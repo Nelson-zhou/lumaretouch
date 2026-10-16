@@ -184,9 +184,15 @@ def aggregate(runs: list[dict], eng: dict | None = None) -> None:
     for d in reps:
         arms.setdefault(d["_run"].split("#")[0], []).append(d)
     print("\n  [按臂聚合 · 中位 / 最差]")
+    # 预计算列只在 G 轮这类真跑过 precompute 的数据里出现：无条件加列会让 E/F 轮
+    # 整片“—”，而报表里满屏占位符正是没人再认真看列的原因
+    has_pc = any(d.get("pcBackend") for ds in arms.values() for d in ds)
     cols = ("臂", "n", "MB/帧", "上传策略", "分块", "fps 中位", "fps 最差",
             "丢帧% 中位", "丢帧% 最差", "取→绘 p50", "p95", "撞帧run",
-            "引擎合计", "内核", "≥中位59且最差≤5%")
+            "引擎合计", "内核")
+    if has_pc:
+        cols += ("预计算（后端·点·通道·MB·总ms）",)
+    cols += ("≥中位59且最差≤5%",)
     rows = []
     for name, ds in arms.items():
         fps = [d["measured_fps"] for d in ds]
@@ -202,13 +208,20 @@ def aggregate(runs: list[dict], eng: dict | None = None) -> None:
         stalls = sum(1 for x in p95 if x > 25_000)
         # 引擎侧分段：同一臂的 bench_done 取中位（老数据没拆细分段时只给得出合计）
         e = eng_arm(eng, name)
-        rows.append((name, str(len(ds)), f"{mb:.2f}", str(d0.get("upload", "raw")), str(ck),
-                     f"{statistics.median(fps):.1f}", f"{min(fps):.1f}",
-                     f"{statistics.median(drop):.1f}", f"{max(drop):.1f}",
-                     ms(statistics.median(p50)), ms(statistics.median(p95)),
-                     f"{stalls}/{len(ds)}",
-                     f"{e['total']:.2f}" if e else "—", f"{e['kernel']:.2f}" if e else "—",
-                     "✓" if ok else "✗"))
+        cells = [name, str(len(ds)), f"{mb:.2f}", str(d0.get("upload", "raw")), str(ck),
+                 f"{statistics.median(fps):.1f}", f"{min(fps):.1f}",
+                 f"{statistics.median(drop):.1f}", f"{max(drop):.1f}",
+                 ms(statistics.median(p50)), ms(statistics.median(p95)),
+                 f"{stalls}/{len(ds)}",
+                 f"{e['total']:.2f}" if e else "—", f"{e['kernel']:.2f}" if e else "—"]
+        if has_pc:
+            pcs = [d["pcTotalMs"] for d in ds if d.get("pcTotalMs") is not None]
+            cells.append("—" if not pcs else (
+                f"{d0.get('pcBackend')}·{d0.get('numLandmarks')}·"
+                f"{d0.get('activeChannel') or '全图'}·"
+                f"{(d0.get('maskBytes') or 0) / 1e6:.1f}·{statistics.median(pcs):.1f}"))
+        cells.append("✓" if ok else "✗")
+        rows.append(tuple(cells))
     w = [max(len(str(c)), *(len(r[i]) for r in rows)) for i, c in enumerate(cols)]
     print("  " + " | ".join(str(c).ljust(w[i]) for i, c in enumerate(cols)))
     print("  " + "-+-".join("-" * x for x in w))

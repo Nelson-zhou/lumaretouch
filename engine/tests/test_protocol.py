@@ -337,3 +337,252 @@ def test_set_device_migrates_resident_session(engine):
     got = (done.get("pipe_device") or "").split(":")[0]
     assert got == expect, f"声明 cuda 但真正跑帧的设备是 {done.get('pipe_device')}"
 
+
+
+# ------------------------------------------------------- M1-3b：导入期预计算的协议与生命周期
+def _expect_error(ep, contains: str, timeout: float = 30.0) -> dict:
+    """等一条 error 事件并校验内容。
+
+    不能复用 wait_for：它对 error 直接抛 AssertionError。这里要验的恰恰是
+    「引擎按我们要求报了错」，所以得自己收事件。
+
+    超时不能报成“没事件”了事：得把期间看到的事件种类与计数贴出来，否则
+    「该拒绝却没拒」看起来与「跑靶根本没开起来」完全一样。
+    """
+    deadline = time.monotonic() + timeout
+    seen: dict[str, int] = {}
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise AssertionError(
+                f"{timeout}s 内没有 error 事件（期望包含 {contains!r}）；期间收到事件 {seen}")
+        try:
+            e = ep.next_event(timeout=min(left, 10.0))
+        except TimeoutError:
+            raise AssertionError(
+                f"等 error({contains!r}) 超 10s 无声；期间收到事件 {seen}") from None
+        kinds = e.get("event") or "?"
+        seen[kinds] = seen.get(kinds, 0) + 1
+        if e.get("event") == "error":
+            assert contains in str(e.get("error", "")), f"报错内容不对：{e}"
+            return e
+
+
+def _load(engine, **kw):
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set")
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.0, **kw)
+    meta = engine.wait_for("shm_ready", timeout=60)
+    engine.wait_for("vram_ready", timeout=60)
+    engine.wait_for("image_ready", timeout=60)
+    return meta
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_precompute_contract_over_ipc(engine):
+    """预计算回报的字段就是 M1-3c 要消费的契约：478 点 + 通道名 + 常驻设备 + 分段耗时。"""
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    meta = _load(engine)
+    engine.send(cmd="precompute", backend="auto")
+    ev = engine.wait_for("precompute_ready", timeout=60)
+    assert ev["num_landmarks"] == 478, f"关键点数量不是 478：{ev['landmark_shape']}"
+    assert ev["landmark_shape"] == [478, 3]
+    assert ev["mask_channels"] and all(isinstance(c, str) for c in ev["mask_channels"])
+    assert ev["mask_shape"][1:] == [meta["h"], meta["w"]], "掩膜必须对得上代理帧尺寸"
+    assert ev["mask_bytes"] > 0 and ev["landmark_bytes"] > 0
+    assert ev["resident_device"].split(":")[0] == "cpu"
+    # 三种成本分开报；全塞一个总数就分不出该优化谁
+    for k in ("build_ms", "infer_ms", "attach_ms"):
+        assert ev[k] >= 0
+    assert ev["total_ms"] >= ev["infer_ms"] > 0
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_precompute_requires_image_first(engine):
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="precompute", backend="auto")
+    _expect_error(engine, "load_image")
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_explicit_missing_backend_is_an_error_not_a_quiet_substitute(engine):
+    """点名要 mediapipe 就必须要么真跑、要么报错；不许退 synthetic 还说成功。
+
+    这条守的是「废数据自洽」那个坑的另一半：如果 precompute_ready 里 backend 写着
+    synthetic 而请求是 mediapipe，报表上就会出现一次"用真模型跑的预计算"，全是假的。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    _load(engine)
+    engine.send(cmd="precompute", backend="mediapipe")
+    _expect_error(engine, "后端不可用")
+    # 拒绝之后不能留下半截状态：再来一次 auto 必须正常成功
+    engine.send(cmd="precompute", backend="auto")
+    ev = engine.wait_for("precompute_ready", timeout=60)
+    assert ev["backend"] in ("synthetic", "mediapipe")
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_channel_selects_resident_mask_and_rejects_unknown(engine):
+    """拖滑块指到掩膜通道：只换张量引用；不认识的通道名必须被拒。"""
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    _load(engine)
+    engine.send(cmd="precompute", backend="auto")
+    ev = engine.wait_for("precompute_ready", timeout=60)
+    channel = ev["mask_channels"][0]
+    engine.send(cmd="set_strength", value=0.6, channel=channel)
+    ps = engine.wait_for("params_set", timeout=30)
+    assert ps["channel"] == channel, "params_set 没回显生效通道，报表分不清是掩膜还是全图"
+    engine.wait_for("frame", timeout=30)
+    engine.send(cmd="set_strength", value=0.6, channel="hair")
+    _expect_error(engine, "没有掩膜通道")
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_new_image_invalidates_previous_masks(engine):
+    """换图必须清掉上一张的掩膜：拿别人的脸磨自己的皮，比没有掩膜更糟。"""
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    _load(engine)
+    engine.send(cmd="precompute", backend="auto")
+    engine.wait_for("precompute_ready", timeout=60)
+    # 换一张完全不同尺寸的图（预算调大 → 代理档变），旧掩膜尺寸就对不上了
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.0, max_px=1310720)
+    engine.wait_for("image_ready", timeout=60)
+    engine.send(cmd="set_strength", value=0.5, channel="skin")
+    _expect_error(engine, "没有掩膜通道")
+
+
+def _read_frame(engine, peer, h, w):
+    ev = engine.wait_for("frame", timeout=30)
+    return np.frombuffer(peer.read_pixels(ev["slot"]), np.uint8).reshape(h, w, 4)[:, :, :3].astype(np.int16)
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_device_switch_keeps_the_active_channel_on_the_frame_it_emits(engine):
+    """换设备补发的最后一帧必须仍按当前通道渲染。
+
+    坑的形状：cmd_precompute 把 active_channel 照抄进 precompute_ready，可迁移路径里
+    补发那帧的 render 没带 channel——于是报表写着「正在用皮肤掩膜」，屏幕上给的是全图
+    磨皮。这跟「会话在 CPU 上跑却标 cuda」是同一个错误类别：上报字段没被实际执行路径
+    约束过。所以这里不用事件字段作证据，直接读 shm 里的像素。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    import torch
+    if not torch.cuda.is_available():
+        pytest.skip("没有 GPU，验不了跨设备重挂")
+
+    meta = _load(engine)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        _ = _read_frame(engine, peer, h, w)          # 先吃掉 load_image 那张，别让它混进对照
+        engine.send(cmd="precompute", backend="auto")
+        ev = engine.wait_for("precompute_ready", timeout=60)
+        channel = ev["mask_channels"][0]
+
+        # 同一系数下分别取「掩膜渲染」与「全图渲染」，两者必须不同，否则本用例没有鉴别力
+        engine.send(cmd="set_strength", value=0.9, channel=channel)
+        engine.wait_for("params_set", timeout=30)
+        masked = _read_frame(engine, peer, h, w)
+        engine.send(cmd="set_strength", value=0.9, channel=None)
+        engine.wait_for("params_set", timeout=30)
+        full = _read_frame(engine, peer, h, w)
+        diff = np.abs(masked - full).mean(axis=-1)
+        assert diff.max() >= 4, f"掩膜与全图渲染逐字节相同（{diff.max()} LSB），这条用例证不了任何事"
+        gate = diff >= 1                       # 只有被门控区参与判定，避免拿全图噪声充数
+        assert gate.mean() > 0.02, f"门控区只占 {gate.mean():.3f}，样本太小判不出方向"
+
+        # 回到掩膜模式，然后换设备：迁移后补发的那一帧才是被测对象
+        engine.send(cmd="set_strength", value=0.9, channel=channel)
+        engine.wait_for("params_set", timeout=30)
+        _ = _read_frame(engine, peer, h, w)
+        engine.send(cmd="set_device", device="cuda")
+        engine.wait_for("device_set", timeout=30)
+        engine.wait_for("vram_ready", timeout=60)
+        ev2 = engine.wait_for("precompute_ready", timeout=60)
+        assert ev2["active_channel"] == channel, "重挂事件里的通道丢了"
+        got = _read_frame(engine, peer, h, w)
+
+        d_masked = float(np.abs(got - masked)[gate].mean())
+        d_full = float(np.abs(got - full)[gate].mean())
+        assert d_masked < d_full, (
+            f"迁移后补发的帧走的是全图渲染（离掩膜 {d_masked:.2f} LSB / 离全图 {d_full:.2f} LSB），"
+            f"而报表仍说 active_channel={ev2['active_channel']}")
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_set_strength_is_refused_while_bench_running(engine):
+    """跑靶进行中必须拒绝拖滑块：两条线程都在写同一个常驻帧缓冲。
+
+    `_wlock` 只护住「写 shm」那一步，护不到 `frame_gpu`：跑靶线程是
+    pack(frame_gpu) → read_back() → 锁内写 shm，而 set_strength 的 render 也写同一个
+    frame_gpu。落在跑靶那两个动作之间，跑靶就会把拖滑块的像素当成自己那一帧存——
+    seq/slot 仍是配得上的，但「引擎侧那一帧」的证据从此对不上人。
+    预计算/换图/换设备三条都早就有这条互斥，set_strength 是漏掉的那一个。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    # 用小代理档 + 长间隔：要的是“跑靶还活着”这段可控窗口，不是 CPU 上渲 200 帧
+    meta = _load(engine, max_px=207360)
+    engine.send(cmd="bench_start", w=meta["w"], h=meta["h"], frames=40,
+                interval_ms=100.0, mode="image_stream")
+    engine.wait_for("bench_started", timeout=30)
+    engine.send(cmd="set_strength", value=0.5)
+    _expect_error(engine, "跑靶进行中", timeout=20.0)
+    # 拒绝不能把跑靶本身弄挂：跑完仍是正常一份数据
+    engine.send(cmd="bench_stop")
+    done = engine.wait_for("bench_done", timeout=90)
+    assert not done.get("failed"), f"一次被拒的 set_strength 把跑靶带崩了：{done}"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_failed_precompute_leaves_no_resident_masks(engine):
+    """失败的预计算不许留下「可用但没人知道」的掩膜。
+
+    坑的形状：通道名校验放在 load_face 之后，失败时掩膜已经常驻、`_precompute` 已赋值，
+    但 `precompute_ready` 没发过。于是宿主端只收到一个 error，下次换设备却突然收到一个
+    replayed_for 事件——它从未见过初始状态；而 UI 报「没掩膜」的同一时刻，引擎里那张掩膜
+    是可用且真的在参与渲染的。修法是把校验提到做任何改动之前。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    _load(engine)
+    engine.send(cmd="precompute", backend="auto", channel="hair")     # 不存在的通道
+    _expect_error(engine, "没有掩膜通道")
+    # 上一句失败后，这张图的掩膜必须真的不在：否则 skin 会照常渲染成功
+    engine.send(cmd="set_strength", value=0.5, channel="skin")
+    _expect_error(engine, "没有掩膜通道")
+    # 而且得能重新来过：一次拒绝不能把这个会话卡死
+    engine.send(cmd="precompute", backend="auto", channel="skin")
+    ev = engine.wait_for("precompute_ready", timeout=60)
+    assert ev["active_channel"] == "skin", "重试后通道没生效"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_device_switch_replays_precompute(engine):
+    """换设备重建会话后，预计算产物必须跟着重挂，否则下一次带通道的渲染会读到旧设备显存。"""
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    import torch
+    if not torch.cuda.is_available():
+        pytest.skip("没有 GPU，验不了跨设备重挂")
+    _load(engine)
+    engine.send(cmd="precompute", backend="auto")
+    ev = engine.wait_for("precompute_ready", timeout=60)
+    assert ev["resident_device"].startswith("cpu")
+    engine.send(cmd="set_device", device="cuda")
+    engine.wait_for("device_set", timeout=30)
+    engine.wait_for("vram_ready", timeout=60)
+    ev2 = engine.wait_for("precompute_ready", timeout=60)
+    assert ev2.get("replayed_for") == "device_switch"
+    assert ev2["resident_device"].startswith("cuda"), f"迁移后掩膜还在 {ev2['resident_device']}"
+    assert ev2["mask_bytes"] == ev["mask_bytes"], "重挂的掩膜换了尺寸"

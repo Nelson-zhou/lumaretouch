@@ -1,0 +1,63 @@
+# MediaPipe 人脸关键点 / 分割后端：**可选运行时插件**（总工 2026-10-16 定 B 方案）
+#
+# 这条通道与 requirements-rocm/cuda.txt 一样**不写进 pyproject 的 dependencies 或
+# dependency-groups**，理由比 GPU 变体更硬：
+#   1. uv 解析会连可选 group 一起解，CI 的 engine job 只该装 numpy + pytest；
+#   2. deb 的 Depends 里不许出现它——通路回归由 synthetic 后端承担（见 face.py），
+#      精度回归只在装了本插件的环境跑，两条路的证据因此永远是分开的；
+#   3. 许可：Python 层零 GPL，但随附组件的许可义务要在正式出包时逐包复核一遍，
+#      不能提前把债写进基线。
+#
+# 未放行前不许安装：`pip install mediapipe` 绕过本文件与下面的审计记录，等于
+# 未经审批引入依赖。引擎侧的 `MediaPipeFace` 在依赖缺失时抛 MissingBackend，
+# 绝不静默换成 synthetic —— 静默降级会把"用真模型跑的精度"写成假证据。
+#
+# ------------------------------------------------------------------ 许可审计（2026-10-16）
+# `uv pip install --dry-run mediapipe` → 16 包。逐包取 PyPI 元数据核验（非记忆）：
+#
+#   Apache-2.0 : mediapipe, opencv-contrib-python, absl-py, flatbuffers, SheenBidi
+#   MIT / MIT-0: fonttools, pyparsing, sounddevice, six, cffi(MIT-0), libraqm, Solarized
+#   BSD-3      : contourpy, pycparser；BSD 系: kiwisolver, cycler
+#   PSF 族自证 : matplotlib（"License agreement for matplotlib versions 1.3.0 and later"）
+#   双证       : python-dateutil（Apache-2.0 / BSD）
+#   MPL-2.0    : certifi —— 弱 copyleft，只约束该证书文件本身，不传染我们的代码
+#
+# 结论：**Python 包名层面零 GPL / AGPL / LGPL**。真正的义务在两处，都必须人读：
+#
+#   A. matplotlib 自带许可文本列出 15 段随附组件（wheel 里就在），其中
+#      `FreeType` = `FTL OR GPL-2.0-or-later`（我们依赖 FTL 那一侧，须保留声明）、
+#      `QHull` = bespoke `Qhull` 许可（非标准常见 SPDX，有自己的附加条款）、
+#      `HarfBuzz` = MIT-Modern-Variant、`JSXTools` = CC0-1.0、
+#      **OFL-1.1 字体 3 份**（AMS Fonts / Last Resort / STIX）+ BaKoMa 字体 +
+#      Bitstream-Charter + 两套 colormap 自定义许可。
+#      ⇒ 分发即需随包附一份 THIRD_PARTY_NOTICES，且 OFL/Qhull/BaKoMa 条款逐条读。
+#      ⇒ 且 **matplotlib 无法从 mediapipe 里剔除**（源码取证）：
+#         tasks/python/vision/drawing_utils.py:21 顶层 `import matplotlib.pyplot as plt`；
+#         tasks/python/vision/__init__.py eager 导入 drawing_utils；导入任何子模块都会先
+#         执行父包 __init__。face_landmarker.py 自身 0 处 matplotlib，但被 __init__ 连坐。
+#   B. sounddevice（MIT）运行时经 ctypes 加载 **libportaudio（LGPL）**。它不进我们的链接，
+#      但会出现在产品运行时依赖里 —— "零 GPL"是否延伸到 LGPL 运行时依赖，待总工裁定。
+#
+# 正式出插件包前必须：重解一次依赖树，对**最终 lock** 逐包复核上面的 license 字段与
+# matplotlib 随附组件清单（版本一变，随附的字体/第三方 .so 就可能变）。
+#
+# ------------------------------------------------------------------ 模型权重
+# 权重不入库（计划决策 9）。引擎只读不吃下载，目录由 LRT_MODEL_DIR 指定，默认
+# ~/.cache/lumaretouch/models，需要两个文件：
+#   face_landmarker.task      （478 点人脸网格）
+#   selfie_segmenter.tflite   （分割掩膜）
+# 由安装器按 sha256 从官方源拉取；缺任一文件时 MediaPipeFace 抛 MissingBackend 并说清缺什么。
+#
+# ------------------------------------------------------------------ 装法（审批通过后）
+#   python3 -m venv ~/.venvs/lumaretouch-mediapipe
+#   ~/.venvs/lumaretouch-mediapipe/bin/pip install -r engine/requirements-mediapipe.txt
+#   LRT_MODEL_DIR=~/.cache/lumaretouch/models \
+#   LRT_ENGINE_PY=~/.venvs/lumaretouch-mediapipe/bin/python \
+#     python -m pytest -q engine/tests/test_face.py     # 此时真后端的用例才该转非 skip
+#
+# 只 pin 本轮实际核验过版本的三个包；其余按 mediapipe 自身约束（absl-py~=2.3、
+# flatbuffers~=25.9、sounddevice~=0.5）与 matplotlib / opencv 的依赖解析确定，
+# 出包时以 lock 为准回填，不凭记忆写死没解析过的版本号。
+mediapipe==1.1.1
+opencv-contrib-python==5.0.0.93
+matplotlib==3.11.2

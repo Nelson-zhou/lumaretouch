@@ -91,6 +91,9 @@ pub struct AppState {
     /// 引擎最近一次 image_ready 的原文（代理档尺寸、解码耗时等）。前端靠它轮询
     /// 「图已就绪」并拿到该用哪个尺寸起跑靶，不需要另开一条同步等待通路。
     image: Mutex<Option<Value>>,
+    /// 最近一次 precompute_ready（478 点 / 掩膜通道 / 常驻设备）。
+    /// 与 image 分开存：换图不重跑预计算时，陈的掩膜状态绝不能当成还在。
+    precompute: Mutex<Option<Value>>,
 }
 
 /// 用 `Arc` 起步才能传给引擎读线程；因此额外管理一个持有 Arc 的启动器。
@@ -113,6 +116,7 @@ impl AppState {
             logs: Mutex::new(Vec::new()),
             engine: Mutex::new(None),
             image: Mutex::new(None),
+            precompute: Mutex::new(None),
         }
     }
 
@@ -151,6 +155,10 @@ impl AppState {
 
     pub fn on_image_ready(&self, v: &Value) {
         *self.image.lock().unwrap() = Some(v.clone());
+    }
+
+    pub fn on_precompute_ready(&self, v: &Value) {
+        *self.precompute.lock().unwrap() = Some(v.clone());
     }
 
     pub fn on_frame_event(&self) {
@@ -218,8 +226,9 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     let h = engine::spawn(&py, &src, &session, st.clone());
     let pid = h.pid();
     // 新引擎进程 = 空的会话。不清掉上一张图的就绪标记，自动流程会拿陈图的 w/h
-    // 去驱一个 _vram=None 的新引擎（量出来的是“没跑但正常”）。
+    // 去驱一个 _vram=None 的新引擎（量出来就是“没跑但正常”）。
     *st.image.lock().unwrap() = None;
+    *st.precompute.lock().unwrap() = None;
     *st.engine.lock().map_err(|_| "引擎锁中毒".to_string())? = Some(Arc::new(h));
     Ok(json!({"pid": pid, "python": py, "src": src, "session": session}))
 }
@@ -259,6 +268,8 @@ fn load_image(
     path: String,
     max_px: Option<u64>,
     strength: Option<f64>,
+    precompute: Option<String>,
+    channel: Option<String>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "load_image", "path": path});
     // 设备必须在建会话之前就定好。F 轮翻车就是因为它：只有 bench_start 发 set_device，
@@ -273,16 +284,56 @@ fn load_image(
     if let Some(v) = strength {
         cmd["strength"] = json!(v);
     }
+    // 导入期预计算：“auto/mediapipe/synthetic” 传下去就是导完图算一次；
+    // 空串/None 那么只解码不算，两条路都得能跑，否则通路验收分不开。
+    match precompute.as_deref().filter(|s| !s.is_empty() && *s != "0") {
+        Some(b) => {
+            cmd["precompute"] = json!(true);
+            cmd["backend"] = json!(b);
+            if let Some(c) = channel.as_deref().filter(|s| !s.is_empty()) {
+                cmd["channel"] = json!(c);
+            }
+        }
+        None => {}
+    }
     *state.image.lock().unwrap() = None;      // 清掉上一张的就绪标记，否则前端会读到陈数据
+    *state.precompute.lock().unwrap() = None;
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
 }
 
-/// 滑块动一下：只重算系数，不重解码也不重上传。
+/// 滑块动一下：只重算系数，不重解码也不重上传。channel 指向某个常驻掩膜通道。
 #[tauri::command]
-fn set_strength(state: State<'_, Arc<AppState>>, value: f64) -> Result<Value, String> {
-    state.send_to_engine(json!({"cmd": "set_strength", "value": value}))?;
+fn set_strength(
+    state: State<'_, Arc<AppState>>,
+    value: f64,
+    channel: Option<String>,
+) -> Result<Value, String> {
+    let mut cmd = json!({"cmd": "set_strength", "value": value});
+    if let Some(c) = channel.filter(|s| !s.is_empty()) {
+        cmd["channel"] = json!(c);
+    }
+    state.send_to_engine(cmd)?;
     Ok(json!({"value": value}))
+}
+
+/// 对当前已导入的图跑一次导入期预计算（478 点 + 语义掩膜，算完常驻显存）。
+#[tauri::command]
+fn precompute(
+    state: State<'_, Arc<AppState>>,
+    backend: Option<String>,
+    channel: Option<String>,
+    model_dir: Option<String>,
+) -> Result<Value, String> {
+    let mut cmd = json!({"cmd": "precompute", "backend": backend.unwrap_or_else(|| "auto".into())});
+    if let Some(c) = channel.filter(|s| !s.is_empty()) {
+        cmd["channel"] = json!(c);
+    }
+    if let Some(d) = model_dir.filter(|s| !s.is_empty()) {
+        cmd["model_dir"] = json!(d);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
 }
 
 /// 取最新一帧。原生二进制响应 = 40B 头 + RGBA 像素：
@@ -486,15 +537,18 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     };
     let logs: Vec<String> = state.logs.lock().unwrap().iter().rev().take(25).cloned().collect();
     let image = state.image.lock().unwrap().clone();
+    let precompute = state.precompute.lock().unwrap().clone();
     json!({"shm": shm_name, "has_shm": has_shm, "emitted": emitted,
-           "delivered": delivered, "logs": logs, "image": image})
+           "delivered": delivered, "logs": logs, "image": image, "precompute": precompute})
 }
 
 #[tauri::command]
 fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     let h = state.engine.lock().unwrap().clone();
-    // 引擎停了，它报过的 image_ready 也随之作废；留着会让下一次自动流程拿陈尺寸起跑
+    // 引擎停了，它报过的 image_ready / precompute_ready 也随之作废；留着会让下一次
+    // 自动流程拿陈尺寸与陈掩膜状态起跑
     *state.image.lock().unwrap() = None;
+    *state.precompute.lock().unwrap() = None;
     match h {
         Some(h) => {
             h.shutdown();
@@ -523,6 +577,8 @@ fn m0_env() -> Value {
         "dirty_frac": tiers().dirty_frac,
         "load_image": std::env::var("LRT_LOAD_IMAGE").unwrap_or_default(),
         "max_px": std::env::var("LRT_MAX_PX").ok().and_then(|v| v.parse::<u64>().ok()),
+        "precompute": std::env::var("LRT_PRECOMPUTE").unwrap_or_default(),
+        "precompute_channel": std::env::var("LRT_PRECOMPUTE_CHANNEL").unwrap_or_default(),
     })
 }
 
@@ -544,7 +600,8 @@ fn main() {
         .manage(Launcher(state.clone()))
         .invoke_handler(tauri::generate_handler![
             start_engine, bench_start, pull_frame, frame_acked, frame_presented, bench_stats,
-            engine_status, shutdown_engine, m0_env, load_image, set_strength, report, quit
+            engine_status, shutdown_engine, m0_env, load_image, set_strength, precompute,
+            report, quit
         ])
         .run(tauri::generate_context!())
         .expect("运行 LumaRetouch 失败");

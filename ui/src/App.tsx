@@ -4,7 +4,7 @@ import Viewer, { type Hud } from "./components/Viewer";
 import { t } from "./i18n";
 import {
   benchStart, benchStats, engineStatus, loadImage, m0Env, quit, report, shutdownEngine, startEngine,
-  type BenchOptions, type EngineStatus, type ImageReady, type Stats,
+  type BenchOptions, type EngineStatus, type ImageReady, type Precompute, type Stats,
 } from "./native";
 
 const SIZES: Record<string, [number, number]> = {
@@ -111,19 +111,36 @@ export default function App() {
         return;
       }
       let image: ImageReady | null = null;
+      let pre: Precompute | null = null;
       if (env.load_image) {
         // 代理档尺寸由引擎决定（按像素预算+长宽比），跑靶得跟着它走，不能拿 spec 里的尺寸硬跑
-        await loadImage(env.load_image, { maxPx: env.max_px ?? undefined, strength: 0 });
+        const wantPre = !!env.precompute && env.precompute !== "0";
+        await loadImage(env.load_image, {
+          maxPx: env.max_px ?? undefined,
+          strength: 0,
+          precompute: wantPre ? env.precompute : undefined,
+          channel: env.precompute_channel || undefined,
+        });
+        // 轮询得同时等预计算：precompute_ready 就在 image_ready 后面几十毫秒，
+        // 只盯 image 会在它到达前就 break 掉，报表上变成“导了图但没算掩膜”
         for (let i = 0; i < 300; i++) {
           await sleep(100);
-          image = (await engineStatus().catch(() => null))?.image ?? null;
-          if (image) break;
+          const st = await engineStatus().catch(() => null);
+          image = st?.image ?? null;
+          pre = st?.precompute ?? null;
+          if (image && (!wantPre || pre)) break;
         }
         if (!image) {
           await report(`M0_ERROR load_image 30s 内未就绪: ${env.load_image}`);
           return;
         }
+        if (wantPre && !pre) {
+          // 预计算没就绪不能默默当“没这一步”：要么报错误要么报缺，绝不给一份假的绿
+          await report(`M0_ERROR precompute 30s 内未就绪（backend=${env.precompute}）`);
+          return;
+        }
         await report(`M0_IMAGE ${JSON.stringify(image)}`);
+        if (pre) await report(`M0_PRECOMPUTE ${JSON.stringify(pre)}`);
         bench.w = image.w;
         bench.h = image.h;
       }
@@ -148,7 +165,7 @@ export default function App() {
           await sleep(1500); // 等在途帧的 ack 收尾
           const final = await benchStats().catch(() => null);
           await report(
-            `M0_STATS ${JSON.stringify({ ...final, ...bench, device: env.device, tier: env.skip_pixels === "1" ? 0 : env.skip_draw === "1" ? 1 : 2, upload: env.upload, chunks: env.chunks, ctx: env.no_ctx !== "1", dirtyFrac: env.dirty_frac, hz: +(1000 / bench.intervalMs).toFixed(1), ...(image ? { decodeMs: image.decode_ms, importMs: image.import_ms, scaleMs: image.scale_ms, shmMs: image.shm_ms, attachMs: image.attach_ms, firstFrameMs: image.first_frame_ms, draft: image.draft, draftSize: image.draft_size, pipeDevice: image.device, bytesPerFrame: image.bytes_per_frame, proxy: `${image.w}x${image.h}` } : {}) })}`,
+            `M0_STATS ${JSON.stringify({ ...final, ...bench, device: env.device, tier: env.skip_pixels === "1" ? 0 : env.skip_draw === "1" ? 1 : 2, upload: env.upload, chunks: env.chunks, ctx: env.no_ctx !== "1", dirtyFrac: env.dirty_frac, hz: +(1000 / bench.intervalMs).toFixed(1), ...(image ? { decodeMs: image.decode_ms, importMs: image.import_ms, scaleMs: image.scale_ms, shmMs: image.shm_ms, attachMs: image.attach_ms, firstFrameMs: image.first_frame_ms, draft: image.draft, draftSize: image.draft_size, pipeDevice: image.device, bytesPerFrame: image.bytes_per_frame, proxy: `${image.w}x${image.h}` } : {}), ...(pre ? { pcBackend: pre.backend, pcInferMs: pre.infer_ms, pcAttachMs: pre.attach_ms, pcTotalMs: pre.total_ms, maskBytes: pre.mask_bytes, channels: pre.mask_channels, residentDevice: pre.resident_device, activeChannel: pre.active_channel } : {}) })}`,
           );
           break;
         }

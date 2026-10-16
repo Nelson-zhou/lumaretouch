@@ -55,6 +55,30 @@ export interface ImageReady {
   import_ms: number;
 }
 
+/** 导入期一次预计算的回报：M1-3c 拖滑块只消费这里的通道名与常驻设备。 */
+export interface Precompute {
+  backend: string;
+  num_landmarks: number;
+  landmark_shape: number[];
+  mask_channels: string[];
+  mask_shape: number[];
+  mask_bytes: number;
+  detect_ms: number;
+  masks_ms: number;
+  build_ms: number;
+  infer_ms: number;
+  attach_ms: number;
+  total_ms: number;
+  resident_device: string;
+  landmark_bytes: number;
+  active_channel: string | null;
+  proxy: number[];
+  face_box: number[] | null;
+  notes: string[];
+  /** 只有因换设备而重挂时才有：区分“真算了一次”与“只是重挂旧产物” */
+  replayed_for?: string;
+}
+
 export interface EngineStatus {
   shm: string;
   has_shm: boolean;
@@ -63,6 +87,8 @@ export interface EngineStatus {
   logs: string[];
   /** 最近一次 image_ready；没导过图为 null。 */
   image: ImageReady | null;
+  /** 最近一次 precompute_ready；换图/换引擎进程会清空。 */
+  precompute: Precompute | null;
 }
 
 export interface BenchOptions {
@@ -100,16 +126,31 @@ export const benchStats = () => invoke<Stats>("bench_stats");
 export const engineStatus = () => invoke<EngineStatus>("engine_status");
 export const shutdownEngine = () => invoke("shutdown_engine");
 
-/** 导入真图。异步语义：引擎要几百毫秒到几秒，靠 engineStatus().image 轮询就绪。 */
-export const loadImage = (path: string, opts?: { maxPx?: number; strength?: number }) =>
+/** 导入真图。异步语义：引擎要几百毫秒到几秒，靠 engineStatus().image 轮询就绪。
+ * precompute 给“auto/mediapipe/synthetic”就是导完图算一次，给空则只解码不算。 */
+export const loadImage = (
+  path: string,
+  opts?: { maxPx?: number; strength?: number; precompute?: string; channel?: string },
+) =>
   invoke<{ requested: boolean }>("load_image", {
     path,
     maxPx: opts?.maxPx,
     strength: opts?.strength,
+    precompute: opts?.precompute,
+    channel: opts?.channel,
   });
 
-/** 滑块动一下：引擎只重算系数，不重解码也不重上传。 */
-export const setStrength = (value: number) => invoke<{ value: number }>("set_strength", { value });
+/** 滑块动一下：引擎只重算系数。channel 指到常驻掩膜通道也不产生任何推理或上传。 */
+export const setStrength = (value: number, channel?: string) =>
+  invoke<{ value: number }>("set_strength", { value, channel });
+
+/** 对当前已导入的图跑一次导入期预计算；结果靠 engineStatus().precompute 轮询。 */
+export const runPrecompute = (opts?: { backend?: string; channel?: string; modelDir?: string }) =>
+  invoke<{ requested: boolean }>("precompute", {
+    backend: opts?.backend,
+    channel: opts?.channel,
+    modelDir: opts?.modelDir,
+  });
 
 /** 帧头解析（小端，与 main.rs 的 pull_frame 注释逐字段对应）。 */
 export interface ParsedFrame {
@@ -169,6 +210,9 @@ export interface M0Env {
   /** 非空则跑靶前先导入这张图（M1-3a 真图通路）。 */
   load_image: string;
   max_px: number | null;
+  /** 非空且不为 "0" 则导入后跑一次预计算，值就是后端名（M1-3b）。 */
+  precompute: string;
+  precompute_channel: string;
 }
 export const m0Env = () => invoke<M0Env>("m0_env");
 export const report = (line: string) => invoke("report", { line });

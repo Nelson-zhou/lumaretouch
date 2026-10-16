@@ -65,6 +65,11 @@ class Engine:
         # 真图会话是否建立。不能拿 self._vram is not None 当“已导图”：跑靶的合成会话
         # 会把它顶掉，之后 set_strength 就不报错而是拿彩条图冒充用户照片。
         self._image_loaded = False
+        # 预计算产物的 CPU 原件留着：换设备重建会话时要就地重挂，不能“迁移完就没脸了”。
+        # 掩膜与关键点只在当前会话的当前尺寸上成立，这是本节的主要不变式。
+        self._precompute = None
+        self._precompute_backend = None
+        self._channel = None
         self._wlock = threading.Lock()   # 跑靶线程与 stdin 线程都在写同一块双缓冲
         self._strength = _clamp_strength(0.5)
 
@@ -134,7 +139,7 @@ class Engine:
         """引擎侧一帧的全部工作，按模式分派。返回 (RGBA 帧, 各段 ms)。
 
         抽成一个方法是为了让 packaging/m1-vram-bench.py 能直接复用同一份代码——
-        离线打靶如果自己拼一份近似逻辑，量的数就不能代表产品通路。
+        离线跑靶如果自己拼一份近似逻辑，量的数就不能代表产品通路。
         """
         seg = dict(synth=0.0, pre=0.0, kernel=0.0, post_gpu=0.0, cpu_post=0.0, readback=0.0)
         # image_stream 模拟拖滑块：系数在 0.25→0.75 上扫一个 100 帧周期，
@@ -145,8 +150,9 @@ class Engine:
             strength = 0.6 + 0.001 * (i % 50)
         if pipe is not None:
             # 常驻路径：源图不重算、不上传，每帧只换一个系数
+            channel = self._channel if mode == "image_stream" else None
             t = monotonic_ns()
-            out = pipe.retouch(strength)
+            out = pipe.retouch(strength, channel=channel)
             self._sync()
             seg["kernel"] = (monotonic_ns() - t) / 1e6
             t = monotonic_ns()
@@ -281,6 +287,11 @@ class Engine:
             emit({"event": "error", "error": f"导入失败({type(e).__name__}): {e}"})
             return
         shm = self._ensure_shm(d.w, d.h)
+        # 旧图的预计算产物对新图没有任何意义（尺寸/内容都变了），先清空；
+        # 不清的话下一个请求会拿到上一张脸的掩膜，那比没有掩膜更坑。
+        self._precompute = None
+        self._precompute_backend = None
+        self._channel = None
         t_a = monotonic_ns()
         pipe = self._attach_pipeline(d.rgb)
         self._image_loaded = True
@@ -301,9 +312,103 @@ class Engine:
               "import_ms": round((t_c - t0) / 1e6, 2)})
         emit({"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
               "w": shm.w, "h": shm.h, "mode": "image"})
+        # 导入期预计算：产品上“导图就算一次”，但它是可选步——失败不许把导入本身拖成失败。
+        # 它自己的 error 事件会单独发，报表里 backend/resident 一眼可验。
+        if p.get("precompute"):
+            self.cmd_precompute({"backend": p.get("backend", "auto"),
+                                 "model_dir": p.get("model_dir"),
+                                 "channel": p.get("channel")})
+
+    # ------------------------------------------------------------ 导入期预计算
+    def _precompute_ready_event(self, pc, info, *, build_ms: float, infer_ms: float,
+                                attach_ms: float, total_ms: float, replayed_for: str | None = None):
+        """precompute_ready 只在这里组装一次。
+
+        两处各写一份的必然结果是漂移，而且漂的方向永远是“设备切换那条臂少一个字段”：
+        重挂那条路径先前就没有 build_ms/infer_ms/total_ms，UI 把它们声明为必存字段
+        就会读到 undefined。现在两条臂的事件形状相同，差别只写在 replayed_for 里。
+        """
+        ev = {"event": "precompute_ready", **pc.meta(self._vram.h, self._vram.w),
+              "resident_device": info["resident_device"],
+              "mask_bytes": info["mask_bytes"], "landmark_bytes": info["landmark_bytes"],
+              "active_channel": self._channel,
+              "build_ms": build_ms, "infer_ms": infer_ms,
+              "attach_ms": attach_ms, "total_ms": total_ms}
+        if replayed_for:
+            ev["replayed_for"] = replayed_for
+        return ev
+
+    def cmd_precompute(self, p: dict):
+        """导入期一次性预计算：478 点关键点 + 语义掩膜，算完直接常驻显存。
+
+        三个耗时分开报，因为它们是三种成本：后端建图/首次推理是每进程一笔，
+        逐图推理是每张图一笔，H2D 挂载是代理帧字节数的一笔。混成一个总数就分不出
+        下一步该优化谁。
+
+        不许静默降级：点名要 mediapipe 而后端/模型不在，直接报错；只有 `auto` 允许回落，
+        且回落必须发 engine_warn —— 上轮「CPU 会话标 cuda」就是少了这一层。
+        """
+        from . import face as face_mod
+
+        if not self._image_loaded or self._vram is None or self._src_rgb is None:
+            emit({"event": "error", "error": "precompute 需要先 load_image"})
+            return
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝预计算：先 bench_stop"})
+            return
+        backend = p.get("backend", "auto")
+        t0 = monotonic_ns()
+        try:
+            fn = face_mod.build(backend, p.get("model_dir"))
+        except face_mod.MissingBackend as e:
+            emit({"event": "error", "error": f"预计算后端不可用({backend}): {e}"})
+            return
+        except ValueError as e:
+            emit({"event": "error", "error": f"预计算参数非法: {e}"})
+            return
+        t1 = monotonic_ns()
+        if backend == "auto" and fn.name != backend and getattr(fn, "notes", None):
+            emit({"event": "engine_warn", "warn": f"auto 回落 {fn.name}: {fn.notes[-1]}"})
+        try:
+            pc = fn(self._src_rgb)
+        except Exception as e:
+            emit({"event": "error", "error": f"预计算失败({type(e).__name__}): {e}"})
+            return
+        t2 = monotonic_ns()
+        # 通道校验必须上移到“上显存”之前。放在 load_face 之后报错会留下半截状态：
+        # 掩膜已常驻、_precompute 已赋值、但 precompute_ready 从没发过——宿主只收到一个 error，
+        # 下次换设备却突然收到一个它从未见过初始值的 replayed_for；而 UI 报“没掩膜”的同一
+        # 时刻，引擎里那张掩膜是可用且真的在参与渲染的。
+        channel = p.get("channel")
+        available = sorted(pc.masks)
+        if channel and channel not in available:
+            emit({"event": "error", "error": f"没有掩膜通道 {channel}"
+                  f"（可用：{', '.join(available) or '无'}）"})
+            return
+        try:
+            info = self._vram.load_face(pc)
+        except Exception as e:
+            emit({"event": "error", "error": f"掩膜上显存失败({type(e).__name__}): {e}"})
+            return
+        t3 = monotonic_ns()
+        self._precompute = pc
+        self._precompute_backend = pc.backend
+        if channel:
+            self._channel = channel
+        emit(self._precompute_ready_event(pc, info,
+              build_ms=round((t1 - t0) / 1e6, 2),
+              infer_ms=round((t2 - t1) / 1e6, 2),
+              attach_ms=round((t3 - t2) / 1e6, 2),
+              total_ms=round((t3 - t0) / 1e6, 2)))
+        # 预计算完不重发帧：默认渲染路径不看掩膜，重发只能多一个变量进测量。
+        # 要看掩膜作不作数，用 set_strength + channel。
 
     def cmd_set_strength(self, p: dict):
-        """滑块动一下：只重算系数，不重解码也不重上传。返回一帧。"""
+        """滑块动一下：只重算系数，不重解码也不重上传。返回一帧。
+
+        channel 可以指到某个常驻掩膜通道（只换张量引用，不重传任何东西），这就是
+        M1-3c「拖滑块零推理」的入口。
+        """
         if not self._image_loaded or self._vram is None:
             emit({"event": "error", "error": "尚未 load_image"})
             return
@@ -312,13 +417,27 @@ class Engine:
             emit({"event": "error", "error": f"shm {getattr(self.shm, 'w', '?')}x{getattr(self.shm, 'h', '?')} "
                   f"!= 会话 {self._vram.w}x{self._vram.h}，请先 load_image"})
             return
+        # 跑靶互斥：_wlock 只护“写 shm”那一步，护不到 frame_gpu。跑靶线程是
+        # pack(frame_gpu) → read_back() → 锁内写 shm，这里的 render 也写同一个 frame_gpu；
+        # 插在中间就会让跑靶把拖滑块的像素当成自己那一帧（seq/slot 仍配得上，但证据对不上人）。
+        # 实测代价还不止错乱：672×848 跑靶中一次 render_ms 到过 534.79 ms。
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝 set_strength：先 bench_stop"})
+            return
         self._strength = _clamp_strength(p.get("value", self._strength))
+        if "channel" in p:
+            if p["channel"] and p["channel"] not in self._vram.mask_names:
+                emit({"event": "error", "error": f"没有掩膜通道 {p['channel']}"
+                      f"（可用：{', '.join(self._vram.mask_names) or '无，先 precompute'}）"})
+                return
+            self._channel = p["channel"] or None
         t0 = monotonic_ns()
-        self._vram.render(self._strength)
+        self._vram.render(self._strength, channel=self._channel)
         render_ms = (monotonic_ns() - t0) / 1e6
         with self._wlock:
             seq, t_emit, slot = self.shm.write_frame(self._vram.read_back())
-        emit({"event": "params_set", "strength": self._strength, "render_ms": round(render_ms, 2)})
+        emit({"event": "params_set", "strength": self._strength, "channel": self._channel,
+              "render_ms": round(render_ms, 2)})
         emit({"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
               "w": self.shm.w, "h": self.shm.h, "mode": "drag"})
 
@@ -373,8 +492,24 @@ class Engine:
                 return
             emit({"event": "engine_info", "info": f"常驻会话从 {self._vram.device} 重建到 {self._effective_device()}"})
             self._attach_pipeline(self._src_rgb)
+            # 预计算产物是“这个会话这个设备上的张量”：迁完不重挂，掩膜就停在旧设备上，
+            # 下一次带 channel 的渲染会直接读错/读到已释放的显存
+            if self._precompute is not None:
+                t_p = monotonic_ns()
+                info = self._vram.load_face(self._precompute)
+                emit(self._precompute_ready_event(
+                    self._precompute, info,
+                    # 重挂没重新算：建图与推理都是 0，不是“没测到”。这里给 0.0 而不是
+                    # 缺字段，是为了让两条臂的事件形状完全一致——UI 那边一旦按必存字段读，
+                    # 少一个键就会在报表上变成 undefined 而无人报错
+                    build_ms=0.0, infer_ms=0.0,
+                    attach_ms=round((monotonic_ns() - t_p) / 1e6, 2),
+                    total_ms=round((monotonic_ns() - t_p) / 1e6, 2),
+                    replayed_for="device_switch"))
             if self.shm is not None and (self.shm.w, self.shm.h) == (self._vram.w, self._vram.h):
-                self._vram.render(self._strength)
+                # 通道必须跟着会话一起迁移：不传 channel 的话，报表里 active_channel 还是 skin，
+                # 而给用户补发的是一帧全图渲染——字段与实际执行不一致正是本仓最贵那个坑的形状
+                self._vram.render(self._strength, channel=self._channel)
                 with self._wlock:
                     seq, t_emit, slot = self.shm.write_frame(self._vram.read_back())
                 emit({"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
@@ -396,7 +531,8 @@ class Engine:
         table = {"hello": self.cmd_hello, "bench_start": self.cmd_bench_start,
                  "bench_stop": lambda p: (self.stop_flag.set(), emit({"event": "bench_stopped"})),
                  "set_device": self.cmd_set_device, "shutdown": self.cmd_shutdown,
-                 "load_image": self.cmd_load_image, "set_strength": self.cmd_set_strength}
+                 "load_image": self.cmd_load_image, "set_strength": self.cmd_set_strength,
+                 "precompute": self.cmd_precompute}
         # 不用 `for line in sys.stdin`：那会等 EOF，收到 shutdown 也退不掉
         while not self._quit:
             line = sys.stdin.readline()

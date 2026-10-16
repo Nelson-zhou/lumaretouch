@@ -49,6 +49,17 @@ def frequency_split_np(img: np.ndarray, radius: int, eps: float):
     return low, img - low
 
 
+def _mix_masked(img, retouched, strength, weight):
+    """按掩膜加权混合：`effective = strength · weight`，再在 img / retouched 之间插值。
+
+    写成这个形式而不是先混图再乘强度，是为了让 **strength=0 逐字节恒等** 这件事在
+    数学上无条件成立：weight 只能取值在 [0,1]，`0.0 * x` 对有限浮点数恒为 0，
+    `(1-0)*img + 0*retouched` 就是 img 本身。掩膜再离谱也不能破坏验收口径③。
+    """
+    w = strength * weight
+    return (1.0 - w) * img + w * retouched
+
+
 def retouch_np(img: np.ndarray, strength: float, radius: int = 12,
                eps: float = 6e-4, detail_gain: float = 0.85) -> np.ndarray:
     """质感磨皮：低频二次均化去色斑，高频按 detail_gain 保留肌理。
@@ -62,6 +73,20 @@ def retouch_np(img: np.ndarray, strength: float, radius: int = 12,
     low2 = guided_np(low, radius * 2, eps * 4.0)
     out = low2 + high * detail_gain
     return (1.0 - strength) * img + strength * out
+
+
+def retouch_masked_np(img: np.ndarray, weight: np.ndarray, strength: float,
+                      radius: int = 12, eps: float = 6e-4,
+                      detail_gain: float = 0.85) -> np.ndarray:
+    """逐像素强度的参考实现（CPU）：掩膜只在能达区域生效。
+
+    weight 形状 (1,1,H,W) 或 (1,C,H,W)，值域 [0,1]。必须与 retouch_masked_t 同语义。
+    """
+    low = guided_np(img, radius, eps)
+    high = img - low
+    low2 = guided_np(low, radius * 2, eps * 4.0)
+    out = low2 + high * detail_gain
+    return _mix_masked(img, out, strength, weight)
 
 
 # ------------------------------------------------------------------ torch 生产
@@ -104,6 +129,20 @@ def retouch_t(img, strength: float, radius: int = 12, eps: float = 6e-4,
     low2 = guided_t(low, radius * 2, eps * 4.0)
     out = low2 + high * detail_gain
     return (1.0 - strength) * img + strength * out
+
+
+def retouch_masked_t(img, weight, strength: float, radius: int = 12, eps: float = 6e-4,
+                     detail_gain: float = 0.85):
+    """GPU 生产版逐像素强度磨皮，与 retouch_masked_np 逐句同语义。
+
+    这一条是 M1-3b 以掩膜常驻显存、M1-3c 拖滑块只改系数的算法底座：
+    半径/强度/掩膜都是张量入参，不需重新上传源图。
+    """
+    low = guided_t(img, radius, eps)
+    high = img - low
+    low2 = guided_t(low, radius * 2, eps * 4.0)
+    out = low2 + high * detail_gain
+    return _mix_masked(img, out, strength, weight)
 
 
 def make_tensor(arr, device: str, dtype=None):

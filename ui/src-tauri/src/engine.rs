@@ -132,6 +132,11 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             state.on_image_ready(&v);
             println!("M0_ENGINE {line}");
         }
+        "precompute_ready" => {
+            // 478 点 / 掩膜通道 / 常驻设备：同样是“前端轮询 + 跑靶采集”两份用
+            state.on_precompute_ready(&v);
+            println!("M0_ENGINE {line}");
+        }
         "bench_done" => {
             state.on_bench_done();
             println!("M0_ENGINE {line}");
