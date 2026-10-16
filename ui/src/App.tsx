@@ -3,8 +3,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import Viewer, { type Hud } from "./components/Viewer";
 import { t } from "./i18n";
 import {
-  benchStart, benchStats, engineStatus, m0Env, quit, report, shutdownEngine, startEngine,
-  type BenchOptions, type EngineStatus, type Stats,
+  benchStart, benchStats, engineStatus, loadImage, m0Env, quit, report, shutdownEngine, startEngine,
+  type BenchOptions, type EngineStatus, type ImageReady, type Stats,
 } from "./native";
 
 const SIZES: Record<string, [number, number]> = {
@@ -110,12 +110,37 @@ export default function App() {
         await report(`M0_ERROR 引擎启动失败: ${e}`);
         return;
       }
+      let image: ImageReady | null = null;
+      if (env.load_image) {
+        // 代理档尺寸由引擎决定（按像素预算+长宽比），跑靶得跟着它走，不能拿 spec 里的尺寸硬跑
+        await loadImage(env.load_image, { maxPx: env.max_px ?? undefined, strength: 0 });
+        for (let i = 0; i < 300; i++) {
+          await sleep(100);
+          image = (await engineStatus().catch(() => null))?.image ?? null;
+          if (image) break;
+        }
+        if (!image) {
+          await report(`M0_ERROR load_image 30s 内未就绪: ${env.load_image}`);
+          return;
+        }
+        await report(`M0_IMAGE ${JSON.stringify(image)}`);
+        bench.w = image.w;
+        bench.h = image.h;
+      }
       for (let i = 0; i < 100; i++) {
         const st = await engineStatus().catch(() => null);
         if (st?.has_shm) break;
         await sleep(100);
       }
-      await benchStart(bench).catch(async (e) => report(`M0_ERROR bench 启动失败: ${e}`));
+      try {
+        await benchStart(bench);
+      } catch (e) {
+        // 启动被拒就必须收场：继续往下只会空轮询 400×500 ms，最后被 timeout 掐掉，
+        // 日志里连“为什么没数据”都不留
+        await report(`M0_ERROR bench 启动失败: ${e}`);
+        await quit().catch(() => undefined);
+        return;
+      }
       for (let i = 0; i < 400; i++) {
         await sleep(500);
         const s = await benchStats().catch(() => null);
@@ -123,7 +148,7 @@ export default function App() {
           await sleep(1500); // 等在途帧的 ack 收尾
           const final = await benchStats().catch(() => null);
           await report(
-            `M0_STATS ${JSON.stringify({ ...final, ...bench, device: env.device, tier: env.skip_pixels === "1" ? 0 : env.skip_draw === "1" ? 1 : 2, upload: env.upload, chunks: env.chunks, ctx: env.no_ctx !== "1", dirtyFrac: env.dirty_frac, hz: +(1000 / bench.intervalMs).toFixed(1) })}`,
+            `M0_STATS ${JSON.stringify({ ...final, ...bench, device: env.device, tier: env.skip_pixels === "1" ? 0 : env.skip_draw === "1" ? 1 : 2, upload: env.upload, chunks: env.chunks, ctx: env.no_ctx !== "1", dirtyFrac: env.dirty_frac, hz: +(1000 / bench.intervalMs).toFixed(1), ...(image ? { decodeMs: image.decode_ms, importMs: image.import_ms, scaleMs: image.scale_ms, shmMs: image.shm_ms, attachMs: image.attach_ms, firstFrameMs: image.first_frame_ms, draft: image.draft, draftSize: image.draft_size, pipeDevice: image.device, bytesPerFrame: image.bytes_per_frame, proxy: `${image.w}x${image.h}` } : {}) })}`,
           );
           break;
         }
@@ -238,6 +263,7 @@ export default function App() {
           <option value="pipeline">{t("bench.mode.pipeline")}</option>
           <option value="pipeline_copyin">{t("bench.mode.pipeline_copyin")}</option>
           <option value="pipeline_resident">{t("bench.mode.pipeline_resident")}</option>
+          <option value="image_stream">{t("bench.mode.image_stream")}</option>
         </select>
         <div className="row">
           <button className="primary" onClick={onRun} disabled={!pid || busy}>

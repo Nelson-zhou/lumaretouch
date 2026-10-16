@@ -4,7 +4,9 @@ version = "0.0.1"
 description = "LumaRetouch 图像与推理引擎（GPU 管线 + 共享内存裸帧通路）"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
-dependencies = ["numpy>=2.0"]
+# Pillow 用于真图解码（M1-3a）：许可 MIT-CMU（CMU 字库基金会那套 BSD 同族许可，
+# 见 importlib.metadata 的 License-Expression），符合「依赖树零 GPL」那条约束
+dependencies = ["numpy>=2.0", "pillow>=11"]
 
 [project.scripts]
 lumaretouch-engine = "lumaretouch_engine.server:main"

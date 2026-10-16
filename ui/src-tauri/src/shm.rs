@@ -118,16 +118,31 @@ impl ShmReader {
     }
 
     /// 从某槽的字节偏移处拷一段出去（长度由 out 定）。
-    /// 脏矩形上传走的就是这里：只把变化那几行跳出来，不再拷整帧。
-    pub fn copy_span(&self, slot: usize, byte_off: usize, out: &mut [u8]) {
-        assert!(byte_off + out.len() <= self.pixel_size, "跳读越出像素区");
-        let src = unsafe {
-            std::slice::from_raw_parts(
-                self.base.add(self.slot_off(slot) + SLOT_META_SIZE + byte_off),
-                out.len(),
-            )
+    /// 脏矩形上传走的就是这里：只把变化那几行拷出来，不再拷整帧。
+    ///
+    /// 这里不用 assert：调用方的 slot / pixel_size 可能来自一块已被引擎换掉的旧缓冲，
+    /// panic 会让整个命令线程倒掉，前端的 pullFrame Promise 永不 resolve、HUD 就地卡死；
+    /// 而 slot 越界则是从映射区外读（UB），不是报错而是可能读到错字节。越界当错误返回。
+    pub fn copy_span(&self, slot: usize, byte_off: usize, out: &mut [u8]) -> Result<(), String> {
+        if slot >= self.slots {
+            return Err(format!("slot {slot} 越出槽数 {}", self.slots));
+        }
+        let start = self.slot_off(slot) + SLOT_META_SIZE + byte_off;
+        let end = match start.checked_add(out.len()) {
+            Some(e) => e,
+            None => return Err("拷读长度溢出".into()),
         };
+        if byte_off + out.len() > self.pixel_size || end > self.len {
+            return Err(format!(
+                "拷读越出像素区：slot={slot} off={byte_off} len={} pixel_size={} 映射={}",
+                out.len(),
+                self.pixel_size,
+                self.len
+            ));
+        }
+        let src = unsafe { std::slice::from_raw_parts(self.base.add(start), out.len()) };
         out.copy_from_slice(src);
+        Ok(())
     }
 }
 

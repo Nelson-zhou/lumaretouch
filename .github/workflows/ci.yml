@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv --version
-      - name: 装依赖（仅 numpy + pytest，不拉 GPU 轮子）
+      - name: 装依赖（仅 numpy + pillow + pytest，不拉 GPU 轮子）
         working-directory: engine
         run: uv sync --group dev
       - name: 单测
@@ -62,6 +62,10 @@ jobs:
         run: |
           REPS=7 LRT_RESIDENT_BUDGET_MS=16 \
             "$PY" packaging/m1-vram-bench.py cuda 1280x800
+      - name: 真图导入保真（strength=0 逐字节等于解码原图）
+        # M1-3a 验收口径③进 CI：这一条破了，“推子归零即原图”就是假的。
+        # 只看字节不看快慢（导入耗时在各机差异大，本机数据：冷首图 ~299 ms、后续 ~40 ms）。
+        run: REPS=3 "$PY" packaging/m1-import-bench.py
 
   # NVIDIA 侧同理。本机无 N 卡，CUDA 依赖 pin 也尚未解析回填，
   # 在拿到 NVIDIA runner 之前这条只能是开关关闭，不能当作已验证。
@@ -81,6 +85,8 @@ jobs:
       - run: |
           REPS=7 LRT_RESIDENT_BUDGET_MS=16 \
             "$PY" packaging/m1-vram-bench.py cuda 1280x800
+      - name: 真图导入保真（strength=0 逐字节等于解码原图）
+        run: REPS=3 "$PY" packaging/m1-import-bench.py
 
   # 通路不回归：引擎层单测 + 脚本可跑。真正的端到端帧率验收需要图形环境，
   # 在 M0 阶段仍是本机跑 packaging/m0-bench.sh，不假称 CI 已覆盖。
@@ -98,3 +104,31 @@ jobs:
             echo '发行暂存目录里混进了字节码'; exit 1
           fi
           test -f ui/src-tauri/gen/engine-stage/lumaretouch_engine/server.py
+
+  # GPU 门禁不跑不能算绿。上面两个 job 开关关上时是 skipped，PR 检查页依旧全绿——
+  # “没验证”必须从沉默变成一个看得见的提醒，否则下一次拿这份绿当 GPU 证据会没人质疑。
+  gate-summary:
+    name: 门禁覆盖回报
+    runs-on: ubuntu-24.04
+    if: always()
+    needs: [engine, ui, packaging, probe-amd, probe-nvidia]
+    steps:
+      - name: 未被本次运行验证的 GPU 门禁
+        env:
+          ROCM: ${{ vars.HAS_ROCM_RUNNER }}
+          CUDA: ${{ vars.HAS_CUDA_RUNNER }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+        run: |
+          miss=""
+          [ "$ROCM" = "true" ] || miss="${miss} AMD/ROCm 打靶（含常驻预算与真图保真）"
+          [ "$CUDA" = "true" ] || miss="${miss} NVIDIA/CUDA 打靶"
+          if [ -n "$miss" ]; then
+            echo "::warning title=GPU 门禁未执行::以下项本轮没跑：${miss}"
+            # 主干上把提醒提到错误级别：不阻断合入（没 runner 不是提交者的错），
+            # 但也不允许它在一片绿勾里隐身
+            if [ "$EVENT" = "push" ] && [ "$REF" = "main" ]; then
+              echo "::error title=主干缺 GPU 证据·release 前必须在真机跑 packaging/m1-upload-matrix.sh 与 m1-import-bench.py::"
+            fi
+          fi
+          echo "本轮验证：engine(CPU 对拍) / ui(tsc+cargo) / packaging；缺：${miss:-无}"

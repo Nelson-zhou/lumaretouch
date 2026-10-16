@@ -88,6 +88,9 @@ pub struct AppState {
     frames: Mutex<Frames>,
     logs: Mutex<Vec<String>>,
     engine: Mutex<Option<Arc<engine::EngineHandle>>>,
+    /// 引擎最近一次 image_ready 的原文（代理档尺寸、解码耗时等）。前端靠它轮询
+    /// 「图已就绪」并拿到该用哪个尺寸起跑靶，不需要另开一条同步等待通路。
+    image: Mutex<Option<Value>>,
 }
 
 /// 用 `Arc` 起步才能传给引擎读线程；因此额外管理一个持有 Arc 的启动器。
@@ -109,6 +112,7 @@ impl AppState {
             }),
             logs: Mutex::new(Vec::new()),
             engine: Mutex::new(None),
+            image: Mutex::new(None),
         }
     }
 
@@ -122,9 +126,31 @@ impl AppState {
     }
 
     pub fn attach_shm(&self, reader: ShmReader, name: String) {
-        let mut f = self.frames.lock().unwrap();
-        f.shm = Some(reader);
-        f.shm_name = name;
+        // 每一条 shm_ready 都代表引擎新建了一块缓冲（同尺寸会早退不发事件），而新缓冲的
+        // seq 从 1 重计。所以重置必须无条件：拿 pixel_size 当“换档”信号会漏掉
+        // 672×848 ↔ 848×672 这种同字节不同构图（同一个代理预算换个 EXIF 方向就是它），
+        // 届时新帧被当成“见过的旧 seq”拒掉，frame_acked 还会把回执配到旧条目的 t_emit 上。
+        let old = {
+            let mut f = self.frames.lock().unwrap();
+            let o = f.shm.as_ref().map(|s| (s.pixel_size, f.emitted, f.delivered, f.pending.len()));
+            f.pending.clear();
+            f.samples.clear();
+            f.emitted = 0;
+            f.delivered = 0;
+            f.shm = Some(reader);
+            f.shm_name = name;
+            o
+        };
+        if let Some((from, emitted, delivered, pending)) = old {
+            // 日志在帧锁之外交，不嵌套两把锁
+            self.push_log(format!(
+                "共享内存换档：旧像素区 {from} 字节，计数重置（已发 {emitted}/已送 {delivered}/在途 {pending}）"
+            ));
+        }
+    }
+
+    pub fn on_image_ready(&self, v: &Value) {
+        *self.image.lock().unwrap() = Some(v.clone());
     }
 
     pub fn on_frame_event(&self) {
@@ -191,6 +217,9 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     let session = format!("ui-{}", std::process::id());
     let h = engine::spawn(&py, &src, &session, st.clone());
     let pid = h.pid();
+    // 新引擎进程 = 空的会话。不清掉上一张图的就绪标记，自动流程会拿陈图的 w/h
+    // 去驱一个 _vram=None 的新引擎（量出来的是“没跑但正常”）。
+    *st.image.lock().unwrap() = None;
     *st.engine.lock().map_err(|_| "引擎锁中毒".to_string())? = Some(Arc::new(h));
     Ok(json!({"pid": pid, "python": py, "src": src, "session": session}))
 }
@@ -222,26 +251,56 @@ fn bench_start(
     Ok(json!({"started": true, "device": device, "mode": mode}))
 }
 
+/// 导入真图（M1-3a）：解码、代理档、常驻显存全在引擎侧，这里只转发与后续查状态。
+/// 不返回同步结果：引擎要几百毫秒到几秒，把它变成一次同步调用会把 UI 卡住。
+#[tauri::command]
+fn load_image(
+    state: State<'_, Arc<AppState>>,
+    path: String,
+    max_px: Option<u64>,
+    strength: Option<f64>,
+) -> Result<Value, String> {
+    let mut cmd = json!({"cmd": "load_image", "path": path});
+    // 设备必须在建会话之前就定好。F 轮翻车就是因为它：只有 bench_start 发 set_device，
+    // 导入时引擎还是默认的 cpu，常驻会话整个建在 CPU 上，跑靶再切 cuda 也追不回来。
+    // 引擎侧现在也会跟着迁移旧会话，但正确顺序仍然要在这里保证——没人想看一张
+    // 91 ms/帧的“GPU”数据。
+    let device = std::env::var("LRT_DEVICE").unwrap_or_else(|_| "cpu".into());
+    state.send_to_engine(json!({"cmd": "set_device", "device": device}))?;
+    if let Some(v) = max_px {
+        cmd["max_px"] = json!(v);
+    }
+    if let Some(v) = strength {
+        cmd["strength"] = json!(v);
+    }
+    *state.image.lock().unwrap() = None;      // 清掉上一张的就绪标记，否则前端会读到陈数据
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 滑块动一下：只重算系数，不重解码也不重上传。
+#[tauri::command]
+fn set_strength(state: State<'_, Arc<AppState>>, value: f64) -> Result<Value, String> {
+    state.send_to_engine(json!({"cmd": "set_strength", "value": value}))?;
+    Ok(json!({"value": value}))
+}
+
 /// 取最新一帧。原生二进制响应 = 40B 头 + RGBA 像素：
 /// seq u64 | t_emit_ns u64 | t_pull_ns u64 | w u32 | h u32 | pixel_len u32 | reserved u32
 /// `LRT_SKIP_PIXELS=1` 时 pixel_len 置 0 并不拷像素，前端据此跳过上传，得到纯 IPC 对照组。
 #[tauri::command]
 fn pull_frame(state: State<'_, Arc<AppState>>) -> Result<tauri::ipc::Response, String> {
-    let (seq, t_emit, slot, pixel_size, fw, fh) = {
-        let f = state.frames.lock().map_err(|_| "锁中毒".to_string())?;
-        let shm = f.shm.as_ref().ok_or("SHM_NOT_READY")?;
-        let (meta, slot) = shm.freshest().ok_or("NO_FRAME_YET")?;
-        (meta.seq, meta.t_ns, slot, shm.pixel_size, meta.w, meta.h)
-    };
+    // 判重、取元数据、拷像素、记在途全部挤在同一个帧锁里。分几次取锁的话，引擎导入真图
+    // 就可能在两次取锁之间把整块 shm 换掉：“按旧 pixel_size 分配缓冲、往新缓冲里读”
+    // 越界（panic 或 UB）；而判重与 push 之间的窗口会让同一个 seq 被投两次，
+    // 丢帧统计同时失真。拷贝本来就是 µs 级，锁里做完不亏。
+    let mut f = state.frames.lock().map_err(|_| "锁中毒".to_string())?;
+    let shm = f.shm.as_ref().ok_or("SHM_NOT_READY")?;
+    let (meta, slot) = shm.freshest().ok_or("NO_FRAME_YET")?;
+    let (seq, t_emit, fw, fh) = (meta.seq, meta.t_ns, meta.w, meta.h);
     // 同一帧重复拉取（无新帧）时直接拒，避免重复计数
-    if state
-        .frames
-        .lock()
-        .unwrap()
-        .pending
-        .iter()
-        .any(|p| p.seq == seq)
-        || state.frames.lock().unwrap().samples.last().map(|x| x.seq) == Some(seq)
+    if f.pending.iter().any(|p| p.seq == seq)
+        || f.samples.last().map(|x| x.seq) == Some(seq)
     {
         return Err("NO_NEW_FRAME".into());
     }
@@ -252,14 +311,10 @@ fn pull_frame(state: State<'_, Arc<AppState>>) -> Result<tauri::ipc::Response, S
     } else {
         (y0 as usize + rows as usize) * fw as usize * 4
     };
-    let payload = want.min(pixel_size);
+    let payload = want.min(shm.pixel_size);
     let mut buf = vec![0u8; 40 + payload];
     if payload > 0 {
-        let f = state.frames.lock().map_err(|_| "锁中毒".to_string())?;
-        f.shm
-            .as_ref()
-            .ok_or("SHM_NOT_READY")?
-            .copy_span(slot, y0 as usize * fw as usize * 4, &mut buf[40..]);
+        shm.copy_span(slot, y0 as usize * fw as usize * 4, &mut buf[40..])?;
     }
     buf[0..8].copy_from_slice(&seq.to_le_bytes());
     buf[8..16].copy_from_slice(&t_emit.to_le_bytes());
@@ -270,24 +325,21 @@ fn pull_frame(state: State<'_, Arc<AppState>>) -> Result<tauri::ipc::Response, S
     // 保留位放 y0：前端用 pixel_len 就能推出行数，起始行得宿主告知
     buf[36..40].copy_from_slice(&y0.to_le_bytes());
     let pull_dur = now_ns().saturating_sub(t_pull) as f64 / 1000.0;
-    {
-        let mut f = state.frames.lock().map_err(|_| "锁中毒".to_string())?;
-        f.delivered += 1;
-        f.pending.push_back(Pending {
-            seq,
-            t_emit,
-            t_pull,
-            pull_dur,
-            js_draw_us: 0.0,
-            t_ack: None,
-            t_present: None,
-        });
-        while f.pending.len() > 24 {
-            // 前端跟不上的旧帧：丢弃并计入丢帧
-            f.pending.pop_front();
-        }
-        reap(&mut f);
+    f.delivered += 1;
+    f.pending.push_back(Pending {
+        seq,
+        t_emit,
+        t_pull,
+        pull_dur,
+        js_draw_us: 0.0,
+        t_ack: None,
+        t_present: None,
+    });
+    while f.pending.len() > 24 {
+        // 前端跟不上的旧帧：丢弃并计入丢帧
+        f.pending.pop_front();
     }
+    reap(&mut f);
     Ok(tauri::ipc::Response::new(buf))
 }
 
@@ -433,13 +485,16 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
         (f.shm_name.clone(), f.emitted, f.delivered, f.shm.is_some())
     };
     let logs: Vec<String> = state.logs.lock().unwrap().iter().rev().take(25).cloned().collect();
+    let image = state.image.lock().unwrap().clone();
     json!({"shm": shm_name, "has_shm": has_shm, "emitted": emitted,
-           "delivered": delivered, "logs": logs})
+           "delivered": delivered, "logs": logs, "image": image})
 }
 
 #[tauri::command]
 fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     let h = state.engine.lock().unwrap().clone();
+    // 引擎停了，它报过的 image_ready 也随之作废；留着会让下一次自动流程拿陈尺寸起跑
+    *state.image.lock().unwrap() = None;
     match h {
         Some(h) => {
             h.shutdown();
@@ -466,6 +521,8 @@ fn m0_env() -> Value {
             .unwrap_or(1),
         "no_ctx": std::env::var("LRT_NO_CTX").unwrap_or_default(),
         "dirty_frac": tiers().dirty_frac,
+        "load_image": std::env::var("LRT_LOAD_IMAGE").unwrap_or_default(),
+        "max_px": std::env::var("LRT_MAX_PX").ok().and_then(|v| v.parse::<u64>().ok()),
     })
 }
 
@@ -487,7 +544,7 @@ fn main() {
         .manage(Launcher(state.clone()))
         .invoke_handler(tauri::generate_handler![
             start_engine, bench_start, pull_frame, frame_acked, frame_presented, bench_stats,
-            engine_status, shutdown_engine, m0_env, report, quit
+            engine_status, shutdown_engine, m0_env, load_image, set_strength, report, quit
         ])
         .run(tauri::generate_context!())
         .expect("运行 LumaRetouch 失败");

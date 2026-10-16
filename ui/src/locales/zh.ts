@@ -29,6 +29,7 @@ const zh = {
   "bench.mode.pipeline": "挂导向滤波管线（旧名，等于对照组）",
   "bench.mode.pipeline_copyin": "管线·逐帧搬运（对照组）",
   "bench.mode.pipeline_resident": "管线·张量常驻显存（M1-2）",
+  "bench.mode.image_stream": "真图常驻流（需先导入图，M1-3a）",
   "bench.run": "开始跑靶",
   "bench.running": "跑靶中…",
   "bench.done": "跑靶结束",

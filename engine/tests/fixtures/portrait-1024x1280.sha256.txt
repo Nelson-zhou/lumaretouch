@@ -1,0 +1,7 @@
+# 来源：packaging/make-test-portrait.py 程序化生成——非真实人物，无第三方许可，无隐私
+# 种子 SEED=20261016；下迹 sha256 是**变更审计线索**，不是跨环境可复现承诺：
+#   JPEG/PNG 字节取决于 Pillow/libjpeg-turbo 构建，重跑得到不同哈希属正常，
+#   要换资产请连本文件一起重生成并同步更新测试（engine/tests/test_decode.py 会比对哈希）。
+# 用途：M1-3a 真图解码/代理档/数值保真回归；M1-3b 的人脸检测回归需另备真实正脸
+782436636ada5c386c2424ccf67ad95ee5c8f5598ccbe8b5f8f4776f2220483a  portrait-1024x1280.jpg
+9e1b8e8caa338392ca47758c2ce91bfd0a1f9fcc1dfe610ae6b3c3a38a5be9af  portrait-1024x1280.png

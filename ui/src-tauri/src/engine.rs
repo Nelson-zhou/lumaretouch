@@ -127,11 +127,21 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             }
         }
         "frame" => state.on_frame_event(),
+        "image_ready" => {
+            // 代理档尺寸与解码耗时是前端开跑靶与报表采集的唯一依据，既存下也回显
+            state.on_image_ready(&v);
+            println!("M0_ENGINE {line}");
+        }
         "bench_done" => {
             state.on_bench_done();
             println!("M0_ENGINE {line}");
         }
-        "error" => state.push_log(format!("引擎错误: {}", v["error"].as_str().unwrap_or("?"))),
+        "error" => {
+            state.push_log(format!("引擎错误: {}", v["error"].as_str().unwrap_or("?")));
+            // 必须回显到标准输出：跑靶脚本只看得见 stdout。不往这里印的话，
+            // “某一臂被引擎拒了”在日志里一个字都不留，表现为静默超时。
+            println!("M0_ENGINE {line}");
+        }
         other => {
             state.push_log(format!("事件 {other}: {v}"));
             // 引擎侧分段耗时（synth/pipe/rgba/shm/notify）是「帧率天花板卡在

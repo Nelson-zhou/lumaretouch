@@ -239,3 +239,101 @@ def test_resident_mode_runs_and_emits_varying_frames(engine):
         peer.close()
     assert len(set(stamps)) == n, f"序号指纹没有逐帧变化: {stamps}"
 
+
+FIXTURE = os.path.join(HERE, "tests", "fixtures", "portrait-1024x1280.jpg")
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE),
+                    reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_load_image_and_drag_stream_real_photo(engine):
+    """M1-3a 端到端：真图导入 → 代理档 → 常驻显存 → shm 里的帧能被独立读出来比对。
+
+    这同时是验收口径③的端到端版本：strength=0 时 shm 帧的 RGB 必须与测试进程
+    独立解码出的代理图逐字节一致；拖一下滑块之后帧必须真的变了。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    from lumaretouch_engine.decode import load_rgb
+
+    ref = load_rgb(FIXTURE)
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set")
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.0)
+    shm_meta = engine.wait_for("shm_ready", timeout=60)
+    assert (shm_meta["w"], shm_meta["h"]) == (ref.w, ref.h), "shm 没按代理档开"
+    engine.wait_for("vram_ready", timeout=60)
+    ready = engine.wait_for("image_ready", timeout=60)
+    assert (ready["src_w"], ready["src_h"]) == (1024, 1280)
+    assert ready["decode_ms"] > 0 and ready["total_ms"] >= ready["decode_ms"]
+    assert ready["bytes_per_frame"] <= 960 * 600 * 4, "代理档越了字节预算"
+
+    peer = FrameShm(shm_meta["name"])
+    try:
+        ev = engine.wait_for("frame", timeout=30)
+        got = np.frombuffer(peer.read_pixels(ev["slot"]), np.uint8).reshape(ref.h, ref.w, 4)
+        assert (got[:, :, 3] == 255).all()
+        d = np.abs(got[:, :, :3].astype(np.int16) - ref.rgb.astype(np.int16))
+        assert d.max() == 0, f"strength=0 上屏帧与解码原图差 {int(d.max())} LSB"
+
+        engine.send(cmd="set_strength", value=0.75)
+        engine.wait_for("params_set", timeout=30)
+        ev2 = engine.wait_for("frame", timeout=30)
+        assert ev2["seq"] > ev["seq"], "拖滑块没发新帧"
+        got2 = np.frombuffer(peer.read_pixels(ev2["slot"]), np.uint8).reshape(ref.h, ref.w, 4)
+        moved = int((np.abs(got2[:, :, :3].astype(np.int16) - got[:, :, :3].astype(np.int16)) > 0).sum())
+        assert moved > 0, "strength 从 0 拉到 0.75 画面一点没变"
+        # 磨皮应当削高频而不是抹平结构：横向一阶差的能量必须降下来
+        def hf(a):
+            return float(np.abs(np.diff(a.astype(np.float32), axis=1)).mean())
+        assert hf(got2[:, :, 0]) < hf(got[:, :, 0]), "磨皮没在削高频，管线可能根本没接上"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE),
+                    reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_set_device_migrates_resident_session(engine):
+    """换设备得把已建立的常驻会话一起带走，而且上报必须说真话。
+
+    F 轮第一轮的坑：先 load_image（此时引擎还是默认的 cpu）再 set_device cuda，
+    旧张量静静留在 CPU 上跑了 600 帧（91 ms/帧），bench_done 照旧报 cuda:true。
+    这种数据内部完全自洽，只有拿「真正跑了这些帧的设备」 against 声明值才能看见，
+    所以这个字段进了协议，这条用例就是它的锁。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    import torch
+
+    has_cuda = torch.cuda.is_available()
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set")
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.0)
+    shm_meta = engine.wait_for("shm_ready", timeout=60)
+    v0 = engine.wait_for("vram_ready", timeout=60)
+    assert v0["device"] == "cpu", f"默认设备下不该建在 {v0['device']} 上"
+    engine.wait_for("image_ready", timeout=60)
+
+    # 先切回同一个设备：会话没动，不该重建（拿这个区分「真迁移」和「每次调用都重连」）
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set")
+    # 再切到目标设备
+    engine.send(cmd="set_device", device="cuda")
+    engine.wait_for("device_set", timeout=30)
+    if has_cuda:
+        v1 = engine.wait_for("vram_ready", timeout=60)
+        assert v1["device"].startswith("cuda"), f"切了 cuda 但会话还在 {v1['device']}"
+        assert (v1["w"], v1["h"]) == (v0["w"], v0["h"]), "迁移后代理档尺寸变了"
+
+    # 最后拿 bench_done 的 pipe_device 兜底：这才是跑靶表里该信的那个字段
+    engine.send(cmd="bench_start", w=shm_meta["w"], h=shm_meta["h"], frames=12,
+                interval_ms=1.0, mode="image_stream")
+    done = engine.wait_for("bench_done", timeout=90)
+    assert not done.get("failed"), f"bench 没跑成：{done}"
+    expect = "cuda" if has_cuda else "cpu"
+    got = (done.get("pipe_device") or "").split(":")[0]
+    assert got == expect, f"声明 cuda 但真正跑帧的设备是 {done.get('pipe_device')}"
+

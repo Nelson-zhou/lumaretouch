@@ -28,12 +28,41 @@ export interface Stats {
   js_draw: Dist;
 }
 
+/** 引擎导入一张真图后的回报：代理档尺寸与逐项耗时（一次性成本，不计进逐帧预算）。 */
+export interface ImageReady {
+  src_w: number;
+  src_h: number;
+  w: number;
+  h: number;
+  format: string;
+  /** 是否真吃到 libjpeg DCT 预缩（不是“调过 draft()”——那个恒为真） */
+  draft: boolean;
+  draft_size: [number, number] | null;
+  open_ms: number;
+  decode_ms: number;
+  orient_ms: number;
+  scale_ms: number;
+  total_ms: number;
+  bytes_per_frame: number;
+  notes: string[];
+  device: string;
+  strength: number;
+  /** 共享内存建档耗时（尺寸变了才重建，多数情况接近 0） */
+  shm_ms: number;
+  /** 初始化常驻张量：冷进程含 GPU 上下文建立，与图尺寸无关 */
+  attach_ms: number;
+  first_frame_ms: number;
+  import_ms: number;
+}
+
 export interface EngineStatus {
   shm: string;
   has_shm: boolean;
   emitted: number;
   delivered: number;
   logs: string[];
+  /** 最近一次 image_ready；没导过图为 null。 */
+  image: ImageReady | null;
 }
 
 export interface BenchOptions {
@@ -41,8 +70,8 @@ export interface BenchOptions {
   h: number;
   frames: number;
   intervalMs: number;
-  /** pipeline = pipeline_copyin 的历史别名，引擎侧两者同义。 */
-  mode: "copy" | "pipeline" | "pipeline_copyin" | "pipeline_resident";
+  /** pipeline = pipeline_copyin 的历史别名，引擎侧两者同义。image_stream 需先 load_image。 */
+  mode: "copy" | "pipeline" | "pipeline_copyin" | "pipeline_resident" | "image_stream";
 }
 
 export const startEngine = (py: string, src: string) =>
@@ -70,6 +99,17 @@ export const framePresented = (seq: number) => invoke("frame_presented", { seq }
 export const benchStats = () => invoke<Stats>("bench_stats");
 export const engineStatus = () => invoke<EngineStatus>("engine_status");
 export const shutdownEngine = () => invoke("shutdown_engine");
+
+/** 导入真图。异步语义：引擎要几百毫秒到几秒，靠 engineStatus().image 轮询就绪。 */
+export const loadImage = (path: string, opts?: { maxPx?: number; strength?: number }) =>
+  invoke<{ requested: boolean }>("load_image", {
+    path,
+    maxPx: opts?.maxPx,
+    strength: opts?.strength,
+  });
+
+/** 滑块动一下：引擎只重算系数，不重解码也不重上传。 */
+export const setStrength = (value: number) => invoke<{ value: number }>("set_strength", { value });
 
 /** 帧头解析（小端，与 main.rs 的 pull_frame 注释逐字段对应）。 */
 export interface ParsedFrame {
@@ -126,6 +166,9 @@ export interface M0Env {
   chunks: number;
   no_ctx: string;
   dirty_frac: number;
+  /** 非空则跑靶前先导入这张图（M1-3a 真图通路）。 */
+  load_image: string;
+  max_px: number | null;
 }
 export const m0Env = () => invoke<M0Env>("m0_env");
 export const report = (line: string) => invoke("report", { line });

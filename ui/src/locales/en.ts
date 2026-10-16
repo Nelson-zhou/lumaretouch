@@ -11,6 +11,7 @@ export const en: Partial<Record<MsgKey, string>> = {
   "bench.mode.pipeline": "With guided-filter pipeline (legacy alias)",
   "bench.mode.pipeline_copyin": "Pipeline · per-frame copy-in (control)",
   "bench.mode.pipeline_resident": "Pipeline · tensors resident in VRAM (M1-2)",
+  "bench.mode.image_stream": "Real-photo resident stream (needs load_image, M1-3a)",
   "bench.run": "Run bench",
   "stats.p95": "p95",
   "gate.pending": "not measured",
