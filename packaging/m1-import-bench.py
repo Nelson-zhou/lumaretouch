@@ -27,7 +27,7 @@ import numpy as np                       # noqa: E402
 import torch                             # noqa: E402
 
 from lumaretouch_engine.decode import load_rgb      # noqa: E402
-from lumaretouch_engine.vram import make_pipeline   # noqa: E402
+from lumaretouch_engine.vram import make_pipeline, warm_device   # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURE = os.path.join(HERE, "..", "engine", "tests", "fixtures", "portrait-1024x1280.jpg")
@@ -76,15 +76,21 @@ def main() -> int:
         print("✗ 要求 cuda 但 torch.cuda.is_available()=False（CPU 组的数不能当 GPU 结论用）")
         return 2
 
-    # 先单独 warm 一次：torch/CUDA 首次初始化要几秒，混进统计会把第一档污染掉
-    one(FIXTURE, BUDGETS[0][0])
+    # 预热：跑的就是引擎 cmd_set_device 里那一份（同一个函数，不是另搭一个近似版）。
+    # 上一版这里也“warm 一次”，但它是把 `one()` 的结果丢不要——那等于把要量的东西
+    # 藏起来再报剩下的数干净。现在预热后量到的**第一张**仍然进统计，并且单独判一条：
+    # 首图不得比稳态中位慢过一个比例（m1-3a-warm 的验收）。
+    warm_ms = warm_device(DEVICE)
+    first = one(FIXTURE, BUDGETS[0][0])
 
     print(f"单次导入打靶 · device={DEVICE} reps={REPS} 源图={os.path.basename(FIXTURE)}")
+    print(f"预热（引擎启动时付）{warm_ms:.2f} ms；预热后的首图 {first[1]['import_total']:.2f} ms")
     print(f"{'档':>5} {'代理档':>9} {'MB/帧':>7} {'解码':>7} {'缩放':>7} "
           f"{'进显存':>7} {'首帧':>7} {'回读':>7} {'总计':>8} {'总计中位':>9} {'保真':>5}")
     rows = []
     # 交错：每轮把三档各跑一次。同档连跑会让页缓存一路变暖，档位之间就不是同一条件了
     per = {tag: [] for _, tag in BUDGETS}
+    per[BUDGETS[0][1]].append(first)          # 预热后的首图就是这一档的第一个样本，不丢
     for _ in range(REPS):
         for budget, tag in BUDGETS:
             per[tag].append(one(FIXTURE, budget))
@@ -113,6 +119,18 @@ def main() -> int:
         print(f"✗ 非零退出：{','.join(bad)} 档 strength=0 输出与解码原图不一致")
         return 1
     print("✓ 三档 strength=0 均逐字节等于解码原图（含 alpha 恒 255）")
+    # m1-3a-warm 的验收：预热之后，用户看到的**第一张**不得还是那个 ~300 ms 的冷价。
+    # 判据取“稳态中位的 1.6 倍 + 20 ms”：F 轮没预热时是 299 vs 35（8.5 倍），跑过了
+    # 应当贴回稳态；留 60% 余量是给页缓存与首次解码的，不是给上下文建立的。
+    tag0 = BUDGETS[0][1]
+    med0 = st.median([r[1]["import_total"] for r in per[tag0]])
+    line = med0 * 1.6 + 20.0
+    f0 = first[1]["import_total"]
+    if f0 > line:
+        print(f"✗ 预热后首图 {f0:.2f} ms > 判据 {line:.2f} ms（稳态中位 {med0:.2f}）："
+              f"预热没盖住真实内核（warm {warm_ms:.2f} ms）")
+        return 1
+    print(f"✓ 预热后首图 {f0:.2f} ms ≤ {line:.2f} ms（稳态中位 {med0:.2f} ms）")
     return 0
 
 

@@ -17,7 +17,7 @@ from .frames import test_frame
 from .shm import FrameShm, monotonic_ns, shm_name
 # 磨皮参数的默认值只在这里取一次：vram 在模块层就容忍 torch 缺失（CPU job 也能 import），
 # 在这里复用它们而不是写第二份字面量，否则默认值与生产值会漂移。
-from .vram import DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_RADIUS, DEFAULT_REPAIR, RepairOp
+from .vram import DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_RADIUS, DEFAULT_REPAIR, RepairOp, warm_device
 
 PROTOCOL_VERSION = 1
 
@@ -712,6 +712,17 @@ class Engine:
             except Exception as e:
                 emit({"event": "engine_warn", "warn": f"torch 不可用: {e}"})
         emit({"event": "device_set", "device": self.device, "cuda": self._cuda})
+        # 预热：把 GPU 上下文与首帧内核加载付在起进程时，而不是用户第一次点“导入”时
+        # （F 轮：冷首图 ~299 ms vs 稳态 ~35 ms，那 265 ms 与图尺寸无关）。已有会话就不必
+        # 再预热：那条链已被真图跑过，再建一个小会话只会白占显存。
+        if self._cuda and not self._image_loaded:
+            try:
+                ms = warm_device(self._effective_device())
+            except Exception as e:      # 预热失败不许拖垮设备切换，但必须报出来
+                emit({"event": "engine_warn", "warn": f"GPU 预热失败（首图会慢）：{e}"})
+                ms = 0.0
+            if ms > 0.0:
+                emit({"event": "engine_warm", "warm_ms": round(ms, 2), "device": self.device})
         # 已经建好的真图会话必须跟着迁移：不然“切设备”只改了个字符串，旧张量继续在
         # 原设备上服务，而所有上报都按新设备解读。重建代价实测 1.6~1.9 ms。
         if self._image_loaded and self._vram is not None \

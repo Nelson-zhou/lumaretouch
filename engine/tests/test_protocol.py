@@ -1057,3 +1057,35 @@ def test_new_image_drops_previous_brush_strokes(engine):
     assert ready2["strength"] == 0.0
     engine.send(cmd="inpaint", action="undo")
     _expect_error(engine, "没有可撤销")
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_gpu_warm_up_takes_the_cold_cost_off_the_first_import(engine):
+    """预热必须真的把首图的冷价挪走，而不是只在日志里说一句"预热了"。
+
+    F 轮实测：冷进程首图 ~299 ms、稳态 ~35 ms，那 265 ms 与图尺寸无关（上下文建立 +
+    内核模块首次加载）。它挂在用户第一次点"导入"上，所以引擎起进程时就该付掉。
+    判据取 `max(150 ms, 第二张 × 3)`：没预热时是 8.5 倍、299 ms，两条都会撞线。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("GPU 预热只在有 torch 的会话里有意义")
+    import torch
+
+    if not torch.cuda.is_available():
+        pytest.skip("本机没有可用的 cuda 设备")
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cuda")
+    d = engine.wait_for("device_set")
+    assert d["cuda"] is True, d
+    warm = engine.next_event(timeout=120.0)
+    assert warm.get("event") == "engine_warm", f"device_set 之后没等到预热回报，拿到的是：{warm}"
+    assert warm["warm_ms"] > 0.0 and warm["device"] == "cuda", warm
+    for _ in range(2):
+        engine.send(cmd="load_image", path=FIXTURE, max_px=576000, strength=0.0)
+    first = engine.wait_for("image_ready", timeout=120)
+    second = engine.wait_for("image_ready", timeout=120)
+    line = max(150.0, second["import_ms"] * 3.0)
+    assert first["import_ms"] <= line, (
+        f"预热后首图仍要 {first['import_ms']} ms（第二张 {second['import_ms']} ms，判据 {line:.1f}）："
+        "预热没盖住真实内核，或者冷价根本挪不走")

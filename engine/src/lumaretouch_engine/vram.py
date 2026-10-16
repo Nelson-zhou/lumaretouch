@@ -411,3 +411,31 @@ def make_pipeline(device: str, w: int, h: int, rgb: np.ndarray | None = None) ->
     if rgb is not None:
         p.load_rgb_u8(rgb)
     return p
+
+
+def warm_device(device: str, side: int = 64) -> float:
+    """把 GPU 上下文与首帧内核加载的成本从“导入第一张图”里挑出来，返实测 ms。
+
+    为什么要挑出来：F 轮实测冷进程首图 ~299 ms、后续 ~35 ms，那 265 ms 与图尺寸无关，
+    是上下文建立与内核模块首次加载——它挂在用户第一次点“导入”上，体感就是
+    “这软件第一张特别慢”。引擎是后台起的，这笔钱付在起进程时没人看得见。
+
+    预热跑的就是首帧那条链（建张量 → 盒式滤波 → 归一化混合 → uint8 打包 → 回读），
+    不是空转一个 `torch.add` 报个好看的数——那样“预热了”三个字盖住的正是没被加载的
+    那几个内核。设备不可用（没 torch / 没 GPU）时返 0.0，调用方据此不报预热事件。
+    """
+    if torch is None or not str(device).startswith("cuda") or not torch.cuda.is_available():
+        return 0.0
+    t0 = time.perf_counter()
+    pipe = PreviewPipeline(device, side, side)
+    try:
+        pipe.load_rgb_u8(np.zeros((side, side, 3), dtype=np.uint8))
+        pipe.render(0.5)
+        torch.cuda.synchronize()        # 与引擎 _sync 同一个理由：不同步就把内核记到回读头上
+        pipe.read_back()
+    finally:
+        pipe.retouched = None
+        pipe.src_u8 = None
+        pipe.src_f32 = None
+        pipe.frame_gpu = None
+    return (time.perf_counter() - t0) * 1000.0
