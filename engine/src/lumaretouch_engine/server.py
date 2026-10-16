@@ -15,6 +15,9 @@ import time
 
 from .frames import test_frame
 from .shm import FrameShm, monotonic_ns, shm_name
+# 磨皮参数的默认值只在这里取一次：vram 在模块层就容忍 torch 缺失（CPU job 也能 import），
+# 在这里复用它们而不是写第二份字面量，否则默认值与生产值会漂移。
+from .vram import DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_RADIUS
 
 PROTOCOL_VERSION = 1
 
@@ -70,6 +73,9 @@ class Engine:
         self._precompute = None
         self._precompute_backend = None
         self._channel = None
+        # 磨皮参数（M1-3c）：与 strength 不同，它们变了滤波结果才会变。缓存键靠这个字典，
+        # 所以它必须存在引擎侧而不是只在调用方：否则报表上看不出「这一帧重算了没」。
+        self._params = dict(radius=DEFAULT_RADIUS, eps=DEFAULT_EPS, detail_gain=DEFAULT_DETAIL_GAIN)
         self._wlock = threading.Lock()   # 跑靶线程与 stdin 线程都在写同一块双缓冲
         self._strength = _clamp_strength(0.5)
 
@@ -103,6 +109,11 @@ class Engine:
               "device": self.device, "cuda": self._cuda, "reason": msg})
 
     def cmd_bench_start(self, p: dict):
+        if "w" not in p or "h" not in p:
+            # 少参数时原来是裸 int(p["w"]) 抛 KeyError，事件里只有一句 "KeyError: 'w'"，
+            # 看不出是协议用错还是引擎坏了；说清缺什么、从哪拿（shm_ready 里的 w/h）
+            self._reject_bench("bench_start 缺 w/h：应从 shm_ready 拿会话尺寸", p.get("mode", "copy"))
+            return
         w, h = int(p["w"]), int(p["h"])
         frames = int(p.get("frames", 600))
         interval_ms = float(p.get("interval_ms", 16.7))
@@ -141,7 +152,7 @@ class Engine:
         抽成一个方法是为了让 packaging/m1-vram-bench.py 能直接复用同一份代码——
         离线跑靶如果自己拼一份近似逻辑，量的数就不能代表产品通路。
         """
-        seg = dict(synth=0.0, pre=0.0, kernel=0.0, post_gpu=0.0, cpu_post=0.0, readback=0.0)
+        seg = dict(synth=0.0, pre=0.0, filter=0.0, kernel=0.0, post_gpu=0.0, cpu_post=0.0, readback=0.0)
         # image_stream 模拟拖滑块：系数在 0.25→0.75 上扫一个 100 帧周期，
         # 像素逐帧真的在变；常驻管线的系数跑靶如果只动 0.001，字节上几乎看不出区别
         if mode == "image_stream":
@@ -152,9 +163,19 @@ class Engine:
             # 常驻路径：源图不重算、不上传，每帧只换一个系数
             channel = self._channel if mode == "image_stream" else None
             t = monotonic_ns()
-            out = pipe.retouch(strength, channel=channel)
+            # 参数必须跟着走：不传的话调用方用 set_strength 改了半径，跑靶仍按默认值出帧，
+            # 量的就不是产品通路（而且会多一次缓存重算混进数据里）
+            out = pipe.retouch(strength, channel=channel, **self._params)
             self._sync()
-            seg["kernel"] = (monotonic_ns() - t) / 1e6
+            # M1-3c：kernel 段现在只是混合；重算滤波的那一笔单独列到 filter 段。
+            # 两者不重叠（filter 由 prepare 自己量，kernel = 整段减去 filter），拼起来
+            # 才是以前的“内核”，这样拖拽热路径的真实成本能被看见，也不会把合计算两遍。
+            # 注意 pipeline_copyin 那条臂没有 filter 段：它调的是 retouch_t，滤波与混合
+            # 在同一个表达式里拆不开（filter=0 不等于“它不滤波”）。跨臂对拍要比的是
+            # copyin.kernel ≈ resident.filter + resident.kernel。
+            whole = (monotonic_ns() - t) / 1e6
+            seg["filter"] = float(getattr(pipe, "last_filter_ms", 0.0) or 0.0)
+            seg["kernel"] = max(whole - seg["filter"], 0.0)
             t = monotonic_ns()
             pipe.pack(out)
             # 跑靶指纹（只给合成靶纸用）：常驻路径的源图不动，逐帧变化的像素只能靠盖序号块。
@@ -171,7 +192,7 @@ class Engine:
         pixels = test_frame(shm.w, shm.h, i)
         seg["synth"] = (monotonic_ns() - t) / 1e6
         if mode in ("pipeline", "pipeline_copyin"):
-            pixels, s = self._pipe_copyin(pixels, strength)
+            pixels, s = self._pipe_copyin(pixels, strength, **self._params)
             seg.update(s)
         return pixels, seg
 
@@ -194,8 +215,11 @@ class Engine:
         # M0 必须知道 60fps 的天花板卡在哪一段——上一版只给一个总数，把合成图形的 17 ms
         # 当成了通路极限；M1-2 要证的是「内核没变快，快的全是搬运」，那就更得拆开。
         period = interval_ms / 1000.0
-        acc = dict(synth=0.0, pre=0.0, kernel=0.0, post_gpu=0.0, cpu_post=0.0,
+        acc = dict(synth=0.0, pre=0.0, filter=0.0, kernel=0.0, post_gpu=0.0, cpu_post=0.0,
                    readback=0.0, shm=0.0, notify=0.0)
+        # 重算次数：拖拽期零推理的直接证据。只要这个数不是 1（或 0），缓存就没真的生效，
+        # 而按均值报 filter 会把它藏起来（600 帧里重算一次只有 0.0075 ms/帧）。
+        refilters = 0
 
         def snapshot(done: int) -> dict:
             return {k: round(v / max(done, 1), 3) for k, v in acc.items()}
@@ -215,6 +239,8 @@ class Engine:
             if self.stop_flag.is_set():
                 break
             pixels, seg = self._make_frame(shm, i, mode, pipe)
+            if seg.get("filter", 0.0) > 0:
+                refilters += 1
             for k, v in seg.items():
                 acc[k] += v
             t4 = monotonic_ns()
@@ -238,6 +264,10 @@ class Engine:
               # 会话落在 CPU 上也能报出一份标着 cuda 的好数据。取局部 pipe 而不是
               # self._vram：后者会被别的命令顶掉，报的就不是刚才那一轮的服务者。
               "pipe_device": str(pipe.device) if pipe is not None else None,
+              # 零推理跑靶的验收面：重算次数应当是 0（预热那 8 帧已经付掉一次性成本）
+              "refilter_frames": refilters,
+              "refilter_ms_total": round(acc["filter"], 2),
+              "params": dict(self._params),
               **snapshot(frames)})
 
     # ------------------------------------------------------------ GPU 管线
@@ -297,7 +327,7 @@ class Engine:
         self._image_loaded = True
         t_b = monotonic_ns()
         self._strength = _clamp_strength(p.get("strength", 0.5))
-        pipe.render(self._strength)
+        pipe.render(self._strength, **self._params)
         with self._wlock:
             seq, t_emit, slot = shm.write_frame(pipe.read_back())
         t_c = monotonic_ns()
@@ -309,6 +339,14 @@ class Engine:
               "shm_ms": round((t_a - t0) / 1e6 - d.t_total_ms, 2),
               "attach_ms": round((t_b - t_a) / 1e6, 2),
               "first_frame_ms": round((t_c - t_b) / 1e6, 2),
+              # M1-3c：首帧里含一次与强度无关的滤波（产品档实测 ~4.5 ms）。不拆进单独字段，
+              # first_frame_ms 就会被读成“每帧都得 4.5 ms”，而拖拽期实际只付混合那 0.1 ms。
+              # 一次性成本与逐帧成本混在一起量就分不出谁是谁。
+              "first_frame_filter_ms": round(float(pipe.last_filter_ms), 2),
+              # 零推理换来的显存代价必须能看见，不能只报快了多少
+              "bytes_filter": pipe.filter_resident_bytes(),
+              # 只报滤波这一份：掩膜在本事件之后才挂上（precompute 跑在 image_ready 后面），这里附 bytes_face 恒为 0，
+              # 反而会被读成"掩膜没常驻"。掩膜/关键点的字节数由 precompute_ready 报，那才是它们为真的那一刻。
               "import_ms": round((t_c - t0) / 1e6, 2)})
         emit({"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
               "w": shm.w, "h": shm.h, "mode": "image"})
@@ -424,28 +462,63 @@ class Engine:
         if self.bench is not None and self.bench.is_alive():
             emit({"event": "error", "error": "跑靶进行中，拒绝 set_strength：先 bench_stop"})
             return
-        self._strength = _clamp_strength(p.get("value", self._strength))
+        # 先全部校验、再一次性提交：这条命令里任何一个字段非法就整条不生效。
+        # 原来的顺序是先把 self._strength / self._channel 提交，再校验磨皮参数；参数越界时
+        # 虽然 emit error 返回了，strength 却已经被这条"没有执行"的命令改走——下一条不带
+        # value 的 set_strength 会拿这个泄漏值出帧，用户看到的是"我拒绝了，画面却变了"。
+        strength = _clamp_strength(p.get("value", self._strength))
+        channel = self._channel
         if "channel" in p:
             if p["channel"] and p["channel"] not in self._vram.mask_names:
                 emit({"event": "error", "error": f"没有掩膜通道 {p['channel']}"
                       f"（可用：{', '.join(self._vram.mask_names) or '无，先 precompute'}）"})
                 return
-            self._channel = p["channel"] or None
+            channel = p["channel"] or None
+        # 磨皮参数：只有真变了才会重算滤波。半径直接决定 reflect pad 后的分配量
+        # （积分图是 O(1)/像素但与窗口面积挂钩），没硬边界的话一个越界值就能把显存打爆，
+        # 与 max_px 同一类风险。
+        # 下界不是随手取的：eps=0 会让 `a = var/(var+eps)` 在平坦皮区算 0/0 = NaN（产品档实测
+        # 402795 个子像素为 NaN）。这份 NaN 会被写进常驻缓存，而 `(1-0)*img + 0*NaN` 仍是 NaN
+        # （IEEE 里 0×NaN = NaN），于是 strength=0 与解码原图差到 255 LSB —— 验收口径③
+        # 整段会话被打穿。radius=0 不产 NaN，但滑块彻底空操作（实测 s=0.5 与原图 0 处不同），
+        # 产品上没有任何意义，一并卡掉。
+        params = dict(self._params)
+        for k, lo, hi in (("radius", 1, 256), ("eps", 1e-6, 1.0), ("detail_gain", 0.0, 2.0)):
+            if p.get(k) is None:
+                continue
+            try:
+                v = int(p[k]) if k == "radius" else float(p[k])
+            except (TypeError, ValueError):
+                emit({"event": "error", "error": f"参数 {k} 非法：{p[k]!r}"})
+                return
+            if not lo <= v <= hi:
+                emit({"event": "error", "error": f"参数 {k}={v} 超出范围 [{lo}, {hi}]"})
+                return
+            params[k] = v
+        self._strength, self._channel, self._params = strength, channel, params
         t0 = monotonic_ns()
-        self._vram.render(self._strength, channel=self._channel)
+        self._vram.render(self._strength, channel=self._channel, **params)
         render_ms = (monotonic_ns() - t0) / 1e6
         with self._wlock:
             seq, t_emit, slot = self.shm.write_frame(self._vram.read_back())
+        # filter_ms > 0 就是这一帧重算了滤波（参数刚变）；0.0 才是拖拽期的常态。
         emit({"event": "params_set", "strength": self._strength, "channel": self._channel,
-              "render_ms": round(render_ms, 2)})
+              "render_ms": round(render_ms, 2),
+              "filter_ms": round(float(self._vram.last_filter_ms), 2),
+              # 这一帧到底复用了缓存没有：`retouched is not None` 是个恒真的说法（render 成功
+              # 之后它必然非空），缓存被无声绕过时也照样报 True。只有 last_filter_ms 才由执行路径约束。
+              "cached": float(self._vram.last_filter_ms) == 0.0, **self._params})
         emit({"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
               "w": self.shm.w, "h": self.shm.h, "mode": "drag"})
 
-    def _pipe_copyin(self, rgba, strength: float):
+    def _pipe_copyin(self, rgba, strength: float, radius: int = DEFAULT_RADIUS,
+                     eps: float = DEFAULT_EPS, detail_gain: float = DEFAULT_DETAIL_GAIN):
         """逐帧搬运路径（对照组）：CPU numpy → H2D → 内核 → D2H → CPU numpy。
 
         返回 (RGBA, 各段 ms)。故意不复用输入缓冲：那是 test_frame 的缓存本体，
         改写它会让下一帧的「基图」逐帧漂走，「帧真的在换」这个证据就不可靠了。
+
+        磨皮参数照单接收：两条臂跑同一组参数，否则 copyin 与 resident 的差值里混着算法差异。
         """
         import numpy as np
 
@@ -462,7 +535,10 @@ class Engine:
         tensor = make_tensor(arr, self.device)
         seg["pre"] = (monotonic_ns() - t) / 1e6
         t = monotonic_ns()
-        o = retouch_t(tensor, strength=strength, radius=12, eps=6e-4)
+        # 这里原先写的是 radius=12, eps=6e-4 两个字面量、而且不传 detail_gain：默认值一改
+        # 这条对照臂就会静默漂离开生产参数，两个臂比的就不是同一件事了
+        o = retouch_t(tensor, strength=strength, radius=radius, eps=eps,
+                      detail_gain=detail_gain)
         self._sync()
         seg["kernel"] = (monotonic_ns() - t) / 1e6
         t = monotonic_ns()
@@ -471,6 +547,13 @@ class Engine:
         return out, seg
 
     def cmd_set_device(self, p: dict):
+        # 跑靶进行中整条拒绝。原来只拦"重建常驻会话"，可 self.device/self._cuda 在拦截之前
+        # 就已经改写并发出了 device_set：会话还留在旧设备上服务，而 _sync() 按 self._cuda
+        # 决定要不要 synchronize —— cuda 翻成 cpu 后跑靶线程的 kernel 段只剩"入队时间"，
+        # 滤波与混合看起来突然变快，数据不崩但分段计时与设备标签双双失真。
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝 set_device：先 bench_stop"})
+            return
         self.device = p.get("device", "cpu")
         # 只有 torch 真认了这个后端才算 GPU，否则 _sync 会去调一个不存在的 API
         self._cuda = False
@@ -509,7 +592,7 @@ class Engine:
             if self.shm is not None and (self.shm.w, self.shm.h) == (self._vram.w, self._vram.h):
                 # 通道必须跟着会话一起迁移：不传 channel 的话，报表里 active_channel 还是 skin，
                 # 而给用户补发的是一帧全图渲染——字段与实际执行不一致正是本仓最贵那个坑的形状
-                self._vram.render(self._strength, channel=self._channel)
+                self._vram.render(self._strength, channel=self._channel, **self._params)
                 with self._wlock:
                     seq, t_emit, slot = self.shm.write_frame(self._vram.read_back())
                 emit({"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,

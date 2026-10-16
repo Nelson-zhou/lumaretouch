@@ -373,7 +373,8 @@ def _load(engine, **kw):
     engine.wait_for("ready")
     engine.send(cmd="set_device", device="cpu")
     engine.wait_for("device_set")
-    engine.send(cmd="load_image", path=FIXTURE, strength=0.0, **kw)
+    # strength 可由调用方覆盖（M1-3c 的用例要从指定强度起步），默认仍是 0.0
+    engine.send(cmd="load_image", path=FIXTURE, **{"strength": 0.0, **kw})
     meta = engine.wait_for("shm_ready", timeout=60)
     engine.wait_for("vram_ready", timeout=60)
     engine.wait_for("image_ready", timeout=60)
@@ -586,3 +587,255 @@ def test_device_switch_replays_precompute(engine):
     assert ev2.get("replayed_for") == "device_switch"
     assert ev2["resident_device"].startswith("cuda"), f"迁移后掩膜还在 {ev2['resident_device']}"
     assert ev2["mask_bytes"] == ev["mask_bytes"], "重挂的掩膜换了尺寸"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_drag_stream_refilters_nothing(engine):
+    """M1-3c 的端到端主张：整场拖拽流里滤波一次都不重算。
+
+    为什么必须在 IPC 层测：缓存写在常驻会话上，单元测试里手动调 retouch() 只能证明
+    "传了参数会重算"，证明不了产品通路（跑靶的 warmup、参数默认值、会话归属）也把
+    重算吃干净。这里读的是引擎自己上报的 refilter_frames，不是测试进程的推断。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+
+    meta = _load(engine, max_px=207360, strength=0.5)
+    engine.send(cmd="bench_start", mode="image_stream", frames=6, interval_ms=20,
+                  w=meta["w"], h=meta["h"])
+    engine.wait_for("bench_started", timeout=30)
+    done = engine.wait_for("bench_done", timeout=90)
+    assert not done.get("failed"), f"跑靶失败：{done}"
+    assert done["refilter_frames"] == 0, \
+        f"拖拽流里重算了 {done['refilter_frames']} 次滤波，零推理没成立"
+    assert done["refilter_ms_total"] == 0.0, f"filter 段合计不为 0：{done['refilter_ms_total']}"
+    # 参数必须随事件说清楚，否则"没重算"也可能只是"没真的跑滤波"
+    assert done["params"]["radius"] == 12 and done["params"]["detail_gain"] == 0.85, done["params"]
+    # 这里**不**卡逐帧时长：bench_done 的各段是“总时间 ÷ 帧数”的均值，6 帧的均值
+    # 被一次调度抖动顶过 1 ms 是完全可能的（全套用例里真就这么红过一次，单跑又绿）。
+    # 时序预算归 m1-drag-bench：那里是 60 帧×9 次交错取中位，量得起。协议测试只管契约。
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_filter_param_change_recomputes_once_and_reaches_the_pixels(engine):
+    """改半径要重算一次，而且必须真的改到像素上。
+
+    只回显参数而画面不动是这一类字段最常见的假绿：params_set 里 radius 变了、
+    filter_ms 也 >0，看着一切正常，但渲染根本没接收这个参数。所以第二帧要和第一帧
+    在像素上真的不同，而且下一次纯改 strength 要回到 filter_ms=0。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    from lumaretouch_engine.shm import FrameShm
+
+    meta = _load(engine, max_px=207360, strength=0.6)
+    peer = FrameShm(meta["name"])
+    try:
+        engine.send(cmd="set_strength", value=0.6)
+        ev = engine.wait_for("params_set", timeout=30)
+        assert ev["filter_ms"] == 0.0, f"纯拖强度也重算了滤波：{ev['filter_ms']} ms"
+
+        before = _read_frame(engine, peer, meta["h"], meta["w"])
+        engine.send(cmd="set_strength", value=0.6, radius=18)
+        ev2 = engine.wait_for("params_set", timeout=30)
+        assert ev2["radius"] == 18, f"参数没回显：{ev2}"
+        assert ev2["filter_ms"] > 0.0, "改了半径却没重算滤波——缓存键没含参数"
+        after = _read_frame(engine, peer, meta["h"], meta["w"])
+        changed = int((np.abs(after - before) > 0).sum())
+        assert changed > 0, "半径从 12 改到 18，画面一个子像素都没动：参数只是回显了"
+
+        engine.send(cmd="set_strength", value=0.9)
+        ev3 = engine.wait_for("params_set", timeout=30)
+        assert ev3["radius"] == 18, f"新参数没记住：{ev3}"
+        assert ev3["filter_ms"] == 0.0, f"同参数下又重算了：{ev3['filter_ms']} ms"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_out_of_range_filter_params_are_refused_wholly(engine):
+    """越界参数要当场拒绝，而且不能半应用。
+
+    半径直接决定 reflect pad 之后的分配量（积分图窗口越大中间张量越大），一个
+    radius=100000 就是一次显存爆炸；写进 self._params 但被渲染忽略更糟——报表说
+    半径是 100000，屏幕上是 12。拒绝之后会话必须还能继续用。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+
+    _load(engine, max_px=207360, strength=0.5)
+    for kw in ({"radius": 100000}, {"radius": -3}, {"eps": -1.0}, {"detail_gain": 99.0}):
+        engine.send(cmd="set_strength", value=0.5, **kw)
+        err = _expect_error(engine, "超出范围")
+        assert err["event"] == "error", err
+        # 拒绝必须整条拒绝：值不能已经写进会话
+        engine.send(cmd="set_strength", value=0.55)
+        ev = engine.wait_for("params_set", timeout=30)
+        for k, v in kw.items():
+            assert ev[k] != v, f"{k}={v} 被拒绝了却写进了会话：{ev}"
+
+    # 被拒绝之后通路仍然是活的（不是一次性错误把会话打死）
+    assert ev["render_ms"] > 0
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_import_reports_the_one_time_filter_cost_separately(engine):
+    """首帧里的一次性滤波必须单独上报，同时报出它换来的显存代价。
+
+    坑的形状：M1-3c 之后 first_frame_ms 仍含那 4.5 ms，而拖拽期一帧只要 0.1 ms。
+    只报一个 first_frame_ms，下一个人就会把它当成逐帧成本，或者把"导入变快了"当成
+    "渲染变快了"。反过来，零推理不是免费的：多常驻一张 float RGB，不报字节数就是
+    只报收益不报成本。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    from lumaretouch_engine.decode import load_rgb
+
+    ref = load_rgb(FIXTURE)
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cuda")
+    engine.wait_for("device_set")
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.5)
+    engine.wait_for("shm_ready", timeout=60)
+    engine.wait_for("vram_ready", timeout=60)
+    r = engine.wait_for("image_ready", timeout=60)
+    expect_filter = ref.w * ref.h * 3 * 4
+    assert r["bytes_filter"] == expect_filter, \
+        f"滤波常驻字节数 {r['bytes_filter']} != 一张 float RGB {expect_filter}（{ref.w}x{ref.h}×3×4）"
+    assert r["first_frame_filter_ms"] > 0, "首帧没报出一次性滤波成本，first_frame_ms 会被误读成逐帧成本"
+    assert r["first_frame_ms"] >= r["first_frame_filter_ms"], \
+        f"分段不自洽：整帧 {r['first_frame_ms']} 比它包含的滤波 {r['first_frame_filter_ms']} 还小"
+    # 纯拖强度不应再付这笔：filter_ms=0 而首帧那次 >0，两个数一起才说明"只算了一次"
+    engine.send(cmd="set_strength", value=0.7)
+    ev = engine.wait_for("params_set", timeout=30)
+    assert ev["filter_ms"] == 0.0, f"拖强度重算了滤波：{ev}"
+    assert ev["cached"] is True, f"缓存没建立却说 cached：{ev}"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_eps_zero_is_refused_because_it_poisons_the_resident_cache(engine):
+    """eps=0 必须当场拒绝：它会把 NaN 写进常驻缓存，并把 strength=0 的恒等打穿。
+
+    实测（产品档 672×848，本轮取证）：radius=12/eps=0 时 `a = var/(var+eps)` 在平坦皮区
+    0/0 → NaN，402795 个子像素为 NaN；缓存一旦收下这份结果，`(1-0)*img + 0*NaN` 也是 NaN
+    （IEEE 里 0×NaN = NaN），pack 的 clamp 对 NaN 无定义，落到 uint8 后与解码原图差 255 LSB。
+    也就是：一条合法形状的 set_strength 就能让"零强度=原图"这条验收口径整段会话失效。
+    radius=0 同样是空滑块（s=0.5 与原图 0 处不同），一并卡下界。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    from lumaretouch_engine.decode import load_rgb
+    from lumaretouch_engine.shm import FrameShm
+
+    ref = load_rgb(FIXTURE)
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cuda")
+    engine.wait_for("device_set")
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.0)
+    meta = engine.wait_for("shm_ready", timeout=60)
+    engine.wait_for("image_ready", timeout=60)
+
+    peer = FrameShm(meta["name"])
+    try:
+        base = _read_frame(engine, peer, ref.h, ref.w)
+        assert np.abs(base - ref.rgb.astype(np.int16)).max() == 0, "起点就不是原图"
+        for kw in ({"eps": 0.0}, {"radius": 0}, {"eps": 0.0, "radius": 0}):
+            engine.send(cmd="set_strength", value=0.5, **kw)
+            _expect_error(engine, "超出范围")
+            engine.send(cmd="set_strength", value=0.0)
+            ev = engine.wait_for("params_set", timeout=30)
+            got = _read_frame(engine, peer, ref.h, ref.w)
+            d = int(np.abs(got - ref.rgb.astype(np.int16)).max())
+            assert d == 0, f"{kw} 被拒绝之后，strength=0 的帧仍与原图差 {d} LSB——非法值已写进缓存"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_rejected_set_strength_leaves_no_half_applied_state(engine):
+    """被拒绝的那条命令一个字段都不能留下。
+
+    坑的形状：cmd_set_strength 原来先提交 strength/channel，再校验磨皮参数；参数越界时
+    直接 emit error 返回，但 self._strength 已经改成这条"没执行"的命令里的值。下一条
+    不带 value 的 set_strength 会拿这个泄漏值出帧——用户看到的是"我拒绝了，画面却变了"。
+    上一轮那条越界用例每条都显式带了 value，正好把这个洞盖住，所以这里刻意**不带** value。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+
+    _load(engine, max_px=207360, strength=0.4)
+    engine.send(cmd="set_strength", value=0.8, channel="skin")   # 没有掩膜，channel 也要被拒
+    _expect_error(engine, "没有掩膜通道")
+    engine.send(cmd="set_strength", value=0.9, radius=100000)    # 参数越界
+    _expect_error(engine, "超出范围")
+    # 现在发一条"什么都不改"的命令：回显必须还是导入时的 0.4 与全图，而不是 0.8/0.9/skin
+    engine.send(cmd="set_strength")
+    ev = engine.wait_for("params_set", timeout=30)
+    assert ev["strength"] == 0.4, f"被拒绝的 value 泄漏进了会话：回显 {ev['strength']}，应为导入时的 0.4"
+    assert ev["channel"] is None, f"被拒绝的 channel 泄漏进了会话：{ev['channel']}"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_cached_field_discriminates_recompute_from_reuse(engine):
+    """`cached` 必须能区分"这一帧重算了没"，不能是个恒真的说法。
+
+    原来是 `"cached": retouched is not None`：只要 render 成功它就必然 True，
+    于是"缓存被无声绕过"这种最坏情况仍会报出一句"已缓存"。所以这里要求它在
+    改参那一帧为 False、在纯拖强度那一帧为 True——两个值都出现过，字段才算被执行路径钉住。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+
+    _load(engine, max_px=207360, strength=0.5)
+    engine.send(cmd="set_strength", value=0.5, radius=18)
+    ev1 = engine.wait_for("params_set", timeout=30)
+    assert ev1["filter_ms"] > 0.0 and ev1["cached"] is False, f"重算帧却报 cached=True：{ev1}"
+    engine.send(cmd="set_strength", value=0.7)
+    ev2 = engine.wait_for("params_set", timeout=30)
+    assert ev2["filter_ms"] == 0.0 and ev2["cached"] is True, f"复用帧却报 cached=False：{ev2}"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_set_device_is_refused_while_bench_running(engine):
+    """跑靶进行中不许换设备：会话留在旧设备上，但 self._cuda 会翻，分段计时随之失真。
+
+    `_sync()` 按 `self._cuda` 决定是否 synchronize。cuda→cpu 翻转后跑靶线程的 kernel 段
+    只剩"入队时间"，滤波/混合看起来突然变快；而 device_set 已经宣告切换成功，只有
+    bench_done.pipe_device 才看得出真相。与 load_image/precompute/set_strength 同一条规矩：
+    整条拒绝，所以既不能有 error 之外的任何 device_set，跑靶也不能因此失败。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    import torch
+    if not torch.cuda.is_available():
+        pytest.skip("无 GPU：迁移路径与 pipe_device 都无从谈起")
+
+    # 注意：_load 之后再 set_device 只做"会话迁移"，不会重发 shm_ready——同尺寸的
+    # _ensure_shm 命中已有缓冲时压根不创建新块。这里复用 _load 拿到的 w/h，别等第二个 shm_ready。
+    meta = _load(engine, max_px=207360, strength=0.5)
+    engine.send(cmd="set_device", device="cuda")
+    engine.wait_for("device_set", timeout=30)
+    engine.send(cmd="bench_start", mode="image_stream", frames=40, interval_ms=100,
+                w=meta["w"], h=meta["h"])
+    engine.wait_for("bench_started", timeout=30)
+
+    engine.send(cmd="set_device", device="cpu")
+    seen = []
+    err = None
+    while err is None and len(seen) < 60:
+        ev = engine.next_event(timeout=20)
+        if ev.get("event") == "error":
+            err = ev
+        else:
+            seen.append(ev.get("event"))
+            assert ev.get("event") != "device_set", \
+                f"拒绝不彻底：跑靶进行中的 set_device 仍发出了 device_set（{ev}）"
+    assert "跑靶进行中" in (err or {}).get("error", ""), f"没等到预期的拒绝：{err}，期间收到 {seen}"
+
+    engine.send(cmd="bench_stop")
+    done = engine.wait_for("bench_done", timeout=60)
+    assert not done.get("failed"), f"跑靶被这次拒绝弄挂了：{done}"
+    assert str(done.get("pipe_device")).startswith("cuda"), \
+        f"会话被换走了：pipe_device={done.get('pipe_device')}，应当仍是 cuda"

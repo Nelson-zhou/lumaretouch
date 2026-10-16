@@ -13,14 +13,16 @@ D2H 1.8、`clip*255→uint8` 4.5。也就是说我们花了 4 倍于算法的成
 
 from __future__ import annotations
 
+import math
 import numpy as np
+import time
 
 try:
     import torch          # 与 ops.guided 同一约定：torch 未装（M0 纯通路、CI 的 CPU job）
 except Exception:        # 也要能 import 成功，不然整个测试收集阶段就报 ModuleNotFoundError
     torch = None
 
-from .ops.guided import guided_t, retouch_masked_t, retouch_t
+from .ops.guided import filter_t, mix_masked
 
 # 与 ops.guided 的生产默认值保持一致；滑块只在这个基准附近改动系数
 DEFAULT_RADIUS = 12
@@ -57,6 +59,13 @@ class PreviewPipeline:
         self.masks_gpu: torch.Tensor | None = None
         self.mask_names: list[str] = []
         self.landmarks_gpu: torch.Tensor | None = None
+        # M1-3c：与 strength 无关的滤波结果也常驻。拖滑块期间只重算混合那一步。
+        # filter_key 记下这份结果对应哪组参数；源图一变（load_rgb_u8）必须作废。
+        self.retouched: torch.Tensor | None = None
+        self.filter_key: tuple | None = None
+        # 上一次 retouch() 里重算滤波花掉的毫秒；0.0 就是命中缓存。分段计时靠它把
+        # 「一次性成本」与「每帧成本」分开上报，不然缓存到底有没有生效看不出来。
+        self.last_filter_ms = 0.0
 
     # ---- 装载：一次性 H2D ----------------------------------------------
     def load_rgb_u8(self, rgb: np.ndarray) -> None:
@@ -70,25 +79,71 @@ class PreviewPipeline:
         self.src_f32 = self.src_u8.to(torch.float32).div_(255.0)
         self.frame_gpu = torch.empty((self.h, self.w, 4), dtype=torch.uint8, device=self.device)
         self.frame_gpu[..., 3] = 255
+        # 换图就是换源张量：旧滤波结果对新图没有任何意义，继续用等于拿别人的脸磨自己的皮
+        self.retouched = None
+        self.filter_key = None
+        self.last_filter_ms = 0.0
         if self.device.type != "cpu":
             torch.cuda.synchronize(self.device)
 
     # ---- 渲染：全 GPU，无 CPU 参与 --------------------------------------
+    def prepare(self, radius: int = DEFAULT_RADIUS, eps: float = DEFAULT_EPS,
+                detail_gain: float = DEFAULT_DETAIL_GAIN, force: bool = False) -> float:
+        """算一次滤波并常驻，返回本次重算的毫秒数；0.0 表示命中缓存没有重算。
+
+        拖滑块期间这个 0.0 才是常态：strength 不进滤波，只在混合那一步当系数。
+        半径/eps/质感这些真的会改滤波结果的参数变了，才会重算这一份。
+        """
+        if self.src_f32 is None:
+            raise RuntimeError("先 load_rgb_u8 再 prepare")
+        # 先把入参归一化再算键：键与实际执行必须来自同一个值。之前是 int(radius) 进键、
+        # 原始的 radius 进滤波，传 12.5 时键说 12 而算的是 12.5——两个不同的滤波结果会
+        # 撞同一个键，下次拿到的就是错的那份。
+        r = int(radius)
+        e = float(eps)
+        g = float(detail_gain)
+        # eps 必须严格为正：`a = var/(var+eps)` 在 eps=0 时于平坦皮区算 0/0，产出 NaN
+        # （产品档实测 402795 个子像素 NaN）。radius=0 在库层是合法的退化恒等滤波（输出有限、
+        # strength=0 仍逐字节成立），协议层另有下界拦住它带来的"空滑块"。
+        if r < 0 or e <= 0.0 or not (math.isfinite(e) and math.isfinite(g)):
+            raise ValueError(f"磨皮参数非法：radius={r}（需 ≥0）、eps={e}（需 >0 的有限值）、"
+                             f"detail_gain={g}（需有限值）")
+        key = (r, e, g)
+        if not force and self.retouched is not None and self.filter_key == key:
+            self.last_filter_ms = 0.0
+            return 0.0
+        t0 = time.perf_counter()
+        out = filter_t(self.src_f32, radius=r, eps=e, detail_gain=g)
+        # 最后一道防线：不把非有限值写进常驻缓存。缓存里的 NaN 会长期作恶——
+        # `(1-0)*img + 0*NaN` 仍是 NaN，strength=0 的逐字节恒等当场失效。
+        # 代价是重算路径上多一次归约与同步（只在换图/换参数时发生，不在拖拽热路径上）。
+        if not torch.isfinite(out).all():
+            raise ValueError(f"滤波产出非有限值，已拒绝写入常驻缓存：radius={r} eps={e} detail_gain={g}")
+        self.retouched = out
+        self.filter_key = key
+        if self.device.type != "cpu":
+            torch.cuda.synchronize(self.device)
+        self.last_filter_ms = (time.perf_counter() - t0) * 1000.0
+        return self.last_filter_ms
+
     def retouch(self, strength: float, radius: int = DEFAULT_RADIUS,
                 eps: float = DEFAULT_EPS, detail_gain: float = DEFAULT_DETAIL_GAIN,
                 channel: str | None = None):
         """只跑算法，返回显存里的 float (1,3,H,W)。滑块每动一次调一次。
 
-        channel 给定时走分通道渲染（掩膜加权），不给定时全图。两条都是纯 GPU：
-        拖滑块只需要换 strength 这个标量，不产生任何推理或上传。
+        channel 给定时走分通道渲染（掩膜加权），不给定时全图。两条都是纯 GPU。
+
+        M1-3c：滤波结果走常驻缓存，这一步退化成一个线性插值。缓存路径与逐帧重算
+        不是“近似相等”而是逐字节相等——混合用的表达式与操作数都完全相同：
+        全图 `(1-s)*img + s*out`，分通道 `mix_masked(img, out, s, weight)`。
+        因此 strength=0 恒等那条承诺一分不改：`0*out` 仍然恒为 0。
         """
         if self.src_f32 is None:
             raise RuntimeError("先 load_rgb_u8 再 render")
+        self.prepare(radius=radius, eps=eps, detail_gain=detail_gain)
         if channel is not None:
-            return retouch_masked_t(self.src_f32, self.mask(channel), strength=strength,
-                                    radius=radius, eps=eps, detail_gain=detail_gain)
-        return retouch_t(self.src_f32, strength=strength, radius=radius,
-                         eps=eps, detail_gain=detail_gain)
+            return mix_masked(self.src_f32, self.retouched, strength, self.mask(channel))
+        return (1.0 - strength) * self.src_f32 + strength * self.retouched
 
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:
@@ -145,6 +200,12 @@ class PreviewPipeline:
             if t is not None:
                 total += int(t.numel() * t.element_size())
         return total
+
+    def filter_resident_bytes(self) -> int:
+        """M1-3c 那份常驻滤波结果的字节数——零推理换来的显存代价，必须能看见。"""
+        if self.retouched is None:
+            return 0
+        return int(self.retouched.numel() * self.retouched.element_size())
 
     def pack(self, out) -> None:
         """float→uint8 并写进常驻帧缓冲，同样全程在显存里做。"""

@@ -112,3 +112,63 @@ def test_torch_matches_numpy_within_tolerance():
     out = to_numpy_chw(retouch_t(t, strength=0.6, radius=10, eps=6e-4))
     diff = np.abs(out.transpose(2, 0, 1)[None] - ref).max()
     assert diff < 2e-3, f"GPU 与 CPU 结果不一致，max diff={diff:.2e}"
+
+
+def test_gpu_cpu_parity_at_product_proxy_size():
+    """产品代理档（672×848）上的 GPU/CPU 对拍。
+
+    上面那条只在 128×160 的噪声图上比，那个组合下端到端差才 2.5e-4，看着很紧。
+    真实照片的平坦皮区会让 `a = var/(var+eps)` 除以小量，把累加噪声放大一个量级；
+    而 672×848 恰好就是产品默认像素预算。门禁定在小图上等于没定。
+
+    容差按实测写（不是猜）：float 层面 s=0.85 时 3.3409e-03，且这个数是**逐位可重现**的
+    （同一输入连跑三次都是 3.3409e-03——它是数值量不是时序量），所以只给到 4e-3 的余量，
+    而不是宽到能盖住真实漂移。
+    真正的验收口径是量化后的字节：最大 ≤1 LSB、且不同子像素占比 <2%。
+    """
+    import os
+
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        pytest.skip("无 GPU 可用")
+    from lumaretouch_engine.decode import load_rgb
+    from lumaretouch_engine.ops.guided import make_tensor, retouch_np, retouch_t
+
+    jpg = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       "tests", "fixtures", "portrait-1024x1280.jpg")
+    if not os.path.isfile(jpg):
+        pytest.skip("缺测试人像，先跑 packaging/make-test-portrait.py")
+    d = load_rgb(jpg)                      # 默认预算 576000 → 672×848，就是产品代理档
+    assert (d.h, d.w) == (848, 672), f"fixture 预算变了：{d.w}x{d.h}"
+
+    chw = np.ascontiguousarray(d.rgb.astype(np.float32) / 255.0).transpose(2, 0, 1)[None]
+    f32 = d.rgb.astype(np.float32) / 255.0          # make_tensor 只收 [0,1] 浮点（uint8 会被拒）
+    q = lambda a: (np.clip(a, 0, 1) * 255).astype(np.uint8).astype(np.int16)
+    for s in (0.3, 0.85):
+        ref = retouch_np(chw, strength=s)
+        out = retouch_t(make_tensor(f32, "cuda"), strength=s)[0].cpu().numpy()
+        fdiff = float(np.abs(out - ref).max())
+        bdiff = np.abs(q(out) - q(ref))          # 比的是两个实现，不是“输出 vs 原图”
+        ratio = float((bdiff > 0).mean())
+        assert fdiff < 4e-3, f"s={s} 产品档 float 差 {fdiff:.2e}，超出实测水平（3.34e-3）的既定余量"
+        assert bdiff.max() <= 1, f"s={s} 量化后差 {int(bdiff.max())} LSB，超出验收口径"
+        assert ratio < 0.02, f"s={s} 有 {ratio:.1%} 子像素在差，不能拿“最大 1 LSB”当安全"
+
+
+def test_make_tensor_rejects_uint8():
+    """make_tensor 必须拒收 uint8。
+
+    它只做转置与搬运、不除 255，所以传错尺子时不报错、静默给出一张 0..255 的图：
+    实测与参考实现最大差 2.5e+02（等于整幅图全黑与全白的差别）。写探针的人连着踩过
+    两次，说明这条路本身就该封掉而不是靠人记住。
+    """
+    pytest.importorskip("torch")
+    from lumaretouch_engine.ops.guided import make_tensor
+
+    with pytest.raises(TypeError, match="float32"):
+        make_tensor(np.zeros((8, 8, 3), dtype=np.uint8), "cpu")
+    with pytest.raises(TypeError, match="255"):
+        make_tensor(np.zeros((8, 8, 3), dtype=np.int32), "cpu")
+    # 浮点仍然正常
+    ok = make_tensor(np.zeros((8, 8, 3), dtype=np.float32), "cpu")
+    assert ok.shape == (1, 3, 8, 8) and ok.dtype.is_floating_point

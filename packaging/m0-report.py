@@ -55,7 +55,9 @@ def engine_for(runs: list[dict], eng: list[dict]) -> dict:
 
 # 引擎侧一帧拆成这样才读得懂：M1-2 的卖点就是「内核没动，省的全是搬运」，
 # 只报一个「管线」总数就分不出这两种情况。
-ENG_COLS = ("引擎:测帧", "引擎:上传", "引擎:内核", "引擎:GPU收尾", "引擎:CPU收尾",
+# M1-3c 之后「引擎:内核」这一列只包含混合那一步：滤波被拆到「引擎:滤波」，它是**一次性成本**
+# （换图或换磨皮参数才付），拖拽期恒为 0。两列不相交，合计就是各列之和，不会算两遍。
+ENG_COLS = ("引擎:测帧", "引擎:上传", "引擎:滤波", "引擎:内核", "引擎:GPU收尾", "引擎:CPU收尾",
             "引擎:回读", "引擎:写shm", "引擎:通知", "引擎:合计")
 
 
@@ -63,7 +65,7 @@ def eng_cells(e: dict) -> tuple[str, ...]:
     if not e:
         return ("—",) * len(ENG_COLS)
     if "kernel" in e:                      # M1-2 后的细粒度分段
-        v = [e.get(k, 0) for k in ("synth", "pre", "kernel", "post_gpu",
+        v = [e.get(k, 0) for k in ("synth", "pre", "filter", "kernel", "post_gpu",
                                    "cpu_post", "readback", "shm", "notify")]
         return tuple(eng_ms(x) for x in v) + (f"{sum(float(x or 0) for x in v):.2f}",)
     # 旧 jsonl 只给了一个 pipe 总数。把它填进「上传」或「内核」都会被读成
@@ -74,9 +76,9 @@ def eng_cells(e: dict) -> tuple[str, ...]:
     cells = ["—"] * len(ENG_COLS)
     cells[0] = eng_ms(synth)
     cells[1] = f"管线(旧){pipe:.2f}"
-    cells[6] = eng_ms(shm)
-    cells[7] = eng_ms(notify)
-    cells[8] = f"{synth + pipe + shm + notify:.2f}"
+    cells[7] = eng_ms(shm)
+    cells[8] = eng_ms(notify)
+    cells[9] = f"{synth + pipe + shm + notify:.2f}"
     return tuple(cells)
 
 
@@ -164,14 +166,17 @@ def eng_arm(eng_by_run: dict, arm: str) -> dict | None:
     rows = [e for key, e in eng_by_run.items() if key.split("#")[0] == arm]
     if not rows:
         return None
-    seg = ("synth", "pre", "kernel", "post_gpu", "cpu_post", "readback", "shm", "notify")
+    seg = ("synth", "pre", "filter", "kernel", "post_gpu", "cpu_post", "readback", "shm", "notify")
     med = lambda xs: statistics.median(xs) if xs else 0.0
     per = {k: med([float(r.get(k, 0) or 0) for r in rows]) for k in seg}
     # 旧数据只有一个 pipe：当作「管线+搬运」合计读，不假装能拆开口
     if not any("kernel" in r for r in rows):
         per = dict(synth=med([float(r.get("synth", 0) or 0) for r in rows]),
                    pipe=med([float(r.get("pipe", 0) or 0) for r in rows]))
-    return {"kernel": per.get("kernel", 0.0), "total": sum(per.values())}
+    # 重算次数取"最差那一次"而不是中位：中位会被 600 帧摊平成 0.00，缓存被绕过也看不出来
+    refl = [int(r.get("refilter_frames", 0) or 0) for r in rows if "refilter_frames" in r]
+    return {"kernel": per.get("kernel", 0.0), "filter": per.get("filter", 0.0),
+            "refilter": max(refl) if refl else None, "total": sum(per.values())}
 
 
 def aggregate(runs: list[dict], eng: dict | None = None) -> None:
@@ -187,9 +192,13 @@ def aggregate(runs: list[dict], eng: dict | None = None) -> None:
     # 预计算列只在 G 轮这类真跑过 precompute 的数据里出现：无条件加列会让 E/F 轮
     # 整片“—”，而报表里满屏占位符正是没人再认真看列的原因
     has_pc = any(d.get("pcBackend") for ds in arms.values() for d in ds)
+    # 老引擎数据没 refilter_frames，加一列全"—"不如不加（同 has_pc 的理由）
+    has_drag = any("refilter_frames" in e for e in (eng or {}).values())
     cols = ("臂", "n", "MB/帧", "上传策略", "分块", "fps 中位", "fps 最差",
             "丢帧% 中位", "丢帧% 最差", "取→绘 p50", "p95", "撞帧run",
             "引擎合计", "内核")
+    if has_drag:
+        cols += ("滤波中位/重算帧",)
     if has_pc:
         cols += ("预计算（后端·点·通道·MB·总ms）",)
     cols += ("≥中位59且最差≤5%",)
@@ -214,6 +223,10 @@ def aggregate(runs: list[dict], eng: dict | None = None) -> None:
                  ms(statistics.median(p50)), ms(statistics.median(p95)),
                  f"{stalls}/{len(ds)}",
                  f"{e['total']:.2f}" if e else "—", f"{e['kernel']:.2f}" if e else "—"]
+        if has_drag:
+            cells.append("—" if not e else
+                         f"{e['filter']:.2f}/{e['refilter']}"
+                         if e['refilter'] is not None else f"{e['filter']:.2f}/—")
         if has_pc:
             pcs = [d["pcTotalMs"] for d in ds if d.get("pcTotalMs") is not None]
             cells.append("—" if not pcs else (

@@ -27,7 +27,7 @@ from lumaretouch_engine.server import Engine              # noqa: E402
 from lumaretouch_engine.shm import FrameShm, monotonic_ns, shm_name   # noqa: E402
 from lumaretouch_engine.vram import make_pipeline         # noqa: E402
 
-SEG_KEYS = ("synth", "pre", "kernel", "post_gpu", "cpu_post", "readback", "shm")
+SEG_KEYS = ("synth", "pre", "filter", "kernel", "post_gpu", "cpu_post", "readback", "shm")
 REPS = int(os.environ.get("REPS", "7"))
 BUDGET = float(os.environ.get("LRT_RESIDENT_BUDGET_MS", "0") or 0)
 
@@ -93,14 +93,25 @@ def run_size(dev: str, w: int, h: int) -> bool:
         a, b = med(rows["copyin"]["total"]), med(rows["resident"]["total"])
         print(f"  合计 {a:.2f} → {b:.2f} ms/帧（Δ {b - a:+.2f}，{(b - a) / a * 100:+.0f}%）"
               f"  最差 {max(rows['copyin']['total']):.2f} → {max(rows['resident']['total']):.2f}")
-        # 内核那一段两条臂跑的是同一个 retouch_t，如果对不上就说明分段本身不可信。
-        # 本机实测这 8 ms 的核有 ±1 ms 的重复性抖动（四轮独立测量中位 7.67–8.65，
-        # 但 min 全部落在 7.67–7.83），所以看中位差也看 min 差，不能拿 1 ms 当回归。
-        ka, kb = med(rows["copyin"]["kernel"]), med(rows["resident"]["kernel"])
-        kamin, kbmin = min(rows["copyin"]["kernel"]), min(rows["resident"]["kernel"])
-        same = abs(kamin - kbmin) <= 0.6 and abs(ka - kb) <= max(1.0, 0.15 * ka)
-        print(f"  内核 copyin {ka:.2f}(min {kamin:.2f}) / resident {kb:.2f}(min {kbmin:.2f}) ms："
-              + ("同一算法，省下来的全是搬运" if same else "内核也变了，分段不可信，先查代码"))
+        # 这条比对在 M1-3c 之前是"两臂内核应当一致"（那时常驻臂每帧也跑完整 retouch_t）。
+        # 现在常驻臂拖拽期只算混合、滤波在预热阶段算一次并被缓存，两臂内核本来就该不同；
+        # 还按"相等"判会把里程碑本身报成回归。换成仍然有牙齿的判据：
+        #   ① 常驻臂"滤波 + 混合"不得超过 copyin 内核 —— 不许偷偷换成更贵的算法；
+        #   ② 省下的量必须显著（>0.5 ms）——否则"零推理"只是没跑算法；
+        #   ③ 若缓存没生效，filter 会≈整个内核，①立刻失败（这条是被绕过的检测器）。
+        # 本机实测这 8 ms 的核有 ±1 ms 重复性抖动（四轮中位 7.67–8.65、min 7.67–7.83），
+        # 所以阈值按抖动量级留余量，不看小数点后两位。
+        ka = med(rows["copyin"]["kernel"])
+        kf = med(rows["resident"]["filter"])
+        kb = med(rows["resident"]["kernel"])
+        same_algo = kf + kb <= ka * 1.05 + 0.2
+        really_saved = ka - (kf + kb) > 0.5
+        print(f"  内核 copyin {ka:.2f}（每帧全算）/ resident 滤波 {kf:.2f} + 混合 {kb:.2f}"
+              f"（拖拽期）ms："
+              + ("滤波已不在热路径，省下的全是真省" if same_algo and really_saved else
+                 f"常驻臂单帧算法成本没降（省 {ka - (kf + kb):+.2f} ms）或反而更贵，先查代码"))
+        if not (same_algo and really_saved):
+            ok = False
         if BUDGET:
             ok = b <= BUDGET
             print(f"  RESIDENT_MS={b:.2f} BUDGET={BUDGET:.2f} VERDICT={'PASS' if ok else 'FAIL'}")

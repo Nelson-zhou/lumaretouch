@@ -145,6 +145,19 @@ case "${ROUND:-e}" in
      arms=("G1-precompute-skin|raw|1|1|672x848|1|image_stream|cuda|$photo|576000|auto|skin"
            "G2-noprecompute|raw|1|1|672x848|1|image_stream|cuda|$photo|576000|0|"
            "G4-copy-672x848|raw|1|1|672x848|1|copy|cpu") ;;
+  # H 轮：拖滑块零推理（M1-3c）。三条臂与 G 轮逐字同参（同 fixture、同代理预算、
+  # 同掩膜通道、同尺寸），这样 58.8 → ? 才是同一件事的前后对照；改任何一个参数
+  # 都会把"零推理的收益"和"配置差异"混成一个数。
+  #   H1 = G1 配置（真图 + 预计算 + skin 掩膜）：主测。判据两条：
+  #        ① refilter_frames 必须为 0（引擎自报拖拽期一次滤波都没重算，这是本轮的
+  #           直接证据，不依赖跨轮比较）；② fps 中位 ≥59.5，即追平 G 轮的 copy 地板。
+  #   H2 = G2 配置（真图、不预计算）：全图拖拽，与 H1 的差就是掩膜在零推理下的代价
+  #   H4 = G4 配置（同尺寸空管线）：地板，用来判断"是否已经没有余量可拿"
+  h) photo="$here/../engine/tests/fixtures/portrait-1024x1280.jpg"
+     [ -f "$photo" ] || { echo "✗ 缺测试人像，先跑 packaging/make-test-portrait.py"; exit 2; }
+     arms=("H1-zero-infer-skin|raw|1|1|672x848|1|image_stream|cuda|$photo|576000|auto|skin"
+           "H2-zero-infer-full|raw|1|1|672x848|1|image_stream|cuda|$photo|576000|0|"
+           "H4-copy-672x848|raw|1|1|672x848|1|copy|cpu") ;;
 esac
 
 if [ "${INTERLEAVE:-1}" = "1" ]; then
