@@ -14,6 +14,8 @@ D2H 1.8、`clip*255→uint8` 4.5。也就是说我们花了 4 倍于算法的成
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass, field
+
 import numpy as np
 import time
 
@@ -23,11 +25,38 @@ except Exception:        # 也要能 import 成功，不然整个测试收集阶
     torch = None
 
 from .ops.guided import filter_t, mix_masked
+from .ops.inpaint import crop_apply_t, hole_extent, inpaint_t, levels_for, mask_bbox
 
 # 与 ops.guided 的生产默认值保持一致；滑块只在这个基准附近改动系数
 DEFAULT_RADIUS = 12
 DEFAULT_EPS = 6e-4
 DEFAULT_DETAIL_GAIN = 0.85
+
+# 消除笔（M1-4）默认参数。refine_iters=6 不是凑的：整幅跑“平滑1/PM6”在产品代理档 9.4 ms，
+# 比 PM2 多 4 ms 买到的是孔径 6→5.1 LSB、口径 12→6.3 LSB；而 PM12 再翻一倍时间只多拿 0.2 LSB。
+# pad 是裁块边距下限，洞大时按 hole 半径自动扩（mask_bbox 里的 grow）。
+DEFAULT_REPAIR = dict(smooth_iters=1, refine_iters=6, kappa=0.06, pad=32, grow=1.5)
+
+
+@dataclass
+class RepairOp:
+    """一次消除笔操作：只存画笔覆盖度（uint8, 0..255）与参数，**不存结果**。
+
+    为什么不存结果：存 `(3,H,W) float32` 补丁在产品代理档是 6.8 MB/笔，五十笔就是 340 MB；
+    而修补算子是确定性的，重算一次几毫秒。只存输入等于天然支持撤销/重做与换设备重建，
+    也不需要一套“图层产物”的失效逻辑——这与决策 11（非破坏、重放）是同一条路。
+    """
+
+    op_id: int
+    weight: np.ndarray            # (H,W) uint8，画笔覆盖度
+    params: dict = field(default_factory=lambda: dict(DEFAULT_REPAIR))
+
+    @property
+    def area_px(self) -> int:
+        return int((self.weight > 0).sum())
+
+    def nbytes(self) -> int:
+        return int(self.weight.nbytes)
 
 
 class PreviewPipeline:
@@ -66,6 +95,14 @@ class PreviewPipeline:
         # 上一次 retouch() 里重算滤波花掉的毫秒；0.0 就是命中缓存。分段计时靠它把
         # 「一次性成本」与「每帧成本」分开上报，不然缓存到底有没有生效看不出来。
         self.last_filter_ms = 0.0
+        # M1-4：消除笔图层。操作列表在 CPU 侧（uint8 画笔），合成结果在显存侧，
+        # repair_version 进滤波缓存键——底图变了，旧的那份滤波结果对新底图没有任何意义。
+        self.repair_ops: list[RepairOp] = []
+        self.redo_ops: list[RepairOp] = []
+        self.repair_base: torch.Tensor | None = None
+        self.repair_version: int = 0
+        self.last_repair_ms: float = 0.0
+        self.repair_box: tuple | None = None
 
     # ---- 装载：一次性 H2D ----------------------------------------------
     def load_rgb_u8(self, rgb: np.ndarray) -> None:
@@ -83,6 +120,13 @@ class PreviewPipeline:
         self.retouched = None
         self.filter_key = None
         self.last_filter_ms = 0.0
+        # 同理，上一张图的画笔坐标与新图毫无关系：不清的话新图会凭空长出几个坑
+        self.repair_ops = []
+        self.redo_ops = []
+        self.repair_base = None
+        self.repair_box = None
+        self.repair_version += 1
+        self.last_repair_ms = 0.0
         if self.device.type != "cpu":
             torch.cuda.synchronize(self.device)
 
@@ -108,12 +152,12 @@ class PreviewPipeline:
         if r < 0 or e <= 0.0 or not (math.isfinite(e) and math.isfinite(g)):
             raise ValueError(f"磨皮参数非法：radius={r}（需 ≥0）、eps={e}（需 >0 的有限值）、"
                              f"detail_gain={g}（需有限值）")
-        key = (r, e, g)
+        key = (r, e, g, self.repair_version)
         if not force and self.retouched is not None and self.filter_key == key:
             self.last_filter_ms = 0.0
             return 0.0
         t0 = time.perf_counter()
-        out = filter_t(self.src_f32, radius=r, eps=e, detail_gain=g)
+        out = filter_t(self.base(), radius=r, eps=e, detail_gain=g)
         # 最后一道防线：不把非有限值写进常驻缓存。缓存里的 NaN 会长期作恶——
         # `(1-0)*img + 0*NaN` 仍是 NaN，strength=0 的逐字节恒等当场失效。
         # 代价是重算路径上多一次归约与同步（只在换图/换参数时发生，不在拖拽热路径上）。
@@ -141,9 +185,10 @@ class PreviewPipeline:
         if self.src_f32 is None:
             raise RuntimeError("先 load_rgb_u8 再 render")
         self.prepare(radius=radius, eps=eps, detail_gain=detail_gain)
+        base = self.base()
         if channel is not None:
-            return mix_masked(self.src_f32, self.retouched, strength, self.mask(channel))
-        return (1.0 - strength) * self.src_f32 + strength * self.retouched
+            return mix_masked(base, self.retouched, strength, self.mask(channel))
+        return (1.0 - strength) * base + strength * self.retouched
 
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:
@@ -207,6 +252,124 @@ class PreviewPipeline:
             return 0
         return int(self.retouched.numel() * self.retouched.element_size())
 
+    # ---- M1-4：消除笔图层（事件驱动） ------------------------------------
+    def base(self):
+        """当前送去滤波的底图：没打过消除笔就是原图，打过就是修补结果。
+
+        修补必须在磨皮**之前**：否则引导滤波会把痘印当成“皮肤细节”去保边，
+        强度一拉反而把它围出一圈更明显的亮环。
+        """
+        if self.src_f32 is None:
+            raise RuntimeError("先 load_rgb_u8")
+        return self.src_f32 if self.repair_base is None else self.repair_base
+
+    def set_repair_ops(self, ops: list, redo: list | None = None) -> dict:
+        """整体挂上一组操作（换设备重建时用）：只认输入，不认旧结果。
+
+        redo 也一并带过来：产品口径是“撤销/重做/换设备都靠重放”，不带上 redo 栈
+        就等于切一次设备静默抹掉重做历史。返回重建信息（与 add_repair 同一份口径）。
+        """
+        return self._commit_repair(list(ops), list(redo) if redo is not None else [])
+
+    def add_repair(self, op: "RepairOp") -> dict:
+        if op.weight.shape != (self.h, self.w):
+            raise ValueError(f"画笔覆盖度尺寸 {op.weight.shape} != 会话 {(self.h, self.w)}，"
+                             "画笔必须画在代理帧坐标系上")
+        if op.weight.dtype != np.uint8:
+            raise ValueError(f"画笔覆盖度必须是 uint8（0..255），得到 {op.weight.dtype}")
+        # 新操作发生在新一次重做之上，旧 redo 栈就失效了：留着它，“重做”会拿到一个
+        # 与当前图层列表都不兼容的状态
+        return self._commit_repair(self.repair_ops + [op], [])
+
+    def undo_repair(self) -> dict | None:
+        if not self.repair_ops:
+            return None
+        last = self.repair_ops[-1]
+        info = self._commit_repair(self.repair_ops[:-1], self.redo_ops + [last])
+        info["undone_ops"] = len(self.repair_ops) + 1
+        return info
+
+    def redo_repair(self) -> dict | None:
+        if not self.redo_ops:
+            return None
+        last = self.redo_ops[-1]
+        info = self._commit_repair(self.repair_ops + [last], self.redo_ops[:-1])
+        info["redone_ops"] = len(self.repair_ops)
+        return info
+
+    def clear_repair(self, keep_redo: bool = True) -> dict:
+        return self._commit_repair([], self.redo_ops if keep_redo else [])
+
+    def _commit_repair(self, ops: list, redo: list) -> dict:
+        """按操作顺序逐笔重建修补底图，**全部算完才一次性提交**常驻状态。
+
+        为什么逐笔而不是把掩膜并成一整块再一次算：实测两笔分开画在脸两侧时，
+        合并后的 bbox 等于整幅（裁块优势归零），而并集掩膜还会让第二笔的周围
+        含上第一笔的旧坑。逐笔应照操作顺序重放，与“只存输入”的非破坏原则同一条。
+
+        为什么要“算进局部、成功才写回”：`inpaint_t`/`crop_apply_t` 完全可能抛
+        （裁块过大 OOM、越界）。旧写法先把 op append 进列表、再把 `repair_base` 置 None，
+        异常劈在中间就会留下三半状态：图层已含新笔、底图却是旧的（None ⇒ 回落
+        src_f32）、而 `repair_version` 没变 ⇒ 下一次拖滑块的滤波缓存**精确命中旧结果**。
+        新底图 × 旧滤波混进同一帧，看上去完全正常、语义是错的。现在异常路径一
+        个字也不改，提交点后面的步骤不会再失败。
+
+        上报里 `repair_ms` 就是这个重建成本。拖滑块期间它是 0——不是“没量到”，
+        而是这一步真的没被执行（render 只读现成的 repair_base）。
+        """
+        if self.src_f32 is None:
+            raise RuntimeError("先 load_rgb_u8 再打消除笔")
+        t0 = time.perf_counter()
+        painted = 0
+        boxes: list = []
+        cur = self.src_f32
+        for op in ops:
+            p = dict(op.params)
+            wsub_np = op.weight.astype(np.float32) / 255.0
+            painted += int((op.weight > 0).sum())
+            box = mask_bbox(wsub_np, pad=int(p.get("pad", DEFAULT_REPAIR["pad"])),
+                            grow=float(p.get("grow", DEFAULT_REPAIR["grow"])))
+            if box is None:
+                continue
+            y0, y1, x0, x1 = box
+            lv = levels_for(hole_extent(wsub_np), y1 - y0, x1 - x0)
+            sub = cur[..., y0:y1, x0:x1]
+            wsub = torch.from_numpy(np.ascontiguousarray(wsub_np[None, None, y0:y1, x0:x1])).to(self.device)
+            fill = inpaint_t(sub, wsub, levels=lv,
+                             smooth_iters=int(p.get("smooth_iters", DEFAULT_REPAIR["smooth_iters"])),
+                             refine_iters=int(p.get("refine_iters", DEFAULT_REPAIR["refine_iters"])),
+                             kappa=float(p.get("kappa", DEFAULT_REPAIR["kappa"])))
+            cur = crop_apply_t(cur, box, fill)
+            boxes.append([int(v) for v in box])
+        base = cur if cur is not self.src_f32 else None
+        box0 = boxes[0] if len(boxes) == 1 else None
+        ms = (time.perf_counter() - t0) * 1000.0
+        # ---- 提交点：到这里后面全是赋值，没有可失败的步骤 ----
+        self.repair_ops = ops
+        self.redo_ops = redo
+        self.repair_base = base
+        self.repair_box = box0
+        self.repair_version += 1
+        self.retouched = None          # 底图变了，滤波缓存立即作废（不靠下一次发现）
+        self.filter_key = None
+        self.last_repair_ms = ms
+        return {
+            "repair_ms": round(ms, 2),
+            "ops": len(ops),
+            "applied": len(boxes),
+            "redo_pending": len(redo),
+            "painted_px": painted,
+            "boxes": boxes,
+            "bytes_base": self.repair_resident_bytes(),
+            "cached": False,          # 这一句由执行路径约束：走到这里就是真重算了
+        }
+
+    def repair_resident_bytes(self) -> int:
+        """修补底图 + 画笔列表的常驻字节（显存与 CPU 侧分开看）。"""
+        gpu = 0 if self.repair_base is None else int(self.repair_base.numel() * self.repair_base.element_size())
+        cpu = sum(op.nbytes() for op in self.repair_ops) + sum(op.nbytes() for op in self.redo_ops)
+        return gpu + cpu
+
     def pack(self, out) -> None:
         """float→uint8 并写进常驻帧缓冲，同样全程在显存里做。"""
         u8 = (out.clamp_(0.0, 1.0) * 255.0).to(torch.uint8)[0].permute(1, 2, 0)
@@ -238,10 +401,9 @@ class PreviewPipeline:
         blk[..., 2] = s
         blk[..., 0] = 255 - s
 
-    # ---- 掩膜类操作要用到的低频层，也常驻在 GPU 上 ----------------------
-    def low_freq(self, radius: int = DEFAULT_RADIUS, eps: float = DEFAULT_EPS):
-        assert self.src_f32 is not None
-        return guided_t(self.src_f32, radius, eps)
+    # ---- 以低频层为入的算法（M2 中性灰/质感）自己调 ops.guided.guided_t，
+    # 不再在这里留一份 low_freq：上一版它引用了没 import 的 guided_t，一调就是 NameError；
+    # 全仓 grep 以证明没有任何调用方，留着只会等一个偶现崩溃。
 
 
 def make_pipeline(device: str, w: int, h: int, rgb: np.ndarray | None = None) -> PreviewPipeline:

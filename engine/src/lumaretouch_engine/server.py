@@ -17,7 +17,7 @@ from .frames import test_frame
 from .shm import FrameShm, monotonic_ns, shm_name
 # 磨皮参数的默认值只在这里取一次：vram 在模块层就容忍 torch 缺失（CPU job 也能 import），
 # 在这里复用它们而不是写第二份字面量，否则默认值与生产值会漂移。
-from .vram import DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_RADIUS
+from .vram import DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_RADIUS, DEFAULT_REPAIR, RepairOp
 
 PROTOCOL_VERSION = 1
 
@@ -76,6 +76,12 @@ class Engine:
         # 磨皮参数（M1-3c）：与 strength 不同，它们变了滤波结果才会变。缓存键靠这个字典，
         # 所以它必须存在引擎侧而不是只在调用方：否则报表上看不出「这一帧重算了没」。
         self._params = dict(radius=DEFAULT_RADIUS, eps=DEFAULT_EPS, detail_gain=DEFAULT_DETAIL_GAIN)
+        # 消除笔（M1-4）的操作列表在引擎侧也有份：常驻会话会因换设备而重建，
+        # 只存在 pipe 里的话迁完就“脸还在但修补全没了”。存的是输入（画笔 uint8），不是结果。
+        # redo 栈也得有一份：不然切一次设备就把“重做”历史静默抹掉，与“撤销/重做都靠重放”矛盾。
+        self._repair_ops: list = []
+        self._redo_ops: list = []
+        self._op_seq = 0
         self._wlock = threading.Lock()   # 跑靶线程与 stdin 线程都在写同一块双缓冲
         self._strength = _clamp_strength(0.5)
 
@@ -286,6 +292,10 @@ class Engine:
         if adopt:
             self._vram = pipe
             self._src_rgb = rgb
+            # 会话新建在另一个设备上：旧张量全在那边，这里按存下的画笔重放一遍。
+            # 不重放就是“会话迁了、图层没迁”，与 M1-3a 那个“会话在 CPU 上跑却标 cuda”同形。
+            if self._repair_ops:
+                pipe.set_repair_ops(self._repair_ops, self._redo_ops)
         emit({"event": "vram_ready", "device": str(pipe.device), "w": w, "h": h,
               "adopted": bool(adopt),
               "bytes_src": int(pipe.src_u8.numel() * pipe.src_u8.element_size()),
@@ -322,6 +332,10 @@ class Engine:
         self._precompute = None
         self._precompute_backend = None
         self._channel = None
+        # 上一张图的画笔坐标对新图没有任何意义（与旧掩膜同一条规矩），先清空
+        self._repair_ops = []
+        self._redo_ops = []
+        self._op_seq = 0
         t_a = monotonic_ns()
         pipe = self._attach_pipeline(d.rgb)
         self._image_loaded = True
@@ -496,20 +510,153 @@ class Engine:
                 return
             params[k] = v
         self._strength, self._channel, self._params = strength, channel, params
-        t0 = monotonic_ns()
-        self._vram.render(self._strength, channel=self._channel, **params)
-        render_ms = (monotonic_ns() - t0) / 1e6
-        with self._wlock:
-            seq, t_emit, slot = self.shm.write_frame(self._vram.read_back())
+        # 出帧走与 cmd_inpaint 同一个入口：以前这里是一份手写的“render → 锁内写 shm → emit frame”，
+        # 而写多份的下场已经受过（上一轮就是其中一份漏了尺寸守卫）。
+        fr = self._write_current_frame("drag")
+        render_ms = fr.pop("render_ms")
         # filter_ms > 0 就是这一帧重算了滤波（参数刚变）；0.0 才是拖拽期的常态。
         emit({"event": "params_set", "strength": self._strength, "channel": self._channel,
-              "render_ms": round(render_ms, 2),
+              "render_ms": render_ms,
               "filter_ms": round(float(self._vram.last_filter_ms), 2),
               # 这一帧到底复用了缓存没有：`retouched is not None` 是个恒真的说法（render 成功
               # 之后它必然非空），缓存被无声绕过时也照样报 True。只有 last_filter_ms 才由执行路径约束。
               "cached": float(self._vram.last_filter_ms) == 0.0, **self._params})
-        emit({"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
-              "w": self.shm.w, "h": self.shm.h, "mode": "drag"})
+        emit(fr)
+
+    # ------------------------------------------------------------ 消除笔（M1-4）
+    def _write_current_frame(self, mode: str) -> dict:
+        """把当前会话渲染一帧并写 shm，返回 frame 事件字段（带 render_ms，调用方 pop）。
+
+        set_strength / inpaint 都走这一个出口；load_image 也渲染+写 shm，但它面对的是刚刚
+        新建的 shm 与一次性分段计时（shm_ms/attach_ms/first_frame_ms），所以单独一段——
+        不并进来不等于可以不要守卫，尺寸不配就在这里拦一次：上一轮“三份里有一份漏守卫”
+        的下场已经受过。
+        """
+        if self.shm is None or (self.shm.w, self.shm.h) != (self._vram.w, self._vram.h):
+            raise RuntimeError(f"shm {getattr(self.shm, 'w', '?')}x{getattr(self.shm, 'h', '?')} "
+                               f"!= 会话 {self._vram.w}x{self._vram.h}：不许把会话尺寸的帧写进别人的槽")
+        t0 = monotonic_ns()
+        self._vram.render(self._strength, channel=self._channel, **self._params)
+        render_ms = (monotonic_ns() - t0) / 1e6
+        with self._wlock:
+            seq, t_emit, slot = self.shm.write_frame(self._vram.read_back())
+        return {"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
+                "w": self.shm.w, "h": self.shm.h, "mode": mode, "render_ms": round(render_ms, 2)}
+
+    def cmd_inpaint(self, p: dict):
+        """消除笔：一次事件（松手）算一次修补；拖滑块期间不重算也不重上传。
+
+        与 M1-3c 同一原则：一次性成本与逐帧成本分开报。这里的一次性成本 =
+        RLE 解码 + 羽化 + 裁块修补 + 滤波重放；之后的拖动只读现成的 repair_base。
+        """
+        action = p.get("action", "add")
+        if action not in ("add", "undo", "redo", "clear"):
+            emit({"event": "error", "error": f"未知 inpaint action: {action}"
+                  f"（可用：add/undo/redo/clear）"})
+            return
+        if not self._image_loaded or self._vram is None:
+            emit({"event": "error", "error": "尚未 load_image"})
+            return
+        if self.shm is None or (self.shm.w, self.shm.h) != (self._vram.w, self._vram.h):
+            emit({"event": "error", "error": f"shm {getattr(self.shm, 'w', '?')}x{getattr(self.shm, 'h', '?')} "
+                  f"!= 会话 {self._vram.w}x{self._vram.h}，请先 load_image"})
+            return
+        if self.bench is not None and self.bench.is_alive():
+            # 与 set_strength 同一条守卫：跑靶线程在写 frame_gpu，这里也写同一块
+            emit({"event": "error", "error": "跑靶进行中，拒绝 inpaint：先 bench_stop"})
+            return
+        t_start = monotonic_ns()
+        info_add = {}
+        if action == "add":
+            # 先全部校验、再一次性提交（与 cmd_set_strength 同一条铁律）：
+            # 被拒绝的命令必须整条不留痕，不能“图层加了一半、参数改了”那种中间态。
+            import numpy as np
+
+            from .ops.inpaint import feather_np, mask_from_rle
+
+            rle = p.get("rle")
+            if not isinstance(rle, list):
+                emit({"event": "error", "error": "inpaint add 缺 rle：应为 [[y,x,len,value255], …]"
+                      "（从代理帧坐标采集，尺寸就是 shm_ready 的 w/h）"})
+                return
+            if len(rle) == 0:
+                emit({"event": "error", "error": "rle 为空：这一笔一个像素也没盖到，不该发这条命令"})
+                return
+            h, w = self._vram.h, self._vram.w
+            try:
+                hard = mask_from_rle(rle, h, w)
+            except (ValueError, TypeError) as e:
+                emit({"event": "error", "error": f"rle 非法，整条拒绝：{e}"})
+                return
+            feather = int(p.get("feather", 2))
+            if not 0 <= feather <= 8:
+                emit({"event": "error", "error": f"feather={feather} 超出范围 [0, 8]"})
+                return
+            params = dict(DEFAULT_REPAIR)
+            for k, lo, hi, cast in (("smooth_iters", 0, 4, int), ("refine_iters", 0, 32, int),
+                                    ("kappa", 1e-3, 1.0, float), ("pad", 0, 256, int),
+                                    ("grow", 1.0, 8.0, float)):
+                if p.get(k) is None:
+                    continue
+                try:
+                    v = cast(p[k])
+                except (TypeError, ValueError):
+                    emit({"event": "error", "error": f"参数 {k} 非法：{p[k]!r}"})
+                    return
+                if not lo <= v <= hi:
+                    emit({"event": "error", "error": f"参数 {k}={v} 超出范围 [{lo}, {hi}]"})
+                    return
+                params[k] = v
+            backend = p.get("backend", "builtin")
+            if backend != "builtin":
+                # 不许静默降级（与 face.MediaPipeFace 同一条规矩）：请求真模型而权重不在，
+                # 就报错说清缺什么，绝不“退成内置扩散然后报一个修补成功”。
+                # （lama 在 ops 包里：上一版写成 `from . import lama`，这条守卫自己先报
+                # ImportError，文案全丢——守卫也要能被测到才算守卫。）
+                from .ops import lama
+
+                emit({"event": "error", "error": lama.missing_reason(backend)})
+                return
+            t_dec = monotonic_ns()
+            soft = feather_np(hard, feather) if feather else (hard.astype(np.float32))
+            weight = np.round(np.clip(soft, 0.0, 1.0) * 255.0).astype(np.uint8)
+            if int((weight > 0).sum()) == 0:
+                emit({"event": "error", "error": "羽化后覆盖度归零：画笔太小或 feather 与坐标不匹配"
+                      "（会话为代理帧尺寸，得用代理帧坐标而不是原图坐标）"})
+                return
+            decode_ms = (monotonic_ns() - t_dec) / 1e6
+            # 号只在提交成功后占：add_repair 内部现在“全算完才写回”，真失败时图层
+            # 一笔也不会多出来，把自增放在前面会白白跳号
+            op = RepairOp(op_id=self._op_seq + 1, weight=weight, params=params)
+            info = self._vram.add_repair(op)
+            self._op_seq = op.op_id
+            info_add = {"op_id": op.op_id, "decode_ms": round(decode_ms, 2),
+                        "backend": backend, "feather": feather, "params": dict(params),
+                        "rle_runs": len(rle)}
+        elif action == "undo":
+            info = self._vram.undo_repair()
+            if info is None:
+                emit({"event": "error", "error": "没有可撤销的消除笔操作"})
+                return
+        elif action == "redo":
+            info = self._vram.redo_repair()
+            if info is None:
+                emit({"event": "error", "error": "没有可重做的消除笔操作"})
+                return
+        else:
+            info = self._vram.clear_repair()
+        # 引擎侧那份列表必须跟着会话走：不同步的话下一次换设备会重放出旧图层
+        self._repair_ops = list(self._vram.repair_ops)
+        self._redo_ops = list(self._vram.redo_ops)
+        fr = self._write_current_frame("repair")
+        render_ms = fr.pop("render_ms")
+        emit({"event": "inpaint_done", "action": action, **info, **info_add,
+              "filter_ms": round(float(self._vram.last_filter_ms), 2),
+              "cached": float(self._vram.last_filter_ms) == 0.0,
+              "repair_ms": info["repair_ms"], "render_ms": render_ms,
+              "total_ms": round((monotonic_ns() - t_start) / 1e6, 2),
+              "device": str(self._vram.device), "strength": self._strength})
+        emit(fr)
 
     def _pipe_copyin(self, rgba, strength: float, radius: int = DEFAULT_RADIUS,
                      eps: float = DEFAULT_EPS, detail_gain: float = DEFAULT_DETAIL_GAIN):
@@ -615,7 +762,7 @@ class Engine:
                  "bench_stop": lambda p: (self.stop_flag.set(), emit({"event": "bench_stopped"})),
                  "set_device": self.cmd_set_device, "shutdown": self.cmd_shutdown,
                  "load_image": self.cmd_load_image, "set_strength": self.cmd_set_strength,
-                 "precompute": self.cmd_precompute}
+                 "precompute": self.cmd_precompute, "inpaint": self.cmd_inpaint}
         # 不用 `for line in sys.stdin`：那会等 EOF，收到 shutdown 也退不掉
         while not self._quit:
             line = sys.stdin.readline()

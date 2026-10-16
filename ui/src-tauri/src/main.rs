@@ -94,6 +94,9 @@ pub struct AppState {
     /// 最近一次 precompute_ready（478 点 / 掩膜通道 / 常驻设备）。
     /// 与 image 分开存：换图不重跑预计算时，陈的掩膜状态绝不能当成还在。
     precompute: Mutex<Option<Value>>,
+    /// 最近一次 inpaint_done（消除笔的事件驱动结果）。与图层同生命期：
+    /// 换图/换引擎进程必须清空，否则前端会拿上一张图的修补指标当本图的。
+    inpaint: Mutex<Option<Value>>,
 }
 
 /// 用 `Arc` 起步才能传给引擎读线程；因此额外管理一个持有 Arc 的启动器。
@@ -117,6 +120,7 @@ impl AppState {
             engine: Mutex::new(None),
             image: Mutex::new(None),
             precompute: Mutex::new(None),
+            inpaint: Mutex::new(None),
         }
     }
 
@@ -159,6 +163,10 @@ impl AppState {
 
     pub fn on_precompute_ready(&self, v: &Value) {
         *self.precompute.lock().unwrap() = Some(v.clone());
+    }
+
+    pub fn on_inpaint_ready(&self, v: &Value) {
+        *self.inpaint.lock().unwrap() = Some(v.clone());
     }
 
     pub fn on_frame_event(&self) {
@@ -298,23 +306,73 @@ fn load_image(
     }
     *state.image.lock().unwrap() = None;      // 清掉上一张的就绪标记，否则前端会读到陈数据
     *state.precompute.lock().unwrap() = None;
+    // 画笔图层也一起清：引擎侧 load_image 会丢旧笔画，宿主留着就是报一个不存在的图层状态
+    *state.inpaint.lock().unwrap() = None;
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
 }
 
 /// 滑块动一下：只重算系数，不重解码也不重上传。channel 指向某个常驻掩膜通道。
+/// radius/eps/detail_gain 是磨皮参数：它们变了引擎会重算一次滤波，所以前端只在松手时带。
 #[tauri::command]
 fn set_strength(
     state: State<'_, Arc<AppState>>,
     value: f64,
     channel: Option<String>,
+    radius: Option<u64>,
+    eps: Option<f64>,
+    detail_gain: Option<f64>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "set_strength", "value": value});
     if let Some(c) = channel.filter(|s| !s.is_empty()) {
         cmd["channel"] = json!(c);
     }
+    // 只在显式给了值时才附字段：缺字段就是“不改这个参数”，与引擎侧的
+    // `p.get(k) is None → continue` 一一对应。把默认值写在这里就等于宿主替引擎
+    // 做决定，生产默认值一改这条通路就会静默漂开。
+    if let Some(v) = radius {
+        cmd["radius"] = json!(v);
+    }
+    if let Some(v) = eps {
+        cmd["eps"] = json!(v);
+    }
+    if let Some(v) = detail_gain {
+        cmd["detail_gain"] = json!(v);
+    }
     state.send_to_engine(cmd)?;
     Ok(json!({"value": value}))
+}
+
+/// 消除笔（M1-4）：一次事件（松手）一条命令。rle 是代理帧坐标下的行程编码。
+/// 不返回同步结果：修补要几十毫秒，结果靠 engine_status().inpaint 轮询。
+#[tauri::command]
+fn inpaint(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    rle: Option<Value>,
+    feather: Option<u64>,
+    backend: Option<String>,
+    refine_iters: Option<u64>,
+    smooth_iters: Option<u64>,
+) -> Result<Value, String> {
+    let mut cmd = json!({"cmd": "inpaint", "action": action});
+    if let Some(v) = rle {
+        cmd["rle"] = v;
+    }
+    if let Some(v) = feather {
+        cmd["feather"] = json!(v);
+    }
+    if let Some(b) = backend.filter(|s| !s.is_empty()) {
+        cmd["backend"] = json!(b);
+    }
+    if let Some(v) = refine_iters {
+        cmd["refine_iters"] = json!(v);
+    }
+    if let Some(v) = smooth_iters {
+        cmd["smooth_iters"] = json!(v);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
 }
 
 /// 对当前已导入的图跑一次导入期预计算（478 点 + 语义掩膜，算完常驻显存）。
@@ -538,8 +596,10 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let logs: Vec<String> = state.logs.lock().unwrap().iter().rev().take(25).cloned().collect();
     let image = state.image.lock().unwrap().clone();
     let precompute = state.precompute.lock().unwrap().clone();
+    let inpaint = state.inpaint.lock().unwrap().clone();
     json!({"shm": shm_name, "has_shm": has_shm, "emitted": emitted,
-           "delivered": delivered, "logs": logs, "image": image, "precompute": precompute})
+           "delivered": delivered, "logs": logs, "image": image, "precompute": precompute,
+           "inpaint": inpaint})
 }
 
 #[tauri::command]
@@ -549,6 +609,7 @@ fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     // 自动流程拿陈尺寸与陈掩膜状态起跑
     *state.image.lock().unwrap() = None;
     *state.precompute.lock().unwrap() = None;
+    *state.inpaint.lock().unwrap() = None;
     match h {
         Some(h) => {
             h.shutdown();
@@ -579,6 +640,8 @@ fn m0_env() -> Value {
         "max_px": std::env::var("LRT_MAX_PX").ok().and_then(|v| v.parse::<u64>().ok()),
         "precompute": std::env::var("LRT_PRECOMPUTE").unwrap_or_default(),
         "precompute_channel": std::env::var("LRT_PRECOMPUTE_CHANNEL").unwrap_or_default(),
+        // 消除笔自动通道："fx:fy:r,…"（坐标按代理帧归一化），跑的是与真人点击同一条链
+        "auto_inpaint": std::env::var("LRT_AUTO_INPAINT").unwrap_or_default(),
     })
 }
 
@@ -601,7 +664,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_engine, bench_start, pull_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, precompute,
-            report, quit
+            inpaint, report, quit
         ])
         .run(tauri::generate_context!())
         .expect("运行 LumaRetouch 失败");

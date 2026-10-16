@@ -6,6 +6,16 @@
  */
 import { useEffect, useRef } from "react";
 import { frameAcked, framePresented, isNoFrame, parseFrameHead, pullFrame, type ParsedFrame } from "../native";
+import { BrushPad, type Rle } from "../brush";
+
+/** 消除笔的视口接口：on=false 时叠加层不吃事件，测量回路一个字也不变。 */
+export interface BrushProps {
+  on: boolean;
+  /** 笔刷半径（代理帧像素） */
+  radius: number;
+  /** 松手时把这一笔的行程编码交出去（引擎只在这时算一次） */
+  onStroke: (rle: Rle, pixels: number) => void;
+}
 
 export interface Hud {
   seq: number;
@@ -36,6 +46,7 @@ export default function Viewer({
   upload = "raw",
   ctxOpt = true,
   chunks = 1,
+  brush,
   onHud,
 }: {
   active: boolean;
@@ -60,16 +71,24 @@ export default function Viewer({
    * 用 LRT_NO_CTX=1 可关，做背靠背对照。
    */
   ctxOpt?: boolean;
+  brush?: BrushProps;
   onHud: (h: Hud) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const overlayRef = useRef<HTMLCanvasElement | null>(null);
   const onHudRef = useRef(onHud);
   onHudRef.current = onHud;
+  // 画笔参数走 ref：把 brush 放进 effect 依赖会让“开关画笔”重建整个 WebGL 测量回路，
+  // 那既浪费一次 GL 上下文，也会把 M0 那条测量链拆散
+  const brushRef = useRef(brush);
+  brushRef.current = brush;
+  const sizeRef = useRef({ w: 0, h: 0 });
 
   useEffect(() => {
     if (!active) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const overlay = overlayRef.current;
     const attrs: WebGLContextAttributes = ctxOpt
       ? { antialias: false, depth: false, alpha: false, desynchronized: true, powerPreference: "high-performance" }
       : { antialias: false, depth: false };
@@ -124,6 +143,71 @@ export default function Viewer({
 
     let curW = 0;
     let curH = 0;
+    // ---- 画笔叠加层：与 GL 测量回路同生命期，但不参与计时 ----
+    const pad = new BrushPad(1, 1);
+    const octx = overlay ? overlay.getContext("2d") : null;
+    let painting = false;
+    let lastPt = { x: 0, y: 0 };
+    const toImg = (e: PointerEvent) => {
+      if (!overlay) return null;
+      const r = overlay.getBoundingClientRect();
+      const { w, h } = sizeRef.current;
+      if (!w || !h || r.width <= 0 || r.height <= 0) return null;
+      // CSS 像素 → 代理帧像素：引擎只认会话尺寸，拿屏幕坐标发过去会画到错的地方，
+      // 而且尺寸比不等于 1 时错得看不见
+      return { x: ((e.clientX - r.left) / r.width) * w, y: ((e.clientY - r.top) / r.height) * h };
+    };
+    const repaint = () => {
+      if (!overlay || !octx) return;
+      const { w, h } = sizeRef.current;
+      if (!w || !h) return;
+      if (overlay.width !== w || overlay.height !== h) {
+        overlay.width = w;
+        overlay.height = h;
+      }
+      const img = octx.createImageData(w, h);
+      pad.paintOverlay(img);
+      octx.putImageData(img, 0, 0);
+    };
+    const onDown = (e: PointerEvent) => {
+      const b = brushRef.current;
+      if (!b?.on || !overlay || e.button !== 0) return;
+      const p = toImg(e);
+      if (!p) return;
+      painting = true;
+      overlay.setPointerCapture(e.pointerId);
+      pad.reset();
+      lastPt = p;
+      pad.stamp(p.x, p.y, b.radius);
+      repaint();
+      e.preventDefault();
+    };
+    const onMove = (e: PointerEvent) => {
+      const b = brushRef.current;
+      if (!painting || !b?.on) return;
+      const p = toImg(e);
+      if (!p) return;
+      pad.segment(lastPt.x, lastPt.y, p.x, p.y, b.radius);
+      lastPt = p;
+      repaint();
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!painting) return;
+      painting = false;
+      overlay?.releasePointerCapture(e.pointerId);
+      const rle = pad.toRle();
+      const n = pad.coveredPixels();
+      pad.reset();
+      repaint();
+      const b = brushRef.current;
+      if (b?.on && rle.length > 0) b.onStroke(rle, n);   // 松手 = 唯一一次事件驱动
+    };
+    if (overlay) {
+      overlay.addEventListener("pointerdown", onDown);
+      overlay.addEventListener("pointermove", onMove);
+      overlay.addEventListener("pointerup", onUp);
+      overlay.addEventListener("pointercancel", onUp);
+    }
     let stop = false;
     let drawn = 0;
     let fps = 0;
@@ -176,6 +260,13 @@ export default function Viewer({
           curH = f.h;
           canvas.width = f.w;
           canvas.height = f.h;
+          // 叠加层与画笔垫必须跟着换尺寸：旧坐标对新图没有任何意义
+          sizeRef.current = { w: f.w, h: f.h };
+          pad.resize(f.w, f.h);
+          if (overlay) {
+            overlay.width = f.w;
+            overlay.height = f.h;
+          }
           gl.viewport(0, 0, f.w, f.h);
           // 两张纹理都要存好存储，否则 ping-pong 切过去时是空纹理
           for (const t of texs) {
@@ -240,6 +331,12 @@ export default function Viewer({
 
     return () => {
       stop = true;
+      if (overlay) {
+        overlay.removeEventListener("pointerdown", onDown);
+        overlay.removeEventListener("pointermove", onMove);
+        overlay.removeEventListener("pointerup", onUp);
+        overlay.removeEventListener("pointercancel", onUp);
+      }
       for (const t of texs) gl.deleteTexture(t);
       gl.deleteProgram(prog);
       gl.deleteBuffer(vbo);
@@ -247,5 +344,10 @@ export default function Viewer({
     };
   }, [active, skipDraw, upload, ctxOpt, chunks]);
 
-  return <canvas ref={canvasRef} />;
+  return (
+    <div className="viewer">
+      <canvas ref={canvasRef} />
+      <canvas ref={overlayRef} className={brush?.on ? "overlay on" : "overlay"} />
+    </div>
+  );
 }

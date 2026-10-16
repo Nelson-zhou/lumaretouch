@@ -839,3 +839,221 @@ def test_set_device_is_refused_while_bench_running(engine):
     assert not done.get("failed"), f"跑靶被这次拒绝弄挂了：{done}"
     assert str(done.get("pipe_device")).startswith("cuda"), \
         f"会话被换走了：pipe_device={done.get('pipe_device')}，应当仍是 cuda"
+
+
+# ================================================================ 消除笔（M1-4）
+def _needs_torch():
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻修补图层要 torch")
+
+
+def _brush_rle(h, w, cy, cx, r, value=255):
+    """圆形画笔 → 行程编码（与 UI 侧的采集方式同构：逐行一段）。"""
+    rle = []
+    for y in range(max(0, cy - r), min(h, cy + r + 1)):
+        dy = y - cy
+        dx = int((r * r - dy * dy) ** 0.5)
+        x0, x1 = max(0, cx - dx), min(w, cx + dx + 1)
+        if x1 > x0:
+            rle.append([y, x0, x1 - x0, value])
+    assert rle, "画笔跑到图外了，这条用例就没有意义"
+    return rle
+
+
+def _brush_mask(h, w, rle):
+    from lumaretouch_engine.ops.inpaint import feather_np, mask_from_rle
+
+    return feather_np(mask_from_rle(rle, h, w), 2)
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_inpaint_changes_only_the_pixels_under_the_brush(engine):
+    """端到端的第一条主张：消除笔只改画笔覆盖到的地方，没盖到的逐字节不动。
+
+    拿上屏字节比而不是引擎内部张量：shm 里那一帧才是用户看到的东西，
+    clamp/量化/pack 这一路上的任何一步把“只改笔内”弄漏了，这里会红。
+
+    “笔内”按**羽化后的支撑**（覆盖度 > 0）算而不是按硬圆算：羽化的本意就是
+    在边界环上小幅度改，拿 0.5 等值线当“笔外”会把一个正确行为测成缺陷（实测差 2 LSB）。
+    所以这里同时卡两头：支撑外逐字节不动，支撑内的改动幅度随覆盖度递降。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        before = _read_frame(engine, peer, h, w)
+        rle = _brush_rle(h, w, h // 2, w // 2, 7)
+        engine.send(cmd="inpaint", action="add", rle=rle, feather=2)
+        done = engine.wait_for("inpaint_done", timeout=60)
+        assert done["action"] == "add" and done["ops"] == 1 and done["applied"] == 1, done
+        assert done["repair_ms"] > 0.0, f"加了一笔却没算修补：{done}"
+        assert str(done["device"]).startswith(("cuda", "cpu")), done["device"]
+        after = _read_frame(engine, peer, h, w)
+        cover = _brush_mask(h, w, rle)
+        assert float((cover > 0).sum()) > float((cover > 0.5).sum()), "羽化环是空的，这条就没在验羽化"
+        untouched = cover == 0
+        d_out = np.abs(after[untouched] - before[untouched])
+        assert int(d_out.max()) == 0, f"笔外像素被改了 {int(d_out.max())} LSB——写回越界了"
+        delta = np.abs(after - before).max(axis=2)
+        core = cover > 0.5
+        ring = (cover > 0) & (cover <= 0.5)
+        assert float(delta[core].mean()) > 0.5, "笔心一点没改，消除笔空转"
+        assert float(delta[ring].max()) <= float(delta[core].max()), \
+            f"羽化环比笔心改得还多（{delta[ring].max()} vs {delta[core].max()}）：覆盖度没起作用"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_drag_stream_after_inpaint_still_refilters_nothing(engine):
+    """修补不能把 M1-3c 的零推理弄掉：事件算一次，之后拖滑块仍是 0 次重算。
+
+    这里是两条主张的交点：滤波缓存的键必须包底图版本（不然拖滑块会拿旧底图的
+    滤波结果磨新底图），而重建只在事件里发生（不然拖拽热路径又付一次 4 ms）。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.5)
+    h, w = meta["h"], meta["w"]
+    engine.send(cmd="inpaint", action="add", rle=_brush_rle(h, w, 30, 30, 5), feather=2)
+    done = engine.wait_for("inpaint_done", timeout=60)
+    assert done["filter_ms"] > 0.0, "底图变了但滤波没重算：下一帧会拿旧图的结果磨新图"
+    assert done["cached"] is False, done
+    # 多笔叠上去才是产品用法：零重算不能只在“只有一笔”下成立。逐笔重放各自四周的裁块，
+    # 图层数与落图数必须一个个对得上，否则报表上看不出漏了哪笔。
+    for i, (cy, cx, r) in enumerate(((h // 2, w // 2, 6), (h - 40, 30, 4)), start=2):
+        engine.send(cmd="inpaint", action="add", rle=_brush_rle(h, w, cy, cx, r), feather=2)
+        more = engine.wait_for("inpaint_done", timeout=60)
+        assert more["ops"] == i and more["applied"] == i, f"第 {i} 笔没逐笔落图：{more}"
+        assert more["repair_ms"] > 0.0, f"第 {i} 笔报称重算了图层却没花任何时间：{more}"
+    engine.send(cmd="bench_start", mode="image_stream", frames=6, interval_ms=20,
+                w=w, h=h)
+    engine.wait_for("bench_started", timeout=30)
+    b = engine.wait_for("bench_done", timeout=90)
+    assert not b.get("failed"), f"跑靶失败：{b}"
+    assert b["refilter_frames"] == 0, \
+        f"拖拽流里重算了 {b['refilter_frames']} 次滤波：修补把零推理弄丢了"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_inpaint_undo_restores_exact_previous_frame_bytes(engine):
+    """撤销不是“重新算一遍相近的结果”，而是逐字节回到上一帧。
+
+    只存画笔不存结果因此必须能做到：重放是确定性的。哪天引入“结果缓存”
+    并把旧缓存回挂了，这条会红。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        base = _read_frame(engine, peer, h, w)
+        rle = _brush_rle(h, w, h // 3, w // 3, 6)
+        engine.send(cmd="inpaint", action="add", rle=rle, feather=2)
+        engine.wait_for("inpaint_done", timeout=60)
+        repaired = _read_frame(engine, peer, h, w)
+        assert np.abs(repaired - base).max() > 0
+        engine.send(cmd="inpaint", action="undo")
+        done = engine.wait_for("inpaint_done", timeout=60)
+        assert done["ops"] == 0 and done["redo_pending"] == 1, done
+        back = _read_frame(engine, peer, h, w)
+        assert np.array_equal(back, base), f"撤销后差了 {int(np.abs(back - base).max())} LSB"
+        engine.send(cmd="inpaint", action="redo")
+        done = engine.wait_for("inpaint_done", timeout=60)
+        assert done["ops"] == 1, done
+        again = _read_frame(engine, peer, h, w)
+        assert np.array_equal(again, repaired), "重做没逐字节复现那一笔"
+        engine.send(cmd="inpaint", action="undo")
+        engine.wait_for("inpaint_done", timeout=60)
+        engine.send(cmd="inpaint", action="undo")
+        _expect_error(engine, "没有可撤销")
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_bad_inpaint_commands_leave_no_trace(engine):
+    """被拒绝的一笔必须整条不留痕：图层没加、强度没改、下一帧还是原样。
+
+    与 cmd_set_strength 同一条铁律。上一轮就是“报错了但全局量已被改走”，
+    下一条正常命令会拿那个泄漏值出帧：用户看到的是“我拒绝了，画面却变了”。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.4)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        before = _read_frame(engine, peer, h, w)
+        good = _brush_rle(h, w, 20, 20, 4)
+        bad_rle = [list(r) for r in good]
+        bad_rle[0][2] = w + 99                        # 行内越界
+        engine.send(cmd="inpaint", action="add", rle=bad_rle, feather=2)
+        _expect_error(engine, "rle 非法")
+        engine.send(cmd="inpaint", action="add", rle=good, feather=99)
+        _expect_error(engine, "feather")
+        engine.send(cmd="inpaint", action="add", rle=good, refine_iters=999)
+        _expect_error(engine, "refine_iters")
+        engine.send(cmd="inpaint", action="add", rle=[], feather=2)
+        _expect_error(engine, "rle 为空")
+        engine.send(cmd="inpaint", action="nope")
+        _expect_error(engine, "未知 inpaint action")
+        # 拒绝之后：撤销应当说“没有可撤销”，而不是默默撤掉一条不存在的图层
+        engine.send(cmd="inpaint", action="undo")
+        _expect_error(engine, "没有可撤销")
+        # 强度也不能被“没执行”的命令改走
+        engine.send(cmd="set_strength")
+        ps = engine.wait_for("params_set", timeout=30)
+        assert ps["strength"] == 0.4, f"失败的 inpaint 把 strength 改走了：{ps['strength']}"
+        after = _read_frame(engine, peer, h, w)
+        assert np.array_equal(after, before), "被拒绝的命令仍然改动了画面"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_inpaint_lama_backend_is_refused_loudly(engine):
+    """没权重时请求生成式后端必须报错说清缺什么，而不是“退成内置然后报成功”。
+
+    静默降级是本仓反复出现的那一类错：两条证据强度完全不同的路径在报表上会长成一个数。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    engine.send(cmd="inpaint", action="add", rle=_brush_rle(meta["h"], meta["w"], 20, 20, 4),
+                backend="lama")
+    e = _expect_error(engine, "不可用")
+    assert "权重" in e["error"] and "builtin" in e["error"], e["error"]
+    engine.send(cmd="inpaint", action="undo")
+    _expect_error(engine, "没有可撤销")
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_inpaint_is_refused_while_bench_running(engine):
+    """跑靶进行中不许改图层：两条路径写同一块 frame_gpu（与 set_strength 同一条守卫）。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.5)
+    h, w = meta["h"], meta["w"]
+    engine.send(cmd="bench_start", mode="image_stream", frames=40, interval_ms=100, w=w, h=h)
+    engine.wait_for("bench_started", timeout=30)
+    engine.send(cmd="inpaint", action="add", rle=_brush_rle(h, w, 20, 20, 4))
+    _expect_error(engine, "跑靶进行中")
+    engine.send(cmd="bench_stop")
+    done = engine.wait_for("bench_done", timeout=60)
+    assert not done.get("failed"), f"这次拒绝把跑靶弄挂了：{done}"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_new_image_drops_previous_brush_strokes(engine):
+    """换图必须丢画笔：旧坐标对新图没有任何意义（与旧掩膜同一条规矩）。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    engine.send(cmd="inpaint", action="add", rle=_brush_rle(h, w, h // 2, w // 2, 6), feather=2)
+    engine.wait_for("inpaint_done", timeout=60)
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.0, max_px=207360)
+    # 第二张与第一张同尺寸 → _ensure_shm 不重建也不重发 shm_ready（已知行为，
+    # 写在这是为了下次不要再当 bug 查）：这里只等真正会重发的那两个事件
+    engine.wait_for("vram_ready", timeout=60)
+    ready2 = engine.wait_for("image_ready", timeout=60)
+    assert ready2["strength"] == 0.0
+    engine.send(cmd="inpaint", action="undo")
+    _expect_error(engine, "没有可撤销")

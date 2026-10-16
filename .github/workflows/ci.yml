@@ -66,6 +66,12 @@ jobs:
         # M1-3a 验收口径③进 CI：这一条破了，“推子归零即原图”就是假的。
         # 只看字节不看快慢（导入耗时在各机差异大，本机数据：冷首图 ~299 ms、后续 ~40 ms）。
         run: REPS=3 "$PY" packaging/m1-import-bench.py
+      - name: 消除笔事件驱动（两臂逐字节相等 + 拖拽期零重算 + 孔内精度）
+        # M1-4 的硬要求：一笔只在松手时算一次，拖滑块期间不得重跑修补；
+        # 并且“快”必须与“同一件事”同时成立（缓存臂与重放臂上屏字节逐字节相等）。
+        # 本机（RX 7600 XT / 产品档 672×848）：热路径 0.62 ms/帧 vs 每帧重放 16.50 ms（×26）、
+        # 引擎侧事件 23.4–23.6 ms（预算 40）、float64 参考对拍 ≤0.001 LSB、孔内 MAE r≤16 ≤4.4 LSB。
+        run: REPS=5 "$PY" packaging/m1-inpaint-bench.py
 
   # NVIDIA 侧同理。本机无 N 卡，CUDA 依赖 pin 也尚未解析回填，
   # 在拿到 NVIDIA runner 之前这条只能是开关关闭，不能当作已验证。
@@ -87,6 +93,8 @@ jobs:
             "$PY" packaging/m1-vram-bench.py cuda 1280x800
       - name: 真图导入保真（strength=0 逐字节等于解码原图）
         run: REPS=3 "$PY" packaging/m1-import-bench.py
+      - name: 消除笔事件驱动（两臂逐字节相等 + 拖拽期零重算 + 孔内精度）
+        run: REPS=5 "$PY" packaging/m1-inpaint-bench.py
 
   # 通路不回归：引擎层单测 + 脚本可跑。真正的端到端帧率验收需要图形环境，
   # 在 M0 阶段仍是本机跑 packaging/m0-bench.sh，不假称 CI 已覆盖。
@@ -121,7 +129,7 @@ jobs:
           REF: ${{ github.ref_name }}
         run: |
           miss=""
-          [ "$ROCM" = "true" ] || miss="${miss} AMD/ROCm 打靶（含常驻预算与真图保真）"
+          [ "$ROCM" = "true" ] || miss="${miss} AMD/ROCm 打靶（含常驻预算、真图保真与消除笔事件驱动）"
           [ "$CUDA" = "true" ] || miss="${miss} NVIDIA/CUDA 打靶"
           if [ -n "$miss" ]; then
             echo "::warning title=GPU 门禁未执行::以下项本轮没跑：${miss}"

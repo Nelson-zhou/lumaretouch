@@ -79,6 +79,31 @@ export interface Precompute {
   replayed_for?: string;
 }
 
+/** 一次消除笔事件的回报（引擎侧 inpaint_done）。事件驱动：只在松手时算一次。 */
+export interface InpaintInfo {
+  action: "add" | "undo" | "redo" | "clear";
+  ops: number;
+  applied: number;
+  redo_pending: number;
+  painted_px: number;
+  boxes: number[][];
+  repair_ms: number;
+  filter_ms: number;
+  render_ms: number;
+  total_ms: number;
+  bytes_base: number;
+  /** 这一帧是否命中了滤波缓存（由执行路径给出，不是声明） */
+  cached: boolean;
+  op_id?: number;
+  decode_ms?: number;
+  backend?: string;
+  feather?: number;
+  rle_runs?: number;
+  params?: Record<string, number>;
+  device: string;
+  strength: number;
+}
+
 export interface EngineStatus {
   shm: string;
   has_shm: boolean;
@@ -89,6 +114,8 @@ export interface EngineStatus {
   image: ImageReady | null;
   /** 最近一次 precompute_ready；换图/换引擎进程会清空。 */
   precompute: Precompute | null;
+  /** 最近一次 inpaint_done；换图/换设备会清空（图层跟着会话走）。 */
+  inpaint: InpaintInfo | null;
 }
 
 export interface BenchOptions {
@@ -140,9 +167,22 @@ export const loadImage = (
     channel: opts?.channel,
   });
 
-/** 滑块动一下：引擎只重算系数。channel 指到常驻掩膜通道也不产生任何推理或上传。 */
-export const setStrength = (value: number, channel?: string) =>
-  invoke<{ value: number }>("set_strength", { value, channel });
+/**
+ * 滑块动一下：引擎只重算系数。channel 指到常驻掩膜通道也不产生任何推理或上传。
+ * radius/eps/detailGain 是磨皮参数：它们变了引擎会重算一次滤波（实测 ~4 ms），
+ * 所以只在松手时带过去；strength 走零推理那条路，可以逐事件发。
+ */
+export const setStrength = (
+  value: number,
+  opts?: { channel?: string; radius?: number; eps?: number; detailGain?: number },
+) =>
+  invoke<{ value: number }>("set_strength", {
+    value,
+    channel: opts?.channel,
+    radius: opts?.radius,
+    eps: opts?.eps,
+    detailGain: opts?.detailGain,
+  });
 
 /** 对当前已导入的图跑一次导入期预计算；结果靠 engineStatus().precompute 轮询。 */
 export const runPrecompute = (opts?: { backend?: string; channel?: string; modelDir?: string }) =>
@@ -150,6 +190,23 @@ export const runPrecompute = (opts?: { backend?: string; channel?: string; model
     backend: opts?.backend,
     channel: opts?.channel,
     modelDir: opts?.modelDir,
+  });
+
+/**
+ * 消除笔：action=add 带行程编码；undo/redo/clear 不带画。异步语义同 loadImage：
+ * 结果靠 engineStatus().inpaint 轮询。不把它做成同步调用——一次修补要几十毫秒，
+ * 而“松手就能看见结果”靠的是不等回答、下一帧自然上屏。
+ */
+export const runInpaint = (
+  action: InpaintInfo["action"],
+  opts?: { rle?: number[][]; feather?: number; backend?: string; refineIters?: number },
+) =>
+  invoke<{ requested: boolean }>("inpaint", {
+    action,
+    rle: opts?.rle,
+    feather: opts?.feather,
+    backend: opts?.backend,
+    refineIters: opts?.refineIters,
   });
 
 /** 帧头解析（小端，与 main.rs 的 pull_frame 注释逐字段对应）。 */
@@ -213,6 +270,8 @@ export interface M0Env {
   /** 非空且不为 "0" 则导入后跑一次预计算，值就是后端名（M1-3b）。 */
   precompute: string;
   precompute_channel: string;
+  /** 非空则导入后自动打几笔消除笔（M1-4）："fx:fy:r,…"，坐标按代理帧归一化。 */
+  auto_inpaint: string;
 }
 export const m0Env = () => invoke<M0Env>("m0_env");
 export const report = (line: string) => invoke("report", { line });

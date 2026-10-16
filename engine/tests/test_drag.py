@@ -115,8 +115,10 @@ def test_first_call_filters_then_reuses(pipe, rgb):
         pipe.retouch(s)
         assert pipe.last_filter_ms == 0.0, f"strength={s} 又重算了一次滤波，缓存没生效"
     from lumaretouch_engine.vram import DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_RADIUS
-    expect_key = (DEFAULT_RADIUS, DEFAULT_EPS, DEFAULT_DETAIL_GAIN)
-    assert pipe.filter_key == expect_key, f"缓存键不是默认参数：{pipe.filter_key}"
+    # M1-4 起键多了一位：底图（修补图层）版本号。磨皮参数三元组仍须逐字对得上。
+    assert pipe.filter_key[:3] == (DEFAULT_RADIUS, DEFAULT_EPS, DEFAULT_DETAIL_GAIN), \
+        f"缓存键不是默认参数：{pipe.filter_key}"
+    assert pipe.filter_key[3] == pipe.repair_version, f"键里第 4 位不是修补版本号：{pipe.filter_key}"
     # force 是显式重建入口，不能因为"命中"就跳过
     assert pipe.prepare(force=True) > 0.0
 
@@ -243,5 +245,5 @@ def test_illegal_filter_params_raise_at_the_lib_boundary(pipe, rgb):
     # 拒绝之后缓存不能被留在半路：键与张量都还是原来的那一份
     from lumaretouch_engine.vram import DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_RADIUS
     pipe.retouch(0.5)
-    assert pipe.filter_key == (DEFAULT_RADIUS, DEFAULT_EPS, DEFAULT_DETAIL_GAIN), \
+    assert pipe.filter_key[:3] == (DEFAULT_RADIUS, DEFAULT_EPS, DEFAULT_DETAIL_GAIN), \
         f"非法参数把缓存状态弄乱了：{pipe.filter_key}"

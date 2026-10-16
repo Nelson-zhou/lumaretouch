@@ -137,6 +137,11 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             state.on_precompute_ready(&v);
             println!("M0_ENGINE {line}");
         }
+        "inpaint_done" => {
+            // 消除笔是事件驱动的：一次松手一条，轮询不到就会错过
+            state.on_inpaint_ready(&v);
+            println!("M0_ENGINE {line}");
+        }
         "bench_done" => {
             state.on_bench_done();
             println!("M0_ENGINE {line}");

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Viewer, { type Hud } from "./components/Viewer";
+import { clickRle } from "./brush";
 import { t } from "./i18n";
 import {
-  benchStart, benchStats, engineStatus, loadImage, m0Env, quit, report, shutdownEngine, startEngine,
-  type BenchOptions, type EngineStatus, type ImageReady, type Precompute, type Stats,
+  benchStart, benchStats, engineStatus, loadImage, m0Env, quit, report, runInpaint, setStrength,
+  shutdownEngine, startEngine,
+  type BenchOptions, type EngineStatus, type ImageReady, type InpaintInfo, type Precompute, type Stats,
 } from "./native";
 
 const SIZES: Record<string, [number, number]> = {
@@ -30,6 +32,9 @@ function gate(s: Stats | null, w: number): "pass" | "fail" | "pending" {
 }
 
 const fmt = (us: number) => (us > 0 ? `${(us / 1000).toFixed(2)} ms` : "—");
+
+/** 强度滑块的最小发送间隔：逐 pointermove 发会把 IPC 排成长队，30 Hz 足够看不见拖影。 */
+const DRAG_THROTTLE_MS = 32;
 
 /** 解析 "1280x800:600:16.7:copy"。 */
 function parseAutoBench(spec: string) {
@@ -66,11 +71,29 @@ export default function App() {
   const [tierLabel, setTierLabel] = useState("tier2");
   const poll = useRef<number | null>(null);
 
+  // ---- 精修台（M1-3c/M1-4）：图路径、磨皮参数、通道、画笔 ----
+  const [imgPath, setImgPath] = useState("");
+  const [maxPx, setMaxPx] = useState(576000);
+  const [strength, setStrengthV] = useState(0.5);
+  const [radius, setRadius] = useState(12);
+  const [detailGain, setDetailGain] = useState(0.85);
+  const [channel, setChannel] = useState("");
+  const [brushOn, setBrushOn] = useState(false);
+  const [brushRadius, setBrushRadius] = useState(8);
+  const [feather, setFeather] = useState(2);
+  const [lastInpaint, setLastInpaint] = useState<InpaintInfo | null>(null);
+  const [dragNote, setDragNote] = useState("");
+  const lastSend = useRef(0);
+  const pending = useRef<number | null>(null);
+
   const [w, h] = SIZES[sizeKey];
 
   const refreshStatus = useCallback(async () => {
     try {
-      setStatus(await engineStatus());
+      const st = await engineStatus();
+      setStatus(st);
+      // 消除笔的结果与日志同源：inpaint_done 只发一次，轮询不能错过
+      if (st.inpaint) setLastInpaint(st.inpaint);
     } catch {
       /* 引擎未起，忽略 */
     }
@@ -135,7 +158,7 @@ export default function App() {
           return;
         }
         if (wantPre && !pre) {
-          // 预计算没就绪不能默默当“没这一步”：要么报错误要么报缺，绝不给一份假的绿
+          // 预计算没就绪不能默默当“没这一步”：要么报错要么报缺，绝不给一份假的绿
           await report(`M0_ERROR precompute 30s 内未就绪（backend=${env.precompute}）`);
           return;
         }
@@ -143,6 +166,57 @@ export default function App() {
         if (pre) await report(`M0_PRECOMPUTE ${JSON.stringify(pre)}`);
         bench.w = image.w;
         bench.h = image.h;
+      }
+      // 消除笔自动通道（$LRT_AUTO_INPAINT="fx:fy:r,…"）：走的是与真人点击完全同一条链
+      // ——brush.ts 的 toRle → runInpaint → Rust → 引擎 → inpaint_done。只有真窗口里
+      // 跑通，才能说“图层常驻 + 拖拽期零重算”不是只在 pytest 的子进程里成立。
+      if (env.auto_inpaint) {
+        if (!image) {
+          await report("M0_ERROR LRT_AUTO_INPAINT 需要 LRT_LOAD_IMAGE（不知道代理帧尺寸）");
+        } else {
+          const w = image.w;
+          const h = image.h;
+          const waitInpaint = async (pred: (v: InpaintInfo) => boolean) => {
+            for (let k = 0; k < 300; k++) {
+              await sleep(100);
+              const st = await engineStatus().catch(() => null);
+              if (st?.inpaint && pred(st.inpaint)) return st.inpaint;
+            }
+            return null;
+          };
+          const strokes = env.auto_inpaint.split(",").map((s) => s.trim()).filter(Boolean);
+          let bad = "";
+          let lastAdd: InpaintInfo | null = null;
+          for (let i = 0; i < strokes.length; i++) {
+            const [fx, fy, r] = strokes[i].split(":").map(Number);
+            if (![fx, fy, r].every(Number.isFinite)) {
+              bad = `第 ${i + 1} 段“${strokes[i]}”不是 fx:fy:r`;
+              break;
+            }
+            await runInpaint("add", { rle: clickRle(w, h, fx * w, fy * h, r), feather: 2 });
+            lastAdd = await waitInpaint((v) => v.action === "add" && v.ops === i + 1);
+            if (!lastAdd) {
+              bad = `第 ${i + 1} 笔 30s 内没等到 inpaint_done`;
+              break;
+            }
+          }
+          if (bad) {
+            await report(`M0_ERROR 消除笔自动通道：${bad}`);
+          } else {
+            // undo/redo 各走一次：“只存输入”的重放在真窗口里逐笔可回退
+            await runInpaint("undo");
+            const u = await waitInpaint((v) => v.action === "undo" && v.ops === strokes.length - 1);
+            await runInpaint("redo");
+            const rd = await waitInpaint((v) => v.action === "redo" && v.ops === strokes.length);
+            await report(`M0_INPAINT ${JSON.stringify(lastAdd)}`);
+            await report(`M0_INPAINT_STACK ${JSON.stringify({
+              strokes: strokes.length, undoOps: u?.ops ?? -1, redoOps: rd?.ops ?? -1,
+              // cached 由执行路径给出：重做后那一帧真的重算了滤波
+              cached: rd?.cached ?? null, repairMs: rd?.repair_ms ?? null,
+              totalMs: rd?.total_ms ?? null, paintedPx: lastAdd?.painted_px ?? null,
+            })}`);
+          }
+        }
       }
       for (let i = 0; i < 100; i++) {
         const st = await engineStatus().catch(() => null);
@@ -231,6 +305,83 @@ export default function App() {
     setStats(null);
   }
 
+  // ------------------------------------------------------------ 精修台
+  const strengthRef = useRef(strength);
+  strengthRef.current = strength;
+
+  async function onImport() {
+    const p = imgPath.trim();
+    if (!p) {
+      setDragNote(t("retouch.needPath"));
+      return;
+    }
+    setBusy(true);
+    setLastInpaint(null);
+    setDragNote(t("retouch.importing"));
+    try {
+      // 设备由 $LRT_DEVICE 定（宿主 load_image 会先把 set_device 发在会话之前）；
+      // precompute=auto：有真后端就用真的，没有就用 synthetic 并把原因写进 notes
+      await loadImage(p, { maxPx, strength: strengthRef.current, precompute: "auto", channel: channel || undefined });
+    } catch (e) {
+      setDragNote(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** 强度：零推理通路，可以逐事件发；唯一要卡住的是 IPC 排队频率。 */
+  function onStrength(v: number) {
+    setStrengthV(v);
+    const now = performance.now();
+    const send = () => {
+      lastSend.current = performance.now();
+      setStrength(strengthRef.current, { channel: channel || undefined }).catch((e) => setDragNote(String(e)));
+    };
+    if (now - lastSend.current >= DRAG_THROTTLE_MS) {
+      if (pending.current !== null) {
+        window.clearTimeout(pending.current);
+        pending.current = null;
+      }
+      send();
+    } else if (pending.current === null) {
+      // 拖动的最后一个值必须发出去，否则松手那一下会停在旧强度上
+      pending.current = window.setTimeout(() => {
+        pending.current = null;
+        send();
+      }, DRAG_THROTTLE_MS);
+    }
+  }
+
+  /**
+   * 磨皮参数：松手才算。半径/质感一变就要重算滤波（产品代理档实测 ~4 ms），
+   * 逐事件发会把 M1-3c 拿回来的 vsync 余量又吐出去。
+   */
+  function onParamCommit() {
+    setStrength(strengthRef.current, { radius, detailGain }).catch((e) => setDragNote(String(e)));
+  }
+
+  function onChannelChange(c: string) {
+    setChannel(c);
+    setStrength(strengthRef.current, { channel: c || undefined }).catch((e) => setDragNote(String(e)));
+  }
+
+  const onStroke = useCallback(
+    (rle: number[][], pixels: number) => {
+      setDragNote(t("retouch.repairing", { pixels }));
+      runInpaint("add", { rle, feather })
+        .then(() => refreshStatus())
+        .catch((e) => setDragNote(String(e)));
+    },
+    [feather, refreshStatus],
+  );
+
+  function onInpaintAction(action: InpaintInfo["action"]) {
+    setDragNote(t("retouch.repairing", { pixels: 0 }));
+    runInpaint(action)
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)));
+  }
+
   const verdict = gate(stats, w);
 
   return (
@@ -260,6 +411,75 @@ export default function App() {
             {t("engine.shm")}: {status.shm} · {status.emitted}/{status.delivered}
           </div>
         )}
+
+        <h2>{t("side.retouch")}</h2>
+        <label className="k">{t("retouch.image")}</label>
+        <input value={imgPath} onChange={(e) => setImgPath(e.target.value)} placeholder="/path/to/photo.jpg" style={{ width: "100%" }} />
+        <div className="row">
+          <input type="number" value={maxPx} step={10000} min={0} onChange={(e) => setMaxPx(+e.target.value)} style={{ width: 110 }} />
+          <span className="mut">{t("retouch.maxPx")}</span>
+          <button className="primary" onClick={onImport} disabled={!pid || busy || !imgPath.trim()}>{t("retouch.import")}</button>
+        </div>
+        <label className="k">{t("retouch.strength")} · {strength.toFixed(2)}</label>
+        <input type="range" min={0} max={1} step={0.01} value={strength} onChange={(e) => onStrength(+e.target.value)} style={{ width: "100%" }} />
+        <label className="k">{t("retouch.radius")} · {radius}</label>
+        <input type="range" min={1} max={60} step={1} value={radius} onChange={(e) => setRadius(+e.target.value)}
+               onPointerUp={onParamCommit} onKeyUp={onParamCommit} style={{ width: "100%" }} />
+        <label className="k">{t("retouch.detail")} · {detailGain.toFixed(2)}</label>
+        <input type="range" min={0} max={1.5} step={0.05} value={detailGain} onChange={(e) => setDetailGain(+e.target.value)}
+               onPointerUp={onParamCommit} onKeyUp={onParamCommit} style={{ width: "100%" }} />
+        <div className="mut">{t("retouch.commitHint")}</div>
+        <label className="k">{t("retouch.channel")}</label>
+        <select value={channel} onChange={(e) => onChannelChange(e.target.value)} style={{ width: "100%" }}>
+          <option value="">{t("retouch.channelFull")}</option>
+          {(status?.precompute?.mask_channels ?? []).map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        <div className="row">
+          <button className={brushOn ? "primary" : ""} onClick={() => setBrushOn(!brushOn)} disabled={!status?.image}>
+            {brushOn ? t("retouch.brushOn") : t("retouch.brushOff")}
+          </button>
+          <input type="number" min={2} max={64} value={brushRadius} onChange={(e) => setBrushRadius(+e.target.value)} style={{ width: 60 }} />
+          <span className="mut">{t("retouch.brushSize")}</span>
+          <input type="number" min={0} max={8} value={feather} onChange={(e) => setFeather(+e.target.value)} style={{ width: 52 }} />
+          <span className="mut">{t("retouch.feather")}</span>
+        </div>
+        <div className="row">
+          <button onClick={() => onInpaintAction("undo")} disabled={!status?.image}>{t("retouch.undo")}</button>
+          <button onClick={() => onInpaintAction("redo")} disabled={!status?.image}>{t("retouch.redo")}</button>
+          <button onClick={() => { onInpaintAction("clear"); setLastInpaint(null); }} disabled={!status?.image}>{t("retouch.clear")}</button>
+        </div>
+        {lastInpaint && (
+          <table>
+            <tbody>
+              <tr>
+                <td>{t("retouch.ops")}</td>
+                <td>{lastInpaint.ops} · {t("retouch.redoPending")} {lastInpaint.redo_pending}</td>
+              </tr>
+              <tr>
+                <td>{t("retouch.painted")}</td>
+                <td>{lastInpaint.painted_px} px</td>
+              </tr>
+              <tr>
+                <td>{t("retouch.repairMs")}</td>
+                <td>{lastInpaint.repair_ms.toFixed(2)} ms</td>
+              </tr>
+              <tr>
+                <td>{t("retouch.totalMs")}</td>
+                <td>
+                  {lastInpaint.total_ms.toFixed(2)} ms · {t("retouch.cached")}{" "}
+                  {lastInpaint.cached ? t("retouch.yes") : t("retouch.no")}
+                </td>
+              </tr>
+              <tr>
+                <td>{t("retouch.device")}</td>
+                <td>{lastInpaint.device}</td>
+              </tr>
+            </tbody>
+          </table>
+        )}
+        {dragNote && <div className="mut">{dragNote}</div>}
 
         <h2>{t("side.bench")}</h2>
         <label className="k">{t("bench.size")}</label>
@@ -322,7 +542,15 @@ export default function App() {
       </aside>
 
       <main className="stage">
-        <Viewer active={!!pid} skipDraw={skipDraw} upload={upload} ctxOpt={ctxOpt} chunks={chunks} onHud={setHud} />
+        <Viewer
+          active={!!pid}
+          skipDraw={skipDraw}
+          upload={upload}
+          ctxOpt={ctxOpt}
+          chunks={chunks}
+          brush={{ on: brushOn && !!status?.image, radius: brushRadius, onStroke }}
+          onHud={setHud}
+        />
         <div className="hud">
           <div>
             <div className="k">{t("hud.frame")}</div>
