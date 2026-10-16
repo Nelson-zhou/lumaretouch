@@ -1,0 +1,24 @@
+:root { color-scheme: dark; --bg:#16181d; --fg:#e6e8ee; --mut:#8b93a4; --line:#2a2e37; --acc:#e0a86a; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:13px/1.5 "Noto Sans CJK SC","Source Han Sans SC",system-ui,sans-serif; }
+.app { display:grid; grid-template-columns: 320px 1fr; height:100vh; }
+.side { border-right:1px solid var(--line); padding:14px; overflow:auto; }
+.stage { display:flex; flex-direction:column; min-width:0; }
+.stage canvas { flex:1; width:100%; background:#0b0c0f; image-rendering: auto; }
+.hud { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:10px 14px; border-top:1px solid var(--line); font-variant-numeric: tabular-nums; }
+.hud .k { color:var(--mut); font-size:11px; }
+.row { display:flex; gap:8px; align-items:center; margin:8px 0; }
+label.k { display:block; color:var(--mut); font-size:11px; margin-top:10px; }
+input, select, button { background:#1f2229; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit; }
+button { cursor:pointer; }
+button.primary { background:var(--acc); color:#1a1a1a; border-color:var(--acc); font-weight:600; }
+button:disabled { opacity:.45; cursor:default; }
+h1 { font-size:15px; margin:0 0 12px; }
+h2 { font-size:12px; color:var(--mut); margin:18px 0 6px; text-transform:none; font-weight:600; }
+table { width:100%; border-collapse:collapse; font-size:12px; }
+td { padding:3px 0; }
+td:nth-child(2) { text-align:right; }
+.warn { color:#ff9c9c; }
+.ok { color:#89e0a8; }
+.mut { color:var(--mut); }
+pre.log { font-size:11px; color:var(--mut); max-height:180px; overflow:auto; background:#12141a; border:1px solid var(--line); border-radius:6px; padding:8px; white-space:pre-wrap; }

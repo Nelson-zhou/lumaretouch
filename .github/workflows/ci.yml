@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  engine:
+    name: 引擎测试（CPU 参考实现对拍）
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv --version
+      - name: 装依赖（仅 numpy + pytest，不拉 GPU 轮子）
+        working-directory: engine
+        run: uv sync --group dev
+      - name: 单测
+        working-directory: engine
+        run: uv run --group dev pytest -q
+
+  ui:
+    name: UI 类型检查与构建
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - name: npm ci + tsc
+        working-directory: ui
+        run: npm ci --no-audit --no-fund && npx tsc --noEmit
+      - name: cargo check
+        working-directory: ui/src-tauri
+        run: cargo check
+
+  # GPU 门禁：需要 self-hosted runner。用仓库 variable 开关，没 runner 时根本不该排队
+  # （之前写 `if: github.repository != ''` 永远为真，结不上标签只会无限 waiting）。
+  # 开启：Settings → Secrets and variables → Actions → Variables → HAS_ROCM_RUNNER = true
+  probe-amd:
+    name: GPU 打靶与内核预算（AMD / ROCm）
+    if: vars.HAS_ROCM_RUNNER == 'true'
+    runs-on: [self-hosted, rocm]
+    env:
+      PY: ${{ vars.LRT_ENGINE_PY || 'python3' }}
+    steps:
+      - uses: actions/checkout@v4
+      # 安装前置检查与用户装包时跑的是同一个脚本，不另搭一套判定
+      - name: 前置检查（设备真能用）
+        run: bash packaging/preflight.sh "$PY"
+      - name: 滤波内核预算（1280×800 ≤ 20 ms）
+        # M0 实测：积分图 7.9 ms；退化成 avg_pool2d 写法要 99.7 ms。
+        # 不卡这一条，算法层换个写法就能静悄悄吃掉一个数量级的帧率。
+        run: |
+          PYTHONPATH=engine/src LRT_KERNEL_BUDGET_MS=20 \
+            "$PY" packaging/m0-pipeline-bench.py cuda 1280 800
+
+  # NVIDIA 侧同理。本机无 N 卡，CUDA 依赖 pin 也尚未解析回填，
+  # 在拿到 NVIDIA runner 之前这条只能是开关关闭，不能当作已验证。
+  probe-nvidia:
+    name: GPU 打靶（NVIDIA / CUDA）
+    if: vars.HAS_CUDA_RUNNER == 'true'
+    runs-on: [self-hosted, cuda]
+    env:
+      PY: ${{ vars.LRT_ENGINE_PY || 'python3' }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash packaging/preflight.sh "$PY"
+      - run: |
+          PYTHONPATH=engine/src LRT_KERNEL_BUDGET_MS=20 \
+            "$PY" packaging/m0-pipeline-bench.py cuda 1280 800
+
+  # 通路不回归：引擎层单测 + 脚本可跑。真正的端到端帧率验收需要图形环境，
+  # 在 M0 阶段仍是本机跑 packaging/m0-bench.sh，不假称 CI 已覆盖。
+  packaging:
+    name: 打包脚本与暂存内容校验
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      # 只验语法，不用 py_compile：那会在仓库里留下 __pycache__
+      - run: bash -n packaging/*.sh && python3 -c 'import ast,sys;[ast.parse(open(f).read(),f) for f in sys.argv[1:]]' packaging/*.py probe/*.py
+      - name: 暂存引擎不应带字节码
+        run: |
+          bash packaging/stage-engine.sh
+          if find ui/src-tauri/gen/engine-stage -name '*.pyc' -o -name '__pycache__' | grep -q .; then
+            echo '发行暂存目录里混进了字节码'; exit 1
+          fi
+          test -f ui/src-tauri/gen/engine-stage/lumaretouch_engine/server.py

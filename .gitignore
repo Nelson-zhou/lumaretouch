@@ -1,0 +1,14 @@
+node_modules/
+dist/
+target/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+# Tauri 生成物（权限 schema）与打包暂存的引擎副本，两者都是构建产物。
+# 注意：`gen/schemas/` 这种含中间斜杠的模式会相对本文件所在目录锚定，
+# 写它只能命中 <根>/gen/schemas，盖不住 ui/src-tauri/gen/，故用绝对路径形式。
+/ui/src-tauri/gen/
+.pytest_cache/
+*.deb

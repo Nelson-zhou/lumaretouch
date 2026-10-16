@@ -1,0 +1,18 @@
+[package]
+name = "lumaretouch"
+version = "0.0.1"
+description = "LumaRetouch — Linux AI 人像精修（M0 骨架）"
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+libc = "0.2"
+
+[profile.dev]
+opt-level = 1
