@@ -236,6 +236,8 @@ export default function App() {
         <select value={mode} onChange={(e) => setMode(e.target.value as BenchOptions["mode"])} style={{ width: "100%" }}>
           <option value="copy">{t("bench.mode.copy")}</option>
           <option value="pipeline">{t("bench.mode.pipeline")}</option>
+          <option value="pipeline_copyin">{t("bench.mode.pipeline_copyin")}</option>
+          <option value="pipeline_resident">{t("bench.mode.pipeline_resident")}</option>
         </select>
         <div className="row">
           <button className="primary" onClick={onRun} disabled={!pid || busy}>

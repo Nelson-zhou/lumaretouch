@@ -1,0 +1,15 @@
+# AMD / ROCm 引擎变体（本机已真装、真跑过的那套）
+#
+# 与 requirements-cuda.txt 平行：GPU 轮子按显卡型号现场装，不写进 pyproject 的
+# dependency-group——uv 解析会连可选 group 一起解，把没跑过的解析图带进 CI 的
+# `uv sync --group dev`（engine job 只该装 numpy + pytest）。
+#
+# 版本号来源：本机 RX 7600 XT（gfx1102）+ ROCm 7.2.1 实装 torch 2.10.0+rocm7.0，
+# gfx1102 原生受支持，不需要 HSA_OVERRIDE_GFX_VERSION。
+--index-url https://download.pytorch.org/whl/rocm7.0
+torch==2.10.0+rocm7.0
+torchvision==0.25.0+rocm7.0
+
+# 装法：
+#   python3 -m venv ~/.venvs/lumaretouch-rocm && ~/.venvs/lumaretouch-rocm/bin/pip install -r engine/requirements-rocm.txt
+#   LRT_ENGINE_PY=~/.venvs/lumaretouch-rocm/bin/python bash packaging/preflight.sh

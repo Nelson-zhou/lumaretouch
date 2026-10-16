@@ -13,7 +13,9 @@ import subprocess
 import sys
 import threading
 import time
+import importlib.util
 
+import numpy as np
 import pytest
 
 from lumaretouch_engine.shm import FrameShm, monotonic_ns, shm_name
@@ -190,3 +192,50 @@ def test_dropped_frames_are_detectable_by_seq_gaps(engine):
     assert max(seen) <= 40
     # 本测试故意慢读：不要求一定有跳号，但要求编号严格单调递增
     assert seen == sorted(seen) and len(set(seen)) == len(seen)
+
+
+def test_unknown_bench_mode_is_rejected(engine):
+    """模式名写错不能默默当成 copy 跑：那样会得到一份「管线根本没跑」但看上去完全正常的数据。"""
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="bench_start", w=32, h=32, frames=2, interval_ms=5, mode="pipeline_residentd")
+    ev = engine.next_event()
+    assert ev["event"] == "error", f"预期报错，实际收到 {ev}"
+    assert "模式" in ev["error"]
+
+
+def test_resident_mode_runs_and_emits_varying_frames(engine):
+    """M1-2 的常驻模式必须在真子进程里跑通，且帧内容真的在换。
+
+    GPU 上的数值一致性由 test_vram 的 GPU 用例覆盖；这里只验协议与分段计时结构，
+    所以固定跑 CPU 后端，不依赖本机有没有显卡——但仍依赖 torch 本身存在。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻模式要 torch；CI 的 CPU job 只装 numpy+pytest（子进程用的是同一个解释器）")
+    w, h, n = 96, 64, 6
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set")
+    engine.send(cmd="bench_start", w=w, h=h, frames=n, interval_ms=8, mode="pipeline_resident")
+    meta = engine.wait_for("shm_ready")
+    peer = FrameShm(meta["name"])
+    stamps = []
+    try:
+        for _ in range(n):
+            ev = engine.wait_for("frame", timeout=30)
+            assert ev["mode"] == "pipeline_resident"
+            assert peer.meta_of(ev["slot"])[0] == ev["seq"], "元数据与通知不一致"
+            arr = np.frombuffer(peer.read_pixels(ev["slot"]), np.uint8).reshape(h, w, 4)
+            stamps.append(int(arr[16, 16, 2]))
+            assert int(arr[0, 0, 3]) == 255, "常驻帧缓冲的 alpha 被洗掉了"
+        done = engine.wait_for("bench_done", timeout=30)
+        assert not done.get("failed"), f"跑靶线程报错了: {done}"
+        # 只断言能稳住在微秒以上的量：96×64 的回读在 CPU 上不到 3 µs，6 帧均值会舍入成 0.0
+        assert done["kernel"] > 0, "常驻路径的滤波内核没真跑"
+        assert done["pre"] == 0 and done["cpu_post"] == 0, "常驻路径不该还有逐帧搬运段"
+        assert done["synth"] == 0, "常驻路径不该每帧重算源图"
+    finally:
+        peer.close()
+    assert len(set(stamps)) == n, f"序号指纹没有逐帧变化: {stamps}"
+

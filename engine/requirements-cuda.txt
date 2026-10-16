@@ -1,0 +1,16 @@
+# NVIDIA / CUDA 引擎变体（与 uv 的 rocm group 平行的另一条安装路径）
+#
+# 为什么单开一个文件而不是再加一个 uv group：两个 group 限定源给同一个包指两个
+# explicit index 时，uv 会直接报 "conflicting indexes for package torch"，
+# 连只装 numpy+pytest 的 `uv sync --group dev`（CI 的 engine job）都会被带崩。
+#
+# 精确 pin 尚未在 NVIDIA 硬件上确定：本机无 N 卡，不得凭空写死一个可能不存在的版本号，
+# 由带 NVIDIA runner 的 CI 首次解析后回填（见计划文档「NVIDIA 未验证」风险项与
+# packaging/preflight.sh 的设备判定）。
+--extra-index-url https://download.pytorch.org/whl/cu126
+torch>=2.6
+torchvision>=0.21
+
+# 装法（在 NVIDIA runner 上）：
+#   python3 -m venv ~/.venvs/lumaretouch-cuda && ~/.venvs/lumaretouch-cuda/bin/pip install -r engine/requirements-cuda.txt
+#   LRT_ENGINE_PY=~/.venvs/lumaretouch-cuda/bin/python bash packaging/preflight.sh

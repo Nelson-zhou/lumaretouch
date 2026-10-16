@@ -55,6 +55,13 @@ jobs:
         run: |
           PYTHONPATH=engine/src LRT_KERNEL_BUDGET_MS=20 \
             "$PY" packaging/m0-pipeline-bench.py cuda 1280 800
+      - name: 显存常驻路径预算（引擎一帧 ≤ 16 ms，且两条臂像素一致）
+        # M1-2 之后对引擎侧的硬要求：一帧不得超一个帧周期（16.7 ms）。
+        # 本步同时验常驻臂与搬运臂的像素一致（≤2 LSB），只快不错才算过。
+        # 实测：1280×800 逐帧搬运 36.8 ms（不达标）→ 常驻 9.2 ms（达标）。
+        run: |
+          REPS=7 LRT_RESIDENT_BUDGET_MS=16 \
+            "$PY" packaging/m1-vram-bench.py cuda 1280x800
 
   # NVIDIA 侧同理。本机无 N 卡，CUDA 依赖 pin 也尚未解析回填，
   # 在拿到 NVIDIA runner 之前这条只能是开关关闭，不能当作已验证。
@@ -70,6 +77,10 @@ jobs:
       - run: |
           PYTHONPATH=engine/src LRT_KERNEL_BUDGET_MS=20 \
             "$PY" packaging/m0-pipeline-bench.py cuda 1280 800
+      # N 卡上没本机数据，预算先按与 ROCm 同一不超标；跑出真数再收紧
+      - run: |
+          REPS=7 LRT_RESIDENT_BUDGET_MS=16 \
+            "$PY" packaging/m1-vram-bench.py cuda 1280x800
 
   # 通路不回归：引擎层单测 + 脚本可跑。真正的端到端帧率验收需要图形环境，
   # 在 M0 阶段仍是本机跑 packaging/m0-bench.sh，不假称 CI 已覆盖。

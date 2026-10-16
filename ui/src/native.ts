@@ -41,7 +41,8 @@ export interface BenchOptions {
   h: number;
   frames: number;
   intervalMs: number;
-  mode: "copy" | "pipeline";
+  /** pipeline = pipeline_copyin 的历史别名，引擎侧两者同义。 */
+  mode: "copy" | "pipeline" | "pipeline_copyin" | "pipeline_resident";
 }
 
 export const startEngine = (py: string, src: string) =>

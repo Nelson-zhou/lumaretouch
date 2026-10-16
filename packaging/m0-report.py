@@ -53,11 +53,37 @@ def engine_for(runs: list[dict], eng: list[dict]) -> dict:
     return out
 
 
+# 引擎侧一帧拆成这样才读得懂：M1-2 的卖点就是「内核没动，省的全是搬运」，
+# 只报一个「管线」总数就分不出这两种情况。
+ENG_COLS = ("引擎:测帧", "引擎:上传", "引擎:内核", "引擎:GPU收尾", "引擎:CPU收尾",
+            "引擎:回读", "引擎:写shm", "引擎:通知", "引擎:合计")
+
+
+def eng_cells(e: dict) -> tuple[str, ...]:
+    if not e:
+        return ("—",) * len(ENG_COLS)
+    if "kernel" in e:                      # M1-2 后的细粒度分段
+        v = [e.get(k, 0) for k in ("synth", "pre", "kernel", "post_gpu",
+                                   "cpu_post", "readback", "shm", "notify")]
+        return tuple(eng_ms(x) for x in v) + (f"{sum(float(x or 0) for x in v):.2f}",)
+    # 旧 jsonl 只给了一个 pipe 总数。把它填进「上传」或「内核」都会被读成
+    # M1-2 的结论，所以那一列单独标成“管线(旧)”。
+    pipe = float(e.get("pipe", 0) or 0)
+    synth = float(e.get("synth", 0) or 0)
+    shm, notify = float(e.get("shm", 0) or 0), float(e.get("notify", 0) or 0)
+    cells = ["—"] * len(ENG_COLS)
+    cells[0] = eng_ms(synth)
+    cells[1] = f"管线(旧){pipe:.2f}"
+    cells[6] = eng_ms(shm)
+    cells[7] = eng_ms(notify)
+    cells[8] = f"{synth + pipe + shm + notify:.2f}"
+    return tuple(cells)
+
+
 def table(runs: list[dict], eng: list[dict]) -> None:
     eby = engine_for(runs, eng)
     cols = ("run", "tier", "尺寸", "模式", "设备", "fps", "丢帧%",
-            "取帧ms", "取→绘 p50/p95/p99", "可→上 p50/p95/p99",
-            "引擎:测帧", "引擎:管线", "引擎:写shm", "引擎:通知")
+            "取帧ms", "取→绘 p50/p95/p99", "可→上 p50/p95/p99") + ENG_COLS
     rows = []
     for d in runs:
         tier = d.get("tier", 2)
@@ -76,11 +102,7 @@ def table(runs: list[dict], eng: list[dict]) -> None:
             ms(d["pull_dur"]["p95"]),
             f"{ms(pt['p50'])} / {ms(pt['p95'])} / {ms(pt['p99'])}",
             f"{ms(pa['p50'])} / {ms(pa['p95'])} / {ms(pa['p99'])}{lab}",
-            eng_ms(e.get("synth", 0)),
-            eng_ms(e.get("pipe", 0)),
-            eng_ms(e.get("shm", 0)),
-            eng_ms(e.get("notify", 0)),
-        ))
+        ) + eng_cells(e))
     w = [max(len(str(c)), *(len(r[i]) for r in rows)) for i, c in enumerate(cols)]
     print("  " + " | ".join(str(c).ljust(w[i]) for i, c in enumerate(cols)))
     print("  " + "-+-".join("-" * x for x in w))
@@ -137,17 +159,34 @@ NOTES = """
 """
 
 
-def aggregate(runs: list[dict]) -> None:
+def eng_arm(eng_by_run: dict, arm: str) -> dict | None:
+    """把同一臂各次的 bench_done 归成中位。engine_for 的键是 "E2-xxx#3"，这里按臂名聚合。"""
+    rows = [e for key, e in eng_by_run.items() if key.split("#")[0] == arm]
+    if not rows:
+        return None
+    seg = ("synth", "pre", "kernel", "post_gpu", "cpu_post", "readback", "shm", "notify")
+    med = lambda xs: statistics.median(xs) if xs else 0.0
+    per = {k: med([float(r.get(k, 0) or 0) for r in rows]) for k in seg}
+    # 旧数据只有一个 pipe：当作「管线+搬运」合计读，不假装能拆开口
+    if not any("kernel" in r for r in rows):
+        per = dict(synth=med([float(r.get("synth", 0) or 0) for r in rows]),
+                   pipe=med([float(r.get("pipe", 0) or 0) for r in rows]))
+    return {"kernel": per.get("kernel", 0.0), "total": sum(per.values())}
+
+
+def aggregate(runs: list[dict], eng: dict | None = None) -> None:
     """按臂聚合（run 名形如 A1-raw#3）。看中位与最差，不挑最好看的那一次。"""
     reps = [d for d in runs if "#" in (d.get("_run") or "")]
     if len(reps) < 2:
         return
+    eng = eng or {}
     arms: dict[str, list[dict]] = {}
     for d in reps:
         arms.setdefault(d["_run"].split("#")[0], []).append(d)
     print("\n  [按臂聚合 · 中位 / 最差]")
     cols = ("臂", "n", "MB/帧", "上传策略", "分块", "fps 中位", "fps 最差",
-            "丢帧% 中位", "丢帧% 最差", "取→绘 p50", "p95", "撞帧run", "≥中位59且最差≤5%")
+            "丢帧% 中位", "丢帧% 最差", "取→绘 p50", "p95", "撞帧run",
+            "引擎合计", "内核", "≥中位59且最差≤5%")
     rows = []
     for name, ds in arms.items():
         fps = [d["measured_fps"] for d in ds]
@@ -161,11 +200,14 @@ def aggregate(runs: list[dict]) -> None:
         ck = int(d0.get("chunks", 1) or 1)
         # 「撞帧」判定：p95 超过 1.5 个帧周期就算尾部撞了整整一帧（双峰分布）
         stalls = sum(1 for x in p95 if x > 25_000)
+        # 引擎侧分段：同一臂的 bench_done 取中位（老数据没拆细分段时只给得出合计）
+        e = eng_arm(eng, name)
         rows.append((name, str(len(ds)), f"{mb:.2f}", str(d0.get("upload", "raw")), str(ck),
                      f"{statistics.median(fps):.1f}", f"{min(fps):.1f}",
                      f"{statistics.median(drop):.1f}", f"{max(drop):.1f}",
                      ms(statistics.median(p50)), ms(statistics.median(p95)),
                      f"{stalls}/{len(ds)}",
+                     f"{e['total']:.2f}" if e else "—", f"{e['kernel']:.2f}" if e else "—",
                      "✓" if ok else "✗"))
     w = [max(len(str(c)), *(len(r[i]) for r in rows)) for i, c in enumerate(cols)]
     print("  " + " | ".join(str(c).ljust(w[i]) for i, c in enumerate(cols)))
@@ -183,8 +225,9 @@ def main() -> int:
     if not runs:
         print("无结果")
         return 1
+    eby = engine_for(runs, eng)
     table(runs, eng)
-    aggregate(runs)
+    aggregate(runs, eby)
     marginal(runs)
     gates(runs)
     print(NOTES)

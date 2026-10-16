@@ -12,30 +12,18 @@ lumaretouch-engine = "lumaretouch_engine.server:main"
 [dependency-groups]
 dev = ["pytest>=8.0"]
 
-# ---- GPU 引擎变体：首启探测显卡后只装其中一组 ----
-rocm = ["torch==2.10.0+rocm7.0", "torchvision==0.25.0+rocm7.0"]
+# ---- GPU 引擎变体：不进 uv group，走两个 requirements 文件 ----
+# 为什么：uv 解析时会连可选 group 一起解，`uv sync --group dev`（CI 的 engine job）
+# 也会因为 rocm 组里 torch==2.10.0+rocm7.0 依赖的 triton-rocm==3.6.0 在指定索引上
+# 找不到而直接报 "no solution found"。GPU 轮子本来就按显卡型号现场装（preflight.sh
+# 给的就是 pip 命令），把变体当依赖声明只会把一个没跑过的解析图塞进 CI。
+#   AMD/ROCm：requirements-rocm.txt（本机已真装并跑过）
+#   NVIDIA/CUDA：requirements-cuda.txt（pin 待 N 卡 runner 回填）
 cpu = []
 
-# CUDA 变体的精确 pin 尚未确定：本机无 N 卡，不得凭空写死一个可能不存在的版本，
-# 由带 NVIDIA runner 的 CI 首次解析后回填（见 docs/风险项「NVIDIA 未验证」）。
-cuda = []
-
-[[tool.uv.index]]
-name = "rocm70"
-url = "https://download.pytorch.org/whl/rocm7.0"
-explicit = true
-
-[[tool.uv.index]]
-name = "cuda"
-url = "https://download.pytorch.org/whl/cu126"
-explicit = true
-
-[tool.uv.sources]
-torch = [
-  { index = "rocm70", group = "rocm" },
-  { index = "cuda", group = "cuda" },
-]
-torchvision = [{ index = "rocm70", group = "rocm" }]
+[tool.uv]
+# uv 默认会把所有可选 group 一起装；这里显式只锁 dev，避开上面那个解析陷阱。
+default-groups = []
 
 [build-system]
 requires = ["hatchling"]
