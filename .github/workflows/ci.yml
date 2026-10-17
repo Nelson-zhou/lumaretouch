@@ -156,6 +156,15 @@ jobs:
         # 本机（RX 7600 XT）：合成 0 LSB、GPU 1.4 ms / CPU 96 ms；线性光 188；色键 1.000/0.000；
         # BiRefNet 结构 1024² 中位 914 ms、峰值额外 1440 MiB（事件驱动一次，可接受）。
         run: REPS=20 LRT_DEVICE=cuda "$PY" packaging/m6-bg-bench.py
+      - name: 放大（分块逐字节等价 + GPU↔CPU↔Pillow 三臂 + 峰值只随 tile 走 + RRDB 结构成本）
+        # M7 硬要求：① Lanczos 分块与整幅差恰为 0（等价性是构造出来的，不是近似）；
+        # ② GPU↔CPU ≤1 LSB、带限正弦重建跟得上解析真值而最近邻跟不上；
+        # ③ ×4 峰值随 tile 走而不随图幅走；④ RRDB 结构只量成本与重叠分块几何，
+        # 无权重不报超分质量。
+        # 本机（RX 7600 XT）：分块差 0、GPU↔CPU 1 LSB、正弦重建 1.02 LSB（最近邻 3.81）；
+        # 1024×1280 ×4：整幅 1036.7 MiB / tile256 307.9 MiB（同 64 ms）；
+        # RRDBNet(23×RRDB,nf=64) 17.77 M 参数，192² 稳态 146 ms / 381 MiB，分块 190 MiB。
+        run: LRT_DEVICE=cuda "$PY" packaging/m7-upscale-bench.py
 
   # NVIDIA 侧同理。本机无 N 卡，CUDA 依赖 pin 也尚未解析回填，
   # 在拿到 NVIDIA runner 之前这条只能是开关关闭，不能当作已验证。
@@ -229,6 +238,9 @@ jobs:
       - name: 抠图/换底（合成 CPU↔GPU 对拍 + 线性光证据 + 色键分离 + BiRefNet 结构成本账）
         # 判据同 ROCm job；N 卡无本机数据，跑出真数后按本机口径收紧 BiRefNet 耗时/显存阈值。
         run: REPS=20 LRT_DEVICE=cuda "$PY" packaging/m6-bg-bench.py
+      - name: 放大（分块逐字节等价 + 三臂对拍 + 峰值只随 tile 走 + RRDB 结构成本）
+        # 判据同 ROCm job；N 卡那侧跑出真数后按本机口径收紧 RRDB 耗时/显存阈值。
+        run: LRT_DEVICE=cuda "$PY" packaging/m7-upscale-bench.py
 
   # 通路不回归：引擎层单测 + 脚本可跑。真正的端到端帧率验收需要图形环境，
   # 在 M0 阶段仍是本机跑 packaging/m0-bench.sh，不假称 CI 已覆盖。
