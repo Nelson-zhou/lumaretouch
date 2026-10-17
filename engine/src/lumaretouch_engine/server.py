@@ -17,7 +17,8 @@ from .frames import test_frame
 from .shm import FrameShm, monotonic_ns, shm_name
 # 磨皮参数的默认值只在这里取一次：vram 在模块层就容忍 torch 缺失（CPU job 也能 import），
 # 在这里复用它们而不是写第二份字面量，否则默认值与生产值会漂移。
-from .vram import DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_RADIUS, DEFAULT_REPAIR, RepairOp, warm_device
+from .vram import DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_MID_GAIN, \
+    DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS, DEFAULT_REPAIR, RepairOp, warm_device
 
 PROTOCOL_VERSION = 1
 
@@ -75,7 +76,10 @@ class Engine:
         self._channel = None
         # 磨皮参数（M1-3c）：与 strength 不同，它们变了滤波结果才会变。缓存键靠这个字典，
         # 所以它必须存在引擎侧而不是只在调用方：否则报表上看不出「这一帧重算了没」。
-        self._params = dict(radius=DEFAULT_RADIUS, eps=DEFAULT_EPS, detail_gain=DEFAULT_DETAIL_GAIN)
+        self._params = dict(radius=DEFAULT_RADIUS, eps=DEFAULT_EPS,
+                            texture_radius=DEFAULT_TEXTURE_RADIUS,
+                            broad_gain=DEFAULT_BROAD_GAIN, mid_gain=DEFAULT_MID_GAIN,
+                            detail_gain=DEFAULT_DETAIL_GAIN)
         # 消除笔（M1-4）的操作列表在引擎侧也有份：常驻会话会因换设备而重建，
         # 只存在 pipe 里的话迁完就“脸还在但修补全没了”。存的是输入（画笔 uint8），不是结果。
         # redo 栈也得有一份：不然切一次设备就把“重做”历史静默抹掉，与“撤销/重做都靠重放”矛盾。
@@ -357,8 +361,12 @@ class Engine:
               # first_frame_ms 就会被读成“每帧都得 4.5 ms”，而拖拽期实际只付混合那 0.1 ms。
               # 一次性成本与逐帧成本混在一起量就分不出谁是谁。
               "first_frame_filter_ms": round(float(pipe.last_filter_ms), 2),
+              # M2-a：首帧那一笔里“分带”与“重组”各占多少。两者混在一个数里就看不出
+              # 分层缓存有没有价值（分带贵、重组便宜）。
+              "first_frame_bands_ms": round(float(pipe.last_bands_ms), 2),
               # 零推理换来的显存代价必须能看见，不能只报快了多少
               "bytes_filter": pipe.filter_resident_bytes(),
+              "bytes_bands": pipe.bands_resident_bytes(),
               # 只报滤波这一份：掩膜在本事件之后才挂上（precompute 跑在 image_ready 后面），这里附 bytes_face 恒为 0，
               # 反而会被读成"掩膜没常驻"。掩膜/关键点的字节数由 precompute_ready 报，那才是它们为真的那一刻。
               "import_ms": round((t_c - t0) / 1e6, 2)})
@@ -490,20 +498,26 @@ class Engine:
             channel = p["channel"] or None
         # 磨皮参数：只有真变了才会重算滤波。半径直接决定 reflect pad 后的分配量
         # （积分图是 O(1)/像素但与窗口面积挂钩），没硬边界的话一个越界值就能把显存打爆，
-        # 与 max_px 同一类风险。
+        # 与 max_px 同一类风险。texture_radius 还要多一层：它决定线性高通的窗口，同样进分配。
         # 下界不是随手取的：eps=0 会让 `a = var/(var+eps)` 在平坦皮区算 0/0 = NaN（产品档实测
         # 402795 个子像素为 NaN）。这份 NaN 会被写进常驻缓存，而 `(1-0)*img + 0*NaN` 仍是 NaN
         # （IEEE 里 0×NaN = NaN），于是 strength=0 与解码原图差到 255 LSB —— 验收口径③
         # 整段会话被打穿。radius=0 不产 NaN，但滑块彻底空操作（实测 s=0.5 与原图 0 处不同），
-        # 产品上没有任何意义，一并卡掉。
+        # 产品上没有任何意义，一并卡掉。texture_radius=0 同理：blur 就是原图、tex 全零，
+        # “肌理保留”滑块当场变成空控件，所以协议层要 ≥1（库层仍允许 0，给对拍用）。
         params = dict(self._params)
-        for k, lo, hi in (("radius", 1, 256), ("eps", 1e-6, 1.0), ("detail_gain", 0.0, 2.0)):
+        for k, lo, hi in (("radius", 1, 256), ("eps", 1e-6, 1.0), ("texture_radius", 1, 32),
+                          ("detail_gain", 0.0, 2.0), ("mid_gain", 0.0, 2.0),
+                          ("broad_gain", 0.0, 2.0)):
             if p.get(k) is None:
                 continue
             try:
-                v = int(p[k]) if k == "radius" else float(p[k])
+                v = int(p[k]) if k in ("radius", "texture_radius") else float(p[k])
             except (TypeError, ValueError):
                 emit({"event": "error", "error": f"参数 {k} 非法：{p[k]!r}"})
+                return
+            if v != v:          # NaN 比大小永远是 False，不先拦就会被当成“越界”报个误导的区间错
+                emit({"event": "error", "error": f"参数 {k} 不是有限数：{p[k]!r}"})
                 return
             if not lo <= v <= hi:
                 emit({"event": "error", "error": f"参数 {k}={v} 超出范围 [{lo}, {hi}]"})
@@ -518,6 +532,10 @@ class Engine:
         emit({"event": "params_set", "strength": self._strength, "channel": self._channel,
               "render_ms": render_ms,
               "filter_ms": round(float(self._vram.last_filter_ms), 2),
+              # M2-a 分层：bands_ms > 0 才是这一帧真重跑了 guided 分带。拖“匀肤/细节/肌理”
+              # 三个滑块时 filter_ms 不为 0 而 bands_ms = 0，说明只重跑了逐点乘加——
+              # 分带/重组两层缓存是否生效，这是唯一的直接证据。
+              "bands_ms": round(float(self._vram.last_bands_ms), 2),
               # 这一帧到底复用了缓存没有：`retouched is not None` 是个恒真的说法（render 成功
               # 之后它必然非空），缓存被无声绕过时也照样报 True。只有 last_filter_ms 才由执行路径约束。
               "cached": float(self._vram.last_filter_ms) == 0.0, **self._params})
@@ -652,6 +670,7 @@ class Engine:
         render_ms = fr.pop("render_ms")
         emit({"event": "inpaint_done", "action": action, **info, **info_add,
               "filter_ms": round(float(self._vram.last_filter_ms), 2),
+              "bands_ms": round(float(self._vram.last_bands_ms), 2),
               "cached": float(self._vram.last_filter_ms) == 0.0,
               "repair_ms": info["repair_ms"], "render_ms": render_ms,
               "total_ms": round((monotonic_ns() - t_start) / 1e6, 2),
@@ -659,7 +678,10 @@ class Engine:
         emit(fr)
 
     def _pipe_copyin(self, rgba, strength: float, radius: int = DEFAULT_RADIUS,
-                     eps: float = DEFAULT_EPS, detail_gain: float = DEFAULT_DETAIL_GAIN):
+                     eps: float = DEFAULT_EPS, detail_gain: float = DEFAULT_DETAIL_GAIN,
+                     mid_gain: float = DEFAULT_MID_GAIN,
+                     broad_gain: float = DEFAULT_BROAD_GAIN,
+                     texture_radius: int = DEFAULT_TEXTURE_RADIUS):
         """逐帧搬运路径（对照组）：CPU numpy → H2D → 内核 → D2H → CPU numpy。
 
         返回 (RGBA, 各段 ms)。故意不复用输入缓冲：那是 test_frame 的缓存本体，
@@ -683,9 +705,11 @@ class Engine:
         seg["pre"] = (monotonic_ns() - t) / 1e6
         t = monotonic_ns()
         # 这里原先写的是 radius=12, eps=6e-4 两个字面量、而且不传 detail_gain：默认值一改
-        # 这条对照臂就会静默漂离开生产参数，两个臂比的就不是同一件事了
+        # 这条对照臂就会静默漂离开生产参数，两个臂比的就不是同一件事了（M2-a 新加的
+        # 三个参数必须一并带过来，否则对照臂还在跑二分频，差值里混着算法改动）
         o = retouch_t(tensor, strength=strength, radius=radius, eps=eps,
-                      detail_gain=detail_gain)
+                      detail_gain=detail_gain, mid_gain=mid_gain,
+                      broad_gain=broad_gain, texture_radius=texture_radius)
         self._sync()
         seg["kernel"] = (monotonic_ns() - t) / 1e6
         t = monotonic_ns()

@@ -65,13 +65,15 @@ def new_engine(dev: str, rgb: np.ndarray, w: int, h: int, tag: str):
 
 
 def drop_cache(pipe):
-    """把滤波缓存清空：下一次 _make_frame 就会走 M1-3b 的每帧重算路径。
+    """把**两层**缓存都清空：下一次 _make_frame 就会从底图重跑整条滤波链。
 
     这是两臂唯一的差别。不清缓存也不允许——那样两臂量到的是同一条路，差值恒为 0，
     "省了多少"就变成一个自证的空话。
+    M2-a 起缓存分成"分带 + 重组"两层，所以这里必须调库里的 drop_cache 而不是自己
+    写两行赋值：只清成品的那条臂量到的是重组（~0.5 ms），而 last_filter_ms > 0 让它
+    的自检照样通过——两臂就在量同一条路而看不出来。出处只有一个才不会再漂。
     """
-    pipe.retouched = None
-    pipe.filter_key = None
+    pipe.drop_cache()
 
 
 def run_arm(eng, pipe, shm, recompute: bool, frames: int):

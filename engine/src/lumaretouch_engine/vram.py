@@ -24,13 +24,14 @@ try:
 except Exception:        # 也要能 import 成功，不然整个测试收集阶段就报 ModuleNotFoundError
     torch = None
 
-from .ops.guided import filter_t, mix_masked
+from .ops.guided import (bands_t, combine_t, mix_masked,
+                         DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS,
+                         DEFAULT_MID_GAIN, DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS)
 from .ops.inpaint import crop_apply_t, hole_extent, inpaint_t, levels_for, mask_bbox
 
-# 与 ops.guided 的生产默认值保持一致；滑块只在这个基准附近改动系数
-DEFAULT_RADIUS = 12
-DEFAULT_EPS = 6e-4
-DEFAULT_DETAIL_GAIN = 0.85
+# 磨皮参数默认值只有一个出处：ops.guided（探针量出来的），这里只转发不改数。
+# 以前在这里写字面量、server 里又写一份，就是 M1-2 那次「默认值改了但调用方还带着
+# 旧字面量」的同构隐患。
 
 # 消除笔（M1-4）默认参数。refine_iters=6 不是凑的：整幅跑“平滑1/PM6”在产品代理档 9.4 ms，
 # 比 PM2 多 4 ms 买到的是孔径 6→5.1 LSB、口径 12→6.3 LSB；而 PM12 再翻一倍时间只多拿 0.2 LSB。
@@ -92,9 +93,16 @@ class PreviewPipeline:
         # filter_key 记下这份结果对应哪组参数；源图一变（load_rgb_u8）必须作废。
         self.retouched: torch.Tensor | None = None
         self.filter_key: tuple | None = None
+        # M2-a：四条带单独缓存。分带只依赖 (radius, eps, texture_radius)，重组只依赖三个
+        # 增益——分两层存，拖“匀肤/细节/肌理”时才不会把 4.5 ms 的分带再跑一遍。
+        self.bands: tuple | None = None
+        self.bands_key: tuple | None = None
         # 上一次 retouch() 里重算滤波花掉的毫秒；0.0 就是命中缓存。分段计时靠它把
         # 「一次性成本」与「每帧成本」分开上报，不然缓存到底有没有生效看不出来。
         self.last_filter_ms = 0.0
+        # 同一次 prepare 里「分带」那一半的成本。报表靠它区分“真的重跑了 guided”
+        # 与“只重跑了逐点乘加”——两者都算 last_filter_ms > 0，混在一起就看不出分层有没有生效。
+        self.last_bands_ms = 0.0
         # M1-4：消除笔图层。操作列表在 CPU 侧（uint8 画笔），合成结果在显存侧，
         # repair_version 进滤波缓存键——底图变了，旧的那份滤波结果对新底图没有任何意义。
         self.repair_ops: list[RepairOp] = []
@@ -119,7 +127,10 @@ class PreviewPipeline:
         # 换图就是换源张量：旧滤波结果对新图没有任何意义，继续用等于拿别人的脸磨自己的皮
         self.retouched = None
         self.filter_key = None
+        self.bands = None
+        self.bands_key = None
         self.last_filter_ms = 0.0
+        self.last_bands_ms = 0.0
         # 同理，上一张图的画笔坐标与新图毫无关系：不清的话新图会凭空长出几个坑
         self.repair_ops = []
         self.redo_ops = []
@@ -132,11 +143,19 @@ class PreviewPipeline:
 
     # ---- 渲染：全 GPU，无 CPU 参与 --------------------------------------
     def prepare(self, radius: int = DEFAULT_RADIUS, eps: float = DEFAULT_EPS,
-                detail_gain: float = DEFAULT_DETAIL_GAIN, force: bool = False) -> float:
-        """算一次滤波并常驻，返回本次重算的毫秒数；0.0 表示命中缓存没有重算。
+                detail_gain: float = DEFAULT_DETAIL_GAIN,
+                mid_gain: float = DEFAULT_MID_GAIN,
+                broad_gain: float = DEFAULT_BROAD_GAIN,
+                texture_radius: int = DEFAULT_TEXTURE_RADIUS, force: bool = False) -> float:
+        """把滤波结果备好并常驻，返回本次重算的毫秒数；0.0 表示命中缓存没有重算。
 
         拖滑块期间这个 0.0 才是常态：strength 不进滤波，只在混合那一步当系数。
-        半径/eps/质感这些真的会改滤波结果的参数变了，才会重算这一份。
+
+        M2-a 把它拆成两层：
+          1) 分带 bands_t：贵（产品档 ~5 ms），只随 (radius, eps, texture_radius, 底图) 变；
+          2) 重组 combine_t：便宜（逐点乘加），只随三个增益变。
+        以前三个增益任何一个动一下都要把整条 guided 链重跑；现在拖“肌理/细节/匀肤”
+        只付第 2 层。第 1 层的实际花费记在 last_bands_ms 里，报表能分开看。
         """
         if self.src_f32 is None:
             raise RuntimeError("先 load_rgb_u8 再 prepare")
@@ -145,24 +164,46 @@ class PreviewPipeline:
         # 撞同一个键，下次拿到的就是错的那份。
         r = int(radius)
         e = float(eps)
+        rf = int(texture_radius)
         g = float(detail_gain)
+        mg = float(mid_gain)
+        bg = float(broad_gain)
         # eps 必须严格为正：`a = var/(var+eps)` 在 eps=0 时于平坦皮区算 0/0，产出 NaN
         # （产品档实测 402795 个子像素 NaN）。radius=0 在库层是合法的退化恒等滤波（输出有限、
         # strength=0 仍逐字节成立），协议层另有下界拦住它带来的"空滑块"。
-        if r < 0 or e <= 0.0 or not (math.isfinite(e) and math.isfinite(g)):
-            raise ValueError(f"磨皮参数非法：radius={r}（需 ≥0）、eps={e}（需 >0 的有限值）、"
-                             f"detail_gain={g}（需有限值）")
-        key = (r, e, g, self.repair_version)
+        if r < 0 or rf < 0 or e <= 0.0 or not (math.isfinite(e) and math.isfinite(g)
+                                              and math.isfinite(mg) and math.isfinite(bg)):
+            raise ValueError(f"磨皮参数非法：radius={r}（需 ≥0）、texture_radius={rf}（需 ≥0）、"
+                             f"eps={e}（需 >0 的有限值）、三个增益（需有限值）")
+        bands_key = (r, e, rf, self.repair_version)
+        # 成品键把修补版本放最后一位（M1-3c 起就是这个约定，测试与报表都按它读）：
+        # 前面六个全是磨皮参数，第 7 位是底图身份。
+        key = (r, e, rf, bg, mg, g, self.repair_version)
         if not force and self.retouched is not None and self.filter_key == key:
             self.last_filter_ms = 0.0
+            self.last_bands_ms = 0.0
             return 0.0
         t0 = time.perf_counter()
-        out = filter_t(self.base(), radius=r, eps=e, detail_gain=g)
-        # 最后一道防线：不把非有限值写进常驻缓存。缓存里的 NaN 会长期作恶——
-        # `(1-0)*img + 0*NaN` 仍是 NaN，strength=0 的逐字节恒等当场失效。
-        # 代价是重算路径上多一次归约与同步（只在换图/换参数时发生，不在拖拽热路径上）。
+        if force or self.bands is None or self.bands_key != bands_key:
+            tb = time.perf_counter()
+            got = bands_t(self.base(), radius=r, eps=e, texture_radius=rf)
+            # 最后一道防线：不把非有限值写进常驻缓存。缓存里的 NaN 会长期作恶——
+            # `(1-0)*img + 0*NaN` 仍是 NaN，strength=0 的逐字节恒等当场失效。
+            # 代价是重算路径上多一次归约与同步（只在换图/换参数时发生，不在拖拽热路径上）。
+            if not all(torch.isfinite(t).all() for t in got):
+                self.bands = None
+                self.bands_key = None
+                raise ValueError(f"分带产出非有限值，已拒绝写入常驻缓存："
+                                 f"radius={r} eps={e} texture_radius={rf}")
+            self.bands = got
+            self.bands_key = bands_key
+            self.last_bands_ms = (time.perf_counter() - tb) * 1000.0
+        else:
+            self.last_bands_ms = 0.0
+        out = combine_t(*self.bands, broad_gain=bg, mid_gain=mg, detail_gain=g)
         if not torch.isfinite(out).all():
-            raise ValueError(f"滤波产出非有限值，已拒绝写入常驻缓存：radius={r} eps={e} detail_gain={g}")
+            raise ValueError(f"滤波产出非有限值，已拒绝写入常驻缓存："
+                             f"radius={r} eps={e} 增益=({bg},{mg},{g})")
         self.retouched = out
         self.filter_key = key
         if self.device.type != "cpu":
@@ -172,6 +213,9 @@ class PreviewPipeline:
 
     def retouch(self, strength: float, radius: int = DEFAULT_RADIUS,
                 eps: float = DEFAULT_EPS, detail_gain: float = DEFAULT_DETAIL_GAIN,
+                mid_gain: float = DEFAULT_MID_GAIN,
+                broad_gain: float = DEFAULT_BROAD_GAIN,
+                texture_radius: int = DEFAULT_TEXTURE_RADIUS,
                 channel: str | None = None):
         """只跑算法，返回显存里的 float (1,3,H,W)。滑块每动一次调一次。
 
@@ -184,7 +228,9 @@ class PreviewPipeline:
         """
         if self.src_f32 is None:
             raise RuntimeError("先 load_rgb_u8 再 render")
-        self.prepare(radius=radius, eps=eps, detail_gain=detail_gain)
+        self.prepare(radius=radius, eps=eps, detail_gain=detail_gain,
+                     mid_gain=mid_gain, broad_gain=broad_gain,
+                     texture_radius=texture_radius)
         base = self.base()
         if channel is not None:
             return mix_masked(base, self.retouched, strength, self.mask(channel))
@@ -251,6 +297,30 @@ class PreviewPipeline:
         if self.retouched is None:
             return 0
         return int(self.retouched.numel() * self.retouched.element_size())
+
+    def bands_resident_bytes(self) -> int:
+        """M2-a 四条带的常驻字节。分带比成品多 4 份张量，不报就等于藏了一笔显存账。"""
+        if self.bands is None:
+            return 0
+        return sum(int(t.numel() * t.element_size()) for t in self.bands)
+
+    def drop_product(self) -> None:
+        """只丢重组好的成品：下一次 prepare 命中分带、只重跑逐点乘加。"""
+        self.retouched = None
+        self.filter_key = None
+
+    def drop_cache(self) -> None:
+        """两层缓存全丢：下一次 prepare 从底图重跑整条滤波链。
+
+        这个方法为什么在库里而不是各跑靶里各写一份：M2-a 把缓存拆成两层之后，只清
+        成品已不等于“逐帧重算”了（分带还会命中）。跑靶里的“重算臂”如果漏了清分带，
+        量到的就是重组那一条路，而 `last_filter_ms > 0` 会让它自检不出错——
+        一个看起来完全正常、实则两臂在量同一条路的坑。定义放在执行侧比放在调用方安
+        全：只有一个出处会漂。
+        """
+        self.drop_product()
+        self.bands = None
+        self.bands_key = None
 
     # ---- M1-4：消除笔图层（事件驱动） ------------------------------------
     def base(self):
@@ -352,6 +422,8 @@ class PreviewPipeline:
         self.repair_version += 1
         self.retouched = None          # 底图变了，滤波缓存立即作废（不靠下一次发现）
         self.filter_key = None
+        self.bands = None              # 分带缓存同理：旧底图的带对新底图没有意义
+        self.bands_key = None
         self.last_repair_ms = ms
         return {
             "repair_ms": round(ms, 2),
@@ -435,6 +507,7 @@ def warm_device(device: str, side: int = 64) -> float:
         pipe.read_back()
     finally:
         pipe.retouched = None
+        pipe.bands = None
         pipe.src_u8 = None
         pipe.src_f32 = None
         pipe.frame_gpu = None

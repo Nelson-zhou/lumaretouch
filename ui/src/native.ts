@@ -169,12 +169,14 @@ export const loadImage = (
 
 /**
  * 滑块动一下：引擎只重算系数。channel 指到常驻掩膜通道也不产生任何推理或上传。
- * radius/eps/detailGain 是磨皮参数：它们变了引擎会重算一次滤波（实测 ~4 ms），
- * 所以只在松手时带过去；strength 走零推理那条路，可以逐事件发。
+ * radius/eps/textureRadius 变的是**分带**（实测产品档 5 ms），detailGain/midGain/broadGain
+ * 变的只是**重组**（~0.5 ms），strength 两者都不动（~0.1 ms）。
+ * 两层都是“松手才提交”：逐事件发会把 M1-3c 拿回来的 vsync 余量又吐出去。
  */
 export const setStrength = (
   value: number,
-  opts?: { channel?: string; radius?: number; eps?: number; detailGain?: number },
+  opts?: { channel?: string; radius?: number; eps?: number; detailGain?: number;
+           midGain?: number; broadGain?: number; textureRadius?: number },
 ) =>
   invoke<{ value: number }>("set_strength", {
     value,
@@ -182,6 +184,9 @@ export const setStrength = (
     radius: opts?.radius,
     eps: opts?.eps,
     detailGain: opts?.detailGain,
+    midGain: opts?.midGain,
+    broadGain: opts?.broadGain,
+    textureRadius: opts?.textureRadius,
   });
 
 /** 对当前已导入的图跑一次导入期预计算；结果靠 engineStatus().precompute 轮询。 */
@@ -272,6 +277,8 @@ export interface M0Env {
   precompute_channel: string;
   /** 非空则导入后自动打几笔消除笔（M1-4）："fx:fy:r,…"，坐标按代理帧归一化。 */
   auto_inpaint: string;
+  /** 非空则导入后提交一次三条带增益（M2-a）："mid:broad:detail"。 */
+  auto_skin: string;
 }
 export const m0Env = () => invoke<M0Env>("m0_env");
 export const report = (line: string) => invoke("report", { line });

@@ -69,11 +69,12 @@ def test_cached_mix_is_byte_identical_to_per_frame_recompute(pipe, rgb):
 def test_cached_mix_still_matches_cpu_reference(pipe, rgb):
     """上屏字节仍然落在项目既定口径内：与 numpy 参考实现差 ≤ 1 LSB。
 
-    这里不拿 float 差当合同：CPU/GPU 的 float 差是积分图 cumsum 累加顺序噪声，
-    **随宽度与 strength 增长**（实测 672 宽单趟 guided 就差 5.4e-3，s=0.85 时整条链
-    差 3.2e-3），而它不是缓存引入的：同一组数据上 `pipe.retouch(s)` 与 `retouch_t(...)`
-    是逐位相等（差 0.0e+00）。真正能验收的是量化后的字节，下面两条一起卡：
-    最大偏差 ≤1 LSB，且不同子像素占比 <2%（不然“处处差 1”会被最大值掩盖）。
+    这里不拿 float 差当合同：CPU/GPU 的 float 差原来主要来自积分图 cumsum 的累加
+    顺序噪声，**随宽度与 strength 增长**（实测 672 宽单趟 guided 就差 5.4e-3，s=0.85
+    时整条链差 3.2e-3）。M2-a 把累加器换成 float64 后这一项被堵了（现在两边算的是
+    同一个精确和），实测降到 1e-7 量级；但合同形式不改：比的仍是量化后的字节，
+    并且占比阈值跟着收紧（不然“把累加器改回去”这种退化不会被看见）：
+    最大偏差 ≤1 LSB，且不同子像素占比 <0.5%。
     """
     from lumaretouch_engine.ops.guided import retouch_np
 
@@ -81,11 +82,11 @@ def test_cached_mix_still_matches_cpu_reference(pipe, rgb):
     for s in (0.0, 0.3, 0.85):
         got = pipe.retouch(s).cpu().numpy()
         ref = retouch_np(img_np, strength=s)
-        q = lambda a: (np.clip(a, 0, 1) * 255).astype(np.uint8).astype(np.int16)
+        q = lambda a: (np.clip(a, 0, 1) * 255).astype(np.uint8).astype(np.int16)  # noqa: E731
         diff = np.abs(q(got) - q(ref))
         ratio = float((diff > 0).mean())
         assert diff.max() <= 1, f"strength={s} 与 CPU 参考差 {int(diff.max())} LSB，超出验收口径"
-        assert ratio < 0.02, f"strength={s} 有 {ratio:.1%} 子像素在差，1 LSB 掩盖了系统性偏差"
+        assert ratio < 0.005, f"strength={s} 有 {ratio:.1%} 子像素在差，1 LSB 掩盖了系统性偏差"
 
 
 @needs_fixture
@@ -101,6 +102,37 @@ def test_strength_zero_is_byte_exact_through_the_cache(pipe, rgb):
 
 
 # ------------------------------------------------------------------ 命中与失效
+def test_ui_seed_values_match_engine_defaults():
+    """前端滑块的初值必须与引擎侧 DEFAULT_* 逐个对得上。
+
+    这不是“顺手检一下格式”：精修台的半径/三个保留度都是“松手才提交”，也就是说
+    滑块初值就是产品默认值的**第二份字面量**。引擎改了而 UI 没改，用户一拖别的滑块
+    就会把旧那份静默写进会话——报表上写的仍是新默认，屏上是旧行为。M1-2 已经因为
+    “调用方自带字面量”红过一次（_pipe_copyin 里手写 radius=12），那条靠同文件修了，
+    跨语言的这一条只能这样钉。
+    """
+    import re
+
+    app = os.path.join(os.path.dirname(HERE), "ui", "src", "App.tsx")
+    if not os.path.isfile(app):
+        pytest.skip("没有前端源码（单独跑引擎包时允许）")
+    src = open(app, encoding="utf-8").read()
+
+    def seed(name):
+        setter = name[0].upper() + name[1:]        # detailGain → setDetailGain（不是 setDetailgain）
+        m = re.search(rf"const \[{name}, set{setter}\] = useState\(([-\d.]+)\)", src)
+        assert m, f"App.tsx 里找不到滑块 {name} 的初值写法，这条钉法需要跟着改"
+        return float(m.group(1))
+
+    from lumaretouch_engine.vram import (DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN,
+                                         DEFAULT_MID_GAIN, DEFAULT_RADIUS)
+    got = {"radius": seed("radius"), "detailGain": seed("detailGain"),
+           "midGain": seed("midGain"), "broadGain": seed("broadGain")}
+    want = {"radius": float(DEFAULT_RADIUS), "detailGain": DEFAULT_DETAIL_GAIN,
+            "midGain": DEFAULT_MID_GAIN, "broadGain": DEFAULT_BROAD_GAIN}
+    assert got == want, f"前端初值与引擎默认值漂开了：{got} vs {want}"
+
+
 @needs_fixture
 def test_first_call_filters_then_reuses(pipe, rgb):
     """第一次算滤波，之后每帧都不再算：命中缓存时 last_filter_ms 必须是 0.0。
@@ -111,16 +143,51 @@ def test_first_call_filters_then_reuses(pipe, rgb):
     pipe.retouch(0.3)
     first = pipe.last_filter_ms
     assert first > 0.0, "第一帧就该把滤波算出来，否则后面测不到命中"
+    assert pipe.last_bands_ms > 0.0, "第一帧没走分带：两层缓存的第一层没生效"
     for s in (0.31, 0.4, 0.5, 0.9):
         pipe.retouch(s)
         assert pipe.last_filter_ms == 0.0, f"strength={s} 又重算了一次滤波，缓存没生效"
-    from lumaretouch_engine.vram import DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_RADIUS
-    # M1-4 起键多了一位：底图（修补图层）版本号。磨皮参数三元组仍须逐字对得上。
-    assert pipe.filter_key[:3] == (DEFAULT_RADIUS, DEFAULT_EPS, DEFAULT_DETAIL_GAIN), \
+        assert pipe.last_bands_ms == 0.0, f"strength={s} 连分带都重跑了"
+    from lumaretouch_engine.vram import (DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS,
+                                         DEFAULT_MID_GAIN, DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS)
+    # M2-a 起键是七元组：(半径, eps, 纹理半径, 三个增益, 修补版本)。它们必须逐字对上默认值，
+    # 否则“命中缓存”可能只是“键算错到同一个值”。
+    assert pipe.filter_key[:6] == (DEFAULT_RADIUS, DEFAULT_EPS, DEFAULT_TEXTURE_RADIUS,
+                                   DEFAULT_BROAD_GAIN, DEFAULT_MID_GAIN, DEFAULT_DETAIL_GAIN), \
         f"缓存键不是默认参数：{pipe.filter_key}"
-    assert pipe.filter_key[3] == pipe.repair_version, f"键里第 4 位不是修补版本号：{pipe.filter_key}"
+    assert pipe.filter_key[6] == pipe.repair_version, f"键里最后一位不是修补版本号：{pipe.filter_key}"
+    assert pipe.bands_key == (DEFAULT_RADIUS, DEFAULT_EPS, DEFAULT_TEXTURE_RADIUS,
+                              pipe.repair_version), f"分带键与成品键不同源：{pipe.bands_key}"
     # force 是显式重建入口，不能因为"命中"就跳过
     assert pipe.prepare(force=True) > 0.0
+    assert pipe.last_bands_ms > 0.0, "force 没有真的重跑分带"
+
+
+@needs_fixture
+def test_band_gain_sliders_reuse_the_expensive_bands(pipe, rgb):
+    """M2-a 的第 2 层缓存：只改三个增益时，贵的分带一次也不重跑。
+
+    M1-3c 只有一个键，改任何一个滤波参数都要重跑整条 guided 链（产品档 4.5 ms）。
+    M2-a 把“分带”与“重组”拆开存：三个增益只进重组那一层，所以拖“匀肤/细节/肌理”
+    只付逐点乘加那一份。这条卡的就是：bands_ms 必须为 0，而结果仍与逐帧重算逐字节等。
+    """
+    from lumaretouch_engine.ops.guided import retouch_t
+
+    pipe.retouch(0.5)
+    assert pipe.last_bands_ms > 0.0
+    for kw in ({"detail_gain": 0.6}, {"mid_gain": 0.45}, {"broad_gain": 0.3},
+               {"mid_gain": 0.45, "broad_gain": 0.3, "detail_gain": 0.9}):
+        out = pipe.retouch(0.5, **kw)
+        assert pipe.last_filter_ms > 0.0, f"{kw} 改了增益却没重组"
+        assert pipe.last_bands_ms == 0.0, f"{kw} 把贵的分带重跑了：{pipe.last_bands_ms:.2f} ms"
+        fresh = retouch_t(pipe.src_f32, strength=0.5, **kw)
+        assert torch.equal(out, fresh), f"{kw} 重组结果与逐帧重算不等"
+
+    # 而改了纹理半径就必须重跑分带：否则等于用别人的带磨这张图
+    pipe.retouch(0.5, texture_radius=8)
+    assert pipe.last_bands_ms > 0.0, "texture_radius 变了却没重跑分带，分带键不算它"
+    assert torch.equal(pipe.retouch(0.5, texture_radius=8),
+                       retouch_t(pipe.src_f32, strength=0.5, texture_radius=8))
 
 
 @needs_fixture
@@ -133,7 +200,8 @@ def test_filter_param_change_recomputes_exactly_once(pipe, rgb):
     pipe.retouch(0.5)
     assert pipe.last_filter_ms == 0.0
 
-    for kw in ({"radius": 20}, {"eps": 1.5e-3}, {"detail_gain": 0.6}):
+    for kw in ({"radius": 20}, {"eps": 1.5e-3}, {"detail_gain": 0.6},
+               {"mid_gain": 0.4}, {"broad_gain": 0.5}, {"texture_radius": 9}):
         out = pipe.retouch(0.5, **kw)
         assert pipe.last_filter_ms > 0.0, f"{kw} 改了参数却没重算滤波"
         fresh = retouch_t(pipe.src_f32, strength=0.5, **kw)
@@ -239,11 +307,14 @@ def test_illegal_filter_params_raise_at_the_lib_boundary(pipe, rgb):
     eps=NaN 会让 `a = var/(var+eps)` 全片变 NaN，然后被 clamp 成 0——屏幕变成全黑而
     没有任何一条错误；负半径则会把 pad 参数变成负数。这类值不能靠调用方自觉。
     """
-    for kw in ({"eps": float("nan")}, {"detail_gain": float("inf")}, {"radius": -1}):
+    for kw in ({"eps": float("nan")}, {"detail_gain": float("inf")}, {"radius": -1},
+               {"mid_gain": float("nan")}, {"broad_gain": float("inf")}, {"texture_radius": -2}):
         with pytest.raises(ValueError, match="磨皮参数非法"):
             pipe.prepare(**kw)
     # 拒绝之后缓存不能被留在半路：键与张量都还是原来的那一份
-    from lumaretouch_engine.vram import DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_RADIUS
+    from lumaretouch_engine.vram import (DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS,
+                                         DEFAULT_MID_GAIN, DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS)
     pipe.retouch(0.5)
-    assert pipe.filter_key[:3] == (DEFAULT_RADIUS, DEFAULT_EPS, DEFAULT_DETAIL_GAIN), \
+    assert pipe.filter_key[:6] == (DEFAULT_RADIUS, DEFAULT_EPS, DEFAULT_TEXTURE_RADIUS,
+                                   DEFAULT_BROAD_GAIN, DEFAULT_MID_GAIN, DEFAULT_DETAIL_GAIN), \
         f"非法参数把缓存状态弄乱了：{pipe.filter_key}"

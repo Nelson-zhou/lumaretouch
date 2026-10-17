@@ -12,3 +12,5 @@ venv/
 /ui/src-tauri/gen/
 .pytest_cache/
 *.deb
+# 跑靶/打靶的生成物目录（对照图、报表）。要长期留存的证据请显式复制到 docs/evidence/
+/build/

@@ -97,8 +97,7 @@ def drag_arm(pipe, eng, op, cached: bool, frames: int):
     pipe.repair_ops = []
     pipe.redo_ops = []
     pipe.repair_base = None
-    pipe.retouched = None
-    pipe.filter_key = None
+    pipe.drop_cache()      # M2-a 起两层都要清，见 vram.PreviewPipeline.drop_cache
     if cached:
         pipe.add_repair(op)
     last = None
@@ -147,8 +146,7 @@ def event_cost(eng, pipe, weight_u8):
     frame = pipe.read_back()
     t_end = monotonic_ns()
     pipe.clear_repair(keep_redo=False)
-    pipe.retouched = None
-    pipe.filter_key = None
+    pipe.drop_cache()      # M2-a 起两层都要清，见 vram.PreviewPipeline.drop_cache
     return {"encode_ms": (t_enc - t0) / 1e6, "decode_ms": (t_dec - t_enc) / 1e6,
             "repair_ms": (t_rep - t_dec) / 1e6, "render_ms": (t_end - t_rep) / 1e6,
             "engine_ms": (t_end - t_enc) / 1e6, "total_ms": (t_end - t0) / 1e6,

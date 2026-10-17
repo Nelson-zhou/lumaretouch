@@ -76,7 +76,11 @@ export default function App() {
   const [maxPx, setMaxPx] = useState(576000);
   const [strength, setStrengthV] = useState(0.5);
   const [radius, setRadius] = useState(12);
-  const [detailGain, setDetailGain] = useState(0.85);
+  // 这三行初始值必须与引擎侧 DEFAULT_* 逐个对得上（test_drag.py 里有一条用例专看这件事）：
+  // 写两份字面量而不对拍，就是 M1-2 那次“默认值改了但调用方还带着旧值”的同构坑。
+  const [detailGain, setDetailGain] = useState(1.0);   // 细带（肌理/毛孔）保留度
+  const [midGain, setMidGain] = useState(0.0);         // 中带（瑕疵/边缘锐度）保留度
+  const [broadGain, setBroadGain] = useState(0.0);     // 低频带（大面积色斑/光影）保留度
   const [channel, setChannel] = useState("");
   const [brushOn, setBrushOn] = useState(false);
   const [brushRadius, setBrushRadius] = useState(8);
@@ -218,6 +222,23 @@ export default function App() {
           }
         }
       }
+      // 三条带增益自动通道（$LRT_AUTO_SKIN="mid:broad:detail"）：走的是与真人松手完全
+      // 同一条链 —— setStrength → Rust set_strength → 引擎 params_set。引擎那条回显由
+      // Rust 打到 stdout（M0_ENGINE …），跑靶脚本据此核对参数真的过了宿主这一层：
+      // 命令签名改了而 TS 侧名字对不上时，Tauri 会静默丢掉那个参数，一个错也不报。
+      if (env.auto_skin) {
+        const nums = env.auto_skin.split(":").map(Number);
+        if (nums.length !== 3 || !nums.every(Number.isFinite)) {
+          await report(`M0_ERROR 无法解析 LRT_AUTO_SKIN=${env.auto_skin}（要 mid:broad:detail）`);
+        } else {
+          const [midGain, broadGain, detailGain] = nums;
+          await setStrength(strengthRef.current, { midGain, broadGain, detailGain })
+            .catch((e) => report(`M0_ERROR 带增益提交失败: ${e}`));
+          await report(`M0_SKIN ${JSON.stringify({ midGain, broadGain, detailGain,
+                                                   strength: strengthRef.current })}`);
+          await sleep(600);        // 等引擎的 params_set 回显落进 stdout
+        }
+      }
       for (let i = 0; i < 100; i++) {
         const st = await engineStatus().catch(() => null);
         if (st?.has_shm) break;
@@ -353,11 +374,13 @@ export default function App() {
   }
 
   /**
-   * 磨皮参数：松手才算。半径/质感一变就要重算滤波（产品代理档实测 ~4 ms），
-   * 逐事件发会把 M1-3c 拿回来的 vsync 余量又吐出去。
+   * 磨皮参数：松手才算。分带（半径/纹理半径/eps）一变要重跑整条 guided（产品档实测 5 ms），
+   * 三个增益只重跑重组（~0.5 ms）——两者都逐事件发会把 M1-3c 拿回来的 vsync 余量吐出去。
    */
   function onParamCommit() {
-    setStrength(strengthRef.current, { radius, detailGain }).catch((e) => setDragNote(String(e)));
+    setStrength(strengthRef.current,
+                { radius, detailGain, midGain, broadGain })
+      .catch((e) => setDragNote(String(e)));
   }
 
   function onChannelChange(c: string) {
@@ -427,6 +450,12 @@ export default function App() {
                onPointerUp={onParamCommit} onKeyUp={onParamCommit} style={{ width: "100%" }} />
         <label className="k">{t("retouch.detail")} · {detailGain.toFixed(2)}</label>
         <input type="range" min={0} max={1.5} step={0.05} value={detailGain} onChange={(e) => setDetailGain(+e.target.value)}
+               onPointerUp={onParamCommit} onKeyUp={onParamCommit} style={{ width: "100%" }} />
+        <label className="k">{t("retouch.mid")} · {midGain.toFixed(2)}</label>
+        <input type="range" min={0} max={1.5} step={0.05} value={midGain} onChange={(e) => setMidGain(+e.target.value)}
+               onPointerUp={onParamCommit} onKeyUp={onParamCommit} style={{ width: "100%" }} />
+        <label className="k">{t("retouch.broad")} · {broadGain.toFixed(2)}</label>
+        <input type="range" min={0} max={1.5} step={0.05} value={broadGain} onChange={(e) => setBroadGain(+e.target.value)}
                onPointerUp={onParamCommit} onKeyUp={onParamCommit} style={{ width: "100%" }} />
         <div className="mut">{t("retouch.commitHint")}</div>
         <label className="k">{t("retouch.channel")}</label>

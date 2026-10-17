@@ -322,6 +322,9 @@ fn set_strength(
     radius: Option<u64>,
     eps: Option<f64>,
     detail_gain: Option<f64>,
+    mid_gain: Option<f64>,
+    broad_gain: Option<f64>,
+    texture_radius: Option<u64>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "set_strength", "value": value});
     if let Some(c) = channel.filter(|s| !s.is_empty()) {
@@ -338,6 +341,16 @@ fn set_strength(
     }
     if let Some(v) = detail_gain {
         cmd["detail_gain"] = json!(v);
+    }
+    // M2-a 四条带：mid=瑕疵/边缘锐度，broad=大面积色斑/光影，texture_radius=细带取多宽
+    if let Some(v) = mid_gain {
+        cmd["mid_gain"] = json!(v);
+    }
+    if let Some(v) = broad_gain {
+        cmd["broad_gain"] = json!(v);
+    }
+    if let Some(v) = texture_radius {
+        cmd["texture_radius"] = json!(v);
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"value": value}))
@@ -642,6 +655,10 @@ fn m0_env() -> Value {
         "precompute_channel": std::env::var("LRT_PRECOMPUTE_CHANNEL").unwrap_or_default(),
         // 消除笔自动通道："fx:fy:r,…"（坐标按代理帧归一化），跑的是与真人点击同一条链
         "auto_inpaint": std::env::var("LRT_AUTO_INPAINT").unwrap_or_default(),
+        // M2-a 三条带增益的自动通道：“mid:broad:detail”。xdotool 的合成点击进不了 WebKit，
+        // 所以“滑块能不能过 Rust”这件事只能靠 env 钩子在真窗口里验：命令签名改了而 TS 侧
+        // 名字对不上时，Tauri 会静默丢掉那个参数，屏上不动而一个错也不报。
+        "auto_skin": std::env::var("LRT_AUTO_SKIN").unwrap_or_default(),
     })
 }
 

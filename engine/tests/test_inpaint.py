@@ -353,12 +353,18 @@ def test_repair_invalidates_filter_then_caches_again(session):
     assert session.last_filter_ms == 0.0
     session.add_repair(_op(session, 40, 40, 5))
     assert session.retouched is None, "加了一笔却没有作废滤波缓存——下一帧会拿旧底图的结果磨新底图"
+    # M2-a：底图变了连分带也必须立即作废。只作废成品而留着分带，等于
+    # “拿上一版脸的带磨这一版脸”：分带键里的修补版本号会隔手拦，但引用还挂在显存里，
+    # 任何绕过键比较的调用方就会拿到旧带。
+    assert session.bands is None, "加了一笔却没有作废分带缓存"
     session.retouch(0.5)
     assert session.last_filter_ms > 0.0, "底图变了却没重算滤波"
+    assert session.last_bands_ms > 0.0, "底图变了却没重跑分带"
+    assert session.filter_key[-1] == session.repair_version, "成品键没带修补版本号"
+    assert session.bands_key[-1] == session.repair_version, "分带键没带修补版本号"
     for s in (0.5, 0.6, 0.75):
         session.retouch(s)
         assert session.last_filter_ms == 0.0, f"strength={s} 又重算滤波，修补把零推理弄丢了"
-    assert session.filter_key[3] == session.repair_version, "缓存键没带修补版本号"
 
 
 @needs_torch
@@ -494,7 +500,9 @@ def test_many_strokes_then_drag_still_zero_recompute(session):
     for s in (0.5, 0.62, 0.8):
         session.retouch(s)
         assert session.last_filter_ms == 0.0, f"strength={s} 又重算了滤波"
-    assert session.filter_key[3] == session.repair_version
+    # M2-a 起键是七元组，修补版本号在最后一位（不是第 4 位了）
+    assert session.filter_key[-1] == session.repair_version
+    assert session.bands_key[-1] == session.repair_version, "分带键没带修补版本号"
     assert session.repair_resident_bytes() > 0, "常驻底图没被记账"
 
 

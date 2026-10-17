@@ -284,10 +284,25 @@ def test_load_image_and_drag_stream_real_photo(engine):
         got2 = np.frombuffer(peer.read_pixels(ev2["slot"]), np.uint8).reshape(ref.h, ref.w, 4)
         moved = int((np.abs(got2[:, :, :3].astype(np.int16) - got[:, :, :3].astype(np.int16)) > 0).sum())
         assert moved > 0, "strength 从 0 拉到 0.75 画面一点没变"
-        # 磨皮应当削高频而不是抹平结构：横向一阶差的能量必须降下来
-        def hf(a):
-            return float(np.abs(np.diff(a.astype(np.float32), axis=1)).mean())
-        assert hf(got2[:, :, 0]) < hf(got[:, :, 0]), "磨皮没在削高频，管线可能根本没接上"
+        # M2-a 把这条的断言方向改了。原话是“磨皮应当削高频”——那恰好是 M2-a
+        # 要避免的东西：把肌理一并削掉就是“塑料脸”的数值定义。现在卡的是
+        # **皮肤区的细带必须留住**（毛孔还在），同时画面真的改了、但改幅在合理区间。
+        # “去斑”那一半不靠这条测：整幅图的频带比例被发丝/眼睛/背景边缘占着，
+        # 那些东西本来就不该动（导向滤波保边），拿它当“磨皮在干活”的证据只会得到 0.94
+        # 这种看不出东西的数。去斑的量在 test_guided 的已知成分回归与 m2-skin-bench 里卡。
+        from lumaretouch_engine.ops.guided import _box_np
+
+        def _fine_u8(a):
+            x = np.ascontiguousarray(a.astype(np.float32).transpose(2, 0, 1)[None]) / 255.0
+            f = x - _box_np(x, 4)
+            return float(f.std())
+
+        keep = _fine_u8(got2[:, :, :3]) / max(_fine_u8(got[:, :, :3]), 1e-9)
+        assert 0.95 <= keep <= 1.15, \
+            f"上屏细带能量变了 {keep:.3f} 倍：纹理被抹掉了（偏低）或被增强了（偏高）"
+        mean_delta = float(np.abs(got2[:, :, :3].astype(np.int16)
+                                  - got[:, :, :3].astype(np.int16)).mean())
+        assert 0.0 < mean_delta < 20.0, f"强度 0.75 的平均改动 {mean_delta:.2f} LSB 不合常理"
     finally:
         peer.close()
 
@@ -609,8 +624,11 @@ def test_drag_stream_refilters_nothing(engine):
     assert done["refilter_frames"] == 0, \
         f"拖拽流里重算了 {done['refilter_frames']} 次滤波，零推理没成立"
     assert done["refilter_ms_total"] == 0.0, f"filter 段合计不为 0：{done['refilter_ms_total']}"
-    # 参数必须随事件说清楚，否则"没重算"也可能只是"没真的跑滤波"
-    assert done["params"]["radius"] == 12 and done["params"]["detail_gain"] == 0.85, done["params"]
+    # 参数必须随事件说清楚，否则"没重算"也可能只是"没真的跑滤波"。
+    # M2-a 起把默认值当字面量写在这里：改了默认不算改产品，这条就是要能红。
+    assert done["params"] == {"radius": 12, "eps": 6e-4, "texture_radius": 4,
+                              "broad_gain": 0.0, "mid_gain": 0.0, "detail_gain": 1.0}, \
+        done["params"]
     # 这里**不**卡逐帧时长：bench_done 的各段是“总时间 ÷ 帧数”的均值，6 帧的均值
     # 被一次调度抖动顶过 1 ms 是完全可能的（全套用例里真就这么红过一次，单跑又绿）。
     # 时序预算归 m1-drag-bench：那里是 60 帧×9 次交错取中位，量得起。协议测试只管契约。
@@ -634,20 +652,32 @@ def test_filter_param_change_recomputes_once_and_reaches_the_pixels(engine):
         engine.send(cmd="set_strength", value=0.6)
         ev = engine.wait_for("params_set", timeout=30)
         assert ev["filter_ms"] == 0.0, f"纯拖强度也重算了滤波：{ev['filter_ms']} ms"
+        assert ev["bands_ms"] == 0.0, f"纯拖强度连分带都重跑了：{ev['bands_ms']} ms"
 
         before = _read_frame(engine, peer, meta["h"], meta["w"])
         engine.send(cmd="set_strength", value=0.6, radius=18)
         ev2 = engine.wait_for("params_set", timeout=30)
         assert ev2["radius"] == 18, f"参数没回显：{ev2}"
         assert ev2["filter_ms"] > 0.0, "改了半径却没重算滤波——缓存键没含参数"
+        assert ev2["bands_ms"] > 0.0, "改了半径却没重跑分带：分带键没算半径"
         after = _read_frame(engine, peer, meta["h"], meta["w"])
         changed = int((np.abs(after - before) > 0).sum())
         assert changed > 0, "半径从 12 改到 18，画面一个子像素都没动：参数只是回显了"
+
+        # M2-a 第 2 层缓存：只改三个增益时，贵的分带一次也不重跑
+        engine.send(cmd="set_strength", value=0.6, mid_gain=0.45, broad_gain=0.3)
+        ev4 = engine.wait_for("params_set", timeout=30)
+        assert ev4["filter_ms"] > 0.0, "改增益没重组：重组那一层没接上参数"
+        assert ev4["bands_ms"] == 0.0, \
+            f"只改增益却重跑了分带（{ev4['bands_ms']} ms）：两层缓存白拆了"
+        gain_frame = _read_frame(engine, peer, meta["h"], meta["w"])
+        assert int((np.abs(gain_frame - after) > 0).sum()) > 0, "增益改了画面不动"
 
         engine.send(cmd="set_strength", value=0.9)
         ev3 = engine.wait_for("params_set", timeout=30)
         assert ev3["radius"] == 18, f"新参数没记住：{ev3}"
         assert ev3["filter_ms"] == 0.0, f"同参数下又重算了：{ev3['filter_ms']} ms"
+        assert ev3["bands_ms"] == 0.0, f"同参数下连分带都重跑了：{ev3['bands_ms']} ms"
     finally:
         peer.close()
 
@@ -664,7 +694,9 @@ def test_out_of_range_filter_params_are_refused_wholly(engine):
         pytest.skip("常驻管线要 torch")
 
     _load(engine, max_px=207360, strength=0.5)
-    for kw in ({"radius": 100000}, {"radius": -3}, {"eps": -1.0}, {"detail_gain": 99.0}):
+    for kw in ({"radius": 100000}, {"radius": -3}, {"eps": -1.0}, {"detail_gain": 99.0},
+               {"texture_radius": 64}, {"texture_radius": 0}, {"mid_gain": -0.1},
+               {"broad_gain": 2.5}):
         engine.send(cmd="set_strength", value=0.5, **kw)
         err = _expect_error(engine, "超出范围")
         assert err["event"] == "error", err
