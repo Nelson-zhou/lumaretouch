@@ -170,6 +170,12 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             state.on_grade_ready(&v);
             println!("M0_ENGINE {line}");
         }
+        "bg_done" => {
+            // M6 换底：一次“换底”事件一条（与 inpaint/light/grade 同为事件驱动）。
+            // 分开存：它报的是合成耗时与遮罩常驻字节，与其它层的账不是一个量。
+            state.on_bg_ready(&v);
+            println!("M0_ENGINE {line}");
+        }
         "bench_done" => {
             state.on_bench_done();
             println!("M0_ENGINE {line}");

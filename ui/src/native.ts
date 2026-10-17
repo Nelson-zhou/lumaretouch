@@ -385,6 +385,24 @@ export interface GradeInfo {
   strength: number;
 }
 
+/** 一次换底事件的回报（引擎侧 bg_done，M6）。事件驱动：一次“换底”一条。
+ *  clear 臂不带 backend/bg/matte_fill_fg（那些只在 set 时有意义）——按 M5-b 那一课，
+ *  引擎不发、这里就不许声明成必存。 */
+export interface BackgroundInfo {
+  action: "set" | "clear";
+  bg_active: boolean;
+  /** 遮罩 + 背景的常驻字节：没活时报 0 而不缺键 */
+  bytes_bg: number;
+  device: string;
+  bg_ms: number;
+  render_ms: number;
+  total_ms: number;
+  backend?: string;
+  bg?: number[];
+  /** 前景占比（alpha>127 的像素比例）：0–1 */
+  matte_fill_fg?: number;
+}
+
 /** 引擎进程的运行时账单：ready 里的 runtime 与宿主选解释器的那几条合起来一份。
  *  键全部可选：新壳配旧引擎时 ready 里根本没有这一项（宿主也不会凭空造一个）。 */
 export interface EngineRuntime {
@@ -432,6 +450,8 @@ export interface EngineStatus {
   lut: LutInfo | null;
   /** 最近一次 grade_done（M3-b）；与 lut 同生命期：肤色定向也随文档走。 */
   grade: GradeInfo | null;
+  /** 最近一次 bg_done（M6 换底）；换图/换设备会清空（遮罩随代理档与设备走）。 */
+  background: BackgroundInfo | null;
   /** 引擎在 ready 里报出的内置预设清单（M3-b）。空数组 = 这个引擎还没这一能力，
    *  UI 就不画按钮，而不是前端自己抄一份名字去撞一个不存在的资产。 */
   presets: PresetInfo[];
@@ -707,6 +727,21 @@ export const runGrade = (
     amount: opts?.amount,
   });
 
+/** 换底（M6）：一次“换底”一条命令。action=set 需 bg（[r,g,b] 0–255）；clear 关掉整层。
+ *  backend 默认 color_key（确定性色键）；birefnet 需权重，无权重引擎会诚实拒。返回只是
+ *  “请求递出去了”，真正的合成结果从 engine_status().background 轮询（与 inpaint/light 同路）。 */
+export const runBackground = (
+  action: BackgroundInfo["action"],
+  opts?: { backend?: string; bg?: number[]; tol?: number; softness?: number },
+) =>
+  invoke<{ requested: boolean }>("background", {
+    action,
+    backend: opts?.backend,
+    bg: opts?.bg,
+    tol: opts?.tol,
+    softness: opts?.softness,
+  });
+
 /** 全尺寸分块导出（M4）。不传 images 就是导当前这张。
  *
  * 这里的返回只是“请求递出去了”：满幅一块图就能是几秒，真正的结果从
@@ -805,6 +840,10 @@ export interface M0Env {
   /** 非空则导入后提交一次肤色定向（M3-b）："dh:ds:dv:amount"，四个数用 : 分隔。
    *  与 lut 的 @ 分法各走一份，两条自动臂可以同时挂。 */
   auto_grade: string;
+  /** M6 换底自动通道（$LRT_AUTO_BG）："rrggbb:tol:softness"。真窗口要证的不是
+   *  合成对不对（test_matting 已钉），而是 TS runBackground → Rust background →
+   *  引擎 bg_done 这条命令签名在真窗口里对得上，且画面真的变了（peek 字节差）。 */
+  auto_background: string;
   /** M4 导出自动通道："<目录>[@<格式>][@<tile>]"。 */
   auto_export: string;
   /** M5-a 底片条自动通道："<目录>[@<切到第几张>[@<长边>]]"。

@@ -6,13 +6,13 @@ import { t } from "./i18n";
 import {
   benchStart, benchStats, engineStatus, loadImage, m0Env, parseFrameHead, peekFrame,
   quit, report, runDeform,
-  fetchFilmstrip, runExport, runGrade, runHistory, runInpaint, runLight, runLut, runSession,
+  fetchFilmstrip, runExport, runGrade, runHistory, runInpaint, runLight, runLut, runSession, runBackground,
   setStrength, shutdownEngine, startEngine,
   type BenchOptions, type DeformInfo, type DocState, type EngineRuntime, type EngineStatus, type ExportDone,
   type ExportProgress, type HistoryReport, type HistoryState, type ImageReady,
   type InpaintInfo, type SessionState,
   type GradeInfo, type LightInfo,
-  type LutInfo,
+  type LutInfo, type BackgroundInfo,
   type Precompute, type Stats,
 } from "./native";
 
@@ -124,6 +124,8 @@ export default function App() {
   const [gradeAmounts, setGradeAmounts] = useState({ dh: 0, ds: 0, dv: 0 });
   const [gradeMix, setGradeMix] = useState(1);
   const [lastGrade, setLastGrade] = useState<GradeInfo | null>(null);
+  // 换底（M6）：最近一次 bg_done。与其它层同生命期（事件驱动、轮询取回）。
+  const [lastBg, setLastBg] = useState<BackgroundInfo | null>(null);
   const gradeFlight = useRef(false);
   const gradeQueued = useRef<{ dh?: number; ds?: number; dv?: number } | null>(null);
   // 批量出片（M4）：满幅导出跑在引擎的 worker 线程里，UI 只能从事件拿进度与终态。
@@ -133,6 +135,12 @@ export default function App() {
   const [exportFormat, setExportFormat] = useState("jpg");
   const [exportQuality, setExportQuality] = useState(95);
   const [exportTile, setExportTile] = useState("");
+  // 换底（M6）：背景色 + 色键容差/软边 + 后端。默认走确定性色键；birefnet 需权重，
+  // 无权重时引擎会诚实拒（与消除笔的 lama 同一条能力口径）。
+  const [bgColor, setBgColor] = useState("#ffffff");
+  const [bgTol, setBgTol] = useState(0.12);
+  const [bgSoft, setBgSoft] = useState(0.1);
+  const [bgBackend, setBgBackend] = useState("color_key");
   const [lastExport, setLastExport] = useState<ExportDone | null>(null);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   // 底片条（M5-a）：格子列表与缩略图分开存。列表每条 session_state 全量替换，
@@ -220,6 +228,7 @@ export default function App() {
         setGradeMix(gs.amount);
       }
       if (st.grade) setLastGrade(st.grade);
+      if (st.background) setLastBg(st.background);
       // 导出这两条无条件跟状态走：Rust 侧在换图/换进程时会清空，这里不跟着清就会
       // 把上一批的字节数当本批读（与图层那几条同一个病，只是这边是账单不是参数）
       setLastExport(st.export ?? null);
@@ -631,6 +640,39 @@ export default function App() {
         for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) n++;
         return n;
       };
+      // 换底自动通道（$LRT_AUTO_BG="rrggbb:tol:softness"）：真窗口证明
+      // runBackground → Rust background → 引擎 bg_done 这条签名对得上，且画面真的变了。
+      if (env.auto_background) {
+        const parts = env.auto_background.split(":");
+        const hex = (parts[0] || "").replace("#", "");
+        const tol = Number(parts[1] ?? 0.12), soft = Number(parts[2] ?? 0.10);
+        if (hex.length !== 6 || !Number.isFinite(tol) || !Number.isFinite(soft)) {
+          await report(`M0_ERROR 无法解析 LRT_AUTO_BG=${env.auto_background}（要 rrggbb:tol:softness）`);
+        } else {
+          const bg = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+          const before = await peek();
+          const homePix = before?.pixels ?? null;
+          let got: BackgroundInfo | null = null;
+          try {
+            await runBackground("set", { backend: "color_key", bg, tol, softness: soft });
+            for (let i = 0; i < 120 && !got; i++) {
+              await sleep(100);
+              const st = await engineStatus().catch(() => null);
+              if (st?.background && st.background.action === "set" && st.background.bg_active) {
+                got = st.background;
+              }
+            }
+          } catch (e) {
+            await report(`M0_ERROR runBackground 失败: ${e}`);
+          }
+          const after = await peek();
+          const diff = diffBytes(homePix, after?.pixels ?? null);
+          await report(`M0_BG ${JSON.stringify(got ? {
+            active: got.bg_active, backend: got.backend, fill: got.matte_fill_fg,
+            bytesBg: got.bytes_bg, bgMs: got.bg_ms, frameChanged: diff, device: got.device,
+          } : { bad: "12s 内没等到 bg_done", bg, tol, soft })}`);
+        }
+      }
       // 等宿主把下一条 history_state 搬进轮询状态：撤销的答复是异步的，
       // 而它的 doc_state 就是"引擎认为现在该摆哪些滑块"的唯一出处
       const waitHistory = async (rev: number, ms = 20000) => {
@@ -1173,6 +1215,24 @@ export default function App() {
       .catch((e) => setDragNote(String(e)));
   }
 
+  /** 换底（M6）：一次事件一条。hex → [r,g,b]；不猜默认 tol/softness（那两数的
+   *  语义由色键定，前端写死就会与引擎那一档漂）。birefnet 无权重时引擎回 error，
+   *  会进 status.logs 被看见——不静默退成色键。 */
+  function onApplyBg() {
+    const hex = bgColor.replace("#", "");
+    if (hex.length !== 6) { setDragNote("背景色需 #rrggbb"); return; }
+    const bg = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    runBackground("set", { backend: bgBackend, bg, tol: bgTol, softness: bgSoft })
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)));
+  }
+
+  function onClearBg() {
+    runBackground("clear")
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)));
+  }
+
   /** 导出一张：tile 空串就是“不给”（让引擎用自己的 DEFAULT_TILE），而不是前端猜一个。 */
   function onExport() {
     const tile = exportTile.trim() === "" ? undefined : Number(exportTile);
@@ -1571,6 +1631,45 @@ export default function App() {
               </table>
             )}
           </>
+        )}
+
+        {/* 换底（M6）：确定性色键把纯色/蓝箱底抠掉换新背景；birefnet 后端需权重，
+            无权重时引擎诚实拒绝（不静默退成色键）。 */}
+        <h2>{t("side.background")}</h2>
+        <div className="mut">{t("bg.desc")}</div>
+        <div className="row">
+          <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)}
+                 style={{ width: 48 }} />
+          <select value={bgBackend} onChange={(e) => setBgBackend(e.target.value)} style={{ width: 132 }}>
+            <option value="color_key">{t("bg.key")}</option>
+            <option value="birefnet">{t("bg.ai")}</option>
+          </select>
+        </div>
+        <label className="k">{t("bg.tol", { v: bgTol.toFixed(2) })}</label>
+        <input type="range" min={0} max={1} step={0.01} value={bgTol}
+               onChange={(e) => setBgTol(+e.target.value)} style={{ width: "100%" }} />
+        <label className="k">{t("bg.soft", { v: bgSoft.toFixed(2) })}</label>
+        <input type="range" min={0.01} max={1} step={0.01} value={bgSoft}
+               onChange={(e) => setBgSoft(+e.target.value)} style={{ width: "100%" }} />
+        <div className="row">
+          <button className="primary" onClick={onApplyBg} disabled={!status?.image}>{t("bg.apply")}</button>
+          <button onClick={onClearBg} disabled={!lastBg?.bg_active}>{t("bg.clear")}</button>
+        </div>
+        {lastBg && (
+          <table>
+            <tbody>
+              <tr><td>{t("bg.state")}</td>
+                <td>{lastBg.bg_active ? t("color.on") : t("color.off")}</td></tr>
+              {lastBg.action === "set" && (
+                <tr><td>{t("bg.fill")}</td>
+                  <td>{((lastBg.matte_fill_fg ?? 0) * 100).toFixed(1)}%</td></tr>
+              )}
+              <tr><td>{t("bg.cost")}</td>
+                <td>{t("bg.msValue", { bg: lastBg.bg_ms.toFixed(2), total: lastBg.total_ms.toFixed(2) })}</td></tr>
+              <tr><td>{t("bg.resident")}</td>
+                <td>{t("retouch.mib", { v: (lastBg.bytes_bg / 1048576).toFixed(2) })}</td></tr>
+            </tbody>
+          </table>
         )}
 
         {/* 批量出片（M4）：满幅分块导出。能力清单（格式与 tile 行程）由引擎在 ready 里

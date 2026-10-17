@@ -109,6 +109,9 @@ pub struct AppState {
     /// 最近一次 grade_done（M3-b 肤色定向）。与 lut 分开存：预设一条命令同时动两层，
     /// 但两层的数字、耗时与账单各自一份，合成一份就分不清“表淡了还是肤色淡了”。
     grade: Mutex<Option<Value>>,
+    /// 最近一次 bg_done（M6 换底）。与 grade 分开存：换底是一次事件驱动的遮罩合成，
+    /// 报的是合成耗时与遮罩常驻字节；生命期同图层（换图即清）。
+    background: Mutex<Option<Value>>,
     /// 引擎在 ready 里报出的内置预设清单（M3-b）。存名字与标题两份：前端按它渲染按钮，
     /// 不自己抄一份——资产改了名而 UI 还拿旧名提交，得到的是“按钮全灭”而不是报错。
     presets: Mutex<Vec<Value>>,
@@ -191,6 +194,7 @@ impl AppState {
             deform: Mutex::new(None),
             lut: Mutex::new(None),
             grade: Mutex::new(None),
+            background: Mutex::new(None),
             presets: Mutex::new(Vec::new()),
             grade_limits: Mutex::new(Vec::new()),
             export: Mutex::new(None),
@@ -285,6 +289,10 @@ impl AppState {
 
     pub fn on_grade_ready(&self, v: &Value) {
         *self.grade.lock().unwrap() = Some(v.clone());
+    }
+
+    pub fn on_bg_ready(&self, v: &Value) {
+        *self.background.lock().unwrap() = Some(v.clone());
     }
 
     pub fn on_export_ready(&self, v: &Value) {
@@ -662,6 +670,35 @@ fn set_strength(
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"value": value}))
+}
+
+/// 换底（M6）：一次“换底”一条命令。backend=color_key（默认、确定性色键）/ birefnet
+/// （神经网络，无权重引擎会诚实拒）。bg 是 [r,g,b] 0–255。不返回同步结果：
+/// 遮罩合成在引擎侧算，结果靠 engine_status().background 轮询（与 inpaint/light 同路）。
+#[tauri::command]
+fn background(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    backend: Option<String>,
+    bg: Option<Vec<u64>>,
+    tol: Option<f64>,
+    softness: Option<f64>,
+) -> Result<Value, String> {
+    let mut cmd = json!({"cmd": "background", "action": action});
+    if let Some(b) = backend.filter(|s| !s.is_empty()) {
+        cmd["backend"] = json!(b);
+    }
+    if let Some(v) = bg {
+        cmd["bg"] = json!(v);
+    }
+    if let Some(v) = tol {
+        cmd["tol"] = json!(v);
+    }
+    if let Some(v) = softness {
+        cmd["softness"] = json!(v);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
 }
 
 /// 消除笔（M1-4）：一次事件（松手）一条命令。rle 是代理帧坐标下的行程编码。
@@ -1101,6 +1138,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let deform = state.deform.lock().unwrap().clone();
     let lut = state.lut.lock().unwrap().clone();
     let grade = state.grade.lock().unwrap().clone();
+    let background = state.background.lock().unwrap().clone();
     let export = state.export.lock().unwrap().clone();
     let export_progress = state.export_progress.lock().unwrap().clone();
     let export_caps = state.export_caps.lock().unwrap().clone();
@@ -1119,6 +1157,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "delivered": delivered, "logs": logs, "image": image, "precompute": precompute,
            "inpaint": inpaint, "light": light, "deform": deform, "lut": lut,
            "grade": grade, "presets": presets, "grade_limits": grade_limits,
+           "background": background,
            "export": export, "export_progress": export_progress,
            "export_caps": export_caps,
            "raw_backends": raw_backends,
@@ -1291,6 +1330,8 @@ fn m0_env() -> Value {
         // 撤销/重做自动通道：<强度值>，给真窗口确认轮用。它验的不是引擎（引擎有
         // 协议用例逐字节对拍），而是 runHistory → Rust history → 引擎 history_state
         // 这条命令签名在真窗口里对不对得上——Tauri 参数名不匹配时是静默丢参数。
+        // 换底自检（M6）：非空则前端自动走一次色键换底（“rrggbb:tol:softness”）
+        "auto_background": std::env::var("LRT_AUTO_BG").unwrap_or_default(),
         "auto_history": std::env::var("LRT_AUTO_HISTORY").unwrap_or_default(),
         // 发布自检（M5-c）：非空则让前端报一条 M0_RELEASE（解释器来历 + 版本 + 能力）
         "auto_release": std::env::var("LRT_AUTO_RELEASE").unwrap_or_default(),
@@ -1316,7 +1357,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, precompute,
-            inpaint, light, deform, lut, grade, export, session, filmstrip, history,
+            inpaint, light, deform, lut, grade, background, export, session, filmstrip, history,
             report, quit
         ])
         .run(tauri::generate_context!())
