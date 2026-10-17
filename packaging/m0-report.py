@@ -57,16 +57,27 @@ def engine_for(runs: list[dict], eng: list[dict]) -> dict:
 # 只报一个「管线」总数就分不出这两种情况。
 # M1-3c 之后「引擎:内核」这一列只包含混合那一步：滤波被拆到「引擎:滤波」，它是**一次性成本**
 # （换图或换磨皮参数才付），拖拽期恒为 0。两列不相交，合计就是各列之和，不会算两遍。
-ENG_COLS = ("引擎:测帧", "引擎:上传", "引擎:滤波", "引擎:内核", "引擎:GPU收尾", "引擎:CPU收尾",
+# M2-a2 / M2-b / M3-a2 / M3-b 把同一个形状又延了四次：修容、形变、调色、肤色定向都是
+# 常驻层，各自报自己的段。两类要分开读：
+#   · 一次性成本（拖拽期恒 0）：滤波、修容（改笔触才重算 db）
+#   · 每帧固定成本（层亮着就每帧付）：形变、调色、肤色定向
+# 引擎侧的 `kernel` 是整帧减去这五段（server.py 里 seg_sum 就那五项），所以十四列仍不相交。
+# 它们不并进报表的话，四个里程碑的常驻层在帧成本表里就是隐形的：「内核」那一列会把
+# 五件事混成一个数，而拖滑块时真正在动的只有混合那一步。
+ENG_COLS = ("引擎:测帧", "引擎:上传", "引擎:滤波", "引擎:修容", "引擎:形变",
+            "引擎:调色", "引擎:肤色", "引擎:内核", "引擎:GPU收尾", "引擎:CPU收尾",
             "引擎:回读", "引擎:写shm", "引擎:通知", "引擎:合计")
+# 旧 jsonl 里只有一笔「管线」总数时，它落在哪几列（下标对 ENG_COLS）
+LEGACY_TOTAL = 13
 
 
 def eng_cells(e: dict) -> tuple[str, ...]:
     if not e:
         return ("—",) * len(ENG_COLS)
     if "kernel" in e:                      # M1-2 后的细粒度分段
-        v = [e.get(k, 0) for k in ("synth", "pre", "filter", "kernel", "post_gpu",
-                                   "cpu_post", "readback", "shm", "notify")]
+        v = [e.get(k, 0) for k in ("synth", "pre", "filter", "light", "deform",
+                                   "lut", "grade", "kernel", "post_gpu", "cpu_post",
+                                   "readback", "shm", "notify")]
         return tuple(eng_ms(x) for x in v) + (f"{sum(float(x or 0) for x in v):.2f}",)
     # 旧 jsonl 只给了一个 pipe 总数。把它填进「上传」或「内核」都会被读成
     # M1-2 的结论，所以那一列单独标成“管线(旧)”。
@@ -76,9 +87,9 @@ def eng_cells(e: dict) -> tuple[str, ...]:
     cells = ["—"] * len(ENG_COLS)
     cells[0] = eng_ms(synth)
     cells[1] = f"管线(旧){pipe:.2f}"
-    cells[7] = eng_ms(shm)
-    cells[8] = eng_ms(notify)
-    cells[9] = f"{synth + pipe + shm + notify:.2f}"
+    cells[11] = eng_ms(shm)
+    cells[12] = eng_ms(notify)
+    cells[LEGACY_TOTAL] = f"{synth + pipe + shm + notify:.2f}"
     return tuple(cells)
 
 
