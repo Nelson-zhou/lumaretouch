@@ -504,6 +504,14 @@ export interface ExportedImage {
   h?: number;
   px?: number;
   src_mb?: number;
+  /** 放大（M7）：源幅与倍率。只报 `w/h` 分不出"2× 真做了"与"导出了原图"。 */
+  src_w?: number;
+  src_h?: number;
+  scale?: number;
+  upscale_backend?: string | null;
+  upscale_ms?: number;
+  sharpen_ms?: number;
+  sharpen_amount?: number;
   tile?: number;
   tiles?: number;
   margin_px?: number;
@@ -529,6 +537,10 @@ export interface ExportDone {
   format: string;
   quality: number;
   tile: number;
+  /** 这一批用的倍率/后端/锐量（引擎拍一次报一次，不是前端自己记得） */
+  scale?: number;
+  upscale_backend?: string | null;
+  sharpen?: number;
   total_ms: number;
   images: ExportedImage[];
 }
@@ -546,6 +558,16 @@ export interface ExportCaps {
   formats: string[];
   tile: [number, number];
   tile_default: number | null;
+  /** 允许的放大倍率（M7）。缺 = 这一版引擎不说倍率，放大那一排就不画。 */
+  scales?: number[] | null;
+  /** 放大能力清单（upscale.py 的 scale_backends）：哪一档装机即用、哪一档等权重。 */
+  upscale_backends?: UpscaleBackends | null;
+}
+
+/** 放大后端清单：baseline 与 weights_gated 是两种不同强度的主张，不许混报。 */
+export interface UpscaleBackends {
+  baseline: string[];
+  weights_gated: string[];
 }
 
 /** raw.py 的 raw_backends 形状：基线能读什么、哪些需插件、插件装没装。 */
@@ -748,10 +770,14 @@ export const runBackground = (
  * export_progress / export_done 两条事件拿（engine_status 轮询）。
  * format/tile 不抄默认值：那两个数的出处是引擎的 ready（export_formats /
  * export_tile），宿主填一份就会在引擎改口径时静默漂开。
+ *
+ * scale/sharpen 同理（M7）：不给就是不上这一层。后端只能从 ready 报的 baseline 里选，
+ * 拿 weights_gated 那一个去提交会被引擎整条拒（这是设计，不是降级）。
  */
 export const runExport = (
   outDir: string,
-  opts?: { format?: string; quality?: number; tile?: number; images?: string[] },
+  opts?: { format?: string; quality?: number; tile?: number; images?: string[];
+           scale?: number; sharpen?: number; upscaleBackend?: string },
 ) =>
   invoke<{ requested: boolean }>("export", {
     outDir,
@@ -759,6 +785,9 @@ export const runExport = (
     quality: opts?.quality,
     tile: opts?.tile,
     images: opts?.images,
+    scale: opts?.scale,
+    sharpen: opts?.sharpen,
+    upscaleBackend: opts?.upscaleBackend,
   });
 
 /** 帧头解析（小端，与 main.rs 的 pull_frame 注释逐字段对应）。 */

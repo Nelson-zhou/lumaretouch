@@ -365,9 +365,14 @@ impl AppState {
             None => *self.history_edit_cmds.lock().unwrap() = Vec::new(),
         }
         // 导出能力（M4）：没报就当这一版引擎还不能导出，置 Null 而不是留上一份
+        // 放大能力（M7）与导出同屏，挂在同一份 caps 里：它管的也是"这张图能怎么出片"。
+        // 同样"没报就置 null"：旧引擎不说倍率，UI 就不画放大那一排，而不是前端刻一份
+        // [1,2,3,4] 然后拿一个引擎不认的参数去撞拒绝。
         *self.export_caps.lock().unwrap() = match (v.get("export_formats"), v.get("export_tile")) {
             (Some(f), Some(t)) => json!({"formats": f, "tile": t,
-                                         "tile_default": v.get("export_tile_default")}),
+                                         "tile_default": v.get("export_tile_default"),
+                                         "scales": v.get("upscale_scales"),
+                                         "upscale_backends": v.get("upscale_backends")}),
             _ => Value::Null,
         };
         // RAW 能力清单（raw.py 的 raw_backends）：没报就当这一版引擎不说自己能不能读 RAW，
@@ -868,6 +873,11 @@ fn export(
     quality: Option<i64>,
     tile: Option<i64>,
     images: Option<Vec<String>>,
+    // 放大（M7）：倍率与出片锐量。宿主不填默认值——那两个数的出处是引擎的
+    // ready（upscale_scales），宿主拄一份就会在引擎改口径时静默漂开。
+    scale: Option<i64>,
+    sharpen: Option<f64>,
+    upscale_backend: Option<String>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "export", "action": "start", "out_dir": out_dir});
     if let Some(v) = format {
@@ -881,6 +891,15 @@ fn export(
     }
     if let Some(v) = images {
         cmd["images"] = json!(v);
+    }
+    if let Some(v) = scale {
+        cmd["scale"] = json!(v);
+    }
+    if let Some(v) = sharpen {
+        cmd["sharpen"] = json!(v);
+    }
+    if let Some(v) = upscale_backend {
+        cmd["upscale_backend"] = json!(v);
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))

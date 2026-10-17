@@ -134,6 +134,10 @@ export default function App() {
   const [exportDir, setExportDir] = useState("/tmp/luma-export");
   const [exportFormat, setExportFormat] = useState("jpg");
   const [exportQuality, setExportQuality] = useState(95);
+  // 放大（M7）：倍率与出片锐量。1 / 0.0 就是"不上这一层"——默认必须是原样出片，
+  // 而不是一个没人同意的默认美化。
+  const [exportScale, setExportScale] = useState(1);
+  const [exportSharpen, setExportSharpen] = useState(0);
   const [exportTile, setExportTile] = useState("");
   // 换底（M6）：背景色 + 色键容差/软边 + 后端。默认走确定性色键；birefnet 需权重，
   // 无权重时引擎会诚实拒（与消除笔的 lama 同一条能力口径）。
@@ -778,20 +782,25 @@ export default function App() {
         }
         return null;
       };
-      // 批量出片（M4）自动通道："<目录>[@<格式>][@<tile>]"。这一条与上面几条同一个
-      // 身份：只有真窗口能证明 runExport → Rust export → 引擎 export_done 对得上；
-      // 而且落盘尺寸是"导出的是满幅不是代理档"的唯一直接证据，所以它与 image_ready
-      // 的代理档尺寸一起报出去（proxy vs out）。
+      // 批量出片（M4）自动通道："<目录>[@<格式>[@<tile>[@<scale>[@<锐量>]]]]"。
+      // 这一条与上面几条同一个身份：只有真窗口能证明 runExport → Rust export →
+      // 引擎 export_done 对得上；而且落盘尺寸是"导出的是满幅不是代理档"的唯一直接
+      // 证据，所以它与 image_ready 的代理档尺寸一起报出去（proxy vs out）。
+      // M7 在它后面接上 scale/锐量：同一个口子，证的还是"参数一路递到了落盘那一帧"。
       if (env.auto_export) {
-        const [dir, fmt, tileStr] = env.auto_export.split("@");
+        const [dir, fmt, tileStr, scaleStr, sharpStr] = env.auto_export.split("@");
         if (!dir) {
-          await report(`M0_ERROR 无法解析 LRT_AUTO_EXPORT=${env.auto_export}（要 目录[@格式[@tile]]）`);
+          await report(`M0_ERROR 无法解析 LRT_AUTO_EXPORT=${env.auto_export}（要 目录[@格式[@tile[@倍率[@锐量]]]]）`);
         } else {
           const proxy = image ? `${image.w}x${image.h}` : "-";
+          const scale = scaleStr ? Number(scaleStr) : undefined;
+          const sharpen = sharpStr ? Number(sharpStr) : undefined;
           try {
             await runExport(dir, {
               format: fmt || undefined,
               tile: tileStr ? Number(tileStr) : undefined,
+              scale: scale && Number.isFinite(scale) && scale > 1 ? scale : undefined,
+              sharpen: sharpen && Number.isFinite(sharpen) && sharpen > 0 ? sharpen : undefined,
             });
           } catch (e) {
             await report(`M0_ERROR runExport 失败: ${e}`);
@@ -810,6 +819,14 @@ export default function App() {
             failed: got.failed, total: got.total, totalMs: got.total_ms,
             seg: got.images.map((x) => x.seg_ms ?? {}),
             skipped: got.images.map((x) => x.skipped ?? []),
+            // 放大（M7）要的直接证据：请求的倍率 vs 引擎报回的倍率 vs 落盘尺寸/源尺寸。
+            // 只看"w×h 变大了"分不出"真做了 2×"与"源图本来就大"，所以 ratio 单独算。
+            wantScale: scale ?? 1, gotScale: got.scale ?? 1,
+            backend: got.upscale_backend ?? null, sharpen: got.sharpen ?? 0,
+            srcs: got.images.map((x) => `${x.src_w ?? 0}x${x.src_h ?? 0}`),
+            ratios: got.images.map((x) => (x.src_w ? +(x.w! / x.src_w).toFixed(3) : 0)),
+            upscaleMs: got.images.map((x) => x.upscale_ms ?? 0),
+            sharpenMs: got.images.map((x) => x.sharpen_ms ?? 0),
           } : { bad: "120s 内没等到 export_done", dir, proxy })}`);
         }
       }
@@ -1340,13 +1357,16 @@ export default function App() {
       .catch((e) => setDragNote(String(e)));
   }
 
-  /** 导出一张：tile 空串就是“不给”（让引擎用自己的 DEFAULT_TILE），而不是前端猜一个。 */
+  /** 导出一张：tile 空串就是“不给”（让引擎用自己的 DEFAULT_TILE），而不是前端猜一个。
+   *  倍率/锐量为 1/0 时也不给：那两个值就是“这一层没开”，递上去与递默认值是两回事。 */
   function onExport() {
     const tile = exportTile.trim() === "" ? undefined : Number(exportTile);
     runExport(exportDir, {
       format: exportFormat,
       quality: exportQuality,
       tile,
+      scale: exportScale !== 1 ? exportScale : undefined,
+      sharpen: exportSharpen > 0 ? exportSharpen : undefined,
     })
       .then(() => refreshStatus())
       .catch((e) => setDragNote(String(e)));
@@ -1804,6 +1824,40 @@ export default function App() {
                 {t("export.tile", { lo: status.export_caps.tile[0], hi: status.export_caps.tile[1] })}
               </span>
             </div>
+            {/* 放大（M7）：倍率名单与可用后端全部从 ready 拿。旧引擎不说 scales 就不画
+                这一排；weights_gated 那一个后端只当"等权重"告知，不当选项——递上去会被
+                引擎整条拒，把它的名字做成下拉就是邀请用户去撞一个注定失败的请求。 */}
+            {!!(status.export_caps.scales?.length) && (
+              <>
+                <div className="row">
+                  <label className="k">{t("export.scale")}</label>
+                  {(status.export_caps.scales ?? []).map((s) => (
+                    <button key={s} className={exportScale === s ? "primary" : ""}
+                            onClick={() => setExportScale(s)}>
+                      {t("export.scaleValue", { s })}
+                    </button>
+                  ))}
+                </div>
+                <div className="row">
+                  <input type="number" min={0} max={2} step={0.05} value={exportSharpen}
+                         onChange={(e) => setExportSharpen(+e.target.value)} style={{ width: 62 }} />
+                  <span className="mut">{t("export.sharpen")}</span>
+                </div>
+                {!!status.export_caps.upscale_backends?.weights_gated?.length && (
+                  <div className="mut">{t("export.upscaleGated", {
+                    b: status.export_caps.upscale_backends.weights_gated.join("/"),
+                    ok: status.export_caps.upscale_backends.baseline.join("/"),
+                  })}</div>
+                )}
+                {exportScale > 1 && status?.image && (
+                  <div className="mut">{t("export.scalePreview", {
+                    src: `${status.image.src_w}x${status.image.src_h}`,
+                    out: `${status.image.src_w * exportScale}x${status.image.src_h * exportScale}`,
+                    mp: ((status.image.src_w * exportScale) * (status.image.src_h * exportScale) / 1e6).toFixed(1),
+                  })}</div>
+                )}
+              </>
+            )}
             <div className="row">
               <button className="primary" onClick={onExport}
                       disabled={!status?.image || exportProgress !== null}>
@@ -1829,6 +1883,17 @@ export default function App() {
                         format: lastExport.format, quality: lastExport.quality, tile: lastExport.tile,
                       })}</td>
                     </tr>
+                    {/* 放大那一行只在引擎真报过倍率时画：没报就是这一批没开放大，
+                        拿前端的 exportScale 去填会把"我选了 2×"写成"引擎做了 2×" */}
+                    {!!lastExport.scale && lastExport.scale > 1 && (
+                      <tr>
+                        <td>{t("export.scale")}</td>
+                        <td>{t("export.scaleRan", {
+                          s: lastExport.scale, b: lastExport.upscale_backend ?? "",
+                          sh: lastExport.sharpen ?? 0,
+                        })}</td>
+                      </tr>
+                    )}
                     <tr>
                       <td>{t("export.ms")}</td>
                       <td>{`${lastExport.total_ms.toFixed(1)} ms · ${lastExport.out_dir}`}</td>

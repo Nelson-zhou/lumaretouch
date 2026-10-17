@@ -135,6 +135,13 @@ export const en: Partial<Record<MsgKey, string>> = {
   "export.desc": "Full-size tiled export — the same chain, the same kernels; VRAM peak follows the tile, not the photo",
   "export.quality": "quality",
   "export.tile": "tile {lo}–{hi}",
+  // Upscale (M7)
+  "export.scale": "Output upscale",
+  "export.scaleValue": "{s}×",
+  "export.sharpen": "Output sharpen (0 = off)",
+  "export.scalePreview": "source {src} → output {out} (~{mp} MP, tiled, peak VRAM follows tile)",
+  "export.scaleRan": "{s}× · backend {b} · sharpen {sh}",
+  "export.upscaleGated": "Neural super-resolution ({b}) needs installer-provisioned sha256-verified weights; available now: {ok}",
   "export.run": "Export",
   "export.running": "Exporting…",
   "export.progress": "image {i} of {n}",

@@ -142,6 +142,13 @@ const zh = {
   "export.desc": "按满幅尺寸切块跑同一条链导出；显存峰值只随 tile 走，与预览代理档无关",
   "export.quality": "质量",
   "export.tile": "tile {lo}–{hi}",
+  // 放大（M7）
+  "export.scale": "出片放大",
+  "export.scaleValue": "{s}×",
+  "export.sharpen": "出片锐量（0 为不锐化）",
+  "export.scalePreview": "源 {src} → 输出 {out}（约 {mp} 百万像素，分块跑，峰值只随 tile 走）",
+  "export.scaleRan": "{s}× · 后端 {b} · 锐量 {sh}",
+  "export.upscaleGated": "神经网络超分（{b}）需安装器按 sha256 放行权重；当前可用：{ok}",
   "export.run": "导出",
   "export.running": "导出中…",
   "export.progress": "第 {i}/{n} 张",
