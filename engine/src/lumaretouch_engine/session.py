@@ -28,10 +28,13 @@ from PIL import Image, UnidentifiedImageError
 
 from .decode import MIN_BUDGET, clamp_budget, load_rgb
 
-# 扩展名白名单只列 decode.load_rgb 真能打开的那些（Pillow 认的位图族）。RAW 不在里面：
-# 这一版没有 RAW 解码器，把 .CR2 收进底片条只会在点下去那一刻报「解码失败」，
-# 而那已经是用户点到第 37 张了——不如在扫描时就如实说「这 12 个文件本版本打不开」。
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
+# 扩展名白名单只列 decode 真能打开的那些（Pillow 认的位图族 + 自研的 DNG）。
+# 再往里的厂商专有容器（.CR2/.NEF/.ARW/.RW2/.RAF）仍然不收：这一版基线没有它们的
+# 解码器（lossless JPEG 那条路要 libraw 可选插件），把 .CR2 收进底片条只会在点下去
+# 那一刻报「解码失败」，而那已经是用户点到第 37 张了——不如在扫描时就如实说
+# 「这 12 个文件本版本打不开」。判断不靠后缀名而是 decode.sniff_raw，后缀只决定
+# 哪些文件值得去嗅探（一个 60 MB 的 .tif 不值得为了排除而读一遍头）。
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".dng"}
 
 EDGE = 160                    # 产品默认：底片条一格的长边
 # 下限不是拍一个数：解码器把代理预算夹在 MIN_BUDGET 以上（那是 shm 与显存分配的下界），

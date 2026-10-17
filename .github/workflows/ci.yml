@@ -66,6 +66,13 @@ jobs:
         # M1-3a 验收口径③进 CI：这一条破了，“推子归零即原图”就是假的。
         # 只看字节不看快慢（导入耗时在各机差异大，本机数据：冷首图 ~299 ms、后续 ~40 ms）。
         run: REPS=3 "$PY" packaging/m1-import-bench.py
+      - name: RAW 读侧三臂对账（往返 / 相位 / GPU↔CPU / 对系统 LibRaw）
+        # 自研 DNG 读侧（raw.py）的证据必须分三臂，缺一臂就是自证：
+        #   臂A 往返 mean|Δ|<8；相位（奇偏移裁片）不得红蓝互换；臂C GPU↔CPU ≤1 LSB；
+        #   臂B 与系统 LibRaw 逐通道相关 ≥0.90（本机没有 delegate 则如实跳过）。
+        # 本机（RX 7600 XT + IM 的 LibRaw 0.21.5）：臂A 2.99、相位 3.09、臂C 1 LSB、
+        #   臂B 相关 0.993~0.997；代理档 672×848 真降了采样。
+        run: REPS=3 LRT_DEVICE=cuda "$PY" packaging/m1-raw-bench.py
       - name: 消除笔事件驱动（两臂逐字节相等 + 拖拽期零重算 + 孔内精度）
         # M1-4 的硬要求：一笔只在松手时算一次，拖滑块期间不得重跑修补；
         # 并且“快”必须与“同一件事”同时成立（缓存臂与重放臂上屏字节逐字节相等）。
@@ -163,6 +170,9 @@ jobs:
             "$PY" packaging/m1-vram-bench.py cuda 1280x800
       - name: 真图导入保真（strength=0 逐字节等于解码原图）
         run: REPS=3 "$PY" packaging/m1-import-bench.py
+      - name: RAW 读侧三臂对账（往返 / 相位 / GPU↔CPU / 对系统 LibRaw）
+        # 判据同 ROCm job；N 卡没本机数据，臂 B 若无 LibRaw delegate 会如实跳过。
+        run: REPS=3 LRT_DEVICE=cuda "$PY" packaging/m1-raw-bench.py
       - name: 消除笔事件驱动（两臂逐字节相等 + 拖拽期零重算 + 孔内精度）
         run: REPS=5 "$PY" packaging/m1-inpaint-bench.py
       - name: 拖滑块零推理（强度臂逐字节等于逐帧重算 + 内核不超预算）

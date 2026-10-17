@@ -123,6 +123,10 @@ pub struct AppState {
     /// 引擎报出的导出能力（export_formats / export_tile 范围）：目的地选项与 tile
     /// 行程由引擎说，宿主抄一份必漂（与 presets / grade_limits 同一条理由）。
     export_caps: Mutex<Value>,
+    /// 引擎在 ready 里自报的 RAW 解码能力（raw_backends：基线能读什么、哪些需插件、
+    /// 插件装没装）。「支持 RAW」这种话由引擎说，宿主不刻一份——把没落地的 CR2
+    /// 支持写进 UI 就是一条假指标（与 export_caps / presets 同一条理由）。
+    raw_backends: Mutex<Value>,
     /// 最近一条 session_state（M5 底片条）：格子列表、当前索引、有没有缩略图。
     /// 这一份里**不带 base64**——控制通道那条“像素不进 JSON”的规矩只在缩略图上开了
     /// 一个一次性的例外，宿主不该把它长期握在轮询载荷里。
@@ -192,6 +196,7 @@ impl AppState {
             export: Mutex::new(None),
             export_progress: Mutex::new(None),
             export_caps: Mutex::new(Value::Null),
+            raw_backends: Mutex::new(Value::Null),
             session: Mutex::new(None),
             thumbs: Mutex::new(std::collections::HashMap::new()),
             session_rev: Mutex::new(0),
@@ -357,6 +362,12 @@ impl AppState {
                                          "tile_default": v.get("export_tile_default")}),
             _ => Value::Null,
         };
+        // RAW 能力清单（raw.py 的 raw_backends）：没报就当这一版引擎不说自己能不能读 RAW，
+        // 置 Null 而不是留上一份（换进程/换壳后旧账单不能当本引擎的读）。
+        *self.raw_backends.lock().unwrap() = match v.get("raw_backends") {
+            Some(r) if r.is_object() => r.clone(),
+            _ => Value::Null,
+        };
     }
 
     pub fn on_frame_event(&self) {
@@ -504,6 +515,7 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     *st.export.lock().unwrap() = None;         // 新进程还没导出一张，上一批的账单不是本会话的
     *st.export_progress.lock().unwrap() = None;
     *st.export_caps.lock().unwrap() = Value::Null;   // 能力等 ready 重新报
+    *st.raw_backends.lock().unwrap() = Value::Null;   // RAW 能力清单等 ready 重新报
     // 底片条也是引擎进程的事实：新进程还没扫过目录，留着旧列表就是让用户点一个
     // 这个进程从没见过的 index
     *st.session.lock().unwrap() = None;
@@ -1092,6 +1104,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let export = state.export.lock().unwrap().clone();
     let export_progress = state.export_progress.lock().unwrap().clone();
     let export_caps = state.export_caps.lock().unwrap().clone();
+    let raw_backends = state.raw_backends.lock().unwrap().clone();
     let session = state.session.lock().unwrap().clone();
     let session_rev = *state.session_rev.lock().unwrap();
     let history = state.history.lock().unwrap().clone();
@@ -1108,6 +1121,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "grade": grade, "presets": presets, "grade_limits": grade_limits,
            "export": export, "export_progress": export_progress,
            "export_caps": export_caps,
+           "raw_backends": raw_backends,
            // 底片条的“有没有、几张、当前哪一格”进轮询（小），像素本体不进：
            // 那两百张要由 filmstrip 单独取，且只在 session_rev 变了的时候取
            "session": session, "session_rev": session_rev,

@@ -25,6 +25,7 @@ from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
 from .ops.grade import DH_LIMIT, DS_LIMIT, DV_LIMIT, GradeError, check_params
 from .ops.presets import PRESETS, PresetError, get_preset, preset_grade, preset_lut
 # M5 底片条：扫描与缩略图的全部口径都在 session 层，命令层只发事件与管线程。
+from . import raw as R
 from . import session as S
 # M4 导出：FORMATS/尺寸边界与落盘器全部从 export 走，命令层不掌一份格式名单（双出处）。
 from .export import (DEFAULT_TILE, FORMATS, MAX_TILE, MIN_TILE, ExportSpec,
@@ -189,6 +190,10 @@ class Engine:
               "export_formats": sorted(set(FORMATS)),
               "export_tile": [MIN_TILE, MAX_TILE],
               "export_tile_default": DEFAULT_TILE,
+              # RAW 能力清单（M1 的 RAW 那一块）：基线只解公开规范 DNG 的未压缩/Deflate
+              # 线性数据，厂商专有容器与 lossless JPEG 要 libraw 可选插件。前端拿这一
+              # 份说话，而不是自己刻一个“支持 RAW”——那会把“解不开 CR2”写成已通过。
+              "raw_backends": R.raw_backends(),
               # M5-a 底片条：行程与上限同样由引擎说。前端自己刻一份“长边 160”或
               # “最多 512 张”，下一轮改上限时就是漏改的那一处（它会静默把图截小）。
               "session_actions": ["scan", "add", "select", "state", "thumbs", "stop_thumbs"],
@@ -869,7 +874,7 @@ class Engine:
         t0 = monotonic_ns()
         budget = int(p.get("max_px") or self._proxy_budget or PROXY_PIXELS)
         try:
-            d = load_rgb(p["path"], budget)
+            d = load_rgb(p["path"], budget, device=self.device)
         except Exception as e:
             emit({"event": "error", "error": f"导入失败({type(e).__name__}): {e}"})
             return
@@ -2545,7 +2550,7 @@ class Engine:
         for idx, path in enumerate(images):
             stage = "decode"
             try:
-                d = load_full(path)
+                d = load_full(path, device=self.device)
                 stage = "render"
                 spec, skipped = self._export_snapshot(snap, d.h, d.w,
                                                       for_document=(path == doc))

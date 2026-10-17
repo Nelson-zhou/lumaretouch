@@ -10,6 +10,9 @@ export const en: Partial<Record<MsgKey, string>> = {
   "engine.died": "Exited · PID {pid} (missing runtime deps or crashed at start; check the log below)",
   "engine.version": "Engine v{v} · interpreter {py}",
   "engine.noTorch": "No GPU build of torch in this interpreter; the retouch pipeline is unavailable: {py}",
+  "engine.raw": "RAW decode: baseline reads {s} ({p})",
+  "engine.rawInstalled": "libraw plugin installed",
+  "engine.rawMissing": "vendor RAW (CR2/NEF) needs the libraw plugin",
   "bench.mode.copy": "Copy only (path ceiling)",
   "bench.mode.pipeline": "With guided-filter pipeline (legacy alias)",
   "bench.mode.pipeline_copyin": "Pipeline · per-frame copy-in (control)",
@@ -20,7 +23,7 @@ export const en: Partial<Record<MsgKey, string>> = {
   "gate.pending": "not measured",
 
   "side.retouch": "Retouch",
-  "retouch.image": "Photo path (JPEG/PNG; RAW pending)",
+  "retouch.image": "Photo path (JPEG/PNG/DNG; vendor RAW needs the libraw plugin)",
   "retouch.maxPx": "proxy pixel budget",
   "retouch.import": "Import",
   "retouch.strength": "Smoothing",

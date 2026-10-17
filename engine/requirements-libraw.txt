@@ -1,0 +1,56 @@
+# LibRaw / rawpy RAW 解码后端：**可选运行时插件**（决策 7「RAW 下一里程碑再做，
+# 需 vendor 或依赖系统 LibRaw，与 deb 许可证审查一起做」的落地通道）
+#
+# 与 requirements-rocm/cuda.txt、requirements-mediapipe.txt 同构：**不写进 pyproject
+# 的 dependencies 或 dependency-groups，也不进 deb 的 Depends**。三条理由：
+#   1. uv 解析会连可选 group 一起解，CI 的 engine job 只该装 numpy + pytest；
+#   2. 基线已有一条零第三方代码的通路（raw.py：自研 clean-room DNG 读侧，覆盖未压缩
+#      与 Deflate 的线性数据），通路回归由它承担——那条路的证据永远与插件分开；
+#   3. 许可义务必须逐包复核后再进出包链路，不能提前把没审完的债写进基线。
+#
+# 覆盖分工（引擎 `raw.raw_backends()` 如实上报，前端不刻一份）：
+#   基线（raw.py，零第三方）：DNG 未压缩条带/瓦片、DNG Deflate（Predictor 1/2）、
+#                             8/16-bit、单 SampleFormat、CFALayout=1、classic TIFF。
+#   需本插件：lossless JPEG 编码的 RAW（DNG 默认压缩、CR2/NEF/ARW/RW2/RAF）、
+#             packed 位深（10/12/14-bit）、float RAW（DNG 1.4+）、BigTIFF(magic 43)、
+#             CFALayout≠1 的交错排阵（富士 SuperCCD 那一类）。
+# 未装本插件时上面那一律抛 `UnsupportedRaw` 并说清卡在哪个字段——**绝不静默换成
+# 别的渲染**：静默降级会把「没解开的相机 RAW」写成「已支持」。
+#
+# ------------------------------------------------------------------ 许可审计（2026-10-16）
+# 本机系统包 `libraw23t64 = 0.21.5b-1ubuntu1.1`，`/usr/share/doc/libraw23t64/copyright`
+# 逐条读到的事实（非记忆）：
+#   Files: *                     → License: LGPL-2.1 or CDDL-1.0（双许可，可任选一侧）
+#   Files: RawSpeed/rawspeed_xmldata.cpp
+#                                → License: CC-BY-SA-3.0  ← 注意：这份相机 XML 数据是
+#                                  ShareAlike，不是 LGPL；随附分发时它的署名+同享条款
+#                                  要单独满足，不能靠 LGPL 侧盖过去。
+#   Files: debian/*              → License: GPL-2+（只约束 Debian 打包胶水，不污染库本身）
+#   库版本（ctypes 读 libraw_r.so.23 的 libraw_version()）：0.21.5-Release。
+#
+# 结论：**库本体可走 CDDL-1.0 一侧规避 LGPL**，但两条硬账还没结，出插件包前必须逐条裁：
+#   A. 静态链接 vs 动态链接。计划决策 7 写的是「LibRaw，LGPL，动态链接」——动态链接
+#      只需用户能替换 .so，义务轻。而 **PyPI 上的 rawpy 把 LibRaw 静态链进 wheel**，
+#      静态链接的 LGPL 义务（提供可重定位目标/源码、允许用户重链）与动态链接不是
+#      同一回事。⇒ 要么走系统 `libraw_r.so`（动态，配合自研或裸 ctypes 绑定），要么
+#      在正式引入 rawpy 前把静态链接那侧的义务连同 LICENSE 分发方案一并裁定。
+#   B. rawpy 的完整依赖树本轮**没解析**（无人值守环境不下载、不安装未放行依赖）。
+#      上面的 license 是「LibRaw 本体」的，不等于「rawpy wheel 里所有随附物」的。
+#      ⇒ 放行前须 `uv pip install --dry-run rawpy` 逐包复核，并对最终 lock 里的
+#         CC-BY-SA / LGPL / CDDL 组件出一份 THIRD_PARTY_NOTICES。
+#
+# 因此这一版的产品姿态是：**基线自研 DNG 通路已经能真跑并有三臂证据；rawpy 只作为
+# 增强通道登记在此文件，未审批、未安装、未进包**。任何「支持 CR2/NEF」的话在插件
+# 没落地前都不成立，raw_backends() 的 needs_plugin 就是把它说破的地方。
+#
+# ------------------------------------------------------------------ 装法（审批通过后，二选一）
+# 甲) 动态链接系统 LibRaw（与决策 7 原话一致，义务最轻）：
+#       sudo apt install libraw-bin libraw-dev          # 已经有 libraw_r.so.23
+#       # 引擎用 ctypes 绑 libraw_r.so，不引入任何编译期静态依赖
+# 乙) rawpy（省事，但先结上面的静态链接 LGPL 账 A）：
+#       python3 -m venv ~/.venvs/lumaretouch-libraw
+#       ~/.venvs/lumaretouch-libraw/bin/pip install -r engine/requirements-libraw.txt
+#       LRT_ENGINE_PY=~/.venvs/lumaretouch-libraw/bin/python \
+#         python -m pytest -q engine/tests/test_raw.py   # 插件臂用例此时才该转非 skip
+#
+# 版本号不在此凭记忆 pin：rawpy 未在本机解析过，出包时以最终 lock 为准回填。

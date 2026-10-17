@@ -75,12 +75,15 @@ if [ "$(cat "$stage/runtime/VERSION" 2>/dev/null)" != "$ver" ]; then
   bad "暂存的 runtime/VERSION 与 packaging/VERSION 不同：出包前重跑 stage-engine.sh"
 fi
 
-# ⑤ 许可未放行的清单不许进包
-if find "$stage" -name 'requirements-mediapipe.txt' | grep -q .; then
-  bad "mediapipe 清单混进了发布物——那棵依赖树的许可审计还没放行"
-else
-  good "mediapipe 清单未随包走（许可门禁保持生效）"
-fi
+# ⑤ 许可未放行的清单不许进包（mediapipe 与 libraw 两条可选插件通道同构：
+# 它们的依赖树都还没逐包放行，混进发布物就成了一条“看着像支持、其实许可没结”的债）
+for unfree in requirements-mediapipe.txt requirements-libraw.txt; do
+  if find "$stage" -name "$unfree" | grep -q .; then
+    bad "$unfree 混进了发布物——那棵依赖树的许可审计还没放行"
+  else
+    good "$unfree 未随包走（许可门禁保持生效）"
+  fi
+done
 
 # ⑥ 开发机的绝对路径不许出现在将要打包的文本资产里
 if grep -rlI "$HOME" "$stage" 2>/dev/null | grep -q .; then

@@ -341,6 +341,98 @@ def test_load_image_and_drag_stream_real_photo(engine):
         peer.close()
 
 
+def _load_mtd():
+    """把写侧夹具当被测依赖之外的一份工具载进来（不 import 引擎常量）。"""
+    path = os.path.join(HERE, "..", "packaging", "make-test-dng.py")
+    spec = importlib.util.spec_from_file_location("make_test_dng", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_hello_reports_raw_backends(engine):
+    """能力清单由引擎自报，前端不刻一份：能读什么、读不了什么、出路在哪。"""
+    engine.send(cmd="hello")
+    ready = engine.wait_for("ready")
+    rb = ready["raw_backends"]
+    assert rb["baseline"] and ".dng" in rb["suffixes"]
+    assert isinstance(rb["plugin_installed"], bool)
+    # needs_plugin 必须非空且不谎称已装——把「解不开 CR2」这件事如实写出来
+    assert rb["needs_plugin"] and rb["plugin"]
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE),
+                    reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_load_dng_strength_zero_and_raw_fields(engine, tmp_path):
+    """端到端：.dng 导入 → 代理档 → 常驻 → shm 帧能被独立读出；raw 字段随 ready 上报。
+
+    这一张从整幅 fixture 生成（1024×1280 超过代理预算），所以它同时把「块内每色
+    均值降采样 + LANCZOS」那条代理支路端到端跑了一遍。strength=0 的逐字节一致是
+    两边都走同一份 torch-cpu 渲染，与 GPU↔CPU 的 ≤1 LSB 是两个独立口径。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("DNG 生产路走 torch")
+    from PIL import Image
+    from lumaretouch_engine.decode import load_rgb
+
+    mt = _load_mtd()
+    src = np.asarray(Image.open(FIXTURE).convert("RGB"))
+    dng = os.path.join(str(tmp_path), "full.dng")
+    mt.build(dng, src, black=256.0, white=16383.0)
+    ref = load_rgb(dng, device="cpu")
+
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set")
+    engine.send(cmd="load_image", path=dng, strength=0.0)
+    shm_meta = engine.wait_for("shm_ready", timeout=120)
+    assert (shm_meta["w"], shm_meta["h"]) == (ref.w, ref.h)
+    engine.wait_for("vram_ready", timeout=120)
+    ready = engine.wait_for("image_ready", timeout=120)
+    assert ready["format"] == "DNG"
+    raw = ready["raw"]
+    assert raw["bits"] == 16 and raw["color_planes"] == 3
+    assert raw["pattern"] == [0, 1, 1, 2]
+    assert raw["white"] == 16383.0
+    # 代理帧比源图小：证明真降了档，不是把整幅塞回来（默认代理预算≈ 960×600 个像素）
+    assert ref.w * ref.h <= 960 * 600 and (ref.w, ref.h) != (1024, 1280)
+
+    peer = FrameShm(shm_meta["name"])
+    try:
+        ev = engine.wait_for("frame", timeout=60)
+        got = np.frombuffer(peer.read_pixels(ev["slot"]), np.uint8).reshape(ref.h, ref.w, 4)
+        d = np.abs(got[:, :, :3].astype(np.int16) - ref.rgb.astype(np.int16))
+        assert d.max() <= 1, f"strength=0 上屏帧与独立解码差 {int(d.max())} LSB"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE),
+                    reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_unsupported_raw_is_refused_honestly(engine, tmp_path):
+    """一张格式良好但基线不认的 DNG（CFALayout≠1）必须报 error 且引擎不死。
+
+    反向门禁：如果哪天把 UnsupportedRaw 吞了、或静默换成 Pillow/预览渲染，这条会红——
+    那正是「把没解开的相机 RAW 写成已支持」的假证据来源。
+    """
+    from PIL import Image
+    mt = _load_mtd()
+    src = np.asarray(Image.open(FIXTURE).convert("RGB"))[:128, :128]
+    dng = os.path.join(str(tmp_path), "交错.dng")
+    mt.build(dng, src, cfa_layout=2, black=256.0, white=16383.0)
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set")
+    engine.send(cmd="load_image", path=dng, strength=0.0)
+    err = engine.wait_for("error", timeout=30)
+    assert "导入失败" in err["error"] and "CFALayout" in err["error"], err["error"]
+    # 引擎还活着：拒绝一张坏 RAW 不许把服务进程带下去
+    engine.send(cmd="hello")
+    assert engine.wait_for("ready")["pid"] == engine.proc.pid
+
+
 @pytest.mark.skipif(not os.path.isfile(FIXTURE),
                     reason="缺测试人像，先跑 packaging/make-test-portrait.py")
 def test_set_device_migrates_resident_session(engine):

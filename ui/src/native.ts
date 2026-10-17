@@ -444,6 +444,9 @@ export interface EngineStatus {
   export_progress: ExportProgress | null;
   /** 引擎在 ready 里报的导出能力。null = 这个引擎还不能导出，按钮就不画。 */
   export_caps: ExportCaps | null;
+  /** 引擎在 ready 里自报的 RAW 解码能力（raw.py 的 raw_backends）。null = 这一版引擎
+   *  还没报过这份清单。能读什么由引擎说，前端不刻一份——把没落地的 CR2 支持写进 UI 就是一条假指标。 */
+  raw_backends: RawBackends | null;
   /** 最近一条 session_state（M5-a 底片条）；换引擎进程会清空。 */
   session: SessionState | null;
   /** session_state / 缩略图每来一条就 +1：前端只在它变了的时候整条重取底片条。 */
@@ -523,6 +526,15 @@ export interface ExportCaps {
   formats: string[];
   tile: [number, number];
   tile_default: number | null;
+}
+
+/** raw.py 的 raw_backends 形状：基线能读什么、哪些需插件、插件装没装。 */
+export interface RawBackends {
+  baseline: string[];
+  suffixes: string[];
+  needs_plugin: string[];
+  plugin: string;
+  plugin_installed: boolean;
 }
 
 /** 一个内置预设的可显示信：提交只靠 name，文字只靠 title。 */

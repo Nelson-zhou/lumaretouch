@@ -1243,6 +1243,16 @@ export default function App() {
             {t("engine.version", { v: status.engine_version, py: status.engine_runtime?.python ?? "" })}
           </div>
         )}
+        {/* RAW 能力由引擎的 raw_backends 自报（raw.py）：只说基线能读的后缀与插件装没装，
+            不拿“支持 RAW”这种笼统话骗人——厂商容器（CR2/NEF）要 libraw 插件才成立。 */}
+        {!!status?.raw_backends && (
+          <div className="mut">
+            {t("engine.raw", {
+              s: status.raw_backends.suffixes.join("/"),
+              p: status.raw_backends.plugin_installed ? t("engine.rawInstalled") : t("engine.rawMissing"),
+            })}
+          </div>
+        )}
         {/* 缺包告警只在包账单**已到**而 torch 为空时报。拿 `torch == null` 单独判会
             在 ready 还没到的那几百毫秒里就对一个健康引擎闪一次“没有 torch”——
             假告警与假指标同罪。 */}

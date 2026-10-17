@@ -71,6 +71,7 @@ class Decoded:
     draft_used: bool = False
     draft_size: tuple[int, int] | None = None
     notes: list[str] = field(default_factory=list)
+    raw: dict | None = None          # 解的是相机 RAW 时的加工模型读数（位深/排阵/黑白电平/分段耗时）
 
     @property
     def w(self) -> int:
@@ -88,11 +89,64 @@ class Decoded:
             "orient_ms": round(self.t_orient_ms, 2), "scale_ms": round(self.t_scale_ms, 2),
             "total_ms": round(self.t_total_ms, 2),
             "bytes_per_frame": self.w * self.h * 4, "notes": self.notes,
+            # RAW 的那一叠字段只在解的是 RAW 时存在（位深/排阵/黑白电平/渲染分段耗时）。
+            # 平时是 None 而不是缺键：报表与真窗口取帧都按同一个形状读，缺键就是 undefined。
+            "raw": self.raw,
         }
 
 
-def load_rgb(path: str, budget: int = PROXY_PIXELS) -> Decoded:
-    """解码 Pillow 认得的图（M1-3a 只承诺 JPEG/PNG），返回代理尺寸 RGB。
+def sniff_raw(path: str) -> bool:
+    """这是一张我们能解的相机 RAW 吗？必须先于 Pillow 判。
+
+    Pillow 见到 CFA TIFF 会报 UnidentifiedImageError（而不是崩），但普通 .tif 照片
+    与 DNG 用的是同一个 `II/MM + 42` 头——区分靠的是有没有 CFA/LinearRaw 的 raw IFD。
+    让 Pillow 去猜，就会把相机 RAW 当坏图拒掉。嗅探只跳读 IFD 骨架（见
+    raw.has_raw_ifd）：大 DNG 的 IFD 在文件尾，只读头部会漏判。
+    """
+    from . import raw as raw_mod
+    return raw_mod.has_raw_ifd(path)
+
+
+def _decoded_from_raw(res: dict, budget: int | None) -> "Decoded":
+    """raw.load_raw 的结果 → Decoded（两条路共用同一个对外形状，不另发明一套字段）。"""
+    rgb, m, ms = res["rgb"], res["meta"], res["ms"]
+    h, w = rgb.shape[:2]
+    d = Decoded(rgb=rgb, src_w=m.src_w, src_h=m.src_h, fmt=m.fmt,
+                t_open_ms=ms["container_ms"], t_decode_ms=ms["pixels_ms"] + ms["render_ms"],
+                t_orient_ms=0.0, t_scale_ms=ms["encode_ms"], t_total_ms=ms["total_ms"],
+                draft_used=False, draft_size=None)
+    d.raw = {"camera": m.camera, "bits": m.bits, "pattern": list(m.pattern),
+             "pattern_dims": list(m.pattern_dims), "color_planes": m.color_planes,
+             "black": float(np.max(np.asarray(m.black))), "white": m.white,
+             "neutral": [round(float(v), 4) for v in m.neutral],
+             "profile_weight": round(m.profile_weight, 4),
+             "forward_matrix": m.forward is not None, "has_preview": bool(m.used_preview),
+             "container_ms": round(ms["container_ms"], 2), "pixels_ms": round(ms["pixels_ms"], 2),
+             "render_ms": round(ms["render_ms"], 2), "encode_ms": round(ms["encode_ms"], 2),
+             "notes": list(m.notes)}
+    d.notes.extend(m.notes)
+    d.notes.append(f"DNG：{m.bits}-bit CFA 解出 {w}×{h}（相机 {m.camera or '未报'}）")
+    if budget:
+        d.notes.append("代理档走块内每色均值降采样 + LANCZOS，不抄内嵌预览")
+    return d
+
+
+def load_rgb(path: str, budget: int = PROXY_PIXELS, device: str | None = None) -> Decoded:
+    """真实图 → 代理帧。JPEG/PNG 走 Pillow；相机 RAW（DNG）走自研读侧。
+
+    RAW 那条分支在最前面就分掉：它需要自己的位深/摆正/缩放口径，而把这些塞进
+    Pillow 那段只会让两条路都变成“有点像”的路径（load_full 的注释里记着同一课）。
+    """
+    from . import raw as raw_mod
+    budget = clamp_budget(budget)
+    if sniff_raw(path):
+        res = raw_mod.load_raw(path, budget=budget, device=device)
+        return _decoded_from_raw(res, budget)
+    return _load_rgb_pillow(path, budget)
+
+
+def _load_rgb_pillow(path: str, budget: int) -> Decoded:
+    """解码 Pillow 认得的位图族（JPEG/PNG/WebP/BMP/TIFF），返回代理尺寸 RGB。
 
     两个容易踩的点，都在这函数里处理掉了：
     * **EXIF 方向**：手机竖拍常常是「横图 + orientation=6」，不转就会横着上屏。方向值
@@ -102,7 +156,6 @@ def load_rgb(path: str, budget: int = PROXY_PIXELS) -> Decoded:
     """
     if not os.path.isfile(path):
         raise FileNotFoundError(f"图片不存在或不是普通文件: {path}")
-    budget = clamp_budget(budget)
     ms = lambda a, b: (b - a) * 1000.0
     t0 = time.perf_counter()
     with Image.open(path) as im:
@@ -157,7 +210,21 @@ def load_rgb(path: str, budget: int = PROXY_PIXELS) -> Decoded:
 MAX_EXPORT_PIXELS = 120_000_000
 
 
-def load_full(path: str, max_px: int = MAX_EXPORT_PIXELS) -> Decoded:
+def load_full(path: str, max_px: int = MAX_EXPORT_PIXELS,
+              device: str | None = None) -> Decoded:
+    """满幅解码（不缩放）：导出通路用。JPEG/PNG 走 Pillow，DNG 走自研读侧。"""
+    from . import raw as raw_mod
+    if sniff_raw(path):
+        res = raw_mod.load_raw(path, budget=None, device=device)
+        m = res["meta"]
+        if m.w * m.h > int(max_px):
+            raise ValueError(f"导出尺寸 {m.w}x{m.h} = {m.w * m.h / 1e6:.0f} Mpx "
+                             f"超过上限 {int(max_px) / 1e6:.0f} Mpx")
+        return _decoded_from_raw(res, None)
+    return _load_full_pillow(path, max_px)
+
+
+def _load_full_pillow(path: str, max_px: int = MAX_EXPORT_PIXELS) -> Decoded:
     """满幅解码（不缩放）：导出通路用。EXIF 方向与 load_rgb 同一条处理。
 
     为什么不走 `load_rgb(path, budget=像素数)`：那条路的预算被 clamp_budget 夹在
