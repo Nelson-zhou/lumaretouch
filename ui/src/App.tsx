@@ -640,28 +640,58 @@ export default function App() {
         for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) n++;
         return n;
       };
-      // 换底自动通道（$LRT_AUTO_BG="rrggbb:tol:softness"）：真窗口证明
-      // runBackground → Rust background → 引擎 bg_done 这条签名对得上，且画面真的变了。
+      // 换底自动通道（$LRT_AUTO_BG="rrggbb:tol:softness[:backend]"）。
+      // 真窗口要证的不是合成本身（test_matting 已钉数值保真），而是三层签名对得上、
+      // 且画面真的随之而动：runBackground → Rust background → 引擎 cmd_background →
+      // bg_done → engine_status。Tauri 参数名错一个，命令会被静默丢掉（屏上不动而
+      // 一个错也不报）——只有真窗口抓得到这一类。
+      //
+      // 三臂一次跑完，因为它们是同一个里程碑的三半边：
+      //   set   → frameChanged > 0（合成写进了用户看见的那一帧）
+      //   clear → frameChanged = 0（关掉整层要逐字节回出厂帧，"能开不能关"是缺陷）
+      //   birefnet 无权重 → 引擎整条拒、画面不动、宿主还活着（静默降级是最坏答案）
       if (env.auto_background) {
         const parts = env.auto_background.split(":");
         const hex = (parts[0] || "").replace("#", "");
         const tol = Number(parts[1] ?? 0.12), soft = Number(parts[2] ?? 0.10);
+        const backend = parts[3] || "color_key";
         if (hex.length !== 6 || !Number.isFinite(tol) || !Number.isFinite(soft)) {
-          await report(`M0_ERROR 无法解析 LRT_AUTO_BG=${env.auto_background}（要 rrggbb:tol:softness）`);
+          await report(`M0_ERROR 无法解析 LRT_AUTO_BG=${env.auto_background}（要 rrggbb:tol:softness[:backend]）`);
         } else {
           const bg = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
-          const before = await peek();
-          const homePix = before?.pixels ?? null;
-          let got: BackgroundInfo | null = null;
-          try {
-            await runBackground("set", { backend: "color_key", bg, tol, softness: soft });
-            for (let i = 0; i < 120 && !got; i++) {
-              await sleep(100);
-              const st = await engineStatus().catch(() => null);
-              if (st?.background && st.background.action === "set" && st.background.bg_active) {
-                got = st.background;
+          // 角落像素直采：frameChanged > 0 只说"动了"，不说"动成了什么"。底色是纯色，
+          // 左上角 8×8 均值就该是那个色（±1 量化）——这一条比字节差硬。
+          // 字节序是 RGBA（取证：给纯红 ff0000 时 p[0]=255、p[2]=0，而画布用的 ImageData
+          // 本就是 RGBA；当成 BGRA 读会得到反的三元组，上一轮 m6bg 真窗口就报过 [0,0,255]）。
+          const cornerRgb = (p: Uint8Array | null, w: number) => {
+            if (!p || w <= 0) return null;
+            let b = 0, g = 0, r = 0, n = 0;
+            for (let y = 0; y < 8; y++) {
+              for (let x = 0; x < 8; x++) {
+                const i = (y * w + x) * 4;
+                if (i + 3 >= p.length) return null;
+                r += p[i]; g += p[i + 1]; b += p[i + 2]; n++;
               }
             }
+            return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
+          };
+          const before = await peek();
+          const homePix = before?.pixels ?? null;
+          // 轮询等一条 bg_done：等 action 而不是等"有 background"，clear 与 set 共用
+          // 同一个槽位，不分辨就会把上一条的余温当成这一条的答复
+          const waitBg = async (want: "set" | "clear", ms = 12000) => {
+            for (let i = 0; i < ms / 100; i++) {
+              await sleep(100);
+              const st = await engineStatus().catch(() => null);
+              if (st?.background && st.background.action === want &&
+                  (want !== "set" || st.background.bg_active)) return st.background;
+            }
+            return null;
+          };
+          let got: BackgroundInfo | null = null;
+          try {
+            await runBackground("set", { backend, bg, tol, softness: soft });
+            got = await waitBg("set");
           } catch (e) {
             await report(`M0_ERROR runBackground 失败: ${e}`);
           }
@@ -670,7 +700,72 @@ export default function App() {
           await report(`M0_BG ${JSON.stringify(got ? {
             active: got.bg_active, backend: got.backend, fill: got.matte_fill_fg,
             bytesBg: got.bytes_bg, bgMs: got.bg_ms, frameChanged: diff, device: got.device,
-          } : { bad: "12s 内没等到 bg_done", bg, tol, soft })}`);
+            wantBg: bg, cornerBefore: cornerRgb(homePix, before?.w ?? 0),
+            cornerAfter: cornerRgb(after?.pixels ?? null, after?.w ?? 0),
+          } : { bad: "12s 内没等到 bg_done", bg, tol, soft, backend, frameChanged: diff })}`);
+
+          if (got) {
+            // 关掉整层：这一臂的判据是"逐字节回到出厂帧"，不是"变了另一个样"
+            let cleared: BackgroundInfo | null = null;
+            try {
+              await runBackground("clear");
+              cleared = await waitBg("clear");
+            } catch (e) {
+              await report(`M0_ERROR runBackground(clear) 失败: ${e}`);
+            }
+            const back = await peek();
+            await report(`M0_BG_CLEAR ${JSON.stringify(cleared ? {
+              active: cleared.bg_active, bytesBg: cleared.bytes_bg,
+              frameRestoredDiff: diffBytes(homePix, back?.pixels ?? null),
+              cornerRestored: cornerRgb(back?.pixels ?? null, back?.w ?? 0),
+              bgMs: cleared.bg_ms,
+            } : { bad: "12s 内没等到 clear 的 bg_done" })}`);
+          } else {
+            // 主臂就没成，后面两臂没有判的余地——但 birefnet 那一臂仍然要试：
+            // 它本来就不该成，主臂塌了它该照塌（引擎没被主臂的失败搞死）
+            await report("M0_BG_SKIP 主臂未就绪，跳过 clear 臂");
+          }
+
+          // birefnet 无权重臂：色键臂能成就说明引擎活着，这一臂要的正是"整条拒 +
+          // 画面一个字不动 + 引擎还能应答"。拒的话 bg_done 永不到，这里不等它，
+          // 等的是宿主轮询还能拿到状态 + 日志里那条诚实的拒绝。
+          if (backend !== "birefnet") {
+            const pixBeforeReject = (await peek())?.pixels ?? null;
+            let rejectNote = "";
+            try {
+              await runBackground("set", { backend: "birefnet", bg, tol, softness: soft });
+              for (let i = 0; i < 60 && !rejectNote; i++) {
+                await sleep(100);
+                const st = await engineStatus().catch(() => null);
+                const hit = (st?.logs ?? []).find((l) => /birefnet|BiRefNet|权重/.test(l));
+                if (hit) rejectNote = hit.slice(0, 220);
+              }
+            } catch (e) {
+              rejectNote = `invoke 抛错: ${e}`;
+            }
+            const stAfter = await engineStatus().catch(() => null);
+            const pixAfterReject = (await peek())?.pixels ?? null;
+            await report(`M0_BG_REJECT ${JSON.stringify({
+              sawError: !!rejectNote, note: rejectNote,
+              frameMoved: diffBytes(pixBeforeReject, pixAfterReject),
+              engineAlive: !!stAfter?.engine_alive,
+              bgStillActive: stAfter?.background?.bg_active ?? null,
+            })}`);
+
+            // 重挂臂：把底色再开回去，并且**开着进接下来的跑靶**。两个理由：
+            //   • 换底不是一次性动作——同一会话里第二次 set 也得成（第一次把状态
+            //     写坏、第二次静默不动是这类分层最容易犯的错）；
+            //   • 后面的 bench 就在"链尾挂着一层常驻合成"的真实状态下量帧通路，
+            //     而不是把层关掉再测一个好看的数。
+            await runBackground("set", { backend, bg, tol, softness: soft });
+            const again = await waitBg("set");
+            const re = await peek();
+            await report(`M0_BG_REAPPLY ${JSON.stringify(again ? {
+              active: again.bg_active, backend: again.backend, bytesBg: again.bytes_bg,
+              corner: cornerRgb(re?.pixels ?? null, re?.w ?? 0),
+              frameChangedVsHome: diffBytes(homePix, re?.pixels ?? null),
+            } : { bad: "第二次 set 没等到 bg_done" })}`);
+          }
         }
       }
       // 等宿主把下一条 history_state 搬进轮询状态：撤销的答复是异步的，
@@ -946,6 +1041,18 @@ export default function App() {
           );
           break;
         }
+      }
+      // 换底层在整个跑靶（几百帧）之后还在不在：这一条是"常驻合成不是只能
+      // 一次性点亮"的直接证据。只看 M0_BG_REAPPLY 不够——那是 bench **开始前**的
+      // 状态；300 帧里被谁摸了一下、重连时 _attach_pipeline 没重挂上，只有此处能发现。
+      if (env.auto_background) {
+        const stLive = await engineStatus().catch(() => null);
+        await report(`M0_BG_LIVE ${JSON.stringify({
+          active: stLive?.background?.bg_active ?? false,
+          action: stLive?.background?.action ?? null,
+          bytesBg: stLive?.background?.bytes_bg ?? 0,
+          emitted: stLive?.emitted ?? 0, delivered: stLive?.delivered ?? 0,
+        })}`);
       }
       await report(`M0_HUD ${JSON.stringify({ ...hudRef.current, active: true })}`);
       await sleep(300);
