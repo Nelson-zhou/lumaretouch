@@ -5,9 +5,10 @@ import { clickRle } from "./brush";
 import { t } from "./i18n";
 import {
   benchStart, benchStats, engineStatus, loadImage, m0Env, quit, report, runDeform,
-  runGrade, runInpaint, runLight, runLut, setStrength,
+  runExport, runGrade, runInpaint, runLight, runLut, setStrength,
   shutdownEngine, startEngine,
-  type BenchOptions, type DeformInfo, type EngineStatus, type ImageReady, type InpaintInfo,
+  type BenchOptions, type DeformInfo, type EngineStatus, type ExportDone,
+  type ExportProgress, type ImageReady, type InpaintInfo,
   type GradeInfo, type LightInfo,
   type LutInfo,
   type Precompute, type Stats,
@@ -119,6 +120,15 @@ export default function App() {
   const [lastGrade, setLastGrade] = useState<GradeInfo | null>(null);
   const gradeFlight = useRef(false);
   const gradeQueued = useRef<{ dh?: number; ds?: number; dv?: number } | null>(null);
+  // 批量出片（M4）：满幅导出跑在引擎的 worker 线程里，UI 只能从事件拿进度与终态。
+  // tile 不预先填一个数：行程与默认值都来自 ready 报的 export_caps，前端抄一份就会在
+  // 引擎改口径时把"能导"变成"导错"。
+  const [exportDir, setExportDir] = useState("/tmp/luma-export");
+  const [exportFormat, setExportFormat] = useState("jpg");
+  const [exportQuality, setExportQuality] = useState(95);
+  const [exportTile, setExportTile] = useState("");
+  const [lastExport, setLastExport] = useState<ExportDone | null>(null);
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [dragNote, setDragNote] = useState("");
   const lastSend = useRef(0);
   const pending = useRef<number | null>(null);
@@ -149,6 +159,10 @@ export default function App() {
       // 调色层也是事件驱动的一次回报（载入/改强度/清除各一条），轮询不能错过
       if (st.lut) setLastLut(st.lut);
       if (st.grade) setLastGrade(st.grade);
+      // 导出这两条无条件跟状态走：Rust 侧在换图/换进程时会清空，这里不跟着清就会
+      // 把上一批的字节数当本批读（与图层那几条同一个病，只是这边是账单不是参数）
+      setLastExport(st.export ?? null);
+      setExportProgress(st.export_progress ?? null);
     } catch {
       /* 引擎未起，忽略 */
     }
@@ -443,6 +457,41 @@ export default function App() {
           } : { bad: "12s 内没等到 grade_done（参数越界或跑靶进行中）", dh, ds, dv, amount })}`);
         }
       }
+      // 批量出片（M4）自动通道："<目录>[@<格式>][@<tile>]"。这一条与上面几条同一个
+      // 身份：只有真窗口能证明 runExport → Rust export → 引擎 export_done 对得上；
+      // 而且落盘尺寸是"导出的是满幅不是代理档"的唯一直接证据，所以它与 image_ready
+      // 的代理档尺寸一起报出去（proxy vs out）。
+      if (env.auto_export) {
+        const [dir, fmt, tileStr] = env.auto_export.split("@");
+        if (!dir) {
+          await report(`M0_ERROR 无法解析 LRT_AUTO_EXPORT=${env.auto_export}（要 目录[@格式[@tile]]）`);
+        } else {
+          const proxy = image ? `${image.w}x${image.h}` : "-";
+          try {
+            await runExport(dir, {
+              format: fmt || undefined,
+              tile: tileStr ? Number(tileStr) : undefined,
+            });
+          } catch (e) {
+            await report(`M0_ERROR runExport 失败: ${e}`);
+          }
+          let got: ExportDone | null = null;
+          for (let i = 0; i < 600 && !got; i++) {
+            await sleep(200);
+            const st = await engineStatus().catch(() => null);
+            if (st?.export) got = st.export;
+          }
+          await report(`M0_EXPORT ${JSON.stringify(got ? {
+            dir, proxy, full: got.images.map((x) => (x.error ? `ERR:${x.stage}` : `${x.w}x${x.h}`)),
+            tiles: got.images.map((x) => x.tiles ?? 0),
+            margin: got.images.map((x) => x.margin_px ?? 0),
+            bytes: got.images.map((x) => x.bytes ?? 0),
+            failed: got.failed, total: got.total, totalMs: got.total_ms,
+            seg: got.images.map((x) => x.seg_ms ?? {}),
+            skipped: got.images.map((x) => x.skipped ?? []),
+          } : { bad: "120s 内没等到 export_done", dir, proxy })}`);
+        }
+      }
       for (let i = 0; i < 100; i++) {
         const st = await engineStatus().catch(() => null);
         if (st?.has_shm) break;
@@ -734,6 +783,18 @@ export default function App() {
     runGrade("clear")
       .then(() => refreshStatus())
       .then(() => setGradeAmounts({ dh: 0, ds: 0, dv: 0 }))
+      .catch((e) => setDragNote(String(e)));
+  }
+
+  /** 导出一张：tile 空串就是“不给”（让引擎用自己的 DEFAULT_TILE），而不是前端猜一个。 */
+  function onExport() {
+    const tile = exportTile.trim() === "" ? undefined : Number(exportTile);
+    runExport(exportDir, {
+      format: exportFormat,
+      quality: exportQuality,
+      tile,
+    })
+      .then(() => refreshStatus())
       .catch((e) => setDragNote(String(e)));
   }
 
@@ -1063,6 +1124,84 @@ export default function App() {
               </table>
             )}
           </>
+        )}
+
+        {/* 批量出片（M4）：满幅分块导出。能力清单（格式与 tile 行程）由引擎在 ready 里
+            报：export_caps 为空就是这一版引擎还不能导，这里不画按钮也不填一份默认值。 */}
+        <h2>{t("side.export")}</h2>
+        {status?.export_caps ? (
+          <>
+            <div className="mut">{t("export.desc")}</div>
+            <input value={exportDir} onChange={(e) => setExportDir(e.target.value)}
+                   style={{ width: "100%" }} />
+            <div className="row">
+              <select value={exportFormat}
+                      onChange={(e) => setExportFormat(e.target.value)} style={{ width: 84 }}>
+                {status.export_caps.formats.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+              <input type="number" min={1} max={100} value={exportQuality}
+                     onChange={(e) => setExportQuality(+e.target.value)} style={{ width: 58 }} />
+              <span className="mut">{t("export.quality")}</span>
+              <input type="text" value={exportTile}
+                     placeholder={String(status.export_caps.tile_default ?? "")}
+                     onChange={(e) => setExportTile(e.target.value)} style={{ width: 72 }} />
+              <span className="mut">
+                {t("export.tile", { lo: status.export_caps.tile[0], hi: status.export_caps.tile[1] })}
+              </span>
+            </div>
+            <div className="row">
+              <button className="primary" onClick={onExport}
+                      disabled={!status?.image || exportProgress !== null}>
+                {exportProgress ? t("export.running") : t("export.run")}
+              </button>
+            </div>
+            {exportProgress && (
+              <div className="mut">
+                {t("export.progress", { i: exportProgress.index + 1, n: exportProgress.total })}
+              </div>
+            )}
+            {lastExport && (
+              <>
+                <table>
+                  <tbody>
+                    <tr>
+                      <td>{t("export.files")}</td>
+                      <td>{t("export.filesValue", { ok: lastExport.total - lastExport.failed, total: lastExport.total })}</td>
+                    </tr>
+                    <tr>
+                      <td>{t("export.settings")}</td>
+                      <td>{t("export.settingsValue", {
+                        format: lastExport.format, quality: lastExport.quality, tile: lastExport.tile,
+                      })}</td>
+                    </tr>
+                    <tr>
+                      <td>{t("export.ms")}</td>
+                      <td>{`${lastExport.total_ms.toFixed(1)} ms · ${lastExport.out_dir}`}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                {lastExport.images.map((x) => (
+                  <div key={x.path} className="mut">
+                    {x.error
+                      ? t("export.failedRow", { stage: x.stage ?? "?", why: x.error })
+                      : t("export.row", {
+                        name: (x.out ?? "").split("/").pop() ?? "?",
+                        size: `${x.w}×${x.h}`, tiles: x.tiles ?? 0,
+                        margin: x.margin_px ?? 0, kb: ((x.bytes ?? 0) / 1024).toFixed(0),
+                        ms: (x.total_ms ?? 0).toFixed(0),
+                      })}
+                    {(x.skipped ?? []).length > 0 && (
+                      <div>{t("export.skipped", { items: (x.skipped ?? []).join(" · ") })}</div>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
+          </>
+        ) : (
+          <div className="mut">{t("export.unavailable")}</div>
         )}
 
         <h2>{t("side.bench")}</h2>

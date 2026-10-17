@@ -114,6 +114,15 @@ pub struct AppState {
     presets: Mutex<Vec<Value>>,
     /// 肤色定向三个增量的硬边界（也在 ready 里）：滑块行程由引擎说。
     grade_limits: Mutex<Vec<f64>>,
+    /// 最近一次 export_done（M4 批量出片）。它不是图层：一次导出是一批文件的结果，
+    /// 但与图层同一条生命期——引擎进程换了、图换了，上一批的账单就不能当本图的读。
+    export: Mutex<Option<Value>>,
+    /// 最近一条 export_progress（第几张 / 共几张）。与 export 分开存：一批二十张时
+    /// 只存终态就看不出“卡在第三张”与“根本没开始”的区别。
+    export_progress: Mutex<Option<Value>>,
+    /// 引擎报出的导出能力（export_formats / export_tile 范围）：目的地选项与 tile
+    /// 行程由引擎说，宿主抄一份必漂（与 presets / grade_limits 同一条理由）。
+    export_caps: Mutex<Value>,
 }
 
 /// 用 `Arc` 起步才能传给引擎读线程；因此额外管理一个持有 Arc 的启动器。
@@ -144,6 +153,9 @@ impl AppState {
             grade: Mutex::new(None),
             presets: Mutex::new(Vec::new()),
             grade_limits: Mutex::new(Vec::new()),
+            export: Mutex::new(None),
+            export_progress: Mutex::new(None),
+            export_caps: Mutex::new(Value::Null),
         }
     }
 
@@ -208,6 +220,17 @@ impl AppState {
         *self.grade.lock().unwrap() = Some(v.clone());
     }
 
+    pub fn on_export_ready(&self, v: &Value) {
+        *self.export.lock().unwrap() = Some(v.clone());
+        // export_done 一到就把进度条归位：留着“12/20”跟在一句“共 20 张、失败 1”后面
+        // 会被读成“还在跑”，而实际已经结束了
+        *self.export_progress.lock().unwrap() = None;
+    }
+
+    pub fn on_export_progress(&self, v: &Value) {
+        *self.export_progress.lock().unwrap() = Some(v.clone());
+    }
+
     pub fn on_ready(&self, v: &Value) {
         // 只接数组：缺键或非数组就当这一版引擎还没这一能力，留空而不是留上一份
         match v.get("presets").and_then(|p| p.as_array()) {
@@ -219,6 +242,12 @@ impl AppState {
                 list.iter().filter_map(|x| x.as_f64()).collect(),
             None => *self.grade_limits.lock().unwrap() = Vec::new(),
         }
+        // 导出能力（M4）：没报就当这一版引擎还不能导出，置 Null 而不是留上一份
+        *self.export_caps.lock().unwrap() = match (v.get("export_formats"), v.get("export_tile")) {
+            (Some(f), Some(t)) => json!({"formats": f, "tile": t,
+                                         "tile_default": v.get("export_tile_default")}),
+            _ => Value::Null,
+        };
     }
 
     pub fn on_frame_event(&self) {
@@ -294,6 +323,9 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     *st.grade.lock().unwrap() = None;        // 定向层同理：新进程里肤色参数应当全是零
     *st.presets.lock().unwrap() = Vec::new();  // 清单等新进程的 ready 重新填
     *st.grade_limits.lock().unwrap() = Vec::new();
+    *st.export.lock().unwrap() = None;         // 新进程还没导出一张，上一批的账单不是本会话的
+    *st.export_progress.lock().unwrap() = None;
+    *st.export_caps.lock().unwrap() = Value::Null;   // 能力等 ready 重新报
     *st.engine.lock().map_err(|_| "引擎锁中毒".to_string())? = Some(Arc::new(h));
     Ok(json!({"pid": pid, "python": py, "src": src, "session": session}))
 }
@@ -370,6 +402,9 @@ fn load_image(
     // 调色层也是：上一张照片的色调不能静默带到这一张上（引擎侧 load_image 已把它清了）
     *state.lut.lock().unwrap() = None;
     *state.grade.lock().unwrap() = None;     // 上一张图的肤色参数不能静默带到这一张
+    // 上一批导出的账单也一样：它说的是另一张图的文件与字节数
+    *state.export.lock().unwrap() = None;
+    *state.export_progress.lock().unwrap() = None;
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
 }
@@ -565,6 +600,39 @@ fn grade(
     }
     if let Some(v) = amount {
         cmd["amount"] = json!(v);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 全尺寸分块导出（M4）。不带 images 就是导当前这张；带 out_dir 必需。
+///
+/// 这一条与上面几个图层命令不同：它不在主线程算任何东西，只是把请求递给了
+/// 引擎的 worker 线程——满幅一块图就能是几秒，UI 线程不能等。进度与终态从
+/// export_progress / export_done 两条事件拿（engine_status 轮询），不靠这里返回。
+/// 同样一律“给了才附”：格式与 tile 的默认值属于引擎，宿主填一份就会在引擎改
+/// 默认值时静默漂开（export_formats / export_tile 就是为此才由 ready 报的）。
+#[tauri::command]
+fn export(
+    state: State<'_, Arc<AppState>>,
+    out_dir: String,
+    format: Option<String>,
+    quality: Option<i64>,
+    tile: Option<i64>,
+    images: Option<Vec<String>>,
+) -> Result<Value, String> {
+    let mut cmd = json!({"cmd": "export", "action": "start", "out_dir": out_dir});
+    if let Some(v) = format {
+        cmd["format"] = json!(v);
+    }
+    if let Some(v) = quality {
+        cmd["quality"] = json!(v);
+    }
+    if let Some(v) = tile {
+        cmd["tile"] = json!(v);
+    }
+    if let Some(v) = images {
+        cmd["images"] = json!(v);
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
@@ -796,12 +864,17 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let deform = state.deform.lock().unwrap().clone();
     let lut = state.lut.lock().unwrap().clone();
     let grade = state.grade.lock().unwrap().clone();
+    let export = state.export.lock().unwrap().clone();
+    let export_progress = state.export_progress.lock().unwrap().clone();
+    let export_caps = state.export_caps.lock().unwrap().clone();
     let presets: Vec<Value> = state.presets.lock().unwrap().clone();
     let grade_limits: Vec<f64> = state.grade_limits.lock().unwrap().clone();
     json!({"shm": shm_name, "has_shm": has_shm, "emitted": emitted,
            "delivered": delivered, "logs": logs, "image": image, "precompute": precompute,
            "inpaint": inpaint, "light": light, "deform": deform, "lut": lut,
-           "grade": grade, "presets": presets, "grade_limits": grade_limits})
+           "grade": grade, "presets": presets, "grade_limits": grade_limits,
+           "export": export, "export_progress": export_progress,
+           "export_caps": export_caps})
 }
 
 #[tauri::command]
@@ -818,6 +891,9 @@ fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     *state.grade.lock().unwrap() = None;
     *state.presets.lock().unwrap() = Vec::new();   // 引擎没了，它报过的清单也就没了
     *state.grade_limits.lock().unwrap() = Vec::new();
+    *state.export.lock().unwrap() = None;
+    *state.export_progress.lock().unwrap() = None;
+    *state.export_caps.lock().unwrap() = Value::Null;
     match h {
         Some(h) => {
             h.shutdown();
@@ -864,6 +940,10 @@ fn m0_env() -> Value {
         // M3-b 肤色定向自动通道："dh:ds:dv:amount"。与上面几条同一条理由：只有真窗口
         // 能证明 runGrade → Rust grade → 引擎 grade_done 这条命令签名对得上。
         "auto_grade": std::env::var("LRT_AUTO_GRADE").unwrap_or_default(),
+        // M4 导出自动通道："<目录>@<格式>@<tile>"（tile 与格式可省）。真窗口跑这一条
+        // 才能证明 runExport → Rust export → 引擎 export_done 对得上，而且落盘文件
+        // 的尺寸是“满幅不是代理档”的唯一直接证据
+        "auto_export": std::env::var("LRT_AUTO_EXPORT").unwrap_or_default(),
     })
 }
 
@@ -886,7 +966,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_engine, bench_start, pull_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, precompute,
-            inpaint, light, deform, lut, grade, report, quit
+            inpaint, light, deform, lut, grade, export, report, quit
         ])
         .run(tauri::generate_context!())
         .expect("运行 LumaRetouch 失败");

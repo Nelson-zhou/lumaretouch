@@ -1693,6 +1693,11 @@ class Engine:
         与 M2-b 拒绝 synthetic 占位关键点是同一条理由。能跨图复用的只有参数级的东西：
         磨皮参数、调色表、肤色定向。skip 必须逐图报出去，不能默默少几层。
         """
+        # 模块层不硬拉 numpy，与本文件其余按需取用的写法同一条。这一笔是真窗口抓出来的：
+        # 形变与通道那两条分支用了 np，而当时挂上的图层里没有形变，协议用例也没走到
+        # 那里——于是 `NameError: name 'np' is not defined` 一路活到了装机件。
+        import numpy as np
+
         p = snap["params"]
         skipped: list = []
         spec = ExportSpec(strength=float(snap["strength"]), radius=int(p["radius"]),

@@ -174,6 +174,18 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             state.on_bench_done();
             println!("M0_ENGINE {line}");
         }
+        "export_progress" => {
+            // M4 批量出片：逐图一条。它落在 other 分支就会只进日志不进状态，
+            // 而 UI 的进度条要的恰好是“第几张 / 共几张”这句话
+            state.on_export_progress(&v);
+            println!("M0_ENGINE {line}");
+        }
+        "export_done" => {
+            // 终态：每张的尺寸/字节/块数/margin，以及逐图 skipped 与失败原因。
+            // 必须回显：跑靶脚本靠它量“导出的是满幅不是代理档”
+            state.on_export_ready(&v);
+            println!("M0_ENGINE {line}");
+        }
         "error" => {
             state.push_log(format!("引擎错误: {}", v["error"].as_str().unwrap_or("?")));
             // 必须回显到标准输出：跑靶脚本只看得见 stdout。不往这里印的话，

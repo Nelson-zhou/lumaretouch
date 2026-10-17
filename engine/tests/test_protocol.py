@@ -2296,6 +2296,49 @@ def test_export_honours_the_current_layers(engine, tmp_path):
     assert float(sat(b.astype(np.float64))[skin].mean()) < float(sat(a.astype(np.float64))[skin].mean())
 
 
+def test_export_carries_the_deform_field_and_the_skin_channel(engine, tmp_path):
+    """挂着形变与肤色通道导出：那两条分支必须真跑得通，而且报的是导出尺寸的数。
+
+    这一条是真窗口抓出来的，不是补写的漂亮话：`_export_snapshot` 里形变与通道那两段
+    用了 np，而 server 的模块层不导 numpy（与本文件其余按需取用同一条写法），而当时
+    所有导出用例都不挂这两层——于是 `NameError: name 'np' is not defined` 一路活到
+    装机件，在 gpuspike/runwin_m4.sh 的形变臂当场塌在 render 阶段。
+    """
+    _need_export_env()
+    import os
+    import numpy as np
+    from PIL import Image
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.5, max_px=207360)
+    engine.wait_for("image_ready", timeout=60)
+    engine.send(cmd="precompute", backend="template")
+    engine.wait_for("precompute_ready", timeout=60)
+    engine.send(cmd="deform", action="set",
+                amounts={"slim_face": 0.6, "big_eye": 0.3, "small_chin": 0.4})
+    lit = engine.wait_for("deform_done", timeout=60)
+    assert lit["lit"] is True, lit
+    engine.send(cmd="export", out_dir=str(tmp_path / "deform"), format="png", tile=512)
+    got, _others = _collect_until(engine, "export_done")
+    assert got["failed"] == 0, f"挂上形变就导出失败：{got['images']}"
+    img = got["images"][0]
+    assert img["deform_peak_px"] > 0, "三滑块开着而场是空的：那一层根本没进导出"
+    assert img["margin_px"] >= 80 + int(img["deform_peak_px"]), \
+        f"margin 没按 ceil(peak)+1 加：{img['margin_px']} / peak {img['deform_peak_px']}"
+    assert not img["skipped"], f"当前文档不该 skip 任何图层：{img['skipped']}"
+
+    # 再把磨皮指到肤色通道：掩膜那一段用的是另一条 np 分支，同样必须活
+    engine.send(cmd="set_strength", strength=0.5, channel="skin")
+    engine.wait_for("frame", timeout=30)
+    engine.send(cmd="export", out_dir=str(tmp_path / "chan"), format="png", tile=512)
+    got2, _o2 = _collect_until(engine, "export_done")
+    assert got2["failed"] == 0, f"分通道导出失败：{got2['images']}"
+    assert got2["images"][0]["channel"] == "skin", \
+        f"通道没带到导出（报的是 {got2['images'][0]['channel']}）：掩膜那一段是空的"
+    name = os.path.splitext(os.path.basename(FIXTURE))[0] + ".png"
+    with Image.open(str(tmp_path / "deform" / name)) as a, Image.open(str(tmp_path / "chan" / name)) as b:
+        d = np.abs(np.asarray(a.convert("RGB"), np.int16) - np.asarray(b.convert("RGB"), np.int16)).max(-1)
+    assert int(d.max()) >= 2, "分通道与全图导出逐字节相同：那张掩膜没参与"
+
+
 def test_export_batch_isolates_failures_and_reports_skips(engine, tmp_path):
     """批量：坏路径只塌自己那一张；不属于本文档的图层明确报 skipped。"""
     _need_export_env()

@@ -297,6 +297,72 @@ export interface EngineStatus {
   /** [dh, ds, dv] 的硬边界（ready 里报的）：滑块行程的唯一出处。空数组 = 这个引擎
    *  还没这一能力，定向那一排就不画。 */
   grade_limits: number[];
+  /** 最近一次 export_done（M4 批量出片）；换图/换引擎进程会清空。 */
+  export: ExportDone | null;
+  /** 最近一条 export_progress：第几张 / 共几张。null = 没在跑（或刚跑完）。 */
+  export_progress: ExportProgress | null;
+  /** 引擎在 ready 里报的导出能力。null = 这个引擎还不能导出，按钮就不画。 */
+  export_caps: ExportCaps | null;
+}
+
+/** 一次导出的逐图账单（export_done.images[] 的一项，M4）。
+ *
+ * 失败项只有 path/stage/error：一张坏路径只塌自己那一张，不带倒整批。
+ * skipped 是逐图报的：不是当前文档的那些图不会带上笔迹/形变/通道，这句话
+ * 必须逐张说清，不能默默少几层。
+ */
+export interface ExportedImage {
+  path: string;
+  out?: string;
+  format?: string;
+  bytes?: number;
+  write_ms?: number;
+  w?: number;
+  h?: number;
+  px?: number;
+  src_mb?: number;
+  tile?: number;
+  tiles?: number;
+  margin_px?: number;
+  deform_peak_px?: number;
+  total_ms?: number;
+  field_ms?: number;
+  per_tile_ms?: number;
+  seg_ms?: Record<string, number>;
+  delta_cpu_mb?: number;
+  channel?: string | null;
+  repair_ms?: number;
+  applied?: number;
+  skipped?: string[];
+  stage?: string;
+  error?: string;
+}
+
+/** 一批导出的终态（引擎侧 export_done，M4）。 */
+export interface ExportDone {
+  total: number;
+  failed: number;
+  out_dir: string;
+  format: string;
+  quality: number;
+  tile: number;
+  total_ms: number;
+  images: ExportedImage[];
+}
+
+/** 逐图进度（引擎侧 export_progress，M4）。index 从 0 起。 */
+export interface ExportProgress {
+  index: number;
+  total: number;
+  path: string;
+  ok: boolean;
+}
+
+/** 导出能力（ready 报的）：格式名单与 tile 行程由引擎说，前端不抄一份。 */
+export interface ExportCaps {
+  formats: string[];
+  tile: [number, number];
+  tile_default: number | null;
 }
 
 /** 一个内置预设的可显示信：提交只靠 name，文字只靠 title。 */
@@ -464,6 +530,25 @@ export const runGrade = (
     amount: opts?.amount,
   });
 
+/** 全尺寸分块导出（M4）。不传 images 就是导当前这张。
+ *
+ * 这里的返回只是“请求递出去了”：满幅一块图就能是几秒，真正的结果从
+ * export_progress / export_done 两条事件拿（engine_status 轮询）。
+ * format/tile 不抄默认值：那两个数的出处是引擎的 ready（export_formats /
+ * export_tile），宿主填一份就会在引擎改口径时静默漂开。
+ */
+export const runExport = (
+  outDir: string,
+  opts?: { format?: string; quality?: number; tile?: number; images?: string[] },
+) =>
+  invoke<{ requested: boolean }>("export", {
+    outDir,
+    format: opts?.format,
+    quality: opts?.quality,
+    tile: opts?.tile,
+    images: opts?.images,
+  });
+
 /** 帧头解析（小端，与 main.rs 的 pull_frame 注释逐字段对应）。 */
 export interface ParsedFrame {
   seq: number;
@@ -543,6 +628,8 @@ export interface M0Env {
   /** 非空则导入后提交一次肤色定向（M3-b）："dh:ds:dv:amount"，四个数用 : 分隔。
    *  与 lut 的 @ 分法各走一份，两条自动臂可以同时挂。 */
   auto_grade: string;
+  /** M4 导出自动通道："<目录>[@<格式>][@<tile>]"。 */
+  auto_export: string;
 }
 export const m0Env = () => invoke<M0Env>("m0_env");
 export const report = (line: string) => invoke("report", { line });

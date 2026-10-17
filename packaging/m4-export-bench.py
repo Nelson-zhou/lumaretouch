@@ -370,10 +370,15 @@ def part_memory(failures: list[str]) -> None:
     a_small_single = table[MAX_TILE][0]
     a_big_single = table[MAX_TILE][1]
     ratio_mp = (bh * bw) / (sh * sw)
+    grow = a_big_single / max(a_small_single, 0.1)
     print(f"  整幅单 pass 随图幅涨：{a_small_single:.1f} → {a_big_single:.1f} MiB "
-          f"（像素比 {ratio_mp:.2f}×）")
-    if a_big_single < a_small_single * min(ratio_mp, 1.5):
-        failures.append("整幅单 pass 的峰值没随图幅涨：这张卡或这套层根本没被撑起来")
+          f"（像素比 {ratio_mp:.2f}× · 实测涨 {grow:.2f}×）")
+    # 线性涨是期望，但峰值里有一块与图幅无关的固定开销（分配器粒度、上下文），所以闸
+    # 按 0.6× 线性给：本机 3.81× 像素实测 3.51×（线性的 0.92）。写成绝对倍数会在
+    # LRT_EXPORT_BIG_MP 调小时不是被比的那件事，写成 1.0× 线性会误伤。
+    if grow < ratio_mp * 0.6:
+        failures.append(f"整幅单 pass 只随图幅涨了 {grow:.2f}×（像素 {ratio_mp:.2f}×，"
+                        "期望至少 0.6× 线性）：这张卡或这套层根本没被撑起来")
     saved = a_big_single / max(table[512][1], 0.1)
     print(f"  分块省下的倍数（大幅 tile512 vs 整幅）：{saved:.1f}×")
     if saved < 3.0:
