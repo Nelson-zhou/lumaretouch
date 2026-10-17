@@ -4,9 +4,10 @@ import Viewer, { type Hud } from "./components/Viewer";
 import { clickRle } from "./brush";
 import { t } from "./i18n";
 import {
-  benchStart, benchStats, engineStatus, loadImage, m0Env, quit, report, runInpaint, setStrength,
+  benchStart, benchStats, engineStatus, loadImage, m0Env, quit, report, runInpaint, runLight, setStrength,
   shutdownEngine, startEngine,
-  type BenchOptions, type EngineStatus, type ImageReady, type InpaintInfo, type Precompute, type Stats,
+  type BenchOptions, type EngineStatus, type ImageReady, type InpaintInfo, type LightInfo,
+  type Precompute, type Stats,
 } from "./native";
 
 const SIZES: Record<string, [number, number]> = {
@@ -85,6 +86,12 @@ export default function App() {
   const [brushOn, setBrushOn] = useState(false);
   const [brushRadius, setBrushRadius] = useState(8);
   const [feather, setFeather] = useState(2);
+  // 画笔模式（M2-a2）：同一支画笔管道，落点时按模式分派到两个图层。
+  // 不另开一套坐标采集：修容与消除笔画的都是代理帧上的同一个 RLE，两套代码必漂。
+  const [brushMode, setBrushMode] = useState<"heal" | "dodge" | "burn">("heal");
+  // 修容档数上限：0.6 档是探针在真图上定的产品默认（再大就开始烧穿高光）
+  const [lightExposure, setLightExposure] = useState(0.6);
+  const [lastLight, setLastLight] = useState<LightInfo | null>(null);
   const [lastInpaint, setLastInpaint] = useState<InpaintInfo | null>(null);
   const [dragNote, setDragNote] = useState("");
   const lastSend = useRef(0);
@@ -98,6 +105,7 @@ export default function App() {
       setStatus(st);
       // 消除笔的结果与日志同源：inpaint_done 只发一次，轮询不能错过
       if (st.inpaint) setLastInpaint(st.inpaint);
+      if (st.light) setLastLight(st.light);
     } catch {
       /* 引擎未起，忽略 */
     }
@@ -237,6 +245,50 @@ export default function App() {
           await report(`M0_SKIN ${JSON.stringify({ midGain, broadGain, detailGain,
                                                    strength: strengthRef.current })}`);
           await sleep(600);        // 等引擎的 params_set 回显落进 stdout
+        }
+      }
+      // 修容自动通道（$LRT_AUTO_LIGHT="fx:fy:r:sign,…"）：与自动消除笔同一条链。
+      // 只有真窗口能证明 runLight → Rust light → 引擎 light_done 这条命令签名对得上：
+      // Tauri 对不上名字时会静默丢参，屏上不动而一个错也不报。
+      if (env.auto_light) {
+        // 坐标必须落在**代理帧**坐标系里。这里踩过一个坑：外层还有个 `const [w, h] =
+        // SIZES[sizeKey]`（合成跑靶档 1024×1280），它和引擎会话 672×848 不是一个系，
+        // 拿它算笔印会编出 x=672 这种越界行程码、被引擎整条拒掉。消除笔那一臂一开始就用
+        // image.w/h，修容这一臂必须跟着它，不能靠外层那个同名变量。
+        if (!image) {
+          await report("M0_ERROR LRT_AUTO_LIGHT 需要 LRT_LOAD_IMAGE（不知道代理帧尺寸）");
+        } else {
+          const pw = image.w;
+          const ph = image.h;
+          const strokes = env.auto_light.split(",").map((s) => s.trim()).filter(Boolean);
+          const waitLight = async (pred: (v: LightInfo) => boolean) => {
+            // 轮询预算只给 12 s：命令被引擎整条拒绝时（越界 RLE、参数非法）这一层永远
+            // 等不到，长时间空轮询会把 UI 线程冻住，把一次“脚本写错参数”变成
+            // 一个看着像产品退化的 fps 数字（实测 45.5 fps / emit_to_pull.max 12.7 s）。
+            for (let i = 0; i < 120; i++) {
+              await sleep(100);
+              const st = await engineStatus().catch(() => null);
+              if (st?.light && pred(st.light)) return st.light;
+            }
+            return null;
+          };
+          let lit: LightInfo | null = null;
+          let bad = "";
+          for (let i = 0; i < strokes.length; i++) {
+            const [fx, fy, r, sign] = strokes[i].split(":").map(Number);
+            if (![fx, fy, r, sign].every(Number.isFinite)) { bad = `第 ${i + 1} 条码无法解析`; break; }
+            try {
+              await runLight("add", { rle: clickRle(pw, ph, fx * pw, fy * ph, r), feather: 2, sign });
+            } catch (e) { bad = String(e); break; }
+            lit = await waitLight((v) => v.action === "add" && v.ops === i + 1);
+            if (!lit) { bad = `第 ${i + 1} 笔 12s 内没等到 light_done（r=${r} 是像素半径，越界会被引擎拒绝）`; break; }
+          }
+          await report(`M0_LIGHT ${JSON.stringify(bad ? { bad, strokes: strokes.length } : {
+            strokes: strokes.length, ops: lit?.ops ?? -1, lit: lit?.lit ?? null,
+            exposure: lit?.exposure ?? null, radius: lit?.radius ?? null,
+            fieldPeak: lit?.field_peak ?? null, lightMs: lit?.light_ms ?? null,
+            bandsMs: lit?.bands_ms ?? null, bytesLight: lit?.bytes_light ?? null,
+          })}`);
         }
       }
       for (let i = 0; i < 100; i++) {
@@ -390,17 +442,40 @@ export default function App() {
 
   const onStroke = useCallback(
     (rle: number[][], pixels: number) => {
-      setDragNote(t("retouch.repairing", { pixels }));
-      runInpaint("add", { rle, feather })
+      if (brushMode === "heal") {
+        setDragNote(t("retouch.repairing", { pixels }));
+        runInpaint("add", { rle, feather })
+          .then(() => refreshStatus())
+          .catch((e) => setDragNote(String(e)));
+        return;
+      }
+      // 加深/减淡共用一条命令，差别只在符号：场是带符号累加的，所以同处一正一负会抵消
+      setDragNote(t("retouch.lighting", { pixels }));
+      runLight("add", { rle, feather, sign: brushMode === "dodge" ? 1 : -1 })
         .then(() => refreshStatus())
         .catch((e) => setDragNote(String(e)));
     },
-    [feather, refreshStatus],
+    [feather, brushMode, refreshStatus],
   );
 
   function onInpaintAction(action: InpaintInfo["action"]) {
     setDragNote(t("retouch.repairing", { pixels: 0 }));
     runInpaint(action)
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)));
+  }
+
+  /** 修容层的撤销/重做/清空：与消除笔各自一份栈（M5 再合并成产品级历史） */
+  function onLightAction(action: LightInfo["action"]) {
+    setDragNote(t("retouch.lighting", { pixels: 0 }));
+    runLight(action)
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)));
+  }
+
+  /** 修容强度：松手才提交。改一次要重算两份 db（产品档实测 ~4 ms），逐事件发会吐掉 vsync 余量 */
+  function onLightExposureCommit() {
+    runLight("params", { exposure: lightExposure })
       .then(() => refreshStatus())
       .catch((e) => setDragNote(String(e)));
   }
@@ -475,9 +550,28 @@ export default function App() {
           <span className="mut">{t("retouch.feather")}</span>
         </div>
         <div className="row">
+          {/* 一支画笔、三个去处（M2-a2）：模式选完再画，与真实修图软件的笔组一致 */}
+          <button className={brushMode === "heal" ? "primary" : ""} onClick={() => setBrushMode("heal")}
+                  disabled={!status?.image}>{t("retouch.modeHeal")}</button>
+          <button className={brushMode === "dodge" ? "primary" : ""} onClick={() => setBrushMode("dodge")}
+                  disabled={!status?.image}>{t("retouch.modeDodge")}</button>
+          <button className={brushMode === "burn" ? "primary" : ""} onClick={() => setBrushMode("burn")}
+                  disabled={!status?.image}>{t("retouch.modeBurn")}</button>
+        </div>
+        <label className="k">{t("retouch.lightExposure", { stops: lightExposure.toFixed(2) })}</label>
+        <input type="range" min={-2} max={2} step={0.05} value={lightExposure}
+               onChange={(e) => setLightExposure(+e.target.value)}
+               onMouseUp={onLightExposureCommit} onTouchEnd={onLightExposureCommit}
+               style={{ width: "100%" }} />
+        <div className="row">
           <button onClick={() => onInpaintAction("undo")} disabled={!status?.image}>{t("retouch.undo")}</button>
           <button onClick={() => onInpaintAction("redo")} disabled={!status?.image}>{t("retouch.redo")}</button>
           <button onClick={() => { onInpaintAction("clear"); setLastInpaint(null); }} disabled={!status?.image}>{t("retouch.clear")}</button>
+        </div>
+        <div className="row">
+          <button onClick={() => onLightAction("undo")} disabled={!status?.image}>{t("retouch.lightUndo")}</button>
+          <button onClick={() => onLightAction("redo")} disabled={!status?.image}>{t("retouch.lightRedo")}</button>
+          <button onClick={() => { onLightAction("clear"); setLastLight(null); }} disabled={!status?.image}>{t("retouch.lightClear")}</button>
         </div>
         {lastInpaint && (
           <table>
@@ -509,6 +603,36 @@ export default function App() {
           </table>
         )}
         {dragNote && <div className="mut">{dragNote}</div>}
+
+        {lastLight && (
+          <table>
+            <tbody>
+              <tr>
+                <td>{t("retouch.lightOps")}</td>
+                <td>{lastLight.ops} · {t("retouch.redoPending")} {lastLight.redo_pending}
+                  {' · '}{lastLight.lit ? t("retouch.lightOn") : t("retouch.lightOff")}</td>
+              </tr>
+              <tr>
+                <td>{t("retouch.lightStops")}</td>
+                <td>{t("retouch.lightStopsValue", {
+                  stops: lastLight.exposure.toFixed(2),
+                  peak: lastLight.field_peak.toFixed(2),
+                })}</td>
+              </tr>
+              <tr>
+                <td>{t("retouch.lightMs")}</td>
+                <td>{t("retouch.lightMsValue", {
+                  light: lastLight.light_ms.toFixed(2),
+                  total: lastLight.total_ms.toFixed(2),
+                })}</td>
+              </tr>
+              <tr>
+                <td>{t("retouch.lightResident")}</td>
+                <td>{t("retouch.mib", { v: (lastLight.bytes_light / 1048576).toFixed(2) })}</td>
+              </tr>
+            </tbody>
+          </table>
+        )}
 
         <h2>{t("side.bench")}</h2>
         <label className="k">{t("bench.size")}</label>

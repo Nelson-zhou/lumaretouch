@@ -18,7 +18,8 @@ from .shm import FrameShm, monotonic_ns, shm_name
 # 磨皮参数的默认值只在这里取一次：vram 在模块层就容忍 torch 缺失（CPU job 也能 import），
 # 在这里复用它们而不是写第二份字面量，否则默认值与生产值会漂移。
 from .vram import DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_MID_GAIN, \
-    DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS, DEFAULT_REPAIR, RepairOp, warm_device
+    DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS, DEFAULT_REPAIR, LightOp, RepairOp, warm_device
+from .ops.light import DB_EXPOSURE_LIMIT, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
 
 PROTOCOL_VERSION = 1
 
@@ -86,6 +87,12 @@ class Engine:
         self._repair_ops: list = []
         self._redo_ops: list = []
         self._op_seq = 0
+        # 修容层（M2-a2）在引擎侧也有一份：它跟消除笔一样是“只存输入”的图层，
+        # 换设备重建会话时要能就地重放。参数（强度/带限半径）也存在引擎侧，
+        # 因为新会话的默认值不等于当前会话的值。
+        self._light_ops: list = []
+        self._light_redo: list = []
+        self._light = dict(exposure=DEFAULT_DB_EXPOSURE, radius=DEFAULT_DB_RADIUS)
         self._wlock = threading.Lock()   # 跑靶线程与 stdin 线程都在写同一块双缓冲
         self._strength = _clamp_strength(0.5)
 
@@ -162,7 +169,8 @@ class Engine:
         抽成一个方法是为了让 packaging/m1-vram-bench.py 能直接复用同一份代码——
         离线跑靶如果自己拼一份近似逻辑，量的数就不能代表产品通路。
         """
-        seg = dict(synth=0.0, pre=0.0, filter=0.0, kernel=0.0, post_gpu=0.0, cpu_post=0.0, readback=0.0)
+        seg = dict(synth=0.0, pre=0.0, filter=0.0, light=0.0, kernel=0.0, post_gpu=0.0,
+                   cpu_post=0.0, readback=0.0)
         # image_stream 模拟拖滑块：系数在 0.25→0.75 上扫一个 100 帧周期，
         # 像素逐帧真的在变；常驻管线的系数跑靶如果只动 0.001，字节上几乎看不出区别
         if mode == "image_stream":
@@ -185,7 +193,11 @@ class Engine:
             # copyin.kernel ≈ resident.filter + resident.kernel。
             whole = (monotonic_ns() - t) / 1e6
             seg["filter"] = float(getattr(pipe, "last_filter_ms", 0.0) or 0.0)
-            seg["kernel"] = max(whole - seg["filter"], 0.0)
+            # M2-a2：修容层也是热路径上可分离的一笔。它应当与 filter 同构：
+            # 只在图层/参数变了的那一帧非 0，拖 strength 时恒为 0。不拆出来
+            # 就会把 db 的开销记到 kernel 头上，而“拖滑块零重算”这条判据看不出来。
+            seg["light"] = float(getattr(pipe, "last_light_ms", 0.0) or 0.0)
+            seg["kernel"] = max(whole - seg["filter"] - seg["light"], 0.0)
             t = monotonic_ns()
             pipe.pack(out)
             # 跑靶指纹（只给合成靶纸用）：常驻路径的源图不动，逐帧变化的像素只能靠盖序号块。
@@ -225,11 +237,14 @@ class Engine:
         # M0 必须知道 60fps 的天花板卡在哪一段——上一版只给一个总数，把合成图形的 17 ms
         # 当成了通路极限；M1-2 要证的是「内核没变快，快的全是搬运」，那就更得拆开。
         period = interval_ms / 1000.0
-        acc = dict(synth=0.0, pre=0.0, filter=0.0, kernel=0.0, post_gpu=0.0, cpu_post=0.0,
-                   readback=0.0, shm=0.0, notify=0.0)
+        acc = dict(synth=0.0, pre=0.0, filter=0.0, light=0.0, kernel=0.0, post_gpu=0.0,
+                   cpu_post=0.0, readback=0.0, shm=0.0, notify=0.0)
         # 重算次数：拖拽期零推理的直接证据。只要这个数不是 1（或 0），缓存就没真的生效，
         # 而按均值报 filter 会把它藏起来（600 帧里重算一次只有 0.0075 ms/帧）。
         refilters = 0
+        # 修容层同一个口径：600 帧拖滑块期间 relight_frames 应当是 0，
+        # 不为 0 就是 db 缓存没命中（键算错了），而均值会把它洗掉。
+        relights = 0
 
         def snapshot(done: int) -> dict:
             return {k: round(v / max(done, 1), 3) for k, v in acc.items()}
@@ -251,6 +266,8 @@ class Engine:
             pixels, seg = self._make_frame(shm, i, mode, pipe)
             if seg.get("filter", 0.0) > 0:
                 refilters += 1
+            if seg.get("light", 0.0) > 0:
+                relights += 1
             for k, v in seg.items():
                 acc[k] += v
             t4 = monotonic_ns()
@@ -277,7 +294,10 @@ class Engine:
               # 零推理跑靶的验收面：重算次数应当是 0（预热那 8 帧已经付掉一次性成本）
               "refilter_frames": refilters,
               "refilter_ms_total": round(acc["filter"], 2),
+              "relight_frames": relights,
+              "relight_ms_total": round(acc["light"], 2),
               "params": dict(self._params),
+              "light": dict(self._light),
               **snapshot(frames)})
 
     # ------------------------------------------------------------ GPU 管线
@@ -300,6 +320,12 @@ class Engine:
             # 不重放就是“会话迁了、图层没迁”，与 M1-3a 那个“会话在 CPU 上跑却标 cuda”同形。
             if self._repair_ops:
                 pipe.set_repair_ops(self._repair_ops, self._redo_ops)
+            # 参数先于图层：新会话的 exposure 默认值不等于用户当前拖到的值，
+            # 先挂图层再改参数会白跑一次 db（而且上报里的 exposure 与实际算的不是一个数）
+            pipe.light_exposure = float(self._light["exposure"])
+            pipe.light_radius = int(self._light["radius"])
+            if self._light_ops:
+                pipe.set_light_ops(self._light_ops, self._light_redo)
         emit({"event": "vram_ready", "device": str(pipe.device), "w": w, "h": h,
               "adopted": bool(adopt),
               "bytes_src": int(pipe.src_u8.numel() * pipe.src_u8.element_size()),
@@ -340,6 +366,8 @@ class Engine:
         self._repair_ops = []
         self._redo_ops = []
         self._op_seq = 0
+        self._light_ops = []
+        self._light_redo = []
         t_a = monotonic_ns()
         pipe = self._attach_pipeline(d.rgb)
         self._image_loaded = True
@@ -367,6 +395,8 @@ class Engine:
               # 零推理换来的显存代价必须能看见，不能只报快了多少
               "bytes_filter": pipe.filter_resident_bytes(),
               "bytes_bands": pipe.bands_resident_bytes(),
+              # 修容层在导入后必然为空（换图已清），这个数报 0 本身就是“没图上一张的笔迹”的证据
+              "bytes_light": pipe.light_resident_bytes(),
               # 只报滤波这一份：掩膜在本事件之后才挂上（precompute 跑在 image_ready 后面），这里附 bytes_face 恒为 0，
               # 反而会被读成"掩膜没常驻"。掩膜/关键点的字节数由 precompute_ready 报，那才是它们为真的那一刻。
               "import_ms": round((t_c - t0) / 1e6, 2)})
@@ -538,7 +568,10 @@ class Engine:
               "bands_ms": round(float(self._vram.last_bands_ms), 2),
               # 这一帧到底复用了缓存没有：`retouched is not None` 是个恒真的说法（render 成功
               # 之后它必然非空），缓存被无声绕过时也照样报 True。只有 last_filter_ms 才由执行路径约束。
-              "cached": float(self._vram.last_filter_ms) == 0.0, **self._params})
+              "cached": float(self._vram.last_filter_ms) == 0.0,
+              # M2-a2：拖磨皮滑块时这一笔应当恒为 0（两份 db 结果都命中常驻）。
+              # 不为 0 就是修容层把磨皮那条零推理热路径拖回了重算——两个数得分开报才能看见。
+              "light_ms": round(float(self._vram.last_light_ms), 2), **self._params})
         emit(fr)
 
     # ------------------------------------------------------------ 消除笔（M1-4）
@@ -677,6 +710,151 @@ class Engine:
               "device": str(self._vram.device), "strength": self._strength})
         emit(fr)
 
+    def _light_params_or_reject(self, p: dict):
+        """从命令里取修容层参数，全部校验通过才返回；失败时自己发 error 并返 None。
+
+        为什么单独拆出来：add 与 params 两条臂都得能带 exposure/radius。上一版只在
+        params 里处理，add 带了就直接**静默忽略**——手工跑一条 add 带 radius=6 时
+        上报里仍是默认的 24，而 exposure 默认值恰好也是 0.6，整个事件看不出任何异常。
+        静默吞掉一个参数比报错难查十倍。
+        """
+        got = {}
+        for k, lo, hi in (("exposure", -DB_EXPOSURE_LIMIT, DB_EXPOSURE_LIMIT),
+                          ("radius", 0, 256)):
+            if p.get(k) is None:
+                continue
+            try:
+                v = float(p[k]) if k == "exposure" else int(p[k])
+            except (TypeError, ValueError):
+                emit({"event": "error", "error": f"参数 {k} 非法：{p[k]!r}"})
+                return None
+            if not v == v or abs(v) == float("inf"):
+                emit({"event": "error", "error": f"参数 {k} 不是有限数：{p[k]!r}"})
+                return None
+            if not lo <= v <= hi:
+                emit({"event": "error", "error": f"参数 {k}={v} 超出范围 [{lo}, {hi}]"})
+                return None
+            got[k] = v
+        return got
+
+    def cmd_light(self, p: dict):
+        """修容笔（M2-a2）：一次事件（松手/改完参数）算一次场；拖磨皮滑块期间不重算。
+
+        与消除笔同一套事件调度、同一条铁律：先全量校验、后一次性提交，被拒绝的命令
+        整条不留痕（不能“图层加了一笔、参数改了、场还是旧的”那种中间态）。
+        """
+        action = p.get("action", "add")
+        if action not in ("add", "undo", "redo", "clear", "params"):
+            emit({"event": "error", "error": f"未知 light action: {action}"
+                  f"（可用：add/undo/redo/clear/params）"})
+            return
+        if not self._image_loaded or self._vram is None:
+            emit({"event": "error", "error": "尚未 load_image"})
+            return
+        if self.shm is None or (self.shm.w, self.shm.h) != (self._vram.w, self._vram.h):
+            emit({"event": "error", "error": f"shm {getattr(self.shm, 'w', '?')}x{getattr(self.shm, 'h', '?')} "
+                  f"!= 会话 {self._vram.w}x{self._vram.h}，请先 load_image"})
+            return
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝 light：先 bench_stop"})
+            return
+        t_start = monotonic_ns()
+        info_add: dict = {}
+        if action == "params":
+            # 参数也得“先校验后写”：一半一半会留下一张用旧曝光算出来、但上报写着新曝光的帧
+            got = self._light_params_or_reject(p)
+            if got is None:
+                return
+            if not got:
+                emit({"event": "error", "error": "light params 什么也没给：至少要有 exposure 或 radius"})
+                return
+            self._light = dict(self._light, **got)
+            info = self._vram.set_light_params(self._light["exposure"], self._light["radius"])
+            info_add = {"params": dict(self._light)}
+        elif action == "add":
+            import numpy as np
+
+            from .ops.inpaint import feather_np, mask_from_rle
+
+            rle = p.get("rle")
+            if not isinstance(rle, list) or not rle:
+                emit({"event": "error", "error": "light add 缺 rle 或 rle 为空："
+                      "应为 [[y,x,len,value255], …]，从代理帧坐标采集"})
+                return
+            h, w = self._vram.h, self._vram.w
+            try:
+                hard = mask_from_rle(rle, h, w)
+            except (ValueError, TypeError) as e:
+                emit({"event": "error", "error": f"rle 非法，整条拒绝：{e}"})
+                return
+            try:
+                sign = int(p.get("sign", 1))
+            except (TypeError, ValueError):
+                emit({"event": "error", "error": f"sign 非法：{p.get('sign')!r}（需 +1 减淡 / -1 加深）"})
+                return
+            if sign not in (-1, 1):
+                emit({"event": "error", "error": f"sign={sign} 非法：只能是 +1（减淡）或 -1（加深）"})
+                return
+            feather = int(p.get("feather", 2))
+            if not 0 <= feather <= 8:
+                emit({"event": "error", "error": f"feather={feather} 超出范围 [0, 8]"})
+                return
+            t_dec = monotonic_ns()
+            soft = feather_np(hard, feather) if feather else hard.astype(np.float32)
+            weight = np.round(np.clip(soft, 0.0, 1.0) * 255.0).astype(np.uint8)
+            if int((weight > 0).sum()) == 0:
+                emit({"event": "error", "error": "羽化后覆盖度归零：画笔太小或坐标不匹配"
+                      "（会话为代理帧尺寸，得用代理帧坐标而不是原图坐标）"})
+                return
+            decode_ms = (monotonic_ns() - t_dec) / 1e6
+            # 带不带参数都得过同一道校验：静默忽略比拒绝坏得多
+            got = self._light_params_or_reject(p)
+            if got is None:
+                return
+            op = LightOp(op_id=self._op_seq + 1, weight=weight, sign=sign)
+            if got:
+                # 先改参数再建层：两者在同一条事件里，提交后帧与上报必须同时是新参数的
+                self._light = dict(self._light, **got)
+                self._vram.set_light_params(self._light["exposure"], self._light["radius"])
+            try:
+                info = self._vram.add_light(op)
+            except ValueError as e:
+                # 建层失败时一笔也不加（_commit_light 是“全算完才提交”），所以这里不能占号
+                emit({"event": "error", "error": f"修容被拒，整条拒绝：{e}"})
+                return
+            self._op_seq = op.op_id
+            info_add = {"op_id": op.op_id, "sign": sign, "decode_ms": round(decode_ms, 2),
+                        "rle_runs": len(rle), "feather": feather, "params": dict(self._light)}
+        elif action == "undo":
+            info = self._vram.undo_light()
+            if info is None:
+                emit({"event": "error", "error": "没有可撤销的修容笔"})
+                return
+        elif action == "redo":
+            info = self._vram.redo_light()
+            if info is None:
+                emit({"event": "error", "error": "没有可重做的修容笔"})
+                return
+        else:
+            info = self._vram.clear_light()
+        # 引擎侧那份列表必须跟着会话走：不同步的话下一次换设备会重放出旧图层
+        self._light_ops = list(self._vram.light_ops)
+        self._light_redo = list(self._vram.light_redo)
+        fr = self._write_current_frame("light")
+        render_ms = fr.pop("render_ms")
+        # 显存账单在渲染之后才算：建层那一刻两份 db 结果还是空的，在那里报会少算
+        # 两个产品档各 6.5 MiB——“零重算”换来的显存代价藏不得
+        info["bytes_light"] = self._vram.light_resident_bytes()
+        emit({"event": "light_done", "action": action, **info, **info_add,
+              "light_ms": round(float(self._vram.last_light_ms), 2),
+              "filter_ms": round(float(self._vram.last_filter_ms), 2),
+              "bands_ms": round(float(self._vram.last_bands_ms), 2),
+              "cached": float(self._vram.last_filter_ms) == 0.0,
+              "render_ms": render_ms,
+              "total_ms": round((monotonic_ns() - t_start) / 1e6, 2),
+              "device": str(self._vram.device), "strength": self._strength})
+        emit(fr)
+
     def _pipe_copyin(self, rgba, strength: float, radius: int = DEFAULT_RADIUS,
                      eps: float = DEFAULT_EPS, detail_gain: float = DEFAULT_DETAIL_GAIN,
                      mid_gain: float = DEFAULT_MID_GAIN,
@@ -692,6 +870,7 @@ class Engine:
         import numpy as np
 
         from .ops.guided import make_tensor, retouch_t, to_numpy_chw
+        from .quant import quantize_np
 
         seg = dict(pre=0.0, kernel=0.0, cpu_post=0.0)
         out = self._pipe_out
@@ -713,7 +892,9 @@ class Engine:
         self._sync()
         seg["kernel"] = (monotonic_ns() - t) / 1e6
         t = monotonic_ns()
-        out[:, :, :3] = (np.clip(to_numpy_chw(o), 0, 1) * 255).astype(np.uint8)
+        # 量化走唯一口径（四舍五入）：这条对照臂与常驻臂必须用同一种收尾，
+        # 否则两臂的差值里混着半 LSB 的系统偏移，字节对拍就没法看了
+        out[:, :, :3] = quantize_np(to_numpy_chw(o))
         seg["cpu_post"] = (monotonic_ns() - t) / 1e6
         return out, seg
 
@@ -797,7 +978,8 @@ class Engine:
                  "bench_stop": lambda p: (self.stop_flag.set(), emit({"event": "bench_stopped"})),
                  "set_device": self.cmd_set_device, "shutdown": self.cmd_shutdown,
                  "load_image": self.cmd_load_image, "set_strength": self.cmd_set_strength,
-                 "precompute": self.cmd_precompute, "inpaint": self.cmd_inpaint}
+                 "precompute": self.cmd_precompute, "inpaint": self.cmd_inpaint,
+                 "light": self.cmd_light}
         # 不用 `for line in sys.stdin`：那会等 EOF，收到 shutdown 也退不掉
         while not self._quit:
             line = sys.stdin.readline()

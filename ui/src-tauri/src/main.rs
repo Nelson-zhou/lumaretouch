@@ -97,6 +97,9 @@ pub struct AppState {
     /// 最近一次 inpaint_done（消除笔的事件驱动结果）。与图层同生命期：
     /// 换图/换引擎进程必须清空，否则前端会拿上一张图的修补指标当本图的。
     inpaint: Mutex<Option<Value>>,
+    /// 最近一次 light_done（M2-a2 修容笔）。与 inpaint 分开存：两个图层各自
+    /// 一次事件一条结果，合成一份就会让“消除笔的 repair_ms”被读成修容的耗时。
+    light: Mutex<Option<Value>>,
 }
 
 /// 用 `Arc` 起步才能传给引擎读线程；因此额外管理一个持有 Arc 的启动器。
@@ -121,6 +124,7 @@ impl AppState {
             image: Mutex::new(None),
             precompute: Mutex::new(None),
             inpaint: Mutex::new(None),
+            light: Mutex::new(None),
         }
     }
 
@@ -167,6 +171,10 @@ impl AppState {
 
     pub fn on_inpaint_ready(&self, v: &Value) {
         *self.inpaint.lock().unwrap() = Some(v.clone());
+    }
+
+    pub fn on_light_ready(&self, v: &Value) {
+        *self.light.lock().unwrap() = Some(v.clone());
     }
 
     pub fn on_frame_event(&self) {
@@ -308,6 +316,7 @@ fn load_image(
     *state.precompute.lock().unwrap() = None;
     // 画笔图层也一起清：引擎侧 load_image 会丢旧笔画，宿主留着就是报一个不存在的图层状态
     *state.inpaint.lock().unwrap() = None;
+    *state.light.lock().unwrap() = None;
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
 }
@@ -383,6 +392,41 @@ fn inpaint(
     }
     if let Some(v) = smooth_iters {
         cmd["smooth_iters"] = json!(v);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 修容笔（M2-a2）：加深/减淡一次事件一条命令，与消除笔同一套事件调度。
+/// sign=+1 减淡、-1 加深；action=params 时只改这层的档数与带限半径。
+/// 不返回同步结果：db 要几毫秒，结果靠 engine_status().light 轮询。
+#[tauri::command]
+fn light(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    rle: Option<Value>,
+    feather: Option<u64>,
+    sign: Option<i64>,
+    exposure: Option<f64>,
+    radius: Option<u64>,
+) -> Result<Value, String> {
+    let mut cmd = json!({"cmd": "light", "action": action});
+    // 一律“给了才附”：缺字段在引擎侧是“不改这个参数”，宿主写默认值就等于
+    // 替引擎做决定，生产默认值一改这条通路就会静默漂开（与 set_strength 同一条规矩）
+    if let Some(v) = rle {
+        cmd["rle"] = v;
+    }
+    if let Some(v) = feather {
+        cmd["feather"] = json!(v);
+    }
+    if let Some(v) = sign {
+        cmd["sign"] = json!(v);
+    }
+    if let Some(v) = exposure {
+        cmd["exposure"] = json!(v);
+    }
+    if let Some(v) = radius {
+        cmd["radius"] = json!(v);
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
@@ -610,9 +654,10 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let image = state.image.lock().unwrap().clone();
     let precompute = state.precompute.lock().unwrap().clone();
     let inpaint = state.inpaint.lock().unwrap().clone();
+    let light = state.light.lock().unwrap().clone();
     json!({"shm": shm_name, "has_shm": has_shm, "emitted": emitted,
            "delivered": delivered, "logs": logs, "image": image, "precompute": precompute,
-           "inpaint": inpaint})
+           "inpaint": inpaint, "light": light})
 }
 
 #[tauri::command]
@@ -623,6 +668,7 @@ fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     *state.image.lock().unwrap() = None;
     *state.precompute.lock().unwrap() = None;
     *state.inpaint.lock().unwrap() = None;
+    *state.light.lock().unwrap() = None;
     match h {
         Some(h) => {
             h.shutdown();
@@ -659,6 +705,9 @@ fn m0_env() -> Value {
         // 所以“滑块能不能过 Rust”这件事只能靠 env 钩子在真窗口里验：命令签名改了而 TS 侧
         // 名字对不上时，Tauri 会静默丢掉那个参数，屏上不动而一个错也不报。
         "auto_skin": std::env::var("LRT_AUTO_SKIN").unwrap_or_default(),
+        // M2-a2 修容自动通道：“fx:fy:r:sign,…”（坐标按代理帧归一化，sign 取 +1/-1），
+        // 跟自动消除笔同一条链：只有真窗口能证明“TS → Rust → 引擎”这条命令签名对得上。
+        "auto_light": std::env::var("LRT_AUTO_LIGHT").unwrap_or_default(),
     })
 }
 
@@ -681,7 +730,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_engine, bench_start, pull_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, precompute,
-            inpaint, report, quit
+            inpaint, light, report, quit
         ])
         .run(tauri::generate_context!())
         .expect("运行 LumaRetouch 失败");

@@ -104,6 +104,38 @@ export interface InpaintInfo {
   strength: number;
 }
 
+/** 一次修容笔事件的回报（引擎侧 light_done，M2-a2）。与消除笔同为事件驱动。 */
+export interface LightInfo {
+  action: "add" | "undo" | "redo" | "clear" | "params";
+  ops: number;
+  redo_pending: number;
+  painted_px: number;
+  /** 累加后的带符号场绝对峰值（≤1：档数上限钉在 exposure 上，不随笔数漂） */
+  field_peak: number;
+  /** 这层现在到底有没有生效（空场或 exposure=0 时为 false） */
+  lit: boolean;
+  exposure: number;
+  radius: number;
+  /** 建层成本（一次性）：重算场 + 上显存。与每帧的 light_ms 不是一个量 */
+  light_build_ms: number;
+  /** 本帧实际跑 db 的毫秒：拖磨皮滑块时应当为 0 */
+  light_ms: number;
+  filter_ms: number;
+  bands_ms: number;
+  render_ms: number;
+  total_ms: number;
+  bytes_light: number;
+  cached: boolean;
+  op_id?: number;
+  sign?: number;
+  decode_ms?: number;
+  feather?: number;
+  rle_runs?: number;
+  params?: Record<string, number>;
+  device: string;
+  strength: number;
+}
+
 export interface EngineStatus {
   shm: string;
   has_shm: boolean;
@@ -116,6 +148,8 @@ export interface EngineStatus {
   precompute: Precompute | null;
   /** 最近一次 inpaint_done；换图/换设备会清空（图层跟着会话走）。 */
   inpaint: InpaintInfo | null;
+  /** 最近一次 light_done；与 inpaint 同生命期，但两份结果各自一份，不串台。 */
+  light: LightInfo | null;
 }
 
 export interface BenchOptions {
@@ -214,6 +248,24 @@ export const runInpaint = (
     refineIters: opts?.refineIters,
   });
 
+/** 修容笔（M2-a2）：与消除笔同一套事件调度，一次松手一条。
+ *
+ * sign 是方向而不是强度：+1 减淡、-1 加深，强度由这层的 exposure（档数）给出。
+ * 这样“多画几笔”只是让场更接近上限，不会像逐笔乘那样把脸烧穿。
+ */
+export const runLight = (
+  action: LightInfo["action"],
+  opts?: { rle?: number[][]; feather?: number; sign?: number; exposure?: number; radius?: number },
+) =>
+  invoke<{ requested: boolean }>("light", {
+    action,
+    rle: opts?.rle,
+    feather: opts?.feather,
+    sign: opts?.sign,
+    exposure: opts?.exposure,
+    radius: opts?.radius,
+  });
+
 /** 帧头解析（小端，与 main.rs 的 pull_frame 注释逐字段对应）。 */
 export interface ParsedFrame {
   seq: number;
@@ -275,10 +327,14 @@ export interface M0Env {
   /** 非空且不为 "0" 则导入后跑一次预计算，值就是后端名（M1-3b）。 */
   precompute: string;
   precompute_channel: string;
-  /** 非空则导入后自动打几笔消除笔（M1-4）："fx:fy:r,…"，坐标按代理帧归一化。 */
+  /** 非空则导入后自动打几笔消除笔（M1-4）："fx:fy:r,…"。fx/fy 是代理帧归一化坐标，
+   *  r 是**像素**半径（clickRle 直接吃它）——上一版注释只说"坐标归一化"，我按 0.15
+   *  传过比例，结果只盖了 25 像素、第三笔 RLE 越界被引擎拒绝，白跑一轮确认。 */
   auto_inpaint: string;
   /** 非空则导入后提交一次三条带增益（M2-a）："mid:broad:detail"。 */
   auto_skin: string;
+  /** 非空则导入后画几笔修容（M2-a2）："fx:fy:r:sign,…"，fx/fy 归一化、r 是**像素**、sign 取 1/-1。 */
+  auto_light: string;
 }
 export const m0Env = () => invoke<M0Env>("m0_env");
 export const report = (line: string) => invoke("report", { line });

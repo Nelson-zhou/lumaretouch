@@ -142,6 +142,11 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             state.on_inpaint_ready(&v);
             println!("M0_ENGINE {line}");
         }
+        "light_done" => {
+            // 修容笔同上：一次事件一条，而且它与消除笔各自一份结果，不能串台
+            state.on_light_ready(&v);
+            println!("M0_ENGINE {line}");
+        }
         "bench_done" => {
             state.on_bench_done();
             println!("M0_ENGINE {line}");

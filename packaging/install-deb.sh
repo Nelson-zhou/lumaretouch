@@ -40,11 +40,15 @@ if [ "$bad" -ne 0 ]; then
   exit 1
 fi
 echo "✓ 已装 $n 个引擎文件，全部与暂存内容逐字节一致"
-# 再点一条"这一轮的特征"：新代码里独有的字符串，命中为 0 说明装的还是旧逻辑
-marker=${1:-refilter_frames}
-if grep -rq "$marker" "$installed"; then
-  echo "✓ 装机代码含本轮特征标记 '$marker'"
-else
-  echo "× 装机代码里找不到 '$marker'——装的不是刚打的那份"
-  exit 1
-fi
+# 再点几条“这一轮的特征”：新代码里独有的字符串，命中为 0 说明装的还是旧逻辑。
+# 支持多个标记（一个包同时接了两个里程碑时，只卡一个会漏）：不传就走上一轮的默认值。
+markers=("$@")
+if [ ${#markers[@]} -eq 0 ]; then markers=(refilter_frames); fi
+for marker in "${markers[@]}"; do
+  if grep -rq "$marker" "$installed"; then
+    echo "✓ 装机代码含本轮特征标记 '$marker'"
+  else
+    echo "× 装机代码里找不到 '$marker'——装的不是刚打的那份"
+    exit 1
+  fi
+done

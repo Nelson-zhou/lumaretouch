@@ -1121,3 +1121,208 @@ def test_gpu_warm_up_takes_the_cold_cost_off_the_first_import(engine):
     assert first["import_ms"] <= line, (
         f"预热后首图仍要 {first['import_ms']} ms（第二张 {second['import_ms']} ms，判据 {line:.1f}）："
         "预热没盖住真实内核，或者冷价根本挪不走")
+
+
+# ================================================== 修容笔（M2-a2）走完整 IPC
+def _dilate(mask: np.ndarray, k: int) -> np.ndarray:
+    """切比雪夫（L∞）膨胀 k 次：给出“离覆盖区不超过 k 像素”的那一圈。
+
+    必须是 8 邻域。上一版只并了上下左右四个移位，得到的是 L1 菱形：对角方向上
+    L∞=8 的点需要 16 步才能膨胀到，于是“笔触外”在对角上侵进了真实影响区，
+    把一帧正确的修容测成“越界 2 LSB”。盒式滤波的支撑是方形窗口，就得用方形膨胀去套。
+    """
+    m = mask.copy()
+    for _ in range(k):
+        p = np.pad(m, 1)
+        m = (m | p[:-2, 1:-1] | p[2:, 1:-1] | p[1:-1, :-2] | p[1:-1, 2:]
+             | p[:-2, :-2] | p[:-2, 2:] | p[2:, :-2] | p[2:, 2:])
+    return m
+
+
+def _lin_light(a: np.ndarray) -> np.ndarray:
+    """int16 的 [0,255] 帧 → 线性光。判"往哪个方向动了多少档"要用它，不能用编码值。"""
+    x = np.clip(a.astype(np.float64) / 255.0, 0.0, 1.0)
+    return np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4)
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_light_moves_exposure_in_the_direction_the_sign_says(engine):
+    """协议层的 sign 直通：减淡必须提亮、加深必须压暗，而且是在**线性光**下按档数。
+
+    方向接反是最典型的接线错误，而字节比对完全看不出来（两边都"改了"）。
+    所以这里不看字节，看线性光均值的移动方向与档数。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    rle = _brush_rle(h, w, h // 2, w // 2, 10)
+    cover = _brush_mask(h, w, rle) > 0
+    base_lin = None
+    peer = FrameShm(meta["name"])
+    try:
+        base = _read_frame(engine, peer, h, w)
+        base_lin = _lin_light(base)
+        for sign, want_up in ((1, True), (-1, False)):
+            engine.send(cmd="light", action="clear")
+            engine.wait_for("light_done", timeout=60)
+            engine.send(cmd="light", action="add", rle=rle, feather=2, sign=sign,
+                        exposure=0.6, radius=6)
+            done = engine.wait_for("light_done", timeout=60)
+            assert done["ops"] == 1 and done["lit"] is True, done
+            assert done["sign"] == sign, f"sign 没过 Rust/协议：{done}"
+            # 参数也得真的落进去：上一版 add 带了 radius=6 而被静默忽略（上报仍是 24），
+            # 整个事件看上去完全正常——静默吞参数比拒命令难查得多，所以这里直接卡上报值
+            assert done["radius"] == 6 and done["exposure"] == 0.6, f"add 带的参数没生效：{done}"
+            shot = _read_frame(engine, peer, h, w)
+            got = _lin_light(shot)[cover].mean() / base_lin[cover].mean()
+            stops = float(np.log2(got))
+            if want_up:
+                assert stops > 0.25, f"减淡笔只动了 {stops:+.3f} 档：方向接反或强度丢了"
+            else:
+                assert stops < -0.25, f"加深笔只动了 {stops:+.3f} 档：方向接反或强度丢了"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_light_leaves_pixels_beyond_the_band_limit_untouched(engine):
+    """带限半径 r 就是影响半径：r 之外必须逐字节不动。
+
+    这条同时在产品通路上验了 gamma 往返恒等——笔外那些像素走的是
+    `srgb(linear(img))`，量化只要偏用截断就会整片掉 1 级（M2-a2 就是这么把
+    产品级量化缺陷顶出来的）。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    rle = _brush_rle(h, w, h // 2, w // 2, 9)
+    cover = _brush_mask(h, w, rle) > 0
+    radius = 6
+    peer = FrameShm(meta["name"])
+    try:
+        before = _read_frame(engine, peer, h, w)
+        engine.send(cmd="light", action="add", rle=rle, feather=2, sign=1,
+                    exposure=0.6, radius=radius)
+        engine.wait_for("light_done", timeout=60)
+        after = _read_frame(engine, peer, h, w)
+        # 图边缘留一圈：reflect pad 会把边界值镜像进来，那不是越界（留够 r+4）
+        far = ~_dilate(cover, radius + 3)
+        edge = radius + 4
+        far[:edge] = far[-edge:] = far[:, :edge] = far[:, -edge:] = False
+        assert float(far.mean()) > 0.5, "远离笔触的区域太小，这条判据是空的"
+        d = int(np.abs(after - before)[far].max())
+        assert d == 0, f"笔触外 {d} LSB——修容的影响半径超出了带限半径"
+        assert int(np.abs(after - before)[cover].max()) > 0, "笔心里一点没改，修容空转"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_drag_stream_after_light_relights_and_refilters_nothing(engine):
+    """M2-a2 的核心产品判据：画完修容再拖滑块，db 与滤波都必须一次都不重算。
+
+    修容层设计成"对两个混合操作数各存一份结果"就是为了这条。relight_frames
+    不为 0 就说明 db 缓存键算错了，热路径被拖回每帧 4 ms。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.5)
+    h, w = meta["h"], meta["w"]
+    engine.send(cmd="light", action="add", rle=_brush_rle(h, w, 30, 30, 5),
+                feather=2, sign=1, radius=6)
+    done = engine.wait_for("light_done", timeout=60)
+    assert done["lit"] is True and done["light_ms"] >= 0.0, done
+    for i, (cy, cx, s) in enumerate(((h // 2, w // 2, 1), (h - 40, 40, -1)), start=2):
+        engine.send(cmd="light", action="add", rle=_brush_rle(h, w, cy, cx, 6),
+                    feather=2, sign=s, radius=6)
+        more = engine.wait_for("light_done", timeout=60)
+        assert more["ops"] == i, f"第 {i} 笔没进图层：{more}"
+        assert more["bands_ms"] == 0.0, f"只画修容却重跑了分带：{more}"
+    engine.send(cmd="bench_start", mode="image_stream", frames=6, interval_ms=20,
+                w=w, h=h)
+    engine.wait_for("bench_started", timeout=30)
+    b = engine.wait_for("bench_done", timeout=90)
+    assert not b.get("failed"), f"跑靶失败：{b}"
+    assert b["refilter_frames"] == 0, f"拖拽流里重算了 {b['refilter_frames']} 次滤波"
+    assert b["relight_frames"] == 0, \
+        f"拖拽流里重算了 {b['relight_frames']} 次修容：db 常驻没生效，热路径被拖回重算"
+    assert b["light"] == 0.0, f"每帧修容均值 {b['light']} ms 不为 0"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_light_undo_restores_exact_previous_frame_bytes(engine):
+    """修容也是"只存输入"：撤销/重做必须逐字节复现，与消除笔同一条非破坏原则。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        base = _read_frame(engine, peer, h, w)
+        engine.send(cmd="light", action="add", rle=_brush_rle(h, w, h // 3, w // 3, 8),
+                    feather=2, sign=1, radius=6)
+        engine.wait_for("light_done", timeout=60)
+        lit = _read_frame(engine, peer, h, w)
+        assert np.abs(lit - base).max() > 0
+        engine.send(cmd="light", action="undo")
+        done = engine.wait_for("light_done", timeout=60)
+        assert done["ops"] == 0 and done["redo_pending"] == 1 and done["lit"] is False, done
+        back = _read_frame(engine, peer, h, w)
+        assert np.array_equal(back, base), f"撤销后差了 {int(np.abs(back - base).max())} LSB"
+        engine.send(cmd="light", action="redo")
+        done = engine.wait_for("light_done", timeout=60)
+        assert done["ops"] == 1 and done["lit"] is True, done
+        again = _read_frame(engine, peer, h, w)
+        assert np.array_equal(again, lit), "重做没逐字节复现那一笔"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_bad_light_commands_leave_no_trace(engine):
+    """被拒绝的修容命令整条不留痕：图层没加、层参数没改、帧还是原样。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.4)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        before = _read_frame(engine, peer, h, w)
+        good = _brush_rle(h, w, 20, 20, 4)
+        engine.send(cmd="light", action="nope")
+        _expect_error(engine, "未知 light action")
+        engine.send(cmd="light", action="add", rle=[], sign=1)
+        _expect_error(engine, "缺 rle")
+        bad_rle = [list(r) for r in good]
+        bad_rle[0][2] = w + 99
+        engine.send(cmd="light", action="add", rle=bad_rle, sign=1)
+        _expect_error(engine, "rle 非法")
+        engine.send(cmd="light", action="add", rle=good, sign=0)
+        _expect_error(engine, "sign=0")
+        engine.send(cmd="light", action="add", rle=good, sign=7)
+        _expect_error(engine, "sign=7")
+        engine.send(cmd="light", action="add", rle=good, sign=1, feather=99)
+        _expect_error(engine, "feather")
+        engine.send(cmd="light", action="params", exposure=9.0)
+        _expect_error(engine, "exposure")
+        engine.send(cmd="light", action="params", radius=-3)
+        _expect_error(engine, "radius")
+        engine.send(cmd="light", action="params")
+        _expect_error(engine, "什么也没给")
+        # 拒绝之后图层与参数都应当是干净的
+        engine.send(cmd="light", action="undo")
+        _expect_error(engine, "没有可撤销的修容笔")
+        # 被拒的命令不发帧，所以拿一条正常 params 把帧取回来比对：无修容层时
+        # exposure 不影响画面，这一帧必须与导入时逐字节相同
+        engine.send(cmd="light", action="params", exposure=0.6)
+        done = engine.wait_for("light_done", timeout=60)
+        assert done["exposure"] == 0.6, done
+        assert done["radius"] == 24, f"被拒的 radius 泄漏进了层参数：{done}"
+        assert done["lit"] is False, f"一笔也没画但上报说层生效了：{done}"
+        after = _read_frame(engine, peer, h, w)
+        assert np.array_equal(after, before), \
+            f"被拒绝的命令改了画面（最大 {int(np.abs(after - before).max())} LSB）"
+        # add 也能带参数，而且越界一样得整条拒绝
+        engine.send(cmd="light", action="add", rle=good, sign=1, radius=9999)
+        _expect_error(engine, "radius")
+        engine.send(cmd="light", action="undo")
+        _expect_error(engine, "没有可撤销的修容笔")
+    finally:
+        peer.close()

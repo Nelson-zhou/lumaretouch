@@ -28,6 +28,8 @@ from .ops.guided import (bands_t, combine_t, mix_masked,
                          DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS,
                          DEFAULT_MID_GAIN, DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS)
 from .ops.inpaint import crop_apply_t, hole_extent, inpaint_t, levels_for, mask_bbox
+from .ops.light import dodge_burn_t, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
+from .quant import quantize_t
 
 # 磨皮参数默认值只有一个出处：ops.guided（探针量出来的），这里只转发不改数。
 # 以前在这里写字面量、server 里又写一份，就是 M1-2 那次「默认值改了但调用方还带着
@@ -51,6 +53,29 @@ class RepairOp:
     op_id: int
     weight: np.ndarray            # (H,W) uint8，画笔覆盖度
     params: dict = field(default_factory=lambda: dict(DEFAULT_REPAIR))
+
+    @property
+    def area_px(self) -> int:
+        return int((self.weight > 0).sum())
+
+    def nbytes(self) -> int:
+        return int(self.weight.nbytes)
+
+
+@dataclass
+class LightOp:
+    """一笔修容：只存画笔覆盖度（uint8）与方向符号，**不存结果也不存自己的曝光**。
+
+    为什么曝光/半径是层属性而不是笔属性：产品口径是“修容强度滑块决定最终档数”，
+    而档数由 `gain = 2^(exposure·场)` 给出。每笔自带曝光的话，拖滑块时到底按哪一笔算
+    就没有答案了；而且那样“多画几笔”会指数叠加把脸烧穿。
+    现在的语义：场是各笔带符号覆盖度的**线性累加**（夹到 [-1,1]），exposure 是这层的
+    档数上限，笔数决定接近它的程度。三条都有探针用例钉着（抵消/线性累加/饱和）。
+    """
+
+    op_id: int
+    weight: np.ndarray            # (H,W) uint8，画笔覆盖度
+    sign: int = 1                 # +1 减淡 / -1 加深
 
     @property
     def area_px(self) -> int:
@@ -111,6 +136,21 @@ class PreviewPipeline:
         self.repair_version: int = 0
         self.last_repair_ms: float = 0.0
         self.repair_box: tuple | None = None
+        # M2-a2：修容层。它是盖在磨皮**之上**的独立调整层，不是底图的一部分——
+        # 为什么不当底图：那样拖“修容强度”滑块会连带把 9 ms 的分带重跑一遍（底图变了）。
+        # 当上层则只对 `img` 与 `retouched` 两个混合操作数各施一次 db（~2 ms），
+        # 分带缓存原样命中，磨皮的缓存键也一分不改。
+        self.light_ops: list[LightOp] = []
+        self.light_redo: list[LightOp] = []
+        self.light_field_gpu: torch.Tensor | None = None     # (1,1,H,W) float32，带符号
+        self.light_version: int = 0                            # 图层内容变了
+        self.light_exposure: float = DEFAULT_DB_EXPOSURE
+        self.light_radius: int = DEFAULT_DB_RADIUS
+        self.light_src: torch.Tensor | None = None             # db(img)
+        self.light_src_key: tuple | None = None
+        self.light_res: torch.Tensor | None = None             # db(retouched)
+        self.light_res_key: tuple | None = None
+        self.last_light_ms: float = 0.0
 
     # ---- 装载：一次性 H2D ----------------------------------------------
     def load_rgb_u8(self, rgb: np.ndarray) -> None:
@@ -138,8 +178,21 @@ class PreviewPipeline:
         self.repair_box = None
         self.repair_version += 1
         self.last_repair_ms = 0.0
+        self._reset_light()
         if self.device.type != "cpu":
             torch.cuda.synchronize(self.device)
+
+    def _reset_light(self) -> None:
+        """换图时清空修容层：上一张图的笔迹坐标与新图没有任何关系。"""
+        self.light_ops = []
+        self.light_redo = []
+        self.light_field_gpu = None
+        self.light_version += 1
+        self.light_src = None
+        self.light_src_key = None
+        self.light_res = None
+        self.light_res_key = None
+        self.last_light_ms = 0.0
 
     # ---- 渲染：全 GPU，无 CPU 参与 --------------------------------------
     def prepare(self, radius: int = DEFAULT_RADIUS, eps: float = DEFAULT_EPS,
@@ -228,13 +281,20 @@ class PreviewPipeline:
         """
         if self.src_f32 is None:
             raise RuntimeError("先 load_rgb_u8 再 render")
+        # 每帧的 db 应用成本从 0 起算：它必须只由“这一帧真跑了什么”给出，
+        # 不能把上一次建层的成本混进来（那是事件驱动的一次性账，另走 light_ms）
+        self.last_light_ms = 0.0
         self.prepare(radius=radius, eps=eps, detail_gain=detail_gain,
                      mid_gain=mid_gain, broad_gain=broad_gain,
                      texture_radius=texture_radius)
-        base = self.base()
+        # M2-a2：两个混合操作数各自过一遍修容层。没画过修容时 lighten_* 直接把
+        # 原张量递回来（不复制、不跑算子），所以混合式与操作数与 M2-a 完全相同，
+        # strength=0 逐字节恒等那条承诺一分不改。
+        base = self.lighten_source()
+        result = self.lighten_result()
         if channel is not None:
-            return mix_masked(base, self.retouched, strength, self.mask(channel))
-        return (1.0 - strength) * base + strength * self.retouched
+            return mix_masked(base, result, strength, self.mask(channel))
+        return (1.0 - strength) * base + strength * result
 
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:
@@ -308,6 +368,9 @@ class PreviewPipeline:
         """只丢重组好的成品：下一次 prepare 命中分带、只重跑逐点乘加。"""
         self.retouched = None
         self.filter_key = None
+        # db(成品) 以成品为入，它没了就必须跟着没；不丢的话下一次 prepare 算出新
+        # 成品后，旧键里的 filter_key 已变，不会拿错——但旧张量会白占一份显存
+        self._light_cache_drop("res")
 
     def drop_cache(self) -> None:
         """两层缓存全丢：下一次 prepare 从底图重跑整条滤波链。
@@ -317,10 +380,15 @@ class PreviewPipeline:
         量到的就是重组那一条路，而 `last_filter_ms > 0` 会让它自检不出错——
         一个看起来完全正常、实则两臂在量同一条路的坑。定义放在执行侧比放在调用方安
         全：只有一个出处会漂。
+
+        修容的两份 db 结果也一起清：它们以成品为入，成品都没了它们就是无源之水。
+        跑靶的“全重算臂”如果漏这一句，量的就不是产品通路了。
         """
         self.drop_product()
         self.bands = None
         self.bands_key = None
+        self._light_cache_drop("src")
+        self._light_cache_drop("res")
 
     # ---- M1-4：消除笔图层（事件驱动） ------------------------------------
     def base(self):
@@ -442,10 +510,198 @@ class PreviewPipeline:
         cpu = sum(op.nbytes() for op in self.repair_ops) + sum(op.nbytes() for op in self.redo_ops)
         return gpu + cpu
 
+    # ---- M2-a2：修容层（盖在磨皮之上的独立调整层，事件驱动） --------------
+    def has_light(self) -> bool:
+        """这一层到底有没有活。没活就一个算子都不跑，两个操作数原样进混合。"""
+        return self.light_field_gpu is not None and float(self.light_exposure) != 0.0
+
+    def _light_cache_get(self, which: str):
+        return (self.light_src, self.light_src_key) if which == "src" \
+            else (self.light_res, self.light_res_key)
+
+    def _light_cache_set(self, which: str, t, key: tuple) -> None:
+        if which == "src":
+            self.light_src, self.light_src_key = t, key
+        else:
+            self.light_res, self.light_res_key = t, key
+
+    def _light_cache_drop(self, which: str) -> None:
+        self._light_cache_set(which, None, None)
+
+    def _apply_light_cached(self, t, which: str):
+        """对一份常驻张量施加当前修容层，结果也常驻。
+
+        which="src" 作用于底图（strength=0 那一侧），"res" 作用于磨皮结果（strength=1 那一侧）。
+        两份分开存是必然的：修容与磨皮强度语义上独立，只存一份就得在拖 strength
+        时重算，零推理那条承诺就碎了。
+        """
+        if not self.has_light():
+            # 不短路时也得把旧缓存放下：不然下次开修容而参数恰好撞上旧键，就会拿到
+            # 一份属于“上一回开启修容”的结果
+            self._light_cache_drop(which)
+            return t
+        if t is None:
+            # 产品通路不会走到这里（retouch 先 prepare），但 lighten_result() 是公开方法：
+            # 直接调它拿到的应当是一句“先 prepare”，而不是下游 _shape_check 的
+            # AttributeError: 'NoneType' object has no attribute 'shape'
+            raise RuntimeError(f"先 prepare() 再取修容结果（which={which} 的入参还是 None）")
+        # 底图身份看 repair_version，磨皮结果身份看 filter_key（它本身已含修补版本）
+        key = ((self.repair_version, self.light_version,
+                float(self.light_exposure), int(self.light_radius)) if which == "src"
+               else (self.filter_key, self.light_version,
+                     float(self.light_exposure), int(self.light_radius)))
+        cur, ck = self._light_cache_get(which)
+        if cur is not None and ck == key:
+            return cur
+        t0 = time.perf_counter()
+        out = dodge_burn_t(t, self.light_field_gpu, exposure=self.light_exposure,
+                           radius=self.light_radius)
+        # 不把非有限值写进常驻：缓存里的 NaN 会长期作恶，而且 `(1-0)*NaN` 仍是 NaN，
+        # strength=0 逐字节恒等当场失效（M1-3c 那条教训的原样复用）
+        if not torch.isfinite(out).all():
+            self._light_cache_drop(which)
+            raise ValueError(f"修容产出非有限值，已拒绝写入常驻缓存："
+                             f"exposure={self.light_exposure} radius={self.light_radius}")
+        self._light_cache_set(which, out, key)
+        if self.device.type != "cpu":
+            torch.cuda.synchronize(self.device)
+        self.last_light_ms += (time.perf_counter() - t0) * 1000.0
+        return out
+
+    def lighten_source(self):
+        """底图过修容层。"""
+        return self._apply_light_cached(self.base(), "src")
+
+    def lighten_result(self):
+        """磨皮结果过修容层。必须在 prepare 之后调（要读 self.retouched）。"""
+        return self._apply_light_cached(self.retouched, "res")
+
+    def set_light_ops(self, ops: list, redo: list | None = None) -> dict:
+        """整体挂上一组修容笔（换设备重建时用）：只认输入，不认旧结果。"""
+        return self._commit_light(list(ops), list(redo) if redo is not None else [])
+
+    def add_light(self, op: "LightOp") -> dict:
+        # 新笔发生在新一次重做之上，旧 redo 栈当场失效（与消除笔同一条理由）
+        return self._commit_light(self.light_ops + [op], [])
+
+    def undo_light(self) -> dict | None:
+        if not self.light_ops:
+            return None
+        last = self.light_ops[-1]
+        info = self._commit_light(self.light_ops[:-1], self.light_redo + [last])
+        info["undone_ops"] = len(self.light_ops) + 1
+        return info
+
+    def redo_light(self) -> dict | None:
+        if not self.light_redo:
+            return None
+        last = self.light_redo[-1]
+        info = self._commit_light(self.light_ops + [last], self.light_redo[:-1])
+        info["redone_ops"] = len(self.light_ops)
+        return info
+
+    def clear_light(self, keep_redo: bool = True) -> dict:
+        return self._commit_light([], self.light_redo if keep_redo else [])
+
+    def set_light_params(self, exposure: float, radius: int) -> dict:
+        """改修容强度/带限半径：只换参数，不动图层。
+
+        两份 db 缓存立即放下：它们对新参数没有意义，而旧张量占着 13 MiB 显存
+        （产品档两份）不给释放，拖一下滑块显存峰值就翻倍。缓存键里含这两个数，
+        不放下也不会拿错，所以这是纯显存措施。
+        """
+        e, r = float(exposure), int(radius)
+        self.light_exposure = e
+        self.light_radius = r
+        self.light_src = None
+        self.light_src_key = None
+        self.light_res = None
+        self.light_res_key = None
+        return {"exposure": e, "radius": r, "ops": len(self.light_ops),
+                "lit": bool(self.has_light())}
+
+    def _commit_light(self, ops: list, redo: list) -> dict:
+        """重算带符号修容场并一次性提交。
+
+        场是各笔的**线性累加**而不是逐笔应用 dodge_burn：逐笔会把 gain 指数乘起来
+        （三笔 0.6 档就是 3.5 倍，脸就烧穿了），而累加后一次应用的成本与笔数无关，
+        撤销一笔也只是从场里减回去。三条产品语义（抵消/线性累加/饱和）都有用例钉着。
+
+        同样“全算完才提交”：参数或尺寸非法时一笔也不加，不会留下“图层多了一笔
+        但场还是旧的”那种半截状态。
+        """
+        if self.src_f32 is None:
+            raise RuntimeError("先 load_rgb_u8 再画修容")
+        t0 = time.perf_counter()
+        painted = 0
+        field = np.zeros((self.h, self.w), dtype=np.float64)
+        for i, op in enumerate(ops):
+            if op.weight.shape != (self.h, self.w):
+                raise ValueError(f"第 {i} 笔修容覆盖度尺寸 {op.weight.shape} != 会话 "
+                                 f"{(self.h, self.w)}，笔必须画在代理帧坐标系上")
+            if op.weight.dtype != np.uint8:
+                raise ValueError(f"第 {i} 笔修容覆盖度必须是 uint8（0..255），得到 {op.weight.dtype}")
+            if int(op.sign) not in (-1, 1):
+                raise ValueError(f"第 {i} 笔修容方向非法：{op.sign!r}（需 +1 减淡 / -1 加深）")
+            field += float(op.sign) * (op.weight.astype(np.float64) / 255.0)
+            painted += int((op.weight > 0).sum())
+        clipped = np.clip(field, -1.0, 1.0)
+        if not np.isfinite(clipped).all():
+            raise ValueError("修容场含非有限值，整条拒绝")
+        # 全零场不上传也不存：has_light() 当场为假，两个操作数原样进混合（零开销）
+        gpu = None
+        if bool(clipped.any()):
+            gpu = torch.from_numpy(np.ascontiguousarray(clipped[None, None].astype(np.float32))) \
+                .to(self.device)
+        ms = (time.perf_counter() - t0) * 1000.0
+        # ---- 提交点：后面全是赋值 ----
+        self.light_ops = ops
+        self.light_redo = redo
+        self.light_field_gpu = gpu
+        self.light_version += 1
+        self._light_cache_drop("src")
+        self._light_cache_drop("res")
+        return {
+            # 建层成本（一次性）。与每帧的 last_light_ms 不同名：上一版两处都叫
+            # light_ms，而 cmd 层的 `**info` 又被每帧那个覆盖，报表上完全看不出
+            # 报的是哪一个——两个量差一个量级（建层 20 ms vs 每帧 0）。
+            "light_build_ms": round(ms, 2),
+            "ops": len(ops),
+            "redo_pending": len(redo),
+            "painted_px": painted,
+            "field_peak": float(np.abs(clipped).max()),
+            "lit": bool(gpu is not None and float(self.light_exposure) != 0.0),
+            "exposure": float(self.light_exposure),
+            "radius": int(self.light_radius),
+            "bytes_light": self.light_resident_bytes(),
+            "cached": False,          # 走到这里就是真重算了，与消除笔同一条口径
+        }
+
+    def light_resident_bytes(self) -> int:
+        """修容层的显存 + CPU 账单：场、两份 db 结果、画笔列表。"""
+        gpu = 0
+        for t in (self.light_field_gpu, self.light_src, self.light_res):
+            if t is not None:
+                gpu += int(t.numel() * t.element_size())
+        cpu = sum(op.nbytes() for op in self.light_ops) + sum(op.nbytes() for op in self.light_redo)
+        return gpu + cpu
+
     def pack(self, out) -> None:
-        """float→uint8 并写进常驻帧缓冲，同样全程在显存里做。"""
-        u8 = (out.clamp_(0.0, 1.0) * 255.0).to(torch.uint8)[0].permute(1, 2, 0)
-        self.frame_gpu[..., :3] = u8
+        """float→uint8 并写进常驻帧缓冲，同样全程在显存里做。
+
+        **量化必须四舍五入，不是向零截断**。M2-a2 探针量出来的：`x.to(torch.uint8)`
+        与 `astype(np.uint8)` 都是截断，对任意非格点值（实测 ×0.9875 与 ×1.0125）
+        平均偏暗 0.48 LSB、绝对误差也正好 0.48 LSB，而舍入是 0.0000。也就是说
+        只要画面不是原封不动的解码值，每一帧都在把全图压暗半级 LSB——暗部渐变
+        多出可见的阶调台阶，而且预览与导出永远差半档。
+
+        为什么以前没被“最大 1 LSB”的验收口径挡住：截断与舍入只在值不在格点上时
+        才有差，磨皮/混合的输出离格点远，两臂又用同一个截断，偏差在对比里抵消了。
+        D&B 把 gain≈1 的输出精确送回格点，才把这笔账算出来。
+
+        也不用就地 clamp_：那会把调用方传进来的张量（包括常驻缓存）直接修改。
+        """
+        self.frame_gpu[..., :3] = quantize_t(out)[0].permute(1, 2, 0)
 
     def render(self, strength: float, channel: str | None = None, **kw) -> None:
         """算一帧写进常驻帧缓冲。strength=0 时不论有没有掩膜都应当逐字节等于原图。"""
@@ -495,6 +751,10 @@ def warm_device(device: str, side: int = 64) -> float:
     预热跑的就是首帧那条链（建张量 → 盒式滤波 → 归一化混合 → uint8 打包 → 回读），
     不是空转一个 `torch.add` 报个好看的数——那样“预热了”三个字盖住的正是没被加载的
     那几个内核。设备不可用（没 torch / 没 GPU）时返 0.0，调用方据此不报预热事件。
+
+    M2-a2 把修容链也纳进来：真窗口实测第一笔修容 light_ms 68.64 ms、后续 3.3 ms，
+    那 65 ms 是 sRGB↔linear、带限 box 与 pow 这组内核首次加载。修容笔是产品里
+    第一个“画下去立刻要看结果”的手势，这笔钱不能留在用户的第一笔上。
     """
     if torch is None or not str(device).startswith("cuda") or not torch.cuda.is_available():
         return 0.0
@@ -502,6 +762,12 @@ def warm_device(device: str, side: int = 64) -> float:
     pipe = PreviewPipeline(device, side, side)
     try:
         pipe.load_rgb_u8(np.zeros((side, side, 3), dtype=np.uint8))
+        pipe.render(0.5)
+        # 修容臂：给一支半覆盖的笔，走的就是 cmd_light 之后每一帧走的那条链
+        # （_commit_light 建场 → lighten_source/lighten_result 各跑一次 db → 混合）。
+        pipe.set_light_ops([LightOp(op_id=1, weight=np.full((side, side), 128, np.uint8),
+                                    sign=1)])
+        pipe.set_light_params(DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS)
         pipe.render(0.5)
         torch.cuda.synchronize()        # 与引擎 _sync 同一个理由：不同步就把内核记到回读头上
         pipe.read_back()
@@ -511,4 +777,11 @@ def warm_device(device: str, side: int = 64) -> float:
         pipe.src_u8 = None
         pipe.src_f32 = None
         pipe.frame_gpu = None
+        # 修容层的场与两份 db 结果必须一起丢掉：预热会话是临时的，把它的图层留在
+        # 模块级引用上，下一个真会话可能继承一张不存在的笔印
+        pipe.light_field_gpu = None
+        pipe.light_src = None
+        pipe.light_res = None
+        pipe.light_ops = []
+        pipe.light_redo = []
     return (time.perf_counter() - t0) * 1000.0

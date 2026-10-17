@@ -82,6 +82,14 @@ jobs:
         # 本机（RX 7600 XT）：孔 0.987 / 斑 0.402 / 边 0.929；产品档 9.49 → 0.534 ms（×17.8）；
         # GPU↔CPU 参考 0 LSB（积分图累加器换 float64 后两边算的是同一个精确和）。
         run: REPS=5 LRT_FRAMES=40 "$PY" packaging/m2-skin-bench.py
+      - name: 中性灰修容（档数精确 + 笔触带限 + db 两层常驻）
+        # M2-a2 的三条硬要求：① 逐像素线性光比值等于 2^(exposure·带限场)（float32
+        # 生产路径 2e-3、float64 参考 1e-5 两档）；② 带限把硬边笔触的边缘跳变压到
+        # 盘心同量级（r=0 必须比 r=24 大 3 倍，否则“中性灰”其实是刷一块色）；
+        # ③ db 常驻臂与每帧重算臂上屏字节逐字节相等。
+        # 本机（RX 7600 XT）：产品档拖 strength 0.156 ms（无修容 0.170 ms，这层热路径
+        # 零成本）、每帧重算 db 3.43 ms（×22）；GPU↔CPU 最大 1 LSB、系统偏移 −0.00002 LSB。
+        run: REPS=5 LRT_FRAMES=40 "$PY" packaging/m2-dnb-bench.py
 
   # NVIDIA 侧同理。本机无 N 卡，CUDA 依赖 pin 也尚未解析回填，
   # 在拿到 NVIDIA runner 之前这条只能是开关关闭，不能当作已验证。
@@ -110,6 +118,8 @@ jobs:
         run: REPS=3 LRT_FRAMES=40 "$PY" packaging/m1-drag-bench.py
       - name: 质感磨皮（毛孔保留率 + 分带/重组两层缓存）
         run: REPS=5 LRT_FRAMES=40 "$PY" packaging/m2-skin-bench.py
+      - name: 中性灰修容（档数精确 + 笔触带限 + db 两层常驻）
+        run: REPS=5 LRT_FRAMES=40 "$PY" packaging/m2-dnb-bench.py
 
   # 通路不回归：引擎层单测 + 脚本可跑。真正的端到端帧率验收需要图形环境，
   # 在 M0 阶段仍是本机跑 packaging/m0-bench.sh，不假称 CI 已覆盖。
@@ -144,7 +154,7 @@ jobs:
           REF: ${{ github.ref_name }}
         run: |
           miss=""
-          [ "$ROCM" = "true" ] || miss="${miss} AMD/ROCm 打靶（常驻预算、真图保真、消除笔、拖滑块零推理、质感磨皮保留率）"
+          [ "$ROCM" = "true" ] || miss="${miss} AMD/ROCm 打靶（常驻预算、真图保真、消除笔、拖滑块零推理、质感磨皮保留率、中性灰修容）"
           [ "$CUDA" = "true" ] || miss="${miss} NVIDIA/CUDA 打靶"
           if [ -n "$miss" ]; then
             echo "::warning title=GPU 门禁未执行::以下项本轮没跑：${miss}"

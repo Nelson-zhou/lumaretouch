@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from .quant import quantize_np
+
 
 def synthetic(w: int, h: int, phase: float) -> np.ndarray:
     """横向渐变 + 一条随 phase 移动的高对比带 + 四角定位块。
@@ -23,7 +25,7 @@ def synthetic(w: int, h: int, phase: float) -> np.ndarray:
     img = np.clip(base + band, 0.0, 1.0)
     rgb = np.stack([img, img * 0.85 + 0.1 * y, img * 0.7 + 0.25 * y], axis=-1)
 
-    out = (np.clip(rgb, 0, 1) * 255.0).astype(np.uint8)
+    out = quantize_np(rgb)
     k = max(8, min(w, h) // 24)
     for r, c in ((0, 0), (0, w - k), (h - k, 0), (h - k, w - k)):
         out[r:r + k, c:c + k] = (255, 0, 0) if (r == 0 and c == 0) else (0, 255, 255)
