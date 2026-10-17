@@ -2497,6 +2497,27 @@ class Engine:
         seg["cpu_post"] = (monotonic_ns() - t) / 1e6
         return out, seg
 
+    def _resolve_device(self, want: str) -> str:
+        """把 "auto"（出厂默认）落实成 torch 真正认的那一块卡。
+
+        为什么这不是宿主该替它定的事：装机件里没人设 LRT_DEVICE，而宿主当时把默认
+        写成了 "cpu"——那一台机器上 torch 是 rocm/cuda 版、卡也在，整条 GPU 管线却
+        被绕开了（M8 裸环境那一轮就是在这一句上抓到的：帧率 53 而不是 60，因为会话
+        建在 CPU 上）。设备能不能用只有 torch 自己是权威，与 raw_backends /
+        matting_backends 同一条理由：能力由引擎报，宿主不猜。
+
+        显式要 "cuda" 而本机没 GPU 依旧保留原字符串（_cuda=False），不静默改写：
+        报表上那个 "cuda" 与 cuda:false 并存才是“这块卡没认上”的可诊断形状。
+        """
+        if want != "auto":
+            return want
+        try:
+            import torch
+            return "cuda" if torch.cuda.is_available() else "cpu"
+        except Exception as e:      # torch 缺失就是没 GPU 可用，但不能拖垮切设备
+            emit({"event": "engine_warn", "warn": f"设备自动选择时 torch 不可用（落到 cpu）：{e}"})
+            return "cpu"
+
     def cmd_set_device(self, p: dict):
         # 跑靶进行中整条拒绝。原来只拦"重建常驻会话"，可 self.device/self._cuda 在拦截之前
         # 就已经改写并发出了 device_set：会话还留在旧设备上服务，而 _sync() 按 self._cuda
@@ -2510,7 +2531,7 @@ class Engine:
             # 正在跑的那一批下一张拿到的就是半旧半新的状态
             emit({"event": "error", "error": "导出进行中，拒绝 set_device：等 export_done"})
             return
-        self.device = p.get("device", "cpu")
+        self.device = self._resolve_device(str(p.get("device", "auto") or "auto"))
         # 只有 torch 真认了这个后端才算 GPU，否则 _sync 会去调一个不存在的 API
         self._cuda = False
         if self.device.startswith("cuda"):

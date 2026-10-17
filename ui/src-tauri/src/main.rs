@@ -585,7 +585,9 @@ fn bench_start(
         f.bench_total = frames as u64;
         f.bench_done = false;
     }
-    let device = std::env::var("LRT_DEVICE").unwrap_or_else(|_| "cpu".into());
+    // 设备默认交回引擎去定（"auto"）：装机件里没人设 LRT_DEVICE，这里写死 "cpu" 就会
+    // 把整条 GPU 管线绕开（M8 裸环境那一轮实测：卡与 rocm 版 torch 都在，会话却建在 CPU 上）。
+    let device = std::env::var("LRT_DEVICE").unwrap_or_else(|_| "auto".into());
     state.send_to_engine(json!({"cmd": "set_device", "device": device}))?;
     state.send_to_engine(json!({
         "cmd": "bench_start", "w": w, "h": h,
@@ -609,8 +611,9 @@ fn load_image(
     // 设备必须在建会话之前就定好。F 轮翻车就是因为它：只有 bench_start 发 set_device，
     // 导入时引擎还是默认的 cpu，常驻会话整个建在 CPU 上，跑靶再切 cuda 也追不回来。
     // 引擎侧现在也会跟着迁移旧会话，但正确顺序仍然要在这里保证——没人想看一张
-    // 91 ms/帧的“GPU”数据。
-    let device = std::env::var("LRT_DEVICE").unwrap_or_else(|_| "cpu".into());
+    // 91 ms/帧的“GPU”数据。默认同样交回引擎定（"auto"）：上一版这里写死 cpu，
+    // 而“开箱即用”的那台机器上没人会设 LRT_DEVICE——GPU 版 torch 白装。
+    let device = std::env::var("LRT_DEVICE").unwrap_or_else(|_| "auto".into());
     state.send_to_engine(json!({"cmd": "set_device", "device": device}))?;
     if let Some(v) = max_px {
         cmd["max_px"] = json!(v);
@@ -1333,7 +1336,9 @@ fn m0_env() -> Value {
         "auto_bench": std::env::var("LRT_AUTO_BENCH").unwrap_or_default(),
         "engine_py": std::env::var("LRT_ENGINE_PY").unwrap_or_default(),
         "engine_src": std::env::var("LRT_ENGINE_SRC").unwrap_or_default(),
-        "device": std::env::var("LRT_DEVICE").unwrap_or_else(|_| "cpu".into()),
+        // 没设 LRT_DEVICE 时报 "auto"（引擎会把它落实成 cuda/cpu）：这里写死 cpu 就会
+        // 让跑靶报表上的设备栏与真用的那个不一致
+        "device": std::env::var("LRT_DEVICE").unwrap_or_else(|_| "auto".into()),
         "skip_draw": std::env::var("LRT_SKIP_DRAW").unwrap_or_default(),
         "skip_pixels": std::env::var("LRT_SKIP_PIXELS").unwrap_or_default(),
         "upload": std::env::var("LRT_UPLOAD").unwrap_or_else(|_| "raw".into()),

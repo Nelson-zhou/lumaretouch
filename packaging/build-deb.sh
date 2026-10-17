@@ -14,6 +14,12 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$here/.."
 
+# 先刷一遍引擎暂存件，再进发布门禁。顺序错了门禁就是错的：check-release 要对账的
+# 随包清单、runtime/VERSION、本机路径全部在暂存目录里，而它原本到 tauri 的
+# beforeBuildCommand 才生成——不先刷，这一道判的是**上一轮**暂存的那一份（M8 改版本号时
+# 就在这一条上红了一次：包内 runtime/VERSION 还是旧号）。
+bash packaging/stage-engine.sh
+
 bash packaging/check-release.sh
 
 cd ui

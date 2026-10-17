@@ -433,6 +433,29 @@ def test_unsupported_raw_is_refused_honestly(engine, tmp_path):
     assert engine.wait_for("ready")["pid"] == engine.proc.pid
 
 
+def test_set_device_auto_resolves_to_the_device_torch_actually_has(engine):
+    """出厂默认（M8）："auto" 必须落到 torch 真认的那一块卡上。
+
+    上一版宿主把默认写成了 cpu，而装机件里没人会设 LRT_DEVICE：那一台有 rocm 版
+    torch 与卡的机器上，整条 GPU 管线被绕开而报表上一个错也不报（裸环境那一轮才抓出：
+    帧率 53、device=cpu）。设不了 GPU 的机器也不报错——它拿到的就是 cpu，而且
+    device_set 里那个 cuda 说的是实话。
+    """
+    torch = pytest.importorskip("torch")
+    want = "cuda" if torch.cuda.is_available() else "cpu"
+    engine.send(cmd="set_device", device="auto")
+    ev = engine.wait_for("device_set", timeout=20)
+    assert ev["device"] == want, ev
+    assert ev["cuda"] is (want == "cuda"), ev
+    # 空串与不传也走同一句：宿主以后少发一个字也不该静默掉回 cpu
+    engine.send(cmd="set_device", device="")
+    assert engine.wait_for("device_set", timeout=20)["device"] == want
+    # 把设备摆回 cpu：这一条可能跑在共享同一个引擎进程的会话里，留个 cuda 给后面
+    # 那些"默认就是 cpu"的用例当暗坑不合适
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set", timeout=20)
+
+
 @pytest.mark.skipif(not os.path.isfile(FIXTURE),
                     reason="缺测试人像，先跑 packaging/make-test-portrait.py")
 def test_set_device_migrates_resident_session(engine):

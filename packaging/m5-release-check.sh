@@ -8,6 +8,12 @@
 #   · "开箱即用"是三件事的合取：包内容对、壳找得到运行时、运行时真能出画面。
 #     任何一件只在装机 + 真窗口里才成立，另两件都能在别处验。
 #
+# M8 起这一轮把 M6/M7 也接进来跑（换底六臂 + 2× 出片），理由不是凑数：装机件里
+# "ready 报没报 matting_backends / upscale_backends"与"换底、放大递到落盘那一路对不对"
+# 只有裸环境的真窗口能量；开发 env 里跑绿了，说明不了这包在别人机器上一样绿。
+# 帧通路也因此是在**挂着换底层**的状态下量的（链尾多一层常驻合成），比关掉再测好看
+# 一点更贴近用户现场。
+#
 # 跑法（顺序即依赖）：
 #   packaging/build-deb.sh → packaging/install-deb.sh → packaging/setup-runtime.sh
 #   → packaging/m5-release-check.sh
@@ -21,6 +27,9 @@ ver=$(cat "$here/VERSION")
 log=/tmp/m5-release-check.$$.log
 fixture=${LRT_CHECK_IMAGE:-$repo/engine/tests/fixtures/portrait-1024x1280.jpg}
 want_prefix="/LumaRetouch/engine/venv/bin/python"
+# 出片臂的落盘目录：每轮清干净，校验时拿磁盘上的 IHDR 与引擎报回的尺寸对账
+outdir=/tmp/lrt-release-export.$$
+want_secs=900                      # 这轮要多跑换底与 2× 出片，预算从 200 s 提到 450 s
 
 pass=0; fail=0
 ok()   { echo "  ✓ $1"; pass=$((pass + 1)); }
@@ -85,6 +94,12 @@ if [ -x "$rt" ] && PYTHONPATH=/usr/lib/LumaRetouch/engine/src "$rt" -c \
 else
   no "运行时 import 引擎链条失败：装机件拿它起不了引擎"
 fi
+# 这台机器上 torch 真正认的那一块卡——下面真窗口那一臂的设备判据就从这里来，
+# 而不是在校色脚本里刻一个 "cuda"。拿错的就是假绿：M8 第一轮抓出来的就是这个形状
+#（包里的 torch 是 rocm 版、卡也在，会话却建在 CPU 上，因为宿主把设备默认写死了）。
+want_dev=$(PYTHONPATH=/usr/lib/LumaRetouch/engine/src "$rt" -c \
+  "import torch; print('cuda' if torch.cuda.is_available() else 'cpu')" 2>/dev/null || echo cpu)
+ok "运行时里 torch 认的设备：$want_dev（会话就该建在这一块上）"
 
 echo "── 3. 裸环境真窗口：剔除所有 LRT_* 后启动装机壳"
 if [ ! -f "$fixture" ]; then
@@ -96,16 +111,18 @@ else
   # 免得某个 shell 把它设成了别处，验的就不是"候选表默认那一档"。
   pkill -f '/usr/bin/lumaretouch' 2>/dev/null || true
   sleep 1
+  rm -rf "$outdir"; mkdir -p "$outdir"
   env "${unset_args[@]}" -u XDG_DATA_HOME \
       DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-/run/user/$(id -u)/.mutter-Xwaylandauth.OJ5EX3}" \
       GDK_BACKEND=x11 HOME="$HOME" USER="$USER" PATH="$PATH" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
       LRT_LOAD_IMAGE="$fixture" LRT_MAX_PX=207360 \
       LRT_PRECOMPUTE=template LRT_PRECOMPUTE_CHANNEL=skin \
       LRT_AUTO_BENCH=672x848:240:16.6:image_stream LRT_AUTO_RELEASE=1 LRT_AUTO_HISTORY=0.85 \
+      LRT_AUTO_BG=ff0000:0.18:0.06 LRT_AUTO_EXPORT="$outdir@png@512@2@0.6" \
       /usr/bin/lumaretouch > "$log" 2>&1 &
   win=$!
   got=0
-  for _ in $(seq 1 400); do
+  for _ in $(seq 1 $((want_secs * 2))); do
     sleep 0.5
     # 等到 M0_RELEASE + 一个终局：M0_STATS（跑通了）或 M0_ERROR（引擎没起来/图没解）。
     # 只等 M0_STATS 的话，运行时缺包那一种会白等 200 s 然后报“没跑完”——而那种情形
@@ -118,13 +135,14 @@ else
   sleep 2
   kill $win 2>/dev/null; wait $win 2>/dev/null
   if [ "$got" != 1 ]; then
-    no "真窗口没跑完（$([ "$got" = 2 ] && echo '进程提前退出' || echo '300 s 内没等到 M0_RELEASE/M0_STATS')）；日志尾部："
+    no "真窗口没跑完（$([ "$got" = 2 ] && echo '进程提前退出' || echo "$want_secs s 内没等到 M0_RELEASE/M0_STATS")）；日志尾部："
     tail -12 "$log" | sed 's/^/      /'
   else
   ok "装机壳在裸环境里跑到了报账（日志：$log）"
-  python3 - "$log" "$ver" "$want_prefix" <<'PY'
-import json, re, sys
-log, want_ver, want_prefix = sys.argv[1], sys.argv[2], sys.argv[3]
+  python3 - "$log" "$ver" "$want_prefix" "$outdir" "$want_dev" <<'PY'
+import json, os, re, struct, sys
+log, want_ver, want_prefix, outdir, want_dev = (sys.argv[1], sys.argv[2], sys.argv[3],
+                                                sys.argv[4], sys.argv[5])
 raw = open(log, "rb").read().decode("utf-8", "replace")
 def last(tag):
     # report() 写的 JSON 冒号后没空格，而 Rust 回显时也不重排——按行尾取最后一条。
@@ -164,9 +182,104 @@ if stats:
     chk(stats["measured_fps"] >= 55, f"裸环境帧率 {stats['measured_fps']} ≥ 55（地板口径同 M5-a）")
 else:
     chk(False, "日志里没有 M0_STATS，帧数与帧率无法判定")
+
+# 能力上报的一致性（M8）：换底与放大两档后端清单得由引擎报进宿主。缺一项就是“装机件
+# 里 UI 在猜能力”——上一版换底面板把 birefnet 当无条件下拉项就是这个形状。
+# 裸环境里没权重（开头把所有 LRT_* 剔干净了），所以装机可用的抠图后端只该有 color_key。
+chk(caps.get("mattingCaps") == 1, "ready 的 matting_backends 到了宿主（换底下拉项的唯一出处）")
+chk(caps.get("mattingBaseline") == 1,
+    f"裸环境里装机即用的抠图后端只该有 color_key：{caps.get('mattingBaseline')} 个")
+chk(caps.get("upscaleBackends") == 1, "ready 的 upscale_backends 到了宿主（倍率与后端名单的出处）")
+
+# 换底（M6）在裸环境里的六臂。每一臂都只判"错了就不能叫开箱即用"的那一句：
+#   主臂——底色落到角像素；关层臂——逐字节回出厂帧；诚实拒臂——无权重 birefnet 被整条拒
+#   且画面不动；重导臂——引擎清 _bg 时宿主也跟着清；重建后重开臂——第二次 set 还得成；
+#   存活臂——挂着这一层跑完帧通路后它还在。上面任何一臂读不到就是不过，不“跳过”。
+TOLQ = 3
+def near(a, want):
+    return bool(a) and len(a) == 3 and all(abs(x - w) <= TOLQ for x, w in zip(a, want))
+bgm = last("M0_BG")
+chk(bgm is not None and "bad" not in (bgm or {}), f"换底主臂跑成了：{bgm and bgm.get('bad')}")
+if bgm and "bad" not in bgm:
+    chk(bgm.get("backend") == "color_key", f"主臂后端 {bgm.get('backend')!r} 应为 color_key")
+    chk(bgm.get("device") == want_dev,
+        f"裸环境里会话建在 torch 认的那一块上：device={bgm.get('device')!r} 应为 {want_dev!r}")
+    chk(isinstance(bgm.get("frameChanged"), int) and bgm["frameChanged"] > 0,
+        f"底色进了用户看见的那一帧：frameChanged={bgm.get('frameChanged')}")
+    chk(near(bgm.get("cornerAfter"), bgm.get("wantBg") or []),
+        f"角像素落到底色 {bgm.get('wantBg')}：实得 {bgm.get('cornerAfter')}")
+    chk(isinstance(bgm.get("fill"), float) and 0.02 < bgm["fill"] < 0.95,
+        f"遮罩真分离了主体与背景：fill={bgm.get('fill')}")
+clr = last("M0_BG_CLEAR")
+chk(clr is not None and clr.get("frameRestoredDiff") == 0,
+    f"关掉整层逐字节回出厂帧：restoredDiff={clr and clr.get('frameRestoredDiff')}")
+rej = last("M0_BG_REJECT")
+chk(rej is not None and rej.get("sawError") is True, "无权重 birefnet 在宿主日志里留下了诚实的拒绝")
+if rej:
+    chk(rej.get("frameMoved") == 0, f"被拒的一层不该动画面：frameMoved={rej.get('frameMoved')}")
+    chk(rej.get("engineAlive") is True, "一次拒绝不能把引擎搞死：engine_alive")
+    chk(rej.get("bgStillActive") is not True, "不得静默降级成色键：bgStillActive")
+rlg = last("M0_BG_RELOAD")
+chk(rlg is not None and rlg.get("hostBgCleared") is True,
+    f"重导后宿主不报陈换底层：hostBgCleared={rlg and rlg.get('hostBgCleared')}")
+if rlg:
+    chk(rlg.get("engineBgActive") is not True, "引擎换图没清 _bg 就是旧遮罩静默带到新图上")
+    chk(rlg.get("frameIsHome") == 0, f"重导同一张图逐字节等于出厂帧：frameIsHome={rlg.get('frameIsHome')}")
+    chk(rlg.get("proxySame") is True, f"重导后代理档不得漂移：proxy={rlg.get('proxy')}")
+rpa = last("M0_BG_REAPPLY")
+chk(rpa is not None and rpa.get("active") is True, f"会话重建后重新开底还得成：{rpa and rpa.get('bad')}")
+lve = last("M0_BG_LIVE")
+chk(lve is not None and lve.get("active") is True and (lve.get("bytesBg") or 0) > 0,
+    f"挂着换底层跑完帧通路后层还在：{lve and {'active': lve.get('active'), 'bytesBg': lve.get('bytesBg')}}")
+
+# 放大（M7）在裸环境里要证的不是"图变大了"，而是三处对得上：请求的倍率、引擎报回的
+# 倍率、**磁盘上那张的 IHDR**。最后一项是“导出的是满幅不是代理档”与“2× 真落盘”的唯一
+# 直接证据——它不拿引擎自己的报数当唯一证人。
+exp = last("M0_EXPORT")
+if exp is None:
+    chk(False, "日志里没有 M0_EXPORT —— 裸环境里 2× 出片那一臂没跑")
+else:
+    chk(exp.get("wantScale") == 2 and exp.get("gotScale") == 2,
+        f"请求 2× 与引擎报回 2× 对得上：want={exp.get('wantScale')} got={exp.get('gotScale')}")
+    chk(exp.get("backend") in ("lanczos3", "lanczos3_tiled"),
+        f"放大后端由引擎具名报回：{exp.get('backend')!r}")
+    chk(exp.get("failed") == 0, f"一批里没失败的图：failed={exp.get('failed')}/{exp.get('total')}")
+    rats = exp.get("ratios") or []
+    chk(bool(rats) and all(abs(r - 2.0) <= 0.001 for r in rats), f"每张的落盘/源比率都是 2：{rats}")
+    chk(all(isinstance(v, (int, float)) and v > 0 for v in (exp.get("upscaleMs") or [0])),
+        f"放大那一段有真计时：{exp.get('upscaleMs')}")
+    chk(all(isinstance(v, (int, float)) and v > 0 for v in (exp.get("sharpenMs") or [0])),
+        f"锐化排在放大后且有真计时：{exp.get('sharpenMs')}")
+    files = [f for f in os.listdir(outdir) if f.lower().endswith(".png")] if os.path.isdir(outdir) else []
+    chk(len(files) == 1, f"出片目录里应当只有一张（{outdir}）：{files}")
+    # 逐图数据在 M0_EXPORT 里是平行的数组（full/srcs/ratios），不是一个对象数组：
+    # 拿 exp["images"] 去取得个 None，然后磁盘对账整段默默跳过——那一臂看上去绿了，
+    # 其实一个字没验（本仓最不能容的那种假绿）。
+    fulls, srcs = exp.get("full") or [], exp.get("srcs") or []
+    if not (files and fulls and srcs):
+        chk(False, f"磁盘对账材料不齐：files={files} full={fulls} srcs={srcs}")
+    else:
+        ow, oh = (int(v) for v in str(fulls[0]).split("x"))
+        sw, sh = (int(v) for v in str(srcs[0]).split("x"))
+        with open(os.path.join(outdir, files[0]), "rb") as f:
+            head = f.read(24)
+        if head[:8] == b"\x89PNG\r\n\x1a\n":
+            dw, dh = struct.unpack(">II", head[16:24])
+            chk((dw, dh) == (ow, oh),
+                f"磁盘尺寸 ({dw},{dh}) 与引擎报回 ({ow},{oh}) 一致")
+            chk(dw == sw * 2 and dh == sh * 2,
+                f"磁盘尺寸是真 2×：{sw}x{sh} → {dw}x{dh}")
+            # “导出的是满幅不是代理档”的直接证据：落盘宽不等于屏上那个代理宽。
+            # 代理尺寸从 M0_EXPORT.proxy（"400x504"）里拆，不是拿引擎报的另一个数当证人。
+            pw = int(str(exp.get("proxy")).split("x")[0] or 0) if exp.get("proxy") else 0
+            chk(pw > 0 and dw != pw, f"导出的不是代理档（代理宽 {pw}，落盘宽 {dw}）")
+        else:
+            chk(False, f"磁盘上那张读不到 PNG 签名：{files[0]}")
 sys.exit(1 if fails else 0)
 PY
   if [ $? -ne 0 ]; then fail=$((fail + 1)); else pass=$((pass + 1)); fi
+  # 换底与 2× 出片的逐臂读数都在上面那段里判了；目录每轮重建，不留到下一轮
+  rm -rf "$outdir"
   # 撤销/重做也必须在裸环境里绕回来（M5-b 的装机证据是另一轮专门跑的）
   if grep -aq 'M0_HISTORY' "$log"; then
     echo "  · 附带：LRT_AUTO_HISTORY 也在这轮跑了（细节见 $log）"
