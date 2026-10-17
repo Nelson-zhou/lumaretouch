@@ -103,6 +103,9 @@ pub struct AppState {
     /// 最近一次 deform_done（M2-b 五官微调）。与修容分开存的理由与上面同一条：
     /// 它报的是形变段与常驻字节，与 db 的账不是一个量。
     deform: Mutex<Option<Value>>,
+    /// 最近一次 lut_done（M3-a2 影楼色彩）。与形变分开存：调色是逐点输出变换，
+    /// 它不依赖关键点也不依赖笔迹，生命期也只随文档走（换图即清）。
+    lut: Mutex<Option<Value>>,
 }
 
 /// 用 `Arc` 起步才能传给引擎读线程；因此额外管理一个持有 Arc 的启动器。
@@ -129,6 +132,7 @@ impl AppState {
             inpaint: Mutex::new(None),
             light: Mutex::new(None),
             deform: Mutex::new(None),
+            lut: Mutex::new(None),
         }
     }
 
@@ -183,6 +187,10 @@ impl AppState {
 
     pub fn on_deform_ready(&self, v: &Value) {
         *self.deform.lock().unwrap() = Some(v.clone());
+    }
+
+    pub fn on_lut_ready(&self, v: &Value) {
+        *self.lut.lock().unwrap() = Some(v.clone());
     }
 
     pub fn on_frame_event(&self) {
@@ -254,6 +262,7 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     *st.image.lock().unwrap() = None;
     *st.precompute.lock().unwrap() = None;
     *st.deform.lock().unwrap() = None;      // 形变层随关键点走，新进程里没有关键点
+    *st.lut.lock().unwrap() = None;          // 调色层也随文档走，新进程里一张表也没挂
     *st.engine.lock().map_err(|_| "引擎锁中毒".to_string())? = Some(Arc::new(h));
     Ok(json!({"pid": pid, "python": py, "src": src, "session": session}))
 }
@@ -327,6 +336,8 @@ fn load_image(
     *state.inpaint.lock().unwrap() = None;
     *state.light.lock().unwrap() = None;
     *state.deform.lock().unwrap() = None;
+    // 调色层也是：上一张照片的色调不能静默带到这一张上（引擎侧 load_image 已把它清了）
+    *state.lut.lock().unwrap() = None;
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
 }
@@ -457,6 +468,38 @@ fn deform(
     // 生产默认值一改这条通路就会静默漂开。
     if let Some(v) = amounts {
         cmd["amounts"] = v;
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 影楼色彩（M3-a2）：把一张 .cube 或混合系数送进引擎。action: set / amount / clear。
+///
+/// 与 deform 同为“参数层”（不是逐笔图层），但发送时机相反：强度只在松手时发。
+/// 引擎侧只把表乘一个新系数重画一帧（不重传体积），逐事件发只会吞掉 vsync 余量。
+#[tauri::command]
+fn lut(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    path: Option<String>,
+    text: Option<String>,
+    preset: Option<String>,
+    amount: Option<f64>,
+) -> Result<Value, String> {
+    let mut cmd = json!({"cmd": "lut", "action": action});
+    // 一律“给了才附”（与 light/deform 同规）：宿主写默认值就是替引擎做决定，
+    // 生产默认值一改这条通路就会静默漂开。
+    if let Some(v) = path {
+        cmd["path"] = json!(v);
+    }
+    if let Some(v) = text {
+        cmd["text"] = json!(v);
+    }
+    if let Some(v) = preset {
+        cmd["preset"] = json!(v);
+    }
+    if let Some(v) = amount {
+        cmd["amount"] = json!(v);
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
@@ -686,9 +729,10 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let inpaint = state.inpaint.lock().unwrap().clone();
     let light = state.light.lock().unwrap().clone();
     let deform = state.deform.lock().unwrap().clone();
+    let lut = state.lut.lock().unwrap().clone();
     json!({"shm": shm_name, "has_shm": has_shm, "emitted": emitted,
            "delivered": delivered, "logs": logs, "image": image, "precompute": precompute,
-           "inpaint": inpaint, "light": light, "deform": deform})
+           "inpaint": inpaint, "light": light, "deform": deform, "lut": lut})
 }
 
 #[tauri::command]
@@ -701,6 +745,7 @@ fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     *state.inpaint.lock().unwrap() = None;
     *state.light.lock().unwrap() = None;
     *state.deform.lock().unwrap() = None;
+    *state.lut.lock().unwrap() = None;
     match h {
         Some(h) => {
             h.shutdown();
@@ -741,6 +786,9 @@ fn m0_env() -> Value {
         // 跟自动消除笔同一条链：只有真窗口能证明“TS → Rust → 引擎”这条命令签名对得上。
         "auto_light": std::env::var("LRT_AUTO_LIGHT").unwrap_or_default(),
         "auto_deform": std::env::var("LRT_AUTO_DEFORM").unwrap_or_default(),
+        // M3-a2 调色自动通道："amount@<路径>"。与上面几条同一条理由：只有真窗口
+        // 能证明 runLut → Rust lut → 引擎 lut_done 这条命令签名对得上。
+        "auto_lut": std::env::var("LRT_AUTO_LUT").unwrap_or_default(),
     })
 }
 
@@ -763,7 +811,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_engine, bench_start, pull_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, precompute,
-            inpaint, light, deform, report, quit
+            inpaint, light, deform, lut, report, quit
         ])
         .run(tauri::generate_context!())
         .expect("运行 LumaRetouch 失败");

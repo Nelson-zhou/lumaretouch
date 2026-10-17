@@ -77,4 +77,23 @@ export const en: Partial<Record<MsgKey, string>> = {
   "retouch.deformBuildValue": "{ms} ms (one-off) · peak shift {px} px",
   "retouch.deformResident": "Deform resident",
   "retouch.mib": "{v} MiB",
+
+  // M3 studio color: one .cube + one mix coefficient (built-in presets & skin HSL are M3-b)
+  "side.color": "Studio Color",
+  "color.cubePath": "3D LUT path (.cube)",
+  "color.load": "Load table",
+  "color.clear": "Clear grade",
+  "color.amount": "Grade strength ({v})",
+  "color.commitHint": "Strength commits on release: the table is not re-uploaded, but every command redraws one frame",
+  "color.layer": "Color layer",
+  "color.on": "active",
+  "color.off": "inactive",
+  "color.table": "Table",
+  "color.tableValue": "{size}³ · {source}",
+  "color.neutral": "Identity table: loaded, and by definition it changes nothing",
+  "color.clipped": "Table values clamped",
+  "color.notes": "Table notes",
+  "color.ms": "Grade cost",
+  "color.msValue": "{lut} ms · upload {mount} ms · total {total} ms",
+  "color.resident": "Grade resident memory",
 };

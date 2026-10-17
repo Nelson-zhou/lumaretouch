@@ -178,6 +178,49 @@ export interface DeformInfo {
   strength: number;
 }
 
+/** 一次调色事件的回报（引擎侧 lut_done，M3-a2）。set/amount/clear 三条臂键集完全相同：
+ * 引擎侧只有一个组装点，前端也可以直接按必存字段读。 */
+export interface LutInfo {
+  action: "set" | "amount" | "clear";
+  /** 有没有挂上一张表。恒等表也是 true：“载入了一张表”与“生效了”是两件事 */
+  lut_set: boolean;
+  /** 这层现在到底有没有生效：恒等表或强度 0 就是 false */
+  lut_lit: boolean;
+  lut_kind: string | null;
+  lut_size: number;
+  lut_title: string;
+  /** 这张表从哪来（文件名 / "text" / "preset:xxx"）。两张同名表时它是唯一的区分 */
+  lut_source: string;
+  /** 表是恒等的（且域为 0–1）：短路回去，一个字节也不改 */
+  lut_neutral: boolean;
+  /** 超出 [0,1] 被夹到端点的表值个数（静默吞掉一个参数比拒绝难查十倍） */
+  lut_clipped: number;
+  /** 库层对这张表的意见（粗表精度不足等），协议层不许把它吞掉 */
+  lut_notes: string[];
+  lut_domain_min: number[];
+  lut_domain_max: number[];
+  /** 混合系数 [0,1]：0 就是逐字节回到未调色那一帧 */
+  lut_amount: number;
+  /** 本帧跑 3D 查表的毫秒（产品档实测 0.35 ms） */
+  lut_ms: number;
+  /** 一次性上显存的成本：只有 set 那一条不为 0 */
+  lut_mount_ms: number;
+  /** 体积 + CPU 原件的常驻字节（只报一份就是藏账） */
+  bytes_lut: number;
+  lut_grid_bytes: number;
+  filter_ms: number;
+  bands_ms: number;
+  /** 补的那一帧仍命中磨皮缓存：调色在链尾，它不该作废任何上游缓存 */
+  filter_cached: boolean;
+  deform_ms: number;
+  render_ms: number;
+  total_ms: number;
+  /** 本条事件是否真的重挂了体积（只有 set 是 true） */
+  layer_recomputed: boolean;
+  device: string;
+  strength: number;
+}
+
 export interface EngineStatus {
   shm: string;
   has_shm: boolean;
@@ -194,6 +237,8 @@ export interface EngineStatus {
   light: LightInfo | null;
   /** 最近一次 deform_done（M2-b）；换图/换引擎进程会清空（关键点不在，层也不在）。 */
   deform: DeformInfo | null;
+  /** 最近一次 lut_done（M3-a2）；换图会清空（调色层随文档走，不随引擎进程走）。 */
+  lut: LutInfo | null;
 }
 
 export interface BenchOptions {
@@ -319,6 +364,24 @@ export const runLight = (
 export const runDeform = (action: DeformInfo["action"], amounts?: Record<string, number>) =>
   invoke<{ requested: boolean }>("deform", { action, amounts });
 
+/** 影楼色彩（M3-a2）：送一张 .cube，或只改混合系数。
+ *
+ * path 与 text 二选一（同时给会被引擎整条拒：拿到哪张都是“对的那张的错版本”）。
+ * 强度滑块松手才发：它不重挂体积，但每条命令都要引擎重画一帧，逐事件发会吞掉
+ * vsync 余量（与修容强度同一条理由）。而形变那一条相反：它必须拖动期间逐事件发。
+ */
+export const runLut = (
+  action: LutInfo["action"],
+  opts?: { path?: string; text?: string; preset?: string; amount?: number },
+) =>
+  invoke<{ requested: boolean }>("lut", {
+    action,
+    path: opts?.path,
+    text: opts?.text,
+    preset: opts?.preset,
+    amount: opts?.amount,
+  });
+
 /** 帧头解析（小端，与 main.rs 的 pull_frame 注释逐字段对应）。 */
 export interface ParsedFrame {
   seq: number;
@@ -391,6 +454,10 @@ export interface M0Env {
   /** 非空则导入后提交一次形变（M2-b）："slim:eye:chin"，三个都是 [-1,1] 的滑块值。
    *  需要 LRT_PRECOMPUTE 给出关键点（synthetic 后端会被引擎整条拒）。 */
   auto_deform: string;
+  /** 非空则导入后载入一张表（M3-a2）："amount@<路径>"，也支持 "amount@preset:<名>"
+   *  （预设属于 M3-b，现在送过去会被引擎明拒）。路径里出现 @ 不冲突：只按**第一个**
+   *  @ 切分，因为前半段是个数字。 */
+  auto_lut: string;
 }
 export const m0Env = () => invoke<M0Env>("m0_env");
 export const report = (line: string) => invoke("report", { line });

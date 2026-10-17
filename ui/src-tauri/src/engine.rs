@@ -152,6 +152,12 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             state.on_deform_ready(&v);
             println!("M0_ENGINE {line}");
         }
+        "lut_done" => {
+            // M3-a2 影楼色彩：set/amount/clear 一条。与 deform 分开存：它报的是调色段
+            // 与表的常驻字节，与形变的账不是一个量（串台就是报表上看不出谁花的钱）
+            state.on_lut_ready(&v);
+            println!("M0_ENGINE {line}");
+        }
         "bench_done" => {
             state.on_bench_done();
             println!("M0_ENGINE {line}");

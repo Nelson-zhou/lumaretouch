@@ -39,10 +39,33 @@ MAX_SIZE_3D = 64                        # 64³×3×4 B = 512 KB，再大收益�
 QUALITY_SIZE_3D = 33                    # 低于它最大偏差进 10 LSB 量级（17³ 实测 12 LSB）
 NEUTRAL_TOL = 1e-6                      # 恒等判定：与 identity 表的最大差
 MAX_TEXT_BYTES = 32 * 1024 * 1024       # 64³ 文本约 3 MiB；再大的文件先怀疑是错文件
+# 调色强度的混合系数。上下界取 [0,1] 而不是允许负值（反向调色）：负方向在 LUT 语义里
+# 没有定义——它不是“把表反着走”，而是把输出往原点的镜像上推，出来的色彩没人能预期。
+AMOUNT_MIN = 0.0
+AMOUNT_MAX = 1.0
+DEFAULT_LUT_AMOUNT = 1.0
 
 
 class LutError(ValueError):
     """解析或应用被拒。整条拒绝，不留半截 LUT。"""
+
+
+def check_amount(value) -> float:
+    """调色强度的唯一校验口径：协议层与常驻层共用，不各写一份区间。
+
+    为什么要一个函数而不是调用方各自 `float(v)`：M1-3c/M2-b 两次都是同一个形状——
+    命令层校验、库层不校验，于是直调库层的通路（跑靶、换设备重放）能把 NaN 写进状态，
+    而 NaN 参与混合会把整帧打成非有限值。NaN 比大小恒为 False，只有这里能拦住它。
+    """
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        raise LutError(f"调色强度非法：{value!r}（需 {AMOUNT_MIN}–{AMOUNT_MAX} 的有限数）") from None
+    if not math.isfinite(v):
+        raise LutError(f"调色强度不是有限数：{value!r}")
+    if not AMOUNT_MIN <= v <= AMOUNT_MAX:
+        raise LutError(f"调色强度 {v} 超出范围 [{AMOUNT_MIN}, {AMOUNT_MAX}]")
+    return v
 
 
 @dataclass(frozen=True)
@@ -61,6 +84,10 @@ class CubeLut:
     clipped: int = 0
     neutral: bool = False
     notes: tuple = field(default_factory=tuple)
+    # 这张表从哪来（文件名 / "text" / "preset:xxx"）。上报里必须能说出话来：用户载入两个
+    # 同名 33³ 的表时，只有 source 能区分事件里报的是哪一张——而它正是“载入成功但画面
+    # 没动”那类问题的第一现场证据。
+    source: str = ""
 
     def nbytes(self) -> int:
         return int(self.grid.nbytes)
@@ -193,7 +220,7 @@ def parse_cube(text: str, *, source: str = "<text>") -> CubeLut:
         notes.append(f"{clipped} 个表值超出 [0,1]，已夹到端点（轻微过冲常见，不静默吞掉）")
     return CubeLut(kind=kind, size=size, grid=grid, title=title,
                    domain_min=dmin, domain_max=dmax, clipped=clipped,
-                   neutral=neutral, notes=tuple(notes))
+                   neutral=neutral, notes=tuple(notes), source=source)
 
 
 def load_cube_file(path: str) -> CubeLut:
@@ -209,7 +236,8 @@ def load_cube_file(path: str) -> CubeLut:
 
 
 # ------------------------------------------------------------------ 烘焙（预设用）
-def bake(fn, size: int = QUALITY_SIZE_3D, *, title: str = "") -> CubeLut:
+def bake(fn, size: int = QUALITY_SIZE_3D, *, title: str = "",
+         source: str = "bake") -> CubeLut:
     """把一个解析可算的调色函数烘焙成 LUT。预设走这条路，与用户 .cube 同一条应用路径。
 
     fn 收 (…,3) 的 float64 通道值、返回同形状 —— 于是"跑靶比真值"这条判据在这里
@@ -230,7 +258,7 @@ def bake(fn, size: int = QUALITY_SIZE_3D, *, title: str = "") -> CubeLut:
         notes.append(f"烘焙尺寸 {size}³ 低于 {QUALITY_SIZE_3D}³，精度按粗表对待")
     return CubeLut(kind="3d", size=size, grid=grid, title=title, clipped=clipped,
                    neutral=bool(np.abs(grid - _identity_grid(size)).max() <= NEUTRAL_TOL),
-                   notes=tuple(notes))
+                   notes=tuple(notes), source=source)
 
 
 # ------------------------------------------------------------------ 应用

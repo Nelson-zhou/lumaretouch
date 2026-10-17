@@ -4,9 +4,10 @@ import Viewer, { type Hud } from "./components/Viewer";
 import { clickRle } from "./brush";
 import { t } from "./i18n";
 import {
-  benchStart, benchStats, engineStatus, loadImage, m0Env, quit, report, runDeform, runInpaint, runLight, setStrength,
+  benchStart, benchStats, engineStatus, loadImage, m0Env, quit, report, runDeform, runInpaint, runLight, runLut, setStrength,
   shutdownEngine, startEngine,
   type BenchOptions, type DeformInfo, type EngineStatus, type ImageReady, type InpaintInfo, type LightInfo,
+  type LutInfo,
   type Precompute, type Stats,
 } from "./native";
 
@@ -104,6 +105,11 @@ export default function App() {
   const deformFlight = useRef(false);
   const deformQueued = useRef<Record<string, number> | null>(null);
   const [lastInpaint, setLastInpaint] = useState<InpaintInfo | null>(null);
+  // 影楼色彩（M3-a2）：一张 .cube + 一个混合系数。它不逐事件发（与形变不同）：
+  // 引擎每帧真跑一次 3D 查表，但每条命令都要重画一帧，拖快了就堆在 stdin 上。
+  const [lutPath, setLutPath] = useState("");
+  const [lutAmount, setLutAmount] = useState(1);
+  const [lastLut, setLastLut] = useState<LutInfo | null>(null);
   const [dragNote, setDragNote] = useState("");
   const lastSend = useRef(0);
   const pending = useRef<number | null>(null);
@@ -131,6 +137,8 @@ export default function App() {
           setDeformNote("");
         }
       }
+      // 调色层也是事件驱动的一次回报（载入/改强度/清除各一条），轮询不能错过
+      if (st.lut) setLastLut(st.lut);
     } catch {
       /* 引擎未起，忽略 */
     }
@@ -353,6 +361,44 @@ export default function App() {
             merged: got.build ? Object.fromEntries(Object.entries(got.build.kinds).map(
               ([k, v]) => [k, v.merged])) : null,
           } : { bad: "12s 内没等到 deform_done（没 precompute 或后端被拒）", amounts })}`);
+        }
+      }
+      // 调色自动通道（$LRT_AUTO_LUT="amount@/tmp/x.cube"）：与形变同一条理由，只有
+      // 真窗口能证明 runLut → Rust lut → 引擎 lut_done 这条命令签名对得上。
+      // 只按**第一个** @ 切分：前半段是个数字，不可能含 @，而路径里什么都可能。
+      if (env.auto_lut) {
+        const at = env.auto_lut.indexOf("@");
+        const amt = Number(at >= 0 ? env.auto_lut.slice(0, at) : "1");
+        const src = (at >= 0 ? env.auto_lut.slice(at + 1) : env.auto_lut).trim();
+        if (!Number.isFinite(amt) || !src) {
+          await report(`M0_ERROR 无法解析 LRT_AUTO_LUT=${env.auto_lut}（要 amount@<路径>）`);
+        } else {
+          const preset = src.startsWith("preset:") ? src.slice(7) : "";
+          const opts = preset ? { preset, amount: amt } : { path: src, amount: amt };
+          const waitLut = async () => {
+            // 轮询预算 12 s：被引擎整条拒（文件不存在、表非法）时这一层永远等不到，
+            // 长时空轮询会冻住 UI 线程、污染 fps。
+            for (let i = 0; i < 120; i++) {
+              await sleep(100);
+              const st = await engineStatus().catch(() => null);
+              if (st?.lut && st.lut.action === "set" && st.lut.lut_amount === amt) return st.lut;
+            }
+            return null;
+          };
+          let got: LutInfo | null = null;
+          try {
+            await runLut("set", opts);
+            got = await waitLut();
+          } catch (e) {
+            await report(`M0_ERROR runLut 失败: ${e}`);
+          }
+          await report(`M0_LUT ${JSON.stringify(got ? {
+            source: got.lut_source, size: got.lut_size, amount: got.lut_amount,
+            lit: got.lut_lit, neutral: got.lut_neutral, clipped: got.lut_clipped,
+            notes: got.lut_notes, lutMs: got.lut_ms, mountMs: got.lut_mount_ms,
+            bytesLut: got.bytes_lut, filterCached: got.filter_cached, bandsMs: got.bands_ms,
+            renderMs: got.render_ms,
+          } : { bad: "12s 内没等到 lut_done（文件不存在或表被引擎拒绝）", opts })}`);
         }
       }
       for (let i = 0; i < 100; i++) {
@@ -578,6 +624,30 @@ export default function App() {
     setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0 });
   }
 
+  /** 载入一张 .cube（M3-a2）。M3-b 会加内置预设按钮，走同一条 runLut 与同一个事件。 */
+  function onLutLoad() {
+    const p = lutPath.trim();
+    if (!p) return;
+    runLut("set", { path: p, amount: lutAmount })
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)));
+  }
+
+  /** 清除调色层：引擎会回一条 lut_done(action=clear)，面板上那张表得跟着改成未生效 */
+  function onLutClear() {
+    runLut("clear")
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)));
+  }
+
+  /** 调色强度：松手才提交。引擎不重传体积，但每条命令都要重画一帧，
+   *  逐事件发会吞掉 vsync 余量（与修容强度同一条理由，与形变滑块相反）。 */
+  function onLutAmountCommit() {
+    runLut("amount", { amount: lutAmount })
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)));
+  }
+
   const verdict = gate(stats, w);
 
   return (
@@ -776,6 +846,62 @@ export default function App() {
               <tr>
                 <td>{t("retouch.deformResident")}</td>
                 <td>{t("retouch.mib", { v: (lastDeform.bytes_deform / 1048576).toFixed(2) })}</td>
+              </tr>
+            </tbody>
+          </table>
+        )}
+
+        <h2>{t("side.color")}</h2>
+        {/* 影楼色彩（M3-a2）：一张 .cube + 一个混合系数。引擎侧是逐点输出变换，
+            挂在磨皮/修容/形变之后，所以它不作废任何上游缓存（面板上能直接看到
+            filter_cached 仍为真）。内置预设（M3-b）会沿同一条 runLut 加进来。 */}
+        <label className="k">{t("color.cubePath")}</label>
+        <input value={lutPath} onChange={(e) => setLutPath(e.target.value)}
+               placeholder="/path/to/grade.cube" style={{ width: "100%" }} />
+        <div className="row">
+          <button className="primary" onClick={onLutLoad}
+                  disabled={!status?.image || !lutPath.trim()}>{t("color.load")}</button>
+          <button onClick={onLutClear} disabled={!lastLut?.lut_set}>{t("color.clear")}</button>
+        </div>
+        <label className="k">{t("color.amount", { v: lutAmount.toFixed(2) })}</label>
+        <input type="range" min={0} max={1} step={0.01} value={lutAmount}
+               onChange={(e) => setLutAmount(+e.target.value)}
+               onPointerUp={onLutAmountCommit} onKeyUp={onLutAmountCommit}
+               style={{ width: "100%" }} />
+        <div className="mut">{t("color.commitHint")}</div>
+        {lastLut && (
+          <table>
+            <tbody>
+              <tr>
+                <td>{t("color.layer")}</td>
+                <td>{lastLut.lut_lit ? t("color.on") : t("color.off")}
+                  {' · '}{lastLut.lut_amount.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <td>{t("color.table")}</td>
+                <td>{t("color.tableValue", {
+                  size: lastLut.lut_size, source: lastLut.lut_source || "-",
+                })}</td>
+              </tr>
+              {lastLut.lut_neutral && (
+                <tr><td colSpan={2}>{t("color.neutral")}</td></tr>
+              )}
+              {lastLut.lut_clipped > 0 && (
+                <tr><td>{t("color.clipped")}</td><td>{lastLut.lut_clipped}</td></tr>
+              )}
+              {lastLut.lut_notes.length > 0 && (
+                <tr><td>{t("color.notes")}</td><td>{lastLut.lut_notes.join(" · ")}</td></tr>
+              )}
+              <tr>
+                <td>{t("color.ms")}</td>
+                <td>{t("color.msValue", {
+                  lut: lastLut.lut_ms.toFixed(2), total: lastLut.total_ms.toFixed(2),
+                  mount: lastLut.lut_mount_ms.toFixed(2),
+                })}</td>
+              </tr>
+              <tr>
+                <td>{t("color.resident")}</td>
+                <td>{t("retouch.mib", { v: (lastLut.bytes_lut / 1048576).toFixed(2) })}</td>
               </tr>
             </tbody>
           </table>

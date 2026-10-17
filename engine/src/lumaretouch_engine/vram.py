@@ -31,6 +31,8 @@ from .ops.inpaint import crop_apply_t, hole_extent, inpaint_t, levels_for, mask_
 from .ops.deform import (KINDS, analytic_frontal_landmarks, check_amounts,
                          identity_grid, unit_field, warp_t)
 from .ops.light import dodge_burn_t, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
+from .ops.lut import (DEFAULT_LUT_AMOUNT, QUALITY_SIZE_3D, CubeLut, LutError,
+                      apply_lut_t, bake, check_amount)
 from .quant import quantize_t
 
 # 磨皮参数默认值只有一个出处：ops.guided（探针量出来的），这里只转发不改数。
@@ -168,6 +170,16 @@ class PreviewPipeline:
         # 每帧的 deform ms 无论如何都 > 0（grid_sample 真在跑），拿它当“有没有重算”
         # 的判据会恒真。计数器只能由解算那一层递增，伪代码伪不出一个不增的数。
         self.deform_builds: int = 0
+        # M3-a2：调色层。存的是**表本身（CPU 原件 float64）+ 一次上显存的体积**，
+        # 每帧只做一次 grid_sample(3d)（产品档实测 0.35 ms）。
+        # 它与形变/修容的根本差别：一张 LUT 与像素位置无关，所以它
+        # ① 不进滤波缓存键（设完 LUT 拖磨皮滑块仍然零重算），
+        # ② 不随底图作废（换图是文档级的事，由命令层清），
+        # ③ 只随会话的**设备**重挂——体积张量活在那块卡上，不跟着会话走就是读别的设备的显存。
+        self.lut: CubeLut | None = None
+        self.lut_vol = None                 # (1,3,D,H,W) float32，常驻；恒等表不挂
+        self.lut_amount: float = DEFAULT_LUT_AMOUNT
+        self.last_lut_ms: float = 0.0
 
     # ---- 装载：一次性 H2D ----------------------------------------------
     def load_rgb_u8(self, rgb: np.ndarray) -> None:
@@ -323,7 +335,10 @@ class PreviewPipeline:
             else (1.0 - strength) * base + strength * result
         # M2-b：形变盖在最后。为什么不盖在底图上：那样拖任意一个滑块都要把 9 ms 的
         # 分带重跑（底图变了），零推理那条承诺就碎了。盖在最后每帧只多一次 grid_sample。
-        return self.apply_deform(out)
+        # M3-a2：调色再盖在形变之后。它是逐点的“输出变换”，与像素位置无关，所以
+        # 放在链尾既不参与任何缓存键，也不会被后面的重采样抹调（反过来把调色放在
+        # 形变前，grid_sample 会对已调色的值做插值——插值与调色不交换，色彩过渡会多吃一份）。
+        return self.apply_lut(self.apply_deform(out))
 
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:
@@ -853,6 +868,141 @@ class PreviewPipeline:
                 total += int(t.numel() * t.element_size())
         return total
 
+    # ---- M3-a2：调色层（盖在形变之后的 3D LUT 输出变换）----------------
+    def has_lut(self) -> bool:
+        """恒等表、没挂表、强度 0 都是“一个字节也改不了”。
+
+        与 has_light 同一条铁律：NaN 与 0.0 不相等，拿 `amount != 0.0` 当“生效”
+        会把一层算不出东西的表报成在生效，而现场要到渲染期才抛。这里当场判假。
+        """
+        if self.lut is None or self.lut.neutral or self.lut_vol is None:
+            return False
+        a = float(self.lut_amount)
+        return math.isfinite(a) and a != 0.0
+
+    def set_lut(self, cube, amount=None) -> dict:
+        """挂上一张表：先全量校验，全算完才一次性提交。
+
+        amount 不传就保留当前值（与 light add 带参数同形：“给了才改”，而不是静默忽略
+        也不是静默重置）。上显存只有一个可能失败的步骤（to_device），它就在提交点前：
+        抛了就是一个字段也不改，不会留下“上报写着新表、画面按旧表渲染”。
+        """
+        if torch is None:
+            raise RuntimeError("torch 未安装，调色层不可用（装 rocm/cuda/cpu 任一变体）")
+        if not isinstance(cube, CubeLut):
+            raise LutError(f"set_lut 需要一张 CubeLut，得到 {type(cube).__name__}："
+                           "先过 parse_cube / load_cube_file / bake")
+        if cube.kind != "3d":
+            raise LutError(f"本层只接三维表，得到 kind={cube.kind}")
+        a = check_amount(self.lut_amount if amount is None else amount)
+        t0 = time.perf_counter()
+        vol = None if cube.neutral else cube.to_device(self.device)
+        mount_ms = (time.perf_counter() - t0) * 1000.0
+        if vol is not None:
+            # 形状与字节必须与原件对得上：这是上报里 bytes_lut 唯一的出处。
+            # permute 后不 contiguous、或者路上换了 dtype，在这里就红，而不是到渲染期
+            # 让 grid_sample 拿一份维度对得上的错表去采。
+            want = (1, 3, cube.size, cube.size, cube.size)
+            got = tuple(vol.shape)
+            mb = int(vol.numel() * vol.element_size())
+            if got != want or vol.dtype != torch.float32 or mb * 2 != cube.nbytes():
+                raise RuntimeError(
+                    f"上显存后不是预期的体积：形状 {got}（需 {want}）、dtype {vol.dtype}"
+                    f"（需 float32）、字节 {mb}（需表原件 {cube.nbytes()} 的一半）")
+            if vol.device.type != self.device.type or (
+                    self.device.index is not None and vol.device.index != self.device.index):
+                # 不能用 `vol.device != self.device`：torch.device("cuda") 的 index 是 None，
+                # 而张量实际报 cuda:0，于是两个完全兼容的设备写法不相等——GPU 上挂任何表
+                # 都会报“跳设备”而当场挂掉（本轮单测在真卡上量到的）。
+                raise RuntimeError(f"体积落在 {vol.device}，会话在 {self.device}："
+                                   "跨设备张量会在下一帧读到不存在的显存")
+        # ---- 提交点：后面全是赋值 ----
+        self.lut = cube
+        self.lut_vol = vol
+        self.lut_amount = a
+        # 不丢任何缓存：调色在混合与形变之后，它改不了分带/成品/db/单位场里的任何字节。
+        # 这一句是“设完 LUT 拖磨皮滑块仍零重算”那条判据的根据，不是注释里的愿望。
+        return self._lut_payload(mount_ms=mount_ms, layer_recomputed=True)
+
+    def clear_lut(self) -> dict:
+        """放下整层：体积与 CPU 原件一起放。强度回默认 1.0。
+
+        强度不保留旧值：“清掉调色”与“挂一张新表但强度停在 0.2”合在一起，用户
+        会看到“预设点了没反应”；清层就是把这一层回到它的出厂状态。
+        """
+        self.lut = None
+        self.lut_vol = None
+        self.lut_amount = DEFAULT_LUT_AMOUNT
+        self.last_lut_ms = 0.0
+        return self._lut_payload(mount_ms=0.0, layer_recomputed=False)
+
+    def set_lut_amount(self, amount) -> dict:
+        """只改混合系数，不重挂体积。这是拖“调色强度”滑块唯一的入口。"""
+        if self.lut is None:
+            raise LutError("还没有 LUT：调色强度无处可施，先用 set_lut 挂一张表")
+        a = check_amount(amount)
+        self.lut_amount = a
+        return self._lut_payload(mount_ms=0.0, layer_recomputed=False)
+
+    def _lut_payload(self, *, mount_ms: float, layer_recomputed: bool) -> dict:
+        """lut_done 的图层字段只在这里组装一次（三条 action 臂共用一份形状）。
+
+        M2 审查第一条发现就是“事件形状在 JSON 边界上漂，而且总是漂向少字段那条”：
+        TS 把字段声明成必存，少一个键就是前端 TypeError 而编译期抓不到。所以这一层
+        不给任何臂“只带自己那几个字段”的机会；没发重算的臂 mount_ms 给 0.0 而不是缺键。
+        """
+        cube = self.lut
+        return {
+            "lut_set": cube is not None,
+            "lut_kind": (cube.kind if cube else None),
+            "lut_size": (cube.size if cube else 0),
+            "lut_title": (cube.title if cube else ""),
+            "lut_source": (cube.source if cube else ""),
+            "lut_neutral": bool(cube.neutral) if cube else False,
+            "lut_clipped": int(cube.clipped) if cube else 0,
+            "lut_notes": list(cube.notes) if cube else [],
+            "lut_domain_min": [float(v) for v in cube.domain_min] if cube else [],
+            "lut_domain_max": [float(v) for v in cube.domain_max] if cube else [],
+            "lut_amount": float(self.lut_amount),
+            "lut_lit": bool(self.has_lut()),
+            "lut_mount_ms": round(float(mount_ms), 2),
+            "bytes_lut": self.lut_resident_bytes(),
+            "lut_grid_bytes": int(cube.nbytes()) if cube else 0,
+            "device": str(self.device),
+            # 与 layer_recomputed（本层真的重挂过）分开：后者与每帧的 filter_cached
+            # 不同名就不怕字典后写吃掉先写（M2 审 ⑤ 的原话）
+            "layer_recomputed": bool(layer_recomputed),
+        }
+
+    def apply_lut(self, t):
+        """把当前调色层施加到一份常驻张量上。每帧只走这里，不走 H2D。
+
+        恒等表/强度 0 当场短路把原张量递回去（不复制、不跑算子）：“strength=0
+        逐字节等于解码原图”那条跨四个里程碑的验收口径，不能因为“挂了一张空表”就碎。
+        """
+        self.last_lut_ms = 0.0
+        if not self.has_lut():
+            return t
+        t0 = time.perf_counter()
+        graded = apply_lut_t(t, self.lut, vol=self.lut_vol)
+        a = float(self.lut_amount)
+        # a==1 不写 `(1-1)*t + 1*graded`：那在 IEEE 里对有限值是精确的，但白跑一次逐点
+        # 乘加（产品档 1–2 ms）。更重要的是短路后“全强度”与 M3-a1 探针量那条路完全同式。
+        out = graded if a == 1.0 else (1.0 - a) * t + a * graded
+        if not torch.isfinite(out).all():
+            raise ValueError(f"调色产出非有限值，已拒绝：lut={self.lut.source!r} "
+                             f"size={self.lut.size} amount={a}")
+        if self.device.type != "cpu":
+            torch.cuda.synchronize(self.device)
+        self.last_lut_ms = (time.perf_counter() - t0) * 1000.0
+        return out
+
+    def lut_resident_bytes(self) -> int:
+        """调色层账单：显存里的体积 + CPU 侧的表原件。两份都得算，不报就等于藏账。"""
+        gpu = 0 if self.lut_vol is None else int(self.lut_vol.numel() * self.lut_vol.element_size())
+        cpu = 0 if self.lut is None else int(self.lut.nbytes())
+        return gpu + cpu
+
     def pack(self, out) -> None:
         """float→uint8 并写进常驻帧缓冲，同样全程在显存里做。
 
@@ -908,6 +1058,16 @@ def make_pipeline(device: str, w: int, h: int, rgb: np.ndarray | None = None) ->
     return p
 
 
+def _warm_grade(x):
+    """预热用的“非恒等但温和”的调色：整体压暗 2% + 蓝通道微量抬升。
+
+    它必须**不是**恒等表：neutral 判定为真时 apply_lut 直接短路，grid_sample(3d)
+    一个内核也不会跑，那句“已预热 3D 内核”就又成了恒真断言（M2 审 ⑤ 那个形状）。
+    真预设是 M3-b 的事；预热只要走到同一个采样内核即可，不拿产品预设当靶。
+    """
+    return np.clip(x * 0.98 + np.array([0.0, 0.004, 0.010]), 0.0, 1.0)
+
+
 def warm_device(device: str, side: int = 64) -> float:
     """把 GPU 上下文与首帧内核加载的成本从“导入第一张图”里挑出来，返实测 ms。
 
@@ -926,6 +1086,11 @@ def warm_device(device: str, side: int = 64) -> float:
     M2-b 再把形变链纳进来：grid_sample 与恒等网格也是首拖才首次加载的内核。
     它用的关键点是 `analytic_frontal_landmarks` 那份解析几何（只为了把内核跑起来），
     不是产品路径——产品路径的形变必须拿 precompute 的真关键点。
+
+    M3-a2 再把调色链纳进来：grid_sample 的 **3D** 与形变用的 **2D** 不是同一个编译单元，
+    形变预热覆盖不到它——第一次载入 .cube 会白付一次内核加载（修容第一笔 68.6 ms 的
+    同一个坑）。用的表是 `_warm_grade` 烘出来的非恒等表：恒等表会被 neutral 短路，
+    那一句“已预热”就是假的。
     """
     if torch is None or not str(device).startswith("cuda") or not torch.cuda.is_available():
         return 0.0
@@ -944,6 +1109,11 @@ def warm_device(device: str, side: int = 64) -> float:
         # 否则用户第一次拖“瘦脸”滑块会白付一次内核加载（修容第一次落笔就是 65 ms 的前车）。
         pipe.build_deform(analytic_frontal_landmarks())
         pipe.set_deform_amounts({"slim_face": 0.5, "big_eye": 0.3, "small_chin": 0.2})
+        pipe.render(0.5)
+        # 调色臂：M3-a2。走的就是产品那一条路：bake → set_lut（上显存）→ render。
+        # 首次执行就是内核加载那一笔：把它付在预热会话里，而不是付在用户第一次载入 .cube 上；
+        # 之后的每帧就只剩实测那 0.35 ms 的真实成本。
+        pipe.set_lut(bake(_warm_grade, QUALITY_SIZE_3D, title="warm", source="warm"), 1.0)
         pipe.render(0.5)
         torch.cuda.synchronize()        # 与引擎 _sync 同一个理由：不同步就把内核记到回读头上
         pipe.read_back()
@@ -964,4 +1134,8 @@ def warm_device(device: str, side: int = 64) -> float:
         pipe.deform_units = {}
         pipe.deform_grid_base = None
         pipe.deform_meta = {}
+        # 调色层同理：那张预热用的临时表与它的体积不能让下一个真会话继承——
+        # 否则 image_ready 里 bytes_lut 会多报 428 KB，而用户一张预设也没点
+        pipe.lut = None
+        pipe.lut_vol = None
     return (time.perf_counter() - t0) * 1000.0

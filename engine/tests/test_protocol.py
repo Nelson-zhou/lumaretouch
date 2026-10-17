@@ -1602,3 +1602,219 @@ def test_synthetic_landmarks_invalidate_a_built_deform_layer(engine):
     # 失效之后一条 set 必须重新走建层判定，并再次整条拒（不能拿旧的模板场继续服务）
     engine.send(cmd="deform", action="set", amounts={"slim_face": 0.5})
     _expect_error(engine, "synthetic")
+
+
+# ============================================================ 调色（M3-a2）
+# 这一节只量接线：方向、字节、事件形状、拒绝路径。表本身的数学已在 test_lut.py 钉死，
+# 所以这里故意用“每通道乘一个常数”这种最素的表——方向判据要的是唯一答案。
+def _write_cube(tmp_path, size: int = 8, k: float = 0.9, identity: bool = False) -> str:
+    """烘一张「每通道乘 k」的 .cube 写进 tmp_path，返回路径（identity=True 就是恒等表）。"""
+    t = np.linspace(0.0, 1.0, size)
+    bb, gg, rr = np.meshgrid(t, t, t, indexing="ij")
+    rows = np.stack([rr, gg, bb], axis=-1)                       # (B,G,R,3)：B 最外层
+    out = rows if identity else np.clip(rows * k, 0.0, 1.0)
+    lines = [f"LUT_3D_SIZE {size}", f'TITLE "k{size}-{k}"']
+    lines += [f"{r:.6f} {g:.6f} {b:.6f}" for r, g, b in out.reshape(-1, 3)]
+    path = tmp_path / f"grade-{size}-{k}{'-id' if identity else ''}.cube"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return str(path)
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_lut_set_darkens_the_frame_in_the_direction_the_table_says(engine, tmp_path):
+    """协议层的 LUT 直通：压暗表必须让画面变暗，而且上报得说清是哪一张表。
+
+    不看字节看方向与幅度：接错通道、接反顺序、表根本没挂上——三种错都会让字节“变了”，
+    但只有方向与幅度能把它们区分开（与 M2-a2 修容那条同一个理由）。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        base = _read_frame(engine, peer, h, w)
+        engine.send(cmd="lut", action="set", path=_write_cube(tmp_path, 8, 0.9))
+        done = engine.wait_for("lut_done", timeout=60)
+        assert done["lut_set"] is True and done["lut_lit"] is True, done
+        assert done["lut_size"] == 8 and done["lut_source"].endswith(".cube"), done
+        assert done["lut_neutral"] is False and done["lut_amount"] == 1.0, done
+        assert done["bytes_lut"] > 0 and done["lut_ms"] >= 0.0, done
+        # 粗表得把精度不足说出来：这是库层的 notes，协议层不许把它吞掉
+        assert any("8³" in n for n in done["lut_notes"]), done["lut_notes"]
+        shot = _read_frame(engine, peer, h, w)
+        d = (shot - base).astype(np.float64)
+        assert float(d.mean()) < -1.0, f"压暗表却让画面均值为 {d.mean():+.2f} LSB：方向接反"
+        assert float((np.abs(d) > 0).mean()) > 0.5, "改色只动了不到半张图：链路没通"
+        assert float(np.abs(d).mean()) > 0.5, f"平均改动 {float(np.abs(d).mean()):.3f} LSB 太少"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_lut_identity_table_reports_loaded_but_leaves_every_byte(engine, tmp_path):
+    """恒等表：“载入了一张表”与“画面动了”必须在上报里分开说。
+
+    M3-a1 那个缺陷的形状是 DOMAIN 非 0–1 的表被当成恒等短路，于是“载入成功但一动不动”。
+    反过来说，真正的恒等表**应当**一动不动——区别只在事件有没有把这件事说清楚。
+    所以这里两条都卡：字节不动 + lut_neutral=True + lut_lit=False。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        base = _read_frame(engine, peer, h, w)
+        engine.send(cmd="lut", action="set", path=_write_cube(tmp_path, 17, 1.0, identity=True))
+        done = engine.wait_for("lut_done", timeout=60)
+        assert done["lut_set"] is True, done
+        assert done["lut_neutral"] is True and done["lut_lit"] is False, done
+        assert done["lut_ms"] == 0.0, f"恒等表走了非短路那条路：{done}"
+        # 体积不挂，但 CPU 原件常驻：账单只报一份就是藏账
+        assert done["lut_grid_bytes"] > 0 and done["bytes_lut"] == done["lut_grid_bytes"], done
+        assert np.array_equal(_read_frame(engine, peer, h, w), base), "恒等表改了画面"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_lut_amount_zero_is_byte_exact_over_ipc(engine, tmp_path):
+    """强度归零必须逐字节回到未调色那一帧，而且采样一次也不跑。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        base = _read_frame(engine, peer, h, w)
+        engine.send(cmd="lut", action="set", path=_write_cube(tmp_path, 8, 0.75), amount=0.6)
+        done = engine.wait_for("lut_done", timeout=60)
+        assert done["lut_amount"] == 0.6 and done["lut_lit"] is True, done
+        graded = _read_frame(engine, peer, h, w)
+        assert not np.array_equal(graded, base), "强度 0.6 却一点没动"
+        engine.send(cmd="lut", action="amount", amount=0.0)
+        zero = engine.wait_for("lut_done", timeout=60)
+        assert zero["lut_lit"] is False and zero["lut_ms"] == 0.0, zero
+        assert zero["lut_set"] is True and zero["lut_size"] == 8, \
+            f"强度归零把表也丢了：{zero}"
+        assert np.array_equal(_read_frame(engine, peer, h, w), base), "强度 0 却没逐字节还原"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_lut_arms_emit_the_same_event_shape(engine, tmp_path):
+    """三条 action 臂的事件键集必须完全相等（含命令层加的那几个计时键）。
+
+    库层用例卡的是 payload 的键集，这里卡的是**送出去的那一条**：两边都卡才封得住，
+    因为漂往往发生在 cmd 层 `**info` 之后又手写几个字段的那一步。
+    """
+    _needs_torch()
+    _load(engine, max_px=207360, strength=0.0)
+    events = []
+    # 逐条发、逐条收：wait_for 会把中间不匹配的事件吃掉，所以“三条全发再三条全等”
+    # 拿到的是丢帧后的残流（本轮就这么错了一次）。lut_done 与它的 frame 在同一条命令里
+    # 是固定次序（先状态后帧），按命令配对收才是确定性的。
+    for kw in [dict(action="set", path=_write_cube(tmp_path, 8, 0.9)),
+               dict(action="amount", amount=0.4),
+               dict(action="clear")]:
+        engine.send(cmd="lut", **kw)
+        events.append(engine.wait_for("lut_done", timeout=60))
+        engine.wait_for("frame", timeout=60)
+    keys = [set(e) for e in events]
+    assert keys[0] == keys[1] == keys[2], \
+        f"事件形状漂了：{(keys[0] ^ keys[1]) | (keys[0] ^ keys[2])}"
+    for k in ("lut_ms", "render_ms", "total_ms", "filter_ms", "bands_ms",
+              "filter_cached", "deform_ms", "bytes_lut", "lut_source", "lut_amount",
+              "lut_notes", "lut_clipped", "lut_domain_min", "device", "strength",
+              "layer_recomputed", "action"):
+        assert k in keys[0], k
+    # 补的那一帧仍得命中磨皮缓存：这是“调色在链尾、不作废上游缓存”的协议级证据
+    assert events[0]["filter_cached"] is True and events[0]["bands_ms"] == 0.0, events[0]
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_bad_lut_commands_leave_no_trace(engine, tmp_path):
+    """被拒绝的调色命令整条不留痕：表没换、强度没改、画面还是原样。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.4)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        base = _read_frame(engine, peer, h, w)
+        good = _write_cube(tmp_path, 8, 0.9)
+        engine.send(cmd="lut", action="nope")
+        _expect_error(engine, "未知 lut action")
+        engine.send(cmd="lut", action="set")
+        _expect_error(engine, "只能给一个来源")
+        engine.send(cmd="lut", action="set", path=good, text="LUT_3D_SIZE 2\n0 0 0\n")
+        _expect_error(engine, "只能给一个来源")
+        engine.send(cmd="lut", action="set", path=str(tmp_path / "没有这个文件.cube"))
+        _expect_error(engine, "LUT 被拒")
+        engine.send(cmd="lut", action="set", text="不是 cube 的一坨文本\n1 2 3 4\n")
+        _expect_error(engine, "LUT 被拒")
+        engine.send(cmd="lut", action="set", path=good, amount=1.5)
+        _expect_error(engine, "超出范围")
+        engine.send(cmd="lut", action="set", path=good, amount=float("nan"))
+        _expect_error(engine, "不是有限数")
+        # 没挂表就调强度：库层与命令层各拦一次，两条都不许静默通过
+        engine.send(cmd="lut", action="amount", amount=0.5)
+        _expect_error(engine, "还没有 LUT")
+        engine.send(cmd="lut", action="amount")
+        _expect_error(engine, "什么也没给")
+        # 拒绝之后状态必须是干净的：clear 报出 lut_set=False，画面与基线逐字节相同
+        engine.send(cmd="lut", action="clear")
+        done = engine.wait_for("lut_done", timeout=60)
+        assert done["lut_set"] is False and done["lut_size"] == 0, done
+        assert done["bytes_lut"] == 0 and done["lut_source"] == "", done
+        assert np.array_equal(_read_frame(engine, peer, h, w), base), "被拒的调色命令动了画面"
+        # 而一条合法命令必须还能正常生效（拒绝路径不能把会话弄成不可用）
+        engine.send(cmd="lut", action="set", path=good)
+        assert engine.wait_for("lut_done", timeout=60)["lut_lit"] is True
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_importing_a_new_image_drops_the_previous_grade(engine, tmp_path):
+    """调色层随文档走：换图不能把上一张的色调静默带过来。"""
+    _needs_torch()
+    _load(engine, max_px=207360, strength=0.0)
+    engine.send(cmd="lut", action="set", path=_write_cube(tmp_path, 8, 0.9))
+    assert engine.wait_for("lut_done", timeout=60)["lut_lit"] is True
+    engine.wait_for("frame", timeout=60)
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.0)
+    engine.wait_for("vram_ready", timeout=60)
+    ready = engine.wait_for("image_ready", timeout=60)
+    assert ready["bytes_lut"] == 0, f"新会话继承了上一张图的调色体积：{ready['bytes_lut']}"
+    # 引擎侧那两个字段也得跟着清：留着就是下一条 amount 会以为表还在
+    engine.send(cmd="lut", action="amount", amount=0.5)
+    _expect_error(engine, "还没有 LUT")
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_drag_stream_with_lut_runs_every_frame_but_recomputes_nothing(engine, tmp_path):
+    """挂着表拖 600 帧：滤波与修容一次都不重算，而调色每帧真在跑。
+
+    最后那条是反向门禁：lut_frames 如果为 0，“常驻层里有一层调色”就只存在于上报里。
+    它与 deform_builds 不增是两件事——那一条证“不解 TPS”，这一条证“层真的在服务”。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.5)
+    h, w = meta["h"], meta["w"]
+    engine.send(cmd="lut", action="set", path=_write_cube(tmp_path, 33, 0.85))
+    done = engine.wait_for("lut_done", timeout=60)
+    assert done["lut_size"] == 33 and done["lut_lit"] is True, done
+    engine.wait_for("frame", timeout=60)
+    engine.send(cmd="bench_start", mode="image_stream", frames=6, interval_ms=20,
+                w=w, h=h)
+    engine.wait_for("bench_started", timeout=30)
+    b = engine.wait_for("bench_done", timeout=90)
+    assert not b.get("failed"), f"跑靶失败：{b}"
+    assert b["refilter_frames"] == 0, f"拖拽流里重算了 {b['refilter_frames']} 次滤波"
+    assert b["relight_frames"] == 0, f"拖拽流里重算了 {b['relight_frames']} 次修容"
+    assert b["deform_builds"] == 0, f"拖拽流里重解了 {b['deform_builds']} 次 TPS"
+    assert b["lut_frames"] == b["frames"], \
+        f"挂了表却只跑了 {b['lut_frames']}/{b['frames']} 帧调色：这一层没在服务"
+    assert b["lut"] > 0.0, f"调色段均值 {b['lut']} ms 为 0，与 lut_frames 对不上"
+    assert b["seg_over_frames"] == 0, f"分段重复计时 {b['seg_over_frames']} 帧"
+    st = b["lut_state"]
+    assert st["lit"] is True and st["size"] == 33 and st["bytes_lut"] > 0, st

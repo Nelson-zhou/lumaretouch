@@ -21,6 +21,7 @@ from .vram import DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_
     DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS, DEFAULT_REPAIR, LightOp, RepairOp, warm_device
 from .ops.light import DB_EXPOSURE_LIMIT, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
 from .ops.deform import KINDS, DeformGeometryError, check_amounts
+from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
 
 PROTOCOL_VERSION = 1
 
@@ -97,6 +98,10 @@ class Engine:
         # 形变层（M2-b）：存的是三个滑块的值，单位场不存（它能从关键点重算，
         # 而关键点已经在 _precompute 里）。换设备重建时重新 build 一次，55 ms。
         self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+        # 调色层（M3-a2）：引擎侧存的是那张表本身（CPU 原件）与混合系数。
+        # 表不存会话里只存在这里是不够的：常驻体积张量活在一块设备上，换设备必须重挂。
+        self._lut = None
+        self._lut_amount = 1.0
         # 分段计时的自洽计数：子段之和超过整帧内核段的帧数（只可能是重复计时）。
         # kernel 靠减法得出并夹到 0，不记这一笔就永远看不出某段被计了两次。
         self._seg_over_frames = 0
@@ -176,8 +181,8 @@ class Engine:
         抽成一个方法是为了让 packaging/m1-vram-bench.py 能直接复用同一份代码——
         离线跑靶如果自己拼一份近似逻辑，量的数就不能代表产品通路。
         """
-        seg = dict(synth=0.0, pre=0.0, filter=0.0, light=0.0, deform=0.0, kernel=0.0,
-                   post_gpu=0.0, cpu_post=0.0, readback=0.0)
+        seg = dict(synth=0.0, pre=0.0, filter=0.0, light=0.0, deform=0.0, lut=0.0,
+                   kernel=0.0, post_gpu=0.0, cpu_post=0.0, readback=0.0)
         # image_stream 模拟拖滑块：系数在 0.25→0.75 上扫一个 100 帧周期，
         # 像素逐帧真的在变；常驻管线的系数跑靶如果只动 0.001，字节上几乎看不出区别
         if mode == "image_stream":
@@ -207,10 +212,14 @@ class Engine:
             # M2-b：形变与修容不同，它每帧真在跑（grid_sample），所以它不是“重算次数”
             # 而是“每帧成本”。零推理那条靠 deform_builds 不增来证，不靠这一段为 0。
             seg["deform"] = float(getattr(pipe, "last_deform_ms", 0.0) or 0.0)
-            # kernel 是“整段减去三个子段”，减法夹到 0 就看不出重复计时：子段之和超过整段
+            # M3-a2：调色与形变同构，也是每帧真在跑的一笔（grid_sample 3d）；它不是
+            # “重算次数”而是“每帧成本”。不拆出来就会把它记到 kernel 头上，而
+            # “挂上 LUT 后拖磨皮滑块仍零重算”那条判据就看不出是谁在花钱。
+            seg["lut"] = float(getattr(pipe, "last_lut_ms", 0.0) or 0.0)
+            # kernel 是“整段减去四个子段”，减法夹到 0 就看不出重复计时：子段之和超过整段
             # 只可能是某段被计了两次或计时嵌套了。当场记一笔，由 bench_done 说话——
             # 一个永远非负、越界也不报的数不是一个判据。
-            seg_sum = seg["filter"] + seg["light"] + seg["deform"]
+            seg_sum = seg["filter"] + seg["light"] + seg["deform"] + seg["lut"]
             if seg_sum - whole > 0.5:
                 self._seg_over_frames += 1
             seg["kernel"] = max(whole - seg_sum, 0.0)
@@ -253,14 +262,17 @@ class Engine:
         # M0 必须知道 60fps 的天花板卡在哪一段——上一版只给一个总数，把合成图形的 17 ms
         # 当成了通路极限；M1-2 要证的是「内核没变快，快的全是搬运」，那就更得拆开。
         period = interval_ms / 1000.0
-        acc = dict(synth=0.0, pre=0.0, filter=0.0, light=0.0, deform=0.0, kernel=0.0,
-                   post_gpu=0.0, cpu_post=0.0, readback=0.0, shm=0.0, notify=0.0)
+        acc = dict(synth=0.0, pre=0.0, filter=0.0, light=0.0, deform=0.0, lut=0.0,
+                   kernel=0.0, post_gpu=0.0, cpu_post=0.0, readback=0.0, shm=0.0, notify=0.0)
         # 重算次数：拖拽期零推理的直接证据。只要这个数不是 1（或 0），缓存就没真的生效，
         # 而按均值报 filter 会把它藏起来（600 帧里重算一次只有 0.0075 ms/帧）。
         refilters = 0
         # 修容层同一个口径：600 帧拖滑块期间 relight_frames 应当是 0，
         # 不为 0 就是 db 缓存没命中（键算错了），而均值会把它洗掉。
         relights = 0
+        # M3-a2：调色是逐帧固定成本，没有“命中缓存”这一说。它只用来防“挂了一层却没跑”：
+        # 表挂上且强度非 0 时它必须等于跑靶帧数，否则那一层只存在于上报里。
+        lut_frames = 0
 
         def snapshot(done: int) -> dict:
             return {k: round(v / max(done, 1), 3) for k, v in acc.items()}
@@ -288,6 +300,8 @@ class Engine:
                 refilters += 1
             if seg.get("light", 0.0) > 0:
                 relights += 1
+            if seg.get("lut", 0.0) > 0:
+                lut_frames += 1
             for k, v in seg.items():
                 acc[k] += v
             t4 = monotonic_ns()
@@ -319,6 +333,19 @@ class Engine:
               "deform_ms_total": round(acc["deform"], 2),
               "deform_builds": (int(getattr(pipe, "deform_builds", 0)) - builds_at_start
                                 if pipe is not None else 0),
+              # M3-a2：调色是逐帧固定成本（不像 filter/light 有缓存命中），所以它没有
+              # “重算次数”可证，只有“每帧真跑了多少帧”：挂上表且强度非 0 时它应当等于
+              # frames，而 lut 均值为 0 就是“挂了一层却没跑”的当场证据。
+              "lut_ms_total": round(acc["lut"], 2),
+              "lut_frames": lut_frames,
+              # 图层状态与每帧分段不能同名（上一版 `"light": dict(self._light)` 就是被
+              # snapshot 里的同名字段吃掉的）。取局部 pipe 而不是 self._vram：后者会被
+              # 别的命令顶掉，报的就不是刚才那 600 帧的服务者。
+              "lut_state": dict(source=(pipe.lut.source if pipe is not None and pipe.lut else None),
+                                size=(pipe.lut.size if pipe is not None and pipe.lut else 0),
+                                amount=float(pipe.lut_amount) if pipe is not None else None,
+                                lit=bool(pipe.has_lut()) if pipe is not None else False,
+                                bytes_lut=pipe.lut_resident_bytes() if pipe is not None else 0),
               # 分段不自洽的帧数：某段被重复计时时会在这里非 0，而不是表上看不出来
               "seg_over_frames": int(self._seg_over_frames),
               "params": dict(self._params),
@@ -370,6 +397,18 @@ class Engine:
                     # 不补帧：调用方（换设备那一条）紧后就自己渲染并写 shm，
                     # 而会话刚迁移时 _write_current_frame 抱异常会把整个迁移打断
                     self._rebuild_deform_for_landmarks(self._precompute, write_frame=False)
+            # 调色层：表与像素位置无关，重挂只是把同一份原件再上一次显存（33³ 实测 428 KB）。
+            # 不重挂就是“会话迁了、调色没迁”：新会话里 lut is None，屏幕回到未调色，
+            # 而宿主侧 status.lut 还停在上一条 payload——上报与实际双向错配。
+            if self._lut is not None:
+                try:
+                    pipe.set_lut(self._lut, self._lut_amount)
+                    self._lut_amount = float(pipe.lut_amount)
+                except (LutError, RuntimeError, ValueError) as e:
+                    emit({"event": "engine_warn",
+                          "warn": f"新会话重挂调色层失败，已整层清除（{type(e).__name__}）：{e}"})
+                    self._lut = None
+                    self._lut_amount = 1.0
         emit({"event": "vram_ready", "device": str(pipe.device), "w": w, "h": h,
               "adopted": bool(adopt),
               "bytes_src": int(pipe.src_u8.numel() * pipe.src_u8.element_size()),
@@ -414,6 +453,11 @@ class Engine:
         self._light_redo = []
         # 形变层也得跟着图走：上一张脸的单位场对这一张脸没有任何意义
         self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+        # 调色层也随文档走。一张 .cube 是“这一张照片的调色”，不是引擎全局偏好：
+        # 留着旧表就是“导入第二张照片一上来就带着第一张的色调”，那是静默错配。
+        # （与磨皮参数不同：radius/增益是“我习惯怎么磨”的全局默认，而表是作品的一部分。）
+        self._lut = None
+        self._lut_amount = 1.0
         t_a = monotonic_ns()
         pipe = self._attach_pipeline(d.rgb)
         self._image_loaded = True
@@ -444,6 +488,9 @@ class Engine:
               # 修容层在导入后必然为空（换图已清），这个数报 0 本身就是“没图上一张的笔迹”的证据
               "bytes_light": pipe.light_resident_bytes(),
               "bytes_deform": pipe.deform_resident_bytes(),
+              # 刚导完图时它必须是 0：预热会话那张临时表不能让真会话继承（不然这里会
+              # 多报 428 KB，而用户一张预设也没点）
+              "bytes_lut": pipe.lut_resident_bytes(),
               # 只报滤波这一份：掩膜在本事件之后才挂上（precompute 跑在 image_ready 后面），这里附 bytes_face 恒为 0，
               # 反而会被读成"掩膜没常驻"。掩膜/关键点的字节数由 precompute_ready 报，那才是它们为真的那一刻。
               "import_ms": round((t_c - t0) / 1e6, 2)})
@@ -1093,6 +1140,152 @@ class Engine:
                                 total_ms=round((monotonic_ns() - t_start) / 1e6, 2))
         emit(fr)
 
+    # ------------------------------------------------------------ 调色（M3-a2）
+    def _resolve_lut_source(self, p: dict):
+        """从命令里解析出那张表：path / text 两个来源必给且只给一个。失败自己发 error 返 None。
+
+        为什么不“都给就用 text”：两个来源并存时先选一个就是替用户做决定，而两个表
+        往往正好不一样——拿到哪个都是“对的那张的错版本”。当场拒比猜安全。
+        preset 这一臂现在是明拒：内置预设属于 M3-b，不拿一张“看着像”的表顶上去。
+        """
+        given = [k for k in ("path", "text", "preset") if p.get(k)]
+        if len(given) != 1:
+            emit({"event": "error",
+                  "error": f"lut set 需要且只能给一个来源（path / text / preset），收到 "
+                           f"{len(given)} 个{('：' + ', '.join(given)) if given else ''}"})
+            return None
+        key = given[0]
+        try:
+            if key == "path":
+                return load_cube_file(str(p["path"]))
+            if key == "text":
+                return parse_cube(str(p["text"]), source="text")
+            emit({"event": "error",
+                  "error": "lut preset 属于 M3-b（内置预设还没落地）：当前只支持 path / text"})
+            return None
+        except (LutError, OSError, UnicodeDecodeError) as e:
+            # 整条拒：不留“解了一半”的表。上一轮“预计算失败留半截显存”同一形状。
+            emit({"event": "error", "error": f"LUT 被拒，整条不生效（{type(e).__name__}）：{e}"})
+            return None
+
+    def _restore_lut(self, prev) -> None:
+        """回到上一条已证能出帧的调色状态（补帧失败与回滚两条臂共用）。"""
+        cube, amount = prev
+        try:
+            if cube is None:
+                self._vram.clear_lut()
+            else:
+                self._vram.set_lut(cube, amount)
+        except Exception as e:      # 回滚再失败就只能说清“重新导图”，不留一个看起来已回滚的状态
+            emit({"event": "engine_warn",
+                  "warn": f"调色层回滚失败（{type(e).__name__}）：{e}，本会话不可信，请重新导入图片"})
+
+    def _emit_lut_state(self, action: str, info: dict, *, render_ms: float = 0.0,
+                        total_ms: float = 0.0) -> None:
+        """lut_done 的唯一组装点（set/clear/amount 三条臂共用一份形状）。
+
+        图层字段全部来自 vram._lut_payload，这里只加计时与每帧那几笔。与
+        _precompute_ready_event / _emit_deform_state 同一条理由：两处各写一份必然漂，
+        而 TS 把字段声明成必存——谎报发生在 JSON 边界上，编译期抓不到。
+        """
+        pipe = self._vram
+        emit({"event": "lut_done", "action": action, **info,
+              # 这一帧真跑了多少调色（挂上表且强度非 0 时 > 0；为 0 就是那层没跑）
+              "lut_ms": round(float(pipe.last_lut_ms), 2),
+              # 这两条是“设 LUT 不作废磨皮缓存”的直接证据：补的那一帧仍应命中
+              "filter_ms": round(float(pipe.last_filter_ms), 2),
+              "bands_ms": round(float(pipe.last_bands_ms), 2),
+              "filter_cached": float(pipe.last_filter_ms) == 0.0,
+              "deform_ms": round(float(pipe.last_deform_ms), 2),
+              "render_ms": round(float(render_ms), 2),
+              "total_ms": round(float(total_ms), 2),
+              "strength": self._strength})
+
+    def cmd_lut(self, p: dict):
+        """3D LUT 调色（M3-a2）：载入/清除一张表，或只改混合系数。
+
+        与 light/deform 同一套铁律：跑靶互斥、先全量校验后一次性提交、被拒整条不留痕、
+        事件只有一个组装点。与它们的区别在于本层不依赖关键点也不依赖笔迹：
+        换设备要重挂（体积活在那块卡上），但不随磨皮/修容参数作废任何缓存。
+        """
+        action = p.get("action", "set")
+        if action not in ("set", "clear", "amount"):
+            emit({"event": "error", "error": f"未知 lut action: {action}（可用：set/clear/amount）"})
+            return
+        if not self._image_loaded or self._vram is None:
+            emit({"event": "error", "error": "尚未 load_image"})
+            return
+        if self.shm is None or (self.shm.w, self.shm.h) != (self._vram.w, self._vram.h):
+            emit({"event": "error", "error": f"shm {getattr(self.shm, 'w', '?')}x"
+                  f"{getattr(self.shm, 'h', '?')} != 会话 {self._vram.w}x{self._vram.h}，"
+                  "请先 load_image"})
+            return
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝 lut：先 bench_stop"})
+            return
+        t_start = monotonic_ns()
+        prev = (self._lut, self._lut_amount)
+        if action == "set":
+            # 强度先校：不能先付一次解析 + 上显存再发现参数非法（与 cmd_deform“参数先于建层”同形）
+            amount = None
+            if p.get("amount") is not None:
+                try:
+                    amount = check_amount(p["amount"])
+                except LutError as e:
+                    emit({"event": "error", "error": f"lut 被拒，整条不生效：{e}"})
+                    return
+            cube = self._resolve_lut_source(p)
+            if cube is None:
+                return
+            try:
+                info = self._vram.set_lut(cube, amount)
+            except (LutError, RuntimeError, ValueError) as e:
+                # 库层只在全部可失败步骤之后才赋值，所以这里会话状态原样未动；
+                # 引擎侧那两个字段也必须不动，否则下一条 set 会以为已经挂上了这张表
+                emit({"event": "error", "error": f"调色层被拒，会话原样未动（"
+                      f"{type(e).__name__}）：{e}"})
+                return
+            self._lut, self._lut_amount = self._vram.lut, float(self._vram.lut_amount)
+        elif action == "amount":
+            if p.get("amount") is None:
+                emit({"event": "error", "error": "lut amount 什么也没给：需要一个 0–1 的数值"})
+                return
+            try:
+                amount = check_amount(p["amount"])
+            except LutError as e:
+                emit({"event": "error", "error": f"lut 被拒，整条不生效：{e}"})
+                return
+            try:
+                info = self._vram.set_lut_amount(amount)
+            except (LutError, RuntimeError, ValueError) as e:
+                emit({"event": "error", "error": f"调色强度被拒，会话原样未动：{e}"})
+                return
+            self._lut_amount = float(self._vram.lut_amount)
+        else:
+            info = self._vram.clear_lut()
+            self._lut, self._lut_amount = None, 1.0
+        try:
+            fr = self._write_current_frame("lut")
+        except Exception as e:
+            # 表/强度已写进常驻层而渲染抛了：必须退回上一条已证能出帧的状态。
+            # cmd_deform 为同一个形状付过钱：“拒绝了但画面变了”比报错难查得多。
+            self._lut, self._lut_amount = prev
+            self._restore_lut(prev)
+            try:
+                back = self._write_current_frame("lut")
+                back.pop("render_ms", None)
+                emit(back)
+            except Exception:      # 回滚后仍出不了一帧：能说清的只有“重新导图”
+                emit({"event": "engine_warn", "warn": "调色回滚后仍无法出帧，本会话不可信，"
+                      "请重新导入图片"})
+            emit({"event": "error", "error": f"调色渲染失败，已退回上一状态（"
+                  f"{type(e).__name__}）：{e}"})
+            return
+        render_ms = fr.pop("render_ms")
+        self._emit_lut_state(action, info, render_ms=render_ms,
+                             total_ms=round((monotonic_ns() - t_start) / 1e6, 2))
+        emit(fr)
+
     def _pipe_copyin(self, rgba, strength: float, radius: int = DEFAULT_RADIUS,
                      eps: float = DEFAULT_EPS, detail_gain: float = DEFAULT_DETAIL_GAIN,
                      mid_gain: float = DEFAULT_MID_GAIN,
@@ -1236,7 +1429,8 @@ class Engine:
                  "set_device": self.cmd_set_device, "shutdown": self.cmd_shutdown,
                  "load_image": self.cmd_load_image, "set_strength": self.cmd_set_strength,
                  "precompute": self.cmd_precompute, "inpaint": self.cmd_inpaint,
-                 "light": self.cmd_light, "deform": self.cmd_deform}
+                 "light": self.cmd_light, "deform": self.cmd_deform,
+                 "lut": self.cmd_lut}
         # 不用 `for line in sys.stdin`：那会等 EOF，收到 shutdown 也退不掉
         while not self._quit:
             line = sys.stdin.readline()

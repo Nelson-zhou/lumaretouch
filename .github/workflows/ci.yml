@@ -97,6 +97,16 @@ jobs:
         # 本机（RX 7600 XT / 产品档 672×848）：形变段 1.05 ms/帧 vs 每帧重解 53.7 ms（×41）、
         # 两臂最大 1 LSB（0.03% 像素，量化边界）、窗外改动 0 px、GPU−CPU 场 1e-13 px。
         run: REPS=5 LRT_FRAMES=40 "$PY" packaging/m2-face-bench.py
+      - name: 影楼色彩（3D LUT 保真与常驻 + 链尾不污染上游）
+        # M3-a2 的四条硬要求：① 恒等表与强度 0 逐字节还原（且 lut_ms=0，走的是结构
+        # 短路而不是“算出来恰好一样”）；② 线性表必须精确复现“夹域后走表”的解析真值
+        # （只在量化边界 ±1e-3 LSB 上允许 float32 舍入翻牌）；③ 常驻臂与独立臂逐字节
+        # 相等；④ 挂表后拖滑块：滤波/db/TPS 零重算，而 N 帧只许一次 to_device。
+        # 本机（RX 7600 XT）：三档恒等与强度 0 均 0 LSB、线性表边界外 0 LSB（18/40/81
+        # 个子像素全在边界上）、常驻=独立臂 0 LSB；调色段 0.333/0.587/1.375 ms（预算
+        # 1.21/3.42/7.86）。“常驻比每帧重传快”实测只有 0.94–1.03×（33³ 表才 431 KB），
+        # 所以这份跑靶不拿加速比当战果——真实价值在热路径零搬运零分配。
+        run: REPS=5 LRT_FRAMES=40 "$PY" packaging/m3-color-bench.py
 
   # NVIDIA 侧同理。本机无 N 卡，CUDA 依赖 pin 也尚未解析回填，
   # 在拿到 NVIDIA runner 之前这条只能是开关关闭，不能当作已验证。
@@ -129,6 +139,9 @@ jobs:
         run: REPS=5 LRT_FRAMES=40 "$PY" packaging/m2-dnb-bench.py
       - name: 五官微调（TPS 作用面 + 缩放与重解同一件事 + 拖滑块零解算）
         run: REPS=5 LRT_FRAMES=40 "$PY" packaging/m2-face-bench.py
+      - name: 影楼色彩（3D LUT 保真与常驻 + 链尾不污染上游）
+        # 判据与预算同 ROCm job；N 卡没本机数据，跑出真数后再按本机口径收紧
+        run: REPS=5 LRT_FRAMES=40 "$PY" packaging/m3-color-bench.py
 
   # 通路不回归：引擎层单测 + 脚本可跑。真正的端到端帧率验收需要图形环境，
   # 在 M0 阶段仍是本机跑 packaging/m0-bench.sh，不假称 CI 已覆盖。
