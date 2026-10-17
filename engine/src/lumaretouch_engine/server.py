@@ -142,6 +142,12 @@ class Engine:
         # 底片条那一列表会被两个线程碰：stdin 线程换整张表，缩略图线程改单格的
         # thumb/thumb_error。GIL 保不了“读→比对→写”这三步，所以自己上锁。
         self._doclock = threading.Lock()
+        # 全局历史（M5-b）：栈里存的是"这一步执行前"的文档状态快照，不是指令。
+        # 挂在 live 上、随文档格走：切底片条时与状态一起存回/装回，每个文档各有一条自己的历史。
+        self._undo: list = []
+        self._redo: list = []
+        self._hist_group = ""           # 最近一步的手势身份（同组在窗口期内合并）
+        self._hist_group_ns = 0
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
@@ -163,7 +169,14 @@ class Engine:
               "thumb_edge": [S.MIN_EDGE, S.MAX_EDGE],
               "thumb_edge_default": S.EDGE,
               "thumb_max_bytes": S.THUMB_MAX_BYTES,
-              "session_max_docs": S.MAX_DOCS})
+              "session_max_docs": S.MAX_DOCS,
+              # M5-b 全局撤销/重做：行程、步数上限与手势合并窗口都由引擎说。
+              # 前端刻一份"最多 64 步"或"700 ms 算一次手势"，下一轮改口径时漏改的就是它——
+              # 而且这一次漏改不会报错，只会让按钮的灰与不灰和真实栈深对不上。
+              "history_actions": list(self.HISTORY_ACTIONS),
+              "history_max": self.HISTORY_MAX,
+              "history_group_ms": self.HISTORY_GROUP_MS,
+              "history_edit_cmds": list(self.EDIT_CMDS)})
 
     # ------------------------------------------------------------ 帧缓冲
     def _ensure_shm(self, w: int, h: int) -> FrameShm:
@@ -606,6 +619,7 @@ class Engine:
         m = S.doc_meta(path)
         return {**m, "path": os.path.abspath(path), "state": state or self._fresh_doc_state(),
                 "budget": budget, "thumb": None, "thumb_error": None, "opened": False,
+                "undo": [], "redo": [],
                 "w": None, "h": None, "src_w": None, "src_h": None}
 
     def _remember_current(self) -> None:
@@ -613,6 +627,194 @@ class Engine:
         「切走再切回来，调的全没了」。"""
         if 0 <= self._doc_index < len(self._docs) and self._image_loaded:
             self._docs[self._doc_index]["state"] = self._capture_state()
+            # 历史跟着状态走：只存状态不存栈，切回来会"画面带着一笔而撤销按钮是灰的"
+            self._docs[self._doc_index]["undo"] = list(self._undo)
+            self._docs[self._doc_index]["redo"] = list(self._redo)
+
+    # ------------------------------------------------------------ 全局撤销/重做（M5-b）
+    # 一步 = 一次手势，不是一条命令：拖强度滑块一口气发五十条，用户按一次 Ctrl+Z
+    # 该退回的是"开始拖之前"，而不是"上一帧的值"。
+    HISTORY_MAX = 64
+    HISTORY_GROUP_MS = 700
+    # 快照里不进历史的两项。理由有两条，都是硬的：① 人脸预计算是"检测"不是"修图"，
+    # 撤销不该把掩膜退回去（也没有任何用户动作期望它回去）；② 它是几 MB 的 numpy 原件，
+    # 64 份快照会把几百 MB 内存钉在进程里。图层与参数照样进。
+    HISTORY_SKIP = ("_precompute", "_precompute_backend")
+    # 哪些命令算"编辑"。判定只在这一个名单里，推送点也只有分发器一处：
+    # 六个 cmd_* 里各插一次 push 的下场可以预见——第七层加进来时总有人忘。
+    EDIT_CMDS = ("set_strength", "inpaint", "light", "deform", "lut", "grade")
+    HISTORY_ACTIONS = ("undo", "redo", "state", "clear")
+
+    def _history_capture(self) -> dict:
+        """抄一份可进历史的文档状态（= 文档状态去掉预计算那两项）。"""
+        st = self._capture_state()
+        for k in self.HISTORY_SKIP:
+            del st[k]
+        return st
+
+    def _history_apply(self, snap: dict) -> None:
+        """装回一份快照：预计算保持当前这一份，其余整份覆盖。"""
+        st = self._capture_state()
+        self._apply_state({**st, **snap})
+
+    def _hist_sig(self, st: dict) -> str:
+        """状态的可比签名。判"这一步真改了没有"必须走它，不能拿字典直接 ==：
+        调色表是 numpy 数组（== 返回数组，真值判断直接抛 ValueError），参数是浮点
+        （1e-16 的差不能算"改过"），_deform/_grade 又是嵌套结构。"""
+        d = {}
+        for k, v in st.items():
+            if k == "_lut":
+                # 表按对象身份比：内容相同的两张表是两个不同的调色动作，同一张表重复
+                # 提交才是空操作。拷一份内容来比会把 33³ 的表在每次滑块时读一遍。
+                d[k] = None if v is None else f"obj:{id(v)}"
+            elif k == "_deform":
+                d[k] = {"amounts": {a: round(float(b), 6) for a, b in v["amounts"].items()},
+                        "built": bool(v["built"])}
+            elif k == "_grade":
+                d[k] = [round(float(x), 6) for x in v]
+            elif k == "_strength":
+                d[k] = round(float(v), 6)
+            elif k in ("_params", "_light"):
+                d[k] = {a: round(float(b), 6) for a, b in v.items()}
+            else:
+                d[k] = v
+        return json.dumps(d, sort_keys=True, default=str)
+
+    @staticmethod
+    def _history_group(name: str, msg: dict) -> str:
+        """一次手势的身份证：命令名 + action + 这条命令**带了哪些参数名**。
+        同一个滑块连发五十条 → 同一个组 → 合并成一步；换另一个滑块（参数名不同）就是新的一步。
+        拿值当组名会出两件事：拖回原位那种"值又变回去"合并不了，而把 action 与路径参数
+        （rle/paths）算进组名会让每一笔都是新组——那正好是我们要区分的两种动作。"""
+        keys = sorted(k for k in msg if k not in ("cmd", "action"))
+        return f"{name}:{msg.get('action', '')}:{','.join(keys)}"
+
+    def _history_record(self, group: str, before: dict) -> None:
+        """一条编辑命令执行完（不论成功还是抛错）后调。
+
+        快照是**执行前**抄的，所以"被拒绝的命令"天然不占一步：它整条 return，
+        live 字段没动，签名与 before 一致。异常路径也记账（分发器里是 try/finally）：
+        半改完的状态正是最需要一次撤销能修回去的时候。
+        """
+        try:
+            after = self._history_capture()
+        except AssertionError:
+            return                      # 名单漂移由命令自己响，这里不叠第二份错
+        if self._hist_sig(before) == self._hist_sig(after):
+            return
+        now = monotonic_ns()
+        same_gesture = False
+        if group and self._hist_group == group \
+                and (now - self._hist_group_ns) / 1e6 < self.HISTORY_GROUP_MS:
+            same_gesture = True
+        if not same_gesture:
+            self._undo.append(before)
+            if len(self._undo) > self.HISTORY_MAX:
+                # 丢最老的：这一条是内存账，不是功能边界（64 步 × 每份几 KB）
+                del self._undo[0]
+        self._hist_group, self._hist_group_ns = group, now
+        # 新编辑一律断掉 redo 链：留着就会出"撤销两次、重做一次跳回最新"那种
+        # 看起来像丢工的行为
+        self._redo.clear()
+
+    def _history_report(self) -> dict:
+        return {"can_undo": bool(self._undo), "can_redo": bool(self._redo),
+                "undo_steps": len(self._undo), "redo_steps": len(self._redo),
+                "history_max": self.HISTORY_MAX}
+
+    def _history_bind(self, row: dict | None) -> None:
+        """切文档时把这一格的历史装回 live（与状态同一批，不单独时序）。"""
+        self._undo = list((row or {}).get("undo") or [])
+        self._redo = list((row or {}).get("redo") or [])
+        self._hist_group, self._hist_group_ns = "", 0
+
+    def cmd_history(self, p: dict):
+        """撤销/重做：整条链只有一份实现——装回快照，然后用 _attach_pipeline 按
+        那些字段重放图层（与换设备、切文档同一条路），不写第二份重放。"""
+        unknown = set(p) - {"cmd", "action"}
+        if unknown:
+            emit({"event": "error", "error": f"history 收到不认识的参数：{sorted(unknown)}"})
+            return
+        action = p.get("action", "state")
+        if action not in self.HISTORY_ACTIONS:
+            emit({"event": "error", "error": f"未知 history action: {action}"
+                  f"（可用：{'/'.join(self.HISTORY_ACTIONS)}）"})
+            return
+        if action == "state":
+            emit({"event": "history_state", "action": action, "doc_state": self.doc_state(),
+                  **self._history_report()})
+            return
+        if action == "clear":
+            self._undo, self._redo = [], []
+            self._hist_group, self._hist_group_ns = "", 0
+            self._remember_current()
+            emit({"event": "history_state", "action": "clear", "doc_state": self.doc_state(),
+                  **self._history_report()})
+            return
+        # 与 set_strength 同一条守卫：跑靶线程在写 frame_gpu，这里也写同一块；
+        # 导出线程拿着的是"撤销前那一版"的笔迹，画面与账单会分头说话
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": f"跑靶进行中，拒绝 history {action}：先 bench_stop"})
+            return
+        if self._export is not None and self._export.is_alive():
+            emit({"event": "error", "error": f"导出进行中，拒绝 history {action}：等 export_done"})
+            return
+        if not self._image_loaded or self._vram is None or self._src_rgb is None:
+            emit({"event": "error", "error": "尚未 load_image，没有可撤销的会话"})
+            return
+        stack = self._undo if action == "undo" else self._redo
+        other = self._redo if action == "undo" else self._undo
+        if not stack:
+            # 退无可退不是错误：快捷键按多了是常态，报 noop 让按钮跟着灰下去
+            emit({"event": "history_state", "action": action, "noop": True,
+                  "doc_state": self.doc_state(), **self._history_report()})
+            return
+        snap = stack[-1]
+        current = self._history_capture()
+        if tuple(snap.get("_proxy") or ()) != tuple(current.get("_proxy") or ()):
+            # 正常路径不会到这里（代理档一变就清历史），留着是为了"清没清干净"这件事
+            # 不能靠注释保证——快照的像素坐标与新尺寸不配时重放会渲染出半截画面
+            emit({"event": "error", "error": f"{action} 那一格的快照属于另一档代理尺寸："
+                  f"{snap.get('_proxy')} vs {current.get('_proxy')}，已拒绝"})
+            return
+        t0 = monotonic_ns()
+        try:
+            self._history_apply(snap)
+            self._attach_pipeline(self._src_rgb, adopt=True)
+            if self._precompute is not None:
+                self._rehang_precompute(replayed_for=f"history_{action}")
+            elif self._channel:
+                self._channel = None
+            fr = self._write_current_frame(f"history_{action}")
+        except Exception as e:
+            # 半截状态不许留在 live 上：退回执行前那一份，并按它重建一次会话
+            try:
+                self._history_apply(current)
+                self._attach_pipeline(self._src_rgb, adopt=True)
+                if self._precompute is not None:
+                    self._rehang_precompute(replayed_for="history_rollback")
+                self._write_current_frame("history_rollback")
+                rolled = True
+            except Exception as e2:
+                rolled = False
+                emit({"event": "engine_warn",
+                      "warn": f"history {action} 失败后回滚也失败（{type(e2).__name__}: {e2}）："
+                              "画面与状态可能不一致，请重新导入这张图"})
+            emit({"event": "error", "error": f"history {action} 失败："
+                  f"{type(e).__name__}: {e}" + ("" if rolled else "；且回滚失败")})
+            return
+        ms = round((monotonic_ns() - t0) / 1e6, 2)
+        stack.pop()
+        other.append(current)
+        if len(other) > self.HISTORY_MAX:
+            del other[0]
+        self._hist_group, self._hist_group_ns = "", 0
+        self._remember_current()
+        render_ms = fr.pop("render_ms")
+        emit({"event": "history_state", "action": action, "history_ms": ms,
+              "render_ms": render_ms, "doc_state": self.doc_state(),
+              **self._history_report()})
+        emit(fr)
 
     # ------------------------------------------------------------ 真图导入
     def cmd_load_image(self, p: dict):
@@ -665,8 +867,13 @@ class Engine:
                 st = self._drop_proxy_layers(
                     st, why=f"这张图上次开在 {st['_proxy'][1]}×{st['_proxy'][0]}，"
                             f"这次按代理预算解出 {d.w}×{d.h}")
+                # 快照里的笔迹也是按旧档像素坐标成立的，留着就是一次"撤销能撤销出半截画面"
+                row["undo"], row["redo"] = [], []
+                emit({"event": "engine_warn",
+                      "warn": "这张图的历史也一并清了：快照里的层按旧代理档的像素坐标成立"})
             self._apply_state(st)
         self._doc_index = idx
+        self._history_bind(row)         # 这一格自己的撤销/重做栈
         self._doc_path = os.path.abspath(str(p["path"]))   # 导出默认目标；只有导成功才记账
         strength = None
         if p.get("strength") is not None:
@@ -768,6 +975,7 @@ class Engine:
         """
         return {"strength": float(self._strength), "params": dict(self._params),
                 "channel": self._channel,
+                "history": self._history_report(),
                 "light": dict(self._light),
                 "counts": {"repair": len(self._repair_ops), "light": len(self._light_ops),
                            "light_redo": len(self._light_redo), "repair_redo": len(self._redo_ops)},
@@ -2311,7 +2519,7 @@ class Engine:
                  "precompute": self.cmd_precompute, "inpaint": self.cmd_inpaint,
                  "light": self.cmd_light, "deform": self.cmd_deform,
                  "lut": self.cmd_lut, "grade": self.cmd_grade, "export": self.cmd_export,
-                 "session": self.cmd_session}
+                 "session": self.cmd_session, "history": self.cmd_history}
         # 不用 `for line in sys.stdin`：那会等 EOF，收到 shutdown 也退不掉
         while not self._quit:
             line = sys.stdin.readline()
@@ -2322,11 +2530,23 @@ class Engine:
                 continue
             try:
                 msg = json.loads(line)
-                fn = table.get(msg.get("cmd", ""))
+                name = msg.get("cmd", "")
+                fn = table.get(name)
                 if fn is None:
-                    emit({"event": "error", "error": f"未知命令: {msg.get('cmd')}"})
+                    emit({"event": "error", "error": f"未知命令: {name}"})
                     continue
-                fn(msg)
+                if name in self.EDIT_CMDS:
+                    # 推送点只在这里这一处（见 EDIT_CMDS 的说明）：执行前抄快照，
+                    # 执行后比对签名决定占不占一步。异常也记（finally）——半改完的
+                    # 状态正是最需要一次撤销能修回去的时候。
+                    before = self._history_capture()
+                    group = self._history_group(name, msg)
+                    try:
+                        fn(msg)
+                    finally:
+                        self._history_record(group, before)
+                else:
+                    fn(msg)
             except Exception as e:  # 协议层不许因单条消息崩溃
                 emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
         self.stop_flag.set()

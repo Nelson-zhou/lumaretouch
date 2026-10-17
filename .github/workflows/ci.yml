@@ -123,6 +123,14 @@ jobs:
         # 本机（RX 7600 XT）：窗口 fps quiet 59.88 / busy 59.94（差 ±0.1）、丢帧 0.0%；
         # 吞吐 44~46 张/秒；切文档 import_ms 中位 16.2 / 最坏 21.5；40 张通道合计 141.6 KB。
         run: REPS=3 LRT_STRIP_N=40 LRT_STRIP_FRAMES=180 "$PY" packaging/m5-filmstrip-bench.py
+      - name: M5-b 撤销/重做跑靶（保真 / 代价 / 内存账 / 手势合并）
+        # 四节：① 五层各一步，撤到底必须从 /dev/shm 读回与出厂帧逐字节相同的一帧（0 LSB），
+        # 重做到顶等于撤销前——两档代理尺寸各跑 REPS 次，先证明改动字节和 > 0（有鉴别力）；
+        # ② 产品档上 40 次来回的 history_ms（中位 ≤30 / 最坏 ≤60 ms，本机实测 15.5/16.4），
+        # 并判"栈深变了单次代价不许涨"；③ 灌满 64 步的 RSS 账（≤8 MiB，本机 +0.8）与五项
+        # 常驻字节账单前后逐字段相同；④ 50 条连发合并成 1 步 vs 每步新增 50 步的逐条往返
+        # （差 ≤2 ms，本机 0.14）。本机口径全部写进脚本头部注释，换口径必须同时改判据。
+        run: REPS=3 LRT_DEVICE=cuda "$PY" packaging/m5-history-bench.py
 
   # NVIDIA 侧同理。本机无 N 卡，CUDA 依赖 pin 也尚未解析回填，
   # 在拿到 NVIDIA runner 之前这条只能是开关关闭，不能当作已验证。
@@ -171,6 +179,14 @@ jobs:
         # 本机口径见 ROCm job 注释：窗口 fps quiet 59.88 / busy 59.94（差 ±0.1）、丢帧 0.0%；
         # 吞吐 44~46 张/秒；切文档 import_ms 中位 16.2 / 最坏 21.5；40 张通道合计 141.6 KB。
         run: REPS=3 LRT_STRIP_N=40 LRT_STRIP_FRAMES=180 "$PY" packaging/m5-filmstrip-bench.py
+      - name: M5-b 撤销/重做跑靶（保真 / 代价 / 内存账 / 手势合并）
+        # 四节：① 五层各一步，撤到底必须从 /dev/shm 读回与出厂帧逐字节相同的一帧（0 LSB），
+        # 重做到顶等于撤销前——两档代理尺寸各跑 REPS 次，先证明改动字节和 > 0（有鉴别力）；
+        # ② 产品档上 40 次来回的 history_ms（中位 ≤30 / 最坏 ≤60 ms，本机实测 15.5/16.4），
+        # 并判"栈深变了单次代价不许涨"；③ 灌满 64 步的 RSS 账（≤8 MiB，本机 +0.8）与五项
+        # 常驻字节账单前后逐字段相同；④ 50 条连发合并成 1 步 vs 每步新增 50 步的逐条往返
+        # （差 ≤2 ms，本机 0.14）。本机口径全部写进脚本头部注释，换口径必须同时改判据。
+        run: REPS=3 LRT_DEVICE=cuda "$PY" packaging/m5-history-bench.py
 
   # 通路不回归：引擎层单测 + 脚本可跑。真正的端到端帧率验收需要图形环境，
   # 在 M0 阶段仍是本机跑 packaging/m0-bench.sh，不假称 CI 已覆盖。

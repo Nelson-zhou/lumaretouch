@@ -133,6 +133,24 @@ pub struct AppState {
     /// session_state 每来一条 +1：前端拿它决定“要不要整条重取一次底片条”，
     /// 而不是每秒把两百张缩略图克隆一遍。
     session_rev: Mutex<usize>,
+    /// 最近一条 history_state（M5-b）。这一份里的 doc_state 是撤销之后**引擎认定的
+    /// 文档状态**：宿主必须按它重摆滑块，因为同一张文档内部撤销时 docKey 不变，
+    /// 走不到 image_ready 那条重摆路——不接就是“画面退回去了而滑块还停在 0.9”。
+    history: Mutex<Option<Value>>,
+    history_rev: Mutex<usize>,
+    /// ready 报的"哪些命令算编辑"（M5-b）。名单属于引擎，宿主只照抄：新加一层而
+    /// 忘了进名单时，撤销按钮会点着不亮——那正是"第七层没人记得"的老下场。
+    history_edit_cmds: Mutex<Vec<String>>,
+    /// 最近一条**带着 doc_state** 的事件（image_ready / session_state / history_state
+    /// 三条之一），外加"是哪一条"。历史账只能从这三条里来，而谁最后到只有宿主按到达
+    /// 次序数得出来：前端各取一份，就会出现"撤销完了又被一条晚到的 session_state 把
+    /// 旧栈深顶回来"——按钮在骗人。
+    doc_report: Mutex<Option<Value>>,
+    doc_rev: Mutex<usize>,
+    /// 发过一条编辑命令、还没听到引擎的历史答复。这一段窗口里撤销按钮必须可用，
+    /// 否则用户拖完滑块按不动：历史账只在 history_state / image_ready / session_state
+    /// 三条里出现，而拖滑块那几条都不在其中。
+    history_dirty: Mutex<bool>,
 }
 
 /// 用 `Arc` 起步才能传给引擎读线程；因此额外管理一个持有 Arc 的启动器。
@@ -169,6 +187,12 @@ impl AppState {
             session: Mutex::new(None),
             thumbs: Mutex::new(std::collections::HashMap::new()),
             session_rev: Mutex::new(0),
+            history: Mutex::new(None),
+            history_rev: Mutex::new(0),
+            doc_report: Mutex::new(None),
+            doc_rev: Mutex::new(0),
+            history_edit_cmds: Mutex::new(Vec::new()),
+            history_dirty: Mutex::new(false),
         }
     }
 
@@ -205,8 +229,23 @@ impl AppState {
         }
     }
 
+    /// 三条带 doc_state 的事件都进这里落一份"引擎最新说的文档状态 + 它是谁说的"。
+    fn note_doc(&self, v: &Value, src: &str) {
+        match v.get("doc_state") {
+            Some(ds) if !ds.is_null() => {
+                *self.doc_report.lock().unwrap() =
+                    Some(json!({"source": src, "doc_state": ds}));
+                *self.doc_rev.lock().unwrap() += 1;
+            }
+            _ => *self.doc_report.lock().unwrap() = None,
+        }
+        *self.history_dirty.lock().unwrap() = false;
+    }
+
     pub fn on_image_ready(&self, v: &Value) {
         *self.image.lock().unwrap() = Some(v.clone());
+        // image_ready 带着这一格文档的历史账（doc_state.history），脏标记可以落地
+        self.note_doc(v, "image_ready");
     }
 
     pub fn on_precompute_ready(&self, v: &Value) {
@@ -242,6 +281,8 @@ impl AppState {
 
     pub fn on_session_state(&self, v: &Value) {
         *self.session.lock().unwrap() = Some(v.clone());
+        // 同上：切文档那一条的 doc_state 就是新那一张的历史账
+        self.note_doc(v, "session_state");
         *self.session_rev.lock().unwrap() += 1;
     }
 
@@ -253,6 +294,12 @@ impl AppState {
             self.thumbs.lock().unwrap().insert(p.to_string(), b.to_string());
         }
         *self.session_rev.lock().unwrap() += 1;
+    }
+
+    pub fn on_history(&self, v: &Value) {
+        *self.history.lock().unwrap() = Some(v.clone());
+        *self.history_rev.lock().unwrap() += 1;
+        self.note_doc(v, "history_state");
     }
 
     pub fn on_export_progress(&self, v: &Value) {
@@ -269,6 +316,12 @@ impl AppState {
             Some(list) => *self.grade_limits.lock().unwrap() =
                 list.iter().filter_map(|x| x.as_f64()).collect(),
             None => *self.grade_limits.lock().unwrap() = Vec::new(),
+        }
+        // 哪些命令算编辑（M5-b）：没报就当这一版引擎还没有历史，清空而不是留上一份
+        match v.get("history_edit_cmds").and_then(|p| p.as_array()) {
+            Some(list) => *self.history_edit_cmds.lock().unwrap() =
+                list.iter().filter_map(|x| x.as_str().map(String::from)).collect(),
+            None => *self.history_edit_cmds.lock().unwrap() = Vec::new(),
         }
         // 导出能力（M4）：没报就当这一版引擎还不能导出，置 Null 而不是留上一份
         *self.export_caps.lock().unwrap() = match (v.get("export_formats"), v.get("export_tile")) {
@@ -287,11 +340,19 @@ impl AppState {
     }
 
     fn send_to_engine(&self, cmd: Value) -> Result<(), String> {
+        // M5-b：命令名先取出来（cmd 下面会被 send 吃掉）。它只用来标"可能有新的一步"，
+        // 宿主不数步数、不自己判哪条命令算编辑——名单由引擎的 ready 报
+        let name = cmd.get("cmd").and_then(|c| c.as_str()).unwrap_or("").to_string();
+        let edited = self.history_edit_cmds.lock().unwrap().iter().any(|c| c == &name);
         let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
         guard
             .as_ref()
             .ok_or_else(|| "引擎未启动".to_string())?
-            .send(cmd)
+            .send(cmd)?;
+        if edited {
+            *self.history_dirty.lock().unwrap() = true;
+        }
+        Ok(())
     }
 }
 
@@ -359,6 +420,21 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     *st.session.lock().unwrap() = None;
     st.thumbs.lock().unwrap().clear();
     *st.session_rev.lock().unwrap() += 1;
+    // 历史属于一个引擎进程里的那份会话：新进程连图都没解，栈必须从零开始
+    *st.history.lock().unwrap() = None;
+    *st.history_rev.lock().unwrap() += 1;
+    *st.doc_report.lock().unwrap() = None;
+    *st.doc_rev.lock().unwrap() += 1;
+    st.history_edit_cmds.lock().unwrap().clear();   // 名单等新进程的 ready 重新填
+    *st.history_dirty.lock().unwrap() = false;
+
+    // 握手：引擎的 ready（预设清单、grade 上限、导出能力、session/history 名单）
+    // **只在收到 hello 时才发**。M5-b 之前这里从没发过 hello，于是装机件里
+    // engine_status 报出来的 presets/grade_limits/export_caps/history_edit_cmds
+    // 一路全是空的——UI 把这些能力全判成"这个引擎还没有"，而日志里一个错都不报。
+    // 真窗口那一轮第一次把它抓出来：裸引擎的协议用例自己会发 hello，碰不到这一层。
+    // 必须在句柄存进 st.engine 之前发出去：那里头没有别的人会替它问候一次。
+    let _ = h.send(json!({"cmd": "hello"}));
     *st.engine.lock().map_err(|_| "引擎锁中毒".to_string())? = Some(Arc::new(h));
     Ok(json!({"pid": pid, "python": py, "src": src, "session": session}))
 }
@@ -928,6 +1004,11 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let export_caps = state.export_caps.lock().unwrap().clone();
     let session = state.session.lock().unwrap().clone();
     let session_rev = *state.session_rev.lock().unwrap();
+    let history = state.history.lock().unwrap().clone();
+    let history_rev = *state.history_rev.lock().unwrap();
+    let history_dirty = *state.history_dirty.lock().unwrap();
+    let doc_report = state.doc_report.lock().unwrap().clone();
+    let doc_rev = *state.doc_rev.lock().unwrap();
     let thumbs_ready = state.thumbs.lock().unwrap().len();
     let presets: Vec<Value> = state.presets.lock().unwrap().clone();
     let grade_limits: Vec<f64> = state.grade_limits.lock().unwrap().clone();
@@ -940,7 +1021,13 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            // 底片条的“有没有、几张、当前哪一格”进轮询（小），像素本体不进：
            // 那两百张要由 filmstrip 单独取，且只在 session_rev 变了的时候取
            "session": session, "session_rev": session_rev,
-           "thumbs_ready": thumbs_ready})
+           "thumbs_ready": thumbs_ready,
+           // 撤销/重做（M5-b）：上一条结果 + 变更序号。按钮的灰与不灰、滑块的重摆
+           // 都只看这两项，前端不许自己数步数
+           "history": history, "history_rev": history_rev,
+           "history_dirty": history_dirty,
+           "doc_report": doc_report, "doc_rev": doc_rev,
+           "history_edit_cmds": state.history_edit_cmds.lock().unwrap().clone()})
 }
 
 #[tauri::command]
@@ -963,6 +1050,12 @@ fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     *state.session.lock().unwrap() = None;
     state.thumbs.lock().unwrap().clear();
     *state.session_rev.lock().unwrap() += 1;
+    *state.history.lock().unwrap() = None;
+    *state.history_rev.lock().unwrap() += 1;
+    *state.doc_report.lock().unwrap() = None;
+    *state.doc_rev.lock().unwrap() += 1;
+    state.history_edit_cmds.lock().unwrap().clear();
+    *state.history_dirty.lock().unwrap() = false;
     match h {
         Some(h) => {
             h.shutdown();
@@ -1015,6 +1108,18 @@ fn session(
         cmd["thumbs"] = json!(v);
     }
     state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 撤销/重做（M5-b）：四个动作一条命令，宿主只做把手。步数上限、手势合并窗口、
+/// 哪几层进历史、随文档走的那条栈——全在引擎里；在这里刻一份就会漂一份。
+#[tauri::command]
+fn history(state: State<'_, Arc<AppState>>, action: String) -> Result<Value, String> {
+    const ACTIONS: [&str; 4] = ["undo", "redo", "state", "clear"];
+    if !ACTIONS.contains(&action.as_str()) {
+        return Err(format!("history 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
+    }
+    state.send_to_engine(json!({"cmd": "history", "action": action}))?;
     Ok(json!({"requested": true}))
 }
 
@@ -1071,6 +1176,10 @@ fn m0_env() -> Value {
         "auto_export": std::env::var("LRT_AUTO_EXPORT").unwrap_or_default(),
         // 底片条自动通道："<目录>[@<选中第几张>[@<edge>]]"，给真窗口确认轮用
         "auto_filmstrip": std::env::var("LRT_AUTO_FILMSTRIP").unwrap_or_default(),
+        // 撤销/重做自动通道：<强度值>，给真窗口确认轮用。它验的不是引擎（引擎有
+        // 协议用例逐字节对拍），而是 runHistory → Rust history → 引擎 history_state
+        // 这条命令签名在真窗口里对不对得上——Tauri 参数名不匹配时是静默丢参数。
+        "auto_history": std::env::var("LRT_AUTO_HISTORY").unwrap_or_default(),
     })
 }
 
@@ -1093,7 +1202,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, precompute,
-            inpaint, light, deform, lut, grade, export, session, filmstrip, report, quit
+            inpaint, light, deform, lut, grade, export, session, filmstrip, history,
+            report, quit
         ])
         .run(tauri::generate_context!())
         .expect("运行 LumaRetouch 失败");

@@ -133,4 +133,14 @@ export const en: Partial<Record<MsgKey, string>> = {
   "strip.empty": "No filmstrip yet: type a folder and press Scan.",
   "strip.edited": "edited",
   "strip.failed": "unreadable",
+  // ---- undo / redo (M5-b)
+  "side.history": "Undo / Redo",
+  "history.desc": "One history across every layer: one press undoes one gesture (a slider drag counts as one). Shortcuts: Ctrl+Z / Ctrl+Shift+Z.",
+  "history.undo": "Undo",
+  "history.redo": "Redo",
+  "history.clear": "Clear history",
+  "history.count": "{u} to undo · {r} to redo (max {max})",
+  "history.unknown": "No history yet: import a photo and start retouching.",
+  "history.last": "Last: {act} · {ms} ms",
+  "history.noop": " (nothing left)",
 };

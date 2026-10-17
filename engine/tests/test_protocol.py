@@ -35,6 +35,9 @@ class EngineProcess:
             text=True, bufsize=1, env=env)
         self.session = session
         self._q: queue.Queue[dict] = queue.Queue()
+        # 最近一条被 wait_for 顺手丢掉的 frame 事件。M5-b 的 undo 链上 history_state
+        # 就发在帧前面，等状态的那个 wait_for 会把画面证据吃掉；像素判据要从这里捡回来。
+        self.last_frame: dict | None = None
         self._err: list[str] = []
         self._closed = False
         threading.Thread(target=self._pump_stdout, daemon=True).start()
@@ -77,6 +80,8 @@ class EngineProcess:
             e = self.next_event(timeout=min(left, 10.0))
             if e.get("event") == event:
                 return e
+            if e.get("event") == "frame":
+                self.last_frame = e
             if e.get("event") == "error":
                 raise AssertionError(f"引擎报错: {e.get('error')}")
 
@@ -1952,12 +1957,25 @@ def test_grade_done_arms_emit_the_same_event_shape(engine):
         engine.send(cmd="grade", **kw)
         events.append(engine.wait_for("grade_done", timeout=60))
         engine.wait_for("frame", timeout=60)
+    extra = ("grade_ms", "lut_ms", "filter_ms", "bands_ms", "filter_cached",
+             "deform_ms", "render_ms", "total_ms", "strength", "lut_preset", "action")
     for k in GRADE_KEYS:
         assert all(k in e for e in events), f"{k} 在某一臂里丢了"
     # 每帧分段与命令层计时得由协议层加：库层的 payload 里没有它们
-    for k in ("grade_ms", "lut_ms", "filter_ms", "bands_ms", "filter_cached",
-              "deform_ms", "render_ms", "total_ms", "strength", "lut_preset", "action"):
+    for k in extra:
         assert all(k in e for e in events), f"{k} 在某一臂里丢了"
+    # 键集**闭合**：宿主那一侧的 TS 接口把每个字段都声明成必存，而谎报发生在 JSON
+    # 边界上、编译期抓不到。M5-b 的真窗口轮就是这么撞上一次事故——grade_done 是铺平
+    # 的一份（grade_dh / grade_amount / grade_lit），嵌套那份 grade_state 才是
+    # dh / amount / lit；UI 把两套名字混进一个接口去读 .amount，渲染时一句
+    # TypeError 把整棵 React 树拆掉，画面冻结在 0 帧（delivered=0）。
+    # 所以这里同时钉两头：少一个键不行，把嵌套那套的短名字混进来也不行。
+    want = {"event"} | set(GRADE_KEYS) | set(extra)
+    for e in events:
+        assert set(e) == want, f"grade_done 的键集漂了：多 {sorted(set(e) - want)}" \
+                               f" 少 {sorted(want - set(e))}"
+        for alias in ("dh", "ds", "dv", "amount", "lit"):
+            assert alias not in e, f"grade_done 里出现了嵌套层的短名字 {alias}：宿主会读错一份"
 
 
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
@@ -2781,3 +2799,297 @@ def test_a_thumb_failure_only_kills_its_own_cell(engine, tmp_path):
     row = next(x for x in st["docs"] if x["path"] == os.path.abspath(broken))
     assert row["thumb"] is None and "解不开" in row["thumb_error"], row
     assert all(x["thumb"] for x in st["docs"] if x["path"] != os.path.abspath(broken))
+
+
+# ============================================================ M5-b：全局撤销/重做
+# 这一节只管**画面与生命周期**：撤销回去的那一帧是不是逐字节同一张、一步的粒度对不对、
+# 历史跟着不跟着文档走。占不占一步、快照装了什么这些纯口径判断在 test_history.py。
+
+def _hist(engine, action="state", timeout=60):
+    engine.send(cmd="history", action=action)
+    return engine.wait_for("history_state", timeout=timeout)
+
+
+def _drain_frames(engine, peer, h, w, quiet=0.5):
+    """把已排队的 frame 事件收干净，返回 (最后一帧的像素, 那条 seq)。
+
+    不能沿用 _read_frame：几条命令排了四帧在队列里，_read_frame 拿的是最早那条事件的
+    slot 号，而双缓冲只有两块——那个号现在装着最新那一帧。撤回到"出厂那一帧"这种判据
+    要是拿错了帧，比的是同一块内存里的同一张图，永远相等。
+    """
+    last = None
+    while True:
+        try:
+            e = engine.next_event(timeout=quiet)
+        except TimeoutError:
+            break
+        if e.get("event") == "frame":
+            last = e
+        elif e.get("event") == "error":
+            raise AssertionError(f"引擎报错：{e.get('error')}")
+    if last is None:
+        # 队列安静了还不是一定没有帧：等 history_state / *_done 时，路上那条 frame 已被
+        # wait_for 丢掉。引擎只留最后一帧在 shm 里，那个 slot 号说的就是当前画面。
+        last = engine.last_frame
+    assert last is not None, "一条帧事件都没有，画面证据是空的"
+    engine.last_frame = None            # 取走就不留：下一次判据必须来自新的一帧
+    px = np.frombuffer(peer.read_pixels(last["slot"]), np.uint8).reshape(h, w, 4)[:, :, :3]
+    return px.astype(np.int16), int(last["seq"])
+
+
+def test_history_contract_is_announced_at_ready(engine):
+    """撤销的行程、步数上限与手势合并窗口都由引擎说，前端不许刻一份。"""
+    engine.send(cmd="hello")
+    r = engine.wait_for("ready")
+    assert set(r["history_actions"]) == {"undo", "redo", "state", "clear"}
+    assert 8 <= r["history_max"] <= 1024, r["history_max"]
+    assert r["history_group_ms"] > 0
+    for c in ("set_strength", "inpaint", "light", "deform", "lut", "grade"):
+        assert c in r["history_edit_cmds"], f"{c} 不进历史：那一层的编辑撤不回来"
+    # 这两条不是编辑：把它们算进去，换一张图就会凭空多一步
+    assert "load_image" not in r["history_edit_cmds"]
+    assert "precompute" not in r["history_edit_cmds"]
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_history_argument_boundaries(engine):
+    """未知动作、多余参数、没有会话、空栈：四条都要整条拒绝或如实报 noop。"""
+    _needs_torch()
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="history", action="nonsense")
+    _expect_error(engine, "未知 history action")
+    engine.send(cmd="history", action="state", extra=1)
+    _expect_error(engine, "history 收到不认识的参数")
+    engine.send(cmd="history", action="undo")
+    _expect_error(engine, "尚未 load_image")
+    # 空栈的 undo 不是错误：快捷键按多了是常态，报 noop 让按钮跟着灰下去
+    _load(engine, max_px=STRIP_MAX_PX, strength=0.0)
+    st = _hist(engine, "undo")
+    assert st.get("noop") is True and st["undo_steps"] == 0 and st["can_redo"] is False
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_undo_returns_the_exact_frame_and_redo_replays_it(engine):
+    """产品的主判据：撤销回去的那一帧必须与来时逐字节同一张，重做再原样回来。
+
+    只看事件不作数：doc_state 报对了而画面没重放那一笔，是同时可能成立的。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=STRIP_MAX_PX, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        base, seq0 = _drain_frames(engine, peer, h, w)
+        assert _hist(engine)["undo_steps"] == 0, "刚导完就该有历史？"
+        engine.send(cmd="set_strength", value=0.9)
+        engine.wait_for("params_set", timeout=30)
+        strong, _ = _drain_frames(engine, peer, h, w)
+        assert int(np.abs(strong - base).max()) > 0, "强度根本没上屏，后面那次相等不作数"
+        st = _hist(engine, "undo")
+        assert st["undo_steps"] == 0 and st["redo_steps"] == 1 and st["can_redo"]
+        assert st["doc_state"]["strength"] == 0.0, st["doc_state"]
+        assert st["history_ms"] >= 0.0
+        back, seq1 = _drain_frames(engine, peer, h, w)
+        assert np.array_equal(back, base), "撤销回去的帧与来时不是逐字节同一张"
+        assert seq1 > seq0, "撤销没出帧"
+        rd = _hist(engine, "redo")
+        assert rd["doc_state"]["strength"] == 0.9 and rd["can_undo"]
+        again, _ = _drain_frames(engine, peer, h, w)
+        assert np.array_equal(again, strong), "重做回去的帧与撤销前不是逐字节同一张"
+        _hist(engine, "undo")
+        e = _hist(engine, "undo")           # 退无可退
+        assert e.get("noop") is True and not e["can_undo"]
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_dragging_one_slider_is_one_undo_step(engine):
+    """一步 = 一次手势：同一个滑块连发五条只占一步，换滑块或跨过合并窗口才算新的一步。"""
+    _needs_torch()
+    engine.send(cmd="hello")
+    ready = engine.wait_for("ready")
+    _load(engine, max_px=STRIP_MAX_PX, strength=0.0)
+    for v in (0.1, 0.25, 0.4, 0.62, 0.8):
+        engine.send(cmd="set_strength", value=v)
+        engine.wait_for("params_set", timeout=30)
+    assert _hist(engine)["undo_steps"] == 1, "一次拖拽被记成了多步：撤销要按五次"
+    engine.send(cmd="set_strength", mid_gain=0.4)     # 另一个滑块（参数名不同）
+    engine.wait_for("params_set", timeout=30)
+    assert _hist(engine)["undo_steps"] == 2
+    time.sleep(ready["history_group_ms"] / 1000.0 + 0.15)
+    engine.send(cmd="set_strength", value=0.3)        # 跨过合并窗口，同组也要新起一步
+    engine.wait_for("params_set", timeout=30)
+    assert _hist(engine)["undo_steps"] == 3
+    st = _hist(engine, "undo")
+    assert st["doc_state"]["strength"] == pytest.approx(0.8)
+    assert st["doc_state"]["params"]["mid_gain"] == pytest.approx(0.4)
+    st = _hist(engine, "undo")
+    assert st["doc_state"]["params"]["mid_gain"] == 0.0, "退掉修容带增益那一步没生效"
+    st = _hist(engine, "undo")
+    assert st["undo_steps"] == 0 and st["doc_state"]["strength"] == 0.0
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_rejected_edit_takes_no_history_step(engine):
+    """整条被拒的命令不许占一步，也不许偷偷改掉任何一个字段。"""
+    _needs_torch()
+    _load(engine, max_px=STRIP_MAX_PX, strength=0.0)
+    assert _hist(engine)["undo_steps"] == 0
+    engine.send(cmd="set_strength", value=0.7, radius=999999)
+    _expect_error(engine, "radius")
+    st = _hist(engine)
+    assert st["undo_steps"] == 0, "被拒绝的命令占了一步"
+    assert st["doc_state"]["strength"] == 0.0, "拒绝的那条把 strength 偷偷改走了"
+    engine.send(cmd="inpaint", action="nonsense")
+    _expect_error(engine, "未知 inpaint action")
+    assert _hist(engine)["undo_steps"] == 0
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_undo_walks_back_through_every_layer(engine, tmp_path):
+    """五层各动一次 → 撤到底必须回到出厂状态与出厂那一帧；重做到顶再原样回来。
+
+    这条是「跨层统一历史栈」的存在理由：各层自己有 undo 是不够的，用户按的是
+    Ctrl+Z，不是「撤销上一次磨皮」。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=STRIP_MAX_PX, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        base, _ = _drain_frames(engine, peer, h, w)
+        engine.send(cmd="set_strength", value=0.6)
+        engine.wait_for("params_set", timeout=30)
+        engine.send(cmd="inpaint", action="add", rle=_brush_rle(h, w, h // 2, w // 2, 6),
+                    feather=2)
+        engine.wait_for("inpaint_done", timeout=120)
+        engine.send(cmd="light", action="add", rle=_brush_rle(h, w, h // 3, w // 3, 6),
+                    feather=2, sign=1, radius=6)
+        engine.wait_for("light_done", timeout=120)
+        engine.send(cmd="grade", action="set", dh=0.02, ds=0.10, dv=-0.05, amount=1.0)
+        engine.wait_for("grade_done", timeout=60)
+        engine.send(cmd="lut", action="set", path=_write_cube(tmp_path, 8, 0.9))
+        engine.wait_for("lut_done", timeout=60)
+        top, seq_top = _drain_frames(engine, peer, h, w)
+        assert not np.array_equal(top, base), "五层全挂上画面却一模一样：这个对拍没有鉴别力"
+        st = _hist(engine)
+        assert st["undo_steps"] == 5, f"五层各一步，实际={st['undo_steps']}"
+        ds = st["doc_state"]
+        assert ds["counts"]["repair"] == 1 and ds["counts"]["light"] == 1
+        assert ds["lut"]["lit"] is True and ds["grade"]["lit"] is True
+        for _ in range(5):
+            _hist(engine, "undo")
+        done = _hist(engine)
+        d0 = done["doc_state"]
+        assert done["undo_steps"] == 0 and done["redo_steps"] == 5
+        assert d0["strength"] == 0.0 and d0["counts"] == {"repair": 0, "light": 0,
+                                                         "repair_redo": 0, "light_redo": 0}
+        assert d0["lut"]["lit"] is False and d0["grade"]["lit"] is False
+        back, _ = _drain_frames(engine, peer, h, w)
+        assert np.array_equal(back, base), "撤到底的画面与出厂那一帧不是逐字节同一张"
+        for _ in range(5):
+            _hist(engine, "redo")
+        again, seq_end = _drain_frames(engine, peer, h, w)
+        assert np.array_equal(again, top), "重做到顶的画面与撤销前不是逐字节同一张"
+        assert seq_end > seq_top
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_history_travels_with_the_document(engine, tmp_path):
+    """每个文档一条历史：切走再回来，栈深与画面都还是它自己那份。"""
+    _needs_torch()
+    d, (fa, _fb) = _strip_dir(tmp_path)
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set", timeout=60)
+    # 先 scan 再切：两张同尺寸，第二张不会再发 shm_ready（`_open_doc` 是"第一次开"
+    # 那一族语义的助手，切文档要走 session select）
+    engine.send(cmd="session", action="scan", dir=d, thumbs=False)
+    engine.wait_for("session_scan", timeout=30)
+    # 当前那一格的 index 直接从 image_ready 拿（它是引擎自己报的 session_index）。
+    # 别去等 session_state：上一条 _hist 已经把 scan 发的那条从队列里吃掉了，
+    # wait_for 就是这么不讲理——它会丢掉路上所有非目标事件
+    _meta, ir_home = _open_doc(engine, fa)
+    home = ir_home["session_index"]
+    engine.send(cmd="set_strength", value=0.7)
+    engine.wait_for("params_set", timeout=30)
+    engine.send(cmd="set_strength", value=0.35)      # 同一次手势：仍然一步
+    engine.wait_for("params_set", timeout=30)
+    assert _hist(engine)["undo_steps"] == 1
+    engine.send(cmd="session", action="select", index=1 - home)
+    engine.wait_for("image_ready", timeout=60)
+    assert _hist(engine)["undo_steps"] == 0, "切到新文档还挂着上一张的撤销栈"
+    engine.send(cmd="set_strength", value=0.9)
+    engine.wait_for("params_set", timeout=30)
+    assert _hist(engine)["undo_steps"] == 1
+    engine.send(cmd="session", action="select", index=home)
+    ir = engine.wait_for("image_ready", timeout=60)
+    assert ir["switched"] is True
+    st = _hist(engine)
+    assert st["undo_steps"] == 1, "回来之后历史不是那张的：撤销会退到别的故事上"
+    assert st["doc_state"]["strength"] == pytest.approx(0.35)
+    undone = _hist(engine, "undo")
+    assert undone["doc_state"]["strength"] == 0.0
+    # 另一张的历史没被这一下动过
+    engine.send(cmd="session", action="select", index=1 - home)
+    engine.wait_for("image_ready", timeout=60)
+    assert _hist(engine)["undo_steps"] == 1
+    assert _hist(engine)["doc_state"]["strength"] == pytest.approx(0.9)
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_budget_change_clears_history_and_says_so(engine):
+    """代理档一变，快照里的像素坐标就不成立了：历史必须跟着清，而且要说出来。"""
+    _needs_torch()
+    meta = _load(engine, max_px=STRIP_MAX_PX, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    engine.send(cmd="inpaint", action="add", rle=_brush_rle(h, w, h // 2, w // 2, 6),
+                feather=2)
+    engine.wait_for("inpaint_done", timeout=120)
+    assert _hist(engine)["undo_steps"] == 1
+    # 把同一张图按更大一档代理预算重开：坐标层作废，历史也就没有意义了
+    engine.send(cmd="load_image", path=FIXTURE, max_px=576000, strength=0.0)
+    got = _collect(engine, "image_ready", timeout=120)
+    warns = [e for e in got.get("engine_warn", []) if "历史" in e["warn"]]
+    assert warns, "清了历史没说：用户按撤销会以为那一笔还在，而画面已经不带它了"
+    assert _hist(engine)["undo_steps"] == 0
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_history_refused_while_benching(engine):
+    """撤销与跑靶互斥：跑靶线程在写 frame_gpu，这里也写同一块（同 set_strength 那条理由）。"""
+    _needs_torch()
+    meta = _load(engine, max_px=STRIP_MAX_PX, strength=0.0)
+    engine.send(cmd="set_strength", value=0.6)
+    engine.wait_for("params_set", timeout=30)
+    engine.send(cmd="bench_start", w=meta["w"], h=meta["h"], frames=400,
+                interval_ms=8, mode="copy")
+    engine.wait_for("bench_started", timeout=30)
+    try:
+        engine.send(cmd="history", action="undo")
+        _expect_error(engine, "跑靶进行中，拒绝 history undo")
+    finally:
+        engine.send(cmd="bench_stop")
+        engine.wait_for("bench_done", timeout=90)
+    # 跑靶停了就恢复正常
+    assert _hist(engine, "undo")["undo_steps"] == 0
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_history_clear_is_not_a_step_and_refuses_empty_actions(engine):
+    """clear 是运维口径（新照片/新会话），它自己不该被撤销回来。"""
+    _needs_torch()
+    _load(engine, max_px=STRIP_MAX_PX, strength=0.0)
+    engine.send(cmd="set_strength", value=0.4)
+    engine.wait_for("params_set", timeout=30)
+    assert _hist(engine)["undo_steps"] == 1
+    st = _hist(engine, "clear")
+    assert st["undo_steps"] == 0 and st["redo_steps"] == 0 and st["can_undo"] is False
+    again = _hist(engine, "undo")
+    assert again.get("noop") is True
+    assert again["doc_state"]["strength"] == pytest.approx(0.4), "clear 不该改画面状态"

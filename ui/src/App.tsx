@@ -6,10 +6,11 @@ import { t } from "./i18n";
 import {
   benchStart, benchStats, engineStatus, loadImage, m0Env, parseFrameHead, peekFrame,
   quit, report, runDeform,
-  fetchFilmstrip, runExport, runGrade, runInpaint, runLight, runLut, runSession,
+  fetchFilmstrip, runExport, runGrade, runHistory, runInpaint, runLight, runLut, runSession,
   setStrength, shutdownEngine, startEngine,
   type BenchOptions, type DeformInfo, type DocState, type EngineStatus, type ExportDone,
-  type ExportProgress, type ImageReady, type InpaintInfo, type SessionState,
+  type ExportProgress, type HistoryReport, type HistoryState, type ImageReady,
+  type InpaintInfo, type SessionState,
   type GradeInfo, type LightInfo,
   type LutInfo,
   type Precompute, type Stats,
@@ -140,11 +141,38 @@ export default function App() {
   // 当前是哪一张文档：变了才按引擎那份 doc_state 重摆滑块（同图轮询不重摆，
   // 否则会把用户正在拖的手势按回引擎上一帧的值）
   const docKey = useRef("");
+  // 撤销/重做（M5-b）。histRep 只信引擎报的那份；histRev 变了才按 history_state
+  // 里的 doc_state 重摆滑块（同图撤销时 docKey 不变，走不到 image_ready 那条路）。
+  // applied 是"宿主真的把引擎那份状态摆上去了"的直接证据，自动通道要读它。
+  const [histRep, setHistRep] = useState<HistoryReport | null>(null);
+  const [histDirty, setHistDirty] = useState(false);
+  const [lastHistory, setLastHistory] = useState<HistoryState | null>(null);
+  const histRev = useRef(-1);
+  const docRev = useRef(-1);
+  const applied = useRef<{ strength: number; from: string } | null>(null);
   const [dragNote, setDragNote] = useState("");
   const lastSend = useRef(0);
   const pending = useRef<number | null>(null);
 
   const [w, h] = SIZES[sizeKey];
+
+  /** 引擎那份文档状态 → 界面滑块。两条路共用它：切文档（image_ready）与
+   *  撤销/重做（history_state）。各写一遍就是 M5-a 之前那种漂移的源头。 */
+  const applyDocState = useCallback((ds: DocState | null | undefined, from: string) => {
+    if (!ds) return;
+    setStrengthV(ds.strength);
+    setRadius(ds.params.radius ?? 12);
+    setDetailGain(ds.params.detail_gain ?? 1.0);
+    setMidGain(ds.params.mid_gain ?? 0.0);
+    setBroadGain(ds.params.broad_gain ?? 0.0);
+    setChannel(ds.channel ?? "");
+    setLightExposure(ds.light.exposure);
+    setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0, ...ds.deform.amounts });
+    setLutAmount(ds.lut.amount);
+    setGradeAmounts({ dh: ds.grade.dh, ds: ds.grade.ds, dv: ds.grade.dv });
+    setGradeMix(ds.grade.amount);
+    applied.current = { strength: ds.strength, from };
+  }, []);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -182,30 +210,58 @@ export default function App() {
         setThumbs(fs.thumbs);
         if (fs.session) setStrip(fs.session);
       }
+      // 历史账（M5-b）。栈深只从宿主记的那一份 doc_report 取：三条带 doc_state 的
+      // 事件谁最后到由 Rust 按到达次序数，前端各自取一份就会出现"撤销完了又被一条
+      // 晚到的 session_state 把旧栈深顶回来"——按钮在骗人。
+      setHistDirty(st.history_dirty);
+      if (st.doc_rev !== docRev.current) {
+        docRev.current = st.doc_rev;
+        setHistRep(st.doc_report?.doc_state?.history ?? null);
+      }
+      // 重摆滑块的两个触发点。history_state 里只有 undo/redo 真的动了编辑，
+      // state 与 clear 是"问一句"，跟着重摆会把用户正在拖的手势按回引擎的值
+      if (st.history_rev !== histRev.current) {
+        histRev.current = st.history_rev;
+        const hs = st.history;
+        if (hs) {
+          setLastHistory(hs);
+          if (hs.action === "undo" || hs.action === "redo") applyDocState(hs.doc_state, hs.action);
+        }
+      }
       if (st.image) {
         const key = `${st.image.doc ?? ""}#${st.image.session_index ?? -1}`;
         if (key !== docKey.current) {
           docKey.current = key;
-          const ds = st.image.doc_state;
-          if (ds) {
-            setStrengthV(ds.strength);
-            setRadius(ds.params.radius ?? 12);
-            setDetailGain(ds.params.detail_gain ?? 1.0);
-            setMidGain(ds.params.mid_gain ?? 0.0);
-            setBroadGain(ds.params.broad_gain ?? 0.0);
-            setChannel(ds.channel ?? "");
-            setLightExposure(ds.light.exposure);
-            setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0, ...ds.deform.amounts });
-            setLutAmount(ds.lut.amount);
-            setGradeAmounts({ dh: ds.grade.dh, ds: ds.grade.ds, dv: ds.grade.dv });
-            setGradeMix(ds.grade.amount);
-          }
+          applyDocState(st.image.doc_state, "image_ready");
         }
+      } else {
+        setHistRep(null);
+        applied.current = null;
       }
     } catch {
       /* 引擎未起，忽略 */
     }
-  }, []);
+  }, [applyDocState]);
+
+  // Ctrl+Z / Ctrl+Shift+Z（macOS 上跟着 Cmd）：撤销是全局动作，不该要求某个按钮被聚焦。
+  // 两处放行：① 焦点在文本框里（目录输入框那种编辑不能被全局撤销吃掉）；② 按住 Alt
+  // 不动它（留给窗口管理器的组合键）。被拒/空栈由引擎回 noop，按钮自己会灰下去。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k !== "z" && k !== "y") return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      e.preventDefault();
+      const redo = k === "y" || e.shiftKey;
+      runHistory(redo ? "redo" : "undo")
+        .then(() => refreshStatus())
+        .catch((err) => setDragNote(String(err)));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [refreshStatus]);
 
   // M0 自动跑靶通道
   useEffect(() => {
@@ -496,6 +552,37 @@ export default function App() {
           } : { bad: "12s 内没等到 grade_done（参数越界或跑靶进行中）", dh, ds, dv, amount })}`);
         }
       }
+      // 帧快照与字节差：底片条（M5-a）与撤销/重做（M5-b）两条自动通道共用。
+      // 比的是"用户看见的那一帧"，不是引擎上报的那个数字。
+      const peek = async () => {
+        try {
+          return parseFrameHead(await peekFrame());
+        } catch (e) {
+          await report(`M0_ERROR peekFrame 失败: ${e}`);
+          return null;
+        }
+      };
+      // 返回 -1 表示"两份快照不是一块画布"（尺寸不同）。这不等于"画面没变"：
+      // 切到不同幅面那张时代理档就从 400×504 变成 552×368，画布都换了，
+      // 拿字节数比是比不出东西的——上一版就是在这里把它判成"没变"，一条
+      // 假红灯把 mixed 那一档整条带崩
+      const diffBytes = (a: Uint8Array | null, b: Uint8Array | null) => {
+        if (!a || !b) return -2;
+        if (a.length !== b.length) return -1;
+        let n = 0;
+        for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) n++;
+        return n;
+      };
+      // 等宿主把下一条 history_state 搬进轮询状态：撤销的答复是异步的，
+      // 而它的 doc_state 就是"引擎认为现在该摆哪些滑块"的唯一出处
+      const waitHistory = async (rev: number, ms = 20000) => {
+        for (let i = 0; i < ms / 100; i++) {
+          await sleep(100);
+          const st = await engineStatus().catch(() => null);
+          if (st && st.history_rev !== rev && st.history) return st.history;
+        }
+        return null;
+      };
       // 批量出片（M4）自动通道："<目录>[@<格式>][@<tile>]"。这一条与上面几条同一个
       // 身份：只有真窗口能证明 runExport → Rust export → 引擎 export_done 对得上；
       // 而且落盘尺寸是"导出的是满幅不是代理档"的唯一直接证据，所以它与 image_ready
@@ -585,26 +672,6 @@ export default function App() {
           let backPath = "";
           let switchMs = -1;
           const idx = pick >= 0 && pick < docs.length ? pick : -1;
-          // 三次快照：走之前、在另一张上、绕回来。比的是字节，不是上报的数字
-          const peek = async () => {
-            try {
-              return parseFrameHead(await peekFrame());
-            } catch (e) {
-              await report(`M0_ERROR peekFrame 失败: ${e}`);
-              return null;
-            }
-          };
-          // 返回 -1 表示"两份快照不是一块画布"（尺寸不同）。这不等于"画面没变"：
-          // 切到不同幅面那张时代理档就从 400×504 变成 552×368，画布都换了，
-          // 拿字节数比是比不出东西的——上一版就是在这里把它判成"没变"，一条
-          // 假红灯把 mixed 那一档整条带崩
-          const diffBytes = (a: Uint8Array | null, b: Uint8Array | null) => {
-            if (!a || !b) return -2;
-            if (a.length !== b.length) return -1;
-            let n = 0;
-            for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) n++;
-            return n;
-          };
           let pixHome = "", pixAway = "", pixBack = "";
           let seqHome = -1, seqAway = -1, seqBack = -1;
           let diffAway = -1, diffBack = -1;
@@ -674,6 +741,83 @@ export default function App() {
             // 字节真的不同（同幅面那张）。两个都不成立才是没换
             pixelLeft: pixAway !== pixHome || diffAway > 0,
             canvasChanged: pixAway !== pixHome,
+          })}`);
+        }
+      }
+      // 撤销/重做（M5-b）自动通道：LRT_AUTO_HISTORY=<强度值>。
+      // 引擎那条链已有协议用例逐字节对拍（test_undo_walks_back_through_every_layer），
+      // 而那份用例连的是裸引擎。这一条要证的是宿主这四层：
+      //   ① runHistory → Rust history → 引擎 history_state 的签名对得上；
+      //   ② 画面真的逐字节退回去/回来（peek_frame 从装机件的 shm 里取）；
+      //   ③ 宿主按引擎那份 doc_state 重摆了滑块（applied 是唯一直接证据——滑块没跟着
+      //      退而画面退了，用户在 UI 上看到的还是 0.9）；
+      //   ④ 引擎在 ready 里报的能力名单真的送到了宿主（historyEditCmds）：这一条
+      //      上一轮报的是 0，抓出的正是"宿主从没发过 hello"那个缺陷。
+      // 基线一律现问引擎（askHistory("state")），不许拿轮询里那份 doc_report：
+      // 编辑命令不带 doc_state，拿它就是拿开图那一刻的账来比现在的动作。
+      if (env.auto_history) {
+        const v = Number(env.auto_history);
+        if (!Number.isFinite(v) || v < 0 || v > 1) {
+          await report(`M0_ERROR 无法解析 LRT_AUTO_HISTORY=${env.auto_history}（要一个 0–1 的强度值）`);
+        } else {
+          const askHistory = async (action: "undo" | "redo" | "state" | "clear") => {
+            const before = (await engineStatus().catch(() => null))?.history_rev ?? -1;
+            await runHistory(action).catch((e) => report(`M0_ERROR runHistory(${action}) 失败: ${e}`));
+            const got = await waitHistory(before);
+            if (!got) await report(`M0_ERROR 没等到 history ${action} 的答复`);
+            return got;
+          };
+          const st0 = await engineStatus().catch(() => null);
+          const editCmds = st0?.history_edit_cmds?.length ?? -1;
+          const q0 = await askHistory("state");
+          const steps0 = q0?.undo_steps ?? -1;
+          const strength0 = q0?.doc_state?.strength ?? -1;
+          const base = await peek();
+          const homePix = base?.pixels ?? null;
+          // 一次手势：两条 set_strength 都只带 value → 同组、窗口内 → 应当只占一步。
+          // 第二跳的落点按"离基线强度足够远"来选（不是 v*0.6 那种固定比例）：
+          // 挂满图层那一臂的基线强度本来就是 0.5，v=0.85 的 0.6 倍正好 0.51，画面
+          // 只差 5515 字节——"撤回去 0 字节"在这种薄鉴别力下几乎不构成证据。
+          const target = (q0?.doc_state?.strength ?? 0) <= 0.5 ? 0.95 : 0.05;
+          await setStrength(v).catch((e) => report(`M0_ERROR setStrength 失败: ${e}`));
+          await sleep(200);
+          await setStrength(target).catch((e) => report(`M0_ERROR setStrength 失败: ${e}`));
+          await sleep(500);
+          const strong = await peek();
+          const q1 = await askHistory("state");
+          const steps1 = q1?.undo_steps ?? -1;
+          const strengthEdit = q1?.doc_state?.strength ?? -1;
+          const appliedBefore = applied.current;
+          // 撤销：像素必须逐字节等于基线，滑块的 echo 必须回到基线那一刻的值
+          const u = await askHistory("undo");
+          await refreshStatus();
+          const appliedUndo = applied.current;
+          const afterUndo = await peek();
+          // 重做：必须回到强版本
+          const r = await askHistory("redo");
+          await refreshStatus();
+          const appliedRedo = applied.current;
+          const afterRedo = await peek();
+          await report(`M0_HISTORY ${JSON.stringify({
+            value: v, editCmds, steps0, steps1,
+            undoSteps: u?.undo_steps ?? -1, redoSteps: u?.redo_steps ?? -1,
+            undoSteps2: r?.undo_steps ?? -1, redoSteps2: r?.redo_steps ?? -1,
+            undoMs: u?.history_ms ?? -1, redoMs: r?.history_ms ?? -1,
+            renderMs: u?.render_ms ?? -1,
+            strength0, strengthEdit,
+            strengthUndo: u?.doc_state?.strength ?? -1,
+            strengthRedo: r?.doc_state?.strength ?? -1,
+            seqs: [base?.seq ?? -1, strong?.seq ?? -1, afterUndo?.seq ?? -1, afterRedo?.seq ?? -1],
+            // 鉴别力：上了强度画面必须变（否则下面那两条"相等"是空的）
+            changed: diffBytes(homePix, strong?.pixels ?? null),
+            // 保真：撤销 == 基线帧、重做 == 撤销前，都是逐字节
+            undoDiff: diffBytes(homePix, afterUndo?.pixels ?? null),
+            redoDiff: diffBytes(strong?.pixels ?? null, afterRedo?.pixels ?? null),
+            // 宿主重摆：applied 由 applyDocState 写，from 说的是哪一条事件摆的
+            applied: [appliedBefore?.from ?? "", appliedUndo?.from ?? "", appliedRedo?.from ?? ""],
+            appliedStrength: [appliedBefore?.strength ?? -1, appliedUndo?.strength ?? -1,
+                              appliedRedo?.strength ?? -1],
+            stepsMerged: steps0 >= 0 && steps1 === steps0 + 1,
           })}`);
         }
       }
@@ -998,6 +1142,13 @@ export default function App() {
       .catch((e) => setDragNote(String(e)));
   }
 
+  /** 撤销/重做（M5-b）：把手。步数、能不能撤、撤完画面是什么，全由引擎答复。 */
+  function onHistory(action: "undo" | "redo" | "clear") {
+    runHistory(action)
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)));
+  }
+
   const verdict = gate(stats, w);
 
   return (
@@ -1303,8 +1454,8 @@ export default function App() {
                 <tbody>
                   <tr>
                     <td>{t("grade.layer")}</td>
-                    <td>{lastGrade.lit ? t("color.on") : t("color.off")}
-                      {' · '}{lastGrade.amount.toFixed(2)}</td>
+                    <td>{lastGrade.grade_lit ? t("color.on") : t("color.off")}
+                      {' · '}{lastGrade.grade_amount.toFixed(2)}</td>
                   </tr>
                   <tr>
                     <td>{t("grade.params")}</td>
@@ -1443,6 +1594,31 @@ export default function App() {
         ) : (
           <div className="mut">{t("strip.empty")}</div>
         )}
+
+        {/* 撤销/重做（M5-b）：一条跨层的历史，按一次退一次手势。按钮的灰与不灰只看
+            引擎报的那份账；刚发过编辑而答复还没回来时（history_dirty）保持可用，
+            否则用户拖完滑块那一下按不动。 */}
+        <h2>{t("side.history")}</h2>
+        <div className="mut">{t("history.desc")}</div>
+        <div className="row">
+          <button onClick={() => onHistory("undo")}
+                  disabled={!(histRep?.can_undo || histDirty)}>{t("history.undo")}</button>
+          <button onClick={() => onHistory("redo")}
+                  disabled={!histRep?.can_redo}>{t("history.redo")}</button>
+          <button onClick={() => onHistory("clear")}
+                  disabled={!histRep?.can_undo}>{t("history.clear")}</button>
+        </div>
+        <div className="mut">
+          {histRep
+            ? t("history.count", { u: histRep.undo_steps, r: histRep.redo_steps, max: histRep.history_max })
+            : t("history.unknown")}
+        </div>
+        {lastHistory && (lastHistory.action === "undo" || lastHistory.action === "redo") ? (
+          <div className="mut">
+            {t("history.last", { act: lastHistory.action, ms: lastHistory.history_ms ?? 0 })}
+            {lastHistory.noop ? t("history.noop") : ""}
+          </div>
+        ) : null}
 
         <h2>{t("side.bench")}</h2>
         <label className="k">{t("bench.size")}</label>

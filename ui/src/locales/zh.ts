@@ -140,6 +140,16 @@ const zh = {
   "strip.empty": "还没有底片条：填一个目录名再点「扫描目录」。",
   "strip.edited": "已调",
   "strip.failed": "解不开",
+  // ---- 撤销 / 重做（M5-b）
+  "side.history": "撤销 / 重做",
+  "history.desc": "一条跨所有图层的历史：按一次退一次手势（拖动一个滑块算一次）。快捷键 Ctrl+Z / Ctrl+Shift+Z。",
+  "history.undo": "撤销",
+  "history.redo": "重做",
+  "history.clear": "清空历史",
+  "history.count": "可撤销 {u} 步 · 可重做 {r} 步（上限 {max}）",
+  "history.unknown": "还没有历史：导一张图开始修就有了。",
+  "history.last": "上一次：{act} · {ms} ms",
+  "history.noop": "（已退到头）",
 
   "bench.size": "帧尺寸",
   "bench.frames": "帧数",

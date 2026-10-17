@@ -85,6 +85,30 @@ export interface DocState {
   deform: { amounts: Record<string, number>; built: boolean };
   lut: { lit: boolean; amount: number; preset: string | null };
   grade: { dh: number; ds: number; dv: number; amount: number; lit: boolean };
+  /** 这一张文档自己的撤销/重做账（M5-b）。随文档走：切到底片条另一格时拿到的是
+   *  那一格的栈深，不是全进程一个数。 */
+  history: HistoryReport;
+}
+
+/** 历史账（M5-b）：引擎是唯一数步数的人，前端只照它报的摆按钮。 */
+export interface HistoryReport {
+  can_undo: boolean;
+  can_redo: boolean;
+  undo_steps: number;
+  redo_steps: number;
+  history_max: number;
+}
+
+/** 最近一条 history_state（M5-b）。doc_state 是撤销之后引擎认定的文档状态——
+ *  宿主重摆滑块的唯一出处（同图撤销时 docKey 不变，走不到 image_ready 那条路）。 */
+export interface HistoryState extends HistoryReport {
+  action: "undo" | "redo" | "state" | "clear";
+  doc_state: DocState;
+  /** 退无可退时引擎发 noop 而不是 error：快捷键按多了是常态。 */
+  noop?: boolean;
+  /** 只有真撤销/真重做才带：这一次的历史耗时与出帧耗时。 */
+  history_ms?: number;
+  render_ms?: number;
 }
 
 /** session_state.docs 的一项。缩略图不在这里：像素由 filmstrip 单独取。 */
@@ -304,8 +328,6 @@ export interface GradeState {
   dv: number;
   /** 混入比例 [0,1] */
   amount: number;
-  /** 有没有非零参数（全零就是关灯，层里没留下任何颜色改动） */
-  grade_set: boolean;
   /** 这层现在真的在服务：有参数且 amount≠0 */
   lit: boolean;
   /** 本层不占显存：报 0 而不缺键，“查过”才是这句话的内容 */
@@ -313,8 +335,15 @@ export interface GradeState {
 }
 
 /** 一次肤色定向事件的回报（引擎侧 grade_done，M3-b）。
- * set/amount/clear 三条臂键集完全相同：引擎侧只有一个组装点。 */
-export interface GradeInfo extends GradeState {
+ * set/amount/clear 三条臂键集完全相同：引擎侧只有一个组装点。
+ *
+ * 它**不继承** GradeState：grade_done 是铺平的一份（grade_dh / grade_amount /
+ * grade_lit / grade_set），嵌套那份 grade_state 才是 dh / amount / lit。两套名字
+ * 混进一个接口，TypeScript 一律当作必存——谎报发生在 JSON 边界上，编译期抓不到，
+ * 现场是渲染时一句 TypeError 把整棵 React 树拆掉（画面就此冻结在 0 帧）。
+ * M5-b 的真窗口轮第一次撞上：那时宿主才开始发 hello，grade_limits 不再为空，
+ * 定向那一排第一次真的被渲染出来。 */
+export interface GradeInfo {
   action: "set" | "amount" | "clear";
   /** 铺平的同一份数：payload 与嵌套字段都来自 _grade_payload */
   grade_dh: number;
@@ -322,6 +351,10 @@ export interface GradeInfo extends GradeState {
   grade_dv: number;
   grade_amount: number;
   grade_lit: boolean;
+  /** 有没有非零参数（全零就是关灯，层里没留下任何颜色改动） */
+  grade_set: boolean;
+  /** 本层不占显存时也报 0 而不缺键："查过"才是这句话的内容 */
+  bytes_grade: number;
   grade_ms: number;
   /** [dh, ds, dv] 的硬边界：滑块的夹取范围由引擎说，前端不抄一份数然后两处漂 */
   grade_limits: number[];
@@ -376,6 +409,19 @@ export interface EngineStatus {
   session_rev: number;
   /** 宿主已收到多少张缩略图（按 path 计）。 */
   thumbs_ready: number;
+  /** 最近一条 history_state（M5-b）；换引擎进程会清空。 */
+  history: HistoryState | null;
+  /** history_state 每来一条 +1：宿主只在它变了的时候按引擎那份 doc_state 重摆滑块。 */
+  history_rev: number;
+  /** 发过编辑命令、还没听到引擎的历史答复：撤销按钮在这段窗口里保持可用。 */
+  history_dirty: boolean;
+  /** 最近一条带 doc_state 的事件（image_ready / session_state / history_state 之一）。
+   *  历史账只从这三条里来，而谁最后到只有宿主按到达次序数得出来。 */
+  doc_report: { source: string; doc_state: DocState } | null;
+  /** doc_report 每换一次 +1：前端只在它变了的时候取新的栈深。 */
+  doc_rev: number;
+  /** ready 报的"哪些命令算编辑"。空数组 = 这个引擎还没有历史能力。 */
+  history_edit_cmds: string[];
 }
 
 /** 一次导出的逐图账单（export_done.images[] 的一项，M4）。
@@ -713,6 +759,10 @@ export interface M0Env {
    *  TS runSession → Rust session → 引擎 session_state 这条签名在真窗口里对得上，
    *  以及切走再切回来时 doc_state 与画面是否还是同一份。 */
   auto_filmstrip: string;
+  /** M5-b 撤销/重做自动通道：<强度值>。引擎那条链已有协议用例逐字节对拍，这一条要证
+   *  的是宿主三层：runHistory → Rust history → history_state 的签名对不对得上，
+   *  以及宿主有没有真按引擎那份 doc_state 重摆滑块（applied 里那一份是唯一直接证据）。 */
+  auto_history: string;
 }
 export const m0Env = () => invoke<M0Env>("m0_env");
 
@@ -723,6 +773,11 @@ export const runSession = (
   opts: { dir?: string; paths?: string[]; index?: number; edge?: number;
           quality?: number; limit?: number; thumbs?: boolean } = {},
 ) => invoke<{ requested: boolean }>("session", { action, ...opts });
+
+/** 撤销/重做（M5-b）：四个动作一条命令，宿主只做把手。步数上限、手势合并窗口、
+ *  哪几层进历史全在引擎里——在这里刻一份就会漂一份。 */
+export const runHistory = (action: "undo" | "redo" | "state" | "clear") =>
+  invoke<{ requested: boolean }>("history", { action });
 
 /** 整条底片条：格子元信息 + 缩略图。只在 session_rev 变了的时候取。 */
 export const fetchFilmstrip = () => invoke<Filmstrip>("filmstrip");

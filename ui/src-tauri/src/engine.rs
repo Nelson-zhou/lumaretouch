@@ -199,6 +199,12 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             // 缩略图：像素按 path 存进宿主，不进 stdout（一张 7 KB，两百张就是 1.4 MB 日志）
             state.on_thumb(&v);
         }
+        "history_state" => {
+            // M5-b 撤销/重做：整条 payload 回显。跑靶要在真窗口里量 history_ms 与栈深，
+            // 而这一份只有数字与图层计数（没有像素），不会把 stdout 撑爆
+            state.on_history(&v);
+            println!("M0_HISTORY {line}");
+        }
         "thumb_failed" => {
             state.on_thumb(&v);
             state.push_log(format!("缩略图解不开: {}", v["path"].as_str().unwrap_or("?")));
