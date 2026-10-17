@@ -253,13 +253,23 @@ export interface DeformInfo {
   total_ms: number;
   /** 关键点出自哪个后端。template 是模板拟合、贴合度不验收，UI 得能显示这一句 */
   landmark_backend: string | null;
+  /** 三种形变里最宽的一种会动到画幅的比例（0–1）。“瘦脸不许拖走背景”这句产品
+   *  承诺在当前这张图上成不成立，只有这个数说得清：窗口参数只给圆心与半径，
+   *  关键点落错地方时同一个公式会盖住整幅（真人照片上量到 0.99）。 */
+  support_share: number;
+  /** 引擎认为这套关键点不像一张脸（肤色包围盒贴到整幅边界）。判据在引擎里，
+   *  前端不去 parse landmark_notes 的中文——改一个字界面就静悄悄不再警告。 */
+  geometry_warning: boolean;
+  /** 后端对这份几何的意见（模板拟合的自述 + 不像脸时的说明） */
+  landmark_notes: string[];
   /** 只有真正建层的那一条才有：一次性解算成本与 kinds 明细 */
   build?: {
     deform_build_ms: number;
     deform_builds: number;
     bytes_deform: number;
     device: string;
-    kinds: Record<string, { peak_px: number; merged: number; controls: number }>;
+    kinds: Record<string, { peak_px: number; merged: number; controls: number;
+                            support_px: number; support_share: number }>;
   };
   /** invalidate 那一条说清为什么清（后端换了 / 重建失败），UI 要能直接给用户看 */
   reason?: string;
@@ -316,6 +326,10 @@ export interface LutInfo {
   grade_state: GradeState;
   /** 当前生效的内置预设名；走 path/text 载表或手动改肤色时为 null */
   lut_preset: string | null;
+  /** 这一条 clear 有没有连带把预设写进肤色定向的那一份一起拿掉。
+   *  预设是两层（表 + 定向），`lut set preset=…` 自己写着“要么两层都上，要么
+   *  都不上”，clear 不跟着对称就是半个撤销。 */
+  preset_grade_cleared: boolean;
 }
 
 /** 肤色定向层（M3-b）的现状。它不持有任何张量：状态就是三个增量加一个混入比例。 */

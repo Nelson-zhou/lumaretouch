@@ -107,6 +107,50 @@ def test_masked_render_hits_the_skin_not_the_whole_frame(proxy_rgb):
 
 
 # ------------------------------------------------------------------ 后端可用性
+def test_geometry_warning_is_a_boolean_the_ui_can_act_on():
+    """不像一张脸的几何必须有一个布尔值可查，而不是只活在 notes 那句中文里。
+
+    来头：一张真人照片（红发 + 脖子胸口 + 左下角一只手）把肤色包围盒撑到整幅，
+    五官微调按这套点搬会作用到 98.6% 的画幅。界面去 parse notes 的文字就是
+    双出处：改一个字警告就静悄悄失效。
+    """
+    from lumaretouch_engine.face import geometry_warning
+
+    assert geometry_warning((0.0, 0.0, 1.0, 1.0)) is True        # 包围盒就是整幅
+    assert geometry_warning((0.40, 0.17, 0.68, 0.77)) is False   # 正常的一张脸
+    assert geometry_warning(None) is False
+
+
+def test_template_backend_warns_when_the_whole_frame_reads_as_skin():
+    """全图都是肤色时，template 必须自己说“这份几何不像脸”。"""
+    from lumaretouch_engine.face import TemplateFace
+
+    flat = np.zeros((180, 140, 3), np.uint8)
+    flat[..., 0], flat[..., 1], flat[..., 2] = 205, 165, 135      # 落在 Cr/Cb 皮肤区
+    assert skin_mask_np(flat).mean() > 0.9, "夹具得真被皮肤规则接住，否则这条测不到东西"
+    pc = TemplateFace()(flat)
+    meta = pc.meta(*flat.shape[:2])
+    assert meta["geometry_warning"] is True
+    assert any("mediapipe" in n for n in meta["notes"]), \
+        "警告只报布尔值不够：日志里得留下人可读的那一句"
+
+
+def test_template_backend_stays_quiet_for_a_compact_face():
+    """反向门禁：一团紧凑的皮肤不该触发警告。否则警告会响成背景噪声，
+    而一个总亮的警告等于没有警告。"""
+    from lumaretouch_engine.face import TemplateFace
+
+    rgb = np.zeros((200, 200, 3), np.uint8)
+    rgb[..., 1] = 90                                              # 绿底
+    yy, xx = np.mgrid[0:200, 0:200]
+    blob = ((xx - 100) ** 2 + (yy - 95) ** 2) < 42 ** 2           # 中心一团“脸”
+    rgb[blob] = (205, 165, 135)
+    pc = TemplateFace()(rgb)
+    meta = pc.meta(*rgb.shape[:2])
+    assert skin_mask_np(rgb).mean() > 0.10
+    assert meta["geometry_warning"] is False, f"紧凑脸形被误报：face_box={meta['face_box']}"
+
+
 def test_explicit_mediapipe_backend_never_falls_back_silently(tmp_path):
     """点名要 mediapipe：依赖或模型不在必须抛 MissingBackend，而不是悄悄给个 synthetic。
 

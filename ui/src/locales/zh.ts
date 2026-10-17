@@ -77,6 +77,9 @@ const zh = {
   "retouch.big_eye": "大眼",
   "retouch.small_chin": "小下巴",
   "retouch.deformInvalidated": "形变层已清除（关键点后端换了，滑块随之归零）",
+  // 几何不像一张脸时的警告：share 是这一层会动到的画幅比例，backend 是关键点出处
+  "retouch.geomWarn": "关键点几何不像一张脸：这一层会动到画面 {share}% 的像素（后端 {backend}）。"
+    + "瘦脸可能同时拖到背景与非脸区域；要按脸落点，请装 mediapipe 插件后端",
   "retouch.deformClear": "重置形变",
   "retouch.deformLayer": "形变图层",
   "retouch.deformOn": "已生效",

@@ -127,6 +127,45 @@ def test_field_is_exactly_zero_outside_the_support():
         assert np.count_nonzero(np.abs(f[outside]).max(axis=1)) == 0
 
 
+def test_unit_field_reports_its_own_support_footprint():
+    """作用面账单：报出的像素数必须就是场里非零的那些，且与窗口解析面积对得上。
+
+    为什么必须有这个数：2026-10-17 拿一张真人照片跑端到端，肤色盒模板被红发、
+    脖子与画面左下角一只手撑到整幅，slim_face=0.9 当场改了 98.6% 的画幅、其中
+    57.6% 落在脸外——而事件里只有圆心与半径，看不出来。算子没错，几何错了；
+    要看得见只能靠这一笔。
+
+    它不是通过线而是量：作用面占多少画幅本身就随“脸在画面里多大”变（紧构图
+    大头照可以合法地接近 1），所以拿它卡一个固定阈值就是许愿。能用的是它的
+    **一致性**：非零区就是半径 r1 的圆盘，像素数与 π·r1² 对不上就是账单在谎报。
+    """
+    lm = landmarks()
+    torch = pytest.importorskip("torch")     # unit_field 走 tps_field_t，没 torch 就跳
+    # 三档：前两份脸占满画幅，支撑圆盘溢出画面（非零区 = 圆盘 ∩ 画面，与 π r²
+    # 对不上是正常的）；第三份把脸缩小到画面一角，圆盘装得下——只有它能真证
+    # "非零区就是那个圆盘"而不是"反正全盖上了"。
+    small = landmarks(half_w=0.06, top=0.42, bottom=0.58,
+                      eye_y=0.46, eye_half=0.024, iris_r=0.007)
+    checked = 0
+    for lm_case, h, w in ((lm, H, W), (lm, 600, 480), (small, 600, 480)):
+        for kind in KINDS:
+            t, meta = unit_field(lm_case, kind, h, w, device="cpu")
+            moved = (t.abs().amax(dim=-1) > 1e-6).numpy()
+            assert meta["support_px"] == int(moved.sum()), "账单与实际场得出自同一次归约"
+            assert abs(meta["support_share"] - float(moved.mean())) <= 1e-4
+            # 窗外逐点为零已由 test_field_is_exactly_zero_outside_the_support 钉住，
+            # 这里补的是反向：窗内必须有真位移，否则 share=0 也能对上任意公式
+            assert meta["support_px"] > 0
+            cx, cy, _R, _r0, r1 = meta["window"]
+            if min(cx, w - 1 - cx, cy, h - 1 - cy) >= r1:
+                analytic = math.pi * r1 * r1 / (h * w)
+                assert abs(meta["support_share"] - analytic) <= 0.10 * analytic, (
+                    f"{h}x{w}/{kind} 非零区不是那个支撑圆盘："
+                    f"报了 {meta['support_share']}，解析值 {analytic:.4f}")
+                checked += 1
+    assert checked >= 1, "圆盘对账一条都没跑上（三档都太大），这条判据已经退化"
+
+
 def test_pure_axis_request_leaves_the_other_component_exactly_zero():
     """反向门禁（本轮真抓到 bug 的那条）：只请求 y 位移时 x 分量必须精确为 0。
 

@@ -107,6 +107,10 @@ export default function App() {
   // 引擎把形变层整条清除时说的那句话（为什么滑块自己回零了）：不写这一句，
   // 用户看到的就只是“拖了一下的滑块弹回零”，像出了 bug
   const [deformNote, setDeformNote] = useState("");
+  // 几何可信度两个读数：基本量（share）与开关（warn）。存基本量而不是对象：
+  // refreshStatus 是轮询，每轮 new 一个对象就是每轮一次重渲染（HUD 那边学过）。
+  const [deformGeomShare, setDeformGeomShare] = useState(0);
+  const [deformGeomWarn, setDeformGeomWarn] = useState(false);
   const deformFlight = useRef(false);
   const deformQueued = useRef<Record<string, number> | null>(null);
   const [lastInpaint, setLastInpaint] = useState<InpaintInfo | null>(null);
@@ -189,14 +193,32 @@ export default function App() {
         if (st.deform.action === "invalidate") {
           setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0 });
           setDeformNote(st.deform.reason ?? "");
+          setDeformGeomWarn(false);
         } else {
           // 不拿 deformNote 做条件（refreshStatus 的依赖表是空的，读到的是旧值）：
           // 无条件清空在正常路径上只是一个 no-op，而按旧值判就会把提示卡在那里抹不掉
           setDeformNote("");
+          // 几何不像脸时当场说出来。真图试验量到：肤色盒模板在一张有红发、
+          // 脖子与一只手的照片上被撑到整幅，slim_face=0.9 改了 98.6% 的画幅、
+          // 其中 57.6% 落在脸外——“瘦脸不许拖走背景”这句承诺当场不成立，而画面上
+          // 只是“动得多了点”，看不出错。警告只拿引擎的 geometry_warning 开：作用面
+          // 占比（share）随“脸在画面里多大”变，拿它卡固定阈值就是许愿，所以它只当
+          // 读数显示。层没点亮时不噪。
+          setDeformGeomShare(st.deform.support_share);
+          setDeformGeomWarn(st.deform.lit && st.deform.geometry_warning);
         }
       }
       // 调色层也是事件驱动的一次回报（载入/改强度/清除各一条），轮询不能错过
       if (st.lut) setLastLut(st.lut);
+      if (st.lut && (st.lut.lut_preset !== null || st.lut.preset_grade_cleared)) {
+        // 预设一条命令动两层（表 + 肤色定向），所以定向滑块必须跟着引擎那一层走。
+        // 不跟就是“画面已经变了而滑块一动不动”：真图试验量到 clear 之后画面
+        // 还带着预设的肤色。只在引擎自己说它动了定向的那两条臂上同步：用户自己
+        // 载表时，清调色不许伸进他的肤色里。
+        const gs = st.lut.grade_state;
+        setGradeAmounts({ dh: gs.dh, ds: gs.ds, dv: gs.dv });
+        setGradeMix(gs.amount);
+      }
       if (st.grade) setLastGrade(st.grade);
       // 导出这两条无条件跟状态走：Rust 侧在换图/换进程时会清空，这里不跟着清就会
       // 把上一批的字节数当本批读（与图层那几条同一个病，只是这边是账单不是参数）
@@ -1316,6 +1338,12 @@ export default function App() {
         </div>
         {deformNote && (
           <div className="mut">{t("retouch.deformInvalidated")}：{deformNote}</div>
+        )}
+        {deformGeomWarn && (
+          <div className="warn">{t("retouch.geomWarn", {
+            share: (deformGeomShare * 100).toFixed(0),
+            backend: status?.deform?.landmark_backend ?? "-",
+          })}</div>
         )}
         {lastInpaint && (
           <table>

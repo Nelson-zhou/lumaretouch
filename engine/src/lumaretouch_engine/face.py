@@ -76,6 +76,9 @@ class FacePrecompute:
             "detect_ms": round(self.t_detect_ms, 2),
             "masks_ms": round(self.t_masks_ms, 2),
             "face_box": list(self.face_box) if self.face_box else None,
+            # 几何看上去像不像一张脸（判据只写在 geometry_warning 里）：UI 拿布尔值
+            # 开提示，不去 parse 上面那条 notes 的中文。
+            "geometry_warning": geometry_warning(self.face_box),
             "proxy": [h, w],
             "notes": self.notes,
         }
@@ -166,6 +169,22 @@ class TemplateFace:
         box = _tight_box(mask)
         lm = _fit_template(analytic_frontal_landmarks(), box)
         t_detect = _now_ms(t0)
+        notes = list(self.notes)
+        # 几何可信度提示：肤色包围盒撑到整幅时，这张图上的“皮肤”一定不止脸。
+        # 2026-10-17 的真人照片（红发 + 脖子胸口 + 画面左下角一只手）就是这么
+        # 把模板撑到 [0,0,1,1] 的：五官微调按这套点搬，slim_face=0.9 改动了 98.6%
+        # 的画幅，其中 57.6% 落在人工标注的脸盒之外。那一次量出来之后，这句话就得
+        # 跟着几何一起走，不能只写在文档里。两条线：贴边≥3 条且覆盖 >60%
+        # （非紧凑的一团皮肤），或干脆贴满四边且覆盖 >85%（包围盒就是整幅）。
+        # 普通大头照不会同时越这两条。
+        bw, bh = box[2] - box[0], box[3] - box[1]
+        share = max(0.0, bw) * max(0.0, bh)
+        edges = sum([box[0] <= 1e-6, box[1] <= 1e-6, box[2] >= 1 - 1e-6, box[3] >= 1 - 1e-6])
+        if geometry_warning(box):
+            notes.append(
+                f"肤色包围盒覆盖画面 {share:.0%} 并贴到 {edges} 条边：这张图上的皮肤区域"
+                "多半不止脸（脖子/胸口/手/暖色头发都算在内），模板落点可能不在脸上，"
+                "五官微调会作用到大片非脸区域。要按脸落点，请装 mediapipe 插件后端")
         return FacePrecompute(
             landmarks=lm,
             masks={"skin": mask},
@@ -173,7 +192,7 @@ class TemplateFace:
             t_detect_ms=t_detect,
             t_masks_ms=0.0,        # 与 synthetic 同一条理由：掩膜与“检测”出自同一个规则
             face_box=box,
-            notes=list(self.notes),
+            notes=notes,
         )
 
 
@@ -306,6 +325,20 @@ def build(backend: str, model_dir: str | None = None):
 
 
 # --------------------------------------------------------------------- 小工具
+def geometry_warning(box) -> bool:
+    """这套几何看上去不像一张脸（而不是“意见”）：命令层与事件层共用同一个判据。
+
+    UI 要拿它开提示，就不能去 parse notes 里的中文句子（那是双出处：改一个字
+    界面就静悄悄不再警告）。规则只在这里写一份，文字提示只是它的展开。
+    """
+    if not box:
+        return False
+    x0, y0, x1, y1 = (float(v) for v in box)
+    share = max(0.0, x1 - x0) * max(0.0, y1 - y0)
+    edges = sum([x0 <= 1e-6, y0 <= 1e-6, x1 >= 1 - 1e-6, y1 >= 1 - 1e-6])
+    return (edges >= 3 and share > 0.60) or (edges >= 4 and share > 0.85)
+
+
 def _tight_box(mask: np.ndarray) -> tuple[float, float, float, float]:
     """掩膜质心包围盒（归一化）。取 ≥0.5 的强皮肤区，退化时用整图中心一块兜底。"""
     h, w = mask.shape

@@ -458,10 +458,20 @@ def write_file(rgb: np.ndarray, path: str, *, quality: int = 95) -> dict:
         if ext in ("jpg", "jpeg"):
             kw["subsampling"] = 0         # 4:4:4：修过色的图不能靠省色度换体积
     elif ext == "png":
-        kw["compress_level"] = q // 10    # PNG 的压缩档位是 0–9，语义不同
+        # PNG 的压缩档位是 0–9，与 JPEG 的 1–100 不同语义：这里把 quality 当"肯出多少力"
+        # 映射。上限 6 不是拍脑袋：真图（3.06 MP 照片）实测 level 1/3/6/7/9 =
+        # 198/290/804/1132/5469 ms，产物 3.20/3.00/2.67/2.64/2.56 MiB——7–9 档
+        # 花 1.4–6.8× 的时间只换 3–4% 体积。而 quality=95 旧映射恰好落在最费的那一档：
+        # 一百张 PNG 就是 9 分钟纯编码。不暴露 7–9 是一个可改的产品决定，
+        # 不是一个未量过的默认值。
+        kw["compress_level"] = min(6, q // 10)
     if ext in ("tif", "tiff"):
         kw["compression"] = "tiff_lzw"
     img.save(path, **kw)
     ms = (time.perf_counter() - t0) * 1000.0
     return {"path": path, "format": ext, "bytes": os.path.getsize(path),
-            "write_ms": round(ms, 1), "quality": int(quality)}
+            "write_ms": round(ms, 1), "quality": int(quality),
+            # PNG 实际用的压缩档位（其他格式为 None，不缺键）：回报里写 quality=95
+            # 而文件是按 level 6 写的，两者对不上时必须看得出来，否则写盘耗时
+            # 与体积就成了无从反推的谜
+            "compress_level": kw.get("compress_level")}

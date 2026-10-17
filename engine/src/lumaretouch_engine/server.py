@@ -1440,6 +1440,7 @@ class Engine:
         条臂少一个字段”，而 TS 把字段声明成必存——谎报发生在 JSON 边界上，编译期抓不到。
         """
         pipe = self._vram
+        from . import face as face_mod       # 判据只写在 face.geometry_warning 里
         ev = {"event": "deform_done", "action": action,
               "amounts": dict(pipe.deform_amounts),
               "built": bool(pipe.deform_units),
@@ -1452,6 +1453,20 @@ class Engine:
               # 关键点出自哪个后端必须原样上报：template 是“按肤色盒摆的模板”，
               # 贴合度不验收。UI 拿不到这个数就会把模板拟合当成真检测给用户看。
               "landmark_backend": (self._precompute.backend if self._precompute else None),
+              # 作用面：三种形变里最宽的那一种会动到画幅的多少。它是“瘦脸不许
+              # 拖走背景”这句话在**当前这张图**上的直接读数：窗口参数只能说明圆心
+              # 与半径，几何落错了地方时同一个公式会盖住整幅（真人照片上量到 98.6%）。
+              # 没建层时给 0.0 而不是缺键：UI 把这两个字段当必存，缺键就是 undefined。
+              "support_share": round(max([float((pipe.deform_meta.get(k) or {})
+                                                .get("support_share", 0.0))
+                                          for k in KINDS] or [0.0]), 4),
+              # 几何看上去像不像一张脸（与 precompute_ready 同一个判据、同一个出处）
+              "geometry_warning": bool(face_mod.geometry_warning(
+                  self._precompute.face_box) if self._precompute else False),
+              # 后端自己对几何可信度的意见（模板拟合贴到整幅边界时不为空）。
+              # 它必须随事件走：同一套代码在合成靶上不说、在真人照片上也不说，
+              # 就正是本仓反复防止的“看不出错”那一类。
+              "landmark_notes": list(self._precompute.notes) if self._precompute else [],
               "device": str(pipe.device), "strength": self._strength}
         if build is not None:
             ev["build"] = build
@@ -1981,7 +1996,8 @@ class Engine:
                           "请重新导入图片"})
 
     def _emit_lut_state(self, action: str, info: dict, *, render_ms: float = 0.0,
-                        total_ms: float = 0.0) -> None:
+                        total_ms: float = 0.0,
+                        preset_grade_cleared: bool = False) -> None:
         """lut_done 的唯一组装点（set/clear/amount 三条臂共用一份形状）。
 
         图层字段全部来自 vram._lut_payload，这里只加计时与每帧那几笔。与
@@ -2003,6 +2019,10 @@ class Engine:
               # 当前生效的预设名（没走预设就是 None）：UI 靠它区分“预设强度”与
               # “自己载的表”，而不是自己记住上一次按了哪个按钮
               "lut_preset": self._lut_preset,
+              # 这次 clear 有没有连带把预设那份肤色定向一起拿掉。它不是计时也不是
+              # 分段，但三条臂都得带：少一个键在 TS 侧就是一个 undefined（M3-b 为
+              # grade_state 的形状付过学费）。
+              "preset_grade_cleared": bool(preset_grade_cleared),
               # 这两条是“设 LUT 不作废磨皮缓存”的直接证据：补的那一帧仍应命中
               "filter_ms": round(float(pipe.last_filter_ms), 2),
               "bands_ms": round(float(pipe.last_bands_ms), 2),
@@ -2038,6 +2058,9 @@ class Engine:
         prev = (self._lut, self._lut_amount)
         prev_grade = self._grade
         prev_preset = self._lut_preset
+        # 只有"带预设身份的 clear"会把它置真；lut_done 三条臂必须带同一个键，
+        # 所以它在任何臂上都得先有个值。
+        grade_with_preset = False
         if action == "set":
             # 强度先校：不能先付一次解析 + 上显存再发现参数非法（与 cmd_deform“参数先于建层”同形）
             amount = None
@@ -2114,6 +2137,18 @@ class Engine:
         else:
             info = self._vram.clear_lut()
             self._lut, self._lut_amount = None, 1.0
+            # 预设是两层（表 + 肤色定向），set 那一臂自己写着“预设要么两层都上，
+            # 要么都不上”——clear 不跟着对称就是半个撤销：用户按了“清除调色”，
+            # 表下来了，预设写进定向层的那份肤色还留在画面上，而面板上已经没有任何
+            # 东西指着它。只在会话带着预设身份时一起下：用户自己载表 + 手动调
+            # 肤色时（cmd_grade 已把 _lut_preset 清成 None），那份肤色是他的，
+            # 清调色表不许伸进另一层去拿他的东西。
+            if self._lut_preset is not None:
+                self._vram.clear_grade()
+                self._grade = (0.0, 0.0, 0.0, 1.0)
+                grade_with_preset = True
+            else:
+                grade_with_preset = False
             self._lut_preset = None
         try:
             fr = self._write_current_frame("lut")
@@ -2125,6 +2160,10 @@ class Engine:
             self._lut_preset = prev_preset
             self._restore_lut(prev)
             self._restore_grade(prev_grade)
+            # prev_preset 里带着“这次 clear 要不要连带定向层”的判断依据：渲染失败
+            # 回滚时两层必须一起回到 prev 那一版（上面提交时是一起提交的）。
+            # _restore_grade 按 prev_grade 那一份参数重放，与预设身份无关，所以这里
+            # 不需要再判一次 preset。
             try:
                 back = self._write_current_frame("lut")
                 back.pop("render_ms", None)
@@ -2137,7 +2176,8 @@ class Engine:
             return
         render_ms = fr.pop("render_ms")
         self._emit_lut_state(action, info, render_ms=render_ms,
-                             total_ms=round((monotonic_ns() - t_start) / 1e6, 2))
+                             total_ms=round((monotonic_ns() - t_start) / 1e6, 2),
+                             preset_grade_cleared=grade_with_preset)
         emit(fr)
 
     def _emit_grade_state(self, action: str, info: dict, *, render_ms: float = 0.0,
@@ -2515,6 +2555,10 @@ class Engine:
                 info = write_file(frame, out_path, quality=quality)
                 results.append({"path": path, "out": info["path"], "format": info["format"],
                                 "bytes": info["bytes"], "write_ms": info["write_ms"],
+                                # PNG 实际压缩档位（非 PNG 为 None）：这里是从 info 里
+                                # 摘键组装的，不补这一笔就会在协议边界上静默丢掉——
+                                # quality 95 与文件按哪个档位写的对不上账，批量报表里看不出来
+                                "compress_level": info.get("compress_level"),
                                 "skipped": skipped, **st})
             except Exception as e:      # 逐图失败不能带倒整批
                 failed += 1

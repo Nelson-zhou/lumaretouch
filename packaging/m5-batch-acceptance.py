@@ -7,7 +7,7 @@
 回答的是规模问题：一批一百张连跑下来，进程会不会慢慢漏、第 97 张会不会突然坏、跑完还
 能不能接着服务。规模问题只能按规模量。
 
-四节：
+五节：
 
   ① 全出片：N 张里 failed 必须为 0，每张产物存在、PIL 解得开、**尺寸 == 源图尺寸**
      （导出必须是全尺寸：掉回代理档就是"批量很快、片子是小的"那种假绿）。
@@ -17,6 +17,9 @@
   ③ 分块账随规模的形状：tiles 随像素数增长，而单块耗时与 delta 峰值不随"这是第几张"
      增长（前面的张数不该把后面的拖慢——那是缓存/显存累积的直接读数）。
   ④ 逐张耗时：中位与最坏的上限；整批 total_ms 的上限。
+  ⑤ 无损交付那一臂：一小批 PNG。①–④ 跑的是 JPEG，把编码器混在同一组预算里判无损
+     就是拿有损的尺子量无损（真图实测：quality=95 旧映射跌到 PNG level 9，3 MP 要
+     5.5 s/张，一百张就是九分钟纯编码）。这一臂单独预算，并验实际压缩档位报得出来。
 
 素材是本仓那张程序化人像做的确定性变换（尺寸档循环 + 亮度/裁切按序号变），因此这一条
 可在 CI 与任何机器上复现，且不涉及真人授权。
@@ -59,6 +62,12 @@ RSS_MAX_MIB = float(os.environ.get("LRT_BATCH_RSS", "256"))
 PER_MED_MS = float(os.environ.get("LRT_BATCH_PER_MED", "400"))
 PER_MAX_MS = float(os.environ.get("LRT_BATCH_PER_MAX", "800"))
 BATCH_MAX_S = float(os.environ.get("LRT_BATCH_TOTAL", "60"))
+# PNG（无损）那一臂：上面三个上限是从 JPEG 批量量出来的，把编码器混在同一组数里
+# 就是拿有损的预算判无损。真图实测 PNG level 6 写一张 3 MP 要 ≈0.8 s，所以单独
+# 设预算、单独取 N（默认 20，CI 不跑成分钟级）。
+PNG_N = int(os.environ.get("LRT_BATCH_PNG_N", "20"))
+PNG_PER_MED_MS = float(os.environ.get("LRT_BATCH_PNG_MED", "3000"))
+PNG_PER_MAX_MS = float(os.environ.get("LRT_BATCH_PNG_MAX", "6000"))
 
 
 def rss_mib(pid: int) -> float:
@@ -242,6 +251,33 @@ def main() -> int:
         print(f"  明细：最快 {min(per_ms):.1f} / 中位 {med:.1f} / p95 {p95:.1f} "
               f"/ 最坏 {worst:.1f} ms")
         chk(p95 <= worst, f"p95 {p95:.1f} ≤ 最坏 {worst:.1f}（分位数自己不许和最大值打架）")
+
+        print(f"── ⑤ 无损交付那一臂：{PNG_N} 张 PNG")
+        # 婚礼样片真要交无损片时，卡的不是分块而是编码器。quality=95 旧映射会跌进
+        # PNG level 9（实测 3 MP 要 5.5 s/张），一百张就是九分钟纯编码——这一臂
+        # 把"批量零崩溃"从"JPEG 很块"补成"无损也交得出"。
+        png_paths = paths[:PNG_N]
+        t0 = time.monotonic()
+        eng.send(cmd="export", images=png_paths, out_dir=outd, format="png",
+                 quality=95, tile=TILE)
+        dpng = eng.wait("export_done", timeout=1800)
+        pw = [float(r["write_ms"]) for r in dpng["images"] if "error" not in r]
+        chk(dpng["failed"] == 0 and len(pw) == PNG_N,
+            f"PNG 批量 failed={dpng['failed']}，出片 {len(pw)}/{PNG_N}")
+        lv = {r.get("compress_level") for r in dpng["images"] if "error" not in r}
+        chk(lv == {6}, f"quality=95 的 PNG 实际落在档位 {lv}（上限 6；7–9 档实测"
+                       "只换 3–4% 体积却多花 1.4–6.8× 时间）")
+        one = dpng["images"][0]
+        src0 = Image.open(one["path"])
+        got0 = Image.open(one["out"])
+        chk(got0.size == src0.size and os.path.getsize(one["out"]) > 0,
+            f"PNG 产物可解码且尺寸等于源图（{got0.size}）；"
+            "无损语义本身由 test_export 的逐字节往返用例钉，不在这里重言一遍")
+        pmed, pmax = statistics.median(pw), max(pw)
+        chk(pmed <= PNG_PER_MED_MS, f"PNG 逐张 write_ms 中位 {pmed:.1f} ≤ {PNG_PER_MED_MS}")
+        chk(pmax <= PNG_PER_MAX_MS, f"PNG 逐张 write_ms 最坏 {pmax:.1f} ≤ {PNG_PER_MAX_MS}")
+        print(f"  PNG 明细：{PNG_N} 张共 {time.monotonic() - t0:.1f} s，"
+              f"最快 {min(pw):.1f} / 中位 {pmed:.1f} / 最坏 {pmax:.1f} ms")
     finally:
         try:
             eng.send(cmd="shutdown")

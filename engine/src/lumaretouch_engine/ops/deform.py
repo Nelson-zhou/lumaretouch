@@ -451,8 +451,16 @@ def unit_field(landmarks, kind: str, h: int, w: int, *, device="cpu",
     cx, cy, R, _fw, _fh = meta["frame"]
     r0, r1 = support_radii(R)
     t = tps_field_t(P, D, h, w, cx=cx, cy=cy, R=r1, r0=r0, lam=lam, device=device)
+    # 作用面账单：这一层的位移场有多少像素不是零。窗口参数（window）只说圆心与
+    # 半径，而“瘦脸会不会拖到背景”要看的是实际盖住的面积占比：关键点几何错了
+    # （肤色盒模板在真人照片上把脖子、手、暖色头发全圈进去）时，同一个公式会
+    # 作用到整幅画面。这一笔只在建层时算（一张图三种形变各一次），不在热路径上。
+    moved = t.abs().amax(dim=-1) > 1e-6
+    share = float(moved.float().mean())
     return t[None], {"kind": kind, "controls": len(P), "merged": meta["merged"],
                "peak_px": round(meta["peak_px"], 3),
+               "support_px": int(moved.sum()),
+               "support_share": round(share, 4),
                "window": [round(cx, 2), round(cy, 2), round(R, 2), round(r0, 2), round(r1, 2)]}
 
 

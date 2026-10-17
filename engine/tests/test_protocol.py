@@ -1461,6 +1461,36 @@ def test_deform_on_template_backend_moves_the_frame_and_clear_restores_it(engine
 
 
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_deform_done_reports_support_and_geometry(engine):
+    """事件得能说出“这一层盖了多少画幅”与“这套点像不像一张脸”。
+
+    两条臂（set / clear）必须同形状：UI 把这三个字段当必存读，少一个键就是
+    一个 undefined 而编译期抓不到。clear 之后作用面归 0，不是留着上一个读数。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    engine.send(cmd="precompute", backend="template")
+    pc = engine.wait_for("precompute_ready", timeout=60)
+    assert isinstance(pc["geometry_warning"], bool), pc
+    peer = FrameShm(meta["name"])
+    try:
+        _nudge_frame(engine, 0.0)
+        _read_frame(engine, peer, meta["h"], meta["w"])
+        engine.send(cmd="deform", action="set", amounts={"slim_face": 0.9})
+        done = engine.wait_for("deform_done", timeout=60)
+        assert 0.0 < done["support_share"] <= 1.0, done
+        assert done["landmark_notes"], "template 后端得在事件里自述它不是精度检测"
+        kinds = done["build"]["kinds"]
+        assert all("support_px" in v and "support_share" in v for v in kinds.values()), kinds
+        engine.send(cmd="deform", action="clear")
+        back = engine.wait_for("deform_done", timeout=60)
+        assert {"support_share", "geometry_warning", "landmark_notes"} <= set(back), back
+        assert back["support_share"] == 0.0, f"层已整条放下，作用面却还报 {back['support_share']}"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
 def test_bad_deform_commands_leave_no_trace(engine):
     """被拒的形变命令整条不留痕：不建层、不改滑块、不改画面。"""
     _needs_torch()
@@ -2097,6 +2127,50 @@ def test_preset_amount_scales_both_layers_and_zero_is_byte_exact(engine):
         engine.send(cmd="lut", action="amount", amount=0.8)
         back = engine.wait_for("lut_done", timeout=60)
         assert back["grade_state"]["amount"] == 0.8 and back["grade_state"]["lit"] is True, back
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_preset_clear_takes_both_layers_down(engine, tmp_path):
+    """预设两层一起上，clear 就得两层一起下；而用户自己的肤色不许被清表带走。
+
+    真图端到端试验量出来的：`lut set preset=creamy` 之后一记 `lut clear`，表下来了
+    而预设写进肤色定向的那三个数还在画面上（与出厂帧差 63771 像素），而面板上
+    已经没有任何东西指着它。`lut set` 那一臂代码里自己写着“预设要么两层都上，
+    要么都不上”——不对称的那一半就在 clear 上。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        base = _read_frame(engine, peer, h, w)
+        engine.send(cmd="lut", action="set", preset="creamy", amount=1.0)
+        on = engine.wait_for("lut_done", timeout=60)
+        assert on["preset_grade_cleared"] is False, on        # set 那一臂不动别人的东西
+        assert on["grade_state"]["lit"] is True, on
+        engine.wait_for("frame", timeout=60)
+        engine.send(cmd="lut", action="clear")
+        off = engine.wait_for("lut_done", timeout=60)
+        assert off["preset_grade_cleared"] is True, off
+        assert off["grade_state"]["lit"] is False, f"预设的肤色还亮着：{off['grade_state']}"
+        assert off["grade_state"]["dh"] == 0.0 and off["grade_state"]["ds"] == 0.0, off
+        assert np.array_equal(_read_frame(engine, peer, h, w), base), \
+            "清掉预设之后画面必须逐字节回到出厂帧"
+
+        # 反向：自己载表 + 手动改肤色时，清表不许伸进用户的肤色里
+        cube = _write_cube(tmp_path, k=0.9)
+        engine.send(cmd="lut", action="set", path=cube, amount=1.0)
+        assert engine.wait_for("lut_done", timeout=60)["lut_preset"] is None
+        engine.send(cmd="grade", action="set", dh=0.02, ds=-0.05, dv=0.03, amount=1.0)
+        engine.wait_for("grade_done", timeout=60)
+        engine.wait_for("frame", timeout=60)
+        engine.send(cmd="lut", action="clear")
+        mine = engine.wait_for("lut_done", timeout=60)
+        assert mine["preset_grade_cleared"] is False, mine
+        assert mine["grade_state"]["lit"] is True, \
+            f"用户自己调的肤色被清表顺手拿掉了：{mine['grade_state']}"
     finally:
         peer.close()
 

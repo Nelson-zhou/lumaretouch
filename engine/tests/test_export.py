@@ -450,6 +450,30 @@ def test_write_file_png_is_lossless_and_jpeg_is_not(tmp_path):
         write_file(rgb, str(tmp_path / "a.jpg"), quality=0)      # 下限夹住，不写 0 字节文件
 
 
+def test_png_compress_level_is_capped_and_reported(tmp_path):
+    """quality→PNG 档位的映射：单调、有上限、而且报得出来。
+
+    上限不是风格：真图（3.06 MP）实测 level 6→9 是 804→5469 ms 换 2.67→2.56 MiB，
+    而旧映射 `q // 10` 让 quality=95（导出面板的默认）正好落在最费的那一档：
+    一百张 PNG 就是九分钟纯编码。这条用例钉住的是"不再默默跌进 7–9"。
+    """
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    rgb = src(64, 96)
+    levels = []
+    for q in (10, 30, 60, 95, 100):
+        info = write_file(rgb, str(tmp_path / f"p{q}.png"), quality=q)
+        assert info["compress_level"] == min(6, q // 10), info
+        assert info["compress_level"] <= 6, f"quality={q} 又跌回 7–9 档了"
+        levels.append(info["compress_level"])
+        assert np.array_equal(np.asarray(Image.open(info["path"]).convert("RGB"), np.uint8),
+                              rgb), "改档位不改无损语义：PNG 必须仍能逐字节解回原图"
+    assert levels == sorted(levels), f"quality 越高档位反而越低：{levels}"
+    jpg = write_file(rgb, str(tmp_path / "x.jpg"), quality=90)
+    assert jpg["compress_level"] is None, "非 PNG 格式没这个旋钮，但要键不要缺键"
+
+
 def test_write_file_accepts_every_advertised_format(tmp_path):
     pytest.importorskip("PIL")
     rgb = src(48, 48)
