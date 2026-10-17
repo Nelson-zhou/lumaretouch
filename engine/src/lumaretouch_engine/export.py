@@ -45,6 +45,8 @@ from .ops.deform import (analytic_frontal_landmarks, controls, face_frame,
 from .ops.grade import GradeError, check_params
 from .ops.inpaint import hole_extent, levels_for, mask_bbox, inpaint_t, crop_apply_t
 from .ops.lut import DEFAULT_LUT_AMOUNT, LutError, check_amount
+from .ops.upscale import Plan as UpscalePlan
+from .ops.upscale import check_scale, unsharp_bands_np
 from .vram import LightOp, PreviewPipeline, RepairOp
 
 DEFAULT_TILE = 1024
@@ -60,6 +62,12 @@ MAX_MARGIN = 2048
 _FIELD_BAND_PX = 1 << 15
 
 FORMATS = ("jpg", "jpeg", "png", "tif", "tiff", "webp")
+# 出片锐化的硬边界（M7）。为什么是模块常量而不是写在 check() 里：命令层要在**开跑前**
+# 就拿同一对数拒掉非法请求（被拒的导出还发 export_progress，UI 的进度条会走完后发现
+# 什么都没有），而两处各写一份数字就是下一轮改边界时漏改的那一处。
+SHARPEN_AMOUNT_LIMIT = 2.0
+SHARPEN_RADIUS_RANGE = (1, 24)
+SHARPEN_THRESHOLD_LIMIT = 0.2
 
 
 class ExportError(ValueError):
@@ -94,6 +102,13 @@ class ExportSpec:
     cube: object = None
     lut_amount: float = DEFAULT_LUT_AMOUNT
     grade: tuple = (0.0, 0.0, 0.0, 1.0)      # (dh, ds, dv, amount)
+    # 放大（M7）：输出倍率与出片锐化。为什么不在预览会话里做而在导出做：预览的
+    # 幅面是代理档（屏幕就这么大），用户要的 2×/4× 只在出片那一刻存在。
+    scale: int = 1
+    upscale_backend: str = "lanczos3"
+    sharpen_amount: float = 0.0
+    sharpen_radius: int = 2
+    sharpen_threshold: float = 0.01
 
     def check(self) -> None:
         """参数在进入昂贵通路之前先过一遍唯一校验口径（与各层 setter 同源）。"""
@@ -121,6 +136,28 @@ class ExportSpec:
                 raise ExportError(f"分通道导出需要掩膜：channel={self.channel!r} 但没有 masks/mask_names")
             if self.channel not in self.mask_names:
                 raise ExportError(f"没有这个通道：{self.channel!r}（可用 {self.mask_names}）")
+        # 放大（M7）：倍率、后端、锐化都先在这里过——导出会落盘，一条越界参数
+        # 不该先花几秒分块再报错。
+        try:
+            self.scale = check_scale(self.scale)
+        except ValueError as e:
+            raise ExportError(f"放大倍率非法：{e}") from None
+        if self.upscale_backend not in ("lanczos3", "realesrgan"):
+            raise ExportError(f"未知放大后端：{self.upscale_backend!r}（可用 lanczos3/realesrgan）")
+        if self.upscale_backend == "realesrgan":
+            # 这里不接受也不降级：静默改用 Lanczos 然后报"AI 超分完成"是这一仓最不能
+            # 犯的那类错（与 lama/birefnet 同规）。能不能用由权重门禁说，不由导出说。
+            raise ExportError("导出通路里的 realesrgan 需先过权重 sha256 门禁；"
+                              "无权重时请用 upscale_backend=lanczos3，引擎不会替你默默切后端")
+        sa = float(self.sharpen_amount)
+        if not math.isfinite(sa) or not 0.0 <= sa <= SHARPEN_AMOUNT_LIMIT:
+            raise ExportError(f"sharpen_amount={self.sharpen_amount!r} 越界（需要 [0,{SHARPEN_AMOUNT_LIMIT}] 内的有限数）")
+        if not (SHARPEN_RADIUS_RANGE[0] <= int(self.sharpen_radius) <= SHARPEN_RADIUS_RANGE[1]):
+            raise ExportError(f"sharpen_radius={self.sharpen_radius} 越界（需要 "
+                              f"{SHARPEN_RADIUS_RANGE[0]}~{SHARPEN_RADIUS_RANGE[1]}）")
+        st = float(self.sharpen_threshold)
+        if not math.isfinite(st) or not 0.0 <= st <= SHARPEN_THRESHOLD_LIMIT:
+            raise ExportError(f"sharpen_threshold={self.sharpen_threshold!r} 越界（需要 [0,{SHARPEN_THRESHOLD_LIMIT}]）")
 
     # ---- margin：由参数算，不是量出来一个数写死 ----
     def margin_px(self, deform_peak_px: float = 0.0) -> int:
@@ -128,6 +165,10 @@ class ExportSpec:
                 2 * int(self.light_radius) if self.light else 0)
         if deform_peak_px:
             m += int(math.ceil(deform_peak_px)) + 1
+        # 放大要的是 Lanczos 的支撑半径：补丁得比目标框四周多包 a 个源像素，
+        # 否则抽头越出补丁——那不是近似，是拿不存在的数据编值
+        if int(self.scale) > 1:
+            m = max(m, UpscalePlan.margin_for(int(self.scale)))
         return m
 
 
@@ -328,8 +369,12 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
         # 说清楚：这一对组合本轮没做，不是默默降级成不分通道。
         raise ExportError("分通道导出还不接受满幅消除笔底图（掩膜装载需要原始像素）："
                           "请分开通道与消除笔，或等这条通路补齐")
-    out = np.zeros((h, w, 3), np.uint8)
+    scale = int(spec.scale)
+    plan = UpscalePlan(h, w, scale)          # 表只算一次，每块取自己那一段
+    out_h, out_w = plan.out_h, plan.out_w
+    out = np.zeros((out_h, out_w, 3), np.uint8)
     seg = {"filter": 0.0, "light": 0.0, "deform": 0.0, "lut": 0.0, "grade": 0.0}
+    upscale_ms = 0.0
     # 三段非算子开销。为什么不只记算子：上一版只记五个算子段，跑靶量到"分段合计只占
     # 整帧 27%"——那 73% 不知道去哪了（真因是每块一次 empty_cache，把分配器缓存全
     # 放掉再重申请）。能归因的账单才是账单，否则只是把没说的话当作没事。
@@ -370,7 +415,16 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
                     channel=spec.channel if spec.masks is not None else None)
         t_r = time.perf_counter()
         got = pipe.read_back()[..., :3]
-        out[y0:y1, x0:x1] = got[y0 - cy0:y1 - cy0, x0 - cx0:x1 - cx0]
+        if scale == 1:
+            out[y0:y1, x0:x1] = got[y0 - cy0:y1 - cy0, x0 - cx0:x1 - cx0]
+        else:
+            # 把本块有数区渲染结果按全局权重表放大到输出坐标里对应那一段。
+            # 不是"先拼整幅再放大"——那会把峰值从 tile 拉回图幅；也不比 0：
+            # 同一串 (下标, 权重) 同一累加顺序，与整幅 `plan.full` 逐字节同一
+            t_u = time.perf_counter()
+            out[y0 * scale:y1 * scale, x0 * scale:x1 * scale] = plan.region(
+                got, y0 * scale, y1 * scale, x0 * scale, x1 * scale, cy0, cx0)
+            upscale_ms += (time.perf_counter() - t_u) * 1000.0
         io["readback"] += (time.perf_counter() - t_r) * 1000.0
         tile_seg = sum(float(getattr(pipe, f"last_{k}_ms", 0.0) or 0.0) for k in seg)
         for k in seg:
@@ -382,9 +436,22 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
         if progress is not None:
             progress(i + 1, len(rects), (time.perf_counter() - t0) * 1000.0)
     ms = (time.perf_counter() - t_all) * 1000.0
+    sharpen_ms = 0.0
+    if float(spec.sharpen_amount) > 0.0:
+        # 出片锐化排在放大之后、且切的是已经完整的输出图：带 halo 拿真像素，
+        # 只有图的真边缘才用 replicate——所以与整图直锐逐字节同一，不拿近似当默认
+        t_s = time.perf_counter()
+        out = unsharp_bands_np(out, radius=float(spec.sharpen_radius),
+                               amount=float(spec.sharpen_amount),
+                               threshold=float(spec.sharpen_threshold))
+        sharpen_ms = (time.perf_counter() - t_s) * 1000.0
     peak_bytes = int(delta.numel() * 4) if delta is not None else 0
     return out, {
-        "w": w, "h": h, "px": w * h, "src_mb": round(h * w * 3 / 1e6, 2),
+        "w": out_w, "h": out_h, "px": out_w * out_h, "src_mb": round(h * w * 3 / 1e6, 2),
+        "src_w": w, "src_h": h, "scale": scale,
+        "upscale_backend": spec.upscale_backend if scale > 1 else None,
+        "upscale_ms": round(upscale_ms, 2), "sharpen_ms": round(sharpen_ms, 2),
+        "sharpen_amount": float(spec.sharpen_amount),
         "tile": int(tile), "tiles": len(rects), "margin_px": int(margin),
         "deform_peak_px": round(peak, 3), "total_ms": round(ms, 1),
         "field_ms": round(field_ms, 1),

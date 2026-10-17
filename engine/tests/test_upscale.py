@@ -216,6 +216,20 @@ def test_unsharp_gpu_cpu_within_one_lsb():
 
 
 # ---------------------------------------------------------------- 能力口径
+def test_unsharp_bands_equals_whole_byte_exact():
+    """分带锐化一整张图 == 整图直锐，逐字节。halo 拿真像素，只有图的真边缘才用 replicate。
+
+    拿不整除图高的小 band（7/17）：那才能同时踩到中间带边界与末带不满。
+    """
+    img = _toy(40, 50)
+    for radius in (1.0, 2.0, 3.5):
+        for band in (7, 17, 40, 512):
+            ref = U.unsharp_np(img, radius=radius, amount=0.6)
+            got = U.unsharp_bands_np(img, radius=radius, amount=0.6, band=band)
+            assert np.array_equal(ref, got), f"radius={radius} band={band} 分带与整图不一致"
+    assert np.array_equal(U.unsharp_bands_np(img, amount=0.0), img)
+
+
 def test_scale_backends_does_not_claim_network_as_baseline():
     b = U.scale_backends()
     assert "lanczos3" in b["baseline"]

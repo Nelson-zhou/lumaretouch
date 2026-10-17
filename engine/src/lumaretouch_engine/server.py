@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 import threading
@@ -24,11 +25,14 @@ from .ops.deform import KINDS, DeformGeometryError, check_amounts
 from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
 from .ops.grade import DH_LIMIT, DS_LIMIT, DV_LIMIT, GradeError, check_params
 from .ops.presets import PRESETS, PresetError, get_preset, preset_grade, preset_lut
+from .ops.upscale import SCALES
+from .ops import upscale as U
 # M5 底片条：扫描与缩略图的全部口径都在 session 层，命令层只发事件与管线程。
 from . import raw as R
 from . import session as S
 # M4 导出：FORMATS/尺寸边界与落盘器全部从 export 走，命令层不掌一份格式名单（双出处）。
-from .export import (DEFAULT_TILE, FORMATS, MAX_TILE, MIN_TILE, ExportSpec,
+from .export import (DEFAULT_TILE, FORMATS, MAX_TILE, MIN_TILE, SHARPEN_AMOUNT_LIMIT,
+                     ExportSpec,
                      export_image, resample_field, write_file)
 from . import __version__
 
@@ -194,6 +198,10 @@ class Engine:
               "export_formats": sorted(set(FORMATS)),
               "export_tile": [MIN_TILE, MAX_TILE],
               "export_tile_default": DEFAULT_TILE,
+              # 放大能力（M7）：倍率与后端名单同样由引擎说。前端刻一份"支持 2×/4×"或
+              # "支持 AI 超分"，就是在无权重的机器上谎报能力。
+              "upscale_scales": list(SCALES),
+              "upscale_backends": U.scale_backends(),
               # RAW 能力清单（M1 的 RAW 那一块）：基线只解公开规范 DNG 的未压缩/Deflate
               # 线性数据，厂商专有容器与 lossless JPEG 要 libraw 可选插件。前端拿这一
               # 份说话，而不是自己刻一个“支持 RAW”——那会把“解不开 CR2”写成已通过。
@@ -2546,7 +2554,8 @@ class Engine:
                       "w": self.shm.w, "h": self.shm.h, "mode": "device_switch"})
 
     # ------------------------------------------------------------ M4 全尺寸导出
-    EXPORT_KEYS = {"cmd", "action", "images", "out_dir", "format", "quality", "tile"}
+    EXPORT_KEYS = {"cmd", "action", "images", "out_dir", "format", "quality", "tile",
+                   "scale", "sharpen", "upscale_backend"}
 
     def _export_snapshot(self, snap: dict, eh: int, ew: int, *, for_document: bool):
         """从命令线程拍好的快照里组一份 ExportSpec。返回 (spec, skipped)。
@@ -2573,7 +2582,10 @@ class Engine:
                           detail_gain=float(p["detail_gain"]),
                           grade=tuple(snap["grade"]), cube=snap["lut"],
                           lut_amount=float(snap["lut_amount"]),
-                          deform_amounts={})
+                          deform_amounts={},
+                          scale=int(snap.get("scale", 1)),
+                          upscale_backend=str(snap.get("upscale_backend", "lanczos3")),
+                          sharpen_amount=float(snap.get("sharpen", 0.0)))
         if not for_document:
             skipped += ["repair", "light", "deform", "channel（笔迹与掩膜属于当前文档）"]
             return spec, skipped
@@ -2668,13 +2680,48 @@ class Engine:
         if not (1 <= quality <= 100):
             emit({"event": "error", "error": f"quality={quality} 越界（需要 1~100）"})
             return
+        # 放大（M7）：这一层只做"能不能解析"的校，参数上下限的唯一口径在
+        # ExportSpec.check（与各层 setter 同源），不在这里拄第二份数
+        from .ops.upscale import check_scale
+        try:
+            scale = check_scale(p.get("scale", 1))
+        except (ValueError, TypeError) as e:
+            emit({"event": "error", "error": f"scale 非法：{e}"})
+            return
+        backend = str(p.get("upscale_backend", "lanczos3"))
+        if backend not in ("lanczos3", "realesrgan"):
+            emit({"event": "error", "error": f"未知放大后端：{backend}（可用 lanczos3/realesrgan）"})
+            return
+        if backend == "realesrgan":
+            # 无权重整条拒，不降级成 Lanczos 报"AI 超分"（与 lama/birefnet 同一条规矩）。
+            # 为什么不在这里探文件存在：那一探会把"权重可用"的判断口径分两处维护，
+            # 而真实装载在 ops.realesrgan.load_net 里（sha256 对账那一关）。导出前就能
+            # 告诉用户不行，靠的是同一个缺省理由。
+            from .ops import realesrgan as _rr
+            emit({"event": "error", "error": _rr.missing_reason("realesrgan")
+                  if not _rr.available() else
+                  "realesrgan 权重存在但未通过 sha256 对账：请设 LRT_REALESRGAN_SHA256 后重试"})
+            return
+        try:
+            sharpen = float(p.get("sharpen", 0.0))
+        except (TypeError, ValueError):
+            emit({"event": "error", "error": "sharpen 必须是 0~2 的数"})
+            return
+        # 越界值必须在开跑前就拒：ExportSpec.check 里那一条虽然也会拦，但它跑在
+        # worker 里，拦下时 export_progress 已经发出去了——进度条走完后什么都没有，
+        # 上一轮 M4 就是为这一件事付过费。界只有一处出处（export 模块常量）。
+        if not (math.isfinite(sharpen) and 0.0 <= sharpen <= SHARPEN_AMOUNT_LIMIT):
+            emit({"event": "error",
+                  "error": f"sharpen={sharpen} 越界（需要 [0,{SHARPEN_AMOUNT_LIMIT}]）"})
+            return
         # 参数在命令线程里全部拍定：worker 里不再读 self._*，否则中途改一下滑块，
         # 这一批里前几张与后几张用的就不是同一套设置（而事件里只写了一份）
         snap = dict(strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
                     lut=self._lut, lut_amount=self._lut_amount, light=dict(self._light),
                     light_ops=list(self._light_ops), repair_ops=list(self._repair_ops),
                     deform=dict(self._deform), channel=self._channel,
-                    precompute=self._precompute, device=self.device)
+                    precompute=self._precompute, device=self.device,
+                    scale=scale, upscale_backend=backend, sharpen=sharpen)
         self._export_args = (list(images), out_dir, fmt, quality, tile, doc, snap)
         self._export = threading.Thread(target=self._export_loop, daemon=True)
         self._export.start()
@@ -2711,6 +2758,8 @@ class Engine:
                   "ok": "error" not in results[-1]})
         emit({"event": "export_done", "total": n, "failed": failed,
               "out_dir": out_dir, "format": fmt, "quality": quality, "tile": tile,
+              "scale": int(snap["scale"]), "upscale_backend": snap["upscale_backend"],
+              "sharpen": float(snap["sharpen"]),
               "total_ms": round((monotonic_ns() - t0) / 1e6, 1), "images": results})
 
     def _effective_device(self) -> str:

@@ -277,6 +277,97 @@ def unsharp_t(t, radius: float = 2.0, amount: float = 0.35, threshold: float = 0
     return (x + float(amount) * d).clamp(0.0, 1.0)
 
 
+class Plan:
+    """一次放大的全局重采样计划：表算一遍，导出按块取用。
+
+    为什么需要这个而不直接叫 upscale_np：导出已经有一套分块（为了把图层的作用域
+    算清楚），它每块只拿到**渲染后的一个补丁**，整幅渲染图从未存在过。如果为了放大
+    再把整幅拼起来，"峰值只随 tile 走"当场作废。Plan 让每块拿自己那块的全局行列权重，
+    把下标平移到补丁坐标里算——于是分块导出与整幅放大逐字节同一，且不要求整幅驻留。
+
+    调用方的契约（`region` 会硬性校）：补丁必须比目标框四周至少多包 `margin_px` 个
+    源像素（= 核半径 a），否则抽头会越出补丁——那就是实现说谎，不是近似。
+    """
+
+    def __init__(self, in_h: int, in_w: int, scale: int = 2, a: int = DEFAULT_A):
+        self.s = check_scale(scale)
+        self.a = int(a)
+        self.in_h, self.in_w = int(in_h), int(in_w)
+        self.out_h, self.out_w = self.in_h * self.s, self.in_w * self.s
+        self.margin_px = Plan.margin_for(self.s, self.a)
+        self._iw, self._ww = (resample_weights(self.out_w, self.in_w, a)
+                              if self.s > 1 else (None, None))
+        self._ih, self._wh = (resample_weights(self.out_h, self.in_h, a)
+                              if self.s > 1 else (None, None))
+
+    @staticmethod
+    def margin_for(scale: int, a: int = DEFAULT_A) -> int:
+        """导出侧唯一要拿的口径：这一倍率需要多少源像素的边。`scale=1` 不要。"""
+        return 0 if check_scale(scale) == 1 else int(a)
+
+    def region(self, patch, oy0: int, oy1: int, ox0: int, ox1: int,
+               cy0: int, cx0: int) -> np.ndarray:
+        """补丁 → 输出坐标里 `[oy0:oy1] × [ox0:ox1]` 那一块（uint8）。
+
+        oy*/ox* 是**输出**下标，cy0/cx0 是补丁在源图里的左上角。累加顺序与 `full`
+        同一条 k 序列，所以两者逐字节等价不是“差不多”而是“同一个数”。
+        """
+        if self.s == 1:
+            return np.ascontiguousarray(patch[oy0 - cy0:oy1 - cy0, ox0 - cx0:ox1 - cx0])
+        if patch.ndim != 3 or patch.shape[2] != 3:
+            raise ValueError(f"region 需要补丁 (h,w,3)，得到 {patch.shape}")
+        ih = self._ih[oy0:oy1] - cy0
+        iw = self._iw[ox0:ox1] - cx0
+        ph, pw = patch.shape[:2]
+        if ih.min() < 0 or ih.max() >= ph or iw.min() < 0 or iw.max() >= pw:
+            raise ValueError(
+                f"补丁不够宽：需要源行 [{int(self._ih[oy0:oy1].min())},"
+                f"{int(self._ih[oy0:oy1].max())}] 落在补丁 [{cy0},{cy0 + ph}) 内——"
+                f"分块导出得给放大留 margin_px={self.margin_px} 的边")
+        x = patch.astype(np.float64) / 255.0
+        x = _apply_axis_np(x, np.clip(iw, 0, pw - 1), self._ww[ox0:ox1], 1)
+        x = _apply_axis_np(x, np.clip(ih, 0, ph - 1), self._wh[oy0:oy1], 0)
+        return np.clip(np.rint(x * 255.0), 0, 255).astype(np.uint8)
+
+    def full(self, img) -> np.ndarray:
+        """整幅一次放大。与 `upscale_np` 同一路（不另开一份实现，免得两档各自腐化）。"""
+        return upscale_np(img, self.s, self.a)
+
+
+def unsharp_bands_np(img, radius: float = 2.0, amount: float = 0.35,
+                     threshold: float = 0.01, band: int = 512) -> np.ndarray:
+    """分带锐化一整张已拼好的输出图：结果与对全图直接 `unsharp_np` 逐字节同一。
+
+    为什么能逐字节：这里切的是**已经完整的图**，每条带上方下方都拿真像素当 halo，
+    只有图的真边缘才用 replicate——那与全图做时用的是同一圈边缘值，不是近似。
+    为什么要分带：×4 的 20 MP 输出是一张 80 MP 的图，float64 整幅副本就是 1.9 GB，
+    分带后峰值只随 band 走。
+    """
+    k = gaussian_kernel1d(radius)
+    if k.size == 1 or amount == 0.0:
+        return img.copy()
+    pad = k.size // 2
+    h, w = img.shape[:2]
+    out = np.empty_like(img)
+    for y0 in range(0, h, int(band)):
+        y1 = min(y0 + int(band), h)
+        cy0, cy1 = max(y0 - pad, 0), min(y1 + pad, h)
+        # 带内每一行需要的 halo 从完整图里拿真像素；图缘那侧没有 halo 可拿，
+        # 但 blur 在那里本来也是 replicate，两边同口径
+        strip = img[cy0:cy1]
+        # blur_np 吃的是归一到 [0,1] 的浮点（与 unsharp_np 同一口径），不是 uint8 原图：
+        # 递错就是拿 0–255 的模糊去减 0–1 的原值，d 整片负尽、出口被括到 0——
+        # 这条就是逐字节对拍报出来的（写这一层时真的错过一次）
+        sub = strip.astype(np.float64) / 255.0
+        bl = blur_np(sub, radius)
+        d = sub - bl
+        if threshold > 0:
+            d = np.where(np.abs(d) < threshold, 0.0, d)
+        q = np.clip(np.rint((sub + amount * d) * 255.0), 0, 255).astype(np.uint8)
+        out[y0:y1] = q[y0 - cy0:y1 - cy0]
+    return out
+
+
 def scale_backends() -> dict:
     """能力上报（口径与 `raw_backends` / `lama` 守卫一致，不许混报）：
 

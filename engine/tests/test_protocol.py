@@ -2392,7 +2392,35 @@ def test_ready_event_lists_the_builtin_presets(engine):
 # ============================================================ M4 全尺寸导出（协议层）
 # 这批用例管的是命令签名与事件形状——库层的分块保真在 test_export.py 里已经逐条钉过，
 # 协议层不许重抄一份数学判据，那只会漂移出两个答案。
-EXPORT_KEYS = {"cmd", "action", "images", "out_dir", "format", "quality", "tile"}
+# EXPORT_KEYS 从引擎拿，不在这里刻一份：本仓对"双出处"付过多次钱（格式名单、
+# grade 边界、版本号）——上一轮它就在这一行默默漂过：测试里那份少了 scale/sharpen/upscale_backend，
+# 而引擎里已有，当时只是没断言到它们身上，漂移看不出来。
+from lumaretouch_engine.server import Engine as _Engine
+
+EXPORT_KEYS = _Engine.EXPORT_KEYS
+
+
+def _next_error_or(engine, timeout: float = 20.0, ignore=("frame", "_raw")):
+    """等一条**对得上这次命令**的答复：`error` 或任一 `export_*`，其余全部是 chatter。
+
+    为什么不拿"下一个事件"当答复：导出一被拒就不发任何 export_* 事件，而此刻会话
+    还在逐帧发 frame，还会补一条 session_state（load_image 的文档登记）——上一版就先
+    报在 frame、再报在 session_state 上，看起来像"没报错"，而那句 error 就在后面两三
+    条。拿白名单挑答复，才是"这条命令说了什么"。返回 export_* 表示**没被拒**，
+    caller 那边的断言会把它当失败报出来，不会假装通过。
+    """
+    deadline = time.monotonic() + timeout
+    seen: list = []
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise TimeoutError(f"{timeout}s 内没等到答复；路上事件={seen}")
+        e = engine.next_event(timeout=min(left, 10.0))
+        name = e.get("event", "")
+        if name == "error" or name.startswith("export_"):
+            return e
+        if name not in ignore:
+            seen.append(name)
 
 
 def _collect_until(engine, event: str, timeout: float = 240.0):
@@ -2612,6 +2640,95 @@ def test_export_refused_while_benching(engine, tmp_path):
 def test_export_command_keys_are_a_whitelist(engine):
     """命令层的白名单要把 `cmd` 自己算进去（M3-b 为这条付过 12 项用例的钱）。"""
     assert "cmd" in EXPORT_KEYS and "action" in EXPORT_KEYS
+    # M7 给导出开了三个新键；它们必须同时在名单里——不在就是“收了但丢了”，
+    # 而“导出了但尺寸不对”在事件里一个字不报
+    assert {"scale", "sharpen", "upscale_backend"} <= EXPORT_KEYS
+
+
+# ============================================================ M7：放大接入出片
+# 这一节只管**命令接线与诚实**：scale 能不能从 stdin 一路走到落盘尺寸、无权重后端
+# 是不是整条拒。放大本身的保真（分块逐字节等价、三臂对拍）在 test_export_scale.py
+# 与 test_upscale.py 钉，不在这里重做一遍。
+def test_export_scale_makes_the_file_actually_bigger(engine, tmp_path):
+    """2× 导出：落盘尺寸必须是源图的两倍，而事件里同时留着源幅与倍率。只报“成了”
+    不报“多大”的导出无法归因。"""
+    _need_export_env()
+    from PIL import Image
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.0, max_px=207360)
+    ready = engine.wait_for("image_ready", timeout=60)
+    engine.send(cmd="export", out_dir=str(tmp_path), format="png", tile=512,
+                scale=2, sharpen=0.5)
+    done, _ = _collect_until(engine, "export_done")
+    assert done["failed"] == 0 and done["total"] == 1, done
+    assert done["scale"] == 2 and done["upscale_backend"] == "lanczos3", done
+    assert float(done["sharpen"]) == 0.5, done
+    img = done["images"][0]
+    with Image.open(img["out"]) as im:
+        assert im.size == (ready["src_w"] * 2, ready["src_h"] * 2), \
+            f"落盘尺寸 {im.size} 不是源图 {(ready['src_w'], ready['src_h'])} 的 2×"
+    assert (img["src_w"], img["src_h"]) == (ready["src_w"], ready["src_h"]), img
+    assert img["w"] == im.size[0] and img["h"] == im.size[1], "账单尺寸要等于落盘尺寸"
+    assert img["upscale_ms"] >= 0.0 and img["sharpen_ms"] >= 0.0, img
+    # 4× 不是“参数能递到”就算了：倍率真乘到像素数上才算接对了
+    engine.send(cmd="export", out_dir=str(tmp_path / "x4"), format="png", tile=512, scale=4)
+    done4, _ = _collect_until(engine, "export_done")
+    with Image.open(done4["images"][0]["out"]) as im:
+        assert im.size == (ready["src_w"] * 4, ready["src_h"] * 4), im.size
+
+
+def test_export_realesrgan_backend_is_refused_honestly_and_engine_lives(engine, tmp_path):
+    """无权重要 Neural 后端：整条拒 + 理由点名权重 + 不落任何文件 + 引擎还能动。
+
+    最坏的答案是“默默用 Lanczos 写了一张图，事件里写 upscale_backend=realesrgan”——
+    那等于把确定性重采样当成神经网络超分卖。这一条钉的就是它不会发生。
+    """
+    _need_export_env()
+    from PIL import Image
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.0, max_px=207360)
+    engine.wait_for("image_ready", timeout=60)
+    out_dir = tmp_path / "nn"
+    engine.send(cmd="export", out_dir=str(out_dir), format="png", scale=2,
+                upscale_backend="realesrgan")
+    # 不用 wait_for：它碰到 error 会直接报断，而这一条要的就是那句 error。
+    # 也不能拿到的第一个事件就当答复：会话在背地里还在发 frame，那一口吃的不是
+    # export 的话（上一版就报在 {'event':'frame'} 上）。
+    e = _next_error_or(engine, timeout=20)
+    assert e.get("event") == "error", e
+    txt = str(e["error"])
+    assert "realesrgan" in txt.lower() or "权重" in txt, txt
+    assert "lanczos3" in txt, f"拒绝理由要告诉用户可用的那一个档：{txt}"
+    assert not list(out_dir.glob("*.png")), "被拒的导出不得留下半截文件"
+    # 拒完还能正常出片：一条拒绝不能把会话或 worker 抖死
+    engine.send(cmd="export", out_dir=str(out_dir), format="png", tile=512, scale=2)
+    done, _ = _collect_until(engine, "export_done")
+    assert done["failed"] == 0 and done["total"] == 1, done
+    with Image.open(done["images"][0]["out"]) as im:
+        assert im.size[0] > 0
+
+
+def test_export_scale_bad_values_are_refused_without_events(engine):
+    """倍率与锐化的越界值在**开跑前**就拒，不产生一个 export_progress 事件。"""
+    _need_export_env()
+    for bad in ({"scale": 5}, {"scale": 0}, {"scale": "two"}, {"sharpen": -1},
+                {"sharpen": float("nan")}, {"upscale_backend": "bicubic"}):
+        engine.send(cmd="export", out_dir="/tmp", format="jpg",
+                    images=[FIXTURE], **bad)
+        e = _next_error_or(engine, timeout=8)
+        assert e.get("event") == "error", (bad, e)
+        # 探针：hello 一定发事件，而且与导出无关——不会被"上一条其实偷偷跑了"蒙过去
+        engine.send(cmd="hello")
+        ready = engine.wait_for("ready", timeout=15)
+        assert ready["protocol"] == 1
+
+
+def test_ready_advertises_upscale_capabilities(engine):
+    """能力上报（M7）：倍率与后端名单由引擎说，前端不刻一份。"""
+    engine.send(cmd="hello")
+    hello = engine.wait_for("ready", timeout=30)
+    assert hello["upscale_scales"] == [1, 2, 3, 4], hello.get("upscale_scales")
+    b = hello["upscale_backends"]
+    assert "lanczos3" in b["baseline"] and "realesrgan" in b["weights_gated"]
+    assert "realesrgan" not in b["baseline"], "无权重机器上不许把神经网络超分列为装机即用能力"
 
 
 # ============================================================ M5-a：底片条（文档会话）
