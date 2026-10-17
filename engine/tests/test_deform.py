@@ -231,15 +231,56 @@ def test_identity_grid_uses_pixel_centers():
     assert torch.allclose(ys[1] - ys[0], torch.tensor(2.0 / H), atol=1e-6)
 
 
-def test_identity_warp_is_byte_identical():
-    """恒等网格 + 零位移：CPU 参考必须逐字节还原（不是"接近"）。"""
+def test_zero_field_short_circuits_without_running_any_kernel():
+    """CPU 参考臂：空场与 s=0 必须直接返回同一个对象，连算子都不进。
+
+    上一版这条叫“恒等网格 + 零位移逐字节还原”，但 warp_np 在全零场上直接
+    `return img`（vram 那边也有 has_deform 门），所以那句逐字节断言**对任何采样公式
+    都成立** —— 连 `plane[y0, x0]` 写错都不会红。恒真判据比没判据更贵：它让人以为
+    采样段被测过。采样公式本身由 test_fractional_translation 与
+    test_warp_np_and_warp_t_agree 钉。这一条拆成不依赖 torch 的一份，CI 的 CPU job
+    也能跑（否则“短路”这个承诺在无 GPU 变体上根本不验）。
+    """
     rng = np.random.default_rng(7)
     img = rng.integers(0, 256, (1, 3, H, W)).astype(np.uint8)
     d = np.zeros((1, H, W, 2), dtype=np.float32)
-    out = warp_np(img.astype(np.float32) / 255.0, d, 1.0)
-    assert np.array_equal(np.round(out * 255.0).astype(np.uint8), img)
-    # s=0 与空场都走短路，连算子都不该有
+    # 身份相等就是结构性质最硬的证法：不是“算出来恰好一样”，是一个字节也没动过
     assert warp_np(img, d, 0.0) is img
+    assert warp_np(img, d, 1.0) is img
+
+
+def test_zero_field_with_identity_grid_is_byte_exact():
+    """GPU 臂：恒等网格 + 零位移必须逐字节等于输入（identity_grid 与 grid_sample 对齐）。"""
+    torch = pytest.importorskip("torch")
+    rng = np.random.default_rng(7)
+    img = rng.integers(0, 256, (1, 3, H, W)).astype(np.uint8)
+    d = np.zeros((1, H, W, 2), dtype=np.float32)
+    tf = torch.from_numpy(img).float().div_(255.0)
+    out = warp_t(tf, torch.from_numpy(d), 1.0, base=identity_grid(H, W))
+    assert torch.equal(out, tf), "零位移不得改变任何一个字节"
+
+
+def test_fractional_translation_matches_analytic_bilinear():
+    """分数位移的采样必须是解析双线性（这一条才真的在验采样公式）。
+
+    整数平移下双线性权重落到格点上，四个抽头写成什么都是对的；只有 0.5 px 能把
+    “拿错抽头”从看起来差不多变成错得离谱。与 GPU 臂同输同对拍。"""
+    torch = pytest.importorskip("torch")
+    rng = np.random.default_rng(11)
+    img = rng.integers(0, 256, (1, 3, H, W)).astype(np.uint8)
+    tf = torch.from_numpy(img).float().div_(255.0)
+    d = np.zeros((1, H, W, 2), dtype=np.float32)
+    d[..., 0] = 0.5
+    ref = tf.numpy()
+    # 采样坐标 x+0.5：左右两个抽头各一半（取 interior 列，不碰 border 延拓那一列）
+    want = np.concatenate([(ref[..., :-1] + ref[..., 1:]) * 0.5, ref[..., -1:]], axis=-1)
+    got_np = warp_np(tf.numpy(), d, 1.0)
+    got_t = warp_t(tf, torch.from_numpy(d), 1.0).numpy()
+    for name, got in (("CPU", got_np), ("GPU", got_t)):
+        inner = got[:, :, 2:-2, 1:-1]
+        w = want[:, :, 2:-2, 1:-1]
+        err = np.abs(inner - w).max()
+        assert err < 1.5e-3, f"{name} 臂 0.5px 采样与解析双线性差 {err}：抽头或权重不对"
 
 
 def test_translation_moves_by_exact_pixels():
@@ -261,6 +302,22 @@ def test_translation_moves_by_exact_pixels():
         got_t = torch.round(warp_t(tf, torch.from_numpy(d), 1.0)[0] * 255.0).to(torch.uint8).numpy()
         assert np.abs(got_np.astype(int) - want.astype(int)).max() == 0, f"CPU 参考平移 {k} 不对"
         assert np.abs(got_t.astype(int) - want.astype(int)).max() == 0, f"GPU 路径平移 {k} 不对"
+
+
+def test_warp_np_refuses_a_batch_it_cannot_map():
+    """批量图 + 单份位移场必须当场拒，不许交一张带未初始化内存的图。
+
+    上一版 `out = np.empty_like(src)` 而循环只写 out[0]，其余批次是脏内存；
+    `np.where(zero, src, out)` 在非零位移区会把那些脏字节拷进输出，而报表全绿。
+    """
+    rng = np.random.default_rng(5)
+    img = rng.integers(0, 256, (2, 3, H, W)).astype(np.float32)
+    d = np.ones((1, H, W, 2), dtype=np.float32)      # 非零场，不走短路
+    with pytest.raises(ValueError):
+        warp_np(img, d, 1.0)
+    # 场的空间尺寸对不上也不靠 reshape “自动对齐”
+    with pytest.raises(ValueError):
+        warp_np(img[:1], np.ones((H + 7, W, 2), dtype=np.float32), 1.0)
 
 
 def test_warp_np_and_warp_t_agree_on_a_real_field():
@@ -449,7 +506,9 @@ def test_warm_device_actually_runs_the_deform_kernels():
         monkey.undo()
     assert ms > 0.0
     assert sorted(calls) == sorted(KINDS), f"预热没覆盖全部三种形变：{calls}"
-    assert vram.PreviewPipeline.__init__  # 会话确实建过（防有人把预热整段注释掉）
+    # 不再加一句 `assert vram.PreviewPipeline.__init__`：那断言的是方法对象，恒真，
+    # 而注释却声称在“防有人把预热整段注释掉”。上面那个 spy 已经证了这件事：
+    # 单位场没真解过就不会有三次调用，而 warm_device 里不建会话根本走不到那里。
 
 
 def test_warm_device_leaves_no_deform_references():

@@ -754,7 +754,7 @@ def test_import_reports_the_one_time_filter_cost_separately(engine):
     engine.send(cmd="set_strength", value=0.7)
     ev = engine.wait_for("params_set", timeout=30)
     assert ev["filter_ms"] == 0.0, f"拖强度重算了滤波：{ev}"
-    assert ev["cached"] is True, f"缓存没建立却说 cached：{ev}"
+    assert ev["filter_cached"] is True, f"缓存没建立却说 filter_cached：{ev}"
 
 
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
@@ -835,10 +835,12 @@ def test_cached_field_discriminates_recompute_from_reuse(engine):
     _load(engine, max_px=207360, strength=0.5)
     engine.send(cmd="set_strength", value=0.5, radius=18)
     ev1 = engine.wait_for("params_set", timeout=30)
-    assert ev1["filter_ms"] > 0.0 and ev1["cached"] is False, f"重算帧却报 cached=True：{ev1}"
+    assert ev1["filter_ms"] > 0.0 and ev1["filter_cached"] is False, \
+        f"重算帧却报 filter_cached=True：{ev1}"
     engine.send(cmd="set_strength", value=0.7)
     ev2 = engine.wait_for("params_set", timeout=30)
-    assert ev2["filter_ms"] == 0.0 and ev2["cached"] is True, f"复用帧却报 cached=False：{ev2}"
+    assert ev2["filter_ms"] == 0.0 and ev2["filter_cached"] is True, \
+        f"复用帧却报 filter_cached=False：{ev2}"
 
 
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
@@ -962,7 +964,11 @@ def test_drag_stream_after_inpaint_still_refilters_nothing(engine):
     engine.send(cmd="inpaint", action="add", rle=_brush_rle(h, w, 30, 30, 5), feather=2)
     done = engine.wait_for("inpaint_done", timeout=60)
     assert done["filter_ms"] > 0.0, "底图变了但滤波没重算：下一帧会拿旧图的结果磨新图"
-    assert done["cached"] is False, done
+    assert done["filter_cached"] is False, done
+    # 图层与滤波两条缓存分不开名：字典字面量后写会静默吃掉先写，于是其中一条永远
+    # 送不出来而报表看着仍自洽（bench_done 的 light/deform 已经栽过一次）
+    assert done["layer_recomputed"] is True, \
+        f"消除笔真重算了却报 layer_recomputed=False：{done}"
     # 多笔叠上去才是产品用法：零重算不能只在“只有一笔”下成立。逐笔重放各自四周的裁块，
     # 图层数与落图数必须一个个对得上，否则报表上看不出漏了哪笔。
     for i, (cy, cx, r) in enumerate(((h // 2, w // 2, 6), (h - 40, 30, 4)), start=2):
@@ -1465,6 +1471,10 @@ def test_drag_stream_with_deform_lit_builds_nothing(engine):
     # 于是其中一个永远送不出来而报表看着仍自洽。这两条就是在钉它俩确实是两个字段。
     assert isinstance(b["deform"], float) and isinstance(b["deform_state"], dict), \
         "deform 每帧 ms 与 deform_state 图层状态必须分得开"
+    # 分段自洽：kernel 是“整段减去 filter/light/deform”并夹到 0，某段被计两次时
+    # 它只会显示 0.0 而不是负数——不报个数就永远看不出重复计时
+    assert b["seg_over_frames"] == 0, \
+        f"{b['seg_over_frames']} 帧的子段之和超过整段：有分段被计了两次"
 
 
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
@@ -1482,3 +1492,113 @@ def test_deform_is_refused_while_bench_running(engine):
     _expect_error(engine, "跑靶进行中")
     engine.send(cmd="bench_stop")
     engine.wait_for("bench_done", timeout=90)
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_light_done_carries_every_field_for_all_five_actions(engine):
+    """light_done 的五种 action 必须送同一套字段：UI 按必存字段读，缺一个就是渲染崩溃。
+
+    上一版 params 那条只回 {exposure, radius, ops, lit}，用户拖完"修容档数"松手，
+    App 读 lastLight.field_peak.toFixed(2) 直接 TypeError。谎报发生在 JSON 边界上，
+    TS 编译期抓不到（引擎交出来的是无类型 JSON），所以这条只能在协议层钉。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.3)
+    h, w = meta["h"], meta["w"]
+    rle = _brush_rle(h, w, h // 3, w // 3, 6)
+    got = {}
+    engine.send(cmd="light", action="add", rle=rle, sign=1)
+    got["add"] = engine.wait_for("light_done", timeout=60)
+    engine.send(cmd="light", action="params", exposure=0.9)
+    got["params"] = engine.wait_for("light_done", timeout=60)
+    engine.send(cmd="light", action="undo")
+    got["undo"] = engine.wait_for("light_done", timeout=60)
+    engine.send(cmd="light", action="redo")
+    got["redo"] = engine.wait_for("light_done", timeout=60)
+    engine.send(cmd="light", action="clear")
+    got["clear"] = engine.wait_for("light_done", timeout=60)
+    # 与 ui/src/native.ts 的 LightInfo 里声明为必存的字段一一对应
+    required = {"action": str, "ops": int, "redo_pending": int, "painted_px": int,
+                "field_peak": float, "lit": bool, "exposure": float, "radius": int,
+                "light_build_ms": float, "light_ms": float, "filter_ms": float,
+                "bands_ms": float, "render_ms": float, "total_ms": float,
+                "bytes_light": int, "layer_recomputed": bool, "filter_cached": bool,
+                "device": str, "strength": float}
+    for act, ev in got.items():
+        missing = sorted(k for k in required if k not in ev)
+        assert not missing, f"{act} 那条缺字段 {missing}：UI 按必存读会读到 undefined"
+        wrong = {k: type(ev[k]).__name__ for k, t in required.items()
+                 if not isinstance(ev[k], t)
+                 and not (t is float and isinstance(ev[k], (int, float)) and not isinstance(ev[k], bool))}
+        assert not wrong, f"{act} 那条类型不对：{wrong}"
+    # 专门把 params 与建层那条摆一起比：上一版就是这一条臂漂了
+    assert set(got["params"]) - set(got["add"]) <= {"action"}, \
+        f"params 那条多/少了键：{set(got['params']) ^ set(got['add'])}"
+    assert got["params"]["lit"] is True and got["params"]["exposure"] == 0.9, got["params"]
+    assert got["params"]["layer_recomputed"] is False, \
+        "只改参数不重算场，报 layer_recomputed=True 就是假指标"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_landmark_change_rebuilds_the_resident_deform_field(engine):
+    """关键点一换，已常驻的单位场必须真的重解：不然旧几何继续瘦这一张脸。
+
+    上一版 cmd_precompute 什么也不做：template 建层后再 precompute，cmd_deform 看见
+    built=True 就不再重解，而 deform_done 把 landmark_backend 报成新后端——上报与
+    画面双向错配，而且"有变化、无异常、指标全绿"。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    engine.send(cmd="precompute", backend="template")
+    engine.wait_for("precompute_ready", timeout=60)
+    peer = FrameShm(meta["name"])
+    try:
+        _nudge_frame(engine, 0.0)
+        engine.send(cmd="deform", action="set", amounts={"slim_face": 0.8})
+        first = engine.wait_for("deform_done", timeout=60)
+        assert first["build"]["deform_builds"] == 1, first
+        lit_px = _read_frame(engine, peer, meta["h"], meta["w"])
+        # 再来一次 precompute：换了关键点就得真的重解，而滑块值原样保留
+        engine.send(cmd="precompute", backend="template")
+        engine.wait_for("precompute_ready", timeout=60)
+        rb = engine.wait_for("deform_done", timeout=60)
+        assert rb["action"] == "rebuild", rb
+        assert rb["deform_builds"] == 2, f"关键点换了但单位场没重解：{rb}"
+        assert rb["built"] is True and rb["lit"] is True, rb
+        assert rb["amounts"]["slim_face"] == 0.8, f"重建不许把用户的滑块归零：{rb}"
+        assert rb["landmark_backend"] == "template", rb
+        assert rb["build"]["deform_build_ms"] > 0, rb
+        # 重建那条必须补帧（不补就是“引擎已按新几何重建、屏幕停在旧像素”）；而同一批
+        # 关键点重解出的单位场必须是同一个东西，所以两帧应当逐字节相等
+        assert np.array_equal(_read_frame(engine, peer, meta["h"], meta["w"]), lit_px), \
+            "同一批关键点重解后画面变了：TPS 解算不再确定性，换设备/重建重放那条全不可信"
+        # 重建之后再拖滑块：不能再解（零推理那条承诺不因重建而失效）
+        engine.send(cmd="deform", action="set", amounts={"slim_face": 0.4})
+        after = engine.wait_for("deform_done", timeout=60)
+        assert "build" not in after and after["deform_builds"] == 2, after
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_synthetic_landmarks_invalidate_a_built_deform_layer(engine):
+    """后端换成不能按脸形语义取点的 synthetic：整层清除并明说，不能默默继续用旧几何。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    engine.send(cmd="precompute", backend="template")
+    engine.wait_for("precompute_ready", timeout=60)
+    engine.send(cmd="deform", action="set", amounts={"slim_face": 0.9})
+    first = engine.wait_for("deform_done", timeout=60)
+    assert first["lit"] is True, first
+    engine.send(cmd="precompute", backend="synthetic")
+    engine.wait_for("precompute_ready", timeout=60)
+    ev = engine.wait_for("deform_done", timeout=60)
+    assert ev["action"] == "invalidate", ev
+    assert ev["built"] is False and ev["lit"] is False and ev["bytes_deform"] == 0, ev
+    assert ev["amounts"]["slim_face"] == 0.0, ev
+    assert ev["dropped_amounts"]["slim_face"] == 0.9, \
+        f"清层得说清刚才滑块是多少，否则用户看到的是滑块自己弹回零：{ev}"
+    assert ev["landmark_backend"] == "synthetic", ev
+    # 失效之后一条 set 必须重新走建层判定，并再次整条拒（不能拿旧的模板场继续服务）
+    engine.send(cmd="deform", action="set", amounts={"slim_face": 0.5})
+    _expect_error(engine, "synthetic")

@@ -97,6 +97,9 @@ class Engine:
         # 形变层（M2-b）：存的是三个滑块的值，单位场不存（它能从关键点重算，
         # 而关键点已经在 _precompute 里）。换设备重建时重新 build 一次，55 ms。
         self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+        # 分段计时的自洽计数：子段之和超过整帧内核段的帧数（只可能是重复计时）。
+        # kernel 靠减法得出并夹到 0，不记这一笔就永远看不出某段被计了两次。
+        self._seg_over_frames = 0
         self._wlock = threading.Lock()   # 跑靶线程与 stdin 线程都在写同一块双缓冲
         self._strength = _clamp_strength(0.5)
 
@@ -204,7 +207,13 @@ class Engine:
             # M2-b：形变与修容不同，它每帧真在跑（grid_sample），所以它不是“重算次数”
             # 而是“每帧成本”。零推理那条靠 deform_builds 不增来证，不靠这一段为 0。
             seg["deform"] = float(getattr(pipe, "last_deform_ms", 0.0) or 0.0)
-            seg["kernel"] = max(whole - seg["filter"] - seg["light"] - seg["deform"], 0.0)
+            # kernel 是“整段减去三个子段”，减法夹到 0 就看不出重复计时：子段之和超过整段
+            # 只可能是某段被计了两次或计时嵌套了。当场记一笔，由 bench_done 说话——
+            # 一个永远非负、越界也不报的数不是一个判据。
+            seg_sum = seg["filter"] + seg["light"] + seg["deform"]
+            if seg_sum - whole > 0.5:
+                self._seg_over_frames += 1
+            seg["kernel"] = max(whole - seg_sum, 0.0)
             t = monotonic_ns()
             pipe.pack(out)
             # 跑靶指纹（只给合成靶纸用）：常驻路径的源图不动，逐帧变化的像素只能靠盖序号块。
@@ -310,6 +319,8 @@ class Engine:
               "deform_ms_total": round(acc["deform"], 2),
               "deform_builds": (int(getattr(pipe, "deform_builds", 0)) - builds_at_start
                                 if pipe is not None else 0),
+              # 分段不自洽的帧数：某段被重复计时时会在这里非 0，而不是表上看不出来
+              "seg_over_frames": int(self._seg_over_frames),
               "params": dict(self._params),
               # 图层状态与每帧分段不能同名。上一版 `"light": dict(self._light)` 写在
               # `**snapshot()` 前面，而 snapshot 里就有同名的每帧 ms——字典字面量后写的
@@ -345,12 +356,20 @@ class Engine:
             pipe.light_radius = int(self._light["radius"])
             if self._light_ops:
                 pipe.set_light_ops(self._light_ops, self._light_redo)
-            # 形变层：单位场不存只重算（一次 55 ms，换设备本来就是重操作）。
+            # 形变层：单位场不存只重解（一次 55 ms，换设备本来就是重操作）。
             # 关键点不在（没 precompute）时不能默默建不起来：那会“迁了会话、
-            # 滑块还在 0.6 但画面不动”，而事件里看不出异常。
-            if self._deform["built"] and self._precompute is not None:
-                pipe.build_deform(self._precompute.landmarks)
-                pipe.set_deform_amounts(dict(self._deform["amounts"]))
+            # 滑块还在 0.6 但画面不动”，而事件里看不出异常。上一版这段只有 if、
+            # 没有 else，注释里写的担心恰好就是代码缺的那一半。
+            if self._deform["built"]:
+                if self._precompute is None:
+                    emit({"event": "engine_warn",
+                          "warn": "会话已迁到新设备，但没有关键点可重建形变层，已整层清除"})
+                    self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+                    self._emit_deform_state("invalidate", reason="没有关键点可重建单位场")
+                else:
+                    # 不补帧：调用方（换设备那一条）紧后就自己渲染并写 shm，
+                    # 而会话刚迁移时 _write_current_frame 抱异常会把整个迁移打断
+                    self._rebuild_deform_for_landmarks(self._precompute, write_frame=False)
         emit({"event": "vram_ready", "device": str(pipe.device), "w": w, "h": h,
               "adopted": bool(adopt),
               "bytes_src": int(pipe.src_u8.numel() * pipe.src_u8.element_size()),
@@ -520,6 +539,97 @@ class Engine:
               total_ms=round((t3 - t0) / 1e6, 2)))
         # 预计算完不重发帧：默认渲染路径不看掩膜，重发只能多一个变量进测量。
         # 要看掩膜作不作数，用 set_strength + channel。
+        # 形变层是例外：它的单位场就是从这批关键点解出来的，关键点一走它就是
+        # 无源之水（M2-b 审查项 2，口径见 _rebuild_deform_for_landmarks）。
+        self._rebuild_deform_for_landmarks(pc)
+
+    def _rebuild_deform_for_landmarks(self, pc, *, write_frame: bool = True) -> None:
+        """关键点更新后重建已常驻的形变层：滑块值保留，单位场跟着新几何走。
+
+        上一版这里什么都不做，于是“precompute(template) → deform set slim=0.9 →
+        装上 mediapipe 再 precompute(mediapipe)”之后 cmd_deform 看见 built=True 就
+        不再重解：形变还在用肤色盒模板的几何瘦这一张脸，而 deform_done 把
+        landmark_backend 报成 mediapipe——上报与画面双向错配，而且是“看不出错”那一类。
+        库层 vram.clear_face 的注释早就写明“关键点一走单位场就是无源之水”，但命令层
+        没接线，所以它一直是没人走的死代码。
+
+        先清再建：新后端解不出层时，旧几何绝不能继续服务。滑块值不重置：换后端是
+        “同一张脸量得更准”，不是“用户改了主意”，把用户的作品按引擎内部事件归零是
+        另一种静默降级。解不出时发 action=invalidate，UI 那条必须把滑块跟着归零。
+        """
+        if not self._deform["built"]:
+            return
+        amounts = dict(self._deform["amounts"])
+        self._vram.clear_deform()
+        self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+        if pc.backend == "synthetic":
+            emit({"event": "engine_warn",
+                  "warn": "关键点后端换成 synthetic（网格占位几何），形变层已整层清除"})
+            self._emit_deform_state("invalidate", reason="synthetic 占位几何不能按脸形语义取点",
+                                    dropped_amounts=amounts)
+            return
+        try:
+            built = self._vram.build_deform(pc.landmarks)
+            state = self._vram.set_deform_amounts(amounts)
+        except (DeformGeometryError, ValueError, RuntimeError) as e:
+            self._vram.clear_deform()
+            emit({"event": "engine_warn",
+                  "warn": f"用新关键点重建形变层失败，已整层清除：{type(e).__name__}: {e}"})
+            self._emit_deform_state("invalidate", reason=f"重建失败：{e}",
+                                    dropped_amounts=amounts)
+            return
+        self._deform = dict(amounts=dict(state["amounts"]), built=True)
+        # 层真的变了（有非零滑块）就必须补一帧：不补就是“引擎已按新几何形变，
+        # 屏幕还是旧像素”，而 precompute_ready 里看不出画面错开
+        render_ms = 0.0
+        fr = None
+        if write_frame and bool(state["lit"]) and self.shm is not None \
+                and (self.shm.w, self.shm.h) == (self._vram.w, self._vram.h):
+            try:
+                fr = self._write_current_frame("deform")
+                render_ms = fr.pop("render_ms")
+            except Exception as e:
+                # 补帧失败不能把整条 precompute 拖死（预计算本身已成立），但必须说清
+                # “引擎已按新几何重建形变层、屏幕还是旧帧”这件事
+                emit({"event": "engine_warn", "warn": f"形变层重建后补帧失败：{e}"})
+        # 事件次序与 cmd_deform 一致：先报状态、后报帧。反过来会让“等 deform_done”的
+        # 调用方把中间那条 frame 事件吞掉，下一帧就再也等不到（本轮真踩过）
+        self._emit_deform_state("rebuild", build=built, render_ms=render_ms)
+        if fr is not None:
+            emit(fr)
+
+    def _emit_deform_state(self, action: str, *, build: dict | None = None,
+                           render_ms: float = 0.0, total_ms: float = 0.0,
+                           reason: str | None = None,
+                           dropped_amounts: dict | None = None) -> None:
+        """deform_done 只在这里组装一次（cmd_deform 与关键点重建/清除三条臂共用）。
+
+        与 _precompute_ready_event 同一条理由：两处各写一份，漂的方向永远是“后接的那
+        条臂少一个字段”，而 TS 把字段声明成必存——谎报发生在 JSON 边界上，编译期抓不到。
+        """
+        pipe = self._vram
+        ev = {"event": "deform_done", "action": action,
+              "amounts": dict(pipe.deform_amounts),
+              "built": bool(pipe.deform_units),
+              "lit": bool(pipe.has_deform()),
+              "deform_builds": int(pipe.deform_builds),
+              "deform_ms": round(float(pipe.last_deform_ms), 2),
+              "bytes_deform": int(pipe.deform_resident_bytes()),
+              "render_ms": round(float(render_ms), 2),
+              "total_ms": round(float(total_ms), 2),
+              # 关键点出自哪个后端必须原样上报：template 是“按肤色盒摆的模板”，
+              # 贴合度不验收。UI 拿不到这个数就会把模板拟合当成真检测给用户看。
+              "landmark_backend": (self._precompute.backend if self._precompute else None),
+              "device": str(pipe.device), "strength": self._strength}
+        if build is not None:
+            ev["build"] = build
+        if reason:
+            ev["reason"] = reason
+        if dropped_amounts:
+            # 失效那一条要让用户看到“刚才拖的是多少”：只报 lit=false 的话，滑块弹回
+            # 零像出了 bug，而实际是后端换了
+            ev["dropped_amounts"] = dict(dropped_amounts)
+        emit(ev)
 
     def cmd_set_strength(self, p: dict):
         """滑块动一下：只重算系数，不重解码也不重上传。返回一帧。
@@ -596,7 +706,9 @@ class Engine:
               "bands_ms": round(float(self._vram.last_bands_ms), 2),
               # 这一帧到底复用了缓存没有：`retouched is not None` 是个恒真的说法（render 成功
               # 之后它必然非空），缓存被无声绕过时也照样报 True。只有 last_filter_ms 才由执行路径约束。
-              "cached": float(self._vram.last_filter_ms) == 0.0,
+              # 名字叫 filter_cached 不叫 cached：库层字典里那条 cached 说的是“本层真重算了”，
+              # 两件事共用一个键名时，字典字面量后写的会静默吃掉先写的。
+              "filter_cached": float(self._vram.last_filter_ms) == 0.0,
               # M2-a2：拖磨皮滑块时这一笔应当恒为 0（两份 db 结果都命中常驻）。
               # 不为 0 就是修容层把磨皮那条零推理热路径拖回了重算——两个数得分开报才能看见。
               "light_ms": round(float(self._vram.last_light_ms), 2), **self._params})
@@ -732,7 +844,7 @@ class Engine:
         emit({"event": "inpaint_done", "action": action, **info, **info_add,
               "filter_ms": round(float(self._vram.last_filter_ms), 2),
               "bands_ms": round(float(self._vram.last_bands_ms), 2),
-              "cached": float(self._vram.last_filter_ms) == 0.0,
+              "filter_cached": float(self._vram.last_filter_ms) == 0.0,
               "repair_ms": info["repair_ms"], "render_ms": render_ms,
               "total_ms": round((monotonic_ns() - t_start) / 1e6, 2),
               "device": str(self._vram.device), "strength": self._strength})
@@ -840,15 +952,27 @@ class Engine:
             if got is None:
                 return
             op = LightOp(op_id=self._op_seq + 1, weight=weight, sign=sign)
+            prev_light = dict(self._light)
             if got:
-                # 先改参数再建层：两者在同一条事件里，提交后帧与上报必须同时是新参数的
+                # 参数先于建层：两者在同一条事件里，提交后帧与上报必须同时是新参数的
                 self._light = dict(self._light, **got)
                 self._vram.set_light_params(self._light["exposure"], self._light["radius"])
             try:
                 info = self._vram.add_light(op)
-            except ValueError as e:
-                # 建层失败时一笔也不加（_commit_light 是“全算完才提交”），所以这里不能占号
-                emit({"event": "error", "error": f"修容被拒，整条拒绝：{e}"})
+            except Exception as e:
+                # 回滚必须成对。上一版只 except ValueError 且不回滚参数：任何
+                # RuntimeError（先 load_rgb_u8）、非有限场、显存 OOM 都会留下“参数已是新的、
+                # 图层一笔没加、事件一条没发”的半应用状态——上报里曝光变了而画面按旧曝光
+                # 渲染，Rust 侧 status.light 还停在上一条 payload。cmd_set_strength 已为同一个
+                # 形状付过钱：“先全量校验、后一次性提交”不是注释，得真的回得去。
+                self._light = prev_light
+                try:
+                    self._vram.set_light_params(prev_light["exposure"], prev_light["radius"])
+                except Exception:      # 回滚本身再抛就得当场说清，不能留个“看起来已回滚”的状态
+                    emit({"event": "engine_warn",
+                          "warn": f"修容回滚失败，参数层已不可信，请重新导图：{type(e).__name__}"})
+                emit({"event": "error",
+                      "error": f"修容被拒，参数一并回滚（{type(e).__name__}）：{e}"})
                 return
             self._op_seq = op.op_id
             info_add = {"op_id": op.op_id, "sign": sign, "decode_ms": round(decode_ms, 2),
@@ -877,7 +1001,7 @@ class Engine:
               "light_ms": round(float(self._vram.last_light_ms), 2),
               "filter_ms": round(float(self._vram.last_filter_ms), 2),
               "bands_ms": round(float(self._vram.last_bands_ms), 2),
-              "cached": float(self._vram.last_filter_ms) == 0.0,
+              "filter_cached": float(self._vram.last_filter_ms) == 0.0,
               "render_ms": render_ms,
               "total_ms": round((monotonic_ns() - t_start) / 1e6, 2),
               "device": str(self._vram.device), "strength": self._strength})
@@ -909,9 +1033,10 @@ class Engine:
             emit({"event": "error", "error": "跑靶进行中，拒绝 deform：先 bench_stop"})
             return
         t_start = monotonic_ns()
-        info_add: dict = {}
+        build_info: dict = {}
+        prev_amounts = dict(self._deform["amounts"])
         if action == "clear":
-            info = self._vram.clear_deform()
+            self._vram.clear_deform()
             self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
         else:
             try:
@@ -937,24 +1062,35 @@ class Engine:
                     emit({"event": "error", "error": f"形变建层失败，整条拒绝：{e}"})
                     return
                 self._deform["built"] = True
-                info_add = {"build": built}
+                build_info = {"build": built}
             try:
                 info = self._vram.set_deform_amounts(got)
             except ValueError as e:
                 emit({"event": "error", "error": f"deform 被拒，整条拒绝：{e}"})
                 return
             self._deform["amounts"] = dict(info["amounts"])
-        fr = self._write_current_frame("deform")
+        try:
+            fr = self._write_current_frame("deform")
+        except Exception as e:
+            # 滑块值已写进常驻层而渲染抛了（apply_deform 的非有限值护栏、会话尺寸不配）：
+            # 必须把滑块值退回上一条已证能出帧的状态，否则“层里留着新值而屏幕停在旧帧”，
+            # 而下一条 set 会拿这个坏场再跑一次。回滚后补一帧把画面与层对齐。
+            self._deform["amounts"] = prev_amounts
+            try:
+                self._vram.set_deform_amounts(prev_amounts)
+                back = self._write_current_frame("deform")
+                back.pop("render_ms", None)
+                emit(back)
+            except Exception:      # 回滚也出帧失败：能说清的只有“重新导图”
+                emit({"event": "engine_warn",
+                      "warn": "形变回滚后仍无法出帧，本会话不可信，请重新导入图片"})
+            emit({"event": "error", "error": f"形变渲染失败，滑块已退回上一值（"
+                  f"{type(e).__name__}）：{e}"})
+            return
         render_ms = fr.pop("render_ms")
-        emit({"event": "deform_done", "action": action, **info, **info_add,
-              # 关键点出自哪个后端必须原样上报：template 是“按肤色盒摆的模板”，
-              # 贴合度不验收。UI 拿不到这个数就会把模板拟合当成真检测给用户看。
-              "landmark_backend": (self._precompute.backend if self._precompute else None),
-              "deform_ms": round(float(self._vram.last_deform_ms), 2),
-              "bytes_deform": self._vram.deform_resident_bytes(),
-              "render_ms": render_ms,
-              "total_ms": round((monotonic_ns() - t_start) / 1e6, 2),
-              "device": str(self._vram.device), "strength": self._strength})
+        self._emit_deform_state(action, build=build_info.get("build"),
+                                render_ms=render_ms,
+                                total_ms=round((monotonic_ns() - t_start) / 1e6, 2))
         emit(fr)
 
     def _pipe_copyin(self, rgba, strength: float, radius: int = DEFAULT_RADIUS,
@@ -1044,16 +1180,35 @@ class Engine:
             # 下一次带 channel 的渲染会直接读错/读到已释放的显存
             if self._precompute is not None:
                 t_p = monotonic_ns()
-                info = self._vram.load_face(self._precompute)
-                emit(self._precompute_ready_event(
-                    self._precompute, info,
-                    # 重挂没重新算：建图与推理都是 0，不是“没测到”。这里给 0.0 而不是
-                    # 缺字段，是为了让两条臂的事件形状完全一致——UI 那边一旦按必存字段读，
-                    # 少一个键就会在报表上变成 undefined 而无人报错
-                    build_ms=0.0, infer_ms=0.0,
-                    attach_ms=round((monotonic_ns() - t_p) / 1e6, 2),
-                    total_ms=round((monotonic_ns() - t_p) / 1e6, 2),
-                    replayed_for="device_switch"))
+                try:
+                    info = self._vram.load_face(self._precompute)
+                except Exception as e:
+                    # 会话已在新设备上而掩膜没重挂：不回收状态字段，下一条带 channel
+                    # 的 set_strength 会被 mask_names 拒掉，而报表仍写着“有 skin 通道”——
+                    # UI 说“没掩膜”的同时引擎里那张掩膜并不存在，两边各自自洽。
+                    # 语义与库层 clear_face 一致：关键点一走，靠它的东西全部放下。
+                    emit({"event": "error",
+                          "error": f"新会话重挂预计算产物失败，掩膜/通道/形变层已全部清除（"
+                                   f"{type(e).__name__}）：{e}"})
+                    self._vram.clear_face()
+                    self._precompute = None
+                    self._precompute_backend = None
+                    self._channel = None
+                    self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+                    info = None
+                if info is not None:
+                    emit(self._precompute_ready_event(
+                        self._precompute, info,
+                        # 重挂没重新算：建图与推理都是 0，不是“没测到”。这里给 0.0 而不是
+                        # 缺字段，是为了让两条臂的事件形状完全一致——UI 那边一旦按必存字段
+                        # 读，少一个键就会在报表上变成 undefined 而无人报错
+                        build_ms=0.0, infer_ms=0.0,
+                        attach_ms=round((monotonic_ns() - t_p) / 1e6, 2),
+                        total_ms=round((monotonic_ns() - t_p) / 1e6, 2),
+                        replayed_for="device_switch"))
+                # 形变层已在 _attach_pipeline 里跟着新会话重解过（那里不补帧，因为
+                # 下面紧后就自己渲染并写 shm）——这里不能再解一次，那会把换设备的
+                # 一次性成本翻倍，而 deform_builds 会凭空多一格
             if self.shm is not None and (self.shm.w, self.shm.h) == (self._vram.w, self._vram.h):
                 # 通道必须跟着会话一起迁移：不传 channel 的话，报表里 active_channel 还是 skin，
                 # 而给用户补发的是一帧全图渲染——字段与实际执行不一致正是本仓最贵那个坑的形状

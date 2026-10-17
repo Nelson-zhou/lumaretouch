@@ -591,3 +591,101 @@ def test_zero_gain_guard_is_load_bearing_on_the_torch_path():
         assert naive[1] > 0, (
             f"{dev} 上裸往返一个点都不翻（{naive}），守卫就成了白写的——"
             "要么靶造得不对，要么实现变了，两种都得重看这条判据")
+
+
+# ==================================================== 常驻层契约（M2-a2 审查落地）
+def _pipe():
+    pytest.importorskip("torch")
+    from lumaretouch_engine.vram import make_pipeline
+    return make_pipeline("cpu", W, H, skin())
+
+
+def test_set_light_params_returns_exactly_the_commit_key_set():
+    """五种 action 共用 light_done 一个事件名：params 那条的键集必须与建层那条一样。
+
+    上一版 set_light_params 只回 {exposure, radius, ops, lit}，painted_px /
+    field_peak / light_build_ms / redo_pending 全缺，而 UI 的 LightInfo 把它们声明
+    成必存字段 —— 用户拖一下"修容档数"松手，App 读 lastLight.field_peak.toFixed()
+    就 TypeError。谎报发生在 JSON 边界上，TS 编译期抓不到，所以这条只能在引擎侧钉。
+    """
+    p = _pipe()
+    committed = p._commit_light([], [])
+    params = p.set_light_params(0.8, 12)
+    assert set(params) == set(committed), \
+        f"两条臂的键集不同：只 params 有 {set(params) - set(committed)}，" \
+        f"只建层有 {set(committed) - set(params)}"
+    for k in ("painted_px", "field_peak", "light_build_ms", "redo_pending"):
+        assert isinstance(params[k], (int, float)), f"{k} 不是数字：{params[k]!r}"
+    assert params["exposure"] == 0.8 and params["radius"] == 12, params
+    assert params["layer_recomputed"] is False and committed["layer_recomputed"] is True
+
+
+def test_set_light_params_rejects_non_finite_exposure_before_writing_state():
+    """NaN 不许进常驻参数：`exposure != 0.0` 对 NaN 为真，于是"生效"判据当场失真。
+
+    后果不是报错而是每帧在渲染期抛 ValueError、会话卡死而 light_done 永不出现——
+    现场与病因隔了两个模块。命令层拦了 NaN，库层不拦就是"只认调用方守规矩"。
+    """
+    p = _pipe()
+    before = (float(p.light_exposure), int(p.light_radius))
+    for bad in (float("nan"), float("inf"), -float("inf"), DB_EXPOSURE_LIMIT + 1):
+        with pytest.raises(ValueError):
+            p.set_light_params(bad, 24)
+        with pytest.raises(ValueError):
+            p.set_light_params(0.6, -1)
+    assert (float(p.light_exposure), int(p.light_radius)) == before, "被拒的参数写进了状态"
+    p.light_exposure = float("nan")
+    assert p.has_light() is False, "NaN 曝光被判成'生效'：lit 这条自证失效"
+
+
+def test_light_add_rolls_back_params_when_the_layer_build_fails(monkeypatch):
+    """建层抛异常时参数必须一起退回：不许留下"参数新、图层旧、事件没发"。
+
+    上一版只 except ValueError（生产路径上几乎走不到），任何 RuntimeError / OOM 都会
+    冒到主循环：self._light 已是新值、db 缓存被丢、一笔没加、light_done 从没发出，
+    而宿主侧 status.light 还停在上一条 payload —— 上报里曝光变了而画面按旧曝光渲染。
+    这条与 cmd_set_strength 那次花钱换来的教训同形："先全量校验、后一次性提交"
+    不是注释，得真的回得去。
+    """
+    pytest.importorskip("torch")
+    from lumaretouch_engine import server as srv
+
+    events = []
+    monkeypatch.setattr(srv, "emit", lambda ev: events.append(dict(ev)))
+    eng = srv.Engine("t-light-rollback")
+    eng.device = "cpu"
+    pipe = _pipe()
+    eng._vram = pipe
+    eng._src_rgb = skin()
+    eng._image_loaded = True
+
+    class FakeShm:
+        w, h = W, H
+    eng.shm = FakeShm()
+    before = dict(eng._light)
+
+    def boom(op):
+        raise RuntimeError("显存不够")
+    monkeypatch.setattr(pipe, "add_light", boom)
+    eng.cmd_light({"action": "add", "rle": [[H // 3, W // 3, 8, 255]], "sign": 1,
+                   "exposure": 1.5, "radius": 8})
+    assert eng._light == before, f"建层失败后引擎侧参数没回滚：{eng._light}"
+    assert (float(pipe.light_exposure), int(pipe.light_radius)) == \
+        (before["exposure"], before["radius"]), "常驻层的参数也没回滚"
+    assert pipe.light_ops == [], "被拒的一笔不许留在图层里"
+    assert any(e["event"] == "error" and "回滚" in e["error"] for e in events), events
+    assert not any(e["event"] == "light_done" for e in events), "整条拒绝却发了成功事件"
+
+
+def test_layer_recomputed_and_filter_cached_are_two_different_names():
+    """库层的"本层重算了"与 cmd 层的"滤波命中缓存"不许共用一个键名。
+
+    字典字面量后写覆盖先写：`{**info, "cached": ...}` 会把 info 里的 cached 静默吃掉，
+    于是其中一个永远送不出来而报表看着仍自洽。bench_done 的 light/deform 已经栽过
+    一次（改名 light_state/deform_state），这两条是同一次事故的另两个现场。
+    """
+    p = _pipe()
+    info = p._commit_light([], [])
+    assert "layer_recomputed" in info and "cached" not in info, \
+        f"库层不许再发 cached 这个泛用名：{sorted(info)}"
+    assert "filter_cached" not in info, "滤波那条只属于 cmd 层，别在这里抢名字"

@@ -73,6 +73,7 @@ const zh = {
   "retouch.slim_face": "瘦脸",
   "retouch.big_eye": "大眼",
   "retouch.small_chin": "小下巴",
+  "retouch.deformInvalidated": "形变层已清除（关键点后端换了，滑块随之归零）",
   "retouch.deformClear": "重置形变",
   "retouch.deformLayer": "形变图层",
   "retouch.deformOn": "已生效",

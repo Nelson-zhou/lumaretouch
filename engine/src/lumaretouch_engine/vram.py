@@ -534,7 +534,9 @@ class PreviewPipeline:
             "painted_px": painted,
             "boxes": boxes,
             "bytes_base": self.repair_resident_bytes(),
-            "cached": False,          # 这一句由执行路径约束：走到这里就是真重算了
+            # 不叫 cached：cmd 层会在 `**info` 之后写一条同名的 filter_cached（滤波命中缓存），
+            # 两件事一个名字就是字典后写吃掉先写。这条只说“本层真的重算了”。
+            "layer_recomputed": True,
         }
 
     def repair_resident_bytes(self) -> int:
@@ -545,8 +547,14 @@ class PreviewPipeline:
 
     # ---- M2-a2：修容层（盖在磨皮之上的独立调整层，事件驱动） --------------
     def has_light(self) -> bool:
-        """这一层到底有没有活。没活就一个算子都不跑，两个操作数原样进混合。"""
-        return self.light_field_gpu is not None and float(self.light_exposure) != 0.0
+        """这一层到底有没有活。没活就一个算子都不跑，两个操作数原样进混合。
+
+        曝光必须先是**有限数**：NaN != 0.0 在 Python 里为真，拿它当“生效”会让一层
+        本来算不出来的东西被报成在生效，而每帧渲染到 dodge_burn 才抛——现场与病因
+        隔了两个模块。这里当场判假（渲染路径同样有 _check 拦，两条不矛盾）。
+        """
+        e = float(self.light_exposure)
+        return self.light_field_gpu is not None and math.isfinite(e) and e != 0.0
 
     def _light_cache_get(self, which: str):
         return (self.light_src, self.light_src_key) if which == "src" \
@@ -642,16 +650,58 @@ class PreviewPipeline:
         两份 db 缓存立即放下：它们对新参数没有意义，而旧张量占着 13 MiB 显存
         （产品档两份）不给释放，拖一下滑块显存峰值就翻倍。缓存键里含这两个数，
         不放下也不会拿错，所以这是纯显存措施。
+
+        校验必须在赋值之前，而且不能只靠调用方兜：上一版这里只做 float()/int()，
+        直调库层的通路（m2-dnb-bench 的 prod()、_attach_pipeline 的直赋值）能把 NaN
+        写进 light_exposure，而 lit 判据是 `exposure != 0.0`——**NaN 判为生效**，于是
+        每帧都在渲染期抛 ValueError，会话卡死而 light_done 永不出现。参数先于图层这
+        条约定与 cmd_set_strength / cmd_deform 花代价换来的同形。
         """
-        e, r = float(exposure), int(radius)
+        from .ops.light import _check
+
+        e, r = _check(exposure, radius)
         self.light_exposure = e
         self.light_radius = r
         self.light_src = None
         self.light_src_key = None
         self.light_res = None
         self.light_res_key = None
-        return {"exposure": e, "radius": r, "ops": len(self.light_ops),
-                "lit": bool(self.has_light())}
+        # 键集必须与 _commit_light 完全一致：五种 action 共用 light_done 这一个事件名，
+        # 少任何一个键，UI 那边按必存字段读就是 undefined（TS 编译期抓不到，谎报发生在
+        # JSON 边界上）。参数这条臂不重算场，所以建层成本记 0、峰值从常驻场现算。
+        peak = 0.0
+        if self.light_field_gpu is not None:
+            peak = float(self.light_field_gpu.abs().max().item())
+        return self._light_payload(build_ms=0.0, ops=len(self.light_ops),
+                                   redo=len(self.light_redo), painted=None,
+                                   field_peak=peak, recomputed=False)
+
+    def _light_payload(self, *, build_ms: float, ops: int, redo: int,
+                       painted, field_peak: float, recomputed: bool) -> dict:
+        """light_done 的图层字段只在这里组装一次（两条臂共用一份形状）。
+
+        painted 为 None 表示“这一条没重数过笔”：场是常驻的那份，拿不到覆盖像素数时
+        宁可给 0 也不留缺键——缺键的代价是 UI 读出 undefined 而无人报错，0 的代价只是
+        一个看得出来的保守值。
+        """
+        return {
+            # 建层成本（一次性）。与每帧的 last_light_ms 不同名：上一版两处都叫
+            # light_ms，而 cmd 层的 `**info` 又被每帧那个覆盖，报表上完全看不出
+            # 报的是哪一个——两个量差一个量级（建层 20 ms vs 每帧 0）。
+            "light_build_ms": round(float(build_ms), 2),
+            "ops": int(ops),
+            "redo_pending": int(redo),
+            "painted_px": int(painted or 0),
+            "field_peak": round(float(field_peak), 6),
+            "lit": bool(self.has_light()),
+            "exposure": float(self.light_exposure),
+            "radius": int(self.light_radius),
+            "bytes_light": self.light_resident_bytes(),
+            # 本层是否真的重算了。不能叫 cached：cmd 层那条 `cached` 说的是“这一帧的
+            # 磨皮滤波命中缓存”，两件事同名就是字典后写静默吃掉先写（bench_done 的
+            # light/deform 已经栽过一次，同一个坑不留在原地）。
+            "layer_recomputed": bool(recomputed),
+        }
 
     def _commit_light(self, ops: list, redo: list) -> dict:
         """重算带符号修容场并一次性提交。
@@ -694,21 +744,9 @@ class PreviewPipeline:
         self.light_version += 1
         self._light_cache_drop("src")
         self._light_cache_drop("res")
-        return {
-            # 建层成本（一次性）。与每帧的 last_light_ms 不同名：上一版两处都叫
-            # light_ms，而 cmd 层的 `**info` 又被每帧那个覆盖，报表上完全看不出
-            # 报的是哪一个——两个量差一个量级（建层 20 ms vs 每帧 0）。
-            "light_build_ms": round(ms, 2),
-            "ops": len(ops),
-            "redo_pending": len(redo),
-            "painted_px": painted,
-            "field_peak": float(np.abs(clipped).max()),
-            "lit": bool(gpu is not None and float(self.light_exposure) != 0.0),
-            "exposure": float(self.light_exposure),
-            "radius": int(self.light_radius),
-            "bytes_light": self.light_resident_bytes(),
-            "cached": False,          # 走到这里就是真重算了，与消除笔同一条口径
-        }
+        return self._light_payload(build_ms=ms, ops=len(ops), redo=len(redo),
+                                   painted=painted, field_peak=float(np.abs(clipped).max()),
+                                   recomputed=True)
 
     def light_resident_bytes(self) -> int:
         """修容层的显存 + CPU 账单：场、两份 db 结果、画笔列表。"""

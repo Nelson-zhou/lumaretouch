@@ -137,7 +137,9 @@ def event_cost(eng, pipe, weight_u8):
     t_dec = monotonic_ns()
     op = RepairOp(op_id=1, weight=w8, params=dict(DEFAULT_REPAIR))
     info = pipe.add_repair(op)
-    if info["ops"] != 1 or info["applied"] != 1 or info["cached"]:
+    if info["ops"] != 1 or info["applied"] != 1 or not info["layer_recomputed"]:
+        # 这条读的是库层字典（本层真重算了）：它不叫 cached——cmd 层会在 `**info` 之后
+        # 写一条同名的 filter_cached（滤波命中缓存），两个名字共一个键就是后写吃掉先写
         raise AssertionError(f"add_repair 应当报“真重算了一笔”，实际 {info}——"
                              "这一步对不上的话后面所有分段计时都不可信")
     t_rep = monotonic_ns()

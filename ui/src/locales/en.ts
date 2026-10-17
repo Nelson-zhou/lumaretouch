@@ -66,6 +66,7 @@ export const en: Partial<Record<MsgKey, string>> = {
   "retouch.slim_face": "Slim face",
   "retouch.big_eye": "Big eyes",
   "retouch.small_chin": "Smaller chin",
+  "retouch.deformInvalidated": "Deform layer cleared (landmark backend changed; sliders reset)",
   "retouch.deformClear": "Reset warp",
   "retouch.deformLayer": "Deform layer",
   "retouch.deformOn": "Active",

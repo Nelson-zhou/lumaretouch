@@ -127,8 +127,11 @@ def part_fidelity(failures: list[str]) -> None:
             f64 = tps_field_np(P, D, h, w, cx=cx, cy=cy, R=r1, r0=r0)
             req = D[:n]
             peak = float(np.abs(req).max())
-            err = float(np.abs(np.stack([f64[int(round(p[1])), int(round(p[0]))]
-                                         for p in P[:n]]) - req).max())
+            # 在**精确坐标**处取场值，不拿 round() 取整像素："TPS 在控制点处等于请求值"
+            # 是亚像素位置上的解析性质，整像素取点最多带 0.5 px 的位置误差。big_eye
+            # 满档峰值才 7.5 px、容差 0.02·peak = 0.15 px，取点误差能吃掉 89% 的预算——
+            # 于是判据过不过取决于关键点落在哪个像素附近，而不是实现对不对。
+            err = float(np.abs(_sample_bilinear(f64, P[:n, 0], P[:n, 1]) - req).max())
             print(f"  {w}x{h} {kind:10s} 峰值 {peak:6.2f} px  控制点误差 {err:.4f} px"
                   f"  改动像素 {changed:6.1%}  窗外改动 {n_out} px")
             if n_out:
@@ -353,14 +356,27 @@ def part_reverse_gates(failures: list[str]) -> None:
     if leak <= 0.0:
         failures.append("4b 反向门禁失效：不套窗窗外也不动，那条判据是恒真的")
 
-    # 4c affine 项转置写反 ⇒ 纯轴判据必须红
-    from lumaretouch_engine.ops import deform as df
-    src = open(os.path.join(HERE, "..", "engine", "src", "lumaretouch_engine",
-                            "ops", "deform.py"), encoding="utf-8").read()
-    transposed = "+ aff[0] + Xn @ aff[1:]" in src
-    print(f"  4c numpy 分支用的是 X @ aff[1:]（不是 .T）：{transposed}")
-    if not transposed:
-        failures.append("4c 生产件里 affine 项又被转置了，纯轴那条判据当场就该红")
+    n_face = len(P) - 8          # 末尾 8 个是边框零锚点，它们的请求必须是 0
+    pure = np.zeros((len(P), 2))
+    pure[:n_face, 1] = 3.0       # 只要 y 方向位移，x 分量一个不给
+    # 4c affine 项转置写反 ⇒ 纯轴判据必须红（本轮真抓到的第一个 bug）。
+    # 这一条上一版写成了对源码做字符串 grep：它只匹配 numpy 分支的字面量，torch
+    # 分支转置写反时照样绿（1e 只比 GPU↔CPU 差，两边同反就测不出）；而任何等价重构
+    # （改个变量名）都会让它**假红**，从而诱导后人把门禁改成更弱的形式。现在按 4b
+    # 的做法真摆一份错实现出来。
+    for arm, right in (("numpy", tps_field_np(P, pure, h, w, cx=cx, cy=cy, R=r1, r0=r0)),
+                       ("torch", tps_field_t(P, pure, h, w, cx=cx, cy=cy, R=r1, r0=r0,
+                                             device=DEV))):
+        r = right.detach().cpu().numpy() if torch.is_tensor(right) else np.asarray(right)
+        gx = float(np.abs(r[..., 0]).max())
+        bx = float(np.abs(_tps_transposed_variant(P, pure, h, w, want_t=(arm == "torch"))[..., 0]).max())
+        print(f"  4c {arm} 分支：生产实现的纯 y 请求 x 分量 {gx:.3e} px，"
+              f"affine 转置写反时 {bx:.4f} px")
+        if gx > 1e-9:
+            failures.append(f"4c {arm} 生产实现里纯 y 请求冒出了 x 位移（{gx} px）")
+        if bx <= 1e-3:
+            failures.append(f"4c {arm} 反向门禁失效：转置写反也看不出差别，"
+                            "那条纯轴判据在这条分支上是恒真的")
 
 
 def tps_field_np_no_window(P, D, h, w, *, cx, cy, R, r0, lam=1e-8):
@@ -370,6 +386,64 @@ def tps_field_np_no_window(P, D, h, w, *, cx, cy, R, r0, lam=1e-8):
     X = np.stack([xx.ravel(), yy.ravel()], axis=1)
     return _tps_field(np.asarray(P, dtype=np.float64), np.asarray(D, dtype=np.float64),
                       X, lam, scale=float(max(h, w))).reshape(h, w, 2)
+
+
+def _tps_transposed_variant(P, D, h, w, *, want_t: bool):
+    """把 affine 项转置写反的那一份 TPS（本轮真 bug 的等价错形）——只给反向门禁用。
+
+    不复用产品函数是因为它已经是对的：反向门禁要的是"错实现必须让判据红"，拿一份
+    注定正确的实现去证"判据能抓到错"是空转。坐标与位移同除 max(h,w) 再乘回来，
+    与 _tps_field 的各向同性归一同步——不然两条臂比的不是同一个形变。
+    """
+    from lumaretouch_engine.ops.deform import _u_kernel
+    P = np.asarray(P, dtype=np.float64)
+    D = np.asarray(D, dtype=np.float64)
+    scale = float(max(h, w))
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float64)
+    X = np.stack([xx.ravel(), yy.ravel()], axis=1) / scale
+    Ps, Ds = P / scale, D / scale
+    n = Ps.shape[0]
+    if want_t:
+        t = torch.as_tensor
+        Pt, Dt, Xt = t(Ps, dtype=torch.float64), t(Ds, dtype=torch.float64), t(X, dtype=torch.float64)
+        A = torch.cat([torch.ones(n, 1, dtype=torch.float64), Pt], dim=1)
+        L = torch.zeros(n + 3, n + 3, dtype=torch.float64)
+        L[:n, :n] = _u_kernel(torch.cdist(Pt, Pt).pow(2))
+        L[:n, n:] = A
+        L[n:, :n] = A.T
+        rhs = torch.zeros(n + 3, 2, dtype=torch.float64)
+        rhs[:n] = Dt
+        sol = torch.linalg.solve(L + 1e-8 * torch.eye(n + 3, dtype=torch.float64), rhs)
+        aff = sol[n:]
+        f = _u_kernel(torch.cdist(Xt, Pt).pow(2)) @ sol[:n] + aff[0] + Xt @ aff[1:].T
+        return (f * scale).reshape(h, w, 2).numpy()
+    A = np.hstack([np.ones((n, 1)), Ps])
+    L = np.zeros((n + 3, n + 3))
+    L[:n, :n] = _u_kernel(((Ps[:, None, :] - Ps[None, :, :]) ** 2).sum(-1))
+    L[:n, n:] = A
+    L[n:, :n] = A.T
+    rhs = np.zeros((n + 3, 2))
+    rhs[:n] = Ds
+    sol = np.linalg.solve(L + 1e-8 * np.eye(n + 3), rhs)
+    aff = sol[n:]
+    f = _u_kernel(((X[:, None, :] - Ps[None, :, :]) ** 2).sum(-1)) @ sol[:n] \
+        + aff[0] + X @ aff[1:].T
+    return (f * scale).reshape(h, w, 2)
+
+
+def _sample_bilinear(f, xs, ys):
+    """在精确坐标处取场值（双线性），避开"取整像素"本身带来的位置误差。"""
+    h, w = f.shape[0], f.shape[1]
+    x = np.clip(np.asarray(xs, dtype=np.float64), 0.0, w - 1.0)
+    y = np.clip(np.asarray(ys, dtype=np.float64), 0.0, h - 1.0)
+    x0 = np.floor(x).astype(np.int64)
+    y0 = np.floor(y).astype(np.int64)
+    x1 = np.minimum(x0 + 1, w - 1)
+    y1 = np.minimum(y0 + 1, h - 1)
+    wx = (x - x0)[:, None]
+    wy = (y - y0)[:, None]
+    return (f[y0, x0] * (1 - wx) * (1 - wy) + f[y0, x1] * wx * (1 - wy)
+            + f[y1, x0] * (1 - wx) * wy + f[y1, x1] * wx * wy)
 
 
 def main() -> int:

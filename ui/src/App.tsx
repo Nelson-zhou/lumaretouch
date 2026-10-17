@@ -98,6 +98,9 @@ export default function App() {
     slim_face: 0, big_eye: 0, small_chin: 0,
   });
   const [lastDeform, setLastDeform] = useState<DeformInfo | null>(null);
+  // 引擎把形变层整条清除时说的那句话（为什么滑块自己回零了）：不写这一句，
+  // 用户看到的就只是“拖了一下的滑块弹回零”，像出了 bug
+  const [deformNote, setDeformNote] = useState("");
   const deformFlight = useRef(false);
   const deformQueued = useRef<Record<string, number> | null>(null);
   const [lastInpaint, setLastInpaint] = useState<InpaintInfo | null>(null);
@@ -114,7 +117,20 @@ export default function App() {
       // 消除笔的结果与日志同源：inpaint_done 只发一次，轮询不能错过
       if (st.inpaint) setLastInpaint(st.inpaint);
       if (st.light) setLastLight(st.light);
-      if (st.deform) setLastDeform(st.deform);
+      if (st.deform) {
+        setLastDeform(st.deform);
+        // 引擎把整层清了（关键点后端换成不能按脸形取点的那个、或重建失败）：滑块必须
+        // 跟着归零。不接这一句就是“界面上写着 0.6 而画面一动不动”，而事件里已说清了
+        // 原因——字段与实际错开正是本仓反复付学费的那一类
+        if (st.deform.action === "invalidate") {
+          setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0 });
+          setDeformNote(st.deform.reason ?? "");
+        } else {
+          // 不拿 deformNote 做条件（refreshStatus 的依赖表是空的，读到的是旧值）：
+          // 无条件清空在正常路径上只是一个 no-op，而按旧值判就会把提示卡在那里抹不掉
+          setDeformNote("");
+        }
+      }
     } catch {
       /* 引擎未起，忽略 */
     }
@@ -232,8 +248,11 @@ export default function App() {
             await report(`M0_INPAINT ${JSON.stringify(lastAdd)}`);
             await report(`M0_INPAINT_STACK ${JSON.stringify({
               strokes: strokes.length, undoOps: u?.ops ?? -1, redoOps: rd?.ops ?? -1,
-              // cached 由执行路径给出：重做后那一帧真的重算了滤波
-              cached: rd?.cached ?? null, repairMs: rd?.repair_ms ?? null,
+              // filter_cached 由执行路径给出：重做后那一帧真的重算了滤波。
+              // 不叫 cached：引擎侧那两个名字（本层重算/滤波命中）同名会互相覆盖
+              filterCached: rd?.filter_cached ?? null,
+              layerRecomputed: rd?.layer_recomputed ?? null,
+              repairMs: rd?.repair_ms ?? null,
               totalMs: rd?.total_ms ?? null, paintedPx: lastAdd?.painted_px ?? null,
             })}`);
           }
@@ -666,6 +685,9 @@ export default function App() {
         <div className="row">
           <button onClick={onDeformClear} disabled={!status?.image}>{t("retouch.deformClear")}</button>
         </div>
+        {deformNote && (
+          <div className="mut">{t("retouch.deformInvalidated")}：{deformNote}</div>
+        )}
         {lastInpaint && (
           <table>
             <tbody>
@@ -685,7 +707,7 @@ export default function App() {
                 <td>{t("retouch.totalMs")}</td>
                 <td>
                   {lastInpaint.total_ms.toFixed(2)} ms · {t("retouch.cached")}{" "}
-                  {lastInpaint.cached ? t("retouch.yes") : t("retouch.no")}
+                  {lastInpaint.filter_cached ? t("retouch.yes") : t("retouch.no")}
                 </td>
               </tr>
               <tr>

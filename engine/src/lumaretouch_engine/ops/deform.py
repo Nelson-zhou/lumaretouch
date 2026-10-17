@@ -460,10 +460,18 @@ def warp_np(img, delta, strength: float = 1.0):
         raise ValueError(f"形变强度非法：{strength!r}（需 |strength| ≤ {KIND_LIMIT} 的有限数）")
     a = np.asarray(img, dtype=np.float64)
     d = np.asarray(delta, dtype=np.float64)
-    if d is None or s == 0.0 or not d.any():
+    if s == 0.0 or not d.any():
         return img
     ch, H, W = a.shape[-3:]          # 入参约定：(...,C,H,W)
     src = a.reshape(-1, ch, H, W)
+    # 位移场只认一份：上一版 `d.reshape(1,H,W,2)` 会静默丢掉多余批次，而循环只写
+    # out[0]，其余批次是 np.empty_like 里的未初始化内存 —— 非零位移区会把它们拷进
+    # 输出。现在当场拒：报错比交一张带脏字的图便宜。
+    if src.shape[0] != 1:
+        raise ValueError(f"warp_np 一次只接一份图：批量 {src.shape[0]} 的位移场必须同批，"
+                         "要么逐张调要么把单位场按 kind 堆在同一份 (1,H,W,2) 里")
+    if d.shape != (H, W, 2) and d.shape != (1, H, W, 2):
+        raise ValueError(f"位移场形状 {d.shape} 对不上图 {(H, W, 2)}：不靠 reshape “自动对齐”")
     g = d.reshape(1, H, W, 2).astype(np.float64) * s
     xs = (np.arange(W, dtype=np.float64)[None, :] + g[0, :, :, 0]).ravel()
     ys = (np.arange(H, dtype=np.float64)[:, None] + g[0, :, :, 1]).ravel()
@@ -472,7 +480,7 @@ def warp_np(img, delta, strength: float = 1.0):
     x0, y0 = np.floor(xs).astype(np.int64), np.floor(ys).astype(np.int64)
     x1, y1 = np.minimum(x0 + 1, W - 1), np.minimum(y0 + 1, H - 1)
     wx, wy = (xs - x0)[None, :], (ys - y0)[None, :]
-    out = np.empty_like(src)
+    out = src.copy()                # 不是 empty_like：多余/零区必须有定义，不能拿脏内存当图
     for c in range(ch):
         plane = src[0, c]
         v = ((plane[y0, x0] * (1 - wx) * (1 - wy) + plane[y0, x1] * wx * (1 - wy)

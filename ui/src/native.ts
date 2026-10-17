@@ -93,7 +93,10 @@ export interface InpaintInfo {
   total_ms: number;
   bytes_base: number;
   /** 这一帧是否命中了滤波缓存（由执行路径给出，不是声明） */
-  cached: boolean;
+  filter_cached: boolean;
+  /** 本层是否真的重算了。与 filter_cached 不是一回事：两个名字共一个键时，
+   *  引擎侧字典后写的会静默吃掉先写的，其中一条永远送不出来 */
+  layer_recomputed: boolean;
   op_id?: number;
   decode_ms?: number;
   backend?: string;
@@ -125,7 +128,10 @@ export interface LightInfo {
   render_ms: number;
   total_ms: number;
   bytes_light: number;
-  cached: boolean;
+  /** 这一帧的磨皮滤波是否命中缓存（与下面两条分开：三个数说的是三件事） */
+  filter_cached: boolean;
+  /** 本条事件是否真的重算了修容场：改参数（params）不重算 */
+  layer_recomputed: boolean;
   op_id?: number;
   sign?: number;
   decode_ms?: number;
@@ -138,7 +144,10 @@ export interface LightInfo {
 
 /** 一次形变事件的回报（引擎侧 deform_done，M2-b）。三个滑块一条。 */
 export interface DeformInfo {
-  action: "set" | "clear";
+  /** set/clear 是用户发的；rebuild 是关键点更新后引擎重解单位场；
+   *  invalidate 是层被整条清除（后端换成不能按脸形取点的 synthetic）——那一条
+   *  必须把滑块归零，否则界面上写着 0.6 而画面一动不动 */
+  action: "set" | "clear" | "rebuild" | "invalidate";
   /** 三种形变当前的滑块值，[-1,1]。0 就是不动。 */
   amounts: Record<string, number>;
   /** 单位场建过没有（第一次非零 set 时建） */
@@ -161,6 +170,10 @@ export interface DeformInfo {
     device: string;
     kinds: Record<string, { peak_px: number; merged: number; controls: number }>;
   };
+  /** invalidate 那一条说清为什么清（后端换了 / 重建失败），UI 要能直接给用户看 */
+  reason?: string;
+  /** invalidate 那一条带上刚才的滑块值：只报 lit=false 的话，滑块弹回零像出了 bug */
+  dropped_amounts?: Record<string, number>;
   device: string;
   strength: number;
 }
