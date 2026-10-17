@@ -124,4 +124,13 @@ export const en: Partial<Record<MsgKey, string>> = {
   "export.failedRow": "failed during {stage}: {why}",
   "export.skipped": "Not carried onto this image: {items}",
   "export.unavailable": "This engine did not advertise export_formats / export_tile — no guessed defaults",
+  // ---- filmstrip (M5-a)
+  "side.strip": "Filmstrip",
+  "strip.desc": "One cell per photo. Click a cell to switch documents; each photo keeps its own edit state.",
+  "strip.scan": "Scan folder",
+  "strip.summary": "{n} photos · thumbnails ready {th}/{n}",
+  "strip.running": " · generating…",
+  "strip.empty": "No filmstrip yet: type a folder and press Scan.",
+  "strip.edited": "edited",
+  "strip.failed": "unreadable",
 };

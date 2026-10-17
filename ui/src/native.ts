@@ -53,6 +53,73 @@ export interface ImageReady {
   attach_ms: number;
   first_frame_ms: number;
   import_ms: number;
+  /** M5-a 底片条：这一张在列表里的位置、是不是"切回来的"、以及它的完整文档状态。
+   *  doc_state 是宿主重摆滑块的唯一出处：切文档时那几条 *_done 快照会被清掉
+   *  （它们属于上一条命令而不是这张文档），只有这一份跟着文档走。 */
+  session_index: number;
+  session_count?: number;
+  doc: string;
+  switched: boolean;
+  layers: SessionEdits;
+  doc_state: DocState;
+}
+
+/** 一格底片条上"这张调了什么"（引擎按图层数与开关报，不靠前端自己看像素）。 */
+export interface SessionEdits {
+  repair: number;
+  light: number;
+  deform: boolean;
+  lut: boolean;
+  lut_preset: string | null;
+  grade: boolean;
+  channel: string | null;
+}
+
+/** 当前文档的完整编辑状态（引擎是唯一出处）。 */
+export interface DocState {
+  strength: number;
+  params: Record<string, number>;
+  channel: string | null;
+  light: { exposure: number; radius: number };
+  counts: { repair: number; light: number; repair_redo: number; light_redo: number };
+  deform: { amounts: Record<string, number>; built: boolean };
+  lut: { lit: boolean; amount: number; preset: string | null };
+  grade: { dh: number; ds: number; dv: number; amount: number; lit: boolean };
+}
+
+/** session_state.docs 的一项。缩略图不在这里：像素由 filmstrip 单独取。 */
+export interface SessionDoc {
+  index: number;
+  path: string;
+  name: string;
+  bytes_on_disk: number;
+  w: number | null;
+  h: number | null;
+  src_w: number | null;
+  src_h: number | null;
+  loaded: boolean;
+  opened: boolean;
+  edits: SessionEdits;
+  thumb: { w: number; h: number; bytes: number; quality: number } | null;
+  thumb_error: string | null;
+}
+
+/** 最近一条 session_state（底片条全貌 + 当前文档状态）。 */
+export interface SessionState {
+  index: number;
+  count: number;
+  current: string | null;
+  thumbs_running: boolean;
+  docs: SessionDoc[];
+  doc_state: DocState | null;
+  /** select 命中当前那一格时引擎会补发一条 noop=true 的状态：它没开新会话。 */
+  noop?: boolean;
+}
+
+/** filmstrip 命令的返回：格子元信息 + path→缩略图 base64（JPEG）。 */
+export interface Filmstrip {
+  session: SessionState | null;
+  thumbs: Record<string, string>;
 }
 
 /** 导入期一次预计算的回报：M1-3c 拖滑块只消费这里的通道名与常驻设备。 */
@@ -303,6 +370,12 @@ export interface EngineStatus {
   export_progress: ExportProgress | null;
   /** 引擎在 ready 里报的导出能力。null = 这个引擎还不能导出，按钮就不画。 */
   export_caps: ExportCaps | null;
+  /** 最近一条 session_state（M5-a 底片条）；换引擎进程会清空。 */
+  session: SessionState | null;
+  /** session_state / 缩略图每来一条就 +1：前端只在它变了的时候整条重取底片条。 */
+  session_rev: number;
+  /** 宿主已收到多少张缩略图（按 path 计）。 */
+  thumbs_ready: number;
 }
 
 /** 一次导出的逐图账单（export_done.images[] 的一项，M4）。
@@ -394,6 +467,11 @@ export const benchStart = (o: BenchOptions) =>
 
 /** 取最新帧：40B 头 + RGBA 裸像素。无新帧时以 "NO_NEW_FRAME" 拒绝。 */
 export const pullFrame = () => invoke<ArrayBuffer>("pull_frame");
+
+/** 只读快照：拿"此刻屏幕上是什么"，与投递计数无关（见 main.rs 的 peek_frame）。
+ *  自动通道量像素用这条，不能用 pullFrame——那条会因"这帧已经投过了"拒发，
+ *  而渲染循环本来就在逐帧拉取，测试路径永远抢不到。 */
+export const peekFrame = () => invoke<ArrayBuffer>("peek_frame");
 
 export const frameAcked = (seq: number, jsDrawUs: number) =>
   // 不能传 BigInt：invoke 的负载走 JSON 序列化，BigInt 会直接抛 TypeError
@@ -630,7 +708,23 @@ export interface M0Env {
   auto_grade: string;
   /** M4 导出自动通道："<目录>[@<格式>][@<tile>]"。 */
   auto_export: string;
+  /** M5-a 底片条自动通道："<目录>[@<切到第几张>[@<长边>]]"。
+   *  这一条要证的不是引擎能扫描（那是 test_session 的事），而是
+   *  TS runSession → Rust session → 引擎 session_state 这条签名在真窗口里对得上，
+   *  以及切走再切回来时 doc_state 与画面是否还是同一份。 */
+  auto_filmstrip: string;
 }
 export const m0Env = () => invoke<M0Env>("m0_env");
+
+/** 底片条（M5-a）：一条转发六个动作的命令。参数一律"给了才附"，让引擎的默认值
+ *  由引擎说（与 runExport 同一条理由）。 */
+export const runSession = (
+  action: "scan" | "add" | "select" | "state" | "thumbs" | "stop_thumbs",
+  opts: { dir?: string; paths?: string[]; index?: number; edge?: number;
+          quality?: number; limit?: number; thumbs?: boolean } = {},
+) => invoke<{ requested: boolean }>("session", { action, ...opts });
+
+/** 整条底片条：格子元信息 + 缩略图。只在 session_rev 变了的时候取。 */
+export const fetchFilmstrip = () => invoke<Filmstrip>("filmstrip");
 export const report = (line: string) => invoke("report", { line });
 export const quit = () => invoke("quit");

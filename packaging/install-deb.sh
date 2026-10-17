@@ -52,3 +52,28 @@ for marker in "${markers[@]}"; do
     exit 1
   fi
 done
+
+# UI 壳也要按内容自证。为什么不能只看 dpkg 成功退出：本仓的包版本固定在 0.0.1，
+# dpkg 对"同版本重装"虽然确实覆盖（本机实测），但一旦哪天版本没同步，apt install ./x.deb
+# 会静默跳过——机器上跑的还是上一轮的壳，而这一轮真窗口量的全是旧 UI。M5-a 把
+# peek_frame 加进 Rust 命令表，装进去的还是旧壳的话，"真窗口确认轮"就只是重跑上一轮。
+echo "→ 按内容校验装机的 UI 壳与 .deb 里那个是同一个（sha256）"
+tmpx=$(mktemp -d)
+dpkg-deb -x "$deb" "$tmpx"
+bin_in_pkg=$(find "$tmpx" -path '*/usr/bin/*' -type f | head -1)
+[ -n "$bin_in_pkg" ] || { echo "  × 包里没有可执行壳（dpkg-deb -x 解出来的东西不对）"; exit 1; }
+a=$(sha256sum "$bin_in_pkg" | cut -d' ' -f1)
+b=$(sha256sum /usr/bin/lumaretouch | cut -d' ' -f1)
+if [ "$a" != "$b" ]; then
+  echo "  × 壳不是刚打的那个：包内 $a ≠ 装机 $b ——不要开始跑靶"
+  exit 1
+fi
+echo "✓ /usr/bin/lumaretouch 与包内逐字节一致"
+# 壳里的本轮特征标记（前端命令名与 Rust 命令表是同一次编译的产物）：命中 0 就是旧壳
+ui_marker=${UI_MARKER:-peek_frame}
+if [ "$(grep -ac "$ui_marker" /usr/bin/lumaretouch)" -gt 0 ]; then
+  echo "✓ 装机壳含本轮特征标记 '$ui_marker'"
+else
+  echo "  × 装机壳里没有 '$ui_marker'：那是上一轮的 UI（用 UI_MARKER=... 传这一轮的标记）"
+  exit 1
+fi

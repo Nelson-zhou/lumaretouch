@@ -123,6 +123,16 @@ pub struct AppState {
     /// 引擎报出的导出能力（export_formats / export_tile 范围）：目的地选项与 tile
     /// 行程由引擎说，宿主抄一份必漂（与 presets / grade_limits 同一条理由）。
     export_caps: Mutex<Value>,
+    /// 最近一条 session_state（M5 底片条）：格子列表、当前索引、有没有缩略图。
+    /// 这一份里**不带 base64**——控制通道那条“像素不进 JSON”的规矩只在缩略图上开了
+    /// 一个一次性的例外，宿主不该把它长期握在轮询载荷里。
+    session: Mutex<Option<Value>>,
+    /// path → 缩略图 base64。归属看 path 不看 index：中途重扫一次列表，index 会换，
+    /// 而“哪张图配哪一格”不会换。
+    thumbs: Mutex<std::collections::HashMap<String, String>>,
+    /// session_state 每来一条 +1：前端拿它决定“要不要整条重取一次底片条”，
+    /// 而不是每秒把两百张缩略图克隆一遍。
+    session_rev: Mutex<usize>,
 }
 
 /// 用 `Arc` 起步才能传给引擎读线程；因此额外管理一个持有 Arc 的启动器。
@@ -156,6 +166,9 @@ impl AppState {
             export: Mutex::new(None),
             export_progress: Mutex::new(None),
             export_caps: Mutex::new(Value::Null),
+            session: Mutex::new(None),
+            thumbs: Mutex::new(std::collections::HashMap::new()),
+            session_rev: Mutex::new(0),
         }
     }
 
@@ -225,6 +238,21 @@ impl AppState {
         // export_done 一到就把进度条归位：留着“12/20”跟在一句“共 20 张、失败 1”后面
         // 会被读成“还在跑”，而实际已经结束了
         *self.export_progress.lock().unwrap() = None;
+    }
+
+    pub fn on_session_state(&self, v: &Value) {
+        *self.session.lock().unwrap() = Some(v.clone());
+        *self.session_rev.lock().unwrap() += 1;
+    }
+
+    /// thumb_ready / thumb_failed 都进这里：一条给像素，一条给“这张解不开”。
+    /// 两条都必须让前端重取整条底片条，所以一起 bump revision。
+    pub fn on_thumb(&self, v: &Value) {
+        if let (Some(p), Some(b)) = (v.get("path").and_then(|x| x.as_str()),
+                                     v.get("jpeg_b64").and_then(|x| x.as_str())) {
+            self.thumbs.lock().unwrap().insert(p.to_string(), b.to_string());
+        }
+        *self.session_rev.lock().unwrap() += 1;
     }
 
     pub fn on_export_progress(&self, v: &Value) {
@@ -326,6 +354,11 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     *st.export.lock().unwrap() = None;         // 新进程还没导出一张，上一批的账单不是本会话的
     *st.export_progress.lock().unwrap() = None;
     *st.export_caps.lock().unwrap() = Value::Null;   // 能力等 ready 重新报
+    // 底片条也是引擎进程的事实：新进程还没扫过目录，留着旧列表就是让用户点一个
+    // 这个进程从没见过的 index
+    *st.session.lock().unwrap() = None;
+    st.thumbs.lock().unwrap().clear();
+    *st.session_rev.lock().unwrap() += 1;
     *st.engine.lock().map_err(|_| "引擎锁中毒".to_string())? = Some(Arc::new(h));
     Ok(json!({"pid": pid, "python": py, "src": src, "session": session}))
 }
@@ -715,6 +748,32 @@ fn pull_frame(state: State<'_, Arc<AppState>>) -> Result<tauri::ipc::Response, S
     Ok(tauri::ipc::Response::new(buf))
 }
 
+/// 只读快照：把当前最新一帧的**整帧像素**取回去，不判重、不记账、不碰 pending/samples。
+///
+/// 为什么要有这一条而复用 `pull_frame`：那条命令是丢帧统计的地基（同 seq 拒发、
+/// 在途队列、reap 都挂在它上面），测试路径走它就会被"这帧已经投过了"拒掉，而
+/// 前端渲染循环本来就在逐帧拉取——自动通道永远抢不到那一帧。这里要的恰恰是
+/// "此刻屏幕上是什么"，与投递计数无关，所以另开一条纯读的口。
+/// `LRT_SKIP_PIXELS` 那类宿主对照组也不影响它：这里必须拿到像素，否则对拍是空的。
+#[tauri::command]
+fn peek_frame(state: State<'_, Arc<AppState>>) -> Result<tauri::ipc::Response, String> {
+    let f = state.frames.lock().map_err(|_| "锁中毒".to_string())?;
+    let shm = f.shm.as_ref().ok_or("SHM_NOT_READY")?;
+    let (meta, slot) = shm.freshest().ok_or("NO_FRAME_YET")?;
+    let n = shm.pixel_size;
+    let mut buf = vec![0u8; 40 + n];
+    shm.copy_span(slot, 0, &mut buf[40..])?;
+    buf[0..8].copy_from_slice(&meta.seq.to_le_bytes());
+    buf[8..16].copy_from_slice(&meta.t_ns.to_le_bytes());
+    buf[16..24].copy_from_slice(&now_ns().to_le_bytes());
+    buf[24..28].copy_from_slice(&meta.w.to_le_bytes());
+    buf[28..32].copy_from_slice(&meta.h.to_le_bytes());
+    buf[32..36].copy_from_slice(&(n as u32).to_le_bytes());
+    // y0 恒 0、行数恒 h：这条口的语义就是整帧
+    buf[36..40].copy_from_slice(&0u32.to_le_bytes());
+    Ok(tauri::ipc::Response::new(buf))
+}
+
 /// 脏矩形窗口：取顶部 dirty_frac 比例的行（行 0 起）。
 /// 测帧的序号色块就落在顶部区域内，所以「帧在换」这个证据依然成立。
 fn dirty_window(w: u32, h: u32) -> (u32, u32) {
@@ -867,6 +926,9 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let export = state.export.lock().unwrap().clone();
     let export_progress = state.export_progress.lock().unwrap().clone();
     let export_caps = state.export_caps.lock().unwrap().clone();
+    let session = state.session.lock().unwrap().clone();
+    let session_rev = *state.session_rev.lock().unwrap();
+    let thumbs_ready = state.thumbs.lock().unwrap().len();
     let presets: Vec<Value> = state.presets.lock().unwrap().clone();
     let grade_limits: Vec<f64> = state.grade_limits.lock().unwrap().clone();
     json!({"shm": shm_name, "has_shm": has_shm, "emitted": emitted,
@@ -874,7 +936,11 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "inpaint": inpaint, "light": light, "deform": deform, "lut": lut,
            "grade": grade, "presets": presets, "grade_limits": grade_limits,
            "export": export, "export_progress": export_progress,
-           "export_caps": export_caps})
+           "export_caps": export_caps,
+           // 底片条的“有没有、几张、当前哪一格”进轮询（小），像素本体不进：
+           // 那两百张要由 filmstrip 单独取，且只在 session_rev 变了的时候取
+           "session": session, "session_rev": session_rev,
+           "thumbs_ready": thumbs_ready})
 }
 
 #[tauri::command]
@@ -894,6 +960,9 @@ fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     *state.export.lock().unwrap() = None;
     *state.export_progress.lock().unwrap() = None;
     *state.export_caps.lock().unwrap() = Value::Null;
+    *state.session.lock().unwrap() = None;
+    state.thumbs.lock().unwrap().clear();
+    *state.session_rev.lock().unwrap() += 1;
     match h {
         Some(h) => {
             h.shutdown();
@@ -901,6 +970,62 @@ fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
         }
         None => json!({"shutdown": false, "reason": "引擎未启动"}),
     }
+}
+
+/// 底片条（M5-a）：一条命令转发六个动作。参数一律「给了才附」，与 export 同一条
+/// 理由——默认值属于引擎，宿主填一份就会在引擎改默认值时静默漂开。
+/// 这里的 action 白名单只是把手挡（拼错的动作名不该变成一个引擎事件），
+/// 真口径仍以引擎的拒绝为准：名单与它报出来的 session_actions 同源。
+#[tauri::command]
+fn session(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    dir: Option<String>,
+    paths: Option<Vec<String>>,
+    index: Option<i64>,
+    edge: Option<i64>,
+    quality: Option<i64>,
+    limit: Option<i64>,
+    thumbs: Option<bool>,
+) -> Result<Value, String> {
+    const ACTIONS: [&str; 6] = ["scan", "add", "select", "state", "thumbs", "stop_thumbs"];
+    if !ACTIONS.contains(&action.as_str()) {
+        return Err(format!("session 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
+    }
+    let mut cmd = json!({"cmd": "session", "action": action});
+    if let Some(v) = dir {
+        cmd["dir"] = json!(v);
+    }
+    if let Some(v) = paths {
+        cmd["paths"] = json!(v);
+    }
+    if let Some(v) = index {
+        cmd["index"] = json!(v);
+    }
+    if let Some(v) = edge {
+        cmd["edge"] = json!(v);
+    }
+    if let Some(v) = quality {
+        cmd["quality"] = json!(v);
+    }
+    if let Some(v) = limit {
+        cmd["limit"] = json!(v);
+    }
+    if let Some(v) = thumbs {
+        cmd["thumbs"] = json!(v);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 整条底片条：格子的元信息来自最近一条 session_state，缩略图按 path 现场配对。
+/// 单独一条命令而不是塞进 engine_status 轮询：两百张 base64 有 1.4 MB，
+/// 每秒克隆一遍是白给的性能税（前端只在 session_rev 变了时取）。
+#[tauri::command]
+fn filmstrip(state: State<'_, Arc<AppState>>) -> Value {
+    let session = state.session.lock().unwrap().clone();
+    let thumbs = state.thumbs.lock().unwrap().clone();
+    json!({"session": session, "thumbs": thumbs})
 }
 
 /// M0 自动跑靶配置：环境变量传进来，让整条通路可以被脚本驱起来跑。
@@ -944,6 +1069,8 @@ fn m0_env() -> Value {
         // 才能证明 runExport → Rust export → 引擎 export_done 对得上，而且落盘文件
         // 的尺寸是“满幅不是代理档”的唯一直接证据
         "auto_export": std::env::var("LRT_AUTO_EXPORT").unwrap_or_default(),
+        // 底片条自动通道："<目录>[@<选中第几张>[@<edge>]]"，给真窗口确认轮用
+        "auto_filmstrip": std::env::var("LRT_AUTO_FILMSTRIP").unwrap_or_default(),
     })
 }
 
@@ -964,9 +1091,9 @@ fn main() {
         .manage(state.clone())
         .manage(Launcher(state.clone()))
         .invoke_handler(tauri::generate_handler![
-            start_engine, bench_start, pull_frame, frame_acked, frame_presented, bench_stats,
+            start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, precompute,
-            inpaint, light, deform, lut, grade, export, report, quit
+            inpaint, light, deform, lut, grade, export, session, filmstrip, report, quit
         ])
         .run(tauri::generate_context!())
         .expect("运行 LumaRetouch 失败");

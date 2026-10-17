@@ -24,11 +24,16 @@ from .ops.deform import KINDS, DeformGeometryError, check_amounts
 from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
 from .ops.grade import DH_LIMIT, DS_LIMIT, DV_LIMIT, GradeError, check_params
 from .ops.presets import PRESETS, PresetError, get_preset, preset_grade, preset_lut
+# M5 底片条：扫描与缩略图的全部口径都在 session 层，命令层只发事件与管线程。
+from . import session as S
 # M4 导出：FORMATS/尺寸边界与落盘器全部从 export 走，命令层不掌一份格式名单（双出处）。
 from .export import (DEFAULT_TILE, FORMATS, MAX_TILE, MIN_TILE, ExportSpec,
                      export_image, resample_field, write_file)
 
 PROTOCOL_VERSION = 1
+# 磨皮强度的出厂默认。写一次：`__init__`、新文档的起始状态、load_image 的可选参数
+# 三处都要它，抄三份字面量就是下一轮改默认值时漏改的那一处。
+DEFAULT_STRENGTH = 0.5
 
 # 跑靶模式：
 #   copy               纯拷贝，M0 通路基线
@@ -117,11 +122,26 @@ class Engine:
         # kernel 靠减法得出并夹到 0，不记这一笔就永远看不出某段被计了两次。
         self._seg_over_frames = 0
         self._wlock = threading.Lock()   # 跑靶线程与 stdin 线程都在写同一块双缓冲
-        self._strength = _clamp_strength(0.5)
+        self._strength = _clamp_strength(DEFAULT_STRENGTH)
         # 当前文档的源路径：导出默认导的就是这一张，而导入时只留下了像素没留下名字。
         self._doc_path: str | None = None
         self._export: threading.Thread | None = None
         self._export_args: tuple | None = None
+        # M5-a 底片条：会话的文档列表与“哪一份是当前文档”。每张图自己一套编辑状态，
+        # 切换是“存回去 / 取出来”而不是“清空重来”——后者是 Lightroom 式的丢工。
+        self._docs: list = []
+        self._doc_index = -1
+        # 代理预算是**会话级**的，不是逐格的：底片条里每张图都得解在同一档预览尺度上，
+        # 不然从一张 400×504 切到一张 672×848 会把 shm 拆了重建——宿主那边正 mmap 着旧
+        # inode 读帧，拿到的是上一张图的旧数据（不报错，只是错）。逐图预算只当记账信息留着。
+        self._proxy_budget: int | None = None
+        # 缩略图在独立线程里解：底片条一百张不能把主循环（以及它负责的帧通路）顶住。
+        self._thumbs: threading.Thread | None = None
+        self._thumb_stop = threading.Event()
+        self._thumb_args: tuple | None = None
+        # 底片条那一列表会被两个线程碰：stdin 线程换整张表，缩略图线程改单格的
+        # thumb/thumb_error。GIL 保不了“读→比对→写”这三步，所以自己上锁。
+        self._doclock = threading.Lock()
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
@@ -136,7 +156,14 @@ class Engine:
               # 漏改的那一处。
               "export_formats": sorted(set(FORMATS)),
               "export_tile": [MIN_TILE, MAX_TILE],
-              "export_tile_default": DEFAULT_TILE})
+              "export_tile_default": DEFAULT_TILE,
+              # M5-a 底片条：行程与上限同样由引擎说。前端自己刻一份“长边 160”或
+              # “最多 512 张”，下一轮改上限时就是漏改的那一处（它会静默把图截小）。
+              "session_actions": ["scan", "add", "select", "state", "thumbs", "stop_thumbs"],
+              "thumb_edge": [S.MIN_EDGE, S.MAX_EDGE],
+              "thumb_edge_default": S.EDGE,
+              "thumb_max_bytes": S.THUMB_MAX_BYTES,
+              "session_max_docs": S.MAX_DOCS})
 
     # ------------------------------------------------------------ 帧缓冲
     def _ensure_shm(self, w: int, h: int) -> FrameShm:
@@ -481,12 +508,123 @@ class Engine:
         """跑靶用的合成源图会话（不拥有全局会话，见 _attach_pipeline.adopt）。"""
         return self._attach_pipeline(test_frame(w, h, 0)[:, :, :3].copy(), adopt=False)
 
+    # ------------------------------------------------------------ 文档状态（M5-a 底片条）
+    # 「一份文档状态到底包含哪些字段」只有这一处名单。新加一层而不进来，切文档就会
+    # 静默丢掉那一层 —— 那是本仓最贵的一族坑（「会话迁了、图层没迁」）的新变体。
+    DOC_FIELDS = ("_strength", "_params", "_channel", "_repair_ops", "_redo_ops", "_op_seq",
+                  "_light_ops", "_light_redo", "_light", "_deform", "_lut", "_lut_amount",
+                  "_lut_preset", "_grade", "_precompute", "_precompute_backend")
+    # 代理档一变就作废的那些层：它们的坐标是**这一档代理帧**上的像素坐标。
+    PROXY_BOUND = ("_channel", "_repair_ops", "_redo_ops", "_light_ops", "_light_redo",
+                   "_deform", "_precompute", "_precompute_backend")
+
+    def _fresh_doc_state(self) -> dict:
+        """一张还没被人动过的图的起始状态。
+
+        这段原来是内联在 cmd_load_image 里的一串赋值，语义是「换图即清空」；那条守卫
+        本身一条没错——旧图的掩膜/笔迹对新图没有任何意义。今天它多了一个身份：底片条
+        里「这张图还没被调过」的定义。同一个口径写两处就会漂，所以抽成一份。
+        """
+        return {"_strength": _clamp_strength(DEFAULT_STRENGTH),
+                "_params": dict(radius=DEFAULT_RADIUS, eps=DEFAULT_EPS,
+                                texture_radius=DEFAULT_TEXTURE_RADIUS,
+                                broad_gain=DEFAULT_BROAD_GAIN, mid_gain=DEFAULT_MID_GAIN,
+                                detail_gain=DEFAULT_DETAIL_GAIN),
+                "_channel": None,
+                "_repair_ops": [], "_redo_ops": [], "_op_seq": 0,
+                "_light_ops": [], "_light_redo": [],
+                "_light": dict(exposure=DEFAULT_DB_EXPOSURE, radius=DEFAULT_DB_RADIUS),
+                "_deform": dict(amounts={k: 0.0 for k in KINDS}, built=False),
+                "_lut": None, "_lut_amount": 1.0, "_lut_preset": None,
+                "_grade": (0.0, 0.0, 0.0, 1.0),
+                "_precompute": None, "_precompute_backend": None,
+                # 掩膜/笔迹/形变场都活在**那一档代理尺寸**上，所以尺寸也是状态的一部分。
+                "_proxy": None}
+
+    def _capture_state(self) -> dict:
+        """把 live 字段抄成一份可存的字典。容器一律新抄：存进去的状态与 live 字段共享
+        同一个 list，下一次 append 会同时改掉两个文档的状态——查起来就像「切了一次文档，
+        上一张的笔迹自己多了一笔」。"""
+        st = {"_strength": float(self._strength), "_channel": self._channel,
+              "_params": dict(self._params), "_light": dict(self._light),
+              "_deform": {"amounts": dict(self._deform["amounts"]),
+                          "built": bool(self._deform["built"])},
+              "_repair_ops": list(self._repair_ops), "_redo_ops": list(self._redo_ops),
+              "_op_seq": int(self._op_seq),
+              "_light_ops": list(self._light_ops), "_light_redo": list(self._light_redo),
+              # 调色表是只读原件（set_lut 会把它拷成会话张量），多份文档共享同一个数组
+              # 不会互相改；真要出现就地写，这里就得改成拷贝。
+              "_lut": self._lut, "_lut_amount": float(self._lut_amount),
+              "_lut_preset": self._lut_preset, "_grade": tuple(self._grade),
+              "_precompute": self._precompute, "_precompute_backend": self._precompute_backend,
+              "_proxy": ((int(self._vram.h), int(self._vram.w))
+                         if (self._vram is not None and self._image_loaded) else None)}
+        # 名单与实际字段漂移了要当场响，不要“新图层静静切不回来”
+        assert set(st) == set(self.DOC_FIELDS) | {"_proxy"}, "文档状态名单与实际字段漂移了"
+        return st
+
+    def _apply_state(self, st: dict) -> None:
+        for k in self.DOC_FIELDS:
+            v = st[k]                 # 缺键就是名单漂移，让它响
+            setattr(self, k, v)
+        # 容器重新抄一遍：存着的状态不能与 live 字段共用同一个 list/dict（理由同 _capture_state）
+        self._params = dict(self._params)
+        self._light = dict(self._light)
+        self._deform = {"amounts": dict(self._deform["amounts"]), "built": bool(self._deform["built"])}
+        self._repair_ops = list(self._repair_ops)
+        self._redo_ops = list(self._redo_ops)
+        self._light_ops = list(self._light_ops)
+        self._light_redo = list(self._light_redo)
+        self._grade = tuple(self._grade)
+        self._strength = _clamp_strength(self._strength)
+
+    def _drop_proxy_layers(self, st: dict, why: str) -> dict:
+        """代理档变了 → 只留下逐点的那几层，按像素坐标成立的全部作废。
+
+        不作废就是拿一张 800×1000 的掩膜去贴 1152×720 的会话：库层会按名字把通道递出来，
+        render 时才撞尺寸，而那时报表上已经写着「有 skin 通道」。宁可多啰嗦一句也要说清。
+        """
+        out = dict(st)
+        for k in self.PROXY_BOUND:
+            out[k] = self._fresh_doc_state()[k]
+        out["_op_seq"] = 0
+        out["_proxy"] = None
+        emit({"event": "engine_warn", "warn": f"{why}：按像素坐标成立的层（掩膜/笔迹/形变）已全部丢弃，"
+                                              "逐点层（磨皮参数/调色表/肤色定向）原样保留"})
+        return out
+
+    def _index_of(self, path) -> int:
+        if not path:
+            return -1
+        want = os.path.abspath(str(path))
+        for i, d in enumerate(self._docs):
+            if d["path"] == want:
+                return i
+        return -1
+
+    def _new_row(self, path: str, *, state: dict | None = None, budget: int | None = None) -> dict:
+        m = S.doc_meta(path)
+        return {**m, "path": os.path.abspath(path), "state": state or self._fresh_doc_state(),
+                "budget": budget, "thumb": None, "thumb_error": None, "opened": False,
+                "w": None, "h": None, "src_w": None, "src_h": None}
+
+    def _remember_current(self) -> None:
+        """把 live 状态存回当前文档那一格。底片条的一切意思都在这一步：不存就是
+        「切走再切回来，调的全没了」。"""
+        if 0 <= self._doc_index < len(self._docs) and self._image_loaded:
+            self._docs[self._doc_index]["state"] = self._capture_state()
+
     # ------------------------------------------------------------ 真图导入
     def cmd_load_image(self, p: dict):
-        """导入一张真图：解码 → 代理帧 → 常驻显存 → 出第一帧。整场会话只走一次。
+        """导入（或从底片条切回）一张真图：解码 → 代理帧 → 常驻显存 → 出第一帧。
 
         解码耗时不藏在帧里：它是一次性成本，与拖滑块时的逐帧成本完全不同量级，
         混在一起量就分不出“导入慢”还是“交互慢”。
+
+        切回一张已经在底片条里的图不是“导入一张新图”：先把当前这份状态存回它那一格，
+        再把目标那一格装回来。层不写第二份重放代码——常驻会话本来就要在
+        `_attach_pipeline` 里按引擎侧字段重放一遍（换设备那条路走的也是它），文档切换
+        只需要在那之前把字段装对。
         """
         from .decode import PROXY_PIXELS, load_rgb
 
@@ -501,45 +639,71 @@ class Engine:
             emit({"event": "error", "error": "导出进行中，拒绝换图：等 export_done"})
             return
         t0 = monotonic_ns()
+        budget = int(p.get("max_px") or self._proxy_budget or PROXY_PIXELS)
         try:
-            d = load_rgb(p["path"], int(p.get("max_px") or PROXY_PIXELS))
+            d = load_rgb(p["path"], budget)
         except Exception as e:
             emit({"event": "error", "error": f"导入失败({type(e).__name__}): {e}"})
             return
-        self._doc_path = str(p["path"])      # 导出默认目标；只有导成功才记账
+        self._proxy_budget = budget     # 下一次切文档默认沿同一档代理（会话级，见上面注释）
+        self._remember_current()
+        idx = self._index_of(p["path"])
+        if idx < 0:
+            self._docs.append(self._new_row(str(p["path"]), budget=budget))
+            idx = len(self._docs) - 1
+            row = self._docs[idx]
+            self._apply_state(row["state"])           # 新格子 = 出厂默认，等于原来的“清空”
+            existed = False
+        else:
+            row = self._docs[idx]
+            row["budget"] = budget
+            # “这一格存过状态”才是切回来与第一次开的唯一区分：扫描刚建的格子有路径
+            # 但还没开过，拿它当“切回来”会把宿主要的 precompute 整步跳掉。
+            existed = bool(row["opened"])
+            st = row["state"]
+            if st.get("_proxy") and (int(d.h), int(d.w)) != tuple(st["_proxy"]):
+                st = self._drop_proxy_layers(
+                    st, why=f"这张图上次开在 {st['_proxy'][1]}×{st['_proxy'][0]}，"
+                            f"这次按代理预算解出 {d.w}×{d.h}")
+            self._apply_state(st)
+        self._doc_index = idx
+        self._doc_path = os.path.abspath(str(p["path"]))   # 导出默认目标；只有导成功才记账
+        strength = None
+        if p.get("strength") is not None:
+            strength = _clamp_strength(p["strength"])
+        return self._open_session(d, p, t0=t0, strength=strength, switched=existed)
+
+    def _open_session(self, d, p: dict, *, t0: int, strength: float | None, switched: bool):
+        """已有源图 → 建会话 → 重挂该重挂的层 → 出帧。新导入与底片条切换共用这一段。"""
         shm = self._ensure_shm(d.w, d.h)
-        # 旧图的预计算产物对新图没有任何意义（尺寸/内容都变了），先清空；
-        # 不清的话下一个请求会拿到上一张脸的掩膜，那比没有掩膜更坑。
-        self._precompute = None
-        self._precompute_backend = None
-        self._channel = None
-        # 上一张图的画笔坐标对新图没有任何意义（与旧掩膜同一条规矩），先清空
-        self._repair_ops = []
-        self._redo_ops = []
-        self._op_seq = 0
-        self._light_ops = []
-        self._light_redo = []
-        # 形变层也得跟着图走：上一张脸的单位场对这一张脸没有任何意义
-        self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
-        # 调色层也随文档走。一张 .cube 是“这一张照片的调色”，不是引擎全局偏好：
-        # 留着旧表就是“导入第二张照片一上来就带着第一张的色调”，那是静默错配。
-        # （与磨皮参数不同：radius/增益是“我习惯怎么磨”的全局默认，而表是作品的一部分。）
-        self._lut = None
-        self._lut_amount = 1.0
-        # 定向层也随文档走：上一张照片调好的肤色窗口，对这一张不是“预设”而是误调。
-        self._grade = (0.0, 0.0, 0.0, 1.0)
-        self._lut_preset = None
         t_a = monotonic_ns()
-        pipe = self._attach_pipeline(d.rgb)
+        pipe = self._attach_pipeline(d.rgb)      # 按引擎侧字段重放图层（见 _attach_pipeline）
         self._image_loaded = True
+        if strength is not None:
+            self._strength = strength
         t_b = monotonic_ns()
-        self._strength = _clamp_strength(p.get("strength", 0.5))
-        pipe.render(self._strength, **self._params)
+        # 切回一张调过的图时预计算产物在状态里带着：会话是新设备/新张量，不重挂
+        # 就是“掩膜在这张图的旧会话里，屏幕读的是新会话”——与换设备那个坑同形。
+        if self._precompute is not None:
+            self._rehang_precompute(replayed_for="doc_switch" if switched else "load")
+        elif self._channel:
+            # 没有掩膜就没有通道：状态里留个指认，下一条带 channel 的渲染会被 mask_names
+            # 拒掉，而宿主的状态栏还写着“skin 在用”
+            self._channel = None
+        pipe.render(self._strength, channel=self._channel, **self._params)
         with self._wlock:
             seq, t_emit, slot = shm.write_frame(pipe.read_back())
         t_c = monotonic_ns()
+        row = self._docs[self._doc_index] if 0 <= self._doc_index < len(self._docs) else None
+        if row is not None:
+            row.update({"w": d.w, "h": d.h, "src_w": d.src_w, "src_h": d.src_h,
+                        "opened": True, "state": self._capture_state()})
         emit({"event": "image_ready", **d.meta(), "device": str(pipe.device),
               "strength": self._strength,
+              # 底片条得知道现在这一格是哪一张、是不是切回来的（而不是新导入）：
+              # UI 拿它把高亮位置对好，不靠“我自己记得点过第几格”。
+              "session_index": self._doc_index, "doc": self._doc_path,
+              "switched": bool(switched),
               # 逐段归因，不留“由减法得出的一坨”：验收口径①要的是「解码」与「初始化常驻张量」
               # 两个分开数。首次 attach 里含着 CUDA 上下文/内核模块的进程级 lazy init，
               # 不拆开来就会把它当成「每张图都要 150 ms」写进产品结论。
@@ -556,29 +720,305 @@ class Engine:
               # 零推理换来的显存代价必须能看见，不能只报快了多少
               "bytes_filter": pipe.filter_resident_bytes(),
               "bytes_bands": pipe.bands_resident_bytes(),
-              # 修容层在导入后必然为空（换图已清），这个数报 0 本身就是“没图上一张的笔迹”的证据
+              # 以下是**当前文档**的图层账单。第一次导入时它们必须是 0（那一层还没人动过），
+              # 而切回一张画过笔的图时它们就是那几笔的真实占用——那时报 0 才是错。
               "bytes_light": pipe.light_resident_bytes(),
               "bytes_deform": pipe.deform_resident_bytes(),
-              # 刚导完图时它必须是 0：预热会话那张临时表不能让真会话继承（不然这里会
-              # 多报 428 KB，而用户一张预设也没点）
+              # 预热会话那张临时表不能让真会话继承（不然这里会多报 428 KB 而用户一张
+              # 预设也没点）；同理，切回一张挂了表的图时这里就应当非 0。
               "bytes_lut": pipe.lut_resident_bytes(),
-              # M3-b：定向层在导入后也必须是零。宿主靠这一份快照摆滑块，不留它就只能
-              # 把上一张图的肤色参数继续显示成“已调”（与 bytes_lut=0 同一条理由）。
+              "layers": self._layer_counts(),
+              # 切回来的那一刻，宿主要按这一份重摆所有滑块（那些 *_done 快照已被清，
+              # 而它们属于上一条命令而不是这张文档）
+              "doc_state": self.doc_state(),
+              # M3-b：定向层的四个数。宿主靠这一份快照摆滑块，不留它就只能把上一张图的
+              # 肤色参数继续显示成“已调”（与 bytes_lut 同一条理由）。
               "grade_state": dict(dh=float(pipe.grade_params[0]), ds=float(pipe.grade_params[1]),
                                   dv=float(pipe.grade_params[2]), amount=float(pipe.grade_amount),
                                   lit=bool(pipe.has_grade()),
                                   bytes_grade=int(pipe.grade_resident_bytes())),
-              # 只报滤波这一份：掩膜在本事件之后才挂上（precompute 跑在 image_ready 后面），这里附 bytes_face 恒为 0，
-              # 反而会被读成"掩膜没常驻"。掩膜/关键点的字节数由 precompute_ready 报，那才是它们为真的那一刻。
+              # 只报滤波这一份：新导入时掩膜在本事件之后才挂上（precompute 跑在 image_ready 后面），
+              # 这里附 bytes_face 恒为 0，反而会被读成"掩膜没常驻"。掩膜/关键点的字节数由
+              # precompute_ready 报，那才是它们为真的那一刻（切回来的图也会重发那一条）。
               "import_ms": round((t_c - t0) / 1e6, 2)})
         emit({"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
               "w": shm.w, "h": shm.h, "mode": "image"})
+        self.emit_session_state()
         # 导入期预计算：产品上“导图就算一次”，但它是可选步——失败不许把导入本身拖成失败。
         # 它自己的 error 事件会单独发，报表里 backend/resident 一眼可验。
-        if p.get("precompute"):
+        # 判据是“这张图现在有没有关键点”，不是“是不是第一次开”：切回一张关键点已被
+        # 作废（代理档变了）的图时，那一次推理得重新付，否则形变/通道两层都是空的。
+        if p.get("precompute") and self._precompute is None:
             self.cmd_precompute({"backend": p.get("backend", "auto"),
                                  "model_dir": p.get("model_dir"),
                                  "channel": p.get("channel")})
+
+    def _layer_counts(self) -> dict:
+        """当前文档有哪几层。底片条那一格的“已调”徽章、UI 的状态栏、测试的断言
+        全部只依这一份，不再各自拼一遍（拼三份就会漂三份）。"""
+        return self._state_edits(self._capture_state())
+
+    def doc_state(self) -> dict:
+        """宿主摆滑块要用的那一份完整文档状态（随 image_ready 一起发）。
+
+        为什么不能只靠图层计数与 grade_state：切回一张调过的图时，宿主手里那些
+        `*_done` 快照已经被清掉了（它们说的是上一条命令，不是这一张文档），而滑块
+        的位置必须来自引擎。缺了 lut_amount / deform 的三个数 / 修容那两个参数，
+        UI 就只能"画面已经调好了但滑块显示 0"——那是双向错配的新一格。
+        """
+        return {"strength": float(self._strength), "params": dict(self._params),
+                "channel": self._channel,
+                "light": dict(self._light),
+                "counts": {"repair": len(self._repair_ops), "light": len(self._light_ops),
+                           "light_redo": len(self._light_redo), "repair_redo": len(self._redo_ops)},
+                "deform": {"amounts": dict(self._deform["amounts"]),
+                           "built": bool(self._deform["built"])},
+                "lut": {"lit": self._lut is not None, "amount": float(self._lut_amount),
+                        "preset": self._lut_preset},
+                "grade": {"dh": float(self._grade[0]), "ds": float(self._grade[1]),
+                          "dv": float(self._grade[2]), "amount": float(self._grade[3]),
+                          "lit": self._grade != (0.0, 0.0, 0.0, 1.0)}}
+
+    def _state_edits(self, st: dict) -> dict:
+        """一份状态（live 抄出来的或底片条格子里存着的）里有哪些层。"""
+        return {"repair": len(st["_repair_ops"]), "light": len(st["_light_ops"]),
+                "deform": any(abs(float(v)) > 0.0 for v in st["_deform"]["amounts"].values()),
+                "lut": st["_lut"] is not None, "lut_preset": st["_lut_preset"],
+                "grade": st["_grade"] != (0.0, 0.0, 0.0, 1.0),
+                "channel": st["_channel"]}
+
+    # ------------------------------------------------------------ M5-a 底片条
+    SESSION_KEYS = {"cmd", "action", "dir", "paths", "index", "limit", "edge",
+                    "quality", "thumbs"}
+    # 每解这么多张让一次 GIL：缩略图解码是纯 CPU 活，而帧通路每秒要 60 次调度。
+    # 该不该让、让多少不是拍出来的，是 m5-filmstrip-bench 那两臂量出来的。
+    THUMB_BATCH = 4
+    THUMB_SLEEP_MS = 2.0
+
+    def _doc_row_event(self, i: int, d: dict) -> dict:
+        """底片条一格上报的形状。当前那一格用 live 字段而不是格子里存的（存的是
+        上一次开会话时的快照，刚刚画上去的一笔还不在里面）——徽章慢一帧就是假事实。"""
+        st = self._capture_state() if (i == self._doc_index and self._image_loaded) else d["state"]
+        th = d["thumb"]
+        return {"index": i, "path": d["path"], "name": d["name"],
+                "bytes_on_disk": d["bytes_on_disk"], "w": d["w"], "h": d["h"],
+                "src_w": d["src_w"], "src_h": d["src_h"],
+                "loaded": (i == self._doc_index and self._image_loaded),
+                "opened": bool(d["opened"]),
+                "edits": self._state_edits(st),
+                "thumb": None if th is None else {"w": th["w"], "h": th["h"],
+                                                   "bytes": th["bytes"], "quality": th["quality"]},
+                "thumb_error": d["thumb_error"]}
+
+    def emit_session_state(self, **extra) -> None:
+        emit({"event": "session_state", "index": self._doc_index, "count": len(self._docs),
+              "current": self._doc_path,
+              # 当前文档的完整状态（live 取的，不是格子里存的快照）。宿主拿它重摆滑块，
+              # 也拿它做"切走再切回来，数字对不对得上"的基线——只有 image_ready 里那份
+              # 的话，基线就停在开图那一刻，之后的每一次调参都不在里面。
+              "doc_state": (self.doc_state()
+                            if (self._image_loaded and self._vram is not None) else None),
+              "thumbs_running": bool(self._thumbs is not None and self._thumbs.is_alive()),
+              "docs": [self._doc_row_event(i, d) for i, d in enumerate(self._docs)], **extra})
+
+    def _rows_from(self, paths: list) -> list:
+        """把一份路径列表合成新的底片条，**保留已有格子的状态与缩略图**。
+
+        不保留就是“重扫一次目录，刚才调的全没了”——那比不记忆更坑，因为它看起来
+        什么都没发生。旧目录里有、这次扫不到的格子会被放下来（当前那张除外，
+        不然正在编辑的图会从底片条上直接消失）。
+        """
+        with self._doclock:
+            old = {d["path"]: d for d in self._docs}
+            rows: list = []
+            seen: set = set()
+            for x in paths:
+                ap = os.path.abspath(str(x))
+                if ap in seen:                   # 同一批里重复的路径只留第一格
+                    # （不兼容也不另说：session_add 报 duplicated 的个数）
+                    continue
+                seen.add(ap)
+                row = old.pop(ap, None)
+                if row is None:
+                    row = self._new_row(ap)
+                rows.append(row)
+            kept = None
+            if self._doc_path:
+                want = os.path.abspath(self._doc_path)
+                if want in old:
+                    kept = old[want]
+            self._docs = rows
+            if kept is not None and not any(r["path"] == kept["path"] for r in rows):
+                rows.append(kept)
+                self._doc_path = kept["path"]
+            self._doc_index = self._index_of(self._doc_path)
+            return rows
+
+    def _start_thumbs(self, indices: list, edge, quality) -> bool:
+        if self._thumbs is not None and self._thumbs.is_alive():
+            emit({"event": "error", "error": "缩略图任务已在跑：先 session action=stop_thumbs"})
+            return False
+        try:
+            edge = S.valid_edge(edge)
+            q = int(quality)
+            if not S.MIN_THUMB_QUALITY <= q <= 100:
+                raise ValueError(f"quality={q} 越界（允许 {S.MIN_THUMB_QUALITY}~100）")
+        except (ValueError, TypeError) as e:
+            emit({"event": "error", "error": f"缩略图参数非法：{e}"})
+            return False
+        self._thumb_stop.clear()
+        self._thumb_args = (list(indices), edge, q)
+        self._thumbs = threading.Thread(target=self._thumb_loop, daemon=True)
+        self._thumbs.start()
+        return True
+
+    def _thumb_loop(self):
+        """逐张解缩略图并发 thumb_ready。
+
+        归属看 **path 不看 index**：列表可能在半路上被第二次 scan 换掉，那时按 index
+        发出去会把上一轮的图放进不相干的那一格——而且事件里任何数字看起来都正常。
+        格子里有没有图也要在写之前再看一眼（已有就跳过，不重解）。
+        """
+        idxs, edge, quality = self._thumb_args
+        t0 = monotonic_ns()
+        n = failed = dropped = 0
+        channel_bytes = 0
+        thumb_ms_sum = 0.0
+        for j, i in enumerate(idxs):
+            if self._thumb_stop.is_set():
+                dropped += len(idxs) - j
+                break
+            with self._doclock:
+                path = self._docs[i]["path"] if 0 <= i < len(self._docs) else None
+                need = path is not None and self._docs[i]["thumb"] is None \
+                    and self._docs[i]["thumb_error"] is None
+            if not need:
+                dropped += 1
+                continue
+            try:
+                info = S.make_thumb(path, edge=edge, quality=quality)
+            except Exception as e:                # 一张解不开只塔自己那一格，不带倒整批
+                failed += 1
+                with self._doclock:
+                    if 0 <= i < len(self._docs) and self._docs[i]["path"] == path:
+                        self._docs[i]["thumb_error"] = f"{type(e).__name__}: {e}"
+                emit({"event": "thumb_failed", "index": i, "path": path,
+                      "error": f"{type(e).__name__}: {e}"})
+                continue
+            b64 = info.pop("jpeg_b64")
+            channel_bytes += len(b64)
+            n += 1
+            thumb_ms_sum += info["total_ms"]
+            with self._doclock:
+                if 0 <= i < len(self._docs) and self._docs[i]["path"] == path:
+                    self._docs[i]["thumb"] = info
+            emit({"event": "thumb_ready", "index": i, "path": path, **info, "jpeg_b64": b64})
+            if (j + 1) % self.THUMB_BATCH == 0 and self.THUMB_SLEEP_MS > 0:
+                time.sleep(self.THUMB_SLEEP_MS / 1000.0)
+        emit({"event": "thumbs_done", "count": n, "failed": failed, "dropped": dropped,
+              "edge": edge, "quality": quality,
+              "decode_ms_sum": round(thumb_ms_sum, 2),
+              "channel_kb": round(channel_bytes / 1024.0, 1),
+              "stopped": bool(self._thumb_stop.is_set()),
+              "total_ms": round((monotonic_ns() - t0) / 1e6, 1)})
+        self.emit_session_state()
+
+    def cmd_session(self, p: dict):
+        """底片条：扫目录、加图、切文档、看状态、管缩略图任务。"""
+        unknown = set(p) - self.SESSION_KEYS
+        if unknown:
+            emit({"event": "error", "error": f"session 收到不认识的参数：{sorted(unknown)}"})
+            return
+        action = p.get("action", "state")
+        if action == "scan":
+            if "dir" not in p:
+                emit({"event": "error", "error": "session scan 需要 dir"})
+                return
+            try:
+                limit = int(p.get("limit", S.MAX_DOCS))
+                if not 1 <= limit <= S.MAX_DOCS:
+                    raise ValueError(f"limit={limit} 越界（允许 1~{S.MAX_DOCS}）")
+                got = S.scan_dir(str(p["dir"]), limit=limit)
+            except (ValueError, TypeError, OSError) as e:
+                emit({"event": "error", "error": f"scan 失败({type(e).__name__}): {e}"})
+                return
+            if self._thumbs is not None and self._thumbs.is_alive():
+                self._thumb_stop.set()      # 旧任务下一轮会自己按 path 对不上而退出
+            self._remember_current()
+            rows = self._rows_from(got["files"])
+            emit({"event": "session_scan", "dir": got["dir"], "found": len(got["files"]),
+                  "rows": len(rows), "truncated": got["truncated"], "skipped": got["skipped"],
+                  "limit": limit, "scan_ms": got["scan_ms"],
+                  "current": self._doc_path, "current_index": self._doc_index})
+            self.emit_session_state()
+            if p.get("thumbs", True):
+                self._start_thumbs([i for i, d in enumerate(rows) if d["thumb"] is None],
+                                   p.get("edge", S.EDGE), p.get("quality", S.THUMB_QUALITY))
+            return
+        if action == "add":
+            paths = p.get("paths")
+            if not isinstance(paths, list) or not paths:
+                emit({"event": "error", "error": "session add 需要 paths（非空路径列表）"})
+                return
+            if any((not isinstance(x, str) or not x) for x in paths):
+                emit({"event": "error", "error": "session add 的 paths 必须是非空字符串列表"})
+                return
+            # 先验存在再提交（与所有 cmd_* 同一条铁律）：收一条不存在的路径进底片条，
+            # 代价要拖到缩略图线程或用户点上去那一刻才报，而那时已经看不出来是哪一步错了。
+            missing = [str(x) for x in paths if not os.path.isfile(os.path.abspath(str(x)))]
+            if missing:
+                emit({"event": "error", "error": f"session add 里有 {len(missing)} 个不是现有文件："
+                       f"{missing[:3]}{'…' if len(missing) > 3 else ''}"})
+                return
+            self._remember_current()
+            before = {d["path"] for d in self._docs}
+            rows = self._rows_from(list(self._doc_paths()) + [str(x) for x in paths])
+            added = [d["path"] for d in rows if d["path"] not in before]
+            emit({"event": "session_add", "requested": len(paths), "added": len(added),
+                  "duplicated": len(paths) - len(added), "rows": len(rows)})
+            self.emit_session_state()
+            if p.get("thumbs", True):
+                self._start_thumbs([i for i, d in enumerate(rows) if d["path"] in set(added)],
+                                   p.get("edge", S.EDGE), p.get("quality", S.THUMB_QUALITY))
+            return
+        if action == "select":
+            try:
+                idx = int(p["index"])
+            except (KeyError, TypeError, ValueError):
+                emit({"event": "error", "error": "session select 需要 index（整数）"})
+                return
+            if not 0 <= idx < len(self._docs):
+                emit({"event": "error", "error": f"index={idx} 不在底片条里（共 {len(self._docs)} 格）"})
+                return
+            if idx == self._doc_index and self._image_loaded:
+                # 重复点当前那一格不开新会话：白付一次解码与重建，而且会把未存快照的
+                # live 状态当“新文档默认值”重装一轮（那就是静默丢工）
+                self.emit_session_state(noop=True)
+                return
+            row = self._docs[idx]
+            cmd = {"path": row["path"]}
+            if self._proxy_budget:
+                cmd["max_px"] = int(self._proxy_budget)
+            # 切文档走的就是 load_image 那一条路，不写第二份：守卫（跑靶/导出互斥）、
+            # 尺寸比对、预计算重挂、事件形状全部同源
+            self.cmd_load_image(cmd)
+            return
+        if action == "thumbs":
+            return self._start_thumbs([int(x) for x in p.get("indices", [])] if p.get("indices")
+                                      else list(range(len(self._docs))),
+                                      p.get("edge", S.EDGE), p.get("quality", S.THUMB_QUALITY))
+        if action == "stop_thumbs":
+            self._thumb_stop.set()
+            self.emit_session_state(stopped=True)
+            return
+        if action == "state":
+            self.emit_session_state()
+            return
+        emit({"event": "error", "error": f"未知 session action: {action}"
+              f"（可用：scan/add/select/thumbs/stop_thumbs/state）"})
+
+    def _doc_paths(self):
+        return [d["path"] for d in self._docs]
 
     # ------------------------------------------------------------ 导入期预计算
     def _precompute_ready_event(self, pc, info, *, build_ms: float, infer_ms: float,
@@ -598,6 +1038,40 @@ class Engine:
         if replayed_for:
             ev["replayed_for"] = replayed_for
         return ev
+
+    def _rehang_precompute(self, *, replayed_for: str) -> bool:
+        """把 CPU 原件形态的预计算产物挂到**当前会话**上。
+
+        换设备与切文档走同一段，不写两份：会话是新张量而掩膜没重挂时，下一条带
+        channel 的 set_strength 会被 mask_names 拒掉，而报表仍写着“有 skin 通道”——
+        UI 说“没掩膜”的同时引擎里那张掩膜并不存在，两边各自自洽。失败后语义与库层
+        clear_face 一致：关键点一走，靠它的东西（通道指认、形变层）全部放下。
+        """
+        if self._precompute is None or self._vram is None:
+            return False
+        t_p = monotonic_ns()
+        try:
+            info = self._vram.load_face(self._precompute)
+        except Exception as e:
+            emit({"event": "error",
+                  "error": f"会话重挂预计算产物失败，掩膜/通道/形变层已全部清除（"
+                           f"{type(e).__name__}）：{e}"})
+            self._vram.clear_face()
+            self._precompute = None
+            self._precompute_backend = None
+            self._channel = None
+            self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+            return False
+        emit(self._precompute_ready_event(
+            self._precompute, info,
+            # 重挂没重新算：建图与推理都是 0，不是“没测到”。这里给 0.0 而不是
+            # 缺字段，是为了让两条臂的事件形状完全一致——UI 那边一旦按必存字段
+            # 读，少一个键就会在报表上变成 undefined 而无人报错
+            build_ms=0.0, infer_ms=0.0,
+            attach_ms=round((monotonic_ns() - t_p) / 1e6, 2),
+            total_ms=round((monotonic_ns() - t_p) / 1e6, 2),
+            replayed_for=replayed_for))
+        return True
 
     def cmd_precompute(self, p: dict):
         """导入期一次性预计算：478 点关键点 + 语义掩膜，算完直接常驻显存。
@@ -1637,35 +2111,10 @@ class Engine:
             emit({"event": "engine_info", "info": f"常驻会话从 {self._vram.device} 重建到 {self._effective_device()}"})
             self._attach_pipeline(self._src_rgb)
             # 预计算产物是“这个会话这个设备上的张量”：迁完不重挂，掩膜就停在旧设备上，
-            # 下一次带 channel 的渲染会直接读错/读到已释放的显存
+            # 下一次带 channel 的渲染会直接读错/读到已释放的显存。切文档也要重挂，
+            # 所以这一段抽成了一个函数而不是两份手抄（两份的下场已经受过）。
             if self._precompute is not None:
-                t_p = monotonic_ns()
-                try:
-                    info = self._vram.load_face(self._precompute)
-                except Exception as e:
-                    # 会话已在新设备上而掩膜没重挂：不回收状态字段，下一条带 channel
-                    # 的 set_strength 会被 mask_names 拒掉，而报表仍写着“有 skin 通道”——
-                    # UI 说“没掩膜”的同时引擎里那张掩膜并不存在，两边各自自洽。
-                    # 语义与库层 clear_face 一致：关键点一走，靠它的东西全部放下。
-                    emit({"event": "error",
-                          "error": f"新会话重挂预计算产物失败，掩膜/通道/形变层已全部清除（"
-                                   f"{type(e).__name__}）：{e}"})
-                    self._vram.clear_face()
-                    self._precompute = None
-                    self._precompute_backend = None
-                    self._channel = None
-                    self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
-                    info = None
-                if info is not None:
-                    emit(self._precompute_ready_event(
-                        self._precompute, info,
-                        # 重挂没重新算：建图与推理都是 0，不是“没测到”。这里给 0.0 而不是
-                        # 缺字段，是为了让两条臂的事件形状完全一致——UI 那边一旦按必存字段
-                        # 读，少一个键就会在报表上变成 undefined 而无人报错
-                        build_ms=0.0, infer_ms=0.0,
-                        attach_ms=round((monotonic_ns() - t_p) / 1e6, 2),
-                        total_ms=round((monotonic_ns() - t_p) / 1e6, 2),
-                        replayed_for="device_switch"))
+                self._rehang_precompute(replayed_for="device_switch")
                 # 形变层已在 _attach_pipeline 里跟着新会话重解过（那里不补帧，因为
                 # 下面紧后就自己渲染并写 shm）——这里不能再解一次，那会把换设备的
                 # 一次性成本翻倍，而 deform_builds 会凭空多一格
@@ -1769,6 +2218,13 @@ class Engine:
         if any((not isinstance(x, str) or not x) for x in images):
             emit({"event": "error", "error": "export 的 images 必须是非空字符串列表"})
             return
+        # 路径一律按绝对路径比对，但**必须排在校验之后**：先归一会把空字符串变成一个
+        # 真实目录、把 "not-a-list" 这个字符串拆成十个单字符路径，于是那两条拒绝双双
+        # 失效（本轮就是这么撞出来的：total=10 张图开跑了）。
+        # 为什么仍要归一：底片条扫出来的、导出请求里给的、当前文档记的，三者可能是
+        # 相对/绝对两种写法；比不上的代价不是报错而是静默——for_document 判假，笔迹与
+        # 形变全部不进满幅文件，而事件里写着“已导出”。
+        images = [os.path.abspath(x) for x in images]
         out_dir = p.get("out_dir")
         if not isinstance(out_dir, str) or not out_dir:
             emit({"event": "error", "error": "export 需要 out_dir（导出目录）"})
@@ -1854,7 +2310,8 @@ class Engine:
                  "load_image": self.cmd_load_image, "set_strength": self.cmd_set_strength,
                  "precompute": self.cmd_precompute, "inpaint": self.cmd_inpaint,
                  "light": self.cmd_light, "deform": self.cmd_deform,
-                 "lut": self.cmd_lut, "grade": self.cmd_grade, "export": self.cmd_export}
+                 "lut": self.cmd_lut, "grade": self.cmd_grade, "export": self.cmd_export,
+                 "session": self.cmd_session}
         # 不用 `for line in sys.stdin`：那会等 EOF，收到 shutdown 也退不掉
         while not self._quit:
             line = sys.stdin.readline()

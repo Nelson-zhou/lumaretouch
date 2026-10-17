@@ -131,6 +131,15 @@ const zh = {
   "export.failedRow": "第 {stage} 步失败：{why}",
   "export.skipped": "这张没带上：{items}",
   "export.unavailable": "当前引擎未报导出能力（export_formats / export_tile），不猜一个默认值",
+  // ---- 底片条（M5-a）
+  "side.strip": "底片条",
+  "strip.desc": "一格一图。点格子就切换到那张图：每张图自己的一套调整跟着图走，不会被下一张顶掉。",
+  "strip.scan": "扫描目录",
+  "strip.summary": "{n} 张 · 已出缩略图 {th}/{n}",
+  "strip.running": " · 解图中…",
+  "strip.empty": "还没有底片条：填一个目录名再点「扫描目录」。",
+  "strip.edited": "已调",
+  "strip.failed": "解不开",
 
   "bench.size": "帧尺寸",
   "bench.frames": "帧数",

@@ -26,3 +26,17 @@ td:nth-child(2) { text-align:right; }
 .ok { color:#89e0a8; }
 .mut { color:var(--mut); }
 pre.log { font-size:11px; color:var(--mut); max-height:180px; overflow:auto; background:#12141a; border:1px solid var(--line); border-radius:6px; padding:8px; white-space:pre-wrap; }
+
+/* 底片条（M5-a）：一格一图。缩略图按长边夹在 160 px 以内（引擎侧的口径），
+   这里的格子只负责不把它们再放大——放大就是把缩略图当预览图用，那是糊的。 */
+.strip { display:flex; gap:6px; overflow-x:auto; padding:6px 0; }
+.strip .cell { position:relative; padding:4px; background:#12141a; border:1px solid var(--line);
+  border-radius:6px; color:inherit; display:flex; flex-direction:column; align-items:center; gap:2px; }
+.strip .cell.on { border-color:var(--acc); }
+.strip .cell img { display:block; max-width:96px; max-height:96px; }
+.strip .cell .nm { font-size:10px; color:var(--mut); max-width:96px; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; }
+.strip .cell .ph { display:flex; align-items:center; justify-content:center;
+  width:96px; height:96px; font-size:11px; color:var(--mut); }
+.strip .cell .badge { position:absolute; top:2px; right:2px; font-size:9px; padding:0 4px;
+  border-radius:6px; background:var(--acc); color:#1a1a1a; }

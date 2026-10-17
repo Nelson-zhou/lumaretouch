@@ -9,15 +9,18 @@ from __future__ import annotations
 import json
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import threading
 import time
+import base64
 import importlib.util
 
 import numpy as np
 import pytest
 
+from lumaretouch_engine import session as S
 from lumaretouch_engine.shm import FrameShm, monotonic_ns, shm_name
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -381,6 +384,21 @@ def _expect_error(ep, contains: str, timeout: float = 30.0) -> dict:
         if e.get("event") == "error":
             assert contains in str(e.get("error", "")), f"报错内容不对：{e}"
             return e
+
+
+def _other_image(tmp_path):
+    """另一张真图（同尺寸、内容不同）：测「换图」就得用**另一张**，不能拿同一个文件导两遍。
+
+    M5-a 之前「同一个文件导两遍」与「换一张图」在引擎里是同一件事，所以那几个用例都
+    图省事复用了 FIXTURE。有了底片条之后两者不再是一件事：重开同一张文档**必须**把这张
+    文档自己的层带回来（test_switching_documents_returns_the_exact_same_frame 钉的就是
+    这条），换一张文档才必须丢坐标层。这里造的就是「另一张文档」。
+    """
+    from PIL import Image
+    q = tmp_path / "other-1024x1280.jpg"
+    src = np.asarray(Image.open(FIXTURE).convert("RGB"), np.int16)
+    Image.fromarray(np.clip(src + 24, 0, 255).astype(np.uint8), "RGB").save(q, quality=92)
+    return str(q)
 
 
 def _load(engine, **kw):
@@ -1092,14 +1110,18 @@ def test_inpaint_is_refused_while_bench_running(engine):
 
 
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
-def test_new_image_drops_previous_brush_strokes(engine):
-    """换图必须丢画笔：旧坐标对新图没有任何意义（与旧掩膜同一条规矩）。"""
+def test_new_image_drops_previous_brush_strokes(engine, tmp_path):
+    """换到**另一张图**必须丢画笔：旧坐标对新图没有任何意义（与旧掩膜同一条规矩）。
+
+    重开同一张文档不在这条的射程里——那一族语义是"文档状态跟着文档走"，由 M5-a
+    的切文档用例钉住。
+    """
     _needs_torch()
     meta = _load(engine, max_px=207360, strength=0.0)
     h, w = meta["h"], meta["w"]
     engine.send(cmd="inpaint", action="add", rle=_brush_rle(h, w, h // 2, w // 2, 6), feather=2)
     engine.wait_for("inpaint_done", timeout=60)
-    engine.send(cmd="load_image", path=FIXTURE, strength=0.0, max_px=207360)
+    engine.send(cmd="load_image", path=_other_image(tmp_path), strength=0.0, max_px=207360)
     # 第二张与第一张同尺寸 → _ensure_shm 不重建也不重发 shm_ready（已知行为，
     # 写在这是为了下次不要再当 bug 查）：这里只等真正会重发的那两个事件
     engine.wait_for("vram_ready", timeout=60)
@@ -1781,10 +1803,10 @@ def test_importing_a_new_image_drops_the_previous_grade(engine, tmp_path):
     engine.send(cmd="lut", action="set", path=_write_cube(tmp_path, 8, 0.9))
     assert engine.wait_for("lut_done", timeout=60)["lut_lit"] is True
     engine.wait_for("frame", timeout=60)
-    engine.send(cmd="load_image", path=FIXTURE, strength=0.0)
+    engine.send(cmd="load_image", path=_other_image(tmp_path), strength=0.0)
     engine.wait_for("vram_ready", timeout=60)
     ready = engine.wait_for("image_ready", timeout=60)
-    assert ready["bytes_lut"] == 0, f"新会话继承了上一张图的调色体积：{ready['bytes_lut']}"
+    assert ready["bytes_lut"] == 0, f"换到另一张图却带着上一张的调色体积：{ready['bytes_lut']}"
     # 引擎侧那两个字段也得跟着清：留着就是下一条 amount 会以为表还在
     engine.send(cmd="lut", action="amount", amount=0.5)
     _expect_error(engine, "还没有 LUT")
@@ -2080,14 +2102,14 @@ def test_unknown_preset_is_rejected_without_touching_anything(engine):
 
 
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
-def test_importing_a_new_image_drops_the_skin_tuning(engine):
-    """定向层随文档走：换图之后 image_ready 里那一份快照必须全是零。"""
+def test_importing_a_new_image_drops_the_skin_tuning(engine, tmp_path):
+    """定向层随文档走：换到另一张图之后 image_ready 里那一份快照必须全是零。"""
     _needs_torch()
     _load(engine, max_px=207360, strength=0.0)
     engine.send(cmd="grade", action="set", dh=0.01, ds=-0.3, dv=0.2)
     assert engine.wait_for("grade_done", timeout=60)["grade_lit"] is True
     engine.wait_for("frame", timeout=60)
-    engine.send(cmd="load_image", path=FIXTURE, strength=0.0)
+    engine.send(cmd="load_image", path=_other_image(tmp_path), strength=0.0)
     engine.wait_for("vram_ready", timeout=60)
     ready = engine.wait_for("image_ready", timeout=60)
     g = ready["grade_state"]
@@ -2380,3 +2402,382 @@ def test_export_refused_while_benching(engine, tmp_path):
 def test_export_command_keys_are_a_whitelist(engine):
     """命令层的白名单要把 `cmd` 自己算进去（M3-b 为这条付过 12 项用例的钱）。"""
     assert "cmd" in EXPORT_KEYS and "action" in EXPORT_KEYS
+
+
+# ============================================================ M5-a：底片条（文档会话）
+# 这一节只管**接线与生命周期**：扫描名单、缩略图的通道上限、切文档时图层跟不跟回来。
+# 缩略图解码本身的口径（长边、降质、最坏情况）在 test_session.py 的库层用例里。
+STRIP_MAX_PX = 207360            # 产品档代理（400×504）：M1-1/M1-2 钉死的那一档
+
+
+def _strip_dir(tmp_path):
+    """底片条靶：两张**同尺寸**真图 + 一个外来文件 + 一个子目录。
+
+    两张必须同尺寸：代理档一致，切换时 shm 不会被重建。尺寸一变引擎会 `unlink` +
+    重开同名缓冲，测试里那个 mmap peer 就指着已删的 inode —— 读到的是旧数据而不是
+    错数据，那种失败最容易被当成"通过"。
+    """
+    from PIL import Image
+    d = tmp_path / "strip"
+    d.mkdir()
+    a = d / "a.jpg"
+    shutil.copyfile(FIXTURE, a)
+    src = np.asarray(Image.open(FIXTURE).convert("RGB"), np.int16)
+    b = d / "b.jpg"
+    Image.fromarray(np.clip(src + 24, 0, 255).astype(np.uint8)).save(b, quality=92)
+    (d / "note.txt").write_text("不是图")
+    (d / "sub").mkdir()
+    return str(d), [str(a), str(b)]
+
+
+def _open_doc(engine, path, **kw):
+    """开一张图（与 _load 同一套事件顺序），返回 (shm 元数据, image_ready)。"""
+    engine.send(cmd="load_image", path=path,
+                **{"max_px": STRIP_MAX_PX, "strength": 0.0, **kw})
+    meta = engine.wait_for("shm_ready", timeout=90)
+    engine.wait_for("vram_ready", timeout=90)
+    return meta, engine.wait_for("image_ready", timeout=90)
+
+
+def _collect(ep, until, timeout=120.0):
+    """收到 until 为止，把期间的事件按类型归堆。
+
+    缩略图是一串事件而不是一条：wait_for 会把它们全丢掉，而"几张到了、几张塌了"
+    正是这一节要验的东西。
+    """
+    got: dict[str, list] = {}
+    deadline = time.monotonic() + timeout
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise AssertionError(f"{timeout}s 内没等到 {until}；已收到 {sorted(got)}")
+        e = ep.next_event(timeout=min(left, 10.0))
+        k = e.get("event") or "?"
+        if k == "error":
+            raise AssertionError(f"引擎报错：{e['error']}")
+        got.setdefault(k, []).append(e)
+        if k == until:
+            return got
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_ready_advertises_filmstrip_bounds(engine):
+    """行程与上限由引擎说，前端不许刻一份。"""
+    engine.send(cmd="hello")
+    ready = engine.wait_for("ready")
+    assert "scan" in ready["session_actions"] and "select" in ready["session_actions"]
+    lo, hi = ready["thumb_edge"]
+    assert lo <= ready["thumb_edge_default"] <= hi
+    assert 0 < ready["thumb_max_bytes"] <= 1 << 20
+    assert ready["session_max_docs"] >= 1
+    # 报出去的名单里每一个动作都得真能用（报一个不认的就是假承诺）
+    assert "state" in ready["session_actions"]
+    engine.send(cmd="session", action="state")
+    engine.wait_for("session_state", timeout=30)
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_session_scan_lists_rows_and_thumbs_stay_inside_the_channel(engine, tmp_path):
+    d, files = _strip_dir(tmp_path)
+    engine.send(cmd="hello")
+    ready = engine.wait_for("ready")
+    engine.send(cmd="session", action="scan", dir=d, edge=64, quality=60)
+    ev = engine.wait_for("session_scan", timeout=30)
+    assert ev["found"] == 2 and ev["rows"] == 2, ev
+    assert ev["current_index"] == -1, "扫描不许动会话（一张也没开过）"
+    why = {s["name"]: s["why"] for s in ev["skipped"]}
+    assert why.get("note.txt") and "扩展名" in why["note.txt"]
+    assert why.get("sub") and "目录" in why["sub"]
+    assert ev["truncated"] is False
+
+    got = _collect(engine, "thumbs_done")
+    done = got["thumbs_done"][0]
+    assert done["count"] == 2 and done["failed"] == 0 and done["dropped"] == 0, done
+    thumbs = got["thumb_ready"]
+    assert len(thumbs) == 2, thumbs
+    for t in thumbs:
+        assert max(t["w"], t["h"]) <= 64, f"缩略图超出格子：{t['w']}x{t['h']}"
+        assert t["bytes"] <= ready["thumb_max_bytes"], f"一行 JSON 被顶爆：{t['bytes']} B"
+        raw = base64.b64decode(t["jpeg_b64"])
+        assert raw[:2] == b"\xff\xd8" and raw[-2:] == b"\xff\xd9"
+        assert t["src_w"] == 1024 and t["src_h"] == 1280, "源尺寸报的是假的"
+    # 事件里不许有满幅像素：一张 1024×1280 的 RGBA 是 5.2 MB，base64 后 7 MB 一行
+    assert done["channel_kb"] < 400, f"缩略图把通道灌了 {done['channel_kb']} KB"
+    # thumbs_done 之后引擎补发一份状态：拿 _collect 里最后那份会比到"解图之前"的快照
+    st = engine.wait_for("session_state", timeout=30)
+    assert st["count"] == 2 and all(x["thumb"] for x in st["docs"]), st
+    assert [x["name"] for x in st["docs"]] == ["a.jpg", "b.jpg"]
+    assert all(x["opened"] is False for x in st["docs"]), "没开过的格子不许说已开过"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_switching_documents_returns_the_exact_same_frame(engine, tmp_path):
+    """这一节的主判据：切走再切回来，画面必须**逐字节**等于离开时那一帧。
+
+    不看事件字段而看 shm 里的像素：layers 报 1 笔而画面没有那一笔、strength 报 0.62
+    而实际按 0.5 出帧，两种错在事件里都自洽（本仓最贵那一族坑的形状）。
+    """
+    _needs_torch()
+    d, (fa, fb) = _strip_dir(tmp_path)
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set")
+    engine.send(cmd="session", action="scan", dir=d, thumbs=False)
+    engine.wait_for("session_scan", timeout=30)
+
+    shm, first = _open_doc(engine, fa)
+    assert first["session_index"] == 0 and first["switched"] is False, first
+    h, w = shm["h"], shm["w"]
+    peer = FrameShm(shm["name"])
+    try:
+        _read_frame(engine, peer, h, w)
+
+        # 四层一起挂上：逐点（lut/grade）与按坐标（笔迹）走的是两条不同的回挂路径
+        engine.send(cmd="set_strength", value=0.62)
+        engine.wait_for("params_set", timeout=30)
+        _read_frame(engine, peer, h, w)
+        engine.send(cmd="lut", action="set", preset="creamy", amount=0.8)
+        engine.wait_for("lut_done", timeout=60)
+        _read_frame(engine, peer, h, w)
+        engine.send(cmd="grade", action="set", dh=0.01, ds=-0.3, dv=0.05)
+        engine.wait_for("grade_done", timeout=60)
+        _read_frame(engine, peer, h, w)
+        engine.send(cmd="inpaint", action="add",
+                    rle=_brush_rle(h, w, h // 3, w // 2, 6), feather=2)
+        engine.wait_for("inpaint_done", timeout=180)
+        edited = _read_frame(engine, peer, h, w)
+
+        # 离开前把"这一格有哪几层"抄一份下来：回来时必须一模一样，一个字段都不许多。
+        # 取 session_state 而不是 image_ready：后者那份快照停在开图那一刻，中间调的
+        # 每一档都不在里面——拿它当基线，比的是"开图状态"而不是"离开时状态"。
+        engine.send(cmd="session", action="state")
+        sess_before = engine.wait_for("session_state", timeout=30)
+        ds_before = sess_before["doc_state"]
+        edits_before = sess_before["docs"][0]["edits"]
+        assert edits_before["repair"] == 1 and edits_before["lut"] is True, edits_before
+        assert edits_before["grade"] is True, edits_before
+        # 手动改过定向之后预设就是 None（cmd_grade 的既定语义），这里把它钉住：
+        # 断言"lut_preset 还是 creamy"会是拿一个从没存在过的语义当回归基线
+        assert edits_before["lut_preset"] is None, edits_before
+
+        # 切到 b：a 的四层必须全部消失，而不是"看起来干净了"
+        engine.send(cmd="session", action="select", index=1)
+        b = engine.wait_for("image_ready", timeout=90)
+        assert b["session_index"] == 1 and b["switched"] is False, b
+        assert abs(float(b["strength"]) - 0.5) < 1e-6, f"b 拿到了 a 的强度：{b['strength']}"
+        assert b["layers"] == {"repair": 0, "light": 0, "deform": False, "lut": False,
+                               "lut_preset": None, "grade": False, "channel": None}, b["layers"]
+        assert b["bytes_lut"] == 0 and b["grade_state"]["lit"] is False, b
+        frame_b = _read_frame(engine, peer, h, w)
+        assert np.abs(frame_b - edited).mean() > 4.0, "a 与 b 是同一张画面，这个对拍没有鉴别力"
+
+        # 切回 a：四层全部回来，而且画面与离开时逐字节相等
+        engine.send(cmd="session", action="select", index=0)
+        back = engine.wait_for("image_ready", timeout=90)
+        assert back["switched"] is True and back["session_index"] == 0, back
+        assert abs(float(back["strength"]) - 0.62) < 1e-6, back["strength"]
+        assert back["layers"] == edits_before, (
+            f"切回来少了一层：走时 {edits_before}，回来 {back['layers']}")
+        # 数字也得跟着回来，不只是"有没有这一层"：宿主按 doc_state 重摆滑块，
+        # 层在而数不对，UI 就会显示一个与画面无关的位置（双向错配的新一格）
+        ds = back["doc_state"]
+        assert abs(ds["strength"] - 0.62) < 1e-6, ds["strength"]
+        assert ds["counts"]["repair"] == 1 and ds["counts"]["light"] == 0, ds["counts"]
+        assert ds["lut"]["lit"] is True and abs(ds["lut"]["amount"] - 0.8) < 1e-6, ds["lut"]
+        assert abs(ds["grade"]["ds"] + 0.3) < 1e-6 and ds["grade"]["lit"] is True, ds["grade"]
+        assert ds == ds_before, f"切走时与回来时的文档状态不是一个数：\n 走 {ds_before}\n 回 {ds}"
+        assert ds["params"]["radius"] >= 1 and ds["light"]["radius"] >= 0, ds
+        assert set(ds["deform"]["amounts"]) == {"slim_face", "big_eye", "small_chin"}, ds["deform"]
+        assert all(abs(v) < 1e-9 for v in ds["deform"]["amounts"].values()), \
+            "这张图没动过形变滑块，回来却带着值：那是把上一张的场搬过来了"
+        assert back["bytes_lut"] > 0 and back["grade_state"]["lit"] is True, back
+        frame_back = _read_frame(engine, peer, h, w)
+        assert np.array_equal(frame_back, edited), (
+            f"切回来不是那一张：max {int(np.abs(frame_back - edited).max())} LSB / "
+            f"{(np.abs(frame_back - edited).max(axis=-1) > 0).mean():.4%} 像素对不上")
+        # 底片条那一格的徽章也得同步（当前格用 live 状态，不许报旧快照）
+        st = engine.wait_for("session_state", timeout=30)
+        assert st["index"] == 0 and st["docs"][0]["edits"]["repair"] == 1, st["docs"][0]
+        assert st["docs"][1]["edits"] == {"repair": 0, "light": 0, "deform": False,
+                                          "lut": False, "lut_preset": None, "grade": False,
+                                          "channel": None}, st["docs"][1]["edits"]
+
+        # 重复点当前那一格不开新会话（白付一次解码，还会把没存快照的 live 状态重装）
+        engine.send(cmd="session", action="select", index=0)
+        noop = engine.wait_for("session_state", timeout=30)
+        assert noop.get("noop") is True, noop
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_a_different_proxy_budget_voids_coordinate_layers(engine, tmp_path):
+    """代理档一变：按像素坐标成立的层作废并明说，逐点层原样留着。
+
+    不作废就是拿一张小代理档上的笔迹去贴大一号的会话 —— 库层按名字把通道递出来，
+    撞尺寸要等到 render 才发生，而那时报表上已经写着"有 skin 通道"。
+    """
+    _needs_torch()
+    d, (fa, _fb) = _strip_dir(tmp_path)
+    engine.send(cmd="hello")
+    ready = engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set")
+    small, _e0 = _open_doc(engine, fa, max_px=64 * 64)
+    engine.wait_for("frame", timeout=60)
+    preset = ready["presets"][0]["name"]
+    engine.send(cmd="lut", action="set", preset=preset, amount=1.0)
+    engine.wait_for("lut_done", timeout=60)
+    engine.wait_for("frame", timeout=60)
+    engine.send(cmd="inpaint", action="add",
+                rle=[[small["h"] // 2, small["w"] // 2, 3, 255]], feather=0)
+    engine.wait_for("inpaint_done", timeout=180)
+    engine.wait_for("frame", timeout=60)
+    engine.send(cmd="session", action="state")
+    assert engine.wait_for("session_state", timeout=30)["docs"][0]["edits"]["repair"] == 1
+
+    # 第二次开同一张、但换一档代理：不能再走 _open_doc——它会把 image_ready 吃掉，
+    # 下面那个"直到 image_ready 为止"的收集循环就会抱着后面的帧事件空等超时
+    engine.send(cmd="load_image", path=fa, max_px=STRIP_MAX_PX)
+    warn = None
+    while True:
+        e = engine.next_event(timeout=90)
+        if e["event"] == "engine_warn" and "按像素坐标成立的层" in e["warn"]:
+            warn = e
+        if e["event"] == "image_ready":
+            break
+    assert warn is not None, "换了代理档却没说坐标层作废：静默丢工"
+    assert "逐点层" in warn["warn"], warn
+    assert e["layers"]["repair"] == 0, e["layers"]
+    assert e["layers"]["lut"] is True and e["layers"]["lut_preset"] == preset, e["layers"]
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_document_switch_is_refused_while_benching(engine, tmp_path):
+    """切文档与跑靶互斥：它走的就是 load_image 那条守卫，不另写一份。"""
+    _needs_torch()
+    d, (fa, _fb) = _strip_dir(tmp_path)
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set")
+    _open_doc(engine, fa)
+    engine.send(cmd="session", action="scan", dir=d, thumbs=False)
+    engine.wait_for("session_scan", timeout=30)
+    assert engine.wait_for("session_state", timeout=30)["index"] == 0
+    engine.send(cmd="bench_start", w=96, h=64, frames=400, interval_ms=8, mode="copy")
+    engine.wait_for("bench_started", timeout=30)
+    try:
+        engine.send(cmd="session", action="select", index=1)
+        _expect_error(engine, "跑靶进行中，拒绝换图")
+    finally:
+        engine.send(cmd="bench_stop")
+        engine.wait_for("bench_done", timeout=90)
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_session_command_boundaries(engine, tmp_path):
+    """参数越界与未知动作整条拒绝，而且不许留下半截底片条。"""
+    d, files = _strip_dir(tmp_path)
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="session", action="state", nope=1)
+    _expect_error(engine, "不认识的参数")
+    engine.send(cmd="session", action="翻一下底片条")
+    _expect_error(engine, "未知 session action")
+    engine.send(cmd="session", action="scan", dir=str(tmp_path / "没有这个目录"))
+    _expect_error(engine, "不是目录或不存在")
+    engine.send(cmd="session", action="scan", dir=files[0])
+    _expect_error(engine, "不是目录或不存在")
+    engine.send(cmd="session", action="scan", dir=d, limit=0)
+    _expect_error(engine, "越界")
+    engine.send(cmd="session", action="scan", dir=d, limit=S.MAX_DOCS + 1)
+    _expect_error(engine, "越界")
+    engine.send(cmd="session", action="select", index=99)
+    _expect_error(engine, "不在底片条里")
+    engine.send(cmd="session", action="select")
+    _expect_error(engine, "需要 index")
+    engine.send(cmd="session", action="add", paths=[])
+    _expect_error(engine, "非空路径列表")
+    engine.send(cmd="session", action="add", paths=[files[0], {"不是字符串": 1}])
+    _expect_error(engine, "非空字符串列表")
+
+    # 到这里前面全部被拒：底片条应当还是空的
+    engine.send(cmd="session", action="state")
+    st = engine.wait_for("session_state", timeout=30)
+    assert st["count"] == 0, f"被拒的命令留下了半截底片条：{st['docs']}"
+
+    engine.send(cmd="session", action="scan", dir=d, thumbs=False)
+    engine.wait_for("session_scan", timeout=30)
+    engine.send(cmd="session", action="add", paths=files)
+    add = engine.wait_for("session_add", timeout=30)
+    assert add["requested"] == 2 and add["added"] == 0 and add["duplicated"] == 2, add
+    engine.send(cmd="session", action="add", paths=[str(tmp_path / "不存在.jpg")])
+    _expect_error(engine, "不是现有文件")
+    engine.send(cmd="session", action="state")
+    st2 = engine.wait_for("session_state", timeout=30)
+    assert st2["count"] == 2, f"被拒的 add 还是往底片条里塞了一格：{st2['docs']}"
+    engine.send(cmd="session", action="thumbs", edge=8)
+    _expect_error(engine, "缩略图参数非法")
+    engine.send(cmd="session", action="stop_thumbs")
+    engine.wait_for("session_state", timeout=30)
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_rescan_keeps_rows_edits_and_skips_finished_thumbs(engine, tmp_path):
+    """重扫不许丢工：格子的状态与已解好的缩略图都在，会话也不动。"""
+    _needs_torch()
+    d, (fa, _fb) = _strip_dir(tmp_path)
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set")
+    engine.send(cmd="session", action="scan", dir=d, edge=64)
+    engine.wait_for("session_scan", timeout=30)
+    _collect(engine, "thumbs_done")
+
+    engine.send(cmd="session", action="select", index=0)
+    engine.wait_for("image_ready", timeout=90)
+    engine.wait_for("frame", timeout=60)
+    engine.send(cmd="set_strength", value=0.77)
+    engine.wait_for("params_set", timeout=30)
+    engine.wait_for("frame", timeout=30)
+
+    engine.send(cmd="session", action="scan", dir=d)     # 用户又点了一次"刷新"
+    again = engine.wait_for("session_scan", timeout=30)
+    assert again["rows"] == 2 and again["current_index"] == 0, again
+    st = engine.wait_for("session_state", timeout=30)
+    assert st["index"] == 0 and st["current"] == os.path.abspath(fa), st
+    done = _collect(engine, "thumbs_done")["thumbs_done"][0]
+    assert done["count"] == 0, f"重扫把已解好的缩略图又解了一遍：{done}"
+    assert done["dropped"] == 0 and done["failed"] == 0, done
+
+    engine.send(cmd="session", action="select", index=1)
+    engine.wait_for("image_ready", timeout=90)
+    engine.wait_for("frame", timeout=60)
+    engine.send(cmd="session", action="select", index=0)
+    back = engine.wait_for("image_ready", timeout=90)
+    assert abs(float(back["strength"]) - 0.77) < 1e-6, f"重扫一次，强度就没了：{back['strength']}"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_a_thumb_failure_only_kills_its_own_cell(engine, tmp_path):
+    """一张解不开只塌自己那一格：整批不许停，其余格子照常出图。"""
+    d, (fa, _fb) = _strip_dir(tmp_path)
+    broken = os.path.join(d, "c.jpg")
+    with open(broken, "wb") as f:
+        f.write(b"%PDF-1.4 not-a-bitmap" * 64)
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="session", action="scan", dir=d, edge=64)
+    engine.wait_for("session_scan", timeout=30)
+    got = _collect(engine, "thumbs_done")
+    done = got["thumbs_done"][0]
+    assert done["count"] == 2 and done["failed"] == 1, done
+    bad = got["thumb_failed"][0]
+    assert bad["path"] == os.path.abspath(broken) and "解不开" in bad["error"], bad
+    st = engine.wait_for("session_state", timeout=30)
+    row = next(x for x in st["docs"] if x["path"] == os.path.abspath(broken))
+    assert row["thumb"] is None and "解不开" in row["thumb_error"], row
+    assert all(x["thumb"] for x in st["docs"] if x["path"] != os.path.abspath(broken))

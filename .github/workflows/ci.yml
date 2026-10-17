@@ -114,6 +114,15 @@ jobs:
         # 等于公式，而且砍半必红且差异全贴在缝上。另有反向门禁：“导出 == 预览通路”
         # 逐字节（本机 0 LSB），否则“分块跑的是一条链”这句话可以靠抄一套实现来自证。
         run: REPS=3 LRT_EXPORT_BIG_MP=2 "$PY" packaging/m4-export-bench.py
+      - name: 底片条（缩略图批量不挤坏帧通路 + 切文档逐字节拿回画面）
+        # M5-a 的三条硬要求：① quiet / busy 两臂交错对拍，busy 臂的窗口正是整批缩略图
+        # 在解码的那段——只看整场平均会把开头几秒的掉帧摊平，所以窗口 fps 单独判；
+        # ② 切走再切回必须从 /dev/shm 读回逐字节相同的一帧（含消除笔那一笔），
+        # 事件说 switched=true 而画面没重放，完全可以同时成立；③ 每轮的缩略图必须
+        # 是全新的一批（count==found），否则吞吐的分母是被缓存命中的 0，会算出天文数字。
+        # 本机（RX 7600 XT）：窗口 fps quiet 59.88 / busy 59.94（差 ±0.1）、丢帧 0.0%；
+        # 吞吐 44~46 张/秒；切文档 import_ms 中位 16.2 / 最坏 21.5；40 张通道合计 141.6 KB。
+        run: REPS=3 LRT_STRIP_N=40 LRT_STRIP_FRAMES=180 "$PY" packaging/m5-filmstrip-bench.py
 
   # NVIDIA 侧同理。本机无 N 卡，CUDA 依赖 pin 也尚未解析回填，
   # 在拿到 NVIDIA runner 之前这条只能是开关关闭，不能当作已验证。
@@ -153,6 +162,15 @@ jobs:
         # 判据与预算同 ROCm job。RDNA3 的 FP64 是 1/32 速率，形变那一次场求值在 N 卡上
         # 会是大不同的数字——跑出真数后按本机口径改那两个预算，而不是改判据。
         run: REPS=3 LRT_EXPORT_BIG_MP=2 "$PY" packaging/m4-export-bench.py
+      - name: 底片条（缩略图批量不挤坏帧通路 + 切文档逐字节拿回画面）
+        # M5-a 的三条硬要求：① quiet / busy 两臂交错对拍，busy 臂的窗口正是整批缩略图
+        # 在解码的那段——只看整场平均会把开头几秒的掉帧摊平，所以窗口 fps 单独判；
+        # ② 切走再切回必须从 /dev/shm 读回逐字节相同的一帧（含消除笔那一笔），
+        # 事件说 switched=true 而画面没重放，完全可以同时成立；③ 每轮的缩略图必须
+        # 是全新的一批（count==found），否则吞吐的分母是被缓存命中的 0，会算出天文数字。
+        # 本机口径见 ROCm job 注释：窗口 fps quiet 59.88 / busy 59.94（差 ±0.1）、丢帧 0.0%；
+        # 吞吐 44~46 张/秒；切文档 import_ms 中位 16.2 / 最坏 21.5；40 张通道合计 141.6 KB。
+        run: REPS=3 LRT_STRIP_N=40 LRT_STRIP_FRAMES=180 "$PY" packaging/m5-filmstrip-bench.py
 
   # 通路不回归：引擎层单测 + 脚本可跑。真正的端到端帧率验收需要图形环境，
   # 在 M0 阶段仍是本机跑 packaging/m0-bench.sh，不假称 CI 已覆盖。

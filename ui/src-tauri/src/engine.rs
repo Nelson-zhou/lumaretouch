@@ -186,6 +186,24 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             state.on_export_ready(&v);
             println!("M0_ENGINE {line}");
         }
+        "session_state" => {
+            // M5-a 底片条：格子列表 + 当前哪一格。载荷不带像素，可以进轮询；
+            // 但这一条也高频（每次开关图与每批缩略图之后各一条），所以只回显摘要，
+            // 不把整份 docs 数组刷进 stdout
+            state.on_session_state(&v);
+            println!("M0_SESSION count={} index={} thumbs_running={}",
+                v["count"].as_i64().unwrap_or(-1), v["index"].as_i64().unwrap_or(-1),
+                v["thumbs_running"].as_bool().unwrap_or(false));
+        }
+        "thumb_ready" => {
+            // 缩略图：像素按 path 存进宿主，不进 stdout（一张 7 KB，两百张就是 1.4 MB 日志）
+            state.on_thumb(&v);
+        }
+        "thumb_failed" => {
+            state.on_thumb(&v);
+            state.push_log(format!("缩略图解不开: {}", v["path"].as_str().unwrap_or("?")));
+            println!("M0_THUMB_FAILED {line}");
+        }
         "error" => {
             state.push_log(format!("引擎错误: {}", v["error"].as_str().unwrap_or("?")));
             // 必须回显到标准输出：跑靶脚本只看得见 stdout。不往这里印的话，

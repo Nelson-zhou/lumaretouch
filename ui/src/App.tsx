@@ -4,11 +4,12 @@ import Viewer, { type Hud } from "./components/Viewer";
 import { clickRle } from "./brush";
 import { t } from "./i18n";
 import {
-  benchStart, benchStats, engineStatus, loadImage, m0Env, quit, report, runDeform,
-  runExport, runGrade, runInpaint, runLight, runLut, setStrength,
-  shutdownEngine, startEngine,
-  type BenchOptions, type DeformInfo, type EngineStatus, type ExportDone,
-  type ExportProgress, type ImageReady, type InpaintInfo,
+  benchStart, benchStats, engineStatus, loadImage, m0Env, parseFrameHead, peekFrame,
+  quit, report, runDeform,
+  fetchFilmstrip, runExport, runGrade, runInpaint, runLight, runLut, runSession,
+  setStrength, shutdownEngine, startEngine,
+  type BenchOptions, type DeformInfo, type DocState, type EngineStatus, type ExportDone,
+  type ExportProgress, type ImageReady, type InpaintInfo, type SessionState,
   type GradeInfo, type LightInfo,
   type LutInfo,
   type Precompute, type Stats,
@@ -129,6 +130,16 @@ export default function App() {
   const [exportTile, setExportTile] = useState("");
   const [lastExport, setLastExport] = useState<ExportDone | null>(null);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
+  // 底片条（M5-a）：格子列表与缩略图分开存。列表每条 session_state 全量替换，
+  // 缩略图按 path 累积——引擎重扫过一次列表时 index 会换而 path 不会，
+  // 拿 index 配像素就会把上一轮的图塞进不相干的那一格。
+  const [strip, setStrip] = useState<SessionState | null>(null);
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [stripDir, setStripDir] = useState("/tmp/luma-strip");
+  const stripRev = useRef(-1);
+  // 当前是哪一张文档：变了才按引擎那份 doc_state 重摆滑块（同图轮询不重摆，
+  // 否则会把用户正在拖的手势按回引擎上一帧的值）
+  const docKey = useRef("");
   const [dragNote, setDragNote] = useState("");
   const lastSend = useRef(0);
   const pending = useRef<number | null>(null);
@@ -163,6 +174,34 @@ export default function App() {
       // 把上一批的字节数当本批读（与图层那几条同一个病，只是这边是账单不是参数）
       setLastExport(st.export ?? null);
       setExportProgress(st.export_progress ?? null);
+      // 底片条：小载荷（格子与状态）跟着轮询走，像素只在 session_rev 变了时整条取一次
+      setStrip(st.session ?? null);
+      if (st.session_rev !== stripRev.current) {
+        stripRev.current = st.session_rev;
+        const fs = await fetchFilmstrip();
+        setThumbs(fs.thumbs);
+        if (fs.session) setStrip(fs.session);
+      }
+      if (st.image) {
+        const key = `${st.image.doc ?? ""}#${st.image.session_index ?? -1}`;
+        if (key !== docKey.current) {
+          docKey.current = key;
+          const ds = st.image.doc_state;
+          if (ds) {
+            setStrengthV(ds.strength);
+            setRadius(ds.params.radius ?? 12);
+            setDetailGain(ds.params.detail_gain ?? 1.0);
+            setMidGain(ds.params.mid_gain ?? 0.0);
+            setBroadGain(ds.params.broad_gain ?? 0.0);
+            setChannel(ds.channel ?? "");
+            setLightExposure(ds.light.exposure);
+            setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0, ...ds.deform.amounts });
+            setLutAmount(ds.lut.amount);
+            setGradeAmounts({ dh: ds.grade.dh, ds: ds.grade.ds, dv: ds.grade.dv });
+            setGradeMix(ds.grade.amount);
+          }
+        }
+      }
     } catch {
       /* 引擎未起，忽略 */
     }
@@ -492,6 +531,152 @@ export default function App() {
           } : { bad: "120s 内没等到 export_done", dir, proxy })}`);
         }
       }
+      // 底片条（M5-a）自动通道："<目录>[@<切到第几张>[@<长边>]]"。
+      // 这一条要证的是签名与数字：TS runSession → Rust session → 引擎 session_state
+      // 对得上，而且切走再切回来时引擎报回来的 doc_state 与走时是同一份。
+      // 画面像素这里也量（peek_frame 取三次快照比字节）：先前打算只让协议用例
+      // （test_switching_documents_returns_the_exact_same_frame）逐字节钉画面，理由是
+      // "装机件里那条路是同一份引擎代码"。但那份用例连的是裸引擎，中间隔着 Rust 的
+      // session/filmstrip 两条命令与宿主的状态搬运——那两层恰恰只有真窗口能证明。
+      // 所以这里量的是"用户看见的那一帧"，不是"引擎算出来的那一帧"。
+      if (env.auto_filmstrip) {
+        const [dir, pickStr, edgeStr] = env.auto_filmstrip.split("@");
+        if (!dir) {
+          await report(`M0_ERROR 无法解析 LRT_AUTO_FILMSTRIP=${env.auto_filmstrip}（要 目录[@第几张[@长边]]）`);
+        } else {
+          const pick = Number(pickStr ?? "1");
+          const edge = Number(edgeStr ?? "0");
+          const st0 = await engineStatus().catch(() => null);
+          const home = st0?.image?.doc ?? null;
+          const homeIdx0 = st0?.image?.session_index ?? -1;
+          try {
+            await runSession("scan", { dir, thumbs: true, ...(edge >= 32 ? { edge } : {}) });
+          } catch (e) {
+            await report(`M0_ERROR runSession(scan) 失败: ${e}`);
+          }
+          let sess: SessionState | null = null;
+          for (let i = 0; i < 300; i++) {
+            await sleep(200);
+            const st = await engineStatus().catch(() => null);
+            if (st?.session) sess = st.session;
+            if (sess && !sess.thumbs_running && sess.count > 0
+              && sess.docs.every((d) => d.thumb || d.thumb_error)) break;
+          }
+          // 基线现取一次：上一条 session_state 可能是开图那一刻发的，中间那几档
+          // 自动调参（lut/grade/deform）都不在它里面
+          await runSession("state").catch(() => undefined);
+          await sleep(400);
+          const stB = await engineStatus().catch(() => null);
+          sess = stB?.session ?? sess;
+          const before = sess?.doc_state ?? null;
+          const docs = sess?.docs ?? [];
+          // 当前那一格的 index 必须在扫描之后重取：扫进来的那一批会整条替换底片条，
+          // 原来那张被挪到列表末尾（引擎只保证"当前那张不会被放下"）。拿扫描前的 0
+          // 去"切回"，切到的其实是新列表的第 0 格——引擎完全照办，日志上一个错都
+          // 看不出来，而这条通道想证的"绕回原样"当场就变成假的。所以这里以引擎报的
+          // index 为准，并且核对 current 还是不是那张
+          const homeIdx = sess?.index ?? -1;
+          if (sess && home && sess.current !== home) {
+            await report(`M0_ERROR 扫描后当前文档换了：${sess.current} ≠ ${home}（不能拿它当基线）`);
+          }
+          let away: DocState | null = null;
+          let back: DocState | null = null;
+          let awayPath = "";
+          let backPath = "";
+          let switchMs = -1;
+          const idx = pick >= 0 && pick < docs.length ? pick : -1;
+          // 三次快照：走之前、在另一张上、绕回来。比的是字节，不是上报的数字
+          const peek = async () => {
+            try {
+              return parseFrameHead(await peekFrame());
+            } catch (e) {
+              await report(`M0_ERROR peekFrame 失败: ${e}`);
+              return null;
+            }
+          };
+          // 返回 -1 表示"两份快照不是一块画布"（尺寸不同）。这不等于"画面没变"：
+          // 切到不同幅面那张时代理档就从 400×504 变成 552×368，画布都换了，
+          // 拿字节数比是比不出东西的——上一版就是在这里把它判成"没变"，一条
+          // 假红灯把 mixed 那一档整条带崩
+          const diffBytes = (a: Uint8Array | null, b: Uint8Array | null) => {
+            if (!a || !b) return -2;
+            if (a.length !== b.length) return -1;
+            let n = 0;
+            for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) n++;
+            return n;
+          };
+          let pixHome = "", pixAway = "", pixBack = "";
+          let seqHome = -1, seqAway = -1, seqBack = -1;
+          let diffAway = -1, diffBack = -1;
+          // 引擎在 image_ready 里报的代理档尺寸：拿它核对"这次快照取的到底是哪张的帧"。
+          // 换到不同幅面的那张时 shm 会整块重建（seq 从 1 重来），只看 seq 递增就会
+          // 在那一档判错，而只看字节又证明不了取到的是新帧不是陈旧帧
+          let awayReady = "", backReady = "";
+          if (idx >= 0 && homeIdx >= 0) {
+            const f0 = await peek();
+            pixHome = f0 ? `${f0.w}x${f0.h}` : "";
+            seqHome = f0?.seq ?? -1;
+            const homePix = f0?.pixels ?? null;
+            await runSession("select", { index: idx }).catch((e) => report(`M0_ERROR select 失败: ${e}`));
+            for (let i = 0; i < 200; i++) {
+              await sleep(150);
+              const st = await engineStatus().catch(() => null);
+              if (st?.image && st.image.doc !== home) {
+                away = st.image.doc_state; awayPath = st.image.doc; switchMs = st.image.import_ms;
+                awayReady = `${st.image.w}x${st.image.h}`; break;
+              }
+            }
+            {
+              const f1 = await peek();
+              pixAway = f1 ? `${f1.w}x${f1.h}` : "";
+              seqAway = f1?.seq ?? -1;
+              diffAway = diffBytes(homePix, f1?.pixels ?? null);
+            }
+            await runSession("select", { index: homeIdx }).catch((e) => report(`M0_ERROR 切回失败: ${e}`));
+            for (let i = 0; i < 200; i++) {
+              await sleep(150);
+              const st = await engineStatus().catch(() => null);
+              if (st?.image && st.image.switched && st.image.doc === home) {
+                back = st.image.doc_state; backPath = st.image.doc;
+                backReady = `${st.image.w}x${st.image.h}`; break;
+              }
+            }
+            const f2 = await peek();
+            pixBack = f2 ? `${f2.w}x${f2.h}` : "";
+            seqBack = f2?.seq ?? -1;
+            diffBack = diffBytes(homePix, f2?.pixels ?? null);
+          }
+          await report(`M0_FILMSTRIP ${JSON.stringify({
+            dir, count: sess?.count ?? 0, index: sess?.index ?? -1, home, homeIdx, homeIdx0,
+            names: docs.map((d) => d.name),
+            thumbCount: docs.filter((d) => d.thumb).length,
+            thumbBytes: docs.reduce((a, d) => a + (d.thumb?.bytes ?? 0), 0),
+            longestEdge: Math.max(0, ...docs.map((d) => (d.thumb ? Math.max(d.thumb.w, d.thumb.h) : 0))),
+            failed: docs.filter((d) => d.thumb_error).map((d) => `${d.name}:${d.thumb_error}`),
+            awayPath, backPath, switchMs,
+            before, away, back,
+            kept: !!before && !!back && JSON.stringify(before) === JSON.stringify(back),
+            // 切过去那张必须干干净净：home 的笔迹漏进新文档，就是"上一张的工刷到
+            // 这一张上"。先前这条写的是 away.counts.repair > 0（把漏了当成通过），
+            // 方向反了——名字也跟着反，所以一并改成 awayClean
+            awayClean: !!away && away.counts.repair === 0 && away.counts.light === 0
+              && away.counts.repair_redo === 0 && away.counts.light_redo === 0,
+            // 画面这一对才是"切回来还是不是那张"的直接证据：绕回必须 0 字节不同，
+            // 而切走那一步必须**有**不同（否则这一对判据是空的——两张图长得一样时
+            // "0 字节不同"说明不了任何事）
+            frames: `${pixHome}/${pixAway}/${pixBack}`,
+            seqs: [seqHome, seqAway, seqBack],
+            readyDims: [awayReady, backReady],
+            diffAwayBytes: diffAway,
+            diffBackBytes: diffBack,
+            pixelKept: diffBack === 0,
+            // "切走了"的直接证据有两个：画布换了（不同幅面那张）或同一块画布上的
+            // 字节真的不同（同幅面那张）。两个都不成立才是没换
+            pixelLeft: pixAway !== pixHome || diffAway > 0,
+            canvasChanged: pixAway !== pixHome,
+          })}`);
+        }
+      }
       for (let i = 0; i < 100; i++) {
         const st = await engineStatus().catch(() => null);
         if (st?.has_shm) break;
@@ -794,6 +979,21 @@ export default function App() {
       quality: exportQuality,
       tile,
     })
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)));
+  }
+
+  /** 扫一个目录进底片图：edge 不给就用引擎的默认长边（前端不抄一份数字）。 */
+  function onScanStrip() {
+    runSession("scan", { dir: stripDir, thumbs: true })
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)));
+  }
+
+  /** 点一格就换文档。引擎那边走的是 load_image 同一条路（守卫、状态存回、重挂同源），
+   *  所以这里被拒（跑靶中/导出中）是正常路径，不是错误分支。 */
+  function onPickDoc(index: number) {
+    runSession("select", { index })
       .then(() => refreshStatus())
       .catch((e) => setDragNote(String(e)));
   }
@@ -1202,6 +1402,46 @@ export default function App() {
           </>
         ) : (
           <div className="mut">{t("export.unavailable")}</div>
+        )}
+
+        {/* 底片条（M5-a）：一格一图，点它就切换文档。缩略图按 path 配对（引擎重扫一次
+            列表，index 会换而 path 不会）；"已调"徽章来自引擎报的图层数，前端不猜。 */}
+        <h2>{t("side.strip")}</h2>
+        <div className="mut">{t("strip.desc")}</div>
+        <div className="row">
+          <input value={stripDir} onChange={(e) => setStripDir(e.target.value)}
+                 style={{ width: "100%" }} />
+          <button onClick={onScanStrip}>{t("strip.scan")}</button>
+        </div>
+        {strip && strip.count > 0 ? (
+          <>
+            <div className="mut">
+              {t("strip.summary", { n: strip.count, th: strip.docs.filter((d) => d.thumb).length })}
+              {strip.thumbs_running ? t("strip.running") : ""}
+            </div>
+            <div className="strip">
+              {strip.docs.map((d) => {
+                const edited = d.edits.repair > 0 || d.edits.light > 0 || d.edits.deform
+                  || d.edits.lut || d.edits.grade;
+                return (
+                  <button key={d.path} className={d.loaded ? "cell on" : "cell"}
+                          title={d.thumb_error ?? d.path}
+                          onClick={() => onPickDoc(d.index)}>
+                    {d.thumb && thumbs[d.path] ? (
+                      <img alt={d.name} width={d.thumb.w} height={d.thumb.h}
+                           src={`data:image/jpeg;base64,${thumbs[d.path]}`} />
+                    ) : (
+                      <span className="ph">{d.thumb_error ? t("strip.failed") : "…"}</span>
+                    )}
+                    <span className="nm">{d.name}</span>
+                    {edited && <span className="badge">{t("strip.edited")}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div className="mut">{t("strip.empty")}</div>
         )}
 
         <h2>{t("side.bench")}</h2>
