@@ -29,8 +29,28 @@ from . import session as S
 # M4 导出：FORMATS/尺寸边界与落盘器全部从 export 走，命令层不掌一份格式名单（双出处）。
 from .export import (DEFAULT_TILE, FORMATS, MAX_TILE, MIN_TILE, ExportSpec,
                      export_image, resample_field, write_file)
+from . import __version__
 
 PROTOCOL_VERSION = 1
+
+
+def runtime_report() -> dict:
+    """ready 里那份运行时账单（M5-c 发布校验用）。只报事实，不做判断。
+
+    只用 importlib.metadata 读 dist-info，**不 import torch**：import torch 要好几秒，
+    把它塞进握手等于给每次启动加几秒；而发布校验要问的是“这个解释器里装了哪套包、
+    版本对不对”，元数据就够用——真跑不跑得起由 set_device 那条路说。
+    """
+    from importlib import metadata
+    out = {"python": ".".join(map(str, sys.version_info[:3]))}
+    for pkg in ("numpy", "pillow", "torch", "torchvision"):
+        try:
+            out[pkg] = metadata.version(pkg)
+        except metadata.PackageNotFoundError:
+            out[pkg] = None      # 没装就写 None：发布校验拿它判“运行时不完整”，不许静默省略键
+    return out
+
+
 # 磨皮强度的出厂默认。写一次：`__init__`、新文档的起始状态、load_image 的可选参数
 # 三处都要它，抄三份字面量就是下一轮改默认值时漏改的那一处。
 DEFAULT_STRENGTH = 0.5
@@ -152,6 +172,12 @@ class Engine:
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
         emit({"event": "ready", "protocol": PROTOCOL_VERSION, "pid": os.getpid(),
+              # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
+              # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
+              # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
+              # 协议号不动（加键属兼容扩展，宿主只读不判）。
+              "version": __version__,
+              "runtime": runtime_report(),
               # 内置预设清单（M3-b）：按钮上写什么字、按哪个名提交，全部由引擎说。
               # 前端抄一份名字就是双出处：资产改名后 UI 会静默拿着错名去撞拒绝。
               "presets": [{"name": k, "title": v.title} for k, v in sorted(PRESETS.items())],

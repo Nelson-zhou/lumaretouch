@@ -121,6 +121,32 @@ def test_handshake(engine):
     assert ready["pid"] == engine.proc.pid
 
 
+def test_ready_reports_the_version_and_runtime_bills(engine):
+    """发布自证（M5-c）：ready 必须报版本与这一份运行时包账单。
+
+    这里只证**内部一致性**：引擎报的版本就是它自己代码里那一份 `__version__`。
+    “六处版本号写不写在一起”属发布门禁（packaging/release-version.py check），
+    不在单测里重做一份：单测拿不到打包配置，写进来只能靠反推路径，那又是一处双出处。
+    """
+    from lumaretouch_engine import __version__
+    from lumaretouch_engine.server import runtime_report
+
+    engine.send(cmd="hello")
+    ready = engine.wait_for("ready")
+    assert ready["version"] == __version__, "引擎报的版本不是自己代码里那一份"
+
+    rt = ready["runtime"]
+    # 键集必须相等：没装的包写 None，不许静默少键——发布校验拿 None 判“运行时不完整”，
+    # “这个包没装”与“这一版引擎不报这个键”是两件事，混起来就会把缺依赖的运行时判成健康。
+    assert set(rt) == set(runtime_report()), f"ready 的 runtime 键集漂了：{sorted(rt)}"
+    assert rt["python"] == ".".join(map(str, sys.version_info[:3]))
+    for pkg in ("numpy", "pillow", "torch", "torchvision"):
+        assert pkg in rt
+        assert rt[pkg] is None or isinstance(rt[pkg], str), f"{pkg} 的版本得是字符串或 None"
+    # numpy 是引擎的硬依赖：跑到了这一步还不报版本，说明 ready 里的账单不是现读的
+    assert rt["numpy"], "numpy 都没装的话，这份账单不可信"
+
+
 def test_unknown_command_does_not_kill_engine(engine):
     engine.send(cmd="hello")
     engine.wait_for("ready")

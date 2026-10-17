@@ -1,19 +1,28 @@
 #!/usr/bin/env bash
 # 安装本地 .deb 并**按内容**证明装进去的就是刚打的那个包。
 #
-# 为什么要有这个脚本：本仓的包版本号固定在 0.0.1（M0 起就没动），而
+# 为什么要有这个脚本：M0 起包版本钉在 0.0.1，而
 # `apt install ./LumaRetouch_0.0.1_amd64.deb` 遇到同名同版本会静默跳过安装——
 # 退出码 0、正常打印"已完成"，机器上跑的还是上一轮的引擎。M1-3b 实测踩过一次：
-# 装机 face.py 仍是旧的 13024 B，而仓库里已经是 13446 B。
-# 之后任何一轮跑靶量的都不是被测代码，数据整片作废。
+# 装机 face.py 仍是旧的 13024 B，而仓库里已经是 13446 B；之后任何一轮跑靶量的
+# 都不是被测代码，数据整片作废。
+# M5-c 起版本有了单一出处（packaging/VERSION）与真版本号，取件这件事反而更危险：
+# bundle/deb/ 里旧版本的包不会被清，`find | head -1` 也不排序——拿到哪一个全看目录项
+# 顺序。所以这里**按版本号定点取件**，宁可不装也不装错。
 #
 # 所以这里做三件事：dpkg -i 强制覆盖 → 逐个文件按内容比对（不比大小/时间戳，
 # 只比 sha256）→ 任一条不一致就非零退出。
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
-deb=$(find "$here/../ui/src-tauri/target/release/bundle/deb" -name '*.deb' | head -1)
-[ -n "$deb" ] || { echo "× 没找到 .deb，先跑 packaging/build-deb.sh"; exit 1; }
+want=$(cat "$here/VERSION")
+debdir="$here/../ui/src-tauri/target/release/bundle/deb"
+deb=$(find "$debdir" -name "*_${want}_amd64.deb" | head -1)
+if [ -z "$deb" ]; then
+  echo "× 没有版本 $want 的 .deb（目录里只有：$(ls "$debdir" 2>/dev/null | tr '\n' ' ')）"
+  echo "  先跑 packaging/build-deb.sh；拿旧版本包跑这一轮的装机校验，量的全是上一轮"
+  exit 1
+fi
 
 stage="$here/../ui/src-tauri/gen/engine-stage/lumaretouch_engine"
 echo "→ 安装 $deb"
@@ -69,7 +78,10 @@ if [ "$a" != "$b" ]; then
   exit 1
 fi
 echo "✓ /usr/bin/lumaretouch 与包内逐字节一致"
-# 壳里的本轮特征标记（前端命令名与 Rust 命令表是同一次编译的产物）：命中 0 就是旧壳
+# 壳里的本轮特征标记：命中 0 就是旧壳。标记**只能取 Rust 侧的字符串**（命令名、
+# env 名、日志前缀都算）：前端那份 JS/CSS 资源在壳里是压缩进二进制的，TS 里写的字面量
+# 在壳里搜不到——M5-c 拿 M0_RELEASE 当标记就报了个假红（壳确实是新的，sha256 已逐字节
+# 对上，只是那条字符串本来就不以明文形态存在）。
 ui_marker=${UI_MARKER:-peek_frame}
 if [ "$(grep -ac "$ui_marker" /usr/bin/lumaretouch)" -gt 0 ]; then
   echo "✓ 装机壳含本轮特征标记 '$ui_marker'"

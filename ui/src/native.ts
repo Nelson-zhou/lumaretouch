@@ -371,7 +371,34 @@ export interface GradeInfo {
   strength: number;
 }
 
+/** 引擎进程的运行时账单：ready 里的 runtime 与宿主选解释器的那几条合起来一份。
+ *  键全部可选：新壳配旧引擎时 ready 里根本没有这一项（宿主也不会凭空造一个）。 */
+export interface EngineRuntime {
+  python?: string;
+  /** env（$LRT_ENGINE_PY）/ explicit（面板里填了）/ runtime（候选表命中）/ fallback（python3）。 */
+  python_source?: string;
+  python_version?: string;
+  engine_src?: string;
+  hint?: string;
+  /** 引擎 ready 报回来的包账单，单独一层（M5-c）。不铺平进这一层：宿主与引擎两边
+   *  都有 `python` 这个键，铺平就是同名互相顶——装机校验读到过 "3.12.15" 当路径。 */
+  packages?: {
+    python?: string | null;
+    engine_version?: string | null;
+    numpy?: string | null;
+    pillow?: string | null;
+    torch?: string | null;
+    torchvision?: string | null;
+  };
+}
+
 export interface EngineStatus {
+  /** 引擎运行时的来历与包账单（M5-c 开箱即用）。整块都取可选：ready 里没报就是
+   *  这一版引擎不说自己是谁，UI 该什么都不显示——把可选字段声明成必存，谎报发生在
+   *  JSON 边界上，编译期抓不到，运行期一个 TypeError 把整棵树拆掉（M5-b 那一课）。 */
+  engine_alive?: boolean;
+  engine_version?: string | null;
+  engine_runtime?: EngineRuntime | null;
   shm: string;
   has_shm: boolean;
   emitted: number;
@@ -763,6 +790,10 @@ export interface M0Env {
    *  的是宿主三层：runHistory → Rust history → history_state 的签名对不对得上，
    *  以及宿主有没有真按引擎那份 doc_state 重摆滑块（applied 里那一份是唯一直接证据）。 */
   auto_history: string;
+  /** 发布自检（M5-c 开箱即用）：非空（一般给 1）则报一条 M0_RELEASE，把“引擎跑在
+   *  哪个解释器、从哪一档候选里来、版本与包账单、能力到没到”一次打全。这些信息
+   *  平时分散在侧栏的四行小字里，脚本读不到而人也不会一行一行去比对。 */
+  auto_release: string;
 }
 export const m0Env = () => invoke<M0Env>("m0_env");
 

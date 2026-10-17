@@ -8,7 +8,7 @@ import {
   quit, report, runDeform,
   fetchFilmstrip, runExport, runGrade, runHistory, runInpaint, runLight, runLut, runSession,
   setStrength, shutdownEngine, startEngine,
-  type BenchOptions, type DeformInfo, type DocState, type EngineStatus, type ExportDone,
+  type BenchOptions, type DeformInfo, type DocState, type EngineRuntime, type EngineStatus, type ExportDone,
   type ExportProgress, type HistoryReport, type HistoryState, type ImageReady,
   type InpaintInfo, type SessionState,
   type GradeInfo, type LightInfo,
@@ -296,6 +296,42 @@ export default function App() {
       } catch (e) {
         await report(`M0_ERROR 引擎启动失败: ${e}`);
         return;
+      }
+      // 发布自检（M5-c 开箱即用）自动通道：LRT_AUTO_RELEASE=1。
+      // 装机件在**没有任何开发 env** 的机器上，必须能一句话说清："引擎跑在哪个
+      // 解释器、它是从候选表哪一档来的、版本与包账单对不对、hello 报的能力到没到"。
+      // 这几件事错了都不崩，只是让"开箱即用"实际变成"在这台开发机上碰巧能跑"。
+      // 位置要紧：这一条紧跟 startEngine、在导任何图**之前**。运行时缺包时引擎
+      // 当场就死，后面那句 "load_image 未就绪" 会整段 return——把自检放在那之后，
+      // 最需要它报账的那一种情形就永远不报，剩下的只有"没跑完"这种模糊读数。
+      if (env.auto_release) {
+        let st = await engineStatus().catch(() => null);
+        for (let i = 0; i < 50; i++) {
+          const rt0 = st?.engine_runtime ?? {};
+          // ready 到了才会有包账单（packages 一层）里的 torch 键；引擎已经死了也立刻收工
+          if (rt0.packages?.torch !== undefined || st?.engine_alive === false) break;
+          await sleep(100);
+          st = await engineStatus().catch(() => null);
+        }
+        const rt: EngineRuntime = st?.engine_runtime ?? {};
+        await report(`M0_RELEASE ${JSON.stringify({
+          engineVersion: st?.engine_version ?? null,
+          alive: st?.engine_alive ?? null,
+          python: rt.python ?? null,
+          // runtime = 候选表命中了装好的运行时；env/explicit = 开发覆盖；
+          // fallback = 连候选表都没中，落到了 python3（几乎必然缺 torch）
+          pythonSource: rt.python_source ?? null,
+          pythonVersion: rt.python_version ?? null,
+          engineSrc: rt.engine_src ?? null,
+          pkgs: { numpy: rt.packages?.numpy ?? null, pillow: rt.packages?.pillow ?? null,
+                  torch: rt.packages?.torch ?? null,
+                  torchvision: rt.packages?.torchvision ?? null },
+          caps: { presets: st?.presets?.length ?? -1,
+                  gradeLimits: st?.grade_limits?.length ?? -1,
+                  exportCaps: st?.export_caps ? 1 : 0,
+                  editCmds: st?.history_edit_cmds?.length ?? -1 },
+          hasShm: !!st?.has_shm,
+        })}`);
       }
       let image: ImageReady | null = null;
       let pre: Precompute | null = null;
@@ -1151,6 +1187,10 @@ export default function App() {
 
   const verdict = gate(stats, w);
 
+  // 引擎进程此刻在不在（M5-c）。报回缺失（新壳配旧宿主）时退回"看 pid"的旧行为，
+  // 而不是当成"没在跑"——那会把刚起好的引擎显示成已死。
+  const engineAlive = status?.engine_alive ?? !!pid;
+
   return (
     <div className="app">
       <aside className="side">
@@ -1163,16 +1203,34 @@ export default function App() {
         <label className="k">{t("engine.src")}</label>
         <input value={src} onChange={(e) => setSrc(e.target.value)} placeholder="../engine/src" style={{ width: "100%" }} />
         <div className="row">
-          <button className="primary" onClick={onStartEngine} disabled={!!pid || busy}>
+          <button className="primary" onClick={onStartEngine} disabled={(!!pid && engineAlive) || busy}>
             {t("engine.start")}
           </button>
-          <button onClick={onStopEngine} disabled={!pid}>
+          <button onClick={onStopEngine} disabled={!pid || !engineAlive}>
             {t("engine.stop")}
           </button>
         </div>
-        <div className={pid ? "ok" : "mut"}>
-          {pid ? t("engine.running", { pid }) : t("engine.stopped")}
+        {/* 运行状态看 engine_alive，不看 pid（M5-c）。pid 只说明“我们起过一个”：
+            运行时缺包时引擎立刻死掉，拿 pid 判就会写成“运行中 · PID 1234”，并把
+            启动按钮永久禁掉——那时用户唯一能做的事只剩重启整个应用。 */}
+        <div className={pid ? (engineAlive ? "ok" : "warn") : "mut"}>
+          {pid ? (engineAlive ? t("engine.running", { pid }) : t("engine.died", { pid })) : t("engine.stopped")}
         </div>
+        {!!status?.engine_version && (
+          <div className="mut">
+            {t("engine.version", { v: status.engine_version, py: status.engine_runtime?.python ?? "" })}
+          </div>
+        )}
+        {/* 缺包告警只在包账单**已到**而 torch 为空时报。拿 `torch == null` 单独判会
+            在 ready 还没到的那几百毫秒里就对一个健康引擎闪一次“没有 torch”——
+            假告警与假指标同罪。 */}
+        {!!status?.engine_runtime?.packages && "torch" in status.engine_runtime.packages
+          && status.engine_runtime.packages.torch == null && (!!status.engine_runtime.hint) && (
+          <>
+            <div className="warn">{t("engine.noTorch", { py: status.engine_runtime.python ?? "" })}</div>
+            <div className="mut">{status.engine_runtime.hint}</div>
+          </>
+        )}
         {status?.has_shm && (
           <div className="mut">
             {t("engine.shm")}: {status.shm} · {status.emitted}/{status.delivered}

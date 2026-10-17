@@ -151,6 +151,14 @@ pub struct AppState {
     /// 否则用户拖完滑块按不动：历史账只在 history_state / image_ready / session_state
     /// 三条里出现，而拖滑块那几条都不在其中。
     history_dirty: Mutex<bool>,
+    /// 引擎在 ready 里报的版本（M5-c 发布自证）。宿主不拿自己的常量去填"这是 0.9.0"
+    /// ——UI 的版本取自打包配置，引擎的版本取自同步后的 __version__，两者只在
+    /// ready 里对得上；装机校验就是比这两份，不一致说明装的引擎不是这个壳配的。
+    engine_version: Mutex<Option<String>>,
+    /// 引擎运行时的来源（M5-c）：解释器路径、它从哪一档候选里选出来、源码目录、
+    /// 以及 ready 里那份 pip 包账单。"引擎起不来"在三台机器上是三个原因，
+    /// 把它们打到状态里，用户与发布校验才看得出现在到底缺哪一件。
+    engine_runtime: Mutex<Value>,
 }
 
 /// 用 `Arc` 起步才能传给引擎读线程；因此额外管理一个持有 Arc 的启动器。
@@ -193,6 +201,8 @@ impl AppState {
             doc_rev: Mutex::new(0),
             history_edit_cmds: Mutex::new(Vec::new()),
             history_dirty: Mutex::new(false),
+            engine_version: Mutex::new(None),
+            engine_runtime: Mutex::new(Value::Null),
         }
     }
 
@@ -307,6 +317,24 @@ impl AppState {
     }
 
     pub fn on_ready(&self, v: &Value) {
+        // 版本与运行时账单（M5-c）：没报就当这一版引擎不说自己是谁，置 None 而不是留上一份
+        *self.engine_version.lock().unwrap() =
+            v.get("version").and_then(|x| x.as_str()).map(String::from);
+        // 引擎那份包账单挂在 **packages 子键**下，不铺平进宿主这一层：两边都有
+        // "python" 这个键（宿主写解释器路径，引擎写解释器版本），铺平就是后到的把
+        // 先到的顶掉。M5-c 装机校验那一轮正是这么读到 python="3.12.15" 的——
+        // 数据是好的，只是"解释器路径"这一项被同名键吃了。
+        match v.get("runtime") {
+            Some(r) if r.is_object() => {
+                let mut merged = self.engine_runtime.lock().unwrap().clone();
+                if !merged.is_object() { merged = json!({}); }
+                if let Some(obj) = merged.as_object_mut() {
+                    obj.insert("packages".to_string(), r.clone());
+                }
+                *self.engine_runtime.lock().unwrap() = merged;
+            }
+            _ => {}
+        }
         // 只接数组：缺键或非数组就当这一版引擎还没这一能力，留空而不是留上一份
         match v.get("presets").and_then(|p| p.as_array()) {
             Some(list) => *self.presets.lock().unwrap() = list.clone(),
@@ -382,13 +410,65 @@ fn default_engine_src(app: &tauri::AppHandle) -> Result<String, String> {
     Err("找不到引擎源码目录（已试过：$LRT_ENGINE_SRC / 打包资源目录 / ../engine/src）".into())
 }
 
+/// 引擎解释器的候选表（M5-c 开箱即用）。这一张顺序与 `packaging/setup-runtime.sh`
+/// 的头注释是同一条约定：脚本把运行时装到哪，宿主就得找到哪——两边分叉时，
+/// 用户会遇到“明明装好了却说没装”。
+///   1) $LRT_ENGINE_PY      开发/调试覆盖，永远优先
+///   2) 用户级运行时      $XDG_DATA_HOME(≈~/.local/share)/LumaRetouch/engine/venv
+///   3) 系统级运行时      /usr/lib/LumaRetouch/engine/venv（root 装的）
+///   4) python3            兜底：几乎必然缺 torch，缺什么由 ready 的 runtime 账单明说
+fn resolve_engine_py() -> (String, &'static str) {
+    use std::path::Path;
+    if let Ok(v) = std::env::var("LRT_ENGINE_PY") {
+        if !v.is_empty() {
+            return (v, "env");
+        }
+    }
+    let data_home = match std::env::var("XDG_DATA_HOME") {
+        Ok(v) if !v.is_empty() => Some(v),
+        _ => std::env::var("HOME").ok().map(|h| format!("{h}/.local/share")),
+    };
+    let mut cands: Vec<String> = Vec::new();
+    if let Some(d) = data_home {
+        cands.push(format!("{d}/LumaRetouch/engine/venv/bin/python"));
+    }
+    cands.push("/usr/lib/LumaRetouch/engine/venv/bin/python".to_string());
+    for c in cands {
+        if Path::new(&c).exists() {
+            return (c, "runtime");
+        }
+    }
+    ("python3".to_string(), "fallback")
+}
+
+/// 运行时没就位时给用户的下一句话。装机布局与开发布局的脚本位置不同，
+/// 拿错的那一条就是让人去跑一个不存在的路径。
+fn runtime_setup_hint() -> String {
+    const INSTALLED: &str = "/usr/lib/LumaRetouch/engine/setup-runtime.sh";
+    if std::path::Path::new(INSTALLED).exists() {
+        return format!("跑一次 {INSTALLED} 按显卡装引擎运行时（需能联网取 GPU 版 torch）");
+    }
+    "跑一次 packaging/setup-runtime.sh 按显卡装引擎运行时（需能联网取 GPU 版 torch）".to_string()
+}
+
 #[tauri::command]
 fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String, src: String) -> Result<Value, String> {
-    // 空串＝用环境变量或默认布局，方便 dev 一键起引擎
-    let py = if py.is_empty() {
-        std::env::var("LRT_ENGINE_PY").unwrap_or_else(|_| "python3".into())
-    } else {
-        py
+    // 空串＝走候选表（M5-c）：以前这里直接落 "python3"，在没有任何开发环境的机器上
+    // 得到的是一个“引擎起了又死了”的窗口——现在先探一次，不行就当场说清缺什么。
+    let (py, source) = if py.is_empty() { resolve_engine_py() } else { (py, "explicit") };
+    let probe = std::process::Command::new(&py).arg("--version").output();
+    let py_version = match probe {
+        Ok(o) if o.status.success() => {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if s.is_empty() { String::from_utf8_lossy(&o.stderr).trim().to_string() } else { s }
+        }
+        Ok(o) => {
+            return Err(format!("{} 不可用（{}）：{}\n→ {}", py, source,
+                              String::from_utf8_lossy(&o.stderr).trim(), runtime_setup_hint()));
+        }
+        Err(e) => {
+            return Err(format!("调不起解释器 {py}（{source}）：{e}\n→ {}", runtime_setup_hint()));
+        }
     };
     let src = if src.is_empty() { default_engine_src(&app)? } else { src };
     let st = launcher.0.clone();
@@ -401,6 +481,15 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
         }
     }
     let session = format!("ui-{}", std::process::id());
+    // 运行时的来历**必须在 spawn 之前写进去**：spawn 里的读线程随时可能把 ready
+    // 送进来，而 on_ready 是往这一份 object 里**并**包账单。先 spawn 后赋值的话，
+    // 引擎比这里快一步（venv 里 import 早已热着时就成立）就会把 numpy/torch 那几条
+    // 顶掉——“有时候有、有时候没”的发布账单比没有还坏。
+    *st.engine_runtime.lock().unwrap() = json!({
+        "python": py.clone(), "python_source": source, "python_version": py_version,
+        "engine_src": src.clone(), "hint": runtime_setup_hint(),
+    });
+    *st.engine_version.lock().unwrap() = None;   // 版本等本进程的 ready 重新报
     let h = engine::spawn(&py, &src, &session, st.clone());
     let pid = h.pid();
     // 新引擎进程 = 空的会话。不清掉上一张图的就绪标记，自动流程会拿陈图的 w/h
@@ -436,7 +525,8 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     // 必须在句柄存进 st.engine 之前发出去：那里头没有别的人会替它问候一次。
     let _ = h.send(json!({"cmd": "hello"}));
     *st.engine.lock().map_err(|_| "引擎锁中毒".to_string())? = Some(Arc::new(h));
-    Ok(json!({"pid": pid, "python": py, "src": src, "session": session}))
+    Ok(json!({"pid": pid, "python": py, "python_source": source,
+              "src": src, "session": session}))
 }
 
 #[tauri::command]
@@ -1027,7 +1117,15 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "history": history, "history_rev": history_rev,
            "history_dirty": history_dirty,
            "doc_report": doc_report, "doc_rev": doc_rev,
-           "history_edit_cmds": state.history_edit_cmds.lock().unwrap().clone()})
+           "history_edit_cmds": state.history_edit_cmds.lock().unwrap().clone(),
+           // 发布自证（M5-c）：壳选的是哪个解释器（含它从哪一档候选里来）、引擎报的
+           // 版本与包账单、以及进程现在还在不在。"引擎起不来"的三种成因（没运行时 /
+           // 运行时缺包 / 跑到一半崩了）在三行上是不同的形状，混在一句"引擎未启动"里
+           // 就谁也没法定位。
+           "engine_alive": state.engine.lock().unwrap().as_ref()
+               .map(|h| h.is_alive()).unwrap_or(false),
+           "engine_version": state.engine_version.lock().unwrap().clone(),
+           "engine_runtime": state.engine_runtime.lock().unwrap().clone()})
 }
 
 #[tauri::command]
@@ -1180,6 +1278,8 @@ fn m0_env() -> Value {
         // 协议用例逐字节对拍），而是 runHistory → Rust history → 引擎 history_state
         // 这条命令签名在真窗口里对不对得上——Tauri 参数名不匹配时是静默丢参数。
         "auto_history": std::env::var("LRT_AUTO_HISTORY").unwrap_or_default(),
+        // 发布自检（M5-c）：非空则让前端报一条 M0_RELEASE（解释器来历 + 版本 + 能力）
+        "auto_release": std::env::var("LRT_AUTO_RELEASE").unwrap_or_default(),
     })
 }
 

@@ -204,6 +204,13 @@ jobs:
             echo '发行暂存目录里混进了字节码'; exit 1
           fi
           test -f ui/src-tauri/gen/engine-stage/lumaretouch_engine/server.py
+      - name: 发布静态门禁（版本号 / 元数据 / 运行时候选表 / 随包文件）
+        # 这一条验的不是代码而是“发布物会不会骗人”：版本号八处（deb 的 Version 来自
+        # tauri.conf.json，引擎在 ready 里报 __version__）、包描述是不是还写着旧里程碑、
+        # setup-runtime.sh 的默认安装位置与 Rust 候选表字面一致不一致、许可未放行的
+        # 清单有没有混进包里。这条门禁落地当天就报过一次红：sync 写完 0.9.0 后，
+        # 改元数据那一步又把 tauri.conf.json 顶回了 0.0.1——而那正是 deb 的 Version 出处。
+        run: bash packaging/check-release.sh
 
   # GPU 门禁不跑不能算绿。上面两个 job 开关关上时是 skipped，PR 检查页依旧全绿——
   # “没验证”必须从沉默变成一个看得见的提醒，否则下一次拿这份绿当 GPU 证据会没人质疑。
