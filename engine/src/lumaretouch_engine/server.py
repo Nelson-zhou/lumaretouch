@@ -2758,8 +2758,10 @@ class Engine:
                   "ok": "error" not in results[-1]})
         emit({"event": "export_done", "total": n, "failed": failed,
               "out_dir": out_dir, "format": fmt, "quality": quality, "tile": tile,
-              "scale": int(snap["scale"]), "upscale_backend": snap["upscale_backend"],
-              "sharpen": float(snap["sharpen"]),
+              "scale": int(snap["scale"]), "sharpen": float(snap["sharpen"]),
+              # 后端名字只在真做了放大时才报：批级别写"lanczos3"而每张图的账单写 None，
+              # 就是在同一件事上给两个答案（没放大时"用了哪个后端"这句话本身不成立）
+              "upscale_backend": snap["upscale_backend"] if int(snap["scale"]) > 1 else None,
               "total_ms": round((monotonic_ns() - t0) / 1e6, 1), "images": results})
 
     def _effective_device(self) -> str:
