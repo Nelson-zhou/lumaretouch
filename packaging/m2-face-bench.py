@@ -244,16 +244,24 @@ def part_speed(failures: list[str]) -> None:
         mb = h * w * 3 / 1e6
         resident, recompute, off = [], [], []
         for rep in range(REPS):
-            # 交替顺序：每轮换一次先后，机器热漂移就不会单边占便宜
-            seq = [lambda: _time_arm(rgb, pc.landmarks, True, h, w),
-                   lambda: _time_arm(rgb, pc.landmarks, False, h, w),
-                   lambda: _time_arm(rgb, pc.landmarks, None, h, w)]
-            if rep % 2:
-                seq = [seq[1], seq[0], seq[2]]
-            res, rec, non = seq[0](), seq[1](), seq[2]()
-            resident.append(res)
-            recompute.append(rec)
-            off.append(non)
+            # 交替顺序：每轮换一次先后，机器热漂移就不会单边占便宜。
+            # 但**身份必须跟着结果走**：上一版先 `seq = [seq[1], seq[0], seq[2]]` 再
+            # `res, rec, non = seq[0](), seq[1](), seq[2]()`，奇数轮里 seq[0] 是重解臂，
+            # 于是“常驻”那堆混进了重解样本、“每帧重解”那堆混进了常驻样本。REPS=5 时
+            # 正确那份占多数，中位数仍落在它上面（只是偏向三份正确样本里最慢的一个，
+            # 所以本表历次报的 33–41× 与实际 33.6–41.3× 对得上）——但这是一个只在
+            # “奇数次重复 + 两臂差距悬殊”两个巧合下才成立的正确：重复数取偶数，或两臂
+            # 差距降到噪声量级（m3-color 的常驻/重传就是 0.2 ms 那一档），两堆会直接
+            # 被读成同一件事。本轮在 m3-color 里它把判据推到 0.200 贴闸红，当场被
+            # 上传计数抓包，这里一并把形状改对。
+            def make(on):
+                return lambda: _time_arm(rgb, pc.landmarks, on, h, w)
+
+            order = [True, False, None] if rep % 2 == 0 else [False, True, None]
+            got = {key: make(key)() for key in order}
+            resident.append(got[True])
+            recompute.append(got[False])
+            off.append(got[None])
         r_tot = statistics.median([a[0] for a in resident])
         r_seg = statistics.median([a[1] for a in resident])
         c_tot = statistics.median([a[0] for a in recompute])

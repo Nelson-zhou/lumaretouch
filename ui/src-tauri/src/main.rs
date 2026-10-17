@@ -106,6 +106,14 @@ pub struct AppState {
     /// 最近一次 lut_done（M3-a2 影楼色彩）。与形变分开存：调色是逐点输出变换，
     /// 它不依赖关键点也不依赖笔迹，生命期也只随文档走（换图即清）。
     lut: Mutex<Option<Value>>,
+    /// 最近一次 grade_done（M3-b 肤色定向）。与 lut 分开存：预设一条命令同时动两层，
+    /// 但两层的数字、耗时与账单各自一份，合成一份就分不清“表淡了还是肤色淡了”。
+    grade: Mutex<Option<Value>>,
+    /// 引擎在 ready 里报出的内置预设清单（M3-b）。存名字与标题两份：前端按它渲染按钮，
+    /// 不自己抄一份——资产改了名而 UI 还拿旧名提交，得到的是“按钮全灭”而不是报错。
+    presets: Mutex<Vec<Value>>,
+    /// 肤色定向三个增量的硬边界（也在 ready 里）：滑块行程由引擎说。
+    grade_limits: Mutex<Vec<f64>>,
 }
 
 /// 用 `Arc` 起步才能传给引擎读线程；因此额外管理一个持有 Arc 的启动器。
@@ -133,6 +141,9 @@ impl AppState {
             light: Mutex::new(None),
             deform: Mutex::new(None),
             lut: Mutex::new(None),
+            grade: Mutex::new(None),
+            presets: Mutex::new(Vec::new()),
+            grade_limits: Mutex::new(Vec::new()),
         }
     }
 
@@ -191,6 +202,23 @@ impl AppState {
 
     pub fn on_lut_ready(&self, v: &Value) {
         *self.lut.lock().unwrap() = Some(v.clone());
+    }
+
+    pub fn on_grade_ready(&self, v: &Value) {
+        *self.grade.lock().unwrap() = Some(v.clone());
+    }
+
+    pub fn on_ready(&self, v: &Value) {
+        // 只接数组：缺键或非数组就当这一版引擎还没这一能力，留空而不是留上一份
+        match v.get("presets").and_then(|p| p.as_array()) {
+            Some(list) => *self.presets.lock().unwrap() = list.clone(),
+            None => *self.presets.lock().unwrap() = Vec::new(),
+        }
+        match v.get("grade_limits").and_then(|p| p.as_array()) {
+            Some(list) => *self.grade_limits.lock().unwrap() =
+                list.iter().filter_map(|x| x.as_f64()).collect(),
+            None => *self.grade_limits.lock().unwrap() = Vec::new(),
+        }
     }
 
     pub fn on_frame_event(&self) {
@@ -263,6 +291,9 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     *st.precompute.lock().unwrap() = None;
     *st.deform.lock().unwrap() = None;      // 形变层随关键点走，新进程里没有关键点
     *st.lut.lock().unwrap() = None;          // 调色层也随文档走，新进程里一张表也没挂
+    *st.grade.lock().unwrap() = None;        // 定向层同理：新进程里肤色参数应当全是零
+    *st.presets.lock().unwrap() = Vec::new();  // 清单等新进程的 ready 重新填
+    *st.grade_limits.lock().unwrap() = Vec::new();
     *st.engine.lock().map_err(|_| "引擎锁中毒".to_string())? = Some(Arc::new(h));
     Ok(json!({"pid": pid, "python": py, "src": src, "session": session}))
 }
@@ -338,6 +369,7 @@ fn load_image(
     *state.deform.lock().unwrap() = None;
     // 调色层也是：上一张照片的色调不能静默带到这一张上（引擎侧 load_image 已把它清了）
     *state.lut.lock().unwrap() = None;
+    *state.grade.lock().unwrap() = None;     // 上一张图的肤色参数不能静默带到这一张
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
 }
@@ -497,6 +529,39 @@ fn lut(
     }
     if let Some(v) = preset {
         cmd["preset"] = json!(v);
+    }
+    if let Some(v) = amount {
+        cmd["amount"] = json!(v);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 肤色定向（M3-b）：三个增量 + 一个混入比例。action: set / amount / clear。
+///
+/// 与 lut 的发送时机相反：这一层是“拖哪个滑块就动哪个”，所以拖动期间逐事件发。
+/// 不逐发就是“滑块拖了、画面不动”（引擎侧每帧真跑一次定向内核，产品档实测 1.3 ms）。
+/// 这里不夹取也不填默认值：滑块范围由引擎的 grade_limits 说，宿主抄一份必漂。
+#[tauri::command]
+fn grade(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    dh: Option<f64>,
+    ds: Option<f64>,
+    dv: Option<f64>,
+    amount: Option<f64>,
+) -> Result<Value, String> {
+    let mut cmd = json!({"cmd": "grade", "action": action});
+    // 一律“给了才附”：部分提交语义靠的就是“没给”与“给了 0”的区别，
+    // 宿主填个默认 0.0 就等于把另外两个滑块抹零。
+    if let Some(v) = dh {
+        cmd["dh"] = json!(v);
+    }
+    if let Some(v) = ds {
+        cmd["ds"] = json!(v);
+    }
+    if let Some(v) = dv {
+        cmd["dv"] = json!(v);
     }
     if let Some(v) = amount {
         cmd["amount"] = json!(v);
@@ -730,9 +795,13 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let light = state.light.lock().unwrap().clone();
     let deform = state.deform.lock().unwrap().clone();
     let lut = state.lut.lock().unwrap().clone();
+    let grade = state.grade.lock().unwrap().clone();
+    let presets: Vec<Value> = state.presets.lock().unwrap().clone();
+    let grade_limits: Vec<f64> = state.grade_limits.lock().unwrap().clone();
     json!({"shm": shm_name, "has_shm": has_shm, "emitted": emitted,
            "delivered": delivered, "logs": logs, "image": image, "precompute": precompute,
-           "inpaint": inpaint, "light": light, "deform": deform, "lut": lut})
+           "inpaint": inpaint, "light": light, "deform": deform, "lut": lut,
+           "grade": grade, "presets": presets, "grade_limits": grade_limits})
 }
 
 #[tauri::command]
@@ -746,6 +815,9 @@ fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     *state.light.lock().unwrap() = None;
     *state.deform.lock().unwrap() = None;
     *state.lut.lock().unwrap() = None;
+    *state.grade.lock().unwrap() = None;
+    *state.presets.lock().unwrap() = Vec::new();   // 引擎没了，它报过的清单也就没了
+    *state.grade_limits.lock().unwrap() = Vec::new();
     match h {
         Some(h) => {
             h.shutdown();
@@ -789,6 +861,9 @@ fn m0_env() -> Value {
         // M3-a2 调色自动通道："amount@<路径>"。与上面几条同一条理由：只有真窗口
         // 能证明 runLut → Rust lut → 引擎 lut_done 这条命令签名对得上。
         "auto_lut": std::env::var("LRT_AUTO_LUT").unwrap_or_default(),
+        // M3-b 肤色定向自动通道："dh:ds:dv:amount"。与上面几条同一条理由：只有真窗口
+        // 能证明 runGrade → Rust grade → 引擎 grade_done 这条命令签名对得上。
+        "auto_grade": std::env::var("LRT_AUTO_GRADE").unwrap_or_default(),
     })
 }
 
@@ -811,7 +886,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_engine, bench_start, pull_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, precompute,
-            inpaint, light, deform, lut, report, quit
+            inpaint, light, deform, lut, grade, report, quit
         ])
         .run(tauri::generate_context!())
         .expect("运行 LumaRetouch 失败");

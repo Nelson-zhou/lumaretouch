@@ -219,6 +219,56 @@ export interface LutInfo {
   layer_recomputed: boolean;
   device: string;
   strength: number;
+  /** 本帧跑肤色定向的毫秒（M3-b：预设一条命令动两层，lut_done 必须能把两层都说出） */
+  grade_ms: number;
+  /** 定向层现状：与 grade_done 同一出处（都取自引擎里的常驻层），不是第二口径 */
+  grade_state: GradeState;
+  /** 当前生效的内置预设名；走 path/text 载表或手动改肤色时为 null */
+  lut_preset: string | null;
+}
+
+/** 肤色定向层（M3-b）的现状。它不持有任何张量：状态就是三个增量加一个混入比例。 */
+export interface GradeState {
+  /** 色相移动（占整圈的比例，正=往黄） */
+  dh: number;
+  /** 饱和相对量（-0.14 = 降 14%） */
+  ds: number;
+  /** 明度相对量 */
+  dv: number;
+  /** 混入比例 [0,1] */
+  amount: number;
+  /** 有没有非零参数（全零就是关灯，层里没留下任何颜色改动） */
+  grade_set: boolean;
+  /** 这层现在真的在服务：有参数且 amount≠0 */
+  lit: boolean;
+  /** 本层不占显存：报 0 而不缺键，“查过”才是这句话的内容 */
+  bytes_grade: number;
+}
+
+/** 一次肤色定向事件的回报（引擎侧 grade_done，M3-b）。
+ * set/amount/clear 三条臂键集完全相同：引擎侧只有一个组装点。 */
+export interface GradeInfo extends GradeState {
+  action: "set" | "amount" | "clear";
+  /** 铺平的同一份数：payload 与嵌套字段都来自 _grade_payload */
+  grade_dh: number;
+  grade_ds: number;
+  grade_dv: number;
+  grade_amount: number;
+  grade_lit: boolean;
+  grade_ms: number;
+  /** [dh, ds, dv] 的硬边界：滑块的夹取范围由引擎说，前端不抄一份数然后两处漂 */
+  grade_limits: number[];
+  lut_ms: number;
+  lut_preset: string | null;
+  filter_ms: number;
+  bands_ms: number;
+  filter_cached: boolean;
+  deform_ms: number;
+  render_ms: number;
+  total_ms: number;
+  layer_recomputed: boolean;
+  device: string;
+  strength: number;
 }
 
 export interface EngineStatus {
@@ -239,6 +289,20 @@ export interface EngineStatus {
   deform: DeformInfo | null;
   /** 最近一次 lut_done（M3-a2）；换图会清空（调色层随文档走，不随引擎进程走）。 */
   lut: LutInfo | null;
+  /** 最近一次 grade_done（M3-b）；与 lut 同生命期：肤色定向也随文档走。 */
+  grade: GradeInfo | null;
+  /** 引擎在 ready 里报出的内置预设清单（M3-b）。空数组 = 这个引擎还没这一能力，
+   *  UI 就不画按钮，而不是前端自己抄一份名字去撞一个不存在的资产。 */
+  presets: PresetInfo[];
+  /** [dh, ds, dv] 的硬边界（ready 里报的）：滑块行程的唯一出处。空数组 = 这个引擎
+   *  还没这一能力，定向那一排就不画。 */
+  grade_limits: number[];
+}
+
+/** 一个内置预设的可显示信：提交只靠 name，文字只靠 title。 */
+export interface PresetInfo {
+  name: string;
+  title: string;
 }
 
 export interface BenchOptions {
@@ -382,6 +446,24 @@ export const runLut = (
     amount: opts?.amount,
   });
 
+/** 肤色定向（M3-b）：三个增量 + 一个混入比例。
+ *
+ * set 是部分提交：没给的增量沿用当前值（拖一个滑块不该把另外两个抹零）。
+ * 拖动期间逐事件发：这一层每帧真跑内核（产品档实测 1.3 ms/帧），不发就是
+ * “滑块拖了、画面不动”。越界值整条拒，拒完状态干净，UI 不必先夹再发。
+ */
+export const runGrade = (
+  action: GradeInfo["action"],
+  opts?: { dh?: number; ds?: number; dv?: number; amount?: number },
+) =>
+  invoke<{ requested: boolean }>("grade", {
+    action,
+    dh: opts?.dh,
+    ds: opts?.ds,
+    dv: opts?.dv,
+    amount: opts?.amount,
+  });
+
 /** 帧头解析（小端，与 main.rs 的 pull_frame 注释逐字段对应）。 */
 export interface ParsedFrame {
   seq: number;
@@ -455,9 +537,12 @@ export interface M0Env {
    *  需要 LRT_PRECOMPUTE 给出关键点（synthetic 后端会被引擎整条拒）。 */
   auto_deform: string;
   /** 非空则导入后载入一张表（M3-a2）："amount@<路径>"，也支持 "amount@preset:<名>"
-   *  （预设属于 M3-b，现在送过去会被引擎明拒）。路径里出现 @ 不冲突：只按**第一个**
-   *  @ 切分，因为前半段是个数字。 */
+   *  （M3-b：预设一条命令同时上表与肤色定向，所以这一条能把两层都验到）。路径里出现 @
+   *  不冲突：只按**第一个** @ 切分，因为前半段是个数字。 */
   auto_lut: string;
+  /** 非空则导入后提交一次肤色定向（M3-b）："dh:ds:dv:amount"，四个数用 : 分隔。
+   *  与 lut 的 @ 分法各走一份，两条自动臂可以同时挂。 */
+  auto_grade: string;
 }
 export const m0Env = () => invoke<M0Env>("m0_env");
 export const report = (line: string) => invoke("report", { line });

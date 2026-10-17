@@ -31,6 +31,7 @@ from .ops.inpaint import crop_apply_t, hole_extent, inpaint_t, levels_for, mask_
 from .ops.deform import (KINDS, analytic_frontal_landmarks, check_amounts,
                          identity_grid, unit_field, warp_t)
 from .ops.light import dodge_burn_t, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
+from .ops.grade import (DH_LIMIT, DS_LIMIT, DV_LIMIT, check_params, grade_t)
 from .ops.lut import (DEFAULT_LUT_AMOUNT, QUALITY_SIZE_3D, CubeLut, LutError,
                       apply_lut_t, bake, check_amount)
 from .quant import quantize_t
@@ -180,6 +181,13 @@ class PreviewPipeline:
         self.lut_vol = None                 # (1,3,D,H,W) float32，常驻；恒等表不挂
         self.lut_amount: float = DEFAULT_LUT_AMOUNT
         self.last_lut_ms: float = 0.0
+        # M3-b：肤色定向层。与调色层的分工是探针量出来的（ops/grade.py 头部写了数）：
+        # 色彩观平滑，33³ 表复现 2 LSB；肤色窗口在 RGB 里陡峭，同一组参数烘进表要差到
+        # 7–9 LSB / 9–10% 像素，所以它**不烘表**，走逐帧内核（实测与 f64 参考差 1 LSB，
+        # 而且窗外逐位等于输入）。这一层不持有任何张量：状态就是三个数与一个混合系数。
+        self.grade_params: tuple = (0.0, 0.0, 0.0)      # (dh, ds, dv)，提交前已过 check_params
+        self.grade_amount: float = 1.0
+        self.last_grade_ms: float = 0.0
 
     # ---- 装载：一次性 H2D ----------------------------------------------
     def load_rgb_u8(self, rgb: np.ndarray) -> None:
@@ -338,7 +346,11 @@ class PreviewPipeline:
         # M3-a2：调色再盖在形变之后。它是逐点的“输出变换”，与像素位置无关，所以
         # 放在链尾既不参与任何缓存键，也不会被后面的重采样抹调（反过来把调色放在
         # 形变前，grid_sample 会对已调色的值做插值——插值与调色不交换，色彩过渡会多吃一份）。
-        return self.apply_lut(self.apply_deform(out))
+        # M3-b：肤色定向盖在调色之后（链的最尾）。这个位置不是随手选的，探针 E 节量过：
+        # 它与“定向在表之前”差 11–12 LSB / 8–9% 像素（乘性量与表里的饱和缩放不交换），
+        # 而窗口落在表之前时，用户看到的皮肤有 0.11% 滑块管不到、另有 1.20% 被误管。
+        # “所见即所调”要求窗口找的是屏幕上那份颜色，所以它在 lut 之后。
+        return self.apply_grade(self.apply_lut(self.apply_deform(out)))
 
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:
@@ -1003,6 +1015,77 @@ class PreviewPipeline:
         cpu = 0 if self.lut is None else int(self.lut.nbytes())
         return gpu + cpu
 
+    # ---- M3-b：肤色定向层 ----------------------------------------------
+    def has_grade(self) -> bool:
+        """这一层到底有没有活。参数在提交前已被 check_params 夹住，这里不再校。"""
+        dh, ds, dv = self.grade_params
+        return bool(float(self.grade_amount) != 0.0 and (dh != 0.0 or ds != 0.0 or dv != 0.0))
+
+    def set_grade(self, dh, ds, dv, amount=None) -> dict:
+        """提交一组肤色定向参数。先全量校验，后才写入——被拒不留半截状态。
+
+        这一层没有“建层”那一笔（不持有张量），所以也没有 mount/build 成本；但校验
+        必须在提交之前：NaN 比大小恒为 False，不拦就会被当“合法”写进常驻层，然后
+        每帧渲染才抛——set_strength / set_deform_amounts / set_lut 三次付过同一笔学费。
+        """
+        a = check_params(dh, ds, dv,
+                         amount=float(self.grade_amount if amount is None else amount))
+        self.grade_params = (a[0], a[1], a[2])
+        self.grade_amount = a[3]
+        return self._grade_payload(layer_recomputed=True)
+
+    def set_grade_amount(self, amount) -> dict:
+        """只改混入比例：三个数原封不动，所以“关掉”不是“忘记”。"""
+        vals = check_params(self.grade_params[0], self.grade_params[1], self.grade_params[2],
+                            amount=amount)
+        self.grade_amount = vals[3]
+        return self._grade_payload(layer_recomputed=False)
+
+    def clear_grade(self) -> dict:
+        self.grade_params = (0.0, 0.0, 0.0)
+        self.grade_amount = 1.0
+        self.last_grade_ms = 0.0
+        return self._grade_payload(layer_recomputed=False)
+
+    def _grade_payload(self, *, layer_recomputed: bool) -> dict:
+        """grade_done 的图层字段只在这里组装一次（set/clear/amount 三臂共用一份形状）。
+
+        窗口边界与硬上限一并带出去：滑块该夹在哪由引擎说，不让 UI 自己抄一份数、
+        然后两处漂。它们不是计时也不是分段，所以名字与每帧的 grade 段不会撞。"""
+        dh, ds, dv = self.grade_params
+        return {
+            "grade_dh": float(dh), "grade_ds": float(ds), "grade_dv": float(dv),
+            "grade_amount": float(self.grade_amount),
+            "grade_set": bool(dh != 0.0 or ds != 0.0 or dv != 0.0),
+            "grade_lit": bool(self.has_grade()),
+            "grade_limits": [float(DH_LIMIT), float(DS_LIMIT), float(DV_LIMIT)],
+            "bytes_grade": int(self.grade_resident_bytes()),
+            "device": str(self.device),
+            "layer_recomputed": bool(layer_recomputed),
+        }
+
+    def apply_grade(self, t):
+        """每帧只走这里。没活就直接把张量递回去（一个算子也不跑，连混合都不做）。"""
+        self.last_grade_ms = 0.0
+        if not self.has_grade():
+            return t
+        t0 = time.perf_counter()
+        dh, ds, dv = self.grade_params
+        out = grade_t(t, dh, ds, dv, amount=float(self.grade_amount))
+        if not torch.isfinite(out).all():
+            # 不写回也不缓存：非有限值一旦进了 shm 就是一块绿斑，而报错比绿斑好查
+            raise ValueError(f"肤色定向产出非有限值，已拒：dh={dh} ds={ds} dv={dv} "
+                             f"amount={self.grade_amount}")
+        if self.device.type != "cpu":
+            torch.cuda.synchronize(self.device)
+        self.last_grade_ms = (time.perf_counter() - t0) * 1000.0
+        return out
+
+    def grade_resident_bytes(self) -> int:
+        """本层账单恒为 0：它不持有任何张量。报 0 而不是不报，“查过、确实没占显存”
+        才是这句话；lut/light/deform 三层都因为“不报就等于藏账”而必须报实数。"""
+        return 0
+
     def pack(self, out) -> None:
         """float→uint8 并写进常驻帧缓冲，同样全程在显存里做。
 
@@ -1115,6 +1198,12 @@ def warm_device(device: str, side: int = 64) -> float:
         # 之后的每帧就只剩实测那 0.35 ms 的真实成本。
         pipe.set_lut(bake(_warm_grade, QUALITY_SIZE_3D, title="warm", source="warm"), 1.0)
         pipe.render(0.5)
+        # 肤色定向臂：M3-b。它是逐帧新的一组 elementwise 内核（HSV 正/反变换、三次
+        # smoothstep、混合），调色那次预热只证了 grid_sample(3d) 已加载，盖不到它——
+        # 同一个形状的事在修容（68.6 ms）与调色（3D 与 2D 不是一个编译单元）上各付过一次。
+        # 用的数值与产品预设同量级，但不从 presets 取：预热不该把产品资产当靶。
+        pipe.set_grade(0.006, -0.14, 0.05)
+        pipe.render(0.5)
         torch.cuda.synchronize()        # 与引擎 _sync 同一个理由：不同步就把内核记到回读头上
         pipe.read_back()
     finally:
@@ -1138,4 +1227,9 @@ def warm_device(device: str, side: int = 64) -> float:
         # 否则 image_ready 里 bytes_lut 会多报 428 KB，而用户一张预设也没点
         pipe.lut = None
         pipe.lut_vol = None
+        # 定向层同理：它只带三个数，但留着就是下一个会话开局“已点火”、
+        # 而用户一个预设也没点（image_ready 里 grade 会多报一份不存在的影响）
+        pipe.grade_params = (0.0, 0.0, 0.0)
+        pipe.grade_amount = 1.0
+        pipe.last_grade_ms = 0.0
     return (time.perf_counter() - t0) * 1000.0

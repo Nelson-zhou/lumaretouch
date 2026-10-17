@@ -22,6 +22,8 @@ from .vram import DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_
 from .ops.light import DB_EXPOSURE_LIMIT, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
 from .ops.deform import KINDS, DeformGeometryError, check_amounts
 from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
+from .ops.grade import DH_LIMIT, DS_LIMIT, DV_LIMIT, GradeError, check_params
+from .ops.presets import PRESETS, PresetError, get_preset, preset_grade, preset_lut
 
 PROTOCOL_VERSION = 1
 
@@ -102,6 +104,12 @@ class Engine:
         # 表不存会话里只存在这里是不够的：常驻体积张量活在一块设备上，换设备必须重挂。
         self._lut = None
         self._lut_amount = 1.0
+        # 定向层（M3-b）：引擎侧只存四个数（它不持有张量）。与调色层同一条规矩：
+        # 随图清、随设备迁移重提交。
+        self._grade = (0.0, 0.0, 0.0, 1.0)
+        # 当前生效的内置预设名（走 path/text 或手动改定向时为 None）。它不是装饰：
+        # 它决定“调色强度”要不要连带施加到定向层，也是 UI 显示“预设/手动”的唯一出处。
+        self._lut_preset = None
         # 分段计时的自洽计数：子段之和超过整帧内核段的帧数（只可能是重复计时）。
         # kernel 靠减法得出并夹到 0，不记这一笔就永远看不出某段被计了两次。
         self._seg_over_frames = 0
@@ -110,7 +118,13 @@ class Engine:
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "pid": os.getpid()})
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "pid": os.getpid(),
+              # 内置预设清单（M3-b）：按钮上写什么字、按哪个名提交，全部由引擎说。
+              # 前端抄一份名字就是双出处：资产改名后 UI 会静默拿着错名去撞拒绝。
+              "presets": [{"name": k, "title": v.title} for k, v in sorted(PRESETS.items())],
+              # 三个增量的硬边界也在这里报一次：滑块的行程在引擎说了为准之后才能开始渲染，
+              # 不等一条 grade_done 才拿到范围（那时滑块已经错看了一轮）。
+              "grade_limits": [DH_LIMIT, DS_LIMIT, DV_LIMIT]})
 
     # ------------------------------------------------------------ 帧缓冲
     def _ensure_shm(self, w: int, h: int) -> FrameShm:
@@ -182,7 +196,7 @@ class Engine:
         离线跑靶如果自己拼一份近似逻辑，量的数就不能代表产品通路。
         """
         seg = dict(synth=0.0, pre=0.0, filter=0.0, light=0.0, deform=0.0, lut=0.0,
-                   kernel=0.0, post_gpu=0.0, cpu_post=0.0, readback=0.0)
+                   grade=0.0, kernel=0.0, post_gpu=0.0, cpu_post=0.0, readback=0.0)
         # image_stream 模拟拖滑块：系数在 0.25→0.75 上扫一个 100 帧周期，
         # 像素逐帧真的在变；常驻管线的系数跑靶如果只动 0.001，字节上几乎看不出区别
         if mode == "image_stream":
@@ -216,10 +230,14 @@ class Engine:
             # “重算次数”而是“每帧成本”。不拆出来就会把它记到 kernel 头上，而
             # “挂上 LUT 后拖磨皮滑块仍零重算”那条判据就看不出是谁在花钱。
             seg["lut"] = float(getattr(pipe, "last_lut_ms", 0.0) or 0.0)
-            # kernel 是“整段减去四个子段”，减法夹到 0 就看不出重复计时：子段之和超过整段
+            # M3-b：肤色定向与调色同构（每帧真在跑的逐点内核，只是它不拿表而拿公式）。
+            # 不拆出来，拖那三个滑块时花的 1.3 ms/帧就会全部记到 kernel 头上，而
+            # “定向不作废磨皮缓存”与“定向每帧真跑了”两条判据都看不出是谁在花钱。
+            seg["grade"] = float(getattr(pipe, "last_grade_ms", 0.0) or 0.0)
+            # kernel 是“整段减去五个子段”，减法夹到 0 就看不出重复计时：子段之和超过整段
             # 只可能是某段被计了两次或计时嵌套了。当场记一笔，由 bench_done 说话——
             # 一个永远非负、越界也不报的数不是一个判据。
-            seg_sum = seg["filter"] + seg["light"] + seg["deform"] + seg["lut"]
+            seg_sum = seg["filter"] + seg["light"] + seg["deform"] + seg["lut"] + seg["grade"]
             if seg_sum - whole > 0.5:
                 self._seg_over_frames += 1
             seg["kernel"] = max(whole - seg_sum, 0.0)
@@ -263,7 +281,8 @@ class Engine:
         # 当成了通路极限；M1-2 要证的是「内核没变快，快的全是搬运」，那就更得拆开。
         period = interval_ms / 1000.0
         acc = dict(synth=0.0, pre=0.0, filter=0.0, light=0.0, deform=0.0, lut=0.0,
-                   kernel=0.0, post_gpu=0.0, cpu_post=0.0, readback=0.0, shm=0.0, notify=0.0)
+                   grade=0.0, kernel=0.0, post_gpu=0.0, cpu_post=0.0, readback=0.0,
+                   shm=0.0, notify=0.0)
         # 重算次数：拖拽期零推理的直接证据。只要这个数不是 1（或 0），缓存就没真的生效，
         # 而按均值报 filter 会把它藏起来（600 帧里重算一次只有 0.0075 ms/帧）。
         refilters = 0
@@ -273,6 +292,8 @@ class Engine:
         # M3-a2：调色是逐帧固定成本，没有“命中缓存”这一说。它只用来防“挂了一层却没跑”：
         # 表挂上且强度非 0 时它必须等于跑靶帧数，否则那一层只存在于上报里。
         lut_frames = 0
+        # M3-b：定向也是逐帧固定成本（点火时）。与 lut 同一个用途：防“设了参数却没跑”。
+        grade_frames = 0
 
         def snapshot(done: int) -> dict:
             return {k: round(v / max(done, 1), 3) for k, v in acc.items()}
@@ -302,6 +323,8 @@ class Engine:
                 relights += 1
             if seg.get("lut", 0.0) > 0:
                 lut_frames += 1
+            if seg.get("grade", 0.0) > 0:
+                grade_frames += 1
             for k, v in seg.items():
                 acc[k] += v
             t4 = monotonic_ns()
@@ -338,6 +361,8 @@ class Engine:
               # frames，而 lut 均值为 0 就是“挂了一层却没跑”的当场证据。
               "lut_ms_total": round(acc["lut"], 2),
               "lut_frames": lut_frames,
+              "grade_ms_total": round(acc["grade"], 2),
+              "grade_frames": grade_frames,
               # 图层状态与每帧分段不能同名（上一版 `"light": dict(self._light)` 就是被
               # snapshot 里的同名字段吃掉的）。取局部 pipe 而不是 self._vram：后者会被
               # 别的命令顶掉，报的就不是刚才那 600 帧的服务者。
@@ -346,6 +371,15 @@ class Engine:
                                 amount=float(pipe.lut_amount) if pipe is not None else None,
                                 lit=bool(pipe.has_lut()) if pipe is not None else False,
                                 bytes_lut=pipe.lut_resident_bytes() if pipe is not None else 0),
+              # M3-b：定向层状态与 lut_state 同构（不同名、不吃 snapshot 的同名键）。
+              # dh/ds/dv/amount 取自局部 pipe：报的就是刚才那 600 帧真正在用的那组数。
+              "grade_state": dict(dh=(pipe.grade_params[0] if pipe is not None else 0.0),
+                                  ds=(pipe.grade_params[1] if pipe is not None else 0.0),
+                                  dv=(pipe.grade_params[2] if pipe is not None else 0.0),
+                                  amount=float(pipe.grade_amount) if pipe is not None else 1.0,
+                                  lit=bool(pipe.has_grade()) if pipe is not None else False,
+                                  bytes_grade=(pipe.grade_resident_bytes()
+                                               if pipe is not None else 0)),
               # 分段不自洽的帧数：某段被重复计时时会在这里非 0，而不是表上看不出来
               "seg_over_frames": int(self._seg_over_frames),
               "params": dict(self._params),
@@ -409,6 +443,18 @@ class Engine:
                           "warn": f"新会话重挂调色层失败，已整层清除（{type(e).__name__}）：{e}"})
                     self._lut = None
                     self._lut_amount = 1.0
+            # 定向层（M3-b）：它不持有张量，所以“重挂”就是把同一组数重新提交一次。
+            # 不提交就是“会话迁了、肤色滑块还在宿主侧的 0.6 但画面不动”——lut 上面
+            # 那段注释写的担心，在这一层一模一样。
+            if self._grade != (0.0, 0.0, 0.0, 1.0):
+                try:
+                    pipe.set_grade(self._grade[0], self._grade[1], self._grade[2],
+                                   amount=self._grade[3])
+                    self._grade = tuple(pipe.grade_params) + (float(pipe.grade_amount),)
+                except (GradeError, RuntimeError, ValueError) as e:
+                    emit({"event": "engine_warn",
+                          "warn": f"新会话重提交肤色定向失败，已整层清除（{type(e).__name__}）：{e}"})
+                    self._grade = (0.0, 0.0, 0.0, 1.0)
         emit({"event": "vram_ready", "device": str(pipe.device), "w": w, "h": h,
               "adopted": bool(adopt),
               "bytes_src": int(pipe.src_u8.numel() * pipe.src_u8.element_size()),
@@ -458,6 +504,9 @@ class Engine:
         # （与磨皮参数不同：radius/增益是“我习惯怎么磨”的全局默认，而表是作品的一部分。）
         self._lut = None
         self._lut_amount = 1.0
+        # 定向层也随文档走：上一张照片调好的肤色窗口，对这一张不是“预设”而是误调。
+        self._grade = (0.0, 0.0, 0.0, 1.0)
+        self._lut_preset = None
         t_a = monotonic_ns()
         pipe = self._attach_pipeline(d.rgb)
         self._image_loaded = True
@@ -491,6 +540,12 @@ class Engine:
               # 刚导完图时它必须是 0：预热会话那张临时表不能让真会话继承（不然这里会
               # 多报 428 KB，而用户一张预设也没点）
               "bytes_lut": pipe.lut_resident_bytes(),
+              # M3-b：定向层在导入后也必须是零。宿主靠这一份快照摆滑块，不留它就只能
+              # 把上一张图的肤色参数继续显示成“已调”（与 bytes_lut=0 同一条理由）。
+              "grade_state": dict(dh=float(pipe.grade_params[0]), ds=float(pipe.grade_params[1]),
+                                  dv=float(pipe.grade_params[2]), amount=float(pipe.grade_amount),
+                                  lit=bool(pipe.has_grade()),
+                                  bytes_grade=int(pipe.grade_resident_bytes())),
               # 只报滤波这一份：掩膜在本事件之后才挂上（precompute 跑在 image_ready 后面），这里附 bytes_face 恒为 0，
               # 反而会被读成"掩膜没常驻"。掩膜/关键点的字节数由 precompute_ready 报，那才是它们为真的那一刻。
               "import_ms": round((t_c - t0) / 1e6, 2)})
@@ -1140,13 +1195,16 @@ class Engine:
                                 total_ms=round((monotonic_ns() - t_start) / 1e6, 2))
         emit(fr)
 
-    # ------------------------------------------------------------ 调色（M3-a2）
+    # ------------------------------------------------------------ 调色（M3-a2）与预设（M3-b）
     def _resolve_lut_source(self, p: dict):
-        """从命令里解析出那张表：path / text 两个来源必给且只给一个。失败自己发 error 返 None。
+        """从命令里解析出那张表：path / text / preset 三个来源必给且只给一个。
+
+        返回 `(cube, preset_or_None)`：走 preset 那一臂时还要把预设的肤色定向一并提交
+        （一个预设 = 一张表 + 三个数），返回的第二个元素就是那个预设对象。
+        失败自己发 error 返 None。
 
         为什么不“都给就用 text”：两个来源并存时先选一个就是替用户做决定，而两个表
         往往正好不一样——拿到哪个都是“对的那张的错版本”。当场拒比猜安全。
-        preset 这一臂现在是明拒：内置预设属于 M3-b，不拿一张“看着像”的表顶上去。
         """
         given = [k for k in ("path", "text", "preset") if p.get(k)]
         if len(given) != 1:
@@ -1157,14 +1215,14 @@ class Engine:
         key = given[0]
         try:
             if key == "path":
-                return load_cube_file(str(p["path"]))
+                return load_cube_file(str(p["path"])), None
             if key == "text":
-                return parse_cube(str(p["text"]), source="text")
-            emit({"event": "error",
-                  "error": "lut preset 属于 M3-b（内置预设还没落地）：当前只支持 path / text"})
-            return None
-        except (LutError, OSError, UnicodeDecodeError) as e:
+                return parse_cube(str(p["text"]), source="text"), None
+            preset = get_preset(p["preset"])
+            return preset_lut(preset.name), preset
+        except (LutError, PresetError, OSError, UnicodeDecodeError, ValueError) as e:
             # 整条拒：不留“解了一半”的表。上一轮“预计算失败留半截显存”同一形状。
+            # 事件里的词沿用 “LUT 被拒”（test_protocol 一直在卡这个字面，也是报表里最好认的一个）。
             emit({"event": "error", "error": f"LUT 被拒，整条不生效（{type(e).__name__}）：{e}"})
             return None
 
@@ -1180,6 +1238,18 @@ class Engine:
             emit({"event": "engine_warn",
                   "warn": f"调色层回滚失败（{type(e).__name__}）：{e}，本会话不可信，请重新导入图片"})
 
+    def _restore_grade(self, prev) -> None:
+        """回滚肤色定向层。与 _restore_lut 同一条：回滚再失败就明说“重新导图”。"""
+        try:
+            if prev == (0.0, 0.0, 0.0, 1.0):
+                self._vram.clear_grade()
+            else:
+                self._vram.set_grade(prev[0], prev[1], prev[2], amount=prev[3])
+        except Exception as e:
+            emit({"event": "engine_warn",
+                  "warn": f"肤色定向回滚失败（{type(e).__name__}）：{e}，本会话不可信，"
+                          "请重新导入图片"})
+
     def _emit_lut_state(self, action: str, info: dict, *, render_ms: float = 0.0,
                         total_ms: float = 0.0) -> None:
         """lut_done 的唯一组装点（set/clear/amount 三条臂共用一份形状）。
@@ -1192,6 +1262,17 @@ class Engine:
         emit({"event": "lut_done", "action": action, **info,
               # 这一帧真跑了多少调色（挂上表且强度非 0 时 > 0；为 0 就是那层没跑）
               "lut_ms": round(float(pipe.last_lut_ms), 2),
+              # M3-b：预设一条命令同时动两层，所以 lut_done 必须能说出定向那层的现状：
+              # 否则 UI 只能自己记一份数，而引擎里那一层可能因为回滚已经变了。
+              # 它与 grade_done 里的 grade_ms 同一出处（都取自局部 pipe），不是第2个口径。
+              "grade_ms": round(float(pipe.last_grade_ms), 2),
+              "grade_state": dict(dh=float(pipe.grade_params[0]), ds=float(pipe.grade_params[1]),
+                                  dv=float(pipe.grade_params[2]), amount=float(pipe.grade_amount),
+                                  lit=bool(pipe.has_grade()),
+                                  bytes_grade=int(pipe.grade_resident_bytes())),
+              # 当前生效的预设名（没走预设就是 None）：UI 靠它区分“预设强度”与
+              # “自己载的表”，而不是自己记住上一次按了哪个按钮
+              "lut_preset": self._lut_preset,
               # 这两条是“设 LUT 不作废磨皮缓存”的直接证据：补的那一帧仍应命中
               "filter_ms": round(float(pipe.last_filter_ms), 2),
               "bands_ms": round(float(pipe.last_bands_ms), 2),
@@ -1225,6 +1306,8 @@ class Engine:
             return
         t_start = monotonic_ns()
         prev = (self._lut, self._lut_amount)
+        prev_grade = self._grade
+        prev_preset = self._lut_preset
         if action == "set":
             # 强度先校：不能先付一次解析 + 上显存再发现参数非法（与 cmd_deform“参数先于建层”同形）
             amount = None
@@ -1234,9 +1317,21 @@ class Engine:
                 except LutError as e:
                     emit({"event": "error", "error": f"lut 被拒，整条不生效：{e}"})
                     return
-            cube = self._resolve_lut_source(p)
-            if cube is None:
+            got = self._resolve_lut_source(p)
+            if got is None:
                 return
+            cube, preset = got
+            gvals = None
+            if preset is not None:
+                # 预设同时动两层，那两层的参数都得先过完才能开始提交：先挂表再拒
+                # 参数就是“半应用”（M1-3c/M2-a2 审查里同一个形状）。
+                # 强度一个数管两层：预设的“50%”应当是整预设 50%，不是表 50% + 定向 100%。
+                try:
+                    gvals = check_params(*preset_grade(preset.name),
+                                         amount=(1.0 if amount is None else float(amount)))
+                except GradeError as e:
+                    emit({"event": "error", "error": f"预设 {preset.name} 被拒，两层均未改动：{e}"})
+                    return
             try:
                 info = self._vram.set_lut(cube, amount)
             except (LutError, RuntimeError, ValueError) as e:
@@ -1246,6 +1341,16 @@ class Engine:
                       f"{type(e).__name__}）：{e}"})
                 return
             self._lut, self._lut_amount = self._vram.lut, float(self._vram.lut_amount)
+            # 预设身份记在引擎侧：它决定“调色强度”要不要连带施加到定向层（见 amount 臂）。
+            # 走 path/text 就是用户自己拿表说话，预设身份当场清掉。
+            self._lut_preset = preset.name if preset is not None else None
+            if gvals is not None:
+                # 参数已在上一步校过，这里的提交不会再拒：预设要么两层都上，要么都不上。
+                # 不拿它的返回值当 info：那会把 lut_done 的形状换成 grade 的那份（就是
+                # M2 审 ⑤ “字典后写吃先写”同一个形状，本轮协议用例一个 KeyError 抽出来的）。
+                # 定向层的现状由 _emit_lut_state 直接从 pipe 组装，只有一个出处。
+                self._vram.set_grade(gvals[0], gvals[1], gvals[2], amount=gvals[3])
+                self._grade = gvals
         elif action == "amount":
             if p.get("amount") is None:
                 emit({"event": "error", "error": "lut amount 什么也没给：需要一个 0–1 的数值"})
@@ -1261,16 +1366,35 @@ class Engine:
                 emit({"event": "error", "error": f"调色强度被拒，会话原样未动：{e}"})
                 return
             self._lut_amount = float(self._vram.lut_amount)
+            if self._lut_preset is not None:
+                # 这一句不是“强度顺便也给定向层用”那么顺手：它是预设语义的必要一半。
+                # `lut set preset=creamy amount=0.5` 把两层同时拉到 50%，之后只拖
+                # “预设强度”滑块走的就是这一臂——不同步定向层就会“表淡了、肤色还满调”。
+                # 只对走过预设的会话生效（_lut_preset 非空）：用户自己载表 + 手动调肤色时，
+                # 表的强度不该伸到另一层里去。
+                try:
+                    self._vram.set_grade_amount(amount)
+                    self._grade = (self._vram.grade_params[0], self._vram.grade_params[1],
+                                   self._vram.grade_params[2], float(self._vram.grade_amount))
+                except GradeError as e:
+                    emit({"event": "error", "error": f"预设强度连带定向层被拒，已整条回滚：{e}"})
+                    self._lut, self._lut_amount = prev
+                    self._restore_lut(prev)
+                    return
         else:
             info = self._vram.clear_lut()
             self._lut, self._lut_amount = None, 1.0
+            self._lut_preset = None
         try:
             fr = self._write_current_frame("lut")
         except Exception as e:
             # 表/强度已写进常驻层而渲染抛了：必须退回上一条已证能出帧的状态。
             # cmd_deform 为同一个形状付过钱：“拒绝了但画面变了”比报错难查得多。
             self._lut, self._lut_amount = prev
+            self._grade = prev_grade
+            self._lut_preset = prev_preset
             self._restore_lut(prev)
+            self._restore_grade(prev_grade)
             try:
                 back = self._write_current_frame("lut")
                 back.pop("render_ms", None)
@@ -1284,6 +1408,122 @@ class Engine:
         render_ms = fr.pop("render_ms")
         self._emit_lut_state(action, info, render_ms=render_ms,
                              total_ms=round((monotonic_ns() - t_start) / 1e6, 2))
+        emit(fr)
+
+    def _emit_grade_state(self, action: str, info: dict, *, render_ms: float = 0.0,
+                          total_ms: float = 0.0) -> None:
+        """grade_done 的唯一组装点（set/clear/amount 三条臂共用一份形状）。
+
+        与 _emit_lut_state 同构：图层字段全部来自 vram._grade_payload，这里只加计时
+        与每帧那几笔。字段集在两层之间对齐不是强迫症：哪一臂的 payload 少一个键，
+        TS 侧就是个运行时 TypeError，而编译期抓不到。
+        """
+        pipe = self._vram
+        emit({"event": "grade_done", "action": action, **info,
+              # 这一帧真跑了多少定向（点火时 > 0；为 0 就是那层没跑，或走的是结构短路）
+              "grade_ms": round(float(pipe.last_grade_ms), 2),
+              # 调色层现状：手动改肤色会清掉预设身份，而“表还在不在”只能由事件说
+              "lut_ms": round(float(pipe.last_lut_ms), 2),
+              "lut_preset": self._lut_preset,
+              "filter_ms": round(float(pipe.last_filter_ms), 2),
+              "bands_ms": round(float(pipe.last_bands_ms), 2),
+              "filter_cached": float(pipe.last_filter_ms) == 0.0,
+              "deform_ms": round(float(pipe.last_deform_ms), 2),
+              "render_ms": round(float(render_ms), 2),
+              "total_ms": round(float(total_ms), 2),
+              "strength": self._strength})
+
+    def cmd_grade(self, p: dict):
+        """肤色 HSL 定向（M3-b）：三个滑块 + 一个混入比例。
+
+        与 cmd_lut 的区别只有一件：这一层不拿表，拿的是公式（窗口内逐帧内核）。
+        其余铁律逐字沿用：跑靶互斥、先全量校验后一次性提交、被拒整条不留痕、
+        出帧失败回滚 + 补帧、事件只有一个组装点。它与磨皮/修容/形变一样不参与
+        任何缓存键：改它不会让滤波重算，反向也一样。
+        """
+        action = p.get("action", "set")
+        if action not in ("set", "clear", "amount"):
+            emit({"event": "error",
+                  "error": f"未知 grade action: {action}（可用：set/clear/amount）"})
+            return
+        if not self._image_loaded or self._vram is None:
+            emit({"event": "error", "error": "尚未 load_image"})
+            return
+        if self.shm is None or (self.shm.w, self.shm.h) != (self._vram.w, self._vram.h):
+            emit({"event": "error", "error": f"shm {getattr(self.shm, 'w', '?')}x"
+                  f"{getattr(self.shm, 'h', '?')} != 会话 {self._vram.w}x{self._vram.h}，"
+                  "请先 load_image"})
+            return
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝 grade：先 bench_stop"})
+            return
+        # 参数键集合当场卡住：拼错了名字的键会被默默当作“没给”而沿用旧值，
+        # 那是“按了滑块但画面不动、而事件看起来完全正常”的下一个版本。
+        # cmd 本身也算一个键（命令与参数同层），所以它必须在白名单里——第一版就是
+        # 忘了它，协议用例一跑就全军“grade 收到不认识的参数：cmd”。
+        extra = sorted(set(p) - {"cmd", "action", "dh", "ds", "dv", "amount"})
+        if extra:
+            emit({"event": "error", "error": f"grade 收到不认识的参数：{', '.join(extra)}"
+                  "（可用：dh / ds / dv / amount）"})
+            return
+        t_start = monotonic_ns()
+        prev = self._grade
+        prev_preset = self._lut_preset
+        if action == "set":
+            cur = dict(dh=self._grade[0], ds=self._grade[1], dv=self._grade[2])
+            given = {k: p[k] for k in ("dh", "ds", "dv") if p.get(k) is not None}
+            if not given and p.get("amount") is None:
+                emit({"event": "error", "error": "grade set 什么也没给：三个增量里至少给一个，"
+                      "或者走 clear 把整层关掉"})
+                return
+            cur.update(given)
+            try:
+                # 部分提交语义与 cmd_deform 一致：拖一个滑块不该把另外两个抹零，
+                # 但合出来的那组数必须整组校过才能写进常驻层
+                vals = check_params(cur["dh"], cur["ds"], cur["dv"],
+                                    amount=float(p.get("amount", self._grade[3])))
+            except GradeError as e:
+                emit({"event": "error", "error": f"grade 被拒，整条不生效：{e}"})
+                return
+            info = self._vram.set_grade(vals[0], vals[1], vals[2], amount=vals[3])
+            self._grade = vals
+            # 手动改了肤色，预设身份就当场失效：不然下一条 `lut amount` 会以为
+            # “这层的肤色还是预设那份”，把用户刚调的数与表的强度绑在一起盖掉
+            self._lut_preset = None
+        elif action == "amount":
+            if p.get("amount") is None:
+                emit({"event": "error", "error": "grade amount 什么也没给：需要一个 0–1 的数值"})
+                return
+            try:
+                info = self._vram.set_grade_amount(p["amount"])
+            except GradeError as e:
+                emit({"event": "error", "error": f"肤色定向强度被拒，会话原样未动：{e}"})
+                return
+            self._grade = (self._vram.grade_params[0], self._vram.grade_params[1],
+                           self._vram.grade_params[2], float(self._vram.grade_amount))
+        else:
+            info = self._vram.clear_grade()
+            self._grade = (0.0, 0.0, 0.0, 1.0)
+            self._lut_preset = None
+        try:
+            fr = self._write_current_frame("grade")
+        except Exception as e:
+            self._grade = prev
+            self._lut_preset = prev_preset
+            self._restore_grade(prev)
+            try:
+                back = self._write_current_frame("grade")
+                back.pop("render_ms", None)
+                emit(back)
+            except Exception:      # 回滚后仍出不了一帧：能说清的只有“重新导图”
+                emit({"event": "engine_warn", "warn": "肤色定向回滚后仍无法出帧，本会话不可信，"
+                      "请重新导入图片"})
+            emit({"event": "error", "error": f"肤色定向渲染失败，已退回上一状态（"
+                  f"{type(e).__name__}）：{e}"})
+            return
+        render_ms = fr.pop("render_ms")
+        self._emit_grade_state(action, info, render_ms=render_ms,
+                               total_ms=round((monotonic_ns() - t_start) / 1e6, 2))
         emit(fr)
 
     def _pipe_copyin(self, rgba, strength: float, radius: int = DEFAULT_RADIUS,
@@ -1430,7 +1670,7 @@ class Engine:
                  "load_image": self.cmd_load_image, "set_strength": self.cmd_set_strength,
                  "precompute": self.cmd_precompute, "inpaint": self.cmd_inpaint,
                  "light": self.cmd_light, "deform": self.cmd_deform,
-                 "lut": self.cmd_lut}
+                 "lut": self.cmd_lut, "grade": self.cmd_grade}
         # 不用 `for line in sys.stdin`：那会等 EOF，收到 shutdown 也退不掉
         while not self._quit:
             line = sys.stdin.readline()

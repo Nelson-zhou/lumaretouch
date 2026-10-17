@@ -4,9 +4,11 @@ import Viewer, { type Hud } from "./components/Viewer";
 import { clickRle } from "./brush";
 import { t } from "./i18n";
 import {
-  benchStart, benchStats, engineStatus, loadImage, m0Env, quit, report, runDeform, runInpaint, runLight, runLut, setStrength,
+  benchStart, benchStats, engineStatus, loadImage, m0Env, quit, report, runDeform,
+  runGrade, runInpaint, runLight, runLut, setStrength,
   shutdownEngine, startEngine,
-  type BenchOptions, type DeformInfo, type EngineStatus, type ImageReady, type InpaintInfo, type LightInfo,
+  type BenchOptions, type DeformInfo, type EngineStatus, type ImageReady, type InpaintInfo,
+  type GradeInfo, type LightInfo,
   type LutInfo,
   type Precompute, type Stats,
 } from "./native";
@@ -110,6 +112,13 @@ export default function App() {
   const [lutPath, setLutPath] = useState("");
   const [lutAmount, setLutAmount] = useState(1);
   const [lastLut, setLastLut] = useState<LutInfo | null>(null);
+  // 肤色定向（M3-b）：三个增量 + 一个混入比例。这一层与形变同侧：拖哪个滑块就动哪个，
+  // 所以拖动期间逐事件发（但与形变一样不许排队：一次 IPC 没回来就把后续合并成最新一份）。
+  const [gradeAmounts, setGradeAmounts] = useState({ dh: 0, ds: 0, dv: 0 });
+  const [gradeMix, setGradeMix] = useState(1);
+  const [lastGrade, setLastGrade] = useState<GradeInfo | null>(null);
+  const gradeFlight = useRef(false);
+  const gradeQueued = useRef<{ dh?: number; ds?: number; dv?: number } | null>(null);
   const [dragNote, setDragNote] = useState("");
   const lastSend = useRef(0);
   const pending = useRef<number | null>(null);
@@ -139,6 +148,7 @@ export default function App() {
       }
       // 调色层也是事件驱动的一次回报（载入/改强度/清除各一条），轮询不能错过
       if (st.lut) setLastLut(st.lut);
+      if (st.grade) setLastGrade(st.grade);
     } catch {
       /* 引擎未起，忽略 */
     }
@@ -401,6 +411,38 @@ export default function App() {
           } : { bad: "12s 内没等到 lut_done（文件不存在或表被引擎拒绝）", opts })}`);
         }
       }
+      // 肤色定向自动通道（$LRT_AUTO_GRADE="dh:ds:dv:amount"）：与上面几条同一条理由——
+      // 只有真窗口能证明 runGrade → Rust grade → 引擎 grade_done 这条命令签名对得上。
+      if (env.auto_grade) {
+        const parts = env.auto_grade.split(":").map((x) => Number(x));
+        if (parts.length !== 4 || parts.some((x) => !Number.isFinite(x))) {
+          await report(`M0_ERROR 无法解析 LRT_AUTO_GRADE=${env.auto_grade}（要 dh:ds:dv:amount）`);
+        } else {
+          const [dh, ds, dv, amount] = parts;
+          const waitGrade = async () => {
+            // 与调色同一条 12 s 轮询预算：被引擎整条拒（越界、跑靶中）时永远等不到
+            for (let i = 0; i < 120; i++) {
+              await sleep(100);
+              const st = await engineStatus().catch(() => null);
+              if (st?.grade && st.grade.action === "set" && st.grade.grade_dh === dh) return st.grade;
+            }
+            return null;
+          };
+          let got: GradeInfo | null = null;
+          try {
+            await runGrade("set", { dh, ds, dv, amount });
+            got = await waitGrade();
+          } catch (e) {
+            await report(`M0_ERROR runGrade 失败: ${e}`);
+          }
+          await report(`M0_GRADE ${JSON.stringify(got ? {
+            dh: got.grade_dh, ds: got.grade_ds, dv: got.grade_dv, amount: got.grade_amount,
+            lit: got.grade_lit, gradeMs: got.grade_ms, lutMs: got.lut_ms,
+            bytesGrade: got.bytes_grade, filterCached: got.filter_cached,
+            limits: got.grade_limits, renderMs: got.render_ms,
+          } : { bad: "12s 内没等到 grade_done（参数越界或跑靶进行中）", dh, ds, dv, amount })}`);
+        }
+      }
       for (let i = 0; i < 100; i++) {
         const st = await engineStatus().catch(() => null);
         if (st?.has_shm) break;
@@ -645,6 +687,53 @@ export default function App() {
   function onLutAmountCommit() {
     runLut("amount", { amount: lutAmount })
       .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)));
+  }
+
+  /** 一键预设（M3-b）：一条 `lut set preset=<名>` 同时上表与肤色定向。
+   *  强度沿用面板上那个值：预设的“50%”应当是整预设 50%，不是表 50% + 肤色 100%。 */
+  function onPreset(name: string) {
+    runLut("set", { preset: name, amount: lutAmount })
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)));
+  }
+
+  /** 肤色滑块：单飞 + 只留最新一份（与 sendDeform 同一条理由：宁可丢中间帧，
+   *  也不让上报与画面错开）。部分提交：只发动过的那一个，另两个沿用当前值。 */
+  function sendGrade(opts: { dh?: number; ds?: number; dv?: number }) {
+    if (gradeFlight.current) {
+      gradeQueued.current = opts;
+      return;
+    }
+    gradeFlight.current = true;
+    runGrade("set", opts)
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)))
+      .finally(() => {
+        gradeFlight.current = false;
+        const q = gradeQueued.current;
+        gradeQueued.current = null;
+        if (q) sendGrade(q);
+      });
+  }
+
+  function onGradeChange(which: "dh" | "ds" | "dv", value: number) {
+    setGradeAmounts({ ...gradeAmounts, [which]: value });
+    sendGrade({ [which]: value });
+  }
+
+  /** 定向混入比例：也逐事件发（它与其他三个增量一样只改一个数，不重建任何东西） */
+  function onGradeMixChange(value: number) {
+    setGradeMix(value);
+    runGrade("amount", { amount: value })
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)));
+  }
+
+  function onGradeClear() {
+    runGrade("clear")
+      .then(() => refreshStatus())
+      .then(() => setGradeAmounts({ dh: 0, ds: 0, dv: 0 }))
       .catch((e) => setDragNote(String(e)));
   }
 
@@ -905,6 +994,75 @@ export default function App() {
               </tr>
             </tbody>
           </table>
+        )}
+
+        {/* 内置预设（M3-b）：清单与按钮文字全部来自引擎的 ready，前端不抄一份名字。
+            一键 = 一张色彩观表 + 三个肤色数，强度滑块同时管两层（那条语义由引擎侧卡）。 */}
+        {(status?.presets ?? []).length > 0 && (
+          <div className="row">
+            {status!.presets.map((p) => (
+              <button key={p.name} onClick={() => onPreset(p.name)} disabled={!status?.image}
+                      className={lastLut?.lut_preset === p.name ? "primary" : ""}>
+                {p.title}
+              </button>
+            ))}
+          </div>
+        )}
+        {/* 肤色定向（M3-b）：只在肤色窗口里动的三个增量。滑块行程来自 ready 报的
+            grade_limits——引擎没说就整排不画，而不是前端先猜一份然后两处漂。 */}
+        {(status?.grade_limits ?? []).length === 3 && (
+          <>
+            <label className="k">{t("grade.hue", { v: gradeAmounts.dh.toFixed(3) })}</label>
+            <input type="range" min={-status!.grade_limits[0]} max={status!.grade_limits[0]}
+                   step={0.001} value={gradeAmounts.dh}
+                   onChange={(e) => onGradeChange("dh", +e.target.value)}
+                   style={{ width: "100%" }} />
+            <label className="k">{t("grade.sat", { v: gradeAmounts.ds.toFixed(3) })}</label>
+            <input type="range" min={-status!.grade_limits[1]} max={status!.grade_limits[1]}
+                   step={0.01} value={gradeAmounts.ds}
+                   onChange={(e) => onGradeChange("ds", +e.target.value)}
+                   style={{ width: "100%" }} />
+            <label className="k">{t("grade.val", { v: gradeAmounts.dv.toFixed(3) })}</label>
+            <input type="range" min={-status!.grade_limits[2]} max={status!.grade_limits[2]}
+                   step={0.01} value={gradeAmounts.dv}
+                   onChange={(e) => onGradeChange("dv", +e.target.value)}
+                   style={{ width: "100%" }} />
+            <label className="k">{t("grade.mix", { v: gradeMix.toFixed(2) })}</label>
+            <input type="range" min={0} max={1} step={0.01} value={gradeMix}
+                   onChange={(e) => onGradeMixChange(+e.target.value)}
+                   style={{ width: "100%" }} />
+            <div className="row">
+              <button onClick={onGradeClear} disabled={!lastGrade?.grade_set}>
+                {t("grade.clear")}
+              </button>
+            </div>
+            <div className="mut">{t("grade.window")}</div>
+            {lastGrade && (
+              <table>
+                <tbody>
+                  <tr>
+                    <td>{t("grade.layer")}</td>
+                    <td>{lastGrade.lit ? t("color.on") : t("color.off")}
+                      {' · '}{lastGrade.amount.toFixed(2)}</td>
+                  </tr>
+                  <tr>
+                    <td>{t("grade.params")}</td>
+                    <td>{`Δh ${lastGrade.grade_dh.toFixed(4)} · Δs ${lastGrade.grade_ds.toFixed(3)} · Δv ${lastGrade.grade_dv.toFixed(3)}`}</td>
+                  </tr>
+                  <tr>
+                    <td>{t("grade.ms")}</td>
+                    <td>{t("grade.msValue", {
+                      grade: lastGrade.grade_ms.toFixed(2), lut: lastGrade.lut_ms.toFixed(2),
+                      total: lastGrade.total_ms.toFixed(2),
+                    })}</td>
+                  </tr>
+                  {lastGrade.filter_cached && (
+                    <tr><td colSpan={2}>{t("grade.cacheKept")}</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </>
         )}
 
         <h2>{t("side.bench")}</h2>

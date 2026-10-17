@@ -127,6 +127,12 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             }
         }
         "frame" => state.on_frame_event(),
+        "ready" => {
+            // M3-b：引擎报上来的内置预设清单（按钮文字与提交名都靠它）。
+            // 不写这一臂就会落进下面的 other 分支：只进日志，前端永远拿不到。
+            state.on_ready(&v);
+            println!("M0_ENGINE {line}");
+        }
         "image_ready" => {
             // 代理档尺寸与解码耗时是前端开跑靶与报表采集的唯一依据，既存下也回显
             state.on_image_ready(&v);
@@ -156,6 +162,12 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             // M3-a2 影楼色彩：set/amount/clear 一条。与 deform 分开存：它报的是调色段
             // 与表的常驻字节，与形变的账不是一个量（串台就是报表上看不出谁花的钱）
             state.on_lut_ready(&v);
+            println!("M0_ENGINE {line}");
+        }
+        "grade_done" => {
+            // M3-b 肤色定向：与 lut 分开存。预设走 lut_done 时也会带一份 grade_state，
+            // 但那一层自己的耗时/上限/事件次序只有 grade_done 能说全
+            state.on_grade_ready(&v);
             println!("M0_ENGINE {line}");
         }
         "bench_done" => {

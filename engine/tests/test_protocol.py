@@ -1818,3 +1818,340 @@ def test_drag_stream_with_lut_runs_every_frame_but_recomputes_nothing(engine, tm
     assert b["seg_over_frames"] == 0, f"分段重复计时 {b['seg_over_frames']} 帧"
     st = b["lut_state"]
     assert st["lit"] is True and st["size"] == 33 and st["bytes_lut"] > 0, st
+
+
+# ============================================================ 肤色定向与预设（M3-b）
+# 这一节的分工与 test_grade/test_presets 一致：库层管数学，这里只管**接线**——
+# 方向、字节、事件形状、拒绝路径、跨层语义（预设一层命令动两层）。
+GRADE_KEYS = ("grade_dh", "grade_ds", "grade_dv", "grade_amount", "grade_set", "grade_lit",
+              "grade_limits", "bytes_grade", "device", "layer_recomputed")
+
+
+def _sat(frame):
+    """饱和度（max−min)/max：不需要完整 HSV，方向判据只要这一个量。"""
+    a = np.asarray(frame, dtype=np.float64) / 255.0
+    mx = a.max(axis=-1)
+    mn = a.min(axis=-1)
+    return np.where(mx > 0, (mx - mn) / np.where(mx > 0, mx, 1.0), 0.0)
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_grade_set_moves_saturation_in_the_declared_direction(engine):
+    """协议直通：ds=−0.6 必须让肤色像素降饱和，而且改色只发生在"有颜色的地方"。
+
+    看方向而不是看字节：接错通道、参数没送进内核、内核根本没跑，三种错都会让字节
+    "变了"，只有方向与分布能把它们分开（M2-a2 修容与 M3-a2 调色同一理由）。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        base = _read_frame(engine, peer, h, w)
+        engine.send(cmd="grade", action="set", dh=0.0, ds=-0.6, dv=0.0)
+        done = engine.wait_for("grade_done", timeout=60)
+        assert done["grade_set"] is True and done["grade_lit"] is True, done
+        assert done["grade_ds"] == -0.6 and done["grade_amount"] == 1.0, done
+        assert done["grade_ms"] > 0.0, f"点火了却没跑内核：{done}"
+        assert done["grade_limits"] == [0.05, 0.60, 0.60], done
+        assert done["bytes_grade"] == 0, "这层不持有张量，账单必须是 0（报而不藏）"
+        assert done["filter_cached"] is True, f"设肤色参数却重算了滤波：{done}"
+        shot = _read_frame(engine, peer, h, w)
+        d = (shot - base).astype(np.float64)
+        changed = np.abs(d).max(axis=-1) > 0
+        assert float(changed.mean()) > 0.05, f"改动面只有 {float(changed.mean()):.2%}：链路没通"
+        s0, s1 = _sat(base), _sat(shot)
+        moved = (s1 - s0)[changed]
+        assert float((moved < 0).mean()) > 0.9, \
+            f"降饱和方向：只有 {float((moved < 0).mean()):.2%} 的改动像素饱和下降"
+        assert np.array_equal(d[~changed], np.zeros(((~changed).sum(), 3))), \
+            "窗外像素被改了：定向写成了全图调整"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_grade_zero_params_report_off_and_run_nothing(engine):
+    """显式把三个增量设为 0 = 关灯：画面逐字节不动、内核一次不跑，而层"还在"。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        base = _read_frame(engine, peer, h, w)
+        engine.send(cmd="grade", action="set", dh=0.01, ds=-0.3, dv=0.2)
+        assert engine.wait_for("grade_done", timeout=60)["grade_lit"] is True
+        hot = _read_frame(engine, peer, h, w)
+        assert not np.array_equal(hot, base), "点了火却没动画面：后面那条比对就是假的"
+        engine.send(cmd="grade", action="set", dh=0.0, ds=0.0, dv=0.0)
+        done = engine.wait_for("grade_done", timeout=60)
+        assert done["grade_set"] is False and done["grade_lit"] is False, done
+        assert done["grade_ms"] == 0.0, "全零参数却跑了内核：结构短路没接上"
+        assert np.array_equal(_read_frame(engine, peer, h, w), base), \
+            "把参数归零之后画面还带着上一组的色：帧不是按当前状态出的"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_bad_grade_commands_leave_no_trace(engine):
+    """非法参数/错 action/多余键/未导图：一律整条拒，而且拒完状态是干净的。"""
+    _needs_torch()
+    _load(engine, max_px=207360, strength=0.0)
+    engine.send(cmd="grade", action="nope")
+    _expect_error(engine, "未知 grade action")
+    engine.send(cmd="grade", action="set")
+    _expect_error(engine, "什么也没给")
+    engine.send(cmd="grade", action="set", dh=0.9)
+    _expect_error(engine, "整条不生效")
+    engine.send(cmd="grade", action="set", ds=float("nan"))
+    _expect_error(engine, "整条不生效")
+    engine.send(cmd="grade", action="set", dv=0.2, amount=1.5)
+    _expect_error(engine, "整条不生效")
+    engine.send(cmd="grade", action="set", ds=-0.3, degreed=0.2)      # 拼错的键必须被拒
+    _expect_error(engine, "不认识的参数")
+    engine.send(cmd="grade", action="amount")
+    _expect_error(engine, "什么也没给")
+    # 被拒之后层必须是干净的：clear 报出全零，而不是"留着刚才那半截"
+    engine.send(cmd="grade", action="clear")
+    done = engine.wait_for("grade_done", timeout=60)
+    assert done["grade_lit"] is False and done["grade_ds"] == 0.0, done
+    assert done["bytes_grade"] == 0, done
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_grade_done_arms_emit_the_same_event_shape(engine):
+    """三条 action 臂过一遍 IPC：事件形状在 JSON 边界上不许漂（M2 审 ① 的原形状）。"""
+    _needs_torch()
+    _load(engine, max_px=207360, strength=0.0)
+    events = []
+    for kw in ({"action": "set", "ds": -0.3}, {"action": "amount", "amount": 0.5},
+               {"action": "clear"}):
+        engine.send(cmd="grade", **kw)
+        events.append(engine.wait_for("grade_done", timeout=60))
+        engine.wait_for("frame", timeout=60)
+    for k in GRADE_KEYS:
+        assert all(k in e for e in events), f"{k} 在某一臂里丢了"
+    # 每帧分段与命令层计时得由协议层加：库层的 payload 里没有它们
+    for k in ("grade_ms", "lut_ms", "filter_ms", "bands_ms", "filter_cached",
+              "deform_ms", "render_ms", "total_ms", "strength", "lut_preset", "action"):
+        assert all(k in e for e in events), f"{k} 在某一臂里丢了"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_grade_and_lut_are_independent_layers(engine, tmp_path):
+    """两层各自可关：清定向不能把表也清了，反之也一样。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        base = _read_frame(engine, peer, h, w)
+        engine.send(cmd="lut", action="set", path=_write_cube(tmp_path, 8, 0.9))
+        assert engine.wait_for("lut_done", timeout=60)["lut_lit"] is True
+        engine.wait_for("frame", timeout=60)
+        engine.send(cmd="grade", action="set", ds=-0.3)
+        g = engine.wait_for("grade_done", timeout=60)
+        assert g["grade_lit"] is True, g
+        engine.wait_for("frame", timeout=60)
+        engine.send(cmd="grade", action="clear")
+        done = engine.wait_for("grade_done", timeout=60)
+        assert done["grade_lit"] is False, done
+        # 层的独立性由"另一层的现状仍在事件里"来证，而不是靠 UI 记状态
+        assert done["lut_ms"] >= 0.0 and done["lut_preset"] is None, done
+        engine.send(cmd="lut", action="amount", amount=1.0)
+        l = engine.wait_for("lut_done", timeout=60)
+        assert l["lut_set"] is True and l["lut_lit"] is True, l
+        assert l["grade_state"]["lit"] is False, f"清掉的定向又活了：{l}"
+        assert l["lut_preset"] is None, "走 path 载表却还带着预设身份"
+        engine.send(cmd="lut", action="clear")
+        assert engine.wait_for("lut_done", timeout=60)["lut_lit"] is False
+        assert np.array_equal(_read_frame(engine, peer, h, w), base), "两层都关了画面却没还原"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_one_preset_command_sets_both_layers(engine):
+    """一键预设 = 一张表 + 三个数：一条命令之后两层都得点着，而且数字来自资产。"""
+    _needs_torch()
+    from lumaretouch_engine.ops.presets import preset_grade as pg
+
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    dh, ds, dv = pg("creamy")
+    try:
+        base = _read_frame(engine, peer, h, w)
+        engine.send(cmd="lut", action="set", preset="creamy")
+        done = engine.wait_for("lut_done", timeout=60)
+        assert done["lut_source"] == "preset:creamy", done
+        assert done["lut_title"] == "韩系奶油" and done["lut_size"] == 33, done
+        assert done["lut_preset"] == "creamy", done
+        assert done["lut_lit"] is True and done["bytes_lut"] > 0, done
+        g = done["grade_state"]
+        assert (g["dh"], g["ds"], g["dv"]) == (dh, ds, dv), g
+        assert g["lit"] is True and g["amount"] == 1.0, g
+        assert done["grade_ms"] > 0.0, f"预设的定向层没跑：{done}"
+        shot = _read_frame(engine, peer, h, w)
+        d = np.abs((shot - base).astype(np.float64))
+        assert float((d.max(axis=-1) > 0).mean()) > 0.5, \
+            f"一键预设只改了 {float((d.max(axis=-1) > 0).mean()):.2%} 像素：不像上了预设"
+        s0, s1 = _sat(base), _sat(shot)
+        moved = (s1 - s0)[d.max(axis=-1) > 0]
+        assert float((moved < 0).mean()) > 0.6, "奶油说降饱和，改动像素却多数在升"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_preset_amount_scales_both_layers_and_zero_is_byte_exact(engine):
+    """预设强度是"整预设"的强度：0.4 要两层同时 0.4，归 0 要逐字节回到基线。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        base = _read_frame(engine, peer, h, w)
+        engine.send(cmd="lut", action="set", preset="creamy", amount=0.4)
+        done = engine.wait_for("lut_done", timeout=60)
+        assert done["lut_amount"] == 0.4, done
+        assert done["grade_state"]["amount"] == 0.4, \
+            f"表的强度归 0.4 而肤色层还是 {done['grade_state']['amount']}：预设被拆开了"
+        engine.wait_for("frame", timeout=60)
+        engine.send(cmd="lut", action="amount", amount=0.0)
+        zero = engine.wait_for("lut_done", timeout=60)
+        assert zero["lut_lit"] is False and zero["grade_state"]["lit"] is False, zero
+        assert zero["grade_state"]["amount"] == 0.0, zero
+        assert zero["lut_ms"] == 0.0 and zero["grade_ms"] == 0.0, \
+            f"强度归零却还在跑内核：{zero['lut_ms']}/{zero['grade_ms']}"
+        assert np.array_equal(_read_frame(engine, peer, h, w), base), \
+            "预设强度归 0 之后画面回不到基线：混色式或短路写错了"
+        # 归 0 之后预设身份还在（只是强度 0），下一条 amount 仍应连带定向层
+        engine.send(cmd="lut", action="amount", amount=0.8)
+        back = engine.wait_for("lut_done", timeout=60)
+        assert back["grade_state"]["amount"] == 0.8 and back["grade_state"]["lit"] is True, back
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_manual_grade_drops_the_preset_identity(engine):
+    """用户手动动了肤色层，表的强度就不许再伸进肤色层——预设身份当场失效。"""
+    _needs_torch()
+    _load(engine, max_px=207360, strength=0.0)
+    engine.send(cmd="lut", action="set", preset="creamy")
+    done = engine.wait_for("lut_done", timeout=60)
+    engine.wait_for("frame", timeout=60)
+    assert done["lut_preset"] == "creamy" and done["grade_state"]["amount"] == 1.0, done
+    engine.send(cmd="grade", action="set", ds=-0.5)
+    g = engine.wait_for("grade_done", timeout=60)
+    assert g["lut_preset"] is None, f"手动改了肤色却还留着预设身份：{g}"
+    engine.wait_for("frame", timeout=60)
+    engine.send(cmd="lut", action="amount", amount=0.3)
+    l = engine.wait_for("lut_done", timeout=60)
+    assert l["lut_amount"] == 0.3, l
+    assert l["grade_state"]["amount"] == 1.0, \
+        f"表的强度把用户手调的肤色层一起拉走了：{l['grade_state']}"
+    assert l["grade_state"]["ds"] == -0.5, l
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_unknown_preset_is_rejected_without_touching_anything(engine):
+    """错预设名整条拒，而且两层都不动：不许"表上了、数字没上"。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        base = _read_frame(engine, peer, h, w)
+        engine.send(cmd="lut", action="set", preset="weishimei")
+        _expect_error(engine, "没有这个预设")
+        engine.send(cmd="lut", action="amount", amount=0.5)
+        _expect_error(engine, "还没有 LUT")
+        # 被拒的命令不出帧，所以得先用一条会出帧的把"现在屏幕上是什么"取回来：
+        # 层本来就空时 clear 也是一次正常提交（与 test_lut 那一节同一形状）
+        engine.send(cmd="lut", action="clear")
+        empty = engine.wait_for("lut_done", timeout=60)
+        assert empty["lut_set"] is False and empty["bytes_lut"] == 0, empty
+        assert np.array_equal(_read_frame(engine, peer, h, w), base), "被拒的预设改了画面"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_importing_a_new_image_drops_the_skin_tuning(engine):
+    """定向层随文档走：换图之后 image_ready 里那一份快照必须全是零。"""
+    _needs_torch()
+    _load(engine, max_px=207360, strength=0.0)
+    engine.send(cmd="grade", action="set", dh=0.01, ds=-0.3, dv=0.2)
+    assert engine.wait_for("grade_done", timeout=60)["grade_lit"] is True
+    engine.wait_for("frame", timeout=60)
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.0)
+    engine.wait_for("vram_ready", timeout=60)
+    ready = engine.wait_for("image_ready", timeout=60)
+    g = ready["grade_state"]
+    assert g["lit"] is False and (g["dh"], g["ds"], g["dv"]) == (0.0, 0.0, 0.0), \
+        f"新会话继承了上一张图的肤色参数：{g}"
+    assert g["amount"] == 1.0 and g["bytes_grade"] == 0, g
+    assert ready["bytes_lut"] == 0, ready
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_drag_stream_with_grade_runs_every_frame_but_recomputes_nothing(engine):
+    """挂着肤色层拖 600 帧：每帧真跑内核，而滤波/修容/TPS 一次都不重算。
+
+    grade_frames == frames 是反向门禁：这层如果只存在于上报里，这个数就是 0。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.5)
+    h, w = meta["h"], meta["w"]
+    engine.send(cmd="grade", action="set", dh=0.006, ds=-0.3, dv=0.2)
+    done = engine.wait_for("grade_done", timeout=60)
+    assert done["grade_lit"] is True, done
+    engine.wait_for("frame", timeout=60)
+    engine.send(cmd="bench_start", mode="image_stream", frames=6, interval_ms=20, w=w, h=h)
+    engine.wait_for("bench_started", timeout=30)
+    b = engine.wait_for("bench_done", timeout=90)
+    assert not b.get("failed"), f"跑靶失败：{b}"
+    assert b["refilter_frames"] == 0, f"拖拽流里重算了 {b['refilter_frames']} 次滤波"
+    assert b["relight_frames"] == 0, f"拖拽流里重算了 {b['relight_frames']} 次修容"
+    assert b["deform_builds"] == 0, f"拖拽流里重解了 {b['deform_builds']} 次 TPS"
+    assert b["grade_frames"] == b["frames"], \
+        f"设了肤色参数却只跑了 {b['grade_frames']}/{b['frames']} 帧：这一层没在服务"
+    assert b["grade"] > 0.0, f"定向段均值 {b['grade']} ms 为 0，与 grade_frames 对不上"
+    assert b["seg_over_frames"] == 0, f"分段重复计时 {b['seg_over_frames']} 帧"
+    st = b["grade_state"]
+    assert st["lit"] is True and st["dh"] == 0.006 and st["bytes_grade"] == 0, st
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_grade_is_refused_while_bench_is_running(engine):
+    """跑靶进行中改图层会污染那份数据：与 lut/deform/set_strength 同一条互斥。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.5)
+    engine.send(cmd="bench_start", mode="image_stream", frames=400, interval_ms=20,
+                w=meta["w"], h=meta["h"])
+    engine.wait_for("bench_started", timeout=30)
+    try:
+        engine.send(cmd="grade", action="set", ds=-0.3)
+        _expect_error(engine, "跑靶进行中，拒绝 grade")
+        engine.send(cmd="lut", action="set", preset="creamy")
+        _expect_error(engine, "跑靶进行中，拒绝 lut")
+    finally:
+        engine.send(cmd="bench_stop")
+        engine.wait_for("bench_done", timeout=90)
+
+
+def test_ready_event_lists_the_builtin_presets(engine):
+    """预设清单由引擎在 ready 里报出来：UI 的按钮不是前端抄的一份名字。
+
+    这条不需要 torch 也不需要真图——它是 CI 的 CPU job 里唯一能卡住“资产改了名而
+    UI 还拿着旧名去撞拒绝”的位置。名字漂了不是报错而是按钮全灭，所以必须在这里钉。
+    """
+    engine.send(cmd="hello")
+    ready = engine.wait_for("ready", timeout=30)
+    assert ready["protocol"] == 1, ready
+    got = {p["name"] for p in ready["presets"]}
+    assert got == {"creamy", "coolwhite"}, f"预设清单与资产对不上：{ready['presets']}"
+    assert all(p["title"] for p in ready["presets"]), "按钮要有可读标题，不能只有英文键名"
