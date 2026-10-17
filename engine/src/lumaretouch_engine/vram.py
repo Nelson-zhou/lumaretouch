@@ -188,6 +188,14 @@ class PreviewPipeline:
         self.grade_params: tuple = (0.0, 0.0, 0.0)      # (dh, ds, dv)，提交前已过 check_params
         self.grade_amount: float = 1.0
         self.last_grade_ms: float = 0.0
+        # M6：换底层。挂在渲染链最尾（肤色之后、量化之前），是逐帧的 `α·前景+(1-α)·背景`。
+        # 与其它层的差别：遮罩是按**这一档代理帧像素坐标**成立的，所以它随代理档作废
+        # （进 PROXY_BOUND），也随设备重挂（遮罩张量活在那块卡上）。没活时 apply 一步直接
+        # 把张量递回，一个算子都不跑——strength=0/没换底那帧的逐字节恒等承诺一分不改。
+        self.bg_matte = None        # (1,1,H,W) float32 [0,1]，常驻
+        self.bg_ref = None          # (1,3,1,1) float32 [0,1]（单色背景）或 (1,3,H,W)（整幅背景）
+        self.bg_active = False
+        self.last_bg_ms: float = 0.0
 
     # ---- 装载：一次性 H2D ----------------------------------------------
     def load_rgb_u8(self, rgb: np.ndarray) -> None:
@@ -376,7 +384,9 @@ class PreviewPipeline:
         # 它与“定向在表之前”差 11–12 LSB / 8–9% 像素（乘性量与表里的饱和缩放不交换），
         # 而窗口落在表之前时，用户看到的皮肤有 0.11% 滑块管不到、另有 1.20% 被误管。
         # “所见即所调”要求窗口找的是屏幕上那份颜色，所以它在 lut 之后。
-        return self.apply_grade(self.apply_lut(self.apply_deform(out)))
+        # 换底必须在链尾（所有调色/肤色之后）：合成的是屏幕上那份颜色叠新背景，
+        # 放在前面会让磨皮/lut 作用到即将被背景替换掉的旧底上（与 M3-b “链尾不污染上游”同一条）。
+        return self.apply_background(self.apply_grade(self.apply_lut(self.apply_deform(out))))
 
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:
@@ -1147,6 +1157,78 @@ class PreviewPipeline:
         才是这句话；lut/light/deform 三层都因为“不报就等于藏账”而必须报实数。"""
         return 0
 
+    # ---- M6：换底层 ----------------------------------------------------
+    def has_background(self) -> bool:
+        return bool(self.bg_active and self.bg_matte is not None and self.bg_ref is not None)
+
+    def set_background(self, matte, bg, *, image_bg=None) -> dict:
+        """提交一组常驻换底：先全量校验、后才写回（被拒不留半截）。同 set_grade 的铁律。
+
+        matte：(H,W) [0,1] float 或 uint8(0..255)。bg：(3,) [0,1] 单色，或 image_bg 为 (H,W,3)
+        整幅背景（二者取其一）。任何形状/非有限不匹配都拒，不往 shm 里递一块坏帧。
+        """
+        if matte.shape != (self.h, self.w):
+            raise ValueError(f"遮罩形状 {matte.shape} 与会话 {self.h}x{self.w} 不符")
+        m = np.asarray(matte, dtype=np.float64)
+        if np.asarray(matte).dtype == np.uint8:
+            m = m / 255.0
+        if not np.isfinite(m).all():
+            raise ValueError("遮罩含非有限值，已拒")
+        m = np.clip(m, 0.0, 1.0)
+        if image_bg is not None:
+            b = np.asarray(image_bg, dtype=np.float64)
+            if b.shape != (self.h, self.w, 3):
+                raise ValueError(f"背景图形状 {b.shape} 与会话不符")
+            if not np.isfinite(b).all():
+                raise ValueError("背景图含非有限值，已拒")
+            b = np.clip(b, 0.0, 1.0)
+            b = np.ascontiguousarray(b.transpose(2, 0, 1))[None]        # (1,3,H,W)
+            bref = torch.tensor(b, dtype=torch.float32, device=self.device)
+        else:
+            c = np.asarray(bg, dtype=np.float64).reshape(3)
+            if not np.isfinite(c).all():
+                raise ValueError("背景色含非有限值，已拒")
+            c = np.clip(c, 0.0, 1.0)
+            bref = torch.tensor(c.reshape(1, 3, 1, 1), dtype=torch.float32,
+                                device=self.device)
+        mt = torch.as_tensor(m, dtype=torch.float32, device=self.device)[None, None].contiguous()
+        self.bg_matte, self.bg_ref = mt, bref
+        self.bg_active = True
+        return self._bg_payload()
+
+    def clear_background(self) -> dict:
+        self.bg_matte = None
+        self.bg_ref = None
+        self.bg_active = False
+        self.last_bg_ms = 0.0
+        return self._bg_payload()
+
+    def _bg_payload(self) -> dict:
+        return {"bg_active": bool(self.has_background()),
+                "bytes_bg": int(self.bg_resident_bytes()),
+                "device": str(self.device)}
+
+    def bg_resident_bytes(self) -> int:
+        if not self.has_background():
+            return 0
+        return int(self.bg_matte.numel() * self.bg_matte.element_size()
+                   + self.bg_ref.numel() * self.bg_ref.element_size())
+
+    def apply_background(self, t):
+        """每帧只走这里。没活就把张量递回（一个算子也不跑，连混合都不做）。"""
+        self.last_bg_ms = 0.0
+        if not self.has_background():
+            return t
+        t0 = time.perf_counter()
+        from .ops.matting import composite_t
+        out = composite_t(t, self.bg_matte, self.bg_ref)
+        if not torch.isfinite(out).all():
+            raise ValueError("换底合成产出非有限值，已拒（不写回也不缓存）")
+        if self.device.type != "cpu":
+            torch.cuda.synchronize(self.device)
+        self.last_bg_ms = (time.perf_counter() - t0) * 1000.0
+        return out
+
     def pack(self, out) -> None:
         """float→uint8 并写进常驻帧缓冲，同样全程在显存里做。
 
@@ -1293,4 +1375,10 @@ def warm_device(device: str, side: int = 64) -> float:
         pipe.grade_params = (0.0, 0.0, 0.0)
         pipe.grade_amount = 1.0
         pipe.last_grade_ms = 0.0
+        # 换底层同理：预热会话上挂的遮罩/背景张量不能让下一个真会话继承，
+        # 否则 image_ready 里 bytes_bg 会多报一份用户从未点过的常驻。
+        pipe.bg_matte = None
+        pipe.bg_ref = None
+        pipe.bg_active = False
+        pipe.last_bg_ms = 0.0
     return (time.perf_counter() - t0) * 1000.0

@@ -136,6 +136,10 @@ class Engine:
         # 定向层（M3-b）：引擎侧只存四个数（它不持有张量）。与调色层同一条规矩：
         # 随图清、随设备迁移重提交。
         self._grade = (0.0, 0.0, 0.0, 1.0)
+        # 换底层（M6）：存“可重建一份常驻遮罩所需的一切”——遮罩原件（代理坐标
+        # uint8）、背景色、后端与参数。随图清、随代理档作废、随设备重挂（与掩膜同命）。
+        self._bg = dict(active=False, matte=None, bg=None, backend=None,
+                        tol=None, softness=None)
         # 当前生效的内置预设名（走 path/text 或手动改定向时为 None）。它不是装饰：
         # 它决定“调色强度”要不要连带施加到定向层，也是 UI 显示“预设/手动”的唯一出处。
         self._lut_preset = None
@@ -542,6 +546,16 @@ class Engine:
                     emit({"event": "engine_warn",
                           "warn": f"新会话重提交肤色定向失败，已整层清除（{type(e).__name__}）：{e}"})
                     self._grade = (0.0, 0.0, 0.0, 1.0)
+            # 换底层（M6）：遮罩张量活在那块卡上，新会话必须用存下的遮罩重新上传一次。
+            # 不重挂就是“会话迁了、换底还在宿主侧但画面回到底图”——lut/grade 写的那段担心在这一层同样成立。
+            if self._bg.get("active") and self._bg.get("matte") is not None:
+                try:
+                    pipe.set_background(self._bg["matte"], self._bg["bg"])
+                except (RuntimeError, ValueError) as e:
+                    emit({"event": "engine_warn",
+                          "warn": f"新会话重挂换底层失败，已整层清除（{type(e).__name__}）：{e}"})
+                    self._bg = dict(active=False, matte=None, bg=None, backend=None,
+                                    tol=None, softness=None)
         emit({"event": "vram_ready", "device": str(pipe.device), "w": w, "h": h,
               "adopted": bool(adopt),
               "bytes_src": int(pipe.src_u8.numel() * pipe.src_u8.element_size()),
@@ -557,10 +571,10 @@ class Engine:
     # 静默丢掉那一层 —— 那是本仓最贵的一族坑（「会话迁了、图层没迁」）的新变体。
     DOC_FIELDS = ("_strength", "_params", "_channel", "_repair_ops", "_redo_ops", "_op_seq",
                   "_light_ops", "_light_redo", "_light", "_deform", "_lut", "_lut_amount",
-                  "_lut_preset", "_grade", "_precompute", "_precompute_backend")
+                  "_lut_preset", "_grade", "_bg", "_precompute", "_precompute_backend")
     # 代理档一变就作废的那些层：它们的坐标是**这一档代理帧**上的像素坐标。
     PROXY_BOUND = ("_channel", "_repair_ops", "_redo_ops", "_light_ops", "_light_redo",
-                   "_deform", "_precompute", "_precompute_backend")
+                   "_deform", "_bg", "_precompute", "_precompute_backend")
 
     def _fresh_doc_state(self) -> dict:
         """一张还没被人动过的图的起始状态。
@@ -581,6 +595,8 @@ class Engine:
                 "_deform": dict(amounts={k: 0.0 for k in KINDS}, built=False),
                 "_lut": None, "_lut_amount": 1.0, "_lut_preset": None,
                 "_grade": (0.0, 0.0, 0.0, 1.0),
+                "_bg": dict(active=False, matte=None, bg=None, backend=None,
+                             tol=None, softness=None),
                 "_precompute": None, "_precompute_backend": None,
                 # 掩膜/笔迹/形变场都活在**那一档代理尺寸**上，所以尺寸也是状态的一部分。
                 "_proxy": None}
@@ -600,6 +616,7 @@ class Engine:
               # 不会互相改；真要出现就地写，这里就得改成拷贝。
               "_lut": self._lut, "_lut_amount": float(self._lut_amount),
               "_lut_preset": self._lut_preset, "_grade": tuple(self._grade),
+              "_bg": dict(self._bg),
               "_precompute": self._precompute, "_precompute_backend": self._precompute_backend,
               "_proxy": ((int(self._vram.h), int(self._vram.w))
                          if (self._vram is not None and self._image_loaded) else None)}
@@ -620,6 +637,7 @@ class Engine:
         self._light_ops = list(self._light_ops)
         self._light_redo = list(self._light_redo)
         self._grade = tuple(self._grade)
+        self._bg = dict(self._bg)
         self._strength = _clamp_strength(self._strength)
 
     def _drop_proxy_layers(self, st: dict, why: str) -> dict:
@@ -673,7 +691,7 @@ class Engine:
     HISTORY_SKIP = ("_precompute", "_precompute_backend")
     # 哪些命令算"编辑"。判定只在这一个名单里，推送点也只有分发器一处：
     # 六个 cmd_* 里各插一次 push 的下场可以预见——第七层加进来时总有人忘。
-    EDIT_CMDS = ("set_strength", "inpaint", "light", "deform", "lut", "grade")
+    EDIT_CMDS = ("set_strength", "inpaint", "light", "deform", "lut", "grade", "background")
     HISTORY_ACTIONS = ("undo", "redo", "state", "clear")
 
     def _history_capture(self) -> dict:
@@ -703,6 +721,13 @@ class Engine:
                         "built": bool(v["built"])}
             elif k == "_grade":
                 d[k] = [round(float(x), 6) for x in v]
+            elif k == "_bg":
+                # 遮罩是 (H,W) uint8，拿 shape+sum 当签名：同一个遮罩 sum 定，换一笔必变。
+                mt = v.get("matte")
+                d[k] = {"active": bool(v.get("active")), "bg": v.get("bg"),
+                        "backend": v.get("backend"), "tol": v.get("tol"),
+                        "softness": v.get("softness"),
+                        "matte": None if mt is None else (list(mt.shape), int(mt.sum()))}
             elif k == "_strength":
                 d[k] = round(float(v), 6)
             elif k in ("_params", "_light"):
@@ -2208,6 +2233,120 @@ class Engine:
               "total_ms": round(float(total_ms), 2),
               "strength": self._strength})
 
+    def cmd_background(self, p: dict):
+        """抠图/换底（M6）：事件驱动——一次“换底”算一次遮罩，之后逐帧只做线性光合成。
+
+        两个后端，证据强度不同，不许混报：
+        * `color_key`（默认）：确定性色键，拿当前代理图与背景参考色的色差算遮罩——零依赖、可测。
+        * `birefnet`：神经网络自动抠图。权重不在就是 MissingBackend，整条拒绝——
+          绝不静默退成色键然后报一个“抠图成功”（与消除笔的 lama 守卫同一条规矩）。
+        遮罩存为代理坐标 uint8，进 PROXY_BOUND（换代理档即作废）与统一历史栈（可撤销）。
+        """
+        import numpy as np
+
+        action = p.get("action", "set")
+        if action not in ("set", "clear"):
+            emit({"event": "error", "error": f"未知 background action: {action}（可用：set/clear）"})
+            return
+        if not self._image_loaded or self._vram is None:
+            emit({"event": "error", "error": "尚未 load_image"})
+            return
+        if self.shm is None or (self.shm.w, self.shm.h) != (self._vram.w, self._vram.h):
+            emit({"event": "error", "error": f"shm {getattr(self.shm, 'w', '?')}x"
+                  f"{getattr(self.shm, 'h', '?')} != 会话 {self._vram.w}x{self._vram.h}，请先 load_image"})
+            return
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝 background：先 bench_stop"})
+            return
+        extra = sorted(set(p) - {"cmd", "action", "backend", "bg", "tol", "softness"})
+        if extra:
+            emit({"event": "error", "error": f"background 收到不认识的参数：{', '.join(extra)}"
+                  "（可用：backend / bg / tol / softness）"})
+            return
+        t_start = monotonic_ns()
+        if action == "clear":
+            info = self._vram.clear_background()
+            self._bg = dict(active=False, matte=None, bg=None, backend=None,
+                            tol=None, softness=None)
+            fr = self._write_current_frame("background")
+            render_ms = fr.pop("render_ms")
+            emit({"event": "bg_done", "action": "clear", "bg_ms": round(float(self._vram.last_bg_ms), 2),
+                  "render_ms": render_ms,
+                  "total_ms": round((monotonic_ns() - t_start) / 1e6, 2),
+                  "device": str(self._vram.device), **info})
+            emit(fr)
+            return
+
+        backend = p.get("backend", "color_key")
+        if backend not in ("color_key", "birefnet"):
+            emit({"event": "error", "error": f"未知抠图后端: {backend}（可用：color_key/birefnet）"})
+            return
+        bg = p.get("bg")
+        if (not isinstance(bg, (list, tuple))) or len(bg) != 3:
+            emit({"event": "error", "error": "background set 缺 bg：需 [r,g,b] 三个 0–255 整数"})
+            return
+        try:
+            bg_i = [int(v) for v in bg]
+        except (TypeError, ValueError):
+            emit({"event": "error", "error": f"bg 非整数三元：{bg!r}"})
+            return
+        if any(not 0 <= v <= 255 for v in bg_i):
+            emit({"event": "error", "error": f"bg 分量超出 0–255：{bg_i}"})
+            return
+        unit = [v / 255.0 for v in bg_i]
+        src = self._src_rgb
+        if src is None or src.shape[:2] != (self._vram.h, self._vram.w):
+            emit({"event": "error", "error": "源图尺寸与会话不符（先 load_image）"})
+            return
+        matte_u8 = None
+        if backend == "color_key":
+            from .ops.matting import key_matte_np
+            tol = float(p.get("tol", 0.12))
+            softness = float(p.get("softness", 0.10))
+            if not (0.0 <= tol <= 1.0 and 1e-3 <= softness <= 1.0):
+                emit({"event": "error", "error": f"tol={tol}/softness={softness} 越界（tol∈[0,1]、softness∈[0.001,1]）"})
+                return
+            a = key_matte_np(src, tol=tol, softness=softness)
+            matte_u8 = np.round(np.clip(a, 0.0, 1.0) * 255.0).astype(np.uint8)
+            if int((matte_u8 > 0).sum()) == 0:
+                emit({"event": "error", "error": "色键遮罩全为 0：背景与前景太接近，调高 tol 或换 birefnet"})
+                return
+        else:
+            from .ops import birefnet
+            try:
+                matte = birefnet.BiRefNetMatte(device=str(self._vram.device))(self._src_gpu_norm())
+            except birefnet.MissingBackend as e:
+                emit({"event": "error", "error": str(e)})   # 绝不静默退成色键
+                return
+            matte_u8 = (matte.detach().cpu().numpy() * 255.0).round().clip(0, 255).astype(np.uint8)
+        try:
+            info = self._vram.set_background(matte_u8, unit)
+        except (ValueError, RuntimeError) as e:
+            emit({"event": "error", "error": f"换底被拒，会话原样未动：{e}"})
+            return
+        self._bg = dict(active=True, matte=matte_u8, bg=unit, backend=backend,
+                        tol=float(p.get("tol", 0.12)) if backend == "color_key" else None,
+                        softness=float(p.get("softness", 0.10)) if backend == "color_key" else None)
+        fr = self._write_current_frame("background")
+        render_ms = fr.pop("render_ms")
+        fill = round(float((matte_u8 > 127).mean()), 4)
+        emit({"event": "bg_done", "action": "set", "backend": backend, "bg": bg_i,
+              "matte_fill_fg": fill, "bytes_bg": int(info["bytes_bg"]),
+              "bg_ms": round(float(self._vram.last_bg_ms), 2), "render_ms": render_ms,
+              "total_ms": round((monotonic_ns() - t_start) / 1e6, 2),
+              "device": str(self._vram.device), **info})
+        emit(fr)
+
+    def _src_gpu_norm(self):
+        """当前会话源图 → (1,3,H,W) [0,1] float 常驻张量（供 birefnet 前向）。"""
+        import torch
+
+        pipe = self._vram
+        x = pipe.src_f32
+        if x is None:
+            raise RuntimeError("会话尚未加载源图")
+        return x if x.dtype == torch.float32 else x.to(torch.float32)
+
     def cmd_grade(self, p: dict):
         """肤色 HSL 定向（M3-b）：三个滑块 + 一个混入比例。
 
@@ -2594,6 +2733,7 @@ class Engine:
                  "precompute": self.cmd_precompute, "inpaint": self.cmd_inpaint,
                  "light": self.cmd_light, "deform": self.cmd_deform,
                  "lut": self.cmd_lut, "grade": self.cmd_grade, "export": self.cmd_export,
+                 "background": self.cmd_background,
                  "session": self.cmd_session, "history": self.cmd_history}
         # 不用 `for line in sys.stdin`：那会等 EOF，收到 shutdown 也退不掉
         while not self._quit:

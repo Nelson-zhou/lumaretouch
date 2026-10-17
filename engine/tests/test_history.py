@@ -120,7 +120,7 @@ def test_dispatch_table_registers_history_and_edit_commands(eng):
     而用户只在按了 Ctrl+Z 之后才发现——那时已经说不清是谁的责任。"""
     table = {"hello", "bench_start", "bench_stop", "set_device", "shutdown", "load_image",
              "set_strength", "precompute", "inpaint", "light", "deform", "lut", "grade",
-             "export", "session", "history"}
+             "background", "export", "session", "history"}
     assert set(Engine.EDIT_CMDS) <= table
     assert "history" in table
     assert set(Engine.HISTORY_ACTIONS) == {"undo", "redo", "state", "clear"}

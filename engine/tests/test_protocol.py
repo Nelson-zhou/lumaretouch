@@ -3285,3 +3285,69 @@ def test_history_clear_is_not_a_step_and_refuses_empty_actions(engine):
     again = _hist(engine, "undo")
     assert again.get("noop") is True
     assert again["doc_state"]["strength"] == pytest.approx(0.4), "clear 不该改画面状态"
+
+
+# ------------------------------------------------------------------ M6 抠图/换底
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_background_swap_changes_frame_and_is_undoable(engine):
+    """M6-b 换底端到端：色键换底真改画面、可撤销逐字节回退、重做逐字节回来、clear 复原。
+
+    证的是「常驻换底层接进了渲染热路径，并且被统一历史栈当成了一步」——算子层的保真
+    在 test_matting 已钉，这里要的是通路级证据：帧真变了、撤销真能整层退回出厂帧。
+    """
+    _needs_torch()
+    meta = _load(engine, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    base = _read_frame(engine, peer, h, w)          # load 出厂帧（strength=0）
+
+    engine.send(cmd="background", action="set", backend="color_key",
+                bg=[255, 0, 0], tol=0.22, softness=0.06)
+    done = engine.wait_for("bg_done", timeout=30)
+    assert done["action"] == "set" and done["bg_active"] is True
+    assert done["bytes_bg"] > 0, "换底层没占任何常驻——遮罩没建起来"
+    assert done["device"].split(":")[0] == "cpu"
+    swapped = _read_frame(engine, peer, h, w)
+    changed = int((np.abs(swapped - base).sum(axis=2) > 0).sum())
+    assert changed > 0, "换底画面一点没变（遮罩全 1 或热路径没接上）"
+    red = (swapped[:, :, 0] > 200) & (swapped[:, :, 1] < 45) & (swapped[:, :, 2] < 45)
+    assert int(red.sum()) > 0, "背景区没被换成红底"
+
+    # 撤销：整层退回出厂帧，逐字节
+    engine.send(cmd="history", action="undo")
+    engine.wait_for("history_state", timeout=30)
+    back = _read_frame(engine, peer, h, w)
+    assert np.array_equal(back, base), "撤销换底没逐字节回到出厂帧"
+    # 重做：逐字节回到换底那帧
+    engine.send(cmd="history", action="redo")
+    engine.wait_for("history_state", timeout=30)
+    redone = _read_frame(engine, peer, h, w)
+    assert np.array_equal(redone, swapped), "重做没逐字节回到换底帧"
+    # clear 复原
+    engine.send(cmd="background", action="clear")
+    engine.wait_for("bg_done", timeout=30)
+    off = _read_frame(engine, peer, h, w)
+    assert np.array_equal(off, base), "clear 后没回到出厂帧"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_background_birefnet_rejected_without_weights(engine):
+    """birefnet 后端无权重必须诚实拒绝：报 error、不静默退成色键、引擎照常活着。
+
+    这是 #11/决策 9 那条「能力不许说谎」在换底上的翻版：宁可拒绝也不拿色键冒充神经网络抠图。
+    """
+    _needs_torch()
+    meta = _load(engine, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    base = _read_frame(engine, peer, h, w)
+
+    engine.send(cmd="background", action="set", backend="birefnet", bg=[0, 255, 0])
+    err = engine.wait_for("error", timeout=30)
+    assert "birefnet" in err["error"].lower() or "权重" in err["error"], err["error"]
+    # 引擎没死：随后一次色键换底应正常出帧
+    engine.send(cmd="background", action="set", backend="color_key", bg=[0, 0, 255],
+                tol=0.22, softness=0.06)
+    engine.wait_for("bg_done", timeout=30)
+    got = _read_frame(engine, peer, h, w)
+    assert int((np.abs(got - base).sum(axis=2) > 0).sum()) > 0, "拒绝 birefnet 后引擎应仍能色键换底"
