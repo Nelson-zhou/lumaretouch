@@ -293,34 +293,36 @@ def _u_kernel(d2):
     return 0.5 * d2 * np.log(np.maximum(d2, 1e-12))
 
 
-def _tps_field(P, D, X, lam: float, scale: float = 1.0):
-    """TPS 解算 + 在 X 上求稠密场。P/D/X 同制（numpy 或 float64 torch），像素单位。
+def tps_solve(P, D, *, lam: float = 1e-8, scale: float = 1.0):
+    """把 TPS 里**与采样点无关**的那一段解出来，返回可供多次求值复用的状态。
 
-    scale 是各向同性的长度归一（坐标与位移同除一个因子，场再乘回来）。见模块
-    docstring 第 4 条：不做这一步，λ 相对 U 的量级等于 0，条件数会把 GPU/CPU 两条
-    路径劈开近 1 px。
+    为什么要拆开（不是洁癖，是账单）：解算是 (n+3)×(n+3) 的线性方程组，GPU 上
+    `torch.linalg.solve` 单次要几毫秒（启动开销，与 n 几乎无关），而稠密求值要按
+    tile/按行带做几十次。不拆开的话，导出会把同一组方程解几十遍——实测 5 MP 上
+    那一笔是 0.8 s，比五个算子段加起来还多。拆开之后它与图幅、与 tile 数都无关。
+
+    与 `_tps_field` 逐字同式（同一套缩放、同一个 solve、同一个 aff），所以
+    "拆开不等于换实现"这条是靠代码形状立的，不是靠口头。
     """
     n = P.shape[0]
     is_t = torch is not None and torch.is_tensor(P)
-    if scale != 1.0:
-        P, D, X = P / scale, D / scale, X / scale
     if is_t:
-        dev, dt = P.device, P.dtype
-        A = torch.cat([torch.ones(n, 1, device=dev, dtype=dt), P], dim=1)
+        Ps, Ds = (P / scale) if scale != 1.0 else P, (D / scale) if scale != 1.0 else D
+        dev, dt = Ps.device, Ps.dtype
+        A = torch.cat([torch.ones(n, 1, device=dev, dtype=dt), Ps], dim=1)
         L = torch.zeros(n + 3, n + 3, device=dev, dtype=dt)
-        L[:n, :n] = _u_kernel(torch.cdist(P, P).pow(2))
+        L[:n, :n] = _u_kernel(torch.cdist(Ps, Ps).pow(2))
         L[:n, n:] = A
         L[n:, :n] = A.T
-        rhs = torch.zeros(n + 3, D.shape[1], device=dev, dtype=dt)
-        rhs[:n] = D
+        rhs = torch.zeros(n + 3, Ds.shape[1], device=dev, dtype=dt)
+        rhs[:n] = Ds
         sol = torch.linalg.solve(L + lam * torch.eye(n + 3, device=dev, dtype=dt), rhs)
-        aff = sol[n:]                             # (3,2)：aff[m, c] = 第 m 个基函数对第 c 个分量的系数
-        # 注意是 X @ aff[1:] 而不是 X @ aff[1:].T：aff[1:] 的行是基函数（∂x、∂y）、列是
-        # 分量，转置会把"x 基对 y 分量的系数"当成"y 基对 x 分量的系数"用。这个矩阵
-        # 一般不对称，写错就是纯 y 请求里冒出 1 px 级的 x 位移（探针实测 1.19 px）。
-        f = _u_kernel(torch.cdist(X, P).pow(2)) @ sol[:n] + aff[0] + X @ aff[1:]
     else:
-        Pn, Dn, Xn = np.asarray(P), np.asarray(D), np.asarray(X)
+        Pn = np.asarray(P)
+        Dn = np.asarray(D)
+        if scale != 1.0:
+            Pn, Dn = Pn / scale, Dn / scale
+        Ps, Ds = Pn, Dn
         A = np.hstack([np.ones((n, 1)), Pn])
         L = np.zeros((n + 3, n + 3))
         L[:n, :n] = _u_kernel(((Pn[:, None, :] - Pn[None, :, :]) ** 2).sum(-1))
@@ -329,16 +331,49 @@ def _tps_field(P, D, X, lam: float, scale: float = 1.0):
         rhs = np.zeros((n + 3, Dn.shape[1]))
         rhs[:n] = Dn
         sol = np.linalg.solve(L + lam * np.eye(n + 3), rhs)
-        aff = sol[n:]                              # (3,2)：常数项 + 线性项，同上（不要转置）
-        f = _u_kernel(((Xn[:, None, :] - Pn[None, :, :]) ** 2).sum(-1)) @ sol[:n] \
-            + aff[0] + Xn @ aff[1:]
+    aff = sol[n:]             # (3,2)：aff[m, c] = 第 m 个基函数对第 c 个分量的系数
+    return {"P": Ps, "sol": sol[:n], "aff": aff, "scale": scale, "torch": is_t}
+
+
+def tps_eval(state, X):
+    """在采样点 X（**像素单位**，(N,2)）上求稠密位移场。与 tps_solve 配套。
+
+    注意是 `X @ aff[1:]` 而不是 `X @ aff[1:].T`：aff[1:] 的行是基函数（∂x、∂y）、
+    列是分量，转置会把"x 基对 y 分量的系数"当成"y 基对 x 分量的系数"用。这个矩阵
+    一般不对称，写错就是纯 y 请求里冒出 1 px 级的 x 位移（探针实测 1.19 px）。
+    """
+    scale = state["scale"]
+    P, sol, aff = state["P"], state["sol"], state["aff"]
+    if state["torch"]:
+        Xs = X / scale if scale != 1.0 else X
+        f = _u_kernel(torch.cdist(Xs, P).pow(2)) @ sol + aff[0] + Xs @ aff[1:]
+    else:
+        Xn = np.asarray(X)
+        Xs = Xn / scale if scale != 1.0 else Xn
+        f = _u_kernel(((Xs[:, None, :] - P[None, :, :]) ** 2).sum(-1)) @ sol + aff[0] + Xs @ aff[1:]
     return f * scale if scale != 1.0 else f
 
 
-def _window(h: int, w: int, cx: float, cy: float, R: float, r0: float, tensor=None):
+def _tps_field(P, D, X, lam: float, scale: float = 1.0):
+    """TPS 解算 + 在 X 上求稠密场。P/D/X 同制（numpy 或 float64 torch），像素单位。
+
+    scale 是各向同性的长度归一（坐标与位移同除一个因子，场再乘回来）。见模块
+    docstring 第 4 条：不做这一步，λ 相对 U 的量级等于 0，条件数会把 GPU/CPU 两条
+    路径劈开近 1 px。
+    """
+    return tps_eval(tps_solve(P, D, lam=lam, scale=scale), X)
+
+
+def _window(h: int, w: int, cx: float, cy: float, R: float, r0: float, tensor=None,
+            box: tuple | None = None):
     """紧支撑窗：r ≤ r0 恒为 1，r ≥ R 恒为 0，中间 smoothstep。像素单位、各向同性的圆。
-    控制点都落在 r0 内，所以窗不改变"TPS 精确插值请求位移"这条性质。"""
-    ys, xs = np.mgrid[0:h, 0:w].astype(np.float64)
+    控制点都落在 r0 内，所以窗不改变"TPS 精确插值请求位移"这条性质。
+
+    box=(y0,y1,x0,x1) 只把**求值网格**切小，圆心/半径仍是整幅坐标：切出去的 (bh,bw) 窗口
+    与整幅窗口的对应切片逐元素相等。导出按 tile 算场靠的就是这一条。
+    """
+    y0, y1, x0, x1 = box if box is not None else (0, h, 0, w)
+    ys, xs = np.mgrid[y0:y1, x0:x1].astype(np.float64)
     r = np.hypot(xs - cx, ys - cy)
     t = np.clip((r - r0) / max(R - r0, 1e-9), 0.0, 1.0)
     win = 1.0 - t * t * (3.0 - 2.0 * t)
@@ -348,35 +383,59 @@ def _window(h: int, w: int, cx: float, cy: float, R: float, r0: float, tensor=No
 
 
 def tps_field_np(P, D, h: int, w: int, *, cx: float, cy: float,
-                 R: float, r0: float, lam: float = 1e-8) -> np.ndarray:
-    """CPU 参考实现：返回 (H,W,2) 位移场（像素单位），带紧支撑窗。
+                 R: float, r0: float, lam: float = 1e-8,
+                 box: tuple | None = None) -> np.ndarray:
+    """CPU 参考实现：位移场（像素单位，带紧支撑窗）。形状是 box 那一段、几何是整幅那一份。
 
     cx/cy/R/r0 都是像素单位，且必须是同一个坐标系（由 controls() 的 meta["frame"] 给）。
     这里不设默认值：默认值等于"猜一个脸的位置"，而脸在不在画面正中是后端说了算的事。
     """
-    yy, xx = np.mgrid[0:h, 0:w].astype(np.float64)
+    y0, y1, x0, x1 = box if box is not None else (0, h, 0, w)
+    yy, xx = np.mgrid[y0:y1, x0:x1].astype(np.float64)
     X = np.stack([xx.ravel(), yy.ravel()], axis=1)
     f = _tps_field(np.asarray(P, dtype=np.float64), np.asarray(D, dtype=np.float64),
-                   X, lam, scale=float(max(h, w))).reshape(h, w, 2)
-    return f * _window(h, w, cx, cy, R, r0)[..., None]
+                   X, lam, scale=float(max(h, w))).reshape(y1 - y0, x1 - x0, 2)
+    return f * _window(h, w, cx, cy, R, r0, box=box)[..., None]
+
+
+def tps_field_from_state(state, h: int, w: int, *, cx: float, cy: float,
+                         R: float, r0: float, device="cpu",
+                         box: tuple | None = None):
+    """用已解好的系数在 box 那一段网格上求场（(bh,bw,2) float32）。与 tps_field_t 同一后半段。
+
+    拆点在这里而不是就地重写一份，是为了"导出复用解算"与"预览整幅解一次"**必须是同一个
+    函数**：两半只共用 tps_eval 不够，窗与 float32 落盘也得同一条。
+    """
+    y0, y1, x0, x1 = box if box is not None else (0, h, 0, w)
+    dev = torch.device(device) if isinstance(device, str) else device
+    yy, xx = torch.meshgrid(
+        torch.arange(y0, y1, device=dev, dtype=torch.float64),
+        torch.arange(x0, x1, device=dev, dtype=torch.float64), indexing="ij")
+    X = torch.stack([xx.ravel(), yy.ravel()], dim=1)
+    f = tps_eval(state, X).reshape(y1 - y0, x1 - x0, 2)
+    win = _window(h, w, cx, cy, R, r0, tensor=dev, box=box)
+    return (f * win[..., None]).to(torch.float32)
 
 
 def tps_field_t(P, D, h: int, w: int, *, cx: float, cy: float,
-                R: float, r0: float, lam: float = 1e-8, device="cpu"):
+                R: float, r0: float, lam: float = 1e-8, device="cpu",
+                box: tuple | None = None):
     """GPU 生产实现，与 tps_field_np 逐句同语义。float64 不是保守，是必需：
-    U 的量级到 1e7，float32 下远场是"大数相减得小数"，误差能到 1 px 级。"""
+    U 的量级到 1e7，float32 下远场是"大数相减得小数"，误差能到 1 px 级。
+
+    **box 是显存问题而不是精度问题**：稠密求值的开销量在 (像素数 × 控制点数) 的
+    U 矩阵上，整幅一次求值在 5 MP 上就要 GB 级 VRAM，而 M4 的主张是"峰值只随 tile
+    走"。切块求值是解析等价的（同一个 X 只取子集，scale 仍按整幅 max(h,w) 归一），
+    所以它不引入任何近似——这一点由 test_deform 里"切片 == 整幅对应切片逐元素相等"
+    钉住，不是口头约定。
+    """
     if torch is None:
         raise RuntimeError("tps_field_t 需要 torch")
     dev = torch.device(device) if isinstance(device, str) else device
     P64 = P.to(dev, dtype=torch.float64) if torch.is_tensor(P) else torch.as_tensor(P, dtype=torch.float64, device=dev)
     D64 = D.to(dev, dtype=torch.float64) if torch.is_tensor(D) else torch.as_tensor(D, dtype=torch.float64, device=dev)
-    yy, xx = torch.meshgrid(
-        torch.arange(h, device=dev, dtype=torch.float64),
-        torch.arange(w, device=dev, dtype=torch.float64), indexing="ij")
-    X = torch.stack([xx.ravel(), yy.ravel()], dim=1)
-    f = _tps_field(P64, D64, X, lam, scale=float(max(h, w))).reshape(h, w, 2)
-    win = _window(h, w, cx, cy, R, r0, tensor=dev)
-    return (f * win[..., None]).to(torch.float32)
+    return tps_field_from_state(tps_solve(P64, D64, lam=lam, scale=float(max(h, w))),
+                                h, w, cx=cx, cy=cy, R=R, r0=r0, device=dev, box=box)
 
 
 def unit_field(landmarks, kind: str, h: int, w: int, *, device="cpu",

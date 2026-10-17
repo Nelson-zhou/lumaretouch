@@ -182,6 +182,34 @@ def test_gpu_field_matches_cpu_reference():
         assert np.abs(got - ref.astype(np.float32)).max() < 1e-3
 
 
+def test_boxed_field_is_the_same_field_exactly():
+    """切带求值必须与整幅求值**逐元素相等**——M4 那句"显存峰值只随 tile 走"全靠这一条。
+
+    这不是"足够接近"的判据：TPS 的稠密求值是采样点位置的解析函数，而 `scale` 仍按
+    整幅 max(h,w) 归一，所以切出来的就是同一张场的对应切片。写 0 容差是故意的：一旦
+    有人把 scale 改成带高（那才是真正的"逐 tile 各解各的"错），这里当场红。
+    """
+    lm = landmarks()
+    P, D, meta = controls(lm, "slim_face", 1.0, H, W)
+    cx, cy, R, _fw, _fh = meta["frame"]
+    r0, r1 = support_radii(R)
+    full = tps_field_np(P, D, H, W, cx=cx, cy=cy, R=r1, r0=r0)
+    for box in ((0, 7, 0, W), (7, 20, 0, W), (20, H, 0, W), (3, 9, 5, W - 2), (0, H, 0, W)):
+        part = tps_field_np(P, D, H, W, cx=cx, cy=cy, R=r1, r0=r0, box=box)
+        assert part.shape == (box[1] - box[0], box[3] - box[2], 2)
+        assert np.array_equal(part, full[box[0]:box[1], box[2]:box[3]]), \
+            f"box={box} 的切片与整幅不一致：求值网格被动了几何参数"
+    torch = pytest.importorskip("torch")
+    kw = dict(cx=cx, cy=cy, R=r1, r0=r0, device="cpu")
+    gt = tps_field_t(torch.from_numpy(P), torch.from_numpy(D), H, W, **kw).numpy()
+    assert gt.shape == (H, W, 2) and gt.dtype == np.float32
+    for box in ((0, 11, 0, W), (11, 40, 30, 90), (40, H, 0, W)):
+        part = tps_field_t(torch.from_numpy(P), torch.from_numpy(D), H, W,
+                           box=box, **kw).numpy()
+        assert np.array_equal(part, gt[box[0]:box[1], box[2]:box[3]]), \
+            f"GPU 臂 box={box} 与整幅切片不等：带循环不能当成整幅解的等价物"
+
+
 def test_displacement_scales_with_face_not_with_frame():
     """同一张脸放大到不同代理档，位移与脸宽之比必须不变——否则换档就换了个效果。"""
     lm = landmarks()

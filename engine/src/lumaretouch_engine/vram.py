@@ -197,8 +197,34 @@ class PreviewPipeline:
         arr = np.ascontiguousarray(rgb.transpose(2, 0, 1))[None]
         # 不开 non_blocking：从 pageable 内存异步上传，调用方一释放这块 numpy 就是未定义行为；
         # 这里整场会话只走一次，同步拷贝不花什么钱。
-        self.src_u8 = torch.from_numpy(arr).to(self.device)
-        self.src_f32 = self.src_u8.to(torch.float32).div_(255.0)
+        u8 = torch.from_numpy(arr).to(self.device)
+        self._begin_source(u8.to(torch.float32).div_(255.0), src_u8=u8)
+
+    def load_rgb_f32(self, rgb: np.ndarray) -> None:
+        """(H,W,3) float32 ∈ [0,1] → 显存常驻。**导出通路专用**。
+
+        为什么要有这条入口：全尺寸导出的底图是"消除笔在满幅算完的那份结果"，而它是
+        float。走 load_rgb_u8 就得先 round 成 uint8 再除回 255，导出的底图比预览少一整档
+        精度——"导出与预览是同一条链"这句话当场就假了（M2-a2 那个向零截断的坑就是同一
+        类：只在不在格点上时才露出来）。
+
+        src_u8 留 None 是有意的：这条会话没有原始像素。谁要"恢复原图"就得拿到一句明确
+        的 None 拒绝，而不是拿一份已经过 round 的底图悄悄当原图用。
+        """
+        if rgb.shape[:2] != (self.h, self.w):
+            raise ValueError(f"源图尺寸 {rgb.shape[:2]} != 会话 {self.h}x{self.w}")
+        if rgb.dtype != np.float32:
+            raise ValueError(f"load_rgb_f32 要 float32，得到 {rgb.dtype}："
+                             "上游换了 dtype 会让导出与预览不是同一个数")
+        if not np.isfinite(rgb).all():
+            raise ValueError("源图含非有限值：NaN 会一路渗进常驻缓存与滤波结果")
+        arr = np.ascontiguousarray(rgb.transpose(2, 0, 1))[None]
+        self._begin_source(torch.from_numpy(arr).to(self.device), src_u8=None)
+
+    def _begin_source(self, src_f32, *, src_u8) -> None:
+        """两条装载入口的公共体：会话状态的重置只有一份，不靠"两边都记得改"。"""
+        self.src_u8 = src_u8
+        self.src_f32 = src_f32
         self.frame_gpu = torch.empty((self.h, self.w, 4), dtype=torch.uint8, device=self.device)
         self.frame_gpu[..., 3] = 255
         # 换图就是换源张量：旧滤波结果对新图没有任何意义，继续用等于拿别人的脸磨自己的皮
@@ -848,6 +874,41 @@ class PreviewPipeline:
         return {"amounts": dict(self.deform_amounts),
                 "built": bool(self.deform_units),
                 "lit": bool(self.has_deform())}
+
+    def adopt_deform_field(self, delta) -> dict:
+        """挂一份**已经合成好的**位移场（1,H,W,2，像素单位）。导出通路专用。
+
+        为什么不让导出器直接摸 `deform_units`/`deform_amounts`/`deform_grid_base`：
+        那三个字段必须同时自洽（amounts 里的系数得与场里的合成结果对得上、网格得与
+        会话同尺寸），从外面摸就是一个三条可以只改两条的状态。现在校验全在这里做，
+        失败就是一个字段也不改。
+
+        `deform_builds` 一分不增：这不是“解了一次 TPS”，而是“拿了一份现成的场”。
+        那个计数器是“拖滑块零推理”的唯一可测口径，导出通路不能把它污染成“每帧重解”
+        的反例——M2-b 的反向门禁专门钉的就是它。
+        """
+        if torch is None:
+            raise RuntimeError("torch 未安装，形变层不可用")
+        if not torch.is_tensor(delta):
+            raise ValueError(f"adopt_deform_field 需要张量，得到 {type(delta).__name__}")
+        want = (1, self.h, self.w, 2)
+        if tuple(delta.shape) != want:
+            raise ValueError(f"位移场形状 {tuple(delta.shape)} != 会话要的 {want}："
+                             "场必须按 tile 的坐标帧算好再交进来")
+        if delta.dtype != torch.float32:
+            raise ValueError(f"位移场必须是 float32，得到 {delta.dtype}")
+        if not torch.isfinite(delta).all():
+            raise ValueError("位移场含非有限值：NaN 会被 grid_sample 采样到整块邻域")
+        self.clear_deform()
+        # 三个 kind 里只走 slim_face 这一位、系数给 1.0：apply_deform 会算
+        # `unit * 1.0`，那是 IEEE 恒等（不改变一个 bit），而不是“又乘了一道强度”。
+        self.deform_units = {"slim_face": delta.to(self.device)}
+        self.deform_amounts = {"slim_face": 1.0, "big_eye": 0.0, "small_chin": 0.0}
+        self.deform_grid_base = identity_grid(self.h, self.w, self.device)
+        self.last_deform_ms = 0.0
+        return {"amounts": dict(self.deform_amounts), "built": True,
+                "lit": bool(self.has_deform()), "deform_builds": self.deform_builds,
+                "bytes_deform": self.deform_resident_bytes(), "adopted": True}
 
     def apply_deform(self, t):
         """把当前形变层施加到一份常驻张量上。每帧只走这里，不走 TPS 解算。"""

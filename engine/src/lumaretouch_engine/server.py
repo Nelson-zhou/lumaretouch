@@ -24,6 +24,9 @@ from .ops.deform import KINDS, DeformGeometryError, check_amounts
 from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
 from .ops.grade import DH_LIMIT, DS_LIMIT, DV_LIMIT, GradeError, check_params
 from .ops.presets import PRESETS, PresetError, get_preset, preset_grade, preset_lut
+# M4 导出：FORMATS/尺寸边界与落盘器全部从 export 走，命令层不掌一份格式名单（双出处）。
+from .export import (DEFAULT_TILE, FORMATS, MAX_TILE, MIN_TILE, ExportSpec,
+                     export_image, resample_field, write_file)
 
 PROTOCOL_VERSION = 1
 
@@ -115,6 +118,10 @@ class Engine:
         self._seg_over_frames = 0
         self._wlock = threading.Lock()   # 跑靶线程与 stdin 线程都在写同一块双缓冲
         self._strength = _clamp_strength(0.5)
+        # 当前文档的源路径：导出默认导的就是这一张，而导入时只留下了像素没留下名字。
+        self._doc_path: str | None = None
+        self._export: threading.Thread | None = None
+        self._export_args: tuple | None = None
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
@@ -124,7 +131,12 @@ class Engine:
               "presets": [{"name": k, "title": v.title} for k, v in sorted(PRESETS.items())],
               # 三个增量的硬边界也在这里报一次：滑块的行程在引擎说了为准之后才能开始渲染，
               # 不等一条 grade_done 才拿到范围（那时滑块已经错看了一轮）。
-              "grade_limits": [DH_LIMIT, DS_LIMIT, DV_LIMIT]})
+              "grade_limits": [DH_LIMIT, DS_LIMIT, DV_LIMIT],
+              # M4：导出能力也由引擎说。前端抄一份格式名单或 tile 范围，就是下一轮改边界时
+              # 漏改的那一处。
+              "export_formats": sorted(set(FORMATS)),
+              "export_tile": [MIN_TILE, MAX_TILE],
+              "export_tile_default": DEFAULT_TILE})
 
     # ------------------------------------------------------------ 帧缓冲
     def _ensure_shm(self, w: int, h: int) -> FrameShm:
@@ -158,6 +170,10 @@ class Engine:
             self._reject_bench("bench_start 缺 w/h：应从 shm_ready 拿会话尺寸", p.get("mode", "copy"))
             return
         w, h = int(p["w"]), int(p["h"])
+        if self._export is not None and self._export.is_alive():
+            # 同一条理由与换图一样：跑靶与导出同抢一块卡，两边的帧成本账单都不是那个数
+            self._reject_bench("导出进行中，拒绝开跑靶：等 export_done", p.get("mode", "copy"))
+            return
         frames = int(p.get("frames", 600))
         interval_ms = float(p.get("interval_ms", 16.7))
         mode = p.get("mode", "copy")          # 见 MODES
@@ -479,12 +495,18 @@ class Engine:
         if self.bench is not None and self.bench.is_alive():
             emit({"event": "error", "error": "跑靶进行中，拒绝换图：先 bench_stop"})
             return
+        # 导出线程正拿着上一张图的笔迹与关键点在跑满幅：此时换图会把“当前文档”
+        # 这张纸从它脚下抽掉，而它报出去的 skipped 里写的是旧文档。
+        if self._export is not None and self._export.is_alive():
+            emit({"event": "error", "error": "导出进行中，拒绝换图：等 export_done"})
+            return
         t0 = monotonic_ns()
         try:
             d = load_rgb(p["path"], int(p.get("max_px") or PROXY_PIXELS))
         except Exception as e:
             emit({"event": "error", "error": f"导入失败({type(e).__name__}): {e}"})
             return
+        self._doc_path = str(p["path"])      # 导出默认目标；只有导成功才记账
         shm = self._ensure_shm(d.w, d.h)
         # 旧图的预计算产物对新图没有任何意义（尺寸/内容都变了），先清空；
         # 不清的话下一个请求会拿到上一张脸的掩膜，那比没有掩膜更坑。
@@ -1577,6 +1599,11 @@ class Engine:
         if self.bench is not None and self.bench.is_alive():
             emit({"event": "error", "error": "跑靶进行中，拒绝 set_device：先 bench_stop"})
             return
+        if self._export is not None and self._export.is_alive():
+            # 导出线程里存的是拍的 device；但换设备会重建当前会话并清掉那些图层产物，
+            # 正在跑的那一批下一张拿到的就是半旧半新的状态
+            emit({"event": "error", "error": "导出进行中，拒绝 set_device：等 export_done"})
+            return
         self.device = p.get("device", "cpu")
         # 只有 torch 真认了这个后端才算 GPU，否则 _sync 会去调一个不存在的 API
         self._cuda = False
@@ -1651,6 +1678,158 @@ class Engine:
                 emit({"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
                       "w": self.shm.w, "h": self.shm.h, "mode": "device_switch"})
 
+    # ------------------------------------------------------------ M4 全尺寸导出
+    EXPORT_KEYS = {"cmd", "action", "images", "out_dir", "format", "quality", "tile"}
+
+    def _export_snapshot(self, snap: dict, eh: int, ew: int, *, for_document: bool):
+        """从命令线程拍好的快照里组一份 ExportSpec。返回 (spec, skipped)。
+
+        为什么不直接读 self._*：导出跑在 worker 线程里，而 stdin 线程随时可能在改参数。
+        读 live 状态的话，一批三张图会各自拿到"当时"的设置——中间拖一下滑块，前两张与
+        后两张就不是同一套设置，而 export_done 里只写了一份。全部取自分好的 snap。
+
+        `for_document=False`（导的不是当前这张图）时，消除笔、修容笔迹与形变一律不带：
+        那些坐标属于**这一张脸**。把它们搬到别的照片上不是"批量应用设置"而是误调——
+        与 M2-b 拒绝 synthetic 占位关键点是同一条理由。能跨图复用的只有参数级的东西：
+        磨皮参数、调色表、肤色定向。skip 必须逐图报出去，不能默默少几层。
+        """
+        p = snap["params"]
+        skipped: list = []
+        spec = ExportSpec(strength=float(snap["strength"]), radius=int(p["radius"]),
+                          eps=float(p["eps"]), texture_radius=int(p["texture_radius"]),
+                          broad_gain=float(p["broad_gain"]), mid_gain=float(p["mid_gain"]),
+                          detail_gain=float(p["detail_gain"]),
+                          grade=tuple(snap["grade"]), cube=snap["lut"],
+                          lut_amount=float(snap["lut_amount"]),
+                          deform_amounts={})
+        if not for_document:
+            skipped += ["repair", "light", "deform", "channel（笔迹与掩膜属于当前文档）"]
+            return spec, skipped
+        spec.repair = [RepairOp(op_id=op.op_id,
+                                weight=resample_field(op.weight, (eh, ew), uint8=True),
+                                params=dict(op.params)) for op in snap["repair_ops"]]
+        spec.light = [LightOp(op_id=op.op_id,
+                              weight=resample_field(op.weight, (eh, ew), uint8=True),
+                              sign=op.sign) for op in snap["light_ops"]]
+        spec.light_exposure = float(snap["light"]["exposure"])
+        spec.light_radius = int(snap["light"]["radius"])
+        deform = snap["deform"]
+        amounts = {k: float(v) for k, v in (deform.get("amounts") or {}).items()
+                   if float(v) != 0.0}
+        pc = snap["precompute"]
+        if amounts and deform.get("built"):
+            if pc is None:
+                # 关键点不在就没有场：宁可少一层形变也不能拿上一张脸的场来凑
+                skipped.append("deform（没有可用的关键点）")
+            else:
+                spec.deform_amounts = amounts
+                spec.landmarks = np.asarray(pc.landmarks, dtype=np.float32)
+        if snap["channel"]:
+            if pc is None:
+                skipped.append(f"channel:{snap['channel']}（没有掩膜）")
+            else:
+                arr, names = pc.stack()
+                spec.channel = snap["channel"]
+                spec.mask_names = list(names)
+                spec.masks = resample_field(np.asarray(arr, dtype=np.float32), (eh, ew))
+        return spec, skipped
+
+    def cmd_export(self, p: dict):
+        """全尺寸分块导出（批量）。在 worker 线程里跑：满幅一块图就能是几秒。"""
+        unknown = set(p) - self.EXPORT_KEYS
+        if unknown:
+            emit({"event": "error", "error": f"export 收到不认识的参数：{sorted(unknown)}"})
+            return
+        # action 在白名单里就必须被校验：不校验的话 {"action":"status"} 会当成"开始导出"
+        # 直接跑起来——前端想要的是状态，拿到的是一次满幅批量出片。
+        action = p.get("action", "start")
+        if action != "start":
+            emit({"event": "error",
+                  "error": f"export 只认识 action=start（收到 {action!r}）；" \
+                           "进度看 export_progress / export_done 事件"})
+            return
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝导出：先 bench_stop"})
+            return
+        if self._export is not None and self._export.is_alive():
+            emit({"event": "error",
+                  "error": "导出已在进行中：一批只许一个（两个导出会同抢一块卡，"
+                           "峰值账单就不是那个数了）"})
+            return
+        doc = self._doc_path
+        images = p.get("images") or ([doc] if doc else [])
+        if not isinstance(images, list) or not images:
+            emit({"event": "error", "error": "export 需要 images（路径列表），且当前没有已加载的文档"})
+            return
+        if any((not isinstance(x, str) or not x) for x in images):
+            emit({"event": "error", "error": "export 的 images 必须是非空字符串列表"})
+            return
+        out_dir = p.get("out_dir")
+        if not isinstance(out_dir, str) or not out_dir:
+            emit({"event": "error", "error": "export 需要 out_dir（导出目录）"})
+            return
+        try:
+            os.makedirs(out_dir, exist_ok=True)
+        except OSError as e:
+            emit({"event": "error", "error": f"out_dir 不可用：{e}"})
+            return
+        fmt = str(p.get("format", "jpg")).lower().lstrip(".")
+        if fmt not in FORMATS:
+            emit({"event": "error", "error": f"不支持的导出格式：{fmt}（可用 {sorted(set(FORMATS))}）"})
+            return
+        try:
+            quality = int(p.get("quality", 95))
+            tile = int(p.get("tile", DEFAULT_TILE))
+        except (TypeError, ValueError):
+            emit({"event": "error", "error": "quality/tile 必须是整数"})
+            return
+        if not (MIN_TILE <= tile <= MAX_TILE):
+            emit({"event": "error", "error": f"tile={tile} 越界（允许 {MIN_TILE}~{MAX_TILE}）"})
+            return
+        if not (1 <= quality <= 100):
+            emit({"event": "error", "error": f"quality={quality} 越界（需要 1~100）"})
+            return
+        # 参数在命令线程里全部拍定：worker 里不再读 self._*，否则中途改一下滑块，
+        # 这一批里前几张与后几张用的就不是同一套设置（而事件里只写了一份）
+        snap = dict(strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
+                    lut=self._lut, lut_amount=self._lut_amount, light=dict(self._light),
+                    light_ops=list(self._light_ops), repair_ops=list(self._repair_ops),
+                    deform=dict(self._deform), channel=self._channel,
+                    precompute=self._precompute, device=self.device)
+        self._export_args = (list(images), out_dir, fmt, quality, tile, doc, snap)
+        self._export = threading.Thread(target=self._export_loop, daemon=True)
+        self._export.start()
+
+    def _export_loop(self):
+        from .decode import load_full
+        images, out_dir, fmt, quality, tile, doc, snap = self._export_args
+        n = len(images)
+        t0 = monotonic_ns()
+        results: list = []
+        failed = 0
+        for idx, path in enumerate(images):
+            stage = "decode"
+            try:
+                d = load_full(path)
+                stage = "render"
+                spec, skipped = self._export_snapshot(snap, d.h, d.w,
+                                                      for_document=(path == doc))
+                stage = "write"
+                out_path = os.path.join(out_dir, os.path.splitext(os.path.basename(path))[0] + "." + fmt)
+                frame, st = export_image(d.rgb, spec, device=snap["device"], tile=tile)
+                info = write_file(frame, out_path, quality=quality)
+                results.append({"path": path, "out": info["path"], "format": info["format"],
+                                "bytes": info["bytes"], "write_ms": info["write_ms"],
+                                "skipped": skipped, **st})
+            except Exception as e:      # 逐图失败不能带倒整批
+                failed += 1
+                results.append({"path": path, "stage": stage, "error": f"{type(e).__name__}: {e}"})
+            emit({"event": "export_progress", "index": idx, "total": n, "path": path,
+                  "ok": "error" not in results[-1]})
+        emit({"event": "export_done", "total": n, "failed": failed,
+              "out_dir": out_dir, "format": fmt, "quality": quality, "tile": tile,
+              "total_ms": round((monotonic_ns() - t0) / 1e6, 1), "images": results})
+
     def _effective_device(self) -> str:
         """会话真正会落在哪个设备上（要求 cuda 但没 GPU 时是 cpu，不是 cuda）。"""
         if self.device.startswith("cuda") and not self._cuda:
@@ -1670,7 +1849,7 @@ class Engine:
                  "load_image": self.cmd_load_image, "set_strength": self.cmd_set_strength,
                  "precompute": self.cmd_precompute, "inpaint": self.cmd_inpaint,
                  "light": self.cmd_light, "deform": self.cmd_deform,
-                 "lut": self.cmd_lut, "grade": self.cmd_grade}
+                 "lut": self.cmd_lut, "grade": self.cmd_grade, "export": self.cmd_export}
         # 不用 `for line in sys.stdin`：那会等 EOF，收到 shutdown 也退不掉
         while not self._quit:
             line = sys.stdin.readline()

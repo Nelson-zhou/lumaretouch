@@ -149,3 +149,52 @@ def load_rgb(path: str, budget: int = PROXY_PIXELS) -> Decoded:
     if swap:
         d.notes.append(f"按 EXIF orientation={orient} 摆正过宽高")
     return d
+
+
+# 导出的像素上限。不是"机器装不下"——分块导出本来就能把显存按住——而是"这已经不是
+# 一张照片了"：Pillow 的解压炸弹保护默认到 1.78 亿像素就报，而真到那一级单张解码要几十秒
+# 与几 GB 内存。超过这道线当场拒，比默默跑三十秒然后被 OOM killer 挑掉诚实。
+MAX_EXPORT_PIXELS = 120_000_000
+
+
+def load_full(path: str, max_px: int = MAX_EXPORT_PIXELS) -> Decoded:
+    """满幅解码（不缩放）：导出通路用。EXIF 方向与 load_rgb 同一条处理。
+
+    为什么不走 `load_rgb(path, budget=像素数)`：那条路的预算被 clamp_budget 夹在
+    800 万（预览帧的尺寸，与 shm 大小绑死），而且它会把边长往下取到 8 的倍数——
+    导出要的就是源图那一个像素，取整就是改用户的构图。两边各自把该做的事写清楚，
+    比共用一个“有点像”的路径诚实。
+    """
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"图片不存在或不是普通文件: {path}")
+    ms = lambda a, b: (b - a) * 1000.0         # noqa: E731  与 load_rgb 同一条计时口径
+    t0 = time.perf_counter()
+    with Image.open(path) as im:
+        fmt = im.format or "?"
+        raw_w, raw_h = im.size
+        orient = int(im.getexif().get(EXIF_ORIENTATION, 1) or 1)
+        swap = orient in SWAPPED_ORIENTATIONS
+        src_w, src_h = (raw_h, raw_w) if swap else (raw_w, raw_h)
+        if src_w * src_h > int(max_px):
+            raise ValueError(f"导出尺寸 {src_w}x{src_h} = {src_w * src_h / 1e6:.0f} Mpx "
+                             f"超过上限 {int(max_px) / 1e6:.0f} Mpx")
+        t_d = time.perf_counter()
+        im.load()
+        t_o = time.perf_counter()
+        if orient != 1:
+            im = ImageOps.exif_transpose(im)
+        if im.size != (src_w, src_h):          # 方向处理后的尺寸必须与报出去的一致
+            raise ValueError(f"摆正后尺寸 {im.size} 与报出去的 {src_w}x{src_h} 不一致")
+        t_s = time.perf_counter()
+        if im.mode != "RGB":
+            im = im.convert("RGB")
+        arr = np.ascontiguousarray(np.asarray(im, dtype=np.uint8))
+    t1 = time.perf_counter()
+    assert arr.shape == (src_h, src_w, 3) and arr.dtype == np.uint8, "满幅解码输出布局不符约定"
+    d = Decoded(rgb=arr, src_w=src_w, src_h=src_h, fmt=fmt,
+                t_open_ms=ms(t0, t_d), t_decode_ms=ms(t_d, t_o), t_orient_ms=ms(t_o, t_s),
+                t_scale_ms=0.0, t_total_ms=ms(t0, t1), draft_used=False, draft_size=None)
+    d.notes.append("满幅解码（导出通路，不缩放）")
+    if swap:
+        d.notes.append(f"按 EXIF orientation={orient} 摆正过宽高")
+    return d

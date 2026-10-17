@@ -2155,3 +2155,185 @@ def test_ready_event_lists_the_builtin_presets(engine):
     got = {p["name"] for p in ready["presets"]}
     assert got == {"creamy", "coolwhite"}, f"预设清单与资产对不上：{ready['presets']}"
     assert all(p["title"] for p in ready["presets"]), "按钮要有可读标题，不能只有英文键名"
+
+
+# ============================================================ M4 全尺寸导出（协议层）
+# 这批用例管的是命令签名与事件形状——库层的分块保真在 test_export.py 里已经逐条钉过，
+# 协议层不许重抄一份数学判据，那只会漂移出两个答案。
+EXPORT_KEYS = {"cmd", "action", "images", "out_dir", "format", "quality", "tile"}
+
+
+def _collect_until(engine, event: str, timeout: float = 240.0):
+    """自己读到某个事件为止，把路上的其它事件留着。
+
+    不用 wait_for：它会把非目标事件丢掉，于是"这一批真的发过逐图进度"这句话
+    在这条路上永远没法验。
+    """
+    deadline = time.monotonic() + timeout
+    seen: list = []
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise TimeoutError(f"没等到 {event}；路上事件={[e.get('event') for e in seen]}")
+        e = engine.next_event(timeout=min(left, 10.0))
+        if e.get("event") == event:
+            return e, seen
+        if e.get("event") == "error":
+            raise AssertionError(f"引擎报错: {e.get('error')}")
+        seen.append(e)
+
+
+def test_ready_advertises_the_export_surface(engine):
+    """导出的格式名单与 tile 范围由 ready 报出，前端不抄一份。
+
+    这条不需要 torch：CI 的 CPU job 也能卡住"引擎改了边界而 UI 还按旧的渲染"。
+    """
+    engine.send(cmd="hello")
+    ready = engine.wait_for("ready", timeout=30)
+    assert "jpg" in ready["export_formats"] and "png" in ready["export_formats"], ready
+    lo, hi = ready["export_tile"]
+    assert 64 <= lo < hi and lo <= ready["export_tile_default"] <= hi, ready
+
+
+@pytest.mark.parametrize("bad,what", [
+    ({"format": "bmp"}, "格式"),
+    ({"tile": 64}, "tile"),
+    ({"tile": 99999}, "tile"),
+    ({"quality": 0}, "quality"),
+    ({"quality": 101}, "quality"),
+    ({"quality": "x"}, "整数"),
+    ({"images": [""]}, "images"),
+    ({"images": "not-a-list"}, "images"),
+    ({"out_dir": ""}, "out_dir"),
+    ({"action": "status"}, "action"),
+])
+def test_export_param_boundaries_are_refused_without_events(engine, bad, what):
+    """非法参数整条拒：不发 export_progress、不发 export_done、不落半截文件。
+
+    被拒的命令若还发进度事件，UI 的进度条会走完后发现什么都没有——那比直接报错坑。
+    探针用 hello：它一定发事件，而且与导出无关，不会被"上一条其实偷偷跑了"蒙过去。
+    """
+    msg = {"cmd": "export", "out_dir": "/tmp", "format": "jpg", "images": [FIXTURE]}
+    msg.update(bad)
+    engine.send(**msg)
+    e = engine.next_event(timeout=8)
+    assert e.get("event") == "error", e
+    assert what in e["error"] or "export" in e["error"], e
+    engine.send(cmd="hello")
+    ready = engine.wait_for("ready", timeout=15)
+    assert ready["protocol"] == 1          # 上面那条被拒的 export 没有插进来任何事件
+
+
+def test_export_rejects_unknown_keys_as_a_whole(engine):
+    engine.send(cmd="export", out_dir="/tmp", images=[FIXTURE], formt="png")
+    e = engine.next_event(timeout=8)
+    assert e.get("event") == "error" and "formt" in e["error"], e
+
+
+def test_export_without_document_and_without_images_is_refused(engine):
+    engine.send(cmd="export", out_dir="/tmp")
+    e = engine.next_event(timeout=8)
+    assert e.get("event") == "error" and "images" in e["error"], e
+
+
+def _need_export_env():
+    pytest.importorskip("torch")
+    pytest.importorskip("PIL")
+    if not os.path.isfile(FIXTURE):
+        pytest.skip(f"缺 fixture：{FIXTURE}")
+
+
+def test_export_writes_full_size_not_the_proxy(engine, tmp_path):
+    """导出的是源图那一个像素，不是预览的代理档。
+
+    这条是 M4 的产品主张本身：预览会话被刻意压到很小（max_px），而落盘的 PNG 尺寸
+    必须等于 fixture 的原始尺寸。只看"文件生成了"是分不出代理与满幅的。
+    """
+    _need_export_env()
+    from PIL import Image
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.4, max_px=207360)
+    ready = engine.wait_for("image_ready", timeout=60)
+    assert ready["w"] * ready["h"] <= 207360, ready        # 预览确实是代理档
+    engine.send(cmd="export", out_dir=str(tmp_path), format="png", tile=256, quality=90)
+    done, others = _collect_until(engine, "export_done")
+    assert done["failed"] == 0 and done["total"] == 1, done
+    assert [e["event"] for e in others].count("export_progress") == 1, others
+    img = done["images"][0]
+    assert img["out"] == str(tmp_path / "portrait-1024x1280.png"), img
+    with Image.open(img["out"]) as im:
+        assert im.size == (ready["src_w"], ready["src_h"]), \
+            f"导出尺寸 {im.size} != 源图 {(ready['src_w'], ready['src_h'])}：那是代理档"
+    assert img["bytes"] > 10_000 and img["tiles"] > 1, img
+    assert img["margin_px"] >= 80, "默认磨皮参数的作用面至少 80 px，margin 比这小就是漏了层"
+
+
+def test_export_honours_the_current_layers(engine, tmp_path):
+    """挂上一键预设后导出，满幅文件里必须真的变了（这层不能只活在事件里）。"""
+    _need_export_env()
+    import numpy as np
+    from PIL import Image
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.0, max_px=207360)
+    engine.wait_for("image_ready", timeout=60)
+    engine.send(cmd="export", out_dir=str(tmp_path / "base"), format="png", tile=512)
+    _collect_until(engine, "export_done")
+    base = str(tmp_path / "base" / "portrait-1024x1280.png")
+    engine.send(cmd="lut", action="set", preset="creamy", amount=1.0)
+    engine.wait_for("lut_done", timeout=30)
+    engine.send(cmd="export", out_dir=str(tmp_path / "look"), format="png", tile=512)
+    _collect_until(engine, "export_done")
+    a = np.asarray(Image.open(base).convert("RGB"), np.int16)
+    b = np.asarray(Image.open(str(tmp_path / "look" / "portrait-1024x1280.png")).convert("RGB"),
+                   np.int16)
+    d = np.abs(a - b).max(axis=-1)
+    assert int(d.max()) >= 2, "挂了一键预设导出后画面没动：那一层只活在事件里"
+    assert float((d > 0).mean()) > 0.5, f"预设只改了 {float((d > 0).mean()):.2%} 像素"
+
+    def sat(x):
+        mx, mn = x.max(axis=-1), x.min(axis=-1)
+        return np.where(mx > 0, (mx - mn) / np.maximum(mx, 1), 0.0)
+    # 肤色方向：奶油是降饱和，满幅图上肤色带的平均饱和必须真的降下来
+    skin = (sat(a) > 0.10) & (sat(a) < 0.55) & (a.max(axis=-1) > 90) & (a.min(axis=-1) > 40)
+    assert float(sat(b.astype(np.float64))[skin].mean()) < float(sat(a.astype(np.float64))[skin].mean())
+
+
+def test_export_batch_isolates_failures_and_reports_skips(engine, tmp_path):
+    """批量：坏路径只塌自己那一张；不属于本文档的图层明确报 skipped。"""
+    _need_export_env()
+    import shutil
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.5, max_px=207360)
+    engine.wait_for("image_ready", timeout=60)
+    other = str(tmp_path / "copy.jpg")
+    shutil.copyfile(FIXTURE, other)
+    missing = str(tmp_path / "没有这个文件.jpg")
+    engine.send(cmd="export", out_dir=str(tmp_path / "batch"), format="jpg",
+                images=[FIXTURE, other, missing], tile=512)
+    done, others = _collect_until(engine, "export_done")
+    assert done["total"] == 3 and done["failed"] == 1, done
+    assert [e["event"] for e in others].count("export_progress") == 3, others
+    bad = [i for i in done["images"] if "error" in i]
+    assert bad and bad[0]["path"] == missing and "FileNotFoundError" in bad[0]["error"], done
+    ok = [i for i in done["images"] if "error" not in i]
+    assert len(ok) == 2
+    doc = next(i for i in ok if i["path"] == FIXTURE)
+    extra = next(i for i in ok if i["path"] == other)
+    # 第二张不是"当前文档"：笔迹/形变/通道都不许搬过去，而且必须报出来
+    assert "repair" in extra["skipped"] and "light" in extra["skipped"], extra["skipped"]
+    assert "repair" not in doc["skipped"], doc["skipped"]
+
+
+def test_export_refused_while_benching(engine, tmp_path):
+    """跑靶与导出互斥（与 set_strength 那几条同一条理由：同抢一块卡，账单就不是那个数）。"""
+    engine.send(cmd="bench_start", w=96, h=64, frames=400, interval_ms=8, mode="copy")
+    engine.wait_for("bench_started", timeout=30)   # shm_ready 在它前面；等错事件就把噪声当成了答案
+    try:
+        engine.send(cmd="export", out_dir=str(tmp_path), images=[FIXTURE])
+        _expect_error(engine, "跑靶进行中，拒绝导出")
+        assert not os.listdir(tmp_path), "被拒的导出还在目录里落了东西"
+    finally:
+        engine.send(cmd="bench_stop")
+        engine.wait_for("bench_done", timeout=90)
+
+
+def test_export_command_keys_are_a_whitelist(engine):
+    """命令层的白名单要把 `cmd` 自己算进去（M3-b 为这条付过 12 项用例的钱）。"""
+    assert "cmd" in EXPORT_KEYS and "action" in EXPORT_KEYS
