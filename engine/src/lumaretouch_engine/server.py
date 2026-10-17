@@ -20,6 +20,7 @@ from .shm import FrameShm, monotonic_ns, shm_name
 from .vram import DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_MID_GAIN, \
     DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS, DEFAULT_REPAIR, LightOp, RepairOp, warm_device
 from .ops.light import DB_EXPOSURE_LIMIT, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
+from .ops.deform import KINDS, DeformGeometryError, check_amounts
 
 PROTOCOL_VERSION = 1
 
@@ -93,6 +94,9 @@ class Engine:
         self._light_ops: list = []
         self._light_redo: list = []
         self._light = dict(exposure=DEFAULT_DB_EXPOSURE, radius=DEFAULT_DB_RADIUS)
+        # 形变层（M2-b）：存的是三个滑块的值，单位场不存（它能从关键点重算，
+        # 而关键点已经在 _precompute 里）。换设备重建时重新 build 一次，55 ms。
+        self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
         self._wlock = threading.Lock()   # 跑靶线程与 stdin 线程都在写同一块双缓冲
         self._strength = _clamp_strength(0.5)
 
@@ -169,8 +173,8 @@ class Engine:
         抽成一个方法是为了让 packaging/m1-vram-bench.py 能直接复用同一份代码——
         离线跑靶如果自己拼一份近似逻辑，量的数就不能代表产品通路。
         """
-        seg = dict(synth=0.0, pre=0.0, filter=0.0, light=0.0, kernel=0.0, post_gpu=0.0,
-                   cpu_post=0.0, readback=0.0)
+        seg = dict(synth=0.0, pre=0.0, filter=0.0, light=0.0, deform=0.0, kernel=0.0,
+                   post_gpu=0.0, cpu_post=0.0, readback=0.0)
         # image_stream 模拟拖滑块：系数在 0.25→0.75 上扫一个 100 帧周期，
         # 像素逐帧真的在变；常驻管线的系数跑靶如果只动 0.001，字节上几乎看不出区别
         if mode == "image_stream":
@@ -197,7 +201,10 @@ class Engine:
             # 只在图层/参数变了的那一帧非 0，拖 strength 时恒为 0。不拆出来
             # 就会把 db 的开销记到 kernel 头上，而“拖滑块零重算”这条判据看不出来。
             seg["light"] = float(getattr(pipe, "last_light_ms", 0.0) or 0.0)
-            seg["kernel"] = max(whole - seg["filter"] - seg["light"], 0.0)
+            # M2-b：形变与修容不同，它每帧真在跑（grid_sample），所以它不是“重算次数”
+            # 而是“每帧成本”。零推理那条靠 deform_builds 不增来证，不靠这一段为 0。
+            seg["deform"] = float(getattr(pipe, "last_deform_ms", 0.0) or 0.0)
+            seg["kernel"] = max(whole - seg["filter"] - seg["light"] - seg["deform"], 0.0)
             t = monotonic_ns()
             pipe.pack(out)
             # 跑靶指纹（只给合成靶纸用）：常驻路径的源图不动，逐帧变化的像素只能靠盖序号块。
@@ -237,8 +244,8 @@ class Engine:
         # M0 必须知道 60fps 的天花板卡在哪一段——上一版只给一个总数，把合成图形的 17 ms
         # 当成了通路极限；M1-2 要证的是「内核没变快，快的全是搬运」，那就更得拆开。
         period = interval_ms / 1000.0
-        acc = dict(synth=0.0, pre=0.0, filter=0.0, light=0.0, kernel=0.0, post_gpu=0.0,
-                   cpu_post=0.0, readback=0.0, shm=0.0, notify=0.0)
+        acc = dict(synth=0.0, pre=0.0, filter=0.0, light=0.0, deform=0.0, kernel=0.0,
+                   post_gpu=0.0, cpu_post=0.0, readback=0.0, shm=0.0, notify=0.0)
         # 重算次数：拖拽期零推理的直接证据。只要这个数不是 1（或 0），缓存就没真的生效，
         # 而按均值报 filter 会把它藏起来（600 帧里重算一次只有 0.0075 ms/帧）。
         refilters = 0
@@ -251,6 +258,10 @@ class Engine:
 
         pipe = (self._vram if mode == "image_stream"
                 else self._open_vram(shm.w, shm.h) if mode == "pipeline_resident" else None)
+        # M2-b：拖 600 帧滑块期间一次 TPS 也不许解。deform_builds 只在 build_deform
+        # 里递增，而 build_deform 只由 cmd_deform 触发——跑靶不碰它。取开头与结尾
+        # 两个快照而不是只取结尾：只取结尾的话，“中途重解了三次但开头就是 3”看不出来。
+        builds_at_start = int(getattr(pipe, "deform_builds", 0)) if pipe is not None else 0
         # 预热：跑完全相同的每帧工作（同一 _make_frame），但不写 shm、不发事件、不进统计
         for k in range(WARMUP_FRAMES):
             self._make_frame(shm, k, mode, pipe)
@@ -296,8 +307,16 @@ class Engine:
               "refilter_ms_total": round(acc["filter"], 2),
               "relight_frames": relights,
               "relight_ms_total": round(acc["light"], 2),
+              "deform_ms_total": round(acc["deform"], 2),
+              "deform_builds": (int(getattr(pipe, "deform_builds", 0)) - builds_at_start
+                                if pipe is not None else 0),
               "params": dict(self._params),
-              "light": dict(self._light),
+              # 图层状态与每帧分段不能同名。上一版 `"light": dict(self._light)` 写在
+              # `**snapshot()` 前面，而 snapshot 里就有同名的每帧 ms——字典字面量后写的
+              # 覆盖先写的，于是上报里的 light 永远是那个毫秒数，曝光/半径根本送不出来，
+              # 而且报表看起来完全自洽。M2-b 的 deform 撞上了同一条，一起改。
+              "light_state": dict(self._light),
+              "deform_state": dict(self._deform),
               **snapshot(frames)})
 
     # ------------------------------------------------------------ GPU 管线
@@ -326,6 +345,12 @@ class Engine:
             pipe.light_radius = int(self._light["radius"])
             if self._light_ops:
                 pipe.set_light_ops(self._light_ops, self._light_redo)
+            # 形变层：单位场不存只重算（一次 55 ms，换设备本来就是重操作）。
+            # 关键点不在（没 precompute）时不能默默建不起来：那会“迁了会话、
+            # 滑块还在 0.6 但画面不动”，而事件里看不出异常。
+            if self._deform["built"] and self._precompute is not None:
+                pipe.build_deform(self._precompute.landmarks)
+                pipe.set_deform_amounts(dict(self._deform["amounts"]))
         emit({"event": "vram_ready", "device": str(pipe.device), "w": w, "h": h,
               "adopted": bool(adopt),
               "bytes_src": int(pipe.src_u8.numel() * pipe.src_u8.element_size()),
@@ -368,6 +393,8 @@ class Engine:
         self._op_seq = 0
         self._light_ops = []
         self._light_redo = []
+        # 形变层也得跟着图走：上一张脸的单位场对这一张脸没有任何意义
+        self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
         t_a = monotonic_ns()
         pipe = self._attach_pipeline(d.rgb)
         self._image_loaded = True
@@ -397,6 +424,7 @@ class Engine:
               "bytes_bands": pipe.bands_resident_bytes(),
               # 修容层在导入后必然为空（换图已清），这个数报 0 本身就是“没图上一张的笔迹”的证据
               "bytes_light": pipe.light_resident_bytes(),
+              "bytes_deform": pipe.deform_resident_bytes(),
               # 只报滤波这一份：掩膜在本事件之后才挂上（precompute 跑在 image_ready 后面），这里附 bytes_face 恒为 0，
               # 反而会被读成"掩膜没常驻"。掩膜/关键点的字节数由 precompute_ready 报，那才是它们为真的那一刻。
               "import_ms": round((t_c - t0) / 1e6, 2)})
@@ -855,6 +883,80 @@ class Engine:
               "device": str(self._vram.device), "strength": self._strength})
         emit(fr)
 
+    def cmd_deform(self, p: dict):
+        """五官微调（M2-b）：瘦脸 / 大眼 / 小下巴三个滑块。
+
+        与修容笔的区别：它不是逐笔图层而是一个“参数层”——滑块值就是全部状态；
+        撤销/重做属于产品闭环（M5）统一做，不在这里先做三份中的一份。
+
+        铁律与 light 同构：先全量校验、后一次性提交。建层需要 478 点关键点，
+        而 **synthetic 后端给的是网格占位几何**：拿它按脸形语义取点会搬到完全无关的
+        位置上，而且画面“真的动了”——看不出错。所以整条拒绝并说清原因。
+        """
+        action = p.get("action", "set")
+        if action not in ("set", "clear"):
+            emit({"event": "error", "error": f"未知 deform action: {action}（可用：set/clear）"})
+            return
+        if not self._image_loaded or self._vram is None:
+            emit({"event": "error", "error": "尚未 load_image"})
+            return
+        if self.shm is None or (self.shm.w, self.shm.h) != (self._vram.w, self._vram.h):
+            emit({"event": "error", "error": f"shm {getattr(self.shm, 'w', '?')}x"
+                  f"{getattr(self.shm, 'h', '?')} != 会话 {self._vram.w}x{self._vram.h}，"
+                  "请先 load_image"})
+            return
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝 deform：先 bench_stop"})
+            return
+        t_start = monotonic_ns()
+        info_add: dict = {}
+        if action == "clear":
+            info = self._vram.clear_deform()
+            self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+        else:
+            try:
+                # 参数先于建层：越界值不该先付一次 55 ms 解算再被拒
+                got = check_amounts(p.get("amounts"))
+            except ValueError as e:
+                emit({"event": "error", "error": f"deform 被拒，整条拒绝：{e}"})
+                return
+            if not self._deform["built"]:
+                pc = self._precompute
+                if pc is None:
+                    emit({"event": "error", "error":
+                          "形变需要先 precompute：没有 478 点关键点就不知道把哪里搬到哪里"})
+                    return
+                if pc.backend == "synthetic":
+                    emit({"event": "error", "error":
+                          "形变拒绝 synthetic 后端的关键点：它们是网格占位几何、不是脸形，"
+                          "按点号取“左脸轮廓”会搬到无关位置。请装 mediapipe 插件后端"})
+                    return
+                try:
+                    built = self._vram.build_deform(pc.landmarks)
+                except (DeformGeometryError, ValueError, RuntimeError) as e:
+                    emit({"event": "error", "error": f"形变建层失败，整条拒绝：{e}"})
+                    return
+                self._deform["built"] = True
+                info_add = {"build": built}
+            try:
+                info = self._vram.set_deform_amounts(got)
+            except ValueError as e:
+                emit({"event": "error", "error": f"deform 被拒，整条拒绝：{e}"})
+                return
+            self._deform["amounts"] = dict(info["amounts"])
+        fr = self._write_current_frame("deform")
+        render_ms = fr.pop("render_ms")
+        emit({"event": "deform_done", "action": action, **info, **info_add,
+              # 关键点出自哪个后端必须原样上报：template 是“按肤色盒摆的模板”，
+              # 贴合度不验收。UI 拿不到这个数就会把模板拟合当成真检测给用户看。
+              "landmark_backend": (self._precompute.backend if self._precompute else None),
+              "deform_ms": round(float(self._vram.last_deform_ms), 2),
+              "bytes_deform": self._vram.deform_resident_bytes(),
+              "render_ms": render_ms,
+              "total_ms": round((monotonic_ns() - t_start) / 1e6, 2),
+              "device": str(self._vram.device), "strength": self._strength})
+        emit(fr)
+
     def _pipe_copyin(self, rgba, strength: float, radius: int = DEFAULT_RADIUS,
                      eps: float = DEFAULT_EPS, detail_gain: float = DEFAULT_DETAIL_GAIN,
                      mid_gain: float = DEFAULT_MID_GAIN,
@@ -979,7 +1081,7 @@ class Engine:
                  "set_device": self.cmd_set_device, "shutdown": self.cmd_shutdown,
                  "load_image": self.cmd_load_image, "set_strength": self.cmd_set_strength,
                  "precompute": self.cmd_precompute, "inpaint": self.cmd_inpaint,
-                 "light": self.cmd_light}
+                 "light": self.cmd_light, "deform": self.cmd_deform}
         # 不用 `for line in sys.stdin`：那会等 EOF，收到 shutdown 也退不掉
         while not self._quit:
             line = sys.stdin.readline()

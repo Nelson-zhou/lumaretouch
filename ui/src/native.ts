@@ -136,6 +136,35 @@ export interface LightInfo {
   strength: number;
 }
 
+/** 一次形变事件的回报（引擎侧 deform_done，M2-b）。三个滑块一条。 */
+export interface DeformInfo {
+  action: "set" | "clear";
+  /** 三种形变当前的滑块值，[-1,1]。0 就是不动。 */
+  amounts: Record<string, number>;
+  /** 单位场建过没有（第一次非零 set 时建） */
+  built: boolean;
+  /** 这层现在到底有没有生效：全零滑块就是 false */
+  lit: boolean;
+  /** 本帧形变段（组装 + grid_sample）的毫秒。拖滑块期间它就是这层的全部代价 */
+  deform_ms: number;
+  /** 三个单位场 + 恒等网格的常驻字节 */
+  bytes_deform: number;
+  render_ms: number;
+  total_ms: number;
+  /** 关键点出自哪个后端。template 是模板拟合、贴合度不验收，UI 得能显示这一句 */
+  landmark_backend: string | null;
+  /** 只有真正建层的那一条才有：一次性解算成本与 kinds 明细 */
+  build?: {
+    deform_build_ms: number;
+    deform_builds: number;
+    bytes_deform: number;
+    device: string;
+    kinds: Record<string, { peak_px: number; merged: number; controls: number }>;
+  };
+  device: string;
+  strength: number;
+}
+
 export interface EngineStatus {
   shm: string;
   has_shm: boolean;
@@ -150,6 +179,8 @@ export interface EngineStatus {
   inpaint: InpaintInfo | null;
   /** 最近一次 light_done；与 inpaint 同生命期，但两份结果各自一份，不串台。 */
   light: LightInfo | null;
+  /** 最近一次 deform_done（M2-b）；换图/换引擎进程会清空（关键点不在，层也不在）。 */
+  deform: DeformInfo | null;
 }
 
 export interface BenchOptions {
@@ -266,6 +297,15 @@ export const runLight = (
     radius: opts?.radius,
   });
 
+/** 五官微调（M2-b）：送三个滑块的值。
+ *
+ * 与修容笔不同，这条在拖动期间也要发：引擎侧只把已常驻的单位场按新系数缩放，
+ * 一次 TPS 也不重解（拖 600 帧 deform_builds 不增，见 m2-face-bench）。
+ * 不发就等于“滑块拖了、画面不动”。
+ */
+export const runDeform = (action: DeformInfo["action"], amounts?: Record<string, number>) =>
+  invoke<{ requested: boolean }>("deform", { action, amounts });
+
 /** 帧头解析（小端，与 main.rs 的 pull_frame 注释逐字段对应）。 */
 export interface ParsedFrame {
   seq: number;
@@ -335,6 +375,9 @@ export interface M0Env {
   auto_skin: string;
   /** 非空则导入后画几笔修容（M2-a2）："fx:fy:r:sign,…"，fx/fy 归一化、r 是**像素**、sign 取 1/-1。 */
   auto_light: string;
+  /** 非空则导入后提交一次形变（M2-b）："slim:eye:chin"，三个都是 [-1,1] 的滑块值。
+   *  需要 LRT_PRECOMPUTE 给出关键点（synthetic 后端会被引擎整条拒）。 */
+  auto_deform: string;
 }
 export const m0Env = () => invoke<M0Env>("m0_env");
 export const report = (line: string) => invoke("report", { line });

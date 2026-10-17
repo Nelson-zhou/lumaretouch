@@ -4,9 +4,9 @@ import Viewer, { type Hud } from "./components/Viewer";
 import { clickRle } from "./brush";
 import { t } from "./i18n";
 import {
-  benchStart, benchStats, engineStatus, loadImage, m0Env, quit, report, runInpaint, runLight, setStrength,
+  benchStart, benchStats, engineStatus, loadImage, m0Env, quit, report, runDeform, runInpaint, runLight, setStrength,
   shutdownEngine, startEngine,
-  type BenchOptions, type EngineStatus, type ImageReady, type InpaintInfo, type LightInfo,
+  type BenchOptions, type DeformInfo, type EngineStatus, type ImageReady, type InpaintInfo, type LightInfo,
   type Precompute, type Stats,
 } from "./native";
 
@@ -92,6 +92,14 @@ export default function App() {
   // 修容档数上限：0.6 档是探针在真图上定的产品默认（再大就开始烧穿高光）
   const [lightExposure, setLightExposure] = useState(0.6);
   const [lastLight, setLastLight] = useState<LightInfo | null>(null);
+  // 形变三滑块（M2-b）。存一个对象而不是三个数：送进引擎的就是一份 amounts，
+  // 拆成三个 state 会让“只改一个但三个都得送”这种不一致没法说清。
+  const [deformAmounts, setDeformAmounts] = useState<Record<string, number>>({
+    slim_face: 0, big_eye: 0, small_chin: 0,
+  });
+  const [lastDeform, setLastDeform] = useState<DeformInfo | null>(null);
+  const deformFlight = useRef(false);
+  const deformQueued = useRef<Record<string, number> | null>(null);
   const [lastInpaint, setLastInpaint] = useState<InpaintInfo | null>(null);
   const [dragNote, setDragNote] = useState("");
   const lastSend = useRef(0);
@@ -106,6 +114,7 @@ export default function App() {
       // 消除笔的结果与日志同源：inpaint_done 只发一次，轮询不能错过
       if (st.inpaint) setLastInpaint(st.inpaint);
       if (st.light) setLastLight(st.light);
+      if (st.deform) setLastDeform(st.deform);
     } catch {
       /* 引擎未起，忽略 */
     }
@@ -289,6 +298,42 @@ export default function App() {
             fieldPeak: lit?.field_peak ?? null, lightMs: lit?.light_ms ?? null,
             bandsMs: lit?.bands_ms ?? null, bytesLight: lit?.bytes_light ?? null,
           })}`);
+        }
+      }
+      // 形变自动通道（$LRT_AUTO_DEFORM="slim:eye:chin"）：与修容同一条理由，只有
+      // 真窗口能证明 runDeform → Rust deform → 引擎 deform_done 这条签名对得上。
+      if (env.auto_deform) {
+        const nums = env.auto_deform.split(":").map((s) => Number(s.trim()));
+        if (nums.length !== 3 || !nums.every(Number.isFinite)) {
+          await report(`M0_ERROR 无法解析 LRT_AUTO_DEFORM=${env.auto_deform}（要 slim:eye:chin）`);
+        } else {
+          const amounts = { slim_face: nums[0], big_eye: nums[1], small_chin: nums[2] };
+          const waitDeform = async () => {
+            // 轮询预算 12 s：被引擎整条拒（没 precompute、synthetic 关键点）时
+            // 这一层永远等不到，长时空轮询会冻住 UI 线程、污染 fps。
+            for (let i = 0; i < 120; i++) {
+              await sleep(100);
+              const st = await engineStatus().catch(() => null);
+              if (st?.deform && st.deform.amounts.slim_face === amounts.slim_face) return st.deform;
+            }
+            return null;
+          };
+          let got: DeformInfo | null = null;
+          try {
+            await runDeform("set", amounts);
+            got = await waitDeform();
+          } catch (e) {
+            await report(`M0_ERROR runDeform 失败: ${e}`);
+          }
+          await report(`M0_DEFORM ${JSON.stringify(got ? {
+            amounts, lit: got.lit, built: got.built, backend: got.landmark_backend,
+            deformMs: got.deform_ms, bytesDeform: got.bytes_deform, renderMs: got.render_ms,
+            buildMs: got.build?.deform_build_ms ?? null,
+            peaks: got.build ? Object.fromEntries(Object.entries(got.build.kinds).map(
+              ([k, v]) => [k, v.peak_px])) : null,
+            merged: got.build ? Object.fromEntries(Object.entries(got.build.kinds).map(
+              ([k, v]) => [k, v.merged])) : null,
+          } : { bad: "12s 内没等到 deform_done（没 precompute 或后端被拒）", amounts })}`);
         }
       }
       for (let i = 0; i < 100; i++) {
@@ -480,6 +525,40 @@ export default function App() {
       .catch((e) => setDragNote(String(e)));
   }
 
+  /** 形变滑块：拖动期间就要发（引擎侧只缩放已常驻的单位场，产品档每帧 ~1.3 ms）。
+   *
+   * 但不许排队：一次 IPC 没回来时把后续的合并成“最新那一份”。不这样做的话，
+   * 快速拖一下就会在 stdin 上堆几十条命令，而每条都要引擎重画一帧——事件回显
+   * 会落到用户早已离开的位置上。宁可丢中间帧，也不让上报与画面错开。
+   */
+  function sendDeform(amounts: Record<string, number>) {
+    if (deformFlight.current) {
+      deformQueued.current = amounts;
+      return;
+    }
+    deformFlight.current = true;
+    runDeform("set", amounts)
+      .then(() => refreshStatus())
+      .catch((e) => setDragNote(String(e)))
+      .finally(() => {
+        deformFlight.current = false;
+        const q = deformQueued.current;
+        deformQueued.current = null;
+        if (q) sendDeform(q);
+      });
+  }
+
+  function onDeformChange(kind: string, value: number) {
+    const next = { ...deformAmounts, [kind]: value };
+    setDeformAmounts(next);
+    sendDeform(next);
+  }
+
+  function onDeformClear() {
+    sendDeform({ slim_face: 0, big_eye: 0, small_chin: 0 });
+    setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0 });
+  }
+
   const verdict = gate(stats, w);
 
   return (
@@ -573,6 +652,20 @@ export default function App() {
           <button onClick={() => onLightAction("redo")} disabled={!status?.image}>{t("retouch.lightRedo")}</button>
           <button onClick={() => { onLightAction("clear"); setLastLight(null); }} disabled={!status?.image}>{t("retouch.lightClear")}</button>
         </div>
+        {/* 五官微调（M2-b）：三个滑块都是 [-1,1]，负值就是反向（丰颊/小眼/长下巴），
+            引擎侧同一套控制点不需要第二份代码。拖动期间逐事件发：它只缩放单位场。 */}
+        {(["slim_face", "big_eye", "small_chin"] as const).map((kind) => (
+          <div key={kind}>
+            <label className="k">{t(`retouch.${kind}`)}
+              {' '}{deformAmounts[kind].toFixed(2)}</label>
+            <input type="range" min={-1} max={1} step={0.01} value={deformAmounts[kind]}
+                   onChange={(e) => onDeformChange(kind, +e.target.value)}
+                   style={{ width: "100%" }} />
+          </div>
+        ))}
+        <div className="row">
+          <button onClick={onDeformClear} disabled={!status?.image}>{t("retouch.deformClear")}</button>
+        </div>
         {lastInpaint && (
           <table>
             <tbody>
@@ -629,6 +722,38 @@ export default function App() {
               <tr>
                 <td>{t("retouch.lightResident")}</td>
                 <td>{t("retouch.mib", { v: (lastLight.bytes_light / 1048576).toFixed(2) })}</td>
+              </tr>
+            </tbody>
+          </table>
+        )}
+
+        {lastDeform && (
+          <table>
+            <tbody>
+              <tr>
+                <td>{t("retouch.deformLayer")}</td>
+                <td>{lastDeform.lit ? t("retouch.deformOn") : t("retouch.deformOff")}
+                  {' · '}{lastDeform.landmark_backend ?? "-"}</td>
+              </tr>
+              <tr>
+                <td>{t("retouch.deformMs")}</td>
+                <td>{t("retouch.deformMsValue", {
+                  deform: lastDeform.deform_ms.toFixed(2),
+                  total: lastDeform.total_ms.toFixed(2),
+                })}</td>
+              </tr>
+              {lastDeform.build && (
+                <tr>
+                  <td>{t("retouch.deformBuild")}</td>
+                  <td>{t("retouch.deformBuildValue", {
+                    ms: lastDeform.build.deform_build_ms.toFixed(1),
+                    px: Object.values(lastDeform.build.kinds).map((k) => k.peak_px.toFixed(1)).join(" / "),
+                  })}</td>
+                </tr>
+              )}
+              <tr>
+                <td>{t("retouch.deformResident")}</td>
+                <td>{t("retouch.mib", { v: (lastDeform.bytes_deform / 1048576).toFixed(2) })}</td>
               </tr>
             </tbody>
           </table>

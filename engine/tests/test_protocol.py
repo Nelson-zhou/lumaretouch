@@ -479,6 +479,18 @@ def _read_frame(engine, peer, h, w):
     return np.frombuffer(peer.read_pixels(ev["slot"]), np.uint8).reshape(h, w, 4)[:, :, :3].astype(np.int16)
 
 
+def _nudge_frame(engine, strength):
+    """发一条会出帧的命令，把“当前画面上到底是不是这个状态”变成一个能读的东西。
+
+    precompute_ready 不出帧：刚经 precompute 就调 _read_frame 会空等 10 s（本轮就是这么
+    错的）。而直接拿 shm 里旧帧当基线又不对：旧帧是 load_image 那一瞬的，中间只要
+    有任何一条改图层的命令被丢弃，基线就与上报对不上。走一遍 set_strength 才是产品
+    出帧的那条路。
+    """
+    engine.send(cmd="set_strength", strength=strength)
+    return engine.wait_for("params_set", timeout=30)
+
+
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
 def test_device_switch_keeps_the_active_channel_on_the_frame_it_emits(engine):
     """换设备补发的最后一帧必须仍按当前通道渲染。
@@ -1326,3 +1338,147 @@ def test_bad_light_commands_leave_no_trace(engine):
         _expect_error(engine, "没有可撤销的修容笔")
     finally:
         peer.close()
+
+
+# ============================================================ M2-b 五官微调
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_deform_requires_precompute_first(engine):
+    """没有 478 点关键点就不许形变：它不是“没得形变”而是“不知道把哪里搬到哪里”。"""
+    _needs_torch()
+    _load(engine, max_px=207360, strength=0.0)
+    engine.send(cmd="deform", action="set", amounts={"slim_face": 0.5})
+    _expect_error(engine, "需要先 precompute")
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_deform_refuses_synthetic_placeholder_landmarks(engine):
+    """synthetic 后端给的是网格占位几何，形变必须整条拒。
+
+    不拒的话它会“成功”：点号 234 在点阵里落在某个格子中心，拿它当“左脸轮廓”
+    会推到完全不相关的像素上，而画面真的在动、事件真的成功——看不出错。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    engine.send(cmd="precompute", backend="synthetic")
+    pc = engine.wait_for("precompute_ready", timeout=60)
+    assert pc["backend"] == "synthetic", pc
+    engine.send(cmd="deform", action="set", amounts={"slim_face": 0.5})
+    _expect_error(engine, "synthetic")
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_deform_on_template_backend_moves_the_frame_and_clear_restores_it(engine):
+    """端到端：模板后端 → 建层 → 拖滑块改画面 → clear 逐字节回原。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    engine.send(cmd="precompute", backend="template")
+    pc = engine.wait_for("precompute_ready", timeout=60)
+    assert pc["backend"] == "template" and pc["num_landmarks"] == 478, pc
+    peer = FrameShm(meta["name"])
+    try:
+        _nudge_frame(engine, 0.0)
+        base = _read_frame(engine, peer, h, w)
+        engine.send(cmd="deform", action="set", amounts={"slim_face": 0.9})
+        done = engine.wait_for("deform_done", timeout=60)
+        assert done["built"] is True and done["lit"] is True, done
+        assert done["landmark_backend"] == "template", done
+        assert done["build"]["deform_builds"] == 1, done
+        assert done["bytes_deform"] > 0, "建了单却没上报常驻字节"
+        lit = _read_frame(engine, peer, h, w)
+        assert np.abs(lit - base).max() > 0, "瘦脸 0.9 没改到画面"
+        # 只改一个滑块，另两个必须停在 0（先校验后提交不得“顺手清零”）
+        assert done["amounts"] == {"slim_face": 0.9, "big_eye": 0.0, "small_chin": 0.0}, done
+        engine.send(cmd="deform", action="set", amounts={"slim_face": 0.45})
+        half = engine.wait_for("deform_done", timeout=60)
+        assert "build" not in half, "第二次 set 不应当重建"
+        engine.send(cmd="deform", action="clear")
+        back = engine.wait_for("deform_done", timeout=60)
+        assert back["lit"] is False and back["bytes_deform"] == 0, back
+        again = _read_frame(engine, peer, h, w)
+        assert np.array_equal(again, base), f"clear 后差了 {int(np.abs(again - base).max())} LSB"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_bad_deform_commands_leave_no_trace(engine):
+    """被拒的形变命令整条不留痕：不建层、不改滑块、不改画面。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.3)
+    h, w = meta["h"], meta["w"]
+    engine.send(cmd="precompute", backend="template")
+    engine.wait_for("precompute_ready", timeout=60)
+    peer = FrameShm(meta["name"])
+    try:
+        _nudge_frame(engine, 0.3)
+        before = _read_frame(engine, peer, h, w)
+        engine.send(cmd="deform", action="nope", amounts={"slim_face": 0.5})
+        _expect_error(engine, "未知 deform action")
+        engine.send(cmd="deform", action="set", amounts={"nose": 0.5})
+        _expect_error(engine, "未知形变类型")
+        engine.send(cmd="deform", action="set", amounts={"slim_face": 3.0})
+        _expect_error(engine, "形变量非法")
+        engine.send(cmd="deform", action="set", amounts={})
+        _expect_error(engine, "至少要给一个")
+        engine.send(cmd="deform", action="set")
+        _expect_error(engine, "至少要给一个")
+        # 越界值不得先触发建层：报错之后图层应当还是空的
+        engine.send(cmd="deform", action="set", amounts={"big_eye": 0.8})
+        done = engine.wait_for("deform_done", timeout=60)
+        assert done["build"]["deform_builds"] == 1, "拒绝的命令把建层也做了"
+        after = _read_frame(engine, peer, h, w)
+        assert np.abs(after - before).max() > 0, "最后一条合法命令应当生效"
+    finally:
+        peer.close()
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_drag_stream_with_deform_lit_builds_nothing(engine):
+    """M2-b 的核心产品判据：开着形变拖 600 帧滑块，一次 TPS 也不许解。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.5)
+    h, w = meta["h"], meta["w"]
+    engine.send(cmd="precompute", backend="template")
+    engine.wait_for("precompute_ready", timeout=60)
+    engine.send(cmd="deform", action="set",
+                amounts={"slim_face": 0.6, "big_eye": 0.3, "small_chin": 0.4})
+    done = engine.wait_for("deform_done", timeout=60)
+    assert done["lit"] is True, done
+    engine.send(cmd="bench_start", mode="image_stream", frames=6, interval_ms=20,
+                w=w, h=h)
+    engine.wait_for("bench_started", timeout=30)
+    b = engine.wait_for("bench_done", timeout=90)
+    assert not b.get("failed"), f"跑靶失败：{b}"
+    assert b["refilter_frames"] == 0, f"拖拽流里重算了滤波：{b['refilter_frames']}"
+    assert b["relight_frames"] == 0, f"拖拽流里重算了修容：{b['relight_frames']}"
+    assert b["deform_builds"] == 0, \
+        f"拖拽流里重解了 {b['deform_builds']} 次 TPS，零推理失效"
+    assert b["deform"] > 0, "开着形变却一帧都没跑 grid_sample，这条判据退化了"
+    # 本用例跑在 CPU 会话上（_load 固定 set_device cpu），4 ms 是 CPU 上 grid_sample +
+    # 零位移保留那两步的量。GPU 产品档的每帧预算由 packaging/m2-face-bench.py 钉（~1 ms），
+    # 不在这里拿 CPU 数字冒充 GPU 结论。
+    assert b["deform"] < 8.0, f"每帧形变均值 {b['deform']} ms 超预算"
+    assert b["deform_state"]["amounts"]["slim_face"] == 0.6, \
+        f"bench_done 里的形变状态与实际跑的不一个数：{b['deform_state']}"
+    # 上报里“每帧分段”与“图层状态”不能共用一个名字：字典字面量后写的会静默覆盖先写的，
+    # 于是其中一个永远送不出来而报表看着仍自洽。这两条就是在钉它俩确实是两个字段。
+    assert isinstance(b["deform"], float) and isinstance(b["deform_state"], dict), \
+        "deform 每帧 ms 与 deform_state 图层状态必须分得开"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_deform_is_refused_while_bench_running(engine):
+    """跑靶进行中不许改图层：与 light/inpaint 同一条互斥，不然 600 帧混进一次解算。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.5)
+    h, w = meta["h"], meta["w"]
+    engine.send(cmd="precompute", backend="template")
+    engine.wait_for("precompute_ready", timeout=60)
+    engine.send(cmd="bench_start", mode="image_stream", frames=40, interval_ms=25,
+                w=w, h=h)
+    engine.wait_for("bench_started", timeout=30)
+    engine.send(cmd="deform", action="set", amounts={"slim_face": 0.5})
+    _expect_error(engine, "跑靶进行中")
+    engine.send(cmd="bench_stop")
+    engine.wait_for("bench_done", timeout=90)

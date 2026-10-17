@@ -100,6 +100,9 @@ pub struct AppState {
     /// 最近一次 light_done（M2-a2 修容笔）。与 inpaint 分开存：两个图层各自
     /// 一次事件一条结果，合成一份就会让“消除笔的 repair_ms”被读成修容的耗时。
     light: Mutex<Option<Value>>,
+    /// 最近一次 deform_done（M2-b 五官微调）。与修容分开存的理由与上面同一条：
+    /// 它报的是形变段与常驻字节，与 db 的账不是一个量。
+    deform: Mutex<Option<Value>>,
 }
 
 /// 用 `Arc` 起步才能传给引擎读线程；因此额外管理一个持有 Arc 的启动器。
@@ -125,6 +128,7 @@ impl AppState {
             precompute: Mutex::new(None),
             inpaint: Mutex::new(None),
             light: Mutex::new(None),
+            deform: Mutex::new(None),
         }
     }
 
@@ -175,6 +179,10 @@ impl AppState {
 
     pub fn on_light_ready(&self, v: &Value) {
         *self.light.lock().unwrap() = Some(v.clone());
+    }
+
+    pub fn on_deform_ready(&self, v: &Value) {
+        *self.deform.lock().unwrap() = Some(v.clone());
     }
 
     pub fn on_frame_event(&self) {
@@ -245,6 +253,7 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     // 去驱一个 _vram=None 的新引擎（量出来就是“没跑但正常”）。
     *st.image.lock().unwrap() = None;
     *st.precompute.lock().unwrap() = None;
+    *st.deform.lock().unwrap() = None;      // 形变层随关键点走，新进程里没有关键点
     *st.engine.lock().map_err(|_| "引擎锁中毒".to_string())? = Some(Arc::new(h));
     Ok(json!({"pid": pid, "python": py, "src": src, "session": session}))
 }
@@ -317,6 +326,7 @@ fn load_image(
     // 画笔图层也一起清：引擎侧 load_image 会丢旧笔画，宿主留着就是报一个不存在的图层状态
     *state.inpaint.lock().unwrap() = None;
     *state.light.lock().unwrap() = None;
+    *state.deform.lock().unwrap() = None;
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
 }
@@ -427,6 +437,26 @@ fn light(
     }
     if let Some(v) = radius {
         cmd["radius"] = json!(v);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 五官微调（M2-b）：三个滑块的值送进引擎。action: set / clear。
+///
+/// 与修容笔不同，它不是逐笔事件而是参数层：滑块拖动期间每帧都要送（引擎侧只缩放
+/// 已常驻的单位场，一次 TPS 也不解）。所以这里不能像 light 那样只在松手时发。
+#[tauri::command]
+fn deform(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    amounts: Option<Value>,
+) -> Result<Value, String> {
+    let mut cmd = json!({"cmd": "deform", "action": action});
+    // 与 light 同一条规矩：给了才附。宿主写默认值等于替引擎做决定，
+    // 生产默认值一改这条通路就会静默漂开。
+    if let Some(v) = amounts {
+        cmd["amounts"] = v;
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
@@ -655,9 +685,10 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let precompute = state.precompute.lock().unwrap().clone();
     let inpaint = state.inpaint.lock().unwrap().clone();
     let light = state.light.lock().unwrap().clone();
+    let deform = state.deform.lock().unwrap().clone();
     json!({"shm": shm_name, "has_shm": has_shm, "emitted": emitted,
            "delivered": delivered, "logs": logs, "image": image, "precompute": precompute,
-           "inpaint": inpaint, "light": light})
+           "inpaint": inpaint, "light": light, "deform": deform})
 }
 
 #[tauri::command]
@@ -669,6 +700,7 @@ fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     *state.precompute.lock().unwrap() = None;
     *state.inpaint.lock().unwrap() = None;
     *state.light.lock().unwrap() = None;
+    *state.deform.lock().unwrap() = None;
     match h {
         Some(h) => {
             h.shutdown();
@@ -708,6 +740,7 @@ fn m0_env() -> Value {
         // M2-a2 修容自动通道：“fx:fy:r:sign,…”（坐标按代理帧归一化，sign 取 +1/-1），
         // 跟自动消除笔同一条链：只有真窗口能证明“TS → Rust → 引擎”这条命令签名对得上。
         "auto_light": std::env::var("LRT_AUTO_LIGHT").unwrap_or_default(),
+        "auto_deform": std::env::var("LRT_AUTO_DEFORM").unwrap_or_default(),
     })
 }
 
@@ -730,7 +763,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_engine, bench_start, pull_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, precompute,
-            inpaint, light, report, quit
+            inpaint, light, deform, report, quit
         ])
         .run(tauri::generate_context!())
         .expect("运行 LumaRetouch 失败");

@@ -28,6 +28,8 @@ from .ops.guided import (bands_t, combine_t, mix_masked,
                          DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS,
                          DEFAULT_MID_GAIN, DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS)
 from .ops.inpaint import crop_apply_t, hole_extent, inpaint_t, levels_for, mask_bbox
+from .ops.deform import (KINDS, analytic_frontal_landmarks, check_amounts,
+                         identity_grid, unit_field, warp_t)
 from .ops.light import dodge_burn_t, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
 from .quant import quantize_t
 
@@ -151,6 +153,21 @@ class PreviewPipeline:
         self.light_res: torch.Tensor | None = None             # db(retouched)
         self.light_res_key: tuple | None = None
         self.last_light_ms: float = 0.0
+        # M2-b：形变层。存的是三种形变各自的**单位场**（amount=1 时的位移场），
+        # 滑块值只当系数用。为什么能这样拆：TPS 的解对右端项线性，而请求位移与
+        # amount 成正比，所以 field(a) = a·field(1) 是恒等而不是近似
+        # （探针 m2b4 量到 ‖f(0.5)−0.5·f(1)‖max = 0.000e+00 px）。
+        # 于是拖滑块期间一次 TPS 都不解——那玩意在 GPU 上 float64 要 34–79 ms。
+        self.deform_units: dict[str, torch.Tensor] = {}
+        self.deform_amounts: dict[str, float] = {k: 0.0 for k in KINDS}
+        self.deform_grid_base: torch.Tensor | None = None      # 恒等网格，常驻
+        self.deform_version: int = 0
+        self.deform_meta: dict[str, dict] = {}
+        self.last_deform_ms: float = 0.0
+        # build_deform 的累计次数。拖滑块期内它必须不增——这才是“零推理”的可测口径：
+        # 每帧的 deform ms 无论如何都 > 0（grid_sample 真在跑），拿它当“有没有重算”
+        # 的判据会恒真。计数器只能由解算那一层递增，伪代码伪不出一个不增的数。
+        self.deform_builds: int = 0
 
     # ---- 装载：一次性 H2D ----------------------------------------------
     def load_rgb_u8(self, rgb: np.ndarray) -> None:
@@ -179,8 +196,18 @@ class PreviewPipeline:
         self.repair_version += 1
         self.last_repair_ms = 0.0
         self._reset_light()
+        self._reset_deform()
         if self.device.type != "cpu":
             torch.cuda.synchronize(self.device)
+
+    def _reset_deform(self) -> None:
+        """换图时清形变层：单位场是从这张图的关键点解出来的，对下一张图没有意义。"""
+        self.deform_units = {}
+        self.deform_amounts = {k: 0.0 for k in KINDS}
+        self.deform_grid_base = None
+        self.deform_meta = {}
+        self.deform_version += 1
+        self.last_deform_ms = 0.0
 
     def _reset_light(self) -> None:
         """换图时清空修容层：上一张图的笔迹坐标与新图没有任何关系。"""
@@ -292,9 +319,11 @@ class PreviewPipeline:
         # strength=0 逐字节恒等那条承诺一分不改。
         base = self.lighten_source()
         result = self.lighten_result()
-        if channel is not None:
-            return mix_masked(base, result, strength, self.mask(channel))
-        return (1.0 - strength) * base + strength * result
+        out = mix_masked(base, result, strength, self.mask(channel)) if channel is not None \
+            else (1.0 - strength) * base + strength * result
+        # M2-b：形变盖在最后。为什么不盖在底图上：那样拖任意一个滑块都要把 9 ms 的
+        # 分带重跑（底图变了），零推理那条承诺就碎了。盖在最后每帧只多一次 grid_sample。
+        return self.apply_deform(out)
 
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:
@@ -336,6 +365,10 @@ class PreviewPipeline:
         self.masks_gpu = None
         self.mask_names = []
         self.landmarks_gpu = None
+        # 单位场是从关键点解出来的，关键点一走它们就成了无源之水：继续用等于
+        # 拿上一张脸的形状去瘦这一张脸
+        if self.deform_units:
+            self.clear_deform()
 
     def mask(self, channel: str):
         """按名字取一个常驻掩膜通道，形状 (1,1,H,W)，可直接与 (1,3,H,W) 广播。"""
@@ -686,6 +719,102 @@ class PreviewPipeline:
         cpu = sum(op.nbytes() for op in self.light_ops) + sum(op.nbytes() for op in self.light_redo)
         return gpu + cpu
 
+    # ---- M2-b：形变层（盖在磨皮与修容之后的几何层）--------------------
+    def has_deform(self) -> bool:
+        """没建单或三个滑块全零 ⇒ 一个算子也不跑。"""
+        return bool(self.deform_units) and any(self.deform_amounts.get(k, 0.0) != 0.0
+                                               for k in self.deform_units)
+
+    def build_deform(self, landmarks) -> dict:
+        """从 478 点解出三种形变的单位场并常驻。一张图只跑一次。
+
+        先算完、再提交：中途某个 kind 解算失败（关键点不够、后端只给占位几何）时，
+        会话不能留下“一半形变已常驻”的跳状态。与 M1-3c 的“不留半截显存”同一条约束。
+        """
+        if self.src_f32 is None:
+            raise RuntimeError("先 load_rgb_u8 再建形变层")
+        lm = np.asarray(landmarks)
+        t0 = time.perf_counter()
+        units: dict[str, torch.Tensor] = {}
+        meta: dict[str, dict] = {}
+        for kind in KINDS:
+            u, m = unit_field(lm, kind, self.h, self.w, device=self.device)
+            if not torch.isfinite(u).all():
+                raise ValueError(f"{kind} 的位移场含非有限值，整层拒绝：不写进常驻")
+            units[kind] = u
+            meta[kind] = m
+        base = identity_grid(self.h, self.w, self.device)
+        ms = (time.perf_counter() - t0) * 1000.0
+        # ---- 提交点：后面全是赋值 ----
+        self.deform_units = units
+        self.deform_meta = meta
+        self.deform_grid_base = base
+        self.deform_version += 1
+        self.deform_builds += 1
+        return {
+            "deform_build_ms": round(ms, 2),
+            "deform_builds": self.deform_builds,
+            "kinds": {k: meta[k] for k in KINDS},
+            "bytes_deform": self.deform_resident_bytes(),
+            "device": str(self.device),
+        }
+
+    def clear_deform(self) -> dict:
+        """放下整层：三个单位场与恒等网格一共 5 份张量，不手动放就会一直占着。"""
+        self.deform_units = {}
+        self.deform_meta = {}
+        self.deform_grid_base = None
+        self.deform_amounts = {k: 0.0 for k in KINDS}
+        self.deform_version += 1
+        return {"amounts": dict(self.deform_amounts), "built": False, "lit": False,
+                "deform_builds": self.deform_builds, "bytes_deform": 0}
+
+    def set_deform_amounts(self, amounts: dict) -> dict:
+        """改滑块值。**先校验后提交**：一个非法值也不能把其他两个带下水。
+
+        不先校验的话 `"slim_face": 5.0` 会先把旧值覆盖成一个越界系数，下一帧就把
+        脸拖成一陀——而事件里报的却是一句“参数非法”。M1-3c 的 set_strength 已经
+        为同一个形状付过一次钱。
+        """
+        if not isinstance(amounts, dict) or not amounts:
+            raise ValueError("deform amounts 至少要给一个 kind")
+        got = check_amounts(amounts)
+        self.deform_amounts = dict(self.deform_amounts, **got)
+        return {"amounts": dict(self.deform_amounts),
+                "built": bool(self.deform_units),
+                "lit": bool(self.has_deform())}
+
+    def apply_deform(self, t):
+        """把当前形变层施加到一份常驻张量上。每帧只走这里，不走 TPS 解算。"""
+        self.last_deform_ms = 0.0
+        if not self.has_deform():
+            return t
+        t0 = time.perf_counter()
+        delta = None
+        for kind, unit in self.deform_units.items():
+            a = self.deform_amounts.get(kind, 0.0)
+            if a == 0.0:
+                continue
+            delta = unit * a if delta is None else delta + unit * a
+        if delta is None:
+            return t
+        out = warp_t(t, delta, 1.0, base=self.deform_grid_base)
+        if not torch.isfinite(out).all():
+            raise ValueError("形变产出非有限值，已拒绝：amounts="
+                             f"{self.deform_amounts}")
+        if self.device.type != "cpu":
+            torch.cuda.synchronize(self.device)
+        self.last_deform_ms = (time.perf_counter() - t0) * 1000.0
+        return out
+
+    def deform_resident_bytes(self) -> int:
+        """形变层的显存账单：三个单位场 + 恒等网格。"""
+        total = 0
+        for t in list(self.deform_units.values()) + [self.deform_grid_base]:
+            if t is not None:
+                total += int(t.numel() * t.element_size())
+        return total
+
     def pack(self, out) -> None:
         """float→uint8 并写进常驻帧缓冲，同样全程在显存里做。
 
@@ -755,6 +884,10 @@ def warm_device(device: str, side: int = 64) -> float:
     M2-a2 把修容链也纳进来：真窗口实测第一笔修容 light_ms 68.64 ms、后续 3.3 ms，
     那 65 ms 是 sRGB↔linear、带限 box 与 pow 这组内核首次加载。修容笔是产品里
     第一个“画下去立刻要看结果”的手势，这笔钱不能留在用户的第一笔上。
+
+    M2-b 再把形变链纳进来：grid_sample 与恒等网格也是首拖才首次加载的内核。
+    它用的关键点是 `analytic_frontal_landmarks` 那份解析几何（只为了把内核跑起来），
+    不是产品路径——产品路径的形变必须拿 precompute 的真关键点。
     """
     if torch is None or not str(device).startswith("cuda") or not torch.cuda.is_available():
         return 0.0
@@ -768,6 +901,11 @@ def warm_device(device: str, side: int = 64) -> float:
         pipe.set_light_ops([LightOp(op_id=1, weight=np.full((side, side), 128, np.uint8),
                                     sign=1)])
         pipe.set_light_params(DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS)
+        pipe.render(0.5)
+        # 形变臂：M2-b。grid_sample 与“恒等网格”这两份内核首次加载也要挑出来，
+        # 否则用户第一次拖“瘦脸”滑块会白付一次内核加载（修容第一次落笔就是 65 ms 的前车）。
+        pipe.build_deform(analytic_frontal_landmarks())
+        pipe.set_deform_amounts({"slim_face": 0.5, "big_eye": 0.3, "small_chin": 0.2})
         pipe.render(0.5)
         torch.cuda.synchronize()        # 与引擎 _sync 同一个理由：不同步就把内核记到回读头上
         pipe.read_back()
@@ -784,4 +922,8 @@ def warm_device(device: str, side: int = 64) -> float:
         pipe.light_res = None
         pipe.light_ops = []
         pipe.light_redo = []
+        # 形变层同理：三个单位场 + 恒等网格共 5 份张量，留在临时会话上就是泄显存
+        pipe.deform_units = {}
+        pipe.deform_grid_base = None
+        pipe.deform_meta = {}
     return (time.perf_counter() - t0) * 1000.0

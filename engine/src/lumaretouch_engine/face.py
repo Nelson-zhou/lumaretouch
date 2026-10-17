@@ -30,7 +30,7 @@ import numpy as np
 # MediaPipe Face Landmarker 的输出点数；契约里钉死，M1-3c 的网格形变按这个索引布局
 NUM_LANDMARKS = 478
 
-BACKENDS = ("synthetic", "mediapipe")
+BACKENDS = ("synthetic", "template", "mediapipe")
 
 # 模型权重不入库（计划决策 9），首启由安装器按 sha256 拉官方源；引擎只读不吃下载
 MODEL_DIR_ENV = "LRT_MODEL_DIR"
@@ -135,6 +135,66 @@ class SyntheticFace:
         )
 
 
+class TemplateFace:
+    """脸形模板后端：把一张解析正脸拟合到肤色包围盒上。零依赖、零权重、零许可负担。
+
+    与 synthetic 的差别只有一条，但正是 M2-b 需要的那一条：它给的 478 点**按 MediaPipe
+    拓扑布局**，点号→部位是对的，所以“左脸轮廓”“下巴尖”“虹膜中心”能按部位取到位置。
+    与 mediapipe 的差别也只有一条：位置是按肤色盒摆的，不是按眼睛鼻子实际在哪找的。
+
+    因此它能承担两件、且只承担两件：
+      1. 让五官微调在没装 mediapipe 插件的机器上也能端到端跑通（产品不能因为一个
+         带许可门禁的可选依赖而整个功能不可用）；
+      2. 给形变的**通路/生命周期/每帧成本**提供真几何证据。
+    它**不能**当精度证据：模板贴合度另由 mediapipe 后端负责（m1-3b-acc 仍阻在许可门禁）。
+    这一点写进 notes，而且 deform_done 事件会把 backend 原样上报，UI 得能显示。
+    """
+
+    name = "template"
+    requires_models = False
+
+    def __init__(self):
+        self.notes = ["template 后端：478 点为脸形模板按肤色盒拟合，部位语义正确、"
+                      "贴合度不验收（精度回归需 mediapipe 插件）"]
+
+    def __call__(self, rgb: np.ndarray) -> FacePrecompute:
+        from .ops.deform import analytic_frontal_landmarks
+
+        h, w = rgb.shape[:2]
+        t0 = time.perf_counter()
+        mask = skin_mask_np(rgb)
+        box = _tight_box(mask)
+        lm = _fit_template(analytic_frontal_landmarks(), box)
+        t_detect = _now_ms(t0)
+        return FacePrecompute(
+            landmarks=lm,
+            masks={"skin": mask},
+            backend=self.name,
+            t_detect_ms=t_detect,
+            t_masks_ms=0.0,        # 与 synthetic 同一条理由：掩膜与“检测”出自同一个规则
+            face_box=box,
+            notes=list(self.notes),
+        )
+
+
+def _fit_template(lm: np.ndarray, box: tuple[float, float, float, float]) -> np.ndarray:
+    """把模板关键点的自带外接盒等比仿射到目标盒里（保宽高比、居中、不越界）。
+
+    各向异性拉伸会把脸拉成方脸，而且“左右脸对称内收”在拉伸后不再对称。所以取
+    均匀缩放因子 min(bw/tw, bh/th)：宁可上下留白，也不把模板拽长。
+    """
+    x0, y0, x1, y1 = box
+    tx0, ty0 = float(lm[:, 0].min()), float(lm[:, 1].min())
+    tw = max(float(lm[:, 0].max()) - tx0, 1e-6)
+    th = max(float(lm[:, 1].max()) - ty0, 1e-6)
+    bw, bh = max(x1 - x0, 1e-6), max(y1 - y0, 1e-6)
+    s = min(bw / tw, bh / th)
+    out = lm.copy()
+    out[:, 0] = x0 + (bw - tw * s) * 0.5 + (lm[:, 0] - tx0) * s
+    out[:, 1] = y0 + (bh - th * s) * 0.5 + (lm[:, 1] - ty0) * s
+    return np.ascontiguousarray(np.clip(out, 0.0, 1.0), dtype=np.float32)
+
+
 class MediaPipeFace:
     """真实后端：MediaPipe Face Landmarker（478 点）+ Selfie Segmenter（person 掩膜）。
 
@@ -223,11 +283,18 @@ class MediaPipeFace:
 
 
 def build(backend: str, model_dir: str | None = None):
-    """按名字构造后端。`auto` = 有 mediapipe 且模型齐就用真的，否则用 synthetic 并说明原因。"""
+    """按名字构造后端。`auto` = 有 mediapipe 且模型齐就用真的，否则用 synthetic 并说明原因。
+
+    auto 不回落 template：那会把“没装插件”与“装了插件但检不出脸”两种情况在报表上
+    混成一个结果。template 必须显式点名，这样事件里的 backend 字段就是“有人主动选
+    了模板拟合”的硬证据。
+    """
     if backend == "mediapipe":
         return MediaPipeFace(model_dir)
     if backend == "synthetic":
         return SyntheticFace()
+    if backend == "template":
+        return TemplateFace()
     if backend == "auto":
         try:
             return MediaPipeFace(model_dir)

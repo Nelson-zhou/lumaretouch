@@ -147,6 +147,11 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             state.on_light_ready(&v);
             println!("M0_ENGINE {line}");
         }
+        "deform_done" => {
+            // M2-b 五官微调：三个滑块一条。真窗口跑靶靠它采 deform_ms / bytes_deform
+            state.on_deform_ready(&v);
+            println!("M0_ENGINE {line}");
+        }
         "bench_done" => {
             state.on_bench_done();
             println!("M0_ENGINE {line}");

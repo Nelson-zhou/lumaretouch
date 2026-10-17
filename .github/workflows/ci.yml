@@ -90,6 +90,13 @@ jobs:
         # 本机（RX 7600 XT）：产品档拖 strength 0.156 ms（无修容 0.170 ms，这层热路径
         # 零成本）、每帧重算 db 3.43 ms（×22）；GPU↔CPU 最大 1 LSB、系统偏移 −0.00002 LSB。
         run: REPS=5 LRT_FRAMES=40 "$PY" packaging/m2-dnb-bench.py
+      - name: 五官微调（TPS 作用面 + 缩放与重解同一件事 + 拖滑块零解算）
+        # M2-b 的三条硬要求：① 紧支撑——窗外像素逐字节不动（瘦脸不许拖走背景）；
+        # ② 控制点处位移等于请求值（≤2% 峰值）且纯轴请求的另一分量精确为 0；
+        # ③ 缩放单位场与每帧重解 TPS 上屏字节逐字节相等，且拖滑块期间 deform_builds 不增。
+        # 本机（RX 7600 XT / 产品档 672×848）：形变段 1.05 ms/帧 vs 每帧重解 53.7 ms（×41）、
+        # 两臂最大 1 LSB（0.03% 像素，量化边界）、窗外改动 0 px、GPU−CPU 场 1e-13 px。
+        run: REPS=5 LRT_FRAMES=40 "$PY" packaging/m2-face-bench.py
 
   # NVIDIA 侧同理。本机无 N 卡，CUDA 依赖 pin 也尚未解析回填，
   # 在拿到 NVIDIA runner 之前这条只能是开关关闭，不能当作已验证。
@@ -120,6 +127,8 @@ jobs:
         run: REPS=5 LRT_FRAMES=40 "$PY" packaging/m2-skin-bench.py
       - name: 中性灰修容（档数精确 + 笔触带限 + db 两层常驻）
         run: REPS=5 LRT_FRAMES=40 "$PY" packaging/m2-dnb-bench.py
+      - name: 五官微调（TPS 作用面 + 缩放与重解同一件事 + 拖滑块零解算）
+        run: REPS=5 LRT_FRAMES=40 "$PY" packaging/m2-face-bench.py
 
   # 通路不回归：引擎层单测 + 脚本可跑。真正的端到端帧率验收需要图形环境，
   # 在 M0 阶段仍是本机跑 packaging/m0-bench.sh，不假称 CI 已覆盖。
