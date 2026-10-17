@@ -26,12 +26,14 @@ from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
 from .ops.grade import DH_LIMIT, DS_LIMIT, DV_LIMIT, GradeError, check_params
 from .ops.presets import PRESETS, PresetError, get_preset, preset_grade, preset_lut
 from .ops.upscale import SCALES
+from .ops import birefnet
 from .ops import upscale as U
 # M5 底片条：扫描与缩略图的全部口径都在 session 层，命令层只发事件与管线程。
 from . import raw as R
 from . import session as S
 # M4 导出：FORMATS/尺寸边界与落盘器全部从 export 走，命令层不掌一份格式名单（双出处）。
 from .export import (DEFAULT_TILE, FORMATS, MAX_TILE, MIN_TILE, SHARPEN_AMOUNT_LIMIT,
+                     UPSCALE_NOT_WIRED,
                      ExportSpec,
                      export_image, resample_field, write_file)
 from . import __version__
@@ -202,6 +204,10 @@ class Engine:
               # "支持 AI 超分"，就是在无权重的机器上谎报能力。
               "upscale_scales": list(SCALES),
               "upscale_backends": U.scale_backends(),
+              # 抠图后端清单（M6，与放大同一个口径）：birefnet 在权重未放行前不算可用。
+              # 旧版只把这一句写在提交后的拒绝里，UI 的下拉项却无条件摆着——那是在
+              # 邀请用户去撞一个注定空的请求。
+              "matting_backends": birefnet.matting_backends(),
               # RAW 能力清单（M1 的 RAW 那一块）：基线只解公开规范 DNG 的未压缩/Deflate
               # 线性数据，厂商专有容器与 lossless JPEG 要 libraw 可选插件。前端拿这一
               # 份说话，而不是自己刻一个“支持 RAW”——那会把“解不开 CR2”写成已通过。
@@ -2694,13 +2700,9 @@ class Engine:
             return
         if backend == "realesrgan":
             # 无权重整条拒，不降级成 Lanczos 报"AI 超分"（与 lama/birefnet 同一条规矩）。
-            # 为什么不在这里探文件存在：那一探会把"权重可用"的判断口径分两处维护，
-            # 而真实装载在 ops.realesrgan.load_net 里（sha256 对账那一关）。导出前就能
-            # 告诉用户不行，靠的是同一个缺省理由。
-            from .ops import realesrgan as _rr
-            emit({"event": "error", "error": _rr.missing_reason("realesrgan")
-                  if not _rr.available() else
-                  "realesrgan 权重存在但未通过 sha256 对账：请设 LRT_REALESRGAN_SHA256 后重试"})
+            # 理由只有一句出处（export.UPSCALE_NOT_WIRED）：命令层与 ExportSpec 各写一份
+            # 就会漂，而“设好 sha256 后重试”那一版把未接入出片环路这一件事推给了权重。
+            emit({"event": "error", "error": UPSCALE_NOT_WIRED})
             return
         try:
             sharpen = float(p.get("sharpen", 0.0))

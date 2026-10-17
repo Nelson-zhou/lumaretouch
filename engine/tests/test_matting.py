@@ -129,3 +129,46 @@ def test_birefnet_gates_weights_without_sha256(tmp_path):
     os.environ.pop(B.MODEL_SHA256_ENV, None)
     with pytest.raises(B.MissingBackend, match="SHA256"):
         B.load_net(model_dir=str(tmp_path))
+
+
+def test_matting_backends_tracks_the_gate_not_a_hardcoded_name(tmp_path, monkeypatch):
+    """能力上报与装载放行是**同一个判据**（M8）：三个档位都得对得上。
+
+    只看文件名会把"权重被换过"那一种机器报成装机可用（一提交就被 load_net 拒），
+    而把名单刻成常量又会在权重真放行的机器上一直说"等权重"——两个方向都是谎。
+    """
+    pytest.importorskip("torch")   # load_net 进门先探 torch；没装就量不到同一句理由
+    from lumaretouch_engine.ops import birefnet as B
+    p = tmp_path / B.MODEL_FILE
+    p.write_bytes(b"pretend-weight-bytes")
+    monkeypatch.setenv("LRT_MODEL_DIR", str(tmp_path))
+
+    # ① 权重在、没给校验和 → 不可用（与 load_net 同口径）
+    monkeypatch.delenv(B.MODEL_SHA256_ENV, raising=False)
+    assert B.matting_backends()["weights_gated"] == ["birefnet"]
+    with pytest.raises(B.MissingBackend):
+        B.load_net()
+
+    # ② 给了校验和但**对不上**（权重被换过）→ 仍不可用，且 load_net 拒的是同一句
+    import hashlib
+    monkeypatch.setenv(B.MODEL_SHA256_ENV, "0" * 64)
+    ok, why = B.production_check()
+    assert ok is False and B.matting_backends()["weights_gated"] == ["birefnet"], why
+    with pytest.raises(B.MissingBackend) as ei:
+        B.load_net()
+    assert str(ei.value) == why, "上报与执行两套口径就是双出处，早晚漂"
+
+    # ③ 校验和真的对上 → 名单跟着事实变，birefnet 进 baseline
+    good = hashlib.sha256(p.read_bytes()).hexdigest()
+    monkeypatch.setenv(B.MODEL_SHA256_ENV, good)
+    b = B.matting_backends()
+    assert b["baseline"] == ["color_key", "birefnet"] and b["weights_gated"] == [], b
+    assert B.production_check()[0] is True
+
+
+def test_matting_backends_default_machine_has_only_color_key():
+    """裸机器（权重不在）上报的名单里不许出现 birefnet 的可用主张。"""
+    from lumaretouch_engine.ops import birefnet as B
+    b = B.matting_backends(model_dir="/nonexistent-lrt-model-dir")
+    assert b["baseline"] == ["color_key"]
+    assert b["weights_gated"] == ["birefnet"]

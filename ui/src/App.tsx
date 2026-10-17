@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Viewer, { type Hud } from "./components/Viewer";
 import { clickRle } from "./brush";
-import { t } from "./i18n";
+import { t, type MsgKey } from "./i18n";
 import {
   benchStart, benchStats, engineStatus, loadImage, m0Env, parseFrameHead, peekFrame,
   quit, report, runDeform,
@@ -39,6 +39,11 @@ function gate(s: Stats | null, w: number): "pass" | "fail" | "pending" {
 }
 
 const fmt = (us: number) => (us > 0 ? `${(us / 1000).toFixed(2)} ms` : "—");
+
+/** 换底后端的显示名（M6）：名单本身由引擎的 matting_backends 给，这里只负责把
+ *  它报回来的名字翻成文案。引擎日后多报一个没见过的名字就直接显示原名——名字
+ *  是事实，怎么叫它才是文案，前端不许拿名单当自己可枚举的集合。 */
+const BG_LABEL: Record<string, MsgKey> = { color_key: "bg.key", birefnet: "bg.ai" };
 
 /** 强度滑块的最小发送间隔：逐 pointermove 发会把 IPC 排成长队，30 Hz 足够看不见拖影。 */
 const DRAG_THROTTLE_MS = 32;
@@ -364,7 +369,12 @@ export default function App() {
           caps: { presets: st?.presets?.length ?? -1,
                   gradeLimits: st?.grade_limits?.length ?? -1,
                   exportCaps: st?.export_caps ? 1 : 0,
-                  editCmds: st?.history_edit_cmds?.length ?? -1 },
+                  editCmds: st?.history_edit_cmds?.length ?? -1,
+                  // 能力上报的一致性（M8）：换底/放大两档后端清单必须由引擎自己报，
+                  // 缺一项就是“装机件里 UI 在猜能力”——裸环境跑这一臂才能区分。
+                  mattingCaps: st?.matting_backends ? 1 : 0,
+                  mattingBaseline: st?.matting_backends?.baseline?.length ?? -1,
+                  upscaleBackends: st?.export_caps?.upscale_backends ? 1 : 0 },
           hasShm: !!st?.has_shm,
         })}`);
       }
@@ -756,11 +766,50 @@ export default function App() {
               bgStillActive: stAfter?.background?.bg_active ?? null,
             })}`);
 
+            // 换图即清臂（M8 补的缺陷）：引擎在 cmd_load_image 里把 _bg 整层清回
+            // 出厂态（_fresh_doc_state），宿主那一侧的 background 槽位若不跟着清，
+            // 就会报“换底还开着”而屏幕上根本没有——同一行还驱动着“关掉换底”按钮的
+            // 灰与不灰、常驻 MiB 的读数。裸引擎的协议用例碰不到宿主这一侧，只有真窗
+            // 口拿得到这一条。
+            if (env.load_image) {
+              const pixBeforeReload = (await peek())?.pixels ?? null;
+              try {
+                await loadImage(env.load_image, { maxPx: env.max_px ?? undefined, strength: 0 });
+              } catch (e) {
+                await report(`M0_ERROR loadImage（重导）失败: ${e}`);
+              }
+              let rst: EngineStatus | null = null;
+              for (let i = 0; i < 300; i++) {
+                await sleep(100);
+                rst = await engineStatus().catch(() => null);
+                if (rst?.image) break;
+              }
+              const rl = await peek();
+              await report(`M0_BG_RELOAD ${JSON.stringify({
+                hostBgCleared: rst?.background == null,
+                engineBgActive: rst?.background?.bg_active ?? null,
+                // 重导同一张图（同一 maxPx）逐字节等于出厂帧：解码确定、代理档同幅。
+                // 不为 0 就是“旧图层没清干净”或“代理档跳了”，两者都不是换底该有的行为。
+                frameIsHome: diffBytes(homePix, rl?.pixels ?? null),
+                frameMovedVsBefore: diffBytes(pixBeforeReload, rl?.pixels ?? null),
+                corner: cornerRgb(rl?.pixels ?? null, rl?.w ?? 0),
+                proxy: rst?.image ? `${rst.image.w}x${rst.image.h}` : "-",
+                proxySame: !!rst?.image && !!before && `${rst.image.w}x${rst.image.h}` === `${before.w}x${before.h}`,
+              })}`);
+              // 后面的臂跟着新的代理档走（旧 w/h 驱一个刚重建的会话只会量到陈尺寸）
+              if (rst?.image) image = rst.image;
+            } else {
+              // 不能默默当这一臂过了：没得验就报没得验
+              await report("M0_BG_SKIP 无 LRT_LOAD_IMAGE，跳过换图即清臂");
+            }
+
             // 重挂臂：把底色再开回去，并且**开着进接下来的跑靶**。两个理由：
             //   • 换底不是一次性动作——同一会话里第二次 set 也得成（第一次把状态
             //     写坏、第二次静默不动是这类分层最容易犯的错）；
             //   • 后面的 bench 就在"链尾挂着一层常驻合成"的真实状态下量帧通路，
             //     而不是把层关掉再测一个好看的数。
+            // M8 起这一臂还多一层意思：它跑在**重导之后**，所以量的是“会话重建后
+            // 再开一次”而不只是“同一会话里连着按”。
             await runBackground("set", { backend, bg, tol, softness: soft });
             const again = await waitBg("set");
             const re = await peek();
@@ -1340,13 +1389,20 @@ export default function App() {
   }
 
   /** 换底（M6）：一次事件一条。hex → [r,g,b]；不猜默认 tol/softness（那两数的
-   *  语义由色键定，前端写死就会与引擎那一档漂）。birefnet 无权重时引擎回 error，
-   *  会进 status.logs 被看见——不静默退成色键。 */
+   *  语义由色键定，前端写死就会与引擎那一档漂）。 */
+  // 可选后端名单由引擎 ready 报的 matting_backends 决定（M8 与放大同一口径）：
+  // 没报就只留 color_key——那是唯一零依赖、装机即用的档，前端不许自己扩名单。
+  const bgBaseline = status?.matting_backends?.baseline?.length
+    ? status.matting_backends.baseline : ["color_key"];
+  const bgGated = status?.matting_backends?.weights_gated ?? [];
+  // 选中的后端可能在新的引擎进程里已经不在名单中（换进程 = 换能力）：提交前按名单
+  // 回落，而不是把注定被整条拒的那一个递上去。
+  const bgBackendSafe = bgBaseline.includes(bgBackend) ? bgBackend : bgBaseline[0];
   function onApplyBg() {
     const hex = bgColor.replace("#", "");
     if (hex.length !== 6) { setDragNote("背景色需 #rrggbb"); return; }
     const bg = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
-    runBackground("set", { backend: bgBackend, bg, tol: bgTol, softness: bgSoft })
+    runBackground("set", { backend: bgBackendSafe, bg, tol: bgTol, softness: bgSoft })
       .then(() => refreshStatus())
       .catch((e) => setDragNote(String(e)));
   }
@@ -1760,18 +1816,23 @@ export default function App() {
           </>
         )}
 
-        {/* 换底（M6）：确定性色键把纯色/蓝箱底抠掉换新背景；birefnet 后端需权重，
-            无权重时引擎诚实拒绝（不静默退成色键）。 */}
+        {/* 换底（M6）：确定性色键把纯色/蓝箱底抠掉换新背景；自动抠图（birefnet）需
+            权重，权重未放行前它只在下面的告知行里出现，不做选项——UI 不许邀请用户
+            去发一个引擎注定整条拒的请求（静默降级与假可用性是同一种病的两面）。 */}
         <h2>{t("side.background")}</h2>
         <div className="mut">{t("bg.desc")}</div>
         <div className="row">
           <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)}
                  style={{ width: 48 }} />
-          <select value={bgBackend} onChange={(e) => setBgBackend(e.target.value)} style={{ width: 132 }}>
-            <option value="color_key">{t("bg.key")}</option>
-            <option value="birefnet">{t("bg.ai")}</option>
+          <select value={bgBackendSafe} onChange={(e) => setBgBackend(e.target.value)} style={{ width: 132 }}>
+            {bgBaseline.map((b) => (
+              <option key={b} value={b}>{BG_LABEL[b] ? t(BG_LABEL[b]) : b}</option>
+            ))}
           </select>
         </div>
+        {!!bgGated.length && (
+          <div className="mut">{t("bg.gated", { b: bgGated.join("/"), ok: bgBaseline.join("/") })}</div>
+        )}
         <label className="k">{t("bg.tol", { v: bgTol.toFixed(2) })}</label>
         <input type="range" min={0} max={1} step={0.01} value={bgTol}
                onChange={(e) => setBgTol(+e.target.value)} style={{ width: "100%" }} />

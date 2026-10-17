@@ -374,8 +374,16 @@ def scale_backends() -> dict:
     * `baseline`——确定性、无需任何外部权重，装机即可用；
     * `weights_gated`——结构已在包里，但没有按 sha256 校验的权重就不接单，
       引擎**不会**把它降级成 lanczos 冒充"AI 超分"。
-    """
+
+    为什么这一份是常量而 `birefnet.matting_backends` 是现场算的：两边的拦住条件不是
+    同一件事。抠图那边只差权重（birefnet 已接进 cmd_background，权重一到就能跑），
+    所以它是**机器事实**，得现场算；而 realesrgan 除权重之外还差一件——出片环路根本
+    还没调用它（`export.py` / `cmd_export` 两处都明确拒）。那是**代码事实**，在任一台
+    机器上都一样，拿环境去探只会探出一个假绿灯：权重放行的机器把“递上去必被拒”
+    的后端列进装机即用档，比一直说“等权重”更坏。"""
     return {
         "baseline": ["lanczos3", "lanczos3_tiled", "unsharp"],
+        # 两道门禁都在它前面：权重按 sha256 放行 **且** 接进出片环路。后者还没做，
+        # 所以这一档不随环境变（文案里把两件事都说清，不让“装上权重就能用”的读法替它说话）。
         "weights_gated": ["realesrgan"],
     }

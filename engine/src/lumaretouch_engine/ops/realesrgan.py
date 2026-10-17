@@ -25,9 +25,10 @@ nf=64 存一层就是 ~33 GB——消费级 A 卡根本放不下。所以本模�
 
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import os
+
+from . import weights
 
 MODEL_FILE = "realesrgan_generator.pt"
 MODEL_SHA256_ENV = "LRT_REALESRGAN_SHA256"
@@ -50,6 +51,20 @@ def model_path(model_dir: str | None = None) -> str:
 
 def available(model_dir: str | None = None) -> bool:
     return os.path.isfile(model_path(model_dir))
+
+
+def production_check(model_dir: str | None = None) -> tuple[bool, str]:
+    """能不能上生产 + 不能的话是为什么。**能力上报（scale_backends）与 `load_net` 共用
+    这一份**（ops/weights）：“权重在位但被人换过”那一台机器上，只看文件存在会把
+    一个注定被拒的后端报成装机可用。
+    """
+    return weights.production_gate(model_file=MODEL_FILE, sha_env=MODEL_SHA256_ENV,
+                                   path=model_path(model_dir),
+                                   absent_reason=missing_reason("realesrgan", model_dir))
+
+
+def ready_for_production(model_dir: str | None = None) -> bool:
+    return production_check(model_dir)[0]
 
 
 def missing_reason(backend: str = "realesrgan", model_dir: str | None = None) -> str:
@@ -134,20 +149,10 @@ def load_net(model_dir: str | None = None, device: str = "cuda", scale: int = 4,
              num_block: int = 23, nf: int = 64):
     """建网 + 权重装载 + sha256 校验。任何一步不满足都抛 MissingBackend。"""
     torch = _torch()
+    ok, why = production_check(model_dir)
+    if not ok:
+        raise MissingBackend(why)
     path = model_path(model_dir)
-    if not os.path.isfile(path):
-        raise MissingBackend(missing_reason("realesrgan", model_dir))
-    want = os.environ.get(MODEL_SHA256_ENV, "").strip().lower()
-    if not want:
-        raise MissingBackend(f"{MODEL_FILE} 存在但没有 {MODEL_SHA256_ENV}：无校验和的权重不许上生产——"
-                             "权重被换过在报表上看不出来，与「会话在 CPU 上跑却标 cuda」同源")
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    got = h.hexdigest()
-    if got != want:
-        raise MissingBackend(f"权重 sha256 不符：期望 {want}，实得 {got}（{path}）")
     net = build_net(torch, scale=scale, num_block=num_block, nf=nf)
     state = torch.load(path, map_location="cpu", weights_only=True)
     if isinstance(state, dict) and "net" in state:

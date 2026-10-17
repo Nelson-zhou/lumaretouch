@@ -467,6 +467,10 @@ export interface EngineStatus {
   /** 引擎在 ready 里自报的 RAW 解码能力（raw.py 的 raw_backends）。null = 这一版引擎
    *  还没报过这份清单。能读什么由引擎说，前端不刻一份——把没落地的 CR2 支持写进 UI 就是一条假指标。 */
   raw_backends: RawBackends | null;
+  /** 引擎在 ready 里自报的抠图后端清单（birefnet.py 的 matting_backends）。null =
+   *  这一版引擎还没报过。换底下拉项由这一份决定：权重未放行时 birefnet 在
+   *  weights_gated 里，摆一个注定被拒的选项就是邀请用户去撞一个空请求。 */
+  matting_backends: MattingBackends | null;
   /** 最近一条 session_state（M5-a 底片条）；换引擎进程会清空。 */
   session: SessionState | null;
   /** session_state / 缩略图每来一条就 +1：前端只在它变了的时候整条重取底片条。 */
@@ -569,6 +573,10 @@ export interface UpscaleBackends {
   baseline: string[];
   weights_gated: string[];
 }
+
+/** 抠图后端清单（M6）：与放大那一档同一个口径、同一种形状，故复用同一份定义——
+ *  两处各自刻一遍就会漂（EXPORT_KEYS 那一课已经付过一次钱）。 */
+export type MattingBackends = UpscaleBackends;
 
 /** raw.py 的 raw_backends 形状：基线能读什么、哪些需插件、插件装没装。 */
 export interface RawBackends {

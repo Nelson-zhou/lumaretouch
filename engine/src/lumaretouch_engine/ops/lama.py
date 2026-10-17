@@ -23,9 +23,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import os
+
+from . import weights
 
 MODEL_FILE = "lama_large.ft"
 MODEL_SHA256_ENV = "LRT_LAMA_SHA256"
@@ -46,6 +47,19 @@ def model_path(model_dir: str | None = None) -> str:
 
 def available(model_dir: str | None = None) -> bool:
     return os.path.isfile(model_path(model_dir))
+
+
+def production_check(model_dir: str | None = None) -> tuple[bool, str]:
+    """能不能上生产 + 不能的话是为什么。与 `load_net` 共用 ops/weights 那一份判定（M8）：
+    能力上报与执行两套口径就是双出处，早晚漂。
+    """
+    return weights.production_gate(model_file=MODEL_FILE, sha_env=MODEL_SHA256_ENV,
+                                   path=model_path(model_dir),
+                                   absent_reason=missing_reason("lama", model_dir))
+
+
+def ready_for_production(model_dir: str | None = None) -> bool:
+    return production_check(model_dir)[0]
 
 
 def missing_reason(backend: str = "lama", model_dir: str | None = None) -> str:
@@ -157,20 +171,10 @@ def build_net(torch, base: int = 96, n_ffc: int = 4):
 def load_net(model_dir: str | None = None, device: str = "cuda", base: int = 96, n_ffc: int = 4):
     """建网 + 权重装载 + sha256 校验。任何一步不满足都抛 MissingBackend。"""
     torch = _torch()
+    ok, why = production_check(model_dir)
+    if not ok:
+        raise MissingBackend(why)
     path = model_path(model_dir)
-    if not os.path.isfile(path):
-        raise MissingBackend(missing_reason("lama", model_dir))
-    want = os.environ.get(MODEL_SHA256_ENV, "").strip().lower()
-    if not want:
-        raise MissingBackend(f"{MODEL_FILE} 存在但没有 {MODEL_SHA256_ENV}：无校验和的权重不许上生产——"
-                             "权重被换过在报表上是看不出来的，与「会话在 CPU 上跑却标 cuda」同源")
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    got = h.hexdigest()
-    if got != want:
-        raise MissingBackend(f"权重 sha256 不符：期望 {want}，实得 {got}（{path}）")
     net = build_net(torch, base=base, n_ffc=n_ffc)
     state = torch.load(path, map_location="cpu", weights_only=True)
     if isinstance(state, dict) and "net" in state:

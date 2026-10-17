@@ -68,6 +68,15 @@ FORMATS = ("jpg", "jpeg", "png", "tif", "tiff", "webp")
 SHARPEN_AMOUNT_LIMIT = 2.0
 SHARPEN_RADIUS_RANGE = (1, 24)
 SHARPEN_THRESHOLD_LIMIT = 0.2
+# 出片现在只接了确定性放大。realesrgan 的算子/权重门禁/分块前向都在包里（M7-a），但
+# 出片环路还没调用它：那一台机器上设好 sha256 也仍然是整条拒。**拒绝的理由只写这一句**，
+# 命令层与 ExportSpec 共用（写两处就会漂，上一轮 sharpen 那一课同一个形）。
+# 文案也不把责任只推给权重：“请设 LRT_REALESRGAN_SHA256 后重试”会让人以为设完就能用。
+UPSCALE_BACKENDS_WIRED = ("lanczos3",)
+UPSCALE_NOT_WIRED = (
+    "出片环路目前只接了确定性放大（lanczos3，分块逐字节等价已在 M7 钉住）；"
+    "realesrgan 的权重门禁与分块前向已就绪，但还没接进导出环路——即使权重已按 sha256 放行也仍会拒。"
+    "要神经网络超分请先等它接入；本引擎不会替你默默换成 Lanczos 然后报“AI 超分完成”。")
 
 
 class ExportError(ValueError):
@@ -146,9 +155,8 @@ class ExportSpec:
             raise ExportError(f"未知放大后端：{self.upscale_backend!r}（可用 lanczos3/realesrgan）")
         if self.upscale_backend == "realesrgan":
             # 这里不接受也不降级：静默改用 Lanczos 然后报"AI 超分完成"是这一仓最不能
-            # 犯的那类错（与 lama/birefnet 同规）。能不能用由权重门禁说，不由导出说。
-            raise ExportError("导出通路里的 realesrgan 需先过权重 sha256 门禁；"
-                              "无权重时请用 upscale_backend=lanczos3，引擎不会替你默默切后端")
+            # 犯的那类错（与 lama/birefnet 同规）。拒的理由与命令层同一句（单一出处）。
+            raise ExportError(UPSCALE_NOT_WIRED)
         sa = float(self.sharpen_amount)
         if not math.isfinite(sa) or not 0.0 <= sa <= SHARPEN_AMOUNT_LIMIT:
             raise ExportError(f"sharpen_amount={self.sharpen_amount!r} 越界（需要 [0,{SHARPEN_AMOUNT_LIMIT}] 内的有限数）")

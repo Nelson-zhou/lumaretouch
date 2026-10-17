@@ -19,9 +19,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import os
+
+from . import weights
 
 MODEL_FILE = "birefnet_matting.pt"
 MODEL_SHA256_ENV = "LRT_BIREFNET_SHA256"
@@ -41,6 +42,36 @@ def model_path(model_dir: str | None = None) -> str:
 
 def available(model_dir: str | None = None) -> bool:
     return os.path.isfile(model_path(model_dir))
+
+
+def ready_for_production(model_dir: str | None = None) -> bool:
+    return production_check(model_dir)[0]
+
+
+def production_check(model_dir: str | None = None) -> tuple[bool, str]:
+    """能不能上生产 + 不能的话是为什么。**能力上报与 `load_net` 共用这一份**（ops/weights）：
+    上报说可用而提交被拒，与上报说不可用而其实早放行了，是同一种病（口径写两处就会漂）的两面。
+    """
+    return weights.production_gate(model_file=MODEL_FILE, sha_env=MODEL_SHA256_ENV,
+                                   path=model_path(model_dir),
+                                   absent_reason=missing_reason("birefnet", model_dir))
+
+
+def matting_backends(model_dir: str | None = None) -> dict:
+    """抠图后端的能力清单（与 `upscale.scale_backends` 同一个口径）：
+
+    * `baseline`——确定性、零依赖、装机即用；
+    * `weights_gated`——结构在包里但等按 sha256 放行的权重。
+
+    权重齐了就把 birefnet 从 weights_gated 移到 baseline：这是**事实改变**后清单跟着变，
+    不是前端自己猜"装了就能选"。
+
+    `model_dir` 只为了可测（拿一个假目录验"裸机器那一档"），命令层不传——它吃的就是
+    产品真正会用的那一个目录，探的是另一处就是双口径。
+    """
+    if ready_for_production(model_dir):
+        return {"baseline": ["color_key", "birefnet"], "weights_gated": []}
+    return {"baseline": ["color_key"], "weights_gated": ["birefnet"]}
 
 
 def missing_reason(backend: str = "birefnet", model_dir: str | None = None) -> str:
@@ -113,20 +144,10 @@ def build_net(torch, base: int = 48):
 def load_net(model_dir: str | None = None, device: str = "cuda", base: int = 48):
     """建网 + 权重装载 + sha256 校验。任何一步不满足都抛 MissingBackend。"""
     torch = _torch()
+    ok, why = production_check(model_dir)
+    if not ok:
+        raise MissingBackend(why)
     path = model_path(model_dir)
-    if not os.path.isfile(path):
-        raise MissingBackend(missing_reason("birefnet", model_dir))
-    want = os.environ.get(MODEL_SHA256_ENV, "").strip().lower()
-    if not want:
-        raise MissingBackend(f"{MODEL_FILE} 存在但没有 {MODEL_SHA256_ENV}：无校验和的权重不许上生产——"
-                             "权重被换过在报表上看不出来，与「会话在 CPU 上跑却标 cuda」同源")
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    got = h.hexdigest()
-    if got != want:
-        raise MissingBackend(f"权重 sha256 不符：期望 {want}，实得 {got}（{path}）")
     net = build_net(torch, base=base)
     state = torch.load(path, map_location="cpu", weights_only=True)
     if isinstance(state, dict) and "net" in state:

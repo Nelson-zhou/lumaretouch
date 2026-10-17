@@ -2697,6 +2697,9 @@ def test_export_realesrgan_backend_is_refused_honestly_and_engine_lives(engine, 
     txt = str(e["error"])
     assert "realesrgan" in txt.lower() or "权重" in txt, txt
     assert "lanczos3" in txt, f"拒绝理由要告诉用户可用的那一个档：{txt}"
+    # M8：理由不能只把责任推给权重。出片环路根本没调用这个后端，那一台机器上设好
+    # sha256 也仍是整条拒——把话说成“放行权重后重试”就是给用户一个假期待。
+    assert "还没接进" in txt, f"拒绝理由要说清还差接入环路这一件：{txt}"
     assert not list(out_dir.glob("*.png")), "被拒的导出不得留下半截文件"
     # 拒完还能正常出片：一条拒绝不能把会话或 worker 抖死
     engine.send(cmd="export", out_dir=str(out_dir), format="png", tile=512, scale=2)
@@ -2729,6 +2732,18 @@ def test_ready_advertises_upscale_capabilities(engine):
     b = hello["upscale_backends"]
     assert "lanczos3" in b["baseline"] and "realesrgan" in b["weights_gated"]
     assert "realesrgan" not in b["baseline"], "无权重机器上不许把神经网络超分列为装机即用能力"
+
+
+def test_ready_advertises_matting_backends(engine):
+    """抠图后端清单也从 ready 报（M6/M8）：上一版只把 birefnet 的不可用写在提交后的
+    拒绝里，UI 的下拉项却无条件摆着——那是在邀请用户去撞一个注定空的请求。"""
+    engine.send(cmd="hello")
+    hello = engine.wait_for("ready", timeout=30)
+    b = hello["matting_backends"]
+    assert "color_key" in b["baseline"], b
+    # 本机权重没放行：birefnet 不能出现在 baseline（装了也不能报——报错了就是谎报能力）
+    assert "birefnet" not in b["baseline"], "无权重机器上不许把神经网络抠图列为装机即用能力"
+    assert "birefnet" in b["weights_gated"], b
 
 
 # ============================================================ M5-a：底片条（文档会话）

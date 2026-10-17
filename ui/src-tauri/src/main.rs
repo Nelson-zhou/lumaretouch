@@ -130,6 +130,9 @@ pub struct AppState {
     /// 插件装没装）。「支持 RAW」这种话由引擎说，宿主不刻一份——把没落地的 CR2
     /// 支持写进 UI 就是一条假指标（与 export_caps / presets 同一条理由）。
     raw_backends: Mutex<Value>,
+    /// 抠图后端清单（M6，ops/birefnet.matting_backends）：哪个档装机即用、哪个还在等
+    /// 权重。与 raw_backends / export_caps 同一条理由：能力由引擎报，宿主不刻一份。
+    matting_backends: Mutex<Value>,
     /// 最近一条 session_state（M5 底片条）：格子列表、当前索引、有没有缩略图。
     /// 这一份里**不带 base64**——控制通道那条“像素不进 JSON”的规矩只在缩略图上开了
     /// 一个一次性的例外，宿主不该把它长期握在轮询载荷里。
@@ -201,6 +204,7 @@ impl AppState {
             export_progress: Mutex::new(None),
             export_caps: Mutex::new(Value::Null),
             raw_backends: Mutex::new(Value::Null),
+            matting_backends: Mutex::new(Value::Null),
             session: Mutex::new(None),
             thumbs: Mutex::new(std::collections::HashMap::new()),
             session_rev: Mutex::new(0),
@@ -381,6 +385,11 @@ impl AppState {
             Some(r) if r.is_object() => r.clone(),
             _ => Value::Null,
         };
+        // 抠图后端（M6）：没报就置 Null（旧引擎不说这一句），不留上一份
+        *self.matting_backends.lock().unwrap() = match v.get("matting_backends") {
+            Some(r) if r.is_object() => r.clone(),
+            _ => Value::Null,
+        };
     }
 
     pub fn on_frame_event(&self) {
@@ -523,12 +532,16 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     *st.deform.lock().unwrap() = None;      // 形变层随关键点走，新进程里没有关键点
     *st.lut.lock().unwrap() = None;          // 调色层也随文档走，新进程里一张表也没挂
     *st.grade.lock().unwrap() = None;        // 定向层同理：新进程里肤色参数应当全是零
+    *st.inpaint.lock().unwrap() = None;      // 笔迹层随会话走：新进程里一笔也没落
+    *st.light.lock().unwrap() = None;        // 增减层与笔迹同生命期
+    *st.background.lock().unwrap() = None;   // 换底层同理：新进程里 matte=None
     *st.presets.lock().unwrap() = Vec::new();  // 清单等新进程的 ready 重新填
     *st.grade_limits.lock().unwrap() = Vec::new();
     *st.export.lock().unwrap() = None;         // 新进程还没导出一张，上一批的账单不是本会话的
     *st.export_progress.lock().unwrap() = None;
     *st.export_caps.lock().unwrap() = Value::Null;   // 能力等 ready 重新报
     *st.raw_backends.lock().unwrap() = Value::Null;   // RAW 能力清单等 ready 重新报
+    *st.matting_backends.lock().unwrap() = Value::Null; // 抠图后端清单同理（M6）
     // 底片条也是引擎进程的事实：新进程还没扫过目录，留着旧列表就是让用户点一个
     // 这个进程从没见过的 index
     *st.session.lock().unwrap() = None;
@@ -626,6 +639,10 @@ fn load_image(
     // 调色层也是：上一张照片的色调不能静默带到这一张上（引擎侧 load_image 已把它清了）
     *state.lut.lock().unwrap() = None;
     *state.grade.lock().unwrap() = None;     // 上一张图的肤色参数不能静默带到这一张
+    // 换底层也是：引擎在 cmd_load_image 里把 _bg 整层清回出厂态（_fresh_doc_state），
+    // 宿主留着旧的那一份就会报“换底还开着”而屏幕上根本没有——按钮的灰与不灰、常驻
+    // MiB 那一行都读这个槽位（与上面 inpaint/light/lut/grade 同一条理由）。
+    *state.background.lock().unwrap() = None;
     // 上一批导出的账单也一样：它说的是另一张图的文件与字节数
     *state.export.lock().unwrap() = None;
     *state.export_progress.lock().unwrap() = None;
@@ -1162,6 +1179,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let export_progress = state.export_progress.lock().unwrap().clone();
     let export_caps = state.export_caps.lock().unwrap().clone();
     let raw_backends = state.raw_backends.lock().unwrap().clone();
+    let matting_backends = state.matting_backends.lock().unwrap().clone();
     let session = state.session.lock().unwrap().clone();
     let session_rev = *state.session_rev.lock().unwrap();
     let history = state.history.lock().unwrap().clone();
@@ -1180,6 +1198,8 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "export": export, "export_progress": export_progress,
            "export_caps": export_caps,
            "raw_backends": raw_backends,
+           // 抠图后端（M6）：UI 的下拉项由这一份决定，不在前端猜"装了 birefnet 就能选"
+           "matting_backends": matting_backends,
            // 底片条的“有没有、几张、当前哪一格”进轮询（小），像素本体不进：
            // 那两百张要由 filmstrip 单独取，且只在 session_rev 变了的时候取
            "session": session, "session_rev": session_rev,
@@ -1212,11 +1232,14 @@ fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     *state.deform.lock().unwrap() = None;
     *state.lut.lock().unwrap() = None;
     *state.grade.lock().unwrap() = None;
+    *state.background.lock().unwrap() = None;   // 换底层也随会话走：进程没了就没有层
     *state.presets.lock().unwrap() = Vec::new();   // 引擎没了，它报过的清单也就没了
     *state.grade_limits.lock().unwrap() = Vec::new();
     *state.export.lock().unwrap() = None;
     *state.export_progress.lock().unwrap() = None;
     *state.export_caps.lock().unwrap() = Value::Null;
+    *state.raw_backends.lock().unwrap() = Value::Null;    // 能力是引擎报的，不是永久的
+    *state.matting_backends.lock().unwrap() = Value::Null; // 同上（M6）
     *state.session.lock().unwrap() = None;
     state.thumbs.lock().unwrap().clear();
     *state.session_rev.lock().unwrap() += 1;
