@@ -149,6 +149,13 @@ jobs:
         # 最坏 207.0 ms，整批 17.0 s，RSS +34 MiB。上限（400/800/60 s/256 MiB）留 3~4 倍
         # 给 CI 的 runner；N 卡那侧阈值相同，跑出真数后按本机口径另行收紧。
         run: N=100 LRT_DEVICE=cuda "$PY" packaging/m5-batch-acceptance.py
+      - name: 抠图/换底（合成 CPU↔GPU 对拍 + 线性光证据 + 色键分离 + BiRefNet 结构成本账）
+        # M6 硬要求：① 线性光 over 合成 GPU 与 CPU 参考逐像素 ≤1 LSB；② 半透明白叠黑必须落在
+        # 线性域（≈188）不是 sRGB 平均（128）；③ 色键在纯色底上把前景/背景分对。
+        # BiRefNet 只量 1024² 前向耗时与峰值显存（负载形态取证），无权重不报抠图质量。
+        # 本机（RX 7600 XT）：合成 0 LSB、GPU 1.4 ms / CPU 96 ms；线性光 188；色键 1.000/0.000；
+        # BiRefNet 结构 1024² 中位 914 ms、峰值额外 1440 MiB（事件驱动一次，可接受）。
+        run: REPS=20 LRT_DEVICE=cuda "$PY" packaging/m6-bg-bench.py
 
   # NVIDIA 侧同理。本机无 N 卡，CUDA 依赖 pin 也尚未解析回填，
   # 在拿到 NVIDIA runner 之前这条只能是开关关闭，不能当作已验证。
@@ -219,6 +226,9 @@ jobs:
         # 最坏 207.0 ms，整批 17.0 s，RSS +34 MiB。上限（400/800/60 s/256 MiB）留 3~4 倍
         # 给 CI 的 runner；N 卡那侧阈值相同，跑出真数后按本机口径另行收紧。
         run: N=100 LRT_DEVICE=cuda "$PY" packaging/m5-batch-acceptance.py
+      - name: 抠图/换底（合成 CPU↔GPU 对拍 + 线性光证据 + 色键分离 + BiRefNet 结构成本账）
+        # 判据同 ROCm job；N 卡无本机数据，跑出真数后按本机口径收紧 BiRefNet 耗时/显存阈值。
+        run: REPS=20 LRT_DEVICE=cuda "$PY" packaging/m6-bg-bench.py
 
   # 通路不回归：引擎层单测 + 脚本可跑。真正的端到端帧率验收需要图形环境，
   # 在 M0 阶段仍是本机跑 packaging/m0-bench.sh，不假称 CI 已覆盖。
