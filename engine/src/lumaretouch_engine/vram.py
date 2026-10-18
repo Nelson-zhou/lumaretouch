@@ -32,6 +32,9 @@ from .ops.deform import (KINDS, analytic_frontal_landmarks, check_amounts,
                          identity_grid, unit_field, warp_t)
 from .ops.light import dodge_burn_t, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
 from .ops.grade import (DH_LIMIT, DS_LIMIT, DV_LIMIT, check_params, grade_t)
+from .ops.geometry import (MAX_ANGLE as GEOM_ANGLE_LIMIT, check as geometry_check,
+                          crop_rotate_t, is_identity as geometry_identity,
+                          out_size as geometry_out_size)
 from .ops.exposure import (EV_LIMIT, TEMP_LIMIT_K, TINT_LIMIT, REFERENCE_K,
                            check_params as exposure_check, exposure_t)
 from .ops.lut import (DEFAULT_LUT_AMOUNT, QUALITY_SIZE_3D, CubeLut, LutError,
@@ -194,6 +197,9 @@ class PreviewPipeline:
         # 状态就是三个数 + 一个参考白，不持有任何张量，所以它既不参缓存键也不随设备重挂。
         # 中性默认 (0,0,0)：这一层的 identity 必须是逐字节恒等（ADR-0003 定的容差 0），
         # 所以没点火时 apply 一步直接递回原张量，一个算子也不跑。
+        self.crop_rect: tuple = (0.0, 0.0, 1.0, 1.0)      # 归一化裁剪框（P0 lnx.crop.v1）
+        self.crop_rotation: float = 0.0                   # 角度，正=顺时针
+        self.last_geometry_ms = 0.0
         self.exposure_params: tuple = (0.0, 0.0, 0.0)     # (ev, temperature_shift, tint_shift)
         self.exposure_ref_k: float = REFERENCE_K
         self.last_exposure_ms: float = 0.0
@@ -396,8 +402,10 @@ class PreviewPipeline:
         # 换底必须在链尾（所有调色/肤色之后）：合成的是屏幕上那份颜色叠新背景，
         # 放在前面会让磨皮/lut 作用到即将被背景替换掉的旧底上（与 M3-b “链尾不污染上游”同一条）。
         # P0：曝光/白平衡插在 lut **之前**（它是场景线性域的输入变换，表是输出变换）。
-        return self.apply_background(self.apply_grade(self.apply_lut(
-            self.apply_exposure(self.apply_deform(out)))))
+        # 裁剪/旋转盖在所有像素层之后（链的最外尾）：笔迹与形变坐标都属于**未剪**的那张图，
+        # 把它们先剪再算会让同一支消除笔在剪后落在别处——次序反过来就是另一件事了。
+        return self.apply_geometry(self.apply_background(self.apply_grade(self.apply_lut(
+            self.apply_exposure(self.apply_deform(out))))))
 
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:
@@ -1145,6 +1153,69 @@ class PreviewPipeline:
             "device": str(self.device),
             "layer_recomputed": bool(layer_recomputed),
         }
+
+    # ---- P0：裁剪 / 旋转（lnx.crop.v1）---------------------------------------
+    def has_geometry(self) -> bool:
+        return not geometry_identity(self.crop_rect, self.crop_rotation)
+
+    def set_geometry(self, rect, rotation_degrees: float = 0.0) -> dict:
+        """量程与判据全部交给 ops.geometry.check——本层不拄第二份数，认不出就抛。"""
+        x0, y0, x1, y1, r = geometry_check(rect, rotation_degrees)
+        self.crop_rect = (x0, y0, x1, y1)
+        self.crop_rotation = r
+        return self.geometry_state()
+
+    def clear_geometry(self) -> dict:
+        self.crop_rect = (0.0, 0.0, 1.0, 1.0)
+        self.crop_rotation = 0.0
+        return self.geometry_state()
+
+    def geometry_state(self) -> dict:
+        """把量程从引擎报出去：UI 不该自己抄一份 [-180,180]，两边分叉没人看得出来。"""
+        ow, oh = geometry_out_size(int(self.w), int(self.h), self.crop_rect, self.crop_rotation)
+        return {"crop_rect": list(self.crop_rect), "crop_rotation": float(self.crop_rotation),
+                "crop_lit": bool(self.has_geometry()),
+                "crop_out": [int(ow), int(oh)],
+                "crop_limits": {"rect": [0.0, 1.0], "rotation": [-float(GEOM_ANGLE_LIMIT),
+                                                                 float(GEOM_ANGLE_LIMIT)]},
+                "bytes_geometry": 0, "geometry_ms": round(float(self.last_geometry_ms), 3)}
+
+    def apply_geometry(self, t):
+        """每帧只走这里；恒等时把张量原样递回去（不复制、不跑算子）。
+
+        预览与导出的分工必须写清：这一层在**代理尺寸**上剪转之后，再把结果缩放回代理画布
+        （显存常驻帧与 shm 双缓冲的尺寸是固定的，为一次拖滑块重分配画布不是"代价小"而是
+        另一条通路）。导出走的是全幅那份数组、不做这一步回缩，所以文件的尺寸是
+        `geometry_state()["crop_out"]` 报出去的真实值——预览是缩放视图，不是另一种构图。
+        """
+        self.last_geometry_ms = 0.0
+        if not self.has_geometry():
+            return t
+        import torch.nn.functional as NF
+        # 链上的张量是 (1,3,H,W)（见 retouch 的返回约定），而 ops.geometry 的两臂按
+        # (H,W,3) 写——这个布局差别在单测里看不见（那里直接喂 HW3），是接进真链第一次
+        # 出帧才炸出来的（permute: input.dim()=4）。所以这里显式转一次，出去也转回来。
+        if t.dim() == 4:
+            n, c, hh, ww = t.shape
+            hw3 = t.permute(0, 2, 3, 1)[0]
+        else:
+            n, c, hh, ww = None, None, None, None
+            hw3 = t
+        t0 = time.perf_counter()
+        out = crop_rotate_t(hw3, self.crop_rect, self.crop_rotation, uint8=False)
+        h, w = int(self.h), int(self.w)
+        if (out.shape[0], out.shape[1]) != (h, w):
+            out = NF.interpolate(out.permute(2, 0, 1)[None], size=(h, w),
+                                 mode="bilinear", align_corners=False)[0].permute(1, 2, 0)
+        if n is not None:
+            out = out.permute(2, 0, 1).contiguous()[None]
+        if not torch.isfinite(out).all():
+            raise ValueError(f"裁剪/旋转产出非有限值，已拒：{self.crop_rect} "
+                             f"{self.crop_rotation}")
+        if self.device.type != "cpu":
+            torch.cuda.synchronize(self.device)
+        self.last_geometry_ms = (time.perf_counter() - t0) * 1000.0
+        return out
 
     # ---- P0：全局曝光 / 白平衡 -----------------------------------------------
     def has_exposure(self) -> bool:

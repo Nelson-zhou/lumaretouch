@@ -118,11 +118,17 @@ def test_new_edit_clears_redo_and_stack_is_capped(eng):
 def test_dispatch_table_registers_history_and_edit_commands(eng):
     """分发表的名单与 EDIT_CMDS 必须对得上：漏一条就是那一层编辑不进历史，
     而用户只在按了 Ctrl+Z 之后才发现——那时已经说不清是谁的责任。"""
-    table = {"hello", "bench_start", "bench_stop", "set_device", "shutdown", "load_image",
-             "set_strength", "precompute", "inpaint", "light", "deform", "lut", "grade",
-             "background", "export", "session", "history"}
-    assert set(Engine.EDIT_CMDS) <= table
+    # 名单不再手抄第二份：以前 test_history 里那份字面量与 server 的分发表就是两处
+    # 会漂的地方（本轮加 crop 时它静静少了两条，守卫红得对，但修的方式不该是再抄一遍）
+    table = set(Engine.HANDLED)
+    assert set(Engine.EDIT_CMDS) <= table, \
+        f"这些编辑命令进了历史名单却不进分发表：{sorted(set(Engine.EDIT_CMDS) - table)}"
     assert "history" in table
+    # 反方向也要封住：写了 cmd_* 却忘了进 HANDLED，等于那条命令永远收不到
+    import inspect
+    implemented = {n[4:] for n, m in inspect.getmembers(Engine, inspect.isfunction)
+                   if n.startswith("cmd_")}
+    assert implemented <= table, f"实现了但没接入分发的命令：{sorted(implemented - table)}"
     assert set(Engine.HISTORY_ACTIONS) == {"undo", "redo", "state", "clear"}
     # 预计算与切文档不是编辑：它们不该被记成一步
     assert "precompute" not in Engine.EDIT_CMDS and "load_image" not in Engine.EDIT_CMDS

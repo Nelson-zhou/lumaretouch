@@ -672,9 +672,50 @@ def test_new_image_invalidates_previous_masks(engine):
     _expect_error(engine, "没有掩膜通道")
 
 
+def _frame_of(ev, peer, h, w):
+    """按 frame 事件**自带的槽号**取像素。
+
+    不是「读最新那一帧」：双缓冲会交替写，连续出帧时按最新读能拿到下一条命令的帧，
+    于是对照的两帧根本不是同一次渲染——这类错在报表上完全自洽，只能从槽号上钉死。
+    """
+    return np.frombuffer(peer.read_pixels(ev["slot"]), np.uint8).reshape(h, w, 4)[:, :, :3].astype(np.int16)
+
+
 def _read_frame(engine, peer, h, w):
     ev = engine.wait_for("frame", timeout=30)
-    return np.frombuffer(peer.read_pixels(ev["slot"]), np.uint8).reshape(h, w, 4)[:, :, :3].astype(np.int16)
+    return _frame_of(ev, peer, h, w)
+
+
+def _wait_frame_mode(engine, mode: str, *, timeout=60.0):
+    """等到那条**由指定命令发出**的帧事件（`mode` 字段），把事件原样交出去。
+
+    两条错路都是本轮真踩的，都记在这儿免得再踩：
+    ① 先用通用「下一个事件」拿到帧、再 `_read_frame` 等第二帧——命令出的那帧就是
+       最后一帧，于是 `_read_frame` 空等 10 s 报「10.0s 内没有事件」；
+    ② 拿「下一个非静默事件」当本命令的帧——load_image 补发的那一帧也在队列里，于是
+       `ev["crop"]` KeyError（那一帧不是 crop 命令出的，本来就没有 crop 段）。
+    判据只能落在事件自己身上：mode。这样还顺带证了「这条命令真的出了一帧」，而不是
+    「这段时间里碰巧有帧」（曝光/裁剪都只发带层的 frame，没有 `*_done` 可等）。
+    槽号留给调用方按 `_frame_of` 读像素用。
+    """
+    t_end = time.monotonic() + timeout
+    while True:
+        left = t_end - time.monotonic()
+        if left <= 0:
+            raise AssertionError(f"{timeout}s 内没等到 mode={mode} 的帧事件；"
+                                 f"stderr 尾部={engine._err[-6:]!r}")
+        try:
+            e = engine.next_event(timeout=min(10.0, left))
+        except TimeoutError:
+            continue
+        if e.get("event") == "error":
+            raise AssertionError(f"引擎报错: {e.get('error')}")
+        if e.get("event") == "frame" and e.get("mode") == mode:
+            return e
+
+
+def _wait_crop_frame(engine, *, timeout=60.0):
+    return _wait_frame_mode(engine, "crop", timeout=timeout)
 
 
 def _nudge_frame(engine, strength):
@@ -684,8 +725,13 @@ def _nudge_frame(engine, strength):
     错的）。而直接拿 shm 里旧帧当基线又不对：旧帧是 load_image 那一瞬的，中间只要
     有任何一条改图层的命令被丢弃，基线就与上报对不上。走一遍 set_strength 才是产品
     出帧的那条路。
+
+    参数名是 `value` 不是 `strength`：cmd_set_strength 只认 `value`（`p.get("value", 现值)`），
+    写错的那个键会被静默忽略——帧照出、基线照拿，用例看起来仍然「通过」，但强度从来没
+    被这条命令设过。这里靠的是 load_image 已经把强度置成传入值，写对键只是不让下一句
+    谎称是这句设的。
     """
-    engine.send(cmd="set_strength", strength=strength)
+    engine.send(cmd="set_strength", value=strength)
     return engine.wait_for("params_set", timeout=30)
 
 
@@ -2492,7 +2538,14 @@ def _collect_until(engine, event: str, timeout: float = 240.0):
         left = deadline - time.monotonic()
         if left <= 0:
             raise TimeoutError(f"没等到 {event}；路上事件={[e.get('event') for e in seen]}")
-        e = engine.next_event(timeout=min(left, 10.0))
+        # 静默跳 10 s 不等于预算用完了：next_event 每一拍最多只看 10 s，而真机
+        # 上 RAW 解码 + 第一次全幅渲染可以在两帧之间静默十几秒。不重试的话，这条
+        # 路在装机的运行时 venv 里会报成“导出坏了”，而在快机器上永远绿——
+        # 只在最慢的那台机器上响的失败不是证据，是噪声
+        try:
+            e = engine.next_event(timeout=min(left, 10.0))
+        except TimeoutError:
+            continue
         if e.get("event") == event:
             return e, seen
         if e.get("event") == "error":
@@ -3678,6 +3731,253 @@ def test_export_bit_depth_16_reports_its_fidelity_numbers(engine, tmp_path):
     assert os.path.isfile(img["out"]) and os.path.getsize(img["out"]) == img["bytes"]
 
 
+# ============================================================ 裁剪 / 旋转（P0 lnx.crop.v1）
+#
+# 这一组把"接了命令"与"真的改到画面/文件"分开证：事件里的读数只算自报，
+# 必须再有帧字节与产物尺寸两处独立反查（本轮 d2c 定的规矩：读回文件，不信自报）。
+
+def test_crop_neutral_is_byte_identical_and_crop_actually_crops(engine):
+    _needs_torch()
+    from lumaretouch_engine.ops.geometry import out_size as _out_size
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    _nudge_frame(engine, 0.0)
+    base = _read_frame(engine, peer, h, w)
+    # 中性提交一次：链必须逐字节原样交出（引擎里那条短路有没有生效，只能这样量）
+    engine.send(cmd="crop", rect=[0.0, 0.0, 1.0, 1.0], rotation_degrees=0.0)
+    ev = _wait_crop_frame(engine)
+    assert ev["crop"]["crop_lit"] is False, ev
+    assert ev["crop"]["crop_rect"] == [0.0, 0.0, 1.0, 1.0] and ev["crop"]["crop_rotation"] == 0.0, ev
+    same = _frame_of(ev, peer, h, w)
+    assert np.array_equal(same, base), f"中性裁剪动了 {int(np.abs(same - base).max())} LSB"
+    # 真剪一块：画面必须变，而且报回来的尺寸就是剪后的尺寸
+    rect = [0.1, 0.1, 0.6, 0.9]
+    engine.send(cmd="crop", rect=rect, rotation_degrees=0.0)
+    ev = _wait_crop_frame(engine)
+    assert ev["crop"]["crop_lit"] is True, ev
+    # 尺寸这一笔由测试自己按满幅×归一化框算：拿引擎的 out_size 再算一遍只是把同一个
+    # 函数调两次，照不出 round(n*(b-a)) 与 round(n*b)-round(n*a) 差一个像素那种分叉
+    cw = int(round(w * rect[2])) - int(round(w * rect[0]))
+    ch = int(round(h * rect[3])) - int(round(h * rect[1]))
+    assert ev["crop"]["crop_out"] == [cw, ch], f"代理档报的是 {ev['crop']['crop_out']}，应是 [{cw}, {ch}]"
+    assert _out_size(w, h, rect, 0.0) == (cw, ch), "唯一尺寸出处与切片对不上：预览与导出会分叉"
+    got = _frame_of(ev, peer, h, w)
+    assert not np.array_equal(got, base), "裁剪命令收下了而画面一动不动"
+
+
+def test_crop_reports_the_size_the_exporter_will_actually_write(engine, tmp_path):
+    """报出去的尺寸必须与文件里的像素对得上——这是"预览是缩放视图"这句话的可验版本。"""
+    _needs_torch()
+    _need_export_env()
+    from PIL import Image
+    # 不拿 out_size 再算一遍当预期：那只是把同一个函数调两次。这里的独立证据是
+    # **文件里的像素**——它来自导出那条完全不同的路径（全幅解码后另做一次裁剪），
+    # 两边对上才说明 out_full 报的是真尺寸而不是代理档那一块
+    src_w, src_h = Image.open(FIXTURE).size       # 满幅原图尺寸，与代理档无关
+    _load(engine, max_px=207360, strength=0.0)
+    rect = [0.05, 0.1, 0.75, 0.95]
+    engine.send(cmd="crop", rect=rect, rotation_degrees=0.0)
+    ev = _wait_crop_frame(engine)
+    assert ev["crop"]["crop_lit"] is True, ev
+    want_full = [round(src_w * rect[2]) - round(src_w * rect[0]),
+                 round(src_h * rect[3]) - round(src_h * rect[1])]
+    assert ev["crop"]["out_full"] == want_full, f"引擎报的满幅是 {ev['crop']['out_full']}，应是 {want_full}"
+    out = str(tmp_path / "cropout")
+    engine.send(cmd="export", out_dir=out, format="png", images=[FIXTURE], tile=256, quality=90)
+    done, _ = _collect_until(engine, "export_done")
+    assert done["failed"] == 0, done["images"]
+    img = done["images"][0]
+    assert img["crop_applied"] is True, img
+    with Image.open(img["out"]) as im:
+        got = list(im.size)
+    assert got == want_full, f"文件是 {tuple(got)} 而引擎报的是 {tuple(want_full)}"
+    assert got[0] < src_w and got[1] < src_h, f"剪完还是满幅 {tuple(got)}，等于没剪"
+
+
+def test_crop_bad_rect_is_refused_and_leaves_everything_untouched(engine):
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    _nudge_frame(engine, 0.0)
+    base = _read_frame(engine, peer, h, w)
+    for bad in ({"rect": [0.6, 0.1, 0.2, 0.9]},            # x0>=x1
+                {"rect": [0.0, -0.1, 1.0, 1.0]},           # 越界
+                {"rect": [0.0, 0.0, 1.0]},                 # 少一个数
+                {"rect": [0.0, 0.0, 1.0, 1.0], "rotation_degrees": 181.0}):
+        engine.send(cmd="crop", **bad)
+        ev = _next_non_frame(engine, timeout=30)
+        assert ev.get("event") == "error", f"{bad} 没被拒：{ev}"
+        # 被拒的那条不许补发一帧：这里等不到任何事件才是对的（比读一帧再比字节更硬——
+        # 它同时证了"没重算"与"没偷偷提交"）
+        with pytest.raises(TimeoutError):
+            engine.next_event(timeout=1.5)
+    # 而状态也没被写过：拿一组合法值提交，报回来的应当正是那一组
+    engine.send(cmd="crop", rect=[0.2, 0.1, 0.8, 0.9], rotation_degrees=15.0)
+    ev = _wait_crop_frame(engine)
+    assert [round(v, 6) for v in ev["crop"]["crop_rect"]] == [0.2, 0.1, 0.8, 0.9], ev
+    assert ev["crop"]["crop_rotation"] == 15.0, ev
+
+
+def test_crop_is_undoable_step_by_step(engine):
+    """裁剪进了 EDIT_CMDS，那么 Ctrl+Z 必须逐字节回到剪之前。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    _nudge_frame(engine, 0.0)
+    base = _read_frame(engine, peer, h, w)
+    engine.send(cmd="crop", rect=[0.2, 0.0, 0.9, 1.0], rotation_degrees=12.5)
+    cut = _frame_of(_wait_crop_frame(engine), peer, h, w)
+    assert not np.array_equal(cut, base)
+    engine.send(cmd="history", action="undo")
+    rep = engine.wait_for("history_state", timeout=60)
+    assert rep["can_redo"] is True, rep
+    back = _read_frame(engine, peer, h, w)      # history_state 之后紧跟着补的那一帧
+    assert np.array_equal(back, base), f"撤销后差 {int(np.abs(back - base).max())} LSB"
+    engine.send(cmd="history", action="redo")
+    engine.wait_for("history_state", timeout=60)
+    again = _read_frame(engine, peer, h, w)
+    assert np.array_equal(again, cut), "重做没逐字节复现那一次裁剪"
+
+
+def test_doc_state_reports_crop_as_its_own_layer(engine):
+    """doc_state 里 crop 必须是一层，而不是 exposure 的一个键。
+
+    上一版它被嵌在 exposure 那个字典字面里（缩进也一样），宿主按
+    `doc_state["crop"]` 取永远拿到 None，而这份错在 JSON 里看起来完全自洽——
+    正是本仓反复出事的那类“错得看不出来”。量程也一样：两份 [-180,180] 迟早分叉。
+    """
+    _needs_torch()
+    from lumaretouch_engine.ops.geometry import MAX_ANGLE
+    _load(engine, max_px=207360, strength=0.0)
+    engine.send(cmd="history", action="state")
+    ds = engine.wait_for("history_state", timeout=30)["doc_state"]
+    assert "crop" in ds, f"doc_state 没有顶层 crop：{sorted(ds)}"
+    assert "crop" not in ds["exposure"], "crop 又回到 exposure 里去了"
+    assert ds["crop"]["lit"] is False and ds["crop"]["neutral"] is True, ds["crop"]
+    assert ds["crop"]["limits"]["rotation"] == [-MAX_ANGLE, MAX_ANGLE], ds["crop"]
+    engine.send(cmd="crop", rect=[0.25, 0.0, 1.0, 1.0], rotation_degrees=-7.5)
+    _wait_crop_frame(engine)
+    engine.send(cmd="history", action="state")
+    ds = engine.wait_for("history_state", timeout=30)["doc_state"]
+    assert ds["crop"]["lit"] is True, ds["crop"]
+    assert [round(v, 6) for v in ds["crop"]["rect"]] == [0.25, 0.0, 1.0, 1.0], ds["crop"]
+    assert ds["crop"]["rotation_degrees"] == -7.5, ds["crop"]
+
+
+def test_crop_and_reference_white_balance_survive_a_device_switch(engine):
+    """重挂判据的两格：剪过的构图、只给 reference_k 的白平衡。
+
+    坑的形状（本轮接线时才看见）：`_attach_pipeline` 里曝光层的判据只看
+    (ev, temperature_shift, tint_shift) 三元组，而 cmd_exposure 允许只给 reference_k
+    ——那时三元组还是中性值，整段重挂被跳过，新会话的参考光源退默认 6500，
+    而 doc_state 报的仍然是来片那个 K：上报与实际双向错配，与上面 lut/grade 怕的
+    是同一件事。裁剪层原来根本没这一笔：迁完会话“明明裁过而画面满幅回来”。
+
+    取证分两层：上报的数必须跟着走（reference_k），画面必须继续被剪着（离剪过的那
+    版近、离清掉的那版远）——只比事件字段就是拿自报当证据。
+    """
+    _needs_torch()
+    import torch
+    if not torch.cuda.is_available():
+        pytest.skip("没有 GPU，验不了跨设备重挂")
+    meta = _load(engine, max_px=207360, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    try:
+        engine.send(cmd="crop", rect=[0.15, 0.1, 0.85, 0.9], rotation_degrees=0.0)
+        _wait_crop_frame(engine)
+        engine.send(cmd="exposure", reference_k=4200.0)
+        ev = _wait_frame_mode(engine, "exposure")
+        assert ev["exposure"]["exposure_reference_k"] == pytest.approx(4200.0), ev
+        assert ev["exposure"]["exposure_set"] is False, \
+            "只给 reference_k 就点了火：这一层在偏移为 0 时必须恒等"
+        engine.send(cmd="set_device", device="cuda")
+        engine.wait_for("device_set", timeout=60)
+        engine.wait_for("vram_ready", timeout=60)
+        migrated = _read_frame(engine, peer, h, w)      # 迁移后补发的那一帧
+        engine.send(cmd="history", action="state")
+        ds = engine.wait_for("history_state", timeout=30)["doc_state"]
+        assert ds["exposure"]["reference_k"] == pytest.approx(4200.0), ds["exposure"]
+        assert ds["crop"]["lit"] is True, ds["crop"]
+        # 在 GPU 上把两层都清掉，拿同一块卡上的“层没生效”版本做对照组。
+        # 每一条命令只出一帧：拿到那一帧就读它，再等一帧就是空等（上面那个坑的同一个形状）
+        engine.send(cmd="exposure", action="clear")
+        _wait_frame_mode(engine, "exposure")
+        engine.send(cmd="crop", action="clear")
+        cleared = _frame_of(_wait_crop_frame(engine), peer, h, w)
+        d_mig = float(np.abs(migrated - cleared).mean())
+        assert d_mig >= 1.0, f"剪过与清掉逐字节相同（{d_mig:.3f} LSB），这条用例没有鉴别力"
+        # 重挂后新会话里那一层确实是活的：再提交一次同样参数的 crop，帧不该变
+        # （与上面“不同”构成双向夹住，而不是只验“没变”或只验“变了”）
+        engine.send(cmd="crop", rect=[0.15, 0.1, 0.85, 0.9], rotation_degrees=0.0)
+        ev = _wait_crop_frame(engine)
+        assert ev["crop"]["crop_lit"] is True, ev
+        r = _frame_of(ev, peer, h, w)
+        assert np.abs(r - cleared).mean() >= 1.0, "重挂后 crop 只活在状态里，画面已经满幅回来"
+        assert float(np.abs(migrated - r).mean()) < 1.0, \
+            "重挂后同一组裁剪参数算出两个画面（迁移那帧与本地重提交不属同一构图）"
+    finally:
+        peer.close()
+
+
+def test_crop_only_deletes_pixels_and_leaves_the_kept_region_untouched(engine, tmp_path):
+    """P0-CROP-BOUNDARY 的 then："裁剪仅按定义删除区域"。
+
+    留存区必须逐字节等于原图那一块：任何"剪完顺手重采样一遍"都会让每次裁剪悄悄
+    改掉没被剪掉的那部分像素，而这件事在预览里几乎看不出来。拿文件做证据：
+    全幅解码 + 图层中立导出的 PNG，与 PIL 自己裁出来的同一块逐字节相同。
+    不用代理帧做对照：那是缩放过的视图，拿它当"原像素"会把重采样当基准。
+    """
+    _needs_torch()
+    _need_export_env()
+    from PIL import Image
+    _load(engine, max_px=207360, strength=0.0)
+    rect = [0.1, 0.2, 0.7, 0.95]
+    engine.send(cmd="crop", rect=rect, rotation_degrees=0.0)
+    _wait_crop_frame(engine)
+    out = str(tmp_path / "kepton")
+    engine.send(cmd="export", out_dir=out, format="png", images=[FIXTURE], tile=256, quality=95)
+    done, _ = _collect_until(engine, "export_done")
+    assert done["failed"] == 0, done["images"]
+    img = done["images"][0]
+    src = Image.open(FIXTURE).convert("RGB")
+    sw, sh = src.size
+    box = (int(round(sw * rect[0])), int(round(sh * rect[1])),
+           int(round(sw * rect[2])), int(round(sh * rect[3])))
+    want = np.asarray(src.crop(box)).astype(np.int16)
+    got = np.asarray(Image.open(img["out"]).convert("RGB")).astype(np.int16)
+    assert got.shape == want.shape, f"产物 {got.shape} 对不上留存区 {want.shape}（box={box}）"
+    d = int(np.abs(got - want).max())
+    assert d == 0, f"留存区被改了 {d} LSB：裁剪不只是按定义删除区域"
+
+
+def test_crop_blocks_the_16bit_master_path_with_a_named_reason(engine, tmp_path):
+    """母档直通是"解出来什么样就写什么样"，剪过就不是那张图了——必须点名拒绝。"""
+    import shutil as _sh
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    if not os.path.isfile(_LR.PROBE_DNG):
+        pytest.skip("缺 raw-probe.dng")
+    src = str(tmp_path / "p.dng")
+    _sh.copyfile(_LR.PROBE_DNG, src)
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="load_image", path=src)
+    _lenient_wait(engine, "image_ready", 120)
+    engine.send(cmd="set_strength", value=0.0)
+    _lenient_wait(engine, "frame", 120)
+    engine.send(cmd="crop", rect=[0.1, 0.1, 0.9, 0.9], rotation_degrees=0.0)
+    _wait_crop_frame(engine, timeout=120)
+    engine.send(cmd="export", out_dir=str(tmp_path / "o"), format="tif",
+                images=[src], bit_depth=16)
+    ev = _next_non_frame(engine, timeout=60)
+    assert ev.get("event") == "error", f"剪过的图居然走了 16-bit 直通：{ev}"
+    assert "裁剪框" in ev["error"], ev
+
+
 # ============================================================ 导出侧 P0 口径（d2c 端到端）
 #
 # 单元测试证的是函数自己守约；这一组证的是“UI 递上来的四个参数真的走到了落盘”。
@@ -3687,20 +3987,44 @@ def test_export_bit_depth_16_reports_its_fidelity_numbers(engine, tmp_path):
 ROUTINE_EVENTS = ("frame", "session_state", "vram_ready", "engine_warn", "image_ready")
 
 
-def _next_non_frame(ep, *, timeout=30.0):
-    """取下一个“会改变结论”的事件。
+def _lenient_wait(ep, want: str, budget: float):
+    """GPU 冷启动的第一次 load_image 可以静默远超 10 s：内联那份的通用版本。"""
+    t_end = time.monotonic() + budget
+    while time.monotonic() < t_end:
+        try:
+            e = ep.next_event(timeout=10.0)
+        except TimeoutError:
+            continue
+        if e.get("event") == want:
+            return e
+        if e.get("event") == "error":
+            raise AssertionError(f"引擎报错: {e.get('error')}")
+    raise AssertionError(f"{budget}s 内没等到 {want}")
 
-    load_image 之后队列里不只有帧：session_state 也紧跟着来（底片条那一份），
-    所以只跳 frame 的写法会把状态事件当成答案。这里跳的是“例行播报”，
-    而 error / export_done / export_progress 一律原样交出——把 error 也跳掉
-    就等于把用例要看的那个结果扔了。
+
+QUIET_EVENTS = ("session_state", "vram_ready", "engine_warn", "image_ready")
+
+
+def _next_event(ep, *, skip=ROUTINE_EVENTS, timeout=30.0):
+    """取下一个"会改变结论"的事件，跳过 skip 里那些例行播报。
+
+    skip 是可传的：导出那组要连 frame 一起跳（那里要看的是 error/done），而裁剪那组
+    要等的**就是** frame——把 frame 也跳掉，60 s 后只会得到"一片静默"这种假失败。
     """
     t_end = time.monotonic() + timeout
     while time.monotonic() < t_end:
-        e = ep.next_event(timeout=10.0)
-        if e.get("event") not in ROUTINE_EVENTS:
+        try:
+            e = ep.next_event(timeout=min(10.0, max(0.1, t_end - time.monotonic())))
+        except TimeoutError:
+            continue
+        if e.get("event") not in skip:
             return e
-    raise AssertionError(f"{timeout}s 内只等到例行事件")
+    raise AssertionError(f"{timeout}s 内只等到被跳过的事件或一片静默")
+
+
+def _next_non_frame(ep, *, timeout=30.0):
+    """连 frame 一起跳的那一层：用在只看 error / export_done 的场合。"""
+    return _next_event(ep, skip=ROUTINE_EVENTS, timeout=timeout)
 
 
 def _make_privacy_jpeg(path, *, icc_bytes):

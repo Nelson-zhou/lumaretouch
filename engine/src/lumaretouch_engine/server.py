@@ -145,6 +145,8 @@ class Engine:
         # P0 全局曝光/白平衡：会话侧同样只存那三个数（加一个参考白）。它必须与
         # _grade 走完全一样的生命周期：初始化、换设备重挂、快照、状态上报——漏一个
         # 就是“宿主以为还写着 0.5 EV，引擎里其实是 0”那种两边错配。
+        self._crop_rect = (0.0, 0.0, 1.0, 1.0)   # P0 lnx.crop.v1（中性=全画幅）
+        self._crop_rotation = 0.0
         self._exposure = (0.0, 0.0, 0.0)
         self._exposure_ref_k = None
         # 换底层（M6）：存“可重建一份常驻遮罩所需的一切”——遮罩原件（代理坐标
@@ -576,9 +578,26 @@ class Engine:
                     emit({"event": "engine_warn",
                           "warn": f"新会话重提交肤色定向失败，已整层清除（{type(e).__name__}）：{e}"})
                     self._grade = (0.0, 0.0, 0.0, 1.0)
+            # 裁剪/旋转（P0 lnx.crop.v1）：重挂只是把同一组数再提交一次。不提交就是
+            # “会话迁了、明明裁过而画面满幅回来”，与上面 lut/grade/曝光同一条担心。
+            # 走 pipe 而不走 self._vram：两者在这一段里恰好是同一个对象，但只有 pipe
+            # 是“刚刚新建的那一个”——写成 self._vram 就是给以后把 adopt 拆出去的人埋雷。
+            if self._crop_rect != (0.0, 0.0, 1.0, 1.0) or self._crop_rotation != 0.0:
+                try:
+                    pipe.set_geometry(self._crop_rect, self._crop_rotation)
+                except Exception as e:
+                    emit({"event": "engine_warn",
+                          "warn": f"新会话重挂裁剪/旋转失败，已清除（{type(e).__name__}）：{e}"})
+                    pipe.clear_geometry()
+                    self._crop_rect = (0.0, 0.0, 1.0, 1.0)
+                    self._crop_rotation = 0.0
             # 曝光层（P0）：不持有张量，重挂就是把同一组数重新提交一次。不提交就是
             # “会话迁了、滑杆还在 0.5 EV 但画面不动”，与上面 lut/grade 同一条担心。
-            if self._exposure != (0.0, 0.0, 0.0):
+            # 判据必须把 reference_k 也算进去：cmd_exposure 允许只给 reference_k（EV 与
+            # 两个偏移全为 0），那时三元组还是中性值而白平衡已偏离默认光源。只看三元组
+            # 就会“会话迁了、参考光源没迁”：新会话按默认 K 数渲染，而宿主侧滑块的位置
+            # 说的是另一个数——与上面那段担心是同一个错误，只是藏在另一个键上。
+            if self._exposure != (0.0, 0.0, 0.0) or self._exposure_ref_k is not None:
                 try:
                     st = pipe.set_exposure(self._exposure[0], self._exposure[1],
                                            self._exposure[2], ref_k=self._exposure_ref_k)
@@ -617,7 +636,7 @@ class Engine:
                   "_light_ops", "_light_redo", "_light", "_deform", "_lut", "_lut_amount",
                   "_lut_preset", "_grade", "_bg", "_precompute", "_precompute_backend",
          "_exposure",
-         "_exposure_ref_k")
+         "_exposure_ref_k", "_crop_rect", "_crop_rotation")
     # 代理档一变就作废的那些层：它们的坐标是**这一档代理帧**上的像素坐标。
     PROXY_BOUND = ("_channel", "_repair_ops", "_redo_ops", "_light_ops", "_light_redo",
                    "_deform", "_bg", "_precompute", "_precompute_backend")
@@ -651,6 +670,7 @@ class Engine:
                              tol=None, softness=None),
                 "_precompute": None, "_precompute_backend": None,
                 "_exposure": (0.0, 0.0, 0.0), "_exposure_ref_k": None,
+                "_crop_rect": (0.0, 0.0, 1.0, 1.0), "_crop_rotation": 0.0,
                 # 掩膜/笔迹/形变场都活在**那一档代理尺寸**上，所以尺寸也是状态的一部分。
                 "_proxy": None}
         # 名单守卫的另一半：起始状态与 _capture_state 必须覆盖同一批字段。
@@ -675,6 +695,7 @@ class Engine:
               "_lut": self._lut, "_lut_amount": float(self._lut_amount),
               "_lut_preset": self._lut_preset, "_grade": tuple(self._grade),
               "_exposure": tuple(self._exposure), "_exposure_ref_k": self._exposure_ref_k,
+              "_crop_rect": tuple(self._crop_rect), "_crop_rotation": float(self._crop_rotation),
               "_bg": dict(self._bg),
               "_precompute": self._precompute, "_precompute_backend": self._precompute_backend,
               "_proxy": ((int(self._vram.h), int(self._vram.w))
@@ -750,7 +771,8 @@ class Engine:
     HISTORY_SKIP = ("_precompute", "_precompute_backend")
     # 哪些命令算"编辑"。判定只在这一个名单里，推送点也只有分发器一处：
     # 六个 cmd_* 里各插一次 push 的下场可以预见——第七层加进来时总有人忘。
-    EDIT_CMDS = ("set_strength", "inpaint", "light", "deform", "lut", "grade", "background")
+    EDIT_CMDS = ("set_strength", "inpaint", "light", "deform", "lut", "grade", "background",
+                 "crop")
     HISTORY_ACTIONS = ("undo", "redo", "state", "clear")
 
     def _history_capture(self) -> dict:
@@ -1132,6 +1154,14 @@ class Engine:
         的位置必须来自引擎。缺了 lut_amount / deform 的三个数 / 修容那两个参数，
         UI 就只能"画面已经调好了但滑块显示 0"——那是双向错配的新一格。
         """
+        from .ops.geometry import geometry_state as geo_state
+
+        # 裁剪/旋转独立一层，不塞在 exposure 的字面里：上一版把 crop 嵌进了
+        # exposure 那个字典（缩进也一样），宿主按 doc_state["crop"] 取就永远取不到，
+        # 而这份错在 JSON 里看起来完全自洽。量程也不在这里写字面量：ops.geometry
+        # 那份是唯一出处，UI 自己拄的 [-180,180] 与引擎实际拒的值迟早分叉。
+        crop = geo_state(list(self._crop_rect), float(self._crop_rotation))
+        crop["lit"] = not crop["neutral"]
         return {"strength": float(self._strength), "params": dict(self._params),
                 "channel": self._channel,
                 "history": self._history_report(),
@@ -1149,7 +1179,8 @@ class Engine:
                              "temperature_shift": float(self._exposure[1]),
                              "tint_shift": float(self._exposure[2]),
                              "reference_k": self._exposure_ref_k,
-                             "lit": self._exposure != (0.0, 0.0, 0.0)}}
+                             "lit": self._exposure != (0.0, 0.0, 0.0)},
+                "crop": crop}
 
     def _state_edits(self, st: dict) -> dict:
         """一份状态（live 抄出来的或底片条格子里存着的）里有哪些层。"""
@@ -2494,6 +2525,81 @@ class Engine:
             raise RuntimeError("会话尚未加载源图")
         return x if x.dtype == torch.float32 else x.to(torch.float32)
 
+    def cmd_crop(self, p: dict):
+        """裁剪 / 旋转（P0 注册表的 lnx.crop.v1：rect_normalized + rotation_degrees）。
+
+        铁律沿用 cmd_exposure：跑靶互斥、整组校验后一次提交、被拒不留痕、出帧失败
+        回滚并补帧。量程不在这里写字面量——`geometry_state()` 把硬上限随事件报出去。
+
+        正角定义为**顺时针**（Lightroom/Capture One 的右转习惯）；两臂与预览/导出
+        都走 ops.geometry 里那一个式子，改符号要一起改，这里不另立一套。
+        """
+        from .ops.geometry import GeometryError
+
+        action = p.get("action", "set")
+        if action not in ("set", "clear"):
+            emit({"event": "error", "error": f"未知 crop action: {action}（可用：set/clear）"})
+            return
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝改裁剪：先 bench_stop"})
+            return
+        if not self._image_loaded or self._vram is None:
+            emit({"event": "error", "error": "尚未 load_image"})
+            return
+        prev_rect = tuple(self._crop_rect)
+        prev_rot = float(self._crop_rotation)
+        if action == "clear":
+            st = self._vram.clear_geometry()
+            self._crop_rect = (0.0, 0.0, 1.0, 1.0)
+            self._crop_rotation = 0.0
+        else:
+            rect = p.get("rect", list(self._crop_rect))
+            rot = p.get("rotation_degrees", self._crop_rotation)
+            if p.get("rect") is None and p.get("rotation_degrees") is None:
+                emit({"event": "error", "error": "crop set 什么也没给：至少给 rect 或 "
+                      "rotation_degrees，或者走 clear 把整层关掉"})
+                return
+            try:
+                st = self._vram.set_geometry(rect, rot)
+            except (GeometryError, ValueError) as e:
+                emit({"event": "error", "error": f"裁剪/旋转被拒，整条不生效：{e}"})
+                return
+            self._crop_rect = tuple(st["crop_rect"])
+            self._crop_rotation = float(st["crop_rotation"])
+        try:
+            fr = self._write_current_frame("crop")
+        except Exception as e:
+            self._crop_rect = prev_rect
+            self._crop_rotation = prev_rot
+            try:
+                if prev_rect == (0.0, 0.0, 1.0, 1.0) and prev_rot == 0.0:
+                    self._vram.clear_geometry()
+                else:
+                    self._vram.set_geometry(prev_rect, prev_rot)
+                back = self._write_current_frame("crop")
+                back.pop("render_ms", None)
+                emit(back)
+            except Exception:
+                emit({"event": "engine_warn", "warn": "裁剪回滚后仍无法出帧，本会话不可信，"
+                      "请重新导入图片"})
+            emit({"event": "error", "error": f"裁剪/旋转渲染失败，已退回上一状态（"
+                  f"{type(e).__name__}）：{e}"})
+            return
+        # crop_out 是**代理档**上剪转后的尺寸（预览那一层就是它，只是又缩回画布）；
+        # out_full 才是导出会写的真实像素数，取自底片条那一行记的满幅尺寸。
+        # 两个数一起报出去，UI 才不会把"预览里那一小块"讲成"文件的尺寸"。
+        fr.setdefault("crop", {}).update(self._vram.geometry_state())
+        row = None
+        for d in self._docs:
+            if d["path"] == os.path.abspath(str(self._doc_path or "")):
+                row = d
+                break
+        if row and row.get("src_w") and row.get("src_h"):
+            from .ops.geometry import out_size as _gs
+            fr["crop"]["out_full"] = list(
+                _gs(int(row["src_w"]), int(row["src_h"]), self._crop_rect, self._crop_rotation))
+        emit(fr)
+
     def cmd_exposure(self, p: dict):
         """全局曝光与白平衡（P0 注册表的 lnx.exposure / lnx.white_balance）。
 
@@ -3014,6 +3120,7 @@ class Engine:
         # 这一批里前几张与后几张用的就不是同一套设置（而事件里只写了一份）
         snap = dict(strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
                     exposure=tuple(self._exposure), exposure_ref_k=self._exposure_ref_k,
+                    crop_rect=tuple(self._crop_rect), crop_rotation=float(self._crop_rotation),
                     lut=self._lut, lut_amount=self._lut_amount, light=dict(self._light),
                     light_ops=list(self._light_ops), repair_ops=list(self._repair_ops),
                     deform=dict(self._deform), channel=self._channel,
@@ -3063,6 +3170,10 @@ class Engine:
                  if abs(float(v)) > 0.0)
         if nz:
             b.append(f"形变控制点 {nz} 个（位移非零）")
+        if self._crop_rect != (0.0, 0.0, 1.0, 1.0):
+            b.append(f"裁剪框={tuple(round(v, 4) for v in self._crop_rect)}")
+        if float(self._crop_rotation) != 0.0:
+            b.append(f"旋转={self._crop_rotation}°")
         if int(scale) != 1:
             b.append(f"放大倍率={scale}")
         if float(sharpen) != 0.0:
@@ -3120,6 +3231,16 @@ class Engine:
                 stage = "write"
                 out_path = os.path.join(out_dir, os.path.splitext(os.path.basename(path))[0] + "." + fmt)
                 frame, st = export_image(d.rgb, spec, device=snap["device"], tile=tile)
+                # 与预览链同序：几何在所有像素层之后。反过来先剪再算，同一支消除笔
+                # 在剪后的图上会落在别处——那不是"批量应用设置"，那是另一张图。
+                from .ops.geometry import crop_rotate_np, is_identity as geom_ident
+                rect0 = tuple(snap.get("crop_rect") or (0.0, 0.0, 1.0, 1.0))
+                rot0 = float(snap.get("crop_rotation") or 0.0)
+                t_g = monotonic_ns()
+                if not geom_ident(rect0, rot0):
+                    frame = crop_rotate_np(frame, rect0, rot0)
+                st["geometry_ms"] = round((monotonic_ns() - t_g) / 1e6, 2)
+                st["crop_applied"] = bool(not geom_ident(rect0, rot0))
                 if opts["output_profile"] == "source" and d.raw is not None:
                     # RAW 那两支不提取源 ICC（见 decode._note_no_source_metadata）：
                     # 让它走到 write_file 里报“源文件没有 ICC”是把“没读”说成“没有”
@@ -3173,18 +3294,30 @@ class Engine:
         emit({"event": "bye"})
 
     # ------------------------------------------------------------ 主循环
+    # 「引擎认哪些命令」只有这一处名单。以前它是一张手抄的字典，而 test_history 里还
+    # 有第二份抄件——本轮加 crop 时两份就漂了（抄件少一条，守卫红）。名字与 cmd_* 一一对应，
+    # 所以名单本身就是可校验的：少写一个方法或多写一个名字，都在开工第一帧响，
+    # 而不是等到用户发那条命令时回一句"未知命令"。
+    HANDLED = ("hello", "bench_start", "bench_stop", "set_device", "shutdown",
+               "load_image", "set_strength", "precompute", "inpaint", "light",
+               "deform", "lut", "grade", "export", "exposure", "crop", "background",
+               "compare", "session", "history")
+    _HANDLED_LAMBDA = ("bench_stop",)      # 唯一不开成 cmd_* 的那条：只是置停止位
+
+    def _dispatch_table(self) -> dict:
+        missing = [n for n in self.HANDLED
+                   if n not in self._HANDLED_LAMBDA and not callable(getattr(self, "cmd_" + n, None))]
+        assert not missing, f"HANDLED 里这些名字没有对应的 cmd_*（名单与方法漂了）：{missing}"
+        t = {}
+        for n in self.HANDLED:
+            if n in self._HANDLED_LAMBDA:
+                t[n] = lambda p: (self.stop_flag.set(), emit({"event": "bench_stopped"}))
+            else:
+                t[n] = getattr(self, "cmd_" + n)
+        return t
+
     def run(self):
-        table = {"hello": self.cmd_hello, "bench_start": self.cmd_bench_start,
-                 "bench_stop": lambda p: (self.stop_flag.set(), emit({"event": "bench_stopped"})),
-                 "set_device": self.cmd_set_device, "shutdown": self.cmd_shutdown,
-                 "load_image": self.cmd_load_image, "set_strength": self.cmd_set_strength,
-                 "precompute": self.cmd_precompute, "inpaint": self.cmd_inpaint,
-                 "light": self.cmd_light, "deform": self.cmd_deform,
-                 "lut": self.cmd_lut, "grade": self.cmd_grade, "export": self.cmd_export,
-                 "exposure": self.cmd_exposure,
-                 "background": self.cmd_background,
-                 "compare": self.cmd_compare,
-                 "session": self.cmd_session, "history": self.cmd_history}
+        table = self._dispatch_table()
         # 不用 `for line in sys.stdin`：那会等 EOF，收到 shutdown 也退不掉
         while not self._quit:
             line = sys.stdin.readline()
