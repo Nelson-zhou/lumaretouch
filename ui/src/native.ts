@@ -887,6 +887,7 @@ export interface M0Env {
   chunks: number;
   no_ctx: string;
   no_mirror: string;
+  gl_visible: string;
   /** 视口自证探针（M9）：非空时在静置后读回画布缓冲并量布局矩形，报 M0_VIEWPORT。 */
   viewport_probe: string;
   dirty_frac: number;

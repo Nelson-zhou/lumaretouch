@@ -19,6 +19,9 @@ body { margin:0; background:var(--bg); color:var(--fg); font:13px/1.5 "Noto Sans
 /* 消除笔叠加层：与 GL 画布同一个矩形，坐标换算靠 getBoundingClientRect 对齐 */
 .viewer { position: relative; display: flex; flex: 1; min-height: 0; }
 .viewer .gl-src { display: none; }   /* 渲染源：不参与布局，也不参与页面合成 */
+/* 对照实验（LRT_GL_VISIBLE=1）：把它摆回原来那个可见位，看 GL 自己能不能上屏 */
+.viewer .gl-src.visible { display: block; flex: 1; width: 100%; max-width: 100%;
+  max-height: 100%; object-fit: contain; }
 /* 显示层：挂在 document.body 上的 fixed 画布，矩形由 Viewer.tsx 跟着 .viewer 量出来。
    几何仍用 object-fit:contain，与 GL 画布当年那套一致，所以画笔叠加层的坐标映射不变。 */
 .mirror { position: fixed; object-fit: contain; pointer-events: none; z-index: 5; }

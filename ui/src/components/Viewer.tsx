@@ -48,6 +48,7 @@ export default function Viewer({
   ctxOpt = true,
   chunks = 1,
   mirrorOn = true,
+  glVisible = false,
   brush,
   onHud,
 }: {
@@ -76,6 +77,8 @@ export default function Viewer({
   /** 显示层开关：GL 画布每帧镜像到一张 2D 画布（这台机器上 GL surface 不进页面合成，
    *  关掉它就回到"后备缓冲有内容、屏幕上看不见"的那个形状）。LRT_NO_MIRROR=1 可关。 */
   mirrorOn?: boolean;
+  /** 对照实验用：把 GL 画布重新摆回可见位（LRT_GL_VISIBLE=1）。 */
+  glVisible?: boolean;
   brush?: BrushProps;
   onHud: (h: Hud) => void;
 }) {
@@ -402,7 +405,9 @@ export default function Viewer({
     <>
       <div className="viewer" ref={boxRef}>
         {/* GL 画布退成纯渲染源：不参与布局，也不指望它上屏（见上面那段）。 */}
-        <canvas ref={canvasRef} className="gl-src" />
+        {/* glVisible 是给"官方开关能不能替掉镜像层"那个对照实验用的：把 GL 画布放回
+            可见位，看它自己上不上得了屏。生产路径不依赖它。 */}
+        <canvas ref={canvasRef} className={glVisible ? "gl-src visible" : "gl-src"} />
         <canvas ref={overlayRef} className={brush?.on ? "overlay on" : "overlay"} />
       </div>
       {/* 显示层：portal 到 document.body 的 fixed 画布，每帧由 GL 画布 drawImage 填进来。

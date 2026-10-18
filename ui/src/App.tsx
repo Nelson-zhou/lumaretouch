@@ -94,7 +94,8 @@ export default function App() {
   // ---- 精修台（M1-3c/M1-4）：图路径、磨皮参数、通道、画笔 ----
   const [comparing, setComparing] = useState(false);   // 按住看原图中（不改会话强度）
   const comparingRef = useRef(false);
-  const [mirrorOn, setMirrorOn] = useState(true);   // 显示层开关，见 Viewer.tsx mirror 那段
+  const [mirrorOn, setMirrorOn] = useState(true);
+  const [glVisible, setGlVisible] = useState(false);   // 对照实验：把 GL 画布放回可见位
   const [imgPath, setImgPath] = useState("");
   // 路径错误就地显示在输入框下方。原来它只落到 dragNote——那行灰字在窗口另一头，
   // 用户点了「导入」什么也没发生也不知道为什么，那就是事实上的静默失败。
@@ -541,14 +542,12 @@ export default function App() {
     m0Started = true;
     (async () => {
       const env = await m0Env().catch(() => null);
-      const spec = env?.auto_bench;
-      if (!env || !spec) return;
-      // WebKit 会节流不可见/未聚焦窗口的 rAF，跑靶前必须把窗口拉到前台
-      await getCurrentWindow().setFocus().catch(() => undefined);
-      const skipPixels = env.skip_pixels === "1";
-      // tier0 连像素都不传，上传/绘制自然没得做
-      setSkipDraw(env.skip_draw === "1" || skipPixels);
-      setTierLabel(skipPixels ? "tier0" : env.skip_draw === "1" ? "tier1" : "tier2");
+      if (!env) return;
+      // 渲染/显示配置与"跑不跑靶"无关，必须先读、再管 spec。原来这整段挂在
+      // `if (!env || !spec) return` 之后，于是静态探针臂里 LRT_NO_CTX / LRT_NO_MIRROR /
+      // LRT_GL_VISIBLE **全是死的**：我拿"两臂读数完全一致"当成 desynchronized 假设被
+      // 证伪，而实际上那两臂根本没换过配置。开关不生效比开关不存在更危险——它会产出
+      // 一份看起来像对照实验、其实什么都没有做的结论。
       const known = ["raw", "bitmap", "pingpong"] as const;
       if ((known as readonly string[]).includes(env.upload)) {
         setUpload(env.upload as (typeof known)[number]);
@@ -557,7 +556,16 @@ export default function App() {
       // 故默认关；保留 LRT_NO_CTX / 开关只做后续对照实验用。
       setCtxOpt(env.no_ctx === "0");
       setMirrorOn(env.no_mirror !== "1");
+      setGlVisible(env.gl_visible === "1");
       setChunks(env.chunks > 1 ? env.chunks : 1);
+      const spec = env.auto_bench;
+      if (!spec) return;
+      // WebKit 会节流不可见/未聚焦窗口的 rAF，跑靶前必须把窗口拉到前台
+      await getCurrentWindow().setFocus().catch(() => undefined);
+      const skipPixels = env.skip_pixels === "1";
+      // tier0 连像素都不传，上传/绘制自然没得做
+      setSkipDraw(env.skip_draw === "1" || skipPixels);
+      setTierLabel(skipPixels ? "tier0" : env.skip_draw === "1" ? "tier1" : "tier2");
       const bench = parseAutoBench(spec);
       if (!bench) {
         await report(`M0_ERROR 无法解析 LRT_AUTO_BENCH=${spec}`);
@@ -2547,6 +2555,7 @@ export default function App() {
           upload={upload}
           ctxOpt={ctxOpt}
           mirrorOn={mirrorOn}
+          glVisible={glVisible}
           chunks={chunks}
           brush={{ on: brushOn && !!status?.image, radius: brushRadius, onStroke }}
           onHud={setHud}
