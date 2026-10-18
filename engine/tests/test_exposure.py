@@ -34,12 +34,17 @@ def _grad(h: int = 37, w: int = 53) -> np.ndarray:
 
 
 # ------------------------------------------------------------------ 中性恒等
-def test_neutral_is_byte_identical_after_16bit_quantization():
+def test_neutral_op_is_within_1lsb_after_quantization():
+    """op 级中性：量化到 16-bit 后最大偏差必须 ≤ 1 LSB。
+
+    口径写在 ops/exposure.py：“逐字节恒等（容差 0）”由**链上未点火短路**保证，
+    而这里量的是“sRGB 传递函数解析往返 + 双精度”落在整数格点上的真实红入。
+    把两个口径混成一条的话，要么测不到真行为，要么要模块假称自己逐位相等。
+    """
     x = _grad()
     out = ex.exposure_np(x, 0.0, 0.0, 0.0)
-    a = np.asarray(out, dtype=np.int64) - np.asarray(x, dtype=np.int64)
-    assert np.array_equal(_u16(out), _u16(x)), \
-        f"中性不恒等：最大偏差 {int(np.abs(a).max())} LSB"
+    a = np.abs(_u16(out).astype(np.int64) - _u16(x).astype(np.int64))
+    assert int(a.max()) <= 1, f"中性 op 级往返超过 1 LSB：{int(a.max())}"
 
 
 def test_neutral_gains_are_exactly_one_not_just_close():
@@ -85,14 +90,27 @@ def test_boundary_values_are_accepted():
 
 
 # ------------------------------------------------------------------ 方向语义
-def test_positive_ev_raises_luminance():
+def test_positive_ev_doubles_linear_light_not_gamma_value():
+    """1 EV = 线性光翻倍。**不是**输出像素翻倍。
+
+    这条用例自己错过一次：它先写于“拿 gamma 值直接乘”的版本，当时比值确实是 2.0；
+    加了线性化后它变红，红得对——因为错的不是实现而是这条断言的口径。
+    量在 gamma 域里的“翻倍”实际只相当于 +0.45 档，那才是错的东西。
+    """
     x = _grad()
     up = ex.exposure_np(x, 1.0, 0.0, 0.0)
     assert up.mean() > x.mean()
-    # 一档 = 线性域翻倍（未饱和部分）
-    mid = (x[:, 10, :] < 0.4)
-    ratio = up[:, 10, :][mid] / x[:, 10, :][mid]
-    assert np.allclose(ratio, 2.0, rtol=1e-6), f"1 EV 不等于翻倍：{ratio[:3]}"
+    lo_in = ex._lin_np(x)
+    lo_out = ex._lin_np(up)
+    keep = (lo_in > 0.02) & (lo_out < 0.98)      # 剔掉黑端与将被夹住的高光
+    ratio = lo_out[keep] / lo_in[keep]
+    assert np.allclose(ratio, 2.0, rtol=1e-4), \
+        f"1 EV 应让线性光翻倍，实测 {ratio.min():.4f}–{ratio.max():.4f}"
+    # 反向：gamma 域比值应接近 2**(1/2.4)≈1.33而不是 2
+    g = _grad()
+    gm = (g > 0.05) & (ex.exposure_np(g, 1.0, 0.0, 0.0) < 0.99)
+    enc = (up[gm] / x[gm])
+    assert 1.2 < enc.mean() < 1.55, f"gamma 域比值异常：{enc.mean():.3f}"
 
 
 def test_positive_kelvin_shift_compensates_toward_cooler():
@@ -207,3 +225,86 @@ def test_apply_helper_passes_through_only_when_all_three_neutral():
     t = torch.ones(1, 3, 4, 4, dtype=torch.float64) * 0.5
     for p in ({"ev": 0.1}, {"temperature_shift": 100.0}, {"tint_shift": 0.1}):
         assert ex.apply_exposure_t(t, p) is not t, f"{p} 不该走短路"
+
+
+# ---------------------------------------------------------------- 链上接线（d3b）
+# 这一组测的是“接进了管线”，不是“模块自己对”。只有模块用例的话，链里没插进去
+# 也能全绿——那正是 DoD-3 “假滑块”会出现的位置。
+
+
+def _pipeline():
+    pytest.importorskip("torch")
+    from lumaretouch_engine.vram import PreviewPipeline
+    rng = np.random.default_rng(7)
+    img = (rng.random((40, 60, 3)) * 200 + 20).astype(np.uint8)
+    pipe = PreviewPipeline("cpu", 60, 40)
+    pipe.load_rgb_u8(img)
+    return pipe, img
+
+
+def test_pipeline_neutral_is_byte_identical_to_unlit():
+    """链上未点火必须逐字节相同（容差 0，ADR-0003 的 identity 口径就在这里）。"""
+    p1, img = _pipeline()
+    p2, _ = _pipeline()
+    st = p2.set_exposure(0.0, 0.0, 0.0)
+    assert st["exposure_set"] is False, "全中性却把层报成已点火"
+    a = p1.render(0.0, radius=3, eps=1e-3)
+    b = p2.render(0.0, radius=3, eps=1e-3)
+    assert np.array_equal(p1.read_back(), p2.read_back()), "中性提交改变了画面"
+
+
+def test_pipeline_positive_ev_actually_brightens_the_frame():
+    """反向门：这条必须有。它红了就是“滑块接上了但不作数”——项目禁的那类假控件。"""
+    p1, img = _pipeline()
+    p2, _ = _pipeline()
+    p1.render(0.0, radius=3, eps=1e-3)
+    before = p1.read_back()
+    st = p2.set_exposure(1.0, 0.0, 0.0)
+    assert st["exposure_set"] is True
+    p2.render(0.0, radius=3, eps=1e-3)
+    after = p2.read_back()
+    assert after.mean() > before.mean() + 8, \
+        f"+1 EV 几乎没亮（{before.mean():.1f} → {after.mean():.1f}）：要么没接进链，要么被夹死了"
+    assert p2.last_exposure_ms > 0.0, "点火了却没计时：分段账单会漏掉这一层"
+
+
+def test_pipeline_rejects_out_of_range_without_leaving_half_state():
+    """被拒的命令整条不留痕：参数越界不能把层置成半截状态。"""
+    pipe, _ = _pipeline()
+    with pytest.raises(ValueError):
+        pipe.set_exposure(99.0, 0.0, 0.0)
+    assert pipe.exposure_params == (0.0, 0.0, 0.0), "被拒后残留了部分提交的参数"
+    assert pipe.has_exposure() is False
+    st = pipe.exposure_state()
+    assert st["exposure_limits"] == [5.0, 2000.0, 1.0], "量程没由引擎报出去（UI 会自己拄一份）"
+
+
+def test_export_spec_carries_exposure_and_matches_preview_bytes():
+    """导出口径：同一个 Exposure + 同一份 PreviewPipeline，导出与预览必须同数。
+
+    这条是“所见即所出”的可执行形式。如果导出走的是另一套实现（而不是复用同一个
+    管线），它一定会在这里红——那比事后发现颜色不匹配便宜得多。
+    """
+    pipe_a, img = _pipeline()
+    pipe_a.render(0.0, radius=3, eps=1e-3)
+    preview = pipe_a.read_back()
+
+    pipe_b, _ = _pipeline()
+    pipe_b.set_exposure(1.0, 0.0, 0.0)
+    pipe_b.render(0.0, radius=3, eps=1e-3)
+    exposed = pipe_b.read_back()
+    assert not np.array_equal(preview, exposed)
+
+    from lumaretouch_engine.export import ExportSpec, export_image
+    spec = ExportSpec(strength=0.0, radius=3, eps=1e-3, detail_gain=0.0,
+                      mid_gain=0.0, broad_gain=0.0, exposure=(1.0, 0.0, 0.0))
+    spec.check()
+    # tile 下限是引擎自己的口径（256~4096），图幅小于 tile 时它该正常出单块
+    pixels, bill = export_image(img, spec, device="cpu", tile=256)
+    # read_back 是 (H,W,4)（带 alpha），导出交回的是 (H,W,3)：按导出侧同一口径截断，
+    # 而不是拿形状不同当作“数值不一致”放过去
+    assert np.array_equal(pixels, exposed[..., :3]), \
+        "导出与预览不同数：导出没有复用同一层，或链序不一致"
+    # 账单里必须有 exposure 段：漏了它，导出耗时的归属就会把这层的成本摊给别人
+    seg = bill["seg_ms"]
+    assert "exposure" in seg, f"分段账单没有曝光段：{sorted(seg)}"

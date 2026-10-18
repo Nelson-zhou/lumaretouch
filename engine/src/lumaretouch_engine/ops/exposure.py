@@ -21,6 +21,14 @@ import math
 
 import numpy as np
 
+# torch 只在生产臂里需要。CPU 真值环境（CI 主门禁的 engine venv）里没装它，
+# 硬 import 会让整个模块导入失败、把十几条纯 numpy 用例一起拖红。
+# 拿 None 占位而不是 try/except 到子函数里：哪里真的用了它，报错就在哪里说清。
+try:                                   # pragma: no cover - 环境依赖
+    import torch
+except ImportError:                    # pragma: no cover
+    torch = None
+
 EV_LIMIT = 5.0             # 冻结量程 [-5, 5]（P0-EXPOSURE）
 TEMP_LIMIT_K = 2000.0      # 冻结量程 ±2000 K
 TINT_LIMIT = 1.0           # 冻结量程 [-1, 1]，归一
@@ -149,27 +157,71 @@ def ev_gain(ev: float) -> float:
 
 
 # ---------------------------------------------------------------- 两臂实现
-def _apply(arr, ev: float, gains: np.ndarray):
-    """线性域乘性：x ← clamp( (x * 2**ev) * wb )。
+# sRGB ↔ 线性。为什么必须过这一道：EV 与 von Kries 白平衡按定义都作用在**场景线性光**上，
+# 而渲染链里常驻的那份张量是 gamma 编码的（ops/light.py 里自带的 _lin/_slin 一对就是证据）。
+# 在 gamma 域上乘 2**EV 数学上也能跑，但它是“抬亮显示值”而不是“加一档曝光”：
+# 中间调会多升 0.45 次幂那么多，高光提前死。写这一层不是为了学术正确，是为了
+# “拉 1 EV 得到的结果与在 RAW 解码端乘两倍的结枓一致”这条可对账的口径。
+_SRGB_GAMMA = 2.4
+_SRGB_BREAK = 0.04045
 
-    输入是 (…,3) 或 (1,3,H,W) 的**线性化** float；gamma 处理由调用方负责（vram 链里
-    给的是已线性化的常驻张量，与 grade/lut 的约定一致）。
-    """
-    g = ev_gain(ev) * np.asarray(gains, dtype=np.float64)
-    return arr * g
+
+def _lin_np(a: np.ndarray) -> np.ndarray:
+    """sRGB → 线性。用掩码赋值而不是 np.where(…, s[hi]…)：后者会把两个长度不同的
+    数组放在一起广播（np.where 的两个分支都会被完整求值，布尔索引后的短数组不会自动归位）。"""
+    s = np.clip(a, 0.0, 1.0)
+    out = np.empty_like(s)
+    lo = s <= _SRGB_BREAK
+    out[lo] = s[lo] / 12.92
+    hi = ~lo
+    out[hi] = ((s[hi] + 0.055) / 1.055) ** _SRGB_GAMMA
+    return out
+
+
+def _slin_np(a: np.ndarray) -> np.ndarray:
+    l = np.clip(a, 0.0, 1.0)
+    lo, hi = l <= 0.0031308, l > 0.0031308
+    out = np.empty_like(l)
+    out[lo] = 12.92 * l[lo]
+    if np.any(hi):
+        out[hi] = 1.055 * l[hi] ** (1.0 / _SRGB_GAMMA) - 0.055
+    return out
+
+
+def _lin_t(x):
+    if torch is None:                  # pragma: no cover
+        raise RuntimeError("生产臂需要 torch（当前环境只装了 numpy 真值臂）")
+    s = x.clamp(0.0, 1.0)
+    lo = s <= _SRGB_BREAK
+    return torch.where(lo, s / 12.92, ((s + 0.055) / 1.055) ** _SRGB_GAMMA)
+
+
+def _slin_t(x):
+    l = x.clamp(0.0, 1.0)
+    lo = l <= 0.0031308
+    return torch.where(lo, 12.92 * l, 1.055 * l ** (1.0 / _SRGB_GAMMA) - 0.055)
+
+
+def _gains(ev: float, temp_shift_k: float, tint_shift: float, ref_k: float) -> np.ndarray:
+    return ev_gain(ev) * wb_gains(temp_shift_k, tint_shift, ref_k)
 
 
 def exposure_np(x: np.ndarray, ev: float = 0.0, temp_shift_k: float = 0.0,
                tint_shift: float = 0.0, ref_k: float = REFERENCE_K) -> np.ndarray:
-    """CPU 真值臂。x 形状 (…,3) 或 (1,3,H,W)，float，线性域。"""
+    """CPU 真值臂。x 形状 (…,3) 或 (1,3,H,W)，float，**gamma 编码**值。
+
+    中性恒等的口径在这里要说清：sRGB 传递函数的往返是解析式，float 上给的不是
+    逐位相同的数（量化到 8/16-bit 后实测 ≤ 1 LSB）。真正的“逐字节恒等（容差 0）”
+    由链上那一层保证：未点火时 apply_exposure 直接递回原张量，不进这里。
+    把这两件事分开写，是为了以后有人改链时能看出“短路不是装饰”。
+    """
     a = np.asarray(x, dtype=np.float64)
-    _, _, _, _ = check_params(ev, temp_shift_k, tint_shift, ref_k)
-    g = ev_gain(ev) * wb_gains(temp_shift_k, tint_shift, ref_k)
-    # 通道轴判定：最后一维是 3 视为 (…,3)，否则第 1 维（NCHW）
+    g = _gains(ev, temp_shift_k, tint_shift, ref_k)
+    lin = _lin_np(a)
     if a.ndim >= 1 and a.shape[-1] == 3:
-        out = a * g
+        out = _slin_np(lin * g)
     elif a.ndim == 4:
-        out = a * g.reshape(1, 3, 1, 1)
+        out = _slin_np(lin * g.reshape(1, 3, 1, 1))
     else:
         raise ValueError(f"exposure_np 不知道这个形状的通道轴：{a.shape}")
     return np.clip(out, 0.0, 1.0)
@@ -177,13 +229,15 @@ def exposure_np(x: np.ndarray, ev: float = 0.0, temp_shift_k: float = 0.0,
 
 def exposure_t(x, ev: float = 0.0, temp_shift_k: float = 0.0,
                tint_shift: float = 0.0, ref_k: float = REFERENCE_K):
-    """GPU 生产臂，与 np 臂同一条算式。"""
-    import torch
-    _, _, _, _ = check_params(ev, temp_shift_k, tint_shift, ref_k)
-    g = ev_gain(ev) * wb_gains(temp_shift_k, tint_shift, ref_k)
+    """GPU 生产臂，与 np 臂同一条算式（同样先线性化、算完再编码回去）。"""
+    if torch is None:                  # pragma: no cover
+        raise RuntimeError("exposure_t 需要 torch；纯 numpy 环境请用 exposure_np")
+    g = _gains(ev, temp_shift_k, tint_shift, ref_k)
     t = torch.as_tensor(g, dtype=torch.float64, device=x.device)
-    out = x.double() * t.view(1, 3, 1, 1) if x.ndim == 4 else x.double() * t
-    return out.clamp_(0.0, 1.0).to(x.dtype)
+    lin = _lin_t(x.double())
+    view = t.view(1, 3, 1, 1) if x.ndim == 4 else t
+    out = _slin_t(lin * view).clamp_(0.0, 1.0)
+    return out.to(x.dtype)
 
 
 def apply_exposure_t(x, params: dict | None):

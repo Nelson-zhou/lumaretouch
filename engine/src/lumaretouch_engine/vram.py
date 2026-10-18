@@ -32,6 +32,8 @@ from .ops.deform import (KINDS, analytic_frontal_landmarks, check_amounts,
                          identity_grid, unit_field, warp_t)
 from .ops.light import dodge_burn_t, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
 from .ops.grade import (DH_LIMIT, DS_LIMIT, DV_LIMIT, check_params, grade_t)
+from .ops.exposure import (EV_LIMIT, TEMP_LIMIT_K, TINT_LIMIT, REFERENCE_K,
+                           check_params as exposure_check, exposure_t)
 from .ops.lut import (DEFAULT_LUT_AMOUNT, QUALITY_SIZE_3D, CubeLut, LutError,
                       apply_lut_t, bake, check_amount)
 from .quant import quantize_t
@@ -188,6 +190,13 @@ class PreviewPipeline:
         self.grade_params: tuple = (0.0, 0.0, 0.0)      # (dh, ds, dv)，提交前已过 check_params
         self.grade_amount: float = 1.0
         self.last_grade_ms: float = 0.0
+        # P0：全局曝光与白平衡层（lnx.exposure / lnx.white_balance）。与定向层同构：
+        # 状态就是三个数 + 一个参考白，不持有任何张量，所以它既不参缓存键也不随设备重挂。
+        # 中性默认 (0,0,0)：这一层的 identity 必须是逐字节恒等（ADR-0003 定的容差 0），
+        # 所以没点火时 apply 一步直接递回原张量，一个算子也不跑。
+        self.exposure_params: tuple = (0.0, 0.0, 0.0)     # (ev, temperature_shift, tint_shift)
+        self.exposure_ref_k: float = REFERENCE_K
+        self.last_exposure_ms: float = 0.0
         # M6：换底层。挂在渲染链最尾（肤色之后、量化之前），是逐帧的 `α·前景+(1-α)·背景`。
         # 与其它层的差别：遮罩是按**这一档代理帧像素坐标**成立的，所以它随代理档作废
         # （进 PROXY_BOUND），也随设备重挂（遮罩张量活在那块卡上）。没活时 apply 一步直接
@@ -386,7 +395,9 @@ class PreviewPipeline:
         # “所见即所调”要求窗口找的是屏幕上那份颜色，所以它在 lut 之后。
         # 换底必须在链尾（所有调色/肤色之后）：合成的是屏幕上那份颜色叠新背景，
         # 放在前面会让磨皮/lut 作用到即将被背景替换掉的旧底上（与 M3-b “链尾不污染上游”同一条）。
-        return self.apply_background(self.apply_grade(self.apply_lut(self.apply_deform(out))))
+        # P0：曝光/白平衡插在 lut **之前**（它是场景线性域的输入变换，表是输出变换）。
+        return self.apply_background(self.apply_grade(self.apply_lut(
+            self.apply_exposure(self.apply_deform(out)))))
 
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:
@@ -1135,6 +1146,64 @@ class PreviewPipeline:
             "layer_recomputed": bool(layer_recomputed),
         }
 
+    # ---- P0：全局曝光 / 白平衡 -----------------------------------------------
+    def has_exposure(self) -> bool:
+        return bool(self.exposure_params != (0.0, 0.0, 0.0))
+
+    def set_exposure(self, ev: float = 0.0, temperature_shift: float = 0.0,
+                     tint_shift: float = 0.0, ref_k: float | None = None) -> dict:
+        """先全量校验后一次性提交：越界/NaN 整条拒，不夹取也不留半截状态。
+
+        参考白 (ref_k) 单独一条口：它不是用户滑杆、而是来片的 as-shot 色温。
+        有 EXIF 就喂真值，没有就留默认 D65——“开尔文偏移”对任何源都成立的原因就在此。
+        """
+        e, dk, tn, rk = exposure_check(ev, temperature_shift, tint_shift,
+                                       float(ref_k) if ref_k else self.exposure_ref_k)
+        self.exposure_params = (e, dk, tn)
+        self.exposure_ref_k = rk
+        return self.exposure_state()
+
+    def clear_exposure(self) -> dict:
+        self.exposure_params = (0.0, 0.0, 0.0)
+        self.exposure_ref_k = REFERENCE_K
+        self.last_exposure_ms = 0.0
+        return self.exposure_state()
+
+    def exposure_state(self) -> dict:
+        """量程上限由引擎报出去：UI 该夹在哪不该由前端拄一份数（与 grade_limits 同一条）。"""
+        e, dk, tn = self.exposure_params
+        return {
+            "exposure_ev": float(e),
+            "exposure_temperature_shift": float(dk),
+            "exposure_tint_shift": float(tn),
+            "exposure_reference_k": float(self.exposure_ref_k),
+            "exposure_set": bool(self.has_exposure()),
+            "exposure_limits": [float(EV_LIMIT), float(TEMP_LIMIT_K), float(TINT_LIMIT)],
+            "bytes_exposure": 0,      # 本层不常驻张量：报真数而不是删字段
+            "device": str(self.device),
+        }
+
+    def apply_exposure(self, t):
+        """每帧只走这里。没点火直接把张量递回去（不复制、不跑算子）。
+
+        位置在 lut **之前**：曝光是场景线性域的输入变换，LUT 是显示输出变换。
+        两者都不改变像素位置，所以它与形变层的次序无关紧要；但它与 lut 的次序有关：
+        先过表再加曝光会把 2^EV 乘到已被表压过的值上，高光恢复能力不同。
+        """
+        self.last_exposure_ms = 0.0
+        if not self.has_exposure():
+            return t
+        t0 = time.perf_counter()
+        e, dk, tn = self.exposure_params
+        out = exposure_t(t, e, dk, tn, ref_k=self.exposure_ref_k)
+        if not torch.isfinite(out).all():
+            raise ValueError(f"曝光/白平衡产出非有限值，已拒：{self.exposure_params} "
+                             f"ref={self.exposure_ref_k}")
+        if self.device.type != "cpu":
+            torch.cuda.synchronize(self.device)
+        self.last_exposure_ms = (time.perf_counter() - t0) * 1000.0
+        return out
+
     def apply_grade(self, t):
         """每帧只走这里。没活就直接把张量递回去（一个算子也不跑，连混合都不做）。"""
         self.last_grade_ms = 0.0
@@ -1375,6 +1444,10 @@ def warm_device(device: str, side: int = 64) -> float:
         pipe.grade_params = (0.0, 0.0, 0.0)
         pipe.grade_amount = 1.0
         pipe.last_grade_ms = 0.0
+        # 曝光层同理：三个数留着就是下一个会话开局“已点火”，而用户一个滑块也没碰
+        pipe.exposure_params = (0.0, 0.0, 0.0)
+        pipe.exposure_ref_k = REFERENCE_K
+        pipe.last_exposure_ms = 0.0
         # 换底层同理：预热会话上挂的遮罩/背景张量不能让下一个真会话继承，
         # 否则 image_ready 里 bytes_bg 会多报一份用户从未点过的常驻。
         pipe.bg_matte = None

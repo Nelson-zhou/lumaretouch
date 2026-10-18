@@ -111,6 +111,11 @@ class ExportSpec:
     cube: object = None
     lut_amount: float = DEFAULT_LUT_AMOUNT
     grade: tuple = (0.0, 0.0, 0.0, 1.0)      # (dh, ds, dv, amount)
+    # P0 全局曝光/白平衡：(ev, temperature_shift, tint_shift)。导出走的是同一个
+    # PreviewPipeline，所以它与预览是同一份算式而不是“第二次实现”——这正是
+    # “所见即所出”能当验收口径的原因。reference_k 缺省用层的默认（D65）。
+    exposure: tuple = (0.0, 0.0, 0.0)
+    exposure_ref_k: float | None = None
     # 放大（M7）：输出倍率与出片锐化。为什么不在预览会话里做而在导出做：预览的
     # 幅面是代理档（屏幕就这么大），用户要的 2×/4× 只在出片那一刻存在。
     scale: int = 1
@@ -381,7 +386,8 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
     plan = UpscalePlan(h, w, scale)          # 表只算一次，每块取自己那一段
     out_h, out_w = plan.out_h, plan.out_w
     out = np.zeros((out_h, out_w, 3), np.uint8)
-    seg = {"filter": 0.0, "light": 0.0, "deform": 0.0, "lut": 0.0, "grade": 0.0}
+    seg = {"filter": 0.0, "light": 0.0, "deform": 0.0, "exposure": 0.0,
+           "lut": 0.0, "grade": 0.0}
     upscale_ms = 0.0
     # 三段非算子开销。为什么不只记算子：上一版只记五个算子段，跑靶量到"分段合计只占
     # 整帧 27%"——那 73% 不知道去哪了（真因是每块一次 empty_cache，把分配器缓存全
@@ -409,6 +415,12 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
                 pipe.set_light_params(spec.light_exposure, spec.light_radius)
         if delta is not None and spec.deform_amounts:
             pipe.adopt_deform_field(delta[:, cy0:cy1, cx0:cx1].contiguous().to(device))
+        if tuple(spec.exposure) != (0.0, 0.0, 0.0):
+            # 插在 cube/grade 之前提交：与预览链里 apply_exposure 的位置一致（lut 前）。
+            # 提交顺位不影响数值（链序在 render 里定死），但保持“按链序挂图层”这个习惯，
+            # 以后谁改链序时不会在这里多一个错因不明的不同步。
+            pipe.set_exposure(spec.exposure[0], spec.exposure[1], spec.exposure[2],
+                              ref_k=spec.exposure_ref_k)
         if spec.cube is not None:
             pipe.set_lut(spec.cube, spec.lut_amount)
         if spec.grade != (0.0, 0.0, 0.0, 1.0):

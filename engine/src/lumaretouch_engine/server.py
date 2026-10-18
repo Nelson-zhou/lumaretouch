@@ -142,6 +142,11 @@ class Engine:
         # 定向层（M3-b）：引擎侧只存四个数（它不持有张量）。与调色层同一条规矩：
         # 随图清、随设备迁移重提交。
         self._grade = (0.0, 0.0, 0.0, 1.0)
+        # P0 全局曝光/白平衡：会话侧同样只存那三个数（加一个参考白）。它必须与
+        # _grade 走完全一样的生命周期：初始化、换设备重挂、快照、状态上报——漏一个
+        # 就是“宿主以为还写着 0.5 EV，引擎里其实是 0”那种两边错配。
+        self._exposure = (0.0, 0.0, 0.0)
+        self._exposure_ref_k = None
         # 换底层（M6）：存“可重建一份常驻遮罩所需的一切”——遮罩原件（代理坐标
         # uint8）、背景色、后端与参数。随图清、随代理档作废、随设备重挂（与掩膜同命）。
         self._bg = dict(active=False, matte=None, bg=None, backend=None,
@@ -571,6 +576,20 @@ class Engine:
                     emit({"event": "engine_warn",
                           "warn": f"新会话重提交肤色定向失败，已整层清除（{type(e).__name__}）：{e}"})
                     self._grade = (0.0, 0.0, 0.0, 1.0)
+            # 曝光层（P0）：不持有张量，重挂就是把同一组数重新提交一次。不提交就是
+            # “会话迁了、滑杆还在 0.5 EV 但画面不动”，与上面 lut/grade 同一条担心。
+            if self._exposure != (0.0, 0.0, 0.0):
+                try:
+                    st = pipe.set_exposure(self._exposure[0], self._exposure[1],
+                                           self._exposure[2], ref_k=self._exposure_ref_k)
+                    self._exposure = (float(st["exposure_ev"]),
+                                      float(st["exposure_temperature_shift"]),
+                                      float(st["exposure_tint_shift"]))
+                    self._exposure_ref_k = float(st["exposure_reference_k"])
+                except (RuntimeError, ValueError) as e:
+                    emit({"event": "engine_warn",
+                          "warn": f"新会话重提交曝光/白平衡失败，已整层清除（{type(e).__name__}）：{e}"})
+                    self._exposure = (0.0, 0.0, 0.0)
             # 换底层（M6）：遮罩张量活在那块卡上，新会话必须用存下的遮罩重新上传一次。
             # 不重挂就是“会话迁了、换底还在宿主侧但画面回到底图”——lut/grade 写的那段担心在这一层同样成立。
             if self._bg.get("active") and self._bg.get("matte") is not None:
@@ -596,7 +615,9 @@ class Engine:
     # 静默丢掉那一层 —— 那是本仓最贵的一族坑（「会话迁了、图层没迁」）的新变体。
     DOC_FIELDS = ("_strength", "_params", "_channel", "_repair_ops", "_redo_ops", "_op_seq",
                   "_light_ops", "_light_redo", "_light", "_deform", "_lut", "_lut_amount",
-                  "_lut_preset", "_grade", "_bg", "_precompute", "_precompute_backend")
+                  "_lut_preset", "_grade", "_bg", "_precompute", "_precompute_backend",
+         "_exposure",
+         "_exposure_ref_k")
     # 代理档一变就作废的那些层：它们的坐标是**这一档代理帧**上的像素坐标。
     PROXY_BOUND = ("_channel", "_repair_ops", "_redo_ops", "_light_ops", "_light_redo",
                    "_deform", "_bg", "_precompute", "_precompute_backend")
@@ -641,6 +662,7 @@ class Engine:
               # 不会互相改；真要出现就地写，这里就得改成拷贝。
               "_lut": self._lut, "_lut_amount": float(self._lut_amount),
               "_lut_preset": self._lut_preset, "_grade": tuple(self._grade),
+              "_exposure": tuple(self._exposure), "_exposure_ref_k": self._exposure_ref_k,
               "_bg": dict(self._bg),
               "_precompute": self._precompute, "_precompute_backend": self._precompute_backend,
               "_proxy": ((int(self._vram.h), int(self._vram.w))
@@ -1110,7 +1132,12 @@ class Engine:
                         "preset": self._lut_preset},
                 "grade": {"dh": float(self._grade[0]), "ds": float(self._grade[1]),
                           "dv": float(self._grade[2]), "amount": float(self._grade[3]),
-                          "lit": self._grade != (0.0, 0.0, 0.0, 1.0)}}
+                          "lit": self._grade != (0.0, 0.0, 0.0, 1.0)},
+                "exposure": {"ev": float(self._exposure[0]),
+                             "temperature_shift": float(self._exposure[1]),
+                             "tint_shift": float(self._exposure[2]),
+                             "reference_k": self._exposure_ref_k,
+                             "lit": self._exposure != (0.0, 0.0, 0.0)}}
 
     def _state_edits(self, st: dict) -> dict:
         """一份状态（live 抄出来的或底片条格子里存着的）里有哪些层。"""
@@ -2455,6 +2482,77 @@ class Engine:
             raise RuntimeError("会话尚未加载源图")
         return x if x.dtype == torch.float32 else x.to(torch.float32)
 
+    def cmd_exposure(self, p: dict):
+        """全局曝光与白平衡（P0 注册表的 lnx.exposure / lnx.white_balance）。
+
+        铁律逐字沿用 cmd_grade/cmd_lut：跑靶互斥、先全量校验后一次性提交、被拒整条
+        不留痕、出帧失败回滚 + 补帧、事件只有一个组装点。这一层不持有张量也不参与
+        任何缓存键：改它不会让滤波重算，反向也一样。
+
+        量程不靠这里的字面量：引擎把硬上限随每次事件报出去（exposure_limits），
+        UI 自己拄一份数是两个会漂的地方。
+        """
+        action = p.get("action", "set")
+        if action not in ("set", "clear"):
+            emit({"event": "error", "error": f"未知 exposure action: {action}（可用：set/clear）"})
+            return
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝改曝光：先 bench_stop"})
+            return
+        if not self._image_loaded or self._vram is None:
+            emit({"event": "error", "error": "尚未 load_image"})
+            return
+        prev = tuple(self._exposure)
+        prev_ref = self._exposure_ref_k
+        if action == "clear":
+            st = self._vram.clear_exposure()
+            self._exposure = (0.0, 0.0, 0.0)
+            self._exposure_ref_k = None
+        else:
+            given = {k: p[k] for k in ("ev", "temperature_shift", "tint_shift")
+                     if p.get(k) is not None}
+            if not given and p.get("reference_k") is None:
+                emit({"event": "error", "error": "exposure set 什么也没给：至少给一个参数，"
+                      "或者走 clear 把整层关掉"})
+                return
+            cur = list(self._exposure)
+            names = {"ev": 0, "temperature_shift": 1, "tint_shift": 2}
+            for k, v in given.items():
+                cur[names[k]] = v
+            try:
+                # 部分提交：拖一个滑块不该把另两个抹零，但合出来的那组必须整组校过
+                st = self._vram.set_exposure(cur[0], cur[1], cur[2],
+                                             ref_k=p.get("reference_k", self._exposure_ref_k))
+            except ValueError as e:
+                emit({"event": "error", "error": f"曝光/白平衡被拒，整条不生效：{e}"})
+                return
+            self._exposure = (float(st["exposure_ev"]),
+                              float(st["exposure_temperature_shift"]),
+                              float(st["exposure_tint_shift"]))
+            self._exposure_ref_k = float(st["exposure_reference_k"])
+        try:
+            fr = self._write_current_frame("exposure")
+        except Exception as e:
+            self._exposure = prev
+            self._exposure_ref_k = prev_ref
+            try:
+                if prev == (0.0, 0.0, 0.0):
+                    self._vram.clear_exposure()
+                else:
+                    self._vram.set_exposure(prev[0], prev[1], prev[2], ref_k=prev_ref)
+                back = self._write_current_frame("exposure")
+                back.pop("render_ms", None)
+                emit(back)
+            except Exception:      # 回滚后仍出不了一帧：能说清的只有“重新导图”
+                emit({"event": "engine_warn", "warn": "曝光回滚后仍无法出帧，本会话不可信，"
+                      "请重新导入图片"})
+            emit({"event": "error", "error": f"曝光渲染失败，已退回上一状态（"
+                  f"{type(e).__name__}）：{e}"})
+            return
+        fr.setdefault("exposure", {})
+        fr["exposure"].update(self._vram.exposure_state())
+        emit(fr)
+
     def cmd_grade(self, p: dict):
         """肤色 HSL 定向（M3-b）：三个滑块 + 一个混入比例。
 
@@ -2702,6 +2800,10 @@ class Engine:
                           broad_gain=float(p["broad_gain"]), mid_gain=float(p["mid_gain"]),
                           detail_gain=float(p["detail_gain"]),
                           grade=tuple(snap["grade"]), cube=snap["lut"],
+                          # 旧底片条格子里没这个键（它是在这一层之前存下的）：用 .get 兜零而
+                          # 不是直接索引——拿历史快照导出应当“没有曝光层”，不是报错。
+                          exposure=tuple(snap.get("exposure", (0.0, 0.0, 0.0))),
+                          exposure_ref_k=snap.get("exposure_ref_k"),
                           lut_amount=float(snap["lut_amount"]),
                           deform_amounts={},
                           scale=int(snap.get("scale", 1)),
@@ -2859,6 +2961,7 @@ class Engine:
         # 参数在命令线程里全部拍定：worker 里不再读 self._*，否则中途改一下滑块，
         # 这一批里前几张与后几张用的就不是同一套设置（而事件里只写了一份）
         snap = dict(strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
+                    exposure=tuple(self._exposure), exposure_ref_k=self._exposure_ref_k,
                     lut=self._lut, lut_amount=self._lut_amount, light=dict(self._light),
                     light_ops=list(self._light_ops), repair_ops=list(self._repair_ops),
                     deform=dict(self._deform), channel=self._channel,
@@ -2982,6 +3085,7 @@ class Engine:
                  "precompute": self.cmd_precompute, "inpaint": self.cmd_inpaint,
                  "light": self.cmd_light, "deform": self.cmd_deform,
                  "lut": self.cmd_lut, "grade": self.cmd_grade, "export": self.cmd_export,
+                 "exposure": self.cmd_exposure,
                  "background": self.cmd_background,
                  "compare": self.cmd_compare,
                  "session": self.cmd_session, "history": self.cmd_history}
