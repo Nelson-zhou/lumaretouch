@@ -40,6 +40,12 @@ function gate(s: Stats | null, w: number): "pass" | "fail" | "pending" {
 
 const fmt = (us: number) => (us > 0 ? `${(us / 1000).toFixed(2)} ms` : "—");
 
+/** 开发态标志（Vite 构建期常量）：跑靶面板、解释器路径这些**开发工具**只在开发态出现。
+ *  发布包里它们不是“美化掉”的东西：一张修图软件的主面板上摆着“python3 / 虚拟环境
+ *  解释器绝对路径”与“帧数/帧间隔”，用户会以为产品坏了。产品面板、状态行、日志面板全都
+ *  保留——只拆掉那些不是产品的那几个。 */
+const IS_DEV = import.meta.env.DEV;
+
 /** 换底后端的显示名（M6）：名单本身由引擎的 matting_backends 给，这里只负责把
  *  它报回来的名字翻成文案。引擎日后多报一个没见过的名字就直接显示原名——名字
  *  是事实，怎么叫它才是文案，前端不许拿名单当自己可枚举的集合。 */
@@ -1138,6 +1144,27 @@ export default function App() {
     };
   }, []);
 
+  // 开箱即用（M8 发布态）：装机件双击开起来就该是“能用的软件”，而不是“先点一下
+  // 启动引擎”。空串 py/src 就是“拿宿主的候选表找运行时”（裸环境那一轮实测
+  // python_source=runtime），与手动按钮走同一条路；这里只多一个“不必点”。
+  // 跑靶那一条不抢：带 LRT_AUTO_BENCH 时它自己拿 env 的 py/src 起引擎，两边都起
+  // 则第二个会被“引擎已在运行”拒掉——那条错不该顶在用户脸上。
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const env = await m0Env().catch(() => null);
+      if (cancelled || env?.auto_bench) return;
+      try {
+        const r = await startEngine("", "");
+        if (!cancelled) setPid(r.pid);
+      } catch {
+        // 起不来不弹错：engine_status 里那一行“没运行/已退出”与运行时账单就是现场证据，
+        // 面板上的候选路径提示也在 engine_runtime.hint 里跟着走
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   async function onStartEngine() {
     setBusy(true);
     try {
@@ -1463,10 +1490,16 @@ export default function App() {
         <div className="mut">{t("app.subtitle")}</div>
 
         <h2>{t("side.engine")}</h2>
-        <label className="k">{t("engine.python")}</label>
-        <input value={py} onChange={(e) => setPy(e.target.value)} placeholder="python3 / 虚拟环境解释器绝对路径" style={{ width: "100%" }} />
-        <label className="k">{t("engine.src")}</label>
-        <input value={src} onChange={(e) => setSrc(e.target.value)} placeholder="../engine/src" style={{ width: "100%" }} />
+        {/* 解释器与引擎源目录只属于开发态：发布包里这两个框填不上也不能让用户去猜
+            “该往这里填什么”——候选表的事由宿主定，账单在下面的运行状态那一行说。 */}
+        {IS_DEV && (
+          <>
+            <label className="k">{t("engine.python")}</label>
+            <input value={py} onChange={(e) => setPy(e.target.value)} placeholder="python3 / 虚拟环境解释器绝对路径" style={{ width: "100%" }} />
+            <label className="k">{t("engine.src")}</label>
+            <input value={src} onChange={(e) => setSrc(e.target.value)} placeholder="../engine/src" style={{ width: "100%" }} />
+          </>
+        )}
         <div className="row">
           <button className="primary" onClick={onStartEngine} disabled={(!!pid && engineAlive) || busy}>
             {t("engine.start")}
@@ -2048,6 +2081,8 @@ export default function App() {
           </div>
         ) : null}
 
+        {IS_DEV && (
+          <>
         <h2>{t("side.bench")}</h2>
         <label className="k">{t("bench.size")}</label>
         <select value={sizeKey} onChange={(e) => setSizeKey(e.target.value)} style={{ width: "100%" }}>
@@ -2103,6 +2138,8 @@ export default function App() {
             </tr>
           </tbody>
         </table>
+          </>
+        )}
 
         <h2>{t("log.title")}</h2>
         <pre className="log">{status?.logs?.length ? status.logs.join("\n") : t("log.empty")}</pre>
