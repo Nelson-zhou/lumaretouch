@@ -62,6 +62,11 @@ MAX_MARGIN = 2048
 _FIELD_BAND_PX = 1 << 15
 
 FORMATS = ("jpg", "jpeg", "png", "tif", "tiff", "webp")
+
+# 扩展名 → Pillow 的 format 名。编码到内存再提交时必须显式给（以前靠扩展名推断，
+# 现在 img.save 的目标是一个 BytesIO，不推就不能定格式）。
+_PIL_FORMAT = {"jpg": "JPEG", "jpeg": "JPEG", "png": "PNG", "webp": "WEBP",
+               "tif": "TIFF", "tiff": "TIFF"}
 # 出片锐化的硬边界（M7）。为什么是模块常量而不是写在 check() 里：命令层要在**开跑前**
 # 就拿同一对数拒掉非法请求（被拒的导出还发 export_progress，UI 的进度条会走完后发现
 # 什么都没有），而两处各写一份数字就是下一轮改边界时漏改的那一处。
@@ -521,7 +526,194 @@ def resample_field(arr: np.ndarray, out_hw: tuple, *, uint8: bool = False) -> np
     return out[0] if a.ndim == 2 else out
 
 
-def write_file(rgb: np.ndarray, path: str, *, quality: int = 95) -> dict:
+def _icc_facts(icc: bytes | None) -> dict:
+    """ICC 的可验回执：长度 + 那一份字节的 sha256。
+
+    为什么必须有 sha256（而只有长度不够）：实测 littleCMS 的 `createProfile("sRGB")`
+    **跨进程给出的字节不一样**（同一台机器两个子进程 588 B，sha256 分别 c827bf… 与
+    a82481…，进程内稳定）。于是“拿本地再生成的一份去比文件里那份”这个断言本身不成立——
+    能证的只有“事件里报的那份字节，就是文件里的那份”，这需要哈希而不是长度。
+    产物的语义正确性另由“它是 sRGB built-in”与读回可解码来证（见 COLOR-001 的口径）。
+    """
+    if not icc:
+        return {"icc_bytes": 0, "icc_sha256": None}
+    import hashlib
+    return {"icc_bytes": len(icc), "icc_sha256": hashlib.sha256(icc).hexdigest()}
+
+
+def _profile_bytes(name: str, source: bytes | None = None) -> bytes | None:
+    """取输出 ICC。只给能真拿到档的选项，拿不到的**明确拒并说缺什么**。
+
+    为什么不烘一个“看起来像”的 profile 充 AdobeRGB/P3：嵌错的 ICC 比不嵌更坏——
+    读方会拿错的那份去转色，结果是颜色真的变了而文件里写着另一个名字。
+    COLOR-002 要的就是这个口径：“展示使用的输入假设/错误；不静默声称准确还原”。
+
+    - srgb：Pillow/littleCMS 内建档（实测 588 B），不依赖任何系统资产；
+    - source：透传源文件自己那份（没有源档时报错，而不是默默不嵌）；
+    - adobergb / display_p3：需要一个真实的 .icc 文件路径。本层不绑 ghostscript 那种
+      系统目录（发行物不该依赖一个不确定存在的资产），调用方递路径即可。
+    """
+    key = (name or "srgb").lower()
+    if key in (None, "", "none"):
+        return None
+    if key == "source":
+        if not source:
+            raise ExportError("output_profile=source 但源文件没有 ICC："
+                              "这条口径不能默默退成“不嵌”，请改选 srgb 或给一个 profile 文件")
+        return bytes(source)
+    if key == "srgb":
+        from PIL import ImageCms
+        return ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+    if os.path.isfile(key):                       # 也接受直接给路径
+        with open(key, "rb") as f:
+            return f.read()
+    raise ExportError(
+        f"output_profile={name!r} 本层不带该档（内置只有 sRGB）。"
+        f"要么改用 srgb / source，要么把一个真实的 .icc 文件路径递进来——"
+        f"不嵌一份名字对、内容错的档。")
+
+
+_EXIF_ORIENT_TAG = 0x0112        # Orientation：像素在解码层已经按它摆过了
+_EXIF_GPS_TAG = 0x8825           # GPSInfo 指针
+
+
+def _tiff_compression(name: str) -> str:
+    """注册表里 tiff_compression 是 none|deflate|lzw（中性 deflate），翻成 Pillow 的名字。
+
+    中性定成 deflate 而不是原来写死的 lzw：这一格在冻结的注册表里中性就是 deflate
+    （ADR-0003）。真图实测（engine/tests/fixtures 那张 1.31 MP 人像，同一份 sRGB ICC）：
+    none 3.93 MB / 31.3 ms，deflate 1.55 MB / 132.1 ms，lzw 1.96 MB / 51.9 ms，三者读回都
+    逐字节一致——deflate 比 lzw 小 21%，代价是编码时间 2.5×。批量导出时这笔时间是要不要
+    换的选择题，所以三个值都开出来而不是只留一个。名字认不出的一律拒：把 "zip" 默默当成
+    deflate 会让导出清单里写着用户没选过的那个名字。
+    """
+    key = (name or "deflate").lower()
+    table = {"none": "none", "deflate": "tiff_deflate", "lzw": "tiff_lzw"}
+    if key not in table:
+        raise ExportError(f"tiff_compression={name!r} 不可用（可用：none / deflate / lzw）")
+    return key, table[key]
+
+
+def _filter_exif(exif, include_gps: bool) -> tuple[bytes | None, dict]:
+    """按开关产出要写的 EXIF 字节，同时交出两项可验事实。
+
+    返回 (字节或 None, {"gps_written": …, "orientation_dropped": …})。
+
+    这里不靠“从数组新建图本来就没 EXIF”来保证不泄位——那是不作数偶然成立，
+    一旦接上源元数据透传就失效。写法是正面删，且三个细节都是定下来的：
+
+    1. **判有无 GPS 只看“键在不在”，不调 `get_ifd(0x8825)`**。Pillow 的 `get_ifd` 会把解出来的
+       子 IFD 缓存进一个私有 `_ifds`，而 `tobytes()` 会遍历 `_ifds` 并把“不在 items 里”的子 IFD
+       重新写回去——删了指针也可能被缓存反写回来。实测三种写法都得出了“GPS 没写出”的结果，
+       但那取决于缓存时序，不能当依据；不调它就不会有缓存。
+    2. **Orientation 永远删**，与 GPS 开关无关。解码时已经按它把像素摆正了（见 decode.py 的
+       exif_transpose），把 274 透传出去等于让读方再转一次——那正是 COLOR-003 里
+       “输出无二次方向错误”点名的坑。
+    3. 在一份**新载入的副本**上操作，不修改调用方递进来的对象：同一份 source_exif 会在一批
+       导出里被用很多次，就地 pop 会让第一张之后的每一张都“莫名少了”那些字段。
+
+    损坏的 EXIF 不默默丢弃也不默默重写：报 ExportError，这是 COLOR-002 的“展示…错误”。
+    """
+    facts = {"gps_written": False, "orientation_dropped": False}
+    if exif is None:
+        return None, facts
+    from PIL import Image
+    if isinstance(exif, Image.Exif):
+        raw = bytes(exif.tobytes())
+    elif isinstance(exif, (bytes, bytearray)):
+        raw = bytes(exif)
+    else:
+        raise ExportError(f"source_exif 类型不可用：{type(exif).__name__}"
+                          "（只接 Pillow Image.Exif 或 EXIF 字节）")
+    if not raw:
+        return None, facts
+    ex = Image.Exif()
+    try:
+        ex.load(raw)
+    except Exception as e:
+        raise ExportError(f"源 EXIF 解析失败（{type(e).__name__}: {e}）："
+                          "不默默丢也不默默重写，拿它当“没有元数据”导出是把错误藏起来") from None
+    had_gps = _EXIF_GPS_TAG in ex
+    had_orient = _EXIF_ORIENT_TAG in ex
+    if had_orient:
+        ex.pop(_EXIF_ORIENT_TAG, None)
+    if had_gps and not include_gps:
+        ex.pop(_EXIF_GPS_TAG, None)
+    out = bytes(ex.tobytes())
+    facts["gps_written"] = bool(had_gps and include_gps)
+    facts["orientation_dropped"] = bool(had_orient)
+    return (out or None), facts
+
+
+def _check_policy(conflict_policy) -> str:
+    """策略名先解析成枚举，认不出的直接拒。
+
+    这个函数存在的理由是“校验必须与文件是否存在无关”：把拒写埋在冲突分支里，
+    一个拼错的 conflict_policy 在目标为空时会被静默当成 skip_and_report 通过，
+    批量导出一百张全新文件时一次错都不会报——那是比覆盖更坏的行为（它让调用方
+    相信自己设了保护）。测试 test_overwrite_policy_is_rejected_as_a_category_error
+    抓到的就是这个。
+    """
+    policy = (conflict_policy or "skip_and_report").lower()
+    if policy not in ("skip_and_report", "recheck"):
+        raise ExportError(f"conflict_policy={conflict_policy!r} 不可用"
+                          f"（可用：skip_and_report / recheck；没有 overwrite 是有意的，"
+                          f"见 ADR-0003 与 EXPORT-001 的“无无提示覆盖”）")
+    return policy
+
+
+def resolve_target(path: str, conflict_policy: str = "skip_and_report") -> tuple[str | None, str | None]:
+    """落盘前解目标名。返回 (要写的路径或 None=跳过, 原因)。
+
+    枚举里没有 overwrite 不是遗漏，是 EXPORT-001 的“无无提示覆盖”要求的直接体现
+    （ADR-0003）。两个选项都不许盖掉已有文件：
+      - skip_and_report：不写，把冲突作为结果交回去（批量跑完后这一条最容易被读到）；
+      - recheck：不写旧文件，改用一个可追溯的唯一名继续写（撞名不丢产物，
+        也不动别人的成果），并在回报里记录改名前后的对应关系。
+    """
+    policy = _check_policy(conflict_policy)
+    if not os.path.exists(path):
+        return path, None
+    if policy == "skip_and_report":
+        return None, f"目标已存在，按 skip_and_report 跳过：{path}"
+    if policy == "recheck":
+        base, ext = os.path.splitext(path)
+        for i in range(1, 10000):
+            cand = f"{base}-{i:04d}{ext}"
+            if not os.path.exists(cand):
+                return cand, f"目标已存在，按 recheck 改用唯一名：{path} → {cand}"
+        return None, f"目标已存在且 recheck 在 9999 个候选名里都没找到空位：{path}"
+
+
+def _atomic_write(path: str, data: bytes) -> None:
+    """同目录临时文件 + fsync + os.replace。中断只会留下一个 .tmp，不会留下半个成品。
+
+    同目录不是细节：跨文件系统的 rename 不是原子的，而且 tmp 放外面会把
+    “失败后现场干净”这件事变成一个分区拓扑问题。用 os.replace 而不是 os.rename：
+    前者在 Windows 语义上也能顶替已存在目标（我们只在 Unix 跑，但口径要一致）。
+    """
+    d = os.path.dirname(os.path.abspath(path)) or "."
+    tmp = os.path.join(d, f".{os.path.basename(path)}.{os.getpid()}.tmp")
+    try:
+        with open(tmp, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        # 失败不留现场：半个 tmp 对谁都没用，删了才能说“目录里只有完整文件”
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def write_file(rgb: np.ndarray, path: str, *, quality: int = 95,
+               output_profile: str = "srgb", source_icc: bytes | None = None,
+               source_exif=None, metadata_include_gps: bool = False,
+               conflict_policy: str = "skip_and_report",
+               tiff_compression: str = "deflate") -> dict:
     """落盘。jpg/webp 按质量、png/tif 无损。扩展名决定格式，不接受"看着像"的猜测。
 
     quality 越界是**拒**而不是夹：默默夹到 1 会交出一张体积小得反常的图，
@@ -536,10 +728,18 @@ def write_file(rgb: np.ndarray, path: str, *, quality: int = 95) -> dict:
         raise ExportError(f"quality={quality!r} 不是整数") from None
     if not 1 <= q <= 100:
         raise ExportError(f"quality={q} 越界（需要 1~100）")
+    _check_policy(conflict_policy)   # 参数校验全部前置：一张 3 MP 的编码不该为一个拼错的字符串而白做
+    comp_key, comp_pillow = _tiff_compression(tiff_compression)
     from PIL import Image                         # 校验完了才碰编码器：拒绝不需要 PIL
     t0 = time.perf_counter()
     img = Image.fromarray(np.ascontiguousarray(rgb), "RGB")
     kw = {}
+    icc = _profile_bytes(output_profile, source_icc)
+    if icc:
+        kw["icc_profile"] = icc
+    exif, exif_facts = _filter_exif(source_exif, bool(metadata_include_gps))
+    if exif:
+        kw["exif"] = exif
     if ext in ("jpg", "jpeg", "webp"):
         kw["quality"] = q
         if ext in ("jpg", "jpeg"):
@@ -553,15 +753,43 @@ def write_file(rgb: np.ndarray, path: str, *, quality: int = 95) -> dict:
         # 不是一个未量过的默认值。
         kw["compress_level"] = min(6, q // 10)
     if ext in ("tif", "tiff"):
-        kw["compression"] = "tiff_lzw"
-    img.save(path, **kw)
+        kw["compression"] = comp_pillow
+    # 先在内存里编码成字节，再走原子提交：编码失败不会留下一个名字对、内容没写完的文件
+    from io import BytesIO
+    buf = BytesIO()
+    img.save(buf, format=_PIL_FORMAT.get(ext, ext.upper()), **kw)
+    target, reason = resolve_target(path, conflict_policy)
+    verifiable = {**_icc_facts(icc),
+                  "icc_source": str(output_profile),
+                  "gps_written": exif_facts["gps_written"],
+                  "orientation_dropped": exif_facts["orientation_dropped"],
+                  "exif_bytes": len(exif) if exif else 0,
+                  # 报的是注册表里那个名字（deflate），不是 Pillow 的内部名（tiff_deflate）：
+                  # 导出清单是给人看的，它该说用户选过的那个词
+                  "tiff_compression": comp_key if ext in ("tif", "tiff") else None,
+                  "tiff_compression_tag": {"none": 1, "deflate": 8, "lzw": 5}[comp_key]
+                                          if ext in ("tif", "tiff") else None}
+    if target is None:
+        # 跳过的结果也要带全这一堆字段：事件形状不一致时，UI 那边就会在同一批里
+        # 一会儿拿到 undefined 一会儿拿到值，而前者不报错
+        return {"path": path, "format": ext, "skipped": True, "reason": reason,
+                "conflict_policy": conflict_policy, "bytes": 0, "write_ms": 0.0,
+                "quality": int(quality), "renamed_from": None,
+                "compress_level": None, **verifiable}
+    _atomic_write(target, buf.getvalue())
     ms = (time.perf_counter() - t0) * 1000.0
-    return {"path": path, "format": ext, "bytes": os.path.getsize(path),
+    return {"path": target, "format": ext, "bytes": os.path.getsize(target),
             "write_ms": round(ms, 1), "quality": int(quality),
+            "skipped": False,
+            # 可验字段：嵌了什么 ICC、GPS 到底在不在输出里、方向标有没有拆掉、
+            # 冲突时改了名没有。只报“我做了什么”而不容许读方反查，等于没有证据。
+            "renamed_from": None if target == path else path,
+            "conflict_policy": conflict_policy,
             # PNG 实际用的压缩档位（其他格式为 None，不缺键）：回报里写 quality=95
             # 而文件是按 level 6 写的，两者对不上时必须看得出来，否则写盘耗时
             # 与体积就成了无从反推的谜
-            "compress_level": kw.get("compress_level")}
+            "compress_level": kw.get("compress_level"),
+            **verifiable}
 
 
 # ------------------------------------------------------------------ 16-bit 母档直通（M9-e）
@@ -576,25 +804,55 @@ def write_file(rgb: np.ndarray, path: str, *, quality: int = 95) -> dict:
 # I;16。Baseline TIFF 的 interleaved 16bpc RGB 是最普通的落盘形状，写它不需第三个依赖。
 
 _TIFF16_TAGS = (0x100, 0x101, 0x102, 0x103, 0x106, 0x111, 0x115, 0x116, 0x117, 0x128)
+_TIFF16_ICC_TAG = 0x8773                          # ICCProfile = 34675（0x8711 是 34577，不是它）
+#  这一处曾写成 0x8711：自写自读那份发现不了，Pillow 把标签原样收下但不认，
+#  info 里没有 icc_profile 才暴露——“独立读方”这层交叉对拍就是为这种错留的。
 
 
-def write_tiff16(rgb: np.ndarray, path: str) -> dict:
+def write_tiff16(rgb: np.ndarray, path: str, *, output_profile: str = "srgb",
+                 source_icc: bytes | None = None,
+                 conflict_policy: str = "skip_and_report",
+                 metadata_include_gps: bool = False,
+                 tiff_compression: str = "none") -> dict:
     """写一张 baseline TIFF：interleaved RGB、16 bit/通道、无压缩、单 strip。
 
     条目按 tag 升序（TIFF 的硬要求，不是风格）；超过 4 字节的值（BitsPerSample 三个
-    SHORT）另存一处，条目里只放偏移。只写必需的那十个 tag：多余的不是不能写，而每多
-    一个就多一处与读回那一侧对不上的可能。
+    SHORT、ICCProfile 整份档）另存一处，条目里只放偏移。只写必需的那十一个 tag：多余的
+    不是不能写，而每多一个就多一处与读回那一侧对不上的可能。
+
+    d2c 的四个口径在这条路上也要成立，不能只在 8-bit 那侧做完就算交工：
+    ICC 嵌进真 tag、冲突不静默覆盖、落盘走原子提交；GPS 则**明确拒**而不
+    是默默忽略——16-bit 母档这一层没实现源元数据透传，接不了就得说出来
+    （DoD-3 “未接通功能显式禁用并说明原因”，留一个按下去不响的开关是最坏的一种）。
     """
     import struct
     if rgb.dtype != np.uint16 or rgb.ndim != 3 or rgb.shape[2] != 3:
         raise ExportError(f"16-bit 直通需要 uint16 的三通道数组，收到 "
                           f"dtype={rgb.dtype} shape={getattr(rgb, 'shape', None)}")
+    key, _ = _tiff_compression(tiff_compression)
+    if key != "none":
+        # 不是“没来得及做”，是量过之后判定不该做：不加 Predictor 的 16-bit 交织数据
+        # deflate 收益是负的（实测噪声样本压缩后 18,600 B > 无压缩 18,578 B）；要真省体积
+        # 得上 Predictor=2，那就不再是“母档解出来什么样就写什么样”的直通，而与读回自证
+        # 那条口径分叉了。母档是留给后续流程的中间产物，这个交换不划算——所以只认 none，
+        # 别的值明确拒（UI 在位深=16 时要把这个控件置灰并写这句原因，而不是留着让人点）。
+        raise ExportError(f"16-bit 母档直通只写无压缩 TIFF（tiff_compression=none），"
+                          f"收到 {tiff_compression!r}：位深 16 的交织数据不加 Predictor 时 "
+                          f"deflate/lzw 测出来是负收益，加 Predictor 就不再是直通了")
+    if metadata_include_gps:
+        raise ExportError("16-bit 母档直通不写 EXIF/GPS：这条路径只携带自己生成的那几个 "
+                          "TIFF tag，透传源元数据尚未实现。要带 GPS 请走常规导出；"
+                          "这里不接一个“按了不响”的开关。")
+    policy = _check_policy(conflict_policy)
+    icc = _profile_bytes(output_profile, source_icc)
     arr = np.ascontiguousarray(rgb)
     h, w = int(arr.shape[0]), int(arr.shape[1])
     data = arr.tobytes()
-    n = len(_TIFF16_TAGS)
+    tags = list(_TIFF16_TAGS) + ([_TIFF16_ICC_TAG] if icc else [])
+    n = len(tags)
     bps_at = 8 + 2 + 12 * n + 4                  # BitsPerSample 三个 SHORT 的位置
-    strip_at = bps_at + 6
+    icc_at = bps_at + 6
+    strip_at = icc_at + (len(icc) if icc else 0)
     ent = []
 
     def short(v): return struct.pack("<H", v) + b"\x00\x00"
@@ -610,15 +868,31 @@ def write_tiff16(rgb: np.ndarray, path: str) -> dict:
     ent.append(struct.pack("<HHI", 0x116, 3, 1) + short(h))   # RowsPerStrip（单 strip）
     ent.append(struct.pack("<HHI", 0x117, 4, 1) + long(len(data)))
     ent.append(struct.pack("<HHI", 0x128, 3, 1) + short(1))   # PlanarConfiguration=Chunky
+    if icc:
+        ent.append(struct.pack("<HHI", _TIFF16_ICC_TAG, 7, len(icc)) + long(icc_at))
     blob = (b"II" + struct.pack("<HI", 42, 8)
             + struct.pack("<H", n) + b"".join(ent) + struct.pack("<I", 0)
-            + struct.pack("<HHH", 16, 16, 16) + data)
+            + struct.pack("<HHH", 16, 16, 16) + (icc or b"") + data)
+    # 与 8-bit 那侧同一套提交：先解目标名再落盘，名字与内容都不能“碰运气”
+    target, reason = resolve_target(path, policy)
+    if target is None:
+        return {"path": path, "format": "tif", "bits": 16, "w": w, "h": h,
+                "skipped": True, "reason": reason, "conflict_policy": policy,
+                "bytes": 0, "write_ms": 0.0, "gps_written": False,
+                "renamed_from": None, **_icc_facts(icc)}
     t0 = time.perf_counter()
-    with open(path, "wb") as f:
-        f.write(blob)
-    return {"path": path, "format": "tif", "bits": 16, "w": w, "h": h,
-            "bytes": os.path.getsize(path),
-            "write_ms": round((time.perf_counter() - t0) * 1000.0, 1)}
+    _atomic_write(target, blob)
+    return {"path": target, "format": "tif", "bits": 16, "w": w, "h": h,
+            "bytes": os.path.getsize(target),
+            "write_ms": round((time.perf_counter() - t0) * 1000.0, 1),
+            "skipped": False,
+            **_icc_facts(icc),
+            "icc_source": str(output_profile),
+            "gps_written": False,          # 本层不写 EXIF，这一句是可验的而不是声明
+            "exif_bytes": 0,
+            "renamed_from": None if target == path else path,
+            "conflict_policy": policy, "tiff_compression": "none",
+            "tiff_compression_tag": 1}
 
 
 def read_tiff16(path: str) -> np.ndarray:
@@ -661,7 +935,37 @@ def read_tiff16(path: str) -> np.ndarray:
     return np.frombuffer(b[at:at + nb], dtype=np.uint16).reshape(h, w, 3)
 
 
-def export_master_16bit(path: str, out_path: str, *, device: str | None = None) -> dict:
+def read_tiff16_icc(path: str) -> bytes | None:
+    """从 write_tiff16 的产物里取回 ICCProfile 的字节（没有那么返回 None）。
+
+    为什么不拿 Pillow 开一下看看 info 里有没有 icc_profile：那只能证明“有人读得懂”，
+    证不了 tag 里的偏移指向的就是我递进去的那一段。本函数只按条目里的
+    (type=7, count, offset) 把字节拼出来，给调用方逐字节比对——嵌错的 ICC 比不嵌更坏，
+    所以“嵌对了”得能独立反查。
+    """
+    import struct
+    with open(path, "rb") as f:
+        b = f.read()
+    ifd_at = struct.unpack_from("<I", b, 4)[0]
+    n = struct.unpack_from("<H", b, ifd_at)[0]
+    for i in range(n):
+        o = ifd_at + 2 + i * 12
+        tag, typ, cnt = struct.unpack_from("<HHI", b, o)
+        if tag == _TIFF16_ICC_TAG:
+            if typ != 7:
+                raise ExportError(f"ICCProfile 条目 type 不是 UNDEFINED(7) 而是 {typ}")
+            if cnt <= 4:                      # 短于 4 字节的值直放在条目里，不是偏移
+                return b[o + 8: o + 8 + cnt] or None
+            at = struct.unpack_from("<I", b, o + 8)[0]
+            return b[at: at + cnt]
+    return None
+
+
+def export_master_16bit(path: str, out_path: str, *, device: str | None = None,
+                        output_profile: str = "srgb",
+                        conflict_policy: str = "skip_and_report",
+                        metadata_include_gps: bool = False,
+                        tiff_compression: str = "none") -> dict:
     """16-bit 母档直通导出：满幅解一次 → 写 16-bit TIFF → 读回逐字节自证。
 
     三个自证读数缺一个都不算“保真”：
@@ -684,16 +988,36 @@ def export_master_16bit(path: str, out_path: str, *, device: str | None = None) 
     if (d.raw or {}).get("used_preview"):
         raise ExportError("16-bit 直通的像素来自相机内嵌预览（source=libraw_preview）："
                           "预览不参与出片这条分界不许在导出这一层破")
-    info = write_tiff16(arr, out_path)
+    ms = lambda a, b: round((b - a) * 1000.0, 2)      # noqa: E731
+    info = write_tiff16(arr, out_path, output_profile=output_profile,
+                        conflict_policy=conflict_policy,
+                        metadata_include_gps=metadata_include_gps,
+                        tiff_compression=tiff_compression)
+    if info.get("skipped"):
+        # 没落盘就没有“读回”这回事。把这些字段补上而不是只返一个 reason：
+        # 批量报表里“跳过”与“保真自证没做过”必须是两种看得出来的状态
+        return {**info, "src_w": d.src_w, "src_h": d.src_h, "src_format": d.fmt,
+                "source": src, "readback_max_diff": None, "levels_per_channel": None,
+                "low8_nonzero_px": None, "decode_ms": ms(t0, t_dec), "write_ms": 0.0,
+                "readback_ms": 0.0,
+                "total_ms": ms(t0, t_dec), "notes": list(d.notes)}
     t_wr = time.perf_counter()
-    back = read_tiff16(out_path)
+    back = read_tiff16(info["path"])          # 读回用解出来的目标名，不是调用方给的那个
     t_rd = time.perf_counter()
     same_shape = back.shape == arr.shape
     diff = int(np.abs(back.astype(np.int32) - arr.astype(np.int32)).max()) if same_shape else -1
-    ms = lambda a, b: round((b - a) * 1000.0, 2)      # noqa: E731
+    # ICC 也要逐字节反查：报 588 B 而 tag 指向的不是那 588 B，与“没嵌”同样是 COLOR-001 的失败
+    icc_back = read_tiff16_icc(info["path"]) or b""
+    icc_want = _profile_bytes(output_profile) if output_profile == "srgb" else b""
     return {**info, "src_w": d.src_w, "src_h": d.src_h, "src_format": d.fmt,
             "source": src, "bits": 16, "readback_max_diff": diff,
+            "icc_readback_bytes": len(icc_back),
+            "icc_readback_matches": (icc_back == icc_want) if icc_want else None,
             "levels_per_channel": [int(len(np.unique(back[..., c]))) for c in range(3)],
             "low8_nonzero_px": int(np.count_nonzero(back & 0xFF)),
-            "decode_ms": ms(t0, t_dec), "write_ms": ms(t_wr, t_rd),
+            "decode_ms": ms(t0, t_dec),
+            # write_ms 是 write_tiff16 里那次提交的时间（{**info} 带过来的），不再被
+            # 读回时间顶掉：旧写法把 t_wr 取在写完之后、又把这段叫 write_ms，
+            # 报表上“写盘时延”其实是“读回时延”
+            "readback_ms": ms(t_wr, t_rd),
             "total_ms": ms(t0, t_rd), "notes": list(d.notes)}

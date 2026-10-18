@@ -505,8 +505,12 @@ def test_tiff16_roundtrip_is_byte_exact():
     back = read_tiff16(p)
     assert back.shape == a.shape and back.dtype == np.uint16, back.shape
     assert np.array_equal(back, a), "落盘字节与内存里的母档不一致"
-    # 头 = 8(签名) + 2(条目数) + 12×10(条目) + 4(下一 IFD) + 6(BitsPerSample) = 140；之外全是像素
-    assert info["bytes"] == 37 * 53 * 3 * 2 + 140, info["bytes"]
+    # 头部布局按字段算而不是拍脑袋留一个魔术数：8(签名) + 2(条目数) + 12×条目数
+    # + 4(下一 IFD) + 6(BitsPerSample) + ICC 本体。条目数 = 10 个基础 tag（+1 当嵌了 ICC）。
+    # 不嵌 ICC 时必须还是原来的 140：那一条旧不变量不能在新参数旁边默默飘移
+    assert info["bytes"] == 37 * 53 * 3 * 2 + 140 + 12 + info["icc_bytes"], info["bytes"]
+    bare = write_tiff16(a, os.path.join(os.path.dirname(p), "bare.tif"), output_profile="none")
+    assert bare["icc_bytes"] == 0 and bare["bytes"] == 37 * 53 * 3 * 2 + 140, bare
 
 
 def test_tiff16_rejects_non_16bit_input(tmp_path):
@@ -570,7 +574,10 @@ def test_master_16bit_export_is_faithful_and_names_its_source(tmp_path):
     assert r["readback_max_diff"] == 0, "落盘与内存母档不逐字节相等"
     assert all(x > 256 for x in r["levels_per_channel"]), r["levels_per_channel"]
     assert r["low8_nonzero_px"] > 0, "低 8 位全零：这是补零伪装的假 16-bit"
-    assert r["bytes"] == r["w"] * r["h"] * 3 * 2 + 140, r   # 无压缩：头 140 字节之外全是母档
+    # 无压缩：除头部与嵌进去的 ICC 之外全是母档字节。条目数从 10 变 11（多一个 ICCProfile）
+    assert r["bytes"] == r["w"] * r["h"] * 3 * 2 + 140 + 12 + r["icc_bytes"], r
+    assert r["icc_bytes"] > 0 and r["icc_readback_matches"] is True, \
+        "报的 ICC 与 tag 偏移指向的字节不是同一份：这等于没嵌"
     assert r["src_format"] == "DNG", r
 
 

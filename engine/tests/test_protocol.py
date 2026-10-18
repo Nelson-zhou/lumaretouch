@@ -605,12 +605,39 @@ def test_explicit_missing_backend_is_an_error_not_a_quiet_substitute(engine):
     if importlib.util.find_spec("torch") is None:
         pytest.skip("常驻管线要 torch")
     _load(engine)
-    engine.send(cmd="precompute", backend="mediapipe")
-    _expect_error(engine, "后端不可用")
+    # 点名一个**根本不存在**的后端名。原来这里用 "mediapipe"，而它从 M9 起是随包运行时
+    # （ADR-0002）：装上之后这条请求会成功，用例就一直在等一条永远不会来的 error——
+    # 运行时 venv 里它就是这么红的（10s 无声，期间收到 precompute_ready）。前提变了就要
+    # 改前提，而不是把用例改成“期望成功”：这条守的是“不许静默替代”，与谁在场无关。
+    engine.send(cmd="precompute", backend="no-such-face-backend")
+    # 期望的措辞按引擎的两种拒绝分开：名字根本不在表里走“参数非法”，名字在表里而
+    # 装不上才走“后端不可用”。这里点的是前者，所以判据是“必须报错且报的是这个后端”，
+    # 而不是钉死某一句——把两句混成一句，用例就只是在复读实现的一句话
+    _expect_error(engine, "no-such-face-backend")
     # 拒绝之后不能留下半截状态：再来一次 auto 必须正常成功
     engine.send(cmd="precompute", backend="auto")
     ev = engine.wait_for("precompute_ready", timeout=60)
     assert ev["backend"] in ("synthetic", "mediapipe")
+
+
+def test_explicit_mediapipe_never_reports_a_different_backend(engine):
+    """点名 mediapipe 时，两个结局都不许说谎：要么 backend 真是 mediapipe，
+    要么明确报错——绝不许“请求 mediapipe、回报 synthetic、还发 precompute_ready”。
+
+    这一条补的是上一条改完之后剩下的那半边：上一条只验“不存在的后端会被拒”，
+    而“存在的后端必须如实回报”才是这台装机件真正会走的路。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    _load(engine)
+    engine.send(cmd="precompute", backend="mediapipe")
+    ev = _next_non_frame(engine, timeout=120.0)
+    if ev.get("event") == "error":
+        assert "后端不可用" in str(ev.get("error", "")), ev
+    else:
+        assert ev.get("event") == "precompute_ready", ev
+        assert ev["backend"] == "mediapipe", \
+            f"请求的是 mediapipe，回报的却是 {ev['backend']}——那就是报表上的假真模型"
 
 
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
@@ -3649,6 +3676,161 @@ def test_export_bit_depth_16_reports_its_fidelity_numbers(engine, tmp_path):
     assert img["low8_nonzero_px"] > 0, img
     assert img["source"] == "libraw", img
     assert os.path.isfile(img["out"]) and os.path.getsize(img["out"]) == img["bytes"]
+
+
+# ============================================================ 导出侧 P0 口径（d2c 端到端）
+#
+# 单元测试证的是函数自己守约；这一组证的是“UI 递上来的四个参数真的走到了落盘”。
+# 上一轮 d3b 的教训就在这儿：链改完只在 venv 里跑通算式，接线的四个生命周期一处没验，
+# 真装上就是一条静默失效的路。所以这里全部从协议进、从文件出，读回反查。
+
+ROUTINE_EVENTS = ("frame", "session_state", "vram_ready", "engine_warn", "image_ready")
+
+
+def _next_non_frame(ep, *, timeout=30.0):
+    """取下一个“会改变结论”的事件。
+
+    load_image 之后队列里不只有帧：session_state 也紧跟着来（底片条那一份），
+    所以只跳 frame 的写法会把状态事件当成答案。这里跳的是“例行播报”，
+    而 error / export_done / export_progress 一律原样交出——把 error 也跳掉
+    就等于把用例要看的那个结果扔了。
+    """
+    t_end = time.monotonic() + timeout
+    while time.monotonic() < t_end:
+        e = ep.next_event(timeout=10.0)
+        if e.get("event") not in ROUTINE_EVENTS:
+            return e
+    raise AssertionError(f"{timeout}s 内只等到例行事件")
+
+
+def _make_privacy_jpeg(path, *, icc_bytes):
+    """造一张“带 GPS、版权、拍摄信息和方向”的源图（COLOR-003 的 given）。"""
+    import numpy as np
+    from PIL import Image
+    ex = Image.Exif()
+    ex[0x010e] = "lumaretouch-privacy-probe"
+    ex[0x0112] = 6                                    # 竖拍方向标：解码层要摆正，导出不能再带
+    ex[0x8298] = "CC0-probe"
+    sub = ex.get_ifd(0x8769)
+    sub[0x9003] = "2026:10:18 09:00:01"
+    gps = ex.get_ifd(0x8825)
+    gps[1] = "N"
+    gps[2] = (39.9, 54.5, 0.25)
+    a = np.zeros((64, 48, 3), np.uint8)
+    a[..., 0] = np.linspace(0, 255, 64)[:, None]
+    im = Image.fromarray(a, "RGB")
+    im.save(path, format="JPEG", exif=ex.tobytes(), icc_profile=icc_bytes, subsampling=0)
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_export_strips_gps_and_orientation_but_keeps_the_rest(engine, tmp_path):
+    _need_export_env()
+    from PIL import Image
+    from lumaretouch_engine.export import _profile_bytes
+    src = str(tmp_path / "privacy.jpg")
+    icc = _profile_bytes("srgb")
+    _make_privacy_jpeg(src, icc_bytes=icc)
+    out = str(tmp_path / "out")
+    engine.send(cmd="load_image", path=src, strength=0.0, max_px=65536)
+    engine.wait_for("image_ready", timeout=120)
+    engine.send(cmd="export", out_dir=out, format="jpg", images=[src], tile=256, quality=92)
+    done, _ = _collect_until(engine, "export_done")
+    assert done["failed"] == 0, done["images"]
+    img = done["images"][0]
+    assert img["gps_written"] is False, "默认路径把 GPS 写出去了——隐私用例直接失败"
+    assert img["orientation_dropped"] is True, "方向标没拆：导出会二次旋转"
+    assert done["metadata_include_gps"] is False and done["conflict_policy"] == "skip_and_report" \
+        , "批级清单没回显这批的口径：事后无从反查是按什么设置出的"
+    # 比的是哈希而不是“本地再生成的一份”：littleCMS 的 sRGB 档跨进程字节不稳定
+    # （实测同机两子进程都是 588 B 而 sha256 不同），能证的只有“事件里那份=文件里那份”
+    import hashlib
+    import io as _i
+    from PIL import ImageCms
+    got = Image.open(img["out"])
+    blob = got.info.get("icc_profile")
+    assert blob and hashlib.sha256(blob).hexdigest() == img["icc_sha256"], \
+        "报的 ICC 与文件里的不是同一份字节"
+    assert len(blob) == img["icc_bytes"], "报的 B 数与文件里的不一致"
+    # 语义侧：它得真是 sRGB（COLOR-001 说的是“嵌入正确 ICC”，不是“嵌了个东西”）
+    desc = ImageCms.getProfileDescription(ImageCms.ImageCmsProfile(_i.BytesIO(blob))).strip()
+    assert "sRGB" in desc, f"嵌进去的不是 sRGB 档：{desc}"
+    ex = got.getexif()
+    assert not ex.get_ifd(0x8825), f"文件里还有 GPS：{dict(ex.get_ifd(0x8825))}"
+    assert 0x0112 not in ex, "文件里还有方向标"
+    assert ex[0x010E] == "lumaretouch-privacy-probe", "删 GPS 时把别的字段一起弄丢了"
+    assert ex.get_ifd(0x8769).get(0x9003) == "2026:10:18 09:00:01", "拍摄时间丢了"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_export_gps_switch_on_actually_writes_it_back(engine, tmp_path):
+    """开关要有两边都能动的证据：只证“关的时候没有”可以是根本没实现。"""
+    _need_export_env()
+    from PIL import Image
+    from lumaretouch_engine.export import _profile_bytes
+    src = str(tmp_path / "privacy2.jpg")
+    _make_privacy_jpeg(src, icc_bytes=_profile_bytes("srgb"))
+    out = str(tmp_path / "out2")
+    engine.send(cmd="load_image", path=src, strength=0.0, max_px=65536)
+    engine.wait_for("image_ready", timeout=120)
+    engine.send(cmd="export", out_dir=out, format="jpg", images=[src], tile=256,
+                quality=92, metadata_include_gps=True)
+    done, _ = _collect_until(engine, "export_done")
+    assert done["failed"] == 0, done["images"]
+    img = done["images"][0]
+    assert img["gps_written"] is True, img
+    gps = Image.open(img["out"]).getexif().get_ifd(0x8825)
+    assert gps and gps[1] == "N", f"报了写出而文件里没有：{dict(gps) if gps else '(空)'}"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_export_conflict_policy_is_visible_per_image(engine, tmp_path):
+    """EXPORT-001 端到端：第二次导同名既不覆盖也要逐张报得出来。"""
+    _need_export_env()
+    from PIL import Image
+    from lumaretouch_engine.export import _profile_bytes
+    src = str(tmp_path / "conflict.jpg")
+    _make_privacy_jpeg(src, icc_bytes=_profile_bytes("srgb"))
+    out = str(tmp_path / "out3")
+    engine.send(cmd="load_image", path=src, strength=0.0, max_px=65536)
+    engine.wait_for("image_ready", timeout=120)
+    for _ in range(2):
+        engine.send(cmd="export", out_dir=out, format="jpg", images=[src], tile=256, quality=92)
+        done, _ = _collect_until(engine, "export_done")
+        assert done["failed"] == 0, done["images"]
+    first = done["images"][0]
+    assert first["out_skipped"] is True and "已存在" in first["skip_reason"], first
+    assert os.path.isfile(first["out"]), "skip 把已有文件也弄没了"
+    engine.send(cmd="export", out_dir=out, format="jpg", images=[src], tile=256,
+                quality=92, conflict_policy="recheck")
+    done2, _ = _collect_until(engine, "export_done")
+    second = done2["images"][0]
+    assert second["out_skipped"] is False and second["renamed_from"] == second["out"].replace(
+        "-0001", ""), second
+    assert second["out"].endswith("-0001.jpg"), second
+    with Image.open(second["out"]) as im:
+        # 源是 48 宽 × 64 高 + orientation=6，摆正后必须是 64 宽 × 48 高；再转一次
+        # 会回到 (48, 64)——这一条就是 COLOR-003 的“输出无二次方向错误”
+        assert im.size == (64, 48), f"改名的产物不可解码或尺寸不对：{im.size}"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_export_refuses_invalid_profile_and_compression_before_doing_anything(engine, tmp_path):
+    """非法值必须在开跑前就拒：跑完一批再报“参数不合法”等于把用户的时间换成一串空事件。"""
+    _need_export_env()
+    from lumaretouch_engine.export import _profile_bytes
+    src = str(tmp_path / "bad.jpg")
+    _make_privacy_jpeg(src, icc_bytes=_profile_bytes("srgb"))
+    engine.send(cmd="load_image", path=src, strength=0.0, max_px=65536)
+    engine.wait_for("image_ready", timeout=120)
+    for bad in ({"output_profile": "adobergb"},
+                {"tiff_compression": "zip"},
+                {"conflict_policy": "overwrite"},
+                {"metadata_include_gps": "yes"}):
+        engine.send(cmd="export", out_dir=str(tmp_path / "never"), format="tif",
+                    images=[src], tile=256, **bad)
+        ev = _next_non_frame(engine, timeout=30)
+        assert ev.get("event") == "error", f"{bad} 没被拒，收到的是 {ev}"
+        assert not os.path.isdir(str(tmp_path / "never")), f"{bad} 拒之前已经动了文件系统"
 
 
 # ============================================================ 「按住看原图」对比

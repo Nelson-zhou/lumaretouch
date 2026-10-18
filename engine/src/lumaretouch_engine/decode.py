@@ -73,6 +73,12 @@ class Decoded:
     draft_size: tuple[int, int] | None = None
     notes: list[str] = field(default_factory=list)
     raw: dict | None = None          # 解的是相机 RAW 时的加工模型读数（位深/排阵/黑白电平/分段耗时）
+    # 源文件自带的颜色档与元数据。COLOR-001/002/003 要的不是“能嵌一个 ICC”，而是
+    # “知道源文件自己是什么假设”：output_profile=source 与“带 GPS”这两个开关都得
+    # 从这一层拿到真东西，不能在导出层拿“没有”当默认。“没有”与“没提取”是两件事，
+    # 所以 RAW 那两支下面会写进 notes。不放进 meta()：那是过 JSON 通道的，字节过不了。
+    source_icc: bytes | None = None
+    source_exif: bytes | None = None
 
     @property
     def w(self) -> int:
@@ -140,6 +146,7 @@ def _decoded_from_raw(res: dict, budget: int | None) -> "Decoded":
              "notes": list(m.notes)}
     d.notes.extend(m.notes)
     d.notes.append(f"DNG：{m.bits}-bit CFA 解出 {w}×{h}（相机 {m.camera or '未报'}）")
+    _note_no_source_metadata(d, "自研 DNG 读侧")
     if budget:
         d.notes.append("代理档走块内每色均值降采样 + LANCZOS，不抄内嵌预览")
     return d
@@ -239,6 +246,41 @@ def load_preview(path: str, budget: int = PROXY_PIXELS) -> "Decoded | None":
     return d
 
 
+def _carry_metadata(im) -> tuple[bytes | None, bytes | None]:
+    """在 exif_transpose 之前把源自带的 ICC 与 EXIF 取成字节带走。
+
+    两个时机都是必要的：`ImageOps.exif_transpose` 返的是一张新图，它的 info 里没有
+    原文件的 icc_profile；而 `with Image.open(...)`一退出，im.info 就成了无源之水。
+    EXIF 当场序列化成 bytes 而不是递对象：Decoded 会被缓存、传递、甚至存进快照，
+    拿着一个引用已关闭文件的 Exif 比拿 None 更坑。
+
+    取不到就给 None（并在调用方的 notes 里能说清“没档”与“没提取”的区别），
+    不烘一份“看起来像”的代替——COLOR-002 要的就是这个口径。
+    """
+    try:
+        icc = im.info.get("icc_profile")
+        icc = bytes(icc) if icc else None
+    except Exception:
+        icc = None
+    try:
+        ex = im.getexif()
+        exif = bytes(ex.tobytes()) if len(ex) else None
+    except Exception:
+        exif = None
+    return icc, exif
+
+
+def _note_no_source_metadata(d: "Decoded", who: str) -> None:
+    """RAW 那两支不产出 source_icc/source_exif，必须让上游看得见“没提取”而不是“源里没有”。
+
+    这一句是给 UI 的禁用理由用的：output_profile=source 与“含 GPS”对 RAW 源现在
+    根本不可用，不说清就只能要么默默报错、要么留一个按下去不响的开关（DoD-3 禁的就是这个）。
+    两者在口径上是不同的：前者“接不了”，后者“这个源本来就没带”。
+    """
+    d.notes.append(f"{who}不提取源 ICC/EXIF：该源的“用源ICC”与“含 GPS”两项当前不可用"
+                    "（不是源里没带，是这一条通道没读元数据）")
+
+
 def _libraw_matrix(path: str, *, output_bps: int = 8, half_size: bool = False) -> tuple:
     """真去马赛克那一臂的入口：返回 (H,W,3) 矩阵与 LibRaw 的账单。
 
@@ -294,6 +336,7 @@ def _decoded_from_libraw(path: str, arr, info: dict, budget: int | None,
              "demosaic_ms": round(info["process_ms"], 2)}
     cam = d.raw["camera"] or "未报机型"
     d.notes.append(f"LibRaw 真去马赛克：{w}×{h} {info['bits']}-bit（相机 {cam}）")
+    _note_no_source_metadata(d, "LibRaw 通道")
     if why is not None:
         # 换了后端必须看得见：基线读侧为什么解不开、这一臂用的是另一套实现，
         # 这两件事不能只在异常栈里，导出对账时它们是解释差异的唯一线索
@@ -371,6 +414,7 @@ def _load_rgb_pillow(path: str, budget: int) -> Decoded:
         # 拿摆正后的 (pw,ph) 去请求竖构图，会把可用档拉低一级。实测 4000×3000 + orientation=6：
         # 传 (656,872) 只降到 1/2（解码 12.07 ms），传 (872,656) 能降到 1/4（6.43 ms）。
         draft_to = im.draft("RGB", (ph, pw) if swap else (pw, ph)) if fmt == "JPEG" else None
+        icc, exif = _carry_metadata(im)
         t_d = time.perf_counter()
         im.load()
         t_o = time.perf_counter()
@@ -395,7 +439,8 @@ def _load_rgb_pillow(path: str, budget: int) -> Decoded:
                 t_open_ms=ms(t0, t_d), t_decode_ms=ms(t_d, t_o), t_orient_ms=ms(t_o, t_s),
                 t_scale_ms=ms(t_s, t1), t_total_ms=ms(t0, t1),
                 draft_used=bool(draft_size and draft_size != (raw_w, raw_h)),
-                draft_size=draft_size)
+                draft_size=draft_size,
+                source_icc=icc, source_exif=exif)
     if d.draft_used:
         d.notes.append(f"libjpeg DCT 预缩到 {draft_size[0]}×{draft_size[1]}")
     if (src_w, src_h) == (pw, ph):
@@ -475,6 +520,7 @@ def _load_full_pillow(path: str, max_px: int = MAX_EXPORT_PIXELS) -> Decoded:
         if src_w * src_h > int(max_px):
             raise ValueError(f"导出尺寸 {src_w}x{src_h} = {src_w * src_h / 1e6:.0f} Mpx "
                              f"超过上限 {int(max_px) / 1e6:.0f} Mpx")
+        icc, exif = _carry_metadata(im)
         t_d = time.perf_counter()
         im.load()
         t_o = time.perf_counter()
@@ -490,7 +536,8 @@ def _load_full_pillow(path: str, max_px: int = MAX_EXPORT_PIXELS) -> Decoded:
     assert arr.shape == (src_h, src_w, 3) and arr.dtype == np.uint8, "满幅解码输出布局不符约定"
     d = Decoded(rgb=arr, src_w=src_w, src_h=src_h, fmt=fmt,
                 t_open_ms=ms(t0, t_d), t_decode_ms=ms(t_d, t_o), t_orient_ms=ms(t_o, t_s),
-                t_scale_ms=0.0, t_total_ms=ms(t0, t1), draft_used=False, draft_size=None)
+                t_scale_ms=0.0, t_total_ms=ms(t0, t1), draft_used=False, draft_size=None,
+                source_icc=icc, source_exif=exif)
     d.notes.append("满幅解码（导出通路，不缩放）")
     if swap:
         d.notes.append(f"按 EXIF orientation={orient} 摆正过宽高")

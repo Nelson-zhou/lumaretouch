@@ -260,10 +260,17 @@ def test_two_arms_agree_continuously_and_flip_only_on_quantization_edges(sample_
     edge = np.abs(tb - np.floor(tb) - 0.5) < 1e-3
     stray = int((np.abs(d) > 0)[~edge].sum())
     assert stray == 0, f"{stray} 个像素不在量化边界上却翻了牌：两臂真的不一样"
-    # 窗外那条结构性保证在两臂上都成立：torch 收到的是 f32，所以跟 f32 那份比
-    w = weight_of(x)
+    # “权重为 0 的像元一动不动”这条结构性保证在两臂上都得成立，但判据要按**算子里
+    # 真正用的那份权重**来取，两个细节都会把断言指错地方（运行时 venv 里这条红就是
+    # 同时踩了这两个：dev venv 没 torch，importorskip 让它从来没跑过）：
+    #   ① grade_np/grade_t 都过 feather_np（[1,2,1]/4），羽化后 w=0 的像元才真是
+    #      “不动”，只看羽化前的 weight_of 会把紧贴肤色的窗外像元也算成“该不动”；
+    #   ② 算子先 clip 到 [0,1] 再算，窗外像元的“原值”是 clip 后的那份，不是 x 本身。
+    # torch 收到的是 f32，所以跟 f32 那份比。
+    w = feather_np(weight_of(x))
     zero = np.isclose(w, 0.0)
-    assert np.array_equal(got[zero], np.asarray(x, dtype=np.float32)[zero])
+    assert zero.sum() > 0, "样本里没有 w=0 的像元：这条断言变成了空转"
+    assert np.array_equal(got[zero], np.clip(np.asarray(x, dtype=np.float32), 0.0, 1.0)[zero])
 
 
 def test_amount_scales_the_move_monotonically(sample_hw3_data):

@@ -625,11 +625,17 @@ class Engine:
     def _fresh_doc_state(self) -> dict:
         """一张还没被人动过的图的起始状态。
 
+        **加图层必须同时改这里**，不然就是本轮那个 KeyError：d3b 把 `_exposure` 加进了
+        DOC_FIELDS 与 `_capture_state`，唯独没加进这份“新鲜状态”。名单守卫只比 `_capture_state`
+        与 DOC_FIELDS，两边一起漏就照不出——而底片条里每张新图都要走 `_apply_state(_fresh_doc_state())`，
+        第一次 load_image 就撞在 `st[k]` 上。dev venv 里那条路整批 skip（要 torch），装机的
+        运行时 venv 才是唯一会走到这行的人。所以这份名单也上守卫，缺一个键当场响。
+
         这段原来是内联在 cmd_load_image 里的一串赋值，语义是「换图即清空」；那条守卫
         本身一条没错——旧图的掩膜/笔迹对新图没有任何意义。今天它多了一个身份：底片条
         里「这张图还没被调过」的定义。同一个口径写两处就会漂，所以抽成一份。
         """
-        return {"_strength": _clamp_strength(DEFAULT_STRENGTH),
+        fresh = {"_strength": _clamp_strength(DEFAULT_STRENGTH),
                 "_params": dict(radius=DEFAULT_RADIUS, eps=DEFAULT_EPS,
                                 texture_radius=DEFAULT_TEXTURE_RADIUS,
                                 broad_gain=DEFAULT_BROAD_GAIN, mid_gain=DEFAULT_MID_GAIN,
@@ -644,8 +650,14 @@ class Engine:
                 "_bg": dict(active=False, matte=None, bg=None, backend=None,
                              tol=None, softness=None),
                 "_precompute": None, "_precompute_backend": None,
+                "_exposure": (0.0, 0.0, 0.0), "_exposure_ref_k": None,
                 # 掩膜/笔迹/形变场都活在**那一档代理尺寸**上，所以尺寸也是状态的一部分。
                 "_proxy": None}
+        # 名单守卫的另一半：起始状态与 _capture_state 必须覆盖同一批字段。
+        # 只守一侧等于把“新图层忘了登记进默认值”这件事留给运行时去撞
+        assert set(fresh) == set(self.DOC_FIELDS) | {"_proxy"}, \
+            "起始状态名单与 DOC_FIELDS 漂移了（新图层没给默认值）"
+        return fresh
 
     def _capture_state(self) -> dict:
         """把 live 字段抄成一份可存的字典。容器一律新抄：存进去的状态与 live 字段共享
@@ -2774,7 +2786,10 @@ class Engine:
 
     # ------------------------------------------------------------ M4 全尺寸导出
     EXPORT_KEYS = {"cmd", "action", "images", "out_dir", "format", "quality", "tile",
-                   "scale", "sharpen", "upscale_backend", "bit_depth"}
+                   "scale", "sharpen", "upscale_backend", "bit_depth",
+                   # d2c 那四格：名字进白名单不等于接通，下面逐条校验完才进 snap
+                   "output_profile", "tiff_compression", "metadata_include_gps",
+                   "conflict_policy"}
 
     def _export_snapshot(self, snap: dict, eh: int, ew: int, *, for_document: bool):
         """从命令线程拍好的快照里组一份 ExportSpec。返回 (spec, skipped)。
@@ -2882,11 +2897,8 @@ class Engine:
         if not isinstance(out_dir, str) or not out_dir:
             emit({"event": "error", "error": "export 需要 out_dir（导出目录）"})
             return
-        try:
-            os.makedirs(out_dir, exist_ok=True)
-        except OSError as e:
-            emit({"event": "error", "error": f"out_dir 不可用：{e}"})
-            return
+        # 目录创建挪到全部参数校验之后（见下方“建目录”那条）：校验没过就先把用户的
+        # 目录建出来，失败的路径会在盘上留下一个空文件夹，而报错说的是“参数不合法”
         fmt = str(p.get("format", "jpg")).lower().lstrip(".")
         if fmt not in FORMATS:
             emit({"event": "error", "error": f"不支持的导出格式：{fmt}（可用 {sorted(set(FORMATS))}）"})
@@ -2958,6 +2970,46 @@ class Engine:
                                + "、".join(blockers) +
                                "。要么把它们清回中立位，要么走 8-bit 常规导出"})
                 return
+        # d2c：ICC / 压缩 / 元数据 / 冲突策略。四条都在命令线程里校验完，理由与
+        # sharpen 那条一样——worker 里拦下时 export_progress 已经发出去了。
+        from .export import ExportError as _ExportError
+        from .export import _check_policy, _tiff_compression
+        output_profile = str(p.get("output_profile", "srgb"))
+        include_gps = p.get("metadata_include_gps", False)
+        if not isinstance(include_gps, bool):
+            emit({"event": "error",
+                  "error": f"metadata_include_gps={include_gps!r} 必须是 true/false"
+                           "（注册表里这一格是 boolean，中性 false=默认不外泄 GPS）"})
+            return
+        conflict_policy = str(p.get("conflict_policy", "skip_and_report"))
+        # TIFF 压缩的中性位按通路选：注册表给常规导出定的是 deflate，而 16-bit 母档
+        # 直通只写无压缩（理由在 export.write_tiff16）。同一句话当两条路的默认值，
+        # 结果就是“16-bit 直通”开箱必失败——本轮 test_export_bit_depth_16 正是这样红的。
+        if "tiff_compression" in p:
+            tiff_comp = str(p["tiff_compression"])
+            if bit_depth == 16 and tiff_comp.lower() not in ("none", ""):
+                emit({"event": "error",
+                      "error": f"16-bit 母档直通只写无压缩 TIFF，收到 tiff_compression={tiff_comp!r}："
+                               "位深 16 的交织数据不加 Predictor 时 deflate/lzw 测出来是负收益，"
+                               "加了 Predictor 就不再是“母档解出来什么样就写什么样”的直通"})
+                return
+        else:
+            tiff_comp = "none" if bit_depth == 16 else "deflate"
+        try:
+            _check_policy(conflict_policy)
+            comp_key, _ = _tiff_compression(tiff_comp)
+            if output_profile not in ("none", "srgb", "source") and not os.path.isfile(output_profile):
+                raise _ExportError(f"output_profile={output_profile!r} 本层不带该档"
+                                   "（可用：srgb / source / none，或一个真实的 .icc 文件路径）")
+        except _ExportError as e:
+            emit({"event": "error", "error": str(e)})
+            return
+        if fmt != "tif" and fmt != "tiff" and comp_key != "deflate":
+            # 不夹也不忽略：只有 TIFF 读这个值，给 JPEG 设 deflate 是一次无效的输入
+            emit({"event": "error",
+                  "error": f"tiff_compression={tiff_comp!r} 只对 TIFF 有意义（当前 format={fmt}）："
+                           "JPEG/WebP 用 quality，PNG 用 quality 映射的 compress_level"})
+            return
         # 参数在命令线程里全部拍定：worker 里不再读 self._*，否则中途改一下滑块，
         # 这一批里前几张与后几张用的就不是同一套设置（而事件里只写了一份）
         snap = dict(strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
@@ -2967,7 +3019,18 @@ class Engine:
                     deform=dict(self._deform), channel=self._channel,
                     precompute=self._precompute, device=self.device,
                     scale=scale, upscale_backend=backend, sharpen=sharpen)
-        self._export_args = (list(images), out_dir, fmt, quality, tile, doc, snap, bit_depth)
+        # 建目录（挪下来了）：到这里每一个参数都已核验，失败的可能性只剩“这一路真不可写”
+        try:
+            os.makedirs(out_dir, exist_ok=True)
+        except OSError as e:
+            emit({"event": "error", "error": f"out_dir 不可用：{e}"})
+            return
+        # 四格打包成一个 dict 放在末尾：_export_args 已经是第 9 元组，再往中间插
+        # 会让“哪一位是什么”只有数位置的人看得懂；加一位 dict 反而把这一批的口径写清了
+        self._export_args = (list(images), out_dir, fmt, quality, tile, doc, snap, bit_depth,
+                             {"output_profile": output_profile, "tiff_compression": tiff_comp,
+                              "metadata_include_gps": bool(include_gps),
+                              "conflict_policy": conflict_policy})
         self._export = threading.Thread(target=self._export_loop, daemon=True)
         self._export.start()
 
@@ -3008,7 +3071,7 @@ class Engine:
 
     def _export_loop(self):
         from .decode import load_full
-        images, out_dir, fmt, quality, tile, doc, snap, bit_depth = self._export_args
+        images, out_dir, fmt, quality, tile, doc, snap, bit_depth, opts = self._export_args
         n = len(images)
         t0 = monotonic_ns()
         results: list = []
@@ -3023,7 +3086,11 @@ class Engine:
                     stage = "master16"
                     out_path = os.path.join(out_dir,
                                             os.path.splitext(os.path.basename(path))[0] + ".tif")
-                    r = export_master_16bit(path, out_path, device=self.device)
+                    r = export_master_16bit(path, out_path, device=self.device,
+                                            output_profile=opts["output_profile"],
+                                            conflict_policy=opts["conflict_policy"],
+                                            metadata_include_gps=opts["metadata_include_gps"],
+                                            tiff_compression=opts["tiff_compression"])
                     results.append({"path": path, "out": r["path"], "format": "tif",
                                     "bits": 16, "source": r["source"],
                                     "w": r["w"], "h": r["h"], "bytes": r["bytes"],
@@ -3034,6 +3101,16 @@ class Engine:
                                     "readback_max_diff": r["readback_max_diff"],
                                     "levels_per_channel": r["levels_per_channel"],
                                     "low8_nonzero_px": r["low8_nonzero_px"],
+                                    # 冲突跳过与 ICC/GPS 的落盘事实：批量清单里“哪几张没写”
+                                    # 必须逐张看得见，只在批级别说一句“有跳过”是没法复查的
+                                    "out_skipped": bool(r.get("skipped")),
+                                    "skip_reason": r.get("reason"),
+                                    "renamed_from": r.get("renamed_from"),
+                                    "icc_bytes": r.get("icc_bytes"),
+                                    "icc_sha256": r.get("icc_sha256"),
+                                    "gps_written": r.get("gps_written"),
+                                    # 仍叫 skipped：UI 那侧按同一个键读两条通路（16-bit 恒空），
+                                    # 冲突跳过用 out_skipped，不把两个语义挤进一个键
                                     "skipped": []})
                     continue
                 d = load_full(path, device=self.device)
@@ -3043,13 +3120,32 @@ class Engine:
                 stage = "write"
                 out_path = os.path.join(out_dir, os.path.splitext(os.path.basename(path))[0] + "." + fmt)
                 frame, st = export_image(d.rgb, spec, device=snap["device"], tile=tile)
-                info = write_file(frame, out_path, quality=quality)
+                if opts["output_profile"] == "source" and d.raw is not None:
+                    # RAW 那两支不提取源 ICC（见 decode._note_no_source_metadata）：
+                    # 让它走到 write_file 里报“源文件没有 ICC”是把“没读”说成“没有”
+                    raise _ExportError(
+                        "RAW 源暂不携带源 ICC：这条通道没读元数据，不是文件里没有。"
+                        "请改选 srgb，或把一个真实的 .icc 文件路径当 output_profile 递进来")
+                info = write_file(frame, out_path, quality=quality,
+                                  output_profile=opts["output_profile"],
+                                  source_icc=d.source_icc, source_exif=d.source_exif,
+                                  metadata_include_gps=opts["metadata_include_gps"],
+                                  conflict_policy=opts["conflict_policy"],
+                                  tiff_compression=opts["tiff_compression"])
                 results.append({"path": path, "out": info["path"], "format": info["format"],
                                 "bytes": info["bytes"], "write_ms": info["write_ms"],
                                 # PNG 实际压缩档位（非 PNG 为 None）：这里是从 info 里
                                 # 摘键组装的，不补这一笔就会在协议边界上静默丢掉——
                                 # quality 95 与文件按哪个档位写的对不上账，批量报表里看不出来
                                 "compress_level": info.get("compress_level"),
+                                "out_skipped": bool(info.get("skipped")),
+                                "skip_reason": info.get("reason"),
+                                "renamed_from": info.get("renamed_from"),
+                                "icc_bytes": info.get("icc_bytes"),
+                                "icc_sha256": info.get("icc_sha256"),
+                                "gps_written": info.get("gps_written"),
+                                "orientation_dropped": info.get("orientation_dropped"),
+                                "tiff_compression": info.get("tiff_compression"),
                                 "skipped": skipped, **st})
             except Exception as e:      # 逐图失败不能带倒整批
                 failed += 1
@@ -3058,7 +3154,7 @@ class Engine:
                   "ok": "error" not in results[-1]})
         emit({"event": "export_done", "total": n, "failed": failed,
               "out_dir": out_dir, "format": fmt, "quality": quality, "tile": tile,
-              "bit_depth": bit_depth,
+              "bit_depth": bit_depth, **opts,
               "scale": int(snap["scale"]), "sharpen": float(snap["sharpen"]),
               # 后端名字只在真做了放大时才报：批级别写"lanczos3"而每张图的账单写 None，
               # 就是在同一件事上给两个答案（没放大时"用了哪个后端"这句话本身不成立）

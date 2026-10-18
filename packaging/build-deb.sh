@@ -28,6 +28,10 @@ cd "$here/.."
 # 就在这一条上红了一次：包内 runtime/VERSION 还是旧号）。
 bash packaging/stage-engine.sh
 
+# 运行时环境测试（本轮新增，事故驱动）：那一遍必须在有 torch 的那个 venv 里跑，
+# 否则“384 passed / 247 skipped”这种全绿会带着一个装上去打不开图的 bug 出包。
+bash packaging/check-tests-runtime.sh
+
 bash packaging/check-release.sh
 
 cd ui
