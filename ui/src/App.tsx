@@ -410,6 +410,34 @@ export default function App() {
           back.readDiffFlipRgb = flip;                 // 翻转后的 RGB 差异：这一条该为 0
         }
       }
+      // 一刀两断的实验：给 canvas 元素本身刷一个刺眼的 CSS 背景再截图。截图抓不到 GL
+      // 后备缓冲（M2-a2 已证），但 CSS 背景是 DOM 绘制、走页面合成那条路。
+      //   截图这块变绿 → 页面合成能上屏、GL 内容上不了屏：黑屏是真的，缺陷在 GL→屏幕；
+      //   截图仍是黑 → 截图对这个区域完全无效，"截图里黑"不能作为任何主张的证据。
+      //
+      // 实测落在第二种：绿色 CSS 背景没进截图（WebGL 后备缓冲盖住了元素背景），但
+      // canvas 的 8px 品红 outline 进了——同一张图里"DOM 有效、GL 无效"同时成立，于是
+      // 用户报的那次黑屏被判定为**截图伪影**，不是缺陷；下面那个 toDataURL→<img> 才是
+      // 正面证据：照片清晰、方向正确地显示在页面上。这一臂留着，以后"黑屏"主张一律先
+      // 走它，别再拿 readPixels 当"上屏"的证据——那是后备缓冲，它有没有内容和屏幕上
+      // 看不看得到是两段路。
+      if (/lime/.test(env.viewport_probe) && cv) {
+        cv.style.background = "#00ff00";
+        cv.style.outline = "8px solid #ff00ff";
+        // 最后一击：把 GL 后备缓冲转成 <img> 贴进 DOM。img 走页面合成，截图一定能反映——
+        // 于是"屏幕上到底有没有这张照片"就不再依赖任何推断（preserveDrawingBuffer:true
+        // 正是为了让 toDataURL 拿得到内容，而不是拿到一张空图）。
+        let dump = "";
+        try {
+          const url = cv.toDataURL("image/png");
+          const el = document.createElement("img");
+          el.src = url;
+          Object.assign(el.style, { position: "fixed", left: "540px", top: "40px", width: "300px", border: "4px solid #ffffff", zIndex: "9999" });
+          document.body.appendChild(el);
+          dump = url.slice(0, 22) + `…len=${url.length}`;
+        } catch (e) { dump = `toDataURL 失败: ${String(e)}`; }
+        await report(`M0_LIME ${JSON.stringify({cssBg: getComputedStyle(cv).backgroundColor, rect: [cv.getBoundingClientRect().width, cv.getBoundingClientRect().height], dump})}`);
+      }
       const scrollH = document.documentElement.scrollHeight;
       // 反向门（裁决3）：写一个不存在的路径再点「导入」，输入框下方必须出现红字。
       // 这条不是装饰：“错了但不说”就是这次缺陷的本体，门不会关就等于没修。
