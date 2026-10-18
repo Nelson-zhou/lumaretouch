@@ -474,6 +474,9 @@ export interface EngineStatus {
   /** 引擎 scan 那份白名单（ready 里报的 image_exts）：原生选择框的过滤器用它。
    *  null = 这一版引擎没说，选择框就退化成“什么都不过滤”，不拿宿主抄的名单去挡人。 */
   image_exts: string[] | null;
+  /** 导出位深能力（M9-e，引擎单一口径）：每个位深对应哪些落盘格式。
+   *  引擎没报（老引擎）就不画 16-bit 那个勾，而不是默认"应该能写"。 */
+  export_bits?: { "8"?: string[]; "16"?: string[] } | null;
   /** 引擎最近一条 error（M9）：load_image 发出去就返回，失败只走 error 事件。
    *  不接住它，坏路径就是一次彻底的静默失败。 */
   last_error: string | null;
@@ -510,6 +513,13 @@ export interface EngineStatus {
  */
 export interface ExportedImage {
   path: string;
+  /** 16-bit 母档直通（M9-e）的三个保真读数。缺任何一条都不能算"无损"：
+   *  差值必须 0、每通道档位必须远多于 256、低 8 位不许全是零。 */
+  bits?: number;
+  source?: string | null;
+  readback_max_diff?: number;
+  levels_per_channel?: number[];
+  low8_nonzero_px?: number;
   out?: string;
   format?: string;
   bytes?: number;
@@ -555,6 +565,8 @@ export interface ExportDone {
   scale?: number;
   upscale_backend?: string | null;
   sharpen?: number;
+  /** 这一批的位深（引擎报，不是前端自己记得）：16 意味着走的是直通那条不进图层的链 */
+  bit_depth?: number;
   total_ms: number;
   images: ExportedImage[];
 }
@@ -595,6 +607,13 @@ export interface RawBackends {
   needs_plugin: string[];
   plugin: string;
   plugin_installed: boolean;
+  /** M9-h 定稿口径：已全链路自验的后缀，与依赖系统 LibRaw 但没有实机样张的那一栏。
+   *  老引擎没报就是 undefined——那时前端只报 suffixes 那一行，不替引擎编一句"已认证"。 */
+  suffixes_verified?: string[];
+  verified_full_chain?: string[];
+  vendor_suffixes?: string[];
+  vendor_status?: string;
+  sample_certified?: { [k: string]: boolean };
 }
 
 /** 一个内置预设的可显示信：提交只靠 name，文字只靠 title。 */
@@ -795,7 +814,8 @@ export const runBackground = (
 export const runExport = (
   outDir: string,
   opts?: { format?: string; quality?: number; tile?: number; images?: string[];
-           scale?: number; sharpen?: number; upscaleBackend?: string },
+           scale?: number; sharpen?: number; upscaleBackend?: string;
+           bitDepth?: number },
 ) =>
   invoke<{ requested: boolean }>("export", {
     outDir,
@@ -806,6 +826,7 @@ export const runExport = (
     scale: opts?.scale,
     sharpen: opts?.sharpen,
     upscaleBackend: opts?.upscaleBackend,
+    bit_depth: opts?.bitDepth,
   });
 
 /** 帧头解析（小端，与 main.rs 的 pull_frame 注释逐字段对应）。 */

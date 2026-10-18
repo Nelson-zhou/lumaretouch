@@ -809,3 +809,21 @@ def test_baseline_refusal_hands_over_to_libraw_with_the_reason_left_visible(tmp_
     assert len(handover) == 1 and "CFALayout" in handover[0], \
         "换了后端却不留原因，报表上就看不出这一张是谁解的——那与静默降级只差一句话"
     assert d.rgb.ndim == 3 and d.rgb.shape[2] == 3 and d.rgb.dtype == np.uint8
+
+
+def test_raw_backends_keeps_vendor_formats_unverified():
+    """#M9-h 口径：厂商格式一律标"未经实机样张认证"，不许出现在已验那一栏里。
+
+    这一条守的不是功能，是话术：装上门机型录不进库，"支持 CR2"就是假指标。已验那一栏
+    只能有 .dng，而 vendor 那一栏必须自带"没样张"这句话——把免责写在数据里，UI 抄走的
+    就是同一份事实，不是一句前端自己补的漂亮话。
+    """
+    bb = R.raw_backends()
+    assert bb["suffixes_verified"] == [".dng"], bb["suffixes_verified"]
+    assert bb["sample_certified"]["vendor"] is False, bb
+    assert any("未经实机样张认证" in s for s in [bb["vendor_status"]]), bb
+    for suf in bb["vendor_suffixes"]:
+        assert suf not in bb["suffixes_verified"]
+        assert suf in bb["vendor_suffixes"]
+    # 16-bit 直通导出属于"已验"那一栏的说法要有出处，不能只是列表里多一行字
+    assert any("16-bit" in s for s in bb["verified_full_chain"]), bb["verified_full_chain"]

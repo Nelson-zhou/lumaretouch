@@ -550,3 +550,138 @@ def write_file(rgb: np.ndarray, path: str, *, quality: int = 95) -> dict:
             # 而文件是按 level 6 写的，两者对不上时必须看得出来，否则写盘耗时
             # 与体积就成了无从反推的谜
             "compress_level": kw.get("compress_level")}
+
+
+# ------------------------------------------------------------------ 16-bit 母档直通（M9-e）
+#
+# 为什么单独一条路，而不是给 export_image 加一个 dtype 分支：export_image 的整条链
+# （图层、掩膜、放大、锐化、色阶）都在 uint8 上算。把 16-bit 塞进去要么先降到 8 再升
+# 回 16（那是假 16-bit，比不做更坏），要么每层另写一套 16-bit 数学（那是另一个里程
+# 碑）。“直通”就是直通：母档解出来什么样就写什么样；图层上有东西时只能拒，不能假装做过。
+#
+# 为什么不叫 Pillow 保存：实测 `Image.fromarray` 直接拒 uint16 的三通道数组
+# （Cannot handle this data type: (1, 1, 3), <u2），而它自己的 16-bit 路径只有单通道
+# I;16。Baseline TIFF 的 interleaved 16bpc RGB 是最普通的落盘形状，写它不需第三个依赖。
+
+_TIFF16_TAGS = (0x100, 0x101, 0x102, 0x103, 0x106, 0x111, 0x115, 0x116, 0x117, 0x128)
+
+
+def write_tiff16(rgb: np.ndarray, path: str) -> dict:
+    """写一张 baseline TIFF：interleaved RGB、16 bit/通道、无压缩、单 strip。
+
+    条目按 tag 升序（TIFF 的硬要求，不是风格）；超过 4 字节的值（BitsPerSample 三个
+    SHORT）另存一处，条目里只放偏移。只写必需的那十个 tag：多余的不是不能写，而每多
+    一个就多一处与读回那一侧对不上的可能。
+    """
+    import struct
+    if rgb.dtype != np.uint16 or rgb.ndim != 3 or rgb.shape[2] != 3:
+        raise ExportError(f"16-bit 直通需要 uint16 的三通道数组，收到 "
+                          f"dtype={rgb.dtype} shape={getattr(rgb, 'shape', None)}")
+    arr = np.ascontiguousarray(rgb)
+    h, w = int(arr.shape[0]), int(arr.shape[1])
+    data = arr.tobytes()
+    n = len(_TIFF16_TAGS)
+    bps_at = 8 + 2 + 12 * n + 4                  # BitsPerSample 三个 SHORT 的位置
+    strip_at = bps_at + 6
+    ent = []
+
+    def short(v): return struct.pack("<H", v) + b"\x00\x00"
+    def long(v): return struct.pack("<I", v)
+
+    ent.append(struct.pack("<HHI", 0x100, 3, 1) + short(w))   # ImageWidth
+    ent.append(struct.pack("<HHI", 0x101, 3, 1) + short(h))   # ImageLength
+    ent.append(struct.pack("<HHI", 0x102, 3, 3) + long(bps_at))
+    ent.append(struct.pack("<HHI", 0x103, 3, 1) + short(1))   # Compression=None
+    ent.append(struct.pack("<HHI", 0x106, 3, 1) + short(2))   # PhotometricInterp=RGB
+    ent.append(struct.pack("<HHI", 0x111, 4, 1) + long(strip_at))
+    ent.append(struct.pack("<HHI", 0x115, 3, 1) + short(3))   # SamplesPerPixel
+    ent.append(struct.pack("<HHI", 0x116, 3, 1) + short(h))   # RowsPerStrip（单 strip）
+    ent.append(struct.pack("<HHI", 0x117, 4, 1) + long(len(data)))
+    ent.append(struct.pack("<HHI", 0x128, 3, 1) + short(1))   # PlanarConfiguration=Chunky
+    blob = (b"II" + struct.pack("<HI", 42, 8)
+            + struct.pack("<H", n) + b"".join(ent) + struct.pack("<I", 0)
+            + struct.pack("<HHH", 16, 16, 16) + data)
+    t0 = time.perf_counter()
+    with open(path, "wb") as f:
+        f.write(blob)
+    return {"path": path, "format": "tif", "bits": 16, "w": w, "h": h,
+            "bytes": os.path.getsize(path),
+            "write_ms": round((time.perf_counter() - t0) * 1000.0, 1)}
+
+
+def read_tiff16(path: str) -> np.ndarray:
+    """把 write_tiff16 写出的那种文件读回数组（独立一份实现，与写侧互相对拍）。
+
+    为什么在同一个模块里再写一份读的：要证的不是“Pillow 能打开”，而是“落盘的字节就是
+    我手里那份 16-bit 数据”。只拿自写自读当证据是循环论证，所以这里同时把形状与
+    位深都重新核对一遍，不满足就报错，不是降级读。"""
+    import struct
+    with open(path, "rb") as f:
+        b = f.read()
+    if b[:2] != b"II":
+        raise ExportError("不是小端 TIFF")
+    magic, ifd_at = struct.unpack_from("<HI", b, 2)
+    if magic != 42:
+        raise ExportError(f"TIFF magic 不是 42而是 {magic}")
+    n = struct.unpack_from("<H", b, ifd_at)[0]
+    tags = {}
+    for i in range(n):
+        o = ifd_at + 2 + i * 12
+        tag, typ, cnt = struct.unpack_from("<HHI", b, o)
+        raw = b[o + 8: o + 12]
+        if typ == 3:                                   # SHORT
+            tags[tag] = struct.unpack_from("<H", raw, 0)[0] if cnt == 1 else None
+        elif typ == 4:                                 # LONG
+            tags[tag] = struct.unpack_from("<I", raw, 0)[0]
+        else:
+            tags[tag] = None
+    if tags.get(0x102) is None:
+        at = struct.unpack_from("<I", b, ifd_at + 2 + 12 * [i for i in range(n)
+                          if struct.unpack_from("<H", b, ifd_at + 2 + i * 12)[0] == 0x102][0] + 8)[0]
+        if struct.unpack_from("<HHH", b, at) != (16, 16, 16):
+            raise ExportError("BitsPerSample 不是三个 16")
+    if tags.get(0x115) != 3 or tags.get(0x106) != 2 or tags.get(0x103) != 1 or tags.get(0x128) != 1:
+        raise ExportError(f"不是无压缩 interleaved RGB：{tags}")
+    h, w = int(tags[0x101]), int(tags[0x100])
+    at, nb = int(tags[0x111]), int(tags[0x117])
+    if nb != w * h * 3 * 2:
+        raise ExportError(f"strip 字节数 {nb} 与 {w}×{h}×3×2 对不上")
+    return np.frombuffer(b[at:at + nb], dtype=np.uint16).reshape(h, w, 3)
+
+
+def export_master_16bit(path: str, out_path: str, *, device: str | None = None) -> dict:
+    """16-bit 母档直通导出：满幅解一次 → 写 16-bit TIFF → 读回逐字节自证。
+
+    三个自证读数缺一个都不算“保真”：
+    * readback_max_diff 必须 0（无损这一句得有人核对，不能只写在注释里）；
+    * levels_per_channel 必须远大于 256（否则所谓 16-bit 其实只有 8-bit 的内容）；
+    * low8_nonzero_px 必须 >0（防的是“8-bit 数据左移 8 位补零”那张假 16-bit 图：
+      它位数看起来对、每通道取值也过 256 个，但低 8 位全是 0）。
+    另外报 source（谁解的）：16-bit 只应该来自真解码那两支，预览那一支在这里必须拒。
+    """
+    from . import decode as D
+    t0 = time.perf_counter()
+    d = D.load_full(path, device=device, want_bits=16)
+    t_dec = time.perf_counter()
+    arr = d.rgb
+    src = (d.raw or {}).get("source")
+    if arr.dtype != np.uint16:
+        raise ExportError(f"这张图没有 16-bit 母档（解出来是 {arr.dtype}，source={src}）："
+                          "16-bit 直通只对真带 16-bit 数据的 RAW 成立，"
+                          "不拿 8-bit 左移补零冒充。要 8-bit 出片请用常规导出。")
+    if (d.raw or {}).get("used_preview"):
+        raise ExportError("16-bit 直通的像素来自相机内嵌预览（source=libraw_preview）："
+                          "预览不参与出片这条分界不许在导出这一层破")
+    info = write_tiff16(arr, out_path)
+    t_wr = time.perf_counter()
+    back = read_tiff16(out_path)
+    t_rd = time.perf_counter()
+    same_shape = back.shape == arr.shape
+    diff = int(np.abs(back.astype(np.int32) - arr.astype(np.int32)).max()) if same_shape else -1
+    ms = lambda a, b: round((b - a) * 1000.0, 2)      # noqa: E731
+    return {**info, "src_w": d.src_w, "src_h": d.src_h, "src_format": d.fmt,
+            "source": src, "bits": 16, "readback_max_diff": diff,
+            "levels_per_channel": [int(len(np.unique(back[..., c]))) for c in range(3)],
+            "low8_nonzero_px": int(np.count_nonzero(back & 0xFF)),
+            "decode_ms": ms(t0, t_dec), "write_ms": ms(t_wr, t_rd),
+            "total_ms": ms(t0, t_rd), "notes": list(d.notes)}

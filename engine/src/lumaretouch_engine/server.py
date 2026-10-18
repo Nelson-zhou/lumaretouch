@@ -214,6 +214,11 @@ class Engine:
               # 线性数据，厂商专有容器与 lossless JPEG 要 libraw 可选插件。前端拿这一
               # 份说话，而不是自己刻一个“支持 RAW”——那会把“解不开 CR2”写成已通过。
               "raw_backends": R.raw_backends(),
+              # 导出位深（M9-e）：16-bit 只有 TIFF 这一种落盘形状，且只有相机 RAW 有
+              # 母档可直通。把这件事写清楚而不是只报“支持 8/16-bit”：前端刻一份
+              # “PNG 也能 16-bit”就是让用户收一张实际只有 8-bit 内容的件。唯一出处在
+              # 这里，不在 UI 里另写一份判定。
+              "export_bits": {"8": list(FORMATS), "16": ["tif", "tiff"]},
               # M5-a 底片条：行程与上限同样由引擎说。前端自己刻一份“长边 160”或
               # “最多 512 张”，下一轮改上限时就是漏改的那一处（它会静默把图截小）。
               "session_actions": ["scan", "add", "select", "state", "thumbs", "stop_thumbs"],
@@ -2639,7 +2644,7 @@ class Engine:
 
     # ------------------------------------------------------------ M4 全尺寸导出
     EXPORT_KEYS = {"cmd", "action", "images", "out_dir", "format", "quality", "tile",
-                   "scale", "sharpen", "upscale_backend"}
+                   "scale", "sharpen", "upscale_backend", "bit_depth"}
 
     def _export_snapshot(self, snap: dict, eh: int, ew: int, *, for_document: bool):
         """从命令线程拍好的快照里组一份 ExportSpec。返回 (spec, skipped)。
@@ -2794,6 +2799,31 @@ class Engine:
             emit({"event": "error",
                   "error": f"sharpen={sharpen} 越界（需要 [0,{SHARPEN_AMOUNT_LIMIT}]）"})
             return
+        # 16-bit 母档直通（M9-e）：位深是“走哪条通路”而不是“一个参数”——它不进
+        # export_image 那整条 uint8 链，所以这里先把话说清：图层上有东西时直拒，
+        # 不默默降到 8-bit 交一张看起来同名的件。
+        try:
+            bit_depth = int(p.get("bit_depth", 8))
+        except (TypeError, ValueError):
+            emit({"event": "error", "error": f"bit_depth={p.get('bit_depth')!r} 不是整数（只认 8 或 16）"})
+            return
+        if bit_depth not in (8, 16):
+            emit({"event": "error", "error": f"bit_depth={bit_depth} 不支持（只认 8 或 16）"})
+            return
+        if bit_depth == 16:
+            if fmt not in ("tif", "tiff"):
+                emit({"event": "error",
+                      "error": f"16-bit 直通只能写 TIFF（收到 format={fmt}）："
+                               "JPEG/WebP 是有损的，PNG 编码器不吃三通道 16-bit"
+                               "（实测 Pillow 拒 uint16 RGB）——不拿降到 8-bit 冒充 16-bit 出片"})
+                return
+            blockers = self._master16_blockers(scale=scale, sharpen=sharpen)
+            if blockers:
+                emit({"event": "error",
+                      "error": "16-bit 母档直通不走图层与放大，而这几项有值："
+                               + "、".join(blockers) +
+                               "。要么把它们清回中立位，要么走 8-bit 常规导出"})
+                return
         # 参数在命令线程里全部拍定：worker 里不再读 self._*，否则中途改一下滑块，
         # 这一批里前几张与后几张用的就不是同一套设置（而事件里只写了一份）
         snap = dict(strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
@@ -2802,13 +2832,48 @@ class Engine:
                     deform=dict(self._deform), channel=self._channel,
                     precompute=self._precompute, device=self.device,
                     scale=scale, upscale_backend=backend, sharpen=sharpen)
-        self._export_args = (list(images), out_dir, fmt, quality, tile, doc, snap)
+        self._export_args = (list(images), out_dir, fmt, quality, tile, doc, snap, bit_depth)
         self._export = threading.Thread(target=self._export_loop, daemon=True)
         self._export.start()
 
+    def _master16_blockers(self, *, scale: int, sharpen: float) -> list:
+        """16-bit 直通能不能走：把“会改像素的那几项”逐个点名。
+
+        只在中立位上才放行：磨皮强度 0、色阶三个增量全 0、LUT 未挂或强度 0、
+        修脸/光影/形变算子表为空、放大倍率 1、出片锐化 0。这里不拿 strength 默认值 0.5
+        当“没动过”——默认值也是会作用到像素上的一个值，用户要 16-bit 直通就得先把它们关掉，
+        而不是让引擎替他在后台偷偷降到 8-bit。radius/eps/各层增益不单独拦：它们是
+        “作用时怎么作”的参数，强度为 0 时不参与。每一层的中立位必须与 PreviewPipeline /
+        ExportSpec 同源；只在这层拦不住的是“参数有值但实际为恒等变换”那一种，宁可多拦
+        也不能默默降级。
+        """
+        b: list = []
+        if float(self._strength) != 0.0:
+            b.append(f"磨皮强度={self._strength}")
+        grade = list(self._grade) + [0.0, 0.0, 0.0, 0.0]
+        if any(abs(float(v)) > 0.0 for v in grade[:3]):
+            b.append(f"色阶增量={tuple(grade[:3])}")
+        if self._lut and float(self._lut_amount) > 0.0:
+            b.append(f"LUT 强度={self._lut_amount}")
+        if self._repair_ops:
+            b.append(f"修脸算子 {len(self._repair_ops)} 个")
+        if self._light_ops:
+            b.append(f"光影算子 {len(self._light_ops)} 个")
+        # 控制点"存在"不等于"作用了"：load_image 会把上一次的控制点带进新一张图（位置还在、
+        # 位移全零），拿条目数当判据会把一张干净的图挪成"有图层"而拒掉直通。只有非零位移才会改像素。
+        nz = sum(1 for v in (self._deform.get("amounts") or {}).values()
+                 if abs(float(v)) > 0.0)
+        if nz:
+            b.append(f"形变控制点 {nz} 个（位移非零）")
+        if int(scale) != 1:
+            b.append(f"放大倍率={scale}")
+        if float(sharpen) != 0.0:
+            b.append(f"出片锐化={sharpen}")
+        return b
+
     def _export_loop(self):
         from .decode import load_full
-        images, out_dir, fmt, quality, tile, doc, snap = self._export_args
+        images, out_dir, fmt, quality, tile, doc, snap, bit_depth = self._export_args
         n = len(images)
         t0 = monotonic_ns()
         results: list = []
@@ -2816,6 +2881,26 @@ class Engine:
         for idx, path in enumerate(images):
             stage = "decode"
             try:
+                if bit_depth == 16:
+                    # 直通：一次满幅 16-bit 解码 → 写 TIFF → 读回自证。图层不进这一条
+                    # （能不能进在 cmd_export 里已经拦过了），所以这里也不发 spec。
+                    from .export import export_master_16bit
+                    stage = "master16"
+                    out_path = os.path.join(out_dir,
+                                            os.path.splitext(os.path.basename(path))[0] + ".tif")
+                    r = export_master_16bit(path, out_path, device=self.device)
+                    results.append({"path": path, "out": r["path"], "format": "tif",
+                                    "bits": 16, "source": r["source"],
+                                    "w": r["w"], "h": r["h"], "bytes": r["bytes"],
+                                    "write_ms": r["write_ms"], "decode_ms": r["decode_ms"],
+                                    # 三个保真读数直接进事件：它们不是调试道具，而是
+                                    # “无损”这句话的存证。差值非 0 / 每通道档位≤256 /
+                                    # 低 8 位全零，任一条都不能算 16-bit 母档
+                                    "readback_max_diff": r["readback_max_diff"],
+                                    "levels_per_channel": r["levels_per_channel"],
+                                    "low8_nonzero_px": r["low8_nonzero_px"],
+                                    "skipped": []})
+                    continue
                 d = load_full(path, device=self.device)
                 stage = "render"
                 spec, skipped = self._export_snapshot(snap, d.h, d.w,
@@ -2838,6 +2923,7 @@ class Engine:
                   "ok": "error" not in results[-1]})
         emit({"event": "export_done", "total": n, "failed": failed,
               "out_dir": out_dir, "format": fmt, "quality": quality, "tile": tile,
+              "bit_depth": bit_depth,
               "scale": int(snap["scale"]), "sharpen": float(snap["sharpen"]),
               # 后端名字只在真做了放大时才报：批级别写"lanczos3"而每张图的账单写 None，
               # 就是在同一件事上给两个答案（没放大时"用了哪个后端"这句话本身不成立）

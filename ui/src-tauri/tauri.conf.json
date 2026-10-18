@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "LumaRetouch",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "identifier": "co.openlumaretouch.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -46,11 +46,12 @@
       "deb": {
         "depends": [
           "libwebkit2gtk-4.1-0",
-          "libgtk-3-0t64"
+          "libgtk-3-0t64",
+          "libraw23t64"
         ]
       }
     },
     "shortDescription": "LumaRetouch 精修 — Linux AI 人像精修",
-    "longDescription": "Linux 原生 AI 人像精修：Tauri 2 宿主 + Python/PyTorch 引擎，预览裸帧经 POSIX 共享内存上屏。质感磨皮（频域分离保留毛孔）、仿中性灰修容、五官微调（TPS）、瑕疵消除笔、3D LUT 与肤色定向调色、全尺寸分块批量导出、底片条多文档与全局撤销/重做。引擎运行时（Python + GPU 版 torch）不进本包，装机后由 /usr/lib/LumaRetouch/engine/setup-runtime.sh 按显卡厂商装对应清单。"
+    "longDescription": "Linux 原生 AI 人像精修：Tauri 2 宿主 + Python/PyTorch 引擎，预览裸帧经 POSIX 共享内存上屏。质感磨皮（频域分离保留毛孔）、仿中性灰修容、五官微调（TPS）、瑕疵消除笔、3D LUT 与肤色定向调色、全尺寸分块批量导出、底片条多文档与全局撤销/重做。相机 RAW：DNG 全链路自研验证（读写对拍、内嵌预览浏览通道、16-bit 母档直通导出，落盘逐字节 0 差异）；厂商格式（CR2/CR3/NEF/ARW/RW2/RAF/ORF）由系统 LibRaw（随包 Depends）解码，本发行物未搭实机样张，如实标注为未经实机样张认证。引擎运行时（Python + GPU 版 torch）不进本包，装机后由 /usr/lib/LumaRetouch/engine/setup-runtime.sh 按显卡厂商装对应清单。"
   }
 }

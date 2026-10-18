@@ -172,3 +172,57 @@ def test_doc_meta_is_cheap_and_names_the_file():
     assert m["name"] == "portrait-1024x1280.jpg"
     assert m["bytes_on_disk"] == os.path.getsize(FIXTURE)
     assert m["bytes_on_disk"] > 0
+
+
+# ------------------------------------------------------------------ M9-f 浏览那一格的解法
+#
+# 这一节钉的是"便宜只能花在浏览那一格"这条分界：半幅（CFA 2×2 合并）是真解码，但会改
+# 像素，所以只许用在底片条那种小格子上；视口/常驻层/导出那几层一个字都不许动。
+# 反向门（小图不许 binning）与正向门（大图的源尺寸要说回全幅）同样重要——前者关掉的是
+# "把细节不够的半幅硬塞给用户"，后者关掉的是"把半幅当源幅报出去"。
+from lumaretouch_engine import decode as _D    # noqa: E402
+from lumaretouch_engine.ops import libraw as _LR    # noqa: E402
+
+_BIG = os.environ.get("LRT_BIG_DNG", "")
+
+
+needs_libraw = pytest.mark.skipif(
+    not _LR.available(), reason="机器上没有系统 LibRaw（libraw_r.so）：半幅那一臂不适用")
+
+
+@needs_libraw
+def test_browse_slot_never_bins_a_small_raw():
+    """128×96 的小靶：目标格子比源图还大，半幅的细节根本不够。
+
+    两条臂都要看：浏览那条在这张图上本来就走内嵌预览（自带预览），编辑那条走自研读侧——
+    两边都不许出现 half_size，否则"省"会悄悄渗进不该省的地方。"""
+    if not os.path.isfile(_LR.PROBE_DNG):
+        pytest.skip("缺 raw-probe.dng：重跑 packaging/make-raw-probe.py")
+    # 浏览臂：这张靶自带内嵌预览，所以走的是抄预览那一条——半幅那条捷径不许在这里出现
+    b = _D.load_rgb(_LR.PROBE_DNG, 160 * 160, allow_preview=True)
+    assert bool((b.raw or {}).get("half_size")) is False, b.raw
+    assert (b.raw or {}).get("used_preview") is True, b.raw
+    # 编辑臂：预览关掉，落回自研读侧；小图不许被 binning 蒙过去
+    e = _D.load_rgb(_LR.PROBE_DNG, 160 * 160)
+    assert bool((e.raw or {}).get("half_size")) is False, e.raw
+    assert (e.raw or {}).get("source") == "self_dng", e.raw
+    assert (e.src_w, e.src_h) == (128, 96), (e.src_w, e.src_h)
+
+
+@pytest.mark.skipif(not _BIG or not os.path.isfile(_BIG),
+                    reason="没有真尺寸靶：设 LRT_BIG_DNG=<路径>，造法见 gpuspike/m9f-bench.py 文件头")
+def test_browse_slot_bins_only_the_browse_slot_and_reports_the_true_size():
+    dims = _LR.identify(_BIG)
+    assert dims and dims["w"] * dims["h"] > 4_000_000, dims   # 靶要真是相机尺寸，不然这条空转
+
+    b = _D.load_rgb(_BIG, 160 * 160, allow_preview=True)      # 浏览那一格
+    assert bool((b.raw or {}).get("half_size")) is True, b.raw
+    assert (b.raw or {}).get("used_preview") is False, "浏览可以省，但不许改成抄预览"
+    # 报出去的尺寸必须是源图那一幅：半幅解码解出的是它的一半
+    assert (b.src_w, b.src_h) == (dims["w"], dims["h"]), (b.src_w, b.src_h, dims)
+
+    e = _D.load_rgb(_BIG, 672 * 672)                          # 视口/常驻层那一臂
+    assert bool((e.raw or {}).get("half_size")) is False, e.raw
+    f = _D.load_full(_BIG, want_bits=16)                      # 导出那一臂
+    assert bool((f.raw or {}).get("half_size")) is False, f.raw
+    assert f.rgb.dtype == np.uint16, f.rgb.dtype

@@ -1099,7 +1099,20 @@ def raw_backends() -> dict:
         "baseline": ["DNG（未压缩条带/瓦片，已与系统 LibRaw 交叉验证）"],
         "self_verified_only": ["DNG（Deflate，Predictor 1/2）：我方读侧对地面真值逐字节自洽，"
                                 "但未获第三方解码器验证（LibRaw 拒读条带 Deflate）"],
+        # ---- M9-h 定稿口径：把"我们验过的"与"依赖别人实现但没样张的"分成两栏 ----
+        # 这一条界线是软件诚信的核心：装上门机型录不进库，一句"支持 CR2"就是假指标。
         "suffixes": [".dng"],
+        "suffixes_verified": [".dng"],
+        "verified_full_chain": [
+            "DNG：读侧（自研三臂对拍 + 系统 LibRaw 交叉验证）、写侧（make-test-dng / "
+            "make-raw-probe 的地面真值）、内嵌预览通道、16-bit 母档直通导出（落盘逐字节 "
+            "0 差异）全部由本仓用例自证"],
+        "vendor_suffixes": [".cr2", ".cr3", ".nef", ".arw", ".rw2", ".raf", ".orf"],
+        "vendor_status": ("依赖系统 LibRaw 插件的厂商解码；本仓未搭载任何实机样张，"
+                          "这些格式的状态是「未经实机样张认证」，不是「已支持」。"
+                          "仓库里能验的只有路由与真解码臂那一半（把基线读侧蒙上眼睛后，"
+                          "厂商后缀确实交到了 LibRaw 手上）"),
+        "sample_certified": {".dng": True, "vendor": False},
         "needs_plugin": ["lossless JPEG 编码的 RAW（DNG 默认压缩、CR2/NEF/ARW/RW2/RAF）",
                          "packed 位深（10/12/14-bit）", "float RAW（DNG 1.4+）",
                          "BigTIFF（magic 43）", "CFALayout≠1 的交错排阵"],

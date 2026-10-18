@@ -125,6 +125,15 @@ def _decoded_from_raw(res: dict, budget: int | None) -> "Decoded":
              # has_preview 是「文件里有没有预览」（raw.py 那个字段存的是“有”/“”），
              # used_preview 才是「这一帧像素是不是从预览来的」。两个分开写：把
              # “有”当成“用了”就是这一层最不能留的那种歧义——看着同一字段两种意思。
+             # source 是“这一帧像素是谁解出来的”，全仓三个值：self_dng（自研读侧）、
+             # libraw（系统库的真解码）、libraw_preview（相机内嵌预览）。上一版只有
+             # libraw 那两支带名字、自研这支是 None，于是上报里“没名字”与“不是预览”
+             # 两件事看起来一样：拿 source 做判据的人只能靠反推。名字补齐了才分得出
+             # “哪个后端解的”，这也就是导出与能力上报需要的那个事实。
+             "source": "self_dng",
+             # 三条臂都报这一位：自研读侧没有半幅这条捷径，写死 False 而不是缺键——
+             # 拿 .get("half_size") 的人分不清"没有这个概念"与"这一次没走半幅"
+             "half_size": False,
              "used_preview": False,
              "container_ms": round(ms["container_ms"], 2), "pixels_ms": round(ms["pixels_ms"], 2),
              "render_ms": round(ms["render_ms"], 2), "encode_ms": round(ms["encode_ms"], 2),
@@ -151,7 +160,7 @@ def load_rgb(path: str, budget: int = PROXY_PIXELS, device: str | None = None,
         if d is not None:
             return d
     if is_raw(path):
-        return _load_rgb_raw(path, budget, device)
+        return _load_rgb_raw(path, budget, device, browse=allow_preview)
     return _load_rgb_pillow(path, budget)
 
 
@@ -230,18 +239,24 @@ def load_preview(path: str, budget: int = PROXY_PIXELS) -> "Decoded | None":
     return d
 
 
-def _libraw_matrix(path: str, *, output_bps: int = 8) -> tuple:
+def _libraw_matrix(path: str, *, output_bps: int = 8, half_size: bool = False) -> tuple:
     """真去马赛克那一臂的入口：返回 (H,W,3) 矩阵与 LibRaw 的账单。
 
     `output_bps=8` 给预览与常驻代理层用；16-bit 母档归导出通路（M9-e），那里才需要
     把每一档线性值都留住。两个档位同一个函数出，不分叉实现。
+
+    `half_size` 是 CFA 上 2×2 合并（binning）后再去马赛克：像素数 ÷4，**仍然是一次真
+    解码**，不是抄相机渲好的那张预览。它只许用在浏览那一格（理由与实测数字写在
+    `_load_rgb_raw` 里）。半幅时 LibRaw 的 iio 报的是半幅尺寸，账单里的 `half_size` 才是
+    这一臂的真实形状。
     """
     from .ops import libraw as LR
-    return LR.process(path, output_bps=int(output_bps))
+    return LR.process(path, output_bps=int(output_bps), half_size=bool(half_size))
 
 
 def _decoded_from_libraw(path: str, arr, info: dict, budget: int | None,
-                         *, why: Exception | None = None, full: bool = False) -> "Decoded":
+                         *, why: "Exception | str | None" = None, full: bool = False,
+                         half: bool = False) -> "Decoded":
     """LibRaw 真解码的结果 → Decoded（与自研那条共用同一个对外形状）。"""
     h, w = int(arr.shape[0]), int(arr.shape[1])
     t0 = time.perf_counter()
@@ -255,7 +270,12 @@ def _decoded_from_libraw(path: str, arr, info: dict, budget: int | None,
         rgb = np.ascontiguousarray(np.asarray(im, dtype=np.uint8))
         t_scale = time.perf_counter()
     m = info["meta"]
-    d = Decoded(rgb=rgb, src_w=int(m["i_w"] or w), src_h=int(m["i_h"] or h),
+    # 半幅那一臂 iio 报的是解出来的那一半，源图的尺寸必须是它的 2 倍（实测这张
+    # 3024×2268 的靶在 half_size 下 iio 给 1512×1134）——把半幅当源幅报出去，
+    # 底片条与导出对账时看到的就是一张小了一号的图，而这个错在 UI 上完全看不出来。
+    src_w = int(m["i_w"] or w) * 2 if half else int(m["i_w"] or w)
+    src_h = int(m["i_h"] or h) * 2 if half else int(m["i_h"] or h)
+    d = Decoded(rgb=rgb, src_w=src_w, src_h=src_h,
                 fmt=(raw_ext(path).lstrip(".").upper() or "RAW"),
                 t_open_ms=info["set_ms"] + info["unpack_ms"], t_decode_ms=info["process_ms"],
                 t_orient_ms=0.0, t_scale_ms=(t_scale - t0) * 1000.0,
@@ -263,6 +283,9 @@ def _decoded_from_libraw(path: str, arr, info: dict, budget: int | None,
                 draft_used=False, draft_size=None)
     d.raw = {"camera": " ".join(x for x in (m["make"], m["model"]) if x),
              "source": "libraw", "bits": int(info["bits"]), "used_preview": False,
+             # half_size 单独报出来：浏览那一格允许 binning，编辑与导出永远不许。
+             # 这一位不给，"这张图是谁解的"就答不完整（同一帧像素，来路有两种）。
+             "half_size": bool(half),
              "color_maximum": int(m["color_maximum"]), "cdesc": m["cdesc"],
              "dng_version": int(m["dng_version"]),
              "container_ms": round(info["set_ms"] + info["unpack_ms"], 2),
@@ -274,16 +297,47 @@ def _decoded_from_libraw(path: str, arr, info: dict, budget: int | None,
     if why is not None:
         # 换了后端必须看得见：基线读侧为什么解不开、这一臂用的是另一套实现，
         # 这两件事不能只在异常栈里，导出对账时它们是解释差异的唯一线索
-        d.notes.append(f"基线读侧没解开（{type(why).__name__}: {why}），这一张由 LibRaw 解码")
+        # 异常那一支的措辞是用例的锚点（"基线读侧没解开"），别改：改一个字，
+        # "换了后端必须看得见"这句话就在 test_raw 那两条断言上静默失效
+        d.notes.append(f"基线读侧没解开（{type(why).__name__}: {why}），这一张由 LibRaw 解码"
+                       if not isinstance(why, str) else f"这一张走 LibRaw：{why}")
+    if half:
+        d.notes.append(f"半幅解码（CFA 2×2 合并，{w}×{h}）：仍是真去马赛克，只用于浏览那一格")
     if budget and (ow, oh) != (w, h) and not full:
         d.notes.append(f"代理档缩到 {ow}×{oh}（真解码之后重采样，不抄内嵌预览）")
     return d
 
 
-def _load_rgb_raw(path: str, budget: int, device: str | None) -> Decoded:
-    """RAW 的代理帧：先试自研 DNG 读侧（基线，三臂证据那条路），解不开再转 LibRaw。"""
+# 浏览那一格允许用半幅解的前提：要的那一格的长边不足源图短边的 1/4。
+# 4 这个数不是拍脑袋：半幅输出的长边是源图的 1/2，要求它至少是目标格子的 2 倍，
+# binning 丢掉的那一半线性细节才落不到用户眼睛里。真尺寸那的那笔账（6.86 MP、无内嵌预览，
+# gpuspike/m9f-bench.py，LibRaw 0.21.5）：全幅 264 ms、半幅 68 ms（0.26×），而 make_thumb(160)
+# 现状每张要 228 ms。取舍取决于这个数，不取决于"半幅看起来差不多"那句话。
+BROWSE_HALF_MIN_RATIO = 4
+
+
+def _load_rgb_raw(path: str, budget: int, device: str | None, *, browse: bool = False) -> Decoded:
+    """RAW 的代理帧：先试自研 DNG 读侧（基线，三臂证据那条路），解不开再转 LibRaw。
+
+    `browse=True` 就是"这一帧只进底片条那一个槽位"（与 allow_preview 同一个开关，全仓只有
+    session.make_thumb 打开）。它多允许一件事：源图比目标格子大得多时用半幅解码，把每张
+    228 ms 的账压到 68 ms 量级。编辑与导出走的仍然是全幅那一臂 —— 分界规则里"要进常驻层、
+    要被滑块吃、要被导出拿走"的那一层一个字都不动，因为 2×2 合并确实会改像素（实测同一格
+    160×160 缩略图与全幅解的最差 28 LSB、均值 0.43 LSB、超过 8 LSB 的像素 0.39%）：这点差别
+    在浏览那一格看不见，在出片里就是不可接受的静默改图。
+    """
     from . import raw as raw_mod
     why = None
+    if browse:
+        # 决定要在解码之前做：半幅那一臂只有在"目标格子的长边不足源图短边 1/4"时才允许，
+        # 而要知道源图尺寸不用先解一次（identify 只读头，实测二十几毫秒）。
+        from .ops import libraw as LR
+        dims = LR.identify(path)
+        if dims is not None:
+            ow, oh = proxy_size(dims["w"], dims["h"], budget)
+            if min(dims["w"], dims["h"]) >= BROWSE_HALF_MIN_RATIO * max(ow, oh):
+                arr, info = _libraw_matrix(path, output_bps=8, half_size=True)
+                return _decoded_from_libraw(path, arr, info, budget, why=why, half=True)
     if raw_mod.has_raw_ifd(path):
         try:
             return _decoded_from_raw(raw_mod.load_raw(path, budget=budget, device=device), budget)
@@ -363,11 +417,20 @@ def load_full(path: str, max_px: int = MAX_EXPORT_PIXELS, device: str | None = N
 
     `want_bits=16` 只在 16-bit 母档那一臂用（M9-e 接导出）：那时 `rgb` 的 dtype 是
     uint16，拿它当代理帧用就是拿 4 字节当 1 字节用——预览与编辑那两层永远走 8-bit。
+
+    16-bit 这一臂**不能拿自研读侧那支**：它只渲染 8-bit（实测 source=self_dng 回的是
+    uint8）。上一版这里把 want_bits 透传给 `_libraw_matrix` 却仍然先走基线那一支，于是
+    “要 16-bit”被悄悄退成“拿到 8-bit”——导出层只能拿它左移补零，而上报里写的还是 16。
+    现在的形状：want_bits=16 就只进 LibRaw 那一支（它没装就报错，而不是降级）；基线
+    那一支负责 8-bit 与代理档。两个理由都写进 notes，因为拿不到 16-bit 的人需要知道是谁拦的。
     """
     from . import raw as raw_mod
+    want = int(want_bits)
+    if want not in (8, 16):
+        raise ValueError(f"want_bits 只认 8 或 16（收到 {want_bits!r}）")
     if is_raw(path):
         why = None
-        if raw_mod.has_raw_ifd(path):
+        if raw_mod.has_raw_ifd(path) and want == 8:
             try:
                 res = raw_mod.load_raw(path, budget=None, device=device)
                 m = res["meta"]
@@ -377,12 +440,17 @@ def load_full(path: str, max_px: int = MAX_EXPORT_PIXELS, device: str | None = N
                 return _decoded_from_raw(res, None)
             except raw_mod.UnsupportedRaw as e:
                 why = e
-        arr, info = _libraw_matrix(path, output_bps=want_bits)
+        if want == 16 and raw_mod.has_raw_ifd(path):
+            why = ("16-bit 母档走系统 LibRaw：自研读侧只渲染 8-bit，拿它凑 16-bit 就是左移补零")
+        arr, info = _libraw_matrix(path, output_bps=want)
         if int(info["w"]) * int(info["h"]) > int(max_px):
             raise ValueError(f"导出尺寸 {info['w']}x{info['h']} = "
                              f"{int(info['w']) * int(info['h']) / 1e6:.0f} Mpx 超过上限 "
                              f"{int(max_px) / 1e6:.0f} Mpx")
         return _decoded_from_libraw(path, arr, info, None, why=why, full=True)
+    if want == 16:
+        raise ValueError(f"16-bit 直通只对相机 RAW 成立（这张是 {os.path.splitext(path)[1] or '无后缀'}"
+                         "，非 RAW）：普通 JPEG/PNG 里没有 16-bit 母档可直通的像素")
     return _load_full_pillow(path, max_px)
 
 

@@ -154,6 +154,10 @@ export default function App() {
   // 而不是一个没人同意的默认美化。
   const [exportScale, setExportScale] = useState(1);
   const [exportSharpen, setExportSharpen] = useState(0);
+  // 16-bit 母档直通（M9-e）：默认关。开它就是要求"其它都别动"；只有把它单独成一个勾，
+  // "这一件没经过图层"才说得出口。
+  const [exportBits16, setExportBits16] = useState(false);
+  const [exportErr, setExportErr] = useState("");
   const [exportTile, setExportTile] = useState("");
   // 换底（M6）：背景色 + 色键容差/软边 + 后端。默认走确定性色键；birefnet 需权重，
   // 无权重时引擎会诚实拒（与消除笔的 lama 同一条能力口径）。
@@ -1618,15 +1622,37 @@ export default function App() {
    *  倍率/锐量为 1/0 时也不给：那两个值就是“这一层没开”，递上去与递默认值是两回事。 */
   function onExport() {
     const tile = exportTile.trim() === "" ? undefined : Number(exportTile);
-    runExport(exportDir, {
-      format: exportFormat,
-      quality: exportQuality,
-      tile,
-      scale: exportScale !== 1 ? exportScale : undefined,
-      sharpen: exportSharpen > 0 ? exportSharpen : undefined,
-    })
-      .then(() => refreshStatus())
+    setExportErr("");
+    // 直通的拒绝是引擎在开跑前发的一条 error：runExport 那条 promise 只到"发出去了"
+    // 为止（宿主回的是 requested:true），所以成败要看状态位，不能等 catch。
+    // 先拿一份 last_error 作基线：上一张图的错还挂在那儿的时候，不能把它读成"这次也失败了"。
+    engineStatus()
+      .then((st0) => {
+        const before = st0?.last_error ?? null;
+        return runExport(exportDir, {
+          format: exportFormat,
+          quality: exportQuality,
+          tile,
+          scale: exportScale !== 1 ? exportScale : undefined,
+          sharpen: exportSharpen > 0 ? exportSharpen : undefined,
+          bitDepth: exportBits16 ? 16 : undefined,
+        })
+          .then(() => refreshStatus())
+          .then(() => watchExportOutcome(before));
+      })
       .catch((e) => setDragNote(String(e)));
+  }
+
+  /** 拒绝是立刻到的（开跑前），成功是慢慢到的（一批图）：这里只等"引擎开口说错"，
+   *  最多 6 秒；导出本身的终态一直由 export_progress / export_done 那条线报。 */
+  async function watchExportOutcome(before: string | null) {
+    const t0 = performance.now();
+    while (performance.now() - t0 < 6_000) {
+      const st = await engineStatus().catch(() => null);
+      const err = st?.last_error ?? null;
+      if (err && err !== before) { setExportErr(err); return; }
+      await sleep(250);
+    }
   }
 
   /** 扫一个目录进底片图：edge 不给就用引擎的默认长边（前端不抄一份数字）。 */
@@ -1703,6 +1729,17 @@ export default function App() {
             {t("engine.raw", {
               s: status.raw_backends.suffixes.join("/"),
               p: status.raw_backends.plugin_installed ? t("engine.rawInstalled") : t("engine.rawMissing"),
+            })}
+          </div>
+        )}
+        {/* 厂商后缀单独一行，且必须自带"未经实机样张认证"这句话（M9-h）：免责写在引擎
+            报的数据里，前端只是把它显示出来——不是前端自己补的一句漂亮话。 */}
+        {!!status?.raw_backends?.vendor_suffixes?.length && (
+          <div className="mut">
+            {t("engine.rawVendor", {
+              s: status.raw_backends.vendor_suffixes.join("/"),
+              ok: status.raw_backends.plugin_installed
+                ? t("engine.rawVendorDecodes") : t("engine.rawVendorMissing"),
             })}
           </div>
         )}
@@ -2100,6 +2137,27 @@ export default function App() {
                 {t("export.tile", { lo: status.export_caps.tile[0], hi: status.export_caps.tile[1] })}
               </span>
             </div>
+            {/* 16-bit 母档直通（M9-e）：可选位深名单由引擎的 ready.export_bits 说。
+                引擎没报这一句、或当前格式不在 16 的名单里，就不画这个勾——把"能选"
+                画出来再让用户去撞一条注定空的请求，是 M6 抠图那个后端踩过的坑。 */}
+            {!!status.export_bits?.["16"]?.some((f) => f === exportFormat) && (
+              <>
+                <label className="row" title={t("export.master16Tip")}>
+                  <input type="checkbox" checked={exportBits16}
+                         onChange={(e) => setExportBits16(e.target.checked)} />
+                  <span className="mut">{t("export.master16")}</span>
+                </label>
+                {exportBits16 && status.export?.bit_depth === 16
+                  && status.export.images?.[0]?.readback_max_diff === 0 && (
+                  <div className="mut">{t("export.master16Ran", {
+                    src: String(status.export.images[0].source ?? "?"),
+                    diff: status.export.images[0].readback_max_diff,
+                    lv: (status.export.images[0].levels_per_channel ?? []).join("/"),
+                  })}</div>
+                )}
+              </>
+            )}
+            {!!exportErr && <div className="err">{exportErr}</div>}
             {/* 放大（M7）：倍率名单与可用后端全部从 ready 拿。旧引擎不说 scales 就不画
                 这一排；weights_gated 那一个后端只当"等权重"告知，不当选项——递上去会被
                 引擎整条拒，把它的名字做成下拉就是邀请用户去撞一个注定失败的请求。 */}

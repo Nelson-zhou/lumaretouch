@@ -30,7 +30,9 @@ from .decode import MIN_BUDGET, clamp_budget, load_rgb
 
 # 扩展名白名单：Pillow 认的位图族 + RAW 那一族（.dng 由自研读侧兜底，其余七个靠系统
 # LibRaw）。厂商容器收进来是**有条件**的，条件写在 decode.RAW_EXTS 与 raw.raw_backends()
-# 里：装机件带 libraw（deb Depends）就真打得开。把 .CR2 从名单里摘掉是另一种骗法：
+# 里：装机件带 libraw（M9-g 起 deb Depends 里确有 libraw）才打得开，而"打得开"不等于
+# "已认证"——本仓一份实机样张都没有，那七个后缀在 raw_backends() 里就写在 vendor_suffixes
+# 那一栏，标的是「未经实机样张认证」。把 .CR2 从名单里摘掉是另一种骗法：
 # 扫描只会说“扩展名不在本版本可打开的名单里”，而用户看到的是底片条少了一张——他不
 # 会去查能力清单，只会以为自己拍丢了。现在的形状是：格子在，解不开就在那一格上如实
 # 写为什么（没库 / 这文件坏了），事实不藏在后缀里。

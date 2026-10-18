@@ -3556,3 +3556,96 @@ def test_background_birefnet_rejected_without_weights(engine):
     engine.wait_for("bg_done", timeout=30)
     got = _read_frame(engine, peer, h, w)
     assert int((np.abs(got - base).sum(axis=2) > 0).sum()) > 0, "拒绝 birefnet 后引擎应仍能色键换底"
+
+
+# 16-bit 母档直通的协议层（M9-e）：这一层要钉的不是像素，是"拒绝要说得出理由"和
+# "成功要把三个保真读数一路带到事件里"。缺前者，用户会以为机器坏了；缺后者，
+# "无损"这句话在协议边界上就没人核对得了。
+@needs_libraw
+@pytest.mark.skipif(not os.path.isfile(_LR.PROBE_DNG), reason="缺 raw-probe.dng")
+def test_export_bit_depth_16_refuses_before_doing_anything(engine, tmp_path):
+    import shutil as _sh
+    src = str(tmp_path / "p.dng")
+    _sh.copyfile(_LR.PROBE_DNG, src)
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    # ① 格式：16-bit 只有 TIFF 这一种落盘形状（PNG 编码器不吃三通道 16-bit）
+    engine.send(cmd="export", out_dir=str(tmp_path / "a"), format="png",
+                images=[src], bit_depth=16)
+    ev = engine.wait_for("error", timeout=15)
+    assert "TIFF" in ev["error"], ev
+    # ② 图层：默认磨皮强度 0.5 是会改像素的，直通不许替用户偷偷降到 8-bit
+    engine.send(cmd="export", out_dir=str(tmp_path / "b"), format="tif",
+                images=[src], bit_depth=16)
+    ev = engine.wait_for("error", timeout=15)
+    assert "磨皮强度" in ev["error"], ev
+    # ③ 放大同理：scale=2 属于图层链，直通不认
+    engine.send(cmd="export", out_dir=str(tmp_path / "c"), format="tif",
+                images=[src], bit_depth=16, scale=2)
+    ev = engine.wait_for("error", timeout=15)
+    assert "放大倍率" in ev["error"] or "磨皮强度" in ev["error"], ev
+    # ④ 位深本身不认识的值不能当成 8 跑起来
+    engine.send(cmd="export", out_dir=str(tmp_path / "d"), format="tif",
+                images=[src], bit_depth=12)
+    ev = engine.wait_for("error", timeout=15)
+    assert "bit_depth" in ev["error"], ev
+    # 三条拒绝都必须在开跑前关门：一个字节都不该落盘
+    for d in ("a", "b", "c", "d"):
+        p = tmp_path / d
+        assert not p.exists() or not list(p.iterdir()), f"被拒的导出仍然写了文件：{d}"
+
+
+# load_image 会碰常驻管线（torch）。CI 那个没有 torch 的 job 里，引擎仍然会把预览送到
+# 视口，但会同时报一条 ModuleNotFoundError：那不是缺陷，是那个环境根本没装计算层。
+# 所以这一条要求的是 torch 在场，不在场就明说跳过，不然 CI 会把一个没装计算层的机器报成导出坏了。
+try:                                        # noqa: E402
+    import torch as _torch                  # noqa: F401,E402
+    _HAS_TORCH = True
+except Exception:
+    _HAS_TORCH = False
+
+needs_torch = pytest.mark.skipif(not _HAS_TORCH,
+                                 reason="引擎 venv 里没有 torch：load_image 走不到常驻管线")
+
+
+@needs_torch
+@needs_libraw
+@pytest.mark.skipif(not os.path.isfile(_LR.PROBE_DNG), reason="缺 raw-probe.dng")
+def test_export_bit_depth_16_reports_its_fidelity_numbers(engine, tmp_path):
+    import shutil as _sh
+    src = str(tmp_path / "p.dng")
+    _sh.copyfile(_LR.PROBE_DNG, src)
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    # wait_for / _collect 里的 next_event 每一拍最多只看 10 s，而 GPU 上第一次
+    # load_image 要把 torch 与 CUDA 上下文立起来，静默可以远超 10 s；这一段只能耐心重新开拍，
+    # 不能把冷启动的等待报成导出坏了。
+    def _lenient(want, budget):
+        t_end = time.monotonic() + budget
+        while time.monotonic() < t_end:
+            try:
+                e = engine.next_event(timeout=10.0)
+            except TimeoutError:
+                continue
+            if e.get("event") == want:
+                return e
+            if e.get("event") == "error":
+                raise AssertionError(f"引擎报错: {e.get('error')}")
+        raise AssertionError(f"{budget}s 内没等到 {want}")
+
+    engine.send(cmd="load_image", path=src)
+    _lenient("image_ready", 120)          # 这个事件叫 image_ready，不是 image：写错一个字就是白等 120 秒
+    engine.send(cmd="set_strength", value=0.0)      # 把图层清回中立位
+    _lenient("frame", 120)
+    out = str(tmp_path / "out")
+    engine.send(cmd="export", out_dir=out, format="tif", images=[src], bit_depth=16)
+    done = _lenient("export_done", 180)
+    assert done["failed"] == 0, done
+    assert done["bit_depth"] == 16, done
+    img = done["images"][0]
+    assert img["bits"] == 16 and img["format"] == "tif", img
+    assert img["readback_max_diff"] == 0, img
+    assert all(x > 256 for x in img["levels_per_channel"]), img
+    assert img["low8_nonzero_px"] > 0, img
+    assert img["source"] == "libraw", img
+    assert os.path.isfile(img["out"]) and os.path.getsize(img["out"]) == img["bytes"]

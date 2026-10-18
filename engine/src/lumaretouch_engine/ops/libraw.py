@@ -318,6 +318,28 @@ def extract_thumb(path: str) -> dict:
         return _read_thumb(h, path)
 
 
+def identify(path: str) -> dict | None:
+    """只开文件读尺寸/机型，不解码不取预览——给"这一格该用哪种解法"那个决定用。
+
+    为什么需要它：真解码那两臂（自研读侧、LibRaw）都要先把整幅 CFA 解出来，而决定
+    "要不要用半幅"必须在解码**之前**知道源图尺寸。open_file 只读头部，实测一张
+    6.86 MP 的 DNG 约二十几毫秒，与它要省下的那 160 毫秒比可以忽略。
+    打不开或没有尺寸就回 None（调用方退回原来的全幅那一臂，不拿猜的尺寸做决定）。
+    """
+    try:
+        ensure_checked()
+        with Handle() as h:
+            h.open_file(path)
+            m = _read_meta(h)
+    except Exception:
+        return None
+    w, hh = int(m.get("i_w") or 0), int(m.get("i_h") or 0)
+    if w <= 0 or hh <= 0:
+        return None
+    return {"w": w, "h": hh, "camera": " ".join(x for x in (m.get("make"), m.get("model")) if x),
+            "color_maximum": int(m.get("color_maximum") or 0)}
+
+
 def _read_thumb(h: "Handle", path: str) -> dict:
     """真正取预览的那一层（不带自检，所以下面 self_check 能直接用它）。"""
     t0 = time.perf_counter()

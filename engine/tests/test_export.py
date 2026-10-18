@@ -485,3 +485,103 @@ def test_write_file_accepts_every_advertised_format(tmp_path):
 def test_default_tile_is_in_range():
     assert MIN_TILE <= DEFAULT_TILE <= MAX_TILE
     assert MAX_MARGIN > 0
+
+
+# ------------------------------------------------------------------ M9-e 16-bit 母档直通
+#
+# 这一节的判据只认三种说法：逐字节相等、每通道档位数量、低 8 位有没有内容。
+# 刻意**不拿 Pillow 当保真判据**：它能打开我们写的 16-bit TIFF，但读回来是 8-bit 的
+# mode='RGB'（实测），拿它比就等于拿"被降过样的那份"当尺子——差值恒 0 恰恰说明尺子坏了。
+# 保真靠 read_tiff16 那份独立实现与写侧对拍，同时留一条反例（8-bit 左移补零的假 16-bit）
+# 证明这几个读数真的会红。
+
+def test_tiff16_roundtrip_is_byte_exact():
+    from lumaretouch_engine.export import read_tiff16, write_tiff16
+    a = (np.random.default_rng(11).integers(0, 65536, (37, 53, 3))).astype(np.uint16)
+    import os
+    import tempfile
+    p = os.path.join(tempfile.mkdtemp(), "a.tif")
+    info = write_tiff16(a, p)
+    back = read_tiff16(p)
+    assert back.shape == a.shape and back.dtype == np.uint16, back.shape
+    assert np.array_equal(back, a), "落盘字节与内存里的母档不一致"
+    # 头 = 8(签名) + 2(条目数) + 12×10(条目) + 4(下一 IFD) + 6(BitsPerSample) = 140；之外全是像素
+    assert info["bytes"] == 37 * 53 * 3 * 2 + 140, info["bytes"]
+
+
+def test_tiff16_rejects_non_16bit_input(tmp_path):
+    """uint8 不许"升"成 16-bit：左移补零出来的是一张位数对、内容只有 8-bit 的假件。"""
+    from lumaretouch_engine.export import ExportError, write_tiff16
+    a = np.zeros((8, 8, 3), dtype=np.uint8)
+    with pytest.raises(ExportError, match="uint16"):
+        write_tiff16(a, str(tmp_path / "x.tif"))
+
+
+def test_low_bits_detector_catches_padded_fake(tmp_path):
+    """反例必须在场：把 8-bit 内容左移补零伪装成 16-bit，读数要认出低 8 位全 0。
+
+    没有这一条，上面那两个"真 16-bit"的用例可以靠一张实际只有 8-bit 内容的图恒绿。
+    """
+    from lumaretouch_engine.export import read_tiff16, write_tiff16
+    real = (np.random.default_rng(5).integers(0, 65536, (16, 16, 3))).astype(np.uint16)
+    fake = (real >> 8 << 8).astype(np.uint16)
+    write_tiff16(fake, str(tmp_path / "fake.tif"))
+    back = read_tiff16(str(tmp_path / "fake.tif"))
+    assert int(np.count_nonzero(back & 0xFF)) == 0, "补零件的低 8 位竟然有内容？判据失效"
+    write_tiff16(real, str(tmp_path / "real.tif"))
+    assert int(np.count_nonzero(read_tiff16(str(tmp_path / "real.tif")) & 0xFF)) > 0
+
+
+import os as _os
+from lumaretouch_engine.ops import libraw as _LR    # noqa: E402
+
+needs_libraw = pytest.mark.skipif(
+    not _LR.available(), reason="机器上没有系统 LibRaw（libraw_r.so）：16-bit 母档那一臂不适用")
+
+
+@needs_libraw
+@pytest.mark.skipif(not _os.path.isfile(_LR.PROBE_DNG),
+                    reason="缺 raw-probe.dng：重跑 packaging/make-raw-probe.py")
+def test_probe_dng_master_is_really_16bit(tmp_path):
+    """基线那一臂只出 8-bit：要 16-bit 就必须换后端，且 source 要说得出是谁解的。
+
+    这一条钉的是 M9-e 之前真正的那个问题：load_full(want_bits=16) 会先走自研读侧并把
+    uint8 当成结果交回来。所以既要求 dtype，也要求 source / bits 这两个名字同方向。
+    """
+    from lumaretouch_engine.decode import load_full
+    d8 = load_full(_LR.PROBE_DNG)
+    assert d8.rgb.dtype == np.uint8 and (d8.raw or {}).get("source") == "self_dng", \
+        (d8.rgb.dtype, (d8.raw or {}).get("source"))
+    d16 = load_full(_LR.PROBE_DNG, want_bits=16)
+    assert d16.rgb.dtype == np.uint16, d16.rgb.dtype
+    assert (d16.raw or {}).get("source") == "libraw", d16.raw
+    assert (d16.raw or {}).get("bits") == 16, d16.raw
+    assert int(d16.rgb.max()) > 255, "16-bit 写法的数据全窓在 8-bit 范围内：白电平没拉开"
+    assert (d16.raw or {}).get("used_preview") is False, "16-bit 不能来自内嵌预览"
+
+
+@needs_libraw
+@pytest.mark.skipif(not _os.path.isfile(_LR.PROBE_DNG), reason="缺 raw-probe.dng")
+def test_master_16bit_export_is_faithful_and_names_its_source(tmp_path):
+    from lumaretouch_engine.export import export_master_16bit
+    out = str(tmp_path / "m.tif")
+    r = export_master_16bit(_LR.PROBE_DNG, out)
+    assert r["bits"] == 16 and r["source"] == "libraw", r
+    assert r["readback_max_diff"] == 0, "落盘与内存母档不逐字节相等"
+    assert all(x > 256 for x in r["levels_per_channel"]), r["levels_per_channel"]
+    assert r["low8_nonzero_px"] > 0, "低 8 位全零：这是补零伪装的假 16-bit"
+    assert r["bytes"] == r["w"] * r["h"] * 3 * 2 + 140, r   # 无压缩：头 140 字节之外全是母档
+    assert r["src_format"] == "DNG", r
+
+
+def test_master_16bit_refuses_non_raw(tmp_path):
+    """没有 16-bit 母档就拒，不降级：交一张 8-bit 内容的 TIFF 却报 bits=16 是骗人。"""
+    from lumaretouch_engine.export import export_master_16bit
+    src = "engine/tests/fixtures/portrait-1024x1280.jpg"
+    if not _os.path.isfile(src):
+        src = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                            "tests/fixtures/portrait-1024x1280.jpg")
+    if not _os.path.isfile(src):
+        pytest.skip("缺 fixture 图")
+    with pytest.raises(ValueError, match="16-bit 直通只对相机 RAW 成立"):
+        export_master_16bit(src, str(tmp_path / "nope.tif"))

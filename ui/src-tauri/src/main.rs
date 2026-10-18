@@ -136,6 +136,9 @@ pub struct AppState {
     /// 能收哪些后缀（引擎 session.IMAGE_EXTS 报的那一份）：原生选择框的过滤器用它，
     /// 宿主不刻一份——名单漂了，用户就在选择框里选不到，而工程师那边说"支持"。
     image_exts: Mutex<Value>,
+    /// 导出位深能力（ready.export_bits，M9-e）：哪些位深对应哪些落盘格式由引擎说。
+    /// 前端自己刻一份"16-bit 只能写 TIFF"，就是引擎改口径时漏改的那一处。
+    export_bits: Mutex<Value>,
     /// 引擎最近一条 error（M9）：load_image 是"发出去就返回"的，失败只走 error 事件。
     /// 不接住它，宿主就永远看不见"为什么打不开"——用户那边就是点了没反应。
     last_error: Mutex<Option<String>>,
@@ -212,6 +215,7 @@ impl AppState {
             raw_backends: Mutex::new(Value::Null),
             matting_backends: Mutex::new(Value::Null),
             image_exts: Mutex::new(Value::Null),
+            export_bits: Mutex::new(Value::Null),
             last_error: Mutex::new(None),
             session: Mutex::new(None),
             thumbs: Mutex::new(std::collections::HashMap::new()),
@@ -400,6 +404,12 @@ impl AppState {
             Some(r) if r.is_array() => r.clone(),
             _ => Value::Null,
         };
+        // 位深能力是个字典（{"8":[…],"16":[…]}）：没报就置 Null，老引擎不说这一句时
+        // UI 不画 16-bit 那个勾，而不是默认"应该支持"
+        *self.export_bits.lock().unwrap() = match v.get("export_bits") {
+            Some(r) if r.is_object() => r.clone(),
+            _ => Value::Null,
+        };
         *self.matting_backends.lock().unwrap() = match v.get("matting_backends") {
             Some(r) if r.is_object() => r.clone(),
             _ => Value::Null,
@@ -556,7 +566,8 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     *st.export_caps.lock().unwrap() = Value::Null;   // 能力等 ready 重新报
     *st.raw_backends.lock().unwrap() = Value::Null;   // RAW 能力清单等 ready 重新报
     *st.matting_backends.lock().unwrap() = Value::Null; // 抠图后端清单同理（M6）
-    *st.image_exts.lock().unwrap() = Value::Null;   // 后缀名单同理：等新进程报
+    *st.image_exts.lock().unwrap() = Value::Null;
+    *st.export_bits.lock().unwrap() = Value::Null;   // 后缀名单同理：等新进程报
     *st.last_error.lock().unwrap() = None;                // 新进程没说错过
     // 底片条也是引擎进程的事实：新进程还没扫过目录，留着旧列表就是让用户点一个
     // 这个进程从没见过的 index
@@ -918,6 +929,10 @@ fn export(
     scale: Option<i64>,
     sharpen: Option<f64>,
     upscale_backend: Option<String>,
+    // 导出位深（M9-e）：宿主不填默认值。不给就让引擎按它自己的 8 走，
+    // 宿主把 8 写死在这里就是把引擎的默认值拷进了宿主。（函数参数上不能挂 ///：
+    // 那是文档注释，只许贴在条目自己那一级，cargo 会直接拒掉这一份签名）
+    bit_depth: Option<i64>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "export", "action": "start", "out_dir": out_dir});
     if let Some(v) = format {
@@ -940,6 +955,9 @@ fn export(
     }
     if let Some(v) = upscale_backend {
         cmd["upscale_backend"] = json!(v);
+    }
+    if let Some(v) = bit_depth {
+        cmd["bit_depth"] = json!(v);
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
@@ -1204,6 +1222,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let raw_backends = state.raw_backends.lock().unwrap().clone();
     let matting_backends = state.matting_backends.lock().unwrap().clone();
     let image_exts = state.image_exts.lock().unwrap().clone();
+    let export_bits = state.export_bits.lock().unwrap().clone();
     let last_error = state.last_error.lock().unwrap().clone();
     let session = state.session.lock().unwrap().clone();
     let session_rev = *state.session_rev.lock().unwrap();
@@ -1226,6 +1245,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            // 抠图后端（M6）：UI 的下拉项由这一份决定，不在前端猜"装了 birefnet 就能选"
            "matting_backends": matting_backends,
            "image_exts": image_exts,
+           "export_bits": export_bits,
            "last_error": last_error,
            // 底片条的“有没有、几张、当前哪一格”进轮询（小），像素本体不进：
            // 那两百张要由 filmstrip 单独取，且只在 session_rev 变了的时候取
@@ -1267,7 +1287,8 @@ fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     *state.export_caps.lock().unwrap() = Value::Null;
     *state.raw_backends.lock().unwrap() = Value::Null;    // 能力是引擎报的，不是永久的
     *state.matting_backends.lock().unwrap() = Value::Null; // 同上（M6）
-    *state.image_exts.lock().unwrap() = Value::Null;  // 同上
+    *state.image_exts.lock().unwrap() = Value::Null;
+    *state.export_bits.lock().unwrap() = Value::Null;  // 同上
     *state.last_error.lock().unwrap() = None;          // 同上
     *state.session.lock().unwrap() = None;
     state.thumbs.lock().unwrap().clear();
