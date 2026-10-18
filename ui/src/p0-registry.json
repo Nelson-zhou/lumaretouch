@@ -1,0 +1,774 @@
+{
+  "schema_version": "1.0",
+  "derived_from": "P0参数注册表.json",
+  "source_sha256": "b8726308161da098afad8f0604855e74359f47603161870db26fe4b5fbafc94e",
+  "null_semantics": "未知待决策；neutral=null不能解释为零，boolean语义也不可猜默认",
+  "identity_rule": "operation_id+parameter_key唯一；稳定ID不得按展示文本改名",
+  "frozen_by": "tools/freeze-p0-registry.py",
+  "decisions_rationale_doc": "docs/adr/0003-p0-parameter-decisions-frozen.md",
+  "scope_single_face": {
+    "decision": "D-P0-02",
+    "rule": "target_scope=single_face 的操作，仅在恰好检测到 1 张可用人脸时启用；检测到 0 张或多于一张时，控件必须显式禁用并说明「需要且仅需要一张可用人脸」。",
+    "reason": "多人照片上「对这张脸做的改动 applied 到全部脸」是手册 SCOPE-001 定义的超范围行为。宁可少给一次自动效果，也不能替别人改脸。",
+    "usable_face_criteria": "backend ∈ {mediapipe} 且 landmarks 形状 (478,3) 且 face.geometry_warning(box) 为 False——synthetic 的网格占位几何不算可用人脸（它按脸形语义取点会搬到无关位置且画面看不出错）。"
+  },
+  "quality_thresholds": {
+    "frozen_at": "由本生成器随版本冻结；改动必须走 ADR",
+    "identity": {
+      "definition": "中性值下输出必须与参考渲染逐字节相同（16-bit 主链，逐通道 uint16 比较）",
+      "tolerance": 0,
+      "note": "0 容差不适用于含色彩管理的链路：那条走下面 color_management 的色差判据。"
+    },
+    "illegal_input": {
+      "definition": "越界/NaN/Inf/类型错误一律拒绝并回明确原因，不夹取、不静默改值",
+      "must_not": [
+        "clamp silently",
+        "coerce to 0",
+        "execute external code"
+      ]
+    },
+    "out_of_scope_change": {
+      "definition": "蒙版/目标外的变化不得超过批准边缘",
+      "edge_pixels_max": 2,
+      "channel_delta_beyond_edge": 1,
+      "reason": "2 px 是肤色定向层羽化（[1,2,1]/4，支撑半径 2 px）的既有事实，把它写成阈值而不是假装它是 0。"
+    },
+    "color_management": {
+      "definition": "参考色块在输出上的 ΔE00 误差",
+      "delta_e00_max": 2.0,
+      "bit_depth_guard": "16-bit 主链不得静默降 8-bit：导出侧必须自报位深读数并与请求一致"
+    },
+    "source_readonly": {
+      "definition": "全部源文件 sha256 与字节数在处理前后一致；导出目标路径等于输入路径即拒绝"
+    }
+  },
+  "entries": [
+    {
+      "requirement_id": "LNX-P0-EXPOSURE",
+      "operation_id": "lnx.exposure.v1",
+      "parameter_key": "ev",
+      "type": "number",
+      "unit": "EV",
+      "neutral": 0.0,
+      "range": {
+        "min": -5.0,
+        "max": 5.0,
+        "step": 0.01
+      },
+      "enum": null,
+      "target_scope": [
+        "image"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32455"
+      ],
+      "reason": "±5 EV、步进 0.01。暗房主流上限（Lightroom 是 ±5，Capture One 同量级）；0.01 是因为导出比对要能分辨 1/100 EV，而更细的步进在 16-bit 上跨不过一个可辨台阶。"
+    },
+    {
+      "requirement_id": "LNX-P0-WHITE-BALANCE",
+      "operation_id": "lnx.white_balance.v1",
+      "parameter_key": "temperature_shift",
+      "type": "number",
+      "unit": "kelvin_offset",
+      "neutral": 0.0,
+      "range": {
+        "min": -2000.0,
+        "max": 2000.0,
+        "step": 25.0
+      },
+      "enum": null,
+      "target_scope": [
+        "image"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32455"
+      ],
+      "reason": "开尔文**偏移**而不是绝对值：绝对值要拿源 as-shot 色温做基准，RAW 里没有 as-shot 时（合成/无 EXIF）绝对值语义直接塌掉；偏移对任何源都成立。2000 K 上限覆盖白炽灯到阴影的全行程，25 K 步进是工程上不会误读的粒度。"
+    },
+    {
+      "requirement_id": "LNX-P0-WHITE-BALANCE",
+      "operation_id": "lnx.white_balance.v1",
+      "parameter_key": "tint_shift",
+      "type": "number",
+      "unit": "normalized",
+      "neutral": 0.0,
+      "range": {
+        "min": -1.0,
+        "max": 1.0,
+        "step": 0.01
+      },
+      "enum": null,
+      "target_scope": [
+        "image"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32455"
+      ],
+      "reason": "绿–洋红是色温之外的正交轴，没有物理单位；用归一 [-1,1] 而不是编一个 'tint 单位'。引擎侧它本来就落到对 G 通道的乘性增益，归一化与实现之间没有换算层就没有谎。"
+    },
+    {
+      "requirement_id": "LNX-P0-CROP",
+      "operation_id": "lnx.crop.v1",
+      "parameter_key": "rect_normalized",
+      "type": "array[4]",
+      "unit": "normalized_source_coordinates",
+      "neutral": [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "range": {
+        "per_coordinate_min": 0.0,
+        "per_coordinate_max": 1.0,
+        "constraints": "x0<x1;y0<y1"
+      },
+      "enum": null,
+      "target_scope": [
+        "image"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32478"
+      ],
+      "reason": "原件已给出逐坐标 [0,1] 与 x0<x1;y0<y1，中性 [0,0,1,1] 就是全画幅——这条不是重新决策，是把原件的空值语义坐实：中性=不裁剪=逐字节等同原图（除方向规范化）。"
+    },
+    {
+      "requirement_id": "LNX-P0-CROP",
+      "operation_id": "lnx.crop.v1",
+      "parameter_key": "rotation_degrees",
+      "type": "number",
+      "unit": "degree",
+      "neutral": 0.0,
+      "range": {
+        "min": -180.0,
+        "max": 180.0,
+        "step": 0.1
+      },
+      "enum": null,
+      "target_scope": [
+        "image"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32478"
+      ],
+      "reason": "±180 是单值覆盖全圆的唯一自然区间（±90 表达不了倒置，0..360 让 0 与 360 两个值表示同一件事、破坏中性唯一性）。0.1° 与主流修图工具的微调粒度一致。"
+    },
+    {
+      "requirement_id": "LNX-P0-MASK",
+      "operation_id": "lnx.mask.v1",
+      "parameter_key": "analysis_enabled",
+      "type": "boolean",
+      "unit": null,
+      "neutral": false,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "single_face"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32464"
+      ],
+      "reason": "默认关：自动分析是一条会改变画面的推理路径，开箱默认关才不会让「我什么都没调但图变了」发生。"
+    },
+    {
+      "requirement_id": "LNX-P0-MASK",
+      "operation_id": "lnx.mask.v1",
+      "parameter_key": "overlay_visible",
+      "type": "boolean",
+      "unit": null,
+      "neutral": false,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "preview"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32464"
+      ],
+      "reason": "蒙版叠加是诊断视图，默认关。"
+    },
+    {
+      "requirement_id": "LNX-P0-MASK",
+      "operation_id": "lnx.mask.v1",
+      "parameter_key": "feather",
+      "type": "number",
+      "unit": "source_pixels",
+      "neutral": 0.0,
+      "range": {
+        "min": 0.0,
+        "max": 256.0,
+        "step": 1.0
+      },
+      "enum": null,
+      "target_scope": [
+        "single_face"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "reason": "单位定成**源像素**而不是归一比例：256 在 443 px 的代理帧上会溢出，而像素值在代理/全分辨率之间是有明确换算的（按长边比例），归一比例反而让「同一条目在两种分辨率下羽化宽度不同」这种错无法被发现。上限 256 覆盖半张代理脸的过渡带。中性 0 = 硬边，必须是可复现的硬边，否则羽化开关的对拍就没有 0 位可退。"
+    },
+    {
+      "requirement_id": "LNX-P0-BLEMISH",
+      "operation_id": "lnx.blemish.v1",
+      "parameter_key": "enabled",
+      "type": "boolean",
+      "unit": null,
+      "neutral": false,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "single_face"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32464"
+      ],
+      "reason": "同上：不改画面的默认。"
+    },
+    {
+      "requirement_id": "LNX-P0-BLEMISH",
+      "operation_id": "lnx.blemish.v1",
+      "parameter_key": "strength",
+      "type": "number",
+      "unit": "normalized",
+      "neutral": 0.0,
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.01
+      },
+      "enum": null,
+      "target_scope": [
+        "single_face"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32464"
+      ],
+      "reason": "归一 [0,1]。祛瑕强度是「这个算法走多远」，不是任何物理量；0 必须是精确恒等，这条是 P0-BLEMISH-NEUTRAL 用例的判据本身。"
+    },
+    {
+      "requirement_id": "LNX-P0-BLEMISH",
+      "operation_id": "lnx.blemish.v1",
+      "parameter_key": "protect_identity_marks",
+      "type": "boolean",
+      "unit": null,
+      "neutral": true,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "single_face"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32464"
+      ],
+      "reason": "**默认开**。痣、疤、纹身是身份特征；祛瑕算法默认把它们当瑕疵抹掉是产品级事故，而且用户通常看不出来（少了一颗痣不会有人报警）。保守一侧的默认值在这里比「效果更强」重要。"
+    },
+    {
+      "requirement_id": "LNX-P0-SKIN",
+      "operation_id": "lnx.skin.v1",
+      "parameter_key": "enabled",
+      "type": "boolean",
+      "unit": null,
+      "neutral": false,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "single_face"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32465"
+      ],
+      "reason": "同 enabled 一族：默认不改画面。"
+    },
+    {
+      "requirement_id": "LNX-P0-SKIN",
+      "operation_id": "lnx.skin.v1",
+      "parameter_key": "strength",
+      "type": "number",
+      "unit": "normalized",
+      "neutral": 0.0,
+      "range": {
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.01
+      },
+      "enum": null,
+      "target_scope": [
+        "single_face"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32465"
+      ],
+      "reason": "与 blemish.strength 同口径，两个「强度」必须同一个含义，否则批量套用时会出一个0.5 是半力、另一个 0.5 是别的什么。"
+    },
+    {
+      "requirement_id": "LNX-P0-EXPORT",
+      "operation_id": "lnx.export.v1",
+      "parameter_key": "format",
+      "type": "enum",
+      "unit": null,
+      "neutral": "jpeg",
+      "range": null,
+      "enum": [
+        "jpeg",
+        "tiff"
+      ],
+      "target_scope": [
+        "export_job"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32483"
+      ],
+      "reason": "枚举是原件给的（jpeg/tiff），本条只定中性：jpeg 是「拖进来就能分享」的默认出口。16-bit 直通只在 tiff 下承诺，jpeg 8-bit 是格式本身的性质，不是降级。"
+    },
+    {
+      "requirement_id": "LNX-P0-EXPORT",
+      "operation_id": "lnx.export.v1",
+      "parameter_key": "jpeg_quality",
+      "type": "number",
+      "unit": "percent",
+      "neutral": 92,
+      "range": {
+        "min": 1,
+        "max": 100,
+        "step": 1
+      },
+      "enum": null,
+      "target_scope": [
+        "export_job"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32483"
+      ],
+      "reason": "92：libjpeg 惯例的「视觉无损」档，也是主流导出对话框的默认。定这个数是为了P0 用例有可复现基准，不是为了最优压缩。"
+    },
+    {
+      "requirement_id": "LNX-P0-EXPORT",
+      "operation_id": "lnx.export.v1",
+      "parameter_key": "tiff_compression",
+      "type": "enum",
+      "unit": null,
+      "neutral": "deflate",
+      "range": null,
+      "enum": [
+        "none",
+        "deflate",
+        "lzw"
+      ],
+      "target_scope": [
+        "export_job"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32483"
+      ],
+      "reason": "全部无损候选（TIFF 里没有有损的合理位置）。默认 deflate：Pillow 与主流读取端都支持、压缩率优于 none。lzw 保留是因为 TIFF 6.0 里它是原生公民，某些管线只认它。"
+    },
+    {
+      "requirement_id": "LNX-P0-EXPORT",
+      "operation_id": "lnx.export.v1",
+      "parameter_key": "output_profile",
+      "type": "asset_ref",
+      "unit": null,
+      "neutral": "srgb",
+      "range": null,
+      "enum": [
+        "source",
+        "srgb",
+        "adobergb",
+        "display_p3"
+      ],
+      "target_scope": [
+        "export_job"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32483"
+      ],
+      "reason": "默认 srgb：接收方最广、且嵌入 ICC 后不会让浏览器把它读成「过饱和」。source 表示不转换只透传源描述文件——这一档必须存在，否则高位深工作流被迫过一次色域转换。"
+    },
+    {
+      "requirement_id": "LNX-P0-EXPORT",
+      "operation_id": "lnx.export.v1",
+      "parameter_key": "metadata_include_gps",
+      "type": "boolean",
+      "unit": null,
+      "neutral": false,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "export_job"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32483"
+      ],
+      "reason": "原件已给 False，坐实它：色彩/隐私用例 COLOR-003 的判据就是默认不外泄位置。"
+    },
+    {
+      "requirement_id": "LNX-P0-BATCH",
+      "operation_id": "lnx.batch.v1",
+      "parameter_key": "module_scope",
+      "type": "set[operation_id]",
+      "unit": null,
+      "neutral": [],
+      "range": {
+        "min_items": 1,
+        "constraints": "非空才能 preflight 通过"
+      },
+      "enum": null,
+      "target_scope": [
+        "selected_assets"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32480"
+      ],
+      "reason": "中性是空集，且**空集不允许通过 preflight**。原件写 neutral=[]，但如果把空集解释成「全部模块」，就等于批量默认套用所有操作——那正是手册警告的越界。所以空集只能是不完整配置。"
+    },
+    {
+      "requirement_id": "LNX-P0-BATCH",
+      "operation_id": "lnx.batch.v1",
+      "parameter_key": "conflict_policy",
+      "type": "enum",
+      "unit": null,
+      "neutral": "skip_and_report",
+      "range": null,
+      "enum": [
+        "skip_and_report",
+        "recheck"
+      ],
+      "target_scope": [
+        "selected_assets"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "reason": "枚举里两个都是**不覆盖**：没有 overwrite 选项不是遗漏，是 EXPORT-001 的「无无提示覆盖」要求的直接体现。默认 skip_and_report——跳过并报告比回头再查一遍更容易在批量跑完后被读到。"
+    },
+    {
+      "requirement_id": "LNX-P0-PROJECT",
+      "operation_id": "lnx.project.v1",
+      "parameter_key": "create",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32448"
+      ],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-PROJECT",
+      "operation_id": "lnx.project.v1",
+      "parameter_key": "open",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32448"
+      ],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-PROJECT",
+      "operation_id": "lnx.project.v1",
+      "parameter_key": "save",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32448"
+      ],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-IMPORT",
+      "operation_id": "lnx.import.v1",
+      "parameter_key": "choose_files",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32448"
+      ],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-IMPORT",
+      "operation_id": "lnx.import.v1",
+      "parameter_key": "choose_folder",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32448"
+      ],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-HISTORY",
+      "operation_id": "lnx.history.v1",
+      "parameter_key": "undo",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/47209"
+      ],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-HISTORY",
+      "operation_id": "lnx.history.v1",
+      "parameter_key": "redo",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/47209"
+      ],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-PRESET",
+      "operation_id": "lnx.preset.v1",
+      "parameter_key": "save",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32457"
+      ],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-PRESET",
+      "operation_id": "lnx.preset.v1",
+      "parameter_key": "apply",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32457"
+      ],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-BATCH",
+      "operation_id": "lnx.batch.v1",
+      "parameter_key": "preflight",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-BATCH",
+      "operation_id": "lnx.batch.v1",
+      "parameter_key": "commit",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-TASK",
+      "operation_id": "lnx.task.v1",
+      "parameter_key": "pause",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-TASK",
+      "operation_id": "lnx.task.v1",
+      "parameter_key": "resume",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-TASK",
+      "operation_id": "lnx.task.v1",
+      "parameter_key": "cancel",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-TASK",
+      "operation_id": "lnx.task.v1",
+      "parameter_key": "retry",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "reason": null
+    },
+    {
+      "requirement_id": "LNX-P0-EXPORT",
+      "operation_id": "lnx.export.v1",
+      "parameter_key": "start",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32483"
+      ],
+      "reason": null
+    }
+  ]
+}
