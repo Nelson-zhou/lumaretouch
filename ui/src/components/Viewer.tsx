@@ -218,6 +218,7 @@ export default function Viewer({
     let stop = false;
     let drawn = 0;
     let fps = 0;
+    let lastHudAt = 0;   // HUD 节流的上一次时刻（见 loop 末尾那段）
     let fpsWindowStart = performance.now();
 
     // 取帧与绘制解耦：早先的写法是在 rAF 里 await pullFrame()，排下一个 rAF 排在
@@ -324,13 +325,20 @@ export default function Viewer({
         framePresented(p.seq).catch(() => undefined);
       }
       const now = performance.now();
-      if (now - fpsWindowStart >= 500) {
+      const turned = now - fpsWindowStart >= 500;
+      if (turned) {
         fps = (drawn * 1000) / (now - fpsWindowStart);
         drawn = 0;
         fpsWindowStart = now;
-        // HUD 只在统计窗口翻转时更新：每帧回调会拖着整个 React 面板做 60 次/秒
-        // 重渲染，而那本身就是要测的那段开销，不能让它留在测量回路里。
-        if (f) onHudRef.current({ seq: f.seq, w: curW, h: curH, fps, lastError: "" });
+      }
+      // HUD 更新：帧到达就得报，但每帧回调会拖着整个 React 面板做 60 次/秒重渲染
+      // （那本身是要测的开销），所以跑帧流时按统计窗口翻转 + 250 ms 节流。
+      // 上一版把它整个挂在"翻转那一拍恰好有帧"里，于是**静态图永远不更新**：一张
+      // 443×553 的 PNG 导入成功、宿主已送出 4 帧，HUD 却写着「序号 0 · 分辨率 0×0 ·
+      // 0.0 fps」——用户拿它判断"图进来了没有"，它就在这里骗人。
+      if (f && (turned || now - lastHudAt >= 250)) {
+        lastHudAt = now;
+        onHudRef.current({ seq: f.seq, w: curW, h: curH, fps, lastError: "" });
       }
       requestAnimationFrame(loop);
     };

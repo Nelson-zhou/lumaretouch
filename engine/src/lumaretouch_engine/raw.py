@@ -1081,10 +1081,17 @@ def _render_torch(pixels, m: RawMeta, is_cfa: bool, scale_t, expo: float,
 
 
 def plugin_installed() -> bool:
-    """可选插件（rawpy 包 LibRaw）在不在。只用 find_spec，不 import：
-    基线不许因为「探测」而去链接一个 LGPL 库。"""
-    import importlib.util
-    return importlib.util.find_spec("rawpy") is not None
+    """真解码后端到底在不在。
+
+    这一位曾经只查 `rawpy` 那个 Python 包（只用 find_spec，不 import：基线不许因为
+    「探测」而去链接一个 LGPL 库）。但 M9-c 起真解码走的是裸 ctypes 绑系统
+    `libraw_r.so.23`，rawpy 从来没装、也不该装——多一个 Python 依赖换不来任何能力。
+    于是装机件明明解得开 CR2，ready 却报「插件未装、一律如实拒绝」：往低报也是谎报，
+    而且它把 M9-h 刚立的口径在用户面前说反了。现在报的是**那个库加载得到吗**，
+    判据来自 ops.libraw 的自检（含偏移表核对），不是某个包名在不在 site-packages 里。
+    """
+    from .ops import libraw as LR
+    return LR.available()
 
 
 def raw_backends() -> dict:

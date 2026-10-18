@@ -827,3 +827,17 @@ def test_raw_backends_keeps_vendor_formats_unverified():
         assert suf in bb["vendor_suffixes"]
     # 16-bit 直通导出属于"已验"那一栏的说法要有出处，不能只是列表里多一行字
     assert any("16-bit" in s for s in bb["verified_full_chain"]), bb["verified_full_chain"]
+
+
+def test_plugin_installed_names_the_real_backend_not_a_package():
+    """plugin_installed 报的是"系统 LibRaw 加载得到吗"，不是"rawpy 这个包在不在"。
+
+    真解码走的是裸 ctypes 绑 libraw_r.so.23，rawpy 从来没装也不该装。上一版拿
+    find_spec("rawpy") 当这一位，于是一台解得开 CR2 的机器在界面上写着"未装 LibRaw
+    插件时一律如实拒绝"——往低报也是谎报，而且它把 M9-h 刚立的口径说反了。
+    """
+    import importlib.util
+    from lumaretouch_engine.ops import libraw as LR
+    assert R.plugin_installed() == LR.available(), (R.plugin_installed(), LR.available())
+    if importlib.util.find_spec("rawpy") is None and LR.available():
+        assert R.plugin_installed() is True, "有系统库、没 rawpy 包：这一位必须是 True"

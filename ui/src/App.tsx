@@ -336,9 +336,23 @@ export default function App() {
       // 静态臂不跑 LRT_AUTO_BENCH，所以入图这步得自己做：用的就是用户那条导入命令
       // （onImport 里同一个 loadImage → Rust → 引擎 cmd_load_image），而不是另开一套
       // 测试专用通路——否则这一臂量的就不是用户那一条路。
+      let importBtn: { found: boolean; text: string } = { found: false, text: "" };
       if (env.load_image) {
-        await loadImage(env.load_image, { maxPx: env.max_px ?? undefined, strength: 0, precompute: "auto" })
-          .catch((e) => report(`M0_ERROR 视口探针导入失败: ${e}`));
+        if (/^manual/.test(env.viewport_probe)) {
+          // 手动臂：只把路径填进输入框，然后真的去点「导入」那一个按钮。这一条走的是
+          // onImport 全链（trim 校验、setBusy、loadImage、waitImportOutcome、就地红字），
+          // 而不是探针直调 loadImage——用户报的那次黑屏发生在按钮这条路上，自动臂的
+          // 读数替它不作证：两条路的差别正好可能是缺陷所在。
+          setImgPath(env.load_image);
+          await sleep(150);                       // 让 React 把 imgPath 提交进去
+          const b = Array.from(document.querySelectorAll("button"))
+            .find((x) => (x.textContent ?? "").trim() === t("retouch.import"));
+          importBtn = { found: !!b, text: (b?.textContent ?? "").trim() };
+          b?.click();
+        } else {
+          await loadImage(env.load_image, { maxPx: env.max_px ?? undefined, strength: 0, precompute: "auto" })
+            .catch((e) => report(`M0_ERROR 视口探针导入失败: ${e}`));
+        }
       }
       // 必须先等到真有一帧送达。探针在首帧之前跑会读到空缓冲，那种"黑"是这个缺陷的
       // 假阳性，量出来会把自己骗过去
@@ -417,7 +431,7 @@ export default function App() {
         negErrText = `反向门自身异常: ${String(e)}`;   // 异常也要报出来，不许静默吞掉
       }
       await report(`M0_VIEWPORT ${JSON.stringify({
-        tag: env.viewport_probe, hasCanvas: !!cv, hasGL: !!gl,
+        tag: env.viewport_probe, hasCanvas: !!cv, hasGL: !!gl, importBtn,
         drawingBuffer: [gl?.drawingBufferWidth ?? 0, gl?.drawingBufferHeight ?? 0],
         frameDims, canvasCss: rect ? [Math.round(rect.width), Math.round(rect.height), Math.round(rect.bottom)] : null,
         canvasBottom: rect ? Math.round(rect.bottom) : -1,
