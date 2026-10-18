@@ -8,7 +8,7 @@ import {
   benchStart, benchStats, engineStatus, loadImage, m0Env, parseFrameHead, peekFrame,
   quit, report, runDeform,
   fetchFilmstrip, runExport, runGrade, runHistory, runInpaint, runLight, runLut, runSession, runBackground,
-  setStrength, shutdownEngine, startEngine,
+  setCompare, setStrength, shutdownEngine, startEngine,
   type BenchOptions, type DeformInfo, type DocState, type EngineRuntime, type EngineStatus, type ExportDone,
   type ExportProgress, type HistoryReport, type HistoryState, type ImageReady,
   type InpaintInfo, type SessionState,
@@ -92,6 +92,8 @@ export default function App() {
   const poll = useRef<number | null>(null);
 
   // ---- 精修台（M1-3c/M1-4）：图路径、磨皮参数、通道、画笔 ----
+  const [comparing, setComparing] = useState(false);   // 按住看原图中（不改会话强度）
+  const comparingRef = useRef(false);
   const [mirrorOn, setMirrorOn] = useState(true);   // 显示层开关，见 Viewer.tsx mirror 那段
   const [imgPath, setImgPath] = useState("");
   // 路径错误就地显示在输入框下方。原来它只落到 dragNote——那行灰字在窗口另一头，
@@ -478,6 +480,25 @@ export default function App() {
           back.mirrorNonBlack = +(mn / (mir.width * mir.height)).toFixed(4);
         } else {
           back.mirrorFail = "no 2d ctx";
+        }
+      }
+      // 对比按钮的真窗口自证：把强度拉到最大（半径也拉大，让差异看得见），然后真的对
+      // 那个按钮派发 pointerdown/pointerup——走的是 cmpOn/cmpOff 同一条 React 处理链，
+      // 不是另开一条测试通路。外部在 HELD 与 RELEASED 两段各截一张图，比对视口像素：
+      // 两张一样就说明按钮没作用，这里必须让它红。
+      if (/cmp/.test(env.viewport_probe)) {
+        const btn = Array.from(document.querySelectorAll("button"))
+          .find((b) => (b.textContent ?? "").trim() === t("retouch.compare")) as HTMLButtonElement | undefined;
+        await report(`M0_CMP_ARMED ${JSON.stringify({ found: !!btn, disabled: !!btn?.disabled })}`);
+        if (btn) {
+          await setStrength(1.0, { radius: 40 }).catch(() => undefined);
+          await sleep(600);
+          btn.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 7, isPrimary: true }));
+          await report("M0_CMP_HELD");            // 外部：这一拍截"原图"
+          await sleep(3200);
+          btn.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 7, isPrimary: true }));
+          await report("M0_CMP_RELEASED");        // 外部：这一拍截"修好的图"
+          await sleep(1600);
         }
       }
       const scrollH = document.documentElement.scrollHeight;
@@ -1495,6 +1516,36 @@ export default function App() {
     }
   }
 
+  /** 对比：按住=临时出一帧原图，松开=回到修好的那一版。
+   *  走引擎的 compare 而不是 set_strength(0)：会话强度不动、撤销栈不占步，
+   *  松手后滑块位置与画面都还是用户离开时那一版。 */
+  async function cmpOn(e: React.PointerEvent<HTMLButtonElement>) {
+    if (!pid || comparingRef.current) return;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* 拿不到捕获不影响对比 */ }
+    comparingRef.current = true;
+    setComparing(true);
+    await setCompare(true).catch((err) => { setDragNote(String(err)); });
+  }
+  async function cmpOff() {
+    if (!comparingRef.current) return;
+    comparingRef.current = false;
+    setComparing(false);
+    await setCompare(false).catch((err) => { setDragNote(String(err)); });
+  }
+  // 指针在窗口外松开、或按住时切走窗口：pointerup 可能永远不来，那样画面会停在原图。
+  // 所以这三条兜底不是装饰——"松开没回来"比没有对比按钮更糟。
+  useEffect(() => {
+    const off = () => { void cmpOff(); };
+    window.addEventListener("blur", off);
+    window.addEventListener("pointerup", off);
+    window.addEventListener("pointercancel", off);
+    return () => {
+      window.removeEventListener("blur", off);
+      window.removeEventListener("pointerup", off);
+      window.removeEventListener("pointercancel", off);
+    };
+  }, [pid]);
+
   /** 强度：零推理通路，可以逐事件发；唯一要卡住的是 IPC 排队频率。 */
   function onStrength(v: number) {
     setStrengthV(v);
@@ -1859,6 +1910,15 @@ export default function App() {
         </div>
         <label className="k">{t("retouch.strength")} · {strength.toFixed(2)}</label>
         <input type="range" min={0} max={1} step={0.01} value={strength} onChange={(e) => onStrength(+e.target.value)} style={{ width: "100%" }} />
+        <button className={comparing ? "cmp on" : "cmp"}
+                onPointerDown={(e) => { void cmpOn(e); }}
+                onPointerUp={() => { void cmpOff(); }}
+                onLostPointerCapture={() => { void cmpOff(); }}
+                disabled={!pid || !status?.image}
+                aria-pressed={comparing}
+                title={t("retouch.compareOn")}>
+          {comparing ? t("retouch.compareOn") : t("retouch.compare")}
+        </button>
         <label className="k">{t("retouch.radius")} · {radius}</label>
         <input type="range" min={1} max={60} step={1} value={radius} onChange={(e) => setRadius(+e.target.value)}
                onPointerUp={onParamCommit} onKeyUp={onParamCommit} style={{ width: "100%" }} />

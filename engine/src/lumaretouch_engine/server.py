@@ -1668,7 +1668,7 @@ class Engine:
         emit(fr)
 
     # ------------------------------------------------------------ 消除笔（M1-4）
-    def _write_current_frame(self, mode: str) -> dict:
+    def _write_current_frame(self, mode: str, *, strength_override: float | None = None) -> dict:
         """把当前会话渲染一帧并写 shm，返回 frame 事件字段（带 render_ms，调用方 pop）。
 
         set_strength / inpaint 都走这一个出口；load_image 也渲染+写 shm，但它面对的是刚刚
@@ -1680,12 +1680,44 @@ class Engine:
             raise RuntimeError(f"shm {getattr(self.shm, 'w', '?')}x{getattr(self.shm, 'h', '?')} "
                                f"!= 会话 {self._vram.w}x{self._vram.h}：不许把会话尺寸的帧写进别人的槽")
         t0 = monotonic_ns()
-        self._vram.render(self._strength, channel=self._channel, **self._params)
+        # 临时强度只作用于这一帧：会话里那个 self._strength 一个字不改（对比不是编辑）
+        st = self._strength if strength_override is None else float(strength_override)
+        self._vram.render(st, channel=self._channel, **self._params)
         render_ms = (monotonic_ns() - t0) / 1e6
         with self._wlock:
             seq, t_emit, slot = self.shm.write_frame(self._vram.read_back())
         return {"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
-                "w": self.shm.w, "h": self.shm.h, "mode": mode, "render_ms": round(render_ms, 2)}
+                "w": self.shm.w, "h": self.shm.h, "mode": mode, "render_ms": round(render_ms, 2),
+                "strength": st}
+
+    def cmd_compare(self, p: dict):
+        """「按住看原图」：临时按强度 0 出一帧，不改会话状态、不进撤销栈。
+
+        为什么不复用 set_strength：那条在 EDIT_CMDS 里，按住再松开会在撤销栈上留一步
+        ——而"看一眼原图"根本不是编辑动作，用户下一次 Ctrl+Z 不该撤掉一次查看。
+        强度本来就不进滤波（只当混合系数），所以这条路和拖滑块一样是零推理通路，
+        代价只有一次混合渲染。on=false 就是把会话里那一版重新出一帧（回到修好的图）。
+        """
+        # 参数校验排在最前（与 cmd_history 同一顺序）：一条写坏的命令应当被报成
+        # "写坏了"，而不是被状态守卫抢先报成"还没导进来"——后者会把真正的笔误藏起来。
+        unknown = set(p) - {"cmd", "on"}
+        if unknown:
+            emit({"event": "error", "error": f"compare 收到不认识的参数：{sorted(unknown)}"})
+            return
+        if not self._image_loaded or self._vram is None:
+            emit({"event": "error", "error": "尚未 load_image"})
+            return
+        if self.shm is None or (self.shm.w, self.shm.h) != (self._vram.w, self._vram.h):
+            emit({"event": "error", "error": f"shm {getattr(self.shm, 'w', '?')}x{getattr(self.shm, 'h', '?')} "
+                  f"!= 会话 {self._vram.w}x{self._vram.h}，请先 load_image"})
+            return
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝 compare：先 bench_stop"})
+            return
+        on = bool(p.get("on", True))
+        fr = self._write_current_frame("compare", strength_override=0.0 if on else None)
+        fr.pop("render_ms")          # 与 set_strength 同一口径：这一笔随 params_set 报，不塞进 frame
+        emit(fr)
 
     def cmd_inpaint(self, p: dict):
         """消除笔：一次事件（松手）算一次修补；拖滑块期间不重算也不重上传。
@@ -2951,6 +2983,7 @@ class Engine:
                  "light": self.cmd_light, "deform": self.cmd_deform,
                  "lut": self.cmd_lut, "grade": self.cmd_grade, "export": self.cmd_export,
                  "background": self.cmd_background,
+                 "compare": self.cmd_compare,
                  "session": self.cmd_session, "history": self.cmd_history}
         # 不用 `for line in sys.stdin`：那会等 EOF，收到 shutdown 也退不掉
         while not self._quit:

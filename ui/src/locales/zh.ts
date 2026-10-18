@@ -59,6 +59,8 @@ const zh = {
   "retouch.no": "否",
   "retouch.device": "计算设备",
   "retouch.needPath": "先填照片路径",
+  "retouch.compare": "按住看原图",
+  "retouch.compareOn": "原图（松开返回修好的图）",
   "retouch.browse": "📂 浏览…",
   "retouch.browseTip": "开原生选择框选一个文件或目录，不靠手打路径",
   "retouch.pickFailed": "原生选择框起不来",

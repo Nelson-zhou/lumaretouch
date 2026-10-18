@@ -682,6 +682,9 @@ export const loadImage = (
  * 变的只是**重组**（~0.5 ms），strength 两者都不动（~0.1 ms）。
  * 两层都是“松手才提交”：逐事件发会把 M1-3c 拿回来的 vsync 余量又吐出去。
  */
+/** 按住看原图：on=true 临时出一帧原图，on=false 回到修好的那一版。不改会话强度。 */
+export const setCompare = (on: boolean) => invoke<{ on: number }>("compare", { on });
+
 export const setStrength = (
   value: number,
   opts?: { channel?: string; radius?: number; eps?: number; detailGain?: number;

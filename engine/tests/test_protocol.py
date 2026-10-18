@@ -3649,3 +3649,53 @@ def test_export_bit_depth_16_reports_its_fidelity_numbers(engine, tmp_path):
     assert img["low8_nonzero_px"] > 0, img
     assert img["source"] == "libraw", img
     assert os.path.isfile(img["out"]) and os.path.getsize(img["out"]) == img["bytes"]
+
+
+# ============================================================ 「按住看原图」对比
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_compare_shows_original_without_touching_state_or_history(engine):
+    """对比不许改会话状态，也不许在撤销栈上留步。
+
+    最省事的写法是复用 set_strength（发 0 再发回原值），但那条在 EDIT_CMDS 里：按住
+    再松开会在撤销栈上占一步，用户下一次 Ctrl+Z 撤掉的会是一次"查看"。所以 compare
+    走独立命令——临时强度只作用于这一帧，self._strength 不动，分发器不记历史。
+    """
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("常驻管线要 torch")
+    _load(engine, max_px=207360)
+    engine.send(cmd="set_strength", value=0.7)
+    engine.wait_for("params_set", timeout=60)
+    engine.wait_for("frame", timeout=60)
+    before = _hist(engine)
+    assert before["doc_state"]["strength"] == pytest.approx(0.7), before["doc_state"]
+
+    engine.send(cmd="compare", on=True)
+    orig = engine.wait_for("frame", timeout=60)
+    assert orig["mode"] == "compare", orig
+    assert orig["strength"] == pytest.approx(0.0), f"按住时这一帧必须是原图，实际按 {orig['strength']} 出的帧"
+
+    engine.send(cmd="compare", on=False)
+    back = engine.wait_for("frame", timeout=60)
+    assert back["strength"] == pytest.approx(0.7), f"松手要回到修好的那一版，实际 {back['strength']}"
+
+    after = _hist(engine)
+    assert after["doc_state"]["strength"] == pytest.approx(0.7), "会话强度被对比改走了"
+    assert after["undo_steps"] == before["undo_steps"], "看一眼原图不该占一步撤销"
+
+
+def test_compare_is_not_registered_as_an_edit_command():
+    """反向门：compare 必须在 EDIT_CMDS 之外。
+
+    上面那条断言只证明"这一次没占步"；这一条才证明它不是靠运气——将来有人把 compare
+    加进 EDIT_CMDS（或把历史改成全命令记录），这条会先红，而不是让用户在撤销时才发现。
+    """
+    from lumaretouch_engine.server import Engine
+    assert "compare" not in Engine.EDIT_CMDS, Engine.EDIT_CMDS
+
+
+def test_compare_rejects_unknown_params_and_reports_its_own_gates(engine):
+    """拒绝路径也要如实：不认的参数、以及没图/跑靶进行中两种守卫都得说清楚。"""
+    engine.send(cmd="compare", on=True, nope=1)
+    _expect_error(engine, "不认识的参数")
+    engine.send(cmd="compare", on=True)
+    _expect_error(engine, "尚未 load_image")

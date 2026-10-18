@@ -54,6 +54,8 @@ export const en: Partial<Record<MsgKey, string>> = {
   "retouch.no": "no",
   "retouch.device": "Device",
   "retouch.needPath": "Fill in a photo path first",
+  "retouch.compare": "Hold to see original",
+  "retouch.compareOn": "Original (release to go back)",
   "retouch.browse": "📂 Browse…",
   "retouch.browseTip": "Pick a file or folder with the native dialog instead of typing a path",
   "retouch.pickFailed": "The native file dialog failed to open",

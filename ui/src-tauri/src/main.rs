@@ -728,6 +728,15 @@ fn set_strength(
     Ok(json!({"value": value}))
 }
 
+// 「按住看原图」。引擎侧它不在 EDIT_CMDS 里，所以这一趟只是转发一次出帧请求：
+// 会话强度不动、撤销栈不占步。这里刻意不复用 set_strength —— 那样按住再松开会
+// 留下一次"查看"作为可撤销步骤，用户下一次 Ctrl+Z 撤掉的就不是编辑而是查看。
+#[tauri::command]
+fn compare(state: State<'_, Arc<AppState>>, on: bool) -> Result<Value, String> {
+    state.send_to_engine(json!({"cmd": "compare", "on": on}))?;
+    Ok(json!({"on": on}))
+}
+
 /// 换底（M6）：一次“换底”一条命令。backend=color_key（默认、确定性色键）/ birefnet
 /// （神经网络，无权重引擎会诚实拒）。bg 是 [r,g,b] 0–255。不返回同步结果：
 /// 遮罩合成在引擎侧算，结果靠 engine_status().background 轮询（与 inpaint/light 同路）。
@@ -1458,7 +1467,7 @@ fn main() {
         .manage(Launcher(state.clone()))
         .invoke_handler(tauri::generate_handler![
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
-            engine_status, shutdown_engine, m0_env, load_image, set_strength, precompute,
+            engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, precompute,
             inpaint, light, deform, lut, grade, background, export, session, filmstrip, history,
             report, quit
         ])

@@ -27,6 +27,7 @@ body { margin:0; background:var(--bg); color:var(--fg); font:13px/1.5 "Noto Sans
 .hud { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:10px 14px; border-top:1px solid var(--line); font-variant-numeric: tabular-nums; }
 .hud .k { color:var(--mut); font-size:11px; }
 .row { display:flex; gap:8px; align-items:center; margin:8px 0; }
+.cmp { width:100%; } .cmp.on { background:#3a2a12; border-color:#c8862a; color:#ffd9a0; }
 label.k { display:block; color:var(--mut); font-size:11px; margin-top:10px; }
 input, select, button { background:#1f2229; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit; }
 button { cursor:pointer; }
