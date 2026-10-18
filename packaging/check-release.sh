@@ -75,17 +75,63 @@ if [ "$(cat "$stage/runtime/VERSION" 2>/dev/null)" != "$ver" ]; then
   bad "暂存的 runtime/VERSION 与 packaging/VERSION 不同：出包前重跑 stage-engine.sh"
 fi
 
-# ⑤ 许可未放行的清单不许进包（mediapipe 与 libraw 两条可选插件通道同构：
-# 它们的依赖树都还没逐包放行，混进发布物就成了一条“看着像支持、其实许可没结”的债）
+# ⑤ 许可未放行的**依赖树**不许进包。注意这一条挡的不是模型权重：
+#    ADR-0001 之后，体积可控、许可一手可证的权重（MediaPipe 那束 478 点模型）
+#    走 bundled 档是允许进 deb 的；但 mediapipe 这个 **pip 包自己的依赖树**还没
+#    逐包审计，libraw 可选插件通道同理——它们混进发布物就成了一条“看着像支持、
+#    其实许可没结”的债。权重能不能进包，看下面⑥的台账门禁。
 for unfree in requirements-mediapipe.txt requirements-libraw.txt; do
   if find "$stage" -name "$unfree" | grep -q .; then
     bad "$unfree 混进了发布物——那棵依赖树的许可审计还没放行"
   else
-    good "$unfree 未随包走（许可门禁保持生效）"
+    good "$unfree 未随包走（依赖树许可门禁保持生效）"
   fi
 done
 
-# ⑥ 开发机的绝对路径不许出现在将要打包的文本资产里
+# ⑥ 模型台账与发布物对账（ADR-0001）。两边都管：
+#    a) 台账里标 bundled 的条目必须真填完了：sha256 非空 + 证据一手。没填完就标
+#       bundled，等于在发行声明里写了一个自己都不知道的数；
+#    b) 暂存目录里真出现了权重文件时，它必须在台账里有条目、条目必须是 bundled，
+#       而且文件实际哈希要跟台账一致——防“进了包但没人核过”。
+if [ -f docs/model-licenses/models.json ]; then
+  python3 - "$stage" <<'PY' || exit 1
+import hashlib, json, os, sys
+stage = sys.argv[1]
+d = json.load(open("docs/model-licenses/models.json", encoding="utf-8"))
+bad = []
+for m in d["models"]:
+    if m.get("tier") == "bundled":
+        if not m.get("sha256"):
+            bad.append(f"{m['id']} 标了 bundled 但 sha256 为空——这个数只能实测，不能抄")
+        if m.get("evidence") != "一手":
+            bad.append(f"{m['id']} 标了 bundled 但许可证据是「{m.get('evidence')}」，一手才能进包")
+for root, _dirs, files in os.walk(stage):
+    for fn in files:
+        if not fn.endswith((".task", ".onnx", ".pth")):
+            continue
+        p = os.path.join(root, fn)
+        ent = next((m for m in d["models"] if m.get("artifact") == fn), None)
+        if ent is None:
+            bad.append(f"发布物里有权重 {fn}，但台账里没有条目")
+            continue
+        if ent.get("tier") != "bundled":
+            bad.append(f"{fn} 在台账里是 {ent.get('tier')} 档，不该出现在发布物里")
+            continue
+        real = hashlib.sha256(open(p, "rb").read()).hexdigest()
+        if real != ent.get("sha256"):
+            bad.append(f"{fn} 实际哈希 {real[:12]}… 与台账 {str(ent.get('sha256'))[:12]}… 不一致")
+if bad:
+    print("× 模型台账门禁未过：")
+    for b in bad:
+        print("  ·", b)
+    sys.exit(1)
+print(f"✓ 模型台账门禁全过（{len(d['models'])} 条，无未填完的 bundled，发布物里权重与台账一致）")
+PY
+else
+  bad "缺 docs/model-licenses/models.json——许可台账是发布契约的一部分"
+fi
+
+# ⑦ 开发机的绝对路径不许出现在将要打包的文本资产里
 if grep -rlI "$HOME" "$stage" 2>/dev/null | grep -q .; then
   bad "暂存目录里写死了当前用户的主目录路径"
 else

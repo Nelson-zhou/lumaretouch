@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # M0 打包入口：产出 .deb。
-# 注意：引擎（Python + torch 变体）与 AI 权重不进 .deb——体积与许可证都不合适，
-# 走首启按显卡探测下载（见 docs 决策 10）。这里只保证 UI 壳与 probe 可安装。
+#
+# 关于权重进不进包（ADR-0001 改过一次口径，这里别照旧话读）：
+#   早期结论是“引擎与 AI 权重都不进 .deb”。现在按三档分层：
+#     · bundled —— 体积可控且许可一手可证的模型（核心精修所需的 478 点模型束）进包；
+#     · fetched —— 数百 MB 的重型生成模型走首次一键拉取，不胀主包；
+#     · blocked —— 许可核不清的不进任何发行物。
+#   引擎运行时（Python + GPU 版 torch）仍然不进包，装机后按显卡厂商拉取。
+#   不管哪一档，**许可文本与署名必须随副本分发**——所以本脚本要把 LICENSE/NOTICE/
+#   模型台账装进 /usr/share/doc/luma-retouch/，并在包里读回来验一遍。
 #
 # M5-c 起这里多几道自己的活：
 #   ① 出包前先过发布静态门禁（版本号一致、元数据不陈旧、随包文件齐、许可未放行的
@@ -10,6 +17,7 @@
 #   ② 把包里不对的两项就地改掉：重复的 Depends 项、缺执行位的随包脚本。
 #   ③/④ 打完立刻把 control 与包内容读回来对一遍：deb 的 Version 来自 tauri.conf.json，
 #      而它是 release-version.py 写进去的；对不上说明同步链路在这一头断了。
+#   ⑤ 许可文本随包：见上，装进去之后同样读回来验。
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$here/.."
@@ -77,6 +85,33 @@ if [ -n "$stage_script" ]; then
 else
   echo "  提示：包里没有 setup-runtime.sh（后面那一项检查会拦下）"
 fi
+
+# ⑤ 许可文本与署名随副本分发。这一步不是"锦上添花"：Apache-2.0 §4 与 CC-BY 类
+#    条款都要求接收方拿得到许可原文与署名，而内置权重里含仅非商业授权的条目——
+#    用户如果看不到 NOTICE，"整体不得商用"这条告知就没有传达，义务就落空了。
+docdir="$norm/pkg/usr/share/doc/luma-retouch"
+mkdir -p "$docdir/model-licenses"
+cp LICENSE "$docdir/copyright"
+cp NOTICE "$docdir/NOTICE"
+cp docs/model-licenses/README.md docs/model-licenses/models.json "$docdir/model-licenses/"
+# control 里补 License 字段：tauri-bundler 会读 Cargo 的 license，但这一版没写进去
+# （装机后 `dpkg -l` 与软件中心都看不到许可），就地补上。
+# 注意插入时**不能留空行**：Debian control 里的空行会终止字段段落，多一个空行 dpkg-deb
+# 就报“发现了多个软件包的 info 条目”直接拒包——这个坑是复刻测试挖出来的。
+if ! grep -q '^License:' "$norm/pkg/DEBIAN/control"; then
+  python3 - "$norm/pkg/DEBIAN/control" <<'PY'
+import io, sys
+p = sys.argv[1]
+text = io.open(p, encoding="utf-8").read()
+assert "\nDescription:" in text, "control 里没有行首 Description:，插入点找不到"
+new = ("\nLicense: GPL-3.0-or-later"
+       "\nLicense-Filename: usr/share/doc/luma-retouch/copyright"
+       "\nDescription:")
+text = text.replace("\nDescription:", new, 1)
+io.open(p, "w", encoding="utf-8").write(text)
+PY
+  echo "  已在 control 补 License: GPL-3.0-or-later"
+fi
 dpkg-deb --root-owner-group -b "$norm/pkg" "$out.norm" >/dev/null
 mv "$out.norm" "$out"
 rm -rf "$norm"
@@ -114,3 +149,23 @@ if find "$tmp" -name '__pycache__' -o -name '*.pyc' | grep -q .; then
   exit 1
 fi
 echo "✓ 包里零字节码"
+
+# ⑤ 的回读：装进去了不算，要在**最终包**里读得到才算。这里故意做成硬失败——
+#    许可文本缺失是发布缺陷，不是美化项没做。
+dpkg-deb -x "$out" "$tmp/verify"
+for f in usr/share/doc/luma-retouch/copyright usr/share/doc/luma-retouch/NOTICE \
+         usr/share/doc/luma-retouch/model-licenses/models.json; do
+  if [ -f "$tmp/verify/$f" ]; then
+    echo "✓ 包内含 $f"
+  else
+    echo "× 包里缺 $f：许可文本没随副本分发，不要发布这个包"
+    exit 1
+  fi
+done
+if dpkg-deb -f "$out" License >/dev/null 2>&1; then
+  echo "✓ control 报 License: $(dpkg-deb -f "$out" License)"
+else
+  echo "× control 没有 License 字段：装机后包管理器里看不出许可，不要发布这个包"
+  exit 1
+fi
+rm -rf "$tmp"

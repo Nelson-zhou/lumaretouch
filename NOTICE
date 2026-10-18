@@ -1,0 +1,70 @@
+LumaRetouch — 第三方资产与署名声明（NOTICE）
+================================================================
+
+本文件随发行包分发。它列出的义务**不因本软件自身采用 GPL-3.0-or-later
+而被吸收**：每个第三方组件按它自己的许可提要求，代码许可管不到模型权重。
+
+本发行物的许可分层（详见 docs/model-licenses/）：
+
+  1. 本仓库自研代码 ................ GPL-3.0-or-later（见 LICENSE）
+  2. 系统库与运行时依赖 ............ 各自许可，见 THIRD-PARTY 段
+  3. 模型权重 ...................... **各自许可，多数含非商业限制**
+  4. 测试样片与文档图片 ............ 见 docs/model-licenses/README.md 的样片段
+
+⚠ 非商业告知（必须随副本一起传递）
+----------------------------------------------------------------
+本发行包内置或可拉取的若干模型权重，其上游许可**仅授予非商业研究/个人使用**。
+因此：**包含这些权重的整体发行物不得用于商业目的。** 想要商用者，必须自行
+替换掉这些权重并单独取得授权——本项目的许可不为这部分作任何授予。
+
+这不是本项目施加的额外限制，而是上游权重许可的原文条款，此处如实转述。
+
+模型权重署名（Attribution）
+----------------------------------------------------------------
+
+[内置 tier=bundled]
+
+* MediaPipe Face Landmarker（478 点 3D 人脸关键点 + 52 blendshape 模型束）
+  版权归：Google LLC
+  许可：Apache License 2.0（权重与其 model card 一并标注）
+  上游：https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker
+        模型卡位于 https://huggingface.co/google/mediapipe-models
+  额外义务：Apache-2.0 §4 要求保留版权声明、许可链接与 NOTICE 内容；
+            若修改模型束（含转换、裁剪、重训练），须在分发时说明修改。
+  可接受使用限制（来自官方 model card，非本项目自创）：
+            不得用于身份识别（identification），不得用于医疗、法律、就业、
+            执法等生命关键或权利决定性场景。本软件的人像精修用途不触碰前者；
+            后续任何"跨照片认人"类功能都与此冲突，不得实现。
+
+[按需拉取 tier=fetched]
+
+* LaMa（Large Mask Inpainting，智能消除）
+  版权归：Samsung Research（原始作者）
+  许可：代码 MIT；**权重训练数据含 Places2 等学术数据集，其条款限研究用途**
+  上游：https://github.com/advimman/lama
+  状态：许可台账已建，训练数据条款待一手复核（见 docs/model-licenses/lama.md）
+
+* CodeFormer（面部超分/修复）
+  版权归：S-Lab (Nanyang Technological University)
+  许可：**S-Lab License 1.0 —— 自定义的非商业许可，不是 CC 也不是 MIT/Apache**
+  上游：https://github.com/sczhou/CodeFormer
+  额外义务：条款要求保留作者与机构署名；商业使用须另行联系权利人。
+
+依赖库（代码层，摘要）
+----------------------------------------------------------------
+  LibRaw ............ LGPL-2.1 或 CDDL-1.0（双许可，随包为系统库，见 Depends）
+  Little CMS ........ MIT
+  GTK / WebKitGTK ... LGPL-2.1+ / LGPL-2.1+（随系统，不进本包）
+  PyTorch ........... BSD-3-Clause（引擎运行时，装机时按显卡厂商单独拉取）
+  ONNX Runtime ...... MIT（若后续接入推理）
+  OpenCV ............ Apache-2.0（若后续接入）
+  Tauri 2 / Rust .... MIT 或 Apache-2.0（双许可择一）
+  MediaPipe (pip 包) . Apache-2.0
+
+完整依赖清单以构建时锁定的版本为准；SBOM 生成属未完成的交付项，
+不在此处假装已经具备。
+
+本文件自身的分发位置
+----------------------------------------------------------------
+装机后位于：/usr/share/doc/luma-retouch/NOTICE
+源码仓库位于：./NOTICE

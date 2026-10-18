@@ -1,0 +1,144 @@
+{
+  "schema_version": "1.0",
+  "checked_on": "2026-10-18",
+  "project_positioning": "纯开源、非商业自由软件；无商业变现与闭源销售计划",
+  "policy": {
+    "tiers": {
+      "bundled": "进 deb，装机即零操作可用。体积上限约束：主包不因模型胀破 1 GB。",
+      "fetched": "首次启动或首次点击该能力时，一次性列出清单（名称/体积/上游/许可/sha256）由用户一键确认，之后全自动。不要求用户手动挂载任何文件。",
+      "blocked": "许可或训练数据权利未核清，且无法用上述两档安全承载时——功能显式禁用并说明缺什么。"
+    },
+    "silent_download": "禁止。理由不是商业侵权，是两条：(1) 我们对外承诺不外传数据，入站网络动作须同等透明；(2) Apache/CC-BY 类许可要求许可文本与署名随副本分发，静默下载会让用户机器上出现其从未见过的许可。",
+    "evidence_levels": {
+      "一手": "在本环境直接读到权利人发布的许可原文/模型卡页面",
+      "二手": "官方文档链接存在但本环境无法直读（如 HF 返回 401），结论取自一致的多方引用",
+      "未核": "只有仓库自述或推测"
+    },
+    "gate": "任何 sha256=null 或 evidence!=一手 的条目不得标 bundled；check-release.sh 会把这条当硬门禁执行。未过门禁的条目用 bundled-pending，它不阻断发布，但阻断把权重放进发行物。"
+  },
+  "models": [
+    {
+      "id": "mp.face_landmarker",
+      "display": "MediaPipe Face Landmarker（478 点 3D 关键点 + 52 blendshape 模型束）",
+      "capability": ["面部重塑", "表情管理", "眼睛/牙齿定位", "皮肤区域贴合"],
+      "tier": "bundled-pending",
+      "tier_note": "目标是 bundled（进 deb、装机零操作）。但 check-release.sh 的台账门禁要求 bundled 必须同时具备实测 sha256 与一手许可证据，两者现在都还缺，所以先标 bundled-pending——**这不是保守，是这个档自前真的还没成立**。",
+      "upstream_project": "https://github.com/google-ai-edge/mediapipe",
+      "model_card": "https://huggingface.co/google/mediapipe-models",
+      "docs": "https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker",
+      "artifact": "face_landmarker.task",
+      "artifact_url": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+      "revision": "float16/1",
+      "size_bytes": null,
+      "size_note": "待实测。用户口径记为 2.5 MB；官方文档明确该 bundle 由 BlazeFace 短距检测 + FaceMesh-V2 + Blendshape 三个模型打包，实际体积须下载后以文件为准，不沿用未验证数字。",
+      "sha256": null,
+      "code_license": "Apache-2.0",
+      "weights_license": "Apache-2.0",
+      "training_data_license": "未披露（官方 model card 未列训练集构成）",
+      "evidence": "二手",
+      "evidence_note": "HF 在本环境返回 401，未能直读 model card 原文。许可结论取自：MediaPipe 仓库整体 Apache-2.0 + 官方文档链接的 model card 被多方一致引用为 Apache-2.0。落地前须在一台能访问 HF 的机器上把 model card 原文与许可元数据存档进 docs/model-licenses/archive/。",
+      "attribution": "Copyright Google LLC. Licensed under the Apache License, Version 2.0.",
+      "obligations": [
+        "保留版权声明与许可链接（Apache-2.0 §4）",
+        "分发时附 NOTICE 内容（本仓库 ./NOTICE 已登记）",
+        "若对模型束做转换/裁剪/重训练，须说明修改"
+      ],
+      "use_restrictions": [
+        "官方 model card 的可接受使用限制：不得用于身份识别；不得用于医疗、法律、就业、执法等生命关键或权利决定性场景",
+        "推论：本软件后续不得实现『跨照片认人/以图搜人』类功能，即使技术上可行"
+      ],
+      "status": "台账已建，尚未接入运行时",
+      "blocking_decisions": []
+    },
+    {
+      "id": "lama.large_mask_inpainting",
+      "display": "LaMa 智能消除",
+      "capability": ["智能消除", "祛路人", "污点/穿帮修复（生成式那一档）"],
+      "tier": "fetched",
+      "upstream_project": "https://github.com/advimman/lama",
+      "artifact": "big-lama 权重",
+      "revision": null,
+      "size_bytes": null,
+      "sha256": null,
+      "code_license": "MIT",
+      "weights_license": "随代码仓库提供，未见独立权重许可声明",
+      "training_data_license": "含 Places2 等学术数据集；Places2 条款限研究用途（待一手复核）",
+      "evidence": "未核",
+      "evidence_note": "代码 MIT 是确定的；权重可分发性取决于 Places2 条款原文，须复核后再定档。复核前：功能可开发，不得进任何对外发行包。",
+      "attribution": "Copyright (c) Advimman (Sber) — MIT；训练数据 Places2 需另行署名/遵守其条款",
+      "obligations": ["附 MIT 许可原文", "附训练数据条款告知"],
+      "use_restrictions": ["训练数据条款可能限研究用途；复核前不得声称可自由再分发"],
+      "status": "待复核",
+      "blocking_decisions": ["复核 Places2 使用条款原文"]
+    },
+    {
+      "id": "codeformer.face_restore",
+      "display": "CodeFormer 面部超分/修复",
+      "capability": ["面部超清", "老照片修复（生成式）"],
+      "tier": "fetched",
+      "upstream_project": "https://github.com/sczhou/CodeFormer",
+      "artifact": "CodeFormer.pth / dlib detection map",
+      "revision": null,
+      "size_bytes": null,
+      "sha256": null,
+      "code_license": "S-Lab License 1.0",
+      "weights_license": "S-Lab License 1.0（自定义非商业许可，不是 CC，也不是 MIT/Apache）",
+      "training_data_license": "完整权利链未知",
+      "evidence": "二手",
+      "evidence_note": "许可性质由权利人仓库 LICENSE 明确为非商业；本项目定位非商业，故允许实现与个人使用，但**不得声称本软件整体可商用**。",
+      "attribution": "Copyright (c) S-Lab, Nanyang Technological University",
+      "obligations": ["保留作者与机构署名", "附 S-Lab License 1.0 原文", "商业使用须另行联系权利人——本项目不做此授予"],
+      "use_restrictions": ["仅非商业"],
+      "status": "台账已建，待接入",
+      "blocking_decisions": []
+    },
+    {
+      "id": "yunet.face_detection",
+      "display": "YuNet 人脸检测（OpenCV Zoo）",
+      "capability": ["多人脸实例检测（P1 作用域前置）"],
+      "tier": "bundled-candidate",
+      "upstream_project": "https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet",
+      "artifact": "face_detection_yunet_2023mar.onnx",
+      "size_bytes": null,
+      "sha256": null,
+      "code_license": "MIT（该模型目录内所有文件，含 ONNX 权重）",
+      "weights_license": "MIT（目录声明）",
+      "training_data_license": "完整训练数据权利链未知，不可由目录 MIT 推导",
+      "evidence": "一手",
+      "evidence_note": "目录 LICENSE 文件可读，属最干净的一档；训练数据链仍是未知，但不阻断非商业使用。",
+      "attribution": "Copyright (c) OpenCV contributors — MIT",
+      "obligations": ["附 MIT 许可原文"],
+      "use_restrictions": [],
+      "status": "尚未引入（当前人脸定位走 MediaPipe 或 synthetic 后端）",
+      "blocking_decisions": []
+    }
+  ],
+  "datasets": [
+    {
+      "id": "ffhq",
+      "role": "本地评测靶（不训练、不分发）",
+      "license": "BSD-3-Clause 的采集条款 + 图片本身 Creative Commons BY-NC-SA 4.0（部分图像另有混合许可，含 NC）",
+      "evidence": "二手",
+      "hard_rules": [
+        "SA 传染：以 FFHQ 为基础的衍生模型再分发须带相同许可——影响我们的许可选择",
+        "官方禁止用于人脸识别/身份识别",
+        "肖像权独立于数据许可：许可不覆盖画面中真人的人格权",
+        "因此：靶集不进 git、不进 deb、不上传；效果证据图不外发真实靶图，改用程序化生成人像 + 靶上数值读数"
+      ]
+    },
+    {
+      "id": "celeba-hq / celebamask-hq",
+      "role": "本地评测靶（分割/关键点族）",
+      "license": "仅非商业研究，且限制派生数据的商业利用",
+      "evidence": "二手",
+      "hard_rules": ["同上：不进仓库、不进包、不外发图像"]
+    },
+    {
+      "id": "synthetic-portrait",
+      "role": "CI 与对外效果证据的唯一图像来源",
+      "license": "本项目自研，程序化生成（packaging/make-test-portrait.py，SEED=20261016）",
+      "evidence": "一手",
+      "hard_rules": ["可自由分发；sha256 台账已随仓库（engine/tests/fixtures/*.sha256.txt）"]
+    }
+  ]
+}
