@@ -883,6 +883,7 @@ export interface M0Env {
   /** 单次上传的横向分块数（验 4 MiB 命令缓冲假设） */
   chunks: number;
   no_ctx: string;
+  no_mirror: string;
   /** 视口自证探针（M9）：非空时在静置后读回画布缓冲并量布局矩形，报 M0_VIEWPORT。 */
   viewport_probe: string;
   dirty_frac: number;

@@ -4,7 +4,8 @@
  * 这里就是 M0 要量死的那一段：上传+绘制时长由 performance.now() 自测（时长差，
  * 不涉及跨进程时钟基准）；「引擎→上屏」的端到端值由 Rust 侧同基纳秒相减得出。
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { frameAcked, framePresented, isNoFrame, parseFrameHead, pullFrame, type ParsedFrame } from "../native";
 import { BrushPad, type Rle } from "../brush";
 
@@ -46,6 +47,7 @@ export default function Viewer({
   upload = "raw",
   ctxOpt = true,
   chunks = 1,
+  mirrorOn = true,
   brush,
   onHud,
 }: {
@@ -71,10 +73,17 @@ export default function Viewer({
    * 用 LRT_NO_CTX=1 可关，做背靠背对照。
    */
   ctxOpt?: boolean;
+  /** 显示层开关：GL 画布每帧镜像到一张 2D 画布（这台机器上 GL surface 不进页面合成，
+   *  关掉它就回到"后备缓冲有内容、屏幕上看不见"的那个形状）。LRT_NO_MIRROR=1 可关。 */
+  mirrorOn?: boolean;
   brush?: BrushProps;
   onHud: (h: Hud) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const mirrorRef = useRef<HTMLCanvasElement | null>(null);
+  // 显示层挂在 document.body 上（见下面 portal 那段），所以要跟着 .viewer 的实际矩形走
+  const [box, setBox] = useState({ left: 0, top: 0, width: 0, height: 0 });
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
   const onHudRef = useRef(onHud);
   onHudRef.current = onHud;
@@ -84,11 +93,35 @@ export default function Viewer({
   brushRef.current = brush;
   const sizeRef = useRef({ w: 0, h: 0 });
 
+  // 显示层的定位：这台机器上 .viewer 里的画布位图不进页面合成（GL 与 2D 都一样，实测
+  // 挂在 document.body 上的 fixed 画布能正常显示），所以显示层必须离开这个子树。
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const sync = () => {
+      const r = el.getBoundingClientRect();
+      setBox({ left: r.left, top: r.top, width: r.width, height: r.height });
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    window.addEventListener("resize", sync);
+    return () => { ro.disconnect(); window.removeEventListener("resize", sync); };
+  }, []);
+
   useEffect(() => {
     if (!active) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const overlay = overlayRef.current;
+    // 显示层。这台机器（AMD + XWayland + WebKitGTK）上 WebGL 画布的内容不进页面合成：
+    // 实测同一张截图里 canvas 的 CSS outline 抓得到、GL 内容抓不到，而把 GL 画布
+    // drawImage 到一张 2D 画布后照片就正常显示了 —— 也就是说后备缓冲一直是好的，
+    // 坏的是"GL surface → 屏幕"那一段。所以这里让 2D 画布做用户真正看到的画面，
+    // GL 仍然照常渲染（测量链路、回执、画笔叠加层一个字都不动）。
+    // 代价是每帧一次 drawImage；LRT_NO_MIRROR=1 可以关掉做背靠背对照。
+    const mirror = mirrorRef.current;
+    const mctx = (mirror && mirrorOn) ? mirror.getContext("2d", { alpha: false }) : null;
     // `preserveDrawingBuffer: true` 不是性能开关，是**正确性**开关：默认值 false 允许
     // 合成器在一个 vsync 之后就把画布后备缓冲清掉。跑帧流时每一帧都在重画，看不出来；
     // 静态图只送那一帧，下一个 vsync 之后用户面对的就是一块空缓冲——这就是装机版
@@ -275,6 +308,10 @@ export default function Viewer({
             overlay.width = f.w;
             overlay.height = f.h;
           }
+          if (mirror) {
+            mirror.width = f.w;
+            mirror.height = f.h;
+          }
           gl.viewport(0, 0, f.w, f.h);
           // 两张纹理都要存好存储，否则 ping-pong 切过去时是空纹理
           for (const t of texs) {
@@ -308,6 +345,8 @@ export default function Viewer({
             gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, f.y0, f.w, f.rows, gl.RGBA, gl.UNSIGNED_BYTE, f.pixels);
           }
           gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          // 一次 drawImage：把这一帧交给用户实际看到的那张画布。
+          if (mctx) mctx.drawImage(canvas, 0, 0);
         } else if (f.bitmap) {
           f.bitmap.close();
         }
@@ -357,12 +396,25 @@ export default function Viewer({
       gl.deleteBuffer(vbo);
       gl.deleteVertexArray(vao);
     };
-  }, [active, skipDraw, upload, ctxOpt, chunks]);
+  }, [active, skipDraw, upload, ctxOpt, chunks, mirrorOn]);
 
   return (
-    <div className="viewer">
-      <canvas ref={canvasRef} />
-      <canvas ref={overlayRef} className={brush?.on ? "overlay on" : "overlay"} />
-    </div>
+    <>
+      <div className="viewer" ref={boxRef}>
+        {/* GL 画布退成纯渲染源：不参与布局，也不指望它上屏（见上面那段）。 */}
+        <canvas ref={canvasRef} className="gl-src" />
+        <canvas ref={overlayRef} className={brush?.on ? "overlay on" : "overlay"} />
+      </div>
+      {/* 显示层：portal 到 document.body 的 fixed 画布，每帧由 GL 画布 drawImage 填进来。
+          放在 body 上不是随手试出来的——实测这个子树外的画布才进得了页面合成。 */}
+      {createPortal(
+        <canvas
+          ref={mirrorRef}
+          className="mirror"
+          style={{ left: box.left, top: box.top, width: box.width, height: box.height }}
+        />,
+        document.body,
+      )}
+    </>
   );
 }

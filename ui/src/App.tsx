@@ -92,6 +92,7 @@ export default function App() {
   const poll = useRef<number | null>(null);
 
   // ---- 精修台（M1-3c/M1-4）：图路径、磨皮参数、通道、画笔 ----
+  const [mirrorOn, setMirrorOn] = useState(true);   // 显示层开关，见 Viewer.tsx mirror 那段
   const [imgPath, setImgPath] = useState("");
   // 路径错误就地显示在输入框下方。原来它只落到 dragNote——那行灰字在窗口另一头，
   // 用户点了「导入」什么也没发生也不知道为什么，那就是事实上的静默失败。
@@ -368,11 +369,12 @@ export default function App() {
       }
       const frameDims: [number, number] = [st.image.w, st.image.h];
       await sleep(800);                       // 静置：给合成器几个 vsync 的机会
-      const cv = document.querySelector<HTMLCanvasElement>(".viewer > canvas");
+      const cv = document.querySelector<HTMLCanvasElement>(".viewer .gl-src");
+      const mir = document.querySelector<HTMLCanvasElement>("body > .mirror");
       const gl = cv?.getContext("webgl2");
       const rect = cv?.getBoundingClientRect();
       const hud = document.querySelector(".hud")?.getBoundingClientRect();
-      const back: Record<string, number> = {};
+      const back: Record<string, number | number[] | string> = {};
       if (cv && gl && gl.drawingBufferWidth > 0) {
         const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
         const px = new Uint8Array(w * h * 4);
@@ -438,6 +440,46 @@ export default function App() {
         } catch (e) { dump = `toDataURL 失败: ${String(e)}`; }
         await report(`M0_LIME ${JSON.stringify({cssBg: getComputedStyle(cv).backgroundColor, rect: [cv.getBoundingClientRect().width, cv.getBoundingClientRect().height], dump})}`);
       }
+      // 通路选型实验：2D canvas 的 putImageData 在这台机器上能不能被看见（判据用
+      // "X 抓图抓不抓得到"，因为抓得到就等于它进了页面合成，屏幕必然也有）。
+      // 抓得到 → 视口可以从 WebGL 换成 2D 通路；抓不到 → 只能退到 <img>。
+      if (/twod/.test(env.viewport_probe) && cv && gl) {
+        // 不另开一条取帧路（Viewer 的回路会把 pullFrame 那帧抢走），直接把 GL 画布
+        // drawImage 镜像到一张 2D 画布——这也正是候选修法本身：每帧一次 drawImage。
+        try {
+          const c2 = document.createElement("canvas");
+          c2.width = cv.width; c2.height = cv.height;
+          Object.assign(c2.style, { position: "fixed", left: "540px", top: "60px", width: "300px",
+                                    border: "4px solid #ffffff", zIndex: "9999", background: "#000" });
+          c2.getContext("2d")!.drawImage(cv, 0, 0);
+          document.body.appendChild(c2);
+          const t = document.createElement("img");
+          t.src = cv.toDataURL("image/png");
+          Object.assign(t.style, { position: "fixed", left: "880px", top: "60px", width: "300px", border: "4px solid #ff00ff" });
+          document.body.appendChild(t);
+          await report(`M0_TWOD ${JSON.stringify({ mirrored: [cv.width, cv.height] })}`);
+        } catch (e) { await report(`M0_TWOD_FAIL ${String(e)}`); }
+      }
+      // 显示层自己的读数：拿 2D getImageData 从 mirror 画布上读，这是"用户实际看到的
+      // 那张画布"的内容，与 GL 后备缓冲分开的第二条证据。
+      if (mir) {
+        const m2 = mir.getContext("2d");
+        if (m2 && mir.width > 0) {
+          const d = m2.getImageData(0, 0, mir.width, mir.height).data;
+          let ms = 0, mn = 0;
+          for (let i = 0; i < mir.width * mir.height; i++) {
+            const l = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3;
+            ms += l; if (l > 4) mn++;
+          }
+          const mr = mir.getBoundingClientRect();
+          back.mirrorDims = [mir.width, mir.height];
+          back.mirrorCss = [+mr.width.toFixed(1), +mr.height.toFixed(1)];
+          back.mirrorMean = +(ms / (mir.width * mir.height)).toFixed(2);
+          back.mirrorNonBlack = +(mn / (mir.width * mir.height)).toFixed(4);
+        } else {
+          back.mirrorFail = "no 2d ctx";
+        }
+      }
       const scrollH = document.documentElement.scrollHeight;
       // 反向门（裁决3）：写一个不存在的路径再点「导入」，输入框下方必须出现红字。
       // 这条不是装饰：“错了但不说”就是这次缺陷的本体，门不会关就等于没修。
@@ -493,6 +535,7 @@ export default function App() {
       // ctx 属性无可复现收益（两轮背靠背：1/5 vs 3/5 vs 3/5 撞帧，均在 ±3fps 噪声内），
       // 故默认关；保留 LRT_NO_CTX / 开关只做后续对照实验用。
       setCtxOpt(env.no_ctx === "0");
+      setMirrorOn(env.no_mirror !== "1");
       setChunks(env.chunks > 1 ? env.chunks : 1);
       const bench = parseAutoBench(spec);
       if (!bench) {
@@ -2443,6 +2486,7 @@ export default function App() {
           skipDraw={skipDraw}
           upload={upload}
           ctxOpt={ctxOpt}
+          mirrorOn={mirrorOn}
           chunks={chunks}
           brush={{ on: brushOn && !!status?.image, radius: brushRadius, onStroke }}
           onHud={setHud}

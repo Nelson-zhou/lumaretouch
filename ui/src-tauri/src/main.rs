@@ -1394,6 +1394,7 @@ fn m0_env() -> Value {
             .filter(|v| (1..=64).contains(v))
             .unwrap_or(1),
         "no_ctx": std::env::var("LRT_NO_CTX").unwrap_or_default(),
+        "no_mirror": std::env::var("LRT_NO_MIRROR").unwrap_or_default(),
         // 视口自证探针（M9）：静态图静置后读回画布缓冲并量布局矩形。历轮跑靶的证据取的是
         // shm 那一帧，即“引擎→宿主”那一段；“宿主→屏幕”那一段从没测过，而 WebKitGTK 的
         // GL 表面截图只会抓到纯黑客户区——黑屏与布局撑爆正是从这条缝里漏出去的。
