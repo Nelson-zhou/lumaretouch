@@ -412,11 +412,16 @@ def find_doc(project: dict, path: str) -> dict | None:
 
 
 def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
-            tags=None, dc_types: dict | None = None, budget: int | None = None) -> dict:
+            tags=None, dc_types: dict | None = None, budget: int | None = None,
+            version_id: str | None = None, version_name: str = "live") -> dict:
     """把一张照片连同它的配方放进项目。已存在就**就地换版本**，不追加第二行。
 
     底片条靠路径认一行；同一路径出现两行会让"切回这张图"有歧义，
     而 `validate()` 会直接拒掉重复 path——所以现在这条是换而不是加。
+
+    `version_id` 给定时按 id **覆盖**而不是追加："当前配方"在工程文件里只能有一格，
+    而它的身份得在多次保存之间稳定（否则“活动版本”每次保存都换一个名字，
+    重开后宿主拿到的 id 与上次看到的不是同一个）。不传就是新建一个命名版本。
     """
     fp = fp or fingerprint(path)
     dropped: list = []
@@ -430,13 +435,16 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
         project["docs"].append(row)
     if tags is not None:
         row["tags"] = list(tags)
-    ver = {"id": str(uuid.uuid4()), "name": "live", "created_ns": int(time.time_ns()),
-           "recipe": enc,
-           # 代理档跟着配方走：那一档上的逐点层（逐点掩膜/笔迹/形变场）尺寸不对就是
-           # 无效配方。不记这一笔，重开时只能拿“图在不在”猜，而猜错的表现是渲染半截画面
-           "proxy": (recipe.get("_proxy") if isinstance(recipe, dict) else None)}
-    row["versions"].append(ver)
-    row["active_version"] = ver["id"]
+    vid = version_id or str(uuid.uuid4())
+    ver = next((v for v in row["versions"] if v["id"] == vid), None)
+    if ver is None:
+        ver = {"id": vid}
+        row["versions"].append(ver)
+    ver.update({"name": version_name, "created_ns": int(time.time_ns()), "recipe": enc,
+                # 代理档跟着配方走：那一档上的逐点层（逐点掩膜/笔迹/形变场）尺寸不对就是
+                # 无效配方。不记这一笔，重开时只能拿“图在不在”猜，而猜错的表现是渲染半截画面
+                "proxy": (recipe.get("_proxy") if isinstance(recipe, dict) else None)})
+    row["active_version"] = vid
     row["fingerprint"] = fp
     if dropped:
         project.setdefault("dropped", []).extend(

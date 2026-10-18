@@ -21,6 +21,7 @@ import numpy as np
 import pytest
 
 from lumaretouch_engine import session as S
+from lumaretouch_engine import project as _PJ
 from lumaretouch_engine.shm import FrameShm, monotonic_ns, shm_name
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -3978,7 +3979,255 @@ def test_crop_blocks_the_16bit_master_path_with_a_named_reason(engine, tmp_path)
     assert "裁剪框" in ev["error"], ev
 
 
-# ============================================================ 导出侧 P0 口径（d2c 端到端）
+# ============================================================ 项目（LNX-P0-PROJECT / CORE-001、007、008）
+#
+# “保存重开”这四个字在三条 P0-*-NEUTRAL 的 when 里都写着，而它是整批 P0 用例的前置。
+# 判据只能拿**另一个进程**做：同一个进程里 live 字段一直活着，“重开”测不出丢没丢。
+
+@pytest.fixture
+def extra_engine():
+    """再起一个引擎进程（用完整清理：会话名不同，/dev/shm 那一块也得跟着清）。"""
+    made: list = []
+
+    def _make(tag: str) -> EngineProcess:
+        ep = EngineProcess(f"itest-{os.getpid()}-{tag}")
+        made.append(ep)
+        return ep
+
+    yield _make
+    for ep in made:
+        ep.close()
+        try:
+            os.unlink(f"/dev/shm/{shm_name(ep.session)}")
+        except FileNotFoundError:
+            pass
+
+
+def _sha_of(path: str) -> str:
+    import hashlib
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()
+
+
+def _create_and_save(engine, tmp_path, name="回归工程"):
+    engine.send(cmd="project", action="create", name=name, directory=str(tmp_path))
+    created = engine.wait_for("project_created", timeout=30)
+    engine.send(cmd="project", action="save")
+    ev = engine.wait_for("project_saved", timeout=90)
+    return created, ev
+
+
+def test_project_save_and_reopen_restores_the_recipe_byte_for_byte(engine, extra_engine, tmp_path):
+    """CORE-001：创建、导入、关闭并重新打开 → 配方完整恢复；源文件哈希不变。"""
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.6)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    rect = [0.1, 0.05, 0.9, 0.95]
+    engine.send(cmd="crop", rect=rect, rotation_degrees=5.0)
+    _wait_crop_frame(engine)
+    engine.send(cmd="exposure", ev=0.3, temperature_shift=200.0)
+    saved = _frame_of(_wait_frame_mode(engine, "exposure"), peer, h, w)
+    src_sha = _sha_of(FIXTURE)
+    _created, ev = _create_and_save(engine, tmp_path)
+    pfile = ev["path"]
+    # 新建的工程文件是**空的**，而底片条上已有调过的那一张：create 那一拍得诚实地说“未保存”
+    assert _created["dirty"] is True, _created
+    # 读回文件反查，不信自报：报出去的字节数与 sha256 必须是磁盘上那一份
+    import hashlib
+    raw = open(pfile, "rb").read()
+    assert len(raw) == ev["bytes"] and hashlib.sha256(raw).hexdigest() == ev["sha256"], ev
+    assert ev["docs"] == 1 and ev["dirty"] is False and ev["fingerprinted"] == 1, ev
+
+    eng2 = extra_engine("reopen")
+    eng2.send(cmd="hello")
+    eng2.wait_for("ready", timeout=60)
+    eng2.send(cmd="set_device", device="cpu")
+    eng2.wait_for("device_set", timeout=60)
+    eng2.send(cmd="project", action="open", path=pfile)
+    op = eng2.wait_for("project_opened", timeout=90)
+    assert op["docs"] == 1 and op["missing_count"] == 0, op
+    assert op["proxy_budget"] == 207360, f"重开换了代理档：{op['proxy_budget']}"
+    meta2 = eng2.wait_for("shm_ready", timeout=180)
+    eng2.wait_for("vram_ready", timeout=180)
+    ready2 = eng2.wait_for("image_ready", timeout=180)
+    assert (meta2["h"], meta2["w"]) == (h, w), f"重开换了尺寸：{(meta2['h'], meta2['w'])}"
+    ds = ready2["doc_state"]
+    assert [round(v, 6) for v in ds["crop"]["rect"]] == rect, ds["crop"]
+    assert ds["crop"]["rotation_degrees"] == 5.0 and ds["crop"]["lit"] is True, ds["crop"]
+    assert ds["exposure"]["ev"] == pytest.approx(0.3) and \
+        ds["exposure"]["temperature_shift"] == pytest.approx(200.0), ds["exposure"]
+    assert ds["strength"] == pytest.approx(0.6), ds["strength"]
+    # 参数对了还不算：“准确预览”要求同一份配方在另一个进程里算出同一张画面
+    peer2 = FrameShm(meta2["name"])
+    got = _read_frame(eng2, peer2, meta2["h"], meta2["w"])
+    d = int(np.abs(got - saved).max())
+    assert d == 0, f"重开后的预览与保存前差 {d} LSB：配方对了而画面不是那一幅"
+    peer2.close()
+    assert _sha_of(FIXTURE) == src_sha, "项目层碰了源文件：原片只读是 CORE-001 的最后一句"
+
+
+def test_project_reopen_restores_brushes_and_says_what_it_dropped(engine, extra_engine, tmp_path):
+    """画笔要逐字节回来，关键点/掩膜要说清“没存”而不是静默少一层。
+
+    分界按本仓已有的一条规则走：RepairOp/LightOp 只存**输入**（画笔覆盖度），所以能
+    进工程文件；预计算产物是模型从这张图算出的派生物，不存（每个通道在 207k 代理档
+    上是 ~830 KB，一百张图就会把工程文件顶出上限）。不存必须进 dropped 并带原因，
+    否则重开后“面部微调按一下没反应”会被读成引擎坏了。所以这里两头都验：
+    报的原因必须是真的（拿通道指认会被拒），重新推理一次必须是能用的。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.5)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    engine.send(cmd="precompute", backend="auto")
+    _next_event(engine, skip=QUIET_EVENTS, timeout=120)
+    engine.send(cmd="inpaint", action="add", rle=_brush_rle(h, w, h // 2, w // 2, 6), feather=2)
+    engine.wait_for("inpaint_done", timeout=90)
+    saved = _read_frame(engine, peer, h, w)
+    _created, ev = _create_and_save(engine, tmp_path, "笔迹回归")
+    reasons = " ".join(str(d.get("reason", "")) for d in ev["dropped"])
+    assert ev["dropped_count"] >= 1, "预计算产物不可能静默消失：它要么存了要么要说清没存"
+    assert "模型产物" in reasons, ev["dropped"]
+    assert ev["assets"] >= 1, f"画笔覆盖度没进资产表：{ev}"
+
+    eng2 = extra_engine("reopen2")
+    eng2.send(cmd="hello")
+    eng2.wait_for("ready", timeout=60)
+    eng2.send(cmd="set_device", device="cpu")
+    eng2.wait_for("device_set", timeout=60)
+    eng2.send(cmd="project", action="open", path=ev["path"])
+    eng2.wait_for("project_opened", timeout=90)
+    meta2 = eng2.wait_for("shm_ready", timeout=180)
+    eng2.wait_for("vram_ready", timeout=180)
+    eng2.wait_for("image_ready", timeout=180)
+    peer2 = FrameShm(meta2["name"])
+    got = _read_frame(eng2, peer2, meta2["h"], meta2["w"])
+    d = int(np.abs(got - saved).max())
+    assert d == 0, f"重开后那一笔消除的位置/强度差了 {d} LSB"
+    eng2.send(cmd="history", action="state")
+    ds = eng2.wait_for("history_state", timeout=30)["doc_state"]
+    assert ds["counts"]["repair"] == 1, f"笔迹没回到文档状态：{ds['counts']}"
+    # 报的原因必须是真的：手里没有掩膜，拿通道指认就该被拒
+    eng2.send(cmd="set_strength", value=0.6, channel="skin")
+    _expect_error(eng2, "没有掩膜通道")
+    # 而这一张图本身仍然是活的：重新推理一次，同一个通道就能用
+    eng2.send(cmd="precompute", backend="auto")
+    ev2 = eng2.wait_for("precompute_ready", timeout=120)
+    eng2.send(cmd="set_strength", value=0.6, channel=ev2["mask_channels"][0])
+    eng2.wait_for("params_set", timeout=30)
+    peer2.close()
+
+
+def test_project_trash_and_tags_reopen_without_touching_the_source(engine, extra_engine, tmp_path):
+    """CORE-007：移入回收站再恢复——工程记录可恢复，原图不删除，配方仍在。"""
+    _needs_torch()
+    _load(engine, max_px=207360, strength=0.0)
+    engine.send(cmd="crop", rect=[0.2, 0.2, 0.8, 0.8], rotation_degrees=0.0)
+    _wait_crop_frame(engine)
+    _created, ev = _create_and_save(engine, tmp_path, "回收站")
+    pfile = ev["path"]
+    engine.send(cmd="project", action="tag", index=0, tags=["待确认", "客户已看"])
+    engine.wait_for("project_edited", timeout=30)
+    engine.send(cmd="project", action="trash", index=0, trashed=True)
+    engine.wait_for("project_edited", timeout=30)
+    engine.send(cmd="project", action="save")
+    ev2 = engine.wait_for("project_saved", timeout=90)
+    assert ev2["dirty"] is False and ev2["dropped_count"] == ev["dropped_count"], ev2
+    src_sha = _sha_of(FIXTURE)
+
+    back = _PJ.load(pfile)
+    row = back["docs"][0]
+    assert row["trashed"] is True and row["tags"] == ["待确认", "客户已看"], row
+    assert os.path.isfile(FIXTURE) and _sha_of(FIXTURE) == src_sha, "回收站碰了原图"
+
+    eng2 = extra_engine("trash")
+    eng2.send(cmd="hello")
+    eng2.wait_for("ready", timeout=60)
+    eng2.send(cmd="project", action="open", path=pfile)
+    op = eng2.wait_for("project_opened", timeout=90)
+    # 回收站里的格子不进“默认打开那张”：重开就选到被丢进回收站的图是意外行为
+    assert op["docs"] == 1
+    eng2.send(cmd="project", action="trash", index=0, trashed=False)
+    row_ev = eng2.wait_for("project_edited", timeout=30)
+    assert row_ev["trashed"] is False, row_ev
+    eng2.send(cmd="project", action="save")
+    ev3 = eng2.wait_for("project_saved", timeout=90)
+    assert _PJ.load(pfile)["docs"][0]["trashed"] is False, ev3
+    assert os.path.isfile(FIXTURE) and _sha_of(FIXTURE) == src_sha
+
+
+def test_project_dirty_flag_tells_the_truth(engine, tmp_path):
+    """“未保存”徽章只能是真话：看一眼原图与被拒的命令不算改过。"""
+    _needs_torch()
+    _load(engine, max_px=207360, strength=0.0)
+    _created, _ = _create_and_save(engine, tmp_path, "徽章")
+    engine.send(cmd="project", action="state")
+    st = engine.wait_for("project_state", timeout=30)
+    assert st["dirty"] is False, "刚存完就报未保存——那徽章没人会信"
+    engine.send(cmd="compare", on=True)
+    _next_event(engine, skip=QUIET_EVENTS, timeout=30)
+    engine.send(cmd="compare", on=False)
+    _next_event(engine, skip=QUIET_EVENTS, timeout=30)
+    engine.send(cmd="project", action="state")
+    assert engine.wait_for("project_state", timeout=30)["dirty"] is False, "按住看原图算了一次修改"
+    engine.send(cmd="crop", rect=[0.9, 0.1, 0.2, 0.9])      # 非法：应当被拒且不脏
+    _next_non_frame(engine, timeout=30)
+    engine.send(cmd="project", action="state")
+    assert engine.wait_for("project_state", timeout=30)["dirty"] is False, "被拒的命令把工程标脏了"
+    engine.send(cmd="crop", rect=[0.1, 0.1, 0.9, 0.9], rotation_degrees=0.0)
+    _wait_crop_frame(engine)
+    engine.send(cmd="project", action="state")
+    assert engine.wait_for("project_state", timeout=30)["dirty"] is True, "真改了而徽章不亮"
+
+
+def test_project_open_refuses_to_drop_unsaved_work_but_honours_force(engine, tmp_path):
+    """换工程不是“静默丢工”：没保存就要改底片条，默认拒，force=true 才是用户自己说的。"""
+    _needs_torch()
+    _load(engine, max_px=207360, strength=0.0)
+    _created, ev = _create_and_save(engine, tmp_path, "甲")
+    other, ev2 = _create_and_save(engine, tmp_path, "乙")
+    assert other["path"] != ev["path"], "同名工程共用了文件：那第二次 create 会顶掉第一份"
+    engine.send(cmd="crop", rect=[0.05, 0.05, 0.95, 0.95], rotation_degrees=0.0)
+    _wait_crop_frame(engine)
+    engine.send(cmd="project", action="open", path=ev["path"])
+    err = engine.wait_for("error", timeout=30)
+    assert "未保存" in err["error"], err
+    engine.send(cmd="project", action="open", path=ev["path"], force=True)
+    op = engine.wait_for("project_opened", timeout=90)
+    assert op["dirty"] is False and op["docs"] == 1, op
+
+
+def test_project_open_reports_a_corrupt_file_and_the_engine_lives(engine, tmp_path):
+    """CORE-008 的协议面：文件被改成半截时，报的是“损坏”而不是“没这一张图”。
+
+    原子性本身在单元用例里用注入 os.replace 失败证；这里验的是引擎碰到坏文件
+    不能进半截状态：旧底片条与当前会话必须原样，并且还能继续干活。
+    """
+    _needs_torch()
+    meta = _load(engine, max_px=207360, strength=0.0)
+    _created, ev = _create_and_save(engine, tmp_path, "损坏")
+    pfile = ev["path"]
+    raw = open(pfile, "rb").read()
+    with open(pfile, "wb") as f:
+        f.write(raw[: len(raw) // 2])
+    engine.send(cmd="project", action="open", path=pfile)
+    err = engine.wait_for("error", timeout=30)
+    assert "损坏" in err["error"], err
+    assert engine.proc.poll() is None, "一个坏项目文件把引擎弄挂了"
+    # 底片条与会话原样：还在当前那张图上，而且还能继续调参
+    engine.send(cmd="session", action="state")
+    ss = engine.wait_for("session_state", timeout=30)
+    assert ss["current"] == os.path.abspath(FIXTURE), ss["current"]
+    assert ss["project"]["path"] == pfile, "被拒的 open 写了半边新状态"
+    engine.send(cmd="set_strength", value=0.4)
+    engine.wait_for("params_set", timeout=30)
+    _read_frame(engine, FrameShm(meta["name"]), meta["h"], meta["w"])
+    with open(pfile, "wb") as f:
+        f.write(raw)                          # 修回去：同一份工程仍然能打开
+    engine.send(cmd="project", action="open", path=pfile, force=True)
+    assert engine.wait_for("project_opened", timeout=60)["docs"] == 1
+
+
 #
 # 单元测试证的是函数自己守约；这一组证的是“UI 递上来的四个参数真的走到了落盘”。
 # 上一轮 d3b 的教训就在这儿：链改完只在 venv 里跑通算式，接线的四个生命周期一处没验，

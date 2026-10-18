@@ -123,14 +123,33 @@ def test_verify_fingerprint_separates_missing_from_touched(tmp_path, src):
     assert v2["head_match"] is False and v2["bytes_match"] is False, v2
 
 
-def test_add_doc_twice_replaces_the_row_and_keeps_versions(tmp_path, src):
-    """同一路径不许出现第二行：validate() 会拒重复 path，所以这里是换行而不是加行。"""
+def test_same_path_never_gets_two_rows(tmp_path, src):
+    """同一路径不许出现第二行：validate() 会拒重复 path，所以这条是换行而不是加行。"""
     prj = P.new_project("p", str(tmp_path))
     P.add_doc(prj, src, _recipe())
     P.add_doc(prj, src, _recipe())
-    assert len(prj["docs"]) == 1 and len(prj["docs"][0]["versions"]) == 2
+    assert len(prj["docs"]) == 1
+    P.validate(prj)                       # 换行之后仍然过得了结构校验
+
+
+def test_named_version_id_is_overwritten_not_appended(tmp_path, src):
+    """“当前配方”在工程文件里只能有一格，而它的身份要在多次保存之间稳定。
+
+    不传 id 时每次保存都新造一版：那会把工程文件写成历史堆（每版一套资产），
+    而重开后宿主拿到的 active_version 与上次看到的不是同一个名字。
+    """
+    prj = P.new_project("p", str(tmp_path))
+    P.add_doc(prj, src, _recipe(), version_id="live")
+    r2 = _recipe()
+    r2["_strength"] = 0.9
+    P.add_doc(prj, src, r2, version_id="live")
     row = prj["docs"][0]
-    assert row["active_version"] == row["versions"][-1]["id"], "新配方没成为活动版本"
+    assert len(row["versions"]) == 1 and row["active_version"] == "live", row
+    got, _ = P.active_recipe(prj, src, dc_types={"Op": Op})
+    assert got["_strength"] == 0.9, "按 id 覆盖没生效，拿到的还是旧配方"
+    # 命名版本（不传 id）仍然逐格累加：那是用户主动存的，不是“当前”
+    P.add_doc(prj, src, r2, version_name="交稿前")
+    assert len(prj["docs"][0]["versions"]) == 2
 
 
 def test_recycle_bin_does_not_touch_the_file(tmp_path, src):

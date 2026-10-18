@@ -30,6 +30,10 @@ from .ops import birefnet
 from .ops import upscale as U
 # M5 底片条：扫描与缩略图的全部口径都在 session 层，命令层只发事件与管线程。
 from . import raw as R
+# 项目持久化：编解码与落盘全在 project 层（纯函数 + 文件 IO，不依赖 torch），
+# 命令层只负责“校验互斥 → 调它 → 把事实发成事件”。
+from . import project as PJ
+from .project import ProjectError
 from . import session as S
 # M4 导出：FORMATS/尺寸边界与落盘器全部从 export 走，命令层不掌一份格式名单（双出处）。
 from .export import (DEFAULT_TILE, FORMATS, MAX_TILE, MIN_TILE, SHARPEN_AMOUNT_LIMIT,
@@ -188,6 +192,16 @@ class Engine:
         self._redo: list = []
         self._hist_group = ""           # 最近一步的手势身份（同组在窗口期内合并）
         self._hist_group_ns = 0
+        # 项目（LNX-P0-PROJECT / CORE-001）：内存里那一份工程文档、它落盘的路径、
+        # 以及“存过之后又改过没有”。脏标记只有一个推送点：`_history_record` 判出
+        # “这一条命令真的改了文档状态”那一刻。拿“底片条内容与保存时不同”当脏会报两件
+        # 假事：重新解码的调色表对象身份变了（签名就是按身份比的），以及缩略图线程
+        # 晚到一步改了单格。两者都会让“未保存”徽章在刚保存完就亮起来。
+        self._project: dict | None = None
+        self._project_path: str | None = None
+        self._project_path_prev: str | None = None
+        self._project_dirty = False
+        self._project_saved_ns: int | None = None
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
@@ -243,7 +257,11 @@ class Engine:
               "history_actions": list(self.HISTORY_ACTIONS),
               "history_max": self.HISTORY_MAX,
               "history_group_ms": self.HISTORY_GROUP_MS,
-              "history_edit_cmds": list(self.EDIT_CMDS)})
+              "history_edit_cmds": list(self.EDIT_CMDS),
+              # 项目面的能力名单由引擎报出去（与 export 的格式名单同一条理由）：
+              # 前端拄一份 action 名单，两边分叉时“不支持”与“拼错了”长得一模一样
+              "project_actions": list(self.PROJECT_ACTIONS),
+              "project_suffix": PJ.SUFFIX})
 
     # ------------------------------------------------------------ 帧缓冲
     def _ensure_shm(self, w: int, h: int) -> FrameShm:
@@ -718,6 +736,15 @@ class Engine:
         self._light_redo = list(self._light_redo)
         self._grade = tuple(self._grade)
         self._bg = dict(self._bg)
+        # 从项目文件回来的配方里，元组一律是 JSON 数组。`_grade` 早就在这里归一回，
+        # 而 crop/exposure 不归一就会漂：重挂判据与“中性”判据比的都是元组字面量，
+        # list != tuple 永真 → “没点火的层”被当成“已点火”，而画面确实没变。
+        # 这是双向错配的另一格：不是图层没迁，是类型让判据说了谎。
+        self._crop_rect = tuple(float(x) for x in self._crop_rect)
+        self._crop_rotation = float(self._crop_rotation)
+        self._exposure = tuple(float(x) for x in self._exposure)
+        self._exposure_ref_k = None if self._exposure_ref_k is None \
+            else float(self._exposure_ref_k)
         self._strength = _clamp_strength(self._strength)
 
     def _drop_proxy_layers(self, st: dict, why: str) -> dict:
@@ -749,6 +776,10 @@ class Engine:
         return {**m, "path": os.path.abspath(path), "state": state or self._fresh_doc_state(),
                 "budget": budget, "thumb": None, "thumb_error": None, "opened": False,
                 "undo": [], "redo": [],
+                # 项目层的三个字段（LNX-P0-PROJECT / CORE-001、CORE-007）：标签与回收站
+                # 是工程记录，不是对原图动手。`fingerprint` 只在项目保存或打开时才算
+                # （全文件哈希是几十毫秒级的一次性成本，不藏在 load_image 的首帧里）。
+                "tags": [], "label": None, "trashed": False, "fingerprint": None,
                 "w": None, "h": None, "src_w": None, "src_h": None}
 
     def _remember_current(self) -> None:
@@ -839,6 +870,11 @@ class Engine:
             return                      # 名单漂移由命令自己响，这里不叠第二份错
         if self._hist_sig(before) == self._hist_sig(after):
             return
+        # “这一条真的改了文档状态”与“这一条要占一步历史”是同一件事，所以项目脏标记
+        # 也只在这里上：被拒的命令整条 return（签名没变）不脏，看一眼原图（compare）
+        # 不在 EDIT_CMDS 里也不脏。刚保存完就亮“未保存”的徽章比不亮更坑：它让人
+        # 以为保存没生效，于是一次又一次地存。
+        self._project_dirty = True
         now = monotonic_ns()
         same_gesture = False
         if group and self._hist_group == group \
@@ -1214,6 +1250,12 @@ class Engine:
                 "loaded": (i == self._doc_index and self._image_loaded),
                 "opened": bool(d["opened"]),
                 "edits": self._state_edits(st),
+                # 项目层的三个字段随底片条上报：状态徽章（已标/回收站）与多选批量
+                # 都要在格子上直接可读，否则 UI 只能自己再拼一份工程状态——那就是
+                # doc_state 里 crop 被塞进 exposure 那一类错：两边各自自洽
+                "tags": list(d.get("tags") or []), "label": d.get("label"),
+                "trashed": bool(d.get("trashed")),
+                "hashed": bool(d.get("fingerprint")),
                 "thumb": None if th is None else {"w": th["w"], "h": th["h"],
                                                    "bytes": th["bytes"], "quality": th["quality"],
                                                    "preview": bool(th.get("preview")),
@@ -1229,6 +1271,7 @@ class Engine:
               "doc_state": (self.doc_state()
                             if (self._image_loaded and self._vram is not None) else None),
               "thumbs_running": bool(self._thumbs is not None and self._thumbs.is_alive()),
+              "project": self._project_state(),
               "docs": [self._doc_row_event(i, d) for i, d in enumerate(self._docs)], **extra})
 
     def _rows_from(self, paths: list) -> list:
@@ -1429,6 +1472,313 @@ class Engine:
 
     def _doc_paths(self):
         return [d["path"] for d in self._docs]
+
+    # ------------------------------------------------------------ 项目（LNX-P0-PROJECT / CORE-001、007、008）
+    PROJECT_ACTIONS = ("create", "open", "save", "state", "tag", "trash")
+    PROJECT_KEYS = {"cmd", "action", "name", "directory", "path", "doc", "index",
+                    "tags", "label", "trashed", "force"}
+
+    def _project_state(self) -> dict:
+        """项目段只有一个组装点：`session_state` 与四条 `project_*` 事件读到的必须同一份。
+
+        写两处就会漂，而漂的表示是“刚刚存完但徽章还说未保存”——保存这件事的可信度
+        全靠这个字段，它不能是一个估算值。
+
+        字段名带 `_count` 不是凑字数：上一版这里叫 `dropped`，而 `project_saved` 里先写
+        `"dropped": 清单`、后写 `**self._project_state()`（那份是个数），字典字面量
+        后写的吃先写的——清单在事件里静默变成了一个整数。M2 审过的那一条同一形状。
+        """
+        p = self._project
+        return {"open": p is not None, "path": self._project_path,
+                "name": (p or {}).get("name"), "project_id": (p or {}).get("project_id"),
+                "docs": len((p or {}).get("docs") or []),
+                "dirty": bool(self._project_dirty),
+                "saved_ns": self._project_saved_ns,
+                "dropped_count": len((p or {}).get("dropped") or [])}
+
+    def _project_build(self, base: dict | None) -> tuple[dict, dict]:
+        """把当前底片条编成一份待写的项目文档（不写盘），并报这一段的成本。
+
+        资产表**每次重建**而不沿用上一份：沿用会让工程文件逐次保存单调变大（旧版本
+        的资产没人引用也没人清），而这份文件是整份读进内存的。版本 id 用确定性的
+        "live"，所以“当前配方”在文件里只有一格，而它的名字在多次保存之间稳定。
+
+        全文件指纹在这里补算（只算缺的那些）并单独报耗时：把它藏在 load_image 的首帧
+        里就会把“导一张图要多久”算成一个不存在的成本，而真机上一张 25 MB 的 DNG  hashing
+        是几十毫秒量级。"""
+        self._remember_current()
+        t0 = monotonic_ns()
+        hashed = 0
+        prj = PJ.new_project((base or {}).get("name") or "未命名项目",
+                             (base or {}).get("root") or os.path.expanduser("~"))
+        if base:
+            # 身份不随重存/改名变：工程列表靠它认“这是同一个项目”
+            prj["project_id"] = base["project_id"]
+            prj["created_ns"] = base.get("created_ns", prj["created_ns"])
+        dc = {"RepairOp": RepairOp, "LightOp": LightOp}
+        for row in self._docs:
+            if row.get("fingerprint") is None:
+                try:
+                    row["fingerprint"] = PJ.fingerprint(row["path"], full=True)
+                except OSError as e:
+                    # 源文件没了：不把“我读不到”说成“它没变”，也不因此不存这一格
+                    row["fingerprint"] = {"path": row["path"], "bytes": -1, "sha256": None,
+                                          "head_sha256": None, "hash_level": "none",
+                          "mtime_ns": 0, "readonly": True, "error": f"{type(e).__name__}: {e}"}
+                else:
+                    hashed += 1
+            recipe = row["state"]
+            if recipe.get("_precompute") is not None:
+                # 关键点与面部掩膜**不随工程文件走**：它们不是用户画的，而是模型从这张图
+                # 算出来的派生物——与本仓 RepairOp/LightOp “只存输入不存结果”同一条理由。
+                # 不剔掉它的话代价是具体的：每个通道 (H,W) float32 在 207k 代理档上就是
+                # ~830 KB，一百张图会把手上的工程文件顶到 `MAX_PROJECT_BYTES` 之外，
+                # 而重开时本可以按 backend 重新推理（几百毫秒）拿回一模一样的东西。
+                # 剔掉必须留话：否则“重开后面部微调按不动”会被读成引擎坏了。
+                recipe = {**recipe, "_precompute": None}
+                prj.setdefault("dropped", []).append(
+                    {"path": row["path"], "at": "recipe._precompute",
+                     "reason": "关键点/掩膜是模型产物（只存输入不存结果）："
+                               "重开后按 precompute_backend 重新推理"})
+            prow = PJ.add_doc(prj, row["path"], recipe, fp=row["fingerprint"],
+                              tags=row.get("tags"), dc_types=dc,
+                              budget=row.get("budget"), version_id="live")
+            # 回收站与标签是**工程记录**：add_doc 新行时默认 False/None，这里把底片条
+            # 那一格的实际值装回去（不装就是“存完重开，标都没了”）
+            prow["trashed"] = bool(row.get("trashed"))
+            prow["label"] = row.get("label")
+        return prj, {"hash_ms": round((monotonic_ns() - t0) / 1e6, 2),
+                     "fingerprinted": hashed}
+
+    def _row_target(self, p: dict) -> dict | None:
+        """按 index 或 path 找底片条那一格；找不到就 emit error 并递 None。"""
+        if p.get("index") is not None:
+            try:
+                idx = int(p["index"])
+            except (TypeError, ValueError):
+                emit({"event": "error", "error": f"project 的 index 不是整数：{p['index']!r}"})
+                return None
+            if not 0 <= idx < len(self._docs):
+                emit({"event": "error", "error": f"index={idx} 不在底片条里（共 "
+                       f"{len(self._docs)} 格）"})
+                return None
+            return self._docs[idx]
+        if p.get("path"):
+            row = next((d for d in self._docs
+                        if d["path"] == os.path.abspath(str(p["path"]))), None)
+            if row is None:
+                emit({"event": "error", "error": f"底片条里没有这一张：{p['path']}"})
+            return row
+        emit({"event": "error", "error": f"project {p.get('action')} 需要 index 或 path"
+              "（它们是不同的东西：前者是底片条位置，后者是身份）"})
+        return None
+
+    def cmd_project(self, p: dict):
+        """项目：创建 / 打开 / 保存 / 标签 / 回收站。
+
+        铁律沿用 cmd_session 与 cmd_exposure：参数先全量校验、跑靶与导出互斥、
+        被拒不留半截状态、事件只有一个组装点。额外一条：`save` 在没有项目时**不隐式
+        造工程**——“保存”在用户手里意思固定，默默在项目根建一个未命名工程是把决定
+        权偷走（而他会以为已经存到自己选的地方）。
+        """
+        unknown = set(p) - self.PROJECT_KEYS
+        if unknown:
+            emit({"event": "error", "error": f"project 收到不认识的参数：{sorted(unknown)}"})
+            return
+        action = p.get("action")
+        if action not in self.PROJECT_ACTIONS:
+            emit({"event": "error", "error": f"未知 project action: {action}"
+                  f"（可用：{'/'.join(self.PROJECT_ACTIONS)}，名单在 ready 的 project_actions 里）"})
+            return
+        if action == "state":
+            emit({"event": "project_state", **self._project_state()})
+            return
+        if self.bench is not None and self.bench.is_alive() and action in ("create", "open"):
+            emit({"event": "error", "error": f"跑靶进行中，拒绝 project {action}：先 bench_stop"
+                  "（这两条会换底片条与会话，跑靶的读数就不再属于一张图）"})
+            return
+        if self._export is not None and self._export.is_alive():
+            # 导出线程拿着的是“开始那一刻”的底片条快照：中途换工程会让账单对着
+            # 一份已经不存在的集合说话（与 history 同一条守卫，但这里连 tag 也拦：
+            # 批量报告里每一行都要能回到当时那一格）
+            emit({"event": "error", "error": f"导出进行中，拒绝 project {action}：等 export_done"})
+            return
+        if action == "create":
+            name, directory = p.get("name"), p.get("directory")
+            if not isinstance(name, str) or not name.strip():
+                emit({"event": "error", "error": "project create 需要 name（非空字符串）"})
+                return
+            if not isinstance(directory, str) or not directory:
+                emit({"event": "error", "error": "project create 需要 directory（可写目录）"})
+                return
+            try:
+                path = PJ.project_path_for(directory, name)
+            except (ProjectError, OSError) as e:
+                emit({"event": "error", "error": f"项目建不出来：{e}"})
+                return
+            # 换工程参照不是丢工（create 不动 _docs，旧文件也不动），但得把“手上还拿着
+            # 一份未存的活”说出去：UI 拿 replaced_dirty 才能把“切走了”与“切走了且没存”分开
+            self._project_path_prev = self._project_path
+            replaced_dirty = bool(self._project_dirty)
+            prj = PJ.new_project(name, directory)
+            try:
+                info = PJ.save(prj, path)
+            except (ProjectError, OSError) as e:
+                emit({"event": "error", "error": f"项目写盘失败：{e}"})
+                return
+            self._project, self._project_path = prj, info["path"]
+            # 新建的是**空**工程，而底片条上那些活还在内存里：脏标记不能清成 False，
+            # 否则徽章会说“已保存”而磁盘上一张图都没有——那比多亮一次危险得多。
+            # （create 本身不丢工：它不动 _docs；真正会丢工的是 open，那一条另有守卫。）
+            self._project_saved_ns = info["updated_ns"]
+            self._project_dirty = bool(self._docs)
+            emit({"event": "project_created", "requested_directory": os.path.abspath(directory),
+                  "replaced": self._project_path_prev, "replaced_dirty": replaced_dirty,
+                  "bytes": info["bytes"], "sha256": info["sha256"],
+                  "write_ms": info["write_ms"], **self._project_state()})
+            self.emit_session_state()
+            return
+        if action == "open":
+            path = p.get("path")
+            if not isinstance(path, str) or not path:
+                emit({"event": "error", "error": "project open 需要 path（项目文件路径）"})
+                return
+            if not os.path.isfile(path):
+                emit({"event": "error", "error": f"项目文件不存在：{path}"})
+                return
+            # 换工程先问一句：底片条会被整张表换掉，手上的活没存就是真的丢了。
+            # 拿 force=true 显式跨过是另一回事——那才是用户自己说的“我不需要这一份”。
+            # 默认直接换是“静默丢工”，本仓最贵的那一族坑就在这一格上。
+            if self._project is not None and self._project_dirty and not p.get("force"):
+                emit({"event": "error", "error": f"当前工程「{(self._project or {}).get('name')}」"
+                      "保存之后又改过（未保存）：先 project save，或带 force=true 重开"})
+                return
+            t0 = monotonic_ns()
+            try:
+                prj = PJ.load(path)
+            except (ProjectError, OSError) as e:
+                emit({"event": "error", "error": f"项目打开失败：{e}"})
+                return
+            dc = {"RepairOp": RepairOp, "LightOp": LightOp}
+            rows, notes = [], []
+            for prow in prj["docs"]:
+                try:
+                    recipe, dropped = PJ.active_recipe(prj, prow["path"], dc_types=dc)
+                except ProjectError as e:
+                    # 一张图坏了不把整个工程锁在外面：这一格降级成“没调过”，原因跟着走
+                    recipe, dropped = None, [{"at": "recipe", "reason": str(e)}]
+                st = self._fresh_doc_state()
+                if isinstance(recipe, dict):
+                    extra = set(recipe) - set(st)
+                    if extra:
+                        notes.append({"path": prow["path"],
+                                      "reason": f"配方里有本版本不认识字段：{sorted(extra)}"})
+                    st.update({k: v for k, v in recipe.items() if k in st})
+                if dropped:
+                    notes.append({"path": prow["path"], "dropped": dropped})
+                row = self._new_row(prow["path"], state=st, budget=prow.get("budget"))
+                row.update({"tags": list(prow.get("tags") or []), "label": prow.get("label"),
+                            "trashed": bool(prow.get("trashed")),
+                            "fingerprint": prow.get("fingerprint"),
+                            # 项目里的格子都是“被打开并调过”的（哪怕配方是空的）：不置这一位，
+                            # load_image 会把它当刚扫出来的新图，把宿主要的那步 precompute 跳掉
+                            "opened": True})
+                rows.append(row)
+            with self._doclock:
+                self._docs = rows
+            # 工程带着自己那一档预览尺寸回来：代理档不只是“快不快”，逐点层（逐点掩膜/
+            # 笔迹/形变场）就活在那一档的像素坐标上。拿默认档重开就会把刚恢复的笔迹当成
+            # “尺寸不对”清掉——那正是“保存重开后配方少了一半”的形状。只有一致的预算才沿用；
+            # 不一致（手工换过档）就走引擎默认，并由 _proxy 不配那条守卫逐张作废。
+            budgets = {int(r["budget"]) for r in rows if r.get("budget")}
+            proxy_budget = next(iter(budgets)) if len(budgets) == 1 else None
+            if proxy_budget is not None and self._proxy_budget is None:
+                self._proxy_budget = proxy_budget
+            self._project, self._project_path = prj, os.path.abspath(path)
+            self._project_saved_ns, self._project_dirty = prj.get("updated_ns"), False
+            # 上一份工程的会话与历史在新底片条上没有意义：索引重置、栈清空
+            self._doc_index, self._doc_path = -1, None
+            self._image_loaded = False
+            self._history_bind(None)
+            missing = [m for m in PJ.missing_sources(prj) if not m["exists"]]
+            # 重开默认展哪一张：先定下来再发事件，否则 `project_opened` 里的
+            # auto_opened 与随后那一摞 shm_ready/image_ready 对不上人（上报与执行
+            # 隔了一拍就是这种形状：事件说“没开”，视口上却亮着一张）。
+            # 回收站里的格子不当默认那张：一份全在回收站里的工程，重开就该是空视口。
+            target = None
+            if p.get("index") is not None:
+                target = self._row_target(p)
+                if target is None:
+                    return
+            elif isinstance(p.get("doc"), str):
+                target = self._row_target({"action": "open", "path": p["doc"]})
+                if target is None:
+                    return
+            elif rows and p.get("doc") != "none":
+                target = next((r for r in rows if not r["trashed"]), None)
+            emit({"event": "project_opened", "docs": len(rows),
+                  "auto_opened": (target or {}).get("path"),
+                  "proxy_budget": self._proxy_budget,
+                  "missing": missing, "missing_count": len(missing),
+                  "restore_ms": round((monotonic_ns() - t0) / 1e6, 2),
+                  "saved_ns": prj.get("updated_ns"),
+                  "assets": len(prj.get("assets") or {}),
+                  "notes": notes[:12], "notes_count": len(notes),
+                  **self._project_state()})
+            self.emit_session_state()
+            if target is not None:
+                cmd = {"path": target["path"]}
+                if self._proxy_budget:
+                    cmd["max_px"] = int(self._proxy_budget)
+                # 重开那一张走的就是 load_image 同一条路（守卫/尺寸比对/预计算重挂/事件形状
+                # 全部同源），不在这里写第二份“把配方装回去”
+                self.cmd_load_image(cmd)
+            return
+        if action == "save":
+            if self._project is None:
+                emit({"event": "error", "error": "还没有项目：先 project create，"
+                      "或 project open 打开已有工程（保存不会静默在未命名工程里造文件）"})
+                return
+            prj, facts = self._project_build(self._project)
+            try:
+                info = PJ.save(prj, self._project_path)
+            except (ProjectError, OSError) as e:
+                # 写失败不能清脏标记：那时徽章说“已保存”而磁盘上还是旧的一份，
+                # 用户相信那句话才会真的丢工
+                emit({"event": "error", "error": f"项目保存失败，脏状态原样保留：{e}"})
+                return
+            self._project = prj
+            self._project_saved_ns, self._project_dirty = info["updated_ns"], False
+            emit({"event": "project_saved", "bytes": info["bytes"], "sha256": info["sha256"],
+                  "write_ms": info["write_ms"], "path": info["path"],
+                  # 清单逐条发（上限 12 条，多了只报数）：“哪一层没存进去”必须能在批量
+                  # 报告里复查，只在批级别说一句“有丢弃”是没法查的
+                  "dropped": prj.get("dropped", [])[:12],
+                  "assets": len(prj.get("assets") or {}), **facts, **self._project_state()})
+            self.emit_session_state()
+            return
+        # tag / trash：改的是底片条那一格，而校验只有一份（project.set_tags / set_trashed）
+        row = self._row_target(p)
+        if row is None:
+            return
+        shim = {"docs": self._docs}
+        try:
+            if action == "tag":
+                PJ.set_tags(shim, row["path"], p.get("tags"))
+                if p.get("label") is not None:
+                    row["label"] = str(p["label"])[:64]
+            else:
+                PJ.set_trashed(shim, row["path"], bool(p.get("trashed", True)))
+        except ProjectError as e:
+            emit({"event": "error", "error": f"{action} 被拒，工程记录原样未动：{e}"})
+            return
+        # 工程记录也改了（与 EDIT_CMDS 那条“真改了文档状态”是两件事，这里必须自己上）
+        self._project_dirty = True
+        emit({"event": "project_edited", "action": action, "path": row["path"],
+              "tags": list(row.get("tags") or []), "label": row.get("label"),
+              "trashed": bool(row.get("trashed")), **self._project_state()})
+        self.emit_session_state()
+
 
     # ------------------------------------------------------------ 导入期预计算
     def _precompute_ready_event(self, pc, info, *, build_ms: float, infer_ms: float,
@@ -3301,7 +3651,7 @@ class Engine:
     HANDLED = ("hello", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "light",
                "deform", "lut", "grade", "export", "exposure", "crop", "background",
-               "compare", "session", "history")
+               "compare", "session", "project", "history")
     _HANDLED_LAMBDA = ("bench_stop",)      # 唯一不开成 cmd_* 的那条：只是置停止位
 
     def _dispatch_table(self) -> dict:
