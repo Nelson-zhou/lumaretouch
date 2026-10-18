@@ -126,7 +126,7 @@ const zh = {
   "grade.val": "肤色明度（{v}）",
   "grade.mix": "肤色定向强度（{v}）",
   "grade.clear": "清除肤色定向",
-  "grade.window": "只动肤色窗口里的像素，窗外逐字节不变；滑块行程由引擎报的硬边界决定",
+  "grade.window": "只动肤色窗口里的像素：边界 2 px 内做空间羽化（不留台阶），再往外逐字节不变；滑块行程由引擎报的硬边界决定",
   "grade.layer": "肤色定向层",
   "grade.params": "增量",
   "grade.ms": "肤色定向耗时",

@@ -20,7 +20,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from lumaretouch_engine.ops.grade import (DH_LIMIT, DS_LIMIT, DV_LIMIT, GradeError,
+from lumaretouch_engine.ops.grade import (DH_LIMIT, DS_LIMIT, DV_LIMIT, GradeError, feather_np,
                                          H_IN_HI, H_IN_LO, H_OUT_HI, H_OUT_LO, S_HI, S_LO,
                                          V_HI, V_LO, check_params, grade_np, grade_t,
                                          hsv_to_rgb_np, is_identity, rgb_to_hsv_np,
@@ -138,7 +138,9 @@ def test_numpy_arm_matches_clamped_analytic_expectation(sample_hw3_data):
     """
     x = sample_hw3_data
     dh, ds, dv = 0.012, -0.35, 0.28
-    got = grade_np(x, dh, ds, dv)
+    # feather=False：这条测的是"混色式 + HSV 正逆变换"这个解析闭包，权重必须是逐点那份；
+    # 羽化是空间低通，掺进来只会让这条判据变成"测我自己写的卷积"。羽化单独有判据。
+    got = grade_np(x, dh, ds, dv, feather=False)
     hsv = rgb_to_hsv_np(np.clip(x, 0.0, 1.0))
     w = weight_of(x)
     full = w == 1.0
@@ -153,18 +155,73 @@ def test_numpy_arm_matches_clamped_analytic_expectation(sample_hw3_data):
     assert max(res_h, res_s, res_v) < 1e-12, (res_h, res_s, res_v)
 
 
+def _dilate(mask, r: int):
+    """把布尔掩码沿横竖各扩 r 像素（补 False，不环绕）。独立于被测实现写。"""
+    p = np.pad(mask, r, constant_values=False)
+    h, w = mask.shape
+    out = mask.copy()
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            out |= p[r + dy:r + dy + h, r + dx:r + dx + w]
+    return out
+
+
 def test_pixels_outside_the_window_are_byte_identical(sample_hw3_data):
-    """窗外必须逐字节不动——而且是**浮点逐位**，不是"量化后相同"。
+    """窗外逐字节不动——**关掉羽化时是任何 w=0 像素**，默认羽化时是"离边界 2 px 以上"。
 
     `0·有限 = 0`、`x + 0 = x`：这是结构性保证，不是调出来的容差。混色式一旦写成
     "先算完再按 mask 挑"，这条立刻碎，而 LSB 判据可能还看不出来。
+
+    口径为什么收窄：权重是逐像素按颜色窗口算的，不羽化就在图像上硬跳，真人像上
+    脸会一块一块分层（用户报"冷白人都分层了"，实测满权重前景里 17.9% 是边界像素、
+    相邻像素权重差最大 1.000）。羽化核 [1,2,1]/4 横竖各一次的支撑半径是 2，所以
+    逐位不变的承诺只能覆盖到离窗口 2 px 以外——边界那一圈本来就该是过渡而不是台阶。
     """
     x = sample_hw3_data
     w = weight_of(x)
-    out = grade_np(x, 0.012, -0.35, 0.28)
     zero = np.isclose(w, 0.0)
     assert zero.sum() > 0
-    assert np.array_equal(out[zero], x[zero]), "窗外像素被改动了（混色式写错了）"
+    strict = grade_np(x, 0.012, -0.35, 0.28, feather=False)
+    assert np.array_equal(strict[zero], x[zero]), "窗外像素被改动了（混色式写错了）"
+
+
+def test_pixels_far_from_the_window_boundary_survive_feathering():
+    """羽化后仍然逐位不变的范围：离肤色窗口 2 px 以外。样本自己造，要有一大片远窗外。
+
+    这份判据不能拿 sample_hw3_data 当输入：那份样本的窗外像素**全部**挤在窗口 2 px 以内，
+    `far` 会空集，断言就退化成恒真——所以这里造一张左肤右绿、右侧留足宽度的图。
+    """
+    x = np.zeros((60, 120, 3), np.float64)
+    x[:, :40] = (0.85, 0.62, 0.50)        # 肤色窗内
+    x[:, 60:] = (0.42, 0.72, 0.30)        # 黄绿，窗外，且离边界 20 px 以上
+    x[:, 40:60] = np.linspace(0.85, 0.42, 20)[None, :, None] * np.array([1.0, 0.9, 0.85])
+    zero = np.isclose(weight_of(x), 0.0)
+    far = zero & ~_dilate(~zero, 2)
+    assert far.sum() > 500, f"样本里「远窗外」只有 {far.sum()} 个像素，判据会退化"
+    assert np.array_equal(grade_np(x, 0.012, -0.35, 0.28)[far], x[far]), \
+        "离肤色边界 2 px 以外的像素被改动了"
+
+
+def test_feather_spreads_the_weight_step_over_pixels_instead_of_flipping():
+    """羽化的正判据：色相硬跨窗口边界时，权重必须摊开，不能一像素翻完。
+
+    反向门在前半段：不羽化时这道缝就是 1 px 内从满权重跳到 0——那正是"分层"的形状。
+    """
+    x = np.zeros((40, 60, 3), np.float64)
+    x[:, :30] = (0.85, 0.62, 0.50)        # 色相落在肤色窗内
+    x[:, 30:] = (0.42, 0.72, 0.30)        # 偏黄绿，窗外
+    raw = weight_of(x)
+    assert raw.max() > 0.9 and raw.min() < 0.1, "样本没造出窗内/窗外两侧"
+    step = float(np.abs(np.diff(raw, axis=1)).max())
+    assert step > 0.9, f"这条判据依赖样本里有硬跳，实际只有 {step:.3f}"
+    sm = float(np.abs(np.diff(feather_np(raw), axis=1)).max())
+    # [1,2,1]/4 跨 0→1 阶跃的最坏跳变正好是 0.5（0.25 → 0.75），所以判据是"不超过一半"，
+    # 写成严格小于会在自己的算式上翻车——第一次就是这么红的。
+    assert sm <= step / 2.0 + 1e-12, f"羽化没把最大逐像素跳变压下去：{step:.3f} → {sm:.3f}"
+    # 过渡要真的摊开：缝上一列里既非满值也非零值的像素至少 3 个
+    seam = feather_np(raw)[:, 26:36]
+    mid = ((seam > 0.02) & (seam < 0.98)).sum()
+    assert mid >= 3, f"过渡只摊在 {mid} 个像素上，仍然是台阶"
 
 
 def test_torch_arm_returns_the_same_object_for_identity(sample_hw3_data):

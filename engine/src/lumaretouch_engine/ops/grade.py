@@ -137,13 +137,42 @@ def skin_weight_np(hsv):
     return wh * smoothstep(s, S_LO, S_HI) * smoothstep(v, V_LO, V_HI)
 
 
-def grade_np(x, dh: float, ds: float, dv: float, amount: float = 1.0):
+def feather_np(w):
+    """对肤色权重做 3×3 二项式低通（可分离 [1,2,1]/4 横竖各一次）。
+
+    为什么必须羽化：w 是**逐像素**按颜色窗口算出来的，色相一过界就整块翻转。真人像上
+    实测（443×553，冷白预设）：w>0.5 的前景里 **17.9% 是边界像素**、相邻像素权重差的
+    **p95=0.223、最大 1.000**、只有 7.2% 的像素能满额进窗——窗内窗外在图像上碎成一片
+    一片，放大显示就是用户报的"人脸分层"。颜色空间里的 smoothstep 平滑救不了这个：
+    它保证的是"同色同权重"，而图像上的斑块要的是"相邻像素权重别跳"。
+
+    口径变化要写清楚：羽化前承诺"窗外逐字节不变"，羽化后只在**离肤色边界 2 px 以上**
+    成立（3×3 核两次 = 支撑半径 2）。边界那一圈本来就该是过渡，不是台阶。
+
+    边缘用 replicate（边缘复制）而不是补零：补零会在图像四边凭空压出一圈权重下降带。
+    """
+    return _binom1_np(_binom1_np(w, axis=-1), axis=-2)
+
+
+def _binom1_np(a, axis):
+    """沿一根轴做 [1,2,1]/4，边缘 replicate（np.take 夹索引，等价于边缘复制且不补零）。"""
+    n = a.shape[axis]
+    i = np.arange(n)
+    lo = np.take(a, np.maximum(i - 1, 0), axis=axis)
+    hi = np.take(a, np.minimum(i + 1, n - 1), axis=axis)
+    return (lo + 2.0 * a + hi) / 4.0
+
+
+def grade_np(x, dh: float, ds: float, dv: float, amount: float = 1.0, *, feather: bool = True):
     """解析真值臂：收 (…,3) 的 float64，返回同形状。"""
     dh, ds, dv, am = check_params(dh, ds, dv, amount=amount)
     x = np.asarray(x, dtype=np.float64)
     base = np.clip(x, 0.0, 1.0)
     hsv = rgb_to_hsv_np(base)
-    w = (skin_weight_np(hsv) * am)[..., None]
+    wraw = skin_weight_np(hsv)
+    if feather:
+        wraw = feather_np(wraw)
+    w = (wraw * am)[..., None]
     h2 = (hsv[..., 0:1] + dh * w) % 1.0
     s2 = np.clip(hsv[..., 1:2] * (1.0 + ds * w), 0.0, 1.0)
     v2 = np.clip(hsv[..., 2:3] * (1.0 + dv * w), 0.0, 1.0)
@@ -198,8 +227,22 @@ def skin_weight_t(h, s, v):
     return wh * smoothstep_t(s, S_LO, S_HI) * smoothstep_t(v, V_LO, V_HI)
 
 
-def grade_t(t, dh: float, ds: float, dv: float, amount: float = 1.0):
-    """生产内核：(N,3,H,W) float32 进、同形状出；窗外精确递回原值。"""
+def feather_t(w):
+    """torch 臂的羽化：与 feather_np **同一条算式**（[1,2,1]/4 横竖各一次、边缘 replicate）。
+
+    分两份实现只是因为索引 API 不同；两臂逐点一致由 test_grade 的对拍钉住。
+    """
+    n_h, n_w = w.shape[-2], w.shape[-1]
+    iw = torch.arange(n_w, device=w.device)
+    w = (torch.index_select(w, -1, (iw - 1).clamp(0, n_w - 1)) + 2.0 * w
+         + torch.index_select(w, -1, (iw + 1).clamp(0, n_w - 1))) / 4.0
+    ih = torch.arange(n_h, device=w.device)
+    return (torch.index_select(w, -2, (ih - 1).clamp(0, n_h - 1)) + 2.0 * w
+            + torch.index_select(w, -2, (ih + 1).clamp(0, n_h - 1))) / 4.0
+
+
+def grade_t(t, dh: float, ds: float, dv: float, amount: float = 1.0, *, feather: bool = True):
+    """生产内核：(N,3,H,W) float32 进、同形状出；离肤色边界 2 px 以上精确递回原值。"""
     if torch is None:
         raise RuntimeError("grade_t 需要 torch")
     if t.ndim != 4 or t.shape[1] != 3:
@@ -209,7 +252,10 @@ def grade_t(t, dh: float, ds: float, dv: float, amount: float = 1.0):
         return t                    # 结构短路：一个算子也不跑
     base = t.clamp(0.0, 1.0)
     h, s, v = rgb_to_hsv_t(base)
-    w = (skin_weight_t(h, s, v) * am).unsqueeze(1)
+    wraw = skin_weight_t(h, s, v)
+    if feather:
+        wraw = feather_t(wraw)
+    w = (wraw * am).unsqueeze(1)
     h2 = (h.unsqueeze(1) + dh * w) % 1.0
     s2 = (s.unsqueeze(1) * (1.0 + ds * w)).clamp(0.0, 1.0)
     v2 = (v.unsqueeze(1) * (1.0 + dv * w)).clamp(0.0, 1.0)

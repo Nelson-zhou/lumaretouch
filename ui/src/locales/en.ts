@@ -119,7 +119,7 @@ export const en: Partial<Record<MsgKey, string>> = {
   "grade.val": "Skin lightness ({v})",
   "grade.mix": "Skin tuning strength ({v})",
   "grade.clear": "Clear skin tuning",
-  "grade.window": "Only pixels inside the skin window move; outside it the bytes are untouched. Slider range comes from the engine's hard limits.",
+  "grade.window": "Only pixels inside the skin window move; the weight is feathered over 2 px at the edge (no hard step), and beyond that the bytes are untouched. Slider range comes from the engine's hard limits.",
   "grade.layer": "Skin tuning layer",
   "grade.params": "Deltas",
   "grade.ms": "Skin tuning cost",
