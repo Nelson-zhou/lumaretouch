@@ -170,6 +170,22 @@ info = {
     "device_name": (torch.cuda.get_device_name(0)
                     if torch.cuda.is_available() else None),
 }
+# 人脸后端可用性单独报：它是“可选但已装”这一档，报成布尔值而不是缺席字段，
+# 这样“装失败但自检全绿”这种情态在本机日志里一眼就能看出来。
+try:
+    import importlib.util as _iu
+    from lumaretouch_engine import face as _face
+    _have = _iu.find_spec("mediapipe") is not None
+    _dirs = _face.model_search_dirs(None)
+    _models = {m: next((d for d in _dirs if __import__("os").path.isfile(
+                   __import__("os").path.join(d, m))), None) or "MISSING"
+               for m in (_face.FACE_LANDMARKER_MODEL, _face.SELFIE_SEGMENTER_MODEL)}
+    info["face_mediapipe_import"] = _have
+    info["face_model_paths"] = _models
+    info["face_backend"] = ("mediapipe" if _have and
+                            all(v != "MISSING" for v in _models.values()) else "synthetic")
+except Exception as _e:
+    info["face_backend"] = f"error: {type(_e).__name__}: {_e}"
 print("LRT_RUNTIME_SELFCHK " + json.dumps(info, ensure_ascii=False))
 if not info["gpu_available"]:
     print("× torch 报告没有可用 GPU 设备", file=sys.stderr)
@@ -230,6 +246,25 @@ else
   "$pybin" -m pip install 'numpy>=2.0' 'pillow>=11'
 fi
 [ -n "$index" ] && rm -f "$eff_req"
+
+# 人脸关键点运行时（MediaPipe FaceMesh，Apache-2.0）。
+# 单独一步而不并进 GPU 清单：那份带 --index-url 指向 pytorch 专仓，把 PyPI 包写进去
+# 会去错仓找包。也是这个原因它必须走默认 index。
+#
+# 装不上**不让整个运行时报错**：磨皮/调色/导出是 0 权重管线，没 mediapipe 也该照常
+# 可用；面部重塑在缺依赖时由引擎抛 MissingBackend 显式说明缺什么，绝不静默退成
+# 占位后端。把“能不能脸重塑”写成安装期的硬前提，会顺带把无网机器整个挡在门外。
+mp_req="$req_dir/requirements-mediapipe.txt"
+if [ -f "$mp_req" ]; then
+  echo "→ 装人脸关键点运行时（mediapipe，走 PyPI；失败不阻断，仅面部重塑不可用）"
+  if command -v uv >/dev/null 2>&1; then
+    uv pip install --python "$pybin" -r "$mp_req" || echo "  ! mediapipe 未装成（下面自检会报）"
+  else
+    "$pybin" -m pip install -r "$mp_req" || echo "  ! mediapipe 未装成（下面自检会报）"
+  fi
+else
+  echo "→ 跳过人脸关键点运行时（清单不在：$mp_req）"
+fi
 
 echo "→ 自检（引擎真实 import 链 + GPU 可用性）"
 selfcheck

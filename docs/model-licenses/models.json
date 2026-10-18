@@ -20,23 +20,28 @@
     {
       "id": "mp.face_landmarker",
       "display": "MediaPipe Face Landmarker（478 点 3D 关键点 + 52 blendshape 模型束）",
-      "capability": ["面部重塑", "表情管理", "眼睛/牙齿定位", "皮肤区域贴合"],
-      "tier": "bundled-pending",
-      "tier_note": "目标是 bundled（进 deb、装机零操作）。但 check-release.sh 的台账门禁要求 bundled 必须同时具备实测 sha256 与一手许可证据，两者现在都还缺，所以先标 bundled-pending——**这不是保守，是这个档自前真的还没成立**。",
+      "capability": [
+        "面部重塑",
+        "表情管理",
+        "眼睛/牙齿定位",
+        "皮肤区域贴合"
+      ],
+      "tier": "bundled",
+      "tier_note": "总工 2026-10-18 放行（非商业 + Apache-2.0 权重全面可用），sha256 与体积均为实测，证据已升到一手，因此这个档真的成立了。见 ADR-0002。",
       "upstream_project": "https://github.com/google-ai-edge/mediapipe",
       "model_card": "https://huggingface.co/google/mediapipe-models",
       "docs": "https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker",
       "artifact": "face_landmarker.task",
       "artifact_url": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
       "revision": "float16/1",
-      "size_bytes": null,
-      "size_note": "待实测。用户口径记为 2.5 MB；官方文档明确该 bundle 由 BlazeFace 短距检测 + FaceMesh-V2 + Blendshape 三个模型打包，实际体积须下载后以文件为准，不沿用未验证数字。",
-      "sha256": null,
+      "size_bytes": 3758596,
+      "size_note": "实测整束 3,758,596 B（=3.58 MiB）。解开 .task（它是 zip）得三份 tflite：face_landmarks_detector 2,553,590 B ← 「2.5MB」说的就是这份、face_detector 229,746 B、face_blendshapes 955,312 B，加 geometry_pipeline_metadata 19,376 B。所以“2.5MB”与“3.58MB”都对，指的东西不一样。",
+      "sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
       "code_license": "Apache-2.0",
       "weights_license": "Apache-2.0",
       "training_data_license": "未披露（官方 model card 未列训练集构成）",
-      "evidence": "二手",
-      "evidence_note": "HF 在本环境返回 401，未能直读 model card 原文。许可结论取自：MediaPipe 仓库整体 Apache-2.0 + 官方文档链接的 model card 被多方一致引用为 Apache-2.0。落地前须在一台能访问 HF 的机器上把 model card 原文与许可元数据存档进 docs/model-licenses/archive/。",
+      "evidence": "一手",
+      "evidence_note": "许可文本双渠道同字节：PyPI wheel 的 dist-info/licenses/LICENSE 与 raw.githubusercontent.com/google-ai-edge/mediapipe/master/LICENSE 均为 12,331 B，已存档 docs/model-licenses/archive/mediapipe-LICENSE.txt（sha256 8707eef0…）。上一轮记的「二手/HF 401」是因为只试了 huggingface 一个端点。",
       "attribution": "Copyright Google LLC. Licensed under the Apache License, Version 2.0.",
       "obligations": [
         "保留版权声明与许可链接（Apache-2.0 §4）",
@@ -48,12 +53,18 @@
         "推论：本软件后续不得实现『跨照片认人/以图搜人』类功能，即使技术上可行"
       ],
       "status": "台账已建，尚未接入运行时",
-      "blocking_decisions": []
+      "blocking_decisions": [],
+      "artifact_sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+      "bundled_path": "usr/lib/LumaRetouch/engine/src/lumaretouch_engine/data/face_landmarker.task"
     },
     {
       "id": "lama.large_mask_inpainting",
       "display": "LaMa 智能消除",
-      "capability": ["智能消除", "祛路人", "污点/穿帮修复（生成式那一档）"],
+      "capability": [
+        "智能消除",
+        "祛路人",
+        "污点/穿帮修复（生成式那一档）"
+      ],
       "tier": "fetched",
       "upstream_project": "https://github.com/advimman/lama",
       "artifact": "big-lama 权重",
@@ -66,15 +77,25 @@
       "evidence": "未核",
       "evidence_note": "代码 MIT 是确定的；权重可分发性取决于 Places2 条款原文，须复核后再定档。复核前：功能可开发，不得进任何对外发行包。",
       "attribution": "Copyright (c) Advimman (Sber) — MIT；训练数据 Places2 需另行署名/遵守其条款",
-      "obligations": ["附 MIT 许可原文", "附训练数据条款告知"],
-      "use_restrictions": ["训练数据条款可能限研究用途；复核前不得声称可自由再分发"],
+      "obligations": [
+        "附 MIT 许可原文",
+        "附训练数据条款告知"
+      ],
+      "use_restrictions": [
+        "训练数据条款可能限研究用途；复核前不得声称可自由再分发"
+      ],
       "status": "待复核",
-      "blocking_decisions": ["复核 Places2 使用条款原文"]
+      "blocking_decisions": [
+        "复核 Places2 使用条款原文"
+      ]
     },
     {
       "id": "codeformer.face_restore",
       "display": "CodeFormer 面部超分/修复",
-      "capability": ["面部超清", "老照片修复（生成式）"],
+      "capability": [
+        "面部超清",
+        "老照片修复（生成式）"
+      ],
       "tier": "fetched",
       "upstream_project": "https://github.com/sczhou/CodeFormer",
       "artifact": "CodeFormer.pth / dlib detection map",
@@ -87,15 +108,23 @@
       "evidence": "二手",
       "evidence_note": "许可性质由权利人仓库 LICENSE 明确为非商业；本项目定位非商业，故允许实现与个人使用，但**不得声称本软件整体可商用**。",
       "attribution": "Copyright (c) S-Lab, Nanyang Technological University",
-      "obligations": ["保留作者与机构署名", "附 S-Lab License 1.0 原文", "商业使用须另行联系权利人——本项目不做此授予"],
-      "use_restrictions": ["仅非商业"],
+      "obligations": [
+        "保留作者与机构署名",
+        "附 S-Lab License 1.0 原文",
+        "商业使用须另行联系权利人——本项目不做此授予"
+      ],
+      "use_restrictions": [
+        "仅非商业"
+      ],
       "status": "台账已建，待接入",
       "blocking_decisions": []
     },
     {
       "id": "yunet.face_detection",
       "display": "YuNet 人脸检测（OpenCV Zoo）",
-      "capability": ["多人脸实例检测（P1 作用域前置）"],
+      "capability": [
+        "多人脸实例检测（P1 作用域前置）"
+      ],
       "tier": "bundled-candidate",
       "upstream_project": "https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet",
       "artifact": "face_detection_yunet_2023mar.onnx",
@@ -107,10 +136,38 @@
       "evidence": "一手",
       "evidence_note": "目录 LICENSE 文件可读，属最干净的一档；训练数据链仍是未知，但不阻断非商业使用。",
       "attribution": "Copyright (c) OpenCV contributors — MIT",
-      "obligations": ["附 MIT 许可原文"],
+      "obligations": [
+        "附 MIT 许可原文"
+      ],
       "use_restrictions": [],
       "status": "尚未引入（当前人脸定位走 MediaPipe 或 synthetic 后端）",
       "blocking_decisions": []
+    },
+    {
+      "id": "mp.selfie_segmenter",
+      "display": "MediaPipe Selfie Segmenter（二类软掩膜：背景/人）",
+      "capability": [
+        "人像区域定位",
+        "皮肤贴合类操作的粗掩膜"
+      ],
+      "tier": "bundled",
+      "upstream_project": "https://github.com/google-ai-edge/mediapipe",
+      "artifact": "selfie_segmenter.tflite",
+      "artifact_url": "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite",
+      "size_bytes": 249537,
+      "sha256": "191ac9529ae506ee0beefa6b2c945a172dab9d07d1e802a290a4e4038226658b",
+      "weights_license": "Apache-2.0",
+      "evidence": "一手",
+      "evidence_note": "与 face_landmarker 同一发行渠道、同一份 12,331 B Apache 文本（见 archive/）。",
+      "bundled_path": "usr/lib/LumaRetouch/engine/src/lumaretouch_engine/data/selfie_segmenter.tflite",
+      "attribution": "Google LLC，MediaPipe 项目，Apache License 2.0。",
+      "known_limits": [
+        "掩膜是「人」不是「皮肤」：含头发与衣服。引擎把它登记为 skin 通道时在 notes 里明说了这层近似，不许当成皮肤分割的结果报精度。"
+      ],
+      "use_restrictions": [
+        "不得用于身份识别"
+      ],
+      "ledger_added_by": "这一条是 check-release.sh ⑥ 逼出来的：文件先进了包、台账里没有条目，门禁报「进了包但没人核过」。补登记在补发布之前。"
     }
   ],
   "datasets": [
@@ -131,14 +188,18 @@
       "role": "本地评测靶（分割/关键点族）",
       "license": "仅非商业研究，且限制派生数据的商业利用",
       "evidence": "二手",
-      "hard_rules": ["同上：不进仓库、不进包、不外发图像"]
+      "hard_rules": [
+        "同上：不进仓库、不进包、不外发图像"
+      ]
     },
     {
       "id": "synthetic-portrait",
       "role": "CI 与对外效果证据的唯一图像来源",
       "license": "本项目自研，程序化生成（packaging/make-test-portrait.py，SEED=20261016）",
       "evidence": "一手",
-      "hard_rules": ["可自由分发；sha256 台账已随仓库（engine/tests/fixtures/*.sha256.txt）"]
+      "hard_rules": [
+        "可自由分发；sha256 台账已随仓库（engine/tests/fixtures/*.sha256.txt）"
+      ]
     }
   ]
 }

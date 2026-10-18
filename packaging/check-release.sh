@@ -75,12 +75,20 @@ if [ "$(cat "$stage/runtime/VERSION" 2>/dev/null)" != "$ver" ]; then
   bad "暂存的 runtime/VERSION 与 packaging/VERSION 不同：出包前重跑 stage-engine.sh"
 fi
 
-# ⑤ 许可未放行的**依赖树**不许进包。注意这一条挡的不是模型权重：
-#    ADR-0001 之后，体积可控、许可一手可证的权重（MediaPipe 那束 478 点模型）
-#    走 bundled 档是允许进 deb 的；但 mediapipe 这个 **pip 包自己的依赖树**还没
-#    逐包审计，libraw 可选插件通道同理——它们混进发布物就成了一条“看着像支持、
-#    其实许可没结”的债。权重能不能进包，看下面⑥的台账门禁。
-for unfree in requirements-mediapipe.txt requirements-libraw.txt; do
+# ⑤ 发布物里的依赖清单：该在的必须在，不该在的必须不在。两个方向都要查——只查
+#    一个方向的话，“门禁因为代码改并而关上了”和“因为根本没人装而开着”长得一模一样。
+#    requirements-mediapipe.txt 从 ADR-0002 起是**必须在**：没它装机后面部重塑永远装不上，
+#    而它自己带了逐包许可审计；THIRD_PARTY_NOTICES 同必须在，因为它补的就是
+#    matplotlib（不可从 mediapipe 剔除）与 libportaudio 的声明义务。
+#    libraw 可选插件通道仍未逐包审计，继续禁止混进发布物。
+for need in requirements-mediapipe.txt THIRD_PARTY_NOTICES; do
+  if find "$stage" -name "$need" | grep -q .; then
+    good "$need 已随包（面部重塑运行时与声明义务齐备）"
+  else
+    bad "$need 没进发布物——没有它，装机后面部重塑无路可装或声明义务没人担"
+  fi
+done
+for unfree in requirements-libraw.txt; do
   if find "$stage" -name "$unfree" | grep -q .; then
     bad "$unfree 混进了发布物——那棵依赖树的许可审计还没放行"
   else

@@ -1,0 +1,66 @@
+# 第三方许可与署名清单（THIRD_PARTY_NOTICES）
+#
+# 本文件由 packaging/gen-notices.py 从实际安装的 dist-info 生成，不要手改：
+#   python3 packaging/gen-notices.py --python <运行时 python> > THIRD_PARTY_NOTICES
+# 手改的那份会在依赖升级时默默变成假声明（旧审计就是这么失效的，见生成器顶部注释）。
+#
+# 读的搜索根：../../../../../.local/share/LumaRetouch/engine/venv/lib/python3.12/site-packages 相对仓库根（不写绝对路径）
+# 自证：本表要求 torch 与 mediapipe 均在场，缺一就直接报错不出表。
+
+| 包 | 版本 | 许可（源头字段） | 形式 | 随副本的许可文本 |
+|---|---|---|---|---|
+| absl-py | 2.5.1 | Apache-2.0 | SPDX | LICENSE（11358 B） |
+| certifi | 2026.10.18 | MPL-2.0 | 自由文本（未归一，不替上游猜 SPDX） | LICENSE（989 B） |
+| cffi | 2.1.1 | MIT-0 | SPDX | LICENSE（1123 B） |
+| contourpy | 1.4.0 | BSD-3-Clause | SPDX | LICENSE（1534 B） |
+| cycler | 0.12.1 | （自由文本，共 1497 字符，摘要：Copyright (c) 2015, matplotlib project All rights reserved. Redistribution and use in source and binary forms,…） | 整篇正文→见右列文件 | LICENSE（1497 B） |
+| filelock | 3.32.3 | MIT | SPDX | LICENSE（1088 B） |
+| flatbuffers | 25.12.19 | Apache 2.0 | 自由文本（未归一，不替上游猜 SPDX） | ⚠ 包内无许可文本 |
+| fonttools | 4.67.0 | MIT | 自由文本（未归一，不替上游猜 SPDX） | LICENSE（1072 B）、LICENSE.external（20022 B） |
+| fsspec | 2026.7.0 | BSD-3-Clause | SPDX | LICENSE（1513 B） |
+| iniconfig | 2.3.1 | MIT | SPDX | LICENSE（1098 B） |
+| Jinja2 | 3.1.6 | （元数据未声明，需人读包内文本） | 缺失 | LICENSE.txt（1475 B） |
+| kiwisolver | 1.5.1 | （自由文本，共 3289 字符，摘要：========================= The Kiwi licensing terms ========================= Kiwi is licensed under the terms …） | 整篇正文→见右列文件 | LICENSE（3289 B） |
+| MarkupSafe | 3.0.3 | BSD-3-Clause | SPDX | LICENSE.txt（1475 B） |
+| matplotlib | 3.11.2 | （自由文本，共 64419 字符，摘要：License agreement for matplotlib versions 1.3.0 and later ====================================================…） | 整篇正文→见右列文件 | LICENSE（63442 B）、LICENSE_DEJAVU（4816 B）、LICENSE_STIX（5476 B） |
+| mediapipe | 1.1.1 | Apache 2.0 | 自由文本（未归一，不替上游猜 SPDX） | LICENSE（12331 B） |
+| mpmath | 1.3.0 | BSD | 自由文本（未归一，不替上游猜 SPDX） | LICENSE（1537 B） |
+| networkx | 3.6.1 | BSD-3-Clause | SPDX | LICENSE.txt（1763 B） |
+| numpy | 2.5.2 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | SPDX | LICENSE.txt（46794 B）、LICENSE.txt（1018 B）、COPYING（690 B）、LICENSE（20785 B） 等 20 份 |
+| opencv-contrib-python | 5.0.0.93 | Apache 2.0 | 自由文本（未归一，不替上游猜 SPDX） | LICENSE-3RD-PARTY.txt（179634 B）、LICENSE.txt（1070 B）、LICENSE-3RD-PARTY.txt（179634 B）、LICENSE.txt（1070 B） |
+| packaging | 26.3 | Apache-2.0 OR BSD-2-Clause | SPDX | LICENSE（197 B）、LICENSE.APACHE（10174 B）、LICENSE.BSD（1344 B） |
+| pillow | 12.3.0 | MIT-CMU | SPDX | LICENSE（70307 B） |
+| pip | 26.2.1 | MIT | SPDX | LICENSE.txt（1093 B）、LICENSE.txt（558 B）、LICENSE（989 B）、LICENSE.txt（14531 B） 等 41 份 |
+| pluggy | 1.7.0 | MIT | 自由文本（未归一，不替上游猜 SPDX） | LICENSE（1110 B） |
+| pycparser | 3.11 | BSD-3-Clause | SPDX | LICENSE（1543 B） |
+| Pygments | 2.21.0 | BSD-2-Clause | SPDX | LICENSE（1331 B） |
+| pyparsing | 3.3.3 | MIT | SPDX | LICENSE（1062 B） |
+| pytest | 9.1.1 | MIT | SPDX | LICENSE（1091 B） |
+| python-dateutil | 2.9.0.post0 | Dual License | 自由文本（未归一，不替上游猜 SPDX） | LICENSE（2889 B） |
+| setuptools | 78.1.0 | （元数据未声明，需人读包内文本） | 缺失 | LICENSE（1023 B）、LICENSE（7634 B）、LICENSE（1023 B）、LICENSE（11358 B） 等 22 份 |
+| six | 1.17.0 | MIT | 自由文本（未归一，不替上游猜 SPDX） | LICENSE（1066 B） |
+| sounddevice | 0.5.6 | MIT | SPDX | LICENSE（1063 B） |
+| sympy | 1.14.0 | BSD | 自由文本（未归一，不替上游猜 SPDX） | LICENSE（7885 B）、LICENSE.txt（1075 B） |
+| torch | 2.10.0+rocm7.0 | BSD-3-Clause | 自由文本（未归一，不替上游猜 SPDX） | LICENSE（507180 B） |
+| torchvision | 0.25.0+rocm7.0 | BSD | 自由文本（未归一，不替上游猜 SPDX） | LICENSE（1517 B） |
+| triton-rocm | 3.6.0 | （元数据未声明，需人读包内文本） | 缺失 | LICENSE（1132 B） |
+| typing_extensions | 4.16.0 | PSF-2.0 | SPDX | LICENSE（13936 B） |
+
+## 本软件自己分发的模型权重
+
+以 `docs/model-licenses/models.json` 为单一事实源（台账里逐条记了 sha256、
+体积、许可、证据等级与使用限制）；本表不重复列权重，避免两处对不上。
+
+## LGPL / 动态库
+
+- 上表里出现 `自由文本` 形式时，声明以该文本为准，本文件不改写它的含义。
+- 本软件以独立进程 + JSON-lines 协议调用引擎，不对任何第三方库做静态链接；
+  对 LGPL 类依赖（如 sounddevice 经 ctypes 加载的 libportaudio），用户可用系统
+  包管理器替换该库，这是 LGPL “可替换性”要求的实现方式。未装该库时音频路径
+  本来就不可用，与本软件的图像功能无关（实测本机 libportaudio2 为未安装态）。
+
+## 本软件
+
+LumaRetouch 源码以 GPL-3.0-or-later 发布（见 `LICENSE`），非商业自由软件；
+署名与非商业告知见 `NOTICE`。分发本 deb 即同时分发上述许可文本，
+安装件里的副本位于 `/usr/share/doc/luma-retouch/`。
