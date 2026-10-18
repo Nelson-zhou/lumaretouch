@@ -8,6 +8,9 @@ RAW 这块的证据分三层，各测各的，不许互相顶：
   `packaging/m1-raw-bench.py`（少了它，往返再准也只是自产自读的循环论证）。
 * **拒绝面**：lossless JPEG / packed 位深 / float RAW / BigTIFF / CFALayout≠1 必须抛
   `UnsupportedRaw`，绝不静默换成别的渲染。
+* **系统 LibRaw 的 ctypes 后端**（M9，本文件最后一节）：绑在 .so 上的那条通道不能拿库的
+  输出验库自己，所以每条都带一个写盘时就知道的真值；另有几条专门把偏移表改坏，验那道
+  门是真的会关。
 """
 
 from __future__ import annotations
@@ -433,3 +436,263 @@ def test_decimate_even_factor_keeps_channel_balance():
     src = np.arange(2 * 2 * 8 * 8, dtype=np.float64).reshape(16, 16, 1)
     out = D.decimate_np(src, (0, 1, 1, 2), (2, 2), 2)
     assert out.shape == (8, 8, 3)
+
+
+# ================================================================== 系统 LibRaw 的 ctypes 后端（M9）
+#
+# 证据形状与上面那一叠不同：上面验的是「自研读侧的数学对不对」，这里验的是「绑在系统库上
+# 的那条通道是否真的知道自己读的是哪几个字节」。读错偏移的后果不是异常，而是一堆看着像
+# 数据的垃圾，所以每条判据都带一个**写盘时就知道的真值**（data/raw-probe.json），而反向
+# 门禁那几条专门把偏移表改坏——门必须是会关的，不是绿灯装饰。
+#
+# 系统库不在的机器上（CI 的 CPU engine job 就是一种）这些整节跳过，但跳过与失败是两件事：
+# 跳过只发生在「这块机器上没有那个库」，绝不在「库在但读错」时发生。
+
+import hashlib        # noqa: E402
+import json           # noqa: E402
+
+from lumaretouch_engine.ops import libraw as LR   # noqa: E402
+
+PROBE_DNG = LR.PROBE_DNG
+needs_libraw = pytest.mark.skipif(not LR.available(),
+                                  reason="机器上没有系统 LibRaw（libraw_r.so）：这一节整节不适用")
+
+
+def _probe_truth():
+    with open(LR.PROBE_SIDECAR, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _synth(h=96, w=128):
+    """算术源图：不依赖仓库里的照片，所以没有 fixture 的机器也能跑容器那一臂。"""
+    yy, xx = np.meshgrid(np.arange(h), np.arange(w))
+    return np.dstack([((xx * 7 + yy * 3) % 256).astype(np.uint8),
+                      ((xx * 13 + yy * 61) % 256).astype(np.uint8),
+                      ((xx * 29 + yy * 11) % 251).astype(np.uint8)]).transpose(1, 0, 2)
+
+
+# ------------------------------------------------------------------ 自检材料本身
+def test_probe_sidecar_pairs_with_the_committed_dng():
+    """探针与 sidecar 必须是同一次生成的那一对（sha 对得上），不然对账就是拿答案问错题。"""
+    truth = _probe_truth()
+    with open(PROBE_DNG, "rb") as f:
+        data = f.read()
+    assert len(data) == truth["dng_bytes"]
+    assert hashlib.sha256(data).hexdigest() == truth["dng_sha256"], \
+        "raw-probe.dng 与 raw-probe.json 不同步：重跑 packaging/make-raw-probe.py（两件一起生成）"
+
+
+def test_probe_semantics_survive_regeneration(tmp_path):
+    """重新生成一份同参数的探针，语义事实必须一致：材料不是手写死的，是生成出来的。
+
+    不比字节：JPEG 由 Pillow 编码，版本不同字节可能不同；这里要锁的是「尺寸/机型/预览
+    宽高」这些**判据**，不是某个 Pillow 版本的输出哈希。
+    """
+    truth = _probe_truth()
+    blob = mt._jpeg_bytes(_synth(truth["preview"]["h"], truth["preview"]["w"]))
+    path = os.path.join(str(tmp_path), "regen.dng")
+    info = mt.build(path, _synth(truth["i_h"], truth["i_w"]), preview=blob,
+                    exif_ifd=(truth["exif"]["iso"], truth["exif"]["shutter"],
+                              truth["exif"]["aperture"], truth["exif"]["focal_len"]),
+                    rows_per_strip=32)
+    assert tuple(info["size"]) == (truth["i_w"], truth["i_h"])
+    pw, ph = mt._jpeg_size(blob)
+    assert (pw, ph) == (truth["preview"]["w"], truth["preview"]["h"])
+    # 自研读侧也必须认出同一件事——两份 sidecar 一起歪掉是拦不住的，第三方读一遍才行
+    got = R.load_raw(path, reference=True)["meta"]
+    assert (got.w, got.h) == (truth["i_w"], truth["i_h"])
+
+
+# ------------------------------------------------------------------ 真值对账
+@needs_libraw
+def test_libraw_self_check_pins_every_offset_it_uses():
+    r = LR.self_check()
+    truth = _probe_truth()
+    assert r["table_matches_lib"] is True, "表与实际载入的库不同源：下面的对账就没有意义了"
+    assert (r["i_w"], r["i_h"]) == (truth["i_w"], truth["i_h"])
+    assert r["make"] == truth["make"] and r["model"] == truth["model"]
+    assert r["preview"] == f"{truth['preview']['w']}x{truth['preview']['h']}"
+    # 拍摄参数那一区：写进去的与按表读到的是同一批字节（ISO 不在这里，见下面那条）
+    for field in ("shutter", "aperture", "focal_len"):
+        assert abs(r["exif"][field] - truth["exif"][field]) < 1e-3
+    assert r["params"]["wb_vs_auto_mean_diff"] > 0, "白平衡开关落错字节＝开关失灵"
+    assert r["params"]["half_shape"] == [truth["i_h"] // 2, truth["i_w"] // 2]
+    # 字节序两臂：唯一解，而且错的那一臂必须**明显**错（分不开就等于没验）
+    assert r["endian_arms"]["direct"]["max_abs_diff"] == 0
+    assert r["endian_arms"]["swapped"]["frac_over_1lsb"] > 0.5
+
+
+@needs_libraw
+def test_libraw_refuses_a_shifted_make_offset(tmp_path, monkeypatch):
+    """反向门禁：把机型名的偏移挪 8 字节，自检必须拒——不许把乱码当机型报上去。"""
+    key = "libraw_iparams_t.make"
+    monkeypatch.setitem(LR.LAYOUT, key, LR.LAYOUT[key] + 8)
+    with pytest.raises(LR.LibRawUnavailable, match="make"):
+        LR.self_check()
+
+
+@needs_libraw
+def test_libraw_refuses_a_shifted_other_block(tmp_path, monkeypatch):
+    """反向门禁：把 libraw_data_t.other 那一区挪 4 字节，拍摄参数必须当场对不上。
+
+    为什么不挪 sizes：尺寸走库自己的访问器（libraw_get_iwidth 那一组），根本不经过表，
+    挪了也不会改变读数——拿一个不生效的改动当「门禁有效」就是绿灯装饰。这里挪的是
+    真被表读到的那一区：快门/光圈/焦距都住在那里面。
+    """
+    key = "libraw_data_t.other"
+    monkeypatch.setitem(LR.LAYOUT, key, LR.LAYOUT[key] + 4)
+    with pytest.raises(LR.LibRawUnavailable, match="libraw_imgother_t"):
+        LR.self_check()
+
+
+@needs_libraw
+def test_libraw_refuses_a_wrong_thumbnail_offset(tmp_path, monkeypatch):
+    """反向门禁：预览宽度读错一格，快通道就会把别人的字节当照片交给视口。"""
+    key = "libraw_thumbnail_t.twidth"
+    monkeypatch.setitem(LR.LAYOUT, key, LR.LAYOUT[key] + 2)
+    with pytest.raises(LR.LibRawUnavailable, match="预览"):
+        LR.self_check()
+
+
+@needs_libraw
+def test_libraw_refuses_a_torn_sidecar(tmp_path):
+    """答案被改过就不许继续用：自检要能分辨「材料坏了」与「库坏了」。"""
+    truth = _probe_truth()
+    truth["dng_sha256"] = hashlib.sha256(b"not the probe").hexdigest()
+    side = os.path.join(str(tmp_path), "raw-probe.json")
+    with open(side, "w", encoding="utf-8") as f:
+        json.dump(truth, f)
+    with pytest.raises(LR.LibRawUnavailable, match="不配对"):
+        LR.self_check(sidecar_path=side)
+
+
+# ------------------------------------------------------------------ 绑定面与缺库
+@needs_libraw
+def test_libraw_bound_symbols_are_the_names_this_so_exports():
+    """绑定的符号名以这块 .so 实数的为准。
+
+    `libraw_dcraw_memfree` 是文档里常见的名字，本机库里没有——真有的是
+    `libraw_dcraw_clear_mem`。当初凭名字写就当场 AttributeError，这条锁住那个教训：
+    不许给缺失的符号找一个同名替身。
+    """
+    lib = LR.load_lib()
+    assert hasattr(lib, "libraw_dcraw_clear_mem")
+    assert not hasattr(lib, "libraw_dcraw_memfree")
+    assert hasattr(lib, "libraw_unpack_thumb") and hasattr(lib, "libraw_dcraw_make_mem_image")
+
+
+def test_libraw_missing_library_kills_the_whole_backend(monkeypatch):
+    """没有库＝整条不可用，而且要说清少了什么；不许退成自研 DNG 读侧冒充全格式。
+
+    这条不 skip：它要的就是「找不到」这个场景，机器上有没有库都得验。
+    """
+    monkeypatch.setattr(LR, "candidate_paths", lambda: ["/nonexistent/libraw_r.so.23"])
+    monkeypatch.setenv(LR.LIB_ENV, "/nonexistent/x.so")
+    with pytest.raises(LR.LibRawUnavailable) as e:
+        LR.load_lib(force=True)
+    assert "全格式" in str(e.value) and "自研 DNG 读侧仍在位" in str(e.value)
+    assert LR.available() is False
+    st = LR.status()
+    assert st["installed"] is False and st["checked"] is False and st["reason"]
+    # 不手动恢复：_lib 已被 force 打掉，monkeypatch 一撤销，下一条会重新实探一遍
+
+
+@needs_libraw
+def test_libraw_corrupt_files_raise_codes_and_do_not_take_the_neighbour_down(tmp_path):
+    """损坏 RAW 只塌自己：异常带 LibRaw 原码，处理完坏件后同一进程里好件照常出图。
+
+    「整条后端被一个坏文件带倒」是装机现场最难查的一类故障，所以这条既验抛错也验恢复。
+    """
+    d = str(tmp_path)
+    truncated = os.path.join(d, "trunc.dng")
+    with open(PROBE_DNG, "rb") as f:
+        all_bytes = f.read()
+    with open(truncated, "wb") as f:
+        f.write(all_bytes[:len(all_bytes) * 2 // 5])
+    junk = os.path.join(d, "junk.dng")
+    with open(junk, "wb") as f:
+        f.write(b"II*\x00\x08\x00\x00\x00" + bytes(range(256)) * 8)
+
+    for bad in (truncated, junk):
+        for fn in (LR.extract_thumb, LR.process):
+            with pytest.raises((LR.LibRawError, LR.LibRawUnavailable)) as e:
+                fn(bad)
+            if isinstance(e.value, LR.LibRawError):
+                assert e.value.rc != 0 and e.value.rc in LR.LibRawError.NAMES, \
+                    "错误码必须能翻成名字：带码不说清等于让人去猜库的意思"
+    # 同一进程里紧接着取好件：坏文件不许留下脏状态
+    good = LR.extract_thumb(PROBE_DNG)
+    assert good["bytes"] == _probe_truth()["preview"]["bytes"]
+
+
+@needs_libraw
+def test_libraw_says_no_thumbnail_instead_of_inventing_one(tmp_path):
+    """没有内嵌预览的文件要如实报「没有」，不许自己画一张顶上去。"""
+    path = os.path.join(str(tmp_path), "noprev.dng")
+    mt.build(path, _synth())
+    with pytest.raises(LR.LibRawError) as e:
+        LR.extract_thumb(path)
+    assert e.value.rc == LR.LAYOUT["LIBRAW_NO_THUMBNAIL"]
+
+
+# ------------------------------------------------------------------ 两条通道的产物
+@needs_libraw
+def test_libraw_thumb_is_the_jpeg_the_file_carries():
+    """快通道搬回来的必须就是文件里那张：sha256 与写进去的逐字节一致，且没被二次渲染。"""
+    truth = _probe_truth()
+    got = LR.extract_thumb(PROBE_DNG)
+    assert hashlib.sha256(got["jpeg"]).hexdigest() == truth["preview"]["sha256"]
+    assert (got["w"], got["h"], got["bytes"]) == (truth["preview"]["w"], truth["preview"]["h"],
+                                                  truth["preview"]["bytes"])
+    assert got["jpeg"][:2] == b"\xff\xd8" and got["jpeg"][-2:] == b"\xff\xd9"
+
+
+@needs_libraw
+def test_libraw_16bit_and_8bit_are_the_same_picture():
+    """字节序两臂的独立复验（自检里算过一次，这里当着测试的面再算一次）：
+    16-bit 右移 8 位必须逐像素等于同档 8-bit 输出，一 LSB 都不许差。"""
+    a16, info = LR.process(PROBE_DNG, output_bps=16)
+    a8, _ = LR.process(PROBE_DNG, output_bps=8)
+    assert a16.dtype == np.uint16 and a8.dtype == np.uint8
+    assert a16.shape == a8.shape == (_probe_truth()["i_h"], _probe_truth()["i_w"], 3)
+    assert int(np.abs((a16.astype(np.int64) >> 8) - a8.astype(np.int64)).max()) == 0
+    assert info["bits"] == 16 and int(a16.max()) == 65535, "dcraw 把母档铺满 16-bit 量程"
+    # 色彩上限不在这里验：process 之后读到的是 dcraw 缩放过的内部上限，与文件的
+    # WhiteLevel 不是同一个量（见 _read_meta 的时机说明），那一笔对账在 self_check 里
+
+
+@needs_fixture
+@needs_libraw
+def test_libraw_16bit_master_matches_our_renderer_on_a_real_photograph(tmp_path):
+    """16-bit 母档的对外符合性：同一张 DNG，LibRaw 渲的与自研渲的必须同向。
+
+    用真照片而不是探针：探针是模 256 的锯齿图，对「两种去马赛克 + 两套色彩矩阵」来说
+    每个像素都在边缘上，相关系数低不代表谁错了——那种材料只能验偏移，不能验色彩。
+    阈值取的是实测余量（本机 r 0.94/0.96/0.97、mean|Δ| 4.7/5.9/12.1），不是凑整数。
+    """
+    src = _src(h=96, w=128)
+    path, _ = _build(tmp_path, src, name="nat")
+    a16, _ = LR.process(path, output_bps=16)
+    theirs = a16.astype(np.int64) >> 8
+    ours = R.load_raw(path, reference=True)["rgb"].astype(np.int64)
+    assert ours.shape == theirs.shape
+    for c in range(3):
+        x, y = ours[..., c].ravel(), theirs[..., c].ravel()
+        assert np.corrcoef(x, y)[0, 1] > 0.90, f"通道 {c} 与第三方渲染不同向"
+        assert float(np.abs(x - y).mean()) < 24.0, f"通道 {c} 与第三方渲染偏差过大"
+
+
+@needs_libraw
+def test_libraw_iso_speed_gap_stays_visible():
+    """ISO 这一栏今天读不出来，必须写成一条会响的锁，而不是让面板显示 0 当事实。
+
+    本机 LibRaw 0.21.5 实测：把 ISOSpeedRatings 写进影像 IFD、写进 EXIF 子 IFD
+    （0x8769 摆位）都读不出 iso_speed，而快门/光圈/焦距同一个 IFD 能读到。所以 Exif
+    面板的 ISO 不能靠 `other.iso_speed` 一条路——要么找到库真正取 ISO 的那条摆位，
+    要么由自研读侧直接解 TIFF 标签。**哪天这条测试变红了，说明库开始读 ISO 了**，
+    那时要改的是面板的取数策略，不是把这条删掉。
+    """
+    truth = _probe_truth()
+    r = LR.self_check()
+    assert r["iso_speed_truth"] == truth["exif"]["iso"] == 200
+    assert r["exif"]["iso_speed"] == 0.0

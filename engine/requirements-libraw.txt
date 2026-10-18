@@ -39,15 +39,30 @@
 #      ⇒ 放行前须 `uv pip install --dry-run rawpy` 逐包复核，并对最终 lock 里的
 #         CC-BY-SA / LGPL / CDDL 组件出一份 THIRD_PARTY_NOTICES。
 #
-# 因此这一版的产品姿态是：**基线自研 DNG 通路已经能真跑并有三臂证据；rawpy 只作为
-# 增强通道登记在此文件，未审批、未安装、未进包**。任何「支持 CR2/NEF」的话在插件
-# 没落地前都不成立，raw_backends() 的 needs_plugin 就是把它说破的地方。
+# 因此直到 M8 为止的产品姿态是：**基线自研 DNG 通路已经能真跑并有三臂证据；rawpy 只作为
+# 增强通道登记在此文件，未审批、未安装、未进包**。
 #
-# ------------------------------------------------------------------ 装法（审批通过后，二选一）
-# 甲) 动态链接系统 LibRaw（与决策 7 原话一致，义务最轻）：
+# ------------------------------------------------------------------ 决定（2026-10-18，M9-b 落地）
+# 走上面那条「甲」：系统 `libraw_r.so.23` + `ops/libraw.py` 裸 ctypes。**不引入 rawpy**。
+# 于是账 A、账 B 一起不适用：
+#   账 A（静态链接 LGPL）——我们动态链接发行版打的 .so，用户可自行替换，义务最轻；
+#   账 B（rawpy 依赖树未复核）——那棵树根本不在我们的依赖图里。
+# 仍未结的一条，出包前必须结（归 M9-h）：
+#   C. THIRD_PARTY_NOTICES 要写明「本软件运行时链接系统 LibRaw（LGPL-2.1 / CDDL-1.0
+#      双许可，由发行版包 libraw23t64 提供、可替换）」，并把上面那份
+#      RawSpeed/rawspeed_xmldata.cpp = CC-BY-SA-3.0 的账**归到系统包分发者**——我们
+#      不复制该数据文件进 .deb，所以不随附分发；写 NOTICE 的人要把这一句说清，
+#      不能只写「依赖 LibRaw」。
+# 「不进 pyproject 的 dependencies」这条纪律不变：系统库不是 pip 依赖，它的出处是
+# deb 的 Depends（M9-h 接）与 ops/libraw.py 的运行期探测；探测不到就整条拒，不退成
+# 自研读侧冒充全格式。覆盖分工那一段（raw_backends）在 M9-d 改写：厂商格式现在只能说
+# 「通道在位、待真机样本验收」，本机没有一份真机 CR2/NEF/ARW，主张必须扣住。
+#
+# ------------------------------------------------------------------ 装法
+# 甲) 动态链接系统 LibRaw（**已采用**，与决策 7 原话一致，义务最轻）：
 #       sudo apt install libraw-bin libraw-dev          # 已经有 libraw_r.so.23
 #       # 引擎用 ctypes 绑 libraw_r.so，不引入任何编译期静态依赖
-# 乙) rawpy（省事，但先结上面的静态链接 LGPL 账 A）：
+# 乙) rawpy（**未采用**：先要结上面的静态链接 LGPL 账 A，而那笔账在甲里不存在）：
 #       python3 -m venv ~/.venvs/lumaretouch-libraw
 #       ~/.venvs/lumaretouch-libraw/bin/pip install -r engine/requirements-libraw.txt
 #       LRT_ENGINE_PY=~/.venvs/lumaretouch-libraw/bin/python \

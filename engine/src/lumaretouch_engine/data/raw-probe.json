@@ -1,0 +1,30 @@
+{
+ "_note": "packaging/make-raw-probe.py 生成的自检真值；与 raw-probe.dng 同一次生成，改一件必须改两件",
+ "black": 256.0,
+ "built_by": "packaging/make-raw-probe.py",
+ "dng_bytes": 27308,
+ "dng_sha256": "5787f67ccfb2f6630e561e19255b5d051a005946e10ca31f3a29ef6c24cd5f9d",
+ "exif": {
+  "aperture": 2.8,
+  "focal_len": 35.0,
+  "iso": 200,
+  "shutter": 0.005
+ },
+ "i_h": 96,
+ "i_w": 128,
+ "make": "LumaRetouch",
+ "model": "TestCam",
+ "pattern": [
+  0,
+  1,
+  1,
+  2
+ ],
+ "preview": {
+  "bytes": 1856,
+  "h": 32,
+  "sha256": "eaf2ac47b66efc279e03f74e15d70d69049a904198ee2dddd474f7af9396e600",
+  "w": 40
+ },
+ "white": 16383.0
+}

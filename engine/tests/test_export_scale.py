@@ -42,6 +42,9 @@ def _spec(**kw):
 
 
 def test_export_scale_dims_and_bill():
+    # 本文件自己的规矩（见下面那几条）：要渲染就 importorskip——没有 torch 时
+    # `export_image` 会报「导出需要 torch」，那是一句对的话，但它不构成本条的通过证据
+    pytest.importorskip("torch")
     out, info = export_image(src(), _spec(scale=2), device="cpu", tile=MIN_TILE)
     assert out.shape == (H * 2, W * 2, 3)
     assert (info["w"], info["h"]) == (W * 2, H * 2)

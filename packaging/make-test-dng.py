@@ -47,7 +47,14 @@ TAGS = dict(new_subfile=0x00FE, width=0x0100, length=0x0101, bps=0x0102,
             crop_origin=0xC61F, crop_size=0xC620, cm1=0xC621, cm2=0xC622,
             cc1=0xC623, cc2=0xC624, rm1=0xC625, rm2=0xC626, analog=0xC627,
             neutral=0xC628, baseline_exposure=0xC62A, illum1=0xC65A, illum2=0xC65B,
-            active_area=0xC68D, fm1=0xC714, fm2=0xC715, preview_color_space=0xC71A)
+            active_area=0xC68D, fm1=0xC714, fm2=0xC715, preview_color_space=0xC71A,
+            # 拍摄参数（Exif 面板那一臂要的真值：自研读侧不读这些，只有 LibRaw 读，
+            # 所以它们必须能写进去才能拿去对账）
+            iso=0x8833, exposure_time=0x829A, fnumber=0x829D, focal_length=0x920A,
+            # EXIF 子 IFD 的指针。写 0x8822（EXIF 标准那一号）LibRaw 不跟，写 0x8769
+            # （TIFF/EP 的 ExifIFDPointer）它才跟——本机 0.21.5 实测（快门/光圈/焦距能读到，
+            # ISO 三种摆位都读不到）。摆位换号不是猜的，是被验过才发现的
+            exif_tag=0x8769, sensing_method=0x9217)
 
 T_BYTE, T_ASCII, T_SHORT, T_LONG, T_RATIONAL, T_UNDEFINED, T_SLONG, T_SRATIONAL = \
     1, 2, 3, 4, 5, 7, 9, 10
@@ -221,6 +228,7 @@ class IfdWriter:
 def build(path: str, rgb_u8: np.ndarray, *, pattern=(0, 1, 1, 2), dims=(2, 2),
           cm1=DEFAULT_CM1, cm2=None, neutral=None, black=256.0, white=16383.0,
           orientation=1, tiles=False, compress=1, predictor=1, preview=None,
+          exif=None, exif_ifd=None,
           rows_per_strip=64, tile=128, active_area=True, crop=None,
           linearization=None, cfa=True, analog=None, nonlinear=None,
           camera="LumaRetouch TestCam 1.0", baseline_exposure=0.0,
@@ -229,6 +237,11 @@ def build(path: str, rgb_u8: np.ndarray, *, pattern=(0, 1, 1, 2), dims=(2, 2),
 
     `preview` 给一张 uint8 RGB 就会挂一个 SubIFD 的 JPEG 预览——用来验证「有预览也不
     许拿预览当代理」这条不变量，不是为了让读侧抄近路。
+    `exif` 给 (iso, shutter, aperture, focal) 就把拍摄参数写进影像 IFD：Exif 面板的
+    真值只能来自这里（自研读侧不读这些标签，拿不到第二个意见）。
+    `exif_ifd` 同样给四元组，但写成正规 EXIF 子 IFD（IFD0 的 0x8769 指过去）——两种
+    摆位都开着才能分开归因：真机文件是子 IFD 那种，而 LibRaw 认不认某一摆位是个经验
+    问题（实测：子 IFD 里快门/光圈/焦距认、ISO 不认；影像 IFD 里同样只认前三个）。
     """
     fwd = rgb_to_mosaic(rgb_u8, pattern=pattern, dims=dims, cm1=cm1, neutral=neutral,
                         black=black, white=white, nonlinear=nonlinear)
@@ -305,6 +318,14 @@ def build(path: str, rgb_u8: np.ndarray, *, pattern=(0, 1, 1, 2), dims=(2, 2),
     tags.put(TAGS["photometric"], T_SHORT, (32803 if cfa else 34892))
     tags.put(TAGS["make"], T_ASCII, "LumaRetouch")
     tags.put(TAGS["model"], T_ASCII, "TestCam")
+    if exif is not None:
+        # 写在影像 IFD 里（DNG 的 in-camera 风格）：能不能被第三方读出来是个经验问题，
+        # 不是规范文字能替我们定的——所以自检拿它当探针，读不出来就如实说读不出来
+        iso, shutter, aperture, focal = exif
+        tags.put(TAGS["iso"], T_SHORT, (int(iso),))
+        tags.put(TAGS["exposure_time"], T_RATIONAL, (float(shutter),))
+        tags.put(TAGS["fnumber"], T_RATIONAL, (float(aperture),))
+        tags.put(TAGS["focal_length"], T_RATIONAL, (float(focal),))
     tags.put(TAGS["orientation"], T_SHORT, (orientation,))
     tags.put(TAGS["spp"], T_SHORT, (1 if cfa else n_planes))
     if tiles:
@@ -358,6 +379,9 @@ def build(path: str, rgb_u8: np.ndarray, *, pattern=(0, 1, 1, 2), dims=(2, 2),
         # 先挂一个占位的 SubIFDs 把 IFD0 的项数定下来：回填时只改值不改项数，
         # 溢出区的偏移因此不会抖（抖了就等于整个文件的偏移全错）
         tags.put(TAGS["sub_ifds"], T_LONG, (0,))
+    if exif_ifd is not None:
+        tags.put(TAGS["exif_tag"], T_LONG, (0,))      # 同上：位置等 tail 算完才知道
+    patches: dict[int, tuple] = {}
     ifd_bytes, body_bytes, _ = tags.bytes_for(ifd_off)
     tail = b""
     if preview is not None:
@@ -385,8 +409,24 @@ def build(path: str, rgb_u8: np.ndarray, *, pattern=(0, 1, 1, 2), dims=(2, 2),
         st.put(TAGS["preview_color_space"], T_LONG, (2,))    # sRGB
         # base 用结构真正的位置 sub_off：溢出值区要紧跟结构，偏移才算得对
         sub_bytes, sub_body, _ = st.bytes_for(sub_off)
-        ifd_bytes, body_bytes, _ = tags.bytes_for(ifd_off, patch={TAGS["sub_ifds"]: (sub_off,)})
+        patches[TAGS["sub_ifds"]] = (sub_off,)
         tail = b"\x00" * ifd0_pad + blob + b"\x00" * (len(blob) % 2) + sub_bytes + sub_body
+    if exif_ifd is not None:
+        e_iso, e_shutter, e_aperture, e_focal = exif_ifd
+        ex = IfdWriter()
+        ex.put(TAGS["exposure_time"], T_RATIONAL, (float(e_shutter),))
+        ex.put(TAGS["fnumber"], T_RATIONAL, (float(e_aperture),))
+        ex.put(TAGS["iso"], T_SHORT, (int(e_iso),))
+        ex.put(TAGS["sensing_method"], T_SHORT, (2,))      # One-chip color area sensor
+        ex.put(TAGS["focal_length"], T_RATIONAL, (float(e_focal),))
+        here = ifd_off + len(ifd_bytes) + len(body_bytes) + len(tail)
+        here += here % 2
+        tail += b"\x00" * (here - (ifd_off + len(ifd_bytes) + len(body_bytes) + len(tail)))
+        ex_bytes, ex_body, _ = ex.bytes_for(here)
+        patches[TAGS["exif_tag"]] = (here,)
+        tail += ex_bytes + ex_body
+    if patches:
+        ifd_bytes, body_bytes, _ = tags.bytes_for(ifd_off, patch=patches)
     with open(path, "wb") as f:
         f.write(bytes(out))
         f.write(ifd_bytes)

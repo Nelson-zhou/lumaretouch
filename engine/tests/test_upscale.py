@@ -50,7 +50,8 @@ def test_rejects_unknown_scale_and_downscale():
 
 
 def test_rejects_bad_tile_bounds():
-    import torch
+    # 本文件其余各条都用 importorskip：这条也一样——没有 torch 时它不是失败，但也算不上证据
+    torch = pytest.importorskip("torch")
     with pytest.raises(ValueError):
         U.upscale_tiled_t(torch.zeros(1, 3, 8, 8), 2, tile=4)
     with pytest.raises(ValueError):
