@@ -9,6 +9,10 @@ import { createPortal } from "react-dom";
 import { frameAcked, framePresented, isNoFrame, parseFrameHead, pullFrame, type ParsedFrame } from "../native";
 import { BrushPad, type Rle } from "../brush";
 
+/** 视口的显示变换（平移/缩放）。它只改显示层的 CSS 变换：帧、回执、测量链一律不动。 */
+export interface View { zoom: number; x: number; y: number }
+export const VIEW_HOME: View = { zoom: 1, x: 0, y: 0 };
+
 /** 消除笔的视口接口：on=false 时叠加层不吃事件，测量回路一个字也不变。 */
 export interface BrushProps {
   on: boolean;
@@ -50,6 +54,9 @@ export default function Viewer({
   mirrorOn = true,
   glVisible = false,
   brush,
+  view,
+  onView,
+  paintLocked = false,
   onHud,
 }: {
   active: boolean;
@@ -80,8 +87,35 @@ export default function Viewer({
   /** 对照实验用：把 GL 画布重新摆回可见位（LRT_GL_VISIBLE=1）。 */
   glVisible?: boolean;
   brush?: BrushProps;
+  /** 平移/缩放（只属于显示层：导出与引擎算的仍是那一份像素，缩放也不触发任何推理） */
+  view: View;
+  onView: (v: View) => void;
+  /** 缩放/平移状态下锁画笔：笔迹坐标是按 1:1 那一档映射的，变换后落点会偏。
+   *  宁可明着锁，也不画到别处去——那是"按了而画歪"最难查的一形。 */
+  paintLocked?: boolean;
   onHud: (h: Hud) => void;
 }) {
+  // 变换只加在显示层（镜像画布）上：GL 渲染源与测量回路一个字也不改
+  const zoomed = view.zoom !== 1 || view.x !== 0 || view.y !== 0;
+  const brushActive = !!brush?.on && !paintLocked;
+  const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const onWheel = (e: React.WheelEvent) => {
+    const next = Math.min(8, Math.max(1, view.zoom * Math.exp(-e.deltaY / 400)));
+    if (next === view.zoom) return;
+    onView(next === 1 ? { zoom: 1, x: 0, y: 0 }
+      : { zoom: next, x: view.x * (next / view.zoom), y: view.y * (next / view.zoom) });
+  };
+  const panDown = (e: React.PointerEvent) => {
+    if (e.button !== 1 && !(e.button === 0 && !brushActive)) return;
+    drag.current = { x: e.clientX, y: e.clientY, ox: view.x, oy: view.y };
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+  };
+  const panMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    onView({ zoom: view.zoom, x: d.ox + (e.clientX - d.x), y: d.oy + (e.clientY - d.y) });
+  };
+  const panUp = () => { drag.current = null; };
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
   const mirrorRef = useRef<HTMLCanvasElement | null>(null);
@@ -93,7 +127,7 @@ export default function Viewer({
   // 画笔参数走 ref：把 brush 放进 effect 依赖会让“开关画笔”重建整个 WebGL 测量回路，
   // 那既浪费一次 GL 上下文，也会把 M0 那条测量链拆散
   const brushRef = useRef(brush);
-  brushRef.current = brush;
+  brushRef.current = paintLocked && brush ? { ...brush, on: false } : brush;
   const sizeRef = useRef({ w: 0, h: 0 });
 
   // 显示层的定位：这台机器上 .viewer 里的画布位图不进页面合成（GL 与 2D 都一样，实测
@@ -403,12 +437,21 @@ export default function Viewer({
 
   return (
     <>
-      <div className="viewer" ref={boxRef}>
+      <div className="viewer" ref={boxRef} onWheel={onWheel}
+           onPointerDown={panDown} onPointerMove={panMove} onPointerUp={panUp}
+           onPointerCancel={panUp}
+           onDoubleClick={() => onView(VIEW_HOME)}
+           title="滚轮缩放 · 拖拽平移 · 双击回到 1:1">
         {/* GL 画布退成纯渲染源：不参与布局，也不指望它上屏（见上面那段）。 */}
         {/* glVisible 是给"官方开关能不能替掉镜像层"那个对照实验用的：把 GL 画布放回
             可见位，看它自己上不上得了屏。生产路径不依赖它。 */}
         <canvas ref={canvasRef} className={glVisible ? "gl-src visible" : "gl-src"} />
-        <canvas ref={overlayRef} className={brush?.on ? "overlay on" : "overlay"} />
+        <canvas ref={overlayRef} className={brushActive ? "overlay on" : "overlay"} />
+        {zoomed && (
+          <span className="zoomtag">
+            {Math.round(view.zoom * 100)}%{paintLocked && brush?.on ? " · 缩放中画笔已锁" : ""}
+          </span>
+        )}
       </div>
       {/* 显示层：portal 到 document.body 的 fixed 画布，每帧由 GL 画布 drawImage 填进来。
           放在 body 上不是随手试出来的——实测这个子树外的画布才进得了页面合成。 */}
@@ -416,7 +459,10 @@ export default function Viewer({
         <canvas
           ref={mirrorRef}
           className="mirror"
-          style={{ left: box.left, top: box.top, width: box.width, height: box.height }}
+          style={{ left: box.left, top: box.top, width: box.width, height: box.height,
+                   transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`,
+                   transformOrigin: "center center",
+                   imageRendering: view.zoom > 1 ? "pixelated" : "auto" }}
         />,
         document.body,
       )}

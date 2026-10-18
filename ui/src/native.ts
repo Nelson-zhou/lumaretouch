@@ -85,6 +85,16 @@ export interface DocState {
   deform: { amounts: Record<string, number>; built: boolean };
   lut: { lit: boolean; amount: number; preset: string | null };
   grade: { dh: number; ds: number; dv: number; amount: number; lit: boolean };
+  /** 曝光/白平衡（P0 lnx.exposure / lnx.white_balance）。`reference_k` 为 null 是
+   *  “没指定参考光源”，不是 0：“中性=null 不能解成零”写在注册表的 null_semantics 里。 */
+  exposure: { ev: number; temperature_shift: number; tint_shift: number;
+              reference_k: number | null; lit: boolean };
+  /** 裁剪/旋转（P0 lnx.crop.v1）。rect 是归一化 [左,上,右,下]；`crop_out` 是代理档上
+   *  剪后的尺寸，`out_full` 才是导出会写的真实像素数——两个数都得看得见，否则 UI 会
+   *  把“预览里那一小块”讲成“文件的尺寸”。 */
+  crop: { rect: number[]; rotation_degrees: number; neutral: boolean; lit: boolean;
+          limits?: { min: number; max: number } | null;
+          crop_out?: [number, number] | null; out_full?: [number, number] | null };
   /** 这一张文档自己的撤销/重做账（M5-b）。随文档走：切到底片条另一格时拿到的是
    *  那一格的栈深，不是全进程一个数。 */
   history: HistoryReport;
@@ -130,6 +140,11 @@ export interface SessionDoc {
   thumb: { w: number; h: number; bytes: number; quality: number;
            preview?: boolean; format?: string | null } | null;
   thumb_error: string | null;
+  /** 工程记录三格（LNX-P0-PROJECT / CORE-007）：标签与回收站都不是对原图动手。
+   *  声明成可选：老引擎不报时底片条照样画，只是没有徽章。 */
+  tags?: string[];
+  label?: string | null;
+  trashed?: boolean;
 }
 
 /** 最近一条 session_state（底片条全貌 + 当前文档状态）。 */
@@ -503,6 +518,68 @@ export interface EngineStatus {
   doc_rev: number;
   /** ready 报的"哪些命令算编辑"。空数组 = 这个引擎还没有历史能力。 */
   history_edit_cmds: string[];
+  /** ready 的整份能力清单（宿主不逐字段拄）：面板上的动作名单、工程后缀、导出格式
+   *  这些“引擎说什么能力”的清单都从这一份读。老宿主没报时为 undefined——那时那一排
+   *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
+  ready_caps?: {
+    project_actions?: string[];
+    project_suffix?: string;
+    task_actions?: string[];
+    export_formats?: string[];
+    [k: string]: unknown;
+  } | null;
+  /** 最近一条项目播报（created/opened/saved/edited/state）。整块可选：老引擎不报
+   *  就什么都不显示，而不是前端自己记一份"存过了"。 */
+  project?: ProjectState | null;
+  project_rev?: number;
+  /** 批量任务台账（按 task_id 聚合的最新一条）。可用性只从这份读：
+   *  转移表在引擎里，前端不自己判"这条能不能暂停"。 */
+  tasks?: TaskState[];
+  task_rev?: number;
+}
+
+/** 工程面（LNX-P0-PROJECT）：名字、脏标记、格数与"这一版没存进去的东西"。 */
+export interface ProjectState {
+  event?: string;
+  open?: boolean;
+  path?: string | null;
+  name?: string | null;
+  project_id?: string | null;
+  docs?: number;
+  dirty?: boolean;
+  saved_ns?: number | null;
+  /** 台账格数（不是清单）：清单在 project_saved 的 `dropped` 里，两件事不共用一个名字 */
+  tasks?: number;
+  dropped_count?: number;
+  bytes?: number;
+  sha256?: string;
+  write_ms?: number;
+  hash_ms?: number;
+  fingerprinted?: number;
+  /** project_saved 才有：没存进工程文件的层与原因（逐条，上限 12） */
+  dropped?: { path?: string; at: string; reason: string }[];
+  /** project_opened 才有：读回来时逐条说了什么 */
+  task_restore?: { task_id: string; state: string; blocked: string }[];
+  missing?: { path: string; exists: boolean }[];
+  missing_count?: number;
+  auto_opened?: string | null;
+  proxy_budget?: number | null;
+}
+
+/** 任务台账的一格（引擎 task_state 的宿主搬运，状态机在 tasks.py）。 */
+export interface TaskState {
+  task_id: string;
+  kind: string;
+  state: "queued" | "running" | "pause_requested" | "paused" | "resuming"
+    | "cancelling" | "cancelled" | "retrying" | "succeeded" | "failed" | string;
+  attempt: number;
+  counts: { total: number; succeeded: number; failed: number; skipped: number; pending: number };
+  batch: { running: number; state: string; counts: Record<string, number> };
+  persisted: boolean;
+  blocked_reason: string | null;
+  out_dir: string | null;
+  updated_ns: number;
+  note?: string;
 }
 
 /** 一次导出的逐图账单（export_done.images[] 的一项，M4）。
@@ -818,7 +895,8 @@ export const runExport = (
   outDir: string,
   opts?: { format?: string; quality?: number; tile?: number; images?: string[];
            scale?: number; sharpen?: number; upscaleBackend?: string;
-           bitDepth?: number },
+           bitDepth?: number; outputProfile?: string; tiffCompression?: string;
+           metadataIncludeGps?: boolean; conflictPolicy?: string },
 ) =>
   invoke<{ requested: boolean }>("export", {
     outDir,
@@ -830,6 +908,11 @@ export const runExport = (
     sharpen: opts?.sharpen,
     upscaleBackend: opts?.upscaleBackend,
     bit_depth: opts?.bitDepth,
+    // 导出侧 P0 的四格：中性位由引擎定（ADR-0003），这里只在用户显式改过才传
+    output_profile: opts?.outputProfile,
+    tiff_compression: opts?.tiffCompression,
+    metadata_include_gps: opts?.metadataIncludeGps,
+    conflict_policy: opts?.conflictPolicy,
   });
 
 /** 帧头解析（小端，与 main.rs 的 pull_frame 注释逐字段对应）。 */
@@ -952,5 +1035,31 @@ export const runHistory = (action: "undo" | "redo" | "state" | "clear") =>
 
 /** 整条底片条：格子元信息 + 缩略图。只在 session_rev 变了的时候取。 */
 export const fetchFilmstrip = () => invoke<Filmstrip>("filmstrip");
+
+/** 工程（LNX-P0-PROJECT）：六个动作一条命令。原子写、脏标记、资产去重全在引擎。 */
+export const runProject = (
+  action: "create" | "open" | "save" | "state" | "tag" | "trash",
+  opts: { name?: string; directory?: string; path?: string; doc?: string; index?: number;
+          tags?: string[]; label?: string; trashed?: boolean; force?: boolean } = {},
+) => invoke<{ requested: boolean }>("project", { action, ...opts });
+
+/** 批量任务队列（LNX-P0-TASK）：转移表在引擎里，这里只把 id 递过去。 */
+export const runTask = (
+  action: "list" | "pause" | "resume" | "cancel" | "retry" | "delete",
+  taskId?: string,
+) => invoke<{ requested: boolean }>("task", { action, task: taskId });
+
+/** 曝光/白平衡（P0）：量程由引擎随事件报 exposure_limits，这里不拄一份。 */
+export const runExposure = (
+  action: "set" | "clear",
+  v: { ev?: number; temperature_shift?: number; tint_shift?: number; reference_k?: number } = {},
+) => invoke<{ requested: boolean }>("exposure", { action, ...v });
+
+/** 裁剪/旋转（P0 lnx.crop.v1）：rect 归一化，正角顺时针——口径在引擎 ops/geometry.py。 */
+export const runCrop = (
+  action: "set" | "clear", rect?: number[], rotationDegrees?: number,
+) => invoke<{ requested: boolean }>("crop", {
+  action, rect, rotation_degrees: rotationDegrees,
+});
 export const report = (line: string) => invoke("report", { line });
 export const quit = () => invoke("quit");

@@ -190,4 +190,11 @@ export const en: Partial<Record<MsgKey, string>> = {
   "history.unknown": "No history yet: import a photo and start retouching.",
   "history.last": "Last: {act} · {ms} ms",
   "history.noop": " (nothing left)",
+  "studio.tasks": "Batch queue",
+  "studio.project": "Project",
+  "studio.exposureClear": "Clear exposure / white balance",
+  "studio.outDir": "Export folder",
+  "studio.targetsSel": "Targets: {n} selected",
+  "studio.targetsOne": "Targets: the open document",
+  "studio.targetsNone": "Targets: nothing to export",
 };

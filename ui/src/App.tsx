@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Viewer, { type Hud } from "./components/Viewer";
+import RegistryPanel from "./components/RegistryPanel";
+import StudioPanel from "./components/StudioPanel";
+import { REGISTRY, keyOf, sectionTitleOf, type SectionId } from "./p0";
 import { clickRle } from "./brush";
 import { t, type MsgKey } from "./i18n";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -8,13 +11,14 @@ import {
   benchStart, benchStats, engineStatus, loadImage, m0Env, parseFrameHead, peekFrame,
   quit, report, runDeform,
   fetchFilmstrip, runExport, runGrade, runHistory, runInpaint, runLight, runLut, runSession, runBackground,
+  runCrop, runExposure, runPrecompute, runProject, runTask,
   setCompare, setStrength, shutdownEngine, startEngine,
   type BenchOptions, type DeformInfo, type DocState, type EngineRuntime, type EngineStatus, type ExportDone,
   type ExportProgress, type HistoryReport, type HistoryState, type ImageReady,
   type InpaintInfo, type SessionState,
   type GradeInfo, type LightInfo,
   type LutInfo, type BackgroundInfo,
-  type Precompute, type Stats,
+  type Precompute, type Stats, type ProjectState, type TaskState,
 } from "./native";
 
 const SIZES: Record<string, [number, number]> = {
@@ -161,6 +165,23 @@ export default function App() {
   // 16-bit 母档直通（M9-e）：默认关。开它就是要求"其它都别动"；只有把它单独成一个勾，
   // "这一件没经过图层"才说得出口。
   const [exportBits16, setExportBits16] = useState(false);
+  // 导出侧 P0 的四格（注册表 lnx.export.v1 / lnx.batch.v1）。中性位按冻结的注册表：
+  // gps 默认关、冲突默认 skip_and_report、色彩档默认 srgb；tiff 压缩的 16-bit 例外
+  // 由引擎拒（那条报错会说出来），前端不预先猜
+  const [exportProfile, setExportProfile] = useState("srgb");
+  const [exportTiffComp, setExportTiffComp] = useState("deflate");
+  const [exportGps, setExportGps] = useState(false);
+  const [exportConflict, setExportConflict] = useState("skip_and_report");
+  // 底片条多选集（LNX-P0-BATCH / 图库批量化）：按 path 记，不按 index 记——
+  // 重扫一次目录 index 会换而 path 不会
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const selAnchor = useRef<number | null>(null);
+  const [batchTag, setBatchTag] = useState("");
+  // 视口平移/缩放（只属于显示：导出写的仍是引擎那一份像素）
+  const [view, setView] = useState({ zoom: 1, x: 0, y: 0 });
+  // 工程与任务面（读只读引擎报的那两份，前端不记“存过了”）
+  const [projName, setProjName] = useState("");
+  const [projErr, setProjErr] = useState("");
   const [exportErr, setExportErr] = useState("");
   const [exportTile, setExportTile] = useState("");
   // 换底（M6）：背景色 + 色键容差/软边 + 后端。默认走确定性色键；birefnet 需权重，
@@ -309,6 +330,33 @@ export default function App() {
   // Ctrl+Z / Ctrl+Shift+Z（macOS 上跟着 Cmd）：撤销是全局动作，不该要求某个按钮被聚焦。
   // 两处放行：① 焦点在文本框里（目录输入框那种编辑不能被全局撤销吃掉）；② 按住 Alt
   // 不动它（留给窗口管理器的组合键）。被拒/空栈由引擎回 noop，按钮自己会灰下去。
+  // 按住空格 = 看原图（DoD 的"对拍"快捷键）。三条守卫都是必要的：
+  // ① 焦点在输入框/文本域里时空格是打字，不许被抢走；
+  // ② preventDefault 挡掉"空格顺手点击当前聚焦的按钮"（不然一按撤销就没了）；
+  // ③ 与按钮那条按住路径共用 comparingRef：两条路都能起,但只能有一个在放。
+  useEffect(() => {
+    const isText = (el: HTMLElement | null) =>
+      !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat || isText(e.target as HTMLElement)) return;
+      e.preventDefault();
+      if (!pid || comparingRef.current) return;
+      comparingRef.current = true;
+      setComparing(true);
+      void setCompare(true).catch((err) => setDragNote(String(err)));
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || isText(e.target as HTMLElement)) return;
+      if (!comparingRef.current) return;
+      comparingRef.current = false;
+      setComparing(false);
+      void setCompare(false).catch((err) => setDragNote(String(err)));
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
+  }, [pid]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
@@ -1787,6 +1835,13 @@ export default function App() {
           scale: exportScale !== 1 ? exportScale : undefined,
           sharpen: exportSharpen > 0 ? exportSharpen : undefined,
           bitDepth: exportBits16 ? 16 : undefined,
+          // 底片条多选集就是本批的清单；没选就只导当前这一张（引擎按 images 逐条记账）
+          images: exportTargets.length ? exportTargets : undefined,
+          // 导出侧 P0 的四格：中性位由引擎定，这里传用户显式选过的值
+          outputProfile: exportProfile,
+          tiffCompression: exportTiffComp,
+          metadataIncludeGps: exportGps,
+          conflictPolicy: exportConflict,
         })
           .then(() => refreshStatus())
           .then(() => watchExportOutcome(before));
@@ -1824,11 +1879,226 @@ export default function App() {
       .catch((e) => setDragNote(String(e)));
   }
 
+  /** 一格的点击语义（图库的多选口径）：
+   *  普通点=打开那一张；Ctrl/Cmd+点=加减选；Shift+点=从上一次锚点到这一格的连续段。
+   *  打开一张不清空多选集：批量导出时"选中的还是那几张"这件事不能被一次浏览打乱。 */
+  function onCellClick(e: React.MouseEvent, index: number, path: string) {
+    if (e.metaKey || e.ctrlKey) {
+      setSel((prev) => { const n = new Set(prev); n.has(path) ? n.delete(path) : n.add(path); return n; });
+      selAnchor.current = index;
+      return;
+    }
+    if (e.shiftKey && selAnchor.current !== null) {
+      const docs = strip?.docs ?? [];
+      const a = Math.min(selAnchor.current, index), b = Math.max(selAnchor.current, index);
+      setSel((prev) => { const n = new Set(prev);
+        docs.filter((d) => d.index >= a && d.index <= b).forEach((d) => n.add(d.path)); return n; });
+      return;
+    }
+    selAnchor.current = index;
+    onPickDoc(index);
+  }
+
+  /** 批量打标签：逐张发给引擎（tag 是整份替换语义，所以这里把已有标签并进去而不是覆盖）。 */
+  async function onBatchTag() {
+    const tag = batchTag.trim();
+    if (!tag || !selPaths.length) return;
+    for (const path of selPaths) {
+      const row = strip?.docs.find((d) => d.path === path);
+      const tags = Array.from(new Set([...(row?.tags ?? []), tag]));
+      await runProject("tag", { path, tags }).catch((e) => setDragNote(String(e)));
+    }
+    await refreshStatus();
+  }
+
+  /** 批量进/出回收站：置的是工程记录里的标志位，源文件一个字节也不动（CORE-007）。 */
+  async function onBatchTrash(toTrash: boolean) {
+    for (const path of selPaths) {
+      await runProject("trash", { path, trashed: toTrash }).catch((e) => setDragNote(String(e)));
+    }
+    await refreshStatus();
+  }
+
   /** 撤销/重做（M5-b）：把手。步数、能不能撤、撤完画面是什么，全由引擎答复。 */
   function onHistory(action: "undo" | "redo" | "clear") {
     runHistory(action)
       .then(() => refreshStatus())
       .catch((e) => setDragNote(String(e)));
+  }
+
+  // ------------------------------------------------------------ 产品态面板（d4：注册表驱动）
+  //
+  // 面板上每一格的读数只从引擎最近说的那一份 doc_state 来：前端记一份“我以为是多少”
+  // 就会出现“滑块在 0.9 而画面是 0.2”那种双向错配（M5-b 那一课的同形）。
+  const doc: DocState | null = status?.doc_report?.doc_state ?? null;
+  const project: ProjectState | null = status?.project ?? null;
+  const tasks: TaskState[] = status?.tasks ?? [];
+  const caps = status?.ready_caps ?? null;
+  const pc: Precompute | null = status?.precompute ?? null;
+  const hasImage = !!status?.image;
+  const exporting = !!status?.export_progress;
+  const projSuffix = caps?.project_suffix ?? ".lrproject.json";
+  /** 底片条上被选中的那几张（没选就只导当前这张） */
+  const selPaths = Array.from(sel);
+  const exportTargets = selPaths.length ? selPaths : (hasImage && status?.image?.doc ? [status.image.doc] : []);
+  /** D-P0-02 的单脸口径（注册表 scope_single_face 逐字）：mediapipe + 478 点 + 无几何警告。
+   *  synthetic 的网格占位不算可用人脸——引擎在 deform 里就拒它，界面不许装作能点。 */
+  const faceOk = !!pc && pc.backend === "mediapipe" && pc.num_landmarks === 478 && !deformGeomWarn;
+  const faceWhy = hasImage
+    ? `需要且仅需要一张可用人脸（当前 backend=${pc?.backend ?? "未跑分析"}、点数=${pc?.num_landmarks ?? 0}`
+      + `${deformGeomWarn ? "，且引擎报了几何警告" : ""}）。多人照片上替别人改脸是本产品明确不做的事。`
+    : "还没导入图片：这一格要作用于一张打开的图。";
+  const liveTask = tasks.length ? tasks[tasks.length - 1] : null;
+  // 注册表上的格式名（jpeg/tiff）与引擎落盘用的后缀名（jpg/tif）不是一回事：
+  // 映射只在这一处，两个名单都不在面板里重复刻
+  const fmtOut: Record<string, string> = { jpeg: "jpg", tiff: "tif", png: "png", webp: "webp" };
+  const fmtIn: Record<string, string> = { jpg: "jpeg", jpeg: "jpeg", tif: "tiff", tiff: "tiff", png: "png", webp: "webp" };
+
+  function p0value(key: string): number | boolean | string | number[] | null | undefined {
+    switch (key) {
+      case "lnx.skin.v1.enabled": return (doc?.strength ?? 0) > 0;
+      case "lnx.skin.v1.strength": return doc?.strength;
+      case "lnx.blemish.v1.enabled": return brushOn;
+      case "lnx.mask.v1.analysis_enabled": return !!pc;
+      case "lnx.mask.v1.feather": return feather;
+      case "lnx.exposure.v1.ev": return doc?.exposure.ev;
+      case "lnx.white_balance.v1.temperature_shift": return doc?.exposure.temperature_shift;
+      case "lnx.white_balance.v1.tint_shift": return doc?.exposure.tint_shift;
+      case "lnx.crop.v1.rect_normalized": return doc?.crop.rect;
+      case "lnx.crop.v1.rotation_degrees": return doc?.crop.rotation_degrees;
+      case "lnx.export.v1.format": return fmtIn[exportFormat] ?? exportFormat;
+      case "lnx.export.v1.jpeg_quality": return exportQuality;
+      case "lnx.export.v1.tiff_compression": return exportTiffComp;
+      case "lnx.export.v1.output_profile": return exportProfile;
+      case "lnx.export.v1.metadata_include_gps": return exportGps;
+      case "lnx.batch.v1.conflict_policy": return exportConflict;
+      case "lnx.preset.v1.apply": return doc?.lut.preset ?? "";
+      default: return undefined;
+    }
+  }
+
+  /** 枚举格的候选：有些由引擎报（预设名、能落的格式），不能在前端拄一份会漂的名单。 */
+  function p0options(key: string): string[] | null {
+    switch (key) {
+      case "lnx.preset.v1.apply":
+        return (status?.presets ?? []).map((p) => p.name);
+      case "lnx.export.v1.format":
+        // 引擎报的落盘后缀翻回注册表的格式名：名单出处仍是 ready.export_formats
+        return (caps?.export_formats ?? ["jpg", "tif", "png"]).map((x) => fmtIn[x] ?? x);
+      case "lnx.export.v1.output_profile":
+        // 内置只有两条真能落的：其它两个枚举值需要用户递一个真实 .icc（面板上说明了原因）
+        return ["srgb", "source"];
+      case "lnx.export.v1.tiff_compression": return ["none", "deflate", "lzw"];
+      case "lnx.batch.v1.conflict_policy": return ["skip_and_report", "recheck"];
+      default: return null;
+    }
+  }
+
+  /** 这一刻为什么不能点。理由必须可复查（说的是引擎报出来的事实），不许写“暂不可用”。 */
+  function p0enabled(key: string): string | null {
+    if (key.startsWith("lnx.task.v1.")) {
+      if (!tasks.length) return "队列里还没有批次：先点「开始批量导出」。";
+      const st = liveTask?.state ?? "?";
+      if (key.endsWith(".pause")) return st === "running" || st === "queued" ? null : `这一条现在是 ${st}：暂停只对正在跑或排队的批次说得上话（转移表在引擎 tasks.py）。`;
+      if (key.endsWith(".resume")) return st === "paused" ? null : `这一条现在是 ${st}：只有 paused 能继续。`;
+      if (key.endsWith(".cancel")) return ["succeeded", "failed", "cancelled"].includes(st) ? `这一条已经是 ${st}：取消是对还没停下的东西说的话。` : null;
+      if (key.endsWith(".retry")) return ["paused", "failed", "cancelled", "succeeded"].includes(st) ? null : `这一条现在是 ${st}：等它停下再重试。`;
+      return null;
+    }
+    if (key.startsWith("lnx.batch.v1.") || key.startsWith("lnx.export.v1.")) {
+      if (key === "lnx.export.v1.start") {
+      if (!pid || !engineAlive) return "引擎没在跑：先启动引擎。";
+      if (exporting) return "已经有一批在跑：一批只许一个（两条 worker 会同抢一块卡）。";
+        return exportTargets.length ? null : "底片条上没选图，也没有打开的文档：导出需要至少一张。";
+      }
+      return hasImage || selPaths.length ? null : "还没导入图片也没选中图：这一格现在没有可作用的对象。";
+    }
+    if (key.startsWith("lnx.project.v1.") || key.startsWith("lnx.import.v1.")) {
+      return !pid || !engineAlive ? "引擎没在跑：先启动引擎。" : null;
+    }
+    if (key.startsWith("lnx.history.v1.")) {
+      if (!pid || !engineAlive) return "引擎没在跑：先启动引擎。";
+      if (!hasImage) return "还没导入图片：没有可撤销的会话。";
+      return null;
+    }
+    // 逐点层与人脸相关：没图 / 没可用人脸就显式禁用并说清哪一条判据没过
+    const faceScoped = key.startsWith("lnx.skin.v1.") || key.startsWith("lnx.blemish.v1.")
+      || key.startsWith("lnx.mask.v1.");
+    if (faceScoped && !faceOk) return faceWhy;
+    if (key.startsWith("lnx.exposure.") || key.startsWith("lnx.white_balance.")
+        || key.startsWith("lnx.crop.")) {
+      return hasImage ? null : "还没导入图片：这一层要作用于一张打开的图。";
+    }
+    return null;
+  }
+
+  function p0slider(key: string, v: number) {
+    if (key === "lnx.exposure.v1.ev") void runExposure("set", { ev: v }).then(refreshStatus).catch((e) => setDragNote(String(e)));
+    else if (key === "lnx.white_balance.v1.temperature_shift") void runExposure("set", { temperature_shift: v }).then(refreshStatus).catch((e) => setDragNote(String(e)));
+    else if (key === "lnx.white_balance.v1.tint_shift") void runExposure("set", { tint_shift: v }).then(refreshStatus).catch((e) => setDragNote(String(e)));
+    else if (key === "lnx.crop.v1.rotation_degrees") void runCrop("set", undefined, v).then(refreshStatus).catch((e) => setDragNote(String(e)));
+    else if (key === "lnx.skin.v1.strength") onStrength(v);
+  }
+
+  function p0toggle(key: string, v: boolean) {
+    if (key === "lnx.blemish.v1.enabled") { setBrushOn(v); return; }
+    if (key === "lnx.export.v1.metadata_include_gps") { setExportGps(v); return; }
+    if (key === "lnx.skin.v1.enabled") { onStrength(v ? (strength <= 0 ? 0.5 : strength) : 0); return; }
+    if (key === "lnx.mask.v1.analysis_enabled") {
+      // 分析只能跑，不能“关”：掩膜是会话级常驻，关掉就是让面部微调当场失效。
+      // 不假装能关：只在没跑过的时候按下去重跑一次。
+      if (!v) { setDragNote("面部分析不提供“关掉”：掩膜常驻在本次会话里，要清空请重新导入这张图。"); return; }
+      void runPrecompute().then(refreshStatus).catch((e) => setDragNote(String(e)));
+    }
+  }
+
+  function p0enum(key: string, v: string) {
+    if (key === "lnx.export.v1.format") { setExportFormat(fmtOut[v] ?? v); return; }
+    if (key === "lnx.export.v1.tiff_compression") { setExportTiffComp(v); return; }
+    if (key === "lnx.export.v1.output_profile") { setExportProfile(v); return; }
+    if (key === "lnx.batch.v1.conflict_policy") { setExportConflict(v); return; }
+    if (key === "lnx.preset.v1.apply") { onPreset(v); return; }
+  }
+
+  function p0rect(_key: string, rect: number[]) {
+    void runCrop("set", rect).then(refreshStatus).catch((e) => setDragNote(String(e)));
+  }
+
+  /** 面板按钮那一批：名字到命令的映射只在这一处（每个键对应注册表的一条）。 */
+  async function p0action(key: string) {
+    try {
+      if (key === "lnx.export.v1.start") { onExport(); return; }
+      if (key === "lnx.history.v1.undo") { onHistory("undo"); return; }
+      if (key === "lnx.history.v1.redo") { onHistory("redo"); return; }
+      if (key === "lnx.import.v1.choose_files") { await onPickPath(false); return; }
+      if (key === "lnx.import.v1.choose_folder") { await onPickPath(true); return; }
+      if (key === "lnx.project.v1.create") {
+        const dir = await openDialog({ directory: true, title: "工程放哪个目录" });
+        if (typeof dir !== "string" || !dir) return;
+        const name = projName.trim() || (dir.split("/").pop() || "未命名项目");
+        await runProject("create", { name, directory: dir });
+        await refreshStatus();
+        return;
+      }
+      if (key === "lnx.project.v1.open") {
+        const f = await openDialog({ title: "打开工程文件",
+          filters: [{ name: "LumaRetouch 工程", extensions: ["json"] }] });
+        if (typeof f !== "string" || !f) return;
+        await runProject("open", { path: f });
+        await refreshStatus();
+        return;
+      }
+      if (key === "lnx.project.v1.save") { await runProject("save"); await refreshStatus(); return; }
+      if (key.startsWith("lnx.task.v1.")) {
+        const action = key.split(".").pop() as "pause" | "resume" | "cancel" | "retry";
+        await runTask(action, liveTask?.task_id);
+        await refreshStatus();
+        return;
+      }
+    } catch (e) {
+      setProjErr(String(e));
+      setDragNote(String(e));
+    }
   }
 
   const verdict = gate(stats, w);
@@ -1839,8 +2109,44 @@ export default function App() {
 
   return (
     <div className="app">
+      <header className="topbar">
+        <span className="name">{t("app.title")}</span>
+        <span className="tag">{project?.open ? (project.name ?? "工程") : "未打开工程"}</span>
+        {project?.open && (
+          <span className={project.dirty ? "tag dirty" : "tag saved"}>
+            {project.dirty ? "未保存" : "已保存"}
+          </span>
+        )}
+        {!!selPaths.length && <span className="tag">选中 {selPaths.length} 张</span>}
+        {exporting && <span className="tag run">
+          导出 {status?.export_progress?.index ?? 0}/{status?.export_progress?.total ?? 0}</span>}
+        {!!tasks.length && <span className="tag">队列 {tasks.length}</span>}
+        <span className="mut" style={{ marginLeft: "auto" }}>
+          {doc ? (doc.crop.lit ? `裁剪 ${JSON.stringify(doc.crop.out_full ?? [])}` : "") : ""}
+          {status?.engine_version ? ` · 引擎 ${status.engine_version}` : ""}
+        </span>
+      </header>
       <aside className="side">
-        <h1>{t("app.title")}</h1>
+        <StudioPanel status={status} doc={doc} tasks={tasks} project={project}
+                     hasImage={hasImage} exporting={exporting} faceOk={faceOk} faceWhy={faceWhy}
+                     note={setDragNote} onDone={refreshStatus}
+                     brush={{ on: brushOn, radius: brushRadius, feather, mode: brushMode,
+                               onChange: (q) => {
+                                 if (q.on !== undefined) setBrushOn(q.on);
+                                 if (q.radius !== undefined) setBrushRadius(q.radius);
+                                 if (q.feather !== undefined) setFeather(q.feather);
+                                 if (q.mode !== undefined) setBrushMode(q.mode);
+                               } }}
+                     exportDir={exportDir} setExportDir={setExportDir}
+                     exportBits16={exportBits16} setExportBits16={setExportBits16}
+                     selCount={selPaths.length} projName={projName} setProjName={setProjName}
+                     p0={{ value: p0value, optionsFor: p0options, enabled: p0enabled,
+                           slider: p0slider, toggle: p0toggle, enum: p0enum,
+                           action: p0action, rect: p0rect }} />
+        {/* 旧工作台整块折起来：它不是产品面，但那些控件与跑靶都是真在用的证据链，
+            删掉就等于把已经验过的能力从这台机器上拿掉。 */}
+        <details className="grp harness">
+        <summary>旧工作台 · 引擎与跑靶（诊断）</summary>
         <div className="mut">{t("app.subtitle")}</div>
 
         <h2>{t("side.engine")}</h2>
@@ -2416,56 +2722,6 @@ export default function App() {
           <div className="mut">{t("export.unavailable")}</div>
         )}
 
-        {/* 底片条（M5-a）：一格一图，点它就切换文档。缩略图按 path 配对（引擎重扫一次
-            列表，index 会换而 path 不会）；"已调"徽章来自引擎报的图层数，前端不猜。 */}
-        <h2>{t("side.strip")}</h2>
-        <div className="mut">{t("strip.desc")}</div>
-        <div className="row">
-          <input value={stripDir} onChange={(e) => { setStripDir(e.target.value); setStripErr(""); }}
-                 placeholder={t("strip.dirPlaceholder")}
-                 style={{ flex: 1, minWidth: 0 }} />
-          <button onClick={() => onPickPath(true)} title={t("retouch.browseTip")}>{t("retouch.browse")}</button>
-          <button onClick={onScanStrip}>{t("strip.scan")}</button>
-        </div>
-        {stripErr && <div className="err">{stripErr}</div>}
-        {strip && strip.count > 0 ? (
-          <>
-            <div className="mut">
-              {t("strip.summary", { n: strip.count, th: strip.docs.filter((d) => d.thumb).length })}
-              {strip.thumbs_running ? t("strip.running") : ""}
-            </div>
-            <div className="strip">
-              {strip.docs.map((d) => {
-                const edited = d.edits.repair > 0 || d.edits.light > 0 || d.edits.deform
-                  || d.edits.lut || d.edits.grade;
-                return (
-                  <button key={d.path} className={d.loaded ? "cell on" : "cell"}
-                          title={d.thumb_error ?? d.path}
-                          onClick={() => onPickDoc(d.index)}>
-                    {d.thumb && thumbs[d.path] ? (
-                      <img alt={d.name} width={d.thumb.w} height={d.thumb.h}
-                           src={`data:image/jpeg;base64,${thumbs[d.path]}`} />
-                    ) : (
-                      <span className="ph">{d.thumb_error ? t("strip.failed") : "…"}</span>
-                    )}
-                    <span className="nm">{d.name}</span>
-                    {edited && <span className="badge">{t("strip.edited")}</span>}
-                    {/* RAW 那一格画的是相机内嵌预览。不标就是理亏：用户会以为那一格
-                        就是我们解出来的质量，而它其实来自相机——这件事必须上屏。 */}
-                    {d.thumb?.preview && (
-                      <span className="badge pv" title={t("strip.previewTip")}>
-                        {t("strip.preview")}{d.thumb.format ? ` · ${d.thumb.format}` : ""}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        ) : (
-          <div className="mut">{t("strip.empty")}</div>
-        )}
-
         {/* 撤销/重做（M5-b）：一条跨层的历史，按一次退一次手势。按钮的灰与不灰只看
             引擎报的那份账；刚发过编辑而答复还没回来时（history_dirty）保持可用，
             否则用户拖完滑块那一下按不动。 */}
@@ -2553,10 +2809,13 @@ export default function App() {
 
         <h2>{t("log.title")}</h2>
         <pre className="log">{status?.logs?.length ? status.logs.join("\n") : t("log.empty")}</pre>
+        </details>
       </aside>
 
       <main className="stage">
         <Viewer
+          view={view} onView={setView}
+          paintLocked={view.zoom !== 1 || view.x !== 0 || view.y !== 0}
           active={!!pid}
           skipDraw={skipDraw}
           upload={upload}
@@ -2615,6 +2874,59 @@ export default function App() {
             </tbody>
           </table>
         )}
+        <section className="gallery">
+          <div className="bar">
+            <span>{strip ? t("strip.summary", { n: strip.count,
+              th: strip.docs.filter((d) => d.thumb).length }) : t("strip.empty")}</span>
+            {strip?.thumbs_running && <span>{t("strip.running")}</span>}
+            <input value={batchTag} placeholder="批量标签" style={{ width: 110 }}
+                   onChange={(e) => setBatchTag(e.target.value)} />
+            <button disabled={!selPaths.length} onClick={onBatchTag}>打标签</button>
+            <button disabled={!selPaths.length} onClick={() => onBatchTrash(true)}>移入回收站</button>
+            <button disabled={!selPaths.length} onClick={() => onBatchTrash(false)}>还原</button>
+            <button disabled={!selPaths.length} onClick={() => setSel(new Set())}>清除选择</button>
+            <input value={stripDir} placeholder={t("strip.dirPlaceholder")}
+                   style={{ flex: 1, minWidth: 90 }}
+                   onChange={(e) => { setStripDir(e.target.value); setStripErr(""); }} />
+            <button onClick={() => onPickPath(true)} title={t("retouch.browseTip")}>{t("retouch.browse")}</button>
+            <button onClick={onScanStrip}>{t("strip.scan")}</button>
+          </div>
+          {stripErr && <div className="err">{stripErr}</div>}
+          {strip && strip.count > 0 && (
+            <div className="strip">
+              {strip.docs.map((d) => {
+                const edited = d.edits.repair > 0 || d.edits.light > 0 || d.edits.deform
+                  || d.edits.lut || d.edits.grade;
+                return (
+                  <button key={d.path}
+                          className={"cell" + (d.loaded ? " on" : "")
+                            + (sel.has(d.path) ? " sel" : "") + (d.trashed ? " trashed" : "")}
+                          title={`${d.path}${d.thumb_error ? ` · ${d.thumb_error}` : ""}`}
+                          onClick={(e) => onCellClick(e, d.index, d.path)}>
+                    {d.thumb && thumbs[d.path] ? (
+                      <img alt={d.name} width={d.thumb.w} height={d.thumb.h}
+                           src={`data:image/jpeg;base64,${thumbs[d.path]}`} />
+                    ) : (
+                      <span className="ph">{d.thumb_error ? t("strip.failed") : "…"}</span>
+                    )}
+                    <span className="nm">{d.name}</span>
+                    {edited && <span className="badge">{t("strip.edited")}</span>}
+                    {/* RAW 那一格画的是相机内嵌预览，不是我们渲的那一帧：不标就是理亏 */}
+                    {d.thumb?.preview && (
+                      <span className="badge pv" title={t("strip.previewTip")}>
+                        {t("strip.preview")}{d.thumb.format ? ` · ${d.thumb.format}` : ""}
+                      </span>
+                    )}
+                    {!!d.tags?.length && <span className="badge tag" title={d.tags.join(" ")}>
+                      {d.tags[0]}{d.tags.length > 1 ? ` +${d.tags.length - 1}` : ""}</span>}
+                    {d.trashed && <span className="badge st">回收站</span>}
+                    {!d.trashed && d.opened && !edited && <span className="badge st">已开</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </main>
     </div>
   );

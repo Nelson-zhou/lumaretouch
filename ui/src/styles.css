@@ -4,8 +4,62 @@
 .err { color:var(--bad); font-size:11px; margin:-2px 0 6px; word-break:break-all; }
 * { box-sizing: border-box; }
 body { margin:0; background:var(--bg); color:var(--fg); font:13px/1.5 "Noto Sans CJK SC","Source Han Sans SC",system-ui,sans-serif; }
-.app { display:grid; grid-template-columns: 320px 1fr; height:100vh; }
-.side { border-right:1px solid var(--line); padding:14px; overflow:auto; }
+/* 产品态三栏：中央视口为主体，右侧精修面板按《P0参数注册表》分栏，底片条在视口
+   下方（手册的工作区规划）。DOM 里 aside 在前、stage 在后，落位交给 grid-column：
+   不动 DOM 顺序就不必把整块面板 JSX 搬来搬去（搬一次就是一次标签失配的机会）。 */
+.app { display:grid; grid-template-columns: 1fr 380px; grid-template-rows: auto 1fr; height:100vh; }
+.side { grid-column:2; grid-row:1 / span 2; border-left:1px solid var(--line); padding:12px; overflow:auto; }
+.stage { grid-column:1; grid-row:2; min-height:0; }
+/* 顶栏：工程名 + 未保存徽章 + 状态一句话。脏标记只从引擎的 project.dirty 读，
+   前端不记“我存过了”。 */
+.topbar { grid-column:1; grid-row:1; display:flex; gap:10px; align-items:center;
+  padding:6px 12px; border-bottom:1px solid var(--line); font-size:12px; }
+.topbar .name { font-weight:600; }
+.tag { font-size:10px; padding:1px 7px; border-radius:9px; border:1px solid var(--line); color:var(--mut); }
+.tag.dirty { border-color:#c8862a; color:#ffd9a0; background:#3a2a12; }
+.tag.saved { border-color:#2e7d4f; color:#89e0a8; }
+.tag.run { border-color:var(--acc); color:var(--acc); }
+/* 分栏（注册表的六个 section）：折叠态不影响控件存在性——折叠只是收起，
+   不是把没接通的功能藏起来。 */
+details.grp { border:1px solid var(--line); border-radius:8px; margin:0 0 8px; background:#12141a; }
+details.grp > summary { cursor:pointer; padding:7px 10px; font-weight:600; font-size:12px;
+  color:var(--fg); list-style:none; display:flex; gap:8px; align-items:center; }
+details.grp > summary::-webkit-details-marker { display:none; }
+details.grp > summary::before { content:"▸"; color:var(--mut); }
+details.grp[open] > summary::before { content:"▾"; }
+details.grp > .body { padding:2px 10px 10px; }
+details.harness { margin-top:12px; }
+details.harness > summary { color:var(--mut); }
+/* P0 注册表格：一格一个参数，禁用时必须带一句能复查的原因 */
+.p0cell { padding:6px 0; border-top:1px dashed var(--line); }
+.p0cell:first-child { border-top:none; }
+.p0cell.off { opacity:.62; }
+.p0head { display:flex; gap:6px; align-items:baseline; }
+.p0label { font-size:11px; color:var(--mut); flex:1; }
+.p0val { font-size:11px; font-variant-numeric:tabular-nums; }
+.p0req { font-size:9px; color:var(--line); border:1px solid var(--line); border-radius:4px;
+  padding:0 3px; }
+.p0why { font-size:10px; color:#ffb27a; margin-top:3px; line-height:1.45; }
+.p0cell input[type="range"], .p0cell select, .p0cell button { width:100%; }
+.p0toggle { display:flex; gap:6px; align-items:center; }
+.p0rect { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; }
+.p0rect input { width:100%; padding:4px; }
+/* 任务台账：一批一行，状态与计数都来自引擎 */
+.taskrow { display:grid; grid-template-columns:1fr auto auto; gap:6px; align-items:center;
+  border-top:1px dashed var(--line); padding:5px 0; font-size:11px; }
+.taskrow .id { color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.taskrow .btns { display:flex; gap:4px; }
+.taskrow .btns button { padding:2px 6px; font-size:11px; }
+/* 底片条搬到底部：多选、批量标记、状态徽章（LNX-P0-GALLERY） */
+.gallery { border-top:1px solid var(--line); padding:6px 10px 8px; max-height:172px; overflow:auto; }
+.gallery .bar { display:flex; gap:6px; align-items:center; font-size:11px; color:var(--mut);
+  flex-wrap:wrap; margin-bottom:4px; }
+.gallery .bar button { padding:3px 8px; font-size:11px; }
+.strip .cell.sel { outline:2px solid #4a90d9; outline-offset:-1px; }
+.strip .cell.trashed { opacity:.4; }
+.strip .cell .badge.st { top:auto; right:auto; bottom:2px; right:2px; background:#3f4653; color:var(--fg); }
+.strip .cell .badge.tag { position:absolute; top:2px; left:2px; right:auto; bottom:auto;
+  background:#2f6b46; color:#e8fff0; font-size:9px; }
 /* .app 是 100vh 的 grid。不给 .stage 定高度，它就按内容长：一张 1312 高的竖图
    能把整列顶出屏幕外（实测 canvasBottom=1312、hudBottom=1387 对 innerH=880，
    底部 HUD 状态栏整条在屏外）。overflow:hidden 是兜底：宁可裁，不许把
@@ -25,6 +79,9 @@ body { margin:0; background:var(--bg); color:var(--fg); font:13px/1.5 "Noto Sans
 /* 显示层：挂在 document.body 上的 fixed 画布，矩形由 Viewer.tsx 跟着 .viewer 量出来。
    几何仍用 object-fit:contain，与 GL 画布当年那套一致，所以画笔叠加层的坐标映射不变。 */
 .mirror { position: fixed; object-fit: contain; pointer-events: none; z-index: 5; }
+.zoomtag { position: absolute; right: 8px; top: 8px; font-size: 10px; padding: 1px 6px;
+  border-radius: 8px; background: rgba(18,20,26,.72); color: var(--acc);
+  border: 1px solid var(--line); pointer-events: none; }
 .viewer .overlay { position: absolute; inset: 0; width: 100%; height: 100%; flex: none; pointer-events: none; }
 .viewer .overlay.on { pointer-events: auto; cursor: crosshair; }
 .hud { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:10px 14px; border-top:1px solid var(--line); font-variant-numeric: tabular-nums; }

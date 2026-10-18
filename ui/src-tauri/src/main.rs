@@ -180,6 +180,10 @@ pub struct AppState {
     /// 状态**，而转移表在引擎里——宿主只搬运，不自己判“能不能暂停”。
     tasks: Mutex<Vec<Value>>,
     task_rev: Mutex<usize>,
+    /// ready 的**整份**能力清单（M9-f）。以前每加一个名单（presets / grade_limits /
+    /// export_caps / project_actions / task_actions）就要改一次 Rust：那正是双出处。
+    /// 整份搬过去让 UI 直接按引擎报的名单画控件；没报就是 Null，UI 那一排不画。
+    ready_caps: Mutex<Value>,
     /// 引擎在 ready 里报的版本（M5-c 发布自证）。宿主不拿自己的常量去填"这是 0.9.0"
     /// ——UI 的版本取自打包配置，引擎的版本取自同步后的 __version__，两者只在
     /// ready 里对得上；装机校验就是比这两份，不一致说明装的引擎不是这个壳配的。
@@ -240,6 +244,7 @@ impl AppState {
             project_rev: Mutex::new(0),
             tasks: Mutex::new(Vec::new()),
             task_rev: Mutex::new(0),
+            ready_caps: Mutex::new(Value::Null),
             engine_version: Mutex::new(None),
             engine_runtime: Mutex::new(Value::Null),
         }
@@ -403,6 +408,10 @@ impl AppState {
     }
 
     pub fn on_ready(&self, v: &Value) {
+        // 整份能力清单先存下（新名单不用改宿主）：只取 JSON 里真是对象的那一份
+        if v.is_object() {
+            *self.ready_caps.lock().unwrap() = v.clone();
+        }
         // 版本与运行时账单（M5-c）：没报就当这一版引擎不说自己是谁，置 None 而不是留上一份
         *self.engine_version.lock().unwrap() =
             v.get("version").and_then(|x| x.as_str()).map(String::from);
@@ -999,6 +1008,12 @@ fn export(
     // 宿主把 8 写死在这里就是把引擎的默认值拷进了宿主。（函数参数上不能挂 ///：
     // 那是文档注释，只许贴在条目自己那一级，cargo 会直接拒掉这一份签名）
     bit_depth: Option<i64>,
+    // 导出侧 P0 口径的四格（d2c）：名单以引擎为准，宿主不填默认值（填了就是把
+    // 引擎的中性位拷进宿主，而中性位属于产品决策，ADR-0003 冻结的就是它）
+    output_profile: Option<String>,
+    tiff_compression: Option<String>,
+    metadata_include_gps: Option<bool>,
+    conflict_policy: Option<String>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "export", "action": "start", "out_dir": out_dir});
     if let Some(v) = format {
@@ -1024,6 +1039,16 @@ fn export(
     }
     if let Some(v) = bit_depth {
         cmd["bit_depth"] = json!(v);
+    }
+    for (k, v) in [
+        ("output_profile", output_profile.map(Value::from)),
+        ("tiff_compression", tiff_compression.map(Value::from)),
+        ("metadata_include_gps", metadata_include_gps.map(Value::from)),
+        ("conflict_policy", conflict_policy.map(Value::from)),
+    ] {
+        if let Some(v) = v {
+            cmd[k] = v;
+        }
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
@@ -1328,6 +1353,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "project_rev": *state.project_rev.lock().unwrap(),
            "tasks": state.tasks.lock().unwrap().clone(),
            "task_rev": *state.task_rev.lock().unwrap(),
+           "ready_caps": state.ready_caps.lock().unwrap().clone(),
            "history_edit_cmds": state.history_edit_cmds.lock().unwrap().clone(),
            // 发布自证（M5-c）：壳选的是哪个解释器（含它从哪一档候选里来）、引擎报的
            // 版本与包账单、以及进程现在还在不在。"引擎起不来"的三种成因（没运行时 /

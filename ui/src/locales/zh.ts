@@ -244,6 +244,13 @@ const zh = {
   "hud.res": "分辨率",
   "hud.origin": "左上角应为红色块（验证纹理未上下翻转）",
 
+  "studio.tasks": "批量队列",
+  "studio.project": "工程",
+  "studio.exposureClear": "清曝光 / 白平衡",
+  "studio.outDir": "导出目录",
+  "studio.targetsSel": "本次目标：选中的 {n} 张",
+  "studio.targetsOne": "本次目标：当前打开的这一张",
+  "studio.targetsNone": "本次目标：没有可导出的图",
   "log.title": "引擎日志",
   "log.empty": "（无）",
 } as const;

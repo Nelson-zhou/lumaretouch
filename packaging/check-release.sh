@@ -139,7 +139,16 @@ else
   bad "缺 docs/model-licenses/models.json——许可台账是发布契约的一部分"
 fi
 
-# ⑦ 开发机的绝对路径不许出现在将要打包的文本资产里
+# ⑦ P0 注册表的面板覆盖：冻结的 36 条必须逐条有格子，接不通的必须带原因。
+#    这一条查的是"发行物自己会不会骗人"里最贵的一形：界面上根本没有那个参数。
+if python3 tools/check-p0-coverage.py >/tmp/check-release-p0.log 2>&1; then
+  good "P0 注册表面板覆盖：$(grep -c '^✓' /tmp/check-release-p0.log) 项全过（36 格逐条落位，禁用格都带原因）"
+else
+  bad "P0 注册表面板覆盖不过："
+  sed 's/^/     /' /tmp/check-release-p0.log
+fi
+
+# ⑧ 开发机的绝对路径不许出现在将要打包的文本资产里
 if grep -rlI "$HOME" "$stage" 2>/dev/null | grep -q .; then
   bad "暂存目录里写死了当前用户的主目录路径"
 else
