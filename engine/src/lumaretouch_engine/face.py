@@ -32,11 +32,30 @@ NUM_LANDMARKS = 478
 
 BACKENDS = ("synthetic", "template", "mediapipe")
 
-# 模型权重不入库（计划决策 9），首启由安装器按 sha256 拉官方源；引擎只读不吃下载
+# 模型目录：总工 2026-10-18 放行后，权重改为**随包分发**，不再靠安装器往用户缓存里拉
+# （旧的“决策 9：权重不入库、首启按 sha256 拉官方源”已被 ADR-0002 推翻，理由见那份）。
+# 解析口径：“没点名时”在候选目录里逐文件找（一个只剩 selfie_segmenter 的旧 ~/.cache 会
+# 把随包的 face_landmarker 遮蔽成“缺失”，而用户看到的是“模型齐了却报缺”）；“点名时”不回退。
+# 每个文件实际来自哪个目录写进 notes，出问题时能一眼看出是随包那份还是用户缓存那份。
 MODEL_DIR_ENV = "LRT_MODEL_DIR"
 DEFAULT_MODEL_DIR = os.path.expanduser("~/.cache/lumaretouch/models")
+BUNDLED_MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 FACE_LANDMARKER_MODEL = "face_landmarker.task"
 SELFIE_SEGMENTER_MODEL = "selfie_segmenter.tflite"
+
+
+def model_search_dirs(model_dir: str | None) -> list[str]:
+    """权重搜索路径。
+
+    显式参数与 LRT_MODEL_DIR 都是**权威**的：给了就不再往别处找。这不是细节，是“报错
+    得说清缺什么”的前提：调用方拿一个空目录点名版本时，若还能回退到随包那份，它得
+    到的就不是它要的版本，而画面上一切看起来正常 —— test_face.py 里那三条守的就是这个。
+    两者都没给时才走默认链：随包 data/ → 用户缓存（后者只用于手工换版本）。
+    """
+    for d in (model_dir, os.environ.get(MODEL_DIR_ENV)):
+        if d:
+            return [os.path.abspath(os.path.expanduser(d))]
+    return [BUNDLED_MODEL_DIR, DEFAULT_MODEL_DIR]
 
 
 class MissingBackend(RuntimeError):
@@ -233,33 +252,47 @@ class MediaPipeFace:
         from .decode import load_rgb      # noqa: F401  （仅为语义清晰：本类只吃代理帧）
 
         self.model_dir = model_dir or os.environ.get(MODEL_DIR_ENV) or DEFAULT_MODEL_DIR
-        missing = [m for m in (FACE_LANDMARKER_MODEL, SELFIE_SEGMENTER_MODEL)
-                   if not os.path.isfile(os.path.join(self.model_dir, m))]
-        if missing:
-            raise MissingBackend(
-                f"模型文件缺失：{missing}（应在 {self.model_dir}）。权重不入库，"
-                "需由安装器按 sha256 从官方源拉取后再跑精度回归。")
+        # 逐文件解析：随包的 data/ 是硬保障，用户缓存只用于换版本。哪个文件从哪来全部
+        # 写进 notes——“到底用了哪份权重”在精度回归里是可审计事实，不能是个谜。
+        search = model_search_dirs(model_dir)
+        resolved: dict[str, str] = {}
+        for name in (FACE_LANDMARKER_MODEL, SELFIE_SEGMENTER_MODEL):
+            hit = next((os.path.join(d, name) for d in search if os.path.isfile(os.path.join(d, name))), None)
+            if hit is None:
+                raise MissingBackend(
+                    f"模型文件缺失：{name}（搜索过：{', '.join(search)}）。这些权重本应随 deb 分发，"
+                    "缺它意味着打包链路漏了 data/ 或依赖被剪错了——不许退成占位后端继续跑。")
+            resolved[name] = hit
+        self.model_paths = resolved
         # 真正建图推迟到首次调用：构造一次 MediaPipe 图就要初始化其 native 运行时，
         # 放在这里会让「只查询后端可用性」也付出几百毫秒
         self._graphs = None
 
     def _ensure(self):
+        # 【 API 名字必须照 1.1.1 的真实签名写，不能照旧文档的记忆 】这一段在 mediapipe
+        # 还是“可选插件、从不安装”的年代写下并从未执行过，字段名与类名都是错的，错了两处：
+        #   • FaceLandmarkerOptions 的字段是 num_faces，不存在 num_face_landmarks；
+        #   • 分割器在 1.1.1 叫 ImageSegmenter / ImageSegmenterOptions，不叫 Segmenter。
+        # 这两个错靠读代码看不出来，只有把插件真装上一次才会炸——所以这次一并把
+        # “插件已放行且进包”写进台账，不再保留“装了但没人跑过”的状态。
         if self._graphs is None:
             from mediapipe.tasks import python as mp_python
             from mediapipe.tasks.python import vision as mp_vision
 
-            lm_path = os.path.join(self.model_dir, FACE_LANDMARKER_MODEL)
-            sg_path = os.path.join(self.model_dir, SELFIE_SEGMENTER_MODEL)
+            lm_path = self.model_paths[FACE_LANDMARKER_MODEL]
+            sg_path = self.model_paths[SELFIE_SEGMENTER_MODEL]
             landmarker = mp_vision.FaceLandmarker.create_from_options(
                 mp_vision.FaceLandmarkerOptions(
                     base_options=mp_python.BaseOptions(model_asset_path=lm_path),
-                    num_face_landmarks=1,
+                    num_faces=1,
                     output_face_blendshapes=False,
                     output_facial_transformation_matrixes=False))
-            segmenter = mp_vision.Segmenter.create_from_options(
-                mp_vision.SegmenterOptions(
+            # confidence_masks 而不是 category_mask：selfie 模型是二类（0=背景、1=人），
+            # 软掩膜要的是连续置信度，硬类别会把边缘量化成一刀切的锯齿。
+            segmenter = mp_vision.ImageSegmenter.create_from_options(
+                mp_vision.ImageSegmenterOptions(
                     base_options=mp_python.BaseOptions(model_asset_path=sg_path),
-                    output_category_mask=False))
+                    output_confidence_masks=True, output_category_mask=False))
             self._graphs = (landmarker, segmenter)
         return self._graphs
 
@@ -282,22 +315,43 @@ class MediaPipeFace:
         t_detect = _now_ms(t0)
 
         t1 = time.perf_counter()
-        seg = segmenter.detect(img)
-        if not seg.mask:
-            raise RuntimeError("MediaPipe 分割没返回掩膜")
-        mask = np.asarray(seg.mask[0].numpy_view, dtype=np.float32)
+        seg = segmenter.segment(img)   # 这个方法叫 segment，不叫 detect（FaceLandmarker 才叫 detect）
+        cm = list(getattr(seg, "confidence_masks", None) or [])
+        if not cm:
+            raise RuntimeError("MediaPipe 分割没返回置信度掩膜（旧代码读的是 seg.mask，这个属性在 "
+                               "ImageSegmenter 上不存在，静默拿到空值会被当成“检不到”而跳层）")
+        # 通道 1 = 人。旧代码取 [0] —— 那是**背景**，拿它当 skin 用是方向反了的错；
+        # 只有单通道时才退回 [0]（并记下退的是哪一条）。
+        person = cm[1] if len(cm) > 1 else cm[0]
+        # numpy_view 在 1.1.1 是**方法**，旧版是 property。写成两种都吃得下而不是硬切，
+        # 因为依赖只在出包时 pin、插件环境可能被用户拿去不同版本：判据是 callable，
+        # 不是版本号——版本号会骗人，这个属性不会。拿错会安静地得到一个 bound method，
+        # 到 float() 才炸，所以这里不留模糊空间。
+        view = person.numpy_view
+        if callable(view):
+            view = view()
+        mask = np.asarray(view, dtype=np.float32)
+        if mask.ndim == 3 and mask.shape[-1] == 1:
+            mask = mask[..., 0]     # 1.1.1 实测给的是 (h, w, 1)，尾通道 singleton
+        if mask.ndim != 2:
+            raise RuntimeError(f"分割掩膜不是预期的二维图，得到 shape={mask.shape}："
+                               "拿错通道或 API 又变了，不能摊平了继续算")
         if mask.shape != (h, w):
             mask = _resize_float(mask, h, w)
         t_masks = _now_ms(t1)
 
         return FacePrecompute(
             landmarks=pts,
-            masks={"skin": mask},          # 自检分割给的是"人"，通道名先按现有语义命名，M2 换多类模型再拆
+            # 自检分割给的是“人”，通道名先按现有语义命名，M2 换多类模型再拆
+            masks={"skin": mask},
             backend=self.name,
             t_detect_ms=t_detect,
             t_masks_ms=t_masks,
             face_box=_norm_box(pts),
-            notes=["mediapipe 后端：478 点为真实检测输出"],
+            notes=["mediapipe 后端：478 点为真实检测输出",
+                   "权重来源 " + ", ".join(f"{n}={os.path.dirname(p)}" for n, p in sorted(self.model_paths.items())),
+                   f"skin 掩膜实为 selfie 分割的「人」通道（{len(cm)} 通道，取索引 "
+                   f"{1 if len(cm) > 1 else 0}）：包含头发/衣服等非皮肤区域，不等同于皮肤"],
         )
 
 
