@@ -82,7 +82,45 @@ def test_source_hash_is_unchanged_by_the_project(tmp_path, src):
     after = (open(src, "rb").read(), os.stat(src).st_mtime_ns)
     assert before[0] == after[0] and before[1] == after[1], "打指纹这一步碰了源文件"
     import hashlib
-    assert fp["sha256"] == hashlib.sha256(after[0]).hexdigest()
+    # 默认那一等是 head（扫描 512 张时逐张全文件哈希会把导入拖成几十秒），
+    # 而 head 不能冒充 full：报出去就得说清手里的是哪个
+    assert fp["hash_level"] == "head" and fp["sha256"] is None, fp
+    full = P.fingerprint(src, full=True)
+    assert full["hash_level"] == "full"
+    assert full["sha256"] == hashlib.sha256(after[0]).hexdigest()
+
+
+def test_fingerprint_bytes_is_the_real_size_over_chunk_boundary(tmp_path):
+    """长度必须是字节数，不是“读了几个块”。
+
+    第一版的 head 快路径把剩下的 1 MB 块数直接加进 n，跨 1 MB 边界的文件会少报
+    几 MB；而 verify 拿这个数判“图被动过没动过”，错的方向是“变了说成没变”。
+    """
+    big = tmp_path / "big.bin"
+    data = np.random.default_rng(1).integers(0, 256, size=(2_500_000,), dtype=np.uint8)
+    big.write_bytes(data.tobytes())
+    for full in (False, True):
+        fp = P.fingerprint(str(big), full=full)
+        assert fp["bytes"] == data.nbytes == os.path.getsize(str(big)), (full, fp["bytes"])
+
+
+def test_verify_fingerprint_separates_missing_from_touched(tmp_path, src):
+    """重开时的三种“不对”处置不同，必须分开报（与 missing_sources 同一理由）。
+
+    缺文件是“在哪”；只改 mtime 是拷贝/同步工具干的，不该报成“照片坏了”；
+    head 对不上才是真被动过。
+    """
+    gone = str(tmp_path / "nope.jpg")
+    fp = P.fingerprint(src)
+    assert P.verify_fingerprint(src, fp)["head_match"] is True
+    assert P.verify_fingerprint(gone, fp)["exists"] is False
+    os.utime(src, ns=(1_000_000_000, 1_000_000_000))
+    v = P.verify_fingerprint(src, fp)
+    assert v["head_match"] and v["bytes_match"] and v["mtime_moved_only"] is True, v
+    with open(src, "ab") as f:
+        f.write(b"x")
+    v2 = P.verify_fingerprint(src, fp)
+    assert v2["head_match"] is False and v2["bytes_match"] is False, v2
 
 
 def test_add_doc_twice_replaces_the_row_and_keeps_versions(tmp_path, src):

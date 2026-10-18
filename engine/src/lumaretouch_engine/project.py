@@ -43,8 +43,9 @@ MAX_PROJECT_BYTES = 256_000_000      # 整份文件上限：再大就不是工�
 HASH_PREVIEW_BYTES = 4_096           # 快速指纹读的头部字节（重定位用的粗筛）
 
 __all__ = ["ProjectError", "SCHEMA", "SUFFIX", "new_project", "load", "save",
-           "encode", "decode", "fingerprint", "add_doc", "find_doc",
-           "set_trashed", "set_tags", "put_active_version", "project_path_for"]
+           "encode", "decode", "fingerprint", "verify_fingerprint", "add_doc",
+           "find_doc", "set_trashed", "set_tags", "put_active_version",
+           "active_recipe", "project_path_for", "missing_sources"]
 
 
 class ProjectError(ValueError):
@@ -160,30 +161,58 @@ def validate(p: object) -> None:
 
 
 # ---------------------------------------------------------------- 指纹
-def fingerprint(path: str) -> dict:
-    """整文件 sha256 + 长度 + mtime。CORE-001 的"源文件哈希不变"要有可比的数。
+def fingerprint(path: str, *, full: bool = False) -> dict:
+    """文件指纹。`hash_level` 说清手里的是哪一等，不把两等混成一个数。
 
-    全文件哈希只在导入与显式核对时做，逐帧路径一次都不做。本机量到的数：
-    0.41 MB 样张 warm 1.0 ms、0.03 MB 的合成 DNG 0.2 ms（≈ 2.4 ms/MB）。
-    25 MB 的真机 DNG 按这一条推是 ≈ 60 ms——本仓没有 25 MB 样张，所以这里明写
-    哪个是量出来的、哪个是推出来的，不拿推算冒充实测。
+    full=True：整文件 sha256。CORE-001 的"源文件哈希不变"要的是这一等。
+    full=False：只读头部 HASH_PREVIEW_BYTES + 长度 + mtime。扫描 512 张时逐张
+    全文件哈希会把导入拖成几十秒（本机 0.41 MB 量到 warm 1.0 ms、0.03 MB 合成
+    DNG 0.2 ms，≈ 2.4 ms/MB；25 MB 真机 DNG 按这一条推是 ≈ 60 ms——本仓没有
+    25 MB 样张，所以这里明写哪个是量出来的、哪个是推出来的），而导入那一层只要
+    能认出"文件变了/被换了"。重开与显式核对才升级到 full。
+
+    两等都只在导入与显式核对时做，逐帧路径一次都不做。
     """
-    h = hashlib.sha256()
+    head = bytearray()
     n = 0
-    with open(path, "rb") as f:
+    h_full = hashlib.sha256() if full else None
+    with open(path, "rb") as f:            # 只读：这里写一个 w 就能顶掉 CORE-001
         while True:
             b = f.read(1 << 20)
             if not b:
                 break
-            h.update(b)
             n += len(b)
+            if h_full is not None:
+                h_full.update(b)
+            if len(head) < HASH_PREVIEW_BYTES:
+                head += b[:HASH_PREVIEW_BYTES - len(head)]
     st = os.stat(path)
-    head = bytearray()
-    with open(path, "rb") as f:
-        head += f.read(HASH_PREVIEW_BYTES)
-    return {"path": os.path.abspath(path), "bytes": n, "sha256": h.hexdigest(),
-            "mtime_ns": int(st.st_mtime_ns), "readonly": not os.access(path, os.W_OK),
-            "head_sha256": hashlib.sha256(bytes(head)).hexdigest()}
+    return {"path": os.path.abspath(path), "bytes": n,
+            "sha256": h_full.hexdigest() if h_full is not None else None,
+            "head_sha256": hashlib.sha256(bytes(head)).hexdigest(),
+            "hash_level": "full" if full else "head",
+            "mtime_ns": int(st.st_mtime_ns), "readonly": not os.access(path, os.W_OK)}
+
+
+def verify_fingerprint(path: str, fp: dict) -> dict:
+    """重开时对一遍指纹。缺 / 长度变 / 头部变 分开报：处置不一样。
+
+    缺文件是“在哪”；长度变了是“这张图被动过”；只有 mtime 变了而字节没变，
+    是拷贝/同步工具干的，不该报成“照片坏了”。
+    """
+    exists = os.path.isfile(path)
+    out = {"path": path, "exists": exists, "level": fp.get("hash_level", "head"),
+           "bytes_match": False, "head_match": False, "full_match": None}
+    if not exists:
+        return out
+    now = fingerprint(path, full=fp.get("hash_level") == "full")
+    out["bytes_match"] = now["bytes"] == fp.get("bytes")
+    out["head_match"] = now["head_sha256"] == fp.get("head_sha256")
+    if fp.get("sha256"):
+        out["full_match"] = now["sha256"] == fp["sha256"]
+    out["mtime_moved_only"] = bool(out["head_match"] and out["bytes_match"]
+                                   and now["mtime_ns"] != fp.get("mtime_ns"))
+    return out
 
 
 # ---------------------------------------------------------------- 编解码
