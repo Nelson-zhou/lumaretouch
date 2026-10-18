@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import os
+import time
 
 import numpy as np
 import pytest
@@ -303,3 +304,21 @@ def test_default_tiff_compression_is_deflate_not_the_old_lzw(tmp_path):
 def test_unknown_tiff_compression_is_rejected(tmp_path):
     with pytest.raises(ExportError, match="tiff_compression"):
         write_file(_rgb(), str(tmp_path / "z.tif"), tiff_compression="zip")
+
+
+def test_builtin_srgb_profile_is_frozen_within_the_process():
+    """同一进程里反复取 srgb 档必须拿到同一份字节。
+
+    littleCMS 把建档那一刻的秒写进 profile 头部（第六个 uint16），不冻的话一次
+    批量导出里每张图嵌的都是自己那一秒的档：同参数的两个产物字节不同，于是
+    “重试固定输入”“冲突跳过后内容一致”这类逐字节判据全部立不住。这条是本轮
+    端到端用例响出来之后补的门。
+    """
+    a = _profile_bytes("srgb")
+    b = _profile_bytes("srgb")
+    assert a == b and a is b
+    time.sleep(1.1)                       # 走秒：不冻就会变
+    assert _profile_bytes("srgb") == a
+    # 内容仍是 sRGB built-in（不是“名字对了、字节是另一回事”）：头部的 colour space
+    # 与 profile class 都该是 rgmt / mntr
+    assert a[16:20] == b"RGB " and a[20:24] == b"XYZ ", a[16:24]

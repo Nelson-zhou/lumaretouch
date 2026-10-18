@@ -170,6 +170,16 @@ pub struct AppState {
     /// 否则用户拖完滑块按不动：历史账只在 history_state / image_ready / session_state
     /// 三条里出现，而拖滑块那几条都不在其中。
     history_dirty: Mutex<bool>,
+    /// 最近一条项目播报（project_created / opened / saved / edited / state）。
+    /// 名单只照抄引擎的 `project_actions`，宿主不自建第二份：徽章上那个“未保存”
+    /// 只能来自引擎的 dirty，拿宿主自己数的就会在“刚存完”那一拍说谎。
+    project: Mutex<Option<Value>>,
+    project_rev: Mutex<usize>,
+    /// 批量任务台账（按 task_id 聚合的最新一条 task_state）。
+    /// 存整份而不是只存条数：暂停/继续/取消按钮的可用态取决于**那一条现在是什么
+    /// 状态**，而转移表在引擎里——宿主只搬运，不自己判“能不能暂停”。
+    tasks: Mutex<Vec<Value>>,
+    task_rev: Mutex<usize>,
     /// 引擎在 ready 里报的版本（M5-c 发布自证）。宿主不拿自己的常量去填"这是 0.9.0"
     /// ——UI 的版本取自打包配置，引擎的版本取自同步后的 __version__，两者只在
     /// ready 里对得上；装机校验就是比这两份，不一致说明装的引擎不是这个壳配的。
@@ -226,6 +236,10 @@ impl AppState {
             doc_rev: Mutex::new(0),
             history_edit_cmds: Mutex::new(Vec::new()),
             history_dirty: Mutex::new(false),
+            project: Mutex::new(None),
+            project_rev: Mutex::new(0),
+            tasks: Mutex::new(Vec::new()),
+            task_rev: Mutex::new(0),
             engine_version: Mutex::new(None),
             engine_runtime: Mutex::new(Value::Null),
         }
@@ -316,6 +330,49 @@ impl AppState {
         // export_done 一到就把进度条归位：留着“12/20”跟在一句“共 20 张、失败 1”后面
         // 会被读成“还在跑”，而实际已经结束了
         *self.export_progress.lock().unwrap() = None;
+    }
+
+    /// 裁剪/曝光那一类 frame 事件：它们带 doc_state，不进这一格的话面板上的数字
+    /// 就停在上一笔（而拖拽帧不带 doc_state，一条也不进）。高频路径上只多一次
+    /// `Option` 判断。pub 而 note_doc 不 pub：判定只在 note_doc 一处，这里只多一个入口。
+    pub fn on_layer_frame(&self, v: &Value) {
+        self.note_doc(v, "frame");
+    }
+
+    /// 项目事件：最后一条就是“现在哪个工程、存没存、几张、丢了什么”。
+    /// 五个名字进同一格：拆开存就会出“刚 create 完但徽章还写着上一个工程的 dirty”。
+    pub fn on_project(&self, v: &Value) {
+        *self.project.lock().unwrap() = Some(v.clone());
+        *self.project_rev.lock().unwrap() += 1;
+    }
+
+    /// 台账：task_state 按 id 覆盖（保留队列插入序），task_list 整份重建，
+    /// task_deleted 删一格。三个名字写同一张表，UI 只需读 tasks 一项目。
+    pub fn on_task(&self, v: &Value) {
+        {
+            let mut t = self.tasks.lock().unwrap();
+            match v.get("event").and_then(|e| e.as_str()).unwrap_or("") {
+                "task_list" => {
+                    if let Some(list) = v.get("tasks").and_then(|x| x.as_array()) {
+                        *t = list.clone();
+                    }
+                }
+                "task_deleted" => {
+                    if let Some(id) = v.get("task_id").and_then(|x| x.as_str()) {
+                        t.retain(|x| x.get("task_id").and_then(|i| i.as_str()) != Some(id));
+                    }
+                }
+                _ => {
+                    let id = v.get("task_id").and_then(|x| x.as_str()).unwrap_or("").to_string();
+                    match t.iter_mut().find(|x| x.get("task_id").and_then(|i| i.as_str())
+                                                   == Some(id.as_str())) {
+                        Some(slot) => *slot = v.clone(),
+                        None => t.push(v.clone()),
+                    }
+                }
+            }
+        }
+        *self.task_rev.lock().unwrap() += 1;
     }
 
     pub fn on_session_state(&self, v: &Value) {
@@ -1265,6 +1322,12 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "history": history, "history_rev": history_rev,
            "history_dirty": history_dirty,
            "doc_report": doc_report, "doc_rev": doc_rev,
+           // 项目面与任务台账（LNX-P0-PROJECT / LNX-P0-TASK）：小载荷（没像素），
+           // 所以进轮询；UI 的“未保存”徽章与队列按钮全看这几项，不自己数
+           "project": state.project.lock().unwrap().clone(),
+           "project_rev": *state.project_rev.lock().unwrap(),
+           "tasks": state.tasks.lock().unwrap().clone(),
+           "task_rev": *state.task_rev.lock().unwrap(),
            "history_edit_cmds": state.history_edit_cmds.lock().unwrap().clone(),
            // 发布自证（M5-c）：壳选的是哪个解释器（含它从哪一档候选里来）、引擎报的
            // 版本与包账单、以及进程现在还在不在。"引擎起不来"的三种成因（没运行时 /
@@ -1375,6 +1438,128 @@ fn history(state: State<'_, Arc<AppState>>, action: String) -> Result<Value, Str
     Ok(json!({"requested": true}))
 }
 
+/// 项目（LNX-P0-PROJECT / CORE-001、007、008）：创建/打开/保存/标签/回收站。
+/// 原子写、脏标记、资产去重、指纹全在引擎的 project.py；这里只做把手。动作名单
+/// 照抄引擎 ready 里的 project_actions，宿主刻一份就有两份答案（session/history 同形）。
+#[tauri::command]
+fn project(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    name: Option<String>,
+    directory: Option<String>,
+    path: Option<String>,
+    doc: Option<String>,
+    index: Option<i64>,
+    tags: Option<Vec<String>>,
+    label: Option<String>,
+    trashed: Option<bool>,
+    force: Option<bool>,
+) -> Result<Value, String> {
+    const ACTIONS: [&str; 6] = ["create", "open", "save", "state", "tag", "trash"];
+    if !ACTIONS.contains(&action.as_str()) {
+        return Err(format!("project 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
+    }
+    let mut cmd = json!({"cmd": "project", "action": action});
+    for (k, v) in [
+        ("name", name.map(Value::from)),
+        ("directory", directory.map(Value::from)),
+        ("path", path.map(Value::from)),
+        ("doc", doc.map(Value::from)),
+        ("index", index.map(Value::from)),
+        ("trashed", trashed.map(Value::from)),
+        ("force", force.map(Value::from)),
+    ] {
+        if let Some(v) = v {
+            cmd[k] = v;
+        }
+    }
+    // tags 与 label 只在 tag 动作上有意义，但空数组也是一个意思（“把标签清空”）：
+    // 拿 `if let Some` 判就区分不了“没给”与“给了一串空”，而后者是用户的明确动作
+    if let Some(v) = tags {
+        cmd["tags"] = json!(v);
+    }
+    if let Some(v) = label {
+        cmd["label"] = json!(v);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 批量任务队列（LNX-P0-TASK）：暂停/继续/取消/重试/删除/列清单。
+/// 转移表只在引擎的 tasks.py：宿主不判“这条能不能暂停”，也不拿“最后一个任务”当默认
+/// 目标（那会静默叫停错的那一批），只把 id 递过去。
+#[tauri::command]
+fn task(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    task: Option<String>,
+) -> Result<Value, String> {
+    const ACTIONS: [&str; 6] = ["list", "pause", "resume", "cancel", "retry", "delete"];
+    if !ACTIONS.contains(&action.as_str()) {
+        return Err(format!("task 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
+    }
+    let mut cmd = json!({"cmd": "task", "action": action});
+    if let Some(v) = task {
+        cmd["task"] = json!(v);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 曝光/白平衡（P0 注册表 lnx.exposure / lnx.white_balance）。量程不在这里写：
+/// 引擎随事件报 exposure_limits，宿主拄一份数就是第二个会漂的地方。
+#[tauri::command]
+fn exposure(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    ev: Option<f64>,
+    temperature_shift: Option<f64>,
+    tint_shift: Option<f64>,
+    reference_k: Option<f64>,
+) -> Result<Value, String> {
+    const ACTIONS: [&str; 2] = ["set", "clear"];
+    if !ACTIONS.contains(&action.as_str()) {
+        return Err(format!("exposure 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
+    }
+    let mut cmd = json!({"cmd": "exposure", "action": action});
+    for (k, v) in [
+        ("ev", ev.map(Value::from)),
+        ("temperature_shift", temperature_shift.map(Value::from)),
+        ("tint_shift", tint_shift.map(Value::from)),
+        ("reference_k", reference_k.map(Value::from)),
+    ] {
+        if let Some(v) = v {
+            cmd[k] = v;
+        }
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 裁剪/旋转（P0 注册表 lnx.crop.v1）。rect 是归一化的 [左,上,右,下]，
+/// 正角顺时针——两个口径的出处都在引擎 ops/geometry.py，宿主不另定一套。
+#[tauri::command]
+fn crop(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    rect: Option<Vec<f64>>,
+    rotation_degrees: Option<f64>,
+) -> Result<Value, String> {
+    const ACTIONS: [&str; 2] = ["set", "clear"];
+    if !ACTIONS.contains(&action.as_str()) {
+        return Err(format!("crop 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
+    }
+    let mut cmd = json!({"cmd": "crop", "action": action});
+    if let Some(v) = rect {
+        cmd["rect"] = json!(v);
+    }
+    if let Some(v) = rotation_degrees {
+        cmd["rotation_degrees"] = json!(v);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
 /// 整条底片条：格子的元信息来自最近一条 session_state，缩略图按 path 现场配对。
 /// 单独一条命令而不是塞进 engine_status 轮询：两百张 base64 有 1.4 MB，
 /// 每秒克隆一遍是白给的性能税（前端只在 session_rev 变了时取）。
@@ -1470,6 +1655,7 @@ fn main() {
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, precompute,
             inpaint, light, deform, lut, grade, background, export, session, filmstrip, history,
+            project, task, exposure, crop,
             report, quit
         ])
         .run(tauri::generate_context!())

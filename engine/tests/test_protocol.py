@@ -4406,6 +4406,295 @@ def test_export_refuses_invalid_profile_and_compression_before_doing_anything(en
         assert not os.path.isdir(str(tmp_path / "never")), f"{bad} 拒之前已经动了文件系统"
 
 
+# ============================================================ 批量任务（LNX-P0-TASK）
+#
+# 台账层（tasks.py）的单测能证明转移表自洽，证明不了“暂停真的停在条目边界上”——那是
+# 跨线程的事：命令线程置控制位，worker 线程在边界读它。判据也不许只看自报的状态位：
+# 状态机说停了而文件还在写，是最难从事件里看出来的一种骗人，所以每一条都去数目录。
+
+def _make_batch(tmp_path, n=8):
+    """把样张拷成 n 个互不相同的文件，凑够一批。
+
+    批次必须够长：一两张的批次里，暂停永远落不到“条目之间”，那条用例会以“通过”的
+    形式什么也没测到。也别图快改用 48×64 的小图：三毫秒一张，叫停的命令还没发出去
+    批次就跑完了（真跑过一遍才知道，所以这里宁可用 1024×1280 的样张）。
+    """
+    paths = []
+    for i in range(n):
+        d = tmp_path / f"batch-{i:02d}.jpg"
+        shutil.copyfile(FIXTURE, d)
+        paths.append(str(d))
+    return paths
+
+
+def _next_task_event(ep, *, task_id=None, timeout=120.0):
+    """取下一条 task_state（可按批次过滤 id）。等到 export_done 还没等到就直说。"""
+    seen: list = []
+    t_end = time.monotonic() + timeout
+    while time.monotonic() < t_end:
+        try:
+            e = ep.next_event(timeout=min(10.0, max(0.1, t_end - time.monotonic())))
+        except TimeoutError:
+            continue
+        name = e.get("event")
+        if name == "error":
+            raise AssertionError(f"引擎报错：{e['error']}")
+        if name == "task_state" and (task_id is None or e["task_id"] == task_id):
+            return e
+        if name == "export_done":
+            raise AssertionError(f"批次已经跑完了而没等到属于 {task_id} 的状态；"
+                                 f"路上见过={[s[1] for s in seen]}")
+        seen.append((name, e.get("state")))
+    raise AssertionError(f"{timeout}s 内没有属于 {task_id} 的 task_state；路上见过={[s[1] for s in seen]}")
+
+
+def _wait_task_state(ep, want: str, *, task_id=None, timeout=120.0):
+    """等批次**下一个** want 状态（不是查当前状态：查当前要发 task list）。
+
+    事件流是单向的，want 一旦被越过就再也读不到；所以调用顺序必须是“先发命令、
+    立刻等状态”，不能拿它当轮询。"""
+    seen: list = []
+    t_end = time.monotonic() + timeout
+    while time.monotonic() < t_end:
+        e = _next_task_event(ep, task_id=task_id, timeout=max(0.1, t_end - time.monotonic()))
+        if e["state"] == want:
+            return e
+        seen.append(e["state"])
+    raise AssertionError(f"没等到 {want}")        # 到不了这里：_next_task_event 会先响
+
+
+def _wait_items_committed(ep, count, *, timeout=240.0):
+    """等第 count 张落盘。叫停要落在“已经原子提交了几张”之后：
+    一张都没跑就停测不出边界，全跑完了就变成“等一个不会来的暂停”。"""
+    seen = 0
+    t_end = time.monotonic() + timeout
+    while time.monotonic() < t_end:
+        try:
+            e = ep.next_event(timeout=min(10.0, max(0.1, t_end - time.monotonic())))
+        except TimeoutError:
+            continue
+        if e.get("event") == "export_progress":
+            seen += 1
+            if seen >= count:
+                return e
+        elif e.get("event") == "export_done":
+            raise AssertionError(f"批次在叫停之前就跑完了（{e['total']} 张）："
+                                 "这一条测不到边界，把 _make_batch 的张数加上去")
+        elif e.get("event") == "error":
+            raise AssertionError(f"引擎报错：{e['error']}")
+    raise AssertionError(f"{timeout}s 内没等到 {count} 条 export_progress（只到 {seen} 条）")
+
+
+def _export_one(engine, path, out_dir, *, tile=256, quality=90):
+    """单张出片，返回产物路径（重试那条要用它做“当前滑块”那一侧的参照）。"""
+    os.makedirs(out_dir, exist_ok=True)
+    engine.send(cmd="export", out_dir=out_dir, format="jpg", quality=quality,
+                tile=tile, images=[path])
+    done, _ = _collect_until(engine, "export_done", timeout=240)
+    f = os.path.join(out_dir, os.path.splitext(os.path.basename(path))[0] + ".jpg")
+    assert os.path.isfile(f), done
+    return f
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_task_pause_stops_at_the_boundary_and_resume_finishes_the_batch(engine, tmp_path):
+    """TASK-001/006/007：先 pause_requested、到条目边界才承认 paused；批次状态算出来。"""
+    _need_export_env()
+    _load(engine, max_px=STRIP_MAX_PX, strength=0.3)
+    paths = _make_batch(tmp_path, 8)
+    out = str(tmp_path / "paused")
+    engine.send(cmd="export", out_dir=out, format="jpg", quality=90, tile=256, images=paths)
+    tid = _next_task_event(engine)["task_id"]
+    _wait_items_committed(engine, 2)
+    engine.send(cmd="task", action="pause", task=tid)
+    req = _wait_task_state(engine, "pause_requested", task_id=tid)
+    # 这一刻还有一条没到边界，批次不许显示成 paused（TASK-007 要的就是这一句）
+    assert req["batch"]["state"] != "paused", req["batch"]
+    at = _wait_task_state(engine, "paused", task_id=tid)
+    assert at["batch"]["state"] == "paused" and at["counts"]["pending"] >= 1, at
+    files = sorted(os.listdir(out))
+    assert at["counts"]["succeeded"] == len(files), (at["counts"], files)
+    time.sleep(0.8)
+    assert sorted(os.listdir(out)) == files, "状态说停了，文件却还在长：这是假暂停"
+    assert not [f for f in files if not f.endswith(".jpg")], files
+    engine.send(cmd="task", action="resume", task=tid)
+    _wait_task_state(engine, "running", task_id=tid)
+    done, road = _collect_until(engine, "export_done", timeout=240)
+    assert done["cancelled"] is False and done["task_state"] == "succeeded", done
+    assert done["task_id"] == tid, done
+    assert len([f for f in os.listdir(out) if f.endswith(".jpg")]) == 8, os.listdir(out)
+    # 继续之后逐条还在记台账：只补文件不补账，重试与断点就没有依据
+    assert [e for e in road if e["event"] == "task_state"], road
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_task_cancel_keeps_committed_files_and_writes_no_more(engine, tmp_path):
+    """TASK-009/003：取消只叫停还没开始的，已原子提交的那几张保留，也绝不删源图。"""
+    _need_export_env()
+    _load(engine, max_px=STRIP_MAX_PX, strength=0.3)
+    paths = _make_batch(tmp_path, 8)
+    src_sha = [_sha_of(p) for p in paths]
+    out = str(tmp_path / "cancelled")
+    engine.send(cmd="export", out_dir=out, format="jpg", quality=90, tile=256, images=paths)
+    tid = _next_task_event(engine)["task_id"]
+    _wait_items_committed(engine, 2)
+    engine.send(cmd="task", action="cancel", task=tid)
+    at = _wait_task_state(engine, "cancelled", task_id=tid)
+    files = sorted(os.listdir(out))
+    assert at["counts"]["succeeded"] == len(files) and at["counts"]["pending"] >= 1, at
+    time.sleep(0.6)
+    assert sorted(os.listdir(out)) == files, "取消之后还在写：条目边界没起作用"
+    done, _ = _collect_until(engine, "export_done", timeout=120)
+    assert done["cancelled"] is True and done["task_state"] == "cancelled", done
+    assert done["total"] == 8 and len(done["images"]) == len(files), done
+    for rec in done["images"]:
+        assert os.path.isfile(rec["out"]), rec      # 账上每张都对得上一个真文件
+    assert [_sha_of(p) for p in paths] == src_sha, "取消动过源图"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_task_retry_uses_the_frozen_inputs_not_the_current_sliders(engine, tmp_path):
+    """TASK-002：未完成/失败重试时输入与配方固定，不许静默换成“最新配方”。
+
+    判据用产物字节做三方对拍：重试产物 == 快照强度那一份参照，且 != 当前滑块那一份。
+    只比文件大小分不出“按当时那套重跑”与“拿现在的滑块重跑一遍”。
+    """
+    _need_export_env()
+    _load(engine, max_px=STRIP_MAX_PX, strength=0.2)
+    paths = _make_batch(tmp_path, 6)
+    victim = paths[-1]
+    ref_lo = _export_one(engine, victim, str(tmp_path / "ref-lo"))    # 快照强度那一份
+    out = str(tmp_path / "retry")
+    engine.send(cmd="export", out_dir=out, format="jpg", quality=90, tile=256, images=paths)
+    tid = _next_task_event(engine)["task_id"]
+    _wait_items_committed(engine, 1)
+    engine.send(cmd="task", action="cancel", task=tid)
+    _wait_task_state(engine, "cancelled", task_id=tid)
+    _collect_until(engine, "export_done", timeout=120)
+    # 滑块拖走，再拿同一张图按新强度出一份参照。这一趟还会把“会话里最后那一批”换掉：
+    # 重试旧批次若偷用了它，跑出来的就是 0.9 那一侧的画面（正是这条要拒的事）
+    _nudge_frame(engine, 0.9)
+    ref_hi = _export_one(engine, victim, str(tmp_path / "ref-hi"))
+    engine.send(cmd="task", action="retry", task=tid)
+    done_at = _wait_task_state(engine, "succeeded", task_id=tid, timeout=240)
+    assert done_at["attempt"] == 1 and done_at["counts"]["pending"] == 0, done_at
+    got = os.path.join(out, os.path.splitext(os.path.basename(victim))[0] + ".jpg")
+    assert os.path.isfile(got), sorted(os.listdir(out))
+    body = open(got, "rb").read()
+    assert body == open(ref_lo, "rb").read(), "重试偷换了配方：产物不等于快照强度那一份"
+    assert body != open(ref_hi, "rb").read(), "重试偷换了配方：产物就是当前滑块那一份"
+    # 字节对拍只在同一次会话里成立（嵌进去的 sRGB 档带着 littleCMS 的建档时间，
+    # 跳进程比永远不等）。像素才是“用的哪套设置”这句话本身，所以再解码对一次
+    from PIL import Image
+
+    def px(p):
+        with Image.open(p) as im:
+            return np.asarray(im.convert("RGB"))
+
+    assert np.array_equal(px(got), px(ref_lo)), "重试产物的像素不是快照那套算出来的"
+    assert not np.array_equal(px(got), px(ref_hi)), "重试产物的像素就是当前滑块那一份"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_task_delete_removes_the_record_only(engine, tmp_path):
+    """TASK-009 的下半句：删队列记录既不删原图，也不删已导出的文件。"""
+    _need_export_env()
+    _load(engine, max_px=STRIP_MAX_PX, strength=0.2)
+    paths = _make_batch(tmp_path, 2)
+    src_sha = [_sha_of(p) for p in paths]
+    out = str(tmp_path / "kept")
+    engine.send(cmd="export", out_dir=out, format="jpg", quality=90, tile=256, images=paths)
+    tid = _next_task_event(engine)["task_id"]
+    _collect_until(engine, "export_done", timeout=240)
+    files = sorted(os.listdir(out))
+    engine.send(cmd="task", action="delete", task=tid)
+    ev = engine.wait_for("task_deleted", timeout=30)
+    assert ev["task_id"] == tid and ev["sources_touched"] is False \
+        and ev["outputs_touched"] is False, ev
+    assert ev["files_kept"]["succeeded"] == len(files), (ev, files)
+    assert sorted(os.listdir(out)) == files, "删记录删掉了产物"
+    assert [_sha_of(p) for p in paths] == src_sha, "删记录动过了源图"
+    engine.send(cmd="task", action="list")
+    lst = engine.wait_for("task_list", timeout=30)
+    assert [t["task_id"] for t in lst["tasks"]] == [] and lst["batch"]["state"] == "idle", lst
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_task_paused_across_a_restart_stays_paused_and_says_why(engine, extra_engine, tmp_path):
+    """CORE-008 + TASK-008：进程中断后重开，批次仍是 paused，不自动重跑也不切最新配方。
+
+    “重开”必须拿另一个进程做：同一进程里 worker 一直活着，resume 总能成功，这一格
+    就永远测不出“从盘上读回来的任务没有配方快照”这件事。
+    """
+    _need_export_env()
+    _load(engine, max_px=STRIP_MAX_PX, strength=0.2)
+    paths = _make_batch(tmp_path, 6)
+    out = str(tmp_path / "interrupted")
+    _created, saved = _create_and_save(engine, tmp_path / "prj", name="中断恢复")
+    pfile = saved["path"]
+    engine.send(cmd="export", out_dir=out, format="jpg", quality=90, tile=256, images=paths)
+    tid = _next_task_event(engine)["task_id"]
+    _wait_items_committed(engine, 2)
+    engine.send(cmd="task", action="pause", task=tid)
+    at = _wait_task_state(engine, "paused", task_id=tid)
+    files = sorted(os.listdir(out))
+    # 暂停中存工程：这一格是 TASK-008 的前提（跑完的批次没有“未完成”可恢复）
+    engine.send(cmd="project", action="save")
+    saved2 = engine.wait_for("project_saved", timeout=120)
+    assert saved2["tasks"] == 1 and at["state"] == "paused", saved2
+    assert at["counts"]["succeeded"] == len(files), (at["counts"], files)
+
+    eng2 = extra_engine("taskreopen")
+    eng2.send(cmd="hello")
+    eng2.wait_for("ready", timeout=60)
+    eng2.send(cmd="set_device", device="cpu")
+    eng2.wait_for("device_set", timeout=60)
+    eng2.send(cmd="project", action="open", path=pfile)
+    op = eng2.wait_for("project_opened", timeout=90)
+    # 两个键各管一件事：task_restore 是“读回来时逐条说了什么”，tasks 是台账格数。
+    # 上一版它们都叫 tasks，后者把前者吃成了一个整数（字典字面量后写的吃先写的）。
+    assert isinstance(op["tasks"], int) and op["tasks"] == 1, op
+    assert len(op["task_restore"]) == 1, op
+    note = op["task_restore"][0]
+    assert note["task_id"] == tid and note["state"] == "paused", note
+    assert "快照" in note["blocked"] or "依赖" in note["blocked"], note
+    time.sleep(1.0)
+    assert sorted(os.listdir(out)) == files, "重开就自动重跑：TASK-008 明写着不许"
+    # 没有 worker 的批次：暂停/继续只能拒（否则台账会停在一个醒不过来的状态）
+    eng2.send(cmd="task", action="resume", task=tid)
+    err = eng2.wait_for("error", timeout=30)
+    assert "worker" in err["error"], err
+    # 取消是记账：落到 cancelled，而一个文件也不动
+    eng2.send(cmd="task", action="cancel", task=tid)
+    done_at = _wait_task_state(eng2, "cancelled", task_id=tid)
+    assert done_at["persisted"] is True and done_at["counts"]["succeeded"] == len(files), done_at
+    assert sorted(os.listdir(out)) == files, "取消删掉了已落盘的产物"
+    eng2.send(cmd="task", action="retry", task=tid)
+    err2 = eng2.wait_for("error", timeout=30)
+    assert "会话" in err2["error"] or "快照" in err2["error"], err2
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_task_command_boundaries(engine):
+    """命令面的边界：名单由 ready 报、不认的参数整条拒、没有批次时不许猜一个。"""
+    engine.send(cmd="hello")
+    ready = engine.wait_for("ready", timeout=30)
+    assert ready["task_actions"] == ["list", "pause", "resume", "cancel", "retry", "delete"]
+    engine.send(cmd="task", action="list")
+    lst = engine.wait_for("task_list", timeout=30)
+    assert lst["tasks"] == [] and lst["batch"]["state"] == "idle", lst
+    engine.send(cmd="task", action="pause")
+    e = engine.next_event(timeout=30)
+    assert e["event"] == "error" and "没有进行中" in e["error"], e
+    for bad in ({"action": "kill"}, {"action": "list", "force": True}):
+        engine.send(cmd="task", **bad)
+        e = engine.next_event(timeout=30)
+        assert e["event"] == "error", (bad, e)
+    # 台账层没被写过一笔：被拒的命令不许留半截状态
+    engine.send(cmd="task", action="list")
+    assert engine.wait_for("task_list", timeout=30)["tasks"] == []
+
+
 # ============================================================ 「按住看原图」对比
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
 def test_compare_shows_original_without_touching_state_or_history(engine):

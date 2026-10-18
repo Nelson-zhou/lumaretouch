@@ -530,8 +530,12 @@ def _icc_facts(icc: bytes | None) -> dict:
     """ICC 的可验回执：长度 + 那一份字节的 sha256。
 
     为什么必须有 sha256（而只有长度不够）：实测 littleCMS 的 `createProfile("sRGB")`
-    **跨进程给出的字节不一样**（同一台机器两个子进程 588 B，sha256 分别 c827bf… 与
-    a82481…，进程内稳定）。于是“拿本地再生成的一份去比文件里那份”这个断言本身不成立——
+    **把建档那一刻的日期写进 profile 头部**（年/月/日/时/分/秒六个 uint16）。于是同一
+    台机器两个子进程给出的字节不一样（588 B，sha256 分别 c827bf… 与 a82481…），而
+    上一版记的“进程内稳定”只在**同一秒内**成立：一次批量导出里隔十秒的两张，嵌的
+    就是两份不同的档（本轮端到端用例拿“重试产物该等于快照那一份”的字节对拍响的就
+    是这个）。现在由 `_srgb_bytes()` 在本进程里只建一次并冻住：同一次会话内同参数
+    导出逐字节可重现，而跨进程仍如实带着各自的建档时间。
     能证的只有“事件里报的那份字节，就是文件里的那份”，这需要哈希而不是长度。
     产物的语义正确性另由“它是 sRGB built-in”与读回可解码来证（见 COLOR-001 的口径）。
     """
@@ -541,6 +545,25 @@ def _icc_facts(icc: bytes | None) -> dict:
     return {"icc_bytes": len(icc), "icc_sha256": hashlib.sha256(icc).hexdigest()}
 
 
+_SRGB_CACHE: bytes | None = None
+
+
+def _srgb_bytes() -> bytes:
+    """sRGB 档在本进程里只建一次并冻住。
+
+    不冻的代价不是“好看一点”而是具体的：littleCMS 把建档那一刻的秒写进 profile 头部，
+    于是同一张图、同一套设置，在本会话里导出两次会得到两份不同的字节——“重试的产物
+    等于快照那一份”这种逐字节判据永远立不住（本轮就是端到端用例响出来的），而批量
+    导出每张还多付一次建档。缓存只处理“同进程”，不伪造型产物的时间：跨进程那两份
+    仍各自带着自己的建档时间，所以下游比对产物一律解码比像素，不比跳进程的字节。
+    """
+    global _SRGB_CACHE
+    if _SRGB_CACHE is None:
+        from PIL import ImageCms
+        _SRGB_CACHE = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+    return _SRGB_CACHE
+
+
 def _profile_bytes(name: str, source: bytes | None = None) -> bytes | None:
     """取输出 ICC。只给能真拿到档的选项，拿不到的**明确拒并说缺什么**。
 
@@ -548,7 +571,8 @@ def _profile_bytes(name: str, source: bytes | None = None) -> bytes | None:
     读方会拿错的那份去转色，结果是颜色真的变了而文件里写着另一个名字。
     COLOR-002 要的就是这个口径：“展示使用的输入假设/错误；不静默声称准确还原”。
 
-    - srgb：Pillow/littleCMS 内建档（实测 588 B），不依赖任何系统资产；
+    - srgb：Pillow/littleCMS 内建档（实测 588 B），不依赖任何系统资产；本进程内
+      只建一次（见 `_srgb_bytes()`），否则同一次会话里每张图嵌的都是自己那一秒的档；
     - source：透传源文件自己那份（没有源档时报错，而不是默默不嵌）；
     - adobergb / display_p3：需要一个真实的 .icc 文件路径。本层不绑 ghostscript 那种
       系统目录（发行物不该依赖一个不确定存在的资产），调用方递路径即可。
@@ -562,8 +586,7 @@ def _profile_bytes(name: str, source: bytes | None = None) -> bytes | None:
                               "这条口径不能默默退成“不嵌”，请改选 srgb 或给一个 profile 文件")
         return bytes(source)
     if key == "srgb":
-        from PIL import ImageCms
-        return ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+        return _srgb_bytes()
     if os.path.isfile(key):                       # 也接受直接给路径
         with open(key, "rb") as f:
             return f.read()

@@ -126,7 +126,14 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
                 Err(e) => state.push_log(format!("打开共享内存失败: {e}")),
             }
         }
-        "frame" => state.on_frame_event(),
+        "frame" => {
+            state.on_frame_event();
+            // 裁剪/曝光那两条一次性 frame 带着 doc_state（面板重摆滑块的唯一依据）；
+            // 拖拽帧没有这一格，一条也不进 note_doc
+            if v.get("doc_state").is_some() {
+                state.on_layer_frame(&v);
+            }
+        }
         "ready" => {
             // M3-b：引擎报上来的内置预设清单（按钮文字与提交名都靠它）。
             // 不写这一臂就会落进下面的 other 分支：只进日志，前端永远拿不到。
@@ -210,6 +217,24 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             // 而这一份只有数字与图层计数（没有像素），不会把 stdout 撑爆
             state.on_history(&v);
             println!("M0_HISTORY {line}");
+        }
+        "project_created" | "project_opened" | "project_saved" | "project_edited"
+        | "project_state" => {
+            // 项目面：五个名字进同一格（最后一条就是当前事实）。载荷只有名字与计数，
+            // 整条回显：装机自证要拿它比“重开后 dirty 说的是不是真话”
+            state.on_project(&v);
+            println!("M0_PROJECT {line}");
+        }
+        "task_state" | "task_list" | "task_deleted" => {
+            // 批量台账：逐条目一条，所以只印摘要不印整份（一批两百张就是两百行 payload，
+            // 而计数与状态就是跑靶要的那两个字）。整份进 state，UI 轮询读
+            state.on_task(&v);
+            let c = &v["counts"];
+            println!("M0_TASK id={} state={} ok={}/{} failed={} skipped={}",
+                v["task_id"].as_str().unwrap_or("?"),
+                v["state"].as_str().unwrap_or("?"),
+                c["succeeded"].as_i64().unwrap_or(-1), c["total"].as_i64().unwrap_or(-1),
+                c["failed"].as_i64().unwrap_or(-1), c["skipped"].as_i64().unwrap_or(-1));
         }
         "thumb_failed" => {
             state.on_thumb(&v);

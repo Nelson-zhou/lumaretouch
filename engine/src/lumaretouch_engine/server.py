@@ -33,6 +33,7 @@ from . import raw as R
 # 项目持久化：编解码与落盘全在 project 层（纯函数 + 文件 IO，不依赖 torch），
 # 命令层只负责“校验互斥 → 调它 → 把事实发成事件”。
 from . import project as PJ
+from . import tasks as T
 from .project import ProjectError
 from . import session as S
 # M4 导出：FORMATS/尺寸边界与落盘器全部从 export 走，命令层不掌一份格式名单（双出处）。
@@ -91,6 +92,20 @@ def emit(obj: dict) -> None:
 
 
 _EMIT_LOCK = threading.Lock()
+
+
+class _TaskControl:
+    """stdin 线程写、worker 线程读的三个位。
+
+    用 Event 而不是布尔量：worker 在边界上等继续时要能睡着，不能空转把 CPU 吃了。
+    它们**不是状态**：“能不能暂停/是否已暂停”的答案在 tasks.py 的转移表里，这里只有
+    “有人提过这个请求”。把请求位当状态就是 TASK-006 拒绝的那种写法（按下就算已暂停）。
+    """
+
+    def __init__(self):
+        self.pause = threading.Event()
+        self.resume = threading.Event()
+        self.cancel = threading.Event()
 
 
 class Engine:
@@ -202,6 +217,12 @@ class Engine:
         self._project_path_prev: str | None = None
         self._project_dirty = False
         self._project_saved_ns: int | None = None
+        # 批量任务台账（LNX-P0-TASK）：状态与审计轨迹在 tasks 层，这里是运行时的三个位。
+        self._tasks: dict = {}            # task_id → 记录（插入序就是队列序）
+        self._task_args: dict = {}        # task_id → 当时那份导出参数（含 numpy 图层，只活在会话）
+        self._task_seq = 0
+        self._task_ctl: "_TaskControl | None" = None
+        self._export_task: dict | None = None
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
@@ -261,7 +282,8 @@ class Engine:
               # 项目面的能力名单由引擎报出去（与 export 的格式名单同一条理由）：
               # 前端拄一份 action 名单，两边分叉时“不支持”与“拼错了”长得一模一样
               "project_actions": list(self.PROJECT_ACTIONS),
-              "project_suffix": PJ.SUFFIX})
+              "project_suffix": PJ.SUFFIX,
+              "task_actions": list(self.TASK_ACTIONS)})
 
     # ------------------------------------------------------------ 帧缓冲
     def _ensure_shm(self, w: int, h: int) -> FrameShm:
@@ -1494,6 +1516,9 @@ class Engine:
                 "docs": len((p or {}).get("docs") or []),
                 "dirty": bool(self._project_dirty),
                 "saved_ns": self._project_saved_ns,
+                # 台账格数（不是“已写进文件的那一份”）：下一次 save 写的就是它，
+                # 而 UI 的“N 个批次任务”必须与 task list 数出来的一致，不能两个答案
+                "tasks": len(self._tasks),
                 "dropped_count": len((p or {}).get("dropped") or [])}
 
     def _project_build(self, base: dict | None) -> tuple[dict, dict]:
@@ -1547,8 +1572,41 @@ class Engine:
             # 那一格的实际值装回去（不装就是“存完重开，标都没了”）
             prow["trashed"] = bool(row.get("trashed"))
             prow["label"] = row.get("label")
+        # 任务台账跟着工程走（TASK-004/008）：persisted 那一份只存参数快照与结局，
+        # 配方快照（带 numpy 图层）不存——所以重开后重试会被拒而不是偷换配方
+        for t in self._tasks.values():
+            t["persisted"] = True
+        prj["tasks"] = [T.for_json(t) for t in self._tasks.values()]
         return prj, {"hash_ms": round((monotonic_ns() - t0) / 1e6, 2),
                      "fingerprinted": hashed}
+
+    def _tasks_restore(self, prj: dict) -> list:
+        """从工程文件读回任务台账（TASK-004/008）：一律 paused，不自动重跑。
+
+        依赖变化在这一层就能判：那一批的输入路径不在新底片条里、或文件已不在
+        磁盘上，就置 blocked_reason 并说清是哪几张。`tasks.from_json` 已经把
+        “进程曾中断”那些“正在做”的说法一律回落到 paused，这里只补依赖那一句。"""
+        self._tasks = {}
+        paths = {d["path"] for d in self._docs}
+        notes = []
+        for obj in prj.get("tasks") or []:
+            try:
+                t = T.from_json(obj)
+            except T.TaskError as e:
+                notes.append({"reason": f"旧任务记录读不进来：{e}"})
+                continue
+            t["recipe_persisted"] = False
+            gone = [p for p in t["inputs"].get("images") or [] if p not in paths
+                    or not os.path.isfile(p)]
+            if gone:
+                t["blocked_reason"] = (f"依赖变了：{len(gone)} 个输入不在本工程或已不在磁盘上"
+                                       f"（{gone[:3]}）——这一批不能重跑")
+            else:
+                t["blocked_reason"] = ("配方快照只活在本次会话：重开后请打开那张图再重新导出")
+            self._tasks[t["task_id"]] = t
+            notes.append({"task_id": t["task_id"], "state": t["state"],
+                          "blocked": t["blocked_reason"]})
+        return notes
 
     def _row_target(self, p: dict) -> dict | None:
         """按 index 或 path 找底片条那一格；找不到就 emit error 并递 None。"""
@@ -1601,8 +1659,14 @@ class Engine:
             # 导出线程拿着的是“开始那一刻”的底片条快照：中途换工程会让账单对着
             # 一份已经不存在的集合说话（与 history 同一条守卫，但这里连 tag 也拦：
             # 批量报告里每一行都要能回到当时那一格）
-            emit({"event": "error", "error": f"导出进行中，拒绝 project {action}：等 export_done"})
-            return
+            # 唯一的例外是“暂停中的批次 + save”：TASK-008 要的是“中断后重开仍然 paused”，
+            # 而这一格只能在这里发生——用户暂停了一批没跑完的活儿，关应用前必然要存
+            # 一次工程。一刀切拒绝等于把验收用例逼成“先继续跑完再存”，而那批已经没有
+            # “未完成的批次”可供恢复了。worker 睡着的时候不写任何文件，存盘是安全的。
+            if not (action == "save" and (self._export_task or {}).get("state") == T.PAUSED):
+                emit({"event": "error", "error": f"导出进行中，拒绝 project {action}：等 export_done"
+                      "（批次暂停到条目边界上时允许 save，那正是 TASK-008 要恢复的那一份）"})
+                return
         if action == "create":
             name, directory = p.get("name"), p.get("directory")
             if not isinstance(name, str) or not name.strip():
@@ -1718,6 +1782,11 @@ class Engine:
                 target = next((r for r in rows if not r["trashed"]), None)
             emit({"event": "project_opened", "docs": len(rows),
                   "auto_opened": (target or {}).get("path"),
+                  # 叫 task_restore 而不叫 tasks：下面那份 `**self._project_state()` 里有一个
+                  # `tasks`（台账格数），字典字面量后写的吃先写的——同一个名字在这一行里
+                  # 一个是清单一个是整数（上一轮 dropped 就漂过同一形，而这一形是本轮
+                  # 端到端用例直接响出来的：len(7) 那种 TypeError 就是它）
+                  "task_restore": self._tasks_restore(prj),
                   "proxy_budget": self._proxy_budget,
                   "missing": missing, "missing_count": len(missing),
                   "restore_ms": round((monotonic_ns() - t0) / 1e6, 2),
@@ -2939,6 +3008,9 @@ class Engine:
         # out_full 才是导出会写的真实像素数，取自底片条那一行记的满幅尺寸。
         # 两个数一起报出去，UI 才不会把"预览里那一小块"讲成"文件的尺寸"。
         fr.setdefault("crop", {}).update(self._vram.geometry_state())
+        # 带一份整张文档的状态：宿主只轮询 doc_state（frame 事件以前不进那一格），
+        # 不带的话拖完裁剪滑块，面板上的数字就停在上一笔——“按了而不动”最难查
+        fr["doc_state"] = self.doc_state()
         row = None
         for d in self._docs:
             if d["path"] == os.path.abspath(str(self._doc_path or "")):
@@ -3019,6 +3091,7 @@ class Engine:
             return
         fr.setdefault("exposure", {})
         fr["exposure"].update(self._vram.exposure_state())
+        fr["doc_state"] = self.doc_state()          # 同 crop：让宿主的滑块跟着这一笔走
         emit(fr)
 
     def cmd_grade(self, p: dict):
@@ -3482,12 +3555,248 @@ class Engine:
         except OSError as e:
             emit({"event": "error", "error": f"out_dir 不可用：{e}"})
             return
-        # 四格打包成一个 dict 放在末尾：_export_args 已经是第 9 元组，再往中间插
+        # 四格打包成一个 dict：_export_args 已经是第 9 元组，再往中间插
         # 会让“哪一位是什么”只有数位置的人看得懂；加一位 dict 反而把这一批的口径写清了
+        # （opts 必须先有名字再进元组：上一版把字面量直接写在元组里，而下面建台账的
+        # `**opts` 引的是一个不存在的名字——于是每一次批量导出都在 cmd_export 里 NameError，
+        # 而开发 venv 里这批用例全部 skip（没 torch），只有运行时 venv 才响得出来）
+        opts = {"output_profile": output_profile, "tiff_compression": tiff_comp,
+                "metadata_include_gps": bool(include_gps), "conflict_policy": conflict_policy}
         self._export_args = (list(images), out_dir, fmt, quality, tile, doc, snap, bit_depth,
-                             {"output_profile": output_profile, "tiff_compression": tiff_comp,
-                              "metadata_include_gps": bool(include_gps),
-                              "conflict_policy": conflict_policy})
+                             opts)
+        # 台账先建再开工：TASK-001 要“状态转移可审计”，而从 queued 起才有第一步。
+        # inputs 是**命令当时那一拍**的快照：TASK-002 的“重试固定输入”全靠它，
+        # 而配方快照（snap）只活在会话里——重开后的 retry 必须拒而不是拿现在的
+        # 滑块重跑（那就是“静默切换最新配方”，TASK-008 明写着不许）。
+        self._task_seq += 1
+        task = T.new_task("export",
+                          {"images": list(images), "out_dir": out_dir, "format": fmt,
+                           "quality": quality, "tile": tile, "bit_depth": bit_depth,
+                           "doc": doc, **opts},
+                          list(images), task_id=f"exp{self._task_seq}-{os.getpid()}")
+        # `recipe_persisted` 说的是“这份配方快照现在还在不在会话里”，不是“有没有写过
+        # 工程文件”：当场建账的批次必然还在（_task_args 刚收过），只有从盘上读回来的
+        # 那一份才 False。上一版在这里写死 False，于是重试的门在**本会话内**也是关着
+        # 的——TASK-002 要的“失败重试固定输入”当场就实现不了，而单测层（tasks.py）
+        # 看不见这道命令面守卫，只有起真进程的端到端用例才会响。
+        task["recipe_persisted"] = True
+        self._tasks[task["task_id"]] = task
+        # 参数快照按 task_id 收：只拿 `self._export_args` （会话里最后那一批）当快照，
+        # 重试旧批次时就会拿新批次的配方重跑——那正是 TASK-002 禁止的那件事
+        self._task_args[task["task_id"]] = self._export_args
+        self._task_ctl = _TaskControl()
+        self._export_task = task
+        self._emit_task(task, "建账")
+        self._export = threading.Thread(target=self._export_loop, daemon=True)
+        self._export.start()
+
+    # ------------------------------------------------------------ 批量任务（LNX-P0-TASK）
+    TASK_ACTIONS = ("list", "pause", "resume", "cancel", "retry", "delete")
+    TASK_KEYS = {"cmd", "action", "task", "scope"}
+
+    def _task_event(self, task: dict, *, note: str = "", **extra) -> dict:
+        """task_state 只有一个组装点：队列里每一格读的必须是同一份。"""
+        return {"event": "task_state", "task_id": task["task_id"], "kind": task["kind"],
+                "state": task["state"], "attempt": int(task["attempt"]),
+                "counts": T.counts(task), "batch": T.batch_state(list(self._tasks.values())),
+                "persisted": bool(task.get("persisted")),
+                "blocked_reason": task.get("blocked_reason"),
+                "out_dir": task["inputs"].get("out_dir"),
+                "updated_ns": task["updated_ns"], "note": note, **extra}
+
+    def _emit_task(self, task: dict, note: str = "", **extra) -> None:
+        emit(self._task_event(task, note=note, **extra))
+
+    def _task_boundary(self, task: dict) -> str:
+        """安全点：只在条目**之间**。返回 "continue" 或 "stop"。
+
+        TASK-009 的“已进入原子提交的任务完成后维持成功”在这里是靠结构保证的，
+        不是靠判据：这一层根本不提供“中断当前条目”的入口。写一个文件中途被叫停
+        就会留下一个解不开的半成品——而它在地账上看起来是“已经写了”。
+        """
+        ctl = self._task_ctl
+        if ctl is None:
+            return "continue"
+        while True:
+            if ctl.cancel.is_set():
+                return "stop"
+            if task["state"] == T.PAUSE_REQUESTED:
+                T.transit(task, T.PAUSED, "已到条目边界")
+                self._emit_task(task, "边界上暂停")
+            if task["state"] == T.PAUSED:
+                # 睡着等 resume（不空转吃 CPU），但带超时：取消与“没带控制位就退出”
+                # 都得能在这里醒过来，一个死等的 worker 会把整个批次拖成不可取消
+                ctl.resume.wait(0.25)
+                if not ctl.pause.is_set():
+                    ctl.resume.clear()
+                continue
+            if task["state"] == T.RESUMING:
+                T.transit(task, T.RUNNING, "自边界继续")
+                self._emit_task(task, "已继续")
+            return "continue"
+
+    def _task_item(self, task: dict | None, path: str, rec: dict) -> None:
+        """逐条目结局。skipped 不是成功也不是失败（它得单独数得出来）。"""
+        if task is None:
+            return
+        if "error" in rec:
+            T.item_result(task, path, "failed", reason=rec["error"],
+                          detail={"stage": rec.get("stage")})
+        elif rec.get("out_skipped"):
+            T.item_result(task, path, "skipped", reason=rec.get("skip_reason"),
+                          out=rec.get("out"))
+        else:
+            T.item_result(task, path, "succeeded", out=rec.get("out"),
+                          detail={"bytes": rec.get("bytes")})
+        self._emit_task(task, f"第 {T.counts(task)['succeeded'] + T.counts(task)['failed']} "
+                              f"条已定")
+
+    def _task_find(self, p: dict) -> list:
+        """按 task 参数取目标：一个 id、"all"，或未给（唯一那条活的）。"""
+        want = p.get("task")
+        if isinstance(want, str) and want.lower() in ("all", "*"):
+            return [t for t in self._tasks.values()]
+        if want is not None:
+            t = self._tasks.get(str(want))
+            if t is None:
+                raise T.TaskError(f"没有这条任务：{want!r}（台账里有："
+                                  f"{list(self._tasks)[-8:]}）")
+            return [t]
+        live = [t for t in self._tasks.values() if T.is_live(t)]
+        if not live:
+            raise T.TaskError("没有进行中的任务：请带 task=<id> 指名一条已结束的批次")
+        if len(live) > 1:
+            raise T.TaskError(f"有 {len(live)} 条进行中的任务，得指名 task=<id>"
+                              "（“默认作用于最后一条”会静默叫停错的那一批）")
+        return live
+
+    def _task_worker_is_live(self, t: dict) -> bool:
+        """这条批次现在真有 worker 在跑吗（重开后的旧台账不是）。"""
+        return (t is self._export_task and self._export is not None
+                and self._export.is_alive())
+
+    def cmd_task(self, p: dict):
+        """批量队列：暂停 / 继续 / 取消 / 重试 / 列清单 / 删记录。
+
+        铁律沿用 cmd_project：参数先全量校验、事件只有一个组装点、被拒不留半截状态。
+        这里的“被拒”多一半来自转移表（tasks.LEGAL）：不在这里重新判“能不能暂停”，
+        否则命令面与 worker 会各自长出一套答案。
+        """
+        unknown = set(p) - self.TASK_KEYS
+        if unknown:
+            emit({"event": "error", "error": f"task 收到不认识的参数：{sorted(unknown)}"})
+            return
+        action = p.get("action", "list")
+        if action not in self.TASK_ACTIONS:
+            emit({"event": "error", "error": f"未知 task action: {action}"
+                  f"（可用：{'/'.join(self.TASK_ACTIONS)}，名单在 ready 的 task_actions 里）"})
+            return
+        if action == "list":
+            emit({"event": "task_list", "tasks": [self._task_event(t) for t in self._tasks.values()],
+                  "batch": T.batch_state(list(self._tasks.values()))})
+            return
+        try:
+            targets = self._task_find(p)
+        except T.TaskError as e:
+            emit({"event": "error", "error": str(e)})
+            return
+        ctl = self._task_ctl
+        changed = []
+        try:
+            for t in targets:
+                if action in ("pause", "resume") and not self._task_worker_is_live(t):
+                    # 对“现在根本没在跑的那批”说暂停/继续，只能把台账写成一个
+                    # 永远醒不过来的状态（RESUMING 而没 worker）：必须拒并说清为什么
+                    t["blocked_reason"] = ("这条批次没有正在跑的 worker（重开后的旧台账）："
+                                           "重试请先打开那张图，或干脆取消它")
+                    raise T.TaskError(t["blocked_reason"])
+                if action == "pause":
+                    T.request_pause(t)
+                    # 先播“用户请求”再推控制位：倒过来就有一条竞态——worker 可能已经跑到
+                    # 边界并先播了 paused，于是事件流里 pause_requested 那一格永远看不见，
+                    # 而 TASK-006 要的那两步（先请求、到边界才承认）恰恰要靠这两条事件。
+                    self._emit_task(t, f"用户 {action}")
+                    if ctl is not None and t is self._export_task:
+                        ctl.pause.set()
+                        ctl.resume.clear()
+                elif action == "resume":
+                    T.request_resume(t)
+                    self._emit_task(t, f"用户 {action}")
+                    if ctl is not None and t is self._export_task:
+                        ctl.pause.clear()
+                        ctl.resume.set()
+                elif action == "cancel":
+                    if not self._task_worker_is_live(t):
+                        # 没 worker 的取消是**记账**：落到 cancelled，别让台账永远停在
+                        # paused；也不删任何已落盘的文件与源图（TASK-009）
+                        if t["state"] != T.CANCELLING:
+                            T.transit(t, T.CANCELLING, "无 worker 的取消（记账）")
+                        T.transit(t, T.CANCELLED, "文件原样保留")
+                        self._emit_task(t, "取消（记账：文件原样保留）")
+                        continue
+                    T.request_cancel(t)
+                    self._emit_task(t, f"用户 {action}")
+                    if ctl is not None and t is self._export_task:
+                        # 睡着等的 worker 得能醒过来看到取消；不推一把就是一场死等
+                        ctl.pause.clear()
+                        ctl.cancel.set()
+                        ctl.resume.set()
+                elif action == "retry":
+                    self._task_retry(t)
+                elif action == "delete":
+                    # TASK-009 的下半句：删队列记录不删原图也不删已导出的文件
+                    self._tasks.pop(t["task_id"], None)
+                changed.append(t)
+        except T.TaskError as e:
+            # 批次里一条没校过就不改其它条：partial 的队列状态比“整批没动”难查得多
+            emit({"event": "error", "error": f"task {action} 被整条拒绝（已改的都在同一批里，"
+                  f"而这一批没人确认过）：{e}"})
+            return
+        if action == "delete":
+            emit({"event": "task_deleted", "task_id": targets[0]["task_id"],
+                  "sources_touched": False, "outputs_touched": False,
+                  "files_kept": T.counts(targets[0]),
+                  "batch": T.batch_state(list(self._tasks.values()))})
+            return
+        for t in changed:
+            # retry 与 delete 各自有自己的事件（task_deleted / 重试已排队），不在这里
+            # 叠第二条；pause/resume/cancel 已在分支里、抢在控制位之前播过了（那里的
+            # 时序是判据的一部分），这里再播一条就成了“同一件事两个答案”
+            if action not in ("retry", "delete", "pause", "resume", "cancel"):
+                self._emit_task(t, f"用户 {action}")
+
+    def _task_retry(self, t: dict) -> None:
+        """重试：同一 task_id、attempt+1、输入用当时那份快照。
+
+        从盘上读回来的任务没有配方快照（它只活在会话里）——这里必须**拒**，而不是
+        拿现在的滑块重跑：TASK-002 写的是“固定输入”，TASK-008 写的是“不自动重跑
+        或切换最新配方”，两句加起来只有拒这一个答案。想重跑请先打开那张图。
+        """
+        if not t.get("recipe_persisted", False):
+            t["blocked_reason"] = ("配方快照只活在本次会话：重开后请打开这张图再重新导出，"
+                                   "本版本不拿“现在的滑块”当那次批次重跑")
+            raise T.TaskError(t["blocked_reason"])
+        if self._export is not None and self._export.is_alive():
+            # 一批只许一个：两条 worker 会同抢一块卡，峰值账单就不是那个数了，
+            # 而更坑的是它们会互相把对方的 `self._export_args` 抢掉
+            raise T.TaskError("已经有一批在跑：先等 export_done 或取消它，再重试")
+        _task, pend = T.begin_retry(t)
+        args = self._task_args.get(t["task_id"])
+        if args is None:
+            t["recipe_persisted"] = False
+            raise T.TaskError("这条批次没有配方快照（重启过的旧台账）：请打开那张图重新导出")
+        images, out_dir, fmt, quality, tile, doc, snap, bit_depth, opts = args
+        # 只跑没成功的，输入一律取自这条批次自己的快照，不是 live 字段也不是“最后那批”
+        self._export_args = ([p for p in images if p in set(pend)], out_dir, fmt, quality,
+                             tile, doc, snap, bit_depth, opts)
+        self._task_args[t["task_id"]] = self._export_args
+        self._export_task = t
+        self._task_ctl = _TaskControl()
+        # 不再回 queued：begin_retry 已经把这一步记成 retrying，而转移表里
+        # retrying 只许走 running/cancelling/failed。再插一个“排队”会把账打断（上一版就
+        # 是这么非法转移响的）；worker 一开工就自己走 retrying → running，那一步合法
+        # 而且已经在 _export_loop 里了。
+        self._emit_task(t, f"重试已排队（第 {t['attempt']} 次尝试，{len(pend)} 条）")
         self._export = threading.Thread(target=self._export_loop, daemon=True)
         self._export.start()
 
@@ -3533,11 +3842,20 @@ class Engine:
     def _export_loop(self):
         from .decode import load_full
         images, out_dir, fmt, quality, tile, doc, snap, bit_depth, opts = self._export_args
+        task = self._export_task
         n = len(images)
+        if task is not None and task["state"] != T.RUNNING:
+            T.transit(task, T.RUNNING, "worker 开工")
+            self._emit_task(task, "开工")
         t0 = monotonic_ns()
         results: list = []
         failed = 0
+        stopped = False
         for idx, path in enumerate(images):
+            # 安全点只在条目之间：这一句返“停”时，上一张已经原子提交完了
+            if task is not None and self._task_boundary(task) == "stop":
+                stopped = True
+                break
             stage = "decode"
             try:
                 if bit_depth == 16:
@@ -3573,6 +3891,12 @@ class Engine:
                                     # 仍叫 skipped：UI 那侧按同一个键读两条通路（16-bit 恒空），
                                     # 冲突跳过用 out_skipped，不把两个语义挤进一个键
                                     "skipped": []})
+                    # 16-bit 那一路也得有逐图进度与台账结局：以前它 continue 得过早，
+                    # 既不发 export_progress 也不记条目——于是 RAW 批量导出在进度条上
+                    # 是“动都不动”，在批次账上是“跑完了而没人知道跑了哪几张”。
+                    self._task_item(task, path, results[-1])
+                    emit({"event": "export_progress", "index": idx, "total": n, "path": path,
+                          "ok": True})
                     continue
                 d = load_full(path, device=self.device)
                 stage = "render"
@@ -3623,7 +3947,26 @@ class Engine:
                 results.append({"path": path, "stage": stage, "error": f"{type(e).__name__}: {e}"})
             emit({"event": "export_progress", "index": idx, "total": n, "path": path,
                   "ok": "error" not in results[-1]})
+            self._task_item(task, path, results[-1])
+        if task is not None:
+            # 收尾状态由条目账算出来，不由“循环跑完了”宣布：部分失败报成 succeeded
+            # 就是 TASK-003 拒绝的那种“把失败折成完成”
+            c = T.counts(task)
+            if stopped:
+                if task["state"] != T.CANCELLING:
+                    T.transit(task, T.CANCELLING, "边界上确认取消")
+                T.transit(task, T.CANCELLED, f"{c['pending']} 条未跑，"
+                                            f"{c['succeeded']} 条已落盘的文件原样保留")
+            elif c["failed"]:
+                T.transit(task, T.FAILED, f"{c['failed']} 条失败（逐条见 items）")
+            else:
+                T.transit(task, T.SUCCEEDED, f"{c['succeeded']} 张已落盘，"
+                                            f"{c['skipped']} 张按策略跳过")
+            self._emit_task(task, "收尾")
         emit({"event": "export_done", "total": n, "failed": failed,
+              "task_id": (task or {}).get("task_id"),
+              "task_state": (task or {}).get("state"),
+              "cancelled": bool(stopped),
               "out_dir": out_dir, "format": fmt, "quality": quality, "tile": tile,
               "bit_depth": bit_depth, **opts,
               "scale": int(snap["scale"]), "sharpen": float(snap["sharpen"]),
@@ -3651,7 +3994,7 @@ class Engine:
     HANDLED = ("hello", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "light",
                "deform", "lut", "grade", "export", "exposure", "crop", "background",
-               "compare", "session", "project", "history")
+               "compare", "session", "project", "task", "history")
     _HANDLED_LAMBDA = ("bench_stop",)      # 唯一不开成 cmd_* 的那条：只是置停止位
 
     def _dispatch_table(self) -> dict:
