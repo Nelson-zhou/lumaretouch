@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import Viewer, { type Hud } from "./components/Viewer";
 import { clickRle } from "./brush";
 import { t, type MsgKey } from "./i18n";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   benchStart, benchStats, engineStatus, loadImage, m0Env, parseFrameHead, peekFrame,
   quit, report, runDeform,
@@ -64,6 +65,7 @@ function parseAutoBench(spec: string) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let m0Started = false;   // React StrictMode 下 effect 会执行两次，这里只允许起靶一次
+let viewportProbeStarted = false;   // 同上：StrictMode 下 effect 会跑两次
 
 export default function App() {
   const [py, setPy] = useState("");
@@ -91,6 +93,9 @@ export default function App() {
 
   // ---- 精修台（M1-3c/M1-4）：图路径、磨皮参数、通道、画笔 ----
   const [imgPath, setImgPath] = useState("");
+  // 路径错误就地显示在输入框下方。原来它只落到 dragNote——那行灰字在窗口另一头，
+  // 用户点了「导入」什么也没发生也不知道为什么，那就是事实上的静默失败。
+  const [pathErr, setPathErr] = useState("");
   const [maxPx, setMaxPx] = useState(576000);
   const [strength, setStrengthV] = useState(0.5);
   const [radius, setRadius] = useState(12);
@@ -166,6 +171,8 @@ export default function App() {
   // 默认留空，不拿一个目录当预置值：上一版预置的是 /tmp/luma-strip，而这台机器的
   // /tmp 是 tmpfs——重启就清，底片条每次开机都是空的，看着像“扫描坏了”。
   const [stripDir, setStripDir] = useState("");
+  // 底片条那个目录框同理：扫不进去要当场说，不能只把错误丢给窗口另一头那行灰字
+  const [stripErr, setStripErr] = useState("");
   const stripRev = useRef(-1);
   // 当前是哪一张文档：变了才按引擎那份 doc_state 重摆滑块（同图轮询不重摆，
   // 否则会把用户正在拖的手势按回引擎上一帧的值）
@@ -310,6 +317,114 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [refreshStatus]);
+
+  // 视口自证（M9 裁决3 的取证臂）：静态图导入后静置，读回画布缓冲并量布局矩形。
+  // 单独一个 effect，不挂在 M0 跑靶那条链上：那条链的入口是 LRT_AUTO_BENCH，而这里要的
+  // 恰恰是"不跑帧流"的静态状态——流在跑时每一帧都在重画，preserveDrawingBuffer 的后果
+  // 根本显不出来。历轮跑靶就是这么漏掉黑屏的：帧一直在动，屏上就"看着有东西"。
+  useEffect(() => {
+    if (viewportProbeStarted) return;
+    viewportProbeStarted = true;
+    (async () => {
+      const env = await m0Env().catch(() => null);
+      if (!env?.viewport_probe) return;
+      await getCurrentWindow().setFocus().catch(() => undefined);
+      // 静态臂不跑 LRT_AUTO_BENCH，所以入图这步得自己做：用的就是用户那条导入命令
+      // （onImport 里同一个 loadImage → Rust → 引擎 cmd_load_image），而不是另开一套
+      // 测试专用通路——否则这一臂量的就不是用户那一条路。
+      if (env.load_image) {
+        await loadImage(env.load_image, { maxPx: env.max_px ?? undefined, strength: 0, precompute: "auto" })
+          .catch((e) => report(`M0_ERROR 视口探针导入失败: ${e}`));
+      }
+      // 必须先等到真有一帧送达。探针在首帧之前跑会读到空缓冲，那种"黑"是这个缺陷的
+      // 假阳性，量出来会把自己骗过去
+      let st: EngineStatus | null = null;
+      for (let i = 0; i < 200; i++) {
+        st = await engineStatus().catch(() => null);
+        if (st?.image) break;
+        await sleep(250);
+      }
+      if (!st?.image) {
+        await report("M0_ERROR 视口探针等不到 image（图没导进来，这一读不作数）");
+        return;
+      }
+      const frameDims: [number, number] = [st.image.w, st.image.h];
+      await sleep(800);                       // 静置：给合成器几个 vsync 的机会
+      const cv = document.querySelector<HTMLCanvasElement>(".viewer > canvas");
+      const gl = cv?.getContext("webgl2");
+      const rect = cv?.getBoundingClientRect();
+      const hud = document.querySelector(".hud")?.getBoundingClientRect();
+      const back: Record<string, number> = {};
+      if (cv && gl && gl.drawingBufferWidth > 0) {
+        const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+        const px = new Uint8Array(w * h * 4);
+        gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        let sum = 0, sq = 0, nb = 0;
+        for (let i = 0; i < w * h; i++) {
+          const l = (px[i * 4] + px[i * 4 + 1] + px[i * 4 + 2]) / 3;
+          sum += l; sq += l * l; if (l > 4) nb++;
+        }
+        const mean = sum / (w * h);
+        back.readMean = +mean.toFixed(2);
+        back.readStd = +Math.sqrt(Math.max(0, sq / (w * h) - mean * mean)).toFixed(2);
+        back.readNonBlack = +(nb / (w * h)).toFixed(4);
+        // 与 shm 里那一帧逐字节比。不能拿原生顺序直接比：`readPixels` 的原点在
+        // **左下**，而 shm 帧从左上起，不翻转就会把“整张垂直倒了”读成“字节对不上”；
+        // alpha 也比不了（通路里 alpha 不参与显示）。两个读数都报：不比的是伪证据，
+        // 只报一个则看不出差是几何来的还是内容来的。
+        back.readDiffVsShm = -1;
+        let f = null;
+        try { f = parseFrameHead(await peekFrame()); } catch (e) { f = null; }
+        if (f && f.w === w && f.h === h && f.pixels.length >= w * h * 4) {
+          let raw = 0, flip = 0, row = w * 4;
+          for (let r = 0; r < h; r++) {
+            const top = r * row;                       // shm：第 r 行从顶上数
+            const bot = (h - 1 - r) * row;             // readPixels：原点在左下
+            for (let x = 0; x < w; x++) {
+              const i = x * 4;
+              for (let c = 0; c < 3; c++) {
+                if (px[top + i + c] !== f.pixels[top + i + c]) raw++;
+                if (px[bot + i + c] !== f.pixels[top + i + c]) flip++;
+              }
+            }
+          }
+          back.readDiffVsShm = raw;                    // 不翻转（只当参考）
+          back.readDiffFlipRgb = flip;                 // 翻转后的 RGB 差异：这一条该为 0
+        }
+      }
+      const scrollH = document.documentElement.scrollHeight;
+      // 反向门（裁决3）：写一个不存在的路径再点「导入」，输入框下方必须出现红字。
+      // 这条不是装饰：“错了但不说”就是这次缺陷的本体，门不会关就等于没修。
+      let negErrText = "";
+      const browseBtns = Array.from(document.querySelectorAll("button"))
+        .filter((b) => (b.textContent ?? "").includes("浏览") || (b.textContent ?? "").includes("Browse")).length;
+      try {
+        setImgPath("/definitely-not-here.jpg");
+        await sleep(80);
+        const btn = Array.from(document.querySelectorAll("button"))
+          .find((b) => (b.textContent ?? "").trim() === t("retouch.import"));
+        btn?.click();
+        for (let i = 0; i < 40 && !negErrText; i++) {
+          await sleep(100);
+          negErrText = (document.querySelector(".err")?.textContent ?? "").trim();
+        }
+        setImgPath("");
+      } catch (e) {
+        negErrText = `反向门自身异常: ${String(e)}`;   // 异常也要报出来，不许静默吞掉
+      }
+      await report(`M0_VIEWPORT ${JSON.stringify({
+        tag: env.viewport_probe, hasCanvas: !!cv, hasGL: !!gl,
+        drawingBuffer: [gl?.drawingBufferWidth ?? 0, gl?.drawingBufferHeight ?? 0],
+        frameDims, canvasCss: rect ? [Math.round(rect.width), Math.round(rect.height), Math.round(rect.bottom)] : null,
+        canvasBottom: rect ? Math.round(rect.bottom) : -1,
+        hudBottom: hud ? Math.round(hud.bottom) : -1,
+        innerW: window.innerWidth, innerH: window.innerHeight,
+        scrollH, overflowing: scrollH > window.innerHeight,
+        browseBtns, negErrText,
+        ...back,
+      })}`);
+    })();
+  }, []);
 
   // M0 自动跑靶通道
   useEffect(() => {
@@ -1225,12 +1340,50 @@ export default function App() {
   const strengthRef = useRef(strength);
   strengthRef.current = strength;
 
+  /** 原生选择框：路径不该靠手打。dir=true 选目录（底片条），false 选图片文件。
+   *  过滤器用引擎报的那份名单（ready.image_exts）；引擎没说就什么都不过滤，而不是
+   *  拿宿主抄的一份去挡用户。取消选择是正常路径（返回 null），不报错也不改现值。 */
+  async function onPickPath(dir: boolean) {
+    let exts: string[] | null = null;
+    if (!dir) exts = (await engineStatus().catch(() => null))?.image_exts ?? null;
+    const stripped = exts ? exts.map((e) => e.replace(/^\./, "")) : undefined;
+    let sel: string | null;
+    try {
+      sel = await openDialog({ multiple: false, directory: dir,
+        ...(stripped ? { filters: [{ name: dir ? "目录" : "图片 / RAW", extensions: stripped }] } : {}) });
+    } catch (e) {
+      // 选择框本身起不来也要说出来：这里静默返回，用户会以为按钮坏了
+      setPathErr(`${t("retouch.pickFailed")}：${String(e)}`);
+      return;
+    }
+    if (typeof sel !== "string" || !sel) return;
+    setPathErr("");
+    if (dir) { setStripDir(sel); setStripErr(""); } else { setImgPath(sel); }
+  }
+
+  /** 导入的成败要从状态里读回来。`load_image` 是“发出去就返回”的（Rust 只回
+   *  requested:true），引擎拒一张图走的是 error 事件——不在那个 promise 的拒绝里。
+   *  所以下面这三件事必须同时盯：错误位有话、image.doc 变成了这张、或者到点没回话。
+   *  少了这一步，坏路径就是一次彻底的静默失败（上一版就是这样）。 */
+  async function waitImportOutcome(p: string, ms = 40_000):
+    Promise<{ kind: "ok" | "error" | "timeout"; why: string }> {
+    const t0 = performance.now();
+    while (performance.now() - t0 < ms) {
+      const st = await engineStatus().catch(() => null);
+      if (st?.last_error) return { kind: "error", why: st.last_error };
+      if (st?.image && st.image.doc === p) return { kind: "ok", why: "" };
+      await sleep(150);
+    }
+    return { kind: "timeout", why: t("retouch.loadTimeout") };
+  }
+
   async function onImport() {
     const p = imgPath.trim();
     if (!p) {
-      setDragNote(t("retouch.needPath"));
+      setPathErr(t("retouch.needPath"));
       return;
     }
+    setPathErr("");
     setBusy(true);
     setLastInpaint(null);
     setDragNote(t("retouch.importing"));
@@ -1238,8 +1391,16 @@ export default function App() {
       // 设备由 $LRT_DEVICE 定（宿主 load_image 会先把 set_device 发在会话之前）；
       // precompute=auto：有真后端就用真的，没有就用 synthetic 并把原因写进 notes
       await loadImage(p, { maxPx, strength: strengthRef.current, precompute: "auto", channel: channel || undefined });
+      const out = await waitImportOutcome(p);
+      if (out.kind !== "ok") {
+        setPathErr(out.why); setDragNote(out.why);
+      } else {
+        setDragNote("");      // “导入中…”不许留在屏上：那一行现在说的是过去
+      }
     } catch (e) {
-      setDragNote(String(e));
+      const why = String(e);
+      setPathErr(why);                 // 就在输入框下面说，不只丢给窗口另一头那行灰字
+      setDragNote(why);
     } finally {
       setBusy(false);
     }
@@ -1470,9 +1631,12 @@ export default function App() {
 
   /** 扫一个目录进底片图：edge 不给就用引擎的默认长边（前端不抄一份数字）。 */
   function onScanStrip() {
-    runSession("scan", { dir: stripDir, thumbs: true })
+    const dir = stripDir.trim();
+    if (!dir) { setStripErr(t("strip.needDir")); return; }
+    setStripErr("");
+    runSession("scan", { dir, thumbs: true })
       .then(() => refreshStatus())
-      .catch((e) => setDragNote(String(e)));
+      .catch((e) => { setStripErr(String(e)); setDragNote(String(e)); });
   }
 
   /** 点一格就换文档。引擎那边走的是 load_image 同一条路（守卫、状态存回、重挂同源），
@@ -1560,7 +1724,12 @@ export default function App() {
 
         <h2>{t("side.retouch")}</h2>
         <label className="k">{t("retouch.image")}</label>
-        <input value={imgPath} onChange={(e) => setImgPath(e.target.value)} placeholder="/path/to/photo.jpg" style={{ width: "100%" }} />
+        <div className="row">
+          <input value={imgPath} onChange={(e) => { setImgPath(e.target.value); setPathErr(""); }}
+                 placeholder="/path/to/photo.jpg" style={{ flex: 1, minWidth: 0 }} />
+          <button onClick={() => onPickPath(false)} title={t("retouch.browseTip")}>{t("retouch.browse")}</button>
+        </div>
+        {pathErr && <div className="err">{pathErr}</div>}
         <div className="row">
           <input type="number" value={maxPx} step={10000} min={0} onChange={(e) => setMaxPx(+e.target.value)} style={{ width: 110 }} />
           <span className="mut">{t("retouch.maxPx")}</span>
@@ -2034,11 +2203,13 @@ export default function App() {
         <h2>{t("side.strip")}</h2>
         <div className="mut">{t("strip.desc")}</div>
         <div className="row">
-          <input value={stripDir} onChange={(e) => setStripDir(e.target.value)}
+          <input value={stripDir} onChange={(e) => { setStripDir(e.target.value); setStripErr(""); }}
                  placeholder={t("strip.dirPlaceholder")}
-                 style={{ width: "100%" }} />
+                 style={{ flex: 1, minWidth: 0 }} />
+          <button onClick={() => onPickPath(true)} title={t("retouch.browseTip")}>{t("retouch.browse")}</button>
           <button onClick={onScanStrip}>{t("strip.scan")}</button>
         </div>
+        {stripErr && <div className="err">{stripErr}</div>}
         {strip && strip.count > 0 ? (
           <>
             <div className="mut">

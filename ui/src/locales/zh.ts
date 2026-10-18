@@ -56,6 +56,10 @@ const zh = {
   "retouch.no": "否",
   "retouch.device": "计算设备",
   "retouch.needPath": "先填照片路径",
+  "retouch.browse": "📂 浏览…",
+  "retouch.browseTip": "开原生选择框选一个文件或目录，不靠手打路径",
+  "retouch.pickFailed": "原生选择框起不来",
+  "retouch.loadTimeout": "引擎 40 秒没回话：这张图没导进来，也没报错——多半是路径不存在或文件读不动。",
   "retouch.importing": "导入中…",
   "retouch.repairing": "修补中（本次覆盖 {pixels} 像素）…",
 
@@ -172,6 +176,7 @@ const zh = {
   "strip.edited": "已调",
   "strip.failed": "解不开",
   "strip.dirPlaceholder": "目录路径，例如 /home/…/Pictures",
+  "strip.needDir": "还没填目录：点「浏览…」选一个，或自己写一个存在的路径。",
   "strip.preview": "相机预览",
   "strip.previewTip": "这一格是相机内嵌的 JPEG 预览，不是我们解出来的一帧；点开进视口编辑时，走的才是母档。",
   // ---- 撤销 / 重做（M5-b）

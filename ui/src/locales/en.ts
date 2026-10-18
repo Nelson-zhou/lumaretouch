@@ -51,6 +51,10 @@ export const en: Partial<Record<MsgKey, string>> = {
   "retouch.no": "no",
   "retouch.device": "Device",
   "retouch.needPath": "Fill in a photo path first",
+  "retouch.browse": "📂 Browse…",
+  "retouch.browseTip": "Pick a file or folder with the native dialog instead of typing a path",
+  "retouch.pickFailed": "The native file dialog failed to open",
+  "retouch.loadTimeout": "The engine did not answer within 40 s: this picture did not get imported and no error was raised — a missing path or an oversized file is the usual cause.",
   "retouch.importing": "Importing…",
   "retouch.repairing": "Repairing ({pixels} px covered)…",
   "retouch.modeHeal": "Heal",
@@ -165,6 +169,7 @@ export const en: Partial<Record<MsgKey, string>> = {
   "strip.edited": "edited",
   "strip.failed": "unreadable",
   "strip.dirPlaceholder": "Folder path, e.g. /home/…/Pictures",
+  "strip.needDir": "No folder yet: press Browse… or type a path that exists.",
   "strip.preview": "camera preview",
   "strip.previewTip": "This cell is the camera's embedded JPEG, not a frame we decoded; editing in the viewport works on the master file.",
   // ---- undo / redo (M5-b)

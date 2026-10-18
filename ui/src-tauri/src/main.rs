@@ -133,6 +133,12 @@ pub struct AppState {
     /// 抠图后端清单（M6，ops/birefnet.matting_backends）：哪个档装机即用、哪个还在等
     /// 权重。与 raw_backends / export_caps 同一条理由：能力由引擎报，宿主不刻一份。
     matting_backends: Mutex<Value>,
+    /// 能收哪些后缀（引擎 session.IMAGE_EXTS 报的那一份）：原生选择框的过滤器用它，
+    /// 宿主不刻一份——名单漂了，用户就在选择框里选不到，而工程师那边说"支持"。
+    image_exts: Mutex<Value>,
+    /// 引擎最近一条 error（M9）：load_image 是"发出去就返回"的，失败只走 error 事件。
+    /// 不接住它，宿主就永远看不见"为什么打不开"——用户那边就是点了没反应。
+    last_error: Mutex<Option<String>>,
     /// 最近一条 session_state（M5 底片条）：格子列表、当前索引、有没有缩略图。
     /// 这一份里**不带 base64**——控制通道那条“像素不进 JSON”的规矩只在缩略图上开了
     /// 一个一次性的例外，宿主不该把它长期握在轮询载荷里。
@@ -205,6 +211,8 @@ impl AppState {
             export_caps: Mutex::new(Value::Null),
             raw_backends: Mutex::new(Value::Null),
             matting_backends: Mutex::new(Value::Null),
+            image_exts: Mutex::new(Value::Null),
+            last_error: Mutex::new(None),
             session: Mutex::new(None),
             thumbs: Mutex::new(std::collections::HashMap::new()),
             session_rev: Mutex::new(0),
@@ -386,6 +394,12 @@ impl AppState {
             _ => Value::Null,
         };
         // 抠图后端（M6）：没报就置 Null（旧引擎不说这一句），不留上一份
+        // 可收后缀名单（scan 那份白名单）：没报就置 Null，选择框退化成"什么都不过滤"，
+        // 而不是拿一份宿主抄的名单去挡用户
+        *self.image_exts.lock().unwrap() = match v.get("image_exts") {
+            Some(r) if r.is_array() => r.clone(),
+            _ => Value::Null,
+        };
         *self.matting_backends.lock().unwrap() = match v.get("matting_backends") {
             Some(r) if r.is_object() => r.clone(),
             _ => Value::Null,
@@ -542,6 +556,8 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     *st.export_caps.lock().unwrap() = Value::Null;   // 能力等 ready 重新报
     *st.raw_backends.lock().unwrap() = Value::Null;   // RAW 能力清单等 ready 重新报
     *st.matting_backends.lock().unwrap() = Value::Null; // 抠图后端清单同理（M6）
+    *st.image_exts.lock().unwrap() = Value::Null;   // 后缀名单同理：等新进程报
+    *st.last_error.lock().unwrap() = None;                // 新进程没说错过
     // 底片条也是引擎进程的事实：新进程还没扫过目录，留着旧列表就是让用户点一个
     // 这个进程从没见过的 index
     *st.session.lock().unwrap() = None;
@@ -615,6 +631,10 @@ fn load_image(
     // 而“开箱即用”的那台机器上没人会设 LRT_DEVICE——GPU 版 torch 白装。
     let device = std::env::var("LRT_DEVICE").unwrap_or_else(|_| "auto".into());
     state.send_to_engine(json!({"cmd": "set_device", "device": device}))?;
+    // 一次新的导入请求 = 上一张的账作废：错误位与 image 都清掉。不清的话，坏路径被
+    // 引擎拒掉时 status.image 里还是上一张的 image_ready，宿主会把它读成"这次也成功了"。
+    *state.last_error.lock().unwrap() = None;
+    *state.image.lock().unwrap() = None;
     if let Some(v) = max_px {
         cmd["max_px"] = json!(v);
     }
@@ -1183,6 +1203,8 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let export_caps = state.export_caps.lock().unwrap().clone();
     let raw_backends = state.raw_backends.lock().unwrap().clone();
     let matting_backends = state.matting_backends.lock().unwrap().clone();
+    let image_exts = state.image_exts.lock().unwrap().clone();
+    let last_error = state.last_error.lock().unwrap().clone();
     let session = state.session.lock().unwrap().clone();
     let session_rev = *state.session_rev.lock().unwrap();
     let history = state.history.lock().unwrap().clone();
@@ -1203,6 +1225,8 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "raw_backends": raw_backends,
            // 抠图后端（M6）：UI 的下拉项由这一份决定，不在前端猜"装了 birefnet 就能选"
            "matting_backends": matting_backends,
+           "image_exts": image_exts,
+           "last_error": last_error,
            // 底片条的“有没有、几张、当前哪一格”进轮询（小），像素本体不进：
            // 那两百张要由 filmstrip 单独取，且只在 session_rev 变了的时候取
            "session": session, "session_rev": session_rev,
@@ -1243,6 +1267,8 @@ fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     *state.export_caps.lock().unwrap() = Value::Null;
     *state.raw_backends.lock().unwrap() = Value::Null;    // 能力是引擎报的，不是永久的
     *state.matting_backends.lock().unwrap() = Value::Null; // 同上（M6）
+    *state.image_exts.lock().unwrap() = Value::Null;  // 同上
+    *state.last_error.lock().unwrap() = None;          // 同上
     *state.session.lock().unwrap() = None;
     state.thumbs.lock().unwrap().clear();
     *state.session_rev.lock().unwrap() += 1;
@@ -1347,6 +1373,10 @@ fn m0_env() -> Value {
             .filter(|v| (1..=64).contains(v))
             .unwrap_or(1),
         "no_ctx": std::env::var("LRT_NO_CTX").unwrap_or_default(),
+        // 视口自证探针（M9）：静态图静置后读回画布缓冲并量布局矩形。历轮跑靶的证据取的是
+        // shm 那一帧，即“引擎→宿主”那一段；“宿主→屏幕”那一段从没测过，而 WebKitGTK 的
+        // GL 表面截图只会抓到纯黑客户区——黑屏与布局撑爆正是从这条缝里漏出去的。
+        "viewport_probe": std::env::var("LRT_VIEWPORT_PROBE").unwrap_or_default(),
         "dirty_frac": tiers().dirty_frac,
         "load_image": std::env::var("LRT_LOAD_IMAGE").unwrap_or_default(),
         "max_px": std::env::var("LRT_MAX_PX").ok().and_then(|v| v.parse::<u64>().ok()),
@@ -1399,6 +1429,9 @@ fn quit() {
 fn main() {
     let state = Arc::new(AppState::new());
     tauri::Builder::default()
+        // 原生文件/目录选择（M9 裁决3）：路径输入框拿人手填不合法路径，错又只落在
+        // 窗口另一头的一行灰色小字上——那是事实上的静默失败。
+        .plugin(tauri_plugin_dialog::init())
         .manage(state.clone())
         .manage(Launcher(state.clone()))
         .invoke_handler(tauri::generate_handler![

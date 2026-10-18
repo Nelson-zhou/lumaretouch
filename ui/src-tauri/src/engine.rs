@@ -217,6 +217,8 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             println!("M0_THUMB_FAILED {line}");
         }
         "error" => {
+            *state.last_error.lock().unwrap() =
+                Some(v["error"].as_str().unwrap_or("?").to_string());
             state.push_log(format!("引擎错误: {}", v["error"].as_str().unwrap_or("?")));
             // 必须回显到标准输出：跑靶脚本只看得见 stdout。不往这里印的话，
             // “某一臂被引擎拒了”在日志里一个字都不留，表现为静默超时。

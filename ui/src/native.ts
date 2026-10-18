@@ -471,6 +471,12 @@ export interface EngineStatus {
   /** 引擎在 ready 里自报的 RAW 解码能力（raw.py 的 raw_backends）。null = 这一版引擎
    *  还没报过这份清单。能读什么由引擎说，前端不刻一份——把没落地的 CR2 支持写进 UI 就是一条假指标。 */
   raw_backends: RawBackends | null;
+  /** 引擎 scan 那份白名单（ready 里报的 image_exts）：原生选择框的过滤器用它。
+   *  null = 这一版引擎没说，选择框就退化成“什么都不过滤”，不拿宿主抄的名单去挡人。 */
+  image_exts: string[] | null;
+  /** 引擎最近一条 error（M9）：load_image 发出去就返回，失败只走 error 事件。
+   *  不接住它，坏路径就是一次彻底的静默失败。 */
+  last_error: string | null;
   /** 引擎在 ready 里自报的抠图后端清单（birefnet.py 的 matting_backends）。null =
    *  这一版引擎还没报过。换底下拉项由这一份决定：权重未放行时 birefnet 在
    *  weights_gated 里，摆一个注定被拒的选项就是邀请用户去撞一个空请求。 */
@@ -856,6 +862,8 @@ export interface M0Env {
   /** 单次上传的横向分块数（验 4 MiB 命令缓冲假设） */
   chunks: number;
   no_ctx: string;
+  /** 视口自证探针（M9）：非空时在静置后读回画布缓冲并量布局矩形，报 M0_VIEWPORT。 */
+  viewport_probe: string;
   dirty_frac: number;
   /** 非空则跑靶前先导入这张图（M1-3a 真图通路）。 */
   load_image: string;

@@ -217,6 +217,10 @@ class Engine:
               # M5-a 底片条：行程与上限同样由引擎说。前端自己刻一份“长边 160”或
               # “最多 512 张”，下一轮改上限时就是漏改的那一处（它会静默把图截小）。
               "session_actions": ["scan", "add", "select", "state", "thumbs", "stop_thumbs"],
+              # 能收哪些后缀：只由 session.IMAGE_EXTS 定这一份，宿主拿它填原生
+              # 选择框的过滤器。拷一份名单到 UI 里就是给自己埋雷：M9-c 把八个 RAW
+              # 后缀收进来的那一次，UI 那份拷件不会跟着变，用户选不了、工程师说支持。
+              "image_exts": sorted(S.IMAGE_EXTS),
               "thumb_edge": [S.MIN_EDGE, S.MAX_EDGE],
               "thumb_edge_default": S.EDGE,
               "thumb_max_bytes": S.THUMB_MAX_BYTES,

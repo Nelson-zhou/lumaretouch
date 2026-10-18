@@ -89,9 +89,16 @@ export default function Viewer({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const overlay = overlayRef.current;
+    // `preserveDrawingBuffer: true` 不是性能开关，是**正确性**开关：默认值 false 允许
+    // 合成器在一个 vsync 之后就把画布后备缓冲清掉。跑帧流时每一帧都在重画，看不出来；
+    // 静态图只送那一帧，下一个 vsync 之后用户面对的就是一块空缓冲——这就是装机版
+    // “导入真图后视口全黑”的根因。历轮跑靶漏掉它，因为证据取的是 shm 那一帧（引擎→
+    // 宿主那一段），而这件事发生在宿主→屏幕那一段；帧流又在跑，屏上“看着有东西”。
+    // 两个分支都得带：ctxOpt 那条是实验对照用，默认走的是下面那条（M0 实测 ctx 属性
+    // 无可复现收益，所以默认关），写漏一边就等于默认路径没修。
     const attrs: WebGLContextAttributes = ctxOpt
-      ? { antialias: false, depth: false, alpha: false, desynchronized: true, powerPreference: "high-performance" }
-      : { antialias: false, depth: false };
+      ? { antialias: false, depth: false, alpha: false, desynchronized: true, powerPreference: "high-performance", preserveDrawingBuffer: true }
+      : { antialias: false, depth: false, preserveDrawingBuffer: true };
     const gl = canvas.getContext("webgl2", attrs);
     if (!gl) {
       onHudRef.current({ seq: 0, w: 0, h: 0, fps: 0, lastError: "WebGL2 不可用" });
