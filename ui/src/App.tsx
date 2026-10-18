@@ -1464,11 +1464,18 @@ export default function App() {
   async function onPickPath(dir: boolean) {
     let exts: string[] | null = null;
     if (!dir) exts = (await engineStatus().catch(() => null))?.image_exts ?? null;
-    const stripped = exts ? exts.map((e) => e.replace(/^\./, "")) : undefined;
+    // 每个后缀给大小写两份模式。GTK 的过滤器模式在 Unix 上**大小写敏感**：实测
+    // GLib.pattern_match_simple("*.cr2", "IMG.cr2") = True，而 "IMG.CR2" = False。
+    // 相机产出的后缀全是大写（佳能 .CR2 / 尼康 .NEF / 索尼 .ARW），于是这一栏过去
+    // 把 RAW 整个藏起来——而引擎那边是 ext.lower() 判断，路径给得到就收：
+    // 唯一挡路的正是这个框。字符类写法 *.[Cc][Rr]2 在这条匹配器上不通，别试。
+    const patterns = exts
+      ? Array.from(new Set(exts.flatMap((e) => [e.replace(/^\./, ""), e.replace(/^\./, "").toUpperCase()])))
+      : undefined;
     let sel: string | null;
     try {
       sel = await openDialog({ multiple: false, directory: dir,
-        ...(stripped ? { filters: [{ name: dir ? "目录" : "图片 / RAW", extensions: stripped }] } : {}) });
+        ...(patterns ? { filters: [{ name: dir ? "目录" : "图片 / RAW", extensions: patterns }] } : {}) });
     } catch (e) {
       // 选择框本身起不来也要说出来：这里静默返回，用户会以为按钮坏了
       setPathErr(`${t("retouch.pickFailed")}：${String(e)}`);
