@@ -42,18 +42,25 @@ def noise_jpg(path: str, edge: int) -> str:
 
 
 # ------------------------------------------------------------------------ 扫描
-def test_scan_dir_sorts_and_keeps_only_openable_extensions(tmp_path):
+def test_scan_dir_sorts_and_admits_the_whitelist(tmp_path):
+    """扫描的名单与 decode 的 RAW 名单同进退：收进来的格子不能少。
+
+    .CR3 从「不收」变成「收」是 M9-c 的口径变更：厂商容器现在由系统 LibRaw 接，把
+    它挡在名单外只会让用户以为拍丢了。今天手上还没有真机样本，所以这条只锁
+    「名单形状」；能不能真解开由 test_raw 那一节与能力上报说。
+    """
     write_jpg(str(tmp_path / "b.jpg"))
     write_jpg(str(tmp_path / "A.jpeg"), seed=1)
     (tmp_path / "note.txt").write_text("不是图")
     (tmp_path / "raw.CR3").write_bytes(b"\x00" * 16)
+    (tmp_path / "shot.NEF").write_bytes(b"\x00" * 16)
     (tmp_path / "sub").mkdir()
     got = S.scan_dir(str(tmp_path))
     names = [os.path.basename(x) for x in got["files"]]
-    assert names == ["A.jpeg", "b.jpg"], f"排序不是不区分大小写的稳定序：{names}"
+    assert names == ["A.jpeg", "b.jpg", "raw.CR3", "shot.NEF"], \
+        f"排序不是不区分大小写的稳定序，或 RAW 后缀没进名单：{names}"
     why = {s["name"]: s["why"] for s in got["skipped"]}
     assert "note.txt" in why and "扩展名" in why["note.txt"]
-    assert "raw.CR3" in why                       # RAW 收进来只会在点开那一刻炸
     assert "sub" in why and "目录" in why["sub"]
     assert got["truncated"] is False
     assert got["scan_ms"] >= 0.0

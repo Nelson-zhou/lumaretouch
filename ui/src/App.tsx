@@ -163,7 +163,9 @@ export default function App() {
   // 拿 index 配像素就会把上一轮的图塞进不相干的那一格。
   const [strip, setStrip] = useState<SessionState | null>(null);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
-  const [stripDir, setStripDir] = useState("/tmp/luma-strip");
+  // 默认留空，不拿一个目录当预置值：上一版预置的是 /tmp/luma-strip，而这台机器的
+  // /tmp 是 tmpfs——重启就清，底片条每次开机都是空的，看着像“扫描坏了”。
+  const [stripDir, setStripDir] = useState("");
   const stripRev = useRef(-1);
   // 当前是哪一张文档：变了才按引擎那份 doc_state 重摆滑块（同图轮询不重摆，
   // 否则会把用户正在拖的手势按回引擎上一帧的值）
@@ -980,11 +982,22 @@ export default function App() {
             seqBack = f2?.seq ?? -1;
             diffBack = diffBytes(homePix, f2?.pixels ?? null);
           }
+          // DOM 证据（M9-d）：GL 表面抓不到图，但底片条是 DOM——角标在不在、写的
+          // 是什么，可以直接问 DOM。“引擎报了 preview”与“用户看得见这件事”是两层，
+          // 差的恰恰是这一层，只看引擎上报抓不到它丢没丢。
+          await sleep(150);
+          const pvBadges = Array.from(document.querySelectorAll(".strip .cell .badge.pv"))
+            .map((el) => (el.textContent ?? "").trim());
           await report(`M0_FILMSTRIP ${JSON.stringify({
             dir, count: sess?.count ?? 0, index: sess?.index ?? -1, home, homeIdx, homeIdx0,
             names: docs.map((d) => d.name),
             thumbCount: docs.filter((d) => d.thumb).length,
             thumbBytes: docs.reduce((a, d) => a + (d.thumb?.bytes ?? 0), 0),
+            // RAW 格与“来路是相机内嵌预览”的格分开报：底片条能不能把 DNG 画出来是一回事，
+            // 有没有如实告诉用户画的是预览是另一回事。后者只能从这里看得到。
+            previewCells: docs.filter((d) => d.thumb?.preview).length,
+            pvBadges,
+            formats: Array.from(new Set(docs.map((d) => d.thumb?.format).filter(Boolean))),
             longestEdge: Math.max(0, ...docs.map((d) => (d.thumb ? Math.max(d.thumb.w, d.thumb.h) : 0))),
             failed: docs.filter((d) => d.thumb_error).map((d) => `${d.name}:${d.thumb_error}`),
             awayPath, backPath, switchMs,
@@ -2022,6 +2035,7 @@ export default function App() {
         <div className="mut">{t("strip.desc")}</div>
         <div className="row">
           <input value={stripDir} onChange={(e) => setStripDir(e.target.value)}
+                 placeholder={t("strip.dirPlaceholder")}
                  style={{ width: "100%" }} />
           <button onClick={onScanStrip}>{t("strip.scan")}</button>
         </div>
@@ -2047,6 +2061,13 @@ export default function App() {
                     )}
                     <span className="nm">{d.name}</span>
                     {edited && <span className="badge">{t("strip.edited")}</span>}
+                    {/* RAW 那一格画的是相机内嵌预览。不标就是理亏：用户会以为那一格
+                        就是我们解出来的质量，而它其实来自相机——这件事必须上屏。 */}
+                    {d.thumb?.preview && (
+                      <span className="badge pv" title={t("strip.previewTip")}>
+                        {t("strip.preview")}{d.thumb.format ? ` · ${d.thumb.format}` : ""}
+                      </span>
+                    )}
                   </button>
                 );
               })}

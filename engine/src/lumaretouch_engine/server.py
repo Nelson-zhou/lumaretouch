@@ -168,6 +168,8 @@ class Engine:
         self._proxy_budget: int | None = None
         # 缩略图在独立线程里解：底片条一百张不能把主循环（以及它负责的帧通路）顶住。
         self._thumbs: threading.Thread | None = None
+        # RAW 秒开那一帧的账（decode.py 的分界规则：它只填首屏，不进会话）
+        self._preview_info: dict | None = None
         self._thumb_stop = threading.Event()
         self._thumb_args: tuple | None = None
         # 底片条那一列表会被两个线程碰：stdin 线程换整张表，缩略图线程改单格的
@@ -898,7 +900,7 @@ class Engine:
         `_attach_pipeline` 里按引擎侧字段重放一遍（换设备那条路走的也是它），文档切换
         只需要在那之前把字段装对。
         """
-        from .decode import PROXY_PIXELS, load_rgb
+        from .decode import PROXY_PIXELS, is_raw, load_rgb
 
         # 跑靶线程还在写那块双缓冲：此时换图会 close/unlink 它正在写的 shm，
         # 线程会在已失效的 mmap 上抱错，产出一份“跑了半截但 frames=600”的数。
@@ -912,10 +914,17 @@ class Engine:
             return
         t0 = monotonic_ns()
         budget = int(p.get("max_px") or self._proxy_budget or PROXY_PIXELS)
+        # RAW 先推一帧相机内嵌预览：真解码那一张要几百毫秒，而那张全清 JPEG 搬回来只要
+        # 几毫秒——视口这几百毫秒不该是黑的。常驻层/预计算/历史栈仍然只认下面
+        # 真解码那一张（分界规则在 decode.py），这一帧不参与任何编辑语义。
+        self._preview_info = None
+        if is_raw(p["path"]):
+            self._preview_info = self._push_preview_frame(p["path"], budget)
         try:
             d = load_rgb(p["path"], budget, device=self.device)
         except Exception as e:
-            emit({"event": "error", "error": f"导入失败({type(e).__name__}): {e}"})
+            tail = "（视口上那一张是相机内嵌预览，编辑没生效）" if self._preview_info else ""
+            emit({"event": "error", "error": f"导入失败({type(e).__name__}): {e}{tail}"})
             return
         self._proxy_budget = budget     # 下一次切文档默认沿同一档代理（会话级，见上面注释）
         self._remember_current()
@@ -949,6 +958,37 @@ class Engine:
         if p.get("strength") is not None:
             strength = _clamp_strength(p["strength"])
         return self._open_session(d, p, t0=t0, strength=strength, switched=existed)
+
+    def _push_preview_frame(self, path: str, budget: int) -> dict | None:
+        """RAW 首帧：相机内嵌预览（只填浏览/首屏那个槽位，见 decode.py 顶部的分界规则）。
+
+        内嵌预览比代理档小时，这里不放大：宿主会先按预览尺寸挂一块 shm，真解码
+        落地时再换档（两条都是既有的 shm_ready 通路，计数重置已在宿主里做过）。把小预览
+        放大成代理尺寸看起来“只发一次事件”，但那是我们编的像素，不是相机给的。
+
+        这一帧不进会话：不建常驻张量、不动历史栈、不拿去做任何导出。
+        """
+        import numpy as np
+        from .decode import load_preview
+        try:
+            pv = load_preview(path, budget)
+        except Exception as e:                  # 预览通道任何意外都不该挡住导入本身
+            emit({"event": "engine_warn", "warn": f"内嵌预览取失败：{type(e).__name__}: {e}"})
+            return None
+        if pv is None:
+            return None
+        rgba = np.empty((pv.h, pv.w, 4), dtype=np.uint8)
+        rgba[:, :, :3] = pv.rgb
+        rgba[:, :, 3] = 255
+        shm = self._ensure_shm(pv.w, pv.h)
+        with self._wlock:
+            seq, t_emit, slot = shm.write_frame(rgba)
+        info = {"w": int(pv.w), "h": int(pv.h), "src_w": int(pv.src_w), "src_h": int(pv.src_h),
+                "ms": round(float(pv.t_total_ms), 3), "seq": int(seq)}
+        emit({"event": "preview_frame", "path": path, **info})
+        emit({"event": "frame", "seq": info["seq"], "slot": slot, "t_emit_ns": t_emit,
+              "w": shm.w, "h": shm.h, "mode": "preview"})
+        return info
 
     def _open_session(self, d, p: dict, *, t0: int, strength: float | None, switched: bool):
         """已有源图 → 建会话 → 重挂该重挂的层 → 出帧。新导入与底片条切换共用这一段。"""
@@ -1017,7 +1057,13 @@ class Engine:
               # 只报滤波这一份：新导入时掩膜在本事件之后才挂上（precompute 跑在 image_ready 后面），
               # 这里附 bytes_face 恒为 0，反而会被读成"掩膜没常驻"。掩膜/关键点的字节数由
               # precompute_ready 报，那才是它们为真的那一刻（切回来的图也会重发那一条）。
-              "import_ms": round((t_c - t0) / 1e6, 2)})
+              "import_ms": round((t_c - t0) / 1e6, 2),
+              # RAW 秒开那一帧的账（没推过预览就是 None）：宿主与跑靶拿它分“看到画面”
+              # 与“可以编辑”两个时刻，混成一个数就会把预览的 3 ms 报成导入的 3 ms
+              "preview_ms": (self._preview_info or {}).get("ms"),
+              "preview_size": ([self._preview_info["w"], self._preview_info["h"]]
+                               if self._preview_info else None)})
+        self._preview_info = None            # 一帧一次：下一条导入重新算，不沿用旧账
         emit({"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
               "w": shm.w, "h": shm.h, "mode": "image"})
         self.emit_session_state()
@@ -1074,8 +1120,13 @@ class Engine:
     THUMB_SLEEP_MS = 2.0
 
     def _doc_row_event(self, i: int, d: dict) -> dict:
-        """底片条一格上报的形状。当前那一格用 live 字段而不是格子里存的（存的是
-        上一次开会话时的快照，刚刚画上去的一笔还不在里面）——徽章慢一帧就是假事实。"""
+        """底片条一格上报的形状。当前那一格用 live 字段，不用格子里存的快照
+        （快照停在上一次开会话时，刚刚画上去的那一笔还不在里面）——徽章慢一帧就是假事实。
+
+        `preview`/`format` 不能在这里丢：RAW 那一格画的是相机内嵌预览，不是我们渲的
+        那一帧。`thumb_ready` 里带了这两个字段，可宿主重连与重扫之后拿的是
+        `session_state`——这里丢一次，底片条就分不出“jpg 的真图”与“DNG 的相机预览”，
+        用户以为第一格就是母档质量，调完发现不是，那比不标更坏。"""
         st = self._capture_state() if (i == self._doc_index and self._image_loaded) else d["state"]
         th = d["thumb"]
         return {"index": i, "path": d["path"], "name": d["name"],
@@ -1085,7 +1136,9 @@ class Engine:
                 "opened": bool(d["opened"]),
                 "edits": self._state_edits(st),
                 "thumb": None if th is None else {"w": th["w"], "h": th["h"],
-                                                   "bytes": th["bytes"], "quality": th["quality"]},
+                                                   "bytes": th["bytes"], "quality": th["quality"],
+                                                   "preview": bool(th.get("preview")),
+                                                   "format": th.get("format")},
                 "thumb_error": d["thumb_error"]}
 
     def emit_session_state(self, **extra) -> None:

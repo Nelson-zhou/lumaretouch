@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import io
 import os
 import time
 from dataclasses import dataclass, field
@@ -121,6 +122,10 @@ def _decoded_from_raw(res: dict, budget: int | None) -> "Decoded":
              "neutral": [round(float(v), 4) for v in m.neutral],
              "profile_weight": round(m.profile_weight, 4),
              "forward_matrix": m.forward is not None, "has_preview": bool(m.used_preview),
+             # has_preview 是「文件里有没有预览」（raw.py 那个字段存的是“有”/“”），
+             # used_preview 才是「这一帧像素是不是从预览来的」。两个分开写：把
+             # “有”当成“用了”就是这一层最不能留的那种歧义——看着同一字段两种意思。
+             "used_preview": False,
              "container_ms": round(ms["container_ms"], 2), "pixels_ms": round(ms["pixels_ms"], 2),
              "render_ms": round(ms["render_ms"], 2), "encode_ms": round(ms["encode_ms"], 2),
              "notes": list(m.notes)}
@@ -131,18 +136,160 @@ def _decoded_from_raw(res: dict, budget: int | None) -> "Decoded":
     return d
 
 
-def load_rgb(path: str, budget: int = PROXY_PIXELS, device: str | None = None) -> Decoded:
-    """真实图 → 代理帧。JPEG/PNG 走 Pillow；相机 RAW（DNG）走自研读侧。
+def load_rgb(path: str, budget: int = PROXY_PIXELS, device: str | None = None,
+             *, allow_preview: bool = False) -> Decoded:
+    """真实图 → 代理帧。JPEG/PNG 走 Pillow；相机 RAW 走下面那两条 RAW 通道。
 
     RAW 那条分支在最前面就分掉：它需要自己的位深/摆正/缩放口径，而把这些塞进
     Pillow 那段只会让两条路都变成“有点像”的路径（load_full 的注释里记着同一课）。
     """
-    from . import raw as raw_mod
     budget = clamp_budget(budget)
-    if sniff_raw(path):
-        res = raw_mod.load_raw(path, budget=budget, device=device)
-        return _decoded_from_raw(res, budget)
+    if allow_preview:
+        # 这个开关只属于浏览那一条通道（见下面那段分界规则）：默认关着，
+        # 因为 load_rgb 的产物是要进常驻层被编辑的，而预览不是我们渲的图
+        d = load_preview(path, budget)
+        if d is not None:
+            return d
+    if is_raw(path):
+        return _load_rgb_raw(path, budget, device)
     return _load_rgb_pillow(path, budget)
+
+
+# ---------------------------------------------------------------- RAW 的两条通道
+#
+# 需求上写的是「RAW 秒开走相机内嵌预览，出片走真去马赛克」，这两句必须同时成立，
+# 而它们天生冲突：预览是相机自己渲的，出片是我们渲的。M3-b 修过的那一类缺陷就是
+# 「预览与出片不同路」——所以分界在这一层钉成一条规则，改代码的人得先看见它：
+#
+#   内嵌预览只填**浏览/缩略图**那一个槽位。凡是要进常驻层、要被滑块吃、要被导出
+#   拿走的像素，必须来自真解码（自研 DNG 读侧，或 LibRaw 的 dcraw_process）。
+#
+# 落在代码上的形状：`allow_preview` 默认 False，全仓只在 session.make_thumb 那一处显式
+# 打开。视口要秒开，是调用方自己先把 load_preview 的帧推进 shm，然后再走 load_rgb 默认
+# 那条把真解码的常驻层装回来——把预览直接做成 load_rgb 的默认返回，等于让编辑读一张
+# 别人渲好的图而账单上一个字都不提。
+LIBRAW_EXTS = {".arw", ".cr2", ".cr3", ".nef", ".raf", ".orf", ".rw2"}
+RAW_EXTS = LIBRAW_EXTS | {".dng"}
+
+
+def raw_ext(path: str) -> str:
+    return os.path.splitext(path)[1].lower()
+
+
+def is_raw(path: str) -> bool:
+    """值不值得走 RAW 那条分支：后缀在 RAW 名单里，或 sniff 闻出 TIFF 骨架里有 raw IFD。
+
+    sniff 只覆盖 DNG 那一族（TIFF 头 + CFA 标签）；厂商容器的 magic 根本不长那样（CR2 是
+    "CR "），光靠 sniff 会把它们漏给 Pillow，然后报一句“不是图片”。后缀在这里不是猜
+    格式，只决定进不进 RAW 分支——进去以后解不开照样如实抛，不静默换成别的渲染。
+    """
+    from . import raw as raw_mod
+    return raw_ext(path) in RAW_EXTS or raw_mod.has_raw_ifd(path)
+
+
+def load_preview(path: str, budget: int = PROXY_PIXELS) -> "Decoded | None":
+    """相机内嵌预览 → 代理尺寸 RGB。浏览/缩略图专用；拿不到就返 None，不自己画一张。
+
+    只走 LibRaw 的 unpack_thumb：它搬的是文件里已经躺着的那张 JPEG，不碰传感器数据，
+    所以是毫秒级（本机探针稳态 0.06 ms 量级）。返 None 的两种情由必须分开看：没有库
+    （整条通道不可用）与这张没有预览——调用方都该 fallback 到真解码，而不是当解码失败。
+    """
+    from .ops import libraw as LR
+    t0 = time.perf_counter()
+    try:
+        got = LR.extract_thumb(path)
+    except (LR.LibRawUnavailable, LR.LibRawError, OSError):
+        return None
+    t_thumb = time.perf_counter()
+    im = Image.open(io.BytesIO(got["jpeg"]))
+    orient = int(im.getexif().get(EXIF_ORIENTATION, 1) or 1)
+    if orient != 1:                                  # 预览 JPEG 自己带了方向就照它摆
+        im = ImageOps.exif_transpose(im)
+    im.load()
+    pw, ph = im.size
+    t_dec = time.perf_counter()
+    ow, oh = proxy_size(pw, ph, clamp_budget(budget))
+    if (ow, oh) != (pw, ph):
+        im = im.resize((ow, oh), Image.LANCZOS)
+    rgb = np.ascontiguousarray(np.asarray(im.convert("RGB"), dtype=np.uint8))
+    t_scale = time.perf_counter()
+    meta = got["meta"]
+    src_w, src_h = int(meta["i_w"] or pw), int(meta["i_h"] or ph)
+    d = Decoded(rgb=rgb, src_w=src_w, src_h=src_h, fmt=(raw_ext(path).lstrip(".").upper() or "RAW"),
+                t_open_ms=(t_thumb - t0) * 1000.0, t_decode_ms=(t_dec - t_thumb) * 1000.0,
+                t_orient_ms=0.0, t_scale_ms=(t_scale - t_dec) * 1000.0,
+                t_total_ms=(t_scale - t0) * 1000.0,
+                draft_used=True, draft_size=(pw, ph))
+    d.raw = {"camera": " ".join(x for x in (meta["make"], meta["model"]) if x),
+             "source": "libraw_preview", "bits": 8, "has_preview": True, "used_preview": True,
+             "preview_w": pw, "preview_h": ph, "preview_bytes": got["bytes"],
+             "thumb_ms": got["t_ms"]}
+    d.notes.append(f"相机内嵌预览 {pw}×{ph}（仅浏览/首屏）：编辑与出片走真解码")
+    if orient != 1:
+        d.notes.append(f"预览按它自己的 EXIF orientation={orient} 摆正")
+    return d
+
+
+def _libraw_matrix(path: str, *, output_bps: int = 8) -> tuple:
+    """真去马赛克那一臂的入口：返回 (H,W,3) 矩阵与 LibRaw 的账单。
+
+    `output_bps=8` 给预览与常驻代理层用；16-bit 母档归导出通路（M9-e），那里才需要
+    把每一档线性值都留住。两个档位同一个函数出，不分叉实现。
+    """
+    from .ops import libraw as LR
+    return LR.process(path, output_bps=int(output_bps))
+
+
+def _decoded_from_libraw(path: str, arr, info: dict, budget: int | None,
+                         *, why: Exception | None = None, full: bool = False) -> "Decoded":
+    """LibRaw 真解码的结果 → Decoded（与自研那条共用同一个对外形状）。"""
+    h, w = int(arr.shape[0]), int(arr.shape[1])
+    t0 = time.perf_counter()
+    if full or (w * h <= (budget or 0)):
+        rgb = np.ascontiguousarray(arr[:, :, :3])
+        ow, oh = w, h
+        t_scale = t0
+    else:
+        ow, oh = proxy_size(w, h, clamp_budget(budget))
+        im = Image.fromarray(arr[:, :, :3]).resize((ow, oh), Image.LANCZOS)
+        rgb = np.ascontiguousarray(np.asarray(im, dtype=np.uint8))
+        t_scale = time.perf_counter()
+    m = info["meta"]
+    d = Decoded(rgb=rgb, src_w=int(m["i_w"] or w), src_h=int(m["i_h"] or h),
+                fmt=(raw_ext(path).lstrip(".").upper() or "RAW"),
+                t_open_ms=info["set_ms"] + info["unpack_ms"], t_decode_ms=info["process_ms"],
+                t_orient_ms=0.0, t_scale_ms=(t_scale - t0) * 1000.0,
+                t_total_ms=info["total_ms"] + (t_scale - t0) * 1000.0,
+                draft_used=False, draft_size=None)
+    d.raw = {"camera": " ".join(x for x in (m["make"], m["model"]) if x),
+             "source": "libraw", "bits": int(info["bits"]), "used_preview": False,
+             "color_maximum": int(m["color_maximum"]), "cdesc": m["cdesc"],
+             "dng_version": int(m["dng_version"]),
+             "container_ms": round(info["set_ms"] + info["unpack_ms"], 2),
+             "pixels_ms": round(info["process_ms"], 2),
+             "render_ms": round(info["mem_ms"], 2), "encode_ms": 0.0,
+             "demosaic_ms": round(info["process_ms"], 2)}
+    cam = d.raw["camera"] or "未报机型"
+    d.notes.append(f"LibRaw 真去马赛克：{w}×{h} {info['bits']}-bit（相机 {cam}）")
+    if why is not None:
+        # 换了后端必须看得见：基线读侧为什么解不开、这一臂用的是另一套实现，
+        # 这两件事不能只在异常栈里，导出对账时它们是解释差异的唯一线索
+        d.notes.append(f"基线读侧没解开（{type(why).__name__}: {why}），这一张由 LibRaw 解码")
+    if budget and (ow, oh) != (w, h) and not full:
+        d.notes.append(f"代理档缩到 {ow}×{oh}（真解码之后重采样，不抄内嵌预览）")
+    return d
+
+
+def _load_rgb_raw(path: str, budget: int, device: str | None) -> Decoded:
+    """RAW 的代理帧：先试自研 DNG 读侧（基线，三臂证据那条路），解不开再转 LibRaw。"""
+    from . import raw as raw_mod
+    why = None
+    if raw_mod.has_raw_ifd(path):
+        try:
+            return _decoded_from_raw(raw_mod.load_raw(path, budget=budget, device=device), budget)
+        except raw_mod.UnsupportedRaw as e:
+            why = e            # lossless JPEG / packed 位深 / float / BigTIFF / CFALayout≠1
+    return _decoded_from_libraw(path, *_libraw_matrix(path, output_bps=8), budget, why=why)
 
 
 def _load_rgb_pillow(path: str, budget: int) -> Decoded:
@@ -210,17 +357,32 @@ def _load_rgb_pillow(path: str, budget: int) -> Decoded:
 MAX_EXPORT_PIXELS = 120_000_000
 
 
-def load_full(path: str, max_px: int = MAX_EXPORT_PIXELS,
-              device: str | None = None) -> Decoded:
-    """满幅解码（不缩放）：导出通路用。JPEG/PNG 走 Pillow，DNG 走自研读侧。"""
+def load_full(path: str, max_px: int = MAX_EXPORT_PIXELS, device: str | None = None,
+              *, want_bits: int = 8) -> Decoded:
+    """满幅解码（不缩放）：导出通路用。JPEG/PNG 走 Pillow，RAW 走上面那两条真解码臂。
+
+    `want_bits=16` 只在 16-bit 母档那一臂用（M9-e 接导出）：那时 `rgb` 的 dtype 是
+    uint16，拿它当代理帧用就是拿 4 字节当 1 字节用——预览与编辑那两层永远走 8-bit。
+    """
     from . import raw as raw_mod
-    if sniff_raw(path):
-        res = raw_mod.load_raw(path, budget=None, device=device)
-        m = res["meta"]
-        if m.w * m.h > int(max_px):
-            raise ValueError(f"导出尺寸 {m.w}x{m.h} = {m.w * m.h / 1e6:.0f} Mpx "
-                             f"超过上限 {int(max_px) / 1e6:.0f} Mpx")
-        return _decoded_from_raw(res, None)
+    if is_raw(path):
+        why = None
+        if raw_mod.has_raw_ifd(path):
+            try:
+                res = raw_mod.load_raw(path, budget=None, device=device)
+                m = res["meta"]
+                if m.w * m.h > int(max_px):
+                    raise ValueError(f"导出尺寸 {m.w}x{m.h} = {m.w * m.h / 1e6:.0f} Mpx "
+                                     f"超过上限 {int(max_px) / 1e6:.0f} Mpx")
+                return _decoded_from_raw(res, None)
+            except raw_mod.UnsupportedRaw as e:
+                why = e
+        arr, info = _libraw_matrix(path, output_bps=want_bits)
+        if int(info["w"]) * int(info["h"]) > int(max_px):
+            raise ValueError(f"导出尺寸 {info['w']}x{info['h']} = "
+                             f"{int(info['w']) * int(info['h']) / 1e6:.0f} Mpx 超过上限 "
+                             f"{int(max_px) / 1e6:.0f} Mpx")
+        return _decoded_from_libraw(path, arr, info, None, why=why, full=True)
     return _load_full_pillow(path, max_px)
 
 

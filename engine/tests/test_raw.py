@@ -696,3 +696,116 @@ def test_libraw_iso_speed_gap_stays_visible():
     r = LR.self_check()
     assert r["iso_speed_truth"] == truth["exif"]["iso"] == 200
     assert r["exif"]["iso_speed"] == 0.0
+
+
+# ------------------------------------------------------------------ 两条通道的接线（M9-c）
+#
+# 需求上「秒开走内嵌预览」与仓里「预览与出片不同路」（M3-b 的教训）必须同时成立，做法是
+# 把分界写成可测的不变量，而不是写在注释里相信没人越界：
+#   浏览那一格可以拿相机内嵌预览（毫秒级）；编辑与出片必须拿真解码。
+# 代码上的形状是 `decode.load_rgb(..., allow_preview=?)` 默认 False，全仓只有
+# session.make_thumb 一处显式打开。下面这几条就是钉这个形状的，包括反向那两条。
+
+from lumaretouch_engine import decode as DEC        # noqa: E402
+from lumaretouch_engine import session as S         # noqa: E402
+
+
+def _with_preview(tmp_path, name="roll"):
+    """一张带内嵌预览的 DNG：预览 40×32，真尺寸 128×96——两个尺寸故意差很多，
+    这样「拿预览当编辑层」会当场在尺寸上露馅，而不是靠 notes 自觉。"""
+    path = os.path.join(str(tmp_path), f"{name}.dng")
+    mt.build(path, _synth(96, 128), preview=mt._jpeg_bytes(_synth(32, 40)))
+    return path
+
+
+@needs_libraw
+def test_preview_channel_fills_only_the_browse_slot(tmp_path):
+    path = _with_preview(tmp_path)
+    pv = DEC.load_preview(path, DEC.PROXY_PIXELS)
+    assert pv is not None and pv.draft_used is True
+    assert pv.raw["source"] == "libraw_preview"
+    assert (pv.w, pv.h) == (40, 32)
+    assert pv.src_w == 128 and pv.src_h == 96, "浏览档小，但源尺寸要报真的：底片条要点开就知道多大"
+    assert any("仅浏览" in n for n in pv.notes)
+    # 默认那条（常驻层与编辑用的）必须走真解码：40×32 一漏出来就是编辑在读相机渲的图
+    d = DEC.load_rgb(path, DEC.PROXY_PIXELS)
+    assert d.draft_used is False and (d.w, d.h) == (128, 96)
+    assert (d.raw or {}).get("source") != "libraw_preview"
+
+
+@needs_libraw
+def test_load_preview_returns_none_instead_of_inventing_a_frame(tmp_path):
+    """没有内嵌预览时浏览那条要老实返 None，让调用方退回真解码——不许画一张灰帧占位。"""
+    path = os.path.join(str(tmp_path), "noprev.dng")
+    mt.build(path, _synth())
+    assert DEC.load_preview(path, DEC.PROXY_PIXELS) is None
+    d = DEC.load_rgb(path, DEC.PROXY_PIXELS)          # 同一张文件走默认那条照样通
+    assert (d.w, d.h) == (128, 96)
+
+
+@needs_libraw
+def test_vendor_route_goes_to_libraw_when_the_baseline_cannot_see_the_container(tmp_path, monkeypatch):
+    """把基线读侧的眼睛蒙上，RAW 分支就该转 LibRaw——这是厂商容器今天唯一能验的那一半。
+
+    真机 CR2/NEF 一份都没有（口径已定：主张扣住），所以这里蒙住 has_raw_ifd 来复现
+    「后缀是 RAW、基线看不见内容」那个形状，文件内容用我们自己写的 DNG。验的是**路由
+    与真解码臂**，不是厂商解码器本身——那句话在 raw_backends() 里也得照样说。
+    """
+    path = os.path.join(str(tmp_path), "shot.cr3")
+    with open(PROBE_DNG, "rb") as f:
+        blob = f.read()
+    with open(path, "wb") as f:
+        f.write(blob)
+    assert DEC.raw_ext(path) == ".cr3" and DEC.is_raw(path), "厂商后缀没进 RAW 分支：会被漏给 Pillow"
+    monkeypatch.setattr(R, "has_raw_ifd", lambda p: False)      # 基线看不见内容
+    d = DEC.load_rgb(path, DEC.PROXY_PIXELS)
+    assert d.raw["source"] == "libraw" and d.draft_used is False
+    assert any("LibRaw 真去马赛克" in n for n in d.notes)
+    assert not any("基线读侧没解开" in n for n in d.notes), \
+        "根本没试过基线，就不能报「基线解不开」——那是把路由说成故障"
+
+
+@needs_libraw
+def test_filmstrip_thumb_uses_the_preview_and_marks_it(tmp_path):
+    """底片条那一格：取预览、如实标 preview=True，并且守住通道字节上限。"""
+    path = _with_preview(tmp_path)
+    info = S.make_thumb(path, edge=160)
+    assert info["preview"] is True
+    assert info["format"] == "DNG" and (info["w"], info["h"]) == (40, 32)
+    assert (info["src_w"], info["src_h"]) == (128, 96)
+    assert S.thumb_stores_bytes_ok(info)
+    assert info["decode_ms"] >= 0.0
+    # 同一个文件走编辑那条默认路：两通道不许在这里汇合
+    d = DEC.load_rgb(path, DEC.PROXY_PIXELS)
+    assert (d.raw or {}).get("source") != "libraw_preview" and (d.w, d.h) == (128, 96)
+
+
+@needs_libraw
+def test_load_full_for_raw_still_decodes_real_pixels(tmp_path):
+    """满幅那条（导出通路）也不许被预览劫持：尺寸必须是源尺寸。"""
+    path = _with_preview(tmp_path)
+    d = DEC.load_full(path)
+    assert (d.w, d.h) == (128, 96) and d.rgb.dtype == np.uint8
+    assert d.raw is None or d.raw.get("used_preview") is not True
+
+
+@needs_libraw
+def test_baseline_refusal_hands_over_to_libraw_with_the_reason_left_visible(tmp_path):
+    """基线拒开的文件要交给 LibRaw，而且**换后端这件事得留在账单上**。
+
+    用的是 CFALayout≠1 那张：基线按规矩拒（那一族本来就登记在 needs_plugin 里），系统
+    LibRaw 接得住。这里的文件是「标签说一套、数据写一套」的合成件（我们的写侧只按行
+    交错铺数据，改的只是那个标签号），所以**不比几何与像素**——比了就是拿一个不合格
+    的材料当判据。这一条只锁路由与留痕；真正的厂商容器要等真机样本才能主张。
+    """
+    path = os.path.join(str(tmp_path), "cfa2.dng")
+    mt.build(path, _synth(), cfa_layout=2)
+    with pytest.raises(R.UnsupportedRaw, match="CFALayout"):     # 基线那条规矩不动
+        R.load_raw(path, reference=True)
+    d = DEC.load_rgb(path, DEC.PROXY_PIXELS)
+    assert d.raw["source"] == "libraw" and d.draft_used is False
+    assert any("LibRaw 真去马赛克" in n for n in d.notes)
+    handover = [n for n in d.notes if "基线读侧没解开" in n]
+    assert len(handover) == 1 and "CFALayout" in handover[0], \
+        "换了后端却不留原因，报表上就看不出这一张是谁解的——那与静默降级只差一句话"
+    assert d.rgb.ndim == 3 and d.rgb.shape[2] == 3 and d.rgb.dtype == np.uint8

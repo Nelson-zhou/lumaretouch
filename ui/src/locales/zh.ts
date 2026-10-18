@@ -171,6 +171,9 @@ const zh = {
   "strip.empty": "还没有底片条：填一个目录名再点「扫描目录」。",
   "strip.edited": "已调",
   "strip.failed": "解不开",
+  "strip.dirPlaceholder": "目录路径，例如 /home/…/Pictures",
+  "strip.preview": "相机预览",
+  "strip.previewTip": "这一格是相机内嵌的 JPEG 预览，不是我们解出来的一帧；点开进视口编辑时，走的才是母档。",
   // ---- 撤销 / 重做（M5-b）
   "side.history": "撤销 / 重做",
   "history.desc": "一条跨所有图层的历史：按一次退一次手势（拖动一个滑块算一次）。快捷键 Ctrl+Z / Ctrl+Shift+Z。",

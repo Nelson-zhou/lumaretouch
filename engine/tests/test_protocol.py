@@ -411,24 +411,31 @@ def test_load_dng_strength_zero_and_raw_fields(engine, tmp_path):
 @pytest.mark.skipif(not os.path.isfile(FIXTURE),
                     reason="缺测试人像，先跑 packaging/make-test-portrait.py")
 def test_unsupported_raw_is_refused_honestly(engine, tmp_path):
-    """一张格式良好但基线不认的 DNG（CFALayout≠1）必须报 error 且引擎不死。
+    """两个后端都解不开的 RAW 必须报 error 且引擎不死。
 
-    反向门禁：如果哪天把 UnsupportedRaw 吞了、或静默换成 Pillow/预览渲染，这条会红——
-    那正是「把没解开的相机 RAW 写成已支持」的假证据来源。
+    这一条原来拿的是 CFALayout≠1 的 DNG：M9 之后那一类不再被拒——系统 LibRaw 能开
+    它（decode 会交接并把「基线没解开」写进 notes，那一臂归 test_raw）。换文件不换判据：
+    坏到谁都不认的文件要报得具体，而不许静默换成 Pillow/预览渲染，也不许把服务
+    进程带下去。反向门禁：哪天把异常吞了或拿一张好图占位，这条就红。
     """
     from PIL import Image
     mt = _load_mtd()
     src = np.asarray(Image.open(FIXTURE).convert("RGB"))[:128, :128]
-    dng = os.path.join(str(tmp_path), "交错.dng")
-    mt.build(dng, src, cfa_layout=2, black=256.0, white=16383.0)
+    good = os.path.join(str(tmp_path), "完整.dng")
+    mt.build(good, src, black=256.0, white=16383.0)
+    cut = os.path.join(str(tmp_path), "截断.dng")
+    with open(good, "rb") as f:
+        blob = f.read()
+    with open(cut, "wb") as f:                       # 只留前 40%：像素区与 IFD 都不在了
+        f.write(blob[: len(blob) * 2 // 5])
     engine.send(cmd="hello")
     engine.wait_for("ready")
     engine.send(cmd="set_device", device="cpu")
     engine.wait_for("device_set")
-    engine.send(cmd="load_image", path=dng, strength=0.0)
+    engine.send(cmd="load_image", path=cut, strength=0.0)
     err = engine.wait_for("error", timeout=30)
-    assert "导入失败" in err["error"] and "CFALayout" in err["error"], err["error"]
-    # 引擎还活着：拒绝一张坏 RAW 不许把服务进程带下去
+    assert "导入失败" in err["error"], err["error"]
+    # 拒绝一张坏 RAW 不许把服务进程带下去：还能再 hello
     engine.send(cmd="hello")
     assert engine.wait_for("ready")["pid"] == engine.proc.pid
 
@@ -2873,6 +2880,49 @@ def test_session_scan_lists_rows_and_thumbs_stay_inside_the_channel(engine, tmp_
     assert st["count"] == 2 and all(x["thumb"] for x in st["docs"]), st
     assert [x["name"] for x in st["docs"]] == ["a.jpg", "b.jpg"]
     assert all(x["opened"] is False for x in st["docs"]), "没开过的格子不许说已开过"
+
+
+# 底片条每一格的“来路”（M9-d）：预览只填浏览那一个槽位，而这一格到底是我们解的
+# 还是相机内嵌的预览，是用户看得见的产品事实。这里不重跑像素，只钉两件事：
+# 事实要说得出（preview/format），而且事件与状态那两份真相不许漂。
+from lumaretouch_engine.ops import libraw as _LR    # noqa: E402
+
+needs_libraw = pytest.mark.skipif(
+    not _LR.available(), reason="机器上没有系统 LibRaw（libraw_r.so）：预览通道不适用")
+
+
+@needs_libraw
+@pytest.mark.skipif(not os.path.isfile(_LR.PROBE_DNG),
+                    reason="缺 raw-probe.dng：重跑 packaging/make-raw-probe.py")
+def test_filmstrip_cell_names_its_picture_source_honestly(engine, tmp_path):
+    d, _files = _strip_dir(tmp_path)
+    import shutil as _sh
+    _sh.copyfile(_LR.PROBE_DNG, os.path.join(str(d), "p.dng"))
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="session", action="scan", dir=str(d), edge=96, quality=60)
+    ev = engine.wait_for("session_scan", timeout=30)
+    assert ev["found"] == 3, ev
+
+    got = _collect(engine, "thumbs_done")
+    assert got["thumbs_done"][0]["failed"] == 0, got["thumbs_done"][0]
+    by_name = {t["name"]: t for t in got["thumb_ready"]}
+    assert set(by_name) == {"a.jpg", "b.jpg", "p.dng"}, sorted(by_name)
+    # JPEG 那一格不是预览（预览只属于 RAW）；DNG 那一格必须说是
+    assert by_name["a.jpg"]["preview"] is False, by_name["a.jpg"]
+    assert by_name["p.dng"]["preview"] is True, by_name["p.dng"]
+    assert by_name["p.dng"]["format"] == "DNG", by_name["p.dng"]
+    assert max(by_name["p.dng"]["w"], by_name["p.dng"]["h"]) <= 96
+
+    st = engine.wait_for("session_state", timeout=30)
+    row = {x["name"]: x for x in st["docs"]}
+    for name in ("a.jpg", "b.jpg", "p.dng"):
+        th = row[name]["thumb"]
+        assert th is not None, row[name]
+        # 状态里丢了 preview 就等于 UI 上分不出“jpg 的真图”与“DNG 的相机预览”：
+        # 宿主重连与重扫之后拿的是这份状态，不是当时那一条事件
+        assert th["preview"] == by_name[name]["preview"], (name, th)
+        assert th["format"] == by_name[name]["format"], (name, th)
 
 
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")

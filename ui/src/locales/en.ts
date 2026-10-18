@@ -164,6 +164,9 @@ export const en: Partial<Record<MsgKey, string>> = {
   "strip.empty": "No filmstrip yet: type a folder and press Scan.",
   "strip.edited": "edited",
   "strip.failed": "unreadable",
+  "strip.dirPlaceholder": "Folder path, e.g. /home/…/Pictures",
+  "strip.preview": "camera preview",
+  "strip.previewTip": "This cell is the camera's embedded JPEG, not a frame we decoded; editing in the viewport works on the master file.",
   // ---- undo / redo (M5-b)
   "side.history": "Undo / Redo",
   "history.desc": "One history across every layer: one press undoes one gesture (a slider drag counts as one). Shortcuts: Ctrl+Z / Ctrl+Shift+Z.",

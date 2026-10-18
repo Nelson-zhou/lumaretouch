@@ -28,13 +28,16 @@ from PIL import Image, UnidentifiedImageError
 
 from .decode import MIN_BUDGET, clamp_budget, load_rgb
 
-# 扩展名白名单只列 decode 真能打开的那些（Pillow 认的位图族 + 自研的 DNG）。
-# 再往里的厂商专有容器（.CR2/.NEF/.ARW/.RW2/.RAF）仍然不收：这一版基线没有它们的
-# 解码器（lossless JPEG 那条路要 libraw 可选插件），把 .CR2 收进底片条只会在点下去
-# 那一刻报「解码失败」，而那已经是用户点到第 37 张了——不如在扫描时就如实说
-# 「这 12 个文件本版本打不开」。判断不靠后缀名而是 decode.sniff_raw，后缀只决定
-# 哪些文件值得去嗅探（一个 60 MB 的 .tif 不值得为了排除而读一遍头）。
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".dng"}
+# 扩展名白名单：Pillow 认的位图族 + RAW 那一族（.dng 由自研读侧兜底，其余七个靠系统
+# LibRaw）。厂商容器收进来是**有条件**的，条件写在 decode.RAW_EXTS 与 raw.raw_backends()
+# 里：装机件带 libraw（deb Depends）就真打得开。把 .CR2 从名单里摘掉是另一种骗法：
+# 扫描只会说“扩展名不在本版本可打开的名单里”，而用户看到的是底片条少了一张——他不
+# 会去查能力清单，只会以为自己拍丢了。现在的形状是：格子在，解不开就在那一格上如实
+# 写为什么（没库 / 这文件坏了），事实不藏在后缀里。
+# 判断走 decode.is_raw：普通 .tif 与 DNG 共用同一个 TIFF 头，得嗅探而不看后缀；
+# 后缀只决定哪些文件值得去嗅探（一个 60 MB 的 .tif 不值得为了排除而读一遍头）。
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff",
+              ".dng", ".arw", ".cr2", ".cr3", ".nef", ".raf", ".orf", ".rw2"}
 
 EDGE = 160                    # 产品默认：底片条一格的长边
 # 下限不是拍一个数：解码器把代理预算夹在 MIN_BUDGET 以上（那是 shm 与显存分配的下界），
@@ -106,17 +109,22 @@ def make_thumb(path: str, *, edge: int = EDGE, quality: int = THUMB_QUALITY) -> 
     长边放到 196 这种数；底片条要的是**长边固定在格子里**，所以再过一道 `thumbnail`
     （只缩不放）。多一次重采样对 160 px 的格子看不见，而少一次就会让底片条被一张
     竖图撑破行高。
+
+    `allow_preview=True` 是全仓唯一一处开启这个开关的地方：底片条就是“浏览”那个槽位，
+    RAW 拿相机内嵌预览毫秒级出图。它不会泄漏到编辑那一路——那一路走的是
+    `load_rgb(...)` 默认参数，那里预览是关着的（分界规则写在 decode.py 顶部）。
     """
     edge = valid_edge(edge)
     if not os.path.isfile(path):
         raise FileNotFoundError(f"图片不存在或不是普通文件：{path}")
     t0 = time.perf_counter()
     try:
-        d = load_rgb(path, clamp_budget(edge * edge))
+        d = load_rgb(path, clamp_budget(edge * edge), allow_preview=True)
     except UnidentifiedImageError as e:
         # 扩展名骗人（把 PDF 改名成 .jpg）是最常见的一类：报得具体，别只说「解码失败」
         raise ValueError(f"扩展名是图片但解不开：{e}") from e
     t_dec = time.perf_counter()
+    is_preview = bool((d.raw or {}).get("source") == "libraw_preview")
 
     def encode(px: int, q: int):
         im = Image.fromarray(d.rgb)
@@ -147,6 +155,7 @@ def make_thumb(path: str, *, edge: int = EDGE, quality: int = THUMB_QUALITY) -> 
     return {"path": path, "name": os.path.basename(path),
             "w": int(im.size[0]), "h": int(im.size[1]),
             "src_w": d.src_w, "src_h": d.src_h, "format": d.fmt,
+            "preview": is_preview,          # 底片条这一格取的是相机内嵌预览，不是我们渲的
             "bytes": len(raw), "quality": q, "reencoded": reencoded, "resized": resized,
             "jpeg_b64": base64.b64encode(raw).decode("ascii"),
             "decode_ms": round((t_dec - t0) * 1000.0, 2),

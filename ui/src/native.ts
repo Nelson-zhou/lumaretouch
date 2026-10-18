@@ -124,7 +124,11 @@ export interface SessionDoc {
   loaded: boolean;
   opened: boolean;
   edits: SessionEdits;
-  thumb: { w: number; h: number; bytes: number; quality: number } | null;
+  /** `preview` 为真时这一格画的是**相机内嵌预览**（RAW 那一族），不是引擎渲的那一帧；
+   *  `format` 是解码报的格式名（DNG/CR2/JPEG…）。两个都不能缺：缺了就分不出
+   *  “jpg 的真图”与“DNG 的相机预览”，而底片条上后者看起来跟前者一模一样。 */
+  thumb: { w: number; h: number; bytes: number; quality: number;
+           preview?: boolean; format?: string | null } | null;
   thumb_error: string | null;
 }
 

@@ -40,3 +40,7 @@ pre.log { font-size:11px; color:var(--mut); max-height:180px; overflow:auto; bac
   width:96px; height:96px; font-size:11px; color:var(--mut); }
 .strip .cell .badge { position:absolute; top:2px; right:2px; font-size:9px; padding:0 4px;
   border-radius:6px; background:var(--acc); color:#1a1a1a; }
+/* “相机预览”的角标：“已调”是暖色（用户自己的动作），这个只是来源事实，
+   不能抢主——所以放在对角、用中性色，不新开一套颜色。 */
+.strip .cell .badge.pv { top:auto; right:auto; bottom:2px; left:2px;
+  background:var(--line); color:var(--mut); }
