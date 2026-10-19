@@ -95,6 +95,12 @@ class LightOp:
         return int(self.weight.nbytes)
 
 
+# 肤色定向层的作用域名单（COLOR-004 局部调色）。放在模块层而不是类里：命令层刚收到
+# 一条 `grade scope=…` 时还没有可活的会话，“这个作用域存不存在”必须先能回答；而事件
+# 载荷与 doc_state 报的都是同一份名单。写两份的下场本仓已经付过很多次学费。
+GRADE_SCOPES = ("all", "skin", "brush")
+
+
 class PreviewPipeline:
     """一张图的 GPU 常驻预览会话。
 
@@ -189,9 +195,15 @@ class PreviewPipeline:
         # M3-b：肤色定向层。与调色层的分工是探针量出来的（ops/grade.py 头部写了数）：
         # 色彩观平滑，33³ 表复现 2 LSB；肤色窗口在 RGB 里陡峭，同一组参数烘进表要差到
         # 7–9 LSB / 9–10% 像素，所以它**不烘表**，走逐帧内核（实测与 f64 参考差 1 LSB，
-        # 而且窗外逐位等于输入）。这一层不持有任何张量：状态就是三个数与一个混合系数。
+        # 而且窗外逐位等于输入）。全图作用域时这一层不持有任何张量（状态就是三个数与
+        # 一个混入比例）；局部调色（brush）起会常驻一份掩膜权重，账单走 grade_resident_bytes。
         self.grade_params: tuple = (0.0, 0.0, 0.0)      # (dh, ds, dv)，提交前已过 check_params
         self.grade_amount: float = 1.0
+        # COLOR-004 局部调色：这一层原来只能全图。作用域把“调谁”与“调多少”分开，
+        # 三个滑块与混入比例的语义一分不改（scope=all 就是旧行为，逐字节相同）。
+        self.grade_scope: str = "all"                   # all | skin | brush
+        self.grade_mask: "np.ndarray | None" = None     # (H,W) uint8，代理帧坐标的画笔覆盖度
+        self._grade_mask_gpu = None                     # (1,1,H,W) float，brush 时才常驻
         self.last_grade_ms: float = 0.0
         # P0：全局曝光与白平衡层（lnx.exposure / lnx.white_balance）。与定向层同构：
         # 状态就是三个数 + 一个参考白，不持有任何张量，所以它既不参缓存键也不随设备重挂。
@@ -447,6 +459,11 @@ class PreviewPipeline:
         self.masks_gpu = None
         self.mask_names = []
         self.landmarks_gpu = None
+        # 调色作用域里 skin 是唯一靠掩膜活着的那个：掩膜一走还留着 scope=skin，
+        # 下一帧渲染就是一条取不到权重的异常（与下面单位场“无源之水”同一条理由）。
+        # brush 靠的是自己那份区域，不受 clear_face 影响。
+        if self.grade_scope == "skin":
+            self.grade_scope = "all"
         # 单位场是从关键点解出来的，关键点一走它们就成了无源之水：继续用等于
         # 拿上一张脸的形状去瘦这一张脸
         if self.deform_units:
@@ -1111,6 +1128,86 @@ class PreviewPipeline:
         dh, ds, dv = self.grade_params
         return bool(float(self.grade_amount) != 0.0 and (dh != 0.0 or ds != 0.0 or dv != 0.0))
 
+    def _grade_weight_gpu(self):
+        """当前作用域对应的那份权重 (1,1,H,W)，None 表示全图（不加混合、逐字节不变）。
+
+        `all` 走的是**真正的短路**而不是“乘一个全 1 的掩膜”：混式的两个操作数在
+        w=1 时确实回到 graded，但那是每帧多跑一遍逐点乘加；而更要紧的是“旧行为逐字节
+        不变”这条承诺不能依赖浮点巧合。与 apply_lut/apply_grade 的“没活就不跑算子”同构。
+        """
+        if self.grade_scope == "all":
+            return None
+        if self.grade_scope == "skin":
+            if self.masks_gpu is None:
+                raise RuntimeError("skin 作用域要人脸掩膜，而本会话还没 precompute")
+            if "skin" not in self.mask_names:
+                # 掩膜在、就是没有那一格：拿 KeyError 去撞每帧渲染等于把一次性
+                # 校验挪到无休止的失败里（set_channel 早就按同一份名单校过）。
+                raise RuntimeError(f"掩膜里没有 skin 通道（可用：{', '.join(self.mask_names)}）")
+            return self.mask("skin")
+        if self._grade_mask_gpu is None:
+            raise RuntimeError("brush 作用域要画笔画出的区域，而当前一份也没有")
+        return self._grade_mask_gpu
+
+    def set_grade_scope(self, scope: str) -> dict:
+        """换作用域。掩膜拿不到就**整条拒**，不静默退回全图。
+
+        这一条不是洁癖：局部调色静默变成全图调色，用户从画面上分不出来（画面真的在
+        变），而他会以为只动了皮肤。与 face/inpaint 的 backend 不许静默降级同一条规矩。
+        """
+        if scope not in GRADE_SCOPES:
+            raise ValueError(f"未知调色作用域 {scope!r}（可用：{', '.join(GRADE_SCOPES)}）")
+        if scope == "skin" and self.masks_gpu is None:
+            raise ValueError("skin 作用域需要人脸掩膜：先跑 precompute（mediapipe 后端）")
+        if scope == "skin" and "skin" not in self.mask_names:
+            raise ValueError(f"skin 作用域需要 skin 掩膜，而本会话的通道里没有它"
+                             f"（可用：{', '.join(self.mask_names) or '无'}）")
+        if scope == "brush" and (self.grade_mask is None or int((self.grade_mask > 0).sum()) == 0):
+            raise ValueError("brush 作用域需要先画出区域：现在一笔也没有")
+        self.grade_scope = scope
+        # brush 的权重只在真要用的时候才常驻；切回 all/skin 就把那份显存放掉
+        self._grade_mask_gpu = (self._np_to_grade_weight(self.grade_mask)
+                                if scope == "brush" else None)
+        return self._grade_payload(layer_recomputed=True)
+
+    def _np_to_grade_weight(self, arr):
+        """uint8 (H,W) 覆盖度 → (1,1,H,W) float，落在本会话的设备上。"""
+        f = torch.as_tensor(arr.astype(np.float32) / 255.0, device=self.device)
+        return f.reshape(1, 1, self.h, self.w).clamp_(0.0, 1.0)
+
+    def set_grade_mask(self, weight, *, mode: str = "replace") -> dict:
+        """递交画笔区域：weight 是 (H,W) uint8 覆盖度（代理帧坐标，0..255）。
+
+        `mode=add` 与已有区域**取并集**（逐像素取大）：第二笔不该把第一笔擦掉，
+        而“多笔累计”如果靠重放每条命令的 rle，历史里任何一次撤销都会连带退回整片区域。
+        """
+        if mode not in ("replace", "add"):
+            raise ValueError(f"未知 grade mask mode {mode!r}（可用：replace/add）")
+        arr = np.asarray(weight)
+        if arr.shape != (self.h, self.w):
+            raise ValueError(f"调色区域尺寸 {arr.shape} != 会话 {(self.h, self.w)}，"
+                             "得用代理帧坐标而不是原图坐标")
+        if arr.dtype != np.uint8:
+            raise ValueError(f"调色区域必须是 uint8（0..255），得到 {arr.dtype}")
+        if not np.isfinite(arr.astype(np.float32)).all():
+            raise ValueError("调色区域含非有限值，整条拒绝")
+        merged = arr if self.grade_mask is None or mode == "replace" \
+            else np.maximum(self.grade_mask, arr)
+        if int((merged > 0).sum()) == 0:
+            raise ValueError("合并后一个像素也没盖到：这一笔不该发这条命令")
+        self.grade_mask = merged
+        if self.grade_scope == "brush":
+            self._grade_mask_gpu = self._np_to_grade_weight(merged)
+        return self._grade_payload(layer_recomputed=True)
+
+    def clear_grade_mask(self) -> dict:
+        """丢掉画笔区域。作用域不会“没掩膜还能是 brush”：顺手退回 all。"""
+        self.grade_mask = None
+        self._grade_mask_gpu = None
+        if self.grade_scope == "brush":
+            self.grade_scope = "all"
+        return self._grade_payload(layer_recomputed=True)
+
     def set_grade(self, dh, ds, dv, amount=None) -> dict:
         """提交一组肤色定向参数。先全量校验，后才写入——被拒不留半截状态。
 
@@ -1132,16 +1229,25 @@ class PreviewPipeline:
         return self._grade_payload(layer_recomputed=False)
 
     def clear_grade(self) -> dict:
+        """关整层：只把三个增量与混入比例回中性。
+
+        **不动作用域与画笔区域**：区域是用户拿笔涂出来的东西，参数滑块归零不该顺手
+        抹掉笔迹（与修容层的 params/clear 分工同构）。要清区域走 clear_grade_mask。
+        """
         self.grade_params = (0.0, 0.0, 0.0)
         self.grade_amount = 1.0
         self.last_grade_ms = 0.0
         return self._grade_payload(layer_recomputed=False)
 
     def _grade_payload(self, *, layer_recomputed: bool) -> dict:
-        """grade_done 的图层字段只在这里组装一次（set/clear/amount 三臂共用一份形状）。
+        """grade_done 的图层字段只在这里组装一次（set/clear/amount/scope/mask 共用一份形状）。
 
         窗口边界与硬上限一并带出去：滑块该夹在哪由引擎说，不让 UI 自己抄一份数、
-        然后两处漂。它们不是计时也不是分段，所以名字与每帧的 grade 段不会撞。"""
+        然后两处漂。它们不是计时也不是分段，所以名字与每帧的 grade 段不会撞。
+
+        作用域与区域覆盖度也从这里报：“现在调的是全图还是只调皮肤/画笔区域”是
+        画面事实，它只能在事件自己身上；UI 自己记得那一格就会在换图/重开后说谎。
+        """
         dh, ds, dv = self.grade_params
         return {
             "grade_dh": float(dh), "grade_ds": float(ds), "grade_dv": float(dv),
@@ -1150,6 +1256,12 @@ class PreviewPipeline:
             "grade_lit": bool(self.has_grade()),
             "grade_limits": [float(DH_LIMIT), float(DS_LIMIT), float(DV_LIMIT)],
             "bytes_grade": int(self.grade_resident_bytes()),
+            # COLOR-004：作用域、可选值、以及“画笔区域到底盖了多少格”一起报出去。
+            # mask_px 是 0 时 scope 不可能是 brush（set_grade_scope 已拦），但那一格
+            # 仍然随事件走：让 UI 能**看到**而不是**推断**“区域空着”。
+            "grade_scope": str(self.grade_scope),
+            "grade_scopes": list(GRADE_SCOPES),
+            "mask_px": 0 if self.grade_mask is None else int((self.grade_mask > 0).sum()),
             "device": str(self.device),
             "layer_recomputed": bool(layer_recomputed),
         }
@@ -1159,7 +1271,7 @@ class PreviewPipeline:
         return not geometry_identity(self.crop_rect, self.crop_rotation)
 
     def set_geometry(self, rect, rotation_degrees: float = 0.0) -> dict:
-        """量程与判据全部交给 ops.geometry.check——本层不拄第二份数，认不出就抛。"""
+        """量程与判据全部交给 ops.geometry.check——本层不抄第二份数，认不出就抛。"""
         x0, y0, x1, y1, r = geometry_check(rect, rotation_degrees)
         self.crop_rect = (x0, y0, x1, y1)
         self.crop_rotation = r
@@ -1241,7 +1353,7 @@ class PreviewPipeline:
         return self.exposure_state()
 
     def exposure_state(self) -> dict:
-        """量程上限由引擎报出去：UI 该夹在哪不该由前端拄一份数（与 grade_limits 同一条）。"""
+        """量程上限由引擎报出去：UI 该夹在哪不该由前端抄一份数（与 grade_limits 同一条）。"""
         e, dk, tn = self.exposure_params
         return {
             "exposure_ev": float(e),
@@ -1287,15 +1399,23 @@ class PreviewPipeline:
             # 不写回也不缓存：非有限值一旦进了 shm 就是一块绿斑，而报错比绿斑好查
             raise ValueError(f"肤色定向产出非有限值，已拒：dh={dh} ds={ds} dv={dv} "
                              f"amount={self.grade_amount}")
+        # COLOR-004：局部调色。混合写成 mix_masked(t, out, 1.0, w) 而不是先混色再乘，
+        # 是为了让“掩膜外逐字节不变”无条件成立：w=0 时 (1-0)*t + 0*out 就是 t 本身。
+        # （这里的 0*out 在 out 有限时恒为 0，而上面那道 isfinite 护栏正好保证了“有限”。）
+        weight = self._grade_weight_gpu()
+        if weight is not None:
+            out = mix_masked(t, out, 1.0, weight)
         if self.device.type != "cpu":
             torch.cuda.synchronize(self.device)
         self.last_grade_ms = (time.perf_counter() - t0) * 1000.0
         return out
 
     def grade_resident_bytes(self) -> int:
-        """本层账单恒为 0：它不持有任何张量。报 0 而不是不报，“查过、确实没占显存”
-        才是这句话；lut/light/deform 三层都因为“不报就等于藏账”而必须报实数。"""
-        return 0
+        """本层账单：以前恒为 0（它不持有张量），局部调色起，brush 作用域会常驻一份
+        掩膜权重。报实数而不是报 0：“查过、确实没占显存”才是那句话，“不报”等于藏账。"""
+        if self._grade_mask_gpu is None:
+            return 0
+        return int(self._grade_mask_gpu.numel() * self._grade_mask_gpu.element_size())
 
     # ---- M6：换底层 ----------------------------------------------------
     def has_background(self) -> bool:

@@ -47,7 +47,7 @@ from .ops.inpaint import hole_extent, levels_for, mask_bbox, inpaint_t, crop_app
 from .ops.lut import DEFAULT_LUT_AMOUNT, LutError, check_amount
 from .ops.upscale import Plan as UpscalePlan
 from .ops.upscale import check_scale, unsharp_bands_np
-from .vram import LightOp, PreviewPipeline, RepairOp
+from .vram import LightOp, PreviewPipeline, RepairOp, GRADE_SCOPES
 
 DEFAULT_TILE = 1024
 MIN_TILE = 256
@@ -121,6 +121,11 @@ class ExportSpec:
     cube: object = None
     lut_amount: float = DEFAULT_LUT_AMOUNT
     grade: tuple = (0.0, 0.0, 0.0, 1.0)      # (dh, ds, dv, amount)
+    # COLOR-004 局部调色：作用域与它的那一片区域（导出尺寸、(H,W) uint8 覆盖度）。
+    # 为什么需要把区域也带到导出：只在屏上局部而出片全图，导出就不是“所见”了——
+    # 而“屏上只动了皮肤、文件里全图都动了”是比“没做局部调色”难查得多的一件事。
+    grade_scope: str = "all"
+    grade_mask: np.ndarray | None = None
     # P0 全局曝光/白平衡：(ev, temperature_shift, tint_shift)。导出走的是同一个
     # PreviewPipeline，所以它与预览是同一份算式而不是“第二次实现”——这正是
     # “所见即所出”能当验收口径的原因。reference_k 缺省用层的默认（D65）。
@@ -150,6 +155,22 @@ class ExportSpec:
             check_params(self.grade[0], self.grade[1], self.grade[2], amount=self.grade[3])
         except GradeError as e:
             raise ExportError(f"肤色定向参数非法：{e}") from None
+        if self.grade_scope not in GRADE_SCOPES:
+            raise ExportError(f"未知调色作用域：{self.grade_scope!r}（可用 {', '.join(GRADE_SCOPES)}）")
+        # 局部作用域 + 点火的定向 = 必须带区域。拿不到区域就把整层放下（命令层干的），
+        # 而不是“那就全图调一下算了”：静默加宽作用域在磁盘上看不出来，而 export_done
+        # 会报一个与实际像素不符的 scope（与 birefnet/lama 不许静默降级同一条规矩）。
+        if (self.grade_scope != "all" and any(float(v) != 0.0 for v in self.grade[:3])
+                and float(self.grade[3]) != 0.0):
+            if self.grade_mask is None:
+                raise ExportError(f"局部调色（scope={self.grade_scope!r}）导出需要那一片区域，"
+                                  "而本份没带上：宁可整层不带调色，也不会把它当成全图调色写出去")
+            gm = np.asarray(self.grade_mask)
+            if gm.ndim != 2:
+                raise ExportError(f"调色区域必须是 (H,W)，得到 {gm.shape}")
+            if int((gm > 0).sum()) == 0:
+                raise ExportError("调色区域一个像素也没盖到：这一层在导出里不会有任何作用，"
+                                  "请清掉局部作用域或重新画一笔")
         if self.cube is not None:
             try:
                 check_amount(self.lut_amount)
@@ -435,6 +456,18 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
             pipe.set_lut(spec.cube, spec.lut_amount)
         if spec.grade != (0.0, 0.0, 0.0, 1.0):
             pipe.set_grade(*spec.grade[:3], amount=spec.grade[3])
+            if spec.grade_scope != "all" and spec.grade_mask is not None:
+                # 逐像素对应：调色是逐点的（margin 里那些像素不参与它），所以按与补丁
+                # 完全相同的窗口切区域就行，不需要重采样也不需要外边扩。
+                sub = spec.grade_mask[cy0:cy1, cx0:cx1]
+                if int((sub > 0).sum()) > 0:
+                    # 与预览同一份库层入口：先挂区域再切作用域（brush 无区域会被当场拒）
+                    pipe.set_grade_mask(sub, mode="replace")
+                    pipe.set_grade_scope("brush")
+                else:
+                    # 这一块完全在区域外：整层不挂 = 该块逐字节与原片同（而不是拿
+                    # scope=brush 去撞一个“无区域”的异常，也不是默默全图调色）
+                    pipe.clear_grade()
         if spec.channel is not None and spec.masks is not None:
             carrier = _MaskCarrier(spec.masks[:, cy0:cy1, cx0:cx1], spec.landmarks)
             carrier._carrier_names = list(spec.mask_names)

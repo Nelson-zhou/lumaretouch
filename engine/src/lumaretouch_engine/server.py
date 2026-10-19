@@ -19,7 +19,8 @@ from .shm import FrameShm, monotonic_ns, shm_name
 # 磨皮参数的默认值只在这里取一次：vram 在模块层就容忍 torch 缺失（CPU job 也能 import），
 # 在这里复用它们而不是写第二份字面量，否则默认值与生产值会漂移。
 from .vram import DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_MID_GAIN, \
-    DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS, DEFAULT_REPAIR, LightOp, RepairOp, warm_device
+    DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS, DEFAULT_REPAIR, GRADE_SCOPES, LightOp, RepairOp, \
+    warm_device
 from .ops.light import DB_EXPOSURE_LIMIT, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
 from .ops.deform import KINDS, DeformGeometryError, check_amounts
 from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
@@ -180,6 +181,13 @@ class Engine:
         # 定向层（M3-b）：引擎侧只存四个数（它不持有张量）。与调色层同一条规矩：
         # 随图清、随设备迁移重提交。
         self._grade = (0.0, 0.0, 0.0, 1.0)
+        # COLOR-004 局部调色：作用域（all/skin/brush）与画笔区域（代理坐标 uint8 覆盖度）。
+        # 它们与 _grade 一样是图层状态、不是渲染缓存，所以生命周期也必须一样（快照、
+        # 切文档、换设备、随代理档作废）。区域与作用域**成对作废**：brush 没有区域、
+        # skin 没有掩膜都是到 apply_grade 取权重那一刻才抛，也就是每一帧都抛——那正是
+        # 「命令收下而画面不动」的形状，所以作废必须一起作，不留半截。
+        self._grade_scope = "all"
+        self._grade_mask = None
         # P0 全局曝光/白平衡：会话侧同样只存那三个数（加一个参考白）。它必须与
         # _grade 走完全一样的生命周期：初始化、换设备重挂、快照、状态上报——漏一个
         # 就是“宿主以为还写着 0.5 EV，引擎里其实是 0”那种两边错配。
@@ -310,7 +318,7 @@ class Engine:
               "history_group_ms": self.HISTORY_GROUP_MS,
               "history_edit_cmds": list(self.EDIT_CMDS),
               # 项目面的能力名单由引擎报出去（与 export 的格式名单同一条理由）：
-              # 前端拄一份 action 名单，两边分叉时“不支持”与“拼错了”长得一模一样
+              # 前端抄一份 action 名单，两边分叉时“不支持”与“拼错了”长得一模一样
               "project_actions": list(self.PROJECT_ACTIONS),
               "project_suffix": PJ.SUFFIX,
               "task_actions": list(self.TASK_ACTIONS)})
@@ -689,6 +697,10 @@ class Engine:
                           "warn": f"新会话重挂换底层失败，已整层清除（{type(e).__name__}）：{e}"})
                     self._bg = dict(active=False, matte=None, bg=None, backend=None,
                                     tol=None, softness=None)
+            # 局部调色（COLOR-004）：作用域与区域同样必须跟着会话走。不重挂就是“会话迁了、
+            # 屏幕上却变成全图调色”，而 grade_done 还写着 brush——与上面 lut/grade 同一条担心。
+            # skin 那一臂在这里可能被推迟（掩膜要 _rehang_precompute 之后才有），那里会再调一次。
+            self._rehang_grade_scope(replayed_for="session_switch")
         emit({"event": "vram_ready", "device": str(pipe.device), "w": w, "h": h,
               "adopted": bool(adopt),
               "bytes_src": int(pipe.src_u8.numel() * pipe.src_u8.element_size()),
@@ -704,12 +716,16 @@ class Engine:
     # 静默丢掉那一层 —— 那是本仓最贵的一族坑（「会话迁了、图层没迁」）的新变体。
     DOC_FIELDS = ("_strength", "_params", "_channel", "_repair_ops", "_redo_ops", "_op_seq",
                   "_light_ops", "_light_redo", "_light", "_deform", "_lut", "_lut_amount",
-                  "_lut_preset", "_grade", "_bg", "_precompute", "_precompute_backend",
+                  "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_bg",
+                  "_precompute", "_precompute_backend",
          "_exposure",
          "_exposure_ref_k", "_crop_rect", "_crop_rotation")
     # 代理档一变就作废的那些层：它们的坐标是**这一档代理帧**上的像素坐标。
     PROXY_BOUND = ("_channel", "_repair_ops", "_redo_ops", "_light_ops", "_light_redo",
-                   "_deform", "_bg", "_precompute", "_precompute_backend")
+                   "_deform", "_bg", "_precompute", "_precompute_backend",
+                   # 调色区域是代理帧像素坐标，作用域活在区域/掩膜之上：掩膜作废而
+                   # 作用域还写着 brush/skin，下一帧就是一条取不到权重的异常。
+                   "_grade_scope", "_grade_mask")
 
     def _fresh_doc_state(self) -> dict:
         """一张还没被人动过的图的起始状态。
@@ -736,6 +752,7 @@ class Engine:
                 "_deform": dict(amounts={k: 0.0 for k in KINDS}, built=False),
                 "_lut": None, "_lut_amount": 1.0, "_lut_preset": None,
                 "_grade": (0.0, 0.0, 0.0, 1.0),
+                "_grade_scope": "all", "_grade_mask": None,
                 "_bg": dict(active=False, matte=None, bg=None, backend=None,
                              tol=None, softness=None),
                 "_precompute": None, "_precompute_backend": None,
@@ -764,6 +781,7 @@ class Engine:
               # 不会互相改；真要出现就地写，这里就得改成拷贝。
               "_lut": self._lut, "_lut_amount": float(self._lut_amount),
               "_lut_preset": self._lut_preset, "_grade": tuple(self._grade),
+              "_grade_scope": str(self._grade_scope), "_grade_mask": self._grade_mask,
               "_exposure": tuple(self._exposure), "_exposure_ref_k": self._exposure_ref_k,
               "_crop_rect": tuple(self._crop_rect), "_crop_rotation": float(self._crop_rotation),
               "_bg": dict(self._bg),
@@ -787,6 +805,10 @@ class Engine:
         self._light_ops = list(self._light_ops)
         self._light_redo = list(self._light_redo)
         self._grade = tuple(self._grade)
+        # 作用域从 JSON 回来是字符串，缺键的旧工程档（1.2.0 之前存的）没有这一项：
+        # 认「全图」而不是拿 None 去和 vram 的名单比。区域是 numpy 原件或 None，
+        # 与 _bg 的遮罩同一条路（project 的资产编码器负责把 ndarray 落成资产）。
+        self._grade_scope = str(self._grade_scope or "all")
         self._bg = dict(self._bg)
         # 从项目文件回来的配方里，元组一律是 JSON 数组。`_grade` 早就在这里归一回，
         # 而 crop/exposure 不归一就会漂：重挂判据与“中性”判据比的都是元组字面量，
@@ -892,6 +914,10 @@ class Engine:
                         "built": bool(v["built"])}
             elif k == "_grade":
                 d[k] = [round(float(x), 6) for x in v]
+            elif k == "_grade_mask":
+                # 与 _bg 的遮罩同一签名口径：shape + 逐像素求和。同一份区域求和恒定，
+                # 而多一笔少一笔都会变——拿数组直接 == 会得出一堆布尔值而不是一个 bool。
+                d[k] = None if v is None else (list(v.shape), int(v.sum()))
             elif k == "_bg":
                 # 遮罩是 (H,W) uint8，拿 shape+sum 当签名：同一个遮罩 sum 定，换一笔必变。
                 mt = v.get("matte")
@@ -1255,7 +1281,7 @@ class Engine:
         # 裁剪/旋转独立一层，不塞在 exposure 的字面里：上一版把 crop 嵌进了
         # exposure 那个字典（缩进也一样），宿主按 doc_state["crop"] 取就永远取不到，
         # 而这份错在 JSON 里看起来完全自洽。量程也不在这里写字面量：ops.geometry
-        # 那份是唯一出处，UI 自己拄的 [-180,180] 与引擎实际拒的值迟早分叉。
+        # 那份是唯一出处，UI 自己抄的 [-180,180] 与引擎实际拒的值迟早分叉。
         crop = geo_state(list(self._crop_rect), float(self._crop_rotation))
         crop["lit"] = not crop["neutral"]
         return {"strength": float(self._strength), "params": dict(self._params),
@@ -1270,7 +1296,14 @@ class Engine:
                         "preset": self._lut_preset},
                 "grade": {"dh": float(self._grade[0]), "ds": float(self._grade[1]),
                           "dv": float(self._grade[2]), "amount": float(self._grade[3]),
-                          "lit": self._grade != (0.0, 0.0, 0.0, 1.0)},
+                          "lit": self._grade != (0.0, 0.0, 0.0, 1.0),
+                          # COLOR-004：作用域与“区域真盖了多少格”。UI 的作用域选择框与
+                          # “被拒/已生效”的文案必须从这里取：换图、重开工程、撤销都会改它，
+                          # 而 UI 自己记一份就是在替引擎说谎。mask_px 从宿主字段算（那才是
+                          # 可重建一份区域的全部信息），不拿会话里那份张量当唯一证人。
+                          "scope": str(self._grade_scope), "scopes": list(GRADE_SCOPES),
+                          "mask_px": 0 if self._grade_mask is None
+                          else int((self._grade_mask > 0).sum())},
                 "exposure": {"ev": float(self._exposure[0]),
                              "temperature_shift": float(self._exposure[1]),
                              "tint_shift": float(self._exposure[2]),
@@ -1977,6 +2010,70 @@ class Engine:
             ev["replayed_for"] = replayed_for
         return ev
 
+    def _drop_grade_scope(self, from_scope: str, why: str) -> None:
+        """局部调色作用域挂不上当前会话 → 整层退回全图，并把这件事说出来。
+
+        宁可退回全图并明说，也不留“宿主说 skin 而引擎里拿不到掩膜”那种两边错配：
+        后者会让每一帧渲染都抛异常，而事件上看不出是哪一层的问题。
+        """
+        emit({"event": "engine_warn",
+              "warn": f"局部调色作用域 {from_scope!r} 未能重挂，已退回全图（{why}）"})
+        self._grade_scope = "all"
+        if self._vram is not None:
+            try:
+                if from_scope == "brush":
+                    # 那份区域对本会话已经没有任何意义（尺寸对不上或干脆不在了）：
+                    # 留着它只会让下一次重挂再撞一遍
+                    self._grade_mask = None
+                    self._vram.clear_grade_mask()
+                # skin 挂不上不该顺手抹掉用户画的笔迹：区域与人脸掩膜是两回事
+                self._vram.set_grade_scope("all")
+            except Exception as e:      # 回滚再失败就只能说清“重新导图”，不留一个看起来已回滚的状态
+                emit({"event": "engine_warn",
+                      "warn": f"调色作用域回滚失败（{type(e).__name__}）：{e}，本会话不可信，"
+                              "请重新导入图片"})
+
+    def _rehang_grade_scope(self, *, replayed_for: str) -> None:
+        """把存下的调色作用域/区域重挂到**当前会话**（换设备、切文档、撤销重做都走这里）。
+
+        三条臂各有归属：all 什么都不做；brush 靠存下的区域（尺寸对不上就整条放下）；
+        skin 靠掩膜，而掩膜要等 `_rehang_precompute` 挂上才存在 —— 所以它在这里可能被
+        **推迟**而不是判失败（掩膜挂上后还会再调一次）。推迟不等于说谎：等不到掩膜的
+        那种局面（本档就没有预计算产物）当场退回全图。
+
+        不写两份的原因与 `_rehang_precompute` 一样：会话新建了而作用域没重挂，新会话
+        里这一层是全图，屏幕会把局部调色算成全局调色，而 grade_done 里报的还是 brush。
+        """
+        pipe = self._vram
+        scope = str(self._grade_scope or "all")
+        if pipe is None or scope == "all":
+            return
+        if scope not in GRADE_SCOPES:
+            self._drop_grade_scope(scope, f"{replayed_for}：未知作用域")
+            return
+        if scope == "skin":
+            if self._precompute is None:
+                self._drop_grade_scope(scope, f"{replayed_for}：本档没有人脸掩膜可用")
+                return
+            if pipe.masks_gpu is None:
+                return          # 等 _rehang_precompute 挂上掩膜后再试一次
+            try:
+                pipe.set_grade_scope("skin")
+            except (ValueError, RuntimeError) as e:
+                self._drop_grade_scope(scope, f"{replayed_for}：{e}")
+            return
+        # brush：区域是代理帧坐标的 uint8，换会话必须重新上一次显存
+        if self._grade_mask is None:
+            self._drop_grade_scope(scope, f"{replayed_for}：画笔区域不在了")
+            return
+        try:
+            pipe.set_grade_mask(self._grade_mask, mode="replace")
+            pipe.set_grade_scope("brush")
+        except (ValueError, RuntimeError) as e:
+            # 尺寸对不上（工程档存的是另一档代理尺寸）也走这里：那份区域对本会话没有
+            # 任何意义，留着它只会让下一次重挂再撞一遍
+            self._drop_grade_scope(scope, f"{replayed_for}：{e}")
+
     def _rehang_precompute(self, *, replayed_for: str) -> bool:
         """把 CPU 原件形态的预计算产物挂到**当前会话**上。
 
@@ -1999,6 +2096,10 @@ class Engine:
             self._precompute_backend = None
             self._channel = None
             self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+            # 掩膜没了，靠它活着的那个调色作用域也必须一起放下（库层 clear_face 已经把
+            # vram 那一侧退回 all，这里不放宿主字段就会继续报“只调皮肤”）
+            if str(self._grade_scope) == "skin":
+                self._drop_grade_scope("skin", f"{replayed_for}：掩膜重挂失败")
             return False
         emit(self._precompute_ready_event(
             self._precompute, info,
@@ -2009,6 +2110,9 @@ class Engine:
             attach_ms=round((monotonic_ns() - t_p) / 1e6, 2),
             total_ms=round((monotonic_ns() - t_p) / 1e6, 2),
             replayed_for=replayed_for))
+        # 掩膜刚挂上，这里才是 skin 作用域能落地的时刻（_attach_pipeline 里那次可能被推迟）。
+        # 放在 ready 事件之后：事件序列先说“掩膜有了”，再说“调色只吃那一片”。
+        self._rehang_grade_scope(replayed_for=replayed_for)
         return True
 
     def cmd_precompute(self, p: dict):
@@ -2731,13 +2835,24 @@ class Engine:
             emit({"event": "engine_warn",
                   "warn": f"调色层回滚失败（{type(e).__name__}）：{e}，本会话不可信，请重新导入图片"})
 
-    def _restore_grade(self, prev) -> None:
-        """回滚肤色定向层。与 _restore_lut 同一条：回滚再失败就明说“重新导图”。"""
+    def _restore_grade(self, prev, prev_scope=None, prev_mask=None) -> None:
+        """回滚肤色定向层（带作用域与画笔区域）。与 _restore_lut 同一条：回滚再失败就明说“重新导图”。
+
+        顺序必须是 mask → scope：brush 没有区域会被库层当场拒（那条拒不是洁癖，是
+        “拿不到掩膜就不能只调那一片”）。prev_scope 缺省（cmd_lut 那条旧调用只回滚四个数）
+        时不动作用域——它本来也不碰这一层。
+        """
         try:
             if prev == (0.0, 0.0, 0.0, 1.0):
                 self._vram.clear_grade()
             else:
                 self._vram.set_grade(prev[0], prev[1], prev[2], amount=prev[3])
+            if prev_scope is not None:
+                if prev_mask is None:
+                    self._vram.clear_grade_mask()
+                else:
+                    self._vram.set_grade_mask(prev_mask, mode="replace")
+                self._vram.set_grade_scope(str(prev_scope))
         except Exception as e:
             emit({"event": "engine_warn",
                   "warn": f"肤色定向回滚失败（{type(e).__name__}）：{e}，本会话不可信，"
@@ -3151,7 +3266,7 @@ class Engine:
         任何缓存键：改它不会让滤波重算，反向也一样。
 
         量程不靠这里的字面量：引擎把硬上限随每次事件报出去（exposure_limits），
-        UI 自己拄一份数是两个会漂的地方。
+        UI 自己抄一份数是两个会漂的地方。
         """
         action = p.get("action", "set")
         if action not in ("set", "clear"):
@@ -3216,17 +3331,25 @@ class Engine:
         emit(fr)
 
     def cmd_grade(self, p: dict):
-        """肤色 HSL 定向（M3-b）：三个滑块 + 一个混入比例。
+        """肤色 HSL 定向（M3-b）+ 局部调色（COLOR-004）：三个滑块、一个混入比例、一个作用域。
 
         与 cmd_lut 的区别只有一件：这一层不拿表，拿的是公式（窗口内逐帧内核）。
         其余铁律逐字沿用：跑靶互斥、先全量校验后一次性提交、被拒整条不留痕、
         出帧失败回滚 + 补帧、事件只有一个组装点。它与磨皮/修容/形变一样不参与
         任何缓存键：改它不会让滤波重算，反向也一样。
+
+        六个 action：set（增量）/amount（混入比例）/clear（关整层，**不动区域**）/
+        scope（all|skin|brush）/mask（画笔区域）/mask_clear（丢掉区域）。两条硬规矩：
+        ① 作用域要不到掩膜就整条拒，不静默退回全图（局部调色静默变成全图调色，用户从
+        画面上分不出来，而他会以为只动了皮肤）；② **落笔即生效** —— 涂了一笔而画面不
+        动是这一仓最像 bug 的体验，所以 mask 那一条在区域真非空时顺手把作用域切到
+        brush，并把最终作用域随 grade_done 报出去（UI 的选择框读它，不自己记一份）。
         """
         action = p.get("action", "set")
-        if action not in ("set", "clear", "amount"):
+        if action not in ("set", "clear", "amount", "scope", "mask", "mask_clear"):
             emit({"event": "error",
-                  "error": f"未知 grade action: {action}（可用：set/clear/amount）"})
+                  "error": f"未知 grade action: {action}（可用：set/clear/amount/"
+                           "scope/mask/mask_clear）"})
             return
         if not self._image_loaded or self._vram is None:
             emit({"event": "error", "error": "尚未 load_image"})
@@ -3243,14 +3366,17 @@ class Engine:
         # 那是“按了滑块但画面不动、而事件看起来完全正常”的下一个版本。
         # cmd 本身也算一个键（命令与参数同层），所以它必须在白名单里——第一版就是
         # 忘了它，协议用例一跑就全军“grade 收到不认识的参数：cmd”。
-        extra = sorted(set(p) - {"cmd", "action", "dh", "ds", "dv", "amount"})
+        extra = sorted(set(p) - {"cmd", "action", "dh", "ds", "dv", "amount",
+                                 "scope", "rle", "feather", "mode"})
         if extra:
             emit({"event": "error", "error": f"grade 收到不认识的参数：{', '.join(extra)}"
-                  "（可用：dh / ds / dv / amount）"})
+                  "（可用：dh / ds / dv / amount / scope / rle / feather / mode）"})
             return
         t_start = monotonic_ns()
         prev = self._grade
         prev_preset = self._lut_preset
+        prev_scope = str(self._grade_scope)
+        prev_mask = self._grade_mask
         if action == "set":
             cur = dict(dh=self._grade[0], ds=self._grade[1], dv=self._grade[2])
             given = {k: p[k] for k in ("dh", "ds", "dv") if p.get(k) is not None}
@@ -3283,6 +3409,80 @@ class Engine:
                 return
             self._grade = (self._vram.grade_params[0], self._vram.grade_params[1],
                            self._vram.grade_params[2], float(self._vram.grade_amount))
+        elif action == "scope":
+            scope = p.get("scope")
+            if not isinstance(scope, str) or not scope:
+                emit({"event": "error", "error": "grade scope 缺 scope：需要 all/skin/brush 三选一"})
+                return
+            try:
+                # 名单与判据全部交回库层（vram.GRADE_SCOPES）：命令层抄一份就是下一轮
+                # 加第四种作用域时漏改的那一处，而 skin/brush 的“掩膜在不在”只有会话知道
+                info = self._vram.set_grade_scope(scope)
+            except (ValueError, RuntimeError) as e:
+                emit({"event": "error", "error": f"调色作用域被拒，会话原样未动：{e}"})
+                return
+            self._grade_scope = str(self._vram.grade_scope)
+            self._grade_mask = self._vram.grade_mask
+        elif action == "mask":
+            import numpy as np
+
+            from .ops.inpaint import feather_np, mask_from_rle
+
+            rle = p.get("rle")
+            if not isinstance(rle, list) or not rle:
+                emit({"event": "error", "error": "grade mask 缺 rle 或 rle 为空："
+                      "应为 [[y,x,len,value255], …]，从代理帧坐标采集"})
+                return
+            mode = str(p.get("mode", "add"))
+            if mode not in ("add", "replace"):
+                emit({"event": "error", "error": f"grade mask mode={mode!r} 非法（可用：add/replace）"})
+                return
+            try:
+                feather = int(p.get("feather", 2))
+            except (TypeError, ValueError):
+                emit({"event": "error", "error": f"feather 非法：{p.get('feather')!r}（需 0–8 的整数）"})
+                return
+            if not 0 <= feather <= 8:
+                emit({"event": "error", "error": f"feather={feather} 超出范围 [0, 8]"})
+                return
+            h, w = self._vram.h, self._vram.w
+            try:
+                hard = mask_from_rle(rle, h, w)
+            except (ValueError, TypeError) as e:
+                emit({"event": "error", "error": f"rle 非法，整条拒绝：{e}"})
+                return
+            soft = feather_np(hard, feather) if feather else hard.astype(np.float32)
+            weight = np.round(np.clip(soft, 0.0, 1.0) * 255.0).astype(np.uint8)
+            if int((weight > 0).sum()) == 0:
+                emit({"event": "error", "error": "羽化后覆盖度归零：画笔太小或坐标不匹配"
+                      "（会话为代理帧尺寸，得用代理帧坐标而不是原图坐标）"})
+                return
+            try:
+                info = self._vram.set_grade_mask(weight, mode=mode)
+            except (ValueError, RuntimeError) as e:
+                emit({"event": "error", "error": f"调色区域被拒，会话原样未动：{e}"})
+                return
+            self._grade_mask = self._vram.grade_mask
+            if self._vram.grade_scope != "brush":
+                # 落笔即生效（见 docstring 那条理由）。区域刚刚校过非空，这一步按库层
+                # 的判据不可能失败；真失败了（例如以后改了 setter）就走成对回滚，
+                # 不留“区域多了一笔而作用域还是 all”那种半截状态。
+                try:
+                    info = self._vram.set_grade_scope("brush")
+                except (ValueError, RuntimeError) as e:
+                    self._grade_mask = prev_mask
+                    self._grade_scope = prev_scope
+                    self._restore_grade(prev, prev_scope, prev_mask)
+                    emit({"event": "error", "error": f"落笔后切局部作用域失败，已退回上一状态：{e}"})
+                    return
+            self._grade_scope = str(self._vram.grade_scope)
+            self._grade_mask = self._vram.grade_mask
+        elif action == "mask_clear":
+            info = self._vram.clear_grade_mask()
+            # 库层会顺手把 brush 退回 all（没区域还写着 brush 就是每帧一异常），
+            # 所以这两个字段必须从会话取而不是写死
+            self._grade_mask = self._vram.grade_mask
+            self._grade_scope = str(self._vram.grade_scope)
         else:
             info = self._vram.clear_grade()
             self._grade = (0.0, 0.0, 0.0, 1.0)
@@ -3292,7 +3492,9 @@ class Engine:
         except Exception as e:
             self._grade = prev
             self._lut_preset = prev_preset
-            self._restore_grade(prev)
+            self._restore_grade(prev, prev_scope, prev_mask)
+            self._grade_scope = str(self._vram.grade_scope)
+            self._grade_mask = self._vram.grade_mask
             try:
                 back = self._write_current_frame("grade")
                 back.pop("render_ms", None)
@@ -3465,6 +3667,10 @@ class Engine:
                           broad_gain=float(p["broad_gain"]), mid_gain=float(p["mid_gain"]),
                           detail_gain=float(p["detail_gain"]),
                           grade=tuple(snap["grade"]), cube=snap["lut"],
+                          # COLOR-004：作用域从 snap 取而不是读 self._grade_scope——导出跑在
+                          # worker 线程里，而 stdin 线程随时可能在切作用域（上面那段理由）。
+                          # 缺键的旧批次台账（存于 1.2.0 之前）当“全图”，不拿 None 去比名单。
+                          grade_scope=str((snap.get("grade_scope") or "all")),
                           # 旧底片条格子里没这个键（它是在这一层之前存下的）：用 .get 兜零而
                           # 不是直接索引——拿历史快照导出应当“没有曝光层”，不是报错。
                           exposure=tuple(snap.get("exposure", (0.0, 0.0, 0.0))),
@@ -3476,6 +3682,13 @@ class Engine:
                           sharpen_amount=float(snap.get("sharpen", 0.0)))
         if not for_document:
             skipped += ["repair", "light", "deform", "channel（笔迹与掩膜属于当前文档）"]
+            if spec.grade_scope != "all":
+                # 局部调色那一片也是**这一张图**的：skin 来自当前文档的预计算，brush 来自
+                # 当前文档的笔迹。拿不到那一片就把整层调色一起放下，而不是“那就全图调一下”：
+                # 把局部调色搬成全局调色不是“批量应用设置”，而是一张错图。
+                spec.grade = (0.0, 0.0, 0.0, 1.0)
+                spec.grade_scope = "all"
+                skipped.append("grade 整层（局部调色作用域属于当前文档，不能搬到别的图）")
             return spec, skipped
         spec.repair = [RepairOp(op_id=op.op_id,
                                 weight=resample_field(op.weight, (eh, ew), uint8=True),
@@ -3504,6 +3717,37 @@ class Engine:
                 spec.channel = snap["channel"]
                 spec.mask_names = list(names)
                 spec.masks = resample_field(np.asarray(arr, dtype=np.float32), (eh, ew))
+        # COLOR-004：局部调色也要跟到导出。两条臂的“那一片”来自不同地方：brush 用存下的
+        # 画笔区域，skin 用当前档的人脸掩膜。两者都是代理帧坐标上的连续覆盖度，所以与
+        # 修容/减淡笔迹走同一个 resample_field（双线性、uint8）——预览与导出是同一个连续场
+        # 的两张网格，不是两套口径。
+        if spec.grade_scope != "all" and tuple(spec.grade) != (0.0, 0.0, 0.0, 1.0):
+            cov = None
+            if spec.grade_scope == "brush":
+                gm = snap.get("grade_mask")
+                if gm is None:
+                    skipped.append("grade 整层（画笔区域不在了）")
+                else:
+                    # 不拿“与会话尺寸相等”当条件：代理档是按原图长宽比算出来的，
+                    # 从任何一档代理网格到导出网格都是同一个连续场的重采样（与笔迹
+                    # 同一条处理），而这里要防的是“静默加宽到全图”，不是网格尺寸。
+                    cov = np.asarray(gm)
+            else:      # skin：从预计算产物里取那一片，不拿脸框去猜一个粗矩形
+                if pc is None or "skin" not in (pc.masks or {}):
+                    skipped.append("grade 整层（没有可用的 skin 掩膜）")
+                else:
+                    # 预览里走的是 float 掩膜，这里先量化成 uint8 覆盖度再重采样（与 brush
+                    # 同一个入口）。差异上界 0.5/255 的权重，而导出本来就是另一张网格：
+                    # export.py 头部定下的口径是“同尺寸上分块==整幅”，不是“与预览逐字节”。
+                    cov = np.round(np.clip(np.asarray(pc.masks["skin"], dtype=np.float64),
+                                           0.0, 1.0) * 255.0).astype(np.uint8)
+            if cov is not None:
+                if int((cov > 0).sum()) == 0:
+                    skipped.append("grade 整层（调色区域一个像素也没盖到）")
+                else:
+                    spec.grade_mask = resample_field(cov, (eh, ew), uint8=True)
+                    # 作用域名字原封不动留在 spec.grade_scope 里（skin 就是 skin）：导出环
+                    # 拿那份重采样后的覆盖度执行，而事件报的是用户选的那一档。
         return spec, skipped
 
     def cmd_export(self, p: dict):
@@ -3588,7 +3832,7 @@ class Engine:
             emit({"event": "error", "error": f"quality={quality} 越界（需要 1~100）"})
             return
         # 放大（M7）：这一层只做"能不能解析"的校，参数上下限的唯一口径在
-        # ExportSpec.check（与各层 setter 同源），不在这里拄第二份数
+        # ExportSpec.check（与各层 setter 同源），不在这里抄第二份数
         from .ops.upscale import check_scale
         try:
             scale = check_scale(p.get("scale", 1))
@@ -3685,6 +3929,7 @@ class Engine:
         # 参数在命令线程里全部拍定：worker 里不再读 self._*，否则中途改一下滑块，
         # 这一批里前几张与后几张用的就不是同一套设置（而事件里只写了一份）
         snap = dict(strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
+                    grade_scope=str(self._grade_scope), grade_mask=self._grade_mask,
                     exposure=tuple(self._exposure), exposure_ref_k=self._exposure_ref_k,
                     crop_rect=tuple(self._crop_rect), crop_rotation=float(self._crop_rotation),
                     lut=self._lut, lut_amount=self._lut_amount, light=dict(self._light),
