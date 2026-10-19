@@ -53,7 +53,10 @@ echo "✓ 已装 $n 个引擎文件，全部与暂存内容逐字节一致"
 # 支持多个标记（一个包同时接了两个里程碑时，只卡一个会漏）：不传就走上一轮的默认值。
 # 默认值必须每轮往上推：留着几轮前的标记，这条检查就只是好看——旧包也一定含它。
 markers=("$@")
-if [ ${#markers[@]} -eq 0 ]; then markers=(all_landmarks _deform_default deform_scopes _pick_loop pick_sensitivities); fi
+# 1.7.0 推到本轮：ANCHORS_BY_KIND / deform_kinds / SMILE_LIFT_OF_MOUTH_W 是形变方向约定
+# 那一修之后才有的符号（装在旧包里的话这三个一定缺其二）。`_pick_loop` 那类上一轮的
+# 标记换成 `pick_sensitivities` 保住挑图那一臂——两条里程碑都在这一版里，只卡一条会漏。
+if [ ${#markers[@]} -eq 0 ]; then markers=(ANCHORS_BY_KIND deform_kinds SMILE_LIFT_OF_MOUTH_W pick_sensitivities); fi
 for marker in "${markers[@]}"; do
   if grep -rq "$marker" "$installed"; then
     echo "✓ 装机代码含本轮特征标记 '$marker'"
