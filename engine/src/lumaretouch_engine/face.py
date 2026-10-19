@@ -23,7 +23,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -84,7 +84,43 @@ class FacePrecompute:
     # 人能预期的。这一格必须上报，让上层能把单脸范围的操作显式禁用，而不是拿
     # 其中一张脸的结果去服务整张图。synthetic 后端给的是模板，按定义是 1。
     num_faces: int = 1
+    # 探到的**每一张**脸的 478 点（PORTRAIT-003）。只留第 0 张就是“静默选型”的
+    # 硬件前提：用户想改第二个人时，引擎里根本没有第二个人的几何可用。
+    # `landmarks` 是 `all_landmarks[face_index]` 的同一份数据（不是拷贝）：下游
+    # （deform 建层、导出、vram 上传）全部只读 `.landmarks`，选型只需换这一个视图，
+    # 不处在六条调用点里各接一次 index（那必漂）。
+    all_landmarks: list = field(default_factory=list)
+    face_index: int = 0
     notes: list[str] = field(default_factory=list)
+
+    def faces(self) -> list[dict]:
+        """可选人脸名单（归一化盒 + 面积占比）。这是“能选哪几个人”的唯一出处：
+        UI 画几个 chip、engine 校验收到的 index，都从这一份算，不数第二遍。"""
+        out = []
+        for i, lm in enumerate(self.all_landmarks or [self.landmarks]):
+            box = _norm_box(lm)
+            out.append({"index": i,
+                        "box": [round(float(v), 5) for v in box] if box else None,
+                        "area": (round(float((box[2] - box[0]) * (box[3] - box[1])), 5)
+                                 if box else 0.0)})
+        return out
+
+    def select_face(self, index: int) -> "FacePrecompute":
+        """换一张脸：返回一个新视图（同一个 masks、同一个 all_landmarks）。
+
+        掩膜不重算也不该重算：selfie 分割给的是“人”这一整块，与选哪张脸无关；
+        而选错的 index 必须响——静默钳到 0 就是拿“你选了 5”去服务 0 号，而画面
+        确实只动了 0 号那一张，人看不出来。
+        """
+        pool = self.all_landmarks or [self.landmarks]
+        if not isinstance(index, int) or isinstance(index, bool):
+            raise ValueError(f"face index 要是整数，得到 {type(index).__name__}")
+        if not 0 <= index < len(pool):
+            raise ValueError(f"face index {index} 不在名单里（这一轮探到 {len(pool)} 张脸）")
+        lm = pool[index]
+        if lm.shape != (NUM_LANDMARKS, 3):
+            raise ValueError(f"第 {index} 张脸的关键点不是 {NUM_LANDMARKS} 点契约：{lm.shape}")
+        return replace(self, landmarks=lm, face_index=index, face_box=_norm_box(lm))
 
     def stack(self) -> tuple[np.ndarray, list[str]]:
         """按名字排序堆成 (K,H,W)，通道名顺序因此是确定的、与 dict 插入顺序无关。"""
@@ -112,7 +148,14 @@ class FacePrecompute:
             # 人数与超范围判据：UI 拿 scope_block 把面部重塑整栏禁用并写明原因，
             # 不去自己数 notes 里的中文（自己数就是一种双出处）
             "num_faces": int(self.num_faces),
+            # scope_block 说的是“这一轮分析的结果是多人图”，不是“用户能不能选”。
+            # 显式选型后该不该放行是**文档状态**（server 那一层），不在这里翻牌：
+            # 把两者混在一格里，SCOPE-001 那条 P0 就验不到它该验的东西了。
             "scope_block": ("multi_face" if self.num_faces > 1 else None),
+            # 可选名单与当前生效的那一张（PORTRAIT-003）：名单只这一处出处，
+            # UI 画几个 chip、engine 校验 index，都拿它算。
+            "face_index": int(self.face_index),
+            "faces": self.faces(),
             "max_faces_probed": SCOPE_MAX_FACES,
             "proxy": [h, w],
             "notes": self.notes,
@@ -164,6 +207,7 @@ class SyntheticFace:
         t_detect = _now_ms(t0)
         return FacePrecompute(
             landmarks=lm,
+            all_landmarks=[lm],       # 单一脸后端：名单里就一张（PORTRAIT-003 的 chip 因此只一个）
             masks={"skin": mask},
             backend=self.name,
             t_detect_ms=t_detect,
@@ -222,6 +266,7 @@ class TemplateFace:
                 "五官微调会作用到大片非脸区域。要按脸落点，请装 mediapipe 插件后端")
         return FacePrecompute(
             landmarks=lm,
+            all_landmarks=[lm],       # 模板按一个肤色盒拟合，按定义只一张
             masks={"skin": mask},
             backend=self.name,
             t_detect_ms=t_detect,
@@ -326,7 +371,17 @@ class MediaPipeFace:
             raise RuntimeError("MediaPipe 未在这张图上检测到人脸（代理档分辨率过低或构图不符）；"
                                "不许退成占位点数——那会让 478 点契约看起来通过了")
         n_faces = len(res.face_landmarks)
-        pts = np.array([[p.x, p.y, p.z] for p in res.face_landmarks[0]], dtype=np.float32)
+        # 探到的每一张全部留下（PORTRAIT-003）：只留 [0] 的话，“改第二个人”在引擎里
+        # 根本没有几何可用，而用户只会在画面上看到“我选了右侧那位而动的是左侧那位”。
+        # 逐张校 478 点契约：哪一张不是 478 点就整条拒，不拿一张坏点位冒充“可选”。
+        all_pts = []
+        for i, one in enumerate(res.face_landmarks):
+            one_pts = np.array([[q.x, q.y, q.z] for q in one], dtype=np.float32)
+            if one_pts.shape != (NUM_LANDMARKS, 3):
+                raise RuntimeError(f"第 {i} 张脸的关键点数量不是 {NUM_LANDMARKS}："
+                                   f"得到 {one_pts.shape}，契约破坏（不拿坏点位继续跑）")
+            all_pts.append(one_pts)
+        pts = all_pts[0]
         if pts.shape != (NUM_LANDMARKS, 3):
             raise RuntimeError(f"关键点数量不是 {NUM_LANDMARKS}：得到 {pts.shape}，契约破坏")
         t_detect = _now_ms(t0)
@@ -362,10 +417,13 @@ class MediaPipeFace:
             multi_face_note.append(
                 f"画面里探到 {n_faces} 张脸（上限探 {SCOPE_MAX_FACES} 张）：面部重塑属 "
                 f"target_scope=single_face，本版本不拿其中某一张冒充「那张脸」——"
-                "多人同图时这一栏显式禁用（SCOPE-001）")
+                "要改谁就 `face select` 显式选定那一张（PORTRAIT-003），没选之前这一栏"
+                "显式禁用并写明原因（SCOPE-001）")
 
         return FacePrecompute(
             landmarks=pts,
+            all_landmarks=all_pts,
+            face_index=0,
             # 自检分割给的是“人”，通道名先按现有语义命名，M2 换多类模型再拆
             masks={"skin": mask},
             backend=self.name,

@@ -153,6 +153,13 @@ class Engine:
         self._precompute = None
         self._precompute_backend = None
         self._channel = None
+        # 多人图里“正在改哪一张”的选择（PORTRAIT-003）。它必须在这里有个起点：
+        # `_capture_state` 是从 live 字段抄的，而一张从未预计算过的图也会走快照（切文档/
+        # 存工程），不在这里初始化就会在那些路径上撞 AttributeError。上一版就是只进了
+        # 名单与快照、没进构造，响在 test_history 那三条臂上。
+        self._face_index = 0
+        self._face_box = None
+        self._face_explicit = False
         # 磨皮参数（M1-3c）：与 strength 不同，它们变了滤波结果才会变。缓存键靠这个字典，
         # 所以它必须存在引擎侧而不是只在调用方：否则报表上看不出「这一帧重算了没」。
         self._params = dict(radius=DEFAULT_RADIUS, eps=DEFAULT_EPS,
@@ -174,6 +181,12 @@ class Engine:
         # 形变层（M2-b）：存的是三个滑块的值，单位场不存（它能从关键点重算，
         # 而关键点已经在 _precompute 里）。换设备重建时重新 build 一次，55 ms。
         self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+        # 「层在而单位场不在」这一格（CORE-001 重开 / 会话迁移）：关键点不随工程文件走
+        # （它是模型派生物），所以重开那一刻必然出现「用户明明有一层瘦脸，而单位场还没解出来」。
+        # 上一版没有这一格：_attach_pipeline 见没关键点就把整层归零，于是「保存重开后配方少了
+        # 一层」——而配方完整恢复正是 CORE-001 的 then。这一格是待重挂标记：滑块值留在
+        # _deform["amounts"]，built=False，关键点一回来就由 _rebuild_deform_for_landmarks 补上。
+        self._deform_defer = False
         # 调色层（M3-a2）：引擎侧存的是那张表本身（CPU 原件）与混合系数。
         # 表不存会话里只存在这里是不够的：常驻体积张量活在一块设备上，换设备必须重挂。
         self._lut = None
@@ -261,6 +274,13 @@ class Engine:
         # 当前文档上“最后一次套用的预设”（id/名/作用域/套完那一组参数）。UI 的下拉
         # 显示它而不是前端自己记一份：报之前还要比一次参数（见 `_preset_last_applied`）。
         self._preset_last: dict | None = None
+        # 名单铁律的第三条腿：DOC_FIELDS 里每一项都必须在构造里有个起点。前两条腿
+        # （_fresh_doc_state 与 _capture_state 互相校名单）照不出“构造里少写一行”：那两份
+        # 名单是同一个口径写在了两处，而 AttributeError 要走到 _capture_state 才响——本轮真实撞到
+        # （face 那三键进了名单与快照，却没进 __init__）。这里构造末尾自校一次，
+        # 把“少一行”提前成创建引擎就响。
+        _missing = [k for k in self.DOC_FIELDS if not hasattr(self, k)]
+        assert not _missing, f"__init__ 没给这些文档字段起点：{_missing}"
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
@@ -622,12 +642,19 @@ class Engine:
             # 关键点不在（没 precompute）时不能默默建不起来：那会“迁了会话、
             # 滑块还在 0.6 但画面不动”，而事件里看不出异常。上一版这段只有 if、
             # 没有 else，注释里写的担心恰好就是代码缺的那一半。
+            # 但上一版的 else 走得更远：它把整层归零。重开工程那一条路（关键点不随
+            # 工程文件走，见 _project_build）一定会撞在这里，于是用户的一层瘦脸在
+            # “保存→重开”之间悄悄消失——配方完整恢复是 CORE-001 的 then，不是“参数碰巧还在”。
+            # 所以这里改成「待重挂」：值留着、built=False、报一条 defer 事件，关键点一回来就重建。
             if self._deform["built"]:
                 if self._precompute is None:
                     emit({"event": "engine_warn",
-                          "warn": "会话已迁到新设备，但没有关键点可重建形变层，已整层清除"})
-                    self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
-                    self._emit_deform_state("invalidate", reason="没有关键点可重建单位场")
+                          "warn": "会话已迁到新设备，但没有关键点可重建形变层：滑块值已存住，"
+                                  "等下一次 precompute 自动重挂（不先清掉用户那一层）"})
+                    self._deform_defer = any(abs(float(v)) > 0.0
+                                             for v in self._deform["amounts"].values())
+                    self._deform = dict(amounts=dict(self._deform["amounts"]), built=False)
+                    self._emit_deform_state("defer", reason="没有关键点可重建单位场，已存住等重挂")
                 else:
                     # 不补帧：调用方（换设备那一条）紧后就自己渲染并写 shm，
                     # 而会话刚迁移时 _write_current_frame 抱异常会把整个迁移打断
@@ -715,14 +742,20 @@ class Engine:
     # 「一份文档状态到底包含哪些字段」只有这一处名单。新加一层而不进来，切文档就会
     # 静默丢掉那一层 —— 那是本仓最贵的一族坑（「会话迁了、图层没迁」）的新变体。
     DOC_FIELDS = ("_strength", "_params", "_channel", "_repair_ops", "_redo_ops", "_op_seq",
-                  "_light_ops", "_light_redo", "_light", "_deform", "_lut", "_lut_amount",
+                  "_light_ops", "_light_redo", "_light", "_deform", "_deform_defer", "_lut",
+                  "_lut_amount",
                   "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_bg",
-                  "_precompute", "_precompute_backend",
+                  "_precompute", "_precompute_backend", "_face_index", "_face_box",
+                  "_face_explicit",
          "_exposure",
          "_exposure_ref_k", "_crop_rect", "_crop_rotation")
     # 代理档一变就作废的那些层：它们的坐标是**这一档代理帧**上的像素坐标。
     PROXY_BOUND = ("_channel", "_repair_ops", "_redo_ops", "_light_ops", "_light_redo",
-                   "_deform", "_bg", "_precompute", "_precompute_backend",
+                   "_deform", "_deform_defer", "_bg", "_precompute", "_precompute_backend",
+                   # 选型 index 是“那一次分析结果里的第几张”（PORTRAIT-003）：分析作废而
+                   # index 还留着，下一次 precompute 完就会拿旧序号去对新名单——那正是
+                   # “静默选了另一个人”的形状，与不选型一样错。
+                   "_face_index", "_face_box", "_face_explicit",
                    # 调色区域是代理帧像素坐标，作用域活在区域/掩膜之上：掩膜作废而
                    # 作用域还写着 brush/skin，下一帧就是一条取不到权重的异常。
                    "_grade_scope", "_grade_mask")
@@ -750,12 +783,21 @@ class Engine:
                 "_light_ops": [], "_light_redo": [],
                 "_light": dict(exposure=DEFAULT_DB_EXPOSURE, radius=DEFAULT_DB_RADIUS),
                 "_deform": dict(amounts={k: 0.0 for k in KINDS}, built=False),
+                # 待重挂标记与层一起走：换图/作废代理档时形变整层放下，标记也必须跟着清，
+                # 不然下一次分析会把「上一张图的瘦脸」复活成这一张图上的一层。
+                "_deform_defer": False,
                 "_lut": None, "_lut_amount": 1.0, "_lut_preset": None,
                 "_grade": (0.0, 0.0, 0.0, 1.0),
                 "_grade_scope": "all", "_grade_mask": None,
                 "_bg": dict(active=False, matte=None, bg=None, backend=None,
                              tol=None, softness=None),
                 "_precompute": None, "_precompute_backend": None,
+                # 多人图里“正在编辑哪一张”的选择（PORTRAIT-003）。`_face_explicit` 与
+                # `_face_index` 成对：一张脸没选过时，多人图的单脸作用域操作整条拒（SCOPE-001），
+                # 选过之后才放行。只存 index 不存“是不是人选的”，下次就能拿默认 0 冒充选定。
+                # `_face_box` 是那一张脸的**身份**：检测器的返回顺序不是人能预期的，
+                # 重算/重开工程后拿旧序号对新名单就是一次静默选型，所以认脸靠脸盒。
+                "_face_index": 0, "_face_box": None, "_face_explicit": False,
                 "_exposure": (0.0, 0.0, 0.0), "_exposure_ref_k": None,
                 "_crop_rect": (0.0, 0.0, 1.0, 1.0), "_crop_rotation": 0.0,
                 # 掩膜/笔迹/形变场都活在**那一档代理尺寸**上，所以尺寸也是状态的一部分。
@@ -774,6 +816,7 @@ class Engine:
               "_params": dict(self._params), "_light": dict(self._light),
               "_deform": {"amounts": dict(self._deform["amounts"]),
                           "built": bool(self._deform["built"])},
+              "_deform_defer": bool(self._deform_defer),
               "_repair_ops": list(self._repair_ops), "_redo_ops": list(self._redo_ops),
               "_op_seq": int(self._op_seq),
               "_light_ops": list(self._light_ops), "_light_redo": list(self._light_redo),
@@ -786,6 +829,9 @@ class Engine:
               "_crop_rect": tuple(self._crop_rect), "_crop_rotation": float(self._crop_rotation),
               "_bg": dict(self._bg),
               "_precompute": self._precompute, "_precompute_backend": self._precompute_backend,
+              "_face_index": int(self._face_index), "_face_explicit": bool(self._face_explicit),
+              "_face_box": (None if self._face_box is None
+                             else tuple(float(v) for v in self._face_box)),
               "_proxy": ((int(self._vram.h), int(self._vram.w))
                          if (self._vram is not None and self._image_loaded) else None)}
         # 名单与实际字段漂移了要当场响，不要“新图层静静切不回来”
@@ -800,6 +846,12 @@ class Engine:
         self._params = dict(self._params)
         self._light = dict(self._light)
         self._deform = {"amounts": dict(self._deform["amounts"]), "built": bool(self._deform["built"])}
+        # 工程档里回来的是 JSON 布尔/缺键（1.3.0 之前的配方没这一格）：归一成 bool，
+        # 缺就当 False。拿 1 冒充 True 会让「有没有待重挂那一层」这句判据时灵时不灵。
+        self._deform_defer = bool(self._deform_defer)
+        if not any(abs(float(v)) > 0.0 for v in self._deform["amounts"].values()):
+            # 全零的滑块值不构成一层：标记留着只会在下一次分析后报一个「重建了个空层」
+            self._deform_defer = False
         self._repair_ops = list(self._repair_ops)
         self._redo_ops = list(self._redo_ops)
         self._light_ops = list(self._light_ops)
@@ -820,6 +872,12 @@ class Engine:
         self._exposure_ref_k = None if self._exposure_ref_k is None \
             else float(self._exposure_ref_k)
         self._strength = _clamp_strength(self._strength)
+        # 从 JSON 回来的选型：数字可能是 float/字符串（旧工具链手写工程档），布尔可能没这一格。
+        # 不归一就会出现“选定了而引擎不认”：判据比的是 `is True`，而那里躺着个 1。
+        self._face_index = int(self._face_index or 0)
+        self._face_box = None if self._face_box is None \
+            else tuple(float(v) for v in self._face_box)
+        self._face_explicit = bool(self._face_explicit)
 
     def _drop_proxy_layers(self, st: dict, why: str) -> dict:
         """代理档变了 → 只留下逐点的那几层，按像素坐标成立的全部作废。
@@ -881,7 +939,7 @@ class Engine:
     # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
     # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
     EDIT_CMDS = ("set_strength", "inpaint", "light", "deform", "lut", "grade", "background",
-                 "crop", "exposure", "preset", "batch")
+                 "crop", "exposure", "preset", "batch", "face")
     # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
     # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
     # 而 batch 改的就是活动文档的配方——不在这里它就会“同步完了而徽章不亮”。
@@ -898,6 +956,10 @@ class Engine:
         """装回一份快照：预计算保持当前这一份，其余整份覆盖。"""
         st = self._capture_state()
         self._apply_state({**st, **snap})
+        # 选型与关键点必须是一对：`_precompute` 不进历史快照而 `_face_index` 进（PORTRAIT-003）。
+        # 不重放这一格就会“状态说在改 0 号、画面在改 1 号”——两张脸都确实被推过，看不出来。
+        # 拿它放在 cmd_history 里是第二份出处：回滚那一条臂会漏掉。
+        self._replay_face_view()
 
     def _hist_sig(self, st: dict) -> str:
         """状态的可比签名。判"这一步真改了没有"必须走它，不能拿字典直接 ==：
@@ -1291,7 +1353,10 @@ class Engine:
                 "counts": {"repair": len(self._repair_ops), "light": len(self._light_ops),
                            "light_redo": len(self._light_redo), "repair_redo": len(self._redo_ops)},
                 "deform": {"amounts": dict(self._deform["amounts"]),
-                           "built": bool(self._deform["built"])},
+                           "built": bool(self._deform["built"]),
+                           # 重开工程/迁会话后“有这一层而关键点还没回来”（CORE-001）：
+                           # UI 拿它把面板标成“待重新分析”，而不是把滑块弹回 0
+                           "defer": bool(self._deform_defer)},
                 "lut": {"lit": self._lut is not None, "amount": float(self._lut_amount),
                         "preset": self._lut_preset},
                 "grade": {"dh": float(self._grade[0]), "ds": float(self._grade[1]),
@@ -1309,6 +1374,9 @@ class Engine:
                              "tint_shift": float(self._exposure[2]),
                              "reference_k": self._exposure_ref_k,
                              "lit": self._exposure != (0.0, 0.0, 0.0)},
+                # 多人图里“现在在改哪一张”（PORTRAIT-003）。chip 数几个、能不能放行，
+                # 全从这一格取：名单是分析结果里算出来的，前端数不来也不许猜。
+                "face": self._face_state(),
                 "crop": crop}
 
     def _state_edits(self, st: dict) -> dict:
@@ -1759,6 +1827,23 @@ class Engine:
               "（它们是不同的东西：前者是底片条位置，后者是身份）"})
         return None
 
+    def _recipe_needs_landmarks(self, st: dict) -> bool:
+        """这一份配方要不要关键点（重开工程时用来定“要不要自动补一次分析”）。
+
+        为什么只问这三件：关键点不随工程文件走（`_project_build` 剔的是派生物），而
+        靠它们活着的只有形变层（含待重挂那一格）、多人图里“在改哪一张”的选型、以及
+        掩膜通道/肤色作用域那两层。后面两件已有自己的诚实退路（`_channel` 在没掩膜时被
+        显式置 None），而形变层上一版没有退路：直接被归零——那就是 CORE-001“配方完整
+        恢复”漏掉的那一层。这里多跑一次分析不贵（几百毫秒），少跑一次就是“重开少一半”。
+        """
+        if bool(st.get("_face_explicit")):
+            return True
+        if st.get("_deform_defer"):
+            return True
+        df = st.get("_deform") or {}
+        return bool(df.get("built")) or any(abs(float(v)) > 0.0
+                                            for v in (df.get("amounts") or {}).values())
+
     def cmd_project(self, p: dict):
         """项目：创建 / 打开 / 保存 / 标签 / 回收站。
 
@@ -1943,6 +2028,13 @@ class Engine:
                     cmd["max_px"] = int(self._proxy_budget)
                 # 重开那一张走的就是 load_image 同一条路（守卫/尺寸比对/预计算重挂/事件形状
                 # 全部同源），不在这里写第二份“把配方装回去”
+                # 但关键点不在工程文件里（它是派生物）：配方靠它的那几层必须在这里主动补
+                # 一次分析，不然就是“重开后那一层形变悄悄消失”（CORE-001）。后端跟着存下来的
+                # 那一个走：点名 mediapipe 而后端不在时报错，不静默回落成 template 凑一层假形变。
+                if self._recipe_needs_landmarks(target.get("state") or {}):
+                    cmd["precompute"] = True
+                    cmd["backend"] = ((target.get("state") or {}).get("_precompute_backend")
+                                       or "mediapipe")
                 self.cmd_load_image(cmd)
             return
         if action == "save":
@@ -2005,7 +2097,11 @@ class Engine:
               "mask_bytes": info["mask_bytes"], "landmark_bytes": info["landmark_bytes"],
               "active_channel": self._channel,
               "build_ms": build_ms, "infer_ms": infer_ms,
-              "attach_ms": attach_ms, "total_ms": total_ms}
+              "attach_ms": attach_ms, "total_ms": total_ms,
+              # 多人图那一格（PORTRAIT-003）：分析完才知道有几张脸、这次挂上的是哪一张。
+              # 宿主的面板要在这里就把“能选几个人”画出来，而不是等一次 face list——
+              # 重开工程那条路就是靠这条事件把选型认回来的（doc_state 发在分析之前）。
+              "face": self._face_state()}
         if replayed_for:
             ev["replayed_for"] = replayed_for
         return ev
@@ -2096,6 +2192,9 @@ class Engine:
             self._precompute_backend = None
             self._channel = None
             self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+            # 关键点回不来了，“等它回来的那一层”也不能继续挂着：否则下一次分析会把
+            # 宿主已经报过“清除”的那一层静悄悄重建出来
+            self._deform_defer = False
             # 掩膜没了，靠它活着的那个调色作用域也必须一起放下（库层 clear_face 已经把
             # vram 那一侧退回 all，这里不放宿主字段就会继续报“只调皮肤”）
             if str(self._grade_scope) == "skin":
@@ -2163,6 +2262,9 @@ class Engine:
                   f"（可用：{', '.join(available) or '无'}）"})
             return
         try:
+            # 多人图里“上次显式选了哪一张”要跟着这次分析走（PORTRAIT-003）。放在上显存
+            # 之前：上传的关键点与后面报出去的 face_index 得是同一张脸。
+            pc = self._preserve_face_choice(pc)
             info = self._vram.load_face(pc)
         except Exception as e:
             emit({"event": "error", "error": f"掩膜上显存失败({type(e).__name__}): {e}"})
@@ -2196,12 +2298,16 @@ class Engine:
         先清再建：新后端解不出层时，旧几何绝不能继续服务。滑块值不重置：换后端是
         “同一张脸量得更准”，不是“用户改了主意”，把用户的作品按引擎内部事件归零是
         另一种静默降级。解不出时发 action=invalidate，UI 那条必须把滑块跟着归零。
+
+        `built=False` 而 `_deform_defer=True` 也算“有层”：那是重开工程/迁会话存住的那一份
+        用户意图（CORE-001），关键点一回来就该补上。不认这一格就是“重开后面部微调静消失”。
         """
-        if not self._deform["built"]:
+        if not (self._deform["built"] or self._deform_defer):
             return
         amounts = dict(self._deform["amounts"])
         self._vram.clear_deform()
         self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+        self._deform_defer = False
         if pc.backend == "synthetic":
             emit({"event": "engine_warn",
                   "warn": "关键点后端换成 synthetic（网格占位几何），形变层已整层清除"})
@@ -2278,6 +2384,11 @@ class Engine:
               "device": str(pipe.device), "strength": self._strength}
         if build is not None:
             ev["build"] = build
+        # 待重挂那一格也得随事件走（CORE-001）：`amounts` 说的是“会话现在真的在渲染什么”，
+        # 而用户那一层的值在 `deferred_amounts` 里。合成一个字段就会说谎：要么把“没在
+        # 渲染”说成“没这一层”，要么把“已存住”说成“已生效”。
+        ev["defer"] = bool(self._deform_defer)
+        ev["deferred_amounts"] = (dict(self._deform["amounts"]) if self._deform_defer else None)
         if reason:
             ev["reason"] = reason
         if dropped_amounts:
@@ -2694,6 +2805,180 @@ class Engine:
               "device": str(self._vram.device), "strength": self._strength})
         emit(fr)
 
+    # -------------------------------------------------- 多人图的分人编辑（PORTRAIT-003）
+    def _face_state(self) -> dict:
+        """「现在在改哪一张」那一格。名单只从分析结果算（单一出处）。"""
+        from .face import SCOPE_MAX_FACES
+
+        pc = self._precompute
+        faces = pc.faces() if pc is not None else []
+        multi = bool(pc is not None and int(getattr(pc, "num_faces", 1)) > 1)
+        return {"index": int(self._face_index), "explicit": bool(self._face_explicit),
+                "box": (None if self._face_box is None
+                        else [round(float(v), 5) for v in self._face_box]),
+                "num_faces": len(faces), "faces": faces,
+                # 放行判据只写这一处：多人图且没显式选过 = 挡住（SCOPE-001），选过 = 能改那一张
+                # （PORTRAIT-003）。UI 的禁用理由与引擎 deform 的整条拒都读它——各自拼一遍就会
+                # 出现“面板能点而引擎拒”那种无响应控件（DoD §3 明确禁止的那件事）。
+                "blocked": bool(multi and not bool(self._face_explicit)),
+                "scope_block": "multi_face" if multi else None,
+                "max_faces_probed": SCOPE_MAX_FACES}
+
+    @staticmethod
+    def _match_face_by_box(pc, box) -> int | None:
+        """在一份分析结果里按**脸盒**找回那一张脸；找不回来返 None。
+
+        容差 1e-3（归一化坐标）是给同一次推理的重算余量：同一张图同一档代理跑
+        两次检测，点位应逐字节一致；真漂过这一档就不是“同一个人”了，宁可不认。
+        """
+        if box is None:
+            return None
+        want = [round(float(v), 5) for v in box]
+        for f in pc.faces():
+            if f["box"] and max(abs(a - b) for a, b in zip(f["box"], want)) < 1e-3:
+                return int(f["index"])
+        return None
+
+    def _replay_face_view(self) -> None:
+        """把当前这份 `_precompute` 重新指到选定那一张上（认不回脸就退回未选定）。
+
+        先认脸盒、后认 index：index 只在“那一次分析”里有意义，而重放发生在
+        历史回滚/选型回填之后，那两侧的名单未必是同一轮跑出来的。
+        """
+        pc = self._precompute
+        if pc is None:
+            return
+        pool = pc.all_landmarks or [pc.landmarks]
+        idx = self._match_face_by_box(pc, self._face_box)
+        if idx is None:
+            idx = int(self._face_index or 0)
+        if idx == pc.face_index:
+            return
+        if not 0 <= idx < len(pool):
+            emit({"event": "engine_warn",
+                  "warn": f"选型 index {idx} 在这一次分析里没有对应的人脸（探到 {len(pool)} 张）："
+                          "退回未选定状态——要改谁请重新点选，引擎不替你猜那一张"})
+            self._face_index = 0
+            self._face_box = None
+            self._face_explicit = False
+            return
+        try:
+            view = pc.select_face(idx)
+        except ValueError as e:
+            emit({"event": "engine_warn", "warn": f"选型重放失败，保持上一次的关键点：{e}"})
+            return
+        self._precompute = view
+        self._face_index = int(view.face_index)
+        self._face_box = tuple(float(v) for v in (view.face_box or ())) or None
+
+    def _preserve_face_choice(self, pc):
+        """新一轮分析后尽量保住“用户上次显式选的那一张”，对不上就退回未选定。
+
+        为什么按**脸盒**认而不是按 index 认：检测器的返回顺序不是人能预期的（这一点
+        写在 face.py 的注释里），拿旧序号对新名单就是一次静默选型。对不上而旧形变层还
+        常驻时，只能整层清掉：留着就是把“刚才瘦的那张脸”悄悄换成另一张。
+        """
+        old = self._precompute
+        was_explicit = bool(self._face_explicit)
+        pool = pc.all_landmarks or [pc.landmarks]
+        if len(pool) <= 1:
+            # 只有一张：没什么可选，脸盒留着当“这同一张”的身份（下一轮又变多人时能认回来）
+            self._face_index = 0
+            self._face_box = tuple(float(v) for v in (pc.face_box or ())) or None
+            return pc
+        hit = self._match_face_by_box(pc, self._face_box) if old is not None else None
+        if hit is None and old is None and was_explicit:
+            # 重开工程那一条路：本会话里没有“上一轮”可认，而名单就是这张图刚跑出来的
+            # 那一轮——按存下来的 index 认，并对上脸盒才算数（对不上就照旧走下面的退回）
+            if 0 <= int(self._face_index or 0) < len(pool):
+                cand = [round(float(v), 5) for v in (pc.faces()[int(self._face_index)]["box"] or ())]
+                want = [round(float(v), 5) for v in (self._face_box or ())]
+                if want and cand and max(abs(a - b) for a, b in zip(cand, want)) < 1e-3:
+                    hit = int(self._face_index)
+        if was_explicit and hit is not None:
+            view = pc.select_face(hit)
+            self._face_index = hit
+            self._face_box = tuple(float(v) for v in (view.face_box or ())) or None
+            return view
+        self._face_index = 0
+        self._face_box = None
+        self._face_explicit = False
+        if was_explicit and (self._deform["built"] or self._deform_defer):
+            amounts = dict(self._deform["amounts"])
+            self._vram.clear_deform()
+            self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+            # 待重挂的那一层也一起吃掉：留着它就是一次静默选型——下一次分析会把
+            # “刚才那一张的形变值”按新名单里不知道哪一张重建出来
+            self._deform_defer = False
+            self._emit_deform_state("invalidate",
+                                    reason="重新分析后没能认出上次显式选定的那一张脸（多人图）："
+                                           "形变层已整层清除，不拿旧序号去服务另一张脸",
+                                    dropped_amounts=amounts)
+        return pc
+
+    def cmd_face(self, p: dict):
+        """多人图里选定“这次改哪一张脸”（PORTRAIT-003）。
+
+        为什么这是一条引擎命令而不是 UI 的事：SCOPE-001 挡的就是“引擎替你选了一张脸”，
+        那放行的凭据必须是**用户的一次显式选择**，而这份选择要进文档状态、进撤销栈、
+        进出片口径——全在引擎侧。前端只画 chip 与发 index。
+        """
+        action = p.get("action", "list")
+        if action not in ("list", "select"):
+            emit({"event": "error", "error": f"未知 face action: {action}（可用：list/select）"})
+            return
+        if not self._image_loaded or self._vram is None:
+            emit({"event": "error", "error": "尚未 load_image"})
+            return
+        pc = self._precompute
+        if pc is None:
+            emit({"event": "error", "error":
+                  "face 需要先 precompute：没有 478 点关键点就没有可列的人脸名单。"
+                  "名单不许前端自己猜：猜出来的 chip 数与引擎能服务的张数一旦不一致，"
+                  "“选了而没生效”就再也查不清是谁的错"})
+            return
+        if action == "list":
+            emit({"event": "face_list", "t_face_ms": 0.0, **self._face_state()})
+            return
+        raw = p.get("index")
+        faces = pc.faces()
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            emit({"event": "error", "error": f"face index 要是整数，得到 {raw!r}"})
+            return
+        idx = int(raw)
+        if idx != raw or not 0 <= idx < len(faces):
+            emit({"event": "error", "error":
+                  f"face index {raw} 不在名单里（这一轮探到 {len(faces)} 张脸，"
+                  f"可选 0…{max(0, len(faces) - 1)}）"})
+            return
+        try:
+            view = pc.select_face(idx)
+        except ValueError as e:
+            emit({"event": "error", "error": f"选型被拒，状态原样保留：{e}"})
+            return
+        prev_pc, prev_index = self._precompute, self._face_index
+        prev_box, prev_explicit = self._face_box, self._face_explicit
+        self._precompute = view
+        self._face_index = idx
+        self._face_box = tuple(float(v) for v in (view.face_box or ())) or None
+        self._face_explicit = True
+        if self._deform["built"] or self._deform_defer:
+            # 已常驻的形变层必须跟着换人：留着旧那份，报的是“选中的人”而画的是
+            # “上次那一张”的脸——双向错配里最难复查的一族。
+            # 待重挂的那一份也一样：不跟着选型重建，下一次补上的就是旧那一张的几何。
+            try:
+                self._rebuild_deform_for_landmarks(view)
+            except Exception as e:
+                (self._precompute, self._face_index, self._face_box, self._face_explicit) = \
+                    (prev_pc, prev_index, prev_box, prev_explicit)
+                emit({"event": "error", "error":
+                      f"换人失败({type(e).__name__})：{e}，已退回上一份选型"})
+                return
+        emit({"event": "face_selected", "action": "select", "requested_index": idx,
+              # 没点火时选型不该改动画面：这一格给端到端用例当判据（“选人不等于调图”）
+              "frame_changed": bool(self._deform["built"]),
+              **self._face_state()})
+
     def cmd_deform(self, p: dict):
         """五官微调（M2-b）：瘦脸 / 大眼 / 小下巴三个滑块。
 
@@ -2724,12 +3009,15 @@ class Engine:
         # 而且用户从画面上看不出来（脸确实被推了，推的不是他以为的那一个）。
         # 只拒这一条：全图调色/曝光/裁剪/磨皮的作用面不是“某个人”，不受影响。
         pc0 = self._precompute
-        if action == "set" and pc0 is not None and int(getattr(pc0, "num_faces", 1)) > 1:
+        if (action == "set" and pc0 is not None and int(getattr(pc0, "num_faces", 1)) > 1
+                and not self._face_explicit):
             from .face import SCOPE_MAX_FACES
             emit({"event": "error",
                   "error": f"画面里探到 {pc0.num_faces} 张脸（上限探 {SCOPE_MAX_FACES} 张）："
                            "面部重塑需要且仅需要一张可用人脸，本版本不在多人照片里替你选"
-                           "哪一张（SCOPE-001）；全图调色、曝光/白平衡、裁剪与磨皮仍可用"})
+                           "哪一张（SCOPE-001）；要改谁就先用 `face select` 显式选定那一张"
+                           f"（名单：{self._face_state()['faces']}，PORTRAIT-003）；"
+                           "全图调色、曝光/白平衡、裁剪与磨皮仍可用"})
             return
         t_start = monotonic_ns()
         build_info: dict = {}
@@ -2737,6 +3025,8 @@ class Engine:
         if action == "clear":
             self._vram.clear_deform()
             self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+            # 用户亲口说“不要这一层”：存住的那一份意图一起清，不然下一次分析又把它复活
+            self._deform_defer = False
         else:
             try:
                 # 参数先于建层：越界值不该先付一次 55 ms 解算再被拒
@@ -2748,7 +3038,9 @@ class Engine:
                 pc = self._precompute
                 if pc is None:
                     emit({"event": "error", "error":
-                          "形变需要先 precompute：没有 478 点关键点就不知道把哪里搬到哪里"})
+                          "形变需要先 precompute：没有 478 点关键点就不知道把哪里搬到哪里"
+                          + ("（上一层的参数已经存住等重挂，跑一次 precompute 就接回去）"
+                             if self._deform_defer else "")})
                     return
                 if pc.backend == "synthetic":
                     emit({"event": "error", "error":
@@ -2761,6 +3053,7 @@ class Engine:
                     emit({"event": "error", "error": f"形变建层失败，整条拒绝：{e}"})
                     return
                 self._deform["built"] = True
+                self._deform_defer = False
                 build_info = {"build": built}
             try:
                 info = self._vram.set_deform_amounts(got)
@@ -3702,7 +3995,10 @@ class Engine:
         amounts = {k: float(v) for k, v in (deform.get("amounts") or {}).items()
                    if float(v) != 0.0}
         pc = snap["precompute"]
-        if amounts and deform.get("built"):
+        # 待重挂的那一层也是用户的配方（CORE-001）：不能因为 `built=False` 就静默不导出。
+        # 出片走的是另一条求值路径（满幅/分块自己从关键点重解场），所以它只需要关键点，
+        # 不需要会话里那个单位场。
+        if amounts and (deform.get("built") or snap.get("deform_defer")):
             if pc is None:
                 # 关键点不在就没有场：宁可少一层形变也不能拿上一张脸的场来凑
                 skipped.append("deform（没有可用的关键点）")
@@ -3934,7 +4230,8 @@ class Engine:
                     crop_rect=tuple(self._crop_rect), crop_rotation=float(self._crop_rotation),
                     lut=self._lut, lut_amount=self._lut_amount, light=dict(self._light),
                     light_ops=list(self._light_ops), repair_ops=list(self._repair_ops),
-                    deform=dict(self._deform), channel=self._channel,
+                    deform=dict(self._deform), deform_defer=bool(self._deform_defer),
+                    channel=self._channel,
                     precompute=self._precompute, device=self.device,
                     scale=scale, upscale_backend=backend, sharpen=sharpen)
         # 建目录（挪下来了）：到这里每一个参数都已核验，失败的可能性只剩“这一路真不可写”
@@ -4740,7 +5037,8 @@ class Engine:
     HANDLED = ("hello", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "light",
                "deform", "lut", "grade", "export", "exposure", "crop", "background",
-               "compare", "session", "project", "task", "history", "preset", "batch")
+               "compare", "session", "project", "task", "history", "preset", "batch",
+               "face")
     _HANDLED_LAMBDA = ("bench_stop",)      # 唯一不开成 cmd_* 的那条：只是置停止位
 
     def _dispatch_table(self) -> dict:

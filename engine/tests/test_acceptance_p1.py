@@ -37,10 +37,10 @@ import pytest
 from lumaretouch_engine.ops.light import DEFAULT_DB_RADIUS
 from lumaretouch_engine.shm import FrameShm
 
-from test_protocol import (FIXTURE, _create_and_save, _expect_error, _frame_of,
+from test_protocol import (FIXTURE, _collect, _create_and_save, _expect_error, _frame_of,
                            _load_mtd, _need_export_env, _needs_torch, _read_frame,
                            _sha_of, _wait_frame_mode, engine, extra_engine)   # noqa: F401
-from test_acceptance_p0 import (DUAL, REPO, _collect_done, _dual_or_explain, _drain,
+from test_acceptance_p0 import (DUAL, REPO, _cmd_frame, _collect_done, _dual_or_explain, _drain,
                                 _live_state, _open)   # noqa: F401  (DUAL 由 _dual_or_explain 用)
 
 # 修容带限半径：默认值取自 ops/light 那一份唯一出处（不在这里重述），
@@ -642,3 +642,244 @@ def test_local_color_adjustment_stays_inside_the_painted_region(engine, extra_en
     assert int(np.abs(got - lit_frame).max()) == 0, \
         f"重开工程后画面与保存前差 {int(np.abs(got - lit_frame).max())} LSB：区域重放不是同一幅"
     assert _sha_of(FIXTURE) == src_sha, "打开/保存工程动了原片"
+
+
+# ------------------------------------------------------------------ PORTRAIT-003
+def _face_region(h: int, w: int, box, shrink: float = 0.0) -> np.ndarray:
+    """把归一化脸盒换算成代理帧上的布尔区；shrink 是把盒子往中心缩的比例。
+
+    "另一个人没被动"这种判据要用**缩过的内芯**：两张脸之间的空隙未必大于形变支撑窗，
+    拿整盒去要求逐字节为 0 会把"局部性半径"这条物理事实当成 bug 来响（ADR-0009 量过
+    支撑窗是 1.6×脸半对角）。内芯之外我们改用"差场包围盒不许与另一张脸的整盒相交"来判。
+    """
+    x0, y0, x1, y1 = [float(v) for v in box]
+    if shrink:
+        cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+        x0, x1 = cx - (cx - x0) * (1 - shrink), cx + (x1 - cx) * (1 - shrink)
+        y0, y1 = cy - (cy - y0) * (1 - shrink), cy + (y1 - cy) * (1 - shrink)
+    m = np.zeros((h, w), dtype=bool)
+    m[max(int(y0 * h), 0):min(int(y1 * h), h), max(int(x0 * w), 0):min(int(x1 * w), w)] = True
+    return m
+
+
+def _current(engine, peer, h, w) -> np.ndarray:
+    """把"现在这一帧"要出来：发一次中性曝光（ev=0.0 不改配方、签名与之前一致所以不进
+    历史、不脏工程），但它一定走一遍 render→shm→frame。
+
+    为什么不用 `_read_frame` 直等：被拒的命令与"只选型没点火"那两条根本不出帧
+    （预计算完不重发帧是 cmd_precompute 里写明的口径），拿 wait_for("frame") 等它
+    只会 30 s 超时——那是测试的错，不是引擎的错。而"此刻画面是什么"恰恰是这些
+    不许改画面的判据要问的东西，所以由测试主动要一帧。
+    """
+    return _cmd_frame(engine, peer, h, w, cmd="exposure", ev=0.0)
+
+
+@pytest.mark.skipif(not os.path.isfile(DUAL), reason="缺多人测试图（生成见 packaging/make-test-dual-portrait.py）")
+def test_editing_one_person_leaves_the_other_untouched(engine, extra_engine, tmp_path):
+    """PORTRAIT-003 多人照片仅编辑指定人物：改谁由用户显式选定，另一个人不动。
+
+    冻结件的 `then` 两句各对一段判据，另外五条是这一仓的硬规矩：
+
+    ① "第二人有效配方不变" → 推 A 时 B 的脸盒内芯**逐字节 0 LSB**，而差场包围盒与 B 的
+       整盒不相交（B 被推过又说成"没动"是最难复查的谎）；
+    ② "影响在第一人蒙版边缘内" → 同一份差场必须落在 A 的脸盒外扩（支撑窗余量）之内；
+    ③ 没选定之前整条拒（SCOPE-001 不许静默选型），错误里要写清怎么放行；
+    ④ 越界 index 明拒且不改状态（静默钳到 0 就是拿"你选了 7"去服务 0 号）；
+    ⑤ 选型本身不是编辑：没点火时换人，画面一分不许动；
+    ⑥ 换人时形变层跟着搬走：推完 A 再选 B，A 的内芯必须回到出厂字节——效果不许留在
+       别人脸上（那正是"第二个人被悄悄改了"的形状）；
+    ⑦ 全局撤销/重做把选型也带回去，且画面逐字节对得上；
+    ⑧ 出片同口径：带 B 的选型导出，文件里 A 的内芯与不导形变时逐字节相同；
+    ⑨ 重开工程：换进程打开，选型（index/脸盒/显式位）回来且画面逐字节相同，原片哈希不动。
+    """
+    _needs_torch()
+    import importlib.util
+    from PIL import Image
+
+    if importlib.util.find_spec("mediapipe") is None:
+        pytest.fail("运行时没装 mediapipe：分人编辑的核心就是「探到每一张脸」，这条不许"
+                    "退成 skip（skip 不是通过），装它见 engine/requirements-mediapipe.txt")
+    path = _dual_or_explain()
+    meta = _open(engine, path=path)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    engine.send(cmd="precompute", backend="mediapipe")
+    pc = engine.wait_for("precompute_ready", timeout=180)
+    assert int(pc.get("num_faces", 0)) == 2, f"多人输入没被真检测器报成 2 张脸：{pc.get('num_faces')}"
+    faces = sorted(pc.get("faces") or [], key=lambda f: f["index"])
+    assert len(faces) == 2, f"名单里只有 {len(faces)} 个人：另一个人没有可编辑的几何"
+    assert pc.get("scope_block") == "multi_face", "选型把多人事实抹掉了（SCOPE-001 的 P0 判据会失去意义）"
+    # 左右各一位（按脸盒中心排），后面所有"谁被动/谁没动"都按这两个格子算
+    left, right = sorted(faces, key=lambda f: f["box"][0] + f["box"][2])
+    a, b = right["index"], left["index"]           # 先推右边那位，判据里叫 A
+    box_a, box_b = right["box"], left["box"]
+    core_a = _face_region(h, w, box_a, shrink=0.25)
+    core_b = _face_region(h, w, box_b, shrink=0.25)
+    st = _live_state(engine)["face"]
+    assert st["blocked"] is True and st["explicit"] is False, st
+
+    base = _current(engine, peer, h, w)
+
+    # ③ 没选定 → 整条拒，且错误里带着放行那条路；状态不许留半截
+    _drain(engine)
+    engine.send(cmd="deform", action="set", amounts={"slim_face": 0.6})
+    err = _expect_error(engine, "SCOPE-001")
+    assert "张脸" in err["error"] and "face select" in err["error"], err
+    d0 = _live_state(engine)
+    assert d0["deform"]["built"] is False and d0["face"]["explicit"] is False, d0
+    assert int(np.abs(_current(engine, peer, h, w) - base).max()) == 0, "被拒的形变偷偷上了画面"
+
+    # ④ 越界与坏类型都明拒（静默钳到 0 会得到"选了 7 而动的是 0 号"）
+    for bad in (7, -1, 2 if faces[-1]["index"] == 1 else 3):
+        _drain(engine)
+        engine.send(cmd="face", action="select", index=bad)
+        e = _expect_error(engine, "不在名单里")
+        assert "2 张脸" in e["error"], e
+    _drain(engine)
+    engine.send(cmd="face", action="select", index="abc")
+    _expect_error(engine, "face index")
+    st = _live_state(engine)["face"]
+    assert st["index"] == 0 and st["explicit"] is False and st["blocked"] is True, st
+
+    # ⑤ 选定 A：这一步只是"接下来改谁"，画面一分不许动
+    _drain(engine)
+    engine.send(cmd="face", action="list")
+    lst = engine.wait_for("face_list", timeout=60)
+    assert len(lst["faces"]) == 2 and lst["blocked"] is True, lst
+    engine.send(cmd="face", action="select", index=a)
+    ev = engine.wait_for("face_selected", timeout=60)
+    assert ev["index"] == a and ev["explicit"] is True and ev["blocked"] is False, ev
+    assert [round(v, 3) for v in ev["box"]] == [round(v, 3) for v in box_a], \
+        f"报回来的脸盒不是 A 的那一张：{ev['box']} vs {box_a}"
+    assert int(np.abs(_current(engine, peer, h, w) - base).max()) == 0, "选个人就把画面改了"
+
+    # ①② 推 A：A 的内芯真动了，B 的内芯逐字节不动，且差场不与 B 的整盒相交
+    _drain(engine)
+    engine.send(cmd="deform", action="set", amounts={"slim_face": 0.9, "big_eye": 0.6})
+    done = engine.wait_for("deform_done", timeout=90)
+    assert done["built"] is True and done["lit"] is True, done
+    assert done["landmark_backend"] == "mediapipe", done
+    pushed = _current(engine, peer, h, w)
+    d = np.abs(pushed - base).max(axis=2)
+    assert int(d[core_a].max()) > EPS, "选了 A 并推了滑块，A 的内芯却一点没动：假控件"
+    left_b = int(d[core_b].max())
+    assert left_b == 0, f"推 A 时 B 的脸盒内芯动了 {left_b} LSB：改一个人动了另一个人"
+    # ② "图像影响在定义的第一人蒙版边缘内"：形变用的是**紧支撑圆盘**（ADR-0009：支撑半径
+    # 1.6×脸半对角），不是脸盒外扩——第一版判据拿"脸盒 + 0.65R 的矩形"去要求逐字节 0，
+    # 实测响在 24 LSB 上；探针量到的是：最远一位变化格在 1.58R，>1.6R 的格子数 0。
+    # 也就是说窗是真的紧，而我把允许区写小了——修的是判据，不是把响当噪声压掉。
+    ax0, ay0, ax1, ay1 = [v * [w, h, w, h][i] for i, v in enumerate(box_a)]
+    R = 0.5 * float(np.hypot(ax1 - ax0, ay1 - ay0))
+    yy, xx = np.mgrid[0:h, 0:w]
+    outside = np.hypot(xx - (ax0 + ax1) / 2.0, yy - (ay0 + ay1) / 2.0) > 1.6 * R
+    out_a = int(d[outside].max())
+    assert out_a == 0, (f"以脸心为心、1.6×半对角（{int(1.6 * R)} px）的支撑窗之外仍变了 "
+                        f"{out_a} LSB：作用面超出那一个人")
+
+    # ⑥ 换成 B：效果必须整个搬走——A 的内芯回到出厂字节
+    _drain(engine)
+    engine.send(cmd="face", action="select", index=b)
+    ev2 = engine.wait_for("face_selected", timeout=60)
+    assert ev2["index"] == b and ev2["box"] is not None, ev2
+    pushed_b = _current(engine, peer, h, w)
+    d2 = np.abs(pushed_b - base).max(axis=2)
+    back_a = int(d2[core_a].max())
+    assert back_a == 0, f"换成 B 后 A 的内芯还留着 {back_a} LSB：形变层没跟着换人"
+    assert int(d2[core_b].max()) > EPS, "选了 B 而 B 没被动：换人不生效"
+
+    # ⑦ 全局撤销：退掉这次选型，回到 A（画面逐字节等于推 A 那一幅）
+    _drain(engine)
+    engine.send(cmd="history", action="undo")
+    hs = engine.wait_for("history_state", timeout=60)
+    assert hs["doc_state"]["face"]["index"] == a, hs["doc_state"]["face"]
+    undid = _current(engine, peer, h, w)
+    assert int(np.abs(undid - pushed).max()) == 0, \
+        f"撤销选型后与推 A 那一幅差 {int(np.abs(undid - pushed).max())} LSB：选型没进历史"
+    _drain(engine)
+    engine.send(cmd="history", action="redo")
+    engine.wait_for("history_state", timeout=60)
+    redid = _current(engine, peer, h, w)
+    assert int(np.abs(redid - pushed_b).max()) == 0, "重做没回到 B 那一幅：重放不是确定性的"
+
+    # ⑧ 出片同口径：带着 B 的选型导一次，再关掉形变导一次
+    src_shape = (int(meta["src_h"]), int(meta["src_w"]))
+    out_on, out_off = tmp_path / "person-on", tmp_path / "person-off"
+    out_on.mkdir(); out_off.mkdir()
+    _drain(engine)
+    engine.send(cmd="export", out_dir=str(out_on), format="png", tile=256, quality=90,
+                images=[path])
+    da, _ = _collect_done(engine)
+    assert da["failed"] == 0, da
+    skipped = da["images"][0].get("skipped") or []
+    assert not any("deform" in str(s) for s in skipped), \
+        f"分人形变在导出里被整层放下了：{skipped}"
+    with Image.open(da["images"][0]["out"]) as im:
+        arr_on = np.asarray(im.convert("RGB"), dtype=np.uint8)
+    assert arr_on.shape[:2] == src_shape, f"导出尺寸不是源图那一幅：{arr_on.shape[:2]}"
+    _drain(engine)
+    engine.send(cmd="deform", action="clear")
+    engine.wait_for("deform_done", timeout=60)
+    engine.send(cmd="export", out_dir=str(out_off), format="png", tile=256, quality=90,
+                images=[path])
+    db, _ = _collect_done(engine)
+    with Image.open(db["images"][0]["out"]) as im:
+        arr_off = np.asarray(im.convert("RGB"), dtype=np.uint8)
+    de = np.abs(arr_on.astype(np.int16) - arr_off.astype(np.int16)).max(axis=2)
+    # 满幅那一侧的内芯：脸盒是归一化的，同一个 `_face_region` 换成源图尺寸再算一遍
+    # （第二版这里手写了一遍缩放，把归一化坐标乘上了"代理→满幅的比例"而不是源图尺寸，
+    # 于是掩膜整片空掉，`mean()` 得到一个 NaN——空掩膜上的任何断言都是空断言，
+    # 所以下面先钉 `.size`，再谈大小。）
+    core_b_full = _face_region(src_shape[0], src_shape[1], box_b, shrink=0.25)
+    core_a_full = _face_region(src_shape[0], src_shape[1], box_a, shrink=0.25)
+    assert core_b_full.sum() > 100 and core_a_full.sum() > 100, \
+        f"满幅侧的内芯掩膜是空的（{int(core_b_full.sum())}/{int(core_a_full.sum())} 格）：断言没在量任何东西"
+    assert int(de[core_b_full].mean()) > 0, "文件里 B 没被推：屏幕上的分人形变没跟到出片"
+    leak = int(de[core_a_full].max())
+    assert leak == 0, f"出片里 A 的内芯动了 {leak} LSB：导出把形变发给了另一个人"
+
+    # ⑨ 重新点火 → 存工程 → 换进程重开
+    _drain(engine)
+    engine.send(cmd="face", action="select", index=a)
+    engine.wait_for("face_selected", timeout=60)
+    engine.send(cmd="deform", action="set", amounts={"slim_face": 0.9, "big_eye": 0.6})
+    engine.wait_for("deform_done", timeout=90)
+    lit_frame = _current(engine, peer, h, w)
+    src_sha = _sha_of(path)
+    _created, saved = _create_and_save(engine, tmp_path, name="分人编辑")
+    raw = json.loads(Path(saved["path"]).read_text(encoding="utf-8"))
+    rows = [d for d in raw["docs"] if d["path"] == os.path.abspath(path)]
+    assert rows, f"工程里没有这张多人图：{[d['path'] for d in raw['docs']]}"
+    # 配方里那一格直接读回：选型是文档状态，它必须在工程文件里（不在就是"重开少一半"）
+    ver = rows[0]["versions"][0]
+    assert ver.get("recipe") is not None, "这一版没有配方：存工程存了个空壳"
+
+    eng2 = extra_engine("portrait003-reopen")
+    eng2.send(cmd="hello")
+    eng2.wait_for("ready", timeout=90)
+    eng2.send(cmd="set_device", device="cpu")
+    eng2.wait_for("device_set", timeout=120)
+    eng2.send(cmd="project", action="open", path=saved["path"])
+    eng2.wait_for("project_opened", timeout=120)
+    # 按事件流的本来的顺序收：wait_for 会把别的类型丢掉，而重开这一路会连着发
+    # shm_ready / (自动的 precompute_ready) / vram_ready / image_ready——先等 precompute
+    # 再把 image_ready 丢了，就会得到一个"引擎没报 image_ready"的假失败（上一版就是这么响的）。
+    got_ev = _collect(eng2, "image_ready", timeout=240)
+    shm2 = got_ev["shm_ready"][-1]
+    # 重开那一条路必须自己把分析补回来（CORE-001“配方完整恢复”）：关键点不随工程文件走，
+    # 而形变层靠它。上一版这里靠测试手动发一条 precompute，才暂时遮住了“重开后形变层被
+    # 归零”这个真缺口。`_collect` 在 image_ready 那一条就返回，而自动补的分析发在它后面
+    # （load_image 内部：先出帧、再按配方补 precompute），所以这里单独等一条。
+    pc2 = eng2.wait_for("precompute_ready", timeout=240)
+    assert int(pc2.get("num_faces", 0)) == 2, pc2
+    st2 = _live_state(eng2)["face"]
+    assert st2["index"] == a and st2["explicit"] is True and st2["blocked"] is False, \
+        f"重开工程后选型没回来：{st2}"
+    peer2 = FrameShm(shm2["name"])
+    got = _current(eng2, peer2, shm2["h"], shm2["w"])
+    dd = np.abs(got.astype(np.int16) - lit_frame.astype(np.int16)).max(axis=2)
+    df2 = _live_state(eng2)["deform"]
+    assert df2["built"] is True and df2["defer"] is False, (
+        f"重开后形变层没回到常驻：{df2}（配方里那一层必须完整恢复，CORE-001）")
+    assert int(dd.max()) == 0, \
+        f"重开后画面与保存前差 {int(dd.max())} LSB：换人重放不是同一幅"
+    assert _sha_of(path) == src_sha, "打开/保存工程动了原片"
