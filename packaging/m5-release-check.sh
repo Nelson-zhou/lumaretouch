@@ -119,6 +119,7 @@ else
       LRT_PRECOMPUTE=mediapipe LRT_PRECOMPUTE_CHANNEL=skin LRT_AUTO_DEFORM=0.35:0.25:0.2 \
       LRT_AUTO_BENCH=672x848:240:16.6:image_stream LRT_AUTO_RELEASE=1 LRT_AUTO_HISTORY=0.85 \
       LRT_AUTO_BG=ff0000:0.18:0.06 LRT_AUTO_EXPORT="$outdir@png@512@2@0.6" \
+      LRT_AUTO_LOCAL_COLOR=0.5:0.42:36:0.006:-0.14:0.05 \
       /usr/bin/lumaretouch > "$log" 2>&1 &
   win=$!
   got=0
@@ -251,6 +252,29 @@ if df and "bad" not in df:
     chk(isinstance(pk, (int, float)) and pk > 0, f"峰值位移非零（不是假滑块）：peak_px={pk}")
 else:
     chk(False, "日志里没有 M0_DEFORM 或它报了 bad：装机件的面部重塑这一臂没跑")
+
+# 局部调色（COLOR-004，DoD §4 的 P1 项）在装机件上也要逐像素量一次：库里那五条用例连的是
+# 裸引擎，中间隔着 Rust 的命令签名。“区域外逐字节不动”这一句在真窗口里只有一份证据：
+# 用户看见的那一帧（before/after 逐格比），而不是引擎上报的作用域字段。
+lc = last("M0_LOCAL_COLOR")
+chk(lc is not None and "bad" not in lc, f"局部调色那一臂跑成了：{lc and lc.get('bad')}")
+if lc and "bad" not in lc:
+    chk(lc.get("scope") == "brush",
+        f"落笔后作用域该被引擎自己切成 brush（不是 UI 记的那份）：{lc.get('scope')!r}")
+    chk(int(lc.get("maskPx") or 0) > 0, f"画笔区域真有覆盖格：mask_px={lc.get('maskPx')}")
+    chk(int(lc.get("bytesGrade") or 0) > 0,
+        f"brush 作用域常驻了掩膜权重：bytes_grade={lc.get('bytesGrade')}")
+    chk(isinstance(lc.get("gradeMs"), (int, float)) and lc["gradeMs"] > 0,
+        f"定向内核真跑了那一帧：grade_ms={lc.get('gradeMs')}")
+    chk(int(lc.get("insideChanged") or -1) > 0,
+        f"区域内画面动了（不是假滑块）：insideChanged={lc.get('insideChanged')}")
+    chk(lc.get("outsideChanged") == 0,
+        f"区域外必须逐字节不动：outsideChanged={lc.get('outsideChanged')}"
+        "（大于 0 就是局部调色偷成了全图调色，屏上看不出来）")
+    chk(isinstance(lc.get("scopes"), list) and lc.get("scopes") == ["all", "skin", "brush"],
+        f"作用域名单由引擎报出去：{lc.get('scopes')}")
+else:
+    chk(False, "日志里没有 M0_LOCAL_COLOR 或它报了 bad：装机件的局部调色这一臂没跑")
 
 # 放大（M7）在裸环境里要证的不是"图变大了"，而是三处对得上：请求的倍率、引擎报回的
 # 倍率、**磁盘上那张的 IHDR**。最后一项是“导出的是满幅不是代理档”与“2× 真落盘”的唯一
