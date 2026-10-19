@@ -43,6 +43,10 @@ from . import scope as SC
 from . import preset_store as PS
 from .project import ProjectError
 from . import session as S
+# 挑图建议（LNX-PICK-001）：度量与档位全部在 picks 层（纯 numpy，不依赖 torch/mediapipe），
+# 命令层只负责「校验 → 起线程 → 把事实发成事件」。眼睑那一格要用 FaceMesh，它是可选的：
+# 后端不在就每一格如实报 eyes_unknown，绝不退成「睁眼」（不许静默降级）。
+from . import picks as PK
 # M4 导出：FORMATS/尺寸边界与落盘器全部从 export 走，命令层不掌一份格式名单（双出处）。
 from .export import (DEFAULT_TILE, FORMATS, MAX_TILE, MIN_TILE, SHARPEN_AMOUNT_LIMIT,
                      UPSCALE_NOT_WIRED,
@@ -248,6 +252,12 @@ class Engine:
         self._preview_info: dict | None = None
         self._thumb_stop = threading.Event()
         self._thumb_args: tuple | None = None
+        # 挑图建议（LNX-PICK-001）：与缩略图同一个形状——独立线程、逐张发事件、写回前按
+        # path 再认一次格子。它是**派生旁注**：不进工程文件（见 `_project_build`）、不进撤销栈
+        # （不在 EDIT_CMDS 里）、不改源文件（这一路只有读）。
+        self._picks: threading.Thread | None = None
+        self._pick_stop = threading.Event()
+        self._pick_args: tuple | None = None
         # 底片条那一列表会被两个线程碰：stdin 线程换整张表，缩略图线程改单格的
         # thumb/thumb_error。GIL 保不了“读→比对→写”这三步，所以自己上锁。
         self._doclock = threading.Lock()
@@ -356,7 +366,17 @@ class Engine:
               # 前端抄一份 action 名单，两边分叉时“不支持”与“拼错了”长得一模一样
               "project_actions": list(self.PROJECT_ACTIONS),
               "project_suffix": PJ.SUFFIX,
-              "task_actions": list(self.TASK_ACTIONS)})
+              "task_actions": list(self.TASK_ACTIONS),
+              # 挑图（LNX-PICK-001）：action 名单、四组档位的可选值、阈值本体与判据指纹
+              # 全部由引擎说。前端刻一份「weak/standard/strong」或抄一个阈值数字，就是
+              # 下一轮改判据时漏改的那一处——而它的表现是徽章悄悄改了含义。
+              "pick_actions": list(self.PICK_ACTIONS),
+              "pick_sensitivities": {k: sorted(v) for k, v in self.PICK_SENS_TABLE.items()},
+              "pick_thresholds": PK.thresholds_for_json(),
+              "pick_schema": PK.SCHEMA, "pick_algo": PK.ALGO_VERSION,
+              "pick_fingerprint": PK.fingerprint(),
+              "pick_edge": [self.PICK_MIN_EDGE, self.PICK_MAX_EDGE],
+              "pick_edge_default": self.PICK_EDGE})
 
     # ------------------------------------------------------------ 帧缓冲
     def _ensure_shm(self, w: int, h: int) -> FrameShm:
@@ -961,7 +981,10 @@ class Engine:
                 # 是工程记录，不是对原图动手。`fingerprint` 只在项目保存或打开时才算
                 # （全文件哈希是几十毫秒级的一次性成本，不藏在 load_image 的首帧里）。
                 "tags": [], "label": None, "trashed": False, "fingerprint": None,
-                "w": None, "h": None, "src_w": None, "src_h": None}
+                "w": None, "h": None, "src_w": None, "src_h": None,
+                # 挑图建议（派生旁注）：一次分析的完整读数与折出来的建议。它随会话活、
+                # 不随工程文件走（理由同 _precompute：是算出来的，不是用户画的）。
+                "pick": None, "pick_error": None}
 
     def _remember_current(self) -> None:
         """把 live 状态存回当前文档那一格。底片条的一切意思都在这一步：不存就是
@@ -1481,7 +1504,10 @@ class Engine:
                                                    "bytes": th["bytes"], "quality": th["quality"],
                                                    "preview": bool(th.get("preview")),
                                                    "format": th.get("format")},
-                "thumb_error": d["thumb_error"]}
+                "thumb_error": d["thumb_error"],
+                # 挑图那一格（PICK-001）。徽章只能读引擎这份：前端自己按缩略图亮度判断
+                # 「这张糊不糊」就是又造一个不可复算的出处
+                "pick": d.get("pick"), "pick_error": d.get("pick_error")}
 
     def _preset_last_applied(self) -> dict | None:
         """最后一次套用的预设，但只在“那几个模块现在还是预设里那一组”时才算数。
@@ -1541,6 +1567,7 @@ class Engine:
               "doc_state": (self.doc_state()
                             if (self._image_loaded and self._vram is not None) else None),
               "thumbs_running": bool(self._thumbs is not None and self._thumbs.is_alive()),
+              "picks_running": bool(self._picks is not None and self._picks.is_alive()),
               "project": self._project_state(),
               # 预设清单与批量同步台账：UI 的下拉项与“撤销同步”按钮只能读引擎报的这两份
               #（前端自己扫目录、自己记 batch_id 就是两个会漂的地方）。
@@ -1745,6 +1772,353 @@ class Engine:
 
     def _doc_paths(self):
         return [d["path"] for d in self._docs]
+
+    # ------------------------------------------------------------ 挑图建议（LNX-PICK-001）
+    PICK_ACTIONS = ("analyze", "stop", "state")
+    PICK_KEYS = {"cmd", "action", "indices", "paths", "edge", "model_dir", "force",
+                 "duplicate", "blur", "exposure", "eyes"}
+    # 度量时的解码尺度：像素类度量自己在 picks 层再降到长边 160，这一档决定的是
+    # 「FaceMesh 能看到多大的眼」与「要不要为一原图付全额解码」。160 太小（眼睑几个
+    # 像素，几何量全是噪声），全额解码太慢（挑图是一次过几百张的后台活）。
+    PICK_EDGE = 512
+    PICK_MIN_EDGE = 160
+    PICK_MAX_EDGE = 1024
+    PICK_BATCH = 3
+    PICK_SLEEP_MS = 2.0
+    # 四组敏感度：档位名 → 那张表。名单只有一个出处（picks 层），ready 里报出去的
+    # 与这里校验的是同一份，所以「可用名单」这句话不会是假的。
+    PICK_SENS_TABLE = {"duplicate": PK.DUPLICATE_SENSITIVITY, "blur": PK.BLUR_SENSITIVITY,
+                       "exposure": PK.EXPOSURE_SENSITIVITY, "eyes": PK.EYE_SENSITIVITY}
+
+    def _pick_sens(self, p: dict) -> dict | None:
+        out: dict = {}
+        for name, table in self.PICK_SENS_TABLE.items():
+            got = p.get(name, "standard")
+            if got not in table:
+                emit({"event": "error", "error": f"pick 的 {name} 档位 {got!r} 不在名单里"
+                      f"（可用：{sorted(table)}，名单在 ready 的 pick_sensitivities 里）"})
+                return None
+            out[name] = got
+        return out
+
+    def _pick_targets(self, p: dict) -> list | None:
+        """要分析哪几格：indices / paths 二选一，都不给就是整条底片条。
+
+        默认**跳过已分析过的格子**（与缩略图同一口径：重跑一次不该把几百毫秒再付一遍），
+        `force=True` 才全部重算——判据指纹换了的时候用户就需要它（数值不可比）。
+        """
+        want_idx, want_paths = p.get("indices"), p.get("paths")
+        if want_idx is not None and want_paths is not None:
+            emit({"event": "error", "error": "pick 的 indices 与 paths 只能给一个"
+                                             "（它们是不同的东西：位置与身份）"})
+            return None
+        with self._doclock:
+            n = len(self._docs)
+            rows = list(self._docs)
+        idxs: list = []
+        if want_idx is not None:
+            if not isinstance(want_idx, list) or not want_idx:
+                emit({"event": "error", "error": "pick 的 indices 要是非空整数列表"})
+                return None
+            for x in want_idx:
+                try:
+                    i = int(x)
+                except (TypeError, ValueError):
+                    emit({"event": "error", "error": f"pick 的 index 不是整数：{x!r}"})
+                    return None
+                if not 0 <= i < n:
+                    emit({"event": "error", "error": f"index={i} 不在底片条里（共 {n} 格）"})
+                    return None
+                idxs.append(i)
+        elif want_paths is not None:
+            if not isinstance(want_paths, list) or not want_paths:
+                emit({"event": "error", "error": "pick 的 paths 要是非空路径列表"})
+                return None
+            by = {d["path"]: i for i, d in enumerate(rows)}
+            for x in want_paths:
+                ap = os.path.abspath(str(x))
+                if ap not in by:
+                    emit({"event": "error", "error": f"底片条里没有这一张：{x}"
+                          f"（先 session add 再挑图，两侧名单必须同一份）"})
+                    return None
+                idxs.append(by[ap])
+        else:
+            idxs = list(range(n))
+        out: list = []
+        seen: set = set()
+        skipped = 0
+        for i in idxs:
+            if i in seen:
+                continue
+            seen.add(i)
+            if not p.get("force", False) and rows[i].get("pick") is not None:
+                skipped += 1
+                continue
+            out.append(i)
+        if skipped:
+            emit({"event": "engine_warn", "warn": f"pick：{skipped} 格已有建议，本次跳过"
+                                                  "（要重算给 force=true；判据指纹变了也建议重算，"
+                                                  "不同版算法的数值不可比）"})
+        return out
+
+    def _start_picks(self, idxs: list, edge: int, model_dir, sens: dict) -> bool:
+        if self._picks is not None and self._picks.is_alive():
+            emit({"event": "error", "error": "挑图任务已在跑：先 pick action=stop"})
+            return False
+        if not idxs:
+            emit({"event": "pick_done", "count": 0, "failed": 0, "groups": [],
+                  "reason": "没有要分析的格子（都已分析过或被筛掉）",
+                  "fingerprint": PK.fingerprint(), "sensitivities": sens})
+            return False
+        self._pick_stop.clear()
+        self._pick_args = (list(idxs), int(edge), model_dir, dict(sens))
+        self._picks = threading.Thread(target=self._pick_loop, daemon=True)
+        self._picks.start()
+        return True
+
+    def _pick_measure_one(self, path: str, edge: int, fn, eyes_error):
+        """一张图的全部读数。只读文件，一个字节都不写回去（原片只读）。"""
+        from .decode import clamp_budget, load_rgb
+
+        m = PK.Measures(path=str(path))
+        t0 = monotonic_ns()
+        d = load_rgb(path, clamp_budget(int(edge) * int(edge)), allow_preview=True)
+        t1 = monotonic_ns()
+        rgb = d.rgb
+        m.decode_size = (int(rgb.shape[1]), int(rgb.shape[0]))
+        # RAW 走相机内嵌预览时必须说出来：那张预览是相机自己锐化/降噪过的，
+        # 「糊」的读数不再属于母档（与底片条同一个开关、同一个理由）
+        m.decoded_from = ("camera_preview"
+                          if (d.raw or {}).get("source") == "libraw_preview" else "pixels")
+        cl = PK.clarity(rgb)
+        m.sharpness, m.ratio, m.contrast = cl["lapvar"], cl["ratio"], cl["contrast"]
+        m.under, m.over = PK.exposure_shares(rgb)
+        m.dhash = PK.dhash64(rgb)
+        t2 = monotonic_ns()
+        if fn is None:
+            m.eye_note = (f"眼睑那一档没量：FaceMesh 后端不可用（{eyes_error}）——"
+                          "这一格不写「睁眼」，也不写「闭眼」")
+        else:
+            try:
+                pc = fn(rgb)
+            except Exception as e:
+                m.eye_note = (f"眼睑那一档没量：FaceMesh 推理失败({type(e).__name__}): {e}"
+                              "——这一格不写「睁眼」，也不写「闭眼」")
+            else:
+                pool = list(pc.all_landmarks or ([pc.landmarks] if pc.landmarks is not None else []))
+                m.faces = len(pool)
+                vals = [PK.eye_openness(lm, image_size=m.decode_size) for lm in pool]
+                vals = [v for v in vals if v is not None]
+                # 多人图取**最小**的那一张脸的那一只眼：任何一个人闭眼都值得复核，
+                # 取均值会把「半个人闭眼」冲淡成"没问题"
+                m.eye_open = min(vals) if vals else None
+                if m.eye_open is None:
+                    m.eye_note = (f"画面里探到 {m.faces} 张脸，但没有一份关键点够 478 点契约"
+                                  "——这一格不写「睁眼」，也不写「闭眼」")
+        t3 = monotonic_ns()
+        m.ms = {"decode_ms": (t1 - t0) / 1e6, "pixel_ms": (t2 - t1) / 1e6,
+                "face_ms": (t3 - t2) / 1e6}
+        return m
+
+    def _pick_write(self, path: str, **fields) -> int:
+        """按 path 认格子再写（与缩略图同一条铁律：列表可能在半路上被换掉）。"""
+        with self._doclock:
+            for i, d in enumerate(self._docs):
+                if d["path"] == path:
+                    for k, v in fields.items():
+                        d[k] = v
+                    return i
+        return -1
+
+    def _pick_loop(self):
+        """两遍：先逐张量读数（能发进度），再一次成组、折建议（分组要看到全部哈希）。
+
+        一遍做完不行：近似组是全体哈希上的关系闭包，第 3 张的「组内第几名」要等第 200 张
+        量完才知道。
+        """
+        from statistics import median
+
+        idxs, edge, model_dir, sens = self._pick_args
+        t0 = monotonic_ns()
+        from . import face as face_mod
+        fn = None
+        eyes_error = None
+        try:
+            fn = face_mod.build("mediapipe", model_dir)
+        except Exception as e:            # 后端/模型不在：像素那三档照量，眼睑如实报 unavailable
+            eyes_error = f"{type(e).__name__}: {e}"
+            emit({"event": "engine_warn", "warn": f"挑图：眼睑那一档不可用（{eyes_error}）。"
+                                                  "清晰度/曝光/近似组仍然量，缺的那一格会显式标"
+                                                  "「没量到」，不会退成「睁眼」"})
+        order: list = []
+        measured: dict = {}
+        failed = 0
+        for j, i in enumerate(idxs):
+            if self._pick_stop.is_set():
+                break
+            with self._doclock:
+                path = self._docs[i]["path"] if 0 <= i < len(self._docs) else None
+            if path is None:
+                continue
+            try:
+                m = self._pick_measure_one(path, edge, fn, eyes_error)
+            except Exception as e:                # 一张解不开只坏自己那一格，不带到倒整批
+                failed += 1
+                self._pick_write(path, pick_error=f"{type(e).__name__}: {e}", pick=None)
+                emit({"event": "pick_failed", "index": i, "path": path,
+                      "error": f"{type(e).__name__}: {e}"})
+                continue
+            measured[path] = m
+            order.append(path)
+            emit({"event": "pick_progress", "index": i, "path": path,
+                  "done": len(order), "total": len(idxs), "measures": m.for_json()})
+            if (j + 1) % self.PICK_BATCH == 0 and self.PICK_SLEEP_MS > 0:
+                time.sleep(self.PICK_SLEEP_MS / 1000.0)
+        t_meas = monotonic_ns()
+        # 分组池 = 本次量到的 + 本会话此前已经量过的那些格的哈希（存在 row["pick"] 里）。
+        # 少了后半截就会出这种错：重跑一张，那张的"组内 3 张"变成"组内 1 张"，徽章自己在动。
+        pool: dict = {p: {"dhash": measured[p].dhash, "ratio": measured[p].ratio,
+                          "under": measured[p].under, "over": measured[p].over}
+                      for p in order}
+        with self._doclock:
+            stored = [(d["path"], d.get("pick")) for d in self._docs]
+        reused = 0
+        for p, pk in stored:
+            if p in pool or not pk:
+                continue
+            mm = pk.get("measures") or {}
+            try:
+                h = int(str(mm.get("dhash")), 16)
+            except (TypeError, ValueError):
+                continue          # 旧版算法没写这一格：不参与分组，不猜
+            pool[p] = {"dhash": h, "ratio": float(mm.get("clarity_ratio") or 0.0),
+                       "under": float(mm.get("under") or 0.0),
+                       "over": float(mm.get("over") or 0.0)}
+            reused += 1
+        items = [(p, v["dhash"]) for p, v in sorted(pool.items())]
+        groups = PK.group_duplicates(items, PK.DUPLICATE_SENSITIVITY[sens["duplicate"]])
+        # 组内排名的依据：**相对自身对比度**（对整体曝光不敏感那一格），并列时看裁切占比，
+        # 最后按路径稳定收尾——「本组最优」是一个可复算的排序结果，不是印象分
+        info: dict = {}
+        for g in groups:
+            members = sorted([p for p in g if p in pool],
+                             key=lambda p: (-pool[p]["ratio"],
+                                            pool[p]["under"] + pool[p]["over"], p))
+            for r, p in enumerate(members):
+                others = [q for q in members if q != p]
+                bits = min(PK.hamming(pool[p]["dhash"], pool[q]["dhash"])
+                           for q in others) if others else None
+                info[p] = {"members": members, "rank": r, "bits": bits}
+        # 批内相对线用的是**池**的中位数（对比对象应当是同批全部，而不是只这次跑的那几张）；
+        # 沿用旧哈希的那些格没有可读对比度那一格，但它们当初能进池就说明不是空白图
+        ratios = [v["ratio"] for v in pool.values() if v["ratio"] > 0.0]
+        ratios += [measured[p].ratio for p in order if measured[p].contrast >= PK.CONTRAST_FLOOR]
+        med_ratio = float(median(ratios)) if ratios else 0.0
+        fp = PK.fingerprint()
+        emitted = 0
+        for p in order:
+            if self._pick_stop.is_set():
+                break
+            gi = info.get(p)
+            m = measured[p]
+            with self._doclock:
+                row = next((d for d in self._docs if d["path"] == p), None)
+            marked = bool(row is not None and ((row.get("tags") or []) or row.get("label")
+                                               or row.get("trashed")))
+            sug = PK.suggest(m, group=(gi["members"] if gi else [p]),
+                             is_leader=bool(gi and gi["rank"] == 0),
+                             rank_in_group=(gi["rank"] if gi else 0),
+                             dup_bits=(gi["bits"] if gi else None),
+                             dup=sens["duplicate"], blur=sens["blur"],
+                             exposure=sens["exposure"], eyes=sens["eyes"],
+                             batch_median_ratio=med_ratio,
+                             group_scope={"analyzed": len(order), "pooled": len(pool)},
+                             user_marked=marked)
+            sug["fingerprint"] = fp
+            sug["edge"] = int(edge)
+            sug["batch_median_ratio"] = round(med_ratio, 4)
+            sug["group_leader"] = (gi["members"][0] if gi else None)
+            sug["decoded_from"] = m.decoded_from
+            sug["analyzed_at_ns"] = int(monotonic_ns())
+            idx = self._pick_write(p, pick=sug, pick_error=None)
+            emit({"event": "pick_item", "index": idx, **sug})
+            emitted += 1
+        emit({"event": "pick_done", "count": emitted, "measured": len(order), "failed": failed,
+              "pooled": len(pool), "reused_hashes": reused,
+              "stopped": bool(self._pick_stop.is_set()),
+              # 组只报「像」这一件事：成员、组内最优那一张、以及「这是关系闭包不是等价类」
+              # 的那句 notes（在每条建议里）。这里绝不出现 delete/建议删除任何一张的说法。
+              "groups": [{"size": len(g), "leader": (info[g[0]]["members"][0]
+                                                     if g and g[0] in info else
+                                                     (g[0] if g else None)),
+                          "members": g} for g in groups],
+              "sensitivities": sens, "thresholds": PK.thresholds_for_json(),
+              "schema": PK.SCHEMA, "algo": PK.ALGO_VERSION, "fingerprint": fp,
+              "edge": int(edge), "batch_median_ratio": round(med_ratio, 4),
+              "eyes_backend": (fn.name if fn is not None else None),
+              "eyes_error": eyes_error,
+              "measure_ms": round((t_meas - t0) / 1e6, 1),
+              "total_ms": round((monotonic_ns() - t0) / 1e6, 1)})
+        self.emit_session_state()
+
+    def cmd_pick(self, p: dict):
+        """挑图建议（LNX-PICK-001）：本地确定性度量，可解释、可覆盖、**不自动删除**。
+
+        冻结件的 then 有三句，这里一一对上：建议可覆盖（`overridable=True`，且人工标签
+        在场时 `overridden_by_user=True`，UI 那一格优先显示用户自己的）；原图不自动删除
+        （这一路只有读文件，没有任何 unlink/move/trash 的代码路径，回收站是工程记录）；
+        近似分组与判定原因可见（`groups` 与每条 reason 的 method/value/threshold）。
+        """
+        unknown = set(p) - self.PICK_KEYS
+        if unknown:
+            emit({"event": "error", "error": f"pick 收到不认识的参数：{sorted(unknown)}"})
+            return
+        action = p.get("action", "state")
+        if action not in self.PICK_ACTIONS:
+            emit({"event": "error", "error": f"未知 pick action: {action}"
+                  f"（可用：{'/'.join(self.PICK_ACTIONS)}，名单在 ready 的 pick_actions 里）"})
+            return
+        if action == "state":
+            with self._doclock:
+                rows = list(self._docs)
+            have = [d for d in rows if d.get("pick")]
+            emit({"event": "pick_state",
+                  "rows": len(rows), "analyzed": len(have),
+                  "failed": len([d for d in rows if d.get("pick_error")]),
+                  "running": bool(self._picks is not None and self._picks.is_alive()),
+                  "labels": sorted({lb for d in have for lb in (d["pick"].get("labels") or [])}),
+                  "fingerprint": PK.fingerprint(), "algo": PK.ALGO_VERSION,
+                  "thresholds": PK.thresholds_for_json(),
+                  "sensitivities": {k: sorted(v) for k, v in self.PICK_SENS_TABLE.items()}})
+            return
+        if action == "stop":
+            self._pick_stop.set()
+            self.emit_session_state(pick_stopped=True)
+            return
+        sens = self._pick_sens(p)
+        if sens is None:
+            return
+        try:
+            edge = int(p.get("edge", self.PICK_EDGE))
+            if not self.PICK_MIN_EDGE <= edge <= self.PICK_MAX_EDGE:
+                raise ValueError(f"度量尺度 {edge} 越界（允许 {self.PICK_MIN_EDGE}"
+                                 f"~{self.PICK_MAX_EDGE}，长边）")
+        except (TypeError, ValueError) as e:
+            emit({"event": "error", "error": f"pick 参数非法：{e}"})
+            return
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝挑图：两边都要解码与推理，"
+                                            "同时跑的话跑靶读数就不再属于那一条通路（先 bench_stop）"})
+            return
+        if not self._docs:
+            emit({"event": "error", "error": "底片条是空的：先 session scan/add"})
+            return
+        idxs = self._pick_targets(p)
+        if idxs is None:
+            return
+        emit({"event": "pick_start", "targets": len(idxs), "edge": edge,
+              "sensitivities": sens, "fingerprint": PK.fingerprint(), "algo": PK.ALGO_VERSION})
+        self._start_picks(idxs, edge, p.get("model_dir"), sens)
 
     # ------------------------------------------------------------ 项目（LNX-P0-PROJECT / CORE-001、007、008）
     PROJECT_ACTIONS = ("create", "open", "save", "state", "tag", "trash")
@@ -5320,7 +5694,9 @@ class Engine:
                "load_image", "set_strength", "precompute", "inpaint", "light",
                "deform", "lut", "grade", "export", "exposure", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
-               "face")
+               # 挑图（LNX-PICK-001）。它不在 EDIT_CMDS 里，所以既不进撤销栈也不打脏标记：
+               # 它是读出来的一格旁注，不是一次编辑动作
+               "face", "pick")
     _HANDLED_LAMBDA = ("bench_stop",)      # 唯一不开成 cmd_* 的那条：只是置停止位
 
     def _dispatch_table(self) -> dict:

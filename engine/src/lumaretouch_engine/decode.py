@@ -180,8 +180,11 @@ def load_rgb(path: str, budget: int = PROXY_PIXELS, device: str | None = None,
 #   内嵌预览只填**浏览/缩略图**那一个槽位。凡是要进常驻层、要被滑块吃、要被导出
 #   拿走的像素，必须来自真解码（自研 DNG 读侧，或 LibRaw 的 dcraw_process）。
 #
-# 落在代码上的形状：`allow_preview` 默认 False，全仓只在 session.make_thumb 那一处显式
-# 打开。视口要秒开，是调用方自己先把 load_preview 的帧推进 shm，然后再走 load_rgb 默认
+# 落在代码上的形状：`allow_preview` 默认 False，全仓只在**浏览那两个槽位**显式打开——
+# session.make_thumb（底片条那一格）与 server._pick_measure_one（挑图读数，它同样只服务
+# 浏览判断，并把 `decoded_from=camera_preview` 原样报进事件，RAW 的糊度读数属于相机预览
+# 而不是母档这件事必须看得见）。视口要秒开，是调用方自己先把 load_preview 的帧推进 shm，
+# 然后再走 load_rgb 默认
 # 那条把真解码的常驻层装回来——把预览直接做成 load_rgb 的默认返回，等于让编辑读一张
 # 别人渲好的图而账单上一个字都不提。
 LIBRAW_EXTS = {".arw", ".cr2", ".cr3", ".nef", ".raf", ".orf", ".rw2"}
@@ -362,8 +365,8 @@ BROWSE_HALF_MIN_RATIO = 4
 def _load_rgb_raw(path: str, budget: int, device: str | None, *, browse: bool = False) -> Decoded:
     """RAW 的代理帧：先试自研 DNG 读侧（基线，三臂证据那条路），解不开再转 LibRaw。
 
-    `browse=True` 就是"这一帧只进底片条那一个槽位"（与 allow_preview 同一个开关，全仓只有
-    session.make_thumb 打开）。它多允许一件事：源图比目标格子大得多时用半幅解码，把每张
+    `browse=True` 就是"这一帧只进浏览槽位"（与 allow_preview 同一个开关，全仓只有
+    session.make_thumb 与 server._pick_measure_one 打开，两处都不进常驻层）。它多允许一件事：源图比目标格子大得多时用半幅解码，把每张
     228 ms 的账压到 68 ms 量级。编辑与导出走的仍然是全幅那一臂 —— 分界规则里"要进常驻层、
     要被滑块吃、要被导出拿走"的那一层一个字都不动，因为 2×2 合并确实会改像素（实测同一格
     160×160 缩略图与全幅解的最差 28 LSB、均值 0.43 LSB、超过 8 LSB 的像素 0.39%）：这点差别

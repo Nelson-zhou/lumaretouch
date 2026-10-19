@@ -112,9 +112,10 @@ def make_thumb(path: str, *, edge: int = EDGE, quality: int = THUMB_QUALITY) -> 
     （只缩不放）。多一次重采样对 160 px 的格子看不见，而少一次就会让底片条被一张
     竖图撑破行高。
 
-    `allow_preview=True` 是全仓唯一一处开启这个开关的地方：底片条就是“浏览”那个槽位，
-    RAW 拿相机内嵌预览毫秒级出图。它不会泄漏到编辑那一路——那一路走的是
-    `load_rgb(...)` 默认参数，那里预览是关着的（分界规则写在 decode.py 顶部）。
+    `allow_preview=True` 只服务“浏览”那个槽位：RAW 拿相机内嵌预览毫秒级出图。它不会泄漏到
+    编辑那一路——那一路走的是 `load_rgb(...)` 默认参数，那里预览是关着的（分界规则写在
+    decode.py 顶部）。全仓另一处开这个开关的是 server._pick_measure_one（挑图读数，同为浏览
+    判断，且把来源写进事件）；除这两处之外谁都不许开。
     """
     edge = valid_edge(edge)
     if not os.path.isfile(path):
