@@ -120,3 +120,11 @@ pre.log { font-size:11px; color:var(--mut); max-height:180px; overflow:auto; bac
    不能抢主——所以放在对角、用中性色，不新开一套颜色。 */
 .strip .cell .badge.pv { top:auto; right:auto; bottom:2px; left:2px;
   background:var(--line); color:var(--mut); }
+/* 挑图建议那一格（LNX-PICK-001）：底边居中，不与"已调/相机预览/标签/回收站"四角撞位。
+   ov = 这一张已有用户自己的标记（建议作为旁注，人先于机器）；ok = 引擎量过但没要复核的。 */
+.strip .cell .badge.pk { top:auto; left:50%; right:auto; bottom:2px; transform:translateX(-50%);
+  background:#5d4a17; color:#ffd866; white-space:nowrap; max-width:92%; overflow:hidden;
+  text-overflow:ellipsis; }
+.strip .cell .badge.pk.ov { background:#3f4653; color:var(--fg); }
+.strip .cell .badge.pk.ok { background:#25443a; color:#9be6c4; }
+

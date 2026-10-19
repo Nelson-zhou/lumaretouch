@@ -165,6 +165,10 @@ export interface SessionDoc {
   thumb: { w: number; h: number; bytes: number; quality: number;
            preview?: boolean; format?: string | null } | null;
   thumb_error: string | null;
+  /** 挑图建议（LNX-PICK-001）：本地确定性度量折出来的一格旁注。null/缺 = 这一格还没量。
+   *  徽章与原因只从这一份读：前端自己按缩略图亮度判"这张糊不糊"就是第二个不可复算的出处。 */
+  pick?: PickSuggestion | null;
+  pick_error?: string | null;
 }
 
 /** 预设面（LNX-P0-PRESET）：清单与“哪些模块能作用”全部由引擎报，前端不扫目录。 */
@@ -213,12 +217,106 @@ export interface SyncState {
   } | null;
 }
 
+/** 挑图建议的一条原因（LNX-PICK-001）：method / 数值 / 阈值 三件齐全。
+ *
+ *  为什么这三件必须一起到 UI：这条功能的承诺是"任何人都能复算"，缺一个就退化成
+ *  "引擎说了算"。文案（text）里已经把数值与阈值写进句子，但名单化的 value/threshold
+ *  才是可以被机器对账的那一份。
+ */
+export interface PickReason {
+  kind: string;
+  method: string;
+  value: number | null;
+  threshold: number | null;
+  text: string;
+  group_size?: number;
+  rank?: number;
+  scope?: { analyzed?: number; pooled?: number };
+  ratio?: number;
+  ratio_threshold?: number;
+  batch_median?: number;
+}
+
+/** 一张图的全部读数：没有一个字段是结论（结论在 labels/suggest 里，由引擎折）。 */
+export interface PickMeasures {
+  dhash: string;
+  sharpness: number;
+  clarity_ratio: number;
+  contrast: number;
+  under: number;
+  over: number;
+  /** null = 没量到（没探到脸/没装后端）。UI 不许把它渲染成"睁眼"。 */
+  eye_open: number | null;
+  eye_note?: string;
+  faces: number;
+  /** "pixels" / "camera_preview"：RAW 那一族的读数来自相机内嵌预览时必须看得见 */
+  decoded_from?: string;
+  decode_size?: number[];
+  measure_edge: number;
+  algo: string;
+  ms?: Record<string, number>;
+}
+
+export interface PickSuggestion {
+  schema: string;
+  path: string;
+  labels: string[];
+  suggest: string;
+  overridable: boolean;
+  overridden_by_user: boolean;
+  /** 这两格恒为假：挑图这一层没有删除能力（手册 §AI挑图 与冻结件的同一条 then） */
+  auto_deleted: boolean;
+  auto_trashed: boolean;
+  sensitivities?: Record<string, string>;
+  reasons: PickReason[];
+  measures: PickMeasures;
+  notes?: string[];
+  fingerprint?: string;
+  edge?: number;
+  batch_median_ratio?: number;
+  group_leader?: string | null;
+  decoded_from?: string;
+  analyzed_at_ns?: number;
+}
+
+/** pick_start / pick_progress / pick_done / pick_state 共用的一格播报（按事件名分形）。 */
+export interface PickRun {
+  event: string;
+  targets?: number;
+  done?: number;
+  total?: number;
+  count?: number;
+  measured?: number;
+  failed?: number;
+  pooled?: number;
+  reused_hashes?: number;
+  stopped?: boolean;
+  groups?: { size: number; leader: string; members: string[] }[];
+  sensitivities?: Record<string, string>;
+  thresholds?: Record<string, unknown>;
+  schema?: string;
+  algo?: string;
+  fingerprint?: string;
+  edge?: number;
+  batch_median_ratio?: number;
+  eyes_backend?: string | null;
+  eyes_error?: string | null;
+  measure_ms?: number;
+  total_ms?: number;
+  reason?: string;
+  rows?: number;
+  analyzed?: number;
+  labels?: string[];
+}
+
 /** 最近一条 session_state（底片条全貌 + 当前文档状态）。 */
 export interface SessionState {
   index: number;
   count: number;
   current: string | null;
   thumbs_running: boolean;
+  /** 挑图后台任务在不在跑（引擎报的，前端不自己数 pick_item）。 */
+  picks_running?: boolean;
   docs: SessionDoc[];
   doc_state: DocState | null;
   /** 预设清单与同步台账：随同一条 session_state 上来，UI 不在前端记第二份。 */
@@ -630,6 +728,10 @@ export interface EngineStatus {
   session_rev: number;
   /** 宿主已收到多少张缩略图（按 path 计）。 */
   thumbs_ready: number;
+  /** 挑图（LNX-PICK-001）：最近一条 pick_* 账单，与已收到的建议格数。
+   *  进度那句话只能读这两项——前端自己数徽章就是把引擎的后台状态改成自己的猜测。 */
+  pick?: PickRun | null;
+  pick_items?: number;
   /** 最近一条 history_state（M5-b）；换引擎进程会清空。 */
   history: HistoryState | null;
   /** history_state 每来一条 +1：宿主只在它变了的时候按引擎那份 doc_state 重摆滑块。 */
@@ -648,6 +750,15 @@ export interface EngineStatus {
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
     project_actions?: string[];
+    /** 挑图（LNX-PICK-001）：动作名单、四组档位的可选值、阈值本体与判据指纹。
+     *  面板上的下拉项由这几格决定，前端不刻一份档名（刻了就双出处）。 */
+    pick_actions?: string[];
+    pick_sensitivities?: Record<string, string[]>;
+    pick_thresholds?: Record<string, unknown>;
+    pick_fingerprint?: string;
+    pick_algo?: string;
+    pick_edge?: number[];
+    pick_edge_default?: number;
     project_suffix?: string;
     task_actions?: string[];
     export_formats?: string[];
@@ -1176,6 +1287,11 @@ export interface M0Env {
    *  哪个解释器、从哪一档候选里来、版本与包账单、能力到没到”一次打全。这些信息
    *  平时分散在侧栏的四行小字里，脚本读不到而人也不会一行一行去比对。 */
   auto_release: string;
+  /** 挑图建议（LNX-PICK-001）自动通道（$LRT_AUTO_PICK）："<重复>/<清晰>/<曝光>/<眼睛>"
+   *  四档名，例如 standard/standard/standard/strong。引擎那半已有端到端用例逐条钉判据，
+   *  这一条要证的是宿主四层签名（runPick → Rust pick → 引擎 pick_* → status.pick）再加上
+   *  用户看得见的那一层：徽章真在 DOM 里、原因里带着数值与阈值、没有一处说"删"。 */
+  auto_pick: string;
 }
 export const m0Env = () => invoke<M0Env>("m0_env");
 
@@ -1186,6 +1302,17 @@ export const runSession = (
   opts: { dir?: string; paths?: string[]; index?: number; edge?: number;
           quality?: number; limit?: number; thumbs?: boolean } = {},
 ) => invoke<{ requested: boolean }>("session", { action, ...opts });
+
+/** 挑图建议（LNX-PICK-001）：一条命令转发 analyze/stop/state。
+ *  动作与档位名单来自引擎 ready（`pick_actions` / `pick_sensitivities`），宿主与前端
+ *  都不抄一份：抄了就是双出处，加一档时先漂的那一处永远是抄的那一份。
+ *  参数一律"给了才附"，默认档位由引擎说。 */
+export const runPick = (
+  action: "analyze" | "stop" | "state",
+  opts: { indices?: number[]; paths?: string[]; edge?: number; model_dir?: string;
+          duplicate?: string; blur?: string; exposure?: string; eyes?: string;
+          force?: boolean } = {},
+) => invoke<{ requested: boolean }>("pick", { action, ...opts });
 
 /** 撤销/重做（M5-b）：四个动作一条命令，宿主只做把手。步数上限、手势合并窗口、
  *  哪几层进历史全在引擎里——在这里刻一份就会漂一份。 */

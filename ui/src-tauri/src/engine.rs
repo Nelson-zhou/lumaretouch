@@ -243,6 +243,23 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
                 c["succeeded"].as_i64().unwrap_or(-1), c["total"].as_i64().unwrap_or(-1),
                 c["failed"].as_i64().unwrap_or(-1), c["skipped"].as_i64().unwrap_or(-1));
         }
+        "pick_start" | "pick_done" | "pick_state" => {
+            // 挑图的账单（跑了多少张、按哪三档、判据指纹）只有这一份能进跑靶日志；
+            // 逐格的那两条不印，500 张就是 500 行 payload
+            state.on_pick(&v);
+            println!("M0_PICK {line}");
+        }
+        "pick_item" => {
+            state.on_pick(&v);
+        }
+        "pick_progress" => {
+            state.on_pick(&v);
+        }
+        "pick_failed" => {
+            state.on_pick(&v);
+            state.push_log(format!("挑图量不开: {}", v["path"].as_str().unwrap_or("?")));
+            println!("M0_PICK_FAILED {line}");
+        }
         "thumb_failed" => {
             state.on_thumb(&v);
             state.push_log(format!("缩略图解不开: {}", v["path"].as_str().unwrap_or("?")));

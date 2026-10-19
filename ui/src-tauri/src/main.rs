@@ -1,5 +1,10 @@
 //! M0 宿主：起窗口、拉起引擎、从共享内存取帧交给 WebView、跨进程打点。
 
+// 状态载荷是一个大 `json!`（一次轮询把二十几格全装进去），每多两键就深一层宏递归：
+// PICK-001 加到那一步撞上默认 128 的上限。serde_json 的官方建议就是抬这个上限，而不是
+// 把载荷拆成两次 merge——拆了以后"轮询里到底有什么"就变成两处代码，比递归难对账得多。
+#![recursion_limit = "256"]
+
 mod engine;
 mod shm;
 
@@ -157,6 +162,12 @@ pub struct AppState {
     /// session_state 每来一条 +1：前端拿它决定“要不要整条重取一次底片条”，
     /// 而不是每秒把两百张缩略图克隆一遍。
     session_rev: Mutex<usize>,
+    /// 挑图建议（LNX-PICK-001）：最近一条 pick_start / pick_progress / pick_done /
+    /// pick_state。UI 那句「已量 37/200、这次按哪三档判的」只能从这里来——前端自己数
+    /// 徽章就是第二个出处。
+    pick: Mutex<Option<Value>>,
+    /// 已收到多少条 pick_item（按格计，pick_start 归零）。徽章是逐格亮的，进度只认这个数。
+    pick_items: Mutex<usize>,
     /// 最近一条 history_state（M5-b）。这一份里的 doc_state 是撤销之后**引擎认定的
     /// 文档状态**：宿主必须按它重摆滑块，因为同一张文档内部撤销时 docKey 不变，
     /// 走不到 image_ready 那条重摆路——不接就是“画面退回去了而滑块还停在 0.9”。
@@ -240,6 +251,8 @@ impl AppState {
             session: Mutex::new(None),
             thumbs: Mutex::new(std::collections::HashMap::new()),
             session_rev: Mutex::new(0),
+            pick: Mutex::new(None),
+            pick_items: Mutex::new(0),
             history: Mutex::new(None),
             history_rev: Mutex::new(0),
             doc_report: Mutex::new(None),
@@ -425,6 +438,23 @@ impl AppState {
             self.thumbs.lock().unwrap().insert(p.to_string(), b.to_string());
         }
         *self.session_rev.lock().unwrap() += 1;
+    }
+
+    /// 挑图的四种播报进同一格（最后一条就是当前事实），`pick_item` 只数一格并让前端
+    /// 重取底片条：建议本体随 session_state 的 docs 走，宿主不另存一份（存两份就会漂）。
+    pub fn on_pick(&self, v: &Value) {
+        let name = v.get("event").and_then(|e| e.as_str()).unwrap_or("");
+        if name == "pick_start" {
+            *self.pick_items.lock().unwrap() = 0;
+        } else if name == "pick_item" {
+            *self.pick_items.lock().unwrap() += 1;
+            *self.session_rev.lock().unwrap() += 1;
+        } else if name == "pick_failed" {
+            *self.session_rev.lock().unwrap() += 1;
+        }
+        if name != "pick_item" {
+            *self.pick.lock().unwrap() = Some(v.clone());
+        }
     }
 
     pub fn on_history(&self, v: &Value) {
@@ -670,6 +700,8 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     // 这个进程从没见过的 index
     *st.session.lock().unwrap() = None;
     st.thumbs.lock().unwrap().clear();
+    st.pick.lock().unwrap().take();
+    *st.pick_items.lock().unwrap() = 0;
     *st.session_rev.lock().unwrap() += 1;
     // 历史属于一个引擎进程里的那份会话：新进程连图都没解，栈必须从零开始
     *st.history.lock().unwrap() = None;
@@ -1401,6 +1433,8 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let doc_report = state.doc_report.lock().unwrap().clone();
     let doc_rev = *state.doc_rev.lock().unwrap();
     let thumbs_ready = state.thumbs.lock().unwrap().len();
+    let pick = state.pick.lock().unwrap().clone();
+    let pick_items = *state.pick_items.lock().unwrap();
     let presets: Vec<Value> = state.presets.lock().unwrap().clone();
     let grade_limits: Vec<f64> = state.grade_limits.lock().unwrap().clone();
     json!({"shm": shm_name, "has_shm": has_shm, "emitted": emitted,
@@ -1421,6 +1455,8 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            // 那两百张要由 filmstrip 单独取，且只在 session_rev 变了的时候取
            "session": session, "session_rev": session_rev,
            "thumbs_ready": thumbs_ready,
+           // 挑图（PICK-001）：进度与账单。建议本体在 session.docs 的每一格里
+           "pick": pick, "pick_items": pick_items,
            // 撤销/重做（M5-b）：上一条结果 + 变更序号。按钮的灰与不灰、滑块的重摆
            // 都只看这两项，前端不许自己数步数
            "history": history, "history_rev": history_rev,
@@ -1527,6 +1563,58 @@ fn session(
     }
     if let Some(v) = thumbs {
         cmd["thumbs"] = json!(v);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 挑图建议（LNX-PICK-001）：一条命令转发 analyze/stop/state。
+///
+/// 这里**不写动作白名单**（session/history/project 那三处各有一份手抄名单）。理由不是偷懒：
+/// 引擎的拒绝文案里已经带着名单（`名单在 ready 的 pick_actions 里`），宿主再抄一份就是
+/// 两个答案——加一档时先撞宿主的挡，用户看到的是"不认识动作"而不是引擎那句真话。
+/// 参数一律「给了才附」：默认档位属于引擎，宿主填一份就会在引擎改默认时静默漂开。
+#[tauri::command]
+fn pick(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    indices: Option<Vec<i64>>,
+    paths: Option<Vec<String>>,
+    edge: Option<i64>,
+    model_dir: Option<String>,
+    duplicate: Option<String>,
+    blur: Option<String>,
+    exposure: Option<String>,
+    eyes: Option<String>,
+    force: Option<bool>,
+) -> Result<Value, String> {
+    let mut cmd = json!({"cmd": "pick", "action": action});
+    if let Some(v) = indices {
+        cmd["indices"] = json!(v);
+    }
+    if let Some(v) = paths {
+        cmd["paths"] = json!(v);
+    }
+    if let Some(v) = edge {
+        cmd["edge"] = json!(v);
+    }
+    if let Some(v) = model_dir {
+        cmd["model_dir"] = json!(v);
+    }
+    if let Some(v) = duplicate {
+        cmd["duplicate"] = json!(v);
+    }
+    if let Some(v) = blur {
+        cmd["blur"] = json!(v);
+    }
+    if let Some(v) = exposure {
+        cmd["exposure"] = json!(v);
+    }
+    if let Some(v) = eyes {
+        cmd["eyes"] = json!(v);
+    }
+    if let Some(v) = force {
+        cmd["force"] = json!(v);
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
@@ -1813,6 +1901,11 @@ fn m0_env() -> Value {
         "auto_history": std::env::var("LRT_AUTO_HISTORY").unwrap_or_default(),
         // 发布自检（M5-c）：非空则让前端报一条 M0_RELEASE（解释器来历 + 版本 + 能力）
         "auto_release": std::env::var("LRT_AUTO_RELEASE").unwrap_or_default(),
+        // 挑图建议（LNX-PICK-001）自动通道："<重复>/<清晰>/<曝光>/<眼睛>"。
+        // 这一格上一轮漏过一次：前端 M0Env 声明了 auto_pick，而宿主少返回一个键，
+        // TS 编译期看不出来（引擎交回来的是无类型 JSON），表现是「引擎算得对而屏幕上
+        // 一次都没点火」。键名单的双向守卫在 engine/tests/test_pick.py 里钉着。
+        "auto_pick": std::env::var("LRT_AUTO_PICK").unwrap_or_default(),
     })
 }
 
@@ -1839,7 +1932,7 @@ fn main() {
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, precompute,
             inpaint, light, deform, lut, grade, background, export, session, filmstrip, history,
-            project, task, exposure, crop, preset, batch, face,
+            project, task, exposure, crop, preset, batch, face, pick,
             report, quit
         ])
         .run(tauri::generate_context!())

@@ -11,7 +11,7 @@ import {
   benchStart, benchStats, engineStatus, loadImage, m0Env, parseFrameHead, peekFrame,
   faceStateOf,
   quit, report, runDeform, runFace,
-  fetchFilmstrip, runExport, runGrade, runHistory, runInpaint, runLight, runLut, runSession, runBackground,
+  fetchFilmstrip, runExport, runGrade, runHistory, runInpaint, runLight, runLut, runPick, runSession, runBackground,
   runBatch, runCrop, runExposure, runPreset, runPrecompute, runProject, runTask,
   setCompare, setStrength, shutdownEngine, startEngine,
   type BenchOptions, type DeformInfo, type DocState, type EngineRuntime, type EngineStatus, type ExportDone,
@@ -19,7 +19,8 @@ import {
   type InpaintInfo, type SessionState,
   type GradeInfo, type LightInfo,
   type LutInfo, type BackgroundInfo,
-  type Precompute, type Stats, type ProjectState, type TaskState,
+  type PickRun, type Precompute, type SessionDoc, type Stats, type ProjectState,
+  type TaskState,
 } from "./native";
 
 const SIZES: Record<string, [number, number]> = {
@@ -213,6 +214,9 @@ export default function App() {
   const [stripDir, setStripDir] = useState("");
   // 底片条那个目录框同理：扫不进去要当场说，不能只把错误丢给窗口另一头那行灰字
   const [stripErr, setStripErr] = useState("");
+  // 挑图（LNX-PICK-001）：四组敏感度（档名由引擎 ready 报，这里只存用户挑的那一个）
+  const [pickSens, setPickSens] = useState<Record<string, string>>({});
+  const [pickNote, setPickNote] = useState("");
   const stripRev = useRef(-1);
   // 当前是哪一张文档：变了才按引擎那份 doc_state 重摆滑块（同图轮询不重摆，
   // 否则会把用户正在拖的手势按回引擎上一帧的值）
@@ -625,7 +629,19 @@ export default function App() {
       setGlVisible(env.gl_visible === "1");
       setChunks(env.chunks > 1 ? env.chunks : 1);
       const spec = env.auto_bench;
-      if (!spec) return;
+      if (!spec) {
+        // 门还是那道门（起靶必须先于任何臂），但**过不了门要自己报**。1.6.0 那一轮
+        // 第 7 臂就是撞在这里：脚本忘传 LRT_AUTO_BENCH，整条自动序列一声不响地
+        // return，外面只能等满 900 s 拿到一句"没跑完"——静默的失败比失败更坏。
+        const wanted = (["auto_pick", "auto_filmstrip", "auto_face", "auto_history",
+          "auto_export", "auto_background", "auto_local_color", "auto_grade"] as const)
+          .filter((k) => !!(env as unknown as Record<string, string>)[k]);
+        if (wanted.length) {
+          await report("M0_ERROR 自动序列没起跑：这些臂挂了，但整段序列要求 LRT_AUTO_BENCH "
+            + "先过门（缺它=静默 return）：" + wanted.join(","));
+        }
+        return;
+      }
       // WebKit 会节流不可见/未聚焦窗口的 rAF，跑靶前必须把窗口拉到前台
       await getCurrentWindow().setFocus().catch(() => undefined);
       const skipPixels = env.skip_pixels === "1";
@@ -1654,6 +1670,72 @@ export default function App() {
           })}`);
         }
       }
+      // 挑图建议（LNX-PICK-001）自动通道：LRT_AUTO_PICK="<重复>/<清晰>/<曝光>/<眼睛>"。
+      // 引擎那半的判据已由 test_pick + 端到端用例逐条钉住；这一条要证的是宿主这四层签名
+      // （runPick → Rust pick → 引擎 pick_* → status.pick），再加上只有真窗口能给的最后一层：
+      // 徽章确实出现在用户看得见的 DOM 里、原因里带着数值与阈值、并且没有一处写着"删"。
+      if (env.auto_pick) {
+        const arms = env.auto_pick.split("/");
+        if (arms.length !== 4) {
+          await report(`M0_ERROR 无法解析 LRT_AUTO_PICK=${env.auto_pick}`
+            + "（要 重复/清晰/曝光/眼睛 四档名）");
+        } else {
+          const sens = { duplicate: arms[0], blur: arms[1], exposure: arms[2], eyes: arms[3] };
+          const names0 = ((await fetchFilmstrip().catch(() => null))?.session?.docs ?? [])
+            .map((d) => d.name).sort();
+          await runPick("analyze", { ...sens, force: true });
+          let run: PickRun | null = null;
+          let err: string | null = null;
+          for (let i = 0; i < 900; i++) {
+            await sleep(200);
+            const st = await engineStatus().catch(() => null);
+            if (st?.last_error) { err = st.last_error; break; }
+            if (st?.pick && (st.pick.event === "pick_done" || st.pick.event === "pick_state")) {
+              run = st.pick;
+              break;
+            }
+          }
+          await sleep(300);
+          const st2 = await engineStatus().catch(() => null);
+          const fs = await fetchFilmstrip().catch(() => null);
+          const docs = fs?.session?.docs ?? [];
+          const withPick = docs.filter((d) => d.pick);
+          const labelCount: Record<string, number> = {};
+          for (const d of withPick) {
+            for (const l of d.pick?.labels ?? []) labelCount[l] = (labelCount[l] ?? 0) + 1;
+          }
+          const badges = Array.from(document.querySelectorAll(".strip .cell .badge.pk"))
+            .map((el) => (el.textContent ?? "").trim());
+          await report(`M0_PICK_RESULT ${JSON.stringify({
+            sens, event: run?.event ?? null, err,
+            targets: run?.targets ?? null, measured: run?.measured ?? null,
+            failed: run?.failed ?? null, stopped: run?.stopped ?? null,
+            groupSizes: (run?.groups ?? []).map((g) => g.size),
+            fingerprint: run?.fingerprint ?? null, algo: run?.algo ?? null,
+            // 两条独立通道来自装机引擎自己：握手 ready 里那份判据指纹与这次事件里那份。
+            // 不相等就是"跑靶读到的判据不是壳握手时承诺的那一版"（发布自证要的就是这一句）
+            readyFingerprint: st2?.ready_caps?.pick_fingerprint ?? null,
+            readyAlgo: st2?.ready_caps?.pick_algo ?? null,
+            readyArms: st2?.ready_caps?.pick_sensitivities ?? null,
+            eyesBackend: run?.eyes_backend ?? null, eyesError: run?.eyes_error ?? null,
+            batchMedian: run?.batch_median_ratio ?? null, edge: run?.edge ?? null,
+            measureMs: run?.measure_ms ?? null, totalMs: run?.total_ms ?? null,
+            pickItems: st2?.pick_items ?? -1, cells: docs.length, withPick: withPick.length,
+            names0, namesNow: docs.map((d) => d.name).sort(), labels: labelCount,
+            badges,
+            // 冻结件那两句在宿主这一层的形状：可覆盖 / 不自动删除（引擎恒假，UI 不许改写）
+            overridableAll: withPick.every((d) => d.pick?.overridable === true),
+            autoDeleteAny: withPick.some((d) => d.pick?.auto_deleted === true
+              || d.pick?.auto_trashed === true),
+            overridden: withPick.filter((d) => d.pick?.overridden_by_user === true).length,
+            reasonsArmed: withPick.every((d) => (d.pick?.reasons ?? []).length === 0
+              || (d.pick?.reasons ?? []).every((r) => !!r.method
+                && r.value !== undefined && r.threshold !== undefined)),
+            deleteWord: withPick.some((d) => (d.pick?.reasons ?? [])
+              .some((r) => (r.text ?? "").includes("删"))),
+          })}`);
+        }
+      }
       // 撤销/重做（M5-b）自动通道：LRT_AUTO_HISTORY=<强度值>。
       // 引擎那条链已有协议用例逐字节对拍（test_undo_walks_back_through_every_layer），
       // 而那份用例连的是裸引擎。这一条要证的是宿主这四层：
@@ -2276,6 +2358,73 @@ export default function App() {
       await runProject("trash", { path, trashed: toTrash }).catch((e) => setDragNote(String(e)));
     }
     await refreshStatus();
+  }
+
+  /** 挑图的四组敏感度：用户没挑的就留空，让引擎的默认档（standard）由引擎说。 */
+  const PICK_KEYS = ["duplicate", "blur", "exposure", "eyes"] as const;
+  const pickArms: Record<string, string> = {};
+  for (const k of PICK_KEYS) if (pickSens[k]) pickArms[k] = pickSens[k];
+  const pickSensList = (status?.ready_caps?.pick_sensitivities ?? null) as
+    Record<string, string[]> | null;
+  const pickRun = status?.pick ?? null;
+  // 在不在跑只看引擎那一份（session_state.picks_running），前端不自己按 pick_item 条数猜
+  const pickRunning = !!strip?.picks_running || pickRun?.event === "pick_start";
+
+  /** 挑图那一行的话：进度、结果、与「一行建议都没有」这一种也得说清楚。
+   *  读数全部来自引擎报的那格（status.pick / session.docs[].pick），前端一个数也不自己算。 */
+  function pickSummary() {
+    const docs = strip?.docs ?? [];
+    const n = docs.filter((d) => d.pick).length;
+    if (!docs.length) return "";
+    if (pickRunning) {
+      const done = pickRun?.event === "pick_progress" ? pickRun?.done : status?.pick_items;
+      const total = pickRun?.total ?? pickRun?.targets ?? docs.length;
+      return `${t("pick.running").trim()}${done != null ? ` ${done}/${total}` : ""}`;
+    }
+    if (pickRun?.event === "pick_done") {
+      const groups = (pickRun.groups ?? []).length;
+      return n ? t("pick.done", { n, total: docs.length, groups,
+                                  ms: Math.round(pickRun.total_ms ?? 0) }) : t("pick.none");
+    }
+    return n ? t("pick.done", { n, total: docs.length,
+                                groups: (pickRun?.groups ?? []).length, ms: 0 }) : t("pick.idle");
+  }
+
+  /** 一格建议的 tooltip 全文：表头（判据指纹 + 档位）、逐条原因（带数值与阈值）、
+   *  最后固定一句"建议不删原片"。原因本体是引擎写的句子，这里只排版。 */
+  function pickTip(d: SessionDoc): string {
+    const p = d.pick;
+    if (!p) return d.pick_error ? t("pick.failed", { why: d.pick_error }) : "";
+    const head = t("pick.tipHeader", {
+      name: d.name, fp: p.fingerprint ?? "?",
+      sens: Object.entries(p.sensitivities ?? {}).map(([k, v]) => `${k}=${v}`).join("/"),
+    });
+    const lines = [head];
+    if (p.overridden_by_user) lines.push(`· ${t("pick.overridden")}`);
+    lines.push(...(p.reasons.length
+      ? p.reasons.map((r) => `· ${r.text}〔${r.method}〕`)
+      : [`· ${t("pick.empty")}`]));
+    if (p.measures.eye_open === null) {
+      lines.push(`· ${t("pick.eyesUnknown", { why: p.measures.eye_note || `${p.measures.faces} 张脸` })}`);
+    }
+    if (p.measures.decoded_from === "camera_preview") {
+      lines.push(`· ${t("strip.previewTip")}`);
+    }
+    lines.push(`· ${t("pick.noDelete")}`);
+    return lines.join("\n");
+  }
+
+  /** 挑图建议（LNX-PICK-001）：把手。范围是"选中的那几张"，没选中就是整条底片条；
+   *  默认跳过已量过的格子，`全部重算`才带 force（判据换版时新旧读数不可比，那时才值
+   *  再付一次解码）。度量、分组、建议全在引擎里，这里不算法也不数格子。 */
+  async function onPickAnalyze(force = false) {
+    setPickNote("");
+    if (!strip?.count) { setPickNote(t("strip.needDir")); return; }
+    const targets = selPaths.length ? selPaths : undefined;
+    try {
+      await runPick("analyze", { ...(targets ? { paths: targets } : {}), force, ...pickArms });
+      await refreshStatus();
+    } catch (e) { setPickNote(String(e)); }
   }
 
   /** 撤销/重做（M5-b）：把手。步数、能不能撤、撤完画面是什么，全由引擎答复。 */
@@ -3383,6 +3532,7 @@ export default function App() {
             <span>{strip ? t("strip.summary", { n: strip.count,
               th: strip.docs.filter((d) => d.thumb).length }) : t("strip.empty")}</span>
             {strip?.thumbs_running && <span>{t("strip.running")}</span>}
+            {strip?.picks_running && <span>{t("pick.running")}</span>}
             <input value={batchTag} placeholder="批量标签" style={{ width: 110 }}
                    onChange={(e) => setBatchTag(e.target.value)} />
             <button disabled={!selPaths.length} onClick={onBatchTag}>打标签</button>
@@ -3394,6 +3544,33 @@ export default function App() {
                    onChange={(e) => { setStripDir(e.target.value); setStripErr(""); }} />
             <button onClick={() => onPickPath(true)} title={t("retouch.browseTip")}>{t("retouch.browse")}</button>
             <button onClick={onScanStrip}>{t("strip.scan")}</button>
+          </div>
+          {/* 挑图（LNX-PICK-001）：档位名单来自引擎 ready；引擎没报就把按钮禁用并说明原因，
+              不留一个按了没反应的控件，也不在前端补一份档名。 */}
+          <div className="bar" title={t("pick.desc")}>
+            <span className="k">{t("pick.title")}</span>
+            {pickSensList && PICK_KEYS.map((key) => (
+              <label key={key} className="k">{t(`pick.sens.${key}`)}
+                <select value={pickSens[key] ?? "standard"}
+                        onChange={(e) => setPickSens({ ...pickSens, [key]: e.target.value })}>
+                  {(pickSensList[key] ?? ["weak", "standard", "strong"]).map((v) => (
+                    <option key={v} value={v}>{t(`pick.arm.${v}` as MsgKey)}</option>
+                  ))}
+                </select>
+              </label>
+            ))}
+            <button onClick={() => onPickAnalyze(false)}
+                    disabled={!strip?.count || pickRunning || !pickSensList}
+                    title={pickSensList ? t("pick.runTip") : t("pick.tip.arm")}>
+              {t("pick.run")}
+            </button>
+            <button onClick={() => onPickAnalyze(true)}
+                    disabled={!strip?.count || pickRunning || !pickSensList}
+                    title={pickSensList ? t("pick.forceTip") : t("pick.tip.arm")}>
+              {t("pick.force")}
+            </button>
+            <span>{pickSummary()}{selPaths.length ? t("pick.scope", { n: selPaths.length }) : ""}</span>
+            {pickNote && <span className="err">{pickNote}</span>}
           </div>
           {stripErr && <div className="err">{stripErr}</div>}
           {strip && strip.count > 0 && (
@@ -3423,6 +3600,20 @@ export default function App() {
                     )}
                     {!!d.tags?.length && <span className="badge tag" title={d.tags.join(" ")}>
                       {d.tags[0]}{d.tags.length > 1 ? ` +${d.tags.length - 1}` : ""}</span>}
+                    {/* 挑图那一格（PICK-001）：标签来自引擎，逐条原因在 tooltip 里带着
+                        数值与阈值。已有用户标记时换成灰底（人先于机器），但建议本体不藏。 */}
+                    {d.pick?.labels?.length ? (
+                      <span className={"badge pk" + (d.pick.overridden_by_user ? " ov" : "")}
+                            title={pickTip(d)}>
+                        {d.pick.labels.map((l) => t(`pick.label.${l}` as MsgKey)).join(" · ")}
+                      </span>
+                    ) : null}
+                    {d.pick && !d.pick.labels.length && (
+                      <span className="badge pk ok" title={pickTip(d)}>OK</span>
+                    )}
+                    {d.pick_error && (
+                      <span className="badge pk ov" title={pickTip(d)}>?</span>
+                    )}
                     {d.trashed && <span className="badge st">回收站</span>}
                     {!d.trashed && d.opened && !edited && <span className="badge st">已开</span>}
                   </button>
