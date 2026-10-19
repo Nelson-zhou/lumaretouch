@@ -53,7 +53,7 @@ echo "✓ 已装 $n 个引擎文件，全部与暂存内容逐字节一致"
 # 支持多个标记（一个包同时接了两个里程碑时，只卡一个会漏）：不传就走上一轮的默认值。
 # 默认值必须每轮往上推：留着几轮前的标记，这条检查就只是好看——旧包也一定含它。
 markers=("$@")
-if [ ${#markers[@]} -eq 0 ]; then markers=(refilter_frames all_landmarks _deform_defer); fi
+if [ ${#markers[@]} -eq 0 ]; then markers=(refilter_frames all_landmarks _deform_defer _deform_default deform_scopes); fi
 for marker in "${markers[@]}"; do
   if grep -rq "$marker" "$installed"; then
     echo "✓ 装机代码含本轮特征标记 '$marker'"

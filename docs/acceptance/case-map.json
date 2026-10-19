@@ -2,11 +2,12 @@
  "schema": "lrt.acceptance-map.v1",
  "cases": "docs/acceptance/cases-frozen.json",
  "cases_sha256": "c2fca495b90e3aa7",
- "generated_at": "2026-10-18T23:06:55",
+ "generated_at": "2026-10-19T00:56:19",
  "map": {
   "CORE-001": {
    "tests": [
     "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
+    "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
     "engine/tests/test_project.py::test_round_trip_restores_docs_tags_trash_and_recipe",
     "engine/tests/test_project.py::test_source_hash_is_unchanged_by_the_project",
     "engine/tests/test_protocol.py::test_project_save_and_reopen_restores_the_recipe_byte_for_byte"
@@ -215,6 +216,7 @@
   "PORTRAIT-003": {
    "tests": [
     "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
+    "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
     "engine/tests/test_face_select.py::test_faces_lists_every_detected_person"
    ],
    "phase": "P1",
@@ -223,11 +225,13 @@
    "note": "未实装：本版本多人照片走 SCOPE-001 的「整条明拒」，没有「编辑第 N 个人」的人物分层模型。不做半截实现来冒充覆盖。"
   },
   "PORTRAIT-004": {
-   "tests": [],
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default"
+   ],
    "phase": "P1",
    "module": "person",
    "title": "覆盖与继承",
-   "note": "未实装：覆盖/继承需要**按人脸**的配方层级，本版本配方是文档级（一张图一份）。"
+   "note": "已实装（1.5.0）：deform 的 scope=all 改全人物默认、scope=person 只给当前选定那一张挂覆盖、action=inherit 恢复继承；生效值由 _effective_deform_amounts() 单一处合成并按脸盒认人。边界：一层形变服务一张脸，同一时刻只有被选中那张生效（换人即换几何）；跨图认「同一个人」是 PORTRAIT-005，本版本没有那个模型。"
   },
   "PORTRAIT-005": {
    "tests": [],
@@ -573,6 +577,7 @@
     "engine/tests/test_acceptance_p0.py::test_multi_face_photo_blocks_reshaping_but_keeps_global_edits",
     "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
     "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces",
+    "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
     "engine/tests/test_face_select.py::test_meta_reports_the_selection_and_keeps_the_scope_flag"
    ],
    "phase": "P0",

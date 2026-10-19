@@ -482,7 +482,9 @@ else
   fgot=0
   for _ in $(seq 1 $((want_secs * 2))); do
     sleep 0.5
-    if grep -aq 'M0_FACE' "$flog" || grep -aq 'M0_ERROR' "$flog"; then fgot=1; break; fi
+    # 等到**层级那一臂**报出来才算跑完：M0_LAYER 紧跟在 M0_FACE 后面发，
+    # 只等 M0_FACE 会在层级还没落笔时就把窗口杀掉，第 6 臂就变成"没有日志可读"
+    if grep -aq 'M0_LAYER' "$flog" || grep -aq 'M0_ERROR' "$flog"; then fgot=1; break; fi
     kill -0 $fwin 2>/dev/null || { fgot=2; break; }
   done
   sleep 2
@@ -534,6 +536,64 @@ sys.exit(1 if fails else 0)
 PY
     if [ $? -ne 0 ]; then fail=$((fail + 1)); else pass=$((pass + 1)); fi
   fi
+fi
+
+echo "── 6. 层级那一臂：全人物默认 + 逐张覆盖 + 恢复继承（LNX-PORTRAIT-004）"
+# 与第 5 臂同一轮窗口、同一份日志：这一段证的是 runDeform 的第三个参数（scope）穿过
+# Rust、穿过宿主轮询状态、最后落在用户看见的那一帧上。库里那八段判据到不了这一层。
+if [ ! -f "${dual:-}" ]; then
+  no "缺多人夹具，层级那一臂没有输入（见第 5 臂）"
+elif [ ! -f "${flog:-}" ]; then
+  no "第 5 臂没跑起来：没有同一轮的窗口日志可查层级那一臂（不做 skip，缺证据就是不过）"
+else
+  python3 - "$flog" <<'PY'
+import json, re, sys
+raw = open(sys.argv[1], "rb").read().decode("utf-8", "replace")
+hits = re.findall(r'M0_LAYER (\{[^\n]*\})', raw)
+fails = []
+def chk(cond, msg):
+    print(("  ✓ " if cond else "  × ") + msg)
+    if not cond:
+        fails.append(msg)
+chk(bool(hits), "日志里有 M0_LAYER：层级那一臂在装机壳里跑了")
+if not hits:
+    err = re.findall(r'M0_ERROR [^\n]*', raw)
+    chk(False, f"没有 M0_LAYER（错误行：{err[-1][:160] if err else '一条也没有'}）")
+else:
+    fc = json.loads(hits[-1])
+    chk("bad" not in fc, f"这一臂没报 bad：{fc.get('bad')}")
+    if "bad" not in fc:
+        chk(fc.get("want") == 1, f"覆盖挂在被点选那一张（want={fc.get('want')}）："
+                                 "选 1 号才验得出「认的是那一张」")
+        chk(fc.get("personScope") == "person",
+            f"scope=person 穿过 Rust 与宿主到了引擎：personScope={fc.get('personScope')!r}")
+        chk(fc.get("overriddenKinds") == ["big_eye"],
+            f"引擎报出这一张被单独覆盖了哪几格：{fc.get('overriddenKinds')}")
+        chk(fc.get("inheritedBeforeOverride") is False,
+            f"挂上覆盖后 inherited 必须为假（面板那句「已单独覆盖」的唯一出处）")
+        chk(fc.get("overrideAmounts") == {"slim_face": 0.2, "big_eye": 0.9, "small_chin": 0.0},
+            f"生效值 = 默认打底 + 覆盖盖上：{fc.get('overrideAmounts')}")
+        chk(fc.get("keptAfterDefaultChange") == {"slim_face": 0.6, "big_eye": 0.9,
+                                                 "small_chin": 0.0},
+            f"改默认（slim 0.2→0.6）时：覆盖项要继续生效而未覆盖项要跟随 → "
+            f"{fc.get('keptAfterDefaultChange')}（冻结件 then 前两句）")
+        chk(fc.get("inheritAmounts") == {"slim_face": 0.6, "big_eye": 0.3, "small_chin": 0.0}
+            and fc.get("inheritOverrideCount") == 0,
+            f"恢复继承后全部按层级合成 → amounts={fc.get('inheritAmounts')} "
+            f"overrides={fc.get('inheritOverrideCount')} 条（冻结件 then 第三句）")
+        chk(int(fc.get("insideChanged") or 0) > 0,
+            f"挂覆盖真的动了被选中那一张：insideChanged={fc.get('insideChanged')}")
+        chk(fc.get("otherChanged") == 0,
+            f"1.6× 脸半对角之外（另一个人那一圈）逐字节不动：otherChanged={fc.get('otherChanged')}")
+        chk(fc.get("sameLayerBytes") == 0,
+            f"两条路径走到同一个层级状态而画面差 {fc.get('sameLayerBytes')} 字节："
+            "合成必须是单一出处（非 0 就是「默认/覆盖各算一遍」）")
+sys.exit(1 if fails else 0)
+PY
+  if [ $? -ne 0 ]; then fail=$((fail + 1)); else pass=$((pass + 1)); fi
+  # 窗口日志留着不删：`M0_FACE`/`M0_LAYER` 那两行原始 JSON 是这一臂唯一的一手证据，
+  # 归档记录要按它逐字段核对（第 5 臂以前也删过，结果报告里只能转述 ✓ 行）
+  ok "同一份日志留着备查（含 M0_FACE / M0_LAYER 原始行）：$flog"
 fi
 
 echo
