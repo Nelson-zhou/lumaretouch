@@ -147,8 +147,8 @@ def test_gain_vector_is_monotonic_in_temperature_shift():
 def test_cct_xy_matches_published_illuminant_chromaticities():
     """锚点对账：这三组是 CIE 公布的标准色度坐标，不是我自己算出来的参考。
 
-    为什么必须有这条：cct_xy 的第一个版本错在拄错了分段系数，而它错得很“安静”——
-    到 7000 K 以上才爆。拿公布值一对，拄错当场就红。
+    为什么必须有这条：cct_xy 的第一个版本错在抄错了分段系数，而它错得很“安静”——
+    到 7000 K 以上才爆。拿公布值一对，抄错当场就红。
     D75 用 7347 K 而不是 7500 K：那是 D75 的相关色温本身（命名里的 75 是序列名，不是 CCT）。
     """
     for k, want in ((5000.0, (0.3457, 0.3585)),      # D50
@@ -163,7 +163,7 @@ def test_cct_xy_matches_published_illuminant_chromaticities():
 
 
 def test_below_daylight_domain_is_rejected_not_guessed():
-    """低于 4003 K 必须拒。黑体轨迹那段我第一版拄错了，现在宁缺不假。"""
+    """低于 4003 K 必须拒。黑体轨迹那段我第一版抄错了，现在宁缺不假。"""
     with pytest.raises(ValueError, match="日光轨迹|不在本层可算域"):
         ex.cct_xy(2856.0)
     with pytest.raises(ValueError):
@@ -276,7 +276,7 @@ def test_pipeline_rejects_out_of_range_without_leaving_half_state():
     assert pipe.exposure_params == (0.0, 0.0, 0.0), "被拒后残留了部分提交的参数"
     assert pipe.has_exposure() is False
     st = pipe.exposure_state()
-    assert st["exposure_limits"] == [5.0, 2000.0, 1.0], "量程没由引擎报出去（UI 会自己拄一份）"
+    assert st["exposure_limits"] == [5.0, 2000.0, 1.0], "量程没由引擎报出去（UI 会自己抄一份）"
 
 
 def test_export_spec_carries_exposure_and_matches_preview_bytes():

@@ -85,7 +85,7 @@ RENDER-002（预览导出一致）
 第一版把 `crop` 嵌进了 `exposure` 那个字典字面里（缩进也一样），宿主按
 `doc_state["crop"] 取永远拿到 `None`，而这份错在 JSON 里看起来完全自洽——正是本仓反复出事的
 那一类"错得看不出来"。现在 `crop` 是顶层键，量程取自 `ops.geometry.MAX_ANGLE` 这一份
-出处（`doc_state` 里那份 `[-180, 180]` 字面量一并删掉：UI 自己拄的数与引擎实际拒的数
+出处（`doc_state` 里那份 `[-180, 180]` 字面量一并删掉：UI 自己抄的数与引擎实际拒的数
 迟早分叉）。用例：`test_doc_state_reports_crop_as_its_own_layer`。
 
 ### 9. 命令面沿用"整组校验后一次提交"那套铁律
