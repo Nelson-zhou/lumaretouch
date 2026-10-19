@@ -255,7 +255,7 @@ def face_frame(landmarks, h: int, w: int) -> tuple[float, float, float, float, f
     """(cx, cy, R, face_w, face_h)，全部**像素**单位。
 
     R 是脸轮廓到中心的最大像素距离（半对角），紧支撑窗以它为标尺；face_w / face_h
-    是轮廓外接盒，三种形变的位移幅度以它为标尺。所有比例都相对"脸"而不是"画面"，
+    是轮廓外接盒，各形变的位移幅度以它为标尺。所有比例都相对"脸"而不是"画面"，
     换代理档、换构图时视觉幅度才一致。
     """
     pts = _check_points(landmarks)
@@ -554,7 +554,7 @@ def unit_field(landmarks, kind: str, h: int, w: int, *, device="cpu",
     # 作用面账单：这一层的位移场有多少像素不是零。窗口参数（window）只说圆心与
     # 半径，而“瘦脸会不会拖到背景”要看的是实际盖住的面积占比：关键点几何错了
     # （肤色盒模板在真人照片上把脖子、手、暖色头发全圈进去）时，同一个公式会
-    # 作用到整幅画面。这一笔只在建层时算（一张图三种形变各一次），不在热路径上。
+    # 作用到整幅画面。这一笔只在建层时算（一张图每格各一次），不在热路径上。
     moved = t.abs().amax(dim=-1) > 1e-6
     share = float(moved.float().mean())
     return t[None], {"kind": kind, "controls": len(P), "merged": meta["merged"],

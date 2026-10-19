@@ -182,7 +182,7 @@ class Engine:
         self._light_ops: list = []
         self._light_redo: list = []
         self._light = dict(exposure=DEFAULT_DB_EXPOSURE, radius=DEFAULT_DB_RADIUS)
-        # 形变层（M2-b）：存的是三个滑块的值，单位场不存（它能从关键点重算，
+        # 形变层（M2-b）：存的是每一格的滑块值（键集 = KINDS），单位场不存（它能从关键点重算，
         # 而关键点已经在 _precompute 里）。换设备重建时重新 build 一次，55 ms。
         self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
         # 「层在而单位场不在」这一格（CORE-001 重开 / 会话迁移）：关键点不随工程文件走
@@ -1420,7 +1420,7 @@ class Engine:
 
         为什么不能只靠图层计数与 grade_state：切回一张调过的图时，宿主手里那些
         `*_done` 快照已经被清掉了（它们说的是上一条命令，不是这一张文档），而滑块
-        的位置必须来自引擎。缺了 lut_amount / deform 的三个数 / 修容那两个参数，
+        的位置必须来自引擎。缺了 lut_amount / deform 那一组数 / 修容那两个参数，
         UI 就只能"画面已经调好了但滑块显示 0"——那是双向错配的新一格。
         """
         from .ops.geometry import geometry_state as geo_state
@@ -2829,7 +2829,7 @@ class Engine:
               # 关键点出自哪个后端必须原样上报：template 是“按肤色盒摆的模板”，
               # 贴合度不验收。UI 拿不到这个数就会把模板拟合当成真检测给用户看。
               "landmark_backend": (self._precompute.backend if self._precompute else None),
-              # 作用面：三种形变里最宽的那一种会动到画幅的多少。它是“瘦脸不许
+              # 作用面：各形变里最宽的那一种会动到画幅的多少。它是“瘦脸不许
               # 拖走背景”这句话在**当前这张图**上的直接读数：窗口参数只能说明圆心
               # 与半径，几何落错了地方时同一个公式会盖住整幅（真人照片上量到 98.6%）。
               # 没建层时给 0.0 而不是缺键：UI 把这两个字段当必存，缺键就是 undefined。
@@ -3480,7 +3480,7 @@ class Engine:
         return {}
 
     def _effective_deform_amounts(self) -> dict:
-        """当前在改那一张脸的最终三个数：默认打底，覆盖项逐 kind 盖上去。
+        """当前在改那一张脸的最终生效值（每格一个，键集 = KINDS）：默认打底，覆盖项逐 kind 盖上去。
 
         合成只在这一处。会话里那份 `_deform["amounts"]`、doc_state、出片、UI 滑块读的都是
         它的结果——写两处就会出现“面板显示默认而渲染用覆盖”那种双向错配。
@@ -3664,7 +3664,9 @@ class Engine:
                 # 认不回那一张（本来就没单独改过）返回 False——那不是错误，是空操作，
                 # 但必须说出口：否则“按了恢复继承而画面没变”就又是一件查不清的事
                 if not self._drop_override(self._face_box):
-                    note = ("这一张本来就没有覆盖（三格全部跟随全人物默认），"
+                    # 格数由 KINDS 报，不许写死：写死的那一句会印在面板上，
+                    # 而面板新增一格时它就成了一句当场的假话。
+                    note = (f"这一张本来就没有覆盖（全部 {len(KINDS)} 格都跟随全人物默认），"
                             "本次 inherit/clear(person) 是空操作")
             eff = self._effective_deform_amounts()
             if not any(abs(float(v)) > 0.0 for v in eff.values()):

@@ -965,7 +965,7 @@ def test_person_override_follows_and_inherits_the_all_person_default(engine, ext
     ① "覆盖项继续生效" → 给 A 挂上 big_eye 覆盖后改默认（slim 0.5→0.2），A 的
        big_eye 一个 LSB 也不许跟着默认走，而 slim 必须跟着走；
     ② "未覆盖项跟随" → 从没被单独改过的那个人（B）在每一次默认变更后，有效值恰好
-       等于默认那三个数，且 `inherited` 为真、`overridden_kinds` 为空；
+       等于默认那一组数（每格一个），且 `inherited` 为真、`overridden_kinds` 为空；
     ③ "恢复继承后全部按层级合成" → 走两条不同路径（0.9→inherit 与 0.4→inherit）
        回到同一个层级状态，两幅画面**逐字节相同**；同值重写也逐字节相同（合成只有
        `_effective_deform_amounts()` 一个出处，这两条就是它的对拍）；
@@ -1051,7 +1051,7 @@ def test_person_override_follows_and_inherits_the_all_person_default(engine, ext
                            amounts={"big_eye": 0.3})
     assert done2["default"] == _amounts(slim_face=0.5, big_eye=0.3, small_chin=0.0), done2
 
-    # 换到 B：完全没有覆盖的人，有效值就是默认那三个数（②"未覆盖项跟随"）
+    # 换到 B：完全没有覆盖的人，有效值就是默认那一组数（②"未覆盖项跟随"）
     sel(b)
     st_b = layered()
     assert st_b["amounts"] == _amounts(slim_face=0.5, big_eye=0.3, small_chin=0.0), st_b

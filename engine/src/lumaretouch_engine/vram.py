@@ -167,7 +167,7 @@ class PreviewPipeline:
         self.light_res: torch.Tensor | None = None             # db(retouched)
         self.light_res_key: tuple | None = None
         self.last_light_ms: float = 0.0
-        # M2-b：形变层。存的是三种形变各自的**单位场**（amount=1 时的位移场），
+        # M2-b：形变层。存的是每一种形变各自的**单位场**（amount=1 时的位移场），
         # 滑块值只当系数用。为什么能这样拆：TPS 的解对右端项线性，而请求位移与
         # amount 成正比，所以 field(a) = a·field(1) 是恒等而不是近似
         # （探针 m2b4 量到 ‖f(0.5)−0.5·f(1)‖max = 0.000e+00 px）。

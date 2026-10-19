@@ -432,7 +432,7 @@ def _pipe(device="cpu"):
 
 
 def test_deform_layer_is_byte_identical_when_unlit():
-    """建了单但三个滑块全零 ⇒ 与没建单逐字节一致。产品承诺"不推就不动"。"""
+    """建了单但所有滑块全零 ⇒ 与没建单逐字节一致。产品承诺"不推就不动"。"""
     p = _pipe()
     p.prepare()
     p.render(0.5)
@@ -592,7 +592,7 @@ def test_warm_device_actually_runs_the_deform_kernels():
     finally:
         monkey.undo()
     assert ms > 0.0
-    assert sorted(calls) == sorted(KINDS), f"预热没覆盖全部三种形变：{calls}"
+    assert sorted(calls) == sorted(KINDS), f"预热没覆盖 KINDS 的全部形变：{calls}"
     # 不再加一句 `assert vram.PreviewPipeline.__init__`：那断言的是方法对象，恒真，
     # 而注释却声称在“防有人把预热整段注释掉”。上面那个 spy 已经证了这件事：
     # 单位场没真解过就不会有三次调用，而 warm_device 里不建会话根本走不到那里。
