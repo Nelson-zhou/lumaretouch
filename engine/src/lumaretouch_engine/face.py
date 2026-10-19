@@ -62,6 +62,12 @@ class MissingBackend(RuntimeError):
     """请求的后端不可用。调用方必须把它当错误处理，不许退到别的路径继续跑。"""
 
 
+# 探到几张脸就停（SCOPE-001）。要的不是“数清一桌子人”，而是“能不能确定只有一张”：
+# 探 2 张足以分辨“恰好 1 张”与“不止 1 张”，而 FaceLandmarker 的耗时随 num_faces 上探
+# 明显增长（多人模式要跑多个候选窗）。官方 API：FaceLandmarkerOptions.num_faces。
+SCOPE_MAX_FACES = 2
+
+
 # --------------------------------------------------------------------- 产物契约
 @dataclass
 class FacePrecompute:
@@ -73,6 +79,11 @@ class FacePrecompute:
     t_detect_ms: float
     t_masks_ms: float
     face_box: tuple[float, float, float, float] | None = None     # 归一化 (x0, y0, x1, y1)
+    # 这一轮看见了几张脸（SCOPE-001 / D-P0-02）。“取第 0 张脸”在多人脸照片上
+    # 就是一次静默选型：用户要的是“只改我指定的那个人”，而检测器返回的顺序不是
+    # 人能预期的。这一格必须上报，让上层能把单脸范围的操作显式禁用，而不是拿
+    # 其中一张脸的结果去服务整张图。synthetic 后端给的是模板，按定义是 1。
+    num_faces: int = 1
     notes: list[str] = field(default_factory=list)
 
     def stack(self) -> tuple[np.ndarray, list[str]]:
@@ -98,6 +109,11 @@ class FacePrecompute:
             # 几何看上去像不像一张脸（判据只写在 geometry_warning 里）：UI 拿布尔值
             # 开提示，不去 parse 上面那条 notes 的中文。
             "geometry_warning": geometry_warning(self.face_box),
+            # 人数与超范围判据：UI 拿 scope_block 把面部重塑整栏禁用并写明原因，
+            # 不去自己数 notes 里的中文（自己数就是一种双出处）
+            "num_faces": int(self.num_faces),
+            "scope_block": ("multi_face" if self.num_faces > 1 else None),
+            "max_faces_probed": SCOPE_MAX_FACES,
             "proxy": [h, w],
             "notes": self.notes,
         }
@@ -284,7 +300,7 @@ class MediaPipeFace:
             landmarker = mp_vision.FaceLandmarker.create_from_options(
                 mp_vision.FaceLandmarkerOptions(
                     base_options=mp_python.BaseOptions(model_asset_path=lm_path),
-                    num_faces=1,
+                    num_faces=SCOPE_MAX_FACES,
                     output_face_blendshapes=False,
                     output_facial_transformation_matrixes=False))
             # confidence_masks 而不是 category_mask：selfie 模型是二类（0=背景、1=人），
@@ -309,6 +325,7 @@ class MediaPipeFace:
         if not res.face_landmarks:
             raise RuntimeError("MediaPipe 未在这张图上检测到人脸（代理档分辨率过低或构图不符）；"
                                "不许退成占位点数——那会让 478 点契约看起来通过了")
+        n_faces = len(res.face_landmarks)
         pts = np.array([[p.x, p.y, p.z] for p in res.face_landmarks[0]], dtype=np.float32)
         if pts.shape != (NUM_LANDMARKS, 3):
             raise RuntimeError(f"关键点数量不是 {NUM_LANDMARKS}：得到 {pts.shape}，契约破坏")
@@ -340,6 +357,13 @@ class MediaPipeFace:
             mask = _resize_float(mask, h, w)
         t_masks = _now_ms(t1)
 
+        multi_face_note = []      # 超范围这件事要写在 notes 里，但只在真的发生时写
+        if n_faces > 1:
+            multi_face_note.append(
+                f"画面里探到 {n_faces} 张脸（上限探 {SCOPE_MAX_FACES} 张）：面部重塑属 "
+                f"target_scope=single_face，本版本不拿其中某一张冒充「那张脸」——"
+                "多人同图时这一栏显式禁用（SCOPE-001）")
+
         return FacePrecompute(
             landmarks=pts,
             # 自检分割给的是“人”，通道名先按现有语义命名，M2 换多类模型再拆
@@ -348,7 +372,8 @@ class MediaPipeFace:
             t_detect_ms=t_detect,
             t_masks_ms=t_masks,
             face_box=_norm_box(pts),
-            notes=["mediapipe 后端：478 点为真实检测输出",
+            num_faces=n_faces,
+            notes=["mediapipe 后端：478 点为真实检测输出"] + multi_face_note + [
                    "权重来源 " + ", ".join(f"{n}={os.path.dirname(p)}" for n, p in sorted(self.model_paths.items())),
                    f"skin 掩膜实为 selfie 分割的「人」通道（{len(cm)} 通道，取索引 "
                    f"{1 if len(cm) > 1 else 0}）：包含头发/衣服等非皮肤区域，不等同于皮肤"],

@@ -389,6 +389,24 @@ def _load_rgb_raw(path: str, budget: int, device: str | None, *, browse: bool = 
     return _decoded_from_libraw(path, *_libraw_matrix(path, output_bps=8), budget, why=why)
 
 
+def _refuse_multipage(im, path: str) -> None:
+    """多页容器（多帧 TIFF / APNG / 动图 GIF）一律明拒，不静默取第 0 页（FORMAT-002）。
+
+    “只解第一页”在这条产品线上是最坏的一种失败：文件写出来了、名字对、尺寸对，
+    而它是那一叠里的第一页——用户直到打印才发现少了后面几页。这一版没有多页编辑
+    也没有多页落盘（注册表里没有这一格），所以把不支持说清楚，而不是假装支持。
+    与 sniff_raw/is_raw 同一条纪律：宁缺不假。
+    """
+    try:
+        frames = int(getattr(im, "n_frames", 1) or 1)
+    except (NotImplementedError, ValueError, AttributeError, TypeError):
+        frames = 1              # 不支持多帧的格式报 NotImplementedError：按单页看
+    if frames > 1:
+        raise ValueError(f"{im.format or '?'} 容器有 {frames} 页：这一版只处理单页图像，"
+                         f"不会拿第 0 页代替整件（{os.path.basename(path)}）；"
+                         "需要逐页编辑请先拆成单页")
+
+
 def _load_rgb_pillow(path: str, budget: int) -> Decoded:
     """解码 Pillow 认得的位图族（JPEG/PNG/WebP/BMP/TIFF），返回代理尺寸 RGB。
 
@@ -405,6 +423,7 @@ def _load_rgb_pillow(path: str, budget: int) -> Decoded:
     with Image.open(path) as im:
         fmt = im.format or "?"
         raw_w, raw_h = im.size
+        _refuse_multipage(im, path)
         orient = int(im.getexif().get(EXIF_ORIENTATION, 1) or 1)
         swap = orient in SWAPPED_ORIENTATIONS
         src_w, src_h = (raw_h, raw_w) if swap else (raw_w, raw_h)   # 摆正后的尺寸
@@ -514,6 +533,7 @@ def _load_full_pillow(path: str, max_px: int = MAX_EXPORT_PIXELS) -> Decoded:
     with Image.open(path) as im:
         fmt = im.format or "?"
         raw_w, raw_h = im.size
+        _refuse_multipage(im, path)
         orient = int(im.getexif().get(EXIF_ORIENTATION, 1) or 1)
         swap = orient in SWAPPED_ORIENTATIONS
         src_w, src_h = (raw_h, raw_w) if swap else (raw_w, raw_h)

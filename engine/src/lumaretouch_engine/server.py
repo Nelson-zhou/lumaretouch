@@ -34,6 +34,12 @@ from . import raw as R
 # 命令层只负责“校验互斥 → 调它 → 把事实发成事件”。
 from . import project as PJ
 from . import tasks as T
+# 模块作用域与预设（LNX-P0-PRESET / lnx.batch.v1.module_scope）：参数合不合法只有
+# 一个出处（scope），落盘边界只有一个出处（preset_store）。命令层只做“守卫 → 调它们
+# → 把事实发成事件”，不在这里再摸一份“哪些参数属于哪个模块”——预设与批量必须同一语义，
+# 分开抄就会出“预设里没有的参数被批量偷偷同步了”。
+from . import scope as SC
+from . import preset_store as PS
 from .project import ProjectError
 from . import session as S
 # M4 导出：FORMATS/尺寸边界与落盘器全部从 export 走，命令层不掌一份格式名单（双出处）。
@@ -66,6 +72,19 @@ def runtime_report() -> dict:
 # 磨皮强度的出厂默认。写一次：`__init__`、新文档的起始状态、load_image 的可选参数
 # 三处都要它，抄三份字面量就是下一轮改默认值时漏改的那一处。
 DEFAULT_STRENGTH = 0.5
+
+# 本进程的“写手形状”只算一次：包元数据不会在一个进程里变，而 `_project_state()` 挂在
+# `session_state` 上（每次导入、每次标签都要读一次）。拿 importlib.metadata 重扫三遍
+# 不值得，而更重要的是：这个值必须在一个会话内是同一个，否则“环境一致”这句话
+# 会随扫描顺序飘。
+_WRITER: dict | None = None
+
+
+def _current_writer() -> dict:
+    global _WRITER
+    if _WRITER is None:
+        _WRITER = PJ.writer_stamp()
+    return _WRITER
 
 # 跑靶模式：
 #   copy               纯拷贝，M0 通路基线
@@ -223,6 +242,17 @@ class Engine:
         self._task_seq = 0
         self._task_ctl: "_TaskControl | None" = None
         self._export_task: dict | None = None
+        # 批量同步台账（LNX-P0-BATCH / BATCH-004）：batch_id → 每一格的 commit 前快照
+        # 与 commit 后的那组模块参数。撤销时要拿“我当初写了什么”去比“现在还是不是它”，
+        # 不然就分不清“这格没被动过”与“用户动过又被我抹掉”。
+        self._batches: dict = {}
+        self._batch_seq = 0
+        # 上一笔同步的事实（commit/undo），随 session_state 的 `sync.last_result` 报出去：
+        # UI 那句“同步了几张、跳过几张为什么”只能从这里来。
+        self._sync_last: dict | None = None
+        # 当前文档上“最后一次套用的预设”（id/名/作用域/套完那一组参数）。UI 的下拉
+        # 显示它而不是前端自己记一份：报之前还要比一次参数（见 `_preset_last_applied`）。
+        self._preset_last: dict | None = None
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
@@ -824,8 +854,15 @@ class Engine:
     HISTORY_SKIP = ("_precompute", "_precompute_backend")
     # 哪些命令算"编辑"。判定只在这一个名单里，推送点也只有分发器一处：
     # 六个 cmd_* 里各插一次 push 的下场可以预见——第七层加进来时总有人忘。
+    # exposure 就在本轮被"总有人忘"忘过一次：它在 DOC_FIELDS 里（切文档、存工程都带得走），
+    # 却不在这份名单里，于是拖完曝光按撤销——参数纹丝不动，而 UI 上没有任何一处会说"为什么
+    # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
+    # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
     EDIT_CMDS = ("set_strength", "inpaint", "light", "deform", "lut", "grade", "background",
-                 "crop")
+                 "crop", "exposure", "preset", "batch")
+    # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
+    # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
+    # 而 batch 改的就是活动文档的配方——不在这里它就会“同步完了而徽章不亮”。
     HISTORY_ACTIONS = ("undo", "redo", "state", "clear")
 
     def _history_capture(self) -> dict:
@@ -1050,6 +1087,7 @@ class Engine:
             emit({"event": "error", "error": f"导入失败({type(e).__name__}): {e}{tail}"})
             return
         self._proxy_budget = budget     # 下一次切文档默认沿同一档代理（会话级，见上面注释）
+        self._preset_last = None        # 换文档了：“这张当前是哪个预设”不能跟着跳过去
         self._remember_current()
         idx = self._index_of(p["path"])
         if idx < 0:
@@ -1284,6 +1322,55 @@ class Engine:
                                                    "format": th.get("format")},
                 "thumb_error": d["thumb_error"]}
 
+    def _preset_last_applied(self) -> dict | None:
+        """最后一次套用的预设，但只在“那几个模块现在还是预设里那一组”时才算数。
+
+        套完预设又推了一下滑块，那一张就不再等于任何预设了——下拉接着显示
+        “暖调（色彩）”就是谎报。判据拿参数比，不拿“中间有没有发过命令”猜：撤销、重做、
+        切文档、手改都会落到参数上，参数自己会说。不匹配就回 None，让 UI 空着。
+        """
+        rec = self._preset_last
+        if not rec:
+            return None
+        try:
+            cur = SC.params_of(self._capture_state(), rec["ops"])
+        except Exception:
+            return None
+        return {"id": rec["id"], "name": rec["name"]} if cur == rec["params"] else None
+
+    def _preset_state(self) -> dict:
+        """预设面只有一个组装点（理由同 `_project_state`）：`preset_list` 事件与
+        `session_state` 里那份必须是同一次读盘的结果，写两处就会漂。
+
+        这里确实会读一次用户预设目录（几个小 JSON）。`session_state` 每批缩略图后一条，
+        而目录里通常只有内置两个 + 用户几个：几十微秒量级。真要省的那一天，缓存键
+        必须是目录 mtime + 文件数，不能是“我记得没改过”。
+        读不了不等于没预设：错误随 `errors` 报出去，不静默给空列表。
+        """
+        try:
+            docs, errors = PS.list_all()
+        except Exception as e:
+            docs = []
+            errors = [{"file": PS.preset_dir(),
+                       "error": f"读预设目录失败({type(e).__name__}): {e}"}]
+        return {"list": docs, "errors": errors, "modules": SC.describe(),
+                "dir": PS.preset_dir(), "schema": SC.PRESET_SCHEMA,
+                "last_applied": self._preset_last_applied()}
+
+    def _sync_state(self) -> dict:
+        """批量同步台账（不是导出任务队列）：撤销入口要能拿到 batch_id。
+
+        `last_result` 是上一笔 commit/undo 的**事实**（写了哪几格、跳过哪几格及原因、
+        冲突哪几格）：UI 要显示“同步了 3 张，2 张因为多人照片没动”这句话，只能拿
+        引擎报的这份，不能自己数多选框里有几个——那是“自报了个没发成的成功”。
+        """
+        items = [{"batch_id": k, "module_scope": v["ops"], "targets": len(v["targets"]),
+                  "undone": v["undone"]} for k, v in self._batches.items()]
+        un = [i for i in items if not i["undone"]]
+        return {"batches": items, "undoable": [i["batch_id"] for i in un],
+                "last": un[-1]["batch_id"] if un else None,
+                "last_result": getattr(self, "_sync_last", None)}
+
     def emit_session_state(self, **extra) -> None:
         emit({"event": "session_state", "index": self._doc_index, "count": len(self._docs),
               "current": self._doc_path,
@@ -1294,6 +1381,9 @@ class Engine:
                             if (self._image_loaded and self._vram is not None) else None),
               "thumbs_running": bool(self._thumbs is not None and self._thumbs.is_alive()),
               "project": self._project_state(),
+              # 预设清单与批量同步台账：UI 的下拉项与“撤销同步”按钮只能读引擎报的这两份
+              #（前端自己扫目录、自己记 batch_id 就是两个会漂的地方）。
+              "presets": self._preset_state(), "sync": self._sync_state(),
               "docs": [self._doc_row_event(i, d) for i, d in enumerate(self._docs)], **extra})
 
     def _rows_from(self, paths: list) -> list:
@@ -1519,6 +1609,11 @@ class Engine:
                 # 台账格数（不是“已写进文件的那一份”）：下一次 save 写的就是它，
                 # 而 UI 的“N 个批次任务”必须与 task list 数出来的一致，不能两个答案
                 "tasks": len(self._tasks),
+                # 写手戳与“与当前环境是否一致”（P0-*-NEUTRAL 的“依赖版本一致”）：
+                # 不一致时不拒开（旧工程必须能接着编辑），但必须把这件事说出口。
+                "writer": (p or {}).get("writer"),
+                "writer_match": ((p or {}).get("writer") == _current_writer())
+                                 if p is not None else None,
                 "dropped_count": len((p or {}).get("dropped") or [])}
 
     def _project_build(self, base: dict | None) -> tuple[dict, dict]:
@@ -1760,6 +1855,20 @@ class Engine:
                 self._proxy_budget = proxy_budget
             self._project, self._project_path = prj, os.path.abspath(path)
             self._project_saved_ns, self._project_dirty = prj.get("updated_ns"), False
+            # 写手环境不一致：说出口，不拒开。同一份配方在另一版 numpy/torch 上算出的
+            # 字节可能差几 LSB（逐层舍入方向），用户看到“重开后画面微妙不同”时得有一条
+            # 能指认的原因，而不是只能怀疑自己记错了。旧版本工程没这一格也算不一致吗？
+            # 不算：缺键是“没说”，不是“说了不一样”，这里只在两边都有值且不同时响。
+            w = prj.get("writer")
+            if w and w != _current_writer():
+                diff = sorted(k for k in set(w) | set(_current_writer())
+                              if w.get(k) != _current_writer().get(k))
+                emit({"event": "engine_warn",
+                      "warn": f"这份工程由另一套环境写下（差异项：{diff}；"
+                              f"它写时 engine={w.get('engine')} torch={w.get('torch')}，"
+                              f"现在是 engine={_current_writer()['engine']} "
+                              f"torch={_current_writer().get('torch')}）。"
+                              "重开照常编辑，但逐层舍入可能与保存前差几 LSB"})
             # 上一份工程的会话与历史在新底片条上没有意义：索引重置、栈清空
             self._doc_index, self._doc_path = -1, None
             self._image_loaded = False
@@ -2505,6 +2614,18 @@ class Engine:
             return
         if self.bench is not None and self.bench.is_alive():
             emit({"event": "error", "error": "跑靶进行中，拒绝 deform：先 bench_stop"})
+            return
+        # 超范围保护（SCOPE-001 / D-P0-02）：面部重塑是 target_scope=single_face 的操作。
+        # 多人同图时不拿“其中某一张”冒充“那张脸”——静默选型正是冻结件点名要防的那件事，
+        # 而且用户从画面上看不出来（脸确实被推了，推的不是他以为的那一个）。
+        # 只拒这一条：全图调色/曝光/裁剪/磨皮的作用面不是“某个人”，不受影响。
+        pc0 = self._precompute
+        if action == "set" and pc0 is not None and int(getattr(pc0, "num_faces", 1)) > 1:
+            from .face import SCOPE_MAX_FACES
+            emit({"event": "error",
+                  "error": f"画面里探到 {pc0.num_faces} 张脸（上限探 {SCOPE_MAX_FACES} 张）："
+                           "面部重塑需要且仅需要一张可用人脸，本版本不在多人照片里替你选"
+                           "哪一张（SCOPE-001）；全图调色、曝光/白平衡、裁剪与磨皮仍可用"})
             return
         t_start = monotonic_ns()
         build_info: dict = {}
@@ -3426,11 +3547,33 @@ class Engine:
         if not isinstance(out_dir, str) or not out_dir:
             emit({"event": "error", "error": "export 需要 out_dir（导出目录）"})
             return
+        out_dir_abs = os.path.abspath(out_dir)
         # 目录创建挪到全部参数校验之后（见下方“建目录”那条）：校验没过就先把用户的
         # 目录建出来，失败的路径会在盘上留下一个空文件夹，而报错说的是“参数不合法”
         fmt = str(p.get("format", "jpg")).lower().lstrip(".")
         if fmt not in FORMATS:
             emit({"event": "error", "error": f"不支持的导出格式：{fmt}（可用 {sorted(set(FORMATS))}）"})
+            return
+        # 原片只读（CORE-004）：落点不许指向**任何一张输入**。
+        # 今天它并不会真的盖掉源文件（resolve_target 对已存在的目标只会 skip_and_report
+        # 或 recheck，枚举里根本没有 overwrite），但拿输入目录当输出目录仍然是一种错用：
+        # 默认策略下整批会“完成而一个文件也没新写”，而事件里写着跳过——用户看到的是
+        # 导出跑了而目录里没有一样新东西。更重要的是：这条不变量不能依赖“今天没有
+        # overwrite 策略”——那是一句会被后人改的话，而源文件不可变是一句必须一直真的话。
+        collide = []
+        for x in images:
+            src_real = os.path.realpath(x)
+            stem = os.path.splitext(os.path.basename(x))[0]
+            for ext in {fmt, "tif"}:
+                if os.path.realpath(os.path.join(out_dir_abs, f"{stem}.{ext}")) == src_real:
+                    collide.append(f"{x} → {stem}.{ext}")
+                    break
+        if collide:
+            emit({"event": "error",
+                  "error": "导出目标就是输入文件本身，整批拒绝（原片只读）："
+                           + "；".join(collide[:4]) + ("…" if len(collide) > 4 else "")
+                           + "；换一个导出目录（同名同格式时 skip_and_report 会整批“跳过”，"
+                             "recheck 会写成 -0001 副本，两者都不是用户要的“导出一张”）"})
             return
         try:
             quality = int(p.get("quality", 95))
@@ -3874,6 +4017,11 @@ class Engine:
                                     "bits": 16, "source": r["source"],
                                     "w": r["w"], "h": r["h"], "bytes": r["bytes"],
                                     "write_ms": r["write_ms"], "decode_ms": r["decode_ms"],
+                                    # 质量口径的可追溯件（与 8-bit 那一路同名同义）：16-bit 直通
+                                    # 不进编码器，encoder_quality 给 None 而不是 0——拿 0 冒充
+                                    # “质量 0”会被读成“用户设了最低质量”
+                                    "quality_mapping_version": r["quality_mapping_version"],
+                                    "encoder_quality": r["encoder_quality"],
                                     # 三个保真读数直接进事件：它们不是调试道具，而是
                                     # “无损”这句话的存证。差值非 0 / 每通道档位≤256 /
                                     # 低 8 位全零，任一条都不能算 16-bit 母档
@@ -3933,6 +4081,11 @@ class Engine:
                                 # 摘键组装的，不补这一笔就会在协议边界上静默丢掉——
                                 # quality 95 与文件按哪个档位写的对不上账，批量报表里看不出来
                                 "compress_level": info.get("compress_level"),
+                                # 质量表版本与真正递给编码器的值（FORMAT-001）：这张清单是
+                                # 从 info 里摸键组装的，不补这两笔就会在协议边界上静默丢掉
+                                # （与上一轮 compress_level 同一个坑）
+                                "quality_mapping_version": info.get("quality_mapping_version"),
+                                "encoder_quality": info.get("encoder_quality"),
                                 "out_skipped": bool(info.get("skipped")),
                                 "skip_reason": info.get("reason"),
                                 "renamed_from": info.get("renamed_from"),
@@ -3991,10 +4144,358 @@ class Engine:
     # 有第二份抄件——本轮加 crop 时两份就漂了（抄件少一条，守卫红）。名字与 cmd_* 一一对应，
     # 所以名单本身就是可校验的：少写一个方法或多写一个名字，都在开工第一帧响，
     # 而不是等到用户发那条命令时回一句"未知命令"。
+    # ------------------------------------------------------------ 预设与批量（LNX-P0-PRESET / LNX-P0-BATCH）
+    PRESET_ACTIONS = ("list", "apply", "save", "import", "delete")
+    PRESET_KEYS = {"cmd", "action", "id", "path", "modules", "name", "kind", "force", "note"}
+    BATCH_ACTIONS = ("preflight", "commit", "undo", "state")
+    BATCH_KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id"}
+    # 冻结件里 conflict_policy 只有这两个值，而两个都是**不覆盖**：没有 overwrite
+    # 不是漏写，是 EXPORT-001“无提示不覆盖”的同一条要求（ADR-0003）。
+    BATCH_POLICIES = ("skip_and_report", "recheck")
+
+    def _replay_state(self, st: dict, *, mode: str, replayed_for: str) -> dict:
+        """装回一份状态并重建会话，返回那一帧。
+
+        重放逻辑只有一份：这里调的就是 `cmd_history` / 换设备 / 切文档用的那三个原始
+        动作（`_apply_state` → `_attach_pipeline` → `_rehang_precompute`），没有第二份
+        “按字段把图层搭回去”的代码。抽成函数而不是直接改 cmd_history 的内部，是为了
+        不把撤销链的计时与事件形状搅进来——那一条有基准测在盯。
+        """
+        self._apply_state(st)
+        self._attach_pipeline(self._src_rgb, adopt=True)
+        if self._precompute is not None:
+            self._rehang_precompute(replayed_for=replayed_for)
+        elif self._channel:
+            self._channel = None
+        return self._write_current_frame(mode)
+
+    def _face_known_single(self, row: dict | None, *, live: bool) -> tuple[str, str]:
+        """人像模块的作用面判据（冻结件：lnx.skin.v1 / lnx.blemish.v1 = single_face）。
+
+        返回 `(结论, 原因)`，结论三取值：`ok` / `multi` / `unknown`。`unknown` 不等于
+        可以默认放过：一张从没打开过、没做过预计算的图，我们**不知道**它有几张脸，
+        把人像参数静默盖上去就是拿“没查”冒充“查过了”。
+        """
+        pc = self._precompute if live else (row or {}).get("state", {}).get("_precompute")
+        if pc is None:
+            return "unknown", ("这张图还没做过人脸预计算（没打开过或没跑 precompute），"
+                               "无法判定是不是单脸；人像模块预设/同步先不作用它")
+        # 预计算产物从工程文件里回来时可能是 dict（而不是 FacePrecompute 对象）：
+        # 拿 getattr(x, "num_faces", 1) 读一个 dict 会静默地得到 1，于是
+        # “多人照片”被当成“单脸”放行——两种形状都读，读不到就当未知。
+        n = pc.get("num_faces") if isinstance(pc, dict) else getattr(pc, "num_faces", None)
+        if n is None:
+            return "unknown", "预计算记录里没有脸数（旧工程文件或形状变了）：按未知处理，不默认放行"
+        if int(n) > 1:
+            return "multi", f"画面里探到 {n} 张脸（SCOPE-001）"
+        return "ok", ""
+
+    def _guard_editable(self, who: str) -> str | None:
+        """编辑类命令的四道公用守卫；不过就给原因，不在各自命令里写四份。"""
+        if self.bench is not None and self.bench.is_alive():
+            return f"跑靶进行中，拒绝 {who}：先 bench_stop"
+        if self._export is not None and self._export.is_alive():
+            return f"导出进行中，拒绝 {who}：等 export_done"
+        if not self._image_loaded or self._vram is None or self._src_rgb is None:
+            return f"尚未 load_image，{who} 没有可作用的活动文档"
+        if self.shm is None or (self.shm.w, self.shm.h) != (self._vram.w, self._vram.h):
+            return f"shm 与会话尺寸不配，拒绝 {who}"
+        return None
+
+    def cmd_preset(self, p: dict):
+        """模块预设（LNX-P0-PRESET / PRESET-001、002）。
+
+        作用域不是这里发明的：`scope.MODULES` 按冻结注册表那组 operation_id 划分，
+        “同模块后应用覆盖、预设外的模块一律不碰”全部在 `scope.apply_modules` 里。
+        一次 apply = 一个撤销步（走 `_replay_state` 与 EDIT_CMDS，不是逐条命令各自入栈）。
+        """
+        unknown = set(p) - self.PRESET_KEYS
+        if unknown:
+            emit({"event": "error", "error": f"preset 收到不认识的参数：{sorted(unknown)}"})
+            return
+        action = p.get("action", "list")
+        if action not in self.PRESET_ACTIONS:
+            emit({"event": "error", "error": f"未知 preset action: {action}"
+                  f"（可用：{'/'.join(self.PRESET_ACTIONS)}）"})
+            return
+        if action == "list":
+            emit({"event": "preset_list", **self._preset_state()})
+            return
+        # 剩下四条都要有个能写的会话或一个能落的目录
+        if action in ("apply", "save"):
+            why = self._guard_editable(f"preset {action}")
+            if why:
+                emit({"event": "error", "error": why})
+                return
+        try:
+            if action == "apply":
+                self._preset_apply(p)
+            elif action == "save":
+                self._preset_save(p)
+            elif action == "import":
+                path = str(p.get("path") or "")
+                if not path:
+                    raise SC.ScopeError("preset import 需要 path")
+                doc = PS.load_file(path)                  # 过大/非 JSON/脚本/未知 schema 在这一层就碎
+                # `load_file` 返回的是已校验副本（带着 builtin=False）；save 里还要再校一次，
+                # 而“文件自报 builtin”是拒的——所以这里把派生字段剔掉再交给落盘层。
+                doc = {k: v for k, v in doc.items() if k != "builtin"}
+                if p.get("id"):
+                    doc = {**doc, "id": str(p["id"])}
+                saved = PS.save(doc, force=bool(p.get("force")))
+                emit({"event": "preset_imported", "preset": doc, "path": saved,
+                      "dir": PS.preset_dir()})
+            else:   # delete
+                gone = PS.delete(str(p.get("id") or ""))
+                emit({"event": "preset_deleted", "path": gone, "id": p.get("id")})
+        except SC.ScopeError as e:
+            # 整条拒：预设被拒时必须一个参数都没动（与 P0-*-BOUNDARY 同一个口径），
+            # 而这一点天然成立——校验全部在 `_preset_apply` 落状态之前跑完。
+            emit({"event": "error", "error": f"preset {action} 被拒：{e}"})
+
+    def _preset_apply(self, p: dict) -> None:
+        pid = str(p.get("id") or "")
+        if not pid:
+            raise SC.ScopeError("preset apply 需要 id（预设名从 preset list 里拿，"
+                                "前端不抄第二份名单）")
+        doc = PS.find(pid)
+        mods = doc["modules"]
+        ops = list(mods)
+        for op in ops:
+            if SC.MODULES[op]["single_face"]:
+                verdict, reason = self._face_known_single(None, live=True)
+                if verdict != "ok":
+                    raise SC.ScopeError(f"{op} 不能作用在这张图上：{reason}"
+                                        "（其他模块也不顺手盖：整条拒比半条好）")
+        before = SC.params_of(self._capture_state(), ops)
+        st = SC.apply_modules(self._capture_state(), mods)
+        fr = self._replay_state(st, mode="preset", replayed_for=f"preset:{pid}")
+        # “现在等于哪一个预设”是引擎侧的事实（套完又被手改就不算了），UI 只读这一份
+        self._preset_last = {"id": pid, "name": doc["name"], "ops": ops,
+                             "params": SC.params_of(st, ops)}
+        render_ms = fr.pop("render_ms")
+        emit({"event": "preset_applied", "id": pid, "kind": doc["kind"], "name": doc["name"],
+              "modules": ops, "before": before, "after": SC.params_of(st, ops),
+              "render_ms": render_ms, "doc_state": self.doc_state()})
+        emit(fr)
+
+    def _preset_save(self, p: dict) -> None:
+        """把当前文档的选定模块抽成预设（注册表的 lnx.preset.v1.save）。"""
+        ops = SC.check_scope(p.get("module_scope") or list(SC.transferable_ops()))
+        st = self._capture_state()
+        doc = {"schema": SC.PRESET_SCHEMA, "id": p.get("id") or "",
+               "name": p.get("name") or str(p.get("id") or ""), "kind": p.get("kind") or "custom",
+               "note": p.get("note") or "",
+               "modules": SC.params_of(st, ops)}
+        clean = SC.validate_preset(doc)
+        saved = PS.save(clean, force=bool(p.get("force")))
+        emit({"event": "preset_saved", "preset": clean, "path": saved})
+
+    def _batch_target_indices(self, docs) -> tuple[list[int], list[dict]]:
+        """`docs` → 底片条格号。能收索引也能收路径（宿主两边都可能有）。
+
+        收不到的那一格**不静默丢**：它进 `bad` 列表，调用方把它报进事件里。默默少同步
+        两张而用户不知道，是“批量”最阴的一种错。
+        """
+        if isinstance(docs, (str, bytes)) or not docs:
+            raise SC.ScopeError("batch 的 docs 必须是非空的格号/路径列表")
+        out: list[int] = []
+        bad: list[dict] = []
+        for d in docs:
+            if isinstance(d, bool) or not isinstance(d, (int, str)):
+                bad.append({"doc": str(d), "error": "格号必须是整数或路径"})
+                continue
+            if isinstance(d, int):
+                if 0 <= d < len(self._docs) and d not in out:
+                    out.append(d)
+                else:
+                    bad.append({"doc": d, "error": "格号超出底片条范围"})
+                continue
+            i = self._index_of(d)
+            if i < 0:
+                bad.append({"doc": d, "error": "这张图不在底片条里"})
+            elif i not in out:
+                out.append(i)
+        if not out:
+            raise SC.ScopeError(f"batch 没有可用目标（全部被拒）：{bad}")
+        return out, bad
+
+    def cmd_batch(self, p: dict):
+        """批量同步（LNX-P0-BATCH / BATCH-001…4）。
+
+        语义：“把当前文档在 `module_scope` 那几个模块里的配方，盖到选中的每一格上”。
+        作用域走的就是预设那一份 `scope`，所以“预设能改的”与“批量能同步的”完全一致。
+
+        只改参数，不改原片：目标格的 `state` 是项目记录，源文件一个字节不写。
+        逐格历史也能撤销这一笔：非活动格把 commit 前的快照推进它自己的 undo 栈，
+        活动格走 `lnx.batch.v1` 在 EDIT_CMDS 里那一步。
+        """
+        unknown = set(p) - self.BATCH_KEYS
+        if unknown:
+            emit({"event": "error", "error": f"batch 收到不认识的参数：{sorted(unknown)}"})
+            return
+        action = p.get("action", "state")
+        if action not in self.BATCH_ACTIONS:
+            emit({"event": "error", "error": f"未知 batch action: {action}"
+                  f"（可用：{'/'.join(self.BATCH_ACTIONS)}）"})
+            return
+        if action == "state":
+            emit({"event": "batch_state", "batches": [
+                {"batch_id": k, "ops": v["ops"], "targets": len(v["targets"]),
+                 "undone": v["undone"], "at_ns": v["at_ns"]} for k, v in self._batches.items()],
+                 "modules": SC.describe()})
+            return
+        why = self._guard_editable(f"batch {action}")
+        if why:
+            emit({"event": "error", "error": why})
+            return
+        try:
+            if action == "undo":
+                self._batch_undo(p)
+                return
+            ops = SC.check_scope(p.get("module_scope"))
+            policy = p.get("conflict_policy", "skip_and_report")
+            if policy not in self.BATCH_POLICIES:
+                raise SC.ScopeError(f"conflict_policy 未知：{policy!r}"
+                                    f"（可用：{'/'.join(self.BATCH_POLICIES)}；没有 overwrite 是冻结的）")
+            idxs, bad = self._batch_target_indices(p.get("docs"))
+            self._remember_current()
+            src = self._capture_state()
+            mods = SC.params_of(src, ops)
+            rows = []
+            for i in idxs:
+                row = self._docs[i]
+                live = (i == self._doc_index)
+                blocked = None
+                for op in ops:
+                    if SC.MODULES[op]["single_face"]:
+                        verdict, reason = self._face_known_single(row, live=live)
+                        if verdict != "ok":
+                            blocked = f"{op}: {reason}"
+                            break
+                rows.append({"index": i, "path": row["path"], "live": live,
+                             "blocked": blocked,
+                             "before": SC.params_of(row["state"] if not live else src, ops)})
+            if action == "preflight":
+                emit({"event": "batch_preflight", "module_scope": ops, "source": "current",
+                      "applies": mods, "policy": policy, "targets": rows,
+                      "rejected_docs": bad,
+                      "ok": sum(1 for r in rows if not r["blocked"]),
+                      "blocked": sum(1 for r in rows if r["blocked"])})
+                return
+            if policy == "recheck" and any(r["blocked"] for r in rows):
+                raise SC.ScopeError(f"recheck 策略下有目标不合格，整条不提交："
+                                    f"{[r['path'] for r in rows if r['blocked']]}")
+            self._batch_commit(ops, mods, rows, policy, bad)
+        except SC.ScopeError as e:
+            emit({"event": "error", "error": f"batch {action} 被拒：{e}"})
+
+    def _batch_commit(self, ops: list[str], mods: dict, rows: list[dict],
+                      policy: str, bad: list[dict]) -> None:
+        """原子提交：先算好每一格的新状态，全部合法才一次性写回。
+
+        中途失败不能留下“同步了一半”的批量——这跟导出那一条“一个目标失败不该拖垮整批，
+        但记账要逐格”是同一个要求：skip 是**事先判出来的**，不是跑中途抱的。
+        """
+        live_idx = self._doc_index
+        planned: list[tuple[int, dict, dict]] = []
+        applied_rows = []
+        for r in rows:
+            if r["blocked"]:
+                continue
+            row = self._docs[r["index"]]
+            before = dict(row["state"]) if r["index"] != live_idx else dict(self._capture_state())
+            new = SC.apply_modules(before, mods)
+            planned.append((r["index"], before, new))
+            applied_rows.append(r)
+        if not planned:
+            raise SC.ScopeError("所有目标都不合格，这一批一个也没写（见 preflight 里的 blocked）")
+        self._batch_seq += 1
+        batch_id = f"batch-{self._batch_seq:03d}-{int(time.time() * 1000)}"
+        targets: dict[str, dict] = {}
+        for idx, before, new in planned:
+            row = self._docs[idx]
+            if idx == live_idx:
+                fr = self._replay_state(new, mode="batch", replayed_for=f"batch:{batch_id}")
+            else:
+                row["state"] = new
+                row["undo"].append(before)          # 逐格 Ctrl+Z 也能撤掉这一笔同步
+                if len(row["undo"]) > self.HISTORY_MAX:
+                    del row["undo"][0]
+                row["redo"].clear()
+                fr = None
+            targets[str(idx)] = {"path": row["path"], "before": before, "applied":
+                                 SC.params_of(new, ops), "live": idx == live_idx}
+        self._batches[batch_id] = {"ops": ops, "targets": targets, "at_ns": monotonic_ns(),
+                                   "undone": False, "policy": policy}
+        self._sync_last = {"kind": "commit", "batch_id": batch_id,
+                           "applied": [r["index"] for r in applied_rows],
+                           "skipped": [{"index": r["index"], "path": r["path"],
+                                        "reason": r["blocked"]} for r in rows if r["blocked"]]}
+        body = {"event": "batch_committed", "batch_id": batch_id, "module_scope": ops,
+                "applies": mods, "policy": policy,
+                "targets": [r["index"] for r in applied_rows],
+                "skipped": [{"index": r["index"], "path": r["path"], "reason": r["blocked"]}
+                            for r in rows if r["blocked"]],
+                "rejected_docs": bad, "doc_state": self.doc_state()}
+        if fr is not None:
+            fr.pop("render_ms", None)
+            body["frame"] = fr
+        emit(body)
+        if fr is not None:
+            emit(fr)
+
+    def _batch_undo(self, p: dict) -> None:
+        """撤销这一批（BATCH-004）：没被动过的还原，被动过的**报冲突不动它**。
+
+        判据不是“时间戳新旧”，而是“这一格上那几个模块现在的参数，还是不是我当初写
+        进去的那组”：相等 → 同步之后没人碰，还原安全；不等 → 用户在同步后又编辑了，
+        抹掉他的后续修改就是把人的工弄没。比较范只限 `module_scope`，因为同批之外
+        的模块本来就没被我们写过。
+        """
+        bid = str(p.get("batch_id") or "")
+        b = self._batches.get(bid)
+        if b is None:
+            raise SC.ScopeError(f"没有这批同步的记录：{bid!r}（可用："
+                                f"{', '.join(self._batches) or '无'}）")
+        if b["undone"]:
+            raise SC.ScopeError(f"这批已经撤销过了：{bid}")
+        ops = b["ops"]
+        # 先把当前这一格的 live 状态存回去再比。不存就是用**陈快照**当事实：
+        # “同步后又被编辑”那一笔还停在 live 字段里，而 row["state"] 还是 commit 时那一版，
+        # 一比就“没冲突”——本轮实测就是这个 bug：被编辑过的那一格也被还原了。
+        self._remember_current()
+        restored, conflicts = [], []
+        for key, rec in b["targets"].items():
+            idx = int(key)
+            if idx >= len(self._docs) or self._docs[idx]["path"] != rec["path"]:
+                conflicts.append({"index": idx, "path": rec["path"],
+                                  "reason": "这一格已经不在底片条上（或换了图），不能还原"})
+                continue
+            row = self._docs[idx]
+            cur = row["state"]
+            if SC.params_of(cur, ops) != rec["applied"]:
+                conflicts.append({"index": idx, "path": rec["path"],
+                                  "reason": "同步后又被编辑过：不抹后续修改",
+                                  "now": SC.params_of(cur, ops), "applied": rec["applied"]})
+                continue
+            if idx == self._doc_index:
+                # 活动那一格不能只改存档：画面就挂在会话上，不重放就是“事件说还原了
+                # 而屏幕上还是同步后那一版”。
+                self._replay_state(rec["before"], mode="batch", replayed_for=f"batch_undo:{bid}")
+            row["state"] = dict(rec["before"])
+            restored.append(idx)
+        b["undone"] = True
+        self._sync_last = {"kind": "undo", "batch_id": bid, "restored": restored,
+                           "conflicts": [{"index": c["index"], "path": c["path"],
+                                          "reason": c["reason"]} for c in conflicts]}
+        emit({"event": "batch_undone", "batch_id": bid, "module_scope": ops,
+              "restored": restored, "conflicts": conflicts, "doc_state": self.doc_state()})
+
     HANDLED = ("hello", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "light",
                "deform", "lut", "grade", "export", "exposure", "crop", "background",
-               "compare", "session", "project", "task", "history")
+               "compare", "session", "project", "task", "history", "preset", "batch")
     _HANDLED_LAMBDA = ("bench_stop",)      # 唯一不开成 cmd_* 的那条：只是置停止位
 
     def _dispatch_table(self) -> dict:

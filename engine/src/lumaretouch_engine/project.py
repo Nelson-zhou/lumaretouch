@@ -29,6 +29,7 @@ import io
 import json
 import math
 import os
+import sys
 import time
 import uuid
 
@@ -73,6 +74,9 @@ def save(project: dict, path: str) -> dict:
     path = os.path.abspath(str(path))
     body = dict(project)
     body["updated_ns"] = int(time.time_ns())
+    # 每次保存都重新盖写手戳：记的是“最后一次写下它的环境”，不是“创建时的环境”。
+    # 只创一次的话，一份被三个版本轮流编辑的工程会拿最早那一个冒充自己。
+    body["writer"] = writer_stamp()
     try:
         data = json.dumps(body, ensure_ascii=False, indent=1,
                           allow_nan=False).encode("utf-8")
@@ -371,13 +375,35 @@ def decode(value: object, assets: dict, dropped: list, at: str,
 
 
 # ---------------------------------------------------------------- 文档行
+def writer_stamp() -> dict:
+    """写下这份工程当时的依赖形状（P0-*-NEUTRAL 那组里“依赖版本一致”就落在这一格）。
+
+    为什么只记版本而不记更多：同一份配方在 numpy/torch 换版本后重算，舍入方向可能不
+    同（16-bit 主链那一 LSB 的差就是在这上面出的）。重开时比一下就能把“画得不一样”
+    归因到“写它的不是这个环境”，而不是让用户对着一个无从知道的差异猜。记的是包元数据
+    （importlib.metadata），**不 import torch**：读一个 JSON 不该取决于 GPU 运行时在不在，
+    而那个 import 要几秒。
+    """
+    from importlib import metadata
+    from . import __version__ as engine_version
+    out = {"engine": str(engine_version),
+           "python": ".".join(map(str, sys.version_info[:3]))}
+    for pkg in ("numpy", "pillow", "torch"):
+        try:
+            out[pkg] = metadata.version(pkg)
+        except metadata.PackageNotFoundError:
+            out[pkg] = None       # 没装就写 None：与 runtime_report 同一规矩，不静默省略键
+    return out
+
+
 def new_project(name: str, root: str = "") -> dict:
     if not str(name).strip():
         raise ProjectError("项目名不能是空的：底片条与工程列表里它得有个能指认的名字")
     return {"schema_version": SCHEMA, "project_id": str(uuid.uuid4()),
             "name": str(name).strip(), "root": os.path.abspath(root or os.getcwd()),
             "created_ns": int(time.time_ns()), "updated_ns": int(time.time_ns()),
-            "engine": "LumaRetouch", "assets": {}, "docs": [], "dropped": []}
+            "engine": "LumaRetouch", "writer": writer_stamp(),
+            "assets": {}, "docs": [], "dropped": []}
 
 
 def project_path_for(directory: str, name: str, occupied=os.path.exists) -> str:

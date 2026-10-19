@@ -63,6 +63,11 @@ _FIELD_BAND_PX = 1 << 15
 
 FORMATS = ("jpg", "jpeg", "png", "tif", "tiff", "webp")
 
+# 质量表的本厂口径版本号（FORMAT-001）。它存在的唯一理由是把"这个 1~100 是谁的量表"
+# 写进产物：以后若改了映射（比如给 PNG 接上真实等级曲线），递增这一串，旧的导出清单
+# 还能被读回去。不拿它暗示与任何外部量表（竞品 0~14、ffmpeg -qscale）等价。
+QUALITY_MAPPING_VERSION = "lrt.quality.v1"
+
 # 扩展名 → Pillow 的 format 名。编码到内存再提交时必须显式给（以前靠扩展名推断，
 # 现在 img.save 的目标是一个 BytesIO，不推就不能定格式）。
 _PIL_FORMAT = {"jpg": "JPEG", "jpeg": "JPEG", "png": "PNG", "webp": "WEBP",
@@ -787,6 +792,15 @@ def write_file(rgb: np.ndarray, path: str, *, quality: int = 95,
                   "gps_written": exif_facts["gps_written"],
                   "orientation_dropped": exif_facts["orientation_dropped"],
                   "exif_bytes": len(exif) if exif else 0,
+                  # 质量口径的版本化自证（FORMAT-001）：本产品的 quality 是**我们自己的**
+                  # 1~100 线性量表，直接交给编码器（JPEG/WebP）、按注释里那条实测曲线
+                  # 映射到 PNG 压缩档（无损，与观感无关）、对 TIFF 不进编码。
+                  # 与任何竞品的 0~14 档**不存在等价关系**，所以不写换算表、也不许在
+                  # 事件里留下能被读成“等价”的字段。encoder_quality 记的是真正递给
+                  # 编码器的那个数（无损格式为 None）：报出去的值与实际递出的值不一致时，
+                  # 导出清单里就得看得出来。
+                  "quality_mapping_version": QUALITY_MAPPING_VERSION,
+                  "encoder_quality": (q if ext in ("jpg", "jpeg", "webp") else None),
                   # 报的是注册表里那个名字（deflate），不是 Pillow 的内部名（tiff_deflate）：
                   # 导出清单是给人看的，它该说用户选过的那个词
                   "tiff_compression": comp_key if ext in ("tif", "tiff") else None,
@@ -902,7 +916,9 @@ def write_tiff16(rgb: np.ndarray, path: str, *, output_profile: str = "srgb",
         return {"path": path, "format": "tif", "bits": 16, "w": w, "h": h,
                 "skipped": True, "reason": reason, "conflict_policy": policy,
                 "bytes": 0, "write_ms": 0.0, "gps_written": False,
-                "renamed_from": None, **_icc_facts(icc)}
+                "renamed_from": None, "quality_mapping_version": QUALITY_MAPPING_VERSION,
+                "encoder_quality": None,        # 直通不进编码器：这一格给 None 而不是 0
+                **_icc_facts(icc)}
     t0 = time.perf_counter()
     _atomic_write(target, blob)
     return {"path": target, "format": "tif", "bits": 16, "w": w, "h": h,
@@ -914,6 +930,8 @@ def write_tiff16(rgb: np.ndarray, path: str, *, output_profile: str = "srgb",
             "gps_written": False,          # 本层不写 EXIF，这一句是可验的而不是声明
             "exif_bytes": 0,
             "renamed_from": None if target == path else path,
+            "quality_mapping_version": QUALITY_MAPPING_VERSION,
+            "encoder_quality": None,
             "conflict_policy": policy, "tiff_compression": "none",
             "tiff_compression_tag": 1}
 
