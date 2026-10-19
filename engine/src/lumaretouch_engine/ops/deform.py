@@ -24,6 +24,16 @@
 4. **解算必须各向同性长度归一**（P/D/X 同除一个因子、场再乘回来）：不归一时 U 的
    元素到 1e7，λ=1e-8 相对它就是 7e-16——等于没正则，GPU 的 cusolver 与 LAPACK
    在这种条件数下差出 0.77 px（探针实测），而请求位移本身才 37 px。归一后 3.8e-6 px。
+5. **`controls()` 里的 D 只有一种读法：画面内容要搬运的方向（前向位移，像素）**。
+   渲染是反向映射（`grid_sample`：output(x) = input(x + 采样偏移)），所以
+   `warp_t`/`warp_np` 内部取那一个负号——**只在这一处取**，预览与导出共用同一条。
+   这条不是洁癖：1.6.0 之前 slim_face 的 D 按"采样偏移"落符号、其余三种按"内容
+   搬运"落符号，于是大眼/小下巴/微笑在真图上是反的（亮点法实测：请求 −14.3 px 的
+   上抬，画面落点 +12.3 px），而任何"改了多少格"的判据都看不出反。判据两处：
+   test_deform 的亮点穿管线（不依赖 torch 之外的东西），验收里的出片重测关键点。
+6. **每种形变都带虹膜中心 + 鼻尖三个零位移身份锚**。TPS 的远场只靠紧支撑窗在外面
+   归零，窗**以内**不衰减——不锚的话"瘦脸"实际是在缩整张脸：实测 0.8 档把瞳距改了
+   13%（两只眼睛互相走过去 = 换人，不是瘦脸）。锚点把身份骨架钉住，改的才是形状。
 
 坐标约定（这一条被探针撞过两次，写死）：关键点入参是 face.py 契约里的**归一化**
 [0,1] 代理帧坐标；本模块内部一律换算成**像素**，因为 U(r)=r²log r 只在各向同性的
@@ -58,13 +68,56 @@ CHIN = 152
 # 视觉幅度不是一回事。
 IRIS_LEFT = 468
 IRIS_RIGHT = 473
+# 口部那四点（478 点拓扑里被广泛当作基准的四个下标）：61/291 是左右嘴角，13/14 是
+# 内唇上下中点。**这四个下标的语义不是照抄记忆**：test_deform.py 里
+# test_mouth_landmark_indices_mean_what_the_names_say 拿真 MediaPipe 在夹具上量了几何
+# 关系（嘴角必须是唇簇的最左/最右且同高、13 必须在 14 上方、嘴宽必须是脸宽的
+# 0.42–0.58），错了那条就红。
+MOUTH_CORNER_LEFT = 61
+MOUTH_CORNER_RIGHT = 291
+LIP_INNER_TOP = 13
+LIP_INNER_BOTTOM = 14
+# 鼻尖（真夹具上量过：x 落在脸中线，y 在眼线与嘴线之间——见 docs/adr/0013 的读数）。
+NOSE_TIP = 1
+# 内眼角：虹膜中心钉住「眼睛在哪」，眼角再钉住「眼睛朝向哪」，缺一格都会漂。
+EYE_INNER_CORNER_LEFT = 133
+EYE_INNER_CORNER_RIGHT = 362
+EYE_OUTER_CORNER_LEFT = 33
+EYE_OUTER_CORNER_RIGHT = 263
+# 每种形变各自的**身份锚**（请求位移逐字为 0）。规则只有一句：这一格本来要动的部位
+# 不许进自己的名单——把嘴角锚住对瘦脸是对的，对微笑就是自废武功；把巴尖锚住对
+# 小下巴是错的；把内眼角钉死则会把"大眼"拦在门口（实测：那样 0.8 档只把眼高开
+# 0.34 px，却把两内眼角横向拖开 12.45 px）。
+# 虹膜中心 + 鼻尖是**所有**形变共用的最小集：它们是"这个人是谁"的读数所在。
+IRIS_NOSE_ANCHORS = (IRIS_LEFT, IRIS_RIGHT, NOSE_TIP)
+EYE_CORNERS = (EYE_OUTER_CORNER_LEFT, EYE_INNER_CORNER_LEFT,
+               EYE_INNER_CORNER_RIGHT, EYE_OUTER_CORNER_RIGHT)
+MOUTH_AND_CHIN = (MOUTH_CORNER_LEFT, MOUTH_CORNER_RIGHT, LIP_INNER_TOP,
+                  LIP_INNER_BOTTOM, CHIN)
+ANCHORS_BY_KIND = {
+    # 瘦脸只动轮廓：内眼角、外眼角、嘴、巴尖全部钉住（实测 0.8 档脸半宽 −12.2%，
+    # 而瞳距只变 −0.8%）。
+    "slim_face": IRIS_NOSE_ANCHORS + EYE_CORNERS + MOUTH_AND_CHIN,
+    # 大眼以虹膜为钉把整圈眼睑（含眼角）向外扩：眼角是**作用对象**，不是锚。
+    "big_eye": IRIS_NOSE_ANCHORS + MOUTH_AND_CHIN,
+    # 小下巴只动巴尖与下颌：眼与嘴钉住。
+    "small_chin": IRIS_NOSE_ANCHORS + EYE_CORNERS + (MOUTH_CORNER_LEFT, MOUTH_CORNER_RIGHT,
+                                                     LIP_INNER_TOP, LIP_INNER_BOTTOM),
+    # 微笑只动嘴角（唇中线由 controls 里那两点锚住）：眼与巴尖钉住。
+    "smile": IRIS_NOSE_ANCHORS + EYE_CORNERS + (CHIN,),
+}
 IRIS_RIM_LEFT = (469, 470, 471, 472)
 IRIS_RIM_RIGHT = (474, 475, 476, 477)
 EYE_RING_LEFT = (33, 7, 163, 144, 145, 153, 154, 155)
 EYE_RING_RIGHT = (263, 249, 390, 373, 374, 380, 381, 382)
 
-KINDS = ("slim_face", "big_eye", "small_chin")
-KIND_LIMIT = 1.0           # 滑块值域 [-1,1]；实际像素幅度由下面三个比例钉住
+KINDS = ("slim_face", "big_eye", "small_chin", "smile")
+KIND_LIMIT = 1.0           # 滑块值域 [-1,1]；实际像素幅度由下面几个比例钉住
+# 「smile」是第四格（LNX-PORTRAIT-012 表情调整）。为什么只做嘴角上扬、不做露齿笑/
+# 抿嘴笑/换表情：那三件事要**重建唇齿内容**（生成式），冻结件 2310 行把"生成式表情/
+# 牙齿重建"明确划到 P2 实验档，而 DoD 严禁拿假效果占一个控件位。所以这一格只做
+# 几何搬点真能做到的那件事（嘴角上抬），中性=不动，幅度以嘴宽为单位；不做的那三样
+# 在 UI 上显式禁用并说原因，不留无响应控件。
 
 # 满档位移与脸部尺寸的比例。都以"脸"而不是"画面"为单位，换代理档、换构图才不变形。
 # 数值取的是"推到顶明显但不过分卡通"的那一档，跑靶 m2-face-bench 把峰值位移钉在这里。
@@ -76,6 +129,12 @@ CHIN_PEAK_OF_FACE_H = 0.055   # 小下巴：下巴尖上收 = 5.5% 脸高
 # 所以窗不改变 TPS 的插值精度），r ≥ SUPPORT_RATIO·R 恒为 0（紧支撑，背景不动）。
 # 上一版给的是 1.35 / 0.62，算出来 r0 = 0.84R < R：控制点落在过渡带上，
 # 探针实测瘦脸在控制点处差 13.4 px（请求 36.4 px）——窗把请求的位移自己削掉了。
+# 微笑：嘴角上抬 = 14% 嘴宽，横向外展 = 5% 嘴宽。以嘴宽（两点间像素距离）为单位而不是
+# 脸宽：同一档滑块在大小脸上"笑的程度"才是一回事。数值取的是满档明显但不卡通那一档，
+# 实测见 docs/adr/0013（夹具上 0.8 档嘴角上抬 xx px）。
+SMILE_LIFT_OF_MOUTH_W = 0.14
+SMILE_SPREAD_OF_MOUTH_W = 0.05
+
 SUPPORT_RATIO = 1.60
 FLAT_RATIO = 1.05
 
@@ -111,7 +170,8 @@ def check_amounts(amounts) -> dict:
 def analytic_frontal_landmarks(cx: float = 0.5, cy: float = 0.46, half_w: float = 0.19,
                                top: float = 0.27, bottom: float = 0.80,
                                eye_y: float = 0.42, eye_half: float = 0.075,
-                               iris_r: float = 0.021) -> np.ndarray:
+                               iris_r: float = 0.021,
+                               mouth_y: float = 0.62, mouth_half: float = 0.085) -> np.ndarray:
     """一张解析正脸的 478 点（归一化坐标）。**只给预热与测试夹具用**。
 
     它不是任何检测后端的输出，产品路径的关键点必须来自 precompute。之所以要有这么
@@ -144,6 +204,16 @@ def analytic_frontal_landmarks(cx: float = 0.5, cy: float = 0.46, half_w: float 
         for k, p in enumerate(ring):
             a = k * math.pi / 4
             put(p, ex + 1.9 * iris_r * math.cos(a), eye_y + 1.9 * iris_r * math.sin(a) * aspect)
+    # 口部四点也必须显式放：template 后端的 478 点是这份解析模板按肤色盒拟合出来的，
+    # 而 slim_face/big_eye/small_chin 用的那些下标本来就在这里被显式放过。**只有嘴角
+    # 与唇中点是格子里的任意点**时，"微笑"搬的就是无关位置——部位语义不许对某一格失效。
+    for p, mx in ((MOUTH_CORNER_LEFT, -mouth_half), (MOUTH_CORNER_RIGHT, mouth_half)):
+        put(p, cx + mx, mouth_y)
+    put(LIP_INNER_TOP, cx, mouth_y - 0.018)
+    put(LIP_INNER_BOTTOM, cx, mouth_y + 0.020)
+    # 鼻尖也必须显式放：身份锚用的就是它。让它落在‘剩余点那个确定格子’上，
+    # 等于把身份骨架钉在一个与五官无关的位置——夹具与 template 后端两边都会失效。
+    put(NOSE_TIP, cx, 0.5 * (eye_y + mouth_y))
     # 剩下的点填在脸外接盒内的一个确定格子上。不填的话它们全在 (0,0)，而
     # face.py 的模板拟合是按“这份点集自己的外接盒”算缩放的——几个零会把整张脸
     # 推到画面左上角去。坐标用下标生成，所以对同一输入逐字节确定（不依赖 RNG）。
@@ -245,13 +315,16 @@ def controls(landmarks, kind: str, amount: float, h: int, w: int,
     if kind == "slim_face":
         # 左右轮廓按"越靠近中段推得越多"的正弦包络往内收；符号由 amount 决定，
         # 负值就是反向（丰颊），同一套点不需要第二份代码。
+        # D 是**前向**位移：左侧（side=-1）要往画面内收，就是往 +x 搬，所以这里乘 -side。
+        # （改前这里乘 side，靠 warp 的反向映射"负负得正"才碰对——那正是另外三种形变
+        #  写反的根源：同一份 D 被两拨人按两种约定写。）
         for idxs, side in ((FACE_OVAL_LEFT, -1.0), (FACE_OVAL_RIGHT, 1.0)):
             n = len(idxs)
             for i, p in enumerate(idxs):
                 env = math.sin(math.pi * (i + 1) / (n + 1))
                 px, py = pts[p] * [w, h]
                 P.append([px, py])
-                D.append([side * SLIM_PEAK_OF_FACE_W * a * fw * env, 0.0])
+                D.append([-side * SLIM_PEAK_OF_FACE_W * a * fw * env, 0.0])
     elif kind == "big_eye":
         for ring, iris, rim in ((EYE_RING_LEFT, IRIS_LEFT, IRIS_RIM_LEFT),
                                 (EYE_RING_RIGHT, IRIS_RIGHT, IRIS_RIM_RIGHT)):
@@ -264,6 +337,26 @@ def controls(landmarks, kind: str, amount: float, h: int, w: int,
                 P.append([px, py])
                 step = EYE_PEAK_OF_IRIS * a * ir
                 D.append([vx / nrm * step, vy / nrm * step])
+    elif kind == "smile":
+        # 嘴角上抬 + 轻微外展；内唇上下中点作**零位移锚**——真笑的时候唇中线基本不动，
+        # 不锚住它的话 TPS 的长尾会把整张嘴平移（"笑"变成"嘴歪"），而屏幕上只会看见
+        # "人变了点意思"，看不出是哪里错了。
+        lx, ly = pts[MOUTH_CORNER_LEFT] * [w, h]
+        rx, ry = pts[MOUTH_CORNER_RIGHT] * [w, h]
+        mw = math.hypot(rx - lx, ry - ly)
+        if mw < 1.0:
+            raise DeformGeometryError(
+                f"左右嘴角距离只有 {mw:.2f} px：这份关键点里没有可用的嘴形"
+                "（占位几何不许冒充表情调节）")
+        lift = SMILE_LIFT_OF_MOUTH_W * a * mw
+        spread = SMILE_SPREAD_OF_MOUTH_W * a * mw
+        for px, py, side in ((lx, ly, -1.0), (rx, ry, 1.0)):
+            P.append([px, py])
+            D.append([side * spread, -lift])
+        for p in (LIP_INNER_TOP, LIP_INNER_BOTTOM):
+            px, py = pts[p] * [w, h]
+            P.append([px, py])
+            D.append([0.0, 0.0])
     else:  # small_chin：下巴尖往上收，两侧下颌角各带一点，形成连续过渡
         for p, wgt in ((CHIN, 1.0), (FACE_OVAL_LEFT[4], 0.45), (FACE_OVAL_RIGHT[4], 0.45)):
             px, py = pts[p] * [w, h]
@@ -274,6 +367,13 @@ def controls(landmarks, kind: str, amount: float, h: int, w: int,
             px, py = pts[p] * [w, h]
             P.append([px, py])
             D.append([0.0, 0.0])
+    # 身份锚（零位移）：见 ANCHORS_BY_KIND 那段——按格给，一刀切会锚死要动的那位。
+    # 写在合并之前：真有小眼/低头的几何时锚点会与五官点贴近，那种重合该进 merged 账，
+    # 不能悄悄吃掉（吃掉的就是「用户请求的一半位移」）。
+    for p in ANCHORS_BY_KIND[kind]:
+        ax, ay = pts[p] * [w, h]
+        P.append([ax, ay])
+        D.append([0.0, 0.0])
     Pd, Dd, merged = dedupe_controls(np.asarray(P), np.asarray(D), tol=tol)
     # 边框锚点在合并之后追加：它们在图像四角，与脸上的点不可能重合，参与合并只会
     # 让 merged 这个数变得难以解释。
@@ -492,7 +592,10 @@ def compose_grid(base, fields, amounts):
 
 
 def warp_t(img, delta, strength: float = 1.0, base=None):
-    """按 base + strength·delta 采样。delta 是 (1,H,W,2) **像素**单位的位移场。
+    """按 base − strength·delta 采样。delta 是 (1,H,W,2) **像素**单位的前向位移场。
+
+    `grid_sample` 是反向映射（输出 x 处取输入 x+网格偏移 的值），所以"把内容往 +x 搬"
+    在这里就是网格往 −x 偏。那个负号**只在这一处取**：controls()/unit_field/composed_delta 一路交出去的都是前向场，预览与导出都汇到这两个采样函数，所以不可能出现"预览一个方向、导出另一个方向"。
 
     像素→归一化的换算系数是 2/W、2/H（align_corners=False 下像素中心间隔就是这两个数），
     不能直接把像素加到归一化网格上：那样 18 px 的位移会变成 18 个归一化单位（=整幅
@@ -513,7 +616,7 @@ def warp_t(img, delta, strength: float = 1.0, base=None):
         return img
     h, w = img.shape[-2], img.shape[-1]
     grid = (identity_grid(h, w, img.device) if base is None else base) \
-        + s * delta * torch.tensor([2.0 / w, 2.0 / h], device=delta.device, dtype=delta.dtype)
+        - s * delta * torch.tensor([2.0 / w, 2.0 / h], device=delta.device, dtype=delta.dtype)
     out = F.grid_sample(img, grid.to(img.dtype), mode="bilinear",
                         padding_mode="border", align_corners=False)
     # 位移恰好为零的像素直接取原值：把"背景逐字节不动"从经验性质变成结构性质
@@ -540,8 +643,9 @@ def warp_np(img, delta, strength: float = 1.0):
     if d.shape != (H, W, 2) and d.shape != (1, H, W, 2):
         raise ValueError(f"位移场形状 {d.shape} 对不上图 {(H, W, 2)}：不靠 reshape “自动对齐”")
     g = d.reshape(1, H, W, 2).astype(np.float64) * s
-    xs = (np.arange(W, dtype=np.float64)[None, :] + g[0, :, :, 0]).ravel()
-    ys = (np.arange(H, dtype=np.float64)[:, None] + g[0, :, :, 1]).ravel()
+    # 与 warp_t 同一处约定：前向位移场 → 采样坐标取负（CPU 参考臂不另立方向）
+    xs = (np.arange(W, dtype=np.float64)[None, :] - g[0, :, :, 0]).ravel()
+    ys = (np.arange(H, dtype=np.float64)[:, None] - g[0, :, :, 1]).ravel()
     xs = np.clip(xs, 0.0, W - 1.0)
     ys = np.clip(ys, 0.0, H - 1.0)
     x0, y0 = np.floor(xs).astype(np.int64), np.floor(ys).astype(np.int64)

@@ -922,6 +922,8 @@ class PreviewPipeline:
                 "lit": bool(self.has_deform())}
 
     def adopt_deform_field(self, delta) -> dict:
+        # delta 是**前向位移场**（与 unit_field 同一种东西，模块 docstring 第 5 条）：
+        # 导出器算的、预览建的、这里存的必须同一种单位制，负号只在 warp_t/warp_np 取。
         """挂一份**已经合成好的**位移场（1,H,W,2，像素单位）。导出通路专用。
 
         为什么不让导出器直接摸 `deform_units`/`deform_amounts`/`deform_grid_base`：

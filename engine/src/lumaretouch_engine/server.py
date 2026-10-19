@@ -22,7 +22,7 @@ from .vram import DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_
     DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS, DEFAULT_REPAIR, GRADE_SCOPES, LightOp, RepairOp, \
     warm_device
 from .ops.light import DB_EXPOSURE_LIMIT, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
-from .ops.deform import KINDS, DeformGeometryError, check_amounts
+from .ops.deform import KINDS, KIND_LIMIT, DeformGeometryError, check_amounts
 from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
 from .ops.grade import DH_LIMIT, DS_LIMIT, DV_LIMIT, GradeError, check_params
 from .ops.presets import PRESETS, PresetError, get_preset, preset_grade, preset_lut
@@ -347,6 +347,10 @@ class Engine:
               # 一份“set/clear”就是下一轮加 inherit 时漏改的那一处（它会撞未知 action）
               "deform_actions": list(self.DEFORM_ACTIONS),
               "deform_scopes": list(self.DEFORM_SCOPES),
+              # 名单从引擎走：上一版前端自己抄了一份三元组，于是"引擎加了 kind 而
+              # 屏幕上没有那一格控件"是可能发生的（而且 TS 编译期一句都不报）。
+              "deform_kinds": list(KINDS),
+              "deform_range": [-KIND_LIMIT, KIND_LIMIT],
               # 能收哪些后缀：只由 session.IMAGE_EXTS 定这一份，宿主拿它填原生
               # 选择框的过滤器。拷一份名单到 UI 里就是给自己埋雷：M9-c 把八个 RAW
               # 后缀收进来的那一次，UI 那份拷件不会跟着变，用户选不了、工程师说支持。
@@ -3545,7 +3549,8 @@ class Engine:
         return any((o.get("amounts") or {}) for o in (st.get("_deform_overrides") or []))
 
     def cmd_deform(self, p: dict):
-        """五官微调（M2-b）：瘦脸 / 大眼 / 小下巴三个滑块，外加作用层（PORTRAIT-004）。
+        """五官微调：瘦脸 / 大眼 / 小下巴 / 微笑嘴角四个滑块（KINDS 是唯一出处，
+        名单与值域随 ready 的 deform_kinds / deform_range 报出去），外加作用层（PORTRAIT-004）。
 
         与修容笔的区别：它不是逐笔图层而是一个“参数层”——滑块值就是全部状态；
         撤销/重做属于产品闭环（M5）统一做，不在这里先做三份中的一份。

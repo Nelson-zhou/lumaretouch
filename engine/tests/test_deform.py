@@ -9,12 +9,14 @@
 from __future__ import annotations
 
 import math
+import os
 
 import numpy as np
 import pytest
 
 from lumaretouch_engine.ops.deform import (
-    CHIN, FACE_OVAL_LEFT, FACE_OVAL_RIGHT, KINDS, KIND_LIMIT, IRIS_LEFT,
+    ANCHORS_BY_KIND, BORDER_ANCHORS, CHIN, FACE_OVAL_LEFT, FACE_OVAL_RIGHT,
+    KINDS, KIND_LIMIT, IRIS_LEFT,
     DeformGeometryError, analytic_frontal_landmarks, check_amounts, controls,
     dedupe_controls, face_frame, identity_grid, support_radii, tps_field_np,
     tps_field_t, unit_field, warp_np, warp_t)
@@ -339,8 +341,9 @@ def test_fractional_translation_matches_analytic_bilinear():
     d = np.zeros((1, H, W, 2), dtype=np.float32)
     d[..., 0] = 0.5
     ref = tf.numpy()
-    # 采样坐标 x+0.5：左右两个抽头各一半（取 interior 列，不碰 border 延拓那一列）
-    want = np.concatenate([(ref[..., :-1] + ref[..., 1:]) * 0.5, ref[..., -1:]], axis=-1)
+    # delta 是**前向**位移（把内容往 +x 搬半格），所以采样坐标往 −x 取：
+    # 输出第 j 列 = 输入 j−0.5 处 = 左右两抽头各一半。取 interior 列，不碰 border 延拓。
+    want = np.concatenate([ref[..., :1], (ref[..., :-1] + ref[..., 1:]) * 0.5], axis=-1)[..., :W]
     got_np = warp_np(tf.numpy(), d, 1.0)
     got_t = warp_t(tf, torch.from_numpy(d), 1.0).numpy()
     for name, got in (("CPU", got_np), ("GPU", got_t)):
@@ -350,12 +353,18 @@ def test_fractional_translation_matches_analytic_bilinear():
         assert err < 1.5e-3, f"{name} 臂 0.5px 采样与解析双线性差 {err}：抽头或权重不对"
 
 
-def test_translation_moves_by_exact_pixels():
-    """反向门禁（本轮真抓到第二个 bug 的那条）：平移 k 像素就得恰好搬 k 像素。
+def test_translation_moves_content_by_exact_pixels():
+    """反向门禁：delta=+k 就得把**画面内容**往 +x 搬 k 格（不是搬反）。
 
-    "像素单位的位移场直接加到归一化网格上"这个错不会被上面那条恒等测试抓到
-    （s=0 时两边都是恒等），只有整数位移的平移能抓：grid_sample 在 border padding
-    下会把超出边界的整幅糊成边缘色，偏差是 200 LSB 级而不是 1 LSB 级。
+    这一条从前是反着钉的（want 取 input[j+k]，即内容搬 −k），因为 warp 一直在按
+    "采样偏移"读入参，而 controls() 里三种形变按"内容搬运"写符号、一种按采样偏移写。
+    两种读法混在一个字段上，表现就是大眼/小下巴/微笑在真图上跑反（ADR-0013），
+    而"画面动了多少"那一类判据一个都不响。现在约定只有一种：D 与场都是前向，
+    负号只在 warp_t/warp_np 里取，所以这条判据按内容搬运的直觉写。
+
+    "像素单位的位移场直接加到归一化网格上"那个错也不会被恒等测试抓到（s=0 时两边
+    都是恒等），只有整数位移能抓：grid_sample 在 border padding 下会把超出边界的整幅
+    糊成边缘色，偏差是 200 LSB 级而不是 1 LSB 级。
     """
     torch = pytest.importorskip("torch")
     rng = np.random.default_rng(3)
@@ -364,11 +373,14 @@ def test_translation_moves_by_exact_pixels():
     for k in (3, -5):
         d = np.zeros((1, H, W, 2), dtype=np.float32)
         d[..., 0] = k
-        want = img[0][:, :, np.clip(np.arange(W) + k, 0, W - 1)]
+        # 内容往 +k 搬 ⇒ 输出第 j 列取自输入第 j−k 列
+        want = img[0][:, :, np.clip(np.arange(W) - k, 0, W - 1)]
         got_np = np.round(warp_np(tf.numpy(), d, 1.0)[0] * 255.0).astype(np.uint8)
         got_t = torch.round(warp_t(tf, torch.from_numpy(d), 1.0)[0] * 255.0).to(torch.uint8).numpy()
-        assert np.abs(got_np.astype(int) - want.astype(int)).max() == 0, f"CPU 参考平移 {k} 不对"
-        assert np.abs(got_t.astype(int) - want.astype(int)).max() == 0, f"GPU 路径平移 {k} 不对"
+        assert np.abs(got_np.astype(int) - want.astype(int)).max() == 0, \
+            f"CPU 参考把内容搬 {k} 格不对（方向或格数）"
+        assert np.abs(got_t.astype(int) - want.astype(int)).max() == 0, \
+            f"GPU 路径把内容搬 {k} 格不对（方向或格数）"
 
 
 def test_warp_np_refuses_a_batch_it_cannot_map():
@@ -538,7 +550,7 @@ def test_clear_face_also_clears_deform():
 
 
 def test_resident_bytes_counts_units_and_grid():
-    """显存账单：三个单位场 + 恒等网格。不报就等于藏了一笔显存账。"""
+    """显存账单：每种形变一个单位场 + 恒等网格。不报就等于藏了一笔显存账。"""
     p = _pipe()
     p.prepare()
     assert p.deform_resident_bytes() == 0
@@ -546,7 +558,15 @@ def test_resident_bytes_counts_units_and_grid():
     want = sum(u.numel() * u.element_size() for u in p.deform_units.values()) \
         + p.deform_grid_base.numel() * p.deform_grid_base.element_size()
     assert info["bytes_deform"] == want == p.deform_resident_bytes()
-    assert want == 4 * H * W * 2 * 4, "应当是 3 份位移场 + 1 份恒等网格，每份 (H,W,2) float32"
+    # 账单的**规则**是「每个 kind 一份单位场 + 一份恒等网格」。上一版写成字面量 `4 *`
+    # 并注释"3 份位移场"：加第四种形变（smile，LNX-PORTRAIT-012）时它红了——这是它
+    # 该有的反应，但红的是把规则写成数量的人。现在按规则核：名单长度来自 KINDS 那一份
+    # 唯一出处，不在测试里重述。
+    assert len(p.deform_units) == len(KINDS), (
+        f"单位场 {len(p.deform_units)} 份而 kind 名单 {len(KINDS)} 种：少一份就是那一格"
+        "滑块拖了没画面，多一份就是一笔没人要的显存")
+    assert want == (len(KINDS) + 1) * H * W * 2 * 4, \
+        "应当是每种 kind 一份位移场 + 1 份恒等网格，每份 (H,W,2) float32"
     assert p.clear_deform()["bytes_deform"] == 0
     assert p.deform_resident_bytes() == 0
 
@@ -600,3 +620,217 @@ def test_warm_device_leaves_no_deform_references():
         monkey.undo()
     p = made["pipe"]
     assert p.deform_units == {} and p.deform_grid_base is None and p.deform_meta == {}
+# ──────────────────────────────────── smile（LNX-PORTRAIT-012 表情：嘴角上扬）
+def _smile_parts(lm, amount=1.0, h=H, w=W):
+    """把 smile 的控制点拆成「左右嘴角」与「唇中锚」两段（按请求位移认，不按顺序猜）。
+
+    顺序不写死：controls() 里追加顺序改了，这条判据也该照样说得清谁是谁——按位移形状
+    认比按下标认结实。
+    """
+    xy, req, meta = controls(lm, "smile", amount, h, w)
+    n = len(xy) - len(BORDER_ANCHORS)                 # 末尾那批是边框零锚
+    xy, req = xy[:n], req[:n]
+    moving = np.abs(req).max(axis=1) > 0.0
+    # 零位移的锚 = 唇中那两点 + 引擎为这一格配的身份锚（名单取自 ANCHORS_BY_KIND，
+    # 不在测试里重述一份：重述了就成了第二个出处，改锚点时这里不会跟着变）
+    assert int((~moving).sum()) == 2 + len(ANCHORS_BY_KIND["smile"]), \
+        f"零位移锚点数不对：{int((~moving).sum())}"
+    order = np.argsort(xy[moving][:, 0])              # 左嘴角在前
+    return req[moving][order], req[~moving], meta
+
+
+def test_smile_lifts_both_corners_and_anchors_the_lip_center():
+    """四格控制点各自的职责：嘴角**向上**且左右同幅，横向相反（外展），唇中锚零位移。
+
+    唇中锚这一句是这条 kind 的全部难点：TPS 是全局插值，不锚住唇中线，"笑"会把整张嘴
+    平移（画面确实"变了"，屏幕上是"人歪了"，而没有任何一个读数会报错）。
+    """
+    lm = landmarks()
+    corners, anchors, _meta = _smile_parts(lm, 1.0)
+    assert len(corners) == 2, corners.shape
+    assert np.all(corners[:, 1] < 0.0), f"嘴角位移的 y 分量必须为负（图像 y 向下为正）：{corners}"
+    assert abs(corners[0, 1] - corners[1, 1]) < 1e-9, f"左右上抬不同幅就不是对称的笑：{corners}"
+    assert corners[0, 0] < 0.0 < corners[1, 0], f"横向该相反（外展），拿到 {corners}"
+    assert np.abs(anchors).max() == 0.0, "唇中锚必须逐字为零位移（TPS 的长尾要靠它锚住）"
+
+
+def test_smile_amplitude_is_a_fraction_of_mouth_width_not_the_frame():
+    """满档位移 = SMILE_LIFT_OF_MOUTH_W × 嘴宽；嘴宽翻倍位移翻倍（精确两倍）。
+
+    单位选嘴宽而不是脸宽/画幅：同一档滑块在大小脸上"笑的程度"才是一回事。这条与
+    `test_displacement_scales_with_face_not_with_frame` 是同一个理由的不同部位。
+    """
+    from lumaretouch_engine.ops.deform import (MOUTH_CORNER_LEFT, MOUTH_CORNER_RIGHT,
+                                               SMILE_LIFT_OF_MOUTH_W)
+
+    narrow = landmarks(mouth_half=0.0425)
+    wide = landmarks(mouth_half=0.085)
+    c_n, _, _ = _smile_parts(narrow)
+    c_w, _, _ = _smile_parts(wide)
+    lift_n, lift_w = -c_n[0, 1], -c_w[0, 1]
+    assert lift_w / lift_n == pytest.approx(2.0, rel=1e-6)   # 模板点是 float32
+    # 而且这个数就是解析嘴宽的比例（不是别处混进来的系数）
+    pts = wide[:, :2] * [W, H]
+    mw = float(np.hypot(*(pts[MOUTH_CORNER_RIGHT] - pts[MOUTH_CORNER_LEFT])))
+    assert lift_w == pytest.approx(SMILE_LIFT_OF_MOUTH_W * mw, rel=1e-6)
+
+
+# 亮点法用比文件头那档大一号的画幅：瘦脸最大的那格控制点本来就贴着轮廓，
+# 小图上一 clamp 就离开原位，测到的就不是那一点的落地了。
+DOT_H, DOT_W = 480, 384
+
+
+def _dot_through_pipeline(lm, amounts, xy, h=DOT_H, w=DOT_W):
+    """把一颗亮点放在 xy，走**生产那条链**（build_deform → apply_deform → warp_t），
+    回来时它搬到了哪。返回相对位移 (dx, dy)。
+
+    为什么非走管线不可：controls() 里的 D 与画面落点之间隔着三件事——TPS 插值、
+    紧支撑窗、反向映射。只测其中一段（例如只看场在控制点处等于 D）证明不了
+    "屏幕上看到的是用户要的那个方向"，而这一段恰恰是 1.6.0 之前真正出错的地方。
+    """
+    torch = pytest.importorskip("torch")               # noqa: F841
+    from lumaretouch_engine.vram import make_pipeline
+
+    y, x = int(round(xy[1])), int(round(xy[0]))
+    y = min(max(y, 4), h - 5)
+    x = min(max(x, 4), w - 5)
+    img = np.zeros((h, w, 3), dtype=np.uint8)
+    img[y - 2:y + 3, x - 2:x + 3] = 255
+    p = make_pipeline("cpu", w, h, img)
+    p.prepare()
+    p.render(0.0)
+    p.build_deform(lm)
+    p.set_deform_amounts(amounts)
+    p.render(0.0)
+    plane = p.read_back()[..., :3].astype(np.float64).mean(axis=2)
+    y0, y1, x0, x1 = max(0, y - 16), min(h, y + 17), max(0, x - 16), min(w, x + 17)
+    win = plane[y0:y1, x0:x1]
+    wgt = np.clip(win - win.min(), 0, None)
+    assert wgt.sum() > 0, "亮点在渲染后整片消失了"
+    yy, xx = np.mgrid[y0:y1, x0:x1]
+    return (float((wgt * xx).sum() / wgt.sum()) - x, float((wgt * yy).sum() / wgt.sum()) - y)
+
+
+def test_every_kind_moves_the_picture_the_way_its_name_says():
+    """四种形变逐格判方向：亮点必须**沿请求位移 D** 走，且落地不少于请求的六成。
+
+    这条是 ADR-0013 那格缺陷的直接守卫。判据按"最大位移那一格的控制点"取，因为
+    它是这一格语义的化身：瘦脸的轮廓点、大眼的眼睑点、小下巴的巴尖、微笑的嘴角。
+    """
+    lm = landmarks()
+    for kind in KINDS:
+        P, D, _meta = controls(lm, kind, 1.0, DOT_H, DOT_W)
+        i = int(np.abs(D).max(axis=1).argmax())
+        got = _dot_through_pipeline(lm, {k: (1.0 if k == kind else 0.0) for k in KINDS}, P[i])
+        want = D[i]
+        proj = got[0] * want[0] + got[1] * want[1]
+        norm = float(np.hypot(*want))
+        assert proj > 0, f"{kind}：请求 D=({want[0]:+.2f},{want[1]:+.2f}) 而画面搬了" \
+                         f"({got[0]:+.2f},{got[1]:+.2f})——方向是反的（滑块名字在说谎）"
+        ratio = float(np.hypot(*got)) / norm
+        assert ratio >= 0.6, f"{kind}：只落地了请求幅度的 {ratio:.2f} 倍（{norm:.2f}→" \
+                             f"{np.hypot(*got):.2f} px），这一格基本等于没动"
+
+
+def test_identity_anchors_stay_put_on_the_rendered_picture():
+    """锚点必须**真的不动**：把亮点放在零位移的锚点上，渲染后不许被拖走。
+
+    这条与上一条是一对：只钉"该动的动了"会放过"整张脸一起被推走"（实测没锚之前
+    slim_face=0.8 把瞳距改了 13%——那不是瘦脸，是换人）。容差给 1 px：TPS 在锚点处
+    逐字为 0，但亮点是 5×5 一块，双线性重采样的质心会带进亚像素的偏置。
+    """
+    lm = landmarks()
+    for kind in KINDS:
+        P, D, _meta = controls(lm, kind, 1.0, DOT_H, DOT_W)
+        zeros = np.nonzero(np.abs(D).max(axis=1) == 0.0)[0]
+        # 只看脸内的锚（边框那批在画幅四角，clamp 会把质心偏置放大到另一种错）
+        inner = [int(i) for i in zeros if 8 < P[i, 0] < DOT_W - 9 and 8 < P[i, 1] < DOT_H - 9]
+        assert inner, f"{kind}：脸内一个锚都没有，身份靠什么钉住？"
+        got = _dot_through_pipeline(lm, {k: (1.0 if k == kind else 0.0) for k in KINDS},
+                                    P[inner[0]])
+        assert np.hypot(*got) <= 1.0, f"{kind}：锚被拖走 {np.hypot(*got):.2f} px"
+
+
+def test_preview_field_and_export_field_point_the_same_way():
+    """预览（unit_field）与导出（composed_delta）交出去的必须是**同一种场**：前向。
+
+    两处各自取负、或一处取一处不取，表现就是"屏幕上往左、导出往右"。这一条把两边
+    拉到同一个控制点上比：同号、且逐格相等（同一条 TPS + 同一个窗，不该有第三种差）。
+    """
+    pytest.importorskip("torch")
+    from lumaretouch_engine.export import composed_delta
+
+    lm = landmarks()
+    for kind in KINDS:
+        P, D, _meta = controls(lm, kind, 1.0, H, W)
+        i = int(np.abs(D).max(axis=1).argmax())
+        f_prev, _m = unit_field(lm, kind, H, W, device="cpu")
+        delta, _peak = composed_delta(lm, {kind: 1.0}, H, W, "cpu")
+        a = f_prev[0, int(round(P[i, 1])), int(round(P[i, 0]))].numpy().astype(np.float64)
+        b = delta[0, int(round(P[i, 1])), int(round(P[i, 0]))].numpy().astype(np.float64)
+        assert float(a @ b) > 0, f"{kind}：预览与导出的场在同一个点上方向相反"
+        assert np.abs(a - D[i]).max() < 1.0, f"{kind}：预览场在控制点处不等于请求位移：{a} vs {D[i]}"
+        assert np.abs(a - b).max() < 1e-3, f"{kind}：预览与导出同点差 {np.abs(a - b).max()}"
+
+
+def test_smile_negative_amount_is_the_mirror_field_exactly():
+    """负档就是反向等幅（下拉），不是"另一种笑"。逐点恒等，不是误差小。"""
+    lm = landmarks()
+    f1, *_ = field(lm, "smile", 1.0)
+    fn, *_ = field(lm, "smile", -1.0)
+    assert np.abs(fn + f1).max() == 0.0
+
+
+def test_smile_field_never_folds_the_image():
+    """无折叠：映射 x ↦ x + f(x) 的 Jacobian 行列式处处 > 0。
+
+    这条是"无纹理破裂 / 唇齿连续性"在算子层的**直接形式**：det J ≤ 0 意味着那一小块
+    被翻了面（像素映射回自身），放大看就是撕裂或内翻的皱褶。只看"位移不大"证明不了
+    不折叠——两个方向相反的剪切就能把一小片折回去。
+    """
+    lm = landmarks()
+    for amount in (1.0, -1.0, 0.6):
+        f, *_ = field(lm, "smile", amount)
+        u, v = f[..., 0], f[..., 1]
+        du_dx = np.gradient(u, axis=1)
+        du_dy = np.gradient(u, axis=0)
+        dv_dx = np.gradient(v, axis=1)
+        dv_dy = np.gradient(v, axis=0)
+        det = (1.0 + du_dx) * (1.0 + dv_dy) - du_dy * dv_dx
+        assert float(det.min()) > 0.0, (
+            f"amount={amount} 时 det J 最小 {float(det.min()):.4f} ≤ 0：画面被翻了面")
+        # 顺带钉住"这条判据不是空的"：场里确实有非零位移
+        assert float(np.abs(f).max()) > 1.0, "smile 场几乎不动，这条折叠判据退化了"
+
+
+def test_smile_refuses_landmarks_that_have_no_mouth():
+    """左右嘴角重合（占位几何、或后端给的点集没有嘴）必须整条拒，不许悄悄搬别的点。
+
+    与 `_check_points` 拒绝像素单位是同一条纪律：宁可不生效，也不要"看着动了"。
+    """
+    lm = landmarks().copy()
+    lm[291, :2] = lm[61, :2]                          # 两点重合 → 嘴宽 0
+    with pytest.raises(DeformGeometryError, match="嘴"):
+        controls(lm, "smile", 0.8, H, W)
+
+
+def test_ready_kind_list_and_the_locale_labels_agree_in_both_directions():
+    """引擎的 kind 名单 ↔ 前端那两份文案 ↔ 面板画的控件，三处名单必须一致。
+
+    这条守卫的由来与 test_pick.py 里 M0Env 键名单那条同一类：TS 的 `as const` 元组与
+    引擎的 KINDS 之间没有类型系统连着，少一格的表现是"引擎算了而屏幕上没有那个滑块"
+    （或者反过来：屏幕上有一格而引擎报未知形变类型——那是**用户能点、点了没反应**的控件，
+    DoD §3 明令禁止的那件事）。
+    """
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    panel = open(os.path.join(root, "ui", "src", "components", "StudioPanel.tsx"),
+                 encoding="utf-8").read()
+    # 面板必须**从引擎那份名单画**，而不是自己抄一份：抄的那一份迟早会漂。
+    assert "deformKinds" in panel or "kinds" in panel, (
+        "StudioPanel 没有按引擎报的 deform_kinds 画滑块——又变成手抄名单了")
+    for loc in ("zh", "en"):
+        text = open(os.path.join(root, "ui", "src", "locales", f"{loc}.ts"),
+                    encoding="utf-8").read()
+        missing = [k for k in KINDS if f'"retouch.{k}"' not in text
+                   and f"'retouch.{k}'" not in text and f"retouch.{k}:" not in text]
+        assert not missing, f"{loc} 文案缺这些形变格：{missing}（面板会画出没有名字的滑块）"
