@@ -596,6 +596,126 @@ PY
   ok "同一份日志留着备查（含 M0_FACE / M0_LAYER 原始行）：$flog"
 fi
 
+echo "── 7. 挑图那一臂：一组照片里量出近似组/糊/过曝/疑似闭眼，而原片一个字节都不动（LNX-PICK-001）"
+# 度量层有 20 条单测、判据有标定台、端到端有一条用例，那些连的都是裸引擎。这一臂要穿过的
+# 是剩下那四层签名：runPick → Rust pick → 引擎 pick_* → 宿主 status.pick → 底片条 DOM 上
+# 用户真正看见的那枚徽章。缺任何一层，表现都是"引擎算对了而屏幕上没有"。
+# 输入由 packaging/make-test-pick-set.py 从已提交夹具确定性生成（同一输入两次 sha 相同），
+# 所以这一臂的读数变了就等于判据变了，不会是被生成器悄悄改了。
+pickset=/tmp/lrt-pick-set.$$
+if [ ! -x "$rt" ]; then
+  no "没有运行时 venv（$rt）：挑图那一臂要真 FaceMesh 才能造输入与量眼睑，缺它就没有证据"
+else
+  rm -rf "$pickset"
+  if ! (cd "$repo" && "$rt" packaging/make-test-pick-set.py "$pickset" >"/tmp/lrt-pick-gen.$$.log" 2>&1); then
+    no "造挑图输入失败（见 /tmp/lrt-pick-gen.$$.log）：没有输入就是没有证据，不做 skip"
+  else
+    sha_before=$(cd "$pickset" && sha256sum ./* | sort)
+    plog=/tmp/m5-release-pick.$$.log
+    pkill -f '/usr/bin/lumaretouch' 2>/dev/null || true
+    sleep 1
+    env "${unset_args[@]}" -u XDG_DATA_HOME \
+        DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-/run/user/$(id -u)/.mutter-Xwaylandauth.OJ5EX3}" \
+        GDK_BACKEND=x11 HOME="$HOME" USER="$USER" PATH="$PATH" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
+        LRT_AUTO_FILMSTRIP="$pickset" LRT_MAX_PX=207360 \
+        LRT_AUTO_PICK=standard/standard/standard/strong LRT_AUTO_RELEASE=1 \
+        LRT_AUTO_BENCH=700x420:60:16.6:image_stream \
+        /usr/bin/lumaretouch > "$plog" 2>&1 &
+    pwin=$!
+    # 先等"过门"那一句（M0_RELEASE）：整条自动序列挂在 LRT_AUTO_BENCH 上，少了它
+    # 前端就是一声不响地 return。本轮就是这么白等了 900 s 才拿到一句"没跑完"——
+    # 门检查放前面，60 s 内没过门就直接把原因与日志尾部报出来，不再拖着等臂。
+    prel=0
+    for _ in $(seq 1 60); do
+      sleep 1
+      grep -aq 'M0_RELEASE' "$plog" && { prel=1; break; }
+      kill -0 $pwin 2>/dev/null || { prel=2; break; }
+    done
+    if [ "$prel" != 1 ]; then
+      no "挑图窗口没过自动序列那道门（60 s 内没有 M0_RELEASE：多半是缺 LRT_AUTO_BENCH 或运行时起不来）"
+      tail -5 "$plog" | sed 's/^/      /'
+      pgot=3
+    else
+      ok "窗口过了那道门（M0_RELEASE 已报），挑图那一臂真在跑"
+      pgot=0
+      for _ in $(seq 1 $((want_secs * 4))); do
+        sleep 0.5
+        if grep -aq 'M0_PICK_RESULT' "$plog" || grep -aq 'M0_ERROR' "$plog"; then pgot=1; break; fi
+        kill -0 $pwin 2>/dev/null || { pgot=2; break; }
+      done
+    fi
+    sleep 2
+    kill $pwin 2>/dev/null; wait $pwin 2>/dev/null
+    sha_after=$(cd "$pickset" && sha256sum ./* | sort)
+    if [ "$pgot" = 3 ]; then
+      :   # 门上已经记过一次不过，这里不重复计账（一次缺陷一条红，账单才不会虚高）
+    elif [ "$pgot" != 1 ]; then
+      no "挑图真窗口没跑完（$([ "$pgot" = 2 ] && echo '进程提前退出' || echo '超时')）；日志尾部："
+      tail -10 "$plog" | sed 's/^/      /'
+    else
+      ok "装机壳跑到了挑图那一臂（日志：$plog）"
+      python3 - "$plog" <<'PY'
+import json, re, sys
+raw = open(sys.argv[1], "rb").read().decode("utf-8", "replace")
+hits = re.findall(r'M0_PICK_RESULT (\{[^\n]*\})', raw)
+fails = []
+def chk(cond, msg):
+    print(("  ✓ " if cond else "  × ") + msg)
+    if not cond:
+        fails.append(msg)
+chk(bool(hits), "日志里有 M0_PICK_RESULT：挑图那一臂在装机壳里跑了")
+if not hits:
+    err = re.findall(r'M0_ERROR [^\n]*', raw)
+    chk(False, f"没有 M0_PICK_RESULT（错误行：{err[-1][:160] if err else '一条也没有'}）")
+else:
+    fc = json.loads(hits[-1])
+    chk(fc.get("err") in (None, ""), f"这一臂没被引擎拒：{fc.get('err')}")
+    chk(fc.get("event") == "pick_done", f"pick_done 穿过 Rust 与宿主回到前端：event={fc.get('event')!r}")
+    chk(int(fc.get("measured") or 0) >= 4 and fc.get("failed") == 0,
+        f"每一张都量到了：measured={fc.get('measured')} failed={fc.get('failed')}")
+    chk(fc.get("cells") == fc.get("measured") and fc.get("pickItems") == fc.get("measured"),
+        f"底片条格数 / 建议条数 / 量到的张数三者一致：{fc.get('cells')}/{fc.get('pickItems')}/{fc.get('measured')}")
+    chk(fc.get("stopped") is False and fc.get("names0") == fc.get("namesNow"),
+        f"名单进出一致（{fc.get('names0')} → {fc.get('namesNow')}）：这一路没有增删文件")
+    chk(fc.get("eyesBackend") == "mediapipe",
+        f"眼睑那一档真是 FaceMesh 量的：{fc.get('eyesBackend')!r} err={fc.get('eyesError')!r}")
+    chk(bool(fc.get("fingerprint")) and fc.get("fingerprint") == fc.get("readyFingerprint"),
+        f"事件里的判据指纹 = 握手 ready 那份：{fc.get('fingerprint')!r} vs "
+        f"{fc.get('readyFingerprint')!r}（不等就是跑靶读到的判据不是这一版引擎承诺的）")
+    chk((fc.get("algo") or "").startswith("dhash9x8+clarity"),
+        f"算法名带着两格清晰度：{fc.get('algo')!r}")
+    gs = fc.get("groupSizes") or []
+    chk(max(gs or [0]) >= 2, f"近似组真的成组了（组大小 {gs}）——冻结件要的「近似分组可见」")
+    labels = fc.get("labels") or {}
+    for k in ("similar", "blur", "overexposed", "eyes_closed"):
+        chk(int(labels.get(k) or 0) > 0, f"四件事按方向各被标出：{k}={labels.get(k)}")
+    chk(fc.get("overridableAll") is True and fc.get("autoDeleteAny") is False,
+        f"每条建议都可覆盖而没有任何一条会删/进回收站：overridableAll={fc.get('overridableAll')} "
+        f"autoDeleteAny={fc.get('autoDeleteAny')}")
+    chk(fc.get("deleteWord") is False,
+        "原因文案里没有「删」这个字（手册 2127 行：相似分组不是绝对重复判定）")
+    chk(fc.get("reasonsArmed") is True,
+        "每条原因都带着 method/数值/阈值（可复算是这条功能的承诺，不是附注）")
+    chk(len(fc.get("badges") or []) == fc.get("withPick"),
+        f"徽章真的画进 DOM：{len(fc.get('badges') or [])} 枚 / {fc.get('withPick')} 格有建议"
+        "（引擎报了而屏幕上没有，就是这一层丢的）")
+    chk(float(fc.get("measureMs") or 0) > 0, f"逐张量有真计时：measure_ms={fc.get('measureMs')}")
+sys.exit(1 if fails else 0)
+PY
+      if [ $? -ne 0 ]; then fail=$((fail + 1)); else pass=$((pass + 1)); fi
+      if [ "$sha_before" = "$sha_after" ]; then
+        ok "挑图跑完，那几张输入的 sha256 逐字节不变（原片只读这条铁律在这一臂上也成立）"
+        pass=$((pass + 1))
+      else
+        no "挑图动了原片：sha256 台账前后不一致"
+        diff <(echo "$sha_before") <(echo "$sha_after") | sed 's/^/      /'
+        fail=$((fail + 1))
+      fi
+      rm -rf "$pickset"
+    fi
+  fi
+fi
+
 echo
 echo "── 读数：$pass 条通过，$fail 条不过"
 if [ "$fail" -ne 0 ]; then

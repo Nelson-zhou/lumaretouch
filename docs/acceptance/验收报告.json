@@ -1,7 +1,7 @@
 {
  "schema": "lrt.acceptance-report.v1",
- "at": "2026-10-19T01:17:55",
- "product_version": "1.5.0",
+ "at": "2026-10-19T04:05:35",
+ "product_version": "1.6.0",
  "mode": "run（这一遍重跑了 pytest）",
  "cases_sha256": "c2fca495b90e3aa7",
  "pytest_rc": 0,
@@ -12,8 +12,8 @@
    "manual_pending": 1
   },
   "P1": {
-   "passed": 7,
-   "uncovered": 9,
+   "passed": 8,
+   "uncovered": 8,
    "manual_pending": 1
   },
   "P2": {
@@ -672,10 +672,12 @@
    "phase": "P1",
    "module": "selection",
    "title": "挑图仅作建议",
-   "status": "uncovered",
+   "status": "passed",
    "then": "建议可覆盖且原图不自动删除；近似组和判定原因可见",
-   "tests": [],
-   "note": "不做：AI 挑图需要一个我们没有的分类器。用阈值规则冒充「AI 判定」正是 DoD §2 明令禁止的事，宁可留未覆盖。"
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_pick_suggestions_are_explainable_overridable_and_never_touch_the_source"
+   ],
+   "note": "已交付为**本地确定性度量**（ADR-0012）：dHash 近似组 + 清晰度两格（绝对高频能量与相对自身对比度）+ luma 裁切占比 + FaceMesh 眼睑睁开比，每条原因带 method/数值/阈值可复算。不做的是「训练出来的挑图分类器」——本包没有那种权重，也不冒充（DoD §2）。建议恒为可覆盖的旁注：不进工程文件、不进撤销栈、不删除不移动任何原片。"
   },
   {
    "id": "BACKGROUND-001",
@@ -999,15 +1001,15 @@
  ],
  "perf": {
   "schema": "lrt.acceptance-perf.v1",
-  "at": "2026-10-19T01:12:33",
+  "at": "2026-10-19T04:00:00",
   "samples": 120,
   "proxy_max_px": "product(PROXY_PIXELS)",
   "env": {
-   "engine_version": "1.5.0",
+   "engine_version": "1.6.0",
    "protocol": 1,
    "device": "cuda",
    "cuda": true,
-   "warm_ms": 625.81,
+   "warm_ms": 636.92,
    "runtime": {
     "python": "3.12.15",
     "numpy": "2.5.2",
@@ -1030,33 +1032,33 @@
     "draft": null
    },
    "import_jpg": {
-    "decode_ms": 6.68,
-    "shm_ms": 0.38,
-    "attach_ms": 2.21,
-    "first_frame_ms": 11.13,
-    "first_frame_filter_ms": 9.38,
-    "first_frame_bands_ms": 8.99,
-    "import_ms": 40.86,
+    "decode_ms": 6.79,
+    "shm_ms": 0.29,
+    "attach_ms": 2.2,
+    "first_frame_ms": 15.9,
+    "first_frame_filter_ms": 13.82,
+    "first_frame_bands_ms": 13.37,
+    "import_ms": 46.07,
     "preview_ms": null,
-    "open_ms": 1.17,
+    "open_ms": 1.29,
     "orient_ms": 0.0,
-    "scale_ms": 19.29,
-    "total_ms": 27.14,
-    "sum_of_stages_ms": 40.86
+    "scale_ms": 19.61,
+    "total_ms": 27.69,
+    "sum_of_stages_ms": 46.08
    },
    "import_dng": {
-    "decode_ms": 104.43,
-    "shm_ms": 26.72,
+    "decode_ms": 96.3,
+    "shm_ms": 32.76,
     "attach_ms": 1.32,
-    "first_frame_ms": 10.81,
-    "first_frame_filter_ms": 9.17,
-    "first_frame_bands_ms": 8.77,
-    "import_ms": 175.72,
+    "first_frame_ms": 14.55,
+    "first_frame_filter_ms": 12.83,
+    "first_frame_bands_ms": 12.35,
+    "import_ms": 176.6,
     "preview_ms": null,
-    "open_ms": 1.86,
+    "open_ms": 2.0,
     "orient_ms": 0.0,
-    "scale_ms": 30.58,
-    "total_ms": 136.88,
+    "scale_ms": 29.67,
+    "total_ms": 127.97,
     "raw": {
      "camera": "LumaRetouch TestCam 1.0",
      "bits": 16,
@@ -1084,97 +1086,97 @@
      "source": "self_dng",
      "half_size": false,
      "used_preview": false,
-     "container_ms": 1.86,
+     "container_ms": 2.0,
      "pixels_ms": 2.02,
-     "render_ms": 102.41,
-     "encode_ms": 30.58,
+     "render_ms": 94.28,
+     "encode_ms": 29.67,
      "notes": [
       "AsShotNeutral=[0.4726, 1.0, 0.9233]"
      ]
     },
     "shape": {
      "proxy": [
-      928,
-      616
+      896,
+      632
      ],
      "source": [
-      3000,
+      2813,
       2000
      ]
     }
    },
    "import_dng_second": {
-    "decode_ms": 90.33,
-    "shm_ms": 0.5,
-    "attach_ms": 3.96,
-    "first_frame_ms": 19.85,
-    "first_frame_filter_ms": 18.03,
-    "first_frame_bands_ms": 17.45,
-    "import_ms": 145.57,
+    "decode_ms": 82.63,
+    "shm_ms": 0.52,
+    "attach_ms": 1.37,
+    "first_frame_ms": 14.59,
+    "first_frame_filter_ms": 12.84,
+    "first_frame_bands_ms": 12.37,
+    "import_ms": 129.07,
     "preview_ms": null,
-    "open_ms": 1.79,
+    "open_ms": 1.93,
     "orient_ms": 0.0,
-    "scale_ms": 29.14,
-    "total_ms": 121.26
+    "scale_ms": 28.02,
+    "total_ms": 112.59
    },
    "thumbnail_ms": {
     "n": 25,
-    "p50": 6.48,
-    "p95": 8.97,
-    "p99": 55.398,
-    "max": 69.88,
-    "mean": 9.151
+    "p50": 6.77,
+    "p95": 10.992,
+    "p99": 51.014,
+    "max": 63.64,
+    "mean": 9.64
    },
    "thumbnail_batch": {
     "count": 25,
     "failed": 0,
     "dropped": 0,
     "edge": 160,
-    "wall_ms": 243.0,
-    "channel_kb": 88.7
+    "wall_ms": 255.4,
+    "channel_kb": 88.9
    },
    "drag_render_ms": {
     "n": 120,
-    "p50": 0.17,
-    "p95": 0.211,
-    "p99": 0.26,
-    "max": 0.27,
-    "mean": 0.178
+    "p50": 0.16,
+    "p95": 0.25,
+    "p99": 0.336,
+    "max": 0.39,
+    "mean": 0.18
    },
    "drag_filter_cached_ratio": 1.0,
    "landmark_backend": "mediapipe",
    "num_landmarks": 478,
    "precompute_ms": {
     "build_ms": 0.12,
-    "infer_ms": 459.81,
-    "total_ms": 462.19
+    "infer_ms": 476.16,
+    "total_ms": 479.0
    },
-   "deform_build_ms": 56.78,
+   "deform_build_ms": 66.07,
    "deform_apply_ms": {
     "n": 60,
     "p50": 1.08,
-    "p95": 1.11,
-    "p99": 1.128,
-    "max": 1.14,
-    "mean": 1.084
+    "p95": 1.13,
+    "p99": 1.196,
+    "max": 1.22,
+    "mean": 1.087
    },
    "deform_builds_during_drag": 0,
    "export_per_image_ms": {
     "n": 6,
-    "p50": 49.775,
-    "p95": 52.062,
-    "p99": 52.437,
-    "max": 52.53,
-    "mean": 50.15
+    "p50": 67.215,
+    "p95": 68.963,
+    "p99": 69.056,
+    "max": 69.08,
+    "mean": 67.35
    },
    "export_progress_events": 6,
-   "export_total_ms": 360.5,
+   "export_total_ms": 451.8,
    "export_tile": 512,
    "export_failed": 0
   },
   "notes": [
-   "RAW 那一臂是合成 DNG（夹具上采样后写 CFA，源幅 3000×2000）：尺寸/位深/排阵的形状对，传感器噪声结构不对——这一组数能比“解码与下采样随像素的标度”，不能当作真机色彩质量结论。"
+   "RAW 那一臂是合成 DNG（夹具上采样后写 CFA，源幅 2813×2000）：尺寸/位深/排阵的形状对，传感器噪声结构不对——这一组数能比“解码与下采样随像素的标度”，不能当作真机色彩质量结论。"
   ]
  },
- "junit": "/tmp/lrt-acceptance-junit.xml"
+ "junit": "/tmp/j-160c.xml"
 }

@@ -53,7 +53,7 @@ echo "✓ 已装 $n 个引擎文件，全部与暂存内容逐字节一致"
 # 支持多个标记（一个包同时接了两个里程碑时，只卡一个会漏）：不传就走上一轮的默认值。
 # 默认值必须每轮往上推：留着几轮前的标记，这条检查就只是好看——旧包也一定含它。
 markers=("$@")
-if [ ${#markers[@]} -eq 0 ]; then markers=(refilter_frames all_landmarks _deform_defer _deform_default deform_scopes); fi
+if [ ${#markers[@]} -eq 0 ]; then markers=(all_landmarks _deform_default deform_scopes _pick_loop pick_sensitivities); fi
 for marker in "${markers[@]}"; do
   if grep -rq "$marker" "$installed"; then
     echo "✓ 装机代码含本轮特征标记 '$marker'"
@@ -83,10 +83,17 @@ echo "✓ /usr/bin/lumaretouch 与包内逐字节一致"
 # env 名、日志前缀都算）：前端那份 JS/CSS 资源在壳里是压缩进二进制的，TS 里写的字面量
 # 在壳里搜不到——M5-c 拿 M0_RELEASE 当标记就报了个假红（壳确实是新的，sha256 已逐字节
 # 对上，只是那条字符串本来就不以明文形态存在）。
-ui_marker=${UI_MARKER:-LRT_AUTO_FACE}
-if [ "$(grep -ac "$ui_marker" /usr/bin/lumaretouch)" -gt 0 ]; then
-  echo "✓ 装机壳含本轮特征标记 '$ui_marker'"
-else
-  echo "  × 装机壳里没有 '$ui_marker'：那是上一轮的 UI（用 UI_MARKER=... 传这一轮的标记）"
-  exit 1
-fi
+# 名单而不是单格：1.6.0 那一轮 m5 第 7 臂撞上的正是"壳里没有 LRT_AUTO_PICK 这一格"
+# （前端 M0Env 声明了、宿主 json! 少返回一个键，TS 与 cargo 两边全绿而那条臂静默不点火）。
+# 装机壳里搜得到这个 env 名，才说明宿主桥真的带着这一格进了包。
+ui_markers=(${UI_MARKER:-LRT_AUTO_FACE LRT_AUTO_PICK})
+ui_bad=0
+for ui_marker in "${ui_markers[@]}"; do
+  if [ "$(grep -ac "$ui_marker" /usr/bin/lumaretouch)" -gt 0 ]; then
+    echo "✓ 装机壳含本轮特征标记 '$ui_marker'"
+  else
+    echo "  × 装机壳里没有 '$ui_marker'：那是上一轮的 UI（用 UI_MARKER='...' 传这一轮的标记）"
+    ui_bad=1
+  fi
+done
+[ "$ui_bad" = 0 ] || exit 1
