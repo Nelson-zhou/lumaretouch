@@ -5,3 +5,23 @@
 # 用途：M1-3a 真图解码/代理档/数值保真回归；M1-3b 的人脸检测回归需另备真实正脸
 782436636ada5c386c2424ccf67ad95ee5c8f5598ccbe8b5f8f4776f2220483a  portrait-1024x1280.jpg
 9e1b8e8caa338392ca47758c2ce91bfd0a1f9fcc1dfe610ae6b3c3a38a5be9af  portrait-1024x1280.png
+# 来源：packaging/make-test-portrait.py 程序化生成——非真实人物，无第三方许可，无隐私
+# 种子 SEED=20261016；下迹 sha256 是**变更审计线索**，不是跨环境可复现承诺：
+#   JPEG/PNG 字节取决于 Pillow/libjpeg-turbo 构建，重跑得到不同哈希属正常，
+#   要换资产请连本文件一起重生成并同步更新测试（engine/tests/test_decode.py 会比对哈希）。
+# 用途：M1-3a 真图解码/代理档/数值保真回归；M1-3b 的人脸检测回归需另备真实正脸
+# PORTRAIT-009 变体（露齿/眼镜/深肤色）：同一段代码的参数分支，因此同一批拓扑；
+#   牙齿与口腔的位置是**画上去的**，所以 test_enhance 能拿它当接地真相。
+a08a831102f2a7601134c0b5485597e182937c396758fa8a1bc67f03c006ecc5  portrait-deep-skin-smile-1024x1280.jpg
+dedffe9effd18aec4ef2e1fbaa87881fd6b50d28f3936f1084111ae08579d697  portrait-glasses-smile-1024x1280.jpg
+41d2200a9de56de6b553e95064834724201199441a0fb05e7a2f4d5da8cd8d40  portrait-smile-1024x1280.jpg
+# 来源：packaging/make-test-portrait.py 程序化生成——非真实人物，无第三方许可，无隐私
+# 种子 SEED=20261016；下迹 sha256 是**变更审计线索**，不是跨环境可复现承诺：
+#   JPEG/PNG 字节取决于 Pillow/libjpeg-turbo 构建，重跑得到不同哈希属正常，
+#   要换资产请连本文件一起重生成并同步更新测试（engine/tests/test_decode.py 会比对哈希）。
+# 用途：M1-3a 真图解码/代理档/数值保真回归；M1-3b 的人脸检测回归需另备真实正脸
+# PORTRAIT-009 变体（露齿/眼镜/深肤色）：同一段代码的参数分支，因此同一批拓扑；
+#   牙齿与口腔的位置是**画上去的**，所以 test_enhance 能拿它当接地真相。
+c6e704ff0dd9b6bb796a2f262d12588901f1e920a2b20a203da218c58716819d  portrait-deep-skin-smile-1024x1280.jpg
+e3042c344ce0793c50e3bc6b1b4b3e1aeea3ad51d1024615a7797aa9b0982718  portrait-glasses-smile-1024x1280.jpg
+1f23723982f407709ddc5460f0db96e0e12f440c7db6bdd9181a86d0b26bfd59  portrait-smile-1024x1280.jpg

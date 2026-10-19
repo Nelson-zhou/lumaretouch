@@ -40,6 +40,7 @@ try:
 except Exception:                    # 与 ops.* 同一约定：没装 torch 也要能 import
     torch = None
 
+from .ops import enhance as ENH
 from .ops.deform import (analytic_frontal_landmarks, controls, face_frame,
                          support_radii, tps_field_from_state, tps_solve)
 from .ops.grade import GradeError, check_params
@@ -126,6 +127,11 @@ class ExportSpec:
     # 而“屏上只动了皮肤、文件里全图都动了”是比“没做局部调色”难查得多的一件事。
     grade_scope: str = "all"
     grade_mask: np.ndarray | None = None
+    # PORTRAIT-009：眼牙局部增强的三个子功能值。这里**只带参数**，不带掩膜场：
+    # 场是关键点的派生物，导出前按导出尺寸重画一份（与形变重解场同一条路）。
+    # 不拿预览档那张小掩膜放大——放大一份"身份"掩膜等于把眼睛涂到眉毛上，而且
+    # 内容门的相对统计会跟着插值得到的假边一起漂。
+    enhance: dict = field(default_factory=dict)
     # P0 全局曝光/白平衡：(ev, temperature_shift, tint_shift)。导出走的是同一个
     # PreviewPipeline，所以它与预览是同一份算式而不是“第二次实现”——这正是
     # “所见即所出”能当验收口径的原因。reference_k 缺省用层的默认（D65）。
@@ -155,6 +161,17 @@ class ExportSpec:
             check_params(self.grade[0], self.grade[1], self.grade[2], amount=self.grade[3])
         except GradeError as e:
             raise ExportError(f"肤色定向参数非法：{e}") from None
+        # PORTRAIT-009：参数先过唯一的校验口径；点火而没带关键点就是没有来源。
+        # 不许退化成"那就不增强"：用户按了牙齿美白而出片里没有，事件必须说清楚为什么。
+        if self.enhance:
+            try:
+                self.enhance = ENH.check_amounts(self.enhance)
+            except ENH.EnhanceError as e:
+                raise ExportError(f"眼牙增强参数非法：{e}") from None
+        if (any(float(v) != 0.0 for v in (self.enhance or {}).values())
+                and self.landmarks is None):
+            raise ExportError("眼牙增强导出需要关键点：这一层的掩膜是从 478 点重画出来的，"
+                              "没有关键点就没有这一层（不拿上一张脸的场来凑，也不拿默认矩形猜）")
         if self.grade_scope not in GRADE_SCOPES:
             raise ExportError(f"未知调色作用域：{self.grade_scope!r}（可用 {', '.join(GRADE_SCOPES)}）")
         # 局部作用域 + 点火的定向 = 必须带区域。拿不到区域就把整层放下（命令层干的），
@@ -413,12 +430,29 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
         # 说清楚：这一对组合本轮没做，不是默默降级成不分通道。
         raise ExportError("分通道导出还不接受满幅消除笔底图（掩膜装载需要原始像素）："
                           "请分开通道与消除笔，或等这条通路补齐")
+    # 眼牙增强：在**整幅坐标**上把掩膜画一次，然后逐块切给自己那一片（与 grade_mask
+    # 的先例同一条），而不是每块各自从关键点重画——两块交界处的软边必须与整幅一致，
+    # 而每块重算会把羽化截断在块边界上（那会在出片里留下一条笔直的眼白接缝）。
+    # 排在这里而不是最前面：内容门判的是“这份底图上的组”——消除笔先把口腔里的
+    # 异物掉掉，那一组的均值就变了，与预览里“先修完再挂眼牙层”是同一条链。
+    enh_reg = None
+    enh_weight = None
+    enhance_ms = 0.0
+    if any(float(vv) != 0.0 for vv in (spec.enhance or {}).values()):
+        t_e = time.perf_counter()
+        enh_reg = ENH.geometry(spec.landmarks, h, w)
+        ey0, ex0, eeh, eew = enh_reg.window
+        # 只把窗口那一片换成 float：整幅 astype 会在 24 MP 上多占 72 MB，而这一层用不着
+        e_win = (base_f[ey0:ey0 + eeh, ex0:ex0 + eew] if base_f is not None
+                 else src_u8[ey0:ey0 + eeh, ex0:ex0 + eew].astype(np.float32) / 255.0)
+        enh_weight, _enh_facts = ENH.refine(enh_reg, np.ascontiguousarray(e_win))
+        enhance_ms = (time.perf_counter() - t_e) * 1000.0
     scale = int(spec.scale)
     plan = UpscalePlan(h, w, scale)          # 表只算一次，每块取自己那一段
     out_h, out_w = plan.out_h, plan.out_w
     out = np.zeros((out_h, out_w, 3), np.uint8)
     seg = {"filter": 0.0, "light": 0.0, "deform": 0.0, "exposure": 0.0,
-           "lut": 0.0, "grade": 0.0}
+           "lut": 0.0, "grade": 0.0, "enhance": 0.0}
     upscale_ms = 0.0
     # 三段非算子开销。为什么不只记算子：上一版只记五个算子段，跑靶量到"分段合计只占
     # 整帧 27%"——那 73% 不知道去哪了（真因是每块一次 empty_cache，把分配器缓存全
@@ -446,6 +480,12 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
                 pipe.set_light_params(spec.light_exposure, spec.light_radius)
         if delta is not None and spec.deform_amounts:
             pipe.adopt_deform_field(delta[:, cy0:cy1, cx0:cx1].contiguous().to(device))
+        if enh_reg is not None:
+            # 先挂场再提交参数：set_enhance 只改三个数，而 has_enhance() 要同时看到场，
+            # 反过来写会有一瞬"参数点火而场上没有额度"——那一瞬里 lit 报的是假话
+            pipe.set_enhance_field(enh_reg.window, enh_weight, origin=(cy0, cx0))
+            if spec.enhance:
+                pipe.set_enhance(spec.enhance)
         if tuple(spec.exposure) != (0.0, 0.0, 0.0):
             # 插在 cube/grade 之前提交：与预览链里 apply_exposure 的位置一致（lut 前）。
             # 提交顺位不影响数值（链序在 render 里定死），但保持“按链序挂图层”这个习惯，
@@ -518,6 +558,10 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
         "tile": int(tile), "tiles": len(rects), "margin_px": int(margin),
         "deform_peak_px": round(peak, 3), "total_ms": round(ms, 1),
         "field_ms": round(field_ms, 1),
+        # 这一层的"重画掩膜"成本单独报：它与形变解场是两种一次性的钱，混在
+        # field_ms 里就看不出该优化谁（导出账单里每一段都要能归因，否则只是把没说的话当作没事）
+        "enhance_field_ms": round(enhance_ms, 1),
+        "enhance": dict(spec.enhance or {}),
         "per_tile_ms": round(ms / max(len(rects), 1), 2),
         "seg_ms": {**{k: round(v, 2) for k, v in seg.items()},
                    **{k: round(v, 2) for k, v in io.items()}},

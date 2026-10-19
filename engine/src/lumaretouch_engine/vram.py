@@ -31,6 +31,7 @@ from .ops.inpaint import crop_apply_t, hole_extent, inpaint_t, levels_for, mask_
 from .ops.deform import (KINDS, analytic_frontal_landmarks, check_amounts,
                          identity_grid, unit_field, warp_t)
 from .ops.light import dodge_burn_t, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
+from .ops import enhance as ENH
 from .ops.grade import (DH_LIMIT, DS_LIMIT, DV_LIMIT, check_params, grade_t)
 from .ops.geometry import (MAX_ANGLE as GEOM_ANGLE_LIMIT, check as geometry_check,
                           crop_rotate_t, is_identity as geometry_identity,
@@ -205,6 +206,27 @@ class PreviewPipeline:
         self.grade_mask: "np.ndarray | None" = None     # (H,W) uint8，代理帧坐标的画笔覆盖度
         self._grade_mask_gpu = None                     # (1,1,H,W) float，brush 时才常驻
         self.last_grade_ms: float = 0.0
+        # PORTRAIT-009：眼牙局部增强（眼白 / 虹膜 / 牙齿，三个子功能独立启停）。
+        # 它持有的是**权重场**（不是参数）：几何 ∩ 内容门在挂层时算一次，每帧只做逐点乘加。
+        # 为什么不在每帧算门：内容门要算池均值，那是一次 D2H 同步，而拖滑块期间每帧一次
+        # 就是断帧的来源（与形变的“单位场只解一次、拖滑块只当系数”同一条理由）。
+        # 判据取**源片**那份颜色而不是屏幕上那份：这一层找的是“这里是不是眼白/牙齿”
+        # （身份），身份必须在未上色的像素上判，否则一张橙色 LUT 会把嘴唇认成牙齿
+        # （与肤色定向“所见即所调”的口径相反，差别写在 ops/enhance.py 头部）。
+        self.enhance_amounts: dict = {k: 0.0 for k in ENH.SUBS}
+        self.enhance_field = None        # (3,fh,fw) float32 [0,1]，窗口那一片的权重原件
+        self.enhance_gpu = None          # 同一份的上卡副本
+        self.enhance_window = None       # 画布坐标 (y0,x0,fh,fw)（报出去用）
+        self.enhance_local = None        # 本会话坐标 (ly0,lx0,lh,lw)（每帧切片用）
+        self.enhance_facts: dict = {}    # 每子功能的一手事实：几何 px、门后 px、拒绝原因
+        # 画这张场用的那份关键点的指纹。它只回答一件事："几何有没有变"——滑块动而几何
+        # 没动时不许重画（重画是每事件一次栅格化 + 内容门 + 一次 D2H，实测 12 ms/次，
+        # 而拖动期间真正要付的只有窗口内那一次逐点乘加，实测 1 ms 级）。与形变层同一
+        # 分工：build 认几何，set 认系数。进程内稳定即可（跨进程要重画，本来也是）。
+        self.enhance_lm_sig: int | None = None
+        self.enhance_info: dict = {}     # 几何读数（开口度、虹膜半径、星形校验结果）
+        self.last_enhance_ms: float = 0.0
+        self.enhance_build_ms: float = 0.0
         # P0：全局曝光与白平衡层（lnx.exposure / lnx.white_balance）。与定向层同构：
         # 状态就是三个数 + 一个参考白，不持有任何张量，所以它既不参缓存键也不随设备重挂。
         # 中性默认 (0,0,0)：这一层的 identity 必须是逐字节恒等（ADR-0003 定的容差 0），
@@ -278,8 +300,24 @@ class PreviewPipeline:
         self.last_repair_ms = 0.0
         self._reset_light()
         self._reset_deform()
+        self._reset_enhance()
         if self.device.type != "cpu":
             torch.cuda.synchronize(self.device)
+
+    def _reset_enhance(self) -> None:
+        """换图/换代理档时清增强层：权重场画在**这一档画布**的坐标上，对下一张图没有意义。
+
+        只放场、不放参数：参数（三个数）是用户意图，属于文档状态，由命令层与工程档管；
+        场是这份意图在这张图上的落地物，可以随时从关键点重算。
+        """
+        self.enhance_field = None
+        self.enhance_gpu = None
+        self.enhance_window = None
+        self.enhance_local = None
+        self.enhance_facts = {}
+        self.enhance_info = {}
+        self.enhance_build_ms = 0.0
+        self.last_enhance_ms = 0.0
 
     def _reset_deform(self) -> None:
         """换图时清形变层：单位场是从这张图的关键点解出来的，对下一张图没有意义。"""
@@ -416,8 +454,11 @@ class PreviewPipeline:
         # P0：曝光/白平衡插在 lut **之前**（它是场景线性域的输入变换，表是输出变换）。
         # 裁剪/旋转盖在所有像素层之后（链的最外尾）：笔迹与形变坐标都属于**未剪**的那张图，
         # 把它们先剪再算会让同一支消除笔在剪后落在别处——次序反过来就是另一件事了。
+        # PORTRAIT-009：眼牙增强夹在形变之后、曝光之前。两个理由都是硬的，写在
+        # ops/enhance.py 头部的“链上位置”那一节（形变之前做=掩膜跟着像素一起搬；
+        # 输出变换之前做=局部修容层在调整图层下面，是工业流程而不是随手选）。
         return self.apply_geometry(self.apply_background(self.apply_grade(self.apply_lut(
-            self.apply_exposure(self.apply_deform(out))))))
+            self.apply_exposure(self.apply_enhance(self.apply_deform(out)))))))
 
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:
@@ -1418,6 +1459,172 @@ class PreviewPipeline:
         if self._grade_mask_gpu is None:
             return 0
         return int(self._grade_mask_gpu.numel() * self._grade_mask_gpu.element_size())
+
+    # ---- PORTRAIT-009：眼牙局部增强 ---------------------------------------
+    def has_enhance(self) -> bool:
+        """这一层到底有没有活：三个数至少一个非零，而权重场里确实有额度。
+
+        只看参数不够：“三个数都是 0.4 而掩膜是空的”（闭嘴样本的牙齿那一格、两只眼都被
+        几何校验拒了的侧脸）是一层没点火的层。让 `lit=true` 与画面互相打脸，就是面板替
+        引擎说谎——所以判据必须把场也算进来（`grade` 那层没有这个问题：它的场是用户画的）。
+        """
+        if not any(float(v) != 0.0 for v in self.enhance_amounts.values()):
+            return False
+        return bool(self.enhance_gpu is not None and float(self.enhance_gpu.max()) > 0.0)
+
+    def build_enhance(self, landmarks) -> dict:
+        """从 478 点重画这一层：几何栅格 + 内容门，然后上一次卡。
+
+        挂层成本一次性报出去（`enhance_build_ms`）：它与每帧的 `enhance_ms` 是两种钱，
+        混在一起就看不出“拖滑块时到底有没有重算掩膜”这件事。
+        """
+        if self.src_f32 is None:
+            raise RuntimeError("build_enhance 需要先 load_rgb_u8/load_rgb_f32")
+        t0 = time.perf_counter()
+        reg = ENH.geometry(landmarks, self.h, self.w)
+        y0, x0, fh, fw = reg.window
+        # 只把窗口那一片搬下来（不是整幅）：内容门要的只是这一块，而整幅 D2H 在
+        # 产品档上是 12 MB——那笔钱没有理由付。
+        win = (self.src_f32[:, :, y0:y0 + fh, x0:x0 + fw]
+               .permute(0, 2, 3, 1).to("cpu", torch.float32).numpy()[0])
+        weight, facts = ENH.refine(reg, win)
+        self.enhance_field = weight
+        self.enhance_gpu = torch.as_tensor(weight, device=self.device)
+        self.enhance_lm_sig = self._lm_fingerprint(landmarks)
+        self.enhance_window = tuple(reg.window)
+        self.enhance_local = tuple(reg.window)     # 会话原点就是画布原点
+        self.enhance_facts = facts
+        self.enhance_info = reg.info
+        self.enhance_build_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+        return self._enhance_payload(layer_recomputed=True, build_ms=self.enhance_build_ms)
+
+    def set_enhance_field(self, window, weight, *, origin=(0, 0)) -> dict:
+        """挂一份**已经算好的**权重场。导出分块走这条路（与 grade_mask 逐块切同一条先例）。
+
+        `window` 是画布坐标 (y0,x0,fh,fw)，`origin` 是本会话那块网格左上角的画布坐标：
+        导出给每个块新建一份 PreviewPipeline，它的 (0,0) 不是画布的 (0,0)。不报原点就会
+        把整幅的掩膜往块里贴，而块里的眼睛会被画到下巴上——那不是“没效果”，是**错效果**。
+        """
+        y0, x0, fh, fw = (int(v) for v in window)
+        arr = np.asarray(weight, dtype=np.float32)
+        if arr.shape != (3, fh, fw):
+            raise ValueError(f"增强权重场形状 {arr.shape} 与窗口 {(3, fh, fw)} 不合")
+        if not np.isfinite(arr).all():
+            raise ValueError("增强权重场含非有限值，整层拒绝")
+        oy, ox = int(origin[0]), int(origin[1])
+        ly0, lx0 = y0 - oy, x0 - ox
+        # 与本会话求交：完全在块外就整层不挂（该块逐字节与原片同），而不是贴一个空场
+        iy0, ix0 = max(0, ly0), max(0, lx0)
+        iy1, ix1 = min(self.h, ly0 + fh), min(self.w, lx0 + fw)
+        if iy1 <= iy0 or ix1 <= ix0:
+            self.clear_enhance_field()
+            return self._enhance_payload(layer_recomputed=False)
+        sub = arr[:, iy0 - ly0:iy1 - ly0, ix0 - lx0:ix1 - lx0]
+        self.enhance_field = np.ascontiguousarray(sub)
+        self.enhance_gpu = torch.as_tensor(self.enhance_field, device=self.device)
+        self.enhance_local = (iy0, ix0, iy1 - iy0, ix1 - ix0)
+        # 画布坐标只在这里报“这一块实际盖到了哪”：导出事件的账要对得上块，而不是对得上原图
+        self.enhance_window = (iy0 + oy, ix0 + ox, iy1 - iy0, ix1 - ix0)
+        self.enhance_build_ms = 0.0
+        return self._enhance_payload(layer_recomputed=True)
+
+    @staticmethod
+    def _lm_fingerprint(landmarks) -> int:
+        """关键点的进程内指纹（`hash(bytes)` 在同一次解释器里稳定，跨进程不稳定——
+        而跨进程本来就要重画，所以这个性质正好）。"""
+        arr = np.ascontiguousarray(np.asarray(landmarks, dtype=np.float32))
+        return hash(arr.tobytes())
+
+    def enhance_needs_rebuild(self, landmarks) -> bool:
+        """这张场还能不能复用：没挂过、或关键点变了，就得重画。"""
+        return self.enhance_lm_sig != self._lm_fingerprint(landmarks)
+
+    def clear_enhance_field(self) -> None:
+        """放下权重场（参数不动）。没场的层就是没点火，`has_enhance()` 会如实说 false。"""
+        self.enhance_field = None
+        self.enhance_gpu = None
+        self.enhance_window = None
+        self.enhance_local = None
+        self.enhance_lm_sig = None      # 场放下了，指纹也没了：下一次必须重画
+
+    def set_enhance(self, amounts) -> dict:
+        """提交三个数。先全量校验，后才写入——被拒不留半截状态（与各层 setter 同规）。"""
+        self.enhance_amounts = ENH.check_amounts(amounts)
+        return self._enhance_payload(layer_recomputed=False)
+
+    def clear_enhance(self) -> dict:
+        """整层放下：三个数回零并把常驻场放掉。
+
+        与 `clear_grade` 的分工不同处要写出来：定向层的区域是用户拿笔画的，归零不该抹笔迹；
+        而这一层的场是从关键点重算的**派生物**，没有“用户画的东西”要保，所以留着它只会
+        占一块没人能看见的常驻显存（`lit=false` 而 `bytes_enhance>0` 就是那种打脸）。
+        要重新点火走 build_enhance（关键点还在，重算几百微秒）。
+        """
+        self.enhance_amounts = {k: 0.0 for k in ENH.SUBS}
+        self.clear_enhance_field()
+        self.enhance_facts = {}
+        self.enhance_info = {}
+        self.last_enhance_ms = 0.0
+        self.enhance_build_ms = 0.0
+        return self._enhance_payload(layer_recomputed=False)
+
+    def apply_enhance(self, t):
+        """每帧只走这里。没活就直接把张量递回去（一个算子也不跑，连混合都不做）。"""
+        self.last_enhance_ms = 0.0
+        if not self.has_enhance():
+            return t
+        t0 = time.perf_counter()
+        ly0, lx0, lh, lw = self.enhance_local
+        sub = t[:, :, ly0:ly0 + lh, lx0:lx0 + lw]
+        eff = ENH.enhance_t(sub, self.enhance_gpu, self.enhance_amounts)
+        # 写回走 clone + 切片赋值：掩膜外的像素因此是**复制**过去的而不是混合出来的，
+        # “掩膜外逐字节不变”这条承诺不依赖浮点巧合（与 apply_grade 用 mix_masked 等价，
+        # 但这里窗口外那些像素连混合式都不该进——它们离掩膜有几百像素远）
+        out = t.clone()
+        out[:, :, ly0:ly0 + lh, lx0:lx0 + lw] = eff
+        if self.device.type != "cpu":
+            torch.cuda.synchronize(self.device)
+        self.last_enhance_ms = (time.perf_counter() - t0) * 1000.0
+        return out
+
+    def enhance_resident_bytes(self) -> int:
+        """本层账单：窗口那一片 float32 权重场。没挂就是 0（不是“查过没有”的 0）。"""
+        n = 0
+        if self.enhance_gpu is not None:
+            n += int(self.enhance_gpu.numel() * self.enhance_gpu.element_size())
+        if self.enhance_field is not None:
+            n += int(self.enhance_field.nbytes)
+        return n
+
+    def _enhance_payload(self, *, layer_recomputed: bool, build_ms: float | None = None) -> dict:
+        """enhance_done 的图层字段只在这里组装一次（set/build/clear/挂场/放场共用一份形状）。
+
+        三个子功能的“点火事实”必须随事件走：每个子层的额度像素数与被拦原因。闭嘴样本的
+        牙齿那一格、被几何校验拒掉的侧脸，UI 要能**看到**而不是**推断**“那一格没活”——
+        推断出来的那一句在换图之后就是说谎。
+        """
+        a = dict(self.enhance_amounts)
+        subs = list(ENH.SUBS)
+        facts = self.enhance_facts or {}
+        return {
+            "enhance_amounts": {k: float(a[k]) for k in subs},
+            "enhance_subs": subs,
+            "enhance_limit": float(ENH.AMOUNT_LIMIT),
+            "enhance_set": bool(any(float(a[k]) != 0.0 for k in subs)),
+            "enhance_lit": bool(self.has_enhance()),
+            "enhance_built": bool(self.enhance_gpu is not None),
+            "enhance_gated_px": {k: int((facts.get(k) or {}).get("gated_px", 0)) for k in subs},
+            "enhance_geom_px": {k: int((facts.get(k) or {}).get("geom_px", 0)) for k in subs},
+            "enhance_reason": {k: (facts.get(k) or {}).get("reason") for k in subs},
+            "enhance_mouth": dict((self.enhance_info or {}).get("mouth") or {}),
+            "enhance_eyes": [dict(e) for e in ((self.enhance_info or {}).get("eyes") or [])],
+            "enhance_window": list(self.enhance_window) if self.enhance_window else None,
+            "bytes_enhance": int(self.enhance_resident_bytes()),
+            "enhance_ms": round(self.last_enhance_ms, 2),
+            "enhance_build_ms": round(self.enhance_build_ms if build_ms is None else build_ms, 2),
+            "device": str(self.device),
+            "layer_recomputed": bool(layer_recomputed),
+        }
 
     # ---- M6：换底层 ----------------------------------------------------
     def has_background(self) -> bool:

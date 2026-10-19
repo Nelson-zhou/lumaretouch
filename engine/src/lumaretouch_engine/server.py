@@ -24,6 +24,7 @@ from .vram import DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_
 from .ops.light import DB_EXPOSURE_LIMIT, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
 from .ops.deform import KINDS, KIND_LIMIT, DeformGeometryError, check_amounts
 from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
+from .ops import enhance as ENH
 from .ops.grade import DH_LIMIT, DS_LIMIT, DV_LIMIT, GradeError, check_params
 from .ops.presets import PRESETS, PresetError, get_preset, preset_grade, preset_lut
 from .ops.upscale import SCALES
@@ -215,6 +216,14 @@ class Engine:
         # 「命令收下而画面不动」的形状，所以作废必须一起作，不留半截。
         self._grade_scope = "all"
         self._grade_mask = None
+        # PORTRAIT-009 眼牙增强：三个子功能的值 + 会话里有没有那份场 + **它属于哪一张脸**。
+        # `box` 这一格不是装饰：这一层的掩膜是从**那一张**的 478 点画出来的。换人选时若
+        # 不认脸盒，就会把 A 的美白静默涂到 B 身上——那是 SCOPE-001 拦的同一件事，
+        # 而画面确实"有人在动"，看不出来。
+        # `_enhance_defer` 是 CORE-001 那一课的直接产物：关键点不随工程文件走，重开那一刻
+        # 必然出现"用户有一层美白而场还没画出来"，没有这一格就会像上一版那样整层归零。
+        self._enhance = dict(amounts={k: 0.0 for k in ENH.SUBS}, built=False, box=None)
+        self._enhance_defer = False
         # P0 全局曝光/白平衡：会话侧同样只存那三个数（加一个参考白）。它必须与
         # _grade 走完全一样的生命周期：初始化、换设备重挂、快照、状态上报——漏一个
         # 就是“宿主以为还写着 0.5 EV，引擎里其实是 0”那种两边错配。
@@ -350,6 +359,11 @@ class Engine:
               # 名单从引擎走：上一版前端自己抄了一份三元组，于是"引擎加了 kind 而
               # 屏幕上没有那一格控件"是可能发生的（而且 TS 编译期一句都不报）。
               "deform_kinds": list(KINDS),
+              # 眼牙增强（PORTRAIT-009）的三个子功能名单与值域同样由引擎说：前端自己
+              # 抄一份"眼白/虹膜/牙齿"就是下一轮加一格时漏改的那一处（而且 TS 一句不报）
+              "enhance_subs": list(ENH.SUBS),
+              "enhance_range": [0.0, float(ENH.AMOUNT_LIMIT)],
+              "enhance_actions": list(self.ENHANCE_ACTIONS),
               "deform_range": [-KIND_LIMIT, KIND_LIMIT],
               # 能收哪些后缀：只由 session.IMAGE_EXTS 定这一份，宿主拿它填原生
               # 选择框的过滤器。拷一份名单到 UI 里就是给自己埋雷：M9-c 把八个 RAW
@@ -770,6 +784,9 @@ class Engine:
             # 屏幕上却变成全图调色”，而 grade_done 还写着 brush——与上面 lut/grade 同一条担心。
             # skin 那一臂在这里可能被推迟（掩膜要 _rehang_precompute 之后才有），那里会再调一次。
             self._rehang_grade_scope(replayed_for="session_switch")
+            # 眼牙层（PORTRAIT-009）：场活在卡上，新会话必须重画一次。没有关键点时
+            # 它自己会转成 defer（存住参数），而不是静默归零——与上面形变同一条担心。
+            self._rehang_enhance(replayed_for="session_switch", write_frame=False)
         emit({"event": "vram_ready", "device": str(pipe.device), "w": w, "h": h,
               "adopted": bool(adopt),
               "bytes_src": int(pipe.src_u8.numel() * pipe.src_u8.element_size()),
@@ -788,6 +805,7 @@ class Engine:
                   "_deform_default", "_deform_overrides", "_lut",
                   "_lut_amount",
                   "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_bg",
+                  "_enhance", "_enhance_defer",
                   "_precompute", "_precompute_backend", "_face_index", "_face_box",
                   "_face_explicit",
          "_exposure",
@@ -799,6 +817,9 @@ class Engine:
                    # 选型 index 是“那一次分析结果里的第几张”（PORTRAIT-003）：分析作废而
                    # index 还留着，下一次 precompute 完就会拿旧序号去对新名单——那正是
                    # “静默选了另一个人”的形状，与不选型一样错。
+                   # 眼牙那一层的场画在这一档代理帧的坐标上（窗口是像素框），而 amounts
+                   # 与脸盒是"用户改了主意才算变"的东西：作废的判据跟着场走，与 _deform 同例。
+                   "_enhance",
                    "_face_index", "_face_box", "_face_explicit",
                    # 调色区域是代理帧像素坐标，作用域活在区域/掩膜之上：掩膜作废而
                    # 作用域还写着 brush/skin，下一帧就是一条取不到权重的异常。
@@ -834,6 +855,8 @@ class Engine:
                 "_lut": None, "_lut_amount": 1.0, "_lut_preset": None,
                 "_grade": (0.0, 0.0, 0.0, 1.0),
                 "_grade_scope": "all", "_grade_mask": None,
+                "_enhance": dict(amounts={k: 0.0 for k in ENH.SUBS}, built=False, box=None),
+                "_enhance_defer": False,
                 "_bg": dict(active=False, matte=None, bg=None, backend=None,
                              tol=None, softness=None),
                 "_precompute": None, "_precompute_backend": None,
@@ -874,6 +897,13 @@ class Engine:
               "_lut": self._lut, "_lut_amount": float(self._lut_amount),
               "_lut_preset": self._lut_preset, "_grade": tuple(self._grade),
               "_grade_scope": str(self._grade_scope), "_grade_mask": self._grade_mask,
+              # 整份新抄：amounts 那个 dict 不能与 live 共享（同 _capture_state 头部那条理由，
+              # 两个文档共用一个 dict，下一笔 set 会同时改掉两份状态）
+              "_enhance": {"amounts": dict(self._enhance["amounts"]),
+                           "built": bool(self._enhance["built"]),
+                           "box": (None if self._enhance.get("box") is None else
+                                   tuple(float(v) for v in self._enhance["box"]))},
+              "_enhance_defer": bool(self._enhance_defer),
               "_exposure": tuple(self._exposure), "_exposure_ref_k": self._exposure_ref_k,
               "_crop_rect": tuple(self._crop_rect), "_crop_rotation": float(self._crop_rotation),
               "_bg": dict(self._bg),
@@ -919,6 +949,22 @@ class Engine:
         # 认「全图」而不是拿 None 去和 vram 的名单比。区域是 numpy 原件或 None，
         # 与 _bg 的遮罩同一条路（project 的资产编码器负责把 ndarray 落成资产）。
         self._grade_scope = str(self._grade_scope or "all")
+        # 眼牙那一份从 JSON 回来时：amounts 可能是 list/字符串/缺键，box 可能是数组，
+        # built/defer 可能是 None。一律归一，判据（"有没有这一层"）不许时灵时不灵
+        _en = self._enhance or {}
+        _am = {}
+        for _k in ENH.SUBS:
+            try:
+                _am[_k] = float((_en.get("amounts") or {}).get(_k, 0.0) or 0.0)
+            except (TypeError, ValueError):
+                _am[_k] = 0.0
+        _box = _en.get("box")
+        self._enhance = {"amounts": _am, "built": bool(_en.get("built")),
+                         "box": (None if not _box else tuple(float(v) for v in _box))}
+        self._enhance_defer = bool(self._enhance_defer)
+        if not any(v != 0.0 for v in _am.values()):
+            # 全零不构成一层：defer 留着只会在下一次分析后报一个"画了个空场"
+            self._enhance_defer = False
         self._bg = dict(self._bg)
         # 从项目文件回来的配方里，元组一律是 JSON 数组。`_grade` 早就在这里归一回，
         # 而 crop/exposure 不归一就会漂：重挂判据与“中性”判据比的都是元组字面量，
@@ -1015,7 +1061,7 @@ class Engine:
     # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
     # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
     EDIT_CMDS = ("set_strength", "inpaint", "light", "deform", "lut", "grade", "background",
-                 "crop", "exposure", "preset", "batch", "face")
+                 "crop", "exposure", "preset", "batch", "face", "enhance")
     # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
     # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
     # 而 batch 改的就是活动文档的配方——不在这里它就会“同步完了而徽章不亮”。
@@ -1061,6 +1107,13 @@ class Engine:
                                    for o in v], sort_keys=True)
             elif k == "_grade":
                 d[k] = [round(float(x), 6) for x in v]
+            elif k == "_enhance":
+                # 三个数按 6 位取整，脸盒按 5 位（与 faces() 同一口径）：1e-16 的浮点噪声
+                # 不算"改过一层"，而换了一张脸必须算
+                d[k] = json.dumps([{a: round(float(b), 6) for a, b in v["amounts"].items()},
+                                   bool(v.get("built")),
+                                   None if not v.get("box") else
+                                   [round(float(x), 5) for x in v["box"]]], sort_keys=True)
             elif k == "_grade_mask":
                 # 与 _bg 的遮罩同一签名口径：shape + 逐像素求和。同一份区域求和恒定，
                 # 而多一笔少一笔都会变——拿数组直接 == 会得出一堆布尔值而不是一个 bool。
@@ -1456,6 +1509,23 @@ class Engine:
                           "scope": str(self._grade_scope), "scopes": list(GRADE_SCOPES),
                           "mask_px": 0 if self._grade_mask is None
                           else int((self._grade_mask > 0).sum())},
+                # PORTRAIT-009：三个子功能的值、这一层真点火了没有、以及"没点火时那一句
+                # 原因"。UI 的开关与提示必须从这里取：自己记一份就会在换图/重开工程/换人选
+                # 之后替引擎说谎（这一层的 reason 有五种来源，都不是前端能推出来的）
+                "enhance": {"amounts": dict(self._enhance["amounts"]),
+                            "subs": list(ENH.SUBS),
+                            "limit": [0.0, float(ENH.AMOUNT_LIMIT)],
+                            "lit": bool(self._vram.has_enhance()) if self._vram else False,
+                            "built": bool(self._enhance["built"]),
+                            "defer": bool(self._enhance_defer),
+                            "box": (list(self._enhance["box"]) if self._enhance.get("box")
+                                    else None),
+                            "gated_px": {k: int(((self._vram.enhance_facts if self._vram
+                                                  else {}) or {}).get(k, {})
+                                                 .get("gated_px", 0)) for k in ENH.SUBS},
+                            "reason": {k: ((self._vram.enhance_facts if self._vram else {})
+                                           or {}).get(k, {}).get("reason")
+                                       for k in ENH.SUBS}},
                 "exposure": {"ev": float(self._exposure[0]),
                              "temperature_shift": float(self._exposure[1]),
                              "tint_shift": float(self._exposure[2]),
@@ -1472,6 +1542,8 @@ class Engine:
                 "deform": any(abs(float(v)) > 0.0 for v in st["_deform"]["amounts"].values()),
                 "lut": st["_lut"] is not None, "lut_preset": st["_lut_preset"],
                 "grade": st["_grade"] != (0.0, 0.0, 0.0, 1.0),
+                "enhance": any(float(v) != 0.0
+                               for v in (st["_enhance"]["amounts"] or {}).values()),
                 "channel": st["_channel"]}
 
     # ------------------------------------------------------------ M5-a 底片条
@@ -2281,6 +2353,10 @@ class Engine:
         # 三层里任何一层有劲儿都要补这一次分析（判据与 `_deform_intent` 同一处）：
         # 只认 `_deform["amounts"]` 会漏掉“多人图重开后还没有脸盒，而默认/覆盖都在等”
         # 那一种——合成出来是零，而用户的活儿实实在在还在那两份里
+        if self._enhance_intent(st):
+            # 眼牙那一层（PORTRAIT-009）与形变同一条：它的掩膜是从关键点重画的，
+            # 没有关键点就没有这一层。少认这一格就是"重开工程后美白静消失"
+            return True
         return self._deform_intent(st)
 
     def cmd_project(self, p: dict):
@@ -2609,6 +2685,277 @@ class Engine:
             # 任何意义，留着它只会让下一次重挂再撞一遍
             self._drop_grade_scope(scope, f"{replayed_for}：{e}")
 
+
+    # ---- PORTRAIT-009：眼牙局部增强 -----------------------------------------
+    ENHANCE_KEYS = {"cmd", "action", "sclera", "iris", "teeth"}
+    ENHANCE_ACTIONS = ("set", "clear")
+
+    def _enhance_intent(self, st: dict | None = None) -> bool:
+        """这一份状态里有没有"用户要一层眼牙增强"的意图（有非零的子功能值）。
+
+        与 `_deform_intent` 同一类判据，独立写一份而不是复用：形变看的是三种 kind 的
+        合成值（默认 + 逐张覆盖），而这一层看的是三个子功能的独立值，两者字段结构不同，
+        硬套会造出"一个函数两种语义"的那种可读性债务。
+        """
+        en = (st if st is not None else self._capture_state())["_enhance"]
+        return any(float(v) != 0.0 for v in (en.get("amounts") or {}).values())
+
+    def _drop_enhance(self, why: str) -> None:
+        """放下会话里那一场（参数与脸盒留在文档状态里）。"""
+        if self._vram is not None:
+            self._vram.clear_enhance_field()
+        self._enhance = dict(amounts=dict(self._enhance["amounts"]), built=False, box=None)
+
+    def _restore_enhance(self, prev: dict) -> None:
+        """被拒/回滚时把文档状态与会话那一场一起退回上一版（不留半截）。"""
+        self._enhance = {"amounts": dict(prev.get("amounts") or {}),
+                         "built": bool(prev.get("built")), "box": prev.get("box")}
+        self._enhance_defer = bool(prev.get("_defer"))
+        if self._vram is None:
+            return
+        if not any(float(v) != 0.0 for v in self._enhance["amounts"].values()):
+            self._vram.clear_enhance()
+        elif prev.get("built") and self._precompute is not None:
+            try:
+                self._vram.build_enhance(self._precompute.landmarks)
+                self._vram.set_enhance(self._enhance["amounts"])
+            except Exception:                            # noqa: BLE001
+                self._vram.clear_enhance_field()
+
+    def _rehang_enhance(self, pc=None, *, replayed_for: str, write_frame: bool = True) -> None:
+        """关键点回来后把这一层接回去（重开工程 / 迁会话 / 换后端 / 换人选都走这里）。
+
+        认的是**脸盒**而不是序号：这一层的掩膜是从那一张脸的 478 点画出来的，换人时若
+        不认脸盒就会把 A 的美白静默涂到 B 身上（SCOPE-001 拦的同一件事）。认不回那一张
+        就整场放下并说清原因——参数留着，因为"用户改过什么"与"引擎现在认不认得人"
+        是两件事（PORTRAIT-004 定下的分层）。
+        """
+        if not self._enhance_intent():
+            if self._enhance["built"]:
+                self._drop_enhance(f"{replayed_for}：参数已经全是 0，这一层没有活")
+            self._enhance_defer = False
+            return
+        if self._vram is None or not self._image_loaded:
+            return
+        pc = pc if pc is not None else self._precompute
+        want_box = self._enhance.get("box")
+        if pc is None:
+            # 没关键点：存住等下一次分析（不归零——那是 CORE-001 已经付过学费的那一格）
+            self._drop_enhance(f"{replayed_for}：没有关键点可重画掩膜")
+            self._enhance_defer = True
+            self._emit_enhance_state("defer",
+                                     reason="这一层的掩膜要从 478 点重画，而本会话还没有关键点："
+                                          "参数已存住，跑一次 precompute 就接回来")
+            return
+        if getattr(pc, "backend", None) == "synthetic":
+            self._drop_enhance(f"{replayed_for}：synthetic 模板几何")
+            self._emit_enhance_state("invalidate",
+                                     reason="关键点来自 synthetic 模板几何（网格占位，不是脸形）："
+                                          "掩膜画不出可信的眼/牙位置，这一层整层放下",
+                                     dropped_amounts=self._enhance["amounts"])
+            return
+        if want_box is not None and self._person_key(self._face_box) != tuple(
+                float(v) for v in want_box):
+            # 换人了：这一层不属于现在选定的那一张
+            self._drop_enhance(f"{replayed_for}：这一层挂在另一张脸上")
+            self._emit_enhance_state("invalidate",
+                                     reason="这一层挂在另一张脸上（按脸盒认的）：不拿 A 的参数"
+                                          "静默服务 B。选回那一张就自动接回来；要改这一张请重新设值",
+                                     dropped_amounts=self._enhance["amounts"])
+            return
+        try:
+            info = self._vram.build_enhance(pc.landmarks)
+            self._vram.set_enhance(self._enhance["amounts"])
+            info = self._vram._enhance_payload(layer_recomputed=True)
+        except (ENH.EnhanceError, ValueError, RuntimeError) as e:
+            self._drop_enhance(f"{replayed_for}：重画失败")
+            self._emit_enhance_state("invalidate",
+                                     reason=f"用这批关键点重画掩膜失败，已整层放下："
+                                            f"{type(e).__name__}: {e}",
+                                     dropped_amounts=self._enhance["amounts"])
+            return
+        self._enhance = dict(amounts=dict(self._enhance["amounts"]), built=True,
+                             box=self._person_key(self._face_box))
+        self._enhance_defer = False
+        fr = None
+        render_ms = 0.0
+        if write_frame and bool(info.get("enhance_lit")) and self.shm is not None \
+                and (self.shm.w, self.shm.h) == (self._vram.w, self._vram.h):
+            try:
+                fr = self._write_current_frame("enhance")
+                render_ms = fr.pop("render_ms", 0.0)
+            except Exception as e:                        # noqa: BLE001
+                emit({"event": "engine_warn", "warn": f"眼牙层重挂后补帧失败：{e}"})
+        self._emit_enhance_state("rebuild", info=info, render_ms=render_ms)
+        if fr is not None:
+            emit(fr)
+
+    def _emit_enhance_state(self, action: str, *, info: dict | None = None,
+                            render_ms: float = 0.0, total_ms: float = 0.0,
+                            reason: str | None = None, dropped_amounts: dict | None = None,
+                            note: str | None = None) -> None:
+        """enhance_done 只在这里组装一次（命令、重挂、放下三条臂共用一份形状）。
+
+        与 `_emit_deform_state` 同一条理由：两处各写一份，漂的方向永远是"后接的那条臂
+        少一个字段"，而 TS 把字段声明成必存——谎报发生在 JSON 边界上，编译期抓不到。
+        """
+        payload = dict(info or (self._vram._enhance_payload(layer_recomputed=False)
+                                if self._vram is not None else {}))
+        payload.update({
+            "event": "enhance_done",
+            "action": action,
+            "amounts": {k: float(v) for k, v in self._enhance["amounts"].items()},
+            "built": bool(self._enhance["built"]),
+            "defer": bool(self._enhance_defer),
+            # 平铺的 lit 与 deform_done 同形：它问的是"屏幕上这一层现在真的有力吗"，
+            # 而 `built` 只说"场挂上了"。闭嘴样本的牙齿那一格就是 built 而 lit 的另一半
+            # （场里没额度）。宿主读嵌套那一份（enhance_*），面板与测试读平铺。
+            "lit": bool(payload.get("enhance_lit")),
+            "gated_px": {k: int(v) for k, v in (payload.get("enhance_gated_px") or {}).items()},
+            "person_box": (list(self._enhance["box"]) if self._enhance.get("box") else None),
+            "render_ms": round(render_ms, 2),
+            "total_ms": round(total_ms, 2),
+        })
+        if reason is not None:
+            payload["reason"] = reason
+        if dropped_amounts is not None:
+            payload["dropped_amounts"] = {k: float(v) for k, v in dropped_amounts.items()}
+        if note is not None:
+            payload["note"] = note
+        emit(payload)
+
+    def cmd_enhance(self, p: dict):
+        """眼牙局部增强（LNX-PORTRAIT-009）：眼白提亮 / 虹膜增强 / 牙齿美白，各自独立启停。
+
+        铁律逐条沿用 cmd_grade/cmd_deform：参数先全量校验、跑靶互斥、被拒整条不生效、
+        渲染抛错就成对回滚、事件只有一个组装点。这一层独有的两条：
+
+        1. **必须有真关键点**（synthetic 模板几何按拒绝处理）：这一层的掩膜画在虹膜圆盘
+           与唇齿多边形上，占位几何画不出可信位置——宁可拒，也不画一张"看上去像眼睛"的
+           椭圆（那就是 DoD 严禁的那种假效果）。
+        2. **点火了而一个像素也没盖到不是错误**：闭嘴样本的牙齿那一格、两只眼都被几何
+           校验拒掉的极端侧脸，命令成功返回、`lit=false`、逐子功能写明原因。把这做成
+           报错会让 UI 只能弹一个"失败"，而用户想知道的恰恰是"为什么牙那格没动"。
+        """
+        unknown = sorted(set(p) - self.ENHANCE_KEYS)
+        if unknown:
+            emit({"event": "error", "error": f"enhance 收到不认识的参数：{', '.join(unknown)}"
+                  "（可用：action / sclera / iris / teeth，名单在 ready 的 enhance_subs 里）"})
+            return
+        action = p.get("action", "set")
+        if action not in self.ENHANCE_ACTIONS:
+            emit({"event": "error", "error": f"未知 enhance action: {action}"
+                  f"（可用：{'/'.join(self.ENHANCE_ACTIONS)}）"})
+            return
+        if not self._image_loaded or self._vram is None:
+            emit({"event": "error", "error": "尚未 load_image"})
+            return
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝 enhance：先 bench_stop"})
+            return
+        given = {k: p[k] for k in ENH.SUBS if p.get(k) is not None}
+        if action == "set" and not given:
+            emit({"event": "error", "error": "enhance set 什么也没给：三个子功能里至少给一个，"
+                  "或者走 clear 把整层关掉"})
+            return
+        merged = dict(self._enhance["amounts"])
+        if action == "clear":
+            merged = {k: 0.0 for k in ENH.SUBS}
+        else:
+            merged.update(given)
+        try:
+            amounts = ENH.check_amounts(merged)
+        except ENH.EnhanceError as e:
+            emit({"event": "error", "error": f"enhance 被拒，整条不生效：{e}"})
+            return
+        t_start = monotonic_ns()
+        prev = {"amounts": dict(self._enhance["amounts"]), "built": bool(self._enhance["built"]),
+                "box": self._enhance.get("box"), "_defer": bool(self._enhance_defer)}
+        pc = self._precompute
+        if any(v != 0.0 for v in amounts.values()):
+            # SCOPE-001：这一层的作用面是"某一个人"。多人图里没显式选定就不许替用户选
+            if (pc is not None and int(getattr(pc, "num_faces", 1)) > 1
+                    and not self._face_explicit):
+                emit({"event": "error",
+                      "error": f"画面里探到 {pc.num_faces} 张脸（上限探 2 张）：眼牙增强只服务"
+                              "一张可用人脸，本版本不在多人照片里替你选哪一张（SCOPE-001）；"
+                              f"要改谁先用 `face select` 显式选定（名单：{self._face_state()['faces']}）"})
+                return
+            if pc is None:
+                self._enhance = dict(amounts=amounts, built=False, box=None)
+                self._enhance_defer = True
+                self._vram.clear_enhance_field()
+                self._emit_enhance_state("defer",
+                                         reason="本会话还没有关键点：参数已存住（不进画面、不静默丢弃），"
+                                                "跑一次 precompute 会自动接回这一层",
+                                         total_ms=round((monotonic_ns() - t_start) / 1e6, 2))
+                return
+            if getattr(pc, "backend", None) == "synthetic":
+                emit({"event": "error", "error":
+                      "enhance 拒绝 synthetic 后端的关键点：那是网格占位几何、不是脸形，"
+                      "画不出可信的虹膜圆盘与唇齿多边形。要这一层请用 mediapipe 后端"
+                      "（template/synthetic 只服务通路回归）"})
+                return
+        try:
+            if any(v != 0.0 for v in amounts.values()):
+                # build_enhance 的返回值不直接用：set_enhance 之后那份才是最终状态，
+                # 而两处都从同一个 `_enhance_payload` 组装（事件只有一个形状来源）。
+                # 场只在几何变了的时候重画（关键点没变而滑块动了 = 只改系数）。
+                # 这条复用判据不是性能偏好：它是"拖滑块时到底有没有重算掩膜"那一句
+                # 产品主张的实现，而性能那一臂把它当回归判据（拖动期间 layer_recomputed
+                # 必须一路 False）。
+                rebuilt = self._vram.enhance_needs_rebuild(pc.landmarks)
+                if rebuilt:
+                    self._vram.build_enhance(pc.landmarks)
+                self._vram.set_enhance(amounts)
+                info = self._vram._enhance_payload(layer_recomputed=rebuilt)
+                self._enhance = dict(amounts=dict(amounts), built=True,
+                                     box=self._person_key(self._face_box))
+                self._enhance_defer = False
+            else:
+                info = self._vram.clear_enhance()
+                self._enhance = dict(amounts=amounts, built=False, box=None)
+                self._enhance_defer = False
+        except (ENH.EnhanceError, ValueError, RuntimeError) as e:
+            self._vram.clear_enhance_field()
+            self._enhance = dict(amounts=dict(amounts), built=False, box=None)
+            emit({"event": "error", "error": f"眼牙增强这一层挂不上，参数已生效但整层放下："
+                  f"{type(e).__name__}: {e}"})
+            return
+        try:
+            fr = self._write_current_frame("enhance")
+        except Exception as e:
+            self._restore_enhance(prev)
+            try:
+                back = self._write_current_frame("enhance")
+                back.pop("render_ms", None)
+                emit(back)
+            except Exception:                            # noqa: BLE001
+                emit({"event": "engine_warn", "warn": "眼牙增强回滚后仍无法出帧，本会话不可信，"
+                      "请重新导入图片"})
+            emit({"event": "error", "error": f"眼牙增强渲染失败，已退回上一状态（"
+                  f"{type(e).__name__}）：{e}"})
+            return
+        render_ms = fr.pop("render_ms", 0.0)
+        # 账要取**渲染之后**那一份：`enhance_ms` 说的是"最近一帧里这一层花了多少"，
+        # 而那一次渲染就是 `_write_current_frame`。取在渲染前，第一条命令必然报出一个
+        # 恒 0 的计时（那一刻这一层还没进过帧通路），于是"这一层是毫秒级局部重放"这句
+        # 承诺一份证据都没有——m5 第 8 臂的 `0 < enhance_ms` 判据就是这样变成假红的
+        # （真机实测：代理档稳态 1.06 ms/帧，首次 250 ms 是 CUDA 惰性建核）。
+        # 与 cmd_deform 同一条次序：先出帧，后组装那一帧的账。
+        if info is not None and self._vram is not None:
+            info = self._vram._enhance_payload(
+                layer_recomputed=bool(info.get("layer_recomputed")),
+                build_ms=float(info.get("enhance_build_ms", 0.0)) or None)
+        # info 必须**按关键字**传：_emit_enhance_state 的签名是 (action, *, info, …)，
+        # 位置传法在 import 时不报错、第一条命令才炸 TypeError——这就是端到端臂存在的理由
+        # （库层 41 条全绿也没碰到它，因为它在 server 的调用点上）。
+        self._emit_enhance_state(action, info=info, render_ms=render_ms,
+                                 total_ms=round((monotonic_ns() - t_start) / 1e6, 2))
+        emit(fr)
+
+
+
     def _rehang_precompute(self, *, replayed_for: str) -> bool:
         """把 CPU 原件形态的预计算产物挂到**当前会话**上。
 
@@ -2653,6 +3000,9 @@ class Engine:
         # 掩膜刚挂上，这里才是 skin 作用域能落地的时刻（_attach_pipeline 里那次可能被推迟）。
         # 放在 ready 事件之后：事件序列先说“掩膜有了”，再说“调色只吃那一片”。
         self._rehang_grade_scope(replayed_for=replayed_for)
+        # 眼牙层（PORTRAIT-009）：掩膜从这批关键点重画。放在 ready 事件之后，与上面
+        # scope 那条同一次序约定（事件先说"关键点有了"，再说"那一层接回来了"）
+        self._rehang_enhance(self._precompute, replayed_for=replayed_for)
         return True
 
     def cmd_precompute(self, p: dict):
@@ -2725,6 +3075,9 @@ class Engine:
         # 形变层是例外：它的单位场就是从这批关键点解出来的，关键点一走它就是
         # 无源之水（M2-b 审查项 2，口径见 _rebuild_deform_for_landmarks）。
         self._rebuild_deform_for_landmarks(pc)
+        # 眼牙层同理是"关键点是它的唯一来源"的那一层（PORTRAIT-009）：换后端重算后
+        # 不重画掩膜，就是"上报说 mediapipe、屏幕上还在按模板几何美白"
+        self._rehang_enhance(pc, replayed_for="precompute")
 
     def _rebuild_deform_for_landmarks(self, pc, *, write_frame: bool = True) -> None:
         """关键点更新后重建已常驻的形变层：滑块值保留，单位场跟着新几何走。
@@ -3448,6 +3801,12 @@ class Engine:
                 emit({"event": "error", "error":
                       f"换人失败({type(e).__name__})：{e}，已退回上一份选型"})
                 return
+        # 眼牙层（PORTRAIT-009）也要跟着换人走，而且它认的是**脸盒**：这一层的掩膜是从
+        # 那一张脸的 478 点画的，把 A 的美白静默涂到 B 身上正是 SCOPE-001 拦的那件事。
+        # 认不回上次那一张就整场放下并写明原因（参数留着，因为它属于“用户改过什么”）。
+        # 排在选型提交之后：失败路径已经在上面 return 了，这里看到的必须是新那一张。
+        if self._enhance_intent() or self._enhance["built"]:
+            self._rehang_enhance(view, replayed_for="face_view")
         fst = self._face_state()
         emit({"event": "face_selected", "action": "select", "requested_index": idx,
               # 没点火时选型不该改动画面：这一格给端到端用例当判据（“选人不等于调图”）
@@ -4637,7 +4996,8 @@ class Engine:
                           upscale_backend=str(snap.get("upscale_backend", "lanczos3")),
                           sharpen_amount=float(snap.get("sharpen", 0.0)))
         if not for_document:
-            skipped += ["repair", "light", "deform", "channel（笔迹与掩膜属于当前文档）"]
+            skipped += ["repair", "light", "deform", "channel（笔迹与掩膜属于当前文档）",
+                        "enhance（眼牙掩膜是从当前那一张脸的关键点画的，不能搬到别的图）"]
             if spec.grade_scope != "all":
                 # 局部调色那一片也是**这一张图**的：skin 来自当前文档的预计算，brush 来自
                 # 当前文档的笔迹。拿不到那一片就把整层调色一起放下，而不是“那就全图调一下”：
@@ -4667,6 +5027,18 @@ class Engine:
                 skipped.append("deform（没有可用的关键点）")
             else:
                 spec.deform_amounts = amounts
+                spec.landmarks = np.asarray(pc.landmarks, dtype=np.float32)
+        # PORTRAIT-009：眼牙增强跟到导出。与形变同一条前提——它需要关键点，而出片是
+        # 按**导出尺寸**重画掩膜（不放大预览档那张小掩膜：放大一份"身份"会涂错位置，
+        # 而内容门的相对统计也会跟着插值得到的假边一起漂）。
+        en = snap.get("enhance") or {}
+        enh_amounts = {k: float(v) for k, v in (en.get("amounts") or {}).items()
+                       if float(v) != 0.0}
+        if enh_amounts and (en.get("built") or snap.get("enhance_defer")):
+            if pc is None:
+                skipped.append("enhance（没有可用的关键点，掩膜画不出来）")
+            else:
+                spec.enhance = enh_amounts
                 spec.landmarks = np.asarray(pc.landmarks, dtype=np.float32)
         if snap["channel"]:
             if pc is None:
@@ -4894,6 +5266,7 @@ class Engine:
                     lut=self._lut, lut_amount=self._lut_amount, light=dict(self._light),
                     light_ops=list(self._light_ops), repair_ops=list(self._repair_ops),
                     deform=dict(self._deform), deform_defer=bool(self._deform_defer),
+                    enhance=dict(self._enhance), enhance_defer=bool(self._enhance_defer),
                     channel=self._channel,
                     precompute=self._precompute, device=self.device,
                     scale=scale, upscale_backend=backend, sharpen=sharpen)
@@ -5703,7 +6076,11 @@ class Engine:
                "compare", "session", "project", "task", "history", "preset", "batch",
                # 挑图（LNX-PICK-001）。它不在 EDIT_CMDS 里，所以既不进撤销栈也不打脏标记：
                # 它是读出来的一格旁注，不是一次编辑动作
-               "face", "pick")
+               "face", "pick",
+               # 眼牙增强（LNX-PORTRAIT-009）：它是一次编辑（进撤销栈、打脏标记），所以
+               # 两个名单都要有它——上一轮加曝光时只改一边，得到的就是"拖完按撤销纹丝不动
+               # 而 UI 一句也不说为什么"（CORE-006 为此专门加了一条用例）
+               "enhance")
     _HANDLED_LAMBDA = ("bench_stop",)      # 唯一不开成 cmd_* 的那条：只是置停止位
 
     def _dispatch_table(self) -> dict:
