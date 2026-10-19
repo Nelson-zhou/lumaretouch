@@ -571,13 +571,25 @@ else:
             f"引擎报出这一张被单独覆盖了哪几格：{fc.get('overriddenKinds')}")
         chk(fc.get("inheritedBeforeOverride") is False,
             f"挂上覆盖后 inherited 必须为假（面板那句「已单独覆盖」的唯一出处）")
-        chk(fc.get("overrideAmounts") == {"slim_face": 0.2, "big_eye": 0.9, "small_chin": 0.0},
+        # 生效字典的键集跟着引擎 KINDS 走（1.7.0 起多了 smile 那一格）。这里不许写死
+        # 整份字典：新增一格就会报假红，而定版门禁一旦习惯假红，它就慢慢没人看了。
+        # 判据拆成两半，两半都是真的：①这一臂显式设过的那几格必须逐格等于设计值；
+        # ②这一臂根本没碰过的格必须全是 0（合成不许凭空给没设过的格带上值）。
+        def _composed(d, want):
+            got = d if isinstance(d, dict) else {}
+            if any(got.get(k) != v for k, v in want.items()):
+                return False
+            return all(float(v) == 0.0 for k, v in got.items() if k not in want)
+
+        chk(_composed(fc.get("overrideAmounts"),
+                      {"slim_face": 0.2, "big_eye": 0.9, "small_chin": 0.0}),
             f"生效值 = 默认打底 + 覆盖盖上：{fc.get('overrideAmounts')}")
-        chk(fc.get("keptAfterDefaultChange") == {"slim_face": 0.6, "big_eye": 0.9,
-                                                 "small_chin": 0.0},
+        chk(_composed(fc.get("keptAfterDefaultChange"),
+                      {"slim_face": 0.6, "big_eye": 0.9, "small_chin": 0.0}),
             f"改默认（slim 0.2→0.6）时：覆盖项要继续生效而未覆盖项要跟随 → "
             f"{fc.get('keptAfterDefaultChange')}（冻结件 then 前两句）")
-        chk(fc.get("inheritAmounts") == {"slim_face": 0.6, "big_eye": 0.3, "small_chin": 0.0}
+        chk(_composed(fc.get("inheritAmounts"),
+                      {"slim_face": 0.6, "big_eye": 0.3, "small_chin": 0.0})
             and fc.get("inheritOverrideCount") == 0,
             f"恢复继承后全部按层级合成 → amounts={fc.get('inheritAmounts')} "
             f"overrides={fc.get('inheritOverrideCount')} 条（冻结件 then 第三句）")
