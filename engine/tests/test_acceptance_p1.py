@@ -1855,3 +1855,435 @@ def test_smile_raises_the_corners_keeps_the_person_and_restores_neutrally(engine
         _assert_no_new_frame(engine, peer, meta, ev, ref_frame, f"请求 {bad} 被拒之后")
 
     assert _sha_of(FIXTURE) == src_sha, "表情这一条改了原片"
+
+
+# ------------------------------------------------------------------ PORTRAIT-009
+# 眼牙局部增强的端到端臂（LNX-PORTRAIT-009）。库层那 41 条（test_enhance.py）判的是
+# 算子性质；这两条判的是**过完整产品链**之后那三句 then 还立不立得住：屏幕上的帧、
+# 撤销账、工程重开、导出文件、以及"做不到 Must 拒且说得出原因"。
+FIX_SMILE_P09 = str(REPO / "engine" / "tests" / "fixtures" / "portrait-smile-1024x1280.jpg")
+FIX_GLASS_P09 = str(REPO / "engine" / "tests" / "fixtures" / "portrait-glasses-smile-1024x1280.jpg")
+FIX_DEEP_P09 = str(REPO / "engine" / "tests" / "fixtures" / "portrait-deep-skin-smile-1024x1280.jpg")
+P09_SIZE = (1280, 1024)        # 夹具的真实像素尺寸；判据按它写死行/列，所以先要住尺寸
+GLASS_BAR_ROWS = (512, 528)    # 生成器里横梁那一个矩形（压在两只眼的虹膜盘上）
+
+
+def _enh_shot(engine, peer, h, w, **payload):
+    """发一条 enhance，同时拿下账单与那一帧（次序与 cmd_deform 一致：先账单后帧）。"""
+    from test_protocol import _next_event
+
+    _drain(engine)
+    engine.send(cmd="enhance", **payload)
+    done = None
+    while True:
+        e = _next_event(engine, skip=("session_state", "engine_warn"), timeout=120.0)
+        if e["event"] == "enhance_done":
+            done = e
+        elif e["event"] == "frame" and e.get("mode") == "enhance":
+            assert done is not None, "帧先于账单到了：与 cmd_enhance 里写的次序不一样"
+            return done, _frame_of(e, peer, h, w), e
+        elif e["event"] == "error":
+            raise AssertionError(f"引擎拒绝了 enhance：{e.get('error')}")
+
+
+def _p09_regions(path):
+    """从**出片同款**的检测结果里取出四个带：虹膜盘、眼裂、内唇开口、上唇面。
+
+    不写死坐标：这些带是判据的接地对象，写死了就会跟着关键点模型或夹具的一次改动
+    指着一个对的东西报错（test_enhance 里那条牙齿带已经付过一次这个学费）。
+    """
+    from lumaretouch_engine.ops.deform import (IRIS_LEFT, IRIS_RIM_LEFT, IRIS_RIM_RIGHT,
+                                               IRIS_RIGHT, LIP_INNER_BOTTOM, LIP_INNER_TOP,
+                                               MOUTH_CORNER_LEFT, MOUTH_CORNER_RIGHT)
+    from PIL import Image
+
+    with Image.open(path) as im:
+        im = im.convert("RGB")
+        h, w = im.height, im.width
+    lm = _detect_on(path)
+    out: dict = {}
+    for side, iris, rim in (("l", IRIS_LEFT, IRIS_RIM_LEFT), ("r", IRIS_RIGHT, IRIS_RIM_RIGHT)):
+        cx, cy = float(lm[iris][0]), float(lm[iris][1])
+        rad = float(np.hypot(lm[list(rim), 0] - cx, lm[list(rim), 1] - cy).mean())
+        out[f"iris_{side}"] = (cx, cy, rad)
+        out[f"eye_{side}"] = (int(max(0, cy - 1.5 * rad)), int(min(h, cy + 1.5 * rad)),
+                              int(max(0, cx - 2.2 * rad)), int(min(w, cx + 2.2 * rad)))
+    y13, y14 = float(lm[LIP_INNER_TOP][1]), float(lm[LIP_INNER_BOTTOM][1])
+    xl, xr = float(lm[MOUTH_CORNER_LEFT][0]), float(lm[MOUTH_CORNER_RIGHT][0])
+    out["mouth"] = (int(min(y13, y14)), int(max(y13, y14)), int(xl), int(xr))
+    out["lip_strip"] = (int(min(y13, y14)) - 18, int(min(y13, y14)) - 4, int(xl), int(xr))
+    return out
+
+
+def _p09_reload(engine, path, peer, h, w):
+    """同一会话里换一张图，**不**重等 shm_ready。
+
+    代理尺寸没变时引擎不重建那块共享缓冲（宿主还映射着它，重建反而要把视口拆一次），
+    所以只发 vram_ready + image_ready。`_open()` 那一份每次都等 shm_ready，在这儿
+    会空等 240 s 报一条假超时——那不是产品没就绪，是助手把"没重建"读成了"没就绪"。
+    """
+    _drain(engine)
+    engine.send(cmd="load_image", path=path, strength=0.0, max_px=2_000_000)
+    got = _collect(engine, "image_ready", timeout=240)
+    ir = got["image_ready"][-1]
+    assert [ir["h"], ir["w"]] == [h, w], (
+        f"换图换了代理档：{(ir['h'], ir['w'])}≠{(h, w)}，那块 shm 缓冲就不是同一块，行判据会指错位")
+    return ir
+
+
+def _p09_band(shape, box):
+    """(y0,y1,x0,x1) → 布尔带；顺手夹进画幅。"""
+    h, w = shape
+    m = np.zeros((h, w), dtype=bool)
+    y0, y1, x0, x1 = box
+    m[max(0, y0):min(h, y1), max(0, x0):min(w, x1)] = True
+    return m
+
+
+def _p09_disc(shape, cx, cy, rad, k=0.6):
+    h, w = shape
+    yy, xx = np.mgrid[0:h, 0:w]
+    return (xx - cx) ** 2 + (yy - cy) ** 2 <= (k * rad) ** 2
+
+
+def _p09_export(engine, out_dir, images):
+    _drain(engine)
+    engine.send(cmd="export", out_dir=str(out_dir), format="png", tile=256, quality=90,
+                images=list(images))
+    done, _seen = _collect_done(engine)
+    assert int(done["failed"]) == 0, done
+    rep = done["images"][0]
+    skipped = [str(s) for s in (rep.get("skipped") or [])]
+    assert not any("enhance" in s for s in skipped), \
+        f"眼牙层在导出里被放下了（屏幕上看到的没跟到文件）：{skipped}"
+    return str(rep["out"])
+
+
+@pytest.mark.skipif(not os.path.isfile(FIX_SMILE_P09),
+                    reason="缺露齿夹具：先跑 packaging/make-test-portrait.py --variant smile")
+def test_eye_teeth_enhance_is_local_independent_and_reversible(engine, tmp_path):
+    """LNX-PORTRAIT-009（眼牙增强）主臂：虹膜不意外改色、牙齿不过曝不越界、三格独立启停。
+
+    冻结件的 then 三句全落成帧上的判据（阈值取自库层那 41 条的同一次实测，余量另给）：
+
+    ① **中性干净** —— 三个数都给 0 那一帧与出厂帧逐字节相同，`built=false`。面板那句
+       "已生效"跟着 lit/built 走，不跟着"我发过一条命令"走。
+    ② **不越界** —— 掩膜只在自己报的那只窗里动：窗外**逐字节**相同；上唇面那一条带
+       （牙带之外 4–18 px）也必须一格不动——牙齿那一格最容易犯的错就是把红唇涂白。
+    ③ **不过曝** —— 全帧 v（=RGB 最大通道）不降、不超过 max(原值, 0.965×255)、255 的
+       像素数不增。这是那条乘性上界的直接读法，不是"看看图爽不爽"。
+    ④ **不是假滑块** —— 露齿带上 0.8 档实测抬升 ≥ 8 LSB（低光臂在库层 ≥ 20）。
+    ⑤ **独立启停** —— 只开牙齿时两眼区域逐字节不动；只开眼白时虹膜盘中心逐字节不动
+       （两道掩膜按构造互斥）；只开虹膜时牙齿带逐字节不动。
+    ⑥ **撤销/重做** —— history undo 回到改动前那一帧（逐字节），redo 再回来。
+    ⑦ **所见即所出** —— 带层导出与中性导出相比：窗内牙齿带确实抬了，窗外**逐字节相同**。
+    ⑧ **冻结件的 given 不止一张图** —— 眼镜横梁那一臂与深肤色那一臂都要过完整链：
+       前者要证“中性遮挡物不被当成眼睛”（实测横梁行带逐字节不动），后者要证内容门
+       是相对的而不是抄绝对阈值（深肤色上牙齿同样抬 ≥ 8 LSB）。
+    """
+    _needs_torch()
+    from lumaretouch_engine.ops import enhance as ENH
+    from PIL import Image
+
+    assert os.path.isfile(FIX_GLASS_P09) and os.path.isfile(FIX_DEEP_P09), \
+        "眼镜/深肤色两臂是同一次生成出来的，缺一张就是夹具没重跑"
+    src_sha = {p: _sha_of(p) for p in (FIX_SMILE_P09, FIX_GLASS_P09, FIX_DEEP_P09)}
+    meta = _open(engine, FIX_SMILE_P09, max_px=2_000_000)
+    h, w = meta["h"], meta["w"]
+    assert (h, w) == P09_SIZE, f"代理尺寸不是夹具原尺寸：{(h, w)}≠{P09_SIZE}，行判据会指错位置"
+    peer = FrameShm(meta["name"])
+    engine.send(cmd="precompute", backend="mediapipe")
+    pc = engine.wait_for("precompute_ready", timeout=180)
+    assert pc["backend"] == "mediapipe" and int(pc["num_faces"]) == 1, pc
+    base = _current(engine, peer, h, w)
+    reg = _p09_regions(FIX_SMILE_P09)
+    mouth = _p09_band((h, w), reg["mouth"])
+    lip = _p09_band((h, w), reg["lip_strip"])
+    eyes = _p09_band((h, w), reg["eye_l"]) | _p09_band((h, w), reg["eye_r"])
+    discs = (_p09_disc((h, w), *reg["iris_l"]) | _p09_disc((h, w), *reg["iris_r"]))
+    vbase = base.max(axis=2).astype(np.int16)
+
+    # ── ① 中性：一格都不动，而且引擎不建层
+    done0, f0, _ev0 = _enh_shot(engine, peer, h, w, action="set", sclera=0.0, iris=0.0, teeth=0.0)
+    assert done0["built"] is False and done0["lit"] is False, done0
+    assert np.array_equal(f0, base), (
+        f"三个 0 却动了 {int((np.abs(f0 - base).max(axis=2) > 0).sum())} 格：中性不干净")
+
+    # ── ②③④ 全开 0.8
+    d8, f8, _e8 = _enh_shot(engine, peer, h, w, action="set", sclera=0.8, iris=0.8, teeth=0.8)
+    assert d8["lit"] is True and d8["built"] is True, d8
+    win = d8["enhance_window"]
+    assert win, d8
+    outside = np.ones((h, w), dtype=bool)
+    y0, x0, fh, fw = (int(v) for v in win)
+    outside[y0:min(h, y0 + fh), x0:min(w, x0 + fw)] = False
+    diff = f8.astype(np.int16) - base.astype(np.int16)
+    adiff = np.abs(diff).max(axis=2)
+    assert int(adiff[outside].max()) == 0, (
+        f"窗外被动了 {int(adiff[outside].max())} LSB：这一层越过了它自己报的那只窗")
+    assert int(adiff[lip].max()) == 0, f"上唇面被牙齿那一格涂白了 {int(adiff[lip].max())} LSB"
+    gate = d8["enhance_gated_px"]
+    assert all(int(gate[k]) >= 12 for k in ("sclera", "iris", "teeth")), gate
+    vout = f8.max(axis=2).astype(np.int16)
+    assert int((vout < vbase - 1).sum()) == 0, "有像素被这一层推暗了：乘性抬升不该降 v"
+    ceil = np.maximum(vbase, int(round(ENH.V_CEIL * 255.0)))
+    assert int((vout > ceil).sum()) == 0, (
+        f"有 {int((vout > ceil).sum())} 格越过了天花板 {int(ENH.V_CEIL * 255)}：这就是过曝")
+    assert int((vout >= 255).sum()) <= int((vbase >= 255).sum()), "255 的像素数增加了"
+    lift_teeth = float(adiff[mouth].mean())
+    assert lift_teeth >= 8.0, f"露齿带上 0.8 档只抬了 {lift_teeth:.2f} LSB：假滑块"
+    assert float(adiff[eyes].mean()) >= 2.0, f"眼部只动了 {float(adiff[eyes].mean()):.2f} LSB"
+
+    # ── ⑤' 计账次序：这一层的 ms 说的是"刚出那一帧的代价"，不是渲染前的 0
+    #      （1.8.0 定版时 m5 第 8 臂读到的就是这个 0：账取在 `_write_current_frame`
+    #      之前，第一条命令永远报"这层不要钱"。恒 0 的计时比没有计时更坏——它把
+    #      "没量到"报成"量到了 0"。）
+    ms = float(d8.get("enhance_ms") or 0.0)
+    assert ms > 0.0, (f"点火那一格的 enhance_ms 报 0：账又取在渲染之前了"
+                      f"（built={d8.get('built')} lit={d8.get('lit')}）")
+
+    # ── ⑤ 独立启停：只开一格时，另两格的重地必须逐字节不动
+    for only, keep, where in (("teeth", eyes, "两眼"),
+                              ("iris", mouth, "露齿带"),
+                              ("sclera", discs, "虹膜盘中心")):
+        _dc, fc, _ec = _enh_shot(engine, peer, h, w, action="clear")
+        assert np.array_equal(fc, base), "clear 之后没回到出厂帧"
+        _dn, fn, _en = _enh_shot(engine, peer, h, w, action="set", **{only: 0.8})
+        a = np.abs(fn.astype(np.int16) - base.astype(np.int16)).max(axis=2)
+        assert int(a[keep].max()) == 0, (
+            f"只开 {only} 时{where}被动了 {int(a[keep].max())} LSB：独立启停不成立")
+        moved = int((a > 0).sum())
+        assert moved > 200, f"只开 {only} 全图只动了 {moved} 格：这一格没接通"
+
+    # ── ⑥ 撤销 / 重做：账本与画面必须是一对
+    _enh_shot(engine, peer, h, w, action="clear")
+    _d7, f7, _e7 = _enh_shot(engine, peer, h, w, action="set", sclera=0.7, iris=0.7, teeth=0.7)
+    assert np.array_equal(_current(engine, peer, h, w), f7), "取回的最新帧与那一笔的帧不一致"
+    _drain(engine)
+    engine.send(cmd="history", action="undo")
+    undone = _frame_of(_wait_frame_mode(engine, "history_undo"), peer, h, w)
+    assert np.array_equal(undone, base), (
+        f"撤销后没回到出厂帧（差 {int(np.abs(undone - base).max())} LSB）：这一层的"
+        "快照没进撤销账，或进了但重放时没放下")
+    _drain(engine)
+    engine.send(cmd="history", action="redo")
+    redone = _frame_of(_wait_frame_mode(engine, "history_redo"), peer, h, w)
+    assert np.array_equal(redone, f7), "redo 回来的那一帧与撤销前那一帧不同：账本说谎"
+
+    # ── ⑦ 所见即所出
+    _enh_shot(engine, peer, h, w, action="set", sclera=0.8, iris=0.8, teeth=0.8)
+    out_on = _p09_export(engine, tmp_path / "enh-on", [FIX_SMILE_P09])
+    _enh_shot(engine, peer, h, w, action="clear")
+    out_off = _p09_export(engine, tmp_path / "enh-off", [FIX_SMILE_P09])
+    with Image.open(out_on) as im:
+        arr_on = np.asarray(im.convert("RGB"), dtype=np.uint8)
+    with Image.open(out_off) as im:
+        arr_off = np.asarray(im.convert("RGB"), dtype=np.uint8)
+    assert arr_on.shape[:2] == arr_off.shape[:2] == (h, w), (arr_on.shape, arr_off.shape)
+    de = np.abs(arr_on.astype(np.int16) - arr_off.astype(np.int16)).max(axis=2)
+    assert int(de[mouth].mean()) > 0, "导出里牙齿带上没有变化：屏幕上的美白没跟到文件"
+    assert int(de[outside].max()) == 0, (
+        f"导出窗外差了 {int(de[outside].max())} LSB：分块挂场没按窗口求交")
+
+    # ── ⑧ 冻结件的 given 点名了眼镜与深肤色：这两臂得过完整链，不只过算子层
+    for path, extra in ((FIX_GLASS_P09, "glass"), (FIX_DEEP_P09, "deep")):
+        m = _p09_reload(engine, path, peer, h, w)
+        hh, ww = m["h"], m["w"]
+        pr = peer                        # 同一块缓冲：代理档没变，宿主映射也没换
+        engine.send(cmd="precompute", backend="mediapipe")
+        q = engine.wait_for("precompute_ready", timeout=180)
+        assert int(q["num_faces"]) == 1, q
+        b = _current(engine, pr, hh, ww)
+        rg = _p09_regions(path)
+        d_, f_, _e_ = _enh_shot(engine, pr, hh, ww, action="set", sclera=0.8, iris=0.8, teeth=0.8)
+        a_ = np.abs(f_.astype(np.int16) - b.astype(np.int16)).max(axis=2)
+        assert d_["lit"] is True, (extra, d_)
+        lift = float(a_[_p09_band((hh, ww), rg["mouth"])].mean())
+        assert lift >= 8.0, f"{extra}：牙齿那一格只抬了 {lift:.2f} LSB（相对内容门没跟上）"
+        if extra == "glass":
+            # 横梁把整条行带盖成了中性中灰（实测 s≤0.06）：两道眼部门都要把它整块掉出去
+            cx_l = int(rg["iris_l"][0])
+            cx_r = int(rg["iris_r"][0])
+            bar = np.zeros((hh, ww), dtype=bool)
+            bar[GLASS_BAR_ROWS[0] + 2:GLASS_BAR_ROWS[1] - 2, cx_l:cx_r + 1] = True
+            assert int(a_[bar].max()) == 0, (
+                f"眼镜横梁被眼部门动了 {int(a_[bar].max())} LSB：中性灰不该被当成眼睛")
+            assert float(a_[_p09_disc((hh, ww), *rg["iris_l"], k=0.45)].mean()) < 3.0, (
+                "横梁压在虹膜盘上而那里动得比护栏宽")
+
+    for p09, sha0 in src_sha.items():
+        assert _sha_of(p09) == sha0, f"眼牙这一条动了原片：{p09}"
+
+
+@pytest.mark.skipif(not os.path.isfile(FIX_SMILE_P09), reason="缺露齿夹具")
+def test_eye_teeth_enhance_refuses_what_it_cannot_do_and_says_why(engine, extra_engine, tmp_path):
+    """LNX-PORTRAIT-009 的"做不到"那一半：闭嘴 / 无关键点 / synthetic / 多人 / 非法参数。
+
+    冻结件的 given 点名了"眼镜/遮挡/低光/深肤色和露齿样本"，而 then 要的是**不出事故**。
+    事故不止是"画坏了"，还包括"没画却报告说画了"与"替用户选了一张脸"。这几臂的共同
+    判据是：拒的那一条必须说得出原因，而且**画面一格不许动**。
+    """
+    _needs_torch()
+
+    # ① 闭嘴样本：牙齿那一格不硬画——整格不点火，且 reason 说得出"闭嘴"
+    meta = _open(engine, FIXTURE, max_px=2_000_000)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    engine.send(cmd="precompute", backend="mediapipe")
+    engine.wait_for("precompute_ready", timeout=180)
+    base = _current(engine, peer, h, w)
+    d1, f1, _ev = _enh_shot(engine, peer, h, w, action="set", sclera=0.8, iris=0.8, teeth=0.8)
+    assert d1["lit"] is True, "眼白/虹膜在闭嘴样本上也该点火；lit=false 就是整层没接上"
+    assert int(d1["enhance_gated_px"]["teeth"]) == 0, d1["enhance_gated_px"]
+    reason = (d1["enhance_reason"] or {}).get("teeth") or ""
+    assert "闭嘴" in reason or "开口度" in reason, f"牙齿那一格没点火却没说原因：{reason!r}"
+    assert int((np.abs(f1 - base).max(axis=2) > 0).sum()) > 0, "眼睛那一格也没动：整层是空的"
+
+    # ② 没关键点：defer 存住参数、不动画面；一次 precompute 自动接回（这条打的就是
+    #    _rehang_precompute 里那份 pc NameError——接线时只测了直调路径）
+    e2 = extra_engine("portrait009-defer")
+    meta2 = _open(e2, FIX_SMILE_P09, max_px=2_000_000)
+    h2, w2 = meta2["h"], meta2["w"]
+    peer2 = FrameShm(meta2["name"])
+    base2 = _current(e2, peer2, h2, w2)
+    _drain(e2)
+    e2.send(cmd="enhance", action="set", iris=0.6)
+    dd = e2.wait_for("enhance_done", timeout=30)
+    assert dd["action"] == "defer" and dd["defer"] is True and dd["built"] is False, dd
+    assert dd["amounts"]["iris"] == 0.6, dd
+    got = _current(e2, peer2, h2, w2)
+    assert np.array_equal(got, base2), "defer 不该动画面：参数存住≠已经生效"
+    e2.send(cmd="precompute", backend="mediapipe")
+    pc2 = e2.wait_for("precompute_ready", timeout=180)
+    assert int(pc2["num_faces"]) == 1, pc2
+    rb = None
+    for _ in range(60):
+        e = e2.next_event(timeout=10.0)
+        if e["event"] == "enhance_done":
+            rb = e
+            break
+    assert rb is not None and rb["action"] == "rebuild", f"precompute 后没把这一层接回来：{rb}"
+    assert rb["lit"] is True and rb["built"] is True, rb
+    after = _current(e2, peer2, h2, w2)
+    assert not np.array_equal(after, got), "接回来之后画面必须真的变了（defer 不是空转）"
+
+    # ②b 存工程 → 换进程重开：三个数与掩膜都要回来，画面逐字节相同。
+    #     这一条不是"顺手测一下"：工程里只存参数、不存关键点（关键点随模型版本走），
+    #     所以重开必须**自动补一次分析**再把这一层挂回去——CORE-001 那一次丢形变层的
+    #     教训就是这条链没接上（口径见 ADR-0008 的 defer）。
+    e6 = extra_engine("portrait009-save")
+    m6 = _open(e6, FIX_SMILE_P09, max_px=2_000_000)
+    h6, w6 = m6["h"], m6["w"]
+    pr6 = FrameShm(m6["name"])
+    e6.send(cmd="precompute", backend="mediapipe")
+    e6.wait_for("precompute_ready", timeout=180)
+    _enh_shot(e6, pr6, h6, w6, action="set", sclera=0.5, iris=0.7, teeth=0.9)
+    lit6 = _current(e6, pr6, h6, w6)
+    sha_smile = _sha_of(FIX_SMILE_P09)
+    _c6, saved6 = _create_and_save(e6, tmp_path, name="眼牙增强")
+    e7 = extra_engine("portrait009-reopen")
+    e7.send(cmd="hello")
+    e7.wait_for("ready", timeout=90)
+    e7.send(cmd="set_device", device="cpu")
+    e7.wait_for("device_set", timeout=120)
+    e7.send(cmd="project", action="open", path=saved6["path"])
+    e7.wait_for("project_opened", timeout=120)
+    got_ev = _collect(e7, "image_ready", timeout=240)
+    shm7 = got_ev["shm_ready"][-1]
+    en7 = (got_ev["image_ready"][-1].get("doc_state") or {}).get("enhance") or {}
+    assert en7.get("amounts"), f"重开后工程里没有这一层的账：{en7}"
+    for k, want in (("sclera", 0.5), ("iris", 0.7), ("teeth", 0.9)):
+        assert abs(float(en7["amounts"].get(k, 0.0)) - want) < 1e-9, (k, en7["amounts"])
+    # 自动补的那次分析排在 image_ready **之后**（PORTRAIT-003 那一臂同一次序）：
+    # 在 image_ready 那一格里 lit=false 是对的——关键点还没回来，场确实还没重画。
+    assert en7.get("lit") is False, f"关键点还没重算就报 lit：{en7}"
+    pc7 = e7.wait_for("precompute_ready", timeout=240)
+    assert pc7["backend"] == "mediapipe", pc7
+    rb7 = None
+    for _ in range(120):
+        e = e7.next_event(timeout=20.0)
+        if e["event"] == "enhance_done":
+            rb7 = e
+            break
+        if e["event"] == "error":
+            raise AssertionError(f"重开自动补分析这路报错了：{e.get('error')}")
+    assert rb7 is not None and rb7["action"] == "rebuild", f"重开后这一层没被接回来：{rb7}"
+    assert rb7["lit"] is True and rb7["built"] is True, rb7
+    assert sum(int(v) for v in (rb7.get("gated_px") or {}).values()) > 0, rb7
+    peer7 = FrameShm(shm7["name"])
+    assert (shm7["h"], shm7["w"]) == (h6, w6), (shm7["h"], shm7["w"])
+    back7 = _current(e7, peer7, shm7["h"], shm7["w"])
+    assert int(np.abs(back7.astype(np.int16) - lit6.astype(np.int16)).max()) == 0, (
+        f"重开工程后画面与保存前差 {int(np.abs(back7 - lit6).max())} LSB："
+        "掩膜重画不是同一幅（换人选/认脸盒那条臂就断在这里）")
+    assert _sha_of(FIX_SMILE_P09) == sha_smile, "存/开工程动了原片"
+
+    # ③ synthetic 后端：占位几何画不出可信位置 → 整条拒 + 画面不动
+    #    这张露齿图与 ① 那张同代理档，所以走 reload（引擎不重建 shm，等 shm_ready
+    #    就是一条 240 s 的假超时——同一个助手口径，理由写在 _p09_reload 的注释里）
+    e3_engine = engine
+    meta3 = _p09_reload(e3_engine, FIX_SMILE_P09, peer, h, w)
+    h3, w3 = meta3["h"], meta3["w"]
+    peer3 = peer
+    e3_engine.send(cmd="precompute", backend="synthetic")
+    e3_engine.wait_for("precompute_ready", timeout=60)
+    base3 = _current(e3_engine, peer3, h3, w3)
+    _drain(e3_engine)
+    e3_engine.send(cmd="enhance", action="set", teeth=0.8)
+    err = e3_engine.wait_for("error", timeout=30)
+    assert "synthetic" in err["error"], err
+    assert np.array_equal(_current(e3_engine, peer3, h3, w3), base3), "被拒之后画面动了"
+
+    # ④ 非法参数：整条不生效，参数与画面都没被改动过
+    for bad, want in (({"action": "set", "iris": 2.0}, "2.0"),
+                      ({"action": "set", "eyebrow": 0.5}, "eyebrow"),
+                      ({"action": "boost", "iris": 0.5}, "boost")):
+        _drain(e3_engine)
+        e3_engine.send(cmd="enhance", **bad)
+        err = e3_engine.wait_for("error", timeout=30)
+        assert want.split()[0] in err["error"], (bad, err["error"])
+        assert np.array_equal(_current(e3_engine, peer3, h3, w3), base3), (
+            f"非法参数 {bad} 之后画面动了：被拒不许留半截状态")
+        st = _live_state(e3_engine)
+        amounts = ((st.get("enhance") or {}).get("amounts")) or {}
+        assert all(abs(float(v)) < 1e-12 for v in amounts.values()), (
+            f"被拒之后 doc_state 里还留着非零值：{amounts}")
+
+    # ⑤ 多人图：不替用户选哪一张脸（SCOPE-001），显式选定后才干活，换人时静默放下要说清
+    dual = _dual_or_explain()
+    sha_dual = _sha_of(dual)
+    meta4 = _open(e3_engine, dual, max_px=2_000_000)
+    h4, w4 = meta4["h"], meta4["w"]
+    peer4 = FrameShm(meta4["name"])
+    e3_engine.send(cmd="precompute", backend="mediapipe")
+    pc4 = e3_engine.wait_for("precompute_ready", timeout=180)
+    assert int(pc4["num_faces"]) >= 2, pc4
+    base4 = _current(e3_engine, peer4, h4, w4)
+    _drain(e3_engine)
+    e3_engine.send(cmd="enhance", action="set", iris=0.6)
+    err = e3_engine.wait_for("error", timeout=30)
+    assert "SCOPE-001" in err["error"] and "face" in err["error"], err["error"]
+    assert np.array_equal(_current(e3_engine, peer4, h4, w4), base4), "多人图被拒之后画面动了"
+    _drain(e3_engine)
+    e3_engine.send(cmd="face", action="select", index=0)
+    # 按事件流本来的顺序收（`wait_for` 会把命中之前的别的类型**丢掉**，而换人这一路
+    # 后面正要读那条被丢掉的 enhance_done——PORTRAIT-003 那一臂已经为这个形状写过警告）
+    got0 = _collect(e3_engine, "face_selected", timeout=60)
+    sel = got0["face_selected"][-1]
+    assert sel.get("explicit") is True or sel.get("selected_index") == 0, sel
+    d5, _f5, _e5 = _enh_shot(e3_engine, peer4, h4, w4, action="set", iris=0.6)
+    assert d5["lit"] is True and d5["person_box"], "选定一张脸之后这一层该点火并报出挂在谁身上"
+    box_a = list(d5["person_box"])
+    _drain(e3_engine)
+    e3_engine.send(cmd="face", action="select", index=1)
+    got5 = _collect(e3_engine, "face_selected", timeout=60)
+    invs = got5.get("enhance_done") or []
+    assert invs, ("换人后连一条 enhance_done 都没有：那一层是静默消失的",
+                  [e.get("event") for e in got5.values()])
+    inv = invs[-1]
+    assert inv["action"] == "invalidate", f"换人后这一层没被放下：{inv}"
+    assert inv["person_box"] != box_a or inv["person_box"] is None, inv
+    assert "另一张脸" in (inv.get("reason") or ""), inv
+    assert (inv.get("dropped_amounts") or {}).get("iris") == 0.6, (
+        f"放下时要把用户的参数如实报回去：{inv.get('dropped_amounts')}")
+    assert _sha_of(dual) == sha_dual, "多人这一条动了原片"

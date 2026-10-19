@@ -2,11 +2,12 @@
  "schema": "lrt.acceptance-map.v1",
  "cases": "docs/acceptance/cases-frozen.json",
  "cases_sha256": "c2fca495b90e3aa7",
- "generated_at": "2026-10-19T06:42:08",
+ "generated_at": "2026-10-19T14:24:59",
  "map": {
   "CORE-001": {
    "tests": [
     "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
+    "engine/tests/test_acceptance_p1.py::test_eye_teeth_enhance_refuses_what_it_cannot_do_and_says_why",
     "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
     "engine/tests/test_project.py::test_round_trip_restores_docs_tags_trash_and_recipe",
     "engine/tests/test_project.py::test_source_hash_is_unchanged_by_the_project",
@@ -216,6 +217,7 @@
   "PORTRAIT-003": {
    "tests": [
     "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
+    "engine/tests/test_acceptance_p1.py::test_eye_teeth_enhance_refuses_what_it_cannot_do_and_says_why",
     "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
     "engine/tests/test_face_select.py::test_faces_lists_every_detected_person"
    ],
@@ -265,11 +267,17 @@
    "note": "未实装：全身美型零实现（本版本重塑只吃 478 点面部关键点）。"
   },
   "PORTRAIT-009": {
-   "tests": [],
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_eye_teeth_enhance_is_local_independent_and_reversible",
+    "engine/tests/test_acceptance_p1.py::test_eye_teeth_enhance_refuses_what_it_cannot_do_and_says_why",
+    "engine/tests/test_enhance.py::test_eye_ring_indices_mean_what_the_names_say",
+    "engine/tests/test_perf_report.py::test_eye_teeth_enhance_percentiles",
+    "engine/tests/test_protocol.py::test_switching_documents_returns_the_exact_same_frame"
+   ],
    "phase": "P1",
    "module": "eyes_teeth",
    "title": "眼牙效果",
-   "note": "未实装：眼牙增强没有独立子功能层（大眼是几何形变，不是「眼睛增强」）。"
+   "note": "已实装（1.8.0）：眼白提亮 / 虹膜增强 / 牙齿美白三格各自独立启停，掩膜从 478 点几何重画、再按本池均值的相对亮/艳开门。边界：没有负档；闭嘴样本的牙齿那一格与虹膜半径不足的眼睛按显式拒绝处理并报 reason；内容门阈值在三份夹具（露齿 / 露齿+眼镜 / 深肤色露齿）上标定，见 ADR-0015。"
   },
   "PORTRAIT-010": {
    "tests": [],
@@ -583,6 +591,7 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_multi_face_photo_blocks_reshaping_but_keeps_global_edits",
     "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
+    "engine/tests/test_acceptance_p1.py::test_eye_teeth_enhance_refuses_what_it_cannot_do_and_says_why",
     "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces",
     "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
     "engine/tests/test_face_select.py::test_meta_reports_the_selection_and_keeps_the_scope_flag"

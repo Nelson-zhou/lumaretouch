@@ -112,7 +112,10 @@ def _open(engine, path: str = FIXTURE, **kw) -> dict:
 # 名单不全就当场响——退回去"拿下一帧"就是本轮那一记红色的来源。
 _FRAME_ACK = {"set_strength": "params_set", "inpaint": "inpaint_done",
               "light": "light_done", "deform": "deform_done", "lut": "lut_done",
-              "grade": "grade_done", "background": "bg_done"}
+              "grade": "grade_done", "background": "bg_done",
+              # 眼牙层（PORTRAIT-009）也是"命令自己那一帧"：cmd_enhance 先 emit
+              # enhance_done 再 emit frame，与 deform/grade 同一条次序约定。
+              "enhance": "enhance_done"}
 _FRAME_MODE = {"crop": "crop", "exposure": "exposure"}
 
 

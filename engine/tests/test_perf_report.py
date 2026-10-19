@@ -313,6 +313,50 @@ def test_face_reshaping_percentiles(engine_perf, report):
     report["metrics"]["deform_builds_during_drag"] = int(e.get("deform_builds") or 0) - builds_after
 
 
+def test_eye_teeth_enhance_percentiles(engine_perf, report):
+    """眼牙局部增强（LNX-PORTRAIT-009）：这一层的"毫秒级"要单独有一笔账。
+
+    与面部重塑那臂同一个分法：`enhance_build_ms` 是首次从关键点重画掩膜的一次性代价，
+    `enhance_apply_ms` 是拖动期间每帧的逐点乘加。为什么不拿真窗口那一格的 enhance_ms
+    当这份证据：`apply_enhance` 里那句 `torch.cuda.synchronize()` 等到的是**这块卡上
+    排到此处为止的全部工作**（同进程里帧通路还在跑靶），装机壳那一臂量到 50 ms 就是这个
+    形状——它不是这一层的成本，把它当成本就是假指标。这里量的是"只有这一层在动"的那一份。
+    """
+    _fixture_or_skip()
+    _load(engine_perf, strength=0.3)
+    engine_perf.send(cmd="precompute", backend="mediapipe")
+    try:
+        pc = engine_perf.wait_for("precompute_ready", timeout=180)
+    except (AssertionError, TimeoutError):
+        pytest.skip("这台机器没有可用的 mediapipe 后端：眼牙这一层的掩膜从关键点重画，"
+                    "没有关键点就量不出这个形状")
+    # 第一笔含建层（几何场 + 内容门），单独记；后面全是"改系数逐点乘加"
+    engine_perf.send(cmd="enhance", action="set", sclera=0.6, iris=0.5, teeth=0.7)
+    try:
+        e = _want(engine_perf, "enhance_done", timeout=120)
+    except (AssertionError, TimeoutError) as err:
+        pytest.skip(f"enhance 在这台机器上跑不通（{err}）：没有可信关键点就没有这一层，不猜数")
+    report["metrics"]["enhance_build_ms"] = e.get("enhance_build_ms")
+    report["metrics"]["enhance_gated_px"] = e.get("enhance_gated_px")
+    report["metrics"]["enhance_window"] = e.get("enhance_window")
+    report["metrics"]["bytes_enhance"] = e.get("bytes_enhance")
+    ms: list = []
+    rebuilt = 0
+    for i in range(min(SAMPLES, 60)):
+        a = 0.1 + 0.6 * ((i % 10) / 9.0)
+        engine_perf.send(cmd="enhance", action="set",
+                         sclera=a, iris=a * 0.8, teeth=a * 0.6)
+        e = _want(engine_perf, "enhance_done", timeout=120)
+        ms.append(float(e.get("enhance_ms") or 0.0))
+        rebuilt += 1 if e.get("layer_recomputed") else 0
+    report["metrics"]["enhance_apply_ms"] = bill(ms)
+    # 拖动期间不许反复重画掩膜：每事件重画就是每事件付一次几何栅格化 + 内容门 + 一次
+    # D2H（实测 12 ms/次），"毫秒级"当场不成立。这一格与形变那臂的
+    # deform_builds_during_drag 同一个身份：功能事实（系数与几何各算一次钱），不是偏好。
+    report["metrics"]["enhance_rebuilds_during_drag"] = rebuilt
+    assert rebuilt == 0, f"拖动 {len(ms)} 次里重画了 {rebuilt} 次掩膜：这一层没在复用场"
+
+
 def test_export_batch_percentiles(engine_perf, report):
     """批量出片的逐张成本（EXPORT-002/003 的"队列稳定"要看的是每张都有数）。"""
     _fixture_or_skip()

@@ -3108,8 +3108,12 @@ def test_switching_documents_returns_the_exact_same_frame(engine, tmp_path):
         b = engine.wait_for("image_ready", timeout=90)
         assert b["session_index"] == 1 and b["switched"] is False, b
         assert abs(float(b["strength"]) - 0.5) < 1e-6, f"b 拿到了 a 的强度：{b['strength']}"
+        # 这份字面量是 edits 名单的第二处出处（第一处在 server._state_edits）：引擎加了
+        # 一层（PORTRAIT-009 的 enhance）就必须在这里同步一格。不同步就是拿一份旧名单当
+        # 回归基线——它报红是**对的**，提醒"有一层的账没人看了"。
         assert b["layers"] == {"repair": 0, "light": 0, "deform": False, "lut": False,
-                               "lut_preset": None, "grade": False, "channel": None}, b["layers"]
+                               "lut_preset": None, "grade": False, "enhance": False,
+                               "channel": None}, b["layers"]
         assert b["bytes_lut"] == 0 and b["grade_state"]["lit"] is False, b
         frame_b = _read_frame(engine, peer, h, w)
         assert np.abs(frame_b - edited).mean() > 4.0, "a 与 b 是同一张画面，这个对拍没有鉴别力"
@@ -3143,6 +3147,7 @@ def test_switching_documents_returns_the_exact_same_frame(engine, tmp_path):
         assert st["index"] == 0 and st["docs"][0]["edits"]["repair"] == 1, st["docs"][0]
         assert st["docs"][1]["edits"] == {"repair": 0, "light": 0, "deform": False,
                                           "lut": False, "lut_preset": None, "grade": False,
+                                          "enhance": False,
                                           "channel": None}, st["docs"][1]["edits"]
 
         # 重复点当前那一格不开新会话（白付一次解码，还会把没存快照的 live 状态重装）
