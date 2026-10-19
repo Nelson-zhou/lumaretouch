@@ -37,6 +37,11 @@ export interface StudioProps {
   exporting: boolean;
   faceOk: boolean;
   faceWhy: string;
+  /** 形变有哪些格：引擎 ready 报的那一份（`deform_kinds`）。空数组 = 这个引擎没报，
+   *  面板整栏禁用并写明原因，而不是退回一份前端自己记的名单。 */
+  deformKinds: string[];
+  /** 值域同样取引擎（`deform_range`）；没报就按 [-1,1]，但那只是缺省，不是副本 */
+  deformRange?: number[];
   note: (s: string) => void;
   onDone: () => void;
   brush: BrushState;
@@ -150,6 +155,11 @@ export default function StudioPanel(props: StudioProps) {
   // 是不是完全跟随默认。全部取自引擎报的那一份，前端不数、不猜、不自己记
   const layerDefault = doc?.deform.default ?? {};
   const overridden = doc?.deform.overridden_kinds ?? [];
+  // 画哪几格：引擎 ready 那份名单优先；还没握手时退回**这份文档的 amounts 键**
+  // （引擎按 KINDS 全量建账，键集合就是名单，仍然是引擎说的）。两个来源都不是前端刻的。
+  const kinds = props.deformKinds.length ? props.deformKinds : Object.keys(deforms);
+  const [kLo, kHi] = (props.deformRange && props.deformRange.length === 2)
+    ? [props.deformRange[0], props.deformRange[1]] : [-1, 1];
   const inherited = doc?.deform.inherited ?? true;
   const scope = props.deformScope;
   /** 多人图那一份名单与选型（LNX-PORTRAIT-003）：chip 数、能不能放行，全从引擎报的读。
@@ -244,13 +254,16 @@ export default function StudioPanel(props: StudioProps) {
           ? t("retouch.inheritAll")
           : t("retouch.overriddenNote",
               { kinds: overridden.map((k) => t(("retouch." + k) as MsgKey)).join("、") })}</div>
-        {(["slim_face", "big_eye", "small_chin"] as const).map((kind) => (
+        {!kinds.length && (
+          <div className="p0why">{t("retouch.noKinds")}</div>
+        )}
+        {kinds.map((kind) => (
           <div key={kind}>
             <label className="k">{t(("retouch." + kind) as MsgKey)} · {(deforms[kind] ?? 0).toFixed(2)}
               {scope === "person" && !overridden.includes(kind)
                 ? `（${t("retouch.followDefault")} ${(layerDefault[kind] ?? 0).toFixed(2)}）` : ""}
             </label>
-            <input type="range" min={-1} max={1} step={0.01}
+            <input type="range" min={kLo} max={kHi} step={0.01}
                    disabled={dim || !props.faceOk}
                    value={deforms[kind] ?? 0}
                    // 只发改变的那一格：整组回发会把「生效值」写进所选那一层，于是改一次

@@ -90,6 +90,9 @@ const zh = {
   "retouch.slim_face": "瘦脸",
   "retouch.big_eye": "大眼",
   "retouch.small_chin": "小下巴",
+  "retouch.smile": "微笑嘴角",
+  "retouch.noKinds": "引擎还没报出形变名单（握手未完成或该引擎没有这一层），"
+    + "因此这一栏没有控件可画——不是坏了，是这台机器的引擎不认领它",
   "retouch.deformInvalidated": "形变层已清除（关键点后端换了，滑块随之归零）",
   // 几何不像一张脸时的警告：share 是这一层会动到的画幅比例，backend 是关键点出处
   "retouch.geomWarn": "关键点几何不像一张脸：这一层会动到画面 {share}% 的像素（后端 {backend}）。"

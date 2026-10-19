@@ -760,6 +760,11 @@ export interface EngineStatus {
     pick_edge?: number[];
     pick_edge_default?: number;
     project_suffix?: string;
+    /** 形变名单与值域（LNX-PORTRAIT-012 起）。面板画几格滑块由这一格决定，
+     *  前端不再自己刻一份元组——刻了就是第二个出处，加 kind 时必然出现
+     *  "引擎有而屏幕上没有"（与 auto_pick 那一格同一类）。 */
+    deform_kinds?: string[];
+    deform_range?: number[];
     task_actions?: string[];
     export_formats?: string[];
     [k: string]: unknown;

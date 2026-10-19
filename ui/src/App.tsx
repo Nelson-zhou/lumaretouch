@@ -126,8 +126,9 @@ export default function App() {
   const [lastLight, setLastLight] = useState<LightInfo | null>(null);
   // 形变三滑块（M2-b）。存一个对象而不是三个数：送进引擎的就是一份 amounts，
   // 拆成三个 state 会让“只改一个但三个都得送”这种不一致没法说清。
+  // 默认值只是"引擎还没说话之前显示 0"，不是名单：名单一律来自 ready 的 deform_kinds
   const [deformAmounts, setDeformAmounts] = useState<Record<string, number>>({
-    slim_face: 0, big_eye: 0, small_chin: 0,
+    slim_face: 0, big_eye: 0, small_chin: 0, smile: 0,
   });
   const [lastDeform, setLastDeform] = useState<DeformInfo | null>(null);
   // 引擎把形变层整条清除时说的那句话（为什么滑块自己回零了）：不写这一句，
@@ -247,7 +248,7 @@ export default function App() {
     setBroadGain(ds.params.broad_gain ?? 0.0);
     setChannel(ds.channel ?? "");
     setLightExposure(ds.light.exposure);
-    setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0, ...ds.deform.amounts });
+    setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0, smile: 0, ...ds.deform.amounts });
     setLutAmount(ds.lut.amount);
     setGradeAmounts({ dh: ds.grade.dh, ds: ds.grade.ds, dv: ds.grade.dv });
     setGradeMix(ds.grade.amount);
@@ -270,11 +271,11 @@ export default function App() {
           // 重开工程 / 迁会话那一条：层还在而关键点还没回来。滑块值保持引擎报的那一份
           // （deferred_amounts）——归零就是“把用户的作品按引擎内部事件抹掉”，而那句
           // 「已清除」是 invalidate 才说的。值没丢而画面暂未生效，由面板那行提示讲清。
-          setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0,
+          setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0, smile: 0,
                              ...(st.deform.deferred_amounts ?? st.deform.amounts ?? {}) });
           setDeformNote(st.deform.reason ?? "");
         } else if (st.deform.action === "invalidate") {
-          setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0 });
+          setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0, smile: 0 });
           setDeformNote(st.deform.reason ?? "");
           setDeformGeomWarn(false);
         } else {
@@ -2774,6 +2775,8 @@ export default function App() {
                                  if (q.feather !== undefined) setFeather(q.feather);
                                  if (q.mode !== undefined) setBrushMode(q.mode);
                                } }}
+                     deformKinds={status?.ready_caps?.deform_kinds ?? []}
+                     deformRange={status?.ready_caps?.deform_range}
                      exportDir={exportDir} setExportDir={setExportDir}
                      exportBits16={exportBits16} setExportBits16={setExportBits16}
                      deformScope={deformScope} setDeformScope={setDeformScope}
