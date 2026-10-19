@@ -6,7 +6,11 @@
   本版本没有——所以它们在这里没有测试；同图分人编辑（003）与层级覆盖继承（004）有，
   判据逐条取自冻结件原文（见下面两个 `test_` 函数）。003/004 都不越界成"跨图认人"：
   覆盖挂在**这一轮分析出来的脸盒**上，换一张图就重新按脸盒认，不假装认得"同一个人";
-· PORTRAIT-008/010/011/012（全身、妆容头发、手脚、表情）本版本一行实现都没有
+· PORTRAIT-008/010/011（全身、妆容头发、手脚）本版本一行实现都没有——它们要的
+  是姿态/发丝/手部那一层感知，没有那一层就没有可验的判据，所以这里不写测试也不签成做了；
+· PORTRAIT-012（表情）这一版本只做**嘴角上扬**那一格（露齿笑/抿嘴笑/闭合嘴巴/换表情
+  要重建唇齿内容 = 生成式 = 冻结件 2310 行的 P2 实验档），所以下面那条测的是这一格，
+  不支持的那四样以「整条拒 + 报得出可用名单」的形式测；
   （012 表情要新的形变目标与唇齿连续性判据，见 ADR-0009 §4 的档位；011 手脚要手部关键点，
   我们只带 FaceMesh；008 全身要身体姿态，同理）；
 ·（PICK-001 原来在这段里：做它要一个我们没有的分类器，而拿启发式规则冒充 AI 正是 DoD
@@ -28,6 +32,7 @@
   客观可测，"背景异常"那一半是**人工**，本文件不代签，见 case-map 的 manual 标记）
 · PORTRAIT-003 "第二人的有效配方不变；图像影响在定义的第一人蒙版边缘内"
 · PICK-001   "建议必须可覆盖，不会自动永久删除照片；近似分组与判定原因可见"
+· PORTRAIT-012 "中性值可恢复"＋在出片上重测关键点判身份与唇齿连续（阈值取实测）
 · PORTRAIT-004 "覆盖项继续生效；未覆盖项跟随；恢复继承后全部按层级合成"
 · BACKGROUND-001 "人像边界与目标区域保护通过；不支持场景明确失败并可恢复"
   （换底与色键早就在装机件里，缺的是这两句 then 的证据：真值取自测试自己画的几何已知
@@ -43,6 +48,7 @@ import os
 from pathlib import Path
 
 import numpy as np
+from lumaretouch_engine.ops.deform import KINDS
 import pytest
 
 from lumaretouch_engine.ops.light import DEFAULT_DB_RADIUS
@@ -60,6 +66,17 @@ RADIUS_WIDE = 60
 STROKE = (120, 80, 40, 40)      # (y0, x0, h, w)：代理帧坐标下的一块实心方块
 EPS = 2                         # 判定"这一格被动过"的最小 LSB 差
 TEAR_SLACK_LSB = 40             # 连续网格重采样不该造出比原图更陡的边缘，余量给插值
+
+
+def _amounts(**kw):
+    """一份"这一格是 0，其余按 kw 给"的形变账，**键集合取自引擎的 KINDS**。
+
+    测试里以前写死三元组，引擎加第四格（smile）时红的是测试而不是产品——那是好事，
+    但修的方式不能是再补一个字面量：补完就有第二份名单了。这里让期望值跟着引擎走。
+    """
+    from lumaretouch_engine.ops.deform import KINDS
+    return {k: float(kw.get(k, 0.0)) for k in KINDS}
+
 
 
 def _bbox(diff: np.ndarray, thr: int = EPS):
@@ -987,7 +1004,7 @@ def test_person_override_follows_and_inherits_the_all_person_default(engine, ext
     box_a, box_b = right["box"], left["box"]
     core_a = _face_region(h, w, box_a, shrink=0.25)
     core_b = _face_region(h, w, box_b, shrink=0.25)
-    ZERO = {"slim_face": 0.0, "big_eye": 0.0, "small_chin": 0.0}
+    ZERO = _amounts()
     base = _current(engine, peer, h, w)
 
     def layered():
@@ -1025,19 +1042,19 @@ def test_person_override_follows_and_inherits_the_all_person_default(engine, ext
                                amounts={"slim_face": 0.5})
     assert done["scope"] == "all" and done["built"] is True and done["lit"] is True, done
     assert done["default"]["slim_face"] == 0.5 and done["inherited"] is True, done
-    assert done["amounts"] == {"slim_face": 0.5, "big_eye": 0.0, "small_chin": 0.0}, done
+    assert done["amounts"] == _amounts(slim_face=0.5, big_eye=0.0, small_chin=0.0), done
     d = np.abs(f_slim.astype(np.int16) - base.astype(np.int16)).max(axis=2)
     assert int(d[core_a].max()) > EPS, "改了全人物默认而选中那张没动：假控件"
     assert int(d[core_b].max()) == 0, "改默认时把没选中的那个人也推了"
     # 同一层的第二格：部分提交不许把上一格默认抹掉（写默认 ≠ 写合成结果）
     done2, _ = _layer_shot(engine, peer, h, w, action="set", scope="all",
                            amounts={"big_eye": 0.3})
-    assert done2["default"] == {"slim_face": 0.5, "big_eye": 0.3, "small_chin": 0.0}, done2
+    assert done2["default"] == _amounts(slim_face=0.5, big_eye=0.3, small_chin=0.0), done2
 
     # 换到 B：完全没有覆盖的人，有效值就是默认那三个数（②"未覆盖项跟随"）
     sel(b)
     st_b = layered()
-    assert st_b["amounts"] == {"slim_face": 0.5, "big_eye": 0.3, "small_chin": 0.0}, st_b
+    assert st_b["amounts"] == _amounts(slim_face=0.5, big_eye=0.3, small_chin=0.0), st_b
     assert st_b["inherited"] is True and st_b["overridden_kinds"] == [], st_b
     f_b_default = _current(engine, peer, h, w)
     db0 = np.abs(f_b_default.astype(np.int16) - base.astype(np.int16)).max(axis=2)
@@ -1054,18 +1071,18 @@ def test_person_override_follows_and_inherits_the_all_person_default(engine, ext
         done3
     assert [round(v, 3) for v in done3["overrides"][0]["box"]] == [round(v, 3) for v in box_a], \
         f"覆盖没挂在 A 的脸盒上：{done3['overrides'][0]['box']} vs {box_a}"
-    assert done3["amounts"] == {"slim_face": 0.5, "big_eye": 0.9, "small_chin": 0.0}, done3
+    assert done3["amounts"] == _amounts(slim_face=0.5, big_eye=0.9, small_chin=0.0), done3
     done4, f_ov2 = _layer_shot(engine, peer, h, w, action="set", scope="all",
                                amounts={"slim_face": 0.2})
-    assert done4["default"] == {"slim_face": 0.2, "big_eye": 0.3, "small_chin": 0.0}, done4
-    assert done4["amounts"] == {"slim_face": 0.2, "big_eye": 0.9, "small_chin": 0.0}, \
+    assert done4["default"] == _amounts(slim_face=0.2, big_eye=0.3, small_chin=0.0), done4
+    assert done4["amounts"] == _amounts(slim_face=0.2, big_eye=0.9, small_chin=0.0), \
         f"改默认把 A 的覆盖也一起改了（覆盖项必须继续生效）：{done4['amounts']}"
     d4 = np.abs(f_ov2.astype(np.int16) - f_ov.astype(np.int16)).max(axis=2)
     assert int(d4[core_a].max()) > 0, "slim 从 0.5 改到 0.2 而 A 的画面没跟着走：未覆盖项没跟随默认"
     # 这时换到 B：她看到的就是新默认，A 那一格覆盖不许漏给她
     sel(b)
     st_b2 = layered()
-    assert st_b2["amounts"] == {"slim_face": 0.2, "big_eye": 0.3, "small_chin": 0.0}, st_b2
+    assert st_b2["amounts"] == _amounts(slim_face=0.2, big_eye=0.3, small_chin=0.0), st_b2
     assert st_b2["inherited"] is True and len(st_b2["overrides"]) == 1, \
         f"A 的覆盖必须还在名单里（不许抹），而 B 自己全程全继承：{st_b2}"
 
@@ -1075,12 +1092,12 @@ def test_person_override_follows_and_inherits_the_all_person_default(engine, ext
     _layer_shot(engine, peer, h, w, action="set", scope="all", amounts={"slim_face": 0.5})
     ref_ov, f_with_ov = _layer_shot(engine, peer, h, w, action="set", scope="person",
                                     amounts={"big_eye": 0.9})     # 同值重写
-    assert ref_ov["amounts"] == {"slim_face": 0.5, "big_eye": 0.9, "small_chin": 0.0}, ref_ov
+    assert ref_ov["amounts"] == _amounts(slim_face=0.5, big_eye=0.9, small_chin=0.0), ref_ov
     # 路径一：0.9 → inherit
     inh1, f_inherit_1 = _layer_shot(engine, peer, h, w, action="inherit")
     assert inh1["action"] == "inherit" and inh1["inherited"] is True, inh1
     assert inh1["overrides"] == [] and inh1["overridden_kinds"] == [], inh1
-    assert inh1["amounts"] == {"slim_face": 0.5, "big_eye": 0.3, "small_chin": 0.0}, \
+    assert inh1["amounts"] == _amounts(slim_face=0.5, big_eye=0.3, small_chin=0.0), \
         f"恢复继承后没有全按层级合成：{inh1['amounts']}"
     assert int(np.abs(f_inherit_1.astype(np.int16)
                       - f_with_ov.astype(np.int16)).max(axis=2)[core_a].max()) > 0, \
@@ -1178,8 +1195,7 @@ def test_person_override_follows_and_inherits_the_all_person_default(engine, ext
     eng2.send(cmd="face", action="select", index=b)
     eng2.wait_for("face_selected", timeout=60)
     st3 = _live_state(eng2)["deform"]
-    assert st3["inherited"] is True and st3["amounts"] == {"slim_face": 0.5, "big_eye": 0.3,
-                                                           "small_chin": 0.0}, \
+    assert st3["inherited"] is True and st3["amounts"] == _amounts(slim_face=0.5, big_eye=0.3), \
         f"覆盖被记成了名单序号而不是脸盒：选到 B 却读到 {st3['amounts']}"
     assert _sha_of(path) == src_sha, "打开/保存工程动了原片"
 
@@ -1648,3 +1664,194 @@ def test_background_swap_protects_subject_edges_and_refuses_what_it_cannot_do(en
     assert not np.array_equal(again, base), "三次拒绝后色键换底应仍然可用"
     engine.send(cmd="background", action="clear")
     engine.wait_for("bg_done", timeout=30)
+# ── PORTRAIT-012（表情调整：本版本做的那一格是「微笑嘴角」）────────────────────
+def _detect_on(path):
+    """在**出片**上再跑一次 MediaPipe，返回该图像素坐标下的 478 点。
+
+    为什么自己跑而不问引擎：引擎报的是"我按哪份几何搬的控制点"，这里要问的是
+    "搬完之后这张脸还认不认得出是同一个人"。缺后端就直接抛，不许退成模板几何——
+    模板点是自己摆的，拿它当"检测结果"就是自证。
+    """
+    import importlib.util
+
+    from PIL import Image
+
+    from lumaretouch_engine import face as face_mod
+
+    if importlib.util.find_spec("mediapipe") is None:
+        pytest.fail("运行时没装 mediapipe：表情这一条要在出片上重测关键点，"
+                    "不许退成模板几何（装法见 engine/requirements-mediapipe.txt）")
+    rgb = np.asarray(Image.open(path).convert("RGB"), dtype=np.uint8)
+    pc = face_mod.build("mediapipe")(rgb)
+    assert pc.num_faces == 1, f"出片上认出 {pc.num_faces} 张脸，这条判据失去对象"
+    return np.asarray(pc.landmarks, dtype=np.float64)[:, :2] * [rgb.shape[1], rgb.shape[0]]
+
+
+def _smile_shot(engine, peer, h, w, amount):
+    """发一条 smile，同时拿下账单与那一帧（次序与 cmd_deform 一致：先账单后帧）。"""
+    from test_protocol import _next_event
+
+    _drain(engine)
+    engine.send(cmd="deform", action="set", amounts={"smile": amount})
+    done = None
+    while True:
+        e = _next_event(engine, skip=("session_state", "engine_warn"), timeout=120.0)
+        if e["event"] == "deform_done":
+            done = e
+        elif e["event"] == "frame" and e.get("mode") == "deform":
+            assert done is not None, "帧先于账单到了：与 cmd_deform 里写的次序不一样"
+            return done, _frame_of(e, peer, h, w), e
+        elif e["event"] == "error":
+            raise AssertionError(f"引擎拒绝了 smile：{e.get('error')}")
+
+
+def _export_one(engine, out_dir):
+    _drain(engine)
+    engine.send(cmd="export", out_dir=str(out_dir), format="png", tile=256, quality=90,
+                images=[FIXTURE])
+    done, _seen = _collect_done(engine)
+    assert int(done["failed"]) == 0, done
+    rep = done["images"][0]
+    assert not any("deform" in str(s) for s in (rep.get("skipped") or [])), \
+        f"形变层在导出里被放下了：{rep.get('skipped')}"
+    return str(rep["out"])
+
+
+def test_smile_raises_the_corners_keeps_the_person_and_restores_neutrally(engine, tmp_path):
+    """LNX-PORTRAIT-012（表情）本版本那一格：嘴角上扬可控、身份与唇齿连续、中性可回。
+
+    冻结件的 `then` 是三句："保留身份和唇齿连续性；无纹理破裂；中性值可恢复"。
+    逐句落成可跑的判据（阈值是**实测**数加余量，不是先拍的）：
+
+    ① 中性可恢复 —— smile=0 那一帧与出厂帧**逐字节相同**，推到 0.8 再回 0 也逐字节
+       相同。不许用"差别很小"糊过去：中性不干净，用户每拖一次都在慢慢改变一张图。
+    ② 可控 —— 在出片上重测关键点：嘴角上抬实测 23.1/24.6 px（按 SMILE_LIFT_OF_MOUTH_W
+       请求 20.9 px），判 0.5–2.0 倍之间；左右差 ≤ 25%（不对称的笑就是脸歪）。
+    ③ 身份保持 —— 虹膜中心移动 ≤ max(3 px, 25% 嘴角量)（实测 0.66/1.40 px），
+       瞳距相对变化 ≤ 2%（实测 −0.90%）。嘴角动了而眼睛也跟着走 = 换人不是表情。
+       这一条是加了身份锚之后才立得住的：没锚时同一档把瞳距改到 −3.9%。
+    ④ 唇齿连续 / 无纹理破裂 —— 内唇上下中点在检测里的移动 ≤ 60% 嘴角量（实测 36%）；
+       嘴周带的边缘能量 99.9 分位不许比同一管线的中性出片高一档（实测反而更低：
+       109.3 → 70.2，重采样把边缘磨软了，没有造出新的硬边）。det J > 0 那条不折叠
+       的判据在 test_deform 算子层钉着，这里补的是过完整链之后的读数。
+    ⑤ 局部性 —— 底部 12% 那一横条逐字节不动（实测作用面 bbox 到 426 行、画幅 504 行）。
+       **不**要求"画面外沿一圈不动"：这张夹具的脸填满画幅，1.6R 的紧支撑窗把整幅都
+       盖住了（ADR-0009 量过），所以那里给的是"最多 25 LSB"的余量而不是 0（实测 18）。
+    ⑥ 做不到的那几样（露齿笑 / 抿嘴笑 / 闭合嘴巴 / 换表情 = 要重建唇齿内容，属冻结件
+       2310 行的 P2 实验档）整条拒，且拒的时候说得出可用名单；拒完画面一格没动。
+    """
+    _needs_torch()
+    src_sha = _sha_of(FIXTURE)
+    meta = _open(engine, max_px=207360)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    base = _current(engine, peer, h, w)
+    engine.send(cmd="precompute", backend="mediapipe")
+    pc = engine.wait_for("precompute_ready", timeout=180)
+    assert pc["backend"] == "mediapipe" and int(pc["num_faces"]) == 1, pc
+    base = _current(engine, peer, h, w)
+
+    # ── ① 中性：一格都不动
+    done0, f0, _ev0 = _smile_shot(engine, peer, h, w, 0.0)
+    assert done0["amounts"]["smile"] == 0.0, done0["amounts"]
+    assert np.array_equal(f0, base), (
+        f"smile=0 动了 {int((np.abs(f0 - base).max(axis=2) > 0).sum())} 格：中性不干净")
+    # 全零时引擎不建层（built=False 是如实报账，面板那句"已生效"必须跟着它，
+    # 而不是跟着"我发过一条命令"）
+    assert done0["built"] is False and done0["lit"] is False, done0
+
+    # ── ②⑤ 推到 0.8：画面按方向在动，而作用面有边界
+    done8, f8, _ev8 = _smile_shot(engine, peer, h, w, 0.8)
+    assert done8["built"] is True and done8["lit"] is True, done8
+    diff = f8.astype(np.int16) - base.astype(np.int16)
+    moved = int((np.abs(diff).max(axis=2) > 0).sum())
+    assert moved > 1000, f"smile=0.8 只动了 {moved} 格（这才是假滑块该有的样子）"
+    assert 0.0 < float(done8["support_share"]) < 1.0, done8["support_share"]
+    bottom = np.zeros((h, w), dtype=bool)
+    bottom[int(h * 0.88):, :] = True
+    assert int(np.abs(diff[bottom]).max()) == 0, (
+        f"底部 12% 被 smile 动了 {int(np.abs(diff[bottom]).max())} LSB：这一格的作用面"
+        "越过了它自己报的那只窗")
+    m = max(2, int(0.06 * min(h, w)))
+    ring = np.ones((h, w), dtype=bool)
+    ring[m:h - m, m:w - m] = False
+    assert int(np.abs(diff[ring]).max()) <= 25, (
+        f"最外 6% 那一圈被推到 {int(np.abs(diff[ring]).max())} LSB：窗没收住（实测 18）")
+
+    # ── ① 回到中性：逐字节回来
+    _done_back, fb, _evb = _smile_shot(engine, peer, h, w, 0.0)
+    assert np.array_equal(fb, base), "推到 0.8 再回 0 没逐字节回到出厂帧"
+
+    # ── 负档是反向等幅（下拉），不是"另一种表情"
+    _dneg, fneg, _evn = _smile_shot(engine, peer, h, w, -0.8)
+    moved_neg = int((np.abs(fneg - base).max(axis=2) > 0).sum())
+    assert moved_neg > 1000, f"负档只动了 {moved_neg} 格：下拉这一半是没接通的"
+
+    # ── ②③④ 出片上的读数：带着 smile 导一次，同一管线中性导一次
+    _smile_shot(engine, peer, h, w, 0.8)
+    smiled = _export_one(engine, tmp_path / "smiled")
+    _smile_shot(engine, peer, h, w, 0.0)
+    plain = _export_one(engine, tmp_path / "plain")
+    lm_s, lm_p = _detect_on(smiled), _detect_on(plain)
+
+    from lumaretouch_engine.ops.deform import (IRIS_LEFT, IRIS_RIGHT, LIP_INNER_BOTTOM,
+                                               LIP_INNER_TOP, MOUTH_CORNER_LEFT,
+                                               MOUTH_CORNER_RIGHT, SMILE_LIFT_OF_MOUTH_W)
+
+    corners = (MOUTH_CORNER_LEFT, MOUTH_CORNER_RIGHT)
+    mouth_w = float(np.hypot(*(lm_p[corners[1]] - lm_p[corners[0]])))
+    want = SMILE_LIFT_OF_MOUTH_W * 0.8 * mouth_w
+    lift = np.array([lm_p[c][1] - lm_s[c][1] for c in corners])      # y 向下：正=上抬
+    assert (lift > 0).all(), f"两个嘴角都该往上走，实测 {lift}：这一格是哭不是笑"
+    assert 0.5 * want <= lift.min() <= 2.0 * want, (
+        f"嘴角抬了 {lift} px，按 SMILE_LIFT_OF_MOUTH_W 请求的是 {want:.1f} px：不是可控幅度")
+    assert abs(lift[0] - lift[1]) <= 0.25 * abs(lift).max() + 1.0, f"左右不对称：{lift}"
+
+    iris = [IRIS_LEFT, IRIS_RIGHT]        # 列表而不是元组：元组会被当成多轴下标
+    iris_move = float(np.abs(lm_s[iris] - lm_p[iris]).max())
+    assert iris_move <= max(3.0, 0.25 * float(lift.min())), (
+        f"虹膜跟着走了 {iris_move:.2f} px（嘴角才 {lift.min():.1f} px）：改的不是表情，是脸")
+    ipd_p = float(np.hypot(*(lm_p[iris[0]] - lm_p[iris[1]])))
+    ipd_s = float(np.hypot(*(lm_s[iris[0]] - lm_s[iris[1]])))
+    assert abs(ipd_s - ipd_p) / ipd_p <= 0.02, (
+        f"瞳距变了 {abs(ipd_s - ipd_p) / ipd_p:.2%}（实测 −0.90%）：身份骨架被拖着走")
+
+    lip = float(np.abs(lm_s[[LIP_INNER_TOP, LIP_INNER_BOTTOM]]
+                       - lm_p[[LIP_INNER_TOP, LIP_INNER_BOTTOM]]).max())
+    assert lip <= 0.6 * float(lift.min()) + 1.0, (
+        f"内唇中点被拖走 {lip:.1f} px（嘴角才 {lift.min():.1f}）：唇中线没锚住，"
+        "唇齿连续性就只是句口号")
+
+    def _band_energy(lm, img):
+        l, r = lm[MOUTH_CORNER_LEFT], lm[MOUTH_CORNER_RIGHT]
+        cx, cy = (l + r) / 2.0
+        rad = float(np.hypot(*(r - l)) / 2.0) * 1.6
+        yy, xx = np.mgrid[0:img.shape[0], 0:img.shape[1]]
+        mask = (xx - cx) ** 2 + (yy - cy) ** 2 <= rad ** 2
+        g = img.astype(np.float64).mean(axis=2)
+        gx = np.abs(np.diff(g, axis=1, prepend=g[:, :1]))
+        gy = np.abs(np.diff(g, axis=0, prepend=g[:1, :]))
+        v = (gx + gy)[mask]
+        return float(np.percentile(v, 99.9)) if v.size else 0.0
+
+    from PIL import Image
+
+    img_p = np.asarray(Image.open(plain).convert("RGB"))
+    img_s = np.asarray(Image.open(smiled).convert("RGB"))
+    e_p, e_s = _band_energy(lm_p, img_p), _band_energy(lm_s, img_s)
+    assert e_s <= 1.1 * e_p + 1.0, (
+        f"嘴周边缘能量 99.9 分位从 {e_p:.1f} 涨到 {e_s:.1f}：出片上长出了原图没有的硬边"
+        "（撕裂/内翻的形状）")
+
+    # ── ⑥ 不支持的表情：整条拒、说得出可用名单、画面一格没动
+    _done_ref, ref_frame, frame_ev = _smile_shot(engine, peer, h, w, 0.8)
+    ev = {"frame": frame_ev}
+    for bad in ("teeth_show", "pout", "mouth_close", "expression_transfer"):
+        _drain(engine)
+        engine.send(cmd="deform", action="set", amounts={bad: 0.5})
+        err = engine.wait_for("error", timeout=30)
+        assert bad in err["error"] and "smile" in err["error"], (
+            f"拒 {bad} 时没说清能做的是哪几格：{err['error']}")
+        _assert_no_new_frame(engine, peer, meta, ev, ref_frame, f"请求 {bad} 被拒之后")
+
+    assert _sha_of(FIXTURE) == src_sha, "表情这一条改了原片"

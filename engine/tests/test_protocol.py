@@ -18,6 +18,7 @@ import base64
 import importlib.util
 
 import numpy as np
+from lumaretouch_engine.ops.deform import KINDS
 import pytest
 
 from lumaretouch_engine import session as S
@@ -25,6 +26,17 @@ from lumaretouch_engine import project as _PJ
 from lumaretouch_engine.shm import FrameShm, monotonic_ns, shm_name
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _amounts(**kw):
+    """一份"这一格是 0，其余按 kw 给"的形变账，**键集合取自引擎的 KINDS**。
+
+    测试里以前写死三元组，引擎加第四格（smile）时红的是测试而不是产品——那是好事，
+    但修的方式不能是再补一个字面量：补完就有第二份名单了。这里让期望值跟着引擎走。
+    """
+    from lumaretouch_engine.ops.deform import KINDS
+    return {k: float(kw.get(k, 0.0)) for k in KINDS}
+
 
 
 class EngineProcess:
@@ -1669,7 +1681,7 @@ def test_deform_on_template_backend_moves_the_frame_and_clear_restores_it(engine
         lit = _read_frame(engine, peer, h, w)
         assert np.abs(lit - base).max() > 0, "瘦脸 0.9 没改到画面"
         # 只改一个滑块，另两个必须停在 0（先校验后提交不得“顺手清零”）
-        assert done["amounts"] == {"slim_face": 0.9, "big_eye": 0.0, "small_chin": 0.0}, done
+        assert done["amounts"] == _amounts(slim_face=0.9, big_eye=0.0, small_chin=0.0), done
         engine.send(cmd="deform", action="set", amounts={"slim_face": 0.45})
         half = engine.wait_for("deform_done", timeout=60)
         assert "build" not in half, "第二次 set 不应当重建"
@@ -3118,7 +3130,7 @@ def test_switching_documents_returns_the_exact_same_frame(engine, tmp_path):
         assert abs(ds["grade"]["ds"] + 0.3) < 1e-6 and ds["grade"]["lit"] is True, ds["grade"]
         assert ds == ds_before, f"切走时与回来时的文档状态不是一个数：\n 走 {ds_before}\n 回 {ds}"
         assert ds["params"]["radius"] >= 1 and ds["light"]["radius"] >= 0, ds
-        assert set(ds["deform"]["amounts"]) == {"slim_face", "big_eye", "small_chin"}, ds["deform"]
+        assert set(ds["deform"]["amounts"]) == set(KINDS), ds["deform"]
         assert all(abs(v) < 1e-9 for v in ds["deform"]["amounts"].values()), \
             "这张图没动过形变滑块，回来却带着值：那是把上一张的场搬过来了"
         assert back["bytes_lut"] > 0 and back["grade_state"]["lit"] is True, back

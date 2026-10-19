@@ -2,7 +2,7 @@
  "schema": "lrt.acceptance-map.v1",
  "cases": "docs/acceptance/cases-frozen.json",
  "cases_sha256": "c2fca495b90e3aa7",
- "generated_at": "2026-10-19T04:21:21",
+ "generated_at": "2026-10-19T06:42:08",
  "map": {
   "CORE-001": {
    "tests": [
@@ -286,11 +286,14 @@
    "note": "未实装：手/脚检测与精修零实现（FaceMesh 不含手脚关键点）。"
   },
   "PORTRAIT-012": {
-   "tests": [],
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_smile_raises_the_corners_keeps_the_person_and_restores_neutrally",
+    "engine/tests/test_deform.py::test_resident_bytes_counts_units_and_grid"
+   ],
    "phase": "P1",
    "module": "expression",
    "title": "表情调整",
-   "note": "未实装：表情调整零实现。"
+   "note": "实装那一格：本版本的表情 = 嘴角上扬（几何搬点，幅度以嘴宽为单位）。\n   露齿笑/抿嘴笑/闭合嘴巴/换表情要重建唇齿内容（生成式，冻结件把生成式划进 P2 实验档），\n   引擎整条拒并报得出可用名单——UI 上也不给它们留控件。判据在**出片上重测 MediaPipe 关键点**：\n   实测 0.8 档嘴角上抬 23.1/24.6 px（按 SMILE_LIFT_OF_MOUTH_W 请求 20.9 px）、瞳距变化 −0.90%、\n   虹膜移动 ≤1.40 px、中性档与出厂帧逐字节相同。"
   },
   "MANUAL-001": {
    "tests": [
