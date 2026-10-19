@@ -20,6 +20,7 @@ import ast
 import importlib.util
 import json
 import pathlib
+import re
 
 import pytest
 
@@ -214,3 +215,26 @@ def test_parse_junit_refuses_doctype(tool, tmp_path):
     p.write_text('<!DOCTYPE x [<!ENTITY y "passed">]><testsuites/>', encoding="utf-8")
     with pytest.raises(SystemExit):
         tool.parse_junit(p)
+
+
+def test_release_scripts_do_not_hardcode_an_amounts_literal():
+    """定版脚本不许拿"整份形变字典字面量"做等式比较（1.7.0 定版那一记假红的产物）。
+
+    当时 m5-release-check.sh 层级那一臂写死了 `== {"slim_face": 0.2, "big_eye": 0.9,
+    "small_chin": 0.0}`。引擎 KINDS 新增 smile 之后，逐 kind 合成出来的字典自然多一格，
+    于是"期望落后于改动"被报成产品缺陷、VERDICT=FAIL。假红比缺判据贵：它教会人跳过红。
+
+    正确的形状是把两半分开判：这一臂显式设过的那几格逐格等于设计值，而它没碰过的格
+    必须全为 0。所以这里禁的是形状，不是判据强度。
+    """
+    pat = re.compile(r'(?:==|!=)\s*\{[^{}]*"?slim_face"?[^{}]*\}'
+                     r'|\{[^{}]*"?slim_face"?[^{}]*\}\s*(?:==|!=)')
+    hits = []
+    for path in sorted([*(_REPO_ROOT / "packaging").glob("*.sh"),
+                        *(_REPO_ROOT / "tools").glob("*.py")]):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for m in pat.finditer(text):
+            line = text.count("\n", 0, m.start()) + 1
+            hits.append(f"{path.name}:{line}")
+    assert not hits, ("定版脚本里写死了形变字典字面量等式：新增一格就会报假红，"
+                      f"改成逐格判（显式设过的等于设计值、没设过的必须为 0）：{hits}")

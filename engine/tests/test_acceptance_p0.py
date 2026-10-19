@@ -36,6 +36,16 @@ from test_protocol import (FIXTURE, _create_and_save, _expect_error, _frame_of, 
 REPO = Path(__file__).resolve().parents[2]
 REG = json.loads((REPO / "docs" / "p0" / "p0-registry-frozen.json").read_text(encoding="utf-8"))
 
+# 判「强度不是假滑块」用的磨皮配置。三个增益都落在协议校验的量程 [0, 2] 内
+# （`cmd_set_strength` 那道校验是量程的唯一出处），而这一组在库层 cpu/cuda 两臂各实测
+# 强度 0↔1 差 134 LSB。出厂那一组（broad 0 / mid 0 / detail 1）不够用：同一份真图两臂只
+# 有 1 LSB——那是"保留全部肌理"的语义，红线贴着 1 LSB 等于没有红线。
+SMOOTH_CONFIG = {"radius": 12, "eps": 0.0006, "texture_radius": 4,
+                 "broad_gain": 0.55, "mid_gain": 0.35, "detail_gain": 0.25}
+# 红线取 16 LSB（满幅的 6%）：实测 134，留一个"假滑块无论怎么摆都过不了"的下界，
+# 而不是贴着读数取个 1——那种红线一遇抗锯齿就红。
+NOT_A_FAKE_SLIDER_MIN_LSB = 16
+
 
 def entry(op_id: str, key: str) -> dict:
     """按 (operation_id, parameter_key) 取冻结件那一条。取不到就响：
@@ -98,11 +108,107 @@ def _open(engine, path: str = FIXTURE, **kw) -> dict:
     return {**shm, **img}
 
 
+# 每条命令「自己那一帧」怎么认：回执名（等到它，前面别人的帧就都消费掉了）或帧里的 mode。
+# 名单不全就当场响——退回去"拿下一帧"就是本轮那一记红色的来源。
+_FRAME_ACK = {"set_strength": "params_set", "inpaint": "inpaint_done",
+              "light": "light_done", "deform": "deform_done", "lut": "lut_done",
+              "grade": "grade_done", "background": "bg_done"}
+_FRAME_MODE = {"crop": "crop", "exposure": "exposure"}
+
+
 def _cmd_frame(engine, peer, h, w, *, cmd: str, **payload) -> np.ndarray:
-    """发一条会出帧的命令，返回**这一笔**写出的那一帧像素。"""
-    _drain(engine)
+    """发一条会出帧的命令，返回**这一笔**写出的那一帧像素（按回执/ mode 认，不按时间猜）。
+
+    为什么不能"排空队列再取下一帧"（drain + wait_for("frame")）：drain 的内层是
+    `next_event(timeout=0.1)` 且一遇空就 break，它赌的是"事件间隔不超过 0.1 s"；负载高时
+    上一条命令的帧还压在队列里，于是拿回旧帧。
+    也不能"发命令前取 peer.freshest() 的 seq，之后第一帧 seq 更大者算数"：前面几条命令
+    如果没等回执，它们的帧会在取样之后才提交进 shm，seq 照样更大——探针实测到
+    「请求 value=1.0 而拿回的那一帧事件自己写着 strength=0.0」，于是"强度 1.0 必须与 0.0
+    不同"被报成假滑块。事件流里的位置才是身份：引擎单线程，回执之后第一条 frame
+    必是本命令写的。
+    """
+    ack = _FRAME_ACK.get(cmd)
+    mode = _FRAME_MODE.get(cmd)
+    if ack is None and mode is None:
+        raise AssertionError(f"不知道 {cmd} 的帧怎么认：补进 _FRAME_ACK 或 _FRAME_MODE，"
+                             "不许退回去拿'下一帧'")
     engine.send(cmd=cmd, **payload)
-    return _read_frame(engine, peer, h, w)
+    acked = ack is None
+    want_strength = payload.get("value")
+    deadline = time.monotonic() + 90.0
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise AssertionError(f"90 s 内没等到 cmd={cmd} 自己那一帧"
+                                 f"（ack={ack} mode={mode}）")
+        try:
+            e = engine.next_event(timeout=min(10.0, left))
+        except TimeoutError:
+            continue
+        if e.get("event") == "error":
+            raise AssertionError(f"引擎报错: {e.get('error')}（cmd={cmd}）")
+        if not acked:
+            if e.get("event") == ack:
+                acked = True
+            continue
+        if e.get("event") != "frame":
+            continue
+        if mode is not None and e.get("mode") != mode:
+            continue
+        if want_strength is not None and e.get("strength") is not None \
+                and abs(float(want_strength) - float(e["strength"])) > 1e-6:
+            # 帧自己报了强度而对不上：这不是本命令那一帧，跳过并继续等（认错了就是伪证）
+            continue
+        return _frame_of(e, peer, h, w)
+
+
+def test_cmd_frame_picks_the_frame_committed_after_its_own_command():
+    """执行器自己的判据（不连引擎）：只认「本命令之后提交的那一帧」。
+
+    形状取自本轮全量回归那一记假红：队列里压着上一条命令的帧事件，旧写法
+    （排空 + 取下一帧）会把旧帧当本帧返回，于是「强度 1.0 必须与 0.0 不同」变成
+    「比较两次历史读数」。shm 的提交语义保证旧事件的 seq 不大于发命令前 shm 里的
+    最大 seq，本命令那一帧一定更大——按 seq 认帧是确定性的，按安静窗口认是碰运气。
+    """
+    hh, ww = 2, 2
+    old_px = bytes([7] * (hh * ww * 4))
+    new_px = bytes([9] * (hh * ww * 4))
+
+    class FakePeer:
+        def freshest(self):
+            return (5, 0, ww, hh, 0, 0)          # 发命令前已提交到 seq=5
+
+        def read_pixels(self, slot):
+            return old_px if slot == 0 else new_px
+
+    class FakeEngine:
+        def __init__(self, events):
+            self._events = list(events)
+            self.sent = []
+
+        def send(self, **payload):
+            self.sent.append(payload)
+
+        def next_event(self, timeout=None):
+            if not self._events:
+                raise TimeoutError("没有更多事件")
+            return self._events.pop(0)
+
+    # 上一版红的形状：请求 value=1.0，而队列里先躺着一帧 strength=0.0 的（属于上一条
+    # 命令）。只按"seq 更大"认，就会把那一帧当证据——实测到的正是这个。
+    eng = FakeEngine([{"event": "frame", "seq": 5, "slot": 0, "mode": "drag", "strength": 0.0},
+                      {"event": "params_set", "strength": 1.0},
+                      {"event": "frame", "seq": 6, "slot": 1, "mode": "drag", "strength": 1.0}])
+    got = _cmd_frame(eng, FakePeer(), hh, ww, cmd="set_strength", value=1.0)
+    assert eng.sent == [{"cmd": "set_strength", "value": 1.0}], eng.sent
+    assert got[..., 0].tolist() == [[9, 9], [9, 9]], \
+        "拿回的是队列里那条旧事件的帧：判据变成比历史读数，P0 中性那条会假红"
+    # 没有回执的命令按 mode 认（crop 只出带 mode 的帧）
+    eng2 = FakeEngine([{"event": "frame", "seq": 7, "slot": 0, "mode": "drag", "strength": 1.0},
+                      {"event": "frame", "seq": 8, "slot": 1, "mode": "crop"}])
+    got2 = _cmd_frame(eng2, FakePeer(), hh, ww, cmd="crop", action="clear")
+    assert got2[..., 0].tolist() == [[9, 9], [9, 9]], got2
 
 
 def _live_state(engine) -> dict:
@@ -231,9 +337,15 @@ def test_neutral_params_are_byte_identity_and_survive_save_reopen(engine, extra_
     engine.send(cmd="inpaint", action="clear")        # 祛瑕中性=没有笔迹
     engine.send(cmd="light", action="clear")
     # 蒙版中性=强度 0 且不作用掩膜；这一笔会出帧，按帧自己读
-    hot = _cmd_frame(engine, peer, h, w, cmd="set_strength", value=1.0)
-    assert int(np.abs(hot - base).max()) > 0, "强度 1.0 画面还一模一样：那是假滑块"
-    cold = _cmd_frame(engine, peer, h, w, cmd="set_strength", value=0.0, channel=None)
+    hot = _cmd_frame(engine, peer, h, w, cmd="set_strength", value=1.0, **SMOOTH_CONFIG)
+    d_hot = int(np.abs(hot - base).max())
+    assert d_hot >= NOT_A_FAKE_SLIDER_MIN_LSB, (
+        f"真要磨皮的配置下强度 1.0 只动了 {d_hot} LSB（红线 {NOT_A_FAKE_SLIDER_MIN_LSB}）："
+        "那是假滑块")
+    # 中性位那条判据一个字不放松：strength=0 时混合式是 `(1-0)*底图 + 0*磨皮结果`，
+    # 配置再怎么磨都不许漏进画面——这一条比"出厂配置下不动"强得多（0 × 任何东西恒为 0）。
+    cold = _cmd_frame(engine, peer, h, w, cmd="set_strength", value=0.0,
+                      channel=None, **SMOOTH_CONFIG)
     d = int(np.abs(cold - base).max())
     assert d == 0, f"全部回写中性位后画面差 {d} LSB：冻结口径是逐字节恒等"
 

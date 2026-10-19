@@ -29,7 +29,7 @@ from lumaretouch_engine import color_metric as CM
 from lumaretouch_engine.shm import FrameShm
 
 from test_protocol import FIXTURE, _needs_torch, _read_frame, _wait_frame_mode
-from test_acceptance_p0 import REPO, _drain, _open, engine   # noqa: F401
+from test_acceptance_p0 import REPO, _cmd_frame, _drain, _open, engine   # noqa: F401
 # （`engine` 必须被导入进本模块才能当 fixture 用：不导入会得到 fixture not found。）
 
 TESTDATA = REPO / "engine" / "tests" / "data" / "ciede2000testdata.txt"
@@ -115,9 +115,11 @@ def test_skin_retouch_keeps_texture_and_does_not_drift_color_or_bleed(engine):
     measured = []
 
     def shot(value: float, channel) -> np.ndarray:
-        _drain(engine)
-        engine.send(cmd="set_strength", value=value, channel=channel)
-        return _read_frame(engine, peer, h, w)
+        # 按 seq 认帧（_cmd_frame）而不是 drain + 取下一帧：drain 赌的是"事件间隔
+        # 不超过 0.1 s"，全量跑时 GPU 争用能把两条命令的帧隔开几百毫秒，于是拿回来
+        # 的是上一条命令那一帧——本轮 P0 中性那条判据就是这么假红的。
+        return _cmd_frame(engine, peer, h, w, cmd="set_strength",
+                          value=value, channel=channel)
 
     for name, temp, tint, ev in SAMPLES:
         _drain(engine)
