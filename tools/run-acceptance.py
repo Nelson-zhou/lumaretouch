@@ -20,6 +20,7 @@
     python3 tools/run-acceptance.py map --write              # 把候选映射写进 case-map.json（保留人工 note）
     ~/.local/share/LumaRetouch/engine/venv/bin/python \
         tools/run-acceptance.py run --junit /tmp/j.xml       # 跑测试 + 出报告（推荐在运行时 venv）
+    python3 tools/run-acceptance.py report --junit /tmp/j.xml # 只用已有 junit 重生成报告（不重跑）
     python3 tools/run-acceptance.py check                    # 发布门禁用的轻量校验（不跑测试）
 """
 from __future__ import annotations
@@ -58,6 +59,18 @@ TEST_GLOBS = ("engine/tests/test_*.py", "tests/test_*.py", "ui/tests/test_*.py")
 ID_RE = re.compile(r"\b(?:P0|CORE|RENDER|COLOR|PORTRAIT|MANUAL|PRESET|BATCH|TASK|EXPORT|"
                    r"LINUX|PICK|BACKGROUND|GEN|CLOUD|RAW|SEC|DIFF|SCOPE|FORMAT|UI)"
                    r"(?:-[A-Z0-9_]+)+\b")
+
+
+def disp(p: Path) -> str:
+    """给人看的路径：仓内写相对路径，仓外（比如把报告指到 /tmp）写绝对路径。
+
+    `relative_to` 在仓外会抛 ValueError：一个只是打印用的路径不值得让报告工具因为
+    产物换了地方就崩在半路（写都写完了，最后一步响一声，人看到的是没产物）。
+    """
+    try:
+        return str(Path(p).relative_to(REPO))
+    except ValueError:
+        return str(p)
 
 
 def load_cases() -> list[dict]:
@@ -146,13 +159,13 @@ def collect_nodes(python: str) -> dict[str, list[str]] | None:
     return got or None
 
 
-def cmd_map(write: bool, python: str) -> int:
-    cases = load_cases()
-    idx = cite_index()
-    old = json.loads(MAP.read_text(encoding="utf-8")) if MAP.exists() else {}
-    old_map = old.get("map", {})
+def build_map(cases: list[dict], idx: dict[str, list[str]], old_map: dict) -> dict[str, dict]:
+    """用例集 + 引用索引 → 映射表（**纯派生**：同一份源码必然得到同一张表）。
+
+    人工补的三格（note/manual/extra）从旧表里继承——它们不是派生物，是评审桌上
+    要读的话，以及"这条得人签字"这类自动化伪造不了的边界。
+    """
     new: dict[str, dict] = {}
-    red = 0
     for c in cases:
         cid = c["id"]
         tests = idx.get(cid, [])
@@ -169,8 +182,25 @@ def cmd_map(write: bool, python: str) -> int:
             entry["extra"] = prev["extra"]      # 人工补的引用（非 ID 字面量，脚本认不出来那种）
             entry["tests"] = sorted(set(tests) | set(prev["extra"]))
         new[cid] = entry
-        if c["phase"] == "P0" and not entry["tests"]:
-            red += 1
+    return new
+
+
+def write_map(new: dict[str, dict]) -> None:
+    MAP.parent.mkdir(parents=True, exist_ok=True)
+    MAP.write_text(json.dumps({"schema": "lrt.acceptance-map.v1",
+                               "cases": CASES.relative_to(REPO).as_posix(),
+                               "cases_sha256": cases_sha256(),
+                               "generated_at": time.strftime("%FT%T"),
+                               "map": new}, ensure_ascii=False, indent=1) + "\n",
+                   encoding="utf-8")
+
+
+def cmd_map(write: bool, python: str) -> int:
+    cases = load_cases()
+    idx = cite_index()
+    old = json.loads(MAP.read_text(encoding="utf-8")) if MAP.exists() else {}
+    new = build_map(cases, idx, old.get("map", {}))
+    red = sum(1 for c in cases if c["phase"] == "P0" and not new[c["id"]]["tests"])
     nodes = collect_nodes(python)
     ghosts = []
     if nodes is not None:
@@ -192,14 +222,8 @@ def cmd_map(write: bool, python: str) -> int:
         for g in ghosts[:10]:
             print(f"    {g}")
     if write:
-        MAP.parent.mkdir(parents=True, exist_ok=True)
-        MAP.write_text(json.dumps({"schema": "lrt.acceptance-map.v1",
-                                   "cases": CASES.relative_to(REPO).as_posix(),
-                                   "cases_sha256": cases_sha256(),
-                                   "generated_at": time.strftime("%FT%T"),
-                                   "map": new}, ensure_ascii=False, indent=1) + "\n",
-                       encoding="utf-8")
-        print(f"✓ 写入 {MAP.relative_to(REPO)}")
+        write_map(new)
+        print(f"✓ 写入 {disp(MAP)}")
     else:
         miss = [c["id"] for c in cases if c["phase"] == "P0" and not new[c["id"]]["tests"]]
         if miss:
@@ -215,6 +239,26 @@ def read_map() -> dict:
         raise SystemExit("× 用例集与映射不同源（cases_sha256 对不上）："
                          "重跑 map --write，别拿旧映射对新用例")
     return doc
+
+
+def sync_map_with_sources(doc: dict, cases: list[dict]) -> list[str]:
+    """把报告要用的映射拉齐到当前测试源码，返回发生变动的用例 ID（无变动返回空表）。
+
+    只认 `tests` 集合的差：note/manual/extra 是人工格，build_map 从旧表继承它们，
+    重算不会丢。有差就把新表写回 case-map.json——committed 的那份必须与报告同源，
+    否则下一轮 `check` 门禁会拿旧表验新源码，红绿就变成了一件时序的事。
+    """
+    fresh = build_map(cases, cite_index(), doc.get("map", {}))
+    old = doc.get("map", {})
+    drift = sorted(cid for cid, e in fresh.items()
+                   if sorted(e["tests"]) != sorted((old.get(cid) or {}).get("tests", [])))
+    if drift:
+        print(f"↻ case-map.json 落后于测试源码：本轮按源码刷新 {len(drift)} 条 → {drift[:12]}")
+        write_map(fresh)
+        doc["map"] = fresh
+    else:
+        print("· 映射与测试源码同源")
+    return drift
 
 
 def cmd_check(python: str) -> int:
@@ -305,36 +349,27 @@ def lookup(statuses: dict[str, list[str]], node: str) -> str | None:
     return "passed" if got else None
 
 
-def cmd_run(args) -> int:
-    doc = read_map()
-    cases = load_cases()
-    junit = Path(args.junit)
-    cmd = [args.python, "-m", "pytest", "-q", "--no-header",
-           f"--junit-xml={junit}", *(args.extra or [])]
-    env = dict(os.environ, PYTHONPATH=str(REPO / "engine" / "src"))
-    # 性能那一臂必须由这一遍真跑：CORE-002（秒开）、RENDER-001（不断帧）、
-    # PORTRAIT-001、EXPORT-002 的**唯一证据**就是 test_perf_report 那几条，而它
-    # 不设 LRT_PERF_OUT 就整模块 skip——上一轮就是这个形状红着四条 P0：“没量”
-    # 不等于“量过且没问题”。报告里的性能段拿的就是这一遍写出的那一份。
-    perf_out = Path(args.perf) if args.perf else Path("/tmp/lrt-perf.json")
-    env.setdefault("LRT_PERF_OUT", str(perf_out))
-    if not env.get("LRT_PERF_DNG"):
-        for cand in ("/tmp/lrt-perf-dng.dng",
-                     str(REPO / "engine" / "tests" / "fixtures" / "perf-3000.dng")):
-            if Path(cand).is_file():
-                env["LRT_PERF_DNG"] = cand
-                break
-    dng_note = (f"RAW 臂用 {env['LRT_PERF_DNG']}" if env.get("LRT_PERF_DNG")
-                else "没有 LRT_PERF_DNG：RAW/秒开 DNG 那一档本轮不收（报告里会写“没量”）")
-    print(f"· 性能读数→{env['LRT_PERF_OUT']}（{dng_note}）")
-    print("$ " + " ".join(cmd))
-    t0 = time.monotonic()
-    rc = subprocess.call(cmd, cwd=REPO, env=env)
-    print(f"pytest 退出码 {rc}（{time.monotonic() - t0:.1f}s）")
-    if not junit.exists():
-        print("× 没有 junit XML：报告不生成（没有证据就不写结论）")
-        return 1
+def product_version() -> str:
+    """报告里得写上它验的是哪一版（验收与定版同源）。
+
+    只读 packaging/VERSION 一处：发布链已经把"版本号多处必须一致"钉成门禁，
+    这一处再自己算一份就是第二个会漂的地方。
+    """
+    p = REPO / "packaging" / "VERSION"
+    return p.read_text(encoding="utf-8").strip() if p.is_file() else ""
+
+
+def write_report(doc: dict, cases: list[dict], junit: Path, perf_out: Path,
+                 stale: list[str], pytest_rc: int | None, mode: str) -> int:
+    """从 junit + 性能 JSON 生成两份报告并打印结论；返回建议退码。
+
+    `pytest_rc` 为 None 表示这份 junit 不是本轮跑的（report-only 重生式），这时
+    rc 从 junit 自己的 failure/error 定——能定"有没有红"，定不出"跑崩在收集阶段"
+    那一类，所以 mode 一并写进报告，不留"看着像重跑过"的余地。
+    """
     statuses = parse_junit(junit)
+    if pytest_rc is None:
+        pytest_rc = 1 if any("failed" in v for v in statuses.values()) else 0
     perf = json.loads(perf_out.read_text(encoding="utf-8")) if perf_out.exists() else None
     if perf is None:
         print("! 没给/没有性能 JSON：报告里性能那一节写『本轮未量』，不编数")
@@ -364,7 +399,9 @@ def cmd_run(args) -> int:
                      "title": c["title"], "status": st,
                      "then": c["then"], "tests": tests, "note": e.get("note")})
     report = {"schema": "lrt.acceptance-report.v1", "at": time.strftime("%FT%T"),
-              "cases_sha256": cases_sha256(), "pytest_rc": rc,
+              "product_version": product_version(), "mode": mode,
+              "cases_sha256": cases_sha256(), "pytest_rc": pytest_rc,
+              "map_refreshed": stale,
               "counts": counters, "rows": rows,
               "perf": perf, "junit": str(junit)}
     REPORT_JSON.parent.mkdir(parents=True, exist_ok=True)
@@ -373,7 +410,7 @@ def cmd_run(args) -> int:
     write_md(report)
     p0_bad = [r["id"] for r in rows if r["phase"] == "P0" and r["status"] not in ("passed", "manual_pending")]
     p0_manual = [r["id"] for r in rows if r["phase"] == "P0" and r["status"] == "manual_pending"]
-    print(f"报告：{REPORT_JSON.relative_to(REPO)} / {REPORT_MD.relative_to(REPO)}")
+    print(f"报告（{mode}）：{disp(REPORT_JSON)} / {disp(REPORT_MD)}")
     for ph in sorted(counters):
         print(f"  {ph}: " + " ".join(f"{k}={v}" for k, v in sorted(counters[ph].items())))
     if p0_bad:
@@ -388,11 +425,71 @@ def cmd_run(args) -> int:
         # 自动化那半过了不等于这条过了：人没签字就不能替人签。退码 3 就是专门给
         # “只差人工”这个状态留的（与“有红项”的 1 分开，不让它摸进绿）。
         print(f"🖐 P0 待人工 {len(p0_manual)} 条（不算通过）：{p0_manual}")
-    if others or rc != 0:
-        print(f"! 非 P0 待看 {len(others)} 条（pytest rc={rc}）："
+    if others or pytest_rc != 0:
+        print(f"! 非 P0 待看 {len(others)} 条（pytest rc={pytest_rc}）："
               f"{[r['id'] for r in others][:12]}")
         return 2
     return 3 if p0_manual else 0
+
+
+def cmd_run(args) -> int:
+    doc = read_map()
+    cases = load_cases()
+    # 映射是从测试源码解析出来的**派生物**，而 case-map.json 是一份 committed 文件：
+    # 派生物落后于源码就是本轮实测到的事故形状——接局部调色那一笔编辑顺手删掉两行
+    # 「验收用例引用」注释，重跑 junit 全绿而报告报 "P0 未跑通 2 条"。假红不只是难看：
+    # 它把真红混进一堆假红里，而 7 分钟的重跑会让人开始怀疑工具而不是怀疑代码。
+    # 所以这一遍先按源码重算；不一致就当场刷新（写回文件，让 `check` 门禁与报告同源），
+    # 并把变动条目报出来——落后必须是喊出来的事实，不能悄悄吞掉或悄悄改写。
+    stale = sync_map_with_sources(doc, cases)
+    junit = Path(args.junit)
+    cmd = [args.python, "-m", "pytest", "-q", "--no-header",
+           f"--junit-xml={junit}", *(args.extra or [])]
+    env = dict(os.environ, PYTHONPATH=str(REPO / "engine" / "src"))
+    # 性能那一臂必须由这一遍真跑：CORE-002（秒开）、RENDER-001（不断帧）、
+    # PORTRAIT-001、EXPORT-002 的**唯一证据**就是 test_perf_report 那几条，而它
+    # 不设 LRT_PERF_OUT 就整模块 skip——上一轮就是这个形状红着四条 P0：“没量”
+    # 不等于“量过且没问题”。报告里的性能段拿的就是这一遍写出的那一份。
+    perf_out = Path(args.perf) if args.perf else Path("/tmp/lrt-perf.json")
+    env.setdefault("LRT_PERF_OUT", str(perf_out))
+    if not env.get("LRT_PERF_DNG"):
+        for cand in ("/tmp/lrt-perf-dng.dng",
+                     str(REPO / "engine" / "tests" / "fixtures" / "perf-3000.dng")):
+            if Path(cand).is_file():
+                env["LRT_PERF_DNG"] = cand
+                break
+    dng_note = (f"RAW 臂用 {env['LRT_PERF_DNG']}" if env.get("LRT_PERF_DNG")
+                else "没有 LRT_PERF_DNG：RAW/秒开 DNG 那一档本轮不收（报告里会写“没量”）")
+    print(f"· 性能读数→{env['LRT_PERF_OUT']}（{dng_note}）")
+    print("$ " + " ".join(cmd))
+    t0 = time.monotonic()
+    rc = subprocess.call(cmd, cwd=REPO, env=env)
+    print(f"pytest 退出码 {rc}（{time.monotonic() - t0:.1f}s）")
+    if not junit.exists():
+        print("× 没有 junit XML：报告不生成（没有证据就不写结论）")
+        return 1
+    return write_report(doc, cases, junit, perf_out, stale, rc, "run（这一遍重跑了 pytest）")
+
+
+def cmd_report(args) -> int:
+    """拿已有的 junit XML 重生成报告（不重跑测试）。
+
+    为什么要有这一子命令：报告版式/元数据（比如这一轮要加的 product_version）改一下
+    就要付 7 分钟的全量重跑，而性能分位数只有在机器相对空闲时量出来才算数——为了
+    一行文案去重跑一整遍，代价是拿一份被构建任务污染的新读数换掉刚量好的那一份。
+    所以重生成与重跑分开，而 mode 字段把两者区分写进报告：复用旧 junit 时不许假装本轮重跑过。
+    """
+    doc = read_map()
+    cases = load_cases()
+    stale = sync_map_with_sources(doc, cases)
+    junit = Path(args.junit)
+    if not junit.exists():
+        print(f"× junit XML 不存在：{junit}（report-only 不跑测试，没证据就不写结论）")
+        return 1
+    perf_out = Path(args.perf) if args.perf else Path("/tmp/lrt-perf.json")
+    print(f"· 复用 junit {junit}（本轮没重跑 pytest）、性能读数 {perf_out}")
+    return write_report(doc, cases, junit, perf_out, stale, None,
+                        "report-only（复用已有 junit XML，本轮没重跑测试）")
 
 
 PH_STATE = {"passed": "✅ 通过", "failed": "❌ 失败", "skipped": "⚠️ 跳过",
@@ -403,6 +500,9 @@ PH_STATE = {"passed": "✅ 通过", "failed": "❌ 失败", "skipped": "⚠️ �
 def write_md(rep: dict) -> None:
     L = ["# LumaRetouch 验收报告", "",
          f"- 生成时间：{rep['at']}",
+         f"- 产品版本：`{rep.get('product_version') or '（没读到 packaging/VERSION）'}`",
+         f"- 结论来源：{rep.get('mode') or '（未标注）'}"
+         f"（junit：{rep['junit']}）",
          f"- 用例集指纹：`{rep['cases_sha256']}`（《开发验收用例.json》冻结件）",
          f"- pytest 退出码：{rep['pytest_rc']}", ""]
     L += ["## 汇总", "", "| 阶段 | 通过 | 待人工 | 失败 | 跳过 | 未证实 | 未覆盖 |",
@@ -486,11 +586,18 @@ def main() -> int:
     r.add_argument("--junit", default="/tmp/lrt-acceptance-junit.xml")
     r.add_argument("--perf", default=os.environ.get("LRT_PERF_OUT", "/tmp/lrt-perf.json"))
     r.add_argument("extra", nargs="*", help="传给 pytest 的额外参数")
+    # report-only：复用已有 junit 重生成报告。报告版式改了不再逼人为了一行文案重跑 7 分钟
+    # （那一遍会把性能那一节换成在非空闲机器上量出来的数）。
+    rp = sub.add_parser("report", help="只从已有 junit XML 重生成报告（不跑测试）")
+    rp.add_argument("--junit", default="/tmp/lrt-acceptance-junit.xml")
+    rp.add_argument("--perf", default=os.environ.get("LRT_PERF_OUT", "/tmp/lrt-perf.json"))
     a = ap.parse_args()
     if a.op == "map":
         return cmd_map(a.write, a.python)
     if a.op == "check":
         return cmd_check(a.python)
+    if a.op == "report":
+        return cmd_report(a)
     return cmd_run(a)
 
 
