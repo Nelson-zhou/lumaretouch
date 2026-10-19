@@ -53,10 +53,11 @@ echo "✓ 已装 $n 个引擎文件，全部与暂存内容逐字节一致"
 # 支持多个标记（一个包同时接了两个里程碑时，只卡一个会漏）：不传就走上一轮的默认值。
 # 默认值必须每轮往上推：留着几轮前的标记，这条检查就只是好看——旧包也一定含它。
 markers=("$@")
-# 1.7.0 推到本轮：ANCHORS_BY_KIND / deform_kinds / SMILE_LIFT_OF_MOUTH_W 是形变方向约定
-# 那一修之后才有的符号（装在旧包里的话这三个一定缺其二）。`_pick_loop` 那类上一轮的
-# 标记换成 `pick_sensitivities` 保住挑图那一臂——两条里程碑都在这一版里，只卡一条会漏。
-if [ ${#markers[@]} -eq 0 ]; then markers=(ANCHORS_BY_KIND deform_kinds SMILE_LIFT_OF_MOUTH_W pick_sensitivities); fi
+# 1.8.0 推到本轮：`enhance_subs` / `SCLERA_S_OF_IRIS` 是眼牙那一层独有的符号（旧包里
+# 连 ops/enhance.py 都没有，命中 0 就说明装的还是上一轮）。同时保住 ANCHORS_BY_KIND
+# （形变方向约定那一修）与 pick_sensitivities（挑图那一臂）——三个里程碑都在这一版里，
+# 只卡一条会漏；名单里每一格都必须是**这一版真的带着**的符号，不是"历史上出现过"。
+if [ ${#markers[@]} -eq 0 ]; then markers=(enhance_subs SCLERA_S_OF_IRIS ANCHORS_BY_KIND pick_sensitivities); fi
 for marker in "${markers[@]}"; do
   if grep -rq "$marker" "$installed"; then
     echo "✓ 装机代码含本轮特征标记 '$marker'"
@@ -89,7 +90,7 @@ echo "✓ /usr/bin/lumaretouch 与包内逐字节一致"
 # 名单而不是单格：1.6.0 那一轮 m5 第 7 臂撞上的正是"壳里没有 LRT_AUTO_PICK 这一格"
 # （前端 M0Env 声明了、宿主 json! 少返回一个键，TS 与 cargo 两边全绿而那条臂静默不点火）。
 # 装机壳里搜得到这个 env 名，才说明宿主桥真的带着这一格进了包。
-ui_markers=(${UI_MARKER:-LRT_AUTO_FACE LRT_AUTO_PICK})
+ui_markers=(${UI_MARKER:-LRT_AUTO_ENHANCE LRT_AUTO_FACE LRT_AUTO_PICK})
 ui_bad=0
 for ui_marker in "${ui_markers[@]}"; do
   if [ "$(grep -ac "$ui_marker" /usr/bin/lumaretouch)" -gt 0 ]; then

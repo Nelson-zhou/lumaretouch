@@ -8,6 +8,9 @@
 #   · "开箱即用"是三件事的合取：包内容对、壳找得到运行时、运行时真能出画面。
 #     任何一件只在装机 + 真窗口里才成立，另两件都能在别处验。
 #
+# M9 起再加第 8 臂（眼牙增强 LNX-PORTRAIT-009，单独一个露齿夹具的窗口）：这一层
+# 的"只在自己那只窗口里逐点乘加"与"关掉就回出厂帧"只能拿用户看见的那一帧量。
+#
 # M8 起这一轮把 M6/M7 也接进来跑（换底六臂 + 2× 出片），理由不是凑数：装机件里
 # "ready 报没报 matting_backends / upscale_backends"与"换底、放大递到落盘那一路对不对"
 # 只有裸环境的真窗口能量；开发 env 里跑绿了，说明不了这包在别人机器上一样绿。
@@ -725,6 +728,104 @@ PY
       fi
       rm -rf "$pickset"
     fi
+  fi
+fi
+
+echo "── 8. 眼牙那一臂：几何掩膜 + 内容门在装机壳里按窗口动，窗口外逐字节不动（LNX-PORTRAIT-009）"
+# 库里那 41 条与端到端那两条连的是裸引擎，中间隔着 Rust 的 enhance 命令与宿主那份槽位——
+# 那两层只有真窗口能证明（第 7 臂 auto_pick 就是撞在"宿主桥漏一格"上，而它当时是静默的）。
+# 输入用仓里那份**露齿**夹具（有 sha256 台账）：主夹具是闭嘴样本，拿它跑这一臂只能验
+# "拒绝得诚实"，验不到"牙齿那一格真能点亮"，而后者才是 DoD §2「严禁假滑块」要的那一句。
+# 缺输入就是缺证据，不做 skip。
+smile=$repo/engine/tests/fixtures/portrait-smile-1024x1280.jpg
+if [ ! -f "$smile" ]; then
+  no "缺露齿夹具：$smile（先跑 packaging/make-test-portrait.py）"
+else
+  elog=/tmp/m5-release-enhance.$$.log
+  pkill -f '/usr/bin/lumaretouch' 2>/dev/null || true
+  sleep 1
+  env "${unset_args[@]}" -u XDG_DATA_HOME \
+      DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-/run/user/$(id -u)/.mutter-Xwaylandauth.OJ5EX3}" \
+      GDK_BACKEND=x11 HOME="$HOME" USER="$USER" PATH="$PATH" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
+      LRT_LOAD_IMAGE="$smile" LRT_MAX_PX=207360 \
+      LRT_PRECOMPUTE=mediapipe LRT_AUTO_ENHANCE=0.6:0.5:0.7 LRT_AUTO_RELEASE=1 \
+      LRT_AUTO_BENCH=700x420:60:16.6:image_stream \
+      /usr/bin/lumaretouch > "$elog" 2>&1 &
+  ewin=$!
+  egot=0
+  for _ in $(seq 1 $((want_secs * 2))); do
+    sleep 0.5
+    # 等到 M0_ENHANCE 才算跑完：那一臂是 set → 逐格比 → clear → 逐格比 才报一次，
+    # 只等 enhance_done 会在"关掉那层"之前就把窗口杀掉，回出厂帧那一条就没账可读
+    if grep -aq 'M0_ENHANCE' "$elog" || grep -aq 'M0_ERROR' "$elog"; then egot=1; break; fi
+    kill -0 $ewin 2>/dev/null || { egot=2; break; }
+  done
+  sleep 2
+  kill $ewin 2>/dev/null; wait $ewin 2>/dev/null
+  if [ "$egot" != 1 ]; then
+    no "眼牙真窗口没跑完（$([ "$egot" = 2 ] && echo '进程提前退出' || echo '超时')）；日志尾部："
+    tail -10 "$elog" | sed 's/^/      /'
+  else
+    ok "装机壳跑到了眼牙那一臂（日志：$elog）"
+    python3 - "$elog" "$want_dev" <<'PY'
+import json, re, sys
+raw = open(sys.argv[1], "rb").read().decode("utf-8", "replace")
+want_dev = sys.argv[2]
+fails = []
+def chk(cond, msg):
+    print(("  ✓ " if cond else "  × ") + msg)
+    if not cond:
+        fails.append(msg)
+hits = re.findall(r'M0_ENHANCE (\{[^\n]*\})', raw)
+chk(bool(hits), "日志里有 M0_ENHANCE：眼牙那一臂在装机壳里跑了")
+if not hits:
+    err = re.findall(r'M0_ERROR ([^\n]*)', raw)
+    chk(False, f"没有 M0_ENHANCE（错误行：{err[-1][:160] if err else '一条也没有'}）")
+else:
+    en = json.loads(hits[-1])
+    chk("bad" not in en, f"眼牙那一臂跑成了：{en.get('bad')}")
+    amt = en.get("amounts") or {}
+    chk(amt == {"sclera": 0.6, "iris": 0.5, "teeth": 0.7},
+        f"三个数原样递到引擎（宿主没替谁填零）：{amt}")
+    chk(en.get("lit") is True, f"这一层真的有力：enhance_lit={en.get('lit')}")
+    gp, rs = en.get("gatedPx") or {}, en.get("reason") or {}
+    # 每子功能那一格只有两种合法状态：有覆盖格，或引擎报了为什么没有。
+    # "既没格又没原因"就是面板上一句空洞的"未接通"，DoD §3 明确不要那种控件。
+    for k in ("sclera", "iris", "teeth"):
+        chk((int(gp.get(k) or 0) > 0) or bool(rs.get(k)),
+            f"{k}：gated_px={gp.get(k)}、reason={rs.get(k)!r}——要么有格要么有原因")
+    chk(int(gp.get("teeth") or 0) > 0,
+        f"牙齿那一格在露齿夹具上点亮（闭嘴时它该被拒而不是被点）：gated_px={gp.get('teeth')}"
+        f"、嘴开度={en.get('mouthOpenness')}")
+    chk(int(en.get("bytesEnhance") or 0) > 0,
+        f"常驻里有那张权重场：bytes_enhance={en.get('bytesEnhance')}")
+    win = en.get("window") or []
+    chk(len(win) == 4 and win[2] > 0 and win[3] > 0,
+        f"引擎报了它自己盖住的那一片（窗口不是脚本估的）：window={win}")
+    chk(int(en.get("insideChanged") or -1) > 0,
+        f"窗口内画面动了（不是假滑块）：insideChanged={en.get('insideChanged')}")
+    chk(en.get("outsideChanged") == 0,
+        f"窗口外逐字节不动：outsideChanged={en.get('outsideChanged')}"
+        "（>0 就是局部增强偷成了全图提亮，屏上看不出来）")
+    chk(en.get("backHomeBytes") == 0,
+        f"关掉那层后回到出厂帧逐字节：backHomeBytes={en.get('backHomeBytes')}"
+        "（不为 0 就是放下层时留了残迹）")
+    ms = en.get("enhanceMs")
+    # 非零 + 上界两条一起：0 在这里不合法——账现在取在渲染之后（1.8.0 定版时先撞过
+    # 一次"恒 0 计时"：账取在 `_write_current_frame` 之前，第一条命令永远报"这层不要钱"）。
+    # 这一格读的是"到 apply_enhance 那个同步点为止，这块卡上排着的活"，真窗口里同进程还有
+    # 帧通路在跑靶，所以它会比这一层自己的代价大（本轮实测：真窗口 50 ms 一档，
+    # 隔离量 3.5 ms p50）。**这一层的成本以性能台账为准**
+    # （docs/acceptance/性能分位数-<版本>.json 的 enhance_apply_ms / enhance_build_ms）；
+    # 这里只判"进了帧通路、且留在帧预算内"。<60 越过就不能在拖滑块时逐事件发。
+    # "是不是假滑块"那一问不由计时承担，由上面 insideChanged 与逐字节那三条负。
+    chk(isinstance(ms, (int, float)) and 0 < ms < 60,
+        f"这一层每帧有真计时且留在帧预算内：enhance_ms={ms}（0<x<60）")
+    chk(en.get("device") == want_dev,
+        f"会话建在这台机器 torch 真认的那块设备上：{en.get('device')}（期望 {want_dev}）")
+sys.exit(1 if fails else 0)
+PY
+    if [ $? -ne 0 ]; then fail=$((fail + 1)); else pass=$((pass + 1)); fi
   fi
 fi
 
