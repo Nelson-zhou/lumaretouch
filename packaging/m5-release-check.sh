@@ -461,6 +461,80 @@ PY
     fi
 fi
 
+echo "── 5. 分人编辑那一臂：多人图里点选一个人，另一个人在用户看见的那一帧上逐字节不动"
+# 库里那九段判据连的是裸引擎，中间隔着 Rust 的 face 命令与宿主的状态搬运——那两层只有
+# 真窗口能证明。输入是仓里那份两人夹具（有 sha256 台账）：缺输入就是缺证据，不做 skip。
+dual=$repo/engine/tests/fixtures/portrait-dual-1570x950.jpg
+if [ ! -f "$dual" ]; then
+  no "缺多人夹具：$dual（先跑 packaging/make-test-dual-portrait.py）"
+else
+  flog=/tmp/m5-release-face.$$.log
+  pkill -f '/usr/bin/lumaretouch' 2>/dev/null || true
+  sleep 1
+  env "${unset_args[@]}" -u XDG_DATA_HOME \
+      DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-/run/user/$(id -u)/.mutter-Xwaylandauth.OJ5EX3}" \
+      GDK_BACKEND=x11 HOME="$HOME" USER="$USER" PATH="$PATH" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
+      LRT_LOAD_IMAGE="$dual" LRT_MAX_PX=207360 \
+      LRT_PRECOMPUTE=mediapipe LRT_AUTO_FACE=1 LRT_AUTO_RELEASE=1 \
+      /usr/bin/lumaretouch > "$flog" 2>&1 &
+  fwin=$!
+  fgot=0
+  for _ in $(seq 1 $((want_secs * 2))); do
+    sleep 0.5
+    if grep -aq 'M0_FACE' "$flog" || grep -aq 'M0_ERROR' "$flog"; then fgot=1; break; fi
+    kill -0 $fwin 2>/dev/null || { fgot=2; break; }
+  done
+  sleep 2
+  kill $fwin 2>/dev/null; wait $fwin 2>/dev/null
+  if [ "$fgot" != 1 ]; then
+    no "分人编辑真窗口没跑完（$([ "$fgot" = 2 ] && echo '进程提前退出' || echo '超时')）；日志尾部："
+    tail -10 "$flog" | sed 's/^/      /'
+  else
+    ok "装机壳跑到了分人编辑那一臂（日志：$flog）"
+    python3 - "$flog" <<'PY'
+import json, re, sys
+raw = open(sys.argv[1], "rb").read().decode("utf-8", "replace")
+hits = re.findall(r'M0_FACE (\{[^\n]*\})', raw)
+fails = []
+def chk(cond, msg):
+    print(("  ✓ " if cond else "  × ") + msg)
+    if not cond:
+        fails.append(msg)
+chk(bool(hits), "日志里有 M0_FACE：分人编辑那一臂在装机壳里跑了")
+if not hits:
+    err = re.findall(r'M0_ERROR ([^\n]*)', raw)
+    chk(False, f"没有 M0_FACE（错误行：{err[-1][:160] if err else '一条也没有'}）")
+else:
+    fc = json.loads(hits[-1])
+    chk("bad" not in fc, f"这一臂没报 bad：{fc.get('bad')}")
+    if "bad" not in fc:
+        chk(fc.get("numFaces") == 2, f"真检测器在这张图上报出两个人：numFaces={fc.get('numFaces')}")
+        chk(fc.get("blockedBefore") is True,
+            f"未选定时引擎报 blocked（放行判据只有一处）：{fc.get('blockedBefore')}")
+        chk(fc.get("want") == 1, f"点选的是 1 号而不是默认的 0 号：want={fc.get('want')}"
+                                 "（选 1 才验得出「认的是那一张」而不是「谁都是第一张」）")
+        chk(fc.get("pickSource") == "face_selected",
+            f"选型答复落进宿主那一个槽位：source={fc.get('pickSource')!r}")
+        chk(fc.get("changedBySelect") == 0,
+            f"点选人物不改画面：changedBySelect={fc.get('changedBySelect')}"
+            "（非 0 就是「选人已等于调图」）")
+        chk(fc.get("backend") == "mediapipe", f"关键点是真 FaceMesh：{fc.get('backend')!r}")
+        chk(fc.get("built") is True and int(fc.get("bytesDeform") or 0) > 0,
+            f"选定后那一层真常驻：built={fc.get('built')} bytes={fc.get('bytesDeform')}")
+        chk(float(fc.get("deformMs") or 0) > 0, f"形变段有真计时：deform_ms={fc.get('deformMs')}")
+        chk(0 < float(fc.get("supportShare") or 0) < 1.0,
+            f"作用面不是整幅：support_share={fc.get('supportShare')}")
+        chk(int(fc.get("insideChanged") or 0) > 0,
+            f"被选中的那一张画面动了（不是假滑块）：insideChanged={fc.get('insideChanged')}")
+        chk(fc.get("outsideChanged") == 0,
+            f"没被选中的那一圈（1.6× 脸半对角之外）逐字节不动：outsideChanged={fc.get('outsideChanged')}"
+            "（大于 0 就是分人形变偷给了别人，而屏上看不出来）")
+sys.exit(1 if fails else 0)
+PY
+    if [ $? -ne 0 ]; then fail=$((fail + 1)); else pass=$((pass + 1)); fi
+  fi
+fi
+
 echo
 echo "── 读数：$pass 条通过，$fail 条不过"
 if [ "$fail" -ne 0 ]; then
