@@ -2,8 +2,10 @@
 
 先写清这一份**不包含**什么，免得它被读成"P1 全过了"：
 
-· PORTRAIT-003/004/005/006（多人物分层、覆盖与继承、跨图同一人确认、人工纠正优先）
-  需要一套"人物身份模型"，本版本没有；
+· PORTRAIT-005（跨图同一人确认）与 006（人工纠正优先）需要一套**跨图人物身份模型**，
+  本版本没有——所以它们在这里没有测试；同图分人编辑（003）与层级覆盖继承（004）有，
+  判据逐条取自冻结件原文（见下面两个 `test_` 函数）。003/004 都不越界成"跨图认人"：
+  覆盖挂在**这一轮分析出来的脸盒**上，换一张图就重新按脸盒认，不假装认得"同一个人";
 · PORTRAIT-008/010/011/012（全身、妆容头发、手脚、表情）本版本一行实现都没有；
 · PICK-001（AI 挑图）要做它就得引入一个我们并没有的分类器——**拿启发式规则冒充 AI
   正是 DoD 明令禁止的那件事**；
@@ -12,7 +14,7 @@
 这几条在这里**没有测试**，`tools/run-acceptance.py` 因此把它们如实写成 `uncovered`
 ——不是 `passed`，也不是 skip。少写一份测试是一回事，把没做的东西签成做了是另一回事。
 
-这一份覆盖的五条都有真实现可验，判据逐条取自冻结件的 `then` 原文：
+这一份覆盖的七条都有真实现可验，判据逐条取自冻结件的 `then` 原文：
 
 · MANUAL-001 "缩放、旋转、裁剪、重开项目 → 笔划保持正确原图位置和半径语义；显示缩放
   不改变结果"
@@ -21,6 +23,8 @@
 · RAW-001  "支持项完成明确的显影链；不支持项准确提示；嵌入 JPEG 预览不冒充 RAW 显影"
 · PORTRAIT-007 "目标变化可控、连续；不扭曲邻近人脸；背景异常纳入人工审核"（前两句
   客观可测，"背景异常"那一半是**人工**，本文件不代签，见 case-map 的 manual 标记）
+· PORTRAIT-003 "第二人的有效配方不变；图像影响在定义的第一人蒙版边缘内"
+· PORTRAIT-004 "覆盖项继续生效；未覆盖项跟随；恢复继承后全部按层级合成"
 
 跑法同 test_acceptance_p0：必须在运行时 venv（有 torch）里跑；没 torch 整片 skip，
 而执行器把 P1 的 skip 记成 `unverified` 而不是绿。
@@ -891,4 +895,283 @@ def test_editing_one_person_leaves_the_other_untouched(engine, extra_engine, tmp
         f"重开后形变层没回到常驻：{df2}（配方里那一层必须完整恢复，CORE-001）")
     assert int(dd.max()) == 0, \
         f"重开后画面与保存前差 {int(dd.max())} LSB：换人重放不是同一幅"
+    assert _sha_of(path) == src_sha, "打开/保存工程动了原片"
+
+
+# ---------------------------------------------------------------- PORTRAIT-004
+def _layer_shot(engine, peer, h, w, **payload):
+    """发一条形变命令（可带 scope），把【账单事件 + 这一笔的帧】一起拿回来。
+
+    不能只等帧：`default / overrides / overridden_kinds / inherited / scope` 全在
+    `deform_done` 里，而事件次序是"先账单后帧"（cmd_deform 里钉着的次序）。判据要用
+    的数一律取自引擎报的那一份，不在测试里自己合成第二份出处。
+    """
+    import time as _t
+
+    from test_protocol import _next_event
+    _drain(engine)
+    engine.send(cmd="deform", **payload)
+    done, deadline = None, _t.monotonic() + 180.0
+    while _t.monotonic() < deadline:
+        e = _next_event(engine, skip=("session_state", "engine_warn"),
+                        timeout=min(10.0, max(0.1, deadline - _t.monotonic())))
+        if e["event"] == "deform_done":
+            done = e
+        elif e["event"] == "frame" and e.get("mode") == "deform":
+            assert done is not None, "帧先于账单到了：事件次序与 cmd_deform 里写的不一样"
+            return done, _frame_of(e, peer, h, w)
+        elif e["event"] == "error":
+            raise AssertionError(f"引擎拒绝 deform（{payload}）：{e.get('error')}")
+    raise AssertionError(f"180s 内没等到这一笔形变的帧：{payload}")
+
+
+def _lsb(a: np.ndarray, b: np.ndarray) -> int:
+    """两帧的最大逐格差（先升 int16：uint8 相减会在负差上回绕，246 不是 10）。"""
+    return int(np.abs(a.astype(np.int16) - b.astype(np.int16)).max())
+
+
+@pytest.mark.skipif(not os.path.isfile(DUAL), reason="缺多人测试图（生成见 packaging/make-test-dual-portrait.py）")
+def test_person_override_follows_and_inherits_the_all_person_default(engine, extra_engine,
+                                                                    tmp_path):
+    """LNX-PORTRAIT-004 覆盖与继承：默认打底、逐张覆盖、恢复继承后全部按层级合成。
+
+    冻结件 `then` 的三句各对一段**逐字节**判据（都在同一张多人图、同一条命令通路、
+    真 mediapipe 关键点上量，不拿单元测试的合成状态冒充端到端）：
+
+    ① "覆盖项继续生效" → 给 A 挂上 big_eye 覆盖后改默认（slim 0.5→0.2），A 的
+       big_eye 一个 LSB 也不许跟着默认走，而 slim 必须跟着走；
+    ② "未覆盖项跟随" → 从没被单独改过的那个人（B）在每一次默认变更后，有效值恰好
+       等于默认那三个数，且 `inherited` 为真、`overridden_kinds` 为空；
+    ③ "恢复继承后全部按层级合成" → 走两条不同路径（0.9→inherit 与 0.4→inherit）
+       回到同一个层级状态，两幅画面**逐字节相同**；同值重写也逐字节相同（合成只有
+       `_effective_deform_amounts()` 一个出处，这两条就是它的对拍）；
+
+    另外五条是本仓的硬规矩：
+    ④ 多人未选定时 `scope=person` 与 `inherit` 整条拒（SCOPE-001 不许静默指派谁）；
+    ⑤ 非法 scope / 非法 action / 多余参数当场拒，且层级一份不留、画面不动；
+    ⑥ 覆盖按**脸盒**认人而不是按名单序号：换进程重开工程后 A 的覆盖回到 A 身上，
+       选到 B 时读到的是默认（把覆盖记成 index 就会在这里响）；
+    ⑦ 层级进撤销栈：undo 把"这一张被单独改过"整格退掉、画面回到纯默认那一幅，
+       redo 再带回来；
+    ⑧ 出片同口径：带着 A 的覆盖导出，文件里 A 的内芯变了而 B 的内芯逐字节不动。
+
+    诚实边界（ADR-0011 §2.7）：一层形变服务一张脸。单位场只从被选中那一张脸的轮廓
+    解控制点，所以"同时给两个人挂不同的效果"这一版做不到，也不许说成做到了；这里验
+    的是"同一时刻生效的那一张，按默认 + 它自己的覆盖合成"。
+    """
+    _needs_torch()
+    import importlib.util
+
+    from PIL import Image
+
+    if importlib.util.find_spec("mediapipe") is None:
+        pytest.fail("运行时没装 mediapipe：这一条要真检测器给出两张脸的位置与脸盒，"
+                    "不许退成 skip（skip 不是通过），装它见 engine/requirements-mediapipe.txt")
+    path = _dual_or_explain()
+    meta = _open(engine, path=path)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    engine.send(cmd="precompute", backend="mediapipe")
+    pc = engine.wait_for("precompute_ready", timeout=180)
+    assert int(pc.get("num_faces", 0)) == 2, f"多人输入没被真检测器报成 2 张脸：{pc.get('num_faces')}"
+    faces = sorted(pc.get("faces") or [], key=lambda f: f["index"])
+    left, right = sorted(faces, key=lambda f: f["box"][0] + f["box"][2])
+    a, b = right["index"], left["index"]           # 与 PORTRAIT-003 同一套称呼：先推右边那位
+    box_a, box_b = right["box"], left["box"]
+    core_a = _face_region(h, w, box_a, shrink=0.25)
+    core_b = _face_region(h, w, box_b, shrink=0.25)
+    ZERO = {"slim_face": 0.0, "big_eye": 0.0, "small_chin": 0.0}
+    base = _current(engine, peer, h, w)
+
+    def layered():
+        return _live_state(engine)["deform"]
+
+    def sel(idx):
+        _drain(engine)
+        engine.send(cmd="face", action="select", index=idx)
+        engine.wait_for("face_selected", timeout=60)
+
+    # ---- ⑤④ 五条不该收下的命令：先拒，再确认层级与画面都没被写过
+    _drain(engine)
+    engine.send(cmd="deform", action="set", scope="person", amounts={"big_eye": 0.9})
+    err = _expect_error(engine, "SCOPE-001")
+    assert "face select" in err["error"], f"多人未选定的覆盖被拒却没给出放行那条路：{err}"
+    _drain(engine)
+    engine.send(cmd="deform", action="inherit")
+    _expect_error(engine, "SCOPE-001")
+    for bad, sub in (({"action": "set", "scope": "everyone", "amounts": {"slim_face": 0.5}},
+                      "未知 deform scope"),
+                     ({"action": "melt", "amounts": {"slim_face": 0.5}}, "未知 deform action"),
+                     ({"action": "set", "scope": "all", "amounts": {"slim_face": 0.5},
+                       "person_index": 0}, "不认识的参数")):
+        _drain(engine)
+        engine.send(cmd="deform", **bad)
+        _expect_error(engine, sub)
+    st = layered()
+    assert st["default"] == ZERO and st["overrides"] == [] and st["amounts"] == ZERO, \
+        f"被拒的层级命令留下了半截：{st}"
+    assert _lsb(_current(engine, peer, h, w), base) == 0, "被拒的形变动了画面"
+
+    # ---- ② 全人物默认：选定 A 之后改这一层，A 被推而 B 的内芯逐字节不动
+    sel(a)
+    done, f_slim = _layer_shot(engine, peer, h, w, action="set", scope="all",
+                               amounts={"slim_face": 0.5})
+    assert done["scope"] == "all" and done["built"] is True and done["lit"] is True, done
+    assert done["default"]["slim_face"] == 0.5 and done["inherited"] is True, done
+    assert done["amounts"] == {"slim_face": 0.5, "big_eye": 0.0, "small_chin": 0.0}, done
+    d = np.abs(f_slim.astype(np.int16) - base.astype(np.int16)).max(axis=2)
+    assert int(d[core_a].max()) > EPS, "改了全人物默认而选中那张没动：假控件"
+    assert int(d[core_b].max()) == 0, "改默认时把没选中的那个人也推了"
+    # 同一层的第二格：部分提交不许把上一格默认抹掉（写默认 ≠ 写合成结果）
+    done2, _ = _layer_shot(engine, peer, h, w, action="set", scope="all",
+                           amounts={"big_eye": 0.3})
+    assert done2["default"] == {"slim_face": 0.5, "big_eye": 0.3, "small_chin": 0.0}, done2
+
+    # 换到 B：完全没有覆盖的人，有效值就是默认那三个数（②"未覆盖项跟随"）
+    sel(b)
+    st_b = layered()
+    assert st_b["amounts"] == {"slim_face": 0.5, "big_eye": 0.3, "small_chin": 0.0}, st_b
+    assert st_b["inherited"] is True and st_b["overridden_kinds"] == [], st_b
+    f_b_default = _current(engine, peer, h, w)
+    db0 = np.abs(f_b_default.astype(np.int16) - base.astype(np.int16)).max(axis=2)
+    assert int(db0[core_b].max()) > EPS and int(db0[core_a].max()) == 0, \
+        "换人后形变层没跟着搬走（B 没动 / A 还留着）"
+
+    # ---- ① 给 A 挂覆盖，然后改默认：覆盖那格不动，没被覆盖的那格跟着默认走
+    sel(a)
+    done3, f_ov = _layer_shot(engine, peer, h, w, action="set", scope="person",
+                              amounts={"big_eye": 0.9})
+    assert done3["scope"] == "person" and done3["inherited"] is False, done3
+    assert done3["overridden_kinds"] == ["big_eye"], done3
+    assert len(done3["overrides"]) == 1 and done3["overrides"][0]["amounts"] == {"big_eye": 0.9}, \
+        done3
+    assert [round(v, 3) for v in done3["overrides"][0]["box"]] == [round(v, 3) for v in box_a], \
+        f"覆盖没挂在 A 的脸盒上：{done3['overrides'][0]['box']} vs {box_a}"
+    assert done3["amounts"] == {"slim_face": 0.5, "big_eye": 0.9, "small_chin": 0.0}, done3
+    done4, f_ov2 = _layer_shot(engine, peer, h, w, action="set", scope="all",
+                               amounts={"slim_face": 0.2})
+    assert done4["default"] == {"slim_face": 0.2, "big_eye": 0.3, "small_chin": 0.0}, done4
+    assert done4["amounts"] == {"slim_face": 0.2, "big_eye": 0.9, "small_chin": 0.0}, \
+        f"改默认把 A 的覆盖也一起改了（覆盖项必须继续生效）：{done4['amounts']}"
+    d4 = np.abs(f_ov2.astype(np.int16) - f_ov.astype(np.int16)).max(axis=2)
+    assert int(d4[core_a].max()) > 0, "slim 从 0.5 改到 0.2 而 A 的画面没跟着走：未覆盖项没跟随默认"
+    # 这时换到 B：她看到的就是新默认，A 那一格覆盖不许漏给她
+    sel(b)
+    st_b2 = layered()
+    assert st_b2["amounts"] == {"slim_face": 0.2, "big_eye": 0.3, "small_chin": 0.0}, st_b2
+    assert st_b2["inherited"] is True and len(st_b2["overrides"]) == 1, \
+        f"A 的覆盖必须还在名单里（不许抹），而 B 自己全程全继承：{st_b2}"
+
+    # ---- ③ 恢复继承：两条路径回到同一个层级状态，画面逐字节相同
+    sel(a)
+    # 先把默认回到 slim 0.5（覆盖还在），这一幅就是"这一张带着覆盖"的样子
+    _layer_shot(engine, peer, h, w, action="set", scope="all", amounts={"slim_face": 0.5})
+    ref_ov, f_with_ov = _layer_shot(engine, peer, h, w, action="set", scope="person",
+                                    amounts={"big_eye": 0.9})     # 同值重写
+    assert ref_ov["amounts"] == {"slim_face": 0.5, "big_eye": 0.9, "small_chin": 0.0}, ref_ov
+    # 路径一：0.9 → inherit
+    inh1, f_inherit_1 = _layer_shot(engine, peer, h, w, action="inherit")
+    assert inh1["action"] == "inherit" and inh1["inherited"] is True, inh1
+    assert inh1["overrides"] == [] and inh1["overridden_kinds"] == [], inh1
+    assert inh1["amounts"] == {"slim_face": 0.5, "big_eye": 0.3, "small_chin": 0.0}, \
+        f"恢复继承后没有全按层级合成：{inh1['amounts']}"
+    assert int(np.abs(f_inherit_1.astype(np.int16)
+                      - f_with_ov.astype(np.int16)).max(axis=2)[core_a].max()) > 0, \
+        "inherit 之后画面与带覆盖那一幅一模一样：恢复继承没落地"
+    # 路径二：先覆盖成别的值（0.4）再 inherit —— 同一个层级状态必须给出同一幅像素
+    _layer_shot(engine, peer, h, w, action="set", scope="person", amounts={"big_eye": 0.4})
+    inh2, f_inherit_2 = _layer_shot(engine, peer, h, w, action="inherit")
+    assert _lsb(f_inherit_1, f_inherit_2) == 0, \
+        f"两条路径回到同一个层级状态而画面差 {_lsb(f_inherit_1, f_inherit_2)} LSB：合成不是一个出处"
+    # 同值重写那一幅也要与"直接按默认"逐字节相同（幂等：层级相同 ⇒ 像素相同）
+    _, f_default_only = _layer_shot(engine, peer, h, w, action="set", scope="all",
+                                    amounts={"slim_face": 0.5, "big_eye": 0.3})
+    assert _lsb(f_default_only, f_inherit_1) == 0, \
+        f"只改默认与恢复继承走到同一组有效值而画面不同：{_lsb(f_default_only, f_inherit_1)} LSB"
+
+    # ---- ⑦ 层级进撤销栈：undo 退掉"这一张被单独改过"，redo 再带回来
+    _layer_shot(engine, peer, h, w, action="set", scope="person", amounts={"big_eye": 0.8})
+    assert layered()["overridden_kinds"] == ["big_eye"], layered()
+    _drain(engine)
+    engine.send(cmd="history", action="undo")
+    hs = engine.wait_for("history_state", timeout=60)
+    ds = hs["doc_state"]["deform"]
+    assert ds["overrides"] == [] and ds["inherited"] is True, f"undo 只退了合成结果没退层级：{ds}"
+    assert _lsb(_current(engine, peer, h, w), f_inherit_1) == 0, \
+        "undo 后画面没回到纯默认那一幅：层级重放与常驻层不是同一个出处"
+    _drain(engine)
+    engine.send(cmd="history", action="redo")
+    engine.wait_for("history_state", timeout=60)
+    rs = layered()
+    assert rs["overridden_kinds"] == ["big_eye"] and rs["amounts"]["big_eye"] == 0.8, rs
+
+    # ---- ⑧ 出片同口径：带着 A 的覆盖导一次，再把整层放下导一次
+    src_shape = (int(meta["src_h"]), int(meta["src_w"]))
+    out_on, out_off = tmp_path / "layer-on", tmp_path / "layer-off"
+    out_on.mkdir(); out_off.mkdir()
+    _drain(engine)
+    engine.send(cmd="export", out_dir=str(out_on), format="png", tile=256, quality=90,
+                images=[path])
+    da, _ = _collect_done(engine)
+    assert da["failed"] == 0, da
+    assert not any("deform" in str(x) for x in (da["images"][0].get("skipped") or [])), \
+        f"层级形变在导出里被整层放下了：{da['images'][0].get('skipped')}"
+    with Image.open(da["images"][0]["out"]) as im:
+        arr_on = np.asarray(im.convert("RGB"), dtype=np.uint8)
+    _drain(engine)
+    engine.send(cmd="deform", action="clear", scope="all")
+    engine.wait_for("deform_done", timeout=60)
+    engine.send(cmd="export", out_dir=str(out_off), format="png", tile=256, quality=90,
+                images=[path])
+    dbe, _ = _collect_done(engine)
+    with Image.open(dbe["images"][0]["out"]) as im:
+        arr_off = np.asarray(im.convert("RGB"), dtype=np.uint8)
+    de = np.abs(arr_on.astype(np.int16) - arr_off.astype(np.int16)).max(axis=2)
+    core_a_full = _face_region(src_shape[0], src_shape[1], box_a, shrink=0.25)
+    core_b_full = _face_region(src_shape[0], src_shape[1], box_b, shrink=0.25)
+    assert core_a_full.sum() > 100 and core_b_full.sum() > 100, \
+        "满幅侧内芯掩膜是空的（空掩膜上的断言就是空断言）"
+    assert int(de[core_a_full].mean()) > 0, "文件里 A 没被推：屏幕上的层级形变没跟到出片"
+    assert int(de[core_b_full].max()) == 0, \
+        f"出片里另一个人也动了 {int(de[core_b_full].max())} LSB：导出把形变发给了没选中的那张脸"
+
+    # ---- ⑥ 换进程重开：覆盖按脸盒回到 A 身上，选到 B 读到的是默认
+    src_sha = _sha_of(path)
+    _layer_shot(engine, peer, h, w, action="set", scope="all",
+                amounts={"slim_face": 0.5, "big_eye": 0.3})
+    _layer_shot(engine, peer, h, w, action="set", scope="person", amounts={"big_eye": 0.9})
+    lit_frame = _current(engine, peer, h, w)
+    _created, saved = _create_and_save(engine, tmp_path, name="覆盖与继承")
+    raw = json.loads(Path(saved["path"]).read_text(encoding="utf-8"))
+    rows = [d for d in raw["docs"] if d["path"] == os.path.abspath(path)]
+    assert rows, f"工程里没有这张多人图：{[d['path'] for d in raw['docs']]}"
+    rec = rows[0]["versions"][0]["recipe"]
+    assert (rec.get("_deform_default") or {}).get("slim_face") == 0.5, rec.get("_deform_default")
+    assert len(rec.get("_deform_overrides") or []) == 1, \
+        f"逐张覆盖没进工程文件（重开就会丢单独改过的那几张）：{rec.get('_deform_overrides')}"
+
+    eng2 = extra_engine("portrait004-reopen")
+    eng2.send(cmd="hello")
+    eng2.wait_for("ready", timeout=90)
+    eng2.send(cmd="set_device", device="cpu")
+    eng2.wait_for("device_set", timeout=120)
+    eng2.send(cmd="project", action="open", path=saved["path"])
+    eng2.wait_for("project_opened", timeout=120)
+    got_ev = _collect(eng2, "image_ready", timeout=240)
+    shm2 = got_ev["shm_ready"][-1]
+    pc2 = eng2.wait_for("precompute_ready", timeout=240)
+    assert int(pc2.get("num_faces", 0)) == 2, pc2
+    st2 = _live_state(eng2)["deform"]
+    assert st2["built"] is True, f"重开后形变层没回到常驻（CORE-001）：{st2}"
+    assert st2["overridden_kinds"] == ["big_eye"] and st2["amounts"]["big_eye"] == 0.9, \
+        f"重开后 A 的覆盖没跟着回来：{st2}"
+    peer2 = FrameShm(shm2["name"])
+    assert _lsb(_current(eng2, peer2, shm2["h"], shm2["w"]), lit_frame) == 0, \
+        "重开后画面与保存前不同：换进程重放不是同一幅"
+    eng2.send(cmd="face", action="select", index=b)
+    eng2.wait_for("face_selected", timeout=60)
+    st3 = _live_state(eng2)["deform"]
+    assert st3["inherited"] is True and st3["amounts"] == {"slim_face": 0.5, "big_eye": 0.3,
+                                                           "small_chin": 0.0}, \
+        f"覆盖被记成了名单序号而不是脸盒：选到 B 却读到 {st3['amounts']}"
     assert _sha_of(path) == src_sha, "打开/保存工程动了原片"

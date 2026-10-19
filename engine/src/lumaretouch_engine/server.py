@@ -187,6 +187,16 @@ class Engine:
         # 一层」——而配方完整恢复正是 CORE-001 的 then。这一格是待重挂标记：滑块值留在
         # _deform["amounts"]，built=False，关键点一回来就由 _rebuild_deform_for_landmarks 补上。
         self._deform_defer = False
+        # 层级合成（LNX-PORTRAIT-004）：**全人物默认**这一份与**逐张脸的覆盖**那一份。
+        # `_deform["amounts"]` 存的是"当前在改那一张的最终生效值"（合成结果），它才是
+        # 会话真在渲染的那组数；默认与覆盖各自独立存着，改哪一层都只动那一层。
+        # 覆盖按**脸盒**认人而不是按 index：与 _face_box 同一条理由（检测顺序不可预期，
+        # 拿旧序号对新名单就是一次静默选型，会把 A 的覆盖盖到 B 脸上）。
+        # 诚实边界（写进 ADR）：一层形变服务一张脸——单位场只从一张脸的轮廓解控制点，
+        # 所以同一时刻只有"被选中那一张"按它的有效值生效；换人就是换那份几何
+        # （test_acceptance_p1 第 ⑥ 段逐字节钉着这件事）。不许把这句写成"多人同时各改各的"。
+        self._deform_default = {k: 0.0 for k in KINDS}
+        self._deform_overrides: list = []   # [{"box": [x0,y0,x1,y1], "amounts": {kind: v}}]
         # 调色层（M3-a2）：引擎侧存的是那张表本身（CPU 原件）与混合系数。
         # 表不存会话里只存在这里是不够的：常驻体积张量活在一块设备上，换设备必须重挂。
         self._lut = None
@@ -322,6 +332,11 @@ class Engine:
               # M5-a 底片条：行程与上限同样由引擎说。前端自己刻一份“长边 160”或
               # “最多 512 张”，下一轮改上限时就是漏改的那一处（它会静默把图截小）。
               "session_actions": ["scan", "add", "select", "state", "thumbs", "stop_thumbs"],
+              # 形变（M2-b / PORTRAIT-004）的 action 与作用层名单同样由引擎说：命令层的
+              # 拒绝文案里承诺了“名单在 ready 里”，这一格不写实就是假承诺。前端自己刻
+              # 一份“set/clear”就是下一轮加 inherit 时漏改的那一处（它会撞未知 action）
+              "deform_actions": list(self.DEFORM_ACTIONS),
+              "deform_scopes": list(self.DEFORM_SCOPES),
               # 能收哪些后缀：只由 session.IMAGE_EXTS 定这一份，宿主拿它填原生
               # 选择框的过滤器。拷一份名单到 UI 里就是给自己埋雷：M9-c 把八个 RAW
               # 后缀收进来的那一次，UI 那份拷件不会跟着变，用户选不了、工程师说支持。
@@ -646,10 +661,13 @@ class Engine:
             # 工程文件走，见 _project_build）一定会撞在这里，于是用户的一层瘦脸在
             # “保存→重开”之间悄悄消失——配方完整恢复是 CORE-001 的 then，不是“参数碰巧还在”。
             # 所以这里改成「待重挂」：值留着、built=False、报一条 defer 事件，关键点一回来就重建。
-            if self._deform["built"]:
+            if self._deform_intent():
+                # 判据从“常驻那一份在不在”换成“用户的意图在不在”（PORTRAIT-004）：
+                # 三层里任何一层有劲儿都要重挂，否则 `built=False` 而默认/覆盖还在的
+                # 那一型会在重挂时被整段跳过——生效值非零而画面不动
                 if self._precompute is None:
                     emit({"event": "engine_warn",
-                          "warn": "会话已迁到新设备，但没有关键点可重建形变层：滑块值已存住，"
+                          "warn": "会话重挂时没有关键点可重建形变层：滑块值与层级已存住，"
                                   "等下一次 precompute 自动重挂（不先清掉用户那一层）"})
                     self._deform_defer = any(abs(float(v)) > 0.0
                                              for v in self._deform["amounts"].values())
@@ -742,7 +760,8 @@ class Engine:
     # 「一份文档状态到底包含哪些字段」只有这一处名单。新加一层而不进来，切文档就会
     # 静默丢掉那一层 —— 那是本仓最贵的一族坑（「会话迁了、图层没迁」）的新变体。
     DOC_FIELDS = ("_strength", "_params", "_channel", "_repair_ops", "_redo_ops", "_op_seq",
-                  "_light_ops", "_light_redo", "_light", "_deform", "_deform_defer", "_lut",
+                  "_light_ops", "_light_redo", "_light", "_deform", "_deform_defer",
+                  "_deform_default", "_deform_overrides", "_lut",
                   "_lut_amount",
                   "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_bg",
                   "_precompute", "_precompute_backend", "_face_index", "_face_box",
@@ -751,7 +770,8 @@ class Engine:
          "_exposure_ref_k", "_crop_rect", "_crop_rotation")
     # 代理档一变就作废的那些层：它们的坐标是**这一档代理帧**上的像素坐标。
     PROXY_BOUND = ("_channel", "_repair_ops", "_redo_ops", "_light_ops", "_light_redo",
-                   "_deform", "_deform_defer", "_bg", "_precompute", "_precompute_backend",
+                   "_deform", "_deform_defer", "_deform_default", "_deform_overrides",
+                   "_bg", "_precompute", "_precompute_backend",
                    # 选型 index 是“那一次分析结果里的第几张”（PORTRAIT-003）：分析作废而
                    # index 还留着，下一次 precompute 完就会拿旧序号去对新名单——那正是
                    # “静默选了另一个人”的形状，与不选型一样错。
@@ -786,6 +806,7 @@ class Engine:
                 # 待重挂标记与层一起走：换图/作废代理档时形变整层放下，标记也必须跟着清，
                 # 不然下一次分析会把「上一张图的瘦脸」复活成这一张图上的一层。
                 "_deform_defer": False,
+                "_deform_default": {k: 0.0 for k in KINDS}, "_deform_overrides": [],
                 "_lut": None, "_lut_amount": 1.0, "_lut_preset": None,
                 "_grade": (0.0, 0.0, 0.0, 1.0),
                 "_grade_scope": "all", "_grade_mask": None,
@@ -817,6 +838,10 @@ class Engine:
               "_deform": {"amounts": dict(self._deform["amounts"]),
                           "built": bool(self._deform["built"])},
               "_deform_defer": bool(self._deform_defer),
+              "_deform_default": dict(self._deform_default),
+              # 覆盖那份整份新抄：里面的 dict 不能与 live 共享（同 _capture_state 那条理由）
+              "_deform_overrides": [{"box": tuple(o["box"]), "amounts": dict(o["amounts"])}
+                                    for o in self._deform_overrides],
               "_repair_ops": list(self._repair_ops), "_redo_ops": list(self._redo_ops),
               "_op_seq": int(self._op_seq),
               "_light_ops": list(self._light_ops), "_light_redo": list(self._light_redo),
@@ -852,6 +877,15 @@ class Engine:
         if not any(abs(float(v)) > 0.0 for v in self._deform["amounts"].values()):
             # 全零的滑块值不构成一层：标记留着只会在下一次分析后报一个「重建了个空层」
             self._deform_defer = False
+        # 层级那两份（PORTRAIT-004）从 JSON 回来是 list/数组：键与类型一律归一，
+        # 不然"有没有覆盖"的判据会拿 ["0.5"] 与 0.5 比出两个答案
+        self._deform_default = {k: float(self._deform_default.get(k, 0.0) or 0.0)
+                                for k in KINDS}
+        self._deform_overrides = [{"box": tuple(float(v) for v in o.get("box") or ()),
+                                   "amounts": {k: float(v) for k, v in (o.get("amounts") or {}).items()
+                                               if k in KINDS}}
+                                  for o in (self._deform_overrides or [])
+                                  if isinstance(o, dict) and o.get("box")]
         self._repair_ops = list(self._repair_ops)
         self._redo_ops = list(self._redo_ops)
         self._light_ops = list(self._light_ops)
@@ -878,6 +912,21 @@ class Engine:
         self._face_box = None if self._face_box is None \
             else tuple(float(v) for v in self._face_box)
         self._face_explicit = bool(self._face_explicit)
+        # 层级合成（PORTRAIT-004）必须在选型归一之后：合成认的是**脸盒**身份，
+        # 顺序反过来就会拿旧名单里的第 0 张去查覆盖，把 A 的覆盖当成 B 的
+        if not any(abs(float(v)) > 0.0 for v in self._deform_default.values()) \
+                and not self._deform_overrides:
+            # 老配方的迁移（1.4.0 之前没有这两格）：那一版没有“逐张覆盖”这一层，存着的
+            # `amounts` 只能来自“对所有人一样的那一层”，所以把它升成默认。不迁就会在
+            # 重开老工程时把用户的形变层整个抹掉——那是比“少一层”更坏的一种错
+            if any(abs(float(v)) > 0.0 for v in self._deform["amounts"].values()):
+                self._deform_default = {k: float(self._deform["amounts"].get(k, 0.0))
+                                        for k in KINDS}
+        # 生效值只有一个出处：从两份层级合成，不把存下来的那份 amounts 当真相
+        # （它是上一次合成的结果，而脸盒可能已经换了、层级可能来自手改的工程档）
+        self._deform["amounts"] = self._effective_deform_amounts()
+        self._deform_defer = (not self._deform["built"]) and any(
+            abs(float(v)) > 0.0 for v in self._deform["amounts"].values())
 
     def _drop_proxy_layers(self, st: dict, why: str) -> dict:
         """代理档变了 → 只留下逐点的那几层，按像素坐标成立的全部作废。
@@ -974,6 +1023,15 @@ class Engine:
             elif k == "_deform":
                 d[k] = {"amounts": {a: round(float(b), 6) for a, b in v["amounts"].items()},
                         "built": bool(v["built"])}
+            elif k == "_deform_default":
+                d[k] = {a: round(float(b), 6) for a, b in v.items()}
+            elif k == "_deform_overrides":
+                # 覆盖是"哪一张脸 + 哪几个数"：脸盒按 5 位归一化取整（与 faces() 同一个
+                # 口径），数值按 6 位——1e-16 的浮点噪声不该算"改过一层"。整份折成 JSON
+                # 串再比：那堆 [list, dict] 直接 sorted() 会在脸盒相等时去比 dict，抛 TypeError。
+                d[k] = json.dumps([[[round(float(x), 5) for x in o["box"]],
+                                    {a: round(float(b), 6) for a, b in o["amounts"].items()}]
+                                   for o in v], sort_keys=True)
             elif k == "_grade":
                 d[k] = [round(float(x), 6) for x in v]
             elif k == "_grade_mask":
@@ -1353,6 +1411,8 @@ class Engine:
                 "counts": {"repair": len(self._repair_ops), "light": len(self._light_ops),
                            "light_redo": len(self._light_redo), "repair_redo": len(self._redo_ops)},
                 "deform": {"amounts": dict(self._deform["amounts"]),
+                           "scope": "person" if self._override_for(self._face_box) else "all",
+                           **self._layered_deform_state(),
                            "built": bool(self._deform["built"]),
                            # 重开工程/迁会话后“有这一层而关键点还没回来”（CORE-001）：
                            # UI 拿它把面板标成“待重新分析”，而不是把滑块弹回 0
@@ -1840,9 +1900,10 @@ class Engine:
             return True
         if st.get("_deform_defer"):
             return True
-        df = st.get("_deform") or {}
-        return bool(df.get("built")) or any(abs(float(v)) > 0.0
-                                            for v in (df.get("amounts") or {}).values())
+        # 三层里任何一层有劲儿都要补这一次分析（判据与 `_deform_intent` 同一处）：
+        # 只认 `_deform["amounts"]` 会漏掉“多人图重开后还没有脸盒，而默认/覆盖都在等”
+        # 那一种——合成出来是零，而用户的活儿实实在在还在那两份里
+        return self._deform_intent(st)
 
     def cmd_project(self, p: dict):
         """项目：创建 / 打开 / 保存 / 标签 / 回收站。
@@ -2185,16 +2246,18 @@ class Engine:
             info = self._vram.load_face(self._precompute)
         except Exception as e:
             emit({"event": "error",
-                  "error": f"会话重挂预计算产物失败，掩膜/通道/形变层已全部清除（"
+                  "error": f"会话重挂预计算产物失败，掩膜/通道/会话里的形变层已放下（"
                            f"{type(e).__name__}）：{e}"})
             self._vram.clear_face()
             self._precompute = None
             self._precompute_backend = None
             self._channel = None
-            self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
-            # 关键点回不来了，“等它回来的那一层”也不能继续挂着：否则下一次分析会把
-            # 宿主已经报过“清除”的那一层静悄悄重建出来
-            self._deform_defer = False
+            # 会话里的生效值与单位场一起放下（这一张现在确实没劲儿），而用户的两份层级
+            # （PORTRAIT-004）不是模型派生物，不在“一并清除”的范围里：留着，下一次成功的
+            # precompute 会按脸盒接回来。defer 只在合成结果非零时留真（全零留真是说谎）
+            self._deform = dict(amounts=self._effective_deform_amounts(), built=False)
+            self._deform_defer = any(abs(float(v)) > 0.0
+                                     for v in self._deform["amounts"].values())
             # 掩膜没了，靠它活着的那个调色作用域也必须一起放下（库层 clear_face 已经把
             # vram 那一侧退回 all，这里不放宿主字段就会继续报“只调皮肤”）
             if str(self._grade_scope) == "skin":
@@ -2302,15 +2365,30 @@ class Engine:
         `built=False` 而 `_deform_defer=True` 也算“有层”：那是重开工程/迁会话存住的那一份
         用户意图（CORE-001），关键点一回来就该补上。不认这一格就是“重开后面部微调静消失”。
         """
-        if not (self._deform["built"] or self._deform_defer):
+        if not self._deform_intent():
+            # 三层（生效值 / 全人物默认 / 逐张覆盖）都没劲儿就是真没这一层：不建、不报
             return
-        amounts = dict(self._deform["amounts"])
+        if self._person_key(self._face_box) is None:
+            # 没有“那一张”（多人图还没选定，或这一轮没探出脸盒）：两份层级原样留着当用户
+            # 意图，而会话里那一层必须放下——拿“全人物默认”去服务一张说不出是谁的脸，正是
+            # SCOPE-001 拦的那件事（上一版这里会照旧建层，等于把默认盖到名单里第 0 张脸上）
+            if self._deform["built"]:
+                self._vram.clear_deform()
+            self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+            self._deform_defer = False
+            self._emit_deform_state("invalidate",
+                                    reason="这一轮没有可服务的那一张（多人图还没 `face select` "
+                                           "选定，或没探出脸盒）：全人物默认与逐张覆盖都留着，"
+                                           "选定那一张后自动接上")
+            return
+        amounts = dict(self._effective_deform_amounts())
         self._vram.clear_deform()
         self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
         self._deform_defer = False
         if pc.backend == "synthetic":
             emit({"event": "engine_warn",
-                  "warn": "关键点后端换成 synthetic（网格占位几何），形变层已整层清除"})
+                  "warn": "关键点后端换成 synthetic（网格占位几何），会话里的形变层已放下；"
+                          "全人物默认与逐张覆盖按脸盒留着，换成真后端再分析一次就接回来"})
             self._emit_deform_state("invalidate", reason="synthetic 占位几何不能按脸形语义取点",
                                     dropped_amounts=amounts)
             return
@@ -2347,7 +2425,8 @@ class Engine:
     def _emit_deform_state(self, action: str, *, build: dict | None = None,
                            render_ms: float = 0.0, total_ms: float = 0.0,
                            reason: str | None = None,
-                           dropped_amounts: dict | None = None) -> None:
+                           dropped_amounts: dict | None = None,
+                           scope: str = "all") -> None:
         """deform_done 只在这里组装一次（cmd_deform 与关键点重建/清除三条臂共用）。
 
         与 _precompute_ready_event 同一条理由：两处各写一份，漂的方向永远是“后接的那
@@ -2357,6 +2436,11 @@ class Engine:
         from . import face as face_mod       # 判据只写在 face.geometry_warning 里
         ev = {"event": "deform_done", "action": action,
               "amounts": dict(pipe.deform_amounts),
+              # 作用层与层级那一份账（PORTRAIT-004）：`amounts` 说的是“会话现在在渲染
+              # 什么”，而“默认是多少、这一张被单独改了几格”只有这里说得出——两条臂
+              # （cmd_deform / 关键点重建）共用这一个组装点，写两处必然漂
+              "scope": scope,
+              **self._layered_deform_state(),
               "built": bool(pipe.deform_units),
               "lit": bool(pipe.has_deform()),
               "deform_builds": int(pipe.deform_builds),
@@ -2908,11 +2992,16 @@ class Engine:
             self._vram.clear_deform()
             self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
             # 待重挂的那一层也一起吃掉：留着它就是一次静默选型——下一次分析会把
-            # “刚才那一张的形变值”按新名单里不知道哪一张重建出来
+            # “刚才那一张的形变值”按新名单里不知道哪一张重建出来。
+            # 但**两份层级不能跟着抹**（PORTRAIT-004）：覆盖挂在脸盒上，而脸盒是这一轮
+            # 名单里可能再次出现的东西（同图重分析），抹掉就是把用户的活儿按引擎认不回
+            # 人这件事烧掉。放下的是“当前生效值”，不是“用户改过什么”
             self._deform_defer = False
             self._emit_deform_state("invalidate",
                                     reason="重新分析后没能认出上次显式选定的那一张脸（多人图）："
-                                           "形变层已整层清除，不拿旧序号去服务另一张脸",
+                                           "会话里的形变已放下，不拿旧序号去服务另一张脸；"
+                                           "全人物默认与逐张覆盖仍按脸盒留着，重新 `face select` "
+                                           "选定那一张就接得回来",
                                     dropped_amounts=amounts)
         return pc
 
@@ -2965,10 +3054,14 @@ class Engine:
         self._face_index = idx
         self._face_box = tuple(float(v) for v in (view.face_box or ())) or None
         self._face_explicit = True
-        if self._deform["built"] or self._deform_defer:
+        if self._deform_intent():
             # 已常驻的形变层必须跟着换人：留着旧那份，报的是“选中的人”而画的是
             # “上次那一张”的脸——双向错配里最难复查的一族。
             # 待重挂的那一份也一样：不跟着选型重建，下一次补上的就是旧那一张的几何。
+            # 第三种形状只有层级（PORTRAIT-004）：`_preserve_face_choice` 认不回上次
+            # 选定那一张时放下的是生效值，而默认与逐张覆盖按脸盒留着——用户现在把那张
+            # 脸选回来了，就必须在这里接上，否则“覆盖跟着人回来”要用户再摸一次滑块才算
+            # 生效，那是一条按了没反应的控件
             try:
                 self._rebuild_deform_for_landmarks(view)
             except Exception as e:
@@ -2985,19 +3078,133 @@ class Engine:
               # precompute_ready、doc_state 汇进同一个槽位），平铺那一份是历史形状。
               **fst, "face": fst})
 
+    # ------------------------------------------------------------ 层级合成（LNX-PORTRAIT-004）
+    DEFORM_ACTIONS = ("set", "clear", "inherit")
+    DEFORM_SCOPES = ("all", "person")
+    DEFORM_KEYS = {"cmd", "action", "amounts", "scope"}
+
+    @staticmethod
+    def _person_key(box):
+        """把脸盒折成可比较的键——这就是“那一张脸”的身份（与 _face_box 同一条理由）。"""
+        if not box or len(box) != 4:
+            return None
+        return tuple(round(float(v), 5) for v in box)
+
+    def _override_for(self, box) -> dict:
+        """那一张脸上挂着的覆盖（没有就给空字典）。认的是脸盒，容差 1e-3。"""
+        key = self._person_key(box)
+        if key is None:
+            return {}
+        for o in self._deform_overrides:
+            ob = self._person_key(o.get("box"))
+            if ob and max(abs(a - b) for a, b in zip(ob, key)) < 1e-3:
+                return dict(o.get("amounts") or {})
+        return {}
+
+    def _effective_deform_amounts(self) -> dict:
+        """当前在改那一张脸的最终三个数：默认打底，覆盖项逐 kind 盖上去。
+
+        合成只在这一处。会话里那份 `_deform["amounts"]`、doc_state、出片、UI 滑块读的都是
+        它的结果——写两处就会出现“面板显示默认而渲染用覆盖”那种双向错配。
+
+        没有“那一张”（没分析过，或多人图还没选定）时生效值全零：`target_scope=single_face`
+        的操作说不出对象就没有可合成的脸，而两份层级原样留着当用户意图，选定之后由
+        `_rebuild_deform_for_landmarks` 接回来。拿“全人物默认”去服务一张说不出是谁的脸，
+        正是 SCOPE-001 拦的那件事。
+        """
+        box = self._person_key(self._face_box)
+        if box is None:
+            return {k: 0.0 for k in KINDS}
+        eff = {k: float(self._deform_default.get(k, 0.0) or 0.0) for k in KINDS}
+        for k, v in self._override_for(box).items():
+            if k in KINDS:
+                eff[k] = float(v)
+        return eff
+
+    def _set_override(self, box, amounts: dict) -> None:
+        """把这几个 kind 挂到那一张脸上（按 kind 增量，不把同一个人别的 kind 抹掉）。"""
+        key = self._person_key(box)
+        for o in self._deform_overrides:
+            if self._person_key(o.get("box")) == key:
+                o["amounts"].update({k: float(v) for k, v in amounts.items() if k in KINDS})
+                return
+        self._deform_overrides.append({"box": key,
+                                       "amounts": {k: float(v) for k, v in amounts.items()
+                                                   if k in KINDS}})
+
+    def _drop_override(self, box) -> bool:
+        """恢复继承：丢掉**那一张脸**的覆盖。返回真有没有得丢（空操作要说出口）。"""
+        key = self._person_key(box)
+        before = len(self._deform_overrides)
+        self._deform_overrides = [o for o in self._deform_overrides
+                                  if self._person_key(o.get("box")) != key]
+        return len(self._deform_overrides) != before
+
+    def _layered_deform_state(self) -> dict:
+        """层级那一份账：`doc_state.deform` 与 `deform_done` 共用这一个组装点。
+
+        前端不自己数“这一张被单独改过几格”：那份数只能从引擎的合成现场来，否则
+        “面板说全继承而渲染带着覆盖”没人拦得住。
+        """
+        ov = self._override_for(self._face_box)
+        return {"default": dict(self._deform_default),
+                "overrides": [{"box": [float(v) for v in (o["box"] or ())],
+                               "amounts": dict(o["amounts"])}
+                              for o in self._deform_overrides],
+                "overridden_kinds": sorted(ov),
+                "inherited": not bool(ov)}
+
+    def _deform_intent(self, st: dict | None = None) -> bool:
+        """这份状态里有没有“用户的形变意图”（三层任一层非零就算有）。
+
+        判据不写两遍：`_recipe_needs_landmarks`（重开要不要补分析）与关键点重建走的是
+        同一句话，而漏掉“只有默认”或“只有别人的覆盖”那两种形状，代价分别是“重开少了
+        一层”和“切回来静没掉”。
+        """
+        st = st if st is not None else self._capture_state()
+        df = st.get("_deform") or {}
+        if bool(df.get("built")) or bool(st.get("_deform_defer")):
+            return True
+        for src in (df.get("amounts") or {}, st.get("_deform_default") or {}):
+            if any(abs(float(v)) > 0.0 for v in src.values()):
+                return True
+        return any((o.get("amounts") or {}) for o in (st.get("_deform_overrides") or []))
+
     def cmd_deform(self, p: dict):
-        """五官微调（M2-b）：瘦脸 / 大眼 / 小下巴三个滑块。
+        """五官微调（M2-b）：瘦脸 / 大眼 / 小下巴三个滑块，外加作用层（PORTRAIT-004）。
 
         与修容笔的区别：它不是逐笔图层而是一个“参数层”——滑块值就是全部状态；
         撤销/重做属于产品闭环（M5）统一做，不在这里先做三份中的一份。
 
-        铁律与 light 同构：先全量校验、后一次性提交。建层需要 478 点关键点，
-        而 **synthetic 后端给的是网格占位几何**：拿它按脸形语义取点会搬到完全无关的
-        位置上，而且画面“真的动了”——看不出错。所以整条拒绝并说清原因。
+        作用层（LNX-PORTRAIT-004）：`scope=all`（默认）改的是**全人物默认**那一层，
+        `scope=person` 只给当前选定的那一张挂**覆盖**，`action=inherit` 把这一张的覆盖
+        拿下来回到跟随默认。三条臂写的都是“某一层”，而送进会话的永远是合成结果
+        （`_effective_deform_amounts()` 是唯一合成点）——所以“改一个 kind 把另一个 kind
+        的单独覆盖抹掉”和“面板显示默认而渲染用的是覆盖”这两种错配都进不来。
+
+        诚实边界：一层形变服务一张脸。单位场只从**那一张**脸的轮廓解控制点，所以同一
+        时刻只有被选中那一张按它的有效值生效；换人就是换那份几何（不是“多人同时各改各
+        的”，那种说法是假能力）。
+
+        铁律与 light 同构：先全量校验、后一次性提交，被拒整条不留痕（层级两份一起退回）。
+        建层需要 478 点关键点，而 **synthetic 后端给的是网格占位几何**：拿它按脸形语义
+        取点会搬到完全无关的位置上，而且画面“真的动了”——看不出错。所以整条拒绝并说清原因。
         """
+        unknown = set(p) - self.DEFORM_KEYS
+        if unknown:
+            emit({"event": "error", "error": f"deform 收到不认识的参数：{sorted(unknown)}"
+                  f"（可用：{sorted(self.DEFORM_KEYS - {'cmd', 'action'})} / action）"})
+            return
         action = p.get("action", "set")
-        if action not in ("set", "clear"):
-            emit({"event": "error", "error": f"未知 deform action: {action}（可用：set/clear）"})
+        if action not in self.DEFORM_ACTIONS:
+            emit({"event": "error", "error": f"未知 deform action: {action}"
+                  f"（可用：{'/'.join(self.DEFORM_ACTIONS)}，名单在 ready 的 deform_actions 里）"})
+            return
+        scope = p.get("scope", "all")
+        if scope not in self.DEFORM_SCOPES:
+            emit({"event": "error", "error": f"未知 deform scope: {scope}"
+                  "（可用：all=改全人物默认 / person=只覆盖当前选定那一张，"
+                  "名单在 ready 的 deform_scopes 里）"})
             return
         if not self._image_loaded or self._vram is None:
             emit({"event": "error", "error": "尚未 load_image"})
@@ -3013,10 +3220,12 @@ class Engine:
         # 超范围保护（SCOPE-001 / D-P0-02）：面部重塑是 target_scope=single_face 的操作。
         # 多人同图时不拿“其中某一张”冒充“那张脸”——静默选型正是冻结件点名要防的那件事，
         # 而且用户从画面上看不出来（脸确实被推了，推的不是他以为的那一个）。
+        # `scope=person` 与 `inherit` 也在说“这一张”，所以一起挡：说不出是谁就不许假装办过。
         # 只拒这一条：全图调色/曝光/裁剪/磨皮的作用面不是“某个人”，不受影响。
         pc0 = self._precompute
-        if (action == "set" and pc0 is not None and int(getattr(pc0, "num_faces", 1)) > 1
-                and not self._face_explicit):
+        addresses_a_person = scope == "person" or action == "inherit"
+        if ((action == "set" or addresses_a_person) and pc0 is not None
+                and int(getattr(pc0, "num_faces", 1)) > 1 and not self._face_explicit):
             from .face import SCOPE_MAX_FACES
             emit({"event": "error",
                   "error": f"画面里探到 {pc0.num_faces} 张脸（上限探 {SCOPE_MAX_FACES} 张）："
@@ -3025,56 +3234,122 @@ class Engine:
                            f"（名单：{self._face_state()['faces']}，PORTRAIT-003）；"
                            "全图调色、曝光/白平衡、裁剪与磨皮仍可用"})
             return
+        # 身份：这一层挂在**脸盒**上（PORTRAIT-004）。没有脸盒就没有可挂的对象，也没有
+        # 可合成的那一张。`clear` + `scope=all` 是唯一的例外：那是“整层放下”，
+        # 不需要知道是谁，也不该因为没分析过而按不动（清空按钮必须永远能按）。
+        if not (action == "clear" and scope == "all") and not self._person_key(self._face_box):
+            emit({"event": "error", "error":
+                  f"deform 需要先 precompute（多人图还要先 `face select` 选定那一张）："
+                  "形变层挂在脸盒身份上（PORTRAIT-004），没有脸盒就不知道该把这一层挂到"
+                  "谁身上、也不知道该按谁的覆盖合成"})
+            return
         t_start = monotonic_ns()
         build_info: dict = {}
         prev_amounts = dict(self._deform["amounts"])
-        if action == "clear":
+        prev_built = bool(self._deform["built"])
+        # 两份层级各自快照：被拒或渲染抛了都要原样退回。只退回合成结果就会留下
+        # “画面回到上一帧而层级记着新的那一份”，而下一次切文档/存工程会把那半成品存出去
+        prev_default = dict(self._deform_default)
+        prev_overrides = [{"box": o["box"], "amounts": dict(o["amounts"])}
+                          for o in self._deform_overrides]
+
+        def _rollback_layers() -> None:
+            self._deform_default = prev_default
+            self._deform_overrides = prev_overrides
+
+        note: str | None = None
+        if action == "clear" and scope == "all":
+            # 整层清空：默认与每一个人的覆盖一起走。只清默认、留着覆盖就是“清空了而画面
+            # 还带着单独改过的那几张”，用户会以为清空按钮没生效
             self._vram.clear_deform()
             self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
             # 用户亲口说“不要这一层”：存住的那一份意图一起清，不然下一次分析又把它复活
             self._deform_defer = False
+            self._deform_default = {k: 0.0 for k in KINDS}
+            self._deform_overrides = []
         else:
-            try:
-                # 参数先于建层：越界值不该先付一次 55 ms 解算再被拒
-                got = check_amounts(p.get("amounts"))
-            except ValueError as e:
-                emit({"event": "error", "error": f"deform 被拒，整条拒绝：{e}"})
-                return
-            if not self._deform["built"]:
-                pc = self._precompute
-                if pc is None:
-                    emit({"event": "error", "error":
-                          "形变需要先 precompute：没有 478 点关键点就不知道把哪里搬到哪里"
-                          + ("（上一层的参数已经存住等重挂，跑一次 precompute 就接回去）"
-                             if self._deform_defer else "")})
-                    return
-                if pc.backend == "synthetic":
-                    emit({"event": "error", "error":
-                          "形变拒绝 synthetic 后端的关键点：它们是网格占位几何、不是脸形，"
-                          "按点号取“左脸轮廓”会搬到无关位置。请装 mediapipe 插件后端"})
-                    return
+            if action == "set":
                 try:
-                    built = self._vram.build_deform(pc.landmarks)
-                except (DeformGeometryError, ValueError, RuntimeError) as e:
-                    emit({"event": "error", "error": f"形变建层失败，整条拒绝：{e}"})
+                    # 参数先于建层也先于落层：越界值不该付一次 55 ms 解算，也不该写进层级
+                    got = check_amounts(p.get("amounts"))
+                except ValueError as e:
+                    emit({"event": "error", "error": f"deform 被拒，整条拒绝：{e}"})
                     return
-                self._deform["built"] = True
+                # 写进它该去的那一层，而不是写进合成结果：改默认不该把别的 kind 变成覆盖
+                if scope == "all":
+                    self._deform_default.update(got)
+                else:
+                    self._set_override(self._face_box, got)
+            else:
+                # `clear`(person) 与 `inherit` 同义：把这一张的覆盖拿下来，默认一个字不动。
+                # 认不回那一张（本来就没单独改过）返回 False——那不是错误，是空操作，
+                # 但必须说出口：否则“按了恢复继承而画面没变”就又是一件查不清的事
+                if not self._drop_override(self._face_box):
+                    note = ("这一张本来就没有覆盖（三格全部跟随全人物默认），"
+                            "本次 inherit/clear(person) 是空操作")
+            eff = self._effective_deform_amounts()
+            if not any(abs(float(v)) > 0.0 for v in eff.values()):
+                # 合成出来全零 = 这一张身上没劲儿：会话里那一层要放下。留着就是一个
+                # “看不见的层”继续占常驻字节，而 `lit=false` 与 `bytes_deform>0` 互相打脸
+                if self._deform["built"]:
+                    self._vram.clear_deform()
+                self._deform = dict(amounts=eff, built=False)
                 self._deform_defer = False
-                build_info = {"build": built}
-            try:
-                info = self._vram.set_deform_amounts(got)
-            except ValueError as e:
-                emit({"event": "error", "error": f"deform 被拒，整条拒绝：{e}"})
-                return
-            self._deform["amounts"] = dict(info["amounts"])
+            else:
+                if not self._deform["built"]:
+                    pc = self._precompute
+                    if pc is None:
+                        _rollback_layers()
+                        emit({"event": "error", "error":
+                              "形变需要先 precompute：没有 478 点关键点就不知道把哪里搬到哪里"
+                              + ("（上一层的参数已经存住等重挂，跑一次 precompute 就接回去）"
+                                 if self._deform_defer else "")
+                              + "；全人物默认与逐张覆盖两份已原样退回"})
+                        return
+                    if pc.backend == "synthetic":
+                        _rollback_layers()
+                        emit({"event": "error", "error":
+                              "形变拒绝 synthetic 后端的关键点：它们是网格占位几何、不是脸形，"
+                              "按点号取“左脸轮廓”会搬到无关位置。请装 mediapipe 插件后端"
+                              "；层级两份已原样退回"})
+                        return
+                    try:
+                        built = self._vram.build_deform(pc.landmarks)
+                    except (DeformGeometryError, ValueError, RuntimeError) as e:
+                        _rollback_layers()
+                        emit({"event": "error", "error": f"形变建层失败，整条拒绝：{e}"
+                              "；全人物默认与逐张覆盖两份已原样退回"})
+                        return
+                    self._deform["built"] = True
+                    self._deform_defer = False
+                    build_info = {"build": built}
+                try:
+                    # 送进会话的是**合成结果**（默认打底 + 这一张的覆盖），不是刚传来的
+                    # 那几个数：只传增量就会让“改一个 kind 把另一个 kind 的覆盖丢掉”
+                    info = self._vram.set_deform_amounts(eff)
+                except ValueError as e:
+                    _rollback_layers()
+                    emit({"event": "error", "error": f"deform 被拒，整条拒绝：{e}"
+                          "；层级两份已原样退回"})
+                    return
+                self._deform["amounts"] = dict(info["amounts"])
         try:
             fr = self._write_current_frame("deform")
         except Exception as e:
-            # 滑块值已写进常驻层而渲染抛了（apply_deform 的非有限值护栏、会话尺寸不配）：
-            # 必须把滑块值退回上一条已证能出帧的状态，否则“层里留着新值而屏幕停在旧帧”，
-            # 而下一条 set 会拿这个坏场再跑一次。回滚后补一帧把画面与层对齐。
-            self._deform["amounts"] = prev_amounts
+            # 值已写进常驻层而渲染抛了（apply_deform 的非有限值护栏、会话尺寸不配）：
+            # 必须退回上一条已证能出帧的状态——层级两份、合成结果与 built 一起退。
+            # 只退 amounts 就会留下“层级记着新的而画面停在旧的”，下一次切文档把半成品存出去。
+            _rollback_layers()
+            self._deform = dict(amounts=prev_amounts, built=prev_built)
+            self._deform_defer = (not prev_built) and any(
+                abs(float(v)) > 0.0 for v in prev_amounts.values())
             try:
+                if prev_built and self._precompute is not None \
+                        and self._precompute.backend != "synthetic":
+                    # clear(all) 那一条臂已经把单位场放下了：回滚要把场一起建回来，
+                    # 不然 `set_deform_amounts(prev)` 写进的是一个没有单位场的会话，
+                    # 报出来的 amounts 非零而 lit=false——又是一处看不出的错配
+                    self._vram.build_deform(self._precompute.landmarks)
                 self._vram.set_deform_amounts(prev_amounts)
                 back = self._write_current_frame("deform")
                 back.pop("render_ms", None)
@@ -3082,13 +3357,14 @@ class Engine:
             except Exception:      # 回滚也出帧失败：能说清的只有“重新导图”
                 emit({"event": "engine_warn",
                       "warn": "形变回滚后仍无法出帧，本会话不可信，请重新导入图片"})
-            emit({"event": "error", "error": f"形变渲染失败，滑块已退回上一值（"
+            emit({"event": "error", "error": f"形变渲染失败，滑块与层级已退回上一值（"
                   f"{type(e).__name__}）：{e}"})
             return
         render_ms = fr.pop("render_ms")
         self._emit_deform_state(action, build=build_info.get("build"),
                                 render_ms=render_ms,
-                                total_ms=round((monotonic_ns() - t_start) / 1e6, 2))
+                                total_ms=round((monotonic_ns() - t_start) / 1e6, 2),
+                                scope=scope, reason=note)
         emit(fr)
 
     # ------------------------------------------------------------ 调色（M3-a2）与预设（M3-b）

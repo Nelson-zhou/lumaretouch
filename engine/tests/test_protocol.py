@@ -373,6 +373,20 @@ def test_hello_reports_raw_backends(engine):
     assert rb["needs_plugin"] and rb["plugin"]
 
 
+def test_hello_lists_deform_actions_and_scopes(engine):
+    """deform 的拒绝文案里写着"名单在 ready 的 deform_actions / deform_scopes 里"，
+    那两格就必须真在——假承诺比没名单更坏：用户照文案去找却找不到，就没人说得清
+    `inherit` 与 `scope=person` 到底存不存在。
+
+    名单同时是前端的唯一出处：UI 自己刻一份 "set/clear" 就是下一轮加第三种作用层时
+    漏改的那一处（它会拿一个引擎不认的名字去撞"未知 deform scope"）。
+    """
+    engine.send(cmd="hello")
+    ready = engine.wait_for("ready")
+    assert ready["deform_actions"] == ["set", "clear", "inherit"], ready.get("deform_actions")
+    assert ready["deform_scopes"] == ["all", "person"], ready.get("deform_scopes")
+
+
 @pytest.mark.skipif(not os.path.isfile(FIXTURE),
                     reason="缺测试人像，先跑 packaging/make-test-portrait.py")
 def test_load_dng_strength_zero_and_raw_fields(engine, tmp_path):
