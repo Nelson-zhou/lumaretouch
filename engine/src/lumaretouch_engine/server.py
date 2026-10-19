@@ -2938,7 +2938,10 @@ class Engine:
                   "“选了而没生效”就再也查不清是谁的错"})
             return
         if action == "list":
-            emit({"event": "face_list", "t_face_ms": 0.0, **self._face_state()})
+            st = self._face_state()
+            # 同一份状态两种形状：平铺（历史形状，宿主与用例都读得到）与嵌套（宿主那一个
+            # 槽位多源汇入，靠 `face` 这一格认出对象）。只算一次，不写两份。
+            emit({"event": "face_list", "t_face_ms": 0.0, **st, "face": st})
             return
         raw = p.get("index")
         faces = pc.faces()
@@ -2974,10 +2977,13 @@ class Engine:
                 emit({"event": "error", "error":
                       f"换人失败({type(e).__name__})：{e}，已退回上一份选型"})
                 return
+        fst = self._face_state()
         emit({"event": "face_selected", "action": "select", "requested_index": idx,
               # 没点火时选型不该改动画面：这一格给端到端用例当判据（“选人不等于调图”）
               "frame_changed": bool(self._deform["built"]),
-              **self._face_state()})
+              # 平铺 + 嵌套同一份：嵌套那一份是给宿主 `note_face()` 认对象用的（它与
+              # precompute_ready、doc_state 汇进同一个槽位），平铺那一份是历史形状。
+              **fst, "face": fst})
 
     def cmd_deform(self, p: dict):
         """五官微调（M2-b）：瘦脸 / 大眼 / 小下巴三个滑块。

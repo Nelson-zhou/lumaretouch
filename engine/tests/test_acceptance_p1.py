@@ -751,6 +751,11 @@ def test_editing_one_person_leaves_the_other_untouched(engine, extra_engine, tmp
     assert ev["index"] == a and ev["explicit"] is True and ev["blocked"] is False, ev
     assert [round(v, 3) for v in ev["box"]] == [round(v, 3) for v in box_a], \
         f"报回来的脸盒不是 A 的那一张：{ev['box']} vs {box_a}"
+    # 宿主那一个槽位（status.face）是多源汇入的，它靠事件里 `face` 这一格认出对象。
+    # 装机真窗口第一轮就撞在这里：事件只平铺、不嵌套，宿主读出 None，于是"点了人而面板
+    # 一动不动"——裸引擎的用例全绿，因为没人读那一格。这条把两种形状钉在一起。
+    assert isinstance(ev.get("face"), dict) and ev["face"]["index"] == ev["index"] \
+        and ev["face"]["blocked"] is False, f"face_selected 没带嵌套那一份：{sorted(ev)}"
     assert int(np.abs(_current(engine, peer, h, w) - base).max()) == 0, "选个人就把画面改了"
 
     # ①② 推 A：A 的内芯真动了，B 的内芯逐字节不动，且差场不与 B 的整盒相交
@@ -871,6 +876,10 @@ def test_editing_one_person_leaves_the_other_untouched(engine, extra_engine, tmp
     # （load_image 内部：先出帧、再按配方补 precompute），所以这里单独等一条。
     pc2 = eng2.wait_for("precompute_ready", timeout=240)
     assert int(pc2.get("num_faces", 0)) == 2, pc2
+    # 分析那一条也得带嵌套的 face：重开时 image_ready 先出（那时还没关键点），面板要
+    # 靠这条把名单与选型认回来，而不是等一次没人发的 face list
+    assert isinstance(pc2.get("face"), dict) and pc2["face"]["blocked"] is False, \
+        f"precompute_ready 没把选型报回宿主：{sorted(pc2)}"
     st2 = _live_state(eng2)["face"]
     assert st2["index"] == a and st2["explicit"] is True and st2["blocked"] is False, \
         f"重开工程后选型没回来：{st2}"
