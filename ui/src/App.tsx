@@ -166,6 +166,9 @@ export default function App() {
   // 16-bit 母档直通（M9-e）：默认关。开它就是要求"其它都别动"；只有把它单独成一个勾，
   // "这一件没经过图层"才说得出口。
   const [exportBits16, setExportBits16] = useState(false);
+  // 形变作用层（LNX-PORTRAIT-004）：这一格选的是"正在改哪一层"，值本身不进口径——
+  // 每一层的数值与"这张被覆盖了哪几格"都由引擎随 doc_state 报（面板读它，不读这里）
+  const [deformScope, setDeformScope] = useState<"all" | "person">("all");
   // 导出侧 P0 的四格（注册表 lnx.export.v1 / lnx.batch.v1）。中性位按冻结的注册表：
   // gps 默认关、冲突默认 skip_and_report、色彩档默认 srgb；tiff 压缩的 16-bit 例外
   // 由引擎拒（那条报错会说出来），前端不预先猜
@@ -1320,6 +1323,141 @@ export default function App() {
             supportShare: df?.support_share ?? 0, insideChanged, outsideChanged,
           })}`);
         }
+      }
+      // 层级覆盖与继承（LNX-PORTRAIT-004）自动通道：跟着 LRT_AUTO_FACE 一起点火。
+      // 库里那八段判据连的是裸引擎；这一段证的是 runDeform(…, scope) → Rust deform
+      // 的第三个参数 → 引擎 deform_done 的 scope/overrides 那几格 → 宿主轮询状态 →
+      // 用户看见的那一帧。中间每一层都只有真窗口能证明。
+      // 前置：上面那一臂已在这张多人图上选定 want 号，并把全人物默认落成 {0.6, 0.3, 0}。
+      if (env.auto_face) {
+        const wantL = Number(env.auto_face);
+        const fullL = (f: any) => !!f && f.rows === f.h && f.pixelLen === f.w * f.h * 4;
+        let lbad = "";
+        let personDone: DeformInfo | null = null;
+        let defaultDone: DeformInfo | null = null;
+        let inheritDone: DeformInfo | null = null;
+        let insideChangedL = -1;
+        let otherChangedL = -1;
+        let sameLayerBytes = -1;
+        // 等一条符合判据的 deform_done：不能只看 action，"覆盖了没"只有层级那几格说得出
+        const waitDeform = async (ok: (d: DeformInfo | null) => boolean, why: string) => {
+          for (let i = 0; i < 200; i++) {
+            await sleep(100);
+            const st = await engineStatus().catch(() => null);
+            if (st && ok(st.deform ?? null)) return st.deform;
+          }
+          lbad = `20s 内没等到${why}`;
+          return null;
+        };
+        // ① a) 先把默认改成 slim 0.2（此时还没有任何覆盖）→ 这一幅就是"纯默认"的参照
+        if (!lbad) {
+          try { await runDeform("set", { slim_face: 0.2 }, "all"); }
+          catch (e) { lbad = `runDeform(scope=all) 抛错: ${e}`; }
+        }
+        const fDefault = lbad ? null : await waitDeform(
+          (d) => !!d && d.action === "set" && d.scope === "all"
+            && Math.abs((d.amounts?.slim_face ?? 9) - 0.2) < 1e-6,
+          "到 scope=all 的默认变更");
+        const base = lbad ? null : await peek();
+        // ① b) 只给这一张挂覆盖（big_eye 0.9）：引擎必须报出 scope=person 与那一格名单
+        if (!lbad) {
+          try { await runDeform("set", { big_eye: 0.9 }, "person"); }
+          catch (e) { lbad = `runDeform(scope=person) 抛错: ${e}`; }
+        }
+        if (!lbad) {
+          personDone = await waitDeform(
+            (d) => !!d && d.action === "set" && d.scope === "person"
+              && (d.overridden_kinds ?? []).includes("big_eye") && d.inherited === false,
+            "scope=person 的覆盖账（overridden_kinds/inherited）");
+        }
+        const litL = lbad ? null : await peek();
+        if (!lbad && !personDone) lbad = lbad || "没等到 scope=person 那一笔的帧";
+        // ② 挂覆盖只许动被选中那一张：与 ADR-0009 同一个口径（1.6× 脸半对角之外必须不动）
+        if (!lbad && base && litL && fullL(base) && fullL(litL)
+          && base.w === litL.w && base.h === litL.h) {
+          const stF = await engineStatus().catch(() => null);
+          const fF = faceStateOf(stF, null);
+          const box = fF?.faces.find((x) => x.index === wantL)?.box ?? null;
+          if (box && box.length === 4) {
+            const cx = ((box[0] + box[2]) / 2) * litL.w;
+            const cy = ((box[1] + box[3]) / 2) * litL.h;
+            const r = 0.5 * Math.hypot((box[2] - box[0]) * litL.w, (box[3] - box[1]) * litL.h);
+            const lim = 1.6 * r;
+            insideChangedL = 0; otherChangedL = 0;
+            for (let y = 0; y < litL.h; y++) {
+              for (let x = 0; x < litL.w; x++) {
+                const i = (y * litL.w + x) * 4;
+                if (litL.pixels[i] === base.pixels[i] && litL.pixels[i + 1] === base.pixels[i + 1]
+                  && litL.pixels[i + 2] === base.pixels[i + 2]) continue;
+                if (Math.hypot(x - cx, y - cy) <= lim) insideChangedL++; else otherChangedL++;
+              }
+            }
+          } else {
+            lbad = `选定那一张没有脸盒（index=${wantL}）：作用面没法量`;
+          }
+        }
+        // ③ 再改默认（slim 0.2→0.6）：覆盖那一格必须继续是 0.9，未覆盖那格跟到 0.6
+        if (!lbad) {
+          try { await runDeform("set", { slim_face: 0.6 }, "all"); }
+          catch (e) { lbad = `runDeform(改默认) 抛错: ${e}`; }
+        }
+        if (!lbad) {
+          defaultDone = await waitDeform(
+            (d) => !!d && d.action === "set" && d.scope === "all"
+              && Math.abs((d.amounts?.big_eye ?? 9) - 0.9) < 1e-6
+              && Math.abs((d.amounts?.slim_face ?? 9) - 0.6) < 1e-6,
+            "覆盖项继续生效而默认那格跟随（big_eye 0.9 / slim 0.6）");
+        }
+        // ④ 恢复继承：合成必须落回默认，且画面逐字节等于"两条路径走到同一个层级状态"的另一幅
+        if (!lbad) {
+          try { await runDeform("inherit"); }
+          catch (e) { lbad = `runDeform(inherit) 抛错: ${e}`; }
+        }
+        if (!lbad) {
+          inheritDone = await waitDeform(
+            (d) => !!d && d.action === "inherit" && (d.overridden_kinds ?? []).length === 0
+              && d.inherited === true && Math.abs((d.amounts?.big_eye ?? 9) - 0.3) < 1e-6,
+            "恢复继承后全按层级合成（覆盖名单空、big_eye 回到默认 0.3）");
+        }
+        const fInherit = lbad ? null : await peek();
+        // 另一条路径回到同一个层级状态：再挂一次覆盖（同值）然后再次 inherit。
+        // 同一组默认 + 同一份"没有覆盖" → 像素必须逐字节相同，否则合成不是单一出处
+        if (!lbad) {
+          try { await runDeform("set", { big_eye: 0.95 }, "person"); }
+          catch (e) { lbad = `runDeform(第二次覆盖) 抛错: ${e}`; }
+        }
+        if (!lbad) {
+          const again = await waitDeform(
+            (d) => !!d && d.scope === "person" && (d.overridden_kinds ?? []).includes("big_eye"),
+            "第二次覆盖的账");
+          if (again) {
+            try { await runDeform("inherit"); }
+            catch (e) { lbad = `runDeform(第二次 inherit) 抛错: ${e}`; }
+          }
+        }
+        if (!lbad) {
+          await waitDeform((d) => !!d && d.action === "inherit" && d.inherited === true,
+            "第二次恢复继承");
+        }
+        const fAgain = lbad ? null : await peek();
+        if (!lbad && fInherit && fAgain && fullL(fInherit) && fullL(fAgain)
+          && fInherit.w === fAgain.w && fInherit.h === fAgain.h) {
+          sameLayerBytes = diffBytes(fInherit.pixels, fAgain.pixels);
+        }
+        await report(`M0_LAYER ${JSON.stringify(lbad ? { bad: lbad, want: wantL } : {
+          want: wantL,
+          defaultFirst: fDefault?.amounts ?? {},
+          personScope: personDone?.scope ?? "",
+          overriddenKinds: personDone?.overridden_kinds ?? [],
+          inheritedBeforeOverride: personDone?.inherited ?? null,
+          defaultAmounts: personDone?.default ?? {},
+          overrideAmounts: personDone?.amounts ?? {},
+          keptAfterDefaultChange: defaultDone?.amounts ?? {},
+          inheritAmounts: inheritDone?.amounts ?? {},
+          inheritOverrideCount: (inheritDone?.overrides ?? []).length,
+          insideChanged: insideChangedL, otherChanged: otherChangedL,
+          sameLayerBytes,
+        })}`);
       }
       // 等宿主把下一条 history_state 搬进轮询状态：撤销的答复是异步的，
       // 而它的 doc_state 就是"引擎认为现在该摆哪些滑块"的唯一出处
@@ -2489,6 +2627,7 @@ export default function App() {
                                } }}
                      exportDir={exportDir} setExportDir={setExportDir}
                      exportBits16={exportBits16} setExportBits16={setExportBits16}
+                     deformScope={deformScope} setDeformScope={setDeformScope}
                      selCount={selPaths.length} projName={projName} setProjName={setProjName}
                      preset={{
                        name: presetName, setName: setPresetName,

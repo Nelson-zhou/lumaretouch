@@ -941,12 +941,18 @@ fn deform(
     state: State<'_, Arc<AppState>>,
     action: String,
     amounts: Option<Value>,
+    scope: Option<String>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "deform", "action": action});
     // 与 light 同一条规矩：给了才附。宿主写默认值等于替引擎做决定，
     // 生产默认值一改这条通路就会静默漂开。
     if let Some(v) = amounts {
         cmd["amounts"] = v;
+    }
+    // 作用层（LNX-PORTRAIT-004）：all=改全人物默认 / person=只覆盖当前选定那一张。
+    // 同样"给了才附"——引擎那边的默认值才是唯一出处，这里再刻一份就是双出处。
+    if let Some(v) = scope {
+        cmd["scope"] = json!(v);
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))

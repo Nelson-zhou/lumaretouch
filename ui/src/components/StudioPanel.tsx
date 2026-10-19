@@ -45,6 +45,10 @@ export interface StudioProps {
   setExportDir: (v: string) => void;
   exportBits16: boolean;
   setExportBits16: (v: boolean) => void;
+  /** 形变的作用层（LNX-PORTRAIT-004）：这是"正在改哪一层"的编辑意图，不是文档值；
+   *  每一层的数值一律从 `doc.deform` 读（引擎是唯一出处）。 */
+  deformScope: "all" | "person";
+  setDeformScope: (v: "all" | "person") => void;
   /** 选中要批量导出的张数（底片条多选） */
   selCount: number;
   /** 模块预设（LNX-P0-PRESET）：清单来自引擎随 session_state 报的那一份，
@@ -142,6 +146,12 @@ export default function StudioPanel(props: StudioProps) {
   const dim = !props.hasImage;
   const chans = status?.precompute?.mask_channels ?? [];
   const deforms = doc?.deform.amounts ?? {};
+  // 层级那三份（PORTRAIT-004）：默认那一层的三个数、当前这张被单独覆盖了哪几格、
+  // 是不是完全跟随默认。全部取自引擎报的那一份，前端不数、不猜、不自己记
+  const layerDefault = doc?.deform.default ?? {};
+  const overridden = doc?.deform.overridden_kinds ?? [];
+  const inherited = doc?.deform.inherited ?? true;
+  const scope = props.deformScope;
   /** 多人图那一份名单与选型（LNX-PORTRAIT-003）：chip 数、能不能放行，全从引擎报的读。
    *  前端自己数脸（数不出来的那种“看着像两个人”）与前端自己记“我点了第几个人”都是第二份
    *  出处，漂的时候会以「面板能点而引擎整条拒」的形态出现。 */
@@ -214,19 +224,48 @@ export default function StudioPanel(props: StudioProps) {
           <div className="mut">{t("face.editing", { n: faceSt!.index + 1 })}</div>
         )}
         {!!doc?.deform.defer && <div className="p0why">{t("face.deferWait")}</div>}
+        {/* 作用层（LNX-PORTRAIT-004）：改「全人物默认」还是「只这一张脸」。
+         *  滑块的位置永远是**生效值**（引擎正在渲染的那一组），标签里再带上层级账：
+         *  只按默认的那一格写着"跟随默认 x.xx"，被单独覆盖的那一格由下面一行点名。
+         *  「只这一张」在引擎认不出脸盒时（多人没选定 / 没分析）整条被拒，按钮当场禁用
+         *  并把原因放进 title——绝不留一个点了不动的控件。 */}
+        <div className="row" style={{ gap: 6 }}>
+          <button className={scope === "all" ? "primary" : ""} disabled={dim}
+                  title={t("retouch.scopeAllWhy")}
+                  onClick={() => props.setDeformScope("all")}>{t("retouch.scopeAll")}</button>
+          <button className={scope === "person" ? "primary" : ""}
+                  disabled={dim || !props.faceOk}
+                  title={props.faceOk ? t("retouch.scopePersonWhy") : props.faceWhy}
+                  onClick={() => props.setDeformScope("person")}>{t("retouch.scopePerson")}</button>
+        </div>
+        <div className="mut">{scope === "all"
+          ? t("retouch.editingDefault") : t("retouch.editingOverride")}</div>
+        <div className="mut">{inherited
+          ? t("retouch.inheritAll")
+          : t("retouch.overriddenNote",
+              { kinds: overridden.map((k) => t(("retouch." + k) as MsgKey)).join("、") })}</div>
         {(["slim_face", "big_eye", "small_chin"] as const).map((kind) => (
           <div key={kind}>
-            <label className="k">{t(("retouch." + kind) as MsgKey)} · {(deforms[kind] ?? 0).toFixed(2)}</label>
+            <label className="k">{t(("retouch." + kind) as MsgKey)} · {(deforms[kind] ?? 0).toFixed(2)}
+              {scope === "person" && !overridden.includes(kind)
+                ? `（${t("retouch.followDefault")} ${(layerDefault[kind] ?? 0).toFixed(2)}）` : ""}
+            </label>
             <input type="range" min={-1} max={1} step={0.01}
                    disabled={dim || !props.faceOk}
                    value={deforms[kind] ?? 0}
-                   onChange={(e) => ok(runDeform("set", { ...deforms, [kind]: +e.target.value }), props)}
+                   // 只发改变的那一格：整组回发会把「生效值」写进所选那一层，于是改一次
+                   // 默认就把这个人单独覆盖过的别的格子抹平（PORTRAIT-004 的"覆盖项继续生效"）
+                   onChange={(e) => ok(runDeform("set", { [kind]: +e.target.value }, scope), props)}
                    style={{ width: "100%" }} />
           </div>
         ))}
         <div className="row">
-          <button disabled={dim || !props.faceOk} onClick={() => ok(runDeform("clear"), props)}>
+          <button disabled={dim || !props.faceOk} title={t("retouch.deformClearWhy")}
+                  onClick={() => ok(runDeform("clear", undefined, "all"), props)}>
             {t("retouch.deformClear")}</button>
+          <button disabled={dim || !props.faceOk || !overridden.length}
+                  title={overridden.length ? t("retouch.inheritWhy") : t("retouch.inheritIdle")}
+                  onClick={() => ok(runDeform("inherit"), props)}>{t("retouch.inherit")}</button>
         </div>
         {!props.faceOk && <div className="p0why">{props.faceWhy}</div>}
         <RegistryPanel section="face" value={p0.value} enabled={p0.enabled}

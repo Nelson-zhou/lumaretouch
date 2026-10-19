@@ -83,6 +83,14 @@ export interface DocState {
   light: { exposure: number; radius: number };
   counts: { repair: number; light: number; repair_redo: number; light_redo: number };
   deform: { amounts: Record<string, number>; built: boolean;
+            /** 作用层（LNX-PORTRAIT-004）：面板要说“这一张已被单独覆盖 / 完全跟随默认”，
+             *  只能从引擎这一格读。前端自己记一份“我刚才改的是哪一层”就会出现
+             *  “面板显示默认而渲染用的是覆盖”那种双向错配。可选：老引擎没有这四格。 */
+            scope?: "all" | "person";
+            default?: Record<string, number>;
+            overrides?: { box: number[]; amounts: Record<string, number> }[];
+            overridden_kinds?: string[];
+            inherited?: boolean;
             /** 「层在而关键点还没回来」（CORE-001 重开 / 迁会话）：滑块值不许弹回 0，
              *  面板要显示「等重新分析」，因为引擎已经答应自动补一次分析 */
             defer?: boolean };
@@ -352,7 +360,13 @@ export interface DeformInfo {
   /** set/clear 是用户发的；rebuild 是关键点更新后引擎重解单位场；
    *  invalidate 是层被整条清除（后端换成不能按脸形取点的 synthetic）——那一条
    *  必须把滑块归零，否则界面上写着 0.6 而画面一动不动 */
-  action: "set" | "clear" | "rebuild" | "invalidate" | "defer";
+  action: "set" | "clear" | "inherit" | "rebuild" | "invalidate" | "defer";
+  /** 作用层与层级那一份账（LNX-PORTRAIT-004，deform_done 与 doc_state 同一个组装点） */
+  scope?: "all" | "person";
+  default?: Record<string, number>;
+  overrides?: { box: number[]; amounts: Record<string, number> }[];
+  overridden_kinds?: string[];
+  inherited?: boolean;
   /** 三种形变当前的滑块值，[-1,1]。0 就是不动。 */
   amounts: Record<string, number>;
   /** 单位场建过没有（第一次非零 set 时建） */
@@ -938,8 +952,11 @@ export const runLight = (
  * 一次 TPS 也不重解（拖 600 帧 deform_builds 不增，见 m2-face-bench）。
  * 不发就等于“滑块拖了、画面不动”。
  */
-export const runDeform = (action: DeformInfo["action"], amounts?: Record<string, number>) =>
-  invoke<{ requested: boolean }>("deform", { action, amounts });
+export const runDeform = (action: DeformInfo["action"], amounts?: Record<string, number>,
+                           scope?: "all" | "person") =>
+  // scope 给了才附（与 amounts 同一条规矩）：宿主写默认值等于替引擎做决定，而
+  // `inherit` 这一臂根本没有 amounts——两个都要能缺省，名单只在引擎的 ready 里
+  invoke<{ requested: boolean }>("deform", { action, amounts, scope });
 
 /** 多人图选人（LNX-PORTRAIT-003）：list 问名单，select 点定「这次改哪一张」。
  *
