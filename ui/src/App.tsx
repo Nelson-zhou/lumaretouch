@@ -11,7 +11,7 @@ import {
   benchStart, benchStats, engineStatus, loadImage, m0Env, parseFrameHead, peekFrame,
   quit, report, runDeform,
   fetchFilmstrip, runExport, runGrade, runHistory, runInpaint, runLight, runLut, runSession, runBackground,
-  runCrop, runExposure, runPrecompute, runProject, runTask,
+  runBatch, runCrop, runExposure, runPreset, runPrecompute, runProject, runTask,
   setCompare, setStrength, shutdownEngine, startEngine,
   type BenchOptions, type DeformInfo, type DocState, type EngineRuntime, type EngineStatus, type ExportDone,
   type ExportProgress, type HistoryReport, type HistoryState, type ImageReady,
@@ -177,6 +177,13 @@ export default function App() {
   const [sel, setSel] = useState<Set<string>>(new Set());
   const selAnchor = useRef<number | null>(null);
   const [batchTag, setBatchTag] = useState("");
+  // 预设与批量同步（LNX-P0-PRESET / LNX-P0-BATCH）：清单、台账与上一笔的事实全部从
+  // status.session 里读（引擎随 session_state 报），这里只记“界面上选中了哪一个”与
+  // “要存的新预设叫什么”。前端不扫目录、不记 batch_id：那是两个会漂的地方。
+  const [presetName, setPresetName] = useState("");
+  const [presetSel, setPresetSel] = useState("");
+  const [appliedPreset, setAppliedPreset] = useState("");
+  const [syncScopeLabel, setSyncScopeLabel] = useState("");
   // 视口平移/缩放（只属于显示：导出写的仍是引擎那一份像素）
   const [view, setView] = useState({ zoom: 1, x: 0, y: 0 });
   // 工程与任务面（读只读引擎报的那两份，前端不记“存过了”）
@@ -1941,12 +1948,19 @@ export default function App() {
   /** 底片条上被选中的那几张（没选就只导当前这张） */
   const selPaths = Array.from(sel);
   const exportTargets = selPaths.length ? selPaths : (hasImage && status?.image?.doc ? [status.image.doc] : []);
-  /** D-P0-02 的单脸口径（注册表 scope_single_face 逐字）：mediapipe + 478 点 + 无几何警告。
-   *  synthetic 的网格占位不算可用人脸——引擎在 deform 里就拒它，界面不许装作能点。 */
-  const faceOk = !!pc && pc.backend === "mediapipe" && pc.num_landmarks === 478 && !deformGeomWarn;
+  /** D-P0-02 的单脸口径（注册表 scope_single_face 逐字）：mediapipe + 478 点 + 无几何警告
+   *  + 恰好一张脸。人数这一格只从引擎的 precompute_ready 读（num_faces）：前端数不来，
+   *  也不该自己编一个“看起来只有一张”的判据。synthetic 的网格占位不算可用人脸——引擎在
+   *  deform 里就拒它，界面不许装作能点。 */
+  const faceCount = pc?.num_faces ?? 1;
+  const faceOk = !!pc && pc.backend === "mediapipe" && pc.num_landmarks === 478
+    && !deformGeomWarn && faceCount === 1;
   const faceWhy = hasImage
-    ? `需要且仅需要一张可用人脸（当前 backend=${pc?.backend ?? "未跑分析"}、点数=${pc?.num_landmarks ?? 0}`
-      + `${deformGeomWarn ? "，且引擎报了几何警告" : ""}）。多人照片上替别人改脸是本产品明确不做的事。`
+    ? (faceCount > 1
+        ? `画面里探到 ${faceCount} 张脸（检测上限探 ${pc?.max_faces_probed ?? 2} 张）：面部重塑需要且仅需要一张可用人脸，`
+          + "本版本不在多人照片里替你选哪一张（SCOPE-001）。全图调色、曝光/白平衡、裁剪与磨皮仍可用。"
+        : `需要且仅需要一张可用人脸（当前 backend=${pc?.backend ?? "未跑分析"}、点数=${pc?.num_landmarks ?? 0}`
+          + `${deformGeomWarn ? "，且引擎报了几何警告" : ""}）。多人照片上替别人改脸是本产品明确不做的事。`)
     : "还没导入图片：这一格要作用于一张打开的图。";
   const liveTask = tasks.length ? tasks[tasks.length - 1] : null;
   // 注册表上的格式名（jpeg/tiff）与引擎落盘用的后缀名（jpg/tif）不是一回事：
@@ -1972,7 +1986,15 @@ export default function App() {
       case "lnx.export.v1.output_profile": return exportProfile;
       case "lnx.export.v1.metadata_include_gps": return exportGps;
       case "lnx.batch.v1.conflict_policy": return exportConflict;
-      case "lnx.preset.v1.apply": return doc?.lut.preset ?? "";
+      // 预设下拉读的两个都来自引擎：`last_applied` 是“套完而没被手改”那一个（参数比过
+      // 才算），而不是前端记的“上次点了哪个按钮”。
+      case "lnx.preset.v1.apply": {
+        const la = presetState?.last_applied
+        const p = la ? presetList.find((x) => x.id === la.id) : null
+        return p ? presetLabel(p) : ""
+      }
+      case "lnx.batch.v1.module_scope":
+        return syncScopeLabel || syncScopes[0]?.label || "";
       default: return undefined;
     }
   }
@@ -1980,8 +2002,13 @@ export default function App() {
   /** 枚举格的候选：有些由引擎报（预设名、能落的格式），不能在前端拄一份会漂的名单。 */
   function p0options(key: string): string[] | null {
     switch (key) {
+      // 注册表的预设格现在接的是**模块预设**（人像/色彩/裁剪那一族，走 cmd_preset）。
+      // LUT 面板上那一排表预设按钮不从这里走：它读的是 ready 报的 `presets`（另一件事：
+      // 调色表 + 肤色定向那两层）。
       case "lnx.preset.v1.apply":
-        return (status?.presets ?? []).map((p) => p.name);
+        return presetList.map(presetLabel);
+      case "lnx.batch.v1.module_scope":
+        return syncScopes.map((s) => s.label);
       case "lnx.export.v1.format":
         // 引擎报的落盘后缀翻回注册表的格式名：名单出处仍是 ready.export_formats
         return (caps?.export_formats ?? ["jpg", "tif", "png"]).map((x) => fmtIn[x] ?? x);
@@ -2057,7 +2084,8 @@ export default function App() {
     if (key === "lnx.export.v1.tiff_compression") { setExportTiffComp(v); return; }
     if (key === "lnx.export.v1.output_profile") { setExportProfile(v); return; }
     if (key === "lnx.batch.v1.conflict_policy") { setExportConflict(v); return; }
-    if (key === "lnx.preset.v1.apply") { onPreset(v); return; }
+    if (key === "lnx.preset.v1.apply") { void onPresetApplyByName(v); return; }
+    if (key === "lnx.batch.v1.module_scope") { setSyncScopeLabel(v); return; }
   }
 
   function p0rect(_key: string, rect: number[]) {
@@ -2068,6 +2096,7 @@ export default function App() {
   async function p0action(key: string) {
     try {
       if (key === "lnx.export.v1.start") { onExport(); return; }
+      if (key === "lnx.preset.v1.save") { await onPresetSave(); return; }
       if (key === "lnx.history.v1.undo") { onHistory("undo"); return; }
       if (key === "lnx.history.v1.redo") { onHistory("redo"); return; }
       if (key === "lnx.import.v1.choose_files") { await onPickPath(false); return; }
@@ -2099,6 +2128,104 @@ export default function App() {
       setProjErr(String(e));
       setDragNote(String(e));
     }
+  }
+
+  // ── 预设与批量同步（LNX-P0-PRESET / LNX-P0-BATCH）─────────────────────
+  // 两份事实都从 status.session 读（引擎随 session_state 报）：预设清单/错误/“现在等于
+  // 哪个预设”，与同步台账/上一笔的结果。这里不扫目录、不记 batch_id、不自己数张数。
+  const presetState = status?.session?.presets ?? null;
+  const syncState = status?.session?.sync ?? null;
+  const presetList = presetState?.list ?? [];
+  /** 名字重名时才拼 id：下拉的每一项必须能唯一映回一个预设，否则“应用哪一个”会变成猜。 */
+  const dupNames = new Set(presetList.map((p) => p.name)
+    .filter((n, i, arr) => arr.indexOf(n) !== i));
+  const presetLabel = (p: { name: string; id: string }) =>
+    (dupNames.has(p.name) ? `${p.name} · ${p.id}` : p.name);
+  /** 作用域候选只从引擎报的 transferable 模块里拼：注册表说不通的那格不进候选。 */
+  const syncScopes: { label: string; ops: string[] }[] = (() => {
+    const mods = presetState?.modules ?? [];
+    const okOf = (op: string) => mods.find((m) => m.operation_id === op)?.transferable === true;
+    const global = ["lnx.exposure.v1", "lnx.white_balance.v1", "lnx.crop.v1"].filter(okOf);
+    const skin = ["lnx.skin.v1", "lnx.blemish.v1"].filter(okOf);
+    const out: { label: string; ops: string[] }[] = [];
+    if (global.length) out.push({ label: "全图配方（曝光·白平衡·裁剪）", ops: global });
+    if (global.length && skin.length)
+      out.push({ label: "全图配方 + 磨皮（逐张须单脸）", ops: [...global, ...skin] });
+    return out;
+  })();
+  const syncScopeOps = (syncScopes.find((s) => s.label === syncScopeLabel) ?? syncScopes[0])?.ops ?? [];
+  /** 上一笔同步的实话（句子里的每一个数字都来自引擎报的那一份） */
+  const syncNote = (() => {
+    const r = syncState?.last_result;
+    if (!r) return "还没有同步记录。"
+    if (r.kind === "commit") {
+      const n = r.applied?.length ?? 0
+      const sk = r.skipped ?? []
+      return sk.length
+        ? `同步了 ${n} 张，${sk.length} 张没动：${sk.map((x) => `${x.path.split("/").pop()}（${x.reason}）`).join("；")}`
+        : `同步了 ${n} 张（“撤销同步”可以退回去）`
+    }
+    const n = r.restored?.length ?? 0
+    const cf = r.conflicts ?? []
+    return cf.length
+      ? `撤销了 ${n} 张，${cf.length} 张有冲突没动：${cf.map((x) => `${x.path.split("/").pop()}（${x.reason}）`).join("；")}`
+      : `撤销了 ${n} 张`
+  })();
+
+  /** 发完一条不开新会话的命令后让引擎重报一次状态；轮询也会拿到，这里只是不等。 */
+  async function refreshFromEngine() {
+    await runSession("state")
+    await refreshStatus()
+  }
+
+  async function onPresetApplyByName(label: string) {
+    const p = presetList.find((x) => presetLabel(x) === label)
+    if (!p) return
+    setPresetSel(p.id)
+    await runPreset("apply", { id: p.id })
+    await refreshFromEngine()
+  }
+
+  async function onPresetSave() {
+    if (!presetName.trim()) {
+      setDragNote("预设名字是空的：存下来也认不出那是哪一个")
+      return
+    }
+    // id 用时间戳而不拿名字拼：名字可以是中文/带空格，拿它当文件名就是一次路径穿越的入口
+    const id = `user-${Date.now().toString(36)}`
+    await runPreset("save", { id, name: presetName.trim(), kind: "custom" })
+    setPresetSel(id)
+    setPresetName("")
+    await refreshFromEngine()
+  }
+
+  async function onPresetImport() {
+    const f = await openDialog({ title: "导入预设（.json）",
+      filters: [{ name: "LumaRetouch 预设", extensions: ["json"] }] })
+    if (typeof f !== "string" || !f) return
+    await runPreset("import", { path: f })
+    // 成不成都不在这里下结论：清单与 errors 随 session_state 上来，坏掉的那个会带着原因列出来
+    await refreshFromEngine()
+  }
+
+  async function onPresetDelete() {
+    if (!presetSel) return
+    await runPreset("delete", { id: presetSel })
+    setPresetSel("")
+    await refreshFromEngine()
+  }
+
+  async function onBatchSync() {
+    if (!selPaths.length || !syncScopeOps.length) return
+    await runBatch("commit", { docs: selPaths, moduleScope: syncScopeOps, conflictPolicy: exportConflict })
+    await refreshFromEngine()
+  }
+
+  async function onBatchUndo() {
+    const id = syncState?.last
+    if (!id) return
+    await runBatch("undo", { batchId: id })
+    await refreshFromEngine()
   }
 
   const verdict = gate(stats, w);
@@ -2140,6 +2267,19 @@ export default function App() {
                      exportDir={exportDir} setExportDir={setExportDir}
                      exportBits16={exportBits16} setExportBits16={setExportBits16}
                      selCount={selPaths.length} projName={projName} setProjName={setProjName}
+                     preset={{
+                       name: presetName, setName: setPresetName,
+                       selectedId: presetSel, setSelectedId: setPresetSel,
+                       builtin: presetList.find((x) => x.id === presetSel)?.builtin ?? false,
+                       count: presetList.length, errors: presetState?.errors ?? [],
+                       onImport: () => { void onPresetImport() },
+                       onDelete: () => { void onPresetDelete() },
+                     }}
+                     sync={{
+                       selected: selPaths.length, canUndo: !!syncState?.last && hasImage,
+                       note: syncNote,
+                       onSync: () => { void onBatchSync() }, onUndo: () => { void onBatchUndo() },
+                     }}
                      p0={{ value: p0value, optionsFor: p0options, enabled: p0enabled,
                            slider: p0slider, toggle: p0toggle, enum: p0enum,
                            action: p0action, rect: p0rect }} />

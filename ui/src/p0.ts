@@ -175,16 +175,12 @@ export const WIRING: Record<string, Binding> = {
     label: ["开始批量导出", "Start batch export"], section: "output", kind: "action",
   },
   // ── 批量应用范围与冲突策略 ───────────────────────────────────────────
+  // 批量同步的作用域（1.2.0 接通）：候选与合法性都在引擎 scope.py，这里只给两个
+  // 真能落的组合。逐点层（消除笔/修容笔笔迹、形变）按定义属于「这一张」的画布坐标与
+  // 那一张自己的关键点，所以它们**不在任何一个选项里**——不是没做，是搬过去就是错的。
   "lnx.batch.v1.module_scope": {
-    label: ["批量应用哪些层", "Layers applied in batch"], section: "output",
-    kind: "enum", blocked: true,
-    why_not: ["导出非当前文档的图时，逐点层（消除笔/修容笔笔迹）按定义属于「这一张」的"
-      + "画布坐标，不能搬到别张脸上；形变层要那一张自己的关键点。因此当前实现把「批量应用"
-      + "设置」限定为整份配方中的全局层，而「挑哪几层批量应用」这个选择器还没有对应的引擎"
-      + "开关。宁可显式禁用，也不能让笔迹落到别人的脸上。",
-      "Per-pixel layers (heal/dodge strokes) belong to this document's canvas coordinates and "
-      + "deform needs that photo's own landmarks, so a «pick which layers to batch-apply» "
-      + "selector has no engine counterpart yet."],
+    label: ["批量同步哪些层", "Layers to sync in batch"], section: "output",
+    kind: "enum",
   },
   "lnx.batch.v1.conflict_policy": {
     label: ["同名冲突策略", "Name conflict policy"], section: "output", kind: "enum",
@@ -229,14 +225,11 @@ export const WIRING: Record<string, Binding> = {
   "lnx.history.v1.redo": {
     label: ["重做", "Redo"], section: "output", kind: "action", read: "history.can_redo",
   },
+  // 预设的两格都接通了（1.2.0）：清单/应用/保存/导入/删除走引擎的 cmd_preset，
+  // 落盘格式是 lrt.preset.v1（scope.py 逐条校验参数键与量程）。
   "lnx.preset.v1.save": {
     label: ["保存当前配方为预设", "Save current recipe as preset"], section: "tone",
-    kind: "action", blocked: true,
-    why_not: ["引擎目前只报内置预设清单（preset 名单随 ready 上来），用户自定义预设的"
-      + "写入与列举还没有落盘格式（它得跟着工程文件走，并且要能跨版本核对参数键）。"
-      + "本轮不做「点了存不下来」的按钮。",
-      "Only built-in presets are reported by the engine; user presets need a durable format and "
-      + "a listing path, which this round does not ship."],
+    kind: "action",
   },
   "lnx.preset.v1.apply": {
     label: ["应用预设", "Apply preset"], section: "tone", kind: "enum",

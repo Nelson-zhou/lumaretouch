@@ -134,17 +134,65 @@ export interface SessionDoc {
   loaded: boolean;
   opened: boolean;
   edits: SessionEdits;
+  /** 工程层的三个字段随底片条上报（状态徽章与多选批量都要在格子上直接可读）：
+   *  标签/标记/回收站都是工程记录，不是对原图动手。 */
+  tags: string[];
+  label?: string | null;
+  trashed: boolean;
+  /** 这一格算过源文件指纹没有（项目保存/打开时才算） */
+  hashed?: boolean;
   /** `preview` 为真时这一格画的是**相机内嵌预览**（RAW 那一族），不是引擎渲的那一帧；
    *  `format` 是解码报的格式名（DNG/CR2/JPEG…）。两个都不能缺：缺了就分不出
    *  “jpg 的真图”与“DNG 的相机预览”，而底片条上后者看起来跟前者一模一样。 */
   thumb: { w: number; h: number; bytes: number; quality: number;
            preview?: boolean; format?: string | null } | null;
   thumb_error: string | null;
-  /** 工程记录三格（LNX-P0-PROJECT / CORE-007）：标签与回收站都不是对原图动手。
-   *  声明成可选：老引擎不报时底片条照样画，只是没有徽章。 */
-  tags?: string[];
-  label?: string | null;
-  trashed?: boolean;
+}
+
+/** 预设面（LNX-P0-PRESET）：清单与“哪些模块能作用”全部由引擎报，前端不扫目录。 */
+export interface PresetInfo {
+  schema: string;
+  id: string;
+  name: string;
+  kind: string;
+  builtin: boolean;
+  modules: Record<string, Record<string, unknown>>;
+  author?: string;
+  note?: string;
+}
+
+/** `lnx.batch.v1.module_scope` 那一份契约的运行时报信：transferable=false 的格子
+ *  带着“为什么没接通”，UI 直接拿它写禁用理由（不在前端刻第二份理由）。 */
+export interface ScopeModule {
+  operation_id: string;
+  params: string[];
+  transferable: boolean;
+  single_face: boolean;
+  unmodeled?: Record<string, string>;
+  reason?: string | null;
+}
+
+export interface PresetState {
+  list: PresetInfo[];
+  errors: { file: string; error: string }[];
+  modules: ScopeModule[];
+  dir: string;
+  schema: string;
+  /** “这一张现在等于哪个预设”由引擎判（套完又被手改就不算），前端不记这一份。 */
+  last_applied?: { id: string; name: string } | null;
+}
+
+/** 批量同步台账（LNX-P0-BATCH / BATCH-004）：撤销要拿引擎报的那个 id。 */
+export interface SyncState {
+  batches: { batch_id: string; module_scope: string[]; targets: number; undone: boolean }[];
+  undoable: string[];
+  last: string | null;
+  /** 上一笔 commit/undo 的事实：UI 那句“同步了几张、跳过几张为什么”只能读这里。 */
+  last_result?: {
+    kind: string; batch_id: string;
+    applied?: number[]; skipped?: { index: number; path: string; reason: string }[];
+    restored?: number[]; conflicts?: { index: number; path: string; reason: string }[];
+  } | null;
 }
 
 /** 最近一条 session_state（底片条全貌 + 当前文档状态）。 */
@@ -155,6 +203,9 @@ export interface SessionState {
   thumbs_running: boolean;
   docs: SessionDoc[];
   doc_state: DocState | null;
+  /** 预设清单与同步台账：随同一条 session_state 上来，UI 不在前端记第二份。 */
+  presets?: PresetState | null;
+  sync?: SyncState | null;
   /** select 命中当前那一格时引擎会补发一条 noop=true 的状态：它没开新会话。 */
   noop?: boolean;
 }
@@ -184,6 +235,15 @@ export interface Precompute {
   active_channel: string | null;
   proxy: number[];
   face_box: number[] | null;
+  /** 几何看上去像不像一张脸（判据只写在引擎的 face.geometry_warning 里） */
+  geometry_warning: boolean;
+  /** 这一轮探到了几张脸（SCOPE-001）。面部重塑只在“恰好 1 张”时可用：
+   *  引擎不拿其中某一张冒充“那张脸”，前端也不拿“有一个关键点集”当可用判据。 */
+  num_faces: number;
+  /** 超范围时引擎给的理由名（目前只有 "multi_face"）；前端不自己编第二个名字 */
+  scope_block: string | null;
+  /** 检测器上限探几张（不是“画上一共几张”：探到这一数就停） */
+  max_faces_probed: number;
   notes: string[];
   /** 只有因换设备而重挂时才有：区分“真算了一次”与“只是重挂旧产物” */
   replayed_for?: string;
@@ -1048,6 +1108,28 @@ export const runTask = (
   action: "list" | "pause" | "resume" | "cancel" | "retry" | "delete",
   taskId?: string,
 ) => invoke<{ requested: boolean }>("task", { action, task: taskId });
+
+/** 模块预设（LNX-P0-PRESET / PRESET-001、002）：作用域与合法性全在引擎的 scope.py，
+ *  这里既不列模块名单也不写量程（与 exposure/crop 同一条理由：抄一份就漂一份）。 */
+export const runPreset = (
+  action: "list" | "apply" | "save" | "import" | "delete",
+  opts: { id?: string; name?: string; path?: string; kind?: string; note?: string;
+          force?: boolean; moduleScope?: string[] } = {},
+) => invoke<{ requested: boolean }>("preset", {
+  action, id: opts.id, name: opts.name, path: opts.path, kind: opts.kind, note: opts.note,
+  force: opts.force, module_scope: opts.moduleScope,
+});
+
+/** 批量同步（LNX-P0-BATCH / BATCH-004）：目标按 path 递（多选集就是按 path 记的），
+ *  preflight/commit/undo 的判定与原子性全在引擎。 */
+export const runBatch = (
+  action: "preflight" | "commit" | "undo" | "state",
+  opts: { docs?: string[]; moduleScope?: string[]; conflictPolicy?: string;
+          batchId?: string } = {},
+) => invoke<{ requested: boolean }>("batch", {
+  action, docs: opts.docs, module_scope: opts.moduleScope,
+  conflict_policy: opts.conflictPolicy, batch_id: opts.batchId,
+});
 
 /** 曝光/白平衡（P0）：量程由引擎随事件报 exposure_limits，这里不拄一份。 */
 export const runExposure = (

@@ -1532,6 +1532,80 @@ fn task(
     Ok(json!({"requested": true}))
 }
 
+/// 模块预设（LNX-P0-PRESET / PRESET-001、002）：清单/应用/保存/导入/删除一条命令。
+/// “哪些参数属于哪个模块”“这个预设文件能不能接”全在引擎的 scope.py + preset_store.py：
+/// 宿主抄一份模块名单或量程就是第二个会漂的地方（与 exposure/crop 同一条理由）。
+/// 清单随 session_state 的 `presets` 上来，这里不开“拿清单”的口子给前端自己扫目录。
+#[tauri::command]
+fn preset(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    id: Option<String>,
+    name: Option<String>,
+    path: Option<String>,
+    kind: Option<String>,
+    note: Option<String>,
+    force: Option<bool>,
+    module_scope: Option<Vec<String>>,
+) -> Result<Value, String> {
+    const ACTIONS: [&str; 5] = ["list", "apply", "save", "import", "delete"];
+    if !ACTIONS.contains(&action.as_str()) {
+        return Err(format!("preset 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
+    }
+    let mut cmd = json!({"cmd": "preset", "action": action});
+    for (k, v) in [
+        ("id", id.map(Value::from)),
+        ("name", name.map(Value::from)),
+        ("path", path.map(Value::from)),
+        ("kind", kind.map(Value::from)),
+        ("note", note.map(Value::from)),
+        ("force", force.map(Value::from)),
+    ] {
+        if let Some(v) = v {
+            cmd[k] = v;
+        }
+    }
+    if let Some(v) = module_scope {
+        cmd["module_scope"] = json!(v);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 批量同步（LNX-P0-BATCH / BATCH-004）：preflight/commit/undo/state。
+/// 目标一律按 path 递：重扫一次目录 index 会换而 path 不会（与底片条多选集同一口径）。
+/// 作用域合法性、人脸范围判定、冲突与原子提交全在引擎：宿主不判“这一格能不能同步”，
+/// 也不拿“上一个 batch_id”当默认目标之外的事——这里只把 id 递过去。
+#[tauri::command]
+fn batch(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    docs: Option<Vec<String>>,
+    module_scope: Option<Vec<String>>,
+    conflict_policy: Option<String>,
+    batch_id: Option<String>,
+) -> Result<Value, String> {
+    const ACTIONS: [&str; 4] = ["preflight", "commit", "undo", "state"];
+    if !ACTIONS.contains(&action.as_str()) {
+        return Err(format!("batch 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
+    }
+    let mut cmd = json!({"cmd": "batch", "action": action});
+    if let Some(v) = docs {
+        cmd["docs"] = json!(v);
+    }
+    if let Some(v) = module_scope {
+        cmd["module_scope"] = json!(v);
+    }
+    if let Some(v) = conflict_policy {
+        cmd["conflict_policy"] = json!(v);
+    }
+    if let Some(v) = batch_id {
+        cmd["batch_id"] = json!(v);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
 /// 曝光/白平衡（P0 注册表 lnx.exposure / lnx.white_balance）。量程不在这里写：
 /// 引擎随事件报 exposure_limits，宿主拄一份数就是第二个会漂的地方。
 #[tauri::command]
@@ -1681,7 +1755,7 @@ fn main() {
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, precompute,
             inpaint, light, deform, lut, grade, background, export, session, filmstrip, history,
-            project, task, exposure, crop,
+            project, task, exposure, crop, preset, batch,
             report, quit
         ])
         .run(tauri::generate_context!())

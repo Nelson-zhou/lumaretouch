@@ -46,6 +46,28 @@ export interface StudioProps {
   setExportBits16: (v: boolean) => void;
   /** 选中要批量导出的张数（底片条多选） */
   selCount: number;
+  /** 模块预设（LNX-P0-PRESET）：清单来自引擎随 session_state 报的那一份，
+   *  前端不扫目录、不记预设名单（那就是两个会漂的地方） */
+  preset: {
+    /** 名字输入（保存用）：空字符串时按钮不动作并说明为什么 */
+    name: string;
+    setName: (v: string) => void;
+    selectedId: string;
+    setSelectedId: (v: string) => void;
+    builtin: boolean;
+    count: number;
+    errors: { file: string; error: string }[];
+    onImport: () => void;
+    onDelete: () => void;
+  };
+  /** 批量同步（LNX-P0-BATCH / BATCH-004）：目标就是底片条多选集 */
+  sync: {
+    selected: number;
+    canUndo: boolean;
+    note: string;
+    onSync: () => void;
+    onUndo: () => void;
+  };
   /** 新建工程的名字（顶栏与面板共用一份输入，存不存由引擎说） */
   projName: string;
   setProjName: (v: string) => void;
@@ -180,8 +202,24 @@ export default function StudioPanel(props: StudioProps) {
       <Group id="tone">
         <RegistryPanel section="tone" value={p0.value} enabled={p0.enabled}
                        optionsFor={p0.optionsFor} onSlider={p0.slider} onToggle={p0.toggle}
-                       onEnum={p0.enum} onAction={p0.action} onRect={p0.rect}
-                       skip={["lnx.preset.v1.save"]} />
+                       onEnum={p0.enum} onAction={p0.action} onRect={p0.rect} />
+        {/* 预设面（LNX-P0-PRESET）：名单与“能不能删”全部读引擎报的那一份。
+            内置预设不删（它随包分发）；坏掉的那一个带原因列在下面，不静默少一个。 */}
+        <div className="row">
+          <input value={props.preset.name} placeholder="新预设名字（保存用）"
+                 onChange={(e) => props.preset.setName(e.target.value)}
+                 style={{ flex: 1, minWidth: 0 }} />
+          <button disabled={dim} onClick={() => { void p0.action("lnx.preset.v1.save") }}>
+            存为预设</button>
+          <button onClick={props.preset.onImport}>导入预设…</button>
+          <button disabled={!props.preset.selectedId || props.preset.builtin}
+                  onClick={props.preset.onDelete}>删除所选</button>
+        </div>
+        {!!props.preset.errors.length && (
+          <div className="p0why">
+            {props.preset.errors.map((e) => `读不了 ${e.file}：${e.error}`).join("；")}
+          </div>
+        )}
         <div className="row">
           <button disabled={dim} onClick={() => ok(runExposure("clear"), props)}>
             {t("studio.exposureClear")}</button>
@@ -296,6 +334,14 @@ export default function StudioPanel(props: StudioProps) {
         <RegistryPanel section="output" value={p0.value} enabled={p0.enabled}
                        optionsFor={p0.optionsFor} onSlider={p0.slider} onToggle={p0.toggle}
                        onEnum={p0.enum} onAction={p0.action} onRect={p0.rect} />
+        {/* 批量同步（LNX-P0-BATCH / BATCH-004）：目标 = 底片条多选集，作用域 = 上面那一格。
+            撤销只拿引擎报的 batch_id（前端不记“上一个批次”），有冲突就报冲突不抹后续修改。 */}
+        <div className="row">
+          <button disabled={!props.sync.selected || !props.hasImage} onClick={props.sync.onSync}>
+            同步到所选（{props.sync.selected}）</button>
+          <button disabled={!props.sync.canUndo} onClick={props.sync.onUndo}>撤销同步</button>
+        </div>
+        {props.sync.note && <div className="mut">{props.sync.note}</div>}
         <div className="row">
           <input value={props.projName} placeholder="工程名"
                  onChange={(e) => props.setProjName(e.target.value)}
