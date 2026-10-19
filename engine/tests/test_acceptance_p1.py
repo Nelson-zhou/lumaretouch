@@ -6,11 +6,13 @@
   本版本没有——所以它们在这里没有测试；同图分人编辑（003）与层级覆盖继承（004）有，
   判据逐条取自冻结件原文（见下面两个 `test_` 函数）。003/004 都不越界成"跨图认人"：
   覆盖挂在**这一轮分析出来的脸盒**上，换一张图就重新按脸盒认，不假装认得"同一个人";
-· PORTRAIT-008/010/011/012（全身、妆容头发、手脚、表情）本版本一行实现都没有；
+· PORTRAIT-008/010/011/012（全身、妆容头发、手脚、表情）本版本一行实现都没有
+  （012 表情要新的形变目标与唇齿连续性判据，见 ADR-0009 §4 的档位；011 手脚要手部关键点，
+  我们只带 FaceMesh；008 全身要身体姿态，同理）；
 ·（PICK-001 原来在这段里：做它要一个我们没有的分类器，而拿启发式规则冒充 AI 正是 DoD
   明令禁止的那件事。现在它按**本地确定性度量**交付——dHash/高频能量/luma 裁切/FaceMesh
   眼睑几何，每条都带 method、数值与阈值可复算，所以它移到下面"已覆盖"那一段。）
-· COLOR-004（局部调色）与 BACKGROUND-001 的"目标区域保护"只有已经存在的那几层可测。
+· COLOR-004（局部调色）的"目标区域保护"只有已经存在的那几层可测。
 
 这几条在这里**没有测试**，`tools/run-acceptance.py` 因此把它们如实写成 `uncovered`
 ——不是 `passed`，也不是 skip。少写一份测试是一回事，把没做的东西签成做了是另一回事。
@@ -27,6 +29,9 @@
 · PORTRAIT-003 "第二人的有效配方不变；图像影响在定义的第一人蒙版边缘内"
 · PICK-001   "建议必须可覆盖，不会自动永久删除照片；近似分组与判定原因可见"
 · PORTRAIT-004 "覆盖项继续生效；未覆盖项跟随；恢复继承后全部按层级合成"
+· BACKGROUND-001 "人像边界与目标区域保护通过；不支持场景明确失败并可恢复"
+  （换底与色键早就在装机件里，缺的是这两句 then 的证据：真值取自测试自己画的几何已知
+  场景，一类像素属于前景/背景/过渡带是**算出来的**，不是看出来的）
 
 跑法同 test_acceptance_p0：必须在运行时 venv（有 torch）里跑；没 torch 整片 skip，
 而执行器把 P1 的 skip 记成 `unverified` 而不是绿。
@@ -1445,3 +1450,201 @@ def _rows(engine) -> list:
     """从引擎取一次底片条（要 index 与 path 的对应关系时只能问引擎，不能自己数）。"""
     engine.send(cmd="session", action="state")
     return engine.wait_for("session_state", timeout=30)["docs"]
+# ── BACKGROUND-001（背景/衣物边界，P1）────────────────────────────────────────
+# 冻结件：given 发丝、透明边缘、多人和复杂衣物的样本；when 使用支持的背景或衣物模块；
+# then 人像边界与目标区域保护通过；不支持场景明确失败并可恢复。
+#
+# 这一条不需要新能力——换底（ops/matting.py 的线性光合成 + 色键遮罩）已经在装机件里，
+# 缺的是**那两句 then 的证据**。为了让"边界保护"有可核对的真值，这里不用影楼渐变夹具
+# （背景在哪要猜），而是自己画一张几何已知的场景：纯灰底铺满四边、两块不相连的主体
+# （第二块就当"另一个人/一件衣物"）、边缘做一次高斯羽化（就是"发丝/透明边缘"那一档）。
+# 于是每一格像素属于哪一类（前景 / 背景 / 过渡带）是**算出来的**，不是看出来的。
+BG_GRAY = 200          # 背景：铺满四边的纯色（色键的 _edge_median 就该报这个数）
+BG_REF = [BG_GRAY, BG_GRAY, BG_GRAY]
+FG_DARK = 60           # 主体：与背景差得足够远，d 归一化后远超 tol+softness
+NEW_BG = [220, 30, 40]   # 换上去的底：红，便于按通道核对"没越界"
+TOL = 0.12             # 色键默认档
+# softness 两档取的是引擎**自己声明的域**（bg 校验：softness∈[0.001,1]，给 0 会被整条拒）。
+# 实测（这套几何 + 300×220 代理帧）：0.001 档中间值 0 格、0.02 档 0 格（8-bit 量化下那一圈
+# d∈(0.12,0.14) 里一格都没有）、0.12 档 160 格。断言按这些数钉，不按我对"羽化该有多少格"
+# 的想象钉（ADR-0009 那条纪律：实测才能定档）。
+SOFT_HARD = 0.001      # 域下界：这一档就是硬切
+SOFT_WIDE = 0.12       # 宽羽化档
+LSB = 1                # 量化余量：线性光合成来回取整最多差一格
+
+
+def _bg_scene(tmp_path) -> str:
+    """画那张几何已知的场景，存成 PNG（无损：真值必须是精确的，不能带 JPEG 噪声）。"""
+    from PIL import Image, ImageDraw, ImageFilter
+    w, h = 300, 220
+    img = Image.new("RGB", (w, h), tuple(BG_REF))
+    dr = ImageDraw.ImageDraw(img)
+    dr.ellipse([70, 40, 190, 170], fill=(FG_DARK, FG_DARK, FG_DARK))       # 主体（"人像"）
+    dr.rectangle([12, 150, 60, 205], fill=(FG_DARK, FG_DARK, FG_DARK))     # 第二块（"另一个人/衣物"）
+    img = img.filter(ImageFilter.GaussianBlur(1.2))   # 边缘羽化：这一圈就是发丝/透明边缘那一档
+    path = str(tmp_path / "bg-scene.png")
+    img.save(path)
+    return path
+
+
+def _bg_truth(base: np.ndarray):
+    """从**已加载的那一帧**上把三类像素算出来（不靠文件坐标：代理帧可能缩过放）。
+
+    前景/背景用与色键同一个距离口径（到边框中位数色 BG_REF 的欧氏距离，归一化），
+    所以这三类与引擎实际会算出的 alpha 是同一件事的两遍计算——一致才有资格当判据。
+    """
+    d = np.sqrt(((base.astype(np.float64) / 255.0
+                  - np.asarray(BG_REF, dtype=np.float64)[None, None, :] / 255.0) ** 2).sum(axis=2))
+    hi = TOL + SOFT_WIDE                              # 取最宽那一档的软硬边界
+    core = d >= hi + 0.05                             # 稳稳的前景（alpha 必为 1）
+    back = d <= TOL - 0.05                            # 稳稳的背景（alpha 必为 0）
+    band = ~(core | back)                             # 过渡带
+    return core, back, band
+
+
+def _bg_load(engine, tmp_path):
+    """hello → cpu → 载入那张场景（走引擎自己的解码，不塞数组），返回 (meta, peer, 帧)。"""
+    _needs_torch()
+    path = _bg_scene(tmp_path)
+    engine.send(cmd="hello")
+    engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set")
+    engine.send(cmd="load_image", path=path, strength=0.0, max_px=300 * 220)
+    meta = engine.wait_for("shm_ready", timeout=60)
+    engine.wait_for("vram_ready", timeout=60)
+    engine.wait_for("image_ready", timeout=60)
+    peer = FrameShm(meta["name"])
+    return meta, peer, _read_frame(engine, peer, meta["h"], meta["w"])
+
+
+
+def _assert_no_new_frame(engine, peer, meta, ev: dict, expect: np.ndarray, what: str,
+                         *, window: float = 1.5):
+    """这一段时间里引擎**没出一帧**，并且上一帧那一格仍逐字节等于 expect。
+
+    用在"被拒的命令不许动画面"这一类判据上。`_read_frame` 在这里是错的：它先等一条
+    frame 事件，而"没有新帧"恰恰是要证的事——等不到就成了超时假失败，而不是判据本身。
+    `ev` 是调用方一路记着的**最近那条 frame 事件**（不能用 engine.last_frame：wait_for
+    命中目标事件时是**先返回**的，那一格根本没被记下来，读它会拿到 None）。
+    """
+    import time
+
+    t_end = time.monotonic() + window
+    while time.monotonic() < t_end:
+        try:
+            e = engine.next_event(timeout=min(0.3, max(0.01, t_end - time.monotonic())))
+        except TimeoutError:
+            continue
+        if e.get("event") == "frame":
+            raise AssertionError(f"{what}：被拒之后还出了一帧（画面被动过）")
+        if e.get("event") == "bg_done":
+            raise AssertionError(f"{what}：报 error 的同时还发了 bg_done（半截状态）")
+    got = _frame_of(ev["frame"], peer, meta["h"], meta["w"])
+    assert np.array_equal(got, expect), f"{what}：上一帧那一格与底片不一致"
+
+def test_background_swap_protects_subject_edges_and_refuses_what_it_cannot_do(engine, tmp_path):
+    """BACKGROUND-001：人像边界与目标区域保护 + 不支持场景明确失败并可恢复。
+
+    五句判据，逐句对着冻结件的 then 来：
+    ① 目标区域真的被换掉：alpha=0 那一片逐格等于要换上去的红底（±LSB）；
+    ② 人像主体一格没动：alpha=1 那一片与换底前**逐字节相同**——换底污染到主体身上，
+       用户在屏幕上看见的就是"人脸上蒙了一层红"；
+    ③ 过渡带不越界：每一格每一通道都落在 [min(前景,新底), max(前景,新底)] ±LSB 内。
+       这一句管的是发丝/透明边缘：正确的 over 合成只会在两个端点之间插值，任何比两端
+       都亮或都暗的像素都是光晕（而 sRGB 域直接加权就会造出这种暗边——见 ops/matting.py
+       顶部那段"为什么在线性光下做"）；
+    ④ 羽化是 softness 给的、不是蒙出来的：域下界那一档（0.001）**一格中间值都不许有**
+       （alpha 只取 0/1 的直接后果），宽档 0.12 必须长出中间值、且不超过我算出的过渡带；
+       而 ② 的核心保护在两档下都仍然逐字节成立——"羽化"不许以吃掉主体边缘为代价；
+    ⑤ 做不了的事要说出来、并且留得下后门：birefnet 无权重整条拒（不静默退成色键）、
+       未知后端拒、衣物那类不存在的参数拒；三次拒绝画面都**一格没变**，且随后
+       action=clear 逐字节回到换底前。
+    """
+    meta, peer, base = _bg_load(engine, tmp_path)
+    core, back, band = _bg_truth(base)
+    assert core.sum() > 2000 and back.sum() > 20000 and band.sum() > 200, (
+        f"这一格的三类像素太少（core={core.sum()} back={back.sum()} band={band.sum()}）："
+        "判据会是空的，测了等于没测")
+
+    ev: dict = {}
+
+    def swap(softness: float) -> np.ndarray:
+        engine.send(cmd="background", action="set", backend="color_key",
+                    bg=NEW_BG, tol=TOL, softness=softness)
+        engine.wait_for("bg_done", timeout=30)
+        ev["frame"] = engine.wait_for("frame", timeout=30)
+        return _frame_of(ev["frame"], peer, meta["h"], meta["w"])
+
+    hard = swap(SOFT_HARD)
+    soft = swap(SOFT_WIDE)
+
+    # ① 目标区域
+    want = np.asarray(NEW_BG, dtype=np.int16)
+    assert np.abs(hard[back].astype(np.int16) - want).max() <= LSB, \
+        "背景那一片没换成指定底色：色键遮罩与合成对不上"
+    # ② 人像主体一格没动（两档都是）
+    for name, got in (("softness=0", hard), ("softness=0.12", soft)):
+        assert np.array_equal(got[core], base[core]), (
+            f"{name} 那档下主体核心区被换底动过（{int((np.abs(got[core] - base[core]).max(axis=1) > 0).sum())} 格）："
+            "alpha=1 必须原样等于前景，这是合成层的逐字节不变式")
+    # 第二块（"另一个人 / 一件衣物"）也在核心区里，② 已经把它一起保住了；这里再单独
+    # 点一次名：两块互不相连的主体都要有像素落在 core 里，否则 ② 可能只保住了一大块
+    ys, xs = np.nonzero(core)
+    assert xs.min() < 65 and xs.max() > 90, "左边那块（第二个人/衣物）不在核心保护区里"
+
+    # ③ 过渡带不越界：逐通道夹在两个端点之间
+    f = base.astype(np.int16)
+    b = np.broadcast_to(want, base.shape).astype(np.int16)
+    lo = np.minimum(f, b) - LSB
+    hi = np.maximum(f, b) + LSB
+    g = soft.astype(np.int16)
+    out_of_range = int(((g < lo) | (g > hi)).sum())
+    assert out_of_range == 0, f"{out_of_range} 个通道越出两端点之间：换底造出了光晕/暗边"
+
+    # ④ 羽化带随 softness 变宽，且不是靠啃主体边缘换来的
+    def mid_count(img: np.ndarray) -> int:
+        gg = img.astype(np.int16)
+        is_back = np.abs(gg - b).max(axis=2) <= LSB
+        is_front = np.abs(gg - f).max(axis=2) <= LSB
+        return int((~(is_back | is_front)).sum())
+
+    n_hard, n_soft = mid_count(hard), mid_count(soft)
+    assert n_hard == 0, (
+        f"域下界那一档（softness={SOFT_HARD}）本来就该是硬切（alpha 只取 0/1），"
+        f"却出现 {n_hard} 格中间值：要么遮罩偷偷羽化了，要么合成端点不是我说的那两个数")
+    assert 0 < n_soft <= int(band.sum()), (
+        f"宽档中间值 {n_soft} 格（实测 160），它必须 >0 且不超过过渡带 {int(band.sum())} 格："
+        "超出带界就是羽化在往主体/背景里啃")
+
+    # ⑤ 不支持的三格：说得出理由、画面不动、还能整层撤掉
+    engine.send(cmd="background", action="clear")
+    engine.wait_for("bg_done", timeout=30)
+    ev["frame"] = engine.wait_for("frame", timeout=30)
+    cleared = _frame_of(ev["frame"], peer, meta["h"], meta["w"])
+    assert np.array_equal(cleared, base), "clear 后没逐字节回到换底前（'可恢复'这半句就是假的）"
+
+    for bad, why in (
+        (dict(backend="birefnet", bg=NEW_BG), "神经网络抠图没权重就整条拒，不许静默退成色键"),
+        (dict(backend="unet", bg=NEW_BG), "未知后端要说得出可用名单"),
+        (dict(backend="color_key", bg=NEW_BG, garment="衬衫"), "衣物模块不存在：不认的参数要拒，不能吞掉"),
+        (dict(backend="color_key", bg=NEW_BG, tol=TOL, softness=0.0),
+         "softness 在声明域 [0.001,1] 之外要拒，并且要把域说出口"),
+    ):
+        engine.send(cmd="background", action="set", **bad)
+        err = engine.wait_for("error", timeout=30)
+        assert err, f"这一格没报错（{bad}）：{why}"
+        if bad.get("softness") == 0.0:
+            assert "0.001" in err["error"], (
+                f"拒的时候没说清可用域，用户无从改起：{err['error']}")
+        # 被拒 = 一格都不许动。这里不用 _read_frame（它会等一条 frame 事件，而**没有**
+        # 新帧正是这条判据的内容）：先确认 1.5 s 内没有新帧，再按上一帧那条事件自带的
+        # 槽号读回像素，与底片逐字节比。两次都要，缺一就漏判——只等事件会把"根本没渲染"
+        # 当成通过，只读 shm 会把"渲染了但没发事件"漏掉。
+        _assert_no_new_frame(engine, peer, meta, ev, base, f"被拒的 {bad}")
+
+    # 拒完引擎照常活着，并且支持的这一档还能用（"明确失败"不许把会话一起打死）
+    again = swap(0.06)
+    assert not np.array_equal(again, base), "三次拒绝后色键换底应仍然可用"
+    engine.send(cmd="background", action="clear")
+    engine.wait_for("bg_done", timeout=30)

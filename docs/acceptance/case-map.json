@@ -1,687 +1,689 @@
 {
-  "schema": "lrt.acceptance-map.v1",
-  "cases": "docs/acceptance/cases-frozen.json",
-  "cases_sha256": "c2fca495b90e3aa7",
-  "generated_at": "2026-10-19T02:27:39",
-  "map": {
-    "CORE-001": {
-      "tests": [
-        "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
-        "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
-        "engine/tests/test_project.py::test_round_trip_restores_docs_tags_trash_and_recipe",
-        "engine/tests/test_project.py::test_source_hash_is_unchanged_by_the_project",
-        "engine/tests/test_protocol.py::test_project_save_and_reopen_restores_the_recipe_byte_for_byte"
-      ],
-      "phase": "P0",
-      "module": "project",
-      "title": "项目创建与重开"
-    },
-    "CORE-002": {
-      "tests": [
-        "engine/tests/test_perf_report.py::test_import_cost_breakdown"
-      ],
-      "phase": "P0",
-      "module": "import",
-      "title": "格式能力与失败隔离"
-    },
-    "CORE-003": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_orientation_is_normalized_exactly_once"
-      ],
-      "phase": "P0",
-      "module": "import",
-      "title": "方向规范化"
-    },
-    "CORE-004": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_sources_are_read_only_and_export_cannot_target_them"
-      ],
-      "phase": "P0",
-      "module": "asset",
-      "title": "原图只读"
-    },
-    "CORE-005": {
-      "tests": [
-        "engine/tests/test_project.py::test_missing_sources_reports_per_row",
-        "engine/tests/test_project.py::test_verify_fingerprint_separates_missing_from_touched"
-      ],
-      "phase": "P0",
-      "module": "asset",
-      "title": "源文件丢失和重定位"
-    },
-    "CORE-006": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_undo_redo_restores_recipe_and_named_versions_survive"
-      ],
-      "phase": "P0",
-      "module": "history",
-      "title": "历史撤销重做"
-    },
-    "CORE-007": {
-      "tests": [
-        "engine/tests/test_project.py::test_recycle_bin_does_not_touch_the_file",
-        "engine/tests/test_protocol.py::test_project_trash_and_tags_reopen_without_touching_the_source"
-      ],
-      "phase": "P0",
-      "module": "project",
-      "title": "项目回收站语义"
-    },
-    "CORE-008": {
-      "tests": [
-        "engine/tests/test_project.py::test_failed_save_leaves_the_old_file_and_no_temp",
-        "engine/tests/test_protocol.py::test_project_open_reports_a_corrupt_file_and_the_engine_lives",
-        "engine/tests/test_protocol.py::test_task_paused_across_a_restart_stays_paused_and_says_why"
-      ],
-      "phase": "P0",
-      "module": "persistence",
-      "title": "事务中断恢复"
-    },
-    "CORE-009": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_hostile_or_incompatible_project_is_inert"
-      ],
-      "phase": "P0",
-      "module": "schema",
-      "title": "参数校验"
-    },
-    "RENDER-001": {
-      "tests": [
-        "engine/tests/test_perf_report.py::test_drag_frame_stream_percentiles"
-      ],
-      "phase": "P0",
-      "module": "renderer",
-      "title": "中性效果"
-    },
-    "RENDER-002": {
-      "tests": [
-        "engine/tests/test_exposure.py::test_export_spec_carries_exposure_and_matches_preview_bytes",
-        "engine/tests/test_protocol.py::test_crop_reports_the_size_the_exporter_will_actually_write"
-      ],
-      "phase": "P0",
-      "module": "renderer",
-      "title": "预览导出一致"
-    },
-    "RENDER-003": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_frame_sequence_is_monotonic_and_slot_never_lies"
-      ],
-      "phase": "P0",
-      "module": "renderer",
-      "title": "迟到结果淘汰"
-    },
-    "RENDER-004": {
-      "tests": [
-        "engine/tests/test_raw.py::test_filmstrip_thumb_uses_the_preview_and_marks_it",
-        "engine/tests/test_raw.py::test_load_full_for_raw_still_decodes_real_pixels",
-        "engine/tests/test_raw.py::test_load_preview_returns_none_instead_of_inventing_a_frame"
-      ],
-      "phase": "P0",
-      "module": "renderer",
-      "title": "快速预览标识"
-    },
-    "RENDER-005": {
-      "tests": [
-        "engine/tests/test_export.py::test_deform_arm_allows_one_lsb_but_only_a_handful_of_pixels",
-        "engine/tests/test_export.py::test_pointwise_only_export_is_byte_identical_across_tiles",
-        "engine/tests/test_export_scale.py::test_export_scale_with_filter_within_one_lsb",
-        "engine/tests/test_upscale.py::test_tiled_is_byte_identical_to_untiled"
-      ],
-      "phase": "P0",
-      "module": "renderer",
-      "title": "瓦片接缝"
-    },
-    "RENDER-006": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_cpu_path_completes_without_silent_quality_or_size_drop"
-      ],
-      "phase": "P0",
-      "module": "renderer",
-      "title": "CPU路径"
-    },
-    "RENDER-007": {
-      "tests": [
-        "engine/tests/test_drag.py::test_new_source_image_invalidates_the_filter_cache",
-        "engine/tests/test_grade.py::test_setting_grade_invalidates_no_filter_cache",
-        "engine/tests/test_inpaint.py::test_repair_invalidates_filter_then_caches_again",
-        "engine/tests/test_lut.py::test_setting_a_lut_invalidates_no_filter_cache",
-        "engine/tests/test_protocol.py::test_new_image_invalidates_previous_masks"
-      ],
-      "phase": "P0",
-      "module": "cache",
-      "title": "缓存依赖完整"
-    },
-    "RENDER-008": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_clearing_caches_keeps_source_recipe_and_versions"
-      ],
-      "phase": "P0",
-      "module": "cache",
-      "title": "清理缓存安全"
-    },
-    "COLOR-001": {
-      "tests": [
-        "engine/tests/test_protocol.py::test_export_strips_gps_and_orientation_but_keeps_the_rest"
-      ],
-      "phase": "P0",
-      "module": "color",
-      "title": "ICC输入输出"
-    },
-    "COLOR-002": {
-      "tests": [
-        "engine/tests/test_export_profile.py::test_corrupt_source_exif_is_reported_not_swallowed"
-      ],
-      "phase": "P0",
-      "module": "color",
-      "title": "缺失或损坏ICC"
-    },
-    "COLOR-003": {
-      "tests": [
-        "engine/tests/test_export_profile.py::test_orientation_is_dropped_because_pixels_are_already_upright",
-        "engine/tests/test_protocol.py::test_export_conflict_policy_is_visible_per_image"
-      ],
-      "phase": "P0",
-      "module": "color",
-      "title": "元数据隐私"
-    },
-    "COLOR-004": {
-      "tests": [
-        "engine/tests/test_acceptance_p1.py::test_local_color_adjustment_stays_inside_the_painted_region",
-        "engine/tests/test_grade.py::test_grade_holds_no_vram_but_still_reports_the_bill"
-      ],
-      "phase": "P1",
-      "module": "color",
-      "title": "局部调色",
-      "note": "1.3.0 接通：肤色定向层加了作用域（all/skin/brush）与画笔区域，判据三条逐字对上冻结件的 then——蒙版外逐字节 0 LSB（含四角背景带与羽化支撑之外）、全局 history 撤销逐字节回到点火前那一帧、边界跳变严格小于整片变化峰值（无硬边无振铃）。另加两条不许静默降级（skin 无掩膜、brush 无区域都整条拒）与出片同口径（导出不带区域时整层调色一起放下，绝不改成全图调色）。诚实记一笔：given 里『人脸边界与背景形成高反差』用的是本仓程序化人像夹具（本机无可授权真人素材）。"
-    },
-    "PORTRAIT-001": {
-      "tests": [
-        "engine/tests/test_inpaint.py::test_hole_is_actually_filled_and_measurably_close",
-        "engine/tests/test_inpaint.py::test_repair_only_changes_pixels_inside_the_brush",
-        "engine/tests/test_perf_report.py::test_face_reshaping_percentiles"
-      ],
-      "phase": "P0",
-      "module": "skin",
-      "title": "局部祛瑕与特征保护"
-    },
-    "PORTRAIT-002": {
-      "tests": [
-        "engine/tests/test_portrait_skin_quality.py::test_skin_retouch_keeps_texture_and_does_not_drift_color_or_bleed"
-      ],
-      "phase": "P0",
-      "module": "skin",
-      "title": "纹理与肤色覆盖",
-      "note": "自动化那半（高频保留比/ΔE00/掩膜外逐字节）已在 test_portrait_skin_quality.py 跑通；人眼盲评按 docs/acceptance/PORTRAIT-002-盲评规程.md 执行，结果未填 → 不算通过",
-      "manual": true
-    },
-    "PORTRAIT-003": {
-      "tests": [
-        "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
-        "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
-        "engine/tests/test_face_select.py::test_faces_lists_every_detected_person"
-      ],
-      "phase": "P1",
-      "module": "person",
-      "title": "多人照片仅编辑指定人物（P1）",
-      "note": "未实装：本版本多人照片走 SCOPE-001 的「整条明拒」，没有「编辑第 N 个人」的人物分层模型。不做半截实现来冒充覆盖。"
-    },
-    "PORTRAIT-004": {
-      "tests": [
-        "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default"
-      ],
-      "phase": "P1",
-      "module": "person",
-      "title": "覆盖与继承",
-      "note": "已实装（1.5.0）：deform 的 scope=all 改全人物默认、scope=person 只给当前选定那一张挂覆盖、action=inherit 恢复继承；生效值由 _effective_deform_amounts() 单一处合成并按脸盒认人。边界：一层形变服务一张脸，同一时刻只有被选中那张生效（换人即换几何）；跨图认「同一个人」是 PORTRAIT-005，本版本没有那个模型。"
-    },
-    "PORTRAIT-005": {
-      "tests": [],
-      "phase": "P1",
-      "module": "identity",
-      "title": "跨图候选人工确认",
-      "note": "未实装：跨图同一人需要人脸嵌入与聚类，本版本没有那个模型；拿启发式相似度冒充识别属于 DoD 禁止的「伪装 AI」。"
-    },
-    "PORTRAIT-006": {
-      "tests": [],
-      "phase": "P1",
-      "module": "detection",
-      "title": "人工纠正优先",
-      "note": "未实装：人工纠正的持久化载体（关键点/掩膜编辑）本版本没有，因此「纠正优先」无从判起。"
-    },
-    "PORTRAIT-007": {
-      "tests": [
-        "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces"
-      ],
-      "phase": "P1",
-      "module": "geometry",
-      "title": "面部美型边界",
-      "note": "自动化判「可控/连续/不扭曲邻近人脸」三条（test_acceptance_p1）；用例原文「背景异常纳入人工审核」那一半必须人签，规程同 PORTRAIT-002。",
-      "manual": true
-    },
-    "PORTRAIT-008": {
-      "tests": [],
-      "phase": "P1",
-      "module": "geometry",
-      "title": "全身美型",
-      "note": "未实装：全身美型零实现（本版本重塑只吃 478 点面部关键点）。"
-    },
-    "PORTRAIT-009": {
-      "tests": [],
-      "phase": "P1",
-      "module": "eyes_teeth",
-      "title": "眼牙效果",
-      "note": "未实装：眼牙增强没有独立子功能层（大眼是几何形变，不是「眼睛增强」）。"
-    },
-    "PORTRAIT-010": {
-      "tests": [],
-      "phase": "P1",
-      "module": "makeup_hair",
-      "title": "妆容头发",
-      "note": "未实装：妆容与头发零实现。"
-    },
-    "PORTRAIT-011": {
-      "tests": [],
-      "phase": "P1",
-      "module": "hands_feet",
-      "title": "手脚精修",
-      "note": "未实装：手/脚检测与精修零实现（FaceMesh 不含手脚关键点）。"
-    },
-    "PORTRAIT-012": {
-      "tests": [],
-      "phase": "P1",
-      "module": "expression",
-      "title": "表情调整",
-      "note": "未实装：表情调整零实现。"
-    },
-    "MANUAL-001": {
-      "tests": [
-        "engine/tests/test_acceptance_p1.py::test_brush_strokes_replay_through_zoom_rotate_crop_and_reopen"
-      ],
-      "phase": "P1",
-      "module": "brush",
-      "title": "笔划重放"
-    },
-    "MANUAL-002": {
-      "tests": [
-        "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces",
-        "engine/tests/test_acceptance_p1.py::test_liquify_replay_undo_redo_is_continuous_and_fully_reversible"
-      ],
-      "phase": "P1",
-      "module": "liquify",
-      "title": "液化重放与撤销"
-    },
-    "MANUAL-003": {
-      "tests": [
-        "engine/tests/test_acceptance_p1.py::test_repair_target_mapping_survives_scale_and_reopen"
-      ],
-      "phase": "P1",
-      "module": "repair",
-      "title": "修复采样源"
-    },
-    "PRESET-001": {
-      "tests": [
-        "engine/tests/test_preset_batch.py::test_module_presets_only_touch_their_own_scope_and_same_module_overrides"
-      ],
-      "phase": "P0",
-      "module": "preset",
-      "title": "模块预设覆盖"
-    },
-    "PRESET-002": {
-      "tests": [
-        "engine/tests/test_preset_batch.py::test_hostile_presets_are_refused_and_a_valid_one_still_imports"
-      ],
-      "phase": "P0",
-      "module": "preset",
-      "title": "预设恶意输入"
-    },
-    "BATCH-001": {
-      "tests": [
-        "engine/tests/test_protocol.py::test_export_batch_isolates_failures_and_reports_skips",
-        "engine/tests/test_tasks.py::test_items_are_fixed_at_creation",
-        "engine/tests/test_tasks.py::test_retry_keeps_the_snapshot_and_the_identity"
-      ],
-      "phase": "P0",
-      "module": "batch",
-      "title": "选择范围精确"
-    },
-    "BATCH-002": {
-      "tests": [
-        "engine/tests/test_tasks.py::test_items_are_fixed_at_creation",
-        "engine/tests/test_tasks.py::test_retry_refuses_a_running_batch_and_a_fully_succeeded_one"
-      ],
-      "phase": "P0",
-      "module": "batch",
-      "title": "并发编辑冲突"
-    },
-    "BATCH-003": {
-      "tests": [
-        "engine/tests/test_protocol.py::test_export_batch_isolates_failures_and_reports_skips"
-      ],
-      "phase": "P0",
-      "module": "batch",
-      "title": "不可迁移操作"
-    },
-    "BATCH-004": {
-      "tests": [
-        "engine/tests/test_preset_batch.py::test_batch_sync_undo_restores_untouched_and_reports_conflict"
-      ],
-      "phase": "P0",
-      "module": "batch",
-      "title": "批量撤销边界"
-    },
-    "TASK-001": {
-      "tests": [
-        "engine/tests/test_protocol.py::test_task_pause_stops_at_the_boundary_and_resume_finishes_the_batch",
-        "engine/tests/test_tasks.py::test_cancel_is_for_things_that_have_not_stopped",
-        "engine/tests/test_tasks.py::test_history_is_auditable_with_reasons"
-      ],
-      "phase": "P0",
-      "module": "queue",
-      "title": "取消语义"
-    },
-    "TASK-002": {
-      "tests": [
-        "engine/tests/test_protocol.py::test_task_retry_uses_the_frozen_inputs_not_the_current_sliders",
-        "engine/tests/test_tasks.py::test_retry_keeps_the_snapshot_and_the_identity"
-      ],
-      "phase": "P0",
-      "module": "queue",
-      "title": "失败重试固定输入"
-    },
-    "TASK-003": {
-      "tests": [
-        "engine/tests/test_tasks.py::test_skipped_is_not_success_nor_failure"
-      ],
-      "phase": "P0",
-      "module": "queue",
-      "title": "磁盘满及权限失败"
-    },
-    "TASK-004": {
-      "tests": [
-        "engine/tests/test_tasks.py::test_an_interrupted_run_comes_back_paused_never_running",
-        "engine/tests/test_tasks.py::test_for_json_round_trip_and_no_auto_resume"
-      ],
-      "phase": "P0",
-      "module": "queue",
-      "title": "崩溃后恢复"
-    },
-    "TASK-005": {
-      "tests": [
-        "engine/tests/test_export.py::test_export_refuses_before_touching_the_gpu",
-        "engine/tests/test_upscale.py::test_tiled_peak_bounds_with_tile_not_image"
-      ],
-      "phase": "P0",
-      "module": "queue",
-      "title": "资源预算"
-    },
-    "EXPORT-001": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_export_refuses_invalid_combinations_instead_of_losing_data",
-        "engine/tests/test_protocol.py::test_export_conflict_policy_is_visible_per_image",
-        "engine/tests/test_tasks.py::test_skipped_is_not_success_nor_failure"
-      ],
-      "phase": "P0",
-      "module": "export",
-      "title": "命名冲突及原子提交"
-    },
-    "EXPORT-002": {
-      "tests": [
-        "engine/tests/test_perf_report.py::test_export_batch_percentiles",
-        "engine/tests/test_protocol.py::test_task_retry_uses_the_frozen_inputs_not_the_current_sliders"
-      ],
-      "phase": "P0",
-      "module": "export",
-      "title": "固定版本导出"
-    },
-    "EXPORT-003": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_export_refuses_invalid_combinations_instead_of_losing_data"
-      ],
-      "phase": "P0",
-      "module": "export",
-      "title": "格式组合校验"
-    },
-    "LINUX-001": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_no_egress_or_telemetry_anywhere_in_the_shipped_code"
-      ],
-      "phase": "P0",
-      "module": "release",
-      "title": "干净机器离线闭环"
-    },
-    "LINUX-002": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_every_bundled_weight_has_a_filled_license_ledger_entry"
-      ],
-      "phase": "P0",
-      "module": "release",
-      "title": "依赖许可门槛"
-    },
-    "PICK-001": {
-      "tests": [
-        "engine/tests/test_acceptance_p1.py::test_pick_suggestions_are_explainable_overridable_and_never_touch_the_source"
-      ],
-      "phase": "P1",
-      "module": "selection",
-      "title": "挑图仅作建议",
-      "note": "已交付为**本地确定性度量**（ADR-0012）：dHash 近似组 + 清晰度两格（绝对高频能量与相对自身对比度）+ luma 裁切占比 + FaceMesh 眼睑睁开比，每条原因带 method/数值/阈值可复算。不做的是「训练出来的挑图分类器」——本包没有那种权重，也不冒充（DoD §2）。建议恒为可覆盖的旁注：不进工程文件、不进撤销栈、不删除不移动任何原片。"
-    },
-    "BACKGROUND-001": {
-      "tests": [],
-      "phase": "P1",
-      "module": "background",
-      "title": "背景与衣物边界",
-      "note": "未实装：`background` 命令有遮罩 set/clear，但背景/衣物的**效果层**没做，只有掩膜本身。"
-    },
-    "GEN-001": {
-      "tests": [],
-      "phase": "P2",
-      "module": "generation",
-      "title": "生成结果可追溯",
-      "note": "范围外（P2）：生成式编辑与本产品「不做生成、不冒充真实拍摄内容」的定位冲突。"
-    },
-    "GEN-002": {
-      "tests": [],
-      "phase": "P2",
-      "module": "generation",
-      "title": "身份和事实变化提示",
-      "note": "范围外（P2）：同上。"
-    },
-    "CLOUD-001": {
-      "tests": [],
-      "phase": "P2",
-      "module": "privacy",
-      "title": "云能力显式同意",
-      "note": "范围外（P2）：本产品无云通道（本地优先/离线可用，见 no-egress 用例），显式同意流程没有可挂的入口。"
-    },
-    "CLOUD-002": {
-      "tests": [],
-      "phase": "P2",
-      "module": "collaboration",
-      "title": "协作冲突保护",
-      "note": "范围外（P2）：无协作服务端，revision 冲突检测没有对手方。"
-    },
-    "RAW-001": {
-      "tests": [
-        "engine/tests/test_acceptance_p1.py::test_raw_whitelist_develops_for_real_and_never_passes_preview_as_raw"
-      ],
-      "phase": "P1",
-      "module": "raw",
-      "title": "RAW支持白名单"
-    },
-    "SEC-001": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_events_never_carry_absolute_paths_off_the_machine",
-        "engine/tests/test_acceptance_p0.py::test_no_egress_or_telemetry_anywhere_in_the_shipped_code"
-      ],
-      "phase": "P0",
-      "module": "privacy",
-      "title": "不收集隐私遥测"
-    },
-    "TASK-006": {
-      "tests": [
-        "engine/tests/test_tasks.py::test_pause_lands_on_the_boundary_not_immediately"
-      ],
-      "phase": "P0",
-      "module": "queue",
-      "title": "单项暂停与继续"
-    },
-    "TASK-007": {
-      "tests": [
-        "engine/tests/test_protocol.py::test_task_pause_stops_at_the_boundary_and_resume_finishes_the_batch",
-        "engine/tests/test_tasks.py::test_batch_state_does_not_say_paused_before_everyone_stopped"
-      ],
-      "phase": "P0",
-      "module": "queue",
-      "title": "全批暂停屏障"
-    },
-    "TASK-008": {
-      "tests": [
-        "engine/tests/test_protocol.py::test_task_paused_across_a_restart_stays_paused_and_says_why",
-        "engine/tests/test_tasks.py::test_for_json_round_trip_and_no_auto_resume"
-      ],
-      "phase": "P0",
-      "module": "queue",
-      "title": "暂停持久化及依赖检查"
-    },
-    "TASK-009": {
-      "tests": [
-        "engine/tests/test_protocol.py::test_task_cancel_keeps_committed_files_and_writes_no_more",
-        "engine/tests/test_protocol.py::test_task_delete_removes_the_record_only"
-      ],
-      "phase": "P0",
-      "module": "queue",
-      "title": "提交期暂停与队列删除"
-    },
-    "DIFF-001": {
-      "tests": [],
-      "phase": "P2",
-      "module": "history",
-      "title": "创意历史跨重开持久化",
-      "note": "未实装（P2）：创意历史（生成派生的版本树）不在本版本；提交式版本已覆盖于 CORE-007。"
-    },
-    "DIFF-002": {
-      "tests": [],
-      "phase": "P2",
-      "module": "generation",
-      "title": "创意派生基底回流",
-      "note": "范围外（P2）：依赖生成派生资产，同 GEN-*。"
-    },
-    "DIFF-003": {
-      "tests": [
-        "engine/tests/test_protocol.py::test_export_writes_full_size_not_the_proxy"
-      ],
-      "phase": "P0",
-      "module": "cache",
-      "title": "预览未就绪仍按配方导出"
-    },
-    "SCOPE-001": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_multi_face_photo_blocks_reshaping_but_keeps_global_edits",
-        "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
-        "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces",
-        "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
-        "engine/tests/test_face_select.py::test_meta_reports_the_selection_and_keeps_the_scope_flag"
-      ],
-      "phase": "P0",
-      "module": "person",
-      "title": "多人超范围保护"
-    },
-    "FORMAT-001": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_quality_mapping_version_and_encoder_value_are_recorded"
-      ],
-      "phase": "P0",
-      "module": "export",
-      "title": "JPEG量表映射版本化"
-    },
-    "FORMAT-002": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_multipage_container_is_refused_not_silently_first_page"
-      ],
-      "phase": "P0",
-      "module": "export",
-      "title": "格式边界及目标大小"
-    },
-    "P0-EXPOSURE-NEUTRAL": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
-      ],
-      "phase": "P0",
-      "module": "exposure",
-      "title": "曝光中性与保存重开"
-    },
-    "P0-EXPOSURE-BOUNDARY": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state"
-      ],
-      "phase": "P0",
-      "module": "exposure",
-      "title": "曝光边界与非法值"
-    },
-    "P0-WHITE_BALANCE-NEUTRAL": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
-      ],
-      "phase": "P0",
-      "module": "white_balance",
-      "title": "白平衡中性与保存重开"
-    },
-    "P0-WHITE_BALANCE-BOUNDARY": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state"
-      ],
-      "phase": "P0",
-      "module": "white_balance",
-      "title": "白平衡边界与非法值"
-    },
-    "P0-CROP-NEUTRAL": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
-      ],
-      "phase": "P0",
-      "module": "crop",
-      "title": "裁剪旋转中性与保存重开"
-    },
-    "P0-CROP-BOUNDARY": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state",
-        "engine/tests/test_protocol.py::test_crop_only_deletes_pixels_and_leaves_the_kept_region_untouched"
-      ],
-      "phase": "P0",
-      "module": "crop",
-      "title": "裁剪旋转边界与非法值"
-    },
-    "P0-MASK-NEUTRAL": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
-      ],
-      "phase": "P0",
-      "module": "mask",
-      "title": "自动保护蒙版中性与保存重开"
-    },
-    "P0-MASK-BOUNDARY": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state"
-      ],
-      "phase": "P0",
-      "module": "mask",
-      "title": "自动保护蒙版边界与非法值"
-    },
-    "P0-BLEMISH-NEUTRAL": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
-      ],
-      "phase": "P0",
-      "module": "blemish",
-      "title": "有限祛瑕中性与保存重开"
-    },
-    "P0-BLEMISH-BOUNDARY": {
-      "tests": [
-        "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state"
-      ],
-      "phase": "P0",
-      "module": "blemish",
-      "title": "有限祛瑕边界与非法值"
-    }
+ "schema": "lrt.acceptance-map.v1",
+ "cases": "docs/acceptance/cases-frozen.json",
+ "cases_sha256": "c2fca495b90e3aa7",
+ "generated_at": "2026-10-19T04:21:21",
+ "map": {
+  "CORE-001": {
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
+    "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
+    "engine/tests/test_project.py::test_round_trip_restores_docs_tags_trash_and_recipe",
+    "engine/tests/test_project.py::test_source_hash_is_unchanged_by_the_project",
+    "engine/tests/test_protocol.py::test_project_save_and_reopen_restores_the_recipe_byte_for_byte"
+   ],
+   "phase": "P0",
+   "module": "project",
+   "title": "项目创建与重开"
+  },
+  "CORE-002": {
+   "tests": [
+    "engine/tests/test_perf_report.py::test_import_cost_breakdown"
+   ],
+   "phase": "P0",
+   "module": "import",
+   "title": "格式能力与失败隔离"
+  },
+  "CORE-003": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_orientation_is_normalized_exactly_once"
+   ],
+   "phase": "P0",
+   "module": "import",
+   "title": "方向规范化"
+  },
+  "CORE-004": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_sources_are_read_only_and_export_cannot_target_them"
+   ],
+   "phase": "P0",
+   "module": "asset",
+   "title": "原图只读"
+  },
+  "CORE-005": {
+   "tests": [
+    "engine/tests/test_project.py::test_missing_sources_reports_per_row",
+    "engine/tests/test_project.py::test_verify_fingerprint_separates_missing_from_touched"
+   ],
+   "phase": "P0",
+   "module": "asset",
+   "title": "源文件丢失和重定位"
+  },
+  "CORE-006": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_undo_redo_restores_recipe_and_named_versions_survive"
+   ],
+   "phase": "P0",
+   "module": "history",
+   "title": "历史撤销重做"
+  },
+  "CORE-007": {
+   "tests": [
+    "engine/tests/test_project.py::test_recycle_bin_does_not_touch_the_file",
+    "engine/tests/test_protocol.py::test_project_trash_and_tags_reopen_without_touching_the_source"
+   ],
+   "phase": "P0",
+   "module": "project",
+   "title": "项目回收站语义"
+  },
+  "CORE-008": {
+   "tests": [
+    "engine/tests/test_project.py::test_failed_save_leaves_the_old_file_and_no_temp",
+    "engine/tests/test_protocol.py::test_project_open_reports_a_corrupt_file_and_the_engine_lives",
+    "engine/tests/test_protocol.py::test_task_paused_across_a_restart_stays_paused_and_says_why"
+   ],
+   "phase": "P0",
+   "module": "persistence",
+   "title": "事务中断恢复"
+  },
+  "CORE-009": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_hostile_or_incompatible_project_is_inert"
+   ],
+   "phase": "P0",
+   "module": "schema",
+   "title": "参数校验"
+  },
+  "RENDER-001": {
+   "tests": [
+    "engine/tests/test_perf_report.py::test_drag_frame_stream_percentiles"
+   ],
+   "phase": "P0",
+   "module": "renderer",
+   "title": "中性效果"
+  },
+  "RENDER-002": {
+   "tests": [
+    "engine/tests/test_exposure.py::test_export_spec_carries_exposure_and_matches_preview_bytes",
+    "engine/tests/test_protocol.py::test_crop_reports_the_size_the_exporter_will_actually_write"
+   ],
+   "phase": "P0",
+   "module": "renderer",
+   "title": "预览导出一致"
+  },
+  "RENDER-003": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_frame_sequence_is_monotonic_and_slot_never_lies"
+   ],
+   "phase": "P0",
+   "module": "renderer",
+   "title": "迟到结果淘汰"
+  },
+  "RENDER-004": {
+   "tests": [
+    "engine/tests/test_raw.py::test_filmstrip_thumb_uses_the_preview_and_marks_it",
+    "engine/tests/test_raw.py::test_load_full_for_raw_still_decodes_real_pixels",
+    "engine/tests/test_raw.py::test_load_preview_returns_none_instead_of_inventing_a_frame"
+   ],
+   "phase": "P0",
+   "module": "renderer",
+   "title": "快速预览标识"
+  },
+  "RENDER-005": {
+   "tests": [
+    "engine/tests/test_export.py::test_deform_arm_allows_one_lsb_but_only_a_handful_of_pixels",
+    "engine/tests/test_export.py::test_pointwise_only_export_is_byte_identical_across_tiles",
+    "engine/tests/test_export_scale.py::test_export_scale_with_filter_within_one_lsb",
+    "engine/tests/test_upscale.py::test_tiled_is_byte_identical_to_untiled"
+   ],
+   "phase": "P0",
+   "module": "renderer",
+   "title": "瓦片接缝"
+  },
+  "RENDER-006": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_cpu_path_completes_without_silent_quality_or_size_drop"
+   ],
+   "phase": "P0",
+   "module": "renderer",
+   "title": "CPU路径"
+  },
+  "RENDER-007": {
+   "tests": [
+    "engine/tests/test_drag.py::test_new_source_image_invalidates_the_filter_cache",
+    "engine/tests/test_grade.py::test_setting_grade_invalidates_no_filter_cache",
+    "engine/tests/test_inpaint.py::test_repair_invalidates_filter_then_caches_again",
+    "engine/tests/test_lut.py::test_setting_a_lut_invalidates_no_filter_cache",
+    "engine/tests/test_protocol.py::test_new_image_invalidates_previous_masks"
+   ],
+   "phase": "P0",
+   "module": "cache",
+   "title": "缓存依赖完整"
+  },
+  "RENDER-008": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_clearing_caches_keeps_source_recipe_and_versions"
+   ],
+   "phase": "P0",
+   "module": "cache",
+   "title": "清理缓存安全"
+  },
+  "COLOR-001": {
+   "tests": [
+    "engine/tests/test_protocol.py::test_export_strips_gps_and_orientation_but_keeps_the_rest"
+   ],
+   "phase": "P0",
+   "module": "color",
+   "title": "ICC输入输出"
+  },
+  "COLOR-002": {
+   "tests": [
+    "engine/tests/test_export_profile.py::test_corrupt_source_exif_is_reported_not_swallowed"
+   ],
+   "phase": "P0",
+   "module": "color",
+   "title": "缺失或损坏ICC"
+  },
+  "COLOR-003": {
+   "tests": [
+    "engine/tests/test_export_profile.py::test_orientation_is_dropped_because_pixels_are_already_upright",
+    "engine/tests/test_protocol.py::test_export_conflict_policy_is_visible_per_image"
+   ],
+   "phase": "P0",
+   "module": "color",
+   "title": "元数据隐私"
+  },
+  "COLOR-004": {
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_local_color_adjustment_stays_inside_the_painted_region",
+    "engine/tests/test_grade.py::test_grade_holds_no_vram_but_still_reports_the_bill"
+   ],
+   "phase": "P1",
+   "module": "color",
+   "title": "局部调色",
+   "note": "1.3.0 接通：肤色定向层加了作用域（all/skin/brush）与画笔区域，判据三条逐字对上冻结件的 then——蒙版外逐字节 0 LSB（含四角背景带与羽化支撑之外）、全局 history 撤销逐字节回到点火前那一帧、边界跳变严格小于整片变化峰值（无硬边无振铃）。另加两条不许静默降级（skin 无掩膜、brush 无区域都整条拒）与出片同口径（导出不带区域时整层调色一起放下，绝不改成全图调色）。诚实记一笔：given 里『人脸边界与背景形成高反差』用的是本仓程序化人像夹具（本机无可授权真人素材）。"
+  },
+  "PORTRAIT-001": {
+   "tests": [
+    "engine/tests/test_inpaint.py::test_hole_is_actually_filled_and_measurably_close",
+    "engine/tests/test_inpaint.py::test_repair_only_changes_pixels_inside_the_brush",
+    "engine/tests/test_perf_report.py::test_face_reshaping_percentiles"
+   ],
+   "phase": "P0",
+   "module": "skin",
+   "title": "局部祛瑕与特征保护"
+  },
+  "PORTRAIT-002": {
+   "tests": [
+    "engine/tests/test_portrait_skin_quality.py::test_skin_retouch_keeps_texture_and_does_not_drift_color_or_bleed"
+   ],
+   "phase": "P0",
+   "module": "skin",
+   "title": "纹理与肤色覆盖",
+   "note": "自动化那半（高频保留比/ΔE00/掩膜外逐字节）已在 test_portrait_skin_quality.py 跑通；人眼盲评按 docs/acceptance/PORTRAIT-002-盲评规程.md 执行，结果未填 → 不算通过",
+   "manual": true
+  },
+  "PORTRAIT-003": {
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
+    "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
+    "engine/tests/test_face_select.py::test_faces_lists_every_detected_person"
+   ],
+   "phase": "P1",
+   "module": "person",
+   "title": "多人照片仅编辑指定人物（P1）",
+   "note": "未实装：本版本多人照片走 SCOPE-001 的「整条明拒」，没有「编辑第 N 个人」的人物分层模型。不做半截实现来冒充覆盖。"
+  },
+  "PORTRAIT-004": {
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default"
+   ],
+   "phase": "P1",
+   "module": "person",
+   "title": "覆盖与继承",
+   "note": "已实装（1.5.0）：deform 的 scope=all 改全人物默认、scope=person 只给当前选定那一张挂覆盖、action=inherit 恢复继承；生效值由 _effective_deform_amounts() 单一处合成并按脸盒认人。边界：一层形变服务一张脸，同一时刻只有被选中那张生效（换人即换几何）；跨图认「同一个人」是 PORTRAIT-005，本版本没有那个模型。"
+  },
+  "PORTRAIT-005": {
+   "tests": [],
+   "phase": "P1",
+   "module": "identity",
+   "title": "跨图候选人工确认",
+   "note": "未实装：跨图同一人需要人脸嵌入与聚类，本版本没有那个模型；拿启发式相似度冒充识别属于 DoD 禁止的「伪装 AI」。"
+  },
+  "PORTRAIT-006": {
+   "tests": [],
+   "phase": "P1",
+   "module": "detection",
+   "title": "人工纠正优先",
+   "note": "未实装：人工纠正的持久化载体（关键点/掩膜编辑）本版本没有，因此「纠正优先」无从判起。"
+  },
+  "PORTRAIT-007": {
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces"
+   ],
+   "phase": "P1",
+   "module": "geometry",
+   "title": "面部美型边界",
+   "note": "自动化判「可控/连续/不扭曲邻近人脸」三条（test_acceptance_p1）；用例原文「背景异常纳入人工审核」那一半必须人签，规程同 PORTRAIT-002。",
+   "manual": true
+  },
+  "PORTRAIT-008": {
+   "tests": [],
+   "phase": "P1",
+   "module": "geometry",
+   "title": "全身美型",
+   "note": "未实装：全身美型零实现（本版本重塑只吃 478 点面部关键点）。"
+  },
+  "PORTRAIT-009": {
+   "tests": [],
+   "phase": "P1",
+   "module": "eyes_teeth",
+   "title": "眼牙效果",
+   "note": "未实装：眼牙增强没有独立子功能层（大眼是几何形变，不是「眼睛增强」）。"
+  },
+  "PORTRAIT-010": {
+   "tests": [],
+   "phase": "P1",
+   "module": "makeup_hair",
+   "title": "妆容头发",
+   "note": "未实装：妆容与头发零实现。"
+  },
+  "PORTRAIT-011": {
+   "tests": [],
+   "phase": "P1",
+   "module": "hands_feet",
+   "title": "手脚精修",
+   "note": "未实装：手/脚检测与精修零实现（FaceMesh 不含手脚关键点）。"
+  },
+  "PORTRAIT-012": {
+   "tests": [],
+   "phase": "P1",
+   "module": "expression",
+   "title": "表情调整",
+   "note": "未实装：表情调整零实现。"
+  },
+  "MANUAL-001": {
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_brush_strokes_replay_through_zoom_rotate_crop_and_reopen"
+   ],
+   "phase": "P1",
+   "module": "brush",
+   "title": "笔划重放"
+  },
+  "MANUAL-002": {
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces",
+    "engine/tests/test_acceptance_p1.py::test_liquify_replay_undo_redo_is_continuous_and_fully_reversible"
+   ],
+   "phase": "P1",
+   "module": "liquify",
+   "title": "液化重放与撤销"
+  },
+  "MANUAL-003": {
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_repair_target_mapping_survives_scale_and_reopen"
+   ],
+   "phase": "P1",
+   "module": "repair",
+   "title": "修复采样源"
+  },
+  "PRESET-001": {
+   "tests": [
+    "engine/tests/test_preset_batch.py::test_module_presets_only_touch_their_own_scope_and_same_module_overrides"
+   ],
+   "phase": "P0",
+   "module": "preset",
+   "title": "模块预设覆盖"
+  },
+  "PRESET-002": {
+   "tests": [
+    "engine/tests/test_preset_batch.py::test_hostile_presets_are_refused_and_a_valid_one_still_imports"
+   ],
+   "phase": "P0",
+   "module": "preset",
+   "title": "预设恶意输入"
+  },
+  "BATCH-001": {
+   "tests": [
+    "engine/tests/test_protocol.py::test_export_batch_isolates_failures_and_reports_skips",
+    "engine/tests/test_tasks.py::test_items_are_fixed_at_creation",
+    "engine/tests/test_tasks.py::test_retry_keeps_the_snapshot_and_the_identity"
+   ],
+   "phase": "P0",
+   "module": "batch",
+   "title": "选择范围精确"
+  },
+  "BATCH-002": {
+   "tests": [
+    "engine/tests/test_tasks.py::test_items_are_fixed_at_creation",
+    "engine/tests/test_tasks.py::test_retry_refuses_a_running_batch_and_a_fully_succeeded_one"
+   ],
+   "phase": "P0",
+   "module": "batch",
+   "title": "并发编辑冲突"
+  },
+  "BATCH-003": {
+   "tests": [
+    "engine/tests/test_protocol.py::test_export_batch_isolates_failures_and_reports_skips"
+   ],
+   "phase": "P0",
+   "module": "batch",
+   "title": "不可迁移操作"
+  },
+  "BATCH-004": {
+   "tests": [
+    "engine/tests/test_preset_batch.py::test_batch_sync_undo_restores_untouched_and_reports_conflict"
+   ],
+   "phase": "P0",
+   "module": "batch",
+   "title": "批量撤销边界"
+  },
+  "TASK-001": {
+   "tests": [
+    "engine/tests/test_protocol.py::test_task_pause_stops_at_the_boundary_and_resume_finishes_the_batch",
+    "engine/tests/test_tasks.py::test_cancel_is_for_things_that_have_not_stopped",
+    "engine/tests/test_tasks.py::test_history_is_auditable_with_reasons"
+   ],
+   "phase": "P0",
+   "module": "queue",
+   "title": "取消语义"
+  },
+  "TASK-002": {
+   "tests": [
+    "engine/tests/test_protocol.py::test_task_retry_uses_the_frozen_inputs_not_the_current_sliders",
+    "engine/tests/test_tasks.py::test_retry_keeps_the_snapshot_and_the_identity"
+   ],
+   "phase": "P0",
+   "module": "queue",
+   "title": "失败重试固定输入"
+  },
+  "TASK-003": {
+   "tests": [
+    "engine/tests/test_tasks.py::test_skipped_is_not_success_nor_failure"
+   ],
+   "phase": "P0",
+   "module": "queue",
+   "title": "磁盘满及权限失败"
+  },
+  "TASK-004": {
+   "tests": [
+    "engine/tests/test_tasks.py::test_an_interrupted_run_comes_back_paused_never_running",
+    "engine/tests/test_tasks.py::test_for_json_round_trip_and_no_auto_resume"
+   ],
+   "phase": "P0",
+   "module": "queue",
+   "title": "崩溃后恢复"
+  },
+  "TASK-005": {
+   "tests": [
+    "engine/tests/test_export.py::test_export_refuses_before_touching_the_gpu",
+    "engine/tests/test_upscale.py::test_tiled_peak_bounds_with_tile_not_image"
+   ],
+   "phase": "P0",
+   "module": "queue",
+   "title": "资源预算"
+  },
+  "EXPORT-001": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_export_refuses_invalid_combinations_instead_of_losing_data",
+    "engine/tests/test_protocol.py::test_export_conflict_policy_is_visible_per_image",
+    "engine/tests/test_tasks.py::test_skipped_is_not_success_nor_failure"
+   ],
+   "phase": "P0",
+   "module": "export",
+   "title": "命名冲突及原子提交"
+  },
+  "EXPORT-002": {
+   "tests": [
+    "engine/tests/test_perf_report.py::test_export_batch_percentiles",
+    "engine/tests/test_protocol.py::test_task_retry_uses_the_frozen_inputs_not_the_current_sliders"
+   ],
+   "phase": "P0",
+   "module": "export",
+   "title": "固定版本导出"
+  },
+  "EXPORT-003": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_export_refuses_invalid_combinations_instead_of_losing_data"
+   ],
+   "phase": "P0",
+   "module": "export",
+   "title": "格式组合校验"
+  },
+  "LINUX-001": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_no_egress_or_telemetry_anywhere_in_the_shipped_code"
+   ],
+   "phase": "P0",
+   "module": "release",
+   "title": "干净机器离线闭环"
+  },
+  "LINUX-002": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_every_bundled_weight_has_a_filled_license_ledger_entry"
+   ],
+   "phase": "P0",
+   "module": "release",
+   "title": "依赖许可门槛"
+  },
+  "PICK-001": {
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_pick_suggestions_are_explainable_overridable_and_never_touch_the_source"
+   ],
+   "phase": "P1",
+   "module": "selection",
+   "title": "挑图仅作建议",
+   "note": "已交付为**本地确定性度量**（ADR-0012）：dHash 近似组 + 清晰度两格（绝对高频能量与相对自身对比度）+ luma 裁切占比 + FaceMesh 眼睑睁开比，每条原因带 method/数值/阈值可复算。不做的是「训练出来的挑图分类器」——本包没有那种权重，也不冒充（DoD §2）。建议恒为可覆盖的旁注：不进工程文件、不进撤销栈、不删除不移动任何原片。"
+  },
+  "BACKGROUND-001": {
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_background_swap_protects_subject_edges_and_refuses_what_it_cannot_do"
+   ],
+   "phase": "P1",
+   "module": "background",
+   "title": "背景与衣物边界",
+   "note": "已覆盖（1.6.0 之后）：冻结件那两句都有端到端证据——①目标区域换成指定底色、人像主体与第二块主体核心区逐字节不动、过渡带逐通道夹在两个端点之间（无光晕）、羽化只在 softness 宽档长出中间值（实测 0 格→160 格，且不超过算出的过渡带）；②birefnet 无权重整条拒、未知后端拒、不认的参数（衣物那类，本仓没有衣物模块）拒、声明域外的 softness 拒并说得出域，四次拒绝都**没有新帧**且上一帧逐字节等于底片，随后 clear 逐字节回到换底前。边界：真值取自测试自己画的几何已知场景（纯灰底 + 两块主体 + 高斯羽化边），不是影楼夹具；**衣物模块本仓不存在**，这一条只测背景（色键档，零依赖可复算）；神经网络自动抠图（birefnet）在权重放行前永远是拒绝，不是降级。"
+  },
+  "GEN-001": {
+   "tests": [],
+   "phase": "P2",
+   "module": "generation",
+   "title": "生成结果可追溯",
+   "note": "范围外（P2）：生成式编辑与本产品「不做生成、不冒充真实拍摄内容」的定位冲突。"
+  },
+  "GEN-002": {
+   "tests": [],
+   "phase": "P2",
+   "module": "generation",
+   "title": "身份和事实变化提示",
+   "note": "范围外（P2）：同上。"
+  },
+  "CLOUD-001": {
+   "tests": [],
+   "phase": "P2",
+   "module": "privacy",
+   "title": "云能力显式同意",
+   "note": "范围外（P2）：本产品无云通道（本地优先/离线可用，见 no-egress 用例），显式同意流程没有可挂的入口。"
+  },
+  "CLOUD-002": {
+   "tests": [],
+   "phase": "P2",
+   "module": "collaboration",
+   "title": "协作冲突保护",
+   "note": "范围外（P2）：无协作服务端，revision 冲突检测没有对手方。"
+  },
+  "RAW-001": {
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_raw_whitelist_develops_for_real_and_never_passes_preview_as_raw"
+   ],
+   "phase": "P1",
+   "module": "raw",
+   "title": "RAW支持白名单"
+  },
+  "SEC-001": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_events_never_carry_absolute_paths_off_the_machine",
+    "engine/tests/test_acceptance_p0.py::test_no_egress_or_telemetry_anywhere_in_the_shipped_code"
+   ],
+   "phase": "P0",
+   "module": "privacy",
+   "title": "不收集隐私遥测"
+  },
+  "TASK-006": {
+   "tests": [
+    "engine/tests/test_tasks.py::test_pause_lands_on_the_boundary_not_immediately"
+   ],
+   "phase": "P0",
+   "module": "queue",
+   "title": "单项暂停与继续"
+  },
+  "TASK-007": {
+   "tests": [
+    "engine/tests/test_protocol.py::test_task_pause_stops_at_the_boundary_and_resume_finishes_the_batch",
+    "engine/tests/test_tasks.py::test_batch_state_does_not_say_paused_before_everyone_stopped"
+   ],
+   "phase": "P0",
+   "module": "queue",
+   "title": "全批暂停屏障"
+  },
+  "TASK-008": {
+   "tests": [
+    "engine/tests/test_protocol.py::test_task_paused_across_a_restart_stays_paused_and_says_why",
+    "engine/tests/test_tasks.py::test_for_json_round_trip_and_no_auto_resume"
+   ],
+   "phase": "P0",
+   "module": "queue",
+   "title": "暂停持久化及依赖检查"
+  },
+  "TASK-009": {
+   "tests": [
+    "engine/tests/test_protocol.py::test_task_cancel_keeps_committed_files_and_writes_no_more",
+    "engine/tests/test_protocol.py::test_task_delete_removes_the_record_only"
+   ],
+   "phase": "P0",
+   "module": "queue",
+   "title": "提交期暂停与队列删除"
+  },
+  "DIFF-001": {
+   "tests": [],
+   "phase": "P2",
+   "module": "history",
+   "title": "创意历史跨重开持久化",
+   "note": "未实装（P2）：创意历史（生成派生的版本树）不在本版本；提交式版本已覆盖于 CORE-007。"
+  },
+  "DIFF-002": {
+   "tests": [],
+   "phase": "P2",
+   "module": "generation",
+   "title": "创意派生基底回流",
+   "note": "范围外（P2）：依赖生成派生资产，同 GEN-*。"
+  },
+  "DIFF-003": {
+   "tests": [
+    "engine/tests/test_protocol.py::test_export_writes_full_size_not_the_proxy"
+   ],
+   "phase": "P0",
+   "module": "cache",
+   "title": "预览未就绪仍按配方导出"
+  },
+  "SCOPE-001": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_multi_face_photo_blocks_reshaping_but_keeps_global_edits",
+    "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
+    "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces",
+    "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
+    "engine/tests/test_face_select.py::test_meta_reports_the_selection_and_keeps_the_scope_flag"
+   ],
+   "phase": "P0",
+   "module": "person",
+   "title": "多人超范围保护"
+  },
+  "FORMAT-001": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_quality_mapping_version_and_encoder_value_are_recorded"
+   ],
+   "phase": "P0",
+   "module": "export",
+   "title": "JPEG量表映射版本化"
+  },
+  "FORMAT-002": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_multipage_container_is_refused_not_silently_first_page"
+   ],
+   "phase": "P0",
+   "module": "export",
+   "title": "格式边界及目标大小"
+  },
+  "P0-EXPOSURE-NEUTRAL": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
+   ],
+   "phase": "P0",
+   "module": "exposure",
+   "title": "曝光中性与保存重开"
+  },
+  "P0-EXPOSURE-BOUNDARY": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state"
+   ],
+   "phase": "P0",
+   "module": "exposure",
+   "title": "曝光边界与非法值"
+  },
+  "P0-WHITE_BALANCE-NEUTRAL": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
+   ],
+   "phase": "P0",
+   "module": "white_balance",
+   "title": "白平衡中性与保存重开"
+  },
+  "P0-WHITE_BALANCE-BOUNDARY": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state"
+   ],
+   "phase": "P0",
+   "module": "white_balance",
+   "title": "白平衡边界与非法值"
+  },
+  "P0-CROP-NEUTRAL": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
+   ],
+   "phase": "P0",
+   "module": "crop",
+   "title": "裁剪旋转中性与保存重开"
+  },
+  "P0-CROP-BOUNDARY": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state",
+    "engine/tests/test_protocol.py::test_crop_only_deletes_pixels_and_leaves_the_kept_region_untouched"
+   ],
+   "phase": "P0",
+   "module": "crop",
+   "title": "裁剪旋转边界与非法值"
+  },
+  "P0-MASK-NEUTRAL": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
+   ],
+   "phase": "P0",
+   "module": "mask",
+   "title": "自动保护蒙版中性与保存重开"
+  },
+  "P0-MASK-BOUNDARY": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state"
+   ],
+   "phase": "P0",
+   "module": "mask",
+   "title": "自动保护蒙版边界与非法值"
+  },
+  "P0-BLEMISH-NEUTRAL": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
+   ],
+   "phase": "P0",
+   "module": "blemish",
+   "title": "有限祛瑕中性与保存重开"
+  },
+  "P0-BLEMISH-BOUNDARY": {
+   "tests": [
+    "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state"
+   ],
+   "phase": "P0",
+   "module": "blemish",
+   "title": "有限祛瑕边界与非法值"
   }
+ }
 }
