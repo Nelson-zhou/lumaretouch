@@ -2,10 +2,11 @@
  "schema": "lrt.acceptance-map.v1",
  "cases": "docs/acceptance/cases-frozen.json",
  "cases_sha256": "c2fca495b90e3aa7",
- "generated_at": "2026-10-18T21:07:27",
+ "generated_at": "2026-10-18T23:06:55",
  "map": {
   "CORE-001": {
    "tests": [
+    "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
     "engine/tests/test_project.py::test_round_trip_restores_docs_tags_trash_and_recipe",
     "engine/tests/test_project.py::test_source_hash_is_unchanged_by_the_project",
     "engine/tests/test_protocol.py::test_project_save_and_reopen_restores_the_recipe_byte_for_byte"
@@ -212,7 +213,10 @@
    "manual": true
   },
   "PORTRAIT-003": {
-   "tests": [],
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
+    "engine/tests/test_face_select.py::test_faces_lists_every_detected_person"
+   ],
    "phase": "P1",
    "module": "person",
    "title": "多人照片仅编辑指定人物（P1）",
@@ -567,7 +571,9 @@
   "SCOPE-001": {
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_multi_face_photo_blocks_reshaping_but_keeps_global_edits",
-    "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces"
+    "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
+    "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces",
+    "engine/tests/test_face_select.py::test_meta_reports_the_selection_and_keeps_the_scope_flag"
    ],
    "phase": "P0",
    "module": "person",

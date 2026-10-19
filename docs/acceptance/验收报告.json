@@ -1,7 +1,7 @@
 {
  "schema": "lrt.acceptance-report.v1",
- "at": "2026-10-18T21:52:07",
- "product_version": "1.3.0",
+ "at": "2026-10-18T23:26:16",
+ "product_version": "1.4.0",
  "mode": "run（这一遍重跑了 pytest）",
  "cases_sha256": "c2fca495b90e3aa7",
  "pytest_rc": 0,
@@ -12,8 +12,8 @@
    "manual_pending": 1
   },
   "P1": {
-   "passed": 5,
-   "uncovered": 11,
+   "passed": 6,
+   "uncovered": 10,
    "manual_pending": 1
   },
   "P2": {
@@ -29,6 +29,7 @@
    "status": "passed",
    "then": "照片集合、标签、活动版本和配方完整恢复；源文件哈希不变",
    "tests": [
+    "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
     "engine/tests/test_project.py::test_round_trip_restores_docs_tags_trash_and_recipe",
     "engine/tests/test_project.py::test_source_hash_is_unchanged_by_the_project",
     "engine/tests/test_protocol.py::test_project_save_and_reopen_restores_the_recipe_byte_for_byte"
@@ -322,9 +323,12 @@
    "phase": "P1",
    "module": "person",
    "title": "多人照片仅编辑指定人物（P1）",
-   "status": "uncovered",
+   "status": "passed",
    "then": "第二人有效配方不变；图像影响在定义的第一人蒙版边缘内",
-   "tests": [],
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
+    "engine/tests/test_face_select.py::test_faces_lists_every_detected_person"
+   ],
    "note": "未实装：本版本多人照片走 SCOPE-001 的「整条明拒」，没有「编辑第 N 个人」的人物分层模型。不做半截实现来冒充覆盖。"
   },
   {
@@ -836,7 +840,9 @@
    "then": "阻止人像AI并说明范围，仍允许全图调色/裁剪；不得静默选最大脸",
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_multi_face_photo_blocks_reshaping_but_keeps_global_edits",
-    "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces"
+    "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
+    "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces",
+    "engine/tests/test_face_select.py::test_meta_reports_the_selection_and_keeps_the_scope_flag"
    ],
    "note": null
   },
@@ -988,15 +994,15 @@
  ],
  "perf": {
   "schema": "lrt.acceptance-perf.v1",
-  "at": "2026-10-18T21:46:36",
+  "at": "2026-10-18T23:20:36",
   "samples": 120,
   "proxy_max_px": "product(PROXY_PIXELS)",
   "env": {
-   "engine_version": "1.3.0",
+   "engine_version": "1.4.0",
    "protocol": 1,
    "device": "cuda",
    "cuda": true,
-   "warm_ms": 634.76,
+   "warm_ms": 672.51,
    "runtime": {
     "python": "3.12.15",
     "numpy": "2.5.2",
@@ -1019,33 +1025,33 @@
     "draft": null
    },
    "import_jpg": {
-    "decode_ms": 6.56,
-    "shm_ms": 0.26,
+    "decode_ms": 6.92,
+    "shm_ms": 0.25,
     "attach_ms": 1.99,
-    "first_frame_ms": 11.18,
-    "first_frame_filter_ms": 9.4,
-    "first_frame_bands_ms": 8.99,
-    "import_ms": 41.1,
+    "first_frame_ms": 16.63,
+    "first_frame_filter_ms": 14.49,
+    "first_frame_bands_ms": 14.02,
+    "import_ms": 47.44,
     "preview_ms": null,
-    "open_ms": 1.23,
+    "open_ms": 1.24,
     "orient_ms": 0.0,
-    "scale_ms": 19.89,
-    "total_ms": 27.67,
-    "sum_of_stages_ms": 41.1
+    "scale_ms": 20.41,
+    "total_ms": 28.57,
+    "sum_of_stages_ms": 47.44
    },
    "import_dng": {
-    "decode_ms": 103.94,
-    "shm_ms": 27.41,
-    "attach_ms": 1.34,
-    "first_frame_ms": 10.8,
-    "first_frame_filter_ms": 9.16,
-    "first_frame_bands_ms": 8.74,
-    "import_ms": 175.96,
+    "decode_ms": 106.9,
+    "shm_ms": 33.51,
+    "attach_ms": 1.37,
+    "first_frame_ms": 15.04,
+    "first_frame_filter_ms": 12.93,
+    "first_frame_bands_ms": 12.45,
+    "import_ms": 194.22,
     "preview_ms": null,
-    "open_ms": 2.26,
+    "open_ms": 2.06,
     "orient_ms": 0.0,
-    "scale_ms": 30.21,
-    "total_ms": 136.41,
+    "scale_ms": 35.34,
+    "total_ms": 144.31,
     "raw": {
      "camera": "LumaRetouch TestCam 1.0",
      "bits": 16,
@@ -1073,10 +1079,10 @@
      "source": "self_dng",
      "half_size": false,
      "used_preview": false,
-     "container_ms": 2.26,
-     "pixels_ms": 2.0,
-     "render_ms": 101.94,
-     "encode_ms": 30.21,
+     "container_ms": 2.06,
+     "pixels_ms": 2.31,
+     "render_ms": 104.59,
+     "encode_ms": 35.34,
      "notes": [
       "AsShotNeutral=[0.4726, 1.0, 0.9233]"
      ]
@@ -1093,71 +1099,71 @@
     }
    },
    "import_dng_second": {
-    "decode_ms": 90.33,
-    "shm_ms": 0.53,
-    "attach_ms": 4.26,
-    "first_frame_ms": 11.03,
-    "first_frame_filter_ms": 9.39,
-    "first_frame_bands_ms": 8.98,
-    "import_ms": 138.03,
+    "decode_ms": 94.1,
+    "shm_ms": 0.68,
+    "attach_ms": 4.1,
+    "first_frame_ms": 15.79,
+    "first_frame_filter_ms": 14.08,
+    "first_frame_bands_ms": 13.39,
+    "import_ms": 147.37,
     "preview_ms": null,
-    "open_ms": 2.07,
+    "open_ms": 2.39,
     "orient_ms": 0.0,
-    "scale_ms": 29.81,
-    "total_ms": 122.21
+    "scale_ms": 30.32,
+    "total_ms": 126.8
    },
    "thumbnail_ms": {
     "n": 25,
-    "p50": 6.76,
-    "p95": 9.814,
-    "p99": 57.108,
-    "max": 71.83,
-    "mean": 9.531
+    "p50": 6.84,
+    "p95": 9.504,
+    "p99": 54.199,
+    "max": 68.15,
+    "mean": 9.481
    },
    "thumbnail_batch": {
     "count": 25,
     "failed": 0,
     "dropped": 0,
     "edge": 160,
-    "wall_ms": 252.7,
+    "wall_ms": 251.3,
     "channel_kb": 88.7
    },
    "drag_render_ms": {
     "n": 120,
-    "p50": 0.15,
-    "p95": 0.19,
-    "p99": 0.22,
-    "max": 0.22,
-    "mean": 0.16
+    "p50": 0.175,
+    "p95": 0.26,
+    "p99": 0.29,
+    "max": 0.32,
+    "mean": 0.186
    },
    "drag_filter_cached_ratio": 1.0,
    "landmark_backend": "mediapipe",
    "num_landmarks": 478,
    "precompute_ms": {
     "build_ms": 0.12,
-    "infer_ms": 478.12,
-    "total_ms": 481.36
+    "infer_ms": 480.72,
+    "total_ms": 483.08
    },
-   "deform_build_ms": 57.92,
+   "deform_build_ms": 68.42,
    "deform_apply_ms": {
     "n": 60,
     "p50": 1.09,
-    "p95": 1.11,
-    "p99": 1.151,
-    "max": 1.21,
-    "mean": 1.092
+    "p95": 1.121,
+    "p99": 1.148,
+    "max": 1.16,
+    "mean": 1.095
    },
    "deform_builds_during_drag": 0,
    "export_per_image_ms": {
     "n": 6,
-    "p50": 52.925,
-    "p95": 54.953,
-    "p99": 55.351,
-    "max": 55.45,
-    "mean": 52.602
+    "p50": 64.655,
+    "p95": 65.995,
+    "p99": 66.135,
+    "max": 66.17,
+    "mean": 64.813
    },
    "export_progress_events": 6,
-   "export_total_ms": 380.0,
+   "export_total_ms": 439.2,
    "export_tile": 512,
    "export_failed": 0
   },
@@ -1165,5 +1171,5 @@
    "RAW 那一臂是合成 DNG（夹具上采样后写 CFA，源幅 3000×2000）：尺寸/位深/排阵的形状对，传感器噪声结构不对——这一组数能比“解码与下采样随像素的标度”，不能当作真机色彩质量结论。"
   ]
  },
- "junit": "/tmp/lrt-accept-1.3.0-final.xml"
+ "junit": "/tmp/lrt-accept-1.4.0.xml"
 }
