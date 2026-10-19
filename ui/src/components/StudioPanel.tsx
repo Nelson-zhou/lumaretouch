@@ -23,7 +23,7 @@ export interface BrushState {
   on: boolean;
   radius: number;
   feather: number;
-  mode: "heal" | "dodge" | "burn";
+  mode: "heal" | "dodge" | "burn" | "color";
   onChange: (patch: Partial<BrushState>) => void;
 }
 
@@ -113,6 +113,19 @@ function rectForAspect(w: number, h: number, aspect: number): number[] {
   const cut = (1 - keep) / 2;
   return [cut, 0, 1 - cut, 1];
 }
+
+/** 画笔模式的展示名（局部调色是 COLOR-004 那第四条：同一支笔、四个去处）。 */
+const MODE_MSG: Record<string, MsgKey> = {
+  heal: "retouch.modeHeal", dodge: "retouch.modeDodge",
+  burn: "retouch.modeBurn", color: "retouch.modeColor",
+};
+
+/** 调色作用域的展示名。名单本身从引擎报的 scopes 读（这里只给名字）：
+ *  引擎以后加一档时，这里少一行只是一个没翻译的选项（直陈引擎那个词），
+ *  而不是拿"全图"去套一个它并不是的东西。 */
+const SCOPE_MSG: Record<string, MsgKey> = {
+  all: "grade.scopeAll", skin: "grade.scopeSkin", brush: "grade.scopeBrush",
+};
 
 function Group(props: { id: SectionId; children: React.ReactNode; open?: boolean }) {
   return (
@@ -247,6 +260,30 @@ export default function StudioPanel(props: StudioProps) {
                value={doc?.grade.amount ?? 1}
                onChange={(e) => ok(runGrade("amount", { amount: +e.target.value }), props)}
                style={{ width: "100%" }} />
+        {/* COLOR-004 局部调色：作用域 + 画笔区域。选项与选中值都读引擎报的那一份
+            （scopes / scope / mask_px）：前端抄一份名单，下一轮引擎加一档这里就少一档；
+            而自己记一份“现在只调皮肤”，换图/重开/撤销后就会替引擎说谎。 */}
+        <label className="k">{t("grade.scope")}</label>
+        <select disabled={dim} style={{ width: "100%" }}
+                value={doc?.grade.scope ?? "all"}
+                onChange={(e) => ok(runGrade("scope", { scope: e.target.value }), props)}>
+          {(doc?.grade.scopes ?? ["all"]).map((s) => {
+            // 拿不到底衬的那一档显式禁用并写清原因（引擎那一侧是整条拒），
+            // 不留“能选而选了什么都不动”的控件
+            const why = s === "skin" && !props.faceOk ? props.faceWhy
+              : s === "brush" && !(doc?.grade.mask_px ?? 0) ? t("grade.regionEmpty") : "";
+            return (
+              <option key={s} value={s} disabled={!!why}>
+                {SCOPE_MSG[s] ? t(SCOPE_MSG[s]) : s}{why ? `（${why}）` : ""}
+              </option>);
+          })}
+        </select>
+        <div className="row">
+          <button disabled={dim || !(doc?.grade.mask_px ?? 0)}
+                  onClick={() => ok(runGrade("mask_clear"), props)}>{t("grade.clearRegion")}</button>
+          <span className="mut">{(doc?.grade.mask_px ?? 0)
+            ? t("grade.region", { n: doc?.grade.mask_px ?? 0 }) : t("grade.regionEmpty")}</span>
+        </div>
         {presets.length === 0 && <div className="mut">（引擎没报内置预设：这一版不带就不画按钮）</div>}
       </Group>
 
@@ -256,11 +293,13 @@ export default function StudioPanel(props: StudioProps) {
                        optionsFor={p0.optionsFor} onSlider={p0.slider} onToggle={p0.toggle}
                        onEnum={p0.enum} onAction={p0.action} onRect={p0.rect} />
         <div className="row">
-          {(["heal", "dodge", "burn"] as const).map((m) => (
-            <button key={m} disabled={dim || !props.faceOk}
+          {(["heal", "dodge", "burn", "color"] as const).map((m) => (
+            // “局部调色”不靠关键点（它要的是用户涂的那一片），所以不该被“没跑面部分析”
+            // 连带禁用：已接通的功被错禁，与“没接通却看着能点”是同一类错
+            <button key={m} disabled={dim || (m !== "color" && !props.faceOk)}
                     className={props.brush.mode === m ? "primary" : ""}
                     onClick={() => props.brush.onChange({ on: true, mode: m })}>
-              {t(("retouch.mode" + (m === "heal" ? "Heal" : m === "dodge" ? "Dodge" : "Burn")) as MsgKey)}
+              {t(MODE_MSG[m])}
             </button>
           ))}
         </div>

@@ -964,6 +964,10 @@ fn grade(
     ds: Option<f64>,
     dv: Option<f64>,
     amount: Option<f64>,
+    scope: Option<String>,
+    rle: Option<Value>,
+    feather: Option<u64>,
+    mode: Option<String>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "grade", "action": action});
     // 一律“给了才附”：部分提交语义靠的就是“没给”与“给了 0”的区别，
@@ -979,6 +983,21 @@ fn grade(
     }
     if let Some(v) = amount {
         cmd["amount"] = json!(v);
+    }
+    // COLOR-004 局部调色：作用域与画笔区域同一条命令走（引擎那一侧的 action：
+    // scope / mask / mask_clear）。这里也不能替引擎填默认值：“没给”与
+    // “给了全图”在引擎里是两种语义（前者不动作用域，后者会把局部改回全图）。
+    if let Some(v) = scope {
+        cmd["scope"] = json!(v);
+    }
+    if let Some(v) = rle {
+        cmd["rle"] = v;
+    }
+    if let Some(v) = feather {
+        cmd["feather"] = json!(v);
+    }
+    if let Some(v) = mode {
+        cmd["mode"] = json!(v);
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
@@ -1000,7 +1019,7 @@ fn export(
     tile: Option<i64>,
     images: Option<Vec<String>>,
     // 放大（M7）：倍率与出片锐量。宿主不填默认值——那两个数的出处是引擎的
-    // ready（upscale_scales），宿主拄一份就会在引擎改口径时静默漂开。
+    // ready（upscale_scales），宿主抄一份就会在引擎改口径时静默漂开。
     scale: Option<i64>,
     sharpen: Option<f64>,
     upscale_backend: Option<String>,
@@ -1607,7 +1626,7 @@ fn batch(
 }
 
 /// 曝光/白平衡（P0 注册表 lnx.exposure / lnx.white_balance）。量程不在这里写：
-/// 引擎随事件报 exposure_limits，宿主拄一份数就是第二个会漂的地方。
+/// 引擎随事件报 exposure_limits，宿主抄一份数就是第二个会漂的地方。
 #[tauri::command]
 fn exposure(
     state: State<'_, Arc<AppState>>,
@@ -1715,6 +1734,9 @@ fn m0_env() -> Value {
         // M3-b 肤色定向自动通道："dh:ds:dv:amount"。与上面几条同一条理由：只有真窗口
         // 能证明 runGrade → Rust grade → 引擎 grade_done 这条命令签名对得上。
         "auto_grade": std::env::var("LRT_AUTO_GRADE").unwrap_or_default(),
+        // 局部调色（COLOR-004）："fx:fy:r:dh:ds:dv"。区域外逐字节不动这一条只能在真窗口量，
+        // 所以它与上面几条同一个身份：签名递得到 + 画面真的按作用域在动。
+        "auto_local_color": std::env::var("LRT_AUTO_LOCAL_COLOR").unwrap_or_default(),
         // M4 导出自动通道："<目录>@<格式>@<tile>"（tile 与格式可省）。真窗口跑这一条
         // 才能证明 runExport → Rust export → 引擎 export_done 对得上，而且落盘文件
         // 的尺寸是“满幅不是代理档”的唯一直接证据

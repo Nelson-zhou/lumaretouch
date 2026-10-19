@@ -118,7 +118,7 @@ export default function App() {
   const [feather, setFeather] = useState(2);
   // 画笔模式（M2-a2）：同一支画笔管道，落点时按模式分派到两个图层。
   // 不另开一套坐标采集：修容与消除笔画的都是代理帧上的同一个 RLE，两套代码必漂。
-  const [brushMode, setBrushMode] = useState<"heal" | "dodge" | "burn">("heal");
+  const [brushMode, setBrushMode] = useState<"heal" | "dodge" | "burn" | "color">("heal");
   // 修容档数上限：0.6 档是探针在真图上定的产品默认（再大就开始烧穿高光）
   const [lightExposure, setLightExposure] = useState(0.6);
   const [lastLight, setLastLight] = useState<LightInfo | null>(null);
@@ -925,6 +925,9 @@ export default function App() {
             dh: got.grade_dh, ds: got.grade_ds, dv: got.grade_dv, amount: got.grade_amount,
             lit: got.grade_lit, gradeMs: got.grade_ms, lutMs: got.lut_ms,
             bytesGrade: got.bytes_grade, filterCached: got.filter_cached,
+            // COLOR-004：作用域与区域格数也进这一行——真窗口那一臂要能看见“落笔之后
+            // 引擎自己把 scope 切成了 brush”，而不是只看见画面动了。
+            scope: got.grade_scope, scopes: got.grade_scopes, maskPx: got.mask_px,
             limits: got.grade_limits, renderMs: got.render_ms,
           } : { bad: "12s 内没等到 grade_done（参数越界或跑靶进行中）", dh, ds, dv, amount })}`);
         }
@@ -1115,6 +1118,78 @@ export default function App() {
               frameChangedVsHome: diffBytes(homePix, re?.pixels ?? null),
             } : { bad: "第二次 set 没等到 bg_done" })}`);
           }
+        }
+      }
+      // 局部调色（COLOR-004）自动通道（$LRT_AUTO_LOCAL_COLOR="fx:fy:r:dh:ds:dv"）。
+      // 真窗口这一臂要同时证三件事：runGrade 的 mask/set 两个新 action 在 Tauri 签名上
+      // 递得到（错一个名字会被静默丢掉，屏不动而一个错也不报）；引擎落笔就把作用域切成
+      // brush；而**区域外那一圈逐字节没动**。最后一条只能拿用户看见的那一帧量——屏上
+      // 没有第二块画布可比，而“局部调色静默变成全图调色”恰恰是画面在变、人分不出来的那种错。
+      if (env.auto_local_color) {
+        const nums = env.auto_local_color.split(":").map(Number);
+        if (nums.length !== 6 || !nums.every(Number.isFinite)) {
+          await report(`M0_ERROR 无法解析 LRT_AUTO_LOCAL_COLOR=${env.auto_local_color}（要 fx:fy:r:dh:ds:dv）`);
+        } else if (!image) {
+          await report("M0_ERROR LRT_AUTO_LOCAL_COLOR 需要 LRT_LOAD_IMAGE（不知道代理帧尺寸）");
+        } else {
+          const [fx, fy, r, dh, ds, dv] = nums;
+          const pw = image.w;
+          const ph = image.h;
+          const waitGrade = async (pred: (v: GradeInfo) => boolean) => {
+            // 轮询预算 12 s：与修容那臂同一条理由——被拒时长时间空轮询会冻住 UI 线程，
+            // 把“脚本写错参数”变成一个看着像产品退化的 fps 数字
+            for (let i = 0; i < 120; i++) {
+              await sleep(100);
+              const st = await engineStatus().catch(() => null);
+              if (st?.grade && pred(st.grade)) return st.grade;
+            }
+            return null;
+          };
+          const before = await peek();
+          let bad = "";
+          let lit: GradeInfo | null = null;
+          try {
+            await runGrade("mask", { rle: clickRle(pw, ph, fx * pw, fy * ph, r),
+                                     feather: 2, mode: "replace" });
+            lit = await waitGrade((v) => v.grade_scope === "brush" && v.mask_px > 0);
+            if (!lit) bad = "落笔后 12s 内没等到作用域为 brush 的 grade_done";
+            if (!bad) {
+              await runGrade("set", { dh, ds, dv, amount: 1 });
+              lit = await waitGrade((v) => v.grade_lit === true) ?? lit;
+            }
+          } catch (e) { bad = String(e); }
+          const after = await peek();
+          // 两份快照得是同一块完整画布才能逐格比：脏矩形只送顶部几行，拿它比字节
+          // 比出来的是“没送到”而不是“没变”（上一轮切文档那一臂就报过 -1）
+          const full = (f: typeof before) => !!f && f.rows === f.h && f.pixelLen === f.w * f.h * 4;
+          let insideChanged = -1;
+          let outsideChanged = -1;
+          if (!bad && before && after && full(before) && full(after)
+            && before.w === after.w && before.h === after.h) {
+            const cx = Math.round(fx * after.w);
+            const cy = Math.round(fy * after.h);
+            const band = Math.round(r) + 6;   // 笔迹半径 + 羽化支撑 + 插值余量
+            insideChanged = 0; outsideChanged = 0;
+            for (let y = 0; y < after.h; y++) {
+              for (let x = 0; x < after.w; x++) {
+                const i = (y * after.w + x) * 4;
+                if (after.pixels[i] === before.pixels[i]
+                  && after.pixels[i + 1] === before.pixels[i + 1]
+                  && after.pixels[i + 2] === before.pixels[i + 2]) continue;
+                if (Math.abs(x - cx) <= band && Math.abs(y - cy) <= band) insideChanged++;
+                else outsideChanged++;
+              }
+            }
+          } else if (!bad) {
+            bad = "两份快照不是同一块完整画布（脏矩形或尺寸变了），区域外逐字节那条没法量";
+          }
+          await report(`M0_LOCAL_COLOR ${JSON.stringify(bad ? { bad, maskPx: lit?.mask_px ?? 0 } : {
+            scope: lit?.grade_scope ?? "", scopes: lit?.grade_scopes ?? [],
+            maskPx: lit?.mask_px ?? 0, lit: lit?.grade_lit ?? null,
+            bytesGrade: lit?.bytes_grade ?? 0, gradeMs: lit?.grade_ms ?? 0,
+            canvas: `${after?.w ?? 0}x${after?.h ?? 0}`,
+            insideChanged, outsideChanged,
+          })}`);
         }
       }
       // 等宿主把下一条 history_state 搬进轮询状态：撤销的答复是异步的，
@@ -1663,6 +1738,16 @@ export default function App() {
           .catch((e) => setDragNote(String(e)));
         return;
       }
+      if (brushMode === "color") {
+        // COLOR-004 局部调色：笔迹不是一条 light/inpaint，而是给肤色定向层递一份区域。
+        // 引擎那边“落笔即生效”（自己把 scope 切到 brush 并随事件报回来），所以这里不能
+        // 自己记一份作用域，也不能等用户再去点一下才能看见变化。
+        setDragNote(t("retouch.coloring", { pixels }));
+        runGrade("mask", { rle, feather, mode: "add" })
+          .then(() => refreshStatus())
+          .catch((e) => setDragNote(String(e)));
+        return;
+      }
       // 加深/减淡共用一条命令，差别只在符号：场是带符号累加的，所以同处一正一负会抵消
       setDragNote(t("retouch.lighting", { pixels }));
       runLight("add", { rle, feather, sign: brushMode === "dodge" ? 1 : -1 })
@@ -1999,7 +2084,7 @@ export default function App() {
     }
   }
 
-  /** 枚举格的候选：有些由引擎报（预设名、能落的格式），不能在前端拄一份会漂的名单。 */
+  /** 枚举格的候选：有些由引擎报（预设名、能落的格式），不能在前端抄一份会漂的名单。 */
   function p0options(key: string): string[] | null {
     switch (key) {
       // 注册表的预设格现在接的是**模块预设**（人像/色彩/裁剪那一族，走 cmd_preset）。
@@ -2417,6 +2502,8 @@ export default function App() {
                   disabled={!status?.image}>{t("retouch.modeDodge")}</button>
           <button className={brushMode === "burn" ? "primary" : ""} onClick={() => setBrushMode("burn")}
                   disabled={!status?.image}>{t("retouch.modeBurn")}</button>
+          <button className={brushMode === "color" ? "primary" : ""} onClick={() => setBrushMode("color")}
+                  disabled={!status?.image}>{t("retouch.modeColor")}</button>
         </div>
         <label className="k">{t("retouch.lightExposure", { stops: lightExposure.toFixed(2) })}</label>
         <input type="range" min={-2} max={2} step={0.05} value={lightExposure}

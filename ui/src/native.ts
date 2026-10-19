@@ -84,7 +84,11 @@ export interface DocState {
   counts: { repair: number; light: number; repair_redo: number; light_redo: number };
   deform: { amounts: Record<string, number>; built: boolean };
   lut: { lit: boolean; amount: number; preset: string | null };
-  grade: { dh: number; ds: number; dv: number; amount: number; lit: boolean };
+  grade: { dh: number; ds: number; dv: number; amount: number; lit: boolean;
+           /** COLOR-004 局部调色：作用域、引擎报的可选名单、区域盖了多少格。
+            *  下拉框的选中值只能从这里读：换图、重开工程、撤销都会改它，前端自己
+            *  记一份就是在替引擎说谎（“当前值必须来自引擎”这条纪律没有例外）。 */
+           scope?: string; scopes?: string[]; mask_px?: number };
   /** 曝光/白平衡（P0 lnx.exposure / lnx.white_balance）。`reference_k` 为 null 是
    *  “没指定参考光源”，不是 0：“中性=null 不能解成零”写在注册表的 null_semantics 里。 */
   exposure: { ev: number; temperature_shift: number; tint_shift: number;
@@ -437,7 +441,7 @@ export interface GradeState {
  * M5-b 的真窗口轮第一次撞上：那时宿主才开始发 hello，grade_limits 不再为空，
  * 定向那一排第一次真的被渲染出来。 */
 export interface GradeInfo {
-  action: "set" | "amount" | "clear";
+  action: "set" | "amount" | "clear" | "scope" | "mask" | "mask_clear";
   /** 铺平的同一份数：payload 与嵌套字段都来自 _grade_payload */
   grade_dh: number;
   grade_ds: number;
@@ -451,6 +455,13 @@ export interface GradeInfo {
   grade_ms: number;
   /** [dh, ds, dv] 的硬边界：滑块的夹取范围由引擎说，前端不抄一份数然后两处漂 */
   grade_limits: number[];
+  /** COLOR-004：当前生效的作用域与可选名单（同样是引擎说）。scope 只能拿这里
+   *  列出的值去试：skin 要人脸掩膜、brush 要画笔区域，拿不到时引擎整条拒而不是
+   *  默默退回全图——所以 UI 必须能看到“现在真的调的是哪一片”。 */
+  grade_scope: string;
+  grade_scopes: string[];
+  /** 画笔区域盖了多少格（代理帧坐标）。0 与“没这一格”不同：那是引擎真报了一个 0。 */
+  mask_px: number;
   lut_ms: number;
   lut_preset: string | null;
   filter_ms: number;
@@ -578,7 +589,7 @@ export interface EngineStatus {
   doc_rev: number;
   /** ready 报的"哪些命令算编辑"。空数组 = 这个引擎还没有历史能力。 */
   history_edit_cmds: string[];
-  /** ready 的整份能力清单（宿主不逐字段拄）：面板上的动作名单、工程后缀、导出格式
+  /** ready 的整份能力清单（宿主不逐字段抄）：面板上的动作名单、工程后缀、导出格式
    *  这些“引擎说什么能力”的清单都从这一份读。老宿主没报时为 undefined——那时那一排
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
@@ -916,7 +927,8 @@ export const runLut = (
  */
 export const runGrade = (
   action: GradeInfo["action"],
-  opts?: { dh?: number; ds?: number; dv?: number; amount?: number },
+  opts?: { dh?: number; ds?: number; dv?: number; amount?: number;
+           scope?: string; rle?: number[][]; feather?: number; mode?: string },
 ) =>
   invoke<{ requested: boolean }>("grade", {
     action,
@@ -924,6 +936,12 @@ export const runGrade = (
     ds: opts?.ds,
     dv: opts?.dv,
     amount: opts?.amount,
+    // COLOR-004：作用域与区域走同一条命令。“给了才附”在 Rust 那一侧把关，
+    // 这里不替引擎填默认值（写了 scope: "all" 就等于把用户刚选的局部作用域抹掉）。
+    scope: opts?.scope,
+    rle: opts?.rle,
+    feather: opts?.feather,
+    mode: opts?.mode,
   });
 
 /** 换底（M6）：一次“换底”一条命令。action=set 需 bg（[r,g,b] 0–255）；clear 关掉整层。
@@ -1058,6 +1076,10 @@ export interface M0Env {
   /** 非空则导入后提交一次肤色定向（M3-b）："dh:ds:dv:amount"，四个数用 : 分隔。
    *  与 lut 的 @ 分法各走一份，两条自动臂可以同时挂。 */
   auto_grade: string;
+  /** 局部调色（COLOR-004）自动通道（$LRT_AUTO_LOCAL_COLOR）："fx:fy:r:dh:ds:dv"。
+   *  fx/fy 是代理帧归一化坐标、r 是像素半径（与修容同一套坐标口径），后三个是定向增量。
+   *  这一条要证的是三层签名对得上 + 区域外逐字节不动（后者只能拿用户看见那一帧量）。 */
+  auto_local_color: string;
   /** M6 换底自动通道（$LRT_AUTO_BG）："rrggbb:tol:softness"。真窗口要证的不是
    *  合成对不对（test_matting 已钉），而是 TS runBackground → Rust background →
    *  引擎 bg_done 这条命令签名在真窗口里对得上，且画面真的变了（peek 字节差）。 */
@@ -1131,7 +1153,7 @@ export const runBatch = (
   conflict_policy: opts.conflictPolicy, batch_id: opts.batchId,
 });
 
-/** 曝光/白平衡（P0）：量程由引擎随事件报 exposure_limits，这里不拄一份。 */
+/** 曝光/白平衡（P0）：量程由引擎随事件报 exposure_limits，这里不抄一份。 */
 export const runExposure = (
   action: "set" | "clear",
   v: { ev?: number; temperature_shift?: number; tint_shift?: number; reference_k?: number } = {},
