@@ -137,6 +137,7 @@ def test_spec_check_refuses(kw, why):
 
 
 def test_export_refuses_before_touching_the_gpu():
+    # 验收用例引用：TASK-005（分块参数不合法当场拒（不静默改小输出尺寸））
     """参数与 tile 数不对，应当一句 ExportError，而不是一句 torch 的 RuntimeError。
 
     顺序也是有内容的：`spec.check()` 与 margin 上限必须在任何显存动作之前——CI 的
@@ -187,6 +188,7 @@ def _pipe_frame(rgb, spec: ExportSpec, device: str, delta=None):
 @pytest.mark.parametrize("device", ["cpu"])
 @pytest.mark.parametrize("tile", [256, 320])
 def test_pointwise_only_export_is_byte_identical_across_tiles(device, tile):
+    # 验收用例引用：RENDER-005（分块与单块：逐点层那组必须恰好逐字节相等（接缝 0 LSB））
     """链上不需要邻域求和的那一组：分块必须**恰好逐字节相等**。
 
     strength=0 把滤波短路，剩下的 lut/grade 全是逐点运算——那里没有"前缀从哪开始"
@@ -247,6 +249,7 @@ def test_color_layers_add_no_margin(device):
 
 @pytest.mark.parametrize("device", ["cpu"])
 def test_deform_arm_allows_one_lsb_but_only_a_handful_of_pixels(device):
+    # 验收用例引用：RENDER-005（带邻域求和那一组按冻结口径判：≤1 LSB 且差异不落在网格线上）
     """形变那一笔：≤1 LSB、差异像素 ≤0.05%，而且**不落在 tile 网格线上**。
 
     为什么不能要求 0：warp 之前还有一整条滤波链，而积分图 cumsum 的起点随 crop 变，

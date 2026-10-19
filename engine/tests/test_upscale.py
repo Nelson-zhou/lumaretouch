@@ -156,6 +156,7 @@ def test_pillow_lanczos_trend_agreement():
 
 # ---------------------------------------------------------------- 分块等价
 def test_tiled_is_byte_identical_to_untiled():
+    # 验收用例引用：RENDER-005（放大那条的分块与整幅逐字节相同）
     torch = pytest.importorskip("torch")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     x = _t(_toy(25, 31), device)
@@ -176,6 +177,7 @@ def test_tiled_byte_identical_across_tile_sizes_and_devices():
 
 
 def test_tiled_peak_bounds_with_tile_not_image():
+    # 验收用例引用：TASK-005（峰值只随 tile 走：限制并发/分块这件事有账面）
     """"峰值只随 tile 走"的账面：同一 tile 换大图，单块峰值不该随图幅涨。"""
     torch = pytest.importorskip("torch")
     small = _t(np.random.default_rng(1).integers(0, 256, (24, 24, 3), dtype=np.uint8))

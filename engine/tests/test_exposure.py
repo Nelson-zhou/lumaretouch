@@ -280,6 +280,7 @@ def test_pipeline_rejects_out_of_range_without_leaving_half_state():
 
 
 def test_export_spec_carries_exposure_and_matches_preview_bytes():
+    # 验收用例引用：RENDER-002（同一份 Exposure + 同一份 PreviewPipeline，导出与预览必须同数）
     """导出口径：同一个 Exposure + 同一份 PreviewPipeline，导出与预览必须同数。
 
     这条是“所见即所出”的可执行形式。如果导出走的是另一套实现（而不是复用同一个

@@ -77,6 +77,7 @@ def test_export_scale_equals_post_hoc_whole_upscale_byte_exact():
 
 
 def test_export_scale_with_filter_within_one_lsb():
+    # 验收用例引用：RENDER-005（放大 + 磨皮同口径判（≤1 LSB、差异占比有界））
     """磨皮在场：分块 vs 单块按 M4 那一档口径判（≤1 LSB 且差异占比有界），不写成 0。"""
     pytest.importorskip("torch")
     s = src()

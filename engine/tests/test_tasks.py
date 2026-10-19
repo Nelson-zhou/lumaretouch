@@ -33,6 +33,8 @@ def test_new_task_refuses_empty_batch_and_missing_snapshot():
 
 
 def test_items_are_fixed_at_creation():
+    # 验收用例引用：BATCH-002（新编辑不改已入账的目标）
+    # 验收用例引用：BATCH-001（目标清单在建立那一刻定死：只改已选的那些）
     """清单进来就定了：跑一半改清单，"批次已暂停"就没人说得清指哪一批。"""
     t = _task()
     assert [i["path"] for i in t["items"]] == ["/img/0.dng", "/img/1.dng", "/img/2.dng"]
@@ -164,6 +166,7 @@ def test_batch_state_does_not_say_paused_before_everyone_stopped():
 
 # ---------------------------------------------------------------- 重试固定输入
 def test_retry_keeps_the_snapshot_and_the_identity():
+    # 验收用例引用：BATCH-001（task_id/attempt 与输入快照保留）
     """TASK-002：attempt+1、task_id 不变、**输入快照不变**。"""
     t = _task(3)
     snap = dict(t["inputs"])
@@ -179,6 +182,7 @@ def test_retry_keeps_the_snapshot_and_the_identity():
 
 
 def test_retry_refuses_a_running_batch_and_a_fully_succeeded_one():
+    # 验收用例引用：BATCH-002（跑到一半的批次不许被另一次编辑覆盖着重启）
     t = _task()
     T.transit(t, T.RUNNING)
     with pytest.raises(T.TaskError):
@@ -193,6 +197,7 @@ def test_retry_refuses_a_running_batch_and_a_fully_succeeded_one():
 
 # ---------------------------------------------------------------- 落盘与重开
 def test_for_json_round_trip_and_no_auto_resume():
+    # 验收用例引用：TASK-004（台账往返：提交标记与状态一致，未跑完的可重试）
     """TASK-008：paused 后关闭进程，重开仍然 paused 等待用户继续；不自动重跑。"""
     t = _task()
     T.transit(t, T.RUNNING)
@@ -206,6 +211,7 @@ def test_for_json_round_trip_and_no_auto_resume():
 @pytest.mark.parametrize("interrupted", [T.QUEUED, T.RUNNING, T.PAUSE_REQUESTED,
                                          T.RESUMING, T.CANCELLING, T.RETRYING])
 def test_an_interrupted_run_comes_back_paused_never_running(interrupted):
+    # 验收用例引用：TASK-004（中断后回来只会 paused，不自动重跑已成功项）
     """进程没了，"正在做"的说法一律不再成立。
 
     回落成 running 等于自动重跑（008 明令禁止）；回落成 failed 等于把中断算成失败，

@@ -1,0 +1,1761 @@
+{
+  "schema_version": "1.1",
+  "document_kind": "原创产品验收规范，非竞品测试结果",
+  "execution_status": "尚未实现或运行；全部为拟定验收",
+  "quality_threshold_policy": "视觉/数值阈值须经固定合法样本与基准机标定并版本化。未冻结阈值前不得宣称通过。",
+  "cases": [
+    {
+      "id": "CORE-001",
+      "phase": "P0",
+      "module": "project",
+      "title": "项目创建与重开",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32448"
+      ],
+      "given": "合法本地文件与可写项目目录",
+      "when": "创建项目、导入、关闭并重新打开",
+      "then": "照片集合、标签、活动版本和配方完整恢复；源文件哈希不变",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-CORE-001",
+        "LNX-P0-PROJECT"
+      ]
+    },
+    {
+      "id": "CORE-002",
+      "phase": "P0",
+      "module": "import",
+      "title": "格式能力与失败隔离",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "支持的JPEG/TIFF、损坏文件和不支持格式混合",
+      "when": "批量导入",
+      "then": "支持项可编辑，失败项有逐项原因；不产生幽灵资产或整批丢失",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-CORE-002",
+        "LNX-P0-IMPORT"
+      ]
+    },
+    {
+      "id": "CORE-003",
+      "phase": "P0",
+      "module": "import",
+      "title": "方向规范化",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "包含各EXIF方向的同内容照片",
+      "when": "导入、裁剪、预览及导出",
+      "then": "方向统一且不重复旋转；裁剪和蒙版定位一致",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-CORE-003",
+        "LNX-P0-IMPORT"
+      ]
+    },
+    {
+      "id": "CORE-004",
+      "phase": "P0",
+      "module": "asset",
+      "title": "原图只读",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "源文件有预先记录的哈希且导出目录包含同名文件",
+      "when": "执行编辑、取消、重试、导出与项目回收站操作",
+      "then": "全部源文件哈希及字节数不变；导出不能指向输入文件",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-CORE-004"
+      ]
+    },
+    {
+      "id": "CORE-005",
+      "phase": "P0",
+      "module": "asset",
+      "title": "源文件丢失和重定位",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "引用资产源文件移动",
+      "when": "重开项目并重新定位",
+      "then": "清楚显示缺失；哈希相同时恢复，哈希不同时请求确认源变化并失效旧缓存",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-CORE-005"
+      ]
+    },
+    {
+      "id": "CORE-006",
+      "phase": "P0",
+      "module": "history",
+      "title": "历史撤销重做",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "47209"
+      ],
+      "given": "多步骤编辑及保存的命名版本",
+      "when": "撤销、重做、撤销后新编辑",
+      "then": "配方正确恢复；分支策略明确；命名版本不被删除",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-CORE-006",
+        "LNX-P0-HISTORY"
+      ]
+    },
+    {
+      "id": "CORE-007",
+      "phase": "P0",
+      "module": "project",
+      "title": "项目回收站语义",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32449"
+      ],
+      "given": "已编辑照片处于项目内",
+      "when": "移入回收站再恢复",
+      "then": "项目记录可恢复；原图不删除；配方仍在",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-CORE-007"
+      ]
+    },
+    {
+      "id": "CORE-008",
+      "phase": "P0",
+      "module": "persistence",
+      "title": "事务中断恢复",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "自动保存事务执行中",
+      "when": "注入进程终止并重开",
+      "then": "恢复到完整旧版本或完整新版本；没有半个配方或损坏数据库",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-CORE-008",
+        "LNX-P0-PROJECT"
+      ]
+    },
+    {
+      "id": "CORE-009",
+      "phase": "P0",
+      "module": "schema",
+      "title": "参数校验",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "未知操作类型或非法参数的配方",
+      "when": "加载或导入",
+      "then": "拒绝或明确禁用不兼容项；不执行外部代码；不静默改变数值",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-CORE-009"
+      ]
+    },
+    {
+      "id": "RENDER-001",
+      "phase": "P0",
+      "module": "renderer",
+      "title": "中性效果",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32465"
+      ],
+      "given": "固定样本与所有操作中性值",
+      "when": "渲染中性配方与解码基线",
+      "then": "满足冻结的中性误差阈值；无意外色彩/几何变化",
+      "test_method": "image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-RENDER-001",
+        "LNX-P0-SKIN"
+      ]
+    },
+    {
+      "id": "RENDER-002",
+      "phase": "P0",
+      "module": "renderer",
+      "title": "预览导出一致",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "同一源图/配方/模型和色彩配置",
+      "when": "准确预览与导出同一100%区域",
+      "then": "解码输出后在同一色彩空间比较满足已冻结容差；显示转换差异单独解释",
+      "test_method": "image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-RENDER-002"
+      ]
+    },
+    {
+      "id": "RENDER-003",
+      "phase": "P0",
+      "module": "renderer",
+      "title": "迟到结果淘汰",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "两个耗时不同的连续滑块请求",
+      "when": "后请求先完成、前请求后完成",
+      "then": "画布最终只显示后请求的版本；前结果不能覆盖",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-RENDER-003"
+      ]
+    },
+    {
+      "id": "RENDER-004",
+      "phase": "P0",
+      "module": "renderer",
+      "title": "快速预览标识",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "快速代理效果与准确效果可能不同",
+      "when": "拖动滑块后停止",
+      "then": "快速状态有标识；准确预览完成后切换；导出用准确实现",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-RENDER-004"
+      ]
+    },
+    {
+      "id": "RENDER-005",
+      "phase": "P0",
+      "module": "renderer",
+      "title": "瓦片接缝",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "细纹/发丝/渐变跨越瓦片边界",
+      "when": "分块渲染并与非分块基准比较",
+      "then": "边界误差满足冻结阈值且人工审核无可见接缝",
+      "test_method": "image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-RENDER-005"
+      ]
+    },
+    {
+      "id": "RENDER-006",
+      "phase": "P0",
+      "module": "renderer",
+      "title": "CPU路径",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "无可用GPU的支持Linux环境",
+      "when": "运行P0完整修图导出",
+      "then": "功能可完成；没有质量/分辨率静默降低；资源限制清楚显示",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-RENDER-006"
+      ]
+    },
+    {
+      "id": "RENDER-007",
+      "phase": "P0",
+      "module": "cache",
+      "title": "缓存依赖完整",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "已缓存图像及配方",
+      "when": "分别改变模型版本/蒙版/ICC/源内容/质量级别",
+      "then": "对应缓存失效且重算；不显示旧效果",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-RENDER-007"
+      ]
+    },
+    {
+      "id": "RENDER-008",
+      "phase": "P0",
+      "module": "cache",
+      "title": "清理缓存安全",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "已有编辑版本和已接受结果",
+      "when": "清理全部可重建缓存",
+      "then": "原图、配方、版本、接受的生成结果不丢失；预览可重建",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-RENDER-008"
+      ]
+    },
+    {
+      "id": "COLOR-001",
+      "phase": "P0",
+      "module": "color",
+      "title": "ICC输入输出",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32455"
+      ],
+      "given": "带明确ICC的JPEG和16-bit TIFF样本",
+      "when": "调色并按目标ICC导出",
+      "then": "输出嵌入正确ICC；高位深主链未静默降8-bit；参考色块误差满足质量配置",
+      "test_method": "image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-COLOR-001"
+      ]
+    },
+    {
+      "id": "COLOR-002",
+      "phase": "P0",
+      "module": "color",
+      "title": "缺失或损坏ICC",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "未标记或损坏profile的图像",
+      "when": "导入并导出",
+      "then": "展示使用的输入假设/错误；不静默声称准确还原",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-COLOR-002"
+      ]
+    },
+    {
+      "id": "COLOR-003",
+      "phase": "P0",
+      "module": "color",
+      "title": "元数据隐私",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "带GPS、版权、拍摄信息和方向的照片",
+      "when": "默认导出再显式调整元数据选项",
+      "then": "默认不泄露GPS；选择范围准确；输出无二次方向错误",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-COLOR-003"
+      ]
+    },
+    {
+      "id": "COLOR-004",
+      "phase": "P1",
+      "module": "color",
+      "title": "局部调色",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32454"
+      ],
+      "given": "人脸边界与背景形成高反差的样本",
+      "when": "仅对指定局部区域调色",
+      "then": "蒙版外变化在定义边缘范围内；撤销恢复；无明显色边",
+      "test_method": "image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-COLOR-004"
+      ]
+    },
+    {
+      "id": "PORTRAIT-001",
+      "phase": "P0",
+      "module": "skin",
+      "title": "局部祛瑕与特征保护",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32464"
+      ],
+      "given": "有临时瑕疵及痣/雀斑的授权样本",
+      "when": "调节祛瑕强度并启用保护区域",
+      "then": "临时瑕疵按预期减少；受保护特征保留；原图可对照并恢复",
+      "test_method": "human_and_image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PORTRAIT-001"
+      ]
+    },
+    {
+      "id": "PORTRAIT-002",
+      "phase": "P0",
+      "module": "skin",
+      "title": "纹理与肤色覆盖",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32465"
+      ],
+      "given": "不同肤色和光照的固定授权样本",
+      "when": "应用基础肤质修饰",
+      "then": "不出现蜡像感、明显肤色漂移或边界污染；按冻结盲评规则通过",
+      "test_method": "human_and_image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PORTRAIT-002",
+        "LNX-P0-SKIN"
+      ]
+    },
+    {
+      "id": "PORTRAIT-003",
+      "phase": "P1",
+      "module": "person",
+      "title": "多人照片仅编辑指定人物（P1）",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "47211"
+      ],
+      "given": "有两人的照片",
+      "when": "只选择第一人调整眼部",
+      "then": "第二人有效配方不变；图像影响在定义的第一人蒙版边缘内",
+      "test_method": "human_and_image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PORTRAIT-003"
+      ]
+    },
+    {
+      "id": "PORTRAIT-004",
+      "phase": "P1",
+      "module": "person",
+      "title": "覆盖与继承",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "47211"
+      ],
+      "given": "全人物默认参数及一个人脸覆盖",
+      "when": "改变默认，再恢复该人脸继承",
+      "then": "覆盖项继续生效；未覆盖项跟随；恢复继承后全部按层级合成",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PORTRAIT-004"
+      ]
+    },
+    {
+      "id": "PORTRAIT-005",
+      "phase": "P1",
+      "module": "identity",
+      "title": "跨图候选人工确认",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "47211"
+      ],
+      "given": "同一人物多张照片及相似不同人物",
+      "when": "分析关联后批量同步到已确认人物",
+      "then": "未确认/冲突候选不被自动修改；同步对象清单可审计",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PORTRAIT-005"
+      ]
+    },
+    {
+      "id": "PORTRAIT-006",
+      "phase": "P1",
+      "module": "detection",
+      "title": "人工纠正优先",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "47211"
+      ],
+      "given": "用户手动添加/禁用的人脸",
+      "when": "后台重检测或更换检测模型",
+      "then": "人工纠正保留，变化可预览；不静默恢复已禁用误检",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PORTRAIT-006"
+      ]
+    },
+    {
+      "id": "PORTRAIT-007",
+      "phase": "P1",
+      "module": "geometry",
+      "title": "面部美型边界",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32466"
+      ],
+      "given": "侧脸、遮挡、邻近人脸及直线背景",
+      "when": "应用已支持的面部形变",
+      "then": "目标变化可控、连续；不扭曲邻近人脸；背景异常纳入人工审核",
+      "test_method": "human_and_image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PORTRAIT-007"
+      ]
+    },
+    {
+      "id": "PORTRAIT-008",
+      "phase": "P1",
+      "module": "geometry",
+      "title": "全身美型",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32473"
+      ],
+      "given": "多人接近、衣纹和直线背景的样本",
+      "when": "仅对选中人物使用支持的身体调整",
+      "then": "未选人物无非预期位移，变形无断裂；中性值恢复",
+      "test_method": "human_and_image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PORTRAIT-008"
+      ]
+    },
+    {
+      "id": "PORTRAIT-009",
+      "phase": "P1",
+      "module": "eyes_teeth",
+      "title": "眼牙效果",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32470"
+      ],
+      "given": "含眼镜/遮挡/低光/深肤色和露齿样本",
+      "when": "应用眼睛及牙齿增强",
+      "then": "无虹膜意外改色、牙齿过曝或越界；每子功能独立启停",
+      "test_method": "human_and_image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PORTRAIT-009"
+      ]
+    },
+    {
+      "id": "PORTRAIT-010",
+      "phase": "P1",
+      "module": "makeup_hair",
+      "title": "妆容头发",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32471"
+      ],
+      "given": "不同发质/发色和妆容的授权样本",
+      "when": "分别启用支持的妆容及发型模块",
+      "then": "效果限制在目标内，保留发丝边界；子模块有独立中性测试",
+      "test_method": "human_and_image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PORTRAIT-010"
+      ]
+    },
+    {
+      "id": "PORTRAIT-011",
+      "phase": "P1",
+      "module": "hands_feet",
+      "title": "手脚精修",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "46608"
+      ],
+      "given": "多手/遮挡/指甲复杂的照片",
+      "when": "只修改选定手脚目标",
+      "then": "无手指数目或形状非预期变化；识别失败给出明确未处理状态",
+      "test_method": "human_and_image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PORTRAIT-011"
+      ]
+    },
+    {
+      "id": "PORTRAIT-012",
+      "phase": "P1",
+      "module": "expression",
+      "title": "表情调整",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32468"
+      ],
+      "given": "正脸侧脸、闭嘴露齿固定样本",
+      "when": "使用已支持表情调节",
+      "then": "保留身份和唇齿连续性；无纹理破裂；中性值可恢复",
+      "test_method": "human_and_image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PORTRAIT-012"
+      ]
+    },
+    {
+      "id": "MANUAL-001",
+      "phase": "P1",
+      "module": "brush",
+      "title": "笔划重放",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32481"
+      ],
+      "given": "已保存规范坐标笔划",
+      "when": "缩放、旋转、裁剪、重开项目",
+      "then": "笔划保持正确原图位置和半径语义；显示缩放不改变结果",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-MANUAL-001"
+      ]
+    },
+    {
+      "id": "MANUAL-002",
+      "phase": "P1",
+      "module": "liquify",
+      "title": "液化重放与撤销",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32479"
+      ],
+      "given": "包含跨块位移的笔划",
+      "when": "重放液化后撤销再重做",
+      "then": "位移连续、结果稳定；边界无拼缝；可完整撤销",
+      "test_method": "image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-MANUAL-002"
+      ]
+    },
+    {
+      "id": "MANUAL-003",
+      "phase": "P1",
+      "module": "repair",
+      "title": "修复采样源",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32482"
+      ],
+      "given": "有明确源点和目标点的修复",
+      "when": "改变缩放和重开后重放",
+      "then": "源点/目标点映射稳定；修复范围可见可撤销",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-MANUAL-003"
+      ]
+    },
+    {
+      "id": "PRESET-001",
+      "phase": "P0",
+      "module": "preset",
+      "title": "模块预设覆盖",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32457"
+      ],
+      "given": "照片已有色彩和人像编辑",
+      "when": "先应用人像预设再应用色彩预设",
+      "then": "人像预设只改范围内人像参数，色彩预设只改色彩；同模块后应用覆盖",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PRESET-001",
+        "LNX-P0-PRESET"
+      ]
+    },
+    {
+      "id": "PRESET-002",
+      "phase": "P0",
+      "module": "preset",
+      "title": "预设恶意输入",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "路径穿越、过大资产、未知schema或脚本内容",
+      "when": "导入预设",
+      "then": "安全拒绝；不写项目外路径，不执行代码；合法预设仍可导入",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PRESET-002",
+        "LNX-P0-PRESET"
+      ]
+    },
+    {
+      "id": "BATCH-001",
+      "phase": "P0",
+      "module": "batch",
+      "title": "选择范围精确",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "源照片及多张目标且仅部分选中",
+      "when": "同步选定模块",
+      "then": "只改变已选目标及模块；源版本快照和batch_id保留",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-BATCH-001",
+        "LNX-P0-BATCH"
+      ]
+    },
+    {
+      "id": "BATCH-002",
+      "phase": "P0",
+      "module": "batch",
+      "title": "并发编辑冲突",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "预检后一个目标被用户编辑",
+      "when": "提交批量同步",
+      "then": "该目标被标记冲突并跳过或重新确认；新编辑不被静默覆盖",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-BATCH-002",
+        "LNX-P0-BATCH"
+      ]
+    },
+    {
+      "id": "BATCH-003",
+      "phase": "P0",
+      "module": "batch",
+      "title": "不可迁移操作",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "源配方含绝对坐标局部笔划/裁剪",
+      "when": "复制到尺寸和人物位置不同照片",
+      "then": "默认排除或要求归一化预览；不盲目复制错位效果",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-BATCH-003",
+        "LNX-P0-BATCH"
+      ]
+    },
+    {
+      "id": "BATCH-004",
+      "phase": "P0",
+      "module": "batch",
+      "title": "批量撤销边界",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "同步后部分目标又被修改",
+      "when": "撤销本次批量",
+      "then": "未再编辑目标可还原；已编辑目标报告冲突，不抹掉后续修改",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-BATCH-004",
+        "LNX-P0-BATCH"
+      ]
+    },
+    {
+      "id": "TASK-001",
+      "phase": "P0",
+      "module": "queue",
+      "title": "取消语义",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "排队/运行/编码中的任务",
+      "when": "请求取消",
+      "then": "状态转移可审计，安全停止后不再提交新输出；无半成品冒充成功",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-TASK-001",
+        "LNX-P0-TASK"
+      ]
+    },
+    {
+      "id": "TASK-002",
+      "phase": "P0",
+      "module": "queue",
+      "title": "失败重试固定输入",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "失败任务的照片随后被重新编辑",
+      "when": "重试原任务",
+      "then": "使用原输入快照；若依赖变化阻塞并解释；不静默切换到最新编辑",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-TASK-002",
+        "LNX-P0-TASK"
+      ]
+    },
+    {
+      "id": "TASK-003",
+      "phase": "P0",
+      "module": "queue",
+      "title": "磁盘满及权限失败",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "批量导出中磁盘空间不足或目录失去写权限",
+      "when": "继续执行并恢复条件后重试",
+      "then": "错误逐项显示；成功项保留；失败临时文件不充当完成输出",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-TASK-003"
+      ]
+    },
+    {
+      "id": "TASK-004",
+      "phase": "P0",
+      "module": "queue",
+      "title": "崩溃后恢复",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "任务运行或提交时进程退出",
+      "when": "重开并恢复队列",
+      "then": "验证提交标记和文件校验；不重复已成功项；未完整项可重试",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-TASK-004"
+      ]
+    },
+    {
+      "id": "TASK-005",
+      "phase": "P0",
+      "module": "queue",
+      "title": "资源预算",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "超过内存预算的大图与多个任务",
+      "when": "批量处理",
+      "then": "限制并发/分块或给出清楚失败；不拖垮UI且不静默减小输出尺寸",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-TASK-005"
+      ]
+    },
+    {
+      "id": "EXPORT-001",
+      "phase": "P0",
+      "module": "export",
+      "title": "命名冲突及原子提交",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "目标目录有同名文件",
+      "when": "按skip/rename策略导出",
+      "then": "执行选定策略；完成文件可解码且尺寸正确；无无提示覆盖",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-EXPORT-001",
+        "LNX-P0-EXPORT"
+      ]
+    },
+    {
+      "id": "EXPORT-002",
+      "phase": "P0",
+      "module": "export",
+      "title": "固定版本导出",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "队列排入后用户继续编辑照片",
+      "when": "执行既有导出任务",
+      "then": "导出仍对应排队时版本；导出清单可回溯",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-EXPORT-002",
+        "LNX-P0-EXPORT"
+      ]
+    },
+    {
+      "id": "EXPORT-003",
+      "phase": "P0",
+      "module": "export",
+      "title": "格式组合校验",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "格式不支持用户所选alpha或位深",
+      "when": "尝试确认导出",
+      "then": "阻止无效组合或要求明确转换；不静默丢弃信息",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-EXPORT-003",
+        "LNX-P0-EXPORT"
+      ]
+    },
+    {
+      "id": "LINUX-001",
+      "phase": "P0",
+      "module": "release",
+      "title": "干净机器离线闭环",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "公布的支持Linux环境与已预备模型",
+      "when": "断网安装并执行导入/修图/同步/导出/重开",
+      "then": "支持范围内完整工作；无账号强依赖；所有出网尝试可检测且默认无出网",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-LINUX-001"
+      ]
+    },
+    {
+      "id": "LINUX-002",
+      "phase": "P0",
+      "module": "release",
+      "title": "依赖许可门槛",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "候选代码、模型权重和训练来源清单",
+      "when": "准备发行包",
+      "then": "每项版本/哈希/许可/分发约束有记录；未知或不允许分发项被排除",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-LINUX-002"
+      ]
+    },
+    {
+      "id": "PICK-001",
+      "phase": "P1",
+      "module": "selection",
+      "title": "挑图仅作建议",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "230984"
+      ],
+      "given": "重复/近似/闭眼/模糊但有保留价值的照片",
+      "when": "执行AI挑图并人工修改标记",
+      "then": "建议可覆盖且原图不自动删除；近似组和判定原因可见",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-PICK-001"
+      ]
+    },
+    {
+      "id": "BACKGROUND-001",
+      "phase": "P1",
+      "module": "background",
+      "title": "背景与衣物边界",
+      "requirement_origin": "原创验收设计（功能参考官网）",
+      "official_article_ids": [
+        "32474"
+      ],
+      "given": "发丝、透明边缘、多人和复杂衣物",
+      "when": "使用支持的背景或衣物模块",
+      "then": "人像边界与目标区域保护通过；不支持场景明确失败并可恢复",
+      "test_method": "human_and_image_regression",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-BACKGROUND-001"
+      ]
+    },
+    {
+      "id": "GEN-001",
+      "phase": "P2",
+      "module": "generation",
+      "title": "生成结果可追溯",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "已授权输入与指定局部区域",
+      "when": "生成多候选并接受其中一项",
+      "then": "保留接受结果资产、依赖版本与操作范围；重开仍可用，撤销回原版本",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-GEN-001"
+      ]
+    },
+    {
+      "id": "GEN-002",
+      "phase": "P2",
+      "module": "generation",
+      "title": "身份和事实变化提示",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "会改变表情、衣物或面部内容的工具",
+      "when": "预览并应用生成结果",
+      "then": "明确标记生成编辑；接受前可看原图对照；不冒称真实拍摄内容",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-GEN-002"
+      ]
+    },
+    {
+      "id": "CLOUD-001",
+      "phase": "P2",
+      "module": "privacy",
+      "title": "云能力显式同意",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "默认纯本地项目",
+      "when": "首次发起云任务",
+      "then": "在发出任何照片/人脸数据前说明目的地、范围、费用与保留策略并取得同意",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-CLOUD-001"
+      ]
+    },
+    {
+      "id": "CLOUD-002",
+      "phase": "P2",
+      "module": "collaboration",
+      "title": "协作冲突保护",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "两名编辑者基于同一版本修改",
+      "when": "提交相互冲突的操作",
+      "then": "按revision检测并提供选择或分支；不能最后写入覆盖全部工作",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-CLOUD-002"
+      ]
+    },
+    {
+      "id": "RAW-001",
+      "phase": "P1",
+      "module": "raw",
+      "title": "RAW支持白名单",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "支持与不支持的相机RAW变体",
+      "when": "导入并编辑导出",
+      "then": "支持项完成明确的显影链；不支持项准确提示；嵌入JPEG预览不冒充RAW显影",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-RAW-001"
+      ]
+    },
+    {
+      "id": "SEC-001",
+      "phase": "P0",
+      "module": "privacy",
+      "title": "不收集隐私遥测",
+      "requirement_origin": "原创工程需求",
+      "official_article_ids": [],
+      "given": "含人脸/路径/GPS的项目",
+      "when": "运行完整本地工作流并检查网络和日志",
+      "then": "默认不发送图像、人脸向量、EXIF或文件路径；错误报告导出可预览并脱敏",
+      "test_method": "integration",
+      "evidence_required": [
+        "测试结果与日志",
+        "输入样本标识及许可",
+        "实际输出或状态快照"
+      ],
+      "status": "not_implemented",
+      "linux_requirement_ids": [
+        "LNX-SEC-001"
+      ]
+    },
+    {
+      "id": "TASK-006",
+      "phase": "P0",
+      "module": "queue",
+      "title": "单项暂停与继续",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-TASK-006",
+        "LNX-P0-TASK"
+      ],
+      "given": "长耗时模型调用执行中",
+      "when": "请求暂停，再继续",
+      "then": "先pause_requested并提示等待安全点；到边界paused，继续resuming；task_id/attempt不变；输入快照不变",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "TASK-007",
+      "phase": "P0",
+      "module": "queue",
+      "title": "全批暂停屏障",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-TASK-007",
+        "LNX-P0-TASK"
+      ],
+      "given": "批次中既有排队项又有运行项",
+      "when": "暂停全部",
+      "then": "立即阻止新子任务，运行项到边界暂停；全部到边界前不显示批次已暂停",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "TASK-008",
+      "phase": "P0",
+      "module": "queue",
+      "title": "暂停持久化及依赖检查",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-TASK-008",
+        "LNX-P0-TASK"
+      ],
+      "given": "任务paused后关闭进程",
+      "when": "重开并继续",
+      "then": "仍paused等待用户继续；依赖变化阻塞并说明；不自动重跑或切换最新配方",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "TASK-009",
+      "phase": "P0",
+      "module": "queue",
+      "title": "提交期暂停与队列删除",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-TASK-009",
+        "LNX-P0-TASK"
+      ],
+      "given": "一个任务已进入原子提交",
+      "when": "暂停/删除队列记录",
+      "then": "完成安全提交后维持成功；删除不删原图或已完成导出文件",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "DIFF-001",
+      "phase": "P2",
+      "module": "history",
+      "title": "创意历史跨重开持久化",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-DIFF-001"
+      ],
+      "given": "多步创意编辑已提交",
+      "when": "关闭并重开项目",
+      "then": "完整提交版本仍可恢复，明确不同于参照产品历史折叠",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "DIFF-002",
+      "phase": "P2",
+      "module": "generation",
+      "title": "创意派生基底回流",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-DIFF-002"
+      ],
+      "given": "生成结果准备应用回精修",
+      "when": "更新工作版本再撤销",
+      "then": "产生派生资产及处于注册表声明初始中性状态的新配方；原文件哈希不变；撤销恢复旧基底和旧配方",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "DIFF-003",
+      "phase": "P0",
+      "module": "cache",
+      "title": "预览未就绪仍按配方导出",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-DIFF-003"
+      ],
+      "given": "批量同步已提交但缩略图仍加载",
+      "when": "立即导出",
+      "then": "输出带已提交效果；导出不依赖预览是否显示完成",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "SCOPE-001",
+      "phase": "P0",
+      "module": "person",
+      "title": "多人超范围保护",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-SCOPE-001"
+      ],
+      "given": "检测出两张脸的照片",
+      "when": "尝试P0人像AI操作",
+      "then": "阻止人像AI并说明范围，仍允许全图调色/裁剪；不得静默选最大脸",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "FORMAT-001",
+      "phase": "P0",
+      "module": "export",
+      "title": "JPEG量表映射版本化",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-FORMAT-001",
+        "LNX-P0-EXPORT"
+      ],
+      "given": "所选UI品质量表已批准",
+      "when": "按多档质量导出并保存重开",
+      "then": "记录编码器值和mapping_version；不得宣称与竞品0—14等价",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "FORMAT-002",
+      "phase": "P0",
+      "module": "export",
+      "title": "格式边界及目标大小",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-FORMAT-002",
+        "LNX-P0-EXPORT"
+      ],
+      "given": "多页TIFF或目标大小不可达",
+      "when": "导入/导出",
+      "then": "明确多页不支持；大小不可达告警且说明实际大小；不静默丢页",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "P0-EXPOSURE-NEUTRAL",
+      "phase": "P0",
+      "module": "exposure",
+      "title": "曝光中性与保存重开",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-P0-EXPOSURE"
+      ],
+      "given": "已批准参数量表及合法固定样本",
+      "when": "应用中性操作、保存、重开、准确预览并导出",
+      "then": "中性输出满足批准阈值；参数/坐标/依赖版本一致；不修改原图",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "P0-EXPOSURE-BOUNDARY",
+      "phase": "P0",
+      "module": "exposure",
+      "title": "曝光边界与非法值",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-P0-EXPOSURE"
+      ],
+      "given": "D-P0-05批准的最小/最大值和越界/NaN输入",
+      "when": "分别渲染边界及提交非法参数",
+      "then": "边界无崩溃或无穷值；非法输入拒绝；曝光/白平衡允许全图改变，裁剪仅按定义删除区域，蒙版/祛瑕目标外变化不超过批准边缘容差",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "P0-WHITE_BALANCE-NEUTRAL",
+      "phase": "P0",
+      "module": "white_balance",
+      "title": "白平衡中性与保存重开",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-P0-WHITE-BALANCE"
+      ],
+      "given": "已批准参数量表及合法固定样本",
+      "when": "应用中性操作、保存、重开、准确预览并导出",
+      "then": "中性输出满足批准阈值；参数/坐标/依赖版本一致；不修改原图",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "P0-WHITE_BALANCE-BOUNDARY",
+      "phase": "P0",
+      "module": "white_balance",
+      "title": "白平衡边界与非法值",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-P0-WHITE-BALANCE"
+      ],
+      "given": "D-P0-05批准的最小/最大值和越界/NaN输入",
+      "when": "分别渲染边界及提交非法参数",
+      "then": "边界无崩溃或无穷值；非法输入拒绝；曝光/白平衡允许全图改变，裁剪仅按定义删除区域，蒙版/祛瑕目标外变化不超过批准边缘容差",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "P0-CROP-NEUTRAL",
+      "phase": "P0",
+      "module": "crop",
+      "title": "裁剪旋转中性与保存重开",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-P0-CROP"
+      ],
+      "given": "已批准参数量表及合法固定样本",
+      "when": "应用中性操作、保存、重开、准确预览并导出",
+      "then": "中性输出满足批准阈值；参数/坐标/依赖版本一致；不修改原图",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "P0-CROP-BOUNDARY",
+      "phase": "P0",
+      "module": "crop",
+      "title": "裁剪旋转边界与非法值",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-P0-CROP"
+      ],
+      "given": "D-P0-05批准的最小/最大值和越界/NaN输入",
+      "when": "分别渲染边界及提交非法参数",
+      "then": "边界无崩溃或无穷值；非法输入拒绝；曝光/白平衡允许全图改变，裁剪仅按定义删除区域，蒙版/祛瑕目标外变化不超过批准边缘容差",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "P0-MASK-NEUTRAL",
+      "phase": "P0",
+      "module": "mask",
+      "title": "自动保护蒙版中性与保存重开",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-P0-MASK"
+      ],
+      "given": "已批准参数量表及合法固定样本",
+      "when": "应用中性操作、保存、重开、准确预览并导出",
+      "then": "中性输出满足批准阈值；参数/坐标/依赖版本一致；不修改原图",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "P0-MASK-BOUNDARY",
+      "phase": "P0",
+      "module": "mask",
+      "title": "自动保护蒙版边界与非法值",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-P0-MASK"
+      ],
+      "given": "D-P0-05批准的最小/最大值和越界/NaN输入",
+      "when": "分别渲染边界及提交非法参数",
+      "then": "边界无崩溃或无穷值；非法输入拒绝；曝光/白平衡允许全图改变，裁剪仅按定义删除区域，蒙版/祛瑕目标外变化不超过批准边缘容差",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "P0-BLEMISH-NEUTRAL",
+      "phase": "P0",
+      "module": "blemish",
+      "title": "有限祛瑕中性与保存重开",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-P0-BLEMISH"
+      ],
+      "given": "已批准参数量表及合法固定样本",
+      "when": "应用中性操作、保存、重开、准确预览并导出",
+      "then": "中性输出满足批准阈值；参数/坐标/依赖版本一致；不修改原图",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    },
+    {
+      "id": "P0-BLEMISH-BOUNDARY",
+      "phase": "P0",
+      "module": "blemish",
+      "title": "有限祛瑕边界与非法值",
+      "requirement_origin": "原创验收设计",
+      "official_article_ids": [],
+      "linux_requirement_ids": [
+        "LNX-P0-BLEMISH"
+      ],
+      "given": "D-P0-05批准的最小/最大值和越界/NaN输入",
+      "when": "分别渲染边界及提交非法参数",
+      "then": "边界无崩溃或无穷值；非法输入拒绝；曝光/白平衡允许全图改变，裁剪仅按定义删除区域，蒙版/祛瑕目标外变化不超过批准边缘容差",
+      "test_method": "integration_and_image_regression",
+      "evidence_required": [
+        "输入及许可",
+        "实际状态/输出",
+        "测试日志及版本化阈值"
+      ],
+      "status": "not_implemented"
+    }
+  ],
+  "coverage_warning": "这些用例为工程/模块骨架及P0专项草案，未执行，不证明所有官网子功能已覆盖；未映射者见feature_test_mapping待补专项用例。"
+}

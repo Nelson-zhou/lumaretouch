@@ -213,6 +213,7 @@ def test_filter_param_change_recomputes_exactly_once(pipe, rgb):
 
 @needs_fixture
 def test_new_source_image_invalidates_the_filter_cache(pipe, rgb):
+    # 验收用例引用：RENDER-007（换源图必须作废对应缓存：不显示旧效果）
     """换源图必须作废：留着旧滤波结果等于拿上一张脸磨这张图。
 
     这条用例故意做成"能区分新旧"的形式：换一张明显不同的图，输出必须跟着新图走。

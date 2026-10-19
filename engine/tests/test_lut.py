@@ -435,6 +435,7 @@ def test_lut_volume_is_uploaded_once_not_per_frame(layer, monkeypatch):
 
 
 def test_setting_a_lut_invalidates_no_filter_cache(layer):
+    # 验收用例引用：RENDER-007（同上：调色在链尾，不作废上游）
     """调色在链尾，所以它不该作废任何上游缓存——而且必须带上反向对照。
 
     只测“挂 LUT 后 filter_ms == 0”是一条风险很高的恒真判据：计数器如果是死的，它永远为

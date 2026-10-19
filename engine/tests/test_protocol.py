@@ -73,12 +73,23 @@ class EngineProcess:
                 f"stderr 尾部={self._err[-6:]!r}")
 
     def wait_for(self, event: str, timeout=10.0):
+        """`timeout` 是**总预算**，不是"下一次取件的静默上限"。
+
+        以前这里把 next_event 抛出的 TimeoutError 直接漏出去：调用方写了 180 s，
+        而引擎在解码一张 6 MP DNG（真的会静默十几秒不发声）时，用例会在第一个
+        10 s 窗口上碎掉——报的是"没等到事件"，实际是"这一段时间它闭嘴干活"。
+        这类假失败只在慢机器/大图上响，正是验收最不该误报的地方。
+        """
         deadline = time.monotonic() + timeout
         while True:
             left = deadline - time.monotonic()
             if left <= 0:
-                raise TimeoutError(f"未等到事件 {event}；stderr 尾部={self._err[-6:]!r}")
-            e = self.next_event(timeout=min(left, 10.0))
+                raise TimeoutError(f"{timeout}s 内未等到事件 {event}；"
+                                   f"stderr 尾部={self._err[-6:]!r}")
+            try:
+                e = self.next_event(timeout=min(left, 10.0))
+            except TimeoutError:
+                continue            # 静默不算失败：只要总预算还没走完就继续等
             if e.get("event") == event:
                 return e
             if e.get("event") == "frame":
@@ -660,6 +671,7 @@ def test_channel_selects_resident_mask_and_rejects_unknown(engine):
 
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
 def test_new_image_invalidates_previous_masks(engine):
+    # 验收用例引用：RENDER-007（换图清掉上一张的掩膜：依赖关系端到端可见）
     """换图必须清掉上一张的掩膜：拿别人的脸磨自己的皮，比没有掩膜更糟。"""
     if importlib.util.find_spec("torch") is None:
         pytest.skip("常驻管线要 torch")
@@ -2615,6 +2627,7 @@ def _need_export_env():
 
 
 def test_export_writes_full_size_not_the_proxy(engine, tmp_path):
+    # 验收用例引用：DIFF-003（导出走的是满幅真解码那条，与预览是否显示完成无关）
     """导出的是源图那一个像素，不是预览的代理档。
 
     这条是 M4 的产品主张本身：预览会话被刻意压到很小（max_px），而落盘的 PNG 尺寸
@@ -2711,6 +2724,8 @@ def test_export_carries_the_deform_field_and_the_skin_channel(engine, tmp_path):
 
 
 def test_export_batch_isolates_failures_and_reports_skips(engine, tmp_path):
+    # 验收用例引用：BATCH-003（不属于本文档的图层（笔迹）明确报 skipped，不盲目复制到别的脸）
+    # 验收用例引用：BATCH-001（逐张作用范围与 skipped 明细（哪张没写看得见））
     """批量：坏路径只塌自己那一张；不属于本文档的图层明确报 skipped。"""
     _need_export_env()
     import shutil
@@ -3768,6 +3783,7 @@ def test_crop_neutral_is_byte_identical_and_crop_actually_crops(engine):
 
 
 def test_crop_reports_the_size_the_exporter_will_actually_write(engine, tmp_path):
+    # 验收用例引用：RENDER-002（报出去的预览尺寸与导出真写的像素一致（几何层同口径））
     """报出去的尺寸必须与文件里的像素对得上——这是"预览是缩放视图"这句话的可验版本。"""
     _needs_torch()
     _need_export_env()
@@ -4554,6 +4570,7 @@ def test_task_cancel_keeps_committed_files_and_writes_no_more(engine, tmp_path):
 
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
 def test_task_retry_uses_the_frozen_inputs_not_the_current_sliders(engine, tmp_path):
+    # 验收用例引用：EXPORT-002（重试拿排队时那份快照，不静默切到最新编辑）
     """TASK-002：未完成/失败重试时输入与配方固定，不许静默换成“最新配方”。
 
     判据用产物字节做三方对拍：重试产物 == 快照强度那一份参照，且 != 当前滑块那一份。

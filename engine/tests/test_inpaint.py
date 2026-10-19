@@ -81,6 +81,7 @@ def test_pixels_outside_brush_are_byte_identical():
 
 
 def test_hole_is_actually_filled_and_measurably_close():
+    # 验收用例引用：PORTRAIT-001（临时瑕疵确实减少要有绝对数，不是"看起来平了"）
     """「修补确实有效」要有绝对数：把干净图挖洞再补回去，量孔内误差。
 
     这里的地面真值就是原图：算法只看得到 `img*known`（洞内为 0），所以这不是
@@ -331,6 +332,7 @@ def _op(pipe, cy, cx, r, op_id=1, **params):
 
 @needs_torch
 def test_repair_only_changes_pixels_inside_the_brush(session):
+    # 验收用例引用：PORTRAIT-001（作用面只在笔内：受保护特征（笔外）不动）
     before = session.base()
     info = session.add_repair(_op(session, session.h // 2, session.w // 2, 6))
     after = session.base()
@@ -347,6 +349,7 @@ def test_repair_only_changes_pixels_inside_the_brush(session):
 
 @needs_torch
 def test_repair_invalidates_filter_then_caches_again(session):
+    # 验收用例引用：RENDER-007（修补改了输入 → 缓存失效一次并重算，之后重新命中）
     """事件成本与逐帧成本必须分开：一次修补付一次滤波重算，之后拖滑块仍是零推理。"""
     session.retouch(0.5)                 # 第一帧本来就要建缓存
     session.retouch(0.5)

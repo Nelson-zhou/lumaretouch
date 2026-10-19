@@ -735,6 +735,7 @@ def test_preview_channel_fills_only_the_browse_slot(tmp_path):
 
 @needs_libraw
 def test_load_preview_returns_none_instead_of_inventing_a_frame(tmp_path):
+    # 验收用例引用：RENDER-004（取不到预览就老实返 None，不画一张顶上去）
     """没有内嵌预览时浏览那条要老实返 None，让调用方退回真解码——不许画一张灰帧占位。"""
     path = os.path.join(str(tmp_path), "noprev.dng")
     mt.build(path, _synth())
@@ -767,6 +768,7 @@ def test_vendor_route_goes_to_libraw_when_the_baseline_cannot_see_the_container(
 
 @needs_libraw
 def test_filmstrip_thumb_uses_the_preview_and_marks_it(tmp_path):
+    # 验收用例引用：RENDER-004（快速预览有标识（preview=True），底片条那一格如实说自己是谁）
     """底片条那一格：取预览、如实标 preview=True，并且守住通道字节上限。"""
     path = _with_preview(tmp_path)
     info = S.make_thumb(path, edge=160)
@@ -782,6 +784,7 @@ def test_filmstrip_thumb_uses_the_preview_and_marks_it(tmp_path):
 
 @needs_libraw
 def test_load_full_for_raw_still_decodes_real_pixels(tmp_path):
+    # 验收用例引用：RENDER-004（导出通路不被预览劫持：快预览完成后准确实现接手）
     """满幅那条（导出通路）也不许被预览劫持：尺寸必须是源尺寸。"""
     path = _with_preview(tmp_path)
     d = DEC.load_full(path)

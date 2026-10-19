@@ -1,0 +1,7 @@
+# LumaRetouch 多人测试图（SCOPE-001 输入）
+620213cef6f168bd3226d5ec88d8ee17b79a5f4706dd9c1a82d365165b0236bf  portrait-dual-1570x950.jpg
+尺寸：1570x950（两格 760x950，间隔 50px，背景取原图采样均值 (177, 165, 161)）
+派生自：portrait-1024x1280.png（程序化正脸，见 make-test-portrait.py）
+变换：等比 LANCZOS 缩放 + 右格水平镜像 + 亮度 x0.92+6.0
+检测事实：引擎代理档（PROXY_PIXELS=576000，本图解出 968x584）下 mediapipe FaceLandmarker 实测 num_faces=2（该数字由本仓测试 test_multi_face_photo_blocks_reshaping_but_keeps_global_edits 直接拿真后端重验，不是这里写死了就算数）
+许可：派生自本仓自有夹具，无真人肖像、无第三方素材

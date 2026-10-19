@@ -395,6 +395,7 @@ def test_grade_amount_zero_is_byte_identical_and_skips_the_kernel(layer):
 
 
 def test_setting_grade_invalidates_no_filter_cache(layer):
+    # 验收用例引用：RENDER-007（链尾层不该作废上游缓存（带反向对照））
     """定向与调色同构：在链尾，所以它不该作废任何上游缓存——带反向对照。"""
     from lumaretouch_engine.vram import DEFAULT_RADIUS
 

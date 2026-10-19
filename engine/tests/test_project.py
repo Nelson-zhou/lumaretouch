@@ -105,6 +105,7 @@ def test_fingerprint_bytes_is_the_real_size_over_chunk_boundary(tmp_path):
 
 
 def test_verify_fingerprint_separates_missing_from_touched(tmp_path, src):
+    # 验收用例引用：CORE-005（缺失与被改分开报：哈希不同就必须说"源变了"并失效旧缓存）
     """重开时的三种“不对”处置不同，必须分开报（与 missing_sources 同一理由）。
 
     缺文件是“在哪”；只改 mtime 是拷贝/同步工具干的，不该报成“照片坏了”；
@@ -363,6 +364,7 @@ def test_project_path_survives_odd_names(tmp_path):
 
 
 def test_missing_sources_reports_per_row(tmp_path, src):
+    # 验收用例引用：CORE-005（逐格显示缺失（不是整批一句"打不开"））
     prj = P.new_project("p", str(tmp_path))
     P.add_doc(prj, src, _recipe())
     gone = str(tmp_path / "missing.jpg")
