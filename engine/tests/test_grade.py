@@ -466,7 +466,11 @@ def test_the_three_grade_arms_return_the_same_key_set(layer):
 
 
 def test_grade_holds_no_vram_but_still_reports_the_bill(layer):
-    """这层不持有张量，账单恒为 0：报 0 而不是不报，"查过"才是这句话的内容。"""
+    """全图作用域下这一层不持有张量，账单恒为 0：报 0 而不是不报，"查过"才是这句话的内容。
+
+    COLOR-004 起 brush 作用域会常驻一份 (1,1,H,W) 掩膜权重，那一笔由下面那两条钉：
+    拿 0 当"报而不藏"的例子仍然成立，但它不再是这句话的全部。
+    """
     pipe, _rgb = layer
     assert pipe.grade_resident_bytes() == 0
     info = pipe.set_grade(0.006, -0.14, 0.05)
@@ -533,3 +537,176 @@ def test_warm_device_actually_runs_the_grade_kernel(monkeypatch):
     assert any(abs(dh) > 0 or abs(ds) > 0 or abs(dv) > 0 for dh, ds, dv, _a, _d in calls), \
         f"预热用的是全零参数，结构短路让它恒真：{calls}"
     assert all(dev.startswith("cuda") for _dh, _ds, _dv, _a, dev in calls), calls
+
+
+# ==================================================== COLOR-004：局部调色（作用域/区域）
+# 冻结件那三条 then：「蒙版外变化在定义边缘范围内；撤销恢复；无明显色边」。这里只管
+# 库层能自证的那两条（蒙版外逐字节恒等、边界邻域跳变有界），“撤销恢复”是命令层语义，
+# 端到端那一臂在 test_acceptance_p1.py。
+def _half_mask(left: bool = True) -> np.ndarray:
+    """代理帧坐标的阶跃区域：左（或右）一半盖住，其余不盖。"""
+    m = np.zeros((H, W), dtype=np.uint8)
+    half = W // 2
+    if left:
+        m[:, :half] = 255
+    else:
+        m[:, half:] = 255
+    return m
+
+
+def test_scope_all_is_byte_identical_to_the_pre_color_004_behaviour(layer):
+    """scope=all 必须是旧行为本身，逐字节而不是“差不多”。
+
+    这一条是整个改动的地基：作用域是新加的旋钮，它不能改动已经签过收的
+    全图定向（那四个数的语义、内核、链上位置）。拿 `is not None` 当短路条件不算证据，
+    因为混式在 w=1 也能回到 graded —— 那是浮点巧合而不是承诺。
+    """
+    pipe, _rgb = layer
+    pipe.set_grade(0.006, -0.14, 0.05, amount=0.8)
+    pipe.render(0.0)
+    full = pipe.read_back()[..., :3].copy()
+    # 挂一份“只盖左半”的区域但把作用域留在 all：它不该参与任何一像素
+    pipe.set_grade_mask(_half_mask(), mode="replace")
+    assert pipe.grade_scope == "all"
+    pipe.render(0.0)
+    assert np.array_equal(pipe.read_back()[..., :3], full), \
+        "区域挂了而作用域还是 all，画面就动了——“没生效”与“生效了”必须与 scope 一致"
+    info = pipe.set_grade_scope("all")
+    assert info["grade_scope"] == "all" and info["grade_scopes"] == ["all", "skin", "brush"]
+
+
+def _ungraded_frame(pipe):
+    """判据的对照面：这一层没点火时的那一帧（磨皮也不点火，所以差只属于定向层）。"""
+    pipe.clear_grade()
+    pipe.render(0.0)
+    return pipe.read_back()[..., :3].copy()
+
+
+def test_local_grade_leaves_outside_the_region_byte_identical(layer):
+    """蒙版外逐字节恒等（判据一）。用位相等而不是 LSB 差：这条承诺是结构性的。
+
+    写成混式 (1-w)·t + w·out 而不是“先混色再乘”，正是为了让它在 w=0 处无条件成立。
+    对照帧必须在**点火之前**取：先 set_grade 再 render 拿到的“基帧”是全图调过色的，
+    那时这条判据比的就不是“蒙版外”而是“蒙版内外谁都不许变”（本仓踩过的那类自伤判据）。
+    """
+    pipe, _rgb = layer
+    base = _ungraded_frame(pipe)
+    pipe.set_grade(0.006, -0.14, 0.05, amount=1.0)
+    pipe.set_grade_mask(_half_mask(left=True), mode="replace")
+    info = pipe.set_grade_scope("brush")
+    assert info["mask_px"] == H * (W // 2), info
+    pipe.render(0.0)
+    got = pipe.read_back()[..., :3]
+    right = slice(W // 2, W)
+    assert np.array_equal(got[:, right], base[:, right]), "蒙版外像素被改了"
+    left = slice(0, W // 2)
+    assert not np.array_equal(got[:, left], base[:, left]), "蒙版内一点没动：局部调色是假的"
+
+
+def test_local_grade_boundary_has_no_hard_color_step(layer):
+    """无明显色边（判据三）：羽化必须把“层效应”的台阶摊开，而不是只让画面动起来。
+
+    比的是**差场** d = |点火帧 − 基帧| 的相邻跳变，不是画面本身的相邻差：这张合成图
+    有一条跨 57 列的水平渐变与 ±0.06 的噪声，画面差里混着它自己的结构，拿它当对照就
+    把“羽化有没有摊开台阶”问成了“这张图哪里有边缘”（上一版就是这么错的：羽化那臂
+    量到 19、硬边那臂量到 15，判据整个反了）。
+    """
+    from lumaretouch_engine.ops.inpaint import feather_np
+
+    pipe, _rgb = layer
+    base = _ungraded_frame(pipe).astype(np.int16)
+    hard = np.zeros((H, W), np.uint8)
+    hard[:, :W // 2] = 255
+
+    pipe.set_grade(0.006, -0.14, 0.05, amount=1.0)
+    pipe.set_grade_mask(hard, mode="replace")
+    pipe.set_grade_scope("brush")
+    pipe.render(0.0)
+    d_hard = np.abs(pipe.read_back()[..., :3].astype(np.int16) - base)
+
+    soft_u8 = np.rint(np.clip(feather_np((hard > 0).astype(np.float32), 3), 0.0, 1.0)
+                      * 255.0).astype(np.uint8)
+    pipe.set_grade_mask(soft_u8, mode="replace")
+    pipe.render(0.0)
+    d_soft = np.abs(pipe.read_back()[..., :3].astype(np.int16) - base)
+    # 盒式羽化的支撑半径就是 r：再往外必须逐字节为 0（“局部”两字的另一半）
+    assert int(d_soft[:, W // 2 + 3:].max()) == 0, "羽化支撑之外还有变化：那不再是局部"
+
+    jump_hard = int(np.abs(np.diff(d_hard, axis=1)).max())
+    jump_soft = int(np.abs(np.diff(d_soft, axis=1)).max())
+    peak = int(d_soft.max())
+    assert peak > 0, "点火了却没有层效应：那这三条判据全部恒真"
+    assert jump_soft < jump_hard, f"羽化没摊开台阶：{jump_soft} vs {jump_hard}"
+    assert jump_soft <= peak, f"边界那一跳超过了整片区域的变化幅度（振铃）：{jump_soft} vs {peak}"
+
+
+def test_scope_without_the_underlying_mask_is_refused_and_changes_nothing(layer):
+    """skin 没 precompute、brush 没区域 → 整条拒，不留半截状态（不许静默退回全图）。"""
+    pipe, _rgb = layer
+    pipe.set_grade(0.006, -0.14, 0.05)
+    snap = (pipe.grade_scope, pipe.grade_mask, pipe.grade_params, pipe.grade_amount)
+    with pytest.raises(ValueError, match="precompute"):
+        pipe.set_grade_scope("skin")
+    with pytest.raises(ValueError, match="一笔"):
+        pipe.set_grade_scope("brush")
+    with pytest.raises(ValueError, match="作用域"):
+        pipe.set_grade_scope("everything")
+    assert (pipe.grade_scope, pipe.grade_mask, pipe.grade_params, pipe.grade_amount) == snap
+
+
+def test_grade_mask_shape_dtype_and_empty_are_all_refused(layer):
+    """区域是代理帧坐标：尺寸不对、位宽不对、全空都得拒（拿原图坐标递过来就是静默错位）。"""
+    pipe, _rgb = layer
+    pipe.set_grade(0.006, -0.14, 0.05)
+    for bad in (np.zeros((H + 1, W), np.uint8), np.zeros((H, W), np.float32),
+                np.zeros((H, W), np.uint8)):
+        with pytest.raises(ValueError):
+            pipe.set_grade_mask(bad, mode="replace")
+    assert pipe.grade_mask is None
+    with pytest.raises(ValueError, match="mode"):
+        pipe.set_grade_mask(_half_mask(), mode="union")
+
+
+def test_brush_mask_add_takes_union_and_replace_takes_this_stroke(layer):
+    """第二笔不该擦掉第一笔（add 取并集），而“重新画”语义（replace）得能真的重来。"""
+    pipe, _rgb = layer
+    a = np.zeros((H, W), np.uint8); a[:, :4] = 255
+    b = np.zeros((H, W), np.uint8); b[:, -4:] = 255
+    pipe.set_grade_mask(a, mode="replace")
+    pipe.set_grade_mask(b, mode="add")
+    assert int(pipe.grade_mask[:, :4].min()) == 255 and int(pipe.grade_mask[:, -4:].min()) == 255
+    assert pipe.grade_mask.mean() < 200, "add 把整张图都涂满了：那是“取大”而不是“累加”"
+    pipe.set_grade_mask(b, mode="replace")
+    assert int(pipe.grade_mask[:, :4].max()) == 0, "replace 没抹掉上一笔"
+
+
+def test_brush_scope_resides_a_mask_and_clearing_it_releases_the_memory(layer):
+    """brush 时真的常驻一份权重（账单非 0），清掉区域后账单回 0、作用域退回 all。"""
+    pipe, _rgb = layer
+    pipe.set_grade(0.006, -0.14, 0.05)
+    pipe.set_grade_mask(_half_mask(), mode="replace")
+    assert pipe.grade_resident_bytes() == 0, "没切作用域不该上显存"
+    info = pipe.set_grade_scope("brush")
+    assert info["bytes_grade"] == H * W * 4, f"掩膜权重没常驻：{info['bytes_grade']}"
+    cleared = pipe.clear_grade_mask()
+    assert cleared["grade_scope"] == "all" and cleared["mask_px"] == 0
+    assert pipe.grade_resident_bytes() == 0
+    assert pipe.grade_params == (0.006, -0.14, 0.05), "清区域不该把参数也抹了"
+
+
+def test_clear_grade_keeps_the_region_the_user_painted(layer):
+    """滑块归零不该顺手抹掉用户拿笔涂出来的东西（params 与 region 的分工）。"""
+    pipe, _rgb = layer
+    pipe.set_grade(0.006, -0.14, 0.05)
+    pipe.set_grade_mask(_half_mask(), mode="replace")
+    pipe.set_grade_scope("brush")
+    info = pipe.clear_grade()
+    assert info["grade_lit"] is False
+    assert info["grade_scope"] == "brush" and info["mask_px"] == H * (W // 2)
+    assert pipe.grade_mask is not None
+    # 关掉整层后画面逐字节回到基帧（那一层没点火，区域也就无从生效）
+    pipe.render(0.0)
+    off = pipe.read_back()[..., :3].copy()
+    pipe.set_grade(0.006, -0.14, 0.05)
+    pipe.render(0.0)
+    assert not np.array_equal(pipe.read_back()[..., :3], off), "重新开火后区域丢了"

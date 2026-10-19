@@ -2,7 +2,7 @@
  "schema": "lrt.acceptance-map.v1",
  "cases": "docs/acceptance/cases-frozen.json",
  "cases_sha256": "c2fca495b90e3aa7",
- "generated_at": "2026-10-18T19:11:53",
+ "generated_at": "2026-10-18T21:07:27",
  "map": {
   "CORE-001": {
    "tests": [
@@ -182,11 +182,14 @@
    "title": "元数据隐私"
   },
   "COLOR-004": {
-   "tests": [],
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_local_color_adjustment_stays_inside_the_painted_region",
+    "engine/tests/test_grade.py::test_grade_holds_no_vram_but_still_reports_the_bill"
+   ],
    "phase": "P1",
    "module": "color",
    "title": "局部调色",
-   "note": "未实装：局部那一路只有笔迹（修容/消除）与 skin/bg 通道；「指定区域调色」作为独立可撤销层没接通，所以没有可测的效果。"
+   "note": "1.3.0 接通：肤色定向层加了作用域（all/skin/brush）与画笔区域，判据三条逐字对上冻结件的 then——蒙版外逐字节 0 LSB（含四角背景带与羽化支撑之外）、全局 history 撤销逐字节回到点火前那一帧、边界跳变严格小于整片变化峰值（无硬边无振铃）。另加两条不许静默降级（skin 无掩膜、brush 无区域都整条拒）与出片同口径（导出不带区域时整层调色一起放下，绝不改成全图调色）。诚实记一笔：given 里『人脸边界与背景形成高反差』用的是本仓程序化人像夹具（本机无可授权真人素材）。"
   },
   "PORTRAIT-001": {
    "tests": [

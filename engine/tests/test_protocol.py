@@ -2115,7 +2115,10 @@ def test_drag_stream_with_lut_runs_every_frame_but_recomputes_nothing(engine, tm
 # 这一节的分工与 test_grade/test_presets 一致：库层管数学，这里只管**接线**——
 # 方向、字节、事件形状、拒绝路径、跨层语义（预设一层命令动两层）。
 GRADE_KEYS = ("grade_dh", "grade_ds", "grade_dv", "grade_amount", "grade_set", "grade_lit",
-              "grade_limits", "bytes_grade", "device", "layer_recomputed")
+              "grade_limits", "bytes_grade", "device", "layer_recomputed",
+              # COLOR-004：作用域、可选名单、区域覆盖格数。三条都是“画面事实”，
+              # 只能由事件自己说：UI 记一份就会在换图/重开/撤销后说谎。
+              "grade_scope", "grade_scopes", "mask_px")
 
 
 def _sat(frame):
@@ -2145,7 +2148,9 @@ def test_grade_set_moves_saturation_in_the_declared_direction(engine):
         assert done["grade_ds"] == -0.6 and done["grade_amount"] == 1.0, done
         assert done["grade_ms"] > 0.0, f"点火了却没跑内核：{done}"
         assert done["grade_limits"] == [0.05, 0.60, 0.60], done
-        assert done["bytes_grade"] == 0, "这层不持有张量，账单必须是 0（报而不藏）"
+        # scope=all 时这层不持有张量，账单必须是 0（报而不藏）；brush 起它才常驻
+        # 一份掩膜权重，那笔账由 grade_resident_bytes 报实数（见 test_grade 那一组）
+        assert done["bytes_grade"] == 0, "全图作用域下肤色定向层不该常驻显存"
         assert done["filter_cached"] is True, f"设肤色参数却重算了滤波：{done}"
         shot = _read_frame(engine, peer, h, w)
         d = (shot - base).astype(np.float64)

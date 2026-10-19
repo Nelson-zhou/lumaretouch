@@ -483,3 +483,162 @@ def test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces
     assert st["deform"]["built"] is False and \
         all(abs(float(v)) == 0.0 for v in st["deform"]["amounts"].values()), \
         f"多人图被拒却留了半截形变状态：{st['deform']}"
+
+
+# ---------------------------------------------------------------- COLOR-004
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像")
+def test_local_color_adjustment_stays_inside_the_painted_region(engine, extra_engine, tmp_path):
+    """COLOR-004 局部调色：只对所选区域调色，蒙版外逐字节不动，撤销逐字节恢复，出片同口径。
+
+    冻结件 `then` 的三句各对上一段判据，另外四条是这一仓自己加的硬规矩：
+
+    ① "蒙版外变化在定义边缘范围内" → 差场必须整片落在笔迹框 + 羽化支撑之内，而四角
+       背景带逐字节为 0（"局部"的反面就是它偷偷全图动了，而画面真的在变、看不出来）；
+    ② "撤销恢复" → 走**全局 history**（不是参数回滚）：撤销那一帧与点火前那一帧逐字节
+       相同，重做再逐字节回来。这条路同时判 DOC_FIELDS 快照与会话重挂（d3b 那一族）；
+    ③ "无明显色边" → 差场的邻域最大跳变必须**严格小于**差场峰值：硬阶跃会把整段变化
+       压在一格里（跳变==峰值），羽化把它摊开（跳变<峰值），振铃则会超过峰值；
+    ④ 不许静默降级：没 precompute 时的 skin、一笔没画时的 brush，都必须明拒；
+    ⑤ 落笔即生效：mask 那条命令自己把作用域切到 brush，并把 scope 随事件报回来；
+    ⑥ 出片同口径：带区域导出与关掉整层再导相比，区域内有变化、区域外逐字节相同；
+    ⑦ 重开工程：换进程打开工程文件，作用域与区域格数回来且画面逐字节相同。
+    """
+    _needs_torch()
+    from PIL import Image
+
+    meta = _open(engine, max_px=207360)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    base = _read_frame(engine, peer, h, w)
+    y0, x0, sh, sw = STROKE
+    feather = 2
+
+    # ④ 两条"不许静默降级"：底衬还没有时整条拒，而且不许留下半截作用域
+    _drain(engine)
+    engine.send(cmd="grade", action="scope", scope="skin")
+    err = _expect_error(engine, "precompute")
+    assert "skin" in err["error"], err
+    _drain(engine)
+    engine.send(cmd="grade", action="scope", scope="brush")
+    _expect_error(engine, "一笔")
+    st = _live_state(engine)["grade"]
+    assert st["scope"] == "all" and st["mask_px"] == 0 and st["lit"] is False, \
+        f"被拒的两条留下了半截状态：{st}"
+
+    # ⑤ 落笔：区域挂上并把作用域切到 brush，可这一层还没点火，所以画面一分不动
+    _drain(engine)
+    engine.send(cmd="grade", action="mask", rle=_rle(*STROKE), feather=feather, mode="replace")
+    done = engine.wait_for("grade_done", timeout=60)
+    assert done["grade_scope"] == "brush" and done["grade_lit"] is False, done
+    assert done["mask_px"] > sh * sw, f"区域格数比笔迹还小：{done['mask_px']} < {sh * sw}"
+    stroke_frame = _read_frame(engine, peer, h, w)
+    assert int(np.abs(stroke_frame - base).max()) == 0, "层没点火却动了画面"
+
+    # 点火：只该作用在区域内
+    _drain(engine)
+    engine.send(cmd="grade", action="set", dh=0.006, ds=-0.14, dv=0.05)
+    done = engine.wait_for("grade_done", timeout=60)
+    assert done["grade_lit"] is True and done["grade_scope"] == "brush", done
+    assert done["bytes_grade"] > 0, f"brush 作用域没常驻掩膜权重，账单却报 0：{done}"
+    graded = _read_frame(engine, peer, h, w)
+    d = np.abs(graded - base).max(axis=2)
+    peak = int(d.max())
+    assert peak > EPS, f"区域内一点没动（峰值 {peak} LSB）：局部调色是假的"
+
+    # ① 判据一：差场整片落在笔迹框外扩（羽化支撑 + 插值余量）之内
+    inside = np.zeros((h, w), dtype=bool)
+    inside[y0:y0 + sh, x0:x0 + sw] = True
+    assert int(d[inside].mean()) > 0, "笔迹实心区没被覆盖"
+    slack = feather + 2
+    allowed = np.zeros((h, w), dtype=bool)
+    allowed[max(y0 - slack, 0):min(y0 + sh + slack, h),
+            max(x0 - slack, 0):min(x0 + sw + slack, w)] = True
+    outside_lsb = int(d[~allowed].max())
+    assert outside_lsb == 0, f"笔迹框外扩 {slack} 格之外仍变了 {outside_lsb} LSB：不是局部调色"
+    corners = _corner_bands(h, w)
+    assert int(d[corners].max()) == 0, "四角背景被局部调色带动"
+
+    # ③ 判据三：羽化必须把台阶摊开（跳变 < 峰值），且不许过冲（跳变 ≤ 峰值）
+    step = int(np.abs(np.diff(d.astype(np.int16), axis=1)).max())
+    assert step <= peak, f"边界振铃：跳变 {step} 超过整片变化峰值 {peak}"
+    assert step < peak, f"羽化没摊开台阶：跳变 {step} == 峰值 {peak}（那是硬边）"
+
+    # ② 判据二：全局撤销/重做逐字节回得来、去得回
+    _drain(engine)
+    engine.send(cmd="history", action="undo")
+    hs = engine.wait_for("history_state", timeout=60)
+    undid = _read_frame(engine, peer, h, w)
+    assert hs["doc_state"]["grade"]["lit"] is False, hs["doc_state"]["grade"]
+    assert hs["doc_state"]["grade"]["scope"] == "brush", \
+        f"撤销该退参数而不是退区域：{hs['doc_state']['grade']}"
+    assert int(np.abs(undid - stroke_frame).max()) == 0, \
+        f"撤销后与点火前差 {int(np.abs(undid - stroke_frame).max())} LSB：撤销没逐字节恢复"
+    _drain(engine)
+    engine.send(cmd="history", action="redo")
+    engine.wait_for("history_state", timeout=60)
+    redid = _read_frame(engine, peer, h, w)
+    assert int(np.abs(redid - graded).max()) == 0, "重做没回到同一幅：重放不是确定性的"
+
+    # ⑥ 出片同口径：带着区域导一次，关掉整层再导一次
+    src_shape = (int(meta["src_h"]), int(meta["src_w"]))
+    out_a, out_b = tmp_path / "local-on", tmp_path / "local-off"
+    out_a.mkdir(); out_b.mkdir()
+    _drain(engine)
+    engine.send(cmd="export", out_dir=str(out_a), format="png", tile=256, quality=90,
+                images=[FIXTURE])
+    da, _ = _collect_done(engine)
+    assert da["failed"] == 0, da
+    skipped_a = da["images"][0].get("skipped") or []
+    assert not any("grade" in str(s) for s in skipped_a), \
+        f"带区域的局部调色在导出里被整层放下了：{skipped_a}"
+    with Image.open(da["images"][0]["out"]) as im:
+        arr_a = np.asarray(im.convert("RGB"), dtype=np.uint8)
+    assert arr_a.shape[:2] == src_shape, f"导出尺寸不是源图那一幅：{arr_a.shape[:2]}"
+
+    _drain(engine)
+    engine.send(cmd="grade", action="clear")
+    engine.wait_for("grade_done", timeout=60)
+    engine.send(cmd="export", out_dir=str(out_b), format="png", tile=256, quality=90,
+                images=[FIXTURE])
+    db, _ = _collect_done(engine)
+    with Image.open(db["images"][0]["out"]) as im:
+        arr_b = np.asarray(im.convert("RGB"), dtype=np.uint8)
+    de = np.abs(arr_a.astype(np.int16) - arr_b.astype(np.int16)).max(axis=2)
+    sy, sx = src_shape[0] / h, src_shape[1] / w
+    full = np.zeros(arr_a.shape[:2], dtype=bool)
+    full[int(y0 * sy):int((y0 + sh) * sy), int(x0 * sx):int((x0 + sw) * sx)] = True
+    assert int(de[full].mean()) > 0, \
+        "导出里区域内没有变化：屏幕上的局部调色没跟到文件（所见非所出）"
+    band = np.zeros(arr_a.shape[:2], dtype=bool)
+    band[max(int(y0 * sy) - 8, 0):min(int((y0 + sh) * sy) + 8, arr_a.shape[0]),
+         max(int(x0 * sx) - 8, 0):min(int((x0 + sw) * sx) + 8, arr_a.shape[1])] = True
+    edge_out = int(de[~band].max())
+    assert edge_out == 0, f"导出把局部调色漏到了区域外（{edge_out} LSB）：文件里它是全图的"
+
+    # 重新点火 → 存工程 → 换进程重开（⑦）
+    _drain(engine)
+    engine.send(cmd="grade", action="set", dh=0.006, ds=-0.14, dv=0.05)
+    engine.wait_for("grade_done", timeout=60)
+    lit_frame = _read_frame(engine, peer, h, w)
+    src_sha = _sha_of(FIXTURE)
+    _created, saved = _create_and_save(engine, tmp_path, name="局部调色")
+    raw = json.loads(Path(saved["path"]).read_text(encoding="utf-8"))
+    sizes = [a.get("shape") for a in (raw.get("assets") or {}).values()]
+    assert [h, w] in sizes, f"调色区域不是按代理帧 {h}×{w} 存的：{sizes}"
+
+    eng2 = extra_engine("color004-reopen")
+    eng2.send(cmd="hello")
+    eng2.wait_for("ready", timeout=90)
+    eng2.send(cmd="set_device", device="cpu")
+    eng2.wait_for("device_set", timeout=120)
+    eng2.send(cmd="project", action="open", path=saved["path"])
+    eng2.wait_for("project_opened", timeout=120)
+    shm2 = eng2.wait_for("shm_ready", timeout=240)
+    ready2 = eng2.wait_for("image_ready", timeout=240)
+    g2 = ready2["doc_state"]["grade"]
+    assert g2["scope"] == "brush" and g2["mask_px"] > 0 and g2["lit"] is True, g2
+    peer2 = FrameShm(shm2["name"])
+    got = _frame_of(eng2.wait_for("frame", timeout=60), peer2, shm2["h"], shm2["w"])
+    assert int(np.abs(got - lit_frame).max()) == 0, \
+        f"重开工程后画面与保存前差 {int(np.abs(got - lit_frame).max())} LSB：区域重放不是同一幅"
+    assert _sha_of(FIXTURE) == src_sha, "打开/保存工程动了原片"
