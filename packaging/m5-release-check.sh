@@ -116,7 +116,7 @@ else
       DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-/run/user/$(id -u)/.mutter-Xwaylandauth.OJ5EX3}" \
       GDK_BACKEND=x11 HOME="$HOME" USER="$USER" PATH="$PATH" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
       LRT_LOAD_IMAGE="$fixture" LRT_MAX_PX=207360 \
-      LRT_PRECOMPUTE=template LRT_PRECOMPUTE_CHANNEL=skin \
+      LRT_PRECOMPUTE=mediapipe LRT_PRECOMPUTE_CHANNEL=skin LRT_AUTO_DEFORM=0.35:0.25:0.2 \
       LRT_AUTO_BENCH=672x848:240:16.6:image_stream LRT_AUTO_RELEASE=1 LRT_AUTO_HISTORY=0.85 \
       LRT_AUTO_BG=ff0000:0.18:0.06 LRT_AUTO_EXPORT="$outdir@png@512@2@0.6" \
       /usr/bin/lumaretouch > "$log" 2>&1 &
@@ -232,6 +232,26 @@ lve = last("M0_BG_LIVE")
 chk(lve is not None and lve.get("active") is True and (lve.get("bytesBg") or 0) > 0,
     f"挂着换底层跑完帧通路后层还在：{lve and {'active': lve.get('active'), 'bytesBg': lve.get('bytesBg')}}")
 
+# 面部重塑（DoD §2 的核心主张）在装机件上必须用**真检测器**跑成：权重 2.5MB 是内嵌
+# 随包的，所以"裸环境里没权重"这条退路在这台机器上不存在。template 后端给的是网格
+# 占位几何，引擎自己也拒它拿来做形变——拿 template 跑这一臂等于什么都没验。
+df = last("M0_DEFORM")
+chk(df is not None and "bad" not in df, f"形变臂跑成了：{df and df.get('bad')}")
+if df and "bad" not in df:
+    chk(df.get("backend") == "mediapipe",
+        f"关键点是真 FaceMesh 不是模板：landmark_backend={df.get('backend')!r}")
+    chk(df.get("built") is True and df.get("lit") is True,
+        f"形变层真常驻且点火：built={df.get('built')} lit={df.get('lit')}")
+    chk(df.get("amounts", {}).get("slim_face") == 0.35,
+        f"滑块值落进引擎：{df.get('amounts')}")
+    chk(isinstance(df.get("deformMs"), (int, float)) and df["deformMs"] < 60,
+        f"面部重塑是毫秒级：deform_ms={df.get('deformMs')}（>60ms 就不是拖滑块那一档）")
+    chk((df.get("bytesDeform") or 0) > 0, f"常驻显存里有那一层：bytes_deform={df.get('bytesDeform')}")
+    pk = (df.get("peaks") or {}).get("slim_face")
+    chk(isinstance(pk, (int, float)) and pk > 0, f"峰值位移非零（不是假滑块）：peak_px={pk}")
+else:
+    chk(False, "日志里没有 M0_DEFORM 或它报了 bad：装机件的面部重塑这一臂没跑")
+
 # 放大（M7）在裸环境里要证的不是"图变大了"，而是三处对得上：请求的倍率、引擎报回的
 # 倍率、**磁盘上那张的 IHDR**。最后一项是“导出的是满幅不是代理档”与“2× 真落盘”的唯一
 # 直接证据——它不拿引擎自己的报数当唯一证人。
@@ -285,6 +305,136 @@ PY
     echo "  · 附带：LRT_AUTO_HISTORY 也在这轮跑了（细节见 $log）"
   fi
   fi
+fi
+
+echo "── 4. RAW 那一臂：拖进 DNG 也要即刻解码、重塑、出片"
+# 上面那一臂的 jpg 证据对 DNG 没有推论力：RAW 走的是完全另一条通路（CFA → 去马赛克
+# → 下采样），而“拖入 DNG 也能用”这句话只能现场量。输入用同一份夹具现场合成的
+# DNG（make-test-dng.py 只是**造输入的工具**，被测的引擎仍是 /usr/lib 那一份）。
+# 诚实记一笔：这台机器上没有可授权的真人照片，所以“真机人像”那一半仍未验（同
+# docs/acceptance/PORTRAIT-002-盲评规程里“待补：真实人像”那一行）——这一臂验的是
+# DNG 容器与真解码通路，不含真人皮肤结构。
+unset_args=()
+while IFS= read -r v; do unset_args+=("-u" "$v"); done < <(compgen -e | grep '^LRT_' || true)
+dng=/tmp/lrt-release-$$.dng
+doutdir=/tmp/lrt-release-dng.$$
+# 尺寸不是我写死的：从生成器自己报的那一行取（本轮就错过一次——拿 900 当期望，
+# 而夹具只有 1024 宽，裁出来是 768×600）。三个观察者对账：生成器知道自己写了什么、
+# 引擎报它解出什么、磁盘上那张 PNG 的 IHDR 是最终事实。
+dgen=$("$rt" "$repo/packaging/make-test-dng.py" --from "$fixture" --out "$dng" --edge 900 2>&1)
+if [ ! -x "$rt" ] || [ ! -f "$dng" ]; then
+  no "DNG 输入造不出来（运行时 $rt 不可用或生成器非零退出）：$dgen"
+elif ! echo "$dgen" | grep -q '×'; then
+  no "DNG 生成器没报出尺寸：$dgen"
+else
+  dsize=$(echo "$dgen" | sed -n 's/.*：\([0-9]\+×[0-9]\+\).*/\1/p' | head -1)
+  dwidth=${dsize%×*}; dheight=${dsize#*×}
+  dsha=$(sha256sum "$dng" | cut -c1-64)
+  dlog=/tmp/m5-release-dng.$$.log
+  pkill -f '/usr/bin/lumaretouch' 2>/dev/null || true
+  sleep 1
+  rm -rf "$doutdir"; mkdir -p "$doutdir"
+  env "${unset_args[@]}" -u XDG_DATA_HOME \
+      DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-/run/user/$(id -u)/.mutter-Xwaylandauth.OJ5EX3}" \
+      GDK_BACKEND=x11 HOME="$HOME" USER="$USER" PATH="$PATH" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
+      LRT_LOAD_IMAGE="$dng" LRT_MAX_PX=207360 \
+      LRT_PRECOMPUTE=mediapipe LRT_PRECOMPUTE_CHANNEL=skin LRT_AUTO_DEFORM=0.3:0.2:0.1 \
+      LRT_AUTO_BENCH=672x848:120:16.6:image_stream LRT_AUTO_RELEASE=1 \
+      LRT_AUTO_EXPORT="$doutdir@png@512" \
+      /usr/bin/lumaretouch > "$dlog" 2>&1 &
+  dwin=$!
+  dgot=0
+  for _ in $(seq 1 $((want_secs * 2))); do
+    sleep 0.5
+    if grep -aq 'M0_RELEASE' "$dlog" && { grep -aq 'M0_EXPORT' "$dlog" || grep -aq 'M0_ERROR' "$dlog"; }; then
+      dgot=1; break
+    fi
+    kill -0 $dwin 2>/dev/null || { dgot=2; break; }
+  done
+  sleep 2
+  kill $dwin 2>/dev/null; wait $dwin 2>/dev/null
+  if [ "$dgot" != 1 ]; then
+    no "DNG 真窗口没跑完（$([ "$dgot" = 2 ] && echo '进程提前退出' || echo '超时')）；日志尾部："
+    tail -10 "$dlog" | sed 's/^/      /'
+    else
+      ok "装机壳跑通了 DNG 那一臂（日志：$dlog，源幅 ${dwidth}×${dheight}）"
+      python3 - "$dlog" "$ver" "$want_prefix" "$doutdir" "$dng" "$dsha" "$dwidth" "$dheight" <<'PY'
+import hashlib, json, os, re, struct, sys
+log, want_ver, want_prefix, outdir, dng, dsha, dw_s, dh_s = sys.argv[1:9]
+dw_w, dh_w = int(dw_s), int(dh_s)
+raw = open(log, "rb").read().decode("utf-8", "replace")
+def last(tag):
+    hits = re.findall(tag + r' (\{[^\n]*\})', raw)
+    return json.loads(hits[-1]) if hits else None
+fails = []
+def chk(cond, msg):
+    print(("  ✓ " if cond else "  × ") + msg)
+    if not cond:
+        fails.append(msg)
+
+rel, img = last("M0_RELEASE"), last("M0_IMAGE")
+chk(rel is not None and rel.get("engineVersion") == want_ver,
+    f"DNG 那一臂跑的是装机引擎 {rel and rel.get('engineVersion')!r} == {want_ver!r}")
+chk(rel is not None and (rel.get("python") or "").endswith(want_prefix),
+    f"解释器仍是装好的运行时：{rel and rel.get('python')!r}")
+chk(bool(img) and int(img.get("w", 0)) > 0, f"DNG 解码并上屏：{img and {'w': img.get('w'), 'h': img.get('h')}}")
+# 代理档不得超过预算（“秒开”靠的是下采样而不是调小预算）
+if img:
+    chk(int(img.get("w", 0)) * int(img.get("h", 0)) <= 207360,
+        f"代理档在预算内：{img.get('w')}×{img.get('h')}")
+    sw, sh = img.get("src_w"), img.get("src_h")
+    if sw and sh:
+        chk((int(sw), int(sh)) == (dw_w, dh_w),
+            f"源幅报回的是 DNG 的真尺寸：{(int(sw), int(sh))} 应为 {(dw_w, dh_w)}")
+
+df = last("M0_DEFORM")
+if df is None:
+    chk(False, "日志里没有 M0_DEFORM：DNG 会话上形变那一臂没跑")
+elif "bad" in df:
+    chk(False, f"DNG 上做面部重塑被拒：{df.get('bad')}")
+else:
+    chk(True, "DNG 上也能做面部重塑")
+if df and "bad" not in df:
+    chk(df.get("backend") == "mediapipe", f"关键点是真 FaceMesh：{df.get('backend')!r}")
+    chk(df.get("built") is True and df.get("lit") is True, "DNG 会话里形变层真常驻并点火")
+
+exp = last("M0_EXPORT")
+if exp is None:
+    # 文案要跟着判据的方向走：上一版这里写死一句“日志里没有 M0_EXPORT”，过与不过
+    # 都打同一句话——于是报告上出现“✓ 日志里没有 M0_EXPORT”这种自相矛盾的行。
+    chk(False, "日志里没有 M0_EXPORT：DNG 出片那一臂没跑")
+else:
+    chk(True, "M0_EXPORT 在日志里：DNG 出片那一臂跑了")
+    full = (exp.get("full") or [""])[0]
+    m = re.fullmatch(r"(\d+)x(\d+)", full or "")
+    chk(m is not None, f"引擎报回的导出尺寸形状不对（{full!r}，要 WxH）" if m is None
+        else f"引擎报回导出尺寸 {full}")
+    if m:
+        ow, oh = int(m.group(1)), int(m.group(2))
+        chk((ow, oh) == (dw_w, dh_w),
+            f"DNG 直通导出的是满幅真解码：引擎报 {ow}×{oh}，期望 {dw_w}×{dh_w}")
+    files = [os.path.join(outdir, f) for f in sorted(os.listdir(outdir))] if os.path.isdir(outdir) else []
+    chk(bool(files), f"磁盘上真有产物：{files[:1]}")
+    if files:
+        with open(files[0], "rb") as f:
+            head = f.read(24)
+        if head[:8] == b"\x89PNG\r\n\x1a\n":
+            pdw, pdh = struct.unpack(">II", head[16:24])
+            chk((pdw, pdh) == (dw_w, dh_w),
+                f"磁盘 IHDR ({pdw},{pdh}) 与满幅 ({dw_w},{dh_w}) 一致（不拿引擎报数当唯一证人）")
+            pw = int(str(exp.get("proxy")).split("x")[0] or 0) if exp.get("proxy") else 0
+            chk(pw > 0 and pdw != pw, f"导出的不是代理档（代理宽 {pw}，落盘宽 {pdw}）")
+        else:
+            chk(False, f"磁盘上那张读不到 PNG 签名：{files[0]}")
+
+# 原片只读：导完一遍再算一次哈希，与导入前那一次逐字符比
+now = hashlib.sha256(open(dng, "rb").read()).hexdigest()
+chk(now == dsha, f"导出没动 RAW 原片：导入前后哈希同为 {now[:12]}…")
+sys.exit(1 if fails else 0)
+PY
+      if [ $? -ne 0 ]; then fail=$((fail + 1)); else pass=$((pass + 1)); fi
+      rm -rf "$doutdir" "$dng"
+    fi
 fi
 
 echo
