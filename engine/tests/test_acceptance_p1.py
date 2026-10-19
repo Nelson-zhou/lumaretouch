@@ -7,8 +7,9 @@
   判据逐条取自冻结件原文（见下面两个 `test_` 函数）。003/004 都不越界成"跨图认人"：
   覆盖挂在**这一轮分析出来的脸盒**上，换一张图就重新按脸盒认，不假装认得"同一个人";
 · PORTRAIT-008/010/011/012（全身、妆容头发、手脚、表情）本版本一行实现都没有；
-· PICK-001（AI 挑图）要做它就得引入一个我们并没有的分类器——**拿启发式规则冒充 AI
-  正是 DoD 明令禁止的那件事**；
+·（PICK-001 原来在这段里：做它要一个我们没有的分类器，而拿启发式规则冒充 AI 正是 DoD
+  明令禁止的那件事。现在它按**本地确定性度量**交付——dHash/高频能量/luma 裁切/FaceMesh
+  眼睑几何，每条都带 method、数值与阈值可复算，所以它移到下面"已覆盖"那一段。）
 · COLOR-004（局部调色）与 BACKGROUND-001 的"目标区域保护"只有已经存在的那几层可测。
 
 这几条在这里**没有测试**，`tools/run-acceptance.py` 因此把它们如实写成 `uncovered`
@@ -24,6 +25,7 @@
 · PORTRAIT-007 "目标变化可控、连续；不扭曲邻近人脸；背景异常纳入人工审核"（前两句
   客观可测，"背景异常"那一半是**人工**，本文件不代签，见 case-map 的 manual 标记）
 · PORTRAIT-003 "第二人的有效配方不变；图像影响在定义的第一人蒙版边缘内"
+· PICK-001   "建议必须可覆盖，不会自动永久删除照片；近似分组与判定原因可见"
 · PORTRAIT-004 "覆盖项继续生效；未覆盖项跟随；恢复继承后全部按层级合成"
 
 跑法同 test_acceptance_p0：必须在运行时 venv（有 torch）里跑；没 torch 整片 skip，
@@ -1175,3 +1177,271 @@ def test_person_override_follows_and_inherits_the_all_person_default(engine, ext
                                                            "small_chin": 0.0}, \
         f"覆盖被记成了名单序号而不是脸盒：选到 B 却读到 {st3['amounts']}"
     assert _sha_of(path) == src_sha, "打开/保存工程动了原片"
+
+
+# ------------------------------------------------------------------ PICK-001
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像")
+def test_pick_suggestions_are_explainable_overridable_and_never_touch_the_source(
+        engine, tmp_path):
+    """LNX-PICK-001 挑图建议：判据可复算、建议可覆盖、**没有任何一条路径动原片**。
+
+    先把「AI」这两个字处理干净。冻结件与手册里这条叫「AI 挑图」，官网那套确实是训练出来的
+    分类器；本仓没有那种权重，而 DoD §2 明令「严禁假滑块、假滤镜或伪装 AI」。所以这里交付的
+    是**本地确定性度量**：dHash 汉明距离分近似组、拉普拉斯能量与相对自身对比度判糊、luma
+    两端的裁切占比判欠/过曝、FaceMesh 478 点量眼睑睁开比。每一条都带 method 名、数值与
+    阈值，任何人都能按名字复算——这一条把「功能名」让给了「能不能被复核」。
+
+    冻结件 `then` 的两句各对一段端到端判据（真引擎子进程、真 mediapipe、真磁盘）：
+    ① 「建议必须可覆盖，不会自动永久删除照片」→ 每一条建议 `overridable=True`、
+       `auto_deleted/auto_trashed=False`，加上人工标签后重算报 `overridden_by_user=True`
+       而读数一个不少；跑完前后**逐个文件 sha256 相同、目录条目一字不差**；
+    ② 「近似分组与判定原因可见」→ `pick_done.groups` 给出成员与组内最优那一张，
+       每条 reason 都有 method/value/threshold 与一句带着数值的中文说明。
+
+    另外三条是本仓的硬规矩：
+    ③ 未知 action / 未知档位 / 多余参数当场拒（拒绝文案里那条「名单在 ready 里」必须真在）；
+    ④ 挑图不进撤销栈也不打工程脏标记：它是读出来的旁注，不是一次编辑（前后 history 账单相同）；
+    ⑤ 没量到的那一格只说「没量到」：眼睑不可用时既不写「睁眼」也不写「闭眼」。
+    """
+    _needs_torch()
+    import importlib.util
+    import json as _json
+    import time as _time
+
+    from PIL import Image, ImageFilter
+
+    from lumaretouch_engine import face as face_mod
+    from lumaretouch_engine import picks as PK
+
+    if importlib.util.find_spec("mediapipe") is None:
+        pytest.fail("运行时没装 mediapipe：眼睑那一档要真 FaceMesh 的 478 点几何，"
+                    "不许退成 skip（skip 不是通过），装它见 engine/requirements-mediapipe.txt")
+
+    d = tmp_path / "set"
+    d.mkdir()
+    base = np.asarray(Image.open(FIXTURE).convert("RGB"), dtype=np.uint8)
+    files: dict = {}
+
+    def put(name: str, arr, *, jpeg: int = 0) -> str:
+        p = str(d / (name + (".jpg" if jpeg else ".png")))
+        if jpeg:
+            Image.fromarray(arr).save(p, quality=jpeg)
+        else:
+            Image.fromarray(arr).save(p)
+        files[name] = p
+        return p
+
+    put("base", base)
+    put("near", np.clip(base.astype(np.int16) + 2, 0, 255).astype(np.uint8))
+    put("soft", np.asarray(Image.fromarray(base).filter(
+        ImageFilter.GaussianBlur(6.0)), dtype=np.uint8), jpeg=90)
+    put("blown", np.clip(base.astype(np.float32) * 2.6 + 12, 0, 255).astype(np.uint8), jpeg=90)
+
+    # 闭眼替身：把两只眼的眼裂按眼下肤色带涂平。对照必须**重新检测一次**再确认——
+    # 拿原图的关键点去量涂平后的图是恒等的，那等于没做这个对照（标定台上就是这里先错过一次）
+    h0, w0 = base.shape[:2]
+    pts = np.asarray((face_mod.build("mediapipe")(base).all_landmarks
+                      or [None])[0], dtype=np.float32)
+    eyes = base.copy()
+    for e in (PK.EYE_LEFT, PK.EYE_RIGHT):
+        sub = pts[[e["outer"], e["inner"], e["upper"], e["lower"]], :2] * [w0, h0]
+        x0, y0 = np.floor(sub.min(axis=0)).astype(int)
+        x1, y1 = np.ceil(sub.max(axis=0)).astype(int)
+        band = eyes[min(y1 + 6, h0 - 1):min(y1 + 12, h0), max(x0, 0):max(x1, 1)]
+        tone = band.reshape(-1, 3).mean(axis=0).astype(np.uint8)
+        eyes[max(y0, 0):min(y1, h0), max(x0, 0):min(x1, w0)] = tone
+    put("closed", eyes)
+    flat_lm = (face_mod.build("mediapipe")(eyes).all_landmarks or [None])[0]
+    flat_read = PK.eye_openness(flat_lm, image_size=(w0, h0))
+    open_read = PK.eye_openness(pts, image_size=(w0, h0))
+    assert flat_read is not None and open_read is not None, "闭眼替身没量出可比读数"
+    assert flat_read < PK.EYE_SENSITIVITY["strong"] < open_read, \
+        f"闭眼替身不成立（睁开 {open_read:.4f} / 涂平后 {flat_read:.4f} / 强档 " \
+        f"{PK.EYE_SENSITIVITY['strong']}）：这一条测的就不是「眼睑塌了」"
+
+    before = {p: _sha_of(p) for p in files.values()}
+    listing = sorted(os.listdir(d))
+
+    engine.send(cmd="hello")
+    ready = engine.wait_for("ready", timeout=90)
+    assert "analyze" in (ready.get("pick_actions") or []), ready.get("pick_actions")
+    assert ready.get("pick_fingerprint") == PK.fingerprint(), "ready 报的判据指纹与引擎不同版"
+    assert set(ready.get("pick_sensitivities", {}).get("eyes", [])) == \
+        set(PK.EYE_SENSITIVITY), "档位名单双出处（ready 与 picks 层必须同一份）"
+    engine.send(cmd="session", action="add", paths=list(files.values()))
+    ev_add = engine.wait_for("session_add", timeout=60)
+    assert ev_add["added"] == len(files), ev_add
+
+    # ---- ③ 三件不该收下的：先拒，再看它们有没有偷偷留下半截状态
+    for bad, sub in (({"action": "delete"}, "未知 pick action"),
+                     ({"action": "analyze", "blur": "ultra"}, "不在名单里"),
+                     ({"action": "analyze", "auto_trash": True}, "不认识的参数")):
+        _drain(engine)
+        engine.send(cmd="pick", **bad)
+        got = _expect_error(engine, sub)
+        if sub == "未知 pick action":
+            assert "analyze/stop/state" in got["error"], f"拒绝文案没给出那条路：{got}"
+    engine.send(cmd="session", action="state")
+    st0 = engine.wait_for("session_state", timeout=30)
+    assert all(row.get("pick") is None for row in st0["docs"]), "被拒的挑图写脏了格子"
+
+    def _run(**kw):
+        # 两遍之间先等上一遍真落地：`pick_done` 之后线程还要补一条 session_state，
+        # 那时再开一遍会被"已在跑"拒掉。这条拒绝是故意的（两条后台任务同时读几百张盘
+        # 会互相把耗时算脏），而 `picks_running` 就是它唯一可见的凭据——顺手也测了它。
+        for _ in range(60):
+            engine.send(cmd="session", action="state")
+            ss = engine.wait_for("session_state", timeout=30)
+            if not ss.get("picks_running"):
+                break
+            _time.sleep(0.5)
+        else:
+            pytest.fail("等不到挑图线程落地：session_state 里 picks_running 一直是真")
+        _drain(engine)
+        engine.send(cmd="pick", action="analyze", **kw)
+        start = engine.wait_for("pick_start", timeout=60)
+        items: dict = {}
+        prog: list = []
+        done = None
+        deadline = _time.time() + 300
+        while _time.time() < deadline:
+            ev = engine.next_event(timeout=2.0)
+            if ev is None:
+                continue
+            name = ev.get("event")
+            if name == "pick_item":
+                items[os.path.basename(ev["path"])] = ev
+            elif name == "pick_progress":
+                prog.append(ev)
+            elif name == "pick_done":
+                done = ev
+                break
+            elif name == "error":
+                pytest.fail(f"挑图进行中报了错：{ev}")
+        assert done is not None, "等不到 pick_done"
+        return start, items, prog, done
+
+    engine.send(cmd="history", action="state")
+    hist0 = engine.wait_for("history_state", timeout=30)
+    start, items, prog, done = _run(eyes="strong")
+    engine.send(cmd="history", action="state")
+    hist1 = engine.wait_for("history_state", timeout=30)
+
+    def _acct(ev):
+        return _json.dumps({k: v for k, v in ev.items()
+                            if k not in ("event", "action", "doc_state", "history_ms")},
+                           sort_keys=True)
+
+    # ---- ④ 挑图不是编辑动作：撤销栈与工程脏标记一个字节都不该动
+    assert _acct(hist0) == _acct(hist1), \
+        f"挑图进了撤销栈/改了工程状态：{_acct(hist0)} → {_acct(hist1)}"
+    assert done["measured"] == len(files) and done["failed"] == 0 and done["stopped"] is False
+    assert done["fingerprint"] == ready["pick_fingerprint"] == PK.fingerprint()
+    assert done["eyes_backend"] == "mediapipe", f"眼睑那一档必须真是 FaceMesh 量的：{done}"
+    assert len(prog) == len(files) and start["targets"] == len(files)
+    assert done["thresholds"]["eyes"] == dict(PK.EYE_SENSITIVITY)
+
+    by = {k: v for k, v in items.items()}
+    assert set(by) == {os.path.basename(p) for p in files.values()}, sorted(by)
+    # ---- ① 建议永远是可覆盖的旁注，而且这一层根本没有删除能力
+    for name, it in by.items():
+        assert it["overridable"] is True and it["auto_deleted"] is False \
+            and it["auto_trashed"] is False, name
+        assert it["schema"] == PK.SCHEMA and it["measures"]["algo"] == PK.ALGO_VERSION
+        assert it["measures"]["decoded_from"] == "pixels", \
+            f"这批都是位图，来源必须写 pixels（写错就是台账在撒谎）：{name}"
+        for r in it["reasons"]:
+            assert r.get("method") and "value" in r and "threshold" in r, (name, r)
+            assert (r.get("text") or "").strip(), (name, r)
+    # ---- ② 近似分组与原因可见
+    gkey = {os.path.basename(files["base"]), os.path.basename(files["near"])}
+    grp = [g for g in done["groups"] if set(os.path.basename(m) for m in g["members"]) >= gkey]
+    assert grp, f"同一构图加 2 偏置的两张没进同一组：{done['groups']}"
+    assert grp[0]["size"] >= 2 and grp[0]["leader"]
+    sim = [r for it in by.values() for r in it["reasons"] if r["kind"] == "similar_group"]
+    assert sim, f"进了组却没有「为什么像」的读数：{by.keys()}"
+    assert all(r["method"] == "dhash64-hamming" and r["value"] <= r["threshold"] for r in sim)
+    assert not any("删" in r["text"] for r in sim), "分组话越过了「像」这条线"
+    for it in by.values():
+        if os.path.basename(it["path"]) in gkey:
+            assert "similar" in it["labels"], it["labels"]
+    # 三件已知方向的变体各自被标出来（数值与阈值一起报，用户看得见按哪条线判的）
+    soft_kinds = {r["kind"] for r in by["soft.jpg"]["reasons"]}
+    assert soft_kinds & {"blur", "soft_vs_batch"}, \
+        f"高斯糊 6.0 的那一张没被任何一条清晰度判据标出：{by['soft.jpg']['reasons']}"
+    assert "overexposed" in by["blown.jpg"]["labels"], by["blown.jpg"]["labels"]
+    blown = next(r for r in by["blown.jpg"]["reasons"] if r["kind"] == "overexposed")
+    assert blown["value"] > blown["threshold"] and "死白" in blown["text"]
+    closed = next((r for r in by["closed.png"]["reasons"] if r["kind"] == "eyes_closed"), None)
+    assert closed is not None, f"涂平眼裂的那张在强档下没被标出：{by['closed.png']['reasons']}"
+    assert closed["method"] == "facemesh-eye-aperture" and closed["value"] < closed["threshold"]
+    assert "不是分类器" in closed["text"], closed["text"]
+    # 睁开比在读数上必须**同方向**，但不许要求逐字节相等：引擎在 512 档上检测，测试在
+    # 满幅上检测，同一张图这两个尺度量出来差约 4%（实测 0.21883 与 0.22795）。这件事
+    # 正是"阈值只能当『要不要复核』的标记"的由来，写进 picks.EYE_SENSITIVITY 的注释。
+    eng_eye = by["closed.png"]["measures"]["eye_open"]
+    _t = PK.EYE_SENSITIVITY["strong"]
+    assert eng_eye is not None and eng_eye < _t and flat_read < _t, \
+        f"两个尺度必须落在阈值同侧：{eng_eye} vs {flat_read}（线 {_t}）"
+    assert abs(eng_eye - flat_read) / flat_read < 0.10, f"同一几何不该差出一个量级：{eng_eye}"
+    # 可复算性真正的那一半：**同一个输入两次跑，读数逐字节相同**（度量没有随机性）
+    _, again1, _, _ = _run(eyes="strong", force=True, paths=[files["closed"]])
+    _, again2, _, _ = _run(eyes="strong", force=True, paths=[files["closed"]])
+    def _readings(it):
+        """读数本体，去掉逐段耗时：那三格每次跑都不同，不属于"可复算"那句话。"""
+        mm = dict(it["measures"])
+        mm.pop("ms", None)
+        return _json.dumps(mm, sort_keys=True)
+
+    assert _readings(again1["closed.png"]) == _readings(again2["closed.png"]), \
+        "度量不可复算：同一张图两次跑给出不同读数"
+    assert any("不写「睁眼」" in (r.get("text") or "") for r in by["base.png"]["reasons"]) \
+        or "eyes_unknown" not in {r["kind"] for r in by["base.png"]["reasons"]}
+    # 眼睛本来睁着的那一张：不许有「闭眼」标签，也不许出现「没量到」的退路
+    base_kinds = {r["kind"] for r in by["base.png"]["reasons"]}
+    assert "eyes_closed" not in by["base.png"]["labels"] and "eyes_unknown" not in base_kinds,         by["base.png"]["reasons"]
+    # ---- ①后半：人工标记优先，重算之后建议变成被压过的旁注
+    engine.send(cmd="project", action="create", name="挑图工程", directory=str(tmp_path))
+    engine.wait_for("project_created", timeout=60)
+    idx_blown = next(i for i, row in enumerate(_rows(engine))
+                     if os.path.basename(row["path"]) == "blown.jpg")
+    engine.send(cmd="project", action="tag", index=idx_blown, tags=["客户已看"], label="keep")
+    engine.wait_for("project_edited", timeout=30)
+    _, items2, _, done2 = _run(eyes="strong", force=True, paths=[files["blown"]])
+    assert _readings(items2["blown.jpg"]) == _readings(by["blown.jpg"]), \
+        "重算把读数算变了：同一条判据应当给出同一个数"
+    again = items2["blown.jpg"]
+    assert again["overridden_by_user"] is True and again["overridable"] is True
+    assert _readings(again) == _readings(by["blown.jpg"]), \
+        "被人工标记压过之后读数应当原样还在（压过≠抹掉）"
+    assert done2["count"] == 1
+    # ---- 底片条那一格确实带着徽章要读的字段（UI 不许自己再算一份）
+    # 先等这一遍真落地：跑着的时候 `picks_running` 就必须是真（上面那圈等待就在读它），
+    # 落地之后才是假——两头的值都测到了才说明那一格不是恒假的装饰
+    running_seen = False
+    for _ in range(60):
+        engine.send(cmd="session", action="state")
+        st1 = engine.wait_for("session_state", timeout=30)
+        if st1.get("picks_running"):
+            running_seen = True
+            _time.sleep(0.5)
+            continue
+        break
+    else:
+        pytest.fail("挑图线程没落地")
+    assert st1.get("picks_running") is False
+    for row in st1["docs"]:
+        name = os.path.basename(row["path"])
+        assert row.get("pick"), f"底片条那一格没带挑图建议，UI 只能自己猜：{name}"
+        assert row["pick"]["labels"] == by[name]["labels"], name
+    # ---- ①的磁盘那一半：一个字节没动，一条也没少，也没多出任何东西
+    assert sorted(os.listdir(d)) == listing, "挑图动过那个目录里的文件名单"
+    for p, sha in before.items():
+        assert os.path.isfile(p), f"原片不见了：{p}"
+        assert _sha_of(p) == sha, f"原片被改写了：{p}"
+
+
+def _rows(engine) -> list:
+    """从引擎取一次底片条（要 index 与 path 的对应关系时只能问引擎，不能自己数）。"""
+    engine.send(cmd="session", action="state")
+    return engine.wait_for("session_state", timeout=30)["docs"]
