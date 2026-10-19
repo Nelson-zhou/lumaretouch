@@ -476,6 +476,7 @@ else
       GDK_BACKEND=x11 HOME="$HOME" USER="$USER" PATH="$PATH" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
       LRT_LOAD_IMAGE="$dual" LRT_MAX_PX=207360 \
       LRT_PRECOMPUTE=mediapipe LRT_AUTO_FACE=1 LRT_AUTO_RELEASE=1 \
+      LRT_AUTO_BENCH=700x420:60:16.6:image_stream \
       /usr/bin/lumaretouch > "$flog" 2>&1 &
   fwin=$!
   fgot=0
