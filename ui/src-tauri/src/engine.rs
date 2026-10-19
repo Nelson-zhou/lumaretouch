@@ -178,6 +178,13 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             state.on_lut_ready(&v);
             println!("M0_ENGINE {line}");
         }
+        "enhance_done" => {
+            // PORTRAIT-009 眼牙局部增强：与定向分开存。它报的是掩膜盖了多少格、
+            // 每一格没接通的原因与那只窗口的常驻字节——这些数定向层没有，合成一份
+            // 就会让面板"牙齿那一格是灰的"这句话找不到出处。
+            state.on_enhance_ready(&v);
+            println!("M0_ENGINE {line}");
+        }
         "grade_done" => {
             // M3-b 肤色定向：与 lut 分开存。预设走 lut_done 时也会带一份 grade_state，
             // 但那一层自己的耗时/上限/事件次序只有 grade_done 能说全

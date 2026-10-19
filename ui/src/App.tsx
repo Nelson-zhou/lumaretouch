@@ -9,12 +9,12 @@ import { t, type MsgKey } from "./i18n";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   benchStart, benchStats, engineStatus, loadImage, m0Env, parseFrameHead, peekFrame,
-  faceStateOf,
-  quit, report, runDeform, runFace,
+  faceStateOf, enhanceStateOf,
+  quit, report, runDeform, runEnhance, runFace,
   fetchFilmstrip, runExport, runGrade, runHistory, runInpaint, runLight, runLut, runPick, runSession, runBackground,
   runBatch, runCrop, runExposure, runPreset, runPrecompute, runProject, runTask,
   setCompare, setStrength, shutdownEngine, startEngine,
-  type BenchOptions, type DeformInfo, type DocState, type EngineRuntime, type EngineStatus, type ExportDone,
+  type BenchOptions, type DeformInfo, type DocState, type EngineRuntime, type EngineStatus, type EnhanceInfo, type ExportDone,
   type ExportProgress, type HistoryReport, type HistoryState, type ImageReady,
   type InpaintInfo, type SessionState,
   type GradeInfo, type LightInfo,
@@ -134,6 +134,12 @@ export default function App() {
   // 引擎把形变层整条清除时说的那句话（为什么滑块自己回零了）：不写这一句，
   // 用户看到的就只是“拖了一下的滑块弹回零”，像出了 bug
   const [deformNote, setDeformNote] = useState("");
+  // 眼牙三格（LNX-PORTRAIT-009）。名单一律来自 ready 的 enhance_subs：这四个初值只是
+  // "引擎还没说话之前显示 0"，不是名单（与形变那几个数同一条纪律）。
+  const [enhanceAmounts, setEnhanceAmounts] = useState<Record<string, number>>({
+    sclera: 0, iris: 0, teeth: 0,
+  });
+  const [lastEnhance, setLastEnhance] = useState<EnhanceInfo | null>(null);
   // 几何可信度两个读数：基本量（share）与开关（warn）。存基本量而不是对象：
   // refreshStatus 是轮询，每轮 new 一个对象就是每轮一次重渲染（HUD 那边学过）。
   const [deformGeomShare, setDeformGeomShare] = useState(0);
@@ -249,6 +255,7 @@ export default function App() {
     setChannel(ds.channel ?? "");
     setLightExposure(ds.light.exposure);
     setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0, smile: 0, ...ds.deform.amounts });
+    setEnhanceAmounts({ sclera: 0, iris: 0, teeth: 0, ...(ds.enhance?.amounts ?? {}) });
     setLutAmount(ds.lut.amount);
     setGradeAmounts({ dh: ds.grade.dh, ds: ds.grade.ds, dv: ds.grade.dv });
     setGradeMix(ds.grade.amount);
@@ -262,6 +269,16 @@ export default function App() {
       // 消除笔的结果与日志同源：inpaint_done 只发一次，轮询不能错过
       if (st.inpaint) setLastInpaint(st.inpaint);
       if (st.light) setLastLight(st.light);
+      if (st.enhance) {
+        setLastEnhance(st.enhance);
+        // defer/invalidate 那两条不能把滑块弹回零：那两句说的是"引擎现在认不认得人"，
+        // 而"用户改过什么"是另一件事（PORTRAIT-004 定下的分层，形变那边同一课）
+        if (st.enhance.action === "invalidate") {
+          setEnhanceAmounts({ sclera: 0, iris: 0, teeth: 0, ...(st.enhance.dropped_amounts ?? {}) });
+        } else {
+          setEnhanceAmounts({ sclera: 0, iris: 0, teeth: 0, ...st.enhance.amounts });
+        }
+      }
       if (st.deform) {
         setLastDeform(st.deform);
         // 引擎把整层清了（关键点后端换成不能按脸形取点的那个、或重建失败）：滑块必须
@@ -1220,6 +1237,109 @@ export default function App() {
           })}`);
         }
       }
+      // 眼牙增强（LNX-PORTRAIT-009）自动通道（$LRT_AUTO_ENHANCE="sclera:iris:teeth"）。
+      // 真窗口这一臂证四件事，缺一条就不叫"开箱即用"：①runEnhance → Rust enhance →
+      // 引擎 enhance_done 四层签名对得上（错一个字段名会被静默丢掉，屏不动而一个错也不报，
+      // 第 7 臂 auto_pick 那一记就是这么漏的）；②点火后画面按掩膜动（insideChanged>0，
+      // 不是假滑块）；③**窗口外那一圈逐字节没动**（outsideChanged=0——"局部增强悄悄变成
+      // 全图提亮"正是画面在变而人分不出来的那种错）；④clear 之后回到 before 逐字节
+      // （backHomeBytes=0，且引擎报 bytes_enhance=0：常驻场真的放掉了，不是留着没人看）。
+      if (env.auto_enhance) {
+        const nums = env.auto_enhance.split(":").map(Number);
+        if (nums.length !== 3 || !nums.every((n) => Number.isFinite(n) && n >= 0 && n <= 1)) {
+          await report(`M0_ERROR 无法解析 LRT_AUTO_ENHANCE=${env.auto_enhance}`
+            + "（要 sclera:iris:teeth，每个 [0,1]）");
+        } else if (!image) {
+          await report("M0_ERROR LRT_AUTO_ENHANCE 需要 LRT_LOAD_IMAGE（不知道代理帧尺寸）");
+        } else {
+          const [sclera, iris, teeth] = nums;
+          const waitEnh = async (pred: (v: EnhanceInfo) => boolean) => {
+            // 12 s 预算与局部调色那臂同一条理由：被拒时长空轮询会冻住 UI 线程，
+            // 把"脚本少传一个参数"变成一个看着像产品退化的 fps 数字
+            for (let i = 0; i < 120; i++) {
+              await sleep(100);
+              const st = await engineStatus().catch(() => null);
+              if (st?.enhance && pred(st.enhance)) return st.enhance;
+            }
+            return null;
+          };
+          const before = await peek();
+          const homePix = before?.pixels ?? null;
+          let bad = "";
+          let lit: EnhanceInfo | null = null;
+          try {
+            await runEnhance("set", { sclera, iris, teeth });
+            lit = await waitEnh((v) => v.lit === true);
+            if (!lit) bad = "点火后 12s 内没等到 lit=true 的 enhance_done";
+            else {
+              // 命中事件那一格可能正好在两次渲染之间（`enhance_ms` 量的是"最近一次渲染里
+              // 这一层的耗时"，读到 0 不等于"不要钱"，等于没量到）。等一小段再取一次，
+              // 拿到的才是用户在拖滑块时真付的那一份代价。
+              await sleep(250);
+              const st2 = await engineStatus().catch(() => null);
+              if (st2?.enhance?.lit === true) lit = st2.enhance;
+            }
+          } catch (e) { bad = String(e); }
+          const after = await peek();
+          // 两份快照得是同一块完整画布才能逐格比：脏矩形只送顶部几行
+          const full = (f: typeof before) => !!f && f.rows === f.h && f.pixelLen === f.w * f.h * 4;
+          let insideChanged = -1;
+          let outsideChanged = -1;
+          if (!bad && before && after && full(before) && full(after)
+            && before.w === after.w && before.h === after.h) {
+            // 窗口取引擎报的那一片画布坐标 (y0,x0,fh,fw)，不是脚本自己按脸盒估的框：
+            // "这一层只在自己那只窗口里逐点乘加"这条承诺的实现就是这个数
+            const win = lit?.enhance_window ?? null;
+            if (!win) {
+              bad = "enhance_window 为 null：场没挂上，窗口内外两条没法量";
+            } else {
+              const wy = Math.round(win[0]), wx = Math.round(win[1]);
+              const wh = Math.round(win[2]), ww = Math.round(win[3]);
+              insideChanged = 0; outsideChanged = 0;
+              for (let y = 0; y < after.h; y++) {
+                for (let x = 0; x < after.w; x++) {
+                  const i = (y * after.w + x) * 4;
+                  if (after.pixels[i] === before.pixels[i]
+                    && after.pixels[i + 1] === before.pixels[i + 1]
+                    && after.pixels[i + 2] === before.pixels[i + 2]) continue;
+                  if (y >= wy && y < wy + wh && x >= wx && x < wx + ww) insideChanged++;
+                  else outsideChanged++;
+                }
+              }
+            }
+          } else if (!bad) {
+            bad = "两份快照不是同一块完整画布（脏矩形或尺寸变了），窗口外逐字节那条没法量";
+          }
+          // 关掉那层：回到 before 逐字节。这一条只在①②③都量完之后才跑，因为它会把
+          // 场放掉——先取完账再放，反过来就只能拿到一份空账
+          let backHomeBytes = -2;
+          if (!bad) {
+            try {
+              await runEnhance("clear");
+              const off = await waitEnh((v) => v.lit === false && v.bytes_enhance === 0);
+              if (!off) {
+                bad = "clear 后 12s 内没等到「enhance_lit=false 且 bytes_enhance=0」那一格";
+              } else {
+                const home2 = await peek();
+                backHomeBytes = (home2 && full(home2) && home2.w === before!.w && home2.h === before!.h)
+                  ? diffBytes(homePix, home2.pixels) : -1;
+              }
+            } catch (e) { bad = `clear 那一臂炸了：${e}`; }
+          }
+          await report(`M0_ENHANCE ${JSON.stringify(bad ? {
+            bad, gatedPx: lit?.gated_px ?? {}, window: lit?.enhance_window ?? null,
+          } : {
+            amounts: lit?.amounts ?? {}, lit: lit?.lit ?? null,
+            gatedPx: lit?.gated_px ?? {}, geomPx: lit?.enhance_geom_px ?? {},
+            reason: lit?.enhance_reason ?? {}, window: lit?.enhance_window ?? [],
+            device: lit?.device ?? "", bytesEnhance: lit?.bytes_enhance ?? 0,
+            enhanceMs: lit?.enhance_ms ?? 0, buildMs: lit?.enhance_build_ms ?? 0,
+            mouthOpenness: (lit?.enhance_mouth ?? {}).openness ?? null,
+            canvas: `${after?.w ?? 0}x${after?.h ?? 0}`,
+            insideChanged, outsideChanged, backHomeBytes,
+          })}`);
+        }
+      }
       // 分人编辑（LNX-PORTRAIT-003）自动通道（$LRT_AUTO_FACE=<要选的 index>）。
       // 库里那九段判据连的是裸引擎，中间隔着 Rust 的 face 命令与宿主的状态搬运——那两层
       // 只有真窗口能证明。这一臂量四件事：①未选定就推形变，引擎整条拒（SCOPE-001）而画面
@@ -2152,6 +2272,13 @@ export default function App() {
       });
   }
 
+  function onEnhanceChange(sub: string, value: number) {
+    // 拖动期间逐事件发：这一层每帧只在自己那只窗口里逐点乘加（实测亚毫秒），
+    // 不发就是"滑块拖了、画面不动"。部分提交交给引擎（没给的子功能沿用当前值）。
+    setEnhanceAmounts((prev) => ({ ...prev, [sub]: value }));
+    void runEnhance("set", { [sub]: value } as Record<string, number>).then(() => {});
+  }
+
   function onDeformChange(kind: string, value: number) {
     const next = { ...deformAmounts, [kind]: value };
     setDeformAmounts(next);
@@ -2963,6 +3090,53 @@ export default function App() {
         <div className="row">
           <button onClick={onDeformClear} disabled={!status?.image}>{t("retouch.deformClear")}</button>
         </div>
+        {/* 眼牙增强（LNX-PORTRAIT-009）：三条滑块各自独立启停。名单与值域都来自引擎
+            （ready 的 enhance_subs / enhance_range）——引擎没说就不画这一排，而不是前端
+            刻一份名字去撞一条会被整条拒的命令。每格的"为什么现在不会动"直接引用引擎
+            报的那句话（enhance.reason），面板不自己推断。 */}
+        {(status?.ready_caps?.enhance_subs ?? []).map((sub) => {
+          const en = enhanceStateOf(status, doc);
+          const range = status?.ready_caps?.enhance_range ?? [0, 1];
+          const px = en?.gated_px?.[sub] ?? 0;
+          const why = en?.reason?.[sub] ?? null;
+          const unusable = !status?.image
+            || (en?.defer ?? false)
+            || (faceSt?.blocked ?? false)
+            || (en != null && !en.built && px <= 0 && why == null);
+          const disabled = unusable || why != null;
+          return (
+            <div key={sub}>
+              <label className="k">{t(`retouch.${sub}` as MsgKey)}
+                {' '}{(enhanceAmounts[sub] ?? 0).toFixed(2)}</label>
+              <input type="range" min={range[0]} max={range[1] ?? 1} step={0.01}
+                     value={enhanceAmounts[sub] ?? 0} disabled={disabled}
+                     onChange={(e) => onEnhanceChange(sub, +e.target.value)}
+                     style={{ width: "100%" }} />
+              {why != null && (
+                <div className="mut">{t("retouch.enhOff", { why })}</div>
+              )}
+              {en?.defer && (
+                <div className="mut">{t("retouch.enhDefer")}</div>
+              )}
+              {faceSt?.blocked && !en?.defer && (
+                <div className="warn">{t("retouch.enhBlocked")}</div>
+              )}
+              {why == null && !disabled && (
+                <div className="mut">{t("retouch.enhGate", {
+                  px, ms: (lastEnhance?.enhance_ms ?? 0).toFixed(2),
+                })}</div>
+              )}
+            </div>
+          );
+        })}
+        <div className="row">
+          <button onClick={() => { void runEnhance("clear").then(() => refreshStatus()); }}
+                  disabled={!status?.image ||
+                             !Object.values(enhanceAmounts).some((v) => Math.abs(v) > 0)}>
+            {t("retouch.enhClear")}
+          </button>
+        </div>
+        <div className="mut">{t("retouch.enhHow")}</div>
         {deformNote && (
           <div className="mut">{t("retouch.deformInvalidated")}：{deformNote}</div>
         )}

@@ -90,6 +90,17 @@ export const en: Partial<Record<MsgKey, string>> = {
   "retouch.geomWarn": "Landmark geometry does not look like a face: this layer would move "
     + "{share}% of the frame (backend {backend}). Slimming may drag the background along; "
     + "install the mediapipe plugin backend for face-accurate placement",
+  "retouch.enhanceTitle": "Eyes & teeth (geometry mask + content gate)",
+  "retouch.sclera": "Brighten sclera",
+  "retouch.iris": "Enhance iris",
+  "retouch.teeth": "Whiten teeth",
+  "retouch.enhGate": "{px} px covered · {ms} ms/frame",
+  "retouch.enhOff": "This sub-effect won't move now: {why}",
+  "retouch.enhDefer": "Landmarks not back yet: the values are stored and will re-attach after the next analysis",
+  "retouch.enhBlocked": "Pick which person to edit first (SCOPE-001: we won't choose a face for you)",
+  "retouch.enhNoFace": "No trustworthy face analysis yet: this layer redraws its mask from landmarks",
+  "retouch.enhClear": "Reset eyes/teeth",
+  "retouch.enhHow": "Not a neural net: a MediaPipe FaceMesh geometric mask gated by this pool's relative brightness/saturation",
   "retouch.deformClear": "Reset warp",
   "retouch.deformClearWhy": "Clears the whole layer: both the all-person default and every per-face override",
   "retouch.scopeAll": "All-person default",

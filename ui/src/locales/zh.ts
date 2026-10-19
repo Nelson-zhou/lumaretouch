@@ -97,6 +97,17 @@ const zh = {
   // 几何不像一张脸时的警告：share 是这一层会动到的画幅比例，backend 是关键点出处
   "retouch.geomWarn": "关键点几何不像一张脸：这一层会动到画面 {share}% 的像素（后端 {backend}）。"
     + "瘦脸可能同时拖到背景与非脸区域；要按脸落点，请装 mediapipe 插件后端",
+  "retouch.enhanceTitle": "眼牙增强（几何掩膜 + 内容门）",
+  "retouch.sclera": "眼白提亮",
+  "retouch.iris": "虹膜增强",
+  "retouch.teeth": "牙齿美白",
+  "retouch.enhGate": "覆盖 {px} 格 · {ms} ms/帧",
+  "retouch.enhOff": "这一格现在不会动：{why}",
+  "retouch.enhDefer": "关键点还没回来：参数已存住，下一次分析会自动接回这一层",
+  "retouch.enhBlocked": "多人图要先点选改谁（SCOPE-001：不替你选一张脸）",
+  "retouch.enhNoFace": "还没做出可信的人脸分析：这一层的掩膜从关键点重画",
+  "retouch.enhClear": "重置眼牙",
+  "retouch.enhHow": "不是神经网络：MediaPipe FaceMesh 几何画掩膜，再按本池均值的相对亮/艳开门",
   "retouch.deformClear": "重置形变",
   "retouch.deformClearWhy": "整层清空：全人物默认与每一个人的单独覆盖一起清掉",
   "retouch.scopeAll": "全人物默认",

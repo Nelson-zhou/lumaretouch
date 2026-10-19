@@ -72,6 +72,8 @@ export interface SessionEdits {
   lut: boolean;
   lut_preset: string | null;
   grade: boolean;
+  /** 眼牙层有没有活（三个子功能里至少一个非零）。可选：老引擎没报这一格 */
+  enhance?: boolean;
   channel: string | null;
 }
 
@@ -103,6 +105,11 @@ export interface DocState {
             *  下拉框的选中值只能从这里读：换图、重开工程、撤销都会改它，前端自己
             *  记一份就是在替引擎说谎（“当前值必须来自引擎”这条纪律没有例外）。 */
            scope?: string; scopes?: string[]; mask_px?: number };
+  /** 眼牙局部增强（LNX-PORTRAIT-009）。整块可选：老引擎的 doc_state 里没这一格，
+   *  声明成必存就会在 JSON 边界上炸掉整棵树。`reason` 是"那一格为什么没接通"的唯一
+   *  出处——面板那句禁用说明只能引用它，不许前端自己推断（推断的那一句在换图之后
+   *  就是说谎：闭嘴样本的牙齿那一格、侧脸被几何校验拒掉的那两只眼各有各的原因）。 */
+  enhance?: EnhanceDoc;
   /** 曝光/白平衡（P0 lnx.exposure / lnx.white_balance）。`reference_k` 为 null 是
    *  “没指定参考光源”，不是 0：“中性=null 不能解成零”写在注册表的 null_semantics 里。 */
   exposure: { ev: number; temperature_shift: number; tint_shift: number;
@@ -454,6 +461,62 @@ export interface FaceState {
   max_faces_probed: number;
 }
 
+/** 眼牙局部增强在引擎里的那一格账（doc_state.enhance 与 enhance_done 同一个组装点）。 */
+export interface EnhanceDoc {
+  /** 三个子功能当前的滑块值，[0,1]；0 就是这一格没开 */
+  amounts: Record<string, number>;
+  /** 子功能名单：面板画几条滑块由引擎这一格决定，前端不刻第二份 */
+  subs?: string[];
+  /** 值域 [0, limit]（ready 里也报一份） */
+  limit?: number[];
+  /** 挂过场没有（第一次非零 set 时从关键点重画） */
+  built: boolean;
+  /** 这一层现在真的有力吗：`built` 而 `lit=false` 是常态——闭嘴样本的牙齿那一格 */
+  lit: boolean;
+  /** 场还没重画（重开工程 / 迁会话 / 换后端）：参数已存住，等下一次分析自动接回 */
+  defer?: boolean;
+  /** 这一层挂在谁的脸上（归一化脸盒）；认不回时为 null。SCOPE-001 的落点 */
+  box?: number[] | null;
+  /** 每个子功能过了内容门的格数（0 就是那一格这一张上不会动） */
+  gated_px?: Record<string, number>;
+  /** 每个子功能没接通时引擎说的那句话；null = 接通了 */
+  reason?: Record<string, string | null>;
+}
+
+/** 一次眼牙增强事件的回报（引擎侧 enhance_done，LNX-PORTRAIT-009）。 */
+export interface EnhanceInfo extends Omit<EnhanceDoc, "reason"> {
+  /** set/clear 是用户发的；rebuild 是关键点回来后重画掩膜；invalidate 是整层被放下
+   *  （换成 synthetic / 认不回那一张脸 / 重画失败）；defer 是"参数存住等分析" */
+  action: "set" | "clear" | "rebuild" | "invalidate" | "defer";
+  person_box?: number[] | null;
+  render_ms: number;
+  total_ms: number;
+  /** 下面这些是宿主槽位里那份嵌套账（与 `_enhance_payload` 同名） */
+  enhance_subs?: string[];
+  enhance_limit?: number;
+  enhance_geom_px?: Record<string, number>;
+  enhance_mouth?: Record<string, unknown>;
+  enhance_eyes?: Record<string, unknown>[];
+  enhance_window?: number[] | null;
+  bytes_enhance?: number;
+  enhance_ms?: number;
+  enhance_build_ms?: number;
+  device?: string;
+  layer_recomputed?: boolean;
+  /** invalidate/defer 那两条给出的整层级说明 */
+  note?: string;
+  /** 事件这一份的 `reason` 是**整层**一句话（defer/invalidate 才有），与 doc_state
+   *  那份逐子功能映射同名不同形。归一在 enhanceStateOf 里做。 */
+  reason?: string | null;
+  /** 逐子功能的原因（面板那句"这一格现在不会动"引用的就是它；与 doc_state.enhance.reason
+   *  同一个来源 enhance_facts，所以两份必然同一句话） */
+  enhance_reason?: Record<string, string | null>;
+  /** 事件里那份嵌套的 amounts（宿主槽位读它；面板读平铺） */
+  enhance_amounts?: Record<string, number>;
+  enhance_lit?: boolean;
+  dropped_amounts?: Record<string, number>;
+}
+
 export interface DeformInfo {
   /** set/clear 是用户发的；rebuild 是关键点更新后引擎重解单位场；
    *  invalidate 是层被整条清除（后端换成不能按脸形取点的 synthetic）——那一条
@@ -692,6 +755,9 @@ export interface EngineStatus {
   lut: LutInfo | null;
   /** 最近一次 grade_done（M3-b）；与 lut 同生命期：肤色定向也随文档走。 */
   grade: GradeInfo | null;
+  /** 最近一次 enhance_done（PORTRAIT-009）；换图/换引擎进程会清空（掩膜是从关键点
+   *  重画的，没有关键点就没有这一层）。 */
+  enhance: EnhanceInfo | null;
   /** 最近一次 bg_done（M6 换底）；换图/换设备会清空（遮罩随代理档与设备走）。 */
   background: BackgroundInfo | null;
   /** 引擎在 ready 里报出的内置预设清单（M3-b）。空数组 = 这个引擎还没这一能力，
@@ -765,6 +831,11 @@ export interface EngineStatus {
      *  "引擎有而屏幕上没有"（与 auto_pick 那一格同一类）。 */
     deform_kinds?: string[];
     deform_range?: number[];
+    /** 眼牙增强（LNX-PORTRAIT-009）：子功能名单、值域与动作名单。面板画几条滑块
+     *  由这几格决定——引擎加了第四个子功能而屏幕上没有，就是双出处的形状。 */
+    enhance_subs?: string[];
+    enhance_range?: number[];
+    enhance_actions?: string[];
     task_actions?: string[];
     export_formats?: string[];
     [k: string]: unknown;
@@ -1108,6 +1179,40 @@ export const runLut = (
     amount: opts?.amount,
   });
 
+/** 眼牙局部增强（LNX-PORTRAIT-009）：三个子功能各自独立启停。
+ *
+ * set 是部分提交：只给一个子功能时另两个沿用当前值（拖一个滑块不该把另外两个抹零，
+ * 与定向层同一条语义）。拖动期间逐事件发：这一层每帧只在自己那只窗口里逐点乘加
+ * （实测 enhance_ms 在产品档上是零点几毫秒），不发就是"滑块拖了、画面不动"。
+ * 越界与不认识的子功能整条拒，拒完状态干净——UI 不必先夹再发。
+ */
+export const runEnhance = (
+  action: EnhanceInfo["action"],
+  opts?: { sclera?: number; iris?: number; teeth?: number },
+) =>
+  invoke<{ requested: boolean }>("enhance", {
+    action,
+    sclera: opts?.sclera,
+    iris: opts?.iris,
+    teeth: opts?.teeth,
+  });
+
+/** 眼牙层现状：与 faceStateOf 同一类"两个来源汇成一份"（重开工程那一刻 image_ready
+ *  先带着"还没分析"的账出来，几百毫秒后自动补的那次分析才把场重画回来）。 */
+export const enhanceStateOf = (
+  st: EngineStatus | null, doc: DocState | null,
+): EnhanceDoc | null => {
+  const ev = st?.enhance;
+  if (ev) {
+    // 事件那份的平铺 reason 是整层一句话，面板要的逐格原因在 enhance_reason 里：
+    // 不在这里换下来，`reason[sub]` 就是在字符串上取下标，恒 undefined——于是
+    // "闭嘴样本的牙齿那一格为什么不动"这句在屏幕上永远显示不出来（而 DoD §3 要的
+    // 正是"禁用必须带原因"）。其余字段两形同名同值，直接摊平用。
+    return { ...ev, reason: ev.enhance_reason ?? undefined };
+  }
+  return doc?.enhance ?? null;
+};
+
 /** 肤色定向（M3-b）：三个增量 + 一个混入比例。
  *
  * set 是部分提交：没给的增量沿用当前值（拖一个滑块不该把另外两个抹零）。
@@ -1272,6 +1377,10 @@ export interface M0Env {
   /** 分人编辑（LNX-PORTRAIT-003）自动通道（$LRT_AUTO_FACE）：<要选的 index>。真窗口要证的
    *  是 runFace → Rust face → 引擎 face_selected → status.face 这四层签名，外加两句话：
    *  未选定时整条拒而画面一格没动、选定之后没被选中的那一圈逐字节没动。 */
+  /** 眼牙增强（LNX-PORTRAIT-009）自动通道（$LRT_AUTO_ENHANCE）："sclera:iris:teeth"，
+   *  三个 [0,1]。这一条要证的是四层签名 + 窗口外逐字节不动 + clear 后回出厂帧——后两条
+   *  只能拿用户看见的那一帧量，屏上没有第二块画布可比。 */
+  auto_enhance: string;
   auto_face: string;
   /** M6 换底自动通道（$LRT_AUTO_BG）："rrggbb:tol:softness"。真窗口要证的不是
    *  合成对不对（test_matting 已钉），而是 TS runBackground → Rust background →

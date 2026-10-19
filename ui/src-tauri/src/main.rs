@@ -119,6 +119,10 @@ pub struct AppState {
     /// 最近一次 grade_done（M3-b 肤色定向）。与 lut 分开存：预设一条命令同时动两层，
     /// 但两层的数字、耗时与账单各自一份，合成一份就分不清“表淡了还是肤色淡了”。
     grade: Mutex<Option<Value>>,
+    /// 最近一次 enhance_done（PORTRAIT-009 眼牙局部增强）。与 grade 分开存：这一层
+    /// 报的是几何掩膜与内容门的账（每子功能盖了多少格、没接通是为什么），生命期同
+    /// 形变层——关键点一走它就没有来源，换图/换进程必须清空。
+    enhance: Mutex<Option<Value>>,
     /// 最近一次 bg_done（M6 换底）。与 grade 分开存：换底是一次事件驱动的遮罩合成，
     /// 报的是合成耗时与遮罩常驻字节；生命期同图层（换图即清）。
     background: Mutex<Option<Value>>,
@@ -238,6 +242,7 @@ impl AppState {
             lut: Mutex::new(None),
             grade: Mutex::new(None),
             background: Mutex::new(None),
+            enhance: Mutex::new(None),
             presets: Mutex::new(Vec::new()),
             grade_limits: Mutex::new(Vec::new()),
             export: Mutex::new(None),
@@ -367,6 +372,10 @@ impl AppState {
 
     pub fn on_grade_ready(&self, v: &Value) {
         *self.grade.lock().unwrap() = Some(v.clone());
+    }
+
+    pub fn on_enhance_ready(&self, v: &Value) {
+        *self.enhance.lock().unwrap() = Some(v.clone());
     }
 
     pub fn on_bg_ready(&self, v: &Value) {
@@ -686,6 +695,7 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     *st.inpaint.lock().unwrap() = None;      // 笔迹层随会话走：新进程里一笔也没落
     *st.light.lock().unwrap() = None;        // 增减层与笔迹同生命期
     *st.background.lock().unwrap() = None;   // 换底层同理：新进程里 matte=None
+    *st.enhance.lock().unwrap() = None;      // 眼牙层同理：新进程里没有关键点，掩膜画不出
     *st.presets.lock().unwrap() = Vec::new();  // 清单等新进程的 ready 重新填
     *st.grade_limits.lock().unwrap() = Vec::new();
     *st.export.lock().unwrap() = None;         // 新进程还没导出一张，上一批的账单不是本会话的
@@ -1036,6 +1046,32 @@ fn lut(
     }
     if let Some(v) = amount {
         cmd["amount"] = json!(v);
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 眼牙局部增强（LNX-PORTRAIT-009）：三个子功能独立启停。
+///
+/// 一律"给了才附"：部分提交语义靠的就是"没给"与"给了 0"的区别，宿主替引擎填 0.0
+/// 就等于把另外两格抹零（与 grade/deform 同一条规矩）。
+#[tauri::command]
+fn enhance(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    sclera: Option<f64>,
+    iris: Option<f64>,
+    teeth: Option<f64>,
+) -> Result<Value, String> {
+    let mut cmd = json!({"cmd": "enhance", "action": action});
+    if let Some(v) = sclera {
+        cmd["sclera"] = json!(v);
+    }
+    if let Some(v) = iris {
+        cmd["iris"] = json!(v);
+    }
+    if let Some(v) = teeth {
+        cmd["teeth"] = json!(v);
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
@@ -1417,6 +1453,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let lut = state.lut.lock().unwrap().clone();
     let grade = state.grade.lock().unwrap().clone();
     let background = state.background.lock().unwrap().clone();
+    let enhance = state.enhance.lock().unwrap().clone();
     let export = state.export.lock().unwrap().clone();
     let export_progress = state.export_progress.lock().unwrap().clone();
     let export_caps = state.export_caps.lock().unwrap().clone();
@@ -1442,7 +1479,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "face": face,
            "inpaint": inpaint, "light": light, "deform": deform, "lut": lut,
            "grade": grade, "presets": presets, "grade_limits": grade_limits,
-           "background": background,
+           "background": background, "enhance": enhance,
            "export": export, "export_progress": export_progress,
            "export_caps": export_caps,
            "raw_backends": raw_backends,
@@ -1886,6 +1923,9 @@ fn m0_env() -> Value {
         // 局部调色（COLOR-004）："fx:fy:r:dh:ds:dv"。区域外逐字节不动这一条只能在真窗口量，
         // 所以它与上面几条同一个身份：签名递得到 + 画面真的按作用域在动。
         "auto_local_color": std::env::var("LRT_AUTO_LOCAL_COLOR").unwrap_or_default(),
+        // 眼牙增强（LNX-PORTRAIT-009）："sclera:iris:teeth"。与上面几条同一个身份：
+        // 只有真窗口能证明 runEnhance → Rust enhance → 引擎 enhance_done 这条签名对得上。
+        "auto_enhance": std::env::var("LRT_AUTO_ENHANCE").unwrap_or_default(),
         "auto_face": std::env::var("LRT_AUTO_FACE").unwrap_or_default(),
         // M4 导出自动通道："<目录>@<格式>@<tile>"（tile 与格式可省）。真窗口跑这一条
         // 才能证明 runExport → Rust export → 引擎 export_done 对得上，而且落盘文件
@@ -1931,7 +1971,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, precompute,
-            inpaint, light, deform, lut, grade, background, export, session, filmstrip, history,
+            inpaint, light, deform, lut, grade, enhance, background, export, session, filmstrip, history,
             project, task, exposure, crop, preset, batch, face, pick,
             report, quit
         ])
