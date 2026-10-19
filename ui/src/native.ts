@@ -82,7 +82,13 @@ export interface DocState {
   channel: string | null;
   light: { exposure: number; radius: number };
   counts: { repair: number; light: number; repair_redo: number; light_redo: number };
-  deform: { amounts: Record<string, number>; built: boolean };
+  deform: { amounts: Record<string, number>; built: boolean;
+            /** 「层在而关键点还没回来」（CORE-001 重开 / 迁会话）：滑块值不许弹回 0，
+             *  面板要显示「等重新分析」，因为引擎已经答应自动补一次分析 */
+            defer?: boolean };
+  /** 多人图的分人编辑状态（PORTRAIT-003）。可选：老引擎的 doc_state 里没这一格，
+   *  把它声明成必存就会在 JSON 边界上炸一个 TypeError 把整棵树拆掉。 */
+  face?: FaceState;
   lut: { lit: boolean; amount: number; preset: string | null };
   grade: { dh: number; ds: number; dv: number; amount: number; lit: boolean;
            /** COLOR-004 局部调色：作用域、引擎报的可选名单、区域盖了多少格。
@@ -317,11 +323,36 @@ export interface LightInfo {
 }
 
 /** 一次形变事件的回报（引擎侧 deform_done，M2-b）。三个滑块一条。 */
+/** 多人图里「这张图上有谁、正在改谁」（LNX-PORTRAIT-003）。
+ *
+ * 每一个字段都来自引擎的 `_face_state()`：名单是那一次真实分析算出来的，前端数不来
+ * 也不许猜。`blocked` 是唯一的放行判据——它是「多人而用户还没点选」，那时面部重塑
+ * 整条被拒（SCOPE-001），面板必须显式禁用并写明原因，而不是留一个点了没反应的滑块。 */
+export interface FacePerson {
+  index: number;
+  /** 归一化脸盒 [左,上,右,下]；认不回那一张时为 null */
+  box: number[] | null;
+  /** 脸盒占画幅的比例（0–1），只用来给 chip 排个序、显示大小 */
+  area: number;
+}
+export interface FaceState {
+  index: number;
+  /** 这一张是不是用户显式点选的（引擎区分「默认 0 号」与「用户选了 0 号」） */
+  explicit: boolean;
+  box: number[] | null;
+  num_faces: number;
+  faces: FacePerson[];
+  blocked: boolean;
+  /** 人像模块作用面受限的原因码（multi_face）；null = 不受限 */
+  scope_block: string | null;
+  max_faces_probed: number;
+}
+
 export interface DeformInfo {
   /** set/clear 是用户发的；rebuild 是关键点更新后引擎重解单位场；
    *  invalidate 是层被整条清除（后端换成不能按脸形取点的 synthetic）——那一条
    *  必须把滑块归零，否则界面上写着 0.6 而画面一动不动 */
-  action: "set" | "clear" | "rebuild" | "invalidate";
+  action: "set" | "clear" | "rebuild" | "invalidate" | "defer";
   /** 三种形变当前的滑块值，[-1,1]。0 就是不动。 */
   amounts: Record<string, number>;
   /** 单位场建过没有（第一次非零 set 时建） */
@@ -358,6 +389,11 @@ export interface DeformInfo {
   reason?: string;
   /** invalidate 那一条带上刚才的滑块值：只报 lit=false 的话，滑块弹回零像出了 bug */
   dropped_amounts?: Record<string, number>;
+  /** 这一层只是「等关键点回来」（重开工程 / 迁会话）：值还在，单位场还没解出来。
+   *  与 invalidate 的区别要说清：invalidate 是层没了，defer 是层在等人。 */
+  defer?: boolean;
+  /** defer 那一条带着用户那一层的值（`amounts` 报的是会话当前真在渲染什么） */
+  deferred_amounts?: Record<string, number> | null;
   device: string;
   strength: number;
 }
@@ -530,6 +566,10 @@ export interface EngineStatus {
   image: ImageReady | null;
   /** 最近一次 precompute_ready；换图/换引擎进程会清空。 */
   precompute: Precompute | null;
+  /** 引擎关于「有几个人、在改哪一个」的最新一句陈述（PORTRAIT-003）。
+   *  一个槽位、多源汇入：precompute_ready / face_selected / face_list，以及任何带
+   *  doc_state 的事件。`source` 说的是哪一条事件说的，出问题时要能指认。 */
+  face: { source: string; face: FaceState } | null;
   /** 最近一次 inpaint_done；换图/换设备会清空（图层跟着会话走）。 */
   inpaint: InpaintInfo | null;
   /** 最近一次 light_done；与 inpaint 同生命期，但两份结果各自一份，不串台。 */
@@ -901,6 +941,22 @@ export const runLight = (
 export const runDeform = (action: DeformInfo["action"], amounts?: Record<string, number>) =>
   invoke<{ requested: boolean }>("deform", { action, amounts });
 
+/** 多人图选人（LNX-PORTRAIT-003）：list 问名单，select 点定「这次改哪一张」。
+ *
+ * 为什么必须走引擎而不是前端自己记住「我点了第几个人」：SCOPE-001 挡的就是「引擎替你
+ * 选了一张脸」，放行的凭据必须是用户的一次显式点击，而这份点击要进文档状态、进撤销栈、
+ * 进出片口径。前端只画 chip 与发 index。答复走 face_selected（轮询 status.face 取）。 */
+/** 引擎关于「这张图上有几个人、正在改哪一个」的最新一份。
+ *
+ *  先后次序只在这一处定：事件槽位（precompute_ready / face_selected）比 doc_state 新——
+ *  重开工程那一刻 image_ready 先带着「还没分析」的 face 出来，几百毫秒后自动补的那次
+ *  分析才把名单与选型报回来。写两份就会有一份漂。 */
+export const faceStateOf = (st: EngineStatus | null, doc: DocState | null): FaceState | null =>
+  st?.face?.face ?? doc?.face ?? null;
+
+export const runFace = (action: "list" | "select", index?: number) =>
+  invoke<{ requested: boolean }>("face", { action, index });
+
 /** 影楼色彩（M3-a2）：送一张 .cube，或只改混合系数。
  *
  * path 与 text 二选一（同时给会被引擎整条拒：拿到哪张都是“对的那张的错版本”）。
@@ -1080,6 +1136,10 @@ export interface M0Env {
    *  fx/fy 是代理帧归一化坐标、r 是像素半径（与修容同一套坐标口径），后三个是定向增量。
    *  这一条要证的是三层签名对得上 + 区域外逐字节不动（后者只能拿用户看见那一帧量）。 */
   auto_local_color: string;
+  /** 分人编辑（LNX-PORTRAIT-003）自动通道（$LRT_AUTO_FACE）：<要选的 index>。真窗口要证的
+   *  是 runFace → Rust face → 引擎 face_selected → status.face 这四层签名，外加两句话：
+   *  未选定时整条拒而画面一格没动、选定之后没被选中的那一圈逐字节没动。 */
+  auto_face: string;
   /** M6 换底自动通道（$LRT_AUTO_BG）："rrggbb:tol:softness"。真窗口要证的不是
    *  合成对不对（test_matting 已钉），而是 TS runBackground → Rust background →
    *  引擎 bg_done 这条命令签名在真窗口里对得上，且画面真的变了（peek 字节差）。 */

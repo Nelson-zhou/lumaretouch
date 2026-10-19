@@ -94,6 +94,11 @@ pub struct AppState {
     /// 最近一次 precompute_ready（478 点 / 掩膜通道 / 常驻设备）。
     /// 与 image 分开存：换图不重跑预计算时，陈的掩膜状态绝不能当成还在。
     precompute: Mutex<Option<Value>>,
+    /// 最近一次引擎关于「这张图里有几张脸、正在改哪一张」的说法（PORTRAIT-003）。
+    /// 一个槽位、多个来源：precompute_ready / face_selected / face_list，加上任何带
+    /// doc_state 的事件（image_ready、history_state）。分成几份存就会出现「面板读着旧的
+    /// 而引擎说的是新的」；而这几路说的是同一件事，所以必须汇成一份。
+    face: Mutex<Option<Value>>,
     /// 最近一次 inpaint_done（消除笔的事件驱动结果）。与图层同生命期：
     /// 换图/换引擎进程必须清空，否则前端会拿上一张图的修补指标当本图的。
     inpaint: Mutex<Option<Value>>,
@@ -215,6 +220,7 @@ impl AppState {
             engine: Mutex::new(None),
             image: Mutex::new(None),
             precompute: Mutex::new(None),
+            face: Mutex::new(None),
             inpaint: Mutex::new(None),
             light: Mutex::new(None),
             deform: Mutex::new(None),
@@ -285,6 +291,7 @@ impl AppState {
 
     /// 三条带 doc_state 的事件都进这里落一份"引擎最新说的文档状态 + 它是谁说的"。
     fn note_doc(&self, v: &Value, src: &str) {
+        self.note_face(v, src);
         match v.get("doc_state") {
             Some(ds) if !ds.is_null() => {
                 *self.doc_report.lock().unwrap() =
@@ -304,6 +311,29 @@ impl AppState {
 
     pub fn on_precompute_ready(&self, v: &Value) {
         *self.precompute.lock().unwrap() = Some(v.clone());
+        self.note_face(v, "precompute_ready");
+    }
+
+    /// 引擎关于「有几个人、在改哪一个」的任何一句陈述都进这里落一份。
+    /// 事件自己带 `face`（precompute_ready / face_selected / face_list），带 `doc_state`
+    /// 的那些（image_ready / history_state）里也有同一个对象——两个形状取到一个槽位。
+    pub fn note_face(&self, v: &Value, src: &str) {
+        let cand = v.get("face").cloned()
+            .or_else(|| v.get("doc_state").and_then(|d| d.get("face")).cloned());
+        match cand {
+            Some(f) if f.is_object() => {
+                *self.face.lock().unwrap() = Some(json!({"source": src, "face": f}));
+            }
+            _ => {
+                // 没带这一格的事件不改动槽位：选型是文档状态，只有引擎说了才算
+            }
+        }
+    }
+
+    /// 多人图选人（PORTRAIT-003）：把用户那一次点击送进引擎，答复走 face_selected。
+    #[allow(dead_code)]
+    pub fn on_face(&self, v: &Value, src: &str) {
+        self.note_face(v, src);
     }
 
     pub fn on_inpaint_ready(&self, v: &Value) {
@@ -619,6 +649,7 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     // 去驱一个 _vram=None 的新引擎（量出来就是“没跑但正常”）。
     *st.image.lock().unwrap() = None;
     *st.precompute.lock().unwrap() = None;
+    *st.face.lock().unwrap() = None;        // 新进程没分析过任何图，名单是空的
     *st.deform.lock().unwrap() = None;      // 形变层随关键点走，新进程里没有关键点
     *st.lut.lock().unwrap() = None;          // 调色层也随文档走，新进程里一张表也没挂
     *st.grade.lock().unwrap() = None;        // 定向层同理：新进程里肤色参数应当全是零
@@ -732,6 +763,8 @@ fn load_image(
     }
     *state.image.lock().unwrap() = None;      // 清掉上一张的就绪标记，否则前端会读到陈数据
     *state.precompute.lock().unwrap() = None;
+    // 人脸名单同理：换一张图就是换一摞脸，留着旧名单会让人点到一个不存在的 index
+    *state.face.lock().unwrap() = None;
     // 画笔图层也一起清：引擎侧 load_image 会丢旧笔画，宿主留着就是报一个不存在的图层状态
     *state.inpaint.lock().unwrap() = None;
     *state.light.lock().unwrap() = None;
@@ -914,6 +947,25 @@ fn deform(
     // 生产默认值一改这条通路就会静默漂开。
     if let Some(v) = amounts {
         cmd["amounts"] = v;
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 多人图选人（PORTRAIT-003）：action list / select（select 要带 index）。
+///
+/// 为什么这条必须由引擎回答而不是前端自己数：SCOPE-001 挡的就是「引擎替你选了一张脸」，
+/// 那放行的凭据必须是用户的一次显式点击，而名单只能来自那一次真实分析。前端数出来的
+/// chip 与引擎能服务的张数一旦不一致，「点了没反应」就再也没人说得清是谁的错。
+#[tauri::command]
+fn face(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    index: Option<u32>,
+) -> Result<Value, String> {
+    let mut cmd = json!({"cmd": "face", "action": action});
+    if let Some(v) = index {
+        cmd["index"] = json!(v);
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
@@ -1320,6 +1372,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let logs: Vec<String> = state.logs.lock().unwrap().iter().rev().take(25).cloned().collect();
     let image = state.image.lock().unwrap().clone();
     let precompute = state.precompute.lock().unwrap().clone();
+    let face = state.face.lock().unwrap().clone();
     let inpaint = state.inpaint.lock().unwrap().clone();
     let light = state.light.lock().unwrap().clone();
     let deform = state.deform.lock().unwrap().clone();
@@ -1346,6 +1399,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let grade_limits: Vec<f64> = state.grade_limits.lock().unwrap().clone();
     json!({"shm": shm_name, "has_shm": has_shm, "emitted": emitted,
            "delivered": delivered, "logs": logs, "image": image, "precompute": precompute,
+           "face": face,
            "inpaint": inpaint, "light": light, "deform": deform, "lut": lut,
            "grade": grade, "presets": presets, "grade_limits": grade_limits,
            "background": background,
@@ -1391,6 +1445,7 @@ fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     // 自动流程拿陈尺寸与陈掩膜状态起跑
     *state.image.lock().unwrap() = None;
     *state.precompute.lock().unwrap() = None;
+    *state.face.lock().unwrap() = None;
     *state.inpaint.lock().unwrap() = None;
     *state.light.lock().unwrap() = None;
     *state.deform.lock().unwrap() = None;
@@ -1737,6 +1792,7 @@ fn m0_env() -> Value {
         // 局部调色（COLOR-004）："fx:fy:r:dh:ds:dv"。区域外逐字节不动这一条只能在真窗口量，
         // 所以它与上面几条同一个身份：签名递得到 + 画面真的按作用域在动。
         "auto_local_color": std::env::var("LRT_AUTO_LOCAL_COLOR").unwrap_or_default(),
+        "auto_face": std::env::var("LRT_AUTO_FACE").unwrap_or_default(),
         // M4 导出自动通道："<目录>@<格式>@<tile>"（tile 与格式可省）。真窗口跑这一条
         // 才能证明 runExport → Rust export → 引擎 export_done 对得上，而且落盘文件
         // 的尺寸是“满幅不是代理档”的唯一直接证据
@@ -1777,7 +1833,7 @@ fn main() {
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, precompute,
             inpaint, light, deform, lut, grade, background, export, session, filmstrip, history,
-            project, task, exposure, crop, preset, batch,
+            project, task, exposure, crop, preset, batch, face,
             report, quit
         ])
         .run(tauri::generate_context!())

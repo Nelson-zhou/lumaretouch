@@ -9,7 +9,8 @@ import { t, type MsgKey } from "./i18n";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   benchStart, benchStats, engineStatus, loadImage, m0Env, parseFrameHead, peekFrame,
-  quit, report, runDeform,
+  faceStateOf,
+  quit, report, runDeform, runFace,
   fetchFilmstrip, runExport, runGrade, runHistory, runInpaint, runLight, runLut, runSession, runBackground,
   runBatch, runCrop, runExposure, runPreset, runPrecompute, runProject, runTask,
   setCompare, setStrength, shutdownEngine, startEngine,
@@ -258,7 +259,14 @@ export default function App() {
         // 引擎把整层清了（关键点后端换成不能按脸形取点的那个、或重建失败）：滑块必须
         // 跟着归零。不接这一句就是“界面上写着 0.6 而画面一动不动”，而事件里已说清了
         // 原因——字段与实际错开正是本仓反复付学费的那一类
-        if (st.deform.action === "invalidate") {
+        if (st.deform.action === "defer") {
+          // 重开工程 / 迁会话那一条：层还在而关键点还没回来。滑块值保持引擎报的那一份
+          // （deferred_amounts）——归零就是“把用户的作品按引擎内部事件抹掉”，而那句
+          // 「已清除」是 invalidate 才说的。值没丢而画面暂未生效，由面板那行提示讲清。
+          setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0,
+                             ...(st.deform.deferred_amounts ?? st.deform.amounts ?? {}) });
+          setDeformNote(st.deform.reason ?? "");
+        } else if (st.deform.action === "invalidate") {
           setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0 });
           setDeformNote(st.deform.reason ?? "");
           setDeformGeomWarn(false);
@@ -1192,6 +1200,127 @@ export default function App() {
           })}`);
         }
       }
+      // 分人编辑（LNX-PORTRAIT-003）自动通道（$LRT_AUTO_FACE=<要选的 index>）。
+      // 库里那九段判据连的是裸引擎，中间隔着 Rust 的 face 命令与宿主的状态搬运——那两层
+      // 只有真窗口能证明。这一臂量四件事：①未选定就推形变，引擎整条拒（SCOPE-001）而画面
+      // 一格没动（不许留半截状态）；②runFace → face_selected → status.face 落回宿主；
+      // ③选定本身不改画面（选人不等于调图）；④推完形变之后**没被选中的那一圈逐字节没动**。
+      // 第④条只能拿用户看见的那一帧量：屏幕上没有第二块画布可比。
+      if (env.auto_face) {
+        const want = Number(env.auto_face);
+        if (!Number.isInteger(want) || want < 0) {
+          await report(`M0_ERROR 无法解析 LRT_AUTO_FACE=${env.auto_face}（要一个非负整数 index）`);
+        } else if (!image) {
+          await report("M0_ERROR LRT_AUTO_FACE 需要 LRT_LOAD_IMAGE + LRT_PRECOMPUTE"
+            + "（多人夹具：先解图再分析，名单只能来自真实分析）");
+        } else {
+          const pw = image.w;
+          const ph = image.h;
+          const full = (f: any) => !!f && f.rows === f.h && f.pixelLen === f.w * f.h * 4;
+          let bad = "";
+          let numFaces = 0;
+          let blockedBefore: boolean | null = null;
+          let pickSource = "";
+          let changedBySelect = -1;
+          let insideChanged = -1;
+          let outsideChanged = -1;
+          let df: DeformInfo | null = null;
+          const st0 = await engineStatus().catch(() => null);
+          const f0 = faceStateOf(st0, st0?.doc_report?.doc_state ?? null);
+          numFaces = f0?.faces.length ?? 0;
+          blockedBefore = f0?.blocked ?? null;
+          const errBefore = st0?.last_error ?? "";
+          const base = await peek();
+          // ① 未选定就推形变：期待一条引擎的拒绝，而画面一格不许动
+          try {
+            await runDeform("set", { slim_face: 0.6, big_eye: 0.3, small_chin: 0 });
+          } catch (e) { bad = `runDeform 抛错（未选定那一臂）: ${e}`; }
+          let errAfter = "";
+          for (let i = 0; i < 120 && !bad; i++) {
+            await sleep(100);
+            const st = await engineStatus().catch(() => null);
+            const e = st?.last_error ?? "";
+            if (e && e !== errBefore) { errAfter = e; break; }
+          }
+          if (!bad && !errAfter) bad = "12s 内没等到引擎拒绝未选定时的形变（SCOPE-001 那条没落）";
+          if (!bad && !errAfter.includes("face select")) {
+            bad = `拒绝没给出路（文案里该有 face select）：${errAfter.slice(0, 120)}`;
+          }
+          const afterReject = await peek();
+          const rejectDiff = (base && afterReject && full(base) && full(afterReject)
+            && base.w === afterReject.w && base.h === afterReject.h)
+            ? diffBytes(base.pixels, afterReject.pixels) : -1;
+          if (!bad && rejectDiff !== 0) {
+            bad = `被拒之后画面还动了 ${rejectDiff} 字节（或快照不可比）：拒绝不许留半截状态`;
+          }
+          // ② 用户点选那一张：答复要落进宿主那一个槽位
+          if (!bad) {
+            try {
+              await runFace("select", want);
+            } catch (e) { bad = `runFace 抛错: ${e}`; }
+            for (let i = 0; i < 200 && !bad; i++) {
+              await sleep(100);
+              const st = await engineStatus().catch(() => null);
+              if (st?.face?.source === "face_selected" && st.face.face.explicit
+                && st.face.face.index === want) { pickSource = st.face.source; break; }
+            }
+            if (!bad && !pickSource) bad = `20s 内 face_selected 没落进宿主的 status.face（want=${want}）`;
+          }
+          // ③ 选定不改画面：选人是「换个服务对象」，不是「调了一次图」
+          const afterSelect = bad ? null : await peek();
+          if (!bad) {
+            changedBySelect = (afterReject && afterSelect && full(afterReject) && full(afterSelect))
+              ? diffBytes(afterReject.pixels, afterSelect.pixels) : -1;
+            if (changedBySelect !== 0) {
+              bad = `点选人物就改了画面 ${changedBySelect} 字节：选人不等于调图`;
+            }
+          }
+          // ④ 选定之后再推同样的三个数：这一回要建层、要出帧
+          if (!bad) {
+            try {
+              await runDeform("set", { slim_face: 0.6, big_eye: 0.3, small_chin: 0 });
+            } catch (e) { bad = `runDeform 抛错（已选定那一臂）: ${e}`; }
+            for (let i = 0; i < 200 && !bad; i++) {
+              await sleep(100);
+              const st = await engineStatus().catch(() => null);
+              if (st?.deform && st.deform.lit && st.deform.action === "set") { df = st.deform; break; }
+            }
+            if (!bad && !df) bad = "选定后 20s 内没等到点火的 deform_done";
+          }
+          const after = bad ? null : await peek();
+          const stF = await engineStatus().catch(() => null);
+          const fF = faceStateOf(stF, null);
+          const box = fF?.faces.find((x) => x.index === want)?.box ?? null;
+          if (!bad && after && afterReject && full(after) && full(afterReject)
+            && after.w === afterReject.w && after.h === afterReject.h && box && box.length === 4) {
+            // 与 ADR-0009 同一个口径：TPS 是紧支撑窗，实测最远变化落在 1.58× 脸半对角，
+            // 所以「没被选中的那一圈」取 1.6R 之外——那里必须一格不动。
+            const cx = ((box[0] + box[2]) / 2) * after.w;
+            const cy = ((box[1] + box[3]) / 2) * after.h;
+            const r = 0.5 * Math.hypot((box[2] - box[0]) * after.w, (box[3] - box[1]) * after.h);
+            const lim = 1.6 * r;
+            insideChanged = 0; outsideChanged = 0;
+            for (let y = 0; y < after.h; y++) {
+              for (let x = 0; x < after.w; x++) {
+                const i = (y * after.w + x) * 4;
+                if (after.pixels[i] === afterReject.pixels[i]
+                  && after.pixels[i + 1] === afterReject.pixels[i + 1]
+                  && after.pixels[i + 2] === afterReject.pixels[i + 2]) continue;
+                if (Math.hypot(x - cx, y - cy) <= lim) insideChanged++; else outsideChanged++;
+              }
+            }
+          } else if (!bad) {
+            bad = "两份快照不是同一块完整画布或缺脸盒：另一张脸那一圈没法量";
+          }
+          await report(`M0_FACE ${JSON.stringify(bad ? { bad, numFaces, want } : {
+            numFaces, want, blockedBefore, pickSource, changedBySelect,
+            canvas: `${after?.w ?? 0}x${after?.h ?? 0}`, proxy: `${pw}x${ph}`,
+            backend: df?.landmark_backend ?? "", built: df?.built ?? null,
+            bytesDeform: df?.bytes_deform ?? 0, deformMs: df?.deform_ms ?? 0,
+            supportShare: df?.support_share ?? 0, insideChanged, outsideChanged,
+          })}`);
+        }
+      }
       // 等宿主把下一条 history_state 搬进轮询状态：撤销的答复是异步的，
       // 而它的 doc_state 就是"引擎认为现在该摆哪些滑块"的唯一出处
       const waitHistory = async (rev: number, ms = 20000) => {
@@ -2033,19 +2162,28 @@ export default function App() {
   /** 底片条上被选中的那几张（没选就只导当前这张） */
   const selPaths = Array.from(sel);
   const exportTargets = selPaths.length ? selPaths : (hasImage && status?.image?.doc ? [status.image.doc] : []);
-  /** D-P0-02 的单脸口径（注册表 scope_single_face 逐字）：mediapipe + 478 点 + 无几何警告
-   *  + 恰好一张脸。人数这一格只从引擎的 precompute_ready 读（num_faces）：前端数不来，
+  /** 分人编辑那一份（LNX-PORTRAIT-003）：名单与「在改哪一张」全部来自引擎。
+   *  先后次序在 native.ts 的 faceStateOf 里定，这里不写第二份。 */
+  const faceSt = faceStateOf(status, doc);
+  const faceCount = faceSt?.num_faces ?? pc?.num_faces ?? 1;
+  /** D-P0-02 的单脸口径（注册表 scope_single_face 逐字）：mediapipe + 478 点 + 无几何警告，
+   *  作用面要么恰好一张脸，要么多人而用户已显式点选了那一张。人数只从引擎报的读：前端数不来，
    *  也不该自己编一个“看起来只有一张”的判据。synthetic 的网格占位不算可用人脸——引擎在
-   *  deform 里就拒它，界面不许装作能点。 */
-  const faceCount = pc?.num_faces ?? 1;
+   *  deform 里就拒它，界面不许装作能点。
+   *  `blocked` 是引擎那一侧的放行判据（多人而未选定），这里只读不拼：拼第二份就会出现
+   *  「面板说能点而引擎整条拒」那个 DoD 明确禁止的无响应控件。 */
   const faceOk = !!pc && pc.backend === "mediapipe" && pc.num_landmarks === 478
-    && !deformGeomWarn && faceCount === 1;
+    && !deformGeomWarn
+    && (faceCount === 1 || (faceCount > 1 && !!faceSt && faceSt.explicit && !faceSt.blocked));
   const faceWhy = hasImage
-    ? (faceCount > 1
-        ? `画面里探到 ${faceCount} 张脸（检测上限探 ${pc?.max_faces_probed ?? 2} 张）：面部重塑需要且仅需要一张可用人脸，`
-          + "本版本不在多人照片里替你选哪一张（SCOPE-001）。全图调色、曝光/白平衡、裁剪与磨皮仍可用。"
-        : `需要且仅需要一张可用人脸（当前 backend=${pc?.backend ?? "未跑分析"}、点数=${pc?.num_landmarks ?? 0}`
-          + `${deformGeomWarn ? "，且引擎报了几何警告" : ""}）。多人照片上替别人改脸是本产品明确不做的事。`)
+    ? (faceCount > 1 && faceSt?.blocked
+        ? `画面里探到 ${faceCount} 张脸（检测上限探 ${faceSt.max_faces_probed} 张）：`
+          + "本版本不在多人照片里替你选哪一张（SCOPE-001）。先在上方点选要编辑的人物，"
+          + "选好之后这三个滑块就可用（LNX-PORTRAIT-003）；全图调色、曝光/白平衡、裁剪与磨皮仍可用。"
+        : faceCount > 1
+          ? `画面里探到 ${faceCount} 张脸：面部重塑只服务你选定的那一张（人物 ${(faceSt?.index ?? 0) + 1}）。`
+          : `需要且仅需要一张可用人脸（当前 backend=${pc?.backend ?? "未跑分析"}、点数=${pc?.num_landmarks ?? 0}`
+            + `${deformGeomWarn ? "，且引擎报了几何警告" : ""}）。多人照片上替别人改脸是本产品明确不做的事。`)
     : "还没导入图片：这一格要作用于一张打开的图。";
   const liveTask = tasks.length ? tasks[tasks.length - 1] : null;
   // 注册表上的格式名（jpeg/tiff）与引擎落盘用的后缀名（jpg/tif）不是一回事：

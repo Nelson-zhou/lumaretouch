@@ -14,7 +14,8 @@ import RegistryPanel from "./RegistryPanel";
 import { sectionTitleOf, type SectionId } from "../p0";
 import { t, type MsgKey } from "../i18n";
 import {
-  runCrop, runDeform, runExposure, runGrade, runInpaint, runLight, runLut, runTask,
+  faceStateOf, runCrop, runDeform, runExposure, runFace, runGrade, runInpaint, runLight,
+  runLut, runTask,
   setStrength,
   type DocState, type EngineStatus, type ProjectState, type TaskState,
 } from "../native";
@@ -141,6 +142,11 @@ export default function StudioPanel(props: StudioProps) {
   const dim = !props.hasImage;
   const chans = status?.precompute?.mask_channels ?? [];
   const deforms = doc?.deform.amounts ?? {};
+  /** 多人图那一份名单与选型（LNX-PORTRAIT-003）：chip 数、能不能放行，全从引擎报的读。
+   *  前端自己数脸（数不出来的那种“看着像两个人”）与前端自己记“我点了第几个人”都是第二份
+   *  出处，漂的时候会以「面板能点而引擎整条拒」的形态出现。 */
+  const faceSt = faceStateOf(props.status, doc);
+  const multi = !!faceSt && faceSt.faces.length > 1;
   const presets = status?.presets ?? [];
   const gl = (status?.grade_limits ?? []) as number[];
   const gmax = gl.length === 3 ? gl[0] : 100;
@@ -191,6 +197,23 @@ export default function StudioPanel(props: StudioProps) {
 
       {/* 2) 面部重塑与遮罩 */}
       <Group id="face">
+        {multi && (
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            {faceSt!.faces.map((f) => (
+              <button key={f.index} disabled={dim}
+                      className={faceSt!.explicit && faceSt!.index === f.index ? "primary" : ""}
+                      title={`脸盒 ${f.box ? f.box.map((x) => x.toFixed(3)).join(", ") : "无"}`
+                              + `·占画幅 ${(f.area * 100).toFixed(2)}%`}
+                      onClick={() => ok(runFace("select", f.index), props)}>
+                {t("face.person")} {f.index + 1}
+              </button>
+            ))}
+          </div>
+        )}
+        {multi && faceSt!.explicit && !faceSt!.blocked && (
+          <div className="mut">{t("face.editing", { n: faceSt!.index + 1 })}</div>
+        )}
+        {!!doc?.deform.defer && <div className="p0why">{t("face.deferWait")}</div>}
         {(["slim_face", "big_eye", "small_chin"] as const).map((kind) => (
           <div key={kind}>
             <label className="k">{t(("retouch." + kind) as MsgKey)} · {(deforms[kind] ?? 0).toFixed(2)}</label>

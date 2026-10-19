@@ -150,6 +150,13 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             state.on_precompute_ready(&v);
             println!("M0_ENGINE {line}");
         }
+        "face_selected" | "face_list" => {
+            // 多人图选人（PORTRAIT-003）：一次点击一条。它与 precompute_ready 汇进同一个
+            // 槽位——面板要的是「引擎现在说有几张脸、在改哪一张」，不关心是哪条事件说的
+            let name = v["event"].as_str().unwrap_or("").to_string();
+            state.on_face(&v, &name);
+            println!("M0_ENGINE {line}");
+        }
         "inpaint_done" => {
             // 消除笔是事件驱动的：一次松手一条，轮询不到就会错过
             state.on_inpaint_ready(&v);
