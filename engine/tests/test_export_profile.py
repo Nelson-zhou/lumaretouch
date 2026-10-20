@@ -322,3 +322,22 @@ def test_builtin_srgb_profile_is_frozen_within_the_process():
     # 内容仍是 sRGB built-in（不是“名字对了、字节是另一回事”）：头部的 colour space
     # 与 profile class 都该是 rgmt / mntr
     assert a[16:20] == b"RGB " and a[20:24] == b"XYZ ", a[16:24]
+
+
+def test_profile_path_case_is_preserved_on_case_sensitive_fs(tmp_path):
+    """P2-1：自定义 ICC 路径不得被 lower() 化——Linux 文件系统大小写敏感。
+
+    上一版 _profile_bytes 先 key=name.lower() 再 os.path.isfile(key)，把真实存在的
+    "MyProfile.icc" 当成不存在的 "myprofile.icc" 而拒。这条用一个大小写混合的档名钉住：
+    原样能读回，全小写那个（并不存在的）路径仍按未知内置名拒绝。
+    """
+    payload = _profile_bytes("srgb")            # 一份真实 littleCMS 生成的 sRGB 档字节
+    mixed = tmp_path / "MyColorProfile.ICC"     # 大小写混合
+    mixed.write_bytes(payload)
+    got = _profile_bytes(str(mixed))
+    assert got == payload, "混合大小写的真实 ICC 路径被读成 None/报错：路径被 lower() 化破坏了"
+    # 关键字分支仍大小写不敏感（内置名不是路径）
+    assert _profile_bytes("SRGB") == payload
+    # 指向一个确实不存在的路径时仍拒，不能因为"不 lower 了"就放宽
+    with pytest.raises(ExportError, match="output_profile"):
+        _profile_bytes(str(tmp_path / "NoSuchProfile.ICC"))

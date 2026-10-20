@@ -706,6 +706,10 @@ def _profile_bytes(name: str, source: bytes | None = None) -> bytes | None:
     - adobergb / display_p3：需要一个真实的 .icc 文件路径。本层不绑 ghostscript 那种
       系统目录（发行物不该依赖一个不确定存在的资产），调用方递路径即可。
     """
+    # 关键字归一只用于内置名（none/source/srgb 本就该大小写不敏感）；
+    # 但用户递进来的真实 .icc **路径**必须按原样处理——Linux 文件系统区分大小写，
+    # 对路径调 .lower() 会让 "MyProfile.icc" 找不存在的 "myprofile.icc"，
+    # 于是把一份真实存在的档当成未知内置名而拒（P2-1）。
     key = (name or "srgb").lower()
     if key in (None, "", "none"):
         return None
@@ -716,8 +720,9 @@ def _profile_bytes(name: str, source: bytes | None = None) -> bytes | None:
         return bytes(source)
     if key == "srgb":
         return _srgb_bytes()
-    if os.path.isfile(key):                       # 也接受直接给路径
-        with open(key, "rb") as f:
+    # 路径分支：用原始 name（不 lower），存在与读取都用它。
+    if name and os.path.isfile(name):             # 也接受直接给路径（大小写敏感）
+        with open(name, "rb") as f:
             return f.read()
     raise ExportError(
         f"output_profile={name!r} 本层不带该档（内置只有 sRGB）。"
