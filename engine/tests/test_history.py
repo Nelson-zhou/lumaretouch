@@ -133,3 +133,61 @@ def test_dispatch_table_registers_history_and_edit_commands(eng):
     # 预计算与切文档不是编辑：它们不该被记成一步
     assert "precompute" not in Engine.EDIT_CMDS and "load_image" not in Engine.EDIT_CMDS
     assert "session" not in Engine.EDIT_CMDS
+
+
+# ---------------------------------------------------------------- P1-6 蒙版签名守卫
+#
+# 审查报的现场是"等面积但内容不同的两笔遮膜被当成同一步"：撤销栈与 dirty 徽章都看不见
+# 变化。判据必须直接跑在 _hist_sig 上——它是历史链与 dirty 徽章唯一的入口。
+
+
+def test_hist_sig_distinguishes_equal_area_masks():
+    """P1-6：形状相同、总面积相同、位置不同的两笔遮膜必须有**不同**的签名。
+
+    老口径 (shape, sum) 会折成同一个签名，撤销历史与未保存徽章看不见这一步。
+    """
+    import numpy as np
+    from lumaretouch_engine.server import Engine
+
+    eng = Engine.__new__(Engine)   # 只跑 _hist_sig，不吃 __init__ 的资源
+    left = np.zeros((64, 64), dtype=np.uint8); left[:, :16] = 255     # 面积 64*16
+    right = np.zeros((64, 64), dtype=np.uint8); right[:, -16:] = 255  # 面积同为 64*16
+
+    assert int(left.sum()) == int(right.sum()), "夹具本身必须等面积，才测得到位置敏感"
+    sig_a = eng._hist_sig({"_grade_mask": left})
+    sig_b = eng._hist_sig({"_grade_mask": right})
+    assert sig_a != sig_b, (
+        "P1-6 修复被回退：_grade_mask 只按 (shape, sum) 签名，等面积不同位置的两笔"
+        "遮膜折成同一步，撤销栈与 dirty 徽章都看不见。")
+
+    # _bg.matte 同一条口径也要覆盖
+    bg_a = {"active": True, "bg": (0, 255, 0), "backend": "b", "tol": 0.1,
+            "softness": 0.5, "matte": left}
+    bg_b = {"active": True, "bg": (0, 255, 0), "backend": "b", "tol": 0.1,
+            "softness": 0.5, "matte": right}
+    assert eng._hist_sig({"_bg": bg_a}) != eng._hist_sig({"_bg": bg_b}), \
+        "P1-6 修复不完整：_bg.matte 也要按内容签名。"
+
+
+def test_hist_sig_still_treats_identical_mask_as_unchanged():
+    """修完不能反向变严：同一笔遮膜重复提交仍要算"没改过"（撤销一步都不能占）。"""
+    import numpy as np
+    from lumaretouch_engine.server import Engine
+
+    eng = Engine.__new__(Engine)
+    m = np.zeros((32, 32), dtype=np.uint8); m[:16] = 255
+    sig1 = eng._hist_sig({"_grade_mask": m})
+    sig2 = eng._hist_sig({"_grade_mask": m.copy()})
+    assert sig1 == sig2, "内容相同的两份遮膜应算同一步；sha1 是内容敏感，不该反过来说每笔都新"
+
+
+def test_hist_sig_treats_none_mask_and_populated_mask_differently():
+    """None → 有内容也要变——别把 None 与"全零遮膜"折成同一格。"""
+    import numpy as np
+    from lumaretouch_engine.server import Engine
+
+    eng = Engine.__new__(Engine)
+    z = np.zeros((32, 32), dtype=np.uint8)
+    sig_none = eng._hist_sig({"_grade_mask": None})
+    sig_zero = eng._hist_sig({"_grade_mask": z})
+    assert sig_none != sig_zero

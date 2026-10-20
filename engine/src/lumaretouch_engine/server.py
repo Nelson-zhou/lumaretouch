@@ -1176,16 +1176,28 @@ class Engine:
                                    None if not v.get("box") else
                                    [round(float(x), 5) for x in v["box"]]], sort_keys=True)
             elif k == "_grade_mask":
-                # 与 _bg 的遮罩同一签名口径：shape + 逐像素求和。同一份区域求和恒定，
-                # 而多一笔少一笔都会变——拿数组直接 == 会得出一堆布尔值而不是一个 bool。
-                d[k] = None if v is None else (list(v.shape), int(v.sum()))
+                # P1-6：老口径 (shape, sum) 会把"等面积、不同位置"的两笔遮膜折成
+                # 同一个签名——撤销历史与未保存徽章看不见这一步；正是审查报的那一格。
+                # 改成 (shape, sha1(bytes))：一次编辑手势一次哈希，1024×1280 的
+                # uint8 遮膜 1 MB 十几毫秒，不在每帧热路径。多一笔少一笔仍会变（原
+                # 判据的那半优势保留），而位置搬动也拦得住。
+                if v is None:
+                    d[k] = None
+                else:
+                    import hashlib as _hl
+                    d[k] = (list(v.shape), _hl.sha1(v.tobytes()).hexdigest())
             elif k == "_bg":
-                # 遮罩是 (H,W) uint8，拿 shape+sum 当签名：同一个遮罩 sum 定，换一笔必变。
+                # P1-6：matte 与 _grade_mask 同一条签名口径（shape + 内容 sha1）。
+                # 拿 (shape, sum) 会漏掉"同一张背景，把'人'抠到左边 vs 抠到右边"这一格。
                 mt = v.get("matte")
+                if mt is None:
+                    _matte_sig = None
+                else:
+                    import hashlib as _hl
+                    _matte_sig = (list(mt.shape), _hl.sha1(mt.tobytes()).hexdigest())
                 d[k] = {"active": bool(v.get("active")), "bg": v.get("bg"),
                         "backend": v.get("backend"), "tol": v.get("tol"),
-                        "softness": v.get("softness"),
-                        "matte": None if mt is None else (list(mt.shape), int(mt.sum()))}
+                        "softness": v.get("softness"), "matte": _matte_sig}
             elif k == "_strength":
                 d[k] = round(float(v), 6)
             elif k in ("_params", "_light"):
