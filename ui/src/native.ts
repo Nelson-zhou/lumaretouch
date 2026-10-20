@@ -113,7 +113,15 @@ export interface DocState {
   /** 曝光/白平衡（P0 lnx.exposure / lnx.white_balance）。`reference_k` 为 null 是
    *  “没指定参考光源”，不是 0：“中性=null 不能解成零”写在注册表的 null_semantics 里。 */
   exposure: { ev: number; temperature_shift: number; tint_shift: number;
+              /** 影调四项（原创扩展，与 EV 同一层）：-100…100，0 = 关 */
+              contrast?: number; highlights?: number; shadows?: number;
+              saturation?: number;
               reference_k: number | null; lit: boolean };
+  /** 八色 HSL（原创扩展，与曝光层同一条链）：`bands` 是 8 段 × (色相/饱和度/明亮度)
+   *  展平后的 24 个数；段名与色相中心也从引擎来（前端不抄一份色相表，那里迟早分叉）。
+   *  整块可选：老引擎的 doc_state 里没这一格。 */
+  hsl?: { bands: number[]; names: string[]; centers: number[];
+          limits: { hue: number; sat: number; lum: number }; lit: boolean };
   /** 裁剪/旋转（P0 lnx.crop.v1）。rect 是归一化 [左,上,右,下]；`crop_out` 是代理档上
    *  剪后的尺寸，`out_full` 才是导出会写的真实像素数——两个数都得看得见，否则 UI 会
    *  把“预览里那一小块”讲成“文件的尺寸”。 */
@@ -1315,12 +1323,14 @@ export const runExport = (
     scale: opts?.scale,
     sharpen: opts?.sharpen,
     upscaleBackend: opts?.upscaleBackend,
-    bit_depth: opts?.bitDepth,
-    // 导出侧 P0 的四格：中性位由引擎定（ADR-0003），这里只在用户显式改过才传
-    output_profile: opts?.outputProfile,
-    tiff_compression: opts?.tiffCompression,
-    metadata_include_gps: opts?.metadataIncludeGps,
-    conflict_policy: opts?.conflictPolicy,
+    bitDepth: opts?.bitDepth,
+    // 导出侧 P0 的四格：中性位由引擎定（ADR-0003），这里只在用户显式改过才传。
+    // 键同样必须是 camelCase：写成 snake_case 就是“勾了 16-bit TIFF / 关了 GPS /
+    // 选了不覆盖，而引擎全按默认跑”——落盘的文件看起来完全正常。
+    outputProfile: opts?.outputProfile,
+    tiffCompression: opts?.tiffCompression,
+    metadataIncludeGps: opts?.metadataIncludeGps,
+    conflictPolicy: opts?.conflictPolicy,
   });
 
 /** 帧头解析（小端，与 main.rs 的 pull_frame 注释逐字段对应）。 */
@@ -1420,6 +1430,12 @@ export interface M0Env {
   auto_face: string;
   /** 人工纠正优先（$LRT_AUTO_MANUAL=<要关掉的 index>）：见 App.tsx 第 9 臂 */
   auto_manual: string;
+  /** 1.12 规格工作台（$LRT_AUTO_SPEC=<JSON>）：100% 视口 + 曝光/影调 + 八色 HSL +
+   *  磨皮 + 瘦脸 + 裁剪旋转。它与上面几条同一条纪律：只有真窗口能证明宿主桥把参数
+   *  原样递到了引擎，而屏幕真的按它动了。 */
+  auto_spec: string;
+  /** 取证臂：跑完自动序列后不退出，留给截图（默认空=照旧退出）。 */
+  keep_open: string;
   /** 系统文件拖入（$LRT_AUTO_DROP=1）：见 App.tsx 第 10 臂——监听挂上了吗，
    *  以及"能不能开"那份判断在装机壳里用的是不是引擎报的名单 */
   auto_drop: string;
@@ -1500,7 +1516,7 @@ export const runPreset = (
           force?: boolean; moduleScope?: string[] } = {},
 ) => invoke<{ requested: boolean }>("preset", {
   action, id: opts.id, name: opts.name, path: opts.path, kind: opts.kind, note: opts.note,
-  force: opts.force, module_scope: opts.moduleScope,
+  force: opts.force, moduleScope: opts.moduleScope,
 });
 
 /** 批量同步（LNX-P0-BATCH / BATCH-004）：目标按 path 递（多选集就是按 path 记的），
@@ -1510,21 +1526,46 @@ export const runBatch = (
   opts: { docs?: string[]; moduleScope?: string[]; conflictPolicy?: string;
           batchId?: string } = {},
 ) => invoke<{ requested: boolean }>("batch", {
-  action, docs: opts.docs, module_scope: opts.moduleScope,
-  conflict_policy: opts.conflictPolicy, batch_id: opts.batchId,
+  action, docs: opts.docs, moduleScope: opts.moduleScope,
+  conflictPolicy: opts.conflictPolicy, batchId: opts.batchId,
 });
 
 /** 曝光/白平衡（P0）：量程由引擎随事件报 exposure_limits，这里不抄一份。 */
 export const runExposure = (
   action: "set" | "clear",
-  v: { ev?: number; temperature_shift?: number; tint_shift?: number; reference_k?: number } = {},
-) => invoke<{ requested: boolean }>("exposure", { action, ...v });
+  v: { ev?: number; temperature_shift?: number; tint_shift?: number;
+       reference_k?: number; contrast?: number; highlights?: number;
+       shadows?: number; saturation?: number } = {},
+) =>
+  // Tauri 的命令参数在 JS 侧是 **camelCase**（Rust 的 temperature_shift 对应
+  // temperatureShift）。上一版这里原样展开了 snake_case 的键：Tauri 把不认识的键
+  // 当“没给”，于是色温/色调/参考白/四项影调全是“拖了滑块而引擎一个数没收到”，
+  // 而回执一切正常。这条不是风格问题，是七个参数里四个静默丢失。
+  invoke<{ requested: boolean }>("exposure", {
+    action,
+    ev: v.ev,
+    temperatureShift: v.temperature_shift,
+    tintShift: v.tint_shift,
+    referenceK: v.reference_k,
+    contrast: v.contrast,
+    highlights: v.highlights,
+    shadows: v.shadows,
+    saturation: v.saturation,
+  });
+
+/** 八色 HSL：band 0…7（红/橙/黄/绿/青/蓝/紫/洋红），dh/ds/dl 为这一段的三个量。
+ *  `clear` 整层归零；部分提交语义在引擎（拖一个滑块不抹掉同段另外两个）。 */
+export const runHsl = (
+  action: "set" | "clear",
+  band?: number,
+  v: { dh?: number; ds?: number; dl?: number } = {},
+) => invoke<{ requested: boolean }>("hsl", { action, band, ...v });
 
 /** 裁剪/旋转（P0 lnx.crop.v1）：rect 归一化，正角顺时针——口径在引擎 ops/geometry.py。 */
 export const runCrop = (
   action: "set" | "clear", rect?: number[], rotationDegrees?: number,
 ) => invoke<{ requested: boolean }>("crop", {
-  action, rect, rotation_degrees: rotationDegrees,
+  action, rect, rotationDegrees,
 });
 export const report = (line: string) => invoke("report", { line });
 export const quit = () => invoke("quit");

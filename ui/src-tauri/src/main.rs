@@ -368,6 +368,17 @@ impl AppState {
 
     pub fn on_lut_ready(&self, v: &Value) {
         *self.lut.lock().unwrap() = Some(v.clone());
+        // lut_done 不带整份 doc_state，但面板的“当前预设”只能来自引擎。
+        // 这里把调色这一格并回缓存，UI 不用自己记“我刚点了哪张卡”；
+        // 撤销/换图时 note_doc 会用整份 doc_state 覆盖，不会留下陈旧选中态。
+        let mut rep = self.doc_report.lock().unwrap();
+        if let Some(rep) = rep.as_mut() {
+            if let Some(lut) = rep.get_mut("doc_state").and_then(|d| d.get_mut("lut")) {
+                lut["lit"] = json!(v.get("lut_lit").and_then(|x| x.as_bool()).unwrap_or(false));
+                lut["amount"] = json!(v.get("lut_amount").and_then(|x| x.as_f64()).unwrap_or(1.0));
+                lut["preset"] = v.get("lut_preset").cloned().unwrap_or(Value::Null);
+            }
+        }
     }
 
     pub fn on_grade_ready(&self, v: &Value) {
@@ -1830,6 +1841,12 @@ fn exposure(
     temperature_shift: Option<f64>,
     tint_shift: Option<f64>,
     reference_k: Option<f64>,
+    // 影调四项与 EV 同一层（原创扩展）：宿主少接一个参数，面板上那个滑块
+    // 就是“拖了、画面不动，而命令回执正常”——上一版这四格根本不在签名里。
+    contrast: Option<f64>,
+    highlights: Option<f64>,
+    shadows: Option<f64>,
+    saturation: Option<f64>,
 ) -> Result<Value, String> {
     const ACTIONS: [&str; 2] = ["set", "clear"];
     if !ACTIONS.contains(&action.as_str()) {
@@ -1841,6 +1858,40 @@ fn exposure(
         ("temperature_shift", temperature_shift.map(Value::from)),
         ("tint_shift", tint_shift.map(Value::from)),
         ("reference_k", reference_k.map(Value::from)),
+        ("contrast", contrast.map(Value::from)),
+        ("highlights", highlights.map(Value::from)),
+        ("shadows", shadows.map(Value::from)),
+        ("saturation", saturation.map(Value::from)),
+    ] {
+        if let Some(v) = v {
+            cmd[k] = v;
+        }
+    }
+    state.send_to_engine(cmd)?;
+    Ok(json!({"requested": true}))
+}
+
+/// 八色 HSL（原创扩展）：band 0…7，dh/ds/dl 是这一段的三格。
+/// 与 exposure 同一个形状：动作名单、参数白名单都在这里，量程由引擎随事件报。
+#[tauri::command]
+fn hsl(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    band: Option<i64>,
+    dh: Option<f64>,
+    ds: Option<f64>,
+    dl: Option<f64>,
+) -> Result<Value, String> {
+    const ACTIONS: [&str; 2] = ["set", "clear"];
+    if !ACTIONS.contains(&action.as_str()) {
+        return Err(format!("hsl 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
+    }
+    let mut cmd = json!({"cmd": "hsl", "action": action});
+    for (k, v) in [
+        ("band", band.map(Value::from)),
+        ("dh", dh.map(Value::from)),
+        ("ds", ds.map(Value::from)),
+        ("dl", dl.map(Value::from)),
     ] {
         if let Some(v) = v {
             cmd[k] = v;
@@ -1940,6 +1991,12 @@ fn m0_env() -> Value {
         // 脚本传了 env、App.tsx 有臂，而桥不转发，于是那条臂**从没跑过**而外面只知道
         // "等满了超时"。桥层漏一个键 = 一条臂静静消失，所以这一格必须与 App.tsx 的臂同名
         "auto_manual": std::env::var("LRT_AUTO_MANUAL").unwrap_or_default(),
+        // 1.12 规格工作台那一臂（$LRT_AUTO_SPEC=<JSON>）：100% 视口 + 曝光/影调 +
+        // 八色 HSL + 磨皮 + 瘦脸 + 裁剪旋转走用户那条链。这一格与 App.tsx 的臂同名，
+        // 漏一行就是“脚本传了 env、臂从没跑过、外面只等到超时”。
+        "auto_spec": std::env::var("LRT_AUTO_SPEC").unwrap_or_default(),
+        // 取证臂：跑完自动序列后不退出，留给截图/人工核对（默认不设=照旧退出）。
+        "keep_open": std::env::var("LRT_KEEP_OPEN").unwrap_or_default(),
         "auto_drop": std::env::var("LRT_AUTO_DROP").unwrap_or_default(),
         "auto_empty": std::env::var("LRT_AUTO_EMPTY").unwrap_or_default(),
         // M4 导出自动通道："<目录>@<格式>@<tile>"（tile 与格式可省）。真窗口跑这一条
@@ -1987,7 +2044,7 @@ fn main() {
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, precompute,
             inpaint, light, deform, lut, grade, enhance, background, export, session, filmstrip, history,
-            project, task, exposure, crop, preset, batch, face, pick,
+            project, task, exposure, hsl, crop, preset, batch, face, pick,
             report, quit
         ])
         .run(tauri::generate_context!())
