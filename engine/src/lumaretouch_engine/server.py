@@ -5661,6 +5661,67 @@ class Engine:
                    "output_profile", "tiff_compression", "metadata_include_gps",
                    "conflict_policy"}
 
+    def _state_to_export_snap(self, st: dict, *, device, scale, upscale_backend,
+                              sharpen) -> dict:
+        """把一份**已存的文档状态**（_capture_state 的下划线键）翻成 _export_snapshot 要的
+        导出快照（非下划线键）。逐张批量导出用的就是这一层（P1-1）：过去整批共用当前那张
+        现拍的 snap，非当前照片被套上别人的磨皮/调色/裁剪——串配方。
+
+        device/scale/upscale_backend/sharpen 是**批级导出选项**（不属于某张照片的编辑配方），
+        由调用方统一传入；其余全部来自这一张自己的 state。缺键按出厂中性兜，而不是拿 None
+        去比名单（与 _export_snapshot 里 exposure/hsl 那条同因）。
+        """
+        return dict(strength=float(st.get("_strength", 0.0)),
+                    params=dict(st.get("_params") or self._params),
+                    grade=tuple(st.get("_grade", (0.0, 0.0, 0.0, 1.0))),
+                    grade_scope=str(st.get("_grade_scope") or "all"),
+                    grade_mask=st.get("_grade_mask"),
+                    exposure=tuple(st.get("_exposure", (0.0,) * 7)),
+                    exposure_ref_k=st.get("_exposure_ref_k"),
+                    hsl=tuple(st.get("_hsl", (0.0,) * 24)),
+                    crop_rect=tuple(st.get("_crop_rect", (0.0, 0.0, 1.0, 1.0))),
+                    crop_rotation=float(st.get("_crop_rotation", 0.0)),
+                    lut=st.get("_lut"), lut_amount=float(st.get("_lut_amount", 0.0)),
+                    light=dict(st.get("_light") or self._light),
+                    light_ops=list(st.get("_light_ops") or []),
+                    repair_ops=list(st.get("_repair_ops") or []),
+                    deform=dict(st.get("_deform") or {"amounts": {}, "built": False}),
+                    deform_defer=bool(st.get("_deform_defer")),
+                    enhance=dict(st.get("_enhance") or {"amounts": {}, "built": False}),
+                    enhance_defer=bool(st.get("_enhance_defer")),
+                    channel=st.get("_channel"),
+                    _bg=dict(st.get("_bg") or {}),
+                    precompute=st.get("_precompute"),
+                    device=device, scale=scale, upscale_backend=upscale_backend,
+                    sharpen=sharpen)
+
+    def _export_snap_by_path(self, images, doc, snap) -> dict:
+        """命令线程里为批量导出的每一张预解析「该用自己的那份配方」+ for_document（P1-1）。
+
+        · 命中当前文档 → 直接用刚现拍的 snap（含它专属图层）。
+        · 命中会话里其它底片条格子 → 用那一格自己的 state 组一份（笔迹/蒙版/裁剪各归各），
+          for_document=True 带全它自己的图层。
+        · 不在会话里的裸文件路径 → 没有独立编辑状态可用，退回共享参数、for_document=False，
+          让 _export_snapshot 逐图 skip 掉文档专属层——与既有口径一致，绝不假装搬了配方。
+
+        全部在命令线程读 self._docs：worker 里不回读 live 字段（并发铁律，与整份 snap
+        预拍同一条理由——中途扫盘/切图会改掉 _docs，worker 读到的就不是开工那一刻的配方）。
+        """
+        out: dict = {}
+        for p in images:
+            if p == doc:
+                out[p] = (snap, True)
+                continue
+            i = self._index_of(p)
+            if 0 <= i < len(self._docs) and isinstance(self._docs[i].get("state"), dict):
+                st = self._docs[i]["state"]
+                out[p] = (self._state_to_export_snap(
+                    st, device=snap["device"], scale=snap["scale"],
+                    upscale_backend=snap["upscale_backend"], sharpen=snap["sharpen"]), True)
+            else:
+                out[p] = (snap, False)
+        return out
+
     def _export_snapshot(self, snap: dict, eh: int, ew: int, *, for_document: bool):
         """从命令线程拍好的快照里组一份 ExportSpec。返回 (spec, skipped)。
 
@@ -6020,8 +6081,10 @@ class Engine:
         # 而开发 venv 里这批用例全部 skip（没 torch），只有运行时 venv 才响得出来）
         opts = {"output_profile": output_profile, "tiff_compression": tiff_comp,
                 "metadata_include_gps": bool(include_gps), "conflict_policy": conflict_policy}
+        # P1-1：为这批每一张预解析各自的配方（命令线程读 _docs，worker 不再读 live）。
+        snap_by_path = self._export_snap_by_path(images, doc, snap)
         self._export_args = (list(images), out_dir, fmt, quality, tile, doc, snap, bit_depth,
-                             opts)
+                             opts, snap_by_path)
         # 台账先建再开工：TASK-001 要“状态转移可审计”，而从 queued 起才有第一步。
         # inputs 是**命令当时那一拍**的快照：TASK-002 的“重试固定输入”全靠它，
         # 而配方快照（snap）只活在会话里——重开后的 retry 必须拒而不是拿现在的
@@ -6243,10 +6306,10 @@ class Engine:
         if args is None:
             t["recipe_persisted"] = False
             raise T.TaskError("这条批次没有配方快照（重启过的旧台账）：请打开那张图重新导出")
-        images, out_dir, fmt, quality, tile, doc, snap, bit_depth, opts = args
+        images, out_dir, fmt, quality, tile, doc, snap, bit_depth, opts, snap_by_path = args
         # 只跑没成功的，输入一律取自这条批次自己的快照，不是 live 字段也不是“最后那批”
         self._export_args = ([p for p in images if p in set(pend)], out_dir, fmt, quality,
-                             tile, doc, snap, bit_depth, opts)
+                             tile, doc, snap, bit_depth, opts, snap_by_path)
         self._task_args[t["task_id"]] = self._export_args
         self._export_task = t
         self._task_ctl = _TaskControl()
@@ -6331,7 +6394,7 @@ class Engine:
 
     def _export_loop(self):
         from .decode import load_full
-        images, out_dir, fmt, quality, tile, doc, snap, bit_depth, opts = self._export_args
+        images, out_dir, fmt, quality, tile, doc, snap, bit_depth, opts, snap_by_path = self._export_args
         task = self._export_task
         n = len(images)
         if task is not None and task["state"] != T.RUNNING:
@@ -6395,16 +6458,19 @@ class Engine:
                     continue
                 d = load_full(path, device=self.device)
                 stage = "render"
-                spec, skipped = self._export_snapshot(snap, d.h, d.w,
-                                                      for_document=(path == doc))
+                # P1-1：这一张用它自己那份配方（当前档=现拍 snap；其它档=它存的 state；
+                # 裸文件=共享参数且 for_document=False）。批级 export_done 仍读 snap。
+                snap_i, for_doc_i = snap_by_path.get(path, (snap, path == doc))
+                spec, skipped = self._export_snapshot(snap_i, d.h, d.w,
+                                                      for_document=for_doc_i)
                 stage = "write"
                 out_path = os.path.join(out_dir, os.path.splitext(os.path.basename(path))[0] + "." + fmt)
-                frame, st = export_image(d.rgb, spec, device=snap["device"], tile=tile)
+                frame, st = export_image(d.rgb, spec, device=snap_i["device"], tile=tile)
                 # 与预览链同序：几何在所有像素层之后。反过来先剪再算，同一支消除笔
                 # 在剪后的图上会落在别处——那不是"批量应用设置"，那是另一张图。
                 from .ops.geometry import crop_rotate_np, is_identity as geom_ident
-                rect0 = tuple(snap.get("crop_rect") or (0.0, 0.0, 1.0, 1.0))
-                rot0 = float(snap.get("crop_rotation") or 0.0)
+                rect0 = tuple(snap_i.get("crop_rect") or (0.0, 0.0, 1.0, 1.0))
+                rot0 = float(snap_i.get("crop_rotation") or 0.0)
                 t_g = monotonic_ns()
                 if not geom_ident(rect0, rot0):
                     frame = crop_rotate_np(frame, rect0, rot0)
