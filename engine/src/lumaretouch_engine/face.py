@@ -62,6 +62,15 @@ class MissingBackend(RuntimeError):
     """请求的后端不可用。调用方必须把它当错误处理，不许退到别的路径继续跑。"""
 
 
+class RegionNotFound(RuntimeError):
+    """用户框的区域里没拿到「就是那一张」的 478 点。
+
+    调用方必须当错误处理：拿邻近那一张的点位、或干脆按框拟合一套占位点位来
+    补齐用户框的那一张，产出的是一条看起来能拖的形变层，而它的控制点不在那
+    个脸上——DoD §2 严禁的正是这个形状。
+    """
+
+
 # 探到几张脸就停（SCOPE-001）。要的不是“数清一桌子人”，而是“能不能确定只有一张”：
 # 探 2 张足以分辨“恰好 1 张”与“不止 1 张”，而 FaceLandmarker 的耗时随 num_faces 上探
 # 明显增长（多人模式要跑多个候选窗）。官方 API：FaceLandmarkerOptions.num_faces。
@@ -91,6 +100,11 @@ class FacePrecompute:
     # 不处在六条调用点里各接一次 index（那必漂）。
     all_landmarks: list = field(default_factory=list)
     face_index: int = 0
+    # 由**用户框的区域**加进名单的那几张的索引（PORTRAIT-006 人工纠正优先）。
+    # 它跟着 all_landmarks 的索引走：手加的脸一律 append 在尾部，所以这一轮检测
+    # 给的那几张的 index 不会被插队改动——改动 index 语义就是改动「第几张」这句
+    # 话的所指，而 face_box 认人已付过一次这个代价（见 server._preserve_face_choice）。
+    manual: tuple[int, ...] = ()
     notes: list[str] = field(default_factory=list)
 
     def faces(self) -> list[dict]:
@@ -102,8 +116,28 @@ class FacePrecompute:
             out.append({"index": i,
                         "box": [round(float(v), 5) for v in box] if box else None,
                         "area": (round(float((box[2] - box[0]) * (box[3] - box[1])), 5)
-                                 if box else 0.0)})
+                                 if box else 0.0),
+                        # 这张脸的几何出自用户框（不是这一轮检测自动找到的）——
+                        # UI 要把它画成「人工」而不冒充模型输出，人工账也靠它算
+                        "manual": bool(i in set(self.manual))})
         return out
+
+    def with_manual_face(self, lm) -> "FacePrecompute":
+        """把一张「用户框出来的脸」 append 进名单，返回新产物（不动原对象）。
+
+        点位必须是 detect_region 从真后端拿回来的 478 点：契约不过就地响。一列
+        表里混进占位几何，下游 deform/enhance 会按部位语义去取那些点，出来的是一
+        层谁也说不清的东西在替用户「修脸」。
+        """
+        pool = list(self.all_landmarks or [self.landmarks])
+        arr = np.asarray(lm, dtype=np.float32)
+        if arr.shape != (NUM_LANDMARKS, 3):
+            raise ValueError(f"手加区域的点位不是 {NUM_LANDMARKS} 点契约：{arr.shape}")
+        pool.append(arr)
+        # 手加的索引记进 manual：来源是「用户框的」这件事从这一刻起跟着名单走，
+        # 换一个视图、重算一次掩膜都不该把它洗成模型自动找到的
+        return replace(self, all_landmarks=pool, num_faces=len(pool),
+                       manual=tuple(sorted({int(i) for i in self.manual} | {len(pool) - 1})))
 
     def select_face(self, index: int) -> "FacePrecompute":
         """换一张脸：返回一个新视图（同一个 masks、同一个 all_landmarks）。
@@ -120,6 +154,8 @@ class FacePrecompute:
         lm = pool[index]
         if lm.shape != (NUM_LANDMARKS, 3):
             raise ValueError(f"第 {index} 张脸的关键点不是 {NUM_LANDMARKS} 点契约：{lm.shape}")
+        # `manual` 由 replace 原样带走：手加的那一张被选中之后仍是「人工的那一张」。
+        # 换一个视图就把来源洗白，等于让面板上写着「人工」的 chip 下一秒自称模型输出
         return replace(self, landmarks=lm, face_index=index, face_box=_norm_box(lm))
 
     def stack(self) -> tuple[np.ndarray, list[str]]:
@@ -148,6 +184,9 @@ class FacePrecompute:
             # 人数与超范围判据：UI 拿 scope_block 把面部重塑整栏禁用并写明原因，
             # 不去自己数 notes 里的中文（自己数就是一种双出处）
             "num_faces": int(self.num_faces),
+            # 人工加进名单的那几个索引（PORTRAIT-006）：报表里「这一轮探到几张」与
+            # 「名单里有几张」从此是两件事，混成一格就查不出补的那一张去了哪
+            "manual_indices": sorted(int(i) for i in (self.manual or ())),
             # scope_block 说的是“这一轮分析的结果是多人图”，不是“用户能不能选”。
             # 显式选型后该不该放行是**文档状态**（server 那一层），不在这里翻牌：
             # 把两者混在一格里，SCOPE-001 那条 P0 就验不到它该验的东西了。
@@ -517,3 +556,129 @@ def _resize_float(a: np.ndarray, h: int, w: int) -> np.ndarray:
     ys = (np.arange(h) * a.shape[0] / h).astype(np.int64)
     xs = (np.arange(w) * a.shape[1] / w).astype(np.int64)
     return np.ascontiguousarray(a[ys[:, None], xs[None, :]].astype(np.float32))
+
+
+REGION_MIN_SIDE_PX = 48      # 小于这个边的窗，两个后端都给不出稳定点位（实测见 ADR-0017）
+REGION_PAD_RATIO = 0.30      # 四周补到用户框长边的 30%：脸模型要头发到下巴的轮廓余量
+REGION_IOU_MIN = 0.20        # 回来的那一张必须与用户框对得上，否则不算「那一张」
+
+
+def _grow_window(lo: int, hi: int, limit: int, center: int, want: int) -> tuple[int, int]:
+    """把一段窗口补到 `want` 个像素：以 `center` 为锚往两边长，贴不住就整段挪。
+
+    先左后右而不是各补一半，是因为左边顶到画面边界时**差额必须全部落到右边**——
+    上一版各补一半再 `max(0, hi - want)`，结果补完还差十几像素，等于"补过了"这件事
+    只在报表里发生，后端拿到的窗仍然比最小边短，于是它报"没脸"，而用户听到的是
+    "这一框里没有脸"。
+    """
+    if hi - lo >= want:
+        return lo, hi
+    need = want - (hi - lo)
+    lo = center - min(need // 2, center)
+    hi = lo + want
+    if hi > limit:                     # 右边出界：整段往左退，长度不再缩
+        hi = limit
+        lo = max(0, hi - want)
+    return int(lo), int(hi)
+
+
+def box_iou(a, b) -> float:
+    """两个归一化盒的 IoU。非法/空盒给 0（不返回负数，也不让人在 NaN 上判据）。"""
+    if not a or not b or len(a) != 4 or len(b) != 4:
+        return 0.0
+    try:
+        ax0, ay0, ax1, ay1 = (float(v) for v in a)
+        bx0, by0, bx1, by1 = (float(v) for v in b)
+    except (TypeError, ValueError):
+        return 0.0
+    iw = max(0.0, min(ax1, bx1) - max(ax0, bx0))
+    ih = max(0.0, min(ay1, by1) - max(ay0, by0))
+    inter = iw * ih
+    ua = max(0.0, ax1 - ax0) * max(0.0, ay1 - ay0)
+    ub = max(0.0, bx1 - bx0) * max(0.0, by1 - by0)
+    den = ua + ub - inter
+    return float(inter / den) if den > 1e-12 else 0.0
+
+
+def detect_region(backend, rgb: np.ndarray, rect) -> tuple[np.ndarray, dict]:
+    """在用户框出的归一化区域里做一次**真检测**，把 478 点映射回整幅归一化坐标。
+
+    为什么补上下文而不是贴着框裁：人脸模型是在「带头发到下巴」的框上训练的，
+    而人圈选时通常只框住五官。贴着框裁会把眼眶外沿、下巴尖切到窗外，回来的点位
+    是「看着像脸、其实不在脸上」那一类——template 后端那条几何警告与 ADR-0013 的
+    实测都是这一族错的学费，所以这里不留给滑块去发现。
+
+    为什么要 IoU 回验：补过上下文之后，这一窗里可能同时坐着别人。把邻座的 478 点
+    当成「你框的那一张」挂进名单，就是拿另一个人的脸形服务一个不该服务的人——与
+    SCOPE-001 拦的是同一件事，只是这次是用户自己动手造成的窗口重叠。
+
+    `backend` 可以是 face_mod.build() 出来的任何后端（都满足 `__call__(rgb) ->
+    FacePrecompute` 契约），所以这一条在没装 mediapipe 插件的机器上也能端到端跑；
+    但**精度证据只在 mediapipe 那一臂**（ADR-0009 同一口径：通路证据 ≠ 精度证据）。
+    """
+    h, w = int(rgb.shape[0]), int(rgb.shape[1])
+    try:
+        x0, y0, x1, y1 = (float(v) for v in rect)
+    except (TypeError, ValueError):
+        raise RegionNotFound(f"区域框要 4 个归一化数 (x0,y0,x1,y1)，得到 {rect!r}") from None
+    if not (0.0 <= x0 < x1 <= 1.0 and 0.0 <= y0 < y1 <= 1.0):
+        raise RegionNotFound(f"区域框越界或反了（要 0≤x0<x1≤1、0≤y0<y1≤1），得到 {rect!r}")
+    if x1 - x0 < 1e-4 or y1 - y0 < 1e-4:
+        raise RegionNotFound("区域框太扁（宽或高不到画面的万分之一）：那不像一张脸，更像一次误点")
+
+    wx0, wy0, wx1, wy1 = (int(round(x0 * w)), int(round(y0 * h)), int(round(x1 * w)), int(round(y1 * h)))
+    pad = int(round(max(wx1 - wx0, wy1 - wy0) * REGION_PAD_RATIO))
+    cx0, cy0 = max(0, wx0 - pad), max(0, wy0 - pad)
+    cx1, cy1 = min(w, wx1 + pad), min(h, wy1 + pad)
+    # 小框补到最小边长（以用户框中心为锚，补不动就让画面边界顶着）：检测器在小窗上的
+    # 失败是「没脸」而不是「不准」，那会被当成用户框错了而报成拒绝——两件事不该混。
+    cx0, cx1 = _grow_window(cx0, cx1, w, (wx0 + wx1) // 2, REGION_MIN_SIDE_PX)
+    cy0, cy1 = _grow_window(cy0, cy1, h, (wy0 + wy1) // 2, REGION_MIN_SIDE_PX)
+    cw, ch = cx1 - cx0, cy1 - cy0
+    if cw < REGION_MIN_SIDE_PX or ch < REGION_MIN_SIDE_PX:
+        raise RegionNotFound(f"这一框可用的画面只有 {cw}x{ch} px（要 ≥{REGION_MIN_SIDE_PX}）："
+                             "代理帧太小或框贴到了边，补不出带轮廓的窗口")
+    crop = np.ascontiguousarray(rgb[cy0:cy1, cx0:cx1])
+
+    try:
+        pc = backend(crop)
+    except (MissingBackend, RegionNotFound):
+        raise
+    except Exception as e:
+        raise RegionNotFound(f"区域检测失败({type(e).__name__}): {e}") from e
+    roster = pc.faces()
+    if not roster:
+        raise RegionNotFound("区域检测没返回任何点位集（后端给了空名单）：这不是「没检测到」的"
+                             "正常拒绝路径，而是产物契约破了")
+    # 选「与用户框 IoU 最大且过下限」那一张，而不是面积最大那一张：用户框的是他要的
+    # 那一张，邻座的脸再大也不算他对上过号
+    best_i, best_iou, best_lm = None, 0.0, None
+    for f in roster:
+        lm = (pc.all_landmarks or [pc.landmarks])[int(f["index"])]
+        bx = _norm_box(lm)
+        # 把这一窗里的盒映回整幅，再与用户框比（比较必须在同一坐标系里做）
+        full = ((bx[0] * cw + cx0) / w, (bx[1] * ch + cy0) / h,
+                (bx[2] * cw + cx0) / w, (bx[3] * ch + cy0) / h)
+        iou = box_iou(full, (x0, y0, x1, y1))
+        if iou > best_iou:
+            best_i, best_iou, best_lm = int(f["index"]), iou, lm
+    if best_i is None or best_iou < REGION_IOU_MIN:
+        raise RegionNotFound(
+            f"这一框里没有与框对得上的脸（最佳 IoU {best_iou:.2f} < {REGION_IOU_MIN}，"
+            f"窗内探到 {len(roster)} 张）：不拿邻近那一张的点位冒充你框的这一个人")
+    arr = np.array(best_lm, dtype=np.float32, copy=True)
+    arr[:, 0] = np.clip((arr[:, 0] * cw + cx0) / w, 0.0, 1.0)
+    arr[:, 1] = np.clip((arr[:, 1] * ch + cy0) / h, 0.0, 1.0)
+    if arr.shape != (NUM_LANDMARKS, 3):
+        raise RegionNotFound(f"区域检测回来的点位不是 {NUM_LANDMARKS} 点契约：{arr.shape}")
+    mapped_box = _norm_box(arr)
+    return np.ascontiguousarray(arr), {
+        "rect": [round(float(v), 5) for v in (x0, y0, x1, y1)],
+        # x 除宽、y 除高：上一版整除 `w`，报出去的窗比实际的那一小截（映射本身用的是
+        # 像素数，所以画面没错——错的是那条可审计的账，而这条账正是判据读的那一格）
+        "window": [round(cx0 / w, 5), round(cy0 / h, 5), round(cx1 / w, 5), round(cy1 / h, 5)],
+        "crop_px": [int(cw), int(ch)], "faces_in_window": len(roster),
+        "chosen_index": best_i, "iou": round(float(best_iou), 4),
+        "box": [round(float(v), 5) for v in mapped_box],
+        "backend": pc.backend, "t_detect_ms": round(float(pc.t_detect_ms), 2),
+    }

@@ -165,6 +165,14 @@ class Engine:
         self._face_index = 0
         self._face_box = None
         self._face_explicit = False
+        # 人脸名单的**人工账**（PORTRAIT-006 人工纠正优先）：`disabled` 是用户关掉的
+        # 那一只（误检），`added` 是用户框出来补上的那一张（漏检）。两条都存**归一化
+        # 脸盒**而不是 index：重检测/换后端之后 index 会重新排，而盒还能认出是同一个人
+        # （与 `_face_box` 存盒同一条理由）。
+        # 它进 DOC_FIELDS（切文档带上、存工程带上、撤销能退），而**不进 PROXY_BOUND**：
+        # 归一化坐标与代理档无关，换一档代理它仍指同一个人。`_face_box` 进那边是因为
+        # 它是"那一次分析里第几张"的凭证，而这份账是"用户对哪一个人做过什么"的判断。
+        self._face_manual = {"disabled": [], "added": []}
         # 磨皮参数（M1-3c）：与 strength 不同，它们变了滤波结果才会变。缓存键靠这个字典，
         # 所以它必须存在引擎侧而不是只在调用方：否则报表上看不出「这一帧重算了没」。
         self._params = dict(radius=DEFAULT_RADIUS, eps=DEFAULT_EPS,
@@ -364,6 +372,10 @@ class Engine:
               "enhance_subs": list(ENH.SUBS),
               "enhance_range": [0.0, float(ENH.AMOUNT_LIMIT)],
               "enhance_actions": list(self.ENHANCE_ACTIONS),
+              # 人脸名单能收的动作（PORTRAIT-006）：前端自己刻一份就是下一轮加动作时
+              # 漏改的那一处，而且 TS 一句都不报
+              "face_actions": list(self.FACE_ACTIONS),
+              "face_manual_iou": self.MANUAL_IOU_MIN,
               "deform_range": [-KIND_LIMIT, KIND_LIMIT],
               # 能收哪些后缀：只由 session.IMAGE_EXTS 定这一份，宿主拿它填原生
               # 选择框的过滤器。拷一份名单到 UI 里就是给自己埋雷：M9-c 把八个 RAW
@@ -807,7 +819,7 @@ class Engine:
                   "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_bg",
                   "_enhance", "_enhance_defer",
                   "_precompute", "_precompute_backend", "_face_index", "_face_box",
-                  "_face_explicit",
+                  "_face_explicit", "_face_manual",
          "_exposure",
          "_exposure_ref_k", "_crop_rect", "_crop_rotation")
     # 代理档一变就作废的那些层：它们的坐标是**这一档代理帧**上的像素坐标。
@@ -824,6 +836,10 @@ class Engine:
                    # 调色区域是代理帧像素坐标，作用域活在区域/掩膜之上：掩膜作废而
                    # 作用域还写着 brush/skin，下一帧就是一条取不到权重的异常。
                    "_grade_scope", "_grade_mask")
+    # `_face_manual` **不在**上面这份名单里，这是决定而不是遗漏：那两份账存的是代理帧
+    # 像素坐标/那一次分析的序号，而人工账存归一化脸盒，换代理档、换后端重算都仍指同一个
+    # 人。把它一起作废就等于「重算一次分辨率，用户关掉的误检自己活了回来」——冻结件
+    # （PORTRAIT-006 的 then）明确禁止的正是这个动作。
 
     def _fresh_doc_state(self) -> dict:
         """一张还没被人动过的图的起始状态。
@@ -866,6 +882,10 @@ class Engine:
                 # `_face_box` 是那一张脸的**身份**：检测器的返回顺序不是人能预期的，
                 # 重算/重开工程后拿旧序号对新名单就是一次静默选型，所以认脸靠脸盒。
                 "_face_index": 0, "_face_box": None, "_face_explicit": False,
+                # 一张新图上「用户关过谁、补过谁」当然都是空。这份默认必须是**新字典
+                # 新列表**，不能是类级常量：两张图共用一个 list，关掉 A 图那一只误检就
+                # 会把 B 图同位置的脸也关掉（与 `_deform["amounts"]` 整份新抄同一条理由）
+                "_face_manual": {"disabled": [], "added": []},
                 "_exposure": (0.0, 0.0, 0.0), "_exposure_ref_k": None,
                 "_crop_rect": (0.0, 0.0, 1.0, 1.0), "_crop_rotation": 0.0,
                 # 掩膜/笔迹/形变场都活在**那一档代理尺寸**上，所以尺寸也是状态的一部分。
@@ -911,6 +931,12 @@ class Engine:
               "_face_index": int(self._face_index), "_face_explicit": bool(self._face_explicit),
               "_face_box": (None if self._face_box is None
                              else tuple(float(v) for v in self._face_box)),
+              # 人工账整份新抄（列表不共享）：切文档时两份状态共用一个 list，下一次
+              # `face disable` 会同时改掉另一张图的账——那是「在 A 图关的脸出现在 B 图」
+              "_face_manual": {"disabled": [tuple(float(v) for v in b) for b in
+                                            (self._face_manual or {}).get("disabled") or []],
+                               "added": [tuple(float(v) for v in b) for b in
+                                         (self._face_manual or {}).get("added") or []]},
               "_proxy": ((int(self._vram.h), int(self._vram.w))
                          if (self._vram is not None and self._image_loaded) else None)}
         # 名单与实际字段漂移了要当场响，不要“新图层静静切不回来”
@@ -982,6 +1008,15 @@ class Engine:
         self._face_box = None if self._face_box is None \
             else tuple(float(v) for v in self._face_box)
         self._face_explicit = bool(self._face_explicit)
+        # 人工账从工程档回来是「列表的列表」，元素可能是 float/字符串/长度不对的残框
+        # （手写档或上一版半成品）。归一成 4 元 float 盒并丢掉不成形的那些：留一条 3 元
+        # 残框，下一次按盒认人时 zip 会静默截断成前三维，把另一个人认成「你关掉的那一个」
+        self._face_manual = {"disabled": [b for b in (self._manual_box(v) for v in
+                                                      (self._face_manual or {}).get("disabled") or [])
+                                         if b is not None],
+                             "added": [b for b in (self._manual_box(v) for v in
+                                                   (self._face_manual or {}).get("added") or [])
+                                       if b is not None]}
         # 层级合成（PORTRAIT-004）必须在选型归一之后：合成认的是**脸盒**身份，
         # 顺序反过来就会拿旧名单里的第 0 张去查覆盖，把 A 的覆盖当成 B 的
         if not any(abs(float(v)) > 0.0 for v in self._deform_default.values()) \
@@ -2348,6 +2383,11 @@ class Engine:
         """
         if bool(st.get("_face_explicit")):
             return True
+        # 人工账非空也要补这一次分析（PORTRAIT-006）：那几只关掉的、那几框补上的，都只有
+        # 在名单重新算出来时才认得出对应的人。不补就是“重开工程后关掉的误检又回到名单里”
+        _led = st.get("_face_manual") or {}
+        if (_led.get("disabled") or _led.get("added")):
+            return True
         if st.get("_deform_defer"):
             return True
         # 三层里任何一层有劲儿都要补这一次分析（判据与 `_deform_intent` 同一处）：
@@ -2730,9 +2770,12 @@ class Engine:
         就整场放下并说清原因——参数留着，因为"用户改过什么"与"引擎现在认不认得人"
         是两件事（PORTRAIT-004 定下的分层）。
         """
+        lit_before = bool(self._vram is not None and self._vram.has_enhance())
         if not self._enhance_intent():
             if self._enhance["built"]:
                 self._drop_enhance(f"{replayed_for}：参数已经全是 0，这一层没有活")
+                if lit_before and write_frame:
+                    self._refresh_frame_after_drop("enhance")
             self._enhance_defer = False
             return
         if self._vram is None or not self._image_loaded:
@@ -2753,6 +2796,9 @@ class Engine:
                                      reason="关键点来自 synthetic 模板几何（网格占位，不是脸形）："
                                           "掩膜画不出可信的眼/牙位置，这一层整层放下",
                                      dropped_amounts=self._enhance["amounts"])
+            if lit_before and write_frame:
+                # 与形变那两条臂同一条理由：层放下了而帧没重画，屏幕上还挂着刚才的美白
+                self._refresh_frame_after_drop("enhance")
             return
         if want_box is not None and self._person_key(self._face_box) != tuple(
                 float(v) for v in want_box):
@@ -2762,6 +2808,8 @@ class Engine:
                                      reason="这一层挂在另一张脸上（按脸盒认的）：不拿 A 的参数"
                                           "静默服务 B。选回那一张就自动接回来；要改这一张请重新设值",
                                      dropped_amounts=self._enhance["amounts"])
+            if lit_before and write_frame:
+                self._refresh_frame_after_drop("enhance")
             return
         try:
             info = self._vram.build_enhance(pc.landmarks)
@@ -2874,12 +2922,11 @@ class Engine:
         pc = self._precompute
         if any(v != 0.0 for v in amounts.values()):
             # SCOPE-001：这一层的作用面是"某一个人"。多人图里没显式选定就不许替用户选
-            if (pc is not None and int(getattr(pc, "num_faces", 1)) > 1
-                    and not self._face_explicit):
-                emit({"event": "error",
-                      "error": f"画面里探到 {pc.num_faces} 张脸（上限探 2 张）：眼牙增强只服务"
-                              "一张可用人脸，本版本不在多人照片里替你选哪一张（SCOPE-001）；"
-                              f"要改谁先用 `face select` 显式选定（名单：{self._face_state()['faces']}）"})
+            blocked, why = self._face_guard()
+            if blocked:
+                # 这一层的作用面也是“某一个人”，所以放行判据与 deform 同一个出处：
+                # 两边各自拼一遍就会在“人工关掉一只误检”之后分了家（PORTRAIT-006）
+                emit({"event": "error", "error": why})
                 return
             if pc is None:
                 self._enhance = dict(amounts=amounts, built=False, box=None)
@@ -3052,6 +3099,9 @@ class Engine:
             emit({"event": "error", "error": f"没有掩膜通道 {channel}"
                   f"（可用：{', '.join(available) or '无'}）"})
             return
+        # 人工账先重贴（PORTRAIT-006）：它必须排在 `_preserve_face_choice` 之前，因为
+        # “还剩几个可编辑的人”要先算对，选型与放行判据才是在同一份名单上做的
+        pc, _manual_ledger = self._reapply_face_manual(pc, backend=fn)
         try:
             # 多人图里“上次显式选了哪一张”要跟着这次分析走（PORTRAIT-003）。放在上显存
             # 之前：上传的关键点与后面报出去的 face_index 得是同一张脸。
@@ -3105,14 +3155,18 @@ class Engine:
             # SCOPE-001 拦的那件事（上一版这里会照旧建层，等于把默认盖到名单里第 0 张脸上）
             if self._deform["built"]:
                 self._vram.clear_deform()
+            was_lit = bool(self._vram.has_deform())
             self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
             self._deform_defer = False
             self._emit_deform_state("invalidate",
                                     reason="这一轮没有可服务的那一张（多人图还没 `face select` "
                                            "选定，或没探出脸盒）：全人物默认与逐张覆盖都留着，"
                                            "选定那一张后自动接上")
+            if was_lit and write_frame:
+                self._refresh_frame_after_drop("deform")
             return
         amounts = dict(self._effective_deform_amounts())
+        was_lit = bool(self._vram.has_deform())
         self._vram.clear_deform()
         self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
         self._deform_defer = False
@@ -3122,6 +3176,8 @@ class Engine:
                           "全人物默认与逐张覆盖按脸盒留着，换成真后端再分析一次就接回来"})
             self._emit_deform_state("invalidate", reason="synthetic 占位几何不能按脸形语义取点",
                                     dropped_amounts=amounts)
+            if was_lit and write_frame:
+                self._refresh_frame_after_drop("deform")
             return
         try:
             built = self._vram.build_deform(pc.landmarks)
@@ -3132,6 +3188,8 @@ class Engine:
                   "warn": f"用新关键点重建形变层失败，已整层清除：{type(e).__name__}: {e}"})
             self._emit_deform_state("invalidate", reason=f"重建失败：{e}",
                                     dropped_amounts=amounts)
+            if was_lit and write_frame:
+                self._refresh_frame_after_drop("deform")
             return
         self._deform = dict(amounts=dict(state["amounts"]), built=True)
         # 层真的变了（有非零滑块）就必须补一帧：不补就是“引擎已按新几何形变，
@@ -3621,23 +3679,119 @@ class Engine:
         emit(fr)
 
     # -------------------------------------------------- 多人图的分人编辑（PORTRAIT-003）
+    # 人工账的三条动作（PORTRAIT-006）。名单要进 ready 上报，前端自己刻一份就是
+    # 下一轮加动作时漏改的那一处（与 DEFORM_ACTIONS 同一条教训）
+    FACE_ACTIONS = ("list", "select", "disable", "enable", "add", "remove")
+    # 按盒认人时「算同一个人」的 IoU 下限。0.5 不是审美数字：两张相邻的脸在同一张
+    # 图上的盒通常交不到 0.5，而同一个人被两个后端/两档代理框出来的盒交得到 0.7 以上
+    # （实测见 ADR-0017）。取中间值 0.5，认不过就明说认不过，不做二次猜测。
+    MANUAL_IOU_MIN = 0.5
+
+    @staticmethod
+    def _manual_box(v):
+        """把一条人工账归一成 4 元归一化盒；不成形就返 None（调用方丢，不留残框）。"""
+        try:
+            if v is None or len(v) != 4:
+                return None
+            box = tuple(round(float(x), 5) for x in v)
+        except (TypeError, ValueError):
+            return None
+        if not all(0.0 <= x <= 1.0 for x in box) or not (box[0] < box[2] and box[1] < box[3]):
+            return None
+        return box
+
+    def _manual_boxes(self, key: str) -> list[tuple]:
+        ledger = self._face_manual or {}
+        return [b for b in (self._manual_box(v) for v in (ledger.get(key) or [])) if b is not None]
+
+    def _match_face_by_iou(self, pc, box):
+        """在一份名单里按 **IoU** 找回那一个人；认不出返 None。
+
+        与 `_match_face_by_box`（容差 1e-3 的逐位比）分两处是有意的：选型要的是
+        「就是这一轮那一张」，人工账要的是「还是那个人」——后者在换后端/换模型时盒会
+        漂，逐位比等于宣布人工纠正只在同一次推理内有效，而冻结件的 when 写的是
+        「后台重检测**或更换检测模型**」。
+        """
+        from .face import box_iou
+
+        want = self._manual_box(box)
+        if pc is None or want is None:
+            return None
+        best_i, best = None, 0.0
+        for f in pc.faces():
+            iou = box_iou(f["box"], want)
+            if iou > best:
+                best_i, best = int(f["index"]), iou
+        return best_i if best >= self.MANUAL_IOU_MIN else None
+
+    def _disabled_indices(self, pc=None) -> set:
+        pc = self._precompute if pc is None else pc
+        out = set()
+        if pc is None:
+            return out
+        for b in self._manual_boxes("disabled"):
+            i = self._match_face_by_iou(pc, b)
+            if i is not None:
+                out.add(i)
+        return out
+
     def _face_state(self) -> dict:
-        """「现在在改哪一张」那一格。名单只从分析结果算（单一出处）。"""
-        from .face import SCOPE_MAX_FACES
+        """「现在在改哪一张 / 名单上有谁 / 人工账盖在上面之后剩谁」那一格。
+
+        名单只从分析结果算（单一出处），人工账只从这里叠上去（也是单一出处）：
+        UI 的 chip、deform/enhance 的放行、验收的判据都读这一份，各自拼一遍就会
+        出现“面板能点而引擎拒”那种无响应控件（DoD §3 明确禁止的那件事）。
+        """
+        from .face import SCOPE_MAX_FACES, box_iou
 
         pc = self._precompute
         faces = pc.faces() if pc is not None else []
-        multi = bool(pc is not None and int(getattr(pc, "num_faces", 1)) > 1)
+        disabled_idx = self._disabled_indices(pc)
+        for f in faces:
+            f["disabled"] = bool(int(f["index"]) in disabled_idx)
+        enabled = [int(f["index"]) for f in faces if not f["disabled"]]
+        detected_multi = bool(pc is not None and int(getattr(pc, "num_faces", 1)) > 1)
+        ledger_disabled = self._manual_boxes("disabled")
+        ledger_added = self._manual_boxes("added")
+        # 账上认不回的条目：它们**留在账上**（丢掉就是一次静默恢复），但要如实报出去
+        stale_disabled = [list(b) for b in ledger_disabled
+                          if self._match_face_by_iou(pc, b) is None]
+        lost_added = [list(b) for b in ledger_added
+                      if pc is not None and self._match_face_by_iou(pc, b) is None]
+        # 「这次检测要新增谁」：名单里既没被禁用、也不在任何一条人工账里的那些——
+        # 冻结件的“变化可预览”要的就是这份账，而不是让用户自己对着 chip 数
+        fresh_faces = [int(f["index"]) for f in faces
+                       if not f["disabled"] and not any(box_iou(f["box"], b) >= self.MANUAL_IOU_MIN
+                                                         for b in ledger_disabled + ledger_added)]
         return {"index": int(self._face_index), "explicit": bool(self._face_explicit),
                 "box": (None if self._face_box is None
                         else [round(float(v), 5) for v in self._face_box]),
                 "num_faces": len(faces), "faces": faces,
-                # 放行判据只写这一处：多人图且没显式选过 = 挡住（SCOPE-001），选过 = 能改那一张
-                # （PORTRAIT-003）。UI 的禁用理由与引擎 deform 的整条拒都读它——各自拼一遍就会
-                # 出现“面板能点而引擎拒”那种无响应控件（DoD §3 明确禁止的那件事）。
-                "blocked": bool(multi and not bool(self._face_explicit)),
-                "scope_block": "multi_face" if multi else None,
-                "max_faces_probed": SCOPE_MAX_FACES}
+                "enabled": enabled, "disabled_count": len(faces) - len(enabled),
+                # 名单上有几个人 vs 这一轮**探到**几张脸：人工补的那一张不是探出来的。
+                # 混成一格就会把"用户框的一位"说成"模型找到的一位"——那是谎报能力面
+                "probed": len(faces) - len([f for f in faces if f.get("manual")]),
+                # 放行判据只写这一处：还剩两个以上可编辑的人而没显式选过 = 挡住（SCOPE-001），
+                # 选过 = 能改那一张（PORTRAIT-003）。用户关掉一只误检后只剩一个人时放行——
+                # 那一步是**人做的排除**，不是引擎替人选
+                "blocked": bool(len(enabled) > 1 and not bool(self._face_explicit)),
+                # 「这一轮分析是不是多人图」是原始事实，不随人工账翻牌（SCOPE-001 的 P0
+                # 判据钉的就是这一格；test_face_select 与端到端两处都在读它）
+                "scope_block": "multi_face" if detected_multi else None,
+                "max_faces_probed": SCOPE_MAX_FACES,
+                "manual": {"disabled": [list(b) for b in ledger_disabled],
+                           "added": [list(b) for b in ledger_added],
+                           "stale": stale_disabled, "lost": lost_added,
+                           "new_faces": fresh_faces,
+                           # 冻结件 then 那句「变化可预览」的落点：重检测之后这一格随
+                           # precompute_ready 一起报出去，UI 不用自己比对两轮名单
+                           "preview": (
+                               f"保留 {len(ledger_disabled) - len(stale_disabled)} 处禁用、"
+                               f"{len(ledger_added) - len(lost_added)} 处人工补的脸"
+                               + (f"，认不回 {len(stale_disabled)} 处禁用" if stale_disabled else "")
+                               + (f"，{len(lost_added)} 框这一轮没找回" if lost_added else "")
+                               + (f"，本轮新增 {len(fresh_faces)} 张无人工记录的脸"
+                                  if fresh_faces else ""))}}
 
     @staticmethod
     def _match_face_by_box(pc, box) -> int | None:
@@ -3653,6 +3807,118 @@ class Engine:
             if f["box"] and max(abs(a - b) for a, b in zip(f["box"], want)) < 1e-3:
                 return int(f["index"])
         return None
+
+    def _face_guard(self) -> tuple[bool, str]:
+        """单脸作用域的操作现在能不能放行（唯一出处，deform 与 enhance 两条臂都读它）。
+
+        以前两边各自拼了一遍“多人且没选定”，于是加进人工禁用之后两边的口径会分家：
+        账上关掉一只误检的人，会看到面板能点而引擎仍按“探到两张”拒（DoD §3 禁止的那件
+        事）。判据按**还剩几个可编辑的人**算：那一步排除是人做的，不是引擎替人选。
+        """
+        st = self._face_state()
+        if not st["blocked"]:
+            return False, ""
+        from .face import SCOPE_MAX_FACES
+        return True, (
+            f"名单上 {st['num_faces']} 个人、可编辑的有 {len(st['enabled'])} 个"
+            f"（这一轮探到 {st['probed']} 张脸，检测上限探 {SCOPE_MAX_FACES} 张，"
+            f"人工关掉 {st['disabled_count']} 只）：面部重塑与眼牙"
+            "增强需要且仅需要一张可用人脸，本版本不在多人照片里替你选哪一张（SCOPE-001）；"
+            f"要改谁先用 `face select` 显式选定那一张（名单：{st['faces']}，PORTRAIT-003），"
+            "或用 `face disable` 关掉误检那一只（PORTRAIT-006）；"
+            "全图调色、曝光/白平衡、裁剪与磨皮仍可用")
+
+    def _refresh_frame_after_drop(self, tag: str) -> None:
+        """把一层放下之后补一帧：生效值清了而帧没重画，屏幕上还是刚才那张改过的脸。
+
+        这不是理论问题。`_rebuild_deform_for_landmarks` 的两条 invalidate 臂原来只
+        `clear_deform()` 就 return，只有在**建新层并点亮**时才补帧；于是“重分析认不回
+        上次选定那一张”之后，事件报 `lit=false` 而屏幕仍是瘦过的脸——报表与画面双向
+        错配。PORTRAIT-006 的逐字节判据（关掉的那一只在重检测后的那一帧上不得重新出现）
+        抓的正是这个形状，所以三条放下臂现在都走这里。
+        """
+        if self.shm is None or self._vram is None:
+            return
+        if (self.shm.w, self.shm.h) != (self._vram.w, self._vram.h):
+            return                       # 会话尺寸变了：这一帧本来就不该由本命令写
+        try:
+            fr = self._write_current_frame(tag)
+            fr.pop("render_ms", None)
+            emit(fr)
+        except Exception as e:                        # noqa: BLE001
+            emit({"event": "engine_warn", "warn": f"放下层之后补帧失败（{tag}）：{e}"})
+
+    def _drop_face_selection(self, why: str, *, write_frame: bool = True) -> None:
+        """放下「正在改谁」与挂在那个人身上的两层的**生效值**，保留「用户改过什么」。
+
+        与 `_preserve_face_choice` 里那条失败路径同一口径：清的是会话里那一层，而
+        全人物默认与逐张覆盖按脸盒留着——用户把那个人选回来时还得接得回来。
+        """
+        amounts = dict(self._deform["amounts"])
+        # 两层里任何一层当时在画面上亮着，放下之后都得补一帧（一次补够，不各补各的）
+        lit_before = bool(self._vram is not None
+                          and (self._vram.has_deform() or self._vram.has_enhance()))
+        if self._deform["built"]:
+            self._vram.clear_deform()
+        self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
+        self._deform_defer = False
+        self._face_index = 0
+        self._face_box = None
+        self._face_explicit = False
+        self._emit_deform_state("invalidate", reason=why, dropped_amounts=amounts)
+        if self._enhance_intent() or self._enhance["built"]:
+            # 眼牙那一层认的是脸盒：选型一放下，`_rehang_enhance` 就会因为认不出
+            # “这一层挂在谁身上”而整场放下（不拿 A 的参数静默服务 B）
+            self._rehang_enhance(self._precompute, replayed_for="face_selection_dropped",
+                                 write_frame=False)
+        if lit_before and write_frame:
+            self._refresh_frame_after_drop("face_selection_dropped")
+
+    def _reapply_face_manual(self, pc, *, backend=None, tag: str = "precompute"):
+        """把人工账重贴到这一轮的名单上（PORTRAIT-006）。返回 (新名单, 账)。
+
+        三条判据直接来自冻结件那句「人工纠正保留，变化可预览；不静默恢复已禁用误检」：
+
+        · **禁用按 IoU 认**而不是逐位相等：`when` 那一栏写的是“后台重检测**或更换检测
+          模型**”，换模型后脸盒会漂（template→mediapipe 能漂出几十个百分点），逐位相等
+          等于宣布人工纠正只在同一次推理内有效；
+        · 认不回的条目**留在账上**并标 stale：悄悄丢掉用户关过的那一只，下一轮检测它
+          就会以“没被禁用”的身份重新出现在名单里——那正是“静默恢复”；
+        · 人工补的那一张要重新从**框**里取一次点位（换了后端就按新后端取）。取不到就
+          在账里明说“这一框这一轮没找回”，不拿旧点位、更不拿占位点位续命：那层的控制点
+          不在那个脸上，而屏幕上看不出来。
+        """
+        from . import face as face_mod
+
+        kept, lost = [], []
+        for rect in self._manual_boxes("added"):
+            if self._match_face_by_iou(pc, rect) is not None:
+                # 这一轮模型自己探到了这个人：人工框的使命完成了，账仍留着（用户改过的
+                # 判断不因模型进步而消失），但不再重复 append 一张同脸
+                kept.append({"rect": list(rect), "state": "detected"})
+                continue
+            if backend is None or getattr(self, "_src_rgb", None) is None:
+                lost.append({"rect": list(rect),
+                             "reason": "这一轮没有可重跑的区域检测后端/代理帧：这一框的人工脸"
+                                       "没找回，账仍保留"})
+                continue
+            try:
+                lm, info = face_mod.detect_region(backend, self._src_rgb, rect)
+                pc = pc.with_manual_face(lm)
+            except Exception as e:                        # noqa: BLE001
+                lost.append({"rect": list(rect),
+                             "reason": f"{type(e).__name__}: {e}"})
+                continue
+            kept.append({"rect": list(rect), "state": "readded", "iou": info["iou"],
+                         "box": info["box"], "landmark_backend": info["backend"]})
+        ledger = {"kept": kept, "lost": lost}
+        if kept or lost:
+            # 这里只报账本身（“哪一框找回了、哪一框没找回”）：完整的名单状态由随后的
+            # precompute_ready 报——那会儿 `self._precompute` 已经是新那一份，现在报只会
+            # 把旧名单当新名单发出去
+            emit({"event": "face_manual", "action": "reapply", "tag": tag,
+                  "kept": kept, "lost": lost})
+        return pc, ledger
 
     def _replay_face_view(self) -> None:
         """把当前这份 `_precompute` 重新指到选定那一张上（认不回脸就退回未选定）。
@@ -3696,12 +3962,27 @@ class Engine:
         old = self._precompute
         was_explicit = bool(self._face_explicit)
         pool = pc.all_landmarks or [pc.landmarks]
+        # 人工账已经叠在这份名单上了（`_reapply_face_manual` 跑在本方法之前），所以这里
+        # 的“还剩谁”是算过用户关掉哪几只之后的结果
+        disabled = self._disabled_indices(pc)
+        enabled = [i for i in range(len(pool)) if i not in disabled]
         if len(pool) <= 1:
             # 只有一张：没什么可选，脸盒留着当“这同一张”的身份（下一轮又变多人时能认回来）
-            self._face_index = 0
-            self._face_box = tuple(float(v) for v in (pc.face_box or ())) or None
+            if enabled:
+                self._face_index = 0
+                self._face_box = tuple(float(v) for v in (pc.face_box or ())) or None
+            else:
+                # 而这一张已被用户关掉（“这不是脸”）：它不能再服务任何人。放下选型与生效值，
+                # 而**不改那份账**——账上是用户说过的话，不是引擎没听见的事
+                self._drop_face_selection(
+                    "这一轮探到的那一张已被人工禁用（误检）：会话里的形变与眼牙层已放下，"
+                    "全人物默认与逐张覆盖按脸盒留着，`face enable` 恢复后即可接回")
             return pc
         hit = self._match_face_by_box(pc, self._face_box) if old is not None else None
+        if hit is not None and hit in disabled:
+            # 上次选定那一张现在是「用户说不是脸」的那一只：认回来也不能继续服务它。
+            # 禁用是一次人的判断，优先级高于一次选型
+            hit = None
         if hit is None and old is None and was_explicit:
             # 重开工程那一条路：本会话里没有“上一轮”可认，而名单就是这张图刚跑出来的
             # 那一轮——按存下来的 index 认，并对上脸盒才算数（对不上就照旧走下面的退回）
@@ -3720,6 +4001,7 @@ class Engine:
         self._face_explicit = False
         if was_explicit and (self._deform["built"] or self._deform_defer):
             amounts = dict(self._deform["amounts"])
+            was_lit = bool(self._vram.has_deform())
             self._vram.clear_deform()
             self._deform = dict(amounts={k: 0.0 for k in KINDS}, built=False)
             # 待重挂的那一层也一起吃掉：留着它就是一次静默选型——下一次分析会把
@@ -3734,6 +4016,22 @@ class Engine:
                                            "全人物默认与逐张覆盖仍按脸盒留着，重新 `face select` "
                                            "选定那一张就接得回来",
                                     dropped_amounts=amounts)
+            if was_lit:
+                # 层放下了就必须补一帧：不然屏幕上还挂着上一次那一张的形变，而事件已经
+                # 报 lit=false（详见 _refresh_frame_after_drop）
+                self._refresh_frame_after_drop("face_invalidate")
+        # 人工账把名单削到只剩一个可编辑的人：这时候「改谁」已经由用户那次排除决定，
+        # 直接指到那一张，而不是要求他对着一份只剩一格的名单再点一次。这一步要明说，
+        # 因为它确实是一次选型（PORTRAIT-006），只是主意是人不是引擎
+        if len(enabled) == 1:
+            view = pc.select_face(enabled[0])
+            self._face_index = enabled[0]
+            self._face_box = tuple(float(v) for v in (view.face_box or ())) or None
+            self._face_explicit = True
+            emit({"event": "engine_warn",
+                  "warn": f"人工禁用之后只剩一个可编辑的人（index {enabled[0]}）："
+                          "已把这一张指为当前编辑对象（PORTRAIT-006：这一步是人做的排除）"})
+            return view
         return pc
 
     def cmd_face(self, p: dict):
@@ -3744,8 +4042,9 @@ class Engine:
         进出片口径——全在引擎侧。前端只画 chip 与发 index。
         """
         action = p.get("action", "list")
-        if action not in ("list", "select"):
-            emit({"event": "error", "error": f"未知 face action: {action}（可用：list/select）"})
+        if action not in self.FACE_ACTIONS:
+            emit({"event": "error",
+                  "error": f"未知 face action: {action}（可用：{'/'.join(self.FACE_ACTIONS)}）"})
             return
         if not self._image_loaded or self._vram is None:
             emit({"event": "error", "error": "尚未 load_image"})
@@ -3763,6 +4062,12 @@ class Engine:
             # 槽位多源汇入，靠 `face` 这一格认出对象）。只算一次，不写两份。
             emit({"event": "face_list", "t_face_ms": 0.0, **st, "face": st})
             return
+        if action in ("disable", "enable", "add", "remove"):
+            # 人工账的四条动作（PORTRAIT-006）。分出去是因为它们改的是**名单与账**，
+            # 而 select 改的是「当前视图」——两条路径的失败回滚面不一样，混在一个函数里
+            # 迟早出现「账改了而视图没改」那一族错配
+            self._face_manual_action(action, p)
+            return
         raw = p.get("index")
         faces = pc.faces()
         if isinstance(raw, bool) or not isinstance(raw, (int, float)):
@@ -3773,6 +4078,12 @@ class Engine:
             emit({"event": "error", "error":
                   f"face index {raw} 不在名单里（这一轮探到 {len(faces)} 张脸，"
                   f"可选 0…{max(0, len(faces) - 1)}）"})
+            return
+        if idx in self._disabled_indices(pc):
+            # 用户说过「这不是脸」，引擎就不服务那一张（PORTRAIT-006）。要改主意先 enable：
+            # 让 select 顺手把禁用解掉，等于一次点击推翻另一条人工判断，两笔账就分不清了
+            emit({"event": "error", "error":
+                  f"第 {idx} 张已被人工禁用（误检）：先用 `face enable` 恢复再选定"})
             return
         try:
             view = pc.select_face(idx)
@@ -3814,6 +4125,231 @@ class Engine:
               # 平铺 + 嵌套同一份：嵌套那一份是给宿主 `note_face()` 认对象用的（它与
               # precompute_ready、doc_state 汇进同一个槽位），平铺那一份是历史形状。
               **fst, "face": fst})
+
+    def _settle_face_layers(self, replayed_for: str) -> None:
+        """人工账改动之后，把两层按当前名单重新落一遍，并保证屏幕与之一致。
+
+        两条重建臂各自只在「建新层且点亮」时补帧（这是它们一直的行为），所以这里
+        统一补一次：否则会出现「报表 lit=false 而屏幕还挂着刚才那张脸」——那正是
+        PORTRAIT-006 的逐字节判据要抓的形状。`write_frame=False` 是把补帧的责任收到
+        这一个出口，不是关掉它。
+        """
+        pc = self._precompute
+        self._rebuild_deform_for_landmarks(pc, write_frame=False)
+        self._rehang_enhance(pc, replayed_for=replayed_for, write_frame=False)
+        self._refresh_frame_after_drop(replayed_for)
+
+    def _face_manual_done(self, action: str, *, note: str | None = None,
+                          extra: dict | None = None) -> None:
+        st = self._face_state()
+        emit({"event": "face_manual", "action": action,
+              "manual": st["manual"], "faces": st["faces"], "enabled": st["enabled"],
+              "blocked": st["blocked"], "index": st["index"], "explicit": st["explicit"],
+              "face": st, **st,
+              **({"note": note} if note else {}), **(extra or {})})
+
+    def _face_manual_action(self, action: str, p: dict) -> None:
+        """人脸名单的人工动作（PORTRAIT-006）：关掉误检 / 恢复 / 补上漏检 / 撤掉补的那一张。
+
+        为什么这四条也是引擎命令：这份账要进文档状态、进撤销栈、进工程文件，并且决定
+        deform/enhance 能不能放行——全在引擎侧。前端只画按钮与发 index/框。
+        """
+        if not self._image_loaded or self._vram is None:
+            emit({"event": "error", "error": "尚未 load_image"})
+            return
+        pc = self._precompute
+        if pc is None:
+            emit({"event": "error", "error":
+                  f"face {action} 需要先 precompute：人工账要叠在一份名单上，没有名单就没有"
+                  "「关掉哪一只」与「补在哪个位置」可记——不许前端自己记一份空账（它会与"
+                  "下一次分析结果对不上）"})
+            return
+        if action == "add":
+            self._face_manual_add(p)
+            return
+        if action == "remove":
+            self._face_manual_remove(p)
+            return
+        faces = pc.faces()
+        raw, box = p.get("index"), p.get("box")
+        idx = None
+        if raw is not None:
+            if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                emit({"event": "error", "error": f"face index 要是整数，得到 {raw!r}"})
+                return
+            idx = int(raw)
+            if idx != raw or not 0 <= idx < len(faces):
+                emit({"event": "error", "error":
+                      f"face index {raw} 不在名单里（这一轮探到 {len(faces)} 张脸）"})
+                return
+            box = faces[idx]["box"]
+        elif box is not None:
+            idx = self._match_face_by_iou(pc, box)
+        else:
+            emit({"event": "error", "error": "face disable/enable 要给 index 或 box"})
+            return
+        key = self._manual_box(box)
+        if key is None:
+            emit({"event": "error", "error": f"这一只没有可用的脸盒（得到 {box!r}）：人工账按盒认人"})
+            return
+        ledger = self._face_manual
+        if action == "disable":
+            if any(self._manual_box(b) == key for b in ledger["disabled"]):
+                emit({"event": "error", "error": "这一只已经在人工禁用名单里"})
+                return
+            ledger["disabled"].append(key)
+            if idx is not None and idx == int(self._face_index) and self._face_explicit:
+                # 当前编辑对象就是这一只：选型先放下，生效值交给 _settle_face_layers 清
+                self._face_index, self._face_box, self._face_explicit = 0, None, False
+            disabled = self._disabled_indices(pc)
+            enabled = [int(f["index"]) for f in faces if int(f["index"]) not in disabled]
+            if len(enabled) == 1:
+                # 只剩一个可编辑的人：那一步排除是人做的，直接指过去（与
+                # `_preserve_face_choice` 末尾同一口径，两处不做两套判断）
+                view = pc.select_face(enabled[0])
+                self._precompute = view
+                self._face_index = enabled[0]
+                self._face_box = tuple(float(v) for v in (view.face_box or ())) or None
+                self._face_explicit = True
+                note = (f"已关掉第 {idx} 只（误检）；名单里只剩 index {enabled[0]} 一个可编辑的人，"
+                        "已指为当前编辑对象")
+            else:
+                note = f"已关掉第 {idx} 只（误检）：这一只不再被任何单脸作用域操作服务"
+            self._settle_face_layers("face_disable")
+            self._face_manual_done("disable", note=note)
+            return
+        # enable：把账上那一条撤掉。认不回的条目也能撤（给 index 走 IoU，给 box 走那条账本身），
+        # 因为 stale 的禁用记录是用户唯一还需要清得掉的东西
+        hit = None
+        for i, b in enumerate(ledger["disabled"]):
+            if b == key or (idx is not None and self._match_face_by_iou(pc, b) == idx):
+                hit = i
+                break
+        if hit is None:
+            emit({"event": "error", "error":
+                  f"这一只不在人工禁用名单里（账上 {len(ledger['disabled'])} 条，"
+                  "没有一条与它对上）：不静默报成功"})
+            return
+        ledger["disabled"].pop(hit)
+        self._settle_face_layers("face_enable")
+        self._face_manual_done("enable",
+                               note=f"已恢复第 {idx if idx is not None else '?'} 只：它重新可以选定与服务")
+        return
+
+    def _face_manual_add(self, p: dict) -> None:
+        """把用户框住的一张漏检的脸加进名单：点位来自**该区域的真检测**。
+
+        这一条的存在理由是 DoD §2：不许伪装 AI，也不许做假控件。所以「手加一张脸」不是
+        在框里画一个可拖的网格，而是**在这一框上再跑一次同一个后端**拿回 478 点；拿不到
+        就明确拒绝并说清为什么（见 face.detect_region 的三条拒绝路径）。
+        """
+        from . import face as face_mod
+
+        rect = p.get("rect") if p.get("rect") is not None else p.get("box")
+        key = self._manual_box(rect)
+        if key is None:
+            emit({"event": "error", "error":
+                  f"face add 要给归一化矩形 rect=(x0,y0,x1,y1)，得到 {rect!r}"})
+            return
+        if self._match_face_by_iou(self._precompute, key) is not None:
+            emit({"event": "error", "error":
+                  "这一框里已经有脸了（名单里有与它对得上的人）：要改他就用 `face select`，"
+                  "重复入列会让同一张脸在名单里出现两次"})
+            return
+        if any(self._manual_box(b) == key for b in self._face_manual["added"]):
+            emit({"event": "error", "error": "这一框已经在人工名单里"})
+            return
+        if getattr(self, "_src_rgb", None) is None:
+            emit({"event": "error", "error": "没有可重跑区域检测的代理帧：请重新 load_image"})
+            return
+        # 用**当前这份名单出自的那个后端**再跑一次：换后端补框会让同一张图里两套点位并存，
+        # 而面板上一律显示同一个 landmark_backend（那是看不出错的那一类错）
+        backend = self._precompute_backend or "auto"
+        try:
+            fn = face_mod.build(backend)
+        except (face_mod.MissingBackend, ValueError) as e:
+            emit({"event": "error", "error": f"区域检测后端不可用({backend}): {e}"})
+            return
+        try:
+            lm, info = face_mod.detect_region(fn, self._src_rgb, key)
+            pc2 = self._precompute.with_manual_face(lm)
+        except Exception as e:                        # noqa: BLE001
+            emit({"event": "error", "error":
+                  f"这一框里没有可服务的人脸，已拒绝，名单原样未动：{type(e).__name__}: {e}"})
+            return
+        new_idx = len(pc2.faces()) - 1
+        view = pc2.select_face(new_idx)
+        try:
+            self._vram.load_face(view)
+        except Exception as e:
+            emit({"event": "error", "error": f"新名单上显存失败({type(e).__name__}): {e}，"
+                                             "人工脸未入列，原名单继续服务"})
+            return
+        self._precompute = view
+        self._face_manual["added"].append(key)
+        # 用户框住它就是要改它：这一步指过去不是「引擎替他选」，而是那次框选本身就是选择
+        self._face_index = new_idx
+        self._face_box = tuple(float(v) for v in (view.face_box or ())) or None
+        self._face_explicit = True
+        self._settle_face_layers("face_add")
+        self._face_manual_done("add",
+                               note=f"已按用户框补进一张人工脸（index {new_idx}，"
+                                   f"点位出自 {info['backend']} 区域检测，IoU {info['iou']}）",
+                              extra={"region": info})
+
+    def _face_manual_remove(self, p: dict) -> None:
+        """撤掉一张**人工补的**脸（补错了要能收回）。检测到的那一张不许撤，只能禁用。"""
+        from dataclasses import replace
+
+        from .face import _norm_box
+
+        pc = self._precompute
+        faces = pc.faces()
+        raw = p.get("index")
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            emit({"event": "error", "error": f"face remove 要给整数 index，得到 {raw!r}"})
+            return
+        idx = int(raw)
+        if idx != raw or not 0 <= idx < len(faces):
+            emit({"event": "error", "error": f"face index {raw} 不在名单里（{len(faces)} 张）"})
+            return
+        if not faces[idx]["manual"]:
+            emit({"event": "error", "error":
+                  f"第 {idx} 张是这一轮检测出来的脸，不能撤：要让它不服务请用 `face disable`"
+                  "（人工账）。撤掉检测结果是另一件事——那是改模型的输出，不是改判断"})
+            return
+        pool = list(pc.all_landmarks or [pc.landmarks])
+        del pool[idx]
+        if not pool:
+            emit({"event": "error", "error": "名单不能空：最后一张脸请用 `face disable` 处理"})
+            return
+        # 索引整体前移一格：删掉第 i 张之后「第 j 张」在 i 之后全部指向别人，不重编就是
+        # 从这一刻起 index 与 chip 分家（本仓为这件事付过学费，见 _face_box 那条注释）
+        manual = tuple(sorted({(i if i < idx else i - 1) for i in pc.manual if i != idx}))
+        # 账上那条人工框要一起撤掉。认的是「这条框当初指到第 idx 张」，而不是拿两个盒子
+        # 比逐位相等：框是用户画的，盒是点位算出来的，本来就不该相等——上一版按相等比，
+        # 条目留在账上并标成 lost，下一轮重检测又把它补回名单：撤掉的脸自己活了回来
+        tied = [b for b in self._face_manual["added"] if self._match_face_by_iou(pc, b) == idx]
+        base = replace(pc, all_landmarks=pool, num_faces=len(pool), manual=manual)
+        # `base.landmarks` 不能停在被删那一张上：下游（deform 建层、导出、vram）只读
+        # `.landmarks`，留着就是一层无源之水。先指到第 0 张，下面再按盒认回用户选过那一张
+        base = replace(base, landmarks=pool[0], face_index=0, face_box=_norm_box(pool[0]))
+        # 当前选定那一张换了位置或没了：按盒认回来，认不回就放下选型（不拿旧序号指新人）
+        keep = self._face_box
+        self._precompute = base
+        # 其余框留着：它们指的是别人，下一轮分析由 `_reapply_face_manual` 重新认
+        self._face_manual["added"] = [b for b in self._face_manual["added"] if b not in tied]
+        hit = self._match_face_by_box(base, keep) if keep is not None else None
+        if hit is None and self._face_explicit:
+            self._face_index, self._face_box, self._face_explicit = 0, None, False
+        elif hit is not None:
+            view = base.select_face(hit)
+            self._precompute = view
+            self._face_index = hit
+            self._face_box = tuple(float(v) for v in (view.face_box or ())) or None
+        self._settle_face_layers("face_remove")
+        self._face_manual_done("remove", note=f"已撤掉人工补的第 {idx} 张：名单重新按索引连续编号")
+        return
 
     # ------------------------------------------------------------ 层级合成（LNX-PORTRAIT-004）
     DEFORM_ACTIONS = ("set", "clear", "inherit")
@@ -3962,16 +4498,11 @@ class Engine:
         # 只拒这一条：全图调色/曝光/裁剪/磨皮的作用面不是“某个人”，不受影响。
         pc0 = self._precompute
         addresses_a_person = scope == "person" or action == "inherit"
-        if ((action == "set" or addresses_a_person) and pc0 is not None
-                and int(getattr(pc0, "num_faces", 1)) > 1 and not self._face_explicit):
-            from .face import SCOPE_MAX_FACES
-            emit({"event": "error",
-                  "error": f"画面里探到 {pc0.num_faces} 张脸（上限探 {SCOPE_MAX_FACES} 张）："
-                           "面部重塑需要且仅需要一张可用人脸，本版本不在多人照片里替你选"
-                           "哪一张（SCOPE-001）；要改谁就先用 `face select` 显式选定那一张"
-                           f"（名单：{self._face_state()['faces']}，PORTRAIT-003）；"
-                           "全图调色、曝光/白平衡、裁剪与磨皮仍可用"})
-            return
+        if (action == "set" or addresses_a_person) and pc0 is not None:
+            blocked, why = self._face_guard()
+            if blocked:
+                emit({"event": "error", "error": why})
+                return
         # 身份：这一层挂在**脸盒**上（PORTRAIT-004）。没有脸盒就没有可挂的对象，也没有
         # 可合成的那一张。`clear` + `scope=all` 是唯一的例外：那是“整层放下”，
         # 不需要知道是谁，也不该因为没分析过而按不动（清空按钮必须永远能按）。
