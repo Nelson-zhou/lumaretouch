@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import Viewer, { type Hud } from "./components/Viewer";
+import Viewer, { VIEW_HOME, type Hud } from "./components/Viewer";
 import RegistryPanel from "./components/RegistryPanel";
-import StudioPanel from "./components/StudioPanel";
+import RetouchPanel from "./components/RetouchPanel";
 import { REGISTRY, keyOf, sectionTitleOf, type SectionId } from "./p0";
 import { clickRle } from "./brush";
 import { t, type MsgKey } from "./i18n";
@@ -124,7 +124,9 @@ export default function App() {
   // 路径错误就地显示在输入框下方。原来它只落到 dragNote——那行灰字在窗口另一头，
   // 用户点了「导入」什么也没发生也不知道为什么，那就是事实上的静默失败。
   const [pathErr, setPathErr] = useState("");
-  const [maxPx, setMaxPx] = useState(576000);
+  // 产品档代理：8294400 px（约 4K 视口档）。此前默认 576000 是跑靶预算，
+  // 在大屏上会把 24MP 的原片缩成 960×600 再放大，观感就是一层马赛克。
+  const [maxPx] = useState(8_294_400);
   const [strength, setStrengthV] = useState(0.5);
   const [radius, setRadius] = useState(12);
   // 这三行初始值必须与引擎侧 DEFAULT_* 逐个对得上（test_drag.py 里有一条用例专看这件事）：
@@ -2336,6 +2338,13 @@ export default function App() {
         setPathErr(out.why); setDragNote(out.why);
       } else {
         setDragNote("");      // “导入中…”不许留在屏上：那一行现在说的是过去
+        // 打开一张图就把同目录扫进底片条（商业软件的行为：底片条是这个文件夹，
+        // 不是一根空带子）。缩略图由引擎生成；扫不动不影响这张图本身。
+        const dir = p.slice(0, Math.max(0, p.lastIndexOf("/")));
+        if (dir) {
+          setStripDir(dir);
+          runSession("scan", { dir, thumbs: true }).catch(() => undefined);
+        }
       }
     } catch (e) {
       const why = String(e);
@@ -2436,12 +2445,17 @@ export default function App() {
   /** 对比：按住=临时出一帧原图，松开=回到修好的那一版。
    *  走引擎的 compare 而不是 set_strength(0)：会话强度不动、撤销栈不占步，
    *  松手后滑块位置与画面都还是用户离开时那一版。 */
-  async function cmpOn(e: React.PointerEvent<HTMLButtonElement>) {
+  /** 按住看原图（顶栏按钮与空格键共用这一条）。 */
+  async function cmpHold() {
     if (!pid || comparingRef.current) return;
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* 拿不到捕获不影响对比 */ }
     comparingRef.current = true;
     setComparing(true);
     await setCompare(true).catch((err) => { setDragNote(String(err)); });
+  }
+
+  async function cmpOn(e: React.PointerEvent<HTMLButtonElement>) {
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* 拿不到捕获不影响对比 */ }
+    await cmpHold();
   }
   async function cmpOff() {
     if (!comparingRef.current) return;
@@ -2912,14 +2926,19 @@ export default function App() {
       const card = document.querySelector(".emptyCard") as HTMLElement | null;
       const stage = document.querySelector(".stage") as HTMLElement | null;
       const btn = document.querySelector(".topbar .openPhoto") as HTMLElement | null;
-      const top = document.querySelector(".topbar") as HTMLElement | null;
+      const brand = document.querySelector(".topbar .brand") as HTMLElement | null;
       const cr = card?.getBoundingClientRect();
       const sr = stage?.getBoundingClientRect();
       await report(`M0_EMPTY ${JSON.stringify({
         card: !!card,
         title: card?.querySelector(".emptyTitle")?.textContent?.trim() ?? "",
-        topBtn: btn?.textContent?.trim() ?? "",
-        topBtnFirst: top?.firstElementChild?.className ?? "",
+        brand: brand?.textContent?.trim() ?? "",
+        openBtn: btn?.textContent?.trim() ?? "",
+        // 产品态的三条硬要求：页面上没有调试 HUD；右栏恰好四组；组的标题是那四个词
+        hud: !!document.querySelector(".hud"),
+        bars: document.querySelectorAll(".gallery .bar").length,
+        groups: Array.from(document.querySelectorAll(".side .pg > summary"))
+          .map((x) => x.textContent?.trim() ?? ""),
         // 相对所在容器量：.stage 才是视口的容器（顶栏与右栏不归它管）
         dx: cr && sr ? Math.round(cr.left + cr.width / 2 - (sr.left + sr.width / 2)) : null,
         dy: cr && sr ? Math.round(cr.top + cr.height / 2 - (sr.top + sr.height / 2)) : null,
@@ -3240,7 +3259,32 @@ export default function App() {
     await refreshFromEngine()
   }
 
-  const verdict = gate(stats, w);
+  // 空格按住出原图、松开回修好的那版（DoD §3 的“按住空格实时对拍”）。
+  // 光标在输入框里或按钮上时不抢：那是用户在打字/激活控件。
+  useEffect(() => {
+    const busyTarget = (el: EventTarget | null) => {
+      const n = el as HTMLElement | null;
+      return !!n && (n.tagName === "INPUT" || n.tagName === "TEXTAREA"
+        || n.tagName === "SELECT" || n.tagName === "BUTTON" || n.isContentEditable);
+    };
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat || busyTarget(e.target)) return;
+      e.preventDefault();
+      void cmpHold();
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || busyTarget(e.target)) return;
+      e.preventDefault();
+      void cmpOff();
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pid]);
 
   // 引擎进程此刻在不在（M5-c）。报回缺失（新壳配旧宿主）时退回"看 pid"的旧行为，
   // 而不是当成"没在跑"——那会把刚起好的引擎显示成已死。
@@ -3249,782 +3293,31 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        {/* 常驻入口：顶栏最左侧，与空状态卡片走同一条 openAndImport。它必须在
-            任何一张图打开之前就可见——C 端用户第一眼要能看见"从哪儿开始"。 */}
-        <button className="openPhoto" onClick={() => void openAndImport()} disabled={busy}
-                title={t("empty.open")}>
-          📂 {t("empty.openBtn")}
+        <span className="brand">LumaRetouch</span>
+        <button className="tb openPhoto" onClick={() => void openAndImport()} disabled={busy}>
+          打开照片
         </button>
-        <span className="name">{t("app.title")}</span>
-        <span className="tag">{project?.open ? (project.name ?? "工程") : "未打开工程"}</span>
-        {project?.open && (
-          <span className={project.dirty ? "tag dirty" : "tag saved"}>
-            {project.dirty ? "未保存" : "已保存"}
-          </span>
-        )}
-        {!!selPaths.length && <span className="tag">选中 {selPaths.length} 张</span>}
-        {exporting && <span className="tag run">
-          导出 {status?.export_progress?.index ?? 0}/{status?.export_progress?.total ?? 0}</span>}
-        {!!tasks.length && <span className="tag">队列 {tasks.length}</span>}
-        <span className="mut" style={{ marginLeft: "auto" }}>
-          {doc ? (doc.crop.lit ? `裁剪 ${JSON.stringify(doc.crop.out_full ?? [])}` : "") : ""}
-          {status?.engine_version ? ` · 引擎 ${status.engine_version}` : ""}
-        </span>
-      </header>
-      <aside className="side">
-        <StudioPanel status={status} doc={doc} tasks={tasks} project={project}
-                     hasImage={hasImage} exporting={exporting} faceOk={faceOk} faceWhy={faceWhy}
-                     pickFace={pickFace} setPickFace={setPickFace}
-                     faceActions={status?.ready_caps?.face_actions ?? []}
-                     note={setDragNote} onDone={refreshStatus}
-                     brush={{ on: brushOn, radius: brushRadius, feather, mode: brushMode,
-                               onChange: (q) => {
-                                 if (q.on !== undefined) setBrushOn(q.on);
-                                 if (q.radius !== undefined) setBrushRadius(q.radius);
-                                 if (q.feather !== undefined) setFeather(q.feather);
-                                 if (q.mode !== undefined) setBrushMode(q.mode);
-                               } }}
-                     deformKinds={status?.ready_caps?.deform_kinds ?? []}
-                     deformRange={status?.ready_caps?.deform_range}
-                     exportDir={exportDir} setExportDir={setExportDir}
-                     exportBits16={exportBits16} setExportBits16={setExportBits16}
-                     deformScope={deformScope} setDeformScope={setDeformScope}
-                     selCount={selPaths.length} projName={projName} setProjName={setProjName}
-                     preset={{
-                       name: presetName, setName: setPresetName,
-                       selectedId: presetSel, setSelectedId: setPresetSel,
-                       builtin: presetList.find((x) => x.id === presetSel)?.builtin ?? false,
-                       count: presetList.length, errors: presetState?.errors ?? [],
-                       onImport: () => { void onPresetImport() },
-                       onDelete: () => { void onPresetDelete() },
-                     }}
-                     sync={{
-                       selected: selPaths.length, canUndo: !!syncState?.last && hasImage,
-                       note: syncNote,
-                       onSync: () => { void onBatchSync() }, onUndo: () => { void onBatchUndo() },
-                     }}
-                     p0={{ value: p0value, optionsFor: p0options, enabled: p0enabled,
-                           slider: p0slider, toggle: p0toggle, enum: p0enum,
-                           action: p0action, rect: p0rect }} />
-        {/* 旧工作台整块折起来：它不是产品面，但那些控件与跑靶都是真在用的证据链，
-            删掉就等于把已经验过的能力从这台机器上拿掉。 */}
-        <details className="grp harness">
-        <summary>旧工作台 · 引擎与跑靶（诊断）</summary>
-        <div className="mut">{t("app.subtitle")}</div>
-
-        <h2>{t("side.engine")}</h2>
-        {/* 解释器与引擎源目录只属于开发态：发布包里这两个框填不上也不能让用户去猜
-            “该往这里填什么”——候选表的事由宿主定，账单在下面的运行状态那一行说。 */}
-        {IS_DEV && (
-          <>
-            <label className="k">{t("engine.python")}</label>
-            <input value={py} onChange={(e) => setPy(e.target.value)} placeholder="python3 / 虚拟环境解释器绝对路径" style={{ width: "100%" }} />
-            <label className="k">{t("engine.src")}</label>
-            <input value={src} onChange={(e) => setSrc(e.target.value)} placeholder="../engine/src" style={{ width: "100%" }} />
-          </>
-        )}
-        <div className="row">
-          <button className="primary" onClick={onStartEngine} disabled={(!!pid && engineAlive) || busy}>
-            {t("engine.start")}
-          </button>
-          <button onClick={onStopEngine} disabled={!pid || !engineAlive}>
-            {t("engine.stop")}
-          </button>
-        </div>
-        {/* 运行状态看 engine_alive，不看 pid（M5-c）。pid 只说明“我们起过一个”：
-            运行时缺包时引擎立刻死掉，拿 pid 判就会写成“运行中 · PID 1234”，并把
-            启动按钮永久禁掉——那时用户唯一能做的事只剩重启整个应用。 */}
-        <div className={pid ? (engineAlive ? "ok" : "warn") : "mut"}>
-          {pid ? (engineAlive ? t("engine.running", { pid }) : t("engine.died", { pid })) : t("engine.stopped")}
-        </div>
-        {!!status?.engine_version && (
-          <div className="mut">
-            {t("engine.version", { v: status.engine_version, py: status.engine_runtime?.python ?? "" })}
-          </div>
-        )}
-        {/* RAW 能力由引擎的 raw_backends 自报（raw.py）：只说基线能读的后缀与插件装没装，
-            不拿“支持 RAW”这种笼统话骗人——厂商容器（CR2/NEF）要 libraw 插件才成立。 */}
-        {!!status?.raw_backends && (
-          <div className="mut">
-            {t("engine.raw", {
-              s: status.raw_backends.suffixes.join("/"),
-              p: status.raw_backends.plugin_installed ? t("engine.rawInstalled") : t("engine.rawMissing"),
-            })}
-          </div>
-        )}
-        {/* 厂商后缀单独一行，且必须自带"未经实机样张认证"这句话（M9-h）：免责写在引擎
-            报的数据里，前端只是把它显示出来——不是前端自己补的一句漂亮话。 */}
-        {!!status?.raw_backends?.vendor_suffixes?.length && (
-          <div className="mut">
-            {t("engine.rawVendor", {
-              s: status.raw_backends.vendor_suffixes.join("/"),
-              ok: status.raw_backends.plugin_installed
-                ? t("engine.rawVendorDecodes") : t("engine.rawVendorMissing"),
-            })}
-          </div>
-        )}
-        {/* 缺包告警只在包账单**已到**而 torch 为空时报。拿 `torch == null` 单独判会
-            在 ready 还没到的那几百毫秒里就对一个健康引擎闪一次“没有 torch”——
-            假告警与假指标同罪。 */}
-        {!!status?.engine_runtime?.packages && "torch" in status.engine_runtime.packages
-          && status.engine_runtime.packages.torch == null && (!!status.engine_runtime.hint) && (
-          <>
-            <div className="warn">{t("engine.noTorch", { py: status.engine_runtime.python ?? "" })}</div>
-            <div className="mut">{status.engine_runtime.hint}</div>
-          </>
-        )}
-        {status?.has_shm && (
-          <div className="mut">
-            {t("engine.shm")}: {status.shm} · {status.emitted}/{status.delivered}
-          </div>
-        )}
-
-        <h2>{t("side.retouch")}</h2>
-        <label className="k">{t("retouch.image")}</label>
-        <div className="row">
-          <input value={imgPath} onChange={(e) => { setImgPath(e.target.value); setPathErr(""); }}
-                 placeholder="/path/to/photo.jpg" style={{ flex: 1, minWidth: 0 }} />
-          <button onClick={() => onPickPath(false)} title={t("retouch.browseTip")}>{t("retouch.browse")}</button>
-        </div>
-        {pathErr && <div className="err">{pathErr}</div>}
-        <div className={dropHint ? "mut dropOn" : "mut"}>
-          {t(dropHint ? "retouch.drop.active" : "retouch.drop.tip")}
-        </div>
-        <div className="row">
-          <input type="number" value={maxPx} step={10000} min={0} onChange={(e) => setMaxPx(+e.target.value)} style={{ width: 110 }} />
-          <span className="mut">{t("retouch.maxPx")}</span>
-          <button className="primary" onClick={onImport} disabled={!pid || busy || !imgPath.trim()}>{t("retouch.import")}</button>
-        </div>
-        <label className="k">{t("retouch.strength")} · {strength.toFixed(2)}</label>
-        <input type="range" min={0} max={1} step={0.01} value={strength} onChange={(e) => onStrength(+e.target.value)} style={{ width: "100%" }} />
-        <button className={comparing ? "cmp on" : "cmp"}
+        <button className={comparing ? "tb on" : "tb"}
                 onPointerDown={(e) => { void cmpOn(e); }}
                 onPointerUp={() => { void cmpOff(); }}
                 onLostPointerCapture={() => { void cmpOff(); }}
-                disabled={!pid || !status?.image}
-                aria-pressed={comparing}
-                title={t("retouch.compareOn")}>
-          {comparing ? t("retouch.compareOn") : t("retouch.compare")}
+                disabled={!hasImage}
+                title="按住查看原图（也可以按住空格）">
+          按住空格看原图
         </button>
-        <label className="k">{t("retouch.radius")} · {radius}</label>
-        <input type="range" min={1} max={60} step={1} value={radius} onChange={(e) => setRadius(+e.target.value)}
-               onPointerUp={onParamCommit} onKeyUp={onParamCommit} style={{ width: "100%" }} />
-        <label className="k">{t("retouch.detail")} · {detailGain.toFixed(2)}</label>
-        <input type="range" min={0} max={1.5} step={0.05} value={detailGain} onChange={(e) => setDetailGain(+e.target.value)}
-               onPointerUp={onParamCommit} onKeyUp={onParamCommit} style={{ width: "100%" }} />
-        <label className="k">{t("retouch.mid")} · {midGain.toFixed(2)}</label>
-        <input type="range" min={0} max={1.5} step={0.05} value={midGain} onChange={(e) => setMidGain(+e.target.value)}
-               onPointerUp={onParamCommit} onKeyUp={onParamCommit} style={{ width: "100%" }} />
-        <label className="k">{t("retouch.broad")} · {broadGain.toFixed(2)}</label>
-        <input type="range" min={0} max={1.5} step={0.05} value={broadGain} onChange={(e) => setBroadGain(+e.target.value)}
-               onPointerUp={onParamCommit} onKeyUp={onParamCommit} style={{ width: "100%" }} />
-        <div className="mut">{t("retouch.commitHint")}</div>
-        <label className="k">{t("retouch.channel")}</label>
-        <select value={channel} onChange={(e) => onChannelChange(e.target.value)} style={{ width: "100%" }}>
-          <option value="">{t("retouch.channelFull")}</option>
-          {(status?.precompute?.mask_channels ?? []).map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-        <div className="row">
-          <button className={brushOn ? "primary" : ""} onClick={() => setBrushOn(!brushOn)} disabled={!status?.image}>
-            {brushOn ? t("retouch.brushOn") : t("retouch.brushOff")}
-          </button>
-          <input type="number" min={2} max={64} value={brushRadius} onChange={(e) => setBrushRadius(+e.target.value)} style={{ width: 60 }} />
-          <span className="mut">{t("retouch.brushSize")}</span>
-          <input type="number" min={0} max={8} value={feather} onChange={(e) => setFeather(+e.target.value)} style={{ width: 52 }} />
-          <span className="mut">{t("retouch.feather")}</span>
-        </div>
-        <div className="row">
-          {/* 一支画笔、三个去处（M2-a2）：模式选完再画，与真实修图软件的笔组一致 */}
-          <button className={brushMode === "heal" ? "primary" : ""} onClick={() => setBrushMode("heal")}
-                  disabled={!status?.image}>{t("retouch.modeHeal")}</button>
-          <button className={brushMode === "dodge" ? "primary" : ""} onClick={() => setBrushMode("dodge")}
-                  disabled={!status?.image}>{t("retouch.modeDodge")}</button>
-          <button className={brushMode === "burn" ? "primary" : ""} onClick={() => setBrushMode("burn")}
-                  disabled={!status?.image}>{t("retouch.modeBurn")}</button>
-          <button className={brushMode === "color" ? "primary" : ""} onClick={() => setBrushMode("color")}
-                  disabled={!status?.image}>{t("retouch.modeColor")}</button>
-        </div>
-        <label className="k">{t("retouch.lightExposure", { stops: lightExposure.toFixed(2) })}</label>
-        <input type="range" min={-2} max={2} step={0.05} value={lightExposure}
-               onChange={(e) => setLightExposure(+e.target.value)}
-               onMouseUp={onLightExposureCommit} onTouchEnd={onLightExposureCommit}
-               style={{ width: "100%" }} />
-        <div className="row">
-          <button onClick={() => onInpaintAction("undo")} disabled={!status?.image}>{t("retouch.undo")}</button>
-          <button onClick={() => onInpaintAction("redo")} disabled={!status?.image}>{t("retouch.redo")}</button>
-          <button onClick={() => { onInpaintAction("clear"); setLastInpaint(null); }} disabled={!status?.image}>{t("retouch.clear")}</button>
-        </div>
-        <div className="row">
-          <button onClick={() => onLightAction("undo")} disabled={!status?.image}>{t("retouch.lightUndo")}</button>
-          <button onClick={() => onLightAction("redo")} disabled={!status?.image}>{t("retouch.lightRedo")}</button>
-          <button onClick={() => { onLightAction("clear"); setLastLight(null); }} disabled={!status?.image}>{t("retouch.lightClear")}</button>
-        </div>
-        {/* 五官微调（M2-b）：三个滑块都是 [-1,1]，负值就是反向（丰颊/小眼/长下巴），
-            引擎侧同一套控制点不需要第二份代码。拖动期间逐事件发：它只缩放单位场。 */}
-        {(["slim_face", "big_eye", "small_chin"] as const).map((kind) => (
-          <div key={kind}>
-            <label className="k">{t(`retouch.${kind}`)}
-              {' '}{deformAmounts[kind].toFixed(2)}</label>
-            <input type="range" min={-1} max={1} step={0.01} value={deformAmounts[kind]}
-                   onChange={(e) => onDeformChange(kind, +e.target.value)}
-                   style={{ width: "100%" }} />
-          </div>
-        ))}
-        <div className="row">
-          <button onClick={onDeformClear} disabled={!status?.image}>{t("retouch.deformClear")}</button>
-        </div>
-        {/* 眼牙增强（LNX-PORTRAIT-009）：三条滑块各自独立启停。名单与值域都来自引擎
-            （ready 的 enhance_subs / enhance_range）——引擎没说就不画这一排，而不是前端
-            刻一份名字去撞一条会被整条拒的命令。每格的"为什么现在不会动"直接引用引擎
-            报的那句话（enhance.reason），面板不自己推断。 */}
-        {(status?.ready_caps?.enhance_subs ?? []).map((sub) => {
-          const en = enhanceStateOf(status, doc);
-          const range = status?.ready_caps?.enhance_range ?? [0, 1];
-          const px = en?.gated_px?.[sub] ?? 0;
-          const why = en?.reason?.[sub] ?? null;
-          const unusable = !status?.image
-            || (en?.defer ?? false)
-            || (faceSt?.blocked ?? false)
-            || (en != null && !en.built && px <= 0 && why == null);
-          const disabled = unusable || why != null;
-          return (
-            <div key={sub}>
-              <label className="k">{t(`retouch.${sub}` as MsgKey)}
-                {' '}{(enhanceAmounts[sub] ?? 0).toFixed(2)}</label>
-              <input type="range" min={range[0]} max={range[1] ?? 1} step={0.01}
-                     value={enhanceAmounts[sub] ?? 0} disabled={disabled}
-                     onChange={(e) => onEnhanceChange(sub, +e.target.value)}
-                     style={{ width: "100%" }} />
-              {why != null && (
-                <div className="mut">{t("retouch.enhOff", { why })}</div>
-              )}
-              {en?.defer && (
-                <div className="mut">{t("retouch.enhDefer")}</div>
-              )}
-              {faceSt?.blocked && !en?.defer && (
-                <div className="warn">{t("retouch.enhBlocked")}</div>
-              )}
-              {why == null && !disabled && (
-                <div className="mut">{t("retouch.enhGate", {
-                  px, ms: (lastEnhance?.enhance_ms ?? 0).toFixed(2),
-                })}</div>
-              )}
-            </div>
-          );
-        })}
-        <div className="row">
-          <button onClick={() => { void runEnhance("clear").then(() => refreshStatus()); }}
-                  disabled={!status?.image ||
-                             !Object.values(enhanceAmounts).some((v) => Math.abs(v) > 0)}>
-            {t("retouch.enhClear")}
-          </button>
-        </div>
-        <div className="mut">{t("retouch.enhHow")}</div>
-        {deformNote && (
-          <div className="mut">{t("retouch.deformInvalidated")}：{deformNote}</div>
-        )}
-        {deformGeomWarn && (
-          <div className="warn">{t("retouch.geomWarn", {
-            share: (deformGeomShare * 100).toFixed(0),
-            backend: status?.deform?.landmark_backend ?? "-",
-          })}</div>
-        )}
-        {lastInpaint && (
-          <table>
-            <tbody>
-              <tr>
-                <td>{t("retouch.ops")}</td>
-                <td>{lastInpaint.ops} · {t("retouch.redoPending")} {lastInpaint.redo_pending}</td>
-              </tr>
-              <tr>
-                <td>{t("retouch.painted")}</td>
-                <td>{lastInpaint.painted_px} px</td>
-              </tr>
-              <tr>
-                <td>{t("retouch.repairMs")}</td>
-                <td>{lastInpaint.repair_ms.toFixed(2)} ms</td>
-              </tr>
-              <tr>
-                <td>{t("retouch.totalMs")}</td>
-                <td>
-                  {lastInpaint.total_ms.toFixed(2)} ms · {t("retouch.cached")}{" "}
-                  {lastInpaint.filter_cached ? t("retouch.yes") : t("retouch.no")}
-                </td>
-              </tr>
-              <tr>
-                <td>{t("retouch.device")}</td>
-                <td>{lastInpaint.device}</td>
-              </tr>
-            </tbody>
-          </table>
-        )}
-        {dragNote && <div className="mut">{dragNote}</div>}
+        <button className="zoom" title="回到 100%" onClick={() => setView(VIEW_HOME)}>
+          {Math.round(view.zoom * 100)}%
+        </button>
+        <button className="tb primary exportBtn" onClick={onExport}
+                disabled={!hasImage || exporting}>
+          {exporting ? "导出中…" : "导出照片"}
+        </button>
+      </header>
 
-        {lastLight && (
-          <table>
-            <tbody>
-              <tr>
-                <td>{t("retouch.lightOps")}</td>
-                <td>{lastLight.ops} · {t("retouch.redoPending")} {lastLight.redo_pending}
-                  {' · '}{lastLight.lit ? t("retouch.lightOn") : t("retouch.lightOff")}</td>
-              </tr>
-              <tr>
-                <td>{t("retouch.lightStops")}</td>
-                <td>{t("retouch.lightStopsValue", {
-                  stops: lastLight.exposure.toFixed(2),
-                  peak: lastLight.field_peak.toFixed(2),
-                })}</td>
-              </tr>
-              <tr>
-                <td>{t("retouch.lightMs")}</td>
-                <td>{t("retouch.lightMsValue", {
-                  light: lastLight.light_ms.toFixed(2),
-                  total: lastLight.total_ms.toFixed(2),
-                })}</td>
-              </tr>
-              <tr>
-                <td>{t("retouch.lightResident")}</td>
-                <td>{t("retouch.mib", { v: (lastLight.bytes_light / 1048576).toFixed(2) })}</td>
-              </tr>
-            </tbody>
-          </table>
-        )}
-
-        {lastDeform && (
-          <table>
-            <tbody>
-              <tr>
-                <td>{t("retouch.deformLayer")}</td>
-                <td>{lastDeform.lit ? t("retouch.deformOn") : t("retouch.deformOff")}
-                  {' · '}{lastDeform.landmark_backend ?? "-"}</td>
-              </tr>
-              <tr>
-                <td>{t("retouch.deformMs")}</td>
-                <td>{t("retouch.deformMsValue", {
-                  deform: lastDeform.deform_ms.toFixed(2),
-                  total: lastDeform.total_ms.toFixed(2),
-                })}</td>
-              </tr>
-              {lastDeform.build && (
-                <tr>
-                  <td>{t("retouch.deformBuild")}</td>
-                  <td>{t("retouch.deformBuildValue", {
-                    ms: lastDeform.build.deform_build_ms.toFixed(1),
-                    px: Object.values(lastDeform.build.kinds).map((k) => k.peak_px.toFixed(1)).join(" / "),
-                  })}</td>
-                </tr>
-              )}
-              <tr>
-                <td>{t("retouch.deformResident")}</td>
-                <td>{t("retouch.mib", { v: (lastDeform.bytes_deform / 1048576).toFixed(2) })}</td>
-              </tr>
-            </tbody>
-          </table>
-        )}
-
-        <h2>{t("side.color")}</h2>
-        {/* 影楼色彩（M3-a2）：一张 .cube + 一个混合系数。引擎侧是逐点输出变换，
-            挂在磨皮/修容/形变之后，所以它不作废任何上游缓存（面板上能直接看到
-            filter_cached 仍为真）。内置预设（M3-b）会沿同一条 runLut 加进来。 */}
-        <label className="k">{t("color.cubePath")}</label>
-        <input value={lutPath} onChange={(e) => setLutPath(e.target.value)}
-               placeholder="/path/to/grade.cube" style={{ width: "100%" }} />
-        <div className="row">
-          <button className="primary" onClick={onLutLoad}
-                  disabled={!status?.image || !lutPath.trim()}>{t("color.load")}</button>
-          <button onClick={onLutClear} disabled={!lastLut?.lut_set}>{t("color.clear")}</button>
-        </div>
-        <label className="k">{t("color.amount", { v: lutAmount.toFixed(2) })}</label>
-        <input type="range" min={0} max={1} step={0.01} value={lutAmount}
-               onChange={(e) => setLutAmount(+e.target.value)}
-               onPointerUp={onLutAmountCommit} onKeyUp={onLutAmountCommit}
-               style={{ width: "100%" }} />
-        <div className="mut">{t("color.commitHint")}</div>
-        {lastLut && (
-          <table>
-            <tbody>
-              <tr>
-                <td>{t("color.layer")}</td>
-                <td>{lastLut.lut_lit ? t("color.on") : t("color.off")}
-                  {' · '}{lastLut.lut_amount.toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td>{t("color.table")}</td>
-                <td>{t("color.tableValue", {
-                  size: lastLut.lut_size, source: lastLut.lut_source || "-",
-                })}</td>
-              </tr>
-              {lastLut.lut_neutral && (
-                <tr><td colSpan={2}>{t("color.neutral")}</td></tr>
-              )}
-              {lastLut.lut_clipped > 0 && (
-                <tr><td>{t("color.clipped")}</td><td>{lastLut.lut_clipped}</td></tr>
-              )}
-              {lastLut.lut_notes.length > 0 && (
-                <tr><td>{t("color.notes")}</td><td>{lastLut.lut_notes.join(" · ")}</td></tr>
-              )}
-              <tr>
-                <td>{t("color.ms")}</td>
-                <td>{t("color.msValue", {
-                  lut: lastLut.lut_ms.toFixed(2), total: lastLut.total_ms.toFixed(2),
-                  mount: lastLut.lut_mount_ms.toFixed(2),
-                })}</td>
-              </tr>
-              <tr>
-                <td>{t("color.resident")}</td>
-                <td>{t("retouch.mib", { v: (lastLut.bytes_lut / 1048576).toFixed(2) })}</td>
-              </tr>
-            </tbody>
-          </table>
-        )}
-
-        {/* 内置预设（M3-b）：清单与按钮文字全部来自引擎的 ready，前端不抄一份名字。
-            一键 = 一张色彩观表 + 三个肤色数，强度滑块同时管两层（那条语义由引擎侧卡）。 */}
-        {(status?.presets ?? []).length > 0 && (
-          <div className="row">
-            {status!.presets.map((p) => (
-              <button key={p.name} onClick={() => onPreset(p.name)} disabled={!status?.image}
-                      className={lastLut?.lut_preset === p.name ? "primary" : ""}>
-                {p.title}
-              </button>
-            ))}
-          </div>
-        )}
-        {/* 肤色定向（M3-b）：只在肤色窗口里动的三个增量。滑块行程来自 ready 报的
-            grade_limits——引擎没说就整排不画，而不是前端先猜一份然后两处漂。 */}
-        {(status?.grade_limits ?? []).length === 3 && (
-          <>
-            <label className="k">{t("grade.hue", { v: gradeAmounts.dh.toFixed(3) })}</label>
-            <input type="range" min={-status!.grade_limits[0]} max={status!.grade_limits[0]}
-                   step={0.001} value={gradeAmounts.dh}
-                   onChange={(e) => onGradeChange("dh", +e.target.value)}
-                   style={{ width: "100%" }} />
-            <label className="k">{t("grade.sat", { v: gradeAmounts.ds.toFixed(3) })}</label>
-            <input type="range" min={-status!.grade_limits[1]} max={status!.grade_limits[1]}
-                   step={0.01} value={gradeAmounts.ds}
-                   onChange={(e) => onGradeChange("ds", +e.target.value)}
-                   style={{ width: "100%" }} />
-            <label className="k">{t("grade.val", { v: gradeAmounts.dv.toFixed(3) })}</label>
-            <input type="range" min={-status!.grade_limits[2]} max={status!.grade_limits[2]}
-                   step={0.01} value={gradeAmounts.dv}
-                   onChange={(e) => onGradeChange("dv", +e.target.value)}
-                   style={{ width: "100%" }} />
-            <label className="k">{t("grade.mix", { v: gradeMix.toFixed(2) })}</label>
-            <input type="range" min={0} max={1} step={0.01} value={gradeMix}
-                   onChange={(e) => onGradeMixChange(+e.target.value)}
-                   style={{ width: "100%" }} />
-            <div className="row">
-              <button onClick={onGradeClear} disabled={!lastGrade?.grade_set}>
-                {t("grade.clear")}
-              </button>
-            </div>
-            <div className="mut">{t("grade.window")}</div>
-            {lastGrade && (
-              <table>
-                <tbody>
-                  <tr>
-                    <td>{t("grade.layer")}</td>
-                    <td>{lastGrade.grade_lit ? t("color.on") : t("color.off")}
-                      {' · '}{lastGrade.grade_amount.toFixed(2)}</td>
-                  </tr>
-                  <tr>
-                    <td>{t("grade.params")}</td>
-                    <td>{`Δh ${lastGrade.grade_dh.toFixed(4)} · Δs ${lastGrade.grade_ds.toFixed(3)} · Δv ${lastGrade.grade_dv.toFixed(3)}`}</td>
-                  </tr>
-                  <tr>
-                    <td>{t("grade.ms")}</td>
-                    <td>{t("grade.msValue", {
-                      grade: lastGrade.grade_ms.toFixed(2), lut: lastGrade.lut_ms.toFixed(2),
-                      total: lastGrade.total_ms.toFixed(2),
-                    })}</td>
-                  </tr>
-                  {lastGrade.filter_cached && (
-                    <tr><td colSpan={2}>{t("grade.cacheKept")}</td></tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-          </>
-        )}
-
-        {/* 换底（M6）：确定性色键把纯色/蓝箱底抠掉换新背景；自动抠图（birefnet）需
-            权重，权重未放行前它只在下面的告知行里出现，不做选项——UI 不许邀请用户
-            去发一个引擎注定整条拒的请求（静默降级与假可用性是同一种病的两面）。 */}
-        <h2>{t("side.background")}</h2>
-        <div className="mut">{t("bg.desc")}</div>
-        <div className="row">
-          <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)}
-                 style={{ width: 48 }} />
-          <select value={bgBackendSafe} onChange={(e) => setBgBackend(e.target.value)} style={{ width: 132 }}>
-            {bgBaseline.map((b) => (
-              <option key={b} value={b}>{BG_LABEL[b] ? t(BG_LABEL[b]) : b}</option>
-            ))}
-          </select>
-        </div>
-        {!!bgGated.length && (
-          <div className="mut">{t("bg.gated", { b: bgGated.join("/"), ok: bgBaseline.join("/") })}</div>
-        )}
-        <label className="k">{t("bg.tol", { v: bgTol.toFixed(2) })}</label>
-        <input type="range" min={0} max={1} step={0.01} value={bgTol}
-               onChange={(e) => setBgTol(+e.target.value)} style={{ width: "100%" }} />
-        <label className="k">{t("bg.soft", { v: bgSoft.toFixed(2) })}</label>
-        <input type="range" min={0.01} max={1} step={0.01} value={bgSoft}
-               onChange={(e) => setBgSoft(+e.target.value)} style={{ width: "100%" }} />
-        <div className="row">
-          <button className="primary" onClick={onApplyBg} disabled={!status?.image}>{t("bg.apply")}</button>
-          <button onClick={onClearBg} disabled={!lastBg?.bg_active}>{t("bg.clear")}</button>
-        </div>
-        {lastBg && (
-          <table>
-            <tbody>
-              <tr><td>{t("bg.state")}</td>
-                <td>{lastBg.bg_active ? t("color.on") : t("color.off")}</td></tr>
-              {lastBg.action === "set" && (
-                <tr><td>{t("bg.fill")}</td>
-                  <td>{((lastBg.matte_fill_fg ?? 0) * 100).toFixed(1)}%</td></tr>
-              )}
-              <tr><td>{t("bg.cost")}</td>
-                <td>{t("bg.msValue", { bg: lastBg.bg_ms.toFixed(2), total: lastBg.total_ms.toFixed(2) })}</td></tr>
-              <tr><td>{t("bg.resident")}</td>
-                <td>{t("retouch.mib", { v: (lastBg.bytes_bg / 1048576).toFixed(2) })}</td></tr>
-            </tbody>
-          </table>
-        )}
-
-        {/* 批量出片（M4）：满幅分块导出。能力清单（格式与 tile 行程）由引擎在 ready 里
-            报：export_caps 为空就是这一版引擎还不能导，这里不画按钮也不填一份默认值。 */}
-        <h2>{t("side.export")}</h2>
-        {status?.export_caps ? (
-          <>
-            <div className="mut">{t("export.desc")}</div>
-            <input value={exportDir} onChange={(e) => setExportDir(e.target.value)}
-                   style={{ width: "100%" }} />
-            <div className="row">
-              <select value={exportFormat}
-                      onChange={(e) => setExportFormat(e.target.value)} style={{ width: 84 }}>
-                {status.export_caps.formats.map((f) => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
-              <input type="number" min={1} max={100} value={exportQuality}
-                     onChange={(e) => setExportQuality(+e.target.value)} style={{ width: 58 }} />
-              <span className="mut">{t("export.quality")}</span>
-              <input type="text" value={exportTile}
-                     placeholder={String(status.export_caps.tile_default ?? "")}
-                     onChange={(e) => setExportTile(e.target.value)} style={{ width: 72 }} />
-              <span className="mut">
-                {t("export.tile", { lo: status.export_caps.tile[0], hi: status.export_caps.tile[1] })}
-              </span>
-            </div>
-            {/* 16-bit 母档直通（M9-e）：可选位深名单由引擎的 ready.export_bits 说。
-                引擎没报这一句、或当前格式不在 16 的名单里，就不画这个勾——把"能选"
-                画出来再让用户去撞一条注定空的请求，是 M6 抠图那个后端踩过的坑。 */}
-            {!!status.export_bits?.["16"]?.some((f) => f === exportFormat) && (
-              <>
-                <label className="row" title={t("export.master16Tip")}>
-                  <input type="checkbox" checked={exportBits16}
-                         onChange={(e) => setExportBits16(e.target.checked)} />
-                  <span className="mut">{t("export.master16")}</span>
-                </label>
-                {exportBits16 && status.export?.bit_depth === 16
-                  && status.export.images?.[0]?.readback_max_diff === 0 && (
-                  <div className="mut">{t("export.master16Ran", {
-                    src: String(status.export.images[0].source ?? "?"),
-                    diff: status.export.images[0].readback_max_diff,
-                    lv: (status.export.images[0].levels_per_channel ?? []).join("/"),
-                  })}</div>
-                )}
-              </>
-            )}
-            {!!exportErr && <div className="err">{exportErr}</div>}
-            {/* 放大（M7）：倍率名单与可用后端全部从 ready 拿。旧引擎不说 scales 就不画
-                这一排；weights_gated 那一个后端只当"等权重"告知，不当选项——递上去会被
-                引擎整条拒，把它的名字做成下拉就是邀请用户去撞一个注定失败的请求。 */}
-            {!!(status.export_caps.scales?.length) && (
-              <>
-                <div className="row">
-                  <label className="k">{t("export.scale")}</label>
-                  {(status.export_caps.scales ?? []).map((s) => (
-                    <button key={s} className={exportScale === s ? "primary" : ""}
-                            onClick={() => setExportScale(s)}>
-                      {t("export.scaleValue", { s })}
-                    </button>
-                  ))}
-                </div>
-                <div className="row">
-                  <input type="number" min={0} max={2} step={0.05} value={exportSharpen}
-                         onChange={(e) => setExportSharpen(+e.target.value)} style={{ width: 62 }} />
-                  <span className="mut">{t("export.sharpen")}</span>
-                </div>
-                {!!status.export_caps.upscale_backends?.weights_gated?.length && (
-                  <div className="mut">{t("export.upscaleGated", {
-                    b: status.export_caps.upscale_backends.weights_gated.join("/"),
-                    ok: status.export_caps.upscale_backends.baseline.join("/"),
-                  })}</div>
-                )}
-                {exportScale > 1 && status?.image && (
-                  <div className="mut">{t("export.scalePreview", {
-                    src: `${status.image.src_w}x${status.image.src_h}`,
-                    out: `${status.image.src_w * exportScale}x${status.image.src_h * exportScale}`,
-                    mp: ((status.image.src_w * exportScale) * (status.image.src_h * exportScale) / 1e6).toFixed(1),
-                  })}</div>
-                )}
-              </>
-            )}
-            <div className="row">
-              <button className="primary" onClick={onExport}
-                      disabled={!status?.image || exportProgress !== null}>
-                {exportProgress ? t("export.running") : t("export.run")}
-              </button>
-            </div>
-            {exportProgress && (
-              <div className="mut">
-                {t("export.progress", { i: exportProgress.index + 1, n: exportProgress.total })}
-              </div>
-            )}
-            {lastExport && (
-              <>
-                <table>
-                  <tbody>
-                    <tr>
-                      <td>{t("export.files")}</td>
-                      <td>{t("export.filesValue", { ok: lastExport.total - lastExport.failed, total: lastExport.total })}</td>
-                    </tr>
-                    <tr>
-                      <td>{t("export.settings")}</td>
-                      <td>{t("export.settingsValue", {
-                        format: lastExport.format, quality: lastExport.quality, tile: lastExport.tile,
-                      })}</td>
-                    </tr>
-                    {/* 放大那一行只在引擎真报过倍率时画：没报就是这一批没开放大，
-                        拿前端的 exportScale 去填会把"我选了 2×"写成"引擎做了 2×" */}
-                    {!!lastExport.scale && lastExport.scale > 1 && (
-                      <tr>
-                        <td>{t("export.scale")}</td>
-                        <td>{t("export.scaleRan", {
-                          s: lastExport.scale, b: lastExport.upscale_backend ?? "",
-                          sh: lastExport.sharpen ?? 0,
-                        })}</td>
-                      </tr>
-                    )}
-                    <tr>
-                      <td>{t("export.ms")}</td>
-                      <td>{`${lastExport.total_ms.toFixed(1)} ms · ${lastExport.out_dir}`}</td>
-                    </tr>
-                  </tbody>
-                </table>
-                {lastExport.images.map((x) => (
-                  <div key={x.path} className="mut">
-                    {x.error
-                      ? t("export.failedRow", { stage: x.stage ?? "?", why: x.error })
-                      : t("export.row", {
-                        name: (x.out ?? "").split("/").pop() ?? "?",
-                        size: `${x.w}×${x.h}`, tiles: x.tiles ?? 0,
-                        margin: x.margin_px ?? 0, kb: ((x.bytes ?? 0) / 1024).toFixed(0),
-                        ms: (x.total_ms ?? 0).toFixed(0),
-                      })}
-                    {(x.skipped ?? []).length > 0 && (
-                      <div>{t("export.skipped", { items: (x.skipped ?? []).join(" · ") })}</div>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
-          </>
-        ) : (
-          <div className="mut">{t("export.unavailable")}</div>
-        )}
-
-        {/* 撤销/重做（M5-b）：一条跨层的历史，按一次退一次手势。按钮的灰与不灰只看
-            引擎报的那份账；刚发过编辑而答复还没回来时（history_dirty）保持可用，
-            否则用户拖完滑块那一下按不动。 */}
-        <h2>{t("side.history")}</h2>
-        <div className="mut">{t("history.desc")}</div>
-        <div className="row">
-          <button onClick={() => onHistory("undo")}
-                  disabled={!(histRep?.can_undo || histDirty)}>{t("history.undo")}</button>
-          <button onClick={() => onHistory("redo")}
-                  disabled={!histRep?.can_redo}>{t("history.redo")}</button>
-          <button onClick={() => onHistory("clear")}
-                  disabled={!histRep?.can_undo}>{t("history.clear")}</button>
-        </div>
-        <div className="mut">
-          {histRep
-            ? t("history.count", { u: histRep.undo_steps, r: histRep.redo_steps, max: histRep.history_max })
-            : t("history.unknown")}
-        </div>
-        {lastHistory && (lastHistory.action === "undo" || lastHistory.action === "redo") ? (
-          <div className="mut">
-            {t("history.last", { act: lastHistory.action, ms: lastHistory.history_ms ?? 0 })}
-            {lastHistory.noop ? t("history.noop") : ""}
-          </div>
-        ) : null}
-
-        {IS_DEV && (
-          <>
-        <h2>{t("side.bench")}</h2>
-        <label className="k">{t("bench.size")}</label>
-        <select value={sizeKey} onChange={(e) => setSizeKey(e.target.value)} style={{ width: "100%" }}>
-          {Object.keys(SIZES).map((k) => (
-            <option key={k} value={k}>
-              {k}
-            </option>
-          ))}
-        </select>
-        <label className="k">{t("bench.frames")}</label>
-        <input type="number" value={frames} min={1} max={5000} onChange={(e) => setFrames(+e.target.value)} style={{ width: "100%" }} />
-        <label className="k">{t("bench.interval")}</label>
-        <input type="number" value={interval} step={0.1} onChange={(e) => setInterval_(+e.target.value)} style={{ width: "100%" }} />
-        <label className="k">{t("bench.mode")}</label>
-        <select value={mode} onChange={(e) => setMode(e.target.value as BenchOptions["mode"])} style={{ width: "100%" }}>
-          <option value="copy">{t("bench.mode.copy")}</option>
-          <option value="pipeline">{t("bench.mode.pipeline")}</option>
-          <option value="pipeline_copyin">{t("bench.mode.pipeline_copyin")}</option>
-          <option value="pipeline_resident">{t("bench.mode.pipeline_resident")}</option>
-          <option value="image_stream">{t("bench.mode.image_stream")}</option>
-        </select>
-        <div className="row">
-          <button className="primary" onClick={onRun} disabled={!pid || busy}>
-            {busy ? t("bench.running") : t("bench.run")}
-          </button>
-        </div>
-
-        <h2>{t("side.gate")}</h2>
-        <div className="mut">{t("gate.desc")}</div>
-        {tierLabel !== "tier2" && <div className="warn">{tierLabel}</div>}
-        <div className="row">
-          <span className={verdict === "pass" ? "ok" : verdict === "fail" ? "warn" : "mut"}>
-            {verdict === "pass" ? t("gate.pass") : verdict === "fail" ? t("gate.fail") : t("gate.pending")}
-          </span>
-        </div>
-        <table>
-          <tbody>
-            <tr>
-              <td>{t("gate.fps")}</td>
-              <td>{stats ? `${stats.measured_fps.toFixed(1)} fps` : "—"}</td>
-            </tr>
-            <tr>
-              <td>{t("gate.drop")}</td>
-              <td>{stats ? `${stats.drop_pct.toFixed(1)} %` : "—"}</td>
-            </tr>
-            <tr>
-              <td>{t("gate.pull")}</td>
-              <td>{stats ? fmt(stats.pull_dur.p95) : "—"}</td>
-            </tr>
-            <tr>
-              <td>{t("gate.latency")}</td>
-              <td>{stats ? `${(stats.pull_to_ack.p50 / 1000 / 16.7).toFixed(2)} × 帧周期` : "—"}</td>
-            </tr>
-          </tbody>
-        </table>
-          </>
-        )}
-
-        <h2>{t("log.title")}</h2>
-        <pre className="log">{status?.logs?.length ? status.logs.join("\n") : t("log.empty")}</pre>
-        </details>
+      <aside className="side">
+        <RetouchPanel status={status} doc={doc} hasImage={hasImage}
+                      faceOk={faceOk} faceWhy={faceWhy}
+                      note={setDragNote} onDone={refreshStatus} />
       </aside>
 
       <main className="stage">
@@ -4042,10 +3335,6 @@ export default function App() {
           pick={{ on: pickFace && !!status?.image && !brushOn, onRect: onPickFaceRect }}
           onHud={setHud}
         />
-        {/* 空状态（DoD §3/§5）：没有照片时视口中央一张卡片，点它直接开选择框。
-            拖拽走的是同一条 importPath（Tauri drag-drop → splitDroppable →
-            importPath），所以"点开"与"拖入"只有一份导入行为。卡片是覆盖层而不是
-            替换 canvas：canvas 的尺寸就是 GL 帧尺寸，空档期不能让它变成 0。 */}
         {!hasImage && (
           <div className="emptyStage" role="button" tabIndex={0} aria-busy={busy}
                aria-label={t("empty.open")}
@@ -4054,155 +3343,35 @@ export default function App() {
                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void openAndImport(); }
                }}>
             <div className="emptyCard">
-              <div className="emptyTitle">{busy ? t("retouch.importing") : t("empty.open")}</div>
+              <div className="emptyTitle">{busy ? "正在打开…" : t("empty.open")}</div>
               <div className="emptyHint">{t("empty.hint")}</div>
-              <div className="emptyHint">{t("retouch.drop.tip")}</div>
             </div>
           </div>
         )}
-        <div className="hud">
-          <div>
-            <div className="k">{t("hud.frame")}</div>
-            <div>
-              {t("hud.seq")} {hud.seq} · {t("hud.res")} {hud.w}×{hud.h}
-            </div>
-            {hud.lastError && <div className="warn">{hud.lastError}</div>}
-          </div>
-          <div>
-            <div className="k">{t("stats.fps")}</div>
-            <div>{hud.fps.toFixed(1)} fps</div>
-            <div className="mut">{t("hud.origin")}</div>
-          </div>
-          <div>
-            <div className="k">{t("stats.emitToAck")} p95</div>
-            <div>{fmt(stats?.emit_to_ack.p95 ?? 0)}</div>
-            <div className="mut">
-              {t("stats.jsDraw")} {fmt(stats?.js_draw.p95 ?? 0)} p95
-            </div>
-          </div>
-        </div>
-        {stats && (
-          <table style={{ padding: "0 14px 12px" }}>
-            <tbody>
-              {([
-                [t("stats.emitToPull"), stats.emit_to_pull],
-                [t("stats.pullDur"), stats.pull_dur],
-                [t("stats.emitToAck"), stats.emit_to_ack],
-                [t("stats.pullToAck"), stats.pull_to_ack],
-                [t("stats.emitToPresent"), stats.emit_to_present],
-                [t("stats.jsDraw"), stats.js_draw],
-              ] as const).map(([label, d]) => (
-                <tr key={label}>
-                  <td>{label}</td>
-                  <td>
-                    {fmt(d.mean)} / {fmt(d.p50)} / <b>{fmt(d.p95)}</b> / {fmt(d.p99)} / {fmt(d.max)}
-                  </td>
-                </tr>
-              ))}
-              <tr>
-                <td>{t("stats.emitted")}/{t("stats.delivered")}/{t("stats.dropped")}</td>
-                <td>
-                  {stats.emitted}/{stats.delivered}/{stats.dropped}（{stats.drop_pct.toFixed(1)}%）
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        {(pathErr || exportErr || dragNote) && (
+          <div className="toast">{exportErr || pathErr || dragNote}</div>
         )}
-        <section className="gallery">
-          <div className="bar">
-            <span>{strip ? t("strip.summary", { n: strip.count,
-              th: strip.docs.filter((d) => d.thumb).length }) : t("strip.empty")}</span>
-            {strip?.thumbs_running && <span>{t("strip.running")}</span>}
-            {strip?.picks_running && <span>{t("pick.running")}</span>}
-            <input value={batchTag} placeholder="批量标签" style={{ width: 110 }}
-                   onChange={(e) => setBatchTag(e.target.value)} />
-            <button disabled={!selPaths.length} onClick={onBatchTag}>打标签</button>
-            <button disabled={!selPaths.length} onClick={() => onBatchTrash(true)}>移入回收站</button>
-            <button disabled={!selPaths.length} onClick={() => onBatchTrash(false)}>还原</button>
-            <button disabled={!selPaths.length} onClick={() => setSel(new Set())}>清除选择</button>
-            <input value={stripDir} placeholder={t("strip.dirPlaceholder")}
-                   style={{ flex: 1, minWidth: 90 }}
-                   onChange={(e) => { setStripDir(e.target.value); setStripErr(""); }} />
-            <button onClick={() => onPickPath(true)} title={t("retouch.browseTip")}>{t("retouch.browse")}</button>
-            <button onClick={onScanStrip}>{t("strip.scan")}</button>
-          </div>
-          {/* 挑图（LNX-PICK-001）：档位名单来自引擎 ready；引擎没报就把按钮禁用并说明原因，
-              不留一个按了没反应的控件，也不在前端补一份档名。 */}
-          <div className="bar" title={t("pick.desc")}>
-            <span className="k">{t("pick.title")}</span>
-            {pickSensList && PICK_KEYS.map((key) => (
-              <label key={key} className="k">{t(`pick.sens.${key}`)}
-                <select value={pickSens[key] ?? "standard"}
-                        onChange={(e) => setPickSens({ ...pickSens, [key]: e.target.value })}>
-                  {(pickSensList[key] ?? ["weak", "standard", "strong"]).map((v) => (
-                    <option key={v} value={v}>{t(`pick.arm.${v}` as MsgKey)}</option>
-                  ))}
-                </select>
-              </label>
-            ))}
-            <button onClick={() => onPickAnalyze(false)}
-                    disabled={!strip?.count || pickRunning || !pickSensList}
-                    title={pickSensList ? t("pick.runTip") : t("pick.tip.arm")}>
-              {t("pick.run")}
-            </button>
-            <button onClick={() => onPickAnalyze(true)}
-                    disabled={!strip?.count || pickRunning || !pickSensList}
-                    title={pickSensList ? t("pick.forceTip") : t("pick.tip.arm")}>
-              {t("pick.force")}
-            </button>
-            <span>{pickSummary()}{selPaths.length ? t("pick.scope", { n: selPaths.length }) : ""}</span>
-            {pickNote && <span className="err">{pickNote}</span>}
-          </div>
-          {stripErr && <div className="err">{stripErr}</div>}
-          {strip && strip.count > 0 && (
+
+        {strip && strip.count > 0 && (
+          <section className="gallery">
             <div className="strip">
-              {strip.docs.map((d) => {
-                const edited = d.edits.repair > 0 || d.edits.light > 0 || d.edits.deform
-                  || d.edits.lut || d.edits.grade;
-                return (
-                  <button key={d.path}
-                          className={"cell" + (d.loaded ? " on" : "")
-                            + (sel.has(d.path) ? " sel" : "") + (d.trashed ? " trashed" : "")}
-                          title={`${d.path}${d.thumb_error ? ` · ${d.thumb_error}` : ""}`}
-                          onClick={(e) => onCellClick(e, d.index, d.path)}>
-                    {d.thumb && thumbs[d.path] ? (
-                      <img alt={d.name} width={d.thumb.w} height={d.thumb.h}
-                           src={`data:image/jpeg;base64,${thumbs[d.path]}`} />
-                    ) : (
-                      <span className="ph">{d.thumb_error ? t("strip.failed") : "…"}</span>
-                    )}
-                    <span className="nm">{d.name}</span>
-                    {edited && <span className="badge">{t("strip.edited")}</span>}
-                    {/* RAW 那一格画的是相机内嵌预览，不是我们渲的那一帧：不标就是理亏 */}
-                    {d.thumb?.preview && (
-                      <span className="badge pv" title={t("strip.previewTip")}>
-                        {t("strip.preview")}{d.thumb.format ? ` · ${d.thumb.format}` : ""}
-                      </span>
-                    )}
-                    {!!d.tags?.length && <span className="badge tag" title={d.tags.join(" ")}>
-                      {d.tags[0]}{d.tags.length > 1 ? ` +${d.tags.length - 1}` : ""}</span>}
-                    {/* 挑图那一格（PICK-001）：标签来自引擎，逐条原因在 tooltip 里带着
-                        数值与阈值。已有用户标记时换成灰底（人先于机器），但建议本体不藏。 */}
-                    {d.pick?.labels?.length ? (
-                      <span className={"badge pk" + (d.pick.overridden_by_user ? " ov" : "")}
-                            title={pickTip(d)}>
-                        {d.pick.labels.map((l) => t(`pick.label.${l}` as MsgKey)).join(" · ")}
-                      </span>
-                    ) : null}
-                    {d.pick && !d.pick.labels.length && (
-                      <span className="badge pk ok" title={pickTip(d)}>OK</span>
-                    )}
-                    {d.pick_error && (
-                      <span className="badge pk ov" title={pickTip(d)}>?</span>
-                    )}
-                    {d.trashed && <span className="badge st">回收站</span>}
-                    {!d.trashed && d.opened && !edited && <span className="badge st">已开</span>}
-                  </button>
-                );
-              })}
+              {strip.docs.map((d) => (
+                <button key={d.path}
+                        className={"cell" + (d.loaded ? " on" : "")
+                          + (sel.has(d.path) ? " sel" : "") + (d.trashed ? " trashed" : "")}
+                        title={d.name}
+                        onClick={(e) => onCellClick(e, d.index, d.path)}>
+                  {d.thumb && thumbs[d.path] ? (
+                    <img alt={d.name} width={d.thumb.w} height={d.thumb.h}
+                         src={`data:image/jpeg;base64,${thumbs[d.path]}`} />
+                  ) : (
+                    <span className="ph">…</span>
+                  )}
+                </button>
+              ))}
             </div>
-          )}
-        </section>
+          </section>
+        )}
       </main>
     </div>
   );

@@ -90,7 +90,7 @@ def test_empty_state_and_topbar_share_one_click_open():
 
     # ③ 顶栏那颗按钮同源
     top = APP[APP.index('<header className="topbar">'):APP.index('</header>')]
-    assert 'className="openPhoto"' in top, "顶栏最左侧没有常驻的「打开照片」"
+    assert "openPhoto" in top, "顶栏没有常驻的「打开照片」"
     assert "openAndImport()" in top, "顶栏按钮没接上同一条入口"
 
 
@@ -107,3 +107,19 @@ def test_auto_empty_env_reaches_the_ui_through_the_host():
     assert "LRT_AUTO_EMPTY" in MAIN and '"auto_empty"' in MAIN
     assert "auto_empty: string;" in NATIVE
     assert re.search(r"env\?\.auto_empty", APP), "前端没读这一格：第 11 臂永远不会答话"
+
+
+PANEL = (REPO / "ui/src/components/RetouchPanel.tsx").read_text(encoding="utf-8")
+
+
+def test_product_ui_has_no_debug_surfaces_and_exactly_four_groups():
+    """产品态：视口下方不许有 HUD/性能表，底片条不许有工具条，右栏恰好四组。"""
+    assert 'className="hud"' not in APP, "调试 HUD 又回到视口里了"
+    assert 'className="bar"' not in APP, "底片条工具条又回来了"
+    assert PANEL.count("<Group title=") == 4, "右栏不是四组"
+    for title in ("智能磨皮", "面部重塑", "五官美白", "色彩风格"):
+        assert f'title="{title}"' in PANEL, f"缺分栏：{title}"
+    for bad in ("LNX-", "名单上", "p95"):
+        assert bad not in PANEL, f"产品面板里混进了开发话术：{bad}"
+    # 产品档代理是 4K 档，不是跑靶预算
+    assert "useState(8_294_400)" in APP and "useState(576000)" not in APP
