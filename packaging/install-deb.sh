@@ -101,7 +101,7 @@ echo "✓ /usr/bin/lumaretouch 与包内逐字节一致"
 # 二进制当判据（那是一条会假红的判据），它由两处钉住：源码级守卫
 # `test_face_manual.py::test_every_host_slot_writer_has_a_router_arm`，与装机真窗口
 # 那几条臂本身（通道死了就是静默超时，本轮 7/8 两臂就是这么红的）。
-ui_markers=(${UI_MARKER:-LRT_AUTO_ENHANCE LRT_AUTO_MANUAL LRT_AUTO_FACE LRT_AUTO_PICK})
+ui_markers=(${UI_MARKER:-LRT_AUTO_ENHANCE LRT_AUTO_MANUAL LRT_AUTO_DROP LRT_AUTO_EMPTY LRT_AUTO_FACE LRT_AUTO_PICK})
 ui_bad=0
 for ui_marker in "${ui_markers[@]}"; do
   if [ "$(grep -ac "$ui_marker" /usr/bin/lumaretouch)" -gt 0 ]; then
