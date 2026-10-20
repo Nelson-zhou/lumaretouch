@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { frameAcked, framePresented, isNoFrame, parseFrameHead, pullFrame, type ParsedFrame } from "../native";
 import { BrushPad, type Rle } from "../brush";
+import { imageDisplayRect, clientToImage } from "../view";
 
 /** 视口的显示变换（平移/缩放）。它只改显示层的 CSS 变换：帧、回执、测量链一律不动。 */
 export interface View {
@@ -187,10 +188,15 @@ export default function Viewer({
     if (!el || !onSwipeRef.current) return;
     const r = el.getBoundingClientRect();
     const v = viewRef.current;
-    const iw = sizeRef.current.w * fitScaleRef.current * v.zoom;
-    if (iw <= 0) return;
-    const left = r.left + (r.width - iw) / 2 + v.x;
-    const frac = Math.min(0.96, Math.max(0.04, (e.clientX - left) / iw));
+    // P1-9：与 toImg / overlay 定位共用同一份显示矩形口径（imageDisplayRect），
+    // 不再各写各的。代数与旧式等价：left = r.left + (r.width-iw)/2 + v.x = r.left + d.left，
+    // iw = d.width。滑动线一直是对的，这里只是把它收敛成单一出处、防止三份再漂移。
+    const { w, h } = sizeRef.current;
+    const d = imageDisplayRect({ boxW: r.width, boxH: r.height, frameW: w, frameH: h,
+                                 zoom: v.zoom, panX: v.x, panY: v.y });
+    if (d.width <= 0) return;
+    const left = r.left + d.left;
+    const frac = Math.min(0.96, Math.max(0.04, (e.clientX - left) / d.width));
     onSwipeRef.current(Math.round(frac * 1000) / 1000);
   };
   const swipeDrag = useRef(false);
@@ -309,13 +315,17 @@ export default function Viewer({
     let painting = false;
     let lastPt = { x: 0, y: 0 };
     const toImg = (e: PointerEvent) => {
-      if (!overlay) return null;
-      const r = overlay.getBoundingClientRect();
+      const el = boxRef.current;
       const { w, h } = sizeRef.current;
-      if (!w || !h || r.width <= 0 || r.height <= 0) return null;
-      // CSS 像素 → 代理帧像素：引擎只认会话尺寸，拿屏幕坐标发过去会画到错的地方，
-      // 而且尺寸比不等于 1 时错得看不见
-      return { x: ((e.clientX - r.left) / r.width) * w, y: ((e.clientY - r.top) / r.height) * h };
+      if (!el || !w || !h) return null;
+      const br = el.getBoundingClientRect();
+      const v = viewRef.current;
+      // P1-9 修复：按图像「实际显示矩形」换算（contain 居中留白 + zoom + 平移），
+      // 而不是铺满盒子的 overlay.getBoundingClientRect()。盒子宽高比≠图像时，
+      // 上一版把整盒当整图，留白维度的落点会偏移、刻度被拉伸——画笔/框选画到错处。
+      return clientToImage(e.clientX - br.left, e.clientY - br.top,
+                           { boxW: br.width, boxH: br.height, frameW: w, frameH: h,
+                             zoom: v.zoom, panX: v.x, panY: v.y });
     };
     const repaint = () => {
       if (!overlay || !octx) return;
@@ -597,6 +607,18 @@ export default function Viewer({
     };
   }, [active, skipDraw, upload, ctxOpt, chunks, mirrorOn]);
 
+  // P1-9：把画笔叠加层摆到「图像实际显示矩形」上（与 mirror 的 contain 留白 + zoom + 平移
+  // 同一口径）。上一版 overlay 靠 CSS inset:0 铺满整个 viewer 盒子，与留白后的图像对不齐，
+  // 笔迹既显示错位、toImg 发往引擎的坐标也跟着错。摆到显示矩形后，overlay 缓冲区 w×h 等比
+  // 拉伸到 dispW×dispH（保持图像宽高比），与镜像层逐像素对齐。
+  const disp = imageDisplayRect({ boxW: box.width, boxH: box.height,
+                                  frameW: frameDim.w, frameH: frameDim.h,
+                                  zoom: view.zoom, panX: view.x, panY: view.y });
+  const overlayStyle: React.CSSProperties = {
+    position: "absolute", right: "auto", bottom: "auto",
+    left: disp.left, top: disp.top, width: disp.width, height: disp.height,
+  };
+
   return (
     <>
       <div className={"viewer" + (compareMode === "swipe" ? " swipe" : "")}
@@ -611,7 +633,8 @@ export default function Viewer({
         {/* glVisible 是给"官方开关能不能替掉镜像层"那个对照实验用的：把 GL 画布放回
             可见位，看它自己上不上得了屏。生产路径不依赖它。 */}
         <canvas ref={canvasRef} className={glVisible ? "gl-src visible" : "gl-src"} />
-        <canvas ref={overlayRef} className={brushActive ? "overlay on" : "overlay"} />
+        <canvas ref={overlayRef} className={brushActive ? "overlay on" : "overlay"}
+                style={overlayStyle} />
         {compareMode !== "single" && (
           <div className="cmpTags">
             <span>{compareMode === "split" ? "精修" : "原图"}</span>

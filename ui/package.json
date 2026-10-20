@@ -10,7 +10,8 @@
     "stage:engine": "bash ../packaging/stage-engine.sh",
     "preview": "vite preview",
     "tauri": "tauri",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/view.test.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
