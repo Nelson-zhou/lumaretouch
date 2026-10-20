@@ -1,8 +1,8 @@
 {
  "schema": "lrt.acceptance-report.v1",
- "at": "2026-10-19T21:09:47",
+ "at": "2026-10-19T22:22:18",
  "product_version": "1.11.0",
- "mode": "run（这一遍重跑了 pytest）",
+ "mode": "report-only（复用已有 junit XML，本轮没重跑测试）",
  "cases_sha256": "c2fca495b90e3aa7",
  "pytest_rc": 0,
  "map_refreshed": [],
@@ -13,11 +13,12 @@
   },
   "P1": {
    "passed": 12,
-   "uncovered": 4,
-   "manual_pending": 1
+   "deferred": 1,
+   "manual_pending": 1,
+   "not_supported": 3
   },
   "P2": {
-   "uncovered": 6
+   "out_of_scope": 6
   }
  },
  "rows": [
@@ -36,7 +37,8 @@
     "engine/tests/test_project.py::test_source_hash_is_unchanged_by_the_project",
     "engine/tests/test_protocol.py::test_project_save_and_reopen_restores_the_recipe_byte_for_byte"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "CORE-002",
@@ -48,7 +50,8 @@
    "tests": [
     "engine/tests/test_perf_report.py::test_import_cost_breakdown"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "CORE-003",
@@ -60,7 +63,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_orientation_is_normalized_exactly_once"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "CORE-004",
@@ -72,7 +76,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_sources_are_read_only_and_export_cannot_target_them"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "CORE-005",
@@ -85,7 +90,8 @@
     "engine/tests/test_project.py::test_missing_sources_reports_per_row",
     "engine/tests/test_project.py::test_verify_fingerprint_separates_missing_from_touched"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "CORE-006",
@@ -97,7 +103,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_undo_redo_restores_recipe_and_named_versions_survive"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "CORE-007",
@@ -110,7 +117,8 @@
     "engine/tests/test_project.py::test_recycle_bin_does_not_touch_the_file",
     "engine/tests/test_protocol.py::test_project_trash_and_tags_reopen_without_touching_the_source"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "CORE-008",
@@ -124,7 +132,8 @@
     "engine/tests/test_protocol.py::test_project_open_reports_a_corrupt_file_and_the_engine_lives",
     "engine/tests/test_protocol.py::test_task_paused_across_a_restart_stays_paused_and_says_why"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "CORE-009",
@@ -136,7 +145,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_hostile_or_incompatible_project_is_inert"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "RENDER-001",
@@ -148,7 +158,8 @@
    "tests": [
     "engine/tests/test_perf_report.py::test_drag_frame_stream_percentiles"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "RENDER-002",
@@ -161,7 +172,8 @@
     "engine/tests/test_exposure.py::test_export_spec_carries_exposure_and_matches_preview_bytes",
     "engine/tests/test_protocol.py::test_crop_reports_the_size_the_exporter_will_actually_write"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "RENDER-003",
@@ -173,7 +185,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_frame_sequence_is_monotonic_and_slot_never_lies"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "RENDER-004",
@@ -187,7 +200,8 @@
     "engine/tests/test_raw.py::test_load_full_for_raw_still_decodes_real_pixels",
     "engine/tests/test_raw.py::test_load_preview_returns_none_instead_of_inventing_a_frame"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "RENDER-005",
@@ -202,7 +216,8 @@
     "engine/tests/test_export_scale.py::test_export_scale_with_filter_within_one_lsb",
     "engine/tests/test_upscale.py::test_tiled_is_byte_identical_to_untiled"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "RENDER-006",
@@ -214,7 +229,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_cpu_path_completes_without_silent_quality_or_size_drop"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "RENDER-007",
@@ -230,7 +246,8 @@
     "engine/tests/test_lut.py::test_setting_a_lut_invalidates_no_filter_cache",
     "engine/tests/test_protocol.py::test_new_image_invalidates_previous_masks"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "RENDER-008",
@@ -242,7 +259,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_clearing_caches_keeps_source_recipe_and_versions"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "COLOR-001",
@@ -254,7 +272,8 @@
    "tests": [
     "engine/tests/test_protocol.py::test_export_strips_gps_and_orientation_but_keeps_the_rest"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "COLOR-002",
@@ -266,7 +285,8 @@
    "tests": [
     "engine/tests/test_export_profile.py::test_corrupt_source_exif_is_reported_not_swallowed"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "COLOR-003",
@@ -279,7 +299,8 @@
     "engine/tests/test_export_profile.py::test_orientation_is_dropped_because_pixels_are_already_upright",
     "engine/tests/test_protocol.py::test_export_conflict_policy_is_visible_per_image"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "COLOR-004",
@@ -292,7 +313,8 @@
     "engine/tests/test_acceptance_p1.py::test_local_color_adjustment_stays_inside_the_painted_region",
     "engine/tests/test_grade.py::test_grade_holds_no_vram_but_still_reports_the_bill"
    ],
-   "note": "1.3.0 接通：肤色定向层加了作用域（all/skin/brush）与画笔区域，判据三条逐字对上冻结件的 then——蒙版外逐字节 0 LSB（含四角背景带与羽化支撑之外）、全局 history 撤销逐字节回到点火前那一帧、边界跳变严格小于整片变化峰值（无硬边无振铃）。另加两条不许静默降级（skin 无掩膜、brush 无区域都整条拒）与出片同口径（导出不带区域时整层调色一起放下，绝不改成全图调色）。诚实记一笔：given 里『人脸边界与背景形成高反差』用的是本仓程序化人像夹具（本机无可授权真人素材）。"
+   "note": "1.3.0 接通：肤色定向层加了作用域（all/skin/brush）与画笔区域，判据三条逐字对上冻结件的 then——蒙版外逐字节 0 LSB（含四角背景带与羽化支撑之外）、全局 history 撤销逐字节回到点火前那一帧、边界跳变严格小于整片变化峰值（无硬边无振铃）。另加两条不许静默降级（skin 无掩膜、brush 无区域都整条拒）与出片同口径（导出不带区域时整层调色一起放下，绝不改成全图调色）。诚实记一笔：given 里『人脸边界与背景形成高反差』用的是本仓程序化人像夹具（本机无可授权真人素材）。",
+   "decision": null
   },
   {
    "id": "PORTRAIT-001",
@@ -306,7 +328,8 @@
     "engine/tests/test_inpaint.py::test_repair_only_changes_pixels_inside_the_brush",
     "engine/tests/test_perf_report.py::test_face_reshaping_percentiles"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "PORTRAIT-002",
@@ -318,7 +341,8 @@
    "tests": [
     "engine/tests/test_portrait_skin_quality.py::test_skin_retouch_keeps_texture_and_does_not_drift_color_or_bleed"
    ],
-   "note": "自动化那半（高频保留比/ΔE00/掩膜外逐字节）已在 test_portrait_skin_quality.py 跑通；人眼盲评按 docs/acceptance/PORTRAIT-002-盲评规程.md 执行，结果未填 → 不算通过"
+   "note": "自动化那半（高频保留比/ΔE00/掩膜外逐字节）已在 test_portrait_skin_quality.py 跑通；人眼盲评按 docs/acceptance/PORTRAIT-002-盲评规程.md 执行，结果未填 → 不算通过　人工签字簿：docs/acceptance/人工签字簿-1.11.0.md",
+   "decision": null
   },
   {
    "id": "PORTRAIT-003",
@@ -334,7 +358,8 @@
     "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
     "engine/tests/test_face_select.py::test_faces_lists_every_detected_person"
    ],
-   "note": "未实装：本版本多人照片走 SCOPE-001 的「整条明拒」，没有「编辑第 N 个人」的人物分层模型。不做半截实现来冒充覆盖。"
+   "note": "未实装：本版本多人照片走 SCOPE-001 的「整条明拒」，没有「编辑第 N 个人」的人物分层模型。不做半截实现来冒充覆盖。",
+   "decision": null
   },
   {
    "id": "PORTRAIT-004",
@@ -346,17 +371,22 @@
    "tests": [
     "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default"
    ],
-   "note": "已实装（1.5.0）：deform 的 scope=all 改全人物默认、scope=person 只给当前选定那一张挂覆盖、action=inherit 恢复继承；生效值由 _effective_deform_amounts() 单一处合成并按脸盒认人。边界：一层形变服务一张脸，同一时刻只有被选中那张生效（换人即换几何）；跨图认「同一个人」是 PORTRAIT-005，本版本没有那个模型。"
+   "note": "已实装（1.5.0）：deform 的 scope=all 改全人物默认、scope=person 只给当前选定那一张挂覆盖、action=inherit 恢复继承；生效值由 _effective_deform_amounts() 单一处合成并按脸盒认人。边界：一层形变服务一张脸，同一时刻只有被选中那张生效（换人即换几何）；跨图认「同一个人」是 PORTRAIT-005，本版本没有那个模型。",
+   "decision": null
   },
   {
    "id": "PORTRAIT-005",
    "phase": "P1",
    "module": "identity",
    "title": "跨图候选人工确认",
-   "status": "uncovered",
+   "status": "deferred",
    "then": "未确认/冲突候选不被自动修改；同步对象清单可审计",
    "tests": [],
-   "note": "未实装：跨图同一人需要人脸嵌入与聚类，本版本没有那个模型；拿启发式相似度冒充识别属于 DoD 禁止的「伪装 AI」。"
+   "note": "未实装（ADR-0019 定档缓期）：跨图同一人需要人脸嵌入与聚类，本版本没有合规权重；拿脸型/关键点几何冒充识别会混入陌生人，属于 DoD 禁止的「伪装 AI」。退出条件（权重/标定/确认面）写在该 ADR；缓期不等于通过。",
+   "decision": {
+    "kind": "deferred",
+    "adr": "ADR-0019"
+   }
   },
   {
    "id": "PORTRAIT-006",
@@ -369,7 +399,8 @@
     "engine/tests/test_acceptance_p1.py::test_a_manually_framed_missed_face_becomes_editable_geometry",
     "engine/tests/test_acceptance_p1.py::test_manual_face_corrections_survive_redetection_model_switch_and_reopen"
    ],
-   "note": "已实装（1.9.0）：人脸名单的人工状态随工程持久化、进撤销栈、跨重检测保留。`disabled`（用户关掉的那一只误检）与 `added`（用户框出来补上的那一张）都存归一化盒并按 IoU 认人（ADR-0017：mediapipe↔mediapipe 实测 IoU 0.98，mediapipe↔template 只有 0.13 —— 认不回时账保留并标 stale，绝不当成没禁过）。放行判据按「还剩几个可编辑的人」算，而 `scope_block` 仍是原始分析事实。人工补的脸的 478 点出自该区域的真检测（face.detect_region），拿不到就明拒、不拟合占位点位。判据：库层 20 条（test_face_manual.py）+ 端到端 2 条（禁用跨重检测/换模型/重开工程、补脸改他不动别人）+ 真窗口第 9 臂 M0_MANUAL（被禁那一位在重检测后的那一帧内芯逐格不动）。"
+   "note": "已实装（1.9.0）：人脸名单的人工状态随工程持久化、进撤销栈、跨重检测保留。`disabled`（用户关掉的那一只误检）与 `added`（用户框出来补上的那一张）都存归一化盒并按 IoU 认人（ADR-0017：mediapipe↔mediapipe 实测 IoU 0.98，mediapipe↔template 只有 0.13 —— 认不回时账保留并标 stale，绝不当成没禁过）。放行判据按「还剩几个可编辑的人」算，而 `scope_block` 仍是原始分析事实。人工补的脸的 478 点出自该区域的真检测（face.detect_region），拿不到就明拒、不拟合占位点位。判据：库层 20 条（test_face_manual.py）+ 端到端 2 条（禁用跨重检测/换模型/重开工程、补脸改他不动别人）+ 真窗口第 9 臂 M0_MANUAL（被禁那一位在重检测后的那一帧内芯逐格不动）。",
+   "decision": null
   },
   {
    "id": "PORTRAIT-007",
@@ -381,17 +412,22 @@
    "tests": [
     "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces"
    ],
-   "note": "自动化判「可控/连续/不扭曲邻近人脸」三条（test_acceptance_p1）；用例原文「背景异常纳入人工审核」那一半必须人签，规程同 PORTRAIT-002。"
+   "note": "自动化判「可控/连续/不扭曲邻近人脸」三条（test_acceptance_p1）；用例原文「背景异常纳入人工审核」那一半必须人签，规程同 PORTRAIT-002。　人工签字簿：docs/acceptance/人工签字簿-1.11.0.md",
+   "decision": null
   },
   {
    "id": "PORTRAIT-008",
    "phase": "P1",
    "module": "geometry",
    "title": "全身美型",
-   "status": "uncovered",
+   "status": "not_supported",
    "then": "未选人物无非预期位移，变形无断裂；中性值恢复",
    "tests": [],
-   "note": "本版本显式不支持（ADR-0016 定档，不是排期）：FaceMesh 478 点里没有躯干与四肢的解剖依据；引入 Pose/Body 意味着新权重 + 新许可声明行 + 新运行时失败面，而 33 点对连续美型的支撑密度撑不起『变形无断裂』那句判据。面板不给这一栏控件（不留无响应控件），退出条件写在 ADR-0016 §3。"
+   "note": "本版本显式不支持（ADR-0016 定档，不是排期）：FaceMesh 478 点里没有躯干与四肢的解剖依据；引入 Pose/Body 意味着新权重 + 新许可声明行 + 新运行时失败面，而 33 点对连续美型的支撑密度撑不起『变形无断裂』那句判据。面板不给这一栏控件（不留无响应控件），退出条件写在 ADR-0016 §3。",
+   "decision": {
+    "kind": "not_supported",
+    "adr": "ADR-0016"
+   }
   },
   {
    "id": "PORTRAIT-009",
@@ -407,27 +443,36 @@
     "engine/tests/test_perf_report.py::test_eye_teeth_enhance_percentiles",
     "engine/tests/test_protocol.py::test_switching_documents_returns_the_exact_same_frame"
    ],
-   "note": "已实装（1.8.0）：眼白提亮 / 虹膜增强 / 牙齿美白三格各自独立启停，掩膜从 478 点几何重画、再按本池均值的相对亮/艳开门。边界：没有负档；闭嘴样本的牙齿那一格与虹膜半径不足的眼睛按显式拒绝处理并报 reason；内容门阈值在三份夹具（露齿 / 露齿+眼镜 / 深肤色露齿）上标定，见 ADR-0015。"
+   "note": "已实装（1.8.0）：眼白提亮 / 虹膜增强 / 牙齿美白三格各自独立启停，掩膜从 478 点几何重画、再按本池均值的相对亮/艳开门。边界：没有负档；闭嘴样本的牙齿那一格与虹膜半径不足的眼睛按显式拒绝处理并报 reason；内容门阈值在三份夹具（露齿 / 露齿+眼镜 / 深肤色露齿）上标定，见 ADR-0015。",
+   "decision": null
   },
   {
    "id": "PORTRAIT-010",
    "phase": "P1",
    "module": "makeup_hair",
    "title": "妆容头发",
-   "status": "uncovered",
+   "status": "not_supported",
    "then": "效果限制在目标内，保留发丝边界；子模块有独立中性测试",
    "tests": [],
-   "note": "本版本显式不支持（ADR-0016 定档）：那句判据要的是发丝级区域分割，而 FaceMesh 没有发际点；拿椭圆或多边形近似『头发区域』在真照片上会切进额头或飘出轮廓——那是 DoD §2 严禁的假效果。"
+   "note": "本版本显式不支持（ADR-0016 定档）：那句判据要的是发丝级区域分割，而 FaceMesh 没有发际点；拿椭圆或多边形近似『头发区域』在真照片上会切进额头或飘出轮廓——那是 DoD §2 严禁的假效果。",
+   "decision": {
+    "kind": "not_supported",
+    "adr": "ADR-0016"
+   }
   },
   {
    "id": "PORTRAIT-011",
    "phase": "P1",
    "module": "hands_feet",
    "title": "手脚精修",
-   "status": "uncovered",
+   "status": "not_supported",
    "then": "无手指数目或形状非预期变化；识别失败给出明确未处理状态",
    "tests": [],
-   "note": "本版本显式不支持（ADR-0016 定档）：手是 21×2 点集加自遮挡问题，只随包 FaceMesh 时这一条永远走『识别失败』分支——把栏目做成只会上报『我不支持』就等于一个华丽版的无响应控件。"
+   "note": "本版本显式不支持（ADR-0016 定档）：手是 21×2 点集加自遮挡问题，只随包 FaceMesh 时这一条永远走『识别失败』分支——把栏目做成只会上报『我不支持』就等于一个华丽版的无响应控件。",
+   "decision": {
+    "kind": "not_supported",
+    "adr": "ADR-0016"
+   }
   },
   {
    "id": "PORTRAIT-012",
@@ -440,7 +485,8 @@
     "engine/tests/test_acceptance_p1.py::test_smile_raises_the_corners_keeps_the_person_and_restores_neutrally",
     "engine/tests/test_deform.py::test_resident_bytes_counts_units_and_grid"
    ],
-   "note": "实装那一格：本版本的表情 = 嘴角上扬（几何搬点，幅度以嘴宽为单位）。\n   露齿笑/抿嘴笑/闭合嘴巴/换表情要重建唇齿内容（生成式，冻结件把生成式划进 P2 实验档），\n   引擎整条拒并报得出可用名单——UI 上也不给它们留控件。判据在**出片上重测 MediaPipe 关键点**：\n   实测 0.8 档嘴角上抬 23.1/24.6 px（按 SMILE_LIFT_OF_MOUTH_W 请求 20.9 px）、瞳距变化 −0.90%、\n   虹膜移动 ≤1.40 px、中性档与出厂帧逐字节相同。"
+   "note": "实装那一格：本版本的表情 = 嘴角上扬（几何搬点，幅度以嘴宽为单位）。\n   露齿笑/抿嘴笑/闭合嘴巴/换表情要重建唇齿内容（生成式，冻结件把生成式划进 P2 实验档），\n   引擎整条拒并报得出可用名单——UI 上也不给它们留控件。判据在**出片上重测 MediaPipe 关键点**：\n   实测 0.8 档嘴角上抬 23.1/24.6 px（按 SMILE_LIFT_OF_MOUTH_W 请求 20.9 px）、瞳距变化 −0.90%、\n   虹膜移动 ≤1.40 px、中性档与出厂帧逐字节相同。",
+   "decision": null
   },
   {
    "id": "MANUAL-001",
@@ -452,7 +498,8 @@
    "tests": [
     "engine/tests/test_acceptance_p1.py::test_brush_strokes_replay_through_zoom_rotate_crop_and_reopen"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "MANUAL-002",
@@ -465,7 +512,8 @@
     "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces",
     "engine/tests/test_acceptance_p1.py::test_liquify_replay_undo_redo_is_continuous_and_fully_reversible"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "MANUAL-003",
@@ -477,7 +525,8 @@
    "tests": [
     "engine/tests/test_acceptance_p1.py::test_repair_target_mapping_survives_scale_and_reopen"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "PRESET-001",
@@ -489,7 +538,8 @@
    "tests": [
     "engine/tests/test_preset_batch.py::test_module_presets_only_touch_their_own_scope_and_same_module_overrides"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "PRESET-002",
@@ -501,7 +551,8 @@
    "tests": [
     "engine/tests/test_preset_batch.py::test_hostile_presets_are_refused_and_a_valid_one_still_imports"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "BATCH-001",
@@ -515,7 +566,8 @@
     "engine/tests/test_tasks.py::test_items_are_fixed_at_creation",
     "engine/tests/test_tasks.py::test_retry_keeps_the_snapshot_and_the_identity"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "BATCH-002",
@@ -528,7 +580,8 @@
     "engine/tests/test_tasks.py::test_items_are_fixed_at_creation",
     "engine/tests/test_tasks.py::test_retry_refuses_a_running_batch_and_a_fully_succeeded_one"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "BATCH-003",
@@ -540,7 +593,8 @@
    "tests": [
     "engine/tests/test_protocol.py::test_export_batch_isolates_failures_and_reports_skips"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "BATCH-004",
@@ -552,7 +606,8 @@
    "tests": [
     "engine/tests/test_preset_batch.py::test_batch_sync_undo_restores_untouched_and_reports_conflict"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "TASK-001",
@@ -566,7 +621,8 @@
     "engine/tests/test_tasks.py::test_cancel_is_for_things_that_have_not_stopped",
     "engine/tests/test_tasks.py::test_history_is_auditable_with_reasons"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "TASK-002",
@@ -579,7 +635,8 @@
     "engine/tests/test_protocol.py::test_task_retry_uses_the_frozen_inputs_not_the_current_sliders",
     "engine/tests/test_tasks.py::test_retry_keeps_the_snapshot_and_the_identity"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "TASK-003",
@@ -591,7 +648,8 @@
    "tests": [
     "engine/tests/test_tasks.py::test_skipped_is_not_success_nor_failure"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "TASK-004",
@@ -604,7 +662,8 @@
     "engine/tests/test_tasks.py::test_an_interrupted_run_comes_back_paused_never_running",
     "engine/tests/test_tasks.py::test_for_json_round_trip_and_no_auto_resume"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "TASK-005",
@@ -617,7 +676,8 @@
     "engine/tests/test_export.py::test_export_refuses_before_touching_the_gpu",
     "engine/tests/test_upscale.py::test_tiled_peak_bounds_with_tile_not_image"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "EXPORT-001",
@@ -631,7 +691,8 @@
     "engine/tests/test_protocol.py::test_export_conflict_policy_is_visible_per_image",
     "engine/tests/test_tasks.py::test_skipped_is_not_success_nor_failure"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "EXPORT-002",
@@ -644,7 +705,8 @@
     "engine/tests/test_perf_report.py::test_export_batch_percentiles",
     "engine/tests/test_protocol.py::test_task_retry_uses_the_frozen_inputs_not_the_current_sliders"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "EXPORT-003",
@@ -656,7 +718,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_export_refuses_invalid_combinations_instead_of_losing_data"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "LINUX-001",
@@ -668,7 +731,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_no_egress_or_telemetry_anywhere_in_the_shipped_code"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "LINUX-002",
@@ -680,7 +744,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_every_bundled_weight_has_a_filled_license_ledger_entry"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "PICK-001",
@@ -692,7 +757,8 @@
    "tests": [
     "engine/tests/test_acceptance_p1.py::test_pick_suggestions_are_explainable_overridable_and_never_touch_the_source"
    ],
-   "note": "已交付为**本地确定性度量**（ADR-0012）：dHash 近似组 + 清晰度两格（绝对高频能量与相对自身对比度）+ luma 裁切占比 + FaceMesh 眼睑睁开比，每条原因带 method/数值/阈值可复算。不做的是「训练出来的挑图分类器」——本包没有那种权重，也不冒充（DoD §2）。建议恒为可覆盖的旁注：不进工程文件、不进撤销栈、不删除不移动任何原片。"
+   "note": "已交付为**本地确定性度量**（ADR-0012）：dHash 近似组 + 清晰度两格（绝对高频能量与相对自身对比度）+ luma 裁切占比 + FaceMesh 眼睑睁开比，每条原因带 method/数值/阈值可复算。不做的是「训练出来的挑图分类器」——本包没有那种权重，也不冒充（DoD §2）。建议恒为可覆盖的旁注：不进工程文件、不进撤销栈、不删除不移动任何原片。",
+   "decision": null
   },
   {
    "id": "BACKGROUND-001",
@@ -704,47 +770,64 @@
    "tests": [
     "engine/tests/test_acceptance_p1.py::test_background_swap_protects_subject_edges_and_refuses_what_it_cannot_do"
    ],
-   "note": "已覆盖（1.6.0 之后）：冻结件那两句都有端到端证据——①目标区域换成指定底色、人像主体与第二块主体核心区逐字节不动、过渡带逐通道夹在两个端点之间（无光晕）、羽化只在 softness 宽档长出中间值（实测 0 格→160 格，且不超过算出的过渡带）；②birefnet 无权重整条拒、未知后端拒、不认的参数（衣物那类，本仓没有衣物模块）拒、声明域外的 softness 拒并说得出域，四次拒绝都**没有新帧**且上一帧逐字节等于底片，随后 clear 逐字节回到换底前。边界：真值取自测试自己画的几何已知场景（纯灰底 + 两块主体 + 高斯羽化边），不是影楼夹具；**衣物模块本仓不存在**，这一条只测背景（色键档，零依赖可复算）；神经网络自动抠图（birefnet）在权重放行前永远是拒绝，不是降级。"
+   "note": "已覆盖（1.6.0 之后）：冻结件那两句都有端到端证据——①目标区域换成指定底色、人像主体与第二块主体核心区逐字节不动、过渡带逐通道夹在两个端点之间（无光晕）、羽化只在 softness 宽档长出中间值（实测 0 格→160 格，且不超过算出的过渡带）；②birefnet 无权重整条拒、未知后端拒、不认的参数（衣物那类，本仓没有衣物模块）拒、声明域外的 softness 拒并说得出域，四次拒绝都**没有新帧**且上一帧逐字节等于底片，随后 clear 逐字节回到换底前。边界：真值取自测试自己画的几何已知场景（纯灰底 + 两块主体 + 高斯羽化边），不是影楼夹具；**衣物模块本仓不存在**，这一条只测背景（色键档，零依赖可复算）；神经网络自动抠图（birefnet）在权重放行前永远是拒绝，不是降级。",
+   "decision": null
   },
   {
    "id": "GEN-001",
    "phase": "P2",
    "module": "generation",
    "title": "生成结果可追溯",
-   "status": "uncovered",
+   "status": "out_of_scope",
    "then": "保留接受结果资产、依赖版本与操作范围；重开仍可用，撤销回原版本",
    "tests": [],
-   "note": "范围外（P2）：生成式编辑与本产品「不做生成、不冒充真实拍摄内容」的定位冲突。"
+   "note": "范围外（P2）：生成式编辑与本产品「不做生成、不冒充真实拍摄内容」的定位冲突。",
+   "decision": {
+    "kind": "out_of_scope",
+    "adr": "ADR-0018"
+   }
   },
   {
    "id": "GEN-002",
    "phase": "P2",
    "module": "generation",
    "title": "身份和事实变化提示",
-   "status": "uncovered",
+   "status": "out_of_scope",
    "then": "明确标记生成编辑；接受前可看原图对照；不冒称真实拍摄内容",
    "tests": [],
-   "note": "范围外（P2）：同上。"
+   "note": "范围外（P2）：同上。",
+   "decision": {
+    "kind": "out_of_scope",
+    "adr": "ADR-0018"
+   }
   },
   {
    "id": "CLOUD-001",
    "phase": "P2",
    "module": "privacy",
    "title": "云能力显式同意",
-   "status": "uncovered",
+   "status": "out_of_scope",
    "then": "在发出任何照片/人脸数据前说明目的地、范围、费用与保留策略并取得同意",
    "tests": [],
-   "note": "范围外（P2）：本产品无云通道（本地优先/离线可用，见 no-egress 用例），显式同意流程没有可挂的入口。"
+   "note": "范围外（P2）：本产品无云通道（本地优先/离线可用，见 no-egress 用例），显式同意流程没有可挂的入口。",
+   "decision": {
+    "kind": "out_of_scope",
+    "adr": "ADR-0018"
+   }
   },
   {
    "id": "CLOUD-002",
    "phase": "P2",
    "module": "collaboration",
    "title": "协作冲突保护",
-   "status": "uncovered",
+   "status": "out_of_scope",
    "then": "按revision检测并提供选择或分支；不能最后写入覆盖全部工作",
    "tests": [],
-   "note": "范围外（P2）：无协作服务端，revision 冲突检测没有对手方。"
+   "note": "范围外（P2）：无协作服务端，revision 冲突检测没有对手方。",
+   "decision": {
+    "kind": "out_of_scope",
+    "adr": "ADR-0018"
+   }
   },
   {
    "id": "RAW-001",
@@ -756,7 +839,8 @@
    "tests": [
     "engine/tests/test_acceptance_p1.py::test_raw_whitelist_develops_for_real_and_never_passes_preview_as_raw"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "SEC-001",
@@ -769,7 +853,8 @@
     "engine/tests/test_acceptance_p0.py::test_events_never_carry_absolute_paths_off_the_machine",
     "engine/tests/test_acceptance_p0.py::test_no_egress_or_telemetry_anywhere_in_the_shipped_code"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "TASK-006",
@@ -781,7 +866,8 @@
    "tests": [
     "engine/tests/test_tasks.py::test_pause_lands_on_the_boundary_not_immediately"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "TASK-007",
@@ -794,7 +880,8 @@
     "engine/tests/test_protocol.py::test_task_pause_stops_at_the_boundary_and_resume_finishes_the_batch",
     "engine/tests/test_tasks.py::test_batch_state_does_not_say_paused_before_everyone_stopped"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "TASK-008",
@@ -807,7 +894,8 @@
     "engine/tests/test_protocol.py::test_task_paused_across_a_restart_stays_paused_and_says_why",
     "engine/tests/test_tasks.py::test_for_json_round_trip_and_no_auto_resume"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "TASK-009",
@@ -820,27 +908,36 @@
     "engine/tests/test_protocol.py::test_task_cancel_keeps_committed_files_and_writes_no_more",
     "engine/tests/test_protocol.py::test_task_delete_removes_the_record_only"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "DIFF-001",
    "phase": "P2",
    "module": "history",
    "title": "创意历史跨重开持久化",
-   "status": "uncovered",
+   "status": "out_of_scope",
    "then": "完整提交版本仍可恢复，明确不同于参照产品历史折叠",
    "tests": [],
-   "note": "未实装（P2）：创意历史（生成派生的版本树）不在本版本；提交式版本已覆盖于 CORE-007。"
+   "note": "未实装（P2）：创意历史（生成派生的版本树）不在本版本；提交式版本已覆盖于 CORE-007。",
+   "decision": {
+    "kind": "out_of_scope",
+    "adr": "ADR-0018"
+   }
   },
   {
    "id": "DIFF-002",
    "phase": "P2",
    "module": "generation",
    "title": "创意派生基底回流",
-   "status": "uncovered",
+   "status": "out_of_scope",
    "then": "产生派生资产及处于注册表声明初始中性状态的新配方；原文件哈希不变；撤销恢复旧基底和旧配方",
    "tests": [],
-   "note": "范围外（P2）：依赖生成派生资产，同 GEN-*。"
+   "note": "范围外（P2）：依赖生成派生资产，同 GEN-*。",
+   "decision": {
+    "kind": "out_of_scope",
+    "adr": "ADR-0018"
+   }
   },
   {
    "id": "DIFF-003",
@@ -852,7 +949,8 @@
    "tests": [
     "engine/tests/test_protocol.py::test_export_writes_full_size_not_the_proxy"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "SCOPE-001",
@@ -872,7 +970,8 @@
     "engine/tests/test_face_manual.py::test_detect_region_picks_the_face_that_matches_the_rect_not_the_biggest",
     "engine/tests/test_face_select.py::test_meta_reports_the_selection_and_keeps_the_scope_flag"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "FORMAT-001",
@@ -884,7 +983,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_quality_mapping_version_and_encoder_value_are_recorded"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "FORMAT-002",
@@ -896,7 +996,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_multipage_container_is_refused_not_silently_first_page"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "P0-EXPOSURE-NEUTRAL",
@@ -908,7 +1009,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "P0-EXPOSURE-BOUNDARY",
@@ -920,7 +1022,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "P0-WHITE_BALANCE-NEUTRAL",
@@ -932,7 +1035,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "P0-WHITE_BALANCE-BOUNDARY",
@@ -944,7 +1048,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "P0-CROP-NEUTRAL",
@@ -956,7 +1061,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "P0-CROP-BOUNDARY",
@@ -969,7 +1075,8 @@
     "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state",
     "engine/tests/test_protocol.py::test_crop_only_deletes_pixels_and_leaves_the_kept_region_untouched"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "P0-MASK-NEUTRAL",
@@ -981,7 +1088,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "P0-MASK-BOUNDARY",
@@ -993,7 +1101,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "P0-BLEMISH-NEUTRAL",
@@ -1005,7 +1114,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_neutral_params_are_byte_identity_and_survive_save_reopen"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   },
   {
    "id": "P0-BLEMISH-BOUNDARY",
@@ -1017,7 +1127,8 @@
    "tests": [
     "engine/tests/test_acceptance_p0.py::test_boundary_and_illegal_params_are_refused_without_half_state"
    ],
-   "note": null
+   "note": null,
+   "decision": null
   }
  ],
  "perf": {

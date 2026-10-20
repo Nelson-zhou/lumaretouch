@@ -18,8 +18,10 @@
   眼睑几何，每条都带 method、数值与阈值可复算，所以它移到下面"已覆盖"那一段。）
 · COLOR-004（局部调色）的"目标区域保护"只有已经存在的那几层可测。
 
-这几条在这里**没有测试**，`tools/run-acceptance.py` 因此把它们如实写成 `uncovered`
-——不是 `passed`，也不是 skip。少写一份测试是一回事，把没做的东西签成做了是另一回事。
+这几条里 005/008/010/011 有 ADR 定档（005 缓期，其余显式不支持），`case-map.json`
+里带 `decision`，`tools/run-acceptance.py` 因此把它们记成 `deferred` / `not_supported`
+——不是 `passed`，也不是 `uncovered`。没有 ADR 依据的空白才记 `uncovered`；
+把没做的东西签成做了，始终是另一回事。
 
 这一份覆盖的七条都有真实现可验，判据逐条取自冻结件的 `then` 原文：
 

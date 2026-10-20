@@ -181,6 +181,10 @@ def build_map(cases: list[dict], idx: dict[str, list[str]], old_map: dict) -> di
         if prev.get("extra"):
             entry["extra"] = prev["extra"]      # 人工补的引用（非 ID 字面量，脚本认不出来那种）
             entry["tests"] = sorted(set(tests) | set(prev["extra"]))
+        if prev.get("decision"):
+            # 产品决定（不支持/范围外/缓期）与 note 一样是人工格：ADR 编号必须
+            # 跟着映射走，重算时不能把它丢成 uncovered。
+            entry["decision"] = prev["decision"]
         new[cid] = entry
     return new
 
@@ -210,13 +214,18 @@ def cmd_map(write: bool, python: str) -> int:
                     ghosts.append(f"{cid} → {t}")
     by_phase = {}
     for c in cases:
-        by_phase.setdefault(c["phase"], [0, 0])
-        has = bool(new[c["id"]]["tests"])
+        e = new[c["id"]]
+        by_phase.setdefault(c["phase"], [0, 0, 0])
+        has = bool(e["tests"])
+        decided = (not has) and bool((e.get("decision") or {}).get("adr"))
         by_phase[c["phase"]][0] += 1
         by_phase[c["phase"]][1] += 1 if has else 0
+        by_phase[c["phase"]][2] += 1 if decided else 0
     for ph in sorted(by_phase):
-        tot, cov = by_phase[ph]
-        print(f"{'✓' if cov == tot else '×'} {ph}: {cov}/{tot} 条用例有测试引用")
+        tot, cov, dec = by_phase[ph]
+        mark = "✓" if cov + dec == tot else "×"
+        tail = f"（另 {dec} 条有 ADR 决定）" if dec else ""
+        print(f"{mark} {ph}: {cov}/{tot} 条用例有测试引用{tail}")
     if ghosts:
         print(f"× 幽灵映射 {len(ghosts)} 条（映射指向不存在的节点）：")
         for g in ghosts[:10]:
@@ -269,6 +278,14 @@ def cmd_check(python: str) -> int:
     fail = 0
     for c in cases:
         e = doc["map"].get(c["id"])
+        dec = (e or {}).get("decision") or {}
+        if dec:
+            if dec.get("kind") not in DECISION_KINDS or not dec.get("adr"):
+                print(f"× {c['id']} 的 decision 缺 kind/adr：{dec}")
+                fail += 1
+            if (e or {}).get("tests"):
+                print(f"× {c['id']} 既有测试引用又有 decision：决定不能盖过读数")
+                fail += 1
         if not e or not e["tests"]:
             if c["phase"] == "P0":
                 print(f"× P0 {c['id']} 没有测试引用")
@@ -349,6 +366,33 @@ def lookup(statuses: dict[str, list[str]], node: str) -> str | None:
     return "passed" if got else None
 
 
+DECISION_KINDS = ("not_supported", "out_of_scope", "deferred")
+
+
+def case_status(entry: dict, statuses: dict[str, list[str]]) -> str:
+    """一条用例的结论：junit 读数优先，其次才是映射里的产品决定。
+
+    `decision` 只允许落在**没有测试引用**的用例上，而且必须带 ADR 编号：
+    - 没有 ADR 的“决定”只是空白，仍记 uncovered（不许拿一句话把红刷掉）；
+    - 有测试引用时决定不生效——测试说红就是红，决定不能盖过读数。
+    三种决定都不计入通过，报告里单独计列。
+    """
+    tests = entry.get("tests") or []
+    if not tests:
+        dec = entry.get("decision") or {}
+        if dec.get("kind") in DECISION_KINDS and dec.get("adr"):
+            return dec["kind"]
+        return "uncovered"
+    got = [lookup(statuses, t) for t in tests]
+    if any(g is None for g in got):
+        return "unverified"
+    if any(g == "failed" for g in got):
+        return "failed"
+    if all(g == "passed" for g in got):
+        return "passed"
+    return "skipped"
+
+
 def product_version() -> str:
     """报告里得写上它验的是哪一版（验收与定版同源）。
 
@@ -378,18 +422,7 @@ def write_report(doc: dict, cases: list[dict], junit: Path, perf_out: Path,
     for c in cases:
         e = doc["map"].get(c["id"]) or {}
         tests = e.get("tests") or []
-        if not tests:
-            st = "uncovered"
-        else:
-            got = [lookup(statuses, t) for t in tests]
-            if any(g is None for g in got):
-                st = "unverified"          # 映射的测试没出现在 junit 里（被 deselect / 收集失败）
-            elif any(g == "failed" for g in got):
-                st = "failed"
-            elif all(g == "passed" for g in got):
-                st = "passed"
-            else:
-                st = "skipped"
+        st = case_status(e, statuses)
         if e.get("manual") and st == "passed":
             # 自动化那半绿了不等于这条过了：`manual` 标的是“还必须由人签字的那一半”。
             st = "manual_pending"
@@ -397,7 +430,8 @@ def write_report(doc: dict, cases: list[dict], junit: Path, perf_out: Path,
         counters[c["phase"]][st] = counters[c["phase"]].get(st, 0) + 1
         rows.append({"id": c["id"], "phase": c["phase"], "module": c["module"],
                      "title": c["title"], "status": st,
-                     "then": c["then"], "tests": tests, "note": e.get("note")})
+                     "then": c["then"], "tests": tests, "note": e.get("note"),
+                     "decision": e.get("decision")})
     report = {"schema": "lrt.acceptance-report.v1", "at": time.strftime("%FT%T"),
               "product_version": product_version(), "mode": mode,
               "cases_sha256": cases_sha256(), "pytest_rc": pytest_rc,
@@ -425,6 +459,13 @@ def write_report(doc: dict, cases: list[dict], junit: Path, perf_out: Path,
         # 自动化那半过了不等于这条过了：人没签字就不能替人签。退码 3 就是专门给
         # “只差人工”这个状态留的（与“有红项”的 1 分开，不让它摸进绿）。
         print(f"🖐 P0 待人工 {len(p0_manual)} 条（不算通过）：{p0_manual}")
+    dec_rows = [r for r in rows if r["status"] in DECISION_KINDS]
+    if dec_rows:
+        by: dict[str, int] = {}
+        for r in dec_rows:
+            by[r["status"]] = by.get(r["status"], 0) + 1
+        print("· 决策项（有 ADR、不计入通过）："
+              + " ".join(f"{k}={v}" for k, v in sorted(by.items())))
     if others or pytest_rc != 0:
         print(f"! 非 P0 待看 {len(others)} 条（pytest rc={pytest_rc}）："
               f"{[r['id'] for r in others][:12]}")
@@ -494,7 +535,10 @@ def cmd_report(args) -> int:
 
 PH_STATE = {"passed": "✅ 通过", "failed": "❌ 失败", "skipped": "⚠️ 跳过",
             "unverified": "⚠️ 未证实", "uncovered": "🔴 未覆盖",
-            "manual_pending": "🖐 待人工"}
+            "manual_pending": "🖐 待人工",
+            "not_supported": "⛔ 不支持（有依据）",
+            "out_of_scope": "➖ 范围外",
+            "deferred": "⏸ 缓期（有退出条件）"}
 
 
 def write_md(rep: dict) -> None:
@@ -505,11 +549,14 @@ def write_md(rep: dict) -> None:
          f"（junit：{rep['junit']}）",
          f"- 用例集指纹：`{rep['cases_sha256']}`（《开发验收用例.json》冻结件）",
          f"- pytest 退出码：{rep['pytest_rc']}", ""]
-    L += ["## 汇总", "", "| 阶段 | 通过 | 待人工 | 失败 | 跳过 | 未证实 | 未覆盖 |",
-          "|---|---|---|---|---|---|---|"]
+    L += ["## 汇总", "",
+          "| 阶段 | 通过 | 待人工 | 不支持 | 范围外 | 缓期 | 失败 | 跳过 | 未证实 | 未覆盖 |",
+          "|---|---|---|---|---|---|---|---|---|---|"]
     for ph in sorted(rep["counts"]):
         c = rep["counts"][ph]
         L.append(f"| {ph} | {c.get('passed', 0)} | {c.get('manual_pending', 0)} | "
+                 f"{c.get('not_supported', 0)} | {c.get('out_of_scope', 0)} | "
+                 f"{c.get('deferred', 0)} | "
                  f"{c.get('failed', 0)} | "
                  f"{c.get('skipped', 0)} | {c.get('unverified', 0)} | {c.get('uncovered', 0)} |")
     L += ["", "## 逐条用例", ""]
@@ -519,6 +566,8 @@ def write_md(rep: dict) -> None:
             cur = r["phase"]
             L += [f"### {cur}", "", "| 用例 | 标题 | 状态 | 证据（测试节点） |", "|---|---|---|---|"]
         ev = "<br>".join(f"`{t}`" for t in r["tests"]) or "—"
+        if r["status"] in DECISION_KINDS and r.get("decision"):
+            ev = f"决策：{r['decision'].get('adr')}"
         L.append(f"| {r['id']} | {r['title']} | {PH_STATE.get(r['status'], r['status'])} | {ev} |")
         if r.get("note"):
             L.append(f"| | ↳ 备注 | | {r['note']} |")
@@ -565,6 +614,9 @@ def write_md(rep: dict) -> None:
           "- P0 用例 `skipped/unverified/uncovered` 都不算通过——没跑过就是没跑过；",
           "- `manual_pending`（待人工）是**映射里标的“这一半要人签字”**：自动化读数全绿也不算通过，"
           "报告里单独颜色列出来（PORTRAIT-002 的盲评规程见 docs/acceptance/）；",
+          "- `not_supported/out_of_scope/deferred` 是映射里带 ADR 的产品决定：单独计列、"
+          "不计入通过；没有 ADR 的空白仍算 `uncovered`，不许用一句话把红刷掉；"
+          "有测试引用时决定不生效（读数说话）；",
           "- 每条用例的证据必须是一段真存在的测试节点，测试里逐条引用用例 ID，"
           "改名不更新引用会在 `check` 里响成幽灵映射。", ""]
     REPORT_MD.write_text("\n".join(L), encoding="utf-8")

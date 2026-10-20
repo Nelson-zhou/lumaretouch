@@ -82,12 +82,41 @@ def test_human_fields_survive_a_refresh(tool):
     cases = tool.load_cases()
     cid, nodes = _pick_covered_p0(tool)
     old = {cid: {"tests": [], "note": "人写的一句话", "manual": "要人签字",
+                 "decision": {"kind": "not_supported", "adr": "ADR-9000"},
                  "extra": ["engine/tests/test_fake.py::test_extra"]}}
     built = tool.build_map(cases, tool.cite_index(), old)
     assert built[cid]["note"] == "人写的一句话"
     assert built[cid]["manual"] == "要人签字"
     assert built[cid]["extra"] == ["engine/tests/test_fake.py::test_extra"]
+    assert built[cid]["decision"] == {"kind": "not_supported", "adr": "ADR-9000"}
     assert built[cid]["tests"] == sorted(set(nodes) | {"engine/tests/test_fake.py::test_extra"})
+
+
+def test_decision_status_requires_an_adr_and_never_overrides_tests(tool):
+    """产品决定只对“没有测试引用”的用例生效，而且必须带 ADR。
+
+    这是本次“平账”的门：没有 ADR 的一句话不能把红刷成“支持/范围外”；
+    一旦某条用例后来有了测试引用，决定立刻失效——读数说话，决定不能盖过读数。
+    """
+    no_tests = {"tests": []}
+    assert tool.case_status(
+        {**no_tests, "decision": {"kind": "not_supported", "adr": "ADR-9000"}}, {}
+    ) == "not_supported"
+    assert tool.case_status(
+        {**no_tests, "decision": {"kind": "deferred"}}, {}
+    ) == "uncovered", "没有 ADR 的决定不算数"
+    assert tool.case_status(
+        {**no_tests, "decision": {"kind": "passed", "adr": "ADR-9000"}}, {}
+    ) == "uncovered", "决定只有三种合法 kind，不能拿 passed 冒充"
+    st = {"engine/tests/test_fake.py::test_a": ["passed"]}
+    assert tool.case_status(
+        {"tests": ["engine/tests/test_fake.py::test_a"],
+         "decision": {"kind": "deferred", "adr": "ADR-9000"}}, st
+    ) == "passed", "有测试引用时决定必须失效"
+    st["engine/tests/test_fake.py::test_a"] = ["failed"]
+    assert tool.case_status(
+        {"tests": ["engine/tests/test_fake.py::test_a"]}, st
+    ) == "failed"
 
 
 def test_committed_map_is_derived_from_the_current_sources(tool):

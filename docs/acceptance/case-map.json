@@ -2,7 +2,7 @@
  "schema": "lrt.acceptance-map.v1",
  "cases": "docs/acceptance/cases-frozen.json",
  "cases_sha256": "c2fca495b90e3aa7",
- "generated_at": "2026-10-19T15:59:54",
+ "generated_at": "2026-10-19T22:17:38",
  "map": {
   "CORE-001": {
    "tests": [
@@ -211,7 +211,7 @@
    "phase": "P0",
    "module": "skin",
    "title": "纹理与肤色覆盖",
-   "note": "自动化那半（高频保留比/ΔE00/掩膜外逐字节）已在 test_portrait_skin_quality.py 跑通；人眼盲评按 docs/acceptance/PORTRAIT-002-盲评规程.md 执行，结果未填 → 不算通过",
+   "note": "自动化那半（高频保留比/ΔE00/掩膜外逐字节）已在 test_portrait_skin_quality.py 跑通；人眼盲评按 docs/acceptance/PORTRAIT-002-盲评规程.md 执行，结果未填 → 不算通过　人工签字簿：docs/acceptance/人工签字簿-1.11.0.md",
    "manual": true
   },
   "PORTRAIT-003": {
@@ -241,7 +241,11 @@
    "phase": "P1",
    "module": "identity",
    "title": "跨图候选人工确认",
-   "note": "未实装：跨图同一人需要人脸嵌入与聚类，本版本没有那个模型；拿启发式相似度冒充识别属于 DoD 禁止的「伪装 AI」。"
+   "note": "未实装（ADR-0019 定档缓期）：跨图同一人需要人脸嵌入与聚类，本版本没有合规权重；拿脸型/关键点几何冒充识别会混入陌生人，属于 DoD 禁止的「伪装 AI」。退出条件（权重/标定/确认面）写在该 ADR；缓期不等于通过。",
+   "decision": {
+    "kind": "deferred",
+    "adr": "ADR-0019"
+   }
   },
   "PORTRAIT-006": {
    "tests": [
@@ -260,7 +264,7 @@
    "phase": "P1",
    "module": "geometry",
    "title": "面部美型边界",
-   "note": "自动化判「可控/连续/不扭曲邻近人脸」三条（test_acceptance_p1）；用例原文「背景异常纳入人工审核」那一半必须人签，规程同 PORTRAIT-002。",
+   "note": "自动化判「可控/连续/不扭曲邻近人脸」三条（test_acceptance_p1）；用例原文「背景异常纳入人工审核」那一半必须人签，规程同 PORTRAIT-002。　人工签字簿：docs/acceptance/人工签字簿-1.11.0.md",
    "manual": true
   },
   "PORTRAIT-008": {
@@ -268,7 +272,11 @@
    "phase": "P1",
    "module": "geometry",
    "title": "全身美型",
-   "note": "本版本显式不支持（ADR-0016 定档，不是排期）：FaceMesh 478 点里没有躯干与四肢的解剖依据；引入 Pose/Body 意味着新权重 + 新许可声明行 + 新运行时失败面，而 33 点对连续美型的支撑密度撑不起『变形无断裂』那句判据。面板不给这一栏控件（不留无响应控件），退出条件写在 ADR-0016 §3。"
+   "note": "本版本显式不支持（ADR-0016 定档，不是排期）：FaceMesh 478 点里没有躯干与四肢的解剖依据；引入 Pose/Body 意味着新权重 + 新许可声明行 + 新运行时失败面，而 33 点对连续美型的支撑密度撑不起『变形无断裂』那句判据。面板不给这一栏控件（不留无响应控件），退出条件写在 ADR-0016 §3。",
+   "decision": {
+    "kind": "not_supported",
+    "adr": "ADR-0016"
+   }
   },
   "PORTRAIT-009": {
    "tests": [
@@ -288,14 +296,22 @@
    "phase": "P1",
    "module": "makeup_hair",
    "title": "妆容头发",
-   "note": "本版本显式不支持（ADR-0016 定档）：那句判据要的是发丝级区域分割，而 FaceMesh 没有发际点；拿椭圆或多边形近似『头发区域』在真照片上会切进额头或飘出轮廓——那是 DoD §2 严禁的假效果。"
+   "note": "本版本显式不支持（ADR-0016 定档）：那句判据要的是发丝级区域分割，而 FaceMesh 没有发际点；拿椭圆或多边形近似『头发区域』在真照片上会切进额头或飘出轮廓——那是 DoD §2 严禁的假效果。",
+   "decision": {
+    "kind": "not_supported",
+    "adr": "ADR-0016"
+   }
   },
   "PORTRAIT-011": {
    "tests": [],
    "phase": "P1",
    "module": "hands_feet",
    "title": "手脚精修",
-   "note": "本版本显式不支持（ADR-0016 定档）：手是 21×2 点集加自遮挡问题，只随包 FaceMesh 时这一条永远走『识别失败』分支——把栏目做成只会上报『我不支持』就等于一个华丽版的无响应控件。"
+   "note": "本版本显式不支持（ADR-0016 定档）：手是 21×2 点集加自遮挡问题，只随包 FaceMesh 时这一条永远走『识别失败』分支——把栏目做成只会上报『我不支持』就等于一个华丽版的无响应控件。",
+   "decision": {
+    "kind": "not_supported",
+    "adr": "ADR-0016"
+   }
   },
   "PORTRAIT-012": {
    "tests": [
@@ -494,28 +510,44 @@
    "phase": "P2",
    "module": "generation",
    "title": "生成结果可追溯",
-   "note": "范围外（P2）：生成式编辑与本产品「不做生成、不冒充真实拍摄内容」的定位冲突。"
+   "note": "范围外（P2）：生成式编辑与本产品「不做生成、不冒充真实拍摄内容」的定位冲突。",
+   "decision": {
+    "kind": "out_of_scope",
+    "adr": "ADR-0018"
+   }
   },
   "GEN-002": {
    "tests": [],
    "phase": "P2",
    "module": "generation",
    "title": "身份和事实变化提示",
-   "note": "范围外（P2）：同上。"
+   "note": "范围外（P2）：同上。",
+   "decision": {
+    "kind": "out_of_scope",
+    "adr": "ADR-0018"
+   }
   },
   "CLOUD-001": {
    "tests": [],
    "phase": "P2",
    "module": "privacy",
    "title": "云能力显式同意",
-   "note": "范围外（P2）：本产品无云通道（本地优先/离线可用，见 no-egress 用例），显式同意流程没有可挂的入口。"
+   "note": "范围外（P2）：本产品无云通道（本地优先/离线可用，见 no-egress 用例），显式同意流程没有可挂的入口。",
+   "decision": {
+    "kind": "out_of_scope",
+    "adr": "ADR-0018"
+   }
   },
   "CLOUD-002": {
    "tests": [],
    "phase": "P2",
    "module": "collaboration",
    "title": "协作冲突保护",
-   "note": "范围外（P2）：无协作服务端，revision 冲突检测没有对手方。"
+   "note": "范围外（P2）：无协作服务端，revision 冲突检测没有对手方。",
+   "decision": {
+    "kind": "out_of_scope",
+    "adr": "ADR-0018"
+   }
   },
   "RAW-001": {
    "tests": [
@@ -574,14 +606,22 @@
    "phase": "P2",
    "module": "history",
    "title": "创意历史跨重开持久化",
-   "note": "未实装（P2）：创意历史（生成派生的版本树）不在本版本；提交式版本已覆盖于 CORE-007。"
+   "note": "未实装（P2）：创意历史（生成派生的版本树）不在本版本；提交式版本已覆盖于 CORE-007。",
+   "decision": {
+    "kind": "out_of_scope",
+    "adr": "ADR-0018"
+   }
   },
   "DIFF-002": {
    "tests": [],
    "phase": "P2",
    "module": "generation",
    "title": "创意派生基底回流",
-   "note": "范围外（P2）：依赖生成派生资产，同 GEN-*。"
+   "note": "范围外（P2）：依赖生成派生资产，同 GEN-*。",
+   "decision": {
+    "kind": "out_of_scope",
+    "adr": "ADR-0018"
+   }
   },
   "DIFF-003": {
    "tests": [
