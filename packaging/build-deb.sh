@@ -98,6 +98,18 @@ mkdir -p "$docdir/model-licenses"
 cp LICENSE "$docdir/copyright"
 cp NOTICE "$docdir/NOTICE"
 cp docs/model-licenses/README.md docs/model-licenses/models.json "$docdir/model-licenses/"
+# P2-7：内置 MediaPipe 权重是 Apache-2.0，NOTICE 明写「§4 要求保留版权声明、许可链接
+# 与 NOTICE 内容」。而 §4(b) 要的是**许可原文随副本分发**——光有转述义务的 NOTICE 与
+# 台账 models.json 并不等于把 Apache 全文交给了接收方。上一版这一步只 cp LICENSE/NOTICE/
+# README/models.json，把 archive/ 下的第三方许可全文整个漏掉了：包里没有 Apache 原文，
+# §4(b) 的分发义务就没履行。这里把 archive/ 的全文一并进包。
+mkdir -p "$docdir/model-licenses/LICENSES"
+lics=(docs/model-licenses/archive/*.txt)
+if [ ! -f "${lics[0]}" ]; then
+  echo "× docs/model-licenses/archive/ 里没有许可原文：内置 Apache/CC 权重无法履行 §4(b) 分发义务"
+  exit 1
+fi
+cp "${lics[@]}" "$docdir/model-licenses/LICENSES/"
 # control 里补 License 字段：tauri-bundler 会读 Cargo 的 license，但这一版没写进去
 # （装机后 `dpkg -l` 与软件中心都看不到许可），就地补上。
 # 注意插入时**不能留空行**：Debian control 里的空行会终止字段段落，多一个空行 dpkg-deb
@@ -166,6 +178,15 @@ for f in usr/share/doc/luma-retouch/copyright usr/share/doc/luma-retouch/NOTICE 
     exit 1
   fi
 done
+# P2-7 回读：包里必须真有一张 Apache-2.0 许可**全文**（内置的 MediaPipe 权重用到它）。
+# 上面那个 for 只验 NOTICE/copyright/models.json，验不到全文——正是上一版漏分发的那处。
+# 这里按内容找（不锁死文件名）：LICENSES/ 下任一文件命中「Apache License」才算交付。
+if ! grep -rl "Apache License" "$tmp/verify/usr/share/doc/luma-retouch/model-licenses/LICENSES/" \
+     2>/dev/null | grep -q .; then
+  echo "× 包里没有 Apache-2.0 许可全文：内置权重没履行 §4(b)，不要发布这个包"
+  exit 1
+fi
+echo "✓ 包内含第三方许可全文（Apache-2.0 等）"
 if dpkg-deb -f "$out" License >/dev/null 2>&1; then
   echo "✓ control 报 License: $(dpkg-deb -f "$out" License)"
 else
