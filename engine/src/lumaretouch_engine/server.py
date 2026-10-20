@@ -2468,6 +2468,35 @@ class Engine:
             return True
         return self._deform_intent(st)
 
+    def _source_fingerprint_drift(self, prj: dict) -> list:
+        """P2-8：工程重开时逐张把源文件的现字节与当初存下的指纹对一遍，报"内容漂移"。
+
+        过去这一步在 server 里从没被调用过（verify_fingerprint 只活在单测里），重开只查
+        文件在不在（missing_sources）。于是"保存后原图被别的程序改了 / 被同步工具换了一版"
+        这一整类漂移静默通过——用户拿旧几何的配方编辑一张已经不是当初那张的图，导出也不自知。
+
+        判据取自存储时那一等（新版 project save 存的是 full）：文件在而 head/bytes/full
+        任一对不上就是漂移。只 mtime 动（拷贝/同步工具改时间戳、字节没动）不算漂移——
+        此时 head/bytes/full 全对得上，drifted 本身就是 False，不必再看 mtime_moved_only；
+        缺文件不在此计（已由 missing 报）。
+        """
+        changed: list = []
+        for prow in prj["docs"]:
+            fp = prow.get("fingerprint")
+            if not isinstance(fp, dict) or fp.get("hash_level") in (None, "none"):
+                continue                      # 这一格没指纹可核（旧版从没算过的降级行）
+            v = PJ.verify_fingerprint(prow["path"], fp)
+            if not v["exists"]:
+                continue                      # 缺文件已由 missing 报，不重复计
+            drifted = (not v["head_match"]) or (not v["bytes_match"]) \
+                or (v.get("full_match") is False)
+            if drifted:
+                changed.append({"path": prow["path"], "level": v["level"],
+                                "head_match": bool(v["head_match"]),
+                                "bytes_match": bool(v["bytes_match"]),
+                                "full_match": v["full_match"]})
+        return changed
+
     def cmd_project(self, p: dict):
         """项目：创建 / 打开 / 保存 / 标签 / 回收站。
 
@@ -2623,6 +2652,7 @@ class Engine:
             self._image_loaded = False
             self._history_bind(None)
             missing = [m for m in PJ.missing_sources(prj) if not m["exists"]]
+            changed = self._source_fingerprint_drift(prj)
             # 重开默认展哪一张：先定下来再发事件，否则 `project_opened` 里的
             # auto_opened 与随后那一摞 shm_ready/image_ready 对不上人（上报与执行
             # 隔了一拍就是这种形状：事件说“没开”，视口上却亮着一张）。
@@ -2647,6 +2677,7 @@ class Engine:
                   "task_restore": self._tasks_restore(prj),
                   "proxy_budget": self._proxy_budget,
                   "missing": missing, "missing_count": len(missing),
+                  "changed": changed[:12], "changed_count": len(changed),
                   "restore_ms": round((monotonic_ns() - t0) / 1e6, 2),
                   "saved_ns": prj.get("updated_ns"),
                   "assets": len(prj.get("assets") or {}),
