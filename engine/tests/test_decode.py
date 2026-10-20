@@ -31,7 +31,8 @@ def test_proxy_size_respects_pixel_budget(w, h):
     ow, oh = proxy_size(w, h)
     assert ow * oh <= PROXY_PIXELS, f"{w}x{h} → {ow}x{oh} 超了字节预算"
     assert abs((ow / oh) - (w / h)) / (w / h) < 0.03, f"{w}x{h} → {ow}x{oh} 长宽比走形"
-    assert ow % ALIGN == 0 and oh % ALIGN == 0
+    if (ow, oh) != (w, h):               # 预算内不重采样：原尺寸不保证 8 对齐
+        assert ow % ALIGN == 0 and oh % ALIGN == 0
 
 
 @pytest.mark.parametrize("w,h", [(640, 480), (960, 600), (100, 100)])
@@ -105,10 +106,12 @@ def _write_oriented_jpg(tmp_path, orientation: int) -> tuple[str, tuple[int, int
 def test_exif_orientation_is_applied_before_proxy_math(tmp_path, orientation):
     """方向必须在算代理档之前读出来：先缩后转会得到错比例的预览。"""
     path, stored = _write_oriented_jpg(tmp_path, orientation)
-    d = load_rgb(path)
+    # 显式给 576 kpx 的小预算：产品默认已抬到 4K，1200×600 在默认档下不缩，
+    # 这条验的"先摆正后缩"就落不到实处。
+    d = load_rgb(path, 576_000)
     expect = (stored[1], stored[0]) if orientation in (5, 6, 7, 8) else stored
     assert (d.src_w, d.src_h) == expect
-    assert (d.w, d.h) == proxy_size(*expect), "代理档不是按摆正后的比例算的"
+    assert (d.w, d.h) == proxy_size(*expect, 576_000), "代理档不是按摆正后的比例算的"
     # 与「规范做法」（先 exif_transpose 再缩）逐像素一致
     with Image.open(path) as im:
         ref = ImageOps.exif_transpose(im).convert("RGB").resize((d.w, d.h), Image.LANCZOS)
@@ -189,7 +192,7 @@ def test_draft_target_uses_stored_orientation(tmp_path):
     libjpeg 选档是按存储宽高与目标两维都 ≥ 来定的，拿摆正后的竖构图去请求会把可用档
     拉低一级。实测 4000×3000 + orientation=6：传 (656,872) 只能降到 1/2（解码 12.07 ms），
     传 (872,656) 能降到 1/4（6.43 ms）。"""
-    d = load_rgb(_write_rotated_jpeg(tmp_path, (3200, 2400), 6))
+    d = load_rgb(_write_rotated_jpeg(tmp_path, (3200, 2400), 6), 576_000)
     assert (d.src_w, d.src_h) == (2400, 3200), "摆正后尺寸不对"
     assert d.draft_used, "大图 + EXIF 旋转的通路没吃到 DCT 预缩，导入耗时会被系统性高估"
     assert d.draft_size is not None and d.draft_size != (3200, 2400)
@@ -203,9 +206,34 @@ def test_draft_used_is_false_when_libjpeg_did_not_scale():
 
     im.draft() 返的是 (mode, (x0, y0, x1, y1))，不是尺寸元组；直接拿它跟 (raw_w, raw_h)
     比会永远“不等”，于是报表上每一张都写着“已吃到 DCT 缩放”——上一版就是这样，F 轮
-    那个 draft=true 是假的。这张 1024×1280 的 fixture 要缩到 672×848，1/2 档（512×640）
-    不够大，libjpeg 不缩，所以这里必须是 False。"""
+    那个 draft=true 是假的。产品默认 4K 预算下这张 1024×1280 的 fixture 原幅不缩，
+    libjpeg 自然不预缩，所以这里必须是 False。"""
     d = load_rgb(JPG)
     assert d.draft_size in (None, (1024, 1280)), f"意外拿到了预缩档 {d.draft_size}"
     assert not d.draft_used, "draft_used 恒为 True 的回归：它又在报假消息"
 
+
+
+def test_proxy_budget_accepts_the_product_4k_tier():
+    """产品档代理是 8_294_400（4K UHD）：这个数必须被接受，且落成 ~8.2MP 的尺寸。
+
+    这条判据的来由：引擎原来的上限是 8_000_000，UI 把默认值提到 4K 之后，
+    打开任何大图都会被一条“代理预算越界”整条拒——用户在屏幕上看到的只是
+    “图打不开”。上限与产品档必须同一个数。
+    """
+    from lumaretouch_engine.decode import MAX_BUDGET, clamp_budget, proxy_size
+
+    assert MAX_BUDGET >= 8_294_400
+    assert clamp_budget(8_294_400) == 8_294_400
+    w, h = proxy_size(4000, 3000, 8_294_400)
+    assert w * h <= 8_294_400
+    assert w * h >= 8_000_000, (w, h, w * h)     # 别悄悄退回低清档
+
+
+def test_default_proxy_budget_is_the_product_4k_tier():
+    """默认预算必须就是产品档：不允许再退回 960×600 的跑靶预算。
+
+    UI 的 maxPx 与引擎默认必须是同一个数，否则“界面上写 4K、引擎里掉回低清”
+    这种账只有把两处钉死才查得到。
+    """
+    assert PROXY_PIXELS == 8_294_400

@@ -970,8 +970,8 @@ def test_multi_face_photo_blocks_reshaping_but_keeps_global_edits(engine):
         pytest.fail("运行时没装 mediapipe 插件：面部重塑的核心就是它，这条用例不许"
                     "退成 skip（skip 不是通过），装它见 engine/requirements-mediapipe.txt")
     path = _dual_or_explain()
-    # 不传 max_px：走引擎产品档（decode.PROXY_PIXELS），台账里"解出 968x584、num_faces=2"
-    # 那组数就是在这个档上量到的；换成测试夹具的小档会改变检测条件，判据就不是那条了
+    # 不传 max_px：走引擎产品档（decode.PROXY_PIXELS = 4K 预算）。这组夹具 1570×950
+    # 本来就在预算内，解出来就是原幅；换成测试夹具的小档会改变检测条件，判据就不是那条了
     meta = _open(engine, path=path)
     h, w = meta["h"], meta["w"]
     peer = FrameShm(meta["name"])

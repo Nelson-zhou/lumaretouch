@@ -325,7 +325,7 @@ def test_load_image_and_drag_stream_real_photo(engine):
     ready = engine.wait_for("image_ready", timeout=60)
     assert (ready["src_w"], ready["src_h"]) == (1024, 1280)
     assert ready["decode_ms"] > 0 and ready["total_ms"] >= ready["decode_ms"]
-    assert ready["bytes_per_frame"] <= 960 * 600 * 4, "代理档越了字节预算"
+    assert ready["bytes_per_frame"] <= 1024 * 1280 * 4, "代理档越了字节预算"
 
     peer = FrameShm(shm_meta["name"])
     try:
@@ -417,13 +417,13 @@ def test_load_dng_strength_zero_and_raw_fields(engine, tmp_path):
     src = np.asarray(Image.open(FIXTURE).convert("RGB"))
     dng = os.path.join(str(tmp_path), "full.dng")
     mt.build(dng, src, black=256.0, white=16383.0)
-    ref = load_rgb(dng, device="cpu")
+    ref = load_rgb(dng, 576_000, device="cpu")   # 与下面那条 load_image 的预算同一档
 
     engine.send(cmd="hello")
     engine.wait_for("ready")
     engine.send(cmd="set_device", device="cpu")
     engine.wait_for("device_set")
-    engine.send(cmd="load_image", path=dng, strength=0.0)
+    engine.send(cmd="load_image", path=dng, max_px=576000, strength=0.0)
     shm_meta = engine.wait_for("shm_ready", timeout=120)
     assert (shm_meta["w"], shm_meta["h"]) == (ref.w, ref.h)
     engine.wait_for("vram_ready", timeout=120)
@@ -433,7 +433,8 @@ def test_load_dng_strength_zero_and_raw_fields(engine, tmp_path):
     assert raw["bits"] == 16 and raw["color_planes"] == 3
     assert raw["pattern"] == [0, 1, 1, 2]
     assert raw["white"] == 16383.0
-    # 代理帧比源图小：证明真降了档，不是把整幅塞回来（默认代理预算≈ 960×600 个像素）
+    # 代理帧比源图小：证明真降了档，不是把整幅塞回来（这里显式给 576 kpx 的预算；
+    # 产品默认已抬到 4K，1024×1280 在默认档下本来就不用缩）
     assert ref.w * ref.h <= 960 * 600 and (ref.w, ref.h) != (1024, 1280)
 
     peer = FrameShm(shm_meta["name"])
@@ -704,8 +705,9 @@ def test_new_image_invalidates_previous_masks(engine):
     _load(engine)
     engine.send(cmd="precompute", backend="auto")
     engine.wait_for("precompute_ready", timeout=60)
-    # 换一张完全不同尺寸的图（预算调大 → 代理档变），旧掩膜尺寸就对不上了
-    engine.send(cmd="load_image", path=FIXTURE, strength=0.0, max_px=1310720)
+    # 换一张完全不同尺寸的图（预算调小 → 代理档变），旧掩膜尺寸就对不上了。
+    # 默认档已是 4K，这张 fixture 在默认预算下不缩，所以这里必须显式给小预算。
+    engine.send(cmd="load_image", path=FIXTURE, strength=0.0, max_px=576000)
     engine.wait_for("image_ready", timeout=60)
     engine.send(cmd="set_strength", value=0.5, channel="skin")
     _expect_error(engine, "没有掩膜通道")

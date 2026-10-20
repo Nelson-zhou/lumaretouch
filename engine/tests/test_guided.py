@@ -308,8 +308,8 @@ def test_gpu_cpu_parity_at_product_proxy_size():
                        "tests", "fixtures", "portrait-1024x1280.jpg")
     if not os.path.isfile(jpg):
         pytest.skip("缺测试人像，先跑 packaging/make-test-portrait.py")
-    d = load_rgb(jpg)                      # 默认预算 576000 → 672×848，就是产品代理档
-    assert (d.h, d.w) == (848, 672), f"fixture 预算变了：{d.w}x{d.h}"
+    d = load_rgb(jpg)                      # 产品默认 4K 预算：1024×1280 原幅不缩
+    assert (d.h, d.w) == (1280, 1024), f"fixture 预算变了：{d.w}x{d.h}"
 
     chw = np.ascontiguousarray(d.rgb.astype(np.float32) / 255.0).transpose(2, 0, 1)[None]
     f32 = d.rgb.astype(np.float32) / 255.0          # make_tensor 只收 [0,1] 浮点（uint8 会被拒）
