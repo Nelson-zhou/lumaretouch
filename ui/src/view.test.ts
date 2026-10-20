@@ -13,7 +13,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { imageDisplayRect, clientToImage, fitScaleOf } from "./view.ts";
+import { readFileSync } from "node:fs";
+import { imageDisplayRect, clientToImage, fitScaleOf, proxyIsNativeResolution } from "./view.ts";
 
 // 场景：viewer 盒子 1000×1000，图像（代理帧）1024×1280（竖构图）。
 // fitScale = min(1000/1024, 1000/1280) = 0.78125 → 显示 800×1000，水平各留白 100px。
@@ -77,4 +78,31 @@ test("退化输入返回 null / 全 0，绝不产生 NaN", () => {
   assert.deepEqual(imageDisplayRect({ boxW: 0, boxH: 0, frameW: 0, frameH: 0, zoom: 1, panX: 0, panY: 0 }),
                    { left: 0, top: 0, width: 0, height: 0 });
   assert.equal(clientToImage(10, 10, { boxW: 100, boxH: 100, frameW: 0, frameH: 0, zoom: 1, panX: 0, panY: 0 }), null);
+});
+
+// —— P0 首版项③：100% 检视不能把代理帧放大冒充原始分辨率 ——
+test("代理==源（小图不降采样）：1:1 就是原始分辨率", () => {
+  assert.equal(proxyIsNativeResolution(1024, 1280, 1024, 1280), true);
+  // ALIGN 对齐带来的 ±几像素差落在容差内，仍算原始
+  assert.equal(proxyIsNativeResolution(1024, 1016, 1024, 1024), true);
+});
+
+test("代理被降采样（6000×4000→4K UHD 档）：1:1 不是原始分辨率，必须判 false", () => {
+  // 4K UHD 预算≈8.29MP：6000×4000=24MP 会被降采样，代理长边≈3504
+  assert.equal(proxyIsNativeResolution(3504, 2336, 6000, 4000), false,
+    "降过位的代理按 1:1 也只是代理档，不得冒充原始分辨率 100%");
+});
+
+test("缺源尺寸（0）时保守判 false：不知道是不是原始就不声称是", () => {
+  assert.equal(proxyIsNativeResolution(1024, 1280, 0, 0), false);
+  assert.equal(proxyIsNativeResolution(0, 0, 1024, 1280), false);
+});
+
+test("静态钉住：App 的 100% 控制真用了这个判据（不是只写个函数当摆设）", () => {
+  const app = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
+  assert.match(app, /import\s*\{[^}]*proxyIsNativeResolution[^}]*\}\s*from\s*"\.\/view"/, "App 没 import 该判据");
+  assert.match(app, /const nativeAt100 = [\s\S]*proxyIsNativeResolution\(/, "没把判据算到 nativeAt100");
+  // 100% 按钮的 title / 代理档徽标必须走 nativeAt100，否则仍是“默认声称 100%=原始”
+  assert.match(app, /nativeAt100[\s\S]{0,400}100%/, "100% 控件没接 nativeAt100");
+  assert.match(app, /oneToOne && !nativeAt100/, "代理档降采样时没有显式标注");
 });

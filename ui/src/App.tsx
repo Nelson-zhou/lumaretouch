@@ -8,6 +8,7 @@ import { TOOLS, TOOL_CATEGORIES } from "./spec";
 import { REGISTRY, keyOf, sectionTitleOf, type SectionId } from "./p0";
 import { clickRle } from "./brush";
 import { reconcileExportCombo } from "./exportModel";
+import { proxyIsNativeResolution } from "./view";
 import { t, type MsgKey } from "./i18n";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
@@ -2732,6 +2733,13 @@ export default function App() {
         : view.zoom * fitScale * (window.devicePixelRatio || 1)) * 100)}%`
       : "100%";
 
+  // P0 首版项③：1:1 物理像素只有在「代理帧==源分辨率」时才是真 100%（原始分辨率）。
+  // 引擎按 4K UHD 像素预算出代理帧，大图会被降采样——那时按 1:1 只是代理档，不得冒充
+  // 原始分辨率 100%。真全分辨率渲染（引擎按需出精帧）属 GPU 端到端、尚未接通；这里先把
+  // 「这一屏是不是原始档」如实标出来，让「不能把代理帧放大冒充 100%」在界面上看得见。
+  const nativeAt100 = !status?.image || proxyIsNativeResolution(
+    status.image.w, status.image.h, status.image.src_w, status.image.src_h);
+
   /** 底片条的评分/色标：落在工程记录的 tags/label 上（不碰原图）。
    *  评分用保留标签 `rating:N`；色标用 label（红/黄/绿/蓝/紫）。 */
   const ratingOf = (d: SessionDoc) => {
@@ -3751,7 +3759,13 @@ export default function App() {
                   <button className={view.fit ? "on" : ""} onClick={zoomFit}
                           title="适应窗口">适合</button>
                   <button className={oneToOne ? "on" : ""} onClick={zoomOne}
-                          title="1 图像像素 = 1 屏幕像素">100%</button>
+                          title={nativeAt100
+                            ? "1 图像像素 = 1 屏幕像素（原始分辨率 1:1）"
+                            : "1 代理帧像素 = 1 屏幕像素：源大于代理档，此为代理档 1:1，非原始分辨率（真全分辨率渲染待引擎按需出精帧）"}>100%</button>
+                  {oneToOne && !nativeAt100 && (
+                    <span className="zoomProxyTag" role="note"
+                          title="源分辨率大于引擎代理档：当前 1:1 显示的是降采样代理，不是原始像素">代理档</span>
+                  )}
                   <span className={"zoomRead" + (view.fit || oneToOne ? " srOnly" : "")}>
                     {zoomPct}
                   </span>

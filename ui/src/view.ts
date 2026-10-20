@@ -68,3 +68,19 @@ export function clientToImage(relX: number, relY: number, g: ViewGeom): { x: num
   if (r.width <= 0 || r.height <= 0 || g.frameW <= 0 || g.frameH <= 0) return null;
   return { x: ((relX - r.left) / r.width) * g.frameW, y: ((relY - r.top) / r.height) * g.frameH };
 }
+
+/**
+ * 当前代理帧是否就是源（裁剪/摆正后）的原始分辨率。
+ *
+ * P0 首版项③：100% 检视必须对应原始分辨率，不能把代理帧放大冒充 100%。引擎按像素预算
+ * （4K UHD）出代理帧：源 ≤ 预算时 frame==src（不降采样），> 预算时 frame < src（降过位）。
+ * “1:1 物理像素”只保证 1 个代理像素 = 1 个屏幕像素；代理被降采样时，那一屏像素盖住的
+ * 是多于一个源像素，看着是 100%、其实不是原始分辨率。这一位就是拦住这种冒充的判据：
+ * true 才可在 UI 上称“原始分辨率 1:1”；false 时必须显式标注为代理档（真全分辨率渲染
+ * 需引擎按需出精帧，属 GPU 端到端范畴）。小容差吸收 ALIGN 对齐的 ±几像素。
+ */
+export function proxyIsNativeResolution(
+  frameW: number, frameH: number, srcW: number, srcH: number, tol = 0.02): boolean {
+  if (!(frameW > 0) || !(frameH > 0) || !(srcW > 0) || !(srcH > 0)) return false;
+  return frameW * (1 + tol) >= srcW && frameH * (1 + tol) >= srcH;
+}
