@@ -932,14 +932,17 @@ def write_file(rgb: np.ndarray, path: str, *, quality: int = 95,
     img = Image.fromarray(np.ascontiguousarray(rgb), "RGB")
     kw = {}
     icc = _profile_bytes(output_profile, source_icc)
-    # P1-3：目标档与 sRGB 工作空间不同就先真转色再嵌档（同档/无档恒等，默认路径逐字节不变）。
-    # 判据必须与下面 `if icc: kw["icc_profile"]=icc` 严格同域：凡是嵌档的 RGB 光栅导出都要转色，
-    # 否则该格式就退回 F03「贴了 AdobeRGB 名却没转、色管按错空间解释同一批 sRGB 数值」的行为。
+    # P1-3/ADR-0023 决策一：工作空间恒 sRGB。导出到一个**命名的非 sRGB 目标档**（adobergb/display_p3/真实
+    # .icc 路径）时，必须先把像素 sRGB→目标转一遍再嵌档；同档(srgb)/无档恒等，默认路径逐字节不变。
+    # 但 output_profile=source 不同：decode 不做输入色管，像素就是源文件自己的编码值，贴源档即忠实；
+    # 若再 sRGB→source 转一遍，对非 sRGB 源就是二次转换（颜色真错）。所以 source 透传不转。
     color_intent = None
     color_converted = False
-    if icc:
+    if icc and str(output_profile).lower() != "source":
         img, color_intent = _convert_srgb_to_profile(img, icc)
         color_converted = color_intent != "srgb_identity"
+    elif icc:                       # source 透传：像素已携源档值，不转（ADR-0023）
+        color_intent = "source_passthrough"
     if icc:
         kw["icc_profile"] = icc
     exif, exif_facts = _filter_exif(source_exif, bool(metadata_include_gps))

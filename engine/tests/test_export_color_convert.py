@@ -107,6 +107,22 @@ def test_unknown_intent_raises():
 
 
 @need_adobe
+def test_output_profile_source_passes_through_without_transform(tmp_path):
+    """ADR-0023 决策一：output_profile=source 不能转色。decode 不做输入色管，像素就是源编码值，
+    再 sRGB→source 转一遍对非 sRGB 源就是二次转换（颜色真错）。本例钉：source 透传像素逐字节不变，
+    但嵌的是源档；而显式目标档(同一 AdobeRGB)则必须转——两者行为不同才说明区分到位。"""
+    from PIL import Image
+    adobe = open(ADOBE, "rb").read()
+    src_png = str(tmp_path / "src.png")
+    info = write_file(_saturated(), src_png, output_profile="source", source_icc=adobe)
+    assert info["color_converted"] is False
+    assert info["color_intent"] == "source_passthrough"
+    assert info["icc_bytes"] > 0            # 源档确实嵌进去了
+    # 透传：落盘像素 == 输入像素（没被 sRGB→AdobeRGB 二次转换）
+    assert np.array_equal(np.asarray(Image.open(src_png).convert("RGB")), _saturated())
+
+
+@need_adobe
 def test_webp_export_to_other_gamut_also_converts(tmp_path):
     """F03 的转色必须覆盖每一个会嵌档的 RGB 光栅格式。webp 也嵌 icc_profile，
     曾因转换护栏只写 jpg/png/tif 而漏了它——那样 webp 会“只贴标签不转色”（F03 残留）。
