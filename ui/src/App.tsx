@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import Viewer, { VIEW_HOME, type Hud } from "./components/Viewer";
+import Viewer, { VIEW_HOME, type CompareMode, type Hud, type View } from "./components/Viewer";
 import RegistryPanel from "./components/RegistryPanel";
 import RetouchPanel from "./components/RetouchPanel";
+import CropModal from "./components/CropModal";
+import { TOOLS, TOOL_CATEGORIES } from "./spec";
 import { REGISTRY, keyOf, sectionTitleOf, type SectionId } from "./p0";
 import { clickRle } from "./brush";
 import { t, type MsgKey } from "./i18n";
@@ -11,7 +13,7 @@ import {
   benchStart, benchStats, engineStatus, loadImage, m0Env, parseFrameHead, peekFrame,
   faceStateOf, enhanceStateOf,
   quit, report, runDeform, runEnhance, runFace,
-  fetchFilmstrip, runExport, runGrade, runHistory, runInpaint, runLight, runLut, runPick, runSession, runBackground,
+  fetchFilmstrip, runExport, runGrade, runHistory, runHsl, runInpaint, runLight, runLut, runPick, runSession, runBackground,
   runBatch, runCrop, runExposure, runPreset, runPrecompute, runProject, runTask,
   setCompare, setStrength, shutdownEngine, startEngine,
   type BenchOptions, type DeformInfo, type DocState, type EngineRuntime, type EngineStatus, type EnhanceInfo, type ExportDone,
@@ -220,7 +222,38 @@ export default function App() {
   const [appliedPreset, setAppliedPreset] = useState("");
   const [syncScopeLabel, setSyncScopeLabel] = useState("");
   // 视口平移/缩放（只属于显示：导出写的仍是引擎那一份像素）
-  const [view, setView] = useState({ zoom: 1, x: 0, y: 0 });
+  const [view, setView] = useState<View>({ ...VIEW_HOME });
+  /** Fit 倍率由视口算（它才知道画布与帧尺寸）；100% = 1/(dpr*fitScale) */
+  const [fitScale, setFitScale] = useState(1);
+  /** 当前是不是「1:1 物理像素」档：它必须随 fitScale 重算，否则改窗口大小就会
+   *  从 100% 漂成 119%（4K 验收时量到过）。自由缩放/滚轮一进来就退出这一档。 */
+  const [oneToOne, setOneToOne] = useState(false);
+  // 工作区：项目管理 / 图库 / 精修（默认）/ 创意 / 批量导出。
+  // 五档对应《工作流规格.json》47238「工作区信息架构」：主页管理项目，项目内切换
+  // 图库、精修、创意，默认精修；导出列表是全局入口。
+  const [workspace, setWorkspace] = useState<
+    "projects" | "library" | "retouch" | "creative" | "export"
+  >("retouch");
+  // 裁剪/旋转模态（P0 lnx.crop.v1）
+  const [cropOpen, setCropOpen] = useState(false);
+  // 图库的「已导出」：只认引擎 export_done 里真的写出去的那几张
+  const [exported, setExported] = useState<Set<string>>(new Set());
+  // 项目管理：最近工程只记用户真开过的路径（本机 localStorage，不上传）
+  const [recentProjects, setRecentProjects] = useState<
+    { path: string; name: string; at: number }[]
+  >(() => {
+    try {
+      const raw = localStorage.getItem("lrt.recentProjects");
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  // 对比：单视图 / 并排 / 卷帘；按住空格是单视图里的临时对比
+  const [compareMode, setCompareMode] = useState<CompareMode>("single");
+  const [swipe, setSwipe] = useState(0.5);
+  const [captureToken, setCaptureToken] = useState(0);
+  const [hasOriginal, setHasOriginal] = useState(false);
+  // 人物属性栏：所有人（联动）或某一张脸（独立）。索引来自引擎的 face.index。
+  const [faceScope, setFaceScope] = useState<"all" | number>("all");
   // 工程与任务面（读只读引擎报的那两份，前端不记“存过了”）
   const [projName, setProjName] = useState("");
   const [projErr, setProjErr] = useState("");
@@ -380,6 +413,11 @@ export default function App() {
         if (key !== docKey.current) {
           docKey.current = key;
           applyDocState(st.image.doc_state, "image_ready");
+          // 换图 = 回到适应窗口、回到所有人；对比的原图快照作废重取
+          setOneToOne(false);
+          setView(VIEW_HOME);
+          setFaceScope("all");
+          setHasOriginal(false);
         }
       } else {
         setHistRep(null);
@@ -1524,6 +1562,175 @@ export default function App() {
           })}`);
         }
       }
+      // 1.12 规格工作台（$LRT_AUTO_SPEC=<JSON>）：用户那四条验收动作一次跑完。
+      // 这一臂量的是**宿主桥 + 引擎 + 屏幕**三层同时成立：runExposure/runHsl/
+      // setStrength/runDeform/runCrop 走的就是面板滑块那条链（中间隔着 Rust 的
+      // 命令签名，Tauri 对不上名字时静默丢参），而 100% 视口与裁剪后的画面尺寸
+      // 只能拿用户看见的那一帧算。报告里的 toneDiff 是“命令全对而画面没动”的
+      // 照妖镜：像素差为 0 就说明这一轮白跑。
+      if (env.auto_spec) {
+        type SpecTour = {
+          exposure?: { ev?: number; temperature_shift?: number; tint_shift?: number;
+                       contrast?: number; highlights?: number; shadows?: number;
+                       saturation?: number };
+          hsl?: { band: number; dh?: number; ds?: number; dl?: number };
+          skin?: number;
+          deform?: Record<string, number>;
+          crop?: { rect: number[]; rotation?: number };
+          view?: "100" | "fit";
+        };
+        let tour: SpecTour | null = null;
+        try {
+          tour = JSON.parse(env.auto_spec) as SpecTour;
+        } catch (e) {
+          await report(`M0_ERROR 无法解析 LRT_AUTO_SPEC=${env.auto_spec}（要 JSON）：${e}`);
+        }
+        if (tour) {
+          const bads: string[] = [];
+          const got: Record<string, unknown> = {};
+          // 文档状态的“最新一份”只随 image_ready / session_state / history_state
+          // 到达。命令本身带的新状态盖不到 status 槽位，所以核对前先问一次
+          // history state（只读命令，不进撤销栈），再按 source 认这一条答复。
+          const refreshDoc = async (): Promise<DocState | null> => {
+            // 宿主的 doc_report 会一直留着上一条 history_state；只认 source 的话
+            // 第二次刷新会当场读到**上一笔**的 doc_state（4K 上裁剪那一臂撞过：
+            // 历史已经 5 步，crop 还是恒等）。doc_rev 是宿主每收一条状态就加的
+            // 序号，必须等它真的往前走。
+            const before = (await engineStatus().catch(() => null))?.doc_rev ?? 0;
+            try { await runHistory("state"); }
+            catch (e) { bads.push(`history state 失败：${e}`); return null; }
+            for (let i = 0; i < 60; i++) {
+              await sleep(100);
+              const st = await engineStatus().catch(() => null);
+              if ((st?.doc_rev ?? 0) > before
+                  && st?.doc_report?.source === "history_state") {
+                return st.doc_report.doc_state;
+              }
+            }
+            return null;
+          };
+          const home = await peek();
+          const homePix = home?.pixels ?? null;
+          if (!image) bads.push("LRT_AUTO_SPEC 需要 LRT_LOAD_IMAGE（不知道代理帧尺寸）");
+          const wantExp = tour.exposure;
+          if (wantExp) {
+            try { await runExposure("set", wantExp); }
+            catch (e) { bads.push(`exposure 命令失败：${e}`); }
+          }
+          if (tour.hsl) {
+            const { band, ...v } = tour.hsl;
+            try { await runHsl("set", band, v); }
+            catch (e) { bads.push(`hsl 命令失败：${e}`); }
+          }
+          if (tour.skin !== undefined) {
+            try { await setStrength(tour.skin); }
+            catch (e) { bads.push(`set_strength 失败：${e}`); }
+          }
+          if (tour.deform) {
+            try { await runDeform("set", tour.deform); }
+            catch (e) { bads.push(`deform 命令失败：${e}`); }
+          }
+          const d1 = await refreshDoc();
+          if (!d1) bads.push("刷新文档状态失败（history_state 没回来）");
+          if (d1 && wantExp) {
+            const bad = Object.entries(wantExp).filter(([k, v]) =>
+              Math.abs(Number((d1.exposure as unknown as Record<string, number>)[k])
+                - Number(v)) > 1e-9).map(([k]) => k);
+            if (bad.length) bads.push(`曝光/影调这几位没到引擎：${bad.join(",")}`);
+            got.exposure = d1.exposure;
+          }
+          if (d1 && tour.hsl) {
+            const { band } = tour.hsl;
+            const b = d1.hsl?.bands ?? [];
+            const v = tour.hsl;
+            const okHsl = (v.dh === undefined || Math.abs(b[band * 3] - v.dh) < 1e-9)
+              && (v.ds === undefined || Math.abs(b[band * 3 + 1] - v.ds) < 1e-9)
+              && (v.dl === undefined || Math.abs(b[band * 3 + 2] - v.dl) < 1e-9);
+            if (!okHsl) bads.push(`八色 HSL 第 ${band + 1} 段没到引擎：${JSON.stringify(b.slice(band * 3, band * 3 + 3))}`);
+            got.hsl = { band, bands: b, lit: d1.hsl?.lit ?? null };
+          }
+          if (d1 && tour.skin !== undefined) {
+            if (Math.abs(d1.strength - tour.skin) > 1e-9) {
+              bads.push(`磨皮强度没到引擎：${d1.strength} != ${tour.skin}`);
+            }
+            got.skin = d1.strength;
+          }
+          if (d1 && tour.deform) {
+            const bad = Object.entries(tour.deform).filter(([k, v]) =>
+              Math.abs((d1.deform.amounts[k] ?? 0) - Number(v)) > 1e-9).map(([k]) => k);
+            if (bad.length) bads.push(`形变这几位没到引擎：${bad.join(",")}（没预计算？）`);
+            got.deform = d1.deform.amounts;
+          }
+          // 像素差：上面四层若真上屏，画面必须与导入时不同（裁剪之前量）
+          const tone = await peek();
+          let frameNow = tone;          // 视口 100% 要按**当前**帧宽算（裁剪后幅面变了）
+          const toneDiff = diffBytes(homePix, tone?.pixels ?? null);
+          got.toneDiff = toneDiff;
+          got.canvasBefore = home ? `${home.w}x${home.h}` : "";
+          got.canvasTone = tone ? `${tone.w}x${tone.h}` : "";
+          if (homePix && tone?.pixels && toneDiff === 0) {
+            bads.push("曝光/HSL/磨皮/瘦脸全报成功，但画面逐字节没变");
+          }
+          // 裁剪 + 旋转（cmd_crop）：状态必须原样落到引擎
+          if (tour.crop) {
+            const errPre = (await engineStatus().catch(() => null))?.last_error ?? "";
+            try { await runCrop("set", tour.crop.rect, tour.crop.rotation ?? 0); }
+            catch (e) { bads.push(`crop 命令失败：${e}`); }
+            // 命令回执只说明“发出去了”。引擎整条拒（跑靶互斥、量程、渲染失败）
+            // 会写 last_error 而不抛异常——把那一句原样带进报告，别让失败只剩
+            // “crop 还是恒等”这种二手读数。
+            const errPost = (await engineStatus().catch(() => null))?.last_error ?? "";
+            if (errPost && errPost !== errPre) got.cropErr = errPost;
+            const d2 = await refreshDoc();
+            if (d2) {
+              const bad = (d2.crop.rect ?? []).some((r, i) =>
+                Math.abs(r - tour.crop!.rect[i]) > 1e-6);
+              if (bad || Math.abs((d2.crop.rotation_degrees ?? 0)
+                - (tour.crop.rotation ?? 0)) > 1e-6) {
+                bads.push(`裁剪/旋转没到引擎：${JSON.stringify(d2.crop.rect)}@${d2.crop.rotation_degrees}`
+                  + (got.cropErr ? `（引擎：${String(got.cropErr).slice(0, 160)}）` : "（引擎没报错）"));
+              }
+              got.crop = { rect: d2.crop.rect, rot: d2.crop.rotation_degrees,
+                           out: d2.crop.crop_out ?? null, outFull: d2.crop.out_full ?? null };
+            }
+            await sleep(400);
+            const cropped = await peek();
+            frameNow = cropped;
+            got.canvasCrop = cropped ? `${cropped.w}x${cropped.h}` : "";
+          }
+          // 100% 视口：视口把 fitScale 画在自己的 DOM 上（data-fit-scale），
+          // 探针按它反推真 1:1，而不是等一个 React state（这个 effect 的闭包是
+          // 首帧那份，读到的 fitScale 永远是 1）。
+          if (tour.view === "100" && image) {
+            const clip = document.querySelector<HTMLElement>(".mirrorClip");
+            const fit = Number(clip?.getAttribute("data-fit-scale") ?? 0);
+            const fw = Number((clip?.getAttribute("data-frame") ?? "").split("x")[0]
+              || frameNow?.w || image.w);
+            const dpr = window.devicePixelRatio || 1;
+            if (!(fit > 0) || !(fw > 0)) bads.push("视口没报 fitScale/frame：算不出 100%");
+            else { setOneToOne(true);
+                   setView({ zoom: 1 / Math.max(1e-6, dpr * fit), x: 0, y: 0, fit: false }); }
+            await sleep(600);
+            got.zoom = (document.querySelector(".zoomRead")?.textContent ?? "").trim();
+            got.fitScale = +fit.toFixed(4);
+            got.frameW = fw;
+            if (!/^10[0-2]%$/.test(String(got.zoom))) {
+              bads.push(`100% 视口没落到读数上：${String(got.zoom)}`);
+            }
+          }
+          // 画质：任何画布/图片都不许挂 pixelated（马赛克那条的现场证据）
+          got.pixelated = Array.from(document.querySelectorAll<HTMLElement>("canvas,img"))
+            .filter((el) => getComputedStyle(el).imageRendering === "pixelated").length;
+          if (got.pixelated) bads.push(`有 ${got.pixelated} 个画布在 pixelated 重采样`);
+          // 面板事实：39 族 / 805 项 / 八色 chips / 真滑块数
+          got.families = document.querySelectorAll("[data-spec-family]").length;
+          got.specControls = Number(document.querySelector("[data-spec-controls]")
+            ?.getAttribute("data-spec-controls") ?? 0);
+          got.hslChips = document.querySelectorAll(".hslChips .hslChip").length;
+          got.sliders = document.querySelectorAll("aside .pslider input[type=range]").length;
+          await report(`M0_SPEC ${JSON.stringify({ bads, ...got })}`);
+        }
+      }
       // 分人编辑（LNX-PORTRAIT-003）自动通道（$LRT_AUTO_FACE=<要选的 index>）。
       // 库里那九段判据连的是裸引擎，中间隔着 Rust 的 face 命令与宿主的状态搬运——那两层
       // 只有真窗口能证明。这一臂量四件事：①未选定就推形变，引擎整条拒（SCOPE-001）而画面
@@ -2157,6 +2364,11 @@ export default function App() {
         })}`);
       }
       await report(`M0_HUD ${JSON.stringify({ ...hudRef.current, active: true })}`);
+      if (env.keep_open === "1") {
+        // 取证臂：自动序列已经跑完，窗口留着给截图/人工核对。
+        await report("M0_KEEP_OPEN 1");
+        return;
+      }
       await sleep(300);
       await quit().catch(() => undefined);
     })();
@@ -2463,6 +2675,94 @@ export default function App() {
     setComparing(false);
     await setCompare(false).catch((err) => { setDragNote(String(err)); });
   }
+
+  /** 并排/卷帘要一张“原图”快照：开 compare 取一帧，再关掉让精修帧继续实时流。
+   *  快照由视口在 captureToken 变化后的下一帧写入；取不到就退回单视图，绝不留
+   *  一张“并排里两半都是精修”的假对比。 */
+  useEffect(() => {
+    if (workspace !== "retouch" || compareMode === "single" || !status?.image) {
+      setHasOriginal(false);
+      return;
+    }
+    if (!pid) return;
+    let dead = false;
+    setHasOriginal(false);
+    (async () => {
+      try {
+        await setCompare(true);
+        await sleep(180);
+        if (!dead) setCaptureToken((v) => v + 1);
+        await sleep(1200);
+        if (!dead) await setCompare(false).catch(() => undefined);
+      } catch {
+        if (!dead) setCompareMode("single");
+      }
+    })();
+    return () => {
+      dead = true;
+      void setCompare(false).catch(() => undefined);
+    };
+  }, [compareMode, workspace, status?.image, pid, strip?.current]);
+
+  const onOriginalCaptured = useCallback(() => {
+    setHasOriginal(true);
+    void setCompare(false).catch(() => undefined);
+  }, []);
+
+  /** 视口/顶栏的缩放：Fit 与真正的 100%（1 图像像素 = 1 屏幕像素）。 */
+  function zoomFit() { setOneToOne(false); setView({ ...VIEW_HOME }); }
+  function zoomOne() {
+    const dpr = window.devicePixelRatio || 1;
+    setOneToOne(true);
+    setView({ zoom: 1 / Math.max(1e-6, dpr * fitScale), x: 0, y: 0, fit: false });
+  }
+  // Fit 倍率随画布尺寸变；「100%」是把 zoom 存成相对 Fit 的倍率，所以窗口一改
+  // 大小就得重算。只算一次的话，4K 上把窗口拉大后徽标会写 119%（图不是 1:1 了）。
+  useEffect(() => {
+    if (!oneToOne) return;
+    const dpr = window.devicePixelRatio || 1;
+    setView((v) => ({ ...v, zoom: 1 / Math.max(1e-6, dpr * fitScale) }));
+  }, [oneToOne, fitScale]);
+  const zoomPct = view.fit
+    ? `${Math.round(fitScale * 100)}%`
+    : `${Math.round(view.zoom * fitScale * (window.devicePixelRatio || 1) * 100)}%`;
+
+  /** 底片条的评分/色标：落在工程记录的 tags/label 上（不碰原图）。
+   *  评分用保留标签 `rating:N`；色标用 label（红/黄/绿/蓝/紫）。 */
+  const ratingOf = (d: SessionDoc) => {
+    const hit = (d.tags ?? []).find((x) => /^rating:[0-5]$/.test(x));
+    return hit ? Number(hit.slice(7)) : 0;
+  };
+  async function setRating(d: SessionDoc, n: number) {
+    const next = ratingOf(d) === n ? 0 : n;
+    const tags = (d.tags ?? []).filter((x) => !x.startsWith("rating:"));
+    if (next > 0) tags.push(`rating:${next}`);
+    try {
+      await runProject("tag", { doc: d.path, tags, label: d.label ?? "" });
+      await refreshStatus();
+    } catch (e) { setDragNote(String(e)); }
+  }
+  async function cycleFlag(d: SessionDoc) {
+    const order = ["", "红", "黄", "绿", "蓝", "紫"];
+    const cur = order.indexOf(d.label ?? "");
+    const next = order[(cur + 1) % order.length];
+    try {
+      await runProject("tag", { doc: d.path, tags: d.tags ?? [], label: next });
+      await refreshStatus();
+    } catch (e) { setDragNote(String(e)); }
+  }
+  const FLAG_COLOR: Record<string, string> = {
+    "红": "#e06c6c", "黄": "#e3c176", "绿": "#7bbf8a", "蓝": "#6f9fd8", "紫": "#b48ad8",
+  };
+  /** 图库三种标识都必须是真事实：RAW 看源后缀或相机预览，已编辑看工程里那几层，
+   *  已导出看 export_done 的 out 字段。前端不按“看起来像”猜。 */
+  const RAW_RE = /\.(dng|cr2|cr3|nef|arw|raf|orf|rw2|pef|srw|3fr|x3f|rwl|iiq)$/i;
+  const isRawDoc = (d: SessionDoc) => RAW_RE.test(d.path) || !!d.thumb?.preview;
+  const isEditedDoc = (d: SessionDoc) => {
+    const e = d.edits;
+    return e.repair > 0 || e.light > 0 || e.deform || e.lut || e.grade
+      || !!e.enhance || !!e.channel;
+  };
   // 指针在窗口外松开、或按住时切走窗口：pointerup 可能永远不来，那样画面会停在原图。
   // 所以这三条兜底不是装饰——"松开没回来"比没有对比按钮更糟。
   useEffect(() => {
@@ -2924,7 +3224,8 @@ export default function App() {
       // 两帧之后再量：首帧还在布局，量到的矩形可能是 0
       await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
       const card = document.querySelector(".emptyCard") as HTMLElement | null;
-      const stage = document.querySelector(".stage") as HTMLElement | null;
+      const stage = (document.querySelector(".stageBody")
+        ?? document.querySelector(".stage")) as HTMLElement | null;
       const btn = document.querySelector(".topbar .openPhoto") as HTMLElement | null;
       const brand = document.querySelector(".topbar .brand") as HTMLElement | null;
       const cr = card?.getBoundingClientRect();
@@ -2938,7 +3239,13 @@ export default function App() {
         hud: !!document.querySelector(".hud"),
         bars: document.querySelectorAll(".gallery .bar").length,
         groups: Array.from(document.querySelectorAll(".side .pg > summary"))
-          .map((x) => x.textContent?.trim() ?? ""),
+          .map((x) => (x.querySelector("span")?.textContent
+            ?? x.textContent ?? "").trim()),
+        // 39 族 / 805 项：功能清单的唯一出处是 ui/src/spec/refine.json
+        families: Array.from(document.querySelectorAll(".side [data-spec-family]"))
+          .map((x) => (x as HTMLElement).dataset.specFamily ?? ""),
+        specControls: (document.querySelector(".retouch") as HTMLElement | null)
+          ?.dataset.specControls ?? "",
         // 相对所在容器量：.stage 才是视口的容器（顶栏与右栏不归它管）
         dx: cr && sr ? Math.round(cr.left + cr.width / 2 - (sr.left + sr.width / 2)) : null,
         dy: cr && sr ? Math.round(cr.top + cr.height / 2 - (sr.top + sr.height / 2)) : null,
@@ -3290,89 +3597,521 @@ export default function App() {
   // 而不是当成"没在跑"——那会把刚起好的引擎显示成已死。
   const engineAlive = status?.engine_alive ?? !!pid;
 
+  /** 图库的「已导出」：只认 export_done 里 out 真写出来的那些源图。 */
+  useEffect(() => {
+    const done = status?.export;
+    if (!done?.images?.length) return;
+    setExported((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      for (const img of done.images) {
+        if (img.path && img.out && !img.error && !next.has(img.path)) {
+          next.add(img.path);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [status?.export]);
+
+  /** 最近工程落本机（只存路径与名字，不存照片内容）。 */
+  function rememberProject(path: string, name: string) {
+    setRecentProjects((prev) => {
+      const next = [{ path, name, at: Date.now() },
+        ...prev.filter((p) => p.path !== path)].slice(0, 8);
+      try { localStorage.setItem("lrt.recentProjects", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+
+  async function afterProjectChange() {
+    await refreshStatus();
+    const st = await engineStatus().catch(() => null);
+    const pj = st?.project;
+    if (pj?.open && pj.path) rememberProject(pj.path, pj.name ?? "");
+  }
+
+  async function openRecentProject(path: string, name: string) {
+    try {
+      await runProject("open", { path });
+      await refreshStatus();
+      rememberProject(path, name);
+      setWorkspace("retouch");
+    } catch (e) {
+      setProjErr(String(e));
+    }
+  }
+
   return (
-    <div className="app">
+    <div className={"app ws-" + workspace}>
       <header className="topbar">
         <span className="brand">LumaRetouch</span>
-        <button className="tb openPhoto" onClick={() => void openAndImport()} disabled={busy}>
+        <button className="tb openPhoto"
+                onClick={() => { setWorkspace("retouch"); void openAndImport(); }}
+                disabled={busy}>
           打开照片
         </button>
-        <button className={comparing ? "tb on" : "tb"}
-                onPointerDown={(e) => { void cmpOn(e); }}
-                onPointerUp={() => { void cmpOff(); }}
-                onLostPointerCapture={() => { void cmpOff(); }}
-                disabled={!hasImage}
-                title="按住查看原图（也可以按住空格）">
-          按住空格看原图
-        </button>
-        <button className="zoom" title="回到 100%" onClick={() => setView(VIEW_HOME)}>
-          {Math.round(view.zoom * 100)}%
-        </button>
-        <button className="tb primary exportBtn" onClick={onExport}
-                disabled={!hasImage || exporting}>
-          {exporting ? "导出中…" : "导出照片"}
+        <nav className="wsTabs" aria-label="工作区">
+          <button className={workspace === "projects" ? "on" : ""}
+                  onClick={() => setWorkspace("projects")}>项目管理</button>
+          <button className={workspace === "library" ? "on" : ""}
+                  onClick={() => setWorkspace("library")}>图库</button>
+          <button className={workspace === "retouch" ? "on" : ""}
+                  onClick={() => setWorkspace("retouch")}>精修</button>
+          <button className={workspace === "creative" ? "on" : ""}
+                  onClick={() => setWorkspace("creative")}>创意</button>
+          <button className={workspace === "export" ? "on" : ""}
+                  onClick={() => setWorkspace("export")}>批量导出</button>
+        </nav>
+        <span className="topHint">
+          {hasImage ? (strip?.current?.split("/").pop() ?? "当前照片") : "本地 · 离线"}
+        </span>
+        <button className="tb primary exportBtn"
+                onClick={() => setWorkspace("export")}
+                disabled={!hasImage}>
+          导出照片
         </button>
       </header>
 
-      <aside className="side">
-        <RetouchPanel status={status} doc={doc} hasImage={hasImage}
-                      faceOk={faceOk} faceWhy={faceWhy}
-                      note={setDragNote} onDone={refreshStatus} />
-      </aside>
+      {workspace === "retouch" && (
+        <aside className="side">
+          <RetouchPanel status={status} doc={doc} hasImage={hasImage}
+                        faceOk={faceOk} faceWhy={faceWhy}
+                        note={setDragNote} onDone={refreshStatus}
+                        thumb={strip?.current ? thumbs[strip.current] : undefined}
+                        faceScope={faceScope} onFaceScope={setFaceScope}
+                        brush={{ on: brushOn, mode: brushMode, radius: brushRadius }}
+                        onBrush={(patch) => {
+                          if (patch.on !== undefined) setBrushOn(patch.on);
+                          if (patch.mode) setBrushMode(patch.mode);
+                          if (patch.radius !== undefined) setBrushRadius(patch.radius);
+                        }}
+                        onOpenCrop={() => setCropOpen(true)}
+                        onFaceAdd={() => {
+                          setPickFace(true);
+                          setDragNote("在画面里拖一个框：松手后引擎在这个框上再跑一次人脸检测");
+                        }}
+                        faceAdding={pickFace} />
+        </aside>
+      )}
 
       <main className="stage">
-        <Viewer
-          view={view} onView={setView}
-          paintLocked={view.zoom !== 1 || view.x !== 0 || view.y !== 0}
-          active={!!pid}
-          skipDraw={skipDraw}
-          upload={upload}
-          ctxOpt={ctxOpt}
-          mirrorOn={mirrorOn}
-          glVisible={glVisible}
-          chunks={chunks}
-          brush={{ on: brushOn && !!status?.image, radius: brushRadius, onStroke }}
-          pick={{ on: pickFace && !!status?.image && !brushOn, onRect: onPickFaceRect }}
-          onHud={setHud}
-        />
-        {!hasImage && (
-          <div className="emptyStage" role="button" tabIndex={0} aria-busy={busy}
-               aria-label={t("empty.open")}
-               onClick={() => void openAndImport()}
-               onKeyDown={(e) => {
-                 if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void openAndImport(); }
-               }}>
-            <div className="emptyCard">
-              <div className="emptyTitle">{busy ? "正在打开…" : t("empty.open")}</div>
-              <div className="emptyHint">{t("empty.hint")}</div>
+        {workspace === "retouch" && (
+          <>
+            <div className="stageTools">
+              <div className="seg">
+                <button className={view.fit ? "on" : ""} onClick={zoomFit}
+                        title="适应窗口">适合</button>
+                <button className={oneToOne ? "on" : ""} onClick={zoomOne}
+                        title="1 图像像素 = 1 屏幕像素">100%</button>
+                <span className="zoomRead">{zoomPct}</span>
+              </div>
+              <div className="seg">
+                <button className={compareMode === "single" ? "on" : ""}
+                        onClick={() => setCompareMode("single")}>单视图</button>
+                <button className={compareMode === "split" ? "on" : ""}
+                        onClick={() => setCompareMode("split")}
+                        disabled={!hasImage}>并排对比</button>
+                <button className={compareMode === "swipe" ? "on" : ""}
+                        onClick={() => setCompareMode("swipe")}
+                        disabled={!hasImage}>卷帘分屏</button>
+                <button className={comparing ? "on" : ""}
+                        onPointerDown={(e) => { void cmpOn(e); }}
+                        onPointerUp={() => { void cmpOff(); }}
+                        onLostPointerCapture={() => { void cmpOff(); }}
+                        disabled={!hasImage || compareMode !== "single"}
+                        title="按住查看原图（也可以按住空格）">按住看原图</button>
+              </div>
+              <div className="seg">
+                <button onClick={() => setCropOpen(true)} disabled={!hasImage}
+                        title="裁剪与旋转（P0 lnx.crop.v1）">裁剪</button>
+                {doc?.crop?.lit && (
+                  <span className="zoomRead">
+                    {doc.crop.out_full
+                      ? `${doc.crop.out_full[0]}×${doc.crop.out_full[1]}`
+                      : "已裁剪"}
+                  </span>
+                )}
+              </div>
+              <span className={"cmpWait" + (compareMode !== "single" && !hasOriginal ? " on" : "")}>
+                {compareMode !== "single" ? (hasOriginal ? "原图已就绪" : "正在取原图…") : ""}
+              </span>
             </div>
-          </div>
-        )}
-        {(pathErr || exportErr || dragNote) && (
-          <div className="toast">{exportErr || pathErr || dragNote}</div>
+            <div className="stageBody">
+              <Viewer
+                view={view} onView={(v) => {
+                  // 滚轮/捏合改了倍率就退出 1:1；平移不算，仍是同一像素密度
+                  if (v.fit || v.zoom !== view.zoom) setOneToOne(false);
+                  setView(v);
+                }}
+                paintLocked={!view.fit || view.zoom !== 1 || view.x !== 0 || view.y !== 0}
+                active={!!pid}
+                skipDraw={skipDraw}
+                upload={upload}
+                ctxOpt={ctxOpt}
+                mirrorOn={mirrorOn}
+                glVisible={glVisible}
+                chunks={chunks}
+                brush={{ on: brushOn && !!status?.image, radius: brushRadius, onStroke }}
+                pick={{ on: pickFace && !!status?.image && !brushOn, onRect: onPickFaceRect }}
+                onHud={setHud}
+                compareMode={compareMode}
+                swipe={swipe}
+                onSwipe={setSwipe}
+                captureToken={captureToken}
+                onOriginalCaptured={onOriginalCaptured}
+                onFitScale={setFitScale}
+              />
+              {!hasImage && (
+                <div className="emptyStage" role="button" tabIndex={0} aria-busy={busy}
+                     aria-label={t("empty.open")}
+                     onClick={() => void openAndImport()}
+                     onKeyDown={(e) => {
+                       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void openAndImport(); }
+                     }}>
+                  <div className="emptyCard">
+                    <div className="emptyTitle">{busy ? "正在打开…" : t("empty.open")}</div>
+                    <div className="emptyHint">{t("empty.hint")}</div>
+                  </div>
+                </div>
+              )}
+              {(pathErr || exportErr || dragNote) && (
+                <div className="toast">{exportErr || pathErr || dragNote}</div>
+              )}
+            </div>
+
+            {strip && strip.count > 0 && (
+              <section className="gallery">
+                <div className="strip">
+                  {strip.docs.map((d) => {
+                    const rate = ratingOf(d);
+                    const flag = d.label ?? "";
+                    return (
+                      <div key={d.path}
+                           className={"cell" + (d.loaded ? " on" : "")
+                             + (sel.has(d.path) ? " sel" : "") + (d.trashed ? " trashed" : "")}
+                           role="button" tabIndex={0}
+                           title={d.name}
+                           onClick={(e) => onCellClick(e as unknown as React.MouseEvent, d.index, d.path)}
+                           onKeyDown={(e) => {
+                             if (e.key === "Enter") onPickDoc(d.index);
+                           }}>
+                        {d.thumb && thumbs[d.path] ? (
+                          <img alt={d.name} width={d.thumb.w} height={d.thumb.h}
+                               src={`data:image/jpeg;base64,${thumbs[d.path]}`} />
+                        ) : (
+                          <span className="ph">…</span>
+                        )}
+                        <span className="cellFlag"
+                              style={flag && FLAG_COLOR[flag] ? { background: FLAG_COLOR[flag] } : undefined}
+                              title={flag ? `色标：${flag}（点击更换）` : "色标（点击设置）"}
+                              onClick={(e) => { e.stopPropagation(); void cycleFlag(d); }} />
+                        <span className="cellStars" onClick={(e) => e.stopPropagation()}>
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <button key={n} className={n <= rate ? "on" : ""}
+                                    title={`${n} 星（再点一次清零）`}
+                                    onClick={() => void setRating(d, n)}>★</button>
+                          ))}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+          </>
         )}
 
-        {strip && strip.count > 0 && (
-          <section className="gallery">
-            <div className="strip">
-              {strip.docs.map((d) => (
-                <button key={d.path}
-                        className={"cell" + (d.loaded ? " on" : "")
-                          + (sel.has(d.path) ? " sel" : "") + (d.trashed ? " trashed" : "")}
-                        title={d.name}
-                        onClick={(e) => onCellClick(e, d.index, d.path)}>
-                  {d.thumb && thumbs[d.path] ? (
-                    <img alt={d.name} width={d.thumb.w} height={d.thumb.h}
-                         src={`data:image/jpeg;base64,${thumbs[d.path]}`} />
-                  ) : (
-                    <span className="ph">…</span>
-                  )}
+        {workspace === "projects" && (
+          <section className="projects">
+            <div className="projHead">
+              <div>
+                <h2>项目管理</h2>
+                <span>{project?.open
+                  ? `${project.name ?? "未命名工程"} · ${project.docs ?? 0} 张 · ${project.dirty ? "有未保存修改" : "已保存"}`
+                  : "尚未打开工程 · 新建或打开一个本地工程"}</span>
+              </div>
+              <button className="chip" disabled={!project?.open}
+                onClick={() => { void runProject("save").then(() => refreshStatus()); }}>
+                保存工程
+              </button>
+            </div>
+            <div className="projGrid">
+              <div className="projCard">
+                <h3>新建项目</h3>
+                <label>项目名
+                  <input value={projName} onChange={(e) => setProjName(e.target.value)}
+                    placeholder="例：2026 秋 婚礼跟拍" />
+                </label>
+                <button className="tb primary"
+                  onClick={async () => { await p0action("lnx.project.v1.create"); await afterProjectChange(); }}>
+                  选择目录并新建
                 </button>
-              ))}
+                <p>工程是单文件 JSON（{projSuffix}），原片只读，编辑写工程记录。</p>
+              </div>
+              <div className="projCard">
+                <h3>打开工程</h3>
+                <button className="tb"
+                  onClick={async () => { await p0action("lnx.project.v1.open"); await afterProjectChange(); }}>
+                  浏览并打开工程文件
+                </button>
+                <button className="tb" disabled={!hasImage}
+                  onClick={() => setWorkspace("retouch")}>进入精修</button>
+                <p>换工程前请先保存：未保存的修改会被引擎拦住，不会静默丢失。</p>
+              </div>
+              <div className="projCard">
+                <h3>最近工程</h3>
+                {recentProjects.length ? (
+                  <ul className="recentList">
+                    {recentProjects.map((p) => (
+                      <li key={p.path}>
+                        <button title={p.path}
+                          onClick={() => void openRecentProject(p.path, p.name)}>
+                          <b>{p.name}</b><span>{p.path}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p>还没有打开过工程。</p>}
+              </div>
+            </div>
+            {projErr && <div className="projErr">{projErr}</div>}
+          </section>
+        )}
+
+        {workspace === "library" && (
+          <section className="library">
+            <div className="libHead">
+              <div>
+                <h2>图库</h2>
+                <span>{strip?.count ?? 0} 张照片{sel.size ? ` · 已选 ${sel.size}` : ""}</span>
+              </div>
+              <button className="chip" onClick={() => void openAndImport()}>
+                打开照片
+              </button>
+            </div>
+            {strip && strip.docs.length > 0 ? (
+              <div className="libGrid">
+                {strip.docs.map((d) => (
+                  <button key={d.path}
+                          className={"libCard" + (d.loaded ? " cur" : "")}
+                          onClick={() => { onPickDoc(d.index); setWorkspace("retouch"); }}>
+                    <span className="libThumb">
+                      {d.thumb && thumbs[d.path]
+                        ? <img alt={d.name} src={`data:image/jpeg;base64,${thumbs[d.path]}`} />
+                        : <span className="ph">…</span>}
+                    </span>
+                    <span className="libMeta">
+                      <span className="libName">{d.name}</span>
+                      <span className="libTags">
+                        {isRawDoc(d) && <em className="tag raw">RAW</em>}
+                        {isEditedDoc(d) && <em className="tag edited">已编辑</em>}
+                        {exported.has(d.path) && <em className="tag done">已导出</em>}
+                      </span>
+                      <span className="libStars">
+                        {"★".repeat(ratingOf(d))}{"☆".repeat(5 - ratingOf(d))}
+                      </span>
+                    </span>
+                    {d.label && FLAG_COLOR[d.label] && (
+                      <i className="libFlag" style={{ background: FLAG_COLOR[d.label] }} />
+                    )}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="libEmpty" role="button" tabIndex={0}
+                   onClick={() => void openAndImport()}
+                   onKeyDown={(e) => { if (e.key === "Enter") void openAndImport(); }}>
+                <b>打开照片，开始第一批精修</b>
+                <span>支持 JPEG / PNG / TIFF / WebP / DNG；原片只读，编辑写工程记录</span>
+              </div>
+            )}
+          </section>
+        )}
+
+        {workspace === "creative" && (
+          <section className="creativeView">
+            <div className="creativeHead">
+              <div>
+                <h2>创意</h2>
+                <span>{TOOLS.length} 个工具 · {TOOL_CATEGORIES.length} 个分类 ·
+                  画布与精修共用同一份文档与历史</span>
+              </div>
+              <button className="chip" disabled={!hasImage}
+                onClick={() => setWorkspace("retouch")}>回到画布</button>
+            </div>
+            <div className="creativeBody">
+              <div className="creativeCards">
+                {TOOL_CATEGORIES.map((cat) => (
+                  <div className="cGroup" key={cat}>
+                    <h3>{cat}<em>{TOOLS.filter((t) => t.category === cat).length}</em></h3>
+                    <div className="cCards">
+                      {TOOLS.filter((t) => t.category === cat).map((tool) => {
+                        const wired = tool.name.includes("智能消除");
+                        return (
+                          <button key={tool.id}
+                            className={"cCard" + (wired ? " on" : " off")}
+                            disabled={!wired || !hasImage}
+                            title={wired
+                              ? "在画布上用消除笔（引擎已接通的同一支画笔）"
+                              : `P1 规划中 · [${tool.id}]：创意工具页尚未接通后端`}
+                            onClick={() => {
+                              if (!wired) return;
+                              setWorkspace("retouch");
+                              setBrushMode("heal");
+                              setBrushOn(true);
+                            }}>
+                            <b>{tool.name}</b>
+                            <span>{(tool.interaction || tool.output || "").slice(0, 46)}</span>
+                            {!wired && <em>P1</em>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <aside className="layerPanel">
+                <h3>图层与历史</h3>
+                <ul>
+                  <li><span>基础图</span><em>只读</em></li>
+                  <li><span>高低频磨皮</span><em>{doc?.strength ? "已启用" : "未启用"}</em></li>
+                  <li><span>面部重塑</span><em>{Object.values(doc?.deform.amounts ?? {}).some((v) => v)
+                    ? "已启用" : "未启用"}</em></li>
+                  <li><span>色彩与风格</span><em>{doc?.lut.lit ? "LUT 已启用" : "未启用"}</em></li>
+                  <li><span>眼牙增强</span><em>{doc?.enhance?.built ? "已启用" : "未启用"}</em></li>
+                  <li><span>裁剪与旋转</span><em>{doc?.crop?.lit ? "已启用" : "未启用"}</em></li>
+                </ul>
+                <div className="layerHist">
+                  撤销 {doc?.history.undo_steps ?? 0} 步 · 重做 {doc?.history.redo_steps ?? 0} 步
+                </div>
+                <div className="layerHist">
+                  {strip?.docs.length ?? 0} 张在底片条 · 选中 {sel.size} 张
+                </div>
+              </aside>
+            </div>
+          </section>
+        )}
+
+        {workspace === "export" && (
+          <section className="exportView">
+            <div className="exportQueue">
+              <div className="qHead">
+                <h2>批量导出</h2>
+                <span>{exportTargets.length} 张 · {exporting
+                  ? `导出中 ${(status?.export_progress?.index ?? 0) + 1}/${status?.export_progress?.total ?? 0}`
+                  : status?.export
+                    ? `上一批 ${status.export.total} 张 · 失败 ${status.export.failed}`
+                    : "空闲"}</span>
+              </div>
+              {exporting && (
+                <div className="qBar"><i style={{ width: `${Math.round(
+                  ((status?.export_progress?.index ?? 0) + 1)
+                  / Math.max(1, status?.export_progress?.total ?? 1) * 100)}%` }} /></div>
+              )}
+              <div className="qList">
+                {exportTargets.length ? exportTargets.map((p) => {
+                  const d = strip?.docs.find((x) => x.path === p);
+                  const done = status?.export?.images?.find((i) => i.path === p);
+                  const now = status?.export_progress?.path === p;
+                  const state = done ? (done.error ? "失败" : "已完成")
+                    : now ? "导出中" : "待导出";
+                  return (
+                    <div className={"qRow" + (done ? (done.error ? " bad" : " ok") : "")}
+                         key={p}>
+                      <span className="qName">{d?.name ?? p.split("/").pop() ?? p}</span>
+                      <span className="qFmt">{exportBits16 ? "16-bit TIFF"
+                        : exportFormat.toUpperCase()}</span>
+                      <em>{state}</em>
+                    </div>
+                  );
+                }) : <div className="qEmpty">先在底片条或图库选择要导出的照片</div>}
+              </div>
+              <div className="qNote">水印、多目录分发与云端交付：P1 规划中 · [工作流 32483]</div>
+            </div>
+
+            <div className="exportCard">
+              <h2>导出设置</h2>
+              <div className="exGrid">
+                <label>格式
+                  <select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)}>
+                    <option value="jpg">JPEG</option>
+                    <option value="png">PNG</option>
+                    <option value="tif">TIFF</option>
+                    <option value="webp">WebP</option>
+                  </select>
+                </label>
+                <label>质量
+                  <input type="range" min={60} max={100} value={exportQuality}
+                         onChange={(e) => setExportQuality(+e.target.value)} />
+                  <em>{exportQuality}</em>
+                </label>
+                <label>尺寸
+                  <select value={exportScale} onChange={(e) => setExportScale(+e.target.value)}>
+                    <option value={1}>1× 原尺寸</option>
+                    <option value={2}>2×</option>
+                    <option value={3}>3×</option>
+                    <option value={4}>4×</option>
+                  </select>
+                </label>
+                <label>色彩空间 ICC
+                  <select value={exportProfile} onChange={(e) => setExportProfile(e.target.value)}>
+                    <option value="srgb">sRGB（嵌入 ICC）</option>
+                    <option value="source">跟随源文件 ICC</option>
+                    <option value="adobergb" disabled>AdobeRGB · P1 规划中</option>
+                    <option value="display_p3" disabled>Display P3 · P1 规划中</option>
+                  </select>
+                </label>
+                <label>同名冲突
+                  <select value={exportConflict} onChange={(e) => setExportConflict(e.target.value)}>
+                    <option value="skip_and_report">跳过并报告</option>
+                    <option value="recheck">重新检查</option>
+                  </select>
+                </label>
+                <label className="exCheck">
+                  <input type="checkbox" checked={exportBits16}
+                         onChange={(e) => setExportBits16(e.target.checked)} />
+                  16-bit TIFF
+                </label>
+                <label className="exCheck">
+                  <input type="checkbox" checked={exportGps}
+                         onChange={(e) => setExportGps(e.target.checked)} />
+                  写入 GPS
+                </label>
+                <label className="exCheck off" title="P1 规划中 · [工作流 32483]">
+                  <input type="checkbox" disabled /> 水印
+                </label>
+              </div>
+              <label className="exDir">输出目录
+                <input value={exportDir} onChange={(e) => setExportDir(e.target.value)} />
+              </label>
+              <div className="exFoot">
+                <span>{exportTargets.length > 1
+                  ? `本批 ${exportTargets.length} 张 · 按底片条记账`
+                  : "单张导出 · 原片只读"}</span>
+                <button className="tb primary" onClick={onExport}
+                        disabled={!hasImage || exporting}>
+                  {exporting ? "导出中…" : "开始导出"}
+                </button>
+              </div>
             </div>
           </section>
         )}
       </main>
+      <CropModal open={cropOpen}
+        imgW={status?.image?.w ?? 0} imgH={status?.image?.h ?? 0}
+        crop={doc?.crop ?? null}
+        onClose={() => setCropOpen(false)}
+        onApply={(rect, rot) => {
+          runCrop("set", rect, rot)
+            .then(() => { void refreshStatus(); setCropOpen(false); })
+            .catch((e) => setDragNote(String(e)));
+        }}
+        onClear={() => {
+          runCrop("clear")
+            .then(() => { void refreshStatus(); setCropOpen(false); })
+            .catch((e) => setDragNote(String(e)));
+        }} />
     </div>
   );
 }

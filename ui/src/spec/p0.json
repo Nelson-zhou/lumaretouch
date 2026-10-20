@@ -1,0 +1,949 @@
+{
+  "schema_version": "1.0",
+  "purpose": "P0最低参数及动作契约，非完整竞品参数表，非已实现注册表",
+  "null_semantics": "未知待决策；neutral=null不能解释为零，boolean语义也不可猜默认",
+  "identity_rule": "operation_id+parameter_key唯一；稳定ID不得按展示文本改名",
+  "entry_json_schema": {
+    "type": "object",
+    "required": [
+      "requirement_id",
+      "operation_id",
+      "parameter_key",
+      "type",
+      "unit",
+      "neutral",
+      "range",
+      "range_status",
+      "target_scope",
+      "enable_condition",
+      "source_category",
+      "decision_required",
+      "neutral_status"
+    ],
+    "properties": {
+      "requirement_id": {
+        "type": "string"
+      },
+      "operation_id": {
+        "type": "string"
+      },
+      "parameter_key": {
+        "type": "string"
+      },
+      "type": {
+        "type": "string"
+      },
+      "unit": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "neutral": {},
+      "range": {
+        "type": [
+          "object",
+          "null"
+        ]
+      },
+      "range_status": {
+        "enum": [
+          "待决策",
+          "原创定义"
+        ]
+      },
+      "target_scope": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "enable_condition": {
+        "type": "string"
+      },
+      "source_category": {
+        "type": "string"
+      },
+      "decision_required": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "entries": [
+    {
+      "requirement_id": "LNX-P0-EXPOSURE",
+      "operation_id": "lnx.exposure.v1",
+      "parameter_key": "ev",
+      "type": "number",
+      "unit": "EV",
+      "neutral": 0,
+      "range": null,
+      "enum": null,
+      "range_status": "待决策",
+      "target_scope": [
+        "image"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32455"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "原创建议待批准"
+    },
+    {
+      "requirement_id": "LNX-P0-WHITE-BALANCE",
+      "operation_id": "lnx.white_balance.v1",
+      "parameter_key": "temperature_shift",
+      "type": "number",
+      "unit": null,
+      "neutral": 0,
+      "range": null,
+      "enum": null,
+      "range_status": "待决策",
+      "target_scope": [
+        "image"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32455"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-04",
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "原创建议待批准"
+    },
+    {
+      "requirement_id": "LNX-P0-WHITE-BALANCE",
+      "operation_id": "lnx.white_balance.v1",
+      "parameter_key": "tint_shift",
+      "type": "number",
+      "unit": null,
+      "neutral": 0,
+      "range": null,
+      "enum": null,
+      "range_status": "待决策",
+      "target_scope": [
+        "image"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32455"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "原创建议待批准"
+    },
+    {
+      "requirement_id": "LNX-P0-CROP",
+      "operation_id": "lnx.crop.v1",
+      "parameter_key": "rect_normalized",
+      "type": "array[4]",
+      "unit": "normalized_source_coordinates",
+      "neutral": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "range": {
+        "per_coordinate_min": 0,
+        "per_coordinate_max": 1,
+        "constraints": "x0<x1;y0<y1"
+      },
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "image"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32478"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "原创建议待批准"
+    },
+    {
+      "requirement_id": "LNX-P0-CROP",
+      "operation_id": "lnx.crop.v1",
+      "parameter_key": "rotation_degrees",
+      "type": "number",
+      "unit": "degree",
+      "neutral": 0,
+      "range": null,
+      "enum": null,
+      "range_status": "待决策",
+      "target_scope": [
+        "image"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32478"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "原创建议待批准"
+    },
+    {
+      "requirement_id": "LNX-P0-MASK",
+      "operation_id": "lnx.mask.v1",
+      "parameter_key": "analysis_enabled",
+      "type": "boolean",
+      "unit": null,
+      "neutral": false,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "single_face"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32464"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "原创建议待批准"
+    },
+    {
+      "requirement_id": "LNX-P0-MASK",
+      "operation_id": "lnx.mask.v1",
+      "parameter_key": "overlay_visible",
+      "type": "boolean",
+      "unit": null,
+      "neutral": false,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "preview"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32464"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "原创建议待批准"
+    },
+    {
+      "requirement_id": "LNX-P0-MASK",
+      "operation_id": "lnx.mask.v1",
+      "parameter_key": "feather",
+      "type": "number",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "待决策",
+      "target_scope": [
+        "single_face"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-03",
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-BLEMISH",
+      "operation_id": "lnx.blemish.v1",
+      "parameter_key": "enabled",
+      "type": "boolean",
+      "unit": null,
+      "neutral": false,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "single_face"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32464"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "原创建议待批准"
+    },
+    {
+      "requirement_id": "LNX-P0-BLEMISH",
+      "operation_id": "lnx.blemish.v1",
+      "parameter_key": "strength",
+      "type": "number",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "待决策",
+      "target_scope": [
+        "single_face"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32464"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-03",
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-BLEMISH",
+      "operation_id": "lnx.blemish.v1",
+      "parameter_key": "protect_identity_marks",
+      "type": "boolean",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "single_face"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32464"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-03",
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-SKIN",
+      "operation_id": "lnx.skin.v1",
+      "parameter_key": "enabled",
+      "type": "boolean",
+      "unit": null,
+      "neutral": false,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "single_face"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32465"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "原创建议待批准"
+    },
+    {
+      "requirement_id": "LNX-P0-SKIN",
+      "operation_id": "lnx.skin.v1",
+      "parameter_key": "strength",
+      "type": "number",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "待决策",
+      "target_scope": [
+        "single_face"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32465"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-03",
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-EXPORT",
+      "operation_id": "lnx.export.v1",
+      "parameter_key": "format",
+      "type": "enum",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": [
+        "jpeg",
+        "tiff"
+      ],
+      "range_status": "原创定义",
+      "target_scope": [
+        "export_job"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32483"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-04"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-EXPORT",
+      "operation_id": "lnx.export.v1",
+      "parameter_key": "jpeg_quality",
+      "type": "number",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "待决策",
+      "target_scope": [
+        "export_job"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32483"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-04",
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-EXPORT",
+      "operation_id": "lnx.export.v1",
+      "parameter_key": "tiff_compression",
+      "type": "enum",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "待决策",
+      "target_scope": [
+        "export_job"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32483"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-04"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-EXPORT",
+      "operation_id": "lnx.export.v1",
+      "parameter_key": "output_profile",
+      "type": "asset_ref",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "待决策",
+      "target_scope": [
+        "export_job"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32483"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-04"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-EXPORT",
+      "operation_id": "lnx.export.v1",
+      "parameter_key": "metadata_include_gps",
+      "type": "boolean",
+      "unit": null,
+      "neutral": false,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "export_job"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32483"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "原创建议待批准"
+    },
+    {
+      "requirement_id": "LNX-P0-BATCH",
+      "operation_id": "lnx.batch.v1",
+      "parameter_key": "module_scope",
+      "type": "set[operation_id]",
+      "unit": null,
+      "neutral": [],
+      "range": null,
+      "enum": null,
+      "range_status": "待决策",
+      "target_scope": [
+        "selected_assets"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32480"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [
+        "D-P0-05"
+      ],
+      "status": "草案，未实现",
+      "neutral_status": "原创建议待批准"
+    },
+    {
+      "requirement_id": "LNX-P0-BATCH",
+      "operation_id": "lnx.batch.v1",
+      "parameter_key": "conflict_policy",
+      "type": "enum",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": [
+        "skip_and_report",
+        "recheck"
+      ],
+      "range_status": "原创定义",
+      "target_scope": [
+        "selected_assets"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-PROJECT",
+      "operation_id": "lnx.project.v1",
+      "parameter_key": "create",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32448"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-PROJECT",
+      "operation_id": "lnx.project.v1",
+      "parameter_key": "open",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32448"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-PROJECT",
+      "operation_id": "lnx.project.v1",
+      "parameter_key": "save",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32448"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-IMPORT",
+      "operation_id": "lnx.import.v1",
+      "parameter_key": "choose_files",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32448"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-IMPORT",
+      "operation_id": "lnx.import.v1",
+      "parameter_key": "choose_folder",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32448"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-HISTORY",
+      "operation_id": "lnx.history.v1",
+      "parameter_key": "undo",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/47209"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-HISTORY",
+      "operation_id": "lnx.history.v1",
+      "parameter_key": "redo",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/47209"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-PRESET",
+      "operation_id": "lnx.preset.v1",
+      "parameter_key": "save",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32457"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-PRESET",
+      "operation_id": "lnx.preset.v1",
+      "parameter_key": "apply",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32457"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-BATCH",
+      "operation_id": "lnx.batch.v1",
+      "parameter_key": "preflight",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-BATCH",
+      "operation_id": "lnx.batch.v1",
+      "parameter_key": "commit",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-TASK",
+      "operation_id": "lnx.task.v1",
+      "parameter_key": "pause",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-TASK",
+      "operation_id": "lnx.task.v1",
+      "parameter_key": "resume",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-TASK",
+      "operation_id": "lnx.task.v1",
+      "parameter_key": "cancel",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-TASK",
+      "operation_id": "lnx.task.v1",
+      "parameter_key": "retry",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    },
+    {
+      "requirement_id": "LNX-P0-EXPORT",
+      "operation_id": "lnx.export.v1",
+      "parameter_key": "start",
+      "type": "action",
+      "unit": null,
+      "neutral": null,
+      "range": null,
+      "enum": null,
+      "range_status": "原创定义",
+      "target_scope": [
+        "project_or_selection"
+      ],
+      "enable_condition": "来源可读且功能依赖可用；人像类还须满足单脸及D-P0-02支持范围",
+      "source_category": "原创Linux控件契约；功能借鉴官方",
+      "official_source_urls": [
+        "https://www.pixcakeai.com/guide/32483"
+      ],
+      "official_parameter_value": null,
+      "decision_required": [],
+      "status": "草案，未实现",
+      "neutral_status": "待决策"
+    }
+  ],
+  "neutral_policy": "不存在通用零值中性规则；enabled=false表示关闭是本产品原创提案。任何数值含0都须按操作确认，不映射竞品默认。"
+}

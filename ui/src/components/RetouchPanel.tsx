@@ -1,15 +1,27 @@
 /**
- * 右侧精修面板（1.11.0 产品态）：只保留四栏，文案只写中文名与数值。
+ * 右侧精修面板（Spec-Driven，1.12.0）。
  *
- * 这里没有任何注册表编号、规约说明或调试读数：面板是给影楼修图师用的，
- * 不是给开发者看的。数值一律从引擎的 doc_state 读；滑块在拖动期间用本地值
- * 先走一步（引擎回声到达时若不在拖动就对齐），松开后一切仍以引擎为准。
+ * 功能清单不在这里手写：39 个功能族、805 个子控件全部从 `ui/src/spec/refine.json`
+ * 读出来递归画（`SpecTree`）。本文件只负责三件事：
+ *   ① 把引擎已接通的格子接上真控件（15 项能力 + 画笔/裁剪/换底/肤色定向）；
+ *   ② 没接通的格子统一交给 P1Row：照常陈列、置灰、Tooltip 写「P1 规划中 · [规格 ID]」；
+ *   ③ 人物属性栏（PC-47211）：所有人 / 每张脸 / 联动锁 / 添加与移出。
+ *
+ * 面板不判断“这一族要不要画”，也不改规格里的顺序——那两件事的出处只有 JSON。
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  runDeform, runEnhance, runExposure, runLut, setStrength,
-  type DocState, type EngineStatus,
+  runBackground, runCrop, runDeform, runEnhance, runExposure, runFace, runGrade,
+  runHistory, runHsl, runLut, setStrength,
+  type DocState, type EngineStatus, type FacePerson,
 } from "../native";
+import {
+  FEATURES, SPEC_COUNTS, buildTree, type SpecFeature, type SpecNode,
+  type SpecSubcontrol,
+} from "../spec";
+import { P1Row, SpecInfo, SpecNodes } from "./SpecTree";
+
+export type BrushMode = "heal" | "dodge" | "burn" | "color";
 
 export interface RetouchProps {
   status: EngineStatus | null;
@@ -19,16 +31,26 @@ export interface RetouchProps {
   faceWhy: string;
   note: (s: string) => void;
   onDone: () => void;
+  /** 当前文档缩略图（JPEG base64）：人脸 chip 与 LUT 卡片的真实预览 */
+  thumb?: string;
+  /** 当前编辑范围：所有人（联动）或某一张脸（独立） */
+  faceScope: "all" | number;
+  onFaceScope: (s: "all" | number) => void;
+  /** 视口画笔（引擎同一支管道：消除 / 局部调色 / 减淡 / 加深） */
+  brush: { on: boolean; mode: BrushMode; radius: number };
+  onBrush: (patch: Partial<{ on: boolean; mode: BrushMode; radius: number }>) => void;
+  /** 打开裁剪/旋转模态（P0 lnx.crop.v1） */
+  onOpenCrop: () => void;
+  /** 框选补脸（PORTRAIT-006）：在画面里拖一个框，引擎再跑一次真检测 */
+  onFaceAdd: () => void;
+  faceAdding: boolean;
 }
 
 const ok = (p: Promise<unknown>, props: RetouchProps) =>
   p.then(props.onDone).catch((e) => props.note(String(e)));
 
-/** 一条干净的滑块：中文名 + 数值，双击归零。
- *
- * 拖动期间用本地值（引擎每条命令都要重画一帧，回声比手指慢半拍；
- * 若一直用回声值，滑块会在手指下轻微回弹）。松手后引擎的值才是唯一出处。
- */
+const P1 = (id: string, what = "当前版本未接通后端算法") => `P1 规划中 · [${id}]：${what}`;
+
 function Slider(props: {
   label: string;
   value: number;
@@ -46,21 +68,17 @@ function Slider(props: {
   useEffect(() => {
     if (!dragging.current) setLocal(props.value);
   }, [props.value]);
-  const show = props.display ?? String(Math.round(local));
   return (
-    <div className={"pslider" + (props.disabled ? " off" : "")} title={props.title}>
+    <div className={"pslider" + (props.disabled ? " off" : "")}>
       <div className="prow">
         <span className="plabel">{props.label}</span>
-        <span className="pval">{show}</span>
+        <span className="pval">{props.display ?? Math.round(local)}</span>
       </div>
-      <input
-        type="range"
-        min={props.min}
-        max={props.max}
+      <input type="range" min={props.min} max={props.max}
         step={props.step ?? 1}
         value={local}
         disabled={props.disabled}
-        title="双击归零"
+        title={props.title ?? "双击归零"}
         onPointerDown={() => { dragging.current = true; }}
         onPointerUp={() => { dragging.current = false; }}
         onPointerCancel={() => { dragging.current = false; }}
@@ -75,15 +93,6 @@ function Slider(props: {
   );
 }
 
-function Group(props: { title: string; open?: boolean; children: React.ReactNode }) {
-  return (
-    <details className="pg" open={props.open ?? true}>
-      <summary>{props.title}</summary>
-      <div className="pgBody">{props.children}</div>
-    </details>
-  );
-}
-
 const FACE_LABEL: Record<string, string> = {
   slim_face: "瘦脸",
   big_eye: "大眼",
@@ -91,100 +100,711 @@ const FACE_LABEL: Record<string, string> = {
   smile: "微笑",
 };
 
+/** 人脸 chip 的头像：拿当前文档缩略图按归一化脸盒裁一块，不额外向引擎要图。 */
+function FaceAvatar({ face, thumb, all }: {
+  face?: FacePerson; thumb?: string; all?: boolean;
+}) {
+  if (all || !face?.box || !thumb) {
+    return <i className={"faceAv ph" + (all ? " all" : "")}>{all ? "全" : "人"}</i>;
+  }
+  const [x0, y0, x1, y1] = face.box;
+  const w = Math.max(0.06, Math.min(1, x1 - x0));
+  const h = Math.max(0.06, Math.min(1, y1 - y0));
+  const px = w < 0.999 ? Math.max(0, Math.min(100, (x0 / (1 - w)) * 100)) : 50;
+  const py = h < 0.999 ? Math.max(0, Math.min(100, (y0 / (1 - h)) * 100)) : 50;
+  return (
+    <i className="faceAv"
+      style={{
+        backgroundImage: `url(data:image/jpeg;base64,${thumb})`,
+        backgroundSize: `${100 / w}% ${100 / h}%`,
+        backgroundPosition: `${px}% ${py}%`,
+      }} />
+  );
+}
+
+/** 已接通的控制：键是「功能族 ID|规格 path」，值是面板里的分派名。
+ *
+ * 这张表只做一件事——把规格里的那一条路径指到引擎的一条真命令上。表里没有的
+ * 一律 P1 置灰；表里有的但引擎拒了（例如没关键点时开瘦脸），错误照样从引擎回来，
+ * 面板不提前放行。
+ */
+const WIRED: Record<string, string> = {
+  // 皮肤调整
+  "PC-32465|高低频磨皮-脸部/身体": "skin.strength",
+  "PC-32465|质感磨皮": "skin.detail",
+  "PC-32465|AI肤色统一（脸部）": "skin.broad",
+  "PC-32465|水润磨皮-脸部/身体": "skin.radius",
+  // 面部重塑 / 表情
+  "PC-32466|脸型/瘦脸": "deform.slim_face",
+  "PC-32466|眼睛/整体大小": "deform.big_eye",
+  "PC-32466|脸型/收下巴": "deform.small_chin",
+  "PC-32466|脸型预设/经典": "deform.preset:经典",
+  "PC-32466|脸型预设/幼态": "deform.preset:幼态",
+  "PC-32466|脸型预设/英气": "deform.preset:英气",
+  "PC-32468|微笑嘴角": "deform.smile",
+  // 五官细节
+  "PC-32470|亮眼/眼白": "enh.sclera",
+  "PC-32470|亮眼/眼瞳": "enh.iris",
+  "PC-32469|牙齿美白": "enh.teeth",
+  // 色彩与光影
+  "PC-32455|影调/曝光": "exp.ev",
+  "PC-32455|白平衡/色温": "exp.temp",
+  "PC-32455|白平衡/色调": "exp.tint",
+  "PC-32455|影调/对比度": "tone.contrast",
+  "PC-32455|影调/高光": "tone.highlights",
+  "PC-32455|影调/阴影": "tone.shadows",
+  "PC-32455|影调/饱和度": "tone.saturation",
+  // 八色 HSL（原创扩展）：规格里 HSL 那一支只有 色相/饱和度/明亮度 三格，色段
+  // 选择器画在父节点（见 hslChips），三格作用的是当前选中的那一段。
+  "PC-32455|HSL/色相": "hsl.hue",
+  "PC-32455|HSL/饱和度": "hsl.sat",
+  "PC-32455|HSL/明亮度": "hsl.lum",
+  "PC-32455|滤镜/强度": "lut.amount",
+  // 裁剪旋转
+  "PC-32478|裁剪": "crop.open",
+  "PC-32478|旋转/顺时针": "crop.cw",
+  "PC-32478|旋转/逆时针": "crop.ccw",
+  "PC-32478|旋转/倾斜角度": "crop.open",
+  // 手动修复
+  "PC-32482|污点修复画笔": "brush.heal",
+  "PC-32482|修补工具": "brush.heal",
+  "PC-32482|仿制图章": "brush.heal",
+  // 历史
+  "PC-47209|撤销": "history.undo",
+  "PC-47209|重做": "history.redo",
+};
+
+/** 已接通格子的产品名：规格 path 的最后一段常常只是“身体/程度”，
+ *  直接当滑杆名会让两行都叫“身体”。这里只改显示名，不改规格 path。 */
+const WIRE_LABEL: Record<string, string> = {
+  "skin.strength": "磨皮强度",
+  "skin.detail": "质感保留",
+  "skin.broad": "肤色匀净",
+  "skin.radius": "磨皮半径",
+  "deform.slim_face": "瘦脸",
+  "deform.big_eye": "大眼",
+  "deform.small_chin": "小下巴",
+  "deform.smile": "微笑",
+  "enh.sclera": "眼白提亮",
+  "enh.iris": "眼瞳提亮",
+  "enh.teeth": "牙齿美白",
+  "exp.ev": "曝光",
+  "exp.temp": "色温",
+  "exp.tint": "色调",
+  "tone.contrast": "对比度",
+  "tone.highlights": "高光",
+  "tone.shadows": "阴影",
+  "tone.saturation": "饱和度",
+  "hsl.hue": "色相",
+  "hsl.sat": "饱和度",
+  "hsl.lum": "明亮度",
+  "lut.amount": "风格强度",
+  "crop.open": "裁剪",
+  "crop.cw": "顺时针 90°",
+  "crop.ccw": "逆时针 90°",
+  "brush.heal": "修复画笔",
+  "history.undo": "撤销",
+  "history.redo": "重做",
+};
+
+/** 八色 HSL 的色段：与 ops/hsl.py 的 BAND_NAMES 同序。名字与量程以引擎上报为准，
+ *  这一份只做首帧（doc 还没回来时）的占位与色块底色。 */
+const HSL_BANDS = ["红", "橙", "黄", "绿", "青", "蓝", "紫", "洋红"];
+const HSL_CHIP_COLORS = ["#e2534b", "#ef8b3a", "#e3c443", "#5fae57",
+                         "#49b3b0", "#4b7bd0", "#8a63c9", "#cf5fa8"];
+
+const SHAPE_PRESETS: Record<string, Record<string, number>> = {
+  经典: { slim_face: 0.22, big_eye: 0.04, small_chin: 0.14, smile: 0 },
+  幼态: { slim_face: 0.12, big_eye: 0.10, small_chin: 0.10, smile: 0.05 },
+  英气: { slim_face: 0.30, big_eye: 0.02, small_chin: 0.18, smile: 0 },
+};
+
+const INFO_IDS = new Set(["PC-47248", "PC-47246", "PC-230985"]);
+
+function hexToRgb(hex: string): number[] {
+  const h = hex.replace("#", "");
+  const n = h.length === 3
+    ? h.split("").map((c) => parseInt(c + c, 16))
+    : [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  return n.map((v) => (Number.isFinite(v) ? Math.max(0, Math.min(255, v)) : 255));
+}
+
 export default function RetouchPanel(props: RetouchProps) {
   const { doc, status } = props;
   const dim = !props.hasImage;
   const params = doc?.params ?? {};
   const amounts = doc?.deform.amounts ?? {};
-  const enhance = doc?.enhance;
-  const enhAmounts = enhance?.amounts ?? {};
+  const enhAmounts = doc?.enhance?.amounts ?? {};
   const ex = doc?.exposure;
+  const grade = doc?.grade;
   const presets = status?.presets ?? [];
+  const faces = doc?.face?.faces ?? [];
+  const faceIdx = typeof props.faceScope === "number" ? props.faceScope : null;
+  const scope: "all" | "person" = props.faceScope === "all" ? "all" : "person";
+  const [q, setQ] = useState("");
+  const [bgHex, setBgHex] = useState("#ffffff");
+  const [openSeen, setOpenSeen] = useState<Record<string, boolean>>({});
+  // 八色 HSL 当前选中的色段（0…7）。这是**界面选择**，不是文档状态：切图后同一段
+  // 继续被选中，引擎侧那 24 个数才是画面事实。
+  const [hslBand, setHslBand] = useState(0);
+  const hslNames = doc?.hsl?.names ?? HSL_BANDS;
 
-  /** 高低频是一组参数：一次提交整组（引擎的 set_strength 就是整组收的）。 */
-  const commitSkin = (patch: { strength?: number; detail?: number; broad?: number }) => {
+  const trees = useMemo(
+    () => FEATURES.map((f) => ({ f, tree: buildTree(f.subcontrols) })),
+    [],
+  );
+
+  const commitSkin = (patch: {
+    strength?: number; detail?: number; broad?: number; radius?: number;
+  }) => {
     if (!doc) return;
     ok(setStrength(patch.strength ?? doc.strength, {
       channel: doc.channel ?? undefined,
-      radius: params.radius,
+      radius: patch.radius ?? params.radius,
       detailGain: patch.detail ?? params.detail_gain,
       midGain: params.mid_gain,
       broadGain: patch.broad ?? params.broad_gain,
     }), props);
   };
 
-  // 引擎报哪几种就画哪几种；ready 还没到（首屏几百毫秒）时按这一版引擎的
-  // 全集先画出来（禁用态），避免"面板里空一块"那种残破感。真能不能用仍由
-  // faceOk 与引擎整条拒把关，前端不替它放行。
-  const reported = (status?.ready_caps?.deform_kinds ?? []).filter((k) => k in FACE_LABEL);
-  const faceKinds = reported.length ? reported : Object.keys(FACE_LABEL);
+  const commitDeform = (patch: Record<string, number>) => {
+    const p = faceIdx === null ? Promise.resolve() : runFace("select", faceIdx);
+    ok(p.then(() => runDeform("set", patch, scope)), props);
+  };
+
+  const commitEnhance = (patch: Record<string, number>) =>
+    ok(runEnhance("set", patch), props);
+
+  const commitExposure = (patch: Record<string, number>) =>
+    ok(runExposure("set", patch), props);
+
+  const rotateBy = (delta: number) => {
+    const cur = doc?.crop?.rotation_degrees ?? 0;
+    let next = cur + delta;
+    if (next > 180) next -= 360;
+    if (next < -180) next += 360;
+    ok(runCrop("set", doc?.crop?.rect ?? [0, 0, 1, 1], next), props);
+  };
+
+  const applyBg = () => {
+    const backend = status?.matting_backends?.baseline?.[0] ?? "color_key";
+    ok(runBackground("set", { backend, bg: hexToRgb(bgHex) }), props);
+  };
+
+  const lutOn = !!doc?.lut.preset;
+  const lutAmt = doc?.lut.amount ?? 1;
+  const gradeScopes = grade?.scopes ?? ["all", "skin"];
+  const maskPx = grade?.mask_px ?? 0;
+
+  const brushOn = props.brush.on;
+  const brushMode = props.brush.mode;
+
+  /** 已接通叶子的实际控件。`name` 是规格 path 的最后一段。 */
+  const renderWired = (fid: string, leaf: SpecSubcontrol, name: string,
+                       kind: string): React.ReactNode => {
+    const title = `${fid} · ${leaf.path}`;
+    const label = WIRE_LABEL[kind] ?? name;
+    if (kind.startsWith("deform.preset:")) {
+      const preset = kind.split(":")[1];
+      return (
+        <button key={leaf.path} className="specBtn" title={title}
+          disabled={dim || !props.faceOk}
+          onClick={() => {
+            setOpenSeen((s) => ({ ...s, [preset]: true }));
+            commitDeform(SHAPE_PRESETS[preset] ?? {});
+          }}>
+          <b>{name}</b><em>脸型预设</em>
+        </button>
+      );
+    }
+    switch (kind) {
+      case "skin.strength":
+        return (
+          <Slider key={leaf.path} label={label}
+            value={Math.round((doc?.strength ?? 0) * 100)} min={0} max={100}
+            disabled={dim} onChange={(v) => commitSkin({ strength: v / 100 })}
+            onReset={() => commitSkin({ strength: 0 })} />
+        );
+      case "skin.detail":
+        return (
+          <Slider key={leaf.path} label={label}
+            value={Math.round(((params.detail_gain ?? 0) / 2) * 100)} min={0} max={100}
+            disabled={dim} onChange={(v) => commitSkin({ detail: (v / 100) * 2 })}
+            onReset={() => commitSkin({ detail: 0 })} />
+        );
+      case "skin.broad":
+        return (
+          <Slider key={leaf.path} label={label}
+            value={Math.round(((params.broad_gain ?? 0) / 2) * 100)} min={0} max={100}
+            disabled={dim} onChange={(v) => commitSkin({ broad: (v / 100) * 2 })}
+            onReset={() => commitSkin({ broad: 0 })} />
+        );
+      case "skin.radius":
+        return (
+          <Slider key={leaf.path} label={label}
+            value={Math.round(params.radius ?? 12)} min={2} max={24}
+            disabled={dim} onChange={(v) => commitSkin({ radius: v })}
+            onReset={() => commitSkin({ radius: 12 })} />
+        );
+      case "deform.slim_face":
+      case "deform.big_eye":
+      case "deform.small_chin":
+      case "deform.smile": {
+        const key = kind.slice("deform.".length);
+        return (
+          <Slider key={leaf.path} label={label}
+            value={Math.round((amounts[key] ?? 0) * 100)} min={0} max={100}
+            disabled={dim || !props.faceOk}
+            title={props.faceOk ? title : props.faceWhy}
+            onChange={(v) => commitDeform({ [key]: v / 100 })}
+            onReset={() => commitDeform({ [key]: 0 })} />
+        );
+      }
+      case "enh.sclera":
+      case "enh.iris":
+      case "enh.teeth": {
+        const key = kind.slice("enh.".length);
+        return (
+          <Slider key={leaf.path} label={label}
+            value={Math.round((enhAmounts[key] ?? 0) * 100)} min={0} max={100}
+            disabled={dim || !props.faceOk}
+            title={props.faceOk ? title : props.faceWhy}
+            onChange={(v) => commitEnhance({ [key]: v / 100 })}
+            onReset={() => commitEnhance({ [key]: 0 })} />
+        );
+      }
+      case "exp.ev":
+        return (
+          <Slider key={leaf.path} label={label}
+            value={ex?.ev ?? 0} min={-5} max={5} step={0.05}
+            display={`${(ex?.ev ?? 0) >= 0 ? "+" : ""}${(ex?.ev ?? 0).toFixed(2)} EV`}
+            disabled={dim}
+            onChange={(v) => commitExposure({ ev: v })}
+            onReset={() => commitExposure({ ev: 0 })} />
+        );
+      case "exp.temp":
+        return (
+          <Slider key={leaf.path} label={label}
+            value={Math.round(ex?.temperature_shift ?? 0)} min={-2000} max={2000} step={20}
+            display={`${Math.round(ex?.temperature_shift ?? 0) >= 0 ? "+" : ""}${Math.round(ex?.temperature_shift ?? 0)} K`}
+            disabled={dim}
+            onChange={(v) => commitExposure({ temperature_shift: v })}
+            onReset={() => commitExposure({ temperature_shift: 0 })} />
+        );
+      case "exp.tint":
+        return (
+          <Slider key={leaf.path} label={label}
+            value={Math.round((ex?.tint_shift ?? 0) * 100)} min={-100} max={100}
+            disabled={dim}
+            onChange={(v) => commitExposure({ tint_shift: v / 100 })}
+            onReset={() => commitExposure({ tint_shift: 0 })} />
+        );
+      case "hsl.hue":
+      case "hsl.sat":
+      case "hsl.lum": {
+        const i = kind === "hsl.hue" ? 0 : kind === "hsl.sat" ? 1 : 2;
+        const cur = doc?.hsl?.bands?.[hslBand * 3 + i] ?? 0;
+        const lim = i === 0 ? (doc?.hsl?.limits?.hue ?? 60)
+          : i === 1 ? (doc?.hsl?.limits?.sat ?? 100)
+            : (doc?.hsl?.limits?.lum ?? 100);
+        const key = (["dh", "ds", "dl"] as const)[i];
+        return (
+          <Slider key={leaf.path}
+            label={`${hslNames[hslBand] ?? HSL_BANDS[hslBand]} · ${label}`}
+            value={Math.round(cur)} min={-lim} max={lim}
+            disabled={dim}
+            onChange={(v) => ok(runHsl("set", hslBand, { [key]: v }), props)}
+            onReset={() => ok(runHsl("set", hslBand, { [key]: 0 }), props)} />
+        );
+      }
+      case "tone.contrast":
+      case "tone.highlights":
+      case "tone.shadows":
+      case "tone.saturation": {
+        const key = kind.slice("tone.".length) as
+          "contrast" | "highlights" | "shadows" | "saturation";
+        return (
+          <Slider key={leaf.path} label={label}
+            value={Math.round((ex?.[key] ?? 0) as number)} min={-100} max={100}
+            disabled={dim}
+            onChange={(v) => commitExposure({ [key]: v })}
+            onReset={() => commitExposure({ [key]: 0 })} />
+        );
+      }
+      case "lut.amount":
+        return (
+          <Slider key={leaf.path} label={label}
+            value={Math.round(lutAmt * 100)} min={0} max={100}
+            display={`${Math.round(lutAmt * 100)}%`}
+            disabled={dim || !lutOn}
+            title={lutOn ? title : "先选一个预设"}
+            onChange={(v) => ok(runLut("set", {
+              preset: doc?.lut.preset ?? undefined, amount: v / 100,
+            }), props)}
+            onReset={() => ok(runLut("set", {
+              preset: doc?.lut.preset ?? undefined, amount: 0,
+            }), props)} />
+        );
+      case "crop.open":
+        return (
+          <button key={leaf.path} className="specBtn" title={title} disabled={dim}
+            onClick={() => props.onOpenCrop()}>
+            <b>{label}</b><em>打开裁剪</em>
+          </button>
+        );
+      case "crop.cw":
+      case "crop.ccw":
+        return (
+          <button key={leaf.path} className="specBtn" title={title} disabled={dim}
+            onClick={() => rotateBy(kind === "crop.cw" ? 90 : -90)}>
+            <b>{label}</b><em>旋转</em>
+          </button>
+        );
+      case "brush.heal":
+        return (
+          <button key={leaf.path} className="specBtn" title={title} disabled={dim}
+            onClick={() => props.onBrush({ mode: "heal", on: true })}>
+            <b>{label}</b><em>画笔</em>
+          </button>
+        );
+      case "history.undo":
+      case "history.redo":
+        return (
+          <button key={leaf.path} className="specBtn" title={title}
+            disabled={dim || (kind === "history.undo" ? !doc?.history.can_undo
+              : !doc?.history.can_redo)}
+            onClick={() => ok(runHistory(kind === "history.undo" ? "undo" : "redo"), props)}>
+            <b>{label}</b><em>{kind === "history.undo" ? "历史" : "历史"}</em>
+          </button>
+        );
+      default:
+        return <P1Row key={leaf.path} name={name} specId={fid} />;
+    }
+  };
+
+  /** 规格树里需要额外画一块的节点：目前只有 HSL 的八色色段选择器。
+   *  三格滑杆仍是规格里的叶子（HSL/色相…），这里只决定“改哪一段”。 */
+  const renderExtra = (node: SpecNode): React.ReactNode => {
+    if (node.full !== "HSL") return null;
+    return (
+      <div className="hslChips" key="hsl-chips" data-hsl-band={hslBand}>
+        {HSL_BANDS.map((n, i) => (
+          <button key={n} title={`${n}（第 ${i + 1} 段）`}
+            className={"hslChip" + (i === hslBand ? " on" : "")}
+            style={{ background: HSL_CHIP_COLORS[i] }}
+            onClick={() => setHslBand(i)}>{n}</button>
+        ))}
+        <button className="hslChip reset" title="八段全部归零"
+          onClick={() => ok(runHsl("clear"), props)}>归零</button>
+      </div>
+    );
+  };
+
+  /** 已接通祖先链：默认展开，别让真控件埋在折叠里。 */
+  const openPathsFor = (f: SpecFeature): Set<string> => {
+    const open = new Set<string>();
+    for (const leaf of f.subcontrols) {
+      if (!WIRED[`${f.id}|${leaf.path}`]) continue;
+      const parts = leaf.path.split("/");
+      let full = "";
+      for (let i = 0; i < parts.length - 1; i++) {
+        full = full ? `${full}/${parts[i]}` : parts[i];
+        open.add(full);
+      }
+      // 叶子所在的那一层也要开：像 `高低频磨皮-脸部/身体` 这种路径，
+      // “身体”自己还有子项，是一个 <details>——不把 full 加进来，真滑杆就
+      // 被折叠在“身体”里，用户只看见一个计数。
+      open.add(leaf.path);
+    }
+    return open;
+  };
+
+  const activeFamilies = new Set(FEATURES
+    .filter((f) => f.subcontrols.some((s) => WIRED[`${f.id}|${s.path}`]))
+    .map((f) => f.id));
+  activeFamilies.add("PC-32452");
+  activeFamilies.add("PC-32454");
+  activeFamilies.add("PC-32475");
+  activeFamilies.add("PC-47209");
+  activeFamilies.add("PC-32482");
+
+  const query = q.trim().toLowerCase();
+  const hit = (f: SpecFeature) =>
+    !query || f.id.toLowerCase().includes(query)
+      || f.title.toLowerCase().includes(query)
+      || f.subcontrols.some((s) => s.path.toLowerCase().includes(query));
+
+  const lutBlock = (
+    <>
+      <div className="lutGrid">
+        <button className={"lutCard" + (!lutOn ? " on" : "")} disabled={dim}
+          onClick={() => ok(runLut("clear"), props)}>
+          <span className="lutThumb none">原</span>
+          <span className="lutName">原片</span>
+        </button>
+        {presets.map((p) => (
+          <button key={p.name}
+            className={"lutCard" + (doc?.lut.preset === p.name ? " on" : "")}
+            disabled={dim}
+            onClick={() => ok(runLut("set", { preset: p.name, amount: lutAmt || 1 }), props)}>
+            <span className="lutThumb"
+              style={props.thumb ? {
+                backgroundImage: `url(data:image/jpeg;base64,${props.thumb})`,
+                filter: p.name === "creamy"
+                  ? "sepia(.16) saturate(1.06) brightness(1.04) contrast(.98)"
+                  : "saturate(.9) brightness(1.03) contrast(1.04) hue-rotate(-6deg)",
+              } : undefined} />
+            <span className="lutName">{p.title}</span>
+          </button>
+        ))}
+        <button className="lutCard off" disabled title={P1("PC-32452", "导入 .cube 的界面尚未接通")}>
+          <span className="lutThumb none dashed">+</span>
+          <span className="lutName">导入 LUT</span>
+        </button>
+      </div>
+      <div className="specHint">预设由引擎上报；点卡片即真应用，强度滑杆实时上屏。</div>
+    </>
+  );
+
+  const gradeBlock = (
+    <div className="specBlock">
+      <div className="specBlockTitle">肤色定向 <em>引擎已接通</em></div>
+      <Slider label="色相偏移" value={Math.round((grade?.dh ?? 0) * 100)}
+        min={-100} max={100} disabled={dim}
+        onChange={(v) => ok(runGrade("set", { dh: v / 100 }), props)}
+        onReset={() => ok(runGrade("set", { dh: 0 }), props)} />
+      <Slider label="饱和偏移" value={Math.round((grade?.ds ?? 0) * 100)}
+        min={-100} max={100} disabled={dim}
+        onChange={(v) => ok(runGrade("set", { ds: v / 100 }), props)}
+        onReset={() => ok(runGrade("set", { ds: 0 }), props)} />
+      <Slider label="明度偏移" value={Math.round((grade?.dv ?? 0) * 100)}
+        min={-100} max={100} disabled={dim}
+        onChange={(v) => ok(runGrade("set", { dv: v / 100 }), props)}
+        onReset={() => ok(runGrade("set", { dv: 0 }), props)} />
+      <Slider label="混入比例" value={Math.round((grade?.amount ?? 1) * 100)}
+        min={0} max={100} disabled={dim}
+        onChange={(v) => ok(runGrade("amount", { amount: v / 100 }), props)}
+        onReset={() => ok(runGrade("amount", { amount: 0 }), props)} />
+      <div className="specSeg">
+        <span>作用范围</span>
+        {(["all", "skin", "brush"] as const).map((s) => {
+          const on = (grade?.scope ?? "all") === s;
+          const off = s === "brush" && maskPx === 0;
+          return (
+            <button key={s} className={on ? "on" : ""}
+              disabled={dim || !gradeScopes.includes(s) || off}
+              title={off ? "先用「局部调色笔」在画面里涂抹一块区域"
+                : s === "all" ? "整张图" : s === "skin" ? "只作用于肤色" : "只作用于涂抹区域"}
+              onClick={() => ok(runGrade("scope", { scope: s }), props)}>
+              {s === "all" ? "全图" : s === "skin" ? "肤色" : "涂抹区域"}
+            </button>
+          );
+        })}
+      </div>
+      <div className="specHint">涂抹区域：在「手动修复」里选局部调色笔，然后在画面里拖。</div>
+    </div>
+  );
+
+  const bgBlock = (
+    <div className="specBlock">
+      <div className="specBlockTitle">证件照纯色换底 <em>引擎已接通</em></div>
+      <div className="specSeg">
+        <span>底色</span>
+        <input type="color" value={bgHex} disabled={dim}
+          onChange={(e) => setBgHex(e.target.value)} title="选择纯色背景" />
+        <button className="on" disabled={dim} onClick={applyBg}>应用换底</button>
+        <button disabled={dim || !status?.background?.bg_active}
+          onClick={() => ok(runBackground("clear"), props)}>还原</button>
+      </div>
+      <div className="specHint">
+        {status?.background?.bg_active
+          ? `换底层已启用（${status.background.backend ?? "color_key"}）`
+          : "换底层未启用：应用后抠像与纯色替换在引擎里合成"}
+      </div>
+    </div>
+  );
+
+  const historyBlock = (
+    <div className="specSeg">
+      <span>历史</span>
+      <button disabled={dim || !doc?.history.can_undo}
+        onClick={() => ok(runHistory("undo"), props)}>
+        撤销（{doc?.history.undo_steps ?? 0}）
+      </button>
+      <button disabled={dim || !doc?.history.can_redo}
+        onClick={() => ok(runHistory("redo"), props)}>
+        重做（{doc?.history.redo_steps ?? 0}）
+      </button>
+    </div>
+  );
+
+  const brushBlock = (
+    <div className="specBlock">
+      <div className="specBlockTitle">画笔工具箱 <em>视口内拖动</em></div>
+      <div className="specSeg">
+        {([
+          ["heal", "消除笔"],
+          ["color", "局部调色笔"],
+          ["dodge", "减淡"],
+          ["burn", "加深"],
+        ] as const).map(([mode, label]) => (
+          <button key={mode} className={brushOn && brushMode === mode ? "on" : ""}
+            disabled={dim}
+            onClick={() => props.onBrush({ mode, on: true })}>{label}</button>
+        ))}
+        <button className={!brushOn ? "on" : ""} disabled={dim}
+          onClick={() => props.onBrush({ on: false })}>关闭</button>
+      </div>
+      <Slider label="画笔大小" value={props.brush.radius} min={2} max={40}
+        disabled={dim}
+        onChange={(v) => props.onBrush({ radius: v })}
+        onReset={() => props.onBrush({ radius: 8 })} />
+    </div>
+  );
+
+  const blockFor = (fid: string): React.ReactNode => {
+    if (fid === "PC-32452") return lutBlock;
+    if (fid === "PC-32454") return gradeBlock;
+    if (fid === "PC-32475") return bgBlock;
+    if (fid === "PC-47209") return historyBlock;
+    if (fid === "PC-32482") return brushBlock;
+    return null;
+  };
 
   return (
-    <div className="retouch">
-      <div className="rtTitle">人像美化</div>
-      <Group title="智能磨皮">
-        <Slider label="磨皮强度" value={Math.round((doc?.strength ?? 0) * 100)}
-                min={0} max={100} disabled={dim}
-                onChange={(v) => commitSkin({ strength: v / 100 })}
-                onReset={() => commitSkin({ strength: 0 })} />
-        <Slider label="肤质保留" value={Math.round(((params.detail_gain ?? 0) / 2) * 100)}
-                min={0} max={100} disabled={dim}
-                onChange={(v) => commitSkin({ detail: (v / 100) * 2 })}
-                onReset={() => commitSkin({ detail: 0 })} />
-        <Slider label="肤色匀净" value={Math.round(((params.broad_gain ?? 0) / 2) * 100)}
-                min={0} max={100} disabled={dim}
-                onChange={(v) => commitSkin({ broad: (v / 100) * 2 })}
-                onReset={() => commitSkin({ broad: 0 })} />
-      </Group>
+    <div className="retouch" data-spec-total={SPEC_COUNTS.features}
+         data-spec-controls={SPEC_COUNTS.subcontrols}>
+      <div className="rtTitle">
+        人像美化
+        <em className="specStat">{SPEC_COUNTS.features} 族 · {SPEC_COUNTS.subcontrols} 项</em>
+      </div>
 
-      <Group title="面部重塑">
-        {faceKinds.map((kind) => (
-          <Slider key={kind} label={FACE_LABEL[kind]}
-                  value={Math.round((amounts[kind] ?? 0) * 100)}
-                  min={0} max={100} disabled={dim || !props.faceOk}
-                  title={props.faceOk ? undefined : props.faceWhy}
-                  onChange={(v) => ok(runDeform("set", { [kind]: v / 100 }, "all"), props)}
-                  onReset={() => ok(runDeform("set", { [kind]: 0 }, "all"), props)} />
-        ))}
-      </Group>
-
-      <Group title="五官美白">
-        <Slider label="眼白提亮" value={Math.round((enhAmounts.sclera ?? 0) * 100)}
-                min={0} max={100} disabled={dim || !props.faceOk}
-                title={props.faceOk ? undefined : props.faceWhy}
-                onChange={(v) => ok(runEnhance("set", { sclera: v / 100 }), props)}
-                onReset={() => ok(runEnhance("set", { sclera: 0 }), props)} />
-        <Slider label="牙齿美白" value={Math.round((enhAmounts.teeth ?? 0) * 100)}
-                min={0} max={100} disabled={dim || !props.faceOk}
-                title={props.faceOk ? undefined : props.faceWhy}
-                onChange={(v) => ok(runEnhance("set", { teeth: v / 100 }), props)}
-                onReset={() => ok(runEnhance("set", { teeth: 0 }), props)} />
-      </Group>
-
-      <Group title="色彩风格">
-        <Slider label="曝光" value={ex?.ev ?? 0} min={-2} max={2} step={0.05}
-                display={(ex?.ev ?? 0).toFixed(2)} disabled={dim}
-                onChange={(v) => ok(runExposure("set", { ev: v }), props)}
-                onReset={() => ok(runExposure("set", { ev: 0 }), props)} />
-        <Slider label="白平衡"
-                value={Math.round((ex?.temperature_shift ?? 0) / 20)}
-                min={-100} max={100}
-                display={`${Math.round(ex?.temperature_shift ?? 0)} K`} disabled={dim}
-                onChange={(v) => ok(runExposure("set", { temperature_shift: v * 20 }), props)}
-                onReset={() => ok(runExposure("set", { temperature_shift: 0 }), props)} />
-        <div className="presets">
-          <button className={"chip" + (!doc?.lut.preset ? " on" : "")} disabled={dim}
-                  onClick={() => ok(runLut("clear"), props)}>原片</button>
-          {presets.map((p) => (
-            <button key={p.name}
-                    className={"chip" + (doc?.lut.preset === p.name ? " on" : "")}
-                    disabled={dim}
-                    onClick={() => ok(runLut("set", { preset: p.name, amount: 1 }), props)}>
-              {p.title}
+      {/* ① 人物属性栏（PC-47211）：所有人 / 每张脸 / 联动锁 / 添加与移出 */}
+      <div className="faceBar" data-spec-family="PC-47211">
+        <div className="faceHead">
+          <span>人物属性 <em className="specId">PC-47211</em></span>
+          <em>{faces.length ? `检测到 ${faces.length} 人` : "等待人脸检测"}</em>
+        </div>
+        <div className="faceChips">
+          <button className={"faceChip" + (props.faceScope === "all" ? " on" : "")}
+            disabled={dim} onClick={() => props.onFaceScope("all")}
+            title="所有人联动：一次调整应用到画面里的每一张脸">
+            <FaceAvatar all />
+            <span>所有人</span>
+          </button>
+          {faces.map((f) => (
+            <button key={f.index}
+              className={"faceChip" + (faceIdx === f.index ? " on" : "")}
+              disabled={dim || !!f.disabled || doc?.face?.blocked}
+              title={f.disabled ? "已标记为非脸" : `单独编辑第 ${f.index + 1} 人`}
+              onClick={() => {
+                props.onFaceScope(f.index);
+                ok(runFace("select", f.index), props);
+              }}>
+              <FaceAvatar face={f} thumb={props.thumb} />
+              <span>人脸{f.index + 1}</span>
             </button>
           ))}
+          {!faces.length && dim && <span className="faceEmpty">打开照片后自动识别人物</span>}
         </div>
-      </Group>
+        <div className="faceState">
+          <button className={"faceLock" + (props.faceScope === "all" ? " on" : "")}
+            disabled={dim || !faces.length}
+            title="联动锁：开 = 改一张等于改所有人；关 = 只改当前选中的人"
+            onClick={() => props.onFaceScope(props.faceScope === "all"
+              ? (faces[0]?.index ?? "all") : "all")}>
+            {props.faceScope === "all" ? "联动锁 开" : "联动锁 关"}
+          </button>
+          <span>{props.faceScope === "all"
+            ? "联动：改一张 = 改所有人"
+            : `独立：只改第 ${(faceIdx ?? 0) + 1} 人，其余人不动`}</span>
+        </div>
+        <div className="faceActs">
+          <button className="specBtn slim" disabled={dim || props.faceAdding}
+            title="在画面里拖一个框，引擎在这个框上再跑一次真检测"
+            onClick={() => props.onFaceAdd()}>
+            <b>{props.faceAdding ? "在画面里框选…" : "＋ 添加人脸"}</b>
+          </button>
+          <button className="specBtn slim" disabled={dim || faceIdx === null}
+            title="把当前选中的人标记为非脸（可撤销）"
+            onClick={() => {
+              if (faceIdx === null) return;
+              ok(runFace("disable", faceIdx), props);
+            }}>
+            <b>移出误检</b>
+          </button>
+          <span className="faceAttr" title={P1("PC-47211", "年龄/性别识别尚未接入检测器")}>
+            男女长幼 · P1
+          </span>
+        </div>
+      </div>
+
+      <div className="specSearchBar">
+        <input className="specSearch" value={q} placeholder="搜索功能 / 规格 ID（如 PC-32465）"
+          onChange={(e) => setQ(e.target.value)} />
+        <span className="specHit">{query ? `匹配 ${FEATURES.filter(hit).length} 族` : ""}</span>
+      </div>
+
+      {/* ② 其余 38 族：按规格原文顺序递归渲染；未接通的格子全部置灰带规格 ID */}
+      {trees.filter(({ f }) => f.id !== "PC-47211" && hit(f)).map(({ f, tree }) => {
+        const wiredCount = f.subcontrols.filter((s) => WIRED[`${f.id}|${s.path}`]).length;
+        const custom = blockFor(f.id);
+        const info = INFO_IDS.has(f.id) || (!f.subcontrols.length && !!custom === false);
+        const open = !!query || activeFamilies.has(f.id) || !!openSeen[f.id];
+        return (
+          <details className="pg sfam" key={f.id} open={open}
+            data-spec-family={f.id}
+            onToggle={(e) => {
+              const el = e.currentTarget as HTMLDetailsElement;
+              if (el.open) setOpenSeen((s) => (s[f.id] ? s : { ...s, [f.id]: true }));
+            }}>
+            <summary title={`${f.id} · ${f.title}${f.source ? ` · ${f.source}` : ""}`}>
+              <span>{f.title}</span>
+              <em className="sfamId">{f.id}</em>
+              <em className="pgCount">
+                {wiredCount ? `已接通 ${wiredCount}` : f.subcontrols.length ? `${f.subcontrols.length} 项` : "说明"}
+              </em>
+            </summary>
+            <div className="pgBody">
+              {custom}
+              {info ? (
+                <>
+                  {(f.controls ?? []).map((c) => <SpecInfo key={c} text={c} />)}
+                  {tree.length > 0 && (
+                    <SpecNodes nodes={tree} specId={f.id}
+                      openPaths={openPathsFor(f)} renderExtra={renderExtra}
+                      renderLeaf={(leaf, name) => {
+                        const kind = WIRED[`${f.id}|${leaf.path}`];
+                        return kind ? renderWired(f.id, leaf, name, kind)
+                          : <P1Row key={leaf.path} name={name} specId={f.id} />;
+                      }} />
+                  )}
+                </>
+              ) : (
+                <>
+                  {tree.length > 0 && (
+                    <SpecNodes nodes={tree} specId={f.id}
+                      openPaths={openPathsFor(f)} renderExtra={renderExtra}
+                      renderLeaf={(leaf, name) => {
+                        const kind = WIRED[`${f.id}|${leaf.path}`];
+                        return kind ? renderWired(f.id, leaf, name, kind)
+                          : <P1Row key={leaf.path} name={name} specId={f.id} />;
+                      }} />
+                  )}
+                  {!tree.length && (f.controls ?? []).map((c) => (
+                    <SpecInfo key={c} text={c} />
+                  ))}
+                </>
+              )}
+            </div>
+          </details>
+        );
+      })}
+
+      <div className="specFoot">
+        规格：精修功能规格.json（39 族 / 805 项）· 工作流规格.json（34 条）·
+        未接通项按商业标准陈列并置灰
+      </div>
     </div>
   );
 }

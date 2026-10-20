@@ -10,8 +10,17 @@ import { frameAcked, framePresented, isNoFrame, parseFrameHead, pullFrame, type 
 import { BrushPad, type Rle } from "../brush";
 
 /** 视口的显示变换（平移/缩放）。它只改显示层的 CSS 变换：帧、回执、测量链一律不动。 */
-export interface View { zoom: number; x: number; y: number }
-export const VIEW_HOME: View = { zoom: 1, x: 0, y: 0 };
+export interface View {
+  /** 相对「适应窗口」的倍率：1 = Fit。100% 由 App 用 1/(dpr*fitScale) 算出来。 */
+  zoom: number;
+  x: number;
+  y: number;
+  /** true = 当前就是 Fit；滚轮/100% 会把它置 false（顶栏据此显示“适合”还是百分比） */
+  fit: boolean;
+}
+export const VIEW_HOME: View = { zoom: 1, x: 0, y: 0, fit: true };
+/** 对比模式：单视图 / 并排 / 卷帘。原图那一帧由引擎 compare 提供，缓存在视口里。 */
+export type CompareMode = "single" | "split" | "swipe";
 
 /** 消除笔的视口接口：on=false 时叠加层不吃事件，测量回路一个字也不变。 */
 export interface BrushProps {
@@ -69,6 +78,12 @@ export default function Viewer({
   onView,
   paintLocked = false,
   onHud,
+  compareMode = "single",
+  swipe = 0.5,
+  onSwipe,
+  captureToken = 0,
+  onOriginalCaptured,
+  onFitScale,
 }: {
   active: boolean;
   /** 对照组：只走 IPC 不上传不绘制，用于分离「地板成本」与「上传绘制成本」 */
@@ -107,19 +122,30 @@ export default function Viewer({
    *  宁可明着锁，也不画到别处去——那是"按了而画歪"最难查的一形。 */
   paintLocked?: boolean;
   onHud: (h: Hud) => void;
+  compareMode?: CompareMode;
+  /** 卷帘分界（图像宽度的 0–1） */
+  swipe?: number;
+  onSwipe?: (v: number) => void;
+  /** App 在 compare=true 之后 +1，视口据此把下一帧存成“原图”快照 */
+  captureToken?: number;
+  onOriginalCaptured?: () => void;
+  /** 把 Fit 倍率交给 App：100% = 1/(dpr*fitScale) 只能在这里算（视口知道画布与帧尺寸） */
+  onFitScale?: (s: number) => void;
 }) {
   // 变换只加在显示层（镜像画布）上：GL 渲染源与测量回路一个字也不改
-  const zoomed = view.zoom !== 1 || view.x !== 0 || view.y !== 0;
+  const zoomed = !view.fit || view.zoom !== 1 || view.x !== 0 || view.y !== 0;
+  const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
   const brushActive = !!brush?.on && !paintLocked;
   const pickActive = !!pick?.on && !paintLocked;
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const onWheel = (e: React.WheelEvent) => {
-    const next = Math.min(8, Math.max(1, view.zoom * Math.exp(-e.deltaY / 400)));
-    if (next === view.zoom) return;
-    onView(next === 1 ? { zoom: 1, x: 0, y: 0 }
-      : { zoom: next, x: view.x * (next / view.zoom), y: view.y * (next / view.zoom) });
+    const next = Math.min(8, Math.max(0.05, view.zoom * Math.exp(-e.deltaY / 400)));
+    if (Math.abs(next - view.zoom) < 1e-4) return;
+    onView({ zoom: next, x: view.x, y: view.y, fit: false });
   };
   const panDown = (e: React.PointerEvent) => {
+    // 卷帘模式：左键属于分界线；对比时也不许平移（两半必须同一坐标系）
+    if (compareMode === "swipe") return;
     // 框选模式下左键属于"画一个框"，不属于平移：两种意图抢同一个手势时让编辑意图赢
     if (e.button !== 1 && !(e.button === 0 && !brushActive && !pickActive)) return;
     drag.current = { x: e.clientX, y: e.clientY, ox: view.x, oy: view.y };
@@ -128,7 +154,7 @@ export default function Viewer({
   const panMove = (e: React.PointerEvent) => {
     const d = drag.current;
     if (!d) return;
-    onView({ zoom: view.zoom, x: d.ox + (e.clientX - d.x), y: d.oy + (e.clientY - d.y) });
+    onView({ zoom: view.zoom, x: d.ox + (e.clientX - d.x), y: d.oy + (e.clientY - d.y), fit: view.fit });
   };
   const panUp = () => { drag.current = null; };
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -147,6 +173,47 @@ export default function Viewer({
   const pickRef = useRef(pick);
   pickRef.current = paintLocked && pick ? { ...pick, on: false } : pick;
   const sizeRef = useRef({ w: 0, h: 0 });
+  // 帧尺寸与 Fit 倍率：100% 的换算与卷帘的落点都靠它，不能靠猜
+  const [frameDim, setFrameDim] = useState({ w: 0, h: 0 });
+  const fitScale = frameDim.w > 0 && box.width > 0 && box.height > 0
+    ? Math.min(box.width / frameDim.w, box.height / frameDim.h) : 0;
+  const fitScaleRef = useRef(fitScale); fitScaleRef.current = fitScale;
+  const viewRef = useRef(view); viewRef.current = view;
+  const compareRef = useRef(compareMode); compareRef.current = compareMode;
+  const swipeRef = useRef(swipe); swipeRef.current = swipe;
+  const captureTokenRef = useRef(captureToken); captureTokenRef.current = captureToken;
+  const onSwipeRef = useRef(onSwipe); onSwipeRef.current = onSwipe;
+  const onOrigRef = useRef(onOriginalCaptured); onOrigRef.current = onOriginalCaptured;
+  const updateSwipe = (e: React.PointerEvent) => {
+    const el = boxRef.current;
+    if (!el || !onSwipeRef.current) return;
+    const r = el.getBoundingClientRect();
+    const v = viewRef.current;
+    const iw = sizeRef.current.w * fitScaleRef.current * v.zoom;
+    if (iw <= 0) return;
+    const left = r.left + (r.width - iw) / 2 + v.x;
+    const frac = Math.min(0.96, Math.max(0.04, (e.clientX - left) / iw));
+    onSwipeRef.current(Math.round(frac * 1000) / 1000);
+  };
+  const swipeDrag = useRef(false);
+  const swipeDown = (e: React.PointerEvent) => {
+    if (compareMode !== "swipe" || e.button !== 0) return;
+    swipeDrag.current = true;
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    updateSwipe(e);
+    e.preventDefault();
+  };
+  const swipeMove = (e: React.PointerEvent) => {
+    if (!swipeDrag.current) return;
+    updateSwipe(e);
+  };
+  const swipeUp = (e: React.PointerEvent) => {
+    if (!swipeDrag.current) return;
+    swipeDrag.current = false;
+    (e.currentTarget as Element).releasePointerCapture?.(e.pointerId);
+  };
+  // Fit 倍率变化时交给 App：100% 按钮与顶栏标签需要同一份数
+  useEffect(() => { onFitScale?.(fitScale); }, [fitScale, onFitScale]);
 
   // 显示层的定位：这台机器上 .viewer 里的画布位图不进页面合成（GL 与 2D 都一样，实测
   // 挂在 document.body 上的 fixed 画布能正常显示），所以显示层必须离开这个子树。
@@ -359,6 +426,10 @@ export default function Viewer({
     // 现在每拍最多一个在途请求，响应落在哪一拍就在哪一拍上传。
     let pulling = false;
     let ready: ParsedFrame | null = null;
+    // 原图快照（离屏）：只由 captureToken 触发写入，不参与测量
+    const snap = document.createElement("canvas");
+    const snapCtx = snap.getContext("2d", { alpha: false });
+    let lastCapture = -1;
     const presentQueue: { seq: number; rafs: number }[] = [];
 
     const pump = () => {
@@ -403,6 +474,9 @@ export default function Viewer({
           canvas.height = f.h;
           // 叠加层与画笔垫必须跟着换尺寸：旧坐标对新图没有任何意义
           sizeRef.current = { w: f.w, h: f.h };
+          setFrameDim({ w: f.w, h: f.h });
+          snap.width = f.w; snap.height = f.h;
+          lastCapture = -1;
           pad.resize(f.w, f.h);
           if (overlay) {
             overlay.width = f.w;
@@ -445,8 +519,35 @@ export default function Viewer({
             gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, f.y0, f.w, f.rows, gl.RGBA, gl.UNSIGNED_BYTE, f.pixels);
           }
           gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-          // 一次 drawImage：把这一帧交给用户实际看到的那张画布。
-          if (mctx) mctx.drawImage(canvas, 0, 0);
+          // 一次 drawImage：把这一帧交给用户实际看到的那张画布；对比模式在这张
+          // 2D 画布上叠原图（GL 渲染与测量链路一个字不动）。
+          if (mctx) {
+            mctx.drawImage(canvas, 0, 0);
+            const mode = compareRef.current;
+            // 原图快照：App 在 compare=true 之后推进 token，这里的下一帧就是原图
+            if (captureTokenRef.current !== lastCapture) {
+              lastCapture = captureTokenRef.current;
+              if (snap.width !== f.w || snap.height !== f.h) {
+                snap.width = f.w; snap.height = f.h;
+              }
+              snapCtx?.drawImage(canvas, 0, 0);
+              onOrigRef.current?.();
+            }
+            if (mode === "split" && snap.width) {
+              // 左精修 / 右原图：两半都按帧分辨率画，再由 CSS 统一缩放
+              mctx.drawImage(canvas, 0, 0, f.w / 2, f.h, 0, 0, f.w / 2, f.h);
+              mctx.drawImage(snap, f.w / 2, 0, f.w / 2, f.h,
+                             f.w / 2, 0, f.w / 2, f.h);
+            } else if (mode === "swipe" && snap.width) {
+              const x = Math.max(1, Math.min(f.w - 1, Math.round(f.w * swipeRef.current)));
+              mctx.save();
+              mctx.beginPath(); mctx.rect(0, 0, x, f.h); mctx.clip();
+              mctx.drawImage(snap, 0, 0);
+              mctx.restore();
+              mctx.fillStyle = "rgba(227,193,118,.95)";
+              mctx.fillRect(x - 1, 0, 2, f.h);
+            }
+          }
         } else if (f.bitmap) {
           f.bitmap.close();
         }
@@ -500,11 +601,14 @@ export default function Viewer({
 
   return (
     <>
-      <div className="viewer" ref={boxRef} onWheel={onWheel}
-           onPointerDown={panDown} onPointerMove={panMove} onPointerUp={panUp}
-           onPointerCancel={panUp}
+      <div className={"viewer" + (compareMode === "swipe" ? " swipe" : "")}
+           ref={boxRef} onWheel={onWheel}
+           onPointerDown={(e) => { swipeDown(e); panDown(e); }}
+           onPointerMove={(e) => { swipeMove(e); panMove(e); }}
+           onPointerUp={(e) => { swipeUp(e); panUp(); }}
+           onPointerCancel={(e) => { swipeUp(e); panUp(); }}
            onDoubleClick={() => onView(VIEW_HOME)}
-           title="滚轮缩放 · 拖拽平移 · 双击回到 1:1">
+           title="滚轮缩放 · 拖拽平移 · 双击适应窗口">
         {/* GL 画布退成纯渲染源：不参与布局，也不指望它上屏（见上面那段）。 */}
         {/* glVisible 是给"官方开关能不能替掉镜像层"那个对照实验用的：把 GL 画布放回
             可见位，看它自己上不上得了屏。生产路径不依赖它。 */}
@@ -512,21 +616,38 @@ export default function Viewer({
         <canvas ref={overlayRef} className={brushActive ? "overlay on" : "overlay"} />
         {zoomed && (
           <span className="zoomtag">
-            {Math.round(view.zoom * 100)}%{paintLocked && brush?.on ? " · 缩放中画笔已锁" : ""}
+            {view.fit ? "适合" : `${Math.round(view.zoom * fitScale * dpr * 100)}%`}
+            {paintLocked && brush?.on ? " · 缩放中画笔已锁" : ""}
           </span>
         )}
+        {compareMode !== "single" && (
+          <div className="cmpTags">
+            <span>{compareMode === "split" ? "精修" : "原图"}</span>
+            <span>{compareMode === "split" ? "原图" : "精修"}</span>
+          </div>
+        )}
+        {compareMode === "swipe" && <div className="cmpHint">拖动分界线对比</div>}
       </div>
       {/* 显示层：portal 到 document.body 的 fixed 画布，每帧由 GL 画布 drawImage 填进来。
           放在 body 上不是随手试出来的——实测这个子树外的画布才进得了页面合成。 */}
       {createPortal(
-        <canvas
-          ref={mirrorRef}
-          className="mirror"
-          style={{ left: box.left, top: box.top, width: box.width, height: box.height,
-                   transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`,
-                   transformOrigin: "center center",
-                   imageRendering: view.zoom > 1 ? "pixelated" : "auto" }}
-        />,
+        // 裁切层必须是独立的一层：放大后的画布会盖住顶栏与右栏，
+        // 只靠 viewer 的 overflow 管不到挂在 body 上的 fixed 画布。
+        <div className="mirrorClip"
+             // 视口的“当前 Fit 倍率 / 帧尺寸”画在 DOM 上：自动探针（M0_SPEC 的
+             // 100% 那一格）与将来任何外部度量都要一个不改 state 就能读到的出处。
+             // React 的状态在长命 effect 的闭包里是首帧那份，读它会把 100% 算错。
+             data-fit-scale={fitScale.toFixed(4)}
+             data-frame={`${frameDim.w}x${frameDim.h}`}
+             style={{ left: box.left, top: box.top, width: box.width, height: box.height }}>
+          <canvas
+            ref={mirrorRef}
+            className="mirror"
+            style={{ width: "100%", height: "100%",
+                     transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`,
+                     transformOrigin: "center center" }}
+          />
+        </div>,
         document.body,
       )}
     </>

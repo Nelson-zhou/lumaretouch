@@ -1,0 +1,429 @@
+{
+  "checked_on": "2026-10-18",
+  "scope": "创意模块官方独立工具页，非实机测试",
+  "tools": [
+    {
+      "id": "205366",
+      "tool": "人像——AI面部重绘",
+      "input": "单张/多张人像，选择目标脸",
+      "interaction": "重绘1—5档，默认2；极速/标准；生成、不满意继续生成、应用",
+      "output": "面部及脖子修饰；程度从祛瑕到重构",
+      "limits_and_unknowns": "多人重绘最多5人；超过5人手选；档位越高涉及五官重构。输出尺寸、失败策略未知",
+      "source_url": "https://www.pixcakeai.com/guide/205366",
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/7980f9e67cb21a85606c01624ddf6caf.png"
+      ]
+    },
+    {
+      "id": "TsKGUrCisN",
+      "tool": "人像——闭眼修复",
+      "input": "人像与同一人物睁眼参考图",
+      "interaction": "选人物，上传参考，生成并比较，继续生成或应用",
+      "output": "每次2个闭眼修复候选",
+      "limits_and_unknowns": "参考图格式/姿态约束及多人上限未披露",
+      "source_url": "https://www.pixcakeai.com/guide/TsKGUrCisN",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad47-b12a-71af-a9b1-2a9fd15914f3/3-_闭眼修复@2x.png"
+      ]
+    },
+    {
+      "id": "230949",
+      "tool": "人像——AI瘦肚子",
+      "input": "人像，选择目标人物",
+      "interaction": "生成、切换候选、继续生成、应用",
+      "output": "每次3个腰腹/背/腋下修形候选",
+      "limits_and_unknowns": "强度滑杆及适用姿势范围未披露",
+      "source_url": "https://www.pixcakeai.com/guide/230949",
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/3fa4fa4223fccee0fac049731e1829b9.png"
+      ]
+    },
+    {
+      "id": "HQL6QugdKe",
+      "tool": "人像——AI加腹肌",
+      "input": "人像，选择目标人物",
+      "interaction": "生成、继续生成、应用",
+      "output": "每次1个腹肌增强候选",
+      "limits_and_unknowns": "宣传面向男性写真/运动照；形体保持误差及强度范围未披露",
+      "source_url": "https://www.pixcakeai.com/guide/HQL6QugdKe",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad49-8d21-7639-81af-c1dda25d1d37/8-_加腹肌@2x.png"
+      ]
+    },
+    {
+      "id": "165437",
+      "tool": "人像——证件照换衣服",
+      "input": "单人/双人证件照及服装、背景素材",
+      "interaction": "自动检测；设尺寸、服装类型、背景；生成后分别编辑衣服/背景层",
+      "output": "1个结果及换装图层组；双人可分别改服装",
+      "limits_and_unknowns": "仅单人双人；女/男/童/双人服装；可调脖长/位置/宽/阴影、头发范围、小头、肩宽、领宽/阴影，数值范围未知",
+      "source_url": "https://www.pixcakeai.com/guide/165437",
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/a8dca50d06d15fad8e2af50d6b127a16.png",
+        "https://download.pixcakeai.com/ui/baklib/de7b28608fce7e599df5f20dfe6b0a0b.png",
+        "https://download.pixcakeai.com/ui/baklib/a2940f092e8ec694cce17b5a81819705"
+      ]
+    },
+    {
+      "id": "hxJhjM76da",
+      "tool": "消除——创成式填充",
+      "input": "图片、手绘选区、文字修改要求",
+      "interaction": "画笔/橡皮；大小[]、硬度Shift+[]；输入要求，生成、选结果、应用",
+      "output": "每次2个局部填充候选",
+      "limits_and_unknowns": "笔刷数值范围、提示词长度及输出分辨率未披露",
+      "source_url": "https://www.pixcakeai.com/guide/hxJhjM76da",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad48-65d4-76b1-a09e-77b857c248c7/5-_创成式填充@2x.png"
+      ]
+    },
+    {
+      "id": "158249",
+      "tool": "消除——AI祛路人",
+      "input": "含路人的图片，自动候选遮罩",
+      "interaction": "画笔/套索修选区；可取消/反选/羽化0—1000/选区建层；生成后调蒙版，应用",
+      "output": "每次2个消除候选；支持批量配方",
+      "limits_and_unknowns": "蒙版密度/羽化可调但具体范围未披露；主体误删需人工检查",
+      "source_url": "https://www.pixcakeai.com/guide/158249",
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/f41a4b5f1d67569a27d20eaa84e3f5db.png",
+        "https://download.pixcakeai.com/ui/baklib/ec486ba9860105b6ddccc869daef63fb.png",
+        "https://download.pixcakeai.com/ui/baklib/8b2939ea0df736e8b61412a499fcb726.png",
+        "https://download.pixcakeai.com/ui/baklib/a20ba8676a272910c5dd2cbd85bc92d4.png",
+        "https://download.pixcakeai.com/ui/baklib/3b9be159faaf5baa09f52614684b6576"
+      ]
+    },
+    {
+      "id": "165435",
+      "tool": "消除——智能消除",
+      "input": "图片、涂抹区域或自动检测插座/安全出口",
+      "interaction": "快速/生成式；可每笔自动消除；主体保护仅主体/含关联物，外边缘优化默认随保护开启；消除后保存",
+      "output": "消除结果；历史把涂抹与消除分开，可只撤销结果",
+      "limits_and_unknowns": "快速免费，文章称生成式每笔10点；收费以客户端为准；不能从此推断所有会员模式。笔刷范围未知",
+      "source_url": "https://www.pixcakeai.com/guide/165435",
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/82939d4e7345e75650f83ed9af25e09d.png",
+        "https://download.pixcakeai.com/ui/baklib/41372babd58be95eb78fb7a1f2db6b8d"
+      ]
+    },
+    {
+      "id": "69YZJo2P2X",
+      "tool": "消除——AI祛体毛",
+      "input": "图片中人物手臂",
+      "interaction": "自动检测所有人的手臂汗毛；生成，切候选，继续或应用",
+      "output": "每次2个祛体毛候选",
+      "limits_and_unknowns": "文档仅明确手臂，其他身体区域未披露",
+      "source_url": "https://www.pixcakeai.com/guide/69YZJo2P2X",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad4c-fe84-76a2-8529-795302523896/11-_祛体毛@2x.png"
+      ]
+    },
+    {
+      "id": "158251",
+      "tool": "修复——AI超清",
+      "input": "单张/多张图片",
+      "interaction": "调整全图/人脸/身体/背景强度，放大比较，应用；支持配方",
+      "output": "清晰增强结果",
+      "limits_and_unknowns": "精修预览最高4000px，创意按原图尺寸；导出仍保留创意效果。滑杆范围/放大倍率未披露",
+      "source_url": "https://www.pixcakeai.com/guide/158251",
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/20ae6cf812f2a094f80013efd73a0293.png",
+        "https://download.pixcakeai.com/ui/baklib/367bb9c9034e187a6a590382ec43706d",
+        "https://download.pixcakeai.com/ui/baklib/4d1dbff60b33bee621b0bf76860808d7",
+        "https://download.pixcakeai.com/ui/baklib/18a89cebb5f7ba597584e3505771502e"
+      ]
+    },
+    {
+      "id": "152790",
+      "tool": "修复——AI补草地",
+      "input": "含草地图片，自动草地遮罩",
+      "interaction": "修选区；羽化0—1000；生成后调色温/色调/饱和/亮度及蒙版，应用；支持配方",
+      "output": "每次2个草地候选",
+      "limits_and_unknowns": "色彩及蒙版参数范围未知",
+      "source_url": "https://www.pixcakeai.com/guide/152790",
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/2e044d4a6104fa351ce34d89fd33aa71.png",
+        "https://download.pixcakeai.com/ui/baklib/b0fb3fafd8a5ad0cc776125972349b29",
+        "https://download.pixcakeai.com/ui/baklib/edd5ec42c755f2fd8b89c2492dcac7b2.png",
+        "https://download.pixcakeai.com/ui/baklib/48fba6388af8fff96b6c78b4a3b1d9b7.png",
+        "https://download.pixcakeai.com/ui/baklib/37729150d9cc35b6b1aaa024fd3c30ed"
+      ]
+    },
+    {
+      "id": "hHmVSQDymd",
+      "tool": "修复——沙滩美化",
+      "input": "海边/沙滩/沙漠图片",
+      "interaction": "质感（默认）或平整；生成，改变模式继续生成，应用",
+      "output": "地面瑕疵清理结果",
+      "limits_and_unknowns": "质感偏保留纹理、平整偏强清理；候选数及连续强度未知",
+      "source_url": "https://www.pixcakeai.com/guide/hHmVSQDymd",
+      "screenshot_urls": []
+    },
+    {
+      "id": "165436",
+      "tool": "修复——智能道具修复",
+      "input": "含道具图片，自动遮罩",
+      "interaction": "修选区、羽化0—1000；生成后调蒙版，可改选区再生成；支持配方",
+      "output": "每次1个道具修复结果",
+      "limits_and_unknowns": "同选区多次生成结果一致；要不同结果须改选区。模型随机种子未披露",
+      "source_url": "https://www.pixcakeai.com/guide/165436",
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/4c9cc62e21ed1c23e807d424acf9923c.png",
+        "https://download.pixcakeai.com/ui/baklib/271009debde1ebe1b1664f641f04a372",
+        "https://download.pixcakeai.com/ui/baklib/69feb0de950a5e6560f904f61a274f46.png",
+        "https://download.pixcakeai.com/ui/baklib/3c6bbaeab23ca9992a7c106cbb93bd2f.png",
+        "https://download.pixcakeai.com/ui/baklib/b895ede0c5a4c565bfad8207e94ea420",
+        "https://download.pixcakeai.com/ui/baklib/3275c1a24452ecb1c7af7e5cd57a7184"
+      ]
+    },
+    {
+      "id": "225672",
+      "tool": "修复——AI老照片修复",
+      "input": "老照片，可多选",
+      "interaction": "照片上色默认开；生成期间可切换其他图；继续生成或应用",
+      "output": "破损/划痕/噪点修复，可上色",
+      "limits_and_unknowns": "候选数、分辨率及关闭上色后的色彩保留规则未披露",
+      "source_url": "https://www.pixcakeai.com/guide/225672",
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/8d95ffde434f62802603ed1021c70505.png",
+        "https://download.pixcakeai.com/ui/baklib/8e7e1c52151c24392f41b74579934b1c"
+      ]
+    },
+    {
+      "id": "230950",
+      "tool": "修复——AI衣服精修",
+      "input": "服装正/反面照片，可多选",
+      "interaction": "概览/关联/单图/多图；模型1.0选正反；2.0Pro选低中高与2K/4K；生成后选图保存至图库",
+      "output": "每次1图，可同原图多模型多次生成；结果可继续编辑/导出/回精修",
+      "limits_and_unknowns": "单图缩放5%—400%；批量全原图/全生成图等；退出未保存会警告，确定退出即丢失；只选生成图可删除",
+      "source_url": "https://www.pixcakeai.com/guide/230950",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e491e-3e05-73f8-8f6e-ef7879fc1c6d/30.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e491f-9596-7425-bc58-324e1e0b4864/31.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4920-41e4-707c-920b-57db09a7c317/32.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4920-ca21-7018-91a8-7839d57b1108/33.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4921-6775-708f-ac6b-849a2157c4d1/34.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4921-8423-730c-acd1-2b66c619d0e8/35.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4921-9e45-7499-a862-f1683f47271f/36.png"
+      ]
+    },
+    {
+      "id": "qrjMSGJ2EJ",
+      "tool": "修复——鞋子祛污",
+      "input": "含鞋图片，选择鞋子",
+      "interaction": "可开多鞋祛污；生成后调祛污力度/影调；继续或应用",
+      "output": "鞋面/边/底祛污结果",
+      "limits_and_unknowns": "最多5双；滑杆范围、每次候选数未知",
+      "source_url": "https://www.pixcakeai.com/guide/qrjMSGJ2EJ",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad4a-64e5-748d-bebe-da124218a37e/14-_鞋子祛污@2x.png"
+      ]
+    },
+    {
+      "id": "dUZWMMNsh0",
+      "tool": "修复——裙子蓬松",
+      "input": "含裙图片，选择裙摆",
+      "interaction": "生成、切候选、继续生成、应用",
+      "output": "每次3个裙子蓬松候选，作用腰部以下轮廓",
+      "limits_and_unknowns": "强度、遮挡处理、输出尺寸未知",
+      "source_url": "https://www.pixcakeai.com/guide/dUZWMMNsh0",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad4a-0f1a-7599-b952-49ebf748aacd/13-_裙子蓬松@2x.png"
+      ]
+    },
+    {
+      "id": "jfMtohpr3O",
+      "tool": "修复——裙摆平整",
+      "input": "含裙图片，选择裙摆",
+      "interaction": "生成、切候选、继续生成、应用",
+      "output": "每次3个裙摆平整候选",
+      "limits_and_unknowns": "连续强度及适用裙型限制未披露",
+      "source_url": "https://www.pixcakeai.com/guide/jfMtohpr3O",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad49-c0a0-70bd-840b-a48b5a987600/12-_裙摆平整@2x.png"
+      ]
+    },
+    {
+      "id": "230951",
+      "tool": "场景——AI追色2.0（风格迁移）",
+      "input": "原片及推荐/自上传参考样片；我的样片与精修同步",
+      "interaction": "单/批量生成；生成记录预览、对比、删除重试；保存新照片或图层",
+      "output": "追光追色保留原尺寸、程度0—100；追场景为4K",
+      "limits_and_unknowns": "追光追色不能分开色彩/影调；追场景不支持程度。文中氛围迁移/追场景名称混用须核实",
+      "source_url": "https://www.pixcakeai.com/guide/230951",
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/1f78c58c8183c09a4183cc8e50cc5364.png",
+        "https://download.pixcakeai.com/ui/baklib/a40ed7d07f1253ee4e214cc42e058497.png"
+      ]
+    },
+    {
+      "id": "165433",
+      "tool": "场景——AI布景",
+      "input": "原图、自动抠图、官方/自有背景",
+      "interaction": "仅主体/含关联物；修蒙版羽化0—1000；定位缩放；选模型/尺寸/文字模板；生成记录比较，存新图或层；批量可随机配背景",
+      "output": "每次1结果；1.0仅4K，2.0为4K/6K；批量统一当前尺寸",
+      "limits_and_unknowns": "可调融合程度但范围未知；6K增加点数；素材可搜索/分类/排序/移动/重命名/删/刷新，官方素材支持下载",
+      "source_url": "https://www.pixcakeai.com/guide/165433",
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/bd2674ca1093875d45253999e5019d50.png",
+        "https://download.pixcakeai.com/ui/baklib/0c904b4bccaf105eda0de4eefde280eb",
+        "https://download.pixcakeai.com/ui/baklib/8cb2a4cda5753923e3c2ccfb7b975545",
+        "https://download.pixcakeai.com/ui/baklib/225a9c026bc403011831bf2d2dea2777",
+        "https://download.pixcakeai.com/ui/baklib/e5ea569646b04b18e87c690a725bdb56",
+        "https://download.pixcakeai.com/ui/baklib/23df00459994e6907f72a12c5016ea6f",
+        "https://download.pixcakeai.com/ui/baklib/e5ea569646b04b18e87c690a725bdb56",
+        "https://download.pixcakeai.com/ui/baklib/23df00459994e6907f72a12c5016ea6f",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e878e-4099-71be-bebb-6c93149e9aab/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e878b-4cda-709b-ab16-8ab1975a7d13/image.png"
+      ]
+    },
+    {
+      "id": "3raG48FD8J",
+      "tool": "场景——AI换天空",
+      "input": "有天空照片及官方/自上传天空素材",
+      "interaction": "选素材，生成、切候选、继续、应用",
+      "output": "每次2个天空替换候选",
+      "limits_and_unknowns": "天空小或无天空可能不稳定；建议大天空清晰边界。蒙版手工控制未披露",
+      "source_url": "https://www.pixcakeai.com/guide/3raG48FD8J",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad49-5875-74c6-858f-0dea82d2a1c5/7-_换天空@2x.png"
+      ]
+    },
+    {
+      "id": "242863",
+      "tool": "场景——春日樱花",
+      "input": "户外照片，可多选",
+      "interaction": "选择春日樱花效果，生成，确认应用",
+      "output": "植被/地面花瓣与人物光线的春日效果",
+      "limits_and_unknowns": "候选数、强度、区域保护及重试参数未披露",
+      "source_url": "https://www.pixcakeai.com/guide/242863",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad4f-de82-7218-a7e0-4235b0882c63/3-春日樱花@2x.png"
+      ]
+    },
+    {
+      "id": "230952",
+      "tool": "场景——夏日晴空",
+      "input": "阴天/多云等户外照片，可多选",
+      "interaction": "生成、继续生成、应用",
+      "output": "夏日晴空、日光、绿叶及水面光感效果",
+      "limits_and_unknowns": "候选数、强度、局部开关未披露",
+      "source_url": "https://www.pixcakeai.com/guide/230952",
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/14500b1a7152f3081cb7cdb125b0f264.png"
+      ]
+    },
+    {
+      "id": "230954",
+      "tool": "场景——秋天落叶",
+      "input": "户外照片，可多选",
+      "interaction": "选秋日风格，生成、继续生成、应用",
+      "output": "银杏金黄或枫叶金红，联动秋日色光",
+      "limits_and_unknowns": "候选数、强度及单独植被控制未披露",
+      "source_url": "https://www.pixcakeai.com/guide/230954",
+      "screenshot_urls": [
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/9e4d1023-4565-4213-abd1-f1132b72ce70-230954_001_-_dc9ddcc88c45.jpg"
+      ]
+    },
+    {
+      "id": "211088",
+      "tool": "场景——冬日雪景",
+      "input": "照片，可多选",
+      "interaction": "选择小雪/大雪/雪后晴天，生成并应用",
+      "output": "雪景氛围结果",
+      "limits_and_unknowns": "候选数、强度范围及保护区域未披露",
+      "source_url": "https://www.pixcakeai.com/guide/211088",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4863-7569-75e8-a5db-675ee5dad12e/29.png"
+      ]
+    },
+    {
+      "id": "242864",
+      "tool": "光影——自然光",
+      "input": "低光等照片，可多选",
+      "interaction": "生成、继续/重新生成、应用",
+      "output": "自然光影结果",
+      "limits_and_unknowns": "强度、方向及候选数量未披露",
+      "source_url": "https://www.pixcakeai.com/guide/242864",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad50-7207-733f-9668-7dcf8f7c4ea1/5-自然光@2x.png"
+      ]
+    },
+    {
+      "id": "230955",
+      "tool": "光影——AI补光",
+      "input": "逆光/暗光人像，可多选",
+      "interaction": "生成后调整补光强度0—100、色温−100—100，继续或应用",
+      "output": "模拟相机方向新增光源",
+      "limits_and_unknowns": "光源方向编辑、候选数未披露；无损画质属宣传未独立验证",
+      "source_url": "https://www.pixcakeai.com/guide/230955",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4922-4820-7758-aacb-e68113f2190a/40.png"
+      ]
+    },
+    {
+      "id": "230956",
+      "tool": "光影——柔化阴影",
+      "input": "硬阴影照片，可多选",
+      "interaction": "生成后柔化0—100；0—30轻度，70—100深度；可重生成，应用",
+      "output": "柔化已有硬阴影并保留结构阴影",
+      "limits_and_unknowns": "候选数、可编辑区域未披露",
+      "source_url": "https://www.pixcakeai.com/guide/230956",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4922-b78b-7408-88f3-7862ebb73101/41.png"
+      ]
+    },
+    {
+      "id": "230957",
+      "tool": "光影——夕阳光",
+      "input": "人像/风景等照片，可多选",
+      "interaction": "生成、继续/重新生成、应用",
+      "output": "暖色夕阳光；有天/水时联动光源及水面光感",
+      "limits_and_unknowns": "强度/方向/候选数未披露",
+      "source_url": "https://www.pixcakeai.com/guide/230957",
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/50fbc3cd6c485305e4539c5e23e7b0a1.png"
+      ]
+    },
+    {
+      "id": "211524",
+      "tool": "光影——发光",
+      "input": "照片，可多选",
+      "interaction": "黑柔/白柔/辉光；前两者1/8、1/4默认、1/2；辉光弱默认/中/强；可再调参数、看绿色作用范围，应用",
+      "output": "柔光效果；强度/半径/阈值/曝光/光散射与色相/饱和/亮度",
+      "limits_and_unknowns": "滑杆数值范围未知；原文物理折射描述不作为实现机制证明",
+      "source_url": "https://www.pixcakeai.com/guide/211524",
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/59eb4b51f5f7686c7baff02306f206e0.png",
+        "https://download.pixcakeai.com/ui/baklib/d27dbcdd6b6e057a868f091e8950733b"
+      ]
+    },
+    {
+      "id": "165438",
+      "tool": "光影——镜头虚化",
+      "input": "照片，经AI景深分析",
+      "interaction": "选5种光斑；主体自动或点选对焦；调焦区、查看黄近紫远景深；清晰/虚化画笔微调；应用/取消",
+      "output": "景深虚化结果；支持批量配方",
+      "limits_and_unknowns": "光斑圆形/圆形II/五边形/八边形/猫眼；画笔强度/大小/流畅度/羽化范围未披露",
+      "source_url": "https://www.pixcakeai.com/guide/165438",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4923-9874-741a-ade7-ac80a1945056/42.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4923-be3b-732d-82e9-aa62ce453c29/43.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4923-e3a9-7687-b06a-7b391e7e8820/44.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4923-f767-77e4-b73d-85f43ca7a843/45.png"
+      ]
+    },
+    {
+      "id": "uXo7tBdQwi",
+      "tool": "创意玩法——AI背景扩图",
+      "input": "照片及外扩画布",
+      "interaction": "默认1.2倍原比例；倍率1.2/1.5/2/3或四边自定义；比例原始/自由/1:1/4:5/5:7/2:3/16:9；生成后选应用",
+      "output": "每次3个扩图候选，可继续生成",
+      "limits_and_unknowns": "扩图模式禁旋转；透明填充可旋转裁切；边距范围未知。原文误写AI老照片修复入口，须实机核实",
+      "source_url": "https://www.pixcakeai.com/guide/uXo7tBdQwi",
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019eca4a-2ed5-779c-8045-07308af0c300/5-_AI背景扩图@2x.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e8762-0f3c-745e-a77b-f7e756ccbc15/image.png"
+      ]
+    }
+  ]
+}

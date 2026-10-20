@@ -1,0 +1,32 @@
+{
+ "source_dir": "/home/nelson/文档/岫图软件/AI开发资料包",
+ "files": {
+  "refine.json": {
+   "source": "精修功能规格.json",
+   "bytes": 288648,
+   "sha256": "ec7e04d962fdb6bbe6b15bf0d4ebdcad853a64f80e4a1f196539aba131cda967"
+  },
+  "workflows.json": {
+   "source": "工作流规格.json",
+   "bytes": 52513,
+   "sha256": "314560caa62f378a35a110b05b8cea78ede23b83a82db7392858ee8ee8362429"
+  },
+  "creative.json": {
+   "source": "创意工具规格.json",
+   "bytes": 24407,
+   "sha256": "20a0ac84906ab1eeb18825c6c04ca5f6f8d83d377585fa48f89b59ae9964fe78"
+  },
+  "p0.json": {
+   "source": "P0参数注册表.json",
+   "bytes": 29518,
+   "sha256": "b8726308161da098afad8f0604855e74359f47603161870db26fe4b5fbafc94e"
+  }
+ },
+ "counts": {
+  "features": 39,
+  "subcontrols": 805,
+  "workflows": 34,
+  "tools": 32,
+  "p0_entries": 36
+ }
+}

@@ -1,0 +1,948 @@
+{
+  "checked_on": "2026-10-18",
+  "scope": "桌面工作流、UI和操作约束；公开说明非实机验收",
+  "copyright_note": "各来源均为限量原创归纳；截图仅登记官方URL。",
+  "workflows": [
+    {
+      "id": "47238",
+      "title": "工作区信息架构",
+      "source_url": "https://www.pixcakeai.com/guide/47238",
+      "steps": [
+        "主页管理项目，项目内切换图库、精修、创意，默认精修",
+        "全局访问技术支持、账户、消息、传输列表、导出列表",
+        "图库看网格与标记，精修用画布及缩略图，创意用工具栏、画布、图层、历史和批量设计"
+      ],
+      "parameters": [
+        "图库网格每行1—7张",
+        "图库可显示RAW、已编辑、已导出及旗星色共6类标识"
+      ],
+      "states_and_exceptions": [
+        "本地、云上传和云下载项目在首页汇总；云项目带云标识"
+      ],
+      "not_disclosed": [
+        "工作区布局持久化、面板尺寸范围未披露"
+      ],
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/3bf8f4eba333ad9b1ed0780baa3b8eec.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad19-988e-715f-9d9a-9dd81cf41fea/首页.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad28-a146-75a9-9f81-67e9e33e4dd1/精修页面.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad35-585f-71e4-9729-c37b27a1d77d/图库页面.png",
+        "https://download.pixcakeai.com/ui/baklib/5715ac7617747559fef47b90a06dc4b0",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad38-25ec-716c-b498-ce60b35294d5/创意模块.png"
+      ],
+      "alias_urls": [
+        "https://www.pixcakeai.com/guide/32445"
+      ]
+    },
+    {
+      "id": "32448",
+      "title": "创建及追加项目",
+      "source_url": "https://www.pixcakeai.com/guide/32448",
+      "steps": [
+        "主页照片导入：选文件/文件夹，或拖入",
+        "也可拖至应用图标；后台在主页时启动并建项目",
+        "在精修页拖入则追加到当前项目"
+      ],
+      "parameters": [
+        "多项拖入以第一项命名"
+      ],
+      "states_and_exceptions": [
+        "设置、导出等二级弹窗打开时，拖入失败"
+      ],
+      "not_disclosed": [
+        "文件冲突及重复文件去重策略未披露"
+      ],
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a12ee2-bee0-73cb-8583-5b923ff1cf77/截屏2026-10-12_14.51.53.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a12eef-3e4d-70dd-8f4f-c5881b426ab0/截屏2026-10-12_15.01.41.png"
+      ]
+    },
+    {
+      "id": "32549",
+      "title": "导入格式与边界",
+      "source_url": "https://www.pixcakeai.com/guide/32549",
+      "steps": [
+        "导入失败先检查格式和软件版本",
+        "尺寸超限需缩小或裁剪后再导入"
+      ],
+      "parameters": [
+        "RAW、JPG/JPEG、PNG、TIFF",
+        "最大12000×12000"
+      ],
+      "states_and_exceptions": [
+        "不支持格式提示无法打开文件；超尺寸提示无法支持尺寸"
+      ],
+      "not_disclosed": [
+        "RAW机型覆盖不能由RAW总称推定"
+      ],
+      "screenshot_urls": [
+        "https://saas.bk-cdn01.com/t/747af862-6781-4bb4-8eb7-e194e1285019/u/2d3238d0-c336-4be4-9ad3-5d2edbbee97b/1726112308927/78e2e6c2",
+        "https://saas.bk-cdn01.com/t/747af862-6781-4bb4-8eb7-e194e1285019/u/2d3238d0-c336-4be4-9ad3-5d2edbbee97b/1726113117119/image.png"
+      ]
+    },
+    {
+      "id": "32447",
+      "title": "标记筛选排序",
+      "source_url": "https://www.pixcakeai.com/guide/32447",
+      "steps": [
+        "在图库/精修标记；图库多选可批量标记",
+        "底部筛选，专业/快捷模式切换；重置按钮清空",
+        "选择排序字段和升降序"
+      ],
+      "parameters": [
+        "星0—5；P选取/X排除/U移除旗标",
+        "红黄蓝绿紫；6—9映射前四色，同键取消",
+        "星级比较≥/≤/=；旗、色、修图状态、导出状态、格式、构图可筛选",
+        "拍摄时间、编辑时间、星级、类型、大小、名称排序"
+      ],
+      "states_and_exceptions": [
+        "不同筛选条件须同时满足；同一旗/色条件支持多选"
+      ],
+      "not_disclosed": [
+        "筛选条件枚举全集、并列排序稳定性未披露"
+      ],
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/14dfec78f6dda43aed774b5d92cbe387.png",
+        "https://download.pixcakeai.com/ui/baklib/84af4a9085d7ae7bb859bbdd8e235606.png",
+        "https://download.pixcakeai.com/ui/baklib/d786bf0cd1b84a356df51061aaa347bc.png",
+        "https://download.pixcakeai.com/ui/baklib/9f35623054be7d7386d3708da33b3e79.png",
+        "https://download.pixcakeai.com/ui/baklib/856cd0896dfd3360d26c1023d1e96919.png",
+        "https://download.pixcakeai.com/ui/baklib/e59cb3014c827ca3baf34fd0428e5d6a.png",
+        "https://download.pixcakeai.com/ui/baklib/8c6cc48093f8cc4ea067757bd703f367.png",
+        "https://download.pixcakeai.com/ui/baklib/0d02b49760b4b09c41f75ebad0b70290.png",
+        "https://download.pixcakeai.com/ui/baklib/fcae1cf1a889f3f301e252fdd2fe361a.png",
+        "https://download.pixcakeai.com/ui/baklib/a0fe23458a70bec02ad0c44a9ce40131.png",
+        "https://download.pixcakeai.com/ui/baklib/2042be5a75ca1efc6caeb61fed027522.png",
+        "https://download.pixcakeai.com/ui/baklib/26923a69903e5a761df1a1a2293f531d.png"
+      ]
+    },
+    {
+      "id": "230984",
+      "title": "AI挑图",
+      "source_url": "https://www.pixcakeai.com/guide/230984",
+      "steps": [
+        "图库开始AI挑图或精修去挑图",
+        "设场景、精选数量/标签及检测规则后开始",
+        "按结果分组查看；重复照片可进入同屏筛选对比"
+      ],
+      "parameters": [
+        "10种场景；≥150张导入时提示挑图",
+        "AI精选数量上限可自定义，可偏好正脸，可保留已有标签",
+        "闭眼、欠曝、过曝、模糊敏感度弱/标准/强",
+        "重复敏感度重复/标准/相似"
+      ],
+      "states_and_exceptions": [
+        "闭眼可排除大笑或超过指定人数合影；模糊可豁免至少一张清晰人脸"
+      ],
+      "not_disclosed": [
+        "人数阈值范围、评分公式、运行耗时未披露；重复敏感度文字须实测确认"
+      ],
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/e47894c0ce819c0ecd6d91e6334681f9",
+        "https://download.pixcakeai.com/ui/baklib/8eeb3e76d15a5bba1e88eeb58ae34e3f",
+        "https://download.pixcakeai.com/ui/baklib/e4010e1e4a8430f63de8c687076a3bb4.png"
+      ]
+    },
+    {
+      "id": "32450",
+      "title": "预览对比与参考",
+      "source_url": "https://www.pixcakeai.com/guide/32450",
+      "steps": [
+        "缩略图右侧选单视图/对比/参考",
+        "单视图按~比较前后；对比视图并排原图效果",
+        "参考图从外部导入，或Alt/Option拖项目缩略图，或右键设为参考"
+      ],
+      "parameters": [
+        "调色模式可对比实时调色与全效果",
+        "参考图图钉默认未钉住"
+      ],
+      "states_and_exceptions": [
+        "未钉住时AI追色样片切换带动参考图；X关闭回单视图"
+      ],
+      "not_disclosed": [
+        "缩放同步、色彩管理显示管线未披露"
+      ],
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/208f34ec72704cfd57ed83c2dfd5d46f",
+        "https://download.pixcakeai.com/ui/baklib/1519f175bc405b10edc20488da54952e",
+        "https://download.pixcakeai.com/ui/baklib/9fe5d68e1301e56653e5135381ccd6b9",
+        "https://download.pixcakeai.com/ui/baklib/f449c613813da8be68f644dfc637c137",
+        "https://download.pixcakeai.com/ui/baklib/47b01bbf9275d75fa245cc5824413fa7",
+        "https://download.pixcakeai.com/ui/baklib/4973c23273b76204439cc373bddba744",
+        "https://download.pixcakeai.com/ui/baklib/7a1e1c00508184156fc272d3b411360b"
+      ]
+    },
+    {
+      "id": "47248",
+      "title": "人像编辑页面",
+      "source_url": "https://www.pixcakeai.com/guide/47248",
+      "steps": [
+        "左侧/面板使用预设并校正年龄性别",
+        "人物属性选择后进入美化模块"
+      ],
+      "parameters": [
+        "女、男、儿童、长辈女、长辈男",
+        "单人、所有人、部分人联动"
+      ],
+      "states_and_exceptions": [
+        "属性作用域决定参数受影响人物"
+      ],
+      "not_disclosed": [
+        "人物检测置信度阈值未披露"
+      ],
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0ad3a-d254-71b1-8cb8-970492007c80/人像页面.png"
+      ]
+    },
+    {
+      "id": "47211",
+      "title": "多人作用域与身份修正",
+      "source_url": "https://www.pixcakeai.com/guide/47211",
+      "steps": [
+        "先整体调整，再单人选脸精修",
+        "属性小锁加入/解除联动，选任一联动属性调整",
+        "人脸检测面板修改属性，可批量同步同人；可添加/删除人脸"
+      ],
+      "parameters": [
+        "按五类属性、单人、所有人、部分属性联动",
+        "单人调整可同步其他照片同一人物"
+      ],
+      "states_and_exceptions": [
+        "单人覆盖后类别调整不再作用该人；还原人物属性会清空单人效果"
+      ],
+      "not_disclosed": [
+        "跨图身份匹配算法、手动加脸框约束未披露"
+      ],
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a08528-3eec-706c-94ea-5dbed25a66da/截屏2026-09-09_15.53.04.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a08529-dc21-721a-94fe-414a2f57cc90/截屏2026-09-09_15.54.02.png",
+        "https://download.pixcakeai.com/ui/baklib/880caa795787f2b3e3cc0f46723b8f66",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0853a-3d89-7589-9724-21c75d797847/截屏2026-09-09_16.12.39.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0853b-b13f-71e1-806d-3a71c339babc/截屏2026-09-09_16.13.39.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a0853d-0a88-721c-9a0b-3ecaf6282461/截屏2026-09-09_16.15.24.png"
+      ]
+    },
+    {
+      "id": "32457",
+      "title": "预设类型与覆盖",
+      "source_url": "https://www.pixcakeai.com/guide/32457",
+      "steps": [
+        "选择色彩、AI色彩、人像或组合预设",
+        "按作用域理解覆盖再应用"
+      ],
+      "parameters": [
+        "同类后用覆盖先用；不同类叠加",
+        "组合包含多模块"
+      ],
+      "states_and_exceptions": [
+        "调色后套含色彩的预设会覆盖手工调色"
+      ],
+      "not_disclosed": [
+        "模块内部逐参数合并细则未披露"
+      ],
+      "screenshot_urls": []
+    },
+    {
+      "id": "32458",
+      "title": "保存与更新预设",
+      "source_url": "https://www.pixcakeai.com/guide/32458",
+      "steps": [
+        "图片调整后保存新预设",
+        "输入名称、分类、类型并选择功能",
+        "保存到我的；更新可选覆盖旧预设"
+      ],
+      "parameters": [
+        "名称≤20字符",
+        "类型自动推定可改；功能可选已调整/全选/全部取消"
+      ],
+      "states_and_exceptions": [
+        "默认选中多个模块全部功能，不等同只保存已调整项"
+      ],
+      "not_disclosed": [
+        "预设序列化版本协议未披露"
+      ],
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/b6d5e4e16a7dccba956c2cb660a16029",
+        "https://download.pixcakeai.com/ui/baklib/9bcd5785d72c7007f4f636720e87ae02",
+        "https://download.pixcakeai.com/ui/baklib/9bc3231a4d72954e55f0fb052e268b89",
+        "https://download.pixcakeai.com/ui/baklib/d0794d3cdb5667f8a0896be84eb3a8be"
+      ]
+    },
+    {
+      "id": "158978",
+      "title": "分享及导入预设",
+      "source_url": "https://www.pixcakeai.com/guide/158978",
+      "steps": [
+        "右键预设分享，或分组批量分享，获得口令",
+        "加号导入：口令加分类，或本地XMP"
+      ],
+      "parameters": [
+        "支持口令、.xmp"
+      ],
+      "states_and_exceptions": [
+        "分享方版本较新需接收方升级；分享方已删除则无法导入"
+      ],
+      "not_disclosed": [
+        "XMP兼容字段、口令有效期未披露"
+      ],
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/6cf845191637cd67a535df48265d7ba0",
+        "https://download.pixcakeai.com/ui/baklib/95b1ad45e0f149faa5e8cccbc95dcc0a",
+        "https://download.pixcakeai.com/ui/baklib/04730e9f0b2488d4c307560bcadaa54e"
+      ]
+    },
+    {
+      "id": "32459",
+      "title": "管理预设",
+      "source_url": "https://www.pixcakeai.com/guide/32459",
+      "steps": [
+        "拖动预设及分类排序；跨分类拖动改分类",
+        "右键重命名/删除",
+        "按类型筛选"
+      ],
+      "parameters": [
+        "可按分类组织"
+      ],
+      "states_and_exceptions": [
+        "删除是否可撤销未披露"
+      ],
+      "not_disclosed": [],
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/c97efd5f235efe1563a24d87879bc805"
+      ]
+    },
+    {
+      "id": "32480",
+      "title": "批量同步与创意配方",
+      "source_url": "https://www.pixcakeai.com/guide/32480",
+      "steps": [
+        "多选目标，点击同步到选中图片，勾选模块/子功能后保存",
+        "创意批量设计新建配方，添加工具并排序",
+        "选图和配方，查看预估点数，再执行"
+      ],
+      "parameters": [
+        "全选Ctrl/Cmd+A；区间Shift；离散Ctrl/Cmd",
+        "同步快捷键Ctrl/Cmd+C"
+      ],
+      "states_and_exceptions": [
+        "操作台显示整批与单图节点进度；可终止整批或停止单图",
+        "运行中图片禁编辑，历史与图层不可看"
+      ],
+      "not_disclosed": [
+        "失败重试/费用返还/事务边界未披露"
+      ],
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/c8227d0d842a2fb51a807a5628dbc4fd",
+        "https://download.pixcakeai.com/ui/baklib/1d7a2bad49686aa9fdd8b235b6927d57",
+        "https://download.pixcakeai.com/ui/baklib/25f1f1023af013cdb79090d41aed0790",
+        "https://download.pixcakeai.com/ui/baklib/e9bb4ec93013c0dca510b0cf089713aa",
+        "https://download.pixcakeai.com/ui/baklib/b1f7ace7caf06f45196938af8d44ea54.png",
+        "https://download.pixcakeai.com/ui/baklib/e480c8218c12a99f079c17a8c8370db2",
+        "https://download.pixcakeai.com/ui/baklib/806df47ae077fe50360b4272ae99f8f7.png",
+        "https://download.pixcakeai.com/ui/baklib/3ea4770424effd06d20dff0ca252c902.png"
+      ]
+    },
+    {
+      "id": "47209",
+      "title": "历史与撤销",
+      "source_url": "https://www.pixcakeai.com/guide/47209",
+      "steps": [
+        "历史点击某一步恢复；Ctrl/Cmd+Z撤销"
+      ],
+      "parameters": [
+        "记录单图编辑步骤"
+      ],
+      "states_and_exceptions": [
+        "关闭软件后细分步骤折叠为上一次保存，不能逐步返回"
+      ],
+      "not_disclosed": [
+        "历史容量和重做快捷键未披露"
+      ],
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/dcab6bf8aca84a3e13a33b5f79861c86.png"
+      ]
+    },
+    {
+      "id": "3YX3UbkTVp",
+      "title": "虚拟副本",
+      "source_url": "https://www.pixcakeai.com/guide/3YX3UbkTVp",
+      "steps": [
+        "图库/精修右键创建副本或批量创建；Ctrl/Cmd+单引号",
+        "副本插到原图右侧，继承当前效果与元数据",
+        "同源聚合，编号递增"
+      ],
+      "parameters": [
+        "原图与副本导出按1张计费"
+      ],
+      "states_and_exceptions": [
+        "删除原图带关联副本入回收站；恢复副本会恢复原图",
+        "官方称不占额外磁盘，不能据此推断实际元数据零开销"
+      ],
+      "not_disclosed": [
+        "副本数量上限未披露"
+      ],
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e9073-f682-763f-b070-63d9624c3a0d/截屏2026-06-04_10.26.05.png"
+      ]
+    },
+    {
+      "id": "127932",
+      "title": "创意图层与回流",
+      "source_url": "https://www.pixcakeai.com/guide/127932",
+      "steps": [
+        "进入创意后拖图可新增图层；选图层改属性",
+        "图层支持重命名、锁定/隐藏、蒙版、组、复制/删除",
+        "完成后应用至精修或直接导出"
+      ],
+      "parameters": [
+        "5种混合：正常/正片叠底/滤色/变亮/变暗；不透明度0—100%",
+        "回流选已创意编辑/当前选择；更新原图或新建.tsq"
+      ],
+      "states_and_exceptions": [
+        "锁定层不可编辑；无选择操作置灰",
+        "更新原精修图保留效果但滑杆归零，重置不能回原图，须用历史",
+        "退出项目或软件历史折叠；创意导出暂缺水印/排版"
+      ],
+      "not_disclosed": [
+        "部分AI图层支持再生成、版本切换和蒙版；具体全工具持久化格式未披露"
+      ],
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a08e4c-f61e-73ba-a9bb-9077a2aec112/截屏2026-09-11_10.29.32.png",
+        "https://download.pixcakeai.com/ui/baklib/5c7483e500a94b7c9eb3881e7f9cb5fb.png",
+        "https://download.pixcakeai.com/ui/baklib/7e68c6edbc622ad772fe0ad1ad460cf4",
+        "https://download.pixcakeai.com/ui/baklib/ffcbccea5e5c381915a61cab8369a132",
+        "https://download.pixcakeai.com/ui/baklib/70a683cfaa9907b0df3c87fa2de0ee3d",
+        "https://download.pixcakeai.com/ui/baklib/68f3a1be20a8d9c766af6f7278cf7700",
+        "https://download.pixcakeai.com/ui/baklib/6d35ec49646c00186b1f96a188e36a95",
+        "https://download.pixcakeai.com/ui/baklib/2376d6627635d4d8f9709e6820deabc7",
+        "https://download.pixcakeai.com/ui/baklib/782de5b9e8b9f580a1875f7c15af35c0",
+        "https://download.pixcakeai.com/ui/baklib/01e2351869e6db958c1a35272af84129",
+        "https://download.pixcakeai.com/ui/baklib/1d99838013e2cb420d75da625394a519",
+        "https://download.pixcakeai.com/ui/baklib/7e5cf16dee33510d91bd2a0875192f31",
+        "https://download.pixcakeai.com/ui/baklib/07be09c3a260bed570cee6f68f221900",
+        "https://download.pixcakeai.com/ui/baklib/0b9583830aacb347b681556bab871736",
+        "https://download.pixcakeai.com/ui/baklib/518607b46a330ad8ac880751cdb1963e",
+        "https://download.pixcakeai.com/ui/baklib/01f9ad867059903055b5673813a0b241",
+        "https://download.pixcakeai.com/ui/baklib/806df47ae077fe50360b4272ae99f8f7.png"
+      ]
+    },
+    {
+      "id": "MlI1Jk6qm6",
+      "title": "AI点修交互",
+      "source_url": "https://www.pixcakeai.com/guide/MlI1Jk6qm6",
+      "steps": [
+        "工具栏AI点修或A；默认智能悬停红遮罩，点击选中",
+        "Ctrl/Cmd点选多区，或快速画笔/橡皮增减选区",
+        "浮层助手输入需求；调色定位局部滑杆；美化按选区推荐"
+      ],
+      "parameters": [
+        "已使用AI追色时可调选区追色",
+        "脸、颈、身体轮廓锚点可拖动塑形"
+      ],
+      "states_and_exceptions": [
+        "工具建议随选区/场景变化"
+      ],
+      "not_disclosed": [
+        "画笔尺寸、选区上限、生成重试策略未披露"
+      ],
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a07acb-8674-7689-9378-06562bf02d91/截屏2026-09-07_15.34.15.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a07ad5-bce2-71f4-8ee0-b0a8b3e9e016/截屏2026-09-07_15.45.13.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a07adc-21b1-70c9-8a0a-90b11d1868f4/截屏2026-09-07_15.52.38.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a07b09-ee81-740a-a43b-283954222eb7/截屏2026-09-07_16.43.37.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a07b08-c2c6-753c-9497-49ac9f4532de/截屏2026-09-07_16.42.22.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a07b06-5f34-7385-b3a7-f1d928e7751b/截屏2026-09-07_16.37.58.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a07b02-d9fe-707a-ac86-23ef499968df/截屏2026-09-07_16.36.10.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a07b2d-d365-70f8-a89d-d48cbc1ebad6/截屏2026-09-07_17.20.51.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a07b32-8bf0-715b-92fc-64483fd4cb07/截屏2026-09-07_17.28.12.png"
+      ]
+    },
+    {
+      "id": "230427",
+      "title": "AI工具箱入口与生态",
+      "source_url": "https://www.pixcakeai.com/guide/230427",
+      "steps": [
+        "首页AI工具箱，或创意AI工具下已购买/大师精选",
+        "选择工具包及场景工具进入生成"
+      ],
+      "parameters": [
+        "第三方场景工具由创作者工具包组织"
+      ],
+      "states_and_exceptions": [
+        "工具及收费是动态目录，不能视为固定开源功能清单"
+      ],
+      "not_disclosed": [
+        "第三方执行隔离、安全审核、模型协议未披露"
+      ],
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a060d7-dff0-767b-b5f9-2c5a1007e549/截屏2026-09-02_14.38.41.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a060e3-e9bb-7462-b4ae-cfe42ef993df/截屏2026-09-02_14.51.08.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a060e7-1da2-725f-9903-e35cc32b7d79/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a060e7-39fa-73d1-8f01-3998b64a6109/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a060e7-516f-7539-8685-04ccd433ae22/image.png",
+        "https://download.pixcakeai.com/ui/baklib/34627554c9da7329e7d1e84c93b0fe43.png",
+        "https://download.pixcakeai.com/ui/baklib/68bae6b042d4623cdbb980e48713a25c",
+        "https://download.pixcakeai.com/ui/baklib/4e7bc0a9b51093b397c092014f79db8d.png",
+        "https://download.pixcakeai.com/ui/baklib/6e31864f98c6cd6cd545b5857496a1da.png"
+      ]
+    },
+    {
+      "id": "32483",
+      "title": "导出设置与资源竞争",
+      "source_url": "https://www.pixcakeai.com/guide/32483",
+      "steps": [
+        "选图导出：快速、自定、排版印刷",
+        "选指定/原图目录并设置路径保留",
+        "自定格式品质色域水印；排版可存模板并接系统打印"
+      ],
+      "parameters": [
+        "原始格式/JPG/TIFF；品质整数0—14或目标文件大小",
+        "sRGB可选；水印按横竖方图分设，可同时导出无水印",
+        "排版边距单位毫米/厘米/英寸"
+      ],
+      "states_and_exceptions": [
+        "文件大小仅近似；极速导出禁编辑和预览，官方约15%提升非保证"
+      ],
+      "not_disclosed": [
+        "截图显示正在导出/完成、暂停全部/开始全部/删除全部及逐项目暂停/删除；重试、同名覆盖、TIFF位深、线程数未知"
+      ],
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/f68919a8df1ce1d0dd11d75006fc9ba2",
+        "https://download.pixcakeai.com/ui/baklib/4a25a3093c3d30d7ab09d2c9dd98136d.jpg",
+        "https://download.pixcakeai.com/ui/baklib/6d74e52d5fc4d780a80b1c4d2add4b4a",
+        "https://download.pixcakeai.com/ui/baklib/719c588866444de95e5e5788d6d750f1"
+      ]
+    },
+    {
+      "id": "124704",
+      "title": "RAW导出平台差异",
+      "source_url": "https://www.pixcakeai.com/guide/124704",
+      "steps": [
+        "需区分导入RAW与输出RAW"
+      ],
+      "parameters": [
+        "Windows/Mac不支持RAW导出；iPad可选原始格式导出RAW"
+      ],
+      "states_and_exceptions": [
+        "桌面导出原始格式不可被解释为所有RAW均原格式写回"
+      ],
+      "not_disclosed": [],
+      "screenshot_urls": [
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/5a2379f3-81f2-45c4-8841-74dae8d349a7-124704_001_RAW-RAW-_e4a9e4454982.jpg"
+      ]
+    },
+    {
+      "id": "32563",
+      "title": "多目录导出",
+      "source_url": "https://www.pixcakeai.com/guide/32563",
+      "steps": [
+        "原图目录导出可新建项目文件夹",
+        "指定目录导出保留导入目录层级"
+      ],
+      "parameters": [
+        "新目录名取导入的末端文件夹名"
+      ],
+      "states_and_exceptions": [
+        "要上一级命名须导入上一级；此FAQ选项措辞与导出主文略有差异，实机核实"
+      ],
+      "not_disclosed": [],
+      "screenshot_urls": [
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/fda9608e-b002-4d69-8691-0f4054bb1e82-32563_001_-_6d958aca29ec.jpg",
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/306c7fb3-c868-4582-85a7-18fe18c6922c-32563_002_-_90f186af6789.jpg",
+        "https://download.pixcakeai.com/ui/baklib/d24a67810ffdead534b834926fb475a3.png",
+        "https://download.pixcakeai.com/ui/baklib/094f69cd8339b8fc5f0951ca5610d82e.png"
+      ]
+    },
+    {
+      "id": "32561",
+      "title": "同步后加载状态",
+      "source_url": "https://www.pixcakeai.com/guide/32561",
+      "steps": [
+        "可直接导出，不必等待所有预览加载",
+        "设置中关闭预览预加载后仅选中图加载"
+      ],
+      "parameters": [
+        "内存≥8GB默认预加载，以当前图附近为优先",
+        "内存<8GB无此开关"
+      ],
+      "states_and_exceptions": [
+        "预览转圈不表示同步参数未应用；导出应带同步效果"
+      ],
+      "not_disclosed": [
+        "缓存大小、调度算法未披露"
+      ],
+      "screenshot_urls": [
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/b30e98f2-07f0-4f78-b9e1-fa11f24b2572-32561_001_-_fcd0777caa94.jpg"
+      ]
+    },
+    {
+      "id": "182640",
+      "title": "未显示效果排查",
+      "source_url": "https://www.pixcakeai.com/guide/182640",
+      "steps": [
+        "≥8GB桌面设置开启大图预览预加载",
+        "低内存桌面及移动端点击单图触发加载"
+      ],
+      "parameters": [
+        "预览能力依内存/平台分层"
+      ],
+      "states_and_exceptions": [
+        "未选中未加载与编辑失败应区别显示"
+      ],
+      "not_disclosed": [],
+      "screenshot_urls": [
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/c0c0e2d5-fba6-49e1-81e1-4a0dcc0e5671-182640_001_-_4556387b6205.jpg"
+      ]
+    },
+    {
+      "id": "32449",
+      "title": "回收站恢复",
+      "source_url": "https://www.pixcakeai.com/guide/32449",
+      "steps": [
+        "首页回收站右键恢复/彻底删除",
+        "进入被删项目多选可局部还原"
+      ],
+      "parameters": [
+        "保留30天"
+      ],
+      "states_and_exceptions": [
+        "到期或彻底删除不可恢复；恢复包含图片效果"
+      ],
+      "not_disclosed": [
+        "原始外部文件删除语义须另核实"
+      ],
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/01a12f10-7e13-73e9-9fe3-8a4f44d46d8f/截屏2026-10-12_15.23.58.png"
+      ]
+    },
+    {
+      "id": "122713",
+      "title": "云项目与一致性",
+      "source_url": "https://www.pixcakeai.com/guide/122713",
+      "steps": [
+        "先设本地云项目缓存目录",
+        "创建云项目选择原图上云/公共盘/不上云；也可上传本地项目",
+        "不上云的其他设备提示照片不存在，链接原图可同层批量重链"
+      ],
+      "parameters": [
+        "仅Windows/Mac跨设备支持",
+        "传输列表分上传/下载，显示进度异常，可暂停/删除任务"
+      ],
+      "states_and_exceptions": [
+        "上传未完项目已可见，图片渐进出现；切换照片同步修改",
+        "单独人脸局部调色及人像效果暂不上云；同图并发最后修改者覆盖",
+        "公共盘项目彻底删除不自动删公共盘原图"
+      ],
+      "not_disclosed": [
+        "冲突版本保留、离线编辑合并未披露"
+      ],
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/92581b540db6981f5a595c75b19e4510",
+        "https://download.pixcakeai.com/ui/baklib/32bf2951c23c49bcc6388d6f0d50709a.png",
+        "https://download.pixcakeai.com/ui/baklib/de30b6b73a59d7a377eb7361b133a7a7.png",
+        "https://download.pixcakeai.com/ui/baklib/9b04492f2306b5a2c6e23e0a29a4974e.png",
+        "https://download.pixcakeai.com/ui/baklib/ef402c73d7c2146621250f306e6c3759.png",
+        "https://download.pixcakeai.com/ui/baklib/8c10959bf86b6fc5ebdf62ee9c48e240",
+        "https://download.pixcakeai.com/ui/baklib/0819527d43753fb178469893735935ab",
+        "https://download.pixcakeai.com/ui/baklib/57785124a1dd3c506da8288149775a45",
+        "https://download.pixcakeai.com/ui/baklib/88ba85ca4c009ff81f8b54660bb6f2f7",
+        "https://download.pixcakeai.com/ui/baklib/24085c6f41f0d6eb7efdee5fb62c0924"
+      ]
+    },
+    {
+      "id": "230903",
+      "title": "选片及交付闭环",
+      "source_url": "https://www.pixcakeai.com/guide/230903",
+      "steps": [
+        "导出勾上传至选片交付，传输完成后进入交付项目",
+        "选片分享生成二维码，客户小程序下载/选片备注",
+        "去修图返回项目，筛选已选并定位备注；再次上传替换初修图"
+      ],
+      "parameters": [
+        "所有项目支持交付；仅原图云端的云项目支持在线选片"
+      ],
+      "states_and_exceptions": [
+        "客户原小程序入口可下载更新精修图"
+      ],
+      "not_disclosed": [
+        "链接有效期、访问控制及原图下载权限未披露"
+      ],
+      "screenshot_urls": [
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/34ab0dcd-1b87-4bb1-8d05-2b2b996c01e5-230903_001_-_52e06c32d42c.jpg",
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/a558a2cd-6e6f-48df-8c62-00e4a534cb8f-230903_002_-_19e71b35ceb1.jpg",
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/8e3446fc-d32a-4e54-bdd4-bba0db8acd5e-230903_003_-_d78bc265e910.jpg",
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/5410df1e-5719-4923-b503-dc9a1279ced2-230903_004_-_35753efcab07.png",
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/9e18007b-b90a-4520-b93d-80482ed46aae-230903_005_-_792c3aea808c.png",
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/d1caab39-5f2e-4f8f-a9a6-bbfc78d59a4e-230903_006_-_0105f032da2e.png",
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/4ce4bf8e-8e00-4ece-9409-8b194f93e71a-230903_007_-_45e19fd19f34.jpg",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fd51e-0804-764f-9f60-124199715c26/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fd51e-28b5-74a0-84fb-1ae8301da2cd/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fd51e-3fe8-7230-b336-945593a88376/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fd51e-57c6-76fb-8097-18bc4449c342/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fd51f-7bf7-740c-baaf-474f3b127cee/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fd51f-956f-7038-bed1-f7f17213ccb9/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fd51f-b69c-76a0-ac95-7ddd9ee0d4c6/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fd51f-cc55-704b-a31c-35629a16a543/image.png",
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/865796c3-1335-4a4d-a1a5-245534e06fea-230903_016_-_bacd71655c0c.jpg",
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/f3f3f1ed-abec-440a-bd71-996e6e6c64ed-230903_017_-_58f1f86fbe7f.png"
+      ]
+    },
+    {
+      "id": "8YEKwsjJg7",
+      "title": "自动化工作流",
+      "source_url": "https://www.pixcakeai.com/guide/8YEKwsjJg7",
+      "steps": [
+        "新建本地/ERP，或导入模板/流程文件",
+        "节点连线，右侧参数与错误策略；检测通过才运行",
+        "运行记录查看订单进度；修改前停止"
+      ],
+      "parameters": [
+        "内测；ERP仅利亚方舟海螺云",
+        "节点含监听/拉单/下载/创建/挑图/追色/预设/标签/分桶/循环/导出",
+        "错误策略中止/跳过/保留继续"
+      ],
+      "states_and_exceptions": [
+        "源无输入、导出无输出；完整链路另检测",
+        "监听与导出同目录会重复处理；ERP需绑定",
+        "自存模板仅本机，流程文件可跨机"
+      ],
+      "not_disclosed": [
+        "节点参数完整范围、检查点重启和幂等机制未披露"
+      ],
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fea91-0915-77c5-9e79-e5613cf6737b/截屏2026-08-10_15.26.14.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fda10-f902-736c-bf5a-02607378d2f3/截屏2026-08-07_10.31.57.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fda32-cc34-707e-8daf-244ab32a13d1/截屏2026-08-07_11.09.28.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fdadc-7454-746f-abfa-5b4b3eaae9d8/截屏2026-08-07_14.14.43.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fdadd-59db-727a-9c85-67baebed4259/截屏2026-08-07_14.15.36.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fdaf7-8c1b-73e3-8ade-249c6981fecf/截屏2026-08-07_14.44.19.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fdb0c-350f-71f9-a390-5bd0b51a17f6/截屏2026-08-07_15.06.43.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fdb12-605f-70a8-8ebc-6529a72deefe/截屏2026-08-07_15.13.47.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fdb17-8874-7686-9da4-6880e618cc84/截屏2026-08-07_15.19.28.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019feaad-31cd-76bd-bf27-582bb345ee10/截屏2026-08-10_15.57.14.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019feae2-684f-777f-9434-5ab1283c4c75/50e77a67aafe7e6670a3dd17219e1b5d.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019feab1-9457-7409-a154-94924040105b/截屏2026-08-10_16.01.12.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019feafc-ca96-773c-8517-3b8ba3c95386/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019feaff-39c3-728c-bb08-97729b25017b/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019ff3f9-cb8b-710a-a7ce-73a38c9f5868/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019ff3fb-63e7-724b-879d-0d779164a22c/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019feb08-76c8-7798-9325-3fc5f2f89b61/截屏2026-08-10_17.34.02.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fdadd-59db-727a-9c85-67baebed4259/截屏2026-08-07_14.15.36.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fdaf7-8c1b-73e3-8ade-249c6981fecf/截屏2026-08-07_14.44.19.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fdb0c-350f-71f9-a390-5bd0b51a17f6/截屏2026-08-07_15.06.43.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fdb12-605f-70a8-8ebc-6529a72deefe/截屏2026-08-07_15.13.47.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fdb17-8874-7686-9da4-6880e618cc84/截屏2026-08-07_15.19.28.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fefad-94fb-743e-bef2-41dc0f2fedbf/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fefab-fea4-71a8-aae7-7c829f3c8b43/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fefb2-0c7d-77fa-9fec-6c50469e9fcb/截屏2026-08-11_15.16.52.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fefbb-46c1-771d-88ba-f60ea75fd9f7/截屏2026-08-11_15.30.11.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fefbf-353b-7216-84e9-137c731e6df2/截屏2026-08-11_15.34.44.png"
+      ]
+    },
+    {
+      "id": "47251",
+      "title": "桌面有线联机",
+      "source_url": "https://www.pixcakeai.com/guide/47251",
+      "steps": [
+        "联机拍摄连接相机，默认自动，可设手动",
+        "按相机支持情况显示参数、取景与快门",
+        "设置传输格式、AI挑图、预览跟随、效果、目录及命名"
+      ],
+      "parameters": [
+        "RAW+JPEG/仅RAW/仅JPEG由相机保存格式限制",
+        "最新图/保持位置；同步上一张/预设",
+        "5种命名方式"
+      ],
+      "states_and_exceptions": [
+        "上一张同步不含液化修复等手动效果",
+        "叠加层须显示效果图；导出另启用保留叠加层"
+      ],
+      "not_disclosed": [
+        "支持机型须查独立名单；Linux不能据此承诺同等支持"
+      ],
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/0907337056834d8437a165893a79bf45",
+        "https://download.pixcakeai.com/ui/baklib/d8c9f3fd56b046b1b1fb9050878194ae.png",
+        "https://download.pixcakeai.com/ui/baklib/13966043d8dc7c81a5e076bd624be715.png",
+        "https://download.pixcakeai.com/ui/baklib/2805dda7d3112e808cd56e8d92b037ea.png",
+        "https://download.pixcakeai.com/ui/baklib/f7d88cc53bd79819cb7a0dd3cc6f57cf.png",
+        "https://download.pixcakeai.com/ui/baklib/7feaf62cd5c66c920790c5d2228fe6f0",
+        "https://download.pixcakeai.com/ui/baklib/db323051425db8cc067ac020008f2916",
+        "https://download.pixcakeai.com/ui/baklib/6aae248f91681f533a332118c5c00dff",
+        "https://download.pixcakeai.com/ui/baklib/e811bb7ed8088c0192e55c1c00e18bce",
+        "https://download.pixcakeai.com/ui/baklib/c7e9bdf1ef286db6944edb0778cccbee",
+        "https://download.pixcakeai.com/ui/baklib/df43ade79b03151d2fc7973bcfa34ed0",
+        "https://download.pixcakeai.com/ui/baklib/916a5cc66f77956dfdd42f35b44757f1"
+      ]
+    },
+    {
+      "id": "159396",
+      "title": "桌面无线联机",
+      "source_url": "https://www.pixcakeai.com/guide/159396",
+      "steps": [
+        "相机电脑同网络，选无线连接，检测列表点击连接",
+        "未发现先查网络再刷新",
+        "配置预览与拍摄效果"
+      ],
+      "parameters": [
+        "可有线、无线各一台同时进入同一项目"
+      ],
+      "states_and_exceptions": [
+        "失败排查机型支持、冲突软件、网络；可重启相机及客户端"
+      ],
+      "not_disclosed": [
+        "网络发现协议及断线补传未披露"
+      ],
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/5ec1a558170d502b9d37c3159c25ce73.png",
+        "https://download.pixcakeai.com/ui/baklib/506a5a1fb76a3ee6c48303289ac2a009",
+        "https://download.pixcakeai.com/ui/baklib/ae4aadd7f866625fbc8e00faa2200180",
+        "https://download.pixcakeai.com/ui/baklib/df43ade79b03151d2fc7973bcfa34ed0",
+        "https://download.pixcakeai.com/ui/baklib/916a5cc66f77956dfdd42f35b44757f1"
+      ]
+    },
+    {
+      "id": "dWi67DTc8Y",
+      "title": "FTP联机入口",
+      "source_url": "https://www.pixcakeai.com/guide/dWi67DTc8Y",
+      "steps": [
+        "桌面本地/云项目选FTP",
+        "手机像素芝士经有线连相机，新增项目选择传至蛋糕",
+        "扫码录入服务器或手动填写，设预设与同步规则",
+        "也可相机直接配置FTP服务器"
+      ],
+      "parameters": [
+        "一台电脑可同时连接多手机",
+        "部分相机需要被动模式和自动传输"
+      ],
+      "states_and_exceptions": [
+        "品牌/固件设置不同，文档有具体例示"
+      ],
+      "not_disclosed": [
+        "传输加密、账户隔离、断点续传未披露"
+      ],
+      "screenshot_urls": [
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019fd4ba-6fda-762d-bc4a-947c02cf06c7/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019f7f28-4abe-71ff-a9ab-efbc64bf58c5/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019f7f29-0575-777a-9403-abfc0ac83f70/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019f7f2b-9a94-71dc-a61c-6fa153c2681b/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019f8256-e57e-7621-83ba-417acac3685d/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019f7f2c-a2c6-7236-b055-2dfab301eda6/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019f7f2d-6ab5-73ba-bf15-255a311e61a5/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4594-165c-732f-a592-199febb10a9e/3.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4594-2887-72cb-bb9e-b432056b8acf/4.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4594-4e5b-739a-9303-7f6c61eda61f/5.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4594-6049-72d1-b50c-dcceaeb02cbe/6.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019eb5e6-767f-715e-8a3f-c8f886a030a6/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019ea640-098c-7657-bff7-75101ee664a9/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019eb5ea-3bf6-7575-bcc7-4d351be9646f/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4594-f96b-714d-8849-cace0161a039/8.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4599-8afe-7068-b26b-d7ea021924d9/13.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4599-c425-710f-8b18-8717bbbbeef9/14.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4599-e99c-758f-9cd0-8ce153f4dbfc/15.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019eb5eb-6814-7025-8396-4a040981ca7f/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019ea646-2dd2-75fa-abbd-1406eb2c59a5/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e459a-44f7-70f6-9dc6-dfee6e4b5125/17.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e459a-8aa3-730e-b88b-ef5895f0023d/18.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e459a-a8ba-739b-8404-f2bc0db4093b/21.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e459a-d02a-75ff-b0a8-a2704e8f33aa/19.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4596-5622-715b-9c69-55eff59373d4/24.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4596-71c5-7709-aed8-388ba02f0d6d/25.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4596-9a83-713e-afe0-40bbb035326f/26.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4596-b94a-73cf-ab1c-f7715b08f4d4/27.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019ea64b-1793-756f-af12-ca540f073312/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019eb5ed-2248-759f-a300-fffc65a43629/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4596-fbf9-73de-bf01-c9d888091cbf/29.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4597-21a2-722f-9d9a-9a949a3f3b27/30.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4597-8500-72ec-8540-c43c6a548721/31.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4597-9d3e-75d8-94f7-dc3ddd3d5426/32.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4597-cf2c-718c-847a-59ba19ca141f/33.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4597-e20b-735a-a2ec-713380818560/34.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019ea64d-f36e-70ee-849e-b0d65d893071/image.png",
+        "https://pixcakeai-public.oss-cn-hangzhou.aliyuncs.com/019dcdd6-3913-7b60-99c7-90fa0d3c724f/files/019e4598-0acd-75f9-951e-81d07c2b346b/35.png"
+      ]
+    },
+    {
+      "id": "192705",
+      "title": "AI生成标识",
+      "source_url": "https://www.pixcakeai.com/guide/192705",
+      "steps": [
+        "使用相关生成工具后图片显示AI生成标识",
+        "隐藏入口位于首次创意弹窗、画面左下、回精修弹窗"
+      ],
+      "parameters": [
+        "部分隐藏流程需同意使用协议"
+      ],
+      "states_and_exceptions": [
+        "官方提醒传播使用生成内容依法声明"
+      ],
+      "not_disclosed": [
+        "开源实现需独立合规评估，不能直接照搬隐藏行为"
+      ],
+      "screenshot_urls": [
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/c4caada5-c745-4952-bfd4-3c6dbd0d830f-192705_001_-AI-_fa32bf86a225.jpg",
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/227d100a-e8b1-4d91-8189-91791bfd6704-192705_002_-AI-_64e5a9769eac.jpg",
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/6a772044-f473-4032-96af-7acf3576b872-192705_003_-AI-_d39f02ea4e5b.jpg",
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/1570bfa1-c21d-409c-bdbf-4f467192c30c-192705_004_-AI-_02de49efec67.jpg"
+      ]
+    },
+    {
+      "id": "W2SRzEUuxl",
+      "title": "单项目数量上限",
+      "source_url": "https://www.pixcakeai.com/guide/W2SRzEUuxl",
+      "steps": [
+        "导入前检查项目类型与可用容量"
+      ],
+      "parameters": [
+        "本地最多10000张；云项目最多2000张且需足够云容量"
+      ],
+      "states_and_exceptions": [
+        "达到上限的具体错误与增量导入处理未披露"
+      ],
+      "not_disclosed": [],
+      "screenshot_urls": []
+    },
+    {
+      "id": "192117",
+      "title": "项目丢失排查",
+      "source_url": "https://www.pixcakeai.com/guide/192117",
+      "steps": [
+        "确认登录账号和设备；本地项目不跨设备",
+        "查回收站；检查安全清理软件是否误删数据库"
+      ],
+      "parameters": [
+        "同机不同账号项目隔离"
+      ],
+      "states_and_exceptions": [
+        "安全工具清理数据库可导致项目丢失；截图链接可提取但本次图像请求缓存未命中"
+      ],
+      "not_disclosed": [
+        "数据库损坏后的修复方法未披露"
+      ],
+      "screenshot_urls": [
+        "https://pixcakeai-public-test.oss-cn-hangzhou.aliyuncs.com/docmost/3dcced89-f4fc-41e8-ba9d-f1bbcf1d0217-192117_001_-_33c9462b5db3.jpg"
+      ]
+    },
+    {
+      "id": "121298",
+      "title": "备份及跨设备入口",
+      "source_url": "https://www.pixcakeai.com/guide/121298",
+      "steps": [
+        "创建云项目，或本地项目右键上传至个人空间",
+        "另一设备同账号进入个人空间"
+      ],
+      "parameters": [
+        "云协同作为官方备份/跨设备方案"
+      ],
+      "states_and_exceptions": [
+        "上传未结束即关机会造成其他设备图数不全；截图仅记录原链接未成功读取"
+      ],
+      "not_disclosed": [
+        "本页未提供完整本地项目打包/恢复方法，不能把云同步当作离线备份规范"
+      ],
+      "screenshot_urls": [
+        "https://download.pixcakeai.com/ui/baklib/911af940a45c4904e47ec319d54c01eb"
+      ]
+    }
+  ]
+}
