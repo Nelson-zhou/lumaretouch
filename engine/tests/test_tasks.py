@@ -59,6 +59,11 @@ def test_history_is_auditable_with_reasons():
     (T.SUCCEEDED, T.RUNNING),      # 成功的批次不能"又开始跑"，只能 retry
     (T.CANCELLED, T.RUNNING),
     (T.PAUSED, T.SUCCEEDED),       # 停在边界上不能直接宣布整批成功
+    # P1-7：取消落在最后一张正在写的时候，收尾不能把已经 CANCELLING 的批次
+    # 宣布成 SUCCEEDED——这条边一旦被允许，就把用户"取消"的意图折成"成功"，
+    # 也正是 server.py `_export_loop` 卡死在 CANCELLING 的根因（服务端守卫在
+    # 本文件末尾 test_export_loop_honours_cancelling_at_finalize）。
+    (T.CANCELLING, T.SUCCEEDED),
 ])
 def test_illegal_transitions_are_refused(cur, to):
     t = _task()
@@ -243,3 +248,37 @@ def test_terminal_states_come_back_unchanged():
         t = _task()
         t["state"] = st
         assert T.from_json(T.for_json(t))["state"] == st
+
+
+# ---------------------------------------------------------------- 服务端守卫（P1-7）
+#
+# 台账层能证明转移表自洽，证不了 `_export_loop` 有没有按转移表来。P1-7 那次修复
+# 把「取消落在最后一张正在写文件的时候」这条路从 transit(SUCCEEDED) 改成
+# 落到 CANCELLED；这条守卫钉住那个形状，未来谁改回原样会在 pytest 立刻红。
+# 与 test_ui_dnd 里"读源码断言字符串"同一口径：源码里存在，才算修好；只写事件字段
+# 或者吞异常都不算。
+
+from pathlib import Path as _P
+
+
+def test_export_loop_honours_cancelling_at_finalize():
+    server = _P(__file__).resolve().parents[1] / "src/lumaretouch_engine/server.py"
+    code = server.read_text()
+    # 收尾判据既看 stopped，也看台账当前是不是 CANCELLING；两者有其一就落到 CANCELLED
+    assert 'if stopped or task["state"] == T.CANCELLING:' in code, (
+        "P1-7 修复被回退：收尾只认 stopped 的话，最后一张写完时才到达的取消会走 "
+        "transit(SUCCEEDED)，被 LEGAL 表拒掉、批次卡在 CANCELLING。")
+    # export_done.cancelled 必须以台账终态为准，不能再回到 bool(stopped)
+    assert '"cancelled": _cancelled_final,' in code, (
+        "P1-7 修复被回退：export_done.cancelled 若还是 bool(stopped)，"
+        "「取消停在最后一张写完」那条路会把批次报成 cancelled=false 而 task_state=cancelled。")
+    # 状态终值取 CANCELLED；不是从 stopped 猜
+    assert '_cancelled_final = (task or {}).get("state") == T.CANCELLED' in code, (
+        "P1-7 修复被回退：cancelled 事件的判据必须来自台账最终态，不能靠循环内的一次布尔位。")
+
+
+def test_legal_table_keeps_cancelling_only_to_cancelled_or_failed():
+    """显式钉住 LEGAL[CANCELLING]。守卫测试与状态机本身两道独立，防止以后从任一侧漂。"""
+    assert T.LEGAL[T.CANCELLING] == (T.CANCELLED, T.FAILED), (
+        f"LEGAL[CANCELLING] 被改动：{(T.CANCELLED, T.FAILED)} 之外的任何目标都会把"
+        "「取消停在最后一张」这条路重新引入 transit(SUCCEEDED) 的死结。")

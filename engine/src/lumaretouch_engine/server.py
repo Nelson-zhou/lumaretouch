@@ -6369,7 +6369,13 @@ class Engine:
             # 收尾状态由条目账算出来，不由“循环跑完了”宣布：部分失败报成 succeeded
             # 就是 TASK-003 拒绝的那种“把失败折成完成”
             c = T.counts(task)
-            if stopped:
+            # P1-7 卡住现场：取消落在最后一张正在写文件的时候，worker 不会再
+            # 回到 `_task_boundary`（那个检查只在每次迭代开头看一次），`stopped`
+            # 就停在 False。但命令面已经把状态推到 CANCELLING。这里必须以状态
+            # 为准，不能因 stopped=False 就宣布 SUCCEEDED——LEGAL[CANCELLING]
+            # = (CANCELLED, FAILED)，transit(SUCCEEDED) 会抛 TaskError，批次
+            # 卡在 CANCELLING，连 export_done 都发不出去。
+            if stopped or task["state"] == T.CANCELLING:
                 if task["state"] != T.CANCELLING:
                     T.transit(task, T.CANCELLING, "边界上确认取消")
                 T.transit(task, T.CANCELLED, f"{c['pending']} 条未跑，"
@@ -6380,10 +6386,14 @@ class Engine:
                 T.transit(task, T.SUCCEEDED, f"{c['succeeded']} 张已落盘，"
                                             f"{c['skipped']} 张按策略跳过")
             self._emit_task(task, "收尾")
+        # cancelled 以台账终态为准（CANCELLING 抢在最后一张写完后才落到
+        # CANCELLED，此时 `stopped` 仍是 False）；旧的 bool(stopped) 会把
+        # “取消成功”的批次报成 cancelled=false，与 task_state=cancelled 自相矛盾。
+        _cancelled_final = (task or {}).get("state") == T.CANCELLED
         emit({"event": "export_done", "total": n, "failed": failed,
               "task_id": (task or {}).get("task_id"),
               "task_state": (task or {}).get("state"),
-              "cancelled": bool(stopped),
+              "cancelled": _cancelled_final,
               "out_dir": out_dir, "format": fmt, "quality": quality, "tile": tile,
               "bit_depth": bit_depth, **opts,
               "scale": int(snap["scale"]), "sharpen": float(snap["sharpen"]),

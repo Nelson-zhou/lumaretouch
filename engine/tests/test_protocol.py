@@ -4607,6 +4607,41 @@ def test_task_cancel_keeps_committed_files_and_writes_no_more(engine, tmp_path):
 
 
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_task_cancel_during_the_last_write_lands_cancelled(engine, tmp_path):
+    """P1-7：cancel 抢在最后一张正在写的时候到达，批次仍要落到 cancelled 并发 export_done。
+
+    上一批测试是"叫停在 N 张里的中间"——worker 走到 iter 边界，`_task_boundary` 看见
+    ctl.cancel 就 break，`stopped=True`，收尾从 CANCELLING 走 CANCELLED；这条路即使
+    不修也能过。真正卡住的是**最后一张写完时**才落到的 cancel：worker 不会再回边界，
+    `stopped` 停在 False，但状态已经是 CANCELLING——修复前的代码会去 `transit(SUCCEEDED)`
+    而被 LEGAL 表拒，批次死在 CANCELLING，连 export_done 都不发。
+
+    设计：单图批次 + 拿到 "worker 开工" 事件后 sleep 50 ms，让 worker 越过 iter 0
+    的边界进入 load_full/write_file；然后 send cancel。ctl.cancel.set 落在写文件阶段。
+    """
+    _need_export_env()
+    _load(engine, max_px=STRIP_MAX_PX, strength=0.3)
+    paths = _make_batch(tmp_path, 1)
+    out = str(tmp_path / "cancel-last")
+    engine.send(cmd="export", out_dir=out, format="jpg", quality=90, tile=256, images=paths)
+    tid = _next_task_event(engine)["task_id"]                # queued 或 running
+    # worker 一开工，边界那一次已经过去了；从这里起 ctl 就是"处理中"的时间窗
+    _wait_task_state(engine, "running", task_id=tid, timeout=30.0)
+    time.sleep(0.05)                                          # 越过 iter 0 的 boundary check
+    engine.send(cmd="task", action="cancel", task=tid)
+    # 关键判据 1：批次必须走到 cancelled；修复前 transit(SUCCEEDED) 会抛 TaskError，
+    # 卡死在 CANCELLING，这条 wait 会超时。
+    at = _wait_task_state(engine, "cancelled", task_id=tid, timeout=60.0)
+    # 关键判据 2：export_done 事件必须照发；修复前 worker 抛异常，事件永远不来。
+    done, _ = _collect_until(engine, "export_done", timeout=60.0)
+    assert done["task_id"] == tid and done["task_state"] == "cancelled", done
+    # 关键判据 3：cancelled=true 不再来自 stopped 布尔位，而以台账终态为准
+    assert done["cancelled"] is True, (
+        f"P1-7 报的 cancelled 与 task_state 不一致：{done}")
+    assert os.path.isdir(out)
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
 def test_task_retry_uses_the_frozen_inputs_not_the_current_sliders(engine, tmp_path):
     # 验收用例引用：EXPORT-002（重试拿排队时那份快照，不静默切到最新编辑）
     """TASK-002：未完成/失败重试时输入与配方固定，不许静默换成“最新配方”。
