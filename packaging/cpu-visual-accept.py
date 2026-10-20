@@ -73,13 +73,37 @@ def main() -> int:
     if float(delta_grade) <= 0.05:
         failures.append(f"肤色定向 grade 平均改动仅 {delta_grade:.3f} LSB，调色没进导出")
 
+    # D) 换底入导出（P1-2）：旧 bug 是换底只活在预览、盘上没换。给一张前景椭圆遮罩 + 醒目背景色，
+    #    导出必须真的把遮罩外（背景角）换成该色、遮罩内（主体中心）保留原图。
+    #    export 层遮罩语义（composite_t: a*fg+(1-a)*bg）：matte=1→前景保留、0→背景替换。
+    H, W = src.shape[:2]
+    yy, xx = np.mgrid[0:H, 0:W]
+    fg = (((xx - W * 0.5) / (W * 0.30)) ** 2 + ((yy - H * 0.5) / (H * 0.42)) ** 2) <= 1.0
+    matte = np.where(fg, 255, 0).astype(np.uint8)
+    BG = (0.90, 0.10, 0.90)                       # 醒目品红，与灰背景/肤色都不撞
+    out_bg, _ = export_image(src, ExportSpec(strength=0.0, light=[], bg_matte=matte, bg_ref=BG),
+                             device="cpu", tile=512)
+    corner = out_bg[5, 5].astype(np.float64)      # 左上角：遮罩外，应为背景色
+    expect = np.array(BG) * 255.0
+    corner_ok = float(np.abs(corner - expect).max()) < 40
+    center_ok = float(np.abs(out_bg[H // 2, W // 2].astype(np.int16)
+                             - src[H // 2, W // 2].astype(np.int16)).mean()) < 30
+    print(f"[bg swap] 背景角≈设定色: {corner_ok} (角={corner.round(0)} 期望≈{expect.round(0)})；"
+          f"主体中心≈原图: {center_ok}")
+    if not corner_ok:
+        failures.append("换底导出：背景角没变成设定背景色——换底可能没进导出（P1-2 回归）")
+    if not center_ok:
+        failures.append("换底导出：主体中心被改动——遮罩极性可能反了")
+
     sep = np.full((src.shape[0], 4, 3), 255, np.uint8)
     files = [
         save(src, "before.png"),
         save(out_skin, "after_skin.png"),
         save(out_grade, "after_grade.png"),
+        save(out_bg, "after_bg.png"),
         save(np.concatenate([src, sep, out_skin], axis=1), "compare_before_vs_skin.png"),
         save(np.concatenate([src, sep, out_grade], axis=1), "compare_before_vs_grade.png"),
+        save(np.concatenate([src, sep, out_bg], axis=1), "compare_before_vs_bg.png"),
     ]
     print("产物：")
     for p in files:
