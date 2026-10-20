@@ -310,3 +310,17 @@ def test_export_spec_carries_exposure_and_matches_preview_bytes():
     # 账单里必须有 exposure 段：漏了它，导出耗时的归属就会把这层的成本摊给别人
     seg = bill["seg_ms"]
     assert "exposure" in seg, f"分段账单没有曝光段：{sorted(seg)}"
+
+
+def test_wb_gains_uses_icc_v4_bradford_matrix():
+    """P1-4：_M_BRADFORD 必须等于 ICC v4 / colour-science CAT_BRADFORD。
+
+    与 test_raw 里的对账同规——两处矩阵必须同一份，且都是规范值。这里单点测是
+    为了当 ops/exposure 独立跑（不装 raw 依赖的场合）也能拦住常数漂移。
+    """
+    published = np.array([[ 0.8951,  0.2664, -0.1614],
+                          [-0.7502,  1.7135,  0.0367],
+                          [ 0.0389, -0.0685,  1.0296]])
+    assert np.allclose(ex._M_BRADFORD, published, atol=1e-4), (
+        f"ops/exposure._M_BRADFORD 与规范 CAT_BRADFORD 对不上：\n{ex._M_BRADFORD}\n"
+        f"期望：\n{published}")

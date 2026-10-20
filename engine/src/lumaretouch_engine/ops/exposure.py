@@ -104,11 +104,17 @@ def _xy_to_xyz(x: float, y: float) -> np.ndarray:
     return np.array([x / y, 1.0, (1.0 - x - y) / y], dtype=np.float64)
 
 
-# Bradford 色适应矩阵（D65 工作空间约定下的标准形式）
+# Bradford 色适应矩阵（ICC v4 规范值）。上一版是把两份不同的 Bradford 混着抄：
+# row0 col2 是老 Bradford 的 0.7502 位置（应为 0.2664），又写成 0.0831；
+# row1 col1 抄成 1.7141（应为 1.7135）；row2 col2 抄成 1.0245（应为 1.0296）。
+# wb_gains 的方向符号（+temp 压 R 抬 B、+tint 抬 R/B 压 G）由算式本身保证，所以旧的方向
+# 断言不会红；但具体增益数字会挪 1–3%，出片白平衡的准确度靠这个。
+# 与 raw.py 里 BRADFORD 同一出处、同一份值，两处不同就是「两个模块对同一件事给两个答案」。
+# 来源：colour-science v0.4.7 `CAT_BRADFORD`、ICC.42019 附表、Lindbloom 参考页。
 _M_BRADFORD = np.array([
-    [0.8951000,  0.7502000,  0.0831000],
-    [-0.7502000, 1.7141000,  0.0670000],
-    [0.0389000, -0.0685000,  1.0245000]], dtype=np.float64)
+    [ 0.8951000,  0.2664000, -0.1614000],
+    [-0.7502000,  1.7135000,  0.0367000],
+    [ 0.0389000, -0.0685000,  1.0296000]], dtype=np.float64)
 
 
 def wb_gains(temp_shift_k: float = 0.0, tint_shift: float = 0.0,

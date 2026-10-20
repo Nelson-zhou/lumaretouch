@@ -844,3 +844,57 @@ def test_plugin_installed_names_the_real_backend_not_a_package():
     assert R.plugin_installed() == LR.available(), (R.plugin_installed(), LR.available())
     if importlib.util.find_spec("rawpy") is None and LR.available():
         assert R.plugin_installed() is True, "有系统库、没 rawpy 包：这一位必须是 True"
+
+
+# ------------------------------------------------------------------ P1-4 Bradford 常数
+# 上一版 raw.BRADFORD 的 row2 三个数全错（末位写成 0.1111，规范是 1.0296），
+# ops/exposure._M_BRADFORD 抄的是另一份"杂交"值（row0 col2=0.0831、row1 col1=1.7141、
+# row2 col2=1.0245，都跟规范对不上）。test_bradford_invariant 只验自洽（可逆 + 同白
+# 映射到自身），常数抄错照样能通过——所以必须补逐位对账。
+# 来源：
+#   - colour-science v0.4.7 `colour.adaptation.CAT_BRADFORD`
+#     https://colour.readthedocs.io/en/v0.4.7/generated/colour.adaptation.CAT_BRADFORD.html
+#   - ICC.42019 规范附表（Julia Colors.jl #278 亦按 v4 ICC 常量）
+#   - Bruce Lindbloom "The BRADFORD Chromatic Adaptation Transform"
+def test_bradford_matrix_matches_icc_v4_published_constants():
+    """raw.BRADFORD 必须逐位等于 ICC v4 / colour-science 公布的 CAT_BRADFORD。
+
+    容差 1e-4：源里给到 4 位有效数字，浮点抄进 np.array 也保留这个精度；
+    比它更紧就是"拿实现的浮点位当规范位"，比它更松就挡不住"上一版那种 1.0296 写成 0.1111"
+    的量级错误。
+    """
+    published = np.array([[ 0.8951,  0.2664, -0.1614],
+                          [-0.7502,  1.7135,  0.0367],
+                          [ 0.0389, -0.0685,  1.0296]])
+    assert R.BRADFORD.shape == (3, 3)
+    assert np.allclose(R.BRADFORD, published, atol=1e-4), (
+        f"raw.BRADFORD 与规范 CAT_BRADFORD 对不上：\n{R.BRADFORD}\n期望：\n{published}")
+
+
+def test_bradford_matrix_matches_exposure_matrix():
+    """两处 Bradford 必须是**同一份值**。上一版 raw 与 ops/exposure 各写一份不同的
+    "Bradford"，同一个"色适应"概念给出两个答案——wb_gains 的滑杆方向与出片白平衡
+    的偏移因此对不上账。这一条把它们钉在同一份常量上。
+    """
+    from lumaretouch_engine.ops import exposure as EX
+    assert EX._M_BRADFORD.shape == (3, 3)
+    assert np.allclose(EX._M_BRADFORD, R.BRADFORD, atol=1e-9), (
+        f"raw.BRADFORD 与 ops/exposure._M_BRADFORD 不是同一份：\n"
+        f"raw=\n{R.BRADFORD}\nexposure=\n{EX._M_BRADFORD}")
+
+
+def test_bradford_d50_to_d65_matches_published_reference_matrix():
+    """bradford(XYZ_D50, XYZ_D65) 必须落在 Lindbloom 页面给出的 D50→D65 参考邻域内。
+
+    容差 1e-3：我方 XYZ_D50/XYZ_D65 常量是 5 位有效数字（0.96422/0.95047 等），
+    Lindbloom 页面用的也是同精度但独立取整，两次解 CAT 的浮点噪声在 1e-4 级；
+    1e-3 覆盖了这一点又足以挡住"常数抄错一整位"（如 0.1111 vs 1.0296 那种）——
+    那一版算出的 blue 通道对角是 1.4154，与参考值 1.32991 差 0.086，量级远大于本容差。
+    """
+    got = R.bradford(R.XYZ_D50, R.XYZ_D65)
+    want = np.array([[ 0.9555767, -0.0230393,  0.0631636],
+                     [-0.0282895,  1.0099416,  0.0210077],
+                     [ 0.0122982, -0.0204830,  1.3299098]])
+    assert np.allclose(got, want, atol=1e-3), (
+        f"D50→D65 Bradford 与公布参考矩阵对不上：\n{got}\n期望：\n{want}\n"
+        f"最大逐元素差 {float(np.abs(got - want).max()):.5f}")

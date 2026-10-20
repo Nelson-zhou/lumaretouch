@@ -92,9 +92,20 @@ XYZ_TO_SRGB = np.array([[3.2407091, -1.5372984, -0.4986282],
                         [-0.9692581, 1.8759676, 0.0415561],
                         [0.0556340, -0.2039118, 1.0572660]])
 SRGB_TO_XYZ = np.linalg.inv(XYZ_TO_SRGB)
-BRADFORD = np.array([[0.8951000, 0.7502000, 0.0380000],
-                     [-0.7502000, 1.0126000, 0.0609000],
-                     [0.0380000, -0.0609000, 0.1111000]])
+# Bradford 色适应矩阵（ICC v4 规范值）：这里必须用**规范推荐**的 linear Bradford，
+# 而不是把老 Bradford 1987 的 row2 抄到一半。上一版 row2 是 (0.0380, -0.0609, 0.1111)——
+# 三个数全错，`1.0296` 被写成 `0.1111`（差一个数量级）。后果不是崩溃而是「算式看着对、
+# 数值不匹配规范」：bradford(XYZ_D50, XYZ_D65) 的 blue 通道对角会偏到 1.4154 而不是
+# 1.32991（≈ 6.4% 差），出片色偏在 ΔE≈4 级；`test_bradford_invariant` 只验自洽（可逆 +
+# 同白映射到自身），挡不住常数抄错，因此这里补一条**逐位对账规范值**的回归。
+# 来源（逐字核对）：
+#   - colour-science v0.4.7 `colour.adaptation.CAT_BRADFORD`
+#     （https://colour.readthedocs.io/en/v0.4.7/generated/colour.adaptation.CAT_BRADFORD.html）
+#   - ICC.42019 规范附表的 Bradford 矩阵（Julia Colors.jl #278 亦按 v4 ICC 常量）
+#   - Bruce Lindbloom 页面给出的 D50→D65 参考矩阵（我方交叉验证逐位一致）
+BRADFORD = np.array([[0.8951000,  0.2664000, -0.1614000],
+                     [-0.7502000,  1.7135000,  0.0367000],
+                     [ 0.0389000, -0.0685000,  1.0296000]])
 SWAPPED_ORIENTATIONS = {5, 6, 7, 8}
 
 TYPE_SIZE = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 7: 1, 9: 4, 10: 8}
