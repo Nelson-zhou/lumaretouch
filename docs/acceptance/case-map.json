@@ -2,7 +2,7 @@
  "schema": "lrt.acceptance-map.v1",
  "cases": "docs/acceptance/cases-frozen.json",
  "cases_sha256": "c2fca495b90e3aa7",
- "generated_at": "2026-10-19T14:24:59",
+ "generated_at": "2026-10-19T15:59:54",
  "map": {
   "CORE-001": {
    "tests": [
@@ -218,6 +218,7 @@
    "tests": [
     "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
     "engine/tests/test_acceptance_p1.py::test_eye_teeth_enhance_refuses_what_it_cannot_do_and_says_why",
+    "engine/tests/test_acceptance_p1.py::test_manual_face_corrections_survive_redetection_model_switch_and_reopen",
     "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
     "engine/tests/test_face_select.py::test_faces_lists_every_detected_person"
    ],
@@ -243,11 +244,14 @@
    "note": "未实装：跨图同一人需要人脸嵌入与聚类，本版本没有那个模型；拿启发式相似度冒充识别属于 DoD 禁止的「伪装 AI」。"
   },
   "PORTRAIT-006": {
-   "tests": [],
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_a_manually_framed_missed_face_becomes_editable_geometry",
+    "engine/tests/test_acceptance_p1.py::test_manual_face_corrections_survive_redetection_model_switch_and_reopen"
+   ],
    "phase": "P1",
    "module": "detection",
    "title": "人工纠正优先",
-   "note": "待实装（ADR-0016 §2.3 的路线，排在 1.9.0）：实现成『人脸名单的人工状态』——disabled/manual 随工程持久化，重检测后人工状态保留、变化可预览，且不静默恢复已禁用的误检；判据可逐字节化（被禁用那一只对应的层在重检测后的那一帧不得重新出现）。当前版本已有的是 face_index 显式选定（PORTRAIT-003）。"
+   "note": "已实装（1.9.0）：人脸名单的人工状态随工程持久化、进撤销栈、跨重检测保留。`disabled`（用户关掉的那一只误检）与 `added`（用户框出来补上的那一张）都存归一化盒并按 IoU 认人（ADR-0017：mediapipe↔mediapipe 实测 IoU 0.98，mediapipe↔template 只有 0.13 —— 认不回时账保留并标 stale，绝不当成没禁过）。放行判据按「还剩几个可编辑的人」算，而 `scope_block` 仍是原始分析事实。人工补的脸的 478 点出自该区域的真检测（face.detect_region），拿不到就明拒、不拟合占位点位。判据：库层 20 条（test_face_manual.py）+ 端到端 2 条（禁用跨重检测/换模型/重开工程、补脸改他不动别人）+ 真窗口第 9 臂 M0_MANUAL（被禁那一位在重检测后的那一帧内芯逐格不动）。"
   },
   "PORTRAIT-007": {
    "tests": [
@@ -593,7 +597,10 @@
     "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
     "engine/tests/test_acceptance_p1.py::test_eye_teeth_enhance_refuses_what_it_cannot_do_and_says_why",
     "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces",
+    "engine/tests/test_acceptance_p1.py::test_manual_face_corrections_survive_redetection_model_switch_and_reopen",
     "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
+    "engine/tests/test_face_manual.py::test_blocked_counts_editable_people_not_detected_faces",
+    "engine/tests/test_face_manual.py::test_detect_region_picks_the_face_that_matches_the_rect_not_the_biggest",
     "engine/tests/test_face_select.py::test_meta_reports_the_selection_and_keeps_the_scope_flag"
    ],
    "phase": "P0",

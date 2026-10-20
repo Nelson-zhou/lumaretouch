@@ -27,6 +27,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CELL_W, CELL_H = 760, 950
 GAP = 50
 DARKEN, LIFT = 0.92, 6.0
+# 第三格相对前两格的缩放。它同时是 PORTRAIT-006 那条端到端反算「漏掉的那一位在哪」
+# 的唯一出处：测试自己再写一个 0.9 就是双出处，改这里而测试还在按旧数字算，会得到一条
+# 空掩膜上的断言（本仓为这件事写过一整段注释）
+THIRD_SCALE = 0.9
 
 
 def bg_color(src_arr: np.ndarray) -> tuple[int, int, int]:
@@ -35,15 +39,30 @@ def bg_color(src_arr: np.ndarray) -> tuple[int, int, int]:
     return tuple(int(v) for v in src_arr.reshape(-1, 3)[::997].mean(axis=0))
 
 
-def build(src_path: str) -> Image.Image:
+def build(src_path: str, cells: int = 2) -> Image.Image:
+    """把同一张程序化正脸贴 N 格（默认 2 格 = 历史行为，逐字节不变）。
+
+    为什么开这个口子（而不是再写一份 triple 脚本）：PORTRAIT-006 的「人工补上漏检的那
+    一张」需要一张**检测器按定义会漏人**的照片——引擎只探 `SCOPE_MAX_FACES=2` 张，于是
+    三格图上必然有一位不在名单里，而那一位的坐标是**本函数算出来的**（不是猜的）。
+    再写一份脚本就会让两格的贴法漂成两套几何，那正是本仓反复防止的“双出处”。
+    """
+    if cells not in (2, 3):
+        raise SystemExit(f"cells 只准备了 2（SCOPE-001）与 3（PORTRAIT-006 漏检臂），得到 {cells}")
     src = Image.open(src_path).convert("RGB")
     left = src.resize((CELL_W, CELL_H), Image.LANCZOS)
     right = left.transpose(Image.FLIP_LEFT_RIGHT)
     a = np.asarray(right).astype(np.float32)
     right = Image.fromarray(np.clip(a * DARKEN + LIFT, 0, 255).astype(np.uint8))
-    canvas = Image.new("RGB", (CELL_W * 2 + GAP, CELL_H), bg_color(np.asarray(src)))
+    # 第三格：左侧那位缩小一档再贴。缩放是为了让它与另两位在检测得分上拉开距离
+    # （探 2 张时它几乎总是被裁掉的那一个），而不是为了好看
+    third = left.resize((int(CELL_W * THIRD_SCALE), int(CELL_H * THIRD_SCALE)), Image.LANCZOS)
+    canvas = Image.new("RGB", (CELL_W * cells + GAP * (cells - 1), CELL_H),
+                       bg_color(np.asarray(src)))
     canvas.paste(left, (0, 0))
     canvas.paste(right, (CELL_W + GAP, 0))
+    if cells == 3:
+        canvas.paste(third, (2 * (CELL_W + GAP), CELL_H - third.height))
     return canvas
 
 
@@ -52,9 +71,19 @@ def main() -> int:
     ap.add_argument("--src", default=os.path.join(HERE, "..", "engine", "tests", "fixtures",
                                                   "portrait-1024x1280.png"))
     ap.add_argument("--out", default=os.path.join(HERE, "..", "engine", "tests", "fixtures"))
+    ap.add_argument("--cells", type=int, default=2, choices=(2, 3),
+                    help="2 = SCOPE-001 多人图；3 = PORTRAIT-006 的漏检臂（只打到 stdout，"
+                         "不覆盖台账里那两张双人格产物）")
     args = ap.parse_args()
 
-    img = build(args.src)
+    img = build(args.src, cells=args.cells)
+    if args.cells != 2:
+        # 三格是测试现算的临时输入（派生自已进台账的两格配方），不进 fixtures/：
+        # 台账里每多一张图都要多一份 sha256 与一句“谁验过这个数字”，不该白占
+        out = os.path.join(args.out, f"portrait-triple-{img.width}x{img.height}.jpg")
+        img.save(out, quality=95, subsampling=2)
+        print(f"✓ {out}\n  sha256 {hashlib.sha256(open(out, 'rb').read()).hexdigest()}")
+        return 0
     path = os.path.join(args.out, f"portrait-dual-{img.width}x{img.height}.jpg")
     img.save(path, quality=95, subsampling=2)
     digest = hashlib.sha256(open(path, "rb").read()).hexdigest()

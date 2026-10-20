@@ -2287,3 +2287,279 @@ def test_eye_teeth_enhance_refuses_what_it_cannot_do_and_says_why(engine, extra_
     assert (inv.get("dropped_amounts") or {}).get("iris") == 0.6, (
         f"放下时要把用户的参数如实报回去：{inv.get('dropped_amounts')}")
     assert _sha_of(dual) == sha_dual, "多人这一条动了原片"
+
+
+# ------------------------------------------------------------------ 人工纠正优先（LNX-PORTRAIT-006）
+# 库层那 20 条（test_face_manual.py）判的是映射数学与账的语义；这两条判的是**产品事实**：
+# 用户关掉的那一只在重检测、换模型、重开工程之后仍是关着的那一只，而用户框出来补上的
+# 那一位，画面里真的是他。
+def test_manual_face_corrections_survive_redetection_model_switch_and_reopen(
+        engine, extra_engine, tmp_path):
+    """LNX-PORTRAIT-006（人工纠正优先）主臂：禁用那一只跨重检测、换模型、重开工程都保留。
+
+    冻结件 given「用户手动添加/禁用的人脸」× when「后台重检测或更换检测模型」× then
+    「人工纠正保留，变化可预览；不静默恢复已禁用误检」逐句对判据：
+
+    ① 关掉当前选定的那一只：那一个人的两层生效值当场放下，另一个人的活儿逐字节不动；
+    ② 禁用之后 `face select` 那一只必须明拒——引擎不服务人说过"这不是脸"的那一张；
+    ③ 全局撤销/重做把这次禁用连同画面一起带回与再放下，逐字节对得上（这条账是真状态，
+       不是宿主侧的一份旁注）；
+    ④ 后台重检测（同模型）：账保留、名单上那一只仍 disabled、被禁那一位在新一帧上的内芯
+       **逐字节 0 LSB**（"不得重新出现"就是这一句），而 `scope_block` 仍是 multi_face
+       （人工账不许把原始分析事实抹掉，SCOPE-001 的 P0 判据读的是它）；
+    ⑤ 更换检测模型（mediapipe → template）：认得回就照账禁用，认不回也要留账并明说 stale；
+       两条路都不许把它当"没被禁过"（逐位相等在这里就不够，所以按 IoU 认人）；
+    ⑥ 存工程 → 换进程重开：账随配方走，重开自动补的那次分析把禁用重新叠上，被禁那一位的
+       内芯仍是出厂字节；
+    ⑦ 原片哈希不动。
+    """
+    _needs_torch()
+    import importlib.util
+    from PIL import Image                      # noqa: F401  （与 PORTRAIT-003 同一臂依赖面）
+
+    if importlib.util.find_spec("mediapipe") is None:
+        pytest.fail("运行时没装 mediapipe：人工纠正判的是「名单里那一个人」，这条不许退成"
+                    "skip（skip 不是通过），装它见 engine/requirements-mediapipe.txt")
+    path = _dual_or_explain()
+    meta = _open(engine, path=path)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    engine.send(cmd="precompute", backend="mediapipe")
+    pc = engine.wait_for("precompute_ready", timeout=180)
+    assert int(pc.get("num_faces", 0)) == 2, pc.get("num_faces")
+    faces = sorted(pc.get("faces") or [], key=lambda f: f["index"])
+    left, right = sorted(faces, key=lambda f: f["box"][0] + f["box"][2])
+    a, b = right["index"], left["index"]           # A = 要留的那一位，B = 被当成误检的那一位
+    box_a, box_b = right["box"], left["box"]
+    core_a = _face_region(h, w, box_a, shrink=0.25)
+    core_b = _face_region(h, w, box_b, shrink=0.25)
+    sha0 = _sha_of(path)
+
+    base = _current(engine, peer, h, w)
+    _drain(engine)
+    engine.send(cmd="face", action="select", index=a)
+    engine.wait_for("face_selected", timeout=60)
+    engine.send(cmd="deform", action="set", amounts={"slim_face": 0.9, "big_eye": 0.6})
+    done = engine.wait_for("deform_done", timeout=90)
+    assert done["built"] is True and done["lit"] is True, done
+    pushed = _current(engine, peer, h, w)
+    d = np.abs(pushed.astype(np.int16) - base.astype(np.int16)).max(axis=2)
+    assert int(d[core_a].max()) > EPS, "推 A 而 A 的内芯没动：假控件"
+    assert int(d[core_b].max()) == 0, "推 A 时 B 动了：改一个人动了另一个人"
+
+    # ① 用户判断：B 是误检，关掉它
+    _drain(engine)
+    engine.send(cmd="face", action="disable", index=b)
+    ev = engine.wait_for("face_manual", timeout=60)
+    assert ev["action"] == "disable" and len(ev["manual"]["disabled"]) == 1, ev
+    flags = {f["index"]: f["disabled"] for f in ev["faces"]}
+    assert flags[b] is True and flags[a] is False, flags
+    assert ev["enabled"] == [a] and ev["blocked"] is False, ev
+    assert ev["scope_block"] == "multi_face", "人工账把「这一轮探到两张」抹掉了"
+    assert ev["explicit"] is True and ev["index"] == a, \
+        f"只剩一个可编辑的人时应指过去并明说：{ev['index']}/{ev['explicit']}"
+    off = _current(engine, peer, h, w)
+    doff = np.abs(off.astype(np.int16) - base.astype(np.int16)).max(axis=2)
+    assert int(doff[core_b].max()) == 0, "关掉的那一只在画面上还挂着东西"
+    assert int(np.abs(off.astype(np.int16) - pushed.astype(np.int16)).max(axis=2)[core_a].max()) == 0, \
+        "关掉 B 把 A 的活儿也一起烧了：一次排除不该推翻另一次编辑"
+
+    # ② 禁用之后不许再把服务给他
+    _drain(engine)
+    engine.send(cmd="face", action="select", index=b)
+    err = _expect_error(engine, "已被人工禁用")
+    assert "face enable" in err["error"], err
+
+    # ③ 撤销这次禁用：账与画面必须同时回去（这份账进文档状态、进撤销栈，不是宿主旁注）
+    _drain(engine)
+    engine.send(cmd="history", action="undo")
+    engine.wait_for("history_state", timeout=60)
+    st = _live_state(engine)["face"]
+    assert st["manual"]["disabled"] == [], f"撤销没把账退回去：{st['manual']}"
+    undone = _current(engine, peer, h, w)
+    assert int(np.abs(undone.astype(np.int16) - pushed.astype(np.int16)).max()) == 0, \
+        "撤销后画面没回到禁用前那一幅"
+    _drain(engine)
+    engine.send(cmd="history", action="redo")
+    engine.wait_for("history_state", timeout=60)
+    st = _live_state(engine)["face"]
+    assert len(st["manual"]["disabled"]) == 1, st["manual"]
+    redone = _current(engine, peer, h, w)
+    assert int(np.abs(redone.astype(np.int16) - off.astype(np.int16)).max()) == 0, \
+        "重做后画面没回到禁用那一幅"
+
+    # ④ 后台重检测（同一个模型再来一次）：不静默恢复，且被禁那一位不许在帧上重新出现
+    _drain(engine)
+    engine.send(cmd="precompute", backend="mediapipe")
+    pc2 = engine.wait_for("precompute_ready", timeout=180)
+    st2 = pc2["face"]
+    assert len(st2["manual"]["disabled"]) == 1, f"重检测把人工账洗掉了：{st2['manual']}"
+    assert st2["manual"]["stale"] == [], f"同模型重检测却认不回：{st2['manual']}"
+    flags2 = {f["index"]: f["disabled"] for f in st2["faces"]}
+    assert flags2[b] is True and flags2[a] is False, flags2
+    assert st2["enabled"] == [a] and st2["blocked"] is False and st2["explicit"] is True, st2
+    assert st2["scope_block"] == "multi_face", st2
+    assert "保留 1 处禁用" in st2["manual"]["preview"], st2["manual"]["preview"]
+    again = _current(engine, peer, h, w)
+    d2 = np.abs(again.astype(np.int16) - base.astype(np.int16)).max(axis=2)
+    assert int(d2[core_b].max()) == 0, \
+        f"重检测后被禁那一只的内芯动了 {int(d2[core_b].max())} LSB：静默恢复"
+    assert int(np.abs(again.astype(np.int16) - off.astype(np.int16)).max()) == 0, \
+        "同图同模型重算，A 那一侧的帧变了：重算不是重新发明"
+
+    # ⑤ 更换检测模型（冻结件 when 的另一半）：认得回照账禁用，认不回留账并明说
+    _drain(engine)
+    engine.send(cmd="precompute", backend="template")
+    pc3 = engine.wait_for("precompute_ready", timeout=120)
+    st3 = pc3["face"]
+    assert len(st3["manual"]["disabled"]) == 1, f"换模型把人工账洗掉了：{st3['manual']}"
+    attached = [f["index"] for f in st3["faces"] if f["disabled"]]
+    assert bool(attached) == (st3["manual"]["stale"] == []), \
+        f"认没认上与实际标记不一致：attached={attached} stale={st3['manual']['stale']}"
+    assert not (set(attached) & set(st3["enabled"])), "被禁那一位同时出现在可编辑名单里"
+    for i in attached:
+        _drain(engine)
+        engine.send(cmd="face", action="select", index=i)
+        _expect_error(engine, "已被人工禁用")
+    _drain(engine)
+    engine.send(cmd="precompute", backend="mediapipe")
+    pc4 = engine.wait_for("precompute_ready", timeout=180)
+    assert len(pc4["face"]["manual"]["disabled"]) == 1 and pc4["face"]["enabled"] == [a], pc4["face"]
+
+    # ⑥ 存工程 → 换进程重开：账随配方走，重开补的那次分析把它叠回名单
+    _created, saved = _create_and_save(engine, tmp_path, name="人工纠正")
+    raw = json.loads(Path(saved["path"]).read_text(encoding="utf-8"))
+    rows = [d for d in raw["docs"] if d["path"] == os.path.abspath(path)]
+    assert rows, f"工程里没有这张多人图：{[d['path'] for d in raw['docs']]}"
+    recipe = json.dumps(rows[0]["versions"][0].get("recipe") or {})
+    assert "disabled" in recipe, "人工账没进工程文件：重开之后关掉的误检会自己活回来"
+
+    eng2 = extra_engine("portrait006-reopen")
+    eng2.send(cmd="hello")
+    eng2.wait_for("ready", timeout=90)
+    eng2.send(cmd="set_device", device="cpu")
+    eng2.wait_for("device_set", timeout=120)
+    eng2.send(cmd="project", action="open", path=saved["path"])
+    eng2.wait_for("project_opened", timeout=120)
+    got_ev = _collect(eng2, "image_ready", timeout=240)
+    shm2 = got_ev["shm_ready"][-1]
+    pc5 = eng2.wait_for("precompute_ready", timeout=240)
+    st5 = pc5["face"]
+    assert len(st5["manual"]["disabled"]) == 1, f"重开后账没了：{st5['manual']}"
+    assert st5["enabled"] == [a] and st5["explicit"] is True and st5["index"] == a, st5
+    got = _current(eng2, FrameShm(shm2["name"]), shm2["h"], shm2["w"])
+    d3 = np.abs(got.astype(np.int16) - base.astype(np.int16)).max(axis=2)
+    core_b2 = _face_region(shm2["h"], shm2["w"], box_b, shrink=0.25)
+    assert int(d3[core_b2].max()) == 0, \
+        f"重开工程后被禁那一只的内芯动了 {int(d3[core_b2].max())} LSB：静默恢复"
+
+    # ⑦ 原片只读
+    assert _sha_of(path) == sha0, "动过原片：这一条在任何一臂里都是死刑"
+
+
+def test_a_manually_framed_missed_face_becomes_editable_geometry(engine, tmp_path):
+    """LNX-PORTRAIT-006 的另一半 given：用户**手动添加**的那一张。引擎只探 2 张，
+    三格图上必然有一位不在名单里——把他框出来，他要拿到**区域真检测**的 478 点，
+    而且改他不动另外两人。
+
+    ① 名单确实漏了第三位（按生成器的几何反算，不靠"我记得长这样"）；
+    ② `face add` 之后那一位的 box 与反算位置对得上，且点位出自区域检测（事件里报后端）；
+    ③ 选定他并推滑块：他的内芯动了，另两位的内芯逐字节 0 LSB——人工补的脸不是新造的
+       一整层，而是与检测脸同一条服务路径；
+    ④ 补错能收回（`face remove` 只允许撤人工的那一张，撤检测脸要明拒）；
+    ⑤ 框在背景上必须**明拒**且名单原样（DoD §2：不许按框拟合一套占位点位冒充 AI）；
+    ⑥ 重复框同一位要明拒（"已经有脸了"），不给他两份几何。
+    """
+    _needs_torch()
+    import importlib.util
+
+    if importlib.util.find_spec("mediapipe") is None:
+        pytest.fail("运行时没装 mediapipe：这一条要的是「区域里真的再检测一次」")
+    spec = importlib.util.spec_from_file_location(
+        "make_test_dual", str(REPO / "packaging" / "make-test-dual-portrait.py"))
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    src_png = str(REPO / "engine" / "tests" / "fixtures" / "portrait-1024x1280.png")
+    img = gen.build(src_png, cells=3)
+    triple = tmp_path / "portrait-triple.jpg"
+    img.save(str(triple), quality=95, subsampling=2)
+
+    meta = _open(engine, path=str(triple))
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+    engine.send(cmd="precompute", backend="mediapipe")
+    pc = engine.wait_for("precompute_ready", timeout=180)
+    faces = sorted(pc.get("faces") or [], key=lambda f: f["index"])
+    assert len(faces) == 2 and int(pc.get("num_faces", 0)) == 2, \
+        f"三格图本该撞到探脸上限（名单漏一位），实际名单 {len(faces)} 张：输入或上限变了"
+    # 第三格的位置由生成器的常量反算（CELL_W/CELL_H/GAP/THIRD_SCALE 是同一份出处）
+    CW, CH, GAP, TS = gen.CELL_W, gen.CELL_H, gen.GAP, gen.THIRD_SCALE
+    total_w = CW * 3 + GAP * 2
+    start_x, start_y = 2 * (CW + GAP), int(CH * (1 - TS))
+    # 名单顺序是检测器的返回顺序，不是从左到右（本仓在 `_face_box` 那条注释里写过这件事），
+    # 所以要按**几何**挑出第一格那一位：第三格贴的是同一张未镜像的源图，镜像那位不能当参照
+    ref_face = min(faces, key=lambda f: f["box"][0] + f["box"][2])
+    ref = ref_face["box"]
+    assert ref[0] * total_w < CW and ref[2] * total_w > CW * 0.4, \
+        f"参照那位不在第一格里（{ref}），反算的前提不成立：这一条判据会量错位置"
+    u0, u1 = ref[0] * total_w / CW, ref[2] * total_w / CW
+    rect = ((start_x + u0 * CW * TS) / total_w, start_y / CH + ref[1] * TS,
+            (start_x + u1 * CW * TS) / total_w, start_y / CH + ref[3] * TS)
+    from lumaretouch_engine.face import box_iou
+    for f in faces:
+        assert box_iou(f["box"], rect) < 0.2, f"这一框与名单里第 {f['index']} 张对得上：输入没漏人"
+
+    _drain(engine)
+    engine.send(cmd="face", action="add", rect=list(rect))
+    ev = engine.wait_for("face_manual", timeout=120)
+    assert ev["action"] == "add" and len(ev["faces"]) == 3, ev
+    newf = [f for f in ev["faces"] if f.get("manual")]
+    assert len(newf) == 1, f"人工来源没标出来：{ev['faces']}"
+    assert ev["region"]["backend"] == "mediapipe", ev["region"]
+    assert box_iou(newf[0]["box"], rect) >= 0.2, f"补回来的不是这一框：{newf[0]['box']} vs {rect}"
+    assert len(ev["manual"]["added"]) == 1, ev["manual"]
+    # 框住他就是要改他：这一步指过去不是"引擎替人选"，那次框选本身就是选择
+    assert ev["index"] == newf[0]["index"] and ev["explicit"] is True, ev
+    assert ev["enabled"] == [f["index"] for f in sorted(ev["faces"], key=lambda x: x["index"])]
+
+    # ③ 改他不动别人：人工补的脸走的是与检测脸同一条服务路径，不是新造的一整层
+    idx = newf[0]["index"]
+    base = _current(engine, peer, h, w)
+    _drain(engine)
+    engine.send(cmd="deform", action="set", amounts={"slim_face": 0.9})
+    done = engine.wait_for("deform_done", timeout=90)
+    assert done["built"] is True and done["lit"] is True, done
+    assert done["landmark_backend"] == "mediapipe", done
+    pushed = _current(engine, peer, h, w)
+    d = np.abs(pushed.astype(np.int16) - base.astype(np.int16)).max(axis=2)
+    mine = _face_region(h, w, newf[0]["box"], shrink=0.25)
+    assert int(d[mine].max()) > EPS, "人工补的那一位推了滑块而画面没动：假控件"
+    for f in faces:
+        other = _face_region(h, w, f["box"], shrink=0.25)
+        assert int(d[other].max()) == 0, \
+            f"改人工补的那一位时动了名单里第 {f['index']} 位（{int(d[other].max())} LSB）"
+
+    # ⑤ 框在**第三格上方那块纯背景**上：明拒，名单原样。补过上下文之后窗里可能带进
+    #    那一位的头顶，两种失败（没脸 / 对不上框）都走同一条外报文案，所以判据不猜原因
+    rect_bg = [(start_x + 20) / total_w, 0.02, (start_x + CW * TS - 20) / total_w, (start_y - 8) / CH]
+    _drain(engine)
+    engine.send(cmd="face", action="add", rect=list(rect_bg))
+    err = _expect_error(engine, "这一框里")
+    assert "名单原样未动" in err["error"], err
+    st = _live_state(engine)["face"]
+    assert len(st["faces"]) == 3, f"被拒的人工框动了名单：{len(st['faces'])} 张"
+
+    # ⑥ 重复框同一位
+    _drain(engine)
+    engine.send(cmd="face", action="add", rect=list(rect))
+    _expect_error(engine, "已经有脸了")
+
+    # ④ 收回：人工那张可以撤，检测那两张只能禁用
+    _drain(engine)
+    engine.send(cmd="face", action="remove", index=0)
+    _expect_error(engine, "不能撤")
+    _drain(engine)
+    engine.send(cmd="face", action="remove", index=idx)
+    ev2 = engine.wait_for("face_manual", timeout=60)
+    assert len(ev2["faces"]) == 2 and not [f for f in ev2["faces"] if f.get("manual")], ev2["faces"]
+    assert ev2["manual"]["added"] == [], ev2["manual"]
