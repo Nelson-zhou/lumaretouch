@@ -51,7 +51,10 @@ rc=$?
 summary=$(grep -E "passed|failed|error" "$log" | tail -1)
 echo "· 结果：${summary:-（没拿到汇总行，见 $log）}"
 
-skips=$(printf '%s' "$summary" | sed -n 's/.*\([0-9]\+\) skipped.*/\1/p')
+# P2-6：取“N skipped”里的完整数字。旧写法 `sed 's/.*\([0-9]\+\) skipped/\1/'` 里的 `.*`
+# 贪婪，会把多位数只剩个位数（247→007 之类取末位）——skip 真超阈时反而判不中、这
+# 道“没 GPU 的那份绿”门禁形同虚设。改用 grep 取紧邻 " skipped" 前的整串数字。
+skips=$(printf '%s' "$summary" | grep -oE '[0-9]+ skipped' | head -1 | grep -oE '[0-9]+')
 if [ -n "${skips:-}" ] && [ "$skips" -gt "$max_skips" ]; then
   echo "× skip 了 $skips 条（上限 $max_skips）：这一遍又变成了“没 GPU 的那份绿”"
   echo "  真实事故就是这一形：384 passed / 247 skipped 全绿，装机第一次 load_image 就 KeyError"
