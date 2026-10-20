@@ -1,8 +1,8 @@
 {
  "schema": "lrt.acceptance-report.v1",
- "at": "2026-10-19T22:22:18",
- "product_version": "1.11.0",
- "mode": "report-only（复用已有 junit XML，本轮没重跑测试）",
+ "at": "2026-10-20T01:54:57",
+ "product_version": "1.12.0",
+ "mode": "run（这一遍重跑了 pytest）",
  "cases_sha256": "c2fca495b90e3aa7",
  "pytest_rc": 0,
  "map_refreshed": [],
@@ -1133,15 +1133,15 @@
  ],
  "perf": {
   "schema": "lrt.acceptance-perf.v1",
-  "at": "2026-10-19T21:04:13",
+  "at": "2026-10-20T01:49:01",
   "samples": 120,
   "proxy_max_px": "product(PROXY_PIXELS)",
   "env": {
-   "engine_version": "1.11.0",
+   "engine_version": "1.12.0",
    "protocol": 1,
    "device": "cuda",
    "cuda": true,
-   "warm_ms": 586.24,
+   "warm_ms": 642.41,
    "runtime": {
     "python": "3.12.15",
     "numpy": "2.5.2",
@@ -1164,33 +1164,33 @@
     "draft": null
    },
    "import_jpg": {
-    "decode_ms": 6.76,
-    "shm_ms": 0.31,
-    "attach_ms": 3.26,
-    "first_frame_ms": 39.43,
-    "first_frame_filter_ms": 34.77,
-    "first_frame_bands_ms": 33.56,
-    "import_ms": 52.32,
+    "decode_ms": 6.98,
+    "shm_ms": 0.3,
+    "attach_ms": 3.29,
+    "first_frame_ms": 41.56,
+    "first_frame_filter_ms": 36.97,
+    "first_frame_bands_ms": 35.76,
+    "import_ms": 54.52,
     "preview_ms": null,
     "open_ms": 1.29,
     "orient_ms": 0.0,
-    "scale_ms": 1.29,
-    "total_ms": 9.33,
-    "sum_of_stages_ms": 52.33
+    "scale_ms": 1.1,
+    "total_ms": 9.37,
+    "sum_of_stages_ms": 54.52
    },
    "import_dng": {
-    "decode_ms": 146.95,
-    "shm_ms": 22.25,
-    "attach_ms": 12.14,
-    "first_frame_ms": 167.64,
-    "first_frame_filter_ms": 143.99,
-    "first_frame_bands_ms": 138.3,
-    "import_ms": 382.14,
+    "decode_ms": 148.7,
+    "shm_ms": 30.42,
+    "attach_ms": 12.7,
+    "first_frame_ms": 169.14,
+    "first_frame_filter_ms": 143.89,
+    "first_frame_bands_ms": 138.22,
+    "import_ms": 395.06,
     "preview_ms": null,
-    "open_ms": 4.81,
+    "open_ms": 5.66,
     "orient_ms": 0.0,
-    "scale_ms": 28.35,
-    "total_ms": 180.11,
+    "scale_ms": 28.44,
+    "total_ms": 182.81,
     "raw": {
      "camera": "LumaRetouch TestCam 1.0",
      "bits": 16,
@@ -1218,10 +1218,10 @@
      "source": "self_dng",
      "half_size": false,
      "used_preview": false,
-     "container_ms": 4.81,
-     "pixels_ms": 2.44,
-     "render_ms": 144.51,
-     "encode_ms": 28.35,
+     "container_ms": 5.66,
+     "pixels_ms": 3.17,
+     "render_ms": 145.53,
+     "encode_ms": 28.44,
      "notes": [
       "AsShotNeutral=[0.4726, 1.0, 0.9233]"
      ]
@@ -1238,62 +1238,62 @@
     }
    },
    "import_dng_second": {
-    "decode_ms": 114.27,
-    "shm_ms": 0.52,
-    "attach_ms": 11.88,
-    "first_frame_ms": 163.28,
-    "first_frame_filter_ms": 146.26,
-    "first_frame_bands_ms": 140.58,
-    "import_ms": 316.41,
+    "decode_ms": 124.7,
+    "shm_ms": 0.67,
+    "attach_ms": 12.42,
+    "first_frame_ms": 161.91,
+    "first_frame_filter_ms": 143.99,
+    "first_frame_bands_ms": 138.35,
+    "import_ms": 326.79,
     "preview_ms": null,
-    "open_ms": 2.42,
+    "open_ms": 2.24,
     "orient_ms": 0.0,
-    "scale_ms": 24.04,
-    "total_ms": 140.73
+    "scale_ms": 24.84,
+    "total_ms": 151.78
    },
    "thumbnail_ms": {
     "n": 25,
-    "p50": 6.42,
-    "p95": 9.038,
-    "p99": 49.279,
-    "max": 61.8,
-    "mean": 8.768
+    "p50": 6.79,
+    "p95": 9.424,
+    "p99": 51.64,
+    "max": 64.78,
+    "mean": 9.252
    },
    "thumbnail_batch": {
     "count": 25,
     "failed": 0,
     "dropped": 0,
     "edge": 160,
-    "wall_ms": 233.4,
+    "wall_ms": 245.7,
     "channel_kb": 88.9
    },
    "drag_render_ms": {
     "n": 120,
-    "p50": 0.16,
-    "p95": 0.19,
-    "p99": 0.208,
-    "max": 0.35,
-    "mean": 0.163
+    "p50": 0.25,
+    "p95": 0.31,
+    "p99": 0.389,
+    "max": 0.41,
+    "mean": 0.25
    },
    "drag_filter_cached_ratio": 1.0,
    "landmark_backend": "mediapipe",
    "num_landmarks": 478,
    "precompute_ms": {
-    "build_ms": 0.12,
-    "infer_ms": 464.57,
-    "total_ms": 469.44
+    "build_ms": 0.13,
+    "infer_ms": 515.97,
+    "total_ms": 520.85
    },
-   "deform_build_ms": 242.85,
+   "deform_build_ms": 248.77,
    "deform_apply_ms": {
     "n": 60,
-    "p50": 2.735,
-    "p95": 4.071,
-    "p99": 4.084,
-    "max": 4.09,
-    "mean": 2.841
+    "p50": 2.76,
+    "p95": 3.927,
+    "p99": 4.08,
+    "max": 4.08,
+    "mean": 2.853
    },
    "deform_builds_during_drag": 0,
-   "enhance_build_ms": 45.34,
+   "enhance_build_ms": 47.17,
    "enhance_gated_px": {
     "sclera": 3166,
     "iris": 2950,
@@ -1308,23 +1308,23 @@
    "bytes_enhance": 2684640,
    "enhance_apply_ms": {
     "n": 60,
-    "p50": 1.22,
-    "p95": 1.331,
-    "p99": 1.354,
-    "max": 1.36,
-    "mean": 1.23
+    "p50": 1.28,
+    "p95": 1.7,
+    "p99": 1.859,
+    "max": 1.9,
+    "mean": 1.353
    },
    "enhance_rebuilds_during_drag": 0,
    "export_per_image_ms": {
     "n": 6,
-    "p50": 68.155,
-    "p95": 84.987,
-    "p99": 85.085,
-    "max": 85.11,
-    "mean": 73.083
+    "p50": 68.62,
+    "p95": 69.785,
+    "p99": 69.877,
+    "max": 69.9,
+    "mean": 68.503
    },
    "export_progress_events": 6,
-   "export_total_ms": 504.3,
+   "export_total_ms": 465.7,
    "export_tile": 512,
    "export_failed": 0
   },
@@ -1332,5 +1332,5 @@
    "RAW 那一臂是合成 DNG（夹具上采样后写 CFA，源幅 2813×2000）：尺寸/位深/排阵的形状对，传感器噪声结构不对——这一组数能比“解码与下采样随像素的标度”，不能当作真机色彩质量结论。"
   ]
  },
- "junit": "/tmp/lrt-acceptance-junit.xml"
+ "junit": "/tmp/junit-1.12.xml"
 }
