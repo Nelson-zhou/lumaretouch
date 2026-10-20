@@ -226,12 +226,22 @@ const WIRED: Record<string, string> = {
   "PC-32478|旋转/逆时针": "crop.ccw",
   "PC-32478|旋转/倾斜角度": "crop.open",
   // 手动修复
+  // F13（P2-4）：只有“污点修复画笔”背后是真·heal 笔迹（按落点扩散、无独立采样）。
+  // “修补工具”“仿制图章”要的独立采样源/目标偏移本版没实现，绝不能再借同一个 brush.heal
+  // 冒充已接通——从 WIRED 摘掉，交给下面的 LEAF_NOTE 置灰并说明，不把三项算成三项已完成。
   "PC-32482|污点修复画笔": "brush.heal",
-  "PC-32482|修补工具": "brush.heal",
-  "PC-32482|仿制图章": "brush.heal",
   // 历史
   "PC-47209|撤销": "history.undo",
   "PC-47209|重做": "history.redo",
+};
+
+/** 置灰叶子的诚实说明（F13 / P2-4）：修补工具/仿制图章没有独立采样实现，本版不能借
+ *  同一个 heal 冒充已接通。给原生 Tooltip 一句实话，而不是“将在后续版本提供”那句泛话。 */
+const LEAF_NOTE: Record<string, string> = {
+  "PC-32482|修补工具": "本版未实现独立采样：它和消除笔共用同一套按落点扩散的修复掩膜，没有"
+    + "可控制的来源区域/目标偏移。真正的修补（选区＋来源重投影）列为后续功能。",
+  "PC-32482|仿制图章": "本版未实现仿制图章：没有采样点与源→目标偏移，画下去走的还是消除笔的"
+    + "扩散修复，不会克隆你指定的源纹理。独立的对齐采样克隆列为后续功能。",
 };
 
 /** 已接通格子的产品名：规格 path 的最后一段常常只是“身体/程度”，
@@ -862,7 +872,8 @@ export default function RetouchPanel(props: RetouchProps) {
                   renderLeaf={(leaf, name) => {
                     const kind = WIRED[`${f.id}|${leaf.path}`];
                     return kind ? renderWired(leaf, name, kind)
-                      : <DisabledRow key={leaf.path} name={name} />;
+                      : <DisabledRow key={leaf.path} name={name}
+                          hint={LEAF_NOTE[`${f.id}|${leaf.path}`]} />;
                   }} />
               )}
             </div>
