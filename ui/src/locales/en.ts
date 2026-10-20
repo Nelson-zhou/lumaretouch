@@ -287,7 +287,7 @@ export const en: Partial<Record<MsgKey, string>> = {
   "studio.targetsSel": "Targets: {n} selected",
   "studio.targetsOne": "Targets: the open document",
   "studio.targetsNone": "Targets: nothing to export",
-  "empty.open": "📂 Click to open a photo, or drop one here",
+  "empty.open": "Click to open a photo, or drop one here",
   "empty.openBtn": "Open Photo",
   "empty.hint": "JPEG / PNG / TIFF and RAW (DNG, CR2, NEF, ARW…); originals are read-only, exports are saved separately",
 };

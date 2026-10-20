@@ -344,7 +344,7 @@ const zh = {
   "log.title": "引擎日志",
   "log.empty": "（无）",
   // C 端入口（1.10.0）：空状态卡片与顶栏按钮。两处走同一条 openAndImport。
-  "empty.open": "📂 点击打开照片，或将照片拖入此处",
+  "empty.open": "点击打开照片，或将照片拖入此处",
   "empty.openBtn": "打开照片",
   "empty.hint": "支持 JPEG / PNG / TIFF 与 RAW（DNG、CR2、NEF、ARW…）；原片只读，导出另存",
 } as const;

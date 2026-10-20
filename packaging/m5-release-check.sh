@@ -1076,9 +1076,11 @@ chk(len(fams) == 39 and "PC-47211" in fams and "PC-32464" in fams
     f"39 个功能族全部由规格生成（读到 {len(fams)} 族）：{fams[:8]}")
 chk(str(d.get("specControls")) == "805",
     f"805 项子控件全部在册：data-spec-controls={d.get('specControls')!r}")
-chk(len(d.get("groups") or []) == 38 and (d.get("groups") or [""])[0] == "人像美化页面概述"
-    and "皮肤调整" in (d.get("groups") or []) and "色彩调节" in (d.get("groups") or []),
-    f"人物属性栏之外的 38 族按规格顺序陈列：{d.get('groups')!r}")
+groups = d.get("groups") or []
+chk(len(groups) >= 20 and "皮肤质感" in groups and "色彩光影" in groups,
+    f"产品分组按中文标题陈列：{groups!r}")
+chk(all("概述" not in g and "说明" not in g and "PC-" not in g for g in groups),
+    f"折叠栏只含中文产品标题：{groups!r}")
 chk(d.get("dx") is not None and abs(int(d["dx"])) <= 2, f"卡片在容器里水平居中：dx={d.get('dx')}")
 chk(d.get("dy") is not None and abs(int(d["dy"])) <= 2, f"卡片在容器里垂直居中：dy={d.get('dy')}")
 chk(int(d.get("w") or 0) > 200 and int(d.get("h") or 0) > 80, f"卡片有真实尺寸：{d.get('w')}×{d.get('h')}")

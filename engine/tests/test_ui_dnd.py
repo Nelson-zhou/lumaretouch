@@ -176,9 +176,9 @@ def test_spec_copies_are_byte_identical_and_complete():
             assert raw == (SPEC_DIR / dst).read_bytes(), f"{dst} 与资料包原件不一致"
 
 
-def test_product_ui_is_spec_driven_and_keeps_every_disabled_control():
-    """红线：39 族全部由 SPEC 数据生成；没接通的格子完整陈列、置灰、
-    Tooltip 写「P1 规划中 · [规格 ID]」；视口不做像素化硬采样。"""
+def test_product_ui_is_spec_driven_and_de_engineered():
+    """红线：39 族仍由 SPEC 数据生成；未开放的控件静默置灰。
+    产品界面不准出现规格编号、阶段标签、项数徽章或后端实现细节。"""
     assert 'className="hud"' not in APP, "调试 HUD 又回到视口里了"
     assert 'className="bar"' not in APP, "底片条工具条又回来了"
     # 规格树是唯一的功能清单：面板里不许再有手写的分类墙
@@ -187,10 +187,20 @@ def test_product_ui_is_spec_driven_and_keeps_every_disabled_control():
     assert 'data-spec-total={SPEC_COUNTS.features}' in PANEL
     assert 'data-spec-controls={SPEC_COUNTS.subcontrols}' in PANEL
     assert 'f.id !== "PC-47211"' in PANEL, "人物属性栏没有按 PC-47211 单列"
-    # 未接通：保留 + 禁用 + 规格 ID
-    assert "P1Row" in PANEL and "P1 规划中" in PANEL
-    assert "P1 规划中 · [${specId}]" in PANEL or "P1 规划中 · [" in PANEL, \
-        "P1 Tooltip 没带规格 ID"
+    # 未开放：保留控件位置、静默置灰；界面上没有 P1 标签
+    assert "DisabledRow" in PANEL
+    assert "P1 规划中" not in PANEL, "P1 黄色标签又回到界面"
+    assert "specId={f.id}" not in PANEL, "规格 ID 又被传进可见控件"
+    for bad in ('className="sfamId"', 'className="pgCount"', 'className="specStat"',
+                'className="specFoot"', 'className="specP1"', "已接通 ${wiredCount}",
+                "39 族", "805 项", "规格 ID", "页面概述"):
+        assert bad not in PANEL, f"产品面板里混进了研发元数据：{bad}"
+    # 数值输入框与单位是这一轮的质感要求，不能只剩一根滑杆
+    assert 'className="pfield"' in PANEL and 'className="pnum"' in PANEL
+    assert 'unit="EV"' in PANEL and 'unit="K"' in PANEL
+    # 创意 / 导出工作区也不许再贴阶段标签或工具/分类数量
+    for bad in ("P1 规划中", "个工具 ·", "个分类", "引擎已接通", "工作流 32483"):
+        assert bad not in APP, f"顶部工作区里混进了研发元数据：{bad}"
     assert "disabled" in PANEL
     # 已接通的那 15 项真的挂在命令上（抽样，防“全表被清空还能过”）
     for fn in ("setStrength", "runDeform", "runEnhance", "runExposure", "runLut",
@@ -204,6 +214,18 @@ def test_product_ui_is_spec_driven_and_keeps_every_disabled_control():
         "视口又用像素化硬采样冒充 1:1 了"
     # 产品档代理是 4K 档，不是跑靶预算
     assert "useState(8_294_400)" in APP and "useState(576000)" not in APP
+
+
+def test_viewport_never_shows_zero_percent_and_uses_floating_capsules():
+    """视口顶栏出现过「0%」按钮的低级错误：没有图或 fitScale 还没量到时
+    必须隐藏缩放读数或用 100% 占位。对比模式与裁剪收进悬浮胶囊。"""
+    assert 'className="stageTools"' not in APP, "旧的顶栏工具条又回来了"
+    assert 'className="viewBar"' in APP and 'className="zoomBar"' in APP
+    assert 'className={"zoomRead"' in APP and 'srOnly' in APP
+    assert 'const zoomPct = !status?.image ? ""' in APP
+    assert 'fitScale > 0' in APP and ': "100%"' in APP, \
+        "fitScale 未就绪时没有 100% 占位，仍可能显示 0%"
+    assert 'className="zoomtag"' not in VIEWER, "视口里还挂着旧的缩放徽标"
 
 
 def test_one_to_one_zoom_is_recomputed_when_the_window_resizes():

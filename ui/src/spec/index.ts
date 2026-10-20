@@ -9,8 +9,8 @@
  * 副本的 sha256 与条数落在 `manifest.json`，`engine/tests/test_ui_spec.py` 每次回归
  * 都拿它跟原件对账——资料包换了而 UI 没换，测试先红，不靠人记得。
  *
- * 铁律：界面上的功能清单以这份数据为唯一出处。引擎没接通的格子由调用方按规格 ID
- * 置灰并写「P1 规划中」，不许在组件里私自少画一族。
+ * 铁律：界面上的功能清单以这份数据为唯一出处。引擎没接通的格子由调用方静默
+ * 置灰，只在原生 Tooltip 里说明后续版本提供；不许在组件里私自少画一族。
  */
 import refineRaw from "./refine.json";
 import workflowsRaw from "./workflows.json";

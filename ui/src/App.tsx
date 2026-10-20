@@ -2723,9 +2723,13 @@ export default function App() {
     const dpr = window.devicePixelRatio || 1;
     setView((v) => ({ ...v, zoom: 1 / Math.max(1e-6, dpr * fitScale) }));
   }, [oneToOne, fitScale]);
-  const zoomPct = view.fit
-    ? `${Math.round(fitScale * 100)}%`
-    : `${Math.round(view.zoom * fitScale * (window.devicePixelRatio || 1) * 100)}%`;
+  // 没有图时不渲染缩放条；有图但视口还没量出 fitScale 时用 100% 占位，
+  // 绝不让顶栏出现 0%。
+  const zoomPct = !status?.image ? ""
+    : fitScale > 0
+      ? `${Math.round((view.fit ? fitScale
+        : view.zoom * fitScale * (window.devicePixelRatio || 1)) * 100)}%`
+      : "100%";
 
   /** 底片条的评分/色标：落在工程记录的 tags/label 上（不碰原图）。
    *  评分用保留标签 `rating:N`；色标用 label（红/黄/绿/蓝/紫）。 */
@@ -3280,26 +3284,19 @@ export default function App() {
     && (faceSt?.enabled?.length ?? faceCount) >= 1
     && (faceCount === 1 || (faceCount > 1 && !!faceSt && faceSt.explicit && !faceSt.blocked))
     && !!faceSt && faceSt.box !== null;
-  // 可编辑的人数从引擎那份 `enabled` 读（人工禁用之后它就变了）。这里只读不拼：拼第二份
-  // 就会出现「面板说还要选人而引擎早就放行了」那个双向错配
-  const editable = faceSt?.enabled?.length ?? faceCount;
   const faceWhy = hasImage
     ? ((faceSt?.enabled?.length ?? faceCount) === 0
-        // 人工把名单里的人都关掉了：这不是"没分析"，而是用户说过"这些都不是脸"。
-        // 面板要说的是这一句，而不是退回一句空洞的"需要先跑分析"
-        ? `名单上 ${faceCount} 个人已全部被人工禁用：单脸作用域的面部重塑与眼牙层不再对任何人服务。`
-          + "在上方人物格里点 ↺ 恢复那一只（LNX-PORTRAIT-006）；全图调色、曝光/白平衡、裁剪与磨皮仍可用。"
+        // 人物被全部排除：告诉用户从哪里恢复，不复述内部状态字段。
+        ? "画面中的人物已全部排除。请在上方人物栏重新选中需要调整的人物。"
+          + "全图调色、曝光、白平衡、裁剪与磨皮仍可使用。"
         : faceCount > 1 && faceSt?.blocked
-        ? `名单上 ${faceCount} 个人、可编辑的有 ${editable} 个`
-          + `${(faceSt?.disabled_count ?? 0) > 0 ? `（已人工关掉 ${faceSt?.disabled_count} 只）` : ""}：`
-          + "本版本不在多人照片里替你选哪一张（SCOPE-001）。先在上方点选要编辑的人物，"
-          + "选好之后这三个滑块就可用（LNX-PORTRAIT-003）；认出那是误检就点 ✕ 关掉它"
-          + "（LNX-PORTRAIT-006）；全图调色、曝光/白平衡、裁剪与磨皮仍可用。"
+        ? `画面中有 ${faceCount} 个人物，请先在人物栏选择要调整的人物。`
+          + `${(faceSt?.disabled_count ?? 0) > 0 ? `（已排除 ${faceSt?.disabled_count} 人）` : ""}`
+          + "选定后即可单独调整面部与眼牙。"
         : faceCount > 1
-          ? `画面里探到 ${faceCount} 张脸：面部重塑只服务你选定的那一张（人物 ${(faceSt?.index ?? 0) + 1}）。`
-          : `需要且仅需要一张可用人脸（当前 backend=${pc?.backend ?? "未跑分析"}、点数=${pc?.num_landmarks ?? 0}`
-            + `${deformGeomWarn ? "，且引擎报了几何警告" : ""}）。多人照片上替别人改脸是本产品明确不做的事。`)
-    : "还没导入图片：这一格要作用于一张打开的图。";
+          ? `当前仅对选中的人物 ${(faceSt?.index ?? 0) + 1} 生效。`
+          : "未检测到可编辑的人脸。请换一张正面人像，或在人物栏中添加人物。")
+    : "打开照片后即可使用。";
   const liveTask = tasks.length ? tasks[tasks.length - 1] : null;
   // 注册表上的格式名（jpeg/tiff）与引擎落盘用的后缀名（jpg/tif）不是一回事：
   // 映射只在这一处，两个名单都不在面板里重复刻
@@ -3372,7 +3369,7 @@ export default function App() {
     }
     if (key.startsWith("lnx.batch.v1.") || key.startsWith("lnx.export.v1.")) {
       if (key === "lnx.export.v1.start") {
-      if (!pid || !engineAlive) return "引擎没在跑：先启动引擎。";
+      if (!pid || !engineAlive) return "图像处理服务未就绪，请稍候重试。";
       if (exporting) return "已经有一批在跑：一批只许一个（两条 worker 会同抢一块卡）。";
         return exportTargets.length ? null : "底片条上没选图，也没有打开的文档：导出需要至少一张。";
       }
@@ -3689,7 +3686,7 @@ export default function App() {
                         onOpenCrop={() => setCropOpen(true)}
                         onFaceAdd={() => {
                           setPickFace(true);
-                          setDragNote("在画面里拖一个框：松手后引擎在这个框上再跑一次人脸检测");
+                          setDragNote("在画面中框选一张人脸，松手即可添加人物");
                         }}
                         faceAdding={pickFace} />
         </aside>
@@ -3698,46 +3695,29 @@ export default function App() {
       <main className="stage">
         {workspace === "retouch" && (
           <>
-            <div className="stageTools">
-              <div className="seg">
-                <button className={view.fit ? "on" : ""} onClick={zoomFit}
-                        title="适应窗口">适合</button>
-                <button className={oneToOne ? "on" : ""} onClick={zoomOne}
-                        title="1 图像像素 = 1 屏幕像素">100%</button>
-                <span className="zoomRead">{zoomPct}</span>
-              </div>
-              <div className="seg">
-                <button className={compareMode === "single" ? "on" : ""}
-                        onClick={() => setCompareMode("single")}>单视图</button>
-                <button className={compareMode === "split" ? "on" : ""}
-                        onClick={() => setCompareMode("split")}
-                        disabled={!hasImage}>并排对比</button>
-                <button className={compareMode === "swipe" ? "on" : ""}
-                        onClick={() => setCompareMode("swipe")}
-                        disabled={!hasImage}>卷帘分屏</button>
-                <button className={comparing ? "on" : ""}
-                        onPointerDown={(e) => { void cmpOn(e); }}
-                        onPointerUp={() => { void cmpOff(); }}
-                        onLostPointerCapture={() => { void cmpOff(); }}
-                        disabled={!hasImage || compareMode !== "single"}
-                        title="按住查看原图（也可以按住空格）">按住看原图</button>
-              </div>
-              <div className="seg">
-                <button onClick={() => setCropOpen(true)} disabled={!hasImage}
-                        title="裁剪与旋转（P0 lnx.crop.v1）">裁剪</button>
-                {doc?.crop?.lit && (
-                  <span className="zoomRead">
-                    {doc.crop.out_full
-                      ? `${doc.crop.out_full[0]}×${doc.crop.out_full[1]}`
-                      : "已裁剪"}
-                  </span>
-                )}
-              </div>
-              <span className={"cmpWait" + (compareMode !== "single" && !hasOriginal ? " on" : "")}>
-                {compareMode !== "single" ? (hasOriginal ? "原图已就绪" : "正在取原图…") : ""}
-              </span>
-            </div>
             <div className="stageBody">
+              {hasImage && (
+                <div className="viewBar" role="toolbar" aria-label="视图模式">
+                  <button className={compareMode === "single" ? "on" : ""}
+                          onClick={() => setCompareMode("single")}>单视图</button>
+                  <button className={compareMode === "split" ? "on" : ""}
+                          onClick={() => setCompareMode("split")}>并排对比</button>
+                  <button className={compareMode === "swipe" ? "on" : ""}
+                          onClick={() => setCompareMode("swipe")}>卷帘分屏</button>
+                  <span className="vbSep" />
+                  <button className={comparing ? "on" : ""}
+                          onPointerDown={(e) => { void cmpOn(e); }}
+                          onPointerUp={() => { void cmpOff(); }}
+                          onLostPointerCapture={() => { void cmpOff(); }}
+                          disabled={compareMode !== "single"}
+                          title="按住查看原图（也可以按住空格）">按住看原图</button>
+                  <button onClick={() => setCropOpen(true)}
+                          title="裁剪与旋转">裁剪</button>
+                  {compareMode !== "single" && (
+                    <span className="vbState">{hasOriginal ? "原图已就绪" : "正在取原图…"}</span>
+                  )}
+                </div>
+              )}
               <Viewer
                 view={view} onView={(v) => {
                   // 滚轮/捏合改了倍率就退出 1:1；平移不算，仍是同一像素密度
@@ -3762,6 +3742,17 @@ export default function App() {
                 onOriginalCaptured={onOriginalCaptured}
                 onFitScale={setFitScale}
               />
+              {hasImage && (
+                <div className="zoomBar" role="group" aria-label="缩放">
+                  <button className={view.fit ? "on" : ""} onClick={zoomFit}
+                          title="适应窗口">适合</button>
+                  <button className={oneToOne ? "on" : ""} onClick={zoomOne}
+                          title="1 图像像素 = 1 屏幕像素">100%</button>
+                  <span className={"zoomRead" + (view.fit || oneToOne ? " srOnly" : "")}>
+                    {zoomPct}
+                  </span>
+                </div>
+              )}
               {!hasImage && (
                 <div className="emptyStage" role="button" tabIndex={0} aria-busy={busy}
                      aria-label={t("empty.open")}
@@ -3770,6 +3761,7 @@ export default function App() {
                        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void openAndImport(); }
                      }}>
                   <div className="emptyCard">
+                    <div className="emptyGlyph" aria-hidden="true">＋</div>
                     <div className="emptyTitle">{busy ? "正在打开…" : t("empty.open")}</div>
                     <div className="emptyHint">{t("empty.hint")}</div>
                   </div>
@@ -3934,8 +3926,7 @@ export default function App() {
             <div className="creativeHead">
               <div>
                 <h2>创意</h2>
-                <span>{TOOLS.length} 个工具 · {TOOL_CATEGORIES.length} 个分类 ·
-                  画布与精修共用同一份文档与历史</span>
+                <span>让照片拥有更多表达</span>
               </div>
               <button className="chip" disabled={!hasImage}
                 onClick={() => setWorkspace("retouch")}>回到画布</button>
@@ -3944,7 +3935,7 @@ export default function App() {
               <div className="creativeCards">
                 {TOOL_CATEGORIES.map((cat) => (
                   <div className="cGroup" key={cat}>
-                    <h3>{cat}<em>{TOOLS.filter((t) => t.category === cat).length}</em></h3>
+                    <h3>{cat}</h3>
                     <div className="cCards">
                       {TOOLS.filter((t) => t.category === cat).map((tool) => {
                         const wired = tool.name.includes("智能消除");
@@ -3953,8 +3944,8 @@ export default function App() {
                             className={"cCard" + (wired ? " on" : " off")}
                             disabled={!wired || !hasImage}
                             title={wired
-                              ? "在画布上用消除笔（引擎已接通的同一支画笔）"
-                              : `P1 规划中 · [${tool.id}]：创意工具页尚未接通后端`}
+                              ? "在画布上使用消除笔"
+                              : "该工具将在后续版本提供"}
                             onClick={() => {
                               if (!wired) return;
                               setWorkspace("retouch");
@@ -3963,7 +3954,6 @@ export default function App() {
                             }}>
                             <b>{tool.name}</b>
                             <span>{(tool.interaction || tool.output || "").slice(0, 46)}</span>
-                            {!wired && <em>P1</em>}
                           </button>
                         );
                       })}
@@ -4027,7 +4017,6 @@ export default function App() {
                   );
                 }) : <div className="qEmpty">先在底片条或图库选择要导出的照片</div>}
               </div>
-              <div className="qNote">水印、多目录分发与云端交付：P1 规划中 · [工作流 32483]</div>
             </div>
 
             <div className="exportCard">
@@ -4058,8 +4047,8 @@ export default function App() {
                   <select value={exportProfile} onChange={(e) => setExportProfile(e.target.value)}>
                     <option value="srgb">sRGB（嵌入 ICC）</option>
                     <option value="source">跟随源文件 ICC</option>
-                    <option value="adobergb" disabled>AdobeRGB · P1 规划中</option>
-                    <option value="display_p3" disabled>Display P3 · P1 规划中</option>
+                    <option value="adobergb" disabled>AdobeRGB</option>
+                    <option value="display_p3" disabled>Display P3</option>
                   </select>
                 </label>
                 <label>同名冲突
@@ -4078,7 +4067,7 @@ export default function App() {
                          onChange={(e) => setExportGps(e.target.checked)} />
                   写入 GPS
                 </label>
-                <label className="exCheck off" title="P1 规划中 · [工作流 32483]">
+                <label className="exCheck off" title="水印将在后续版本提供">
                   <input type="checkbox" disabled /> 水印
                 </label>
               </div>

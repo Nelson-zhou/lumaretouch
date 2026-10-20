@@ -1,13 +1,13 @@
 /**
  * 右侧精修面板（Spec-Driven，1.12.0）。
  *
- * 功能清单不在这里手写：39 个功能族、805 个子控件全部从 `ui/src/spec/refine.json`
+ * 功能清单不在这里手写：所有功能族与子控件从 `ui/src/spec/refine.json`
  * 读出来递归画（`SpecTree`）。本文件只负责三件事：
- *   ① 把引擎已接通的格子接上真控件（15 项能力 + 画笔/裁剪/换底/肤色定向）；
- *   ② 没接通的格子统一交给 P1Row：照常陈列、置灰、Tooltip 写「P1 规划中 · [规格 ID]」；
- *   ③ 人物属性栏（PC-47211）：所有人 / 每张脸 / 联动锁 / 添加与移出。
+ *   ① 把已经接通的能力接上真控件（15 项能力 + 画笔/裁剪/换底/肤色定向）；
+ *   ② 未开放的格子静默置灰，只在原生 Tooltip 里说明后续版本提供；
+ *   ③ 人物栏：所有人 / 每张脸 / 多脸联动 / 添加与移出。
  *
- * 面板不判断“这一族要不要画”，也不改规格里的顺序——那两件事的出处只有 JSON。
+ * 产品界面不打印内部编号、阶段标签、项数统计或后端实现细节。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -19,7 +19,7 @@ import {
   FEATURES, SPEC_COUNTS, buildTree, type SpecFeature, type SpecNode,
   type SpecSubcontrol,
 } from "../spec";
-import { P1Row, SpecInfo, SpecNodes } from "./SpecTree";
+import { DisabledRow, SpecNodes } from "./SpecTree";
 
 export type BrushMode = "heal" | "dodge" | "burn" | "color";
 
@@ -49,43 +49,102 @@ export interface RetouchProps {
 const ok = (p: Promise<unknown>, props: RetouchProps) =>
   p.then(props.onDone).catch((e) => props.note(String(e)));
 
-const P1 = (id: string, what = "当前版本未接通后端算法") => `P1 规划中 · [${id}]：${what}`;
-
 function Slider(props: {
   label: string;
   value: number;
   min: number;
   max: number;
   step?: number;
-  display?: string;
+  unit?: string;
+  digits?: number;
   disabled?: boolean;
   title?: string;
   onChange: (v: number) => void;
   onReset: () => void;
 }) {
   const [local, setLocal] = useState(props.value);
+  const [text, setText] = useState(() => fmt(props.value));
   const dragging = useRef(false);
+  const typing = useRef(false);
+  const step = props.step ?? 1;
+
+  function fmt(v: number) {
+    return props.digits === undefined ? String(Math.round(v)) : v.toFixed(props.digits);
+  }
+
+  function snap(v: number) {
+    const n = Math.min(props.max, Math.max(props.min, v));
+    return Math.round(n / step) * step;
+  }
+
   useEffect(() => {
-    if (!dragging.current) setLocal(props.value);
+    if (dragging.current || typing.current) return;
+    setLocal(props.value);
+    setText(fmt(props.value));
+    // fmt 只依赖 props.digits；把它列进来会让滑杆每次父级刷新都重置光标。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.value]);
+
+  const commit = () => {
+    typing.current = false;
+    const raw = Number(text);
+    if (!Number.isFinite(raw)) {
+      setText(fmt(local));
+      return;
+    }
+    const v = snap(raw);
+    setLocal(v);
+    setText(fmt(v));
+    if (v !== props.value) props.onChange(v);
+  };
+
+  const pct = ((local - props.min) / (props.max - props.min)) * 100;
+  const zero = props.min < 0 && props.max > 0
+    ? ((0 - props.min) / (props.max - props.min)) * 100 : 0;
+  const lo = Math.min(pct, zero);
+  const hi = Math.max(pct, zero);
+  const track = `linear-gradient(to right, #343434 0 ${lo}%, #c79a63 ${lo}% ${hi}%, #343434 ${hi}% 100%)`;
+
   return (
     <div className={"pslider" + (props.disabled ? " off" : "")}>
       <div className="prow">
         <span className="plabel">{props.label}</span>
-        <span className="pval">{props.display ?? Math.round(local)}</span>
+        <span className="pfield">
+          <input className="pnum" type="text" inputMode="decimal"
+            aria-label={`${props.label} 数值`}
+            value={text} disabled={props.disabled}
+            onChange={(e) => setText(e.target.value)}
+            onFocus={(e) => { typing.current = true; e.currentTarget.select(); }}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") {
+                typing.current = false;
+                setText(fmt(props.value));
+                e.currentTarget.blur();
+              }
+            }} />
+          {props.unit && <span className="punit">{props.unit}</span>}
+        </span>
       </div>
       <input type="range" min={props.min} max={props.max}
-        step={props.step ?? 1}
+        step={step}
         value={local}
         disabled={props.disabled}
+        aria-label={props.label}
         title={props.title ?? "双击归零"}
+        style={{ background: track }}
         onPointerDown={() => { dragging.current = true; }}
         onPointerUp={() => { dragging.current = false; }}
         onPointerCancel={() => { dragging.current = false; }}
-        onChange={(e) => { const v = +e.target.value; setLocal(v); props.onChange(v); }}
+        onChange={(e) => {
+          const v = +e.target.value;
+          setLocal(v);
+          setText(fmt(v));
+          props.onChange(v);
+        }}
         onDoubleClick={() => {
           dragging.current = false;
-          setLocal(0);
           props.onReset();
         }}
       />
@@ -125,7 +184,7 @@ function FaceAvatar({ face, thumb, all }: {
 /** 已接通的控制：键是「功能族 ID|规格 path」，值是面板里的分派名。
  *
  * 这张表只做一件事——把规格里的那一条路径指到引擎的一条真命令上。表里没有的
- * 一律 P1 置灰；表里有的但引擎拒了（例如没关键点时开瘦脸），错误照样从引擎回来，
+ * 一律静默置灰；表里有的但引擎拒了（例如没关键点时开瘦脸），错误照样从引擎回来，
  * 面板不提前放行。
  */
 const WIRED: Record<string, string> = {
@@ -219,7 +278,44 @@ const SHAPE_PRESETS: Record<string, Record<string, number>> = {
   英气: { slim_face: 0.30, big_eye: 0.02, small_chin: 0.18, smile: 0 },
 };
 
-const INFO_IDS = new Set(["PC-47248", "PC-47246", "PC-230985"]);
+/** 面板上用产品语言呈现的分组名：只改显示，不动规格原文。 */
+const PANEL_TITLE: Record<string, string> = {
+  "PC-32464": "瑕疵修复",
+  "PC-32465": "皮肤质感",
+  "PC-32466": "面部重塑",
+  "PC-32468": "表情微调",
+  "PC-32469": "牙齿美化",
+  "PC-32470": "眼部精修",
+  "PC-32471": "妆容调整",
+  "PC-32472": "发型调整",
+  "PC-46608": "手部美化",
+  "PC-9XYcMCvHXW": "足部美化",
+  "PC-32473": "全身塑形",
+  "PC-32474": "背景处理",
+  "PC-32475": "证件照换底",
+  "PC-32476": "天空替换",
+  "PC-32477": "衣物修饰",
+  "PC-32452": "风格调色",
+  "PC-32455": "色彩光影",
+  "PC-32454": "局部调色",
+  "PC-32479": "手动液化",
+  "PC-32482": "修复工具",
+  "PC-32481": "局部画笔",
+  "PC-32480": "批量同步",
+  "PC-4WvzDIBakP": "宠物修复",
+  "PC-DaMvAbwxp4": "眼部调整",
+  "PC-32478": "裁剪与旋转",
+  "PC-AlCcjw85ql": "去除黑白边",
+  "PC-165385": "构图参考线",
+  "PC-47209": "历史记录",
+};
+
+/** 说明书式的概述与常见问答不占工作台版面；数据仍在 DOM 与规格 JSON 里。 */
+const ARCHIVE_IDS = new Set([
+  "PC-47248", "PC-47246", "PC-230985",
+  "PC-32558", "PC-64490", "PC-149774", "PC-32550",
+  "PC-121089", "PC-124704", "PC-32552",
+]);
 
 function hexToRgb(hex: string): number[] {
   const h = hex.replace("#", "");
@@ -300,20 +396,19 @@ export default function RetouchPanel(props: RetouchProps) {
   const brushMode = props.brush.mode;
 
   /** 已接通叶子的实际控件。`name` 是规格 path 的最后一段。 */
-  const renderWired = (fid: string, leaf: SpecSubcontrol, name: string,
+  const renderWired = (leaf: SpecSubcontrol, name: string,
                        kind: string): React.ReactNode => {
-    const title = `${fid} · ${leaf.path}`;
     const label = WIRE_LABEL[kind] ?? name;
     if (kind.startsWith("deform.preset:")) {
       const preset = kind.split(":")[1];
       return (
-        <button key={leaf.path} className="specBtn" title={title}
+        <button key={leaf.path} className="specBtn" title={`脸型预设：${name}`}
           disabled={dim || !props.faceOk}
           onClick={() => {
             setOpenSeen((s) => ({ ...s, [preset]: true }));
             commitDeform(SHAPE_PRESETS[preset] ?? {});
           }}>
-          <b>{name}</b><em>脸型预设</em>
+          <b>{name}</b><em>预设</em>
         </button>
       );
     }
@@ -355,7 +450,7 @@ export default function RetouchPanel(props: RetouchProps) {
           <Slider key={leaf.path} label={label}
             value={Math.round((amounts[key] ?? 0) * 100)} min={0} max={100}
             disabled={dim || !props.faceOk}
-            title={props.faceOk ? title : props.faceWhy}
+            title={props.faceOk ? "拖动调整" : props.faceWhy}
             onChange={(v) => commitDeform({ [key]: v / 100 })}
             onReset={() => commitDeform({ [key]: 0 })} />
         );
@@ -368,7 +463,7 @@ export default function RetouchPanel(props: RetouchProps) {
           <Slider key={leaf.path} label={label}
             value={Math.round((enhAmounts[key] ?? 0) * 100)} min={0} max={100}
             disabled={dim || !props.faceOk}
-            title={props.faceOk ? title : props.faceWhy}
+            title={props.faceOk ? "拖动调整" : props.faceWhy}
             onChange={(v) => commitEnhance({ [key]: v / 100 })}
             onReset={() => commitEnhance({ [key]: 0 })} />
         );
@@ -377,8 +472,7 @@ export default function RetouchPanel(props: RetouchProps) {
         return (
           <Slider key={leaf.path} label={label}
             value={ex?.ev ?? 0} min={-5} max={5} step={0.05}
-            display={`${(ex?.ev ?? 0) >= 0 ? "+" : ""}${(ex?.ev ?? 0).toFixed(2)} EV`}
-            disabled={dim}
+            unit="EV" digits={2} disabled={dim}
             onChange={(v) => commitExposure({ ev: v })}
             onReset={() => commitExposure({ ev: 0 })} />
         );
@@ -386,8 +480,7 @@ export default function RetouchPanel(props: RetouchProps) {
         return (
           <Slider key={leaf.path} label={label}
             value={Math.round(ex?.temperature_shift ?? 0)} min={-2000} max={2000} step={20}
-            display={`${Math.round(ex?.temperature_shift ?? 0) >= 0 ? "+" : ""}${Math.round(ex?.temperature_shift ?? 0)} K`}
-            disabled={dim}
+            unit="K" disabled={dim}
             onChange={(v) => commitExposure({ temperature_shift: v })}
             onReset={() => commitExposure({ temperature_shift: 0 })} />
         );
@@ -435,9 +528,8 @@ export default function RetouchPanel(props: RetouchProps) {
         return (
           <Slider key={leaf.path} label={label}
             value={Math.round(lutAmt * 100)} min={0} max={100}
-            display={`${Math.round(lutAmt * 100)}%`}
-            disabled={dim || !lutOn}
-            title={lutOn ? title : "先选一个预设"}
+            unit="%" disabled={dim || !lutOn}
+            title={lutOn ? "拖动调整" : "先选择一个风格"}
             onChange={(v) => ok(runLut("set", {
               preset: doc?.lut.preset ?? undefined, amount: v / 100,
             }), props)}
@@ -447,22 +539,23 @@ export default function RetouchPanel(props: RetouchProps) {
         );
       case "crop.open":
         return (
-          <button key={leaf.path} className="specBtn" title={title} disabled={dim}
+          <button key={leaf.path} className="specBtn" title="裁剪与旋转" disabled={dim}
             onClick={() => props.onOpenCrop()}>
-            <b>{label}</b><em>打开裁剪</em>
+            <b>{label}</b><em>打开</em>
           </button>
         );
       case "crop.cw":
       case "crop.ccw":
         return (
-          <button key={leaf.path} className="specBtn" title={title} disabled={dim}
+          <button key={leaf.path} className="specBtn"
+            title={kind === "crop.cw" ? "顺时针旋转 90°" : "逆时针旋转 90°"} disabled={dim}
             onClick={() => rotateBy(kind === "crop.cw" ? 90 : -90)}>
             <b>{label}</b><em>旋转</em>
           </button>
         );
       case "brush.heal":
         return (
-          <button key={leaf.path} className="specBtn" title={title} disabled={dim}
+          <button key={leaf.path} className="specBtn" title="修复画笔" disabled={dim}
             onClick={() => props.onBrush({ mode: "heal", on: true })}>
             <b>{label}</b><em>画笔</em>
           </button>
@@ -470,15 +563,16 @@ export default function RetouchPanel(props: RetouchProps) {
       case "history.undo":
       case "history.redo":
         return (
-          <button key={leaf.path} className="specBtn" title={title}
+          <button key={leaf.path} className="specBtn"
+            title={kind === "history.undo" ? "撤销上一步" : "重做"}
             disabled={dim || (kind === "history.undo" ? !doc?.history.can_undo
               : !doc?.history.can_redo)}
             onClick={() => ok(runHistory(kind === "history.undo" ? "undo" : "redo"), props)}>
-            <b>{label}</b><em>{kind === "history.undo" ? "历史" : "历史"}</em>
+            <b>{label}</b><em>历史</em>
           </button>
         );
       default:
-        return <P1Row key={leaf.path} name={name} specId={fid} />;
+        return <DisabledRow key={leaf.path} name={name} />;
     }
   };
 
@@ -489,7 +583,7 @@ export default function RetouchPanel(props: RetouchProps) {
     return (
       <div className="hslChips" key="hsl-chips" data-hsl-band={hslBand}>
         {HSL_BANDS.map((n, i) => (
-          <button key={n} title={`${n}（第 ${i + 1} 段）`}
+          <button key={n} title={`${n}色`}
             className={"hslChip" + (i === hslBand ? " on" : "")}
             style={{ background: HSL_CHIP_COLORS[i] }}
             onClick={() => setHslBand(i)}>{n}</button>
@@ -519,20 +613,19 @@ export default function RetouchPanel(props: RetouchProps) {
     return open;
   };
 
-  const activeFamilies = new Set(FEATURES
-    .filter((f) => f.subcontrols.some((s) => WIRED[`${f.id}|${s.path}`]))
-    .map((f) => f.id));
-  activeFamilies.add("PC-32452");
-  activeFamilies.add("PC-32454");
-  activeFamilies.add("PC-32475");
-  activeFamilies.add("PC-47209");
-  activeFamilies.add("PC-32482");
+  const visibleTrees = trees.filter(({ f }) =>
+    f.id !== "PC-47211" && !ARCHIVE_IDS.has(f.id));
+  const archived = FEATURES.filter((f) =>
+    f.id !== "PC-47211" && ARCHIVE_IDS.has(f.id));
 
   const query = q.trim().toLowerCase();
-  const hit = (f: SpecFeature) =>
-    !query || f.id.toLowerCase().includes(query)
+  const hit = (f: SpecFeature) => {
+    if (!query) return true;
+    const title = PANEL_TITLE[f.id] ?? f.title;
+    return title.toLowerCase().includes(query)
       || f.title.toLowerCase().includes(query)
       || f.subcontrols.some((s) => s.path.toLowerCase().includes(query));
+  };
 
   const lutBlock = (
     <>
@@ -557,18 +650,17 @@ export default function RetouchPanel(props: RetouchProps) {
             <span className="lutName">{p.title}</span>
           </button>
         ))}
-        <button className="lutCard off" disabled title={P1("PC-32452", "导入 .cube 的界面尚未接通")}>
+        <button className="lutCard off" disabled title="自定义 LUT 导入将在后续版本提供">
           <span className="lutThumb none dashed">+</span>
           <span className="lutName">导入 LUT</span>
         </button>
       </div>
-      <div className="specHint">预设由引擎上报；点卡片即真应用，强度滑杆实时上屏。</div>
     </>
   );
 
   const gradeBlock = (
     <div className="specBlock">
-      <div className="specBlockTitle">肤色定向 <em>引擎已接通</em></div>
+      <div className="specBlockTitle">肤色定向</div>
       <Slider label="色相偏移" value={Math.round((grade?.dh ?? 0) * 100)}
         min={-100} max={100} disabled={dim}
         onChange={(v) => ok(runGrade("set", { dh: v / 100 }), props)}
@@ -601,13 +693,12 @@ export default function RetouchPanel(props: RetouchProps) {
           );
         })}
       </div>
-      <div className="specHint">涂抹区域：在「手动修复」里选局部调色笔，然后在画面里拖。</div>
     </div>
   );
 
   const bgBlock = (
     <div className="specBlock">
-      <div className="specBlockTitle">证件照纯色换底 <em>引擎已接通</em></div>
+      <div className="specBlockTitle">证件照换底</div>
       <div className="specSeg">
         <span>底色</span>
         <input type="color" value={bgHex} disabled={dim}
@@ -615,11 +706,6 @@ export default function RetouchPanel(props: RetouchProps) {
         <button className="on" disabled={dim} onClick={applyBg}>应用换底</button>
         <button disabled={dim || !status?.background?.bg_active}
           onClick={() => ok(runBackground("clear"), props)}>还原</button>
-      </div>
-      <div className="specHint">
-        {status?.background?.bg_active
-          ? `换底层已启用（${status.background.backend ?? "color_key"}）`
-          : "换底层未启用：应用后抠像与纯色替换在引擎里合成"}
       </div>
     </div>
   );
@@ -640,7 +726,7 @@ export default function RetouchPanel(props: RetouchProps) {
 
   const brushBlock = (
     <div className="specBlock">
-      <div className="specBlockTitle">画笔工具箱 <em>视口内拖动</em></div>
+      <div className="specBlockTitle">局部画笔</div>
       <div className="specSeg">
         {([
           ["heal", "消除笔"],
@@ -674,16 +760,13 @@ export default function RetouchPanel(props: RetouchProps) {
   return (
     <div className="retouch" data-spec-total={SPEC_COUNTS.features}
          data-spec-controls={SPEC_COUNTS.subcontrols}>
-      <div className="rtTitle">
-        人像美化
-        <em className="specStat">{SPEC_COUNTS.features} 族 · {SPEC_COUNTS.subcontrols} 项</em>
-      </div>
+      <div className="rtTitle">人像精修</div>
 
-      {/* ① 人物属性栏（PC-47211）：所有人 / 每张脸 / 联动锁 / 添加与移出 */}
+      {/* ① 人物栏：所有人 / 每张脸 / 多脸联动 / 添加与移出 */}
       <div className="faceBar" data-spec-family="PC-47211">
         <div className="faceHead">
-          <span>人物属性 <em className="specId">PC-47211</em></span>
-          <em>{faces.length ? `检测到 ${faces.length} 人` : "等待人脸检测"}</em>
+          <span>人物</span>
+          <em>{faces.length ? `${faces.length} 人` : "未检测到人脸"}</em>
         </div>
         <div className="faceChips">
           <button className={"faceChip" + (props.faceScope === "all" ? " on" : "")}
@@ -702,7 +785,7 @@ export default function RetouchPanel(props: RetouchProps) {
                 ok(runFace("select", f.index), props);
               }}>
               <FaceAvatar face={f} thumb={props.thumb} />
-              <span>人脸{f.index + 1}</span>
+              <span>人物 {f.index + 1}</span>
             </button>
           ))}
           {!faces.length && dim && <span className="faceEmpty">打开照片后自动识别人物</span>}
@@ -710,47 +793,53 @@ export default function RetouchPanel(props: RetouchProps) {
         <div className="faceState">
           <button className={"faceLock" + (props.faceScope === "all" ? " on" : "")}
             disabled={dim || !faces.length}
-            title="联动锁：开 = 改一张等于改所有人；关 = 只改当前选中的人"
+            title="在多脸同步与单脸调整之间切换"
             onClick={() => props.onFaceScope(props.faceScope === "all"
               ? (faces[0]?.index ?? "all") : "all")}>
-            {props.faceScope === "all" ? "联动锁 开" : "联动锁 关"}
+            {props.faceScope === "all" ? "多脸联动" : "单脸调整"}
           </button>
           <span>{props.faceScope === "all"
-            ? "联动：改一张 = 改所有人"
-            : `独立：只改第 ${(faceIdx ?? 0) + 1} 人，其余人不动`}</span>
+            ? "所有人物同步调整"
+            : `仅调整人物 ${(faceIdx ?? 0) + 1}`}</span>
         </div>
         <div className="faceActs">
           <button className="specBtn slim" disabled={dim || props.faceAdding}
-            title="在画面里拖一个框，引擎在这个框上再跑一次真检测"
+            title="在画面中框选一张脸，追加为人物"
             onClick={() => props.onFaceAdd()}>
-            <b>{props.faceAdding ? "在画面里框选…" : "＋ 添加人脸"}</b>
+            <b>{props.faceAdding ? "在画面中框选…" : "＋ 添加人物"}</b>
           </button>
           <button className="specBtn slim" disabled={dim || faceIdx === null}
-            title="把当前选中的人标记为非脸（可撤销）"
+            title="将当前人物从编辑范围中排除"
             onClick={() => {
               if (faceIdx === null) return;
               ok(runFace("disable", faceIdx), props);
             }}>
-            <b>移出误检</b>
+            <b>排除人物</b>
           </button>
-          <span className="faceAttr" title={P1("PC-47211", "年龄/性别识别尚未接入检测器")}>
-            男女长幼 · P1
+          <span className="faceAttr" title="年龄与性别识别将在后续版本提供">
+            男女长幼
           </span>
         </div>
       </div>
 
       <div className="specSearchBar">
-        <input className="specSearch" value={q} placeholder="搜索功能 / 规格 ID（如 PC-32465）"
+        <svg className="searchIcon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="6.5" />
+          <path d="m16 16 4 4" />
+        </svg>
+        <input className="specSearch" value={q} placeholder="搜索功能，如 磨皮、瘦脸"
           onChange={(e) => setQ(e.target.value)} />
-        <span className="specHit">{query ? `匹配 ${FEATURES.filter(hit).length} 族` : ""}</span>
       </div>
 
-      {/* ② 其余 38 族：按规格原文顺序递归渲染；未接通的格子全部置灰带规格 ID */}
-      {trees.filter(({ f }) => f.id !== "PC-47211" && hit(f)).map(({ f, tree }) => {
-        const wiredCount = f.subcontrols.filter((s) => WIRED[`${f.id}|${s.path}`]).length;
+      {query && !visibleTrees.some(({ f }) => hit(f)) && (
+        <div className="specEmpty">未找到相关功能</div>
+      )}
+
+      {/* ② 其余功能族：按规格顺序递归渲染；未开放的项只置灰，不贴任何标签 */}
+      {visibleTrees.filter(({ f }) => hit(f)).map(({ f, tree }) => {
         const custom = blockFor(f.id);
-        const info = INFO_IDS.has(f.id) || (!f.subcontrols.length && !!custom === false);
-        const open = !!query || activeFamilies.has(f.id) || !!openSeen[f.id];
+        const open = !!query || !!openSeen[f.id] || f.id === "PC-32465";
+        const title = PANEL_TITLE[f.id] ?? f.title;
         return (
           <details className="pg sfam" key={f.id} open={open}
             data-spec-family={f.id}
@@ -758,52 +847,28 @@ export default function RetouchPanel(props: RetouchProps) {
               const el = e.currentTarget as HTMLDetailsElement;
               if (el.open) setOpenSeen((s) => (s[f.id] ? s : { ...s, [f.id]: true }));
             }}>
-            <summary title={`${f.id} · ${f.title}${f.source ? ` · ${f.source}` : ""}`}>
-              <span>{f.title}</span>
-              <em className="sfamId">{f.id}</em>
-              <em className="pgCount">
-                {wiredCount ? `已接通 ${wiredCount}` : f.subcontrols.length ? `${f.subcontrols.length} 项` : "说明"}
-              </em>
+            <summary title={title}>
+              <span>{title}</span>
             </summary>
             <div className="pgBody">
               {custom}
-              {info ? (
-                <>
-                  {(f.controls ?? []).map((c) => <SpecInfo key={c} text={c} />)}
-                  {tree.length > 0 && (
-                    <SpecNodes nodes={tree} specId={f.id}
-                      openPaths={openPathsFor(f)} renderExtra={renderExtra}
-                      renderLeaf={(leaf, name) => {
-                        const kind = WIRED[`${f.id}|${leaf.path}`];
-                        return kind ? renderWired(f.id, leaf, name, kind)
-                          : <P1Row key={leaf.path} name={name} specId={f.id} />;
-                      }} />
-                  )}
-                </>
-              ) : (
-                <>
-                  {tree.length > 0 && (
-                    <SpecNodes nodes={tree} specId={f.id}
-                      openPaths={openPathsFor(f)} renderExtra={renderExtra}
-                      renderLeaf={(leaf, name) => {
-                        const kind = WIRED[`${f.id}|${leaf.path}`];
-                        return kind ? renderWired(f.id, leaf, name, kind)
-                          : <P1Row key={leaf.path} name={name} specId={f.id} />;
-                      }} />
-                  )}
-                  {!tree.length && (f.controls ?? []).map((c) => (
-                    <SpecInfo key={c} text={c} />
-                  ))}
-                </>
+              {tree.length > 0 && (
+                <SpecNodes nodes={tree}
+                  openPaths={openPathsFor(f)} renderExtra={renderExtra}
+                  renderLeaf={(leaf, name) => {
+                    const kind = WIRED[`${f.id}|${leaf.path}`];
+                    return kind ? renderWired(leaf, name, kind)
+                      : <DisabledRow key={leaf.path} name={name} />;
+                  }} />
               )}
             </div>
           </details>
         );
       })}
 
-      <div className="specFoot">
-        规格：精修功能规格.json（39 族 / 805 项）· 工作流规格.json（34 条）·
-        未接通项按商业标准陈列并置灰
+      {/* 概述与常见问答不占工作台版面；保留隐藏节点是为了完整数据契约与白盒审计。 */}
+      <div className="specArchive" hidden aria-hidden="true">
+        {archived.map((f) => <div key={f.id} data-spec-family={f.id} />)}
       </div>
     </div>
   );

@@ -133,8 +133,6 @@ export default function Viewer({
   onFitScale?: (s: number) => void;
 }) {
   // 变换只加在显示层（镜像画布）上：GL 渲染源与测量回路一个字也不改
-  const zoomed = !view.fit || view.zoom !== 1 || view.x !== 0 || view.y !== 0;
-  const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
   const brushActive = !!brush?.on && !paintLocked;
   const pickActive = !!pick?.on && !paintLocked;
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
@@ -614,12 +612,6 @@ export default function Viewer({
             可见位，看它自己上不上得了屏。生产路径不依赖它。 */}
         <canvas ref={canvasRef} className={glVisible ? "gl-src visible" : "gl-src"} />
         <canvas ref={overlayRef} className={brushActive ? "overlay on" : "overlay"} />
-        {zoomed && (
-          <span className="zoomtag">
-            {view.fit ? "适合" : `${Math.round(view.zoom * fitScale * dpr * 100)}%`}
-            {paintLocked && brush?.on ? " · 缩放中画笔已锁" : ""}
-          </span>
-        )}
         {compareMode !== "single" && (
           <div className="cmpTags">
             <span>{compareMode === "split" ? "精修" : "原图"}</span>
