@@ -76,6 +76,10 @@ class Decoded:
     t_total_ms: float
     draft_used: bool = False
     draft_size: tuple[int, int] | None = None
+    # 源图每通道真实位深（P0：16-bit TIFF 导入不能静默降为 8-bit）。默认 8；
+    # 预览代理把高位深源降到 8-bit 显示时，这一位必须报出真实源位深 + notes 里写清，
+    # 让“看的是 8-bit 代理、母档/出片走 16-bit 直通”这件事可审计，而不是静默丢高位。
+    src_bits: int = 8
     notes: list[str] = field(default_factory=list)
     raw: dict | None = None          # 解的是相机 RAW 时的加工模型读数（位深/排阵/黑白电平/分段耗时）
     # 源文件自带的颜色档与元数据。COLOR-001/002/003 要的不是“能嵌一个 ICC”，而是
@@ -101,6 +105,8 @@ class Decoded:
             "orient_ms": round(self.t_orient_ms, 2), "scale_ms": round(self.t_scale_ms, 2),
             "total_ms": round(self.t_total_ms, 2),
             "bytes_per_frame": self.w * self.h * 4, "notes": self.notes,
+            # 源位深：>8 时预览这一帧仍是 8-bit 代理，UI/报表据此显式标注“非静默降位”。
+            "src_bits": self.src_bits,
             # RAW 的那一叠字段只在解的是 RAW 时存在（位深/排阵/黑白电平/渲染分段耗时）。
             # 平时是 None 而不是缺键：报表与真窗口取帧都按同一个形状读，缺键就是 undefined。
             "raw": self.raw,
@@ -415,6 +421,67 @@ def _refuse_multipage(im, path: str) -> None:
                          "需要逐页编辑请先拆成单页")
 
 
+def _source_bits(im) -> int:
+    """报源图每通道真实位深（只用于“不能静默降位”的可见性，不拿它把预览升到 16-bit）。
+
+    TIFF 读 BitsPerSample(258)，PNG 读 info["bits"]，Pillow 的单通道 16-bit 模式（I;16*）按 16；
+    拿不到就当 8。这不是为了在预览里保留高位——工作层就是 8-bit RGBA 代理——而是让
+    “一张 16-bit 源正被当作 8-bit 显示”这件事从静默变成可审计（P0 首版验收项①）。
+    """
+    try:
+        bps = im.tag_v2.get(258) if hasattr(im, "tag_v2") else None
+    except Exception:
+        bps = None
+    if isinstance(bps, (tuple, list)) and bps:
+        return int(max(bps))
+    if isinstance(bps, int) and bps > 0:
+        return int(bps)
+    if im.mode in ("I;16", "I;16B", "I;16L", "I;16N"):
+        return 16
+    bits = im.info.get("bits")
+    if isinstance(bits, (tuple, list)) and bits:
+        try:
+            return int(max(bits))
+        except (TypeError, ValueError):
+            pass
+    return 8
+
+
+def _load_16bit_tiff_full(path: str, max_px: int) -> Decoded:
+    """把 baseline 无压缩 16bpc RGB TIFF 的真实 uint16 像素读进来（P0：16-bit TIFF 导入不降 8-bit）。
+
+    读侧复用 export.read_tiff16——那份实现与 write_tiff16 成对自证过，只认无压缩、单
+    strip、interleaved(Chunky)、photometric=RGB 且 bps 全为 16 的那种（就是本厂 P0 交换格式）。
+    任何其它排布（压缩/多 strip/平面/BigTIFF/8-bit）它会抛，这里翻成一句明确的“不静默降位”的
+    拒，而不是退回 Pillow 把高位砍掉凑一张假 16-bit。这一支只处理无方向（orientation）的母档：
+    write_tiff16 不写方向，按 orientation 重排属于 8-bit 预览通路，不在直通这一格。
+    """
+    import time as _time
+    from .export import read_tiff16
+    t0 = _time.perf_counter()
+    try:
+        arr = read_tiff16(path)
+    except Exception as e:
+        raise ValueError(
+            f"16-bit 直通只保证 baseline 无压缩、单 strip、interleaved 16bpc RGB TIFF（本厂 P0 交换格式）；"
+            f"这张读不出真 16-bit（{type(e).__name__}: {e}）。不拿 Pillow 的 8-bit 降位凑一张假 16-bit——"
+            "要出 16-bit 请先另存为无压缩 16-bit TIFF") from None
+    if arr.dtype != np.uint16:
+        raise ValueError(f"内部错误：read_tiff16 没交出 uint16（拿到 {arr.dtype}）")
+    h, w = int(arr.shape[0]), int(arr.shape[1])
+    if w * h > int(max_px):
+        raise ValueError(f"导出尺寸 {w}x{h} = {w * h / 1e6:.0f} Mpx 超过上限 {int(max_px) / 1e6:.0f} Mpx")
+    t1 = _time.perf_counter()
+    ms = lambda a, b: (b - a) * 1000.0      # noqa: E731
+    d = Decoded(rgb=np.ascontiguousarray(arr), src_w=w, src_h=h, fmt="TIFF",
+                t_open_ms=0.0, t_decode_ms=ms(t0, t1), t_orient_ms=0.0, t_scale_ms=0.0,
+                t_total_ms=ms(t0, t1), draft_used=False, draft_size=None, src_bits=16)
+    # source 报 "tiff16"：与 RAW 那三支（self_dng/libraw/libraw_preview）并列，让“这一帧谁解的”答得完整
+    d.raw = {"source": "tiff16", "bits": 16, "used_preview": False, "half_size": False}
+    d.notes.append(f"16-bit TIFF 直通：读到 {w}×{h} 真实 uint16 像素（baseline 无压缩），未降位")
+    return d
+
+
 def _load_rgb_pillow(path: str, budget: int) -> Decoded:
     """解码 Pillow 认得的位图族（JPEG/PNG/WebP/BMP/TIFF），返回代理尺寸 RGB。
 
@@ -432,6 +499,7 @@ def _load_rgb_pillow(path: str, budget: int) -> Decoded:
         fmt = im.format or "?"
         raw_w, raw_h = im.size
         _refuse_multipage(im, path)
+        src_bits = _source_bits(im)
         orient = int(im.getexif().get(EXIF_ORIENTATION, 1) or 1)
         swap = orient in SWAPPED_ORIENTATIONS
         src_w, src_h = (raw_h, raw_w) if swap else (raw_w, raw_h)   # 摆正后的尺寸
@@ -467,9 +535,13 @@ def _load_rgb_pillow(path: str, budget: int) -> Decoded:
                 t_scale_ms=ms(t_s, t1), t_total_ms=ms(t0, t1),
                 draft_used=bool(draft_size and draft_size != (raw_w, raw_h)),
                 draft_size=draft_size,
+                src_bits=src_bits,
                 source_icc=icc, source_exif=exif)
     if d.draft_used:
         d.notes.append(f"libjpeg DCT 预缩到 {draft_size[0]}×{draft_size[1]}")
+    if src_bits > 8:
+        d.notes.append(f"源为 {src_bits}-bit，预览代理降到 8-bit 显示（非静默降位）；"
+                       "出片/母档请走 16-bit 直通")
     if (src_w, src_h) == (pw, ph):
         d.notes.append("源图已在代理档以内，未缩放")
     if swap:
@@ -521,8 +593,14 @@ def load_full(path: str, max_px: int = MAX_EXPORT_PIXELS, device: str | None = N
                              f"{int(max_px) / 1e6:.0f} Mpx")
         return _decoded_from_libraw(path, arr, info, None, why=why, full=True)
     if want == 16:
-        raise ValueError(f"16-bit 直通只对相机 RAW 成立（这张是 {os.path.splitext(path)[1] or '无后缀'}"
-                         "，非 RAW）：普通 JPEG/PNG 里没有 16-bit 母档可直通的像素")
+        ext = os.path.splitext(path)[1].lower()
+        if ext in (".tif", ".tiff"):
+            # P0：baseline 无压缩 16bpc RGB TIFF 走真 16-bit 直通（不降位、不左移补零）；
+            # 读不出真 16-bit 的变体在 _load_16bit_tiff_full 里明确拒，而不是退回 8-bit。
+            return _load_16bit_tiff_full(path, max_px)
+        raise ValueError(f"16-bit 直通只对相机 RAW 或 baseline 无压缩 16bpc RGB TIFF 成立"
+                         f"（这张是 {ext or '无后缀'}）：普通 JPEG/PNG/8-bit 图里没有 16-bit 母档可直通，"
+                         "不拿 8-bit 左移补零冒充。要 8-bit 出片请用常规导出。")
     return _load_full_pillow(path, max_px)
 
 
@@ -542,6 +620,7 @@ def _load_full_pillow(path: str, max_px: int = MAX_EXPORT_PIXELS) -> Decoded:
         fmt = im.format or "?"
         raw_w, raw_h = im.size
         _refuse_multipage(im, path)
+        src_bits = _source_bits(im)
         orient = int(im.getexif().get(EXIF_ORIENTATION, 1) or 1)
         swap = orient in SWAPPED_ORIENTATIONS
         src_w, src_h = (raw_h, raw_w) if swap else (raw_w, raw_h)
@@ -565,8 +644,12 @@ def _load_full_pillow(path: str, max_px: int = MAX_EXPORT_PIXELS) -> Decoded:
     d = Decoded(rgb=arr, src_w=src_w, src_h=src_h, fmt=fmt,
                 t_open_ms=ms(t0, t_d), t_decode_ms=ms(t_d, t_o), t_orient_ms=ms(t_o, t_s),
                 t_scale_ms=0.0, t_total_ms=ms(t0, t1), draft_used=False, draft_size=None,
+                src_bits=src_bits,
                 source_icc=icc, source_exif=exif)
     d.notes.append("满幅解码（导出通路，不缩放）")
+    if src_bits > 8:
+        d.notes.append(f"源为 {src_bits}-bit：本路径按 8-bit 落盘（Pillow 会把高位截掉）；"
+                       "要保 16-bit 请用 want_bits=16 的直通导出")
     if swap:
         d.notes.append(f"按 EXIF orientation={orient} 摆正过宽高")
     return d
