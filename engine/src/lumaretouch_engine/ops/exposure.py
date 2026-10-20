@@ -21,6 +21,8 @@ import math
 
 import numpy as np
 
+from .tone import check_tone, is_identity as tone_identity, tone_np, tone_t
+
 # torch 只在生产臂里需要。CPU 真值环境（CI 主门禁的 engine venv）里没装它，
 # 硬 import 会让整个模块导入失败、把十几条纯 numpy 用例一起拖红。
 # 拿 None 占位而不是 try/except 到子函数里：哪里真的用了它，报错就在哪里说清。
@@ -207,7 +209,9 @@ def _gains(ev: float, temp_shift_k: float, tint_shift: float, ref_k: float) -> n
 
 
 def exposure_np(x: np.ndarray, ev: float = 0.0, temp_shift_k: float = 0.0,
-               tint_shift: float = 0.0, ref_k: float = REFERENCE_K) -> np.ndarray:
+               tint_shift: float = 0.0, ref_k: float = REFERENCE_K,
+               contrast: float = 0.0, highlights: float = 0.0,
+               shadows: float = 0.0, saturation: float = 0.0) -> np.ndarray:
     """CPU 真值臂。x 形状 (…,3) 或 (1,3,H,W)，float，**gamma 编码**值。
 
     中性恒等的口径在这里要说清：sRGB 传递函数的往返是解析式，float 上给的不是
@@ -224,11 +228,16 @@ def exposure_np(x: np.ndarray, ev: float = 0.0, temp_shift_k: float = 0.0,
         out = _slin_np(lin * g.reshape(1, 3, 1, 1))
     else:
         raise ValueError(f"exposure_np 不知道这个形状的通道轴：{a.shape}")
-    return np.clip(out, 0.0, 1.0)
+    out = np.clip(out, 0.0, 1.0)
+    if not tone_identity(contrast, highlights, shadows, saturation):
+        out = tone_np(out, contrast, highlights, shadows, saturation)
+    return out
 
 
 def exposure_t(x, ev: float = 0.0, temp_shift_k: float = 0.0,
-               tint_shift: float = 0.0, ref_k: float = REFERENCE_K):
+               tint_shift: float = 0.0, ref_k: float = REFERENCE_K,
+               contrast: float = 0.0, highlights: float = 0.0,
+               shadows: float = 0.0, saturation: float = 0.0):
     """GPU 生产臂，与 np 臂同一条算式（同样先线性化、算完再编码回去）。"""
     if torch is None:                  # pragma: no cover
         raise RuntimeError("exposure_t 需要 torch；纯 numpy 环境请用 exposure_np")
@@ -236,8 +245,10 @@ def exposure_t(x, ev: float = 0.0, temp_shift_k: float = 0.0,
     t = torch.as_tensor(g, dtype=torch.float64, device=x.device)
     lin = _lin_t(x.double())
     view = t.view(1, 3, 1, 1) if x.ndim == 4 else t
-    out = _slin_t(lin * view).clamp_(0.0, 1.0)
-    return out.to(x.dtype)
+    out = _slin_t(lin * view).clamp_(0.0, 1.0).to(x.dtype)
+    if not tone_identity(contrast, highlights, shadows, saturation):
+        out = tone_t(out, contrast, highlights, shadows, saturation)
+    return out
 
 
 def apply_exposure_t(x, params: dict | None):
@@ -252,6 +263,11 @@ def apply_exposure_t(x, params: dict | None):
     ev = float(params.get("ev", 0.0))
     dk = float(params.get("temperature_shift", 0.0))
     tint = float(params.get("tint_shift", 0.0))
-    if ev == 0.0 and dk == 0.0 and tint == 0.0:
+    c = float(params.get("contrast", 0.0))
+    h = float(params.get("highlights", 0.0))
+    s = float(params.get("shadows", 0.0))
+    sa = float(params.get("saturation", 0.0))
+    if ev == 0.0 and dk == 0.0 and tint == 0.0 and tone_identity(c, h, s, sa):
         return x
-    return exposure_t(x, ev, dk, tint)
+    return exposure_t(x, ev, dk, tint, contrast=c, highlights=h,
+                      shadows=s, saturation=sa)

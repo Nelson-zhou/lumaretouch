@@ -26,6 +26,8 @@ from .ops.deform import KINDS, KIND_LIMIT, DeformGeometryError, check_amounts
 from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
 from .ops import enhance as ENH
 from .ops.grade import DH_LIMIT, DS_LIMIT, DV_LIMIT, GradeError, check_params
+from .ops.hsl import (BAND_CENTERS, BAND_NAMES, HUE_LIMIT as HSL_HUE_LIMIT,
+                      LUM_LIMIT as HSL_LUM_LIMIT, SAT_LIMIT as HSL_SAT_LIMIT)
 from .ops.presets import PRESETS, PresetError, get_preset, preset_grade, preset_lut
 from .ops.upscale import SCALES
 from .ops import birefnet
@@ -237,8 +239,12 @@ class Engine:
         # 就是“宿主以为还写着 0.5 EV，引擎里其实是 0”那种两边错配。
         self._crop_rect = (0.0, 0.0, 1.0, 1.0)   # P0 lnx.crop.v1（中性=全画幅）
         self._crop_rotation = 0.0
-        self._exposure = (0.0, 0.0, 0.0)
+        self._exposure = (0.0,) * 7
         self._exposure_ref_k = None
+        # 八色 HSL（原创扩展）：24 个数 = 8 段 × (色相/饱和度/明亮度)。与曝光层
+        # 同一条生命周期（初始化、重挂、快照、上报），否则又是“切张图滑块还在、
+        # 画面已经回中性”。
+        self._hsl = (0.0,) * 24
         # 换底层（M6）：存“可重建一份常驻遮罩所需的一切”——遮罩原件（代理坐标
         # uint8）、背景色、后端与参数。随图清、随代理档作废、随设备重挂（与掩膜同命）。
         self._bg = dict(active=False, matte=None, bg=None, backend=None,
@@ -770,18 +776,35 @@ class Engine:
             # 两个偏移全为 0），那时三元组还是中性值而白平衡已偏离默认光源。只看三元组
             # 就会“会话迁了、参考光源没迁”：新会话按默认 K 数渲染，而宿主侧滑块的位置
             # 说的是另一个数——与上面那段担心是同一个错误，只是藏在另一个键上。
-            if self._exposure != (0.0, 0.0, 0.0) or self._exposure_ref_k is not None:
+            if self._exposure != (0.0,) * 7 or self._exposure_ref_k is not None:
                 try:
                     st = pipe.set_exposure(self._exposure[0], self._exposure[1],
-                                           self._exposure[2], ref_k=self._exposure_ref_k)
+                                           self._exposure[2], ref_k=self._exposure_ref_k,
+                                           contrast=self._exposure[3],
+                                           highlights=self._exposure[4],
+                                           shadows=self._exposure[5],
+                                           saturation=self._exposure[6])
                     self._exposure = (float(st["exposure_ev"]),
                                       float(st["exposure_temperature_shift"]),
-                                      float(st["exposure_tint_shift"]))
+                                      float(st["exposure_tint_shift"]),
+                                      float(st["tone_contrast"]),
+                                      float(st["tone_highlights"]),
+                                      float(st["tone_shadows"]),
+                                      float(st["tone_saturation"]))
                     self._exposure_ref_k = float(st["exposure_reference_k"])
                 except (RuntimeError, ValueError) as e:
                     emit({"event": "engine_warn",
                           "warn": f"新会话重提交曝光/白平衡失败，已整层清除（{type(e).__name__}）：{e}"})
-                    self._exposure = (0.0, 0.0, 0.0)
+                    self._exposure = (0.0,) * 7
+            # 八色 HSL：与上面同一条“不提交就是会话迁了而画面回中性”。
+            if self._hsl != (0.0,) * 24:
+                try:
+                    pipe.set_hsl(self._hsl)
+                    self._hsl = tuple(float(v) for v in pipe.hsl_bands)
+                except (RuntimeError, ValueError) as e:
+                    emit({"event": "engine_warn",
+                          "warn": f"新会话重提交八色 HSL 失败，已整层清除（{type(e).__name__}）：{e}"})
+                    self._hsl = (0.0,) * 24
             # 换底层（M6）：遮罩张量活在那块卡上，新会话必须用存下的遮罩重新上传一次。
             # 不重挂就是“会话迁了、换底还在宿主侧但画面回到底图”——lut/grade 写的那段担心在这一层同样成立。
             if self._bg.get("active") and self._bg.get("matte") is not None:
@@ -821,7 +844,7 @@ class Engine:
                   "_precompute", "_precompute_backend", "_face_index", "_face_box",
                   "_face_explicit", "_face_manual",
          "_exposure",
-         "_exposure_ref_k", "_crop_rect", "_crop_rotation")
+         "_exposure_ref_k", "_hsl", "_crop_rect", "_crop_rotation")
     # 代理档一变就作废的那些层：它们的坐标是**这一档代理帧**上的像素坐标。
     PROXY_BOUND = ("_channel", "_repair_ops", "_redo_ops", "_light_ops", "_light_redo",
                    "_deform", "_deform_defer", "_deform_default", "_deform_overrides",
@@ -886,7 +909,8 @@ class Engine:
                 # 新列表**，不能是类级常量：两张图共用一个 list，关掉 A 图那一只误检就
                 # 会把 B 图同位置的脸也关掉（与 `_deform["amounts"]` 整份新抄同一条理由）
                 "_face_manual": {"disabled": [], "added": []},
-                "_exposure": (0.0, 0.0, 0.0), "_exposure_ref_k": None,
+                "_exposure": (0.0,) * 7, "_exposure_ref_k": None,
+                "_hsl": (0.0,) * 24,
                 "_crop_rect": (0.0, 0.0, 1.0, 1.0), "_crop_rotation": 0.0,
                 # 掩膜/笔迹/形变场都活在**那一档代理尺寸**上，所以尺寸也是状态的一部分。
                 "_proxy": None}
@@ -925,6 +949,7 @@ class Engine:
                                    tuple(float(v) for v in self._enhance["box"]))},
               "_enhance_defer": bool(self._enhance_defer),
               "_exposure": tuple(self._exposure), "_exposure_ref_k": self._exposure_ref_k,
+              "_hsl": tuple(self._hsl),
               "_crop_rect": tuple(self._crop_rect), "_crop_rotation": float(self._crop_rotation),
               "_bg": dict(self._bg),
               "_precompute": self._precompute, "_precompute_backend": self._precompute_backend,
@@ -999,6 +1024,7 @@ class Engine:
         self._crop_rect = tuple(float(x) for x in self._crop_rect)
         self._crop_rotation = float(self._crop_rotation)
         self._exposure = tuple(float(x) for x in self._exposure)
+        self._hsl = (tuple(float(x) for x in self._hsl) + (0.0,) * 24)[:24]
         self._exposure_ref_k = None if self._exposure_ref_k is None \
             else float(self._exposure_ref_k)
         self._strength = _clamp_strength(self._strength)
@@ -1096,7 +1122,7 @@ class Engine:
     # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
     # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
     EDIT_CMDS = ("set_strength", "inpaint", "light", "deform", "lut", "grade", "background",
-                 "crop", "exposure", "preset", "batch", "face", "enhance")
+                 "crop", "exposure", "hsl", "preset", "batch", "face", "enhance")
     # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
     # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
     # 而 batch 改的就是活动文档的配方——不在这里它就会“同步完了而徽章不亮”。
@@ -1519,6 +1545,21 @@ class Engine:
         # 那份是唯一出处，UI 自己抄的 [-180,180] 与引擎实际拒的值迟早分叉。
         crop = geo_state(list(self._crop_rect), float(self._crop_rotation))
         crop["lit"] = not crop["neutral"]
+        # 剪后尺寸两个数：crop_out 是代理档上的（预览那一层就是它），out_full 是
+        # 导出会写的真实像素数。它们原来只在 frame 事件里带（宿主那份 doc_report
+        # 只从 image_ready/session_state/history_state 来），于是“裁完看一眼工具栏”
+        # 永远是空的——UI 写了读这两格的代码，却没有一条路能把数送到。
+        if self._vram is not None:
+            from .ops.geometry import out_size as _gsz
+            crop["crop_out"] = list(_gsz(int(self._vram.w), int(self._vram.h),
+                                         tuple(self._crop_rect),
+                                         float(self._crop_rotation)))
+            row = next((d for d in self._docs
+                        if d["path"] == os.path.abspath(str(self._doc_path or ""))), None)
+            if row and row.get("src_w") and row.get("src_h"):
+                crop["out_full"] = list(_gsz(int(row["src_w"]), int(row["src_h"]),
+                                             tuple(self._crop_rect),
+                                             float(self._crop_rotation)))
         return {"strength": float(self._strength), "params": dict(self._params),
                 "channel": self._channel,
                 "history": self._history_report(),
@@ -1564,8 +1605,21 @@ class Engine:
                 "exposure": {"ev": float(self._exposure[0]),
                              "temperature_shift": float(self._exposure[1]),
                              "tint_shift": float(self._exposure[2]),
+                             "contrast": float(self._exposure[3]),
+                             "highlights": float(self._exposure[4]),
+                             "shadows": float(self._exposure[5]),
+                             "saturation": float(self._exposure[6]),
                              "reference_k": self._exposure_ref_k,
-                             "lit": self._exposure != (0.0, 0.0, 0.0)},
+                             "lit": self._exposure != (0.0,) * 7},
+                # 八色 HSL：数组顺序与 ops/hsl.py 的 BAND_NAMES 一一对应；量程也
+                # 从引擎报（UI 不抄一份数）。
+                "hsl": {"bands": [float(v) for v in self._hsl],
+                        "names": list(BAND_NAMES),
+                        "centers": [float(v) for v in BAND_CENTERS],
+                        "limits": {"hue": float(HSL_HUE_LIMIT),
+                                   "sat": float(HSL_SAT_LIMIT),
+                                   "lum": float(HSL_LUM_LIMIT)},
+                        "lit": self._hsl != (0.0,) * 24},
                 # 多人图里“现在在改哪一张”（PORTRAIT-003）。chip 数几个、能不能放行，
                 # 全从这一格取：名单是分析结果里算出来的，前端数不来也不许猜。
                 "face": self._face_state(),
@@ -1579,6 +1633,9 @@ class Engine:
                 "grade": st["_grade"] != (0.0, 0.0, 0.0, 1.0),
                 "enhance": any(float(v) != 0.0
                                for v in (st["_enhance"]["amounts"] or {}).values()),
+                # 旧工程档里可能还没有这一格：缺键按“没调过”算，不拿 KeyError 把
+                # 整条底片条打成红。
+                "hsl": any(float(v) != 0.0 for v in (st.get("_hsl") or ())),
                 "channel": st["_channel"]}
 
     # ------------------------------------------------------------ M5-a 底片条
@@ -5128,29 +5185,39 @@ class Engine:
         prev_ref = self._exposure_ref_k
         if action == "clear":
             st = self._vram.clear_exposure()
-            self._exposure = (0.0, 0.0, 0.0)
+            self._exposure = (0.0,) * 7
             self._exposure_ref_k = None
         else:
-            given = {k: p[k] for k in ("ev", "temperature_shift", "tint_shift")
+            given = {k: p[k] for k in ("ev", "temperature_shift", "tint_shift",
+                                        "contrast", "highlights", "shadows",
+                                        "saturation")
                      if p.get(k) is not None}
             if not given and p.get("reference_k") is None:
                 emit({"event": "error", "error": "exposure set 什么也没给：至少给一个参数，"
                       "或者走 clear 把整层关掉"})
                 return
             cur = list(self._exposure)
-            names = {"ev": 0, "temperature_shift": 1, "tint_shift": 2}
+            names = {"ev": 0, "temperature_shift": 1, "tint_shift": 2,
+                     "contrast": 3, "highlights": 4, "shadows": 5,
+                     "saturation": 6}
             for k, v in given.items():
                 cur[names[k]] = v
             try:
                 # 部分提交：拖一个滑块不该把另两个抹零，但合出来的那组必须整组校过
                 st = self._vram.set_exposure(cur[0], cur[1], cur[2],
-                                             ref_k=p.get("reference_k", self._exposure_ref_k))
+                                             ref_k=p.get("reference_k", self._exposure_ref_k),
+                                             contrast=cur[3], highlights=cur[4],
+                                             shadows=cur[5], saturation=cur[6])
             except ValueError as e:
                 emit({"event": "error", "error": f"曝光/白平衡被拒，整条不生效：{e}"})
                 return
             self._exposure = (float(st["exposure_ev"]),
                               float(st["exposure_temperature_shift"]),
-                              float(st["exposure_tint_shift"]))
+                              float(st["exposure_tint_shift"]),
+                              float(st["tone_contrast"]),
+                              float(st["tone_highlights"]),
+                              float(st["tone_shadows"]),
+                              float(st["tone_saturation"]))
             self._exposure_ref_k = float(st["exposure_reference_k"])
         try:
             fr = self._write_current_frame("exposure")
@@ -5158,10 +5225,12 @@ class Engine:
             self._exposure = prev
             self._exposure_ref_k = prev_ref
             try:
-                if prev == (0.0, 0.0, 0.0):
+                if prev == (0.0,) * 7:
                     self._vram.clear_exposure()
                 else:
-                    self._vram.set_exposure(prev[0], prev[1], prev[2], ref_k=prev_ref)
+                    self._vram.set_exposure(prev[0], prev[1], prev[2], ref_k=prev_ref,
+                                            contrast=prev[3], highlights=prev[4],
+                                            shadows=prev[5], saturation=prev[6])
                 back = self._write_current_frame("exposure")
                 back.pop("render_ms", None)
                 emit(back)
@@ -5174,6 +5243,90 @@ class Engine:
         fr.setdefault("exposure", {})
         fr["exposure"].update(self._vram.exposure_state())
         fr["doc_state"] = self.doc_state()          # 同 crop：让宿主的滑块跟着这一笔走
+        emit(fr)
+
+    def cmd_hsl(self, p: dict):
+        """八色 HSL：按色相分段改「色相 / 饱和度 / 明亮度」。
+
+        为什么不做成前端滤镜：八段窗口是逐像素按颜色算的，前端拿不到代理帧；
+        更重要的是它必须与导出走同一份式子（`ops/hsl.py` 的两臂），否则屏幕上
+        调好的橙色在导出文件里是另一个值。
+
+        动作只有两个：`set`（给 band + 三个量里的任意几个，部分提交）与 `clear`
+        （整层归零，**不动**其他 band 的选择）。量程从引擎事件里报，UI 不抄。
+        """
+        action = p.get("action", "set")
+        if action not in ("set", "clear"):
+            emit({"event": "error",
+                  "error": f"未知 hsl action: {action}（可用：set/clear）"})
+            return
+        if self.bench is not None and self.bench.is_alive():
+            emit({"event": "error", "error": "跑靶进行中，拒绝改 HSL：先 bench_stop"})
+            return
+        if not self._image_loaded or self._vram is None:
+            emit({"event": "error", "error": "尚未 load_image"})
+            return
+        extra = sorted(set(p) - {"cmd", "action", "band", "dh", "ds", "dl"})
+        if extra:
+            emit({"event": "error", "error": f"hsl 收到不认识的参数：{', '.join(extra)}"
+                  "（可用：band / dh / ds / dl）"})
+            return
+        prev = tuple(self._hsl)
+        if action == "clear":
+            st = self._vram.clear_hsl()
+            self._hsl = (0.0,) * 24
+        else:
+            if p.get("band") is None:
+                emit({"event": "error", "error": "hsl set 需要 band（0…7，对应"
+                      f"{'/'.join(BAND_NAMES)}）"})
+                return
+            try:
+                band = int(p["band"])
+            except (TypeError, ValueError):
+                emit({"event": "error", "error": f"hsl band 不是整数：{p.get('band')!r}"})
+                return
+            if not 0 <= band < len(BAND_NAMES):
+                emit({"event": "error", "error": f"hsl band={band} 越界（0…7）"})
+                return
+            given = {k: p[k] for k in ("dh", "ds", "dl") if p.get(k) is not None}
+            if not given:
+                emit({"event": "error", "error": "hsl set 什么也没给：至少给 dh/ds/dl 里一个，"
+                      "或者走 clear 把整层关掉"})
+                return
+            cur = list(self._hsl)
+            base = band * 3
+            for i, k in enumerate(("dh", "ds", "dl")):
+                if k in given:
+                    cur[base + i] = given[k]
+            try:
+                # 部分提交：拖一个滑块不该把同段另外两个抹零，但合出来的 24 个数
+                # 必须整组校过（与 exposure 的部分提交同一条）。
+                st = self._vram.set_hsl(cur)
+            except ValueError as e:
+                emit({"event": "error", "error": f"八色 HSL 被拒，整条不生效：{e}"})
+                return
+            self._hsl = tuple(float(v) for v in st["hsl_bands"])
+        try:
+            fr = self._write_current_frame("hsl")
+        except Exception as e:
+            self._hsl = prev
+            try:
+                if prev == (0.0,) * 24:
+                    self._vram.clear_hsl()
+                else:
+                    self._vram.set_hsl(prev)
+                back = self._write_current_frame("hsl")
+                back.pop("render_ms", None)
+                emit(back)
+            except Exception:      # 回滚后仍出不了一帧：能说清的只有“重新导图”
+                emit({"event": "engine_warn", "warn": "HSL 回滚后仍无法出帧，本会话不可信，"
+                      "请重新导入图片"})
+            emit({"event": "error", "error": f"HSL 渲染失败，已退回上一状态（"
+                  f"{type(e).__name__}）：{e}"})
+            return
+        fr.setdefault("hsl", {})
+        fr["hsl"].update(self._vram.hsl_state())
+        fr["doc_state"] = self.doc_state()          # 让宿主的滑块跟着这一笔走
         emit(fr)
 
     def cmd_grade(self, p: dict):
@@ -5519,8 +5672,9 @@ class Engine:
                           grade_scope=str((snap.get("grade_scope") or "all")),
                           # 旧底片条格子里没这个键（它是在这一层之前存下的）：用 .get 兜零而
                           # 不是直接索引——拿历史快照导出应当“没有曝光层”，不是报错。
-                          exposure=tuple(snap.get("exposure", (0.0, 0.0, 0.0))),
+                          exposure=tuple(snap.get("exposure", (0.0,) * 7)),
                           exposure_ref_k=snap.get("exposure_ref_k"),
+                          hsl=tuple(snap.get("hsl", (0.0,) * 24)),
                           lut_amount=float(snap["lut_amount"]),
                           deform_amounts={},
                           scale=int(snap.get("scale", 1)),
@@ -5793,6 +5947,7 @@ class Engine:
         snap = dict(strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
                     grade_scope=str(self._grade_scope), grade_mask=self._grade_mask,
                     exposure=tuple(self._exposure), exposure_ref_k=self._exposure_ref_k,
+                    hsl=tuple(self._hsl),
                     crop_rect=tuple(self._crop_rect), crop_rotation=float(self._crop_rotation),
                     lut=self._lut, lut_amount=self._lut_amount, light=dict(self._light),
                     light_ops=list(self._light_ops), repair_ops=list(self._repair_ops),
@@ -6603,7 +6758,7 @@ class Engine:
 
     HANDLED = ("hello", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "light",
-               "deform", "lut", "grade", "export", "exposure", "crop", "background",
+               "deform", "lut", "grade", "export", "exposure", "hsl", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
                # 挑图（LNX-PICK-001）。它不在 EDIT_CMDS 里，所以既不进撤销栈也不打脏标记：
                # 它是读出来的一格旁注，不是一次编辑动作

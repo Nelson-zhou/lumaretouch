@@ -38,6 +38,10 @@ from .ops.geometry import (MAX_ANGLE as GEOM_ANGLE_LIMIT, check as geometry_chec
                           out_size as geometry_out_size)
 from .ops.exposure import (EV_LIMIT, TEMP_LIMIT_K, TINT_LIMIT, REFERENCE_K,
                            check_params as exposure_check, exposure_t)
+from .ops.tone import TONE_LIMIT, check_tone
+from .ops.hsl import (BAND_CENTERS, BAND_NAMES, HUE_LIMIT as HSL_HUE_LIMIT,
+                      LUM_LIMIT as HSL_LUM_LIMIT, SAT_LIMIT as HSL_SAT_LIMIT,
+                      check_hsl, hsl_t)
 from .ops.lut import (DEFAULT_LUT_AMOUNT, QUALITY_SIZE_3D, CubeLut, LutError,
                       apply_lut_t, bake, check_amount)
 from .quant import quantize_t
@@ -234,9 +238,16 @@ class PreviewPipeline:
         self.crop_rect: tuple = (0.0, 0.0, 1.0, 1.0)      # 归一化裁剪框（P0 lnx.crop.v1）
         self.crop_rotation: float = 0.0                   # 角度，正=顺时针
         self.last_geometry_ms = 0.0
-        self.exposure_params: tuple = (0.0, 0.0, 0.0)     # (ev, temperature_shift, tint_shift)
+        # (ev, temperature_shift, tint_shift, contrast, highlights, shadows, saturation)
+        # 影调四项与 EV 同一层：都是逐点、无位置、无掩膜的整图变换。
+        self.exposure_params: tuple = (0.0,) * 7
         self.exposure_ref_k: float = REFERENCE_K
         self.last_exposure_ms: float = 0.0
+        # 八色 HSL（原创扩展）：与曝光层同一条纪律（逐点、无位置、无掩膜、中性逐
+        # 字节恒等），但它是按色相分段的窗口变换，所以单独一组数、单独一帧记账。
+        # 24 个数 = 8 段 × (色相偏移, 饱和度, 明亮度)；全 0 时 apply 一步递回。
+        self.hsl_bands: tuple = (0.0,) * 24
+        self.last_hsl_ms: float = 0.0
         # M6：换底层。挂在渲染链最尾（肤色之后、量化之前），是逐帧的 `α·前景+(1-α)·背景`。
         # 与其它层的差别：遮罩是按**这一档代理帧像素坐标**成立的，所以它随代理档作废
         # （进 PROXY_BOUND），也随设备重挂（遮罩张量活在那块卡上）。没活时 apply 一步直接
@@ -457,8 +468,11 @@ class PreviewPipeline:
         # PORTRAIT-009：眼牙增强夹在形变之后、曝光之前。两个理由都是硬的，写在
         # ops/enhance.py 头部的“链上位置”那一节（形变之前做=掩膜跟着像素一起搬；
         # 输出变换之前做=局部修容层在调整图层下面，是工业流程而不是随手选）。
+        # 八色 HSL 紧跟曝光层之后、LUT 之前：它读的是曝光后的那份颜色，而表是
+        # 输出变换（把 HSL 放在表后面就是“调完再套一层风格”，两份调整互相污染）。
         return self.apply_geometry(self.apply_background(self.apply_grade(self.apply_lut(
-            self.apply_exposure(self.apply_enhance(self.apply_deform(out)))))))
+            self.apply_hsl(self.apply_exposure(
+                self.apply_enhance(self.apply_deform(out))))))))
 
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:
@@ -1374,10 +1388,12 @@ class PreviewPipeline:
 
     # ---- P0：全局曝光 / 白平衡 -----------------------------------------------
     def has_exposure(self) -> bool:
-        return bool(self.exposure_params != (0.0, 0.0, 0.0))
+        return bool(self.exposure_params != (0.0,) * 7)
 
     def set_exposure(self, ev: float = 0.0, temperature_shift: float = 0.0,
-                     tint_shift: float = 0.0, ref_k: float | None = None) -> dict:
+                     tint_shift: float = 0.0, ref_k: float | None = None,
+                     contrast: float = 0.0, highlights: float = 0.0,
+                     shadows: float = 0.0, saturation: float = 0.0) -> dict:
         """先全量校验后一次性提交：越界/NaN 整条拒，不夹取也不留半截状态。
 
         参考白 (ref_k) 单独一条口：它不是用户滑杆、而是来片的 as-shot 色温。
@@ -1385,26 +1401,30 @@ class PreviewPipeline:
         """
         e, dk, tn, rk = exposure_check(ev, temperature_shift, tint_shift,
                                        float(ref_k) if ref_k else self.exposure_ref_k)
-        self.exposure_params = (e, dk, tn)
+        c, h, s, sa = check_tone(contrast, highlights, shadows, saturation)
+        self.exposure_params = (e, dk, tn, c, h, s, sa)
         self.exposure_ref_k = rk
         return self.exposure_state()
 
     def clear_exposure(self) -> dict:
-        self.exposure_params = (0.0, 0.0, 0.0)
+        self.exposure_params = (0.0,) * 7
         self.exposure_ref_k = REFERENCE_K
         self.last_exposure_ms = 0.0
         return self.exposure_state()
 
     def exposure_state(self) -> dict:
         """量程上限由引擎报出去：UI 该夹在哪不该由前端抄一份数（与 grade_limits 同一条）。"""
-        e, dk, tn = self.exposure_params
+        e, dk, tn, c, h, s, sa = self.exposure_params
         return {
             "exposure_ev": float(e),
             "exposure_temperature_shift": float(dk),
             "exposure_tint_shift": float(tn),
+            "tone_contrast": float(c), "tone_highlights": float(h),
+            "tone_shadows": float(s), "tone_saturation": float(sa),
             "exposure_reference_k": float(self.exposure_ref_k),
             "exposure_set": bool(self.has_exposure()),
             "exposure_limits": [float(EV_LIMIT), float(TEMP_LIMIT_K), float(TINT_LIMIT)],
+            "tone_limits": [float(TONE_LIMIT)] * 4,
             "bytes_exposure": 0,      # 本层不常驻张量：报真数而不是删字段
             "device": str(self.device),
         }
@@ -1420,14 +1440,54 @@ class PreviewPipeline:
         if not self.has_exposure():
             return t
         t0 = time.perf_counter()
-        e, dk, tn = self.exposure_params
-        out = exposure_t(t, e, dk, tn, ref_k=self.exposure_ref_k)
+        e, dk, tn, c, h, s, sa = self.exposure_params
+        out = exposure_t(t, e, dk, tn, ref_k=self.exposure_ref_k,
+                         contrast=c, highlights=h, shadows=s, saturation=sa)
         if not torch.isfinite(out).all():
             raise ValueError(f"曝光/白平衡产出非有限值，已拒：{self.exposure_params} "
                              f"ref={self.exposure_ref_k}")
         if self.device.type != "cpu":
             torch.cuda.synchronize(self.device)
         self.last_exposure_ms = (time.perf_counter() - t0) * 1000.0
+        return out
+
+    # ---- 八色 HSL -----------------------------------------------------------
+    def has_hsl(self) -> bool:
+        return bool(self.hsl_bands != (0.0,) * 24)
+
+    def set_hsl(self, bands) -> dict:
+        """整组 24 个数一次提交：先全量校验再写 live，越界/NaN 整条拒。"""
+        self.hsl_bands = check_hsl(bands)
+        return self.hsl_state()
+
+    def clear_hsl(self) -> dict:
+        self.hsl_bands = (0.0,) * 24
+        self.last_hsl_ms = 0.0
+        return self.hsl_state()
+
+    def hsl_state(self) -> dict:
+        return {"hsl_bands": [float(v) for v in self.hsl_bands],
+                "hsl_names": list(BAND_NAMES),
+                "hsl_centers": [float(v) for v in BAND_CENTERS],
+                "hsl_limits": {"hue": float(HSL_HUE_LIMIT),
+                               "sat": float(HSL_SAT_LIMIT),
+                               "lum": float(HSL_LUM_LIMIT)},
+                "hsl_set": bool(self.has_hsl()),
+                "bytes_hsl": 0,      # 本层不常驻张量：报真数而不是删字段
+                "device": str(self.device)}
+
+    def apply_hsl(self, t):
+        """每帧只走这里。没点火直接把张量递回去（不复制、不跑算子）。"""
+        self.last_hsl_ms = 0.0
+        if not self.has_hsl():
+            return t
+        t0 = time.perf_counter()
+        out = hsl_t(t, self.hsl_bands)
+        if not torch.isfinite(out).all():
+            raise ValueError(f"八色 HSL 产出非有限值，已拒：{self.hsl_bands}")
+        if self.device.type != "cpu":
+            torch.cuda.synchronize(self.device)
+        self.last_hsl_ms = (time.perf_counter() - t0) * 1000.0
         return out
 
     def apply_grade(self, t):
@@ -1845,9 +1905,11 @@ def warm_device(device: str, side: int = 64) -> float:
         pipe.grade_amount = 1.0
         pipe.last_grade_ms = 0.0
         # 曝光层同理：三个数留着就是下一个会话开局“已点火”，而用户一个滑块也没碰
-        pipe.exposure_params = (0.0, 0.0, 0.0)
+        pipe.exposure_params = (0.0,) * 7
         pipe.exposure_ref_k = REFERENCE_K
         pipe.last_exposure_ms = 0.0
+        pipe.hsl_bands = (0.0,) * 24
+        pipe.last_hsl_ms = 0.0
         # 换底层同理：预热会话上挂的遮罩/背景张量不能让下一个真会话继承，
         # 否则 image_ready 里 bytes_bg 会多报一份用户从未点过的常驻。
         pipe.bg_matte = None

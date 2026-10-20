@@ -44,6 +44,7 @@ from .ops import enhance as ENH
 from .ops.deform import (analytic_frontal_landmarks, controls, face_frame,
                          support_radii, tps_field_from_state, tps_solve)
 from .ops.grade import GradeError, check_params
+from .ops.hsl import check_hsl
 from .ops.inpaint import hole_extent, levels_for, mask_bbox, inpaint_t, crop_apply_t
 from .ops.lut import DEFAULT_LUT_AMOUNT, LutError, check_amount
 from .ops.upscale import Plan as UpscalePlan
@@ -135,8 +136,12 @@ class ExportSpec:
     # P0 全局曝光/白平衡：(ev, temperature_shift, tint_shift)。导出走的是同一个
     # PreviewPipeline，所以它与预览是同一份算式而不是“第二次实现”——这正是
     # “所见即所出”能当验收口径的原因。reference_k 缺省用层的默认（D65）。
-    exposure: tuple = (0.0, 0.0, 0.0)
+    # (ev, temperature_shift, tint_shift, contrast, highlights, shadows, saturation)
+    exposure: tuple = (0.0,) * 7
     exposure_ref_k: float | None = None
+    # 八色 HSL：24 个数 = 8 段 × (色相/饱和度/明亮度)。与预览同一条链序
+    # （曝光之后、LUT 之前），所以导出与屏上是同一份式子。
+    hsl: tuple = (0.0,) * 24
     # 放大（M7）：输出倍率与出片锐化。为什么不在预览会话里做而在导出做：预览的
     # 幅面是代理档（屏幕就这么大），用户要的 2×/4× 只在出片那一刻存在。
     scale: int = 1
@@ -161,6 +166,12 @@ class ExportSpec:
             check_params(self.grade[0], self.grade[1], self.grade[2], amount=self.grade[3])
         except GradeError as e:
             raise ExportError(f"肤色定向参数非法：{e}") from None
+        # 旧调用方可能只带 EV/WB：先把 HSL 补长到 24 再整组校（越界/NaN 落盘前拒）。
+        try:
+            self.hsl = check_hsl((tuple(float(v) for v in (self.hsl or ()))
+                                  + (0.0,) * 24)[:24])
+        except ValueError as e:
+            raise ExportError(f"八色 HSL 参数非法：{e}") from None
         # PORTRAIT-009：参数先过唯一的校验口径；点火而没带关键点就是没有来源。
         # 不许退化成"那就不增强"：用户按了牙齿美白而出片里没有，事件必须说清楚为什么。
         if self.enhance:
@@ -486,12 +497,18 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
             pipe.set_enhance_field(enh_reg.window, enh_weight, origin=(cy0, cx0))
             if spec.enhance:
                 pipe.set_enhance(spec.enhance)
-        if tuple(spec.exposure) != (0.0, 0.0, 0.0):
+        # 旧调用方可能仍只带 EV/WB 三项：先补长到 7 元组，再判中性/取影调四项。
+        expo = (tuple(float(v) for v in spec.exposure) + (0.0,) * 7)[:7]
+        if expo != (0.0,) * 7:
             # 插在 cube/grade 之前提交：与预览链里 apply_exposure 的位置一致（lut 前）。
             # 提交顺位不影响数值（链序在 render 里定死），但保持“按链序挂图层”这个习惯，
             # 以后谁改链序时不会在这里多一个错因不明的不同步。
-            pipe.set_exposure(spec.exposure[0], spec.exposure[1], spec.exposure[2],
-                              ref_k=spec.exposure_ref_k)
+            pipe.set_exposure(expo[0], expo[1], expo[2],
+                              ref_k=spec.exposure_ref_k,
+                              contrast=expo[3], highlights=expo[4],
+                              shadows=expo[5], saturation=expo[6])
+        if any(float(v) != 0.0 for v in spec.hsl):
+            pipe.set_hsl(spec.hsl)
         if spec.cube is not None:
             pipe.set_lut(spec.cube, spec.lut_amount)
         if spec.grade != (0.0, 0.0, 0.0, 1.0):

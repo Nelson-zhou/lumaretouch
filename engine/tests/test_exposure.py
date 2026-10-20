@@ -273,7 +273,8 @@ def test_pipeline_rejects_out_of_range_without_leaving_half_state():
     pipe, _ = _pipeline()
     with pytest.raises(ValueError):
         pipe.set_exposure(99.0, 0.0, 0.0)
-    assert pipe.exposure_params == (0.0, 0.0, 0.0), "被拒后残留了部分提交的参数"
+    assert pipe.exposure_params == (0.0,) * 7, "被拒后残留了部分提交的参数"
+    # 影调四项也必须是中性：越界的那次调用不能只回滚 EV/WB 而漏掉 tone
     assert pipe.has_exposure() is False
     st = pipe.exposure_state()
     assert st["exposure_limits"] == [5.0, 2000.0, 1.0], "量程没由引擎报出去（UI 会自己抄一份）"

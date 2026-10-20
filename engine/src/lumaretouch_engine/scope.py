@@ -72,8 +72,14 @@ MODULES: dict[str, dict] = {
         "params": ("ev",), "state_fields": ("_exposure",), "single_face": False,
         "transferable": True, "cmd": "exposure",
         "read": lambda st: {"ev": float(st["_exposure"][0])},
+        # 曝光层是 7 元组（EV/WB + 影调四项，1.12 起）：模块只写自己那一位，
+        # 其余原样带上。上一版这里重建 3 元组，套一次色彩预设就把 _exposure 变短，
+        # 下一次重挂 (index 3) 直接 IndexError——预设是 P0 用例，写坏一次就是
+        # “点预设 → 引擎报错 → 整张图不可信”。
         "write": lambda st, v: st.update(
-            _exposure=(float(v.get("ev", NEUTRAL_EV)), st["_exposure"][1], st["_exposure"][2])),
+            _exposure=(float(v.get("ev", NEUTRAL_EV)), st["_exposure"][1],
+                       st["_exposure"][2], st["_exposure"][3], st["_exposure"][4],
+                       st["_exposure"][5], st["_exposure"][6])),
     },
     OP_WHITE_BALANCE: {
         "params": ("temperature_shift", "tint_shift"), "state_fields": ("_exposure",),
@@ -83,7 +89,9 @@ MODULES: dict[str, dict] = {
         "write": lambda st, v: st.update(
             _exposure=(st["_exposure"][0],
                        float(v.get("temperature_shift", NEUTRAL_TEMP)),
-                       float(v.get("tint_shift", NEUTRAL_TINT)))),
+                       float(v.get("tint_shift", NEUTRAL_TINT)),
+                       st["_exposure"][3], st["_exposure"][4],
+                       st["_exposure"][5], st["_exposure"][6])),
     },
     OP_CROP: {
         "params": ("rect_normalized", "rotation_degrees"),
