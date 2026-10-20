@@ -7,6 +7,7 @@ import CropModal from "./components/CropModal";
 import { TOOLS, TOOL_CATEGORIES } from "./spec";
 import { REGISTRY, keyOf, sectionTitleOf, type SectionId } from "./p0";
 import { clickRle } from "./brush";
+import { reconcileExportCombo } from "./exportModel";
 import { t, type MsgKey } from "./i18n";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
@@ -3040,8 +3041,11 @@ export default function App() {
     engineStatus()
       .then((st0) => {
         const before = st0?.last_error ?? null;
+        // P2-2：勾了 16-bit 就按后端唯一接受的「无压缩 TIFF」发，
+        // 不能把面板上的 jpg / 默认 deflate 原样递上去（那会被 cmd_export 立即拒）。
+        const combo = reconcileExportCombo(exportBits16, exportFormat, exportTiffComp);
         return runExport(exportDir, {
-          format: exportFormat,
+          format: combo.format,
           quality: exportQuality,
           tile,
           scale: exportScale !== 1 ? exportScale : undefined,
@@ -3051,7 +3055,7 @@ export default function App() {
           images: exportTargets.length ? exportTargets : undefined,
           // 导出侧 P0 的四格：中性位由引擎定，这里传用户显式选过的值
           outputProfile: exportProfile,
-          tiffCompression: exportTiffComp,
+          tiffCompression: combo.tiffCompression,
           metadataIncludeGps: exportGps,
           conflictPolicy: exportConflict,
         })
@@ -4023,7 +4027,9 @@ export default function App() {
               <h2>导出设置</h2>
               <div className="exGrid">
                 <label>格式
-                  <select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)}>
+                  <select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)}
+                          disabled={exportBits16}
+                          title={exportBits16 ? "16-bit 母档直通只写无压缩 TIFF，格式已锁定" : undefined}>
                     <option value="jpg">JPEG</option>
                     <option value="png">PNG</option>
                     <option value="tif">TIFF</option>
@@ -4059,7 +4065,11 @@ export default function App() {
                 </label>
                 <label className="exCheck">
                   <input type="checkbox" checked={exportBits16}
-                         onChange={(e) => setExportBits16(e.target.checked)} />
+                         onChange={(e) => {
+                           setExportBits16(e.target.checked);
+                           // 切 16-bit 同时把面板格式收到 TIFF，不让控件停在会被后端拒的 jpg
+                           if (e.target.checked) setExportFormat("tif");
+                         }} />
                   16-bit TIFF
                 </label>
                 <label className="exCheck">
