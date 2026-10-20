@@ -1070,8 +1070,15 @@ chk(d.get("brand") == "LumaRetouch", f"顶栏 Logo：{d.get('brand')!r}")
 chk("打开照片" in str(d.get("openBtn")), f"顶栏「打开照片」：{d.get('openBtn')!r}")
 chk(d.get("hud") is False, "页面上没有调试 HUD（帧率/p95/帧序号一律不该出现）")
 chk(int(d.get("bars") or 0) == 0, f"底片条没有工具条：bars={d.get('bars')}")
-chk(d.get("groups") == ["智能磨皮", "面部重塑", "五官美白", "色彩风格"],
-    f"右栏恰好四组且标题正确：{d.get('groups')!r}")
+fams = d.get("families") or []
+chk(len(fams) == 39 and "PC-47211" in fams and "PC-32464" in fams
+    and "PC-32465" in fams and "PC-32466" in fams and "PC-32455" in fams,
+    f"39 个功能族全部由规格生成（读到 {len(fams)} 族）：{fams[:8]}")
+chk(str(d.get("specControls")) == "805",
+    f"805 项子控件全部在册：data-spec-controls={d.get('specControls')!r}")
+chk(len(d.get("groups") or []) == 38 and (d.get("groups") or [""])[0] == "人像美化页面概述"
+    and "皮肤调整" in (d.get("groups") or []) and "色彩调节" in (d.get("groups") or []),
+    f"人物属性栏之外的 38 族按规格顺序陈列：{d.get('groups')!r}")
 chk(d.get("dx") is not None and abs(int(d["dx"])) <= 2, f"卡片在容器里水平居中：dx={d.get('dx')}")
 chk(d.get("dy") is not None and abs(int(d["dy"])) <= 2, f"卡片在容器里垂直居中：dy={d.get('dy')}")
 chk(int(d.get("w") or 0) > 200 and int(d.get("h") or 0) > 80, f"卡片有真实尺寸：{d.get('w')}×{d.get('h')}")
@@ -1080,6 +1087,98 @@ if fails:
 sys.exit(1 if fails else 0)
 ARM11PY
   if [ $? -ne 0 ]; then fail=$((fail + 1)); else pass=$((pass + 1)); fi
+fi
+
+# ── 第 12 臂：1.12 规格工作台（100% 视口 + 曝光/影调 + 八色 HSL + 磨皮 + 瘦脸 + 裁剪旋转）
+# 这一臂量的是**宿主桥 + 引擎 + 屏幕**三层同时成立。上一轮真的抓到过一整类静默丢参：
+# native.ts 里几个键写成 snake_case，Tauri 把不认识的键当“没给”，于是色温/色调/
+# 四项影调/旋转全是“界面拖了而引擎一个数没收到”，回执一切正常。只有装上包的真窗口
+# 能把这条链量出来（开发 venv 的协议用例根本不经过 Rust 的参数绑定）。
+echo "── 12. 1.12 规格工作台（真窗口）：曝光/影调 + HSL + 磨皮 + 瘦脸 + 裁剪旋转 + 100%"
+spec_fixture=${LRT_CHECK_SPEC_IMAGE:-$repo/engine/tests/fixtures/portrait-1024x1280.jpg}
+if [ ! -f "$spec_fixture" ]; then
+  no "缺 1.12 规格臂夹具：$spec_fixture"
+else
+  slog=/tmp/m5-release-spec.$$.log
+  pkill -f '/usr/bin/lumaretouch' 2>/dev/null || true
+  sleep 1
+  tour='{"exposure":{"ev":0.6,"temperature_shift":300,"tint_shift":0.06,"contrast":25,"highlights":-20,"shadows":15,"saturation":18},"hsl":{"band":1,"dh":18,"ds":35,"dl":12},"skin":0.62,"deform":{"slim_face":0.3},"crop":{"rect":[0.05,0.05,0.95,0.95],"rotation":90},"view":"100"}'
+  env "${unset_args[@]}" -u XDG_DATA_HOME \
+      DISPLAY="${DISPLAY:-:0}" "${xauth_args[@]}" \
+      GDK_BACKEND=x11 HOME="$HOME" USER="$USER" PATH="$PATH" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
+      LRT_LOAD_IMAGE="$spec_fixture" LRT_MAX_PX=1310720 \
+      LRT_PRECOMPUTE=mediapipe LRT_AUTO_SPEC="$tour" LRT_AUTO_RELEASE=1 \
+      LRT_AUTO_BENCH=700x420:60:16.6:image_stream \
+      /usr/bin/lumaretouch > "$slog" 2>&1 &
+  swin=$!
+  wait_from=$SECONDS
+  sgot=0
+  for _ in $(seq 1 480); do
+    if [ $((SECONDS - wait_from)) -ge 45 ] && [ ! -s "$slog" ]; then sgot=3; break; fi
+    if grep -aq 'M0_SPEC' "$slog" || grep -aq 'M0_ERROR' "$slog"; then sgot=1; break; fi
+    kill -0 $swin 2>/dev/null || { sgot=2; break; }
+    sleep 0.5
+  done
+  sleep 1
+  kill $swin 2>/dev/null; wait $swin 2>/dev/null
+  if [ "$sgot" != 1 ]; then
+    no "1.12 规格臂没跑完（$( if [ "$sgot" = 2 ]; then echo '进程提前退出'; elif [ "$sgot" = 3 ]; then echo '45 s 内装机壳一个字也没报（前端首屏崩了，或引擎从没被 spawn）'; else echo '超时'; fi )）；日志尾部："
+    tail -10 "$slog" | sed 's/^/      /'
+  else
+    ok "装机壳跑到了 1.12 规格工作台那一臂（日志：$slog）"
+    python3 - "$slog" <<'ARM12PY'
+import json, re, sys
+raw = open(sys.argv[1], "rb").read().decode("utf-8", "replace")
+fails = []
+def chk(cond, msg):
+    print(("  ✓ " if cond else "  × ") + msg)
+    if not cond:
+        fails.append(msg)
+hits = re.findall(r'M0_SPEC (\{[^\n]*\})', raw)
+chk(bool(hits), "日志里有 M0_SPEC：规格工作台那一臂在装机壳里跑完了")
+if not hits:
+    err = re.findall(r'M0_ERROR ([^\n]*)', raw)
+    chk(False, f"没有 M0_SPEC（错误行：{err[-1][:200] if err else '一条也没有'}）")
+    sys.exit(1)
+d = json.loads(hits[-1])
+chk(d.get("bads") == [], f"臂内自检零红项：{d.get('bads')}")
+ex = d.get("exposure") or {}
+chk(abs(float(ex.get("ev", 0)) - 0.6) < 1e-9
+    and abs(float(ex.get("temperature_shift", 0)) - 300) < 1e-9
+    and abs(float(ex.get("tint_shift", 0)) - 0.06) < 1e-9
+    and abs(float(ex.get("contrast", 0)) - 25) < 1e-9
+    and abs(float(ex.get("highlights", 0)) + 20) < 1e-9
+    and abs(float(ex.get("shadows", 0)) - 15) < 1e-9
+    and abs(float(ex.get("saturation", 0)) - 18) < 1e-9,
+    f"曝光/色温/色调/对比度/高光/阴影/饱和度七个参数原样到引擎：{ex}")
+hsl = d.get("hsl") or {}
+bands = hsl.get("bands") or []
+chk(hsl.get("band") == 1 and len(bands) == 24
+    and bands[3:6] == [18.0, 35.0, 12.0],
+    f"八色 HSL 第 2 段（橙）三个数到引擎：band={hsl.get('band')} {bands[:6]}")
+chk(abs(float(d.get("skin", -1)) - 0.62) < 1e-9, f"磨皮强度：{d.get('skin')}")
+df = d.get("deform") or {}
+chk(abs(float(df.get("slim_face", 0)) - 0.3) < 1e-9, f"瘦脸：{df}")
+chk(int(d.get("toneDiff") or 0) > 0,
+    f"上面四层真上了屏（与导入帧的字节差）：toneDiff={d.get('toneDiff')}")
+crop = d.get("crop") or {}
+chk(crop.get("rect") == [0.05, 0.05, 0.95, 0.95] and abs(float(crop.get("rot") or 0) - 90) < 1e-9,
+    f"裁剪框与 90° 旋转：{crop}")
+chk(bool(crop.get("out")) and bool(crop.get("outFull")),
+    f"剪后尺寸两个数都由引擎报出：crop_out={crop.get('out')} out_full={crop.get('outFull')}")
+chk(str(d.get("zoom")) == "100%", f"视口真 1:1（Fit 的倍率也读到了）：zoom={d.get('zoom')} fit={d.get('fitScale')}")
+chk(int(d.get("pixelated") or 0) == 0,
+    f"没有画布挂 pixelated 重采样：pixelated={d.get('pixelated')}")
+chk(int(d.get("families") or 0) == 39, f"39 个功能族：{d.get('families')}")
+chk(str(d.get("specControls")) == "805", f"805 项子控件：{d.get('specControls')}")
+chk(int(d.get("hslChips") or 0) >= 9, f"八色 chips + 归零都在：{d.get('hslChips')}")
+chk(int(d.get("sliders") or 0) >= 20, f"已接通的真滑块都在面板上：{d.get('sliders')}")
+if fails:
+    print("   原样 JSON：", json.dumps(d, ensure_ascii=False))
+sys.exit(1 if fails else 0)
+ARM12PY
+    if [ $? -ne 0 ]; then fail=$((fail + 1)); else pass=$((pass + 1)); fi
+  fi
 fi
 
 echo
