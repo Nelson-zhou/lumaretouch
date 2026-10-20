@@ -6275,7 +6275,10 @@ class Engine:
         grade = list(self._grade) + [0.0, 0.0, 0.0, 0.0]
         if any(abs(float(v)) > 0.0 for v in grade[:3]):
             b.append(f"色阶增量={tuple(grade[:3])}")
-        if self._lut and float(self._lut_amount) > 0.0:
+        # P1-5 附带修：老写法 `if self._lut` 在 cube 是 numpy/torch 数组时会抛
+# 「truth value ambiguous」——还没走到「拒绝并说明理由」就崩。is not None 才是这里要的
+# 判据（cube 挂了没有），配合 amount>0 才叫「LUT 层在像素上有点火」。
+        if self._lut is not None and float(self._lut_amount) > 0.0:
             b.append(f"LUT 强度={self._lut_amount}")
         if self._repair_ops:
             b.append(f"修脸算子 {len(self._repair_ops)} 个")
@@ -6295,6 +6298,35 @@ class Engine:
             b.append(f"放大倍率={scale}")
         if float(sharpen) != 0.0:
             b.append(f"出片锐化={sharpen}")
+        # P1-5 补齐：直通这一路只走「16-bit 解码 → 原样写 TIFF」，图层不进；
+        # 所以任何**会改像素**的编辑都必须挡在门外，否则出来的是「报着 bits=16、
+        # readback_max_diff=0 的保真好话，但用户设的 EV/HSL/换底全被静默跳过」。
+        # 前一份 blockers 只覆盖到 sharpen 为止，以下五条是漏网的。
+        # 曝光/白平衡：7 元组 = (ev, temperature_shift, tint_shift, contrast,
+        # highlights, shadows, saturation)。非零任一分量都会动像素；ref_k 只有
+        # 在 temperature/tint 有值时才起作用，所以不单独拦（与 exposure 那条同源）。
+        expo = list(self._exposure) + [0.0] * 7
+        if any(abs(float(v)) > 0.0 for v in expo[:7]):
+            b.append(f"曝光/白平衡/影调={tuple(round(float(v), 4) for v in expo[:7])}")
+        # 八色 HSL：24 元组（8 段 × 色相/饱和度/明亮度），任一分量非零都会动像素。
+        hsl = list(self._hsl) + [0.0] * 24
+        if any(abs(float(v)) > 0.0 for v in hsl[:24]):
+            b.append("八色 HSL（有色调偏移）")
+        # 眼/牙增强：amounts 里任一非零就是像素级编辑（与 deform 同规：
+        # 「条目存在」不等于「作用了」——只有非零位移/非零额度才真的改像素）。
+        _en = (self._enhance or {}).get("amounts") or {}
+        _en_nz = sum(1 for v in _en.values() if abs(float(v)) > 0.0)
+        if _en_nz:
+            b.append(f"眼/牙增强 {_en_nz} 项（额度非零）")
+        # 换底：active=True 意味着合成链上有一层 composite_t 会重画背景像素。
+        # 与 P1-2 修的那条相呼应——直通这一路目前还没接 bg_matte/bg_ref，那就要拦。
+        if (self._bg or {}).get("active"):
+            b.append("换底（背景合成会改像素，直通不进这一层）")
+        # 局部调色：scope=brush/skin 时那一片 matte 会参与 grade；直通这一路目前
+        # 也不进 matte。全图 grade 上面已经通过 `self._grade` 拦了，这里只补作用域那一条。
+        if str(self._grade_scope) != "all" and any(abs(float(v)) > 0.0
+                                                    for v in (list(self._grade) + [0.0, 0.0, 0.0, 0.0])[:3]):
+            b.append(f"局部调色作用域={self._grade_scope}（brush/skin 遮罩不参与直通）")
         return b
 
     def _export_loop(self):
