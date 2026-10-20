@@ -26,3 +26,22 @@ PYTHONPATH=engine/src REPS=5 LRT_FRAMES=40 \
 第 2、4 格一片糊。可验证的保留率不是靠看图，而是 `m2-skin-bench.py` 第一部分在
 **成分已知**皮肤靶上的最小二乘回归：孔 0.987 / 斑 0.402 / 边 0.929（选择性 2.46），
 而任何半径的传统模糊都是 孔 ≤0.013 / 斑 ≥0.83（选择性 ≈0.01）。
+
+## cpu-visual-skin.png / cpu-visual-grade.png — CPU 端到端导出视觉自证（左原图 / 右结果）
+
+生成命令（仓库根；`CUDA_VISIBLE_DEVICES=""` 走 CPU，无 GPU 负载）：
+
+```
+CUDA_VISIBLE_DEVICES="" PYTHONPATH=engine/src \
+  python packaging/cpu-visual-accept.py        # 默认写到 build/cpu-visual/，此处为缩略入库件
+```
+
+拿真测试人像走**引擎实际导出路径** `export_image(..., device="cpu")`（与 GPU 同一条产品通路，
+vram cuda→cpu 回退）出 before/after。看点：
+- **skin**（磨皮 s=1.0）：肤色窗内（脸/颈）颗粒被平滑，而发际/眉/眼/唇**边缘仍锐利**、
+  **背景颗粒不动**——证明磨皮是肤色窗内的、不越界带跑结构与背景；恒等位导出逐字节==原图（脚本内断言）。
+- **grade**（肤色定向）：肤色偏暖偏亮，结构与背景基本不动——证明调色确有像素作用且守作用域。
+
+诚实边界：夹具是 `make-test-portrait.py` 合成的矢量脸 + 颗粒噪声，验的是**窗口化/保边/作用域**这类
+结构正确性，**不是真实客片的肤质观感**；真实照片的观感复核与交互帧率仍属受控 GPU 窗口那一轮。
+入库为 0.45× 缩略（合成颗粒 PNG 很大），全分辨率可用上面命令随时重跑。
