@@ -1,0 +1,201 @@
+{
+ "schema": "lrt.acceptance-perf.v1",
+ "at": "2026-10-19T18:34:13",
+ "samples": 120,
+ "proxy_max_px": "product(PROXY_PIXELS)",
+ "env": {
+  "engine_version": "1.9.0",
+  "protocol": 1,
+  "device": "cuda",
+  "cuda": true,
+  "warm_ms": 619.68,
+  "runtime": {
+   "python": "3.12.15",
+   "numpy": "2.5.2",
+   "pillow": "12.3.0",
+   "torch": "2.10.0+rocm7.0",
+   "torchvision": "0.25.0+rocm7.0"
+  }
+ },
+ "metrics": {
+  "shape": {
+   "proxy": [
+    672,
+    848
+   ],
+   "source": [
+    1024,
+    1280
+   ],
+   "format": "JPEG",
+   "draft": null
+  },
+  "import_jpg": {
+   "decode_ms": 7.22,
+   "shm_ms": 0.28,
+   "attach_ms": 1.7,
+   "first_frame_ms": 11.29,
+   "first_frame_filter_ms": 9.51,
+   "first_frame_bands_ms": 9.1,
+   "import_ms": 48.91,
+   "preview_ms": null,
+   "open_ms": 1.37,
+   "orient_ms": 0.0,
+   "scale_ms": 27.05,
+   "total_ms": 35.64,
+   "sum_of_stages_ms": 48.91
+  },
+  "import_dng": {
+   "decode_ms": 98.48,
+   "shm_ms": 22.04,
+   "attach_ms": 1.31,
+   "first_frame_ms": 10.92,
+   "first_frame_filter_ms": 8.84,
+   "first_frame_bands_ms": 8.44,
+   "import_ms": 169.24,
+   "preview_ms": null,
+   "open_ms": 5.05,
+   "orient_ms": 0.0,
+   "scale_ms": 31.44,
+   "total_ms": 134.96,
+   "raw": {
+    "camera": "LumaRetouch TestCam 1.0",
+    "bits": 16,
+    "pattern": [
+     0,
+     1,
+     1,
+     2
+    ],
+    "pattern_dims": [
+     2,
+     2
+    ],
+    "color_planes": 3,
+    "black": 256.0,
+    "white": 16383.0,
+    "neutral": [
+     0.4726,
+     1.0,
+     0.9233
+    ],
+    "profile_weight": 0.0,
+    "forward_matrix": false,
+    "has_preview": false,
+    "source": "self_dng",
+    "half_size": false,
+    "used_preview": false,
+    "container_ms": 5.05,
+    "pixels_ms": 2.66,
+    "render_ms": 95.82,
+    "encode_ms": 31.44,
+    "notes": [
+     "AsShotNeutral=[0.4726, 1.0, 0.9233]"
+    ]
+   },
+   "shape": {
+    "proxy": [
+     896,
+     632
+    ],
+    "source": [
+     2813,
+     2000
+    ]
+   }
+  },
+  "import_dng_second": {
+   "decode_ms": 86.83,
+   "shm_ms": 1.89,
+   "attach_ms": 2.18,
+   "first_frame_ms": 10.53,
+   "first_frame_filter_ms": 8.69,
+   "first_frame_bands_ms": 8.29,
+   "import_ms": 133.09,
+   "preview_ms": null,
+   "open_ms": 3.99,
+   "orient_ms": 0.0,
+   "scale_ms": 27.66,
+   "total_ms": 118.49
+  },
+  "thumbnail_ms": {
+   "n": 25,
+   "p50": 6.67,
+   "p95": 9.268,
+   "p99": 51.283,
+   "max": 64.37,
+   "mean": 9.138
+  },
+  "thumbnail_batch": {
+   "count": 25,
+   "failed": 0,
+   "dropped": 0,
+   "edge": 160,
+   "wall_ms": 242.7,
+   "channel_kb": 88.9
+  },
+  "drag_render_ms": {
+   "n": 120,
+   "p50": 0.16,
+   "p95": 0.2,
+   "p99": 0.21,
+   "max": 0.28,
+   "mean": 0.164
+  },
+  "drag_filter_cached_ratio": 1.0,
+  "landmark_backend": "mediapipe",
+  "num_landmarks": 478,
+  "precompute_ms": {
+   "build_ms": 0.12,
+   "infer_ms": 484.14,
+   "total_ms": 486.94
+  },
+  "deform_build_ms": 98.87,
+  "deform_apply_ms": {
+   "n": 60,
+   "p50": 1.09,
+   "p95": 1.121,
+   "p99": 1.144,
+   "max": 1.15,
+   "mean": 1.094
+  },
+  "deform_builds_during_drag": 0,
+  "enhance_build_ms": 21.96,
+  "enhance_gated_px": {
+   "sclera": 1391,
+   "iris": 1281,
+   "teeth": 0
+  },
+  "enhance_window": [
+   323,
+   222,
+   222,
+   228
+  ],
+  "bytes_enhance": 1214784,
+  "enhance_apply_ms": {
+   "n": 60,
+   "p50": 1.15,
+   "p95": 1.464,
+   "p99": 1.564,
+   "max": 1.57,
+   "mean": 1.183
+  },
+  "enhance_rebuilds_during_drag": 0,
+  "export_per_image_ms": {
+   "n": 6,
+   "p50": 51.06,
+   "p95": 52.167,
+   "p99": 52.353,
+   "max": 52.4,
+   "mean": 50.887
+  },
+  "export_progress_events": 6,
+  "export_total_ms": 366.6,
+  "export_tile": 512,
+  "export_failed": 0
+ },
+ "notes": [
+  "RAW 那一臂是合成 DNG（夹具上采样后写 CFA，源幅 2813×2000）：尺寸/位深/排阵的形状对，传感器噪声结构不对——这一组数能比“解码与下采样随像素的标度”，不能当作真机色彩质量结论。"
+ ]
+}

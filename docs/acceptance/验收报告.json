@@ -1,7 +1,7 @@
 {
  "schema": "lrt.acceptance-report.v1",
- "at": "2026-10-19T15:13:28",
- "product_version": "1.8.0",
+ "at": "2026-10-19T18:31:23",
+ "product_version": "1.9.0",
  "mode": "run（这一遍重跑了 pytest）",
  "cases_sha256": "c2fca495b90e3aa7",
  "pytest_rc": 0,
@@ -12,8 +12,8 @@
    "manual_pending": 1
   },
   "P1": {
-   "passed": 11,
-   "uncovered": 5,
+   "passed": 12,
+   "uncovered": 4,
    "manual_pending": 1
   },
   "P2": {
@@ -330,6 +330,7 @@
    "tests": [
     "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
     "engine/tests/test_acceptance_p1.py::test_eye_teeth_enhance_refuses_what_it_cannot_do_and_says_why",
+    "engine/tests/test_acceptance_p1.py::test_manual_face_corrections_survive_redetection_model_switch_and_reopen",
     "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
     "engine/tests/test_face_select.py::test_faces_lists_every_detected_person"
    ],
@@ -362,10 +363,13 @@
    "phase": "P1",
    "module": "detection",
    "title": "人工纠正优先",
-   "status": "uncovered",
+   "status": "passed",
    "then": "人工纠正保留，变化可预览；不静默恢复已禁用误检",
-   "tests": [],
-   "note": "待实装（ADR-0016 §2.3 的路线，排在 1.9.0）：实现成『人脸名单的人工状态』——disabled/manual 随工程持久化，重检测后人工状态保留、变化可预览，且不静默恢复已禁用的误检；判据可逐字节化（被禁用那一只对应的层在重检测后的那一帧不得重新出现）。当前版本已有的是 face_index 显式选定（PORTRAIT-003）。"
+   "tests": [
+    "engine/tests/test_acceptance_p1.py::test_a_manually_framed_missed_face_becomes_editable_geometry",
+    "engine/tests/test_acceptance_p1.py::test_manual_face_corrections_survive_redetection_model_switch_and_reopen"
+   ],
+   "note": "已实装（1.9.0）：人脸名单的人工状态随工程持久化、进撤销栈、跨重检测保留。`disabled`（用户关掉的那一只误检）与 `added`（用户框出来补上的那一张）都存归一化盒并按 IoU 认人（ADR-0017：mediapipe↔mediapipe 实测 IoU 0.98，mediapipe↔template 只有 0.13 —— 认不回时账保留并标 stale，绝不当成没禁过）。放行判据按「还剩几个可编辑的人」算，而 `scope_block` 仍是原始分析事实。人工补的脸的 478 点出自该区域的真检测（face.detect_region），拿不到就明拒、不拟合占位点位。判据：库层 20 条（test_face_manual.py）+ 端到端 2 条（禁用跨重检测/换模型/重开工程、补脸改他不动别人）+ 真窗口第 9 臂 M0_MANUAL（被禁那一位在重检测后的那一帧内芯逐格不动）。"
   },
   {
    "id": "PORTRAIT-007",
@@ -862,7 +866,10 @@
     "engine/tests/test_acceptance_p1.py::test_editing_one_person_leaves_the_other_untouched",
     "engine/tests/test_acceptance_p1.py::test_eye_teeth_enhance_refuses_what_it_cannot_do_and_says_why",
     "engine/tests/test_acceptance_p1.py::test_face_reshaping_is_controlled_continuous_and_protects_neighbouring_faces",
+    "engine/tests/test_acceptance_p1.py::test_manual_face_corrections_survive_redetection_model_switch_and_reopen",
     "engine/tests/test_acceptance_p1.py::test_person_override_follows_and_inherits_the_all_person_default",
+    "engine/tests/test_face_manual.py::test_blocked_counts_editable_people_not_detected_faces",
+    "engine/tests/test_face_manual.py::test_detect_region_picks_the_face_that_matches_the_rect_not_the_biggest",
     "engine/tests/test_face_select.py::test_meta_reports_the_selection_and_keeps_the_scope_flag"
    ],
    "note": null
@@ -1015,15 +1022,15 @@
  ],
  "perf": {
   "schema": "lrt.acceptance-perf.v1",
-  "at": "2026-10-19T15:07:39",
+  "at": "2026-10-19T18:25:34",
   "samples": 120,
   "proxy_max_px": "product(PROXY_PIXELS)",
   "env": {
-   "engine_version": "1.8.0",
+   "engine_version": "1.9.0",
    "protocol": 1,
    "device": "cuda",
    "cuda": true,
-   "warm_ms": 605.07,
+   "warm_ms": 593.4,
    "runtime": {
     "python": "3.12.15",
     "numpy": "2.5.2",
@@ -1046,33 +1053,33 @@
     "draft": null
    },
    "import_jpg": {
-    "decode_ms": 6.59,
-    "shm_ms": 0.27,
-    "attach_ms": 1.71,
-    "first_frame_ms": 15.91,
-    "first_frame_filter_ms": 14.01,
+    "decode_ms": 6.69,
+    "shm_ms": 0.28,
+    "attach_ms": 1.87,
+    "first_frame_ms": 15.87,
+    "first_frame_filter_ms": 14.0,
     "first_frame_bands_ms": 13.52,
-    "import_ms": 45.56,
+    "import_ms": 45.96,
     "preview_ms": null,
-    "open_ms": 1.32,
+    "open_ms": 1.35,
     "orient_ms": 0.0,
-    "scale_ms": 19.75,
-    "total_ms": 27.66,
-    "sum_of_stages_ms": 45.55
+    "scale_ms": 19.9,
+    "total_ms": 27.94,
+    "sum_of_stages_ms": 45.96
    },
    "import_dng": {
-    "decode_ms": 97.56,
-    "shm_ms": 27.82,
-    "attach_ms": 1.41,
-    "first_frame_ms": 14.94,
-    "first_frame_filter_ms": 12.92,
-    "first_frame_bands_ms": 12.45,
-    "import_ms": 176.4,
+    "decode_ms": 99.69,
+    "shm_ms": 22.74,
+    "attach_ms": 1.4,
+    "first_frame_ms": 14.95,
+    "first_frame_filter_ms": 12.85,
+    "first_frame_bands_ms": 12.37,
+    "import_ms": 190.75,
     "preview_ms": null,
-    "open_ms": 5.08,
+    "open_ms": 4.95,
     "orient_ms": 0.0,
-    "scale_ms": 29.58,
-    "total_ms": 132.22,
+    "scale_ms": 47.02,
+    "total_ms": 151.66,
     "raw": {
      "camera": "LumaRetouch TestCam 1.0",
      "bits": 16,
@@ -1100,10 +1107,10 @@
      "source": "self_dng",
      "half_size": false,
      "used_preview": false,
-     "container_ms": 5.08,
-     "pixels_ms": 2.78,
-     "render_ms": 94.78,
-     "encode_ms": 29.58,
+     "container_ms": 4.95,
+     "pixels_ms": 2.54,
+     "render_ms": 97.15,
+     "encode_ms": 47.02,
      "notes": [
       "AsShotNeutral=[0.4726, 1.0, 0.9233]"
      ]
@@ -1120,62 +1127,62 @@
     }
    },
    "import_dng_second": {
-    "decode_ms": 88.92,
-    "shm_ms": 1.95,
-    "attach_ms": 2.16,
-    "first_frame_ms": 14.7,
-    "first_frame_filter_ms": 12.89,
-    "first_frame_bands_ms": 12.42,
-    "import_ms": 139.3,
+    "decode_ms": 90.26,
+    "shm_ms": 1.63,
+    "attach_ms": 2.1,
+    "first_frame_ms": 14.5,
+    "first_frame_filter_ms": 12.8,
+    "first_frame_bands_ms": 12.34,
+    "import_ms": 139.74,
     "preview_ms": null,
-    "open_ms": 3.83,
+    "open_ms": 3.84,
     "orient_ms": 0.0,
-    "scale_ms": 27.75,
-    "total_ms": 120.5
+    "scale_ms": 27.41,
+    "total_ms": 121.51
    },
    "thumbnail_ms": {
     "n": 25,
     "p50": 6.69,
-    "p95": 9.322,
-    "p99": 51.16,
-    "max": 64.18,
-    "mean": 9.113
+    "p95": 9.288,
+    "p99": 51.064,
+    "max": 64.07,
+    "mean": 9.122
    },
    "thumbnail_batch": {
     "count": 25,
     "failed": 0,
     "dropped": 0,
     "edge": 160,
-    "wall_ms": 242.0,
+    "wall_ms": 242.4,
     "channel_kb": 88.9
    },
    "drag_render_ms": {
     "n": 120,
-    "p50": 0.16,
-    "p95": 0.19,
-    "p99": 0.218,
-    "max": 0.22,
-    "mean": 0.168
+    "p50": 0.18,
+    "p95": 0.26,
+    "p99": 0.316,
+    "max": 0.35,
+    "mean": 0.191
    },
    "drag_filter_cached_ratio": 1.0,
    "landmark_backend": "mediapipe",
    "num_landmarks": 478,
    "precompute_ms": {
     "build_ms": 0.12,
-    "infer_ms": 478.03,
-    "total_ms": 479.61
+    "infer_ms": 480.96,
+    "total_ms": 482.42
    },
-   "deform_build_ms": 111.83,
+   "deform_build_ms": 113.82,
    "deform_apply_ms": {
     "n": 60,
     "p50": 1.09,
-    "p95": 1.121,
-    "p99": 1.178,
-    "max": 1.19,
-    "mean": 1.091
+    "p95": 1.17,
+    "p99": 1.226,
+    "max": 1.25,
+    "mean": 1.106
    },
    "deform_builds_during_drag": 0,
-   "enhance_build_ms": 32.05,
+   "enhance_build_ms": 23.55,
    "enhance_gated_px": {
     "sclera": 1391,
     "iris": 1281,
@@ -1192,21 +1199,21 @@
     "n": 60,
     "p50": 1.12,
     "p95": 1.19,
-    "p99": 1.204,
-    "max": 1.21,
-    "mean": 1.133
+    "p99": 1.25,
+    "max": 1.28,
+    "mean": 1.135
    },
    "enhance_rebuilds_during_drag": 0,
    "export_per_image_ms": {
     "n": 6,
-    "p50": 67.975,
-    "p95": 70.102,
-    "p99": 70.221,
-    "max": 70.25,
-    "mean": 68.248
+    "p50": 65.525,
+    "p95": 69.358,
+    "p99": 69.712,
+    "max": 69.8,
+    "mean": 66.327
    },
    "export_progress_events": 6,
-   "export_total_ms": 457.6,
+   "export_total_ms": 447.0,
    "export_tile": 512,
    "export_failed": 0
   },
