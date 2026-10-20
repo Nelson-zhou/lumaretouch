@@ -753,9 +753,10 @@ else:
         "原因文案里没有「删」这个字（手册 2127 行：相似分组不是绝对重复判定）")
     chk(fc.get("reasonsArmed") is True,
         "每条原因都带着 method/数值/阈值（可复算是这条功能的承诺，不是附注）")
-    chk(len(fc.get("badges") or []) == fc.get("withPick"),
-        f"徽章真的画进 DOM：{len(fc.get('badges') or [])} 枚 / {fc.get('withPick')} 格有建议"
-        "（引擎报了而屏幕上没有，就是这一层丢的）")
+    # 产品态（1.11.0）：底片条只留缩略图，建议不再画角标。挑图建议这件事仍由
+    # 引擎一手数据举证（withPick / labels / reasons 三项在上面）。
+    chk(len(fc.get("badges") or []) == 0,
+        f"底片条只有缩略图：建议角标不再画（{len(fc.get('badges') or [])} 枚）")
     chk(float(fc.get("measureMs") or 0) > 0, f"逐张量有真计时：measure_ms={fc.get('measureMs')}")
 sys.exit(1 if fails else 0)
 PY
@@ -1065,8 +1066,12 @@ if not hits:
 d = json.loads(hits[-1])
 chk(d.get("card") is True, "没有图时视口中央真的画出了那张卡片（不是白屏）")
 chk("点击打开照片" in str(d.get("title")), f"卡片原话：{d.get('title')!r}")
-chk("打开照片" in str(d.get("topBtn")), f"顶栏按钮原话：{d.get('topBtn')!r}")
-chk("openPhoto" in str(d.get("topBtnFirst")), f"顶栏第一个子元素是那颗按钮：{d.get('topBtnFirst')!r}")
+chk(d.get("brand") == "LumaRetouch", f"顶栏 Logo：{d.get('brand')!r}")
+chk("打开照片" in str(d.get("openBtn")), f"顶栏「打开照片」：{d.get('openBtn')!r}")
+chk(d.get("hud") is False, "页面上没有调试 HUD（帧率/p95/帧序号一律不该出现）")
+chk(int(d.get("bars") or 0) == 0, f"底片条没有工具条：bars={d.get('bars')}")
+chk(d.get("groups") == ["智能磨皮", "面部重塑", "五官美白", "色彩风格"],
+    f"右栏恰好四组且标题正确：{d.get('groups')!r}")
 chk(d.get("dx") is not None and abs(int(d["dx"])) <= 2, f"卡片在容器里水平居中：dx={d.get('dx')}")
 chk(d.get("dy") is not None and abs(int(d["dy"])) <= 2, f"卡片在容器里垂直居中：dy={d.get('dy')}")
 chk(int(d.get("w") or 0) > 200 and int(d.get("h") or 0) > 80, f"卡片有真实尺寸：{d.get('w')}×{d.get('h')}")
