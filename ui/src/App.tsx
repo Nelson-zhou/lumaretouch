@@ -23,6 +23,23 @@ import {
   type TaskState,
 } from "./native";
 
+/** 拖进来的文件能不能开：判据只有一份，出处是引擎 ready 报的 image_exts
+ *  （session.IMAGE_EXTS 那一份）。拆成纯函数是因为装机真窗口要能**直接问它**——
+ *  否则"拖拽接上了吗"这件事只能靠人坐在机器前拖一次，而那一条没法进发布门禁。 */
+export function splitDroppable(paths: string[], exts: string[] | null | undefined) {
+  const extOf = (p: string) => {
+    const i = p.lastIndexOf(".");
+    return i < 0 ? "" : p.slice(i).toLowerCase();
+  };
+  const ok: string[] = [], skipped: string[] = [];
+  for (const p of paths) {
+    if (!p) continue;
+    (exts && exts.length && !exts.includes(extOf(p)) ? skipped : ok).push(p);
+  }
+  ok.sort();                       // 同一批重拖得到同一张：顺序不能靠操作系统给
+  return { ok, skipped };
+}
+
 const SIZES: Record<string, [number, number]> = {
   "640 × 400": [640, 400],
   "1280 × 800（代理档）": [1280, 800],
@@ -103,6 +120,7 @@ export default function App() {
   const [mirrorOn, setMirrorOn] = useState(true);
   const [glVisible, setGlVisible] = useState(false);   // 对照实验：把 GL 画布放回可见位
   const [imgPath, setImgPath] = useState("");
+  const [dropHint, setDropHint] = useState(false);
   // 路径错误就地显示在输入框下方。原来它只落到 dragNote——那行灰字在窗口另一头，
   // 用户点了「导入」什么也没发生也不知道为什么，那就是事实上的静默失败。
   const [pathErr, setPathErr] = useState("");
@@ -2225,17 +2243,23 @@ export default function App() {
   /** 原生选择框：路径不该靠手打。dir=true 选目录（底片条），false 选图片文件。
    *  过滤器用引擎报的那份名单（ready.image_exts）；引擎没说就什么都不过滤，而不是
    *  拿宿主抄的一份去挡用户。取消选择是正常路径（返回 null），不报错也不改现值。 */
-  async function onPickPath(dir: boolean) {
-    let exts: string[] | null = null;
-    if (!dir) exts = (await engineStatus().catch(() => null))?.image_exts ?? null;
-    // 每个后缀给大小写两份模式。GTK 的过滤器模式在 Unix 上**大小写敏感**：实测
-    // GLib.pattern_match_simple("*.cr2", "IMG.cr2") = True，而 "IMG.CR2" = False。
-    // 相机产出的后缀全是大写（佳能 .CR2 / 尼康 .NEF / 索尼 .ARW），于是这一栏过去
-    // 把 RAW 整个藏起来——而引擎那边是 ext.lower() 判断，路径给得到就收：
-    // 唯一挡路的正是这个框。字符类写法 *.[Cc][Rr]2 在这条匹配器上不通，别试。
-    const patterns = exts
+  /** 图片后缀模式：只从引擎 ready 报的 `image_exts` 来（唯一出处）。
+   *
+   *  每个后缀给大小写两份。GTK 的过滤器模式在 Unix 上**大小写敏感**：实测
+   *  GLib.pattern_match_simple("*.cr2", "IMG.cr2") = True，而 "IMG.CR2" = False。
+   *  相机产出的后缀全是大写（佳能 .CR2 / 尼康 .NEF / 索尼 .ARW），于是这一栏过去
+   *  把 RAW 整个藏起来——而引擎那边是 ext.lower() 判断，路径给得到就收：
+   *  唯一挡路的正是这个框。字符类写法 *.[Cc][Rr]2 在这条匹配器上不通，别试。
+   *  引擎还没报名单时返回 undefined：把过滤交给系统，而不是拿宿主抄的名单挡人。 */
+  async function imagePatterns(): Promise<string[] | undefined> {
+    const exts = (await engineStatus().catch(() => null))?.image_exts ?? null;
+    return exts
       ? Array.from(new Set(exts.flatMap((e) => [e.replace(/^\./, ""), e.replace(/^\./, "").toUpperCase()])))
       : undefined;
+  }
+
+  async function onPickPath(dir: boolean) {
+    const patterns = dir ? undefined : await imagePatterns();
     let sel: string | null;
     try {
       sel = await openDialog({ multiple: false, directory: dir,
@@ -2266,8 +2290,35 @@ export default function App() {
     return { kind: "timeout", why: t("retouch.loadTimeout") };
   }
 
-  async function onImport() {
-    const p = imgPath.trim();
+  /** 拖进来与点进来走同一条路：选择框、路径框、系统 DND 都汇到 importPath，
+   *  行为只有一份（两份导入就会有一份不报错）。 */
+  async function onImport() { await importPath(imgPath); }
+
+  /** 一次点击就开图：空状态卡片与顶栏「打开照片」共用这一条路。
+   *
+   *  与 `onPickPath(false)` 的唯一差别是选完立刻导入——C 端入口不该要两次点击，
+   *  而"选完还得再按一下导入"正是最容易让人以为按钮坏了的形状（DoD §3）。
+   *  过滤器、取消路径、报错文案全部复用同一份，免得出现"拖进来能开、点进来开不了"。
+   *  取消是正常路径（返回 null），不报错也不改现值。 */
+  async function openAndImport() {
+    if (busy) return;
+    const patterns = await imagePatterns();
+    let sel: string | null;
+    try {
+      sel = await openDialog({ multiple: false, directory: false,
+        ...(patterns ? { filters: [{ name: "图片 / RAW", extensions: patterns }] } : {}) });
+    } catch (e) {
+      setPathErr(`${t("retouch.pickFailed")}：${String(e)}`);
+      return;
+    }
+    if (typeof sel !== "string" || !sel) return;
+    setPathErr("");
+    setImgPath(sel);
+    await importPath(sel);
+  }
+
+  async function importPath(raw: string) {
+    const p = raw.trim();
     if (!p) {
       setPathErr(t("retouch.needPath"));
       return;
@@ -2294,6 +2345,93 @@ export default function App() {
       setBusy(false);
     }
   }
+
+  /** 系统文件拖入（DoD §5「任意拖入真机人像或 DNG 照片」）。
+   *
+   *  为什么走 Tauri 的 drag-drop 事件而不是 HTML5 的 onDrop：装机壳里 v2 默认
+   *  `dragDropEnabled: true`，WebKitGTK 把桌面环境的 DND 拦成 `tauri://drag-drop` 并
+   *  只在这里交出**真实文件路径**；HTML5 的 dataTransfer 在壳里拿不到路径（浏览器 dev
+   *  里能拿到）。挂错的地方就表现为"拖进来什么都不发生、屏上一个字也不说"。
+   *  可开后缀以引擎报的 `image_exts`（session.IMAGE_EXTS 那一份）为准：拷一份名单到
+   *  前端就是给自己埋雷。多张的接法按现有能力说实话：底片条是按目录扫的，所以同一目录
+   *  先 scan 再打开第一张，不同目录就明说只打开了第一张（不许静默丢文件）。 */
+  async function onDropPaths(raw: string[]) {
+    setDropHint(false);
+    if (!raw.length) return;
+    const exts = (await engineStatus().catch(() => null))?.image_exts ?? null;
+    const { ok, skipped } = splitDroppable(raw, exts);
+    if (!ok.length) {
+      setPathErr(t("retouch.drop.unsupported", { n: String(skipped.length), exts: (exts ?? []).join(" ") }));
+      return;
+    }
+    ok.sort();                       // 同一批重拖得到同一张：顺序不能靠操作系统给
+    const first = ok[0];
+    const dirs = new Set(ok.map((p) => p.slice(0, p.lastIndexOf("/"))));
+    setImgPath(first);
+    setPathErr("");
+    if (ok.length > 1 && dirs.size === 1) {
+      const dir = Array.from(dirs)[0];
+      setStripDir(dir);
+      runSession("scan", { dir, thumbs: true }).catch(() => undefined);
+      setDragNote(t("retouch.drop.scanned", { n: String(ok.length) }));
+    } else if (ok.length > 1) {
+      setDragNote(t("retouch.drop.onlyFirst", { n: String(ok.length - 1) }));
+    }
+    await importPath(first);
+  }
+
+  useEffect(() => {
+    let dead = false;
+    let unlisten: (() => void) | undefined;
+    // 宿主 API 可能**同步**抛错：普通浏览器里没有 __TAURI_INTERNALS__，
+    // `getCurrentWindow()` 读 `.metadata` 直接 TypeError；而 useEffect 里逃出来的
+    // 同步异常会把整棵 React 树打崩（浏览器预览因此只剩空 body）。系统拖拽是可选
+    // 能力：起不来就跳过这一路，界面照常——DoD §3 要的是"没有起不来的界面"。
+    let attaching: Promise<() => void>;
+    try {
+      attaching = getCurrentWindow().onDragDropEvent((ev) => {
+        const p = ev.payload as { type: string; paths?: string[] };
+        if (p.type === "enter" || p.type === "over") { setDropHint(true); return; }
+        if (p.type === "leave") { setDropHint(false); return; }
+        if (p.type === "drop") void onDropPaths(p.paths ?? []);
+      });
+    } catch {
+      return;
+    }
+    attaching.then(async (fn) => {
+      if (dead) fn(); else unlisten = fn;
+      // env 只能问宿主（异步）：这一臂是可选的，读不到就当没开，不许拖垮监听本身
+      if ((await m0Env().catch(() => null))?.auto_drop) {
+        // 装机壳里量两件事：①监听器挂上了（权限或 API 没通就是这里 reject，
+        // 走不到这一行）；②那份"能不能开"的判断在**装好的这一件**里跑的是引擎报的
+        // 名单（可开后缀为空 = 引擎还没说话，臂自己报红，不猜）
+        void (async () => {
+          // ready 可能还没到（引擎 spawn 是并行的）：轮一小段等引擎说话。等不到就带着
+          // 空名单报出去——那一格在门禁里就是红的，臂不许猜一份后缀名单顶上去。
+          let exts: string[] | null = null;
+          for (let i = 0; i < 100 && !exts?.length; i++) {
+            exts = (await engineStatus().catch(() => null))?.image_exts ?? null;
+            if (!exts?.length) await sleep(100);
+          }
+          const got = splitDroppable(["/x/照片.jpg", "/x/照片.DNG", "/x/说明.txt", ""], exts);
+          await report(`M0_DROP ${JSON.stringify({
+            attached: true, exts: exts ?? [],
+            accepted: got.ok.map((p) => p.split("/").pop()),
+            rejected: got.skipped.map((p) => p.split("/").pop()),
+            dragDropEnabledDefault: true,
+          })}`);
+        })();
+      }
+    }).catch(async (e) => {
+      setDropHint(false);
+      if ((await m0Env().catch(() => null))?.auto_drop) {
+        await report(`M0_DROP ${JSON.stringify({ attached: false, error: String(e) })}`);
+      }
+    });
+    return () => { dead = true; unlisten?.(); };
+    // 只挂一次：处理函数读的是 ref 与 setState，放进依赖会让监听器每帧重挂
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** 对比：按住=临时出一帧原图，松开=回到修好的那一版。
    *  走引擎的 compare 而不是 set_strength(0)：会话强度不动、撤销栈不占步，
@@ -2759,6 +2897,40 @@ export default function App() {
   const caps = status?.ready_caps ?? null;
   const pc: Precompute | null = status?.precompute ?? null;
   const hasImage = !!status?.image;
+
+  // 空状态自证（1.10.0 收官）：没有图时，视口中央那张卡片是不是真的画出来了、
+  // 是不是在容器里居中、顶栏那颗按钮的字对不对。浏览器预览只能证明 React 树，
+  // "装上去的这一件"要靠真窗口答；判据在 m5 第 11 臂里（$LRT_AUTO_EMPTY）。
+  useEffect(() => {
+    if (hasImage) return;
+    let dead = false;
+    void (async () => {
+      const env = await m0Env().catch(() => null);
+      if (dead || !env?.auto_empty) return;
+      // 两帧之后再量：首帧还在布局，量到的矩形可能是 0
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+      const card = document.querySelector(".emptyCard") as HTMLElement | null;
+      const stage = document.querySelector(".stage") as HTMLElement | null;
+      const btn = document.querySelector(".topbar .openPhoto") as HTMLElement | null;
+      const top = document.querySelector(".topbar") as HTMLElement | null;
+      const cr = card?.getBoundingClientRect();
+      const sr = stage?.getBoundingClientRect();
+      await report(`M0_EMPTY ${JSON.stringify({
+        card: !!card,
+        title: card?.querySelector(".emptyTitle")?.textContent?.trim() ?? "",
+        topBtn: btn?.textContent?.trim() ?? "",
+        topBtnFirst: top?.firstElementChild?.className ?? "",
+        // 相对所在容器量：.stage 才是视口的容器（顶栏与右栏不归它管）
+        dx: cr && sr ? Math.round(cr.left + cr.width / 2 - (sr.left + sr.width / 2)) : null,
+        dy: cr && sr ? Math.round(cr.top + cr.height / 2 - (sr.top + sr.height / 2)) : null,
+        w: Math.round(cr?.width ?? 0),
+        h: Math.round(cr?.height ?? 0),
+      })}`);
+    })();
+    return () => { dead = true; };
+    // 只在"没有图"这一档跑一次；有图时不报（那一臂的前提不成立）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasImage]);
   const exporting = !!status?.export_progress;
   const projSuffix = caps?.project_suffix ?? ".lrproject.json";
   /** 底片条上被选中的那几张（没选就只导当前这张） */
@@ -3077,6 +3249,12 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
+        {/* 常驻入口：顶栏最左侧，与空状态卡片走同一条 openAndImport。它必须在
+            任何一张图打开之前就可见——C 端用户第一眼要能看见"从哪儿开始"。 */}
+        <button className="openPhoto" onClick={() => void openAndImport()} disabled={busy}
+                title={t("empty.open")}>
+          📂 {t("empty.openBtn")}
+        </button>
         <span className="name">{t("app.title")}</span>
         <span className="tag">{project?.open ? (project.name ?? "工程") : "未打开工程"}</span>
         {project?.open && (
@@ -3209,6 +3387,9 @@ export default function App() {
           <button onClick={() => onPickPath(false)} title={t("retouch.browseTip")}>{t("retouch.browse")}</button>
         </div>
         {pathErr && <div className="err">{pathErr}</div>}
+        <div className={dropHint ? "mut dropOn" : "mut"}>
+          {t(dropHint ? "retouch.drop.active" : "retouch.drop.tip")}
+        </div>
         <div className="row">
           <input type="number" value={maxPx} step={10000} min={0} onChange={(e) => setMaxPx(+e.target.value)} style={{ width: 110 }} />
           <span className="mut">{t("retouch.maxPx")}</span>
@@ -3861,6 +4042,24 @@ export default function App() {
           pick={{ on: pickFace && !!status?.image && !brushOn, onRect: onPickFaceRect }}
           onHud={setHud}
         />
+        {/* 空状态（DoD §3/§5）：没有照片时视口中央一张卡片，点它直接开选择框。
+            拖拽走的是同一条 importPath（Tauri drag-drop → splitDroppable →
+            importPath），所以"点开"与"拖入"只有一份导入行为。卡片是覆盖层而不是
+            替换 canvas：canvas 的尺寸就是 GL 帧尺寸，空档期不能让它变成 0。 */}
+        {!hasImage && (
+          <div className="emptyStage" role="button" tabIndex={0} aria-busy={busy}
+               aria-label={t("empty.open")}
+               onClick={() => void openAndImport()}
+               onKeyDown={(e) => {
+                 if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void openAndImport(); }
+               }}>
+            <div className="emptyCard">
+              <div className="emptyTitle">{busy ? t("retouch.importing") : t("empty.open")}</div>
+              <div className="emptyHint">{t("empty.hint")}</div>
+              <div className="emptyHint">{t("retouch.drop.tip")}</div>
+            </div>
+          </div>
+        )}
         <div className="hud">
           <div>
             <div className="k">{t("hud.frame")}</div>

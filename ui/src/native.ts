@@ -1420,6 +1420,11 @@ export interface M0Env {
   auto_face: string;
   /** 人工纠正优先（$LRT_AUTO_MANUAL=<要关掉的 index>）：见 App.tsx 第 9 臂 */
   auto_manual: string;
+  /** 系统文件拖入（$LRT_AUTO_DROP=1）：见 App.tsx 第 10 臂——监听挂上了吗，
+   *  以及"能不能开"那份判断在装机壳里用的是不是引擎报的名单 */
+  auto_drop: string;
+  /** 空状态自证（1.10.0）：没有图时跑一臂，报卡片与顶栏入口。 */
+  auto_empty: string;
   /** M6 换底自动通道（$LRT_AUTO_BG）："rrggbb:tol:softness"。真窗口要证的不是
    *  合成对不对（test_matting 已钉），而是 TS runBackground → Rust background →
    *  引擎 bg_done 这条命令签名在真窗口里对得上，且画面真的变了（peek 字节差）。 */

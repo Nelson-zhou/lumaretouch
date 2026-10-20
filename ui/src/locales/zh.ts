@@ -66,6 +66,11 @@ const zh = {
   "retouch.pickFailed": "原生选择框起不来",
   "retouch.loadTimeout": "引擎 40 秒没回话：这张图没导进来，也没报错——多半是路径不存在或文件读不动。",
   "retouch.importing": "导入中…",
+  "retouch.drop.tip": "也可以把照片或 DNG 直接拖进这个窗口",
+  "retouch.drop.active": "松手即打开（可多张）",
+  "retouch.drop.scanned": "拖入 {n} 张（同一目录）：都进了底片条，打开的是第一张",
+  "retouch.drop.onlyFirst": "拖入的几张不在同一目录：只打开了第一张（底片条按目录扫描）",
+  "retouch.drop.unsupported": "拖入的 {n} 张都不是可打开的格式（引擎报的可开后缀：{exts}）",
   "retouch.repairing": "修补中（本次覆盖 {pixels} 像素）…",
 
   // M2-a2 仿中性灰修容：一支画笔三个去处，与消除笔同为事件驱动图层
@@ -338,6 +343,10 @@ const zh = {
   "studio.targetsNone": "本次目标：没有可导出的图",
   "log.title": "引擎日志",
   "log.empty": "（无）",
+  // C 端入口（1.10.0）：空状态卡片与顶栏按钮。两处走同一条 openAndImport。
+  "empty.open": "📂 点击打开照片，或将照片拖入此处",
+  "empty.openBtn": "打开照片",
+  "empty.hint": "支持 JPEG / PNG / TIFF 与 RAW（DNG、CR2、NEF、ARW…）；原片只读，导出另存",
 } as const;
 
 export type MsgKey = keyof typeof zh;

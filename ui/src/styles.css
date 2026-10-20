@@ -64,7 +64,8 @@ details.harness > summary { color:var(--mut); }
    能把整列顶出屏幕外（实测 canvasBottom=1312、hudBottom=1387 对 innerH=880，
    底部 HUD 状态栏整条在屏外）。overflow:hidden 是兜底：宁可裁，不许把
    别的东西推出可视区。 */
-.stage { display:flex; flex-direction:column; min-width:0; overflow:hidden; height:100%; }
+.stage { display:flex; flex-direction:column; min-width:0; overflow:hidden; height:100%;
+  /* 空状态卡片是这一块的绝对定位覆盖层 */ position:relative; }
 /* canvas 的固有尺寸就是 GL 帧尺寸（drawingBuffer 就是 672×848），只写 width:100%
    不限高度，等于让它按固有高度摆。max-height:100% + object-fit:contain：画面按
    长边完整塞进视口，不裁、不拉伸、也不放大（放大就是把缩略图当预览用，那是糊的）。 */
@@ -128,3 +129,18 @@ pre.log { font-size:11px; color:var(--mut); max-height:180px; overflow:auto; bac
 .strip .cell .badge.pk.ov { background:#3f4653; color:var(--fg); }
 .strip .cell .badge.pk.ok { background:#25443a; color:#9be6c4; }
 
+
+/* 空状态（1.10.0）：没有照片时视口正中的入口卡片。它盖在 canvas 上而不是替掉
+   canvas——canvas 的固有尺寸就是 GL 帧尺寸，空档期不能让它变成 0。拖拽事件仍
+   落在底下的视口上（DND 由 Tauri 窗口级监听，不经过这一层）。 */
+.emptyStage { position:absolute; inset:0; z-index:6; display:flex; align-items:center;
+  justify-content:center; padding:28px; cursor:pointer; background:rgba(11,12,15,.72); }
+.emptyStage:focus-visible { outline:2px solid var(--acc); outline-offset:-6px; }
+.emptyCard { max-width:420px; width:100%; padding:34px 30px; text-align:center;
+  border:1px dashed #3a4050; border-radius:12px; background:#12141a; }
+.emptyStage:hover .emptyCard { border-color:var(--acc); }
+.emptyTitle { font-size:16px; font-weight:600; line-height:1.9; }
+.emptyHint { margin-top:8px; font-size:11px; color:var(--mut); line-height:1.6; }
+/* 顶栏的常驻入口：只在视觉上抢一格，不跟工程徽章争宽度 */
+.topbar .openPhoto { padding:4px 12px; font-weight:600; border-color:var(--acc);
+  color:var(--acc); }

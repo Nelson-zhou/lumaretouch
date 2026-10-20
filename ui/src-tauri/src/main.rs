@@ -1940,6 +1940,8 @@ fn m0_env() -> Value {
         // 脚本传了 env、App.tsx 有臂，而桥不转发，于是那条臂**从没跑过**而外面只知道
         // "等满了超时"。桥层漏一个键 = 一条臂静静消失，所以这一格必须与 App.tsx 的臂同名
         "auto_manual": std::env::var("LRT_AUTO_MANUAL").unwrap_or_default(),
+        "auto_drop": std::env::var("LRT_AUTO_DROP").unwrap_or_default(),
+        "auto_empty": std::env::var("LRT_AUTO_EMPTY").unwrap_or_default(),
         // M4 导出自动通道："<目录>@<格式>@<tile>"（tile 与格式可省）。真窗口跑这一条
         // 才能证明 runExport → Rust export → 引擎 export_done 对得上，而且落盘文件
         // 的尺寸是“满幅不是代理档”的唯一直接证据
