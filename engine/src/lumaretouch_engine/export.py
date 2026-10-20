@@ -730,6 +730,46 @@ def _profile_bytes(name: str, source: bytes | None = None) -> bytes | None:
         f"不嵌一份名字对、内容错的档。")
 
 
+# P1-3（F03）：导出像素的工作空间经核实是 sRGB 编码的显示参考 8-bit——decode 的非 RAW 路径走
+# im.convert("RGB")（即 sRGB），RAW 路径也归到 sRGB 显示域；正因为工作空间就是 sRGB，默认
+# embed sRGB ICC 而不转色才是恒等。于是给一个「与 sRGB 不同的」输出档时，必须真把像素
+# sRGB→目标档转一遍再嵌档：只贴标签会让色管读者拿错空间解释同一批 sRGB 数值，颜色就飘了
+# ——这正是 F03「ICC 只写标签、不做转换」的口径。
+#
+# 渲染意图默认 relative_colorimetric + 黑点补偿（littleCMS/Photoshop「转到配置文件」的稳妥
+# 缺省）。这是本工程自己定的缺省值、不是从竞品数值推定；待产品确认后改 RENDERING_INTENT_DEFAULT
+# 即可——转换机制本身与意图选择无关。小整数取自 littleCMS 规范（PIL 12.3 实测一致）：
+# perceptual=0、relative_colorimetric=1、saturation=2、absolute_colorimetric=3；BPC flag=8192。
+RENDERING_INTENT_DEFAULT = "relative_colorimetric"
+_INTENT_CODES = {"perceptual": 0, "relative_colorimetric": 1,
+                 "saturation": 2, "absolute_colorimetric": 3}
+_FLAG_BLACKPOINT = 8192
+
+
+def _convert_srgb_to_profile(img, target_icc: bytes | None, *,
+                             intent: str = RENDERING_INTENT_DEFAULT):
+    """把处于 sRGB 工作空间的 PIL 图转到 target_icc，返回 (新图, 生效意图名)。
+
+    · target 为空、或与内置 sRGB 档字节相同 → 原样返回（恒等：不动像素、不引入一次舍入），
+      意图名报 "srgb_identity"——默认导出（output_profile=srgb）因此与改动前逐字节一致。
+    · 否则用 littleCMS（PIL.ImageCms）建 sRGB→target 变换并应用；除绝对色度外都开黑点补偿。
+    口径与嵌档处严格对齐：write_file 对所有 RGB 光栅格式（jpg/jpeg/png/tif/tiff/webp）都
+    嵌 icc_profile，于是每一种都必须先转色——漏掉任一种就是 F03「只贴标签不转色」在该格式复活。
+    """
+    from PIL import ImageCms
+    from io import BytesIO
+    if not target_icc or target_icc == _srgb_bytes():
+        return img, "srgb_identity"
+    if intent not in _INTENT_CODES:
+        raise ExportError(f"未知渲染意图 {intent!r}（可用：{sorted(_INTENT_CODES)}）")
+    src = ImageCms.createProfile("sRGB")
+    dst = ImageCms.ImageCmsProfile(BytesIO(bytes(target_icc)))
+    flags = 0 if intent == "absolute_colorimetric" else _FLAG_BLACKPOINT
+    xf = ImageCms.buildTransform(src, dst, "RGB", "RGB",
+                                 renderingIntent=_INTENT_CODES[intent], flags=flags)
+    return ImageCms.applyTransform(img, xf, inPlace=False), intent
+
+
 _EXIF_ORIENT_TAG = 0x0112        # Orientation：像素在解码层已经按它摆过了
 _EXIF_GPS_TAG = 0x8825           # GPSInfo 指针
 
@@ -892,6 +932,14 @@ def write_file(rgb: np.ndarray, path: str, *, quality: int = 95,
     img = Image.fromarray(np.ascontiguousarray(rgb), "RGB")
     kw = {}
     icc = _profile_bytes(output_profile, source_icc)
+    # P1-3：目标档与 sRGB 工作空间不同就先真转色再嵌档（同档/无档恒等，默认路径逐字节不变）。
+    # 判据必须与下面 `if icc: kw["icc_profile"]=icc` 严格同域：凡是嵌档的 RGB 光栅导出都要转色，
+    # 否则该格式就退回 F03「贴了 AdobeRGB 名却没转、色管按错空间解释同一批 sRGB 数值」的行为。
+    color_intent = None
+    color_converted = False
+    if icc:
+        img, color_intent = _convert_srgb_to_profile(img, icc)
+        color_converted = color_intent != "srgb_identity"
     if icc:
         kw["icc_profile"] = icc
     exif, exif_facts = _filter_exif(source_exif, bool(metadata_include_gps))
@@ -918,6 +966,10 @@ def write_file(rgb: np.ndarray, path: str, *, quality: int = 95,
     target, reason = resolve_target(path, conflict_policy)
     verifiable = {**_icc_facts(icc),
                   "icc_source": str(output_profile),
+                  # P1-3 可审计事实：到底有没有真转色、用的哪个渲染意图。只贴标签不转色
+                  # 会报 color_converted=false——行级写进导出清单，色管读者能反查这一句不是空话。
+                  "color_converted": color_converted,
+                  "color_intent": color_intent,
                   "gps_written": exif_facts["gps_written"],
                   "orientation_dropped": exif_facts["orientation_dropped"],
                   "exif_bytes": len(exif) if exif else 0,
