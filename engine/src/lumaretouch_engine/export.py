@@ -736,9 +736,9 @@ def _profile_bytes(name: str, source: bytes | None = None) -> bytes | None:
 # sRGB→目标档转一遍再嵌档：只贴标签会让色管读者拿错空间解释同一批 sRGB 数值，颜色就飘了
 # ——这正是 F03「ICC 只写标签、不做转换」的口径。
 #
-# 渲染意图默认 relative_colorimetric + 黑点补偿（littleCMS/Photoshop「转到配置文件」的稳妥
-# 缺省）。这是本工程自己定的缺省值、不是从竞品数值推定；待产品确认后改 RENDERING_INTENT_DEFAULT
-# 即可——转换机制本身与意图选择无关。小整数取自 littleCMS 规范（PIL 12.3 实测一致）：
+# 渲染意图默认 relative_colorimetric + 黑点补偿（与 Photoshop「转换为配置文件」默认一致；
+# 依据见 ADR-0023，已定档为首版默认）。要整体改口径只改 RENDERING_INTENT_DEFAULT 一处——
+# 转换机制本身与意图选择无关。小整数取自 littleCMS 规范（PIL 12.3 实测一致）：
 # perceptual=0、relative_colorimetric=1、saturation=2、absolute_colorimetric=3；BPC flag=8192。
 RENDERING_INTENT_DEFAULT = "relative_colorimetric"
 _INTENT_CODES = {"perceptual": 0, "relative_colorimetric": 1,
