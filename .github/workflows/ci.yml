@@ -31,6 +31,13 @@ jobs:
       - name: npm ci + tsc
         working-directory: ui
         run: npm ci --no-audit --no-fund && npx tsc --noEmit
+      # P2-5：cargo check 之前必须先暂存引擎。tauri.conf.json 的 bundle.resources 指向
+      # gen/engine-stage/*，而 tauri_build::build() 在 check 阶段就校验这些源目录存在——
+      # 干净 checkout 里没有它们，cargo check 直接红（历史口径就是“Rust 检查在准备 staging
+      # 资源后才通过”）。beforeBuildCommand 只在 tauri build 跑，救不了裸 cargo check。
+      - name: 暂存引擎资源（cargo check 的前置）
+        working-directory: ui
+        run: npm run stage:engine
       - name: cargo check
         working-directory: ui/src-tauri
         run: cargo check
