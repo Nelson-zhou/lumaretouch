@@ -593,7 +593,7 @@ def test_master_16bit_refuses_non_raw(tmp_path):
                             "tests/fixtures/portrait-1024x1280.jpg")
     if not _os.path.isfile(src):
         pytest.skip("缺 fixture 图")
-    with pytest.raises(ValueError, match="16-bit 直通只对相机 RAW 成立"):
+    with pytest.raises(ValueError, match="16-bit 直通只对相机 RAW"):
         export_master_16bit(src, str(tmp_path / "nope.tif"))
 
 

@@ -344,7 +344,7 @@ export default function RetouchPanel(props: RetouchProps) {
   const enhAmounts = doc?.enhance?.amounts ?? {};
   const ex = doc?.exposure;
   const grade = doc?.grade;
-  // P2-3：肤色定向三条滑杆的量程来自引擎报的 grade_limits（不是前端拄 ±100）。
+  // P2-3：肤色定向三条滑杆的量程来自引擎报的 grade_limits（不是前端写死 ±100）。
   // ×100 整数表示：dh→±5、ds/dv→±60，换算回后端单位正好落在 check_params 的有效带。
   const gradeBounds = skinSliderBounds100(skinLimits(status?.grade_limits));
   const presets = status?.presets ?? [];

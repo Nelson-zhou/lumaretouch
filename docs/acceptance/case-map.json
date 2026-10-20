@@ -2,7 +2,7 @@
  "schema": "lrt.acceptance-map.v1",
  "cases": "docs/acceptance/cases-frozen.json",
  "cases_sha256": "c2fca495b90e3aa7",
- "generated_at": "2026-10-19T22:17:38",
+ "generated_at": "2026-10-20T11:02:49",
  "map": {
   "CORE-001": {
    "tests": [
@@ -385,6 +385,8 @@
   },
   "BATCH-003": {
    "tests": [
+    "engine/tests/test_export_per_image_recipe.py::test_export_snap_by_path_bare_file_no_fabricated_recipe",
+    "engine/tests/test_export_per_image_recipe.py::test_export_snap_by_path_uses_own_recipe_per_document",
     "engine/tests/test_protocol.py::test_export_batch_isolates_failures_and_reports_skips"
    ],
    "phase": "P0",
