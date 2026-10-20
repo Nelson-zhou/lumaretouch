@@ -128,6 +128,11 @@ class ExportSpec:
     # 而“屏上只动了皮肤、文件里全图都动了”是比“没做局部调色”难查得多的一件事。
     grade_scope: str = "all"
     grade_mask: np.ndarray | None = None
+    # M6/P1-2 换底：与预览同一份 matte 与背景色（导出尺寸、(H,W) uint8 覆盖度、
+    # bg_ref 是 [0,1] 三分量）。换底只活在预览而不进导出就是“屏幕换了、盘上没换”——
+    # 前景仍在原位、只是背后的色没变，是最难从缩略图看出来的一类不一致。
+    bg_matte: np.ndarray | None = None
+    bg_ref: tuple | None = None
     # PORTRAIT-009：眼牙局部增强的三个子功能值。这里**只带参数**，不带掩膜场：
     # 场是关键点的派生物，导出前按导出尺寸重画一份（与形变重解场同一条路）。
     # 不拿预览档那张小掩膜放大——放大一份"身份"掩膜等于把眼睛涂到眉毛上，而且
@@ -230,6 +235,26 @@ class ExportSpec:
         st = float(self.sharpen_threshold)
         if not math.isfinite(st) or not 0.0 <= st <= SHARPEN_THRESHOLD_LIMIT:
             raise ExportError(f"sharpen_threshold={self.sharpen_threshold!r} 越界（需要 [0,{SHARPEN_THRESHOLD_LIMIT}]）")
+        # P1-2 换底：matte 与 ref 要么都不带，要么都带齐；半截状态在合成里会拿
+        # 未定义行为写出一片“看着像换了、其实背景色取的是老值”，比整层不带更难归因。
+        if self.bg_matte is not None:
+            if self.bg_ref is None:
+                raise ExportError("换底导出带 matte 却没带 bg_ref：宁可整层不带换底，也不拿未定义背景色写出去")
+            bm = np.asarray(self.bg_matte)
+            if bm.ndim != 2:
+                raise ExportError(f"换底遮罩必须是 (H,W)，得到 {bm.shape}")
+            if bm.shape[0] <= 0 or bm.shape[1] <= 0:
+                raise ExportError(f"换底遮罩形状非法：{bm.shape}")
+            ref = tuple(self.bg_ref)
+            if len(ref) != 3:
+                raise ExportError(f"bg_ref 必须是三分量，得到 {ref!r}")
+            rf = [float(v) for v in ref]
+            if not all(math.isfinite(v) for v in rf):
+                raise ExportError(f"bg_ref 含非有限值：{ref!r}")
+            if any(not 0.0 <= v <= 1.0 for v in rf):
+                raise ExportError(f"bg_ref 分量越界（需要 [0,1]）：{ref!r}")
+        elif self.bg_ref is not None:
+            raise ExportError("带 bg_ref 却没带 matte：换底没有可套用的遮罩，整层应一起放下")
 
     # ---- margin：由参数算，不是量出来一个数写死 ----
     def margin_px(self, deform_peak_px: float = 0.0) -> int:
@@ -463,7 +488,7 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
     out_h, out_w = plan.out_h, plan.out_w
     out = np.zeros((out_h, out_w, 3), np.uint8)
     seg = {"filter": 0.0, "light": 0.0, "deform": 0.0, "exposure": 0.0,
-           "lut": 0.0, "grade": 0.0, "enhance": 0.0}
+           "lut": 0.0, "grade": 0.0, "enhance": 0.0, "bg": 0.0}
     upscale_ms = 0.0
     # 三段非算子开销。为什么不只记算子：上一版只记五个算子段，跑靶量到"分段合计只占
     # 整帧 27%"——那 73% 不知道去哪了（真因是每块一次 empty_cache，把分配器缓存全
@@ -525,6 +550,11 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
                     # 这一块完全在区域外：整层不挂 = 该块逐字节与原片同（而不是拿
                     # scope=brush 去撞一个“无区域”的异常，也不是默默全图调色）
                     pipe.clear_grade()
+        if spec.bg_matte is not None and spec.bg_ref is not None:
+            # P1-2 换底：与 grade_mask 同一个切窗（逐像素对应，外边扩那些像素不参与
+            # 混合，只喂给带限算子）；遮罩是代理档上算好后 resample 到导出尺寸的连续覆盖度，
+            # 与预览链上那次 set_background 走的是同一份 composite_t 算式。
+            pipe.set_background(spec.bg_matte[cy0:cy1, cx0:cx1], list(spec.bg_ref))
         if spec.channel is not None and spec.masks is not None:
             carrier = _MaskCarrier(spec.masks[:, cy0:cy1, cx0:cx1], spec.landmarks)
             carrier._carrier_names = list(spec.mask_names)

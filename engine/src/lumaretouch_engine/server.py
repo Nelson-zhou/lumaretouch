@@ -5701,7 +5701,8 @@ class Engine:
                           sharpen_amount=float(snap.get("sharpen", 0.0)))
         if not for_document:
             skipped += ["repair", "light", "deform", "channel（笔迹与掩膜属于当前文档）",
-                        "enhance（眼牙掩膜是从当前那一张脸的关键点画的，不能搬到别的图）"]
+                        "enhance（眼牙掩膜是从当前那一张脸的关键点画的，不能搬到别的图）",
+                        "bg（换底遮罩是从当前那张图的色键/网络抠图算出来的，不能搬到别的图）"]
             if spec.grade_scope != "all":
                 # 局部调色那一片也是**这一张图**的：skin 来自当前文档的预计算，brush 来自
                 # 当前文档的笔迹。拿不到那一片就把整层调色一起放下，而不是“那就全图调一下”：
@@ -5783,6 +5784,31 @@ class Engine:
                     spec.grade_mask = resample_field(cov, (eh, ew), uint8=True)
                     # 作用域名字原封不动留在 spec.grade_scope 里（skin 就是 skin）：导出环
                     # 拿那份重采样后的覆盖度执行，而事件报的是用户选的那一档。
+        # P1-2 换底：预览里 pipe.set_background 挂的是代理档坐标上的 uint8 遮罩，
+        # _capture_state 把整份 _bg（含 matte/bg/backend/tol/softness）落进快照；导出这一路
+        # 只做两件事——按导出尺寸重采样覆盖度（与 grade_mask 同一 resample_field 入口，
+        # 双线性、uint8），并把 [0,1] 三分量背景色原样带到 spec.bg_ref。链序由 PreviewPipeline
+        # 保证：apply_grade 之后、apply_geometry 之前 apply_background——与预览逐帧那一次同源。
+        _bgs = snap.get("_bg") or {}
+        if _bgs.get("active") and _bgs.get("matte") is not None and _bgs.get("bg") is not None:
+            _mt = np.asarray(_bgs["matte"])
+            _bgv = _bgs["bg"]
+            if _mt.ndim != 2:
+                skipped.append(f"bg（遮罩形状异常：{_mt.shape}，需要 (H,W)）")
+            elif int((_mt > 0).sum()) == 0:
+                # 全 0 遮罩 = 整幅都是前景：这一层在导出里不会有任何作用。不静默加宽，
+                # 也不拿未定义背景写出去——与「调色区域一个像素也没盖到」同一条口径。
+                skipped.append("bg（遮罩全 0：整幅前景，换底在导出里不会有任何作用）")
+            elif (not isinstance(_bgv, (list, tuple))) or len(_bgv) != 3:
+                skipped.append(f"bg（背景色形状异常：{_bgv!r}，需要 3 分量）")
+            else:
+                try:
+                    _ref = tuple(float(v) for v in _bgv)
+                except (TypeError, ValueError):
+                    skipped.append(f"bg（背景色不能转成 3 个 float：{_bgv!r}）")
+                else:
+                    spec.bg_matte = resample_field(_mt, (eh, ew), uint8=True)
+                    spec.bg_ref = _ref
         return spec, skipped
 
     def cmd_export(self, p: dict):
@@ -5973,6 +5999,12 @@ class Engine:
                     deform=dict(self._deform), deform_defer=bool(self._deform_defer),
                     enhance=dict(self._enhance), enhance_defer=bool(self._enhance_defer),
                     channel=self._channel,
+                    # P1-2 换底：snap 必须把 _bg 也带上，否则 _export_snapshot 里那句
+                    # `snap.get("_bg")` 永远拿到 None，「屏幕换了、盘上没换」的原始缺陷
+                    # 就没被真正修掉。整份新抄：里面的 list/tuple 不能与 live 字段共享
+                    # （与 _capture_state 那条同因，worker 线程里读到一半被 stdin 线程改掉会
+                    # 让一批里前几张与后几张用的不是同一个 matte）。
+                    _bg=dict(self._bg),
                     precompute=self._precompute, device=self.device,
                     scale=scale, upscale_backend=backend, sharpen=sharpen)
         # 建目录（挪下来了）：到这里每一个参数都已核验，失败的可能性只剩“这一路真不可写”

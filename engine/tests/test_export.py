@@ -595,3 +595,67 @@ def test_master_16bit_refuses_non_raw(tmp_path):
         pytest.skip("缺 fixture 图")
     with pytest.raises(ValueError, match="16-bit 直通只对相机 RAW 成立"):
         export_master_16bit(src, str(tmp_path / "nope.tif"))
+
+
+# ------------------------------------------------------------------ P1-2 换底进导出
+# 报告里那一条「换底只在预览生效，没进入实际导出」是「所见非所出」里最难看出的一种：
+# 前景仍在原位，只是背后的色没变，缩略图上一时看不出。判据必须盯到导出文件的像素，
+# 不能只信事件里的 `bg_active=true`。三条单元：参数半截拒、区域像素真换了、
+# 分块与整幅在纯逐点链上逐字节同一（否则「换底进导出」只是把预览的错复制到多个 tile）。
+@pytest.mark.parametrize("kw, why", [
+    (dict(bg_matte=np.zeros((16, 16), np.uint8)), "带 matte 却没带 ref"),
+    (dict(bg_ref=(1.0, 0.0, 0.0)), "带 ref 却没 matte"),
+    (dict(bg_matte=np.zeros((16, 16, 3), np.uint8), bg_ref=(1.0, 0.0, 0.0)), "matte 非 (H,W)"),
+    (dict(bg_matte=np.zeros((16, 16), np.uint8), bg_ref=(0.5, 0.0, 0.0, 0.0)), "ref 不是三分量"),
+    (dict(bg_matte=np.zeros((16, 16), np.uint8), bg_ref=(1.5, 0.0, 0.0)), "ref 越界"),
+    (dict(bg_matte=np.zeros((16, 16), np.uint8), bg_ref=(float("nan"), 0.0, 0.0)), "ref 非有限"),
+])
+def test_export_spec_refuses_half_or_bad_background(kw, why):
+    """半截或形状/取值不合法的换底参数一律 ExportError，不进入合成写盘。"""
+    with pytest.raises(ExportError, match=r"换底|bg_"):
+        ExportSpec(**kw).check()
+
+
+def test_export_applies_background_at_correct_regions():
+    """背景区（matte=0）在导出文件里应当真的变成 bg_ref，前景区（matte=255）逐字节保留原片。
+
+    64×64 灰底 + 上半 matte=0 / 下半 matte=255 + 红背景。上半输出必须贴近 (255,0,0)，
+    下半输出必须与源片 128 逐字节同一。只看 `bg_ms>0` 是不够的：那一层可能被挂上但没进合成
+    链，账单照样能算出来。
+    """
+    pytest.importorskip("torch")
+    s = np.full((64, 64, 3), 128, np.uint8)
+    matte = np.zeros((64, 64), np.uint8)
+    matte[32:, :] = 255
+    spec = ExportSpec(strength=0.0, light=[], radius=4, texture_radius=2,
+                      bg_matte=matte, bg_ref=(1.0, 0.0, 0.0))
+    out, bill = export_image(s, spec, device="cpu", tile=MAX_TILE)
+    top = out[:24].astype(np.int16)
+    bot = out[40:].astype(np.int16)
+    assert np.abs(top - np.array([255, 0, 0], np.int16)).max() <= 1, \
+        f"背景区没被换成红底（上半平均：{top.reshape(-1,3).mean(axis=0)}）"
+    assert np.array_equal(bot, np.full(bot.shape, 128, np.int16)), \
+        f"前景区被误动（下半平均：{bot.reshape(-1,3).mean(axis=0)}）"
+    # bg_ms 要归因到那一层；不进 seg 表说明 apply_background 没被跑到
+    assert float(bill["seg_ms"]["bg"]) > 0.0, "账单里 bg 段是 0：这层没真的跑 composite_t"
+
+
+def test_export_background_tiles_match_full_image():
+    """同一份换底参数在 tile=MAX 与 tile=MIN 下逐字节同一（纯逐点链，strength=0）。
+
+    composite_t 是逐点线性光混合，邻域求和不参与；这一条与
+    `test_pointwise_only_export_is_byte_identical_across_tiles` 同规，专测「tile 切分时 matte
+    与 bg_ref 都逐块传对了」。上一版没有把 matte 分块切给 pipe，就会在这里响：两块之间的
+    背景接缝会留下可见的位移。
+    """
+    pytest.importorskip("torch")
+    s = src(200, 300)
+    yy, xx = np.mgrid[0:200, 0:300]
+    matte = np.where(((xx - 150) ** 2 + (yy - 100) ** 2) < 60 ** 2, 255, 0).astype(np.uint8)
+    spec = ExportSpec(strength=0.0, light=[], radius=4, texture_radius=2,
+                      bg_matte=matte, bg_ref=(0.0, 1.0, 0.0))
+    one, _ = export_image(s, spec, device="cpu", tile=MAX_TILE)
+    two, _ = export_image(s, spec, device="cpu", tile=MIN_TILE)
+    assert np.array_equal(one, two), \
+        (f"分块与整幅不一致（最大差异 "
+         f"{int(np.abs(one.astype(np.int16)-two.astype(np.int16)).max())}）：换底遮罩 tile 局部坐标没对好")

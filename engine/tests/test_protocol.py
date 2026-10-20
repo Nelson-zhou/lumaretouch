@@ -4869,3 +4869,57 @@ def test_compare_rejects_unknown_params_and_reports_its_own_gates(engine):
     _expect_error(engine, "不认识的参数")
     engine.send(cmd="compare", on=True)
     _expect_error(engine, "尚未 load_image")
+
+
+@pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像，先跑 packaging/make-test-portrait.py")
+def test_background_swap_reaches_the_exported_file_not_only_the_preview(engine, tmp_path):
+    """P1-2：预览里换了底，导出文件里必须真的换了。
+
+    报告里那条「换底只在预览生效」是「所见非所出」最难看出来的一种：前景仍在原位，
+    只是背后的色没换。判据不能停在 `bg_active=true` 或预览帧变了——要把导出 png 拿回来
+    数像素。用 red 背景 + color_key 换底；导出图与预览帧的红像素必须同时存在（导出满幅
+    分辨率更高，红像素数量理应 ≥ 代理档那一份；一片红也没有就是 P1-2 原缺陷）。
+    """
+    _need_export_env()
+    _needs_torch()
+    import numpy as np
+    from PIL import Image
+    meta = _load(engine, strength=0.0)
+    h, w = meta["h"], meta["w"]
+    peer = FrameShm(meta["name"])
+
+    engine.send(cmd="background", action="set", backend="color_key",
+                bg=[255, 0, 0], tol=0.22, softness=0.06)
+    done = engine.wait_for("bg_done", timeout=30)
+    assert done["action"] == "set" and done["bg_active"] is True, done
+
+    swapped = _read_frame(engine, peer, h, w)
+    red_preview = ((swapped[:, :, 0] > 200) & (swapped[:, :, 1] < 45)
+                   & (swapped[:, :, 2] < 45))
+    n_prev = int(red_preview.sum())
+    assert n_prev > 0, "预览帧里就没有红底：换底那一步在测试里没生效，后面的对拍无意义"
+
+    engine.send(cmd="export", out_dir=str(tmp_path), format="png", tile=512, quality=100)
+    d, _ = _collect_until(engine, "export_done")
+    assert d["failed"] == 0 and d["total"] == 1, d
+    img = d["images"][0]
+    out_path = img["out"]
+    assert os.path.isfile(out_path), d
+    assert img.get("skipped") is False or img.get("out_skipped") is False, img
+
+    with Image.open(out_path) as im:
+        exp = np.asarray(im.convert("RGB"))
+    red_exp = ((exp[:, :, 0] > 200) & (exp[:, :, 1] < 45) & (exp[:, :, 2] < 45))
+    n_exp = int(red_exp.sum())
+    exp_area = int(exp.shape[0]) * int(exp.shape[1])
+    print(f"预览红像素 {n_prev}（面积 {w}x{h}）、导出红像素 {n_exp}（面积 {exp.shape[1]}x{exp.shape[0]}）")
+    # 三条底线，缺一即红：① 一片红也没有 = P1-2 原缺陷；② 覆盖率明显低于预览档（<50%）
+    # = 换底在 tile 里被裁掉了；③ 覆盖率异常高于 5× = 背景色被误当成前景。
+    assert n_exp > 0, (
+        f"导出文件里一片红像素也没有（预览 {n_prev}）：换底只活在预览、没进导出（P1-2 原缺陷）")
+    preview_frac = n_prev / max(1, w * h)
+    export_frac = n_exp / max(1, exp_area)
+    assert export_frac >= preview_frac * 0.5, (
+        f"导出换底覆盖率 {export_frac:.3%} 明显低于预览 {preview_frac:.3%}：tile 里 matte 被裁错或没挂上")
+    assert export_frac <= preview_frac * 5.0 + 0.02, (
+        f"导出换底覆盖率 {export_frac:.3%} 异常高于预览 {preview_frac:.3%}：可能把前景也换成了背景色")
