@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.join(ROOT, "engine", "src"))
 
 from lumaretouch_engine.decode import load_rgb               # noqa: E402
 from lumaretouch_engine.export import ExportSpec, export_image  # noqa: E402
+from lumaretouch_engine.ops.deform import analytic_frontal_landmarks  # noqa: E402
 
 FIXTURE = os.path.join(ROOT, "engine", "tests", "fixtures", "portrait-1024x1280.jpg")
 OUT_DIR = os.environ.get("LRT_OUT", os.path.join(ROOT, "build", "cpu-visual"))
@@ -95,15 +96,33 @@ def main() -> int:
     if not center_ok:
         failures.append("换底导出：主体中心被改动——遮罩极性可能反了")
 
+    # E) 脸部形变进导出（核心工作流"脸部形变" + 验收"检查边缘和背景变形"）：给一个强形变（slim_face），
+    #    导出必须真的 warp 面部、远处背景逐字节不动、无 NaN。用解析正面关键点（与居中人脸大致对齐）。
+    lm = analytic_frontal_landmarks()
+    out_def, _ = export_image(
+        src, ExportSpec(strength=0.0, light=[], deform_amounts={"slim_face": 1.0}, landmarks=lm),
+        device="cpu", tile=512)
+    if not np.isfinite(out_def.astype(np.float64)).all():
+        failures.append("形变导出含非有限值")
+    delta_def = float(np.abs(out_def.astype(np.int16) - src.astype(np.int16)).mean())
+    corner_def_ok = bool(np.array_equal(out_def[3, 3], src[3, 3]))   # 顶角远离面部影响半径，应不动
+    print(f"[deform slim_face=1.0] 全图平均改动={delta_def:.3f} LSB；远处顶角逐字节不动: {corner_def_ok}")
+    if delta_def <= 0.02:
+        failures.append("形变导出：全图几乎没动——形变没进导出")
+    if not corner_def_ok:
+        failures.append("形变导出：远处顶角被改动——形变影响半径越界（背景被带跑）")
+
     sep = np.full((src.shape[0], 4, 3), 255, np.uint8)
     files = [
         save(src, "before.png"),
         save(out_skin, "after_skin.png"),
         save(out_grade, "after_grade.png"),
         save(out_bg, "after_bg.png"),
+        save(out_def, "after_deform.png"),
         save(np.concatenate([src, sep, out_skin], axis=1), "compare_before_vs_skin.png"),
         save(np.concatenate([src, sep, out_grade], axis=1), "compare_before_vs_grade.png"),
         save(np.concatenate([src, sep, out_bg], axis=1), "compare_before_vs_bg.png"),
+        save(np.concatenate([src, sep, out_def], axis=1), "compare_before_vs_deform.png"),
     ]
     print("产物：")
     for p in files:
