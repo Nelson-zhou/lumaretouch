@@ -13,6 +13,7 @@
 import RegistryPanel from "./RegistryPanel";
 import { sectionTitleOf, type SectionId } from "../p0";
 import { t, type MsgKey } from "../i18n";
+import { skinLimits, skinSliderBoundsRaw } from "../gradeLimits";
 import {
   faceStateOf, runCrop, runDeform, runExposure, runFace, runGrade, runInpaint, runLight,
   runLut, runTask,
@@ -178,7 +179,8 @@ export default function StudioPanel(props: StudioProps) {
   const showRoster = !!faceSt && faceSt.faces.length > 0 && (multi || ledgerRows > 0);
   const presets = status?.presets ?? [];
   const gl = (status?.grade_limits ?? []) as number[];
-  const gmax = gl.length === 3 ? gl[0] : 100;
+  // P2-3：每条滑杆各用引擎报的那一档上限（dh/ds/dv 互不相同），不再拿 gl[0] 套全三条。
+  const gradeBounds = skinSliderBoundsRaw(skinLimits(gl));
 
   const taskBtn = (label: string, action: "pause" | "resume" | "cancel" | "retry" | "delete",
                    x: TaskState, enabled: boolean) => (
@@ -366,11 +368,12 @@ export default function StudioPanel(props: StudioProps) {
                value={doc?.lut.amount ?? 1}
                onChange={(e) => ok(runLut("amount", { amount: +e.target.value }), props)}
                style={{ width: "100%" }} />
-        {(["dh", "ds", "dv"] as const).map((k) => (
+        {(["dh", "ds", "dv"] as const).map((k, idx) => (
           <div key={k}>
             <label className="k">{t(k === "dh" ? "grade.hue" : k === "ds" ? "grade.sat"
-              : "grade.val", { v: (doc?.grade[k] ?? 0).toFixed(1) })}</label>
-            <input type="range" min={-gmax} max={gmax} step={1} disabled={dim}
+              : "grade.val", { v: (doc?.grade[k] ?? 0).toFixed(2) })}</label>
+            <input type="range" min={gradeBounds[idx].min} max={gradeBounds[idx].max}
+                   step={gradeBounds[idx].step} disabled={dim}
                    value={doc?.grade[k] ?? 0}
                    onChange={(e) => ok(runGrade("set", { [k]: +e.target.value }), props)}
                    style={{ width: "100%" }} />

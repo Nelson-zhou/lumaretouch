@@ -20,6 +20,7 @@ import {
   type SpecSubcontrol,
 } from "../spec";
 import { DisabledRow, SpecNodes } from "./SpecTree";
+import { skinLimits, skinSliderBounds100 } from "../gradeLimits";
 
 export type BrushMode = "heal" | "dodge" | "burn" | "color";
 
@@ -333,6 +334,9 @@ export default function RetouchPanel(props: RetouchProps) {
   const enhAmounts = doc?.enhance?.amounts ?? {};
   const ex = doc?.exposure;
   const grade = doc?.grade;
+  // P2-3：肤色定向三条滑杆的量程来自引擎报的 grade_limits（不是前端拄 ±100）。
+  // ×100 整数表示：dh→±5、ds/dv→±60，换算回后端单位正好落在 check_params 的有效带。
+  const gradeBounds = skinSliderBounds100(skinLimits(status?.grade_limits));
   const presets = status?.presets ?? [];
   const faces = doc?.face?.faces ?? [];
   const faceIdx = typeof props.faceScope === "number" ? props.faceScope : null;
@@ -662,15 +666,15 @@ export default function RetouchPanel(props: RetouchProps) {
     <div className="specBlock">
       <div className="specBlockTitle">肤色定向</div>
       <Slider label="色相偏移" value={Math.round((grade?.dh ?? 0) * 100)}
-        min={-100} max={100} disabled={dim}
+        min={gradeBounds[0].min} max={gradeBounds[0].max} disabled={dim}
         onChange={(v) => ok(runGrade("set", { dh: v / 100 }), props)}
         onReset={() => ok(runGrade("set", { dh: 0 }), props)} />
       <Slider label="饱和偏移" value={Math.round((grade?.ds ?? 0) * 100)}
-        min={-100} max={100} disabled={dim}
+        min={gradeBounds[1].min} max={gradeBounds[1].max} disabled={dim}
         onChange={(v) => ok(runGrade("set", { ds: v / 100 }), props)}
         onReset={() => ok(runGrade("set", { ds: 0 }), props)} />
       <Slider label="明度偏移" value={Math.round((grade?.dv ?? 0) * 100)}
-        min={-100} max={100} disabled={dim}
+        min={gradeBounds[2].min} max={gradeBounds[2].max} disabled={dim}
         onChange={(v) => ok(runGrade("set", { dv: v / 100 }), props)}
         onReset={() => ok(runGrade("set", { dv: 0 }), props)} />
       <Slider label="混入比例" value={Math.round((grade?.amount ?? 1) * 100)}
