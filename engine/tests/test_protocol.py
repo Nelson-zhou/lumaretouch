@@ -4251,6 +4251,42 @@ def test_project_open_refuses_to_drop_unsaved_work_but_honours_force(engine, tmp
     assert op["dirty"] is False and op["docs"] == 1, op
 
 
+def test_project_open_protects_untitled_dirty_session(engine, tmp_path):
+    """P1-8：从没 project create/save 过的会话，改了图也算未保存——不能因为
+    `_project is None` 就绕开 dirty 保护。open 另一个工程必须默认拒，force 才跨。"""
+    from lumaretouch_engine import project as PJ
+    _needs_torch()
+    # 先用纯函数在盘上落一份"目标"项目文件（不经 engine，主 engine 保持 _project=None）
+    tgt_dir = tmp_path / "target"
+    tgt_dir.mkdir()
+    prj = PJ.new_project("目标", str(tgt_dir))
+    tgt_file = PJ.save(prj, str(tgt_dir / "target.lrtproj"))["path"]
+
+    # 主 engine 会话：只 load + 真改（crop 落在 EDIT_CMDS，1223 行的 dirty 判据会亮）
+    _load(engine, max_px=207360, strength=0.0)
+    engine.send(cmd="crop", rect=[0.05, 0.05, 0.95, 0.95], rotation_degrees=0.0)
+    _wait_crop_frame(engine)
+    engine.send(cmd="project", action="state")
+    st = engine.wait_for("project_state", timeout=30)
+    assert st["dirty"] is True, f"crop 已作用但 dirty 徽章没亮：{st}"
+
+    # 关键：`_project is None` 且 dirty，open 目标默认必须拒——这就是 P1-8 现场
+    engine.send(cmd="project", action="open", path=tgt_file, force=False)
+    err = engine.wait_for("error", timeout=30)
+    assert "未命名工程" in err["error"] and "未保存" in err["error"], \
+        f"P1-8 修复被回退：未命名 dirty 的 open 未拒或文案不认：{err}"
+    # 会话必须原样：底片条没被换掉，还在 FIXTURE 那张上
+    engine.send(cmd="session", action="state")
+    ss = engine.wait_for("session_state", timeout=30)
+    assert os.path.basename(ss["current"]) == os.path.basename(FIXTURE), \
+        f"被拒的 open 已经换了底片条：{ss}"
+
+    # force=true 是用户显式说的"我承认丢"——必须通过，切过去之后 dirty 归零
+    engine.send(cmd="project", action="open", path=tgt_file, force=True)
+    op = engine.wait_for("project_opened", timeout=90)
+    assert op["dirty"] is False, f"force open 之后 dirty 未清：{op}"
+
+
 def test_project_open_reports_a_corrupt_file_and_the_engine_lives(engine, tmp_path):
     """CORE-008 的协议面：文件被改成半截时，报的是“损坏”而不是“没这一张图”。
 

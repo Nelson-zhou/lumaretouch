@@ -2538,9 +2538,16 @@ class Engine:
             # 换工程先问一句：底片条会被整张表换掉，手上的活没存就是真的丢了。
             # 拿 force=true 显式跨过是另一回事——那才是用户自己说的“我不需要这一份”。
             # 默认直接换是“静默丢工”，本仓最贵的那一族坑就在这一格上。
-            if self._project is not None and self._project_dirty and not p.get("force"):
-                emit({"event": "error", "error": f"当前工程「{(self._project or {}).get('name')}」"
-                      "保存之后又改过（未保存）：先 project save，或带 force=true 重开"})
+            # P1-8：老 gate 只看 `self._project is not None and self._project_dirty`——
+            # 那一条把"从没 project create/save 过但已经改了图"的未命名会话直接放过，
+            # 换工程会静默丢工。`_project_dirty` 在 1223 行的真改判据里就已经被置 True
+            # （不需要 _project 存在）；这里以 dirty 为唯一判据，未命名与已命名两条一起护。
+            if self._project_dirty and not p.get("force"):
+                _pname = (self._project or {}).get("name")
+                _who = f"当前工程「{_pname}」" if _pname else "当前未命名工程"
+                _hint = ("先 project save，或带 force=true 重开" if _pname
+                         else "先 project create + project save 落一份，或带 force=true 重开")
+                emit({"event": "error", "error": f"{_who}保存之后又改过（未保存）：{_hint}"})
                 return
             t0 = monotonic_ns()
             try:
