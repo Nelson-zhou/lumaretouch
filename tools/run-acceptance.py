@@ -403,6 +403,26 @@ def product_version() -> str:
     return p.read_text(encoding="utf-8").strip() if p.is_file() else ""
 
 
+def overall_verdict(pytest_rc: int, p0_bad: list, p0_manual: list,
+                    others: list) -> tuple[bool, str]:
+    """P2-9（F18）：从整体读数算一个不能被误读成“可发布”的顶层结论。
+
+    逐条 status=passed 只说“那条映射的测试节点绿”，它盖不住：本轮 pytest 整体红
+    （rc≠0）、P0 有红、P0 待人工、非 P0 失败/未证实——这些情冴下行级 passed 会被
+    读成发布结论。任一成立就 release_ok=False。
+    """
+    if pytest_rc != 0:
+        return False, (f"⛔ 验收不通过：本轮 pytest 退出码 {pytest_rc}（有红项/跑崩）。"
+                       "行级 passed 只说那条映射的测试节点绿，不等于整套可发布。")
+    if p0_bad:
+        return False, f"⛔ 验收不通过：P0 有 {len(p0_bad)} 条未跑通：{p0_bad[:12]}"
+    if p0_manual:
+        return False, f"🖐 尚不可发布：P0 有 {len(p0_manual)} 条待人工签署（自动化绿不等于人签过）"
+    if others:
+        return False, f"⚠ 非 P0 有 {len(others)} 条失败/未证实（pytest rc={pytest_rc}），需人工看"
+    return True, "✅ 验收通过：P0 全绿、无待人工、无失败/未证实项——可进入发布流程"
+
+
 def write_report(doc: dict, cases: list[dict], junit: Path, perf_out: Path,
                  stale: list[str], pytest_rc: int | None, mode: str) -> int:
     """从 junit + 性能 JSON 生成两份报告并打印结论；返回建议退码。
@@ -432,9 +452,18 @@ def write_report(doc: dict, cases: list[dict], junit: Path, perf_out: Path,
                      "title": c["title"], "status": st,
                      "then": c["then"], "tests": tests, "note": e.get("note"),
                      "decision": e.get("decision")})
+    # P2-9（F18）：逐条 status 只说“那条映射的测试节点绿没绿”，它盖不住两个坑：
+    # ① 本轮 pytest 整体红（rc≠0）时，行级 passed 会被读成“可发布”；② P0 待人工、
+    # 非 P0 失败/未证实也会在一堆绿勾里隐身。所以额外算一个顶层总体结论：
+    # 只要 rc≠0、或 P0 有红、或有待人工、或有非 P0 未决项，release_ok 就是 False。
+    p0_bad = [r["id"] for r in rows if r["phase"] == "P0" and r["status"] not in ("passed", "manual_pending")]
+    p0_manual = [r["id"] for r in rows if r["phase"] == "P0" and r["status"] == "manual_pending"]
+    others = [r for r in rows if r["phase"] != "P0" and r["status"] in ("failed", "unverified")]
+    release_ok, conclusion = overall_verdict(pytest_rc, p0_bad, p0_manual, others)
     report = {"schema": "lrt.acceptance-report.v1", "at": time.strftime("%FT%T"),
               "product_version": product_version(), "mode": mode,
               "cases_sha256": cases_sha256(), "pytest_rc": pytest_rc,
+              "release_ok": release_ok, "conclusion": conclusion,
               "map_refreshed": stale,
               "counts": counters, "rows": rows,
               "perf": perf, "junit": str(junit)}
@@ -442,8 +471,6 @@ def write_report(doc: dict, cases: list[dict], junit: Path, perf_out: Path,
     REPORT_JSON.write_text(json.dumps(report, ensure_ascii=False, indent=1) + "\n",
                            encoding="utf-8")
     write_md(report)
-    p0_bad = [r["id"] for r in rows if r["phase"] == "P0" and r["status"] not in ("passed", "manual_pending")]
-    p0_manual = [r["id"] for r in rows if r["phase"] == "P0" and r["status"] == "manual_pending"]
     print(f"报告（{mode}）：{disp(REPORT_JSON)} / {disp(REPORT_MD)}")
     for ph in sorted(counters):
         print(f"  {ph}: " + " ".join(f"{k}={v}" for k, v in sorted(counters[ph].items())))
@@ -453,7 +480,6 @@ def write_report(doc: dict, cases: list[dict], junit: Path, perf_out: Path,
     # 上一版这里写的是 `return 0 if rc == 0 else 0`——两个分支同一个值，等于把 pytest 的
     # 退出码当场勾销：非 P0 炸了报告也是一片绿，那是报告的结构性失信。现在 P0 全绿
     # 而仍有其他用例失败时，把数量报出来并回退码 2（红是 P0 定的，2 是“要人看”）。
-    others = [r for r in rows if r["phase"] != "P0" and r["status"] in ("failed", "unverified")]
     print("✓ P0 没有红项")
     if p0_manual:
         # 自动化那半过了不等于这条过了：人没签字就不能替人签。退码 3 就是专门给
@@ -549,6 +575,12 @@ def write_md(rep: dict) -> None:
          f"（junit：{rep['junit']}）",
          f"- 用例集指纹：`{rep['cases_sha256']}`（《开发验收用例.json》冻结件）",
          f"- pytest 退出码：{rep['pytest_rc']}", ""]
+    # P2-9（F18）：把一个不能误读的总体结论放在最前面——行级 passed 不等于可发布。
+    L += [f"## 验收结论", "",
+          f"- **{rep.get('conclusion') or '（旧报告无此字段）'}**",
+          f"- 发布门禁 `release_ok`：{'✅ 通过' if rep.get('release_ok') else '⛔ 未通过'}"
+          "（逐条 passed 只表示该条映射的测试节点绿；pytest_rc≠0、P0 有红、待人工"
+          "、非 P0 失败/未证实任一成立即不得当发布结论）", ""]
     L += ["## 汇总", "",
           "| 阶段 | 通过 | 待人工 | 不支持 | 范围外 | 缓期 | 失败 | 跳过 | 未证实 | 未覆盖 |",
           "|---|---|---|---|---|---|---|---|---|---|"]
