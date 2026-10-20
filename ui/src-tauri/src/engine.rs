@@ -150,9 +150,13 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             state.on_precompute_ready(&v);
             println!("M0_ENGINE {line}");
         }
-        "face_selected" | "face_list" => {
+        "face_selected" | "face_list" | "face_manual" => {
             // 多人图选人（PORTRAIT-003）：一次点击一条。它与 precompute_ready 汇进同一个
-            // 槽位——面板要的是「引擎现在说有几张脸、在改哪一张」，不关心是哪条事件说的
+            // 槽位——面板要的是「引擎现在说有几张脸、在改哪一张」，不关心是哪条事件说的。
+            // face_manual（PORTRAIT-006）必须一起接：上一版只列了前两个，于是点了 ✕
+            // 之后引擎那句「已关掉第 1 只」落在事件里而**没人往槽位搬**——面板读的是槽位，
+            // 账记上了而屏幕不认（要等下一次 precompute 才刷新）。装机真窗口第 9 臂
+            // 就是这么抓出来的：库里 20 条与端到端 2 条全部连的是裸引擎，看不见这一格。
             let name = v["event"].as_str().unwrap_or("").to_string();
             state.on_face(&v, &name);
             println!("M0_ENGINE {line}");

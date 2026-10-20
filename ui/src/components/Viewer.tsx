@@ -22,6 +22,16 @@ export interface BrushProps {
   onStroke: (rle: Rle, pixels: number) => void;
 }
 
+/** 「框一位补脸」（LNX-PORTRAIT-006）的视口接口：on=false 时叠加层不吃事件。
+ *
+ * 与消除笔同一条约束：坐标只在 1:1 那一档映射（平移/缩放时锁），因为映射是按画布
+ * 矩形算的，变换之后落点会偏——把用户框的位置算成另一块地方，比不响应更糟。 */
+export interface PickProps {
+  on: boolean;
+  /** 松手时把归一化矩形 [x0,y0,x1,y1] 交出去：引擎在这一框上再跑一次真检测 */
+  onRect: (rect: number[]) => void;
+}
+
 export interface Hud {
   seq: number;
   w: number;
@@ -54,6 +64,7 @@ export default function Viewer({
   mirrorOn = true,
   glVisible = false,
   brush,
+  pick,
   view,
   onView,
   paintLocked = false,
@@ -87,6 +98,8 @@ export default function Viewer({
   /** 对照实验用：把 GL 画布重新摆回可见位（LRT_GL_VISIBLE=1）。 */
   glVisible?: boolean;
   brush?: BrushProps;
+  /** 框选补脸（只在按钮亮起时吃事件；平时叠加层与测量回路一个字也不变） */
+  pick?: PickProps;
   /** 平移/缩放（只属于显示层：导出与引擎算的仍是那一份像素，缩放也不触发任何推理） */
   view: View;
   onView: (v: View) => void;
@@ -98,6 +111,7 @@ export default function Viewer({
   // 变换只加在显示层（镜像画布）上：GL 渲染源与测量回路一个字也不改
   const zoomed = view.zoom !== 1 || view.x !== 0 || view.y !== 0;
   const brushActive = !!brush?.on && !paintLocked;
+  const pickActive = !!pick?.on && !paintLocked;
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const onWheel = (e: React.WheelEvent) => {
     const next = Math.min(8, Math.max(1, view.zoom * Math.exp(-e.deltaY / 400)));
@@ -106,7 +120,8 @@ export default function Viewer({
       : { zoom: next, x: view.x * (next / view.zoom), y: view.y * (next / view.zoom) });
   };
   const panDown = (e: React.PointerEvent) => {
-    if (e.button !== 1 && !(e.button === 0 && !brushActive)) return;
+    // 框选模式下左键属于"画一个框"，不属于平移：两种意图抢同一个手势时让编辑意图赢
+    if (e.button !== 1 && !(e.button === 0 && !brushActive && !pickActive)) return;
     drag.current = { x: e.clientX, y: e.clientY, ox: view.x, oy: view.y };
     (e.target as Element).setPointerCapture?.(e.pointerId);
   };
@@ -128,6 +143,9 @@ export default function Viewer({
   // 那既浪费一次 GL 上下文，也会把 M0 那条测量链拆散
   const brushRef = useRef(brush);
   brushRef.current = paintLocked && brush ? { ...brush, on: false } : brush;
+  // 与 brush 同一条理由：把 pick 放进 effect 依赖会让"开关框选"重建整个 GL 测量回路
+  const pickRef = useRef(pick);
+  pickRef.current = paintLocked && pick ? { ...pick, on: false } : pick;
   const sizeRef = useRef({ w: 0, h: 0 });
 
   // 显示层的定位：这台机器上 .viewer 里的画布位图不进页面合成（GL 与 2D 都一样，实测
@@ -246,7 +264,31 @@ export default function Viewer({
       pad.paintOverlay(img);
       octx.putImageData(img, 0, 0);
     };
+    let pickRect: { x0: number; y0: number; x1: number; y1: number } | null = null;
+    /** 框选中的那一格画在叠加层上：先让笔刷那层照常重绘，再叠这个虚线框 */
+    const repaintPick = () => {
+      repaint();
+      if (!pickRect || !octx) return;
+      const { w } = sizeRef.current;
+      octx.save();
+      octx.strokeStyle = "rgba(90, 200, 255, 0.95)";
+      octx.lineWidth = Math.max(2, w / 420);
+      octx.setLineDash([Math.max(6, w / 90), Math.max(4, w / 130)]);
+      octx.strokeRect(pickRect.x0, pickRect.y0,
+                      pickRect.x1 - pickRect.x0, pickRect.y1 - pickRect.y0);
+      octx.restore();
+    };
     const onDown = (e: PointerEvent) => {
+      const pk = pickRef.current;
+      if (pk?.on && overlay && e.button === 0) {
+        const p = toImg(e);
+        if (!p) return;
+        pickRect = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+        overlay.setPointerCapture(e.pointerId);
+        repaintPick();
+        e.preventDefault();
+        return;
+      }
       const b = brushRef.current;
       if (!b?.on || !overlay || e.button !== 0) return;
       const p = toImg(e);
@@ -260,6 +302,13 @@ export default function Viewer({
       e.preventDefault();
     };
     const onMove = (e: PointerEvent) => {
+      if (pickRect) {
+        const p = toImg(e);
+        if (!p) return;
+        pickRect = { ...pickRect, x1: p.x, y1: p.y };
+        repaintPick();
+        return;
+      }
       const b = brushRef.current;
       if (!painting || !b?.on) return;
       const p = toImg(e);
@@ -269,6 +318,20 @@ export default function Viewer({
       repaint();
     };
     const onUp = (e: PointerEvent) => {
+      if (pickRect) {
+        const { w, h } = sizeRef.current;
+        const r = pickRect;
+        pickRect = null;
+        overlay?.releasePointerCapture(e.pointerId);
+        repaint();
+        const x0 = Math.min(r.x0, r.x1) / w, x1 = Math.max(r.x0, r.x1) / w;
+        const y0 = Math.min(r.y0, r.y1) / h, y1 = Math.max(r.y0, r.y1) / h;
+        // 太小的那一拖不当成"框了一个人"：误点的面积比一次点击还小，发过去只会得到
+        // 一条"这一框里没有脸"，而用户不知道自己是误点
+        if (x1 - x0 < 0.02 || y1 - y0 < 0.02) return;
+        pickRef.current?.onRect([x0, y0, x1, y1]);
+        return;
+      }
       if (!painting) return;
       painting = false;
       overlay?.releasePointerCapture(e.pointerId);

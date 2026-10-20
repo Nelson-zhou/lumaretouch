@@ -447,6 +447,25 @@ export interface FacePerson {
   box: number[] | null;
   /** 脸盒占画幅的比例（0–1），只用来给 chip 排个序、显示大小 */
   area: number;
+  /** 这一张的点位出自**用户框的区域**（不是这一轮检测自动找到的）——chip 要标"人工" */
+  manual?: boolean;
+  /** 用户说过"这不是脸"（LNX-PORTRAIT-006）。被标上的那一张不再被任何单脸作用域操作服务 */
+  disabled?: boolean;
+}
+/** 人脸名单上的人工账（引擎 `_face_state().manual` 同一份）。 */
+export interface FaceManual {
+  /** 用户关掉的那些脸（归一化盒）。认不回也留账——丢掉就是一次静默恢复 */
+  disabled: number[][];
+  /** 用户框出来补上的那些区域（归一化框） */
+  added: number[][];
+  /** 账上有、这一轮名单里认不回的禁用条目（面板要说明，不能装作还在生效） */
+  stale: number[][];
+  /** 账上有、这一轮没找回的人工框 */
+  lost: number[][];
+  /** 这一轮名单里没有任何人工记录的脸 = 这次检测新增的候选 */
+  new_faces?: number[];
+  /** 引擎算好的一句话（"保留 1 处禁用，1 处人工框未找回"） */
+  preview?: string;
 }
 export interface FaceState {
   index: number;
@@ -455,6 +474,11 @@ export interface FaceState {
   box: number[] | null;
   num_faces: number;
   faces: FacePerson[];
+  /** 还没被人关掉的那些人的 index。`blocked` 按这一格算，不按 `num_faces` 算 */
+  enabled?: number[];
+  disabled_count?: number;
+  /** 人工账（PORTRAIT-006）：关掉的与补上的都在这一格里 */
+  manual?: FaceManual;
   blocked: boolean;
   /** 人像模块作用面受限的原因码（multi_face）；null = 不受限 */
   scope_block: string | null;
@@ -836,6 +860,9 @@ export interface EngineStatus {
     enhance_subs?: string[];
     enhance_range?: number[];
     enhance_actions?: string[];
+    /** 人脸名单能收哪些动作（LNX-PORTRAIT-006）：面板上 ✕/↺/⌫/「框一位」这几格
+     *  画不画由这一格决定，前端不刻第二份名单。 */
+    face_actions?: string[];
     task_actions?: string[];
     export_formats?: string[];
     [k: string]: unknown;
@@ -1158,8 +1185,17 @@ export const runDeform = (action: DeformInfo["action"], amounts?: Record<string,
 export const faceStateOf = (st: EngineStatus | null, doc: DocState | null): FaceState | null =>
   st?.face?.face ?? doc?.face ?? null;
 
-export const runFace = (action: "list" | "select", index?: number) =>
-  invoke<{ requested: boolean }>("face", { action, index });
+/** 人脸名单的命令（LNX-PORTRAIT-003 选定 / LNX-PORTRAIT-006 人工账）。
+ *
+ * 动作名单由引擎 ready 报（`face_actions`）：这里写联合类型只是为了编译期挡住拼错，
+ * 运行时能不能收仍以引擎为准——面板上一格按钮在引擎没有对应动作时必须显式禁用，
+ * 不许发一条指望引擎"大概能懂"的命令。
+ * rect 只在 `add` 上有意义：那是用户框出来的归一化区域，引擎在这一框上**再跑一次真检测**
+ * 拿 478 点（不拿框拟合一套占位点位，那是 DoD §2 严禁的假 AI）。 */
+export type FaceAction = "list" | "select" | "disable" | "enable" | "add" | "remove";
+
+export const runFace = (action: FaceAction, index?: number, rect?: number[]) =>
+  invoke<{ requested: boolean }>("face", { action, index, rect });
 
 /** 影楼色彩（M3-a2）：送一张 .cube，或只改混合系数。
  *
@@ -1382,6 +1418,8 @@ export interface M0Env {
    *  只能拿用户看见的那一帧量，屏上没有第二块画布可比。 */
   auto_enhance: string;
   auto_face: string;
+  /** 人工纠正优先（$LRT_AUTO_MANUAL=<要关掉的 index>）：见 App.tsx 第 9 臂 */
+  auto_manual: string;
   /** M6 换底自动通道（$LRT_AUTO_BG）："rrggbb:tol:softness"。真窗口要证的不是
    *  合成对不对（test_matting 已钉），而是 TS runBackground → Rust background →
    *  引擎 bg_done 这条命令签名在真窗口里对得上，且画面真的变了（peek 字节差）。 */

@@ -37,6 +37,11 @@ export interface StudioProps {
   exporting: boolean;
   faceOk: boolean;
   faceWhy: string;
+  /** 「框一位补脸」的开关（视口里的框选模式由 App 统一持有：它与消除笔互斥） */
+  pickFace: boolean;
+  setPickFace: (v: boolean) => void;
+  /** 人脸名单能收哪些动作：引擎 ready 报的那一份（`face_actions`）。空 = 这一版没这些按钮 */
+  faceActions?: string[];
   /** 形变有哪些格：引擎 ready 报的那一份（`deform_kinds`）。空数组 = 这个引擎没报，
    *  面板整栏禁用并写明原因，而不是退回一份前端自己记的名单。 */
   deformKinds: string[];
@@ -167,6 +172,10 @@ export default function StudioPanel(props: StudioProps) {
    *  出处，漂的时候会以「面板能点而引擎整条拒」的形态出现。 */
   const faceSt = faceStateOf(props.status, doc);
   const multi = !!faceSt && faceSt.faces.length > 1;
+  // 人物行什么时候要画：多人图之外，**人工账非空**也算——只剩一个人而用户把这一只关掉时，
+  // 屏幕上必须有那颗 ↺，否则"恢复"这条路口只在引擎里存在，用户按不到（DoD §3）
+  const ledgerRows = (faceSt?.manual?.disabled.length ?? 0) + (faceSt?.manual?.added.length ?? 0);
+  const showRoster = !!faceSt && faceSt.faces.length > 0 && (multi || ledgerRows > 0);
   const presets = status?.presets ?? [];
   const gl = (status?.grade_limits ?? []) as number[];
   const gmax = gl.length === 3 ? gl[0] : 100;
@@ -217,19 +226,56 @@ export default function StudioPanel(props: StudioProps) {
 
       {/* 2) 面部重塑与遮罩 */}
       <Group id="face">
-        {multi && (
+        {showRoster && (
           <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-            {faceSt!.faces.map((f) => (
-              <button key={f.index} disabled={dim}
-                      className={faceSt!.explicit && faceSt!.index === f.index ? "primary" : ""}
-                      title={`脸盒 ${f.box ? f.box.map((x) => x.toFixed(3)).join(", ") : "无"}`
-                              + `·占画幅 ${(f.area * 100).toFixed(2)}%`}
-                      onClick={() => ok(runFace("select", f.index), props)}>
-                {t("face.person")} {f.index + 1}
-              </button>
-            ))}
+            {faceSt!.faces.map((f) => {
+              const here = faceSt!.explicit && faceSt!.index === f.index;
+              const acts = props.faceActions ?? [];
+              return (
+                <span key={f.index} className="row" style={{ gap: 2 }}>
+                  <button disabled={dim || !!f.disabled}
+                          className={here ? "primary" : ""}
+                          title={(f.disabled ? t("face.disabledWhy") + "·" : "")
+                                  + `脸盒 ${f.box ? f.box.map((x) => x.toFixed(3)).join(", ") : "无"}`
+                                  + `·占画幅 ${(f.area * 100).toFixed(2)}%`}
+                          onClick={() => ok(runFace("select", f.index), props)}>
+                    {f.manual ? t("face.manualTag") : ""}{t("face.person")} {f.index + 1}
+                  </button>
+                  {acts.includes("disable") && !f.disabled && (
+                    <button disabled={dim} className="mini" title={t("face.disableWhy")}
+                            onClick={() => ok(runFace("disable", f.index), props)}>✕</button>
+                  )}
+                  {acts.includes("enable") && f.disabled && (
+                    <button disabled={dim} className="mini" title={t("face.enableWhy")}
+                            onClick={() => ok(runFace("enable", f.index), props)}>↺</button>
+                  )}
+                  {acts.includes("remove") && f.manual && (
+                    <button disabled={dim} className="mini" title={t("face.removeWhy")}
+                            onClick={() => ok(runFace("remove", f.index), props)}>⌫</button>
+                  )}
+                </span>
+              );
+            })}
           </div>
         )}
+        {/* 人工纠正那一条（LNX-PORTRAIT-006）：检测漏掉的人由用户框出来，引擎在这一框上
+            再跑一次**真检测**拿点位；拿不到就明拒。按钮在引擎没有 add 动作时禁用并写原因。 */}
+        {(props.faceActions ?? []).includes("add") && (
+          <div className="row" style={{ gap: 6 }}>
+            <button disabled={dim || props.brush.on}
+                    className={props.pickFace ? "primary" : ""}
+                    title={props.brush.on ? t("face.addBlockedBrush") : t("face.addWhy")}
+                    onClick={() => props.setPickFace(!props.pickFace)}>{t("face.addPerson")}</button>
+            {props.pickFace && <span className="mut">{t("face.addHint")}</span>}
+          </div>
+        )}
+        {/* 这一格必须自己判空：`faceSt` 在"还没跑过分析"时就是 null（faceStateOf 的缺省），
+         * 而它不在 `multi &&` 那块里。上一版写 `faceSt!.manual` —— 非空断言在编译期擦除，
+         * 首屏直接 TypeError 把整棵 React 树打崩（白屏 + 自动序列从没起跑）。本轮就是被装机
+         * 真窗口抓到的：日志 0 字节、引擎从没被 spawn。 */}
+        {(faceSt?.manual?.disabled.length ?? 0) > 0 || (faceSt?.manual?.added.length ?? 0) > 0 ? (
+          <div className="p0why">{t("face.manual", { line: faceSt?.manual?.preview ?? "" })}</div>
+        ) : null}
         {multi && faceSt!.explicit && !faceSt!.blocked && (
           <div className="mut">{t("face.editing", { n: faceSt!.index + 1 })}</div>
         )}

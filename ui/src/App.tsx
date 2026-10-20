@@ -121,6 +121,9 @@ export default function App() {
   // 画笔模式（M2-a2）：同一支画笔管道，落点时按模式分派到两个图层。
   // 不另开一套坐标采集：修容与消除笔画的都是代理帧上的同一个 RLE，两套代码必漂。
   const [brushMode, setBrushMode] = useState<"heal" | "dodge" | "burn" | "color">("heal");
+  // 框选补脸那一档（LNX-PORTRAIT-006）：它是一次性的编辑意图，不是文档状态——文档状态
+  // 是引擎那份 `_face_manual`，这里只记"视口下一拖该画框还是该平移"
+  const [pickFace, setPickFace] = useState(false);
   // 修容档数上限：0.6 档是探针在真图上定的产品默认（再大就开始烧穿高光）
   const [lightExposure, setLightExposure] = useState(0.6);
   const [lastLight, setLastLight] = useState<LightInfo | null>(null);
@@ -652,7 +655,8 @@ export default function App() {
         // 第 7 臂就是撞在这里：脚本忘传 LRT_AUTO_BENCH，整条自动序列一声不响地
         // return，外面只能等满 900 s 拿到一句"没跑完"——静默的失败比失败更坏。
         const wanted = (["auto_pick", "auto_filmstrip", "auto_face", "auto_history",
-          "auto_export", "auto_background", "auto_local_color", "auto_grade"] as const)
+          "auto_export", "auto_background", "auto_local_color", "auto_grade",
+          "auto_manual"] as const)
           .filter((k) => !!(env as unknown as Record<string, string>)[k]);
         if (wanted.length) {
           await report("M0_ERROR 自动序列没起跑：这些臂挂了，但整段序列要求 LRT_AUTO_BENCH "
@@ -1337,6 +1341,166 @@ export default function App() {
             mouthOpenness: (lit?.enhance_mouth ?? {}).openness ?? null,
             canvas: `${after?.w ?? 0}x${after?.h ?? 0}`,
             insideChanged, outsideChanged, backHomeBytes,
+          })}`);
+        }
+      }
+      // 人工纠正优先（LNX-PORTRAIT-006）自动通道（$LRT_AUTO_MANUAL=<要关掉的 index>）。
+      // 库里那 20 条与端到端那两条连的是裸引擎；这一臂证的是同一份账走完
+      // 视口 → Rust `face` → 引擎 → 宿主 `status.face` 这四层之后**仍是那一条账**，
+      // 并且"关掉的那一位在重检测后的那一帧上不得重新出现"能在用户看见的那一帧上量出来
+      // ——屏幕上没有第二块画布可比，这一条只能真窗口量。
+      if (env.auto_manual) {
+        const want = Number(env.auto_manual);
+        if (!Number.isInteger(want) || want < 0) {
+          await report(`M0_ERROR 无法解析 LRT_AUTO_MANUAL=${env.auto_manual}（要一个非负整数 index）`);
+        } else if (!image) {
+          await report("M0_ERROR LRT_AUTO_MANUAL 需要 LRT_LOAD_IMAGE + LRT_PRECOMPUTE"
+            + "（多人夹具：名单只能来自真实分析）");
+        } else {
+          const pw = image.w;
+          const ph = image.h;
+          const full = (f: any) => !!f && f.rows === f.h && f.pixelLen === f.w * f.h * 4;
+          const waitFace = async (pred: (v: NonNullable<ReturnType<typeof faceStateOf>>) => boolean) => {
+            // 12 s 预算与眼牙那一臂同一条理由：长空轮询会冻住 UI 线程，把"脚本少传一个
+            // 参数"变成一个看着像产品退化的 fps 数字
+            for (let i = 0; i < 120; i++) {
+              await sleep(100);
+              const st = await engineStatus().catch(() => null);
+              const v = faceStateOf(st, st?.doc_report?.doc_state ?? null);
+              if (v && pred(v)) return v;
+            }
+            return null;
+          };
+          /** 那一圈脸盒内芯（缩 25%）里有多少格被改动：逐字节判据的计数方式与端到端同源 */
+          const changedIn = (a: Uint8Array | null, b: Uint8Array | null, box: number[] | null) => {
+            if (!a || !b || !box || a.length !== b.length) return -1;
+            const [x0, y0, x1, y1] = box;
+            const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+            const hx = (x1 - x0) / 2 * 0.75, hy = (y1 - y0) / 2 * 0.75;
+            let n = 0;
+            for (let y = 0; y < ph; y++) {
+              for (let x = 0; x < pw; x++) {
+                if (Math.abs(x / pw - cx) > hx || Math.abs(y / ph - cy) > hy) continue;
+                const i = (y * pw + x) * 4;
+                if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) n++;
+              }
+            }
+            return n;
+          };
+          let bad = "";
+          let f1: ReturnType<typeof faceStateOf> = null;
+          let f2: ReturnType<typeof faceStateOf> = null;
+          let f3: ReturnType<typeof faceStateOf> = null;
+          let roster0 = 0, other = -1, dfLit: boolean | null = null;
+          let keptCore = -1, redetectCore = -1, errRefused = "";
+          let rectTakenByEngine = false, rectErrText = "";
+          try {
+            const st0 = await engineStatus().catch(() => null);
+            const f0 = faceStateOf(st0, st0?.doc_report?.doc_state ?? null);
+            roster0 = f0?.faces.length ?? 0;
+            other = f0?.faces.find((x) => x.index !== want)?.index ?? -1;
+            if (!f0 || roster0 <= want || other < 0) {
+              bad = `名单里只有 ${roster0} 个人：这一臂要的是多人夹具（要能关掉一位、留下另一位）`;
+            }
+            if (!bad) {
+              await runFace("select", other);
+              if (!(await waitFace((v) => v.explicit === true && v.index === other))) {
+                bad = `选定人物 ${other} 之后 12s 内没等到 explicit 的 face 状态`;
+              }
+            }
+            if (!bad) {
+              await runDeform("set", { slim_face: 0.6 });
+              for (let i = 0; i < 90; i++) {
+                await sleep(100);
+                const st = await engineStatus().catch(() => null);
+                if (st?.deform?.lit === true) { dfLit = true; break; }
+                dfLit = st?.deform?.lit ?? null;
+              }
+              if (!dfLit) bad = "推了留下那一位的形变而 9s 内没等到 lit=true";
+            }
+            if (!bad) {
+              const errBefore = (await engineStatus().catch(() => null))?.last_error ?? "";
+              const before = await peek();
+              await runFace("disable", want);
+              f1 = await waitFace((v) => (v.manual?.disabled?.length ?? 0) >= 1);
+              if (!f1) bad = "关掉那一只之后 12s 内没等到带人工禁用账的 face 状态";
+              else {
+                const flags = f1.faces.filter((x) => x.index === want).map((x) => !!x.disabled);
+                if (!flags.length || !flags[0]) bad = `被关那一只没标 disabled：${JSON.stringify(f1.faces)}`;
+                if (f1.enabled?.includes(want)) bad = "被关那一只仍出现在可编辑名单里";
+                // 人工账不许把"这一轮分析是多人图"这个原始事实抹掉（SCOPE-001 的 P0 判据读它）
+                if (f1.scope_block !== "multi_face") bad = `禁用抹掉了多人事实：${f1.scope_block}`;
+                const after = await peek();
+                if (before && after && full(before) && full(after)) {
+                  const box = f1.faces.find((x) => x.index === want)?.box ?? null;
+                  keptCore = changedIn(before.pixels, after.pixels, box);
+                  if (keptCore !== 0) bad = `关掉那一只改动了画面（${keptCore} 格）：选人与账不该动像素`;
+                } else bad = "关掉前后不是同一块完整画布，逐格判据没法量";
+              }
+              // 明拒那一条：被禁的那一只不许再被选定，而拒绝必须走得到宿主（error 事件）
+              await runFace("select", want);
+              for (let i = 0; i < 40 && !errRefused; i++) {
+                await sleep(100);
+                const st = await engineStatus().catch(() => null);
+                const e = st?.last_error ?? "";
+                if (e && e !== errBefore && e.includes("已被人工禁用")) errRefused = e;
+              }
+              if (!errRefused) bad = bad || "选定被禁那一只没等到『已被人工禁用』的拒绝到达宿主";
+              // 后台重检测：账要在、画面里那一圈不许出现他的东西
+              const preRedetect = await peek();
+              await runPrecompute({ backend: "mediapipe" });
+              f2 = await waitFace((v) => (v.manual?.disabled?.length ?? 0) >= 1
+                && v.faces.some((x) => x.index === want && x.disabled));
+              if (!f2) bad = bad || "重检测后没等到「那一只仍是关着的」那份状态：静默恢复";
+              const postRedetect = await peek();
+              if (f2 && preRedetect && postRedetect && full(preRedetect) && full(postRedetect)) {
+                const box = f2.faces.find((x) => x.index === want)?.box ?? null;
+                redetectCore = changedIn(preRedetect.pixels, postRedetect.pixels, box);
+                if (redetectCore !== 0) {
+                  bad = `重检测后被禁那一只的内芯动了 ${redetectCore} 格：那层的几何悄悄活了回来`;
+                }
+              } else if (f2) bad = bad || "重检测前后不是同一块完整画布：逐格判据落不了地";
+              // 恢复：账清空才算"人工判断可以被人推翻"
+              await runFace("enable", want);
+              f3 = await waitFace((v) => (v.manual?.disabled?.length ?? 0) === 0);
+              if (!f3) bad = bad || "恢复那一只之后 12s 内账没清空";
+              // rect 这一格必须在装机壳里也走得通：视口 → Rust `face`(rect) → 引擎。上一轮
+              // auto_pick 就是漏在桥那一格（TS 发了，Rust 的签名里没这一项，引擎收到的永远是
+              // 空的）。判据用**两条拒绝文案的差别**，不必再造一张漏检夹具：rect 被桥丢了，引擎
+              // 说的是「face add 要给归一化矩形」；rect 到了而框里已有人，说的是「这一框里已经
+              // 有脸了」。差一句话，正好把丢参数这件事量出来。
+              const errBeforeAdd = (await engineStatus().catch(() => null))?.last_error ?? "";
+              const boxProbe = f3?.faces.find((x) => x.index === other)?.box ?? null;
+              if (!boxProbe) {
+                bad = bad || "补框那一臂没拿到可发的 rect（名单里没有留下那一位的脸盒）";
+              } else {
+                await runFace("add", undefined, boxProbe);
+                for (let i = 0; i < 40 && !rectTakenByEngine; i++) {
+                  await sleep(100);
+                  const e = (await engineStatus().catch(() => null))?.last_error ?? "";
+                  if (e && e !== errBeforeAdd) {
+                    rectErrText = e.slice(0, 140);
+                    rectTakenByEngine = e.includes("已经有脸了");
+                  }
+                }
+                if (!rectTakenByEngine) {
+                  bad = bad || `face add 的 rect 没走到引擎（宿主收到的是「${rectErrText}」）`;
+                }
+              }
+            }
+          } catch (e) { bad = `臂内异常：${e}`; }
+          await report(`M0_MANUAL ${JSON.stringify(bad ? {
+            bad, roster: roster0, keptCore, redetectCore, errRefused: !!errRefused,
+            rectReachedEngine: rectTakenByEngine, rectErr: rectErrText,
+            disabledLedger: f1?.manual?.disabled?.length ?? -1,
+          } : {
+            roster: roster0, kept: other, refused: want,
+            disabledLedger: f3?.manual?.disabled?.length ?? -1,
+            enabledAfterEnable: f3?.enabled?.length ?? -1,
+            scopeBlock: f1?.scope_block ?? null, preview: f1?.manual?.preview ?? "",
+            keptCore, redetectCore, refusedReachedHost: !!errRefused,
+            rectReachedEngine: rectTakenByEngine, rectErr: rectErrText,
+            deformLit: dfLit, canvas: `${pw}x${ph}`,
           })}`);
         }
       }
@@ -2199,6 +2363,29 @@ export default function App() {
     setStrength(strengthRef.current, { channel: c || undefined }).catch((e) => setDragNote(String(e)));
   }
 
+  // 框选补脸：视口那一拖交出归一化框，引擎在这一框上**再跑一次真检测**（不拟合占位点位）。
+  // 拒绝走 error 事件、成功走名单，两边都不在 invoke 的返回值里，所以这里等一小段再取状态：
+  // 否则用户框完只看到"点了没反应"（DoD §3 明确禁止的那件事）
+  const onPickFaceRect = useCallback(async (rect: number[]) => {
+    setPickFace(false);
+    setDragNote(t("face.adding"));
+    const errBefore = (await engineStatus().catch(() => null))?.last_error ?? null;
+    try {
+      await runFace("add", undefined, rect);
+    } catch (e) {
+      setDragNote(String(e));
+      return;
+    }
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      const st = await engineStatus().catch(() => null);
+      const err = st?.last_error ?? null;
+      if (err && err !== errBefore) { setDragNote(err); return; }
+      if ((st?.face?.face?.manual?.added?.length ?? 0) > 0) break;
+    }
+    await refreshStatus();
+  }, [refreshStatus]);
+
   const onStroke = useCallback(
     (rle: number[][], pixels: number) => {
       if (brushMode === "heal") {
@@ -2589,12 +2776,27 @@ export default function App() {
    *  「面板说能点而引擎整条拒」那个 DoD 明确禁止的无响应控件。 */
   const faceOk = !!pc && pc.backend === "mediapipe" && pc.num_landmarks === 478
     && !deformGeomWarn
-    && (faceCount === 1 || (faceCount > 1 && !!faceSt && faceSt.explicit && !faceSt.blocked));
+    // 三条一起才放行：①还剩可编辑的人（关掉唯一那一只之后一个也不剩），②人数与选定那一条
+    // （多人而未选定要挡），③引擎手上真有"那一个人"的脸盒（`faceSt.box`）。只查②会出现
+    // 面板亮着而引擎整条拒——DoD §3 明确禁止的那一形，而它正是人工账新造出来的形状
+    && (faceSt?.enabled?.length ?? faceCount) >= 1
+    && (faceCount === 1 || (faceCount > 1 && !!faceSt && faceSt.explicit && !faceSt.blocked))
+    && !!faceSt && faceSt.box !== null;
+  // 可编辑的人数从引擎那份 `enabled` 读（人工禁用之后它就变了）。这里只读不拼：拼第二份
+  // 就会出现「面板说还要选人而引擎早就放行了」那个双向错配
+  const editable = faceSt?.enabled?.length ?? faceCount;
   const faceWhy = hasImage
-    ? (faceCount > 1 && faceSt?.blocked
-        ? `画面里探到 ${faceCount} 张脸（检测上限探 ${faceSt.max_faces_probed} 张）：`
+    ? ((faceSt?.enabled?.length ?? faceCount) === 0
+        // 人工把名单里的人都关掉了：这不是"没分析"，而是用户说过"这些都不是脸"。
+        // 面板要说的是这一句，而不是退回一句空洞的"需要先跑分析"
+        ? `名单上 ${faceCount} 个人已全部被人工禁用：单脸作用域的面部重塑与眼牙层不再对任何人服务。`
+          + "在上方人物格里点 ↺ 恢复那一只（LNX-PORTRAIT-006）；全图调色、曝光/白平衡、裁剪与磨皮仍可用。"
+        : faceCount > 1 && faceSt?.blocked
+        ? `名单上 ${faceCount} 个人、可编辑的有 ${editable} 个`
+          + `${(faceSt?.disabled_count ?? 0) > 0 ? `（已人工关掉 ${faceSt?.disabled_count} 只）` : ""}：`
           + "本版本不在多人照片里替你选哪一张（SCOPE-001）。先在上方点选要编辑的人物，"
-          + "选好之后这三个滑块就可用（LNX-PORTRAIT-003）；全图调色、曝光/白平衡、裁剪与磨皮仍可用。"
+          + "选好之后这三个滑块就可用（LNX-PORTRAIT-003）；认出那是误检就点 ✕ 关掉它"
+          + "（LNX-PORTRAIT-006）；全图调色、曝光/白平衡、裁剪与磨皮仍可用。"
         : faceCount > 1
           ? `画面里探到 ${faceCount} 张脸：面部重塑只服务你选定的那一张（人物 ${(faceSt?.index ?? 0) + 1}）。`
           : `需要且仅需要一张可用人脸（当前 backend=${pc?.backend ?? "未跑分析"}、点数=${pc?.num_landmarks ?? 0}`
@@ -2894,6 +3096,8 @@ export default function App() {
       <aside className="side">
         <StudioPanel status={status} doc={doc} tasks={tasks} project={project}
                      hasImage={hasImage} exporting={exporting} faceOk={faceOk} faceWhy={faceWhy}
+                     pickFace={pickFace} setPickFace={setPickFace}
+                     faceActions={status?.ready_caps?.face_actions ?? []}
                      note={setDragNote} onDone={refreshStatus}
                      brush={{ on: brushOn, radius: brushRadius, feather, mode: brushMode,
                                onChange: (q) => {
@@ -3654,6 +3858,7 @@ export default function App() {
           glVisible={glVisible}
           chunks={chunks}
           brush={{ on: brushOn && !!status?.image, radius: brushRadius, onStroke }}
+          pick={{ on: pickFace && !!status?.image && !brushOn, onRect: onPickFaceRect }}
           onHud={setHud}
         />
         <div className="hud">

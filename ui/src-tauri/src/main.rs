@@ -1000,20 +1000,29 @@ fn deform(
     Ok(json!({"requested": true}))
 }
 
-/// 多人图选人（PORTRAIT-003）：action list / select（select 要带 index）。
+/// 多人图选人（PORTRAIT-003）与人脸名单的人工账（PORTRAIT-006）：
+/// action list / select / disable / enable / add / remove（前四个要带 index，add 要带 rect）。
 ///
 /// 为什么这条必须由引擎回答而不是前端自己数：SCOPE-001 挡的就是「引擎替你选了一张脸」，
 /// 那放行的凭据必须是用户的一次显式点击，而名单只能来自那一次真实分析。前端数出来的
 /// chip 与引擎能服务的张数一旦不一致，「点了没反应」就再也没人说得清是谁的错。
+///
+/// 动作与 rect 都**不在这层白名单**：引擎是唯一出处（ready 报 `face_actions`）。上一版
+/// 这里少一条 rect，宿主把"用户框的那一张"整条丢掉，前端收到 requested=true 而引擎从没
+/// 见过那条框——桥层静默吞参数是本轮 auto_pick 那次同款事故的形状，所以参数一律转发。
 #[tauri::command]
 fn face(
     state: State<'_, Arc<AppState>>,
     action: String,
     index: Option<u32>,
+    rect: Option<Vec<f64>>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "face", "action": action});
     if let Some(v) = index {
         cmd["index"] = json!(v);
+    }
+    if let Some(v) = rect {
+        cmd["rect"] = json!(v);
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
@@ -1927,6 +1936,10 @@ fn m0_env() -> Value {
         // 只有真窗口能证明 runEnhance → Rust enhance → 引擎 enhance_done 这条签名对得上。
         "auto_enhance": std::env::var("LRT_AUTO_ENHANCE").unwrap_or_default(),
         "auto_face": std::env::var("LRT_AUTO_FACE").unwrap_or_default(),
+        // 人工纠正优先（LNX-PORTRAIT-006）那一臂。上一轮 auto_pick 就是漏在这一行没写：
+        // 脚本传了 env、App.tsx 有臂，而桥不转发，于是那条臂**从没跑过**而外面只知道
+        // "等满了超时"。桥层漏一个键 = 一条臂静静消失，所以这一格必须与 App.tsx 的臂同名
+        "auto_manual": std::env::var("LRT_AUTO_MANUAL").unwrap_or_default(),
         // M4 导出自动通道："<目录>@<格式>@<tile>"（tile 与格式可省）。真窗口跑这一条
         // 才能证明 runExport → Rust export → 引擎 export_done 对得上，而且落盘文件
         // 的尺寸是“满幅不是代理档”的唯一直接证据
