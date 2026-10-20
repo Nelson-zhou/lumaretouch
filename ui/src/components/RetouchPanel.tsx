@@ -121,6 +121,7 @@ export default function RetouchPanel(props: RetouchProps) {
 
   return (
     <div className="retouch">
+      <div className="rtTitle">人像美化</div>
       <Group title="智能磨皮">
         <Slider label="磨皮强度" value={Math.round((doc?.strength ?? 0) * 100)}
                 min={0} max={100} disabled={dim}

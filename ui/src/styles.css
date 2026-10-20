@@ -154,19 +154,19 @@ pre.log { font-size:11px; color:var(--mut); max-height:180px; overflow:auto; bac
 html, body { background:#181818; }
 body { font:13px/1.5 "Noto Sans CJK SC","Source Han Sans SC",system-ui,sans-serif; }
 
-.app { grid-template-columns:1fr 320px; grid-template-rows:52px 1fr; }
-.topbar { grid-column:1 / span 2; grid-row:1; height:52px; padding:0 16px; gap:10px;
+.app { grid-template-columns:1fr 320px; grid-template-rows:48px 1fr; }
+.topbar { grid-column:1 / span 2; grid-row:1; height:48px; padding:0 14px; gap:8px;
   background:#181818; border-bottom:1px solid #242424; font-size:12.5px; }
 .side { grid-column:2; grid-row:2; background:#181818; border-left:1px solid #242424;
-  padding:12px 12px 20px; }
+  padding:10px 10px 14px; }
 .stage { grid-column:1; grid-row:2; background:#181818; }
 .stage canvas { background:#141414; }
 
-.brand { font-size:15px; font-weight:700; letter-spacing:.02em; margin-right:8px; color:#f4f4f4; }
+.brand { font-size:14.5px; font-weight:700; letter-spacing:.02em; margin-right:6px; color:#f4f4f4; }
 .brand::before { content:""; display:inline-block; width:8px; height:8px; border-radius:50%;
   background:var(--acc); margin-right:8px; vertical-align:1px; }
 .topbar .tb { background:#1d1d1d; border:1px solid #303030; color:#e9e9e9;
-  padding:6px 14px; border-radius:6px; font-size:12.5px; }
+  padding:5px 12px; border-radius:6px; font-size:12.5px; }
 .topbar .tb:hover { border-color:#4a4a4a; background:#242424; }
 .topbar .tb.on { border-color:var(--acc); color:var(--acc); background:#26200f; }
 .topbar .tb.primary { background:var(--acc); color:#1a1a1a; border-color:var(--acc); font-weight:700; }
@@ -179,34 +179,39 @@ body { font:13px/1.5 "Noto Sans CJK SC","Source Han Sans SC",system-ui,sans-seri
 .topbar .exportBtn { margin-left:6px; }
 
 /* 底片条：只有缩略图，没有工具条与文字 */
-.gallery { border-top:1px solid #242424; padding:8px 12px; max-height:112px; }
+.gallery { border-top:1px solid #242424; padding:6px 10px; max-height:100px; }
 .strip { display:flex; gap:8px; overflow-x:auto; padding:0 0 2px; }
 .strip::-webkit-scrollbar { height:6px; }
 .strip::-webkit-scrollbar-thumb { background:#333; border-radius:3px; }
 .strip .cell { padding:0; border:1px solid transparent; border-radius:6px; background:#222;
   display:block; }
-.strip .cell img { display:block; max-width:84px; max-height:84px; border-radius:6px; }
+.strip .cell img { display:block; max-width:72px; max-height:72px; border-radius:5px; }
 .strip .cell.on { border-color:#4a4a4a; }
 .strip .cell.sel { outline:2px solid var(--acc); outline-offset:-2px; }
 .strip .cell .ph { display:flex; align-items:center; justify-content:center;
-  width:84px; height:84px; font-size:11px; color:#777; }
+  width:72px; height:72px; font-size:11px; color:#777; }
 .strip .cell.trashed { opacity:.35; }
 
 /* 右侧四栏 */
-.retouch { display:flex; flex-direction:column; gap:10px; }
-.pg { border:none; background:transparent; margin:0; }
+.retouch { display:flex; flex-direction:column; gap:6px; }
+.rtTitle { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600;
+  color:#ededed; padding:2px 2px 8px; }
+.rtTitle::before { content:""; width:3px; height:12px; border-radius:1px;
+  background:var(--acc); }
+.pg { border:1px solid #262626; border-radius:6px; background:#1c1c1c; margin:0; }
 .pg > summary { list-style:none; cursor:pointer; font-size:13px; font-weight:600;
-  color:#ededed; padding:11px 12px; background:#1f1f1f; border-radius:8px;
+  color:#ededed; padding:8px 12px; background:#1f1f1f; border-radius:6px;
   display:flex; align-items:center; justify-content:space-between; }
+.pg[open] > summary { border-radius:6px 6px 0 0; }
 .pg > summary::-webkit-details-marker { display:none; }
 .pg > summary::after { content:"▾"; color:#7a7a7a; font-size:11px; }
 .pg:not([open]) > summary::after { content:"▸"; }
-.pgBody { padding:14px 12px 16px; background:#1b1b1b; border-radius:0 0 8px 8px;
+.pgBody { padding:8px 12px 10px; background:#1c1c1c; border-radius:0 0 6px 6px;
   margin-top:1px; }
-.pslider { margin-bottom:14px; }
+.pslider { margin-bottom:8px; }
 .pslider:last-child { margin-bottom:0; }
 .pslider .prow { display:flex; justify-content:space-between; align-items:baseline;
-  margin-bottom:6px; }
+  margin-bottom:3px; }
 .pslider .plabel { font-size:12px; color:#d8d8d8; }
 .pslider .pval { font-size:12px; color:var(--acc); font-variant-numeric:tabular-nums; }
 .pslider.off { opacity:.42; }
@@ -216,7 +221,7 @@ body { font:13px/1.5 "Noto Sans CJK SC","Source Han Sans SC",system-ui,sans-seri
   width:14px; height:14px; border-radius:50%; background:var(--acc);
   border:2px solid #181818; box-shadow:0 0 0 1px #4a4a4a; cursor:pointer; }
 .pslider input[type="range"]:disabled::-webkit-slider-thumb { background:#666; }
-.presets { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+.presets { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 .chip { background:#232323; border:1px solid #333; color:#ddd; border-radius:14px;
   padding:5px 12px; font-size:12px; }
 .chip:hover { border-color:#555; }
