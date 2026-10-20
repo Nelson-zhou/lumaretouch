@@ -31,6 +31,12 @@
 - 能力/性能边界**如实标注为待测**：真实"无 GPU 裸机安装 + 端到端 UI + 全尺寸性能曲线"本轮**未运行**
   （需要一台真无 GPU 的环境与授权）；本 ADR 只记录已证的运行正确性与单点耗时，不据此给出 SLA 或
   "任意机器可流畅"的结论。
+- **安装层（本轮补正）**：此前 `setup-runtime.sh` 按决策 10 只装 GPU 变体、无 GPU 机器直接 `exit 1`——
+  即 P0② 要的"无 GPU 可安装"当时**并未满足**（本 ADR 早先只证了 code 层 cuda→cpu 运行回退，未覆盖
+  “安装”这一层，此处更正）。现补上显式 opt-in 的无 GPU 安装路径：`engine/requirements-cpu.txt` +
+  `setup-runtime.sh --variant cpu`（auto/rocm/cuda 默认行为不变，探测到 AMD/NVIDIA 仍装 GPU；不把
+  静默 CPU 回落当默认，与决策 10 不冲突）。该安装路径的**实际装机与全尺寸性能曲线仍需在真无 GPU
+  裸机上首跑回填**（与 requirements-cuda.txt “N 卡未实测”同口径），未在此冒充“装机验收通过”。
 
 ## 后果
 

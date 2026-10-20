@@ -21,6 +21,12 @@ mkdir -p "$rt"
 cp "$here/../packaging/setup-runtime.sh" "$stage/setup-runtime.sh"
 chmod +x "$stage/setup-runtime.sh"
 cp "$here/../engine/requirements-rocm.txt" "$here/../engine/requirements-cuda.txt" "$rt/"
+# requirements-cpu.txt 随包（手册 P0 首版②：无 GPU 也能安装的路径）。setup-runtime.sh
+# --variant cpu 是一条显式 opt-in 降级路径，它得在**没有仓库的装机机**上真能跑——清单只躺在
+# engine/ 目录里等于这条路径形同虚设（装机后 runtime 目录里没有 cpu 清单，--variant cpu 直接
+# "× 清单不存在"）。这与上面 GPU 清单随包是同一条理由，不改变 auto/rocm/cuda 的默认探测
+# （决策 10 仍禁止静默 CPU 回落；边界见 docs/adr/0022）。check-release.sh ④ 会反向查这份在不在。
+cp "$here/../engine/requirements-cpu.txt" "$rt/"
 # 人脸关键点清单**从 2026-10-18 起随包**（ADR-0002 推翻旧的“不进包”）：总工已放行
 # 非商业定位下的 Apache-2.0 权重与 mediapipe 运行时，而 setup-runtime.sh 要拿这份清单
 # 才能装上面部重塑。旧注释说的“审计未放行”不是没有审计——那棵 16 包的许可逐包列在

@@ -49,7 +49,8 @@ usage() {
   cat <<'TXT'
 用法：packaging/setup-runtime.sh [选项]
 
-  --variant auto|rocm|cuda   引擎 GPU 变体（默认 auto：按 PCI 厂商探测）
+  --variant auto|rocm|cuda|cpu  引擎变体（默认 auto：按 PCI 厂商探测装 GPU；cpu 是无 GPU 的显式降级
+                              路径，帧率受限，能力/性能边界见 docs/adr/0022，非静默回落）
   --prefix DIR               运行时安装位置（默认 用户级 XDG_DATA_HOME/LumaRetouch/engine/venv）
   --system                   装到系统级 /usr/lib/LumaRetouch/engine/venv（需 root）
   --engine-src DIR           自检时用的引擎源码目录（默认自动找：仓库 engine/src → 装机资源目录）
@@ -92,21 +93,22 @@ detect_vendors() {
 }
 
 vendors=$(detect_vendors || true)
-if [ -z "$vendors" ]; then
+# 厂商探测只服务 auto；显式 --variant rocm|cuda|cpu 一律绕过探测，按用户点名的变体装。
+if [ "$variant" != auto ]; then
+  :
+elif [ -z "$vendors" ]; then
   echo "× sysfs 里没找到任何显示控制器（class 0x03xxxx），无法判定 GPU 厂商"
-  echo "  显式指定变体可绕过探测：--variant rocm 或 --variant cuda"
+  echo "  显式指定变体可绕过探测：--variant rocm / cuda；确需无 GPU 路径用 --variant cpu（性能受限，见 ADR-0022）"
   exit 1
-fi
-echo "→ 探测到显示控制器厂商：$(echo "$vendors" | tr '\n' ' ')"
-
-if [ "$variant" = auto ]; then
+else
+  echo "→ 探测到显示控制器厂商：$(echo "$vendors" | tr '\n' ' ')"
   if echo "$vendors" | grep -q '^0x1002$'; then
     variant=rocm
   elif echo "$vendors" | grep -q '^0x10de$'; then
     variant=cuda
   else
     echo "× 既不是 AMD（0x1002）也不是 NVIDIA（0x10de）的显卡；不猜变体"
-    echo "  要求 CPU 变体请显式说明——本脚本不提供没跑过的安装路径"
+    echo "  要无 GPU 路径请显式 --variant cpu（本脚本不把没跑过的路径当默认，也不静默回落 CPU）"
     exit 1
   fi
 fi
@@ -127,6 +129,11 @@ fi
 # 的 CI 回填）。让它跟 ROCm 一样"直接开装"等于替用户装一套没解析过的依赖图。
 if [ "$variant" = cuda ]; then
   echo "  注意：CUDA 变体的精确 pin 尚未在任何 N 卡上实测（见清单头注释）。"
+fi
+
+if [ "$variant" = cpu ]; then
+  echo "  注意：CPU 是无 GPU 的显式降级路径（手册 P0②）。常驻精修管线在 CPU 上帧率显著低于 GPU，"
+  echo "        仅可用、非流畅；能力/性能边界见 docs/adr/0022-…md，精确 pin 待无 GPU 裸机实测回填。"
 fi
 
 # ---------------------------------------------------------------- 安装位置
@@ -151,8 +158,8 @@ fi
 # 自检跑的是引擎真正的 import 链，不是"torch 能不能 import"：server.py 一路会拉
 # vram/ops/guided 等模块，缺哪个包、哪个符号在这里就露出来了。
 selfcheck() {
-  PYTHONPATH="$engine_src" "$pybin" - <<'PY'
-import sys, json
+  LRT_VARIANT="$variant" PYTHONPATH="$engine_src" "$pybin" - <<'PY'
+import sys, json, os
 import numpy, PIL
 import torch
 import lumaretouch_engine.server as _server   # 真正的 import 链
@@ -187,9 +194,12 @@ try:
 except Exception as _e:
     info["face_backend"] = f"error: {type(_e).__name__}: {_e}"
 print("LRT_RUNTIME_SELFCHK " + json.dumps(info, ensure_ascii=False))
-if not info["gpu_available"]:
+_variant = os.environ.get("LRT_VARIANT", "auto")
+if _variant != "cpu" and not info["gpu_available"]:
     print("× torch 报告没有可用 GPU 设备", file=sys.stderr)
     sys.exit(3)
+if _variant == "cpu":
+    print("  （CPU 变体：按无 GPU 路径自检，gpu_available=False 属预期）", file=sys.stderr)
 PY
 }
 
@@ -205,7 +215,7 @@ if [ "$dry" = 1 ]; then
   cat <<TXT
 --dry-run，未动磁盘。将执行：
   1) 建 venv     $(command -v uv >/dev/null && echo "uv venv --seed --python 3.12 $prefix" || echo "python3 -m venv $prefix")
-  2) 装 GPU 轮子 $(command -v uv >/dev/null && echo "uv pip install --python $pybin ${index:+--index-url $index }-r $eff_req" || echo "$pybin -m pip install -r $eff_req")
+  2) 装 torch 轮子 $(command -v uv >/dev/null && echo "uv pip install --python $pybin ${index:+--index-url $index }-r $eff_req" || echo "$pybin -m pip install -r $eff_req")
   3) 装引擎依赖  $(command -v uv >/dev/null && echo "uv pip install --python $pybin 'numpy>=2.0' 'pillow>=11'" || echo "$pybin -m pip install 'numpy>=2.0' 'pillow>=11'")
   4) 自检        PYTHONPATH=$engine_src $pybin -c 'import lumaretouch_engine.server'
 TXT

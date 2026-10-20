@@ -1,0 +1,24 @@
+# 无 GPU / CPU 引擎变体（手册 P0 首版验收项②：提供无 GPU 也能安装、可运行的路径）
+#
+# 这是决策 10「默认按显卡装 GPU 轮子、不做静默 CPU 回落」之外的一条**显式 opt-in** 路径：
+# 只有 `--variant cpu` 才走这里；auto/rocm/cuda 的默认行为一个字都不变，探测到 AMD/NVIDIA
+# 仍装对应 GPU 变体。提供这条路径本身是 P0② 的要求（"明确该路径的性能与能力边界"），
+# 它不是把 GPU 变体悄悄换成 CPU——那条静默回落仍被 preflight/决策 10 明确禁止。
+#
+# 能力/性能边界（务必让用户知道，见 docs/adr/0022-no-gpu-run-path-capability-and-perf-boundary.md）：
+# 常驻精修管线整个建立在 torch 之上。CPU 上帧率显著低于 GPU——本机 512×640 实测：首帧滤波
+# ~106 ms（含一次性建缓存），缓存命中后混合+量化 ~1.6 ms/帧；满幅分块出片更慢。这是"可用、
+# 能出正确结果、但不流畅"的降级路径，不是与 GPU 等体验。AI 类后端（人脸关键点/抠图/超分）在
+# 无 GPU 机器上仍可走 CPU 但更慢；缺权重/依赖时报"这一档不可用"，不静默换一张图。
+#
+# 精确 pin 尚未在无 GPU 裸机上实测：本机有 GPU，只验证过 code 层 cuda→cpu 运行回退
+# （engine/tests/test_no_gpu_path.py），这条"装"的路径需在真无 GPU 环境首次解析后回填——
+# 与 requirements-cuda.txt 的"N 卡未实测"是同一条诚实口径，不拿"代码能跑"冒充"装机验收通过"。
+--index-url https://download.pytorch.org/whl/cpu
+torch>=2.6
+torchvision>=0.21
+
+# 装法（无 GPU 机器上）：
+#   python3 -m venv ~/.venvs/lumaretouch-cpu && ~/.venvs/lumaretouch-cpu/bin/pip install -r engine/requirements-cpu.txt
+#   bash packaging/setup-runtime.sh --variant cpu --engine-src "$PWD/engine/src"   # 显式无 GPU 路径
+#   LRT_ENGINE_PY=~/.venvs/lumaretouch-cpu/bin/python bash packaging/preflight.sh

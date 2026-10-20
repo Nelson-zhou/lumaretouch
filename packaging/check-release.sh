@@ -64,7 +64,10 @@ if [ -n "$junk" ]; then
 else
   good "暂存目录零字节码（发布物里不该有别人机器上的 .pyc）"
 fi
-for f in setup-runtime.sh runtime/requirements-rocm.txt runtime/requirements-cuda.txt runtime/VERSION; do
+# requirements-cpu.txt 是手册 P0 首版②那条无 GPU 显式安装路径（--variant cpu）的清单：装机后
+# runtime 目录里必须有它，否则 --variant cpu 报“清单不存在”——这条路径就在真无 GPU 机器上
+# 断掉。与 rocm/cuda 同档，纳入必在硬门禁（反向：谁把 stage-engine.sh 里的 cp 删了这里就红）。
+for f in setup-runtime.sh runtime/requirements-rocm.txt runtime/requirements-cuda.txt runtime/requirements-cpu.txt runtime/VERSION; do
   if [ -f "$stage/$f" ]; then
     good "随包文件在位：$f"
   else
