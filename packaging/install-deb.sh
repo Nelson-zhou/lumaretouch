@@ -57,7 +57,10 @@ markers=("$@")
 # 连 ops/enhance.py 都没有，命中 0 就说明装的还是上一轮）。同时保住 ANCHORS_BY_KIND
 # （形变方向约定那一修）与 pick_sensitivities（挑图那一臂）——三个里程碑都在这一版里，
 # 只卡一条会漏；名单里每一格都必须是**这一版真的带着**的符号，不是"历史上出现过"。
-if [ ${#markers[@]} -eq 0 ]; then markers=(enhance_subs SCLERA_S_OF_IRIS ANCHORS_BY_KIND pick_sensitivities); fi
+# 1.9.0 推到本轮：`face_actions` 是人工账四条动作的单一出处（旧包里没这一格），
+# `MANUAL_IOU_MIN` 是"按 IoU 认人"那条决定落进代码的名字——换检测模型时人工纠正还认得回
+# 人，靠的就是它；装机的引擎文件里没有这两个符号，说明这一轮的引擎没进包。
+if [ ${#markers[@]} -eq 0 ]; then markers=(enhance_subs SCLERA_S_OF_IRIS ANCHORS_BY_KIND pick_sensitivities face_actions MANUAL_IOU_MIN detect_region); fi
 for marker in "${markers[@]}"; do
   if grep -rq "$marker" "$installed"; then
     echo "✓ 装机代码含本轮特征标记 '$marker'"
@@ -90,7 +93,15 @@ echo "✓ /usr/bin/lumaretouch 与包内逐字节一致"
 # 名单而不是单格：1.6.0 那一轮 m5 第 7 臂撞上的正是"壳里没有 LRT_AUTO_PICK 这一格"
 # （前端 M0Env 声明了、宿主 json! 少返回一个键，TS 与 cargo 两边全绿而那条臂静默不点火）。
 # 装机壳里搜得到这个 env 名，才说明宿主桥真的带着这一格进了包。
-ui_markers=(${UI_MARKER:-LRT_AUTO_ENHANCE LRT_AUTO_FACE LRT_AUTO_PICK})
+# LRT_AUTO_MANUAL 是第 9 臂的那一格桥接：上一轮 auto_pick 漏在桥上（脚本传了 env、
+# App 有臂，而桥不转发 → 那条臂从没跑过），所以每个臂名都要在装机壳里逐字节核到
+# 这一格只认 `LRT_AUTO_*` 这类**独立字符串常量**：实测路由器里的事件名（bg_done、
+# lut_done、face_selected、enhance_done…）在装机壳里 grep 一律读不出来——链接器把
+# .rodata 的字面量合并成池，连续字节位置不保。所以"match 臂被削掉"这件事不能拿装机
+# 二进制当判据（那是一条会假红的判据），它由两处钉住：源码级守卫
+# `test_face_manual.py::test_every_host_slot_writer_has_a_router_arm`，与装机真窗口
+# 那几条臂本身（通道死了就是静默超时，本轮 7/8 两臂就是这么红的）。
+ui_markers=(${UI_MARKER:-LRT_AUTO_ENHANCE LRT_AUTO_MANUAL LRT_AUTO_FACE LRT_AUTO_PICK})
 ui_bad=0
 for ui_marker in "${ui_markers[@]}"; do
   if [ "$(grep -ac "$ui_marker" /usr/bin/lumaretouch)" -gt 0 ]; then

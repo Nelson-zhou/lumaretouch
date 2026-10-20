@@ -11,6 +11,10 @@
 # M9 起再加第 8 臂（眼牙增强 LNX-PORTRAIT-009，单独一个露齿夹具的窗口）：这一层
 # 的"只在自己那只窗口里逐点乘加"与"关掉就回出厂帧"只能拿用户看见的那一帧量。
 #
+# M10 起再加第 9 臂（人工纠正优先 LNX-PORTRAIT-006，单独一个多人夹具的窗口）：这一臂量的是
+# "关掉的那一位跨重检测不复活"与"拒绝走到宿主"——两件事都在 视口→桥→引擎→状态槽位 这条链的
+# 交接面上，裸引擎用例一个字也碰不到（第 7 臂 auto_pick 那次静默漏桥就是教训）。
+#
 # M8 起这一轮把 M6/M7 也接进来跑（换底六臂 + 2× 出片），理由不是凑数：装机件里
 # "ready 报没报 matting_backends / upscale_backends"与"换底、放大递到落盘那一路对不对"
 # 只有裸环境的真窗口能量；开发 env 里跑绿了，说明不了这包在别人机器上一样绿。
@@ -33,6 +37,16 @@ want_prefix="/LumaRetouch/engine/venv/bin/python"
 # 出片臂的落盘目录：每轮清干净，校验时拿磁盘上的 IHDR 与引擎报回的尺寸对账
 outdir=/tmp/lrt-release-export.$$
 want_secs=900                      # 这轮要多跑换底与 2× 出片，预算从 200 s 提到 450 s
+# XAUTHORITY 不许写死后缀：`.mutter-Xwaylandauth.XXXXXX` 是每次登录重新生成的随机名，
+# 上一版把 OJ5EX3 写死在六条臂里，换新会话后那六条臂的失败模式是“窗口起不来 + 日志
+# 零字节”——比直接报错难读得多。解析顺序：环境里已有的（还在）→ /run/user/<uid> 下最
+# 新那一个 → 都没有就不设这个变量，让 Xlib 走它自己的默认查找。
+xauth=${XAUTHORITY:-}
+if [ -z "$xauth" ] || [ ! -e "$xauth" ]; then
+  xauth=$(ls -t /run/user/"$(id -u)"/.mutter-Xwaylandauth.* 2>/dev/null | head -1)
+fi
+xauth_args=()
+[ -n "$xauth" ] && xauth_args=("XAUTHORITY=$xauth")
 
 pass=0; fail=0
 ok()   { echo "  ✓ $1"; pass=$((pass + 1)); }
@@ -116,7 +130,7 @@ else
   sleep 1
   rm -rf "$outdir"; mkdir -p "$outdir"
   env "${unset_args[@]}" -u XDG_DATA_HOME \
-      DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-/run/user/$(id -u)/.mutter-Xwaylandauth.OJ5EX3}" \
+      DISPLAY="${DISPLAY:-:0}" "${xauth_args[@]}" \
       GDK_BACKEND=x11 HOME="$HOME" USER="$USER" PATH="$PATH" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
       LRT_LOAD_IMAGE="$fixture" LRT_MAX_PX=207360 \
       LRT_PRECOMPUTE=mediapipe LRT_PRECOMPUTE_CHANNEL=skin LRT_AUTO_DEFORM=0.35:0.25:0.2 \
@@ -125,8 +139,13 @@ else
       LRT_AUTO_LOCAL_COLOR=0.5:0.42:36:0.006:-0.14:0.05 \
       /usr/bin/lumaretouch > "$log" 2>&1 &
   win=$!
+  wait_from=$SECONDS
   got=0
   for _ in $(seq 1 $((want_secs * 2))); do
+    # 空日志不是「还没跑到」，而是「根本没跑起来」：装机壳一个字也没报（前端首屏
+    # 崩了、或引擎从没被 spawn）时，等满 want_secs 只会得到一句「没跑完」——本轮
+    # 那次白屏就是这么被藏了 15 分钟。45 s 还零字节就单独判红，并把这条区别说出来。
+    if [ $((SECONDS - wait_from)) -ge 45 ] && [ ! -s "$log" ]; then got=3; break; fi
     sleep 0.5
     # 等到 M0_RELEASE + 一个终局：M0_STATS（跑通了）或 M0_ERROR（引擎没起来/图没解）。
     # 只等 M0_STATS 的话，运行时缺包那一种会白等 200 s 然后报“没跑完”——而那种情形
@@ -139,7 +158,7 @@ else
   sleep 2
   kill $win 2>/dev/null; wait $win 2>/dev/null
   if [ "$got" != 1 ]; then
-    no "真窗口没跑完（$([ "$got" = 2 ] && echo '进程提前退出' || echo "$want_secs s 内没等到 M0_RELEASE/M0_STATS")）；日志尾部："
+    no "真窗口没跑完（$( if [ "$got" = 2 ]; then echo '进程提前退出'; elif [ "$got" = 3 ]; then echo '45 s 内装机壳一个字也没报（前端首屏崩了，或引擎从没被 spawn）'; else echo "$want_secs s 内没等到 M0_RELEASE/M0_STATS"; fi )）；日志尾部："
     tail -12 "$log" | sed 's/^/      /'
   else
   ok "装机壳在裸环境里跑到了报账（日志：$log）"
@@ -362,7 +381,7 @@ else
   sleep 1
   rm -rf "$doutdir"; mkdir -p "$doutdir"
   env "${unset_args[@]}" -u XDG_DATA_HOME \
-      DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-/run/user/$(id -u)/.mutter-Xwaylandauth.OJ5EX3}" \
+      DISPLAY="${DISPLAY:-:0}" "${xauth_args[@]}" \
       GDK_BACKEND=x11 HOME="$HOME" USER="$USER" PATH="$PATH" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
       LRT_LOAD_IMAGE="$dng" LRT_MAX_PX=207360 \
       LRT_PRECOMPUTE=mediapipe LRT_PRECOMPUTE_CHANNEL=skin LRT_AUTO_DEFORM=0.3:0.2:0.1 \
@@ -370,8 +389,13 @@ else
       LRT_AUTO_EXPORT="$doutdir@png@512" \
       /usr/bin/lumaretouch > "$dlog" 2>&1 &
   dwin=$!
+  wait_from=$SECONDS
   dgot=0
   for _ in $(seq 1 $((want_secs * 2))); do
+    # 空日志不是「还没跑到」，而是「根本没跑起来」：装机壳一个字也没报（前端首屏
+    # 崩了、或引擎从没被 spawn）时，等满 want_secs 只会得到一句「没跑完」——本轮
+    # 那次白屏就是这么被藏了 15 分钟。45 s 还零字节就单独判红，并把这条区别说出来。
+    if [ $((SECONDS - wait_from)) -ge 45 ] && [ ! -s "$dlog" ]; then dgot=3; break; fi
     sleep 0.5
     if grep -aq 'M0_RELEASE' "$dlog" && { grep -aq 'M0_EXPORT' "$dlog" || grep -aq 'M0_ERROR' "$dlog"; }; then
       dgot=1; break
@@ -381,7 +405,7 @@ else
   sleep 2
   kill $dwin 2>/dev/null; wait $dwin 2>/dev/null
   if [ "$dgot" != 1 ]; then
-    no "DNG 真窗口没跑完（$([ "$dgot" = 2 ] && echo '进程提前退出' || echo '超时')）；日志尾部："
+    no "DNG 真窗口没跑完（$( if [ "$dgot" = 2 ]; then echo '进程提前退出'; elif [ "$dgot" = 3 ]; then echo '45 s 内装机壳一个字也没报（前端首屏崩了，或引擎从没被 spawn）'; else echo '超时'; fi )）；日志尾部："
     tail -10 "$dlog" | sed 's/^/      /'
     else
       ok "装机壳跑通了 DNG 那一臂（日志：$dlog，源幅 ${dwidth}×${dheight}）"
@@ -475,15 +499,20 @@ else
   pkill -f '/usr/bin/lumaretouch' 2>/dev/null || true
   sleep 1
   env "${unset_args[@]}" -u XDG_DATA_HOME \
-      DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-/run/user/$(id -u)/.mutter-Xwaylandauth.OJ5EX3}" \
+      DISPLAY="${DISPLAY:-:0}" "${xauth_args[@]}" \
       GDK_BACKEND=x11 HOME="$HOME" USER="$USER" PATH="$PATH" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
       LRT_LOAD_IMAGE="$dual" LRT_MAX_PX=207360 \
       LRT_PRECOMPUTE=mediapipe LRT_AUTO_FACE=1 LRT_AUTO_RELEASE=1 \
       LRT_AUTO_BENCH=700x420:60:16.6:image_stream \
       /usr/bin/lumaretouch > "$flog" 2>&1 &
   fwin=$!
+  wait_from=$SECONDS
   fgot=0
   for _ in $(seq 1 $((want_secs * 2))); do
+    # 空日志不是「还没跑到」，而是「根本没跑起来」：装机壳一个字也没报（前端首屏
+    # 崩了、或引擎从没被 spawn）时，等满 want_secs 只会得到一句「没跑完」——本轮
+    # 那次白屏就是这么被藏了 15 分钟。45 s 还零字节就单独判红，并把这条区别说出来。
+    if [ $((SECONDS - wait_from)) -ge 45 ] && [ ! -s "$flog" ]; then fgot=3; break; fi
     sleep 0.5
     # 等到**层级那一臂**报出来才算跑完：M0_LAYER 紧跟在 M0_FACE 后面发，
     # 只等 M0_FACE 会在层级还没落笔时就把窗口杀掉，第 6 臂就变成"没有日志可读"
@@ -493,7 +522,7 @@ else
   sleep 2
   kill $fwin 2>/dev/null; wait $fwin 2>/dev/null
   if [ "$fgot" != 1 ]; then
-    no "分人编辑真窗口没跑完（$([ "$fgot" = 2 ] && echo '进程提前退出' || echo '超时')）；日志尾部："
+    no "分人编辑真窗口没跑完（$( if [ "$fgot" = 2 ]; then echo '进程提前退出'; elif [ "$fgot" = 3 ]; then echo '45 s 内装机壳一个字也没报（前端首屏崩了，或引擎从没被 spawn）'; else echo '超时'; fi )）；日志尾部："
     tail -10 "$flog" | sed 's/^/      /'
   else
     ok "装机壳跑到了分人编辑那一臂（日志：$flog）"
@@ -630,7 +659,7 @@ else
     pkill -f '/usr/bin/lumaretouch' 2>/dev/null || true
     sleep 1
     env "${unset_args[@]}" -u XDG_DATA_HOME \
-        DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-/run/user/$(id -u)/.mutter-Xwaylandauth.OJ5EX3}" \
+        DISPLAY="${DISPLAY:-:0}" "${xauth_args[@]}" \
         GDK_BACKEND=x11 HOME="$HOME" USER="$USER" PATH="$PATH" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
         LRT_AUTO_FILMSTRIP="$pickset" LRT_MAX_PX=207360 \
         LRT_AUTO_PICK=standard/standard/standard/strong LRT_AUTO_RELEASE=1 \
@@ -652,8 +681,13 @@ else
       pgot=3
     else
       ok "窗口过了那道门（M0_RELEASE 已报），挑图那一臂真在跑"
+      wait_from=$SECONDS
       pgot=0
       for _ in $(seq 1 $((want_secs * 4))); do
+      # 空日志不是「还没跑到」，而是「根本没跑起来」：装机壳一个字也没报（前端首屏
+      # 崩了、或引擎从没被 spawn）时，等满 want_secs 只会得到一句「没跑完」——本轮
+      # 那次白屏就是这么被藏了 15 分钟。45 s 还零字节就单独判红，并把这条区别说出来。
+      if [ $((SECONDS - wait_from)) -ge 45 ] && [ ! -s "$plog" ]; then pgot=3; break; fi
         sleep 0.5
         if grep -aq 'M0_PICK_RESULT' "$plog" || grep -aq 'M0_ERROR' "$plog"; then pgot=1; break; fi
         kill -0 $pwin 2>/dev/null || { pgot=2; break; }
@@ -665,7 +699,7 @@ else
     if [ "$pgot" = 3 ]; then
       :   # 门上已经记过一次不过，这里不重复计账（一次缺陷一条红，账单才不会虚高）
     elif [ "$pgot" != 1 ]; then
-      no "挑图真窗口没跑完（$([ "$pgot" = 2 ] && echo '进程提前退出' || echo '超时')）；日志尾部："
+      no "挑图真窗口没跑完（$( if [ "$pgot" = 2 ]; then echo '进程提前退出'; elif [ "$pgot" = 3 ]; then echo '45 s 内装机壳一个字也没报（前端首屏崩了，或引擎从没被 spawn）'; else echo '超时'; fi )）；日志尾部："
       tail -10 "$plog" | sed 's/^/      /'
     else
       ok "装机壳跑到了挑图那一臂（日志：$plog）"
@@ -745,15 +779,20 @@ else
   pkill -f '/usr/bin/lumaretouch' 2>/dev/null || true
   sleep 1
   env "${unset_args[@]}" -u XDG_DATA_HOME \
-      DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-/run/user/$(id -u)/.mutter-Xwaylandauth.OJ5EX3}" \
+      DISPLAY="${DISPLAY:-:0}" "${xauth_args[@]}" \
       GDK_BACKEND=x11 HOME="$HOME" USER="$USER" PATH="$PATH" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
       LRT_LOAD_IMAGE="$smile" LRT_MAX_PX=207360 \
       LRT_PRECOMPUTE=mediapipe LRT_AUTO_ENHANCE=0.6:0.5:0.7 LRT_AUTO_RELEASE=1 \
       LRT_AUTO_BENCH=700x420:60:16.6:image_stream \
       /usr/bin/lumaretouch > "$elog" 2>&1 &
   ewin=$!
+  wait_from=$SECONDS
   egot=0
   for _ in $(seq 1 $((want_secs * 2))); do
+    # 空日志不是「还没跑到」，而是「根本没跑起来」：装机壳一个字也没报（前端首屏
+    # 崩了、或引擎从没被 spawn）时，等满 want_secs 只会得到一句「没跑完」——本轮
+    # 那次白屏就是这么被藏了 15 分钟。45 s 还零字节就单独判红，并把这条区别说出来。
+    if [ $((SECONDS - wait_from)) -ge 45 ] && [ ! -s "$elog" ]; then egot=3; break; fi
     sleep 0.5
     # 等到 M0_ENHANCE 才算跑完：那一臂是 set → 逐格比 → clear → 逐格比 才报一次，
     # 只等 enhance_done 会在"关掉那层"之前就把窗口杀掉，回出厂帧那一条就没账可读
@@ -763,7 +802,7 @@ else
   sleep 2
   kill $ewin 2>/dev/null; wait $ewin 2>/dev/null
   if [ "$egot" != 1 ]; then
-    no "眼牙真窗口没跑完（$([ "$egot" = 2 ] && echo '进程提前退出' || echo '超时')）；日志尾部："
+    no "眼牙真窗口没跑完（$( if [ "$egot" = 2 ]; then echo '进程提前退出'; elif [ "$egot" = 3 ]; then echo '45 s 内装机壳一个字也没报（前端首屏崩了，或引擎从没被 spawn）'; else echo '超时'; fi )）；日志尾部："
     tail -10 "$elog" | sed 's/^/      /'
   else
     ok "装机壳跑到了眼牙那一臂（日志：$elog）"
@@ -823,6 +862,90 @@ else:
         f"这一层每帧有真计时且留在帧预算内：enhance_ms={ms}（0<x<60）")
     chk(en.get("device") == want_dev,
         f"会话建在这台机器 torch 真认的那块设备上：{en.get('device')}（期望 {want_dev}）")
+sys.exit(1 if fails else 0)
+PY
+    if [ $? -ne 0 ]; then fail=$((fail + 1)); else pass=$((pass + 1)); fi
+  fi
+fi
+
+echo "── 9. 人工纠正那一臂：关掉的那一位跨重检测不复活，拒绝走到宿主（LNX-PORTRAIT-006）"
+# 库层 20 条与端到端 2 条连的是裸引擎；这一臂证的是同一份账走完 视口 → Rust `face`
+# → 引擎 → 宿主 `status.face` 这四层之后仍是那一条，并且"被禁那一只不得在重检测后的
+# 那一帧上重新出现"能量在用户看见的那一帧上。上一轮 auto_pick 就是漏在桥那一格（静默）。
+# 输入用**多人夹具**（有 sha256 台账）：单人图没有"关掉一位、留下另一位"这回事。
+dual=$repo/engine/tests/fixtures/portrait-dual-1570x950.jpg
+if [ ! -f "$dual" ]; then
+  no "缺多人夹具：$dual（先跑 packaging/make-test-dual-portrait.py）"
+else
+  mlog=/tmp/m5-release-manual.$$.log
+  pkill -f '/usr/bin/lumaretouch' 2>/dev/null || true
+  sleep 1
+  env "${unset_args[@]}" -u XDG_DATA_HOME \
+      DISPLAY="${DISPLAY:-:0}" "${xauth_args[@]}" \
+      GDK_BACKEND=x11 HOME="$HOME" USER="$USER" PATH="$PATH" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
+      LRT_LOAD_IMAGE="$dual" LRT_MAX_PX=207360 \
+      LRT_PRECOMPUTE=mediapipe LRT_AUTO_MANUAL=1 LRT_AUTO_RELEASE=1 \
+      LRT_AUTO_BENCH=700x420:60:16.6:image_stream \
+      /usr/bin/lumaretouch > "$mlog" 2>&1 &
+  mwin=$!
+  wait_from=$SECONDS
+  mgot=0
+  for _ in $(seq 1 $((want_secs * 2))); do
+    # 空日志不是「还没跑到」，而是「根本没跑起来」：装机壳一个字也没报（前端首屏
+    # 崩了、或引擎从没被 spawn）时，等满 want_secs 只会得到一句「没跑完」——本轮
+    # 那次白屏就是这么被藏了 15 分钟。45 s 还零字节就单独判红，并把这条区别说出来。
+    if [ $((SECONDS - wait_from)) -ge 45 ] && [ ! -s "$mlog" ]; then mgot=3; break; fi
+    sleep 0.5
+    # 等到 M0_MANUAL 才算跑完：那一臂是 选定 → 推形变 → 关掉 → 拒绝 → 重检测 → 恢复
+    # 才报一次，中途杀掉就只剩半条账（而"重检测不复活"那一问恰恰在后半段）
+    if grep -aq 'M0_MANUAL' "$mlog" || grep -aq 'M0_ERROR' "$mlog"; then mgot=1; break; fi
+    kill -0 $mwin 2>/dev/null || { mgot=2; break; }
+  done
+  sleep 2
+  kill $mwin 2>/dev/null; wait $mwin 2>/dev/null
+  if [ "$mgot" != 1 ]; then
+    no "人工纠正真窗口没跑完（$( if [ "$mgot" = 2 ]; then echo '进程提前退出'; elif [ "$mgot" = 3 ]; then echo '45 s 内装机壳一个字也没报（前端首屏崩了，或引擎从没被 spawn）'; else echo '超时'; fi )）；日志尾部："
+    tail -10 "$mlog" | sed 's/^/      /'
+  else
+    ok "装机壳跑到了人工纠正那一臂（日志：$mlog）"
+    python3 - "$mlog" <<'PY'
+import json, re, sys
+raw = open(sys.argv[1], "rb").read().decode("utf-8", "replace")
+fails = []
+def chk(cond, msg):
+    print(("  ✓ " if cond else "  × ") + msg)
+    if not cond:
+        fails.append(msg)
+hits = re.findall(r'M0_MANUAL (\{[^\n]*\})', raw)
+chk(bool(hits), "日志里有 M0_MANUAL：人工纠正那一臂在装机壳里跑了")
+if not hits:
+    err = re.findall(r'M0_ERROR ([^\n]*)', raw)
+    chk(False, f"没有 M0_MANUAL（错误行：{err[-1][:160] if err else '一条也没有'}）")
+else:
+    mm = json.loads(hits[-1])
+    chk("bad" not in mm, f"这一臂跑成了：{mm.get('bad')}")
+    chk(int(mm.get("roster", 0)) >= 2,
+        f"名单里真有多位可关：roster={mm.get('roster')}（单人图上这一臂没有对象）")
+    chk(mm.get("scopeBlock") == "multi_face",
+        f"人工账没抹掉原始分析事实：scope_block={mm.get('scopeBlock')!r}（SCOPE-001 的 P0 判据读这一格）")
+    chk(mm.get("keptCore") == 0,
+        f"关掉那一位没改动画面：keptCore={mm.get('keptCore')}（记一条账不是调图）")
+    chk(mm.get("redetectCore") == 0,
+        f"重检测后被禁那一位的内芯逐格没动：redetectCore={mm.get('redetectCore')}"
+        "（>0 就是那层的几何悄悄活了回来——冻结件 then 那句「不静默恢复已禁用误检」）")
+    chk(mm.get("refusedReachedHost") is True,
+        "选定被禁那一只的拒绝走到了宿主（last_error 里那句『已被人工禁用』）："
+        "面板据此禁用带原因，而不是留一个点了不动的按钮")
+    chk(int(mm.get("disabledLedger", -1)) == 0,
+        f"恢复之后账清空：disabledLedger={mm.get('disabledLedger')}（人工判断要能被人推翻）")
+    chk(mm.get("rectReachedEngine") is True,
+        f"face add 的 rect 走过了 Rust 桥：拒绝文案是「已经有脸了」而不是「要给归一化矩形」"
+        f"（桥丢这一项时宿主读到的那句是 {mm.get('rectErr')!r}）")
+    chk(bool(mm.get("preview")),
+        f"变化可预览那句话真到了宿主：preview={mm.get('preview')!r}")
+    chk(mm.get("deformLit") is True,
+        f"留下那一位的形变仍点着（关掉别人不烧掉他的活儿）：deform_lit={mm.get('deformLit')}")
+    chk(bool(mm.get("canvas")), f"量在用户看见的那一帧上：canvas={mm.get('canvas')}")
 sys.exit(1 if fails else 0)
 PY
     if [ $? -ne 0 ]; then fail=$((fail + 1)); else pass=$((pass + 1)); fi
