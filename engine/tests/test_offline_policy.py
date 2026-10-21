@@ -117,3 +117,38 @@ def test_real_model_and_export_run_inside_enforced_engine(tmp_path):
         assert done['failed']==0 and Path(done['images'][0]['out']).is_file(),done
         assert hashlib.sha256(source.read_bytes()).hexdigest()==before
     finally:engine.close()
+
+
+def test_socket_created_immediately_before_filter_load_is_also_closed():
+    """Close inherited descriptors after TSYNC, not before its race window."""
+    got = run('''
+import json, os, socket, errno, ctypes as C
+from lumaretouch_engine import privacy
+real_cdll = C.CDLL
+seccomp = real_cdll('libseccomp.so.2')
+real_load = seccomp.seccomp_load
+real_load.argtypes = [C.c_void_p]
+real_load.restype = C.c_int
+created = []
+class Proxy:
+    def __getattr__(self, name):
+        return getattr(seccomp, name)
+proxy = Proxy()
+def load_with_last_moment_socket(ctx):
+    # No address is supplied and no data is sent. This deterministically models
+    # a pre-existing thread creating a socket immediately before TSYNC applies.
+    created.append(socket.socket(socket.AF_INET, socket.SOCK_STREAM).detach())
+    return real_load(ctx)
+proxy.seccomp_load = load_with_last_moment_socket
+privacy.C.CDLL = lambda name, *a, **kw: proxy if name == 'libseccomp.so.2' else real_cdll(name, *a, **kw)
+status = privacy.install_offline_policy()
+try:
+    os.fstat(created[0])
+except OSError as e:
+    assert e.errno == errno.EBADF
+else:
+    os.close(created[0])
+    raise AssertionError('socket opened before filter load escaped descriptor cleanup')
+print(json.dumps(status))
+''')
+    assert got['enforced'] and got['closed_inherited_sockets'] >= 1

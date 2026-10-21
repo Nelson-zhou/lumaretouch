@@ -83,9 +83,11 @@ def install_offline_policy():
             number=lib.seccomp_syscall_resolve_name(name.encode('ascii'))
             if number<0 or lib.seccomp_rule_add(ctx,0x00050000|errno.EPERM,number,0)!=0:
                 raise OfflinePolicyError('cannot install complete offline syscall policy')
-        closed=_close_inherited_sockets()
         if lib.seccomp_load(ctx)!=0:
             raise OfflinePolicyError('kernel rejected offline policy; refusing to start')
+        # First synchronize the denial across threads, then close inherited
+        # sockets. Closing first leaves a create-socket race before TSYNC.
+        closed=_close_inherited_sockets()
     finally:
         lib.seccomp_release(ctx)
     _native_probe()
