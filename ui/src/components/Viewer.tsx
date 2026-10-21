@@ -5,9 +5,12 @@ import { comparisonFrameSize } from "../compareCapture";
  * 这里就是 M0 要量死的那一段：上传+绘制时长由 performance.now() 自测（时长差，
  * 不涉及跨进程时钟基准）；「引擎→上屏」的端到端值由 Rust 侧同基纳秒相减得出。
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { frameAcked, framePresented, isNoFrame, parseFrameHead, pullFrame, type ParsedFrame } from "../native";
+import { inspectionApi, INSPECTION_EDIT_INTENT } from "../native";
+import { inspectionLayout } from "../inspectionViewport";
+import { createInspectionController, type InspectionIntent, type InspectionUiState } from "../inspectionController";
 import { BrushPad, type Rle } from "../brush";
 import { imageDisplayRect, clientToImage } from "../view";
 
@@ -85,7 +88,11 @@ export default function Viewer({
   onSwipe,
   originalFrame = null,
   onFitScale,
+  inspection,
+  onInspectionState,
 }: {
+  inspection?: { enabled:boolean; oneToOne:boolean; comparing:boolean; key:string; width:number; height:number };
+  onInspectionState?: (state:InspectionUiState)=>void;
   active: boolean;
   /** 对照组：只走 IPC 不上传不绘制，用于分离「地板成本」与「上传绘制成本」 */
   skipDraw?: boolean;
@@ -133,13 +140,17 @@ export default function Viewer({
   onFitScale?: (s: number) => void;
 }) {
   // 变换只加在显示层（镜像画布）上：GL 渲染源与测量回路一个字也不改
-  const coordinateLocked = paintLocked || compareMode !== "single";
+  const coordinateLocked = paintLocked || compareMode !== "single" || !!inspection?.enabled;
+  const invalidateInspection = useRef<()=>void>(()=>{});
   const brushActive = !!brush?.on && !coordinateLocked;
   const pickActive = !!pick?.on && !coordinateLocked;
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const effectiveZoom=useRef(view.zoom);
   const onWheel = (e: React.WheelEvent) => {
-    const next = Math.min(8, Math.max(0.05, view.zoom * Math.exp(-e.deltaY / 400)));
-    if (Math.abs(next - view.zoom) < 1e-4) return;
+    const baseline=effectiveZoom.current;
+    const next = Math.min(Math.max(8,baseline*2), Math.max(0.05, baseline * Math.exp(-e.deltaY / 400)));
+    if (Math.abs(next - baseline) < 1e-4) return;
+    invalidateInspection.current();
     onView({ zoom: next, x: view.x, y: view.y, fit: false });
   };
   const panDown = (e: React.PointerEvent) => {
@@ -153,6 +164,7 @@ export default function Viewer({
   const panMove = (e: React.PointerEvent) => {
     const d = drag.current;
     if (!d) return;
+    invalidateInspection.current();
     onView({ zoom: view.zoom, x: d.ox + (e.clientX - d.x), y: d.oy + (e.clientY - d.y), fit: view.fit });
   };
   const panUp = () => { drag.current = null; };
@@ -175,8 +187,13 @@ export default function Viewer({
   // 帧尺寸与 Fit 倍率：100% 的换算与卷帘的落点都靠它，不能靠猜
   const [frameDim, setFrameDim] = useState({ w: 0, h: 0 });
   const displayDim = comparisonFrameSize(frameDim.w, frameDim.h, compareMode);
-  const fitScale = frameDim.w > 0 && box.width > 0 && box.height > 0
-    ? Math.min(box.width / displayDim.w, box.height / displayDim.h) : 0;
+  const [dpr,setDpr]=useState(()=>window.devicePixelRatio||1);
+  const [editRevision,setEditRevision]=useState(0);
+  const sourceMode=!!inspection?.enabled && compareMode==='single' && !inspection.comparing;
+  const layout=sourceMode?inspectionLayout(box,inspection.width,inspection.height,view,dpr,inspection.oneToOne):null;
+  effectiveZoom.current=layout?.zoom??view.zoom;
+  const fitScale = layout?.fit ?? (frameDim.w > 0 && box.width > 0 && box.height > 0
+    ? Math.min(box.width / displayDim.w, box.height / displayDim.h) : 0);
   const fitScaleRef = useRef(fitScale); fitScaleRef.current = fitScale;
   const viewRef = useRef(view); viewRef.current = view;
   const compareRef = useRef(compareMode); compareRef.current = compareMode;
@@ -216,6 +233,55 @@ export default function Viewer({
     swipeDrag.current = false;
     (e.currentTarget as Element).releasePointerCapture?.(e.pointerId);
   };
+  const detailRef=useRef<HTMLCanvasElement|null>(null);
+  const controllerRef=useRef<ReturnType<typeof createInspectionController>|null>(null);
+  const stateCallback=useRef(onInspectionState);stateCallback.current=onInspectionState;
+  const budgetOk=!!layout?.roi && layout.roi.width*layout.roi.height<=16*1024*1024;
+  const intent:InspectionIntent|null=active&&mirrorOn&&sourceMode&&layout?.roi&&budgetOk?{
+    key:JSON.stringify([inspection?.key,editRevision,dpr,layout.rect,layout.roi]),
+    canvasWidth:inspection!.width,canvasHeight:inspection!.height,roi:layout.roi,
+  }:null;
+  const intentRef=useRef(intent);intentRef.current=intent;
+  const patchRef=useRef(layout?.patch);patchRef.current=layout?.patch;
+  const clearDetail=()=>{const canvas=detailRef.current;if(canvas){canvas.style.visibility='hidden';canvas.width=0;canvas.height=0;}};
+  invalidateInspection.current=()=>{clearDetail();controllerRef.current?.update(null);setEditRevision(n=>n+1);};
+  useEffect(()=>{
+    let alive=true;
+    const controller=createInspectionController(inspectionApi,{
+      clear:clearDetail,
+      paint:(frame,request)=>{
+        const canvas=detailRef.current;
+        if(!canvas||intentRef.current?.key!==request.key)throw new Error('视口已变化');
+        canvas.style.visibility='hidden';canvas.width=frame.roi.width;canvas.height=frame.roi.height;
+        const context=canvas.getContext('2d',{alpha:false});if(!context)throw new Error('精细预览画布不可用');
+        context.putImageData(new ImageData(frame.pixels,frame.roi.width,frame.roi.height),0,0);
+      },
+      reveal:(request)=>{
+        const canvas=detailRef.current,patch=patchRef.current;
+        if(!canvas||!patch||intentRef.current?.key!==request.key)throw new Error('视口已变化');
+        Object.assign(canvas.style,{left:`${patch.left}px`,top:`${patch.top}px`,width:`${patch.width}px`,height:`${patch.height}px`,visibility:'visible'});
+      },
+      state:(value)=>{if(alive)stateCallback.current?.(value);},
+    });
+    controllerRef.current=controller;controller.update(intentRef.current);
+    return()=>{alive=false;controller.dispose();if(controllerRef.current===controller)controllerRef.current=null;};
+  },[]);
+  useLayoutEffect(()=>{
+    controllerRef.current?.update(intentRef.current);
+    if(sourceMode&&!intentRef.current)stateCallback.current?.({state:'error',message:layout?.roi&&!budgetOk?'当前视口超过精细预览预算，请放大后重试':'原图尺寸尚未就绪，当前为代理预览'});
+  },[intent?.key,sourceMode,budgetOk,active,mirrorOn]);
+  useEffect(()=>{
+    const edit=()=>{invalidateInspection.current();};
+    window.addEventListener(INSPECTION_EDIT_INTENT,edit);
+    return()=>window.removeEventListener(INSPECTION_EDIT_INTENT,edit);
+  },[]);
+  useEffect(()=>{
+    let media:MediaQueryList;
+    const update=()=>{media?.removeEventListener('change',update);setDpr(window.devicePixelRatio||1);
+      media=window.matchMedia(`(resolution: ${window.devicePixelRatio||1}dppx)`);media.addEventListener('change',update);};
+    update();window.addEventListener('resize',update);
+    return()=>{media.removeEventListener('change',update);window.removeEventListener('resize',update);};
+  },[]);
   // Fit 倍率变化时交给 App：100% 按钮与顶栏标签需要同一份数
   useEffect(() => { onFitScale?.(fitScale); }, [fitScale, onFitScale]);
 
@@ -643,7 +709,7 @@ export default function Viewer({
            onPointerMove={(e) => { swipeMove(e); panMove(e); }}
            onPointerUp={(e) => { swipeUp(e); panUp(); }}
            onPointerCancel={(e) => { swipeUp(e); panUp(); }}
-           onDoubleClick={() => onView(VIEW_HOME)}
+           onDoubleClick={() => { invalidateInspection.current(); onView(VIEW_HOME); }}
            title="滚轮缩放 · 拖拽平移 · 双击适应窗口">
         {/* GL 画布退成纯渲染源：不参与布局，也不指望它上屏（见上面那段）。 */}
         {/* glVisible 是给"官方开关能不能替掉镜像层"那个对照实验用的：把 GL 画布放回
@@ -676,10 +742,12 @@ export default function Viewer({
           <canvas
             ref={mirrorRef}
             className="mirror"
-            style={{ width: "100%", height: "100%",
+            style={layout?{left:layout.rect.left,top:layout.rect.top,width:layout.rect.width,height:layout.rect.height,right:"auto",bottom:"auto",objectFit:"fill",transform:"none"}:{ width: "100%", height: "100%",
                      transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`,
                      transformOrigin: "center center" }}
           />
+          <canvas ref={detailRef} aria-label="原始分辨率精细预览"
+            style={{position:'absolute',pointerEvents:'none',visibility:'hidden'}} />
         </div>,
         document.body,
       )}

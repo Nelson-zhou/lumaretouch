@@ -1,5 +1,17 @@
 /** 与 Rust 命令的唯一出入口。所有跨语言类型集中在这里，避免各组件各自猜字段。 */
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+
+export const INSPECTION_EDIT_INTENT='lumaretouch-inspection-edit-intent';
+export function notifyInspectionEditIntent(){
+  if(typeof window!=='undefined')window.dispatchEvent(new Event(INSPECTION_EDIT_INTENT));
+}
+const inspectionMutations=new Set(['start_engine','shutdown_engine','load_image','set_strength','precompute',
+  'inpaint','light','deform','lut','grade','enhance','background','exposure','hsl','curves','crop','compare',
+  'session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
+function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
+  if(inspectionMutations.has(command))notifyInspectionEditIntent();
+  return tauriInvoke<T>(command,args,options);
+}
 
 export interface Dist {
   mean: number;
@@ -1601,3 +1613,14 @@ export const runCrop = (
 });
 export const report = (line: string) => invoke("report", { line });
 export const quit = () => invoke("quit");
+
+/** Full-source patches use their own identity-bearing transport, never proxy SHM. */
+export const inspectionStatus = () => invoke<import('./inspectionController').InspectionStatus>('inspection_status');
+export const inspectionStart = (intent:import('./inspectionController').InspectionIntent,status:import('./inspectionController').InspectionStatus) =>
+  invoke<import('./inspectionController').InspectionAccepted>('inspection_start',{
+    engineEpoch:status.epoch,generation:status.generation,canvasWidth:intent.canvasWidth,canvasHeight:intent.canvasHeight,...intent.roi,
+  });
+export const inspectionPull = (engineEpoch:string,requestId:string) => invoke<ArrayBuffer>('inspection_pull',{engineEpoch,requestId});
+export const inspectionCancel = (engineEpoch:string,requestId:string) => invoke<{requested:boolean}>('inspection_cancel',{engineEpoch,requestId});
+export const inspectionRelease = (engineEpoch:string,requestId:string) => invoke<{released:boolean}>('inspection_release',{engineEpoch,requestId});
+export const inspectionApi = {status:inspectionStatus,start:inspectionStart,pull:inspectionPull,cancel:inspectionCancel,release:inspectionRelease};

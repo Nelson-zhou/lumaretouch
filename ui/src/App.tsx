@@ -11,7 +11,8 @@ import { TOOLS, TOOL_CATEGORIES } from "./spec";
 import { REGISTRY, keyOf, sectionTitleOf, type SectionId } from "./p0";
 import { clickRle } from "./brush";
 import { reconcileExportCombo } from "./exportModel";
-import { proxyIsNativeResolution } from "./view";
+import { notifyInspectionEditIntent } from "./native";
+import type { InspectionUiState } from "./inspectionController";
 import { t, type MsgKey } from "./i18n";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
@@ -231,6 +232,9 @@ export default function App() {
   /** 当前是不是「1:1 物理像素」档：它必须随 fitScale 重算，否则改窗口大小就会
    *  从 100% 漂成 119%（4K 验收时量到过）。自由缩放/滚轮一进来就退出这一档。 */
   const [oneToOne, setOneToOne] = useState(false);
+  const [inspectionEnabled,setInspectionEnabled]=useState(false);
+  const [inspectionRetry,setInspectionRetry]=useState(0);
+  const [inspectionState,setInspectionState]=useState<InspectionUiState>({state:'idle',message:'代理预览'});
   // 工作区：项目管理 / 图库 / 精修（默认）/ 创意 / 批量导出。
   // 五档对应《工作流规格.json》47238「工作区信息架构」：主页管理项目，项目内切换
   // 图库、精修、创意，默认精修；导出列表是全局入口。
@@ -418,6 +422,7 @@ export default function App() {
           applyDocState(st.image.doc_state, "image_ready");
           // 换图 = 回到适应窗口、回到所有人；对比的原图快照作废重取
           setOneToOne(false);
+          setInspectionEnabled(false);
           setView(VIEW_HOME);
           setFaceScope("all");
           setHasOriginal(false);
@@ -2723,16 +2728,17 @@ export default function App() {
   }, [needsOriginal, workspace, compareKey, compareDoc, pid]);
 
   /** 视口/顶栏的缩放：Fit 与真正的 100%（1 图像像素 = 1 屏幕像素）。 */
-  function zoomFit() { setOneToOne(false); setView({ ...VIEW_HOME }); }
+  function zoomFit() { setInspectionEnabled(false); setOneToOne(false); setView({ ...VIEW_HOME }); }
   function zoomOne() {
     const dpr = window.devicePixelRatio || 1;
+    setInspectionEnabled(true);setInspectionRetry(n=>n+1);
     setOneToOne(true);
-    setView({ zoom: 1 / Math.max(1e-6, dpr * fitScale), x: 0, y: 0, fit: false });
+    setView({ zoom: fitScale>0?1/(dpr*fitScale):1, x: 0, y: 0, fit: false });
   }
   // Fit 倍率随画布尺寸变；「100%」是把 zoom 存成相对 Fit 的倍率，所以窗口一改
   // 大小就得重算。只算一次的话，4K 上把窗口拉大后徽标会写 119%（图不是 1:1 了）。
   useEffect(() => {
-    if (!oneToOne) return;
+    if (!oneToOne || fitScale<=0) return;
     const dpr = window.devicePixelRatio || 1;
     setView((v) => ({ ...v, zoom: 1 / Math.max(1e-6, dpr * fitScale) }));
   }, [oneToOne, fitScale]);
@@ -2744,12 +2750,10 @@ export default function App() {
         : view.zoom * fitScale * (window.devicePixelRatio || 1)) * 100)}%`
       : "100%";
 
-  // P0 首版项③：1:1 物理像素只有在「代理帧==源分辨率」时才是真 100%（原始分辨率）。
-  // 引擎按 4K UHD 像素预算出代理帧，大图会被降采样——那时按 1:1 只是代理档，不得冒充
-  // 原始分辨率 100%。真全分辨率渲染（引擎按需出精帧）属 GPU 端到端、尚未接通；这里先把
-  // 「这一屏是不是原始档」如实标出来，让「不能把代理帧放大冒充 100%」在界面上看得见。
-  const nativeAt100 = !status?.image || proxyIsNativeResolution(
-    status.image.w, status.image.h, status.image.src_w, status.image.src_h);
+  const inspectionCrop=status?.doc_report?.doc_state?.crop;
+  const inspectionSize=inspectionCrop?.out_full ?? (inspectionCrop?.neutral
+    ? [status?.image?.src_w??0,status?.image?.src_h??0] : [0,0]);
+  const inspectionKey=JSON.stringify([compareKey,status?.doc_rev,pid,inspectionRetry]);
 
   /** 底片条的评分/色标：落在工程记录的 tags/label 上（不碰原图）。
    *  评分用保留标签 `rating:N`；色标用 label（红/黄/绿/蓝/紫）。 */
@@ -3698,7 +3702,11 @@ export default function App() {
       </header>
 
       {workspace === "retouch" && (
-        <aside className="side">
+        <aside className="side" onInputCapture={(event)=>{
+                const target=event.target;
+                if(target instanceof HTMLSelectElement || (target instanceof HTMLInputElement
+                  && ['range','number','color','checkbox'].includes(target.type)))notifyInspectionEditIntent();
+              }}>
           <RetouchPanel status={status} doc={doc} hasImage={hasImage}
                         faceOk={faceOk} faceWhy={faceWhy}
                         note={setDragNote} onDone={requestPanelRefresh}
@@ -3760,6 +3768,7 @@ export default function App() {
               <Viewer
                 view={view} onView={(v) => {
                   // 滚轮/捏合改了倍率就退出 1:1；平移不算，仍是同一像素密度
+                  if (v.fit) setInspectionEnabled(false);
                   if (v.fit || v.zoom !== view.zoom) setOneToOne(false);
                   setView(v);
                 }}
@@ -3779,18 +3788,19 @@ export default function App() {
                 onSwipe={setSwipe}
                 originalFrame={originalFrame}
                 onFitScale={setFitScale}
+                inspection={{enabled:inspectionEnabled,oneToOne,comparing,key:inspectionKey,width:inspectionSize[0],height:inspectionSize[1]}}
+                onInspectionState={setInspectionState}
               />
               {hasImage && (
                 <div className="zoomBar" role="group" aria-label="缩放">
                   <button className={view.fit ? "on" : ""} onClick={zoomFit}
                           title="适应窗口">适合</button>
                   <button className={oneToOne ? "on" : ""} onClick={zoomOne}
-                          title={nativeAt100
-                            ? "1 图像像素 = 1 屏幕像素（原始分辨率 1:1）"
-                            : "1 代理帧像素 = 1 屏幕像素：源大于代理档，此为代理档 1:1，非原始分辨率（真全分辨率渲染待引擎按需出精帧）"}>100%</button>
-                  {oneToOne && !nativeAt100 && (
-                    <span className="zoomProxyTag" role="note"
-                          title="源分辨率大于引擎代理档：当前 1:1 显示的是降采样代理，不是原始像素">代理档</span>
+                          title="按原始图像尺寸查看 1:1，停下操作后加载当前视口的精细像素；再次点击可重试">100%</button>
+                  {inspectionEnabled && (
+                    <span className="zoomProxyTag" role="status" title={inspectionState.message}>
+                      {compareMode!=='single'||comparing?'代理对比':inspectionState.state==='ready'?'原图精细':inspectionState.state==='loading'?'精细预览加载中':'代理预览'}
+                    </span>
                   )}
                   <span className={"zoomRead" + (view.fit || oneToOne ? " srOnly" : "")}>
                     {zoomPct}
