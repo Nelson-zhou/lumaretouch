@@ -1,3 +1,5 @@
+import {useProjectWorkflow} from './projects/useProjectWorkflow';
+import {ProjectWorkspace} from './projects/ProjectWorkspace';
 import {useViewportProbe} from './diagnostics/useViewportProbe';
 import {useBenchmarkAutomation} from './diagnostics/useBenchmarkAutomation';
 import {useEmptyStateProbe} from './diagnostics/useEmptyStateProbe';
@@ -240,15 +242,6 @@ export default function App() {
   const [cropOpen, setCropOpen] = useState(false);
   // 图库的「已导出」：只认引擎 export_done 里真的写出去的那几张
   const [exported, setExported] = useState<Set<string>>(new Set());
-  // 项目管理：最近工程只记用户真开过的路径（本机 localStorage，不上传）
-  const [recentProjects, setRecentProjects] = useState<
-    { path: string; name: string; at: number }[]
-  >(() => {
-    try {
-      const raw = localStorage.getItem("lrt.recentProjects");
-      return raw ? JSON.parse(raw) : [];
-    } catch { return []; }
-  });
   // 对比：单视图 / 并排 / 卷帘；按住空格是单视图里的临时对比
   const [compareMode, setCompareMode] = useState<CompareMode>("single");
   const [swipe, setSwipe] = useState(0.5);
@@ -257,8 +250,6 @@ export default function App() {
   // 人物属性栏：所有人（联动）或某一张脸（独立）。索引来自引擎的 face.index。
   const [faceScope, setFaceScope] = useState<"all" | number>("all");
   // 工程与任务面（读只读引擎报的那两份，前端不记“存过了”）
-  const [projName, setProjName] = useState("");
-  const [projErr, setProjErr] = useState("");
   const [exportErr, setExportErr] = useState("");
   const [exportTile, setExportTile] = useState("");
   // 换底（M6）：背景色 + 色键容差/软边 + 后端。默认走确定性色键；birefnet 需权重，
@@ -492,6 +483,9 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [refreshStatus]);
+
+  const projectFlow=useProjectWorkflow({refresh:refreshStatus,notify:setDragNote,
+    enterRetouch:()=>setWorkspace("retouch")});
 
   useViewportProbe(setImgPath);
 
@@ -1522,23 +1516,9 @@ export default function App() {
       if (key === "lnx.history.v1.redo") { onHistory("redo"); return; }
       if (key === "lnx.import.v1.choose_files") { await onPickPath(false); return; }
       if (key === "lnx.import.v1.choose_folder") { await onPickPath(true); return; }
-      if (key === "lnx.project.v1.create") {
-        const dir = await openDialog({ directory: true, title: "工程放哪个目录" });
-        if (typeof dir !== "string" || !dir) return;
-        const name = projName.trim() || (dir.split("/").pop() || "未命名项目");
-        await runProject("create", { name, directory: dir });
-        await refreshStatus();
-        return;
-      }
-      if (key === "lnx.project.v1.open") {
-        const f = await openDialog({ title: "打开工程文件",
-          filters: [{ name: "LumaRetouch 工程", extensions: ["json"] }] });
-        if (typeof f !== "string" || !f) return;
-        await runProject("open", { path: f });
-        await refreshStatus();
-        return;
-      }
-      if (key === "lnx.project.v1.save") { await runProject("save"); await refreshStatus(); return; }
+      if (key === "lnx.project.v1.create") { await projectFlow.perform("create"); return; }
+      if (key === "lnx.project.v1.open") { await projectFlow.perform("open"); return; }
+      if (key === "lnx.project.v1.save") { await projectFlow.perform("save"); return; }
       if (key.startsWith("lnx.task.v1.")) {
         const action = key.split(".").pop() as "pause" | "resume" | "cancel" | "retry";
         await runTask(action, liveTask?.task_id);
@@ -1546,8 +1526,7 @@ export default function App() {
         return;
       }
     } catch (e) {
-      setProjErr(String(e));
-      setDragNote(String(e));
+      projectFlow.reportError(e);
     }
   }
 
@@ -1696,34 +1675,6 @@ export default function App() {
       return changed ? next : prev;
     });
   }, [status?.export]);
-
-  /** 最近工程落本机（只存路径与名字，不存照片内容）。 */
-  function rememberProject(path: string, name: string) {
-    setRecentProjects((prev) => {
-      const next = [{ path, name, at: Date.now() },
-        ...prev.filter((p) => p.path !== path)].slice(0, 8);
-      try { localStorage.setItem("lrt.recentProjects", JSON.stringify(next)); } catch {}
-      return next;
-    });
-  }
-
-  async function afterProjectChange() {
-    await refreshStatus();
-    const st = await engineStatus().catch(() => null);
-    const pj = st?.project;
-    if (pj?.open && pj.path) rememberProject(pj.path, pj.name ?? "");
-  }
-
-  async function openRecentProject(path: string, name: string) {
-    try {
-      await runProject("open", { path });
-      await refreshStatus();
-      rememberProject(path, name);
-      setWorkspace("retouch");
-    } catch (e) {
-      setProjErr(String(e));
-    }
-  }
 
   return (
     <div className={"app ws-" + workspace}>
@@ -1923,62 +1874,9 @@ export default function App() {
           </>
         )}
 
-        {workspace === "projects" && (
-          <section className="projects">
-            <div className="projHead">
-              <div>
-                <h2>项目管理</h2>
-                <span>{project?.open
-                  ? `${project.name ?? "未命名工程"} · ${project.docs ?? 0} 张 · ${project.dirty ? "有未保存修改" : "已保存"}`
-                  : "尚未打开工程 · 新建或打开一个本地工程"}</span>
-              </div>
-              <button className="chip" disabled={!project?.open}
-                onClick={() => { void runProject("save").then(() => refreshStatus()); }}>
-                保存工程
-              </button>
-            </div>
-            <div className="projGrid">
-              <div className="projCard">
-                <h3>新建项目</h3>
-                <label>项目名
-                  <input value={projName} onChange={(e) => setProjName(e.target.value)}
-                    placeholder="例：2026 秋 婚礼跟拍" />
-                </label>
-                <button className="tb primary"
-                  onClick={async () => { await p0action("lnx.project.v1.create"); await afterProjectChange(); }}>
-                  选择目录并新建
-                </button>
-                <p>工程是单文件 JSON（{projSuffix}），原片只读，编辑写工程记录。</p>
-              </div>
-              <div className="projCard">
-                <h3>打开工程</h3>
-                <button className="tb"
-                  onClick={async () => { await p0action("lnx.project.v1.open"); await afterProjectChange(); }}>
-                  浏览并打开工程文件
-                </button>
-                <button className="tb" disabled={!hasImage}
-                  onClick={() => setWorkspace("retouch")}>进入精修</button>
-                <p>换工程前请先保存：未保存的修改会被引擎拦住，不会静默丢失。</p>
-              </div>
-              <div className="projCard">
-                <h3>最近工程</h3>
-                {recentProjects.length ? (
-                  <ul className="recentList">
-                    {recentProjects.map((p) => (
-                      <li key={p.path}>
-                        <button title={p.path}
-                          onClick={() => void openRecentProject(p.path, p.name)}>
-                          <b>{p.name}</b><span>{p.path}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : <p>还没有打开过工程。</p>}
-              </div>
-            </div>
-            {projErr && <div className="projErr">{projErr}</div>}
-          </section>
-        )}
+        {workspace === "projects" && <ProjectWorkspace workflow={projectFlow}
+          project={project} projectSuffix={projSuffix} hasImage={hasImage}
+          onEnterRetouch={() => setWorkspace("retouch")} />}
 
         {workspace === "library" && (
           <section className="library">

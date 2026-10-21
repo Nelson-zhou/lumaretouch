@@ -7,6 +7,11 @@ into its acceptance. The unfinished luminance feature remains a separate patch.
 ## Ownership
 
 - `App.tsx`: interactive application composition and production lifecycle.
+- `projects/useProjectWorkflow.ts`: owns project form/error/recent-list state and
+  local persistence. Mounted unconditionally so workspace changes do not reset it.
+- `projects/projectActions.ts`: project create/open/save/recent action policy over
+  named I/O ports, independently testable without React or Tauri runtime.
+- `projects/ProjectWorkspace.tsx`: project rendering only; no native I/O or storage.
 - `diagnostics/useViewportProbe.ts`: opt-in static viewport evidence.
 - `diagnostics/useBenchmarkAutomation.ts`: environment-opted-in acceptance scenarios.
 - `diagnostics/useEmptyStateProbe.ts`: empty-state observation.
@@ -57,3 +62,12 @@ its final target's live frame may be emitted. Also, all recipes are validated
 before writes, but a live replay exception is not a transactional rollback of
 already written rows. These are separate correctness tasks; the extraction must
 not silently claim stronger atomicity or a frozen preflight-token contract.
+
+## Existing project behavior deliberately preserved
+
+Dialog create/open paths still perform their authoritative refresh after a cancel
+or caught failure. Recent-open errors remain local; dialog action errors also show
+in the global notice. Direct Save still propagates rejection. These differing old
+behaviors are pinned by action-port tests, not silently rewritten during extraction.
+The registry adapter's legacy project-error reporting for other actions remains an
+explicit compatibility call. Correcting these UX quirks is a later functional fix.
