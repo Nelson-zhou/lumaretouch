@@ -15,6 +15,7 @@ pub struct EngineHandle {
     dispatcher: Arc<crate::dispatch::Dispatcher>,
     child: Arc<Mutex<Child>>,
     alive: Arc<AtomicBool>,
+    inspection_root: Arc<crate::inspection_io::Root>,
 }
 
 impl EngineHandle {
@@ -39,13 +40,17 @@ impl EngineHandle {
     pub fn shutdown(&self) {
         let _ = self.send(serde_json::json!({"cmd": "shutdown"}));
         if let Ok(mut c) = self.child.lock() {
-            let _ = c.wait();
+            if c.wait().is_ok(){
+                self.alive.store(false,Ordering::Relaxed);
+                let _=self.inspection_root.cleanup();
+            }
         }
     }
 }
 
 /// 启动引擎并开两个读线程（stdout 事件 / stderr 日志）。
-pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>) -> EngineHandle {
+pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
+             inspection_epoch:[u8;16],inspection_root:Arc<crate::inspection_io::Root>) -> EngineHandle {
     let mut child = Command::new(py)
         .arg("-m")
         .arg("lumaretouch_engine.server")
@@ -55,6 +60,8 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>) ->
         .env("PYTHONUNBUFFERED", "1")
         // 不往只读的资源目录里写 __pycache__
         .env("PYTHONDONTWRITEBYTECODE", "1")
+        .env("LRT_PARENT_PID",std::process::id().to_string())
+        .env("LRT_INSPECTION_ROOT",&inspection_root.path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -69,12 +76,14 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>) ->
     }
     let stdout = child.stdout.take().expect("拿不到引擎 stdout");
     let stderr = child.stderr.take().expect("拿不到引擎 stderr");
+    let child=Arc::new(Mutex::new(child));
     let alive = Arc::new(AtomicBool::new(true));
 
     let (tx, rx) = mpsc::channel::<String>();
     {
         let alive = alive.clone();
         let d = dispatcher.clone();
+        let process=child.clone();let st=state.clone();let root=inspection_root.clone();
         thread::spawn(move || {
             for line in BufReader::new(stdout).lines() {
                 match line {
@@ -86,6 +95,9 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>) ->
             }
             alive.store(false, Ordering::Relaxed);
             d.close();
+            let exited=process.lock().map(|mut c|c.wait().is_ok()).unwrap_or(false);
+            st.on_inspection_engine_end(inspection_epoch);
+            if exited{if let Err(e)=root.cleanup(){st.push_log(format!("inspection cleanup: {e}"));}}
         });
     }
     {
@@ -116,19 +128,21 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>) ->
                         continue;
                     }
                 }
-                handle_event(&st, &line);
+                handle_event(&st, &line,inspection_epoch);
             }
         });
     }
 
     EngineHandle {
         dispatcher,
-        child: Arc::new(Mutex::new(child)),
+        child,
         alive,
+        inspection_root,
     }
 }
 
-fn handle_event(state: &Arc<AppState>, line: &str) {
+fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
+    if state.inspection.lock().unwrap().epoch!=inspection_epoch{return;}
     let v: Value = match serde_json::from_str(line) {
         Ok(v) => v,
         Err(_) => {
@@ -137,6 +151,7 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
         }
     };
     match v.get("event").and_then(|e| e.as_str()).unwrap_or("") {
+        "inspection_snapshot"=>state.on_inspection_event(inspection_epoch,&v),
         "shm_ready" => {
             let name = v["name"].as_str().unwrap_or("").to_string();
             match ShmReader::open(&name) {
@@ -157,6 +172,7 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             }
         }
         "ready" => {
+            state.inspection.lock().unwrap().ready(inspection_epoch,v["inspection_protocol"].as_u64()==Some(1));
             // M3-b：引擎报上来的内置预设清单（按钮文字与提交名都靠它）。
             // 不写这一臂就会落进下面的 other 分支：只进日志，前端永远拿不到。
             state.on_ready(&v);

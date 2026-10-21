@@ -58,7 +58,8 @@ class InspectionJob:
         self._stderr = None
         self._started = None
         self._cancelled = False
-        self._directory = tempfile.TemporaryDirectory(prefix='lumaretouch-inspection-')
+        self._directory = tempfile.TemporaryDirectory(prefix='lumaretouch-inspection-',
+                                                     dir=os.environ.get('LRT_INSPECTION_ROOT'))
         self.directory = self._directory.name
         try:
             self.writer = BundleWriter(self.directory, owned)

@@ -11,6 +11,9 @@ mod engine;
 mod edit_queue;
 mod dispatch;
 mod shm;
+mod inspection_host;
+mod inspection_io;
+mod inspection_api;
 
 use std::sync::{Arc, Mutex};
 
@@ -94,6 +97,8 @@ fn tiers() -> &'static Tiers {
 }
 
 pub struct AppState {
+    inspection: Mutex<inspection_host::Host>,
+    inspection_root: Mutex<Option<Arc<inspection_io::Root>>>,
     frames: Mutex<Frames>,
     compare_frame: Mutex<Option<Value>>,
     logs: Mutex<Vec<String>>,
@@ -227,6 +232,8 @@ pub struct Launcher(pub Arc<AppState>);
 impl AppState {
     fn new() -> Self {
         Self {
+            inspection: Mutex::new(inspection_host::Host::default()),
+            inspection_root: Mutex::new(None),
             frames: Mutex::new(Frames {
                 shm: None,
                 shm_name: String::new(),
@@ -579,6 +586,8 @@ impl AppState {
     }
 
     fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
+        let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
+        inspection.invalidate();
         let guard=self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
         guard.as_ref().ok_or("引擎未启动")?.send_interactive(key,cmd)?;
         *self.history_dirty.lock().unwrap()=true;
@@ -590,6 +599,8 @@ impl AppState {
         // 宿主不数步数、不自己判哪条命令算编辑——名单由引擎的 ready 报
         let name = cmd.get("cmd").and_then(|c| c.as_str()).unwrap_or("").to_string();
         let edited = self.history_edit_cmds.lock().unwrap().iter().any(|c| c == &name);
+        let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
+        if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
         let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
         guard
             .as_ref()
@@ -708,7 +719,11 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
         "engine_src": src.clone(), "hint": runtime_setup_hint(),
     });
     *st.engine_version.lock().unwrap() = None;   // 版本等本进程的 ready 重新报
-    let h = engine::spawn(&py, &src, &session, st.clone());
+    let inspection_epoch=inspection_api::fresh_epoch()?;
+    let inspection_root=Arc::new(inspection_io::Root::create(inspection_epoch)?);
+    st.inspection.lock().unwrap().reset(inspection_epoch)?;
+    *st.inspection_root.lock().unwrap()=Some(inspection_root.clone());
+    let h = engine::spawn(&py, &src, &session, st.clone(),inspection_epoch,inspection_root);
     let pid = h.pid();
     // 新引擎进程 = 空的会话。不清掉上一张图的就绪标记，自动流程会拿陈图的 w/h
     // 去驱一个 _vram=None 的新引擎（量出来就是“没跑但正常”）。
@@ -752,9 +767,10 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     // engine_status 报出来的 presets/grade_limits/export_caps/history_edit_cmds
     // 一路全是空的——UI 把这些能力全判成"这个引擎还没有"，而日志里一个错都不报。
     // 真窗口那一轮第一次把它抓出来：裸引擎的协议用例自己会发 hello，碰不到这一层。
-    // 必须在句柄存进 st.engine 之前发出去：那里头没有别的人会替它问候一次。
+    // 先登记句柄再问候：ready 可能立即回来，能力可见时必须已有对应发送句柄。
+    let h=Arc::new(h);
+    *st.engine.lock().map_err(|_| "引擎锁中毒".to_string())? = Some(h.clone());
     let _ = h.send(json!({"cmd": "hello"}));
-    *st.engine.lock().map_err(|_| "引擎锁中毒".to_string())? = Some(Arc::new(h));
     Ok(json!({"pid": pid, "python": py, "python_source": source,
               "src": src, "session": session}))
 }
@@ -1569,6 +1585,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
 
 #[tauri::command]
 fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
+    state.inspection.lock().unwrap().invalidate();
     let h = state.engine.lock().unwrap().clone();
     // 引擎停了，它报过的 image_ready / precompute_ready 也随之作废；留着会让下一次
     // 自动流程拿陈尺寸与陈掩膜状态起跑
@@ -2119,7 +2136,10 @@ fn report(line: String) {
 }
 
 #[tauri::command]
-fn quit() {
+fn quit(state: State<'_, Arc<AppState>>) {
+    state.inspection.lock().unwrap().invalidate();
+    let handle=state.engine.lock().unwrap().clone();
+    if let Some(handle)=handle{handle.shutdown();}
     std::process::exit(0);
 }
 
@@ -2132,6 +2152,8 @@ fn main() {
         .manage(state.clone())
         .manage(Launcher(state.clone()))
         .invoke_handler(tauri::generate_handler![
+            inspection_api::inspection_start, inspection_api::inspection_status,
+            inspection_api::inspection_cancel, inspection_api::inspection_pull, inspection_api::inspection_release,
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, compare_status, precompute,
             inpaint, light, deform, lut, grade, enhance, background, export, session, filmstrip, history,

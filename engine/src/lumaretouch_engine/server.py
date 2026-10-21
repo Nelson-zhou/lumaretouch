@@ -19,6 +19,9 @@ import time
 # The native host launches this module directly. Apply the boundary before any
 # image/model dependencies load; the console entry uses bootstrap for the same reason.
 if __name__ == "__main__":
+    if os.environ.get("LRT_PARENT_PID"):
+        from .inspection_worker import bind_parent
+        bind_parent(int(os.environ["LRT_PARENT_PID"]))
     from .privacy import require_offline_or_exit
     require_offline_or_exit()
 
@@ -351,7 +354,7 @@ class Engine:
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -7044,7 +7047,9 @@ class Engine:
         if detail is not None:
             self._inspection_snapshot_error = detail
         asset_bytes = tx.asset_bytes if tx is not None else (result.asset_bytes if result else (job.asset_bytes if job is not None else 0))
+        config = getattr(self, "_inspection_render_config", None) or {}
         emit({"event": "inspection_snapshot", "preparation_only": getattr(self, "_inspection_render_config", None) is None,
+              "epoch": config.get("epoch"), "ticket": config.get("ticket"),
               "request_id": getattr(self, "_inspection_snapshot_id", None),
               "state": getattr(self, "_inspection_snapshot_state", "idle"),
               "asset_bytes": asset_bytes,
@@ -7115,6 +7120,28 @@ class Engine:
             self._inspection_job = None
 
     def cmd_inspection_snapshot(self, p: dict):
+        try:
+            return self._cmd_inspection_snapshot(p)
+        except Exception as exc:
+            if p.get("action", "status") == "start":
+                # Rejection belongs to the submitted identity, not the previous
+                # active job. The host must release a never-started reservation
+                # even when export/benchmark/validation rejects before registration.
+                config = p.get("render") if type(p.get("render")) is dict else {}
+                epoch = config.get("epoch")
+                ticket = config.get("ticket")
+                request = p.get("request_id")
+                emit({"event": "inspection_snapshot", "state": "failed", "rejected": True,
+                      "preparation_only": not bool(config),
+                      "request_id": request if type(request) is str and len(request) <= 20 else None,
+                      "epoch": epoch if type(epoch) is str and len(epoch) == 32 else None,
+                      "ticket": ticket if type(ticket) is list and len(ticket) == 5 and
+                          all(type(v) is str and len(v) <= 20 for v in ticket) else None,
+                      "asset_bytes": 0, "copied_bytes": 0, "result_path": None,
+                      "error": str(exc)[:2000]})
+            raise
+
+    def _cmd_inspection_snapshot(self, p: dict):
         unknown = set(p) - {"cmd", "action", "request_id", "max_asset_bytes", "render"}
         if unknown:
             raise ValueError(f"inspection_snapshot unknown fields: {sorted(unknown)}")
@@ -7173,7 +7200,7 @@ class Engine:
             self._inspection_snapshot_tx = SnapshotTransaction(snap, max_asset_bytes=limit)
         except Exception as exc:
             self._inspection_snapshot_state = "failed"
-            self._snapshot_emit(str(exc))
+            self._inspection_snapshot_error = str(exc)
             raise
         self._inspection_snapshot_state = "copying"
         self._snapshot_emit()

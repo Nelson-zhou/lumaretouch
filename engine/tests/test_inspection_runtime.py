@@ -174,3 +174,22 @@ def test_parent_binding_checks_reparenting(monkeypatch):
     worker.bind_parent(123)
     with pytest.raises(RuntimeError,match='exited'):
         worker.bind_parent(456)
+
+
+def test_busy_export_start_rejection_is_correlated_to_new_ticket(tmp_path,monkeypatch):
+    from test_snapshot_scheduler import harness
+    from types import SimpleNamespace
+    from lumaretouch_engine import server
+    e=harness();events=[]
+    e._image_loaded=True;e._vram=SimpleNamespace(h=64,w=96);e._doc_path=str(tmp_path/'source.png')
+    e._export=SimpleNamespace(is_alive=lambda:True);e.bench=None
+    monkeypatch.setattr(server,'emit',events.append)
+    e._process_line(json.dumps(dict(cmd='inspection_snapshot',action='start',request_id='7',
+        max_asset_bytes=100,render=config('7'),_host_request_id='ack')),
+        {'inspection_snapshot':e.cmd_inspection_snapshot})
+    rejected=[v for v in events if v['event']=='inspection_snapshot']
+    assert len(rejected)==1 and rejected[0]['state']=='failed' and rejected[0]['rejected']
+    assert rejected[0]['request_id']=='7' and rejected[0]['ticket']==config('7')['ticket']
+    assert rejected[0]['epoch']==config()['epoch']
+    assert e._inspection_snapshot_id is None and e._inspection_snapshot_tx is None
+    assert events[-1]=={'event':'command_done','request_id':'ack'}

@@ -67,3 +67,33 @@ pixels and release its file). No production cap is increased or disabled. An
 8 GiB virtual-address allowance is not an 8 GiB physical-memory allocation or a
 performance result. Dedicated CPU runtime packaging and host admission policy
 remain separate work; the higher-budget attempt is not yet a verified remedy.
+
+## Native host integration (verification pending)
+
+The native API is now start/status/cancel/pull/release, still without Viewer wiring.
+The host issues epoch/request/generation identities. Cancel and pull require the
+matching epoch; start also requires the current host generation and an idle edit
+queue. Source dimensions come from the engine's loaded-image metadata. Requested
+canvas dimensions remain independently checked against the worker's captured
+geometry before a result can be returned.
+
+A Rust-owned mode0700 root contains the Engine's temporary job directories. Rust
+opens the job and fixed result through descriptor-relative openat, rejecting
+symlinks/nonregular files. It reads/validates the fixed header and exact file size
+before allocating the bounded payload, validates the full packet, then rechecks
+request identity. One read lease survives cancellation/restart until that actual
+read ends; a separate published-buffer lease requires frontend release before
+another buffer can be delivered. This does not magically reclaim a buffer retained
+by JavaScript: the future Viewer must drop its reference before acknowledging.
+
+State transitions and their complete command-enqueue batches share the same host
+mutex, so Cancel cannot overtake a reserved but unsent Start. All valid Start
+rejections include the submitted epoch/Ticket, including a busy exporter, rather
+than leaving the host waiting on an unregistered job. Old-epoch events/EOF cannot
+retire a new inspection. Normal Engine exit is waited before host-root cleanup;
+normal app quit requests shutdown first. An abruptly killed host may still leave
+private files, but Engine/worker parent-death bindings prevent continuing work.
+
+CI now includes the actual Cargo inspection tests (host state, parser, and private
+file reader), not just a detached wire parser. These changes are candidates until
+CI, local regressions, and native-API pixel/cancel/release tests establish them.
