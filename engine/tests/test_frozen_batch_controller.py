@@ -121,3 +121,16 @@ def test_later_exhausted_target_prevents_any_live_or_parked_write():
     c,rows,_,events,replays,_=fixture();rows[2][KEY]['revision']=MAX_REVISION;before=deepcopy(rows)
     c.handle_command({'action':'commit','docs':[0,1,2],'module_scope':[OP_EXPOSURE]})
     assert rows==before and not replays and c.ledger=={} and events[-1]['event']=='error'
+
+
+def test_failure_after_target_writes_is_unknown_and_retry_cannot_apply_twice():
+    c,rows,_,events,_,_=fixture();token=preflight(c,events,docs=[1])
+    def failed_status():raise RuntimeError('fixture receipt failure after writes')
+    c.editor=replace(c.editor,status=failed_status)
+    result=commit(c,events,token)
+    assert not result['success'] and result['outcome_unknown']
+    assert result['target_outcomes'][0]['outcome']=='unknown' and rows[1]['state']['_exposure'][0]==1
+    before=deepcopy(rows[1]);again=commit(c,events,token)
+    assert again['replayed'] and again['outcome_unknown'] and rows[1]==before
+    c.handle_command({'action':'commit','preflight_token':token})
+    assert events[-1]['event']=='batch_result' and not events[-1]['success'] and rows[1]==before

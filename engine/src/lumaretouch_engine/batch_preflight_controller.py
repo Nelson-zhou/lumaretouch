@@ -38,7 +38,7 @@ class FrozenBatchController:
             raise SC.ScopeError('token commit cannot change reviewed options')
         cached=self.store.completed(p.get('preflight_token'),self.versions.workspace)
         if cached is None:return False
-        if p.get('request_id') is None:self.emit({**cached,'event':'batch_committed','replayed':True})
+        if p.get('request_id') is None:self.emit({**cached,'event':'batch_result','action':'commit','request_id':None,'replayed':True})
         else:self.emit_result(p,{**cached,'replayed':True})
         return True
 
@@ -105,7 +105,7 @@ class FrozenBatchController:
         except Exception as error:
             result={'success':False,'error':str(error)[:2000],'requires_preflight':True,
                     'outcome_unknown':commit_started,
-                    'target_outcomes':[{**r,'outcome':'conflict' if r['blocked'] else 'not_applied'} for r in resolved],
+                    'target_outcomes':[{**r,'outcome':'conflict' if r['blocked'] else ('unknown' if commit_started else 'not_applied')} for r in resolved],
                     'preflight_token':p.get('preflight_token'),'workspace_generation':self.versions.workspace}
             if plan is not None and p.get('action')=='commit':result=self.store.finish(plan,result)
             self.emit({'event':'error','error':'batch '+str(p.get('action'))+' rejected: '+result['error']})
