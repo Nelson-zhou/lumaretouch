@@ -23,7 +23,7 @@ def test_extracted_policy_and_controller_do_not_import_engine_or_heavy_runtime()
     assert set(imports(ENGINE/'history_policy.py')) <= {'json','hashlib'}
 
 def test_diagnostics_depend_on_ports_not_on_app_component():
-    for path in list((ROOT/'ui/src/diagnostics').glob('*.ts')) + list((ROOT/'ui/src/projects').glob('*.ts*')):
+    for path in list((ROOT/'ui/src/diagnostics').glob('*.ts')) + list((ROOT/'ui/src/projects').glob('*.ts*')) + list((ROOT/'ui/src/batch').glob('*.ts*')):
         source=path.read_text(encoding='utf-8')
         assert not re.search(r'''from\s*['"][^'"]*/App(?:\.tsx?)?['"]''',source)
         assert 'import.meta.env.DEV' not in source

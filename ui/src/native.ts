@@ -1,3 +1,4 @@
+import type {BatchReply} from './batch/batchWorkflow';
 import type {CaptureTransport,CaptureStatus} from "./colorCaptureController";
 import type {ScopeResult,ScopeStage} from "./colorScopesModel";
 /** 与 Rust 命令的唯一出入口。所有跨语言类型集中在这里，避免各组件各自猜字段。 */
@@ -898,6 +899,7 @@ export interface EngineStatus {
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
     color_capture_protocol?: number;
+    batch_preflight_protocol?: number;
     color_scopes_protocol?: number;
     project_actions?: string[];
     /** 挑图（LNX-PICK-001）：动作名单、四组档位的可选值、阈值本体与判据指纹。
@@ -1551,11 +1553,12 @@ export const runPreset = (
 export const runBatch = (
   action: "preflight" | "commit" | "undo" | "state",
   opts: { docs?: string[]; moduleScope?: string[]; conflictPolicy?: string;
-          batchId?: string } = {},
+          batchId?: string; preflightToken?:string;requestId?:string } = {},
 ) => invoke<{ requested: boolean }>("batch", {
   action, docs: opts.docs, moduleScope: opts.moduleScope,
-  conflictPolicy: opts.conflictPolicy, batchId: opts.batchId,
+  conflictPolicy: opts.conflictPolicy, batchId: opts.batchId,preflightToken:opts.preflightToken,requestId:opts.requestId,
 });
+export const readBatchResult=(requestId:string)=>invoke<{phase:string;request_id:string;result?:BatchReply;error?:string}>("batch_result",{requestId});
 
 /** 曝光/白平衡（P0）：量程由引擎随事件报 exposure_limits，这里不抄一份。 */
 export const runExposure = (

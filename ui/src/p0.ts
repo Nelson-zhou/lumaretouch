@@ -183,25 +183,13 @@ export const WIRING: Record<string, Binding> = {
     kind: "enum",
   },
   "lnx.batch.v1.conflict_policy": {
-    label: ["同名冲突策略", "Name conflict policy"], section: "output", kind: "enum",
+    label: ["目标改动冲突策略", "Edited-target conflict policy"], section: "output", kind: "enum",
   },
   "lnx.batch.v1.preflight": {
-    label: ["导出前整批体检", "Preflight the whole batch"], section: "output",
-    kind: "action", blocked: true,
-    why_not: ["现在只有「逐张失败如实上报 + 16-bit 母档的阻塞项点名」这一条：批量导出会把"
-      + "每张的解码/写入结局逐条报出来，但没有一次「跑之前先把整批试解一遍」的独立动作。"
-      + "做它需要一条只解码不写盘的预演命令，本轮未接。",
-      "Per-image failures and 16-bit blockers are reported, but there is no decode-only dry run "
-      + "of the whole batch yet."],
+    label: ["同步前预检", "Review recipe synchronization"], section: "output", kind: "action",
   },
   "lnx.batch.v1.commit": {
-    label: ["整批提交", "Commit the batch"], section: "output", kind: "action",
-    blocked: true,
-    why_not: ["原子提交发生在**每张文件自己**那一层（写临时 → fsync → rename → 目录 fsync），"
-      + "没有跨条目的「整批一次提交」：批量导出中途断电时，已完成的每张都是完整可读的文件，"
-      + "未跑的不会出现半个。界面上放一个「提交」按钮会让人以为不点就还没落盘。",
-      "Atomic commit is per file (tmp → fsync → rename → dir fsync); a cross-item «commit» button "
-      + "would imply nothing is durable until pressed, which is false."],
+    label: ["预检并确认同步", "Review and confirm synchronization"], section: "output", kind: "action",
   },
   // ── 工程 ────────────────────────────────────────────────────────────
   "lnx.project.v1.create": {

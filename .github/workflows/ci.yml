@@ -89,7 +89,7 @@ jobs:
         run: rustc --edition=2021 --test core/levels/levels.rs -o /tmp/lrt-levels-tests && /tmp/lrt-levels-tests
       - name: cargo check
         working-directory: ui/src-tauri
-        run: cargo check && cargo test --bin lumaretouch dispatch::tests && cargo test --bin lumaretouch inspection && cargo test --bin lumaretouch edit_commands::tests && cargo test --bin lumaretouch levels_api::tests && cargo test --bin lumaretouch color_scopes_host::tests && cargo test --bin lumaretouch color_capture_host::tests
+        run: cargo check && cargo test --bin lumaretouch dispatch::tests && cargo test --bin lumaretouch inspection && cargo test --bin lumaretouch edit_commands::tests && cargo test --bin lumaretouch levels_api::tests && cargo test --bin lumaretouch color_scopes_host::tests && cargo test --bin lumaretouch color_capture_host::tests && cargo test --bin lumaretouch batch_host::tests
 
   # GPU 门禁：需要 self-hosted runner。用仓库 variable 开关，没 runner 时根本不该排队
   # （之前写 `if: github.repository != ''` 永远为真，结不上标签只会无限 waiting）。

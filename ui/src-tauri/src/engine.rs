@@ -12,6 +12,7 @@ use crate::shm::ShmReader;
 use crate::AppState;
 
 pub struct EngineHandle {
+    epoch:[u8;16],
     dispatcher: Arc<crate::dispatch::Dispatcher>,
     child: Arc<Mutex<Child>>,
     alive: Arc<AtomicBool>,
@@ -19,6 +20,7 @@ pub struct EngineHandle {
 }
 
 impl EngineHandle {
+    pub fn epoch(&self)->[u8;16]{self.epoch}
     pub fn send(&self, cmd: Value) -> Result<(), String> {
         self.dispatcher.enqueue(None, cmd)
     }
@@ -93,6 +95,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                     Err(_) => break,
                 }
             }
+            drop(tx); // Let the consumer drain receipts without waiting for process cleanup.
             alive.store(false, Ordering::Relaxed);
             d.close();
             let exited=process.lock().map(|mut c|c.wait().is_ok()).unwrap_or(false);
@@ -131,10 +134,13 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                 }
                 handle_event(&st, &line,inspection_epoch);
             }
+            // Drain every accepted stdout event before synthesizing unknown outcomes.
+            st.batch_results.lock().unwrap().ended(inspection_epoch);
         });
     }
 
     EngineHandle {
+        epoch:inspection_epoch,
         dispatcher,
         child,
         alive,
@@ -153,6 +159,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
     };
     match v.get("event").and_then(|e| e.as_str()).unwrap_or("") {
         "inspection_snapshot"=>state.on_inspection_event(inspection_epoch,&v),
+        "batch_result"=>state.batch_results.lock().unwrap().receive(inspection_epoch,&v),
         "shm_ready" => {
             let name = v["name"].as_str().unwrap_or("").to_string();
             match ShmReader::open(&name) {
@@ -200,7 +207,10 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             }
         }
         "ready" => {
-            state.inspection.lock().unwrap().ready(inspection_epoch,v["inspection_protocol"].as_u64()==Some(1));
+            let mut inspection=state.inspection.lock().unwrap();
+            if inspection.epoch!=inspection_epoch{return;}
+            inspection.ready(inspection_epoch,v["inspection_protocol"].as_u64()==Some(1));
+            state.batch_results.lock().unwrap().ready(inspection_epoch,v["batch_preflight_protocol"].as_u64()==Some(1));
             // M3-b：引擎报上来的内置预设清单（按钮文字与提交名都靠它）。
             // 不写这一臂就会落进下面的 other 分支：只进日志，前端永远拿不到。
             state.on_ready(&v);

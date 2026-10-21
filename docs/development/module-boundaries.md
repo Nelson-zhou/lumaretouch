@@ -138,3 +138,8 @@ narrow PlanPorts. None imports Engine, GPU runtimes, filesystem or native/UI cod
 BatchEditor gains a dirty callback because parked-only writes bypass live history.
 Server only wires these owners and lifecycle fence hooks. Reviewed server cap rises
 7040→7065 for this wiring; it is not permission to move transaction policy back in.
+
+The native batch host is pure receipt state; batch_api owns IPC arguments. The React
+batch workflow owns request lifecycle independently of rendering, and Actions/Review
+components only present it. App composes the entry and supplies narrow context; no
+transaction state or polling loop is embedded there. Existing caps remain unchanged.

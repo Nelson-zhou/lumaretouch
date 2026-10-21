@@ -1,3 +1,6 @@
+import {BatchActions} from './batch/BatchActions';
+import {useBatchWorkflow} from './batch/useBatchWorkflow';
+import {BatchReview} from './batch/BatchReview';
 import {useColorSampler} from './useColorSampler';
 import {ColorSamplePanel} from './components/ColorSamplePanel';
 import {useProjectWorkflow} from './projects/useProjectWorkflow';
@@ -27,7 +30,7 @@ import {
   faceStateOf, enhanceStateOf,
   report, runDeform, runEnhance, runFace,
   fetchFilmstrip, runExport, runGrade, runHistory, runHsl, runInpaint, runLight, runLut, runPick, runSession, runBackground,
-  runBatch, runCrop, runExposure, runPreset, runPrecompute, runProject, runTask,
+  runCrop, runExposure, runPreset, runPrecompute, runProject, runTask,
   setCompare, compareStatus, setStrength, shutdownEngine, startEngine,
   type BenchOptions, type DeformInfo, type DocState, type EngineStatus, type EnhanceInfo, type ExportDone,
   type ExportProgress, type HistoryReport, type HistoryState,
@@ -224,6 +227,7 @@ export default function App() {
   const [presetSel, setPresetSel] = useState("");
   const [appliedPreset, setAppliedPreset] = useState("");
   const [syncScopeLabel, setSyncScopeLabel] = useState("");
+  const [batchPolicy,setBatchPolicy]=useState("skip_and_report");
   // 视口平移/缩放（只属于显示：导出写的仍是引擎那一份像素）
   const [view, setView] = useState<View>({ ...VIEW_HOME });
   /** Fit 倍率由视口算（它才知道画布与帧尺寸）；100% = 1/(dpr*fitScale) */
@@ -453,6 +457,7 @@ export default function App() {
     const isText = (el: HTMLElement | null) =>
       !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
     const down = (e: KeyboardEvent) => {
+      if (document.querySelector('.batchReviewBackdrop')) return;
       if (e.code !== "Space" || e.repeat || isText(e.target as HTMLElement)) return;
       e.preventDefault();
       if (!pid || comparingRef.current || compareMode !== "single") return;
@@ -474,6 +479,7 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (document.querySelector('.batchReviewBackdrop')) return;
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
       const k = e.key.toLowerCase();
       if (k !== "z" && k !== "y") return;
@@ -1402,7 +1408,7 @@ export default function App() {
       case "lnx.export.v1.tiff_compression": return exportTiffComp;
       case "lnx.export.v1.output_profile": return exportProfile;
       case "lnx.export.v1.metadata_include_gps": return exportGps;
-      case "lnx.batch.v1.conflict_policy": return exportConflict;
+      case "lnx.batch.v1.conflict_policy": return batchPolicy;
       // 预设下拉读的两个都来自引擎：`last_applied` 是“套完而没被手改”那一个（参数比过
       // 才算），而不是前端记的“上次点了哪个按钮”。
       case "lnx.preset.v1.apply": {
@@ -1450,6 +1456,7 @@ export default function App() {
       return null;
     }
     if (key.startsWith("lnx.batch.v1.") || key.startsWith("lnx.export.v1.")) {
+      if (key.startsWith("lnx.batch.v1.") && (!hasImage || status?.ready_caps?.batch_preflight_protocol!==1)) return "需要已打开照片及支持预检的配套引擎。";
       if (key === "lnx.export.v1.start") {
       if (!pid || !engineAlive) return "图像处理服务未就绪，请稍候重试。";
       if (exporting) return "已经有一批在跑：一批只许一个（两条 worker 会同抢一块卡）。";
@@ -1503,7 +1510,7 @@ export default function App() {
     if (key === "lnx.export.v1.format") { setExportFormat(fmtOut[v] ?? v); return; }
     if (key === "lnx.export.v1.tiff_compression") { setExportTiffComp(v); return; }
     if (key === "lnx.export.v1.output_profile") { setExportProfile(v); return; }
-    if (key === "lnx.batch.v1.conflict_policy") { setExportConflict(v); return; }
+    if (key === "lnx.batch.v1.conflict_policy") { setBatchPolicy(v); return; }
     if (key === "lnx.preset.v1.apply") { void onPresetApplyByName(v); return; }
     if (key === "lnx.batch.v1.module_scope") { setSyncScopeLabel(v); return; }
   }
@@ -1515,6 +1522,7 @@ export default function App() {
   /** 面板按钮那一批：名字到命令的映射只在这一处（每个键对应注册表的一条）。 */
   async function p0action(key: string) {
     try {
+      if (key === "lnx.batch.v1.preflight" || key === "lnx.batch.v1.commit") {await onBatchSync();return;}
       if (key === "lnx.export.v1.start") { onExport(); return; }
       if (key === "lnx.preset.v1.save") { await onPresetSave(); return; }
       if (key === "lnx.history.v1.undo") { onHistory("undo"); return; }
@@ -1620,18 +1628,11 @@ export default function App() {
     await refreshFromEngine()
   }
 
-  async function onBatchSync() {
-    if (!selPaths.length || !syncScopeOps.length) return
-    await runBatch("commit", { docs: selPaths, moduleScope: syncScopeOps, conflictPolicy: exportConflict })
-    await refreshFromEngine()
-  }
-
-  async function onBatchUndo() {
-    const id = syncState?.last
-    if (!id) return
-    await runBatch("undo", { batchId: id })
-    await refreshFromEngine()
-  }
+  const batchWorkflow=useBatchWorkflow({docs:selPaths,moduleScope:syncScopeOps,conflictPolicy:batchPolicy,
+    sourceDocumentId:doc?.document_id??'',enabled:!!status?.engine_alive&&status?.ready_caps?.batch_preflight_protocol===1,
+    label:syncScopeLabel||syncScopes[0]?.label||''},()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));});
+  const onBatchSync=()=>batchWorkflow.start();
+  const onBatchUndo=()=>syncState?.last?batchWorkflow.undo(syncState.last):undefined;
 
   // 空格按住出原图、松开回修好的那版（DoD §3 的“按住空格实时对拍”）。
   // 光标在输入框里或按钮上时不抢：那是用户在打字/激活控件。
@@ -1642,6 +1643,7 @@ export default function App() {
         || n.tagName === "SELECT" || n.tagName === "BUTTON" || n.isContentEditable);
     };
     const down = (e: KeyboardEvent) => {
+      if (document.querySelector('.batchReviewBackdrop')) return;
       if (e.code !== "Space" || e.repeat || busyTarget(e.target)) return;
       e.preventDefault();
       void cmpHold();
@@ -1849,6 +1851,10 @@ export default function App() {
 
             {strip && strip.count > 0 && (
               <section className="gallery">
+                <BatchActions count={selPaths.length} scopes={syncScopes} scope={syncScopeLabel||syncScopes[0]?.label||''}
+                  policy={batchPolicy} onScope={setSyncScopeLabel} onPolicy={setBatchPolicy} note={syncNote}
+                  ready={hasImage&&status?.ready_caps?.batch_preflight_protocol===1} busy={['committing','preflighting'].includes(batchWorkflow.ui.phase)}
+                  unresolved={batchWorkflow.ui.phase==='uncertain'} canUndo={!!syncState?.last} onReview={onBatchSync} onUndo={onBatchUndo}/>
                 <div className="strip">
                   {strip.docs.map((d) => {
                     const rate = ratingOf(d);
@@ -2124,6 +2130,7 @@ export default function App() {
           </section>
         )}
       </main>
+      <BatchReview state={batchWorkflow.ui} onCommit={batchWorkflow.commit} onReview={batchWorkflow.start} onQuery={batchWorkflow.query} onAcknowledge={batchWorkflow.acknowledgeInspection} onClose={batchWorkflow.close}/>
       <CropModal open={cropOpen}
         imgW={status?.image?.w ?? 0} imgH={status?.image?.h ?? 0}
         crop={doc?.crop ?? null}

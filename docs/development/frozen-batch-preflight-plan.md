@@ -1,8 +1,9 @@
-# Frozen batch preflight: backend candidate, UI pending
+# Frozen batch preflight: end-to-end candidate
 
 Original AI acceptance BATCH-001 preserves source-version snapshot; BATCH-002
 protects targets edited after preflight. The new token backend freezes source/targets and consumes reviewed plans. It is
-not yet verified or wired into the native/UI review flow at this checkpoint.
+verified in focused Qoder backend checks; native/UI review wiring is now present
+but awaits its own checks at this checkpoint.
 Legacy commits without a token remain explicitly direct_unreviewed compatibility
 operations. The narrow scoped-undo correction alone did not close this gap.
 
@@ -74,8 +75,8 @@ and parked undo retaining unrelated edits; no conflicts from pure reads/selectio
   retained in terminal results. Repeated completed tokens replay before edit guards.
 - Lifecycle fences cover explicit strength, proxy recovery, internal precompute,
   failed face reattachment and device migration, not only normal edit commands.
-- Native epoch-bound receipt ownership and the user review dialog remain pending.
-  No complete BATCH-001/BATCH-002 or hardware acceptance claim is made.
+- Native epoch-bound receipt ownership and the user review dialog are wired in
+  this candidate; basic native/UI checks and hardware acceptance remain pending.
 
 ## Official / mature open-source comparison
 
@@ -91,3 +92,26 @@ The engine similarly orders mutation on one execution sequence and freezes revie
 parameters, but does not inherit SQLite's rollback journal or durability guarantees.
 Pure metadata tests, actual engine integration and later UI checks must prove our
 implementation rather than assuming these references make it correct.
+
+## Native and UI ownership
+
+`batch_host.rs` owns bounded request receipts, exact engine epoch/action/request
+correlation, readiness admission and first terminal result. Engine stdout receipts
+are drained before exit synthesizes unknown outcomes. `batch_api.rs` owns command
+arguments; main only registers and routes. Existing unreviewed compatibility
+commands remain available, but production UI synchronization always uses a token.
+
+`batchWorkflow.ts` owns a pure preflight→review→commit→receipt lifecycle. It validates
+source/target receipt identity, rejects stale review on selection/scope/policy/source
+context changes and never treats queue acceptance as success. Both IPC awaits are
+bounded. Timeouts/unknown results retain their request ID, even when the dialog is
+hidden; the persistent launcher works outside retouch/filmstrip. Fresh mutations
+remain blocked until receipt resolution or an explicit inspect-and-end-tracking
+action. This acknowledgment does not cancel or undo an already-sent command.
+
+`useBatchWorkflow` adapts React lifecycle and native ports. `BatchActions` provides
+the real filmstrip entry, independent recipe conflict policy and scoped batch undo.
+`BatchReview` shows the frozen source, modules, parameters, eligible/blocked targets
+and actual per-target outcomes. App global comparison/history shortcuts do not
+intercept dialog keys. Registry preflight/commit actions open this reviewed flow;
+they are not mislabeled export dry-run or cross-file atomic export controls.
