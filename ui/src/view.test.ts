@@ -98,11 +98,17 @@ test("缺源尺寸（0）时保守判 false：不知道是不是原始就不声�
   assert.equal(proxyIsNativeResolution(0, 0, 1024, 1280), false);
 });
 
-test("静态钉住：App 的 100% 控制真用了这个判据（不是只写个函数当摆设）", () => {
+test("100% 标签由已交付精细帧决定，不能再用近似代理尺寸推断", () => {
   const app = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
-  assert.match(app, /import\s*\{[^}]*proxyIsNativeResolution[^}]*\}\s*from\s*"\.\/view"/, "App 没 import 该判据");
-  assert.match(app, /const nativeAt100 = [\s\S]*proxyIsNativeResolution\(/, "没把判据算到 nativeAt100");
-  // 100% 按钮的 title / 代理档徽标必须走 nativeAt100，否则仍是“默认声称 100%=原始”
-  assert.match(app, /nativeAt100[\s\S]{0,400}100%/, "100% 控件没接 nativeAt100");
-  assert.match(app, /oneToOne && !nativeAt100/, "代理档降采样时没有显式标注");
+  const viewer = readFileSync(new URL("./components/Viewer.tsx", import.meta.url), "utf8");
+  const controller = readFileSync(new URL("./inspectionController.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(app, /const nativeAt100[\s\S]*?proxyIsNativeResolution\(/,
+    "尺寸接近不能替代精细像素交付证据");
+  assert.match(app, /inspectionState\.state==='ready'\?'原图精细'/);
+  assert.match(app, /compareMode!=='single'\|\|comparing\?'代理对比'/);
+  assert.match(app, /onInspectionState=\{setInspectionState\}/);
+  assert.match(viewer, /createInspectionController\(inspectionApi/);
+  assert.match(controller, /callbacks\.reveal\(intent\);callbacks\.state\(\{state:'ready'/);
+  assert.match(controller, /finalStatus\.generation===owner\.expectation\.ticket\.recipe/);
+  assert.match(controller, /finalStatus\.published_id===null/);
 });

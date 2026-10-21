@@ -39,3 +39,12 @@ The full-source worker currently renders the complete recipe before ROI output;
 this is not tiled algorithm evaluation or a performance promise. Full-resolution
 comparison, automatic inspection at arbitrary zoom, GPU worker acceptance,
 large-source tiling and production resource policy remain separate work.
+
+## First CI result retained
+
+Run 39646716653 on `a2f8cb546817bc02f8400a2ba215b426eb7ceb5a` failed its UI
+step because the old static view test mandated importing the obsolete
+`proxyIsNativeResolution` UI predicate. New controller and geometry tests passed.
+The test is updated to require the stronger delivered-frame ready state and
+explicit proxy comparison label; existing proxy predicate unit tests remain.
+This is a contract migration, not a claim that the initial run passed.
