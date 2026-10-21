@@ -1,9 +1,26 @@
 """The Rust dispatcher must be released even by rejected commands."""
 import io
 import json
+import os
 import threading
+from contextlib import contextmanager
 from unittest.mock import patch
 from lumaretouch_engine.server import Engine
+
+
+@contextmanager
+def protocol_input(lines):
+    """Exercise the same interruptible fd reader used by the Rust host."""
+    read_fd, write_fd = os.pipe()
+    with os.fdopen(read_fd, 'r', encoding='utf-8') as stream:
+        try:
+            payload = lines.encode('utf-8')
+            assert len(payload) < 4096  # Small fixture fits without a writer thread.
+            assert os.write(write_fd, payload) == len(payload)
+        finally:
+            os.close(write_fd)
+        with patch('sys.stdin', stream):
+            yield
 
 
 def test_ack_is_after_dispatch_and_survives_errors():
@@ -15,13 +32,16 @@ def test_ack_is_after_dispatch_and_survives_errors():
     calls=[]
     def ok(msg):
         assert '_host_request_id' not in msg
+        # No acknowledgement for this dispatch may escape before it returns.
+        previous = [json.loads(line) for line in out.getvalue().splitlines()]
+        assert len([e for e in previous if e['event']=='command_done']) == (0 if not calls else 3)
         calls.append(msg['cmd'])
     def fail(msg):
         raise ValueError('expected failure')
     engine._dispatch_table=lambda: {'ok':ok,'fail':fail}
     lines='\n'.join(json.dumps({'cmd':n,'_host_request_id':i})
                     for i,n in enumerate(['ok','fail','unknown','ok'],1))+'\n'
-    with patch('sys.stdin',io.StringIO(lines)),patch('sys.stdout',new_callable=io.StringIO) as out:
+    with protocol_input(lines),patch('sys.stdout',new_callable=io.StringIO) as out:
         engine.run()
     events=[json.loads(line) for line in out.getvalue().splitlines()]
     assert [e['request_id'] for e in events if e['event']=='command_done']==[1,2,3,4]
@@ -33,6 +53,6 @@ def test_plain_protocol_does_not_gain_unsolicited_ack_events():
     engine=Engine.__new__(Engine)
     engine._quit=False;engine.stop_flag=threading.Event();engine.shm=None;engine.EDIT_CMDS=()
     engine._dispatch_table=lambda:{'ok':lambda msg:None}
-    with patch('sys.stdin',io.StringIO('{"cmd":"ok"}\n')),patch('sys.stdout',new_callable=io.StringIO) as out:
+    with protocol_input('{"cmd":"ok"}\n'),patch('sys.stdout',new_callable=io.StringIO) as out:
         engine.run()
     assert out.getvalue()==''
