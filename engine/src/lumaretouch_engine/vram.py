@@ -13,6 +13,8 @@ D2H 1.8、`clip*255→uint8` 4.5。也就是说我们花了 4 倍于算法的成
 
 from __future__ import annotations
 
+from .ops import curves as curve_ops
+
 import math
 from dataclasses import dataclass, field
 
@@ -250,6 +252,9 @@ class PreviewPipeline:
         # 24 个数 = 8 段 × (色相偏移, 饱和度, 明亮度)；全 0 时 apply 一步递回。
         self.hsl_bands: tuple = (0.0,) * 24
         self.last_hsl_ms: float = 0.0
+        self.curves_spec = curve_ops.default_curves()
+        self.curves_compiled = (None,) * 4
+        self.last_curves_ms = 0.0
         # M6：换底层。挂在渲染链最尾（肤色之后、量化之前），是逐帧的 `α·前景+(1-α)·背景`。
         # 与其它层的差别：遮罩是按**这一档代理帧像素坐标**成立的，所以它随代理档作废
         # （进 PROXY_BOUND），也随设备重挂（遮罩张量活在那块卡上）。没活时 apply 一步直接
@@ -475,8 +480,8 @@ class PreviewPipeline:
         # 八色 HSL 紧跟曝光层之后、LUT 之前：它读的是曝光后的那份颜色，而表是
         # 输出变换（把 HSL 放在表后面就是“调完再套一层风格”，两份调整互相污染）。
         return self.apply_geometry(self.apply_background(self.apply_grade(self.apply_lut(
-            self.apply_hsl(self.apply_exposure(
-                self.apply_enhance(self.apply_deform(out))))))))
+            self.apply_hsl(self.apply_curves(self.apply_exposure(
+                self.apply_enhance(self.apply_deform(out)))))))))
 
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:
@@ -1476,6 +1481,36 @@ class PreviewPipeline:
         self.last_exposure_ms = (time.perf_counter() - t0) * 1000.0
         return out
 
+    # ---- Independent RGB/master point curves -----------------------------
+    def set_curves(self, spec):
+        checked = curve_ops.check_curves(spec)
+        compiled = curve_ops.tensor_bundles(checked, self.device, torch.float32)
+        # Compile/allocate completely before committing live state.
+        self.curves_spec, self.curves_compiled = checked, compiled
+        return self.curves_state()
+
+    def clear_curves(self):
+        return self.set_curves(curve_ops.default_curves())
+
+    def has_curves(self):
+        return any(bundle is not None for bundle in self.curves_compiled)
+
+    def curves_state(self):
+        return {"curves": curve_ops.check_curves(self.curves_spec), "curves_set": self.has_curves()}
+
+    def apply_curves(self, tensor):
+        self.last_curves_ms = 0.0
+        if not self.has_curves():
+            return tensor
+        start = time.perf_counter()
+        result = curve_ops.curves_t(tensor, self.curves_compiled)
+        if not torch.isfinite(result).all():
+            raise ValueError("curves produced nonfinite pixels")
+        if self.device.type != "cpu":
+            torch.cuda.synchronize(self.device)
+        self.last_curves_ms = (time.perf_counter()-start)*1000.0
+        return result
+
     # ---- 八色 HSL -----------------------------------------------------------
     def has_hsl(self) -> bool:
         return bool(self.hsl_bands != (0.0,) * 24)
@@ -1948,6 +1983,9 @@ def warm_device(device: str, side: int = 64) -> float:
         pipe.last_exposure_ms = 0.0
         pipe.hsl_bands = (0.0,) * 24
         pipe.last_hsl_ms = 0.0
+        pipe.curves_spec = curve_ops.default_curves()
+        pipe.curves_compiled = (None,) * 4
+        pipe.last_curves_ms = 0.0
         # 换底层同理：预热会话上挂的遮罩/背景张量不能让下一个真会话继承，
         # 否则 image_ready 里 bytes_bg 会多报一份用户从未点过的常驻。
         pipe.bg_matte = None

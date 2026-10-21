@@ -19,3 +19,5 @@ venv/
 # 中文密集的文件里逐处 replace 能配 count==1 断言，而手工编辑会把字写坏。
 # 它们是过程物，不是产物：不进发布物，也不进历史。）
 .scratch/
+
+/engine/src/lumaretouch_engine/bin/curve-compiler

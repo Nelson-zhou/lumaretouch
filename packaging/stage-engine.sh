@@ -10,6 +10,10 @@ mkdir -p "$stage"
 ( cd "$here/../engine/src" && tar cf - --exclude='__pycache__' --exclude='*.pyc' . ) \
   | ( cd "$stage" && tar xf - )
 
+# Ship the Rust compiler used by headless recipe restore and batch processing.
+# Build into staging, not the source tree, so no host-specific binary is committed.
+bash "$here/build-curve-compiler.sh" "$stage/lumaretouch_engine/bin/curve-compiler"
+
 # 运行时引导那两件（M5-c）也随包走：torch 不进 .deb（体积与许可），但
 # “按显卡装对应清单”这件事得有可执行的东西留在装机件里，而且它得在**没有仓库
 # 的机器上**能跑——所以 GPU 清单本身也要进包，不能只留在 engine/ 目录里。

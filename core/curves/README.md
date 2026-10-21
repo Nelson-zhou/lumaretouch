@@ -23,3 +23,15 @@ https://doi.org/10.1137/0905021
 Tests: `rustc --edition=2021 --test core/curves/curve.rs -o /tmp/lrt-curves-test`
 then `/tmp/lrt-curves-test`. CI also compiles and checks the headless adapter.
 Packaging of the adapter and actual consumption by the engine are not yet wired.
+
+Engine adapter status: the Python wrapper validates full control-point recipes,
+invokes the packaged Rust compiler with bounded stdin (no shell), caches immutable
+coefficients, and only evaluates them on NumPy/Torch. Resident pipelines now have
+an independent curves stage between exposure and HSL; it is identity by default.
+The binary is built by packaging/build-curve-compiler.sh into staging; headless
+source-tree development must run that build script once with the existing Rust
+compiler. It adds no download or startup compilation.
+
+Still not complete: application protocol, persistence/history, batch/preset/export
+state wiring, and the interactive curve editor. Until those are integrated this
+is an internal operator, not an available end-user editing tool.

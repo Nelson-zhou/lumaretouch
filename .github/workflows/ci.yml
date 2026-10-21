@@ -31,6 +31,9 @@ jobs:
           "$RUNNER_TEMP/lrt-layout" > "$RUNNER_TEMP/lrt-layout.json"
           PYTHONPATH=engine/src python3 -c 'import json,os; from lumaretouch_engine.ops.libraw_layout import LAYOUT,LIBRAW_VERSION; d=json.load(open(os.environ["RUNNER_TEMP"]+"/lrt-layout.json")); assert d.pop("libraw_version")==LIBRAW_VERSION; assert d==LAYOUT, "compiled ABI differs from committed table"'
           echo "LRT_LIBRAW_PATH=$prefix/lib/libraw_r.so" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build headless Rust curve compiler
+        run: bash packaging/build-curve-compiler.sh
       - name: 单测
         working-directory: engine
         run: uv run --group dev pytest -q
@@ -282,6 +285,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       # 只验语法，不用 py_compile：那会在仓库里留下 __pycache__
       - run: bash -n packaging/*.sh && python3 -c 'import ast,sys;[ast.parse(open(f).read(),f) for f in sys.argv[1:]]' packaging/*.py probe/*.py
       - name: 暂存引擎不应带字节码
