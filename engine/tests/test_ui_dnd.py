@@ -15,6 +15,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 APP = (REPO / "ui/src/App.tsx").read_text(encoding="utf-8")
+BENCHMARK = (REPO / "ui/src/diagnostics/useBenchmarkAutomation.ts").read_text(encoding="utf-8")
+EMPTY_PROBE = (REPO / "ui/src/diagnostics/useEmptyStateProbe.ts").read_text(encoding="utf-8")
+VIEWPORT_PROBE = (REPO / "ui/src/diagnostics/useViewportProbe.ts").read_text(encoding="utf-8")
 NATIVE = (REPO / "ui/src/native.ts").read_text(encoding="utf-8")
 MAIN = (REPO / "ui/src-tauri/src/main.rs").read_text(encoding="utf-8")
 ZH = (REPO / "ui/src/locales/zh.ts").read_text(encoding="utf-8")
@@ -124,18 +127,24 @@ def test_host_bridge_uses_the_real_tauri_parameter_names():
                 "metadata_include_gps: opts?.metadataIncludeGps"):
         assert bad not in native, f"snake_case 键 {bad} 会被 Tauri 静默丢掉"
     # 八色 HSL 那条命令与它的真窗口臂：桥里少一条就是“滑块拖了而引擎没这条命令”
-    assert "fn hsl(" in main, "宿主没有 hsl 命令"
+    edit_commands = (REPO / "ui/src-tauri/src/edit_commands.rs").read_text()
+    assert "mod edit_commands;" in main and "fn hsl(" in edit_commands, "宿主没有 hsl 命令"
     # Registration order is not a contract: new commands may sit between old ones.
     # Inspect actual handler identifiers, not an adjacent three-name substring.
     import re
     handler = main.split("tauri::generate_handler![", 1)[1].split("])", 1)[0]
     handler = re.sub(r"//[^\n]*", "", handler)
-    registered = {name.strip() for name in handler.split(",") if name.strip()}
+    registered_paths = {name.strip() for name in handler.split(",") if name.strip()}
+    registered = {name.rsplit("::", 1)[-1] for name in registered_paths}
+    for command in ("exposure", "hsl", "crop", "curves", "curve_preview"):
+        assert f"edit_commands::{command}" in registered_paths
+        assert f"fn {command}(" in edit_commands
     for command in ("exposure", "hsl", "crop", "curves", "curve_preview"):
         assert command in registered, f"{command} 没注册进 invoke_handler"
     assert "gestureId,interactive,requestId" in native, "曲线请求标识未以 camelCase 传递"
     assert '"auto_spec"' in main and '"keep_open"' in main, "M0_SPEC 的桥缺一格"
-    app = APP
+    assert "useBenchmarkAutomation({" in APP
+    app = BENCHMARK
     assert "runHsl(" in app and "LRT_AUTO_SPEC" in app, "M0_SPEC 臂或 runHsl 没接上"
     assert 'data-fit-scale' in VIEWER and 'data-frame' in VIEWER, \
         "视口没把 fitScale/帧尺寸画到 DOM 上：100% 探针读不到真倍率"
@@ -144,7 +153,8 @@ def test_auto_empty_env_reaches_the_ui_through_the_host():
     """$LRT_AUTO_EMPTY 要走完 main.rs → m0_env → M0Env 这三格（少一格就是一条静默）。"""
     assert "LRT_AUTO_EMPTY" in MAIN and '"auto_empty"' in MAIN
     assert "auto_empty: string;" in NATIVE
-    assert re.search(r"env\?\.auto_empty", APP), "前端没读这一格：第 11 臂永远不会答话"
+    assert "useEmptyStateProbe(hasImage)" in APP
+    assert re.search(r"env\?\.auto_empty", EMPTY_PROBE), "前端没读这一格：第 11 臂永远不会答话"
 
 
 PANEL = (REPO / "ui/src/components/RetouchPanel.tsx").read_text(encoding="utf-8")
@@ -254,5 +264,15 @@ def test_doc_report_is_refreshed_by_revision_not_by_source():
     而宿主一直留着上一笔答复——于是第二次刷新当场读到裁剪前的状态，报告写
     “历史 5 步、crop 还是恒等”。必须等宿主的 doc_rev 真的往前走。
     同一条臂还把引擎的 last_error 带进报告：crop 被整条拒时命令不会抛。"""
-    assert "st?.doc_rev ?? 0) > before" in APP, "刷新只认 source，会读到上一笔"
-    assert "got.cropErr" in APP, "crop 失败没把引擎原话带进报告"
+    assert "st?.doc_rev ?? 0) > before" in BENCHMARK, "刷新只认 source，会读到上一笔"
+    assert "got.cropErr" in BENCHMARK, "crop 失败没把引擎原话带进报告"
+
+
+def test_diagnostics_are_explicit_modules_not_part_of_product_or_dev_only():
+    assert "useViewportProbe(setImgPath)" in APP
+    assert "useBenchmarkAutomation({" in APP
+    assert "useEmptyStateProbe(hasImage)" in APP
+    assert "let viewportProbeStarted=false" in VIEWPORT_PROBE
+    assert "let m0Started=false" in BENCHMARK
+    assert "import.meta.env.DEV" not in BENCHMARK + VIEWPORT_PROBE + EMPTY_PROBE
+    assert 'from "../App"' not in BENCHMARK + VIEWPORT_PROBE + EMPTY_PROBE
