@@ -93,17 +93,18 @@ export interface SessionEdits {
 }
 
 /** 当前文档的完整编辑状态（引擎是唯一出处）。 */
-export type CurveChannel = "master" | "red" | "green" | "blue";
+export type CurveChannel = "master" | "red" | "green" | "blue" | "luminance";
 export type CurveSpec = {
-  version: 1; space: "srgb-display"; interpolation: "pchip"; boundary: "linear";
+  version: 1 | 2; space: "srgb-display"; interpolation: "pchip"; boundary: "linear";
   enabled: boolean; master: [number,number][]; red: [number,number][];
   green: [number,number][]; blue: [number,number][];
+  luminance_space?: "linear-srgb-y-ratio"; luminance?: [number,number][];
 };
 export const neutralCurves = (): CurveSpec => ({version:1,space:"srgb-display",interpolation:"pchip",boundary:"linear",enabled:true,
   master:[[0,0],[1,1]],red:[[0,0],[1,1]],green:[[0,0],[1,1]],blue:[[0,0],[1,1]]});
 export const runCurves = (action:"set"|"clear", spec?:CurveSpec, gestureId?:string, interactive=false, requestId?:string) =>
   invoke<{requested:boolean}>("curves",{action,spec,gestureId,interactive,requestId});
-export const previewCurves = (spec:CurveSpec) => invoke<Record<CurveChannel,number[]>>("curve_preview",{spec});
+export const previewCurves = (spec:CurveSpec) => invoke<Partial<Record<CurveChannel,number[]>>>("curve_preview",{spec});
 
 export interface DocState {
   curves?: CurveSpec;

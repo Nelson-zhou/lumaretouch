@@ -75,7 +75,7 @@ jobs:
           python3 -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/lrt-curves.json")); assert d["version"]==1 and not d["identity"] and len(d["segments"])==2'
       - name: cargo check
         working-directory: ui/src-tauri
-        run: cargo check && cargo test --bin lumaretouch dispatch::tests && cargo test --bin lumaretouch inspection
+        run: cargo check && cargo test --bin lumaretouch dispatch::tests && cargo test --bin lumaretouch inspection && cargo test --bin lumaretouch edit_commands::tests
 
   # GPU 门禁：需要 self-hosted runner。用仓库 variable 开关，没 runner 时根本不该排队
   # （之前写 `if: github.repository != ''` 永远为真，结不上标签只会无限 waiting）。

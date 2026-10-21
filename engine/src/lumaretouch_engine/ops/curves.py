@@ -15,6 +15,8 @@ from ..optional_dependencies import optional_module
 torch = optional_module('torch')
 CHANNELS = ('master', 'red', 'green', 'blue')
 HEADER = dict(version=1, space='srgb-display', interpolation='pchip', boundary='linear')
+LUMINANCE_SPACE = 'linear-srgb-y-ratio'
+Y_WEIGHTS = (0.21263900587151036, 0.7151686787677559, 0.07219231536073371)
 
 
 def default_curves():
@@ -24,14 +26,24 @@ def default_curves():
 def check_curves(value):
     if value is None:
         return default_curves()
-    if not isinstance(value, dict) or set(value) != set(HEADER) | {'enabled', *CHANNELS}:
-        raise ValueError('curves: expected complete versioned RGB/master recipe')
-    if any(value[k] != v or type(value[k]) is not type(v) for k, v in HEADER.items()):
+    if not isinstance(value, dict):
+        raise ValueError('curves: expected a versioned recipe')
+    version = value.get('version')
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError('curves: unsupported version')
+    channels = CHANNELS + (('luminance',) if version == 2 else ())
+    extra = {'luminance', 'luminance_space'} if version == 2 else set()
+    if set(value) != set(HEADER) | {'enabled', *CHANNELS} | extra:
+        raise ValueError('curves: expected complete versioned recipe')
+    if version == 2 and value['luminance_space'] != LUMINANCE_SPACE:
+        raise ValueError('curves: unsupported luminance colour domain')
+    if any(value[k] != v or type(value[k]) is not type(v) for k, v in HEADER.items() if k != 'version'):
         raise ValueError('curves: unsupported schema, colour space or interpolation')
     if type(value['enabled']) is not bool:
         raise ValueError('curves: enabled must be boolean')
-    result = dict(**HEADER, enabled=value['enabled'])
-    for channel in CHANNELS:
+    result = dict(**HEADER, enabled=value['enabled']); result['version'] = version
+    if version == 2: result['luminance_space'] = LUMINANCE_SPACE
+    for channel in channels:
         points = value[channel]
         if not isinstance(points, (list, tuple)) or not 2 <= len(points) <= 64:
             raise ValueError('curves: each channel needs 2..64 points')
@@ -53,7 +65,7 @@ def check_curves(value):
 
 def is_identity(value):
     spec = check_curves(value)
-    return not spec['enabled'] or all(x == y for c in CHANNELS for x, y in spec[c])
+    return not spec['enabled'] or all(x == y for c in CHANNELS + (('luminance',) if spec['version'] == 2 else ()) for x, y in spec[c])
 
 
 def _compiler_path():
@@ -93,8 +105,9 @@ def _compile_channel(points):
 def compile_curves(value):
     spec = check_curves(value)
     if not spec['enabled']:
-        return (None,) * 4
-    return tuple(_compile_channel(tuple(map(tuple, spec[c]))) for c in CHANNELS)
+        return (None,) * 5
+    return tuple(_compile_channel(tuple(map(tuple, spec[c]))) for c in CHANNELS) + (
+        _compile_channel(tuple(map(tuple, spec['luminance']))) if spec['version'] == 2 else None,)
 
 
 def _eval_np(x, bundle):
@@ -116,8 +129,19 @@ def curves_np(rgb, spec):
         return rgb
     if rgb.ndim < 1 or rgb.shape[-1] != 3 or not np.issubdtype(rgb.dtype, np.floating):
         raise ValueError('curves_np expects floating RGB with last dimension 3')
-    return np.stack([_eval_np(_eval_np(rgb[..., i], bundles[0]), bundles[i+1])
-                     for i in range(3)], axis=-1)
+    result = np.stack([_eval_np(_eval_np(rgb[..., i], bundles[0]), bundles[i+1])
+                       for i in range(3)], axis=-1)
+    if bundles[4] is None: return result
+    # Extended sRGB TRC, preserving sign and HDR values until the output stage.
+    a = np.abs(result)
+    linear = np.sign(result) * np.where(a <= .04045, a / 12.92, ((a + .055) / 1.055) ** 2.4)
+    y = sum(linear[..., i] * weight for i, weight in enumerate(Y_WEIGHTS))
+    target = _eval_np(y, bundles[4])
+    negative_extent = np.maximum(-linear.min(axis=-1), 0.)
+    denominator = np.maximum(y, 1e-7) + negative_extent
+    linear = linear + (target-y)[..., None] * (1. + (linear-y[..., None])/denominator[..., None])
+    a = np.abs(linear)
+    return (np.sign(linear) * np.where(a <= .0031308, 12.92*a, 1.055*a**(1/2.4)-.055)).astype(rgb.dtype, copy=False)
 
 
 def tensor_bundles(spec, device, dtype):
@@ -143,5 +167,15 @@ def curves_t(rgb, bundles):
         return rgb
     if rgb.ndim != 4 or rgb.shape[1] != 3:
         raise ValueError('curves_t expects NCHW RGB')
-    return torch.stack([_eval_t(_eval_t(rgb[:, i], bundles[0]), bundles[i+1])
-                        for i in range(3)], dim=1)
+    result = torch.stack([_eval_t(_eval_t(rgb[:, i], bundles[0]), bundles[i+1])
+                          for i in range(3)], dim=1)
+    if bundles[4] is None: return result
+    a = result.abs()
+    linear = result.sign() * torch.where(a <= .04045, a / 12.92, ((a + .055) / 1.055).pow(2.4))
+    y = sum(linear[:, i] * weight for i, weight in enumerate(Y_WEIGHTS))
+    target = _eval_t(y, bundles[4])
+    negative_extent = (-linear.amin(dim=1)).clamp_min(0.)
+    denominator = y.clamp_min(1e-7) + negative_extent
+    linear = linear + (target-y)[:, None] * (1. + (linear-y[:, None])/denominator[:, None])
+    a = linear.abs()
+    return linear.sign() * torch.where(a <= .0031308, 12.92*a, 1.055*a.pow(1/2.4)-.055)

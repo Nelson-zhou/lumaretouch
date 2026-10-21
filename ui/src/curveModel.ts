@@ -1,6 +1,6 @@
 import type {CurveSpec} from './native';
 export const curveSignature=(s:CurveSpec)=>JSON.stringify([s.version,s.space,s.interpolation,s.boundary,s.enabled,
-  s.master,s.red,s.green,s.blue]);
+  s.master,s.red,s.green,s.blue,s.luminance_space,s.luminance]);
 export function movedCurvePoint(points:[number,number][],i:number,x:number,y:number):[number,number]{
   const clamp=(v:number,lo:number,hi:number)=>Math.max(lo,Math.min(hi,v));
   const lo=i>0?points[i-1][0]+1e-5:0,hi=i<points.length-1?points[i+1][0]-1e-5:1;
@@ -10,4 +10,11 @@ export function movedCurvePoint(points:[number,number][],i:number,x:number,y:num
 }
 export function matchesCurveResult(pendingId:string|undefined,resultId:string|undefined){
   return !!pendingId && pendingId===resultId;
+}
+
+export type EditableCurveSpec=CurveSpec & {luminance:[number,number][]};
+export function editableCurveSpec(s:CurveSpec):EditableCurveSpec {
+  const luminance:[number,number][]=s.luminance??[[0,0],[1,1]];
+  return {...structuredClone(s),version:2,luminance_space:'linear-srgb-y-ratio',
+    luminance:structuredClone(luminance)};
 }

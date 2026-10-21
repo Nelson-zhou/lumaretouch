@@ -196,6 +196,8 @@ const WIRED: Record<string, string> = {
   "PC-32455|曲线/红": "curves.control",
   "PC-32455|曲线/绿": "curves.control",
   "PC-32455|曲线/蓝": "curves.control",
+  "PC-32455|曲线/亮度": "curves.control",
+  "PC-32455|曲线/亮度通道曲线": "curves.control",
   "PC-32455|曲线/添加控制点": "curves.control",
   "PC-32455|曲线/删除控制点": "curves.control",
   "PC-32455|曲线/移动控制点": "curves.control",

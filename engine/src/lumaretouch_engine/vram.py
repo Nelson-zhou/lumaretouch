@@ -253,7 +253,7 @@ class PreviewPipeline:
         self.hsl_bands: tuple = (0.0,) * 24
         self.last_hsl_ms: float = 0.0
         self.curves_spec = curve_ops.default_curves()
-        self.curves_compiled = (None,) * 4
+        self.curves_compiled = (None,) * 5
         self.last_curves_ms = 0.0
         # M6：换底层。挂在渲染链最尾（肤色之后、量化之前），是逐帧的 `α·前景+(1-α)·背景`。
         # 与其它层的差别：遮罩是按**这一档代理帧像素坐标**成立的，所以它随代理档作废
@@ -1996,7 +1996,7 @@ def warm_device(device: str, side: int = 64) -> float:
         pipe.hsl_bands = (0.0,) * 24
         pipe.last_hsl_ms = 0.0
         pipe.curves_spec = curve_ops.default_curves()
-        pipe.curves_compiled = (None,) * 4
+        pipe.curves_compiled = (None,) * 5
         pipe.last_curves_ms = 0.0
         # 换底层同理：预热会话上挂的遮罩/背景张量不能让下一个真会话继承，
         # 否则 image_ready 里 bytes_bg 会多报一份用户从未点过的常驻。

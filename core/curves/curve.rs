@@ -87,6 +87,29 @@ impl Curve {
     }
 }
 
+/// Versioned luminance mode: extended linear-sRGB Y ratio after RGB curves.
+/// These scalar references also define NumPy/Torch parity vectors. They are not
+/// a claim that the GPU image is downloaded for scalar Rust processing.
+pub const Y_WEIGHTS: [f64; 3] = [0.21263900587151036, 0.7151686787677559, 0.07219231536073371];
+pub fn srgb_decode(value: f64) -> f64 {
+    let x=value.abs();
+    value.signum()*if x<=0.04045 {x/12.92} else {((x+0.055)/1.055).powf(2.4)}
+}
+pub fn srgb_encode(value: f64) -> f64 {
+    let x=value.abs();
+    value.signum()*if x<=0.0031308 {12.92*x} else {1.055*x.powf(1.0/2.4)-0.055}
+}
+pub fn apply_luminance(rgb: [f64; 3], curve: &Curve) -> [f64; 3] {
+    if curve.identity {return rgb;}
+    let linear=rgb.map(srgb_decode);
+    let y=linear.iter().zip(Y_WEIGHTS).map(|(c,w)|c*w).sum::<f64>();
+    let target=curve.evaluate(y);
+    let negative_extent=(-linear.iter().copied().fold(f64::INFINITY,f64::min)).max(0.0);
+    let denominator=y.max(1e-7)+negative_extent;
+    let adjusted=linear.map(|c|c+(target-y)*(1.0+(c-y)/denominator));
+    adjusted.map(srgb_encode)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,5 +157,29 @@ mod tests {
             vec![Point{x:0.0,y:0.0},Point{x:0.0,y:0.5},Point{x:1.0,y:1.0}],
             vec![Point{x:0.0,y:0.0},Point{x:1e-7,y:0.5},Point{x:1.0,y:1.0}],
             vec![Point{x:0.0,y:-0.1},Point{x:1.0,y:1.0}]] {assert!(compile(&p).is_err());}
+    }
+}
+
+#[cfg(test)]
+mod luminance_tests {
+    use super::*;
+    #[test] fn identity_keeps_signed_zero_and_hdr_exact() {
+        let curve=compile(&[Point{x:0.,y:0.},Point{x:1.,y:1.}]).unwrap();
+        let rgb=[-0.,-0.3,4.];let result=apply_luminance(rgb,&curve);
+        for i in 0..3 {assert_eq!(rgb[i].to_bits(),result[i].to_bits());}
+    }
+    #[test] fn transfer_functions_round_trip_extended_values() {
+        for x in [-2.,-0.1,-0.,0.,0.01,0.04045,0.5,1.,3.] {
+            assert!((srgb_encode(srgb_decode(x))-x).abs()<1e-7);
+        }
+    }
+    #[test] fn black_lift_is_neutral_and_coloured_ratio_is_preserved() {
+        let curve=compile(&[Point{x:0.,y:0.1},Point{x:1.,y:0.9}]).unwrap();
+        let black=apply_luminance([0.;3],&curve);
+        assert!((black[0]-srgb_encode(0.1)).abs()<1e-12);
+        assert_eq!(black[0],black[1]);assert_eq!(black[1],black[2]);
+        let rgb=[0.2,0.5,0.8];let before=rgb.map(srgb_decode);
+        let after=apply_luminance(rgb,&curve).map(srgb_decode);
+        assert!((before[0]/before[2]-after[0]/after[2]).abs()<1e-12);
     }
 }

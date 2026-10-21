@@ -113,16 +113,20 @@ pub(crate) fn crop(
 #[tauri::command]
 pub(crate) fn curve_preview(spec: Value) -> Result<Value, String> {
     let object = spec.as_object().ok_or("curves spec must be an object")?;
-    let expected = ["version", "space", "interpolation", "boundary", "enabled", "master", "red", "green", "blue"];
+    let version = spec["version"].as_u64().ok_or("invalid curve version")?;
+    let mut expected = vec!["version", "space", "interpolation", "boundary", "enabled", "master", "red", "green", "blue"];
+    if version == 2 { expected.extend(["luminance", "luminance_space"]); }
     if object.len() != expected.len() || object.keys().any(|k| !expected.contains(&k.as_str())) {
         return Err("curves spec has missing/unknown fields".into());
     }
-    if spec["version"].as_u64() != Some(1) || spec["space"] != "srgb-display" ||
+    if ![1,2].contains(&version) || (version == 2 && spec["luminance_space"] != "linear-srgb-y-ratio") || spec["space"] != "srgb-display" ||
        spec["interpolation"] != "pchip" || spec["boundary"] != "linear" || !spec["enabled"].is_boolean() {
         return Err("unsupported curve schema/colour space".into());
     }
     let mut samples = serde_json::Map::new();
-    for channel in ["master", "red", "green", "blue"] {
+    let mut channels=vec!["master", "red", "green", "blue"];
+    if version == 2 { channels.push("luminance"); }
+    for channel in channels {
         let rows = spec[channel].as_array().ok_or("curve points must be an array")?;
         if !(2..=point_curve::MAX_POINTS).contains(&rows.len()) {return Err("curve point count out of range".into());}
         let mut points = Vec::with_capacity(rows.len());
@@ -160,3 +164,26 @@ pub(crate) fn curves(state: State<'_, Arc<AppState>>, action: String, spec: Opti
     Ok(json!({"requested":true}))
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn neutral()->Value {json!({"version":1,"space":"srgb-display","interpolation":"pchip",
+        "boundary":"linear","enabled":true,"master":[[0,0],[1,1]],"red":[[0,0],[1,1]],
+        "green":[[0,0],[1,1]],"blue":[[0,0],[1,1]]})}
+    #[test] fn old_rgb_recipe_keeps_four_native_sample_channels() {
+        let result=curve_preview(neutral()).unwrap();
+        assert_eq!(result.as_object().unwrap().len(),4);
+        assert_eq!(result["master"][128],json!(0.5));
+    }
+    #[test] fn luminance_requires_explicit_domain_and_uses_same_compiler() {
+        let mut value=neutral();value["version"]=json!(2);
+        assert!(curve_preview(value.clone()).is_err());
+        value["luminance_space"]=json!("linear-srgb-y-ratio");
+        value["luminance"]=json!([[0,0.1],[1,0.9]]);
+        let result=curve_preview(value.clone()).unwrap();
+        assert_eq!(result.as_object().unwrap().len(),5);
+        assert_eq!(result["luminance"][128],json!(0.5));
+        value["luminance_space"]=json!("lab-l");assert!(curve_preview(value).is_err());
+    }
+}

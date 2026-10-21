@@ -1,7 +1,7 @@
 {
   "schema": "lrt.registry.extensions.v1",
   "source": "Linux开源人像修图产品指导手册:首版基础曲线; AI开发资料包:RGB/单通道节点编辑",
-  "scope_note": "RGB/master points only. Luminance and parametric curves remain unimplemented. Original frozen registry is unchanged.",
+  "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Parametric curves, eyedroppers and histogram are separate unfinished features. Original frozen registry is unchanged.",
   "entries": [
     {
       "operation_id": "lnx.curves.v1",

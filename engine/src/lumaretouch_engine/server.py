@@ -6315,7 +6315,7 @@ class Engine:
             b.append(f"曝光/白平衡/影调={tuple(round(float(v), 4) for v in expo[:7])}")
         # 八色 HSL：24 元组（8 段 × 色相/饱和度/明亮度），任一分量非零都会动像素。
         if not CURVES.is_identity(getattr(self, "_curves", None)):
-            b.append("RGB/master 曲线")
+            b.append("RGB/master 曲线（含亮度通道）")
         hsl = list(self._hsl) + [0.0] * 24
         if any(abs(float(v)) > 0.0 for v in hsl[:24]):
             b.append("八色 HSL（有色调偏移）")

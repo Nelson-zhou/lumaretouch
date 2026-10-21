@@ -28,9 +28,9 @@ def test_curves_module_sync_does_not_touch_lut_or_exposure():
 def test_nonidentity_curves_prevent_16bit_neutral_passthrough():
     e=Engine('curve-export-test')
     e._curves['red'][0][1]=.1
-    assert 'RGB/master 曲线' in e._master16_blockers(scale=1,sharpen=0)
-    assert 'RGB/master 曲线' in Engine._master16_snapshot_blockers({'curves':e._curves})
-    assert 'RGB/master 曲线' not in Engine._master16_snapshot_blockers({})
+    assert 'RGB/master 曲线（含亮度通道）' in e._master16_blockers(scale=1,sharpen=0)
+    assert 'RGB/master 曲线（含亮度通道）' in Engine._master16_snapshot_blockers({'curves':e._curves})
+    assert 'RGB/master 曲线（含亮度通道）' not in Engine._master16_snapshot_blockers({})
 
 
 def test_gesture_identity_does_not_merge_different_drags():
