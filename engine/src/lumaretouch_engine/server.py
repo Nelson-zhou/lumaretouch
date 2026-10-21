@@ -164,6 +164,9 @@ class Engine:
         self._inspection_snapshot_last_id = 0
         self._inspection_snapshot_state = "idle"
         self._inspection_snapshot_request = None
+        self._inspection_job = None
+        self._inspection_render_config = None
+        self._inspection_snapshot_error = None
         self._pipe_out = None
         self._vram = None
         # 常驻会话对应的那张源图（CPU 侧 numpy），留着是为了换设备时能就地重建。
@@ -7029,46 +7032,90 @@ class Engine:
         emit({"event": "batch_undone", "batch_id": bid, "module_scope": ops,
               "restored": restored, "conflicts": conflicts, "doc_state": self.doc_state()})
 
-    # Internal preparation endpoint. This does not produce a full-quality frame
-    # or expose the unfinished 100% viewer feature.
+    # Internal preparation/render endpoint. The host/Viewer 100% UI is separate.
     SNAPSHOT_TICK_BYTES = 1024 * 1024
     SNAPSHOT_MAX_ASSET_BYTES = 512 * 1024 * 1024
 
     def _snapshot_emit(self, error=None):
         tx = getattr(self, "_inspection_snapshot_tx", None)
         result = getattr(self, "_inspection_snapshot_result", None)
-        emit({"event": "inspection_snapshot", "preparation_only": True,
+        job = getattr(self, "_inspection_job", None)
+        detail = error or (job.error if job is not None else None)
+        if detail is not None:
+            self._inspection_snapshot_error = detail
+        asset_bytes = tx.asset_bytes if tx is not None else (result.asset_bytes if result else (job.asset_bytes if job is not None else 0))
+        emit({"event": "inspection_snapshot", "preparation_only": getattr(self, "_inspection_render_config", None) is None,
               "request_id": getattr(self, "_inspection_snapshot_id", None),
               "state": getattr(self, "_inspection_snapshot_state", "idle"),
-              "asset_bytes": tx.asset_bytes if tx is not None else (result.asset_bytes if result else 0),
-              "copied_bytes": tx.copied_bytes if tx is not None else (result.asset_bytes if result else 0),
-              "error": error})
+              "asset_bytes": asset_bytes,
+              "copied_bytes": tx.copied_bytes if tx is not None else asset_bytes,
+              "result_path": os.path.join(job.directory, "result.lrif") if job is not None and job.state == "ready" else None,
+              "error": getattr(self, "_inspection_snapshot_error", None)})
 
     def _cancel_snapshot(self, reason="invalidated", *, notify=True):
         tx = getattr(self, "_inspection_snapshot_tx", None)
-        active = tx is not None or getattr(self, "_inspection_snapshot_result", None) is not None
+        job = getattr(self, "_inspection_job", None)
+        active = tx is not None or getattr(self, "_inspection_snapshot_result", None) is not None or job is not None
+        if job is not None:
+            job.cancel()
+            if not job.running:
+                job.cleanup()
+                self._inspection_job = None
         if tx is not None:
             tx.cancel()
         self._inspection_snapshot_tx = None
         self._inspection_snapshot_result = None
         self._inspection_snapshot_request = None
         if active:
-            self._inspection_snapshot_state = "cancelled"
+            self._inspection_snapshot_state = "cancelling" if job is not None and job.running else "cancelled"
             if notify:
                 self._snapshot_emit(reason)
 
     def _tick_snapshot(self):
+        job = getattr(self, "_inspection_job", None)
+        if job is not None:
+            before = job.state
+            job.tick(self.SNAPSHOT_TICK_BYTES)
+            self._inspection_snapshot_state = job.state
+            if job.state != before:
+                self._snapshot_emit()
+            if job.state in ("cancelled", "failed") and not job.running:
+                self._inspection_job = None
+            return
         tx = getattr(self, "_inspection_snapshot_tx", None)
         if tx is None:
             return
         if tx.advance(self.SNAPSHOT_TICK_BYTES):
             self._inspection_snapshot_result = tx.take_result()
             self._inspection_snapshot_tx = None
-            self._inspection_snapshot_state = "ready"
+            config = getattr(self, "_inspection_render_config", None)
+            if config is not None:
+                from .inspection_job import InspectionJob
+                request = self._inspection_snapshot_request
+                self._inspection_job = InspectionJob(self._inspection_snapshot_result,
+                    request["path"], request["source_identity"], config, request["max_asset_bytes"])
+                self._inspection_snapshot_result = None
+                self._inspection_snapshot_state = "spooling"
+            else:
+                self._inspection_snapshot_state = "ready"
             self._snapshot_emit()
 
+    def _snapshot_pending(self):
+        job = getattr(self, "_inspection_job", None)
+        return (getattr(self, "_inspection_snapshot_tx", None) is not None or
+                (job is not None and job.state in ("spooling", "rendering", "cancelling")))
+
+    def _finish_inspection_shutdown(self):
+        self._cancel_snapshot("engine_exit", notify=False)
+        job = getattr(self, "_inspection_job", None)
+        if job is not None:
+            if job.process is not None:
+                job.process.wait()  # SIGKILL sent by cancel; never abandon child/lease.
+            job.cleanup()
+            self._inspection_job = None
+
     def cmd_inspection_snapshot(self, p: dict):
-        unknown = set(p) - {"cmd", "action", "request_id", "max_asset_bytes"}
+        unknown = set(p) - {"cmd", "action", "request_id", "max_asset_bytes", "render"}
         if unknown:
             raise ValueError(f"inspection_snapshot unknown fields: {sorted(unknown)}")
         action = p.get("action", "status")
@@ -7084,7 +7131,8 @@ class Engine:
             if request_id != getattr(self, "_inspection_snapshot_id", None):
                 raise ValueError("inspection_snapshot request identity mismatch")
             self._cancel_snapshot(action, notify=False)
-            self._inspection_snapshot_state = "cancelled" if action == "cancel" else "released"
+            if getattr(self, "_inspection_job", None) is None:
+                self._inspection_snapshot_state = "cancelled" if action == "cancel" else "released"
             self._snapshot_emit()
             return
         if action != "start":
@@ -7099,12 +7147,26 @@ class Engine:
             raise ValueError("inspection_snapshot is busy with export/benchmark")
         if int(request_id) <= getattr(self, "_inspection_snapshot_last_id", 0):
             raise ValueError("inspection_snapshot request IDs must increase")
+        config = p.get("render")
+        if config is not None:
+            from .inspection_job import validate_config
+            config = validate_config(config)
+            if config["ticket"][0] != request_id:
+                raise ValueError("Inspection render ticket differs from request ID")
         self._cancel_snapshot("superseded")
+        if getattr(self, "_inspection_job", None) is not None:
+            raise ValueError("Previous inspection worker is still exiting; retry after cancellation")
+        self._inspection_render_config = config
+        self._inspection_snapshot_error = None
         self._inspection_snapshot_last_id = int(request_id)
         self._inspection_snapshot_id = request_id
         self._inspection_snapshot_request = {"path": self._doc_path,
             "proxy_hw": (int(self._vram.h), int(self._vram.w)), "request_id": request_id}
         try:
+            if config is not None:
+                from .inspection_worker import source_identity
+                self._inspection_snapshot_request.update(source_identity=source_identity(self._doc_path),
+                                                         max_asset_bytes=limit)
             from .render_snapshot import SnapshotTransaction
             snap = self._state_to_export_snap(self._capture_state(), device="cpu", scale=1,
                                                upscale_backend="lanczos3", sharpen=0)
@@ -7158,6 +7220,14 @@ class Engine:
             # source arrays/recipes, including history, load, export and shutdown.
             if name not in ("hello", "inspection_snapshot"):
                 self._cancel_snapshot("command:" + name)
+                job = getattr(self, "_inspection_job", None)
+                heavy = name in ("export", "bench_start") or (name == "task" and msg.get("action") in ("resume", "retry"))
+                if heavy and job is not None and job.running:
+                    reason = "Inspection worker is exiting; heavy work must wait for its lease"
+                    if name == "bench_start":
+                        self._reject_bench(reason, msg.get("mode", "copy"))
+                        return
+                    raise ValueError(reason)
             if name in self.EDIT_CMDS:
                 # 推送点只在这里这一处（见 EDIT_CMDS 的说明）：执行前抄快照，
                 # 执行后比对签名决定占不占一步。异常也记（finally）——半改完的
@@ -7235,13 +7305,16 @@ class Engine:
                 try:
                     line = inbox.get_nowait()
                 except queue.Empty:
-                    if getattr(self, "_inspection_snapshot_tx", None) is not None:
+                    if self._snapshot_pending():
                         try:
                             self._tick_snapshot()
                         except Exception as exc:
                             self._cancel_snapshot(notify=False)
                             self._inspection_snapshot_state = "failed"
                             self._snapshot_emit(str(exc))  # never retain traceback in job state
+                        job = getattr(self, "_inspection_job", None)
+                        if job is not None and job.running:
+                            time.sleep(.005)  # bounded poll cadence, no busy-spin while rendering
                         continue
                     try:
                         line = inbox.get(timeout=.1)
@@ -7263,7 +7336,7 @@ class Engine:
                 os.close(wake_read)
                 os.close(wake_write)
                 self._command_inbox = None
-                self._cancel_snapshot("engine_exit", notify=False)
+                self._finish_inspection_shutdown()
                 self.stop_flag.set()
                 if self.shm:
                     self.shm.close()
