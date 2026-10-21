@@ -1123,7 +1123,7 @@ export const compareStatus = () => invoke<{ capture_id: string | null; doc: stri
 export const setStrength = (
   value: number,
   opts?: { channel?: string; radius?: number; eps?: number; detailGain?: number;
-           midGain?: number; broadGain?: number; textureRadius?: number },
+           midGain?: number; broadGain?: number; textureRadius?: number; interactionKey?: string },
 ) =>
   invoke<{ value: number }>("set_strength", {
     value,
@@ -1134,6 +1134,7 @@ export const setStrength = (
     midGain: opts?.midGain,
     broadGain: opts?.broadGain,
     textureRadius: opts?.textureRadius,
+    interactionKey: opts?.interactionKey,
   });
 
 /** 对当前已导入的图跑一次导入期预计算；结果靠 engineStatus().precompute 轮询。 */
@@ -1547,6 +1548,7 @@ export const runExposure = (
   v: { ev?: number; temperature_shift?: number; tint_shift?: number;
        reference_k?: number; contrast?: number; highlights?: number;
        shadows?: number; saturation?: number } = {},
+  interactive = false,
 ) =>
   // Tauri 的命令参数在 JS 侧是 **camelCase**（Rust 的 temperature_shift 对应
   // temperatureShift）。上一版这里原样展开了 snake_case 的键：Tauri 把不认识的键
@@ -1562,6 +1564,7 @@ export const runExposure = (
     highlights: v.highlights,
     shadows: v.shadows,
     saturation: v.saturation,
+    interactive,
   });
 
 /** 八色 HSL：band 0…7（红/橙/黄/绿/青/蓝/紫/洋红），dh/ds/dl 为这一段的三个量。
@@ -1570,7 +1573,8 @@ export const runHsl = (
   action: "set" | "clear",
   band?: number,
   v: { dh?: number; ds?: number; dl?: number } = {},
-) => invoke<{ requested: boolean }>("hsl", { action, band, ...v });
+  interactive = false,
+) => invoke<{ requested: boolean }>("hsl", { action, band, ...v, interactive });
 
 /** 裁剪/旋转（P0 lnx.crop.v1）：rect 归一化，正角顺时针——口径在引擎 ops/geometry.py。 */
 export const runCrop = (

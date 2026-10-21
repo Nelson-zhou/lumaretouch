@@ -6,6 +6,8 @@
 #![recursion_limit = "256"]
 
 mod engine;
+mod edit_queue;
+mod dispatch;
 mod shm;
 
 use std::sync::{Arc, Mutex};
@@ -572,6 +574,13 @@ impl AppState {
         self.frames.lock().unwrap().bench_done = true;
     }
 
+    fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
+        let guard=self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
+        guard.as_ref().ok_or("引擎未启动")?.send_interactive(key,cmd)?;
+        *self.history_dirty.lock().unwrap()=true;
+        Ok(())
+    }
+
     fn send_to_engine(&self, cmd: Value) -> Result<(), String> {
         // M5-b：命令名先取出来（cmd 下面会被 send 吃掉）。它只用来标"可能有新的一步"，
         // 宿主不数步数、不自己判哪条命令算编辑——名单由引擎的 ready 报
@@ -851,6 +860,7 @@ fn set_strength(
     mid_gain: Option<f64>,
     broad_gain: Option<f64>,
     texture_radius: Option<u64>,
+    interaction_key: Option<String>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "set_strength", "value": value});
     if let Some(c) = channel.filter(|s| !s.is_empty()) {
@@ -878,7 +888,10 @@ fn set_strength(
     if let Some(v) = texture_radius {
         cmd["texture_radius"] = json!(v);
     }
-    state.send_to_engine(cmd)?;
+    if let Some(key) = interaction_key.filter(|k| ["strength", "detail", "broad", "radius"].contains(&k.as_str())) {
+        let scope=cmd.get("channel").cloned().unwrap_or(Value::Null);
+        state.send_interactive(format!("skin:{scope}:{key}"),cmd)?;
+    } else { state.send_to_engine(cmd)?; }
     Ok(json!({"value": value}))
 }
 
@@ -1499,6 +1512,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let history = state.history.lock().unwrap().clone();
     let history_rev = *state.history_rev.lock().unwrap();
     let history_dirty = *state.history_dirty.lock().unwrap();
+    let edit_queue = state.engine.lock().unwrap().as_ref().map(|h| h.queue_stats());
     let doc_report = state.doc_report.lock().unwrap().clone();
     let doc_rev = *state.doc_rev.lock().unwrap();
     let thumbs_ready = state.thumbs.lock().unwrap().len();
@@ -1530,6 +1544,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            // 都只看这两项，前端不许自己数步数
            "history": history, "history_rev": history_rev,
            "history_dirty": history_dirty,
+           "edit_queue": edit_queue,
            "doc_report": doc_report, "doc_rev": doc_rev,
            // 项目面与任务台账（LNX-P0-PROJECT / LNX-P0-TASK）：小载荷（没像素），
            // 所以进轮询；UI 的“未保存”徽章与队列按钮全看这几项，不自己数
@@ -1859,6 +1874,7 @@ fn exposure(
     highlights: Option<f64>,
     shadows: Option<f64>,
     saturation: Option<f64>,
+    interactive: Option<bool>,
 ) -> Result<Value, String> {
     const ACTIONS: [&str; 2] = ["set", "clear"];
     if !ACTIONS.contains(&action.as_str()) {
@@ -1879,7 +1895,11 @@ fn exposure(
             cmd[k] = v;
         }
     }
-    state.send_to_engine(cmd)?;
+    if interactive == Some(true) && action == "set" {
+        let fields:Vec<_>=cmd.as_object().unwrap().keys().cloned().collect();
+        let target=cmd.get("band").cloned().unwrap_or(Value::Null);
+        state.send_interactive(format!("exposure:{target}:{fields:?}"),cmd)?;
+    } else {state.send_to_engine(cmd)?;}
     Ok(json!({"requested": true}))
 }
 
@@ -1893,6 +1913,7 @@ fn hsl(
     dh: Option<f64>,
     ds: Option<f64>,
     dl: Option<f64>,
+    interactive: Option<bool>,
 ) -> Result<Value, String> {
     const ACTIONS: [&str; 2] = ["set", "clear"];
     if !ACTIONS.contains(&action.as_str()) {
@@ -1909,7 +1930,11 @@ fn hsl(
             cmd[k] = v;
         }
     }
-    state.send_to_engine(cmd)?;
+    if interactive == Some(true) && action == "set" {
+        let fields:Vec<_>=cmd.as_object().unwrap().keys().cloned().collect();
+        let target=cmd.get("band").cloned().unwrap_or(Value::Null);
+        state.send_interactive(format!("hsl:{target}:{fields:?}"),cmd)?;
+    } else {state.send_to_engine(cmd)?;}
     Ok(json!({"requested": true}))
 }
 

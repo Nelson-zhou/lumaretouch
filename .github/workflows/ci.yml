@@ -54,9 +54,12 @@ jobs:
       - name: 暂存引擎资源（cargo check 的前置）
         working-directory: ui
         run: npm run stage:engine
+      - name: Rust latest-value queue invariants
+        working-directory: ui/src-tauri
+        run: rustc --test src/edit_queue.rs -o "$RUNNER_TEMP/lrt-edit-queue" && "$RUNNER_TEMP/lrt-edit-queue"
       - name: cargo check
         working-directory: ui/src-tauri
-        run: cargo check
+        run: cargo check && cargo test --bin lumaretouch dispatch::tests
 
   # GPU 门禁：需要 self-hosted runner。用仓库 variable 开关，没 runner 时根本不该排队
   # （之前写 `if: github.repository != ''` 永远为真，结不上标签只会无限 waiting）。

@@ -338,7 +338,7 @@ class Engine:
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -7114,8 +7114,10 @@ class Engine:
             line = line.strip()
             if not line:
                 continue
+            request_id = None
             try:
                 msg = json.loads(line)
+                request_id = msg.pop("_host_request_id", None)
                 name = msg.get("cmd", "")
                 fn = table.get(name)
                 if fn is None:
@@ -7135,6 +7137,9 @@ class Engine:
                     fn(msg)
             except Exception as e:  # 协议层不许因单条消息崩溃
                 emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
+            finally:
+                if request_id is not None:
+                    emit({"event": "command_done", "request_id": request_id})
         self.stop_flag.set()
         if self.shm:
             self.shm.close()

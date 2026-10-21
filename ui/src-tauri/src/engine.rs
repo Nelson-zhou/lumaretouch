@@ -1,7 +1,7 @@
 //! 引擎子进程：spawn + JSON lines 事件回读。
 
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::io::{BufRead, BufReader};
+use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
@@ -12,21 +12,21 @@ use crate::shm::ShmReader;
 use crate::AppState;
 
 pub struct EngineHandle {
-    stdin: Arc<Mutex<ChildStdin>>,
+    dispatcher: Arc<crate::dispatch::Dispatcher>,
     child: Arc<Mutex<Child>>,
     alive: Arc<AtomicBool>,
 }
 
 impl EngineHandle {
     pub fn send(&self, cmd: Value) -> Result<(), String> {
-        let mut stdin = self.stdin.lock().map_err(|_| "stdin 锁中毒".to_string())?;
-        let line = serde_json::to_string(&cmd).map_err(|e| e.to_string())?;
-        stdin
-            .write_all(line.as_bytes())
-            .and_then(|_| stdin.write_all(b"\n"))
-            .and_then(|_| stdin.flush())
-            .map_err(|e| format!("写引擎 stdin 失败: {e}"))
+        self.dispatcher.enqueue(None, cmd)
     }
+
+    pub fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
+        self.dispatcher.enqueue(Some(key), cmd)
+    }
+
+    pub fn queue_stats(&self) -> Value { self.dispatcher.stats() }
 
     pub fn pid(&self) -> u32 {
         self.child.lock().map(|c| c.id()).unwrap_or(0)
@@ -61,7 +61,12 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>) ->
         .spawn()
         .unwrap_or_else(|e| panic!("启动引擎失败 ({py}): {e}"));
 
-    let stdin = Arc::new(Mutex::new(child.stdin.take().expect("拿不到引擎 stdin")));
+    let stdin = child.stdin.take().expect("拿不到引擎 stdin");
+    let dispatcher = crate::dispatch::Dispatcher::new();
+    {
+        let d=dispatcher.clone(); let st=state.clone();
+        thread::spawn(move || { if let Err(e)=d.run(stdin) { d.close(); st.push_log(e); } });
+    }
     let stdout = child.stdout.take().expect("拿不到引擎 stdout");
     let stderr = child.stderr.take().expect("拿不到引擎 stderr");
     let alive = Arc::new(AtomicBool::new(true));
@@ -69,18 +74,18 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>) ->
     let (tx, rx) = mpsc::channel::<String>();
     {
         let alive = alive.clone();
+        let d = dispatcher.clone();
         thread::spawn(move || {
             for line in BufReader::new(stdout).lines() {
                 match line {
                     Ok(l) => {
-                        if tx.send(l).is_err() {
-                            return;
-                        }
+                        if tx.send(l).is_err() { break; }
                     }
                     Err(_) => break,
                 }
             }
             alive.store(false, Ordering::Relaxed);
+            d.close();
         });
     }
     {
@@ -96,15 +101,28 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>) ->
 
     {
         let st = state.clone();
+        let d = dispatcher.clone();
         thread::spawn(move || {
             while let Ok(line) = rx.recv() {
+                if let Ok(v)=serde_json::from_str::<Value>(&line) {
+                    if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {
+                        let why="宿主与引擎不匹配：引擎缺少命令完成回执，请使用同一版本的配套引擎";
+                        *st.last_error.lock().unwrap()=Some(why.into());
+                        st.push_log(why.into());
+                        d.close();
+                    }
+                    if v["event"]=="command_done" {
+                        if let Some(id)=v["request_id"].as_u64() {d.acknowledge(id);}
+                        continue;
+                    }
+                }
                 handle_event(&st, &line);
             }
         });
     }
 
     EngineHandle {
-        stdin,
+        dispatcher,
         child: Arc::new(Mutex::new(child)),
         alive,
     }

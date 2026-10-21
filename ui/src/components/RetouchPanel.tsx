@@ -372,6 +372,7 @@ export default function RetouchPanel(props: RetouchProps) {
     if (!doc) return;
     ok(setStrength(patch.strength ?? doc.strength, {
       channel: doc.channel ?? undefined,
+      interactionKey: Object.keys(patch).sort().join(","),
       radius: patch.radius ?? params.radius,
       detailGain: patch.detail ?? params.detail_gain,
       midGain: params.mid_gain,
@@ -388,7 +389,7 @@ export default function RetouchPanel(props: RetouchProps) {
     ok(runEnhance("set", patch), props);
 
   const commitExposure = (patch: Record<string, number>) =>
-    ok(runExposure("set", patch), props);
+    ok(runExposure("set", patch, true), props);
 
   const rotateBy = (delta: number) => {
     const cur = doc?.crop?.rotation_degrees ?? 0;
@@ -522,8 +523,8 @@ export default function RetouchPanel(props: RetouchProps) {
             label={`${hslNames[hslBand] ?? HSL_BANDS[hslBand]} · ${label}`}
             value={Math.round(cur)} min={-lim} max={lim}
             disabled={dim}
-            onChange={(v) => ok(runHsl("set", hslBand, { [key]: v }), props)}
-            onReset={() => ok(runHsl("set", hslBand, { [key]: 0 }), props)} />
+            onChange={(v) => ok(runHsl("set", hslBand, { [key]: v }, true), props)}
+            onReset={() => ok(runHsl("set", hslBand, { [key]: 0 }, true), props)} />
         );
       }
       case "tone.contrast":

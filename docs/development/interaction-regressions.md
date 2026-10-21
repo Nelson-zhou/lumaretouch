@@ -33,3 +33,31 @@ Official reference reviewed: https://www.pixcakeai.com/guide/47246 and https://w
 ## Architecture direction
 
 Prefer Rust for new core orchestration, caching, IPC and suitable processing components. Preserve mature model interoperability where Python remains necessary. Keep the Tauri/React frontend for now; moving languages must preserve output correctness and demonstrate measured benefit, not merely be labelled a performance improvement.
+
+## Rust dispatch follow-up (not yet performance-accepted)
+
+A paired host/engine transport now acknowledges completion after command handling,
+including validation failure and history recording. Rust keeps one command in flight.
+Only explicitly interactive skin/exposure/HSL submissions opt into adjacent latest-value
+coalescing. Different controls/targets and all ordinary commands (including document,
+history, export and reset operations) retain ordering barriers. Ordinary protocol clients
+without a host request ID retain their existing event stream. Unknown old engines fail
+compatibility checking rather than leaving a queue waiting forever.
+
+The bounded queue reserves a final shutdown barrier; it never silently discards ordinary
+commands. No retry is performed after an uncertain write. Queue counters expose pending,
+in-flight and coalesced work for subsequent measurement. This is not a claim that all tools
+or all sources are now responsive: deform/other operations, frame transport, high-resolution
+preview policy, and actual GUI latency still need testing.
+
+Baseline measured by Qoder on bb963, synthetic 4096×3072 source, actual AMD CUDA/ROCm and
+enforced engine offline policy (not RAW or GUI performance):
+- 1,034,880 preview pixels: single strength median 2.2 ms; 20-value burst tail 39.7 ms.
+- 8,260,160 preview pixels: single strength median 14.6 ms; 20-value burst tail 298.4 ms.
+Both processed all 20 intermediate values. The initial 8,388,608 budget was invalid;
+the corrected 8,294,400 budget was measured without changing production limits.
+
+Local verification for the dispatch change: two transport tests and a real enforced-process
+hello/error/shutdown receipt smoke test passed; frontend 41 tests, typecheck and production
+build passed. Rust queue tests and native compilation are CI gates; hardware/GUI dispatch
+comparison remains pending. Host and engine must be deployed together.
