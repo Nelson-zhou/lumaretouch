@@ -658,7 +658,7 @@ class Engine:
                 acc[k] += v
             t4 = monotonic_ns()
             with self._wlock:
-                seq, t_emit, slot = shm.write_frame(pixels)
+                seq, t_emit, slot = shm.write_frame(pixels, presentation=self._frame_presentation() if mode=="image_stream" else self._frame_presentation("0", (shm.w,shm.h), "synthetic"))
             acc["shm"] += (monotonic_ns() - t4) / 1e6
             emit({"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
                   "w": shm.w, "h": shm.h, "mode": mode})
@@ -1296,7 +1296,7 @@ class Engine:
         # 真解码那一张（分界规则在 decode.py），这一帧不参与任何编辑语义。
         self._preview_info = None
         if is_raw(p["path"]):
-            self._preview_info = self._push_preview_frame(p["path"], budget)
+            self._preview_info = self._push_preview_frame(p["path"], budget, str(t0))
         if cold_device:
             device_start = monotonic_ns()
             self.cmd_set_device({"device": requested_device})
@@ -1342,7 +1342,7 @@ class Engine:
         return self._open_session(d, p, t0=t0, strength=strength, switched=existed,
                                   device_prepare_ms=device_prepare_ms)
 
-    def _push_preview_frame(self, path: str, budget: int) -> dict | None:
+    def _push_preview_frame(self, path: str, budget: int, document_id: str) -> dict | None:
         """RAW 首帧：相机内嵌预览（只填浏览/首屏那个槽位，见 decode.py 顶部的分界规则）。
 
         内嵌预览比代理档小时，这里不放大：宿主会先按预览尺寸挂一块 shm，真解码
@@ -1365,7 +1365,7 @@ class Engine:
         rgba[:, :, 3] = 255
         shm = self._ensure_shm(pv.w, pv.h)
         with self._wlock:
-            seq, t_emit, slot = shm.write_frame(rgba)
+            seq, t_emit, slot = shm.write_frame(rgba, presentation=self._frame_presentation(document_id, (pv.w,pv.h), "preview"))
         info = {"w": int(pv.w), "h": int(pv.h), "src_w": int(pv.src_w), "src_h": int(pv.src_h),
                 "ms": round(float(pv.t_total_ms), 3), "seq": int(seq)}
         emit({"event": "preview_frame", "path": path, **info})
@@ -1394,7 +1394,7 @@ class Engine:
         effective_strength, effective_channel = self._retouch_render_args()
         pipe.render(effective_strength, channel=effective_channel, **self._params)
         with self._wlock:
-            seq, t_emit, slot = shm.write_frame(pipe.read_back())
+            seq, t_emit, slot = shm.write_frame(pipe.read_back(), presentation=self._frame_presentation(str(t0), (d.src_w,d.src_h)))
         t_c = monotonic_ns()
         row = self._docs[self._doc_index] if 0 <= self._doc_index < len(self._docs) else None
         if row is not None:
@@ -3409,6 +3409,14 @@ class Engine:
             return 0.0, None
         return self._strength, self._channel
 
+    def _frame_presentation(self, document_id=None, source=None, kind="edited"):
+        from .frame_presentation import make
+        if source is None:
+            row=self._docs[self._doc_index] if 0<=self._doc_index<len(self._docs) else {}
+            source=(row.get("src_w") or self._vram.w,row.get("src_h") or self._vram.h)
+        return make(self._load_id if document_id is None else document_id,source,
+                    self._crop_rect,self._crop_rotation,kind)
+
     def _write_current_frame(self, mode: str, *, original: bool = False) -> dict:
         """把当前会话渲染一帧并写 shm，返回 frame 事件字段（带 render_ms，调用方 pop）。
 
@@ -3429,7 +3437,7 @@ class Engine:
             self._vram.render(st, channel=channel, **self._params)
         render_ms = (monotonic_ns() - t0) / 1e6
         with self._wlock:
-            seq, t_emit, slot = self.shm.write_frame(self._vram.read_back())
+            seq, t_emit, slot = self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation(kind="original" if original else "edited"))
         return {"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
                 "w": self.shm.w, "h": self.shm.h, "mode": mode, "render_ms": round(render_ms, 2),
                 "strength": st}
@@ -3465,6 +3473,7 @@ class Engine:
             return
         on = p.get("on", True)
         fr = self._write_current_frame("compare", original=on)
+        fr.update(document_id=self._load_id,shm_instance=self.shm.instance_id.hex(),seq_id=str(fr["seq"]))
         fr["capture_id"] = capture_id
         fr["doc"] = self._doc_path
         fr["view"] = "original" if on else "edited"
@@ -5737,7 +5746,7 @@ class Engine:
                 strength, channel = self._retouch_render_args()
                 self._vram.render(strength, channel=channel, **self._params)
                 with self._wlock:
-                    seq, t_emit, slot = self.shm.write_frame(self._vram.read_back())
+                    seq, t_emit, slot = self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation())
                 emit({"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
                       "w": self.shm.w, "h": self.shm.h, "mode": "device_switch"})
 

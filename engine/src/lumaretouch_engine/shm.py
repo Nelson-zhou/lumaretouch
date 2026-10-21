@@ -127,12 +127,13 @@ class FrameShm:
         return HEADER_SIZE + i * self.slot_size
 
     def write_frame(self, pixels, fourcc: int = FOURCC_RGBA8,
-                    t_ns: int | None = None) -> tuple[int, int, int]:
+                    t_ns: int | None = None, *, presentation=None) -> tuple[int, int, int]:
         """写入一帧，返回 (seq, t_emit_ns, slot)。t_emit 在像素落地后打点。
 
         pixels 可以是 bytes，也可以是 C 连续的 numpy 数组：后者直接走缓冲协议，
         省掉一次 tobytes() 的全帧分配和拷贝（1280x800 就是 4 MB/帧）。
         """
+        reserved = presentation.pack() if presentation is not None else bytes(36)
         mv = memoryview(pixels).cast("B")
         if mv.nbytes != self.pixel_size:
             raise ValueError(f"像素长度 {mv.nbytes} != 期望 {self.pixel_size}")
@@ -146,7 +147,7 @@ class FrameShm:
             self._seq += 1
             seq = self._seq
             t = t_ns if t_ns is not None else monotonic_ns()
-            SLOT_HDR.pack_into(self._buf, off, seq, t, self.w, self.h, fourcc, b"")
+            SLOT_HDR.pack_into(self._buf, off, seq, t, self.w, self.h, fourcc, reserved)
             return seq, t, i
 
     @contextmanager

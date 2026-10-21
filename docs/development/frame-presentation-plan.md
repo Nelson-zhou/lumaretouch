@@ -1,4 +1,4 @@
-# Frame-bound presentation correction (planned, not implemented)
+# Frame-bound presentation correction (implementation candidate, not yet verified)
 
 The current ordinary preview stretches a cropped/rotated output back into the
 fixed proxy raster and displays that raster's aspect. A square crop of a 3:2
@@ -48,3 +48,11 @@ frames during edits, original capture racing edited frames, dirty/skip modes,
 large integer identities, parser version/length failures, independent split/swipe
 aspects, zoom/pan and first-frame initialization. Basic deterministic checks first;
 real-machine visual/performance acceptance remains pending until performed.
+
+## Candidate wiring
+
+LPR1 slot metadata, LRF1 preview IPC, strict original-frame identity, independent
+comparison containment and display-aspect adoption are now implemented as an
+unverified candidate. New Viewer instances use uncounted full bootstrap reads;
+partial uploads remain on an initialized texture. Existing full-source inspection
+layout remains separate. See docs/protocols/preview-frame-v1.md for exact fields.

@@ -18,6 +18,8 @@ mod edit_queue;
 mod dispatch;
 mod shm;
 mod frame_identity;
+mod frame_presentation;
+mod preview_wire;
 mod capture_wire;
 mod color_capture_host;
 mod color_capture_api;
@@ -72,6 +74,7 @@ struct Pending {
 struct Frames {
     shm: Option<ShmReader>,
     shm_name: String,
+    last_presentation: Option<frame_presentation::Presentation>,
     emitted: u64,
     delivered: u64,
     /// 在途帧队列：前端每帧都拉，ack 允许滞后，所以不能只留一个。
@@ -250,6 +253,7 @@ impl AppState {
             frames: Mutex::new(Frames {
                 shm: None,
                 shm_name: String::new(),
+                last_presentation: None,
                 emitted: 0,
                 delivered: 0,
                 pending: std::collections::VecDeque::new(),
@@ -327,6 +331,7 @@ impl AppState {
             f.samples.clear();
             f.emitted = 0;
             f.delivered = 0;
+            f.last_presentation = None;
             f.shm = Some(reader);
             f.shm_name = name;
             o
@@ -1303,8 +1308,7 @@ fn precompute(
     Ok(json!({"requested": true}))
 }
 
-/// 取最新一帧。原生二进制响应 = 40B 头 + RGBA 像素：
-/// seq u64 | t_emit_ns u64 | t_pull_ns u64 | w u32 | h u32 | pixel_len u32 | reserved u32
+/// Versioned LRF1 header + RGBA pixels; presentation is committed with this exact slot.
 /// `LRT_SKIP_PIXELS=1` 时 pixel_len 置 0 并不拷像素，前端据此跳过上传，得到纯 IPC 对照组。
 #[tauri::command]
 fn pull_frame(state: State<'_, Arc<AppState>>) -> Result<tauri::ipc::Response, String> {
@@ -1324,27 +1328,21 @@ fn pull_frame(state: State<'_, Arc<AppState>>) -> Result<tauri::ipc::Response, S
         return Err("NO_NEW_FRAME".into());
     }
     let t_pull = now_ns();
-    let (y0, rows) = dirty_window(fw, fh);
+    let (y0, rows) = if meta.presentation!=f.last_presentation {(0,fh)} else {dirty_window(fw, fh)};
     let want = if tiers().skip_pixels {
         0
     } else {
-        (y0 as usize + rows as usize) * fw as usize * 4
+        rows as usize * fw as usize * 4
     };
     let payload = want.min(shm.pixel_size);
-    let mut buf = vec![0u8; 40 + payload];
-    if payload > 0 {
-        read.copy_span(slot, y0 as usize * fw as usize * 4, &mut buf[40..])?;
-    }
-    buf[0..8].copy_from_slice(&seq.to_le_bytes());
-    buf[8..16].copy_from_slice(&t_emit.to_le_bytes());
-    buf[16..24].copy_from_slice(&t_pull.to_le_bytes());
-    buf[24..28].copy_from_slice(&fw.to_le_bytes());
-    buf[28..32].copy_from_slice(&fh.to_le_bytes());
-    buf[32..36].copy_from_slice(&(payload as u32).to_le_bytes());
-    // 保留位放 y0：前端用 pixel_len 就能推出行数，起始行得宿主告知
-    buf[36..40].copy_from_slice(&y0.to_le_bytes());
+    let header=preview_wire::Header{seq,emitted:t_emit,pulled:t_pull,width:fw,height:fh,
+        payload:payload as u32,y0,instance:shm.instance_id(),presentation:meta.presentation}.encode()?;
+    let mut buf = vec![0u8; preview_wire::HEADER_BYTES + payload];
+    buf[..preview_wire::HEADER_BYTES].copy_from_slice(&header);
+    if payload > 0 {read.copy_span(slot,y0 as usize*fw as usize*4,&mut buf[preview_wire::HEADER_BYTES..])?;}
     drop(read); // Release cross-process lock before bookkeeping / IPC delivery.
     let pull_dur = now_ns().saturating_sub(t_pull) as f64 / 1000.0;
+    if payload>0 {f.last_presentation=meta.presentation;}
     f.delivered += 1;
     f.pending.push_back(Pending {
         seq,
@@ -1371,22 +1369,17 @@ fn pull_frame(state: State<'_, Arc<AppState>>) -> Result<tauri::ipc::Response, S
 /// "此刻屏幕上是什么"，与投递计数无关，所以另开一条纯读的口。
 /// `LRT_SKIP_PIXELS` 那类宿主对照组也不影响它：这里必须拿到像素，否则对拍是空的。
 #[tauri::command]
-fn peek_frame(state: State<'_, Arc<AppState>>) -> Result<tauri::ipc::Response, String> {
+fn peek_frame(state: State<'_, Arc<AppState>>, respect_tiers:Option<bool>) -> Result<tauri::ipc::Response, String> {
+    if respect_tiers==Some(true)&&tiers().skip_pixels{return Err("NO_NEW_FRAME".into());}
     let f = state.frames.lock().map_err(|_| "锁中毒".to_string())?;
     let shm = f.shm.as_ref().ok_or("SHM_NOT_READY")?;
     let read = shm.read()?;
     let (meta, slot) = read.freshest()?.ok_or("NO_FRAME_YET")?;
     let n = shm.pixel_size;
-    let mut buf = vec![0u8; 40 + n];
-    read.copy_span(slot, 0, &mut buf[40..])?;
-    buf[0..8].copy_from_slice(&meta.seq.to_le_bytes());
-    buf[8..16].copy_from_slice(&meta.t_ns.to_le_bytes());
-    buf[16..24].copy_from_slice(&now_ns().to_le_bytes());
-    buf[24..28].copy_from_slice(&meta.w.to_le_bytes());
-    buf[28..32].copy_from_slice(&meta.h.to_le_bytes());
-    buf[32..36].copy_from_slice(&(n as u32).to_le_bytes());
-    // y0 恒 0、行数恒 h：这条口的语义就是整帧
-    buf[36..40].copy_from_slice(&0u32.to_le_bytes());
+    let header=preview_wire::Header{seq:meta.seq,emitted:meta.t_ns,pulled:now_ns(),width:meta.w,height:meta.h,
+        payload:n as u32,y0:0,instance:shm.instance_id(),presentation:meta.presentation}.encode()?;
+    let mut buf=vec![0u8;preview_wire::HEADER_BYTES+n];buf[..preview_wire::HEADER_BYTES].copy_from_slice(&header);
+    read.copy_span(slot,0,&mut buf[preview_wire::HEADER_BYTES..])?;
     Ok(tauri::ipc::Response::new(buf))
 }
 

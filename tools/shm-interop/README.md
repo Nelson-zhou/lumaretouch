@@ -40,3 +40,8 @@ The actual native harness includes the same identity parser as the application.
 `check-replacement` waits for its caller to recreate the mapping, then proves the
 old native reader rejects it before copying. CI builds this harness so interop
 cases no longer silently skip for lack of a reader executable.
+
+The subsequent LPR1 slot extension binds presentation dimensions/document/geometry
+to the frame under the same flock. The normal preview IPC is now LRF1 (128-byte
+versioned header), documented in docs/protocols/preview-frame-v1.md. LRI1 mapping
+identity and locking-v2 layout sizes are unchanged.

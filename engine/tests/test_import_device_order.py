@@ -15,7 +15,7 @@ def _order(*, loaded=False, raw=True, device=True, gpu_available=True, preview=T
         order.append(('device', payload['device']))
         engine.device = 'cuda'
     engine.cmd_set_device = select
-    engine._push_preview_frame = lambda path, budget: order.append(('preview', path)) or ({'seq': 1} if preview else None)
+    engine._push_preview_frame = lambda path, budget, document_id: order.append(('preview', path)) or ({'seq': 1} if preview else None)
     def decode(path, budget, *, device):
         order.append(('decode', device))
         raise ValueError('fixture stops before allocating a resident pipeline')

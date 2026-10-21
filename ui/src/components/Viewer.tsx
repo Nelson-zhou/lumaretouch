@@ -1,6 +1,6 @@
 import {ColorSampleOverlay} from './ColorSampleOverlay';
 import type {ColorSampler} from '../useColorSampler';
-import { comparisonFrameSize } from "../compareCapture";
+import {composition,displayGeometry,frameAdmission,type DisplayGeometry} from "../previewComposition";
 /**
  * WebGL2 视口：rAF 驱动，从宿主取裸帧 → texSubImage2D → 绘制 → 双 rAF 后回执。
  *
@@ -9,7 +9,7 @@ import { comparisonFrameSize } from "../compareCapture";
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { frameAcked, framePresented, isNoFrame, parseFrameHead, pullFrame, type ParsedFrame } from "../native";
+import { frameAcked, framePresented, isNoFrame, parseFrameHead, pullFrame, peekFrame, type ParsedFrame } from "../native";
 import { inspectionApi, INSPECTION_EDIT_INTENT } from "../native";
 import { inspectionLayout } from "../inspectionViewport";
 import { createInspectionController, type InspectionIntent, type InspectionUiState } from "../inspectionController";
@@ -191,10 +191,12 @@ export default function Viewer({
   const sizeRef = useRef({ w: 0, h: 0 });
   // 帧尺寸与 Fit 倍率：100% 的换算与卷帘的落点都靠它，不能靠猜
   const [frameDim, setFrameDim] = useState({ w: 0, h: 0 });
-  const displayDim = comparisonFrameSize(frameDim.w, frameDim.h, compareMode);
+  const [presentation,setPresentation]=useState<{displayWidth:number;displayHeight:number;compositionOnly:boolean}|null>(null);
+  const displayDim={w:presentation?.displayWidth??frameDim.w,h:presentation?.displayHeight??frameDim.h};
   const [dpr,setDpr]=useState(()=>window.devicePixelRatio||1);
   const [editRevision,setEditRevision]=useState(0);
   const sourceMode=!!inspection?.enabled && compareMode==='single' && !inspection.comparing;
+  const sourceModeRef=useRef(sourceMode);sourceModeRef.current=sourceMode;
   const layout=sourceMode?inspectionLayout(box,inspection.width,inspection.height,view,dpr,inspection.oneToOne):null;
   effectiveZoom.current=layout?.zoom??view.zoom;
   const fitScale = layout?.fit ?? (frameDim.w > 0 && box.width > 0 && box.height > 0
@@ -202,6 +204,7 @@ export default function Viewer({
   const fitScaleRef = useRef(fitScale); fitScaleRef.current = fitScale;
   const viewRef = useRef(view); viewRef.current = view;
   const compareRef = useRef(compareMode); compareRef.current = compareMode;
+  const originalHoldRef=useRef(!!inspection?.comparing);originalHoldRef.current=!!inspection?.comparing;
   const swipeRef = useRef(swipe); swipeRef.current = swipe;
   const originalRef = useRef(originalFrame); originalRef.current = originalFrame;
   const onSwipeRef = useRef(onSwipe); onSwipeRef.current = onSwipe;
@@ -210,15 +213,10 @@ export default function Viewer({
     if (!el || !onSwipeRef.current) return;
     const r = el.getBoundingClientRect();
     const v = viewRef.current;
-    // P1-9：与 toImg / overlay 定位共用同一份显示矩形口径（imageDisplayRect），
-    // 不再各写各的。代数与旧式等价：left = r.left + (r.width-iw)/2 + v.x = r.left + d.left，
-    // iw = d.width。滑动线一直是对的，这里只是把它收敛成单一出处、防止三份再漂移。
-    const { w, h } = sizeRef.current;
-    const d = imageDisplayRect({ boxW: r.width, boxH: r.height, frameW: w, frameH: h,
-                                 zoom: v.zoom, panX: v.x, panY: v.y });
-    if (d.width <= 0) return;
-    const left = r.left + d.left;
-    const frac = Math.min(0.96, Math.max(0.04, (e.clientX - left) / d.width));
+    // One screen-space divider over two independently contained photographs.
+    const d=imageDisplayRect({boxW:r.width,boxH:r.height,frameW:displayDim.w,frameH:displayDim.h,zoom:v.zoom,panX:v.x,panY:v.y});
+    if(d.width<=0)return;
+    const frac=Math.max(0,Math.min(1,(e.clientX-r.left-d.left)/d.width));
     onSwipeRef.current(Math.round(frac * 1000) / 1000);
   };
   const swipeDrag = useRef(false);
@@ -380,6 +378,7 @@ export default function Viewer({
 
     let curW = 0;
     let curH = 0;
+    let displayedFrame:DisplayGeometry|null=null;
     // ---- 画笔叠加层：与 GL 测量回路同生命期，但不参与计时 ----
     const pad = new BrushPad(1, 1);
     const octx = overlay ? overlay.getContext("2d") : null;
@@ -394,9 +393,10 @@ export default function Viewer({
       // P1-9 修复：按图像「实际显示矩形」换算（contain 居中留白 + zoom + 平移），
       // 而不是铺满盒子的 overlay.getBoundingClientRect()。盒子宽高比≠图像时，
       // 上一版把整盒当整图，留白维度的落点会偏移、刻度被拉伸——画笔/框选画到错处。
-      return clientToImage(e.clientX - br.left, e.clientY - br.top,
-                           { boxW: br.width, boxH: br.height, frameW: w, frameH: h,
-                             zoom: v.zoom, panX: v.x, panY: v.y });
+      const pw=displayedFrame?.width??w,ph=displayedFrame?.height??h;
+      const point=clientToImage(e.clientX-br.left,e.clientY-br.top,
+        {boxW:br.width,boxH:br.height,frameW:pw,frameH:ph,zoom:v.zoom,panX:v.x,panY:v.y});
+      return point?{x:point.x*w/pw,y:point.y*h/ph}:null;
     };
     const repaint = () => {
       if (!overlay || !octx) return;
@@ -504,7 +504,9 @@ export default function Viewer({
     // await 之后，于是 IPC 往返与垂直同步串成一条链，帧率被系统性低估。
     // 现在每拍最多一个在途请求，响应落在哪一拍就在哪一拍上传。
     let pulling = false;
-    let ready: ParsedFrame | null = null;
+    let ready: (ParsedFrame & {untracked?:boolean}) | null = null;
+    let needsInitialFull=!skipDraw;
+    let bootstrapRetryAt=0;
     // Snapshot identity is verified by the receipt, never arrival timing.
     const snap = document.createElement("canvas");
     const snapCtx = snap.getContext("2d", { alpha: false });
@@ -515,17 +517,19 @@ export default function Viewer({
     const presentQueue: { seq: number; rafs: number }[] = [];
 
     const pump = () => {
-      if (pulling) return;
+      if (pulling||ready||performance.now()<bootstrapRetryAt) return;
       pulling = true;
-      pullFrame()
+      const bootstrap=needsInitialFull;
+      (bootstrap?peekFrame(true):pullFrame())
         .then(async (buf) => {
-          const f = parseFrameHead(buf);
-          if (buf.byteLength !== 40 + f.pixelLen) {
-            throw new Error(`响应长度异常: ${buf.byteLength} vs ${40 + f.pixelLen}`);
+          const f:ParsedFrame & {untracked?:boolean}=parseFrameHead(buf);
+          f.untracked=bootstrap;
+          if (buf.byteLength !== f.headerBytes + f.pixelLen) {
+            throw new Error(`响应长度异常: ${buf.byteLength} vs ${f.headerBytes + f.pixelLen}`);
           }
           if (upload === "bitmap" && f.pixelLen > 0) {
             // Uint8ClampedArray 直接 view 宿主送来的字节，不再拷一份
-            const view = new Uint8ClampedArray(buf, 40, f.pixelLen);
+            const view = new Uint8ClampedArray(buf, f.headerBytes, f.pixelLen);
             f.bitmap = await createImageBitmap(new ImageData(view, f.w, f.rows), {
               colorSpaceConversion: "none",
               premultiplyAlpha: "none",
@@ -534,6 +538,8 @@ export default function Viewer({
           ready = f;
         })
         .catch((e) => {
+          if(bootstrap&&String(e).includes('NO_NEW_FRAME'))needsInitialFull=false;
+          if(bootstrap)bootstrapRetryAt=performance.now()+250;
           if (!isNoFrame(e)) {
             onHudRef.current({ seq: 0, w: curW, h: curH, fps, lastError: String(e) });
           }
@@ -549,6 +555,9 @@ export default function Viewer({
       const f = ready;
       if (f) {
         ready = null;
+        const {geometry,complete,usable,recoverFull}=frameAdmission(displayedFrame,f,compareRef.current,originalHoldRef.current,skipDraw);
+        if(recoverFull)needsInitialFull=true;
+        if(usable){
         if (f.w !== curW || f.h !== curH) {
           curW = f.w;
           curH = f.h;
@@ -576,10 +585,11 @@ export default function Viewer({
           }
           gl.bindTexture(gl.TEXTURE_2D, texs[texIdx]);
         }
+        }
         const t0 = performance.now();
         // pixelLen=0 是宿主对照组：字节根本没跨进程，自然也没得上传
-        if (!skipDraw && f.pixelLen > 0) {
-          if (upload === "pingpong") {
+        if (usable) {
+          if (upload === "pingpong" && complete) {
             // 先换张再上传：正被上一帧合成器读的纹理不写入，避开驱动的同纹理上传串行
             texIdx = 1 - texIdx;
             gl.bindTexture(gl.TEXTURE_2D, texs[texIdx]);
@@ -603,6 +613,8 @@ export default function Viewer({
           gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
           // 一次 drawImage：把这一帧交给用户实际看到的那张画布；对比模式在这张
           // 2D 画布上叠原图（GL 渲染与测量链路一个字不动）。
+          displayedFrame=geometry;
+          if(complete)needsInitialFull=false;
           compositionDirty = true;
         } else if (f.bitmap) {
           f.bitmap.close();
@@ -610,8 +622,8 @@ export default function Viewer({
         const drawUs = (performance.now() - t0) * 1000;
         drawn += 1;
         // 绘制命令发出的当拍就 ack：pull_to_ack 里不再掺进整整一个帧周期
-        frameAcked(f.seq, drawUs).catch(() => undefined);
-        presentQueue.push({ seq: f.seq, rafs: 0 });
+        if(!f.untracked){frameAcked(f.seq, drawUs).catch(() => undefined);
+          presentQueue.push({ seq: f.seq, rafs: 0 });}
       }
       // 「上屏」没有可靠事件可用，退而求其次：本帧之后又跑了两个 rAF，
       // 合成器就已经拿它画过一整屏了。这一段仍由原生时钟打点。
@@ -634,7 +646,7 @@ export default function Viewer({
       // 0.0 fps」——用户拿它判断"图进来了没有"，它就在这里骗人。
       if (f && (turned || now - lastHudAt >= 250)) {
         lastHudAt = now;
-        onHudRef.current({ seq: f.seq, w: curW, h: curH, fps, lastError: "" });
+        onHudRef.current({ seq: f.seq, w: f.w, h: f.h, fps, lastError: "" });
       }
       // Wipe/mode changes repaint even when no new engine frame is available.
       if (mctx && curW > 0 && curH > 0) {
@@ -650,28 +662,29 @@ export default function Viewer({
         const mode = compareRef.current;
         if (mode !== lastMode || swipeRef.current !== lastSwipe) compositionDirty = true;
         lastMode = mode; lastSwipe = swipeRef.current;
-        if (compositionDirty) {
-          if (mirror) {
-            const width = comparisonFrameSize(curW, curH, mode).w;
-            if (mirror.width !== width) mirror.width = width;
+        if (compositionDirty && displayedFrame) {
+          const layout=composition(displayedFrame,original?displayGeometry(original):null,mode);
+          if(mirror){if(mirror.width!==layout.width)mirror.width=layout.width;if(mirror.height!==layout.height)mirror.height=layout.height;}
+          // Always redraw retained texture before composing; original capture IPC
+          // can arrive without replacing the edited texture.
+          gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+          const paint=(source:CanvasImageSource,r:{left:number;top:number;width:number;height:number})=>mctx.drawImage(source,r.left,r.top,r.width,r.height);
+          mctx.fillStyle='#16191e';mctx.fillRect(0,0,layout.width,layout.height);
+          if(mode==='swipe'&&layout.original&&original){
+            const seam=Math.max(0,Math.min(layout.width,layout.width*swipeRef.current));
+            mctx.save();mctx.beginPath();mctx.rect(seam,0,layout.width-seam,layout.height);mctx.clip();paint(canvas,layout.edited);mctx.restore();
+            mctx.save();mctx.beginPath();mctx.rect(0,0,seam,layout.height);mctx.clip();paint(snap,layout.original);mctx.restore();
+            mctx.fillStyle='rgba(227,193,118,.95)';mctx.fillRect(seam-1,0,2,layout.height);
+          }else{
+            paint(canvas,layout.edited);if(mode==='split'&&layout.original&&original)paint(snap,layout.original);
           }
-          // Texture storage survives WebGL drawing-buffer presentation. Redraw
-          // it for display-only changes; do not copy a second full image per frame.
-          if (!f) gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-          if (mode !== "split" || !original) mctx.drawImage(canvas, 0, 0);
-          if (original && snap.width === curW && snap.height === curH) {
-            if (mode === "split") {
-              // Whole photographs on both sides, not unrelated half-image crops.
-              mctx.fillStyle = "#16191e"; mctx.fillRect(0, 0, curW * 2, curH);
-              mctx.drawImage(snap, 0, 0);
-              mctx.drawImage(canvas, curW, 0);
-            } else if (mode === "swipe") {
-              const x = Math.max(0, Math.min(curW, Math.round(curW * swipeRef.current)));
-              mctx.save(); mctx.beginPath(); mctx.rect(0, 0, x, curH); mctx.clip();
-              mctx.drawImage(snap, 0, 0); mctx.restore();
-              mctx.fillStyle = "rgba(227,193,118,.95)"; mctx.fillRect(x - 1, 0, 2, curH);
-            }
+          if(mirror&&!sourceModeRef.current){
+            const br=boxRef.current?.getBoundingClientRect(),v=viewRef.current;
+            if(br){const r=imageDisplayRect({boxW:br.width,boxH:br.height,frameW:layout.displayWidth,frameH:layout.displayHeight,zoom:v.zoom,panX:v.x,panY:v.y});
+              Object.assign(mirror.style,{left:`${r.left}px`,top:`${r.top}px`,width:`${r.width}px`,height:`${r.height}px`,right:'auto',bottom:'auto',objectFit:'fill',transform:'none'});}
           }
+          setPresentation(previous=>previous?.displayWidth===layout.displayWidth&&previous?.displayHeight===layout.displayHeight
+            &&previous?.compositionOnly===layout.compositionOnly?previous:{displayWidth:layout.displayWidth,displayHeight:layout.displayHeight,compositionOnly:layout.compositionOnly});
           compositionDirty = false;
         }
       }
@@ -729,7 +742,7 @@ export default function Viewer({
             <span>精修</span>
           </div>
         )}
-        {compareMode === "swipe" && <div className="cmpHint">拖动分界线对比</div>}
+        {compareMode === "swipe" && <div className="cmpHint">{presentation?.compositionOnly?"构图对比：两侧保留各自完整画幅，不代表像素对齐":"拖动分界线对比"}</div>}
         {compareMode !== "single" && (brush?.on || pick?.on) &&
           <div className="cmpHint">请切回单视图使用画笔或框选人物</div>}
       </div>
@@ -748,9 +761,7 @@ export default function Viewer({
           <canvas
             ref={mirrorRef}
             className="mirror"
-            style={layout?{left:layout.rect.left,top:layout.rect.top,width:layout.rect.width,height:layout.rect.height,right:"auto",bottom:"auto",objectFit:"fill",transform:"none"}:{ width: "100%", height: "100%",
-                     transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`,
-                     transformOrigin: "center center" }}
+            style={layout?{left:layout.rect.left,top:layout.rect.top,width:layout.rect.width,height:layout.rect.height,right:"auto",bottom:"auto",objectFit:"fill",transform:"none"}:{left:disp.left,top:disp.top,width:disp.width,height:disp.height,right:"auto",bottom:"auto",objectFit:"fill",transform:"none"}}
           />
           <canvas ref={detailRef} aria-label="原始分辨率精细预览"
             style={{position:'absolute',pointerEvents:'none',visibility:'hidden'}} />

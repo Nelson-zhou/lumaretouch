@@ -809,7 +809,7 @@ export default function App() {
     void (async () => {
       try {
         const frame = await captureOriginal({
-          id, doc: compareDoc, cancelled: () => dead,
+          id, doc: compareDoc, documentId:status?.image?.load_id, cancelled: () => dead,
           request: (requestId) => setCompare(true, requestId), receipt: compareStatus,
           pixels: async () => parseFrameHead(await peekFrame()),
           wait: () => sleep(25), now: () => performance.now(),

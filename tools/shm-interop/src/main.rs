@@ -1,3 +1,5 @@
+#[path = "../../../ui/src-tauri/src/frame_presentation.rs"]
+mod frame_presentation;
 #[path = "../../../ui/src-tauri/src/frame_identity.rs"]
 mod frame_identity;
 #[path = "../../../ui/src-tauri/src/shm.rs"]

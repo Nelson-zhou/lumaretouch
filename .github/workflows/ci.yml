@@ -77,6 +77,8 @@ jobs:
           rustc --edition=2021 core/curves/main.rs -o "$RUNNER_TEMP/lrt-curve-compiler"
           printf '3 0 0 0.5 1 1 1\n' | "$RUNNER_TEMP/lrt-curve-compiler" > "$RUNNER_TEMP/lrt-curves.json"
           python3 -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/lrt-curves.json")); assert d["version"]==1 and not d["identity"] and len(d["segments"])==2'
+      - name: Frame-bound presentation and preview transport
+        run: rustc --edition=2021 --test tools/preview-wire-tests.rs -o "$RUNNER_TEMP/lrt-preview-wire" && "$RUNNER_TEMP/lrt-preview-wire"
       - name: Identified capture binary contract
         run: rustc --edition=2021 --test ui/src-tauri/src/capture_wire.rs -o "$RUNNER_TEMP/lrt-capture-wire" && "$RUNNER_TEMP/lrt-capture-wire"
       - name: Rust shared-frame identity contract

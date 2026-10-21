@@ -16,6 +16,7 @@ pub struct SlotMeta {
     pub w: u32,
     pub h: u32,
     pub fourcc: u32,
+    pub presentation: Option<crate::frame_presentation::Presentation>,
 }
 
 pub struct ShmReader {
@@ -112,20 +113,22 @@ impl ShmReader {
 }
 
 impl FrameReadGuard<'_> {
-    fn meta(&self, slot: usize) -> SlotMeta {
+    fn meta(&self, slot: usize) -> Result<SlotMeta,String> {
         let r=self.reader;
         let off=HEADER_SIZE+slot*r.slot_size;
-        SlotMeta { seq: u64::from_le_bytes(rd8(r.base,off)),
+        let bytes=unsafe {std::slice::from_raw_parts(r.base.add(off+28),36)};
+        Ok(SlotMeta { seq: u64::from_le_bytes(rd8(r.base,off)),
                    t_ns: u64::from_le_bytes(rd8(r.base,off+8)),
                    w: u32::from_le_bytes(rd4(r.base,off+16)),
                    h: u32::from_le_bytes(rd4(r.base,off+20)),
-                   fourcc: u32::from_le_bytes(rd4(r.base,off+24)) }
+                   fourcc: u32::from_le_bytes(rd4(r.base,off+24)),
+                   presentation: crate::frame_presentation::Presentation::parse(bytes)? })
     }
 
     pub fn freshest(&self) -> Result<Option<(SlotMeta,usize)>,String> {
         let mut best: Option<(SlotMeta,usize)> = None;
         for i in 0..self.reader.slots {
-            let meta=self.meta(i);
+            let meta=self.meta(i)?;
             if meta.seq==0 { continue; }
             if meta.w != self.reader.width || meta.h != self.reader.height || meta.fourcc != 0x41424752 {
                 return Err("frame metadata does not match mapped RGBA8 layout".into());

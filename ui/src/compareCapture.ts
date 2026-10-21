@@ -1,8 +1,8 @@
 /** Match a request/document/sequence, never infer an original frame from a delay. */
-export interface SnapshotFrame { seq: number; w: number; h: number; pixelLen: number; pixels: Uint8Array; y0: number; rows: number }
-export interface CompareReceipt { capture_id: string | null; doc: string; seq: number; view: string }
+export interface SnapshotFrame { seq: number; w: number; h: number; pixelLen: number; pixels: Uint8Array; y0: number; rows: number; seqId?:string;instance?:string|null;presentation?:{documentId:string;kind:number}|null }
+export interface CompareReceipt { capture_id: string | null; doc: string; seq: number; view: string;document_id?:string;shm_instance?:string;seq_id?:string }
 export async function captureOriginal<T extends SnapshotFrame>(o: {
-  id: string; doc: string; cancelled: () => boolean;
+  id: string; doc: string; documentId?:string; cancelled: () => boolean;
   request: (id: string) => Promise<unknown>; receipt: () => Promise<CompareReceipt | null>;
   pixels: () => Promise<T>; wait: () => Promise<void>; now: () => number; timeoutMs?: number;
 }): Promise<T | null> {
@@ -15,7 +15,9 @@ export async function captureOriginal<T extends SnapshotFrame>(o: {
     if (receipt?.capture_id === o.id && receipt.doc === o.doc && receipt.view === 'original') {
       const frame = await o.pixels();
       if (o.cancelled()) return null;
-      if (frame.seq === receipt.seq && frame.w > 0 && frame.h > 0 && frame.y0 === 0
+      const identified=!o.documentId||(receipt.document_id===o.documentId&&frame.presentation?.documentId===o.documentId
+        &&frame.presentation?.kind===2&&!!frame.instance&&frame.instance===receipt.shm_instance&&frame.seqId===receipt.seq_id);
+      if (identified && frame.seq === receipt.seq && frame.w > 0 && frame.h > 0 && frame.y0 === 0
         && frame.rows === frame.h && frame.pixelLen === frame.w * frame.h * 4
         && frame.pixels.byteLength === frame.pixelLen) return frame;
     }

@@ -45,3 +45,12 @@ test('side-by-side preserves two complete equal-scale frames',()=>{
   assert.deepEqual(comparisonFrameSize(220,275,'swipe'),{w:220,h:275});
   assert.deepEqual(comparisonFrameSize(220,275,'single'),{w:220,h:275});
 });
+
+test('identified comparison refuses reused sequence from another mapping or document',async()=>{
+ const base=setup();
+ const goodFrame={...frame,seqId:'7',instance:'a',presentation:{documentId:'123',kind:2}};
+ const goodReceipt={...receipt,seq_id:'7',shm_instance:'a',document_id:'123'};
+ const o={...base,documentId:'123',pixels:async()=>goodFrame,receipt:async()=>goodReceipt};
+ assert.equal(await captureOriginal(o),goodFrame);
+ o.pixels=async()=>({...goodFrame,instance:'b'});await assert.rejects(captureOriginal(o),/超时/);
+});

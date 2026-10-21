@@ -1127,13 +1127,13 @@ export const benchStart = (o: BenchOptions) =>
     mode: o.mode,
   });
 
-/** 取最新帧：40B 头 + RGBA 裸像素。无新帧时以 "NO_NEW_FRAME" 拒绝。 */
+/** 取最新帧：LRF1 128B 头 + RGBA 裸像素。无新帧时以 "NO_NEW_FRAME" 拒绝。 */
 export const pullFrame = () => invoke<ArrayBuffer>("pull_frame");
 
 /** 只读快照：拿"此刻屏幕上是什么"，与投递计数无关（见 main.rs 的 peek_frame）。
  *  自动通道量像素用这条，不能用 pullFrame——那条会因"这帧已经投过了"拒发，
  *  而渲染循环本来就在逐帧拉取，测试路径永远抢不到。 */
-export const peekFrame = () => invoke<ArrayBuffer>("peek_frame");
+export const peekFrame = (respectTiers=false) => invoke<ArrayBuffer>("peek_frame",{respectTiers});
 
 export const frameAcked = (seq: number, jsDrawUs: number) =>
   // 不能传 BigInt：invoke 的负载走 JSON 序列化，BigInt 会直接抛 TypeError
@@ -1168,7 +1168,7 @@ export const loadImage = (
  */
 /** 按住看原图：on=true 临时出一帧原图，on=false 回到修好的那一版。不改会话强度。 */
 export const setCompare = (on: boolean, captureId?: string) => invoke<{ on: boolean }>("compare", { on, captureId });
-export const compareStatus = () => invoke<{ capture_id: string | null; doc: string; seq: number; view: string } | null>("compare_status");
+export const compareStatus = () => invoke<import("./compareCapture").CompareReceipt | null>("compare_status");
 
 export const setStrength = (
   value: number | undefined,
@@ -1395,42 +1395,7 @@ export const runExport = (
     conflictPolicy: opts?.conflictPolicy,
   });
 
-/** 帧头解析（小端，与 main.rs 的 pull_frame 注释逐字段对应）。 */
-export interface ParsedFrame {
-  seq: number;
-  tEmitNs: number;
-  tPullNs: number;
-  w: number;
-  h: number;
-  /** 0 = 宿主对照组（LRT_SKIP_PIXELS），像素根本没跨进程 */
-  pixelLen: number;
-  /** 脏矩形起始行（占用头部的保留位） */
-  y0: number;
-  /** 本次送来的行数：整帧时等于 h，脏矩形时小于 h */
-  rows: number;
-  pixels: Uint8Array;
-  /** upload=bitmap 策略下泵里解好的原生位图；用完必须 close() */
-  bitmap?: ImageBitmap;
-}
-
-export function parseFrameHead(buf: ArrayBuffer): ParsedFrame {
-  const dv = new DataView(buf);
-  const w = dv.getUint32(24, true);
-  const h = dv.getUint32(28, true);
-  const pixelLen = dv.getUint32(32, true);
-  return {
-    seq: Number(dv.getBigUint64(0, true)),
-    tEmitNs: Number(dv.getBigUint64(8, true)),
-    tPullNs: Number(dv.getBigUint64(16, true)),
-    w,
-    h,
-    pixelLen,
-    y0: dv.getUint32(36, true),
-    // 行数从字节数反推：宿主只送顶部几行时，上传尺寸得按实际拿到的算
-    rows: pixelLen > 0 && w > 0 ? pixelLen / (w * 4) : 0,
-    pixels: new Uint8Array(buf, 40),
-  };
-}
+export {parseFrameHead,type ParsedFrame} from './previewFrame';
 
 export const isNoFrame = (e: unknown) => {
   const s = String(e);
