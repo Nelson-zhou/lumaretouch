@@ -76,3 +76,35 @@ def test_engine_compatibility_aliases_and_late_emitter_patch(monkeypatch):
     assert events[-1]['event']=='batch_state'
     assert engine._batch_controller().sequence==7
     assert engine._sync_state()['last_result']=={'kind':'known'}
+
+
+def test_batch_undo_preserves_later_out_of_scope_edits_for_parked_target():
+    c,rows,_,_,_,_=fixture()
+    c.handle_command({'action':'commit','docs':[1],'module_scope':[OP_EXPOSURE]})
+    bid=c.summary()['last']
+    rows[1]['state']['untouched']='later edit outside batch scope'
+    rows[1]['state']['new_unrelated_layer']={'visible':True}
+    c.handle_command({'action':'undo','batch_id':bid})
+    assert rows[1]['state']['_exposure'][0]==0
+    assert rows[1]['state']['untouched']=='later edit outside batch scope'
+    assert rows[1]['state']['new_unrelated_layer']=={'visible':True}
+
+
+def test_batch_undo_replays_scoped_restore_without_erasing_live_unrelated_edits():
+    c,rows,current,_,replays,_=fixture()
+    c.handle_command({'action':'commit','docs':[1],'module_scope':[OP_EXPOSURE]})
+    bid=c.summary()['last'];current[0]=1
+    rows[1]['state']['untouched']='later live edit'
+    c.handle_command({'action':'undo','batch_id':bid})
+    assert rows[1]['state']['_exposure'][0]==0
+    assert rows[1]['state']['untouched']=='later live edit'
+    assert replays[-1]['replayed_for']==f'batch_undo:{bid}'
+
+
+def test_batch_ev_undo_preserves_later_white_balance_and_tone_in_shared_tuple():
+    c,rows,_,_,_,_=fixture()
+    c.handle_command({'action':'commit','docs':[1],'module_scope':[OP_EXPOSURE]})
+    bid=c.summary()['last']
+    rows[1]['state']['_exposure']=(1.,.2,-.1,.15,.1,-.2,.3)
+    c.handle_command({'action':'undo','batch_id':bid})
+    assert rows[1]['state']['_exposure']==(0.,.2,-.1,.15,.1,-.2,.3)

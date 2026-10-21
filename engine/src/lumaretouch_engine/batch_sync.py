@@ -228,11 +228,14 @@ class BatchSyncController:
                                   "reason": "同步后又被编辑过：不抹后续修改",
                                   "now": SC.params_of(cur, ops), "applied": rec["applied"]})
                 continue
+            # Conflict checks are scoped; restoration must use the same scope.
+            # Restoring the whole old snapshot would erase later unrelated edits.
+            restored_state = SC.apply_modules(cur, SC.params_of(rec["before"], ops))
             if idx == self.documents.current_index():
                 # 活动那一格不能只改存档：画面就挂在会话上，不重放就是“事件说还原了
                 # 而屏幕上还是同步后那一版”。
-                self.editor.replay(rec["before"], mode="batch", replayed_for=f"batch_undo:{bid}")
-            row["state"] = dict(rec["before"])
+                self.editor.replay(restored_state, mode="batch", replayed_for=f"batch_undo:{bid}")
+            row["state"] = restored_state
             restored.append(idx)
         b["undone"] = True
         self.last_result = {"kind": "undo", "batch_id": bid, "restored": restored,
