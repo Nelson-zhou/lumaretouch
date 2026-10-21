@@ -25,3 +25,5 @@
 `render_snapshot.own_render_inputs` 只接收明确的 CPU 值与 RepairOp/LightOp/FacePrecompute/CubeLut记录，先计入每次实际数组复制的字节，再复制为独立只读数组。已连续数组也必须复制，不能通过给live别名加只读标志假装冻结。字典、列表、记录字段均归后台消费者独有。调用方必须在整次检查/复制期间持有编辑命令互斥，不能在worker中复制仍被用户修改的live数据。
 
 预算仅为数组payload；另有限制节点数、文本字节及嵌套深度，不冒充Python进程总内存上界。该函数不是配方/图层有效性验证器，也没有启用全分辨率UI；后续仍须语义白名单、活跃层完整性校验、解码与渲染总预算、worker调度及像素通道接入。
+
+独立像素包协议草案已落为 `inspection_wire.py` / Rust `inspection_wire.rs`，含跨语言同一golden向量、完整会话epoch及请求身份核验。它只编码头/校验已有字节，不等于共享内存发布、生命周期、JS解析或Viewer接入已完成；详见 `inspection-wire-v1.md`。

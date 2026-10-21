@@ -63,6 +63,9 @@ jobs:
       - name: Rust full-source inspection admission contracts
         working-directory: ui/src-tauri
         run: rustc --edition=2021 --test src/refinement.rs -o "$RUNNER_TEMP/lrt-refinement" && "$RUNNER_TEMP/lrt-refinement"
+      - name: Inspection wire identity and payload contracts
+        working-directory: ui/src-tauri
+        run: rustc --edition=2021 --test src/inspection_wire.rs -o "$RUNNER_TEMP/lrt-inspection-wire" && "$RUNNER_TEMP/lrt-inspection-wire"
       - name: Rust point-curve compiler contracts
         run: |
           rustc --edition=2021 --test core/curves/curve.rs -o "$RUNNER_TEMP/lrt-curves-test"
