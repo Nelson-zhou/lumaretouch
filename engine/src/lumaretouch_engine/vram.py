@@ -361,6 +361,26 @@ class PreviewPipeline:
         self.last_light_ms = 0.0
 
     # ---- 渲染：全 GPU，无 CPU 参与 --------------------------------------
+    @staticmethod
+    def _filter_parameters(radius, eps, detail_gain, mid_gain, broad_gain, texture_radius):
+        # 先把入参归一化再算键：键与实际执行必须来自同一个值。之前是 int(radius) 进键、
+        # 原始的 radius 进滤波，传 12.5 时键说 12 而算的是 12.5——两个不同的滤波结果会
+        # 撞同一个键，下次拿到的就是错的那份。
+        r = int(radius)
+        e = float(eps)
+        rf = int(texture_radius)
+        g = float(detail_gain)
+        mg = float(mid_gain)
+        bg = float(broad_gain)
+        # eps 必须严格为正：`a = var/(var+eps)` 在 eps=0 时于平坦皮区算 0/0，产出 NaN
+        # （产品档实测 402795 个子像素 NaN）。radius=0 在库层是合法的退化恒等滤波（输出有限、
+        # strength=0 仍逐字节成立），协议层另有下界拦住它带来的"空滑块"。
+        if r < 0 or rf < 0 or e <= 0.0 or not (math.isfinite(e) and math.isfinite(g)
+                                              and math.isfinite(mg) and math.isfinite(bg)):
+            raise ValueError(f"磨皮参数非法：radius={r}（需 ≥0）、texture_radius={rf}（需 ≥0）、"
+                             f"eps={e}（需 >0 的有限值）、三个增益（需有限值）")
+        return r, e, rf, g, mg, bg
+
     def prepare(self, radius: int = DEFAULT_RADIUS, eps: float = DEFAULT_EPS,
                 detail_gain: float = DEFAULT_DETAIL_GAIN,
                 mid_gain: float = DEFAULT_MID_GAIN,
@@ -378,22 +398,8 @@ class PreviewPipeline:
         """
         if self.src_f32 is None:
             raise RuntimeError("先 load_rgb_u8 再 prepare")
-        # 先把入参归一化再算键：键与实际执行必须来自同一个值。之前是 int(radius) 进键、
-        # 原始的 radius 进滤波，传 12.5 时键说 12 而算的是 12.5——两个不同的滤波结果会
-        # 撞同一个键，下次拿到的就是错的那份。
-        r = int(radius)
-        e = float(eps)
-        rf = int(texture_radius)
-        g = float(detail_gain)
-        mg = float(mid_gain)
-        bg = float(broad_gain)
-        # eps 必须严格为正：`a = var/(var+eps)` 在 eps=0 时于平坦皮区算 0/0，产出 NaN
-        # （产品档实测 402795 个子像素 NaN）。radius=0 在库层是合法的退化恒等滤波（输出有限、
-        # strength=0 仍逐字节成立），协议层另有下界拦住它带来的"空滑块"。
-        if r < 0 or rf < 0 or e <= 0.0 or not (math.isfinite(e) and math.isfinite(g)
-                                              and math.isfinite(mg) and math.isfinite(bg)):
-            raise ValueError(f"磨皮参数非法：radius={r}（需 ≥0）、texture_radius={rf}（需 ≥0）、"
-                             f"eps={e}（需 >0 的有限值）、三个增益（需有限值）")
+        r, e, rf, g, mg, bg = self._filter_parameters(
+            radius, eps, detail_gain, mid_gain, broad_gain, texture_radius)
         bands_key = (r, e, rf, self.repair_version)
         # 成品键把修补版本放最后一位（M1-3c 起就是这个约定，测试与报表都按它读）：
         # 前面六个全是磨皮参数，第 7 位是底图身份。
@@ -450,16 +456,22 @@ class PreviewPipeline:
         # 每帧的 db 应用成本从 0 起算：它必须只由“这一帧真跑了什么”给出，
         # 不能把上一次建层的成本混进来（那是事件驱动的一次性账，另走 light_ms）
         self.last_light_ms = 0.0
-        self.prepare(radius=radius, eps=eps, detail_gain=detail_gain,
-                     mid_gain=mid_gain, broad_gain=broad_gain,
-                     texture_radius=texture_radius)
-        # M2-a2：两个混合操作数各自过一遍修容层。没画过修容时 lighten_* 直接把
-        # 原张量递回来（不复制、不跑算子），所以混合式与操作数与 M2-a 完全相同，
-        # strength=0 逐字节恒等那条承诺一分不改。
-        base = self.lighten_source()
-        result = self.lighten_result()
-        out = mix_masked(base, result, strength, self.mask(channel)) if channel is not None \
-            else (1.0 - strength) * base + strength * result
+        if strength == 0.0:
+            # No filtered contribution: validate the same contract, then avoid
+            # full-frame bands/allocation. Do not discard a useful warm cache.
+            self._filter_parameters(radius, eps, detail_gain, mid_gain, broad_gain, texture_radius)
+            if channel is not None:
+                self.mask(channel)  # missing/unknown masks must still be rejected
+            self.last_filter_ms = self.last_bands_ms = 0.0
+            out = self.lighten_source()  # keep repair + dodge/burn, NOT original-view bypass
+        else:
+            self.prepare(radius=radius, eps=eps, detail_gain=detail_gain,
+                         mid_gain=mid_gain, broad_gain=broad_gain,
+                         texture_radius=texture_radius)
+            base = self.lighten_source()
+            result = self.lighten_result()
+            out = mix_masked(base, result, strength, self.mask(channel)) if channel is not None \
+                else (1.0 - strength) * base + strength * result
         # M2-b：形变盖在最后。为什么不盖在底图上：那样拖任意一个滑块都要把 9 ms 的
         # 分带重跑（底图变了），零推理那条承诺就碎了。盖在最后每帧只多一次 grid_sample。
         # M3-a2：调色再盖在形变之后。它是逐点的“输出变换”，与像素位置无关，所以

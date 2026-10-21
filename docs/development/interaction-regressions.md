@@ -109,3 +109,19 @@ The Rust host now sends the requested device with one acknowledged import comman
 This reduces an avoidable dependency on the first-preview path; it does not reduce RAW decode work, proxy resolution, or claim measured editable-readiness speed. Embedded previews remain browse-only and never become editable/export source pixels. Decode uses the effective device so unavailable explicit CUDA also receives the established CPU fallback. Budget validation runs before device changes. `image_ready.device_prepare_ms` records device preparation separately; `import_ms` now includes it for the unified host command, unlike the previous two-command timing. `shm_ms` still includes other import bookkeeping/preview overhead, not a pure shared-memory benchmark.
 
 Seven local mock contract tests cover cold/hot ordering, raster and legacy paths, missing previews, CPU fallback, and invalid-budget side effects; three earlier mask/patch contracts and UI typecheck also pass. These are not camera/GPU measurements; actual import integration tests and CI must be checked separately.
+
+## 2026-10-21 — Neutral skin bypass (verification pending)
+
+When skin strength is exactly zero, the pipeline validates the same parameters and
+requested mask channel, but no longer builds guided-filter bands/result merely to
+multiply them by zero. Repair/dodge-burn source and every downstream edit remain
+active; this is not the original-image comparison bypass. Existing nonzero caches
+and keys are retained. Nonzero first use still incurs filtering: the cost was not
+magically removed from that operation. No proxy size or export quality was reduced.
+
+The shared validation helper retains the existing normalization and error contract.
+Tests cover small neutral images, no filtering calls, cache reuse/rebuild, parameter
+and mask errors, color edits and source-buffer immutability. The small-image fix is
+limited to neutral filtering: nonzero large-radius reflection padding on tiny images
+is still a separate unresolved case. Tests/benchmarks must run through Qoder or CI;
+no performance number is claimed here.
