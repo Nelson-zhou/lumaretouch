@@ -29,15 +29,17 @@ def test_admission_returns_private_lists():
     assert out['ticket'][1]=='1'
 
 
-def test_real_protocol_worker_renders_then_release_removes_private_result(engine,tmp_path):
+@pytest.mark.parametrize('address_bytes', [512*1024**2, 8*1024**3])
+def test_real_protocol_worker_renders_then_release_removes_private_result(engine,tmp_path,address_bytes):
     pytest.importorskip('torch')
     from PIL import Image
     data=np.full((64,96,3),100,np.uint8)
     path=tmp_path/'fixture.png';Image.fromarray(data).save(path)
     engine.send(cmd='load_image',path=str(path),device='cpu',strength=0)
     engine.wait_for('image_ready',timeout=60)
+    admission=config();admission['max_address_bytes']=address_bytes
     engine.send(cmd='inspection_snapshot',action='start',request_id='1',max_asset_bytes=1024*1024,
-                render=config(),_host_request_id='accepted')
+                render=admission,_host_request_id='accepted')
     phases=[];accepted=False
     while True:
         event=engine.next_event(timeout=75)
@@ -46,8 +48,16 @@ def test_real_protocol_worker_renders_then_release_removes_private_result(engine
             assert event['event']!='error',event
             continue
         phases.append(event['state'])
-        assert event['state'] not in ('failed','cancelled','cancelling'),event
+        if address_bytes == 512*1024**2 and event['state']=='failed':
+            assert accepted and event['error'] and event['result_path'] is None, json.dumps(event)
+            # The admitted limit is never silently increased or downgraded to a proxy.
+            engine.send(cmd='hello')
+            engine.wait_for('ready',timeout=10)
+            return
+        if event['state'] in ('failed','cancelled','cancelling'):
+            pytest.fail(json.dumps(event,ensure_ascii=False))
         if event['state']=='ready':
+            assert address_bytes == 8*1024**3, 'Tiny budget unexpectedly accepted the heavy runtime'
             assert accepted and event['preparation_only'] is False
             result=Path(event['result_path']);break
     assert 'spooling' in phases and 'rendering' in phases

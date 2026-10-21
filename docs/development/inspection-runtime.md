@@ -55,3 +55,15 @@ parent death may still leave its private temporary files for host recovery.
 References checked during implementation:
 - https://man7.org/linux/man-pages/man2/PR_SET_PDEATHSIG.2const.html
 - https://docs.python.org/3/library/resource.html
+
+## Runtime-mapping diagnostic
+
+The first actual ROCm-venv run at a 4 GiB address-space admission failed before
+rendering: `ImportError: libmagma.so: failed to map segment from shared object`.
+That failure is preserved, not counted as a passing pixel test. The next test
+separates a deliberately insufficient 512 MiB admission (explicit failure, Engine
+still responsive) from the existing maximum 8 GiB admission (must produce exact
+pixels and release its file). No production cap is increased or disabled. An
+8 GiB virtual-address allowance is not an 8 GiB physical-memory allocation or a
+performance result. Dedicated CPU runtime packaging and host admission policy
+remain separate work; the higher-budget attempt is not yet a verified remedy.
