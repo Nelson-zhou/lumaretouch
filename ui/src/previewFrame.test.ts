@@ -9,8 +9,9 @@ test('preview golden preserves identity independently of raster and presentation
  assert.deepEqual([...f.pixels],Array.from({length:16},(_,i)=>i));
 });
 test('invalid version, geometry, reserved fields, partial rows and payload lengths rejected',()=>{
- for(const offset of [4,6,76,96,100]){const b=golden();new DataView(b).setUint32(offset,0xffffffff,true);assert.throws(()=>parseFrameHead(b));}
+ for(const offset of [4,6,96,100]){const b=golden();new DataView(b).setUint32(offset,0xffffffff,true);assert.throws(()=>parseFrameHead(b));}
  for(const n of [0,39,127,143,145]){const b=new Uint8Array(n);b.set(new Uint8Array(golden()).subarray(0,n));assert.throws(()=>parseFrameHead(b.buffer));}
+ const zeroWidth=golden();new DataView(zeroWidth).setUint32(76,0,true);assert.throws(()=>parseFrameHead(zeroWidth));
  const b=golden();new DataView(b).setUint32(44,1,true);assert.throws(()=>parseFrameHead(b));
 });
 test('legacy header remains unidentified and zero-payload benchmark frames do not claim pixels',()=>{
