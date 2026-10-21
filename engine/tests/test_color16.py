@@ -8,7 +8,15 @@ from lumaretouch_engine.color16 import convert_rgb16
 from lumaretouch_engine.export import _srgb_bytes, export_master_16bit, read_tiff16, read_tiff16_icc
 import tifffile
 
-PROFILE=Path('/usr/share/color/icc/compatibleWithAdobeRGB1998.icc')
+PROFILE=Path(__file__).resolve().parent/'fixtures'/'icc'/'AdobeCompat-v2.icc'
+
+
+def test_reference_profile_is_bundled_and_pinned():
+    import hashlib
+    data=PROFILE.read_bytes()  # Required fixture: absence fails, never silently skips.
+    assert len(data)==374
+    assert hashlib.sha256(data).hexdigest()=='60fb2adecacf82132db0b1c09b303316f3bbd9e2823e7ba096d01627d12d57c9'
+    assert data[36:40]==b'acsp' and data[16:20]==b'RGB '
 
 
 def ramp():
@@ -21,7 +29,6 @@ def test_same_profile_is_exact_uint16_identity():
     assert np.array_equal(a,convert_rgb16(a,profile,profile))
 
 
-@pytest.mark.skipif(not PROFILE.exists(),reason='reference RGB ICC unavailable')
 def test_rgb16_transform_agrees_with_independent_pillow8_reference_without_losing_levels():
     a=ramp();source=PROFILE.read_bytes();target=_srgb_bytes()
     out=convert_rgb16(a,source,target)
@@ -43,7 +50,6 @@ def test_wrong_colorspace_rejected():
     with pytest.raises(ValueError,match='RGB'):convert_rgb16(ramp(),lab,_srgb_bytes())
 
 
-@pytest.mark.skipif(not PROFILE.exists(),reason='reference RGB ICC unavailable')
 @pytest.mark.parametrize('target',['source','srgb'])
 def test_master16_uses_source_profile_instead_of_retagging(tmp_path,target):
     a=ramp();profile=PROFILE.read_bytes();src=tmp_path/'source.tif';dst=tmp_path/'out.tif'

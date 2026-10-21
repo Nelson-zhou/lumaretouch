@@ -72,3 +72,10 @@ def test_cancelled_render_is_never_returned(monkeypatch):
         return d.rgb.copy(),{}
     monkeypatch.setattr(F,'export_image',render)
     with pytest.raises(F.RefinementCancelled):run(d,cancelled=cancelled)
+
+
+def test_tiff_preserves_known_source_precision_metadata(monkeypatch):
+    d=decoded(16);d.raw={'source':'tiff16'}
+    monkeypatch.setattr(F,'render_edited_rgb16',lambda *a,**kw:(d.rgb.copy(),None,{}))
+    got=run(d)
+    assert got.decoded_bits==16 and got.source_bits==16
