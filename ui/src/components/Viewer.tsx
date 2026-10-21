@@ -435,8 +435,6 @@ export default function Viewer({
     const snap = document.createElement("canvas");
     const snapCtx = snap.getContext("2d", { alpha: false });
     let lastOriginal: ParsedFrame | null = null;
-    const edited = document.createElement("canvas");
-    const editedCtx = edited.getContext("2d", { alpha: false });
     let compositionDirty = false;
     let lastMode: CompareMode = "single";
     let lastSwipe = -1;
@@ -486,7 +484,6 @@ export default function Viewer({
           sizeRef.current = { w: f.w, h: f.h };
           setFrameDim({ w: f.w, h: f.h });
           snap.width = f.w; snap.height = f.h;
-          edited.width = f.w; edited.height = f.h;
           lastOriginal = null;
           pad.resize(f.w, f.h);
           if (overlay) {
@@ -532,7 +529,7 @@ export default function Viewer({
           gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
           // 一次 drawImage：把这一帧交给用户实际看到的那张画布；对比模式在这张
           // 2D 画布上叠原图（GL 渲染与测量链路一个字不动）。
-          if (editedCtx) { editedCtx.drawImage(canvas, 0, 0); compositionDirty = true; }
+          compositionDirty = true;
         } else if (f.bitmap) {
           f.bitmap.close();
         }
@@ -580,13 +577,16 @@ export default function Viewer({
         if (mode !== lastMode || swipeRef.current !== lastSwipe) compositionDirty = true;
         lastMode = mode; lastSwipe = swipeRef.current;
         if (compositionDirty) {
-          mctx.drawImage(edited, 0, 0);
+          // Texture storage survives WebGL drawing-buffer presentation. Redraw
+          // it for display-only changes; do not copy a second full image per frame.
+          if (!f) gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          mctx.drawImage(canvas, 0, 0);
           if (original && snap.width === curW && snap.height === curH) {
             if (mode === "split") {
               // Whole photographs on both sides, not unrelated half-image crops.
               mctx.fillStyle = "#16191e"; mctx.fillRect(0, 0, curW, curH);
               mctx.drawImage(snap, 0, curH / 4, curW / 2, curH / 2);
-              mctx.drawImage(edited, curW / 2, curH / 4, curW / 2, curH / 2);
+              mctx.drawImage(canvas, curW / 2, curH / 4, curW / 2, curH / 2);
             } else if (mode === "swipe") {
               const x = Math.max(0, Math.min(curW, Math.round(curW * swipeRef.current)));
               mctx.save(); mctx.beginPath(); mctx.rect(0, 0, x, curH); mctx.clip();
