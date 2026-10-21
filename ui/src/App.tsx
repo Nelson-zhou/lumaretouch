@@ -1,3 +1,4 @@
+import { createRefreshPump } from "./refreshPump";
 import { captureOriginal, compareImageKey } from "./compareCapture";
 import { skinStrengthOptions, skinMaskUnavailable } from "./skinScope";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -425,10 +426,25 @@ export default function App() {
         setHistRep(null);
         applied.current = null;
       }
+      return st;
     } catch {
       /* 引擎未起，忽略 */
     }
   }, [applyDocState]);
+
+  const panelRefreshRef = useRef<ReturnType<typeof createRefreshPump> | null>(null);
+  useEffect(() => {
+    const pump = createRefreshPump(async () => {
+      const st = await refreshStatus();
+      return !!(st?.edit_queue?.in_flight || st?.edit_queue?.pending);
+    }, run => window.setTimeout(run, 80), id => window.clearTimeout(id));
+    panelRefreshRef.current = pump;
+    return () => {
+      pump.dispose();
+      if (panelRefreshRef.current === pump) panelRefreshRef.current = null;
+    };
+  }, [refreshStatus]);
+  const requestPanelRefresh = useCallback(() => panelRefreshRef.current?.trigger(), []);
 
   // Ctrl+Z / Ctrl+Shift+Z（macOS 上跟着 Cmd）：撤销是全局动作，不该要求某个按钮被聚焦。
   // 两处放行：① 焦点在文本框里（目录输入框那种编辑不能被全局撤销吃掉）；② 按住 Alt
@@ -2681,10 +2697,11 @@ export default function App() {
   // Polling allocates fresh objects, but does not import a new photograph.
   const compareKey = compareImageKey(status?.image);
   const compareDoc = status?.image?.doc ?? "";
+  const needsOriginal = compareMode !== "single";
   useEffect(() => {
     setHasOriginal(false);
     setOriginalFrame(null);
-    if (workspace !== "retouch" || compareMode === "single" || !compareDoc || !pid) return;
+    if (workspace !== "retouch" || !needsOriginal || !compareDoc || !pid) return;
     let dead = false;
     const id = crypto.randomUUID();
     void (async () => {
@@ -2703,7 +2720,7 @@ export default function App() {
       }
     })();
     return () => { dead = true; void setCompare(false).catch(() => undefined); };
-  }, [compareMode, workspace, compareKey, compareDoc, pid]);
+  }, [needsOriginal, workspace, compareKey, compareDoc, pid]);
 
   /** 视口/顶栏的缩放：Fit 与真正的 100%（1 图像像素 = 1 屏幕像素）。 */
   function zoomFit() { setOneToOne(false); setView({ ...VIEW_HOME }); }
@@ -3684,7 +3701,7 @@ export default function App() {
         <aside className="side">
           <RetouchPanel status={status} doc={doc} hasImage={hasImage}
                         faceOk={faceOk} faceWhy={faceWhy}
-                        note={setDragNote} onDone={refreshStatus}
+                        note={setDragNote} onDone={requestPanelRefresh}
                         thumb={strip?.current ? thumbs[strip.current] : undefined}
                         faceScope={faceScope} onFaceScope={setFaceScope}
                         brush={{ on: brushOn, mode: brushMode, radius: brushRadius }}

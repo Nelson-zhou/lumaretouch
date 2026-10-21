@@ -838,6 +838,7 @@ export interface EngineStatus {
   history_rev: number;
   /** 发过编辑命令、还没听到引擎的历史答复：撤销按钮在这段窗口里保持可用。 */
   history_dirty: boolean;
+  edit_queue?: { pending: number; in_flight: boolean; coalesced: number; closed: boolean };
   /** 最近一条带 doc_state 的事件（image_ready / session_state / history_state 之一）。
    *  历史账只从这三条里来，而谁最后到只有宿主按到达次序数得出来。 */
   doc_report: { source: string; doc_state: DocState } | null;

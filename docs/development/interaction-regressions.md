@@ -91,3 +91,13 @@ the same strength into a whole-image blur. Explicit unmasked protocol edits rema
 Three focused patch/suspension contracts pass locally; real masked replay is still subject
 to the engine/model regression suite. This is a concrete fallback defect, not proof that it
 was the sole cause of the user's old installed package's neutral-import appearance.
+
+## 2026-10-21 — Coalesced panel status refresh
+
+The Rust dispatcher remains the authority for command ordering and latest-value coalescing. The React panel now coalesces redundant status reads into an 80 ms timer, allows one pump read in flight, and continues reading while the host reports pending/in-flight edits. A trailing read is retained when an edit arrives during a read. The existing one-second health poll remains; this change does not throttle frame delivery or claim a measured GUI latency.
+
+The pump is created inside an effect, with a fresh instance on every setup (including StrictMode replay); cleanup disposes only that instance. Switching between split and wipe reuses the same verified original snapshot rather than recapturing it. New image identity, engine restart, leaving comparison, and workspace changes still invalidate it.
+
+Validation: frontend typecheck, 47 Node tests, and production build passed locally. Four pump tests cover burst coalescing, busy queue draining, trailing reads, and disposal. Native desktop control/visual acceptance remains pending. This is not RAW import, curves, or whole-product completion.
+
+Read-only installed-package inspection found `/usr/lib/LumaRetouch/engine/src/lumaretouch_engine/server.py` uses `DEFAULT_STRENGTH = 0.5` and initially unrestricted channel, unlike the candidate's zero default. This explains a plausible direct path to unsolicited smoothing in the old desktop package; it is code evidence, not a reproduction using the user's photograph. The installed package was not modified.
