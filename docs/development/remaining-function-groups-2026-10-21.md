@@ -39,3 +39,9 @@ separate correct geometry paths; they do not repair ordinary viewing.
 
 Deep real-machine visual/performance testing remains deferred, not removed. Basic
 compile and deterministic functional checks remain mandatory for each change.
+
+Subsequent correction: the frame-bound presentation implementation passed basic
+CI/Qoder verification on62c33128 (production equivalent backend33ee297d). The
+ordinary crop-aspect code path and comparison containment are corrected candidates;
+physical desktop visual acceptance remains pending. See frame-presentation-
+verification-2026-10-21.md. This does not close any of the six feature groups above.
