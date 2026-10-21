@@ -27,3 +27,5 @@
 预算仅为数组payload；另有限制节点数、文本字节及嵌套深度，不冒充Python进程总内存上界。该函数不是配方/图层有效性验证器，也没有启用全分辨率UI；后续仍须语义白名单、活跃层完整性校验、解码与渲染总预算、worker调度及像素通道接入。
 
 独立像素包协议草案已落为 `inspection_wire.py` / Rust `inspection_wire.rs`，含跨语言同一golden向量、完整会话epoch及请求身份核验。它只编码头/校验已有字节，不等于共享内存发布、生命周期、JS解析或Viewer接入已完成；详见 `inspection-wire-v1.md`。
+
+运行时接入第一步：现有 `Engine._export_snapshot` 已委托同一个纯 `export_recipe.build_export_spec`，保留原函数体与所有现有图层解释，不让检查worker构造假Engine或另抄缩减配方。该函数仍会做全尺寸mask重采样，必须在准入后调用；它本身不提供调度、资源限制或独立输入所有权。检查仍未运行时接通。
