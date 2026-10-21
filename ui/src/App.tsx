@@ -1,3 +1,5 @@
+import {useColorSampler} from './useColorSampler';
+import {ColorSamplePanel} from './components/ColorSamplePanel';
 import {useProjectWorkflow} from './projects/useProjectWorkflow';
 import {ProjectWorkspace} from './projects/ProjectWorkspace';
 import {useViewportProbe} from './diagnostics/useViewportProbe';
@@ -1679,6 +1681,12 @@ export default function App() {
     });
   }, [status?.export]);
 
+  const captureAllowed=!!status?.engine_alive && status?.ready_caps?.color_capture_protocol===1
+    && !!doc?.document_id && status.image?.load_id===doc.document_id && workspace==='retouch'
+    && compareMode==='single' && !comparing && !inspectionEnabled && !cropOpen;
+  const captureReason=captureAllowed?'':'请导入图片，并在单视图代理预览中取色';
+  const colorSampler=useColorSampler({documentId:doc?.document_id??'',revision:status?.doc_rev??-1,
+    allowed:captureAllowed,reason:captureReason},brushOn||pickFace);
   return (
     <div className={"app ws-" + workspace}>
       <header className="topbar">
@@ -1718,6 +1726,9 @@ export default function App() {
                   && ['range','number','color','checkbox'].includes(target.type)))notifyInspectionEditIntent();
               }}>
           <RetouchPanel status={status} doc={doc} hasImage={hasImage}
+                        colorSamplePanel={<ColorSamplePanel sampler={colorSampler} reason={captureReason}
+                          canArm={captureAllowed&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending}
+                          onArm={()=>{setBrushOn(false);setPickFace(false);colorSampler.arm();}}/>}
                         faceOk={faceOk} faceWhy={faceWhy}
                         note={setDragNote} onDone={requestPanelRefresh}
                         thumb={strip?.current ? thumbs[strip.current] : undefined}
@@ -1775,7 +1786,7 @@ export default function App() {
                   )}
                 </div>
               )}
-              <Viewer
+              <Viewer colorSampler={colorSampler}
                 view={view} onView={(v) => {
                   // 滚轮/捏合改了倍率就退出 1:1；平移不算，仍是同一像素密度
                   if (v.fit) setInspectionEnabled(false);

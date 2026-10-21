@@ -1,3 +1,4 @@
+import type {CaptureTransport,CaptureStatus} from "./colorCaptureController";
 import type {ScopeResult,ScopeStage} from "./colorScopesModel";
 /** 与 Rust 命令的唯一出入口。所有跨语言类型集中在这里，避免各组件各自猜字段。 */
 import type {LevelsSpec} from "./levelsModel";
@@ -107,6 +108,14 @@ export const neutralCurves = (): CurveSpec => ({version:1,space:"srgb-display",i
   master:[[0,0],[1,1]],red:[[0,0],[1,1]],green:[[0,0],[1,1]],blue:[[0,0],[1,1]]});
 export const runCurves = (action:"set"|"clear", spec?:CurveSpec, gestureId?:string, interactive=false, requestId?:string, documentId?:string) =>
   invoke<{requested:boolean}>("curves",{action,spec,gestureId,interactive,requestId,documentId});
+export const colorCaptureApi:CaptureTransport={
+  arm:(captureId,documentId)=>invoke<{ticket:string;revision:number}>("capture_arm",{captureId,documentId}),
+  status:(captureId,ticket)=>invoke<CaptureStatus>("capture_status",{captureId,ticket}),
+  frame:(captureId,ticket)=>invoke<ArrayBuffer>("capture_frame",{captureId,ticket}),
+  presented:(captureId,ticket)=>invoke<{eligible:boolean}>("capture_presented",{captureId,ticket}),
+  sample:(captureId,ticket,requestId,point)=>invoke<{request_ticket:string}>("capture_sample",{captureId,ticket,requestId,...point}),
+  cancel:(captureId,ticket)=>invoke("capture_cancel",{captureId,ticket}),
+};
 export const requestColorScopes=(documentId:string,requestId:string,stage:ScopeStage)=>
   invoke<{requested:boolean}>("color_scopes",{documentId,requestId,stage});
 export const previewCurves = (spec:CurveSpec) => invoke<Partial<Record<CurveChannel,number[]>>>("curve_preview",{spec});
@@ -888,6 +897,8 @@ export interface EngineStatus {
    *  这些“引擎说什么能力”的清单都从这一份读。老宿主没报时为 undefined——那时那一排
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
+    color_capture_protocol?: number;
+    color_scopes_protocol?: number;
     project_actions?: string[];
     /** 挑图（LNX-PICK-001）：动作名单、四组档位的可选值、阈值本体与判据指纹。
      *  面板上的下拉项由这几格决定，前端不刻一份档名（刻了就双出处）。 */

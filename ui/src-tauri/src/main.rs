@@ -18,6 +18,9 @@ mod edit_queue;
 mod dispatch;
 mod shm;
 mod frame_identity;
+mod capture_wire;
+mod color_capture_host;
+mod color_capture_api;
 mod inspection_host;
 mod inspection_io;
 mod inspection_api;
@@ -176,6 +179,7 @@ pub struct AppState {
     curve_result: Mutex<Option<Value>>,
     levels_result: Mutex<Option<Value>>,
     color_scopes: Mutex<color_scopes_host::ScopeHost>,
+    color_capture: Mutex<color_capture_host::CaptureHost>,
     /// 最近一条 session_state（M5 底片条）：格子列表、当前索引、有没有缩略图。
     /// 这一份里**不带 base64**——控制通道那条“像素不进 JSON”的规矩只在缩略图上开了
     /// 一个一次性的例外，宿主不该把它长期握在轮询载荷里。
@@ -279,6 +283,7 @@ impl AppState {
             curve_result: Mutex::new(None),
             levels_result: Mutex::new(None),
             color_scopes: Mutex::new(color_scopes_host::ScopeHost::default()),
+            color_capture: Mutex::new(color_capture_host::CaptureHost::default()),
             session: Mutex::new(None),
             thumbs: Mutex::new(std::collections::HashMap::new()),
             session_rev: Mutex::new(0),
@@ -310,6 +315,7 @@ impl AppState {
     }
 
     pub fn attach_shm(&self, reader: ShmReader, name: String) {
+        self.color_capture.lock().unwrap().invalidate();
         // 每一条 shm_ready 都代表引擎新建了一块缓冲（同尺寸会早退不发事件），而新缓冲的
         // seq 从 1 重计。所以重置必须无条件：拿 pixel_size 当“换档”信号会漏掉
         // 672×848 ↔ 848×672 这种同字节不同构图（同一个代理预算换个 EXIF 方向就是它），
@@ -596,6 +602,7 @@ impl AppState {
     }
 
     fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
+        self.color_capture.lock().map_err(|_|"capture lock poisoned")?.invalidate();
         self.color_scopes.lock().map_err(|_|"scope lock poisoned")?.invalidate();
         let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
         inspection.invalidate();
@@ -610,6 +617,7 @@ impl AppState {
         // 宿主不数步数、不自己判哪条命令算编辑——名单由引擎的 ready 报
         let name = cmd.get("cmd").and_then(|c| c.as_str()).unwrap_or("").to_string();
         if name!="hello" && name!="inspection_snapshot" {self.color_scopes.lock().map_err(|_|"scope lock poisoned")?.invalidate();}
+        if name!="hello" {self.color_capture.lock().map_err(|_|"capture lock poisoned")?.invalidate();}
         let edited = self.history_edit_cmds.lock().unwrap().iter().any(|c| c == &name);
         let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
         if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
@@ -734,6 +742,7 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     let inspection_epoch=inspection_api::fresh_epoch()?;
     let inspection_root=Arc::new(inspection_io::Root::create(inspection_epoch)?);
     st.inspection.lock().unwrap().reset(inspection_epoch)?;
+    st.color_capture.lock().unwrap().reset(inspection_epoch);
     *st.inspection_root.lock().unwrap()=Some(inspection_root.clone());
     let h = engine::spawn(&py, &src, &session, st.clone(),inspection_epoch,inspection_root);
     let pid = h.pid();
@@ -1606,6 +1615,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
 
 #[tauri::command]
 fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
+    state.color_capture.lock().unwrap().invalidate();
     state.inspection.lock().unwrap().invalidate();
     state.color_scopes.lock().unwrap().invalidate();
     let h = state.engine.lock().unwrap().clone();
@@ -2027,6 +2037,8 @@ fn main() {
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, compare_status, precompute,
             inpaint, light, deform, lut, grade, enhance, background, export, session, filmstrip, history,
+            color_capture_api::capture_arm, color_capture_api::capture_status, color_capture_api::capture_frame,
+            color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
             project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, edit_commands::crop, levels_api::levels, color_scopes_api::color_scopes, preset, batch, face, pick,
             report, quit
         ])

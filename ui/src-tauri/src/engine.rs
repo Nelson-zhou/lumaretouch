@@ -97,6 +97,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             d.close();
             let exited=process.lock().map(|mut c|c.wait().is_ok()).unwrap_or(false);
             st.on_inspection_engine_end(inspection_epoch);
+            st.color_capture.lock().unwrap().engine_ended(inspection_epoch);
             if exited{if let Err(e)=root.cleanup(){st.push_log(format!("inspection cleanup: {e}"));}}
         });
     }
@@ -173,6 +174,11 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             receipt["host_doc_rev"]=json!(*state.doc_rev.lock().unwrap());
             *state.curve_result.lock().unwrap() = Some(receipt);
         }
+        "color_capture" => {
+            let revision=*state.doc_rev.lock().unwrap();
+            state.color_capture.lock().unwrap().armed_event(inspection_epoch,&v,revision);
+        }
+        "color_capture_sample" => state.color_capture.lock().unwrap().sample_event(inspection_epoch,&v),
         "color_scopes" => {
             let revision=*state.doc_rev.lock().unwrap();
             state.color_scopes.lock().unwrap().complete(&v,revision);

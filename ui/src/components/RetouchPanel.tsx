@@ -30,6 +30,7 @@ import { skinLimits, skinSliderBounds100 } from "../gradeLimits";
 export type BrushMode = "heal" | "dodge" | "burn" | "color";
 
 export interface RetouchProps {
+  colorSamplePanel?: React.ReactNode;
   status: EngineStatus | null;
   doc: DocState | null;
   hasImage: boolean;
@@ -628,7 +629,7 @@ export default function RetouchPanel(props: RetouchProps) {
   const renderExtra = (node: SpecNode, featureId?:string): React.ReactNode => {
     if(featureId==="PC-32455"&&node.full==="直方图")return <HistogramPanel
       key={status?.image?.load_id??"empty"} documentId={status?.image?.load_id??""} snapshotId={doc?.document_id}
-      revision={status?.doc_rev??-1} result={status?.color_scopes} disabled={!props.hasImage} onDone={props.onDone}/>;
+      revision={status?.doc_rev??-1} result={status?.color_scopes} disabled={!props.hasImage||status?.ready_caps?.color_scopes_protocol!==1} onDone={props.onDone}/>;
     if (featureId === "PC-32455" && node.full === "色阶") return <LevelsEditor
       key={status?.image?.load_id??"empty"} value={doc?.levels} documentId={status?.image?.load_id??""}
       snapshotId={doc?.document_id} documentRevision={status?.doc_rev??-1}
@@ -915,6 +916,7 @@ export default function RetouchPanel(props: RetouchProps) {
             </summary>
             <div className="pgBody">
               {f.id === "PC-32465" && skinWhy && <div className="specEmpty" role="status">{skinWhy}</div>}
+              {f.id === "PC-32455" && props.colorSamplePanel}
               {custom}
               {tree.length > 0 && (
                 <SpecNodes nodes={tree}

@@ -5,6 +5,9 @@ use tauri::State;
 use crate::AppState;
 #[tauri::command]
 pub(crate) fn color_scopes(state:State<'_,Arc<AppState>>,document_id:String,request_id:String,stage:String)->Result<Value,String>{
+    if state.ready_caps.lock().map_err(|_|"capability lock poisoned")?["color_scopes_protocol"]!=1 {
+        return Err("current engine does not support colour scopes".into());
+    }
     if document_id.is_empty()||document_id.len()>64||request_id.is_empty()||request_id.len()>128 {
         return Err("invalid colour-scope identity".into());
     }

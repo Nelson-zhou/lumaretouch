@@ -362,7 +362,7 @@ class Engine:
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -5271,6 +5271,24 @@ class Engine:
 
     def cmd_levels(self, p: dict): return self._levels_controller().handle_command(p)
 
+    def _color_capture_controller(self):
+        from .color_capture_controller import ColorCaptureController, CapturePorts
+        from .color_capture_pipeline import document_context, sample_output
+        owner=self.__dict__.get("_color_capture_owner")
+        if owner is None:
+            owner=ColorCaptureController(CapturePorts(
+                document=lambda:document_context(self._load_id,self.shm,self.doc_state()["crop"]),
+                guard=lambda:(self._guard_editable("color capture") or
+                    ("Release full-resolution inspection before colour sampling" if
+                     any(x is not None for x in (self._inspection_controller().tx,self._inspection_controller().result,self._inspection_controller().job)) else None)),
+                render=lambda:self._write_current_frame("color_capture"),
+                sample=lambda region,dims:sample_output(self._vram,*self._retouch_render_args(),self._params,region,dims)),
+                emit=lambda event:emit(event))
+            self._color_capture_owner=owner
+        return owner
+
+    def cmd_color_capture(self, p: dict): self._color_capture_controller().handle(p)
+
     def cmd_color_scopes(self, p: dict):
         from .color_scopes_controller import ScopePorts, handle_scopes
         from .color_scopes_sampling import sample_stage
@@ -6831,7 +6849,7 @@ class Engine:
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("hello", "inspection_snapshot", "color_scopes", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("hello", "inspection_snapshot", "color_scopes", "color_capture", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "light",
                "deform", "lut", "grade", "export", "exposure", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -6869,9 +6887,12 @@ class Engine:
             if fn is None:
                 emit({"event": "error", "error": f"未知命令: {name}"})
                 return
+            if name not in ("hello", "color_scopes", "color_capture") and not (
+                    name=="inspection_snapshot" and msg.get("action","status")=="status"):
+                self._color_capture_controller().invalidate()
             # The executor cancels before any other known command can mutate
             # source arrays/recipes, including history, load, export and shutdown.
-            if name not in ("hello", "inspection_snapshot", "color_scopes"):
+            if name not in ("hello", "inspection_snapshot", "color_scopes", "color_capture"):
                 self._cancel_snapshot("command:" + name)
                 heavy = name in ("export", "bench_start") or (name == "task" and msg.get("action") in ("resume", "retry"))
                 if heavy and self._inspection_controller().worker_running:

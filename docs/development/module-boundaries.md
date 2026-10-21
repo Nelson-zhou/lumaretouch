@@ -113,3 +113,18 @@ Native-main cap is reviewed 2030→2040 for module/state/IPC wiring only. Scope
 requests use a separate read-only queue path and must not invalidate inspection.
 Explicit refresh avoids adding another render to every slider/status event; live
 cached capture, eyedroppers and full-source analysis remain unfinished scope.
+
+## Identified colour capture boundary review (unverified candidate)
+
+Capture lifecycle, bounded sampling, native ticket ownership, binary transport,
+frontend async state, React subscription, display and readout are separate modules.
+App/Viewer only pass bindings and a portal target; no capture work enters the long
+WebGL render loop. Main gains state/module/command wiring; server gains a narrow
+port factory and pre-command invalidation. Reviewed caps: native main 2040→2060,
+server 7010→7040. App remains capped at 2150. These are growth ratchets, not quality
+or feature completion scores. No product tests have yet run for this candidate.
+
+Frozen sampling uses producer-bound presentation dimensions, not fixed proxy
+raster aspect. The ordinary live-preview crop-aspect defect is still open.
+Point/neighbourhood readout does not complete white balance, black/white-point,
+curve or HSL action eyedroppers, full-source sampling or comparison sampling.

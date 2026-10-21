@@ -1,3 +1,5 @@
+import {ColorSampleOverlay} from './ColorSampleOverlay';
+import type {ColorSampler} from '../useColorSampler';
 import { comparisonFrameSize } from "../compareCapture";
 /**
  * WebGL2 视口：rAF 驱动，从宿主取裸帧 → texSubImage2D → 绘制 → 双 rAF 后回执。
@@ -90,7 +92,9 @@ export default function Viewer({
   onFitScale,
   inspection,
   onInspectionState,
+  colorSampler,
 }: {
+  colorSampler?:ColorSampler;
   inspection?: { enabled:boolean; oneToOne:boolean; comparing:boolean; key:string; width:number; height:number };
   onInspectionState?: (state:InspectionUiState)=>void;
   active: boolean;
@@ -139,6 +143,7 @@ export default function Viewer({
   /** 把 Fit 倍率交给 App：100% = 1/(dpr*fitScale) 只能在这里算（视口知道画布与帧尺寸） */
   onFitScale?: (s: number) => void;
 }) {
+  const [sampleClip,setSampleClip]=useState<HTMLDivElement|null>(null);
   // 变换只加在显示层（镜像画布）上：GL 渲染源与测量回路一个字也不改
   const coordinateLocked = paintLocked || compareMode !== "single" || !!inspection?.enabled;
   const invalidateInspection = useRef<()=>void>(()=>{});
@@ -711,6 +716,7 @@ export default function Viewer({
            onPointerCancel={(e) => { swipeUp(e); panUp(); }}
            onDoubleClick={() => { invalidateInspection.current(); onView(VIEW_HOME); }}
            title="滚轮缩放 · 拖拽平移 · 双击适应窗口">
+        {colorSampler&&<ColorSampleOverlay sampler={colorSampler} clip={sampleClip} box={box} view={view}/>}
         {/* GL 画布退成纯渲染源：不参与布局，也不指望它上屏（见上面那段）。 */}
         {/* glVisible 是给"官方开关能不能替掉镜像层"那个对照实验用的：把 GL 画布放回
             可见位，看它自己上不上得了屏。生产路径不依赖它。 */}
@@ -732,7 +738,7 @@ export default function Viewer({
       {createPortal(
         // 裁切层必须是独立的一层：放大后的画布会盖住顶栏与右栏，
         // 只靠 viewer 的 overflow 管不到挂在 body 上的 fixed 画布。
-        <div className="mirrorClip"
+        <div className="mirrorClip" ref={setSampleClip}
              // 视口的“当前 Fit 倍率 / 帧尺寸”画在 DOM 上：自动探针（M0_SPEC 的
              // 100% 那一格）与将来任何外部度量都要一个不改 state 就能读到的出处。
              // React 的状态在长命 effect 的闭包里是首帧那份，读它会把 100% 算错。
