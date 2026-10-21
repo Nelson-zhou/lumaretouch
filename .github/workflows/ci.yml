@@ -17,6 +17,20 @@ jobs:
       - name: 装图像与测试依赖（不拉 GPU 轮子）
         working-directory: engine
         run: uv sync --group dev
+      # The generated ctypes ABI table is pinned to this release. Do not silently
+      # use whichever libraw happens to be preinstalled on the runner image.
+      - name: Build and verify matching LibRaw reference runtime
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/lrt-libraw"
+          curl --fail --location --retry 3 https://www.libraw.org/data/LibRaw-0.21.5.tar.gz -o "$RUNNER_TEMP/libraw.tar.gz"
+          echo "a74a2e68303d3b9219f82318f935b28c5c4abd7f2c9f7dbf8faa4997c9038305  $RUNNER_TEMP/libraw.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/libraw.tar.gz" -C "$RUNNER_TEMP"
+          (cd "$RUNNER_TEMP/LibRaw-0.21.5" && ./configure --prefix="$prefix" --disable-examples && make -j2 && make install)
+          cc -I"$prefix/include/libraw" packaging/libraw_layout.c -L"$prefix/lib" -Wl,-rpath,"$prefix/lib" -lraw -o "$RUNNER_TEMP/lrt-layout"
+          "$RUNNER_TEMP/lrt-layout" > "$RUNNER_TEMP/lrt-layout.json"
+          PYTHONPATH=engine/src python3 -c 'import json,os; from lumaretouch_engine.ops.libraw_layout import LAYOUT,LIBRAW_VERSION; d=json.load(open(os.environ["RUNNER_TEMP"]+"/lrt-layout.json")); assert d.pop("libraw_version")==LIBRAW_VERSION; assert d==LAYOUT, "compiled ABI differs from committed table"'
+          echo "LRT_LIBRAW_PATH=$prefix/lib/libraw_r.so" >> "$GITHUB_ENV"
       - name: 单测
         working-directory: engine
         run: uv run --group dev pytest -q
@@ -32,7 +46,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: npm ci + tsc
         working-directory: ui
-        run: npm ci --no-audit --no-fund && npx tsc --noEmit
+        run: npm ci --no-audit --no-fund && npm test && npm run build
       # P2-5：cargo check 之前必须先暂存引擎。tauri.conf.json 的 bundle.resources 指向
       # gen/engine-stage/*，而 tauri_build::build() 在 check 阶段就校验这些源目录存在——
       # 干净 checkout 里没有它们，cargo check 直接红（历史口径就是“Rust 检查在准备 staging

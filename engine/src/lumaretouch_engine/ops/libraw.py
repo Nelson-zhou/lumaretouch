@@ -106,10 +106,21 @@ def load_lib(force: bool = False) -> ctypes.CDLL:
             f"装上系统包（apt install libraw23t64）或设 {LIB_ENV}=<libraw_r.so 绝对路径> 再试。"
             "自研 DNG 读侧仍在位，但那是「未压缩/Deflate 线性 DNG」那一档，不是全格式。")
     _setup_signatures(lib)
+    _require_layout_version(lib)
     _lib = lib
     _checked = False
     _check_error = None
     return lib
+
+
+def _require_layout_version(lib) -> str:
+    """Reject unknown ABI before dereferencing any generated struct offsets."""
+    runtime = lib.libraw_version().decode("ascii", "replace")
+    if runtime != L.LIBRAW_VERSION:
+        raise LibRawUnavailable(
+            f"LibRaw ABI 版本不匹配：实际 {runtime}，布局表 {L.LIBRAW_VERSION}；"
+            "已在读取结构字段前拒绝。需要匹配且验证过的动态库/布局表，不能只改版本字符串。")
+    return runtime
 
 
 def _arg(lib, name, restype=None, argtypes=None):
@@ -564,7 +575,7 @@ def self_check(dng_path: str | None = None, sidecar_path: str | None = None) -> 
     """
     global _checked
     lib = load_lib()
-    runtime = lib.libraw_version().decode("ascii", "replace")
+    runtime = _require_layout_version(lib)
     dng = dng_path or PROBE_DNG
     sc = sidecar_path or PROBE_SIDECAR
     if not os.path.isfile(dng) or not os.path.isfile(sc):
