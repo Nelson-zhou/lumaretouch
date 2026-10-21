@@ -79,3 +79,24 @@ History extraction retains its original dedicated busy/loaded guards and
 history-specific face/precompute replay. No stacks move until restore/render
 succeeds; rollback failures still emit their warning. Dirty-state policy is not
 changed. General editor guards/replay helpers are not equivalent substitutes.
+
+## Levels boundary review (2026-10-21)
+
+New levels work is not appended as another large Engine/App handler. Rust
+`core/levels` defines scalar math; `levels_api.rs` validates IPC. Python
+`levels_controller.py` owns transactional recipe state via five narrow ports;
+`levels_stage.py` owns vector-stage state, while `ops/levels.py` owns schema/math.
+UI `LevelsEditor`, `levelsModel` and shared `editReceipts` separate interaction,
+parameter math and asynchronous acknowledgement policy. Shared export recipe,
+scope/history and document snapshots carry the complete versioned recipe.
+
+Server line cap changes 6980→7010 for explicit state/command/export registration
+and document-token wiring only. New algorithms and controllers stay outside it.
+App and native main retain their existing caps. Tonal receipts now use a matched
+request/document plus an atomic host snapshot revision, including clear/restart
+mutations; an identical recipe is not a completion signal. Snapshot document IDs
+prevent separately sampled image/report fields from authorizing cross-photo edits.
+Legacy curve callers remain supported without a document token; the new UI always
+supplies one. This is not a claim that all older editing commands are token-fenced.
+
+Candidate validation is pending Qoder/CI; deep GUI/performance remains deferred.

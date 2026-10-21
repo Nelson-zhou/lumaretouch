@@ -8,6 +8,7 @@ mandatory and full-quality inspection must reject any skipped active layers.
 from .export import ExportSpec, resample_field
 from .vram import RepairOp, LightOp
 from .ops import curves as CURVES
+from .ops import levels as LEVELS
 
 
 def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
@@ -47,7 +48,7 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
                       exposure=tuple(snap.get("exposure", (0.0,) * 7)),
                       exposure_ref_k=snap.get("exposure_ref_k"),
                       hsl=tuple(snap.get("hsl", (0.0,) * 24)),
-                      curves=CURVES.check_curves(snap.get("curves")),
+                      curves=CURVES.check_curves(snap.get("curves")), levels=LEVELS.check_levels(snap.get("levels")),
                       lut_amount=float(snap["lut_amount"]),
                       deform_amounts={},
                       scale=int(snap.get("scale", 1)),

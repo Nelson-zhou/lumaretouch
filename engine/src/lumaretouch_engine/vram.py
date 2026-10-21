@@ -14,6 +14,7 @@ D2H 1.8、`clip*255→uint8` 4.5。也就是说我们花了 4 倍于算法的成
 from __future__ import annotations
 
 from .ops import curves as curve_ops
+from .levels_stage import LevelsStage
 
 import math
 from dataclasses import dataclass, field
@@ -252,6 +253,7 @@ class PreviewPipeline:
         # 24 个数 = 8 段 × (色相偏移, 饱和度, 明亮度)；全 0 时 apply 一步递回。
         self.hsl_bands: tuple = (0.0,) * 24
         self.last_hsl_ms: float = 0.0
+        self.levels_stage = LevelsStage()
         self.curves_spec = curve_ops.default_curves()
         self.curves_compiled = (None,) * 5
         self.last_curves_ms = 0.0
@@ -492,8 +494,8 @@ class PreviewPipeline:
         # 八色 HSL 紧跟曝光层之后、LUT 之前：它读的是曝光后的那份颜色，而表是
         # 输出变换（把 HSL 放在表后面就是“调完再套一层风格”，两份调整互相污染）。
         return self.apply_geometry(self.apply_background(self.apply_grade(self.apply_lut(
-            self.apply_hsl(self.apply_curves(self.apply_exposure(
-                self.apply_enhance(self.apply_deform(out)))))))))
+            self.apply_hsl(self.apply_curves(self.apply_levels(self.apply_exposure(
+                self.apply_enhance(self.apply_deform(out))))))))))
 
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:
@@ -1493,6 +1495,13 @@ class PreviewPipeline:
         self.last_exposure_ms = (time.perf_counter() - t0) * 1000.0
         return out
 
+    # LevelsStage owns its recipe, parameters and execution timing.
+    def set_levels(self, spec): return self.levels_stage.set(spec)
+    def clear_levels(self): return self.levels_stage.set(None)
+    def has_levels(self): return self.levels_stage.active
+    def levels_state(self): return self.levels_stage.state()
+    def apply_levels(self, tensor): return self.levels_stage.apply(tensor)
+
     # ---- Independent RGB/master point curves -----------------------------
     def set_curves(self, spec):
         checked = curve_ops.check_curves(spec)
@@ -1995,6 +2004,7 @@ def warm_device(device: str, side: int = 64) -> float:
         pipe.last_exposure_ms = 0.0
         pipe.hsl_bands = (0.0,) * 24
         pipe.last_hsl_ms = 0.0
+        pipe.levels_stage = LevelsStage()
         pipe.curves_spec = curve_ops.default_curves()
         pipe.curves_compiled = (None,) * 5
         pipe.last_curves_ms = 0.0

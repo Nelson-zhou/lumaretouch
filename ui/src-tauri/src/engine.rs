@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::shm::ShmReader;
 use crate::AppState;
@@ -159,7 +159,16 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
                 Err(e) => state.push_log(format!("打开共享内存失败: {e}")),
             }
         }
-        "curves_result" => {*state.curve_result.lock().unwrap() = Some(v.clone());}
+        "curves_result" => {
+            let mut receipt=v.clone();
+            receipt["host_doc_rev"]=json!(*state.doc_rev.lock().unwrap());
+            *state.curve_result.lock().unwrap() = Some(receipt);
+        }
+        "levels_result" => {
+            let mut receipt=v.clone();
+            receipt["host_doc_rev"]=json!(*state.doc_rev.lock().unwrap());
+            *state.levels_result.lock().unwrap() = Some(receipt);
+        }
         "frame" => {
             if v.get("mode").and_then(|x| x.as_str()) == Some("compare") {
                 *state.compare_frame.lock().unwrap() = Some(v.clone());

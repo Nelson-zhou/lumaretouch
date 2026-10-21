@@ -8,6 +8,9 @@
 #[path = "../../../core/curves/curve.rs"]
 mod point_curve;
 mod edit_commands;
+#[path = "../../../core/levels/levels.rs"]
+mod levels_core;
+mod levels_api;
 mod engine;
 mod edit_queue;
 mod dispatch;
@@ -168,6 +171,7 @@ pub struct AppState {
     /// 不接住它，宿主就永远看不见"为什么打不开"——用户那边就是点了没反应。
     last_error: Mutex<Option<String>>,
     curve_result: Mutex<Option<Value>>,
+    levels_result: Mutex<Option<Value>>,
     /// 最近一条 session_state（M5 底片条）：格子列表、当前索引、有没有缩略图。
     /// 这一份里**不带 base64**——控制通道那条“像素不进 JSON”的规矩只在缩略图上开了
     /// 一个一次性的例外，宿主不该把它长期握在轮询载荷里。
@@ -269,6 +273,7 @@ impl AppState {
             export_bits: Mutex::new(Value::Null),
             last_error: Mutex::new(None),
             curve_result: Mutex::new(None),
+            levels_result: Mutex::new(None),
             session: Mutex::new(None),
             thumbs: Mutex::new(std::collections::HashMap::new()),
             session_rev: Mutex::new(0),
@@ -326,13 +331,11 @@ impl AppState {
     /// 三条带 doc_state 的事件都进这里落一份"引擎最新说的文档状态 + 它是谁说的"。
     fn note_doc(&self, v: &Value, src: &str) {
         self.note_face(v, src);
-        match v.get("doc_state") {
-            Some(ds) if !ds.is_null() => {
-                *self.doc_report.lock().unwrap() =
-                    Some(json!({"source": src, "doc_state": ds}));
-                *self.doc_rev.lock().unwrap() += 1;
-            }
-            _ => *self.doc_report.lock().unwrap() = None,
+        {
+            let mut report = self.doc_report.lock().unwrap();
+            *report = v.get("doc_state").filter(|ds| !ds.is_null())
+                .map(|ds| json!({"source": src, "doc_state": ds}));
+            *self.doc_rev.lock().unwrap() += 1;
         }
         *self.history_dirty.lock().unwrap() = false;
     }
@@ -393,6 +396,7 @@ impl AppState {
                 lut["lit"] = json!(v.get("lut_lit").and_then(|x| x.as_bool()).unwrap_or(false));
                 lut["amount"] = json!(v.get("lut_amount").and_then(|x| x.as_f64()).unwrap_or(1.0));
                 lut["preset"] = v.get("lut_preset").cloned().unwrap_or(Value::Null);
+                *self.doc_rev.lock().unwrap() += 1;
             }
         }
     }
@@ -758,8 +762,11 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     // 历史属于一个引擎进程里的那份会话：新进程连图都没解，栈必须从零开始
     *st.history.lock().unwrap() = None;
     *st.history_rev.lock().unwrap() += 1;
-    *st.doc_report.lock().unwrap() = None;
-    *st.doc_rev.lock().unwrap() += 1;
+    {
+        let mut report = st.doc_report.lock().unwrap();
+        *report = None;
+        *st.doc_rev.lock().unwrap() += 1;
+    }
     st.history_edit_cmds.lock().unwrap().clear();   // 名单等新进程的 ready 重新填
     *st.history_dirty.lock().unwrap() = false;
 
@@ -1532,8 +1539,11 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
     let history_rev = *state.history_rev.lock().unwrap();
     let history_dirty = *state.history_dirty.lock().unwrap();
     let edit_queue = state.engine.lock().unwrap().as_ref().map(|h| h.queue_stats());
-    let doc_report = state.doc_report.lock().unwrap().clone();
-    let doc_rev = *state.doc_rev.lock().unwrap();
+    // Keep the report locked until its revision is sampled: never old data/new revision.
+    let (doc_report, doc_rev) = {
+        let report = state.doc_report.lock().unwrap();
+        (report.clone(), *state.doc_rev.lock().unwrap())
+    };
     let thumbs_ready = state.thumbs.lock().unwrap().len();
     let pick = state.pick.lock().unwrap().clone();
     let pick_items = *state.pick_items.lock().unwrap();
@@ -1554,6 +1564,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "export_bits": export_bits,
            "last_error": last_error,
            "curve_result": state.curve_result.lock().unwrap().clone(),
+           "levels_result": state.levels_result.lock().unwrap().clone(),
            // 底片条的“有没有、几张、当前哪一格”进轮询（小），像素本体不进：
            // 那两百张要由 filmstrip 单独取，且只在 session_rev 变了的时候取
            "session": session, "session_rev": session_rev,
@@ -1614,8 +1625,11 @@ fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     *state.session_rev.lock().unwrap() += 1;
     *state.history.lock().unwrap() = None;
     *state.history_rev.lock().unwrap() += 1;
-    *state.doc_report.lock().unwrap() = None;
-    *state.doc_rev.lock().unwrap() += 1;
+    {
+        let mut report = state.doc_report.lock().unwrap();
+        *report = None;
+        *state.doc_rev.lock().unwrap() += 1;
+    }
     state.history_edit_cmds.lock().unwrap().clear();
     *state.history_dirty.lock().unwrap() = false;
     match h {
@@ -2003,7 +2017,7 @@ fn main() {
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, compare_status, precompute,
             inpaint, light, deform, lut, grade, enhance, background, export, session, filmstrip, history,
-            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, edit_commands::crop, preset, batch, face, pick,
+            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, edit_commands::crop, levels_api::levels, preset, batch, face, pick,
             report, quit
         ])
         .run(tauri::generate_context!())

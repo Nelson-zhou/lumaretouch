@@ -144,13 +144,18 @@ pub(crate) fn curve_preview(spec: Value) -> Result<Value, String> {
 
 #[tauri::command]
 pub(crate) fn curves(state: State<'_, Arc<AppState>>, action: String, spec: Option<Value>,
-          gesture_id: Option<String>, request_id: Option<String>, interactive: Option<bool>) -> Result<Value,String> {
+          gesture_id: Option<String>, request_id: Option<String>, interactive: Option<bool>,
+          document_id: Option<String>) -> Result<Value,String> {
     if action != "set" && action != "clear" {return Err("unknown curves action".into());}
     let mut command = json!({"cmd":"curves", "action":action});
     if action == "set" {
         let value=spec.ok_or("curves set requires spec")?;
         curve_preview(value.clone())?;
         command["spec"]=value;
+    }
+    if let Some(document) = document_id {
+        if document.is_empty() || document.len() > 64 {return Err("invalid curve document id".into());}
+        command["document_id"]=json!(document);
     }
     let gesture=gesture_id.unwrap_or_default();
     if gesture.chars().count()>128 {return Err("curve gesture id too long".into());}

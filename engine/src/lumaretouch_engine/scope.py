@@ -31,6 +31,7 @@ from __future__ import annotations
 import json
 import math
 from .ops import curves as CURVES
+from .ops import levels as LEVELS
 
 SCHEMA = "lrt.scope.v1"
 PRESET_SCHEMA = "lrt.preset.v1"
@@ -39,6 +40,7 @@ PRESET_MAX_MODULES = 16
 
 # 冻结注册表里 editable 的那几个 operation_id（写在这里而不是去读文件：见模块 docstring）。
 OP_CURVES = "lnx.curves.v1"
+OP_LEVELS = "lnx.levels.v1"
 OP_EXPOSURE = "lnx.exposure.v1"
 OP_WHITE_BALANCE = "lnx.white_balance.v1"
 OP_CROP = "lnx.crop.v1"
@@ -70,6 +72,12 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: operation_id → 契约。`single_face` 的模块只能作用在"已知只有一张脸"的文档上；
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
+    OP_LEVELS: {
+        "params": ("recipe",), "state_fields": ("_levels",), "single_face": False,
+        "transferable": True, "cmd": "levels",
+        "read": lambda st: {"recipe": LEVELS.check_levels(st.get("_levels"))},
+        "write": lambda st, p: st.update(_levels=LEVELS.check_levels(p["recipe"])),
+    },
     OP_CURVES: {
         "params": ("recipe",), "state_fields": ("_curves",), "single_face": False,
         "transferable": True, "cmd": "curves",
@@ -215,6 +223,9 @@ def check_params(op: str, params: dict) -> dict:
         parts = [f"{k}：{unmodeled_reason(op, k)}" if unmodeled_reason(op, k) else f"{k}（未知参数）"
                  for k in unknown]
         raise ScopeError(f"{op} 收到不可作用的参数：" + "；".join(parts))
+    if op == OP_LEVELS:
+        try: return {"recipe": LEVELS.check_levels(params.get("recipe"))}
+        except ValueError as error: raise ScopeError(str(error)) from error
     if op == OP_CURVES:
         try:
             return {"recipe": CURVES.check_curves(params.get("recipe"))}
@@ -250,6 +261,7 @@ def check_params(op: str, params: dict) -> dict:
 
 
 def _neutral_of(op: str, key: str):
+    if op == OP_LEVELS and key == "recipe": return LEVELS.default_levels()
     if op == OP_CURVES and key == "recipe":
         return CURVES.default_curves()
     return {OP_EXPOSURE: {"ev": NEUTRAL_EV},

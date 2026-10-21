@@ -311,9 +311,12 @@ export default function App() {
     applied.current = { strength: ds.strength, from };
   }, []);
 
+  const acceptedDocRevision = useRef(-1);
   const refreshStatus = useCallback(async () => {
     try {
       const st = await engineStatus();
+      if (st.doc_rev < acceptedDocRevision.current) return;
+      acceptedDocRevision.current = st.doc_rev;
       setStatus(st);
       // 消除笔的结果与日志同源：inpaint_done 只发一次，轮询不能错过
       if (st.inpaint) setLastInpaint(st.inpaint);
@@ -882,7 +885,7 @@ export default function App() {
   const isEditedDoc = (d: SessionDoc) => {
     const e = d.edits;
     return e.repair > 0 || e.light > 0 || e.deform || e.lut || e.grade
-      || !!e.enhance || !!e.channel || !!e.curves;
+      || !!e.enhance || !!e.channel || !!e.curves || !!e.levels;
   };
   // 指针在窗口外松开、或按住时切走窗口：pointerup 可能永远不来，那样画面会停在原图。
   // 所以这三条兜底不是装饰——"松开没回来"比没有对比按钮更糟。
@@ -1545,10 +1548,10 @@ export default function App() {
   const syncScopes: { label: string; ops: string[] }[] = (() => {
     const mods = presetState?.modules ?? [];
     const okOf = (op: string) => mods.find((m) => m.operation_id === op)?.transferable === true;
-    const global = ["lnx.exposure.v1", "lnx.white_balance.v1", "lnx.curves.v1", "lnx.crop.v1"].filter(okOf);
+    const global = ["lnx.exposure.v1", "lnx.white_balance.v1", "lnx.levels.v1", "lnx.curves.v1", "lnx.crop.v1"].filter(okOf);
     const skin = ["lnx.skin.v1", "lnx.blemish.v1"].filter(okOf);
     const out: { label: string; ops: string[] }[] = [];
-    if (global.length) out.push({ label: "全图配方（曝光·白平衡·曲线·裁剪）", ops: global });
+    if (global.length) out.push({ label: "全图配方（曝光·白平衡·色阶·曲线·裁剪）", ops: global });
     if (global.length && skin.length)
       out.push({ label: "全图配方 + 磨皮（逐张须单脸）", ops: [...global, ...skin] });
     return out;

@@ -1,3 +1,4 @@
+import {canReconcileEdit} from '../editReceipts';
 import {curveSignature as signature, movedCurvePoint, matchesCurveResult, editableCurveSpec as copy, type EditableCurveSpec} from "../curveModel";
 import {useEffect, useRef, useState} from 'react';
 import {neutralCurves, previewCurves, runCurves, type CurveSpec, type CurveChannel} from '../native';
@@ -6,10 +7,14 @@ const channels:CurveChannel[]=['master','red','green','blue','luminance'];
 const names=['RGB','红','绿','蓝','亮度'];
 const colors=['#ddd','#ef7373','#79cd8d','#77aaff','#e8c779'];
 const clamp=(v:number,lo=0,hi=1)=>Math.max(lo,Math.min(hi,v));
-export function CurveEditor({value,disabled,error,result,onDone,note}:{value?:CurveSpec;disabled:boolean;
-  result?:{request_id:string;success:boolean;spec:CurveSpec}|null;
+export function CurveEditor({value,documentId,snapshotId,documentRevision,disabled,result,onDone,note}:{value?:CurveSpec;documentId:string;snapshotId?:string;documentRevision:number;disabled:boolean;
+  result?:{request_id:string;document_id:string;host_doc_rev:number;success:boolean;spec:CurveSpec}|null;
   error:string|null;onDone:()=>void;note:(s:string)=>void}){
   const [draft,setDraft]=useState<EditableCurveSpec>(()=>copy(value??neutralCurves()));
+  const authoritative=useRef<{value?:CurveSpec;documentId:string;snapshotId?:string}>({value,documentId,snapshotId});
+  authoritative.current={value,documentId,snapshotId};
+  function restoreAuthoritative(){const current=authoritative.current;
+    if(current.value&&current.documentId===documentId&&current.snapshotId===documentId)update(current.value);}
   const live=useRef(draft),pending=useRef<{id:string;signature:string}|null>(null);
   const [channel,setChannel]=useState<CurveChannel>('master');
   const [selected,setSelected]=useState(0);
@@ -18,19 +23,17 @@ export function CurveEditor({value,disabled,error,result,onDone,note}:{value?:Cu
   const previewRevision=useRef(0);
   const update=(s:CurveSpec)=>{const next=copy(s);live.current=next;setDraft(next);};
   useEffect(()=>{
-    const next=copy(value??neutralCurves());
-    if(drag.current) return;
-    if(pending.current && pending.current.signature!==signature(next)) return;
-    pending.current=null;live.current=copy(next);setDraft(live.current);
-  },[value]);
+    if(drag.current||pending.current||!value||snapshotId!==documentId)return;
+    update(value);
+  },[value,snapshotId,documentId]);
   useEffect(()=>{
-    if(!result || !matchesCurveResult(pending.current?.id,result.request_id))return;
+    if(!result||!value||!canReconcileEdit(pending.current?.id,result,documentId,snapshotId,documentRevision,true))return;
     pending.current=null;
-    if(!result.success)drag.current=null;
-    if(!drag.current) {live.current=copy(result.spec);setDraft(live.current);}
-  },[result]);
-  useEffect(()=>{if(error){pending.current=null;drag.current=null;
-    live.current=copy(value??neutralCurves());setDraft(live.current);}},[error]);
+    if(!result.success){drag.current=null;note('曲线未提交，请检查错误信息');}
+    if(!drag.current)update(value);
+  },[result,documentId,snapshotId,documentRevision,value]);
+  // Only a correlated result or this invocation's rejection may settle pending edits.
+  disabled=disabled||!documentId||snapshotId!==documentId||!value;
   useEffect(()=>{
     const revision=++previewRevision.current;
     void previewCurves(draft).then(s=>{if(revision===previewRevision.current)setSamples(s);})
@@ -40,10 +43,10 @@ export function CurveEditor({value,disabled,error,result,onDone,note}:{value?:Cu
   const submit=(s:CurveSpec,id:string=crypto.randomUUID(),interactive=false)=>{
     const requestId=crypto.randomUUID();
     update(s);pending.current={id:requestId,signature:signature(copy(s))};
-    void runCurves('set',s,id,interactive,requestId).then(onDone).catch(e=>{
+    void runCurves('set',s,id,interactive,requestId,documentId).then(onDone).catch(e=>{
       note(String(e));
       if(matchesCurveResult(pending.current?.id,requestId)) {
-        pending.current=null;update(copy(value??neutralCurves()));
+        pending.current=null;drag.current=null;restoreAuthoritative();
       }
     });
   };

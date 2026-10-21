@@ -1,3 +1,4 @@
+import {LevelsEditor} from "./LevelsEditor";
 import { CurveEditor } from "./CurveEditor";
 import { skinEditOptions, skinMaskReady, type SkinEdit } from "../skinScope";
 import { TOOL_GROUPS, toolGroupOf, type ToolGroup } from "../toolNavigation";
@@ -192,6 +193,18 @@ function FaceAvatar({ face, thumb, all }: {
  * 面板不提前放行。
  */
 const WIRED: Record<string, string> = {
+  "PC-32455|色阶/输入黑场": "levels.control",
+  "PC-32455|色阶/输入灰场": "levels.control",
+  "PC-32455|色阶/输入白场": "levels.control",
+  "PC-32455|色阶/输出黑场": "levels.control",
+  "PC-32455|色阶/输出白场": "levels.control",
+  "PC-32455|色阶/输入色阶": "levels.control",
+  "PC-32455|色阶/输出色阶": "levels.control",
+  "PC-32455|色阶/通道调整方法": "levels.control",
+  "PC-32455|色阶/RGB": "levels.control",
+  "PC-32455|色阶/红": "levels.control",
+  "PC-32455|色阶/绿": "levels.control",
+  "PC-32455|色阶/蓝": "levels.control",
   "PC-32455|曲线/RGB": "curves.control",
   "PC-32455|曲线/红": "curves.control",
   "PC-32455|曲线/绿": "curves.control",
@@ -442,6 +455,7 @@ export default function RetouchPanel(props: RetouchProps) {
       );
     }
     switch (kind) {
+      case "levels.control": return null;
       case "curves.control": return null; // implemented together in CurveEditor
       case "skin.strength":
         return (
@@ -609,8 +623,13 @@ export default function RetouchPanel(props: RetouchProps) {
   /** 规格树里需要额外画一块的节点：目前只有 HSL 的八色色段选择器。
    *  三格滑杆仍是规格里的叶子（HSL/色相…），这里只决定“改哪一段”。 */
   const renderExtra = (node: SpecNode, featureId?:string): React.ReactNode => {
+    if (featureId === "PC-32455" && node.full === "色阶") return <LevelsEditor
+      key={status?.image?.load_id??"empty"} value={doc?.levels} documentId={status?.image?.load_id??""}
+      snapshotId={doc?.document_id} documentRevision={status?.doc_rev??-1}
+      disabled={!props.hasImage} result={status?.levels_result} onDone={props.onDone} note={props.note}/>;
     if (featureId === "PC-32455" && node.full === "曲线") return <CurveEditor
       key={status?.image?.load_id ?? status?.image?.doc ?? "empty"} value={doc?.curves}
+      documentId={status?.image?.load_id??""} snapshotId={doc?.document_id} documentRevision={status?.doc_rev??-1}
       disabled={!props.hasImage} result={status?.curve_result} error={status?.last_error??null} onDone={props.onDone} note={props.note}/>;
     if (node.full !== "HSL") return null;
     return (
@@ -630,7 +649,7 @@ export default function RetouchPanel(props: RetouchProps) {
   /** 已接通祖先链：默认展开，别让真控件埋在折叠里。 */
   const openPathsFor = (f: SpecFeature): Set<string> => {
     const open = new Set<string>();
-    if(f.id === "PC-32455") open.add("曲线");
+    if(f.id === "PC-32455") {open.add("曲线");open.add("色阶");}
     for (const leaf of f.subcontrols) {
       if (!WIRED[`${f.id}|${leaf.path}`]) continue;
       const parts = leaf.path.split("/");

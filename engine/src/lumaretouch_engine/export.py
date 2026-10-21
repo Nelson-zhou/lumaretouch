@@ -44,6 +44,7 @@ from .ops.deform import (analytic_frontal_landmarks, controls, face_frame,
                          support_radii, tps_field_from_state, tps_solve)
 from .ops.grade import GradeError, check_params
 from .ops import curves as CURVES
+from .ops import levels as LEVELS
 from .ops.hsl import check_hsl
 from .ops.inpaint import hole_extent, levels_for, mask_bbox, inpaint_t, crop_apply_t
 from .ops.lut import DEFAULT_LUT_AMOUNT, LutError, check_amount
@@ -149,6 +150,7 @@ class ExportSpec:
     # （曝光之后、LUT 之前），所以导出与屏上是同一份式子。
     hsl: tuple = (0.0,) * 24
     curves: dict | None = None
+    levels: dict | None = None
     # 放大（M7）：输出倍率与出片锐化。为什么不在预览会话里做而在导出做：预览的
     # 幅面是代理档（屏幕就这么大），用户要的 2×/4× 只在出片那一刻存在。
     scale: int = 1
@@ -160,6 +162,7 @@ class ExportSpec:
     def check(self) -> None:
         """参数在进入昂贵通路之前先过一遍唯一校验口径（与各层 setter 同源）。"""
         self.curves = CURVES.check_curves(self.curves)
+        self.levels = LEVELS.check_levels(self.levels)
         s = float(self.strength)
         if not math.isfinite(s) or not 0.0 <= s <= 1.0:
             raise ExportError(f"strength={self.strength!r} 越界（需要 [0,1] 的有限数）")
@@ -555,6 +558,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                               ref_k=spec.exposure_ref_k,
                               contrast=expo[3], highlights=expo[4],
                               shadows=expo[5], saturation=expo[6])
+        if not LEVELS.is_identity(spec.levels): pipe.set_levels(spec.levels)
         if not CURVES.is_identity(spec.curves):
             pipe.set_curves(spec.curves)
         if any(float(v) != 0.0 for v in spec.hsl):

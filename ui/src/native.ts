@@ -1,4 +1,5 @@
 /** 与 Rust 命令的唯一出入口。所有跨语言类型集中在这里，避免各组件各自猜字段。 */
+import type {LevelsSpec} from "./levelsModel";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 
 export const INSPECTION_EDIT_INTENT='lumaretouch-inspection-edit-intent';
@@ -6,7 +7,7 @@ export function notifyInspectionEditIntent(){
   if(typeof window!=='undefined')window.dispatchEvent(new Event(INSPECTION_EDIT_INTENT));
 }
 const inspectionMutations=new Set(['start_engine','shutdown_engine','load_image','set_strength','precompute',
-  'inpaint','light','deform','lut','grade','enhance','background','exposure','hsl','curves','crop','compare',
+  'inpaint','light','deform','lut','grade','enhance','background','exposure','hsl','curves','levels','crop','compare',
   'session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
   if(inspectionMutations.has(command))notifyInspectionEditIntent();
@@ -81,6 +82,7 @@ export interface ImageReady {
 /** 一格底片条上"这张调了什么"（引擎按图层数与开关报，不靠前端自己看像素）。 */
 export interface SessionEdits {
   curves?: boolean;
+  levels?: boolean;
   repair: number;
   light: number;
   deform: boolean;
@@ -102,11 +104,13 @@ export type CurveSpec = {
 };
 export const neutralCurves = (): CurveSpec => ({version:1,space:"srgb-display",interpolation:"pchip",boundary:"linear",enabled:true,
   master:[[0,0],[1,1]],red:[[0,0],[1,1]],green:[[0,0],[1,1]],blue:[[0,0],[1,1]]});
-export const runCurves = (action:"set"|"clear", spec?:CurveSpec, gestureId?:string, interactive=false, requestId?:string) =>
-  invoke<{requested:boolean}>("curves",{action,spec,gestureId,interactive,requestId});
+export const runCurves = (action:"set"|"clear", spec?:CurveSpec, gestureId?:string, interactive=false, requestId?:string, documentId?:string) =>
+  invoke<{requested:boolean}>("curves",{action,spec,gestureId,interactive,requestId,documentId});
 export const previewCurves = (spec:CurveSpec) => invoke<Partial<Record<CurveChannel,number[]>>>("curve_preview",{spec});
 
 export interface DocState {
+  document_id?: string;
+  levels?: LevelsSpec;
   curves?: CurveSpec;
   strength: number;
   params: Record<string, number>;
@@ -846,7 +850,8 @@ export interface EngineStatus {
   /** 引擎最近一条 error（M9）：load_image 发出去就返回，失败只走 error 事件。
    *  不接住它，坏路径就是一次彻底的静默失败。 */
   last_error: string | null;
-  curve_result?: {request_id:string;success:boolean;spec:CurveSpec}|null;
+  curve_result?: {request_id:string;document_id:string;host_doc_rev:number;success:boolean;spec:CurveSpec}|null;
+  levels_result?: {request_id:string;document_id:string;host_doc_rev:number;success:boolean;spec:LevelsSpec;error:string|null}|null;
   /** 引擎在 ready 里自报的抠图后端清单（birefnet.py 的 matting_backends）。null =
    *  这一版引擎还没报过。换底下拉项由这一份决定：权重未放行时 birefnet 在
    *  weights_gated 里，摆一个注定被拒的选项就是邀请用户去撞一个空请求。 */
@@ -1625,3 +1630,7 @@ export const inspectionPull = (engineEpoch:string,requestId:string) => invoke<Ar
 export const inspectionCancel = (engineEpoch:string,requestId:string) => invoke<{requested:boolean}>('inspection_cancel',{engineEpoch,requestId});
 export const inspectionRelease = (engineEpoch:string,requestId:string) => invoke<{released:boolean}>('inspection_release',{engineEpoch,requestId});
 export const inspectionApi = {status:inspectionStatus,start:inspectionStart,pull:inspectionPull,cancel:inspectionCancel,release:inspectionRelease};
+
+export const runLevels=(action:'set'|'clear',spec:LevelsSpec|undefined,documentId:string,
+  gestureId?:string,interactive=false,requestId?:string)=>invoke<{requested:boolean}>('levels',
+    {action,spec,documentId,gestureId,interactive,requestId});

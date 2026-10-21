@@ -1,7 +1,7 @@
 {
   "schema": "lrt.registry.extensions.v1",
   "source": "Linux开源人像修图产品指导手册:首版基础曲线; AI开发资料包:RGB/单通道节点编辑",
-  "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Parametric curves, eyedroppers and histogram are separate unfinished features. Original frozen registry is unchanged.",
+  "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Parametric curves, eyedroppers and histogram are separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
       "operation_id": "lnx.curves.v1",
@@ -68,6 +68,56 @@
           1
         ],
         "minimum_x_spacing": 1e-05
+      },
+      "transferable": true
+    },
+    {
+      "operation_id": "lnx.levels.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "space": "srgb-display",
+        "enabled": true,
+        "master": {
+          "input_black": 0.0,
+          "input_white": 1.0,
+          "gamma": 1.0,
+          "output_black": 0.0,
+          "output_white": 1.0
+        },
+        "red": {
+          "input_black": 0.0,
+          "input_white": 1.0,
+          "gamma": 1.0,
+          "output_black": 0.0,
+          "output_white": 1.0
+        },
+        "green": {
+          "input_black": 0.0,
+          "input_white": 1.0,
+          "gamma": 1.0,
+          "output_black": 0.0,
+          "output_white": 1.0
+        },
+        "blue": {
+          "input_black": 0.0,
+          "input_white": 1.0,
+          "gamma": 1.0,
+          "output_black": 0.0,
+          "output_white": 1.0
+        }
+      },
+      "hard_range": {
+        "endpoints": [
+          0,
+          1
+        ],
+        "gamma": [
+          0.1,
+          10
+        ],
+        "minimum_input_gap": 1e-05
       },
       "transferable": true
     }
