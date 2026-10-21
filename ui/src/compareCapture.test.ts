@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { captureOriginal, compareImageKey } from './compareCapture.ts';
+import { captureOriginal, compareImageKey, comparisonFrameSize } from './compareCapture.ts';
 const frame = {seq:7,w:2,h:1,pixelLen:8,pixels:new Uint8Array(8),y0:0,rows:1};
 const receipt = {capture_id:'new',doc:'/a',seq:7,view:'original'};
 function setup() {
@@ -37,4 +37,11 @@ test('slow receipt succeeds beyond old 180ms assumption',async()=>{
   const o=setup();o.timeoutMs=2000;let calls=0;
   o.receipt=async()=>++calls<8?{...receipt,capture_id:'old'}:receipt;
   assert.equal(await captureOriginal(o),frame);assert.equal(calls,8);
+});
+
+test('side-by-side preserves two complete equal-scale frames',()=>{
+  assert.deepEqual(comparisonFrameSize(220,275,'split'),{w:440,h:275});
+  assert.deepEqual(comparisonFrameSize(600,400,'split'),{w:1200,h:400});
+  assert.deepEqual(comparisonFrameSize(220,275,'swipe'),{w:220,h:275});
+  assert.deepEqual(comparisonFrameSize(220,275,'single'),{w:220,h:275});
 });

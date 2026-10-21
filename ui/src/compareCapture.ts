@@ -26,3 +26,8 @@ export async function captureOriginal<T extends SnapshotFrame>(o: {
 export function compareImageKey(image: {doc?: string; load_id?: string; w: number; h: number; src_w: number; src_h: number} | null | undefined): string {
   return image ? JSON.stringify([image.doc, image.load_id, image.w, image.h, image.src_w, image.src_h]) : '';
 }
+
+/** Side-by-side uses two whole frames at identical scale. */
+export function comparisonFrameSize(w:number,h:number,mode:'single'|'split'|'swipe') {
+  return {w:mode==='split'?w*2:w,h};
+}

@@ -1,3 +1,4 @@
+import { comparisonFrameSize } from "../compareCapture";
 /**
  * WebGL2 视口：rAF 驱动，从宿主取裸帧 → texSubImage2D → 绘制 → 双 rAF 后回执。
  *
@@ -132,8 +133,9 @@ export default function Viewer({
   onFitScale?: (s: number) => void;
 }) {
   // 变换只加在显示层（镜像画布）上：GL 渲染源与测量回路一个字也不改
-  const brushActive = !!brush?.on && !paintLocked;
-  const pickActive = !!pick?.on && !paintLocked;
+  const coordinateLocked = paintLocked || compareMode !== "single";
+  const brushActive = !!brush?.on && !coordinateLocked;
+  const pickActive = !!pick?.on && !coordinateLocked;
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const onWheel = (e: React.WheelEvent) => {
     const next = Math.min(8, Math.max(0.05, view.zoom * Math.exp(-e.deltaY / 400)));
@@ -165,15 +167,16 @@ export default function Viewer({
   // 画笔参数走 ref：把 brush 放进 effect 依赖会让“开关画笔”重建整个 WebGL 测量回路，
   // 那既浪费一次 GL 上下文，也会把 M0 那条测量链拆散
   const brushRef = useRef(brush);
-  brushRef.current = paintLocked && brush ? { ...brush, on: false } : brush;
+  brushRef.current = coordinateLocked && brush ? { ...brush, on: false } : brush;
   // 与 brush 同一条理由：把 pick 放进 effect 依赖会让"开关框选"重建整个 GL 测量回路
   const pickRef = useRef(pick);
-  pickRef.current = paintLocked && pick ? { ...pick, on: false } : pick;
+  pickRef.current = coordinateLocked && pick ? { ...pick, on: false } : pick;
   const sizeRef = useRef({ w: 0, h: 0 });
   // 帧尺寸与 Fit 倍率：100% 的换算与卷帘的落点都靠它，不能靠猜
   const [frameDim, setFrameDim] = useState({ w: 0, h: 0 });
+  const displayDim = comparisonFrameSize(frameDim.w, frameDim.h, compareMode);
   const fitScale = frameDim.w > 0 && box.width > 0 && box.height > 0
-    ? Math.min(box.width / frameDim.w, box.height / frameDim.h) : 0;
+    ? Math.min(box.width / displayDim.w, box.height / displayDim.h) : 0;
   const fitScaleRef = useRef(fitScale); fitScaleRef.current = fitScale;
   const viewRef = useRef(view); viewRef.current = view;
   const compareRef = useRef(compareMode); compareRef.current = compareMode;
@@ -577,16 +580,20 @@ export default function Viewer({
         if (mode !== lastMode || swipeRef.current !== lastSwipe) compositionDirty = true;
         lastMode = mode; lastSwipe = swipeRef.current;
         if (compositionDirty) {
+          if (mirror) {
+            const width = comparisonFrameSize(curW, curH, mode).w;
+            if (mirror.width !== width) mirror.width = width;
+          }
           // Texture storage survives WebGL drawing-buffer presentation. Redraw
           // it for display-only changes; do not copy a second full image per frame.
           if (!f) gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-          mctx.drawImage(canvas, 0, 0);
+          if (mode !== "split" || !original) mctx.drawImage(canvas, 0, 0);
           if (original && snap.width === curW && snap.height === curH) {
             if (mode === "split") {
               // Whole photographs on both sides, not unrelated half-image crops.
-              mctx.fillStyle = "#16191e"; mctx.fillRect(0, 0, curW, curH);
-              mctx.drawImage(snap, 0, curH / 4, curW / 2, curH / 2);
-              mctx.drawImage(canvas, curW / 2, curH / 4, curW / 2, curH / 2);
+              mctx.fillStyle = "#16191e"; mctx.fillRect(0, 0, curW * 2, curH);
+              mctx.drawImage(snap, 0, 0);
+              mctx.drawImage(canvas, curW, 0);
             } else if (mode === "swipe") {
               const x = Math.max(0, Math.min(curW, Math.round(curW * swipeRef.current)));
               mctx.save(); mctx.beginPath(); mctx.rect(0, 0, x, curH); mctx.clip();
@@ -621,7 +628,7 @@ export default function Viewer({
   // 笔迹既显示错位、toImg 发往引擎的坐标也跟着错。摆到显示矩形后，overlay 缓冲区 w×h 等比
   // 拉伸到 dispW×dispH（保持图像宽高比），与镜像层逐像素对齐。
   const disp = imageDisplayRect({ boxW: box.width, boxH: box.height,
-                                  frameW: frameDim.w, frameH: frameDim.h,
+                                  frameW: displayDim.w, frameH: displayDim.h,
                                   zoom: view.zoom, panX: view.x, panY: view.y });
   const overlayStyle: React.CSSProperties = {
     position: "absolute", right: "auto", bottom: "auto",
@@ -644,13 +651,15 @@ export default function Viewer({
         <canvas ref={canvasRef} className={glVisible ? "gl-src visible" : "gl-src"} />
         <canvas ref={overlayRef} className={brushActive ? "overlay on" : "overlay"}
                 style={overlayStyle} />
-        {compareMode !== "single" && (
+        {compareMode !== "single" && originalFrame && (
           <div className="cmpTags">
-            <span>{compareMode === "split" ? "精修" : "原图"}</span>
-            <span>{compareMode === "split" ? "原图" : "精修"}</span>
+            <span>原图</span>
+            <span>精修</span>
           </div>
         )}
         {compareMode === "swipe" && <div className="cmpHint">拖动分界线对比</div>}
+        {compareMode !== "single" && (brush?.on || pick?.on) &&
+          <div className="cmpHint">请切回单视图使用画笔或框选人物</div>}
       </div>
       {/* 显示层：portal 到 document.body 的 fixed 画布，每帧由 GL 画布 drawImage 填进来。
           放在 body 上不是随手试出来的——实测这个子树外的画布才进得了页面合成。 */}

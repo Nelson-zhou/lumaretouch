@@ -61,3 +61,12 @@ Local verification for the dispatch change: two transport tests and a real enfor
 hello/error/shutdown receipt smoke test passed; frontend 41 tests, typecheck and production
 build passed. Rust queue tests and native compilation are CI gates; hardware/GUI dispatch
 comparison remains pending. Host and engine must be deployed together.
+
+## Comparison layout and navigation follow-up
+
+Side-by-side now has a true two-frame-wide display surface, preserving image aspect ratio
+and per-image 1:1 scaling; original/edited labels match the pixels. Wipe stays single-frame
+wide. Brush and person-box editing require single view until their comparison coordinate
+mapping is implemented, with an explicit hint rather than misdirected strokes. Category
+scroll positions and both expanded/collapsed states are retained. These are UI code changes,
+not a claim of a completed native visual review. Frontend suite now includes 42 tests.

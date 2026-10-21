@@ -10,7 +10,7 @@ import { TOOL_GROUPS, toolGroupOf, type ToolGroup } from "../toolNavigation";
  *
  * 产品界面不打印内部编号、阶段标签、项数统计或后端实现细节。
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   runBackground, runCrop, runDeform, runEnhance, runExposure, runFace, runGrade,
   runHistory, runHsl, runLut, setStrength,
@@ -354,6 +354,11 @@ export default function RetouchPanel(props: RetouchProps) {
   const scope: "all" | "person" = props.faceScope === "all" ? "all" : "person";
   const [q, setQ] = useState("");
   const [toolGroup, setToolGroup] = useState<ToolGroup>("color");
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const scrollPositions = useRef<Partial<Record<ToolGroup, number>>>({});
+  useLayoutEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = q.trim() ? 0 : (scrollPositions.current[toolGroup] ?? 0);
+  }, [toolGroup, q]);
   const [bgHex, setBgHex] = useState("#ffffff");
   const [openSeen, setOpenSeen] = useState<Record<string, boolean>>({});
   // 八色 HSL 当前选中的色段（0…7）。这是**界面选择**，不是文档状态：切图后同一段
@@ -777,7 +782,9 @@ export default function RetouchPanel(props: RetouchProps) {
   return (
     <div className="retouch" data-spec-total={SPEC_COUNTS.features}
          data-spec-controls={SPEC_COUNTS.subcontrols}>
-      <div className="rtContent">
+      <div className="rtContent" ref={contentRef} onScroll={(e) => {
+        if (!q.trim()) scrollPositions.current[toolGroup] = e.currentTarget.scrollTop;
+      }}>
       <div className="rtTitle">{q.trim() ? "功能搜索" : TOOL_GROUPS.find(g => g.id === toolGroup)?.label}</div>
 
       {/* ① 人物栏：所有人 / 每张脸 / 多脸联动 / 添加与移出 */}
@@ -856,7 +863,7 @@ export default function RetouchPanel(props: RetouchProps) {
       {/* ② 其余功能族：按规格顺序递归渲染；未开放的项只置灰，不贴任何标签 */}
       {visibleTrees.map(({ f, tree }) => {
         const custom = blockFor(f.id);
-        const open = !!query || !!openSeen[f.id] || f.id === "PC-32465" || f.id === "PC-32455";
+        const open = !!query || (openSeen[f.id] ?? (f.id === "PC-32465" || f.id === "PC-32455"));
         const title = PANEL_TITLE[f.id] ?? f.title;
         return (
           <details className="pg sfam" key={f.id} open={open}
@@ -864,7 +871,7 @@ export default function RetouchPanel(props: RetouchProps) {
             hidden={query ? !hit(f) : toolGroupOf(f.id) !== toolGroup}
             onToggle={(e) => {
               const el = e.currentTarget as HTMLDetailsElement;
-              if (el.open) setOpenSeen((s) => (s[f.id] ? s : { ...s, [f.id]: true }));
+              if (!query) { const next = el.open; setOpenSeen((s) => s[f.id] === next ? s : { ...s, [f.id]: next }); }
             }}>
             <summary title={title}>
               <span>{title}</span>
