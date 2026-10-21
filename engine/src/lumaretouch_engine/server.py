@@ -10,6 +10,8 @@ import argparse
 import json
 import math
 import os
+import queue
+import select
 import sys
 import threading
 import time
@@ -156,6 +158,12 @@ class Engine:
         self._cuda = False        # 真的是 GPU 才需要 synchronize，CPU 上调一次是白调
         self._torch = None        # set_device 时握一次模块引用，免得每帧走一遍 import
         self._quit = False
+        self._inspection_snapshot_tx = None
+        self._inspection_snapshot_result = None
+        self._inspection_snapshot_id = None
+        self._inspection_snapshot_last_id = 0
+        self._inspection_snapshot_state = "idle"
+        self._inspection_snapshot_request = None
         self._pipe_out = None
         self._vram = None
         # 常驻会话对应的那张源图（CPU 侧 numpy），留着是为了换设备时能就地重建。
@@ -7021,7 +7029,94 @@ class Engine:
         emit({"event": "batch_undone", "batch_id": bid, "module_scope": ops,
               "restored": restored, "conflicts": conflicts, "doc_state": self.doc_state()})
 
-    HANDLED = ("hello", "bench_start", "bench_stop", "set_device", "shutdown",
+    # Internal preparation endpoint. This does not produce a full-quality frame
+    # or expose the unfinished 100% viewer feature.
+    SNAPSHOT_TICK_BYTES = 1024 * 1024
+    SNAPSHOT_MAX_ASSET_BYTES = 512 * 1024 * 1024
+
+    def _snapshot_emit(self, error=None):
+        tx = getattr(self, "_inspection_snapshot_tx", None)
+        result = getattr(self, "_inspection_snapshot_result", None)
+        emit({"event": "inspection_snapshot", "preparation_only": True,
+              "request_id": getattr(self, "_inspection_snapshot_id", None),
+              "state": getattr(self, "_inspection_snapshot_state", "idle"),
+              "asset_bytes": tx.asset_bytes if tx is not None else (result.asset_bytes if result else 0),
+              "copied_bytes": tx.copied_bytes if tx is not None else (result.asset_bytes if result else 0),
+              "error": error})
+
+    def _cancel_snapshot(self, reason="invalidated", *, notify=True):
+        tx = getattr(self, "_inspection_snapshot_tx", None)
+        active = tx is not None or getattr(self, "_inspection_snapshot_result", None) is not None
+        if tx is not None:
+            tx.cancel()
+        self._inspection_snapshot_tx = None
+        self._inspection_snapshot_result = None
+        self._inspection_snapshot_request = None
+        if active:
+            self._inspection_snapshot_state = "cancelled"
+            if notify:
+                self._snapshot_emit(reason)
+
+    def _tick_snapshot(self):
+        tx = getattr(self, "_inspection_snapshot_tx", None)
+        if tx is None:
+            return
+        if tx.advance(self.SNAPSHOT_TICK_BYTES):
+            self._inspection_snapshot_result = tx.take_result()
+            self._inspection_snapshot_tx = None
+            self._inspection_snapshot_state = "ready"
+            self._snapshot_emit()
+
+    def cmd_inspection_snapshot(self, p: dict):
+        unknown = set(p) - {"cmd", "action", "request_id", "max_asset_bytes"}
+        if unknown:
+            raise ValueError(f"inspection_snapshot unknown fields: {sorted(unknown)}")
+        action = p.get("action", "status")
+        if action == "status":
+            self._snapshot_emit()
+            return
+        request_id = p.get("request_id")
+        if (not isinstance(request_id, str) or not request_id.isascii() or
+            not request_id.isdecimal() or len(request_id) > 20 or
+            request_id.startswith("0") or not 0 < int(request_id) < 2**64):
+            raise ValueError("inspection_snapshot requires a canonical nonzero u64 request_id string")
+        if action in ("cancel", "release"):
+            if request_id != getattr(self, "_inspection_snapshot_id", None):
+                raise ValueError("inspection_snapshot request identity mismatch")
+            self._cancel_snapshot(action, notify=False)
+            self._inspection_snapshot_state = "cancelled" if action == "cancel" else "released"
+            self._snapshot_emit()
+            return
+        if action != "start":
+            raise ValueError("inspection_snapshot action must be start/status/cancel/release")
+        limit = p.get("max_asset_bytes")
+        if type(limit) is not int or not 0 <= limit <= self.SNAPSHOT_MAX_ASSET_BYTES:
+            raise ValueError("inspection_snapshot needs an admitted asset budget <=512MiB")
+        if not self._image_loaded or self._vram is None or not self._doc_path:
+            raise ValueError("inspection_snapshot requires a loaded document")
+        if ((self.bench is not None and self.bench.is_alive()) or
+            (self._export is not None and self._export.is_alive())):
+            raise ValueError("inspection_snapshot is busy with export/benchmark")
+        if int(request_id) <= getattr(self, "_inspection_snapshot_last_id", 0):
+            raise ValueError("inspection_snapshot request IDs must increase")
+        self._cancel_snapshot("superseded")
+        self._inspection_snapshot_last_id = int(request_id)
+        self._inspection_snapshot_id = request_id
+        self._inspection_snapshot_request = {"path": self._doc_path,
+            "proxy_hw": (int(self._vram.h), int(self._vram.w)), "request_id": request_id}
+        try:
+            from .render_snapshot import SnapshotTransaction
+            snap = self._state_to_export_snap(self._capture_state(), device="cpu", scale=1,
+                                               upscale_backend="lanczos3", sharpen=0)
+            self._inspection_snapshot_tx = SnapshotTransaction(snap, max_asset_bytes=limit)
+        except Exception as exc:
+            self._inspection_snapshot_state = "failed"
+            self._snapshot_emit(str(exc))
+            raise
+        self._inspection_snapshot_state = "copying"
+        self._snapshot_emit()
+
+    HANDLED = ("hello", "inspection_snapshot", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "light",
                "deform", "lut", "grade", "export", "exposure", "hsl", "curves", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -7046,46 +7141,133 @@ class Engine:
                 t[n] = getattr(self, "cmd_" + n)
         return t
 
+    def _process_line(self, line, table):
+        line = line.strip()
+        if not line:
+            return
+        request_id = None
+        try:
+            msg = json.loads(line)
+            request_id = msg.pop("_host_request_id", None)
+            name = msg.get("cmd", "")
+            fn = table.get(name)
+            if fn is None:
+                emit({"event": "error", "error": f"未知命令: {name}"})
+                return
+            # The executor cancels before any other known command can mutate
+            # source arrays/recipes, including history, load, export and shutdown.
+            if name not in ("hello", "inspection_snapshot"):
+                self._cancel_snapshot("command:" + name)
+            if name in self.EDIT_CMDS:
+                # 推送点只在这里这一处（见 EDIT_CMDS 的说明）：执行前抄快照，
+                # 执行后比对签名决定占不占一步。异常也记（finally）——半改完的
+                # 状态正是最需要一次撤销能修回去的时候。
+                before = self._history_capture()
+                group = self._history_group(name, msg)
+                try:
+                    fn(msg)
+                finally:
+                    self._history_record(group, before)
+            else:
+                fn(msg)
+        except Exception as e:  # 协议层不许因单条消息崩溃
+            emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
+        finally:
+            if request_id is not None:
+                emit({"event": "command_done", "request_id": request_id})
+
     def run(self):
         table = self._dispatch_table()
-        # 不用 `for line in sys.stdin`：那会等 EOF，收到 shutdown 也退不掉
-        while not self._quit:
-            line = sys.stdin.readline()
-            if not line:            # 父进程已关闭管道
-                break
-            line = line.strip()
-            if not line:
-                continue
-            request_id = None
+        # Reader only enqueues; all editing and snapshot ticks stay on this one
+        # execution sequence. One queued line bounds read-ahead/backpressure.
+        inbox = queue.Queue(maxsize=1)
+        reader_stop = threading.Event()
+        self._command_inbox = inbox
+        # Read the protocol fd, not a blocking TextIOWrapper: a private wakeup
+        # pipe lets shutdown stop/join the reader while the parent keeps stdin open.
+        try:
+            input_fd = sys.stdin.fileno()
+            wake_read, wake_write = os.pipe()
+        except BaseException:
+            self._command_inbox = None
+            self._cancel_snapshot("reader_init_failed", notify=False)
+            self.stop_flag.set()
+            if self.shm:
+                self.shm.close()
+                self.shm.unlink()
+            raise
+        def enqueue(line):
+            while not reader_stop.is_set():
+                try:
+                    inbox.put(line, timeout=.05)
+                    return True
+                except queue.Full:
+                    pass
+            return False
+        def read_commands():
+            pending = bytearray()
             try:
-                msg = json.loads(line)
-                request_id = msg.pop("_host_request_id", None)
-                name = msg.get("cmd", "")
-                fn = table.get(name)
-                if fn is None:
-                    emit({"event": "error", "error": f"未知命令: {name}"})
-                    continue
-                if name in self.EDIT_CMDS:
-                    # 推送点只在这里这一处（见 EDIT_CMDS 的说明）：执行前抄快照，
-                    # 执行后比对签名决定占不占一步。异常也记（finally）——半改完的
-                    # 状态正是最需要一次撤销能修回去的时候。
-                    before = self._history_capture()
-                    group = self._history_group(name, msg)
+                while not reader_stop.is_set():
+                    ready, _, _ = select.select([input_fd, wake_read], [], [])
+                    if wake_read in ready:
+                        return
+                    chunk = os.read(input_fd, 65536)
+                    if not chunk:
+                        if pending and not enqueue(pending.decode("utf-8")):
+                            return
+                        enqueue("")
+                        return
+                    pending.extend(chunk)
+                    while True:
+                        newline = pending.find(b"\n")
+                        if newline < 0:
+                            break
+                        line = pending[:newline+1].decode("utf-8")
+                        del pending[:newline+1]
+                        if not enqueue(line):
+                            return
+            except Exception as exc:
+                enqueue({"read_error": str(exc)})
+        reader = threading.Thread(target=read_commands, name="command-reader")
+        try:
+            reader.start()
+            while not self._quit:
+                try:
+                    line = inbox.get_nowait()
+                except queue.Empty:
+                    if getattr(self, "_inspection_snapshot_tx", None) is not None:
+                        try:
+                            self._tick_snapshot()
+                        except Exception as exc:
+                            self._cancel_snapshot(notify=False)
+                            self._inspection_snapshot_state = "failed"
+                            self._snapshot_emit(str(exc))  # never retain traceback in job state
+                        continue
                     try:
-                        fn(msg)
-                    finally:
-                        self._history_record(group, before)
-                else:
-                    fn(msg)
-            except Exception as e:  # 协议层不许因单条消息崩溃
-                emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
+                        line = inbox.get(timeout=.1)
+                    except queue.Empty:
+                        continue
+                if isinstance(line, dict):
+                    emit({"event": "error", "error": "stdin: " + line["read_error"]})
+                    break
+                if not line:
+                    break
+                self._process_line(line, table)
+        finally:
+            reader_stop.set()
+            try:
+                os.write(wake_write, b"x")
+                if reader.ident is not None:
+                    reader.join()  # selectable reader is explicitly woken, not abandoned
             finally:
-                if request_id is not None:
-                    emit({"event": "command_done", "request_id": request_id})
-        self.stop_flag.set()
-        if self.shm:
-            self.shm.close()
-            self.shm.unlink()
+                os.close(wake_read)
+                os.close(wake_write)
+                self._command_inbox = None
+                self._cancel_snapshot("engine_exit", notify=False)
+                self.stop_flag.set()
+                if self.shm:
+                    self.shm.close()
+                    self.shm.unlink()
 
 
 def main():

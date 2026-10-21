@@ -26,8 +26,9 @@ class OwnedSnapshot:
     string_bytes: int
 
 
-def own_render_inputs(value: dict, *, max_asset_bytes: int,
-                      max_nodes: int = 10000, max_string_bytes: int = 1048576) -> OwnedSnapshot:
+def _owned_with_array_copier(value: dict, *, max_asset_bytes: int,
+                      max_nodes: int = 10000, max_string_bytes: int = 1048576,
+                      array_copier) -> OwnedSnapshot:
     """Validate/count before ANY array copy, then privately clone known CPU data.
 
     Each reference is counted once per planned copy, even if two operations share
@@ -117,7 +118,7 @@ def own_render_inputs(value: dict, *, max_asset_bytes: int,
         if typ is np.ndarray:
             # array(copy=True) rather than ascontiguousarray: even an already
             # contiguous source must not keep a writable alias into the editor.
-            out = np.array(v, copy=True, order='C', subok=False)
+            out = array_copier(v)
             out.setflags(write=False)
             return out
         if typ is dict:
@@ -132,3 +133,100 @@ def own_render_inputs(value: dict, *, max_asset_bytes: int,
 
     owned = clone(value)
     return OwnedSnapshot(owned, count['bytes'], count['arrays'], count['nodes'], count['strings'])
+
+
+
+def own_render_inputs(value: dict, *, max_asset_bytes: int,
+                      max_nodes: int = 10000, max_string_bytes: int = 1048576) -> OwnedSnapshot:
+    """Synchronous reference copy; caller excludes editing for the entire call."""
+    return _owned_with_array_copier(value, max_asset_bytes=max_asset_bytes,
+        max_nodes=max_nodes, max_string_bytes=max_string_bytes,
+        array_copier=lambda a: np.array(a, copy=True, order='C', subok=False))
+
+
+class SnapshotTransaction:
+    """Single-executor, cancellable bounded-copy transaction.
+
+    The owner must CANCEL this transaction before any source mutation, and must
+    not run advance concurrently with commands. Constructor validates/counts and
+    reserves private destinations but copies no array pixels. advance copies at
+    most its byte allowance; only take_result can publish completed inputs.
+    This is not a concurrent-reader lock or a complete process memory budget.
+    """
+    def __init__(self, value: dict, *, max_asset_bytes: int,
+                 max_nodes: int = 10000, max_string_bytes: int = 1048576):
+        self._copies = []
+        self._index = 0
+        self._offset = 0
+        self._cancelled = False
+        self._taken = False
+        self.copied_bytes = 0
+        def reserve(source):
+            destination = np.empty(source.shape, dtype=source.dtype, order='C')
+            if source.size:
+                self._copies.append((source, destination))
+            return destination
+        self._staged = None
+        try:
+            self._staged = _owned_with_array_copier(value, max_asset_bytes=max_asset_bytes,
+                max_nodes=max_nodes, max_string_bytes=max_string_bytes, array_copier=reserve)
+            self.asset_bytes = self._staged.asset_bytes
+        except BaseException:
+            self.cancel()
+            raise
+
+    @property
+    def complete(self):
+        return not self._cancelled and not self._taken and self._index == len(self._copies)
+
+    def cancel(self):
+        self._cancelled = True
+        self._copies.clear()
+        self._staged = None
+
+    def advance(self, max_copy_bytes: int) -> bool:
+        if self._cancelled or self._taken:
+            raise SnapshotError('Snapshot transaction is no longer active')
+        if type(max_copy_bytes) is not int or max_copy_bytes <= 0:
+            raise SnapshotError('Copy tick needs a positive byte allowance')
+        remaining = max_copy_bytes
+        try:
+            while self._index < len(self._copies):
+                source, destination = self._copies[self._index]
+                itemsize = source.dtype.itemsize
+                if remaining < itemsize:
+                    if remaining == max_copy_bytes:
+                        raise SnapshotError('Copy tick is smaller than an array element')
+                    break
+                n = min(source.size-self._offset, remaining//itemsize)
+                # flat slicing materializes at most this tick, including for
+                # negative/noncontiguous strides. Never reshape the source:
+                # that could silently copy the entire array before this slice.
+                chunk = source.flat[self._offset:self._offset+n]
+                destination.setflags(write=True)
+                try:
+                    np.copyto(destination.reshape(-1)[self._offset:self._offset+n], chunk)
+                finally:
+                    destination.setflags(write=False)
+                used = n*itemsize
+                self.copied_bytes += used
+                remaining -= used
+                self._offset += n
+                if self._offset == source.size:
+                    self._index += 1
+                    self._offset = 0
+                if remaining == 0:
+                    break
+        except BaseException:
+            self.cancel()
+            raise
+        return self.complete
+
+    def take_result(self) -> OwnedSnapshot:
+        if not self.complete:
+            raise SnapshotError('Incomplete/cancelled snapshot cannot be published')
+        result = self._staged
+        self._staged = None
+        self._copies.clear()
+        self._taken = True
+        return result

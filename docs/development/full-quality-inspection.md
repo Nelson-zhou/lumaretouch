@@ -29,3 +29,9 @@
 独立像素包协议草案已落为 `inspection_wire.py` / Rust `inspection_wire.rs`，含跨语言同一golden向量、完整会话epoch及请求身份核验。它只编码头/校验已有字节，不等于共享内存发布、生命周期、JS解析或Viewer接入已完成；详见 `inspection-wire-v1.md`。
 
 运行时接入第一步：现有 `Engine._export_snapshot` 已委托同一个纯 `export_recipe.build_export_spec`，保留原函数体与所有现有图层解释，不让检查worker构造假Engine或另抄缩减配方。该函数仍会做全尺寸mask重采样，必须在准入后调用；它本身不提供调度、资源限制或独立输入所有权。检查仍未运行时接通。
+
+运行时准备路径：`inspection_snapshot` 是内部快照准备协议，不是full_quality结果。start要求递增的u64十进制request_id及明确资产预算；当前上限512MiB仅约束快照目标payload，不是进程总RAM。stdin读线程仅向容量1队列入队，全部编辑状态修改和复制tick仍在主执行序列；已排队命令先执行，每空隙最多复制1MiB，任何其他已知命令（hello除外）先取消旧准备事务。元数据验证/目标预约仍在start中，字节tick不是毫秒延迟保证。
+
+事务完成只保存私有owned输入、发preparation_only快照ready；尚未创建渲染worker、发LRIF帧或启用100%UI。取消、导出/换图/历史命令、EOF及shutdown会丢弃未交付准备数据。后续任何后台资产安装也必须走同一取消/状态执行序列，不能直接并发修改源数组。
+
+stdin reader使用原生fd/select及私有唤醒pipe，不阻塞在TextIOWrapper.readline；shutdown即使宿主保持stdin打开，也会唤醒并join reader后关闭本服务自己的pipe。测试覆盖EOF尾行、读取错误、队列积压shutdown、复制失败后下一命令和构造失败清理。输入队列容量只限制行数，不宣称任意JSON行的字节上界。
