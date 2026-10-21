@@ -50,6 +50,7 @@ export interface ImageReady {
   strength: number;
   /** 共享内存建档耗时（尺寸变了才重建，多数情况接近 0） */
   shm_ms: number;
+  device_prepare_ms?: number;
   /** 初始化常驻张量：冷进程含 GPU 上下文建立，与图尺寸无关 */
   attach_ms: number;
   first_frame_ms: number;

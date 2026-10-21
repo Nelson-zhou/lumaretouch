@@ -796,13 +796,10 @@ fn load_image(
     channel: Option<String>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "load_image", "path": path});
-    // 设备必须在建会话之前就定好。F 轮翻车就是因为它：只有 bench_start 发 set_device，
-    // 导入时引擎还是默认的 cpu，常驻会话整个建在 CPU 上，跑靶再切 cuda 也追不回来。
-    // 引擎侧现在也会跟着迁移旧会话，但正确顺序仍然要在这里保证——没人想看一张
-    // 91 ms/帧的“GPU”数据。默认同样交回引擎定（"auto"）：上一版这里写死 cpu，
-    // 而“开箱即用”的那台机器上没人会设 LRT_DEVICE——GPU 版 torch 白装。
-    let device = std::env::var("LRT_DEVICE").unwrap_or_else(|_| "auto".into());
-    state.send_to_engine(json!({"cmd": "set_device", "device": device}))?;
+    // Keep import ordering atomic in one acknowledged command. The engine may
+    // publish a camera preview before cold GPU initialization, but must resolve
+    // the requested device before RAW decode and resident-session creation.
+    cmd["device"] = json!(std::env::var("LRT_DEVICE").unwrap_or_else(|_| "auto".into()));
     // 一次新的导入请求 = 上一张的账作废：错误位与 image 都清掉。不清的话，坏路径被
     // 引擎拒掉时 status.image 里还是上一张的 image_ready，宿主会把它读成"这次也成功了"。
     *state.last_error.lock().unwrap() = None;

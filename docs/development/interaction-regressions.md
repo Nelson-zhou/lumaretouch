@@ -101,3 +101,11 @@ The pump is created inside an effect, with a fresh instance on every setup (incl
 Validation: frontend typecheck, 47 Node tests, and production build passed locally. Four pump tests cover burst coalescing, busy queue draining, trailing reads, and disposal. Native desktop control/visual acceptance remains pending. This is not RAW import, curves, or whole-product completion.
 
 Read-only installed-package inspection found `/usr/lib/LumaRetouch/engine/src/lumaretouch_engine/server.py` uses `DEFAULT_STRENGTH = 0.5` and initially unrestricted channel, unlike the candidate's zero default. This explains a plausible direct path to unsolicited smoothing in the old desktop package; it is code evidence, not a reproduction using the user's photograph. The installed package was not modified.
+
+## 2026-10-21 — Cold RAW preview before GPU preparation
+
+The Rust host now sends the requested device with one acknowledged import command. For a cold engine only, the engine publishes an available camera preview before device discovery/warmup, then selects the device before real RAW decoding. Existing resident sessions still migrate before publishing a new preview, avoiding old-image migration frames overwriting it. Legacy callers omitting the device field retain their selection.
+
+This reduces an avoidable dependency on the first-preview path; it does not reduce RAW decode work, proxy resolution, or claim measured editable-readiness speed. Embedded previews remain browse-only and never become editable/export source pixels. Decode uses the effective device so unavailable explicit CUDA also receives the established CPU fallback. Budget validation runs before device changes. `image_ready.device_prepare_ms` records device preparation separately; `import_ms` now includes it for the unified host command, unlike the previous two-command timing. `shm_ms` still includes other import bookkeeping/preview overhead, not a pure shared-memory benchmark.
+
+Seven local mock contract tests cover cold/hot ordering, raster and legacy paths, missing previews, CPU fallback, and invalid-budget side effects; three earlier mask/patch contracts and UI typecheck also pass. These are not camera/GPU measurements; actual import integration tests and CI must be checked separately.

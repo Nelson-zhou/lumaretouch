@@ -1369,7 +1369,7 @@ class Engine:
         `_attach_pipeline` 里按引擎侧字段重放一遍（换设备那条路走的也是它），文档切换
         只需要在那之前把字段装对。
         """
-        from .decode import PROXY_PIXELS, is_raw, load_rgb
+        from .decode import PROXY_PIXELS, clamp_budget, is_raw, load_rgb
 
         # 跑靶线程还在写那块双缓冲：此时换图会 close/unlink 它正在写的 shm，
         # 线程会在已失效的 mmap 上抱错，产出一份“跑了半截但 frames=600”的数。
@@ -1385,16 +1385,30 @@ class Engine:
         # A rejected import must leave the current document intact.
         strength = (_clamp_strength(p["strength"])
                     if p.get("strength") is not None else None)
+        budget = clamp_budget(p.get("max_px") or self._proxy_budget or PROXY_PIXELS)
         t0 = monotonic_ns()
-        budget = int(p.get("max_px") or self._proxy_budget or PROXY_PIXELS)
+        device_prepare_ms = 0.0
+        # Existing sessions retain the old migration ordering: migrating after
+        # publishing a new preview could overwrite it with the previous image.
+        # Cold imports instead show their camera preview before torch/GPU warmup.
+        requested_device = p.get("device")
+        cold_device = requested_device is not None and not self._image_loaded
+        if requested_device is not None and not cold_device:
+            device_start = monotonic_ns()
+            self.cmd_set_device({"device": requested_device})
+            device_prepare_ms = (monotonic_ns() - device_start) / 1e6
         # RAW 先推一帧相机内嵌预览：真解码那一张要几百毫秒，而那张全清 JPEG 搬回来只要
         # 几毫秒——视口这几百毫秒不该是黑的。常驻层/预计算/历史栈仍然只认下面
         # 真解码那一张（分界规则在 decode.py），这一帧不参与任何编辑语义。
         self._preview_info = None
         if is_raw(p["path"]):
             self._preview_info = self._push_preview_frame(p["path"], budget)
+        if cold_device:
+            device_start = monotonic_ns()
+            self.cmd_set_device({"device": requested_device})
+            device_prepare_ms = (monotonic_ns() - device_start) / 1e6
         try:
-            d = load_rgb(p["path"], budget, device=self.device)
+            d = load_rgb(p["path"], budget, device=self._effective_device())
         except Exception as e:
             tail = "（视口上那一张是相机内嵌预览，编辑没生效）" if self._preview_info else ""
             emit({"event": "error", "error": f"导入失败({type(e).__name__}): {e}{tail}"})
@@ -1428,7 +1442,8 @@ class Engine:
         self._doc_index = idx
         self._history_bind(row)         # 这一格自己的撤销/重做栈
         self._doc_path = os.path.abspath(str(p["path"]))   # 导出默认目标；只有导成功才记账
-        return self._open_session(d, p, t0=t0, strength=strength, switched=existed)
+        return self._open_session(d, p, t0=t0, strength=strength, switched=existed,
+                                  device_prepare_ms=device_prepare_ms)
 
     def _push_preview_frame(self, path: str, budget: int) -> dict | None:
         """RAW 首帧：相机内嵌预览（只填浏览/首屏那个槽位，见 decode.py 顶部的分界规则）。
@@ -1461,7 +1476,8 @@ class Engine:
               "w": shm.w, "h": shm.h, "mode": "preview"})
         return info
 
-    def _open_session(self, d, p: dict, *, t0: int, strength: float | None, switched: bool):
+    def _open_session(self, d, p: dict, *, t0: int, strength: float | None, switched: bool,
+                      device_prepare_ms: float = 0.0):
         """已有源图 → 建会话 → 重挂该重挂的层 → 出帧。新导入与底片条切换共用这一段。"""
         restore_channel = p.get("channel", self._channel)
         restore_grade_scope = self._grade_scope
@@ -1496,7 +1512,8 @@ class Engine:
               # 逐段归因，不留“由减法得出的一坨”：验收口径①要的是「解码」与「初始化常驻张量」
               # 两个分开数。首次 attach 里含着 CUDA 上下文/内核模块的进程级 lazy init，
               # 不拆开来就会把它当成「每张图都要 150 ms」写进产品结论。
-              "shm_ms": round((t_a - t0) / 1e6 - d.t_total_ms, 2),
+              "shm_ms": round((t_a - t0) / 1e6 - d.t_total_ms - device_prepare_ms, 2),
+              "device_prepare_ms": round(device_prepare_ms, 2),
               "attach_ms": round((t_b - t_a) / 1e6, 2),
               "first_frame_ms": round((t_c - t_b) / 1e6, 2),
               # M1-3c：首帧里含一次与强度无关的滤波（产品档实测 ~4.5 ms）。不拆进单独字段，
