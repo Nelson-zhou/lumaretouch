@@ -15,7 +15,7 @@ def imports(path):
             yield from (alias.name for alias in node.names)
 
 def test_extracted_policy_and_controller_do_not_import_engine_or_heavy_runtime():
-    for name in ('history_policy.py', 'inspection_controller.py'):
+    for name in ('history_policy.py', 'inspection_controller.py', 'batch_sync.py'):
         source=(ENGINE/name).read_text(encoding='utf-8')
         names=set(imports(ENGINE/name))
         assert not {'server','Engine','torch','vram','project','session'} & names
@@ -33,5 +33,5 @@ def test_coordination_files_have_no_new_growth_without_explicit_boundary_review(
     # New responsibilities belong in modules; deliberate wiring growth requires
     # a reviewed boundary update, not silently increasing the threshold.
     for name, cap in [('ui/src/App.tsx',2250),('ui/src-tauri/src/main.rs',2030),
-                      ('engine/src/lumaretouch_engine/server.py',7240)]:
+                      ('engine/src/lumaretouch_engine/server.py',7050)]:
         assert len((ROOT/name).read_text(encoding='utf-8').splitlines()) <= cap, name

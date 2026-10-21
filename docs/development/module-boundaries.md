@@ -18,6 +18,9 @@ into its acceptance. The unfinished luminance feature remains a separate patch.
 - `inspection_controller.py`: sole owner of inspection transaction, worker,
   request identities, publication-preparation state and teardown. It receives
   document, proxy-dimension, busy, snapshot and event callbacks, not Engine.
+- `batch_sync.py`: owns batch IDs, commit/undo ledger, target planning and result
+  summaries. Explicit documents/editor ports borrow current session rows; no Engine
+  object is passed or cached. Scope validation remains in scope.py.
 - `history_policy.py`: pure state identity and gesture grouping. No engine,
   renderer, project, session, transport or heavy runtime dependency.
 - `server.py`: command ordering and integration. Compatibility properties expose
@@ -46,3 +49,11 @@ assertion. No claim of complete modularization is made by this first batch.
 
 Validation: CI compile/unit suites plus Qoder's focused functional regression.
 Deep GUI/performance/visual optimization remains deferred per current priority.
+
+## Existing batch behavior deliberately not changed by extraction
+
+The current commit loop's frame variable is overwritten for each target, so only
+its final target's live frame may be emitted. Also, all recipes are validated
+before writes, but a live replay exception is not a transactional rollback of
+already written rows. These are separate correctness tasks; the extraction must
+not silently claim stronger atomicity or a frozen preflight-token contract.
