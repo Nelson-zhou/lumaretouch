@@ -148,6 +148,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     # 双线性、uint8），并把 [0,1] 三分量背景色原样带到 spec.bg_ref。链序由 PreviewPipeline
     # 保证：apply_grade 之后、apply_geometry 之前 apply_background——与预览逐帧那一次同源。
     _bgs = snap.get("_bg") or {}
+    if _bgs.get("active") and (_bgs.get("matte") is None or _bgs.get("bg") is None):
+        skipped.append("bg（换底已启用但缺少遮罩或背景色，不能静默省略）")
     if _bgs.get("active") and _bgs.get("matte") is not None and _bgs.get("bg") is not None:
         _mt = np.asarray(_bgs["matte"])
         _bgv = _bgs["bg"]

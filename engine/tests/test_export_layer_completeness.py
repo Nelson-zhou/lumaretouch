@@ -37,3 +37,27 @@ def test_neutral_unbuilt_layers_are_not_false_missing_features():
     snap["enhance"] = {"amounts": {"sclera": 0.}, "built": False}
     _, skipped = _mk_session([])._export_snapshot(snap, 64, 96, for_document=True)
     assert not any(item.startswith(("deform（", "enhance（")) for item in skipped)
+
+
+@pytest.mark.parametrize("missing", ["matte", "bg", "both"])
+def test_active_background_missing_assets_is_reported(missing):
+    snap = _batch_snap()
+    snap["_bg"] = {"active": True, "matte": np.full((8, 8), 255, np.uint8),
+                   "bg": (0.1, 0.2, 0.3)}
+    for key in (("matte", "bg") if missing == "both" else (missing,)):
+        snap["_bg"].pop(key)
+    spec, skipped = _mk_session([])._export_snapshot(snap, 64, 96, for_document=True)
+    assert len([item for item in skipped if item.startswith("bg（")]) == 1
+    assert spec.bg_matte is None
+
+
+def test_inactive_background_and_unselected_lut_are_neutral():
+    snap = _batch_snap()
+    snap["_bg"] = {"active": False}
+    # Actual editor defaults/reset use amount=1 with no selected LUT.
+    # A nonzero amount alone is not evidence of a missing active LUT.
+    snap["lut"] = None
+    snap["lut_amount"] = 1.0
+    spec, skipped = _mk_session([])._export_snapshot(snap, 64, 96, for_document=True)
+    assert not any(item.startswith(("bg（", "lut（")) for item in skipped)
+    assert spec.cube is None and spec.bg_matte is None
