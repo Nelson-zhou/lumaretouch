@@ -18,3 +18,18 @@ def test_radius_patch_preserves_strength_and_other_bands():
     assert e._channel=='skin'
     assert e._params=={'radius':20,'eps':.0006,'texture_radius':4,'detail_gain':1.2,'mid_gain':.2,'broad_gain':.3}
     assert [v['event'] for v in events]==['params_set','frame']
+
+
+def test_missing_mask_suspends_effect_without_erasing_recipe():
+    e=Engine.__new__(Engine)
+    e._strength=.7;e._channel='skin';e._vram=SimpleNamespace(mask_names=[])
+    assert e._retouch_render_args()==(0.0,None)
+    assert (e._strength,e._channel)==(.7,'skin')
+    e._vram.mask_names=['skin']
+    assert e._retouch_render_args()==(.7,'skin')
+
+
+def test_explicit_unmasked_api_edit_retains_its_semantics():
+    e=Engine.__new__(Engine)
+    e._strength=.7;e._channel=None;e._vram=SimpleNamespace(mask_names=[])
+    assert e._retouch_render_args()==(.7,None)

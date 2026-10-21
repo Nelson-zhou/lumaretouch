@@ -83,3 +83,11 @@ so a radius/detail edit does not write a stale strength or overwrite unrelated b
 engine already preserves omitted values; a focused contract test pins that behavior. The
 frontend suite has 43 tests after adding main-panel scope/patch/availability coverage.
 Full-mask-outside pixel verification and actual GUI behavior remain separate pending tests.
+
+A further failure-path guard preserves the requested skin channel when derived masks cannot
+be restored (import/history/device/session replay). Rendering temporarily uses zero skin
+strength without erasing the saved recipe, rather than clearing the channel and broadening
+the same strength into a whole-image blur. Explicit unmasked protocol edits remain supported.
+Three focused patch/suspension contracts pass locally; real masked replay is still subject
+to the engine/model regression suite. This is a concrete fallback defect, not proof that it
+was the sole cause of the user's old installed package's neutral-import appearance.

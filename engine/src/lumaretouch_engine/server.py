@@ -1326,8 +1326,6 @@ class Engine:
             self._attach_pipeline(self._src_rgb, adopt=True)
             if self._precompute is not None:
                 self._rehang_precompute(replayed_for=f"history_{action}")
-            elif self._channel:
-                self._channel = None
             fr = self._write_current_frame(f"history_{action}")
         except Exception as e:
             # 半截状态不许留在 live 上：退回执行前那一份，并按它重建一次会话
@@ -1479,10 +1477,9 @@ class Engine:
         if self._precompute is not None:
             self._rehang_precompute(replayed_for="doc_switch" if switched else "load")
         elif self._channel:
-            # 没有掩膜就没有通道：状态里留个指认，下一条带 channel 的渲染会被 mask_names
-            # 拒掉，而宿主的状态栏还写着“skin 在用”
-            self._channel = None
-        pipe.render(self._strength, channel=self._channel, **self._params)
+            emit({"event": "engine_warn", "warn": "蒙版尚未恢复：保留编辑参数，暂不应用该范围的磨皮，不回退为全图"})
+        effective_strength, effective_channel = self._retouch_render_args()
+        pipe.render(effective_strength, channel=effective_channel, **self._params)
         with self._wlock:
             seq, t_emit, slot = shm.write_frame(pipe.read_back())
         t_c = monotonic_ns()
@@ -3148,8 +3145,8 @@ class Engine:
 
         换设备与切文档走同一段，不写两份：会话是新张量而掩膜没重挂时，下一条带
         channel 的 set_strength 会被 mask_names 拒掉，而报表仍写着“有 skin 通道”——
-        UI 说“没掩膜”的同时引擎里那张掩膜并不存在，两边各自自洽。失败后语义与库层
-        clear_face 一致：关键点一走，靠它的东西（通道指认、形变层）全部放下。
+        UI 说“没掩膜”的同时引擎里那张掩膜并不存在，两边各自自洽。失败后清除派生掩膜与单位场，
+        但保留用户请求的作用域；渲染时暂停缺少掩膜的效果，不扩大到全图。
         """
         if self._precompute is None or self._vram is None:
             return False
@@ -3158,12 +3155,13 @@ class Engine:
             info = self._vram.load_face(self._precompute)
         except Exception as e:
             emit({"event": "error",
-                  "error": f"会话重挂预计算产物失败，掩膜/通道/会话里的形变层已放下（"
+                  "error": f"会话重挂预计算产物失败，相关效果暂不生效，编辑参数已保留（"
                            f"{type(e).__name__}）：{e}"})
             self._vram.clear_face()
             self._precompute = None
             self._precompute_backend = None
-            self._channel = None
+            # Keep the user's requested scope. Rendering suspends the masked effect
+            # until its mask is restored; None would silently turn it into a global edit.
             # 会话里的生效值与单位场一起放下（这一张现在确实没劲儿），而用户的两份层级
             # （PORTRAIT-004）不是模型派生物，不在“一并清除”的范围里：留着，下一次成功的
             # precompute 会按脸盒接回来。defer 只在合成结果非零时留真（全零留真是说谎）
@@ -3494,6 +3492,16 @@ class Engine:
         emit(fr)
 
     # ------------------------------------------------------------ 消除笔（M1-4）
+    def _retouch_render_args(self) -> tuple[float, str | None]:
+        """Missing derived masks suspend an effect, never broaden its scope.
+
+        Requested strength/channel stay in the recipe so reanalysis can restore them.
+        Explicit unmasked API edits (channel=None) retain their existing semantics.
+        """
+        if self._channel and self._channel not in self._vram.mask_names:
+            return 0.0, None
+        return self._strength, self._channel
+
     def _write_current_frame(self, mode: str, *, original: bool = False) -> dict:
         """把当前会话渲染一帧并写 shm，返回 frame 事件字段（带 render_ms，调用方 pop）。
 
@@ -3507,11 +3515,11 @@ class Engine:
                                f"!= 会话 {self._vram.w}x{self._vram.h}：不许把会话尺寸的帧写进别人的槽")
         t0 = monotonic_ns()
         # Original viewing bypasses all layers, rather than merely setting skin strength0.
-        st = 0.0 if original else self._strength
+        st, channel = (0.0, None) if original else self._retouch_render_args()
         if original:
             self._vram.render_original()
         else:
-            self._vram.render(st, channel=self._channel, **self._params)
+            self._vram.render(st, channel=channel, **self._params)
         render_ms = (monotonic_ns() - t0) / 1e6
         with self._wlock:
             seq, t_emit, slot = self.shm.write_frame(self._vram.read_back())
@@ -5723,7 +5731,8 @@ class Engine:
             if self.shm is not None and (self.shm.w, self.shm.h) == (self._vram.w, self._vram.h):
                 # 通道必须跟着会话一起迁移：不传 channel 的话，报表里 active_channel 还是 skin，
                 # 而给用户补发的是一帧全图渲染——字段与实际执行不一致正是本仓最贵那个坑的形状
-                self._vram.render(self._strength, channel=self._channel, **self._params)
+                strength, channel = self._retouch_render_args()
+                self._vram.render(strength, channel=channel, **self._params)
                 with self._wlock:
                     seq, t_emit, slot = self.shm.write_frame(self._vram.read_back())
                 emit({"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
@@ -6752,8 +6761,6 @@ class Engine:
         self._attach_pipeline(self._src_rgb, adopt=True)
         if self._precompute is not None:
             self._rehang_precompute(replayed_for=replayed_for)
-        elif self._channel:
-            self._channel = None
         return self._write_current_frame(mode)
 
     def _face_known_single(self, row: dict | None, *, live: bool) -> tuple[str, str]:
