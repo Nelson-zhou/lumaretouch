@@ -108,5 +108,5 @@ physical screen presentation. Pixel sampling rerenders the unchanged float recip
 and copies only the selected at-most-121 values to the Rust colour analyzer.
 
 Static review corrected obsolete-request rejection handling, ImageData buffer
-typing, and pointer-down identity across cancel/rearm. This candidate is not yet
-validated by CI/Qoder or GUI testing. No action eyedropper is marked implemented.
+typing, and pointer-down identity across cancel/rearm. Basic CI/Qoder checks subsequently passed; see color-capture-verification-2026-10-21.md.
+GUI/visual testing remains pending. No action eyedropper is marked implemented.

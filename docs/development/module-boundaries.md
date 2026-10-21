@@ -122,7 +122,8 @@ App/Viewer only pass bindings and a portal target; no capture work enters the lo
 WebGL render loop. Main gains state/module/command wiring; server gains a narrow
 port factory and pre-command invalidation. Reviewed caps: native main 2040→2060,
 server 7010→7040. App remains capped at 2150. These are growth ratchets, not quality
-or feature completion scores. No product tests have yet run for this candidate.
+or feature completion scores. Basic CI/Qoder checks subsequently passed; see
+color-capture-verification-2026-10-21.md. GUI acceptance remains pending.
 
 Frozen sampling uses producer-bound presentation dimensions, not fixed proxy
 raster aspect. The ordinary live-preview crop-aspect defect is still open.
