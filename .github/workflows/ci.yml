@@ -57,6 +57,13 @@ jobs:
       - name: Rust latest-value queue invariants
         working-directory: ui/src-tauri
         run: rustc --test src/edit_queue.rs -o "$RUNNER_TEMP/lrt-edit-queue" && "$RUNNER_TEMP/lrt-edit-queue"
+      - name: Rust point-curve compiler contracts
+        run: |
+          rustc --edition=2021 --test core/curves/curve.rs -o "$RUNNER_TEMP/lrt-curves-test"
+          "$RUNNER_TEMP/lrt-curves-test"
+          rustc --edition=2021 core/curves/main.rs -o "$RUNNER_TEMP/lrt-curve-compiler"
+          printf '3 0 0 0.5 1 1 1\n' | "$RUNNER_TEMP/lrt-curve-compiler" > "$RUNNER_TEMP/lrt-curves.json"
+          python3 -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/lrt-curves.json")); assert d["version"]==1 and not d["identity"] and len(d["segments"])==2'
       - name: cargo check
         working-directory: ui/src-tauri
         run: cargo check && cargo test --bin lumaretouch dispatch::tests
