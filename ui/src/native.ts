@@ -68,6 +68,7 @@ export interface ImageReady {
 
 /** 一格底片条上"这张调了什么"（引擎按图层数与开关报，不靠前端自己看像素）。 */
 export interface SessionEdits {
+  curves?: boolean;
   repair: number;
   light: number;
   deform: boolean;
@@ -80,7 +81,20 @@ export interface SessionEdits {
 }
 
 /** 当前文档的完整编辑状态（引擎是唯一出处）。 */
+export type CurveChannel = "master" | "red" | "green" | "blue";
+export type CurveSpec = {
+  version: 1; space: "srgb-display"; interpolation: "pchip"; boundary: "linear";
+  enabled: boolean; master: [number,number][]; red: [number,number][];
+  green: [number,number][]; blue: [number,number][];
+};
+export const neutralCurves = (): CurveSpec => ({version:1,space:"srgb-display",interpolation:"pchip",boundary:"linear",enabled:true,
+  master:[[0,0],[1,1]],red:[[0,0],[1,1]],green:[[0,0],[1,1]],blue:[[0,0],[1,1]]});
+export const runCurves = (action:"set"|"clear", spec?:CurveSpec, gestureId?:string, interactive=false, requestId?:string) =>
+  invoke<{requested:boolean}>("curves",{action,spec,gestureId,interactive,requestId});
+export const previewCurves = (spec:CurveSpec) => invoke<Record<CurveChannel,number[]>>("curve_preview",{spec});
+
 export interface DocState {
+  curves?: CurveSpec;
   strength: number;
   params: Record<string, number>;
   channel: string | null;
@@ -819,6 +833,7 @@ export interface EngineStatus {
   /** 引擎最近一条 error（M9）：load_image 发出去就返回，失败只走 error 事件。
    *  不接住它，坏路径就是一次彻底的静默失败。 */
   last_error: string | null;
+  curve_result?: {request_id:string;success:boolean;spec:CurveSpec}|null;
   /** 引擎在 ready 里自报的抠图后端清单（birefnet.py 的 matting_backends）。null =
    *  这一版引擎还没报过。换底下拉项由这一份决定：权重未放行时 birefnet 在
    *  weights_gated 里，摆一个注定被拒的选项就是邀请用户去撞一个空请求。 */

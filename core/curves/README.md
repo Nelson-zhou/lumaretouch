@@ -35,3 +35,25 @@ compiler. It adds no download or startup compilation.
 Still not complete: application protocol, persistence/history, batch/preset/export
 state wiring, and the interactive curve editor. Until those are integrated this
 is an internal operator, not an available end-user editing tool.
+
+Application wiring (awaiting integrated verification): the versioned control-point
+recipe now participates in document state, history gesture IDs, project restore,
+module presets/batch sync, and both active/per-document export snapshots. Nonneutral
+curves block the 16-bit original passthrough fast path. The original frozen registry
+is untouched; `docs/p0/registry-extensions.json` records the RGB/master extension
+and is checked alongside it. Tauri validates points with this Rust core and returns
+samples from the same compiler for the SVG editor, not a separate browser spline.
+
+The point editor supports channel selection, add/move/delete, numeric coordinates,
+keyboard adjustment, enable/reset, final-command barriers and pointer cancellation.
+Luminance/parametric curves, eyedropper and input histogram remain unimplemented;
+those controls are not represented as complete. Native UI visual/interaction QA
+is still outstanding. Added protocol and 16-bit export tests require the real Torch
+runtime, not only frontend compilation or the pure-Rust mathematical tests.
+
+UI reconciliation uses a bounded request UUID and an authoritative `curves_result`
+receipt, including failures. Repeating identical error text cannot leave a fake
+pending edit; JSON object-key order does not determine recipe equality. The
+application's whole-image sync choice includes the curves module. Dense legal
+nodes preserve x when editing y. Regression helpers cover these cases; desktop
+pointer/keyboard/screenshot acceptance remains pending.

@@ -5,6 +5,8 @@
 // 把载荷拆成两次 merge——拆了以后"轮询里到底有什么"就变成两处代码，比递归难对账得多。
 #![recursion_limit = "256"]
 
+#[path = "../../../core/curves/curve.rs"]
+mod point_curve;
 mod engine;
 mod edit_queue;
 mod dispatch;
@@ -159,6 +161,7 @@ pub struct AppState {
     /// 引擎最近一条 error（M9）：load_image 是"发出去就返回"的，失败只走 error 事件。
     /// 不接住它，宿主就永远看不见"为什么打不开"——用户那边就是点了没反应。
     last_error: Mutex<Option<String>>,
+    curve_result: Mutex<Option<Value>>,
     /// 最近一条 session_state（M5 底片条）：格子列表、当前索引、有没有缩略图。
     /// 这一份里**不带 base64**——控制通道那条“像素不进 JSON”的规矩只在缩略图上开了
     /// 一个一次性的例外，宿主不该把它长期握在轮询载荷里。
@@ -257,6 +260,7 @@ impl AppState {
             image_exts: Mutex::new(Value::Null),
             export_bits: Mutex::new(Value::Null),
             last_error: Mutex::new(None),
+            curve_result: Mutex::new(None),
             session: Mutex::new(None),
             thumbs: Mutex::new(std::collections::HashMap::new()),
             session_rev: Mutex::new(0),
@@ -1532,6 +1536,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "image_exts": image_exts,
            "export_bits": export_bits,
            "last_error": last_error,
+           "curve_result": state.curve_result.lock().unwrap().clone(),
            // 底片条的“有没有、几张、当前哪一格”进轮询（小），像素本体不进：
            // 那两百张要由 filmstrip 单独取，且只在 session_rev 变了的时候取
            "session": session, "session_rev": session_rev,
@@ -1901,6 +1906,57 @@ fn exposure(
     Ok(json!({"requested": true}))
 }
 
+/// Compile the same Rust point curves used by headless recipe replay.
+#[tauri::command]
+fn curve_preview(spec: Value) -> Result<Value, String> {
+    let object = spec.as_object().ok_or("curves spec must be an object")?;
+    let expected = ["version", "space", "interpolation", "boundary", "enabled", "master", "red", "green", "blue"];
+    if object.len() != expected.len() || object.keys().any(|k| !expected.contains(&k.as_str())) {
+        return Err("curves spec has missing/unknown fields".into());
+    }
+    if spec["version"].as_u64() != Some(1) || spec["space"] != "srgb-display" ||
+       spec["interpolation"] != "pchip" || spec["boundary"] != "linear" || !spec["enabled"].is_boolean() {
+        return Err("unsupported curve schema/colour space".into());
+    }
+    let mut samples = serde_json::Map::new();
+    for channel in ["master", "red", "green", "blue"] {
+        let rows = spec[channel].as_array().ok_or("curve points must be an array")?;
+        if !(2..=point_curve::MAX_POINTS).contains(&rows.len()) {return Err("curve point count out of range".into());}
+        let mut points = Vec::with_capacity(rows.len());
+        for row in rows {
+            let pair = row.as_array().filter(|p| p.len()==2).ok_or("curve point needs x/y")?;
+            points.push(point_curve::Point {x:pair[0].as_f64().ok_or("invalid curve x")?,
+                y:pair[1].as_f64().ok_or("invalid curve y")?});
+        }
+        let compiled = point_curve::compile(&points).map_err(str::to_owned)?;
+        let values:Vec<_> = (0..=256).map(|i| compiled.evaluate(i as f64/256.0)).collect();
+        samples.insert(channel.into(), json!(values));
+    }
+    Ok(Value::Object(samples))
+}
+
+#[tauri::command]
+fn curves(state: State<'_, Arc<AppState>>, action: String, spec: Option<Value>,
+          gesture_id: Option<String>, request_id: Option<String>, interactive: Option<bool>) -> Result<Value,String> {
+    if action != "set" && action != "clear" {return Err("unknown curves action".into());}
+    let mut command = json!({"cmd":"curves", "action":action});
+    if action == "set" {
+        let value=spec.ok_or("curves set requires spec")?;
+        curve_preview(value.clone())?;
+        command["spec"]=value;
+    }
+    let gesture=gesture_id.unwrap_or_default();
+    if gesture.chars().count()>128 {return Err("curve gesture id too long".into());}
+    command["gesture_id"]=json!(gesture.clone());
+    let request=request_id.unwrap_or_default();
+    if request.chars().count()>128 {return Err("curve request id too long".into());}
+    command["request_id"]=json!(request);
+    if interactive==Some(true) && action=="set" {
+        state.send_interactive(format!("curves:{gesture}"),command)?;
+    } else {state.send_to_engine(command)?;}
+    Ok(json!({"requested":true}))
+}
+
 /// 八色 HSL（原创扩展）：band 0…7，dh/ds/dl 是这一段的三格。
 /// 与 exposure 同一个形状：动作名单、参数白名单都在这里，量程由引擎随事件报。
 #[tauri::command]
@@ -2079,7 +2135,7 @@ fn main() {
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, compare_status, precompute,
             inpaint, light, deform, lut, grade, enhance, background, export, session, filmstrip, history,
-            project, task, exposure, hsl, crop, preset, batch, face, pick,
+            project, task, exposure, hsl, curves, curve_preview, crop, preset, batch, face, pick,
             report, quit
         ])
         .run(tauri::generate_context!())

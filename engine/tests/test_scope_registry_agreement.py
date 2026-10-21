@@ -19,6 +19,10 @@ from lumaretouch_engine import scope as SC
 REPO = Path(__file__).resolve().parents[2]
 REG = json.loads((REPO / "docs" / "p0" / "p0-registry-frozen.json").read_text(encoding="utf-8"))
 
+# Reviewed extensions supplement, never rewrite the original frozen baseline.
+EXT = json.loads((REPO / "docs" / "p0" / "registry-extensions.json").read_text(encoding="utf-8"))
+REG["entries"] += EXT["entries"]
+
 
 def reg_entry(op_id: str, key: str) -> dict:
     for e in REG["entries"]:

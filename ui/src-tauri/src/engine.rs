@@ -144,6 +144,7 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
                 Err(e) => state.push_log(format!("打开共享内存失败: {e}")),
             }
         }
+        "curves_result" => {*state.curve_result.lock().unwrap() = Some(v.clone());}
         "frame" => {
             if v.get("mode").and_then(|x| x.as_str()) == Some("compare") {
                 *state.compare_frame.lock().unwrap() = Some(v.clone());

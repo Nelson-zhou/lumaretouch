@@ -1,0 +1,75 @@
+{
+  "schema": "lrt.registry.extensions.v1",
+  "source": "Linux开源人像修图产品指导手册:首版基础曲线; AI开发资料包:RGB/单通道节点编辑",
+  "scope_note": "RGB/master points only. Luminance and parametric curves remain unimplemented. Original frozen registry is unchanged.",
+  "entries": [
+    {
+      "operation_id": "lnx.curves.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "space": "srgb-display",
+        "interpolation": "pchip",
+        "boundary": "linear",
+        "enabled": true,
+        "master": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "red": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "green": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "blue": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      },
+      "hard_range": {
+        "points_per_channel": [
+          2,
+          64
+        ],
+        "x": [
+          0,
+          1
+        ],
+        "y": [
+          0,
+          1
+        ],
+        "minimum_x_spacing": 1e-05
+      },
+      "transferable": true
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { CurveEditor } from "./CurveEditor";
 import { skinEditOptions, skinMaskReady, type SkinEdit } from "../skinScope";
 import { TOOL_GROUPS, toolGroupOf, type ToolGroup } from "../toolNavigation";
 /**
@@ -191,6 +192,14 @@ function FaceAvatar({ face, thumb, all }: {
  * 面板不提前放行。
  */
 const WIRED: Record<string, string> = {
+  "PC-32455|曲线/RGB": "curves.control",
+  "PC-32455|曲线/红": "curves.control",
+  "PC-32455|曲线/绿": "curves.control",
+  "PC-32455|曲线/蓝": "curves.control",
+  "PC-32455|曲线/添加控制点": "curves.control",
+  "PC-32455|曲线/删除控制点": "curves.control",
+  "PC-32455|曲线/移动控制点": "curves.control",
+
   // 皮肤调整
   "PC-32465|高低频磨皮-脸部/身体": "skin.strength",
   "PC-32465|质感磨皮": "skin.detail",
@@ -431,6 +440,7 @@ export default function RetouchPanel(props: RetouchProps) {
       );
     }
     switch (kind) {
+      case "curves.control": return null; // implemented together in CurveEditor
       case "skin.strength":
         return (
           <Slider key={leaf.path} label={label}
@@ -596,7 +606,10 @@ export default function RetouchPanel(props: RetouchProps) {
 
   /** 规格树里需要额外画一块的节点：目前只有 HSL 的八色色段选择器。
    *  三格滑杆仍是规格里的叶子（HSL/色相…），这里只决定“改哪一段”。 */
-  const renderExtra = (node: SpecNode): React.ReactNode => {
+  const renderExtra = (node: SpecNode, featureId?:string): React.ReactNode => {
+    if (featureId === "PC-32455" && node.full === "曲线") return <CurveEditor
+      key={status?.image?.load_id ?? status?.image?.doc ?? "empty"} value={doc?.curves}
+      disabled={!props.hasImage} result={status?.curve_result} error={status?.last_error??null} onDone={props.onDone} note={props.note}/>;
     if (node.full !== "HSL") return null;
     return (
       <div className="hslChips" key="hsl-chips" data-hsl-band={hslBand}>
@@ -615,6 +628,7 @@ export default function RetouchPanel(props: RetouchProps) {
   /** 已接通祖先链：默认展开，别让真控件埋在折叠里。 */
   const openPathsFor = (f: SpecFeature): Set<string> => {
     const open = new Set<string>();
+    if(f.id === "PC-32455") open.add("曲线");
     for (const leaf of f.subcontrols) {
       if (!WIRED[`${f.id}|${leaf.path}`]) continue;
       const parts = leaf.path.split("/");
@@ -877,7 +891,7 @@ export default function RetouchPanel(props: RetouchProps) {
               {custom}
               {tree.length > 0 && (
                 <SpecNodes nodes={tree}
-                  openPaths={openPathsFor(f)} renderExtra={renderExtra}
+                  openPaths={openPathsFor(f)} renderExtra={node=>renderExtra(node,f.id)}
                   renderLeaf={(leaf, name) => {
                     const kind = WIRED[`${f.id}|${leaf.path}`];
                     return kind ? renderWired(leaf, name, kind)

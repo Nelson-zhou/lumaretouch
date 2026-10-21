@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import math
+from .ops import curves as CURVES
 
 SCHEMA = "lrt.scope.v1"
 PRESET_SCHEMA = "lrt.preset.v1"
@@ -37,6 +38,7 @@ PRESET_MAX_BYTES = 256 * 1024        # 预设是纯参数文本；超过这个�
 PRESET_MAX_MODULES = 16
 
 # 冻结注册表里 editable 的那几个 operation_id（写在这里而不是去读文件：见模块 docstring）。
+OP_CURVES = "lnx.curves.v1"
 OP_EXPOSURE = "lnx.exposure.v1"
 OP_WHITE_BALANCE = "lnx.white_balance.v1"
 OP_CROP = "lnx.crop.v1"
@@ -68,6 +70,12 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: operation_id → 契约。`single_face` 的模块只能作用在"已知只有一张脸"的文档上；
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
+    OP_CURVES: {
+        "params": ("recipe",), "state_fields": ("_curves",), "single_face": False,
+        "transferable": True, "cmd": "curves",
+        "read": lambda st: {"recipe": CURVES.check_curves(st.get("_curves"))},
+        "write": lambda st, p: st.update(_curves=CURVES.check_curves(p["recipe"])),
+    },
     OP_EXPOSURE: {
         "params": ("ev",), "state_fields": ("_exposure",), "single_face": False,
         "transferable": True, "cmd": "exposure",
@@ -207,6 +215,11 @@ def check_params(op: str, params: dict) -> dict:
         parts = [f"{k}：{unmodeled_reason(op, k)}" if unmodeled_reason(op, k) else f"{k}（未知参数）"
                  for k in unknown]
         raise ScopeError(f"{op} 收到不可作用的参数：" + "；".join(parts))
+    if op == OP_CURVES:
+        try:
+            return {"recipe": CURVES.check_curves(params.get("recipe"))}
+        except ValueError as error:
+            raise ScopeError(str(error)) from error
     out: dict = {}
     for key in m["params"]:
         if key == "enabled":
@@ -237,6 +250,8 @@ def check_params(op: str, params: dict) -> dict:
 
 
 def _neutral_of(op: str, key: str):
+    if op == OP_CURVES and key == "recipe":
+        return CURVES.default_curves()
     return {OP_EXPOSURE: {"ev": NEUTRAL_EV},
             OP_WHITE_BALANCE: {"temperature_shift": NEUTRAL_TEMP, "tint_shift": NEUTRAL_TINT},
             OP_CROP: {"rect_normalized": list(NEUTRAL_RECT), "rotation_degrees": NEUTRAL_ROTATION},

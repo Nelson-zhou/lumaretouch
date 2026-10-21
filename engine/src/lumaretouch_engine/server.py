@@ -30,6 +30,7 @@ from .vram import DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS, DEFAULT_
     warm_device
 from .ops.light import DB_EXPOSURE_LIMIT, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
 from .ops.deform import KINDS, KIND_LIMIT, DeformGeometryError, check_amounts
+from .ops import curves as CURVES
 from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
 from .ops import enhance as ENH
 from .ops.grade import DH_LIMIT, DS_LIMIT, DV_LIMIT, GradeError, check_params
@@ -255,6 +256,7 @@ class Engine:
         # 同一条生命周期（初始化、重挂、快照、上报），否则又是“切张图滑块还在、
         # 画面已经回中性”。
         self._hsl = (0.0,) * 24
+        self._curves = CURVES.default_curves()
         # 换底层（M6）：存“可重建一份常驻遮罩所需的一切”——遮罩原件（代理坐标
         # uint8）、背景色、后端与参数。随图清、随代理档作废、随设备重挂（与掩膜同命）。
         self._bg = dict(active=False, matte=None, bg=None, backend=None,
@@ -808,6 +810,9 @@ class Engine:
                     emit({"event": "engine_warn",
                           "warn": f"新会话重提交曝光/白平衡失败，已整层清除（{type(e).__name__}）：{e}"})
                     self._exposure = (0.0,) * 7
+            # Curves are independent of LUTs and must survive every session rebuild.
+            if not CURVES.is_identity(self._curves):
+                pipe.set_curves(self._curves)  # fail visibly; never silently erase a recipe
             # 八色 HSL：与上面同一条“不提交就是会话迁了而画面回中性”。
             if self._hsl != (0.0,) * 24:
                 try:
@@ -856,7 +861,7 @@ class Engine:
                   "_precompute", "_precompute_backend", "_face_index", "_face_box",
                   "_face_explicit", "_face_manual",
          "_exposure",
-         "_exposure_ref_k", "_hsl", "_crop_rect", "_crop_rotation")
+         "_exposure_ref_k", "_hsl", "_curves", "_crop_rect", "_crop_rotation")
     # 代理档一变就作废的那些层：它们的坐标是**这一档代理帧**上的像素坐标。
     PROXY_BOUND = ("_channel", "_repair_ops", "_redo_ops", "_light_ops", "_light_redo",
                    "_deform", "_deform_defer", "_deform_default", "_deform_overrides",
@@ -922,7 +927,7 @@ class Engine:
                 # 会把 B 图同位置的脸也关掉（与 `_deform["amounts"]` 整份新抄同一条理由）
                 "_face_manual": {"disabled": [], "added": []},
                 "_exposure": (0.0,) * 7, "_exposure_ref_k": None,
-                "_hsl": (0.0,) * 24,
+                "_hsl": (0.0,) * 24, "_curves": CURVES.default_curves(),
                 "_crop_rect": (0.0, 0.0, 1.0, 1.0), "_crop_rotation": 0.0,
                 # 掩膜/笔迹/形变场都活在**那一档代理尺寸**上，所以尺寸也是状态的一部分。
                 "_proxy": None}
@@ -961,7 +966,7 @@ class Engine:
                                    tuple(float(v) for v in self._enhance["box"]))},
               "_enhance_defer": bool(self._enhance_defer),
               "_exposure": tuple(self._exposure), "_exposure_ref_k": self._exposure_ref_k,
-              "_hsl": tuple(self._hsl),
+              "_hsl": tuple(self._hsl), "_curves": CURVES.check_curves(self._curves),
               "_crop_rect": tuple(self._crop_rect), "_crop_rotation": float(self._crop_rotation),
               "_bg": dict(self._bg),
               "_precompute": self._precompute, "_precompute_backend": self._precompute_backend,
@@ -981,6 +986,8 @@ class Engine:
         return st
 
     def _apply_state(self, st: dict) -> None:
+        # Old projects predate curves. Validate/deep-copy before changing any live field.
+        st = {**st, "_curves": CURVES.check_curves(st.get("_curves"))}
         for k in self.DOC_FIELDS:
             v = st[k]                 # 缺键就是名单漂移，让它响
             setattr(self, k, v)
@@ -1134,7 +1141,7 @@ class Engine:
     # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
     # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
     EDIT_CMDS = ("set_strength", "inpaint", "light", "deform", "lut", "grade", "background",
-                 "crop", "exposure", "hsl", "preset", "batch", "face", "enhance")
+                 "crop", "exposure", "hsl", "curves", "preset", "batch", "face", "enhance")
     # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
     # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
     # 而 batch 改的就是活动文档的配方——不在这里它就会“同步完了而徽章不亮”。
@@ -1224,6 +1231,8 @@ class Engine:
         同一个滑块连发五十条 → 同一个组 → 合并成一步；换另一个滑块（参数名不同）就是新的一步。
         拿值当组名会出两件事：拖回原位那种"值又变回去"合并不了，而把 action 与路径参数
         （rle/paths）算进组名会让每一笔都是新组——那正好是我们要区分的两种动作。"""
+        if name == "curves" and isinstance(msg.get("gesture_id"), str) and msg["gesture_id"]:
+            return "curves:gesture:" + msg["gesture_id"][:128]
         keys = sorted(k for k in msg if k not in ("cmd", "action"))
         return f"{name}:{msg.get('action', '')}:{','.join(keys)}"
 
@@ -1248,13 +1257,18 @@ class Engine:
         now = monotonic_ns()
         same_gesture = False
         if group and self._hist_group == group \
-                and (now - self._hist_group_ns) / 1e6 < self.HISTORY_GROUP_MS:
+                and (group.startswith("curves:gesture:") or
+                     (now - self._hist_group_ns) / 1e6 < self.HISTORY_GROUP_MS):
             same_gesture = True
         if not same_gesture:
             self._undo.append(before)
             if len(self._undo) > self.HISTORY_MAX:
                 # 丢最老的：这一条是内存账，不是功能边界（64 步 × 每份几 KB）
                 del self._undo[0]
+        if same_gesture and group.startswith("curves:gesture:") and self._undo \
+                and self._hist_sig(self._undo[-1]) == self._hist_sig(after):
+            self._undo.pop()  # dragging/cancelling back to the start is not an undo step
+            group = ""
         self._hist_group, self._hist_group_ns = group, now
         # 新编辑一律断掉 redo 链：留着就会出"撤销两次、重做一次跳回最新"那种
         # 看起来像丢工的行为
@@ -1662,6 +1676,7 @@ class Engine:
                              "lit": self._exposure != (0.0,) * 7},
                 # 八色 HSL：数组顺序与 ops/hsl.py 的 BAND_NAMES 一一对应；量程也
                 # 从引擎报（UI 不抄一份数）。
+                "curves": CURVES.check_curves(self._curves),
                 "hsl": {"bands": [float(v) for v in self._hsl],
                         "names": list(BAND_NAMES),
                         "centers": [float(v) for v in BAND_CENTERS],
@@ -1685,6 +1700,7 @@ class Engine:
                 # 旧工程档里可能还没有这一格：缺键按“没调过”算，不拿 KeyError 把
                 # 整条底片条打成红。
                 "hsl": any(float(v) != 0.0 for v in (st.get("_hsl") or ())),
+                "curves": not CURVES.is_identity(st.get("_curves")),
                 "channel": st["_channel"]}
 
     # ------------------------------------------------------------ M5-a 底片条
@@ -5364,6 +5380,51 @@ class Engine:
         fr["doc_state"] = self.doc_state()          # 同 crop：让宿主的滑块跟着这一笔走
         emit(fr)
 
+    def cmd_curves(self, p: dict):
+        success = False
+        try:
+            success = bool(self._cmd_curves_edit(p))
+        finally:
+            request = p.get("request_id")
+            if not isinstance(request, str) or len(request) > 128:
+                request = None
+            emit({"event": "curves_result", "request_id": request,
+                  "success": success, "spec": CURVES.check_curves(self._curves)})
+
+    def _cmd_curves_edit(self, p: dict):
+        reason = self._guard_editable("curves")
+        if reason:
+            emit({"event": "error", "error": reason})
+            return
+        if set(p) - {"cmd", "action", "spec", "gesture_id", "request_id"}:
+            emit({"event": "error", "error": "curves 收到未知参数"})
+            return
+        action = p.get("action", "set")
+        gesture = p.get("gesture_id", "")
+        if action not in ("set", "clear") or not isinstance(gesture, str) or len(gesture) > 128:
+            emit({"event": "error", "error": "curves action/gesture_id 非法"})
+            return
+        previous = CURVES.check_curves(self._curves)
+        try:
+            if action == "set" and "spec" not in p:
+                raise ValueError("curves set requires a complete spec")
+            spec = CURVES.check_curves(p.get("spec") if action == "set" else None)
+            self._vram.set_curves(spec)
+            self._curves = spec
+            frame = self._write_current_frame("curves")
+        except Exception as error:
+            self._curves = previous
+            try:
+                self._vram.set_curves(previous)
+                emit(self._write_current_frame("curves_rollback"))
+            except Exception as rollback:
+                emit({"event": "engine_warn", "warn": f"曲线回滚帧失败，请重新导入：{rollback}"})
+            emit({"event": "error", "error": f"曲线未提交，已保留上一配方：{error}"})
+            return
+        frame["doc_state"] = self.doc_state()
+        emit(frame)
+        return True
+
     def cmd_hsl(self, p: dict):
         """八色 HSL：按色相分段改「色相 / 饱和度 / 明亮度」。
 
@@ -5780,6 +5841,7 @@ class Engine:
                     exposure=tuple(st.get("_exposure", (0.0,) * 7)),
                     exposure_ref_k=st.get("_exposure_ref_k"),
                     hsl=tuple(st.get("_hsl", (0.0,) * 24)),
+                    curves=CURVES.check_curves(st.get("_curves")),
                     crop_rect=tuple(st.get("_crop_rect", (0.0, 0.0, 1.0, 1.0))),
                     crop_rotation=float(st.get("_crop_rotation", 0.0)),
                     lut=st.get("_lut"), lut_amount=float(st.get("_lut_amount", 0.0)),
@@ -5907,6 +5969,7 @@ class Engine:
                           exposure=tuple(snap.get("exposure", (0.0,) * 7)),
                           exposure_ref_k=snap.get("exposure_ref_k"),
                           hsl=tuple(snap.get("hsl", (0.0,) * 24)),
+                          curves=CURVES.check_curves(snap.get("curves")),
                           lut_amount=float(snap["lut_amount"]),
                           deform_amounts={},
                           scale=int(snap.get("scale", 1)),
@@ -6189,6 +6252,7 @@ class Engine:
                     grade_scope=str(self._grade_scope), grade_mask=self._grade_mask,
                     exposure=tuple(self._exposure), exposure_ref_k=self._exposure_ref_k,
                     hsl=tuple(self._hsl),
+                    curves=CURVES.check_curves(self._curves),
                     crop_rect=tuple(self._crop_rect), crop_rotation=float(self._crop_rotation),
                     lut=self._lut, lut_amount=self._lut_amount, light=dict(self._light),
                     light_ops=list(self._light_ops), repair_ops=list(self._repair_ops),
@@ -6478,6 +6542,7 @@ class Engine:
             "repair_ops": [], "light_ops": [], "deform": {},
             "crop_rect": (0.0, 0.0, 1.0, 1.0), "crop_rotation": 0.0,
             "exposure": (0.0,) * 7, "hsl": (0.0,) * 24, "enhance": {},
+            "curves": CURVES.default_curves(),
         }
         fields = {"_" + key: snap.get(key, value) for key, value in defaults.items()}
         fields["_bg"] = snap.get("_bg", {})
@@ -6535,6 +6600,8 @@ class Engine:
         if any(abs(float(v)) > 0.0 for v in expo[:7]):
             b.append(f"曝光/白平衡/影调={tuple(round(float(v), 4) for v in expo[:7])}")
         # 八色 HSL：24 元组（8 段 × 色相/饱和度/明亮度），任一分量非零都会动像素。
+        if not CURVES.is_identity(getattr(self, "_curves", None)):
+            b.append("RGB/master 曲线")
         hsl = list(self._hsl) + [0.0] * 24
         if any(abs(float(v)) > 0.0 for v in hsl[:24]):
             b.append("八色 HSL（有色调偏移）")
@@ -7105,7 +7172,7 @@ class Engine:
 
     HANDLED = ("hello", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "light",
-               "deform", "lut", "grade", "export", "exposure", "hsl", "crop", "background",
+               "deform", "lut", "grade", "export", "exposure", "hsl", "curves", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
                # 挑图（LNX-PICK-001）。它不在 EDIT_CMDS 里，所以既不进撤销栈也不打脏标记：
                # 它是读出来的一格旁注，不是一次编辑动作

@@ -77,3 +77,14 @@ def test_resident_pipeline_curves_are_independent_and_clearable():
     assert not pipe.has_lut()
     pipe.clear_curves(); pipe.render(0.)
     assert np.array_equal(pipe.read_back(), before)
+
+
+def test_curve_export16_uses_same_recipe_without_eight_bit_steps():
+    pytest.importorskip('torch')
+    from lumaretouch_engine.export import export_image16, ExportSpec
+    spec=C.default_curves();spec['master']=[[0,.05],[.5,.6],[1,.95]]
+    source=np.broadcast_to(np.linspace(0,65535,513,dtype=np.uint16)[None,:,None],(64,513,3)).copy()
+    expected=np.rint(np.clip(C.curves_np(source.astype(np.float32)/65535,spec),0,1)*65535).astype(np.uint16)
+    actual,_=export_image16(source,ExportSpec(strength=0,curves=spec),device='cpu',tile=256)
+    assert np.max(np.abs(actual.astype(np.int32)-expected.astype(np.int32)))<=1
+    assert len(np.unique(actual[0,:,0]))>256
