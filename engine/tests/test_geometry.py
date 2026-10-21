@@ -135,3 +135,31 @@ def test_rotation_actually_moves_pixels_and_fills_outside_with_zero():
     row = out[out.shape[0] // 2]
     assert not np.all(row == row[0]), "45° 之后还是整行同色——等于没转"
     assert out.min() == 0 and out.max() > 0, "画布外应当补 0，而画面里仍有非零像素"
+
+
+@pytest.mark.parametrize("angle", [-179.9, -90.1, -89.9, -0.1, 0.1, 89.9, 90.1, 179.9])
+def test_legacy_snap_dimensions_and_pixels_agree_on_both_sides(angle):
+    # Large enough for the old bounding-box calculation to differ by pixels.
+    # Preserve legacy rendered pixels; only the incorrect reported size changes.
+    a = _photo(256, 1024)
+    rect = [0.1, 0.125, 0.9, 0.875]
+    cropped = crop_np(a, rect)
+    expected = np.ascontiguousarray(np.rot90(cropped, int(round(-angle / 90)) % 4))
+    actual = crop_rotate_np(a, rect, angle)
+    native = crop_rotate_t(torch.from_numpy(a), rect, angle).numpy()
+    assert out_size(1024, 256, rect, angle) == (expected.shape[1], expected.shape[0])
+    assert np.array_equal(actual, expected)
+    assert np.array_equal(native, expected)
+
+
+@pytest.mark.parametrize("angle", [-90.5, -89.5, -0.5, 0.5, 89.5, 90.5])
+def test_exact_half_degree_remains_interpolated(angle):
+    from lumaretouch_engine.ops.geometry import _snapped_quarter_turn
+    assert _snapped_quarter_turn(angle) is None
+    a = _photo(64, 96)
+    rect = [0., 0., 1., 1.]
+    actual = crop_rotate_np(a, rect, angle)
+    native = crop_rotate_t(torch.from_numpy(a), rect, angle).numpy()
+    assert out_size(96, 64, rect, angle) == (actual.shape[1], actual.shape[0])
+    assert native.shape == actual.shape
+    assert np.abs(native.astype(np.int16) - actual.astype(np.int16)).max() <= 1

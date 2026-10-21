@@ -76,6 +76,19 @@ def _cut(n: int, a: float, b: float) -> tuple[int, int]:
     return lo, hi
 
 
+def _snapped_quarter_turn(r: float) -> int | None:
+    """Preserve the v1 renderer's strict half-degree snap, including both sides.
+
+    This is a compatibility rule, not permission to change stored angles. Exactly
+    half a degree still uses interpolation. Dimensions and both renderers must
+    make the same decision before allocating a canvas or validating a patch.
+    """
+    remainder = abs(r) % 90.0
+    if remainder < 0.5 or abs(remainder - 90.0) < 0.5:
+        return int(round(r / 90.0)) % 4
+    return None
+
+
 def out_size(w: int, h: int, rect, rotation_degrees: float) -> tuple[int, int]:
     """裁剪框 + 旋转后的**真实**输出尺寸（(宽, 高)）。
 
@@ -86,8 +99,8 @@ def out_size(w: int, h: int, rect, rotation_degrees: float) -> tuple[int, int]:
     xa, xb = _cut(w, x0, x1)
     ya, yb = _cut(h, y0, y1)
     cw, ch = xb - xa, yb - ya
-    if abs(r % 90.0) < 0.5 - EPS:        # 整数倍 90°：转置，画布是精确的宽高互换
-        k = int(round(r / 90.0)) % 4
+    k = _snapped_quarter_turn(r)
+    if k is not None:
         return (cw, ch) if k % 2 == 0 else (ch, cw)
     # 任意角：外接框按旋转后的包围盒算（与 crop_rotate_* 里用的同一个式子）
     a = math.radians(r)
@@ -116,8 +129,9 @@ def rotate_np(arr: np.ndarray, degrees: float) -> np.ndarray:
     _, _, _, _, r = check([0.0, 0.0, 1.0, 1.0], degrees)
     if abs(r) < EPS:
         return arr
-    if abs(abs(r) % 90.0) < 0.5 or abs(abs(r) % 90.0 - 90.0) < 0.5:
-        return np.ascontiguousarray(_quarter_turn(arr, int(round(-r / 90.0))))
+    k = _snapped_quarter_turn(r)
+    if k is not None:
+        return np.ascontiguousarray(_quarter_turn(arr, -k))
     h, w = int(arr.shape[0]), int(arr.shape[1])
     src = np.asarray(arr, dtype=np.float64)
     a = math.radians(r)
@@ -200,8 +214,9 @@ def crop_rotate_t(arr, rect, rotation_degrees: float, *, uint8: bool = True):
     if r == 0.0:
         return cur
     ch, cw = int(cur.shape[0]), int(cur.shape[1])
-    if abs(abs(r) % 90.0) < 0.5 or abs(abs(r) % 90.0 - 90.0) < 0.5:
-        return torch.rot90(cur, k=int(round(-r / 90.0)) % 4, dims=(0, 1)).contiguous()
+    k = _snapped_quarter_turn(r)
+    if k is not None:
+        return torch.rot90(cur, k=(-k) % 4, dims=(0, 1)).contiguous()
     ow, oh = out_size(cw, ch, [0.0, 0.0, 1.0, 1.0], r)
     dtype = cur.dtype if cur.is_floating_point() else torch.float32
     src = cur.to(dtype)
