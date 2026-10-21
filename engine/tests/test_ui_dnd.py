@@ -125,7 +125,15 @@ def test_host_bridge_uses_the_real_tauri_parameter_names():
         assert bad not in native, f"snake_case 键 {bad} 会被 Tauri 静默丢掉"
     # 八色 HSL 那条命令与它的真窗口臂：桥里少一条就是“滑块拖了而引擎没这条命令”
     assert "fn hsl(" in main, "宿主没有 hsl 命令"
-    assert "exposure, hsl, crop" in main, "hsl 没注册进 invoke_handler"
+    # Registration order is not a contract: new commands may sit between old ones.
+    # Inspect actual handler identifiers, not an adjacent three-name substring.
+    import re
+    handler = main.split("tauri::generate_handler![", 1)[1].split("])", 1)[0]
+    handler = re.sub(r"//[^\n]*", "", handler)
+    registered = {name.strip() for name in handler.split(",") if name.strip()}
+    for command in ("exposure", "hsl", "crop", "curves", "curve_preview"):
+        assert command in registered, f"{command} 没注册进 invoke_handler"
+    assert "gestureId,interactive,requestId" in native, "曲线请求标识未以 camelCase 传递"
     assert '"auto_spec"' in main and '"keep_open"' in main, "M0_SPEC 的桥缺一格"
     app = APP
     assert "runHsl(" in app and "LRT_AUTO_SPEC" in app, "M0_SPEC 臂或 runHsl 没接上"

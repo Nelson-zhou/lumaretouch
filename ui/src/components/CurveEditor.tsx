@@ -42,7 +42,10 @@ export function CurveEditor({value,disabled,error,result,onDone,note}:{value?:Cu
     const requestId=crypto.randomUUID();
     update(s);pending.current={id:requestId,signature:signature(s)};
     void runCurves('set',s,id,interactive,requestId).then(onDone).catch(e=>{
-      pending.current=null;note(String(e));update(copy(value??neutralCurves()));
+      note(String(e));
+      if(matchesCurveResult(pending.current?.id,requestId)) {
+        pending.current=null;update(copy(value??neutralCurves()));
+      }
     });
   };
   const points=draft[channel], index=Math.min(selected,points.length-1),point=points[index];
