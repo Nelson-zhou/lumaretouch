@@ -8196,9 +8196,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32455",
       "source_child_index": 30,
       "title": "曲线",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_implementation_under_verification",
+      "implementation": [
+        "core/curves/curve.rs",
+        "engine/src/lumaretouch_engine/ops/curves.py",
+        "engine/src/lumaretouch_engine/server.py",
+        "ui/src/components/CurveEditor.tsx"
+      ],
+      "verification": [
+        "b086144c: Qoder真实运行时定向回归78通过（含曲线像素、撤销、工程重开、16-bit梯度及相关守卫）；不是全部原生UI验收",
+        "Rust曲线数学7项通过；前端51项单测与类型检查/构建通过，不把它们等同实际拖动验收",
+        "https://github.com/Nelson-zhou/lumaretouch/actions/runs/39591157237"
+      ],
+      "remaining": "原生窗口节点操作、连续手势/中断/切图视觉验收尚缺；亮度/参数曲线/吸管/输入直方图未实现，不以RGB点曲线代替。",
+      "implementation_commit": "b086144c52daad9df24efe8fa91866eaad048ff3"
     },
     {
       "id": "control:PC-32455:32",
@@ -8209,7 +8220,8 @@
       "title": "曲线/参数曲线",
       "status": "pending_independent_verification",
       "implementation": [],
-      "verification": []
+      "verification": [],
+      "remaining": "当前只有RGB/master与R/G/B点曲线；本项尚未实现，保留原始需求，不计完成。"
     },
     {
       "id": "control:PC-32455:33",
@@ -8218,9 +8230,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32455",
       "source_child_index": 32,
       "title": "曲线/RGB通道曲线",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_implementation_under_verification",
+      "implementation": [
+        "core/curves/curve.rs",
+        "engine/src/lumaretouch_engine/ops/curves.py",
+        "engine/src/lumaretouch_engine/server.py",
+        "ui/src/components/CurveEditor.tsx"
+      ],
+      "verification": [
+        "b086144c: Qoder真实运行时定向回归78通过（含曲线像素、撤销、工程重开、16-bit梯度及相关守卫）；不是全部原生UI验收",
+        "Rust曲线数学7项通过；前端51项单测与类型检查/构建通过，不把它们等同实际拖动验收",
+        "https://github.com/Nelson-zhou/lumaretouch/actions/runs/39591157237"
+      ],
+      "remaining": "原生窗口节点操作、连续手势/中断/切图视觉验收尚缺；亮度/参数曲线/吸管/输入直方图未实现，不以RGB点曲线代替。",
+      "implementation_commit": "b086144c52daad9df24efe8fa91866eaad048ff3"
     },
     {
       "id": "control:PC-32455:34",
@@ -8231,7 +8254,8 @@
       "title": "曲线/亮度通道曲线",
       "status": "pending_independent_verification",
       "implementation": [],
-      "verification": []
+      "verification": [],
+      "remaining": "当前只有RGB/master与R/G/B点曲线；本项尚未实现，保留原始需求，不计完成。"
     },
     {
       "id": "control:PC-32455:35",
@@ -8240,9 +8264,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32455",
       "source_child_index": 34,
       "title": "曲线/红/绿/蓝色通道曲线",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_implementation_under_verification",
+      "implementation": [
+        "core/curves/curve.rs",
+        "engine/src/lumaretouch_engine/ops/curves.py",
+        "engine/src/lumaretouch_engine/server.py",
+        "ui/src/components/CurveEditor.tsx"
+      ],
+      "verification": [
+        "b086144c: Qoder真实运行时定向回归78通过（含曲线像素、撤销、工程重开、16-bit梯度及相关守卫）；不是全部原生UI验收",
+        "Rust曲线数学7项通过；前端51项单测与类型检查/构建通过，不把它们等同实际拖动验收",
+        "https://github.com/Nelson-zhou/lumaretouch/actions/runs/39591157237"
+      ],
+      "remaining": "原生窗口节点操作、连续手势/中断/切图视觉验收尚缺；亮度/参数曲线/吸管/输入直方图未实现，不以RGB点曲线代替。",
+      "implementation_commit": "b086144c52daad9df24efe8fa91866eaad048ff3"
     },
     {
       "id": "control:PC-32455:36",
@@ -8253,7 +8288,8 @@
       "title": "曲线/曲线吸管",
       "status": "pending_independent_verification",
       "implementation": [],
-      "verification": []
+      "verification": [],
+      "remaining": "当前只有RGB/master与R/G/B点曲线；本项尚未实现，保留原始需求，不计完成。"
     },
     {
       "id": "control:PC-32455:37",
@@ -8867,9 +8903,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32455",
       "source_child_index": 91,
       "title": "曲线/RGB",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_implementation_under_verification",
+      "implementation": [
+        "core/curves/curve.rs",
+        "engine/src/lumaretouch_engine/ops/curves.py",
+        "engine/src/lumaretouch_engine/server.py",
+        "ui/src/components/CurveEditor.tsx"
+      ],
+      "verification": [
+        "b086144c: Qoder真实运行时定向回归78通过（含曲线像素、撤销、工程重开、16-bit梯度及相关守卫）；不是全部原生UI验收",
+        "Rust曲线数学7项通过；前端51项单测与类型检查/构建通过，不把它们等同实际拖动验收",
+        "https://github.com/Nelson-zhou/lumaretouch/actions/runs/39591157237"
+      ],
+      "remaining": "原生窗口节点操作、连续手势/中断/切图视觉验收尚缺；亮度/参数曲线/吸管/输入直方图未实现，不以RGB点曲线代替。",
+      "implementation_commit": "b086144c52daad9df24efe8fa91866eaad048ff3"
     },
     {
       "id": "control:PC-32455:93",
@@ -8880,7 +8927,8 @@
       "title": "曲线/亮度",
       "status": "pending_independent_verification",
       "implementation": [],
-      "verification": []
+      "verification": [],
+      "remaining": "当前只有RGB/master与R/G/B点曲线；本项尚未实现，保留原始需求，不计完成。"
     },
     {
       "id": "control:PC-32455:94",
@@ -8889,9 +8937,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32455",
       "source_child_index": 93,
       "title": "曲线/红",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_implementation_under_verification",
+      "implementation": [
+        "core/curves/curve.rs",
+        "engine/src/lumaretouch_engine/ops/curves.py",
+        "engine/src/lumaretouch_engine/server.py",
+        "ui/src/components/CurveEditor.tsx"
+      ],
+      "verification": [
+        "b086144c: Qoder真实运行时定向回归78通过（含曲线像素、撤销、工程重开、16-bit梯度及相关守卫）；不是全部原生UI验收",
+        "Rust曲线数学7项通过；前端51项单测与类型检查/构建通过，不把它们等同实际拖动验收",
+        "https://github.com/Nelson-zhou/lumaretouch/actions/runs/39591157237"
+      ],
+      "remaining": "原生窗口节点操作、连续手势/中断/切图视觉验收尚缺；亮度/参数曲线/吸管/输入直方图未实现，不以RGB点曲线代替。",
+      "implementation_commit": "b086144c52daad9df24efe8fa91866eaad048ff3"
     },
     {
       "id": "control:PC-32455:95",
@@ -8900,9 +8959,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32455",
       "source_child_index": 94,
       "title": "曲线/绿",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_implementation_under_verification",
+      "implementation": [
+        "core/curves/curve.rs",
+        "engine/src/lumaretouch_engine/ops/curves.py",
+        "engine/src/lumaretouch_engine/server.py",
+        "ui/src/components/CurveEditor.tsx"
+      ],
+      "verification": [
+        "b086144c: Qoder真实运行时定向回归78通过（含曲线像素、撤销、工程重开、16-bit梯度及相关守卫）；不是全部原生UI验收",
+        "Rust曲线数学7项通过；前端51项单测与类型检查/构建通过，不把它们等同实际拖动验收",
+        "https://github.com/Nelson-zhou/lumaretouch/actions/runs/39591157237"
+      ],
+      "remaining": "原生窗口节点操作、连续手势/中断/切图视觉验收尚缺；亮度/参数曲线/吸管/输入直方图未实现，不以RGB点曲线代替。",
+      "implementation_commit": "b086144c52daad9df24efe8fa91866eaad048ff3"
     },
     {
       "id": "control:PC-32455:96",
@@ -8911,9 +8981,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32455",
       "source_child_index": 95,
       "title": "曲线/蓝",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_implementation_under_verification",
+      "implementation": [
+        "core/curves/curve.rs",
+        "engine/src/lumaretouch_engine/ops/curves.py",
+        "engine/src/lumaretouch_engine/server.py",
+        "ui/src/components/CurveEditor.tsx"
+      ],
+      "verification": [
+        "b086144c: Qoder真实运行时定向回归78通过（含曲线像素、撤销、工程重开、16-bit梯度及相关守卫）；不是全部原生UI验收",
+        "Rust曲线数学7项通过；前端51项单测与类型检查/构建通过，不把它们等同实际拖动验收",
+        "https://github.com/Nelson-zhou/lumaretouch/actions/runs/39591157237"
+      ],
+      "remaining": "原生窗口节点操作、连续手势/中断/切图视觉验收尚缺；亮度/参数曲线/吸管/输入直方图未实现，不以RGB点曲线代替。",
+      "implementation_commit": "b086144c52daad9df24efe8fa91866eaad048ff3"
     },
     {
       "id": "control:PC-32455:97",
@@ -8922,9 +9003,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32455",
       "source_child_index": 96,
       "title": "曲线/添加控制点",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_implementation_under_verification",
+      "implementation": [
+        "core/curves/curve.rs",
+        "engine/src/lumaretouch_engine/ops/curves.py",
+        "engine/src/lumaretouch_engine/server.py",
+        "ui/src/components/CurveEditor.tsx"
+      ],
+      "verification": [
+        "b086144c: Qoder真实运行时定向回归78通过（含曲线像素、撤销、工程重开、16-bit梯度及相关守卫）；不是全部原生UI验收",
+        "Rust曲线数学7项通过；前端51项单测与类型检查/构建通过，不把它们等同实际拖动验收",
+        "https://github.com/Nelson-zhou/lumaretouch/actions/runs/39591157237"
+      ],
+      "remaining": "原生窗口节点操作、连续手势/中断/切图视觉验收尚缺；亮度/参数曲线/吸管/输入直方图未实现，不以RGB点曲线代替。",
+      "implementation_commit": "b086144c52daad9df24efe8fa91866eaad048ff3"
     },
     {
       "id": "control:PC-32455:98",
@@ -8933,9 +9025,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32455",
       "source_child_index": 97,
       "title": "曲线/删除控制点",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_implementation_under_verification",
+      "implementation": [
+        "core/curves/curve.rs",
+        "engine/src/lumaretouch_engine/ops/curves.py",
+        "engine/src/lumaretouch_engine/server.py",
+        "ui/src/components/CurveEditor.tsx"
+      ],
+      "verification": [
+        "b086144c: Qoder真实运行时定向回归78通过（含曲线像素、撤销、工程重开、16-bit梯度及相关守卫）；不是全部原生UI验收",
+        "Rust曲线数学7项通过；前端51项单测与类型检查/构建通过，不把它们等同实际拖动验收",
+        "https://github.com/Nelson-zhou/lumaretouch/actions/runs/39591157237"
+      ],
+      "remaining": "原生窗口节点操作、连续手势/中断/切图视觉验收尚缺；亮度/参数曲线/吸管/输入直方图未实现，不以RGB点曲线代替。",
+      "implementation_commit": "b086144c52daad9df24efe8fa91866eaad048ff3"
     },
     {
       "id": "control:PC-32455:99",
@@ -8944,9 +9047,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32455",
       "source_child_index": 98,
       "title": "曲线/移动控制点",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_implementation_under_verification",
+      "implementation": [
+        "core/curves/curve.rs",
+        "engine/src/lumaretouch_engine/ops/curves.py",
+        "engine/src/lumaretouch_engine/server.py",
+        "ui/src/components/CurveEditor.tsx"
+      ],
+      "verification": [
+        "b086144c: Qoder真实运行时定向回归78通过（含曲线像素、撤销、工程重开、16-bit梯度及相关守卫）；不是全部原生UI验收",
+        "Rust曲线数学7项通过；前端51项单测与类型检查/构建通过，不把它们等同实际拖动验收",
+        "https://github.com/Nelson-zhou/lumaretouch/actions/runs/39591157237"
+      ],
+      "remaining": "原生窗口节点操作、连续手势/中断/切图视觉验收尚缺；亮度/参数曲线/吸管/输入直方图未实现，不以RGB点曲线代替。",
+      "implementation_commit": "b086144c52daad9df24efe8fa91866eaad048ff3"
     },
     {
       "id": "control:PC-32455:100",

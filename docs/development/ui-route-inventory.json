@@ -1,7 +1,7 @@
 {
   "method": "静态提取RetouchPanel WIRED，仅证明该表列出路由。其它特殊UI分支未计入，未列出不直接判缺失，已列出也不算已完成。",
   "families": 39,
-  "wired_routes": 32,
+  "wired_routes": 39,
   "items": [
     {
       "id": "PC-47211",
@@ -202,6 +202,34 @@
       "title": "色彩调节",
       "subcontrol_records": 167,
       "wired_routes_in_retouch_panel": [
+        {
+          "path": "曲线/RGB",
+          "ui_route": "curves.control"
+        },
+        {
+          "path": "曲线/红",
+          "ui_route": "curves.control"
+        },
+        {
+          "path": "曲线/绿",
+          "ui_route": "curves.control"
+        },
+        {
+          "path": "曲线/蓝",
+          "ui_route": "curves.control"
+        },
+        {
+          "path": "曲线/添加控制点",
+          "ui_route": "curves.control"
+        },
+        {
+          "path": "曲线/删除控制点",
+          "ui_route": "curves.control"
+        },
+        {
+          "path": "曲线/移动控制点",
+          "ui_route": "curves.control"
+        },
         {
           "path": "影调/曝光",
           "ui_route": "exp.ev"
@@ -418,5 +446,8 @@
     "AI肤色统一映射到skin.broad频带参数不证明实现语义等价，须对照肤色目标和实图验收。",
     "水润磨皮映射到skin.radius不证明完整对应原手册体验。",
     "仿制图章与修补工具目前仍无独立采样实现，需求保留，不可用heal冒充。"
-  ]
+  ],
+  "unique_handler_names": 32,
+  "verified_source_commit": "8a443fd6d3a3eaaecda04f9b869840520958f9c4",
+  "count_warning": "39条显式路由含同一曲线编辑器的多个入口；32种handler名称也不是32个独立完成功能。特殊renderExtra/独立工作流未完整计入，禁止除以805生成完成率。"
 }
