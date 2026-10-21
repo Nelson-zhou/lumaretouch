@@ -70,3 +70,16 @@ wide. Brush and person-box editing require single view until their comparison co
 mapping is implemented, with an explicit hint rather than misdirected strokes. Category
 scroll positions and both expanded/collapsed states are retained. These are UI code changes,
 not a claim of a completed native visual review. Frontend suite now includes 42 tests.
+
+## Main-panel skin scope correction
+
+The main RetouchPanel (not just the legacy App handler) now explicitly uses the semantic
+skin channel. It requires an available, nonempty skin mask; absent analysis is not permission
+to blur the whole photograph. Single-person skin editing remains unwired and is explicitly
+blocked rather than applying an all-person mask under a single-person label.
+
+Each slider submits only its changed field. Rust set_strength accepts an omitted strength
+so a radius/detail edit does not write a stale strength or overwrite unrelated bands. The
+engine already preserves omitted values; a focused contract test pins that behavior. The
+frontend suite has 43 tests after adding main-panel scope/patch/availability coverage.
+Full-mask-outside pixel verification and actual GUI behavior remain separate pending tests.

@@ -1,3 +1,4 @@
+import { skinEditOptions, skinMaskReady, type SkinEdit } from "../skinScope";
 import { TOOL_GROUPS, toolGroupOf, type ToolGroup } from "../toolNavigation";
 /**
  * 右侧精修面板（Spec-Driven，1.12.0）。
@@ -340,6 +341,9 @@ function hexToRgb(hex: string): number[] {
 export default function RetouchPanel(props: RetouchProps) {
   const { doc, status } = props;
   const dim = !props.hasImage;
+  const skinReady = skinMaskReady(status?.precompute?.mask_channels, status?.precompute?.mask_nonzero_pixels);
+  const skinWhy = props.faceScope !== "all" ? "单人物磨皮尚未接通，请选择所有人"
+    : skinReady ? "" : "尚无有效皮肤掩膜，请先完成人像分析";
   const params = doc?.params ?? {};
   const amounts = doc?.deform.amounts ?? {};
   const enhAmounts = doc?.enhance?.amounts ?? {};
@@ -371,18 +375,10 @@ export default function RetouchPanel(props: RetouchProps) {
     [],
   );
 
-  const commitSkin = (patch: {
-    strength?: number; detail?: number; broad?: number; radius?: number;
-  }) => {
-    if (!doc) return;
-    ok(setStrength(patch.strength ?? doc.strength, {
-      channel: doc.channel ?? undefined,
-      interactionKey: Object.keys(patch).sort().join(","),
-      radius: patch.radius ?? params.radius,
-      detailGain: patch.detail ?? params.detail_gain,
-      midGain: params.mid_gain,
-      broadGain: patch.broad ?? params.broad_gain,
-    }), props);
+  const commitSkin = (patch: SkinEdit) => {
+    if (!doc || dim) return;
+    if (skinWhy) { props.note(skinWhy); return; }
+    ok(setStrength(patch.strength, skinEditOptions(patch)), props);
   };
 
   const commitDeform = (patch: Record<string, number>) => {
@@ -439,28 +435,28 @@ export default function RetouchPanel(props: RetouchProps) {
         return (
           <Slider key={leaf.path} label={label}
             value={Math.round((doc?.strength ?? 0) * 100)} min={0} max={100}
-            disabled={dim} onChange={(v) => commitSkin({ strength: v / 100 })}
+            disabled={dim || !!skinWhy} title={skinWhy || undefined} onChange={(v) => commitSkin({ strength: v / 100 })}
             onReset={() => commitSkin({ strength: 0 })} />
         );
       case "skin.detail":
         return (
           <Slider key={leaf.path} label={label}
             value={Math.round(((params.detail_gain ?? 0) / 2) * 100)} min={0} max={100}
-            disabled={dim} onChange={(v) => commitSkin({ detail: (v / 100) * 2 })}
+            disabled={dim || !!skinWhy} title={skinWhy || undefined} onChange={(v) => commitSkin({ detail: (v / 100) * 2 })}
             onReset={() => commitSkin({ detail: 0 })} />
         );
       case "skin.broad":
         return (
           <Slider key={leaf.path} label={label}
             value={Math.round(((params.broad_gain ?? 0) / 2) * 100)} min={0} max={100}
-            disabled={dim} onChange={(v) => commitSkin({ broad: (v / 100) * 2 })}
+            disabled={dim || !!skinWhy} title={skinWhy || undefined} onChange={(v) => commitSkin({ broad: (v / 100) * 2 })}
             onReset={() => commitSkin({ broad: 0 })} />
         );
       case "skin.radius":
         return (
           <Slider key={leaf.path} label={label}
             value={Math.round(params.radius ?? 12)} min={2} max={24}
-            disabled={dim} onChange={(v) => commitSkin({ radius: v })}
+            disabled={dim || !!skinWhy} title={skinWhy || undefined} onChange={(v) => commitSkin({ radius: v })}
             onReset={() => commitSkin({ radius: 12 })} />
         );
       case "deform.slim_face":
@@ -877,6 +873,7 @@ export default function RetouchPanel(props: RetouchProps) {
               <span>{title}</span>
             </summary>
             <div className="pgBody">
+              {f.id === "PC-32465" && skinWhy && <div className="specEmpty" role="status">{skinWhy}</div>}
               {custom}
               {tree.length > 0 && (
                 <SpecNodes nodes={tree}

@@ -852,7 +852,7 @@ fn load_image(
 #[tauri::command]
 fn set_strength(
     state: State<'_, Arc<AppState>>,
-    value: f64,
+    value: Option<f64>,
     channel: Option<String>,
     radius: Option<u64>,
     eps: Option<f64>,
@@ -862,7 +862,8 @@ fn set_strength(
     texture_radius: Option<u64>,
     interaction_key: Option<String>,
 ) -> Result<Value, String> {
-    let mut cmd = json!({"cmd": "set_strength", "value": value});
+    let mut cmd = json!({"cmd": "set_strength"});
+    if let Some(v)=value {cmd["value"]=json!(v);}
     if let Some(c) = channel.filter(|s| !s.is_empty()) {
         cmd["channel"] = json!(c);
     }

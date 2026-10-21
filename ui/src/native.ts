@@ -1121,11 +1121,11 @@ export const setCompare = (on: boolean, captureId?: string) => invoke<{ on: bool
 export const compareStatus = () => invoke<{ capture_id: string | null; doc: string; seq: number; view: string } | null>("compare_status");
 
 export const setStrength = (
-  value: number,
+  value: number | undefined,
   opts?: { channel?: string; radius?: number; eps?: number; detailGain?: number;
            midGain?: number; broadGain?: number; textureRadius?: number; interactionKey?: string },
 ) =>
-  invoke<{ value: number }>("set_strength", {
+  invoke<{ value: number | null }>("set_strength", {
     value,
     channel: opts?.channel,
     radius: opts?.radius,
