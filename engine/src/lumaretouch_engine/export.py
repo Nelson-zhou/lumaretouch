@@ -1362,6 +1362,43 @@ def export_master_16bit(path: str, out_path: str, *, device: str | None = None,
             "pipeline": "passthrough_rgb16", "notes": list(d.notes)}
 
 
+def render_edited_rgb16(decoded, spec: ExportSpec, *, device: str = "cpu",
+                        tile: int = DEFAULT_TILE, crop_rect=(0.0, 0.0, 1.0, 1.0),
+                        rotation_degrees: float = 0.0, output_profile: str = "srgb",
+                        progress=None):
+    """Shared high-precision render/ICC path. Returns pixels, ICC and facts; no file IO."""
+    if decoded.rgb.dtype != np.uint16 or (decoded.raw or {}).get("used_preview"):
+        raise ExportError("16-bit 编辑需要真实 uint16 源，不接受8-bit显示代理")
+    from .color16 import convert_rgb16
+    working_icc = _srgb_bytes()
+    target_icc = _profile_bytes(output_profile, decoded.source_icc)
+    t_color = time.perf_counter()
+    source = decoded.rgb
+    input_converted = False
+    if decoded.source_icc:
+        source = convert_rgb16(source, decoded.source_icc, working_icc)
+        input_converted = decoded.source_icc != working_icc
+    input_color_ms = (time.perf_counter() - t_color) * 1000
+    frame, render_stats = export_image16(source, spec, device=device, tile=tile,
+                                         crop_rect=crop_rect, rotation_degrees=rotation_degrees, progress=progress)
+    t_color = time.perf_counter()
+    output_converted = bool(target_icc and target_icc != working_icc)
+    if output_converted:
+        frame = convert_rgb16(frame, working_icc, target_icc)
+    color_ms = input_color_ms + (time.perf_counter() - t_color) * 1000
+    return frame, target_icc, { "src_w": decoded.src_w, "src_h": decoded.src_h,
+            "src_format": decoded.fmt, "source": (decoded.raw or {}).get("source"),
+            "bits": 16, "icc_source": str(output_profile),
+            "color_converted": input_converted or output_converted,
+            "color_conversion_ms": round(color_ms, 2),
+            "render_stats": render_stats, "pipeline": "float32_rgb16",
+            "working_color_space": "sRGB", "decoded_bits": 16,
+            # LibRaw output_bps describes the developed RGB, not the sensor file bit depth.
+            "source_bits": (int(decoded.src_bits)
+                            if (decoded.raw or {}).get("source") in (None, "tiff16") else None),
+            "notes": list(decoded.notes) + ["真实RGB16源经float32或更高精度编辑；显示uint8缓冲不作为导出输入"]}
+
+
 def export_edited_16bit(decoded, spec: ExportSpec, out_path: str, *,
                          device: str = "cpu", tile: int = DEFAULT_TILE,
                          crop_rect=(0.0, 0.0, 1.0, 1.0), rotation_degrees: float = 0.0,
@@ -1378,38 +1415,12 @@ def export_edited_16bit(decoded, spec: ExportSpec, out_path: str, *,
     if not math.isfinite(decode_ms) or decode_ms < 0:
         raise ExportError("decode_ms 必须是有限非负数")
     t0 = time.perf_counter()
-    if decoded.rgb.dtype != np.uint16 or (decoded.raw or {}).get("used_preview"):
-        raise ExportError("16-bit 编辑需要真实 uint16 源，不接受8-bit显示代理")
-    from .color16 import convert_rgb16
-    working_icc = _srgb_bytes()
-    target_icc = _profile_bytes(output_profile, decoded.source_icc)
-    t_color = time.perf_counter()
-    source = decoded.rgb
-    input_converted = False
-    if decoded.source_icc:
-        source = convert_rgb16(source, decoded.source_icc, working_icc)
-        input_converted = decoded.source_icc != working_icc
-    input_color_ms = (time.perf_counter() - t_color) * 1000
-    frame, render_stats = export_image16(source, spec, device=device, tile=tile,
-                                         crop_rect=crop_rect, rotation_degrees=rotation_degrees)
-    t_color = time.perf_counter()
-    output_converted = bool(target_icc and target_icc != working_icc)
-    if output_converted:
-        frame = convert_rgb16(frame, working_icc, target_icc)
-    color_ms = input_color_ms + (time.perf_counter() - t_color) * 1000
+    frame, target_icc, facts = render_edited_rgb16(
+        decoded, spec, device=device, tile=tile, crop_rect=crop_rect,
+        rotation_degrees=rotation_degrees, output_profile=output_profile)
     info = _write_verified_rgb16(frame, out_path, target_icc=target_icc,
                                  conflict_policy=conflict_policy,
                                  metadata_include_gps=metadata_include_gps,
                                  tiff_compression=tiff_compression)
-    return {**info, "src_w": decoded.src_w, "src_h": decoded.src_h,
-            "src_format": decoded.fmt, "source": (decoded.raw or {}).get("source"),
-            "bits": 16, "icc_source": str(output_profile),
-            "color_converted": input_converted or output_converted,
-            "color_conversion_ms": round(color_ms, 2), "decode_ms": decode_ms,
-            "render_stats": render_stats, "pipeline": "float32_rgb16",
-            "working_color_space": "sRGB", "decoded_bits": 16,
-            # LibRaw output_bps describes the developed RGB, not the sensor file bit depth.
-            "source_bits": (int(decoded.src_bits)
-                            if (decoded.raw or {}).get("source") in (None, "tiff16") else None),
-            "total_ms": round(decode_ms + (time.perf_counter() - t0) * 1000, 2),
-            "notes": list(decoded.notes) + ["真实RGB16源经float32或更高精度编辑；显示uint8缓冲不作为导出输入"]}
+    return {**info, **facts, "decode_ms": decode_ms,
+            "total_ms": round(decode_ms + (time.perf_counter() - t0) * 1000, 2)}

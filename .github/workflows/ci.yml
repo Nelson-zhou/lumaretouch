@@ -60,6 +60,9 @@ jobs:
       - name: Rust latest-value queue invariants
         working-directory: ui/src-tauri
         run: rustc --test src/edit_queue.rs -o "$RUNNER_TEMP/lrt-edit-queue" && "$RUNNER_TEMP/lrt-edit-queue"
+      - name: Rust full-source inspection admission contracts
+        working-directory: ui/src-tauri
+        run: rustc --edition=2021 --test src/refinement.rs -o "$RUNNER_TEMP/lrt-refinement" && "$RUNNER_TEMP/lrt-refinement"
       - name: Rust point-curve compiler contracts
         run: |
           rustc --edition=2021 --test core/curves/curve.rs -o "$RUNNER_TEMP/lrt-curves-test"
