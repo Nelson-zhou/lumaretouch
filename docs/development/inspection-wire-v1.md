@@ -42,8 +42,8 @@ come from the shared full-quality renderer and its missing-layer guards.
 
 The same literal `core/inspection/packet-v1.hex` is consumed by Rust and Python tests.
 It includes request id 9007199254740993, intentionally above JavaScript's safe
-integer limit. Future JS consumers MUST read u64 via `getBigUint64`, then use BigInt
-or decimal strings for identities and ack/release. Never round through Number or
+integer limit. The standalone `inspectionFrame.ts` parser reads u64 via `getBigUint64`, then uses BigInt
+or decimal strings for identities and a JSON round-trip test. Actual Viewer/ack/release wiring remains pending. Never round through Number or
 serialize BigInt directly with JSON.stringify. u32 dimensions still need actual
 canvas/texture device limits before allocation; u32 representability is not a
 promise that a browser can display that size.
@@ -54,3 +54,8 @@ copy; no truncate while a reader holds the buffer; leases covering SHM + Rust +
 IPC + JS + texture copies; release after the final consumer; cancellation and
 engine-disconnect cleanup. Re-reading an unchanged header is not a substitute
 for a lock and does not prevent concurrent pixel overwrite.
+
+The JS parser rejects SharedArrayBuffer and resizable ArrayBuffer. Its pixels are
+borrowed from the fixed input buffer, not immutable: the caller must not retain
+a writing alias or transfer/detach the buffer during display. Publishing and ack
+still need the session/desired-generation and ownership lifecycle checks.
