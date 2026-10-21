@@ -6002,6 +6002,8 @@ class Engine:
         # 待重挂的那一层也是用户的配方（CORE-001）：不能因为 `built=False` 就静默不导出。
         # 出片走的是另一条求值路径（满幅/分块自己从关键点重解场），所以它只需要关键点，
         # 不需要会话里那个单位场。
+        if amounts and not (deform.get("built") or snap.get("deform_defer")):
+            skipped.append("deform（配方非零但图层未构建且未标记可重建；不能报为完整应用）")
         if amounts and (deform.get("built") or snap.get("deform_defer")):
             if pc is None:
                 # 关键点不在就没有场：宁可少一层形变也不能拿上一张脸的场来凑
@@ -6015,6 +6017,8 @@ class Engine:
         en = snap.get("enhance") or {}
         enh_amounts = {k: float(v) for k, v in (en.get("amounts") or {}).items()
                        if float(v) != 0.0}
+        if enh_amounts and not (en.get("built") or snap.get("enhance_defer")):
+            skipped.append("enhance（配方非零但图层未构建且未标记可重建；不能报为完整应用）")
         if enh_amounts and (en.get("built") or snap.get("enhance_defer")):
             if pc is None:
                 skipped.append("enhance（没有可用的关键点，掩膜画不出来）")
