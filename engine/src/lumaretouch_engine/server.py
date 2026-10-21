@@ -5270,6 +5270,18 @@ class Engine:
 
     def cmd_levels(self, p: dict): return self._levels_controller().handle_command(p)
 
+    def cmd_color_scopes(self, p: dict):
+        from .color_scopes_controller import ScopePorts, handle_scopes
+        from .color_scopes_sampling import sample_stage
+        from .color_scopes_bridge import analyze
+        owner=self._inspection_controller()
+        busy=lambda: (self._guard_editable("color scopes") or
+            ("Full-resolution inspection owns resources; release it before sampling" if
+             owner.tx is not None or owner.result is not None or owner.job is not None else None))
+        handle_scopes(p,ScopePorts(lambda:self._load_id,busy,
+            lambda stage:sample_stage(self._vram,stage,*self._retouch_render_args(),params=self._params),analyze),emit)
+
+
     def cmd_curves(self, p: dict):
         success = False
         try:
@@ -6818,7 +6830,7 @@ class Engine:
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("hello", "inspection_snapshot", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("hello", "inspection_snapshot", "color_scopes", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "light",
                "deform", "lut", "grade", "export", "exposure", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -6858,7 +6870,7 @@ class Engine:
                 return
             # The executor cancels before any other known command can mutate
             # source arrays/recipes, including history, load, export and shutdown.
-            if name not in ("hello", "inspection_snapshot"):
+            if name not in ("hello", "inspection_snapshot", "color_scopes"):
                 self._cancel_snapshot("command:" + name)
                 heavy = name in ("export", "bench_start") or (name == "task" and msg.get("action") in ("resume", "retry"))
                 if heavy and self._inspection_controller().worker_running:

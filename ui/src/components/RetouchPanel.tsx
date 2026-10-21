@@ -1,3 +1,4 @@
+import {HistogramPanel} from "./HistogramPanel";
 import {LevelsEditor} from "./LevelsEditor";
 import { CurveEditor } from "./CurveEditor";
 import { skinEditOptions, skinMaskReady, type SkinEdit } from "../skinScope";
@@ -193,6 +194,7 @@ function FaceAvatar({ face, thumb, all }: {
  * 面板不提前放行。
  */
 const WIRED: Record<string, string> = {
+  "PC-32455|直方图": "histogram.control",
   "PC-32455|色阶/输入黑场": "levels.control",
   "PC-32455|色阶/输入灰场": "levels.control",
   "PC-32455|色阶/输入白场": "levels.control",
@@ -455,6 +457,7 @@ export default function RetouchPanel(props: RetouchProps) {
       );
     }
     switch (kind) {
+      case "histogram.control": return null;
       case "levels.control": return null;
       case "curves.control": return null; // implemented together in CurveEditor
       case "skin.strength":
@@ -623,6 +626,9 @@ export default function RetouchPanel(props: RetouchProps) {
   /** 规格树里需要额外画一块的节点：目前只有 HSL 的八色色段选择器。
    *  三格滑杆仍是规格里的叶子（HSL/色相…），这里只决定“改哪一段”。 */
   const renderExtra = (node: SpecNode, featureId?:string): React.ReactNode => {
+    if(featureId==="PC-32455"&&node.full==="直方图")return <HistogramPanel
+      key={status?.image?.load_id??"empty"} documentId={status?.image?.load_id??""} snapshotId={doc?.document_id}
+      revision={status?.doc_rev??-1} result={status?.color_scopes} disabled={!props.hasImage} onDone={props.onDone}/>;
     if (featureId === "PC-32455" && node.full === "色阶") return <LevelsEditor
       key={status?.image?.load_id??"empty"} value={doc?.levels} documentId={status?.image?.load_id??""}
       snapshotId={doc?.document_id} documentRevision={status?.doc_rev??-1}

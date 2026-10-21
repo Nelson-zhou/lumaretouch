@@ -443,7 +443,7 @@ class PreviewPipeline:
                 mid_gain: float = DEFAULT_MID_GAIN,
                 broad_gain: float = DEFAULT_BROAD_GAIN,
                 texture_radius: int = DEFAULT_TEXTURE_RADIUS,
-                channel: str | None = None):
+                channel: str | None = None, scope_tap=None):
         """只跑算法，返回显存里的 float (1,3,H,W)。滑块每动一次调一次。
 
         channel 给定时走分通道渲染（掩膜加权），不给定时全图。两条都是纯 GPU。
@@ -493,9 +493,14 @@ class PreviewPipeline:
         # 输出变换之前做=局部修容层在调整图层下面，是工业流程而不是随手选）。
         # 八色 HSL 紧跟曝光层之后、LUT 之前：它读的是曝光后的那份颜色，而表是
         # 输出变换（把 HSL 放在表后面就是“调完再套一层风格”，两份调整互相污染）。
-        return self.apply_geometry(self.apply_background(self.apply_grade(self.apply_lut(
-            self.apply_hsl(self.apply_curves(self.apply_levels(self.apply_exposure(
-                self.apply_enhance(self.apply_deform(out))))))))))
+        out = self.apply_exposure(self.apply_enhance(self.apply_deform(out)))
+        if scope_tap is not None: scope_tap("levels-input", out)
+        out = self.apply_levels(out)
+        if scope_tap is not None: scope_tap("curves-input", out)
+        out = self.apply_geometry(self.apply_background(self.apply_grade(self.apply_lut(
+            self.apply_hsl(self.apply_curves(out))))))
+        if scope_tap is not None: scope_tap("output", out)
+        return out
 
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:

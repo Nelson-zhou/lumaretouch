@@ -37,6 +37,8 @@ legacy curve callers without document ID remain backward compatible.
 
 Validation files cover scalar Rust, NumPy/Torch parity, old-project defaults,
 project/preset/batch/history, RGB8/RGB16 export, actual inspection worker, failed
-switches and receipt ordering. Tests are written, not yet executed for this candidate.
+switches and receipt ordering. Basic CI and Qoder checks passed for the corrected candidate; see
+`docs/development/levels-verification-2026-10-21.md` for exact commits, counts,
+retained failures and skips.
 Histogram, eyedroppers, parametric curves and real-machine performance/visual
 acceptance remain separate unfinished work; no placeholder is counted as complete.

@@ -164,6 +164,10 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             receipt["host_doc_rev"]=json!(*state.doc_rev.lock().unwrap());
             *state.curve_result.lock().unwrap() = Some(receipt);
         }
+        "color_scopes" => {
+            let revision=*state.doc_rev.lock().unwrap();
+            state.color_scopes.lock().unwrap().complete(&v,revision);
+        }
         "levels_result" => {
             let mut receipt=v.clone();
             receipt["host_doc_rev"]=json!(*state.doc_rev.lock().unwrap());

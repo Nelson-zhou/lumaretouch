@@ -33,7 +33,7 @@ jobs:
           echo "LRT_LIBRAW_PATH=$prefix/lib/libraw_r.so" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
       - name: Build headless Rust curve compiler
-        run: bash packaging/build-curve-compiler.sh
+        run: bash packaging/build-curve-compiler.sh && bash packaging/build-color-scopes.sh
       - name: 单测
         working-directory: engine
         run: uv run --group dev pytest -q
@@ -73,11 +73,13 @@ jobs:
           rustc --edition=2021 core/curves/main.rs -o "$RUNNER_TEMP/lrt-curve-compiler"
           printf '3 0 0 0.5 1 1 1\n' | "$RUNNER_TEMP/lrt-curve-compiler" > "$RUNNER_TEMP/lrt-curves.json"
           python3 -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/lrt-curves.json")); assert d["version"]==1 and not d["identity"] and len(d["segments"])==2'
+      - name: Rust colour scopes contract
+        run: rustc --edition=2021 --test core/color_scopes/main.rs -o /tmp/lrt-scopes-tests && /tmp/lrt-scopes-tests
       - name: Rust levels contract
         run: rustc --edition=2021 --test core/levels/levels.rs -o /tmp/lrt-levels-tests && /tmp/lrt-levels-tests
       - name: cargo check
         working-directory: ui/src-tauri
-        run: cargo check && cargo test --bin lumaretouch dispatch::tests && cargo test --bin lumaretouch inspection && cargo test --bin lumaretouch edit_commands::tests && cargo test --bin lumaretouch levels_api::tests
+        run: cargo check && cargo test --bin lumaretouch dispatch::tests && cargo test --bin lumaretouch inspection && cargo test --bin lumaretouch edit_commands::tests && cargo test --bin lumaretouch levels_api::tests && cargo test --bin lumaretouch color_scopes_host::tests
 
   # GPU 门禁：需要 self-hosted runner。用仓库 variable 开关，没 runner 时根本不该排队
   # （之前写 `if: github.repository != ''` 永远为真，结不上标签只会无限 waiting）。

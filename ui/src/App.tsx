@@ -1713,6 +1713,7 @@ export default function App() {
       {workspace === "retouch" && (
         <aside className="side" onInputCapture={(event)=>{
                 const target=event.target;
+                if(target instanceof Element && target.closest('[data-readonly-scopes]'))return;
                 if(target instanceof HTMLSelectElement || (target instanceof HTMLInputElement
                   && ['range','number','color','checkbox'].includes(target.type)))notifyInspectionEditIntent();
               }}>

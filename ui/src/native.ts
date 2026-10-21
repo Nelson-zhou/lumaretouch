@@ -1,3 +1,4 @@
+import type {ScopeResult,ScopeStage} from "./colorScopesModel";
 /** 与 Rust 命令的唯一出入口。所有跨语言类型集中在这里，避免各组件各自猜字段。 */
 import type {LevelsSpec} from "./levelsModel";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
@@ -106,6 +107,8 @@ export const neutralCurves = (): CurveSpec => ({version:1,space:"srgb-display",i
   master:[[0,0],[1,1]],red:[[0,0],[1,1]],green:[[0,0],[1,1]],blue:[[0,0],[1,1]]});
 export const runCurves = (action:"set"|"clear", spec?:CurveSpec, gestureId?:string, interactive=false, requestId?:string, documentId?:string) =>
   invoke<{requested:boolean}>("curves",{action,spec,gestureId,interactive,requestId,documentId});
+export const requestColorScopes=(documentId:string,requestId:string,stage:ScopeStage)=>
+  invoke<{requested:boolean}>("color_scopes",{documentId,requestId,stage});
 export const previewCurves = (spec:CurveSpec) => invoke<Partial<Record<CurveChannel,number[]>>>("curve_preview",{spec});
 
 export interface DocState {
@@ -850,6 +853,7 @@ export interface EngineStatus {
   /** 引擎最近一条 error（M9）：load_image 发出去就返回，失败只走 error 事件。
    *  不接住它，坏路径就是一次彻底的静默失败。 */
   last_error: string | null;
+  color_scopes?: ScopeResult|null;
   curve_result?: {request_id:string;document_id:string;host_doc_rev:number;success:boolean;spec:CurveSpec}|null;
   levels_result?: {request_id:string;document_id:string;host_doc_rev:number;success:boolean;spec:LevelsSpec;error:string|null}|null;
   /** 引擎在 ready 里自报的抠图后端清单（birefnet.py 的 matting_backends）。null =

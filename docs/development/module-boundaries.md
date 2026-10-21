@@ -99,4 +99,17 @@ prevent separately sampled image/report fields from authorizing cross-photo edit
 Legacy curve callers remain supported without a document token; the new UI always
 supplies one. This is not a claim that all older editing commands are token-fenced.
 
-Candidate validation is pending Qoder/CI; deep GUI/performance remains deferred.
+Basic Qoder/CI validation passed for the corrected candidate; exact evidence is
+in levels-verification-2026-10-21.md. Deep GUI/performance remains deferred.
+
+## Colour scopes boundary review (candidate)
+
+Rust owns histogram/color mathematics and bounded protocol. Dedicated Python
+sampling/controller/bridge modules own only stage extraction, request policy and
+transport. Native ScopeHost owns request tickets/results; HistogramPanel owns UI
+state. No Engine/App object is passed into the new controller. Optional stateless
+pipeline taps preserve stage order and do not retain full tensors.
+Native-main cap is reviewed 2030→2040 for module/state/IPC wiring only. Scope
+requests use a separate read-only queue path and must not invalidate inspection.
+Explicit refresh avoids adding another render to every slider/status event; live
+cached capture, eyedroppers and full-source analysis remain unfinished scope.

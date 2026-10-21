@@ -11,6 +11,8 @@ mod edit_commands;
 #[path = "../../../core/levels/levels.rs"]
 mod levels_core;
 mod levels_api;
+mod color_scopes_api;
+mod color_scopes_host;
 mod engine;
 mod edit_queue;
 mod dispatch;
@@ -172,6 +174,7 @@ pub struct AppState {
     last_error: Mutex<Option<String>>,
     curve_result: Mutex<Option<Value>>,
     levels_result: Mutex<Option<Value>>,
+    color_scopes: Mutex<color_scopes_host::ScopeHost>,
     /// 最近一条 session_state（M5 底片条）：格子列表、当前索引、有没有缩略图。
     /// 这一份里**不带 base64**——控制通道那条“像素不进 JSON”的规矩只在缩略图上开了
     /// 一个一次性的例外，宿主不该把它长期握在轮询载荷里。
@@ -274,6 +277,7 @@ impl AppState {
             last_error: Mutex::new(None),
             curve_result: Mutex::new(None),
             levels_result: Mutex::new(None),
+            color_scopes: Mutex::new(color_scopes_host::ScopeHost::default()),
             session: Mutex::new(None),
             thumbs: Mutex::new(std::collections::HashMap::new()),
             session_rev: Mutex::new(0),
@@ -591,6 +595,7 @@ impl AppState {
     }
 
     fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
+        self.color_scopes.lock().map_err(|_|"scope lock poisoned")?.invalidate();
         let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
         inspection.invalidate();
         let guard=self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
@@ -603,6 +608,7 @@ impl AppState {
         // M5-b：命令名先取出来（cmd 下面会被 send 吃掉）。它只用来标"可能有新的一步"，
         // 宿主不数步数、不自己判哪条命令算编辑——名单由引擎的 ready 报
         let name = cmd.get("cmd").and_then(|c| c.as_str()).unwrap_or("").to_string();
+        if name!="hello" && name!="inspection_snapshot" {self.color_scopes.lock().map_err(|_|"scope lock poisoned")?.invalidate();}
         let edited = self.history_edit_cmds.lock().unwrap().iter().any(|c| c == &name);
         let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
         if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
@@ -732,6 +738,7 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     let pid = h.pid();
     // 新引擎进程 = 空的会话。不清掉上一张图的就绪标记，自动流程会拿陈图的 w/h
     // 去驱一个 _vram=None 的新引擎（量出来就是“没跑但正常”）。
+    st.color_scopes.lock().unwrap().invalidate();
     *st.image.lock().unwrap() = None;
     *st.precompute.lock().unwrap() = None;
     *st.face.lock().unwrap() = None;        // 新进程没分析过任何图，名单是空的
@@ -1565,6 +1572,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "last_error": last_error,
            "curve_result": state.curve_result.lock().unwrap().clone(),
            "levels_result": state.levels_result.lock().unwrap().clone(),
+           "color_scopes": state.color_scopes.lock().unwrap().snapshot(),
            // 底片条的“有没有、几张、当前哪一格”进轮询（小），像素本体不进：
            // 那两百张要由 filmstrip 单独取，且只在 session_rev 变了的时候取
            "session": session, "session_rev": session_rev,
@@ -1598,6 +1606,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
 #[tauri::command]
 fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     state.inspection.lock().unwrap().invalidate();
+    state.color_scopes.lock().unwrap().invalidate();
     let h = state.engine.lock().unwrap().clone();
     // 引擎停了，它报过的 image_ready / precompute_ready 也随之作废；留着会让下一次
     // 自动流程拿陈尺寸与陈掩膜状态起跑
@@ -2017,7 +2026,7 @@ fn main() {
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, compare_status, precompute,
             inpaint, light, deform, lut, grade, enhance, background, export, session, filmstrip, history,
-            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, edit_commands::crop, levels_api::levels, preset, batch, face, pick,
+            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, edit_commands::crop, levels_api::levels, color_scopes_api::color_scopes, preset, batch, face, pick,
             report, quit
         ])
         .run(tauri::generate_context!())
