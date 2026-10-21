@@ -46,7 +46,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: npm ci + tsc
         working-directory: ui
-        run: npm ci --no-audit --no-fund && npm test && npm run build
+        run: npm ci --no-audit --no-fund && npx tsc --noEmit && npm test && npm run build
       # P2-5：cargo check 之前必须先暂存引擎。tauri.conf.json 的 bundle.resources 指向
       # gen/engine-stage/*，而 tauri_build::build() 在 check 阶段就校验这些源目录存在——
       # 干净 checkout 里没有它们，cargo check 直接红（历史口径就是“Rust 检查在准备 staging
