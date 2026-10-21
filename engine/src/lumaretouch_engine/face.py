@@ -23,6 +23,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import time
+import weakref
 from dataclasses import dataclass, field, replace
 
 import numpy as np
@@ -41,7 +42,8 @@ MODEL_DIR_ENV = "LRT_MODEL_DIR"
 DEFAULT_MODEL_DIR = os.path.expanduser("~/.cache/lumaretouch/models")
 BUNDLED_MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 FACE_LANDMARKER_MODEL = "face_landmarker.task"
-SELFIE_SEGMENTER_MODEL = "selfie_segmenter.tflite"
+SELFIE_SEGMENTER_MODEL = "selfie_segmenter.tflite"  # legacy person-only asset, never skin
+SELFIE_MULTICLASS_MODEL = "selfie_multiclass_256x256.tflite"
 
 
 def model_search_dirs(model_dir: str | None) -> list[str]:
@@ -142,7 +144,7 @@ class FacePrecompute:
     def select_face(self, index: int) -> "FacePrecompute":
         """换一张脸：返回一个新视图（同一个 masks、同一个 all_landmarks）。
 
-        掩膜不重算也不该重算：selfie 分割给的是“人”这一整块，与选哪张脸无关；
+        掩膜不重算：当前皮肤语义场覆盖全图所有人物，与面部几何选哪张脸无关；
         而选错的 index 必须响——静默钳到 0 就是拿“你选了 5”去服务 0 号，而画面
         确实只动了 0 号那一张，人看不出来。
         """
@@ -173,6 +175,7 @@ class FacePrecompute:
             "num_landmarks": int(self.landmarks.shape[0]),
             "landmark_shape": list(self.landmarks.shape),
             "mask_channels": names,
+            "mask_nonzero_pixels": {n: int(np.count_nonzero(self.masks[n])) for n in names},
             "mask_shape": [int(arr.shape[0]), int(arr.shape[1]), int(arr.shape[2])],
             "mask_bytes_f32": int(arr.nbytes),
             "detect_ms": round(self.t_detect_ms, 2),
@@ -333,8 +336,16 @@ def _fit_template(lm: np.ndarray, box: tuple[float, float, float, float]) -> np.
     return np.ascontiguousarray(np.clip(out, 0.0, 1.0), dtype=np.float32)
 
 
+def _close_mediapipe_graphs(graphs):
+    """Close both native handles while their dispatchers are still alive."""
+    try:
+        graphs[0].close()
+    finally:
+        graphs[1].close()
+
+
 class MediaPipeFace:
-    """真实后端：MediaPipe Face Landmarker（478 点）+ Selfie Segmenter（person 掩膜）。
+    """真实后端：MediaPipe Face Landmarker（478 点）+ SelfieMulticlass（皮肤语义掩膜）。
 
     依赖 `mediapipe` 与两个官方模型文件。任何一个缺失都抛 MissingBackend 并说清缺什么，
     因为"装了但没跑起来"和"没装"在报表上必须长得一样明显——悄悄换后端是本节最贵的错误。
@@ -356,7 +367,7 @@ class MediaPipeFace:
         # 写进 notes——“到底用了哪份权重”在精度回归里是可审计事实，不能是个谜。
         search = model_search_dirs(model_dir)
         resolved: dict[str, str] = {}
-        for name in (FACE_LANDMARKER_MODEL, SELFIE_SEGMENTER_MODEL):
+        for name in (FACE_LANDMARKER_MODEL, SELFIE_MULTICLASS_MODEL):
             hit = next((os.path.join(d, name) for d in search if os.path.isfile(os.path.join(d, name))), None)
             if hit is None:
                 raise MissingBackend(
@@ -367,8 +378,30 @@ class MediaPipeFace:
         # 真正建图推迟到首次调用：构造一次 MediaPipe 图就要初始化其 native 运行时，
         # 放在这里会让「只查询后端可用性」也付出几百毫秒
         self._graphs = None
+        self._finalizer = None
+        self._closed = False
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            if self._finalizer is not None:
+                self._finalizer()
+        finally:
+            self._graphs = None
+
+    def __enter__(self):
+        if self._closed:
+            raise RuntimeError("MediaPipe backend is closed")
+        return self
+
+    def __exit__(self, *_):
+        self.close()
 
     def _ensure(self):
+        if self._closed:
+            raise RuntimeError("MediaPipe backend is closed")
         # 【 API 名字必须照 1.1.1 的真实签名写，不能照旧文档的记忆 】这一段在 mediapipe
         # 还是“可选插件、从不安装”的年代写下并从未执行过，字段名与类名都是错的，错了两处：
         #   • FaceLandmarkerOptions 的字段是 num_faces，不存在 num_face_landmarks；
@@ -380,20 +413,27 @@ class MediaPipeFace:
             from mediapipe.tasks.python import vision as mp_vision
 
             lm_path = self.model_paths[FACE_LANDMARKER_MODEL]
-            sg_path = self.model_paths[SELFIE_SEGMENTER_MODEL]
+            sg_path = self.model_paths[SELFIE_MULTICLASS_MODEL]
             landmarker = mp_vision.FaceLandmarker.create_from_options(
                 mp_vision.FaceLandmarkerOptions(
                     base_options=mp_python.BaseOptions(model_asset_path=lm_path),
                     num_faces=SCOPE_MAX_FACES,
                     output_face_blendshapes=False,
                     output_facial_transformation_matrixes=False))
-            # confidence_masks 而不是 category_mask：selfie 模型是二类（0=背景、1=人），
-            # 软掩膜要的是连续置信度，硬类别会把边缘量化成一刀切的锯齿。
-            segmenter = mp_vision.ImageSegmenter.create_from_options(
-                mp_vision.ImageSegmenterOptions(
-                    base_options=mp_python.BaseOptions(model_asset_path=sg_path),
-                    output_confidence_masks=True, output_category_mask=False))
+            # Six semantic confidence masks preserve soft boundaries. The old two-class
+            # person model is not an acceptable skin-segmentation fallback.
+            try:
+                segmenter = mp_vision.ImageSegmenter.create_from_options(
+                    mp_vision.ImageSegmenterOptions(
+                        base_options=mp_python.BaseOptions(model_asset_path=sg_path),
+                        output_confidence_masks=True, output_category_mask=False))
+            except BaseException:
+                landmarker.close()
+                raise
             self._graphs = (landmarker, segmenter)
+            # No reference to self in the callback arguments: normal collection
+            # closes promptly, and live objects close before module teardown.
+            self._finalizer = weakref.finalize(self, _close_mediapipe_graphs, self._graphs)
         return self._graphs
 
     def __call__(self, rgb: np.ndarray) -> FacePrecompute:
@@ -431,24 +471,15 @@ class MediaPipeFace:
         if not cm:
             raise RuntimeError("MediaPipe 分割没返回置信度掩膜（旧代码读的是 seg.mask，这个属性在 "
                                "ImageSegmenter 上不存在，静默拿到空值会被当成“检不到”而跳层）")
-        # 通道 1 = 人。旧代码取 [0] —— 那是**背景**，拿它当 skin 用是方向反了的错；
-        # 只有单通道时才退回 [0]（并记下退的是哪一条）。
-        person = cm[1] if len(cm) > 1 else cm[0]
-        # numpy_view 在 1.1.1 是**方法**，旧版是 property。写成两种都吃得下而不是硬切，
-        # 因为依赖只在出包时 pin、插件环境可能被用户拿去不同版本：判据是 callable，
-        # 不是版本号——版本号会骗人，这个属性不会。拿错会安静地得到一个 bound method，
-        # 到 float() 才炸，所以这里不留模糊空间。
-        view = person.numpy_view
-        if callable(view):
-            view = view()
-        mask = np.asarray(view, dtype=np.float32)
-        if mask.ndim == 3 and mask.shape[-1] == 1:
-            mask = mask[..., 0]     # 1.1.1 实测给的是 (h, w, 1)，尾通道 singleton
-        if mask.ndim != 2:
-            raise RuntimeError(f"分割掩膜不是预期的二维图，得到 shape={mask.shape}："
-                               "拿错通道或 API 又变了，不能摊平了继续算")
+        from .semantic_masks import skin_from_multiclass, skin_edit_weight
+        confidence = []
+        for channel in cm:
+            value = channel.numpy_view
+            confidence.append(value() if callable(value) else value)
+        mask = skin_from_multiclass(confidence)
         if mask.shape != (h, w):
             mask = _resize_float(mask, h, w)
+        mask = skin_edit_weight(mask)
         t_masks = _now_ms(t1)
 
         multi_face_note = []      # 超范围这件事要写在 notes 里，但只在真的发生时写
@@ -463,7 +494,7 @@ class MediaPipeFace:
             landmarks=pts,
             all_landmarks=all_pts,
             face_index=0,
-            # 自检分割给的是“人”，通道名先按现有语义命名，M2 换多类模型再拆
+            # Only body-skin + face-skin, never the whole person probability.
             masks={"skin": mask},
             backend=self.name,
             t_detect_ms=t_detect,
@@ -472,8 +503,9 @@ class MediaPipeFace:
             num_faces=n_faces,
             notes=["mediapipe 后端：478 点为真实检测输出"] + multi_face_note + [
                    "权重来源 " + ", ".join(f"{n}={os.path.dirname(p)}" for n, p in sorted(self.model_paths.items())),
-                   f"skin 掩膜实为 selfie 分割的「人」通道（{len(cm)} 通道，取索引 "
-                   f"{1 if len(cm) > 1 else 0}）：包含头发/衣服等非皮肤区域，不等同于皮肤"],
+                   "skin 掩膜来自六类语义模型的身体皮肤+面部皮肤概率；头发、衣服、背景不计入皮肤类别",
+                   "自动编辑采用连续置信度余量 max(2*p_skin-1,0)，不确定区域不自动处理；人工修正能力仍须完善",
+                   "模型输出非像素级真值；弱光、逆光、遮挡与边缘仍需检查和手工修正"],
         )
 
 

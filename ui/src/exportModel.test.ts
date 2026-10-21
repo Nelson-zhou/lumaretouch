@@ -1,5 +1,5 @@
 /**
- * P2-2 回归：勾了 16-bit 时，发出去的组合必须是后端唯一接受的「无压缩 TIFF」。
+ * P2-2 回归：勾了 16-bit 时，发出去的组合必须是后端唯一接受的「TIFF（无损压缩）」。
  *
  * 运行：node --experimental-strip-types --test src/exportModel.test.ts
  * 反向门禁：复刻旧行为（bitDepth16 时仍原样递 format/压缩），证明它会递出后端必拒的组合。
@@ -10,22 +10,22 @@ import { readFileSync } from "node:fs";
 import { reconcileExportCombo } from "./exportModel.ts";
 
 // 后端 cmd_export 的硬约束（对照判据，不是前端拿去当默认值的数）：
-// 16-bit 只认 format∈{tif,tiff} 且 tiff_compression∈{none,""}。
+// 16-bit 只认 format∈{tif,tiff} 且 tiff_compression∈{none,deflate,lzw}。
 const backendAccepts16 = (fmt: string, comp: string) =>
-  (fmt === "tif" || fmt === "tiff") && (comp === "none" || comp === "");
+  (fmt === "tif" || fmt === "tiff") && ["none", "deflate", "lzw"].includes(comp);
 
-test("16-bit：把 jpg + deflate 收成 tif + none", () => {
+test("16-bit：把 jpg + deflate 收成 tif + deflate", () => {
   const c = reconcileExportCombo(true, "jpg", "deflate");
   assert.equal(c.format, "tif");
-  assert.equal(c.tiffCompression, "none");
+  assert.equal(c.tiffCompression, "deflate");
   assert.ok(backendAccepts16(c.format, c.tiffCompression), "16-bit 递出的组合仍会被后端拒");
 });
 
-test("非 16-bit：原样保留用户选的格式与压缩", () => {
+test("非TIFF不提交不适用的压缩参数，保留格式", () => {
   assert.deepEqual(reconcileExportCombo(false, "png", "deflate"),
-    { format: "png", tiffCompression: "deflate" });
+    { format: "png", tiffCompression: undefined });
   assert.deepEqual(reconcileExportCombo(false, "jpg", "none"),
-    { format: "jpg", tiffCompression: "none" });
+    { format: "jpg", tiffCompression: undefined });
 });
 
 test("反向门禁：旧行为在 16-bit 下会递出后端必拒的组合", () => {
@@ -49,4 +49,15 @@ test("静态接线：App 导出走 reconcile、16-bit 下锁住格式下拉", ()
   assert.ok(/disabled=\{exportBits16\}/.test(app), "格式下拉在 16-bit 下没锁定");
   assert.ok(/if \(e\.target\.checked\) setExportFormat\("tif"\)/.test(app),
     "勾 16-bit 没同时把面板格式收到 tif");
+});
+
+for (const compression of ["none", "deflate", "lzw"]) {
+  test(`16-bit保留所选无损压缩：${compression}`, () => {
+    assert.equal(reconcileExportCombo(true, "jpg", compression).tiffCompression, compression);
+  });
+}
+
+test("TIFF切到JPEG后不递交旧压缩，切回TIFF仍保留选择", () => {
+  assert.deepEqual(reconcileExportCombo(false, "jpg", "lzw"), {format:"jpg",tiffCompression:undefined});
+  assert.deepEqual(reconcileExportCombo(false, "tif", "lzw"), {format:"tif",tiffCompression:"lzw"});
 });

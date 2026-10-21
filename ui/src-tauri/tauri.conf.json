@@ -47,7 +47,9 @@
         "depends": [
           "libwebkit2gtk-4.1-0",
           "libgtk-3-0t64",
-          "libraw23t64"
+          "libraw23t64",
+          "liblcms2-2",
+          "libseccomp2"
         ]
       }
     },

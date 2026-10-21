@@ -35,10 +35,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-try:
-    import torch
-except Exception:                    # 与 ops.* 同一约定：没装 torch 也要能 import
-    torch = None
+from .optional_dependencies import optional_module
+
+torch = optional_module("torch")
 
 from .ops import enhance as ENH
 from .ops.deform import (analytic_frontal_landmarks, controls, face_frame,
@@ -48,7 +47,8 @@ from .ops.hsl import check_hsl
 from .ops.inpaint import hole_extent, levels_for, mask_bbox, inpaint_t, crop_apply_t
 from .ops.lut import DEFAULT_LUT_AMOUNT, LutError, check_amount
 from .ops.upscale import Plan as UpscalePlan
-from .ops.upscale import check_scale, unsharp_bands_np
+from .ops.upscale import check_scale, unsharp_bands_np, unsharp_float_bands_np
+from .quant import quantize16_np
 from .vram import LightOp, PreviewPipeline, RepairOp, GRADE_SCOPES
 
 DEFAULT_TILE = 1024
@@ -379,7 +379,10 @@ def apply_repair_full(src_u8: np.ndarray, ops: list, device: str):
             raise ExportError(f"消除笔图层必须是 RepairOp，得到 {type(op).__name__}："
                               "weight 需是导出尺寸的 (H,W) uint8")
     arr = np.ascontiguousarray(src_u8.transpose(2, 0, 1))[None]
-    cur = torch.from_numpy(arr).to(device).to(torch.float32).div_(255.0)
+    if src_u8.dtype not in (np.uint8, np.uint16):
+        raise ExportError("消除笔源图需要 uint8 或 uint16")
+    divisor = 65535.0 if src_u8.dtype == np.uint16 else 255.0
+    cur = torch.from_numpy(arr).to(device).to(torch.float32).div_(divisor)
     boxes = []
     t0 = time.perf_counter()
     for op in ops:
@@ -429,12 +432,33 @@ def _rest(op, cls):
 
 def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
                  tile: int = DEFAULT_TILE, progress=None) -> tuple:
-    """满幅分块导出。返回 ((H,W,3) uint8, 账单 dict)。
+    """Existing RGB8 entry point; do not silently promote source precision."""
+    return _export_image_impl(src_u8, spec, device=device, tile=tile,
+                              progress=progress, bits=8)
 
-    progress 每块回调一次 (done, total, tile_ms)，批量导出靠它算百分比。
+
+def export_image16(src_u16: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
+                   tile: int = DEFAULT_TILE, progress=None,
+                   crop_rect=(0.0, 0.0, 1.0, 1.0), rotation_degrees: float = 0.0) -> tuple:
+    """Working-sRGB RGB16 through the same editing chain, float until final RGB16.
+
+    This is the editing-library entry point used by the application's end-to-end
+    RAW/TIFF decode, recipe, crop and color-managed file-export integration.
     """
-    if src_u8.ndim != 3 or src_u8.shape[2] != 3 or src_u8.dtype != np.uint8:
-        raise ExportError(f"导出要 (H,W,3) uint8，得到 {src_u8.shape} {src_u8.dtype}")
+    return _export_image_impl(src_u16, spec, device=device, tile=tile,
+                              progress=progress, bits=16, geometry=(crop_rect, rotation_degrees))
+
+
+def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
+                       tile: int, progress, bits: int, geometry=None) -> tuple:
+    t_function = time.perf_counter()
+    if geometry is not None:
+        from .ops.geometry import check as check_geometry
+        check_geometry(*geometry)
+    dtype = np.uint16 if bits == 16 else np.uint8
+    divisor = 65535.0 if bits == 16 else 255.0
+    if src_u8.ndim != 3 or src_u8.shape[2] != 3 or src_u8.dtype != dtype:
+        raise ExportError(f"导出要 (H,W,3) {np.dtype(dtype).name}，得到 {src_u8.shape} {src_u8.dtype}")
     spec.check()
     # 纯校验全部排在 torch 守卫之前：没装 torch 的环境也要拿到同一句参数拒绝，
     # 而不是先被"导出需要 torch"抢掉——那样 CI 的 CPU job 根本测不到这些分支。
@@ -460,12 +484,6 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
     repair_stats = {}
     if spec.repair:
         base_f, repair_stats = apply_repair_full(src_u8, spec.repair, device)
-    if spec.channel is not None and base_f is not None:
-        # load_face 要求会话持有原始像素（掩膜尺寸对得上才能挂），而 float 底图那条形
-        # 式下 src_u8 是 None。与其在那里抛一句与导出无关的 RuntimeError，不如在这里
-        # 说清楚：这一对组合本轮没做，不是默默降级成不分通道。
-        raise ExportError("分通道导出还不接受满幅消除笔底图（掩膜装载需要原始像素）："
-                          "请分开通道与消除笔，或等这条通路补齐")
     # 眼牙增强：在**整幅坐标**上把掩膜画一次，然后逐块切给自己那一片（与 grade_mask
     # 的先例同一条），而不是每块各自从关键点重画——两块交界处的软边必须与整幅一致，
     # 而每块重算会把羽化截断在块边界上（那会在出片里留下一条笔直的眼白接缝）。
@@ -480,13 +498,13 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
         ey0, ex0, eeh, eew = enh_reg.window
         # 只把窗口那一片换成 float：整幅 astype 会在 24 MP 上多占 72 MB，而这一层用不着
         e_win = (base_f[ey0:ey0 + eeh, ex0:ex0 + eew] if base_f is not None
-                 else src_u8[ey0:ey0 + eeh, ex0:ex0 + eew].astype(np.float32) / 255.0)
+                 else src_u8[ey0:ey0 + eeh, ex0:ex0 + eew].astype(np.float32) / divisor)
         enh_weight, _enh_facts = ENH.refine(enh_reg, np.ascontiguousarray(e_win))
         enhance_ms = (time.perf_counter() - t_e) * 1000.0
     scale = int(spec.scale)
     plan = UpscalePlan(h, w, scale)          # 表只算一次，每块取自己那一段
     out_h, out_w = plan.out_h, plan.out_w
-    out = np.zeros((out_h, out_w, 3), np.uint8)
+    out = np.zeros((out_h, out_w, 3), np.float32 if bits == 16 else np.uint8)
     seg = {"filter": 0.0, "light": 0.0, "deform": 0.0, "exposure": 0.0,
            "lut": 0.0, "grade": 0.0, "enhance": 0.0, "bg": 0.0}
     upscale_ms = 0.0
@@ -500,9 +518,11 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
         cy1, cx1 = min(y1 + margin, h), min(x1 + margin, w)
         th, tw = cy1 - cy0, cx1 - cx0
         t0 = time.perf_counter()
-        pipe = PreviewPipeline(device, tw, th)
+        pipe = PreviewPipeline(device, tw, th, high_precision_warp=(bits == 16))
         if base_f is not None:
             pipe.load_rgb_f32(np.ascontiguousarray(base_f[cy0:cy1, cx0:cx1]))
+        elif bits == 16:
+            pipe.load_rgb_f32(np.ascontiguousarray(src_u8[cy0:cy1, cx0:cx1], dtype=np.float32) / divisor)
         else:
             pipe.load_rgb_u8(src_u8[cy0:cy1, cx0:cx1])
         t_c = time.perf_counter()
@@ -559,12 +579,19 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
             carrier = _MaskCarrier(spec.masks[:, cy0:cy1, cx0:cx1], spec.landmarks)
             carrier._carrier_names = list(spec.mask_names)
             pipe.load_face(carrier)
-        pipe.render(spec.strength, radius=spec.radius, eps=spec.eps,
-                    detail_gain=spec.detail_gain, mid_gain=spec.mid_gain,
-                    broad_gain=spec.broad_gain, texture_radius=spec.texture_radius,
-                    channel=spec.channel if spec.masks is not None else None)
-        t_r = time.perf_counter()
-        got = pipe.read_back()[..., :3]
+        render_options = dict(radius=spec.radius, eps=spec.eps,
+                              detail_gain=spec.detail_gain, mid_gain=spec.mid_gain,
+                              broad_gain=spec.broad_gain, texture_radius=spec.texture_radius,
+                              channel=spec.channel if spec.masks is not None else None)
+        if bits == 16:
+            rendered = pipe.retouch(spec.strength, **render_options)
+            t_r = time.perf_counter()
+            got = np.ascontiguousarray(rendered[0].permute(1, 2, 0).detach().cpu().numpy())
+            del rendered
+        else:
+            pipe.render(spec.strength, **render_options)
+            t_r = time.perf_counter()
+            got = pipe.read_back()[..., :3]
         if scale == 1:
             out[y0:y1, x0:x1] = got[y0 - cy0:y1 - cy0, x0 - cx0:x1 - cx0]
         else:
@@ -572,7 +599,8 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
             # 不是"先拼整幅再放大"——那会把峰值从 tile 拉回图幅；也不比 0：
             # 同一串 (下标, 权重) 同一累加顺序，与整幅 `plan.full` 逐字节同一
             t_u = time.perf_counter()
-            out[y0 * scale:y1 * scale, x0 * scale:x1 * scale] = plan.region(
+            sampler = plan.region_float if bits == 16 else plan.region
+            out[y0 * scale:y1 * scale, x0 * scale:x1 * scale] = sampler(
                 got, y0 * scale, y1 * scale, x0 * scale, x1 * scale, cy0, cx0)
             upscale_ms += (time.perf_counter() - t_u) * 1000.0
         io["readback"] += (time.perf_counter() - t_r) * 1000.0
@@ -591,19 +619,31 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
         # 出片锐化排在放大之后、且切的是已经完整的输出图：带 halo 拿真像素，
         # 只有图的真边缘才用 replicate——所以与整图直锐逐字节同一，不拿近似当默认
         t_s = time.perf_counter()
-        out = unsharp_bands_np(out, radius=float(spec.sharpen_radius),
+        sharpener = unsharp_float_bands_np if bits == 16 else unsharp_bands_np
+        out = sharpener(out, radius=float(spec.sharpen_radius),
                                amount=float(spec.sharpen_amount),
                                threshold=float(spec.sharpen_threshold))
         sharpen_ms = (time.perf_counter() - t_s) * 1000.0
+    geometry_facts = {}
+    if geometry is not None:
+        from .ops.geometry import crop_rotate_np, is_identity
+        t_geometry = time.perf_counter()
+        out = crop_rotate_np(out, *geometry, uint8=False)
+        out_h, out_w = out.shape[:2]
+        geometry_facts = {"crop_applied": not is_identity(*geometry),
+                          "geometry_ms": round((time.perf_counter() - t_geometry) * 1000, 2)}
+    if bits == 16:
+        out = quantize16_np(out)
     peak_bytes = int(delta.numel() * 4) if delta is not None else 0
     return out, {
-        "w": out_w, "h": out_h, "px": out_w * out_h, "src_mb": round(h * w * 3 / 1e6, 2),
+        "bits": bits, "warp_precision": "float64" if bits == 16 else "float32",
+        "w": out_w, "h": out_h, "px": out_w * out_h, "src_mb": round(h * w * 3 * src_u8.dtype.itemsize / 1e6, 2),
         "src_w": w, "src_h": h, "scale": scale,
         "upscale_backend": spec.upscale_backend if scale > 1 else None,
         "upscale_ms": round(upscale_ms, 2), "sharpen_ms": round(sharpen_ms, 2),
         "sharpen_amount": float(spec.sharpen_amount),
         "tile": int(tile), "tiles": len(rects), "margin_px": int(margin),
-        "deform_peak_px": round(peak, 3), "total_ms": round(ms, 1),
+        "deform_peak_px": round(peak, 3), "total_ms": round((time.perf_counter() - t_function) * 1000, 1),
         "field_ms": round(field_ms, 1),
         # 这一层的"重画掩膜"成本单独报：它与形变解场是两种一次性的钱，混在
         # field_ms 里就看不出该优化谁（导出账单里每一段都要能归因，否则只是把没说的话当作没事）
@@ -613,7 +653,7 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
         "seg_ms": {**{k: round(v, 2) for k, v in seg.items()},
                    **{k: round(v, 2) for k, v in io.items()}},
         "delta_cpu_mb": round(peak_bytes / 2**20, 1),
-        "channel": spec.channel, **repair_stats,
+        "channel": spec.channel, **repair_stats, **geometry_facts,
     }
 
 
@@ -731,7 +771,7 @@ def _profile_bytes(name: str, source: bytes | None = None) -> bytes | None:
 
 
 # P1-3（F03）：导出像素的工作空间经核实是 sRGB 编码的显示参考 8-bit——decode 的非 RAW 路径走
-# im.convert("RGB")（即 sRGB），RAW 路径也归到 sRGB 显示域；正因为工作空间就是 sRGB，默认
+# _to_working_srgb 显式输入转换，RAW 路径也归到 sRGB 显示域；工作空间为 sRGB，默认
 # embed sRGB ICC 而不转色才是恒等。于是给一个「与 sRGB 不同的」输出档时，必须真把像素
 # sRGB→目标档转一遍再嵌档：只贴标签会让色管读者拿错空间解释同一批 sRGB 数值，颜色就飘了
 # ——这正是 F03「ICC 只写标签、不做转换」的口径。
@@ -932,17 +972,13 @@ def write_file(rgb: np.ndarray, path: str, *, quality: int = 95,
     img = Image.fromarray(np.ascontiguousarray(rgb), "RGB")
     kw = {}
     icc = _profile_bytes(output_profile, source_icc)
-    # P1-3/ADR-0023 决策一：工作空间恒 sRGB。导出到一个**命名的非 sRGB 目标档**（adobergb/display_p3/真实
-    # .icc 路径）时，必须先把像素 sRGB→目标转一遍再嵌档；同档(srgb)/无档恒等，默认路径逐字节不变。
-    # 但 output_profile=source 不同：decode 不做输入色管，像素就是源文件自己的编码值，贴源档即忠实；
-    # 若再 sRGB→source 转一遍，对非 sRGB 源就是二次转换（颜色真错）。所以 source 透传不转。
+    # Input decoding normalizes pixels to sRGB. "source" selects the original
+    # target profile, not unconverted source pixels; it needs the same transform.
     color_intent = None
     color_converted = False
-    if icc and str(output_profile).lower() != "source":
+    if icc:
         img, color_intent = _convert_srgb_to_profile(img, icc)
         color_converted = color_intent != "srgb_identity"
-    elif icc:                       # source 透传：像素已携源档值，不转（ADR-0023）
-        color_intent = "source_passthrough"
     if icc:
         kw["icc_profile"] = icc
     exif, exif_facts = _filter_exif(source_exif, bool(metadata_include_gps))
@@ -1035,7 +1071,7 @@ def write_tiff16(rgb: np.ndarray, path: str, *, output_profile: str = "srgb",
                  conflict_policy: str = "skip_and_report",
                  metadata_include_gps: bool = False,
                  tiff_compression: str = "none") -> dict:
-    """写一张 baseline TIFF：interleaved RGB、16 bit/通道、无压缩、单 strip。
+    """写RGB16 TIFF；none保留基线布局，Deflate/LZW使用可逆Predictor 2。
 
     条目按 tag 升序（TIFF 的硬要求，不是风格）；超过 4 字节的值（BitsPerSample 三个
     SHORT、ICCProfile 整份档）另存一处，条目里只放偏移。只写必需的那十一个 tag：多余的
@@ -1051,15 +1087,6 @@ def write_tiff16(rgb: np.ndarray, path: str, *, output_profile: str = "srgb",
         raise ExportError(f"16-bit 直通需要 uint16 的三通道数组，收到 "
                           f"dtype={rgb.dtype} shape={getattr(rgb, 'shape', None)}")
     key, _ = _tiff_compression(tiff_compression)
-    if key != "none":
-        # 不是“没来得及做”，是量过之后判定不该做：不加 Predictor 的 16-bit 交织数据
-        # deflate 收益是负的（实测噪声样本压缩后 18,600 B > 无压缩 18,578 B）；要真省体积
-        # 得上 Predictor=2，那就不再是“母档解出来什么样就写什么样”的直通，而与读回自证
-        # 那条口径分叉了。母档是留给后续流程的中间产物，这个交换不划算——所以只认 none，
-        # 别的值明确拒（UI 在位深=16 时要把这个控件置灰并写这句原因，而不是留着让人点）。
-        raise ExportError(f"16-bit 母档直通只写无压缩 TIFF（tiff_compression=none），"
-                          f"收到 {tiff_compression!r}：位深 16 的交织数据不加 Predictor 时 "
-                          f"deflate/lzw 测出来是负收益，加 Predictor 就不再是直通了")
     if metadata_include_gps:
         raise ExportError("16-bit 母档直通不写 EXIF/GPS：这条路径只携带自己生成的那几个 "
                           "TIFF tag，透传源元数据尚未实现。要带 GPS 请走常规导出；"
@@ -1068,32 +1095,45 @@ def write_tiff16(rgb: np.ndarray, path: str, *, output_profile: str = "srgb",
     icc = _profile_bytes(output_profile, source_icc)
     arr = np.ascontiguousarray(rgb)
     h, w = int(arr.shape[0]), int(arr.shape[1])
-    data = arr.tobytes()
-    tags = list(_TIFF16_TAGS) + ([_TIFF16_ICC_TAG] if icc else [])
-    n = len(tags)
-    bps_at = 8 + 2 + 12 * n + 4                  # BitsPerSample 三个 SHORT 的位置
-    icc_at = bps_at + 6
-    strip_at = icc_at + (len(icc) if icc else 0)
-    ent = []
+    compression_tag = {"none": 1, "deflate": 8, "lzw": 5}[key]
+    if key != "none":
+        import io
+        import tifffile
+        buffer = io.BytesIO()
+        # Predictor 2 is reversible horizontal differencing. It changes the
+        # stored representation, not the decoded uint16 samples.
+        tifffile.imwrite(buffer, arr, photometric="rgb", planarconfig="contig",
+                         byteorder="<", compression=compression_tag, predictor=2,
+                         rowsperstrip=min(h, 256), iccprofile=icc, metadata=None,
+                         software="LumaRetouch")
+        blob = buffer.getvalue()
+    else:
+        data = arr.tobytes()
+        tags = list(_TIFF16_TAGS) + ([_TIFF16_ICC_TAG] if icc else [])
+        n = len(tags)
+        bps_at = 8 + 2 + 12 * n + 4                  # BitsPerSample 三个 SHORT 的位置
+        icc_at = bps_at + 6
+        strip_at = icc_at + (len(icc) if icc else 0)
+        ent = []
 
-    def short(v): return struct.pack("<H", v) + b"\x00\x00"
-    def long(v): return struct.pack("<I", v)
+        def short(v): return struct.pack("<H", v) + b"\x00\x00"
+        def long(v): return struct.pack("<I", v)
 
-    ent.append(struct.pack("<HHI", 0x100, 3, 1) + short(w))   # ImageWidth
-    ent.append(struct.pack("<HHI", 0x101, 3, 1) + short(h))   # ImageLength
-    ent.append(struct.pack("<HHI", 0x102, 3, 3) + long(bps_at))
-    ent.append(struct.pack("<HHI", 0x103, 3, 1) + short(1))   # Compression=None
-    ent.append(struct.pack("<HHI", 0x106, 3, 1) + short(2))   # PhotometricInterp=RGB
-    ent.append(struct.pack("<HHI", 0x111, 4, 1) + long(strip_at))
-    ent.append(struct.pack("<HHI", 0x115, 3, 1) + short(3))   # SamplesPerPixel
-    ent.append(struct.pack("<HHI", 0x116, 3, 1) + short(h))   # RowsPerStrip（单 strip）
-    ent.append(struct.pack("<HHI", 0x117, 4, 1) + long(len(data)))
-    ent.append(struct.pack("<HHI", 0x128, 3, 1) + short(1))   # PlanarConfiguration=Chunky
-    if icc:
-        ent.append(struct.pack("<HHI", _TIFF16_ICC_TAG, 7, len(icc)) + long(icc_at))
-    blob = (b"II" + struct.pack("<HI", 42, 8)
-            + struct.pack("<H", n) + b"".join(ent) + struct.pack("<I", 0)
-            + struct.pack("<HHH", 16, 16, 16) + (icc or b"") + data)
+        ent.append(struct.pack("<HHI", 0x100, 4, 1) + long(w))   # ImageWidth
+        ent.append(struct.pack("<HHI", 0x101, 4, 1) + long(h))   # ImageLength
+        ent.append(struct.pack("<HHI", 0x102, 3, 3) + long(bps_at))
+        ent.append(struct.pack("<HHI", 0x103, 3, 1) + short(1))   # Compression=None
+        ent.append(struct.pack("<HHI", 0x106, 3, 1) + short(2))   # PhotometricInterp=RGB
+        ent.append(struct.pack("<HHI", 0x111, 4, 1) + long(strip_at))
+        ent.append(struct.pack("<HHI", 0x115, 3, 1) + short(3))   # SamplesPerPixel
+        ent.append(struct.pack("<HHI", 0x116, 3, 1) + short(h))   # RowsPerStrip（单 strip）
+        ent.append(struct.pack("<HHI", 0x117, 4, 1) + long(len(data)))
+        ent.append(struct.pack("<HHI", 0x128, 3, 1) + short(1))   # PlanarConfiguration=Chunky
+        if icc:
+            ent.append(struct.pack("<HHI", _TIFF16_ICC_TAG, 7, len(icc)) + long(icc_at))
+        blob = (b"II" + struct.pack("<HI", 42, 8)
+                + struct.pack("<H", n) + b"".join(ent) + struct.pack("<I", 0)
+                + struct.pack("<HHH", 16, 16, 16) + (icc or b"") + data)
     # 与 8-bit 那侧同一套提交：先解目标名再落盘，名字与内容都不能“碰运气”
     target, reason = resolve_target(path, policy)
     if target is None:
@@ -1116,8 +1156,8 @@ def write_tiff16(rgb: np.ndarray, path: str, *, output_profile: str = "srgb",
             "renamed_from": None if target == path else path,
             "quality_mapping_version": QUALITY_MAPPING_VERSION,
             "encoder_quality": None,
-            "conflict_policy": policy, "tiff_compression": "none",
-            "tiff_compression_tag": 1}
+            "conflict_policy": policy, "tiff_compression": key,
+            "tiff_compression_tag": compression_tag}
 
 
 def read_tiff16(path: str) -> np.ndarray:
@@ -1126,6 +1166,18 @@ def read_tiff16(path: str) -> np.ndarray:
     为什么在同一个模块里再写一份读的：要证的不是“Pillow 能打开”，而是“落盘的字节就是
     我手里那份 16-bit 数据”。只拿自写自读当证据是循环论证，所以这里同时把形状与
     位深都重新核对一遍，不满足就报错，不是降级读。"""
+    import tifffile
+    with tifffile.TiffFile(path) as tf:
+        page = tf.pages[0]
+        if int(page.compression) != 1:
+            if (len(tf.pages) != 1 or page.dtype != np.dtype("uint16")
+                    or page.samplesperpixel != 3 or int(page.photometric) != 2
+                    or int(page.imagewidth) * int(page.imagelength) > 120_000_000):
+                raise ExportError("不是受支持的单页RGB16 TIFF")
+            arr = page.asarray()
+            if int(page.planarconfig) == 2:
+                arr = arr.transpose(1, 2, 0)
+            return np.ascontiguousarray(arr, dtype=np.uint16)
     import struct
     with open(path, "rb") as f:
         b = f.read()
@@ -1186,6 +1238,74 @@ def read_tiff16_icc(path: str) -> bytes | None:
     return None
 
 
+def _rgb16_readback_facts(reference: np.ndarray, actual: np.ndarray, *,
+                          chunk_pixels: int = 1 << 18) -> dict:
+    """Exact readback statistics with bounded temporary comparison/histograms.
+
+    uint16 has only 65536 possible codes: accumulate presence histograms instead
+    of sorting full channels. The source/readback arrays are still full-sized;
+    this bounds verification temporaries, not the entire export working set.
+    low8_nonzero_px retains its legacy name but counts RGB components, not pixels.
+    """
+    if actual.dtype != np.uint16 or actual.ndim != 3 or actual.shape[2] != 3:
+        raise ValueError("readback statistics require (H,W,3) uint16")
+    if reference.dtype != np.uint16:
+        raise ValueError("readback reference must be uint16")
+    budget = int(chunk_pixels)
+    if budget <= 0:
+        raise ValueError("chunk_pixels must be positive")
+    h, w = actual.shape[:2]
+    if not h or not w:
+        raise ValueError("readback image must be nonempty")
+    columns = min(w, budget)
+    rows = max(1, budget // columns)
+    present = np.zeros((3, 65536), dtype=bool)
+    same_shape = reference.shape == actual.shape
+    difference = 0 if same_shape else -1
+    low8 = 0
+    for y in range(0, h, rows):
+        for x in range(0, w, columns):
+            block = actual[y:y + rows, x:x + columns]
+            if same_shape:
+                delta = reference[y:y + rows, x:x + columns].astype(np.int32)
+                np.subtract(delta, block, out=delta)
+                np.abs(delta, out=delta)
+                difference = max(difference, int(delta.max()))
+            for c in range(3):
+                present[c] |= np.bincount(block[..., c].reshape(-1), minlength=65536) > 0
+            low8 += int(np.count_nonzero(block & 0xFF))
+    return {"readback_max_diff": difference,
+            "levels_per_channel": [int(np.count_nonzero(p)) for p in present],
+            "low8_nonzero_px": low8}
+
+
+def _write_verified_rgb16(arr, out_path, *, target_icc, conflict_policy,
+                          metadata_include_gps, tiff_compression):
+    info = write_tiff16(arr, out_path, output_profile="source" if target_icc else "none",
+                        source_icc=target_icc, conflict_policy=conflict_policy,
+                        metadata_include_gps=metadata_include_gps,
+                        tiff_compression=tiff_compression)
+    if info.get("skipped"):
+        return {**info, "readback_max_diff": None, "levels_per_channel": None,
+                "low8_nonzero_px": None, "readback_ms": 0.0, "verification_ms": 0.0,
+                "icc_readback_bytes": None, "icc_readback_matches": None}
+    t_wr = time.perf_counter()
+    back = read_tiff16(info["path"])
+    t_rd = time.perf_counter()
+    facts = _rgb16_readback_facts(arr, back)
+    icc_back = read_tiff16_icc(info["path"]) or b""
+    icc_want = target_icc or b""
+    t_verified = time.perf_counter()
+    if facts["readback_max_diff"] != 0 or icc_back != icc_want:
+        raise ExportError(
+            f"16-bit 导出读回验证失败：像素最大差={facts['readback_max_diff']}，"
+            f"ICC一致={icc_back == icc_want}。文件保留供检查，不作为成功出片：{info['path']}")
+    return {**info, **facts, "icc_readback_bytes": len(icc_back),
+            "icc_readback_matches": (icc_back == icc_want) if icc_want else None,
+            "readback_ms": round((t_rd - t_wr) * 1000, 2),
+            "verification_ms": round((t_verified - t_rd) * 1000, 2)}
+
+
 def export_master_16bit(path: str, out_path: str, *, device: str | None = None,
                         output_profile: str = "srgb",
                         conflict_policy: str = "skip_and_report",
@@ -1214,35 +1334,77 @@ def export_master_16bit(path: str, out_path: str, *, device: str | None = None,
         raise ExportError("16-bit 直通的像素来自相机内嵌预览（source=libraw_preview）："
                           "预览不参与出片这条分界不许在导出这一层破")
     ms = lambda a, b: round((b - a) * 1000.0, 2)      # noqa: E731
-    info = write_tiff16(arr, out_path, output_profile=output_profile,
-                        conflict_policy=conflict_policy,
-                        metadata_include_gps=metadata_include_gps,
-                        tiff_compression=tiff_compression)
-    if info.get("skipped"):
-        # 没落盘就没有“读回”这回事。把这些字段补上而不是只返一个 reason：
-        # 批量报表里“跳过”与“保真自证没做过”必须是两种看得出来的状态
-        return {**info, "src_w": d.src_w, "src_h": d.src_h, "src_format": d.fmt,
-                "source": src, "readback_max_diff": None, "levels_per_channel": None,
-                "low8_nonzero_px": None, "decode_ms": ms(t0, t_dec), "write_ms": 0.0,
-                "readback_ms": 0.0,
-                "total_ms": ms(t0, t_dec), "notes": list(d.notes)}
-    t_wr = time.perf_counter()
-    back = read_tiff16(info["path"])          # 读回用解出来的目标名，不是调用方给的那个
-    t_rd = time.perf_counter()
-    same_shape = back.shape == arr.shape
-    diff = int(np.abs(back.astype(np.int32) - arr.astype(np.int32)).max()) if same_shape else -1
-    # ICC 也要逐字节反查：报 588 B 而 tag 指向的不是那 588 B，与“没嵌”同样是 COLOR-001 的失败
-    icc_back = read_tiff16_icc(info["path"]) or b""
-    icc_want = _profile_bytes(output_profile) if output_profile == "srgb" else b""
+    target_icc = _profile_bytes(output_profile, d.source_icc)
+    color_converted = False
+    t_color = time.perf_counter()
+    if target_icc:
+        from .color16 import convert_rgb16
+        # TIFF pixels retain their source encoding; LibRaw output is configured
+        # as sRGB. No-profile RGB follows the same explicit sRGB assumption as
+        # the normal input path. Conversion never stages through uint8.
+        input_icc = d.source_icc or _srgb_bytes()
+        color_converted = input_icc != target_icc
+        arr = convert_rgb16(arr, input_icc, target_icc)
+    color_ms = ms(t_color, time.perf_counter())
+    info = _write_verified_rgb16(arr, out_path, target_icc=target_icc,
+                                 conflict_policy=conflict_policy,
+                                 metadata_include_gps=metadata_include_gps,
+                                 tiff_compression=tiff_compression)
     return {**info, "src_w": d.src_w, "src_h": d.src_h, "src_format": d.fmt,
-            "source": src, "bits": 16, "readback_max_diff": diff,
-            "icc_readback_bytes": len(icc_back),
-            "icc_readback_matches": (icc_back == icc_want) if icc_want else None,
-            "levels_per_channel": [int(len(np.unique(back[..., c]))) for c in range(3)],
-            "low8_nonzero_px": int(np.count_nonzero(back & 0xFF)),
-            "decode_ms": ms(t0, t_dec),
-            # write_ms 是 write_tiff16 里那次提交的时间（{**info} 带过来的），不再被
-            # 读回时间顶掉：旧写法把 t_wr 取在写完之后、又把这段叫 write_ms，
-            # 报表上“写盘时延”其实是“读回时延”
-            "readback_ms": ms(t_wr, t_rd),
-            "total_ms": ms(t0, t_rd), "notes": list(d.notes)}
+            "source": src, "bits": 16, "icc_source": str(output_profile),
+            "color_converted": color_converted, "color_conversion_ms": color_ms,
+            "decode_ms": ms(t0, t_dec), "total_ms": ms(t0, time.perf_counter()),
+            "pipeline": "passthrough_rgb16", "notes": list(d.notes)}
+
+
+def export_edited_16bit(decoded, spec: ExportSpec, out_path: str, *,
+                         device: str = "cpu", tile: int = DEFAULT_TILE,
+                         crop_rect=(0.0, 0.0, 1.0, 1.0), rotation_degrees: float = 0.0,
+                         output_profile: str = "srgb", conflict_policy: str = "skip_and_report",
+                         metadata_include_gps: bool = False, tiff_compression: str = "none",
+                         decode_ms: float = 0.0) -> dict:
+    """Decoded true RGB16 -> working sRGB -> float edits/geometry -> RGB16 TIFF.
+
+    Source and destination ICC conversion use RGB16 LittleCMS, never Pillow RGB8.
+    Display proxy bytes are not accepted as source data. This does not establish
+    scene-linear HDR, wide-gamut editing, GPU quality, or an unlimited RAM budget.
+    """
+    decode_ms = float(decode_ms)
+    if not math.isfinite(decode_ms) or decode_ms < 0:
+        raise ExportError("decode_ms 必须是有限非负数")
+    t0 = time.perf_counter()
+    if decoded.rgb.dtype != np.uint16 or (decoded.raw or {}).get("used_preview"):
+        raise ExportError("16-bit 编辑需要真实 uint16 源，不接受8-bit显示代理")
+    from .color16 import convert_rgb16
+    working_icc = _srgb_bytes()
+    target_icc = _profile_bytes(output_profile, decoded.source_icc)
+    t_color = time.perf_counter()
+    source = decoded.rgb
+    input_converted = False
+    if decoded.source_icc:
+        source = convert_rgb16(source, decoded.source_icc, working_icc)
+        input_converted = decoded.source_icc != working_icc
+    input_color_ms = (time.perf_counter() - t_color) * 1000
+    frame, render_stats = export_image16(source, spec, device=device, tile=tile,
+                                         crop_rect=crop_rect, rotation_degrees=rotation_degrees)
+    t_color = time.perf_counter()
+    output_converted = bool(target_icc and target_icc != working_icc)
+    if output_converted:
+        frame = convert_rgb16(frame, working_icc, target_icc)
+    color_ms = input_color_ms + (time.perf_counter() - t_color) * 1000
+    info = _write_verified_rgb16(frame, out_path, target_icc=target_icc,
+                                 conflict_policy=conflict_policy,
+                                 metadata_include_gps=metadata_include_gps,
+                                 tiff_compression=tiff_compression)
+    return {**info, "src_w": decoded.src_w, "src_h": decoded.src_h,
+            "src_format": decoded.fmt, "source": (decoded.raw or {}).get("source"),
+            "bits": 16, "icc_source": str(output_profile),
+            "color_converted": input_converted or output_converted,
+            "color_conversion_ms": round(color_ms, 2), "decode_ms": decode_ms,
+            "render_stats": render_stats, "pipeline": "float32_rgb16",
+            "working_color_space": "sRGB", "decoded_bits": 16,
+            # LibRaw output_bps describes the developed RGB, not the sensor file bit depth.
+            "source_bits": (int(decoded.src_bits)
+                            if (decoded.raw or {}).get("source") in (None, "tiff16") else None),
+            "total_ms": round(decode_ms + (time.perf_counter() - t0) * 1000, 2),
+            "notes": list(decoded.notes) + ["真实RGB16源经float32或更高精度编辑；显示uint8缓冲不作为导出输入"]}

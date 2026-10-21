@@ -24,10 +24,9 @@ from __future__ import annotations
 
 import numpy as np
 
-try:                                   # pragma: no cover - 环境依赖
-    import torch
-except ImportError:                    # pragma: no cover
-    torch = None
+from ..optional_dependencies import optional_module
+
+torch = optional_module("torch")
 
 BAND_NAMES = ("红", "橙", "黄", "绿", "青", "蓝", "紫", "洋红")
 BAND_CENTERS = (0.0, 30.0, 60.0, 120.0, 180.0, 240.0, 280.0, 320.0)

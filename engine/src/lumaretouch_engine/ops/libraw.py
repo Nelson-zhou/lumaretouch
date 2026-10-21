@@ -143,6 +143,8 @@ def _setup_signatures(lib: ctypes.CDLL) -> None:
     need("libraw_unpack", ctypes.c_int, [H])
     need("libraw_unpack_thumb", ctypes.c_int, [H])
     need("libraw_dcraw_process", ctypes.c_int, [H])
+    need("libraw_set_output_color", None, [H, ctypes.c_int])
+    need("libraw_set_gamma", None, [H, ctypes.c_int, ctypes.c_float])
     need("libraw_dcraw_make_mem_image", ctypes.c_void_p, [H, ctypes.POINTER(ctypes.c_int)])
     need("libraw_dcraw_clear_mem", None, [ctypes.c_void_p])
     need("libraw_get_raw_height", ctypes.c_int, [H])
@@ -414,6 +416,11 @@ def _decode(lib: ctypes.CDLL, path: str, *, output_bps: int = 16, use_camera_wb:
         if flip is not None:
             set_int("libraw_output_params_t.user_flip", flip)
         set_int("libraw_output_params_t.output_bps", int(output_bps))
+        # LibRaw defaults to gamma 0.45/toe 4.5, not the transfer described by
+        # an sRGB ICC. Use the public C setters (no new guessed struct offsets).
+        lib.libraw_set_output_color(h.ptr, 1)
+        lib.libraw_set_gamma(h.ptr, 0, 1.0 / 2.4)
+        lib.libraw_set_gamma(h.ptr, 1, 12.92)
         t_set = time.perf_counter()
 
         rc = lib.libraw_unpack(h.ptr)
@@ -461,6 +468,7 @@ def _decode(lib: ctypes.CDLL, path: str, *, output_bps: int = 16, use_camera_wb:
             "total_ms": round((t_bytes - t0) * 1000, 2),
             "use_camera_wb": int(use_camera_wb), "use_camera_matrix": int(use_camera_matrix),
             "output_bps": int(output_bps), "no_auto_bright": int(no_auto_bright),
+            "output_color_space": "sRGB", "output_gamma": [1.0 / 2.4, 12.92],
             "half_size": int(half_size), "meta": meta}
     return arr, info
 

@@ -1,3 +1,4 @@
+import { skinStrengthOptions, skinMaskUnavailable } from "./skinScope";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Viewer, { VIEW_HOME, type CompareMode, type Hud, type View } from "./components/Viewer";
@@ -131,7 +132,7 @@ export default function App() {
   // 产品档代理：8294400 px（约 4K 视口档）。此前默认 576000 是跑靶预算，
   // 在大屏上会把 24MP 的原片缩成 960×600 再放大，观感就是一层马赛克。
   const [maxPx] = useState(8_294_400);
-  const [strength, setStrengthV] = useState(0.5);
+  const [strength, setStrengthV] = useState(0.0);
   const [radius, setRadius] = useState(12);
   // 这三行初始值必须与引擎侧 DEFAULT_* 逐个对得上（test_drag.py 里有一条用例专看这件事）：
   // 写两份字面量而不对拍，就是 M1-2 那次“默认值改了但调用方还带着旧值”的同构坑。
@@ -198,15 +199,13 @@ export default function App() {
   // 而不是一个没人同意的默认美化。
   const [exportScale, setExportScale] = useState(1);
   const [exportSharpen, setExportSharpen] = useState(0);
-  // 16-bit 母档直通（M9-e）：默认关。开它就是要求"其它都别动"；只有把它单独成一个勾，
-  // "这一件没经过图层"才说得出口。
+  // 16-bit TIFF：保留原生高位深源，并按逐图配方进入浮点编辑；显示代理不作出片源。
   const [exportBits16, setExportBits16] = useState(false);
   // 形变作用层（LNX-PORTRAIT-004）：这一格选的是"正在改哪一层"，值本身不进口径——
   // 每一层的数值与"这张被覆盖了哪几格"都由引擎随 doc_state 报（面板读它，不读这里）
   const [deformScope, setDeformScope] = useState<"all" | "person">("all");
   // 导出侧 P0 的四格（注册表 lnx.export.v1 / lnx.batch.v1）。中性位按冻结的注册表：
-  // gps 默认关、冲突默认 skip_and_report、色彩档默认 srgb；tiff 压缩的 16-bit 例外
-  // 由引擎拒（那条报错会说出来），前端不预先猜
+  // GPS默认关，冲突默认skip_and_report，色彩档默认sRGB；两种位深均支持无损TIFF压缩。
   const [exportProfile, setExportProfile] = useState("srgb");
   const [exportTiffComp, setExportTiffComp] = useState("deflate");
   const [exportGps, setExportGps] = useState(false);
@@ -2546,7 +2545,7 @@ export default function App() {
     try {
       // 设备由 $LRT_DEVICE 定（宿主 load_image 会先把 set_device 发在会话之前）；
       // precompute=auto：有真后端就用真的，没有就用 synthetic 并把原因写进 notes
-      await loadImage(p, { maxPx, strength: strengthRef.current, precompute: "auto", channel: channel || undefined });
+      await loadImage(p, { maxPx, precompute: "auto" });
       const out = await waitImportOutcome(p);
       if (out.kind !== "ok") {
         setPathErr(out.why); setDragNote(out.why);
@@ -2792,11 +2791,12 @@ export default function App() {
 
   /** 强度：零推理通路，可以逐事件发；唯一要卡住的是 IPC 排队频率。 */
   function onStrength(v: number) {
+    setChannel("skin");
     setStrengthV(v);
     const now = performance.now();
     const send = () => {
       lastSend.current = performance.now();
-      setStrength(strengthRef.current, { channel: channel || undefined }).catch((e) => setDragNote(String(e)));
+      setStrength(strengthRef.current, skinStrengthOptions()).catch((e) => setDragNote(String(e)));
     };
     if (now - lastSend.current >= DRAG_THROTTLE_MS) {
       if (pending.current !== null) {
@@ -3049,8 +3049,8 @@ export default function App() {
     engineStatus()
       .then((st0) => {
         const before = st0?.last_error ?? null;
-        // P2-2：勾了 16-bit 就按后端唯一接受的「无压缩 TIFF」发，
-        // 不能把面板上的 jpg / 默认 deflate 原样递上去（那会被 cmd_export 立即拒）。
+        // P2-2：勾了 16-bit 就按TIFF容器，保留用户的无损压缩选择发，
+        // 不把JPEG容器冒充16-bit，也不向非TIFF格式递交旧TIFF压缩参数。
         const combo = reconcileExportCombo(exportBits16, exportFormat, exportTiffComp);
         return runExport(exportDir, {
           format: combo.format,
@@ -3395,6 +3395,9 @@ export default function App() {
       if (!hasImage) return "还没导入图片：没有可撤销的会话。";
       return null;
     }
+    if (key.startsWith("lnx.skin.v1.") && skinMaskUnavailable(pc?.mask_nonzero_pixels)
+        && !(key === "lnx.skin.v1.enabled" && (doc?.strength ?? 0) > 0))
+      return "未找到置信度足够的皮肤区域，本次不会自动磨皮。可重新分析；不要把空蒙版当成已修好。";
     // 逐点层与人脸相关：没图 / 没可用人脸就显式禁用并说清哪一条判据没过
     const faceScoped = key.startsWith("lnx.skin.v1.") || key.startsWith("lnx.blemish.v1.")
       || key.startsWith("lnx.mask.v1.");
@@ -3705,6 +3708,18 @@ export default function App() {
       )}
 
       <main className="stage">
+        {!!((project?.changed_count ?? 0) + (project?.missing_count ?? 0)) && (
+          <section className="projectSourceWarning" role="alert" aria-label="工程原片校验提醒">
+            <strong>工程原片需要核对</strong>
+            <p>打开工程时发现 {project?.changed_count ?? 0} 张原片内容已改变，
+              {project?.missing_count ?? 0} 张原片缺失。旧编辑参数可能不再适用，导出前请核对原片与修图效果。
+              保存工程不会自动消除此提醒；恢复正确原片后重新打开工程可再次校验。</p>
+            <details><summary>查看原片路径（最多显示各 12 项）</summary>
+              <ul>{project?.changed?.map((item) => <li key={"changed:" + item.path}>内容改变：{item.path}</li>)}
+                {project?.missing?.map((item) => <li key={"missing:" + item.path}>原片缺失：{item.path}</li>)}</ul>
+            </details>
+          </section>
+        )}
         {workspace === "retouch" && (
           <>
             <div className="stageBody">
@@ -4043,11 +4058,20 @@ export default function App() {
                 <label>格式
                   <select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)}
                           disabled={exportBits16}
-                          title={exportBits16 ? "16-bit 母档直通只写无压缩 TIFF，格式已锁定" : undefined}>
+                          title={exportBits16 ? "16-bit 输出使用 TIFF，支持无损压缩，格式已锁定" : undefined}>
                     <option value="jpg">JPEG</option>
                     <option value="png">PNG</option>
                     <option value="tif">TIFF</option>
                     <option value="webp">WebP</option>
+                  </select>
+                </label>
+                <label>TIFF 无损压缩
+                  <select value={exportTiffComp}
+                          disabled={!exportBits16 && !["tif", "tiff"].includes(exportFormat)}
+                          onChange={(e) => setExportTiffComp(e.target.value)}>
+                    <option value="none">无压缩</option>
+                    <option value="deflate">Deflate（无损）</option>
+                    <option value="lzw">LZW（无损）</option>
                   </select>
                 </label>
                 <label>质量

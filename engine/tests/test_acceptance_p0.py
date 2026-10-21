@@ -685,7 +685,7 @@ def test_export_refuses_invalid_combinations_instead_of_losing_data(engine, tmp_
     out = tmp_path / "out"
     for payload, word in (
         ({"bit_depth": 16, "format": "png"}, "TIFF"),
-        ({"bit_depth": 16, "format": "tif", "tiff_compression": "lzw"}, "无压缩"),
+        ({"bit_depth": 16, "format": "tif", "tiff_compression": "jpeg"}, "tiff_compression"),
         ({"bit_depth": 8, "format": "heic"}, "格式"),
         ({"bit_depth": 7}, "bit_depth"),
         ({"bit_depth": "16位"}, "bit_depth"),

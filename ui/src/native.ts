@@ -353,6 +353,7 @@ export interface Precompute {
   num_landmarks: number;
   landmark_shape: number[];
   mask_channels: string[];
+  mask_nonzero_pixels?: Record<string, number>;
   mask_shape: number[];
   mask_bytes: number;
   detect_ms: number;
@@ -909,6 +910,8 @@ export interface ProjectState {
   task_restore?: { task_id: string; state: string; blocked: string }[];
   missing?: { path: string; exists: boolean }[];
   missing_count?: number;
+  changed?: { path: string; level?: string; head_match?: boolean; bytes_match?: boolean; full_match?: boolean | null }[];
+  changed_count?: number;
   auto_opened?: string | null;
   proxy_budget?: number | null;
 }
@@ -937,13 +940,19 @@ export interface TaskState {
  */
 export interface ExportedImage {
   path: string;
-  /** 16-bit 母档直通（M9-e）的三个保真读数。缺任何一条都不能算"无损"：
-   *  差值必须 0、每通道档位必须远多于 256、低 8 位不许全是零。 */
+  /** 16-bit 母档读回差值必须为0；档位/低8位是诊断而非纯色图拒绝条件。
+   *  冲突跳过时没有读回，三个诊断值为null。 */
   bits?: number;
   source?: string | null;
-  readback_max_diff?: number;
-  levels_per_channel?: number[];
-  low8_nonzero_px?: number;
+  readback_max_diff?: number | null;
+  levels_per_channel?: number[] | null;
+  low8_nonzero_px?: number | null;
+  decode_ms?: number;
+  readback_ms?: number;
+  verification_ms?: number;
+  semantic_analysis_ms?: number;
+  pipeline?: "passthrough_rgb16" | "float32_rgb16";
+  render_stats?: Record<string, unknown>;
   out?: string;
   format?: string;
   bytes?: number;
@@ -1372,7 +1381,7 @@ export function parseFrameHead(buf: ArrayBuffer): ParsedFrame {
 
 export const isNoFrame = (e: unknown) => {
   const s = String(e);
-  return s.includes("NO_NEW_FRAME") || s.includes("NO_FRAME_YET") || s.includes("SHM_NOT_READY");
+  return s.includes("NO_NEW_FRAME") || s.includes("NO_FRAME_YET") || s.includes("SHM_NOT_READY") || s.includes("SHM_CHANGED");
 };
 
 /** M0 自动化跑靶：由环境变量驱动，结果打到宿主 stdout，便于脚本采集。 */

@@ -782,3 +782,7 @@ input[type="range"], input[type="checkbox"] { accent-color: var(--acc); }
 
 
 .zoomRead.srOnly { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+.projectSourceWarning { margin:8px 12px; padding:10px 14px; border:1px solid #a87537; border-radius:8px; background:#33291d; color:#ffe0b0; max-height:180px; overflow:auto; }
+.projectSourceWarning p { margin:4px 0; }
+.projectSourceWarning li { overflow-wrap:anywhere; }

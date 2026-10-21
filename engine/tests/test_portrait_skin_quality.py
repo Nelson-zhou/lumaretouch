@@ -12,9 +12,9 @@
 阈值定在实测与"坏味道"之间。ΔE00 的**测量本身**先要被验：`color_metric.delta_e00`
 逐条对 Sharma 等人的官方校验数据（34 行全对），否则上面那些数字都是自报。
 
-样本从哪来：本仓自有程序化正脸夹具（`packaging/make-test-portrait.py`，许可干净、无真人），
+样本从哪来：确定性算法臂用本仓自有程序化正脸夹具（`packaging/make-test-portrait.py`，许可干净、无真人），
 "不同肤色与光照"由引擎自己的白平衡/曝光命令造出来（±800 K、色调 +0.6、±1.0 EV）——
-用产品命令造样本，比在测试里 PS 一张图更接近真实工况，也不引入第二份色彩路径。
+用产品命令造样本，不引入第二份色彩路径。真实模型臂另用有来源记录的NASA公共领域照片；色温变化不冒充不同真实肤色人群。
 """
 from __future__ import annotations
 
@@ -51,6 +51,7 @@ SAMPLES = [("中性", 0.0, 0.0, 0.0),
            ("暗光", 0.0, 0.0, -1.0),
            ("亮光", 0.0, 0.0, 1.0)]
 STRENGTH = 0.6
+REAL_PHOTO = REPO / "engine/tests/fixtures/nasa-astronaut-face-crop.png"
 
 
 def _face_box(h: int, w: int) -> np.ndarray:
@@ -95,7 +96,8 @@ def test_delta_e00_matches_the_published_reference_vectors():
 
 
 @pytest.mark.skipif(not os.path.isfile(FIXTURE), reason="缺测试人像")
-def test_skin_retouch_keeps_texture_and_does_not_drift_color_or_bleed(engine):
+@pytest.mark.parametrize("backend,path", [("synthetic", FIXTURE), ("mediapipe", str(REAL_PHOTO))])
+def test_skin_retouch_keeps_texture_and_does_not_drift_color_or_bleed(engine, backend, path):
     """PORTRAIT-002（自动化那半）：基础肤质修饰不产生蜡像感、不明显肤色漂移、不越界污染。
 
     每组样本各判三件事（strength=0 与 0.6 两帧对比，全部走真命令通路）：
@@ -107,7 +109,7 @@ def test_skin_retouch_keeps_texture_and_does_not_drift_color_or_bleed(engine):
        拿全局那一帧判越界会把正确实现判成错。
     """
     _needs_torch()
-    meta = _open(engine, max_px=207360)
+    meta = _open(engine, path=path, max_px=207360)
     h, w = meta["h"], meta["w"]
     peer = FrameShm(meta["name"])
     box = _face_box(h, w)
@@ -141,9 +143,9 @@ def test_skin_retouch_keeps_texture_and_does_not_drift_color_or_bleed(engine):
         assert (base != on).any(), f"{name}：strength={STRENGTH} 画面一动不动：假磨皮"
 
     # ③ 边界污染：只有掩膜那一次能判
-    engine.send(cmd="precompute", backend="mediapipe")
+    engine.send(cmd="precompute", backend=backend)
     pc = engine.wait_for("precompute_ready", timeout=180)
-    assert pc.get("backend") == "mediapipe", pc
+    assert pc.get("backend") == backend, pc
     _drain(engine)
     engine.send(cmd="exposure", action="clear")
     _wait_frame_mode(engine, "exposure")
@@ -155,3 +157,9 @@ def test_skin_retouch_keeps_texture_and_does_not_drift_color_or_bleed(engine):
     inside = int(np.abs(masked - base).max())
     assert inside > 0, "掩膜内也没动：这一层根本没生效，'没污染'是因为'没干活'"
     print("\nPORTRAIT-002 自动化读数（名字, 高频比, ΔE00 mean, p95, max）：", measured)
+
+
+def test_real_photo_fixture_matches_documented_bytes():
+    import json
+    manifest = json.loads((REAL_PHOTO.parent / "nasa-astronaut-provenance.json").read_text())
+    assert hashlib.sha256(REAL_PHOTO.read_bytes()).hexdigest() == manifest["sha256"]

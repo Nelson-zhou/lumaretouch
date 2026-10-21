@@ -25,7 +25,7 @@ def test_byte_layout_is_pinned():
         return int.from_bytes(buf[o:o + 4], "little")
 
     assert bytes(buf[0:4]) == b"LRSH"
-    assert (u32(4), u32(8), u32(12), u32(16)) == (1, 2, 640, 480)
+    assert (u32(4), u32(8), u32(12), u32(16)) == (2, 2, 640, 480)
     assert (u32(20), u32(24), u32(28)) == (px, slot_size, 64 + 2 * slot_size)
 
     s = bytearray(64)
@@ -81,7 +81,7 @@ def test_write_frame_accepts_ndarray_without_tobytes(shm):
         shm.write_frame(np.transpose(frame, (1, 0, 2)))
 
 
-def test_slots_alternate_so_reader_never_sees_torn_frame(shm):
+def test_slots_alternate_and_unwritten_slot_keeps_previous_frame(shm):
     a = np.zeros(shm.pixel_size, np.uint8)
     b = np.full(shm.pixel_size, 255, np.uint8)
     _, _, s0 = shm.write_frame(a.tobytes())

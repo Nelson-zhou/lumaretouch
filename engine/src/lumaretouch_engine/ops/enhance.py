@@ -56,10 +56,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-try:                                    # torch 是可选依赖：CI 的 CPU job 没装也要能 import
-    import torch
-except ModuleNotFoundError:             # pragma: no cover
-    torch = None
+from ..optional_dependencies import optional_module
+
+torch = optional_module("torch")
 
 from .deform import (IRIS_LEFT, IRIS_RIM_LEFT, IRIS_RIM_RIGHT, IRIS_RIGHT, LIP_INNER_BOTTOM,
                      LIP_INNER_TOP, MOUTH_CORNER_LEFT, MOUTH_CORNER_RIGHT)

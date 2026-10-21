@@ -20,10 +20,9 @@ from __future__ import annotations
 
 import numpy as np
 
-try:
-    import torch
-except Exception:      # 与 ops.guided 同一约定：torch 未装（CI 的 CPU job）也要能 import
-    torch = None
+from ..optional_dependencies import optional_module
+
+torch = optional_module("torch")
 
 from .guided import _box_np, _box_t
 

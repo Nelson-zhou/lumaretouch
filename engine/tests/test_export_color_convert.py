@@ -17,7 +17,8 @@ from lumaretouch_engine.export import (
     RENDERING_INTENT_DEFAULT, _convert_srgb_to_profile, _srgb_bytes, write_file,
 )
 
-ADOBE = "/usr/share/color/icc/colord/AdobeRGB1998.icc"
+ADOBE = next((p for p in ("/usr/share/color/icc/colord/AdobeRGB1998.icc",
+    "/usr/share/color/icc/compatibleWithAdobeRGB1998.icc") if os.path.isfile(p)), "")
 need_adobe = pytest.mark.skipif(not os.path.isfile(ADOBE), reason="系统没有 AdobeRGB1998.icc 样本档")
 
 
@@ -107,19 +108,17 @@ def test_unknown_intent_raises():
 
 
 @need_adobe
-def test_output_profile_source_passes_through_without_transform(tmp_path):
-    """ADR-0023 决策一：output_profile=source 不能转色。decode 不做输入色管，像素就是源编码值，
-    再 sRGB→source 转一遍对非 sRGB 源就是二次转换（颜色真错）。本例钉：source 透传像素逐字节不变，
-    但嵌的是源档；而显式目标档(同一 AdobeRGB)则必须转——两者行为不同才说明区分到位。"""
+def test_output_profile_source_converts_working_pixels(tmp_path):
+    """Input decoding normalizes to sRGB, so source is an output target too."""
     from PIL import Image
     adobe = open(ADOBE, "rb").read()
     src_png = str(tmp_path / "src.png")
+    expected, _ = _convert_srgb_to_profile(Image.fromarray(_saturated()), adobe)
     info = write_file(_saturated(), src_png, output_profile="source", source_icc=adobe)
-    assert info["color_converted"] is False
-    assert info["color_intent"] == "source_passthrough"
-    assert info["icc_bytes"] > 0            # 源档确实嵌进去了
-    # 透传：落盘像素 == 输入像素（没被 sRGB→AdobeRGB 二次转换）
-    assert np.array_equal(np.asarray(Image.open(src_png).convert("RGB")), _saturated())
+    assert info["color_converted"] is True
+    assert info["color_intent"] == RENDERING_INTENT_DEFAULT
+    assert info["icc_bytes"] == len(adobe)
+    assert np.array_equal(np.asarray(Image.open(src_png)), np.asarray(expected))
 
 
 @need_adobe

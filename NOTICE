@@ -8,16 +8,14 @@ LumaRetouch — 第三方资产与署名声明（NOTICE）
 
   1. 本仓库自研代码 ................ GPL-3.0-or-later（见 LICENSE）
   2. 系统库与运行时依赖 ............ 各自许可，见 THIRD-PARTY 段
-  3. 模型权重 ...................... **各自许可，多数含非商业限制**
+  3. 模型权重 ...................... 各自许可；适用性按具体资产核验
   4. 测试样片与文档图片 ............ 见 docs/model-licenses/README.md 的样片段
 
-⚠ 非商业告知（必须随副本一起传递）
+纯开源分发边界
 ----------------------------------------------------------------
-本发行包内置或可拉取的若干模型权重，其上游许可**仅授予非商业研究/个人使用**。
-因此：**包含这些权重的整体发行物不得用于商业目的。** 想要商用者，必须自行
-替换掉这些权重并单独取得授权——本项目的许可不为这部分作任何授予。
-
-这不是本项目施加的额外限制，而是上游权重许可的原文条款，此处如实转述。
+本项目代码许可不因作者是否收费而增加非商业限制。受限或未核清的候选模型
+不因此取得分发许可，不作为纯开源默认获取方案。下列候选条目保留署名与
+限制说明，不表示相应权重已在发行包内或已获下载放行。
 
 模型权重署名（Attribution）
 ----------------------------------------------------------------
@@ -36,15 +34,15 @@ LumaRetouch — 第三方资产与署名声明（NOTICE）
             执法等生命关键或权利决定性场景。本软件的人像精修用途不触碰前者；
             后续任何"跨照片认人"类功能都与此冲突，不得实现。
 
-[按需拉取 tier=fetched]
+[未放行/排除的候选：不作为默认获取清单]
 
 * LaMa（Large Mask Inpainting，智能消除）
   版权归：Samsung Research（原始作者）
-  许可：代码 MIT；**权重训练数据含 Places2 等学术数据集，其条款限研究用途**
+  许可：代码 MIT；具体权重及训练数据条款适用范围待一手核验，不自动推导权重继承训练集全部条款
   上游：https://github.com/advimman/lama
-  状态：许可台账已建，训练数据条款待一手复核（见 docs/model-licenses/lama.md）
+  状态：fetched-pending，权重分发尚未放行，具体条款待一手复核（见 docs/model-licenses/lama.md）
 
-* CodeFormer（面部超分/修复）
+* CodeFormer（面部超分/修复，blocked：不进入纯开源默认分发）
   版权归：S-Lab (Nanyang Technological University)
   许可：**S-Lab License 1.0 —— 自定义的非商业许可，不是 CC 也不是 MIT/Apache**
   上游：https://github.com/sczhou/CodeFormer
@@ -68,3 +66,9 @@ LumaRetouch — 第三方资产与署名声明（NOTICE）
 ----------------------------------------------------------------
 装机后位于：/usr/share/doc/luma-retouch/NOTICE
 源码仓库位于：./NOTICE
+
+Google SelfieMulticlass 256x256 semantic segmentation model
+Copyright Google LLC. Author: Adel Ahmadyan. Apache License, Version 2.0.
+The original model bytes are unmodified. License text: docs/model-licenses/archive/mediapipe-LICENSE.txt.
+Model card: https://storage.googleapis.com/mediapipe-assets/Model%20Card%20Multiclass%20Segmentation.pdf
+Not pixel-perfect; limitations and artifact hash: docs/model-licenses/models.json.

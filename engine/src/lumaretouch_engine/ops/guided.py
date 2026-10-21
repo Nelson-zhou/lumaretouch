@@ -9,14 +9,11 @@ from __future__ import annotations
 
 import numpy as np
 
-try:
-    import torch
-    import torch.nn.functional as F
-    _HAS_TORCH = True
-except Exception:  # torch 未装（M0 纯通路阶段允许）
-    torch = None
-    F = None
-    _HAS_TORCH = False
+from ..optional_dependencies import optional_module
+
+torch = optional_module("torch")
+F = optional_module("torch.nn.functional")
+_HAS_TORCH = torch is not None
 
 
 # ---------------------------------------------------- M2-a 四条带与产品默认值

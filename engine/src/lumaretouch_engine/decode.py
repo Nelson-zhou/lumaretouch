@@ -339,6 +339,8 @@ def _decoded_from_libraw(path: str, arr, info: dict, budget: int | None,
                 draft_used=False, draft_size=None)
     d.raw = {"camera": " ".join(x for x in (m["make"], m["model"]) if x),
              "source": "libraw", "bits": int(info["bits"]), "used_preview": False,
+             "output_color_space": info.get("output_color_space"),
+             "output_gamma": info.get("output_gamma"),
              # half_size 单独报出来：浏览那一格允许 binning，编辑与导出永远不许。
              # 这一位不给，"这张图是谁解的"就答不完整（同一帧像素，来路有两种）。
              "half_size": bool(half),
@@ -350,6 +352,7 @@ def _decoded_from_libraw(path: str, arr, info: dict, budget: int | None,
              "demosaic_ms": round(info["process_ms"], 2)}
     cam = d.raw["camera"] or "未报机型"
     d.notes.append(f"LibRaw 真去马赛克：{w}×{h} {info['bits']}-bit（相机 {cam}）")
+    d.notes.append("LibRaw输出显式使用sRGB原色及传递曲线（1/2.4，toe=12.92）")
     _note_no_source_metadata(d, "LibRaw 通道")
     if why is not None:
         # 换了后端必须看得见：基线读侧为什么解不开、这一臂用的是另一套实现，
@@ -448,38 +451,93 @@ def _source_bits(im) -> int:
 
 
 def _load_16bit_tiff_full(path: str, max_px: int) -> Decoded:
-    """把 baseline 无压缩 16bpc RGB TIFF 的真实 uint16 像素读进来（P0：16-bit TIFF 导入不降 8-bit）。
+    """Read true uint16 RGB TIFF using the upstream TIFF codec, then orient losslessly.
 
-    读侧复用 export.read_tiff16——那份实现与 write_tiff16 成对自证过，只认无压缩、单
-    strip、interleaved(Chunky)、photometric=RGB 且 bps 全为 16 的那种（就是本厂 P0 交换格式）。
-    任何其它排布（压缩/多 strip/平面/BigTIFF/8-bit）它会抛，这里翻成一句明确的“不静默降位”的
-    拒，而不是退回 Pillow 把高位砍掉凑一张假 16-bit。这一支只处理无方向（orientation）的母档：
-    write_tiff16 不写方向，按 orientation 重排属于 8-bit 预览通路，不在直通这一格。
+    Supports strips/tiles, separate/contiguous RGB, either endian and BigTIFF.
+    Never convert through Pillow RGB or pad 8-bit data to impersonate 16-bit.
     """
-    import time as _time
-    from .export import read_tiff16
-    t0 = _time.perf_counter()
+    import tifffile
+    t0 = time.perf_counter()
     try:
-        arr = read_tiff16(path)
-    except Exception as e:
-        raise ValueError(
-            f"16-bit 直通只保证 baseline 无压缩、单 strip、interleaved 16bpc RGB TIFF（本厂 P0 交换格式）；"
-            f"这张读不出真 16-bit（{type(e).__name__}: {e}）。不拿 Pillow 的 8-bit 降位凑一张假 16-bit——"
-            "要出 16-bit 请先另存为无压缩 16-bit TIFF") from None
-    if arr.dtype != np.uint16:
-        raise ValueError(f"内部错误：read_tiff16 没交出 uint16（拿到 {arr.dtype}）")
+        with tifffile.TiffFile(path) as tf:
+            page = tf.pages[0]
+            if len(tf.pages) != 1:
+                raise ValueError("16-bit 多页 TIFF 尚需显式选页，不能静默丢弃其它页")
+            if (page.dtype.kind != "u" or page.dtype.itemsize != 2
+                    or int(page.photometric) != 2 or page.samplesperpixel != 3):
+                raise ValueError("16-bit TIFF 导入需要真实 uint16 RGB 三通道；不静默降位或丢弃通道")
+            w, h = int(page.imagewidth), int(page.imagelength)
+            if w * h > int(max_px):
+                raise ValueError(f"导出尺寸 {w}x{h} = {w*h/1e6:.0f} Mpx 超过上限 {int(max_px)/1e6:.0f} Mpx")
+            orientation_tag = page.tags.get(274)
+            orientation = int(orientation_tag.value) if orientation_tag else 1
+            icc_tag = page.tags.get(34675)
+            source_icc = bytes(icc_tag.value) if icc_tag else None
+            opened = time.perf_counter()
+            arr = page.asarray()
+            if int(page.planarconfig) == 2:
+                arr = arr.transpose(1, 2, 0)
+            if arr.shape != (h, w, 3):
+                raise ValueError(f"16-bit TIFF 像素形状异常：{arr.shape}")
+            arr = arr.astype(np.uint16, copy=False)
+            decoded = time.perf_counter()
+    except (tifffile.TiffFileError, OSError, ValueError, IndexError) as exc:
+        raise ValueError(f"无法读取真实 16-bit TIFF：{exc}") from exc
+    if orientation not in range(1, 9):
+        raise ValueError(f"TIFF orientation 非法：{orientation}")
+    if orientation == 2:
+        arr = arr[:, ::-1]
+    elif orientation == 3:
+        arr = arr[::-1, ::-1]
+    elif orientation == 4:
+        arr = arr[::-1]
+    elif orientation == 5:
+        arr = arr.transpose(1, 0, 2)
+    elif orientation == 6:
+        arr = np.rot90(arr, -1)
+    elif orientation == 7:
+        arr = arr.transpose(1, 0, 2)[::-1, ::-1]
+    elif orientation == 8:
+        arr = np.rot90(arr, 1)
     h, w = int(arr.shape[0]), int(arr.shape[1])
     if w * h > int(max_px):
         raise ValueError(f"导出尺寸 {w}x{h} = {w * h / 1e6:.0f} Mpx 超过上限 {int(max_px) / 1e6:.0f} Mpx")
-    t1 = _time.perf_counter()
+    t1 = time.perf_counter()
     ms = lambda a, b: (b - a) * 1000.0      # noqa: E731
     d = Decoded(rgb=np.ascontiguousarray(arr), src_w=w, src_h=h, fmt="TIFF",
-                t_open_ms=0.0, t_decode_ms=ms(t0, t1), t_orient_ms=0.0, t_scale_ms=0.0,
+                t_open_ms=ms(t0, opened), t_decode_ms=ms(opened, decoded),
+                t_orient_ms=ms(decoded, t1), t_scale_ms=0.0,
                 t_total_ms=ms(t0, t1), draft_used=False, draft_size=None, src_bits=16)
     # source 报 "tiff16"：与 RAW 那三支（self_dng/libraw/libraw_preview）并列，让“这一帧谁解的”答得完整
     d.raw = {"source": "tiff16", "bits": 16, "used_preview": False, "half_size": False}
-    d.notes.append(f"16-bit TIFF 直通：读到 {w}×{h} 真实 uint16 像素（baseline 无压缩），未降位")
+    d.source_icc = source_icc
+    if orientation != 1:
+        d.notes.append(f"16-bit 像素按 TIFF orientation={orientation} 无损摆正")
+    d.notes.append(f"16-bit TIFF 直通：读到 {w}×{h} 真实 uint16 像素（tifffile），未降位")
     return d
+
+
+def _to_working_srgb(im, icc: bytes | None):
+    """Convert embedded source encodings before any RGB editing or resampling.
+
+    Keep the original ICC separately for output_profile=source. A mode conversion
+    alone is not color management. Invalid profiles must not silently become sRGB.
+    """
+    if not icc:
+        return im if im.mode == "RGB" else im.convert("RGB")
+    from PIL import ImageCms
+    try:
+        src = ImageCms.ImageCmsProfile(io.BytesIO(icc))
+        # Palette/alpha RGB images carry RGB profiles; CMYK, L and LAB need their
+        # original modes so littleCMS sees the correct channel encoding.
+        mode = im.mode if im.mode in ("RGB", "CMYK", "L", "LAB") else "RGB"
+        source = im if im.mode == mode else im.convert(mode)
+        return ImageCms.profileToProfile(
+            source, src, ImageCms.createProfile("sRGB"), outputMode="RGB",
+            renderingIntent=ImageCms.Intent.RELATIVE_COLORIMETRIC,
+            flags=ImageCms.Flags.BLACKPOINTCOMPENSATION)
+    except (ImageCms.PyCMSError, OSError, ValueError, TypeError) as exc:
+        raise ValueError(f"输入 ICC 无法转换到 sRGB：{exc}") from exc
 
 
 def _load_rgb_pillow(path: str, budget: int) -> Decoded:
@@ -516,8 +574,7 @@ def _load_rgb_pillow(path: str, budget: int) -> Decoded:
         if orient != 1:
             im = ImageOps.exif_transpose(im)          # 无 EXIF 时是空操作
         t_s = time.perf_counter()
-        if im.mode != "RGB":
-            im = im.convert("RGB")                    # 灰度/调色板/带 alpha 都先落到 RGB
+        im = _to_working_srgb(im, icc)
         if im.size != (pw, ph):                       # draft 只能给到近似尺寸，补最后一步
             im = im.resize((pw, ph), Image.LANCZOS)
         arr = np.ascontiguousarray(np.asarray(im, dtype=np.uint8))
@@ -537,6 +594,8 @@ def _load_rgb_pillow(path: str, budget: int) -> Decoded:
                 draft_size=draft_size,
                 src_bits=src_bits,
                 source_icc=icc, source_exif=exif)
+    d.notes.append("输入嵌入 ICC 已转换至 sRGB 工作空间" if icc
+                   else "源图没有 ICC：按 sRGB 输入假设处理")
     if d.draft_used:
         d.notes.append(f"libjpeg DCT 预缩到 {draft_size[0]}×{draft_size[1]}")
     if src_bits > 8:
@@ -559,8 +618,8 @@ def load_full(path: str, max_px: int = MAX_EXPORT_PIXELS, device: str | None = N
               *, want_bits: int = 8) -> Decoded:
     """满幅解码（不缩放）：导出通路用。JPEG/PNG 走 Pillow，RAW 走上面那两条真解码臂。
 
-    `want_bits=16` 只在 16-bit 母档那一臂用（M9-e 接导出）：那时 `rgb` 的 dtype 是
-    uint16，拿它当代理帧用就是拿 4 字节当 1 字节用——预览与编辑那两层永远走 8-bit。
+    `want_bits=16` 用于母档及高位深编辑导出：`rgb` 的 dtype 是 uint16。
+    显示代理独立走 8-bit；高位深出片不能反过来读取该显示缓冲。
 
     16-bit 这一臂**不能拿自研读侧那支**：它只渲染 8-bit（实测 source=self_dng 回的是
     uint8）。上一版这里把 want_bits 透传给 `_libraw_matrix` 却仍然先走基线那一支，于是
@@ -595,10 +654,10 @@ def load_full(path: str, max_px: int = MAX_EXPORT_PIXELS, device: str | None = N
     if want == 16:
         ext = os.path.splitext(path)[1].lower()
         if ext in (".tif", ".tiff"):
-            # P0：baseline 无压缩 16bpc RGB TIFF 走真 16-bit 直通（不降位、不左移补零）；
+            # P0：16bpc RGB TIFF 走真 16-bit 解码（不降位、不左移补零）；
             # 读不出真 16-bit 的变体在 _load_16bit_tiff_full 里明确拒，而不是退回 8-bit。
             return _load_16bit_tiff_full(path, max_px)
-        raise ValueError(f"16-bit 直通只对相机 RAW 或 baseline 无压缩 16bpc RGB TIFF 成立"
+        raise ValueError(f"16-bit 直通只对相机 RAW 或 16bpc RGB TIFF 成立"
                          f"（这张是 {ext or '无后缀'}）：普通 JPEG/PNG/8-bit 图里没有 16-bit 母档可直通，"
                          "不拿 8-bit 左移补零冒充。要 8-bit 出片请用常规导出。")
     return _load_full_pillow(path, max_px)
@@ -636,8 +695,7 @@ def _load_full_pillow(path: str, max_px: int = MAX_EXPORT_PIXELS) -> Decoded:
         if im.size != (src_w, src_h):          # 方向处理后的尺寸必须与报出去的一致
             raise ValueError(f"摆正后尺寸 {im.size} 与报出去的 {src_w}x{src_h} 不一致")
         t_s = time.perf_counter()
-        if im.mode != "RGB":
-            im = im.convert("RGB")
+        im = _to_working_srgb(im, icc)
         arr = np.ascontiguousarray(np.asarray(im, dtype=np.uint8))
     t1 = time.perf_counter()
     assert arr.shape == (src_h, src_w, 3) and arr.dtype == np.uint8, "满幅解码输出布局不符约定"
@@ -646,6 +704,8 @@ def _load_full_pillow(path: str, max_px: int = MAX_EXPORT_PIXELS) -> Decoded:
                 t_scale_ms=0.0, t_total_ms=ms(t0, t1), draft_used=False, draft_size=None,
                 src_bits=src_bits,
                 source_icc=icc, source_exif=exif)
+    d.notes.append("输入嵌入 ICC 已转换至 sRGB 工作空间" if icc
+                   else "源图没有 ICC：按 sRGB 输入假设处理")
     d.notes.append("满幅解码（导出通路，不缩放）")
     if src_bits > 8:
         d.notes.append(f"源为 {src_bits}-bit：本路径按 8-bit 落盘（Pillow 会把高位截掉）；"

@@ -94,3 +94,41 @@ def test_src_bits_default_8_for_plain_jpeg(tmp_path):
     p = str(tmp_path / "plain.jpg")
     Image.fromarray((np.full((16, 16, 3), 128, np.uint8)), "RGB").save(p)
     assert D.load_rgb(p).src_bits == 8
+
+
+@pytest.mark.parametrize("orientation", range(1, 9))
+def test_full16_normalizes_orientation_without_quantizing(tmp_path, orientation):
+    """Use independent Pillow transpose semantics to check all TIFF orientations."""
+    import struct
+    p = tmp_path / "oriented.tif"
+    arr = _rich16(h=4, w=7)
+    write_tiff16(arr, str(p), output_profile="none")
+    data = bytearray(p.read_bytes())
+    old_ifd = struct.unpack_from("<I", data, 4)[0]
+    count = struct.unpack_from("<H", data, old_ifd)[0]
+    entries = [bytes(data[old_ifd+2+i*12:old_ifd+14+i*12]) for i in range(count)]
+    entries.append(struct.pack("<HHIHH", 274, 3, 1, orientation, 0))
+    entries.sort(key=lambda e: struct.unpack_from("<H", e)[0])
+    new_ifd = len(data)
+    data.extend(struct.pack("<H", len(entries)) + b"".join(entries) + b"\0"*4)
+    struct.pack_into("<I", data, 4, new_ifd)
+    p.write_bytes(data)
+    transpose = {2: Image.Transpose.FLIP_LEFT_RIGHT, 3: Image.Transpose.ROTATE_180,
+                 4: Image.Transpose.FLIP_TOP_BOTTOM, 5: Image.Transpose.TRANSPOSE,
+                 6: Image.Transpose.ROTATE_270, 7: Image.Transpose.TRANSVERSE,
+                 8: Image.Transpose.ROTATE_90}
+    planes = [Image.fromarray(arr[:, :, c]) for c in range(3)]
+    expected = np.stack([np.asarray(im.transpose(transpose[orientation])
+                       if orientation != 1 else im) for im in planes], axis=-1)
+    got = D.load_full(str(p), want_bits=16)
+    assert got.rgb.dtype == np.uint16
+    assert np.array_equal(got.rgb, expected)
+    assert (got.src_w, got.src_h) == (expected.shape[1], expected.shape[0])
+
+
+def test_full16_keeps_embedded_source_profile(tmp_path):
+    from PIL import ImageCms
+    profile = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+    path = str(tmp_path / "profile16.tif")
+    write_tiff16(_rich16(), path, output_profile="source", source_icc=profile)
+    assert D.load_full(path, want_bits=16).source_icc == profile

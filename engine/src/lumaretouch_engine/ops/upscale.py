@@ -307,27 +307,32 @@ class Plan:
 
     def region(self, patch, oy0: int, oy1: int, ox0: int, ox1: int,
                cy0: int, cx0: int) -> np.ndarray:
-        """补丁 → 输出坐标里 `[oy0:oy1] × [ox0:ox1]` 那一块（uint8）。
-
-        oy*/ox* 是**输出**下标，cy0/cx0 是补丁在源图里的左上角。累加顺序与 `full`
-        同一条 k 序列，所以两者逐字节等价不是“差不多”而是“同一个数”。
-        """
+        """Legacy RGB8 output, using the same float sampling kernel."""
         if self.s == 1:
             return np.ascontiguousarray(patch[oy0 - cy0:oy1 - cy0, ox0 - cx0:ox1 - cx0])
-        if patch.ndim != 3 or patch.shape[2] != 3:
-            raise ValueError(f"region 需要补丁 (h,w,3)，得到 {patch.shape}")
+        x = self.region_float(patch.astype(np.float64) / 255.0,
+                              oy0, oy1, ox0, ox1, cy0, cx0)
+        return np.clip(np.rint(x * 255.0), 0, 255).astype(np.uint8)
+
+    def region_float(self, patch, oy0: int, oy1: int, ox0: int, ox1: int,
+                     cy0: int, cx0: int) -> np.ndarray:
+        """Normalized float patch, no intermediate integer quantization.
+
+        Float refers to storage precision, not a claim about transfer encoding.
+        The caller supplies its working color space and quantizes after editing.
+        """
+        if patch.ndim != 3 or patch.shape[2] != 3 or patch.dtype.kind != "f":
+            raise ValueError("region_float requires floating (H,W,3) RGB")
+        if self.s == 1:
+            return np.ascontiguousarray(patch[oy0 - cy0:oy1 - cy0, ox0 - cx0:ox1 - cx0])
         ih = self._ih[oy0:oy1] - cy0
         iw = self._iw[ox0:ox1] - cx0
         ph, pw = patch.shape[:2]
         if ih.min() < 0 or ih.max() >= ph or iw.min() < 0 or iw.max() >= pw:
-            raise ValueError(
-                f"补丁不够宽：需要源行 [{int(self._ih[oy0:oy1].min())},"
-                f"{int(self._ih[oy0:oy1].max())}] 落在补丁 [{cy0},{cy0 + ph}) 内——"
-                f"分块导出得给放大留 margin_px={self.margin_px} 的边")
-        x = patch.astype(np.float64) / 255.0
+            raise ValueError(f"补丁不够宽：分块放大需要 margin_px={self.margin_px}")
+        x = patch.astype(np.float64)
         x = _apply_axis_np(x, np.clip(iw, 0, pw - 1), self._ww[ox0:ox1], 1)
-        x = _apply_axis_np(x, np.clip(ih, 0, ph - 1), self._wh[oy0:oy1], 0)
-        return np.clip(np.rint(x * 255.0), 0, 255).astype(np.uint8)
+        return _apply_axis_np(x, np.clip(ih, 0, ph - 1), self._wh[oy0:oy1], 0)
 
     def full(self, img) -> np.ndarray:
         """整幅一次放大。与 `upscale_np` 同一路（不另开一份实现，免得两档各自腐化）。"""
@@ -365,6 +370,30 @@ def unsharp_bands_np(img, radius: float = 2.0, amount: float = 0.35,
             d = np.where(np.abs(d) < threshold, 0.0, d)
         q = np.clip(np.rint((sub + amount * d) * 255.0), 0, 255).astype(np.uint8)
         out[y0:y1] = q[y0 - cy0:y1 - cy0]
+    return out
+
+
+def unsharp_float_bands_np(img, radius: float = 2.0, amount: float = 0.35,
+                           threshold: float = 0.01, band: int = 512) -> np.ndarray:
+    """Same unsharp formula on normalized float RGB, without an 8-bit stop."""
+    if img.ndim != 3 or img.shape[2] != 3 or img.dtype.kind != "f":
+        raise ValueError("float sharpening requires floating (H,W,3) RGB")
+    if int(band) <= 0:
+        raise ValueError("band must be positive")
+    k = gaussian_kernel1d(radius)
+    if k.size == 1 or amount == 0:
+        return img.copy()
+    pad = k.size // 2
+    h = img.shape[0]
+    out = np.empty_like(img)
+    for y0 in range(0, h, int(band)):
+        y1 = min(y0 + int(band), h)
+        cy0, cy1 = max(y0 - pad, 0), min(y1 + pad, h)
+        sub = img[cy0:cy1].astype(np.float64)
+        d = sub - blur_np(sub, radius)
+        if threshold > 0:
+            d = np.where(np.abs(d) < threshold, 0.0, d)
+        out[y0:y1] = (sub + amount * d)[y0 - cy0:y1 - cy0]
     return out
 
 

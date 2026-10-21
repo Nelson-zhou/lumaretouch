@@ -19,10 +19,9 @@ from __future__ import annotations
 
 import numpy as np
 
-try:
-    import torch
-except Exception:          # 与 ops.guided 同一约定：没装 torch 也要能 import
-    torch = None
+from .optional_dependencies import optional_module
+
+torch = optional_module("torch")
 
 
 def quantize_np(a: np.ndarray) -> np.ndarray:
@@ -48,3 +47,29 @@ def quantize_t(t):
 def dequantize(u8: np.ndarray, dtype=np.float32) -> np.ndarray:
     """uint8 → [0,1] 浮点。正向口径，测试与跑靶都靠它跟 quantize_* 对齐。"""
     return np.asarray(u8).astype(dtype) / dtype(255.0)
+
+
+def quantize16_np(a: np.ndarray, *, chunk_pixels: int = 1 << 18) -> np.ndarray:
+    """Normalized floating RGB -> RGB16, one final nearest-even quantization.
+
+    Bound float64 temporaries by image tiles; preserve the input array and reject
+    nonfinite values instead of letting a cast turn NaNs into plausible pixels.
+    """
+    a = np.asarray(a)
+    if a.ndim != 3 or a.shape[2] != 3 or a.dtype.kind != "f":
+        raise ValueError("quantize16_np requires floating (H,W,3) RGB")
+    h, w = a.shape[:2]
+    budget = int(chunk_pixels)
+    if budget <= 0 or not h or not w:
+        raise ValueError("image and quantization budget must be positive")
+    columns = min(w, budget)
+    rows = max(1, budget // columns)
+    out = np.empty(a.shape, dtype=np.uint16)
+    for y in range(0, h, rows):
+        for x in range(0, w, columns):
+            block = np.asarray(a[y:y + rows, x:x + columns], dtype=np.float64)
+            if not np.isfinite(block).all():
+                raise ValueError("nonfinite RGB cannot be quantized")
+            out[y:y + rows, x:x + columns] = np.clip(
+                np.rint(np.clip(block, 0, 1) * 65535), 0, 65535).astype(np.uint16)
+    return out

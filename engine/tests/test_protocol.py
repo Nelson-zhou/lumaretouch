@@ -2952,7 +2952,10 @@ def _collect(ep, until, timeout=120.0):
         left = deadline - time.monotonic()
         if left <= 0:
             raise AssertionError(f"{timeout}s 内没等到 {until}；已收到 {sorted(got)}")
-        e = ep.next_event(timeout=min(left, 10.0))
+        try:
+            e = ep.next_event(timeout=min(left, 10.0))
+        except TimeoutError:
+            continue  # A quiet poll is not expiry of the caller's total budget.
         k = e.get("event") or "?"
         if k == "error":
             raise AssertionError(f"引擎报错：{e['error']}")
@@ -3109,7 +3112,7 @@ def test_switching_documents_returns_the_exact_same_frame(engine, tmp_path):
         engine.send(cmd="session", action="select", index=1)
         b = engine.wait_for("image_ready", timeout=90)
         assert b["session_index"] == 1 and b["switched"] is False, b
-        assert abs(float(b["strength"]) - 0.5) < 1e-6, f"b 拿到了 a 的强度：{b['strength']}"
+        assert float(b["strength"]) == 0.0, f"b 拿到了 a 的强度：{b['strength']}"
         # 这份字面量是 edits 名单的第二处出处（第一处在 server._state_edits）：引擎加了
         # 一层（PORTRAIT-009 的 enhance / 1.12 的八色 hsl）就必须在这里同步一格。
         # 不同步就是拿一份旧名单当回归基线——它报红是**对的**，提醒"有一层的账没人看了"。
@@ -3708,23 +3711,15 @@ def test_export_bit_depth_16_refuses_before_doing_anything(engine, tmp_path):
                 images=[src], bit_depth=16)
     ev = engine.wait_for("error", timeout=15)
     assert "TIFF" in ev["error"], ev
-    # ② 图层：默认磨皮强度 0.5 是会改像素的，直通不许替用户偷偷降到 8-bit
-    engine.send(cmd="export", out_dir=str(tmp_path / "b"), format="tif",
-                images=[src], bit_depth=16)
-    ev = engine.wait_for("error", timeout=15)
-    assert "磨皮强度" in ev["error"], ev
-    # ③ 放大同理：scale=2 属于图层链，直通不认
-    engine.send(cmd="export", out_dir=str(tmp_path / "c"), format="tif",
-                images=[src], bit_depth=16, scale=2)
-    ev = engine.wait_for("error", timeout=15)
-    assert "放大倍率" in ev["error"] or "磨皮强度" in ev["error"], ev
+    # Valid editing/scale requests are exercised by positive RGB16 file tests;
+    # they are no longer invalid merely because passthrough could not do them.
     # ④ 位深本身不认识的值不能当成 8 跑起来
     engine.send(cmd="export", out_dir=str(tmp_path / "d"), format="tif",
                 images=[src], bit_depth=12)
     ev = engine.wait_for("error", timeout=15)
     assert "bit_depth" in ev["error"], ev
     # 三条拒绝都必须在开跑前关门：一个字节都不该落盘
-    for d in ("a", "b", "c", "d"):
+    for d in ("a", "d"):
         p = tmp_path / d
         assert not p.exists() or not list(p.iterdir()), f"被拒的导出仍然写了文件：{d}"
 
@@ -4009,8 +4004,8 @@ def test_crop_only_deletes_pixels_and_leaves_the_kept_region_untouched(engine, t
     assert d == 0, f"留存区被改了 {d} LSB：裁剪不只是按定义删除区域"
 
 
-def test_crop_blocks_the_16bit_master_path_with_a_named_reason(engine, tmp_path):
-    """母档直通是"解出来什么样就写什么样"，剪过就不是那张图了——必须点名拒绝。"""
+def test_crop_uses_true_16bit_edit_path_without_losing_pixels(engine, tmp_path):
+    """Cropping now uses the RGB16 edit path, not an unchanged master or RGB8 proxy."""
     import shutil as _sh
     if importlib.util.find_spec("torch") is None:
         pytest.skip("常驻管线要 torch")
@@ -4018,8 +4013,14 @@ def test_crop_blocks_the_16bit_master_path_with_a_named_reason(engine, tmp_path)
         pytest.skip("缺 raw-probe.dng")
     src = str(tmp_path / "p.dng")
     _sh.copyfile(_LR.PROBE_DNG, src)
+    source_hash = _sha_of(src)
+    from lumaretouch_engine.decode import load_full
+    from lumaretouch_engine.export import read_tiff16
+    original = load_full(src, want_bits=16, device="cpu").rgb
     engine.send(cmd="hello")
     engine.wait_for("ready")
+    engine.send(cmd="set_device", device="cpu")
+    engine.wait_for("device_set")
     engine.send(cmd="load_image", path=src)
     _lenient_wait(engine, "image_ready", 120)
     engine.send(cmd="set_strength", value=0.0)
@@ -4028,9 +4029,15 @@ def test_crop_blocks_the_16bit_master_path_with_a_named_reason(engine, tmp_path)
     _wait_crop_frame(engine, timeout=120)
     engine.send(cmd="export", out_dir=str(tmp_path / "o"), format="tif",
                 images=[src], bit_depth=16)
-    ev = _next_non_frame(engine, timeout=60)
-    assert ev.get("event") == "error", f"剪过的图居然走了 16-bit 直通：{ev}"
-    assert "裁剪框" in ev["error"], ev
+    done, _ = _collect_until(engine, "export_done")
+    assert done["failed"] == 0, done
+    result = done["images"][0]
+    assert result["pipeline"] == "float32_rgb16", result
+    h, w = original.shape[:2]
+    expected = original[round(h*.1):round(h*.9), round(w*.1):round(w*.9)]
+    np.testing.assert_array_equal(read_tiff16(result["out"]), expected)
+    assert result["readback_max_diff"] == 0 and result["icc_readback_matches"]
+    assert _sha_of(src) == source_hash
 
 
 # ============================================================ 项目（LNX-P0-PROJECT / CORE-001、007、008）

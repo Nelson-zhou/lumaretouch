@@ -26,14 +26,11 @@ import math
 
 import numpy as np
 
-try:
-    import torch
-    import torch.nn.functional as F
-    _HAS_TORCH = True
-except Exception:          # 与 ops.guided 同一约定：没装 torch 也要能 import
-    torch = None
-    F = None
-    _HAS_TORCH = False
+from ..optional_dependencies import optional_module
+
+torch = optional_module("torch")
+F = optional_module("torch.nn.functional")
+_HAS_TORCH = torch is not None
 
 from .guided import _box_np, _box_t, mix_masked      # 同一套积分图盒式滤波，不另写一份
 

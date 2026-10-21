@@ -50,12 +50,10 @@ import math
 
 import numpy as np
 
-try:
-    import torch
-    import torch.nn.functional as F
-except Exception:      # 与 ops.guided / ops.light 同一约定：CI 的 CPU job 没装 torch 也要能 import
-    torch = None
-    F = None
+from ..optional_dependencies import optional_module
+
+torch = optional_module("torch")
+F = optional_module("torch.nn.functional")
 
 # MediaPipe Face Mesh 的 478 点拓扑里，本模块用到的那几组下标。
 # 这是公开的事实性拓扑（点号→部位），不是任何上游代码；写死在这里是为了让
@@ -444,13 +442,27 @@ def tps_eval(state, X):
     """
     scale = state["scale"]
     P, sol, aff = state["P"], state["sol"], state["aff"]
+    # Bound the temporary pairwise matrix, not the final displacement field.
+    # The same coefficients and full-image scale are used for every sample.
+    if state["torch"]:
+        batch = max(1, 2_000_000 // max(1, len(P)))
+        if len(X) > batch:
+            out = torch.empty((len(X), sol.shape[1]), dtype=sol.dtype, device=sol.device)
+            for start in range(0, len(X), batch):
+                out[start:start + batch] = tps_eval(state, X[start:start + batch])
+            return out
     if state["torch"]:
         Xs = X / scale if scale != 1.0 else X
         f = _u_kernel(torch.cdist(Xs, P).pow(2)) @ sol + aff[0] + Xs @ aff[1:]
     else:
         Xn = np.asarray(X)
         Xs = Xn / scale if scale != 1.0 else Xn
-        f = _u_kernel(((Xs[:, None, :] - P[None, :, :]) ** 2).sum(-1)) @ sol + aff[0] + Xs @ aff[1:]
+        kernel = _u_kernel(((Xs[:, None, :] - P[None, :, :]) ** 2).sum(-1))
+        # Keep the reduction order independent of the number of sampled rows.
+        # BLAS matmul may select a different kernel for a tile versus a full frame,
+        # producing tiny seams in the otherwise identical analytic field.
+        f = (np.einsum("ij,jk->ik", kernel, sol, optimize=False) + aff[0]
+             + np.einsum("ij,jk->ik", Xs, aff[1:], optimize=False))
     return f * scale if scale != 1.0 else f
 
 
@@ -564,9 +576,11 @@ def unit_field(landmarks, kind: str, h: int, w: int, *, device="cpu",
                "window": [round(cx, 2), round(cy, 2), round(R, 2), round(r0, 2), round(r1, 2)]}
 
 
-def identity_grid(h: int, w: int, device="cpu", dtype=torch.float32 if torch is not None else None):
+def identity_grid(h: int, w: int, device="cpu", dtype=None):
     """align_corners=False 的精确恒等网格：像素中心 (2i+1)/n − 1。
     写成 linspace(−1+2/n, 1−2/n, n) 会把整幅重新采样（实测 98.8% 像素变、174 LSB）。"""
+    if dtype is None:
+        dtype = torch.float32
     ys = (2 * torch.arange(h, device=device, dtype=dtype) + 1) / h - 1
     xs = (2 * torch.arange(w, device=device, dtype=dtype) + 1) / w - 1
     gy, gx = torch.meshgrid(ys, xs, indexing="ij")
@@ -607,20 +621,31 @@ def warp_t(img, delta, strength: float = 1.0, base=None):
     float32 舍入的经验性质，而"没推滑块⇒画面一个字节都不动"是产品承诺，
     不能建在经验上（M2-a2 的零增益区就是同样的形状）。
     """
+    prepared = prepare_warp_t(delta, img.shape[-2], img.shape[-1], strength, base=base)
+    return apply_prepared_warp_t(img, prepared)
+
+
+def prepare_warp_t(delta, h: int, w: int, strength: float = 1.0, base=None):
+    """Cacheable geometry only: never retain or reuse an edited image tensor."""
     if torch is None:
         raise RuntimeError("warp_t 需要 torch")
     s = float(strength)
     if not math.isfinite(s) or abs(s) > KIND_LIMIT:
         raise ValueError(f"形变强度非法：{strength!r}（需 |strength| ≤ {KIND_LIMIT} 的有限数）")
     if delta is None or s == 0.0 or not bool(torch.any(delta)):
-        return img
-    h, w = img.shape[-2], img.shape[-1]
-    grid = (identity_grid(h, w, img.device) if base is None else base) \
+        return None
+    grid = (identity_grid(h, w, delta.device) if base is None else base) \
         - s * delta * torch.tensor([2.0 / w, 2.0 / h], device=delta.device, dtype=delta.dtype)
+    return grid, (delta == 0).all(dim=-1)[None]
+
+
+def apply_prepared_warp_t(img, prepared):
+    if prepared is None:
+        return img
+    grid, unchanged = prepared
     out = F.grid_sample(img, grid.to(img.dtype), mode="bilinear",
                         padding_mode="border", align_corners=False)
-    # 位移恰好为零的像素直接取原值：把"背景逐字节不动"从经验性质变成结构性质
-    return torch.where((delta == 0).all(dim=-1)[None], img, out)
+    return torch.where(unchanged, img, out)
 
 
 def warp_np(img, delta, strength: float = 1.0):

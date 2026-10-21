@@ -1,17 +1,14 @@
-//! 共享内存读端。布局必须与 engine/src/lumaretouch_engine/shm.py 逐字节一致：
-//!
-//!   GLOBAL_HDR = 64B : magic[4] version u32 slots u32 w u32 h u32 pixel_size u32 slot_size u32 total u32 reserved[32]
-//!   SLOT_HDR   = 64B : seq u64  t_ns u64  w u32 h u32 fourcc u32 reserved[36]
-//!   槽 i 偏移 = 64 + i * slot_size，元数据之后紧跟 w*h*4 像素
-
-use std::ffi::CString;
+//! Protocol v2 shared-frame reader. A shared flock covers metadata selection and
+//! pixel copying; the Python writer holds the same file's exclusive flock.
+//! Ping-pong slots alone do not protect a slow reader against a later overwrite.
+use std::fs::File;
 use std::io;
+use std::os::fd::AsRawFd;
 
 pub const HEADER_SIZE: usize = 64;
 pub const SLOT_META_SIZE: usize = 64;
 const MAGIC: &[u8; 4] = b"LRSH";
 
-#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct SlotMeta {
     pub seq: u64,
@@ -24,145 +21,135 @@ pub struct SlotMeta {
 pub struct ShmReader {
     base: *mut u8,
     len: usize,
-    path: CString,
+    path: String,
+    file: File,
+    width: u32,
+    height: u32,
     pub slots: usize,
     pub slot_size: usize,
     pub pixel_size: usize,
 }
-
 unsafe impl Send for ShmReader {}
 
+fn flock(file: &File, operation: libc::c_int) -> Result<(), String> {
+    loop {
+        if unsafe { libc::flock(file.as_raw_fd(), operation) } == 0 { return Ok(()); }
+        let err = io::Error::last_os_error();
+        if err.kind() != io::ErrorKind::Interrupted { return Err(format!("frame flock: {err}")); }
+    }
+}
+
+/// The borrow keeps the mapping and descriptor alive until the lock is released.
+/// Metadata/pixel access is exposed only through this guard.
+pub struct FrameReadGuard<'a> { reader: &'a ShmReader }
+impl Drop for FrameReadGuard<'_> {
+    fn drop(&mut self) { let _ = flock(&self.reader.file, libc::LOCK_UN); }
+}
+
 impl ShmReader {
-    /// 打开并校验表头。文件名（不含 /dev/shm/ 前缀）由引擎经 shm_ready 事件告知。
     pub fn open(name: &str) -> Result<Self, String> {
-        let path = CString::new(format!("/dev/shm/{name}"))
-            .map_err(|_| "共享内存名含 NUL".to_string())?;
-        unsafe {
-            let fd = libc::open(path.as_ptr(), libc::O_RDWR);
-            if fd < 0 {
-                return Err(format!("open 失败: {}", io::Error::last_os_error()));
-            }
-            let len = libc::lseek(fd, 0, libc::SEEK_END);
-            if len <= 0 {
-                libc::close(fd);
-                return Err("共享内存长度为 0".into());
-            }
-            let len = len as usize;
-            libc::lseek(fd, 0, libc::SEEK_SET);
-            let base = libc::mmap(
-                std::ptr::null_mut(),
-                len,
-                libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_SHARED,
-                fd,
-                0,
-            );
-            libc::close(fd); // 映射在 mmap 后独立持有
-            if base == libc::MAP_FAILED {
-                return Err(format!("mmap 失败: {}", io::Error::last_os_error()));
-            }
-            let b = base as *mut u8;
-            let magic: [u8; 4] = std::slice::from_raw_parts(b, 4).try_into().unwrap();
-            if &magic != MAGIC {
-                return Err(format!("magic 不匹配: {magic:?}"));
-            }
-            let version = u32::from_le_bytes(rd4(b, 4));
-            if version != 1 {
-                return Err(format!("协议版本不支持: {version}"));
-            }
-            // 字段偏移由 engine 侧 test_byte_layout_is_pinned 钉死：
-            // magic@0 version@4 slots@8 w@12 h@16 pixel_size@20 slot_size@24 total@28
-            Ok(Self {
-                base: b,
-                len,
-                path,
-                slots: u32::from_le_bytes(rd4(b, 8)) as usize,
-                pixel_size: u32::from_le_bytes(rd4(b, 20)) as usize,
-                slot_size: u32::from_le_bytes(rd4(b, 24)) as usize,
-            })
+        if name.is_empty() || name.contains('/') || name.contains('\0') {
+            return Err("invalid shared-memory name".into());
         }
-    }
-
-    pub fn path_name(&self) -> &str {
-        self.path.to_str().unwrap_or("?")
-    }
-
-    fn slot_off(&self, i: usize) -> usize {
-        HEADER_SIZE + i * self.slot_size
-    }
-
-    pub fn meta(&self, slot: usize) -> SlotMeta {
-        let o = self.slot_off(slot);
-        SlotMeta {
-            seq: u64::from_le_bytes(rd8(self.base, o)),
-            t_ns: u64::from_le_bytes(rd8(self.base, o + 8)),
-            w: u32::from_le_bytes(rd4(self.base, o + 16)),
-            h: u32::from_le_bytes(rd4(self.base, o + 20)),
-            fourcc: u32::from_le_bytes(rd4(self.base, o + 24)),
-        }
-    }
-
-    pub fn freshest(&self) -> Option<(SlotMeta, usize)> {
-        let mut best: Option<(SlotMeta, usize)> = None;
-        for i in 0..self.slots {
-            let m = self.meta(i);
-            if m.seq == 0 {
-                continue;
-            }
-            match &best {
-                Some((b, _)) if b.seq >= m.seq => {}
-                _ => best = Some((m, i)),
-            }
-        }
-        best
-    }
-
-    /// 从某槽的字节偏移处拷一段出去（长度由 out 定）。
-    /// 脏矩形上传走的就是这里：只把变化那几行拷出来，不再拷整帧。
-    ///
-    /// 这里不用 assert：调用方的 slot / pixel_size 可能来自一块已被引擎换掉的旧缓冲，
-    /// panic 会让整个命令线程倒掉，前端的 pullFrame Promise 永不 resolve、HUD 就地卡死；
-    /// 而 slot 越界则是从映射区外读（UB），不是报错而是可能读到错字节。越界当错误返回。
-    pub fn copy_span(&self, slot: usize, byte_off: usize, out: &mut [u8]) -> Result<(), String> {
-        if slot >= self.slots {
-            return Err(format!("slot {slot} 越出槽数 {}", self.slots));
-        }
-        let start = self.slot_off(slot) + SLOT_META_SIZE + byte_off;
-        let end = match start.checked_add(out.len()) {
-            Some(e) => e,
-            None => return Err("拷读长度溢出".into()),
+        let path = format!("/dev/shm/{name}");
+        let file = File::open(&path).map_err(|e| format!("open: {e}"))?;
+        let len = usize::try_from(file.metadata().map_err(|e| e.to_string())?.len())
+            .map_err(|_| "shared-memory length overflow")?;
+        if len < HEADER_SIZE { return Err("shared-memory header truncated".into()); }
+        let base = unsafe { libc::mmap(std::ptr::null_mut(), len, libc::PROT_READ,
+                                      libc::MAP_SHARED, file.as_raw_fd(), 0) };
+        if base == libc::MAP_FAILED { return Err(format!("mmap: {}", io::Error::last_os_error())); }
+        // Construct first so every subsequent error unmaps and closes via Drop.
+        let mut reader = Self { base: base as *mut u8, len, path, file,
+                                width: 0, height: 0, slots: 0, slot_size: 0, pixel_size: 0 };
+        let hdr = {
+            let _guard = reader.read()?;
+            let mut hdr = [0u8; HEADER_SIZE];
+            unsafe { std::ptr::copy_nonoverlapping(reader.base, hdr.as_mut_ptr(), HEADER_SIZE); }
+            hdr
         };
-        if byte_off + out.len() > self.pixel_size || end > self.len {
-            return Err(format!(
-                "拷读越出像素区：slot={slot} off={byte_off} len={} pixel_size={} 映射={}",
-                out.len(),
-                self.pixel_size,
-                self.len
-            ));
+        let word = |off: usize| u32::from_le_bytes(hdr[off..off+4].try_into().unwrap()) as usize;
+        if &hdr[..4] != MAGIC || word(4) != 2 {
+            return Err("shared-memory magic/version mismatch (requires locking protocol v2)".into());
         }
-        let src = unsafe { std::slice::from_raw_parts(self.base.add(start), out.len()) };
+        let (slots,w,h,pixel_size,slot_size,total) = (word(8),word(12),word(16),word(20),word(24),word(28));
+        let pixels = w.checked_mul(h).and_then(|x| x.checked_mul(4));
+        let stride = pixel_size.checked_add(SLOT_META_SIZE);
+        let expected = slot_size.checked_mul(slots).and_then(|x| x.checked_add(HEADER_SIZE));
+        if slots == 0 || w == 0 || h == 0 || pixels != Some(pixel_size)
+            || stride != Some(slot_size) || expected != Some(len) || total != len {
+            return Err("shared-memory layout is inconsistent or overflows".into());
+        }
+        reader.slots=slots; reader.slot_size=slot_size; reader.pixel_size=pixel_size;
+        reader.width=w as u32; reader.height=h as u32;
+        Ok(reader)
+    }
+
+    pub fn path_name(&self) -> &str { &self.path }
+    pub fn read(&self) -> Result<FrameReadGuard<'_>, String> {
+        flock(&self.file, libc::LOCK_SH)?;
+        let guard=FrameReadGuard { reader: self };
+        if self.file.metadata().map_err(|e| e.to_string())?.len() != self.len as u64 {
+            return Err("SHM_CHANGED: reopen resized frame mapping".into());
+        }
+        if self.pixel_size != 0 && (u32::from_le_bytes(rd4(self.base,4)) != 2
+            || u32::from_le_bytes(rd4(self.base,12)) != self.width
+            || u32::from_le_bytes(rd4(self.base,16)) != self.height) {
+            return Err("SHM_CHANGED: frame layout changed".into());
+        }
+        Ok(guard)
+    }
+}
+
+impl FrameReadGuard<'_> {
+    fn meta(&self, slot: usize) -> SlotMeta {
+        let r=self.reader;
+        let off=HEADER_SIZE+slot*r.slot_size;
+        SlotMeta { seq: u64::from_le_bytes(rd8(r.base,off)),
+                   t_ns: u64::from_le_bytes(rd8(r.base,off+8)),
+                   w: u32::from_le_bytes(rd4(r.base,off+16)),
+                   h: u32::from_le_bytes(rd4(r.base,off+20)),
+                   fourcc: u32::from_le_bytes(rd4(r.base,off+24)) }
+    }
+
+    pub fn freshest(&self) -> Result<Option<(SlotMeta,usize)>,String> {
+        let mut best: Option<(SlotMeta,usize)> = None;
+        for i in 0..self.reader.slots {
+            let meta=self.meta(i);
+            if meta.seq==0 { continue; }
+            if meta.w != self.reader.width || meta.h != self.reader.height || meta.fourcc != 0x41424752 {
+                return Err("frame metadata does not match mapped RGBA8 layout".into());
+            }
+            if best.as_ref().map(|(b,_)| b.seq >= meta.seq).unwrap_or(false) { continue; }
+            best=Some((meta,i));
+        }
+        Ok(best)
+    }
+
+    pub fn copy_span(&self, slot: usize, byte_off: usize, out: &mut [u8]) -> Result<(),String> {
+        let r=self.reader;
+        if slot>=r.slots { return Err("frame slot out of bounds".into()); }
+        let span_end=byte_off.checked_add(out.len()).ok_or("frame span overflow")?;
+        if span_end>r.pixel_size { return Err("frame span outside pixels".into()); }
+        let start=HEADER_SIZE+slot*r.slot_size+SLOT_META_SIZE+byte_off;
+        let end=start.checked_add(out.len()).ok_or("frame mapping overflow")?;
+        if end>r.len { return Err("frame span outside mapping".into()); }
+        let src=unsafe { std::slice::from_raw_parts(r.base.add(start),out.len()) };
         out.copy_from_slice(src);
         Ok(())
     }
 }
 
-/// 小端读取：宽度由函数名定死，避免 from_le_bytes 的数组长度不匹配
-fn rd4(base: *mut u8, off: usize) -> [u8; 4] {
-    let mut b = [0u8; 4];
-    unsafe { std::ptr::copy_nonoverlapping(base.add(off) as *const u8, b.as_mut_ptr(), 4) };
-    b
+fn rd4(base:*mut u8, off:usize)->[u8;4] {
+    let mut out=[0;4];
+    unsafe { std::ptr::copy_nonoverlapping(base.add(off),out.as_mut_ptr(),4); }
+    out
 }
-
-fn rd8(base: *mut u8, off: usize) -> [u8; 8] {
-    let mut b = [0u8; 8];
-    unsafe { std::ptr::copy_nonoverlapping(base.add(off) as *const u8, b.as_mut_ptr(), 8) };
-    b
+fn rd8(base:*mut u8, off:usize)->[u8;8] {
+    let mut out=[0;8];
+    unsafe { std::ptr::copy_nonoverlapping(base.add(off),out.as_mut_ptr(),8); }
+    out
 }
-
 impl Drop for ShmReader {
-    fn drop(&mut self) {
-        unsafe {
-            libc::munmap(self.base as *mut _, self.len);
-        }
-    }
+    fn drop(&mut self) { unsafe { libc::munmap(self.base as *mut _,self.len); } }
 }

@@ -1249,7 +1249,8 @@ fn pull_frame(state: State<'_, Arc<AppState>>) -> Result<tauri::ipc::Response, S
     // 丢帧统计同时失真。拷贝本来就是 µs 级，锁里做完不亏。
     let mut f = state.frames.lock().map_err(|_| "锁中毒".to_string())?;
     let shm = f.shm.as_ref().ok_or("SHM_NOT_READY")?;
-    let (meta, slot) = shm.freshest().ok_or("NO_FRAME_YET")?;
+    let read = shm.read()?;
+    let (meta, slot) = read.freshest()?.ok_or("NO_FRAME_YET")?;
     let (seq, t_emit, fw, fh) = (meta.seq, meta.t_ns, meta.w, meta.h);
     // 同一帧重复拉取（无新帧）时直接拒，避免重复计数
     if f.pending.iter().any(|p| p.seq == seq)
@@ -1267,7 +1268,7 @@ fn pull_frame(state: State<'_, Arc<AppState>>) -> Result<tauri::ipc::Response, S
     let payload = want.min(shm.pixel_size);
     let mut buf = vec![0u8; 40 + payload];
     if payload > 0 {
-        shm.copy_span(slot, y0 as usize * fw as usize * 4, &mut buf[40..])?;
+        read.copy_span(slot, y0 as usize * fw as usize * 4, &mut buf[40..])?;
     }
     buf[0..8].copy_from_slice(&seq.to_le_bytes());
     buf[8..16].copy_from_slice(&t_emit.to_le_bytes());
@@ -1277,6 +1278,7 @@ fn pull_frame(state: State<'_, Arc<AppState>>) -> Result<tauri::ipc::Response, S
     buf[32..36].copy_from_slice(&(payload as u32).to_le_bytes());
     // 保留位放 y0：前端用 pixel_len 就能推出行数，起始行得宿主告知
     buf[36..40].copy_from_slice(&y0.to_le_bytes());
+    drop(read); // Release cross-process lock before bookkeeping / IPC delivery.
     let pull_dur = now_ns().saturating_sub(t_pull) as f64 / 1000.0;
     f.delivered += 1;
     f.pending.push_back(Pending {
@@ -1307,10 +1309,11 @@ fn pull_frame(state: State<'_, Arc<AppState>>) -> Result<tauri::ipc::Response, S
 fn peek_frame(state: State<'_, Arc<AppState>>) -> Result<tauri::ipc::Response, String> {
     let f = state.frames.lock().map_err(|_| "锁中毒".to_string())?;
     let shm = f.shm.as_ref().ok_or("SHM_NOT_READY")?;
-    let (meta, slot) = shm.freshest().ok_or("NO_FRAME_YET")?;
+    let read = shm.read()?;
+    let (meta, slot) = read.freshest()?.ok_or("NO_FRAME_YET")?;
     let n = shm.pixel_size;
     let mut buf = vec![0u8; 40 + n];
-    shm.copy_span(slot, 0, &mut buf[40..])?;
+    read.copy_span(slot, 0, &mut buf[40..])?;
     buf[0..8].copy_from_slice(&meta.seq.to_le_bytes());
     buf[8..16].copy_from_slice(&meta.t_ns.to_le_bytes());
     buf[16..24].copy_from_slice(&now_ns().to_le_bytes());

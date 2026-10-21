@@ -98,7 +98,7 @@ def test_one_gesture_one_step_and_the_window_bound(eng):
     _edit(eng, "h", _strength=0.9)        # 换一组（另一个滑块）
     assert len(eng._undo) == 3
     # 快照存的是这一步执行前的状态：栈底那格必须是出厂强度
-    assert eng._undo[0]["_strength"] == pytest.approx(0.5)
+    assert eng._undo[0]["_strength"] == pytest.approx(0.0)  # P0 neutral: disabled at import
 
 
 def test_new_edit_clears_redo_and_stack_is_capped(eng):

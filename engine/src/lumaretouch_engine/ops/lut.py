@@ -28,10 +28,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-try:                                    # torch 是可选依赖：CI 的 CPU job 没装也要能 import 本模块
-    import torch
-except ModuleNotFoundError:             # pragma: no cover
-    torch = None
+from ..optional_dependencies import optional_module
+
+torch = optional_module("torch")
 
 # ---- 边界（都是实测/规格定的，不是许愿值）----
 MIN_SIZE_3D = 2

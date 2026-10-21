@@ -26,10 +26,9 @@ from .tone import check_tone, is_identity as tone_identity, tone_np, tone_t
 # torch 只在生产臂里需要。CPU 真值环境（CI 主门禁的 engine venv）里没装它，
 # 硬 import 会让整个模块导入失败、把十几条纯 numpy 用例一起拖红。
 # 拿 None 占位而不是 try/except 到子函数里：哪里真的用了它，报错就在哪里说清。
-try:                                   # pragma: no cover - 环境依赖
-    import torch
-except ImportError:                    # pragma: no cover
-    torch = None
+from ..optional_dependencies import optional_module
+
+torch = optional_module("torch")
 
 EV_LIMIT = 5.0             # 冻结量程 [-5, 5]（P0-EXPOSURE）
 TEMP_LIMIT_K = 2000.0      # 冻结量程 ±2000 K

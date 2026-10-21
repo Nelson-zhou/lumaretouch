@@ -316,7 +316,25 @@ def has_raw_ifd(path: str) -> bool:
             bo = "<" if head[:2] == b"II" else ">"
             magic = struct.unpack(bo + "H", head[2:4])[0]
             if magic == 43:
-                return True                         # BigTIFF：交给 load_raw 如实拒绝
+                # BigTIFF is a container, not evidence of sensor RAW. Inspect
+                # page metadata (including SubIFDs) without decoding pixels.
+                import tifffile
+                with tifffile.TiffFile(path) as tf:
+                    pending = [iter(tf.pages)]
+                    inspected = 0
+                    while pending:
+                        page = next(pending[-1], None)
+                        if page is None:
+                            pending.pop()
+                            continue
+                        inspected += 1
+                        if inspected > 512:
+                            raise ValueError("TIFF IFD inspection limit exceeded")
+                        if int(page.photometric) in (PHOTOMETRIC_CFA, PHOTOMETRIC_LINEAR_RAW):
+                            return True
+                        if page.subifds:
+                            pending.append(iter(page.pages))
+                return False
             if magic != 42:
                 return False
             frontier = [struct.unpack(bo + "I", head[4:8])[0]]

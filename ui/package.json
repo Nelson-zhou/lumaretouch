@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/view.test.ts src/gradeLimits.test.ts src/exportModel.test.ts src/repairToolHonesty.test.ts"
+    "test": "node --experimental-strip-types --test src/view.test.ts src/gradeLimits.test.ts src/exportModel.test.ts src/repairToolHonesty.test.ts src/skinScope.test.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

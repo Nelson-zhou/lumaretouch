@@ -2169,6 +2169,11 @@ def test_eye_teeth_enhance_refuses_what_it_cannot_do_and_says_why(engine, extra_
     after = _current(e2, peer2, h2, w2)
     assert not np.array_equal(after, got), "接回来之后画面必须真的变了（defer 不是空转）"
 
+    # This independent branch is finished: release its model/process before opening another.
+    # Assertions and image sizes are unchanged; keeping unused engines alive is not coverage.
+    peer2.close()
+    e2.close()
+
     # ②b 存工程 → 换进程重开：三个数与掩膜都要回来，画面逐字节相同。
     #     这一条不是"顺手测一下"：工程里只存参数、不存关键点（关键点随模型版本走），
     #     所以重开必须**自动补一次分析**再把这一层挂回去——CORE-001 那一次丢形变层的
@@ -2183,6 +2188,9 @@ def test_eye_teeth_enhance_refuses_what_it_cannot_do_and_says_why(engine, extra_
     lit6 = _current(e6, pr6, h6, w6)
     sha_smile = _sha_of(FIX_SMILE_P09)
     _c6, saved6 = _create_and_save(e6, tmp_path, name="眼牙增强")
+    # A real close/reopen also verifies the saved recipe has no live-process dependency.
+    pr6.close()
+    e6.close()
     e7 = extra_engine("portrait009-reopen")
     e7.send(cmd="hello")
     e7.wait_for("ready", timeout=90)
@@ -2219,6 +2227,8 @@ def test_eye_teeth_enhance_refuses_what_it_cannot_do_and_says_why(engine, extra_
         f"重开工程后画面与保存前差 {int(np.abs(back7 - lit6).max())} LSB："
         "掩膜重画不是同一幅（换人选/认脸盒那条臂就断在这里）")
     assert _sha_of(FIX_SMILE_P09) == sha_smile, "存/开工程动了原片"
+    peer7.close()
+    e7.close()
 
     # ③ synthetic 后端：占位几何画不出可信位置 → 整条拒 + 画面不动
     #    这张露齿图与 ① 那张同代理档，所以走 reload（引擎不重建 shm，等 shm_ready

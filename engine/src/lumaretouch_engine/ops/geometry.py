@@ -18,10 +18,9 @@ import math
 
 import numpy as np
 
-try:
-    import torch
-except ImportError:          # 顶层硬 import 会拖红没有 torch 的 CI 环境
-    torch = None
+from ..optional_dependencies import optional_module
+
+torch = optional_module("torch")
 
 EPS = 1e-12
 MAX_ANGLE = 180.0             # 注册表：[-180, 180]，±180 是单值覆盖全圆的唯一自然区间

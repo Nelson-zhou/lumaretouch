@@ -14,6 +14,13 @@ import sys
 import threading
 import time
 
+# The native host launches this module directly. Apply the boundary before any
+# image/model dependencies load; the console entry uses bootstrap for the same reason.
+if __name__ == "__main__":
+    from .privacy import require_offline_or_exit
+    require_offline_or_exit()
+
+from .privacy import policy_status
 from .frames import test_frame
 from .shm import FrameShm, monotonic_ns, shm_name
 # 磨皮参数的默认值只在这里取一次：vram 在模块层就容忍 torch 缺失（CPU job 也能 import），
@@ -69,7 +76,7 @@ def runtime_report() -> dict:
     """
     from importlib import metadata
     out = {"python": ".".join(map(str, sys.version_info[:3]))}
-    for pkg in ("numpy", "pillow", "torch", "torchvision"):
+    for pkg in ("numpy", "pillow", "tifffile", "imagecodecs", "torch", "torchvision"):
         try:
             out[pkg] = metadata.version(pkg)
         except metadata.PackageNotFoundError:
@@ -79,7 +86,7 @@ def runtime_report() -> dict:
 
 # 磨皮强度的出厂默认。写一次：`__init__`、新文档的起始状态、load_image 的可选参数
 # 三处都要它，抄三份字面量就是下一轮改默认值时漏改的那一处。
-DEFAULT_STRENGTH = 0.5
+DEFAULT_STRENGTH = 0.0
 
 # 本进程的“写手形状”只算一次：包元数据不会在一个进程里变，而 `_project_state()` 挂在
 # `session_state` 上（每次导入、每次标签都要读一次）。拿 importlib.metadata 重扫三遍
@@ -108,7 +115,10 @@ def _clamp_strength(v) -> float:
     """强度只接受 [0,1]。load_image 与 set_strength 必须同一规：一边夹一边不夹的话，
     越界值会被包框里的 clamp_ 削平成一张看不出错但语义错的帧，而 image_ready.strength
     照原值上报。"""
-    return min(max(float(v), 0.0), 1.0)
+    value = float(v)
+    if not math.isfinite(value):
+        raise ValueError("strength 必须是有限数")
+    return min(max(value, 0.0), 1.0)
 
 
 def emit(obj: dict) -> None:
@@ -296,6 +306,7 @@ class Engine:
         # 假事：重新解码的调色表对象身份变了（签名就是按身份比的），以及缩略图线程
         # 晚到一步改了单格。两者都会让“未保存”徽章在刚保存完就亮起来。
         self._project: dict | None = None
+        self._project_source_notice: dict = {}
         self._project_path: str | None = None
         self._project_path_prev: str | None = None
         self._project_dirty = False
@@ -334,6 +345,7 @@ class Engine:
               # 协议号不动（加键属兼容扩展，宿主只读不判）。
               "version": __version__,
               "runtime": runtime_report(),
+              "privacy": policy_status(),
               # 内置预设清单（M3-b）：按钮上写什么字、按哪个名提交，全部由引擎说。
               # 前端抄一份名字就是双出处：资产改名后 UI 会静默拿着错名去撞拒绝。
               "presets": [{"name": k, "title": v.title} for k, v in sorted(PRESETS.items())],
@@ -1371,6 +1383,10 @@ class Engine:
         if self._export is not None and self._export.is_alive():
             emit({"event": "error", "error": "导出进行中，拒绝换图：等 export_done"})
             return
+        # Validate before decoding, preview publication, or switching recipe/history.
+        # A rejected import must leave the current document intact.
+        strength = (_clamp_strength(p["strength"])
+                    if p.get("strength") is not None else None)
         t0 = monotonic_ns()
         budget = int(p.get("max_px") or self._proxy_budget or PROXY_PIXELS)
         # RAW 先推一帧相机内嵌预览：真解码那一张要几百毫秒，而那张全清 JPEG 搬回来只要
@@ -1414,9 +1430,6 @@ class Engine:
         self._doc_index = idx
         self._history_bind(row)         # 这一格自己的撤销/重做栈
         self._doc_path = os.path.abspath(str(p["path"]))   # 导出默认目标；只有导成功才记账
-        strength = None
-        if p.get("strength") is not None:
-            strength = _clamp_strength(p["strength"])
         return self._open_session(d, p, t0=t0, strength=strength, switched=existed)
 
     def _push_preview_frame(self, path: str, budget: int) -> dict | None:
@@ -1452,6 +1465,8 @@ class Engine:
 
     def _open_session(self, d, p: dict, *, t0: int, strength: float | None, switched: bool):
         """已有源图 → 建会话 → 重挂该重挂的层 → 出帧。新导入与底片条切换共用这一段。"""
+        restore_channel = p.get("channel", self._channel)
+        restore_grade_scope = self._grade_scope
         shm = self._ensure_shm(d.w, d.h)
         t_a = monotonic_ns()
         pipe = self._attach_pipeline(d.rgb)      # 按引擎侧字段重放图层（见 _attach_pipeline）
@@ -1534,7 +1549,15 @@ class Engine:
         if p.get("precompute") and self._precompute is None:
             self.cmd_precompute({"backend": p.get("backend", "auto"),
                                  "model_dir": p.get("model_dir"),
-                                 "channel": p.get("channel")})
+                                 "channel": restore_channel})
+            if self._precompute is not None and (restore_channel or restore_grade_scope == "skin"):
+                if restore_grade_scope == "skin":
+                    self._grade_scope = "skin"
+                    self._rehang_grade_scope(replayed_for="project_reanalysis")
+                # Reanalysis must publish the restored pixels, not leave the
+                # first unmasked loading frame on screen with a masked status.
+                emit(self._write_current_frame("precompute_restore"))
+                self.emit_session_state()
 
     def _layer_counts(self) -> dict:
         """当前文档有哪几层。底片条那一格的“已调”徽章、UI 的状态栏、测试的断言
@@ -1788,9 +1811,6 @@ class Engine:
             return rows
 
     def _start_thumbs(self, indices: list, edge, quality) -> bool:
-        if self._thumbs is not None and self._thumbs.is_alive():
-            emit({"event": "error", "error": "缩略图任务已在跑：先 session action=stop_thumbs"})
-            return False
         try:
             edge = S.valid_edge(edge)
             q = int(quality)
@@ -1798,6 +1818,10 @@ class Engine:
                 raise ValueError(f"quality={q} 越界（允许 {S.MIN_THUMB_QUALITY}~100）")
         except (ValueError, TypeError) as e:
             emit({"event": "error", "error": f"缩略图参数非法：{e}"})
+            return False
+        # Validate first: invalid requests must not depend on worker timing.
+        if self._thumbs is not None and self._thumbs.is_alive():
+            emit({"event": "error", "error": "缩略图任务已在跑：先 session action=stop_thumbs"})
             return False
         self._thumb_stop.clear()
         self._thumb_args = (list(indices), edge, q)
@@ -2329,7 +2353,8 @@ class Engine:
                 "writer": (p or {}).get("writer"),
                 "writer_match": ((p or {}).get("writer") == _current_writer())
                                  if p is not None else None,
-                "dropped_count": len((p or {}).get("dropped") or [])}
+                "dropped_count": len((p or {}).get("dropped") or []),
+                **getattr(self, "_project_source_notice", {})}
 
     def _project_build(self, base: dict | None) -> tuple[dict, dict]:
         """把当前底片条编成一份待写的项目文档（不写盘），并报这一段的成本。
@@ -2446,10 +2471,12 @@ class Engine:
 
         为什么只问这三件：关键点不随工程文件走（`_project_build` 剔的是派生物），而
         靠它们活着的只有形变层（含待重挂那一格）、多人图里“在改哪一张”的选型、以及
-        掩膜通道/肤色作用域那两层。后面两件已有自己的诚实退路（`_channel` 在没掩膜时被
-        显式置 None），而形变层上一版没有退路：直接被归零——那就是 CORE-001“配方完整
+        掩膜通道/肤色作用域那两层。掩膜派生物可重算，但用户的通道/作用域选择必须恢复；
+        不能以缺少派生物为由把用户选择清空——那就是 CORE-001“配方完整
         恢复”漏掉的那一层。这里多跑一次分析不贵（几百毫秒），少跑一次就是“重开少一半”。
         """
+        if st.get("_channel") or st.get("_grade_scope") == "skin":
+            return True
         if bool(st.get("_face_explicit")):
             return True
         # 人工账非空也要补这一次分析（PORTRAIT-006）：那几只关掉的、那几框补上的，都只有
@@ -2556,6 +2583,7 @@ class Engine:
             except (ProjectError, OSError) as e:
                 emit({"event": "error", "error": f"项目写盘失败：{e}"})
                 return
+            self._project_source_notice = {}
             self._project, self._project_path = prj, info["path"]
             # 新建的是**空**工程，而底片条上那些活还在内存里：脏标记不能清成 False，
             # 否则徽章会说“已保存”而磁盘上一张图都没有——那比多亮一次危险得多。
@@ -2653,6 +2681,11 @@ class Engine:
             self._history_bind(None)
             missing = [m for m in PJ.missing_sources(prj) if not m["exists"]]
             changed = self._source_fingerprint_drift(prj)
+            # Keep opening audit visible across later state/edit/save events.
+            self._project_source_notice = {
+                "changed": changed[:12], "changed_count": len(changed),
+                "missing": missing[:12], "missing_count": len(missing),
+            }
             # 重开默认展哪一张：先定下来再发事件，否则 `project_opened` 里的
             # auto_opened 与随后那一摞 shm_ready/image_ready 对不上人（上报与执行
             # 隔了一拍就是这种形状：事件说“没开”，视口上却亮着一张）。
@@ -2662,7 +2695,7 @@ class Engine:
                 target = self._row_target(p)
                 if target is None:
                     return
-            elif isinstance(p.get("doc"), str):
+            elif isinstance(p.get("doc"), str) and p["doc"] != "none":
                 target = self._row_target({"action": "open", "path": p["doc"]})
                 if target is None:
                     return
@@ -3461,7 +3494,7 @@ class Engine:
         emit(fr)
 
     # ------------------------------------------------------------ 消除笔（M1-4）
-    def _write_current_frame(self, mode: str, *, strength_override: float | None = None) -> dict:
+    def _write_current_frame(self, mode: str, *, original: bool = False) -> dict:
         """把当前会话渲染一帧并写 shm，返回 frame 事件字段（带 render_ms，调用方 pop）。
 
         set_strength / inpaint 都走这一个出口；load_image 也渲染+写 shm，但它面对的是刚刚
@@ -3473,9 +3506,12 @@ class Engine:
             raise RuntimeError(f"shm {getattr(self.shm, 'w', '?')}x{getattr(self.shm, 'h', '?')} "
                                f"!= 会话 {self._vram.w}x{self._vram.h}：不许把会话尺寸的帧写进别人的槽")
         t0 = monotonic_ns()
-        # 临时强度只作用于这一帧：会话里那个 self._strength 一个字不改（对比不是编辑）
-        st = self._strength if strength_override is None else float(strength_override)
-        self._vram.render(st, channel=self._channel, **self._params)
+        # Original viewing bypasses all layers, rather than merely setting skin strength0.
+        st = 0.0 if original else self._strength
+        if original:
+            self._vram.render_original()
+        else:
+            self._vram.render(st, channel=self._channel, **self._params)
         render_ms = (monotonic_ns() - t0) / 1e6
         with self._wlock:
             seq, t_emit, slot = self.shm.write_frame(self._vram.read_back())
@@ -3484,12 +3520,10 @@ class Engine:
                 "strength": st}
 
     def cmd_compare(self, p: dict):
-        """「按住看原图」：临时按强度 0 出一帧，不改会话状态、不进撤销栈。
+        """临时显示完整解码原图，绕过全部编辑；松手恢复完整配方。
 
-        为什么不复用 set_strength：那条在 EDIT_CMDS 里，按住再松开会在撤销栈上留一步
-        ——而"看一眼原图"根本不是编辑动作，用户下一次 Ctrl+Z 不该撤掉一次查看。
-        强度本来就不进滤波（只当混合系数），所以这条路和拖滑块一样是零推理通路，
-        代价只有一次混合渲染。on=false 就是把会话里那一版重新出一帧（回到修好的图）。
+        不改参数、不清缓存、不进撤销栈。strength=0 仍会保留曝光/LUT/修补等层，
+        因此不能冒充原图；本入口直接打包原始工作空间源张量。
         """
         # 参数校验排在最前（与 cmd_history 同一顺序）：一条写坏的命令应当被报成
         # "写坏了"，而不是被状态守卫抢先报成"还没导进来"——后者会把真正的笔误藏起来。
@@ -3507,8 +3541,12 @@ class Engine:
         if self.bench is not None and self.bench.is_alive():
             emit({"event": "error", "error": "跑靶进行中，拒绝 compare：先 bench_stop"})
             return
-        on = bool(p.get("on", True))
-        fr = self._write_current_frame("compare", strength_override=0.0 if on else None)
+        if "on" in p and not isinstance(p["on"], bool):
+            emit({"event": "error", "error": "compare on 必须是 boolean"})
+            return
+        on = p.get("on", True)
+        fr = self._write_current_frame("compare", original=on)
+        fr["view"] = "original" if on else "edited"
         fr.pop("render_ms")          # 与 set_strength 同一口径：这一笔随 params_set 报，不塞进 frame
         emit(fr)
 
@@ -5753,6 +5791,53 @@ class Engine:
                 out[p] = (snap, False)
         return out
 
+    def _prepare_export_snapshot(self, path: str, snap: dict, for_document: bool):
+        """Resolve each image's semantic scope without borrowing another face's mask.
+
+        Only label-based skin edits can be regenerated across bare files. Brush,
+        reshape, eye/teeth and background coordinates remain document-specific.
+        The copied snapshot never mutates the current document or batch recipe.
+        """
+        from .export import ExportError
+        channel_active = bool(snap.get("channel")) and float(snap.get("strength", 0)) != 0
+        grade_active = (str(snap.get("grade_scope", "all")) == "skin"
+                        and float(tuple(snap.get("grade", (0, 0, 0, 1)))[3]) != 0
+                        and any(float(x) != 0 for x in tuple(snap.get("grade", (0, 0, 0, 1)))[:3]))
+        if not channel_active and not grade_active:
+            return snap, for_document
+        def require_skin(pc):
+            import numpy as np
+            mask = (getattr(pc, "masks", None) or {}).get("skin")
+            if mask is None or not np.isfinite(mask).all() or not np.any(np.asarray(mask) > 0):
+                raise ExportError("该图片未找到置信度足够的皮肤区域，不能把空蒙版报成已完成皮肤调整")
+        if for_document and snap.get("precompute") is not None:
+            require_skin(snap["precompute"])
+            return snap, for_document
+        if channel_active and snap.get("channel") != "skin":
+            raise ExportError("该图片缺少所选蒙版，不能用全图处理替代局部作用域")
+        if for_document:
+            targeted = any(float(x) != 0 for x in ((snap.get("deform") or {}).get("amounts") or {}).values())
+            targeted |= any(float(x) != 0 for x in ((snap.get("enhance") or {}).get("amounts") or {}).values())
+            if targeted:
+                raise ExportError("人物定向编辑缺少选定关键点，请完成该图片的分析后导出，不能替用户选择人物")
+        from .face import MediaPipeFace
+        from .decode import load_rgb
+        proxy = load_rgb(path, device=snap.get("device"))
+        with MediaPipeFace() as backend:
+            own_precompute = backend(proxy.rgb)
+        require_skin(own_precompute)
+        prepared = dict(snap)
+        prepared["precompute"] = own_precompute
+        if not for_document:
+            prepared.update(repair_ops=[], light_ops=[],
+                            deform={"amounts": {}, "built": False}, deform_defer=False,
+                            enhance={"amounts": {}, "built": False}, enhance_defer=False, _bg={})
+            prepared["export_skipped"] = ["文档专属笔迹/形变/眼牙/换底未复制；皮肤蒙版已逐图重新分析"]
+            if prepared.get("grade_scope") == "brush":
+                prepared.update(grade=(0.0, 0.0, 0.0, 1.0), grade_scope="all", grade_mask=None)
+                prepared["export_skipped"].append("另一张图片的局部调色画笔未复制")
+        return prepared, True
+
     def _export_snapshot(self, snap: dict, eh: int, ew: int, *, for_document: bool):
         """从命令线程拍好的快照里组一份 ExportSpec。返回 (spec, skipped)。
 
@@ -5771,7 +5856,11 @@ class Engine:
         import numpy as np
 
         p = snap["params"]
-        skipped: list = []
+        skipped: list = list(snap.get("export_skipped", []))
+        if snap.get("channel") and float(snap.get("strength", 0)) != 0:
+            if not for_document or snap.get("precompute") is None:
+                from .export import ExportError
+                raise ExportError("缺少这张图片的蒙版，禁止把局部磨皮扩大为全图")
         spec = ExportSpec(strength=float(snap["strength"]), radius=int(p["radius"]),
                           eps=float(p["eps"]), texture_radius=int(p["texture_radius"]),
                           broad_gain=float(p["broad_gain"]), mid_gain=float(p["mid_gain"]),
@@ -6028,16 +6117,9 @@ class Engine:
         if bit_depth == 16:
             if fmt not in ("tif", "tiff"):
                 emit({"event": "error",
-                      "error": f"16-bit 直通只能写 TIFF（收到 format={fmt}）："
+                      "error": f"16-bit 输出当前只能写 TIFF（收到 format={fmt}）："
                                "JPEG/WebP 是有损的，PNG 编码器不吃三通道 16-bit"
                                "（实测 Pillow 拒 uint16 RGB）——不拿降到 8-bit 冒充 16-bit 出片"})
-                return
-            blockers = self._master16_blockers(scale=scale, sharpen=sharpen)
-            if blockers:
-                emit({"event": "error",
-                      "error": "16-bit 母档直通不走图层与放大，而这几项有值："
-                               + "、".join(blockers) +
-                               "。要么把它们清回中立位，要么走 8-bit 常规导出"})
                 return
         # d2c：ICC / 压缩 / 元数据 / 冲突策略。四条都在命令线程里校验完，理由与
         # sharpen 那条一样——worker 里拦下时 export_progress 已经发出去了。
@@ -6051,19 +6133,9 @@ class Engine:
                            "（注册表里这一格是 boolean，中性 false=默认不外泄 GPS）"})
             return
         conflict_policy = str(p.get("conflict_policy", "skip_and_report"))
-        # TIFF 压缩的中性位按通路选：注册表给常规导出定的是 deflate，而 16-bit 母档
-        # 直通只写无压缩（理由在 export.write_tiff16）。同一句话当两条路的默认值，
-        # 结果就是“16-bit 直通”开箱必失败——本轮 test_export_bit_depth_16 正是这样红的。
-        if "tiff_compression" in p:
-            tiff_comp = str(p["tiff_compression"])
-            if bit_depth == 16 and tiff_comp.lower() not in ("none", ""):
-                emit({"event": "error",
-                      "error": f"16-bit 母档直通只写无压缩 TIFF，收到 tiff_compression={tiff_comp!r}："
-                               "位深 16 的交织数据不加 Predictor 时 deflate/lzw 测出来是负收益，"
-                               "加了 Predictor 就不再是“母档解出来什么样就写什么样”的直通"})
-                return
-        else:
-            tiff_comp = "none" if bit_depth == 16 else "deflate"
+        # Preserve the previous protocol default while accepting explicit lossless
+        # compression in both bit depths. Predictor 2 preserves decoded samples.
+        tiff_comp = str(p.get("tiff_compression", "none" if bit_depth == 16 else "deflate"))
         try:
             _check_policy(conflict_policy)
             comp_key, _ = _tiff_compression(tiff_comp)
@@ -6099,6 +6171,13 @@ class Engine:
                     _bg=dict(self._bg),
                     precompute=self._precompute, device=self.device,
                     scale=scale, upscale_backend=backend, sharpen=sharpen)
+        # Validate every frozen per-image recipe, not the active image's live
+        # fields. Otherwise a neutral active image silently bypasses edits on
+        # another image in a 16-bit passthrough batch.
+        snap_by_path = self._export_snap_by_path(images, doc, snap)
+        # Pixel edits are now routed to the float/RGB16 pipeline per image.
+        # The neutral classifier remains below to select exact passthrough;
+        # it must not be used to silently omit nonneutral frozen recipes.
         # 建目录（挪下来了）：到这里每一个参数都已核验，失败的可能性只剩“这一路真不可写”
         try:
             os.makedirs(out_dir, exist_ok=True)
@@ -6113,7 +6192,6 @@ class Engine:
         opts = {"output_profile": output_profile, "tiff_compression": tiff_comp,
                 "metadata_include_gps": bool(include_gps), "conflict_policy": conflict_policy}
         # P1-1：为这批每一张预解析各自的配方（命令线程读 _docs，worker 不再读 live）。
-        snap_by_path = self._export_snap_by_path(images, doc, snap)
         self._export_args = (list(images), out_dir, fmt, quality, tile, doc, snap, bit_depth,
                              opts, snap_by_path)
         # 台账先建再开工：TASK-001 要“状态转移可审计”，而从 queued 起才有第一步。
@@ -6352,6 +6430,28 @@ class Engine:
         self._export = threading.Thread(target=self._export_loop, daemon=True)
         self._export.start()
 
+    @staticmethod
+    def _master16_snapshot_blockers(snap: dict) -> list:
+        """Adapt a frozen export recipe to the existing neutral-state validator.
+
+        No live Engine state is changed, so preflight cannot corrupt the active
+        document or race with rendering. Keep one definition of pixel blockers.
+        This selects neutral passthrough versus the editing pipeline. A nonempty
+        result must now route to edits, never be ignored or treated as completion.
+        """
+        from types import SimpleNamespace
+        defaults = {
+            "strength": 0.0, "grade": (0.0, 0.0, 0.0, 1.0),
+            "grade_scope": "all", "lut": None, "lut_amount": 0.0,
+            "repair_ops": [], "light_ops": [], "deform": {},
+            "crop_rect": (0.0, 0.0, 1.0, 1.0), "crop_rotation": 0.0,
+            "exposure": (0.0,) * 7, "hsl": (0.0,) * 24, "enhance": {},
+        }
+        fields = {"_" + key: snap.get(key, value) for key, value in defaults.items()}
+        fields["_bg"] = snap.get("_bg", {})
+        return Engine._master16_blockers(SimpleNamespace(**fields),
+            scale=snap.get("scale", 1), sharpen=snap.get("sharpen", 0.0))
+
     def _master16_blockers(self, *, scale: int, sharpen: float) -> list:
         """16-bit 直通能不能走：把“会改像素的那几项”逐个点名。
 
@@ -6367,7 +6467,7 @@ class Engine:
         if float(self._strength) != 0.0:
             b.append(f"磨皮强度={self._strength}")
         grade = list(self._grade) + [0.0, 0.0, 0.0, 0.0]
-        if any(abs(float(v)) > 0.0 for v in grade[:3]):
+        if any(abs(float(v)) > 0.0 for v in grade[:3]) and float(grade[3]) != 0.0:
             b.append(f"色阶增量={tuple(grade[:3])}")
         # P1-5 附带修：老写法 `if self._lut` 在 cube 是 numpy/torch 数组时会抛
 # 「truth value ambiguous」——还没走到「拒绝并说明理由」就崩。is not None 才是这里要的
@@ -6418,7 +6518,7 @@ class Engine:
             b.append("换底（背景合成会改像素，直通不进这一层）")
         # 局部调色：scope=brush/skin 时那一片 matte 会参与 grade；直通这一路目前
         # 也不进 matte。全图 grade 上面已经通过 `self._grade` 拦了，这里只补作用域那一条。
-        if str(self._grade_scope) != "all" and any(abs(float(v)) > 0.0
+        if str(self._grade_scope) != "all" and float(grade[3]) != 0.0 and any(abs(float(v)) > 0.0
                                                     for v in (list(self._grade) + [0.0, 0.0, 0.0, 0.0])[:3]):
             b.append(f"局部调色作用域={self._grade_scope}（brush/skin 遮罩不参与直通）")
         return b
@@ -6442,30 +6542,49 @@ class Engine:
                 break
             stage = "decode"
             try:
+                image_started = monotonic_ns()
+                snap_i, for_doc_i = snap_by_path.get(path, (snap, path == doc))
+                stage = "semantic_analysis"
+                snap_i, for_doc_i = self._prepare_export_snapshot(path, snap_i, for_doc_i)
+                analysis_ms = round((monotonic_ns() - image_started) / 1e6, 2)
                 if bit_depth == 16:
-                    # 直通：一次满幅 16-bit 解码 → 写 TIFF → 读回自证。图层不进这一条
-                    # （能不能进在 cmd_export 里已经拦过了），所以这里也不发 spec。
-                    from .export import export_master_16bit
-                    stage = "master16"
-                    out_path = os.path.join(out_dir,
-                                            os.path.splitext(os.path.basename(path))[0] + ".tif")
-                    r = export_master_16bit(path, out_path, device=self.device,
-                                            output_profile=opts["output_profile"],
-                                            conflict_policy=opts["conflict_policy"],
-                                            metadata_include_gps=opts["metadata_include_gps"],
-                                            tiff_compression=opts["tiff_compression"])
+                    from .export import export_master_16bit, export_edited_16bit
+                    out_path = os.path.join(out_dir, os.path.splitext(os.path.basename(path))[0] + ".tif")
+                    skipped = []
+                    common = dict(output_profile=opts["output_profile"],
+                                  conflict_policy=opts["conflict_policy"],
+                                  metadata_include_gps=opts["metadata_include_gps"],
+                                  tiff_compression=opts["tiff_compression"])
+                    if self._master16_snapshot_blockers(snap_i):
+                        stage = "decode16"
+                        decode_started = monotonic_ns()
+                        d = load_full(path, device=snap_i["device"], want_bits=16)
+                        decode_ms = (monotonic_ns() - decode_started) / 1e6
+                        spec, skipped = self._export_snapshot(snap_i, d.h, d.w, for_document=for_doc_i)
+                        stage = "edit16"
+                        r = export_edited_16bit(d, spec, out_path, device=snap_i["device"], tile=tile,
+                                               crop_rect=tuple(snap_i.get("crop_rect") or (0, 0, 1, 1)),
+                                               rotation_degrees=float(snap_i.get("crop_rotation") or 0),
+                                               decode_ms=decode_ms, **common)
+                    else:
+                        stage = "master16"
+                        r = export_master_16bit(path, out_path, device=snap_i["device"], **common)
                     results.append({"path": path, "out": r["path"], "format": "tif",
                                     "bits": 16, "source": r["source"],
                                     "w": r["w"], "h": r["h"], "bytes": r["bytes"],
                                     "write_ms": r["write_ms"], "decode_ms": r["decode_ms"],
+                                    "readback_ms": r["readback_ms"],
+                                    "verification_ms": r["verification_ms"],
+                                    "total_ms": round((monotonic_ns() - image_started) / 1e6, 2),
+                                    "semantic_analysis_ms": analysis_ms,
                                     # 质量口径的可追溯件（与 8-bit 那一路同名同义）：16-bit 直通
                                     # 不进编码器，encoder_quality 给 None 而不是 0——拿 0 冒充
                                     # “质量 0”会被读成“用户设了最低质量”
                                     "quality_mapping_version": r["quality_mapping_version"],
                                     "encoder_quality": r["encoder_quality"],
                                     # 三个保真读数直接进事件：它们不是调试道具，而是
-                                    # “无损”这句话的存证。差值非 0 / 每通道档位≤256 /
-                                    # 低 8 位全零，任一条都不能算 16-bit 母档
+                                    # “无损”比较针对待写像素，颜色转换可能有意改变源像素。
+                                    # 档位与低8位是诊断信息；自然纯色图不能因档位少被判假16-bit。
                                     "readback_max_diff": r["readback_max_diff"],
                                     "levels_per_channel": r["levels_per_channel"],
                                     "low8_nonzero_px": r["low8_nonzero_px"],
@@ -6476,10 +6595,19 @@ class Engine:
                                     "renamed_from": r.get("renamed_from"),
                                     "icc_bytes": r.get("icc_bytes"),
                                     "icc_sha256": r.get("icc_sha256"),
+                                    "icc_source": r.get("icc_source"),
+                                    "icc_readback_matches": r.get("icc_readback_matches"),
+                                    "color_converted": r.get("color_converted"),
+                                    "color_conversion_ms": r.get("color_conversion_ms"),
+                                    "tiff_compression": r.get("tiff_compression"),
+                                    "tiff_compression_tag": r.get("tiff_compression_tag"),
+                                    "notes": list(r.get("notes", [])),
                                     "gps_written": r.get("gps_written"),
                                     # 仍叫 skipped：UI 那侧按同一个键读两条通路（16-bit 恒空），
                                     # 冲突跳过用 out_skipped，不把两个语义挤进一个键
-                                    "skipped": []})
+                                    "pipeline": r.get("pipeline"),
+                                    "render_stats": r.get("render_stats"),
+                                    "skipped": skipped})
                     # 16-bit 那一路也得有逐图进度与台账结局：以前它 continue 得过早，
                     # 既不发 export_progress 也不记条目——于是 RAW 批量导出在进度条上
                     # 是“动都不动”，在批次账上是“跑完了而没人知道跑了哪几张”。
@@ -6491,7 +6619,6 @@ class Engine:
                 stage = "render"
                 # P1-1：这一张用它自己那份配方（当前档=现拍 snap；其它档=它存的 state；
                 # 裸文件=共享参数且 for_document=False）。批级 export_done 仍读 snap。
-                snap_i, for_doc_i = snap_by_path.get(path, (snap, path == doc))
                 spec, skipped = self._export_snapshot(snap_i, d.h, d.w,
                                                       for_document=for_doc_i)
                 stage = "write"
@@ -7009,6 +7136,8 @@ class Engine:
 
 
 def main():
+    from .privacy import require_offline_or_exit
+    require_offline_or_exit()
     ap = argparse.ArgumentParser()
     ap.add_argument("--session", default="default")
     args = ap.parse_args()

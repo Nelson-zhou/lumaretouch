@@ -19,17 +19,16 @@ from dataclasses import dataclass, field
 import numpy as np
 import time
 
-try:
-    import torch          # 与 ops.guided 同一约定：torch 未装（M0 纯通路、CI 的 CPU job）
-except Exception:        # 也要能 import 成功，不然整个测试收集阶段就报 ModuleNotFoundError
-    torch = None
+from .optional_dependencies import optional_module
+
+torch = optional_module("torch")
 
 from .ops.guided import (bands_t, combine_t, mix_masked,
                          DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS,
                          DEFAULT_MID_GAIN, DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS)
 from .ops.inpaint import crop_apply_t, hole_extent, inpaint_t, levels_for, mask_bbox
 from .ops.deform import (KINDS, analytic_frontal_landmarks, check_amounts,
-                         identity_grid, unit_field, warp_t)
+                         identity_grid, unit_field, warp_t, prepare_warp_t, apply_prepared_warp_t)
 from .ops.light import dodge_burn_t, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
 from .ops import enhance as ENH
 from .ops.grade import (DH_LIMIT, DS_LIMIT, DV_LIMIT, check_params, grade_t)
@@ -114,10 +113,11 @@ class PreviewPipeline:
     搬运上，而不是顺手把算法也跳过了。
     """
 
-    def __init__(self, device: str, w: int, h: int):
+    def __init__(self, device: str, w: int, h: int, *, high_precision_warp: bool = False):
         if torch is None:
             raise RuntimeError("torch 未安装，显存常驻预览路径不可用（装 rocm/cuda/cpu 任一变体）")
         self.w, self.h = w, h
+        self.high_precision_warp = bool(high_precision_warp)
         want_cuda = device.startswith("cuda")
         if want_cuda and not torch.cuda.is_available():
             # 静默退到 CPU 会让「GPU 常驻」的结论变成假的，必须让调用方能看见
@@ -180,6 +180,8 @@ class PreviewPipeline:
         self.deform_units: dict[str, torch.Tensor] = {}
         self.deform_amounts: dict[str, float] = {k: 0.0 for k in KINDS}
         self.deform_grid_base: torch.Tensor | None = None      # 恒等网格，常驻
+        self._deform_warp = None
+        self._deform_warp_key = None
         self.deform_version: int = 0
         self.deform_meta: dict[str, dict] = {}
         self.last_deform_ms: float = 0.0
@@ -332,6 +334,8 @@ class PreviewPipeline:
 
     def _reset_deform(self) -> None:
         """换图时清形变层：单位场是从这张图的关键点解出来的，对下一张图没有意义。"""
+        self._deform_warp = None
+        self._deform_warp_key = None
         self.deform_units = {}
         self.deform_amounts = {k: 0.0 for k in KINDS}
         self.deform_grid_base = None
@@ -477,8 +481,11 @@ class PreviewPipeline:
     # ---- M1-3b：预计算产物的常驻与取用 ------------------------------------
     def load_face(self, precompute) -> dict:
         """把人脸关键点与语义掩膜一次性上显存。整张图只走这一次。"""
-        if self.src_u8 is None:
-            raise RuntimeError("先 load_rgb_u8：掩膜尺寸必须对得上会话尺寸")
+        # Masks describe geometry, not the storage dtype of the source. Export
+        # keeps repaired pixels in float32 so attaching masks must not require
+        # manufacturing a rounded uint8 "original".
+        if self.src_f32 is None:
+            raise RuntimeError("先装载源图：掩膜尺寸必须对得上会话尺寸")
         arr, names = precompute.stack()
         if arr.shape[1:] != (self.h, self.w):
             raise ValueError(f"掩膜尺寸 {arr.shape[1:]} != 会话 {(self.h, self.w)}，"
@@ -938,6 +945,8 @@ class PreviewPipeline:
         base = identity_grid(self.h, self.w, self.device)
         ms = (time.perf_counter() - t0) * 1000.0
         # ---- 提交点：后面全是赋值 ----
+        self._deform_warp = None
+        self._deform_warp_key = None
         self.deform_units = units
         self.deform_meta = meta
         self.deform_grid_base = base
@@ -953,6 +962,8 @@ class PreviewPipeline:
 
     def clear_deform(self) -> dict:
         """放下整层：三个单位场与恒等网格一共 5 份张量，不手动放就会一直占着。"""
+        self._deform_warp = None
+        self._deform_warp_key = None
         self.deform_units = {}
         self.deform_meta = {}
         self.deform_grid_base = None
@@ -971,7 +982,11 @@ class PreviewPipeline:
         if not isinstance(amounts, dict) or not amounts:
             raise ValueError("deform amounts 至少要给一个 kind")
         got = check_amounts(amounts)
-        self.deform_amounts = dict(self.deform_amounts, **got)
+        new_amounts = dict(self.deform_amounts, **got)
+        if new_amounts != self.deform_amounts:
+            self._deform_warp = None
+            self._deform_warp_key = None
+        self.deform_amounts = new_amounts
         return {"amounts": dict(self.deform_amounts),
                 "built": bool(self.deform_units),
                 "lit": bool(self.has_deform())}
@@ -1019,15 +1034,24 @@ class PreviewPipeline:
         if not self.has_deform():
             return t
         t0 = time.perf_counter()
-        delta = None
-        for kind, unit in self.deform_units.items():
-            a = self.deform_amounts.get(kind, 0.0)
-            if a == 0.0:
-                continue
-            delta = unit * a if delta is None else delta + unit * a
-        if delta is None:
-            return t
-        out = warp_t(t, delta, 1.0, base=self.deform_grid_base)
+        key = (self.deform_version, tuple(sorted(self.deform_amounts.items())), self.high_precision_warp)
+        if key != self._deform_warp_key:
+            delta = None
+            for kind, unit in self.deform_units.items():
+                amount = self.deform_amounts.get(kind, 0.0)
+                if amount != 0.0:
+                    delta = unit * amount if delta is None else delta + unit * amount
+            base = self.deform_grid_base
+            if self.high_precision_warp:
+                # RGB16 exposes normalized-float32 grid rounding as visible LSB
+                # disagreement across tile sizes. Build and sample in float64,
+                # then return to the float32 editing buffer; RGB8 is unchanged.
+                delta = delta.to(torch.float64)
+                base = identity_grid(self.h, self.w, self.device, dtype=torch.float64)
+            self._deform_warp = prepare_warp_t(delta, self.h, self.w, base=base)
+            self._deform_warp_key = key
+        sample = t.to(torch.float64) if self.high_precision_warp else t
+        out = apply_prepared_warp_t(sample, self._deform_warp).to(t.dtype)
         if not torch.isfinite(out).all():
             raise ValueError("形变产出非有限值，已拒绝：amounts="
                              f"{self.deform_amounts}")
@@ -1037,9 +1061,10 @@ class PreviewPipeline:
         return out
 
     def deform_resident_bytes(self) -> int:
-        """形变层的显存账单：三个单位场 + 恒等网格。"""
+        """形变层的显存账单：各单位场 + 恒等网格 + 已生成的采样网格/零位移掩膜。"""
         total = 0
-        for t in list(self.deform_units.values()) + [self.deform_grid_base]:
+        for t in (list(self.deform_units.values()) + [self.deform_grid_base]
+                  + list(self._deform_warp or ())):
             if t is not None:
                 total += int(t.numel() * t.element_size())
         return total
@@ -1775,8 +1800,19 @@ class PreviewPipeline:
         """
         self.frame_gpu[..., :3] = quantize_t(out)[0].permute(1, 2, 0)
 
+    def render_original(self) -> None:
+        """Display the oriented working-space source, bypassing EVERY edit layer.
+
+        Cropping is also an edit: this is the full original image, not a cropped
+        or partially color-adjusted approximation. The recipe and layer caches
+        are untouched; normal render restores the edited frame afterward.
+        """
+        if self.src_f32 is None:
+            raise RuntimeError("先 load_rgb 再看原图")
+        self.pack(self.src_f32)
+
     def render(self, strength: float, channel: str | None = None, **kw) -> None:
-        """算一帧写进常驻帧缓冲。strength=0 时不论有没有掩膜都应当逐字节等于原图。"""
+        """按当前全部编辑层出帧；strength=0 只关闭磨皮，原图对比用 render_original。"""
         self.pack(self.retouch(strength, channel=channel, **kw))
 
     def read_back(self) -> np.ndarray:
@@ -1892,6 +1928,8 @@ def warm_device(device: str, side: int = 64) -> float:
         pipe.light_ops = []
         pipe.light_redo = []
         # 形变层同理：三个单位场 + 恒等网格共 5 份张量，留在临时会话上就是泄显存
+        pipe._deform_warp = None
+        pipe._deform_warp_key = None
         pipe.deform_units = {}
         pipe.deform_grid_base = None
         pipe.deform_meta = {}

@@ -160,15 +160,23 @@ fi
 selfcheck() {
   LRT_VARIANT="$variant" PYTHONPATH="$engine_src" "$pybin" - <<'PY'
 import sys, json, os
-import numpy, PIL
+from lumaretouch_engine.privacy import require_offline_or_exit, policy_status
+require_offline_or_exit()
+import numpy, PIL, tifffile, imagecodecs
 import torch
 import lumaretouch_engine.server as _server   # 真正的 import 链
 from lumaretouch_engine import __version__
+from lumaretouch_engine.color16 import _library as _color_library
+_color_library()  # fail clearly if the system RGB16 ICC runtime is absent
 info = {
     "python": sys.version.split()[0],
+    "privacy": policy_status(),
     "engine_version": __version__,
     "numpy": numpy.__version__,
     "pillow": PIL.__version__,
+    "tifffile": tifffile.__version__,
+    "imagecodecs": imagecodecs.__version__,
+    "icc16_runtime": "LittleCMS 2 (system)",
     "torch": torch.__version__,
     "hip": getattr(torch.version, "hip", None),
     "cuda": getattr(torch.version, "cuda", None),
@@ -186,11 +194,11 @@ try:
     _dirs = _face.model_search_dirs(None)
     _models = {m: next((d for d in _dirs if __import__("os").path.isfile(
                    __import__("os").path.join(d, m))), None) or "MISSING"
-               for m in (_face.FACE_LANDMARKER_MODEL, _face.SELFIE_SEGMENTER_MODEL)}
+               for m in (_face.FACE_LANDMARKER_MODEL, _face.SELFIE_MULTICLASS_MODEL)}
     info["face_mediapipe_import"] = _have
     info["face_model_paths"] = _models
     info["face_backend"] = ("mediapipe" if _have and
-                            all(v != "MISSING" for v in _models.values()) else "synthetic")
+                            all(v != "MISSING" for v in _models.values()) else "unavailable")
 except Exception as _e:
     info["face_backend"] = f"error: {type(_e).__name__}: {_e}"
 print("LRT_RUNTIME_SELFCHK " + json.dumps(info, ensure_ascii=False))
@@ -216,7 +224,7 @@ if [ "$dry" = 1 ]; then
 --dry-run，未动磁盘。将执行：
   1) 建 venv     $(command -v uv >/dev/null && echo "uv venv --seed --python 3.12 $prefix" || echo "python3 -m venv $prefix")
   2) 装 torch 轮子 $(command -v uv >/dev/null && echo "uv pip install --python $pybin ${index:+--index-url $index }-r $eff_req" || echo "$pybin -m pip install -r $eff_req")
-  3) 装引擎依赖  $(command -v uv >/dev/null && echo "uv pip install --python $pybin 'numpy>=2.0' 'pillow>=11'" || echo "$pybin -m pip install 'numpy>=2.0' 'pillow>=11'")
+  3) 装引擎依赖  $(command -v uv >/dev/null && echo "uv pip install --python $pybin 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10'" || echo "$pybin -m pip install 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10'")
   4) 自检        PYTHONPATH=$engine_src $pybin -c 'import lumaretouch_engine.server'
 TXT
   exit 0
@@ -250,10 +258,10 @@ if command -v uv >/dev/null 2>&1; then
   echo "→ 装 GPU 变体（uv 的缓存命中走硬链接，第二次装几乎不占新磁盘）"
   uv pip install --python "$pybin" "${idx_args[@]}" -r "$eff_req"
   echo "→ 装引擎运行时依赖"
-  uv pip install --python "$pybin" 'numpy>=2.0' 'pillow>=11'
+  uv pip install --python "$pybin" 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10'
 else
   "$pybin" -m pip install "${idx_args[@]}" -r "$eff_req"
-  "$pybin" -m pip install 'numpy>=2.0' 'pillow>=11'
+  "$pybin" -m pip install 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10'
 fi
 [ -n "$index" ] && rm -f "$eff_req"
 

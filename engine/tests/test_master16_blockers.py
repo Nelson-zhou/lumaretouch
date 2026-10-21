@@ -116,3 +116,19 @@ def test_master16_blockers_ignores_grade_scope_when_grade_neutral():
     e._grade_scope = "skin"
     e._grade = (0.0, 0.0, 0.0, 1.0)
     assert e._master16_blockers(scale=1, sharpen=0.0) == []
+
+
+def test_master16_checks_snapshot_not_active_document():
+    """A neutral active image must not let another image's exposure be ignored."""
+    e = _mk()
+    neutral = {'strength': 0.0, 'exposure': (0.0,) * 7}
+    edited = {**neutral, 'exposure': (1.0,) + (0.0,) * 6}
+    assert e._master16_snapshot_blockers(neutral) == []
+    assert any('曝光' in x for x in e._master16_snapshot_blockers(edited))
+    assert e._exposure == (0.0,) * 7
+
+
+def test_master16_snapshot_keeps_background_and_crop_checks():
+    e = _mk()
+    assert any('换底' in x for x in e._master16_snapshot_blockers({'_bg': {'active': True}}))
+    assert any('裁剪' in x for x in e._master16_snapshot_blockers({'crop_rect': (0.1, 0.1, 0.9, 0.9)}))

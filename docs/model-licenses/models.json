@@ -1,14 +1,15 @@
 {
   "schema_version": "1.0",
-  "checked_on": "2026-10-18",
-  "project_positioning": "纯开源、非商业自由软件；无商业变现与闭源销售计划",
+  "checked_on": "2026-10-20",
+  "project_positioning": "纯开源项目；是否收费不改变下游开源权利，不以作者非商业计划豁免第三方许可",
   "policy": {
     "tiers": {
       "bundled": "进 deb，装机即零操作可用。体积上限约束：主包不因模型胀破 1 GB。",
-      "fetched": "首次启动或首次点击该能力时，一次性列出清单（名称/体积/上游/许可/sha256）由用户一键确认，之后全自动。不要求用户手动挂载任何文件。",
-      "blocked": "许可或训练数据权利未核清，且无法用上述两档安全承载时——功能显式禁用并说明缺什么。"
+      "fetched": "具体权重版本、许可与哈希核准后按需获取；不能用下载分离规避许可",
+      "blocked": "该后端不可进入纯开源主发行方案；功能需求保留并选择兼容替代实现",
+      "fetched-pending": "获取候选尚未放行，不得默认下载或混入发行物；对应功能需求保留"
     },
-    "silent_download": "禁止。理由不是商业侵权，是两条：(1) 我们对外承诺不外传数据，入站网络动作须同等透明；(2) Apache/CC-BY 类许可要求许可文本与署名随副本分发，静默下载会让用户机器上出现其从未见过的许可。",
+    "silent_download": "默认提供下载前透明说明与可控安装；附带许可和署名是分发义务，不等于每次须用户点击。任何新版本或许可变化仍须核验。",
     "evidence_levels": {
       "一手": "在本环境直接读到权利人发布的许可原文/模型卡页面",
       "二手": "官方文档链接存在但本环境无法直读（如 HF 返回 401），结论取自一致的多方引用",
@@ -27,7 +28,7 @@
         "皮肤区域贴合"
       ],
       "tier": "bundled",
-      "tier_note": "总工 2026-10-18 放行（非商业 + Apache-2.0 权重全面可用），sha256 与体积均为实测，证据已升到一手，因此这个档真的成立了。见 ADR-0002。",
+      "tier_note": "保留既有模型字节登记；包清单一致性与适用许可/运行时审计分开，不以非商业意图作为许可豁免。",
       "upstream_project": "https://github.com/google-ai-edge/mediapipe",
       "model_card": "https://huggingface.co/google/mediapipe-models",
       "docs": "https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker",
@@ -65,7 +66,7 @@
         "祛路人",
         "污点/穿帮修复（生成式那一档）"
       ],
-      "tier": "fetched",
+      "tier": "fetched-pending",
       "upstream_project": "https://github.com/advimman/lama",
       "artifact": "big-lama 权重",
       "revision": null,
@@ -96,7 +97,7 @@
         "面部超清",
         "老照片修复（生成式）"
       ],
-      "tier": "fetched",
+      "tier": "blocked",
       "upstream_project": "https://github.com/sczhou/CodeFormer",
       "artifact": "CodeFormer.pth / dlib detection map",
       "revision": null,
@@ -105,8 +106,8 @@
       "code_license": "S-Lab License 1.0",
       "weights_license": "S-Lab License 1.0（自定义非商业许可，不是 CC，也不是 MIT/Apache）",
       "training_data_license": "完整权利链未知",
-      "evidence": "二手",
-      "evidence_note": "许可性质由权利人仓库 LICENSE 明确为非商业；本项目定位非商业，故允许实现与个人使用，但**不得声称本软件整体可商用**。",
+      "evidence": "一手",
+      "evidence_note": "2026-10-20直接复核上游LICENSE：S-Lab License 1.0限制非商业用途，不能以项目自身开源/免费为由自动放行。",
       "attribution": "Copyright (c) S-Lab, Nanyang Technological University",
       "obligations": [
         "保留作者与机构署名",
@@ -116,8 +117,10 @@
       "use_restrictions": [
         "仅非商业"
       ],
-      "status": "台账已建，待接入",
-      "blocking_decisions": []
+      "status": "该后端排除于纯开源默认分发；面部恢复功能仍待兼容替代实现",
+      "blocking_decisions": [
+        "非商业限制与纯开源主发行目标不一致"
+      ]
     },
     {
       "id": "yunet.face_detection",
@@ -134,7 +137,7 @@
       "weights_license": "MIT（目录声明）",
       "training_data_license": "完整训练数据权利链未知，不可由目录 MIT 推导",
       "evidence": "一手",
-      "evidence_note": "目录 LICENSE 文件可读，属最干净的一档；训练数据链仍是未知，但不阻断非商业使用。",
+      "evidence_note": "上游目录MIT声明已记录；具体权重文件版本、摘要、体积与许可适用范围仍待实际核验，不能用非商业意图替代。",
       "attribution": "Copyright (c) OpenCV contributors — MIT",
       "obligations": [
         "附 MIT 许可原文"
@@ -147,8 +150,7 @@
       "id": "mp.selfie_segmenter",
       "display": "MediaPipe Selfie Segmenter（二类软掩膜：背景/人）",
       "capability": [
-        "人像区域定位",
-        "皮肤贴合类操作的粗掩膜"
+        "旧版整个人像区域定位（不作皮肤分类）"
       ],
       "tier": "bundled",
       "upstream_project": "https://github.com/google-ai-edge/mediapipe",
@@ -162,12 +164,43 @@
       "bundled_path": "usr/lib/LumaRetouch/engine/src/lumaretouch_engine/data/selfie_segmenter.tflite",
       "attribution": "Google LLC，MediaPipe 项目，Apache License 2.0。",
       "known_limits": [
-        "掩膜是「人」不是「皮肤」：含头发与衣服。引擎把它登记为 skin 通道时在 notes 里明说了这层近似，不许当成皮肤分割的结果报精度。"
+        "仅背景/人二类，不能当皮肤分割。为旧资产兼容保留，不再由MediaPipeFace用于skin。"
       ],
       "use_restrictions": [
         "不得用于身份识别"
       ],
       "ledger_added_by": "这一条是 check-release.sh ⑥ 逼出来的：文件先进了包、台账里没有条目，门禁报「进了包但没人核过」。补登记在补发布之前。"
+    },
+    {
+      "id": "mp.selfie_multiclass_256",
+      "display": "Google SelfieMulticlass 256 六类人体语义分割",
+      "capability": [
+        "身体皮肤与面部皮肤概率",
+        "头发/衣服/背景类别分离"
+      ],
+      "tier": "bundled",
+      "artifact": "selfie_multiclass_256x256.tflite",
+      "artifact_url": "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite",
+      "revision": "official latest bytes pinned by sha256, fetched 2026-10-20",
+      "size_bytes": 16371837,
+      "sha256": "c6748b1253a99067ef71f7e26ca71096cd449baefa8f101900ea23016507e0e0",
+      "weights_license": "Apache-2.0",
+      "code_license": "Apache-2.0",
+      "evidence": "一手",
+      "model_card": "https://storage.googleapis.com/mediapipe-assets/Model%20Card%20Multiclass%20Segmentation.pdf",
+      "evidence_note": "官方模型卡第一页明确Apache License 2.0；类别与输入输出见官方Image Segmenter文档。Apache全文已在archive/mediapipe-LICENSE.txt。模型字节未修改。",
+      "upstream_project": "https://github.com/google-ai-edge/mediapipe",
+      "attribution": "Google LLC; model author Adel Ahmadyan. Apache License 2.0.",
+      "obligations": [
+        "保留Apache许可与版权声明",
+        "修改模型时标注修改；本模型未转换或重训练"
+      ],
+      "known_limits": [
+        "非像素级精确蒙版；弱光/逆光/噪声/运动/遮挡会降低质量",
+        "模型卡报告不同肤色质量差异；单张NASA样图不代表婚纱/多人/全肤色验收"
+      ],
+      "status": "本地集成及第13轮逐文件全套回归通过；单张真人质量回归通过；婚纱/多人/多肤色/逆光/发丝边缘总体质量仍未验收",
+      "bundled_path": "usr/lib/LumaRetouch/engine/src/lumaretouch_engine/data/selfie_multiclass_256x256.tflite"
     }
   ],
   "datasets": [
@@ -194,11 +227,24 @@
     },
     {
       "id": "synthetic-portrait",
-      "role": "CI 与对外效果证据的唯一图像来源",
+      "role": "确定性算法与协议回归夹具；不是神经网络真人分割精度证明",
       "license": "本项目自研，程序化生成（packaging/make-test-portrait.py，SEED=20261016）",
       "evidence": "一手",
       "hard_rules": [
         "可自由分发；sha256 台账已随仓库（engine/tests/fixtures/*.sha256.txt）"
+      ]
+    },
+    {
+      "id": "nasa-astronaut-test-crop",
+      "role": "离线真人分割和编辑回归，不进应用包，不作宣传",
+      "license": "NASA US Government public-domain photograph; publicity and endorsement restrictions separate",
+      "evidence": "一手",
+      "manifest": "engine/tests/fixtures/nasa-astronaut-provenance.json",
+      "source": "https://scikit-image.org/docs/stable/api/skimage.data.html#skimage.data.astronaut",
+      "hard_rules": [
+        "不是不同真实肤色或婚纱样片覆盖证明",
+        "不作人物身份识别，不暗示NASA或人物背书",
+        "裁剪与摘要记录在provenance清单，测试图不打进应用资源"
       ]
     }
   ]

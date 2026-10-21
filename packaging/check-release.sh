@@ -86,7 +86,7 @@ fi
 #    libraw 可选插件通道仍未逐包审计，继续禁止混进发布物。
 for need in requirements-mediapipe.txt THIRD_PARTY_NOTICES; do
   if find "$stage" -name "$need" | grep -q .; then
-    good "$need 已随包（面部重塑运行时与声明义务齐备）"
+    good "$need 已随包（清单与声明文件在位；内容适用性另审）"
   else
     bad "$need 没进发布物——没有它，装机后面部重塑无路可装或声明义务没人担"
   fi
@@ -105,39 +105,7 @@ done
 #    b) 暂存目录里真出现了权重文件时，它必须在台账里有条目、条目必须是 bundled，
 #       而且文件实际哈希要跟台账一致——防“进了包但没人核过”。
 if [ -f docs/model-licenses/models.json ]; then
-  python3 - "$stage" <<'PY' || exit 1
-import hashlib, json, os, sys
-stage = sys.argv[1]
-d = json.load(open("docs/model-licenses/models.json", encoding="utf-8"))
-bad = []
-for m in d["models"]:
-    if m.get("tier") == "bundled":
-        if not m.get("sha256"):
-            bad.append(f"{m['id']} 标了 bundled 但 sha256 为空——这个数只能实测，不能抄")
-        if m.get("evidence") != "一手":
-            bad.append(f"{m['id']} 标了 bundled 但许可证据是「{m.get('evidence')}」，一手才能进包")
-for root, _dirs, files in os.walk(stage):
-    for fn in files:
-        if not fn.endswith((".task", ".onnx", ".pth")):
-            continue
-        p = os.path.join(root, fn)
-        ent = next((m for m in d["models"] if m.get("artifact") == fn), None)
-        if ent is None:
-            bad.append(f"发布物里有权重 {fn}，但台账里没有条目")
-            continue
-        if ent.get("tier") != "bundled":
-            bad.append(f"{fn} 在台账里是 {ent.get('tier')} 档，不该出现在发布物里")
-            continue
-        real = hashlib.sha256(open(p, "rb").read()).hexdigest()
-        if real != ent.get("sha256"):
-            bad.append(f"{fn} 实际哈希 {real[:12]}… 与台账 {str(ent.get('sha256'))[:12]}… 不一致")
-if bad:
-    print("× 模型台账门禁未过：")
-    for b in bad:
-        print("  ·", b)
-    sys.exit(1)
-print(f"✓ 模型台账门禁全过（{len(d['models'])} 条，无未填完的 bundled，发布物里权重与台账一致）")
-PY
+  python3 packaging/check-model-artifacts.py "$stage" || exit 1
 else
   bad "缺 docs/model-licenses/models.json——许可台账是发布契约的一部分"
 fi

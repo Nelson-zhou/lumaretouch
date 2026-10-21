@@ -1,0 +1,422 @@
+{
+  "method": "静态提取RetouchPanel WIRED，仅证明该表列出路由。其它特殊UI分支未计入，未列出不直接判缺失，已列出也不算已完成。",
+  "families": 39,
+  "wired_routes": 32,
+  "items": [
+    {
+      "id": "PC-47211",
+      "title": "人物属性栏",
+      "subcontrol_records": 7,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-47248",
+      "title": "人像美化页面概述",
+      "subcontrol_records": 0,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32464",
+      "title": "祛除瑕疵",
+      "subcontrol_records": 45,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32465",
+      "title": "皮肤调整",
+      "subcontrol_records": 50,
+      "wired_routes_in_retouch_panel": [
+        {
+          "path": "高低频磨皮-脸部/身体",
+          "ui_route": "skin.strength"
+        },
+        {
+          "path": "质感磨皮",
+          "ui_route": "skin.detail"
+        },
+        {
+          "path": "AI肤色统一（脸部）",
+          "ui_route": "skin.broad"
+        },
+        {
+          "path": "水润磨皮-脸部/身体",
+          "ui_route": "skin.radius"
+        }
+      ],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32466",
+      "title": "面部重塑",
+      "subcontrol_records": 82,
+      "wired_routes_in_retouch_panel": [
+        {
+          "path": "脸型/瘦脸",
+          "ui_route": "deform.slim_face"
+        },
+        {
+          "path": "眼睛/整体大小",
+          "ui_route": "deform.big_eye"
+        },
+        {
+          "path": "脸型/收下巴",
+          "ui_route": "deform.small_chin"
+        },
+        {
+          "path": "脸型预设/经典",
+          "ui_route": "deform.preset:经典"
+        },
+        {
+          "path": "脸型预设/幼态",
+          "ui_route": "deform.preset:幼态"
+        },
+        {
+          "path": "脸型预设/英气",
+          "ui_route": "deform.preset:英气"
+        }
+      ],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32468",
+      "title": "表情管理",
+      "subcontrol_records": 7,
+      "wired_routes_in_retouch_panel": [
+        {
+          "path": "微笑嘴角",
+          "ui_route": "deform.smile"
+        }
+      ],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32469",
+      "title": "牙齿美化",
+      "subcontrol_records": 8,
+      "wired_routes_in_retouch_panel": [
+        {
+          "path": "牙齿美白",
+          "ui_route": "enh.teeth"
+        }
+      ],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32470",
+      "title": "眼睛增强",
+      "subcontrol_records": 33,
+      "wired_routes_in_retouch_panel": [
+        {
+          "path": "亮眼/眼白",
+          "ui_route": "enh.sclera"
+        },
+        {
+          "path": "亮眼/眼瞳",
+          "ui_route": "enh.iris"
+        }
+      ],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32471",
+      "title": "妆容调整",
+      "subcontrol_records": 74,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32472",
+      "title": "头发调整",
+      "subcontrol_records": 14,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-46608",
+      "title": "手部美化",
+      "subcontrol_records": 3,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-9XYcMCvHXW",
+      "title": "脚部美化",
+      "subcontrol_records": 2,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32473",
+      "title": "全身美型",
+      "subcontrol_records": 23,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32474",
+      "title": "背景调整",
+      "subcontrol_records": 19,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32475",
+      "title": "证件照换背景",
+      "subcontrol_records": 46,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32476",
+      "title": "换天空",
+      "subcontrol_records": 20,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32477",
+      "title": "衣物美化",
+      "subcontrol_records": 17,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-47246",
+      "title": "色彩调节页面概述",
+      "subcontrol_records": 0,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32452",
+      "title": "AI色彩",
+      "subcontrol_records": 32,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32455",
+      "title": "色彩调节",
+      "subcontrol_records": 167,
+      "wired_routes_in_retouch_panel": [
+        {
+          "path": "影调/曝光",
+          "ui_route": "exp.ev"
+        },
+        {
+          "path": "白平衡/色温",
+          "ui_route": "exp.temp"
+        },
+        {
+          "path": "白平衡/色调",
+          "ui_route": "exp.tint"
+        },
+        {
+          "path": "影调/对比度",
+          "ui_route": "tone.contrast"
+        },
+        {
+          "path": "影调/高光",
+          "ui_route": "tone.highlights"
+        },
+        {
+          "path": "影调/阴影",
+          "ui_route": "tone.shadows"
+        },
+        {
+          "path": "影调/饱和度",
+          "ui_route": "tone.saturation"
+        },
+        {
+          "path": "HSL/色相",
+          "ui_route": "hsl.hue"
+        },
+        {
+          "path": "HSL/饱和度",
+          "ui_route": "hsl.sat"
+        },
+        {
+          "path": "HSL/明亮度",
+          "ui_route": "hsl.lum"
+        },
+        {
+          "path": "滤镜/强度",
+          "ui_route": "lut.amount"
+        }
+      ],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32454",
+      "title": "局部调色",
+      "subcontrol_records": 78,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-230985",
+      "title": "后期调色",
+      "subcontrol_records": 0,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32479",
+      "title": "手动液化",
+      "subcontrol_records": 15,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32482",
+      "title": "手动修复",
+      "subcontrol_records": 3,
+      "wired_routes_in_retouch_panel": [
+        {
+          "path": "污点修复画笔",
+          "ui_route": "brush.heal"
+        }
+      ],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32481",
+      "title": "手动涂抹画笔",
+      "subcontrol_records": 5,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-47209",
+      "title": "历史记录",
+      "subcontrol_records": 0,
+      "wired_routes_in_retouch_panel": [
+        {
+          "path": "撤销",
+          "ui_route": "history.undo"
+        },
+        {
+          "path": "重做",
+          "ui_route": "history.redo"
+        }
+      ],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32480",
+      "title": "批量应用效果至其他图片",
+      "subcontrol_records": 2,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32558",
+      "title": "哪些功能支持使用手动涂抹工具擦回复原？",
+      "subcontrol_records": 1,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-64490",
+      "title": "为什么集体照部分人无效果？",
+      "subcontrol_records": 1,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-149774",
+      "title": "集体照如何只单独调整某一个人？",
+      "subcontrol_records": 1,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32550",
+      "title": "色彩调节下全效果和实时调色有何区别？",
+      "subcontrol_records": 2,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-121089",
+      "title": "为什么批量同步后部分图片的背景瑕疵/穿帮没有被祛除？",
+      "subcontrol_records": 2,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-124704",
+      "title": "RAW格式图片如何导出后仍然保留RAW格式？",
+      "subcontrol_records": 0,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32552",
+      "title": "为什么部分功能无法使用（置灰）？",
+      "subcontrol_records": 1,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-4WvzDIBakP",
+      "title": "宠物祛瑕疵",
+      "subcontrol_records": 1,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-DaMvAbwxp4",
+      "title": "眼睛调整",
+      "subcontrol_records": 10,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-32478",
+      "title": "裁剪旋转",
+      "subcontrol_records": 23,
+      "wired_routes_in_retouch_panel": [
+        {
+          "path": "裁剪",
+          "ui_route": "crop.open"
+        },
+        {
+          "path": "旋转/顺时针",
+          "ui_route": "crop.cw"
+        },
+        {
+          "path": "旋转/逆时针",
+          "ui_route": "crop.ccw"
+        },
+        {
+          "path": "旋转/倾斜角度",
+          "ui_route": "crop.open"
+        }
+      ],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-AlCcjw85ql",
+      "title": "祛除黑白边",
+      "subcontrol_records": 6,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    },
+    {
+      "id": "PC-165385",
+      "title": "参考线",
+      "subcontrol_records": 5,
+      "wired_routes_in_retouch_panel": [],
+      "status": "implementation_and_semantics_require_verification"
+    }
+  ],
+  "semantic_risks": [
+    "AI肤色统一映射到skin.broad频带参数不证明实现语义等价，须对照肤色目标和实图验收。",
+    "水润磨皮映射到skin.radius不证明完整对应原手册体验。",
+    "仿制图章与修补工具目前仍无独立采样实现，需求保留，不可用heal冒充。"
+  ]
+}

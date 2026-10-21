@@ -1,0 +1,12 @@
+{
+  "asset": "nasa-astronaut-face-crop.png",
+  "sha256": "2d6f0e15a88ef981eda2c1316e0a735674c1c4d9f85119a7088463cead790db7",
+  "source": "NASA photograph distributed as skimage.data.astronaut in official scikit-image 0.26.0 wheel",
+  "source_documentation": "https://scikit-image.org/docs/stable/api/skimage.data.html#skimage.data.astronaut",
+  "source_media": "https://flic.kr/p/r9qvLn",
+  "usage_guidelines": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+  "rights": "Public domain US Government photograph as documented by scikit-image; not CC0 and not relicensed as project code",
+  "modification": "RGB crop box (120, 0, 340, 275) from original 512x512 astronaut.png; no retouching",
+  "purpose": "Offline automated regression only; not a product promo, endorsement, identity recognition or general wedding-quality benchmark",
+  "caveat": "Publicity/personality rights and NASA endorsement/logo restrictions remain separate. Test fixture is not staged into the application."
+}

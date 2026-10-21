@@ -41,10 +41,9 @@ import math
 
 import numpy as np
 
-try:                                    # torch 是可选依赖：CI 的 CPU job 没装也要能 import
-    import torch
-except ModuleNotFoundError:             # pragma: no cover
-    torch = None
+from ..optional_dependencies import optional_module
+
+torch = optional_module("torch")
 
 
 # ---- 窗口边界：真图分区域量出来的，不是猜的 ----

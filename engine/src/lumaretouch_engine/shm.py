@@ -6,12 +6,9 @@
   偏移 64   槽 0：元数据 64B + 像素 w*h*4
             槽 1：元数据 64B + 像素 w*h*4
 
-提交语义：**先写像素、最后写元数据**，元数据里的 seq 即提交标记。
-读取方轮询两个槽的 seq，取更大的那个——写入方永远在另一个槽上，
-因此读者不会读到写一半的帧。
-
-内存序说明（M0 已知简化）：Python 侧依赖 CPython 的 GIL 与 memcpy 完成
-后再 pack_into，实测足够；正式实现需在 Rust 侧用原子/栅栏替换 seq 写入。
+提交语义：先写像素、最后写元数据；整个写入持有 flock 排他锁。读端必须在
+同一共享锁内选择帧并复制像素。双槽本身不能防止慢读者被两帧后的写入覆盖；
+CPython GIL 也不保护另一个进程。协议 v2 拒绝没有锁契约的旧读端。
 
 跨进程时间戳统一 CLOCK_MONOTONIC 纳秒：引擎在“帧可读”时刻打 t_emit，
 UI 侧在收到绘制回执时打 t_ack，同基直接相减即端到端延迟，无需时钟校准。
@@ -20,12 +17,15 @@ UI 侧在收到绘制回执时打 t_ack，同基直接相减即端到端延迟�
 from __future__ import annotations
 
 import mmap
+import fcntl
+import threading
+from contextlib import contextmanager
 import os
 import struct
 import time
 
 MAGIC = b"LRSH"
-VERSION = 1
+VERSION = 2
 
 # 4s + 7*I + 32s = 4 + 28 + 32 = 64
 GLOBAL_HDR = struct.Struct("<4sIIIIIII32s")
@@ -48,40 +48,56 @@ class FrameShm:
 
     def __init__(self, name: str, width: int = 0, height: int = 0,
                  slots: int = 2, create: bool = False):
+        self._thread_lock = threading.RLock()
         self.name = name
         self.path = f"/dev/shm/{name}"
         self.slots = slots
         self._seq = 0
         self._slot = 0
 
+        if not isinstance(name, str) or not name or "/" in name or "\0" in name:
+            raise ValueError("invalid shared-memory name")
         if create:
-            if width <= 0 or height <= 0:
-                raise ValueError("创建模式必须给出 width/height")
+            if width <= 0 or height <= 0 or slots <= 0:
+                raise ValueError("创建模式必须给出正 width/height/slots")
             self.w, self.h = width, height
             self.pixel_size = width * height * 4
             self.slot_size = SLOT_META_SIZE + self.pixel_size
             self.total = HEADER_SIZE + self.slot_size * slots
-            fd = os.open(self.path, os.O_CREAT | os.O_RDWR | os.O_TRUNC, 0o600)
+            if self.total > 0xffffffff:
+                raise ValueError("shared-memory layout exceeds uint32 protocol limit")
+        self._fd = os.open(self.path, os.O_CREAT | os.O_RDWR if create else os.O_RDWR, 0o600)
+        self._buf = None
+        try:
+            fcntl.flock(self._fd, fcntl.LOCK_EX if create else fcntl.LOCK_SH)
             try:
-                os.ftruncate(fd, self.total)
-            except OSError:
-                os.close(fd)
-                raise
-            self._fd = fd
-            # 跨进程共享必须显式 MAP_SHARED；默认值因版本而异，不能赌
-            self._buf = mmap.mmap(fd, self.total, flags=mmap.MAP_SHARED,
-                                  access=mmap.ACCESS_WRITE)
-            self._write_global()
-        else:
-            self._fd = os.open(self.path, os.O_RDWR)
-            self._buf = mmap.mmap(self._fd, 0, flags=mmap.MAP_SHARED,
-                                  access=mmap.ACCESS_WRITE)
-            self.total = self._buf.size()
-            magic, version, slots, w, h, pixel_size, slot_size, _total, _rsv = self.read_global()
-            if magic != MAGIC or version != VERSION:
-                raise ValueError(f"共享内存头不匹配: magic={magic!r} version={version}")
-            self.slots, self.w, self.h = slots, w, h
-            self.pixel_size, self.slot_size = pixel_size, slot_size
+                if create:
+                    # Truncation must also respect active readers, not happen in open().
+                    os.ftruncate(self._fd, self.total)
+                else:
+                    self.total = os.fstat(self._fd).st_size
+                    if self.total < HEADER_SIZE:
+                        raise ValueError("shared-memory header truncated")
+                self._buf = mmap.mmap(self._fd, self.total, flags=mmap.MAP_SHARED,
+                                      access=mmap.ACCESS_WRITE)
+                if create:
+                    self._write_global()
+                else:
+                    magic, version, slots, w, h, pixels, stride, total, _rsv = self.read_global()
+                    if magic != MAGIC or version != VERSION:
+                        raise ValueError(f"共享内存头不匹配: magic={magic!r} version={version}")
+                    if (slots <= 0 or w <= 0 or h <= 0 or pixels != w*h*4
+                            or stride != SLOT_META_SIZE+pixels
+                            or total != HEADER_SIZE+slots*stride or total != self.total):
+                        raise ValueError("shared-memory layout is inconsistent")
+                    self.slots, self.w, self.h = slots, w, h
+                    self.pixel_size, self.slot_size = pixels, stride
+            finally:
+                fcntl.flock(self._fd, fcntl.LOCK_UN)
+        except BaseException:
+            if self._buf is not None: self._buf.close()
+            os.close(self._fd)
+            raise
 
     # ---- 全局头 ----------------------------------------------------------
     def _write_global(self) -> None:
@@ -106,17 +122,47 @@ class FrameShm:
         mv = memoryview(pixels).cast("B")
         if mv.nbytes != self.pixel_size:
             raise ValueError(f"像素长度 {mv.nbytes} != 期望 {self.pixel_size}")
-        i = self._slot
-        self._slot = (self._slot + 1) % self.slots
-        off = self._slot_offset(i)
-        # 1) 像素
-        self._buf[off + SLOT_META_SIZE:off + self.slot_size] = mv
-        # 2) 提交标记 + 打点
-        self._seq += 1
-        seq = self._seq
-        t = t_ns if t_ns is not None else monotonic_ns()
-        SLOT_HDR.pack_into(self._buf, off, seq, t, self.w, self.h, fourcc, b"")
-        return seq, t, i
+        with self.frame_lock(exclusive=True):
+            i = self._slot
+            self._slot = (self._slot + 1) % self.slots
+            off = self._slot_offset(i)
+            # 1) 像素
+            self._buf[off + SLOT_META_SIZE:off + self.slot_size] = mv
+            # 2) 提交标记 + 打点
+            self._seq += 1
+            seq = self._seq
+            t = t_ns if t_ns is not None else monotonic_ns()
+            SLOT_HDR.pack_into(self._buf, off, seq, t, self.w, self.h, fourcc, b"")
+            return seq, t, i
+
+    @contextmanager
+    def frame_lock(self, *, exclusive=False):
+        """One lock spans metadata selection AND the entire pixel copy."""
+        with self._thread_lock:
+            fcntl.flock(self._fd, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+            try:
+                if os.fstat(self._fd).st_size != self.total:
+                    raise ValueError("shared-memory size changed; reopen after shm_ready")
+                yield
+            finally:
+                fcntl.flock(self._fd, fcntl.LOCK_UN)
+
+    def read_snapshot(self, slot=None, expected_seq=None):
+        """Return (metadata-with-slot, copied bytes), or None for a stale event.
+
+        Notifications can legitimately outlive their two-slot frame. Never label
+        newer pixels with the old notification's sequence number.
+        """
+        with self.frame_lock():
+            if slot is None:
+                meta = self.freshest()
+            else:
+                if not isinstance(slot, int) or not 0 <= slot < self.slots:
+                    raise ValueError('invalid frame slot')
+                meta = (*self.meta_of(slot), slot)
+            if meta is None or not meta[0] or (expected_seq is not None and meta[0] != expected_seq):
+                return None
+            return meta, self.read_pixels(meta[-1])
 
     def meta_of(self, slot: int) -> tuple[int, int, int, int, int]:
         return SLOT_HDR.unpack_from(self._buf, self._slot_offset(slot))[:5]

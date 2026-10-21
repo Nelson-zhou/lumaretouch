@@ -18,10 +18,9 @@ from __future__ import annotations
 
 import numpy as np
 
-try:                                   # pragma: no cover - 环境依赖
-    import torch
-except ImportError:                    # pragma: no cover
-    torch = None
+from ..optional_dependencies import optional_module
+
+torch = optional_module("torch")
 
 TONE_LIMIT = 100.0
 

@@ -12,7 +12,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv --version
-      - name: 装依赖（仅 numpy + pillow + pytest，不拉 GPU 轮子）
+      - name: Install system ICC and offline-policy runtimes
+        run: sudo apt-get update && sudo apt-get install -y liblcms2-2 libseccomp2
+      - name: 装图像与测试依赖（不拉 GPU 轮子）
         working-directory: engine
         run: uv sync --group dev
       - name: 单测
