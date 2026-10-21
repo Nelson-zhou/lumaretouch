@@ -64,8 +64,9 @@ def test_torch_cpu_matches_numpy_and_keeps_identity():
 def test_resident_pipeline_curves_are_independent_and_clearable():
     pytest.importorskip('torch')
     from lumaretouch_engine.vram import make_pipeline
-    image = np.full((16, 16, 3), 64, dtype=np.uint8)
-    pipe = make_pipeline('cpu', 16, 16, image)
+    # The existing guided-filter reference needs dimensions larger than its radius.
+    image = np.full((64, 64, 3), 64, dtype=np.uint8)
+    pipe = make_pipeline('cpu', 64, 64, image)
     pipe.render(0.)
     before = pipe.read_back().copy()
     spec = C.default_curves(); spec['red'] = [[0, .1], [1, 1.]]

@@ -32,7 +32,8 @@ def test_curves_pixels_history_project_and_original(engine,tmp_path):
         np.testing.assert_array_equal(pixels(),edited)
         _,project=_create_and_save(engine,tmp_path)
         engine.send(cmd='curves',action='clear');_wait_frame_mode(engine,'curves')
-        engine.send(cmd='project',action='open',path=project['path']);engine.wait_for('project_opened',timeout=60)
+        # This test intentionally discards its own temporary clear operation.
+        engine.send(cmd='project',action='open',path=project['path'],force=True);engine.wait_for('project_opened',timeout=60)
         engine.send(cmd='history',action='state');restored=engine.wait_for('history_state',timeout=30)
         assert restored['doc_state']['curves']==spec
         np.testing.assert_array_equal(pixels(),edited)
