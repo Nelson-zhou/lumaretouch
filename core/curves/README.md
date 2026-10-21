@@ -93,3 +93,9 @@ reference parity, NumPy/Torch equivalence, state/module propagation, and RGB16
 shared export. Deep real-photo/GPU/GUI optimization remains deferred; passing
 this channel's checks must not be reported as the entire professional colour
 workstation (levels, histogram, parametric curve, eyedroppers) being complete.
+
+Initial v2 CI run 39654402139 retained: production compilation and engine tests
+passed, but the new native nonidentity midpoint test compared floating JSON
+numbers exactly (0.5000000000000001 versus 0.5). That assertion now uses the same
+1e-12 numerical tolerance as the scalar core tests. Identity bypass remains
+bit-exact; no production curve arithmetic or rejection guard was loosened.

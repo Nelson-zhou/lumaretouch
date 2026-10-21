@@ -183,7 +183,7 @@ mod tests {
         value["luminance"]=json!([[0,0.1],[1,0.9]]);
         let result=curve_preview(value.clone()).unwrap();
         assert_eq!(result.as_object().unwrap().len(),5);
-        assert_eq!(result["luminance"][128],json!(0.5));
+        assert!((result["luminance"][128].as_f64().unwrap()-0.5).abs()<1e-12);
         value["luminance_space"]=json!("lab-l");assert!(curve_preview(value).is_err());
     }
 }
