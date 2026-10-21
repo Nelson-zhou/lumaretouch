@@ -1685,7 +1685,7 @@ export default function App() {
 
   const captureAllowed=!!status?.engine_alive && status?.ready_caps?.color_capture_protocol===1
     && !!doc?.document_id && status.image?.load_id===doc.document_id && workspace==='retouch'
-    && compareMode==='single' && !comparing && !inspectionEnabled && !cropOpen;
+    && compareMode==='single' && !comparing && !inspectionEnabled && !cropOpen && (batchWorkflow.ui.phase==='closed'||batchWorkflow.ui.hidden===true);
   const captureReason=captureAllowed?'':'请导入图片，并在单视图代理预览中取色';
   const colorSampler=useColorSampler({documentId:doc?.document_id??'',revision:status?.doc_rev??-1,
     allowed:captureAllowed,reason:captureReason},brushOn||pickFace);
@@ -1850,11 +1850,12 @@ export default function App() {
             </div>
 
             {strip && strip.count > 0 && (
-              <section className="gallery">
+              <>
                 <BatchActions count={selPaths.length} scopes={syncScopes} scope={syncScopeLabel||syncScopes[0]?.label||''}
                   policy={batchPolicy} onScope={setSyncScopeLabel} onPolicy={setBatchPolicy} note={syncNote}
                   ready={hasImage&&status?.ready_caps?.batch_preflight_protocol===1} busy={['committing','preflighting'].includes(batchWorkflow.ui.phase)}
                   unresolved={batchWorkflow.ui.phase==='uncertain'} canUndo={!!syncState?.last} onReview={onBatchSync} onUndo={onBatchUndo}/>
+              <section className="gallery">
                 <div className="strip">
                   {strip.docs.map((d) => {
                     const rate = ratingOf(d);

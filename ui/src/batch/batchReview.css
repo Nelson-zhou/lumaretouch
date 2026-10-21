@@ -12,3 +12,10 @@
 .batchActions select{max-width:300px;background:#25262c;color:inherit;border:1px solid #555;border-radius:5px;padding:5px}
 .batchActions small{flex-basis:100%;color:#b8bbc5;overflow-wrap:anywhere}
 .batchPending{position:fixed;right:24px;bottom:24px;z-index:1100;background:#554323;color:#ffe1a3;box-shadow:0 4px 20px #0008}
+.batchActions{flex:none;overflow:visible}.batchSettings{position:relative;margin-left:auto}
+.batchSettings summary{cursor:pointer;white-space:nowrap}.batchSettings>div{position:absolute;right:0;bottom:calc(100% + 10px);z-index:30;width:min(430px,75vw);padding:14px;background:#25262c;border:1px solid #555;border-radius:8px;box-shadow:0 8px 30px #0008;display:grid;gap:12px}
+.batchSettings label{flex-direction:column;align-items:stretch}.batchSettings select{max-width:100%}
+.batchActions button,.batchReview button,.batchPending{border:1px solid #555;border-radius:6px;background:#303138;color:inherit;padding:6px 10px;cursor:pointer}
+.batchActions button.primary,.batchReview button.primary{background:var(--acc);color:#1b1b1b;border-color:var(--acc)}
+.batchActions button:disabled,.batchReview button:disabled{opacity:.4;cursor:default}
+.batchActions :focus-visible,.batchReview :focus-visible,.batchPending:focus-visible{outline:2px solid var(--acc);outline-offset:2px}

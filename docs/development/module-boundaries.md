@@ -142,4 +142,6 @@ Server only wires these owners and lifecycle fence hooks. Reviewed server cap ri
 The native batch host is pure receipt state; batch_api owns IPC arguments. The React
 batch workflow owns request lifecycle independently of rendering, and Actions/Review
 components only present it. App composes the entry and supplies narrow context; no
-transaction state or polling loop is embedded there. Existing caps remain unchanged.
+transaction state or polling loop is embedded there. A reviewed App cap change
+2150→2160 permits sibling composition around the compact batch bar, keeping the
+existing fixed-height filmstrip unobstructed; native/server caps are unchanged.
