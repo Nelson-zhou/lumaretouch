@@ -1490,7 +1490,7 @@ class Engine:
         if row is not None:
             row.update({"w": d.w, "h": d.h, "src_w": d.src_w, "src_h": d.src_h,
                         "opened": True, "state": self._capture_state()})
-        emit({"event": "image_ready", **d.meta(), "device": str(pipe.device),
+        emit({"event": "image_ready", **d.meta(), "load_id": str(t0), "device": str(pipe.device),
               "strength": self._strength,
               # 底片条得知道现在这一格是哪一张、是不是切回来的（而不是新导入）：
               # UI 拿它把高亮位置对好，不靠“我自己记得点过第几格”。
@@ -3527,7 +3527,7 @@ class Engine:
         """
         # 参数校验排在最前（与 cmd_history 同一顺序）：一条写坏的命令应当被报成
         # "写坏了"，而不是被状态守卫抢先报成"还没导进来"——后者会把真正的笔误藏起来。
-        unknown = set(p) - {"cmd", "on"}
+        unknown = set(p) - {"cmd", "on", "capture_id"}
         if unknown:
             emit({"event": "error", "error": f"compare 收到不认识的参数：{sorted(unknown)}"})
             return
@@ -3544,8 +3544,14 @@ class Engine:
         if "on" in p and not isinstance(p["on"], bool):
             emit({"event": "error", "error": "compare on 必须是 boolean"})
             return
+        capture_id = p.get("capture_id")
+        if capture_id is not None and (not isinstance(capture_id, str) or not 1 <= len(capture_id) <= 128):
+            emit({"event": "error", "error": "compare capture_id 必须是 1–128 字符的字符串"})
+            return
         on = p.get("on", True)
         fr = self._write_current_frame("compare", original=on)
+        fr["capture_id"] = capture_id
+        fr["doc"] = self._doc_path
         fr["view"] = "original" if on else "edited"
         fr.pop("render_ms")          # 与 set_strength 同一口径：这一笔随 params_set 报，不塞进 frame
         emit(fr)

@@ -19,7 +19,10 @@ def test_compare_original_bypasses_all_edits_without_mutating_recipe(engine,tmp_
         edited=np.frombuffer(peer.read_snapshot()[1],np.uint8).reshape(90,120,4)[...,:3]
         assert np.any(edited!=source)
         state=_hist(engine)
-        engine.send(cmd='compare',on=True);engine.wait_for('frame',timeout=60)
+        engine.send(cmd='compare',on=True,capture_id='capture-regression')
+        receipt=engine.wait_for('frame',timeout=60)
+        assert receipt['capture_id']=='capture-regression' and receipt['doc']==str(path)
+        assert receipt['view']=='original'
         actual=np.frombuffer(peer.read_snapshot()[1],np.uint8).reshape(90,120,4)[...,:3]
         np.testing.assert_array_equal(actual,source)
         engine.send(cmd='compare',on=False);engine.wait_for('frame',timeout=60)

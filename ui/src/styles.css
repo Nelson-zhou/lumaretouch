@@ -786,3 +786,16 @@ input[type="range"], input[type="checkbox"] { accent-color: var(--acc); }
 .projectSourceWarning { margin:8px 12px; padding:10px 14px; border:1px solid #a87537; border-radius:8px; background:#33291d; color:#ffe0b0; max-height:180px; overflow:auto; }
 .projectSourceWarning p { margin:4px 0; }
 .projectSourceWarning li { overflow-wrap:anywhere; }
+
+/* Category navigation: one tool family area plus a persistent outer rail. */
+.side:has(.rtToolNav) { padding:0; overflow:hidden; }
+.retouch:has(.rtToolNav) { height:100%; min-height:0; display:grid;
+  grid-template-columns:minmax(0,1fr) 52px; align-items:start; }
+.rtContent { height:100%; min-height:0; overflow-y:auto; padding:10px 12px 24px; }
+.rtToolNav { height:100%; overflow-y:auto; display:flex; flex-direction:column;
+  gap:3px; padding:8px 3px; border-left:1px solid #292929; background:#191919; }
+.rtToolNav button { min-height:42px; flex-shrink:0; padding:5px 2px; font-size:11px;
+  border:1px solid transparent; border-radius:5px; background:transparent; color:#aaa; }
+.rtToolNav button[aria-pressed="true"] { color:#f4d69b; background:#332b20; border-color:#655038; }
+.rtToolNav button:focus-visible { outline:2px solid #c79a63; outline-offset:-2px; }
+.retouch [hidden] { display:none !important; }

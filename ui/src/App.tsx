@@ -1,3 +1,4 @@
+import { captureOriginal, compareImageKey } from "./compareCapture";
 import { skinStrengthOptions, skinMaskUnavailable } from "./skinScope";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -18,14 +19,14 @@ import {
   quit, report, runDeform, runEnhance, runFace,
   fetchFilmstrip, runExport, runGrade, runHistory, runHsl, runInpaint, runLight, runLut, runPick, runSession, runBackground,
   runBatch, runCrop, runExposure, runPreset, runPrecompute, runProject, runTask,
-  setCompare, setStrength, shutdownEngine, startEngine,
+  setCompare, compareStatus, setStrength, shutdownEngine, startEngine,
   type BenchOptions, type DeformInfo, type DocState, type EngineRuntime, type EngineStatus, type EnhanceInfo, type ExportDone,
   type ExportProgress, type HistoryReport, type HistoryState, type ImageReady,
   type InpaintInfo, type SessionState,
   type GradeInfo, type LightInfo,
   type LutInfo, type BackgroundInfo,
   type PickRun, type Precompute, type SessionDoc, type Stats, type ProjectState,
-  type TaskState,
+  type TaskState, type ParsedFrame,
 } from "./native";
 
 /** 拖进来的文件能不能开：判据只有一份，出处是引擎 ready 报的 image_exts
@@ -91,7 +92,7 @@ function parseAutoBench(spec: string) {
   return { w, h, frames: +frames, intervalMs: +(interval || 16.7), mode: (mode || "copy") as BenchOptions["mode"] };
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 let m0Started = false;   // React StrictMode 下 effect 会执行两次，这里只允许起靶一次
 let viewportProbeStarted = false;   // 同上：StrictMode 下 effect 会跑两次
 
@@ -251,7 +252,7 @@ export default function App() {
   // 对比：单视图 / 并排 / 卷帘；按住空格是单视图里的临时对比
   const [compareMode, setCompareMode] = useState<CompareMode>("single");
   const [swipe, setSwipe] = useState(0.5);
-  const [captureToken, setCaptureToken] = useState(0);
+  const [originalFrame, setOriginalFrame] = useState<ParsedFrame | null>(null);
   const [hasOriginal, setHasOriginal] = useState(false);
   // 人物属性栏：所有人（联动）或某一张脸（独立）。索引来自引擎的 face.index。
   const [faceScope, setFaceScope] = useState<"all" | number>("all");
@@ -442,7 +443,7 @@ export default function App() {
     const down = (e: KeyboardEvent) => {
       if (e.code !== "Space" || e.repeat || isText(e.target as HTMLElement)) return;
       e.preventDefault();
-      if (!pid || comparingRef.current) return;
+      if (!pid || comparingRef.current || compareMode !== "single") return;
       comparingRef.current = true;
       setComparing(true);
       void setCompare(true).catch((err) => setDragNote(String(err)));
@@ -457,7 +458,7 @@ export default function App() {
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
-  }, [pid]);
+  }, [pid, compareMode]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -2677,38 +2678,32 @@ export default function App() {
     await setCompare(false).catch((err) => { setDragNote(String(err)); });
   }
 
-  /** 并排/卷帘要一张“原图”快照：开 compare 取一帧，再关掉让精修帧继续实时流。
-   *  快照由视口在 captureToken 变化后的下一帧写入；取不到就退回单视图，绝不留
-   *  一张“并排里两半都是精修”的假对比。 */
+  // Polling allocates fresh objects, but does not import a new photograph.
+  const compareKey = compareImageKey(status?.image);
+  const compareDoc = status?.image?.doc ?? "";
   useEffect(() => {
-    if (workspace !== "retouch" || compareMode === "single" || !status?.image) {
-      setHasOriginal(false);
-      return;
-    }
-    if (!pid) return;
-    let dead = false;
     setHasOriginal(false);
-    (async () => {
+    setOriginalFrame(null);
+    if (workspace !== "retouch" || compareMode === "single" || !compareDoc || !pid) return;
+    let dead = false;
+    const id = crypto.randomUUID();
+    void (async () => {
       try {
-        await setCompare(true);
-        await sleep(180);
-        if (!dead) setCaptureToken((v) => v + 1);
-        await sleep(1200);
-        if (!dead) await setCompare(false).catch(() => undefined);
-      } catch {
-        if (!dead) setCompareMode("single");
+        const frame = await captureOriginal({
+          id, doc: compareDoc, cancelled: () => dead,
+          request: (requestId) => setCompare(true, requestId), receipt: compareStatus,
+          pixels: async () => parseFrameHead(await peekFrame()),
+          wait: () => sleep(25), now: () => performance.now(),
+        });
+        if (!dead && frame) { setOriginalFrame(frame); setHasOriginal(true); }
+      } catch (err) {
+        if (!dead) { setDragNote(String(err)); setCompareMode("single"); }
+      } finally {
+        if (!dead) void setCompare(false).catch((err) => setDragNote(String(err)));
       }
     })();
-    return () => {
-      dead = true;
-      void setCompare(false).catch(() => undefined);
-    };
-  }, [compareMode, workspace, status?.image, pid, strip?.current]);
-
-  const onOriginalCaptured = useCallback(() => {
-    setHasOriginal(true);
-    void setCompare(false).catch(() => undefined);
-  }, []);
+    return () => { dead = true; void setCompare(false).catch(() => undefined); };
+  }, [compareMode, workspace, compareKey, compareDoc, pid]);
 
   /** 视口/顶栏的缩放：Fit 与真正的 100%（1 图像像素 = 1 屏幕像素）。 */
   function zoomFit() { setOneToOne(false); setView({ ...VIEW_HOME }); }
@@ -3765,8 +3760,7 @@ export default function App() {
                 compareMode={compareMode}
                 swipe={swipe}
                 onSwipe={setSwipe}
-                captureToken={captureToken}
-                onOriginalCaptured={onOriginalCaptured}
+                originalFrame={originalFrame}
                 onFitScale={setFitScale}
               />
               {hasImage && (

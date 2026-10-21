@@ -30,6 +30,7 @@ export interface Stats {
 
 /** 引擎导入一张真图后的回报：代理档尺寸与逐项耗时（一次性成本，不计进逐帧预算）。 */
 export interface ImageReady {
+  load_id?: string;
   src_w: number;
   src_h: number;
   w: number;
@@ -1116,7 +1117,8 @@ export const loadImage = (
  * 两层都是“松手才提交”：逐事件发会把 M1-3c 拿回来的 vsync 余量又吐出去。
  */
 /** 按住看原图：on=true 临时出一帧原图，on=false 回到修好的那一版。不改会话强度。 */
-export const setCompare = (on: boolean) => invoke<{ on: number }>("compare", { on });
+export const setCompare = (on: boolean, captureId?: string) => invoke<{ on: boolean }>("compare", { on, captureId });
+export const compareStatus = () => invoke<{ capture_id: string | null; doc: string; seq: number; view: string } | null>("compare_status");
 
 export const setStrength = (
   value: number,

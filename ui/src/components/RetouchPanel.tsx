@@ -1,3 +1,4 @@
+import { TOOL_GROUPS, toolGroupOf, type ToolGroup } from "../toolNavigation";
 /**
  * 右侧精修面板（Spec-Driven，1.12.0）。
  *
@@ -352,6 +353,7 @@ export default function RetouchPanel(props: RetouchProps) {
   const faceIdx = typeof props.faceScope === "number" ? props.faceScope : null;
   const scope: "all" | "person" = props.faceScope === "all" ? "all" : "person";
   const [q, setQ] = useState("");
+  const [toolGroup, setToolGroup] = useState<ToolGroup>("color");
   const [bgHex, setBgHex] = useState("#ffffff");
   const [openSeen, setOpenSeen] = useState<Record<string, boolean>>({});
   // 八色 HSL 当前选中的色段（0…7）。这是**界面选择**，不是文档状态：切图后同一段
@@ -774,10 +776,11 @@ export default function RetouchPanel(props: RetouchProps) {
   return (
     <div className="retouch" data-spec-total={SPEC_COUNTS.features}
          data-spec-controls={SPEC_COUNTS.subcontrols}>
-      <div className="rtTitle">人像精修</div>
+      <div className="rtContent">
+      <div className="rtTitle">{q.trim() ? "功能搜索" : TOOL_GROUPS.find(g => g.id === toolGroup)?.label}</div>
 
       {/* ① 人物栏：所有人 / 每张脸 / 多脸联动 / 添加与移出 */}
-      <div className="faceBar" data-spec-family="PC-47211">
+      <div className="faceBar" data-spec-family="PC-47211" hidden={toolGroup !== "portrait" || !!query}>
         <div className="faceHead">
           <span>人物</span>
           <em>{faces.length ? `${faces.length} 人` : "未检测到人脸"}</em>
@@ -841,7 +844,7 @@ export default function RetouchPanel(props: RetouchProps) {
           <circle cx="11" cy="11" r="6.5" />
           <path d="m16 16 4 4" />
         </svg>
-        <input className="specSearch" value={q} placeholder="搜索功能，如 磨皮、瘦脸"
+        <input className="specSearch" value={q} placeholder="搜索全部功能，如 曝光、磨皮"
           onChange={(e) => setQ(e.target.value)} />
       </div>
 
@@ -850,13 +853,14 @@ export default function RetouchPanel(props: RetouchProps) {
       )}
 
       {/* ② 其余功能族：按规格顺序递归渲染；未开放的项只置灰，不贴任何标签 */}
-      {visibleTrees.filter(({ f }) => hit(f)).map(({ f, tree }) => {
+      {visibleTrees.map(({ f, tree }) => {
         const custom = blockFor(f.id);
-        const open = !!query || !!openSeen[f.id] || f.id === "PC-32465";
+        const open = !!query || !!openSeen[f.id] || f.id === "PC-32465" || f.id === "PC-32455";
         const title = PANEL_TITLE[f.id] ?? f.title;
         return (
           <details className="pg sfam" key={f.id} open={open}
             data-spec-family={f.id}
+            hidden={query ? !hit(f) : toolGroupOf(f.id) !== toolGroup}
             onToggle={(e) => {
               const el = e.currentTarget as HTMLDetailsElement;
               if (el.open) setOpenSeen((s) => (s[f.id] ? s : { ...s, [f.id]: true }));
@@ -885,6 +889,15 @@ export default function RetouchPanel(props: RetouchProps) {
       <div className="specArchive" hidden aria-hidden="true">
         {archived.map((f) => <div key={f.id} data-spec-family={f.id} />)}
       </div>
+      </div>
+      <nav className="rtToolNav" aria-label="精修工具分类">
+        {TOOL_GROUPS.map(group => (
+          <button key={group.id} type="button" aria-pressed={!query && toolGroup === group.id}
+            title={group.label} onClick={() => { setToolGroup(group.id); setQ(""); }}>
+            {group.label}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }

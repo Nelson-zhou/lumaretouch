@@ -82,8 +82,7 @@ export default function Viewer({
   compareMode = "single",
   swipe = 0.5,
   onSwipe,
-  captureToken = 0,
-  onOriginalCaptured,
+  originalFrame = null,
   onFitScale,
 }: {
   active: boolean;
@@ -127,9 +126,8 @@ export default function Viewer({
   /** 卷帘分界（图像宽度的 0–1） */
   swipe?: number;
   onSwipe?: (v: number) => void;
-  /** App 在 compare=true 之后 +1，视口据此把下一帧存成“原图”快照 */
-  captureToken?: number;
-  onOriginalCaptured?: () => void;
+  /** Verified request-correlated original pixels. */
+  originalFrame?: ParsedFrame | null;
   /** 把 Fit 倍率交给 App：100% = 1/(dpr*fitScale) 只能在这里算（视口知道画布与帧尺寸） */
   onFitScale?: (s: number) => void;
 }) {
@@ -180,9 +178,8 @@ export default function Viewer({
   const viewRef = useRef(view); viewRef.current = view;
   const compareRef = useRef(compareMode); compareRef.current = compareMode;
   const swipeRef = useRef(swipe); swipeRef.current = swipe;
-  const captureTokenRef = useRef(captureToken); captureTokenRef.current = captureToken;
+  const originalRef = useRef(originalFrame); originalRef.current = originalFrame;
   const onSwipeRef = useRef(onSwipe); onSwipeRef.current = onSwipe;
-  const onOrigRef = useRef(onOriginalCaptured); onOrigRef.current = onOriginalCaptured;
   const updateSwipe = (e: React.PointerEvent) => {
     const el = boxRef.current;
     if (!el || !onSwipeRef.current) return;
@@ -434,10 +431,15 @@ export default function Viewer({
     // 现在每拍最多一个在途请求，响应落在哪一拍就在哪一拍上传。
     let pulling = false;
     let ready: ParsedFrame | null = null;
-    // 原图快照（离屏）：只由 captureToken 触发写入，不参与测量
+    // Snapshot identity is verified by the receipt, never arrival timing.
     const snap = document.createElement("canvas");
     const snapCtx = snap.getContext("2d", { alpha: false });
-    let lastCapture = -1;
+    let lastOriginal: ParsedFrame | null = null;
+    const edited = document.createElement("canvas");
+    const editedCtx = edited.getContext("2d", { alpha: false });
+    let compositionDirty = false;
+    let lastMode: CompareMode = "single";
+    let lastSwipe = -1;
     const presentQueue: { seq: number; rafs: number }[] = [];
 
     const pump = () => {
@@ -484,7 +486,8 @@ export default function Viewer({
           sizeRef.current = { w: f.w, h: f.h };
           setFrameDim({ w: f.w, h: f.h });
           snap.width = f.w; snap.height = f.h;
-          lastCapture = -1;
+          edited.width = f.w; edited.height = f.h;
+          lastOriginal = null;
           pad.resize(f.w, f.h);
           if (overlay) {
             overlay.width = f.w;
@@ -529,33 +532,7 @@ export default function Viewer({
           gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
           // 一次 drawImage：把这一帧交给用户实际看到的那张画布；对比模式在这张
           // 2D 画布上叠原图（GL 渲染与测量链路一个字不动）。
-          if (mctx) {
-            mctx.drawImage(canvas, 0, 0);
-            const mode = compareRef.current;
-            // 原图快照：App 在 compare=true 之后推进 token，这里的下一帧就是原图
-            if (captureTokenRef.current !== lastCapture) {
-              lastCapture = captureTokenRef.current;
-              if (snap.width !== f.w || snap.height !== f.h) {
-                snap.width = f.w; snap.height = f.h;
-              }
-              snapCtx?.drawImage(canvas, 0, 0);
-              onOrigRef.current?.();
-            }
-            if (mode === "split" && snap.width) {
-              // 左精修 / 右原图：两半都按帧分辨率画，再由 CSS 统一缩放
-              mctx.drawImage(canvas, 0, 0, f.w / 2, f.h, 0, 0, f.w / 2, f.h);
-              mctx.drawImage(snap, f.w / 2, 0, f.w / 2, f.h,
-                             f.w / 2, 0, f.w / 2, f.h);
-            } else if (mode === "swipe" && snap.width) {
-              const x = Math.max(1, Math.min(f.w - 1, Math.round(f.w * swipeRef.current)));
-              mctx.save();
-              mctx.beginPath(); mctx.rect(0, 0, x, f.h); mctx.clip();
-              mctx.drawImage(snap, 0, 0);
-              mctx.restore();
-              mctx.fillStyle = "rgba(227,193,118,.95)";
-              mctx.fillRect(x - 1, 0, 2, f.h);
-            }
-          }
+          if (editedCtx) { editedCtx.drawImage(canvas, 0, 0); compositionDirty = true; }
         } else if (f.bitmap) {
           f.bitmap.close();
         }
@@ -587,6 +564,38 @@ export default function Viewer({
       if (f && (turned || now - lastHudAt >= 250)) {
         lastHudAt = now;
         onHudRef.current({ seq: f.seq, w: curW, h: curH, fps, lastError: "" });
+      }
+      // Wipe/mode changes repaint even when no new engine frame is available.
+      if (mctx && curW > 0 && curH > 0) {
+        const original = originalRef.current;
+        if (original !== lastOriginal) {
+          lastOriginal = original;
+          compositionDirty = true;
+          snap.width = original?.w ?? 0; snap.height = original?.h ?? 0;
+          if (original && snapCtx) {
+            snapCtx.putImageData(new ImageData(new Uint8ClampedArray(original.pixels), original.w, original.h), 0, 0);
+          }
+        }
+        const mode = compareRef.current;
+        if (mode !== lastMode || swipeRef.current !== lastSwipe) compositionDirty = true;
+        lastMode = mode; lastSwipe = swipeRef.current;
+        if (compositionDirty) {
+          mctx.drawImage(edited, 0, 0);
+          if (original && snap.width === curW && snap.height === curH) {
+            if (mode === "split") {
+              // Whole photographs on both sides, not unrelated half-image crops.
+              mctx.fillStyle = "#16191e"; mctx.fillRect(0, 0, curW, curH);
+              mctx.drawImage(snap, 0, curH / 4, curW / 2, curH / 2);
+              mctx.drawImage(edited, curW / 2, curH / 4, curW / 2, curH / 2);
+            } else if (mode === "swipe") {
+              const x = Math.max(0, Math.min(curW, Math.round(curW * swipeRef.current)));
+              mctx.save(); mctx.beginPath(); mctx.rect(0, 0, x, curH); mctx.clip();
+              mctx.drawImage(snap, 0, 0); mctx.restore();
+              mctx.fillStyle = "rgba(227,193,118,.95)"; mctx.fillRect(x - 1, 0, 2, curH);
+            }
+          }
+          compositionDirty = false;
+        }
       }
       requestAnimationFrame(loop);
     };

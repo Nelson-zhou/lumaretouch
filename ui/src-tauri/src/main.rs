@@ -91,6 +91,7 @@ fn tiers() -> &'static Tiers {
 
 pub struct AppState {
     frames: Mutex<Frames>,
+    compare_frame: Mutex<Option<Value>>,
     logs: Mutex<Vec<String>>,
     engine: Mutex<Option<Arc<engine::EngineHandle>>>,
     /// 引擎最近一次 image_ready 的原文（代理档尺寸、解码耗时等）。前端靠它轮询
@@ -231,6 +232,7 @@ impl AppState {
                 bench_total: 0,
                 bench_done: false,
             }),
+            compare_frame: Mutex::new(None),
             logs: Mutex::new(Vec::new()),
             engine: Mutex::new(None),
             image: Mutex::new(None),
@@ -884,9 +886,16 @@ fn set_strength(
 // 会话强度不动、撤销栈不占步。这里刻意不复用 set_strength —— 那样按住再松开会
 // 留下一次"查看"作为可撤销步骤，用户下一次 Ctrl+Z 撤掉的就不是编辑而是查看。
 #[tauri::command]
-fn compare(state: State<'_, Arc<AppState>>, on: bool) -> Result<Value, String> {
-    state.send_to_engine(json!({"cmd": "compare", "on": on}))?;
+fn compare(state: State<'_, Arc<AppState>>, on: bool, capture_id: Option<String>) -> Result<Value, String> {
+    let mut cmd = json!({"cmd": "compare", "on": on});
+    if let Some(id) = capture_id { cmd["capture_id"] = json!(id); }
+    state.send_to_engine(cmd)?;
     Ok(json!({"on": on}))
+}
+
+#[tauri::command]
+fn compare_status(state: State<'_, Arc<AppState>>) -> Option<Value> {
+    state.compare_frame.lock().unwrap().clone()
 }
 
 /// 换底（M6）：一次“换底”一条命令。backend=color_key（默认、确定性色键）/ birefnet
@@ -2045,7 +2054,7 @@ fn main() {
         .manage(Launcher(state.clone()))
         .invoke_handler(tauri::generate_handler![
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
-            engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, precompute,
+            engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, compare_status, precompute,
             inpaint, light, deform, lut, grade, enhance, background, export, session, filmstrip, history,
             project, task, exposure, hsl, crop, preset, batch, face, pick,
             report, quit

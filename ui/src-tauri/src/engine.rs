@@ -127,6 +127,9 @@ fn handle_event(state: &Arc<AppState>, line: &str) {
             }
         }
         "frame" => {
+            if v.get("mode").and_then(|x| x.as_str()) == Some("compare") {
+                *state.compare_frame.lock().unwrap() = Some(v.clone());
+            }
             state.on_frame_event();
             // 裁剪/曝光那两条一次性 frame 带着 doc_state（面板重摆滑块的唯一依据）；
             // 拖拽帧没有这一格，一条也不进 note_doc
