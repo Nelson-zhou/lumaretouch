@@ -37,3 +37,23 @@ batch partial-failure/frame-selection and project cancellation/error UX quirks
 are documented in `module-boundaries.md`, not silently fixed or concealed by
 this refactor. Continue the full product requirements without placeholder or
 scope-cut claims; deep real-device optimization remains a later phase.
+
+## Timestamp-label correction (read-only audit)
+
+A later Qoder summary incorrectly reused timestamps for the colour-scopes round.
+Targeted inspection also corrected the older frontend build time labels below;
+original logs/meta were not changed and tests were not rerun.
+
+- `31d42a57`: original meta records npm test 11:05:55–11:05:55 and build
+  11:06:07–11:06:11 at offset −07:00, hence UTC **18:05:55–18:05:55** and
+  **18:06:07–18:06:11** on 2026-10-21.
+- `4c37d354`: original meta records npm test 11:19:27–11:19:27 and build
+  11:19:39–11:19:43 at offset −07:00, hence UTC **18:19:27–18:19:27** and
+  **18:19:39–18:19:43**.
+
+Earlier narrative labels that treated an end time as the start are invalid.
+The 75/79 test counts, listed 12/13 test files and rc0 records remain consistent.
+Those older frontend artifacts do not contain separate source/binary/dist hashes,
+explicit UTC fields, independent stderr, Node version or a host timezone name.
+Do not retrofit those missing fields or conflate UTC conversion from the recorded
+offset with an original UTC timestamp. This is not release reproducibility evidence.

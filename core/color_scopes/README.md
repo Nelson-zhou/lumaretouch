@@ -1,4 +1,4 @@
-# Colour scopes v1 — candidate, not yet verified
+# Colour scopes v1 — basic checks verified; product acceptance remains partial
 
 Requirement: original manual professional-colour section “直方图/RGB-Lab”; trace
 `PC-32455-C-50c884e953`. This slice implements explicitly refreshed, bounded proxy
@@ -80,4 +80,5 @@ analysis remain follow-up work, not silently removed requirements.
 
 Tests cover count conservation, nonfinite values, binary limits, reference Lab,
 spatial budgets, tap pixel/frame invariance, read-only inspection coexistence and
-host/UI late-result rejection. Candidate results are still pending.
+host/UI late-result rejection. Basic checks passed; see `docs/development/color-scopes-verification-2026-10-21.md`
+for exact candidate, logs, reporting correction and remaining acceptance.

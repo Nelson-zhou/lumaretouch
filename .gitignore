@@ -21,3 +21,5 @@ venv/
 .scratch/
 
 /engine/src/lumaretouch_engine/bin/curve-compiler
+
+/engine/src/lumaretouch_engine/bin/color-scopes
