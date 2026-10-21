@@ -155,7 +155,16 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "shm_ready" => {
             let name = v["name"].as_str().unwrap_or("").to_string();
             match ShmReader::open(&name) {
-                Ok(reader) => state.attach_shm(reader, name),
+                Ok(reader) => {
+                    if v.get("frame_identity_version").is_some() || v.get("shm_instance").is_some() {
+                        let actual=reader.instance_id().map(crate::frame_identity::hex);
+                        if v["frame_identity_version"].as_u64()!=Some(1) ||
+                            actual.as_deref()!=v["shm_instance"].as_str() || actual.is_none() {
+                            state.push_log("共享帧实例身份不匹配，拒绝绑定".into());return;
+                        }
+                    }
+                    state.attach_shm(reader, name);
+                },
                 Err(e) => state.push_log(format!("打开共享内存失败: {e}")),
             }
         }

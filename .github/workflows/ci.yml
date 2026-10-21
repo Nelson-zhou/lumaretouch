@@ -34,6 +34,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build headless Rust curve compiler
         run: bash packaging/build-curve-compiler.sh && bash packaging/build-color-scopes.sh
+      - name: Build actual native shared-frame reader harness
+        run: |
+          cargo build --manifest-path tools/shm-interop/Cargo.toml --locked
+          echo "LRT_SHM_READER_BIN=$GITHUB_WORKSPACE/tools/shm-interop/target/debug/lrt-shm-harness" >> "$GITHUB_ENV"
       - name: 单测
         working-directory: engine
         run: uv run --group dev pytest -q
@@ -73,6 +77,8 @@ jobs:
           rustc --edition=2021 core/curves/main.rs -o "$RUNNER_TEMP/lrt-curve-compiler"
           printf '3 0 0 0.5 1 1 1\n' | "$RUNNER_TEMP/lrt-curve-compiler" > "$RUNNER_TEMP/lrt-curves.json"
           python3 -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/lrt-curves.json")); assert d["version"]==1 and not d["identity"] and len(d["segments"])==2'
+      - name: Rust shared-frame identity contract
+        run: rustc --edition=2021 --test ui/src-tauri/src/frame_identity.rs -o /tmp/lrt-frame-id-tests && /tmp/lrt-frame-id-tests
       - name: Rust colour scopes contract
         run: rustc --edition=2021 --test core/color_scopes/main.rs -o /tmp/lrt-scopes-tests && /tmp/lrt-scopes-tests
       - name: Rust levels contract

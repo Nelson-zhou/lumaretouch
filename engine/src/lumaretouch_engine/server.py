@@ -460,6 +460,7 @@ class Engine:
                 self.shm.unlink()
             self.shm = FrameShm(shm_name(self.session), w, h, slots=2, create=True)
         emit({"event": "shm_ready", "name": self.shm.name, "path": self.shm.path,
+              "frame_identity_version": 1, "shm_instance": self.shm.instance_id.hex(),
               "w": w, "h": h, "slot_size": self.shm.slot_size,
               "pixel_size": self.shm.pixel_size, "total": self.shm.total})
         return self.shm

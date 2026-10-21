@@ -25,6 +25,7 @@ pub struct ShmReader {
     file: File,
     width: u32,
     height: u32,
+    instance: Option<[u8;16]>,
     pub slots: usize,
     pub slot_size: usize,
     pub pixel_size: usize,
@@ -61,7 +62,7 @@ impl ShmReader {
         if base == libc::MAP_FAILED { return Err(format!("mmap: {}", io::Error::last_os_error())); }
         // Construct first so every subsequent error unmaps and closes via Drop.
         let mut reader = Self { base: base as *mut u8, len, path, file,
-                                width: 0, height: 0, slots: 0, slot_size: 0, pixel_size: 0 };
+                                width: 0, height: 0, instance: None, slots: 0, slot_size: 0, pixel_size: 0 };
         let hdr = {
             let _guard = reader.read()?;
             let mut hdr = [0u8; HEADER_SIZE];
@@ -82,9 +83,11 @@ impl ShmReader {
         }
         reader.slots=slots; reader.slot_size=slot_size; reader.pixel_size=pixel_size;
         reader.width=w as u32; reader.height=h as u32;
+        reader.instance=crate::frame_identity::parse(&hdr[32..64]);
         Ok(reader)
     }
 
+    pub fn instance_id(&self)->Option<[u8;16]>{self.instance}
     pub fn path_name(&self) -> &str { &self.path }
     pub fn read(&self) -> Result<FrameReadGuard<'_>, String> {
         flock(&self.file, libc::LOCK_SH)?;
@@ -96,6 +99,13 @@ impl ShmReader {
             || u32::from_le_bytes(rd4(self.base,12)) != self.width
             || u32::from_le_bytes(rd4(self.base,16)) != self.height) {
             return Err("SHM_CHANGED: frame layout changed".into());
+        }
+        if self.pixel_size != 0 {
+            let mut reserved=[0u8;32];
+            unsafe { std::ptr::copy_nonoverlapping(self.base.add(32),reserved.as_mut_ptr(),32); }
+            if crate::frame_identity::parse(&reserved)!=self.instance {
+                return Err("SHM_CHANGED: shared-frame instance replaced".into());
+            }
         }
         Ok(guard)
     }

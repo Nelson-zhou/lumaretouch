@@ -165,3 +165,13 @@ def test_monotonic_ns_is_cross_process_comparable():
     assert isinstance(parent, int), "monotonic_ns 必须返回整数纳秒"
     assert parent > 1_000_000_000, "量级不像纳秒（怀疑用了 clock_gettime 秒浮点）"
     assert abs(parent - child) < 1_000_000_000, "跨进程时间戳不同基，端到端延迟数据不可信"
+
+
+def test_reserved_identity_extension_is_versioned_and_legacy_is_display_only(shm):
+    from lumaretouch_engine.shm import frame_identity,IDENTITY_TAG
+    reserved=shm.read_global()[-1]
+    assert reserved[:4]==IDENTITY_TAG and frame_identity(reserved)==shm.instance_id
+    assert len(shm.instance_id)==16 and any(shm.instance_id)
+    assert frame_identity(bytes(32)) is None
+    assert frame_identity(IDENTITY_TAG+bytes(28)) is None
+    assert frame_identity(reserved[:-1]+b'X') is None

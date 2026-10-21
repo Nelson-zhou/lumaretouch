@@ -104,3 +104,53 @@ def test_native_reader_rejects_legacy_protocol_and_corrupt_layout():
         bad=subprocess.run([binary,name],capture_output=True,text=True)
         assert bad.returncode!=0 and 'inconsistent' in bad.stderr
     finally:owner.close();owner.unlink()
+
+
+def test_same_size_recreation_and_sequence_reuse_do_not_relabel_old_mapping():
+    name=shm_name('instance-'+str(os.getpid()));owner=FrameShm(name,8,8,create=True);peer=FrameShm(name)
+    try:
+        owner.write_frame(bytes([1])*owner.pixel_size)
+        owner.write_frame(bytes([3])*owner.pixel_size)  # populate both old commit slots
+        previous=owner.instance_id
+        changed=FrameShm(name,8,8,create=True)
+        try:
+            fresh_empty=FrameShm(name)
+            try:assert fresh_empty.read_snapshot() is None
+            finally:fresh_empty.close()
+            changed.write_frame(bytes([2])*changed.pixel_size)
+            assert changed.instance_id!=previous
+            with pytest.raises(ValueError,match='instance changed'):peer.read_snapshot()
+            with pytest.raises(ValueError,match='instance changed'):owner.write_frame(bytes(owner.pixel_size))
+            fresh=FrameShm(name)
+            try:
+                meta,pixels=fresh.read_snapshot()
+                assert meta[0]==1 and pixels==bytes([2])*changed.pixel_size
+                assert fresh.instance_id==changed.instance_id
+            finally:fresh.close()
+        finally:changed.close()
+    finally:peer.close();owner.close();owner.unlink()
+
+
+def test_actual_native_reader_rejects_same_size_replacement_before_copy():
+    import subprocess
+    binary=os.environ.get('LRT_SHM_READER_BIN')
+    if not binary:pytest.skip('native shared-frame harness not built')
+    name=shm_name('native-instance-'+str(os.getpid()));owner=FrameShm(name,8,8,create=True)
+    reader=None;changed=None
+    try:
+        owner.write_frame(bytes([1])*owner.pixel_size)
+        owner.write_frame(bytes([3])*owner.pixel_size)  # both must disappear at recreation
+        reader=subprocess.Popen([binary,name,'check-replacement'],stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        assert reader.stdout.readline().strip()=='OPENED'
+        changed=FrameShm(name,8,8,create=True)
+        empty=subprocess.run([binary,name,'expect-empty'],capture_output=True,text=True,timeout=10)
+        assert empty.returncode==0 and empty.stdout.strip()=='NO_FRAME',(empty.stdout,empty.stderr)
+        changed.write_frame(bytes([2])*changed.pixel_size)
+        out,err=reader.communicate('continue\n',timeout=10)
+        assert reader.returncode==0,(out,err)
+        assert 'instance replaced' in out
+    finally:
+        if reader is not None and reader.poll() is None:reader.kill();reader.wait()
+        if changed is not None:changed.close()
+        owner.close();owner.unlink()

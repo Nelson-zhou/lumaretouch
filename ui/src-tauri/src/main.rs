@@ -17,6 +17,7 @@ mod engine;
 mod edit_queue;
 mod dispatch;
 mod shm;
+mod frame_identity;
 mod inspection_host;
 mod inspection_io;
 mod inspection_api;

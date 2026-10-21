@@ -23,9 +23,16 @@ from contextlib import contextmanager
 import os
 import struct
 import time
+import uuid
 
 MAGIC = b"LRSH"
 VERSION = 2
+IDENTITY_TAG = b"LRI1"
+
+def frame_identity(reserved):
+    if len(reserved)!=32 or reserved[:4]!=IDENTITY_TAG or any(reserved[20:]):return None
+    value=reserved[4:20]
+    return value if any(value) else None
 
 # 4s + 7*I + 32s = 4 + 28 + 32 = 64
 GLOBAL_HDR = struct.Struct("<4sIIIIIII32s")
@@ -54,6 +61,7 @@ class FrameShm:
         self.slots = slots
         self._seq = 0
         self._slot = 0
+        self.instance_id = uuid.uuid4().bytes if create else None
 
         if not isinstance(name, str) or not name or "/" in name or "\0" in name:
             raise ValueError("invalid shared-memory name")
@@ -81,6 +89,11 @@ class FrameShm:
                 self._buf = mmap.mmap(self._fd, self.total, flags=mmap.MAP_SHARED,
                                       access=mmap.ACCESS_WRITE)
                 if create:
+                    # Same-size ftruncate preserves old bytes. A new instance must
+                    # not inherit nonzero commit sequences from the old producer.
+                    for slot in range(self.slots):
+                        off = self._slot_offset(slot)
+                        self._buf[off:off + SLOT_META_SIZE] = bytes(SLOT_META_SIZE)
                     self._write_global()
                 else:
                     magic, version, slots, w, h, pixels, stride, total, _rsv = self.read_global()
@@ -92,6 +105,7 @@ class FrameShm:
                         raise ValueError("shared-memory layout is inconsistent")
                     self.slots, self.w, self.h = slots, w, h
                     self.pixel_size, self.slot_size = pixels, stride
+                    self.instance_id = frame_identity(_rsv)
             finally:
                 fcntl.flock(self._fd, fcntl.LOCK_UN)
         except BaseException:
@@ -103,7 +117,7 @@ class FrameShm:
     def _write_global(self) -> None:
         # 绑定方法签名：pack_into(buffer, offset, *values)
         GLOBAL_HDR.pack_into(self._buf, 0, MAGIC, VERSION, self.slots, self.w, self.h,
-                             self.pixel_size, self.slot_size, self.total, b"")
+                             self.pixel_size, self.slot_size, self.total, IDENTITY_TAG+self.instance_id+b"\0"*12)
 
     def read_global(self):
         return GLOBAL_HDR.unpack_from(self._buf, 0)
@@ -143,6 +157,8 @@ class FrameShm:
             try:
                 if os.fstat(self._fd).st_size != self.total:
                     raise ValueError("shared-memory size changed; reopen after shm_ready")
+                if frame_identity(self.read_global()[-1]) != self.instance_id:
+                    raise ValueError("shared-memory instance changed; reopen after shm_ready")
                 yield
             finally:
                 fcntl.flock(self._fd, fcntl.LOCK_UN)
