@@ -26,6 +26,9 @@ into its acceptance. The unfinished luminance feature remains a separate patch.
 - `batch_sync.py`: owns batch IDs, commit/undo ledger, target planning and result
   summaries. Explicit documents/editor ports borrow current session rows; no Engine
   object is passed or cached. Scope validation remains in scope.py.
+- `history_controller.py`: owns active undo/redo stacks and gesture identity,
+  bounded record/bind/undo/redo with rollback through an explicit restore-frame port.
+  Session still owns parked row histories and their existing copy/bind timing.
 - `history_policy.py`: pure state identity and gesture grouping. No engine,
   renderer, project, session, transport or heavy runtime dependency.
 - `server.py`: command ordering and integration. Compatibility properties expose
@@ -71,3 +74,8 @@ in the global notice. Direct Save still propagates rejection. These differing ol
 behaviors are pinned by action-port tests, not silently rewritten during extraction.
 The registry adapter's legacy project-error reporting for other actions remains an
 explicit compatibility call. Correcting these UX quirks is a later functional fix.
+
+History extraction retains its original dedicated busy/loaded guards and
+history-specific face/precompute replay. No stacks move until restore/render
+succeeds; rollback failures still emit their warning. Dirty-state policy is not
+changed. General editor guards/replay helpers are not equivalent substitutes.
