@@ -41,7 +41,7 @@ export function LevelsEditor({value,documentId,snapshotId,documentRevision,disab
     if(!result.success){drag.current=null;note(result.error??'色阶未提交');}
     if(!drag.current)update(value);
   },[result,documentId,snapshotId,documentRevision,value]);
-  function submit(spec:LevelsSpec,gestureId=crypto.randomUUID(),interactive=false){
+  function submit(spec:LevelsSpec,gestureId:string=crypto.randomUUID(),interactive=false){
     const requestId=crypto.randomUUID();update(spec);
     pending.current={id:requestId,signature:levelsSignature(spec)};
     void runLevels('set',spec,documentId,gestureId,interactive,requestId).then(onDone).catch(error=>{
