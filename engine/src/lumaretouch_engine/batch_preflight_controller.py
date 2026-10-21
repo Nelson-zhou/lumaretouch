@@ -47,7 +47,7 @@ class FrozenBatchController:
         try:
             if p['action']=='preflight':
                 ops=SC.check_scope(p.get('module_scope'));policy=p.get('conflict_policy','skip_and_report')
-                if policy not in ('skip_and_report','recheck'):raise SC.ScopeError('unknown batch conflict policy')
+                if policy not in ('skip_and_report','recheck'):raise SC.ScopeError(f'conflict_policy 未知：{policy!r}（可用：skip_and_report/recheck；没有 overwrite）')
                 if p.get('preflight_token') is not None:raise SC.ScopeError('preflight does not accept an old token')
                 indices,rejected=self.ports.targets(p.get('docs'));self.ports.remember()
                 rows=self.ports.rows();index=self.ports.current()
