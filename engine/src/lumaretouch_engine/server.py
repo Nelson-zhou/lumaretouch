@@ -362,7 +362,7 @@ class Engine:
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -1126,9 +1126,19 @@ class Engine:
                 return i
         return -1
 
+    def _document_versions(self):
+        from .document_versions import DocumentVersions
+        owner=self.__dict__.get("_document_version_owner")
+        if owner is None:owner=DocumentVersions();self._document_version_owner=owner
+        return owner
+
+    def _fence_current_document(self):
+        index=getattr(self,"_doc_index",-1);rows=getattr(self,"_docs",[])
+        if 0<=index<len(rows):self._document_versions().advance(rows[index])
+
     def _new_row(self, path: str, *, state: dict | None = None, budget: int | None = None) -> dict:
         m = S.doc_meta(path)
-        return {**m, "path": os.path.abspath(path), "state": state or self._fresh_doc_state(),
+        row = {**m, "path": os.path.abspath(path), "state": state or self._fresh_doc_state(),
                 "budget": budget, "thumb": None, "thumb_error": None, "opened": False,
                 "undo": [], "redo": [],
                 # 项目层的三个字段（LNX-P0-PROJECT / CORE-001、CORE-007）：标签与回收站
@@ -1139,6 +1149,8 @@ class Engine:
                 # 挑图建议（派生旁注）：一次分析的完整读数与折出来的建议。它随会话活、
                 # 不随工程文件走（理由同 _precompute：是算出来的，不是用户画的）。
                 "pick": None, "pick_error": None}
+        self._document_versions().version(row)
+        return row
 
     def _remember_current(self) -> None:
         """把 live 状态存回当前文档那一格。底片条的一切意思都在这一步：不存就是
@@ -1328,6 +1340,7 @@ class Engine:
             existed = bool(row["opened"])
             st = row["state"]
             if st.get("_proxy") and (int(d.h), int(d.w)) != tuple(st["_proxy"]):
+                self._document_versions().advance(row)
                 st = self._drop_proxy_layers(
                     st, why=f"这张图上次开在 {st['_proxy'][1]}×{st['_proxy'][0]}，"
                             f"这次按代理预算解出 {d.w}×{d.h}")
@@ -1383,6 +1396,7 @@ class Engine:
         pipe = self._attach_pipeline(d.rgb)      # 按引擎侧字段重放图层（见 _attach_pipeline）
         self._image_loaded = True
         if strength is not None:
+            self._fence_current_document()
             self._strength = strength
         t_b = monotonic_ns()
         # 切回一张调过的图时预计算产物在状态里带着：会话是新设备/新张量，不重挂
@@ -2489,6 +2503,7 @@ class Engine:
                 return
             self._project_source_notice = {}
             self._project, self._project_path = prj, info["path"]
+            self._document_versions().new_workspace()
             # 新建的是**空**工程，而底片条上那些活还在内存里：脏标记不能清成 False，
             # 否则徽章会说“已保存”而磁盘上一张图都没有——那比多亮一次危险得多。
             # （create 本身不丢工：它不动 _docs；真正会丢工的是 open，那一条另有守卫。）
@@ -2555,6 +2570,7 @@ class Engine:
                 rows.append(row)
             with self._doclock:
                 self._docs = rows
+            self._document_versions().new_workspace()
             # 工程带着自己那一档预览尺寸回来：代理档不只是“快不快”，逐点层（逐点掩膜/
             # 笔迹/形变场）就活在那一档的像素坐标上。拿默认档重开就会把刚恢复的笔迹当成
             # “尺寸不对”清掉——那正是“保存重开后配方少了一半”的形状。只有一致的预算才沿用；
@@ -3061,6 +3077,7 @@ class Engine:
         try:
             info = self._vram.load_face(self._precompute)
         except Exception as e:
+            self._fence_current_document()
             emit({"event": "error",
                   "error": f"会话重挂预计算产物失败，相关效果暂不生效，编辑参数已保留（"
                            f"{type(e).__name__}）：{e}"})
@@ -3115,6 +3132,7 @@ class Engine:
         if self.bench is not None and self.bench.is_alive():
             emit({"event": "error", "error": "跑靶进行中，拒绝预计算：先 bench_stop"})
             return
+        self._fence_current_document()
         backend = p.get("backend", "auto")
         t0 = monotonic_ns()
         try:
@@ -5730,6 +5748,7 @@ class Engine:
                 # 跑靶中途重建会写花正在用的会话与缓冲，当场拒并说清原因
                 emit({"event": "error", "error": "跑靶进行中，不迁移常驻会话：先 bench_stop"})
                 return
+            self._fence_current_document()
             emit({"event": "engine_info", "info": f"常驻会话从 {self._vram.device} 重建到 {self._effective_device()}"})
             self._attach_pipeline(self._src_rgb)
             # 预计算产物是“这个会话这个设备上的张量”：迁完不重挂，掩膜就停在旧设备上，
@@ -6767,9 +6786,9 @@ class Engine:
                     capture=lambda: self._capture_state(),
                     replay=lambda state, **kw: self._replay_state(state, **kw),
                     face_known_single=lambda row, **kw: self._face_known_single(row, **kw),
-                    status=lambda: self.doc_state()),
+                    status=lambda: self.doc_state(),mark_dirty=lambda:setattr(self,"_project_dirty",True)),
                 emit=lambda event: emit(event), clock=lambda: time.time(),
-                monotonic=lambda: monotonic_ns(), history_limit=self.HISTORY_MAX)
+                monotonic=lambda: monotonic_ns(), history_limit=self.HISTORY_MAX, versions=self._document_versions())
             self._batch_sync = controller
         controller.history_limit = self.HISTORY_MAX
         return controller
@@ -6896,6 +6915,9 @@ class Engine:
             if fn is None:
                 emit({"event": "error", "error": f"未知命令: {name}"})
                 return
+            from .document_versions import fences_current_document
+            if fences_current_document(name,msg,self.EDIT_CMDS):
+                self._fence_current_document()
             if name not in ("hello", "color_scopes", "color_capture") and not (
                     name=="inspection_snapshot" and msg.get("action","status")=="status"):
                 self._color_capture_controller().invalidate()

@@ -16,6 +16,7 @@ def fixture():
     editor=BatchEditor(lambda label:None,lambda:deepcopy(rows[current[0]]['state']),replay,
         lambda row,live:('ok',''),lambda:deepcopy(rows[current[0]]['state']))
     controller=BatchSyncController(documents,editor,events.append,lambda:1.,lambda:2,2)
+    for row in rows:controller.versions.version(row)
     return controller,rows,current,events,replays,remember
 
 

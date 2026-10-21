@@ -1,9 +1,10 @@
-# Frozen batch preflight: design, not implemented
+# Frozen batch preflight: backend candidate, UI pending
 
 Original AI acceptance BATCH-001 preserves source-version snapshot; BATCH-002
-protects targets edited after preflight. Current preflight is stateless and commit
-recaptures current source/targets. The narrow scoped-undo correction does not close
-this gap.
+protects targets edited after preflight. The new token backend freezes source/targets and consumes reviewed plans. It is
+not yet verified or wired into the native/UI review flow at this checkpoint.
+Legacy commits without a token remain explicitly direct_unreviewed compatibility
+operations. The narrow scoped-undo correction alone did not close this gap.
 
 ## Ownership
 
@@ -54,3 +55,39 @@ Required tests: frozen source after source edits/removal; target edit→undo/red
 same-gesture return; reorder/remove/re-add; project create/open/restart; skip/recheck
 zero-write behavior; identity/eligibility/proxy changes; duplicate token/click; live
 and parked undo retaining unrelated edits; no conflicts from pure reads/selection.
+
+## Backend candidate and remaining integration
+
+- DocumentVersions owns runtime row IDs/workspace generation/conservative fences.
+- PreflightStore owns at most 8 pending plans (30-minute lifetime, 2 MiB each),
+  and 32 terminal records with a shared 16 MiB budget (8 MiB per receipt). Eviction
+  never reopens a consumed token. Claim occurs before writes; an unencodable final
+  receipt leaves an explicit unknown outcome, not permission to execute twice.
+- FrozenBatchController owns resolution, conflict policy and correlated results.
+  Stable identity lookup is linear in workspace+target count, not target×workspace.
+- BatchSync validates all target histories/revision capacity before writes, renders
+  the live target before parked writes, attempts live rollback on failure, and
+  marks the project dirty for parked-only changes. This is an in-memory ordered
+  operation, not a crash-durable database transaction. Unknown failure outcomes
+  must not be presented as proof that nothing changed.
+- Source version diagnostics and stable per-target revision/outcome evidence are
+  retained in terminal results. Repeated completed tokens replay before edit guards.
+- Lifecycle fences cover explicit strength, proxy recovery, internal precompute,
+  failed face reattachment and device migration, not only normal edit commands.
+- Native epoch-bound receipt ownership and the user review dialog remain pending.
+  No complete BATCH-001/BATCH-002 or hardware acceptance claim is made.
+
+## Official / mature open-source comparison
+
+The conditional-write principle follows RFC 9110 section 13.1.1, which checks a
+representation validator before mutation to prevent lost updates:
+https://www.ietf.org/ietf-ftp/rfc/rfc9110.html#section-13.1.1
+This implementation adapts that principle to local document IDs/fences; it does not
+claim HTTP conformance or use wall-clock timestamps as version authority.
+
+SQLite documents serialized writes and snapshot isolation:
+https://sqlite.org/isolation.html
+The engine similarly orders mutation on one execution sequence and freezes review
+parameters, but does not inherit SQLite's rollback journal or durability guarantees.
+Pure metadata tests, actual engine integration and later UI checks must prove our
+implementation rather than assuming these references make it correct.

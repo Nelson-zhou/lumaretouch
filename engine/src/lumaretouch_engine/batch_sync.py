@@ -6,9 +6,11 @@ commands. The controller alone owns batch identities, undo ledger and summaries.
 from dataclasses import dataclass
 from typing import Callable
 from . import scope as SC
+from .document_versions import DocumentVersions
+from .batch_preflight_controller import FrozenBatchController,PlanPorts
 
 ACTIONS = ("preflight", "commit", "undo", "state")
-KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id"}
+KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id"}
 POLICIES = ("skip_and_report", "recheck")
 
 @dataclass(frozen=True)
@@ -25,11 +27,12 @@ class BatchEditor:
     replay: Callable[..., dict]
     face_known_single: Callable[..., tuple[str, str]]
     status: Callable[[], dict]
+    mark_dirty: Callable[[], None] = lambda:None
 
 class BatchSyncController:
     def __init__(self, documents: BatchDocuments, editor: BatchEditor,
                  emit: Callable[[dict], None], clock: Callable[[], float],
-                 monotonic: Callable[[], int], history_limit: int):
+                 monotonic: Callable[[], int], history_limit: int, versions=None):
         self.documents = documents
         self.editor = editor
         self.emit = emit
@@ -39,6 +42,11 @@ class BatchSyncController:
         self.ledger = {}
         self.sequence = 0
         self.last_result = None
+        self.versions=versions if versions is not None else DocumentVersions()
+        self.preflight=FrozenBatchController(PlanPorts(lambda:self.documents.rows(),lambda:self.documents.current_index(),
+            lambda:self.documents.remember_current(),lambda:self.editor.capture(),lambda docs:self.target_indices(docs),
+            lambda row,**kw:self.editor.face_known_single(row,**kw),lambda *a,**kw:self.commit(*a,**kw)),
+            self.versions,lambda event:self.emit(event),monotonic)
 
     def target_indices(self, docs) -> tuple[list[int], list[dict]]:
         """`docs` → 底片条格号。能收索引也能收路径（宿主两边都可能有）。
@@ -69,6 +77,11 @@ class BatchSyncController:
             raise SC.ScopeError(f"batch 没有可用目标（全部被拒）：{bad}")
         return out, bad
 
+    def _reject(self,p,message):
+        self.emit({"event":"error","error":message})
+        if isinstance(p.get("request_id"),str) and 1<=len(p["request_id"])<=128:
+            self.preflight.emit_result(p,{"success":False,"error":message,"requires_preflight":True})
+
     def handle_command(self, p: dict):
         """批量同步（LNX-P0-BATCH / BATCH-001…4）。
 
@@ -79,14 +92,16 @@ class BatchSyncController:
         逐格历史也能撤销这一笔：非活动格把 commit 前的快照推进它自己的 undo 栈，
         活动格走 `lnx.batch.v1` 在 EDIT_CMDS 里那一步。
         """
+        request=p.get("request_id")
+        if request is not None and (not isinstance(request,str) or not 1<=len(request)<=128):
+            self.emit({"event":"error","error":"invalid batch request identity"});return
         unknown = set(p) - KEYS
         if unknown:
-            self.emit({"event": "error", "error": f"batch 收到不认识的参数：{sorted(unknown)}"})
+            self._reject(p,f"batch 收到不认识的参数：{sorted(unknown)}")
             return
         action = p.get("action", "state")
         if action not in ACTIONS:
-            self.emit({"event": "error", "error": f"未知 batch action: {action}"
-                  f"（可用：{'/'.join(ACTIONS)}）"})
+            self._reject(p,f"未知 batch action: {action}（可用：{'/'.join(ACTIONS)}）")
             return
         if action == "state":
             self.emit({"event": "batch_state", "batches": [
@@ -94,13 +109,20 @@ class BatchSyncController:
                  "undone": v["undone"], "at_ns": v["at_ns"]} for k, v in self.ledger.items()],
                  "modules": SC.describe()})
             return
+        if action=="commit" and p.get("preflight_token") is not None:
+            try:
+                if self.preflight.replay_completed(p):return
+            except Exception as error:self._reject(p,str(error));return
         why = self.editor.guard(f"batch {action}")
         if why:
-            self.emit({"event": "error", "error": why})
+            self._reject(p,why)
             return
+        if action=="preflight" or (action=="commit" and p.get("preflight_token") is not None):
+            self.preflight.handle(p);return
         try:
             if action == "undo":
-                self.undo(p)
+                body=self.undo(p)
+                self.preflight.emit_result(p,{**body,"success":True})
                 return
             ops = SC.check_scope(p.get("module_scope"))
             policy = p.get("conflict_policy", "skip_and_report")
@@ -125,22 +147,16 @@ class BatchSyncController:
                 rows.append({"index": i, "path": row["path"], "live": live,
                              "blocked": blocked,
                              "before": SC.params_of(row["state"] if not live else src, ops)})
-            if action == "preflight":
-                self.emit({"event": "batch_preflight", "module_scope": ops, "source": "current",
-                      "applies": mods, "policy": policy, "targets": rows,
-                      "rejected_docs": bad,
-                      "ok": sum(1 for r in rows if not r["blocked"]),
-                      "blocked": sum(1 for r in rows if r["blocked"])})
-                return
             if policy == "recheck" and any(r["blocked"] for r in rows):
                 raise SC.ScopeError(f"recheck 策略下有目标不合格，整条不提交："
                                     f"{[r['path'] for r in rows if r['blocked']]}")
-            self.commit(ops, mods, rows, policy, bad)
-        except SC.ScopeError as e:
-            self.emit({"event": "error", "error": f"batch {action} 被拒：{e}"})
+            body=self.commit(ops, mods, rows, policy, bad)
+            self.preflight.emit_result(p,{**body,"success":True,"mode":"direct_unreviewed"})
+        except Exception as e:
+            self._reject(p,f"batch {action} 被拒：{e}")
 
     def commit(self, ops: list[str], mods: dict, rows: list[dict],
-                      policy: str, bad: list[dict]) -> None:
+                      policy: str, bad: list[dict], source_snapshot=None) -> dict:
         """原子提交：先算好每一格的新状态，全部合法才一次性写回。
 
         中途失败不能留下“同步了一半”的批量——这跟导出那一条“一个目标失败不该拖垮整批，
@@ -153,6 +169,9 @@ class BatchSyncController:
             if r["blocked"]:
                 continue
             row = self.documents.rows()[r["index"]]
+            if not isinstance(row.get("undo"),list) or not isinstance(row.get("redo"),list):
+                raise SC.ScopeError("target history is invalid; no target was written")
+            self.versions.check_advance(row)
             before = dict(row["state"]) if r["index"] != live_idx else dict(self.editor.capture())
             new = SC.apply_modules(before, mods)
             planned.append((r["index"], before, new))
@@ -162,21 +181,32 @@ class BatchSyncController:
         self.sequence += 1
         batch_id = f"batch-{self.sequence:03d}-{int(self.clock() * 1000)}"
         targets: dict[str, dict] = {}
+        fr=None
+        # Render/validate the live target before committing any parked rows.
+        live_plan=next((item for item in planned if item[0]==live_idx),None)
+        if live_plan is not None:
+            idx,before,new=live_plan;self.versions.advance(self.documents.rows()[idx])
+            try:fr=self.editor.replay(new,mode="batch",replayed_for=f"batch:{batch_id}")
+            except Exception as error:
+                try:
+                    rollback=self.editor.replay(before,mode="batch",replayed_for=f"batch_rollback:{batch_id}")
+                    if rollback is not None:self.emit(rollback)
+                except Exception as rollback_error:
+                    self.emit({"event":"engine_warn","warn":f"batch rollback failed: {rollback_error}; reload the active document"})
+                raise SC.ScopeError(f"live target failed before parked writes: {error}") from error
+        self.editor.mark_dirty()
         for idx, before, new in planned:
             row = self.documents.rows()[idx]
-            if idx == live_idx:
-                fr = self.editor.replay(new, mode="batch", replayed_for=f"batch:{batch_id}")
-            else:
+            if idx != live_idx:
+                self.versions.advance(row)
                 row["state"] = new
-                row["undo"].append(before)          # 逐格 Ctrl+Z 也能撤掉这一笔同步
-                if len(row["undo"]) > self.history_limit:
-                    del row["undo"][0]
+                row["undo"].append(before)
+                if len(row["undo"]) > self.history_limit:del row["undo"][0]
                 row["redo"].clear()
-                fr = None
-            targets[str(idx)] = {"path": row["path"], "before": before, "applied":
-                                 SC.params_of(new, ops), "live": idx == live_idx}
+            targets[str(idx)] = {"path": row["path"], "before": before,
+                "applied":SC.params_of(new, ops),"live":idx==live_idx,"document_id":self.versions.version(row).document_id}
         self.ledger[batch_id] = {"ops": ops, "targets": targets, "at_ns": self.monotonic(),
-                                   "undone": False, "policy": policy}
+                                   "undone": False, "policy": policy,"source_snapshot":source_snapshot}
         self.last_result = {"kind": "commit", "batch_id": batch_id,
                            "applied": [r["index"] for r in applied_rows],
                            "skipped": [{"index": r["index"], "path": r["path"],
@@ -193,6 +223,7 @@ class BatchSyncController:
         self.emit(body)
         if fr is not None:
             self.emit(fr)
+        return body
 
     def undo(self, p: dict) -> None:
         """撤销这一批（BATCH-004）：没被动过的还原，被动过的**报冲突不动它**。
@@ -217,6 +248,9 @@ class BatchSyncController:
         restored, conflicts = [], []
         for key, rec in b["targets"].items():
             idx = int(key)
+            if rec.get("document_id"):
+                found=self.versions.find(self.documents.rows(),rec["document_id"])
+                idx=found[0] if found is not None else len(self.documents.rows())
             if idx >= len(self.documents.rows()) or self.documents.rows()[idx]["path"] != rec["path"]:
                 conflicts.append({"index": idx, "path": rec["path"],
                                   "reason": "这一格已经不在底片条上（或换了图），不能还原"})
@@ -231,18 +265,22 @@ class BatchSyncController:
             # Conflict checks are scoped; restoration must use the same scope.
             # Restoring the whole old snapshot would erase later unrelated edits.
             restored_state = SC.apply_modules(cur, SC.params_of(rec["before"], ops))
+            self.versions.advance(row)
             if idx == self.documents.current_index():
                 # 活动那一格不能只改存档：画面就挂在会话上，不重放就是“事件说还原了
                 # 而屏幕上还是同步后那一版”。
                 self.editor.replay(restored_state, mode="batch", replayed_for=f"batch_undo:{bid}")
             row["state"] = restored_state
+            self.editor.mark_dirty()
             restored.append(idx)
         b["undone"] = True
         self.last_result = {"kind": "undo", "batch_id": bid, "restored": restored,
                            "conflicts": [{"index": c["index"], "path": c["path"],
                                           "reason": c["reason"]} for c in conflicts]}
-        self.emit({"event": "batch_undone", "batch_id": bid, "module_scope": ops,
-              "restored": restored, "conflicts": conflicts, "doc_state": self.editor.status()})
+        body={"event": "batch_undone", "batch_id": bid, "module_scope": ops,
+              "restored": restored, "conflicts": conflicts, "doc_state": self.editor.status()}
+        self.emit(body)
+        return body
 
     def summary(self) -> dict:
         """批量同步台账（不是导出任务队列）：撤销入口要能拿到 batch_id。

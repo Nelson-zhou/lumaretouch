@@ -129,3 +129,12 @@ Frozen sampling uses producer-bound presentation dimensions, not fixed proxy
 raster aspect. The ordinary live-preview crop-aspect defect is still open.
 Point/neighbourhood readout does not complete white balance, black/white-point,
 curve or HSL action eyedroppers, full-source sampling or comparison sampling.
+
+## Frozen batch backend boundary
+
+DocumentVersions owns runtime identities/fences outside undo recipes; PreflightStore
+owns bounded immutable records; FrozenBatchController owns review/commit policy over
+narrow PlanPorts. None imports Engine, GPU runtimes, filesystem or native/UI code.
+BatchEditor gains a dirty callback because parked-only writes bypass live history.
+Server only wires these owners and lifecycle fence hooks. Reviewed server cap rises
+7040→7065 for this wiring; it is not permission to move transaction policy back in.
