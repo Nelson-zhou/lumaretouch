@@ -2738,7 +2738,8 @@ export default function App() {
   // Fit 倍率随画布尺寸变；「100%」是把 zoom 存成相对 Fit 的倍率，所以窗口一改
   // 大小就得重算。只算一次的话，4K 上把窗口拉大后徽标会写 119%（图不是 1:1 了）。
   useEffect(() => {
-    if (!oneToOne || fitScale<=0) return;
+    if (!oneToOne) return;
+    if (fitScale<=0) return;
     const dpr = window.devicePixelRatio || 1;
     setView((v) => ({ ...v, zoom: 1 / Math.max(1e-6, dpr * fitScale) }));
   }, [oneToOne, fitScale]);

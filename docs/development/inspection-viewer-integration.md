@@ -48,3 +48,8 @@ step because the old static view test mandated importing the obsolete
 The test is updated to require the stronger delivered-frame ready state and
 explicit proxy comparison label; existing proxy predicate unit tests remain.
 This is a contract migration, not a claim that the initial run passed.
+
+Run 39647048157 passed UI/build/Rust checks but the engine job found a second
+source-text regression test requiring the exact independent oneToOne guard.
+The fitScale safety guard is now a separate statement, preserving both the old
+resize contract and the new no-zero-scale protection. Initial failure retained.
