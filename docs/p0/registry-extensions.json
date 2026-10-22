@@ -1,7 +1,7 @@
 {
   "schema": "lrt.registry.extensions.v1",
   "source": "Linux开源人像修图产品指导手册:首版基础曲线; AI开发资料包:RGB/单通道节点编辑",
-  "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Integrated verification and native UI acceptance remain pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
+  "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
       "operation_id": "lnx.curves.v1",
@@ -120,6 +120,60 @@
         "minimum_input_gap": 1e-05
       },
       "transferable": true
+    },
+    {
+      "operation_id": "lnx.hsl.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "algorithm": "legacy-hsv8-smoothstep-v1",
+        "bands": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "hard_range": {
+        "band_count": 8,
+        "values_per_band": 3,
+        "dh": [
+          -60,
+          60
+        ],
+        "ds": [
+          -100,
+          100
+        ],
+        "dl": [
+          -100,
+          100
+        ]
+      },
+      "transferable": true,
+      "source_requirement": "LNX-REF-PC-32455-C-3791959b40",
+      "reason": "Versioned preset/batch envelope for the existing eight-color HSV/smoothstep operator. Pixel math and legacy tuple state are unchanged; this is not true HSL or an implemented image-action eyedropper."
     }
   ]
 }

@@ -1,3 +1,4 @@
+import {batchScopeOptions, resolveBatchScope} from "./batch/batchScopeOptions";
 import {BatchActions} from './batch/BatchActions';
 import {useBatchWorkflow} from './batch/useBatchWorkflow';
 import {BatchReview} from './batch/BatchReview';
@@ -1417,7 +1418,7 @@ export default function App() {
         return p ? presetLabel(p) : ""
       }
       case "lnx.batch.v1.module_scope":
-        return syncScopeLabel || syncScopes[0]?.label || "";
+        return effectiveScope.label;
       default: return undefined;
     }
   }
@@ -1555,18 +1556,10 @@ export default function App() {
   const presetLabel = (p: { name: string; id: string }) =>
     (dupNames.has(p.name) ? `${p.name} · ${p.id}` : p.name);
   /** 作用域候选只从引擎报的 transferable 模块里拼：注册表说不通的那格不进候选。 */
-  const syncScopes: { label: string; ops: string[] }[] = (() => {
-    const mods = presetState?.modules ?? [];
-    const okOf = (op: string) => mods.find((m) => m.operation_id === op)?.transferable === true;
-    const global = ["lnx.exposure.v1", "lnx.white_balance.v1", "lnx.levels.v1", "lnx.curves.v1", "lnx.crop.v1"].filter(okOf);
-    const skin = ["lnx.skin.v1", "lnx.blemish.v1"].filter(okOf);
-    const out: { label: string; ops: string[] }[] = [];
-    if (global.length) out.push({ label: "全图配方（曝光·白平衡·色阶·曲线·裁剪）", ops: global });
-    if (global.length && skin.length)
-      out.push({ label: "全图配方 + 磨皮（逐张须单脸）", ops: [...global, ...skin] });
-    return out;
-  })();
-  const syncScopeOps = (syncScopes.find((s) => s.label === syncScopeLabel) ?? syncScopes[0])?.ops ?? [];
+  const scopeChoices = batchScopeOptions(presetState?.modules ?? []);
+  const effectiveScope = resolveBatchScope(scopeChoices, syncScopeLabel);
+  const syncScopes = effectiveScope.ops.length ? scopeChoices : [effectiveScope, ...scopeChoices];
+  const syncScopeOps = effectiveScope.ops;
   /** 上一笔同步的实话（句子里的每一个数字都来自引擎报的那一份） */
   const syncNote = (() => {
     const r = syncState?.last_result;
@@ -1630,7 +1623,7 @@ export default function App() {
 
   const batchWorkflow=useBatchWorkflow({docs:selPaths,moduleScope:syncScopeOps,conflictPolicy:batchPolicy,
     sourceDocumentId:doc?.document_id??'',enabled:!!status?.engine_alive&&status?.ready_caps?.batch_preflight_protocol===1,
-    label:syncScopeLabel||syncScopes[0]?.label||''},()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));});
+    label:effectiveScope.label},()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));});
   const onBatchSync=()=>batchWorkflow.start();
   const onBatchUndo=()=>syncState?.last?batchWorkflow.undo(syncState.last):undefined;
 
@@ -1851,7 +1844,7 @@ export default function App() {
 
             {strip && strip.count > 0 && (
               <>
-                <BatchActions count={selPaths.length} scopes={syncScopes} scope={syncScopeLabel||syncScopes[0]?.label||''}
+                <BatchActions count={selPaths.length} scopes={syncScopes} scope={effectiveScope.label}
                   policy={batchPolicy} onScope={setSyncScopeLabel} onPolicy={setBatchPolicy} note={syncNote}
                   ready={hasImage&&status?.ready_caps?.batch_preflight_protocol===1} busy={['committing','preflighting'].includes(batchWorkflow.ui.phase)}
                   unresolved={batchWorkflow.ui.phase==='uncertain'} canUndo={!!syncState?.last} onReview={onBatchSync} onUndo={onBatchUndo}/>

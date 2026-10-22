@@ -2,9 +2,10 @@
 export function BatchActions(props:{count:number;scopes:Array<{label:string;ops:string[]}>;scope:string;policy:string;
   onScope:(value:string)=>void;onPolicy:(value:string)=>void;ready:boolean;busy:boolean;unresolved:boolean;
   canUndo:boolean;note:string;onReview:()=>unknown;onUndo:()=>unknown}){
+  const hasScope = props.scopes.some(s => s.label === props.scope && s.ops.length > 0);
   return <section className="batchActions" aria-label="批量配方同步">
     <div><strong>配方同步</strong><span>底片条已选 {props.count} 张（Ctrl / Shift 多选）</span></div>
-    <div><button className="tb primary" disabled={!props.unresolved&&(!props.ready||!props.count||!props.scopes.length||props.busy)} onClick={props.onReview}>
+    <div><button className="tb primary" disabled={!props.unresolved&&(!props.ready||!props.count||!hasScope||props.busy)} onClick={props.onReview}>
       {props.unresolved?'查看未确认任务':'预检并同步配方'}</button>
       <button className="tb" disabled={!props.ready||!props.canUndo||props.busy||props.unresolved} onClick={props.onUndo}>撤销上一批同步</button></div>
     <details className="batchSettings"><summary>范围与冲突</summary><div>

@@ -1,9 +1,9 @@
 # Parametric curves: implementation contract and status
 
-Status: mathematical core passed an initial Qoder candidate check. Native schema,
-editor, engine vector evaluation and shared recipe wiring are now implemented as
-an unverified integration candidate; **do not claim feature completion**. Full
-integration checks and physical UI acceptance remain pending.
+Status: implemented integration passed the recorded CI and Qoder basic checks.
+See [verification evidence](parametric-curves-verification.md) for exact candidates,
+counts, provenance and limitations. Physical UI, real-photo and performance
+acceptance remain pending; this is not whole-product or whole-curves-family completion.
 Existing point curves remain; this stage must not replace them.
 
 ## Requirement and upstream evidence
@@ -52,7 +52,7 @@ log-domain evaluation rather than an upstream intermediate logarithm floor.
   finite/monotone samples. No alternative grid is silently accepted.
   No external table is trusted as a validated recipe.
 
-## Integration candidate (verification pending)
+## Integrated behavior (basic checks recorded)
 
 Recipe v3 retains every v2 field and adds explicit parametric parameters. v1/v2
 remain unchanged. Point interpolation/boundary metadata applies only to points;

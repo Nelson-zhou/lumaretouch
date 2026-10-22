@@ -58,6 +58,7 @@ from . import tasks as T
 # → 把事实发成事件”，不在这里再摸一份“哪些参数属于哪个模块”——预设与批量必须同一语义，
 # 分开抄就会出“预设里没有的参数被批量偷偷同步了”。
 from . import scope as SC
+from . import hsl_recipe as HSL_RECIPE
 from . import preset_store as PS
 from .project import ProjectError
 from . import session as S
@@ -839,13 +840,7 @@ class Engine:
                 pipe.set_curves(self._curves)  # fail visibly; never silently erase a recipe
             # 八色 HSL：与上面同一条“不提交就是会话迁了而画面回中性”。
             if self._hsl != (0.0,) * 24:
-                try:
-                    pipe.set_hsl(self._hsl)
-                    self._hsl = tuple(float(v) for v in pipe.hsl_bands)
-                except (RuntimeError, ValueError) as e:
-                    emit({"event": "engine_warn",
-                          "warn": f"新会话重提交八色 HSL 失败，已整层清除（{type(e).__name__}）：{e}"})
-                    self._hsl = (0.0,) * 24
+                pipe.set_hsl(self._hsl)  # propagate to transaction rollback; never erase silently
             # 换底层（M6）：遮罩张量活在那块卡上，新会话必须用存下的遮罩重新上传一次。
             # 不重挂就是“会话迁了、换底还在宿主侧但画面回到底图”——lut/grade 写的那段担心在这一层同样成立。
             if self._bg.get("active") and self._bg.get("matte") is not None:
@@ -1011,7 +1006,8 @@ class Engine:
 
     def _apply_state(self, st: dict) -> None:
         # Old projects predate curves. Validate/deep-copy before changing any live field.
-        st = {**st, "_curves": CURVES.check_curves(st.get("_curves")), "_levels": LEVELS.check_levels(st.get("_levels"))}
+        st = {**st, "_curves": CURVES.check_curves(st.get("_curves")), "_levels": LEVELS.check_levels(st.get("_levels")),
+              "_hsl": HSL_RECIPE.normalize_state(st.get("_hsl", HSL_RECIPE.NEUTRAL))}
         for k in self.DOC_FIELDS:
             v = st[k]                 # 缺键就是名单漂移，让它响
             setattr(self, k, v)
@@ -1067,7 +1063,6 @@ class Engine:
         self._crop_rect = tuple(float(x) for x in self._crop_rect)
         self._crop_rotation = float(self._crop_rotation)
         self._exposure = tuple(float(x) for x in self._exposure)
-        self._hsl = (tuple(float(x) for x in self._hsl) + (0.0,) * 24)[:24]
         self._exposure_ref_k = None if self._exposure_ref_k is None \
             else float(self._exposure_ref_k)
         self._strength = _clamp_strength(self._strength)
@@ -6632,7 +6627,7 @@ class Engine:
     # 而不是等到用户发那条命令时回一句"未知命令"。
     # ------------------------------------------------------------ 预设与批量（LNX-P0-PRESET / LNX-P0-BATCH）
     PRESET_ACTIONS = ("list", "apply", "save", "import", "delete")
-    PRESET_KEYS = {"cmd", "action", "id", "path", "modules", "name", "kind", "force", "note"}
+    PRESET_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note"}
     BATCH_ACTIONS = BS.ACTIONS
     BATCH_KEYS = BS.KEYS
     # 冻结件里 conflict_policy 只有这两个值，而两个都是**不覆盖**：没有 overwrite
@@ -6751,9 +6746,11 @@ class Engine:
                 if verdict != "ok":
                     raise SC.ScopeError(f"{op} 不能作用在这张图上：{reason}"
                                         "（其他模块也不顺手盖：整条拒比半条好）")
-        before = SC.params_of(self._capture_state(), ops)
-        st = SC.apply_modules(self._capture_state(), mods)
-        fr = self._replay_state(st, mode="preset", replayed_for=f"preset:{pid}")
+        from .preset_transaction import apply_with_rollback
+        previous = self._capture_state(); before = SC.params_of(previous, ops)
+        st = SC.apply_modules(previous, mods)
+        fr = apply_with_rollback(self._replay_state, previous, st, preset_id=pid, emit=emit,
+                                 invalidate=lambda: setattr(self, "_vram", None))
         # “现在等于哪一个预设”是引擎侧的事实（套完又被手改就不算了），UI 只读这一份
         self._preset_last = {"id": pid, "name": doc["name"], "ops": ops,
                              "params": SC.params_of(st, ops)}
@@ -6765,7 +6762,8 @@ class Engine:
 
     def _preset_save(self, p: dict) -> None:
         """把当前文档的选定模块抽成预设（注册表的 lnx.preset.v1.save）。"""
-        ops = SC.check_scope(p.get("module_scope") or list(SC.transferable_ops()))
+        requested = p.get("module_scope")
+        ops = SC.check_scope(list(SC.transferable_ops()) if requested is None else requested)
         st = self._capture_state()
         doc = {"schema": SC.PRESET_SCHEMA, "id": p.get("id") or "",
                "name": p.get("name") or str(p.get("id") or ""), "kind": p.get("kind") or "custom",
@@ -6787,7 +6785,8 @@ class Engine:
                     capture=lambda: self._capture_state(),
                     replay=lambda state, **kw: self._replay_state(state, **kw),
                     face_known_single=lambda row, **kw: self._face_known_single(row, **kw),
-                    status=lambda: self.doc_state(),mark_dirty=lambda:setattr(self,"_project_dirty",True)),
+                    status=lambda: self.doc_state(),mark_dirty=lambda:setattr(self,"_project_dirty",True),
+                    invalidate=lambda:setattr(self,"_vram",None)),
                 emit=lambda event: emit(event), clock=lambda: time.time(),
                 monotonic=lambda: monotonic_ns(), history_limit=self.HISTORY_MAX, versions=self._document_versions())
             self._batch_sync = controller

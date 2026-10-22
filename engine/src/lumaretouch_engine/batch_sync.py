@@ -28,6 +28,7 @@ class BatchEditor:
     face_known_single: Callable[..., tuple[str, str]]
     status: Callable[[], dict]
     mark_dirty: Callable[[], None] = lambda:None
+    invalidate: Callable[[], None] = lambda:None
 
 class BatchSyncController:
     def __init__(self, documents: BatchDocuments, editor: BatchEditor,
@@ -192,6 +193,7 @@ class BatchSyncController:
                     rollback=self.editor.replay(before,mode="batch",replayed_for=f"batch_rollback:{batch_id}")
                     if rollback is not None:self.emit(rollback)
                 except Exception as rollback_error:
+                    self.editor.invalidate()
                     self.emit({"event":"engine_warn","warn":f"batch rollback failed: {rollback_error}; reload the active document"})
                 raise SC.ScopeError(f"live target failed before parked writes: {error}") from error
         self.editor.mark_dirty()
