@@ -14,7 +14,7 @@ import pytest
 from lumaretouch_engine import local_grade_layers as L
 from lumaretouch_engine import local_grade_source as Source
 from lumaretouch_engine import local_mask_state as M
-from lumaretouch_engine import project as P
+from lumaretouch_engine import project as P, manual_liquify_state as ML
 
 
 def groups(path, shape=(20, 32), *, disabled=False):
@@ -40,8 +40,8 @@ def test_project_v5_roundtrip_keeps_groups_independent_and_owned(tmp_path):
     path = source(tmp_path)
     retained = groups(path)
     retained['layers'][1]['mask']['recipe']['objects'][0]['operation'] = 'intersect'
-    state = {'_grade': [0, 0, 0, 1], '_local_grade_layers': retained,
-             '_hist': [{'_local_grade_layers': copy.deepcopy(retained)}]}
+    state = {'_manual_liquify': ML.empty(), '_grade': [0, 0, 0, 1], '_local_grade_layers': retained,
+             '_hist': [{'_manual_liquify': ML.empty(), '_local_grade_layers': copy.deepcopy(retained)}]}
     project = P.new_project('Independent adjustments')
     P.add_doc(project, str(path), state)
     saved = tmp_path / 'local.lrproject.json'
@@ -61,8 +61,8 @@ def test_each_legacy_schema_migrates_without_converting_scalar_grade(tmp_path, s
     state = {'_grade': [0, .1, .1, .7], '_grade_scope': 'all',
              '_hist': [{'_grade': [0, 0, 0, 1], '_grade_scope': 'all'}]}
     project = P.new_project('Legacy grade')
-    P.add_doc(project, str(path), state)
     project['schema_version'] = schema
+    P.add_doc(project, str(path), state)
     before = copy.deepcopy(project)
     saved = tmp_path / 'legacy.lrproject.json'
     saved.write_text(json.dumps(project))
@@ -78,7 +78,7 @@ def test_each_legacy_schema_migrates_without_converting_scalar_grade(tmp_path, s
 def test_pretending_groups_are_pre_v5_is_rejected(tmp_path, schema):
     path = source(tmp_path)
     project = P.new_project('No silent downgrade')
-    P.add_doc(project, str(path), {'_local_grade_layers': groups(path)})
+    P.add_doc(project, str(path), {'_manual_liquify': ML.empty(), '_local_grade_layers': groups(path)})
     project['schema_version'] = schema
     with pytest.raises(P.ProjectError, match='pre-v5'):
         P.validate(project)
@@ -89,7 +89,7 @@ def test_pretending_groups_are_pre_v5_is_rejected(tmp_path, schema):
 def test_corrupt_groups_anywhere_reject_before_save(tmp_path, location, mutation):
     path = source(tmp_path)
     project = P.new_project('Fail closed')
-    P.add_doc(project, str(path), {'_local_grade_layers': groups(path)}, version_id='live')
+    P.add_doc(project, str(path), {'_manual_liquify': ML.empty(), '_local_grade_layers': groups(path)}, version_id='live')
     root = project['docs'][0]['versions'][0]['recipe']
     if location == 'inactive':
         inactive = copy.deepcopy(project['docs'][0]['versions'][0])

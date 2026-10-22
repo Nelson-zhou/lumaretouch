@@ -108,3 +108,14 @@ RapidRetouch 衣物细褶复用
   lumaretouch_engine/third_party/rapidretouch/FABRIC_NOTICE，完整许可同目录 LICENSE。
   同源 eye_detail.py 补充祛红血丝与已有高光增强（人物左右独立），同样保留
   AGPL-3.0-only；不包含合成眼神光或睫毛素材，详见 UNDER_EYE_NOTICE。
+
+GEGL 手动液化场算法适配
+------------------------------------------------------------------
+core/manual_liquify/field.rs 实际适配 GNOME GEGL operations/common-cxx/warp.cc。
+Copyright 2011 Michael Muré；LGPL-3.0-or-later；WITHOUT ANY WARRANTY。
+上游：https://github.com/GNOME/gegl/blob/master/operations/common-cxx/warp.cc
+修改：Rust 有界矢量重放、仿射笔刷、保留时间/压感、保护场与固定边缘。
+逆映射组合、衰减重建、场均值平滑和紧支撑权重来自该算法；
+图像采样仍复用现有 Torch 路径，不声称与 GEGL 或 PixCake 位级等价。
+完整源码、改动说明、COPYING.LESSER 与 GPL 文本随二进制位于
+lumaretouch_engine/third_party/manual_liquify/。

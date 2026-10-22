@@ -8,12 +8,15 @@
 （`packaging/m4-export-bench.py` 第 5 节）：形变场按行带求值，峰值只随 `_FIELD_BAND_PX`
 走，代价是场按整幅活在系统内存；消除笔按洞的 bbox 满幅预跑，峰值随 bbox 走（切 tile
 去解它会换掉 levels 与 bbox，那才是真的错）。
+手动液化另需整幅 CPU 位移/保护场；下面既有链的测量不覆盖这个新阶段，
+新阶段的边界叠加和内存预检是保守实现，仍需本地分块与整幅质量验收。
 
 margin 从哪来（`m4a2.py` 逐参数定点验证，不是推算）：
     分带     blur=box(rf) → low1=guided(blur, r) → base=guided(low1, 2r)
              每层 box 跨 2r，所以支撑 = 2·rf + 6·r
     修容     box(db_radius) → 2·r_db
-    形变     warp 采样的位移 + 双线性那一脚 → ceil(peak|delta|) + 1
+    自动形变 warp 采样的位移 + 双线性那一脚 → ceil(peak|delta|) + 1
+    手动液化 最终 RGB 采样另加 ceil(peak|manual|) + 1，不能与上游取 max
     消除笔   在分块**之前**按洞的 bbox 整幅跑一次，所以它不往 margin 里加东西
     色彩     逐点（lut/grade）——结构上就不需要 margin
 实测结论：按这个公式给的 margin 下，分块与整幅单 pass **最大 1 LSB**，差异像素 ≤
@@ -60,8 +63,8 @@ from .vram import LightOp, PreviewPipeline, RepairOp, GRADE_SCOPES
 DEFAULT_TILE = 1024
 MIN_TILE = 256
 MAX_TILE = 4096
-# margin 的上限：它按公式算出来是"支撑有多宽"，但如果一个参数把支撑推到比 tile 还大，
-# 分块就没有意义了（每块的有效区是负的）。这时当场拒绝，而不是默默出一个糊图。
+# margin 是每个有效 tile 外侧额外读取的支撑宽度；过宽会让每块都处理巨大的重叠区。
+# 超过固定上限就拒绝，不截短支撑、不偷偷改用代理场；增大 tile 不会改变这个上限。
 MAX_MARGIN = 2048
 # 形变场的逐带求值预算（像素数）。拿它除以图宽得到带高，于是带的显存量按这个常数走
 # 而不是按图幅走。稠密求值的开销量在 (像素数 × 控制点数) 的 float64 U 矩阵上，所以
@@ -144,6 +147,10 @@ class ExportSpec:
     effect_recovery_path: str | None = None  # ephemeral verified original source
     effect_recovery_stamp: list | None = None  # full-decode identity, never rebased
     effect_recovery_fields: list | None = None  # disposable full-source uint8 masks
+    manual_liquify: dict | None = None       # retained source-bound ordered gestures
+    manual_liquify_path: str | None = None   # verified original, never a proxy
+    manual_liquify_stamp: list | None = None # decode-to-render identity guard
+    manual_liquify_field: np.ndarray | None = None  # disposable original-size dx/dy/protection
     # M6/P1-2 换底：与预览同一份 matte 与背景色（导出尺寸、(H,W) uint8 覆盖度、
     # bg_ref 是 [0,1] 三分量）。换底只活在预览而不进导出就是“屏幕换了、盘上没换”——
     # 前景仍在原位、只是背后的色没变，是最难从缩略图看出来的一类不一致。
@@ -198,9 +205,32 @@ class ExportSpec:
         except ValueError as error:
             raise ExportError(f'效果恢复导出配方无效：{error}') from error
 
+    def check_manual_liquify(self) -> None:
+        """Validate even freeze-only/zero-displacement intent, never drop it."""
+        from .manual_liquify_state import check
+        from .manual_liquify_stage import check_field
+        try:
+            self.manual_liquify = check(self.manual_liquify)
+            path, stamp = self.manual_liquify_path, self.manual_liquify_stamp
+            if path is not None and (type(path) is not str or not path or '\x00' in path):
+                raise ValueError('手动液化源图路径无效')
+            if stamp is not None and (type(stamp) is not list or len(stamp) != 5
+                    or any(type(n) is not int for n in stamp)):
+                raise ValueError('手动液化源图解码凭据无效')
+            if self.manual_liquify['strokes'] and (path is None or stamp is None):
+                raise ValueError('手动液化导出缺少经过验证的源图路径或解码凭据')
+            if self.manual_liquify_field is not None:
+                source = self.manual_liquify['source']
+                if source is None:
+                    raise ValueError('无笔迹的液化配方不能携带不明来源的位移场')
+                check_field(self.manual_liquify_field, (source['height'], source['width']))
+        except ValueError as error:
+            raise ExportError(f'手动液化导出配方无效：{error}') from error
+
     def check(self) -> None:
         """参数在进入昂贵通路之前先过一遍唯一校验口径（与各层 setter 同源）。"""
         self.check_effect_recovery()
+        self.check_manual_liquify()
         from .local_grade_layers import check as check_groups
         from .local_grade_stage import check_fields
         self.local_grade_groups = check_groups(self.local_grade_groups)
@@ -329,15 +359,25 @@ class ExportSpec:
             raise ExportError("带 bg_ref 却没带 matte：换底没有可套用的遮罩，整层应一起放下")
 
     # ---- margin：由参数算，不是量出来一个数写死 ----
-    def margin_px(self, deform_peak_px: float = 0.0) -> int:
+    def margin_px(self, deform_peak_px: float = 0.0, manual_peak_px: float = 0.0) -> int:
         m = max(2 * int(self.texture_radius) + 6 * int(self.radius),
                 2 * int(self.light_radius) if self.light else 0)
         if deform_peak_px:
             m += int(math.ceil(deform_peak_px)) + 1
-        # 放大要的是 Lanczos 的支撑半径：补丁得比目标框四周多包 a 个源像素，
-        # 否则抽头越出补丁——那不是近似，是拿不存在的数据编值
+        # Final manual sampling consumes already-filtered/auto-warped pixels.
+        # Its support ADDS to the existing halo, including a second bilinear tap.
+        # Freeze-only recipes still get validated/replayed, even when peak == 0.
+        manual_active = bool(manual_peak_px or (self.manual_liquify or {}).get("strokes"))
+        if manual_active:
+            if not math.isfinite(manual_peak_px) or manual_peak_px < 0:
+                raise ExportError("手动液化作用面必须是有限非负值")
+            m += int(math.ceil(manual_peak_px)) + 1
         if int(self.scale) > 1:
-            m = max(m, UpscalePlan.margin_for(int(self.scale)))
+            support = UpscalePlan.margin_for(int(self.scale))
+            # Lanczos consumes a neighborhood of the manual output. Each of
+            # those pixels needs the entire upstream+manual footprint, so this
+            # support also adds. Preserve the established manual-free formula.
+            m = m + support if manual_active else max(m, support)
         return m
 
 
@@ -348,6 +388,57 @@ def tile_rects(h: int, w: int, tile: int) -> list:
         raise ExportError(f"tile={tile} 越界（允许 {MIN_TILE}~{MAX_TILE}）")
     return [(y0, min(y0 + t, h), x0, min(x0 + t, w))
             for y0 in range(0, h, t) for x0 in range(0, w, t)]
+
+
+def _admit_manual_tile(spec, h, w, tile, margin, bits, device, manual_peak):
+    """Conservative allocation admission, not a measured peak/OOM guarantee.
+
+    Check the *halo-expanded* tile, not its nominal side. The existing filters,
+    caches, auto warp and editing temporaries are reserved at 320 B/pixel. The
+    second warp additionally needs inverse offsets, base/normalized grids, exact
+    identity mask, interpolation/where output and RGB16 float64 source/output.
+    Reserve 96/192 B/pixel for that stage (RGB8/RGB16), including its temporaries.
+    Already-live full-source fields are reflected in the remaining CPU budget.
+    """
+    # Exact-zero displacement takes the stage's identity fast path; freeze
+    # intent and its full protection field were still verified and replayed.
+    if not spec.manual_liquify['strokes'] or manual_peak == 0:
+        return 0
+    from .cpu_memory_budget import available_estimate
+    import resource
+    pixels = min(h, int(tile)+2*margin) * min(w, int(tile)+2*margin)
+    tile_bytes = pixels * (320 + (192 if bits == 16 else 96))
+    # Output is float until the final RGB16 quantization. Full repair and fabric
+    # products, when requested, are still to be allocated after this admission.
+    full_bytes = h*w*(12 if bits == 16 else 3)*int(spec.scale)**2
+    full_bytes += h*w*(12 if spec.repair else 0)
+    full_bytes += h*w*(4 if spec.fabric_amount else 0)
+    headroom = 64*1024*1024
+    target = torch.device(device)
+    if target.type == 'cuda' and not torch.cuda.is_available():
+        target = torch.device('cpu')  # Match PreviewPipeline's explicit fallback.
+    # CPU transport/readback and per-tile float conversions remain even on GPU.
+    cpu_need = full_bytes + (tile_bytes if target.type == 'cpu' else pixels*32) + headroom
+    try:
+        remaining = available_estimate()
+        soft, _ = resource.getrlimit(resource.RLIMIT_AS)
+        if soft != resource.RLIM_INFINITY:
+            with open('/proc/self/statm', 'r', encoding='ascii') as info:
+                mapped = int(info.read(128).split()[0])*os.sysconf('SC_PAGE_SIZE')
+            remaining = min(remaining, max(0, soft-mapped))
+        if cpu_need > remaining:
+            raise ExportError('手动液化全尺寸分块内存预算不足；请减小导出分块，不会放大代理场代替')
+        if target.type == 'cuda':
+            free, _ = torch.cuda.mem_get_info(target)
+            # Cached unallocated blocks belong to this process and are reusable.
+            reusable = max(0, torch.cuda.memory_reserved(target)-torch.cuda.memory_allocated(target))
+            if tile_bytes+headroom > int(free)+int(reusable):
+                raise ExportError('手动液化分块含完整边界后超过可用显存；请减小分块或手动形变范围')
+    except (OSError, ValueError, RuntimeError) as error:
+        if isinstance(error, ExportError):
+            raise
+        raise ExportError(f'无法确认手动液化分块资源预算：{error}') from error
+    return tile_bytes
 
 
 class _MaskCarrier:
@@ -518,7 +609,14 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     from .local_grade_layers import check as check_groups
     from .local_grade_stage import check_fields
     from .effect_recovery_runtime import export_prepare as prepare_effect_recovery, attach_tile
+    from .manual_liquify_runtime import export_prepare as prepare_manual_liquify, attach_tile as attach_manual_tile
     spec.check_effect_recovery()
+    spec.check_manual_liquify()
+    manual_source_stamp = None
+    if spec.manual_liquify["strokes"]:
+        manual_source_stamp = file_stamp(spec.manual_liquify_path)
+        if list(manual_source_stamp) != spec.manual_liquify_stamp:
+            raise ExportError("手动液化源图自全尺寸解码后变化，停止导出")
     recovery_source_stamp = None
     if spec.effect_recovery['targets']:
         recovery_source_stamp = file_stamp(spec.effect_recovery_path)
@@ -547,6 +645,12 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     check_fields(spec.local_grade_fields, src_u8.shape[:2], groups=groups)
     spec.effect_recovery_fields = None
     prepare_effect_recovery(spec, src_u8.shape[:2], cancelled=mask_cancelled)
+    # Replay the vector recipe ONCE at original dimensions. Never enlarge a
+    # proxy field or replay independent tiles whose field composition would differ.
+    t_manual = time.perf_counter()
+    spec.manual_liquify_field = None
+    manual_peak = prepare_manual_liquify(spec, src_u8.shape[:2], cancelled=mask_cancelled)
+    manual_field_ms = (time.perf_counter() - t_manual) * 1000.0
     if group_source_stamp is not None and file_stamp(spec.local_mask_source_path) != group_source_stamp:
         raise ExportError('Independent local-grade source changed during mask preparation')
     spec.check()
@@ -554,10 +658,11 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     # 而不是先被"导出需要 torch"抢掉——那样 CI 的 CPU job 根本测不到这些分支。
     h, w = src_u8.shape[:2]
     rects = tile_rects(h, w, tile)
-    if spec.margin_px(0.0) > MAX_MARGIN:
+    initial_margin = spec.margin_px(0.0, manual_peak)
+    if initial_margin > MAX_MARGIN:
         # 不需要 torch 就能算出来的那一半：半径把作用面撑爆这件事与有没有 GPU 无关
-        raise ExportError(f"这组参数的作用面宽到 margin={spec.margin_px(0.0)} px"
-                          f"（超过 {MAX_MARGIN}），换更大的 tile 或调小磨皮/修容半径")
+        raise ExportError(f"这组参数的作用面宽到 margin={initial_margin} px"
+                          f"（超过 {MAX_MARGIN}），请调小滤波半径或形变范围；不会截短边界继续出片")
     if torch is None:
         raise ExportError("导出需要 torch（装 rocm/cuda/cpu 任一变体）")
     delta, peak = (None, 0.0)
@@ -566,10 +671,11 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         t_f = time.perf_counter()
         delta, peak = composed_delta(spec.landmarks, spec.deform_amounts, h, w, device)
         field_ms = (time.perf_counter() - t_f) * 1000.0
-    margin = spec.margin_px(peak)
+    margin = spec.margin_px(peak, manual_peak)
     if margin > MAX_MARGIN:
         raise ExportError(f"这组参数的作用面宽到 margin={margin} px（超过 {MAX_MARGIN}），"
-                          "换更大的 tile 或调小磨皮/修容半径")
+                          "请调小滤波半径或形变范围；不会截短边界继续出片")
+    manual_tile_budget = _admit_manual_tile(spec, h, w, tile, margin, bits, device, manual_peak)
     base_f = None
     repair_stats = {}
     if spec.repair:
@@ -606,7 +712,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     out_h, out_w = plan.out_h, plan.out_w
     out = np.zeros((out_h, out_w, 3), np.float32 if bits == 16 else np.uint8)
     seg = {"filter": 0.0, "light": 0.0, "deform": 0.0, "exposure": 0.0,
-           "lut": 0.0, "grade": 0.0, "local_grade": 0.0, "enhance": 0.0, "bg": 0.0}
+           "lut": 0.0, "grade": 0.0, "local_grade": 0.0, "enhance": 0.0, "bg": 0.0, "manual_liquify": 0.0}
     upscale_ms = 0.0
     # 三段非算子开销。为什么不只记算子：上一版只记五个算子段，跑靶量到"分段合计只占
     # 整帧 27%"——那 73% 不知道去哪了（真因是每块一次 empty_cache，把分配器缓存全
@@ -628,6 +734,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         # Rasterize once at source dimensions, then take the identical tile halo
         # used by all operators. RGB8/RGB16 share this float recovery stage.
         attach_tile(pipe, spec, (cy0, cx0, cy1, cx1))
+        attach_manual_tile(pipe, spec, (cy0, cx0, cy1, cx1))
         t_c = time.perf_counter()
         io["setup"] += (t_c - t0) * 1000.0
         if spec.light:
@@ -757,6 +864,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         raise ExportError('Independent local-grade source changed during rendering')
     if recovery_source_stamp is not None and file_stamp(spec.effect_recovery_path) != recovery_source_stamp:
         raise ExportError('效果恢复源图在渲染过程中变化，停止导出')
+    if manual_source_stamp is not None and file_stamp(spec.manual_liquify_path) != manual_source_stamp:
+        raise ExportError("手动液化源图在渲染过程中变化，停止导出")
     peak_bytes = int(delta.numel() * 4) if delta is not None else 0
     return out, {
         "bits": bits, "warp_precision": "float64" if bits == 16 else "float32",
@@ -768,6 +877,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         "tile": int(tile), "tiles": len(rects), "margin_px": int(margin),
         "deform_peak_px": round(peak, 3), "total_ms": round((time.perf_counter() - t_function) * 1000, 1),
         "field_ms": round(field_ms, 1),
+        "manual_liquify_field_ms": round(manual_field_ms, 1),
+        "manual_liquify_peak_px": round(manual_peak, 3),
+        "manual_liquify_field_cpu_bytes": (0 if spec.manual_liquify_field is None else int(spec.manual_liquify_field.nbytes)),
+        "manual_liquify_tile_estimate_bytes": manual_tile_budget,
         # 这一层的"重画掩膜"成本单独报：它与形变解场是两种一次性的钱，混在
         # field_ms 里就看不出该优化谁（导出账单里每一段都要能归因，否则只是把没说的话当作没事）
         "enhance_field_ms": round(enhance_ms, 1),

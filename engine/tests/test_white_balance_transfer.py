@@ -3,11 +3,11 @@ import copy
 import json
 from pathlib import Path
 import pytest
-from lumaretouch_engine import white_balance_recipe as W, scope as S, project as P
+from lumaretouch_engine import white_balance_recipe as W, scope as S, project as P, manual_liquify_state as ML
 
 
 def state():
-    return {'_exposure': (.5,200,.1,10,20,30,40), '_exposure_ref_k':7000,
+    return {'_manual_liquify': ML.empty(), '_exposure': (.5,200,.1,10,20,30,40), '_exposure_ref_k':7000,
             '_wb_options':{**W.default_options(W.CORRECTED),'picked_gains':[1.2,.8,1.1]}}
 
 

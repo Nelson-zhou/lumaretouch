@@ -15,6 +15,8 @@ impl AppState {
         self.batch_results.lock().unwrap().reset(epoch);
         self.preset_results.lock().unwrap().reset(epoch);
         self.white_balance_results.lock().unwrap().reset(epoch);
+        self.manual_liquify.lock().unwrap().reset(epoch);
+        self.liquify_preview.lock().unwrap().reset(epoch);
         self.effect_recovery.lock().unwrap().reset(epoch);
         self.recovery_preview.lock().unwrap().reset(epoch);
         self.local_grade_live.lock().unwrap().reset(epoch);

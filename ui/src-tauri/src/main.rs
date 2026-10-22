@@ -52,6 +52,8 @@ mod source_patch_api;
 mod clone_stamp_api;
 mod local_mask_api;
 mod local_mask_host;
+mod manual_liquify_host;
+mod manual_liquify_api;
 mod effect_recovery_host;
 mod effect_recovery_api;
 mod local_grade_live_host;
@@ -219,6 +221,8 @@ pub struct AppState {
     color_capture: Mutex<color_capture_host::CaptureHost>,
     source_patch: Mutex<source_patch_host::SourcePatchHost>,
     local_masks: Mutex<local_mask_host::LocalMaskHost>,
+    manual_liquify: Mutex<manual_liquify_host::LiquifyHost>,
+    liquify_preview: Mutex<manual_liquify_host::LiquifyPreviewHost>,
     effect_recovery: Mutex<effect_recovery_host::RecoveryHost>,
     recovery_preview: Mutex<effect_recovery_host::RecoveryPreviewHost>,
     local_grade_live: Mutex<local_grade_live_host::LiveGradeHost>,
@@ -339,6 +343,8 @@ impl AppState {
             color_capture: Mutex::new(color_capture_host::CaptureHost::default()),
             source_patch: Mutex::new(source_patch_host::SourcePatchHost::default()),
             local_masks: Mutex::new(local_mask_host::LocalMaskHost::default()),
+            manual_liquify: Mutex::new(manual_liquify_host::LiquifyHost::default()),
+            liquify_preview: Mutex::new(manual_liquify_host::LiquifyPreviewHost::default()),
             effect_recovery: Mutex::new(effect_recovery_host::RecoveryHost::default()),
             recovery_preview: Mutex::new(effect_recovery_host::RecoveryPreviewHost::default()),
             local_grade_live: Mutex::new(local_grade_live_host::LiveGradeHost::default()),
@@ -411,7 +417,7 @@ impl AppState {
     /// 三条带 doc_state 的事件都进这里落一份"引擎最新说的文档状态 + 它是谁说的"。
     fn note_doc(&self, v: &Value, src: &str) {
         self.source_patch_capture.lock().unwrap().invalidate();
-        self.recovery_preview.lock().unwrap().invalidate();
+        self.recovery_preview.lock().unwrap().invalidate(); self.liquify_preview.lock().unwrap().invalidate();
         self.white_balance_capture.lock().unwrap().invalidate();
         self.color_picker_capture.lock().unwrap().invalidate();
         self.note_face(v, src);
@@ -471,7 +477,7 @@ impl AppState {
 
     pub fn on_lut_ready(&self, v: &Value) {
         self.source_patch_capture.lock().unwrap().invalidate();
-        self.recovery_preview.lock().unwrap().invalidate();
+        self.recovery_preview.lock().unwrap().invalidate(); self.liquify_preview.lock().unwrap().invalidate();
         self.white_balance_capture.lock().unwrap().invalidate();
         self.color_picker_capture.lock().unwrap().invalidate();
         *self.lut.lock().unwrap() = Some(v.clone());
@@ -1665,7 +1671,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
 #[tauri::command]
 fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     state.source_patch_capture.lock().unwrap().invalidate();
-    state.recovery_preview.lock().unwrap().invalidate();
+    state.recovery_preview.lock().unwrap().invalidate(); state.liquify_preview.lock().unwrap().invalidate();
     state.white_balance_capture.lock().unwrap().invalidate();
     state.color_picker_capture.lock().unwrap().invalidate();
     state.color_capture.lock().unwrap().invalidate();
@@ -2002,7 +2008,7 @@ fn report(line: String) {
 fn quit(state: State<'_, Arc<AppState>>) {
     prompted_model_api::shutdown(&state);
     state.source_patch_capture.lock().unwrap().invalidate();
-    state.recovery_preview.lock().unwrap().invalidate();
+    state.recovery_preview.lock().unwrap().invalidate(); state.liquify_preview.lock().unwrap().invalidate();
     state.white_balance_capture.lock().unwrap().invalidate();
     state.color_picker_capture.lock().unwrap().invalidate();
     state.inspection.lock().unwrap().invalidate();
@@ -2030,6 +2036,8 @@ fn main() {
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
             source_patch_api::source_patch_capture, source_patch_api::source_patch_capture_status, source_patch_api::source_patch_capture_frame,
             source_patch_api::source_patch, source_patch_api::source_patch_result, clone_stamp_api::clone_stamp, local_mask_api::local_masks, local_mask_api::local_masks_result,
+            manual_liquify_api::manual_liquify, manual_liquify_api::manual_liquify_result,
+            manual_liquify_api::manual_liquify_preview, manual_liquify_api::manual_liquify_preview_status,
             effect_recovery_api::effect_recovery, effect_recovery_api::effect_recovery_result,
             effect_recovery_api::effect_recovery_preview, effect_recovery_api::effect_recovery_preview_status,
             local_grade_live_api::local_grade_live, local_grade_live_api::local_grade_live_result,

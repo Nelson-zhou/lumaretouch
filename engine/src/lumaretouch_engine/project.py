@@ -44,7 +44,8 @@ WB_SCHEMA = "lrt.project.v2"
 REPAIR_SCHEMA = "lrt.project.v3"
 MASK_SCHEMA = "lrt.project.v4"
 GRADE_SCHEMA = "lrt.project.v5"
-SCHEMA = "lrt.project.v6"
+RECOVERY_SCHEMA = "lrt.project.v6"
+SCHEMA = "lrt.project.v7"
 SUFFIX = ".lrproject.json"
 
 # 上限：宁可显式丢弃，也不要"保存成功但下次打开少了一半配方"这种事
@@ -151,7 +152,7 @@ def validate(p: object) -> None:
     if not isinstance(p, dict):
         raise ProjectError(f"项目顶层不是对象：{type(p).__name__}")
     sv = p.get("schema_version")
-    if sv not in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, MASK_SCHEMA, GRADE_SCHEMA, SCHEMA):
+    if sv not in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, MASK_SCHEMA, GRADE_SCHEMA, RECOVERY_SCHEMA, SCHEMA):
         raise ProjectError(f"项目 schema_version={sv!r}，本版本认 {SCHEMA!r}")
     for k in ("project_id", "name", "docs", "assets"):
         if k not in p:
@@ -184,12 +185,15 @@ def validate(p: object) -> None:
                     WB.normalize_state(recipe, required=(sv != LEGACY_SCHEMA))
                 except ValueError as error:
                     raise ProjectError(f"Invalid white-balance recipe: {error}") from error
+                if sv == SCHEMA:
+                    _check_manual_liquify_record(recipe.get("_manual_liquify"))
         # Check the complete owned row, not only its active recipe: inactive
         # versions, document snapshots and nested history must fail together.
         _validate_encoded_repairs(row, p["assets"],
             allow_legacy=(sv in (LEGACY_SCHEMA, WB_SCHEMA)),
-            allow_local_grades=(sv in (GRADE_SCHEMA, SCHEMA)),
-            allow_effect_recovery=(sv == SCHEMA))
+            allow_local_grades=(sv in (GRADE_SCHEMA, RECOVERY_SCHEMA, SCHEMA)),
+            allow_effect_recovery=(sv in (RECOVERY_SCHEMA, SCHEMA)),
+            require_manual_liquify=(sv == SCHEMA))
 
 
 def _migrate(project):
@@ -197,7 +201,11 @@ def _migrate(project):
     result = copy.deepcopy(project)
     previous = result["schema_version"]
     if previous != SCHEMA:
+        from .manual_liquify_state import migrate_legacy_states as migrate_manual
         for row in result["docs"]:
+            # Include document snapshots and inactive/nested history states, not
+            # just the selected version. Existing manual records are never erased.
+            migrate_manual(row)
             for version in row["versions"]:
                 if version.get("recipe") is not None:
                     version["recipe"] = WB.normalize_state(version["recipe"])
@@ -205,14 +213,18 @@ def _migrate(project):
                         _migrate_repair_kinds(version["recipe"])
                     if previous in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, MASK_SCHEMA):
                         _migrate_local_grade_states(version["recipe"], root=True)
-                    from .effect_recovery_state import migrate_legacy_states
-                    migrate_legacy_states(version["recipe"], root=True)
+                    if previous in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, MASK_SCHEMA, GRADE_SCHEMA):
+                        from .effect_recovery_state import migrate_legacy_states
+                        migrate_legacy_states(version["recipe"], root=True)
+                    migrate_manual(version["recipe"], root=True)
         result["schema_version"] = SCHEMA
         result.setdefault("migration_notes", []).append(
-            f"Migrated {previous} to v6: legacy white balance retained; only v1/v2 missing repair kinds migrate to heal. "
+            f"Migrated {previous} to v7: legacy white balance retained; only v1/v2 missing repair kinds migrate to heal. "
             "Existing scalar grades and composed masks keep their exact order; v5 independent grade groups are preserved. "
-            "Only v1-v4 independent groups start empty. Effect recovery starts empty for every pre-v6 recipe. "
-            "Retained recovery requires a v6-capable reader; older readers must reject this schema.")
+            "Only v1-v4 independent groups start empty; only pre-v6 effect recovery starts empty. "
+            "Existing v6 recovery is preserved. Manual liquify starts empty only where absent in v1-v6. "
+            "Retained manual liquify requires a v7-capable reader; older readers must reject this schema.")
+        validate(result)
     return result
 
 
@@ -286,9 +298,15 @@ def _repair_fields(value, assets, *, allow_legacy=True, shape=None):
 
 
 def _validate_encoded_repairs(value, assets, *, allow_legacy, allow_local_grades=True,
-                              allow_effect_recovery=True):
+                              allow_effect_recovery=True, require_manual_liquify=False):
     """Check every saved version, including inactive versions and redo stacks."""
     if isinstance(value, dict):
+        if "_manual_liquify" in value:
+            _check_manual_liquify_record(value["_manual_liquify"])
+        elif require_manual_liquify and any(key in value for key in
+                ("_strength", "_grade", "_grade_scope", "_local_masks",
+                 "_local_grade_layers", "_effect_recovery")):
+            raise ProjectError("Project v7 document/history state is missing manual liquify intent")
         if "_local_masks" in value:
             from .local_mask_state import check
             check(value["_local_masks"])
@@ -316,12 +334,22 @@ def _validate_encoded_repairs(value, assets, *, allow_legacy, allow_local_grades
             else:
                 _validate_encoded_repairs(child, assets, allow_legacy=allow_legacy,
                                           allow_local_grades=allow_local_grades,
-                                          allow_effect_recovery=allow_effect_recovery)
+                                          allow_effect_recovery=allow_effect_recovery,
+                                          require_manual_liquify=require_manual_liquify)
     elif isinstance(value, list):
         for child in value:
             _validate_encoded_repairs(child, assets, allow_legacy=allow_legacy,
                                       allow_local_grades=allow_local_grades,
-                                      allow_effect_recovery=allow_effect_recovery)
+                                      allow_effect_recovery=allow_effect_recovery,
+                                      require_manual_liquify=require_manual_liquify)
+
+
+def _check_manual_liquify_record(value):
+    from .manual_liquify_state import check_saved_record
+    try:
+        check_saved_record(value)
+    except ValueError as error:
+        raise ProjectError(f"Invalid manual-liquify recipe: {error}") from error
 
 
 def _check_effect_recovery_record(value):
@@ -503,6 +531,8 @@ def encode(value: object, assets: dict, dropped: list, at: str) -> object:
             _check_local_grade_record(value['_local_grade_layers'])
         if '_effect_recovery' in value:
             _check_effect_recovery_record(value['_effect_recovery'])
+        if '_manual_liquify' in value:
+            _check_manual_liquify_record(value['_manual_liquify'])
         out = {}
         for k, v in value.items():
             if not isinstance(k, str):
@@ -560,6 +590,8 @@ def decode(value: object, assets: dict, dropped: list, at: str,
             _check_local_grade_record(value['_local_grade_layers'])
         if '_effect_recovery' in value:
             _check_effect_recovery_record(value['_effect_recovery'])
+        if '_manual_liquify' in value:
+            _check_manual_liquify_record(value['_manual_liquify'])
         if value.get("__dc__") == "RepairOp":
             fields = _repair_fields(value, assets)
             cls = (dc_types or {}).get("RepairOp", RepairOp)
@@ -687,6 +719,8 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
     if recipe is not None:
         try:
             recipe = WB.normalize_state(recipe)
+            if project.get("schema_version") == SCHEMA:
+                _check_manual_liquify_record(recipe.get("_manual_liquify"))
             for key in _REPAIR_STACKS.intersection(recipe):
                 validate_repair_ops(recipe[key], shape=recipe.get("_proxy"))
         except ValueError as error:
@@ -695,7 +729,8 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
     dropped: list = []
     assets = dict(project.get("assets", {}))
     enc = encode(recipe, assets, dropped, "recipe") if recipe is not None else None
-    _validate_encoded_repairs(enc, assets, allow_legacy=False)
+    _validate_encoded_repairs(enc, assets, allow_legacy=False,
+                              require_manual_liquify=(project.get("schema_version") == SCHEMA))
     project["assets"] = assets
     row = find_doc(project, fp["path"])
     if row is None:
@@ -729,8 +764,15 @@ def active_recipe(project: dict, path: str, dc_types: dict | None = None) -> obj
     vid = row.get("active_version")
     for v in row.get("versions", []):
         if v["id"] == vid:
+            recipe = v.get("recipe")
+            if project.get("schema_version") == SCHEMA and recipe is not None:
+                if type(recipe) is not dict:
+                    raise ProjectError("Project v7 recipe must be an object")
+                _check_manual_liquify_record(recipe.get("_manual_liquify"))
+                _validate_encoded_repairs(recipe, project.get("assets") or {}, allow_legacy=False,
+                                          require_manual_liquify=True)
             dropped: list = []
-            return decode(v.get("recipe"), project.get("assets") or {}, dropped,
+            return decode(recipe, project.get("assets") or {}, dropped,
                           "recipe", dc_types), dropped
     raise ProjectError(f"{path} 的活动版本 {vid!r} 在 versions 里找不到（半个配方）")
 

@@ -5,7 +5,7 @@ import json
 import numpy as np
 import pytest
 
-from lumaretouch_engine import project as P
+from lumaretouch_engine import project as P, manual_liquify_state as ML
 from lumaretouch_engine import white_balance_recipe as WB
 from lumaretouch_engine.repair_record import RepairOp, check_repair_fields, validate_repair_ops
 
@@ -22,7 +22,7 @@ def fixture(tmp_path):
     weight = np.arange(120, dtype=np.uint8).reshape(10, 12)
     heal = RepairOp(1, weight)
     patch = RepairOp(2, weight.copy(), patch_params(), kind="source_patch")
-    recipe = {"_repair_ops": [heal, patch], "_redo_ops": [copy.deepcopy(patch)], "_proxy": (10, 12)}
+    recipe = {"_manual_liquify": ML.empty(), "_repair_ops": [heal, patch], "_redo_ops": [copy.deepcopy(patch)], "_proxy": (10, 12)}
     P.add_doc(project, str(source), recipe, version_id="live")
     return project, source, tmp_path / "repair.json"
 
@@ -131,12 +131,12 @@ def test_repair_encode_failures_do_not_append_dropped_or_change_project(tmp_path
     bad = RepairOp(3, np.ones((10, 12), np.uint8), patch_params(), "source_patch")
     bad.params["version"] = "unknown"
     with pytest.raises(P.ProjectError):
-        P.add_doc(project, str(source), {"_repair_ops": [bad]}, version_id="live")
+        P.add_doc(project, str(source), {"_manual_liquify": ML.empty(), "_repair_ops": [bad]}, version_id="live")
     assert project == before
     bad.params = patch_params()
     monkeypatch.setattr(P, "MAX_ASSET_BYTES", 1)
     with pytest.raises(P.ProjectError, match="data loss"):
-        P.add_doc(project, str(source), {"_repair_ops": [bad]}, version_id="live")
+        P.add_doc(project, str(source), {"_manual_liquify": ML.empty(), "_repair_ops": [bad]}, version_id="live")
     assert project == before
 
 

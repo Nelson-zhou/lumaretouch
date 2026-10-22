@@ -18,6 +18,7 @@ from .levels_stage import LevelsStage
 from .fabric_stage import FabricStage
 from .local_grade_stage import LocalGradeStage
 from .effect_recovery_stage import EffectRecoveryStage
+from .manual_liquify_stage import ManualLiquifyStage
 
 import math
 from dataclasses import dataclass
@@ -111,6 +112,8 @@ class PreviewPipeline:
         self.local_grade_layers = LocalGradeStage(self.device, (h, w))
         self.effect_recovery = EffectRecoveryStage(self.device, (h, w))
         self._effect_recovery_key = None
+        self.manual_liquify = ManualLiquifyStage(self.device, (self.h, self.w), self.high_precision_warp)
+        self._manual_liquify_key = None
         # 源图 float 与 uint8 都留着：float 供滤波，uint8 供"恢复原图"这类需要原始像素的操作
         self.src_u8: torch.Tensor | None = None
         self.src_f32: torch.Tensor | None = None
@@ -296,6 +299,8 @@ class PreviewPipeline:
         self._local_grade_layers_key = None
         self.effect_recovery = EffectRecoveryStage(self.device, (self.h, self.w))
         self._effect_recovery_key = None
+        self.manual_liquify = ManualLiquifyStage(self.device, (self.h, self.w), self.high_precision_warp)
+        self._manual_liquify_key = None
         self.src_f32 = src_f32
         self.frame_gpu = torch.empty((self.h, self.w, 4), dtype=torch.uint8, device=self.device)
         self.frame_gpu[..., 3] = 255
@@ -480,7 +485,8 @@ class PreviewPipeline:
         # Actual order: repair/light + smoothing/recovery -> fabric/recovery ->
         # automatic deform -> enhance -> exposure -> levels -> curves -> HSL ->
         # LUT -> legacy grade -> independent local grades -> background/recovery
-        # -> geometry. Neither deformation nor grade is the whole graph's tail.
+        # -> manual liquify -> geometry. Source masks stay at their own consumers;
+        # the final manual stage moves the complete processed RGB only.
         # Recovery at an operator mixes only that operator's own input/output;
         # later effects continue to consume the recovered pixels normally.
         out = self.effect_recovery.apply('fabric_fine', out, self.fabric.apply(out))
@@ -494,7 +500,9 @@ class PreviewPipeline:
         if scope_tap is not None: scope_tap("curves-input", out)
         out = self.apply_grade(self.apply_lut(self.apply_hsl(self.apply_curves(out))))
         out = self.local_grade_layers.apply(out, self.align_source_grade_mask)
-        out = self.apply_geometry(self.apply_background(out))
+        out = self.apply_background(out)
+        out = self.manual_liquify.apply(out)
+        out = self.apply_geometry(out)
         if scope_tap is not None: scope_tap("output", out)
         return out
 
@@ -1616,6 +1624,14 @@ class PreviewPipeline:
     def effect_recovery_resident_bytes(self) -> int:
         """Disposable per-operator uint8 masks, not persisted image buffers."""
         return self.effect_recovery.resident_bytes()
+
+    def manual_liquify_resident_bytes(self) -> int:
+        """Disposable inverse/protection field and prepared sampler, not RGB."""
+        return self.manual_liquify.resident_bytes()
+
+    @property
+    def last_manual_liquify_ms(self):
+        return self.manual_liquify.last_ms
 
     @property
     def last_local_grade_ms(self):

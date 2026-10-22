@@ -37,10 +37,12 @@ def render_review(engine, stage):
     from .fabric_controller import sync as fabric
     from .local_mask_state import sync as masks
     from .local_grade_runtime import sync as grades
+    from .manual_liquify_runtime import sync as manual
     fabric(engine)
     masks(engine, strict=True)
     grades(engine, strict=True)
     R.sync(engine, strict=True)
+    manual(engine, strict=True)
     pipe = engine._vram
     old = pipe.effect_recovery
     strength, channel = engine._retouch_render_args()

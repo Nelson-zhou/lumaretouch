@@ -57,6 +57,11 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
                       scale=int(snap.get("scale", 1)),
                       upscale_backend=str(snap.get("upscale_backend", "lanczos3")),
                       sharpen_amount=float(snap.get("sharpen", 0.0)))
+    # Source-bound final shaping must be checked before the generic-export return.
+    # A nonempty manual recipe cannot be copied OR silently omitted across photos.
+    from .manual_liquify_runtime import configure_export as configure_manual_liquify
+    configure_manual_liquify(spec, snap, (eh, ew), for_document=for_document)
+    spec.check_manual_liquify()
     from .effect_recovery_runtime import configure_export as configure_effect_recovery
     configure_effect_recovery(spec, snap, (eh, ew), for_document=for_document)
     spec.check_effect_recovery()
@@ -184,7 +189,7 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     # _capture_state 把整份 _bg（含 matte/bg/backend/tol/softness）落进快照；导出这一路
     # 只做两件事——按导出尺寸重采样覆盖度（与 grade_mask 同一 resample_field 入口，
     # 双线性、uint8），并把 [0,1] 三分量背景色原样带到 spec.bg_ref。链序由 PreviewPipeline
-    # 保证：apply_grade 之后、apply_geometry 之前 apply_background——与预览逐帧那一次同源。
+    # 保证：apply_grade 之后、手动液化和 apply_geometry 之前 apply_background——与预览逐帧同源。
     _bgs = snap.get("_bg") or {}
     if _bgs.get("active") and (_bgs.get("matte") is None or _bgs.get("bg") is None):
         skipped.append("bg（换底已启用但缺少遮罩或背景色，不能静默省略）")

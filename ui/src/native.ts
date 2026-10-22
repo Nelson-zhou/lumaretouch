@@ -92,6 +92,7 @@ export interface ImageReady {
 /** 一格底片条上"这张调了什么"（引擎按图层数与开关报，不靠前端自己看像素）。 */
 export interface SessionEdits {
   effect_recovery?: number;
+  manual_liquify?: number;
   curves?: boolean;
   levels?: boolean;
   repair: number;
@@ -139,6 +140,7 @@ export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_pre
 
 export interface DocState {
   effect_recovery?: import("./effectRecovery/model").RecoveryReport;
+  manual_liquify?: import("./manualLiquify/model").LiquifyReport;
   local_masks?: import("./localMasks/model").LocalMaskReport;
   fabric?: import("./fabric/FabricPanel").FabricState;
   document_id?: string;
@@ -920,6 +922,7 @@ export interface EngineStatus {
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
     effect_recovery_protocol?: number;
+    manual_liquify_protocol?: number;
     local_grade_live_protocol?: number;
     source_patch_capture_protocol?: number;
     source_patch_result_protocol?: number;

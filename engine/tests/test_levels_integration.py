@@ -39,10 +39,10 @@ def test_levels_history_gesture_and_snapshot_export_contract():
 
 def test_project_file_and_module_preset_round_trip(tmp_path):
     from PIL import Image
-    from lumaretouch_engine import project as P,scope as S
+    from lumaretouch_engine import project as P,scope as S,manual_liquify_state as ML
     path=tmp_path/'source.png';Image.fromarray(np.full((32,24,3),100,np.uint8)).save(path)
     original=path.read_bytes();project=P.new_project('levels',str(tmp_path))
-    P.add_doc(project,str(path),{'_levels':recipe()});saved=P.project_path_for(str(tmp_path),'levels')
+    P.add_doc(project,str(path),{'_manual_liquify':ML.empty(),'_levels':recipe()});saved=P.project_path_for(str(tmp_path),'levels')
     P.save(project,saved);restored,dropped=P.active_recipe(P.load(saved),str(path))
     assert dropped==[] and restored['_levels']==recipe() and path.read_bytes()==original
     preset=S.validate_preset({'schema':S.PRESET_SCHEMA,'id':'levels-test','name':'Levels','kind':'custom',

@@ -15,7 +15,7 @@ import os
 import numpy as np
 import pytest
 
-from lumaretouch_engine import project as P
+from lumaretouch_engine import project as P, manual_liquify_state as ML
 
 
 @dataclasses.dataclass
@@ -37,7 +37,7 @@ def src(tmp_path):
 
 
 def _recipe():
-    return {"_strength": 0.4, "_params": {"radius": 12, "eps": 0.02},
+    return {"_manual_liquify": ML.empty(), "_strength": 0.4, "_params": {"radius": 12, "eps": 0.02},
             "_grade": (0.1, -0.2, 0.0, 0.8), "_exposure": (0.5, -100.0, 0.0),
             "_crop_rect": (0.1, 0.2, 0.7, 0.95), "_crop_rotation": -7.5,
             "_lut": None, "_lut_amount": 1.0, "_channel": "skin",

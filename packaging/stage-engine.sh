@@ -15,6 +15,11 @@ mkdir -p "$stage"
 bash "$here/build-curve-compiler.sh" "$stage/lumaretouch_engine/bin/curve-compiler"
 bash "$here/build-color-scopes.sh" "$stage/lumaretouch_engine/bin/color-scopes"
 bash "$here/build-local-masks.sh" "$stage/lumaretouch_engine/bin/local-masks"
+bash "$here/build-manual-liquify.sh" "$stage/lumaretouch_engine/bin/manual-liquify"
+# Distribute the exact adapted worker sources and LGPL/GPL texts with its binary.
+mkdir -p "$stage/lumaretouch_engine/third_party/manual_liquify"
+cp "$here/../core/manual_liquify/"{*.rs,README.md,COPYING.LESSER} "$stage/lumaretouch_engine/third_party/manual_liquify/"
+cp "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/manual_liquify/COPYING"
 
 # 运行时引导那两件（M5-c）也随包走：torch 不进 .deb（体积与许可），但
 # “按显卡装对应清单”这件事得有可执行的东西留在装机件里，而且它得在**没有仓库
