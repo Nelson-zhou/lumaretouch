@@ -8,7 +8,9 @@ export type MaskObject=Common & (
   {kind:'brush';points:Point[];axes:[Point,Point]}|
   {kind:'linear';start:Point;end:Point;cross:Point}|
   {kind:'radial';center:Point;axes:[Point,Point]}|
-  {kind:'color_range';color:[number,number,number];tolerance:number}|
+  // Omission is accepted only for legacy input. New/report-normalized objects
+  // carry a boolean; the engine rejects non-boolean values instead of coercing.
+  {kind:'color_range';color:[number,number,number];tolerance:number;invert?:boolean}|
   {kind:'luminance_range';low:number;high:number}|
   {kind:'semantic';channel:string}|
   {kind:'full'}|{kind:'prompted';selection:PromptSelection});
@@ -25,7 +27,7 @@ export function newMask(kind:MaskKind,channel=''):MaskObject {
     case 'brush':return {...common,kind,points:[],axes:[[.025,0],[0,.025]]};
     case 'linear':return {...common,kind,start:[.25,.5],end:[.75,.5],cross:[0,.5]};
     case 'radial':return {...common,kind,center:[.5,.5],axes:[[.25,0],[0,.25]]};
-    case 'color_range':return {...common,kind,color:[.5,.5,.5],tolerance:.15};
+    case 'color_range':return {...common,kind,color:[.5,.5,.5],tolerance:.15,invert:false};
     case 'luminance_range':return {...common,kind,low:.25,high:.75};
     case 'semantic':return {...common,kind,channel};
     case 'full':return {...common,kind};
@@ -39,7 +41,7 @@ export function geometryDescription(object:MaskObject):string {
     case 'brush':return `${object.points.length} 个保留路径点；源图坐标`;
     case 'linear':return `源图起点 (${p(object.start)})，终点 (${p(object.end)})`;
     case 'radial':return `源图中心 (${p(object.center)})；保留椭圆轴`;
-    case 'color_range':return '颜色范围使用原始源图的 sRGB 颜色距离';
+    case 'color_range':return `颜色范围使用原始源图的 sRGB 颜色距离${object.invert?'；已反转选区':''}`;
     case 'luminance_range':return '亮度范围使用原始源图的线性亮度 Y';
     case 'semantic':return `区域：${object.channel}`;
     case 'prompted':return 'AI提示选区；保留提示与模型绑定，参数编辑不改变选区来源';

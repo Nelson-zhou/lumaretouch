@@ -5,36 +5,45 @@ import {captureRect} from '../colorSampleGeometry';
 import {normalizedPoint,type Point} from '../sourcePatch/geometry';
 import type {LocalMaskOwner} from './useLocalMaskWorkflow';
 import {MASK_SOURCE_LABEL,type MaskObject} from './model';
+import {savedMaskDisplay} from './display';
 import '../sourcePatch/sourcePatch.css';
 interface Gesture {pointer:number;key:string;points:Point[]}
 export function LocalMaskOverlay({owner,clip,box,view}:{owner:LocalMaskOwner;clip:HTMLDivElement|null;box:{left:number;top:number;width:number;height:number};view:{zoom:number;x:number;y:number}}){
   const {state,workflow}=owner,frame=state.frame;
   const coverage=useRef<HTMLCanvasElement|null>(null);
   const canvas=useRef<HTMLCanvasElement|null>(null),surface=useRef<HTMLDivElement|null>(null),gesture=useRef<Gesture|null>(null);
+  const painted=useRef<typeof frame>(null);
   const [draft,setDraft]=useState<Point[]>([]),[hover,setHover]=useState<Point|null>(null);
   const rect=frame?captureRect(box,view,frame.descriptor):{left:0,top:0,width:0,height:0};
   const visible=box.width>0&&box.height>0&&rect.width>0&&rect.height>0;
   const object=state.mutation?.action==='upsert'?state.mutation.object:null;
   const key=[frame?.descriptor.capture_id,frame?.descriptor.ticket,box.left,box.top,rect.left,rect.top,rect.width,rect.height,object?.id].join(':');
   const diameter=useRef(.05);
+  const showCoverage=state.showOverlay||state.showLuminanceMap;
   useLayoutEffect(()=>{if(frame&&object?.kind==='brush')diameter.current=object.axes[0][0]*2;},[frame]);
   useLayoutEffect(()=>{
-    gesture.current=null;setDraft([]);setHover(null);
+    painted.current=null;
     if(!frame||!clip||!canvas.current||!visible)return;
-    let live=true,first=0,second=0;
     try{
       const node=canvas.current;node.width=frame.descriptor.width;node.height=frame.descriptor.height;
       const context=node.getContext('2d');if(!context)throw Error('无法创建原始源图画布');
       if(frame.descriptor.mask_overlay!==true||!coverage.current)throw Error('原始源图缺少真实蒙版覆盖数据');
-      const rgb=new Uint8ClampedArray(frame.rgba),tint=new Uint8ClampedArray(frame.rgba.length);
-      for(let i=0;i<rgb.length;i+=4){tint[i]=40;tint[i+1]=220;tint[i+2]=240;tint[i+3]=Math.round(rgb[i+3]*.55);rgb[i+3]=255;}
-      context.putImageData(new ImageData(rgb,node.width,node.height),0,0);
+      const display=savedMaskDisplay(frame,state.showLuminanceMap);
+      context.putImageData(new ImageData(display.base,node.width,node.height),0,0);
       const mask=coverage.current;mask.width=node.width;mask.height=node.height;
       const maskContext=mask.getContext('2d');if(!maskContext)throw Error('无法显示已保存蒙版覆盖');
-      maskContext.putImageData(new ImageData(tint,node.width,node.height),0,0);
-      first=requestAnimationFrame(()=>{second=requestAnimationFrame(()=>{if(live)void workflow.presented(frame.descriptor);});});
-      surface.current?.focus({preventScroll:true});
+      maskContext.putImageData(new ImageData(display.coverage,node.width,node.height),0,0);
+      painted.current=frame;
     }catch(error){workflow.failed(error);}
+  },[frame,clip,workflow,visible,state.showLuminanceMap]);
+  useLayoutEffect(()=>{
+    gesture.current=null;setDraft([]);setHover(null);
+    if(!frame||!clip||!visible||painted.current!==frame)return;
+    // A display toggle does not reset a gesture or produce a second source
+    // presentation acknowledgement. Only the original frozen frame is proved.
+    let live=true,first=0,second=0;
+    first=requestAnimationFrame(()=>{second=requestAnimationFrame(()=>{if(live)void workflow.presented(frame.descriptor);});});
+    surface.current?.focus({preventScroll:true});
     return()=>{live=false;cancelAnimationFrame(first);cancelAnimationFrame(second);};
   },[frame,clip,workflow,visible]);
   useLayoutEffect(()=>{const blur=()=>{if(gesture.current)workflow.gestureCancelled('窗口失焦，本次手势未保留');gesture.current=null;setDraft([]);};window.addEventListener('blur',blur);return()=>window.removeEventListener('blur',blur);},[workflow]);
@@ -99,14 +108,14 @@ export function LocalMaskOverlay({owner,clip,box,view}:{owner:LocalMaskOwner;cli
       onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();abandon();workflow.cancel();}}}/>
     {createPortal(<div className="sourcePatchPreview" aria-hidden="true">
       <canvas ref={canvas} style={{position:'absolute',left:rect.left,top:rect.top,width:rect.width,height:rect.height}}/>
-      <canvas ref={coverage} style={{position:'absolute',left:rect.left,top:rect.top,width:rect.width,height:rect.height,display:state.showOverlay?'block':'none'}}/>
+      <canvas ref={coverage} style={{position:'absolute',left:rect.left,top:rect.top,width:rect.width,height:rect.height,display:showCoverage?'block':'none'}}/>
       <svg className="sourcePatchShapes" width={rect.width} height={rect.height} viewBox={`0 0 ${d.width} ${d.height}`} preserveAspectRatio="none" style={{left:rect.left,top:rect.top}}>
         {contours(shown)}
         {sampling&&hover&&<circle cx={hover[0]*d.width} cy={hover[1]*d.height} r="4" fill="none" stroke="#fff" vectorEffect="non-scaling-stroke"/>}
         {editable&&object?.kind==='brush'&&hover&&<circle cx={hover[0]*d.width} cy={hover[1]*d.height} r={diameter.current*Math.min(d.width,d.height)/2} fill="none" stroke="#ffb35c" vectorEffect="non-scaling-stroke"/>}
       </svg>
-      <div className="sourcePatchViewLabel">{MASK_SOURCE_LABEL}{d.mask_suspended?`；已保存蒙版暂停：${d.mask_suspended}`:state.showOverlay?'；青色：已保存组合范围':''}</div>
-      <div className="sourcePatchViewHint">{state.draw?'橙色仅表示本次几何草稿，不代表合成蒙版；拖动可重画，面板点击应用。':sampling?'点击源图取样：8 位代理近似值；青色仍是已保存范围，不是本次参数预览。':rangeMode?'此画面未提供采样有效域，吸管不可用；可在面板手动设定范围。':'原始源图已冻结；请在蒙版面板确认或关闭。'}</div>
+      <div className="sourcePatchViewLabel">{state.showLuminanceMap?'源图亮度诊断：8 位代理 RGB → 线性 Y → 显示灰度，不是最终效果或原图精度验证':MASK_SOURCE_LABEL}{d.mask_suspended?`；已保存蒙版暂停：${d.mask_suspended}`:showCoverage?'；青色：已保存组合范围（不是本次草稿）':''}</div>
+      <div className="sourcePatchViewHint">{state.showLuminanceMap?'灰色棋盘表示构图填充，不参与亮度；吸管仍读原始 RGB，不读灰度或青色。':''}{state.draw?'橙色仅表示本次几何草稿，不代表合成蒙版；拖动可重画，面板点击应用。':sampling?'点击源图取样：8 位代理近似值；参数或反相修改需应用后重新查看已保存范围。':rangeMode?'此画面未提供采样有效域，吸管不可用；可在面板手动设定范围。':'原始源图已冻结；请在蒙版面板确认或关闭。'}</div>
     </div>,clip)}
   </>;
 }

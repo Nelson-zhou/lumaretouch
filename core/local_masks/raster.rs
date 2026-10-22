@@ -94,7 +94,7 @@ pub fn render(request: &crate::wire::Request<'_>, work: &mut u64) -> Result<Vec<
                         let u = inverse(*axes, [p[0]-center[0],p[1]-center[1]]);
                         (1.-u[0].hypot(u[1])).clamp(0.,1.)
                     },
-                    Object::Color { color, tolerance } => {
+                    Object::Color { color, tolerance, invert } => {
                         let offset = request.rgb.ok_or("missing immutable source RGB")?+n*12;
                         let mut distance = 0.;
                         for (c, target) in color.iter().enumerate() {
@@ -106,7 +106,11 @@ pub fn render(request: &crate::wire::Request<'_>, work: &mut u64) -> Result<Vec<
                             distance += (v-target)*(v-target);
                         }
                         // Normalized encoded-sRGB Euclidean distance, not a Lab/Delta-E claim.
-                        if (distance/3.).sqrt() <= *tolerance { 1. } else { 0. }
+                        let membership = if (distance/3.).sqrt() <= *tolerance { 1. } else { 0. };
+                        // Invert only a valid source-domain range, before the
+                        // existing feather -> opacity -> composition stages.
+                        // Missing/nonfinite operands above still fail closed.
+                        if *invert { 1.-membership } else { membership }
                     },
                     Object::Luminance { low, high } => {
                         let offset = request.rgb.ok_or("missing immutable source RGB")?+n*12;

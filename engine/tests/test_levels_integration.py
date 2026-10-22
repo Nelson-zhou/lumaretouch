@@ -113,18 +113,21 @@ def test_actual_protocol_inspection_undo_and_stale_document_fence(engine,tmp_pat
     assert L.is_identity(event['spec'])
 
 
-def test_failed_switch_invalidates_old_token_before_recipe_replacement(monkeypatch):
+def test_failed_switch_invalidates_old_token_before_recipe_replacement(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    source = tmp_path / "new-photo.png"
+    source.write_bytes(b"source identity fixture; decoding is mocked")
     from lumaretouch_engine import server,decode
     e=server.Engine('levels-switch-failure');e._load_id='old-document'
     events=[];installs=[]
     monkeypatch.setattr(server,'emit',events.append)
-    monkeypatch.setattr(decode,'load_rgb',lambda *a,**k:object())
+    monkeypatch.setattr(decode,'load_rgb',lambda *a,**k:SimpleNamespace(src_w=16,src_h=12))
     monkeypatch.setattr(e,'_remember_current',lambda:None)
     monkeypatch.setattr(e,'_effective_device',lambda:'cpu')
     def fail_attach(*a,**k):raise RuntimeError('injected attach failure')
     monkeypatch.setattr(e,'_open_session',fail_attach)
     with pytest.raises(RuntimeError,match='injected attach failure'):
-        e.cmd_load_image({'path':'/candidate/new-photo.png'})
+        e.cmd_load_image({'path':str(source)})
     assert e._load_id=='' and e.doc_state()['document_id']==''
     monkeypatch.setattr(e,'_guard_editable',lambda name:None)
     e.cmd_levels({'action':'set','spec':recipe(),'document_id':'old-document','request_id':'stale'})
@@ -134,12 +137,16 @@ def test_failed_switch_invalidates_old_token_before_recipe_replacement(monkeypat
     assert events[-1]['event']=='curves_result' and not events[-1]['success']
 
 
-def test_decode_failure_does_not_invalidate_current_document(monkeypatch):
+def test_decode_failure_does_not_invalidate_current_document(monkeypatch, tmp_path):
+    source = tmp_path / "bad-photo.png"
+    source.write_bytes(b"source identity fixture; decoder rejects it")
     from lumaretouch_engine import server,decode
     e=server.Engine('levels-decode-failure');e._load_id='still-current'
-    monkeypatch.setattr(server,'emit',lambda event:None)
+    events=[]
+    monkeypatch.setattr(server,'emit',events.append)
     monkeypatch.setattr(e,'_effective_device',lambda:'cpu')
     def fail_decode(*a,**k):raise ValueError('decode rejected')
     monkeypatch.setattr(decode,'load_rgb',fail_decode)
-    e.cmd_load_image({'path':'/candidate/bad-photo.png'})
+    e.cmd_load_image({'path':str(source)})
+    assert 'decode rejected' in events[-1]['error']
     assert e._load_id=='still-current'

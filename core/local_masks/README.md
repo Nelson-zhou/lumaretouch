@@ -20,7 +20,10 @@ product interaction, or acceptance was executed for this change.
   ownership, history, persistence, consumer suspension, and export attachment.
 
 Requirements consulted: manual-text lines 615–616 and frozen refine PC-32454
-controls 11–24. This does not claim AI smart/free/quick selections, edge
+controls 11–24, plus child 72 colour selection inversion. Child 75's separate
+saved-coverage luminance display is documented in
+[`mask-range-inversion-and-luminance-map.md`](../../docs/development/mask-range-inversion-and-luminance-map.md).
+This does not claim AI smart/free/quick selections, edge
 expand/contract/smoothing, batch synchronization, presets, or new semantic models.
 
 ## Retained recipe
@@ -34,7 +37,7 @@ An object always contains `id`, `name`, `enabled`, `operation`, `kind`, `opacity
 | brush | `points:[[x,y],...]`, `axes:[[dx,dy],[dx,dy]]` |
 | linear | `start:[x,y]`, `end:[x,y]`, `cross:[dx,dy]` |
 | radial | `center:[x,y]`, `axes:[[dx,dy],[dx,dy]]` |
-| color_range | `color:[r,g,b]`, `tolerance:0..1` |
+| color_range | `color:[r,g,b]`, `tolerance:0..1`, `invert:boolean` (legacy omission means false) |
 | luminance_range | `low:0..1`, `high:0..1` |
 | semantic | `channel:string` |
 | full | No extra fields |
@@ -57,6 +60,17 @@ Luminance uses sRGB decoding and Y = .2126 R + .7152 G + .0722 B; interval endpo
 are inclusive. RGB must be immutable pre-retouch source RGB, never displayed,
 retouched or deformed output. Extended finite source values are not clipped into
 membership. Semantic inputs are same-domain finite probabilities in [0,1].
+
+Only colour ranges support inversion in this schema. After validating the source
+sample, `invert:true` complements that object's range membership, then the usual
+feather, opacity and ordered composition run. It never inverts the composed stack
+or the display alpha. `invert:false` uses the exact old membership branch. Missing
+legacy fields normalize to false; integers, null and strings are rejected, and
+other object kinds cannot gain this field. New canonical colour objects include
+the field, so older strict readers reject rather than silently dropping inversion.
+Source masks are rasterized before projection: rotation padding is not a source
+pixel that can be selected by inversion. Missing RGB/semantic/prompted dependencies
+still fail the entire composition, even for inverted or subtract operands.
 
 Feather 0–100 means spatial box-filter radius 0–5% of the shorter original source
 axis, rounded up to integer sample support at each requested resolution. It is not
@@ -110,11 +124,16 @@ The largest tile packet may still include RGB and several semantic fields, so
 these limits do not constitute a guarantee of total renderer memory availability.
 Transport uses Unix selectable/nonblocking pipes, matching the packaged Linux app.
 
-Each request is framed by a little-endian u32 payload length. Payload: `LMR1`,
+Each request is framed by a little-endian u32 payload length. Payload: `LMR2`,
 13 u32s (source W,H; tile x,y,W,H; core x,y,W,H relative to tile; object count;
 RGB flag; semantic count), object records, optional RGB f32 LE triplets, then one
 f32 LE tile per semantic channel. Each object has u8 kind, u8 operation, f64 opacity,
 u32 radius, then the documented numeric geometry (brush starts with u32 count).
+Colour records contain four f64s (RGB and tolerance), then one strict u8 inversion
+flag (0 or 1). Other object records are unchanged. Both producer and worker require
+LMR2; LMR1 is rejected, so a stale installed worker cannot ignore inversion or
+misalign the following pixel data. Retained JSON stays v1 with the narrowly
+specified legacy omission above; the worker wire version is independent.
 Semantic records carry u32 channel index. Object names/ids remain in retained JSON;
 they are not executable worker input. Responses are u32 size then core uint8 bytes.
 Both sides enforce exact lengths. EOF closes the worker; failure returns no mask.

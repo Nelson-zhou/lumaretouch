@@ -57,9 +57,17 @@ contours are explicitly geometry guides, not proof of a selected pixel range.
 Range eyedroppers sample the frozen RGB8 proxy and are explicitly approximate;
 exact producer-owned valid row spans exclude rotation padding. Manual ranges
 remain usable if pick-validity metadata exceeds its bounded budget. Controls
-70/73 have this sampling path; 72 inverse display and 75 brightness-map display
-remain unimplemented, not relabelled as ordinary overlay. Range edits must be applied then viewed in a new saved-mask capture to see their
-actual coverage. Per-object feather is source-normalized; its exact kernel,
+70/73 have this sampling path. Child 72 is now written as actual retained
+colour-range selection inversion, not display inversion; child 75 is written as
+linear-Y grayscale from the frozen RGB8 proxy plus actual saved-composition
+coverage, not a CSS grayscale substitute or an unapplied draft preview. Both
+remain unrun and unaccepted. The luminance map is display-only, preserves source
+RGBA/proofs/history, and requires producer-owned valid rows to exclude padding.
+Missing validity or suspended coverage disables that map explicitly. See
+[range inversion and luminance-map scope](mask-range-inversion-and-luminance-map.md)
+for exact frozen IDs, official/community sources, LMR2 worker requirements, and
+the focused acceptance handoff. Range edits must be applied then viewed in a
+new saved-mask capture to see their actual coverage. Per-object feather is source-normalized; its exact kernel,
 range formulas and work budgets are documented in core/local_masks/README.md.
 
 ## Semantic ownership and failure boundaries

@@ -4,6 +4,7 @@ import type {CloneStampCaptureStatus} from '../cloneStamp/workflow';
 import type {MaskMutation,MaskObject,PromptAcceptance} from './model';
 import type {Point} from '../sourcePatch/geometry';
 import type {RangePatch} from './RangeControls';
+import {luminanceMapUnavailableReason,sourceLuminanceFromSrgb8} from './display.ts';
 export interface LocalMaskContext {enabled:boolean;canStart?:boolean;documentId:string;contextKey:string;reason?:string}
 export interface LocalMaskRequest {request_id:string;capture_id:string;ticket:string;document_id:string;mutation:MaskMutation}
 export interface LocalMaskTransport {
@@ -17,10 +18,10 @@ export interface LocalMaskTransport {
 }
 export interface LocalMaskState {
   phase:'idle'|'arming'|'painting'|'target'|'sending'|'waiting'|'success'|'failure'|'uncertain';
-  showOverlay:boolean;frame:VerifiedCapture|null;mutation:MaskMutation|null;draw:boolean;geometryReady:boolean;request:LocalMaskRequest|null;message:string;
+  showOverlay:boolean;showLuminanceMap:boolean;frame:VerifiedCapture|null;mutation:MaskMutation|null;draw:boolean;geometryReady:boolean;request:LocalMaskRequest|null;message:string;
 }
 interface CaptureOwner {id:string;ticket:string|null;documentId:string;contextKey:string;ack:Promise<boolean>|null}
-const initial=():LocalMaskState=>({phase:'idle',showOverlay:true,frame:null,mutation:null,draw:false,geometryReady:false,request:null,message:''});
+const initial=():LocalMaskState=>({phase:'idle',showOverlay:true,showLuminanceMap:false,frame:null,mutation:null,draw:false,geometryReady:false,request:null,message:''});
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const count=(v:unknown)=>Number.isSafeInteger(v)&&Number(v)>=0;
 function bounded<T>(promise:Promise<T>,milliseconds:number):Promise<T>{
@@ -107,9 +108,9 @@ export function createLocalMaskWorkflow(api:LocalMaskTransport,options:{refresh:
     const object=state.mutation.object;
     let next:MaskObject;
     if(object.kind==='color_range'){
-      const color=patch.color??object.color,tolerance=patch.tolerance??object.tolerance;
-      if(color.length!==3||!color.every(n=>Number.isFinite(n)&&n>=0&&n<=1)||!Number.isFinite(tolerance)||tolerance<0||tolerance>1)return;
-      next={...object,color:[...color],tolerance};
+      const color=patch.color??object.color,tolerance=patch.tolerance??object.tolerance,invert=patch.invert??object.invert??false;
+      if(color.length!==3||!color.every(n=>Number.isFinite(n)&&n>=0&&n<=1)||!Number.isFinite(tolerance)||tolerance<0||tolerance>1||typeof invert!=='boolean')return;
+      next={...object,color:[...color],tolerance,invert};
     }else if(object.kind==='luminance_range'){
       const low=patch.low??object.low,high=patch.high??object.high;
       if(!Number.isFinite(low)||!Number.isFinite(high)||low<0||high>1||low>high)return;
@@ -128,8 +129,8 @@ export function createLocalMaskWorkflow(api:LocalMaskTransport,options:{refresh:
     const color=[0,1,2].map(i=>state.frame!.rgba[offset+i]/255) as [number,number,number];
     if(object.kind==='color_range')range({color});
     else if(object.kind==='luminance_range'){
-      const linear=color.map(n=>n<=.04045?n/12.92:Math.pow((n+.055)/1.055,2.4));
-      const value=linear[0]*.2126+linear[1]*.7152+linear[2]*.0722,width=object.high-object.low;
+      const rgb=state.frame.rgba;
+      const value=sourceLuminanceFromSrgb8(rgb[offset],rgb[offset+1],rgb[offset+2]),width=object.high-object.low;
       const low=Math.max(0,Math.min(1-width,value-width/2));range({low,high:low+width});
     }else return;
     publish({message:'已用显示用 8 位源图代理取样（近似）；可调整范围参数，确认后应用'});
@@ -173,6 +174,13 @@ export function createLocalMaskWorkflow(api:LocalMaskTransport,options:{refresh:
   }
   return {snapshot:()=>state,subscribe:(f:(s:LocalMaskState)=>void)=>{listeners.add(f);return()=>{listeners.delete(f);};},context:updateContext,start,cancel,failed,presented,geometry,range,sample,acceptPrompted,apply,
     overlay(showOverlay:boolean){publish({showOverlay});},
+    luminanceMap(showLuminanceMap:boolean){
+      if(state.phase!=='target'||!state.frame)return;
+      const reason=showLuminanceMap?luminanceMapUnavailableReason(state.frame.descriptor):null;
+      if(reason){publish({message:reason});return;}
+      // Display-only: no mutation, receipt, presentation proof, or history edit.
+      publish({showLuminanceMap});
+    },
     beginGeometry(){if(state.phase==='target'&&state.draw)publish({geometryReady:false});},
     gestureCancelled(message:string){if(state.phase==='target')publish({message});},busy:pending,capturing:()=>!!owner,
     externalEdit(){if(owner&&!pending())cancel('照片正在调整，未提交蒙版已取消');},

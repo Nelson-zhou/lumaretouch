@@ -33,7 +33,7 @@ OPERATIONS = ('add', 'subtract', 'intersect')
 COMMON = {'id', 'name', 'enabled', 'operation', 'kind', 'opacity', 'feather'}
 EXTRA = {'full': set(), 'brush': {'points', 'axes'},
          'linear': {'start', 'end', 'cross'}, 'radial': {'center', 'axes'},
-         'color_range': {'color', 'tolerance'}, 'luminance_range': {'low', 'high'},
+         'color_range': {'color', 'tolerance', 'invert'}, 'luminance_range': {'low', 'high'},
          'semantic': {'channel'}, 'prompted': {'selection'}}
 
 
@@ -72,7 +72,10 @@ def check_object(raw):
     if type(raw) is not dict or raw.get('kind') not in KINDS:
         raise ValueError('Unsupported local mask object')
     kind = raw['kind']
-    if set(raw) != COMMON | EXTRA[kind]:
+    fields = COMMON | EXTRA[kind]
+    # Pre-inversion v1 recipes remain valid and select exactly the old range.
+    # Only this one legacy omission is allowed; other kinds stay strict.
+    if set(raw) != fields and not (kind == 'color_range' and set(raw) == fields - {'invert'}):
         raise ValueError('Invalid local mask object fields')
     ident, name = raw['id'], raw['name']
     if type(ident) is not str or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', ident):
@@ -99,7 +102,11 @@ def check_object(raw):
     elif kind == 'color_range':
         if not isinstance(raw['color'], (list, tuple)) or len(raw['color']) != 3:
             raise ValueError('Colour range requires encoded-sRGB colour')
-        out.update(color=[number(v, 0, 1) for v in raw['color']], tolerance=number(raw['tolerance'], 0, 1))
+        invert = raw.get('invert', False)
+        if type(invert) is not bool:
+            raise ValueError('Colour range inversion must be a boolean')
+        out.update(color=[number(v, 0, 1) for v in raw['color']],
+                   tolerance=number(raw['tolerance'], 0, 1), invert=invert)
     elif kind == 'luminance_range':
         low, high = number(raw['low'], 0, 1), number(raw['high'], 0, 1)
         if low > high:
@@ -243,6 +250,7 @@ def _objects_packet(objects, shape, channels):
             packet += _f64(obj['center']+[v for a in obj['axes'] for v in a])
         elif kind == 'color_range':
             packet += _f64(obj['color']+[obj['tolerance']])
+            packet += struct.pack('<B', int(obj['invert']))
         elif kind == 'luminance_range':
             packet += _f64([obj['low'], obj['high']])
         elif kind == 'semantic':
@@ -371,7 +379,7 @@ def raster(stack, shape, rgb=None, semantic=None):
     try:
         for tile in _tiles(shape, plan['radius']):
             x, y, w, h, cx, cy, cw, ch = tile
-            packet = bytearray(b'LMR1')
+            packet = bytearray(b'LMR2')
             packet += struct.pack('<13I', shape[1], shape[0], *tile, len(objects), int(needs_rgb), len(channels))
             packet += body
             if needs_rgb:

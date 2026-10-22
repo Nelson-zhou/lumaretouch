@@ -1,4 +1,4 @@
-//! Strict bounded LMR1 tile protocol. Geometry is decoded independently of Python.
+//! Strict bounded LMR2 tile protocol. Geometry is decoded independently of Python.
 pub const MAX_BYTES: usize = 128*1024*1024;
 pub const MAX_WORK: u64 = 512_000_000;
 const MAX_TILE: usize = 2_000_000;
@@ -12,7 +12,7 @@ pub enum Object {
     Brush { points: Vec<[f64;2]>, axes: [[f64;2];2] },
     Linear { start: [f64;2], end: [f64;2], cross: [f64;2] },
     Radial { center: [f64;2], axes: [[f64;2];2] },
-    Color { color: [f64;3], tolerance: f64 },
+    Color { color: [f64;3], tolerance: f64, invert: bool },
     Luminance { low: f64, high: f64 },
     Semantic { index: usize },
 }
@@ -48,7 +48,7 @@ fn basis(value: [[f64;2];2]) -> Result<(), &'static str> {
 pub fn decode(bytes: &[u8]) -> Result<Request<'_>, &'static str> {
     if bytes.len() > MAX_BYTES { return Err("local mask packet exceeds budget"); }
     let mut r = Reader { bytes, offset: 0 };
-    if r.take(4)? != b"LMR1" { return Err("unsupported local mask wire version"); }
+    if r.take(4)? != b"LMR2" { return Err("unsupported local mask wire version"); }
     let shape = Shape { w: r.u32()?, h: r.u32()? };
     if shape.w == 0 || shape.h == 0 || shape.w > 65536 || shape.h > 65536 || shape.w*shape.h > 64_000_000 {
         return Err("local mask source exceeds pixel budget");
@@ -98,7 +98,14 @@ pub fn decode(bytes: &[u8]) -> Result<Request<'_>, &'static str> {
             3 => Object::Radial { center:r.point()?, axes:r.basis()? },
             4 => {
                 if rgb_flag != 1 { return Err("missing immutable source RGB"); }
-                Object::Color { color:[r.f64(0.,1.)?,r.f64(0.,1.)?,r.f64(0.,1.)?],tolerance:r.f64(0.,1.)? }
+                let color = [r.f64(0.,1.)?,r.f64(0.,1.)?,r.f64(0.,1.)?];
+                let tolerance = r.f64(0.,1.)?;
+                let invert = match r.u8()? {
+                    0 => false,
+                    1 => true,
+                    _ => return Err("invalid colour range inversion"),
+                };
+                Object::Color { color,tolerance,invert }
             },
             5 => {
                 if rgb_flag != 1 { return Err("missing immutable source RGB"); }

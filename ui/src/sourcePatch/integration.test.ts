@@ -4,9 +4,15 @@ import {readFileSync} from 'node:fs';
 
 const source=(name:string)=>readFileSync(new URL(`../${name}`,import.meta.url),'utf8');
 test('App owns one workflow outside conditional panels and exposes pending status independently',()=>{
-  const app=source('App.tsx');
-  assert.equal((app.match(/\buseSourcePatchWorkflow\(/g)??[]).length,1);
-  assert.ok(app.indexOf('const sourcePatch=useSourcePatchWorkflow')<app.indexOf('<RetouchPanel'));
+  const app=source('App.tsx'),owners=source('localMasks/useRetouchCaptureWorkflows.ts');
+  assert.equal((app.match(/\buseRetouchCaptureWorkflows\(/g)??[]).length,1);
+  assert.equal((app.match(/\buseSourcePatchWorkflow\(/g)??[]).length,0);
+  assert.equal((owners.match(/\buseSourcePatchWorkflow\(/g)??[]).length,1);
+  const ownerCall=app.indexOf('=useRetouchCaptureWorkflows(');
+  assert.ok(ownerCall>=0&&ownerCall<app.indexOf('<RetouchPanel'));
+  assert.match(app,/const \{sourcePatch,wbPicker,cloneStamp,localMasks\}=useRetouchCaptureWorkflows/);
+  assert.match(owners,/const sourcePatch=useSourcePatchWorkflow\(context,refresh\)/);
+  assert.match(owners,/return \{sourcePatch,wbPicker,cloneStamp,localMasks\}/);
   assert.match(app,/<SourcePatchStatus owner=\{sourcePatch\}/);
   assert.match(app,/<Viewer[^>]*sourcePatch=\{sourcePatch\}/);
   assert.match(app,/source_patch_capture_protocol===1&&caps\?\.source_patch_result_protocol===1/);
@@ -19,7 +25,7 @@ test('repair panel wires an independent panel, never maps source patch to heal',
   const panel=source('components/RetouchPanel.tsx');
   assert.match(panel,/fid === "PC-32482"[^\n]*props\.sourcePatchPanel/);
   assert.doesNotMatch(panel,/"PC-32482\|修补工具":\s*"brush\.heal"/);
-  assert.match(panel,/leaf\.path==='修补工具'&&props\.sourcePatchPanel\)return null/);
+  assert.match(panel,/if\(f\.id==='PC-32482'&&\(\(leaf\.path==='修补工具'&&props\.sourcePatchPanel\)\|\|\(leaf\.path==='仿制图章'&&props\.cloneStampPanel\)\)\)return null/);
   assert.doesNotMatch(panel,/本版未实现独立采样/);
 });
 test('viewer adds a separate overlay without replacing main mirror rendering',()=>{

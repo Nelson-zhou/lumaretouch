@@ -2,6 +2,7 @@ import {useEffect,useState} from 'react';
 import type {LocalMaskOwner} from './useLocalMaskWorkflow';
 import {drawingKind,geometryDescription,MASK_LABELS,newMask,OPERATION_LABELS,type LocalMaskReport,type MaskKind,type MaskMutation,type MaskObject,type MaskOperation} from './model';
 import {RangeControls} from './RangeControls';
+import {luminanceMapUnavailableReason} from './display';
 import './localMasks.css';
 import {PromptedMaskDialog} from '../promptedMasks/PromptedMaskDialog';
 export function LocalMaskPanel({owner,report,onStart,blocked=false}:{owner:LocalMaskOwner;report?:LocalMaskReport;onStart:(mutation:MaskMutation|null,draw?:boolean)=>void;blocked?:boolean}){
@@ -32,6 +33,7 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false}:{owner:Local
   };
   const canAdd=objects.length<64&&!(draft.kind==='full'&&objects.some(o=>o.kind==='full'));
   const invalidSemantic=draft.kind==='semantic'&&!channels.includes(draft.channel);
+  const luminanceUnavailable=luminanceMapUnavailableReason(state.frame?.descriptor??null);
   return <section className="localMaskPanel" aria-label="可组合局部蒙版" data-readonly-scopes>
     <strong>组合蒙版</strong>
     <small>只限制上方色相、饱和、明度与混入比例，不限制全局 LUT。几何与范围基于原始源图，不是形变后的最终画面。</small>
@@ -82,7 +84,10 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false}:{owner:Local
       </div>
       {selected&&drawingKind(draft.kind)&&<small>参数修改保留原有源图几何；重绘会替换选中对象的几何，不增加另一对象。</small>}
     </fieldset>
-    {active&&<label><input type="checkbox" checked={state.showOverlay} onChange={e=>workflow.overlay(e.target.checked)}/>显示已保存组合范围（青色）</label>}
+    {active&&<label><input type="checkbox" checked={state.showOverlay||state.showLuminanceMap} disabled={state.showLuminanceMap} onChange={e=>workflow.overlay(e.target.checked)}/>显示已保存组合范围（青色）</label>}
+    {active&&<label title={luminanceUnavailable??'仅切换源图亮度与已保存组合范围的诊断显示，不修改蒙版或历史'}><input type="checkbox" checked={state.showLuminanceMap} disabled={state.phase!=='target'||!!luminanceUnavailable} onChange={e=>workflow.luminanceMap(e.target.checked)}/>显示明亮度图（已保存组合范围）</label>}
+    {active&&state.frame&&luminanceUnavailable&&<small>亮度图不可用：{luminanceUnavailable}。仍可查看彩色源图并手动设定范围。</small>}
+    {active&&state.showLuminanceMap&&<small>灰度由原始源图 8 位代理的线性亮度 Y 计算，青色来自引擎已保存组合蒙版，均为代理诊断。未应用的亮度区间、颜色反相与其他草稿不在此图中；应用后请重新打开“查看已保存范围”。关闭此开关恢复彩色，不写历史。</small>}
     {active&&<small>青色为引擎计算的已保存范围，不包含本次尚未应用的参数或几何。原始源图仅用于定位，关闭编辑视图后查看最终调色结果。</small>}
     {active&&<div className="localMaskReview">
       <strong>{state.mutation?.action==='upsert'?`待应用：${state.mutation.object.name}`:state.mutation?.action==='delete'?`待删除：${objects.find(o=>o.id===(state.mutation as {id:string}).id)?.name??state.mutation.id}`:state.mutation?.action==='move'?`待移到第 ${state.mutation.index+1} 位：${objects.find(o=>o.id===(state.mutation as {id:string}).id)?.name??state.mutation.id}`:state.mutation?.action==='bind'?(state.mutation.enabled?'待绑定组合蒙版':'待恢复全图作用'):'查看已保存组合范围'}</strong>
