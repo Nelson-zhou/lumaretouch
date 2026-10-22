@@ -1,6 +1,6 @@
 # Product coverage checkpoint — 2026-10-22
 
-Latest published code checkpoint:1150ca6fe12b87e5a3f00180a6816949059fcc66. This updates the
+Published code checkpoint:ddc6a0790705af31f0733caa1aee48265d1b617b. This updates the
 older sampled audits, not a claim to have independently accepted every handbook
 requirement. The original product handbook and AI development package remain the
 scope; deferred real-device validation does not remove any feature.
@@ -35,12 +35,14 @@ must be read with subsequent corrections, not copied as today's missing-feature 
 2. Detailed portrait families: independent body, hair, makeup, clothing, hand/foot
    and many blemish/reshaping controls. One related slider does not close a family.
 3. Local editing: persisted composable mask-object stack, selectors/ranges/gradients,
-   independent clone, effect recovery and full liquify protection. Source-sampled
-   patch is now connected in code (see source-patch-tool.md), not yet accepted.
+   effect recovery and full liquify protection. Source-sampled patch and genuine
+   clone-stamp brush are connected in code (source-patch-tool.md / clone-stamp-tool.md),
+   not yet accepted.
 4. Multi-person/cross-image workflows: grouping, parameter-level inheritance and
    explicitly confirmed cross-image identity associations.
-5. Advanced delivery: layout/printing and other specified output workflows. Export
-   watermark code is connected; see export-watermark-implementation.md, not accepted.
+5. Advanced delivery: remaining output requirements beyond the connected watermark,
+   ordinary/ID-photo layout and explicit native print-dialog workflows. These code
+   paths are not accepted; see export-watermark-implementation.md / layout-print-workflow.md.
 6. Creative/generative tools and the separately requested optional extension flow.
 
 These are major groupings, not six equally sized tasks or a complete item-level count.

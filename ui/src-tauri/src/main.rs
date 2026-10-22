@@ -40,6 +40,7 @@ mod color_capture_api;
 mod source_patch_host;
 mod source_patch_capture_host;
 mod source_patch_api;
+mod clone_stamp_api;
 mod inspection_host;
 mod inspection_io;
 mod inspection_api;
@@ -665,7 +666,7 @@ impl AppState {
         if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
         let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
         let handle=guard.as_ref().ok_or_else(|| "引擎未启动".to_string())?;
-        if name=="batch" {batch_api::enqueue(self,handle,cmd)?;}else if name=="preset" {preset_api::enqueue(self,handle,cmd)?;}else if name=="white_balance" {white_balance_api::enqueue(self,handle,cmd)?;}else if name=="source_patch" {source_patch_api::enqueue(self,handle,cmd)?;}else{handle.send(cmd)?;}
+        if name=="batch" {batch_api::enqueue(self,handle,cmd)?;}else if name=="preset" {preset_api::enqueue(self,handle,cmd)?;}else if name=="white_balance" {white_balance_api::enqueue(self,handle,cmd)?;}else if name=="source_patch" || name=="clone_stamp" {source_patch_api::enqueue(self,handle,cmd)?;}else{handle.send(cmd)?;}
         if edited {
             *self.history_dirty.lock().unwrap() = true;
         }
@@ -2024,7 +2025,7 @@ fn main() {
             color_capture_api::capture_arm, color_capture_api::capture_status, color_capture_api::capture_frame,
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
             source_patch_api::source_patch_capture, source_patch_api::source_patch_capture_status, source_patch_api::source_patch_capture_frame,
-            source_patch_api::source_patch, source_patch_api::source_patch_result,
+            source_patch_api::source_patch, source_patch_api::source_patch_result, clone_stamp_api::clone_stamp,
             white_balance_capture_api::white_balance_capture, white_balance_capture_api::white_balance_capture_status, white_balance_capture_api::white_balance_capture_frame, white_balance_capture_api::white_balance_pick,
             project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
             report, quit

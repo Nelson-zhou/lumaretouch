@@ -10,7 +10,7 @@ import numpy as np
 
 
 DEFAULT_REPAIR = dict(smooth_iters=1, refine_iters=6, kappa=0.06, pad=32, grow=1.5)
-REPAIR_KINDS = ("heal", "source_patch")
+REPAIR_KINDS = ("heal", "source_patch", "clone_stamp")
 
 
 @dataclass
@@ -35,6 +35,9 @@ def check_repair_params(kind, params):
         raise ValueError(f"Unknown repair kind: {kind!r}")
     if type(params) is not dict:
         raise ValueError("Repair params must be an object")
+    if kind == "clone_stamp":
+        from .ops.clone_stamp import check_recipe
+        return check_recipe(params)
     if kind == "source_patch":
         from .ops.source_patch import check_recipe
         return check_recipe(params)

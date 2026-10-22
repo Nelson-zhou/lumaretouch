@@ -2,6 +2,8 @@ import {WhiteBalancePickerOverlay} from '../whiteBalance/WhiteBalancePickerOverl
 import type {WhiteBalancePickerOwner} from '../whiteBalance/useWhiteBalancePicker';
 import {ColorSampleOverlay} from './ColorSampleOverlay';
 import type {ColorSampler} from '../useColorSampler';
+import {CloneStampOverlay} from '../cloneStamp/CloneStampOverlay';
+import type {CloneStampOwner} from '../cloneStamp/useCloneStampWorkflow';
 import {SourcePatchOverlay} from '../sourcePatch/SourcePatchOverlay';
 import type {SourcePatchOwner} from '../sourcePatch/useSourcePatchWorkflow';
 import {composition,displayGeometry,frameAdmission,type DisplayGeometry} from "../previewComposition";
@@ -97,10 +99,10 @@ export default function Viewer({
   inspection,
   onInspectionState,
   colorSampler,
-  sourcePatch,whiteBalancePicker,
+  sourcePatch,whiteBalancePicker,cloneStamp,
 }: {
   colorSampler?:ColorSampler;
-  sourcePatch?:SourcePatchOwner;whiteBalancePicker?:WhiteBalancePickerOwner;
+  cloneStamp?:CloneStampOwner;sourcePatch?:SourcePatchOwner;whiteBalancePicker?:WhiteBalancePickerOwner;
   inspection?: { enabled:boolean; oneToOne:boolean; comparing:boolean; key:string; width:number; height:number };
   onInspectionState?: (state:InspectionUiState)=>void;
   active: boolean;
@@ -151,7 +153,7 @@ export default function Viewer({
 }) {
   const [sampleClip,setSampleClip]=useState<HTMLDivElement|null>(null);
   // 变换只加在显示层（镜像画布）上：GL 渲染源与测量回路一个字也不改
-  const coordinateLocked = !!whiteBalancePicker?.active || !!whiteBalancePicker?.pending || paintLocked || compareMode !== "single" || !!inspection?.enabled || !!sourcePatch?.active || !!sourcePatch?.pending;
+  const coordinateLocked = !!cloneStamp?.active || !!cloneStamp?.pending || !!whiteBalancePicker?.active || !!whiteBalancePicker?.pending || paintLocked || compareMode !== "single" || !!inspection?.enabled || !!sourcePatch?.active || !!sourcePatch?.pending;
   const invalidateInspection = useRef<()=>void>(()=>{});
   const brushActive = !!brush?.on && !coordinateLocked;
   const pickActive = !!pick?.on && !coordinateLocked;
@@ -737,6 +739,7 @@ export default function Viewer({
            title="滚轮缩放 · 拖拽平移 · 双击适应窗口">
         {colorSampler&&<ColorSampleOverlay sampler={colorSampler} clip={sampleClip} box={box} view={view}/>}
         {whiteBalancePicker&&<WhiteBalancePickerOverlay owner={whiteBalancePicker} clip={sampleClip} box={box} view={view}/>}
+        {cloneStamp&&<CloneStampOverlay owner={cloneStamp} clip={sampleClip} box={box} view={view}/>}
         {sourcePatch&&<SourcePatchOverlay owner={sourcePatch} clip={sampleClip} box={box} view={view}/>}
         {/* GL 画布退成纯渲染源：不参与布局，也不指望它上屏（见上面那段）。 */}
         {/* glVisible 是给"官方开关能不能替掉镜像层"那个对照实验用的：把 GL 画布放回

@@ -36,7 +36,7 @@ export interface RetouchProps {
   whiteBalancePanel?: React.ReactNode;
   whiteBalanceBusy?: boolean;
   colorSamplePanel?: React.ReactNode;
-  sourcePatchPanel?: React.ReactNode;
+  sourcePatchPanel?: React.ReactNode;cloneStampPanel?: React.ReactNode;
   status: EngineStatus | null;
   doc: DocState | null;
   hasImage: boolean;
@@ -266,7 +266,7 @@ const WIRED: Record<string, string> = {
   "PC-32478|旋转/倾斜角度": "crop.open",
   // 手动修复
   // F13（P2-4）：只有“污点修复画笔”背后是真·heal 笔迹（按落点扩散、无独立采样）。
-  // 来源区域修补由独立 sourcePatchPanel 接入，不借 brush.heal；仿制图章仍未接通。
+  // 来源区域修补由独立 sourcePatchPanel 接入，不借 brush.heal；仿制图章由独立 cloneStampPanel 接入。
   "PC-32482|污点修复画笔": "brush.heal",
   // 历史
   "PC-47209|撤销": "history.undo",
@@ -278,7 +278,7 @@ const LEAF_NOTE: Record<string, string> = {
   "PC-32470|眼神光": "可放置眼神光素材尚未实现；亮眼中的眼睛高光仅增强原片已有高光。",
   "PC-32470|眼神光/程度": "素材眼神光尚未接通，不用现有高光增强替代。",
   "PC-32482|修补工具": "来源区域修补需要独立取样视图与匹配版本的引擎；不会使用消除笔替代。",
-  "PC-32482|仿制图章": "仿制图章尚未实现持续采样点与逐笔来源偏移；来源区域修补不是仿制图章。",
+  "PC-32482|仿制图章": "仿制图章需要匹配版本的独立取样面板；来源区域修补不是仿制图章。",
 };
 
 /** 已接通格子的产品名：规格 path 的最后一段常常只是“身体/程度”，
@@ -834,7 +834,7 @@ export default function RetouchPanel(props: RetouchProps) {
     if (fid === "PC-32475") return bgBlock;
     if (fid === "PC-47209") return historyBlock;
     if (fid === "PC-32477") return <FabricPanel value={doc?.fabric} documentId={doc?.document_id} revision={status?.doc_rev??0} disabled={dim} onDone={props.onDone} note={props.note}/>;
-    if (fid === "PC-32482") return <>{props.sourcePatchPanel}{brushBlock}</>;
+    if (fid === "PC-32482") return <>{props.sourcePatchPanel}{props.cloneStampPanel}{brushBlock}</>;
     return null;
   };
 
@@ -944,7 +944,7 @@ export default function RetouchPanel(props: RetouchProps) {
                   openPaths={openPathsFor(f)} renderExtra={node=>renderExtra(node,f.id)}
                   renderLeaf={(leaf, name) => {
                     if(f.id==='PC-32477'&&leaf.path==='衣服祛褶皱/祛细褶皱')return null;
-                    if(f.id==='PC-32482'&&leaf.path==='修补工具'&&props.sourcePatchPanel)return null;
+                    if(f.id==='PC-32482'&&((leaf.path==='修补工具'&&props.sourcePatchPanel)||(leaf.path==='仿制图章'&&props.cloneStampPanel)))return null;
                     const kind = WIRED[`${f.id}|${leaf.path}`];
                     return kind ? renderWired(leaf, name, kind)
                       : <DisabledRow key={leaf.path} name={name}

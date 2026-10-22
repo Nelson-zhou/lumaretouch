@@ -10872,7 +10872,14 @@
       "source_child_index": 2,
       "title": "仿制图章",
       "status": "pending_independent_verification",
-      "implementation": [],
+      "implementation": [
+        "ui/src/cloneStamp/CloneStampPanel.tsx",
+        "ui/src/cloneStamp/CloneStampOverlay.tsx",
+        "ui/src/cloneStamp/workflow.ts",
+        "ui/src-tauri/src/clone_stamp_api.rs",
+        "engine/src/lumaretouch_engine/ops/clone_stamp.py",
+        "docs/development/clone-stamp-tool.md"
+      ],
       "verification": []
     },
     {

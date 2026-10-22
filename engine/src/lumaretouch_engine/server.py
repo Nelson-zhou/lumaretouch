@@ -369,7 +369,7 @@ class Engine:
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -1172,7 +1172,7 @@ class Engine:
     # 却不在这份名单里，于是拖完曝光按撤销——参数纹丝不动，而 UI 上没有任何一处会说"为什么
     # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
     # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
-    EDIT_CMDS = ("set_strength", "inpaint", "source_patch", "light", "deform", "lut", "grade", "background",
+    EDIT_CMDS = ("set_strength", "inpaint", "source_patch", "clone_stamp", "light", "deform", "lut", "grade", "background",
                  "crop", "exposure", "white_balance", "hsl", "curves", "levels", "preset", "batch", "face", "enhance", "fabric")
     # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
     # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
@@ -5334,6 +5334,7 @@ class Engine:
     def cmd_source_patch_capture(self, p): self._source_patch_controller().capture.handle(p)
 
     def cmd_source_patch(self, p): self._source_patch_controller().handle(p)
+    def cmd_clone_stamp(self, p): self._source_patch_controller().handle(p)
 
     def cmd_color_scopes(self, p: dict):
         from .color_scopes_controller import ScopePorts, handle_scopes
@@ -6844,7 +6845,7 @@ class Engine:
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
     HANDLED = ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "white_balance_capture", "bench_start", "bench_stop", "set_device", "shutdown",
-               "load_image", "set_strength", "precompute", "inpaint", "source_patch", "light",
+               "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "light",
                "deform", "lut", "grade", "export", "exposure", "white_balance", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
                # 挑图（LNX-PICK-001）。它不在 EDIT_CMDS 里，所以既不进撤销栈也不打脏标记：
@@ -6882,7 +6883,7 @@ class Engine:
             if fn is None:
                 emit({"event": "error", "error": f"未知命令: {name}"})
                 return
-            if name == "source_patch" and not self._source_patch_controller().prepare(msg):
+            if name in ("source_patch", "clone_stamp") and not self._source_patch_controller().prepare(msg):
                 return  # Receipt/cache replay and rejected proofs never advance the fence.
             if name == "white_balance" and not self._white_balance_controller().prepare(msg):
                 return  # Pick proof and scalar policy are checked before mutation fencing.
@@ -6920,7 +6921,7 @@ class Engine:
                 try:
                     fn(msg)
                 finally:
-                    self._history_record(group, before, coalesce=not (name in ("white_balance", "source_patch") or (name == "preset" and msg.get("action") == "apply")))
+                    self._history_record(group, before, coalesce=not (name in ("white_balance", "source_patch", "clone_stamp") or (name == "preset" and msg.get("action") == "apply")))
             else:
                 fn(msg)
         except Exception as e:  # 协议层不许因单条消息崩溃
@@ -6932,7 +6933,7 @@ class Engine:
                     self._white_balance_controller().finish(msg, dispatch_error)
                 if name == "preset" and isinstance(msg, dict):
                     self._preset_controller().finish(msg, dispatch_error)
-                if name == "source_patch" and isinstance(msg, dict):
+                if name in ("source_patch", "clone_stamp") and isinstance(msg, dict):
                     self._source_patch_controller().finish(msg, dispatch_error)
             except Exception as error:
                 emit({"event": "error", "error": f"{name} receipt failed: {error}"})

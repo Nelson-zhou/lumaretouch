@@ -24,6 +24,7 @@ def _mk() -> Engine:
     """
     e = Engine.__new__(Engine)
     e._strength = 0.0
+    e._fabric_amount = 0.0
     e._grade = (0.0, 0.0, 0.0, 1.0)
     e._grade_scope = "all"
     e._lut = None

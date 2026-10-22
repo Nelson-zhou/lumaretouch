@@ -20,6 +20,7 @@ def test_dispatch_fence_catches_undo_to_identical_recipe_but_not_state_reads(mon
 
 def test_explicit_strength_override_fences_before_failed_render(monkeypatch):
     e=server.Engine.__new__(server.Engine);e._docs=[{'state':{}}];e._doc_index=0
+    e._vram=None
     e._channel=None;e._grade_scope='all';e._precompute=None;e._params={};e._strength=0
     e._ensure_shm=lambda w,h:object()
     def failed(*a,**kw):raise RuntimeError('fixture render failure')

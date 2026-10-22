@@ -79,8 +79,8 @@ def _field(path, scale=1.0):
 
 # ---------------------------------------------------------------- 参数校验
 def test_check_amounts_accepts_partial_and_clamps_types():
-    assert ENH.check_amounts({"iris": 0.5}) == {"sclera": 0.0, "iris": 0.5, "teeth": 0.0}
-    assert ENH.check_amounts({}) == {k: 0.0 for k in ENH.SUBS}
+    assert ENH.check_amounts({"iris": 0.5}) == {**dict.fromkeys(ENH.AMOUNT_KEYS, 0.0), "iris": 0.5}
+    assert ENH.check_amounts({}) == {k: 0.0 for k in ENH.AMOUNT_KEYS}
 
 
 @pytest.mark.parametrize("bad", [

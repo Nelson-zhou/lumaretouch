@@ -10,6 +10,7 @@ from .repair_record import RepairOp, check_repair_fields
 from .white_balance_controller import identity, error_text
 
 PROOF_KEYS = ("document_id", "capture_id", "ticket", "generation", "recipe_document_id", "recipe_revision")
+CLONE_KEYS = {"cmd", "action", "request_id", "kind", "stroke", *PROOF_KEYS}
 COMMAND_KEYS = {"cmd", "action", "request_id", "polygon", "offset", *PROOF_KEYS}
 
 
@@ -50,7 +51,10 @@ class SourcePatchController:
                   "success": False, "outcome_unknown": False, "requires_reload": False, "error": None}
         pending = self.pending = {"result": result, "digest": None, "proof": None, "started": False}
         try:
-            if p.get("cmd") != "source_patch" or p.get("action") != "apply" or set(p) != COMMAND_KEYS:
+            kind = "clone_stamp" if p.get("cmd") == "clone_stamp" else "source_patch"
+            keys = CLONE_KEYS if kind == "clone_stamp" else COMMAND_KEYS
+            if (p.get("cmd") not in ("source_patch", "clone_stamp") or p.get("action") != "apply"
+                    or set(p) != keys or (kind == "clone_stamp" and p.get("kind") != kind)):
                 raise ValueError("Invalid source-patch action or fields")
             if result["request_id"] is None or any(result[key] is None for key in PROOF_KEYS):
                 raise ValueError("Invalid source-patch request identity")
@@ -69,14 +73,17 @@ class SourcePatchController:
             proof = self.ports.prepare_proof(p)
             if type(proof) is not dict or any(proof.get(key) != p[key] for key in PROOF_KEYS):
                 raise ValueError("Source-patch capture proof does not match the request")
-            clean = check_repair_fields({"op_id": 0, "kind": "source_patch",
+            if proof.get("kind", "source_patch") != kind:
+                raise ValueError("Repair capture proof kind does not match request")
+            result["kind"] = kind
+            clean = check_repair_fields({"op_id": 0, "kind": kind,
                                         "weight": proof.get("weight"), "params": proof.get("params")})
             # No borrowed mutable coordinates or coverage survive capture invalidation.
             pending["proof"] = {**{key: proof[key] for key in PROOF_KEYS},
-                                "params": clean["params"], "weight": clean["weight"].copy()}
+                                "params": clean["params"], "weight": clean["weight"].copy(), "kind": kind}
             h, w = clean["weight"].shape
             dx, dy = clean["params"]["offset"]
-            if dx == 0 and dy == 0:
+            if (dx == 0 and dy == 0) or (kind == "clone_stamp" and clean["params"]["opacity"] == 0):
                 count = self.ports.status()["counts"]["repair"]
                 if type(count) is not int or count < 0:
                     raise ValueError("Invalid repair operation count")
@@ -156,12 +163,12 @@ def apply_to_engine(engine, proof, emit):
     pipeline_before = dict(vars(pipe))
     committed = False
     try:
-        op = RepairOp(engine._op_seq + 1, proof["weight"], proof["params"], "source_patch")
+        op = RepairOp(engine._op_seq + 1, proof["weight"], proof["params"], proof.get("kind", "source_patch"))
         info = pipe.add_repair(op)
         committed = True
         engine._repair_ops, engine._redo_ops = list(pipe.repair_ops), list(pipe.redo_ops)
         engine._op_seq = op.op_id
-        frame = engine._write_current_frame("source_patch")
+        frame = engine._write_current_frame(op.kind)
         frame["doc_state"] = engine.doc_state()
         emit(frame)
         return {"op_id": op.op_id, "kind": op.kind, "recipe_version": op.params["version"],

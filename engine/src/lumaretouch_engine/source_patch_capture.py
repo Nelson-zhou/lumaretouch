@@ -173,6 +173,13 @@ class CaptureController:
     def prepare_apply(self,p):
         c=self._matching(p,recipe=True)
         if not c['eligible']:raise ValueError('Repair input was not presented')
+        if p.get('kind') == 'clone_stamp':
+            from .clone_stamp_geometry import inverse_stroke
+            params, weight = inverse_stroke(c['spec'], p.get('stroke'), c['valid'], c['descriptor']['full_source'])
+            proof = {k:c['descriptor'][k] for k in ('document_id','capture_id','ticket','generation','recipe_document_id','recipe_revision')}
+            proof.update(kind='clone_stamp', params=params, weight=weight)
+            self.invalidate()
+            return proof
         raw=check_recipe({'version':VERSION,'polygon':p.get('polygon'),'offset':p.get('offset')})
         spec=c['spec']
         donor=[[x+raw['offset'][0],y+raw['offset'][1]] for x,y in raw['polygon']]
