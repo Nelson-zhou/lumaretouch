@@ -42,8 +42,9 @@ samples from the same compiler for the SVG editor, not a separate browser spline
 
 The point editor supports channel selection, add/move/delete, numeric coordinates,
 keyboard adjustment, enable/reset, final-command barriers and pointer cancellation.
-Parametric curves, eyedropper and input histogram remain unimplemented;
-those controls are not represented as complete. Native UI visual/interaction QA
+Parametric curves now have a separate v3 integration candidate; its verification
+status is recorded below, not inferred from point-curve checks. Action eyedroppers
+and live/full-source input histograms remain unfinished. Native UI visual/interaction QA
 is still outstanding. Added protocol and 16-bit export tests require the real Torch
 runtime, not only frontend compilation or the pure-Rust mathematical tests.
 

@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {registerCurveEditBarrier} from '../curveEditBarrier';
-import {ParametricGesture} from '../parametricGesture';
+import {ParametricGesture,beginCurvePointer} from '../parametricGesture';
 import {neutralParametric,parametricCurveSpec} from '../curveModel';
 import {dragParametricCurve,type CurveSpec,type CurvePreview,type ParametricSpec} from '../native';
 const keys=['shadows','darks','lights','highlights'] as const;
@@ -20,6 +20,11 @@ export function ParametricCurveEditor(props:Props){
   },(value,region,target)=>dragParametricCurve(parametricCurveSpec(value),region,target)));
   useEffect(()=>{const remove=registerCurveEditBarrier(()=>gesture.settle(),()=>gesture.busy);return ()=>{remove();gesture.abort();};},[gesture]);
   useEffect(()=>{gesture.abort();pointer.current=null;control.current=null;owner.current=null;rangePointer.current=null;},[props.resetToken,gesture]);
+  useEffect(()=>{
+    const blur=()=>{void gesture.finish();};const hidden=()=>{if(document.hidden)blur();};
+    window.addEventListener('blur',blur);document.addEventListener('visibilitychange',hidden);
+    return ()=>{window.removeEventListener('blur',blur);document.removeEventListener('visibilitychange',hidden);};
+  },[gesture]);
   const spec=parametricCurveSpec(props.value),p=spec.parametric;
   const unavailable=props.disabled||!spec.enabled;
   const inactive=unavailable||!p.enabled;
@@ -45,8 +50,7 @@ export function ParametricCurveEditor(props:Props){
   };
   const rangeEvents=(key:string)=>({
     onPointerDown:(e:React.PointerEvent<HTMLInputElement>)=>{
-      if(e.button!==0)return;e.currentTarget.focus();
-      if(gesture.busy||!start(key))return;
+      if(!beginCurvePointer(e,gesture.busy,()=>e.currentTarget.focus(),()=>start(key)))return;
       owner.current=e.currentTarget;rangePointer.current=e.pointerId;e.currentTarget.setPointerCapture(e.pointerId);
     },
     onPointerUp:(e:React.PointerEvent<HTMLInputElement>)=>{if(owner.current===e.currentTarget&&rangePointer.current===e.pointerId)finish();},
@@ -84,15 +88,15 @@ export function ParametricCurveEditor(props:Props){
         <path d={`M${x*256} 0V256`} stroke="#666671" strokeDasharray="2 4"/>
         <path d={`M${x*256} 256l-7 13h14z`} fill="#b6b6c4" style={{cursor:inactive?'default':'ew-resize'}}
           onPointerDown={e=>{
-            if(e.button!==0)return;const svg=e.currentTarget.ownerSVGElement;svg?.focus();
-            if(gesture.busy||!start(`split-${i}`))return;e.stopPropagation();owner.current=svg;
+            const svg=e.currentTarget.ownerSVGElement;if(!svg)return;
+            if(!beginCurvePointer(e,gesture.busy,()=>svg.focus(),()=>start(`split-${i}`)))return;e.stopPropagation();owner.current=svg;
             pointer.current={id:e.pointerId,kind:'split',index:i};svg?.setPointerCapture(e.pointerId);
           }}/>
       </g>)}
       {props.samples?.parametric_handles?.map(([x,y],i)=><circle key={i} cx={x*256} cy={256-y*256} r="5" fill="#f5e2a2"
         style={{cursor:inactive?'default':'ns-resize'}} onPointerDown={e=>{
-          if(e.button!==0)return;const svg=e.currentTarget.ownerSVGElement;svg?.focus();
-          if(gesture.busy||!start(`tone-${i}`))return;e.stopPropagation();owner.current=svg;
+          const svg=e.currentTarget.ownerSVGElement;if(!svg)return;
+          if(!beginCurvePointer(e,gesture.busy,()=>svg.focus(),()=>start(`tone-${i}`)))return;e.stopPropagation();owner.current=svg;
           pointer.current={id:e.pointerId,kind:'tone',index:i};svg?.setPointerCapture(e.pointerId);
         }}/>) }
     </svg>

@@ -68,9 +68,9 @@ def decode(raw: bytes, requested_splits):
     """Validate once at the process boundary, never repeatedly per image pixel."""
     if not isinstance(raw, (bytes, bytearray, memoryview)):
         raise ValueError('invalid parametric compiler buffer')
-    raw = bytes(raw)  # snapshot mutable callers before validation/cache exposure
     if len(raw) != PAYLOAD_BYTES:
         raise ValueError('invalid parametric compiler output size')
+    raw = bytes(raw)  # bounded snapshot before validation/cache exposure
     header = HEADER.unpack_from(raw)
     if header[:5] != (b'LPC1', 1, 40, SAMPLES, 1) or header[5:] != tuple(requested_splits):
         raise ValueError('invalid parametric compiler header/grid/split correspondence')

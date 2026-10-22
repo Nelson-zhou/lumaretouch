@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {ParametricGesture,boundedCurveSolve,type CurveSolver} from './parametricGesture.ts';
+import {ParametricGesture,boundedCurveSolve,beginCurvePointer,type CurveSolver} from './parametricGesture.ts';
 import {parametricCurveSpec} from './curveModel.ts';
 import {registerCurveEditBarrier,settleCurveEdit,curveBarrierRequired,isCurveEditBusy} from './curveEditBarrier.ts';
 import type {CurveSpec} from './native';
@@ -94,4 +94,15 @@ test('idle editors keep normal dispatch timing and old cleanup cannot clear a ne
   const old=registerCurveEditBarrier(async()=>{},()=>false);assert.equal(isCurveEditBusy(),false);
   let called=false;const newer=registerCurveEditBarrier(async()=>{called=true;},()=>true);old();
   assert.equal(isCurveEditBusy(),true);await settleCurveEdit();assert.equal(called,true);newer();assert.equal(isCurveEditBusy(),false);
+});
+
+test('secondary pointer cannot focus another control or trigger its native default',()=>{
+  const order:string[]=[];const event={button:0,preventDefault:()=>order.push('prevent'),stopPropagation:()=>order.push('stop')};
+  const accepted=beginCurvePointer(event,true,()=>order.push('focus'),()=>{order.push('begin');return true;});
+  assert.equal(accepted,false);assert.deepEqual(order,['prevent','stop']);
+});
+test('idle pointer focuses the destination before beginning a new history gesture',()=>{
+  const order:string[]=[];const event={button:0,preventDefault:()=>order.push('prevent'),stopPropagation:()=>order.push('stop')};
+  assert.equal(beginCurvePointer(event,false,()=>order.push('focus'),()=>{order.push('begin');return true;}),true);
+  assert.deepEqual(order,['focus','begin']);
 });

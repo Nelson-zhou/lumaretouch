@@ -65,3 +65,10 @@ export class ParametricGesture {
   }
   abort():void{this.active=null;this.ports.busy(false);}
 }
+
+export function beginCurvePointer(event:{button:number;preventDefault:()=>void;stopPropagation:()=>void},
+  busy:boolean,focus:()=>void,begin:()=>boolean):boolean{
+  if(event.button!==0)return false;
+  if(busy){event.preventDefault();event.stopPropagation();return false;}
+  focus();return begin();
+}
