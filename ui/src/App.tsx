@@ -1,3 +1,7 @@
+import {createStatusFence} from "./statusFence";
+import {usePresetWorkflow} from "./presets/usePresetWorkflow";
+import {PresetPanel} from "./presets/PresetPanel";
+import {presetLabel as modulePresetLabel} from "./presets/presetModel";
 import {batchScopeOptions, resolveBatchScope} from "./batch/batchScopeOptions";
 import {BatchActions} from './batch/BatchActions';
 import {useBatchWorkflow} from './batch/useBatchWorkflow';
@@ -31,7 +35,7 @@ import {
   faceStateOf, enhanceStateOf,
   report, runDeform, runEnhance, runFace,
   fetchFilmstrip, runExport, runGrade, runHistory, runHsl, runInpaint, runLight, runLut, runPick, runSession, runBackground,
-  runCrop, runExposure, runPreset, runPrecompute, runProject, runTask,
+  runCrop, runExposure, runPrecompute, runProject, runTask,
   setCompare, compareStatus, setStrength, shutdownEngine, startEngine,
   type BenchOptions, type DeformInfo, type DocState, type EngineStatus, type EnhanceInfo, type ExportDone,
   type ExportProgress, type HistoryReport, type HistoryState,
@@ -224,8 +228,6 @@ export default function App() {
   // 预设与批量同步（LNX-P0-PRESET / LNX-P0-BATCH）：清单、台账与上一笔的事实全部从
   // status.session 里读（引擎随 session_state 报），这里只记“界面上选中了哪一个”与
   // “要存的新预设叫什么”。前端不扫目录、不记 batch_id：那是两个会漂的地方。
-  const [presetName, setPresetName] = useState("");
-  const [presetSel, setPresetSel] = useState("");
   const [appliedPreset, setAppliedPreset] = useState("");
   const [syncScopeLabel, setSyncScopeLabel] = useState("");
   const [batchPolicy,setBatchPolicy]=useState("skip_and_report");
@@ -318,12 +320,12 @@ export default function App() {
     applied.current = { strength: ds.strength, from };
   }, []);
 
-  const acceptedDocRevision = useRef(-1);
-  const refreshStatus = useCallback(async () => {
+  const statusFence = useRef(createStatusFence());
+  const refreshStatusWithErrors = useCallback(async (propagateError = false) => {
+    const ticket = statusFence.current.issue();
     try {
       const st = await engineStatus();
-      if (st.doc_rev < acceptedDocRevision.current) return;
-      acceptedDocRevision.current = st.doc_rev;
+      if (!statusFence.current.accept(ticket, st.doc_rev)) return;
       setStatus(st);
       // 消除笔的结果与日志同源：inpaint_done 只发一次，轮询不能错过
       if (st.inpaint) setLastInpaint(st.inpaint);
@@ -388,8 +390,9 @@ export default function App() {
       // 底片条：小载荷（格子与状态）跟着轮询走，像素只在 session_rev 变了时整条取一次
       setStrip(st.session ?? null);
       if (st.session_rev !== stripRev.current) {
-        stripRev.current = st.session_rev;
         const fs = await fetchFilmstrip();
+        if (!statusFence.current.current(ticket, st.doc_rev)) return;
+        stripRev.current = st.session_rev;
         setThumbs(fs.thumbs);
         if (fs.session) setStrip(fs.session);
       }
@@ -428,10 +431,12 @@ export default function App() {
         applied.current = null;
       }
       return st;
-    } catch {
-      /* 引擎未起，忽略 */
+    } catch (error) {
+      if (propagateError) throw error;
+      /* Background polling is quiet; explicit workflows surface refresh errors. */
     }
   }, [applyDocState]);
+  const refreshStatus = useCallback(() => refreshStatusWithErrors(), [refreshStatusWithErrors]);
 
   const panelRefreshRef = useRef<ReturnType<typeof createRefreshPump> | null>(null);
   useEffect(() => {
@@ -1550,11 +1555,7 @@ export default function App() {
   const presetState = status?.session?.presets ?? null;
   const syncState = status?.session?.sync ?? null;
   const presetList = presetState?.list ?? [];
-  /** 名字重名时才拼 id：下拉的每一项必须能唯一映回一个预设，否则“应用哪一个”会变成猜。 */
-  const dupNames = new Set(presetList.map((p) => p.name)
-    .filter((n, i, arr) => arr.indexOf(n) !== i));
-  const presetLabel = (p: { name: string; id: string }) =>
-    (dupNames.has(p.name) ? `${p.name} · ${p.id}` : p.name);
+  const presetLabel = (p: (typeof presetList)[number]) => modulePresetLabel(p, presetList);
   /** 作用域候选只从引擎报的 transferable 模块里拼：注册表说不通的那格不进候选。 */
   const scopeChoices = batchScopeOptions(presetState?.modules ?? []);
   const effectiveScope = resolveBatchScope(scopeChoices, syncScopeLabel);
@@ -1581,45 +1582,14 @@ export default function App() {
   /** 发完一条不开新会话的命令后让引擎重报一次状态；轮询也会拿到，这里只是不等。 */
   async function refreshFromEngine() {
     await runSession("state")
-    await refreshStatus()
+    await refreshStatusWithErrors(true)
   }
 
-  async function onPresetApplyByName(label: string) {
-    const p = presetList.find((x) => presetLabel(x) === label)
-    if (!p) return
-    setPresetSel(p.id)
-    await runPreset("apply", { id: p.id })
-    await refreshFromEngine()
-  }
-
-  async function onPresetSave() {
-    if (!presetName.trim()) {
-      setDragNote("预设名字是空的：存下来也认不出那是哪一个")
-      return
-    }
-    // id 用时间戳而不拿名字拼：名字可以是中文/带空格，拿它当文件名就是一次路径穿越的入口
-    const id = `user-${Date.now().toString(36)}`
-    await runPreset("save", { id, name: presetName.trim(), kind: "custom" })
-    setPresetSel(id)
-    setPresetName("")
-    await refreshFromEngine()
-  }
-
-  async function onPresetImport() {
-    const f = await openDialog({ title: "导入预设（.json）",
-      filters: [{ name: "LumaRetouch 预设", extensions: ["json"] }] })
-    if (typeof f !== "string" || !f) return
-    await runPreset("import", { path: f })
-    // 成不成都不在这里下结论：清单与 errors 随 session_state 上来，坏掉的那个会带着原因列出来
-    await refreshFromEngine()
-  }
-
-  async function onPresetDelete() {
-    if (!presetSel) return
-    await runPreset("delete", { id: presetSel })
-    setPresetSel("")
-    await refreshFromEngine()
-  }
+  const presetWorkflow=usePresetWorkflow({enabled:!!status?.engine_alive&&status?.ready_caps?.preset_result_protocol===1,
+    editable:hasImage&&!exporting&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending,
+    documentId:doc?.document_id??''},presetState,refreshFromEngine,{ok:faceOk,why:faceWhy});
+  const onPresetApplyByName=(label:string)=>presetWorkflow.applyByLabel(label);
+  const onPresetSave=()=>presetWorkflow.save();
 
   const batchWorkflow=useBatchWorkflow({docs:selPaths,moduleScope:syncScopeOps,conflictPolicy:batchPolicy,
     sourceDocumentId:doc?.document_id??'',enabled:!!status?.engine_alive&&status?.ready_caps?.batch_preflight_protocol===1,
@@ -1720,7 +1690,7 @@ export default function App() {
                 if(target instanceof HTMLSelectElement || (target instanceof HTMLInputElement
                   && ['range','number','color','checkbox'].includes(target.type)))notifyInspectionEditIntent();
               }}>
-          <RetouchPanel status={status} doc={doc} hasImage={hasImage}
+          <RetouchPanel presetPanel={<PresetPanel workflow={presetWorkflow}/>} status={status} doc={doc} hasImage={hasImage}
                         colorSamplePanel={<ColorSamplePanel sampler={colorSampler} reason={captureReason}
                           canArm={captureAllowed&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending}
                           onArm={()=>{setBrushOn(false);setPickFace(false);colorSampler.arm();}}/>}

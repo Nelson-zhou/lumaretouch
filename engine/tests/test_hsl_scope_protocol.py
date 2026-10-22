@@ -58,8 +58,9 @@ def test_hsl_scoped_preset_pixels_one_step_undo_and_project(hsl_engine, tmp_path
         np.testing.assert_array_equal(pixels(), edited)
         if correlated:
             engine.send(cmd='preset', action='apply', id='hsl-colors', request_id='stale', document_id=document)
+            assert '照片已经变化' in engine.wait_for('error', timeout=30)['error']
             rejected = engine.wait_for('preset_result', timeout=30)
-            assert not rejected['success'] and not rejected['outcome_unknown']
+            assert rejected['request_id'] == 'stale' and not rejected['success'] and not rejected['outcome_unknown']
             engine.send(cmd='hsl', action='clear'); _wait_frame_mode(engine, 'hsl')
             engine.send(cmd='preset', action='apply', id='hsl-colors', **apply_identity)
             assert engine.wait_for('preset_result', timeout=30)['replayed']

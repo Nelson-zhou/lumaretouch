@@ -1,4 +1,5 @@
 import {curveBarrierRequired,settleCurveEdit,isCurveEditBusy} from './curveEditBarrier';
+import type {PresetReply} from './presets/presetWorkflow';
 import type {BatchReply} from './batch/batchWorkflow';
 import type {CaptureTransport,CaptureStatus} from "./colorCaptureController";
 import type {ScopeResult,ScopeStage} from "./colorScopesModel";
@@ -267,6 +268,7 @@ export interface ScopeModule {
 }
 
 export interface PresetState {
+  available?: boolean;
   list: PresetInfo[];
   errors: { file: string; error: string }[];
   modules: ScopeModule[];
@@ -852,7 +854,7 @@ export interface EngineStatus {
   background: BackgroundInfo | null;
   /** 引擎在 ready 里报出的内置预设清单（M3-b）。空数组 = 这个引擎还没这一能力，
    *  UI 就不画按钮，而不是前端自己抄一份名字去撞一个不存在的资产。 */
-  presets: PresetInfo[];
+  presets: LutPresetInfo[];
   /** [dh, ds, dv] 的硬边界（ready 里报的）：滑块行程的唯一出处。空数组 = 这个引擎
    *  还没这一能力，定向那一排就不画。 */
   grade_limits: number[];
@@ -911,6 +913,7 @@ export interface EngineStatus {
   ready_caps?: {
     color_capture_protocol?: number;
     batch_preflight_protocol?: number;
+    preset_result_protocol?: number;
     curve_recipe_versions?:number[];
     color_scopes_protocol?: number;
     project_actions?: string[];
@@ -1115,7 +1118,7 @@ export interface RawBackends {
 }
 
 /** 一个内置预设的可显示信：提交只靠 name，文字只靠 title。 */
-export interface PresetInfo {
+export interface LutPresetInfo {
   name: string;
   title: string;
 }
@@ -1554,11 +1557,12 @@ export const runTask = (
 export const runPreset = (
   action: "list" | "apply" | "save" | "import" | "delete",
   opts: { id?: string; name?: string; path?: string; kind?: string; note?: string;
-          force?: boolean; moduleScope?: string[] } = {},
+          force?: boolean; moduleScope?: string[]; requestId?: string; documentId?: string } = {},
 ) => invoke<{ requested: boolean }>("preset", {
   action, id: opts.id, name: opts.name, path: opts.path, kind: opts.kind, note: opts.note,
-  force: opts.force, moduleScope: opts.moduleScope,
+  force: opts.force, moduleScope: opts.moduleScope, requestId: opts.requestId, documentId: opts.documentId,
 });
+export const readPresetResult=(requestId:string)=>invoke<{phase:string;request_id:string;result?:PresetReply;error?:string}>("preset_result",{requestId});
 
 /** 批量同步（LNX-P0-BATCH / BATCH-004）：目标按 path 递（多选集就是按 path 记的），
  *  preflight/commit/undo 的判定与原子性全在引擎。 */

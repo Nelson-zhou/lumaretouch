@@ -30,6 +30,7 @@ import { skinLimits, skinSliderBounds100 } from "../gradeLimits";
 export type BrushMode = "heal" | "dodge" | "burn" | "color";
 
 export interface RetouchProps {
+  presetPanel?: React.ReactNode;
   colorSamplePanel?: React.ReactNode;
   status: EngineStatus | null;
   doc: DocState | null;
@@ -809,7 +810,7 @@ export default function RetouchPanel(props: RetouchProps) {
   );
 
   const blockFor = (fid: string): React.ReactNode => {
-    if (fid === "PC-32452") return lutBlock;
+    if (fid === "PC-32452") return <>{props.presetPanel}{lutBlock}</>;
     if (fid === "PC-32454") return gradeBlock;
     if (fid === "PC-32475") return bgBlock;
     if (fid === "PC-47209") return historyBlock;

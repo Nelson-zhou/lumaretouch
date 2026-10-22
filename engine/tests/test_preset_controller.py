@@ -43,7 +43,7 @@ def test_save_is_deferred_until_finish_and_returns_actual_file(setup):
 @pytest.mark.parametrize('patch', [
     {'module_scope': []}, {'module_scope': {S.OP_HSL: False}}, {'module_scope': [True]},
     {'module_scope': None}, {'document_id': 'old'}, {'document_id': None},
-    {'force': 'false'}, {'name': '  '}, {'name': 123}, {'unused': 1},
+    {'force': 'false'}, {'name': '  '}, {'name': 123}, {'name': '名'*81}, {'name': 'name\x1c'}, {'unused': 1},
 ])
 def test_invalid_correlated_save_is_definite_rejection(setup, patch):
     c, _, _, events, _ = setup

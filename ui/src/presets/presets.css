@@ -1,0 +1,8 @@
+.modulePresets{display:grid;gap:10px;padding:12px 0;border-bottom:1px solid var(--line,#343434);font-size:12px}
+.modulePresets h4,.modulePresets p{margin:0}.modulePresets p{line-height:1.6;overflow-wrap:anywhere}
+.modulePresets>label,.modulePresets fieldset>label{display:grid;gap:6px}.modulePresets select,.modulePresets input:not([type=checkbox]){width:100%;min-width:0;box-sizing:border-box}
+.modulePresets fieldset{min-width:0;display:grid;gap:10px;padding:10px;border:1px solid var(--line,#343434);border-radius:6px}
+.presetButtons{display:flex;flex-wrap:wrap;gap:6px}.presetScopes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.presetScopes label{display:flex;align-items:flex-start;gap:5px}.modulePresets small{display:block;opacity:.7;line-height:1.5;overflow-wrap:anywhere}
+.presetDetail,.presetUncertain{display:grid;gap:6px;padding:8px;border:1px solid var(--line,#343434);border-radius:6px}
+.modulePresets button:disabled{opacity:.45}.presetUncertain{border-color:#a77937}

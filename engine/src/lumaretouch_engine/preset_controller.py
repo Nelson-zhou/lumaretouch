@@ -80,6 +80,8 @@ class PresetController:
                 if not p.get(key, "").strip(): raise SC.ScopeError(f"preset {action} 需要 {key}")
             if action == "save":
                 if not p.get("name", "").strip(): raise SC.ScopeError("预设名称不能为空")
+                if p["name"] != p["name"].strip() or len(p["name"]) > 80:
+                    raise SC.ScopeError("预设名称最多 80 个字符，前后不能含空白")
                 scope = p.get("module_scope")
                 if type(scope) is not list or any(type(op) is not str for op in scope):
                     raise SC.ScopeError("module_scope 必须是模块名数组")

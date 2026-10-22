@@ -1,62 +1,15 @@
-//! Epoch-bound correlated receipts. Queue acceptance is never a commit result.
-use std::collections::VecDeque;
-use serde_json::{json,Value};
-const MAX_RECORDS:usize=32;
-const MAX_RESULT_BYTES:usize=8*1024*1024;
-const MAX_BYTES:usize=16*1024*1024;
-struct Receipt { id:String, action:String, result:Option<Value>, bytes:usize }
-#[derive(Default)]
-pub(crate) struct BatchHost { epoch:[u8;16], supported:bool, records:VecDeque<Receipt> }
-impl BatchHost {
-    pub fn reset(&mut self,epoch:[u8;16]) {self.epoch=epoch;self.supported=false;self.records.clear();}
-    pub fn ready(&mut self,epoch:[u8;16],supported:bool){if self.epoch==epoch{self.supported=supported;}}
-    pub fn begin(&mut self,epoch:[u8;16],id:&str,action:&str)->Result<(),String>{
-        if epoch==[0;16] || epoch!=self.epoch{return Err("batch engine generation changed".into());}
-        if !self.supported{return Err("engine has not advertised reviewed batch support".into());}
-        if id.is_empty() || id.len()>128 || !["preflight","commit","undo"].contains(&action){return Err("invalid batch request".into());}
-        if self.records.iter().any(|r|r.id==id){return Err("batch request ID already exists".into());}
-        while self.records.len()>=MAX_RECORDS {
-            let index=self.records.iter().position(|r|r.result.is_some()).ok_or("too many pending batch requests")?;
-            self.records.remove(index);
-        }
-        self.records.push_back(Receipt{id:id.into(),action:action.into(),result:None,bytes:0});Ok(())
-    }
-    pub fn receive(&mut self,epoch:[u8;16],value:&Value){
-        if epoch!=self.epoch || epoch==[0;16]{return;}
-        let Some(id)=value["request_id"].as_str() else{return};
-        let Some(record)=self.records.iter_mut().find(|r|r.id==id) else{return};
-        if record.result.is_some() || value["action"].as_str()!=Some(record.action.as_str()){return;}
-        let bytes=value.to_string().len();
-        let result=if value["success"].as_bool().is_none() || bytes>MAX_RESULT_BYTES {
-            json!({"success":false,"outcome_unknown":true,"request_id":id,"action":record.action,
-                "error":"invalid or oversized batch receipt; inspect document state"})
-        } else {value.clone()};
-        record.bytes=result.to_string().len();record.result=Some(result);
-        while self.records.iter().map(|r|r.bytes).sum::<usize>()>MAX_BYTES {
-            if let Some(index)=self.records.iter().position(|r|r.result.is_some()){self.records.remove(index);}else{break;}
-        }
-    }
-    pub fn failed(&mut self,id:&str,error:&str){
-        let action=self.records.iter().find(|r|r.id==id).map(|r|r.action.clone());
-        if let Some(action)=action {self.receive(self.epoch,&json!({"request_id":id,"action":action,
-            "success":false,"outcome_unknown":true,"error":error}));}
-    }
-    pub fn ended(&mut self,epoch:[u8;16]){
-        if self.epoch!=epoch{return;}
-        let ids:Vec<String>=self.records.iter().filter(|r|r.result.is_none()).map(|r|r.id.clone()).collect();
-        for id in ids {self.failed(&id,"engine ended before batch completion was confirmed");}
-        self.epoch=[0;16];self.supported=false;
-    }
-    pub fn status(&self,id:&str)->Value{
-        match self.records.iter().find(|r|r.id==id) {
-            Some(r)=>match &r.result {
-                Some(result)=>json!({"phase":"done","request_id":id,"result":result}),
-                None=>json!({"phase":"pending","request_id":id}),
-            },
-            None=>json!({"phase":"unavailable","request_id":id,"error":"receipt missing, evicted or engine restarted"}),
-        }
-    }
+//! Reviewed batch receipts use the shared epoch-bound mailbox.
+use serde_json::Value;
+use crate::receipt_host::{ReceiptHost, ReceiptKind};
+pub(crate) struct BatchKind;
+impl ReceiptKind for BatchKind {
+    const NAME: &'static str = "batch";
+    const ACTIONS: &'static [&'static str] = &["preflight", "commit", "undo"];
+    fn valid(value: &Value, _: Option<&str>) -> bool { value["success"].as_bool().is_some() }
 }
+pub(crate) type BatchHost = ReceiptHost<BatchKind>;
+#[cfg(test)] use crate::receipt_host::MAX_RECORDS;
+#[cfg(test)] use serde_json::json;
 #[cfg(test)]
 mod tests {
     use super::*;

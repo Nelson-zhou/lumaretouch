@@ -136,6 +136,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             }
             // Drain every accepted stdout event before synthesizing unknown outcomes.
             st.batch_results.lock().unwrap().ended(inspection_epoch);
+            st.preset_results.lock().unwrap().ended(inspection_epoch);
         });
     }
 
@@ -160,6 +161,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
     match v.get("event").and_then(|e| e.as_str()).unwrap_or("") {
         "inspection_snapshot"=>state.on_inspection_event(inspection_epoch,&v),
         "batch_result"=>state.batch_results.lock().unwrap().receive(inspection_epoch,&v),
+        "preset_result"=>state.preset_results.lock().unwrap().receive(inspection_epoch,&v),
         "shm_ready" => {
             let name = v["name"].as_str().unwrap_or("").to_string();
             match ShmReader::open(&name) {
@@ -211,6 +213,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             if inspection.epoch!=inspection_epoch{return;}
             inspection.ready(inspection_epoch,v["inspection_protocol"].as_u64()==Some(1));
             state.batch_results.lock().unwrap().ready(inspection_epoch,v["batch_preflight_protocol"].as_u64()==Some(1));
+            state.preset_results.lock().unwrap().ready(inspection_epoch,v["preset_result_protocol"].as_u64()==Some(1));
             // M3-b：引擎报上来的内置预设清单（按钮文字与提交名都靠它）。
             // 不写这一臂就会落进下面的 other 分支：只进日志，前端永远拿不到。
             state.on_ready(&v);

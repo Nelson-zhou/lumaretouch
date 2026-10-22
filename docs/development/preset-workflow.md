@@ -1,7 +1,8 @@
 # Module preset workflow: implementation contract
 
-Status: backend-only candidate, not yet executed. Native receipts and the mounted
-preset UI are still to be implemented. Existing LUT looks remain separate.
+Status: integrated implementation candidate, awaiting native/frontend execution.
+Backend-only cd96304 has CI evidence below; this is not physical acceptance.
+Existing LUT looks remain separate.
 
 ## Backend module boundaries
 
@@ -40,7 +41,7 @@ turn a confirmed save into an automatic retry. Imports pin a nonblocking file
 descriptor, reject non-regular files and enforce a bounded actual read as well
 as the initial file size. No executable preset content is run.
 
-## Required native/UI stage, not completed here
+## Native/UI implementation, awaiting verification
 
 - Epoch-bound bounded receipt mailbox, advertised protocol capability gate,
   register-before-enqueue and query-only uncertain recovery.
@@ -52,8 +53,14 @@ as the initial file size. No executable preset content is run.
 - Retain form data on failure/uncertainty; don't erase text edited after submit.
 - Apply/save require an editable photo; list/import/delete do not require one.
 - Refresh failure must not change a successful mutation into failure or retry.
-- Existing old StudioPanel controls are not proof of completion: that panel is
-  not mounted. Existing PC-32452 renders LUT looks, not this new workflow.
+- The application-lifetime hook is mounted in App; PC-32452 now renders the
+  module-preset panel alongside the existing LUT block. The unmounted old
+  StudioPanel is not used as completion evidence. Legacy P0 string-label adapters
+  reject ambiguous matches rather than applying the first matching preset.
+- A status ticket/revision fence is rechecked after asynchronous filmstrip reads;
+  an older refresh cannot restore prior-document controls after a newer accepted
+  refresh. Explicit workflow refresh errors propagate without changing a confirmed
+  mutation outcome. Receipt doc_state is never installed directly.
 
 ## Tests added, awaiting execution
 
@@ -75,3 +82,32 @@ bounded growth/FIFO rejection. Root has not run these tests; Qoder/CI own execut
   unique temporary name, not a predictable `<id>.json.tmp` target.
 - [Linux fsync(2)](https://man7.org/linux/man-pages/man2/fsync.2.html): file fsync
   alone does not ensure the containing directory entry is durable.
+
+
+## Verified backend baseline and remaining checks
+
+Remote `cd96304bc3369715876d83184a02fd09d79d98a4`, tree
+`d0b0979f4f22eb99b8509b9ca3f740faaac57094`:
+[CI 39712807553](https://github.com/Nelson-zhou/lumaretouch/actions/runs/39712807553)
+passed all non-GPU jobs. Engine: 1120 passed, 428 skipped, 72.06s. Frontend:
+147 passed, zero failures/skips. GPU jobs skipped. This CI did NOT exercise the
+new two-case real HSL/preset protocol: its environment lacked Torch and those
+cases use importorskip. Do not count the skipped protocol as a pass.
+
+Qoder fetched and verified the exact detached candidate but local helper/pytest
+never ran: its chat was not bound to the product workspace, and the artifact Write
+was denied. The task was paused without a shell bypass. Project binding is awaited.
+
+The integrated candidate adds a dedicated CI step installing the official pinned
+CPU-only Torch 2.10.0 wheel AFTER the existing lightweight suite, then running both
+real preset protocol cases. It checks wheel identity and JUnit count with no
+skips/failures/errors; evidence is retained as an artifact. This does not replace
+local Qoder or physical UI/GPU/performance acceptance. No local dependency change
+is performed by this workflow.
+
+Official references for the UI/CI additions:
+- [Tauri dialog](https://v2.tauri.app/plugin/dialog/): native file selection and
+  explicit destructive-operation confirmation, using the already-present plugin.
+- [PyTorch previous versions](https://pytorch.org/get-started/previous-versions/):
+  official 2.10.0 CPU-only index. Only torch is needed for these synthetic image
+  cases; torchvision/torchaudio and GPU wheels are not installed.

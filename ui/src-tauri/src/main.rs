@@ -25,6 +25,9 @@ mod frame_presentation;
 mod preview_wire;
 mod capture_wire;
 mod color_capture_host;
+mod receipt_host;
+mod preset_host;
+mod preset_api;
 mod batch_host;
 mod batch_api;
 mod color_capture_api;
@@ -189,6 +192,7 @@ pub struct AppState {
     color_scopes: Mutex<color_scopes_host::ScopeHost>,
     color_capture: Mutex<color_capture_host::CaptureHost>,
     batch_results: Mutex<batch_host::BatchHost>,
+    preset_results: Mutex<preset_host::PresetHost>,
     /// 最近一条 session_state（M5 底片条）：格子列表、当前索引、有没有缩略图。
     /// 这一份里**不带 base64**——控制通道那条“像素不进 JSON”的规矩只在缩略图上开了
     /// 一个一次性的例外，宿主不该把它长期握在轮询载荷里。
@@ -295,6 +299,7 @@ impl AppState {
             color_scopes: Mutex::new(color_scopes_host::ScopeHost::default()),
             color_capture: Mutex::new(color_capture_host::CaptureHost::default()),
             batch_results: Mutex::new(batch_host::BatchHost::default()),
+            preset_results: Mutex::new(preset_host::PresetHost::default()),
             session: Mutex::new(None),
             thumbs: Mutex::new(std::collections::HashMap::new()),
             session_rev: Mutex::new(0),
@@ -635,7 +640,7 @@ impl AppState {
         if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
         let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
         let handle=guard.as_ref().ok_or_else(|| "引擎未启动".to_string())?;
-        if name=="batch" {batch_api::enqueue(self,handle,cmd)?;}else{handle.send(cmd)?;}
+        if name=="batch" {batch_api::enqueue(self,handle,cmd)?;}else if name=="preset" {preset_api::enqueue(self,handle,cmd)?;}else{handle.send(cmd)?;}
         if edited {
             *self.history_dirty.lock().unwrap() = true;
         }
@@ -755,6 +760,7 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     *st.ready_caps.lock().unwrap()=json!({});
     st.color_capture.lock().unwrap().reset(inspection_epoch);
     st.batch_results.lock().unwrap().reset(inspection_epoch);
+    st.preset_results.lock().unwrap().reset(inspection_epoch);
     *st.inspection_root.lock().unwrap()=Some(inspection_root.clone());
     let h = engine::spawn(&py, &src, &session, st.clone(),inspection_epoch,inspection_root);
     let pid = h.pid();
@@ -1839,46 +1845,6 @@ fn task(
     Ok(json!({"requested": true}))
 }
 
-/// 模块预设（LNX-P0-PRESET / PRESET-001、002）：清单/应用/保存/导入/删除一条命令。
-/// “哪些参数属于哪个模块”“这个预设文件能不能接”全在引擎的 scope.py + preset_store.py：
-/// 宿主抄一份模块名单或量程就是第二个会漂的地方（与 exposure/crop 同一条理由）。
-/// 清单随 session_state 的 `presets` 上来，这里不开“拿清单”的口子给前端自己扫目录。
-#[tauri::command]
-fn preset(
-    state: State<'_, Arc<AppState>>,
-    action: String,
-    id: Option<String>,
-    name: Option<String>,
-    path: Option<String>,
-    kind: Option<String>,
-    note: Option<String>,
-    force: Option<bool>,
-    module_scope: Option<Vec<String>>,
-) -> Result<Value, String> {
-    const ACTIONS: [&str; 5] = ["list", "apply", "save", "import", "delete"];
-    if !ACTIONS.contains(&action.as_str()) {
-        return Err(format!("preset 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
-    }
-    let mut cmd = json!({"cmd": "preset", "action": action});
-    for (k, v) in [
-        ("id", id.map(Value::from)),
-        ("name", name.map(Value::from)),
-        ("path", path.map(Value::from)),
-        ("kind", kind.map(Value::from)),
-        ("note", note.map(Value::from)),
-        ("force", force.map(Value::from)),
-    ] {
-        if let Some(v) = v {
-            cmd[k] = v;
-        }
-    }
-    if let Some(v) = module_scope {
-        cmd["module_scope"] = json!(v);
-    }
-    state.send_to_engine(cmd)?;
-    Ok(json!({"requested": true}))
-}
-
 /// 批量同步（LNX-P0-BATCH / BATCH-004）：preflight/commit/undo/state。
 /// 目标一律按 path 递：重扫一次目录 index 会换而 path 不会（与底片条多选集同一口径）。
 /// 作用域合法性、人脸范围判定、冲突与原子提交全在引擎：宿主不判“这一格能不能同步”，
@@ -2009,7 +1975,7 @@ fn main() {
             inpaint, light, deform, lut, grade, enhance, background, export, session, filmstrip, history,
             color_capture_api::capture_arm, color_capture_api::capture_status, color_capture_api::capture_frame,
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
-            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, color_scopes_api::color_scopes, preset, batch_api::batch, batch_api::batch_result, face, pick,
+            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, batch_api::batch, batch_api::batch_result, face, pick,
             report, quit
         ])
         .run(tauri::generate_context!())
