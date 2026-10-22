@@ -1,6 +1,7 @@
 # Module preset workflow: implementation contract
 
-Status: integrated implementation candidate, awaiting native/frontend execution.
+Status: integrated c1afbf7 passed the basic CI checks recorded below; local Qoder
+and physical acceptance remain open. No-photo protocol coverage is being extended.
 Backend-only cd96304 has CI evidence below; this is not physical acceptance.
 Existing LUT looks remain separate.
 
@@ -41,7 +42,7 @@ turn a confirmed save into an automatic retry. Imports pin a nonblocking file
 descriptor, reject non-regular files and enforce a bounded actual read as well
 as the initial file size. No executable preset content is run.
 
-## Native/UI implementation, awaiting verification
+## Native/UI implementation
 
 - Epoch-bound bounded receipt mailbox, advertised protocol capability gate,
   register-before-enqueue and query-only uncertain recovery.
@@ -99,7 +100,7 @@ never ran: its chat was not bound to the product workspace, and the artifact Wri
 was denied. The task was paused without a shell bypass. Project binding is awaited.
 
 The integrated candidate adds a dedicated CI step installing the official pinned
-CPU-only Torch 2.10.0 wheel AFTER the existing lightweight suite, then running both
+CPU-only Torch 2.10.0 wheel AFTER the existing lightweight suite, then running the
 real preset protocol cases. It checks wheel identity and JUnit count with no
 skips/failures/errors; evidence is retained as an artifact. This does not replace
 local Qoder or physical UI/GPU/performance acceptance. No local dependency change
@@ -111,3 +112,20 @@ Official references for the UI/CI additions:
 - [PyTorch previous versions](https://pytorch.org/get-started/previous-versions/):
   official 2.10.0 CPU-only index. Only torch is needed for these synthetic image
   cases; torchvision/torchaudio and GPU wheels are not installed.
+
+
+Integrated `c1afbf7fb91e6eaa46827ec61c73a89d67a4bb8c`, tree
+`24a3ff0ba0ac8560b30fd82fe84a943be46baddf`, passed
+[CI39715962929](https://github.com/Nelson-zhou/lumaretouch/actions/runs/39715962929):
+frontend166/0skip, TypeScript/build, Rust checks and five preset-host plus five
+batch-host tests. Engine lightweight suite1122 passed/428 skipped/41.94s;
+separate pinned Torch2.10.0+cpu run: both real synthetic-image protocol cases
+passed/0skip in2.71s, with exact count enforced and JUnit retained. All non-GPU
+jobs passed; GPU jobs skipped. Qoder local execution remains blocked before tests
+by project binding, not represented as a pass. Desktop installation unchanged.
+
+The next coverage increment adds a third real protocol case without an open
+photo: list, import, conflict without overwrite, import as a new ID, builtin
+protection, delete, missing-file rejection and final catalog/disk evidence.
+This added case is not yet executed as of this edit. A positive result must not
+be inferred from c1afbf7's two-case run.

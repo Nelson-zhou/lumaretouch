@@ -125,10 +125,12 @@ neutralization separately.
 
 ## HSL persistence gap and acceptance
 
-Current _hsl has history/project/export paths, but no HSL operation in scope.py.
-Add a versioned lnx.hsl.v1 module with explicit legacy-hsv8-smoothstep-v1 semantics
-and 24 bands, matching registry, presets, frozen batch, UI selection and export.
-Do not advertise current HSL as already transferable or silently replace HSV math.
+The historical HSL persistence gap was closed by `9f35e43e`: lnx.hsl.v1 now
+transfers the explicit legacy-hsv8-smoothstep-v1 recipe and 24 bands through
+registry, presets, frozen batch, UI scope selection and export. Basic Qoder and
+CI evidence is recorded in hsl-scope.md. Integrated preset UI candidate c1afbf7
+adds real legacy/correlated CPU protocol coverage. This is not an HSL action
+picker or a replacement of the existing HSV pixel semantics.
 
 Acceptance must cover independent requirement IDs, Rust golden/error/identity cases,
 nonneutral upstream/downstream stages, v3 curves, arbitrary crop/rotation/resize,
