@@ -12,17 +12,74 @@ filtered to `镜头调整` and `透视矫正`. The live official guide confirms 
 lens and perspective branches, RAW default lens correction, automatic smart /
 horizontal / vertical, up to four guide lines with solving on the second release,
 manual transforms and ratio-preserving crop locks:
-https://www.pixcakeai.com/guide/32455 . Numerical slider limits are not published
-there. The ranges below are explicit LumaRetouch design choices, not claimed
-PixCake values or a pixel-equivalence claim.
+https://www.pixcakeai.com/guide/32455 and the current desktop Wiki
+https://wiki.pixcakeai.com/guide/9398.html . The latter identifies `AI透视矫正`
+as the enable control for those three modes, not a separately specified fourth
+algorithm. It does not require a neural model. Numerical slider limits and
+default/reset/composition details are not published there. The ranges and
+policies below are explicit LumaRetouch design choices, not claimed PixCake
+values or a pixel-equivalence claim.
 
 This is NOT crop/rotation relabeling. Lensfun calculates calibrated distortion and
 TCA inverse coordinates and photometric gains; our Rust raster kernel actually
 samples original upstream RGB with those coordinates. Manual radial distortion,
 linear-light vignette and midpoint are independent operators. Perspective is a
 real homography, not canned guessed offsets. Smart analysis is an OpenCV LSD
-line detector followed by robust regularized least squares, confidence and
-fold/conditioning rejection. It is labeled non-ML; no unspecified AI model exists.
+line detector followed by robust regularized least squares, heuristic evidence
+scoring and fold/conditioning rejection. This implementation has no neural
+network dependency; that is not a claim about PixCake's undisclosed internals.
+
+## Automatic-perspective enable, reset and review policy
+
+The existing version-1 `perspective.mode` is the sole retained enable state:
+`smart`, `horizontal` and `vertical` are enabled; `off` and `guided` are not
+automatic. No second hidden enable flag, model or recipe version is introduced.
+
+- New/legacy neutral recipes start `off` with an identity matrix. A valid RAW
+  default Lensfun correction is independent and is not disabled by this policy.
+- Every enable from `off` or `guided` runs `smart` on the current real
+  lens-corrected, pre-perspective pixels. No former mode/matrix is secretly
+  restored. Mode buttons are available while automatic correction is on, or as
+  explicit retry choices after a failed enable/solve so a failed smart solve
+  cannot block a useful single-axis attempt. Failure does not turn on an
+  unproved recipe. Selecting a mode performs a new image-evidence solve, never
+  a fixed transform.
+- Disabling automatic correction clears only its mode, matrix, analysis and
+  guide records; lens edits and all seven manual perspective values remain.
+- Manual values compose after the solved matrix, as before: solved perspective,
+  manual horizontal/vertical projective terms and aspect, center rotation,
+  uniform scale, then offsets. Crop-lock framing and final legacy crop remain
+  downstream. Manual edits do not change the line-analysis input or its meaning.
+- Automatic and guided solves are alternatives. Entering guides replaces the
+  automatic solve; the first guide has no solved transform and the second
+  release triggers the solve. Enabling automatic clears the guide records.
+  Both transitions are disclosed and retain manual values. A dedicated clear
+  guides action removes the guided solve without resetting manual values.
+- `reset_perspective` replaces only the perspective section with neutral values:
+  mode off, identity matrix, no guides/analysis, manual values zero except scale
+  100, auxiliary grid off, crop lock on. It preserves the complete lens section,
+  including its profile, enabled state, manual edits and crop lock. Source
+  binding remains if the retained lens profile requires it. Existing `reset`
+  is explicitly labeled as resetting **both** sections, including lens identity.
+- Each operation stays in the producer-owned preview draft. Failures keep the
+  previous valid draft. Apply consumes the exact reviewed result once and adds
+  one undo step; cancel discards unapplied changes. Changing mode or resetting
+  does not create a history step until Apply.
+- Interactive optical review binds the exact preview ID, result image URI and
+  decoded dimensions. All three images must load; the actual result element
+  must intersect the viewport by at least 99%, be unclipped by its scroll
+  ancestors, pass basic occlusion checks, and remain on a focused visible page
+  over two animation frames. A delayed acknowledgement cannot approve a newer
+  preview. Merely loading the result below the fold is not presentation proof.
+  This does not assert that the user understood or accepted image quality.
+
+The persisted field `analysis.confidence` remains for compatibility; the UI
+labels its value a heuristic line-support score out of 100, not a probability.
+Guided results display their user-supplied constraints rather than a fictitious
+100% success probability. No solver, threshold, dependency or precision path was
+changed by this enable/reset correction. Naturalness, strong keystone behavior
+and perceptual quality remain unrun/unaccepted, not proved by these controls.
+See `AI-PERSPECTIVE-SHARED-HOOKS.md` for the included small shared routing changes.
 
 ## Explicit operator order and coordinate contracts
 
@@ -75,7 +132,7 @@ not acceptance evidence; the linked baseline remains research evidence.
 | 97e25fa700 | vignette | Linear-light edge gain, -100..100, maximum +/-2 EV |
 | 34a1b1823c | midpoint | Radial onset, 0..100; default50, neutral unless vignette is nonzero |
 | b75e31f8df | perspective | Separate retained homography/manual parameters and source binding |
-| 171eace8b1 | automatic | Actual image line detection, robust fit, confidence, explicit failure |
+| 171eace8b1 | automatic enable | Real parent switch for existing three image-evidence modes; exact baseline routing connected; no neural prerequisite |
 | cb1d7f388c | smart | Conservative regularization compromises straightening and stretch; not ML |
 | 7a3b74734c | horizontal auto | Fits horizontal-line evidence without vertical-projective degree |
 | 744036c8c7 | vertical auto | Fits vertical-line evidence without horizontal-projective degree |
@@ -93,7 +150,7 @@ not acceptance evidence; the linked baseline remains research evidence.
 Guide input is its own real lens-corrected, uncropped, pre-perspective image. It
 is not a CSS warp of the final image. Geometric lens changes require explicitly
 turning off auto/guided perspective and re-analyzing/replacing lines, so old line
-coordinates are never silently reinterpreted. Failed low-confidence detection
+coordinates are never silently reinterpreted. Failed low-support detection
 keeps the last valid draft and never commits a guessed transform. Preview edits
 accumulate in a producer-owned draft. Apply publishes one confirmed transaction
 and one undo step; closing discards the unapplied draft.
@@ -180,7 +237,7 @@ reanalysis claim is made.
 ## Local verification still required (not executed here)
 
 Qoder should verify real straight-edge and camera profiles, EXIF orientations,
-missing/ambiguous metadata, source/DB changes, fail-closed confidence, second-line
+missing/ambiguous metadata, source/DB changes, fail-closed evidence scoring, second-line
 trigger/max4, crop bounds, every manual control, preview acknowledgement races,
 one-step undo, project replay, two simultaneous documents, manual-only portable scopes and explicit per-target
 automatic reanalysis, global tile seams, full8/full16, nonzero low-bit16 ramps, cancellation,

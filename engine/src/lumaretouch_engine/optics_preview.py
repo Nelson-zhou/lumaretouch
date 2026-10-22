@@ -35,11 +35,15 @@ def guide_value(value):
 def mutate(engine, value, mutation, pixels, source_binding):
     if type(mutation) is not dict: raise ValueError('镜头/透视修改必须是对象')
     value = S.check(value); action = mutation.get('action'); shape = pixels.shape[-2:]
-    fields = {'view':{'action'},'reset':{'action'},'set':{'action','section','key','value'},
+    fields = {'view':{'action'},'reset':{'action'},'reset_perspective':{'action'},'set':{'action','section','key','value'},
               'auto':{'action','mode'},'guides':{'action','guides'},'profile':{'action','candidate','metadata'},'find_profile':{'action','metadata'}}
     if action not in fields or set(mutation)!=fields[action]: raise ValueError('镜头/透视修改字段无效')
     extra = {}
     if action=='reset': value = S.empty()
+    elif action=='reset_perspective':
+        # A section reset must not discard calibrated lens identity or edits.
+        # These are our neutral defaults, not undisclosed PixCake defaults.
+        value['perspective'] = S.empty()['perspective']
     elif action=='set':
         section,key = mutation['section'],mutation['key']
         allowed = {'lens':{'enabled','distortion','vignette','midpoint','crop_lock'},'perspective':{*S.MANUAL,'show_guides','crop_lock'}}
@@ -104,7 +108,7 @@ class OpticsPreview:
                 self.emit(self.event(p,state='presented',success=True)); return
             if len(json.dumps(p,allow_nan=False).encode())>64*1024: raise ValueError('镜头/透视参数超过预算')
             viewing = p['mutation']=={'action':'view'}
-            resetting = p['mutation']=={'action':'reset'}
+            resetting = p['mutation'] in ({'action':'reset'},{'action':'reset_perspective'})
             if self.session is None or self.session['id']!=p['session_id']:
                 if not viewing and not resetting: raise ValueError('必须先展示真实参考画面才能编辑')
                 self.cancel(); metadata,spec = context(self.engine)

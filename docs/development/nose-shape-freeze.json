@@ -1,0 +1,300 @@
+{
+  "schema": "lrt.nose-shape.freeze.v1",
+  "frozen_at": "2026-10-22T17:53:30Z",
+  "base": "7fdced66332ae1a5ffc967730f8ee10223f04acc",
+  "status": "integrated_source_only_acceptance_unrun",
+  "acceptance": "NOT_RUN",
+  "source_evidence": [
+    "https://wiki.pixcakeai.com/guide/9405.html",
+    "https://github.com/google-ai-edge/mediapipe/blob/v1.1.1/mediapipe/tasks/python/vision/face_landmarker.py"
+  ],
+  "correction": "鼻高 is head-local vertical POSITION, not longitudinal scaling. 左右 is a positional scalar.",
+  "operation": "lnx.nose_shape.v1",
+  "recipe_version": 1,
+  "protocol": 2,
+  "controls": {
+    "family": "PC-32466-C-ba582ff45d",
+    "size": "PC-32466-C-0025490aa7",
+    "height": "PC-32466-C-180241806a",
+    "position": "PC-32466-C-1ef85157f8",
+    "bridge": "PC-32466-C-6598ad2758",
+    "wing": "PC-32466-C-aed80c5608",
+    "tip": "PC-32466-C-aec9e15569"
+  },
+  "numeric_policy": {
+    "range": [
+      -1,
+      1
+    ],
+    "neutral": 0,
+    "origin": "LumaRetouch product policy, not official range"
+  },
+  "composition": "N(B(A(x))) at actual off-grid coordinates, one final image sampler",
+  "shared_hooks_document": "docs/NOSE-SHAPE-INTEGRATION.md",
+  "verification": {
+    "python_ast": "24 source files parsed; no product imports or execution",
+    "tests": "not run",
+    "rust": "not compiled",
+    "typescript": "not typechecked",
+    "inference": "not run",
+    "photos": "not run",
+    "diff_whitespace": "git diff --check only"
+  },
+  "files": [
+    {
+      "path": "core/nose_shape/lib.rs",
+      "sha256": "ecae8505dd4a1064857f0b6b1fece84ea8a4e79776bb64fa37d78d0c1fa3e3c9",
+      "kind": "new"
+    },
+    {
+      "path": "docs/NOSE-SHAPE-INTEGRATION.md",
+      "sha256": "2190942f678c5a9bcdbc5c8cef767f500b5e32c02c4b9344e4b02238c3a9f3c3",
+      "kind": "new"
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "5dbcdff911dc3a32ec3e1ee5a69786d23e7f710f6a6af42db953860d37741dbd",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight_controller.py",
+      "sha256": "4f8f5446fb337349220d148ed1e5701193dbdc40fc03856b9a6be97a98d48ffc",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "a73221ac591577fcd168ff783ef01ec5873f18dedc6eb8de9449a0d793753b40",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/color_action_readiness.py",
+      "sha256": "ea867bf9a354f34165e1e2ecc63cee8a9852eedb6378c866d72fdb6be35f5c62",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "8a96cab7c38652fac78c724d566bcea08e65096057b3624004866d15a6e8a551",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "51b1b17645fa1e3a49b85730f8cf46240c6e4dd089108939395b5ace0b84ea82",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_controller.py",
+      "sha256": "b4a50bac57ecb61537f8017f2017206a188f68f0924a1da42281ea1f12713223",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "a36edacd167f8255c2815c2b71f1d73f6a0867d22a8fe452f6ae1a609f47cadb",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_preset_review.py",
+      "sha256": "c218033d5bece52e350fb168e3fec84737765006b9bd1ba0f9760a206de4f721",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/nose_shape_command.py",
+      "sha256": "98ca7f8584d5646188df5193796c7a85bacf59b1070f30d709a301fdee6076a0",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/nose_shape_field.py",
+      "sha256": "0b1a00a3709250886f64d12dfd72d83e31314f1d7bf6acfc46390f3e743354af",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/nose_shape_geometry.py",
+      "sha256": "1643f4d0ead92e59487708e90b2bb5b5910b961063bc81b7fcfaf58dc7a162ce",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/nose_shape_native.py",
+      "sha256": "28c71c2e46c2e7ecfa58486ce3d36c3987cce4d566883d02ea3316cd420a1914",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/nose_shape_project.py",
+      "sha256": "1bdc787327e4ab3a6df5cfc3d43126cb49170534497db4e096108b9d5b194d7d",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/nose_shape_receipts.py",
+      "sha256": "c90be58de8bc94bb09354fdab345ebb307756487aa18a383ca8964a1bfb0335b",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/nose_shape_runtime.py",
+      "sha256": "69a5ba1a4a139f47cced62efd33d879596c2e761af9699d36e8e04d829c0e0dd",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/nose_shape_scope.py",
+      "sha256": "1d6fabeaa3995a2b2832f27bfa9f944d0358dc81263f1cbb9687164f68c685e4",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/nose_shape_state.py",
+      "sha256": "dfc8d36e486f2dbb971d6b1b9211c152b57d3002b3089a8648153d1b4611a756",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_geometry_dispatch.py",
+      "sha256": "54c4382a90395f6216d4e15c487aa039ad1cec0aa1eb2f852ab220d5e2ae4ea5",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "sha256": "41acd9882438185e6ad40df376a08c8e2969fbeafe0989ba9832ace1dca6bfd0",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "6d168bb2f36b167b8d6faa8b314e70b0241f2dceb7b13a923f602f073a796a40",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "d0c2719b2bb6983191352c3a730931f147842ac59f66b044a8058b6bc8f0a223",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "6299eb7b9d900ca4ac966f989c49ac6094d90ae78d26960b77295422c03bed8d",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "d05d2479a5b9ed1fc743384d145c15cd6fed9dbc7bffa92462b350f6ccdeb434",
+      "kind": "shared"
+    },
+    {
+      "path": "engine/tests/test_nose_shape_contract.py",
+      "sha256": "79ccd3fcd418e04984a6dee5b5e96cc643dc95bdad58ca0d2efa91ab4c86ec6d",
+      "kind": "new"
+    },
+    {
+      "path": "packaging/build-nose-shape.sh",
+      "sha256": "7a6e1921bdcf572dd74270f44e6111a463290b0f68e0b5c74f1ffbe1e086ba00",
+      "kind": "new"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "2ea16731407c0ad5e6b67902962695ba1aff33c70d70c43e1333b38330b3a038",
+      "kind": "shared"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "4ad8a106c3ccda199ffe53ae2d3ba07eae0f725f59df7b0beef11d649b4b9de0",
+      "kind": "shared"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "243503c254c16c17fa5e5a4687bfae94ea598418d1daf9baccf55e7338453100",
+      "kind": "shared"
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "61f166be4703e9acfc98857228cebd733a08f6963117c187e8b2a48630913e56",
+      "kind": "shared"
+    },
+    {
+      "path": "ui/src-tauri/src/nose_shape_api.rs",
+      "sha256": "1d112bf7d2d2cd28c90e6f5c212cd4d62c175e29fd8d56cb7c845a375fb8a4d8",
+      "kind": "new"
+    },
+    {
+      "path": "ui/src/batch/batchScopeOptions.ts",
+      "sha256": "1f1db026a18826383e46e46f9bfd66bd14278f4aa5947be388facac9e91d1856",
+      "kind": "shared"
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "cf539c7485b7c04cfc940576fe410a0fc3974066770acde6e5743111570416c9",
+      "kind": "shared"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "5c78f5ad3051394478dabb5aeef6c9f5516f437657a23f3055b952fe2212ef47",
+      "kind": "shared"
+    },
+    {
+      "path": "ui/src/noseShape/NoseShapeControls.tsx",
+      "sha256": "1f000f80ea77b063a0c4426f89c8981aedb3926821f18daf01890bbd64ae5883",
+      "kind": "new"
+    },
+    {
+      "path": "ui/src/noseShape/interaction.ts",
+      "sha256": "0ade4dfefc237a586537004c4e7e87521d2ad5f8e0c5a768e3799ad2427d9c18",
+      "kind": "new"
+    },
+    {
+      "path": "ui/src/noseShape/model.test.ts",
+      "sha256": "c14473b4bca49e13bdb5a5eb9d2f775787cb8751e25b63558e5c373cc950e480",
+      "kind": "new"
+    },
+    {
+      "path": "ui/src/noseShape/model.ts",
+      "sha256": "84c8afa0233719f0dff3ed44021b0312029755ec41848c35ca4495a5caec7e8f",
+      "kind": "new"
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "c4017b858bf17eac403b113f7547e43af5abcf6a20e94ff4b9215bab9903be3b",
+      "kind": "shared"
+    }
+  ],
+  "manifest_path": "docs/development/nose-shape-freeze.json",
+  "owned_paths": [
+    "core/nose_shape/lib.rs",
+    "docs/NOSE-SHAPE-INTEGRATION.md",
+    "docs/p0/registry-extensions.json",
+    "engine/src/lumaretouch_engine/batch_preflight_controller.py",
+    "engine/src/lumaretouch_engine/batch_sync.py",
+    "engine/src/lumaretouch_engine/color_action_readiness.py",
+    "engine/src/lumaretouch_engine/export.py",
+    "engine/src/lumaretouch_engine/export_recipe.py",
+    "engine/src/lumaretouch_engine/history_controller.py",
+    "engine/src/lumaretouch_engine/history_policy.py",
+    "engine/src/lumaretouch_engine/local_grade_preset_review.py",
+    "engine/src/lumaretouch_engine/nose_shape_command.py",
+    "engine/src/lumaretouch_engine/nose_shape_field.py",
+    "engine/src/lumaretouch_engine/nose_shape_geometry.py",
+    "engine/src/lumaretouch_engine/nose_shape_native.py",
+    "engine/src/lumaretouch_engine/nose_shape_project.py",
+    "engine/src/lumaretouch_engine/nose_shape_receipts.py",
+    "engine/src/lumaretouch_engine/nose_shape_runtime.py",
+    "engine/src/lumaretouch_engine/nose_shape_scope.py",
+    "engine/src/lumaretouch_engine/nose_shape_state.py",
+    "engine/src/lumaretouch_engine/portrait_geometry_dispatch.py",
+    "engine/src/lumaretouch_engine/preset_controller.py",
+    "engine/src/lumaretouch_engine/project.py",
+    "engine/src/lumaretouch_engine/scope.py",
+    "engine/src/lumaretouch_engine/server.py",
+    "engine/src/lumaretouch_engine/vram.py",
+    "engine/tests/test_nose_shape_contract.py",
+    "packaging/build-nose-shape.sh",
+    "packaging/stage-engine.sh",
+    "ui/src-tauri/src/engine.rs",
+    "ui/src-tauri/src/main.rs",
+    "ui/src-tauri/src/native_dispatch.rs",
+    "ui/src-tauri/src/nose_shape_api.rs",
+    "ui/src/batch/batchScopeOptions.ts",
+    "ui/src/components/RetouchPanel.tsx",
+    "ui/src/native.ts",
+    "ui/src/noseShape/NoseShapeControls.tsx",
+    "ui/src/noseShape/interaction.ts",
+    "ui/src/noseShape/model.test.ts",
+    "ui/src/noseShape/model.ts",
+    "ui/src/presets/presetModel.ts",
+    "docs/development/nose-shape-freeze.json"
+  ],
+  "registry_correction": {
+    "head_only_brow_lip_blob": "289cd1a6885cdaa13e2a50a1b4292cbf0518efd5",
+    "live_extension": "brow + lip + nose",
+    "immutable_baseline": "unchanged"
+  }
+}

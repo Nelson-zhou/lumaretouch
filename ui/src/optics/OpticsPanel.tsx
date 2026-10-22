@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import type {Guide,LensMetadata,OpticsRecipe,OpticsReport} from './model';
 import type {OpticsOwner} from './useOpticsWorkflow';
+import {useOutputPresentation} from './useOutputPresentation';
 import './optics.css';
 const LABELS:Record<string,string>={distortion:'畸变矫正',vignette:'暗角调节',midpoint:'中点',vertical:'垂直透视',horizontal:'水平透视',rotation:'旋转',aspect:'长宽比',scale:'缩放',offset_x:'水平偏移',offset_y:'垂直偏移'};
 function GuideCanvas({source,width,height,guides,disabled,onChange,onLoad}:{source:string;width:number;height:number;guides:Guide[];disabled:boolean;onChange:(v:Guide[])=>void;onLoad:()=>void}){
@@ -37,16 +38,31 @@ function GuideCanvas({source,width,height,guides,disabled,onChange,onLoad}:{sour
 }
 export function OpticsPanel({owner,report,disabled=false}:{owner:OpticsOwner;report?:OpticsReport;disabled?:boolean}){
   const {state}=owner;const shown=useRef(state);shown.current=state;const [draft,setDraft]=useState<OpticsRecipe|null>(null),[metadata,setMetadata]=useState<LensMetadata>({camera_maker:'',camera_model:'',lens_maker:'',lens_model:'',focal:null,aperture:null,distance:null});
-  const loaded=useRef<{id:string|null;keys:Set<string>}>({id:null,keys:new Set()});
+  const [loaded,setLoaded]=useState<{id:string|null;before:string;after:string;input:string}>({id:null,before:'',after:'',input:''});
+  const [autoAttempt,setAutoAttempt]=useState(false);
+  const resultImage=useRef<HTMLImageElement>(null);
   const close=useRef<HTMLButtonElement>(null);
-  useEffect(()=>{if(state.image)setDraft(structuredClone(state.image.recipe));},[state.image]);
+  useEffect(()=>{if(state.image){setDraft(structuredClone(state.image.recipe));setAutoAttempt(false);}},[state.image]);
+  useEffect(()=>{if(!state.open)setAutoAttempt(false);},[state.open]);
   useEffect(()=>{if(report?.metadata)setMetadata(report.metadata);},[report?.metadata]);
   useEffect(()=>{if(!state.open)return;const root=document.getElementById('root'),was=root?.inert,previous=document.activeElement as HTMLElement|null;if(root)root.inert=true;close.current?.focus();return()=>{if(root)root.inert=!!was;previous?.focus();};},[state.open]);
   useEffect(()=>{if(!state.open)return;const handler=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.preventDefault();owner.cancel();}};window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler);},[state.open,owner.cancel]);
   const image=state.image,locked=state.phase==='loading'||owner.pending,ready=state.phase==='ready'&&state.presented;
-  function didLoad(key:string){if(state.previewId!==shown.current.previewId||shown.current.phase!=='ready')return;if(loaded.current.id!==state.previewId)loaded.current={id:state.previewId,keys:new Set()};loaded.current.keys.add(key);
-    if(loaded.current.keys.size===3){const id=state.previewId;requestAnimationFrame(()=>requestAnimationFrame(()=>{if(loaded.current.id===id&&document.visibilityState==='visible')void owner.presented();}));}}
+  const autoEnabled=!!draft&&['smart','horizontal','vertical'].includes(draft.perspective.mode);
+  // A failed first smart solve must not prevent trying the single-axis modes.
+  // This is retry UI only; it does not enable or persist an unproved recipe.
+  const autoRetry=state.phase==='failed'&&(autoAttempt||autoEnabled);
+  const imagesLoaded=!!image&&loaded.id===state.previewId&&loaded.before===image.before&&loaded.after===image.after&&loaded.input===image.input;
+  useOutputPresentation({element:resultImage,previewId:state.previewId,source:image?.after,width:image?.width,height:image?.height,
+    ready:state.open&&state.phase==='ready'&&!state.presented&&imagesLoaded,onPresented:owner.presented});
+  function didLoad(key:'before'|'after'|'input'){
+    if(!image||state.previewId!==shown.current.previewId||shown.current.phase!=='ready'||shown.current.image?.[key]!==image[key])return;
+    setLoaded(previous=>({...previous,...(previous.id!==state.previewId?{before:'',after:'',input:''}:{}),id:state.previewId,[key]:image[key]}));
+  }
   function setting(section:'lens'|'perspective',key:string,value:number|boolean){void owner.preview({action:'set',section,key,value});}
+  function automatic(mode:'off'|'smart'|'horizontal'|'vertical'){
+    setAutoAttempt(mode!=='off');void owner.preview({action:'auto',mode});
+  }
   function slider(section:'lens'|'perspective',key:string,min=-100,max=100,step=1){if(!draft)return null;const values=draft[section] as unknown as Record<string,unknown>;const value=Number(values[key]);
     const update=(v:number)=>setDraft(p=>p?{...p,[section]:{...p[section],[key]:v}}:p);
     const commit=(v:number)=>{if(Number.isFinite(v))setting(section,key,v);};
@@ -71,19 +87,27 @@ export function OpticsPanel({owner,report,disabled=false}:{owner:OpticsOwner;rep
           {image?.candidates?.length===0&&<p>没有匹配配置，请检查型号或使用手动调整。</p>}
           {image?.candidates?.map((candidate,i)=><button key={`${candidate.lens_model}-${i}`} disabled={locked||!state.presented} onClick={()=>void owner.preview({action:'profile',candidate,metadata:image.profile_metadata??metadata})}>{candidate.camera_model} / {candidate.lens_maker} {candidate.lens_model}</button>)}
         </details>
-        <h3>透视矫正</h3><p><small>自动模式采用真实线段分析，不是 AI 模型；无可信直线时保持原样并提示。</small></p>
-        <div className="opticsModes">{(['off','smart','horizontal','vertical'] as const).map((mode,i)=><button key={mode} aria-pressed={draft.perspective.mode===mode} disabled={locked||!state.presented} onClick={()=>void owner.preview({action:'auto',mode})}>{['关闭自动','智能','仅水平','仅垂直'][i]}</button>)}</div>
-        {draft.perspective.analysis&&<p><small>{draft.perspective.analysis.message}<br/>依据 {draft.perspective.analysis.lines} 条线，置信度 {Math.round(draft.perspective.analysis.confidence*100)}%，残差 {draft.perspective.analysis.residual_degrees.toFixed(2)}°</small></p>}
+        <h3>透视矫正</h3>
+        <label><input type="checkbox" checked={autoEnabled} disabled={locked||(!state.presented&&!autoRetry)} onChange={e=>automatic(e.target.checked?'smart':'off')}/>自动透视矫正（手册：AI透视矫正）</label>
+        <p><small>采用真实线段检测与几何解算，无神经网络依赖；证据不足时保留上一有效结果并提示。</small></p>
+        <div className="opticsModes" role="group" aria-label="自动透视生效模式">{(['smart','horizontal','vertical'] as const).map((mode,i)=><button key={mode} aria-pressed={draft.perspective.mode===mode} disabled={(!autoEnabled&&!autoRetry)||locked||(!state.presented&&!autoRetry)} onClick={()=>automatic(mode)}>{['智能','仅水平','仅垂直'][i]}</button>)}</div>
+        {autoRetry&&<p role="status">本次自动解算未生效，上一有效设置未改变；可选择其他模式重试，或返回上一有效预览。</p>}
+        <p><small>本产品默认关闭，每次开启先用智能模式；关闭只清除自动解算，保留下面的手动微调。智能在两个方向间保守折中，不强行拉直全部线条。</small></p>
+        {draft.perspective.mode==='guided'&&<p><small>当前使用引导线解算；开启自动会替换该解算并清除引导线，手动微调保留。</small><br/><button disabled={locked||!state.presented} onClick={()=>void owner.preview({action:'auto',mode:'off'})}>清除引导线解算，保留手动微调</button></p>}
+        {draft.perspective.analysis&&<p><small>{draft.perspective.analysis.message}<br/>依据 {draft.perspective.analysis.lines} 条线，{draft.perspective.mode==='guided'?'手动引导线约束':`线段支持评分 ${Math.round(draft.perspective.analysis.confidence*100)}/100（启发式，非成功概率）`}，残差 {draft.perspective.analysis.residual_degrees.toFixed(2)}°</small></p>}
         {['vertical','horizontal','rotation','aspect','scale','offset_x','offset_y'].map(key=>slider('perspective',key,key==='scale'?25:key==='rotation'?-45:-100,key==='scale'?400:key==='rotation'?45:100,key==='rotation'?.1:1))}
         <label><input type="checkbox" checked={draft.perspective.show_guides} disabled={locked||!state.presented} onChange={e=>setting('perspective','show_guides',e.target.checked)}/>显示结果辅助线</label>
         <label><input type="checkbox" checked={draft.perspective.crop_lock} disabled={locked||!state.presented} onChange={e=>setting('perspective','crop_lock',e.target.checked)}/>锁定透视裁剪，保持画面比例</label>
+        <button disabled={locked||!state.presented} onClick={()=>void owner.preview({action:'reset_perspective'})}>仅重置透视，保留镜头调整</button>
         <p><small>更换镜头或修改畸变前须先关闭自动/引导透视，再重新分析或放置引导线，避免旧线条被错误解释。</small></p><p><small>当前自动收边缩放：{((image?.crop_zoom??1)*100).toFixed(1)}%。手动数值范围为本产品约定，不冒充官方未披露量程。</small></p>
-        <button disabled={locked||!state.presented} onClick={()=>void owner.preview({action:'reset'})}>重置镜头与透视</button>
+        <button disabled={locked||!state.presented} onClick={()=>void owner.preview({action:'reset'})}>重置全部镜头与透视（含镜头配置）</button>
       </>}</aside><div className="opticsImages">{image&&state.phase!=='loading'&&<>
         <div className="opticsComparisons"><figure><figcaption>镜头/透视之前（只读）</figcaption><img key={`before-${state.previewId}`} src={image.before} width={image.width} height={image.height} alt="镜头透视之前，已包括原有全部效果和裁剪的真实画面" onLoad={()=>didLoad('before')}/></figure>
-          <figure><figcaption>当前镜头/透视结果（只读）</figcaption><div className={draft?.perspective.show_guides?'opticsResult opticsGrid':'opticsResult'}><img key={`after-${state.previewId}`} src={image.after} width={image.width} height={image.height} alt="实际镜头和透视校正结果，已应用最终裁剪" onLoad={()=>didLoad('after')}/></div></figure></div>
+          <figure><figcaption>当前镜头/透视结果（只读）</figcaption><div className={draft?.perspective.show_guides?'opticsResult opticsGrid':'opticsResult'}><img key={`after-${state.previewId}`} ref={resultImage} data-optics-preview={state.previewId} src={image.after} width={image.width} height={image.height} alt="实际镜头和透视校正结果，已应用最终裁剪" onLoad={()=>didLoad('after')}/></div></figure></div>
+        {state.phase==='ready'&&!state.presented&&<p role="status">请将本次结果图完整滚动到可视区域，并保持窗口焦点；展示确认完成后才能继续编辑或应用。</p>}
+        {autoEnabled&&<p><small>绘制引导线会替换当前自动解算；第 2 条线完成后按引导线重新求解，手动微调保留。</small></p>}
         <h3>透视引导线画布</h3><GuideCanvas key={`input-${state.previewId}`} source={image.input} width={image.input_width} height={image.input_height} guides={draft?.perspective.guides??[]} disabled={locked||!state.presented} onLoad={()=>didLoad('input')} onChange={guides=>void owner.preview({action:'guides',guides})}/>
-      </>}</div></main><footer><p role="status">{state.message}</p>{state.phase==='failed'&&<><button onClick={()=>void owner.preview({action:'view'})}>返回上一有效预览</button><button onClick={()=>void owner.preview({action:'reset'})}>重置镜头/透视并审阅</button></>}<small>预览是当前生产链的真实代理反馈，非全尺寸验收。批量/预设可选手动参数或逐目标自动重算；须审阅完整候选，源照片的镜头身份、矩阵和引导线不复制。</small>
+      </>}</div></main><footer><p role="status">{state.message}</p>{state.phase==='failed'&&<><button onClick={()=>void owner.preview({action:'view'})}>返回上一有效预览</button><button onClick={()=>void owner.preview({action:'reset_perspective'})}>仅重置透视并审阅，保留镜头</button><button onClick={()=>void owner.preview({action:'reset'})}>重置全部镜头/透视并审阅</button></>}<small>预览是当前生产链的真实代理反馈，非全尺寸验收。批量/预设可选手动参数或逐目标自动重算；须审阅完整候选，源照片的镜头身份、矩阵和引导线不复制。</small>
         <button disabled={!ready||!state.dirty||locked} onClick={()=>void owner.apply()}>应用本次修改</button>{state.phase==='uncertain'&&<button onClick={()=>void owner.check()}>查询原结果，不重复提交</button>}
       </footer></div>,document.body)}
   </section>;

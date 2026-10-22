@@ -206,6 +206,50 @@
       "reason": "Versioned white-balance algorithm and replacement gains. Omission in imported legacy payloads preserves target reference; it is not replaced by this explicit neutral object. Corrected daylight domain requires reference and shifted white in 4000–25000 K. Picker UI remains separate."
     },
     {
+      "operation_id": "lnx.nose_shape.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "size": 0.0,
+        "height": 0.0,
+        "position": 0.0,
+        "bridge": 0.0,
+        "wing": 0.0,
+        "tip": 0.0
+      },
+      "hard_range": {
+        "version": 1,
+        "size": [
+          -1,
+          1
+        ],
+        "height": [
+          -1,
+          1
+        ],
+        "position": [
+          -1,
+          1
+        ],
+        "bridge": [
+          -1,
+          1
+        ],
+        "wing": [
+          -1,
+          1
+        ],
+        "tip": [
+          -1,
+          1
+        ]
+      },
+      "transferable": true,
+      "source_requirement": "PC-32466-C-ba582ff45d",
+      "reason": "Six 2D projected nose controls; height is head-local vertical position, position is horizontal translation. Numeric ranges are local product policy, not official guide values. Portable recipe only; target geometry and visible support are recomputed. Source integrated, acceptance unrun."
+    },
+    {
       "operation_id": "lnx.brow_shape.v1",
       "parameter_key": "recipe",
       "type": "object",

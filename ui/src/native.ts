@@ -15,7 +15,7 @@ export function notifyInspectionEditIntent(){
   if(typeof window!=='undefined')window.dispatchEvent(new Event(INSPECTION_EDIT_INTENT));
 }
 const inspectionMutations=new Set(['start_engine','shutdown_engine','load_image','set_strength','precompute',
-  'inpaint','light','deform','lut','grade','enhance','lip_makeup','brow_shape','background','exposure','hsl','curves','levels','fabric','crop','compare',
+  'inpaint','light','deform','lut','grade','enhance','lip_makeup','brow_shape','nose_shape','background','exposure','hsl','curves','levels','fabric','crop','compare',
   'session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
   const send=()=>{if(inspectionMutations.has(command))notifyInspectionEditIntent();return tauriInvoke<T>(command,args,options);};
@@ -144,6 +144,7 @@ export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_pre
 
 export interface DocState {
   brow_shape?: {version:1;revision:number;selected_face_id:string;recipe:import("./browShape/model").BrowShape;sides:Partial<Record<import("./browShape/model").BrowSide,import("./browShape/model").BrowFact>>;suspended:string|null;bytes_fields:number};
+  nose_shape?: {version:1;revision:number;selected_face_id:string;recipe:import("./noseShape/model").NoseShape;controls:Partial<Record<import("./noseShape/model").NoseKey,import("./noseShape/model").NoseFact>>;suspended:string|null;bytes_fields:number};
   lip_makeup?: {version:1;recipe:import("./lipMakeup/model").LipMakeup;facts:import("./lipMakeup/model").LipFact;suspended:string|null;bytes_fields:number};
   effect_recovery?: import("./effectRecovery/model").RecoveryReport;
   optics?: import("./optics/model").OpticsReport;
@@ -934,6 +935,7 @@ export interface EngineStatus {
   ready_caps?: {
     lip_makeup_protocol?: number;
     brow_shape_protocol?: number;
+    nose_shape_protocol?: number;
     effect_recovery_protocol?: number;
     optics_protocol?: number;
     sky_replacement_protocol?: number;
@@ -1698,4 +1700,12 @@ export function runBrowShapeRequest(request:BrowRequest):Promise<{requested:bool
 export function runBrowShapeRequest(request:BrowRequest|{action:'status';request_id:string}){
   // Receipt lookups are read-only and must not invalidate editing captures.
   return request.action==='status'?tauriInvoke<import('./browShape/latestIntent').Mailbox<import('./browShape/model').BrowShape>>("brow_shape",{request}):invoke<{requested:boolean}>("brow_shape",{request});
+}
+
+type NoseRequest={action:'edit';request_id:string;gesture_id:string;document_id:string;face_id:string;control:string;recipe:import('./noseShape/model').NoseShape;base:import('./noseShape/model').NoseShape};
+export function runNoseShapeRequest(request:{action:'status';request_id:string}):Promise<import('./browShape/latestIntent').Mailbox<import('./noseShape/model').NoseShape>>;
+export function runNoseShapeRequest(request:NoseRequest):Promise<{requested:boolean}>;
+export function runNoseShapeRequest(request:NoseRequest|{action:'status';request_id:string}){
+  // Receipt lookups are read-only and must not invalidate editing captures.
+  return request.action==='status'?tauriInvoke<import('./browShape/latestIntent').Mailbox<import('./noseShape/model').NoseShape>>("nose_shape",{request}):invoke<{requested:boolean}>("nose_shape",{request});
 }

@@ -15,3 +15,11 @@ class PortraitGeometryMixin:
     def finish_brow_shape(self,p,error):
         from .brow_shape_receipts import finish
         finish(self,p,error,_emit)
+
+    def cmd_nose_shape(self,p):
+        from .nose_shape_receipts import apply
+        apply(self,p,_emit)
+
+    def finish_nose_shape(self,p,error):
+        from .nose_shape_receipts import finish
+        finish(self,p,error,_emit)

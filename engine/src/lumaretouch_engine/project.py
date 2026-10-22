@@ -195,8 +195,9 @@ def validate(p: object) -> None:
         try: validate_sky(row,required=(sv in (SKY_SCHEMA, SCHEMA)),allowed=(sv in (SKY_SCHEMA, SCHEMA)),semantic=(sv==SCHEMA))
         except ValueError as error: raise ProjectError(str(error)) from error
         from .brow_shape_project import validate_records as validate_brows
+        from .nose_shape_project import validate_records as validate_noses
         from .lip_makeup_project import validate_records as validate_lips
-        try: validate_lips(row); validate_brows(row)
+        try: validate_lips(row); validate_brows(row); validate_noses(row)
         except ValueError as error: raise ProjectError(str(error)) from error
         from .optics_project import validate_records as validate_optics
         try: validate_optics(row,required=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)),allowed=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)))
@@ -563,6 +564,9 @@ def encode(value: object, assets: dict, dropped: list, at: str) -> object:
         if '_brow_shape' in value:
             from .brow_shape_project import validate_records
             validate_records(value)
+        if '_nose_shape' in value:
+            from .nose_shape_project import validate_records
+            validate_records(value)
         if '_lip_makeup' in value:
             from .lip_makeup_project import check_saved
             check_saved(value['_lip_makeup'])
@@ -636,6 +640,9 @@ def decode(value: object, assets: dict, dropped: list, at: str,
             _check_manual_liquify_record(value['_manual_liquify'])
         if '_brow_shape' in value:
             from .brow_shape_project import validate_records
+            validate_records(value)
+        if '_nose_shape' in value:
+            from .nose_shape_project import validate_records
             validate_records(value)
         if '_lip_makeup' in value:
             from .lip_makeup_project import check_saved
@@ -781,8 +788,9 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
             from .sky_replacement_project import validate_records as validate_sky
             validate_sky(recipe,required=(project.get("schema_version") in (SKY_SCHEMA, SCHEMA)),allowed=(project.get("schema_version") in (SKY_SCHEMA, SCHEMA)),semantic=(project.get("schema_version")==SCHEMA))
             from .brow_shape_project import validate_records as validate_brows
+            from .nose_shape_project import validate_records as validate_noses
             from .lip_makeup_project import validate_records as validate_lips
-            validate_lips(recipe); validate_brows(recipe)
+            validate_lips(recipe); validate_brows(recipe); validate_noses(recipe)
             from .optics_project import validate_records as validate_optics
             validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)))
             from .studio_background_project import validate_records as validate_studio
@@ -838,8 +846,9 @@ def active_recipe(project: dict, path: str, dc_types: dict | None = None) -> obj
                 from .sky_replacement_project import validate_records as validate_sky
                 validate_sky(recipe,required=(project.get("schema_version") in (SKY_SCHEMA, SCHEMA)),allowed=(project.get("schema_version") in (SKY_SCHEMA, SCHEMA)),semantic=(project.get("schema_version")==SCHEMA))
                 from .brow_shape_project import validate_records as validate_brows
+                from .nose_shape_project import validate_records as validate_noses
                 from .lip_makeup_project import validate_records as validate_lips
-                validate_lips(recipe); validate_brows(recipe)
+                validate_lips(recipe); validate_brows(recipe); validate_noses(recipe)
                 from .optics_project import validate_records as validate_optics
                 validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)))
                 from .studio_background_project import validate_records as validate_studio

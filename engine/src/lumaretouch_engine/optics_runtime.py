@@ -69,7 +69,7 @@ def report(engine):
             'suspended':getattr(stage,'suspended',None),'crop_zoom':getattr(stage,'zoom',1.),
             'resident_bytes':stage.resident_bytes() if stage else 0,'install_hint':L.install_hint(),
             'boundaries':['镜头/透视在全部旧效果与最终手动液化之后、裁剪旋转之前；不会改写旧配方顺序',
-                          '自动透视使用 OpenCV 线段分析与置信度筛选，不是 AI 模型；无可信证据则不改图',
+                          '自动透视使用 OpenCV 线段分析与启发式支持评分，无神经网络依赖；无可信证据则不改图',
                           '正常发行包随附镜头运行库与冻结数据库，运行时安装器离线安装；缺失时明示修复路径，无隐藏下载',
                           '预设/批量可选手动参数或逐目标自动重算；完整候选须冻结预检，镜头身份、求解矩阵和引导线不跨图复制']}
 

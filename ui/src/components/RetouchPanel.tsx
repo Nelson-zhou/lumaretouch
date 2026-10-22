@@ -1,5 +1,7 @@
 import {withoutCoveredLeaves} from "../toolRouting/coverage";
 import {revealTool,type ToolLocation} from "../toolRouting/RetouchToolActivity";
+import {NoseShapeControls} from "../noseShape/NoseShapeControls";
+import {neutral as neutralNose} from "../noseShape/model";
 import {BrowShapeControls} from "../browShape/BrowShapeControls";
 import {neutral as neutralBrows} from "../browShape/model";
 import {LipMakeupControls} from "../lipMakeup/LipMakeupControls";
@@ -214,6 +216,13 @@ function FaceAvatar({ face, thumb, all }: {
  * 面板不提前放行。
  */
 const WIRED: Record<string, string> = {
+  "PC-32466|鼻子": "nose.family",
+  "PC-32466|鼻子/大小": "nose.size",
+  "PC-32466|鼻子/鼻高": "nose.height",
+  "PC-32466|鼻子/左右": "nose.position",
+  "PC-32466|鼻子/鼻梁": "nose.bridge",
+  "PC-32466|鼻子/鼻翼": "nose.wing",
+  "PC-32466|鼻子/鼻尖": "nose.tip",
   "PC-32466|眉毛": "brow.family",
   "PC-32466|眉毛/粗细": "brow.thickness",
   "PC-32466|眉毛/眉距": "brow.spacing",
@@ -511,6 +520,11 @@ export default function RetouchPanel(props: RetouchProps) {
   const renderWired = (leaf: SpecSubcontrol, name: string,
                        kind: string): React.ReactNode => {
     const label = WIRE_LABEL[kind] ?? name;
+    if (kind === "nose.family") return <NoseShapeControls key={leaf.path} value={doc?.nose_shape?.recipe??neutralNose()}
+      facts={doc?.nose_shape?.controls} disabled={dim||!props.faceOk||!!props.whiteBalanceBusy||status?.ready_caps?.nose_shape_protocol!==2}
+      why={props.faceOk?(doc?.nose_shape?.suspended??undefined):props.faceWhy}
+      documentId={doc?.document_id??""} faceId={doc?.nose_shape?.selected_face_id??""} revision={doc?.nose_shape?.revision??0}/>;
+    if (kind.startsWith("nose.")) return null;
     if (kind === "brow.family") return <BrowShapeControls key={leaf.path} value={doc?.brow_shape?.recipe??neutralBrows()}
       facts={doc?.brow_shape?.sides} disabled={dim||!props.faceOk||!!props.whiteBalanceBusy||status?.ready_caps?.brow_shape_protocol!==2}
       why={props.faceOk?(doc?.brow_shape?.suspended??undefined):props.faceWhy}
@@ -723,7 +737,7 @@ export default function RetouchPanel(props: RetouchProps) {
     if (featureId === "PC-32455" && props.opticsPanel && node.full === "镜头调整")
       return <div data-tool-anchor="镜头调整">{props.opticsPanel}</div>;
     if (featureId === "PC-32455" && props.opticsPanel && node.full === "透视矫正")
-      return <div data-tool-anchor="透视矫正" className="toolRouteNote"><button className="toolRouteLink" onClick={()=>navigateTool("PC-32455","镜头调整")}>前往镜头与透视调整</button><p>手动透视、线段自动分析和引导线使用同一个编辑器；线段分析不是 AI 模型。</p></div>;
+      return <div data-tool-anchor="透视矫正" className="toolRouteNote"><button className="toolRouteLink" onClick={()=>navigateTool("PC-32455","镜头调整")}>前往镜头与透视调整</button><p>自动透视启用、智能/水平/垂直模式、手动微调与引导线使用同一个编辑器；自动分析基于真实线段与几何解算。</p></div>;
     if(featureId==="PC-32455"&&node.full==="白平衡")return props.whiteBalancePanel;
     if(featureId==="PC-32455"&&node.full==="直方图")return <HistogramPanel
       key={status?.image?.load_id??"empty"} documentId={status?.image?.load_id??""} snapshotId={doc?.document_id}
@@ -1034,8 +1048,6 @@ export default function RetouchPanel(props: RetouchProps) {
                       return <div className="toolRouteNote"><button className="toolRouteLink" onClick={()=>navigateTool("PC-32476")}>换天空恢复画笔</button><p>进入换天空，选择“恢复换天空”标记区域。</p></div>;
                     if (f.id === "PC-32481" && props.effectRecoveryPanel && ["祛除瑕疵涂抹笔","衣服祛褶皱涂抹笔"].includes(leaf.path))
                       return <div><DisabledRow name={name}/><p className="toolRouteNote">{leaf.path === "祛除瑕疵涂抹笔" ? "通用祛瑕疵恢复尚未接通；上方磨皮、面部祛纹及唇妆恢复仅处理各自效果。" : "当前仅支持衣物细褶恢复，不代表全部衣服褶皱恢复。"}</p></div>;
-                    if (f.id === "PC-32455" && leaf.path === "透视矫正/AI透视矫正" && props.opticsPanel)
-                      return <div><DisabledRow name={name}/><p className="toolRouteNote">AI 透视模型尚未接通；现有自动矫正使用真实线段分析。</p></div>;
                     if(f.id==='PC-32477'&&leaf.path==='衣服祛褶皱/祛细褶皱')return null;
                     if(f.id==='PC-32482'&&((leaf.path==='修补工具'&&props.sourcePatchPanel)||(leaf.path==='仿制图章'&&props.cloneStampPanel)))return null;
                     const kind = WIRED[`${f.id}|${leaf.path}`];

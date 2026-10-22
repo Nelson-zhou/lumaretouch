@@ -6,7 +6,7 @@ use crate::{AppState,engine::EngineHandle,color_capture_host::{id16,token},frame
 fn mutation(v:&Value)->Result<(),String>{
     let count=v.as_object().map_or(0,|v|v.len());
     let valid=match v["action"].as_str(){
-        Some("view"|"reset")=>count==1,
+        Some("view"|"reset"|"reset_perspective")=>count==1,
         Some("set")=>count==4&&matches!(v["section"].as_str(),Some("lens"|"perspective"))&&v["key"].is_string(),
         Some("auto")=>count==2&&matches!(v["mode"].as_str(),Some("off"|"smart"|"horizontal"|"vertical")),
         Some("guides")=>count==2&&v["guides"].as_array().is_some_and(|p|p.len()<=4),

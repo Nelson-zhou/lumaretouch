@@ -1,5 +1,5 @@
 """Bounded frozen local-mask/automatic-optics preset reviews; no editor writes."""
-from . import brow_shape_scope as BROW
+from . import brow_shape_scope as BROW, nose_shape_scope as NOSE
 from collections import OrderedDict
 from copy import deepcopy
 import time
@@ -22,6 +22,7 @@ class PresetReviews:
         candidate=OA.candidate(state,prepared,local_replace_legacy=bool(transfer and transfer['legacy_removed']))
         if SKY.OP in prepared:SKY.validate_target(candidate['_sky_replacement'],row['path'],(row['src_h'],row['src_w']))
         if BROW.OP in prepared and OA.OP not in prepared:BROW.validate_target(candidate,row)
+        if NOSE.OP in prepared and OA.OP not in prepared:NOSE.validate_target(candidate,row)
         optical_record=None;optical_transfer=None
         if OA.OP in prepared:
             if prepare_optics is None:raise ValueError('本引擎缺少目标完整编辑预检端口')
@@ -50,6 +51,7 @@ class PresetReviews:
         candidate=OA.candidate(state,record['modules'],local_replace_legacy=bool(record['transfer'] and record['transfer']['legacy_removed']))
         if SKY.OP in record['modules']:SKY.validate_target(candidate['_sky_replacement'],row['path'],(row['src_h'],row['src_w']))
         if BROW.OP in record['modules'] and OA.OP not in record['modules']:BROW.validate_target(candidate,row)
+        if NOSE.OP in record['modules'] and OA.OP not in record['modules']:NOSE.validate_target(candidate,row)
         if OA.OP in record['modules']:OA.verify_target(record['optics'],state,candidate,row,document_id,revision,record['modules'][OA.OP])
         del self.pending[token]
         return record

@@ -2,7 +2,7 @@ import type {SpecNode} from "../spec";
 /** Exact baseline family + path coverage, verified against the corresponding panel.
  * This is UI de-duplication, not an acceptance claim. Never hide whole families.
  * Optics auxiliary grid and editable solve guides are distinct implemented controls.
- * RAW workflows and AI perspective remain explicit gaps. */
+ * RAW workflows remain explicit gaps; automatic perspective is one enable plus three modes. */
 const COVERED: Record<string, ReadonlySet<string>> = {
   "PC-32479": new Set([
     "向前变形",
@@ -72,6 +72,7 @@ const COVERED: Record<string, ReadonlySet<string>> = {
     "镜头调整/锁定裁剪",
     "镜头调整/暗角调节",
     "镜头调整/中点调节",
+    "透视矫正/AI透视矫正",
     "透视矫正/智能",
     "透视矫正/水平自动",
     "透视矫正/垂直自动",

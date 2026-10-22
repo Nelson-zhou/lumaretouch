@@ -1,5 +1,5 @@
 """Frozen batch review/commit policy, using explicit document/editor ports."""
-from . import brow_shape_scope as BROW
+from . import brow_shape_scope as BROW, nose_shape_scope as NOSE
 from dataclasses import dataclass
 from typing import Callable
 import json
@@ -81,10 +81,11 @@ class FrozenBatchController:
                             candidate=OA.candidate(source if live else row["state"],prepared or mods,local_replace_legacy=bool(transfer and transfer["legacy_removed"]))
                             SKY.validate_target(candidate["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
                         except Exception as error: blocked=str(error)[:2000]
-                    if not blocked and BROW.OP in ops and OA.OP not in ops:
+                    if not blocked and (BROW.OP in ops or NOSE.OP in ops) and OA.OP not in ops:
                         try:
                             candidate=OA.candidate(source if live else row['state'],prepared or mods,local_replace_legacy=bool(transfer and transfer['legacy_removed']))
-                            BROW.validate_target(candidate,row)
+                            if BROW.OP in ops: BROW.validate_target(candidate,row)
+                            if NOSE.OP in ops: NOSE.validate_target(candidate,row)
                         except Exception as error: blocked=str(error)[:2000]
                     if not blocked and OA.OP in ops:
                         try:

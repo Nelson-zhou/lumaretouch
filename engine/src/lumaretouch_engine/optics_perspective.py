@@ -138,12 +138,14 @@ def automatic(rgb, mode):
     if len(lines)<4: raise ValueError('可信直线少于 4 条；未自动改图，请使用引导线')
     m,residual = _fit(lines,mode,aspect=w/h)
     inliers = residual < math.sin(math.radians(3))
-    if np.count_nonzero(inliers)<4: raise ValueError('直线方向不一致，自动透视置信度不足；保留原参数')
+    if np.count_nonzero(inliers)<4: raise ValueError('直线方向不一致，自动透视线段支持不足；保留原参数')
     m,residual = _fit(lines[inliers],mode,aspect=w/h)
     good = lines[inliers]; support = float(good[:,5].sum()/lines[:,5].sum())
     spread = max(float(np.ptp((good[:,0]+good[:,2])/2)),float(np.ptp((good[:,1]+good[:,3])/2)))
     degrees = float(np.degrees(np.arcsin(np.clip(np.average(residual,weights=good[:,5]),0,1))))
+    # The retained field name is compatibility-only: this is a heuristic score,
+    # not a calibrated success probability or a learned model output.
     confidence = min(1.,len(good)/8)*min(1.,spread/.45)*support*math.exp(-degrees/3)
-    if confidence < .45: raise ValueError(f'自动透视置信度不足（{confidence:.0%}）；保留原参数，请使用引导线')
+    if confidence < .45: raise ValueError(f'自动透视线段支持评分不足（{confidence*100:.0f}/100，启发式，非成功概率）；保留原参数，请使用引导线')
     return m.ravel().tolist(),{'method':'opencv-lsd-robust-projective-v1','confidence':confidence,'lines':len(good),'residual_degrees':degrees,
-                             'message':'基于真实线段的自动校正，不是 AI 模型；智能模式保守折中，避免强行拉直所有线条'}
+                             'message':'基于真实线段检测与几何解算，无神经网络依赖；智能模式保守折中，避免强行拉直所有线条'}

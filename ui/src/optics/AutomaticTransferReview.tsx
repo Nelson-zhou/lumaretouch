@@ -8,7 +8,7 @@ export function AutomaticTransferReview({report}:{report:OpticalTargetReview}){
   return <section aria-label="目标镜头透视重新计算预检">
     <strong>本目标重新匹配与解算，尚未应用</strong>
     <p>{report.lens?`${report.lens.camera_model} / ${report.lens.lens_model}，实际标定：${report.lens.flags.join('、')}`:'此请求关闭自动镜头配置'}</p>
-    {report.analysis?<p>依据 {report.analysis.lines} 条线，置信度 {Math.round(report.analysis.confidence*100)}%，残差 {report.analysis.residual_degrees.toFixed(2)}°。{report.analysis.message}</p>:<p>此请求不执行自动透视；仅应用其镜头与手动参数。</p>}
+    {report.analysis?<p>依据 {report.analysis.lines} 条线，线段支持评分 {Math.round(report.analysis.confidence*100)}/100（启发式，非成功概率），残差 {report.analysis.residual_degrees.toFixed(2)}°。{report.analysis.message}</p>:<p>此请求不执行自动透视；仅应用其镜头与手动参数。</p>}
     <p>自动收边倍率 {((report.crop_zoom??1)*100).toFixed(1)}%。源图或编辑版本改变后必须重新预检。</p>
     {safe&&image&&<div style={{display:'flex',flexWrap:'wrap',gap:12}}>
       <figure><figcaption>本次候选上游效果，镜头/透视之前</figcaption><img src={image.before} width={image.width} height={image.height} alt="该目标完整编辑画布的只读分析输入缩略图"/></figure>

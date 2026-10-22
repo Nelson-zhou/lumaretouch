@@ -7,7 +7,7 @@ mandatory and full-quality inspection must reject any skipped active layers.
 """
 from . import facial_wrinkle_state as WSTATE, facial_wrinkle_runtime as WRUNTIME
 from . import lip_makeup_state as LIPS, lip_makeup_runtime as LIPR
-from . import brow_shape_state as BROWS, brow_shape_runtime as BROWR
+from . import brow_shape_state as BROWS, brow_shape_runtime as BROWR, nose_shape_state as NOSES, nose_shape_runtime as NOSER
 from . import white_balance_recipe as WB
 from .export import ExportSpec, resample_field
 from .vram import RepairOp, LightOp
@@ -94,6 +94,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
         configure_export(spec, snap, eh, ew)
     elif float(snap.get("fabric_amount", 0)) != 0:
         raise ValueError("衣物细褶需要逐图分析衣物语义蒙版，禁止复用另一张图片的蒙版")
+    if not for_document and NOSES.active(snap.get("nose_shape")):
+        raise ValueError("鼻形需逐图绑定真实选中人物，请先同步参数到目标照片")
     if not for_document and BROWS.active(snap.get("brow_shape")):
         raise ValueError("眉形需逐图绑定真实选中人物，请先同步参数到目标照片")
     if not for_document and LIPS.active(snap.get("lip_makeup")):
@@ -154,6 +156,7 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
             spec.landmarks = np.asarray(pc.landmarks, dtype=np.float32)
             WRUNTIME.configure_export(spec, snap, eh, ew)
     BROWR.configure_export(spec,snap)
+    NOSER.configure_export(spec,snap)
     spec.lip_makeup = LIPS.check(snap.get("lip_makeup"))
     if LIPS.active(spec.lip_makeup):
         if pc is None: raise ValueError("唇妆导出缺少当前选中人物")

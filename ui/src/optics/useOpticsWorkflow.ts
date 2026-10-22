@@ -50,8 +50,9 @@ export function useOpticsWorkflow(context:OpticsContext,refresh:()=>Promise<void
       latest.current.prepare?.();await settleCurveEdit();const now=latest.current.context;if(!now.enabled||now.canStart===false||now.documentId!==c.documentId||now.contextKey!==c.contextKey)return;session=uuid();document=c.documentId;baseContext=c.contextKey;
       publish({...initial(),open:true});await preview({action:'view'});
     }
-    async function presented(){
-      if(!session||!view.previewId||view.phase!=='ready'||view.presented)return;
+    async function presented(expectedPreviewId:string){
+      // A delayed DOM proof can never acknowledge a newer replacement image.
+      if(!session||!view.previewId||view.previewId!==expectedPreviewId||view.phase!=='ready'||view.presented)return;
       const s=session,p=view.previewId;
       try{await bounded(invoke('optics_preview',{action:'presented',previewId:p,sessionId:s,documentId:document,mutation:null}));
         const deadline=Date.now()+10000;
