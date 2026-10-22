@@ -8,7 +8,7 @@ export function NoseShapeControls({value,facts,disabled,why,documentId,faceId,re
   useEffect(()=>{owner.update({documentId,faceId,recipe:value,revision,enabled:!disabled,peopleContext});},[documentId,faceId,value,revision,disabled,peopleContext]);
   const gesture=(key:NoseKey)=>{let id=gestures.current.get(key);if(!id){id=crypto.randomUUID();gestures.current.set(key,id);}return id;};
   const end=(key:NoseKey)=>{gestures.current.delete(key);};
-  const edit=(change:(r:NoseShape)=>NoseShape,k:NoseKey|'all',id=crypto.randomUUID())=>owner.edit(change,k,id);
+  const edit=(change:(r:NoseShape)=>NoseShape,k:NoseKey|'all',id:string=crypto.randomUUID())=>owner.edit(change,k,id);
   const blocked=disabled||view.phase==='uncertain'||!owner.ownsPending();
   return <section data-control-id={IDS.family} aria-label="鼻子二维几何调整">
     <p className="muted">只调整已有鼻部纹理，不生成缺失部位、不做三维重建。鼻高是上下位置；左右是位置，不是左右侧独立开关。</p>

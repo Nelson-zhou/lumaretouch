@@ -70,7 +70,7 @@ export function useOpticsWorkflow(context:OpticsContext,refresh:()=>Promise<void
       try{
         const deadline=Date.now()+120000;
         while(active&&request===r){
-          const raw=await bounded(invoke<unknown>('optics_result',{requestId:r}),deadline-Date.now());
+          const raw:unknown=await bounded(invoke<unknown>('optics_result',{requestId:r}),deadline-Date.now());
           if(!object(raw))throw Error('修改回执无效');
           if(raw.request_id!==r)throw Error('修改回执身份变化');
           if(raw.phase==='pending'){await new Promise(resolve=>setTimeout(resolve,60));continue;}

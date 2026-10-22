@@ -8,7 +8,7 @@ export function EyeShapeControls({value,facts,disabled,why,documentId,faceId,rev
   useLayoutEffect(()=>{owner.update({documentId,faceId,recipe:value,revision,enabled:!disabled,peopleContext});},[documentId,faceId,value,revision,disabled,peopleContext]);
   const gesture=(key:string)=>{let id=gestures.current.get(key);if(!id){id=crypto.randomUUID();gestures.current.set(key,id);}return id;};
   const end=(key:string)=>{gestures.current.delete(key);};
-  const edit=(change:(r:EyeShape)=>EyeShape,k:EyeKey|'all',id=crypto.randomUUID())=>owner.edit(change,k,id);
+  const edit=(change:(r:EyeShape)=>EyeShape,k:EyeKey|'all',id:string=crypto.randomUUID())=>owner.edit(change,k,id);
   const blocked=disabled||view.phase==='uncertain'||!owner.ownsPending();
   return <section data-control-id={IDS.family} aria-label="眼部几何调整">
     <p className="muted">左/右均指人物自身。只搬运已有二维纹理，不生成眼白、虹膜或睫毛；闭眼不能变成真实睁眼。</p>

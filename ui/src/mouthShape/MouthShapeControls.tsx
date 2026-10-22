@@ -12,7 +12,7 @@ export function MouthShapeControls({value,facts,disabled,why,documentId,faceId,r
   useLayoutEffect(()=>{owner.update({documentId,faceId,recipe:value,revision,enabled:!disabled,peopleContext});},[documentId,faceId,value,revision,disabled,peopleContext]);
   const gesture=(key:string)=>{let id=gestures.current.get(key);if(!id){id=crypto.randomUUID();gestures.current.set(key,id);}return id;};
   const end=(key:string)=>{gestures.current.delete(key);};
-  const edit=(change:(r:MouthShape)=>MouthShape,key:MouthKey|'all',id=crypto.randomUUID())=>owner.edit(change,key,id);
+  const edit=(change:(r:MouthShape)=>MouthShape,key:MouthKey|'all',id:string=crypto.randomUUID())=>owner.edit(change,key,id);
   const blocked=disabled||view.phase==='uncertain'||!owner.ownsPending();
   const slider=(key:MouthKey,side?:MouthSide)=>{
     const id=side?`${key}:${side}`:key;

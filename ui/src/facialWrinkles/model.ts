@@ -43,6 +43,7 @@ export function active(amounts:Record<string,number>):boolean {return KEYS.some(
 export type WrinkleKey = typeof KEYS[number] | typeof LINK_KEY;
 export function transportPatch(amounts?:Partial<Record<WrinkleKey,number>>):Record<string,number>|undefined {
   if(!amounts) return undefined;
-  const entries=[...KEYS,LINK_KEY].filter(k=>amounts[k]!==undefined).map(k=>[k,amounts[k]!]);
+  const keys:readonly WrinkleKey[]=[...KEYS,LINK_KEY];
+  const entries=keys.filter(k=>amounts[k]!==undefined).map(k=>[k,amounts[k]!]);
   return entries.length?Object.fromEntries(entries):undefined;
 }

@@ -47,6 +47,8 @@ export function createRecoveryWorkflow(api:RecoveryTransport,options:{refresh:()
   let state=initial(),context:RecoveryContext={enabled:false,documentId:'',contextKey:''};
   let owner:Owner|null=null,active=true,life=0,serial=0,inflight=false,querying=false;
   let latest:Candidate|null=null,shown:Candidate|null=null,continueDrawing=false;
+  // Read the live queue after awaits: a newer gesture may have replaced it.
+  const queuedCandidate=():Candidate|null=>latest;
   let submittedContext:string|null=null,resumeReady=false;
   let paintTimer:ReturnType<typeof setTimeout>|undefined;
   const listeners=new Set<(value:RecoveryState)=>void>();
@@ -130,7 +132,10 @@ export function createRecoveryWorkflow(api:RecoveryTransport,options:{refresh:()
         publish({image,previewId:candidate.id,phase:state.strokeActive?'drawing':'previewing',message:latest?'全效果预览更新中…':candidate.final?'正在显示本笔最终效果…':'左侧定位原图，右侧是真实全效果；可继续涂抹'});
         return;
       }
-    }catch(error){if(current(o)&&token===life&&(!latest||latest.serial<=candidate.serial))failed(error);}
+    }catch(error){
+      const queued=queuedCandidate();
+      if(current(o)&&token===life&&(!queued||queued.serial<=candidate.serial))failed(error);
+    }
     finally{if(token===life){inflight=false;if(latest)void pump();}}
   }
   async function imagePresented(preview:string){

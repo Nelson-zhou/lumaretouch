@@ -8,7 +8,7 @@ export function BrowShapeControls({value,facts,disabled,why,documentId,faceId,re
   useLayoutEffect(()=>{owner.update({documentId,faceId,recipe:value,revision,enabled:!disabled,peopleContext});},[documentId,faceId,value,revision,disabled,peopleContext]);
   const gesture=(key:string)=>{let id=gestures.current.get(key);if(!id){id=crypto.randomUUID();gestures.current.set(key,id);}return id;};
   const end=(key:string)=>{gestures.current.delete(key);};
-  const edit=(change:(r:BrowShape)=>BrowShape,k:BrowKey|'all',id=crypto.randomUUID())=>owner.edit(change,k,id);
+  const edit=(change:(r:BrowShape)=>BrowShape,k:BrowKey|'all',id:string=crypto.randomUUID())=>owner.edit(change,k,id);
   const blocked=disabled||view.phase==='uncertain'||!owner.ownsPending();
   return <section data-control-id={IDS.family} aria-label="眉毛几何调整">
     <p className="muted">左/右均指人物自身。只调整现有眉毛形状，不生发、不补眉、不更换素材。</p>
