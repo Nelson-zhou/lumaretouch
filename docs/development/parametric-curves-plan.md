@@ -1,8 +1,9 @@
 # Parametric curves: implementation contract and status
 
-Status: mathematical core and headless binary adapter under development, **not a
-usable product feature yet**. Native schema/editor, engine vector evaluation,
-project/preset/frozen batch/export integration and verification are still pending.
+Status: mathematical core passed an initial Qoder candidate check. Native schema,
+editor, engine vector evaluation and shared recipe wiring are now implemented as
+an unverified integration candidate; **do not claim feature completion**. Full
+integration checks and physical UI acceptance remain pending.
 Existing point curves remain; this stage must not replace them.
 
 ## Requirement and upstream evidence
@@ -51,7 +52,7 @@ log-domain evaluation rather than an upstream intermediate logarithm floor.
   finite/monotone samples. No alternative grid is silently accepted.
   No external table is trusted as a validated recipe.
 
-## Integration still required
+## Integration candidate (verification pending)
 
 Recipe v3 retains every v2 field and adds explicit parametric parameters. v1/v2
 remain unchanged. Point interpolation/boundary metadata applies only to points;
@@ -82,3 +83,44 @@ could exceed the 2e-6 gate at the first dark interval with all controls +100 and
 splits [.01,.02,.03]. The proposal now concentrates 16384 intervals in each tone
 region. Default splits retain the original uniform lattice. Actual dense error
 must still be measured by Qoder/CI; static reasoning is not a passed test.
+
+## Initial core evidence (not integrated-product acceptance)
+
+Remote d77f719ad4ff9c07c7c2fad2c0980bde6d95514e, tree
+e76590195745cea04b6eeec105f7a5699c312441. Qoder local 2026-10-22:
+9 parametric tests passed (00:57:48–00:58:01 UTC, 13.18s); 10 existing point
+core tests passed; main helper compiled. 168 profiles, maximum tested error
+9.998432835001125e-7, worst values [-100,100,100,100], splits [.01,.02,.03],
+x=.03002960205078125. The 2e-6 gate was not relaxed.
+Uniform/nonuniform binary protocols passed; 10 malformed cases returned rc2
+and empty stdout. Protocol checks ran 01:03:37–01:03:38 UTC. Candidate and
+baseline tracked files stayed clean; no installed app changes.
+
+Evidence limitations: complete binary stdout blobs were checked in memory but
+not retained, though byte counts, headers, assertions and sample values were logged.
+Steps 2–3 and 4–7 have grouped timestamps, not individual subprocess timestamps.
+The protocol verifier accumulated assertions rather than fail-fast; no failures
+occurred. Do not describe this as perfect/full raw-output retention.
+Subsequent integration changes (local-coordinate lookup, scalar reference mode,
+vector wrappers, UI) need their own checks and cannot inherit these passes.
+
+Integration additions: recipe-v3 capability gate; separate native curve API;
+version-preserving point editor; parameter/point tabs; four sliders/numeric values,
+four native-inverted vertical handles, three split handles/numeric controls;
+per-stage/global enable/reset; shared request/receipt lifecycle. Async inverse
+solves are bounded; final barriers await the newest solve, cancellation restores
+the complete pre-upgrade recipe, and late replies after abort are ignored.
+Parameter stage CPU cache is independently bounded to16 immutable tables. Native
+scalar references are compared unconditionally against NumPy; Torch checks remain
+separate and must run in Qoder's real environment. Render rollback restores the
+previous compiled tuple without recompilation/allocation.
+
+Further static-review corrections before integration publication: decoder snapshots
+mutable buffers; raw v1 recipe retained separately from editable v2 view for exact
+cancel/history restoration; pointer completion belongs to one owning element and
+pointer ID, destination focus occurs before gesture start; untouched handle clicks
+send no edit. A shared native-call barrier settles active parameter gestures and
+waits for final host enqueue before external mutations (including Undo/Redo), while
+own curve writes/read-only state queries remain exempt and idle dispatch stays
+synchronous. Physical range->graph, graph->range, multi-pointer, window deactivation,
+and toolbar history interaction checks remain pending, not inferred from unit tests.

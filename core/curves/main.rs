@@ -13,6 +13,7 @@ fn run()->Result<(),String>{
     if input.len()>16384 {return Err("curve request exceeds 16 KiB".into());}
     let mut tokens=input.split_whitespace();
     let first=tokens.next().ok_or("missing point count")?;
+    if first=="parametric-reference" {return parametric_reference(&mut tokens);}
     if first=="parametric" {return parametric_table(&mut tokens);}
     if first=="levels" {return levels_reference(&mut tokens);}
     let luminance=first=="luminance";
@@ -68,15 +69,28 @@ fn levels_reference(tokens:&mut std::str::SplitWhitespace<'_>)->Result<(),String
     println!("[{}]",rows.join(","));Ok(())
 }
 
-fn parametric_table(tokens:&mut std::str::SplitWhitespace<'_>)->Result<(),String>{
+fn parse_parametric(tokens:&mut std::str::SplitWhitespace<'_>)->Result<parametric::Curve,String>{
     let enabled=match tokens.next(){Some("1")=>true,Some("0")=>false,_=>return Err("parametric enabled must be 0/1".into())};
     let mut values=[0.;4];let mut splits=[0.;3];
     for value in values.iter_mut().chain(splits.iter_mut()){
         *value=tokens.next().ok_or("missing parametric parameter")?.parse().map_err(|_|"invalid parametric parameter")?;
     }
+    parametric::Curve::new(parametric::Spec{enabled,values,splits}).map_err(str::to_owned)
+}
+fn parametric_table(tokens:&mut std::str::SplitWhitespace<'_>)->Result<(),String>{
+    let curve=parse_parametric(tokens)?;
     if tokens.next().is_some(){return Err("unexpected parametric trailing input".into());}
-    let curve=parametric::Curve::new(parametric::Spec{enabled,values,splits}).map_err(str::to_owned)?;
     let table=curve.compile().map_err(str::to_owned)?;
     let bytes=curve.encode(&table).map_err(str::to_owned)?;
     let mut out=io::stdout().lock();out.write_all(&bytes).map_err(|e|e.to_string())?;out.flush().map_err(|e|e.to_string())
+}
+
+fn parametric_reference(tokens:&mut std::str::SplitWhitespace<'_>)->Result<(),String>{
+    let curve=parse_parametric(tokens)?;let mut rows=Vec::new();
+    for token in tokens{if rows.len()>=64{return Err("parametric reference exceeds 64 values".into());}
+        let x:f64=token.parse().map_err(|_|"invalid parametric reference x")?;
+        if !x.is_finite(){return Err("nonfinite parametric reference x".into());}
+        rows.push(format!("[{},{}]",curve.evaluate(x),curve.sampled(x)));
+    }
+    println!("[{}]",rows.join(","));Ok(())
 }

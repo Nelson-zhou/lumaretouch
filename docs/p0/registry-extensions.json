@@ -1,7 +1,7 @@
 {
   "schema": "lrt.registry.extensions.v1",
   "source": "Linux开源人像修图产品指导手册:首版基础曲线; AI开发资料包:RGB/单通道节点编辑",
-  "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Parametric curves, eyedroppers and histogram are separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
+  "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Integrated verification and native UI acceptance remain pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
       "operation_id": "lnx.curves.v1",

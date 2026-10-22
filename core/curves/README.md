@@ -106,6 +106,6 @@ bit-exact; no production curve arithmetic or rejection guard was loosened.
 `parametric.rs` adapts the RawTherapee 5.12 parametric basis, with original copyright,
 GPL-3.0-or-later notice and modifications documented in the source and NOTICE.
 Its headless adapter emits a bounded LPC1 binary LUT; existing JSON point protocols
-are unchanged. Native editor and engine wiring are not implemented by this core
-alone. See docs/development/parametric-curves-plan.md for exact contracts and the
+are unchanged. Native editor and engine wiring now have an integration candidate, not a
+verified completion claim. See docs/development/parametric-curves-plan.md for exact contracts and the
 remaining acceptance gates. Do not report the feature complete from core tests.

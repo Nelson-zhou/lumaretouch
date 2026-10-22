@@ -1,3 +1,4 @@
+import {curveBarrierRequired,settleCurveEdit,isCurveEditBusy} from './curveEditBarrier';
 import type {BatchReply} from './batch/batchWorkflow';
 import type {CaptureTransport,CaptureStatus} from "./colorCaptureController";
 import type {ScopeResult,ScopeStage} from "./colorScopesModel";
@@ -13,8 +14,11 @@ const inspectionMutations=new Set(['start_engine','shutdown_engine','load_image'
   'inpaint','light','deform','lut','grade','enhance','background','exposure','hsl','curves','levels','crop','compare',
   'session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
-  if(inspectionMutations.has(command))notifyInspectionEditIntent();
-  return tauriInvoke<T>(command,args,options);
+  const send=()=>{if(inspectionMutations.has(command))notifyInspectionEditIntent();return tauriInvoke<T>(command,args,options);};
+  if(isCurveEditBusy()&&curveBarrierRequired(command,(args as Record<string,unknown>|undefined)?.action,inspectionMutations.has(command))){
+    return settleCurveEdit().then(send);
+  }
+  return send();
 }
 
 export interface Dist {
@@ -99,11 +103,16 @@ export interface SessionEdits {
 
 /** 当前文档的完整编辑状态（引擎是唯一出处）。 */
 export type CurveChannel = "master" | "red" | "green" | "blue" | "luminance";
+export type ParametricSpec = {
+  version:1; algorithm:'lrt-rt512-parametric-splitgrid-lut-v1';space:'srgb-display';
+  grid:'split-aligned-4x16384';boundary:'identity-outside-unit';enabled:boolean;
+  shadows:number;darks:number;lights:number;highlights:number;splits:[number,number,number];
+};
 export type CurveSpec = {
-  version: 1 | 2; space: "srgb-display"; interpolation: "pchip"; boundary: "linear";
+  version: 1 | 2 | 3; space: "srgb-display"; interpolation: "pchip"; boundary: "linear";
   enabled: boolean; master: [number,number][]; red: [number,number][];
   green: [number,number][]; blue: [number,number][];
-  luminance_space?: "linear-srgb-y-ratio"; luminance?: [number,number][];
+  luminance_space?: "linear-srgb-y-ratio"; luminance?: [number,number][];parametric?:ParametricSpec;
 };
 export const neutralCurves = (): CurveSpec => ({version:1,space:"srgb-display",interpolation:"pchip",boundary:"linear",enabled:true,
   master:[[0,0],[1,1]],red:[[0,0],[1,1]],green:[[0,0],[1,1]],blue:[[0,0],[1,1]]});
@@ -119,7 +128,9 @@ export const colorCaptureApi:CaptureTransport={
 };
 export const requestColorScopes=(documentId:string,requestId:string,stage:ScopeStage)=>
   invoke<{requested:boolean}>("color_scopes",{documentId,requestId,stage});
-export const previewCurves = (spec:CurveSpec) => invoke<Partial<Record<CurveChannel,number[]>>>("curve_preview",{spec});
+export type CurvePreview=Partial<Record<CurveChannel,number[]>>&{parametric?:number[];parametric_handles?:[number,number][]};
+export const dragParametricCurve=(spec:CurveSpec,region:number,target:number)=>invoke<{spec:CurveSpec;y:number}>("curve_parametric_drag",{spec,region,target});
+export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_preview",{spec});
 
 export interface DocState {
   document_id?: string;
@@ -900,6 +911,7 @@ export interface EngineStatus {
   ready_caps?: {
     color_capture_protocol?: number;
     batch_preflight_protocol?: number;
+    curve_recipe_versions?:number[];
     color_scopes_protocol?: number;
     project_actions?: string[];
     /** 挑图（LNX-PICK-001）：动作名单、四组档位的可选值、阈值本体与判据指纹。

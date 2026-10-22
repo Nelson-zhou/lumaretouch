@@ -47,9 +47,9 @@ impl Curve {
     fn position(&self,x:f64)->(usize,f64){
         let bounds=[0.,self.spec.splits[0],self.spec.splits[1],self.spec.splits[2],1.];
         let region=self.spec.splits.iter().filter(|split|x>=**split).count();
-        let position=(region as f64+(x-bounds[region])/(bounds[region+1]-bounds[region]))*REGION_INTERVALS as f64;
-        let lo=(position.floor() as usize).min(INTERVALS-1);
-        (lo,(position-lo as f64).clamp(0.,1.))
+        let position=(x-bounds[region])/(bounds[region+1]-bounds[region])*REGION_INTERVALS as f64;
+        let lo=(position.floor() as usize).min(REGION_INTERVALS-1);
+        (region*REGION_INTERVALS+lo,(position-lo as f64).clamp(0.,1.))
     }
     pub fn evaluate_table(&self,table:&[f32],x:f64)->Result<f64,&'static str>{
         if table.len()!=SAMPLES{return Err("invalid parametric table size");}
@@ -147,7 +147,11 @@ mod tests{
     #[test]fn neutral_and_disabled_are_exact_including_extended_values(){
         for splits in [[0.25,0.5,0.75],[0.01,0.02,0.99],[0.97,0.98,0.99]]{
             for s in [Spec{splits,..Spec::default()},Spec{enabled:false,values:[100.;4],splits}]{
-                let c=Curve::new(s).unwrap();for x in [-2.,-0.,0.,0.123456789,1.,12.]{assert_eq!(c.evaluate(x).to_bits(),x.to_bits());}
+                let c=Curve::new(s).unwrap();let table=c.compile().unwrap();
+                for x in [-2.,-0.,0.,0.123456789,1.,12.]{
+                    assert_eq!(c.evaluate(x).to_bits(),x.to_bits());assert_eq!(c.sampled(x).to_bits(),x.to_bits());
+                    assert_eq!(c.evaluate_table(&table,x).unwrap().to_bits(),x.to_bits());
+                }
             }
         }
     }

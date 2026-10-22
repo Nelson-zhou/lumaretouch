@@ -1,13 +1,14 @@
+import {ParametricCurveEditor} from './ParametricCurveEditor';
 import {canReconcileEdit} from '../editReceipts';
-import {curveSignature as signature, movedCurvePoint, matchesCurveResult, editableCurveSpec as copy, type EditableCurveSpec} from "../curveModel";
+import {curveSignature as signature, movedCurvePoint, matchesCurveResult, editableCurveSpec as copy, parametricCurveSpec, curveEditSnapshot, type EditableCurveSpec} from "../curveModel";
 import {useEffect, useRef, useState} from 'react';
-import {neutralCurves, previewCurves, runCurves, type CurveSpec, type CurveChannel} from '../native';
+import {neutralCurves, previewCurves, runCurves, type CurveSpec, type CurveChannel, type CurvePreview} from '../native';
 
 const channels:CurveChannel[]=['master','red','green','blue','luminance'];
 const names=['RGB','红','绿','蓝','亮度'];
 const colors=['#ddd','#ef7373','#79cd8d','#77aaff','#e8c779'];
 const clamp=(v:number,lo=0,hi=1)=>Math.max(lo,Math.min(hi,v));
-export function CurveEditor({value,documentId,snapshotId,documentRevision,disabled,result,onDone,note}:{value?:CurveSpec;documentId:string;snapshotId?:string;documentRevision:number;disabled:boolean;
+export function CurveEditor({value,documentId,snapshotId,documentRevision,disabled,parametricSupported,result,onDone,note}:{value?:CurveSpec;documentId:string;snapshotId?:string;documentRevision:number;disabled:boolean;parametricSupported:boolean;
   result?:{request_id:string;document_id:string;host_doc_rev:number;success:boolean;spec:CurveSpec}|null;
   error:string|null;onDone:()=>void;note:(s:string)=>void}){
   const [draft,setDraft]=useState<EditableCurveSpec>(()=>copy(value??neutralCurves()));
@@ -15,38 +16,42 @@ export function CurveEditor({value,documentId,snapshotId,documentRevision,disabl
   authoritative.current={value,documentId,snapshotId};
   function restoreAuthoritative(){const current=authoritative.current;
     if(current.value&&current.documentId===documentId&&current.snapshotId===documentId)update(current.value);}
+  const raw=useRef<CurveSpec>(structuredClone(value??neutralCurves()));
   const live=useRef(draft),pending=useRef<{id:string;signature:string}|null>(null);
+  const [mode,setMode]=useState<'point'|'parametric'>('point');
+  const paramActive=useRef(false);const [paramBusy,setParamBusy]=useState(false);const [resetToken,setResetToken]=useState(0);
+  const paramBusyChanged=(busy:boolean)=>{paramActive.current=busy;setParamBusy(busy);};
   const [channel,setChannel]=useState<CurveChannel>('master');
   const [selected,setSelected]=useState(0);
-  const [samples,setSamples]=useState<Partial<Record<CurveChannel,number[]>>|null>(null);
+  const [samples,setSamples]=useState<CurvePreview|null>(null);
   const drag=useRef<{id:string;before:CurveSpec;index:number;pointer:number}|null>(null);
   const previewRevision=useRef(0);
-  const update=(s:CurveSpec)=>{const next=copy(s);live.current=next;setDraft(next);};
+  const update=(s:CurveSpec)=>{const next=curveEditSnapshot(s);raw.current=next.raw;live.current=next.editable;setDraft(next.editable);};
   useEffect(()=>{
-    if(drag.current||pending.current||!value||snapshotId!==documentId)return;
+    if(drag.current||paramActive.current||pending.current||!value||snapshotId!==documentId)return;
     update(value);
   },[value,snapshotId,documentId]);
   useEffect(()=>{
     if(!result||!value||!canReconcileEdit(pending.current?.id,result,documentId,snapshotId,documentRevision,true))return;
     pending.current=null;
-    if(!result.success){drag.current=null;note('曲线未提交，请检查错误信息');}
-    if(!drag.current)update(value);
+    if(!result.success){drag.current=null;paramActive.current=false;setParamBusy(false);setResetToken(v=>v+1);note('曲线未提交，请检查错误信息');}
+    if(!drag.current&&!paramActive.current)update(value);
   },[result,documentId,snapshotId,documentRevision,value]);
   // Only a correlated result or this invocation's rejection may settle pending edits.
   disabled=disabled||!documentId||snapshotId!==documentId||!value;
   useEffect(()=>{
     const revision=++previewRevision.current;
-    void previewCurves(draft).then(s=>{if(revision===previewRevision.current)setSamples(s);})
+    void previewCurves(mode==='parametric'&&parametricSupported?parametricCurveSpec(draft):draft).then(s=>{if(revision===previewRevision.current)setSamples(s);})
       .catch(e=>{if(revision===previewRevision.current)note(String(e));});
     return ()=>{++previewRevision.current;};
-  },[draft]);
+  },[draft,mode,parametricSupported]);
   const submit=(s:CurveSpec,id:string=crypto.randomUUID(),interactive=false)=>{
     const requestId=crypto.randomUUID();
     update(s);pending.current={id:requestId,signature:signature(copy(s))};
-    void runCurves('set',s,id,interactive,requestId,documentId).then(onDone).catch(e=>{
+    return runCurves('set',s,id,interactive,requestId,documentId).then(()=>{onDone();}).catch(e=>{
       note(String(e));
       if(matchesCurveResult(pending.current?.id,requestId)) {
-        pending.current=null;drag.current=null;restoreAuthoritative();
+        pending.current=null;drag.current=null;paramActive.current=false;setParamBusy(false);setResetToken(v=>v+1);restoreAuthoritative();
       }
     });
   };
@@ -70,13 +75,22 @@ export function CurveEditor({value,documentId,snapshotId,documentRevision,disabl
     const s=copy(live.current);s[channel].splice(index,1);setSelected(index-1);submit(s);};
   const yValues=samples?.[channel];
   return <fieldset disabled={disabled} className="curveEditor" style={{margin:0,padding:8,border:'1px solid #45454b',borderRadius:6}}>
-    <legend>点曲线</legend>
+    <legend>曲线</legend>
+    <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:8}}>
+      <button type="button" aria-pressed={mode==='point'} disabled={paramBusy||!!drag.current} onClick={()=>setMode('point')}>点曲线</button>
+      <button type="button" aria-pressed={mode==='parametric'} disabled={!parametricSupported||paramBusy||!!drag.current}
+        title={parametricSupported?'四区域参数曲线':'当前引擎尚未支持参数曲线'} onClick={()=>setMode('parametric')}>参数曲线</button>
+      <label><input type="checkbox" checked={draft.enabled} disabled={paramBusy||!!drag.current}
+        onChange={e=>submit({...copy(live.current),enabled:e.target.checked})}/>启用曲线</label>
+      <button type="button" disabled={paramBusy||!!drag.current} onClick={()=>{setSelected(0);submit(neutralCurves());}}>重置全部</button>
+    </div>
+    {mode==='parametric'?<ParametricCurveEditor value={raw.current} samples={samples} disabled={disabled||!parametricSupported}
+      resetToken={resetToken} submit={submit} onBusy={paramBusyChanged} note={note}/>:<>
     {channel==='luminance'&&<small>线性 sRGB 亮度 Y 保色曲线；非 Lab L*。黑场抬升使用中性补偿。</small>}
     <div style={{display:'flex',gap:4,marginBottom:8}}>
       {channels.map((c,i)=><button type="button" key={c} aria-pressed={channel===c}
         style={{color:colors[i],fontWeight:channel===c?'bold':'normal'}}
         onClick={()=>{finish();setChannel(c);setSelected(0);}}>{names[i]}</button>)}
-      <label><input type="checkbox" checked={draft.enabled} onChange={e=>submit({...copy(live.current),enabled:e.target.checked})}/>启用</label>
     </div>
     <svg viewBox="0 0 256 256" role="img" aria-label={`${names[channels.indexOf(channel)]}点曲线，点击添加节点，拖动调整`} tabIndex={disabled?-1:0}
       style={{width:'100%',display:'block',background:'#202025',touchAction:'none',cursor:disabled?'default':'crosshair'}}
@@ -117,8 +131,8 @@ export function CurveEditor({value,documentId,snapshotId,documentRevision,disabl
     <div style={{display:'flex',gap:4,marginTop:8}}>
       <button type="button" disabled={disabled||index===0||index===points.length-1} onClick={remove}>删除节点</button>
       <button type="button" onClick={()=>{setSelected(0);submit({...copy(live.current),[channel]:[[0,0],[1,1]]});}}>重置当前</button>
-      <button type="button" onClick={()=>{setSelected(0);submit(neutralCurves());}}>重置全部</button>
     </div>
     <small>点击空白添加节点；选中后可用方向键微调。输入/输出为 0–1。</small>
+    </>}
   </fieldset>;
 }

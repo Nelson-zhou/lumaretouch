@@ -6,10 +6,11 @@ from lumaretouch_engine.shm import FrameShm
 from lumaretouch_engine.ops.curves import default_curves
 
 
-def test_curves_pixels_history_project_and_original(engine,tmp_path):
+@pytest.mark.parametrize("parametric",[False,True])
+def test_curves_pixels_history_project_and_original(engine,tmp_path,parametric):
     pytest.importorskip('torch')
     src=np.full((64,64,3),64,np.uint8);path=tmp_path/'curve-source.png';Image.fromarray(src).save(path)
-    engine.send(cmd='hello');engine.wait_for('ready')
+    engine.send(cmd='hello');ready=engine.wait_for('ready');assert ready['curve_recipe_versions']==[1,2,3]
     engine.send(cmd='load_image',path=str(path),device='cpu',strength=0)
     shm=engine.wait_for('shm_ready',timeout=60);engine.wait_for('image_ready',timeout=60)
     peer=FrameShm(shm['name'])
@@ -17,6 +18,9 @@ def test_curves_pixels_history_project_and_original(engine,tmp_path):
     try:
         baseline=pixels()
         spec=default_curves();spec['red']=[[0,.1],[1,1]]
+        if parametric:
+            from test_parametric_curves import recipe
+            spec=recipe((25,0,0,0));spec['red']=[[0,.1],[1,1]]
         engine.send(cmd='curves',action='set',spec=spec,gesture_id='drag-1');_wait_frame_mode(engine,'curves')
         first=pixels();assert np.any(first[...,0]!=baseline[...,0])
         spec['red']=[[0,.2],[1,1]]

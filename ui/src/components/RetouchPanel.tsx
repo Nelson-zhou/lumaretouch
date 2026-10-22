@@ -637,7 +637,7 @@ export default function RetouchPanel(props: RetouchProps) {
     if (featureId === "PC-32455" && node.full === "曲线") return <CurveEditor
       key={status?.image?.load_id ?? status?.image?.doc ?? "empty"} value={doc?.curves}
       documentId={status?.image?.load_id??""} snapshotId={doc?.document_id} documentRevision={status?.doc_rev??-1}
-      disabled={!props.hasImage} result={status?.curve_result} error={status?.last_error??null} onDone={props.onDone} note={props.note}/>;
+      disabled={!props.hasImage} parametricSupported={status?.ready_caps?.curve_recipe_versions?.includes(3)===true} result={status?.curve_result} error={status?.last_error??null} onDone={props.onDone} note={props.note}/>;
     if (node.full !== "HSL") return null;
     return (
       <div className="hslChips" key="hsl-chips" data-hsl-band={hslBand}>

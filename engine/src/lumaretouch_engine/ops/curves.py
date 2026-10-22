@@ -10,6 +10,7 @@ import json
 import math
 import subprocess
 import numpy as np
+from . import parametric_curves as P
 from ..optional_dependencies import optional_module
 
 torch = optional_module('torch')
@@ -29,20 +30,22 @@ def check_curves(value):
     if not isinstance(value, dict):
         raise ValueError('curves: expected a versioned recipe')
     version = value.get('version')
-    if type(version) is not int or version not in (1, 2):
+    if type(version) is not int or version not in (1, 2, 3):
         raise ValueError('curves: unsupported version')
-    channels = CHANNELS + (('luminance',) if version == 2 else ())
-    extra = {'luminance', 'luminance_space'} if version == 2 else set()
+    channels = CHANNELS + (('luminance',) if version >= 2 else ())
+    extra = {'luminance', 'luminance_space'} if version >= 2 else set()
+    if version == 3: extra.add('parametric')
     if set(value) != set(HEADER) | {'enabled', *CHANNELS} | extra:
         raise ValueError('curves: expected complete versioned recipe')
-    if version == 2 and value['luminance_space'] != LUMINANCE_SPACE:
+    if version >= 2 and value['luminance_space'] != LUMINANCE_SPACE:
         raise ValueError('curves: unsupported luminance colour domain')
     if any(value[k] != v or type(value[k]) is not type(v) for k, v in HEADER.items() if k != 'version'):
         raise ValueError('curves: unsupported schema, colour space or interpolation')
     if type(value['enabled']) is not bool:
         raise ValueError('curves: enabled must be boolean')
     result = dict(**HEADER, enabled=value['enabled']); result['version'] = version
-    if version == 2: result['luminance_space'] = LUMINANCE_SPACE
+    if version >= 2: result['luminance_space'] = LUMINANCE_SPACE
+    if version == 3: result['parametric'] = P.check_parametric(value['parametric'])
     for channel in channels:
         points = value[channel]
         if not isinstance(points, (list, tuple)) or not 2 <= len(points) <= 64:
@@ -65,7 +68,8 @@ def check_curves(value):
 
 def is_identity(value):
     spec = check_curves(value)
-    return not spec['enabled'] or all(x == y for c in CHANNELS + (('luminance',) if spec['version'] == 2 else ()) for x, y in spec[c])
+    return not spec['enabled'] or (all(x == y for c in CHANNELS + (('luminance',) if spec['version'] >= 2 else ()) for x, y in spec[c])
+        and (spec['version'] != 3 or P.is_identity(spec['parametric'])))
 
 
 def _compiler_path():
@@ -105,9 +109,10 @@ def _compile_channel(points):
 def compile_curves(value):
     spec = check_curves(value)
     if not spec['enabled']:
-        return (None,) * 5
-    return tuple(_compile_channel(tuple(map(tuple, spec[c]))) for c in CHANNELS) + (
-        _compile_channel(tuple(map(tuple, spec['luminance']))) if spec['version'] == 2 else None,)
+        return (None,) * (6 if spec['version'] == 3 else 5)
+    points = tuple(_compile_channel(tuple(map(tuple, spec[c]))) for c in CHANNELS) + (
+        _compile_channel(tuple(map(tuple, spec['luminance']))) if spec['version'] >= 2 else None,)
+    return points + ((P.compile_recipe(spec['parametric'], _compiler_path()),) if spec['version'] == 3 else ())
 
 
 def _eval_np(x, bundle):
@@ -129,7 +134,9 @@ def curves_np(rgb, spec):
         return rgb
     if rgb.ndim < 1 or rgb.shape[-1] != 3 or not np.issubdtype(rgb.dtype, np.floating):
         raise ValueError('curves_np expects floating RGB with last dimension 3')
-    result = np.stack([_eval_np(_eval_np(rgb[..., i], bundles[0]), bundles[i+1])
+    base = P.evaluate_np(rgb, bundles[5]) if len(bundles) == 6 else rgb
+    if all(b is None for b in bundles[:5]): return base
+    result = np.stack([_eval_np(_eval_np(base[..., i], bundles[0]), bundles[i+1])
                        for i in range(3)], axis=-1)
     if bundles[4] is None: return result
     # Extended sRGB TRC, preserving sign and HDR values until the output stage.
@@ -146,8 +153,10 @@ def curves_np(rgb, spec):
 
 def tensor_bundles(spec, device, dtype):
     """Called when recipe/device changes, not once per rendered frame."""
-    return tuple(None if bundle is None else tuple(torch.tensor(a.copy(), device=device, dtype=dtype)
-                 for a in bundle) for bundle in compile_curves(spec))
+    compiled = compile_curves(spec)
+    points = tuple(None if bundle is None else tuple(torch.tensor(a.copy(), device=device, dtype=dtype)
+                 for a in bundle) for bundle in compiled[:5])
+    return points + ((P.tensor_bundle(compiled[5], device, dtype),) if len(compiled) == 6 else ())
 
 
 def _eval_t(x, bundle):
@@ -167,7 +176,9 @@ def curves_t(rgb, bundles):
         return rgb
     if rgb.ndim != 4 or rgb.shape[1] != 3:
         raise ValueError('curves_t expects NCHW RGB')
-    result = torch.stack([_eval_t(_eval_t(rgb[:, i], bundles[0]), bundles[i+1])
+    base = P.evaluate_t(rgb, bundles[5]) if len(bundles) == 6 else rgb
+    if all(b is None for b in bundles[:5]): return base
+    result = torch.stack([_eval_t(_eval_t(base[:, i], bundles[0]), bundles[i+1])
                           for i in range(3)], dim=1)
     if bundles[4] is None: return result
     a = result.abs()

@@ -362,7 +362,7 @@ class Engine:
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -5357,6 +5357,7 @@ class Engine:
             emit({"event": "error", "error": "curves action/gesture_id 非法"})
             return
         previous = CURVES.check_curves(self._curves)
+        old_pipeline = (self._vram.curves_spec, self._vram.curves_compiled)
         try:
             if action == "set" and "spec" not in p:
                 raise ValueError("curves set requires a complete spec")
@@ -5367,7 +5368,7 @@ class Engine:
         except Exception as error:
             self._curves = previous
             try:
-                self._vram.set_curves(previous)
+                self._vram.curves_spec, self._vram.curves_compiled = old_pipeline
                 emit(self._write_current_frame("curves_rollback"))
             except Exception as rollback:
                 emit({"event": "engine_warn", "warn": f"曲线回滚帧失败，请重新导入：{rollback}"})

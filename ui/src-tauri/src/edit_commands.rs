@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use serde_json::{json, Value};
 use tauri::State;
-use crate::{AppState, point_curve};
+use crate::AppState;
 
 /// 曝光/白平衡（P0 注册表 lnx.exposure / lnx.white_balance）。量程不在这里写：
 /// 引擎随事件报 exposure_limits，宿主抄一份数就是第二个会漂的地方。
@@ -111,36 +111,7 @@ pub(crate) fn crop(
 
 /// Compile the same Rust point curves used by headless recipe replay.
 #[tauri::command]
-pub(crate) fn curve_preview(spec: Value) -> Result<Value, String> {
-    let object = spec.as_object().ok_or("curves spec must be an object")?;
-    let version = spec["version"].as_u64().ok_or("invalid curve version")?;
-    let mut expected = vec!["version", "space", "interpolation", "boundary", "enabled", "master", "red", "green", "blue"];
-    if version == 2 { expected.extend(["luminance", "luminance_space"]); }
-    if object.len() != expected.len() || object.keys().any(|k| !expected.contains(&k.as_str())) {
-        return Err("curves spec has missing/unknown fields".into());
-    }
-    if ![1,2].contains(&version) || (version == 2 && spec["luminance_space"] != "linear-srgb-y-ratio") || spec["space"] != "srgb-display" ||
-       spec["interpolation"] != "pchip" || spec["boundary"] != "linear" || !spec["enabled"].is_boolean() {
-        return Err("unsupported curve schema/colour space".into());
-    }
-    let mut samples = serde_json::Map::new();
-    let mut channels=vec!["master", "red", "green", "blue"];
-    if version == 2 { channels.push("luminance"); }
-    for channel in channels {
-        let rows = spec[channel].as_array().ok_or("curve points must be an array")?;
-        if !(2..=point_curve::MAX_POINTS).contains(&rows.len()) {return Err("curve point count out of range".into());}
-        let mut points = Vec::with_capacity(rows.len());
-        for row in rows {
-            let pair = row.as_array().filter(|p| p.len()==2).ok_or("curve point needs x/y")?;
-            points.push(point_curve::Point {x:pair[0].as_f64().ok_or("invalid curve x")?,
-                y:pair[1].as_f64().ok_or("invalid curve y")?});
-        }
-        let compiled = point_curve::compile(&points).map_err(str::to_owned)?;
-        let values:Vec<_> = (0..=256).map(|i| compiled.evaluate(i as f64/256.0)).collect();
-        samples.insert(channel.into(), json!(values));
-    }
-    Ok(Value::Object(samples))
-}
+pub(crate) fn curve_preview(spec: Value) -> Result<Value, String> {crate::curve_api::preview(&spec)}
 
 #[tauri::command]
 pub(crate) fn curves(state: State<'_, Arc<AppState>>, action: String, spec: Option<Value>,
@@ -151,6 +122,8 @@ pub(crate) fn curves(state: State<'_, Arc<AppState>>, action: String, spec: Opti
     if action == "set" {
         let value=spec.ok_or("curves set requires spec")?;
         curve_preview(value.clone())?;
+        if value["version"]==3 && !state.ready_caps.lock().map_err(|_|"capability lock poisoned")?["curve_recipe_versions"]
+            .as_array().is_some_and(|versions|versions.iter().any(|v|v.as_u64()==Some(3))){return Err("engine does not support curve recipe v3".into());}
         command["spec"]=value;
     }
     if let Some(document) = document_id {

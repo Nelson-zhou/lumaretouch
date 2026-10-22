@@ -7,6 +7,9 @@
 
 #[path = "../../../core/curves/curve.rs"]
 mod point_curve;
+#[path = "../../../core/curves/parametric.rs"]
+mod parametric_core;
+mod curve_api;
 mod edit_commands;
 #[path = "../../../core/levels/levels.rs"]
 mod levels_core;
@@ -2006,7 +2009,7 @@ fn main() {
             inpaint, light, deform, lut, grade, enhance, background, export, session, filmstrip, history,
             color_capture_api::capture_arm, color_capture_api::capture_status, color_capture_api::capture_frame,
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
-            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, edit_commands::crop, levels_api::levels, color_scopes_api::color_scopes, preset, batch_api::batch, batch_api::batch_result, face, pick,
+            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, color_scopes_api::color_scopes, preset, batch_api::batch, batch_api::batch_result, face, pick,
             report, quit
         ])
         .run(tauri::generate_context!())
