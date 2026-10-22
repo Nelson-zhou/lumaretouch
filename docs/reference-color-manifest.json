@@ -1,0 +1,245 @@
+{
+  "version": 1,
+  "base_commit": "2ae65644ad36fdd3041e5e372703ced5ed7d7a59",
+  "control_id": "PC-32455-C-53da929b74",
+  "scope": "Same-scene reference WB/brightness only; not AI追色",
+  "acceptance": "Source integration only. Runtime, build, tests, photo quality and acceptance not executed.",
+  "manifest_self_excluded": true,
+  "line_caps": {
+    "ui/src/App.tsx": 2141,
+    "ui/src-tauri/src/main.rs": 2056,
+    "engine/src/lumaretouch_engine/server.py": 7021
+  },
+  "files": [
+    {
+      "path": "core/reference_color/lib.rs",
+      "status": "new",
+      "sha256": "56eb9c5760f96a5fec670a0c171cc3601c4263000739e1b7507c41190d165fc8"
+    },
+    {
+      "path": "docs/REFERENCE-COLOR-INTEGRATION.md",
+      "status": "new",
+      "sha256": "07d90fc63d057dd9eb7c09c6e29b002d77f41ef96cb5a10c28a01cc491405465"
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "status": "modified",
+      "sha256": "81e452b00a36c72ac997ad139e3ea6c7a7be753b0a74c6401e77ca3627978f6e"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_group_history.py",
+      "status": "new",
+      "sha256": "658b8baaee70b054dec557e79d7ea3f08617ecb86f942681ac2c7ad2f34e6117"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight.py",
+      "status": "modified",
+      "sha256": "c460b42ef9fc2e9531fecbf658f9d07a7ffea32bcd6a67e071f3ca8cd09361e6"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight_controller.py",
+      "status": "modified",
+      "sha256": "d183a0331cbeb9837dd6e2a3cfcdcbae0932f069e0112d4557a7e105cb72510e"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "status": "modified",
+      "sha256": "4c7008fc11407cc94056f59f1eed34861e30bfafdde46b77d52bc738854b75e8"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "status": "modified",
+      "sha256": "287a72014745de695ddbef291fcf670404371949179555b77926ecbe1b2308e2"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "status": "modified",
+      "sha256": "52cb5a37acaabc1eb6e9a29723321a7e38c07a18f5ab7d51539c786dbdecd4e8"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_quality.py",
+      "status": "modified",
+      "sha256": "cda039c114bdf2131d931fb5a27cefab73f103ace7134a95f4d5c2520a45658a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/inspection_worker.py",
+      "status": "modified",
+      "sha256": "ed60c3ce8a19ede1e01b319046530b250aa27d275c1c8b97b5efc0f8d1bacf1d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_preset_review.py",
+      "status": "modified",
+      "sha256": "6c06c81e202645d4422c11678f99a948aeea812507b6b218e2537cf94bab64d9"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/optics_auto_scope.py",
+      "status": "modified",
+      "sha256": "f5af66c1daee254eef20d0330a7c9ed1e12f4ce736fc2f7ff5834503707e5d94"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "status": "modified",
+      "sha256": "000b47aeea815b51edc8a1cdc345dcd2fdba53494e55c80a4944e25c358e3d71"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "status": "modified",
+      "sha256": "bbdcd536e567503c8c8eb89df3bd4e00d91b4892eacad6a745ec665113001a13"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_assets.py",
+      "status": "new",
+      "sha256": "0d1e4046c1cead761911b9d27476daa32b07f76ae52bda0d44282a962bedec5c"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_correspondence.py",
+      "status": "new",
+      "sha256": "3ffed5ed00bdd8d5a1f3c512a49f5d97d33868ebe223529ec3f715e1bd8756e4"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_engine.py",
+      "status": "new",
+      "sha256": "cac18af6abf4124de6ae35c1ed4fe44a934ee60454033d5693ad1162f4ec8a2a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_native.py",
+      "status": "new",
+      "sha256": "981ae1ae5820f113883065289d93f6522b72e51669ac5328bbaa159ca35c729d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_project.py",
+      "status": "new",
+      "sha256": "29015dd59464619586e4512340a8c7a2bffbe2c43046d77e1ac3dae7ae62b86d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_provenance.py",
+      "status": "new",
+      "sha256": "51ed00570c4c7edf0bb7f1f99285d63b92cd6139c67806c7107250da8b074ebb"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_review.py",
+      "status": "new",
+      "sha256": "8fc2b77b667e79c7aa8a04c18a1fb7bd76ac65805fa4ab67435cecc30d706c98"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_runtime.py",
+      "status": "new",
+      "sha256": "1f28d37c0414798c46c54c4dfad88d92bbc6eca2fd511ed9494f4d26e47a7f30"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_scope.py",
+      "status": "new",
+      "sha256": "5b547bbe3312933cc152d942fcaabb0f33d94c1dd3952ab706f1e7569708a5d8"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_stage.py",
+      "status": "new",
+      "sha256": "40ee21bac014e784ae4abb6a0453d5b2b08de8df3e244be547c17f81d8504bb0"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_state.py",
+      "status": "new",
+      "sha256": "b8434dd3dd2c16572a058d14f5c1813d6c32cc8d44884bf377f6af33f4d8b3ba"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "status": "modified",
+      "sha256": "cc53fabf34a1a9e511ea5399f4e8843b89e32e35d7073c77212e0d72bab88b29"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "status": "modified",
+      "sha256": "1836ad4157d4d27a591a02e159621c7faea20ac7f759af9fa7c81390300159f0"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "status": "modified",
+      "sha256": "0b0eb3296e2c0b9bfcd0b5ee0bdd5fa0b6c5b12cc3837b005cc5acee7f2a79fe"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "status": "new",
+      "sha256": "26404539645f47e304a2d5bf6e5ab439d66aea7ee0451bdb40bb154cddc10007"
+    },
+    {
+      "path": "engine/tests/test_reference_color_contract.py",
+      "status": "new",
+      "sha256": "ee01309e69b448e0b7cf52002cd683122c32cfd349b9f9d063bee6f037d88a1b"
+    },
+    {
+      "path": "packaging/build-reference-color.sh",
+      "status": "new",
+      "sha256": "73b1c655b4f47f9821bfcdde3ea3f7b4c06aec4977fb68fe557cb44eddbe236d"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "status": "modified",
+      "sha256": "0c760f172d9b0f9e0bf73ba5d844e3282b3360fa85b08151a7c189f99c8ee988"
+    },
+    {
+      "path": "ui/src-tauri/src/batch_api.rs",
+      "status": "modified",
+      "sha256": "57d6b04c791eeb8ad492591a4dd433d31cced5b3472bc01ae5614c2f5c90e451"
+    },
+    {
+      "path": "ui/src-tauri/src/batch_host.rs",
+      "status": "modified",
+      "sha256": "416230b7e9f48508f48369efea25b6c726f7c0139b4aa203668bcf8d2e64bff3"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "status": "modified",
+      "sha256": "d9115e1e515faaf27827cdb9169699e88563a8ed1ff812ee94ef05d7789f4bb0"
+    },
+    {
+      "path": "ui/src/batch/BatchReview.tsx",
+      "status": "modified",
+      "sha256": "586568e0c55d5006b77bd3628d3104680a274ab2bba292c95628beeb7e2a5330"
+    },
+    {
+      "path": "ui/src/batch/batchWorkflow.ts",
+      "status": "modified",
+      "sha256": "7893ee3273a39ecb4f8be3ec19b72a39ea95c869c5db7cb61e019aa2570f3b23"
+    },
+    {
+      "path": "ui/src/batch/useBatchWorkflow.ts",
+      "status": "modified",
+      "sha256": "83f20629be7cc1a32195d1e54dca5bf885c61d9836fd1f221d1f27f39c705c20"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "status": "modified",
+      "sha256": "5849e04f0d157c1259ccbcb4aa0be69513dceb9b97c4bd8b87c69a2595b4288c"
+    },
+    {
+      "path": "ui/src/presets/PresetPanel.tsx",
+      "status": "modified",
+      "sha256": "32f0a94cdcd49add508118c41e2ce5ad91ef0403134d057780d1816a4607fa74"
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "status": "modified",
+      "sha256": "6fef270faf207ed5fe413cfb3e672465cfb47200de534c324018b35b43bdc0d7"
+    },
+    {
+      "path": "ui/src/presets/presetWorkflow.ts",
+      "status": "modified",
+      "sha256": "fd7a7eec84271dc0c64f75a75741e25ef4f3839188c13a5e6dcaf83aaf2f5634"
+    },
+    {
+      "path": "ui/src/presets/usePresetWorkflow.ts",
+      "status": "modified",
+      "sha256": "c1614b7eee6391d4e6cd315d13a79fed9242aa5d2d23b0c6954e0d3a490f8d04"
+    },
+    {
+      "path": "ui/src/referenceColor/ReferenceColorControls.tsx",
+      "status": "new",
+      "sha256": "1f3a7b8fa46af52d2e9b7d1435e54f46e350407fb90f5139327e53ba50313f1b"
+    },
+    {
+      "path": "ui/src/referenceColor/ReferenceColorReview.tsx",
+      "status": "new",
+      "sha256": "6007c73ad28e3c2dbe1c0eca8a0ffe6b527d1379c48f5ff6483249c46c3a2be1"
+    }
+  ]
+}

@@ -73,9 +73,11 @@ def render_inspection_roi(decoded, spec: ExportSpec, roi, *, max_source_pixels: 
                                     rotation_degrees=rotation_degrees,output_profile='srgb',progress=progress)
     else:
         # load_full RGB8 already converts embedded ICC into working sRGB.
-        full,_=export_image(source,spec,device=device,tile=tile,progress=progress)
+        from .reference_color_state import active as reference_active
+        matching=reference_active(spec.reference_color)
+        full,_=export_image(source,spec,device=device,tile=tile,progress=progress,geometry=(crop_rect,rotation_degrees) if matching else None)
         check_cancel()
-        full=crop_rotate_np(full,crop_rect,rotation_degrees)
+        if not matching:full=crop_rotate_np(full,crop_rect,rotation_degrees)
     check_cancel()
     if full.shape[:2]!=(canvas_height,canvas_width):
         raise ExportError('Rendered canvas dimensions differ from ROI coordinate contract')

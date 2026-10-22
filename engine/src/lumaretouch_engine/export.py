@@ -199,6 +199,10 @@ class ExportSpec:
     exposure: tuple = (0.0,) * 7
     exposure_ref_k: float | None = None
     wb_options: dict | None = None
+    reference_color: dict | None = None
+    float_output: bool = False  # internal full-precision analysis, never an encoded file
+    provenance_output: bool = False
+    provenance_result: np.ndarray | None = None
     # 八色 HSL：24 个数 = 8 段 × (色相/饱和度/明亮度)。与预览同一条链序
     # （曝光之后、LUT 之前），所以导出与屏上是同一份式子。
     hsl: tuple = (0.0,) * 24
@@ -626,10 +630,17 @@ def _rest(op, cls):
 
 
 def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
-                 tile: int = DEFAULT_TILE, progress=None) -> tuple:
+                 tile: int = DEFAULT_TILE, progress=None, geometry=None) -> tuple:
     """Existing RGB8 entry point; do not silently promote source precision."""
     return _export_image_impl(src_u8, spec, device=device, tile=tile,
-                              progress=progress, bits=8)
+                              progress=progress, bits=8, geometry=geometry)
+
+
+def export_float(src, spec, *, geometry, progress=None):
+    """Internal actual fully edited original-resolution RGB and provenance tap."""
+    spec.float_output=True;spec.provenance_output=True
+    return _export_image_impl(src,spec,device='cpu',tile=DEFAULT_TILE,progress=progress,
+                              bits=16 if src.dtype==np.uint16 else 8,geometry=geometry)
 
 
 def export_image16(src_u16: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
@@ -666,6 +677,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     spec.check_sky_replacement()
     from .optics_state import active as optics_enabled
     optical = optics_enabled(spec.optics)
+    from .reference_color_stage import ReferenceColorStage
+    reference_stage=ReferenceColorStage(spec.reference_color)
+    floating=bits==16 or optical or reference_stage.active or spec.float_output
+    if spec.provenance_output and (not spec.float_output or spec.scale!=1): raise ExportError("来源支持只用于原尺寸浮点分析")
     optical_budget = 0
     if optical:
         from .optics_export import admit
@@ -783,7 +798,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     scale = int(spec.scale)
     plan = UpscalePlan(h, w, scale)          # 表只算一次，每块取自己那一段
     out_h, out_w = plan.out_h, plan.out_w
-    out = np.zeros((h,w,3) if optical else (out_h,out_w,3), np.float32 if bits==16 or optical else np.uint8)
+    out = np.zeros((h,w,3) if optical else (out_h,out_w,3), np.float32 if floating else np.uint8)
+    support=np.zeros((h,w,3),np.float32) if spec.provenance_output else None
     seg = {"filter": 0.0, "light": 0.0, "deform": 0.0, "exposure": 0.0,
            "lut": 0.0, "grade": 0.0, "local_grade": 0.0, "enhance": 0.0, "bg": 0.0, "manual_liquify": 0.0}
     upscale_ms = 0.0
@@ -892,7 +908,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                               detail_gain=spec.detail_gain, mid_gain=spec.mid_gain,
                               broad_gain=spec.broad_gain, texture_radius=spec.texture_radius,
                               channel=spec.channel if spec.masks is not None else None)
-        if bits == 16 or optical:
+        if floating:
             rendered = pipe.retouch(spec.strength, **render_options)
             t_r = time.perf_counter()
             got = np.ascontiguousarray(rendered[0].permute(1, 2, 0).detach().cpu().numpy())
@@ -901,6 +917,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             pipe.render(spec.strength, **render_options)
             t_r = time.perf_counter()
             got = pipe.read_back()[..., :3]
+        if support is not None:
+            from .reference_color_provenance import source_support
+            evidence=source_support(pipe,(cy0,cx0,cy1,cx1),(h,w),spec)
+            support[y0:y1,x0:x1]=evidence[y0-cy0:y1-cy0,x0-cx0:x1-cx0]
         if scale == 1 or optical:
             out[y0:y1, x0:x1] = got[y0 - cy0:y1 - cy0, x0 - cx0:x1 - cx0]
         else:
@@ -908,7 +928,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             # 不是"先拼整幅再放大"——那会把峰值从 tile 拉回图幅；也不比 0：
             # 同一串 (下标, 权重) 同一累加顺序，与整幅 `plan.full` 逐字节同一
             t_u = time.perf_counter()
-            sampler = plan.region_float if bits == 16 else plan.region
+            sampler = plan.region_float if floating else plan.region
             out[y0 * scale:y1 * scale, x0 * scale:x1 * scale] = sampler(
                 got, y0 * scale, y1 * scale, x0 * scale, x1 * scale, cy0, cx0)
             upscale_ms += (time.perf_counter() - t_u) * 1000.0
@@ -928,6 +948,9 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         from .optics_runtime import apply_export
         from .optics_export import upscale as optical_upscale
         out,optics_facts=apply_export(out,spec,cancelled=mask_cancelled)
+        if support is not None:
+            from .reference_color_provenance import optical_support
+            support=optical_support(support,spec)
         t_u=time.perf_counter();out=optical_upscale(out,plan,cancelled=mask_cancelled)
         upscale_ms+=(time.perf_counter()-t_u)*1000.
     sharpen_ms = 0.0
@@ -935,7 +958,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         # 出片锐化排在放大之后、且切的是已经完整的输出图：带 halo 拿真像素，
         # 只有图的真边缘才用 replicate——所以与整图直锐逐字节同一，不拿近似当默认
         t_s = time.perf_counter()
-        sharpener = unsharp_float_bands_np if bits == 16 or optical else unsharp_bands_np
+        sharpener = unsharp_float_bands_np if floating else unsharp_bands_np
         out = sharpener(out, radius=float(spec.sharpen_radius),
                                amount=float(spec.sharpen_amount),
                                threshold=float(spec.sharpen_threshold))
@@ -945,12 +968,15 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         from .ops.geometry import crop_rotate_np, is_identity
         t_geometry = time.perf_counter()
         out = crop_rotate_np(out, *geometry, uint8=False)
+        if support is not None: support=crop_rotate_np(support,*geometry,uint8=False)
         out_h, out_w = out.shape[:2]
         geometry_facts = {"crop_applied": not is_identity(*geometry),
                           "geometry_ms": round((time.perf_counter() - t_geometry) * 1000, 2)}
-    if bits == 16:
+    out=reference_stage.apply_np(out)
+    if support is not None: spec.provenance_result=np.all(support>=.999999,axis=2)
+    if bits == 16 and not spec.float_output:
         out = quantize16_np(out)
-    elif optical:
+    elif floating and not spec.float_output:
         out = np.clip(np.rint(out*255.),0,255).astype(np.uint8)
     if group_source_stamp is not None and file_stamp(spec.local_mask_source_path) != group_source_stamp:
         raise ExportError('Independent local-grade source changed during rendering')

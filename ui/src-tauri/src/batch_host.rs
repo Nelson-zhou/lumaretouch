@@ -4,7 +4,7 @@ use crate::receipt_host::{ReceiptHost, ReceiptKind};
 pub(crate) struct BatchKind;
 impl ReceiptKind for BatchKind {
     const NAME: &'static str = "batch";
-    const ACTIONS: &'static [&'static str] = &["preflight", "commit", "undo"];
+    const ACTIONS: &'static [&'static str] = &["preflight", "commit", "undo", "redo"];
     fn valid(value: &Value, _: Option<&str>) -> bool { value["success"].as_bool().is_some() }
 }
 pub(crate) type BatchHost = ReceiptHost<BatchKind>;

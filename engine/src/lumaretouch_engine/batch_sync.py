@@ -7,13 +7,13 @@ from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scop
 from . import white_balance_recipe as WB
 from dataclasses import dataclass
 from typing import Callable
-from . import scope as SC
+from . import scope as SC, reference_color_scope as RC
 from . import sky_replacement_scope as SKY, optics_auto_scope as OA
 from .document_versions import DocumentVersions
 from .batch_preflight_controller import FrozenBatchController,PlanPorts
 
-ACTIONS = ("preflight", "commit", "undo", "state")
-KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer"}
+ACTIONS = ("preflight", "commit", "undo", "redo", "state")
+KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color"}
 POLICIES = ("skip_and_report", "recheck")
 
 @dataclass(frozen=True)
@@ -33,6 +33,8 @@ class BatchEditor:
     mark_dirty: Callable[[], None] = lambda:None
     invalidate: Callable[[], None] = lambda:None
     prepare_optics: Callable | None = None
+    prepare_reference: Callable | None = None
+    capture_reference: Callable | None = None
 
 class BatchSyncController:
     def __init__(self, documents: BatchDocuments, editor: BatchEditor,
@@ -50,7 +52,7 @@ class BatchSyncController:
         self.versions=versions if versions is not None else DocumentVersions()
         self.preflight=FrozenBatchController(PlanPorts(lambda:self.documents.rows(),lambda:self.documents.current_index(),
             lambda:self.documents.remember_current(),lambda:self.editor.capture(),lambda docs:self.target_indices(docs),
-            lambda row,**kw:self.editor.face_known_single(row,**kw),lambda *a,**kw:self.commit(*a,**kw),self.editor.prepare_optics),
+            lambda row,**kw:self.editor.face_known_single(row,**kw),lambda *a,**kw:self.commit(*a,**kw),self.editor.prepare_optics,self.editor.prepare_reference,self.editor.capture_reference),
             self.versions,lambda event:self.emit(event),monotonic)
 
     def target_indices(self, docs) -> tuple[list[int], list[dict]]:
@@ -125,13 +127,15 @@ class BatchSyncController:
         if action=="preflight" or (action=="commit" and p.get("preflight_token") is not None):
             self.preflight.handle(p);return
         try:
-            if action == "undo":
-                body=self.undo(p)
+            if action in ("undo","redo"):
+                from .batch_group_history import restore_group
+                body=restore_group(self,p) if action=="redo" or RC.OP in self.ledger.get(str(p.get("batch_id")),{}).get("ops",[]) else self.undo(p)
                 self.preflight.emit_result(p,{**body,"success":True})
                 return
             ops = SC.check_scope(p.get("module_scope"))
             if SKY.OP in ops:
                 raise SC.ScopeError("换天空批量必须逐目标预检，再用冻结 token 提交；不会猜测天空或复制源图区域")
+            if RC.OP in ops:raise SC.ScopeError('参考统一必须先逐图预检')
             if OA.OP in ops:raise SC.ScopeError('自动镜头/透视必须先逐目标冻结预检，不能直接复制源照片分析')
             if SC.OP_LOCAL_GRADE in ops:
                 raise SC.ScopeError('独立局部调色必须先逐目标预检，再用冻结 token 提交；不允许未审核直传')
@@ -189,6 +193,10 @@ class BatchSyncController:
                 if r.get('_optics_prepared') is None:raise SC.ScopeError('缺少冻结目标镜头/透视预检')
                 version=self.versions.version(row)
                 new['_optics']=OA.verify_target(r['_optics_prepared'],before,new,row,version.document_id,version.revision,prepared[OA.OP])
+            if RC.OP in ops:
+                version=self.versions.version(row)
+                recipe=RC.verify_target(r.get('_reference_prepared'),before,new,row,version.document_id,version.revision,prepared[RC.OP])
+                RC.apply_verified(new,recipe)
             if SKY.OP in ops:
                 SKY.validate_target(new["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
             if BROW.OP in ops and OA.OP not in ops: BROW.validate_target(new,row)
@@ -209,7 +217,7 @@ class BatchSyncController:
         if live_plan is not None:
             idx,before,new=live_plan;self.versions.advance(self.documents.rows()[idx])
             try:fr=self.editor.replay(new,mode="batch",replayed_for=f"batch:{batch_id}",
-                                      **({'strict_local':True} if SC.OP_LOCAL_GRADE in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops else {}))
+                                      **({'strict_local':True} if SC.OP_LOCAL_GRADE in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops else {}))
             except Exception as error:
                 try:
                     rollback=self.editor.replay(before,mode="batch",replayed_for=f"batch_rollback:{batch_id}")
@@ -227,7 +235,7 @@ class BatchSyncController:
                 row["undo"].append(before)
                 if len(row["undo"]) > self.history_limit:del row["undo"][0]
                 row["redo"].clear()
-            targets[str(idx)] = {"path": row["path"], "before": before,
+            targets[str(idx)] = {"path": row["path"], "before": before, "after": new,
                 "applied":OA.before_params(new, ops),"live":idx==live_idx,"document_id":self.versions.version(row).document_id,
                 "local_key":SC.LOCAL_GRADE.undo_key(new) if SC.OP_LOCAL_GRADE in ops else None}
         self.ledger[batch_id] = {"ops": ops, "targets": targets, "at_ns": self.monotonic(),

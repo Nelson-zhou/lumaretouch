@@ -1,3 +1,4 @@
+import {ReferenceColorControls} from './referenceColor/ReferenceColorControls';
 import {RetouchToolActivity,type ToolLocation} from "./toolRouting/RetouchToolActivity";
 import { neutral as neutralWrinkles } from "./facialWrinkles/model";
 import {ExportQueuePanel} from './components/ExportQueuePanel';
@@ -1871,6 +1872,7 @@ export default function App() {
 
             {strip && strip.count > 0 && (
               <>
+                <ReferenceColorControls sourceDocumentId={doc?.document_id??''} currentPath={strip.current??''} targets={selPaths} enabled={hasImage&&status?.ready_caps?.reference_color_protocol===1} onComplete={()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));}}/>
                 <BatchActions count={selPaths.length} scopes={syncScopes} scope={effectiveScope.label}
                   groups={doc?.local_masks?.transfer_groups} localMaskTransfer={syncScopeOps.includes(LOCAL_GRADE_OP)?localMaskTransfer:undefined} onLocalMaskTransfer={setLocalMaskTransfer} policy={batchPolicy} onScope={setSyncScopeLabel} onPolicy={setBatchPolicy} note={syncNote}
                   ready={hasImage&&status?.ready_caps?.batch_preflight_protocol===1} busy={['committing','preflighting'].includes(batchWorkflow.ui.phase)}

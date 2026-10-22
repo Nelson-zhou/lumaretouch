@@ -16,8 +16,8 @@ pub(crate) fn enqueue(state:&AppState,handle:&EngineHandle,command:Value)->Resul
 #[tauri::command]
 pub(crate) fn batch(state:State<'_,Arc<AppState>>,action:String,docs:Option<Vec<String>>,
     module_scope:Option<Vec<String>>,conflict_policy:Option<String>,batch_id:Option<String>,
-    preflight_token:Option<String>,request_id:Option<String>,local_mask_transfer:Option<Value>)->Result<Value,String>{
-    if !["preflight","commit","undo","state"].contains(&action.as_str()){return Err("unknown batch action".into());}
+    preflight_token:Option<String>,request_id:Option<String>,local_mask_transfer:Option<Value>,reference_color:Option<Value>)->Result<Value,String>{
+    if !["preflight","commit","undo","redo","state"].contains(&action.as_str()){return Err("unknown batch action".into());}
     if request_id.is_some() && state.ready_caps.lock().map_err(|_|"capability lock poisoned")?["batch_preflight_protocol"]!=1 {
         return Err("current engine does not support reviewed batch receipts".into());
     }
@@ -28,6 +28,7 @@ pub(crate) fn batch(state:State<'_,Arc<AppState>>,action:String,docs:Option<Vec<
     if let Some(v)=batch_id{cmd["batch_id"]=json!(v);}
     if let Some(v)=preflight_token{cmd["preflight_token"]=json!(v);}
     if let Some(v)=request_id{cmd["request_id"]=json!(v);}
+    if let Some(v)=reference_color{cmd["reference_color"]=v;}
     if let Some(v)=local_mask_transfer{cmd["local_mask_transfer"]=v;}
     state.send_to_engine(cmd)?;Ok(json!({"requested":true}))
 }

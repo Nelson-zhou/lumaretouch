@@ -112,6 +112,8 @@ def render(directory):
     studio.check_export_decode(snap, path, manual_source_stamp, (decoded.h, decoded.w))
     optics.check_export_decode(snap,path,manual_source_stamp,(decoded.h,decoded.w))
     sky.check_export_decode(snap,path,manual_source_stamp,(decoded.h,decoded.w))
+    from .reference_color_runtime import verify_export as verify_reference
+    verify_reference(snap,path,(decoded.h,decoded.w))
     if snap.get("grade_scope") == "objects":
         from .local_mask_state import check, verify_source
         verify_source(check(snap.get("local_masks")), path, (decoded.h, decoded.w))

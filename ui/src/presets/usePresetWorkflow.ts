@@ -53,7 +53,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
       setNote(value.face.why||'这个预设的部分模块需要可用的单脸');return;
     }
     dispatch({type:'select',id});setNote('');
-    await current()?.submit(ops.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP].includes(op))?'preflight':'apply',{id,...(ops.includes(LOCAL_GRADE_OP)?{localMaskTransfer:value.localMaskTransfer}:{})},ops);
+    await current()?.submit(ops.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1"].includes(op))?'preflight':'apply',{id,...(ops.includes(LOCAL_GRADE_OP)?{localMaskTransfer:value.localMaskTransfer}:{})},ops);
   }
   const review=ui.action==='preflight'&&ui.result?.success&&ui.result.id===form.selectedId&&ui.result.document_id===context.documentId
     &&(!ui.result.module_scope?.includes(LOCAL_GRADE_OP)||JSON.stringify(ui.submitted?.options.localMaskTransfer)===JSON.stringify(localMaskTransfer))?ui.result:null;

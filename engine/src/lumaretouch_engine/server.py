@@ -68,12 +68,14 @@ from . import studio_background_state as SBS, studio_background_runtime as SBR
 from .studio_tools_dispatch import StudioToolsMixin
 from .preview_lifecycle import PreviewLifecycleMixin
 from .portrait_geometry_dispatch import PortraitGeometryMixin
+from .workflow_ports import WorkflowPortsMixin
 from . import optics_state as OPS, optics_runtime as OPR
 from . import sky_replacement_state as SKS, sky_replacement_runtime as SKR
 from . import scope as SC
 from . import preset_controller as PRS
 from . import hsl_recipe as HSL_RECIPE
 from . import white_balance_recipe as WB
+from . import reference_color_state as RCS, reference_color_runtime as RCR
 from . import preset_store as PS
 from .project import ProjectError
 from . import session as S
@@ -174,7 +176,7 @@ class _TaskControl:
         self.cancel = threading.Event()
 
 
-class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
+class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, WorkflowPortsMixin):
     def __init__(self, session: str):
         self.session = session
         self.shm: FrameShm | None = None
@@ -276,7 +278,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
         self._grade_scope = "all"
         self._grade_mask = None
         self._local_masks = LM.empty(); self._local_grade_layers = LG.empty()
-        self._effect_recovery = ERS.empty(); self._manual_liquify = MLS.empty(); self._studio_background = SBS.empty(); self._optics = OPS.empty(); self._sky_replacement = SKS.empty(); self._lip_makeup = LIPS.neutral(); self._brow_shape = BROWS.neutral(); self._brow_shape_owner = None; self._nose_shape = NOSES.neutral(); self._nose_shape_owner = None; self._eye_shape = EYES.neutral(); self._eye_shape_owner = None; self._mouth_shape = MOUTHS.neutral(); self._mouth_shape_owner = None
+        self._effect_recovery = ERS.empty(); self._manual_liquify = MLS.empty(); self._studio_background = SBS.empty(); self._optics = OPS.empty(); self._sky_replacement = SKS.empty(); self._lip_makeup = LIPS.neutral(); self._brow_shape = BROWS.neutral(); self._brow_shape_owner = None; self._nose_shape = NOSES.neutral(); self._nose_shape_owner = None; self._eye_shape = EYES.neutral(); self._eye_shape_owner = None; self._mouth_shape = MOUTHS.neutral(); self._mouth_shape_owner = None; self._reference_color = RCS.empty(); self._reference_color_bundle = None
         # PORTRAIT-009 眼牙增强：三个子功能的值 + 会话里有没有那份场 + **它属于哪一张脸**。
         # `box` 这一格不是装饰：这一层的掩膜是从**那一张**的 478 点画出来的。换人选时若
         # 不认脸盒，就会把 A 的美白静默涂到 B 身上——那是 SCOPE-001 拦的同一件事，
@@ -383,7 +385,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2, "studio_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"reference_color_protocol":1, "studio_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -882,7 +884,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
                   "_light_ops", "_light_redo", "_light", "_deform", "_deform_defer",
                   "_deform_default", "_deform_overrides", "_lut",
                   "_lut_amount",
-                  "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_local_masks", "_local_grade_layers", "_effect_recovery", "_manual_liquify", "_studio_background", "_optics", "_sky_replacement", "_lip_makeup", "_brow_shape", "_brow_shape_owner", "_nose_shape", "_nose_shape_owner", "_eye_shape", "_eye_shape_owner", "_mouth_shape", "_mouth_shape_owner", "_bg",
+                  "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_local_masks", "_local_grade_layers", "_effect_recovery", "_manual_liquify", "_studio_background", "_optics", "_sky_replacement", "_lip_makeup", "_brow_shape", "_brow_shape_owner", "_nose_shape", "_nose_shape_owner", "_eye_shape", "_eye_shape_owner", "_mouth_shape", "_mouth_shape_owner", "_reference_color", "_reference_color_bundle", "_bg",
                   "_enhance", "_enhance_defer",
                   "_precompute", "_precompute_backend", "_face_index", "_face_box",
                   "_face_explicit", "_face_manual",
@@ -936,7 +938,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
                 "_deform_default": {k: 0.0 for k in KINDS}, "_deform_overrides": [],
                 "_lut": None, "_lut_amount": 1.0, "_lut_preset": None,
                 "_grade": (0.0, 0.0, 0.0, 1.0),
-                "_grade_scope": "all", "_grade_mask": None, "_local_masks": LM.empty(), "_local_grade_layers": LG.empty(), "_effect_recovery": ERS.empty(), "_manual_liquify": MLS.empty(), "_studio_background": SBS.empty(), "_optics": OPS.empty(), "_sky_replacement": SKS.empty(), "_lip_makeup": LIPS.neutral(), "_brow_shape": BROWS.neutral(), "_brow_shape_owner": None, "_nose_shape": NOSES.neutral(), "_nose_shape_owner": None, "_eye_shape": EYES.neutral(), "_eye_shape_owner": None, "_mouth_shape": MOUTHS.neutral(), "_mouth_shape_owner": None,
+                "_grade_scope": "all", "_grade_mask": None, "_local_masks": LM.empty(), "_local_grade_layers": LG.empty(), "_effect_recovery": ERS.empty(), "_manual_liquify": MLS.empty(), "_studio_background": SBS.empty(), "_optics": OPS.empty(), "_sky_replacement": SKS.empty(), "_lip_makeup": LIPS.neutral(), "_brow_shape": BROWS.neutral(), "_brow_shape_owner": None, "_nose_shape": NOSES.neutral(), "_nose_shape_owner": None, "_eye_shape": EYES.neutral(), "_eye_shape_owner": None, "_mouth_shape": MOUTHS.neutral(), "_mouth_shape_owner": None, "_reference_color": RCS.empty(), "_reference_color_bundle": None,
                 "_enhance": dict(amounts={k: 0.0 for k in ENH.AMOUNT_KEYS}, built=False, box=None),
                 "_enhance_defer": False,
                 "_bg": dict(active=False, matte=None, bg=None, backend=None,
@@ -983,7 +985,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
               # 不会互相改；真要出现就地写，这里就得改成拷贝。
               "_lut": self._lut, "_lut_amount": float(self._lut_amount),
               "_lut_preset": self._lut_preset, "_grade": tuple(self._grade),
-              "_grade_scope": str(self._grade_scope), "_grade_mask": self._grade_mask, "_local_masks": LM.check(self._local_masks), "_local_grade_layers": LG.check(self._local_grade_layers), "_effect_recovery": ERS.check(self._effect_recovery), "_manual_liquify": MLS.check(self._manual_liquify), "_studio_background": SBS.check(self._studio_background), "_optics": OPS.check(self._optics), "_sky_replacement": SKS.check(self._sky_replacement), "_lip_makeup": LIPS.check(self._lip_makeup), "_brow_shape": BROWS.check(self._brow_shape), "_brow_shape_owner": self._brow_shape_owner, "_nose_shape": NOSES.check(self._nose_shape), "_nose_shape_owner": self._nose_shape_owner, "_eye_shape": EYES.check(self._eye_shape), "_eye_shape_owner": self._eye_shape_owner, "_mouth_shape": MOUTHS.check(self._mouth_shape), "_mouth_shape_owner": self._mouth_shape_owner,
+              "_grade_scope": str(self._grade_scope), "_grade_mask": self._grade_mask, "_local_masks": LM.check(self._local_masks), "_local_grade_layers": LG.check(self._local_grade_layers), "_effect_recovery": ERS.check(self._effect_recovery), "_manual_liquify": MLS.check(self._manual_liquify), "_studio_background": SBS.check(self._studio_background), "_optics": OPS.check(self._optics), "_sky_replacement": SKS.check(self._sky_replacement), "_lip_makeup": LIPS.check(self._lip_makeup), "_brow_shape": BROWS.check(self._brow_shape), "_brow_shape_owner": self._brow_shape_owner, "_nose_shape": NOSES.check(self._nose_shape), "_nose_shape_owner": self._nose_shape_owner, "_eye_shape": EYES.check(self._eye_shape), "_eye_shape_owner": self._eye_shape_owner, "_mouth_shape": MOUTHS.check(self._mouth_shape), "_mouth_shape_owner": self._mouth_shape_owner, "_reference_color": RCS.check(self._reference_color), "_reference_color_bundle": self._reference_color_bundle,
               # 整份新抄：amounts 那个 dict 不能与 live 共享（同 _capture_state 头部那条理由，
               # 两个文档共用一个 dict，下一笔 set 会同时改掉两份状态）
               "_enhance": {"amounts": dict(self._enhance["amounts"]),
@@ -1017,7 +1019,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
         for key in ("_repair_ops", "_redo_ops"):
             validate_repair_ops(st.get(key, []), shape=st.get("_proxy"))
         # Validate WB and compile before changing any live field.
-        st = {**st, "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0)), "_local_masks": LM.check(st.get("_local_masks")), "_local_grade_layers": LG.check(st.get("_local_grade_layers")), "_effect_recovery": ERS.check(st.get("_effect_recovery")), "_manual_liquify": MLS.check(st.get("_manual_liquify")), "_studio_background": SBS.check(st.get("_studio_background")), "_optics": OPS.check(st.get("_optics")), "_sky_replacement": SKS.check(st.get("_sky_replacement")), "_lip_makeup": LIPS.check(st.get("_lip_makeup")), "_brow_shape": BROWS.check(st.get("_brow_shape")), "_brow_shape_owner": st.get("_brow_shape_owner"), "_nose_shape": NOSES.check(st.get("_nose_shape")), "_nose_shape_owner": st.get("_nose_shape_owner"), "_eye_shape": EYES.check(st.get("_eye_shape")), "_eye_shape_owner": st.get("_eye_shape_owner"), "_mouth_shape": MOUTHS.check(st.get("_mouth_shape")), "_mouth_shape_owner": st.get("_mouth_shape_owner")}
+        st = {**st, "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0)), "_local_masks": LM.check(st.get("_local_masks")), "_local_grade_layers": LG.check(st.get("_local_grade_layers")), "_effect_recovery": ERS.check(st.get("_effect_recovery")), "_manual_liquify": MLS.check(st.get("_manual_liquify")), "_studio_background": SBS.check(st.get("_studio_background")), "_optics": OPS.check(st.get("_optics")), "_sky_replacement": SKS.check(st.get("_sky_replacement")), "_lip_makeup": LIPS.check(st.get("_lip_makeup")), "_brow_shape": BROWS.check(st.get("_brow_shape")), "_brow_shape_owner": st.get("_brow_shape_owner"), "_nose_shape": NOSES.check(st.get("_nose_shape")), "_nose_shape_owner": st.get("_nose_shape_owner"), "_eye_shape": EYES.check(st.get("_eye_shape")), "_eye_shape_owner": st.get("_eye_shape_owner"), "_mouth_shape": MOUTHS.check(st.get("_mouth_shape")), "_mouth_shape_owner": st.get("_mouth_shape_owner"), "_reference_color": RCS.check(st.get("_reference_color")), "_reference_color_bundle": st.get("_reference_color_bundle")}
         st = WB.normalize_state(st)
         WB.prepare_state(st)
         # Old projects predate curves. Validate/deep-copy before changing any live field.
@@ -1428,7 +1430,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
             emit({"event": "engine_warn", "warn": "蒙版尚未恢复：保留编辑参数，暂不应用该范围的磨皮，不回退为全图"})
         effective_strength, effective_channel = self._retouch_render_args()
         FABRIC.sync(self)
-        LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self)
+        LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); RCR.sync(self)
         SKR.render_proxy(self,lambda:pipe.render(effective_strength, channel=effective_channel, **self._params))
         with self._wlock:
             seq, t_emit, slot = shm.write_frame(pipe.read_back(), presentation=self._frame_presentation(str(t0), (d.src_w,d.src_h)))
@@ -1545,7 +1547,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
                 crop["out_full"] = list(_gsz(int(row["src_w"]), int(row["src_h"]),
                                              tuple(self._crop_rect),
                                              float(self._crop_rotation)))
-        return {"document_id": self._load_id, "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self), "lip_makeup": LIPR.report(self), "brow_shape": BROWR.report(self), "nose_shape": NOSER.report(self), "eye_shape": EYER.report(self), "mouth_shape": MOUTHR.report(self),
+        return {"document_id": self._load_id, "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self), "lip_makeup": LIPR.report(self), "brow_shape": BROWR.report(self), "nose_shape": NOSER.report(self), "eye_shape": EYER.report(self), "mouth_shape": MOUTHR.report(self), "reference_color": RCR.report(self),
                 "strength": float(self._strength), "params": dict(self._params),
                 "channel": self._channel,
                 "history": self._history_report(),
@@ -1673,23 +1675,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
                 # 「这张糊不糊」就是又造一个不可复算的出处
                 "pick": d.get("pick"), "pick_error": d.get("pick_error")}
 
-    def _prepare_optics_target(self, row, candidate, document_id, revision):
-        from .optics_transfer_engine import prepare_target
-        return prepare_target(self, row, candidate, document_id, revision)
 
-    def _preset_controller(self):
-        controller = self.__dict__.get("_live_presets")
-        if controller is None:
-            controller = PRS.PresetController(PRS.PresetPorts(
-                prepare_optics=self._prepare_optics_target,
-                guard=lambda label: self._guard_editable(label), document_id=lambda: self._load_id,
-                capture=lambda: self._capture_state(), replay=lambda state, **kw: self._replay_state(state, **kw),
-                face_check=lambda: self._face_known_single(None, live=True), status=lambda: self.doc_state(),
-                invalidate=lambda: setattr(self, "_vram", None), target_row=lambda: self._docs[self._doc_index],
-                revision=lambda: str(self._document_versions().version(self._docs[self._doc_index]).revision),
-                advance=lambda: self._fence_current_document()), emit=lambda event: emit(event))
-            self._live_presets = controller
-        return controller
 
     @property
     def _preset_last(self): return self._preset_controller().last
@@ -3475,7 +3461,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
                                f"!= 会话 {self._vram.w}x{self._vram.h}：不许把会话尺寸的帧写进别人的槽")
         t0 = monotonic_ns()
         # Original viewing bypasses all layers, rather than merely setting skin strength0.
-        if not original: FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self)
+        if not original: FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); RCR.sync(self)
         st, channel = (0.0, None) if original else self._retouch_render_args()
         if original:
             self._vram.render_original()
@@ -5667,7 +5653,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
                 # 通道必须跟着会话一起迁移：不传 channel 的话，报表里 active_channel 还是 skin，
                 # 而给用户补发的是一帧全图渲染——字段与实际执行不一致正是本仓最贵那个坑的形状
                 strength, channel = self._retouch_render_args()
-                FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self)
+                FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); RCR.sync(self)
                 SKR.render_proxy(self,lambda:self._vram.render(strength, channel=channel, **self._params))
                 with self._wlock:
                     seq, t_emit, slot = self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation())
@@ -5696,7 +5682,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
                     grade=tuple(st.get("_grade", (0.0, 0.0, 0.0, 1.0))),
                     grade_scope=str(st.get("_grade_scope") or "all"),
                     grade_mask=st.get("_grade_mask"), local_masks=LM.check(st.get("_local_masks")), local_mask_owner=LM.owner_from_state(st), local_grade_groups=LG.check(st.get("_local_grade_layers")),
-                    effect_recovery=ERS.check(st.get("_effect_recovery")), manual_liquify=MLS.check(st.get("_manual_liquify")), studio_background=SBS.check(st.get("_studio_background")), optics=OPS.check(st.get("_optics")), sky_replacement=SKS.check(st.get("_sky_replacement")), lip_makeup=LIPS.check(st.get("_lip_makeup")), brow_shape=BROWS.check(st.get("_brow_shape")), brow_shape_owner=st.get("_brow_shape_owner"), nose_shape=NOSES.check(st.get("_nose_shape")), nose_shape_owner=st.get("_nose_shape_owner"), eye_shape=EYES.check(st.get("_eye_shape")), eye_shape_owner=st.get("_eye_shape_owner"), mouth_shape=MOUTHS.check(st.get("_mouth_shape")), mouth_shape_owner=st.get("_mouth_shape_owner"),
+                    effect_recovery=ERS.check(st.get("_effect_recovery")), manual_liquify=MLS.check(st.get("_manual_liquify")), studio_background=SBS.check(st.get("_studio_background")), optics=OPS.check(st.get("_optics")), sky_replacement=SKS.check(st.get("_sky_replacement")), lip_makeup=LIPS.check(st.get("_lip_makeup")), brow_shape=BROWS.check(st.get("_brow_shape")), brow_shape_owner=st.get("_brow_shape_owner"), nose_shape=NOSES.check(st.get("_nose_shape")), nose_shape_owner=st.get("_nose_shape_owner"), eye_shape=EYES.check(st.get("_eye_shape")), eye_shape_owner=st.get("_eye_shape_owner"), reference_color=RCS.check(st.get("_reference_color")), mouth_shape=MOUTHS.check(st.get("_mouth_shape")), mouth_shape_owner=st.get("_mouth_shape_owner"),
                     exposure=tuple(st.get("_exposure", (0.0,) * 7)),
                     exposure_ref_k=st.get("_exposure_ref_k"),
                     wb_options=WB.normalize_state(st)["_wb_options"],
@@ -5984,7 +5970,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
         # 这一批里前几张与后几张用的就不是同一套设置（而事件里只写了一份）
         snap = dict(strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
                     grade_scope=str(self._grade_scope), grade_mask=self._grade_mask, local_masks=LM.check(self._local_masks), local_mask_owner=LM.current_owner(self), local_grade_groups=LG.check(self._local_grade_layers),
-                    effect_recovery=ERS.check(self._effect_recovery), manual_liquify=MLS.check(self._manual_liquify), studio_background=SBS.check(self._studio_background), optics=OPS.check(self._optics), sky_replacement=SKS.check(self._sky_replacement), lip_makeup=LIPS.check(self._lip_makeup), brow_shape=BROWS.check(self._brow_shape), brow_shape_owner=self._brow_shape_owner, nose_shape=NOSES.check(self._nose_shape), nose_shape_owner=self._nose_shape_owner, eye_shape=EYES.check(self._eye_shape), eye_shape_owner=self._eye_shape_owner, mouth_shape=MOUTHS.check(self._mouth_shape), mouth_shape_owner=self._mouth_shape_owner,
+                    effect_recovery=ERS.check(self._effect_recovery), manual_liquify=MLS.check(self._manual_liquify), studio_background=SBS.check(self._studio_background), optics=OPS.check(self._optics), sky_replacement=SKS.check(self._sky_replacement), lip_makeup=LIPS.check(self._lip_makeup), brow_shape=BROWS.check(self._brow_shape), brow_shape_owner=self._brow_shape_owner, nose_shape=NOSES.check(self._nose_shape), nose_shape_owner=self._nose_shape_owner, eye_shape=EYES.check(self._eye_shape), eye_shape_owner=self._eye_shape_owner, reference_color=RCS.check(self._reference_color), mouth_shape=MOUTHS.check(self._mouth_shape), mouth_shape_owner=self._mouth_shape_owner,
                     exposure=tuple(self._exposure), exposure_ref_k=self._exposure_ref_k,
                     wb_options=WB.check_options(self._wb_options),
                     hsl=tuple(self._hsl),
@@ -6303,6 +6289,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
         fields["_nose_shape"] = NOSES.check(snap.get("nose_shape")); fields["_nose_shape_owner"] = snap.get("nose_shape_owner")
         fields["_eye_shape"] = EYES.check(snap.get("eye_shape"))
         fields["_eye_shape_owner"] = snap.get("eye_shape_owner")
+        fields["_reference_color"] = RCS.check(snap.get("reference_color"))
         fields["_mouth_shape"] = MOUTHS.check(snap.get("mouth_shape"))
         fields["_mouth_shape_owner"] = snap.get("mouth_shape_owner")
         return Engine._master16_blockers(SimpleNamespace(**fields),
@@ -6331,6 +6318,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
         if BROWS.active(getattr(self, '_brow_shape', None)): b.append('眉形（七项左右独立几何）')
         if NOSES.active(getattr(self, '_nose_shape', None)): b.append('鼻形（六项二维几何）')
         if EYES.active(getattr(self, '_eye_shape', None)): b.append('眼形（十项双侧二维几何）')
+        if RCS.active(getattr(self, '_reference_color', None)): b.append('同场景参考校正（完整浮点 RGB16）')
         if MOUTHS.active(getattr(self, '_mouth_shape', None)): b.append('嘴形（九项二维几何）')
         if SBS.active(getattr(self, '_studio_background', None)):
             b.append('影棚背景调整（须完整源图重新计算）')
@@ -6440,7 +6428,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
                         stage = "decode16"
                         decode_started = monotonic_ns()
                         d = load_full(path, device=snap_i["device"], want_bits=16)
-                        LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
+                        LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w))
                         decode_ms = (monotonic_ns() - decode_started) / 1e6
                         spec, skipped = self._export_snapshot(snap_i, d.h, d.w, for_document=for_doc_i)
                         stage = "edit16"
@@ -6501,7 +6489,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
                           "ok": True})
                     continue
                 d = load_full(path, device=self.device)
-                LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
+                LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w))
                 stage = "render"
                 # P1-1：这一张用它自己那份配方（当前档=现拍 snap；其它档=它存的 state；
                 # 裸文件=共享参数且 for_document=False）。批级 export_done 仍读 snap。
@@ -6509,14 +6497,14 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
                                                       for_document=for_doc_i)
                 stage = "write"
                 out_path = os.path.join(out_dir, os.path.splitext(os.path.basename(path))[0] + "." + fmt)
-                frame, st = export_image(d.rgb, spec, device=snap_i["device"], tile=tile)
+                frame, st = export_image(d.rgb, spec, device=snap_i["device"], tile=tile, geometry=(tuple(snap_i.get("crop_rect") or (0.,0.,1.,1.)),float(snap_i.get("crop_rotation") or 0.)) if RCS.active(spec.reference_color) else None)
                 # 与预览链同序：几何在所有像素层之后。反过来先剪再算，同一支消除笔
                 # 在剪后的图上会落在别处——那不是"批量应用设置"，那是另一张图。
                 from .ops.geometry import crop_rotate_np, is_identity as geom_ident
                 rect0 = tuple(snap_i.get("crop_rect") or (0.0, 0.0, 1.0, 1.0))
                 rot0 = float(snap_i.get("crop_rotation") or 0.0)
                 t_g = monotonic_ns()
-                if not geom_ident(rect0, rot0):
+                if not geom_ident(rect0, rot0) and not RCS.active(spec.reference_color):
                     frame = crop_rotate_np(frame, rect0, rot0)
                 st["geometry_ms"] = round((monotonic_ns() - t_g) / 1e6, 2)
                 st["crop_applied"] = bool(not geom_ident(rect0, rot0))
@@ -6638,7 +6626,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
         self._attach_pipeline(self._src_rgb, adopt=True)
         if self._precompute is not None:
             self._rehang_precompute(replayed_for=replayed_for)
-        if strict_local: LM.sync(self, strict=True); LGR.sync(self, strict=True); ERR.sync(self, strict=True); MLR.sync(self, strict=True); SBR.sync(self, strict=True); OPR.sync(self, strict=True); SKR.sync(self, strict=True); LIPR.sync(self, strict=True); BROWR.sync(self, strict=True); NOSER.sync(self, strict=True); EYER.sync(self, strict=True); MOUTHR.sync(self, strict=True)
+        if strict_local: LM.sync(self, strict=True); LGR.sync(self, strict=True); ERR.sync(self, strict=True); MLR.sync(self, strict=True); SBR.sync(self, strict=True); OPR.sync(self, strict=True); SKR.sync(self, strict=True); LIPR.sync(self, strict=True); BROWR.sync(self, strict=True); NOSER.sync(self, strict=True); EYER.sync(self, strict=True); MOUTHR.sync(self, strict=True); RCR.sync(self, strict=True)
         return self._write_current_frame(mode)
 
     def _face_known_single(self, row: dict | None, *, live: bool) -> tuple[str, str]:
@@ -6674,34 +6662,10 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin):
             return f"shm 与会话尺寸不配，拒绝 {who}"
         return None
 
-    def cmd_preset(self, p: dict): self._preset_controller().handle_command(p)
 
-    def _preset_apply(self, p: dict): return self._preset_controller().apply(p)
 
-    def _preset_save(self, p: dict): return self._preset_controller().save(p)
 
-    def _batch_controller(self):
-        controller = self.__dict__.get("_batch_sync")
-        if controller is None:
-            controller = BS.BatchSyncController(
-                BS.BatchDocuments(rows=lambda: self._docs,
-                    current_index=lambda: self._doc_index,
-                    remember_current=lambda: self._remember_current(),
-                    index_of=lambda path: self._index_of(path)),
-                BS.BatchEditor(prepare_optics=self._prepare_optics_target, guard=lambda label: self._guard_editable(label),
-                    capture=lambda: self._capture_state(),
-                    replay=lambda state, **kw: self._replay_state(state, **kw),
-                    face_known_single=lambda row, **kw: self._face_known_single(row, **kw),
-                    status=lambda: self.doc_state(),mark_dirty=lambda:setattr(self,"_project_dirty",True),
-                    invalidate=lambda:setattr(self,"_vram",None)),
-                emit=lambda event: emit(event), clock=lambda: time.time(),
-                monotonic=lambda: monotonic_ns(), history_limit=self.HISTORY_MAX, versions=self._document_versions())
-            self._batch_sync = controller
-        controller.history_limit = self.HISTORY_MAX
-        return controller
 
-    def cmd_batch(self, p: dict):
-        return self._batch_controller().handle_command(p)
 
     # Compatibility aliases; the ledger and sequence have a single owner.
     _batches = property(lambda self: self._batch_controller().ledger,

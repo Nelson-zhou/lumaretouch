@@ -1,0 +1,71 @@
+"""Explicit batch/preset engine ports, extracted from the capped command host."""
+import time
+from . import batch_sync as BS, preset_controller as PRS
+from .shm import monotonic_ns
+def emit(event):
+    from .server import emit as send
+    send(event)
+
+class WorkflowPortsMixin:
+    def _prepare_reference_target(self,row,state,document_id,revision,params):
+        from .reference_color_engine import prepare_target
+        return prepare_target(self,row,state,document_id,revision,params)
+
+    def _capture_reference(self,row,state,document_id,revision,strength):
+        from .reference_color_engine import reference_intent
+        return reference_intent(self,row,state,document_id,revision,strength)
+
+    def _prepare_optics_target(self, row, candidate, document_id, revision):
+        from .optics_transfer_engine import prepare_target
+        return prepare_target(self, row, candidate, document_id, revision)
+
+
+    def _preset_controller(self):
+        controller = self.__dict__.get("_live_presets")
+        if controller is None:
+            controller = PRS.PresetController(PRS.PresetPorts(
+                prepare_optics=self._prepare_optics_target, prepare_reference=self._prepare_reference_target,
+                guard=lambda label: self._guard_editable(label), document_id=lambda: self._load_id,
+                capture=lambda: self._capture_state(), replay=lambda state, **kw: self._replay_state(state, **kw),
+                face_check=lambda: self._face_known_single(None, live=True), status=lambda: self.doc_state(),
+                invalidate=lambda: setattr(self, "_vram", None), target_row=lambda: self._docs[self._doc_index],
+                revision=lambda: str(self._document_versions().version(self._docs[self._doc_index]).revision),
+                advance=lambda: self._fence_current_document()), emit=lambda event: emit(event))
+            self._live_presets = controller
+        return controller
+
+
+    def cmd_preset(self, p: dict): self._preset_controller().handle_command(p)
+
+
+    def _preset_apply(self, p: dict): return self._preset_controller().apply(p)
+
+
+    def _preset_save(self, p: dict): return self._preset_controller().save(p)
+
+
+    def _batch_controller(self):
+        controller = self.__dict__.get("_batch_sync")
+        if controller is None:
+            controller = BS.BatchSyncController(
+                BS.BatchDocuments(rows=lambda: self._docs,
+                    current_index=lambda: self._doc_index,
+                    remember_current=lambda: self._remember_current(),
+                    index_of=lambda path: self._index_of(path)),
+                BS.BatchEditor(capture_reference=self._capture_reference, prepare_optics=self._prepare_optics_target, prepare_reference=self._prepare_reference_target, guard=lambda label: self._guard_editable(label),
+                    capture=lambda: self._capture_state(),
+                    replay=lambda state, **kw: self._replay_state(state, **kw),
+                    face_known_single=lambda row, **kw: self._face_known_single(row, **kw),
+                    status=lambda: self.doc_state(),mark_dirty=lambda:setattr(self,"_project_dirty",True),
+                    invalidate=lambda:setattr(self,"_vram",None)),
+                emit=lambda event: emit(event), clock=lambda: time.time(),
+                monotonic=lambda: monotonic_ns(), history_limit=self.HISTORY_MAX, versions=self._document_versions())
+            self._batch_sync = controller
+        controller.history_limit = self.HISTORY_MAX
+        return controller
+
+
+    def cmd_batch(self, p: dict):
+        return self._batch_controller().handle_command(p)
+
+

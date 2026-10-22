@@ -4,6 +4,7 @@ Prepared target recipes are deliberately not accepted as portable preset input.
 """
 from copy import deepcopy
 from . import optics_state as S
+from . import reference_color_scope as RC
 OP='lnx.optics_auto.v1'
 FIELDS=('_optics',)
 EXCLUDED=['profile identity','guide geometry','solved matrix']
@@ -45,8 +46,9 @@ def undo_key(state):
 
 def before_params(state,ops):
     from . import scope as SC
-    result=SC.params_of(state,[op for op in ops if op!=OP])
+    result=SC.params_of(state,[op for op in ops if op not in (OP,RC.OP)])
     if OP in ops:result[OP]={'target_recipe_key':undo_key(state)}
+    if RC.OP in ops:result[RC.OP]={"target_recipe_key":RC.undo_key(state)}
     return result
 
 
@@ -54,7 +56,7 @@ def candidate(state,modules,*,local_replace_legacy=False):
     """One shadow candidate for BOTH upstream render and final transaction."""
     from . import scope as SC
     SC.check_scope(list(modules))
-    ordinary={op:params for op,params in modules.items() if op!=OP}
+    ordinary={op:params for op,params in modules.items() if op not in (OP,RC.OP)}
     return SC.apply_modules(state,ordinary,local_replace_legacy=local_replace_legacy) if ordinary else dict(state)
 
 

@@ -1,3 +1,4 @@
+import {validReferenceReview,type ReferenceReview} from '../referenceColor/ReferenceColorReview';
 import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../optics/transferReviewModel';
 import {validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence,type TransferGroupChoice} from '../localMasks/transferModel.ts';
 /** Completion-only receipts. Never install a historical receipt's doc_state into controls. */
@@ -6,7 +7,7 @@ export type PresetAction = 'list'|'preflight'|'apply'|'save'|'import'|'delete';
 export type PresetOptions = {id?:string;name?:string;path?:string;kind?:string;note?:string;force?:boolean;
   moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string};
 export type PresetReply = {protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
-  revision?:string;optical_transfer?:OpticalTargetReview;preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
+  reference_color?:ReferenceReview;revision?:string;optical_transfer?:OpticalTargetReview;preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
   before?:Record<string,unknown>;after?:Record<string,unknown>;doc_state?:Record<string,unknown>;
   error?:string;requires_reload?:boolean;rolled_back?:boolean;operation_committed?:boolean|null};
 export type PresetContext = {enabled:boolean;editable:boolean;documentId:string;sourceGroups?:TransferGroupChoice[]};
@@ -40,8 +41,9 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
     if(result.module_scope.includes('lnx.local_grade.v1')){
       if(!validTransferEvidence(result.local_mask_transfer)||!sameTransferOptions(result.local_mask_transfer.policy,opts.localMaskTransfer))throw Error('局部预设预检证据或策略不匹配');
     }
+    if(result.module_scope.includes('lnx.reference_color.v1')&&(result.applies?.['lnx.reference_color.v1'] as {strength?:number})?.strength!==0&&!validReferenceReview(result.reference_color,opts.documentId??'',result.revision))throw Error('参考统一目标证据不完整');
     if(result.module_scope.includes(OPTICS_AUTO_OP)&&!validOpticalReview(result.optical_transfer,opts.documentId??'',result.revision,result.applies?.[OPTICS_AUTO_OP]))throw Error('自动镜头/透视目标预检证据不完整');
-    if(!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP].includes(op)))throw Error('预设不含需要冻结预检的模块');
+    if(!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1'].includes(op)))throw Error('预设不含需要冻结预检的模块');
     return;
   }
   if(action==='apply'){

@@ -29,6 +29,7 @@ class FrozenTarget:
     prepared_json:str|None=None
     transfer_json:str|None=None
     optics_json:str|None=None
+    reference_json:str|None=None
 
 @dataclass(frozen=True)
 class FrozenPlan:
@@ -57,7 +58,7 @@ class PreflightStore:
         now=self.clock();self._prune(now)
         # Validate the total metadata budget, not only each target independently.
         canonical({'source':[source_id,source_revision,source_path],'modules':modules,'params':params,
-            'targets':[[t.document_id,t.revision,t.index,t.path,t.blocked,t.before_json,t.prepared_json,t.transfer_json,t.optics_json] for t in targets],'rejected':rejected})
+            'targets':[[t.document_id,t.revision,t.index,t.path,t.blocked,t.before_json,t.prepared_json,t.transfer_json,t.optics_json,t.reference_json] for t in targets],'rejected':rejected})
         plan=FrozenPlan(uuid.uuid4().hex,workspace,source_id,source_revision,source_path,tuple(modules),canonical(params),policy,
             tuple(targets),canonical(rejected),now,now+TTL_NS)
         self.pending[plan.token]=plan

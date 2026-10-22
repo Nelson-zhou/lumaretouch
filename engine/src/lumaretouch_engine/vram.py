@@ -21,6 +21,7 @@ from .effect_recovery_stage import EffectRecoveryStage
 from .manual_liquify_stage import ManualLiquifyStage
 from .studio_background_stage import StudioBackgroundStage
 from .optics_stage import OpticsStage
+from .reference_color_stage import ReferenceColorStage
 from .sky_replacement_stage import SkyReplacementStage
 
 import math
@@ -125,6 +126,7 @@ class PreviewPipeline:
         self.sky_replacement = SkyReplacementStage(self.device, (self.h,self.w))
         self._sky_replacement_key = None
         self.optics = OpticsStage()
+        self.reference_color = ReferenceColorStage(None)
         self._optics_key = None
         # 源图 float 与 uint8 都留着：float 供滤波，uint8 供"恢复原图"这类需要原始像素的操作
         self.src_u8: torch.Tensor | None = None
@@ -329,6 +331,7 @@ class PreviewPipeline:
         self.sky_replacement = SkyReplacementStage(self.device, (self.h,self.w))
         self._sky_replacement_key = None
         self.optics = OpticsStage()
+        self.reference_color = ReferenceColorStage(None)
         self._optics_key = None
         self.src_f32 = src_f32
         self.frame_gpu = torch.empty((self.h, self.w, 4), dtype=torch.uint8, device=self.device)
@@ -550,6 +553,7 @@ class PreviewPipeline:
         if render_stage == 'optics-input': return out
         out = self.optics.apply(out)
         out = self.apply_geometry(out)
+        out = self.reference_color.apply_t(out)
         if scope_tap is not None: scope_tap("output", out)
         return out
 

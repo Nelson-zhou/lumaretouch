@@ -650,6 +650,45 @@
       "transferable": true,
       "source_requirement": "PC-32466-C-cbb4c198e8",
       "reason": "Nine distinct observed-texture 2D mouth controls. Only gummy has bilateral unlock; nonnegative upper-lip-down coverage. Vertical positive down; tilt sign explicitly local policy. Legacy smile and lip makeup unchanged and stacking disclosed. Target recomputes original-source evidence; source implementation pending runtime/photo acceptance."
+    },
+    {
+      "operation_id": "lnx.reference_color.v1",
+      "transferable": true,
+      "source_requirement": "PC-32455-C-53da929b74",
+      "reason": "Same-scene rendered-reference white balance/brightness only. Authenticated corresponding scene patches, robust target-owned linear RGB gain; no AI style-transfer parity. Frozen target review and whole-group history. Runtime/photo acceptance pending.",
+      "parameter_key": "version",
+      "type": "integer",
+      "neutral": 1,
+      "range": {
+        "min": 1,
+        "max": 1
+      }
+    },
+    {
+      "operation_id": "lnx.reference_color.v1",
+      "transferable": true,
+      "source_requirement": "PC-32455-C-53da929b74",
+      "reason": "Same-scene rendered-reference white balance/brightness only. Authenticated corresponding scene patches, robust target-owned linear RGB gain; no AI style-transfer parity. Frozen target review and whole-group history. Runtime/photo acceptance pending.",
+      "parameter_key": "strength",
+      "type": "number",
+      "neutral": 0,
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": 0.01
+      }
+    },
+    {
+      "operation_id": "lnx.reference_color.v1",
+      "transferable": true,
+      "source_requirement": "PC-32455-C-53da929b74",
+      "reason": "Same-scene rendered-reference white balance/brightness only. Authenticated corresponding scene patches, robust target-owned linear RGB gain; no AI style-transfer parity. Frozen target review and whole-group history. Runtime/photo acceptance pending.",
+      "parameter_key": "reference",
+      "type": "object",
+      "neutral": null,
+      "range": {
+        "format": "sha256-bound locally retained rendered reference"
+      }
     }
   ]
 }

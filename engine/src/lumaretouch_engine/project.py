@@ -37,6 +37,7 @@ import time
 import uuid
 
 import numpy as np
+from .reference_color_project import validate_records as validate_reference
 from .repair_record import RepairOp, check_repair_fields, validate_repair_ops
 
 LEGACY_SCHEMA = "lrt.project.v1"
@@ -199,7 +200,7 @@ def validate(p: object) -> None:
         from .eye_shape_project import validate_records as validate_eyes
         from .mouth_shape_project import validate_records as validate_mouth
         from .lip_makeup_project import validate_records as validate_lips
-        try: validate_lips(row); validate_brows(row); validate_noses(row); validate_eyes(row); validate_mouth(row)
+        try: validate_lips(row); validate_brows(row); validate_noses(row); validate_eyes(row); validate_mouth(row); validate_reference(row)
         except ValueError as error: raise ProjectError(str(error)) from error
         from .optics_project import validate_records as validate_optics
         try: validate_optics(row,required=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)),allowed=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)))
@@ -569,6 +570,7 @@ def encode(value: object, assets: dict, dropped: list, at: str) -> object:
         if '_eye_shape' in value:
             from .eye_shape_project import validate_records
             validate_records(value)
+        if '_reference_color' in value: validate_reference(value)
         if '_mouth_shape' in value:
             from .mouth_shape_project import validate_records
             validate_records(value)
@@ -652,6 +654,7 @@ def decode(value: object, assets: dict, dropped: list, at: str,
         if '_eye_shape' in value:
             from .eye_shape_project import validate_records
             validate_records(value)
+        if '_reference_color' in value: validate_reference(value)
         if '_mouth_shape' in value:
             from .mouth_shape_project import validate_records
             validate_records(value)
@@ -806,7 +809,7 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
             from .eye_shape_project import validate_records as validate_eyes
             from .mouth_shape_project import validate_records as validate_mouth
             from .lip_makeup_project import validate_records as validate_lips
-            validate_lips(recipe); validate_brows(recipe); validate_noses(recipe); validate_eyes(recipe); validate_mouth(recipe)
+            validate_lips(recipe); validate_brows(recipe); validate_noses(recipe); validate_eyes(recipe); validate_mouth(recipe); validate_reference(recipe)
             from .optics_project import validate_records as validate_optics
             validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)))
             from .studio_background_project import validate_records as validate_studio
@@ -866,7 +869,7 @@ def active_recipe(project: dict, path: str, dc_types: dict | None = None) -> obj
                 from .eye_shape_project import validate_records as validate_eyes
                 from .mouth_shape_project import validate_records as validate_mouth
                 from .lip_makeup_project import validate_records as validate_lips
-                validate_lips(recipe); validate_brows(recipe); validate_noses(recipe); validate_eyes(recipe); validate_mouth(recipe)
+                validate_lips(recipe); validate_brows(recipe); validate_noses(recipe); validate_eyes(recipe); validate_mouth(recipe); validate_reference(recipe)
                 from .optics_project import validate_records as validate_optics
                 validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)))
                 from .studio_background_project import validate_records as validate_studio

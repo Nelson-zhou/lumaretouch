@@ -89,3 +89,10 @@ echo "  · setup-runtime.sh + $(ls "$rt" | tr '\n' ' ')"
 mkdir -p "$stage/lumaretouch_engine/third_party/optics"
 cp "$here/../core/optics/lib.rs" "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/optics/"
 cp "$here/../docs/optics/DEPENDENCIES.md" "$stage/lumaretouch_engine/third_party/optics/"
+
+# Original local correspondence solver; no weights or runtime download.
+bash "$here/build-reference-color.sh" "$stage/lumaretouch_engine/bin/liblrt_reference_color.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/reference_color/core/reference_color" "$stage/lumaretouch_engine/third_party/reference_color/core/curves"
+cp "$here/../core/reference_color/lib.rs" "$stage/lumaretouch_engine/third_party/reference_color/core/reference_color/"
+cp "$here/../core/curves/curve.rs" "$stage/lumaretouch_engine/third_party/reference_color/core/curves/"
+cp "$here/../LICENSE" "$here/../docs/REFERENCE-COLOR-INTEGRATION.md" "$stage/lumaretouch_engine/third_party/reference_color/"

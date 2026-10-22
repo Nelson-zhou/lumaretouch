@@ -37,6 +37,7 @@ from . import white_balance_recipe as WB
 from . import local_grade_layers as LOCAL_GRADE
 from . import studio_background_scope as STUDIO
 from . import optics_scope as OPTICS, optics_auto_scope as OPTICS_AUTO
+from . import reference_color_scope as REFERENCE
 from . import facial_wrinkle_scope as WRINKLES
 from . import lip_makeup_scope as LIP
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
@@ -92,6 +93,9 @@ MODULES: dict[str, dict] = {
     EYE.OP: {"params": ("recipe",), "state_fields": EYE.FIELDS, "single_face": True,
               "transferable": True, "cmd": "eye_shape", "read": EYE.params_of, "write": EYE.install,
               "why_not": "仅十项双侧二维参数；目标重新确认真实人物与可见眼部，不复制源图身份、网格或蒙版"},
+    REFERENCE.OP: {"params": ("version","strength","reference"), "label": "参考同场景白平衡/亮度", "single_face": False,
+              "transferable": True, "cmd": "batch", "read": REFERENCE.params_of, "write": REFERENCE.install,
+              "state_fields": REFERENCE.FIELDS},
     MOUTH.OP: {"params": ("recipe",), "state_fields": MOUTH.FIELDS, "single_face": True,
               "transferable": True, "cmd": "mouth_shape", "read": MOUTH.params_of, "write": MOUTH.install,
               "why_not": "仅九项二维参数；目标重新确认真实人物与可见唇部，不复制源图身份、网格或蒙版"},
@@ -274,6 +278,7 @@ def check_params(op: str, params: dict) -> dict:
     if op == SKY.OP:
         try: return SKY.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
+    if op == REFERENCE.OP: return REFERENCE.check_params(params)
     if op == OPTICS_AUTO.OP:
         try: return OPTICS_AUTO.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
@@ -429,10 +434,11 @@ def apply_modules(state: dict, mods: dict[str, dict], *, local_replace_legacy=Fa
 
 def restore_modules(current, previous, ops):
     """Restore only reviewed modules; retain exact legacy local-grade fields."""
-    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP)]
+    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP,REFERENCE.OP)]
     result = apply_modules(current, params_of(previous, ordinary)) if ordinary else dict(current)
     if OP_LOCAL_GRADE in ops: LOCAL_GRADE.restore(result, previous)
     if OPTICS_AUTO.OP in ops: OPTICS_AUTO.restore(result, previous)
+    if REFERENCE.OP in ops: REFERENCE.restore(result, previous)
     return result
 
 

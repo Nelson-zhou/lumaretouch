@@ -3,7 +3,7 @@ from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scop
 from dataclasses import dataclass
 from typing import Callable
 import json
-from . import scope as SC
+from . import scope as SC, reference_color_scope as RC
 from . import sky_replacement_scope as SKY, optics_auto_scope as OA
 from . import optics_transfer_review as OR
 from . import local_grade_layers as LG
@@ -20,6 +20,8 @@ class PlanPorts:
     face_check:Callable
     commit:Callable
     prepare_optics:Callable|None=None
+    prepare_reference:Callable|None=None
+    capture_reference:Callable|None=None
 
 class FrozenBatchController:
     def __init__(self,ports,versions,emit,clock):
@@ -61,6 +63,12 @@ class FrozenBatchController:
                 if not 0<=index<len(rows):raise SC.ScopeError('no active source document')
                 source=self.ports.capture();source_row=rows[index];version=self.versions.version(source_row)
                 mods=SC.params_of(source,ops)
+                reference_options=p.get('reference_color')
+                if reference_options is not None:
+                    if ops!=[RC.OP] or type(reference_options) is not dict or set(reference_options)!={'strength'}:
+                        raise ValueError('新样片统一必须单独选择参考模块与程度')
+                    if self.ports.capture_reference is None:raise ValueError('参考样片端口不可用')
+                    mods[RC.OP]=self.ports.capture_reference(source_row,source,version.document_id,str(version.revision),reference_options['strength'])
                 local_options=p.get('local_mask_transfer')
                 if LG.OP in ops:
                     local_options=LG.options(local_options)
@@ -72,7 +80,8 @@ class FrozenBatchController:
                 for i in indices:
                     row=rows[i];v=self.versions.version(row);live=i==index
                     before=OA.before_params(source if live else row['state'],ops);blocked=self._blocked(row,ops,live)
-                    prepared=None;transfer=None;optics_record=None;optical_transfer=None
+                    prepared=None;transfer=None;optics_record=None;optical_transfer=None;reference_record=None
+                    if RC.OP in ops and live:blocked="参考图保持不变，不作为统一目标"
                     if not blocked and LG.OP in ops:
                         try:prepared,transfer=LR.prepare_modules(source if live else row['state'],mods,row,local_options,preview=len(public)<12)
                         except Exception as error:blocked=str(error)[:2000]
@@ -97,12 +106,19 @@ class FrozenBatchController:
                             target_input=self.ports.prepare_optics(row,candidate,v.document_id,str(v.revision))
                             optics_record,optical_transfer=OR.prepare(mods[OA.OP],target_input,before_state=original,preview=len(public)<2)
                         except Exception as error:blocked=str(error)[:2000]
+                    if not blocked and RC.OP in ops:
+                        try:
+                            if self.ports.prepare_reference is None:raise ValueError('参考统一目标预检端口不可用')
+                            candidate=OA.candidate(row['state'],prepared or mods,local_replace_legacy=bool(transfer and transfer['legacy_removed']))
+                            if optics_record is not None:candidate['_optics']=optics_record['recipe']
+                            reference_record=self.ports.prepare_reference(row,candidate,v.document_id,str(v.revision),mods[RC.OP])
+                        except Exception as error:blocked=str(error)[:2000]
                     private_transfer=None if transfer is None else {k:v for k,v in transfer.items() if k!='preview_jpeg'}
                     targets.append(FrozenTarget(v.document_id,v.revision,i,row['path'],blocked,canonical(before),
                         None if prepared is None else canonical(prepared),None if private_transfer is None else canonical(private_transfer),
-                        None if optics_record is None else canonical(optics_record)))
+                        None if optics_record is None else canonical(optics_record),None if reference_record is None else canonical(reference_record)))
                     public.append({'index':i,'path':row['path'],'live':live,'blocked':blocked,'before':before,
-                                   'document_id':v.document_id,'revision':str(v.revision),'local_mask_transfer':transfer,'optical_transfer':optical_transfer})
+                                   'document_id':v.document_id,'revision':str(v.revision),'local_mask_transfer':transfer,'optical_transfer':optical_transfer,'reference_color':reference_record})
                 plan=self.store.create(self.versions.workspace,version.document_id,version.revision,source_row['path'],
                     ops,mods,policy,targets,rejected)
                 body={'event':'batch_preflight','success':True,'module_scope':ops,'source':'current',
@@ -145,12 +161,21 @@ class FrozenBatchController:
                             OA.verify_target(json.loads(target.optics_json),original,candidate,row,target.document_id,target.revision,prepared[OA.OP])
                         except Exception as error:blocked=str(error)[:2000]
                 resolved.append({'index':index,'path':target.path,'blocked':blocked,'document_id':target.document_id,
+                    '_reference_prepared':None if target.reference_json is None else json.loads(target.reference_json),
                     '_optics_prepared':None if target.optics_json is None else json.loads(target.optics_json),
                     '_prepared_modules':None if target.prepared_json is None else json.loads(target.prepared_json),
                     '_local_replace_legacy':False if target.transfer_json is None else json.loads(target.transfer_json)['legacy_removed'],
                     'reviewed_index':target.index,'expected_revision':str(target.revision),'current_revision':None if actual is None else str(actual)})
             source=by_id.get(plan.source_id)
             source_changed=source is None or self.versions.version(source[1]).revision!=plan.source_revision
+            if RC.OP in plan.modules:
+                if source_changed:raise SC.ScopeError('参考源图在预检后变化，请重新审核')
+                # A newly captured current reference is source-file bound as well
+                # as revision bound; an external file replacement is not an edit event.
+                records=[json.loads(t.reference_json) for t in plan.targets if t.reference_json is not None]
+                if any(r['reference']['document_id']==plan.source_id for r in records):
+                    from .local_mask_state import verify_source
+                    verify_source({'source':plan.params()[RC.OP]['reference']['source']},source[1]['path'])
             if plan.policy=='recheck' and any(r['blocked'] for r in resolved):
                 raise SC.ScopeError('preflight conflicts require a new review; no target was written')
             self.store.claim(plan);commit_started=True

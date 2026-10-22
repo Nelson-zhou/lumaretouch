@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 import json
 from typing import Callable
-from . import scope as SC, preset_store as PS
+from . import scope as SC, preset_store as PS, reference_color_scope as RC
 from .preset_transaction import apply_with_rollback, PresetApplyError
 from . import local_grade_layers as LG
 from . import sky_replacement_scope as SKY, optics_auto_scope as OA
@@ -40,6 +40,7 @@ class PresetPorts:
     revision: Callable[[], str] = lambda: ''
     advance: Callable[[], None] = lambda: None
     prepare_optics: Callable | None = None
+    prepare_reference: Callable | None = None
 
 
 class PresetController:
@@ -135,7 +136,7 @@ class PresetController:
                         verdict, reason = self.ports.face_check()
                         if verdict != 'ok': raise SC.ScopeError(f'{op}：{reason}')
                 evidence = self.reviews.prepare(doc, self.ports.capture(), self.ports.target_row(),
-                    self.ports.document_id(), self.ports.revision(), p.get('local_mask_transfer'), self.ports.prepare_optics)
+                    self.ports.document_id(), self.ports.revision(), p.get('local_mask_transfer'), self.ports.prepare_optics, self.ports.prepare_reference)
             elif action == "apply": evidence = self.apply(p)
             elif action == "save": evidence = self.save(p)
             elif action == "import":
@@ -214,7 +215,7 @@ class PresetController:
             doc, mods = record['preset'], record['modules']
         else:
             doc = PS.find(pid); mods = doc['modules']
-            if LG.OP in mods or OA.OP in mods: raise SC.ScopeError('含局部组或自动镜头/透视的预设必须先查看本目标预检，再确认应用')
+            if LG.OP in mods or OA.OP in mods or RC.OP in mods: raise SC.ScopeError('含局部组或自动镜头/透视的预设必须先查看本目标预检，再确认应用')
         ops = list(mods)
         for op in ops:
             if SC.MODULES[op]["single_face"]:
@@ -224,6 +225,9 @@ class PresetController:
         state = OA.candidate(previous, mods, local_replace_legacy=bool(p.get('preflight_token') and record['transfer'] and record['transfer']['legacy_removed']))
         if OA.OP in ops:
             state['_optics']=OA.verify_target(record['optics'],previous,state,self.ports.target_row(),self.ports.document_id(),self.ports.revision(),mods[OA.OP])
+        if RC.OP in ops:
+            recipe=RC.verify_target(record['reference'],previous,state,self.ports.target_row(),self.ports.document_id(),self.ports.revision(),mods[RC.OP])
+            RC.apply_verified(state,recipe)
         if SKY.OP in ops:
             row=self.ports.target_row()
             SKY.validate_target(state["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
@@ -234,7 +238,7 @@ class PresetController:
         if p.get('preflight_token') is not None:self.ports.advance()
         self._effect_started = True
         frame = apply_with_rollback(self.ports.replay, previous, state, preset_id=pid,
-                                    emit=self.emit, invalidate=self.ports.invalidate, strict_local=LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops)
+                                    emit=self.emit, invalidate=self.ports.invalidate, strict_local=LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
         after = OA.before_params(state, ops)
         self.last = {"id": pid, "name": doc["name"], "ops": ops, "params": after}
         render_ms = frame.pop("render_ms")
@@ -246,7 +250,7 @@ class PresetController:
 
     def save(self, p):
         requested = p.get("module_scope")
-        ops = SC.check_scope([op for op in SC.transferable_ops() if op!=OA.OP] if requested is None else requested)
+        ops = SC.check_scope([op for op in SC.transferable_ops() if op not in (OA.OP,RC.OP)] if requested is None else requested)
         mods = SC.params_of(self.ports.capture(), ops)
         if SKY.OP in mods and mods[SKY.OP]["recipe"]["enabled"]:
             from .sky_replacement_assets import verify
