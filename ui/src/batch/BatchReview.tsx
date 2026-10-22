@@ -1,3 +1,4 @@
+import {PeopleTransferEvidence} from '../people/transferReview';
 import {ReferenceColorReview} from '../referenceColor/ReferenceColorReview';
 import {AutomaticTransferReview} from '../optics/AutomaticTransferReview';
 import {MaskTransferEvidenceView} from '../localMasks/transfer';
@@ -52,7 +53,7 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
       {plan&&<>
         <p title={plan.source_snapshot.path}>源图：{file(plan.source_snapshot.path)} · 预检版本 {plan.source_snapshot.revision}</p>
         <p>{state.scopeLabel} · {plan.module_scope.length} 个模块</p>
-        <p>{plan.module_scope.includes('lnx.reference_color.v1')?'参考或目标在预检后修改则拒绝，必须重新审核。样片保持不变，整组撤销/重做保留其他手动编辑。':'固定使用预检时的配方；目标照片若在预检后修改，不会被覆盖。'}</p>
+        <p>{plan.people_transfer?'只向明确确认的同一人物同步勾选参数；源图、目标或关联改变后必须重新预检。':plan.module_scope.includes('lnx.reference_color.v1')?'参考或目标在预检后修改则拒绝，必须重新审核。样片保持不变，整组撤销/重做保留其他手动编辑。':'固定使用预检时的配方；目标照片若在预检后修改，不会被覆盖。'}</p>
         <p>预检可同步 {plan.ok} 张 · 受阻 {plan.blocked} 张 · 无效选择 {plan.rejected_docs?.length??0} 张</p>
         <p>冲突处理：{plan.policy==='recheck'?'任一目标变化则整批不写入，重新预检':'跳过有变化的目标，并逐张报告'}</p>
         {result?.source_changed_since_preflight&&<p>源图在预检后已变化，本次仍使用已确认的旧版本配方。</p>}
@@ -60,6 +61,7 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
       </>}
       {!!targets.length&&<ul className="batchTargets">{targets.map(t=><li key={t.document_id} title={t.path}>
         <span>{file(t.path)}</span><span>{t.outcome==='applied'?'已同步':t.outcome==='unknown'?'结果未确认':t.outcome==='not_applied'?'未执行':reason(t.blocked)}</span>
+        {t.people_transfer&&<PeopleTransferEvidence value={t.people_transfer}/>}
         {t.local_mask_transfer&&<MaskTransferEvidenceView value={t.local_mask_transfer}/>}
         {t.reference_color&&<ReferenceColorReview value={t.reference_color}/>}
         {t.optical_transfer&&<AutomaticTransferReview report={t.optical_transfer}/>}

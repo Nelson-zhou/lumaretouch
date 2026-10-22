@@ -44,6 +44,7 @@ from .ops.deform import (KINDS, analytic_frontal_landmarks, check_amounts,
 from .ops.light import dodge_burn_t, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
 from .ops import enhance as ENH
 from . import under_eye_layer as UNDER
+from . import people_pipeline as PEOPLE_PIPE
 from . import lip_makeup_runtime as LIPR, lip_makeup_layer as LIPL, lip_makeup_state as LIPS
 from . import brow_shape_runtime as BROWR, brow_shape_state as BROWS, nose_shape_runtime as NOSER, nose_shape_state as NOSES, eye_shape_state as EYES, eye_shape_runtime as EYER, mouth_shape_state as MOUTHS, mouth_shape_runtime as MOUTHR
 from . import facial_wrinkle_runtime as WRUNTIME, facial_wrinkle_layer as WLAYER, facial_wrinkle_state as WSTATE
@@ -499,6 +500,8 @@ class PreviewPipeline:
         全图 `(1-s)*img + s*out`，分通道 `mix_masked(img, out, s, weight)`。
         因此 strength=0 恒等那条承诺一分不改：`0*out` 仍然恒为 0。
         """
+        from .people_engine_runtime import require_ready
+        require_ready(self)
         if render_stage not in ('output', 'wb-input', 'optics-input'):
             raise ValueError('Unknown production render stage')
         if self.src_f32 is None:
@@ -533,10 +536,14 @@ class PreviewPipeline:
         # later effects continue to consume the recovered pixels normally.
         out = self.effect_recovery.apply('fabric_fine', out, self.fabric.apply(out))
         out = self.studio_background.apply(out)
-        WLAYER.refresh_source(self)
-        out = self.effect_recovery.apply('facial_wrinkles', out, WLAYER.apply_delta(self, out))
-        LIPR.refresh_source(self)
-        out = self.effect_recovery.apply('lip_makeup', out, LIPL.apply_delta(self, out))
+        if PEOPLE_PIPE.active(self):
+            out=PEOPLE_PIPE.source_effect(self,'facial_wrinkles',out)
+            out=PEOPLE_PIPE.source_effect(self,'lip_makeup',out)
+        else:
+            WLAYER.refresh_source(self)
+            out = self.effect_recovery.apply('facial_wrinkles', out, WLAYER.apply_delta(self, out))
+            LIPR.refresh_source(self)
+            out = self.effect_recovery.apply('lip_makeup', out, LIPL.apply_delta(self, out))
         out = self.apply_enhance(self.apply_deform(out))
         if scope_tap is not None: scope_tap("wb-input", out)
         if render_stage == 'wb-input':
@@ -991,6 +998,7 @@ class PreviewPipeline:
 
     # ---- M2-b：形变层（盖在磨皮与修容之后的几何层）--------------------
     def has_deform(self) -> bool:
+        if PEOPLE_PIPE.active(self):return self.people_prepared.geometry.peak>0
         """没建单或三个滑块全零 ⇒ 一个算子也不跑。"""
         return bool(self.deform_units) and any(self.deform_amounts.get(k, 0.0) != 0.0
                                                for k in self.deform_units)
@@ -1102,6 +1110,7 @@ class PreviewPipeline:
     def apply_deform(self, t):
         """把当前形变层施加到一份常驻张量上。每帧只走这里，不走 TPS 解算。"""
         self.last_deform_ms = 0.0
+        if PEOPLE_PIPE.active(self): return PEOPLE_PIPE.warp(self,t)
         if not self.has_deform() and not BROWR.has_brow(self) and not NOSER.has_nose(self) and not EYER.has_eye(self) and not MOUTHR.has_mouth(self):
             return t
         t0 = time.perf_counter()
@@ -1134,7 +1143,8 @@ class PreviewPipeline:
 
     def deform_resident_bytes(self) -> int:
         """形变层的显存账单：各单位场 + 恒等网格 + 已生成的采样网格/零位移掩膜。"""
-        total = 0
+        total = PEOPLE_PIPE.resident_bytes(self)
+        if PEOPLE_PIPE.active(self):total += self.people_prepared.geometry.delta.nbytes + self.people_prepared.geometry.owner.nbytes
         for t in (list(self.deform_units.values()) + [self.deform_grid_base]
                   + list(self._deform_warp or ())):
             if t is not None:
@@ -1314,6 +1324,7 @@ class PreviewPipeline:
         """
         if weight is None:
             raise ValueError("Source-domain grade coverage is unavailable")
+        if PEOPLE_PIPE.active(self): return PEOPLE_PIPE.warp(self,weight)
         if not self.has_deform() and not BROWR.has_brow(self) and not NOSER.has_nose(self) and not EYER.has_eye(self) and not MOUTHR.has_mouth(self):
             return weight
         image_warp_ms = self.last_deform_ms
@@ -1704,6 +1715,7 @@ class PreviewPipeline:
 
     # ---- PORTRAIT-009：眼牙局部增强 ---------------------------------------
     def has_enhance(self) -> bool:
+        if PEOPLE_PIPE.active(self):return any(r.stage in ("enhance","eye_detail","facial_wrinkles") for r in self.people_prepared.effects)
         """这一层到底有没有活：三个数至少一个非零，而权重场里确实有额度。
 
         只看参数不够：“三个数都是 0.4 而掩膜是空的”（闭嘴样本的牙齿那一格、两只眼都被
@@ -1849,6 +1861,7 @@ class PreviewPipeline:
     def apply_enhance(self, t):
         """每帧只走这里。没活就直接把张量递回去（一个算子也不跑，连混合都不做）。"""
         self.last_enhance_ms = 0.0
+        if PEOPLE_PIPE.active(self): return PEOPLE_PIPE.post_effects(self,t)
         UNDER.refresh_source(self)
         if not self.has_enhance():
             return t
@@ -1879,6 +1892,9 @@ class PreviewPipeline:
     def enhance_resident_bytes(self) -> int:
         """本层账单：窗口那一片 float32 权重场。没挂就是 0（不是“查过没有”的 0）。"""
         n = WRUNTIME.resident_bytes(self) + LIPR.resident_bytes(self)
+        if PEOPLE_PIPE.active(self):
+            n += sum(a.nbytes for record in self.people_prepared.effects for a in (record.delta,record.weights) if a is not None)
+            n += sum(record["weight"].nbytes for record in self.people_prepared.recovery.values())
         brow = getattr(self,"brow_shape_field",None)
         n += brow.resident_bytes() if brow else 0
         nose = getattr(self,"nose_shape_field",None)

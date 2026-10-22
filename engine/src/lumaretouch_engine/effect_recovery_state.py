@@ -112,7 +112,12 @@ def prepare_mutation(engine, capture, mutation):
     if action not in fields or set(mutation) != fields[action]:
         raise ValueError('效果恢复修改字段无效')
     name = target(mutation['target'])
-    value = check(getattr(engine, '_effect_recovery', None))
+    from . import people_recovery as PEOPLE
+    if PEOPLE.handles(engine, name):
+        PEOPLE.context(engine)
+        value = PEOPLE.value(engine)
+    else:
+        value = check(getattr(engine, '_effect_recovery', None))
     binding = M.bind_source(engine)
     if value['source'] is not None and value['source'] != binding:
         raise ValueError('源图身份改变，恢复笔迹不能重新绑定到另一张照片')

@@ -8,6 +8,7 @@ def _text(v): return type(v) is str and 0<len(v)<=128
 
 def apply(engine,p,emit):
     expected={'cmd','recipe','base','document_id','control','request_id','gesture_id','face_id'}
+    if isinstance(p,dict) and 'people_context' in p:expected.add('people_context')
     if type(p) is not dict or set(p)!=expected or any(not _text(p[k]) for k in ('request_id','gesture_id','face_id','document_id')):
         raise ValueError('眼形请求身份或字段无效')
     records=engine.__dict__.setdefault('_eye_receipts',OrderedDict())

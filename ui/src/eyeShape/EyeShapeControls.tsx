@@ -1,10 +1,11 @@
+import type {PeopleContext} from '../people/model';
 import {useLayoutEffect,useRef,useSyncExternalStore} from 'react';
 import {KEYS,IDS,LABELS,HINTS,neutral,adjust,link,reason,type EyeShape,type EyeKey,type EyeFact} from './model';
 import {eyeInteraction as owner} from './interaction';
-export function EyeShapeControls({value,facts,disabled,why,documentId,faceId,revision,legacy,clearLegacy}:{value:EyeShape;facts?:Partial<Record<string,EyeFact>>;legacy:number;clearLegacy:()=>void;disabled:boolean;why?:string;documentId:string;faceId:string;revision:number}) {
+export function EyeShapeControls({value,facts,disabled,why,documentId,faceId,revision,legacy,clearLegacy,peopleContext}:{value:EyeShape;facts?:Partial<Record<string,EyeFact>>;legacy:number;clearLegacy:()=>void;disabled:boolean;why?:string;documentId:string;faceId:string;revision:number;peopleContext?:PeopleContext}) {
   const view=useSyncExternalStore(owner.subscribe,owner.snapshot,owner.snapshot);
   const gestures=useRef(new Map<string,string>());
-  useLayoutEffect(()=>{owner.update({documentId,faceId,recipe:value,revision,enabled:!disabled});},[documentId,faceId,value,revision,disabled]);
+  useLayoutEffect(()=>{owner.update({documentId,faceId,recipe:value,revision,enabled:!disabled,peopleContext});},[documentId,faceId,value,revision,disabled,peopleContext]);
   const gesture=(key:string)=>{let id=gestures.current.get(key);if(!id){id=crypto.randomUUID();gestures.current.set(key,id);}return id;};
   const end=(key:string)=>{gestures.current.delete(key);};
   const edit=(change:(r:EyeShape)=>EyeShape,k:EyeKey|'all',id=crypto.randomUUID())=>owner.edit(change,k,id);

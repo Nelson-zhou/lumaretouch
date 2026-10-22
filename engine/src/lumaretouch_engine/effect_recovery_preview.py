@@ -9,6 +9,7 @@ import json
 import re
 from copy import deepcopy
 from . import effect_recovery_state as S, effect_recovery_runtime as R
+from . import people_recovery as PEOPLE
 from .source_patch_controller import PROOF_KEYS
 
 MAX_IMAGE_EDGE = 800
@@ -49,18 +50,30 @@ def render_review(engine, stage):
     sky(engine,strict=True)
     from .optics_runtime import sync as optics
     optics(engine,strict=True)
+    if PEOPLE.managed(engine):
+        engine._people_sync(strict=True)
     pipe = engine._vram
     old = pipe.effect_recovery
+    old_people = {key: getattr(pipe, key, None) for key in
+                  ('people_prepared', 'people_origin', 'people_warp', 'people_suspended')}
+    candidate = getattr(stage, 'people_recovery', None)
     strength, channel = engine._retouch_render_args()
     presentation = engine._frame_presentation()
     try:
         before, dimensions = image(pipe.retouch(strength, channel=channel, **engine._params), presentation)
         pipe.effect_recovery = stage
+        if candidate is not None:
+            PEOPLE.assert_context(engine, candidate['context'])
+            from .people_pipeline import install
+            install(pipe, candidate['prepared'])
+            pipe.people_suspended = None
         after, after_dimensions = image(pipe.retouch(strength, channel=channel, **engine._params), presentation)
         if after_dimensions != dimensions:
             raise ValueError('恢复预览构图在渲染中变化')
     finally:
         pipe.effect_recovery = old
+        for key, value in old_people.items():
+            setattr(pipe, key, value)
     if len(before) + len(after) > MAX_REVIEW_BYTES:
         raise ValueError('恢复效果对比超过 6 MiB 预览预算')
     return {'before': before, 'after': after, 'width': dimensions[0], 'height': dimensions[1],
@@ -103,18 +116,24 @@ class RecoveryPreview:
                     raise ValueError('恢复笔迹超过 128 KiB')
                 mutation = p['mutation']
                 viewing = (type(mutation) is dict and mutation.get('action') == 'view')
+                if PEOPLE.managed(self.engine):
+                    self.engine._people_sync(strict=True)
                 if viewing:
                     if set(mutation) != {'action', 'target'}:
                         raise ValueError('恢复查看请求字段无效')
                     S.target(mutation['target'])
-                    value = S.check(getattr(self.engine, '_effect_recovery', None))
+                    value = (PEOPLE.value(self.engine) if PEOPLE.handles(self.engine, mutation['target'])
+                             else S.check(getattr(self.engine, '_effect_recovery', None)))
                 else:
                     value = S.prepare_mutation(self.engine, capture, mutation)
                 stage = R.prepare_stage(self.engine, value)
+                stage.people_recovery = PEOPLE.prepare(self.engine, value, mutation['target'])
                 result = render_review(self.engine, stage)
                 self._matching(p)
                 self.record = {'id': ident, 'proof': proof, 'value': value,
                                'target': p['mutation']['target'], 'presented': False,
+                               'people_context': (deepcopy(stage.people_recovery['context'])
+                                                  if stage.people_recovery is not None else None),
                                'committable': not viewing}
                 event.update(state='ready', success=True, result=result, target=p['mutation']['target'])
             else:
@@ -140,6 +159,13 @@ class RecoveryPreview:
             raise ValueError('请先查看此笔真实效果预览，不能提交未显示或过期的修改')
         value = S.check(record['value'])
         stage = R.prepare_stage(self.engine, value)
+        if PEOPLE.handles(self.engine, record['target']):
+            if record['people_context'] is None:
+                raise ValueError('人物恢复预览缺少确切人物归属，请重新查看本笔')
+            stage.people_recovery = PEOPLE.prepare(self.engine, value, record['target'],
+                                                    expected=record['people_context'])
+        elif record['people_context'] is not None:
+            raise ValueError('人物恢复处理路径在预览后改变')
         return deepcopy(value), stage
 
 

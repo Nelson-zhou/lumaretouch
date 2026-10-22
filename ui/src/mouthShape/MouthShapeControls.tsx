@@ -1,14 +1,15 @@
+import type {PeopleContext} from '../people/model';
 import {useLayoutEffect,useRef,useSyncExternalStore} from 'react';
 import {KEYS,IDS,LABELS,HINTS,neutral,adjust,link,reason,type MouthShape,type MouthKey,type MouthSide,type MouthFact} from './model';
 import {mouthInteraction as owner} from './interaction';
 interface Props {
   value:MouthShape;facts?:Partial<Record<string,MouthFact>>;disabled:boolean;why?:string;
-  documentId:string;faceId:string;revision:number;legacy:number;
+  documentId:string;faceId:string;revision:number;legacy:number;peopleContext?:PeopleContext;
 }
-export function MouthShapeControls({value,facts,disabled,why,documentId,faceId,revision,legacy}:Props) {
+export function MouthShapeControls({value,facts,disabled,why,documentId,faceId,revision,legacy,peopleContext}:Props) {
   const view=useSyncExternalStore(owner.subscribe,owner.snapshot,owner.snapshot);
   const gestures=useRef(new Map<string,string>());
-  useLayoutEffect(()=>{owner.update({documentId,faceId,recipe:value,revision,enabled:!disabled});},[documentId,faceId,value,revision,disabled]);
+  useLayoutEffect(()=>{owner.update({documentId,faceId,recipe:value,revision,enabled:!disabled,peopleContext});},[documentId,faceId,value,revision,disabled,peopleContext]);
   const gesture=(key:string)=>{let id=gestures.current.get(key);if(!id){id=crypto.randomUUID();gestures.current.set(key,id);}return id;};
   const end=(key:string)=>{gestures.current.delete(key);};
   const edit=(change:(r:MouthShape)=>MouthShape,key:MouthKey|'all',id=crypto.randomUUID())=>owner.edit(change,key,id);

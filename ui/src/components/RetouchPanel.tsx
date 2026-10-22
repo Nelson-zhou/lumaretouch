@@ -1,3 +1,7 @@
+import {PeoplePanel} from '../people/PeoplePanel';
+import type {PeopleOwner} from '../people/usePeopleWorkflow';
+import {peopleContext, type ParameterPatch} from '../people/model';
+import {portraitRequestsBusy} from '../people/portraitAccess';
 import {MouthShapeControls} from "../mouthShape/MouthShapeControls";
 import {neutral as neutralMouth} from "../mouthShape/model";
 import {EyeShapeControls} from "../eyeShape/EyeShapeControls";
@@ -31,11 +35,11 @@ import { TOOL_GROUPS, toolGroupOf, type ToolGroup } from "../toolNavigation";
  *
  * 产品界面不打印内部编号、阶段标签、项数统计或后端实现细节。
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  runLipMakeup, runBackground, runCrop, runDeform, runEnhance, runExposure, runFace, runGrade,
+  runLipMakeup, runBackground, runCrop, runDeform, runEnhance, runExposure, runGrade,
   runHistory, runHsl, runLut, setStrength,
-  type DocState, type EngineStatus, type FacePerson,
+  type DocState, type EngineStatus,
 } from "../native";
 import {
   FEATURES, SPEC_COUNTS, buildTree, type SpecFeature, type SpecNode,
@@ -65,9 +69,7 @@ export interface RetouchProps {
   onDone: () => void;
   /** 当前文档缩略图（JPEG base64）：人脸 chip 与 LUT 卡片的真实预览 */
   thumb?: string;
-  /** 当前编辑范围：所有人（联动）或某一张脸（独立） */
-  faceScope: "all" | number;
-  onFaceScope: (s: "all" | number) => void;
+  people: PeopleOwner;
   /** 视口画笔（引擎同一支管道：消除 / 局部调色 / 减淡 / 加深） */
   brush: { on: boolean; mode: BrushMode; radius: number };
   onBrush: (patch: Partial<{ on: boolean; mode: BrushMode; radius: number }>) => void;
@@ -80,6 +82,8 @@ export interface RetouchProps {
 
 const ok = (p: Promise<unknown>, props: RetouchProps) =>
   p.then(props.onDone).catch((e) => props.note(String(e)));
+
+const PortraitRevision = createContext<string>('');
 
 function Slider(props: {
   label: string;
@@ -94,6 +98,7 @@ function Slider(props: {
   onChange: (v: number) => void;
   onReset: () => void;
 }) {
+  const authoritativeRevision = useContext(PortraitRevision);
   const [local, setLocal] = useState(props.value);
   const [text, setText] = useState(() => fmt(props.value));
   const dragging = useRef(false);
@@ -115,7 +120,7 @@ function Slider(props: {
     setText(fmt(props.value));
     // fmt 只依赖 props.digits；把它列进来会让滑杆每次父级刷新都重置光标。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.value]);
+  }, [props.value, authoritativeRevision]);
 
   const commit = () => {
     typing.current = false;
@@ -167,8 +172,8 @@ function Slider(props: {
         title={props.title ?? "双击归零"}
         style={{ background: track }}
         onPointerDown={() => { dragging.current = true; }}
-        onPointerUp={() => { dragging.current = false; }}
-        onPointerCancel={() => { dragging.current = false; }}
+        onPointerUp={() => { dragging.current = false; if(authoritativeRevision){setLocal(props.value);setText(fmt(props.value));} }}
+        onPointerCancel={() => { dragging.current = false; setLocal(props.value);setText(fmt(props.value)); }}
         onChange={(e) => {
           const v = +e.target.value;
           setLocal(v);
@@ -190,28 +195,6 @@ const FACE_LABEL: Record<string, string> = {
   small_chin: "小下巴",
   smile: "微笑",
 };
-
-/** 人脸 chip 的头像：拿当前文档缩略图按归一化脸盒裁一块，不额外向引擎要图。 */
-function FaceAvatar({ face, thumb, all }: {
-  face?: FacePerson; thumb?: string; all?: boolean;
-}) {
-  if (all || !face?.box || !thumb) {
-    return <i className={"faceAv ph" + (all ? " all" : "")}>{all ? "全" : "人"}</i>;
-  }
-  const [x0, y0, x1, y1] = face.box;
-  const w = Math.max(0.06, Math.min(1, x1 - x0));
-  const h = Math.max(0.06, Math.min(1, y1 - y0));
-  const px = w < 0.999 ? Math.max(0, Math.min(100, (x0 / (1 - w)) * 100)) : 50;
-  const py = h < 0.999 ? Math.max(0, Math.min(100, (y0 / (1 - h)) * 100)) : 50;
-  return (
-    <i className="faceAv"
-      style={{
-        backgroundImage: `url(data:image/jpeg;base64,${thumb})`,
-        backgroundSize: `${100 / w}% ${100 / h}%`,
-        backgroundPosition: `${px}% ${py}%`,
-      }} />
-  );
-}
 
 /** 已接通的控制：键是「功能族 ID|规格 path」，值是面板里的分派名。
  *
@@ -454,10 +437,10 @@ function hexToRgb(hex: string): number[] {
 
 export default function RetouchPanel(props: RetouchProps) {
   const { doc, status } = props;
-  const dim = !props.hasImage||!!props.colorActions?.owner.pending;
+  const dim = !props.hasImage||!!props.colorActions?.owner.pending||(props.people.state.pending && props.people.state.pendingAction !== 'patch')||props.people.state.uncertain;
+  const capturedPeople = peopleContext(doc?.people);
   const skinReady = skinMaskReady(status?.precompute?.mask_channels, status?.precompute?.mask_nonzero_pixels);
-  const skinWhy = props.faceScope !== "all" ? "单人物磨皮尚未接通，请选择所有人"
-    : skinReady ? "" : "尚无有效皮肤掩膜，请先完成人像分析";
+  const skinWhy = skinReady ? "" : "尚无有效皮肤掩膜，请先完成人像分析";
   const params = doc?.params ?? {};
   const amounts = doc?.deform.amounts ?? {};
   const enhAmounts = doc?.enhance?.amounts ?? {};
@@ -467,9 +450,6 @@ export default function RetouchPanel(props: RetouchProps) {
   // ×100 整数表示：dh→±5、ds/dv→±60，换算回后端单位正好落在 check_params 的有效带。
   const gradeBounds = skinSliderBounds100(skinLimits(status?.grade_limits));
   const presets = status?.presets ?? [];
-  const faces = doc?.face?.faces ?? [];
-  const faceIdx = typeof props.faceScope === "number" ? props.faceScope : null;
-  const scope: "all" | "person" = props.faceScope === "all" ? "all" : "person";
   const [q, setQ] = useState("");
   const [toolGroup, setToolGroup] = useState<ToolGroup>("color");
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -509,13 +489,23 @@ export default function RetouchPanel(props: RetouchProps) {
     ok(setStrength(patch.strength, skinEditOptions(patch)), props);
   };
 
+  const commitPeopleLeaves = (patches: ParameterPatch[]) => {
+    try {props.people.patch(patches);} catch (error) {props.note(String(error));}
+  };
+  const scalarLeaves = (operation: string, values: Record<string, number>): ParameterPatch[] =>
+    Object.entries(values).map(([key, value]) => ({operation_id: operation, parameter_path: `/${key}`, unset: false, value}));
   const commitDeform = (patch: Record<string, number>) => {
-    const p = faceIdx === null ? Promise.resolve() : runFace("select", faceIdx);
-    ok(p.then(() => runDeform("set", patch, scope)), props);
+    if (doc?.people) {commitPeopleLeaves(scalarLeaves('lnx.deform.v1', patch)); return;}
+    ok(runDeform("set", patch, undefined, capturedPeople), props);
   };
 
-  const commitEnhance = (patch: Record<string, number>) =>
-    ok(runEnhance("set", patch), props);
+  const commitEnhance = (patch: Record<string, number>) => {
+    if (doc?.people) {
+      commitPeopleLeaves(Object.entries(patch).map(([key, value]) => ({operation_id: key.startsWith('wrinkle_')
+        ? 'lnx.facial_wrinkles.v1' : 'lnx.enhance.v1', parameter_path: `/${key}`, unset: false, value}))); return;
+    }
+    ok(runEnhance("set", patch, capturedPeople), props);
+  };
 
   const commitExposure = (patch: Record<string, number>) =>
     ok(runExposure("set", patch, true), props);
@@ -549,28 +539,33 @@ export default function RetouchPanel(props: RetouchProps) {
       facts={doc?.mouth_shape?.controls} disabled={dim||!props.faceOk||!!props.whiteBalanceBusy||status?.ready_caps?.mouth_shape_protocol!==2}
       why={props.faceOk?(doc?.mouth_shape?.native_available===false?"嘴形 Rust 核心不可用，调整会明确拒绝；仍可重置旧参数。请使用完整打包版本。":doc?.mouth_shape?.suspended??undefined):props.faceWhy}
       legacy={doc?.mouth_shape?.legacy_smile??amounts.smile??0}
-      documentId={doc?.document_id??""} faceId={doc?.mouth_shape?.selected_face_id??""} revision={doc?.mouth_shape?.revision??0}/>;
+      documentId={doc?.document_id??""} faceId={doc?.mouth_shape?.selected_face_id??""} revision={doc?.mouth_shape?.revision??0} peopleContext={capturedPeople}/>;
     if (kind.startsWith("mouth.")) return null;
     if (kind === "eye.family") return <EyeShapeControls key={leaf.path} value={doc?.eye_shape?.recipe??neutralEyes()}
       facts={doc?.eye_shape?.controls} disabled={dim||!props.faceOk||!!props.whiteBalanceBusy||status?.ready_caps?.eye_shape_protocol!==2}
       why={props.faceOk?(doc?.eye_shape?.native_available===false?"眼形 Rust 核心未安装；调整会明确拒绝，请使用完整打包版本。":doc?.eye_shape?.suspended??undefined):props.faceWhy}
       legacy={doc?.eye_shape?.legacy_big_eye??amounts.big_eye??0} clearLegacy={()=>commitDeform({big_eye:0})}
-      documentId={doc?.document_id??""} faceId={doc?.eye_shape?.selected_face_id??""} revision={doc?.eye_shape?.revision??0}/>;
+      documentId={doc?.document_id??""} faceId={doc?.eye_shape?.selected_face_id??""} revision={doc?.eye_shape?.revision??0} peopleContext={capturedPeople}/>;
     if (kind.startsWith("eye.")) return null;
     if (kind === "nose.family") return <NoseShapeControls key={leaf.path} value={doc?.nose_shape?.recipe??neutralNose()}
       facts={doc?.nose_shape?.controls} disabled={dim||!props.faceOk||!!props.whiteBalanceBusy||status?.ready_caps?.nose_shape_protocol!==2}
       why={props.faceOk?(doc?.nose_shape?.suspended??undefined):props.faceWhy}
-      documentId={doc?.document_id??""} faceId={doc?.nose_shape?.selected_face_id??""} revision={doc?.nose_shape?.revision??0}/>;
+      documentId={doc?.document_id??""} faceId={doc?.nose_shape?.selected_face_id??""} revision={doc?.nose_shape?.revision??0} peopleContext={capturedPeople}/>;
     if (kind.startsWith("nose.")) return null;
     if (kind === "brow.family") return <BrowShapeControls key={leaf.path} value={doc?.brow_shape?.recipe??neutralBrows()}
       facts={doc?.brow_shape?.sides} disabled={dim||!props.faceOk||!!props.whiteBalanceBusy||status?.ready_caps?.brow_shape_protocol!==2}
       why={props.faceOk?(doc?.brow_shape?.suspended??undefined):props.faceWhy}
-      documentId={doc?.document_id??""} faceId={doc?.brow_shape?.selected_face_id??""} revision={doc?.brow_shape?.revision??0}/>;
+      documentId={doc?.document_id??""} faceId={doc?.brow_shape?.selected_face_id??""} revision={doc?.brow_shape?.revision??0} peopleContext={capturedPeople}/>;
     if (kind.startsWith("brow.")) return null;
     if (kind === "lip.family") return <LipMakeupControls key={leaf.path} value={doc?.lip_makeup?.recipe??neutralLips()}
       fact={doc?.lip_makeup?.facts} disabled={dim||!props.faceOk||!!props.whiteBalanceBusy||status?.ready_caps?.lip_makeup_protocol!==1}
       reason={props.faceOk?(doc?.lip_makeup?.suspended??undefined):props.faceWhy}
-      commit={(recipe,control)=>doc?.document_id&&ok(runLipMakeup(recipe,doc.document_id,control),props)} Slider={Slider}/>;
+      commit={(recipe,control)=>{
+        if (doc?.people) {
+          const keys = control === 'all' ? ['saturation','brightness','dimensionality'] as const : [control];
+          commitPeopleLeaves(keys.map(key=>({operation_id:'lnx.lip_makeup.v1',parameter_path:`/${key}`,unset:false,value:recipe[key]})));
+        } else if (doc?.document_id) ok(runLipMakeup(recipe,doc.document_id,control,capturedPeople),props);
+      }} Slider={Slider}/>;
     if (kind.startsWith("lip.")) return null;
     if (kind === "wrinkle.family") return <p key={leaf.path} className="muted"
       data-control-id="PC-32464-C-d9e8e03577">八个部位独立调节；法令纹可左右联动或解锁。只淡化线状细纹，保留五官与皮肤纹理。</p>;
@@ -975,6 +970,7 @@ export default function RetouchPanel(props: RetouchProps) {
   };
 
   return (
+    <PortraitRevision.Provider value={doc?.people ? `${doc.people.binding.document_id}:${doc.people.revision}:${JSON.stringify(doc.people.editing_target)}` : ''}>
     <div className="retouch" data-spec-total={SPEC_COUNTS.features}
          data-spec-controls={SPEC_COUNTS.subcontrols}>
       <div className="rtContent" ref={contentRef} onScroll={(e) => {
@@ -982,64 +978,9 @@ export default function RetouchPanel(props: RetouchProps) {
       }}>
       <div className="rtTitle">{q.trim() ? "功能搜索" : TOOL_GROUPS.find(g => g.id === toolGroup)?.label}</div>
 
-      {/* ① 人物栏：所有人 / 每张脸 / 多脸联动 / 添加与移出 */}
-      <div className="faceBar" data-spec-family="PC-47211" hidden={toolGroup !== "portrait" || !!query}>
-        <div className="faceHead">
-          <span>人物</span>
-          <em>{faces.length ? `${faces.length} 人` : "未检测到人脸"}</em>
-        </div>
-        <div className="faceChips">
-          <button className={"faceChip" + (props.faceScope === "all" ? " on" : "")}
-            disabled={dim} onClick={() => props.onFaceScope("all")}
-            title="所有人联动：一次调整应用到画面里的每一张脸">
-            <FaceAvatar all />
-            <span>所有人</span>
-          </button>
-          {faces.map((f) => (
-            <button key={f.index}
-              className={"faceChip" + (faceIdx === f.index ? " on" : "")}
-              disabled={dim || !!f.disabled || doc?.face?.blocked}
-              title={f.disabled ? "已标记为非脸" : `单独编辑第 ${f.index + 1} 人`}
-              onClick={() => {
-                props.onFaceScope(f.index);
-                ok(runFace("select", f.index), props);
-              }}>
-              <FaceAvatar face={f} thumb={props.thumb} />
-              <span>人物 {f.index + 1}</span>
-            </button>
-          ))}
-          {!faces.length && dim && <span className="faceEmpty">打开照片后自动识别人物</span>}
-        </div>
-        <div className="faceState">
-          <button className={"faceLock" + (props.faceScope === "all" ? " on" : "")}
-            disabled={dim || !faces.length}
-            title="在多脸同步与单脸调整之间切换"
-            onClick={() => props.onFaceScope(props.faceScope === "all"
-              ? (faces[0]?.index ?? "all") : "all")}>
-            {props.faceScope === "all" ? "多脸联动" : "单脸调整"}
-          </button>
-          <span>{props.faceScope === "all"
-            ? "所有人物同步调整"
-            : `仅调整人物 ${(faceIdx ?? 0) + 1}`}</span>
-        </div>
-        <div className="faceActs">
-          <button className="specBtn slim" disabled={dim || props.faceAdding}
-            title="在画面中框选一张脸，追加为人物"
-            onClick={() => props.onFaceAdd()}>
-            <b>{props.faceAdding ? "在画面中框选…" : "＋ 添加人物"}</b>
-          </button>
-          <button className="specBtn slim" disabled={dim || faceIdx === null}
-            title="将当前人物从编辑范围中排除"
-            onClick={() => {
-              if (faceIdx === null) return;
-              ok(runFace("disable", faceIdx), props);
-            }}>
-            <b>排除人物</b>
-          </button>
-          <span className="faceAttr" title="年龄与性别识别将在后续版本提供">
-            男女长幼
-          </span>
-        </div>
+      <div data-spec-family="PC-47211" hidden={toolGroup !== "portrait" || !!query}>
+        <PeoplePanel owner={props.people} busy={dim || portraitRequestsBusy() || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending}
+          thumb={props.thumb} onFaceAdd={props.onFaceAdd} faceAdding={props.faceAdding}/>
       </div>
 
       <div className="specSearchBar">
@@ -1072,6 +1013,7 @@ export default function RetouchPanel(props: RetouchProps) {
               <span>{title}</span>
             </summary>
             <div className="pgBody">
+              {f.id === "PC-32465" && <p className="muted">磨皮使用本照片皮肤蒙版，不随上方人物或分组范围切换。</p>}
               {f.id === "PC-32465" && skinWhy && <div className="specEmpty" role="status">{skinWhy}</div>}
               {f.id === "PC-32455" && props.colorSamplePanel}
               {custom}
@@ -1112,5 +1054,6 @@ export default function RetouchPanel(props: RetouchProps) {
         ))}
       </nav>
     </div>
+    </PortraitRevision.Provider>
   );
 }

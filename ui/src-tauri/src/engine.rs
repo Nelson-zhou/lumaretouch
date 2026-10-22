@@ -138,6 +138,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                 handle_event(&st, &line,inspection_epoch);
             }
             // Drain every accepted stdout event before synthesizing unknown outcomes.
+            crate::people_api::ended(inspection_epoch);
             st.batch_results.lock().unwrap().ended(inspection_epoch);
             st.preset_results.lock().unwrap().ended(inspection_epoch);
             st.white_balance_results.lock().unwrap().ended(inspection_epoch);
@@ -182,6 +183,10 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
     match v.get("event").and_then(|e| e.as_str()).unwrap_or("") {
         "inspection_snapshot"=>state.on_inspection_event(inspection_epoch,&v),
         "batch_result"=>state.batch_results.lock().unwrap().receive(inspection_epoch,&v),
+        "people_result" => {
+            crate::people_api::receive(inspection_epoch, &v);
+            if v.get("doc_state").is_some() { state.on_layer_frame(&v); }
+        },
         "brow_shape_result"=>{crate::brow_shape_api::receive(inspection_epoch,&v);if v.get("doc_state").is_some(){state.on_layer_frame(&v);}},
         "nose_shape_result"=>{crate::nose_shape_api::receive(inspection_epoch,&v);if v.get("doc_state").is_some(){state.on_layer_frame(&v);}},
         "eye_shape_result"=>{crate::eye_shape_api::receive(inspection_epoch,&v);if v.get("doc_state").is_some(){state.on_layer_frame(&v);}},

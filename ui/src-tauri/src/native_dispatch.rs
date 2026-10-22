@@ -46,6 +46,7 @@ impl AppState {
         let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
         let handle=guard.as_ref().ok_or_else(|| "引擎未启动".to_string())?;
         match name.as_str() {
+            "people" => crate::people_api::enqueue(handle, cmd)?,
             "brow_shape" => crate::brow_shape_api::enqueue(handle, cmd)?,
             "nose_shape" => crate::nose_shape_api::enqueue(handle, cmd)?,
             "eye_shape" => crate::eye_shape_api::enqueue(handle, cmd)?,

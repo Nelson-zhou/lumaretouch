@@ -34,6 +34,8 @@ mod preview_wire;
 mod capture_wire;
 mod color_capture_host;
 mod receipt_host;
+mod people_api;
+mod portrait_api;
 mod preset_host;
 mod preset_api;
 mod white_balance_api;
@@ -1123,27 +1125,6 @@ fn light(
 ///
 /// 与修容笔不同，它不是逐笔事件而是参数层：滑块拖动期间每帧都要送（引擎侧只缩放
 /// 已常驻的单位场，一次 TPS 也不解）。所以这里不能像 light 那样只在松手时发。
-#[tauri::command]
-fn deform(
-    state: State<'_, Arc<AppState>>,
-    action: String,
-    amounts: Option<Value>,
-    scope: Option<String>,
-) -> Result<Value, String> {
-    let mut cmd = json!({"cmd": "deform", "action": action});
-    // 与 light 同一条规矩：给了才附。宿主写默认值等于替引擎做决定，
-    // 生产默认值一改这条通路就会静默漂开。
-    if let Some(v) = amounts {
-        cmd["amounts"] = v;
-    }
-    // 作用层（LNX-PORTRAIT-004）：all=改全人物默认 / person=只覆盖当前选定那一张。
-    // 同样"给了才附"——引擎那边的默认值才是唯一出处，这里再刻一份就是双出处。
-    if let Some(v) = scope {
-        cmd["scope"] = json!(v);
-    }
-    state.send_to_engine(cmd)?;
-    Ok(json!({"requested": true}))
-}
 
 /// 多人图选人（PORTRAIT-003）与人脸名单的人工账（PORTRAIT-006）：
 /// action list / select / disable / enable / add / remove（前四个要带 index，add 要带 rect）。
@@ -1161,6 +1142,7 @@ fn face(
     action: String,
     index: Option<u32>,
     rect: Option<Vec<f64>>,
+    people_context: Option<Value>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "face", "action": action});
     if let Some(v) = index {
@@ -1169,6 +1151,7 @@ fn face(
     if let Some(v) = rect {
         cmd["rect"] = json!(v);
     }
+    people_api::add_context(&mut cmd, people_context)?;
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
 }
@@ -1209,25 +1192,6 @@ fn lut(
 ///
 /// 一律"给了才附"：部分提交语义靠的就是"没给"与"给了 0"的区别，宿主替引擎填 0.0
 /// 就等于把另外两格抹零（与 grade/deform 同一条规矩）。
-#[tauri::command]
-fn enhance(
-    state: State<'_, Arc<AppState>>,
-    action: String,
-    sclera: Option<f64>,
-    iris: Option<f64>,
-    teeth: Option<f64>,
-    dark_circles: Option<f64>,
-    eye_bags: Option<f64>,
-    veins: Option<f64>,
-    catchlight_left: Option<f64>,
-    catchlight_right: Option<f64>,
-    wrinkles: Option<Value>,
-) -> Result<Value, String> {
-    let cmd = facial_wrinkle_api::enhance_command(&action,
-        [sclera, iris, teeth, dark_circles, eye_bags, veins, catchlight_left, catchlight_right], wrinkles)?;
-    state.send_to_engine(cmd)?;
-    Ok(json!({"requested": true}))
-}
 
 /// 肤色定向（M3-b）：三个增量 + 一个混入比例。action: set / amount / clear。
 ///
@@ -2024,7 +1988,8 @@ fn main() {
             inspection_api::inspection_cancel, inspection_api::inspection_pull, inspection_api::inspection_release,
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, compare_status, precompute,
-            inpaint, light, deform, lut, grade, enhance, background, export, session, filmstrip, history,
+            inpaint, light, portrait_api::deform, lut, grade, portrait_api::enhance, background, export, session, filmstrip, history,
+            people_api::people,
             color_capture_api::capture_arm, color_capture_api::capture_status, color_capture_api::capture_frame,
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
             source_patch_api::source_patch_capture, source_patch_api::source_patch_capture_status, source_patch_api::source_patch_capture_frame,

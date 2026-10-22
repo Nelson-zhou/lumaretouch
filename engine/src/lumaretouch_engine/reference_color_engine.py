@@ -42,7 +42,9 @@ def render(engine,row,candidate_state,document_id,revision,*,reference=False,can
         raise ValueError('参考统一要求真实完整原片，不能使用代理或相机预览')
     if bits==16 and str(decoded.rgb.dtype)!='uint16':raise ValueError('高位深输入未保留真实 RGB16')
     source={'sha256':M.source_digest(path),'width':decoded.w,'height':decoded.h}
-    snap=engine._state_to_export_snap(candidate_state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.)
+    snap=engine._state_to_export_snap(candidate_state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=path)
+    from .people_export import verify_source as verify_people, isolated_snapshot
+    verify_people(snap,path);snap=isolated_snapshot(snap,for_document=True)
     if not reference:snap['reference_color']=S.empty()
     # Match the owned full-source inspection/export guards. No replacement face
     # selection or inferred scope is synthesized for an unanalyzed target.

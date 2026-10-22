@@ -1,3 +1,5 @@
+import type {PeopleTransferRequest} from './people/transferReview';
+import type {PeopleAction, PeopleContext, PeopleMailbox, PeopleView} from './people/model';
 import { transportPatch as wrinkleTransport, type WrinkleKey, type RegionFact } from "./facialWrinkles/model";
 import type {MaskTransferOptions} from './localMasks/transfer';
 import type {WatermarkSettings} from "./watermark/model";
@@ -16,7 +18,7 @@ export function notifyInspectionEditIntent(){
 }
 const inspectionMutations=new Set(['start_engine','shutdown_engine','load_image','set_strength','precompute',
   'inpaint','light','deform','lut','grade','enhance','lip_makeup','brow_shape','nose_shape','eye_shape','mouth_shape','background','exposure','hsl','curves','levels','fabric','crop','compare',
-  'session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
+  'people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
   const send=()=>{if(inspectionMutations.has(command))notifyInspectionEditIntent();return tauriInvoke<T>(command,args,options);};
   if(isCurveEditBusy()&&curveBarrierRequired(command,(args as Record<string,unknown>|undefined)?.action,inspectionMutations.has(command))){
@@ -143,6 +145,7 @@ export const dragParametricCurve=(spec:CurveSpec,region:number,target:number)=>i
 export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_preview",{spec});
 
 export interface DocState {
+  people?: PeopleView;
   brow_shape?: {version:1;revision:number;selected_face_id:string;recipe:import("./browShape/model").BrowShape;sides:Partial<Record<import("./browShape/model").BrowSide,import("./browShape/model").BrowFact>>;suspended:string|null;bytes_fields:number};
   nose_shape?: {version:1;revision:number;selected_face_id:string;recipe:import("./noseShape/model").NoseShape;controls:Partial<Record<import("./noseShape/model").NoseKey,import("./noseShape/model").NoseFact>>;suspended:string|null;bytes_fields:number};
   eye_shape?: {version:1;revision:number;selected_face_id:string;recipe:import("./eyeShape/model").EyeShape;controls:Partial<Record<string,import("./eyeShape/model").EyeFact>>;suspended:string|null;bytes_fields:number;legacy_big_eye:number;native_available:boolean};
@@ -987,6 +990,7 @@ export interface EngineStatus {
     /** 人脸名单能收哪些动作（LNX-PORTRAIT-006）：面板上 ✕/↺/⌫/「框一位」这几格
      *  画不画由这一格决定，前端不刻第二份名单。 */
     face_actions?: string[];
+    people_protocol?: number;
     task_actions?: string[];
     export_formats?: string[];
     [k: string]: unknown;
@@ -1304,10 +1308,10 @@ export const runLight = (
  * 不发就等于“滑块拖了、画面不动”。
  */
 export const runDeform = (action: DeformInfo["action"], amounts?: Record<string, number>,
-                           scope?: "all" | "person") =>
+                           scope?: "all" | "person", peopleContext?: PeopleContext) =>
   // scope 给了才附（与 amounts 同一条规矩）：宿主写默认值等于替引擎做决定，而
   // `inherit` 这一臂根本没有 amounts——两个都要能缺省，名单只在引擎的 ready 里
-  invoke<{ requested: boolean }>("deform", { action, amounts, scope });
+  invoke<{ requested: boolean }>("deform", { action, amounts, scope, peopleContext });
 
 /** 多人图选人（LNX-PORTRAIT-003）：list 问名单，select 点定「这次改哪一张」。
  *
@@ -1331,8 +1335,8 @@ export const faceStateOf = (st: EngineStatus | null, doc: DocState | null): Face
  * 拿 478 点（不拿框拟合一套占位点位，那是 DoD §2 严禁的假 AI）。 */
 export type FaceAction = "list" | "select" | "disable" | "enable" | "add" | "remove";
 
-export const runFace = (action: FaceAction, index?: number, rect?: number[]) =>
-  invoke<{ requested: boolean }>("face", { action, index, rect });
+export const runFace = (action: FaceAction, index?: number, rect?: number[], peopleContext?: PeopleContext) =>
+  invoke<{ requested: boolean }>("face", { action, index, rect, peopleContext });
 
 /** 影楼色彩（M3-a2）：送一张 .cube，或只改混合系数。
  *
@@ -1362,6 +1366,7 @@ export const runLut = (
 export const runEnhance = (
   action: EnhanceInfo["action"],
   opts?: { sclera?: number; iris?: number; teeth?: number; dark_circles?: number; eye_bags?: number; veins?: number; catchlight_left?: number; catchlight_right?: number } & Partial<Record<WrinkleKey, number>>,
+  peopleContext?: PeopleContext,
 ) =>
   invoke<{ requested: boolean }>("enhance", {
     action,
@@ -1371,6 +1376,7 @@ export const runEnhance = (
     catchlightLeft: opts?.catchlight_left,
     catchlightRight: opts?.catchlight_right,
     wrinkles: wrinkleTransport(opts),
+    peopleContext,
     sclera: opts?.sclera,
     iris: opts?.iris,
     teeth: opts?.teeth,
@@ -1615,7 +1621,7 @@ export const runTask = (
 export const runPreset = (
   action: "list" | "preflight" | "apply" | "save" | "import" | "delete",
   opts: { id?: string; name?: string; path?: string; kind?: string; note?: string;
-          force?: boolean; moduleScope?: string[]; requestId?: string; documentId?: string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string } = {},
+          force?: boolean; moduleScope?: string[]; requestId?: string; documentId?: string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};preflightToken?:string } = {},
 ) => invoke<{ requested: boolean }>("preset", {
   action, id: opts.id, name: opts.name, path: opts.path, kind: opts.kind, note: opts.note,
   force: opts.force, moduleScope: opts.moduleScope, requestId: opts.requestId, documentId: opts.documentId,localMaskTransfer:opts.localMaskTransfer,referenceColor:opts.referenceColor,preflightToken:opts.preflightToken,
@@ -1627,10 +1633,10 @@ export const readPresetResult=(requestId:string)=>invoke<{phase:string;request_i
 export const runBatch = (
   action: "preflight" | "commit" | "undo" | "redo" | "state",
   opts: { docs?: string[]; moduleScope?: string[]; conflictPolicy?: string;
-          batchId?: string; preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number} } = {},
+          batchId?: string; preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest } = {},
 ) => invoke<{ requested: boolean }>("batch", {
   action, docs: opts.docs, moduleScope: opts.moduleScope,
-  conflictPolicy: opts.conflictPolicy, batchId: opts.batchId,preflightToken:opts.preflightToken,requestId:opts.requestId,localMaskTransfer:opts.localMaskTransfer,referenceColor:opts.referenceColor,
+  conflictPolicy: opts.conflictPolicy, batchId: opts.batchId,preflightToken:opts.preflightToken,requestId:opts.requestId,localMaskTransfer:opts.localMaskTransfer,referenceColor:opts.referenceColor,peopleTransfer:opts.peopleTransfer,
 });
 export const readBatchResult=(requestId:string)=>invoke<{phase:string;request_id:string;result?:BatchReply;error?:string}>("batch_result",{requestId});
 
@@ -1696,10 +1702,10 @@ export const runLevels=(action:'set'|'clear',spec:LevelsSpec|undefined,documentI
 export const runFabric=(amount:number,documentId:string)=>invoke<{requested:boolean}>("fabric",{action:amount===0?"clear":"set",amount,documentId});
 
 /** Accepted edits update doc_state only after the engine rendered the recipe. */
-export const runLipMakeup=(recipe:import("./lipMakeup/model").LipMakeup,documentId:string,control:import("./lipMakeup/model").LipKey|"all"="all")=>
-  invoke<{requested:boolean}>("lip_makeup",{recipe,documentId,control});
+export const runLipMakeup=(recipe:import("./lipMakeup/model").LipMakeup,documentId:string,control:import("./lipMakeup/model").LipKey|"all"="all",peopleContext?:PeopleContext)=>
+  invoke<{requested:boolean}>("lip_makeup",{recipe,documentId,control,peopleContext});
 
-type BrowRequest={action:'edit';request_id:string;gesture_id:string;document_id:string;face_id:string;control:string;recipe:import('./browShape/model').BrowShape;base:import('./browShape/model').BrowShape};
+type BrowRequest={people_context?:PeopleContext;action:'edit';request_id:string;gesture_id:string;document_id:string;face_id:string;control:string;recipe:import('./browShape/model').BrowShape;base:import('./browShape/model').BrowShape};
 export function runBrowShapeRequest(request:{action:'status';request_id:string}):Promise<import('./browShape/latestIntent').Mailbox<import('./browShape/model').BrowShape>>;
 export function runBrowShapeRequest(request:BrowRequest):Promise<{requested:boolean}>;
 export function runBrowShapeRequest(request:BrowRequest|{action:'status';request_id:string}){
@@ -1707,7 +1713,7 @@ export function runBrowShapeRequest(request:BrowRequest|{action:'status';request
   return request.action==='status'?tauriInvoke<import('./browShape/latestIntent').Mailbox<import('./browShape/model').BrowShape>>("brow_shape",{request}):invoke<{requested:boolean}>("brow_shape",{request});
 }
 
-type NoseRequest={action:'edit';request_id:string;gesture_id:string;document_id:string;face_id:string;control:string;recipe:import('./noseShape/model').NoseShape;base:import('./noseShape/model').NoseShape};
+type NoseRequest={people_context?:PeopleContext;action:'edit';request_id:string;gesture_id:string;document_id:string;face_id:string;control:string;recipe:import('./noseShape/model').NoseShape;base:import('./noseShape/model').NoseShape};
 export function runNoseShapeRequest(request:{action:'status';request_id:string}):Promise<import('./browShape/latestIntent').Mailbox<import('./noseShape/model').NoseShape>>;
 export function runNoseShapeRequest(request:NoseRequest):Promise<{requested:boolean}>;
 export function runNoseShapeRequest(request:NoseRequest|{action:'status';request_id:string}){
@@ -1715,7 +1721,7 @@ export function runNoseShapeRequest(request:NoseRequest|{action:'status';request
   return request.action==='status'?tauriInvoke<import('./browShape/latestIntent').Mailbox<import('./noseShape/model').NoseShape>>("nose_shape",{request}):invoke<{requested:boolean}>("nose_shape",{request});
 }
 
-type EyeRequest={action:'edit';request_id:string;gesture_id:string;document_id:string;face_id:string;control:string;recipe:import('./eyeShape/model').EyeShape;base:import('./eyeShape/model').EyeShape};
+type EyeRequest={people_context?:PeopleContext;action:'edit';request_id:string;gesture_id:string;document_id:string;face_id:string;control:string;recipe:import('./eyeShape/model').EyeShape;base:import('./eyeShape/model').EyeShape};
 export function runEyeShapeRequest(request:{action:'status';request_id:string}):Promise<import('./browShape/latestIntent').Mailbox<import('./eyeShape/model').EyeShape>>;
 export function runEyeShapeRequest(request:EyeRequest):Promise<{requested:boolean}>;
 export function runEyeShapeRequest(request:EyeRequest|{action:'status';request_id:string}){
@@ -1723,10 +1729,18 @@ export function runEyeShapeRequest(request:EyeRequest|{action:'status';request_i
   return request.action==='status'?tauriInvoke<import('./browShape/latestIntent').Mailbox<import('./eyeShape/model').EyeShape>>("eye_shape",{request}):invoke<{requested:boolean}>("eye_shape",{request});
 }
 
-type MouthRequest={action:'edit';request_id:string;gesture_id:string;document_id:string;face_id:string;control:string;recipe:import('./mouthShape/model').MouthShape;base:import('./mouthShape/model').MouthShape};
+type MouthRequest={people_context?:PeopleContext;action:'edit';request_id:string;gesture_id:string;document_id:string;face_id:string;control:string;recipe:import('./mouthShape/model').MouthShape;base:import('./mouthShape/model').MouthShape};
 export function runMouthShapeRequest(request:{action:'status';request_id:string}):Promise<import('./browShape/latestIntent').Mailbox<import('./mouthShape/model').MouthShape>>;
 export function runMouthShapeRequest(request:MouthRequest):Promise<{requested:boolean}>;
 export function runMouthShapeRequest(request:MouthRequest|{action:'status';request_id:string}){
   // Receipt lookups are read-only and must not invalidate editing captures.
   return request.action==='status'?tauriInvoke<import('./browShape/latestIntent').Mailbox<import('./mouthShape/model').MouthShape>>("mouth_shape",{request}):invoke<{requested:boolean}>("mouth_shape",{request});
+}
+
+/** Commands carry exact engine binding; status lookups never mutate captures. */
+export function runPeopleRequest(request: {action: 'status'; request_id: string}): Promise<PeopleMailbox>;
+export function runPeopleRequest(request: PeopleAction): Promise<{requested: boolean}>;
+export function runPeopleRequest(request: PeopleAction | {action: 'status'; request_id: string}) {
+  return request.action === 'status' ? tauriInvoke<PeopleMailbox>('people', {request})
+    : invoke<{requested: boolean}>('people', {request});
 }

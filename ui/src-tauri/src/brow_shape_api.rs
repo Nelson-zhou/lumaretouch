@@ -39,10 +39,13 @@ pub(crate) fn brow_shape(state:tauri::State<'_,std::sync::Arc<crate::AppState>>,
         if m.epoch!=epoch{return Ok(json!({"phase":"unavailable","request_id":id,"error":"引擎已重启，原请求结果未确认"}));}
         return Ok(m.host.status(id));
     }
-    if request["action"]!="edit"||object.len()!=8||!["document_id","face_id","gesture_id","control"].iter().all(|k|text(&request[*k]))
+    if request["action"]!="edit"||(object.len()!=8 && object.len()!=9)||!["document_id","face_id","gesture_id","control"].iter().all(|k|text(&request[*k]))
         ||!recipe(&request["recipe"])||!recipe(&request["base"])||!(request["control"]=="all"||KEYS.iter().any(|k|request["control"]==*k)){
         return Err("眉形编辑字段无效".into());
     }
+    if let Some(context) = request.get("people_context") {
+        if !crate::people_api::valid_context(context) { return Err("人物范围或版本信息无效".into()); }
+    } else if object.len() != 8 { return Err("未识别的人像命令字段".into()); }
     if state.ready_caps.lock().map_err(|_|"能力锁失败")?["brow_shape_protocol"]!=2{return Err("引擎缺少确认式眉形协议".into());}
     {let mut m=mailbox().lock().map_err(|_|"眉形结果锁失败")?;
         if m.epoch!=epoch{m.epoch=epoch;m.host.reset(epoch);m.host.ready(epoch,true);}

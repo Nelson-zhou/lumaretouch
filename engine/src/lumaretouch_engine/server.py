@@ -68,6 +68,7 @@ from . import studio_background_state as SBS, studio_background_runtime as SBR
 from .studio_tools_dispatch import StudioToolsMixin
 from .preview_lifecycle import PreviewLifecycleMixin
 from .portrait_geometry_dispatch import PortraitGeometryMixin
+from .people_host import PeopleHostMixin
 from .workflow_ports import WorkflowPortsMixin
 from . import optics_state as OPS, optics_runtime as OPR
 from . import sky_replacement_state as SKS, sky_replacement_runtime as SKR
@@ -176,7 +177,7 @@ class _TaskControl:
         self.cancel = threading.Event()
 
 
-class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, WorkflowPortsMixin):
+class Engine(PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, WorkflowPortsMixin):
     def __init__(self, session: str):
         self.session = session
         self.shm: FrameShm | None = None
@@ -385,7 +386,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"reference_color_protocol":1, "studio_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"reference_color_protocol":1, "studio_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -1194,7 +1195,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
     # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
     # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
     EDIT_CMDS = ("set_strength", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light", "deform", "lut", "grade", "background",
-                 "crop", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "preset", "batch", "face", "enhance", "lip_makeup", "brow_shape", "nose_shape", "eye_shape", "mouth_shape", "fabric")
+                 "crop", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "preset", "batch", "face", "enhance", "lip_makeup", "brow_shape", "nose_shape", "eye_shape", "mouth_shape", "people", "fabric")
     # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
     # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
     # 而 batch 改的就是活动文档的配方——不在这里它就会“同步完了而徽章不亮”。
@@ -1205,11 +1206,13 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
         st = self._capture_state()
         for k in self.HISTORY_SKIP:
             del st[k]
+        st["_people_history"]=self._people_history_capture()
         return st
 
     def _history_apply(self, snap: dict) -> None:
         """装回一份快照：预计算保持当前这一份，其余整份覆盖。"""
         st = self._capture_state()
+        self._people_history_apply(snap.get("_people_history"),snap.get("_people_transition"))
         self._apply_state({**st, **snap})
         # 选型与关键点必须是一对：`_precompute` 不进历史快照而 `_face_index` 进（PORTRAIT-003）。
         # 不重放这一格就会“状态说在改 0 号、画面在改 1 号”——两张脸都确实被推过，看不出来。
@@ -1414,6 +1417,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
         restore_grade_scope = self._grade_scope
         shm = self._ensure_shm(d.w, d.h)
         t_a = monotonic_ns()
+        self._people_prepare_open(d,p)
         pipe = self._attach_pipeline(d.rgb)      # 按引擎侧字段重放图层（见 _attach_pipeline）
         self._image_loaded = True
         optics_row = self._docs[self._doc_index]
@@ -1430,17 +1434,17 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
             emit({"event": "engine_warn", "warn": "蒙版尚未恢复：保留编辑参数，暂不应用该范围的磨皮，不回退为全图"})
         effective_strength, effective_channel = self._retouch_render_args()
         FABRIC.sync(self)
-        LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); RCR.sync(self)
-        SKR.render_proxy(self,lambda:pipe.render(effective_strength, channel=effective_channel, **self._params))
+        LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); RCR.sync(self)
+        self._people_render_open(pipe,lambda:SKR.render_proxy(self,lambda:pipe.render(effective_strength, channel=effective_channel, **self._params)))
         with self._wlock:
-            seq, t_emit, slot = shm.write_frame(pipe.read_back(), presentation=self._frame_presentation(str(t0), (d.src_w,d.src_h)))
+            seq, t_emit, slot = shm.write_frame(pipe.read_back(), presentation=self._frame_presentation(str(t0), (d.src_w,d.src_h), "original" if self._people_open_flags() else "edited"))
         t_c = monotonic_ns()
         row = self._docs[self._doc_index] if 0 <= self._doc_index < len(self._docs) else None
         if row is not None:
             row.update({"w": d.w, "h": d.h, "src_w": d.src_w, "src_h": d.src_h,
                         "opened": True, "state": self._capture_state()})
         self._load_id = str(t0)
-        emit({"event": "image_ready", **d.meta(), "load_id": self._load_id, "device": str(pipe.device), **SKR.proxy_flags(self),
+        emit({"event": "image_ready", **d.meta(), "load_id": self._load_id, "device": str(pipe.device), **SKR.proxy_flags(self), **self._people_open_flags(),
               "strength": self._strength,
               # 底片条得知道现在这一格是哪一张、是不是切回来的（而不是新导入）：
               # UI 拿它把高亮位置对好，不靠“我自己记得点过第几格”。
@@ -1492,7 +1496,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
                                if self._preview_info else None)})
         self._preview_info = None            # 一帧一次：下一条导入重新算，不沿用旧账
         emit({"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
-              "w": shm.w, "h": shm.h, "mode": "image"})
+              "w": shm.w, "h": shm.h, "mode": "image", **self._people_open_flags()})
         self.emit_session_state()
         # 导入期预计算：产品上“导图就算一次”，但它是可选步——失败不许把导入本身拖成失败。
         # 它自己的 error 事件会单独发，报表里 backend/resident 一眼可验。
@@ -1613,7 +1617,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
                         "lit": self._hsl != (0.0,) * 24},
                 # 多人图里“现在在改哪一张”（PORTRAIT-003）。chip 数几个、能不能放行，
                 # 全从这一格取：名单是分析结果里算出来的，前端数不来也不许猜。
-                "face": self._face_state(),
+                "face": self._face_state(), "people": self._people_report(),
                 "crop": crop}
 
     def _state_edits(self, st: dict) -> dict:
@@ -2341,6 +2345,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
         for t in self._tasks.values():
             t["persisted"] = True
         prj["tasks"] = [T.for_json(t) for t in self._tasks.values()]
+        self._people_save(prj)
         return prj, {"hash_ms": round((monotonic_ns() - t0) / 1e6, 2),
                      "fingerprinted": hashed}
 
@@ -2588,6 +2593,9 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
             for candidate in rows:
                 WB.prepare_state(candidate["state"])
             notes.extend({"reason": note} for note in prj.get("migration_notes", []))
+            try:people_history=self._people_stage_project(prj,rows)
+            except (ValueError,RuntimeError,OSError) as error:
+                emit({"event":"error","error":"People project history rejected: "+str(error)});return
             with self._doclock:
                 self._docs = rows
             self._document_versions().new_workspace()
@@ -2599,6 +2607,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
             proxy_budget = next(iter(budgets)) if len(budgets) == 1 else None
             if proxy_budget is not None and self._proxy_budget is None:
                 self._proxy_budget = proxy_budget
+            self._people_load(prj,people_history)
             self._project, self._project_path = prj, os.path.abspath(path)
             self._project_saved_ns, self._project_dirty = prj.get("updated_ns"), False
             # 写手环境不一致：说出口，不拒开。同一份配方在另一版 numpy/torch 上算出的
@@ -2841,6 +2850,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
         是两件事（PORTRAIT-004 定下的分层）。
         """
         lit_before = bool(self._vram is not None and self._vram.has_enhance())
+        if self._people_managed():return
         if not self._enhance_intent():
             if self._enhance["built"]:
                 self._drop_enhance(f"{replayed_for}：参数已经全是 0，这一层没有活")
@@ -2957,6 +2967,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
            校验拒掉的极端侧脸，命令成功返回、`lit=false`、逐子功能写明原因。把这做成
            报错会让 UI 只能弹一个"失败"，而用户想知道的恰恰是"为什么牙那格没动"。
         """
+        if self._people_managed():return self._people_legacy("lnx.enhance.v1",p,emit)
         unknown = sorted(set(p) - self.ENHANCE_KEYS)
         if unknown:
             emit({"event": "error", "error": f"enhance 收到不认识的参数：{', '.join(unknown)}"
@@ -3222,6 +3233,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
         `built=False` 而 `_deform_defer=True` 也算“有层”：那是重开工程/迁会话存住的那一份
         用户意图（CORE-001），关键点一回来就该补上。不认这一格就是“重开后面部微调静消失”。
         """
+        if self._people_managed():return
         if not self._deform_intent():
             # 三层（生效值 / 全人物默认 / 逐张覆盖）都没劲儿就是真没这一层：不建、不报
             return
@@ -3461,20 +3473,21 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
                                f"!= 会话 {self._vram.w}x{self._vram.h}：不许把会话尺寸的帧写进别人的槽")
         t0 = monotonic_ns()
         # Original viewing bypasses all layers, rather than merely setting skin strength0.
-        if not original: FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); RCR.sync(self)
+        if not original: FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); RCR.sync(self)
         st, channel = (0.0, None) if original else self._retouch_render_args()
-        if original:
+        unapplied=not original and mode.startswith("history_") and bool(self._people_open_flags())
+        if original or unapplied:
             self._vram.render_original()
         else:
             SKR.render_proxy(self,lambda:self._vram.render(st, channel=channel, **self._params),
                              allow_suspended=mode not in ("preset","batch","sky_replacement"))
         render_ms = (monotonic_ns() - t0) / 1e6
         with self._wlock:
-            seq, t_emit, slot = self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation(kind="original" if original else "edited"))
+            seq, t_emit, slot = self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation(kind="original" if original or unapplied else "edited"))
         return {"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
                 "w": self.shm.w, "h": self.shm.h, "mode": mode, "render_ms": round(render_ms, 2),
                 "strength": st, "bytes_effect_recovery": self._vram.effect_recovery_resident_bytes(),
-                **({"sky_replacement_suspended":None,"suspended_effects":[],"display_quality":"original"} if original else SKR.proxy_flags(self))}
+                **({"sky_replacement_suspended":None,"suspended_effects":[],"display_quality":"original"} if original else {**SKR.proxy_flags(self),**(self._people_open_flags() if unapplied else {})})}
 
     def cmd_compare(self, p: dict):
         """临时显示完整解码原图，绕过全部编辑；松手恢复完整配方。
@@ -3853,6 +3866,9 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
         """
         from .face import SCOPE_MAX_FACES, box_iou
 
+        if self._people_managed():
+            from .people_face_compat import report
+            return report(self)
         pc = self._precompute
         faces = pc.faces() if pc is not None else []
         disabled_idx = self._disabled_indices(pc)
@@ -4150,6 +4166,9 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
         那放行的凭据必须是**用户的一次显式选择**，而这份选择要进文档状态、进撤销栈、
         进出片口径——全在引擎侧。前端只画 chip 与发 index。
         """
+        if self._people_managed():
+            from .people_face_compat import apply
+            return apply(self,p,emit)
         action = p.get("action", "list")
         if action not in self.FACE_ACTIONS:
             emit({"event": "error",
@@ -4496,6 +4515,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
         `_rebuild_deform_for_landmarks` 接回来。拿“全人物默认”去服务一张说不出是谁的脸，
         正是 SCOPE-001 拦的那件事。
         """
+        if self._people_managed():return dict(self._deform["amounts"])
         box = self._person_key(self._face_box)
         if box is None:
             return {k: 0.0 for k in KINDS}
@@ -4575,6 +4595,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
         建层需要 478 点关键点，而 **synthetic 后端给的是网格占位几何**：拿它按脸形语义
         取点会搬到完全无关的位置上，而且画面“真的动了”——看不出错。所以整条拒绝并说清原因。
         """
+        if self._people_managed():return self._people_legacy("lnx.deform.v1",p,emit)
         unknown = set(p) - self.DEFORM_KEYS
         if unknown:
             emit({"event": "error", "error": f"deform 收到不认识的参数：{sorted(unknown)}"
@@ -5653,7 +5674,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
                 # 通道必须跟着会话一起迁移：不传 channel 的话，报表里 active_channel 还是 skin，
                 # 而给用户补发的是一帧全图渲染——字段与实际执行不一致正是本仓最贵那个坑的形状
                 strength, channel = self._retouch_render_args()
-                FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); RCR.sync(self)
+                FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); RCR.sync(self)
                 SKR.render_proxy(self,lambda:self._vram.render(strength, channel=channel, **self._params))
                 with self._wlock:
                     seq, t_emit, slot = self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation())
@@ -5668,7 +5689,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
                    "conflict_policy", "watermark", "layout"}
 
     def _state_to_export_snap(self, st: dict, *, device, scale, upscale_backend,
-                              sharpen) -> dict:
+                              sharpen, source_path=None, people_graph=None) -> dict:
         """把一份**已存的文档状态**（_capture_state 的下划线键）翻成 _export_snapshot 要的
         导出快照（非下划线键）。逐张批量导出用的就是这一层（P1-1）：过去整批共用当前那张
         现拍的 snap，非当前照片被套上别人的磨皮/调色/裁剪——串配方。
@@ -5677,7 +5698,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
         由调用方统一传入；其余全部来自这一张自己的 state。缺键按出厂中性兜，而不是拿 None
         去比名单（与 _export_snapshot 里 exposure/hsl 那条同因）。
         """
-        return dict(strength=float(st.get("_strength", 0.0)),
+        return dict(people=self._people_export_snapshot(st,source_path,people_graph), strength=float(st.get("_strength", 0.0)),
                     params=dict(st.get("_params") or self._params),
                     grade=tuple(st.get("_grade", (0.0, 0.0, 0.0, 1.0))),
                     grade_scope=str(st.get("_grade_scope") or "all"),
@@ -5727,7 +5748,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
                 st = self._docs[i]["state"]
                 out[p] = (self._state_to_export_snap(
                     st, device=snap["device"], scale=snap["scale"],
-                    upscale_backend=snap["upscale_backend"], sharpen=snap["sharpen"]), True)
+                    upscale_backend=snap["upscale_backend"], sharpen=snap["sharpen"], source_path=p), True)
             else:
                 out[p] = (snap, False)
         return out
@@ -5740,6 +5761,8 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
         The copied snapshot never mutates the current document or batch recipe.
         """
         from .export import ExportError
+        from .people_export import verify_source as verify_people_source, isolated_snapshot
+        verify_people_source(snap,path);snap=isolated_snapshot(snap,for_document=for_document)
         if snap.get("grade_scope") == "objects":
             if not for_document: raise ExportError("Source-bound mask objects cannot transfer to another photo")
             LM.verify_source(LM.check(snap.get("local_masks")), path)
@@ -5968,7 +5991,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
             return
         # 参数在命令线程里全部拍定：worker 里不再读 self._*，否则中途改一下滑块，
         # 这一批里前几张与后几张用的就不是同一套设置（而事件里只写了一份）
-        snap = dict(strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
+        snap = dict(people=self._people_export_snapshot(self._capture_state()), strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
                     grade_scope=str(self._grade_scope), grade_mask=self._grade_mask, local_masks=LM.check(self._local_masks), local_mask_owner=LM.current_owner(self), local_grade_groups=LG.check(self._local_grade_layers),
                     effect_recovery=ERS.check(self._effect_recovery), manual_liquify=MLS.check(self._manual_liquify), studio_background=SBS.check(self._studio_background), optics=OPS.check(self._optics), sky_replacement=SKS.check(self._sky_replacement), lip_makeup=LIPS.check(self._lip_makeup), brow_shape=BROWS.check(self._brow_shape), brow_shape_owner=self._brow_shape_owner, nose_shape=NOSES.check(self._nose_shape), nose_shape_owner=self._nose_shape_owner, eye_shape=EYES.check(self._eye_shape), eye_shape_owner=self._eye_shape_owner, reference_color=RCS.check(self._reference_color), mouth_shape=MOUTHS.check(self._mouth_shape), mouth_shape_owner=self._mouth_shape_owner,
                     exposure=tuple(self._exposure), exposure_ref_k=self._exposure_ref_k,
@@ -6626,7 +6649,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
         self._attach_pipeline(self._src_rgb, adopt=True)
         if self._precompute is not None:
             self._rehang_precompute(replayed_for=replayed_for)
-        if strict_local: LM.sync(self, strict=True); LGR.sync(self, strict=True); ERR.sync(self, strict=True); MLR.sync(self, strict=True); SBR.sync(self, strict=True); OPR.sync(self, strict=True); SKR.sync(self, strict=True); LIPR.sync(self, strict=True); BROWR.sync(self, strict=True); NOSER.sync(self, strict=True); EYER.sync(self, strict=True); MOUTHR.sync(self, strict=True); RCR.sync(self, strict=True)
+        if strict_local: LM.sync(self, strict=True); LGR.sync(self, strict=True); ERR.sync(self, strict=True); MLR.sync(self, strict=True); SBR.sync(self, strict=True); OPR.sync(self, strict=True); SKR.sync(self, strict=True); LIPR.sync(self, strict=True); BROWR.sync(self, strict=True); NOSER.sync(self, strict=True); EYER.sync(self, strict=True); MOUTHR.sync(self, strict=True); self._people_sync(strict=True); RCR.sync(self, strict=True)
         return self._write_current_frame(mode)
 
     def _face_known_single(self, row: dict | None, *, live: bool) -> tuple[str, str]:
@@ -6758,7 +6781,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
                # 眼牙增强（LNX-PORTRAIT-009）：它是一次编辑（进撤销栈、打脏标记），所以
                # 两个名单都要有它——上一轮加曝光时只改一边，得到的就是"拖完按撤销纹丝不动
                # 而 UI 一句也不说为什么"（CORE-006 为此专门加了一条用例）
-               "enhance", "lip_makeup", "brow_shape", "nose_shape", "eye_shape", "mouth_shape", "fabric")
+               "enhance", "lip_makeup", "brow_shape", "nose_shape", "eye_shape", "mouth_shape", "people", "fabric")
     _HANDLED_LAMBDA = ("bench_stop",)      # 唯一不开成 cmd_* 的那条：只是置停止位
 
     def _dispatch_table(self) -> dict:
@@ -6863,12 +6886,13 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
                 # 推送点只在这里这一处（见 EDIT_CMDS 的说明）：执行前抄快照，
                 # 执行后比对签名决定占不占一步。异常也记（finally）——半改完的
                 # 状态正是最需要一次撤销能修回去的时候。
+                self._people_shared_mutation=False
                 before = self._history_capture()
                 group = self._history_group(name, msg)
                 try:
                     fn(msg)
                 finally:
-                    self._history_record(group, before, coalesce=not (name in ("white_balance", "color_picker", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement") or (name == "preset" and msg.get("action") == "apply")))
+                    if not self._people_shared_mutation:self._history_record(group, before, coalesce=not (name in ("white_balance", "color_picker", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement") or (name == "preset" and msg.get("action") == "apply")))
             else:
                 fn(msg)
         except Exception as e:  # 协议层不许因单条消息崩溃
@@ -6880,6 +6904,7 @@ class Engine(PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, Wor
                 if name == "nose_shape" and isinstance(msg, dict): self.finish_nose_shape(msg, dispatch_error)
                 if name == "eye_shape" and isinstance(msg, dict): self.finish_eye_shape(msg, dispatch_error)
                 if name == "mouth_shape" and isinstance(msg, dict): self.finish_mouth_shape(msg, dispatch_error)
+                if name == "people" and isinstance(msg, dict): self.finish_people(msg, dispatch_error)
                 if name == "sky_replacement" and isinstance(msg, dict):
                     self._sky_replacement_controller().finish(msg, dispatch_error)
                 if name == "optics" and isinstance(msg, dict):

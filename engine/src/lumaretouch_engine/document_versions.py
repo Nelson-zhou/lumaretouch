@@ -53,7 +53,7 @@ def fences_current_document(name,p,edit_commands):
     admitted recipe/recovery mutation points, not by bumping the previously selected row.
     """
     action=p.get('action','')
-    if name=='batch':return False
+    if name in ('batch','people') or p.get('people_context') is not None:return False
     # Reviewed local preset claims validate the old revision before advancing
     # their own fence. Ordinary preset applies keep the existing dispatcher path.
     if name=='preset':return action=='apply' and p.get('preflight_token') is None

@@ -74,10 +74,9 @@ class RegionNotFound(RuntimeError):
     """
 
 
-# 探到几张脸就停（SCOPE-001）。要的不是“数清一桌子人”，而是“能不能确定只有一张”：
-# 探 2 张足以分辨“恰好 1 张”与“不止 1 张”，而 FaceLandmarker 的耗时随 num_faces 上探
-# 明显增长（多人模式要跑多个候选窗）。官方 API：FaceLandmarkerOptions.num_faces。
-SCOPE_MAX_FACES = 2
+# Bounded full-photo discovery, not a two-face ambiguity probe or exact census.
+# MediaPipe supports num_faces; reaching this cap is visible and never called complete.
+SCOPE_MAX_FACES = 32
 
 
 # --------------------------------------------------------------------- 产物契约
@@ -112,6 +111,9 @@ class FacePrecompute:
     # Actual bytes supplied to the segmentation graph, not a manifest claim.
     # None for synthetic/template and older in-memory producers.
     semantic_model_sha256: str | None = None
+    detector_model_sha256: str | None = None
+    detection_limit: int = SCOPE_MAX_FACES
+    detection_limit_reached: bool = False
 
     def faces(self) -> list[dict]:
         """可选人脸名单（归一化盒 + 面积占比）。这是“能选哪几个人”的唯一出处：
@@ -183,6 +185,9 @@ class FacePrecompute:
             "mask_shape": [int(arr.shape[0]), int(arr.shape[1]), int(arr.shape[2])],
             "mask_bytes_f32": int(arr.nbytes),
             "semantic_model_sha256": self.semantic_model_sha256,
+            "detector_model_sha256": self.detector_model_sha256,
+            "detection_limit_reached": self.detection_limit_reached,
+            "census_complete": False,
             "detect_ms": round(self.t_detect_ms, 2),
             "masks_ms": round(self.t_masks_ms, 2),
             "face_box": list(self.face_box) if self.face_box else None,
@@ -419,9 +424,15 @@ class MediaPipeFace:
 
             lm_path = self.model_paths[FACE_LANDMARKER_MODEL]
             sg_path = self.model_paths[SELFIE_MULTICLASS_MODEL]
+            # Hash exactly the bytes supplied to the supported buffer loader.
+            with open(lm_path,'rb') as stream:
+                detector_bytes=stream.read(64*1024*1024+1)
+            if not detector_bytes or len(detector_bytes)>64*1024*1024:
+                raise MissingBackend('Face detector must be nonempty and at most 64 MiB')
+            detector_sha256=hashlib.sha256(detector_bytes).hexdigest()
             landmarker = mp_vision.FaceLandmarker.create_from_options(
                 mp_vision.FaceLandmarkerOptions(
-                    base_options=mp_python.BaseOptions(model_asset_path=lm_path),
+                    base_options=mp_python.BaseOptions(model_asset_buffer=detector_bytes),
                     num_faces=SCOPE_MAX_FACES,
                     output_face_blendshapes=False,
                     output_facial_transformation_matrixes=False))
@@ -446,10 +457,36 @@ class MediaPipeFace:
                 raise
             self._graphs = (landmarker, segmenter)
             self.semantic_model_sha256 = model_sha256
+            self.detector_model_sha256 = detector_sha256
             # No reference to self in the callback arguments: normal collection
             # closes promptly, and live objects close before module teardown.
             self._finalizer = weakref.finalize(self, _close_mediapipe_graphs, self._graphs)
         return self._graphs
+
+    def semantic_masks(self, rgb):
+        """Actual full-source semantic fields, also for a manually detected region."""
+        import mediapipe as mp
+        _, segmenter = self._ensure()
+        h,w=rgb.shape[:2]
+        img=mp.Image(image_format=mp.ImageFormat.SRGB,data=np.ascontiguousarray(rgb))
+        seg = segmenter.segment(img)   # 这个方法叫 segment，不叫 detect（FaceLandmarker 才叫 detect）
+        cm = list(getattr(seg, "confidence_masks", None) or [])
+        if not cm:
+            raise RuntimeError("MediaPipe 分割没返回置信度掩膜（旧代码读的是 seg.mask，这个属性在 "
+                               "ImageSegmenter 上不存在，静默拿到空值会被当成“检不到”而跳层）")
+        from .semantic_sources import probability_sources, edit_sources
+        confidence = []
+        for channel in cm:
+            value = channel.numpy_view
+            confidence.append(value() if callable(value) else value)
+        # Keep genuine whole-photo model categories for retained local-mask
+        # objects. As before, skin sums classes 2+3 before resizing; clothes is
+        # class 4. Apply the same conservative margin only after resizing.
+        probabilities = probability_sources(confidence)
+        masks = edit_sources({name: (_resize_float(value, h, w)
+                                     if value.shape != (h, w) else value)
+                              for name, value in probabilities.items()})
+        return masks
 
     def __call__(self, rgb: np.ndarray) -> FacePrecompute:
         import mediapipe as mp
@@ -481,32 +518,12 @@ class MediaPipeFace:
         t_detect = _now_ms(t0)
 
         t1 = time.perf_counter()
-        seg = segmenter.segment(img)   # 这个方法叫 segment，不叫 detect（FaceLandmarker 才叫 detect）
-        cm = list(getattr(seg, "confidence_masks", None) or [])
-        if not cm:
-            raise RuntimeError("MediaPipe 分割没返回置信度掩膜（旧代码读的是 seg.mask，这个属性在 "
-                               "ImageSegmenter 上不存在，静默拿到空值会被当成“检不到”而跳层）")
-        from .semantic_sources import probability_sources, edit_sources
-        confidence = []
-        for channel in cm:
-            value = channel.numpy_view
-            confidence.append(value() if callable(value) else value)
-        # Keep genuine whole-photo model categories for retained local-mask
-        # objects. As before, skin sums classes 2+3 before resizing; clothes is
-        # class 4. Apply the same conservative margin only after resizing.
-        probabilities = probability_sources(confidence)
-        masks = edit_sources({name: (_resize_float(value, h, w)
-                                     if value.shape != (h, w) else value)
-                              for name, value in probabilities.items()})
+        masks = self.semantic_masks(rgb)
         t_masks = _now_ms(t1)
 
-        multi_face_note = []      # 超范围这件事要写在 notes 里，但只在真的发生时写
-        if n_faces > 1:
-            multi_face_note.append(
-                f"画面里探到 {n_faces} 张脸（上限探 {SCOPE_MAX_FACES} 张）：面部重塑属 "
-                f"target_scope=single_face，本版本不拿其中某一张冒充「那张脸」——"
-                "要改谁就 `face select` 显式选定那一张（PORTRAIT-003），没选之前这一栏"
-                "显式禁用并写明原因（SCOPE-001）")
+        multi_face_note = [f"本次检测到 {n_faces} 张脸；最多检测 {SCOPE_MAX_FACES} 张，不代表完整人数统计"]
+        if n_faces >= SCOPE_MAX_FACES:
+            multi_face_note.append("检测达到上限，可能还有漏检；请检查并补充人物区域")
 
         return FacePrecompute(
             landmarks=pts,
@@ -516,6 +533,8 @@ class MediaPipeFace:
             # a general object/person instance segmentation.
             masks=masks,
             semantic_model_sha256=getattr(self, 'semantic_model_sha256', None),
+            detector_model_sha256=getattr(self,'detector_model_sha256',None),
+            detection_limit=SCOPE_MAX_FACES, detection_limit_reached=n_faces>=SCOPE_MAX_FACES,
             backend=self.name,
             t_detect_ms=t_detect,
             t_masks_ms=t_masks,

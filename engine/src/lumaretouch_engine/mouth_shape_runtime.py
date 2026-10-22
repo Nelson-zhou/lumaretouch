@@ -35,6 +35,7 @@ def clear(pipe):
 
 
 def sync(engine,*,strict=False):
+    if getattr(engine,'_people_managed',lambda:False)():return
     pipe=engine._vram
     if pipe is None: return
     recipe=S.check(getattr(engine,'_mouth_shape',None))
@@ -96,6 +97,7 @@ def joint_delta(pipe,auto_delta):
 
 def report(engine):
     pipe=engine._vram; field=getattr(pipe,'mouth_shape_field',None)
+    if getattr(engine,'_people_managed',lambda:False)():field=engine._people_selected_field('mouth_shape')
     pc=getattr(engine,'_precompute',None)
     try: selected=identity(pc.landmarks) if pc is not None else 'none'
     except ValueError: selected='none'
@@ -167,7 +169,7 @@ def admit_working_set(shape):
 
 def has_source_geometry(pipe):
     from .eye_shape_runtime import has_source_geometry as previous
-    return previous(pipe) or has_mouth(pipe) or getattr(pipe,'mouth_shape_combined',False)
+    return getattr(pipe,'people_prepared',None) is not None or previous(pipe) or has_mouth(pipe) or getattr(pipe,'mouth_shape_combined',False)
 
 
 def warp_key(pipe):

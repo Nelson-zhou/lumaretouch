@@ -156,6 +156,9 @@ def validate(p: object) -> None:
     """
     if not isinstance(p, dict):
         raise ProjectError(f"项目顶层不是对象：{type(p).__name__}")
+    from .people_project import validate_records as validate_people
+    try: validate_people(p)
+    except (ValueError,TypeError,KeyError) as error: raise ProjectError(str(error)) from error
     sv = p.get("schema_version")
     if sv not in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, MASK_SCHEMA, GRADE_SCHEMA, RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SCHEMA):
         raise ProjectError(f"项目 schema_version={sv!r}，本版本认 {SCHEMA!r}")

@@ -1,3 +1,4 @@
+import {peopleContext} from '../people/model';
 /**
  * 右侧精修面板（产品态）。六个分栏按手册的工作区规划与《P0参数注册表.json》组织：
  * 质感磨皮 / 面部重塑 / 曝光白平衡肤色LUT / 局部修容画笔 / 裁剪旋转 / 导出批量工程。
@@ -316,17 +317,17 @@ export default function StudioPanel(props: StudioProps) {
                    value={deforms[kind] ?? 0}
                    // 只发改变的那一格：整组回发会把「生效值」写进所选那一层，于是改一次
                    // 默认就把这个人单独覆盖过的别的格子抹平（PORTRAIT-004 的"覆盖项继续生效"）
-                   onChange={(e) => ok(runDeform("set", { [kind]: +e.target.value }, scope), props)}
+                   onChange={(e) => ok(runDeform("set", { [kind]: +e.target.value }, scope, peopleContext(doc?.people)), props)}
                    style={{ width: "100%" }} />
           </div>
         ))}
         <div className="row">
           <button disabled={dim || !props.faceOk} title={t("retouch.deformClearWhy")}
-                  onClick={() => ok(runDeform("clear", undefined, "all"), props)}>
+                  onClick={() => ok(runDeform("clear", undefined, "all", peopleContext(doc?.people)), props)}>
             {t("retouch.deformClear")}</button>
           <button disabled={dim || !props.faceOk || !overridden.length}
                   title={overridden.length ? t("retouch.inheritWhy") : t("retouch.inheritIdle")}
-                  onClick={() => ok(runDeform("inherit"), props)}>{t("retouch.inherit")}</button>
+                  onClick={() => ok(runDeform("inherit", undefined, undefined, peopleContext(doc?.people)), props)}>{t("retouch.inherit")}</button>
         </div>
         {!props.faceOk && <div className="p0why">{props.faceWhy}</div>}
         <RegistryPanel section="face" value={p0.value} enabled={p0.enabled}

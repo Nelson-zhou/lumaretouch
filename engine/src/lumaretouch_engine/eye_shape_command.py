@@ -3,6 +3,7 @@ from . import eye_shape_state as S,eye_shape_runtime as R
 
 
 def apply(engine,p,emit):
+    if engine._people_managed():return engine._people_legacy('lnx.eye_shape.v1',p,emit)
     if type(p) is not dict or set(p)!={'cmd','recipe','base','document_id','control'} or p['cmd']!='eye_shape':
         raise ValueError('眼形命令字段无效')
     if type(p['document_id']) is not str or p['document_id']!=engine._load_id: raise ValueError('照片已切换，眼形修改未应用')

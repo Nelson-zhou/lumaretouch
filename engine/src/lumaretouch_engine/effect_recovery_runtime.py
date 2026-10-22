@@ -12,7 +12,7 @@ def availability(engine):
     fabric = status(engine)
     lip = getattr(pipe, 'lip_makeup_delta', None) if pipe else None
     lip_suspended = getattr(getattr(pipe, 'effect_recovery', None), 'suspended_targets', {}).get('lip_makeup') if pipe else None
-    return {
+    result = {
         'facial_wrinkles': FACE.availability(pipe),
         'lip_makeup': {'active': bool(lip is not None and lip.any() and not lip_suspended),
                        'reason': lip_suspended or (None if lip is not None and bool(lip.any()) else '请先启用当前人物的唇妆增强')},
@@ -22,6 +22,10 @@ def availability(engine):
         'background_replace': {'active': bool(pipe and pipe.has_background()),
                                'reason': None if pipe and pipe.has_background() else '请先启用现有换底；不包含尚未实现的换天空或背景修复'},
     }
+    from . import people_recovery as PEOPLE
+    if PEOPLE.managed(engine):
+        result.update(PEOPLE.availability(engine))
+    return result
 
 
 def raster_fields(value, path, shape, *, cancelled=lambda: False):
@@ -41,7 +45,9 @@ def prepare_stage(engine, value):
     pipe = engine._vram
     if pipe is None:
         raise ValueError('没有可处理的照片')
-    value = S.check(value)
+    requested = S.check(value)
+    from .people_recovery import global_value
+    value = global_value(engine, requested)
     row = engine._docs[engine._doc_index]
     before = M.file_stamp(row['path'])
     if row.get('_local_source_stamp') != before:
@@ -57,7 +63,7 @@ def prepare_stage(engine, value):
         raise ValueError('恢复蒙版装载到处理设备时源图变化')
     # The commit must use the stamp actually verified above, not read a newer
     # stamp after preparing old pixels and accidentally bless it as current.
-    stage.verified_source_key = stage_key(engine, value, source_stamp=before)
+    stage.verified_source_key = stage_key(engine, requested, source_stamp=before)
     return stage
 
 
@@ -65,7 +71,8 @@ def sync(engine, *, strict=False):
     pipe = engine._vram
     if pipe is None:
         return
-    value = S.check(getattr(engine, '_effect_recovery', None))
+    from .people_recovery import global_value
+    value = global_value(engine)
     if not hasattr(pipe, 'effect_recovery'):
         pipe.effect_recovery = EffectRecoveryStage(pipe.device, (pipe.h, pipe.w))
     key = None
@@ -92,18 +99,28 @@ def stage_key(engine, value, *, source_stamp=None):
 
 
 def report(engine):
-    value = S.check(getattr(engine, '_effect_recovery', None))
+    from . import people_recovery as PEOPLE
+    value = PEOPLE.value(engine)
     status = availability(engine)
     stage = getattr(engine._vram, 'effect_recovery', None)
     rows = {row['target']: row for row in value['targets']}
+    suspended_targets = dict(getattr(stage, 'suspended_targets', {}))
+    face_bytes = 0
+    if PEOPLE.managed(engine):
+        reason = getattr(engine._vram, 'people_suspended', None)
+        if reason:
+            suspended_targets.update({target: reason for target in FACE.FACE_TARGETS})
+        prepared = getattr(engine._vram, 'people_prepared', None)
+        if prepared is not None:
+            face_bytes = sum(record['weight'].nbytes for record in prepared.recovery.values())
     return {'version': S.VERSION, 'targets': [{
         'target': name, 'label': S.LABELS[name], 'stage': S.STAGES[name],
         'active': status[name]['active'], 'reason': status[name]['reason'],
         'enabled': rows[name]['enabled'] if name in rows else True,
         'strokes': rows[name]['recipe']['objects'] if name in rows else [],
     } for name in S.TARGETS], 'suspended': getattr(stage, 'suspended', None),
-        'suspended_targets': dict(getattr(stage, 'suspended_targets', {})),
-        'bytes_masks': stage.resident_bytes() if stage else 0,
+        'suspended_targets': suspended_targets,
+        'bytes_masks': (stage.resident_bytes() if stage else 0) + face_bytes,
         'boundaries': ['不恢复全部原图，也不擦掉曝光、曲线、LUT、局部调色或手工修补',
             '影棚背景祛瑕/祛穿帮/光影/断层使用背景调整工作区内的专属恢复；此处不混合其他算子',
             '尚未支持：独立人物瑕疵恢复、眼镜反光、碎发/白发、天空',

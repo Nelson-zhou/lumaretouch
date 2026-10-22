@@ -1,0 +1,14 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+.peoplePanel { margin-bottom: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.peoplePanel p { margin: 7px 0; color: var(--mut); font-size: 11px; }
+.peoplePanel [role="alert"] { color: var(--bad); }
+.peoplePanel button { margin: 3px 4px 3px 0; max-width: 100%; white-space: normal; }
+.peoplePanel button[aria-pressed="true"] { border-color: var(--acc); }
+.peoplePanel details { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+.peoplePanel summary { cursor: pointer; }
+.peoplePanel fieldset { border: 0; padding: 6px 0; margin: 0; min-width: 0; }
+.peoplePanel label { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.peoplePanel input:not([type="checkbox"]), .peoplePanel select { min-width: 0; max-width: 100%; flex: 1; }
+.peoplePanel .peopleValue { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 5px 0; border-bottom: 1px dotted var(--line); }
+.peoplePanel .peopleValue span { overflow-wrap: anywhere; font-size: 11px; }
+.peoplePanel .faceChip { min-height: 45px; }

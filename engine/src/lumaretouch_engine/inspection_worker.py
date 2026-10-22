@@ -80,6 +80,8 @@ def render(directory):
     if before != request['source_identity']:
         raise ValueError('Inspection source changed before decode')
     snap = read_bundle(directory, max_asset_bytes=request['max_asset_bytes'])
+    from .people_export import verify_source as verify_people, isolated_snapshot
+    verify_people(snap,path);snap=isolated_snapshot(snap,for_document=True)
     from .local_grade_source import has_groups, verify_snapshot, check_export_decode
     from . import effect_recovery_runtime as recovery
     from . import manual_liquify_runtime as manual

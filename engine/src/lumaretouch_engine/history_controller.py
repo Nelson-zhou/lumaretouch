@@ -56,6 +56,9 @@ class HistoryController:
                 and (group.startswith(("curves:gesture:", "levels:gesture:", "brow_shape:gesture:", "nose_shape:gesture:", "eye_shape:gesture:", "mouth_shape:gesture:")) or
                      (now - self.group_ns) / 1e6 < self.group_ms):
             same_gesture = True
+        from .people_document_history import decorate
+        before=decorate(before,after)
+        if same_gesture and self.undo:self.undo[-1]=decorate(self.undo[-1],after)
         if not same_gesture:
             self.undo.append(before)
             if len(self.undo) > self.limit:
@@ -143,7 +146,8 @@ class HistoryController:
             return
         ms = round((self.clock() - t0) / 1e6, 2)
         stack.pop()
-        other.append(current)
+        from .people_document_history import decorate
+        other.append(decorate(current,self.ports.capture()))
         if len(other) > self.limit:
             del other[0]
         self.group, self.group_ns = "", 0

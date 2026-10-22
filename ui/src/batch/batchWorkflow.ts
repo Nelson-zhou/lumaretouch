@@ -1,18 +1,19 @@
+import {samePeopleRequest,validPeopleReview,type PeopleTransferRequest,type PeopleTransferProof,type PeopleTransferReview} from '../people/transferReview';
 import {validReferenceReview,type ReferenceReview} from '../referenceColor/ReferenceColorReview';
 import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../optics/transferReviewModel';
 import {LOCAL_GRADE_OP,validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence} from '../localMasks/transferModel.ts';
 /** Reviewed batch lifecycle. A queued command is not evidence of successful edits. */
 export type BatchAction='preflight'|'commit'|'undo'|'redo';
-export type BatchOptions={docs?:string[];moduleScope?:string[];conflictPolicy?:string;batchId?:string;preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number}};
+export type BatchOptions={docs?:string[];moduleScope?:string[];conflictPolicy?:string;batchId?:string;preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest};
 export type BatchTarget={index:number|null;path:string;document_id:string;revision?:string;blocked?:string|null;
-  expected_revision?:string;current_revision?:string|null;result_revision?:string|null;outcome?:string;before?:unknown;local_mask_transfer?:MaskTransferEvidence;optical_transfer?:OpticalTargetReview;reference_color?:ReferenceReview};
+  expected_revision?:string;current_revision?:string|null;result_revision?:string|null;outcome?:string;before?:unknown;local_mask_transfer?:MaskTransferEvidence;optical_transfer?:OpticalTargetReview;reference_color?:ReferenceReview;people_transfer?:PeopleTransferReview|null};
 export type BatchReply={batch_id?:string;request_id:string;action:BatchAction;success:boolean;error?:string;outcome_unknown?:boolean;
-  local_mask_transfer?:MaskTransferOptions;preflight_token?:string;source_snapshot?:{document_id:string;revision:string;path:string};source_changed_since_preflight?:boolean;
+  people_transfer?:boolean;local_mask_transfer?:MaskTransferOptions;preflight_token?:string;source_snapshot?:{document_id:string;revision:string;path:string};source_changed_since_preflight?:boolean;
   module_scope?:string[];applies?:Record<string,unknown>;policy?:string;targets?:unknown[];target_outcomes?:BatchTarget[];
   rejected_docs?:Array<{doc:unknown;error:string}>;ok?:number;blocked?:number;restored?:number[];conflicts?:Array<{path:string;reason:string}>};
 export type BatchPlan=Omit<BatchReply,'targets'|'success'|'preflight_token'|'source_snapshot'|'module_scope'|'applies'|'ok'|'blocked'>&{success:true;preflight_token:string;source_snapshot:{document_id:string;revision:string;path:string};
   module_scope:string[];targets:BatchTarget[];applies:Record<string,unknown>;ok:number;blocked:number};
-export type BatchContext={docs:string[];moduleScope:string[];conflictPolicy:string;sourceDocumentId:string;enabled:boolean;label:string;referencePath?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number}};
+export type BatchContext={docs:string[];moduleScope:string[];conflictPolicy:string;sourceDocumentId:string;enabled:boolean;label:string;referencePath?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest;peopleProof?:PeopleTransferProof};
 export type BatchUi={phase:'closed'|'preflighting'|'review'|'committing'|'uncertain'|'done'|'error';
   hidden?:boolean;operation:BatchAction;plan:BatchPlan|null;result:BatchReply|null;message:string;scopeLabel:string};
 export type BatchTransport={request:(action:BatchAction,options:BatchOptions)=>Promise<{requested:boolean}>;
@@ -24,7 +25,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   const now=options.now??(()=>performance.now());
   let context:BatchContext={docs:[],moduleScope:[],conflictPolicy:'skip_and_report',sourceDocumentId:'',enabled:false,label:''};
   let key='',generation=0,disposed=false;
-  let pending:{id:string;action:BatchAction;generation:number;token?:string;scope?:string[];policy?:string;transfer?:MaskTransferOptions;reference?:{strength:number}}|null=null;
+  let pending:{id:string;action:BatchAction;generation:number;token?:string;scope?:string[];policy?:string;transfer?:MaskTransferOptions;reference?:{strength:number};people?:PeopleTransferRequest;peopleProof?:PeopleTransferProof;referencePath?:string}|null=null;
   let state:BatchUi={phase:'closed',operation:'preflight',plan:null,result:null,message:'',scopeLabel:''};
   const set=(patch:Partial<BatchUi>)=>{state={...state,...patch};if(!disposed)publish(state);};
   const active=(g:number)=>!disposed&&g===generation;
@@ -34,13 +35,13 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     generation++;pending=null;set({phase:'closed',hidden:false,plan:null,result:null,message:''});
   }
   function updateContext(next:BatchContext){
-    const nextKey=JSON.stringify([next.docs,next.moduleScope,next.conflictPolicy,next.sourceDocumentId,next.enabled,next.localMaskTransfer,next.referenceColor,next.referencePath]);
+    const nextKey=JSON.stringify([next.docs,next.moduleScope,next.conflictPolicy,next.sourceDocumentId,next.enabled,next.localMaskTransfer,next.referenceColor,next.referencePath,next.peopleTransfer,next.peopleProof]);
     if(key!==nextKey&&['preflighting','review'].includes(state.phase))close();
     context={...next,docs:[...next.docs],moduleScope:[...next.moduleScope]};key=nextKey;
   }
   const identity=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{32}$/.test(v);
   const revision=(v:unknown)=>typeof v==='string'&&v.length<=20&&/^\d+$/.test(v)&&BigInt(v)<=18446744073709551615n;
-  function planFrom(result:BatchReply,scope:string[],policy:string,transfer?:MaskTransferOptions,reference?:{strength:number}):BatchPlan{
+  function planFrom(result:BatchReply,scope:string[],policy:string,transfer?:MaskTransferOptions,reference?:{strength:number},people?:PeopleTransferRequest,peopleProof?:PeopleTransferProof,referencePath?:string):BatchPlan{
     if(scope.includes(LOCAL_GRADE_OP)&&!sameTransferOptions(result.local_mask_transfer,transfer))throw Error('局部迁移策略与请求不一致');
     if(!identity(result.preflight_token)||!result.source_snapshot||!identity(result.source_snapshot.document_id)
       ||!revision(result.source_snapshot.revision)||typeof result.source_snapshot.path!=='string'
@@ -48,9 +49,12 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       ||JSON.stringify(result.module_scope)!==JSON.stringify(scope)||result.policy!==policy
       ||!Array.isArray(result.rejected_docs)||!Number.isInteger(result.ok)||!Number.isInteger(result.blocked)
       ||(result.ok??-1)<0||(result.blocked??-1)<0||(result.ok??0)+(result.blocked??0)!==result.targets.length
-      ||Object.keys(result.applies).sort().join('|')!==[...scope].sort().join('|'))throw Error('预检回执不完整，未允许提交');
+      ||(!people&&Object.keys(result.applies).sort().join('|')!==[...scope].sort().join('|')))throw Error('预检回执不完整，未允许提交');
+    if(people&&(!peopleProof||result.people_transfer!==true||!samePeopleRequest(result.applies,people)
+      ||result.source_snapshot.document_id!==peopleProof.document_id||result.source_snapshot.revision!==String(peopleProof.document_revision)))throw Error('人物迁移源图、关联或参数选择与请求不符');
+    if(!people&&result.people_transfer)throw Error('未请求的人物迁移回执');
     if(reference&&(result.applies?.['lnx.reference_color.v1'] as {strength?:number})?.strength!==reference.strength)throw Error('参考统一程度与请求不同');
-    if(context.referencePath&&result.source_snapshot.path!==context.referencePath)throw Error('参考统一样片与当前请求不同');
+    if(referencePath&&result.source_snapshot.path!==referencePath)throw Error('源图与冻结请求不同');
     const ids=new Set<string>();let blocked=0;
     for(const item of result.targets){const t=item as BatchTarget;
       if(!t||typeof t.path!=='string'||!identity(t.document_id)||!revision(t.revision)
@@ -58,6 +62,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       if(scope.includes(LOCAL_GRADE_OP)&&!t.blocked&&(!validTransferEvidence(t.local_mask_transfer)||!sameTransferOptions(t.local_mask_transfer.policy,transfer)))throw Error('缺少匹配的目标局部组预检证据');
       if(scope.includes(OPTICS_AUTO_OP)&&!t.blocked&&!validOpticalReview(t.optical_transfer,t.document_id,t.revision,result.applies[OPTICS_AUTO_OP]))throw Error('缺少匹配的自动镜头/透视目标预检证据');
       if(scope.includes('lnx.reference_color.v1')&&!t.blocked&&(result.applies['lnx.reference_color.v1'] as {strength?:number})?.strength!==0&&!validReferenceReview(t.reference_color,t.document_id,t.revision??''))throw Error('缺少匹配的参考统一目标预检证据');
+      if(people&&!t.blocked&&(!peopleProof||!validPeopleReview(t.people_transfer,people,peopleProof,t)))throw Error('缺少已确认人物及逐项参数的目标预检证据');
       ids.add(t.document_id);if(t.blocked)blocked++;
     }
     if(blocked!==result.blocked)throw Error('预检受阻数量不一致');
@@ -93,7 +98,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
           if(!result||result.request_id!==request.id||result.action!==request.action||typeof result.success!=='boolean')throw Error('批量结果身份不匹配');
           if(result.success&&request.action==='commit'&&result.preflight_token!==request.token)throw Error('批量结果不属于本次预检');
           if(result.success&&request.action==='preflight'){
-            const plan=planFrom(result,request.scope??[],request.policy??'',request.transfer,request.reference);pending=null;set({phase:'review',plan,result:null,message:''});return;
+            const plan=planFrom(result,request.scope??[],request.policy??'',request.transfer,request.reference,request.people,request.peopleProof,request.referencePath);pending=null;set({phase:'review',plan,result:null,message:''});return;
           }
           if(result.outcome_unknown&&request.action!=='preflight'){set({phase:'uncertain',result,message:result.error??'执行结果未确认'});return;}
           if(result.success&&request.action==='commit')checkCommitted(result);
@@ -110,7 +115,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   }
   async function submit(action:BatchAction,opts:BatchOptions){
     const g=++generation,id=uuid(),deadline=now()+(options.timeoutMs??120000);
-    const request={id,action,generation:g,token:opts.preflightToken,scope:opts.moduleScope,policy:opts.conflictPolicy,transfer:opts.localMaskTransfer,reference:opts.referenceColor};pending=request;
+    const request={id,action,generation:g,token:opts.preflightToken,scope:opts.moduleScope,policy:opts.conflictPolicy,transfer:opts.localMaskTransfer,reference:opts.referenceColor,people:opts.peopleTransfer,peopleProof:context.peopleProof,referencePath:context.referencePath};pending=request;
     set({phase:action==='preflight'?'preflighting':'committing',hidden:false,operation:action,result:null,message:''});
     try{
       const accepted=await bounded(api.request(action,{...opts,requestId:id}),deadline);
@@ -126,7 +131,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     if(disposed||['committing','preflighting'].includes(state.phase))return;
     if(!context.enabled||!context.docs.length||!context.moduleScope.length){set({phase:'error',plan:null,result:null,message:'请选择照片与作用范围，并使用支持批量预检的配套引擎'});return;}
     set({plan:null,result:null,scopeLabel:context.label});
-    await submit('preflight',{docs:[...context.docs],moduleScope:[...context.moduleScope],conflictPolicy:context.conflictPolicy,localMaskTransfer:context.moduleScope.includes(LOCAL_GRADE_OP)?context.localMaskTransfer:undefined,referenceColor:context.referenceColor});
+    await submit('preflight',{docs:[...context.docs],moduleScope:[...context.moduleScope],conflictPolicy:context.conflictPolicy,localMaskTransfer:context.moduleScope.includes(LOCAL_GRADE_OP)?context.localMaskTransfer:undefined,referenceColor:context.referenceColor,peopleTransfer:context.peopleTransfer});
   }
   async function commit(){
     if(state.phase!=='review'||!state.plan||state.plan.ok<1)return;

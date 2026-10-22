@@ -35,6 +35,7 @@ def clear(pipe):
 
 
 def sync(engine,*,strict=False):
+    if getattr(engine,'_people_managed',lambda:False)():return
     pipe=engine._vram
     if pipe is None: return
     recipe=S.check(getattr(engine,'_eye_shape',None))
@@ -95,6 +96,7 @@ def joint_delta(pipe,auto_delta):
 
 def report(engine):
     pipe=engine._vram; field=getattr(pipe,'eye_shape_field',None)
+    if getattr(engine,'_people_managed',lambda:False)():field=engine._people_selected_field('eye_shape')
     pc=getattr(engine,'_precompute',None)
     try: selected=identity(pc.landmarks) if pc is not None else 'none'
     except ValueError: selected='none'

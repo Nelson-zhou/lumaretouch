@@ -14,8 +14,10 @@ pub fn command(recipe:Value,document_id:String,control:String)->Result<Value,Str
 }
 
 #[tauri::command]
-pub(crate) fn lip_makeup(state:tauri::State<'_,std::sync::Arc<crate::AppState>>,recipe:Value,document_id:String,control:String)->Result<Value,String>{
-    state.send_to_engine(command(recipe,document_id,control)?)?;
+pub(crate) fn lip_makeup(state:tauri::State<'_,std::sync::Arc<crate::AppState>>,recipe:Value,document_id:String,control:String,people_context:Option<Value>)->Result<Value,String>{
+    let mut request = command(recipe,document_id,control)?;
+    crate::people_api::add_context(&mut request, people_context)?;
+    state.send_to_engine(request)?;
     Ok(json!({"requested":true}))
 }
 

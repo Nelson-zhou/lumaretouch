@@ -1,10 +1,11 @@
+import type {PeopleContext} from '../people/model';
 import {useLayoutEffect,useRef,useSyncExternalStore} from 'react';
 import {KEYS,IDS,LABELS,HINTS,neutral,adjust,link,reason,type BrowShape,type BrowKey,type BrowFact} from './model';
 import {browInteraction as owner} from './interaction';
-export function BrowShapeControls({value,facts,disabled,why,documentId,faceId,revision}:{value:BrowShape;facts?:Partial<Record<'left'|'right',BrowFact>>;disabled:boolean;why?:string;documentId:string;faceId:string;revision:number}) {
+export function BrowShapeControls({value,facts,disabled,why,documentId,faceId,revision,peopleContext}:{value:BrowShape;facts?:Partial<Record<'left'|'right',BrowFact>>;disabled:boolean;why?:string;documentId:string;faceId:string;revision:number;peopleContext?:PeopleContext}) {
   const view=useSyncExternalStore(owner.subscribe,owner.snapshot,owner.snapshot);
   const gestures=useRef(new Map<string,string>());
-  useLayoutEffect(()=>{owner.update({documentId,faceId,recipe:value,revision,enabled:!disabled});},[documentId,faceId,value,revision,disabled]);
+  useLayoutEffect(()=>{owner.update({documentId,faceId,recipe:value,revision,enabled:!disabled,peopleContext});},[documentId,faceId,value,revision,disabled,peopleContext]);
   const gesture=(key:string)=>{let id=gestures.current.get(key);if(!id){id=crypto.randomUUID();gestures.current.set(key,id);}return id;};
   const end=(key:string)=>{gestures.current.delete(key);};
   const edit=(change:(r:BrowShape)=>BrowShape,k:BrowKey|'all',id=crypto.randomUUID())=>owner.edit(change,k,id);

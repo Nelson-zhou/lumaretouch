@@ -3,6 +3,7 @@ from . import lip_makeup_state as S, lip_makeup_runtime as R
 
 
 def apply(engine,p,emit):
+    if engine._people_managed():return engine._people_legacy('lnx.lip_makeup.v1',p,emit)
     if type(p) is not dict or set(p)!={'cmd','recipe','document_id','control'} or p['cmd']!='lip_makeup':
         raise ValueError('唇妆命令字段无效')
     if type(p['document_id']) is not str or p['document_id']!=engine._load_id:

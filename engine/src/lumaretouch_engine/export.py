@@ -176,6 +176,7 @@ class ExportSpec:
     # 不拿预览档那张小掩膜放大——放大一份"身份"掩膜等于把眼睛涂到眉毛上，而且
     # 内容门的相对统计会跟着插值得到的假边一起漂。
     enhance: dict = field(default_factory=dict)
+    people: dict | None = None
     brow_shape: dict | None = None
     brow_shape_face: object | None = None
     nose_shape: dict | None = None
@@ -744,6 +745,11 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                           f"（超过 {MAX_MARGIN}），请调小滤波半径或形变范围；不会截短边界继续出片")
     if torch is None:
         raise ExportError("导出需要 torch（装 rocm/cuda/cpu 任一变体）")
+    base_f=None;repair_stats={}
+    if spec.repair:base_f,repair_stats=apply_repair_full(src_u8,spec.repair,device)
+    from .people_export import prepare as prepare_people
+    people_start=time.perf_counter();people_prepared=prepare_people(spec,src_u8,base_f)
+    people_prepare_ms=(time.perf_counter()-people_start)*1000.0 if people_prepared is not None else 0.0
     delta, peak = (None, 0.0)
     field_ms = 0.0
     if spec.deform_amounts:
@@ -755,6 +761,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     eye_field = EYER.export_field(spec, src_u8, divisor=65535 if src_u8.dtype == np.uint16 else 255)
     mouth_field = MOUTHR.export_field(spec, src_u8, divisor=65535 if src_u8.dtype == np.uint16 else 255)
     delta, peak = compose_geometry_delta(delta, brow_field, nose_field, eye_field, mouth_field, (h,w))
+    if people_prepared is not None: delta,peak=people_prepared.geometry.delta,people_prepared.geometry.peak
     if isinstance(delta,np.ndarray): delta = torch.from_numpy(delta)
     margin = spec.margin_px(peak, manual_peak)
     if margin > MAX_MARGIN:
@@ -762,10 +769,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                           "请调小滤波半径或形变范围；不会截短边界继续出片")
     manual_tile_budget = _admit_manual_tile(spec, h, w, tile, margin, bits, device, manual_peak)
     sky_tile_budget = admit_sky(spec,h,w,tile,margin,bits,device)
-    base_f = None
-    repair_stats = {}
-    if spec.repair:
-        base_f, repair_stats = apply_repair_full(src_u8, spec.repair, device)
+
     # 眼牙增强：在**整幅坐标**上把掩膜画一次，然后逐块切给自己那一片（与 grade_mask
     # 的先例同一条），而不是每块各自从关键点重画——两块交界处的软边必须与整幅一致，
     # 而每块重算会把羽化截断在块边界上（那会在出片里留下一条笔直的眼白接缝）。
@@ -822,6 +826,9 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             pipe.load_rgb_u8(src_u8[cy0:cy1, cx0:cx1])
         # Rasterize once at source dimensions, then take the identical tile halo
         # used by all operators. RGB8/RGB16 share this float recovery stage.
+        if people_prepared is not None:
+            from .people_pipeline import install as install_people
+            install_people(pipe,people_prepared,origin=(cy0,cx0))
         attach_tile(pipe, spec, (cy0, cx0, cy1, cx1))
         attach_manual_tile(pipe, spec, (cy0, cx0, cy1, cx1))
         attach_studio_tile(pipe, spec, (cy0, cx0, cy1, cx1))
@@ -837,7 +844,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                 pipe.set_light_params(spec.light_exposure, spec.light_radius)
         if fabric_field is not None:
             pipe.fabric.install(fabric_field[cy0:cy1, cx0:cx1], spec.fabric_amount)
-        if delta is not None:
+        if delta is not None and people_prepared is None:
             pipe.adopt_deform_field(delta[:, cy0:cy1, cx0:cx1].contiguous().to(device))
             pipe.brow_shape_combined = brow_field is not None and brow_field.state is not None
             pipe.nose_shape_combined = nose_field is not None and nose_field.state is not None
@@ -1034,6 +1041,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         "effect_recovery_targets": [item['target'] for item in spec.effect_recovery_fields],
         "effect_recovery_mask_cpu_bytes": sum(int(item['weight'].nbytes) for item in spec.effect_recovery_fields),
         "channel": spec.channel, **repair_stats, **geometry_facts,
+        "people":None if people_prepared is None else {"full_resolution":True,"prepare_ms":round(people_prepare_ms,2),
+            "faces":[row["face_ref"] for row in people_prepared.plan["entries"]],
+            "facts":people_prepared.facts,"overlap_pixels":people_prepared.geometry.overlap_pixels,
+            "overlap_policy":people_prepared.plan["overlap_policy"],"selection_independent":True,"refused_count":0},
     }
 
 

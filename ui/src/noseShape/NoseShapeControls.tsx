@@ -1,10 +1,11 @@
+import type {PeopleContext} from '../people/model';
 import {useEffect,useRef,useSyncExternalStore} from 'react';
 import {KEYS,IDS,LABELS,HINTS,neutral,adjust,reason,type NoseShape,type NoseKey,type NoseFact} from './model';
 import {noseInteraction as owner} from './interaction';
-export function NoseShapeControls({value,facts,disabled,why,documentId,faceId,revision}:{value:NoseShape;facts?:Partial<Record<NoseKey,NoseFact>>;disabled:boolean;why?:string;documentId:string;faceId:string;revision:number}){
+export function NoseShapeControls({value,facts,disabled,why,documentId,faceId,revision,peopleContext}:{value:NoseShape;facts?:Partial<Record<NoseKey,NoseFact>>;disabled:boolean;why?:string;documentId:string;faceId:string;revision:number;peopleContext?:PeopleContext}){
   const view=useSyncExternalStore(owner.subscribe,owner.snapshot,owner.snapshot);
   const gestures=useRef(new Map<NoseKey,string>());
-  useEffect(()=>{owner.update({documentId,faceId,recipe:value,revision,enabled:!disabled});},[documentId,faceId,value,revision,disabled]);
+  useEffect(()=>{owner.update({documentId,faceId,recipe:value,revision,enabled:!disabled,peopleContext});},[documentId,faceId,value,revision,disabled,peopleContext]);
   const gesture=(key:NoseKey)=>{let id=gestures.current.get(key);if(!id){id=crypto.randomUUID();gestures.current.set(key,id);}return id;};
   const end=(key:NoseKey)=>{gestures.current.delete(key);};
   const edit=(change:(r:NoseShape)=>NoseShape,k:NoseKey|'all',id=crypto.randomUUID())=>owner.edit(change,k,id);

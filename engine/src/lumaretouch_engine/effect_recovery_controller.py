@@ -63,15 +63,22 @@ class RecoveryController:
             if R.stage_key(e, pending['value']) != verified_key:
                 raise ValueError('恢复准备后源图改变，未提交本笔')
             pending['started'] = True
-            e._effect_recovery, pipe.effect_recovery = pending['value'], pending['stage']
-            pipe._effect_recovery_key = verified_key
-            frame = e._write_current_frame('effect_recovery')
-            if R.stage_key(e, e._effect_recovery) != verified_key:
-                raise ValueError('恢复提交渲染期间源图改变，撤回本笔')
+            people = getattr(pending['stage'], 'people_recovery', None)
+            if people is not None:
+                from .people_recovery import commit
+                frame = commit(e, people, verified_source_key=verified_key, recovery=pending['value'])
+                no_change = people['no_change']
+            else:
+                e._effect_recovery, pipe.effect_recovery = pending['value'], pending['stage']
+                pipe._effect_recovery_key = verified_key
+                frame = e._write_current_frame('effect_recovery')
+                if R.stage_key(e, e._effect_recovery) != verified_key:
+                    raise ValueError('恢复提交渲染期间源图改变，撤回本笔')
+                no_change = previous == e._effect_recovery
             # The dispatcher still has to record this gesture. Publish both
             # pixels and authoritative UI state only after that history step.
             pending['frame'] = frame
-            result.update(success=True, no_change=(previous == e._effect_recovery))
+            result.update(success=True, no_change=no_change)
         except Exception as error:
             e._effect_recovery, pipe.effect_recovery, pipe._effect_recovery_key = previous, old_stage, old_key
             try:

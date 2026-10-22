@@ -128,6 +128,7 @@ def working_bytes(shape,landmarks=None):
 
 
 def sync(engine,*,strict=False):
+    if getattr(engine,'_people_managed',lambda:False)():return
     """Restore/reload entry point; non-strict failures remain visibly suspended."""
     pipe=engine._vram
     if pipe is None: return

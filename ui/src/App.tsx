@@ -1,3 +1,7 @@
+import {ConfirmedPeopleTransfer} from './people/ConfirmedPeopleTransfer';
+import {usePeopleWorkflow} from './people/usePeopleWorkflow';
+import {portraitAccess} from './people/portraitAccess';
+import {peopleContext, peopleAssetContext, type PeopleContext} from './people/model';
 import {ReferenceColorControls} from './referenceColor/ReferenceColorControls';
 import {RetouchToolActivity,type ToolLocation} from "./toolRouting/RetouchToolActivity";
 import { neutral as neutralWrinkles } from "./facialWrinkles/model";
@@ -52,7 +56,7 @@ import { t, type MsgKey } from "./i18n";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   benchStart, benchStats, engineStatus, loadImage, m0Env, parseFrameHead, peekFrame,
-  faceStateOf, enhanceStateOf,
+  enhanceStateOf,
   report, runDeform, runEnhance, runFace,
   fetchFilmstrip, runExport, runGrade, runHistory, runHsl, runInpaint, runLight, runLut, runPick, runSession, runBackground,
   runCrop, runExposure, runPrecompute, runProject, runTask,
@@ -179,6 +183,7 @@ export default function App() {
   // 框选补脸那一档（LNX-PORTRAIT-006）：它是一次性的编辑意图，不是文档状态——文档状态
   // 是引擎那份 `_face_manual`，这里只记"视口下一拖该画框还是该平移"
   const [pickFace, setPickFace] = useState(false);
+  const faceAddContext = useRef<PeopleContext | undefined>(undefined);
   // 修容档数上限：0.6 档是探针在真图上定的产品默认（再大就开始烧穿高光）
   const [lightExposure, setLightExposure] = useState(0.6);
   const [lastLight, setLastLight] = useState<LightInfo | null>(null);
@@ -280,8 +285,6 @@ export default function App() {
   const [swipe, setSwipe] = useState(0.5);
   const [originalFrame, setOriginalFrame] = useState<ParsedFrame | null>(null);
   const [hasOriginal, setHasOriginal] = useState(false);
-  // 人物属性栏：所有人（联动）或某一张脸（独立）。索引来自引擎的 face.index。
-  const [faceScope, setFaceScope] = useState<"all" | number>("all");
   // 工程与任务面（读只读引擎报的那两份，前端不记“存过了”）
   const [exportErr, setExportErr] = useState("");
   const [exportTile, setExportTile] = useState("");
@@ -986,9 +989,12 @@ export default function App() {
   const onPickFaceRect = useCallback(async (rect: number[]) => {
     setPickFace(false);
     setDragNote(t("face.adding"));
-    const errBefore = (await engineStatus().catch(() => null))?.last_error ?? null;
+    const captured = faceAddContext.current; faceAddContext.current = undefined;
+    const before = await engineStatus().catch(() => null);
+    const errBefore = before?.last_error ?? null;
+    const previousAdded = before?.face?.face?.manual?.added?.length ?? 0;
     try {
-      await runFace("add", undefined, rect);
+      await runFace("add", undefined, rect, captured);
     } catch (e) {
       setDragNote(String(e));
       return;
@@ -998,7 +1004,9 @@ export default function App() {
       const st = await engineStatus().catch(() => null);
       const err = st?.last_error ?? null;
       if (err && err !== errBefore) { setDragNote(err); return; }
-      if ((st?.face?.face?.manual?.added?.length ?? 0) > 0) break;
+      if (captured && st?.doc_report?.doc_state?.people?.binding.document_id !== captured.document_id) {setDragNote("照片已切换，原补脸结果未确认；未向新照片重发。"); return;}
+      if ((st?.face?.face?.manual?.added?.length ?? 0) > previousAdded) {setDragNote("人脸区域已完成分析并加入当前照片。"); break;}
+      if (i === 39) setDragNote("补脸结果尚未确认，请查看人物状态；未重发操作。");
     }
     await refreshStatus();
   }, [refreshStatus]);
@@ -1065,7 +1073,7 @@ export default function App() {
       return;
     }
     deformFlight.current = true;
-    runDeform("set", amounts)
+    runDeform("set", amounts, undefined, peopleContext(status?.doc_report?.doc_state?.people))
       .then(() => refreshStatus())
       .catch((e) => setDragNote(String(e)))
       .finally(() => {
@@ -1080,7 +1088,7 @@ export default function App() {
     // 拖动期间逐事件发：这一层每帧只在自己那只窗口里逐点乘加（实测亚毫秒），
     // 不发就是"滑块拖了、画面不动"。部分提交交给引擎（没给的子功能沿用当前值）。
     setEnhanceAmounts((prev) => ({ ...prev, [sub]: value }));
-    void runEnhance("set", { [sub]: value } as Record<string, number>).then(() => {});
+    void runEnhance("set", { [sub]: value } as Record<string, number>, peopleContext(status?.doc_report?.doc_state?.people)).then(() => {});
   }
 
   function onDeformChange(kind: string, value: number) {
@@ -1387,37 +1395,7 @@ export default function App() {
   /** 底片条上被选中的那几张（没选就只导当前这张） */
   const selPaths = Array.from(sel);
   const exportTargets = selPaths.length ? selPaths : (hasImage && status?.image?.doc ? [status.image.doc] : []);
-  /** 分人编辑那一份（LNX-PORTRAIT-003）：名单与「在改哪一张」全部来自引擎。
-   *  先后次序在 native.ts 的 faceStateOf 里定，这里不写第二份。 */
-  const faceSt = faceStateOf(status, doc);
-  const faceCount = faceSt?.num_faces ?? pc?.num_faces ?? 1;
-  /** D-P0-02 的单脸口径（注册表 scope_single_face 逐字）：mediapipe + 478 点 + 无几何警告，
-   *  作用面要么恰好一张脸，要么多人而用户已显式点选了那一张。人数只从引擎报的读：前端数不来，
-   *  也不该自己编一个“看起来只有一张”的判据。synthetic 的网格占位不算可用人脸——引擎在
-   *  deform 里就拒它，界面不许装作能点。
-   *  `blocked` 是引擎那一侧的放行判据（多人而未选定），这里只读不拼：拼第二份就会出现
-   *  「面板说能点而引擎整条拒」那个 DoD 明确禁止的无响应控件。 */
-  const faceOk = !!pc && pc.backend === "mediapipe" && pc.num_landmarks === 478
-    && !deformGeomWarn
-    // 三条一起才放行：①还剩可编辑的人（关掉唯一那一只之后一个也不剩），②人数与选定那一条
-    // （多人而未选定要挡），③引擎手上真有"那一个人"的脸盒（`faceSt.box`）。只查②会出现
-    // 面板亮着而引擎整条拒——DoD §3 明确禁止的那一形，而它正是人工账新造出来的形状
-    && (faceSt?.enabled?.length ?? faceCount) >= 1
-    && (faceCount === 1 || (faceCount > 1 && !!faceSt && faceSt.explicit && !faceSt.blocked))
-    && !!faceSt && faceSt.box !== null;
-  const faceWhy = hasImage
-    ? ((faceSt?.enabled?.length ?? faceCount) === 0
-        // 人物被全部排除：告诉用户从哪里恢复，不复述内部状态字段。
-        ? "画面中的人物已全部排除。请在上方人物栏重新选中需要调整的人物。"
-          + "全图调色、曝光、白平衡、裁剪与磨皮仍可使用。"
-        : faceCount > 1 && faceSt?.blocked
-        ? `画面中有 ${faceCount} 个人物，请先在人物栏选择要调整的人物。`
-          + `${(faceSt?.disabled_count ?? 0) > 0 ? `（已排除 ${faceSt?.disabled_count} 人）` : ""}`
-          + "选定后即可单独调整面部与眼牙。"
-        : faceCount > 1
-          ? `当前仅对选中的人物 ${(faceSt?.index ?? 0) + 1} 生效。`
-          : "未检测到可编辑的人脸。请换一张正面人像，或在人物栏中添加人物。")
-    : "打开照片后即可使用。";
+  const {ok: faceOk, why: faceWhy} = portraitAccess(status, doc, deformGeomWarn);
   const liveTask = tasks.length ? tasks[tasks.length - 1] : null;
   // 注册表上的格式名（jpeg/tiff）与引擎落盘用的后缀名（jpg/tif）不是一回事：
   // 映射只在这一处，两个名单都不在面板里重复刻
@@ -1614,6 +1592,7 @@ export default function App() {
     await refreshStatusWithErrors(true)
   }
 
+  const peopleWorkflow = usePeopleWorkflow(status, doc, refreshFromEngine);
   const whiteBalanceWorkflow=useWhiteBalanceWorkflow({documentId:doc?.document_id??'',
     reason:!status?.engine_alive?'引擎尚未就绪':status?.ready_caps?.white_balance_result_protocol!==1?'当前引擎不支持此操作，请更新匹配版本':!hasImage?'请先导入照片':exporting?'导出进行中':status?.edit_queue?.in_flight||status?.edit_queue?.pending?'有编辑操作正在处理':'照片状态正在同步',
     enabled:!!status?.engine_alive&&status?.ready_caps?.white_balance_result_protocol===1&&hasImage&&!exporting
@@ -1746,7 +1725,7 @@ export default function App() {
                         faceOk={faceOk} faceWhy={faceWhy}
                         note={setDragNote} onDone={requestPanelRefresh}
                         thumb={strip?.current ? thumbs[strip.current] : undefined}
-                        faceScope={faceScope} onFaceScope={setFaceScope}
+                        people={peopleWorkflow}
                         brush={{ on: brushOn, mode: brushMode, radius: brushRadius }}
                         onBrush={(patch) => {
                           if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;if(patch.on)colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();
@@ -1756,7 +1735,7 @@ export default function App() {
                         }}
                         onOpenCrop={() => {if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setCropOpen(true);}}
                         onFaceAdd={() => {
-                          if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setPickFace(true);
+                          if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();faceAddContext.current=peopleAssetContext(doc?.people);setPickFace(true);
                           setDragNote("在画面中框选一张人脸，松手即可添加人物");
                         }}
                         faceAdding={pickFace} />
@@ -1870,6 +1849,7 @@ export default function App() {
               )}
             </div>
 
+            <ConfirmedPeopleTransfer owner={peopleWorkflow} targets={selPaths} currentPath={strip?.current??''} enabled={hasImage&&!exporting&&status?.ready_caps?.people_protocol===1&&status?.ready_caps?.batch_preflight_protocol===1} onComplete={()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));}}/>
             {strip && strip.count > 0 && (
               <>
                 <ReferenceColorControls sourceDocumentId={doc?.document_id??''} currentPath={strip.current??''} targets={selPaths} enabled={hasImage&&status?.ready_caps?.reference_color_protocol===1} onComplete={()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));}}/>

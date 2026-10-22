@@ -13,7 +13,7 @@ from .document_versions import DocumentVersions
 from .batch_preflight_controller import FrozenBatchController,PlanPorts
 
 ACTIONS = ("preflight", "commit", "undo", "redo", "state")
-KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color"}
+KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color", "people_transfer"}
 POLICIES = ("skip_and_report", "recheck")
 
 @dataclass(frozen=True)
@@ -35,6 +35,8 @@ class BatchEditor:
     prepare_optics: Callable | None = None
     prepare_reference: Callable | None = None
     capture_reference: Callable | None = None
+    people_restore: Callable | None = None
+    people_transfer: Callable | None = None
 
 class BatchSyncController:
     def __init__(self, documents: BatchDocuments, editor: BatchEditor,
@@ -52,7 +54,7 @@ class BatchSyncController:
         self.versions=versions if versions is not None else DocumentVersions()
         self.preflight=FrozenBatchController(PlanPorts(lambda:self.documents.rows(),lambda:self.documents.current_index(),
             lambda:self.documents.remember_current(),lambda:self.editor.capture(),lambda docs:self.target_indices(docs),
-            lambda row,**kw:self.editor.face_known_single(row,**kw),lambda *a,**kw:self.commit(*a,**kw),self.editor.prepare_optics,self.editor.prepare_reference,self.editor.capture_reference),
+            lambda row,**kw:self.editor.face_known_single(row,**kw),lambda *a,**kw:self.commit(*a,**kw),self.editor.prepare_optics,self.editor.prepare_reference,self.editor.capture_reference,self.editor.people_transfer),
             self.versions,lambda event:self.emit(event),monotonic)
 
     def target_indices(self, docs) -> tuple[list[int], list[dict]]:
@@ -129,9 +131,13 @@ class BatchSyncController:
         try:
             if action in ("undo","redo"):
                 from .batch_group_history import restore_group
-                body=restore_group(self,p) if action=="redo" or RC.OP in self.ledger.get(str(p.get("batch_id")),{}).get("ops",[]) else self.undo(p)
+                from .people_batch_ledger import restore as restore_people
+                if "people_changes" in self.ledger.get(str(p.get("batch_id")),{}):
+                    body=restore_people(self,p)
+                else:body=restore_group(self,p) if action=="redo" or RC.OP in self.ledger.get(str(p.get("batch_id")),{}).get("ops",[]) else self.undo(p)
                 self.preflight.emit_result(p,{**body,"success":True})
                 return
+            if p.get("people_transfer") is not None:raise SC.ScopeError("People transfer requires a frozen preflight token")
             ops = SC.check_scope(p.get("module_scope"))
             if SKY.OP in ops:
                 raise SC.ScopeError("换天空批量必须逐目标预检，再用冻结 token 提交；不会猜测天空或复制源图区域")
