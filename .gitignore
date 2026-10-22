@@ -23,3 +23,5 @@ venv/
 /engine/src/lumaretouch_engine/bin/curve-compiler
 
 /engine/src/lumaretouch_engine/bin/color-scopes
+
+/engine/src/lumaretouch_engine/bin/local-masks

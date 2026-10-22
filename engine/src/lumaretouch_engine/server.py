@@ -58,6 +58,7 @@ from . import tasks as T
 # 一个出处（scope），落盘边界只有一个出处（preset_store）。命令层只做“守卫 → 调它们
 # → 把事实发成事件”，不在这里再摸一份“哪些参数属于哪个模块”——预设与批量必须同一语义，
 # 分开抄就会出“预设里没有的参数被批量偷偷同步了”。
+from . import local_mask_state as LM
 from . import scope as SC
 from . import preset_controller as PRS
 from . import hsl_recipe as HSL_RECIPE
@@ -263,6 +264,7 @@ class Engine:
         # 「命令收下而画面不动」的形状，所以作废必须一起作，不留半截。
         self._grade_scope = "all"
         self._grade_mask = None
+        self._local_masks = LM.empty()
         # PORTRAIT-009 眼牙增强：三个子功能的值 + 会话里有没有那份场 + **它属于哪一张脸**。
         # `box` 这一格不是装饰：这一层的掩膜是从**那一张**的 478 点画出来的。换人选时若
         # 不认脸盒，就会把 A 的美白静默涂到 B 身上——那是 SCOPE-001 拦的同一件事，
@@ -369,7 +371,7 @@ class Engine:
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -868,7 +870,7 @@ class Engine:
                   "_light_ops", "_light_redo", "_light", "_deform", "_deform_defer",
                   "_deform_default", "_deform_overrides", "_lut",
                   "_lut_amount",
-                  "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_bg",
+                  "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_local_masks", "_bg",
                   "_enhance", "_enhance_defer",
                   "_precompute", "_precompute_backend", "_face_index", "_face_box",
                   "_face_explicit", "_face_manual",
@@ -922,7 +924,7 @@ class Engine:
                 "_deform_default": {k: 0.0 for k in KINDS}, "_deform_overrides": [],
                 "_lut": None, "_lut_amount": 1.0, "_lut_preset": None,
                 "_grade": (0.0, 0.0, 0.0, 1.0),
-                "_grade_scope": "all", "_grade_mask": None,
+                "_grade_scope": "all", "_grade_mask": None, "_local_masks": LM.empty(),
                 "_enhance": dict(amounts={k: 0.0 for k in ENH.AMOUNT_KEYS}, built=False, box=None),
                 "_enhance_defer": False,
                 "_bg": dict(active=False, matte=None, bg=None, backend=None,
@@ -969,7 +971,7 @@ class Engine:
               # 不会互相改；真要出现就地写，这里就得改成拷贝。
               "_lut": self._lut, "_lut_amount": float(self._lut_amount),
               "_lut_preset": self._lut_preset, "_grade": tuple(self._grade),
-              "_grade_scope": str(self._grade_scope), "_grade_mask": self._grade_mask,
+              "_grade_scope": str(self._grade_scope), "_grade_mask": self._grade_mask, "_local_masks": LM.check(self._local_masks),
               # 整份新抄：amounts 那个 dict 不能与 live 共享（同 _capture_state 头部那条理由，
               # 两个文档共用一个 dict，下一笔 set 会同时改掉两份状态）
               "_enhance": {"amounts": dict(self._enhance["amounts"]),
@@ -1003,7 +1005,7 @@ class Engine:
         for key in ("_repair_ops", "_redo_ops"):
             validate_repair_ops(st.get(key, []), shape=st.get("_proxy"))
         # Validate WB and compile before changing any live field.
-        st = {**st, "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0))}
+        st = {**st, "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0)), "_local_masks": LM.check(st.get("_local_masks"))}
         st = WB.normalize_state(st)
         WB.prepare_state(st)
         # Old projects predate curves. Validate/deep-copy before changing any live field.
@@ -1107,6 +1109,7 @@ class Engine:
         out = dict(st)
         for k in self.PROXY_BOUND:
             out[k] = self._fresh_doc_state()[k]
+        if st.get("_grade_scope") == "objects": out["_grade_scope"] = "objects"
         out["_op_seq"] = 0
         out["_proxy"] = None
         emit({"event": "engine_warn", "warn": f"{why}：按像素坐标成立的层（掩膜/笔迹/形变）已全部丢弃，"
@@ -1172,7 +1175,7 @@ class Engine:
     # 却不在这份名单里，于是拖完曝光按撤销——参数纹丝不动，而 UI 上没有任何一处会说"为什么
     # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
     # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
-    EDIT_CMDS = ("set_strength", "inpaint", "source_patch", "clone_stamp", "light", "deform", "lut", "grade", "background",
+    EDIT_CMDS = ("set_strength", "inpaint", "source_patch", "clone_stamp", "local_masks", "light", "deform", "lut", "grade", "background",
                  "crop", "exposure", "white_balance", "hsl", "curves", "levels", "preset", "batch", "face", "enhance", "fabric")
     # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
     # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
@@ -1310,7 +1313,9 @@ class Engine:
             self.cmd_set_device({"device": requested_device})
             device_prepare_ms = (monotonic_ns() - device_start) / 1e6
         try:
+            source_stamp = LM.file_stamp(p["path"])
             d = load_rgb(p["path"], budget, device=self._effective_device())
+            if source_stamp != LM.file_stamp(p["path"]): raise ValueError("Source changed during decode")
         except Exception as e:
             tail = "（视口上那一张是相机内嵌预览，编辑没生效）" if self._preview_info else ""
             emit({"event": "error", "error": f"导入失败({type(e).__name__}): {e}{tail}"})
@@ -1345,6 +1350,8 @@ class Engine:
                 emit({"event": "engine_warn",
                       "warn": "这张图的历史也一并清了：快照里的层按旧代理档的像素坐标成立"})
             self._apply_state(st)
+        row["_local_source_stamp"] = source_stamp
+        row.update(src_w=d.src_w, src_h=d.src_h)
         self._doc_index = idx
         self._history_bind(row)         # 这一格自己的撤销/重做栈
         self._doc_path = os.path.abspath(str(p["path"]))   # 导出默认目标；只有导成功才记账
@@ -1403,6 +1410,7 @@ class Engine:
             emit({"event": "engine_warn", "warn": "蒙版尚未恢复：保留编辑参数，暂不应用该范围的磨皮，不回退为全图"})
         effective_strength, effective_channel = self._retouch_render_args()
         FABRIC.sync(self)
+        LM.sync(self)
         pipe.render(effective_strength, channel=effective_channel, **self._params)
         with self._wlock:
             seq, t_emit, slot = shm.write_frame(pipe.read_back(), presentation=self._frame_presentation(str(t0), (d.src_w,d.src_h)))
@@ -1518,7 +1526,7 @@ class Engine:
                 crop["out_full"] = list(_gsz(int(row["src_w"]), int(row["src_h"]),
                                              tuple(self._crop_rect),
                                              float(self._crop_rotation)))
-        return {"document_id": self._load_id, "fabric": FABRIC.status(self),
+        return {"document_id": self._load_id, "fabric": FABRIC.status(self), "local_masks": LM.state(self),
                 "strength": float(self._strength), "params": dict(self._params),
                 "channel": self._channel,
                 "history": self._history_report(),
@@ -1588,7 +1596,8 @@ class Engine:
 
     def _state_edits(self, st: dict) -> dict:
         """一份状态（live 抄出来的或底片条格子里存着的）里有哪些层。"""
-        return {"fabric": bool(st.get("_fabric_amount", 0.0)), "repair": len(st["_repair_ops"]), "light": len(st["_light_ops"]),
+        return {"local_masks": len((st.get("_local_masks") or LM.empty())["recipe"]["objects"]),
+                "fabric": bool(st.get("_fabric_amount", 0.0)), "repair": len(st["_repair_ops"]), "light": len(st["_light_ops"]),
                 "deform": any(abs(float(v)) > 0.0 for v in st["_deform"]["amounts"].values()),
                 "lut": st["_lut"] is not None, "lut_preset": st["_lut_preset"],
                 "grade": st["_grade"] != (0.0, 0.0, 0.0, 1.0),
@@ -2377,6 +2386,7 @@ class Engine:
         不能以缺少派生物为由把用户选择清空——那就是 CORE-001“配方完整
         恢复”漏掉的那一层。这里多跑一次分析不贵（几百毫秒），少跑一次就是“重开少一半”。
         """
+        if st.get("_grade_scope") == "objects" and LM.R.dependencies(LM.check(st.get("_local_masks"))["recipe"])[1]: return True
         if st.get("_channel") or st.get("_grade_scope") == "skin":
             return True
         if bool(st.get("_face_explicit")):
@@ -2713,27 +2723,12 @@ class Engine:
         return ev
 
     def _drop_grade_scope(self, from_scope: str, why: str) -> None:
-        """局部调色作用域挂不上当前会话 → 整层退回全图，并把这件事说出来。
-
-        宁可退回全图并明说，也不留“宿主说 skin 而引擎里拿不到掩膜”那种两边错配：
-        后者会让每一帧渲染都抛异常，而事件上看不出是哪一层的问题。
-        """
-        emit({"event": "engine_warn",
-              "warn": f"局部调色作用域 {from_scope!r} 未能重挂，已退回全图（{why}）"})
-        self._grade_scope = "all"
+        """Retain local intent when derived masks are unavailable; never broaden."""
+        emit({"event": "engine_warn", "warn": f"局部调色 {from_scope!r} 暂停，未扩大到全图（{why}）"})
+        self._grade_scope = from_scope
         if self._vram is not None:
-            try:
-                if from_scope == "brush":
-                    # 那份区域对本会话已经没有任何意义（尺寸对不上或干脆不在了）：
-                    # 留着它只会让下一次重挂再撞一遍
-                    self._grade_mask = None
-                    self._vram.clear_grade_mask()
-                # skin 挂不上不该顺手抹掉用户画的笔迹：区域与人脸掩膜是两回事
-                self._vram.set_grade_scope("all")
-            except Exception as e:      # 回滚再失败就只能说清“重新导图”，不留一个看起来已回滚的状态
-                emit({"event": "engine_warn",
-                      "warn": f"调色作用域回滚失败（{type(e).__name__}）：{e}，本会话不可信，"
-                              "请重新导入图片"})
+            self._vram.grade_scope = from_scope
+            if from_scope == "brush": self._vram._grade_mask_gpu = None
 
     def _rehang_grade_scope(self, *, replayed_for: str) -> None:
         """把存下的调色作用域/区域重挂到**当前会话**（换设备、切文档、撤销重做都走这里）。
@@ -2753,6 +2748,8 @@ class Engine:
         if scope not in GRADE_SCOPES:
             self._drop_grade_scope(scope, f"{replayed_for}：未知作用域")
             return
+        if scope == "objects":
+            LM.sync(self); return
         if scope == "skin":
             if self._precompute is None:
                 self._drop_grade_scope(scope, f"{replayed_for}：本档没有人脸掩膜可用")
@@ -3443,7 +3440,7 @@ class Engine:
                                f"!= 会话 {self._vram.w}x{self._vram.h}：不许把会话尺寸的帧写进别人的槽")
         t0 = monotonic_ns()
         # Original viewing bypasses all layers, rather than merely setting skin strength0.
-        if not original: FABRIC.sync(self)
+        if not original: FABRIC.sync(self); LM.sync(self)
         st, channel = (0.0, None) if original else self._retouch_render_args()
         if original:
             self._vram.render_original()
@@ -5331,6 +5328,12 @@ class Engine:
         from .source_patch_controller import get_controller
         return get_controller(self, lambda event: emit(event))
 
+    def _local_mask_controller(self):
+        from .local_mask_controller import controller
+        return controller(self, emit)
+
+    def cmd_local_masks(self, p): self._local_mask_controller().apply(p)
+
     def cmd_source_patch_capture(self, p): self._source_patch_controller().capture.handle(p)
 
     def cmd_source_patch(self, p): self._source_patch_controller().handle(p)
@@ -5483,184 +5486,8 @@ class Engine:
         emit(fr)
 
     def cmd_grade(self, p: dict):
-        """肤色 HSL 定向（M3-b）+ 局部调色（COLOR-004）：三个滑块、一个混入比例、一个作用域。
-
-        与 cmd_lut 的区别只有一件：这一层不拿表，拿的是公式（窗口内逐帧内核）。
-        其余铁律逐字沿用：跑靶互斥、先全量校验后一次性提交、被拒整条不留痕、
-        出帧失败回滚 + 补帧、事件只有一个组装点。它与磨皮/修容/形变一样不参与
-        任何缓存键：改它不会让滤波重算，反向也一样。
-
-        六个 action：set（增量）/amount（混入比例）/clear（关整层，**不动区域**）/
-        scope（all|skin|brush）/mask（画笔区域）/mask_clear（丢掉区域）。两条硬规矩：
-        ① 作用域要不到掩膜就整条拒，不静默退回全图（局部调色静默变成全图调色，用户从
-        画面上分不出来，而他会以为只动了皮肤）；② **落笔即生效** —— 涂了一笔而画面不
-        动是这一仓最像 bug 的体验，所以 mask 那一条在区域真非空时顺手把作用域切到
-        brush，并把最终作用域随 grade_done 报出去（UI 的选择框读它，不自己记一份）。
-        """
-        action = p.get("action", "set")
-        if action not in ("set", "clear", "amount", "scope", "mask", "mask_clear"):
-            emit({"event": "error",
-                  "error": f"未知 grade action: {action}（可用：set/clear/amount/"
-                           "scope/mask/mask_clear）"})
-            return
-        if not self._image_loaded or self._vram is None:
-            emit({"event": "error", "error": "尚未 load_image"})
-            return
-        if self.shm is None or (self.shm.w, self.shm.h) != (self._vram.w, self._vram.h):
-            emit({"event": "error", "error": f"shm {getattr(self.shm, 'w', '?')}x"
-                  f"{getattr(self.shm, 'h', '?')} != 会话 {self._vram.w}x{self._vram.h}，"
-                  "请先 load_image"})
-            return
-        if self.bench is not None and self.bench.is_alive():
-            emit({"event": "error", "error": "跑靶进行中，拒绝 grade：先 bench_stop"})
-            return
-        # 参数键集合当场卡住：拼错了名字的键会被默默当作“没给”而沿用旧值，
-        # 那是“按了滑块但画面不动、而事件看起来完全正常”的下一个版本。
-        # cmd 本身也算一个键（命令与参数同层），所以它必须在白名单里——第一版就是
-        # 忘了它，协议用例一跑就全军“grade 收到不认识的参数：cmd”。
-        extra = sorted(set(p) - {"cmd", "action", "dh", "ds", "dv", "amount",
-                                 "scope", "rle", "feather", "mode"})
-        if extra:
-            emit({"event": "error", "error": f"grade 收到不认识的参数：{', '.join(extra)}"
-                  "（可用：dh / ds / dv / amount / scope / rle / feather / mode）"})
-            return
-        t_start = monotonic_ns()
-        prev = self._grade
-        prev_preset = self._lut_preset
-        prev_scope = str(self._grade_scope)
-        prev_mask = self._grade_mask
-        if action == "set":
-            cur = dict(dh=self._grade[0], ds=self._grade[1], dv=self._grade[2])
-            given = {k: p[k] for k in ("dh", "ds", "dv") if p.get(k) is not None}
-            if not given and p.get("amount") is None:
-                emit({"event": "error", "error": "grade set 什么也没给：三个增量里至少给一个，"
-                      "或者走 clear 把整层关掉"})
-                return
-            cur.update(given)
-            try:
-                # 部分提交语义与 cmd_deform 一致：拖一个滑块不该把另外两个抹零，
-                # 但合出来的那组数必须整组校过才能写进常驻层
-                vals = check_params(cur["dh"], cur["ds"], cur["dv"],
-                                    amount=float(p.get("amount", self._grade[3])))
-            except GradeError as e:
-                emit({"event": "error", "error": f"grade 被拒，整条不生效：{e}"})
-                return
-            info = self._vram.set_grade(vals[0], vals[1], vals[2], amount=vals[3])
-            self._grade = vals
-            # 手动改了肤色，预设身份就当场失效：不然下一条 `lut amount` 会以为
-            # “这层的肤色还是预设那份”，把用户刚调的数与表的强度绑在一起盖掉
-            self._lut_preset = None
-        elif action == "amount":
-            if p.get("amount") is None:
-                emit({"event": "error", "error": "grade amount 什么也没给：需要一个 0–1 的数值"})
-                return
-            try:
-                info = self._vram.set_grade_amount(p["amount"])
-            except GradeError as e:
-                emit({"event": "error", "error": f"肤色定向强度被拒，会话原样未动：{e}"})
-                return
-            self._grade = (self._vram.grade_params[0], self._vram.grade_params[1],
-                           self._vram.grade_params[2], float(self._vram.grade_amount))
-        elif action == "scope":
-            scope = p.get("scope")
-            if not isinstance(scope, str) or not scope:
-                emit({"event": "error", "error": "grade scope 缺 scope：需要 all/skin/brush 三选一"})
-                return
-            try:
-                # 名单与判据全部交回库层（vram.GRADE_SCOPES）：命令层抄一份就是下一轮
-                # 加第四种作用域时漏改的那一处，而 skin/brush 的“掩膜在不在”只有会话知道
-                info = self._vram.set_grade_scope(scope)
-            except (ValueError, RuntimeError) as e:
-                emit({"event": "error", "error": f"调色作用域被拒，会话原样未动：{e}"})
-                return
-            self._grade_scope = str(self._vram.grade_scope)
-            self._grade_mask = self._vram.grade_mask
-        elif action == "mask":
-            import numpy as np
-
-            from .ops.inpaint import feather_np, mask_from_rle
-
-            rle = p.get("rle")
-            if not isinstance(rle, list) or not rle:
-                emit({"event": "error", "error": "grade mask 缺 rle 或 rle 为空："
-                      "应为 [[y,x,len,value255], …]，从代理帧坐标采集"})
-                return
-            mode = str(p.get("mode", "add"))
-            if mode not in ("add", "replace"):
-                emit({"event": "error", "error": f"grade mask mode={mode!r} 非法（可用：add/replace）"})
-                return
-            try:
-                feather = int(p.get("feather", 2))
-            except (TypeError, ValueError):
-                emit({"event": "error", "error": f"feather 非法：{p.get('feather')!r}（需 0–8 的整数）"})
-                return
-            if not 0 <= feather <= 8:
-                emit({"event": "error", "error": f"feather={feather} 超出范围 [0, 8]"})
-                return
-            h, w = self._vram.h, self._vram.w
-            try:
-                hard = mask_from_rle(rle, h, w)
-            except (ValueError, TypeError) as e:
-                emit({"event": "error", "error": f"rle 非法，整条拒绝：{e}"})
-                return
-            soft = feather_np(hard, feather) if feather else hard.astype(np.float32)
-            weight = np.round(np.clip(soft, 0.0, 1.0) * 255.0).astype(np.uint8)
-            if int((weight > 0).sum()) == 0:
-                emit({"event": "error", "error": "羽化后覆盖度归零：画笔太小或坐标不匹配"
-                      "（会话为代理帧尺寸，得用代理帧坐标而不是原图坐标）"})
-                return
-            try:
-                info = self._vram.set_grade_mask(weight, mode=mode)
-            except (ValueError, RuntimeError) as e:
-                emit({"event": "error", "error": f"调色区域被拒，会话原样未动：{e}"})
-                return
-            self._grade_mask = self._vram.grade_mask
-            if self._vram.grade_scope != "brush":
-                # 落笔即生效（见 docstring 那条理由）。区域刚刚校过非空，这一步按库层
-                # 的判据不可能失败；真失败了（例如以后改了 setter）就走成对回滚，
-                # 不留“区域多了一笔而作用域还是 all”那种半截状态。
-                try:
-                    info = self._vram.set_grade_scope("brush")
-                except (ValueError, RuntimeError) as e:
-                    self._grade_mask = prev_mask
-                    self._grade_scope = prev_scope
-                    self._restore_grade(prev, prev_scope, prev_mask)
-                    emit({"event": "error", "error": f"落笔后切局部作用域失败，已退回上一状态：{e}"})
-                    return
-            self._grade_scope = str(self._vram.grade_scope)
-            self._grade_mask = self._vram.grade_mask
-        elif action == "mask_clear":
-            info = self._vram.clear_grade_mask()
-            # 库层会顺手把 brush 退回 all（没区域还写着 brush 就是每帧一异常），
-            # 所以这两个字段必须从会话取而不是写死
-            self._grade_mask = self._vram.grade_mask
-            self._grade_scope = str(self._vram.grade_scope)
-        else:
-            info = self._vram.clear_grade()
-            self._grade = (0.0, 0.0, 0.0, 1.0)
-            self._lut_preset = None
-        try:
-            fr = self._write_current_frame("grade")
-        except Exception as e:
-            self._grade = prev
-            self._lut_preset = prev_preset
-            self._restore_grade(prev, prev_scope, prev_mask)
-            self._grade_scope = str(self._vram.grade_scope)
-            self._grade_mask = self._vram.grade_mask
-            try:
-                back = self._write_current_frame("grade")
-                back.pop("render_ms", None)
-                emit(back)
-            except Exception:      # 回滚后仍出不了一帧：能说清的只有“重新导图”
-                emit({"event": "engine_warn", "warn": "肤色定向回滚后仍无法出帧，本会话不可信，"
-                      "请重新导入图片"})
-            emit({"event": "error", "error": f"肤色定向渲染失败，已退回上一状态（"
-                  f"{type(e).__name__}）：{e}"})
-            return
-        render_ms = fr.pop("render_ms")
-        self._emit_grade_state(action, info, render_ms=render_ms,
-                               total_ms=round((monotonic_ns() - t_start) / 1e6, 2))
-        emit(fr)
+        from .grade_controller import handle
+        return handle(self, p, emit)
 
     def _pipe_copyin(self, rgba, strength: float, radius: int = DEFAULT_RADIUS,
                      eps: float = DEFAULT_EPS, detail_gain: float = DEFAULT_DETAIL_GAIN,
@@ -5812,7 +5639,7 @@ class Engine:
                     params=dict(st.get("_params") or self._params),
                     grade=tuple(st.get("_grade", (0.0, 0.0, 0.0, 1.0))),
                     grade_scope=str(st.get("_grade_scope") or "all"),
-                    grade_mask=st.get("_grade_mask"),
+                    grade_mask=st.get("_grade_mask"), local_masks=LM.check(st.get("_local_masks")), local_mask_owner=LM.owner_from_state(st),
                     exposure=tuple(st.get("_exposure", (0.0,) * 7)),
                     exposure_ref_k=st.get("_exposure_ref_k"),
                     wb_options=WB.normalize_state(st)["_wb_options"],
@@ -5870,6 +5697,9 @@ class Engine:
         The copied snapshot never mutates the current document or batch recipe.
         """
         from .export import ExportError
+        if snap.get("grade_scope") == "objects":
+            if not for_document: raise ExportError("Source-bound mask objects cannot transfer to another photo")
+            LM.verify_source(LM.check(snap.get("local_masks")), path)
         channel_active = bool(snap.get("channel")) and float(snap.get("strength", 0)) != 0
         grade_active = (str(snap.get("grade_scope", "all")) == "skin"
                         and float(tuple(snap.get("grade", (0, 0, 0, 1)))[3]) != 0
@@ -6077,7 +5907,7 @@ class Engine:
         # 参数在命令线程里全部拍定：worker 里不再读 self._*，否则中途改一下滑块，
         # 这一批里前几张与后几张用的就不是同一套设置（而事件里只写了一份）
         snap = dict(strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
-                    grade_scope=str(self._grade_scope), grade_mask=self._grade_mask,
+                    grade_scope=str(self._grade_scope), grade_mask=self._grade_mask, local_masks=LM.check(self._local_masks), local_mask_owner=LM.current_owner(self),
                     exposure=tuple(self._exposure), exposure_ref_k=self._exposure_ref_k,
                     wb_options=WB.check_options(self._wb_options),
                     hsl=tuple(self._hsl),
@@ -6488,6 +6318,7 @@ class Engine:
             try:
                 image_started = monotonic_ns()
                 snap_i, for_doc_i = snap_by_path.get(path, (snap, path == doc))
+                mask_source_stamp = LM.file_stamp(path) if snap_i.get("grade_scope") == "objects" else None
                 stage = "semantic_analysis"
                 snap_i, for_doc_i = self._prepare_export_snapshot(path, snap_i, for_doc_i)
                 analysis_ms = round((monotonic_ns() - image_started) / 1e6, 2)
@@ -6503,6 +6334,7 @@ class Engine:
                         stage = "decode16"
                         decode_started = monotonic_ns()
                         d = load_full(path, device=snap_i["device"], want_bits=16)
+                        LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w))
                         decode_ms = (monotonic_ns() - decode_started) / 1e6
                         spec, skipped = self._export_snapshot(snap_i, d.h, d.w, for_document=for_doc_i)
                         stage = "edit16"
@@ -6563,6 +6395,7 @@ class Engine:
                           "ok": True})
                     continue
                 d = load_full(path, device=self.device)
+                LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w))
                 stage = "render"
                 # P1-1：这一张用它自己那份配方（当前档=现拍 snap；其它档=它存的 state；
                 # 裸文件=共享参数且 for_document=False）。批级 export_done 仍读 snap。
@@ -6845,7 +6678,7 @@ class Engine:
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
     HANDLED = ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "white_balance_capture", "bench_start", "bench_stop", "set_device", "shutdown",
-               "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "light",
+               "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "light",
                "deform", "lut", "grade", "export", "exposure", "white_balance", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
                # 挑图（LNX-PICK-001）。它不在 EDIT_CMDS 里，所以既不进撤销栈也不打脏标记：
@@ -6885,6 +6718,8 @@ class Engine:
                 return
             if name in ("source_patch", "clone_stamp") and not self._source_patch_controller().prepare(msg):
                 return  # Receipt/cache replay and rejected proofs never advance the fence.
+            if name == "local_masks" and not self._local_mask_controller().prepare(msg):
+                return
             if name == "white_balance" and not self._white_balance_controller().prepare(msg):
                 return  # Pick proof and scalar policy are checked before mutation fencing.
             from .document_versions import fences_current_document
@@ -6921,7 +6756,7 @@ class Engine:
                 try:
                     fn(msg)
                 finally:
-                    self._history_record(group, before, coalesce=not (name in ("white_balance", "source_patch", "clone_stamp") or (name == "preset" and msg.get("action") == "apply")))
+                    self._history_record(group, before, coalesce=not (name in ("white_balance", "source_patch", "clone_stamp", "local_masks") or (name == "preset" and msg.get("action") == "apply")))
             else:
                 fn(msg)
         except Exception as e:  # 协议层不许因单条消息崩溃
@@ -6929,6 +6764,8 @@ class Engine:
             emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
         finally:
             try:
+                if name == "local_masks" and isinstance(msg, dict):
+                    self._local_mask_controller().finish(msg, dispatch_error)
                 if name == "white_balance" and isinstance(msg, dict):
                     self._white_balance_controller().finish(msg, dispatch_error)
                 if name == "preset" and isinstance(msg, dict):

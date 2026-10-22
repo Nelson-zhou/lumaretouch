@@ -14,6 +14,7 @@ mkdir -p "$stage"
 # Build into staging, not the source tree, so no host-specific binary is committed.
 bash "$here/build-curve-compiler.sh" "$stage/lumaretouch_engine/bin/curve-compiler"
 bash "$here/build-color-scopes.sh" "$stage/lumaretouch_engine/bin/color-scopes"
+bash "$here/build-local-masks.sh" "$stage/lumaretouch_engine/bin/local-masks"
 
 # 运行时引导那两件（M5-c）也随包走：torch 不进 .deb（体积与许可），但
 # “按显卡装对应清单”这件事得有可执行的东西留在装机件里，而且它得在**没有仓库

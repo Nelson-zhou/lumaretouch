@@ -81,7 +81,7 @@ class LightOp:
 # 肤色定向层的作用域名单（COLOR-004 局部调色）。放在模块层而不是类里：命令层刚收到
 # 一条 `grade scope=…` 时还没有可活的会话，“这个作用域存不存在”必须先能回答；而事件
 # 载荷与 doc_state 报的都是同一份名单。写两份的下场本仓已经付过很多次学费。
-GRADE_SCOPES = ("all", "skin", "brush")
+GRADE_SCOPES = ("all", "skin", "brush", "objects")
 
 
 class PreviewPipeline:
@@ -191,6 +191,8 @@ class PreviewPipeline:
         self.grade_scope: str = "all"                   # all | skin | brush
         self.grade_mask: "np.ndarray | None" = None     # (H,W) uint8，代理帧坐标的画笔覆盖度
         self._grade_mask_gpu = None                     # (1,1,H,W) float，brush 时才常驻
+        self._local_mask_gpu = None
+        self.local_mask_suspended = None
         self.last_grade_ms: float = 0.0
         # PORTRAIT-009：眼牙局部增强（眼白 / 虹膜 / 牙齿，三个子功能独立启停）。
         # 它持有的是**权重场**（不是参数）：几何 ∩ 内容门在挂层时算一次，每帧只做逐点乘加。
@@ -542,8 +544,7 @@ class PreviewPipeline:
         # 调色作用域里 skin 是唯一靠掩膜活着的那个：掩膜一走还留着 scope=skin，
         # 下一帧渲染就是一条取不到权重的异常（与下面单位场“无源之水”同一条理由）。
         # brush 靠的是自己那份区域，不受 clear_face 影响。
-        if self.grade_scope == "skin":
-            self.grade_scope = "all"
+        # Missing semantic analysis suspends grade; it never widens to all.
         # 单位场是从关键点解出来的，关键点一走它们就成了无源之水：继续用等于
         # 拿上一张脸的形状去瘦这一张脸
         if self.deform_units:
@@ -1218,6 +1219,8 @@ class PreviewPipeline:
         """
         if self.grade_scope == "all":
             return None
+        if self.grade_scope == "objects":
+            return self._local_mask_gpu
         if self.grade_scope == "skin":
             if self.masks_gpu is None:
                 raise RuntimeError("skin 作用域要人脸掩膜，而本会话还没 precompute")
@@ -1229,6 +1232,14 @@ class PreviewPipeline:
         if self._grade_mask_gpu is None:
             raise RuntimeError("brush 作用域要画笔画出的区域，而当前一份也没有")
         return self._grade_mask_gpu
+
+    def set_local_mask(self, weight, *, reason=None):
+        arr = np.asarray(weight)
+        if arr.shape != (self.h, self.w) or arr.dtype != np.uint8:
+            raise ValueError("Composed mask must match the source grid")
+        self._local_mask_gpu = self._np_to_grade_weight(arr)
+        self.local_mask_suspended = reason
+        self.grade_scope = "objects"
 
     def set_grade_scope(self, scope: str) -> dict:
         """换作用域。掩膜拿不到就**整条拒**，不静默退回全图。
@@ -1245,6 +1256,8 @@ class PreviewPipeline:
                              f"（可用：{', '.join(self.mask_names) or '无'}）")
         if scope == "brush" and (self.grade_mask is None or int((self.grade_mask > 0).sum()) == 0):
             raise ValueError("brush 作用域需要先画出区域：现在一笔也没有")
+        if scope == "objects" and self._local_mask_gpu is None:
+            raise ValueError("Create a composed mask before binding grade")
         self.grade_scope = scope
         # brush 的权重只在真要用的时候才常驻；切回 all/skin 就把那份显存放掉
         self._grade_mask_gpu = (self._np_to_grade_weight(self.grade_mask)
@@ -1555,6 +1568,10 @@ class PreviewPipeline:
         self.last_grade_ms = 0.0
         if not self.has_grade():
             return t
+        if (self.grade_scope == "objects" and self._local_mask_gpu is None
+                or self.grade_scope == "skin" and (self.masks_gpu is None or "skin" not in self.mask_names)
+                or self.grade_scope == "brush" and self._grade_mask_gpu is None):
+            return t  # Retain intent, suspend missing masks, never apply globally.
         t0 = time.perf_counter()
         dh, ds, dv = self.grade_params
         out = grade_t(t, dh, ds, dv, amount=float(self.grade_amount))
@@ -1576,9 +1593,8 @@ class PreviewPipeline:
     def grade_resident_bytes(self) -> int:
         """本层账单：以前恒为 0（它不持有张量），局部调色起，brush 作用域会常驻一份
         掩膜权重。报实数而不是报 0：“查过、确实没占显存”才是那句话，“不报”等于藏账。"""
-        if self._grade_mask_gpu is None:
-            return 0
-        return int(self._grade_mask_gpu.numel() * self._grade_mask_gpu.element_size())
+        return sum(int(t.numel() * t.element_size()) for t in
+                   (self._grade_mask_gpu, self._local_mask_gpu) if t is not None)
 
     # ---- PORTRAIT-009：眼牙局部增强 ---------------------------------------
     def has_enhance(self) -> bool:

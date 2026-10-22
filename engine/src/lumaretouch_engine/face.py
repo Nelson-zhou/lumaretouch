@@ -21,6 +21,7 @@ MediaPipe 是**可选运行时插件**（决策 B）：不进 deb 依赖、不�
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import os
 import time
 import weakref
@@ -108,6 +109,9 @@ class FacePrecompute:
     # 话的所指，而 face_box 认人已付过一次这个代价（见 server._preserve_face_choice）。
     manual: tuple[int, ...] = ()
     notes: list[str] = field(default_factory=list)
+    # Actual bytes supplied to the segmentation graph, not a manifest claim.
+    # None for synthetic/template and older in-memory producers.
+    semantic_model_sha256: str | None = None
 
     def faces(self) -> list[dict]:
         """可选人脸名单（归一化盒 + 面积占比）。这是“能选哪几个人”的唯一出处：
@@ -178,6 +182,7 @@ class FacePrecompute:
             "mask_nonzero_pixels": {n: int(np.count_nonzero(self.masks[n])) for n in names},
             "mask_shape": [int(arr.shape[0]), int(arr.shape[1]), int(arr.shape[2])],
             "mask_bytes_f32": int(arr.nbytes),
+            "semantic_model_sha256": self.semantic_model_sha256,
             "detect_ms": round(self.t_detect_ms, 2),
             "masks_ms": round(self.t_masks_ms, 2),
             "face_box": list(self.face_box) if self.face_box else None,
@@ -423,14 +428,24 @@ class MediaPipeFace:
             # Six semantic confidence masks preserve soft boundaries. The old two-class
             # person model is not an acceptable skin-segmentation fallback.
             try:
+                # Hash and load the same bounded immutable buffer. Hashing a
+                # path then letting MediaPipe reopen it permits a replacement
+                # race; a manifest digest also misidentifies explicit overrides.
+                # Official BaseOptions supports model_asset_buffer (bytes).
+                with open(sg_path, 'rb') as stream:
+                    model_bytes = stream.read(64 * 1024 * 1024 + 1)
+                if not model_bytes or len(model_bytes) > 64 * 1024 * 1024:
+                    raise MissingBackend('Semantic model must be nonempty and at most 64 MiB')
+                model_sha256 = hashlib.sha256(model_bytes).hexdigest()
                 segmenter = mp_vision.ImageSegmenter.create_from_options(
                     mp_vision.ImageSegmenterOptions(
-                        base_options=mp_python.BaseOptions(model_asset_path=sg_path),
+                        base_options=mp_python.BaseOptions(model_asset_buffer=model_bytes),
                         output_confidence_masks=True, output_category_mask=False))
             except BaseException:
                 landmarker.close()
                 raise
             self._graphs = (landmarker, segmenter)
+            self.semantic_model_sha256 = model_sha256
             # No reference to self in the callback arguments: normal collection
             # closes promptly, and live objects close before module teardown.
             self._finalizer = weakref.finalize(self, _close_mediapipe_graphs, self._graphs)
@@ -471,19 +486,18 @@ class MediaPipeFace:
         if not cm:
             raise RuntimeError("MediaPipe 分割没返回置信度掩膜（旧代码读的是 seg.mask，这个属性在 "
                                "ImageSegmenter 上不存在，静默拿到空值会被当成“检不到”而跳层）")
-        from .semantic_masks import skin_from_multiclass, skin_edit_weight, clothes_from_multiclass
+        from .semantic_sources import probability_sources, edit_sources
         confidence = []
         for channel in cm:
             value = channel.numpy_view
             confidence.append(value() if callable(value) else value)
-        clothes = clothes_from_multiclass(confidence)
-        if clothes.shape != (h, w):
-            clothes = _resize_float(clothes, h, w)
-        clothes = skin_edit_weight(clothes)
-        mask = skin_from_multiclass(confidence)
-        if mask.shape != (h, w):
-            mask = _resize_float(mask, h, w)
-        mask = skin_edit_weight(mask)
+        # Keep genuine whole-photo model categories for retained local-mask
+        # objects. As before, skin sums classes 2+3 before resizing; clothes is
+        # class 4. Apply the same conservative margin only after resizing.
+        probabilities = probability_sources(confidence)
+        masks = edit_sources({name: (_resize_float(value, h, w)
+                                     if value.shape != (h, w) else value)
+                              for name, value in probabilities.items()})
         t_masks = _now_ms(t1)
 
         multi_face_note = []      # 超范围这件事要写在 notes 里，但只在真的发生时写
@@ -498,8 +512,10 @@ class MediaPipeFace:
             landmarks=pts,
             all_landmarks=all_pts,
             face_index=0,
-            # Only body-skin + face-skin, never the whole person probability.
-            masks={"skin": mask, "clothes": clothes},
+            # These are all-photo semantic categories, never a selected face or
+            # a general object/person instance segmentation.
+            masks=masks,
+            semantic_model_sha256=getattr(self, 'semantic_model_sha256', None),
             backend=self.name,
             t_detect_ms=t_detect,
             t_masks_ms=t_masks,
@@ -508,6 +524,7 @@ class MediaPipeFace:
             notes=["mediapipe 后端：478 点为真实检测输出"] + multi_face_note + [
                    "权重来源 " + ", ".join(f"{n}={os.path.dirname(p)}" for n, p in sorted(self.model_paths.items())),
                    "skin 掩膜来自六类语义模型的身体皮肤+面部皮肤概率；头发、衣服、背景不计入皮肤类别",
+                   "类别蒙版覆盖全图，不随所选人脸变化；人像类别合并不包含其他类，不能代替通用主体、宠物或单人实例蒙版",
                    "自动编辑采用连续置信度余量 max(2*p_skin-1,0)，不确定区域不自动处理；人工修正能力仍须完善",
                    "模型输出非像素级真值；弱光、逆光、遮挡与边缘仍需检查和手工修正"],
         )

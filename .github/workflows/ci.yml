@@ -33,7 +33,7 @@ jobs:
           echo "LRT_LIBRAW_PATH=$prefix/lib/libraw_r.so" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
       - name: Build headless Rust curve compiler
-        run: bash packaging/build-curve-compiler.sh && bash packaging/build-color-scopes.sh
+        run: bash packaging/build-curve-compiler.sh && bash packaging/build-color-scopes.sh && bash packaging/build-local-masks.sh
       - name: Build actual native shared-frame reader harness
         run: |
           cargo build --manifest-path tools/shm-interop/Cargo.toml --locked

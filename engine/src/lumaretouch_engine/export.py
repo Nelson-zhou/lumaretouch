@@ -134,6 +134,8 @@ class ExportSpec:
     # 而“屏上只动了皮肤、文件里全图都动了”是比“没做局部调色”难查得多的一件事。
     grade_scope: str = "all"
     grade_mask: np.ndarray | None = None
+    local_masks: dict | None = None
+    local_mask_semantics: dict = field(default_factory=dict)
     # M6/P1-2 换底：与预览同一份 matte 与背景色（导出尺寸、(H,W) uint8 覆盖度、
     # bg_ref 是 [0,1] 三分量）。换底只活在预览而不进导出就是“屏幕换了、盘上没换”——
     # 前景仍在原位、只是背后的色没变，是最难从缩略图看出来的一类不一致。
@@ -224,13 +226,17 @@ class ExportSpec:
         # 会报一个与实际像素不符的 scope（与 birefnet/lama 不许静默降级同一条规矩）。
         if (self.grade_scope != "all" and any(float(v) != 0.0 for v in self.grade[:3])
                 and float(self.grade[3]) != 0.0):
-            if self.grade_mask is None:
+            if self.grade_scope == "objects" and self.local_masks is not None and self.grade_mask is None:
+                from .local_mask_state import check
+                check(self.local_masks)
+                gm = None  # Source-colour predicates resolve only after full decode.
+            elif self.grade_mask is None:
                 raise ExportError(f"局部调色（scope={self.grade_scope!r}）导出需要那一片区域，"
                                   "而本份没带上：宁可整层不带调色，也不会把它当成全图调色写出去")
-            gm = np.asarray(self.grade_mask)
-            if gm.ndim != 2:
+            gm = None if self.grade_mask is None else np.asarray(self.grade_mask)
+            if gm is not None and gm.ndim != 2:
                 raise ExportError(f"调色区域必须是 (H,W)，得到 {gm.shape}")
-            if int((gm > 0).sum()) == 0:
+            if gm is not None and self.grade_scope != "objects" and int((gm > 0).sum()) == 0:
                 raise ExportError("调色区域一个像素也没盖到：这一层在导出里不会有任何作用，"
                                   "请清掉局部作用域或重新画一笔")
         if self.cube is not None:
@@ -470,6 +476,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     divisor = 65535.0 if bits == 16 else 255.0
     if src_u8.ndim != 3 or src_u8.shape[2] != 3 or src_u8.dtype != dtype:
         raise ExportError(f"导出要 (H,W,3) {np.dtype(dtype).name}，得到 {src_u8.shape} {src_u8.dtype}")
+    from .local_mask_state import export_prepare
+    export_prepare(spec, src_u8)
     spec.check()
     # 纯校验全部排在 torch 守卫之前：没装 torch 的环境也要拿到同一句参数拒绝，
     # 而不是先被"导出需要 torch"抢掉——那样 CI 的 CPU job 根本测不到这些分支。

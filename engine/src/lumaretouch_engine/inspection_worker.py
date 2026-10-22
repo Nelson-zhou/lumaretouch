@@ -90,6 +90,9 @@ def render(directory):
         raise ValueError('Full decode dimensions differ from admitted source')
     if source_identity(path) != before:
         raise ValueError('Inspection source changed during decode')
+    if snap.get("grade_scope") == "objects":
+        from .local_mask_state import check, verify_source
+        verify_source(check(snap.get("local_masks")), path, (decoded.h, decoded.w))
     spec, skipped = build_export_spec(snap, decoded.h, decoded.w, for_document=True)
     pixels = render_inspection_roi(decoded, spec, request['roi'],
         max_source_pixels=request['max_source_pixels'], max_display_pixels=request['max_display_pixels'],

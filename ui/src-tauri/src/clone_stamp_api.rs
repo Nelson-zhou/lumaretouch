@@ -40,6 +40,7 @@ pub(crate) fn clone_stamp(state: State<'_, Arc<AppState>>, request_id: String,
     let handle = state.engine.lock().map_err(|_| "engine lock poisoned")?.clone().ok_or("engine is not running")?;
     let proof = state.source_patch_capture.lock().map_err(|_| "repair capture lock poisoned")?
         .redeem(handle.epoch(), &capture_id, &ticket)?;
+    if proof.descriptor["domain"] != "repair-input" { return Err("clone stamp requires repair-input capture".into()); }
     let command = json!({"cmd":"clone_stamp","kind":"clone_stamp","action":"apply","request_id":request_id,
         "host_epoch":hex(proof.identity.epoch),"document_id":proof.identity.document.to_string(),
         "capture_id":capture_id,"ticket":ticket,"generation":proof.identity.generation.to_string(),

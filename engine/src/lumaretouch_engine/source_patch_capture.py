@@ -119,7 +119,7 @@ class CaptureController:
                'ticket':p.get('ticket'),'success':False}
         try:
             allowed={'cmd','action','capture_id','ticket','document_id'}
-            allowed|={'epoch'} if action=='arm' else {'generation'}
+            allowed|={'epoch', 'purpose'} if action=='arm' else {'generation'}
             if set(p)-allowed or action not in ('arm','presented','cancel'):
                 raise ValueError('Invalid repair capture command')
             if not _hex(p.get('capture_id')) or not _uint(p.get('ticket')) or not _uint(p.get('document_id')):
@@ -133,6 +133,8 @@ class CaptureController:
             else:
                 self.invalidate()
                 if not _hex(p.get('epoch')):raise ValueError('Invalid repair capture epoch')
+                purpose=p.get('purpose', 'repair')
+                if purpose not in ('repair', 'local-masks'): raise ValueError('Invalid capture purpose')
                 context,spec=self._context()
                 if context['document_id']!=p['document_id']:raise ValueError('Repair document changed')
                 if self.generation==MAX_U64:raise ValueError('Repair generation exhausted; restart engine')
@@ -144,7 +146,7 @@ class CaptureController:
                 if required>max(0,available_estimate()-256*1024**2)*65//100:
                     raise ValueError('Insufficient host memory for repair input capture')
                 import torch
-                stage=pipeline.base()
+                stage=pipeline.src_f32 if purpose == 'local-masks' else pipeline.base()
                 if stage.dtype!=torch.float32 or tuple(stage.shape)!=(1,3,spec.height,spec.width) or not torch.isfinite(stage).all():
                     raise ValueError('Invalid repair input pixels')
                 projected=spec.apply(stage)
@@ -153,10 +155,18 @@ class CaptureController:
                 rgb=quantize_t(projected[0].permute(1,2,0)).contiguous().cpu().numpy()
                 rgba=np.empty((spec.height,spec.width,4),np.uint8)
                 rgba[...,:3]=rgb;rgba[...,3]=255
-                d={**context,'version':1,'domain':'repair-input','quality':'proxy-float-input',
+                mask_reason = None
+                if purpose == 'local-masks':
+                    from .local_mask_state import diagnostic, sample_valid_rows
+                    mask, mask_reason = diagnostic(self.engine)
+                    field = torch.as_tensor(mask.astype(np.float32)/255., device=pipeline.device)[None,None]
+                    rgba[...,3] = quantize_t(spec.apply(field)[0,0]).contiguous().cpu().numpy()
+
+                d={**context,'version':1,'domain':'source-input' if purpose == 'local-masks' else 'repair-input','quality':'proxy-float-input',
                    'profile':'working-srgb','epoch':p['epoch'],'shm_instance':uuid.uuid4().hex,
                    'seq':'1','generation':str(self.generation),'capture_id':p['capture_id'],'ticket':p['ticket'],
                    'width':spec.width,'height':spec.height,'projection':spec.descriptor()}
+                if purpose == 'local-masks': d.update(mask_overlay=True, mask_suspended=mask_reason, sample_valid_rows=sample_valid_rows(valid))
                 current,current_spec=self._context()
                 if current!=context or current_spec!=spec:raise ValueError('Repair input changed while capturing')
                 root=os.environ.get('LRT_INSPECTION_ROOT')
@@ -173,6 +183,7 @@ class CaptureController:
     def prepare_apply(self,p):
         c=self._matching(p,recipe=True)
         if not c['eligible']:raise ValueError('Repair input was not presented')
+        if c['descriptor']['domain'] != 'repair-input': raise ValueError('Repair requires its own input capture')
         if p.get('kind') == 'clone_stamp':
             from .clone_stamp_geometry import inverse_stroke
             params, weight = inverse_stroke(c['spec'], p.get('stroke'), c['valid'], c['descriptor']['full_source'])

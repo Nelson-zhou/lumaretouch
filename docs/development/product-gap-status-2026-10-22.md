@@ -1,6 +1,6 @@
 # Product coverage checkpoint — 2026-10-22
 
-Published code checkpoint:ddc6a0790705af31f0733caa1aee48265d1b617b. This updates the
+Published code checkpoint:d5b1f281d901ab49f5101f1b10df7f7cdcc920a0. This updates the
 older sampled audits, not a claim to have independently accepted every handbook
 requirement. The original product handbook and AI development package remain the
 scope; deferred real-device validation does not remove any feature.
@@ -34,8 +34,10 @@ must be read with subsequent corrections, not copied as today's missing-feature 
    matching and group consistency, lens/perspective/calibration requirements.
 2. Detailed portrait families: independent body, hair, makeup, clothing, hand/foot
    and many blemish/reshaping controls. One related slider does not close a family.
-3. Local editing: persisted composable mask-object stack, selectors/ranges/gradients,
-   effect recovery and full liquify protection. Source-sampled patch and genuine
+3. Local editing: remaining AI selection, mask batch/preset/display subcontrols,
+   effect recovery and full liquify protection. Retained composable brush/linear/
+   radial/color/luminance objects and real portrait-category sources are now wired
+   to the existing grade consumer; this does not make LUT or every adjustment local. Source-sampled patch and genuine
    clone-stamp brush are connected in code (source-patch-tool.md / clone-stamp-tool.md),
    not yet accepted.
 4. Multi-person/cross-image workflows: grouping, parameter-level inheritance and
@@ -89,3 +91,8 @@ Additional development-first code packages (not acceptance claims):
   connects state/history/project/preview/full export. It is not garment synthesis,
   coarse-fold removal or upper/lower garment separation. Cross-image processing
   without that image's own clothing mask is explicitly rejected.
+
+The composable mask package uses project v4 and retains v1–v3 migrations. Its
+source/model identity and Rust worker implementation are unverified integrations,
+not evidence of runtime or image-quality acceptance. See composable-local-mask-scope.md
+and semantic-mask-source-scope.md for exact covered and unimplemented controls.

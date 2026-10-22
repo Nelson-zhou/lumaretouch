@@ -14,7 +14,7 @@ pub(crate) struct Proof {
 enum Phase { Arming, Ready, Copying, Copied, Eligible, Redeemed }
 struct Record {
     capture: String, document: String, ticket: u64, revision: usize,
-    phase: Phase, proof: Option<Proof>,
+    phase: Phase, proof: Option<Proof>, domain: &'static str,
 }
 #[derive(Default)]
 pub(crate) struct SourcePatchCaptureHost {
@@ -28,6 +28,17 @@ fn revision(value: &str) -> Result<u64, String> {
 }
 fn dimension_pair(value: &Value) -> bool {
     value.as_array().is_some_and(|a| a.len() == 2 && a.iter().all(|v| v.as_u64().is_some_and(|n| n > 0 && n <= u32::MAX as u64)))
+}
+fn sample_rows(value: &Value, identity: &Identity) -> bool {
+    value.is_null() || (identity.height <= 8192 && value.as_array().is_some_and(|rows| {
+        rows.len() == identity.height as usize && rows.iter().all(|row| row.as_array().is_some_and(|pair| {
+            if pair.len() != 2 { return false; }
+            match (pair[0].as_u64(), pair[1].as_u64()) {
+                (Some(start), Some(end)) => start <= end && end <= identity.width as u64,
+                _ => false,
+            }
+        }))
+    }))
 }
 fn projection(value: &Value, identity: &Identity) -> bool {
     // Bounded, explicit metadata only. The engine retains the authoritative
@@ -56,12 +67,16 @@ impl SourcePatchCaptureHost {
         if self.epoch == epoch { self.invalidate(); self.epoch = [0;16]; self.supported = false; }
     }
     pub fn begin(&mut self, epoch: [u8;16], capture: String, document: String, host_revision: usize) -> Result<String, String> {
+        self.begin_for_domain(epoch, capture, document, host_revision, "repair-input")
+    }
+    pub fn begin_for_domain(&mut self, epoch: [u8;16], capture: String, document: String, host_revision: usize, domain: &'static str) -> Result<String, String> {
+        if !["repair-input", "source-input"].contains(&domain) { return Err("invalid input capture domain".into()); }
         id16(&capture)?; token(&document)?;
         if epoch == [0;16] || self.epoch != epoch || !self.supported { return Err("repair-input capture is unavailable".into()); }
         self.counter = self.counter.checked_add(1).ok_or("source patch capture ticket exhausted")?;
         let ticket = self.counter;
         self.invalidate();
-        self.record = Some(Record { capture, document, ticket, revision: host_revision, phase: Phase::Arming, proof: None });
+        self.record = Some(Record { capture, document, ticket, revision: host_revision, phase: Phase::Arming, proof: None, domain });
         Ok(ticket.to_string())
     }
     pub fn armed_event(&mut self, epoch: [u8;16], event: &Value, host_revision: usize) {
@@ -72,10 +87,14 @@ impl SourcePatchCaptureHost {
             if event["success"] != true { return Err(event["error"].as_str().unwrap_or("repair-input capture failed").chars().take(2000).collect()); }
             if host_revision != record.revision { return Err("document changed while arming repair input; retry".into()); }
             let d = &event["descriptor"];
-            if d["version"] != 1 || d["domain"] != "repair-input" || d["quality"] != "proxy-float-input"
+            if d["version"] != 1 || d["domain"] != record.domain || d["quality"] != "proxy-float-input"
                 || d["profile"] != "working-srgb" || d["document_id"] != record.document
                 || d["epoch"] != hex(epoch) || d["seq"] != "1" || !dimension_pair(&d["full_source"]) {
                 return Err("repair-input descriptor contract mismatch".into());
+            }
+            if record.domain == "source-input" && (d["mask_overlay"] != true
+                || !(d["mask_suspended"].is_null() || d["mask_suspended"].as_str().is_some_and(|s| s.len() <= 2000))) {
+                return Err("source-input coverage overlay contract mismatch".into());
             }
             // Older capture consumers expect these aliases in the descriptor.
             // If supplied, they must agree; the registered record is authoritative.
@@ -91,6 +110,9 @@ impl SourcePatchCaptureHost {
                 capture: id16(&record.capture)?, seq: 1, generation: scalar("generation")?, document: token(&record.document)?, ticket: record.ticket,
                 width: dimension("width")?, height: dimension("height")?, presentation_width: dimension("presentation_width")?, presentation_height: dimension("presentation_height")? };
             identity.header().map_err(str::to_owned)?;
+            if record.domain == "source-input" && !sample_rows(&d["sample_valid_rows"], &identity) {
+                return Err("source-input sampling validity is invalid".into());
+            }
             if !projection(&d["projection"], &identity) { return Err("repair-input projection descriptor is invalid".into()); }
             let recipe_document_id = d["recipe_document_id"].as_str().ok_or("missing recipe document identity")?;
             id16(recipe_document_id)?;
@@ -101,6 +123,10 @@ impl SourcePatchCaptureHost {
             for key in ["version","domain","quality","profile","epoch","shm_instance","seq","generation","document_id",
                 "recipe_document_id","recipe_revision","width","height","presentation_width","presentation_height","projection","full_source"] {
                 descriptor[key] = d[key].clone();
+            }
+            if record.domain == "source-input" {
+                descriptor["mask_overlay"] = json!(true); descriptor["mask_suspended"] = d["mask_suspended"].clone();
+                descriptor["sample_valid_rows"] = d["sample_valid_rows"].clone();
             }
             descriptor["capture_id"] = json!(record.capture); descriptor["ticket"] = json!(record.ticket.to_string());
             Ok(Proof { identity, recipe_document_id: recipe_document_id.to_owned(), recipe_revision: recipe_revision.to_owned(), descriptor })
@@ -186,6 +212,18 @@ mod tests {
         "projection":{"version":"crop-rotate-fixed-proxy-v1","source_proxy":[2,2],"rect":[0,0,1,1],"integer_crop":[0,0,2,2],
             "rotation":0,"quarter_turn":0,"rotated":[2,2],"target":[2,2],"resize":"bilinear","align_corners":false,"antialias":false}}}) }
     fn arm(h: &mut SourcePatchCaptureHost) -> String { let t=h.begin([1;16],CAP.into(),"123".into(),4).unwrap(); h.armed_event([1;16],&event(&t),4); t }
+    #[test] fn local_mask_purpose_requires_source_domain_and_true_coverage() {
+        let mut h=host(); let t=h.begin_for_domain([1;16],CAP.into(),"123".into(),4,"source-input").unwrap();
+        h.armed_event([1;16],&event(&t),4);
+        assert_eq!(h.status_for(CAP,&t)["phase"],"error");
+        let t=h.begin_for_domain([1;16],CAP.into(),"123".into(),4,"source-input").unwrap();
+        let mut e=event(&t); e["descriptor"]["domain"]=json!("source-input");
+        h.armed_event([1;16],&e,4); assert_eq!(h.status_for(CAP,&t)["phase"],"error");
+        let t=h.begin_for_domain([1;16],CAP.into(),"123".into(),4,"source-input").unwrap();
+        let mut e=event(&t); e["descriptor"]["domain"]=json!("source-input"); e["descriptor"]["mask_overlay"]=json!(true);
+        h.armed_event([1;16],&e,4); assert_eq!(h.status_for(CAP,&t)["phase"],"ready");
+        assert_eq!(h.status_for(CAP,&t)["descriptor"]["mask_overlay"],true);
+    }
     #[test] fn copying_presented_and_redemption_are_ordered_and_one_shot() {
         let mut h=host(); let t=arm(&mut h);
         assert!(h.presented(CAP,&t,"123").is_err()); assert!(h.redeem([1;16],CAP,&t).is_err());

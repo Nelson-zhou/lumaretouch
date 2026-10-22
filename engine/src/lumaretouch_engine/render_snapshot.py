@@ -27,7 +27,7 @@ class OwnedSnapshot:
 
 
 def _owned_with_array_copier(value: dict, *, max_asset_bytes: int,
-                      max_nodes: int = 10000, max_string_bytes: int = 1048576,
+                      max_nodes: int = 65536, max_string_bytes: int = 1048576,
                       array_copier) -> OwnedSnapshot:
     """Validate/count before ANY array copy, then privately clone known CPU data.
 
@@ -137,7 +137,7 @@ def _owned_with_array_copier(value: dict, *, max_asset_bytes: int,
 
 
 def own_render_inputs(value: dict, *, max_asset_bytes: int,
-                      max_nodes: int = 10000, max_string_bytes: int = 1048576) -> OwnedSnapshot:
+                      max_nodes: int = 65536, max_string_bytes: int = 1048576) -> OwnedSnapshot:
     """Synchronous reference copy; caller excludes editing for the entire call."""
     return _owned_with_array_copier(value, max_asset_bytes=max_asset_bytes,
         max_nodes=max_nodes, max_string_bytes=max_string_bytes,
@@ -154,7 +154,7 @@ class SnapshotTransaction:
     This is not a concurrent-reader lock or a complete process memory budget.
     """
     def __init__(self, value: dict, *, max_asset_bytes: int,
-                 max_nodes: int = 10000, max_string_bytes: int = 1048576):
+                 max_nodes: int = 65536, max_string_bytes: int = 1048576):
         self._copies = []
         self._index = 0
         self._offset = 0

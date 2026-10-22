@@ -70,8 +70,10 @@ pub(crate) fn enqueue(state: &AppState, handle: &EngineHandle, mut command: Valu
 
 #[tauri::command]
 pub(crate) fn source_patch_capture(state: State<'_, Arc<AppState>>, action: String,
-    capture_id: String, ticket: Option<String>, document_id: String) -> Result<Value, String> {
+    capture_id: String, ticket: Option<String>, document_id: String, purpose: Option<String>) -> Result<Value, String> {
     id16(&capture_id)?; token(&document_id)?;
+    if action != "arm" && purpose.is_some() { return Err("capture purpose is only accepted when arming".into()); }
+    let domain = match purpose.as_deref() { None | Some("repair") => "repair-input", Some("local-masks") => "source-input", _ => return Err("invalid capture purpose".into()) };
     match action.as_str() {
         "arm" => {
             if ticket.is_some() { return Err("arm does not accept an existing capture ticket".into()); }
@@ -87,9 +89,9 @@ pub(crate) fn source_patch_capture(state: State<'_, Arc<AppState>>, action: Stri
             };
             let handle = engine(&state)?;
             let mut capture = state.source_patch_capture.lock().map_err(|_| "source patch capture lock poisoned")?;
-            let ticket = capture.begin(handle.epoch(), capture_id.clone(), document_id.clone(), revision)?;
+            let ticket = capture.begin_for_domain(handle.epoch(), capture_id.clone(), document_id.clone(), revision, domain)?;
             let command = json!({"cmd":"source_patch_capture","action":"arm","capture_id":capture_id,
-                "ticket":ticket,"document_id":document_id,"epoch":hex(handle.epoch())});
+                "ticket":ticket,"document_id":document_id,"epoch":hex(handle.epoch()),"purpose":purpose.unwrap_or_else(|| "repair".into())});
             if let Err(error) = handle.send(command) {
                 capture.cancel(&capture_id, Some(&ticket), &document_id); return Err(error);
             }
@@ -164,6 +166,7 @@ pub(crate) fn source_patch(state: State<'_, Arc<AppState>>, request_id: String, 
     // RGB, projection, gains, generation, recipe ID or revision is accepted.
     let proof = state.source_patch_capture.lock().map_err(|_| "source patch capture lock poisoned")?
         .redeem(handle.epoch(), &capture_id, &ticket)?;
+    if proof.descriptor["domain"] != "repair-input" { return Err("source patch requires repair-input capture".into()); }
     let command = json!({"cmd":"source_patch","action":"apply","request_id":request_id,
         "host_epoch":hex(proof.identity.epoch),"document_id":proof.identity.document.to_string(),"capture_id":capture_id,"ticket":ticket,
         "generation":proof.identity.generation.to_string(),"recipe_document_id":proof.recipe_document_id,

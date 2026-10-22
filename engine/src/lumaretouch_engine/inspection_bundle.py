@@ -12,7 +12,7 @@ import stat
 import numpy as np
 
 MAX_MANIFEST = 2 * 1024 * 1024
-MAX_NODES = 10000
+MAX_NODES = 65536  # Bounded vector mask paths: at most 8192 retained points.
 MAX_DEPTH = 128
 MAX_TEXT = 1024 * 1024
 

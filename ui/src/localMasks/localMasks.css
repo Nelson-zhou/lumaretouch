@@ -1,0 +1,10 @@
+.localMaskPanel{display:grid;gap:9px;margin-top:12px;padding:10px;border:1px solid #494b56;border-radius:8px}
+.localMaskPanel small{display:block;color:var(--muted,#a8aab4);line-height:1.45}
+.localMaskPanel fieldset{display:grid;gap:8px;min-width:0;border:1px solid #454751;border-radius:6px;padding:8px}
+.localMaskPanel label{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px}
+.localMaskPanel input[type=range]{flex:1;min-width:70px}.localMaskPanel input[type=text],.localMaskPanel select{min-width:0;max-width:100%}
+.localMaskPanel input[type=number]{width:65px}.localMaskToolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.localMaskList{list-style:none;padding:0;margin:0;display:grid;gap:4px;max-height:260px;overflow:auto}
+.localMaskList li{display:flex;gap:3px;padding:4px;border:1px solid transparent;border-radius:5px;align-items:center}
+.localMaskList li.selected{border-color:#88a2d0;background:#273142}.localMaskSelect{flex:1;min-width:0;text-align:left;overflow-wrap:anywhere}
+.localMaskWarning{background:#433623;color:#f1d3a1;padding:8px;border-radius:6px}.localMaskReview{display:grid;gap:7px;border:1px solid #85a6dc;border-radius:6px;padding:9px}

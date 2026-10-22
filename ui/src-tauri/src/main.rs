@@ -41,6 +41,8 @@ mod source_patch_host;
 mod source_patch_capture_host;
 mod source_patch_api;
 mod clone_stamp_api;
+mod local_mask_api;
+mod local_mask_host;
 mod inspection_host;
 mod inspection_io;
 mod inspection_api;
@@ -202,6 +204,7 @@ pub struct AppState {
     color_scopes: Mutex<color_scopes_host::ScopeHost>,
     color_capture: Mutex<color_capture_host::CaptureHost>,
     source_patch: Mutex<source_patch_host::SourcePatchHost>,
+    local_masks: Mutex<local_mask_host::LocalMaskHost>,
     source_patch_capture: Mutex<source_patch_capture_host::SourcePatchCaptureHost>,
     white_balance_capture: Mutex<white_balance_capture_host::WhiteBalanceCaptureHost>,
     batch_results: Mutex<batch_host::BatchHost>,
@@ -313,6 +316,7 @@ impl AppState {
             color_scopes: Mutex::new(color_scopes_host::ScopeHost::default()),
             color_capture: Mutex::new(color_capture_host::CaptureHost::default()),
             source_patch: Mutex::new(source_patch_host::SourcePatchHost::default()),
+            local_masks: Mutex::new(local_mask_host::LocalMaskHost::default()),
             source_patch_capture: Mutex::new(source_patch_capture_host::SourcePatchCaptureHost::default()),
             white_balance_capture: Mutex::new(white_balance_capture_host::WhiteBalanceCaptureHost::default()),
             batch_results: Mutex::new(batch_host::BatchHost::default()),
@@ -666,7 +670,7 @@ impl AppState {
         if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
         let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
         let handle=guard.as_ref().ok_or_else(|| "引擎未启动".to_string())?;
-        if name=="batch" {batch_api::enqueue(self,handle,cmd)?;}else if name=="preset" {preset_api::enqueue(self,handle,cmd)?;}else if name=="white_balance" {white_balance_api::enqueue(self,handle,cmd)?;}else if name=="source_patch" || name=="clone_stamp" {source_patch_api::enqueue(self,handle,cmd)?;}else{handle.send(cmd)?;}
+        if name=="batch" {batch_api::enqueue(self,handle,cmd)?;}else if name=="preset" {preset_api::enqueue(self,handle,cmd)?;}else if name=="white_balance" {white_balance_api::enqueue(self,handle,cmd)?;}else if name=="local_masks" {local_mask_api::enqueue(self,handle,cmd)?;}else if name=="source_patch" || name=="clone_stamp" {source_patch_api::enqueue(self,handle,cmd)?;}else{handle.send(cmd)?;}
         if edited {
             *self.history_dirty.lock().unwrap() = true;
         }
@@ -786,6 +790,7 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     *st.ready_caps.lock().unwrap()=json!({});
     st.color_capture.lock().unwrap().reset(inspection_epoch);
     st.source_patch.lock().unwrap().reset(inspection_epoch);
+    st.local_masks.lock().unwrap().reset(inspection_epoch);
     st.source_patch_capture.lock().unwrap().reset(inspection_epoch);
     st.white_balance_capture.lock().unwrap().reset(inspection_epoch);
     st.batch_results.lock().unwrap().reset(inspection_epoch);
@@ -2025,7 +2030,7 @@ fn main() {
             color_capture_api::capture_arm, color_capture_api::capture_status, color_capture_api::capture_frame,
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
             source_patch_api::source_patch_capture, source_patch_api::source_patch_capture_status, source_patch_api::source_patch_capture_frame,
-            source_patch_api::source_patch, source_patch_api::source_patch_result, clone_stamp_api::clone_stamp,
+            source_patch_api::source_patch, source_patch_api::source_patch_result, clone_stamp_api::clone_stamp, local_mask_api::local_masks, local_mask_api::local_masks_result,
             white_balance_capture_api::white_balance_capture, white_balance_capture_api::white_balance_capture_status, white_balance_capture_api::white_balance_capture_frame, white_balance_capture_api::white_balance_pick,
             project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
             report, quit

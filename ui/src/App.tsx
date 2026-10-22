@@ -1,4 +1,5 @@
-import {useWhiteBalancePickerWorkflow} from './whiteBalance/useWhiteBalancePicker';
+import {useRetouchCaptureWorkflows} from './localMasks/useRetouchCaptureWorkflows';
+import {LocalMaskPanel,LocalMaskStatus} from './localMasks/LocalMaskPanel';
 import {WhiteBalancePickerControls,WhiteBalancePickerStatus} from './whiteBalance/WhiteBalancePickerControls';
 import {LayoutControls} from "./layout/LayoutControls";
 import {useLayoutSettings} from "./layout/model";
@@ -6,9 +7,7 @@ import {WatermarkControls, WatermarkReceipt} from "./watermark/WatermarkControls
 import {useWatermarkSettings} from "./watermark/model";
 import {useWhiteBalanceWorkflow} from "./whiteBalance/useWhiteBalanceWorkflow";
 import {WhiteBalanceControls} from "./whiteBalance/WhiteBalanceControls";
-import {useCloneStampWorkflow} from './cloneStamp/useCloneStampWorkflow';
 import {CloneStampPanel,CloneStampStatus} from './cloneStamp/CloneStampPanel';
-import {useSourcePatchWorkflow} from './sourcePatch/useSourcePatchWorkflow';
 import {SourcePatchPanel,SourcePatchStatus} from './sourcePatch/SourcePatchPanel';
 import {createStatusFence} from "./statusFence";
 import {usePresetWorkflow} from "./presets/usePresetWorkflow";
@@ -1671,17 +1670,11 @@ export default function App() {
     &&compareMode==='single'&&!comparing&&!inspectionEnabled&&!cropOpen&&!whiteBalanceWorkflow.workflow.busy()
     &&(batchWorkflow.ui.phase==='closed'||batchWorkflow.ui.hidden===true);
   const sourcePatchCanStart=!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending;
-  const sourcePatch=useSourcePatchWorkflow({enabled:sourcePatchAllowed,canStart:sourcePatchCanStart,documentId:doc?.document_id??'',
+  const {sourcePatch,wbPicker,cloneStamp,localMasks}=useRetouchCaptureWorkflows({enabled:sourcePatchAllowed,canStart:sourcePatchCanStart,documentId:doc?.document_id??'',
     contextKey:JSON.stringify([pid,status?.doc_rev,status?.image?.load_id,workspace,compareMode,comparing,inspectionEnabled,cropOpen]),
-    reason:!sourcePatchSupported?'当前引擎不支持来源区域修补，请更新匹配版本':!sourcePatchCanStart?'正在等待命令队列空闲':'请等待编辑完成，并切回单视图代理预览'},refreshFromEngine);
-  useEffect(()=>{if((brushOn||pickFace)&&sourcePatch.workflow.capturing()&&!sourcePatch.workflow.busy())sourcePatch.workflow.cancel('已切换工具，未提交的修补选区已取消');},[brushOn,pickFace,sourcePatch.workflow]);
-  const wbPicker=useWhiteBalancePickerWorkflow({enabled:sourcePatchAllowed&&!sourcePatch.active&&!sourcePatch.pending&&caps?.white_balance_capture_protocol===1,
-    canStart:sourcePatchCanStart,documentId:doc?.document_id??'',contextKey:JSON.stringify([pid,status?.doc_rev,status?.image?.load_id,workspace,compareMode,comparing,inspectionEnabled,cropOpen]),
-    reason:caps?.white_balance_capture_protocol!==1?'当前引擎不支持白平衡输入取样，请更新匹配版本':'请结束其他操作，并切回单视图代理预览'},refreshFromEngine);
-  useEffect(()=>{if((brushOn||pickFace)&&wbPicker.workflow.capturing()&&!wbPicker.workflow.busy())wbPicker.workflow.cancel('已切换工具，未提交的白平衡取样已取消');},[brushOn,pickFace,wbPicker.workflow]);
-  const cloneStamp=useCloneStampWorkflow({...sourcePatch.context,reason:caps?.clone_stamp_protocol!==1?'当前引擎不支持仿制图章，请更新匹配版本':sourcePatch.context.reason,samplingKey:JSON.stringify([pid,doc?.document_id,doc?.crop?.rect,doc?.crop?.rotation_degrees,workspace,compareMode,comparing,inspectionEnabled,cropOpen]),enabled:sourcePatchAllowed&&!sourcePatch.active&&!sourcePatch.pending&&!wbPicker.active&&!wbPicker.pending&&caps?.clone_stamp_protocol===1},refreshFromEngine);
-  useEffect(()=>{if((brushOn||pickFace)&&cloneStamp.workflow.capturing()&&!cloneStamp.pending)cloneStamp.workflow.cancel('已切换工具，未提交的图章已取消');},[brushOn,pickFace,cloneStamp.workflow,cloneStamp.pending]);
-  const captureAllowed=!cloneStamp.active&&!cloneStamp.pending&&!!status?.engine_alive && status?.ready_caps?.color_capture_protocol===1&&!sourcePatch.active&&!sourcePatch.pending&&!wbPicker.active&&!wbPicker.pending
+    reason:!sourcePatchSupported?'当前引擎不支持源图取样，请更新匹配版本':!sourcePatchCanStart?'正在等待命令队列空闲':'请等待编辑完成，并切回单视图代理预览'},
+    caps,JSON.stringify([pid,doc?.document_id,doc?.crop?.rect,doc?.crop?.rotation_degrees,workspace,compareMode,comparing,inspectionEnabled,cropOpen]),refreshFromEngine,brushOn,pickFace);
+  const captureAllowed=!localMasks.active&&!localMasks.pending&&!cloneStamp.active&&!cloneStamp.pending&&!!status?.engine_alive && status?.ready_caps?.color_capture_protocol===1&&!sourcePatch.active&&!sourcePatch.pending&&!wbPicker.active&&!wbPicker.pending
     && !!doc?.document_id && status.image?.load_id===doc.document_id && workspace==='retouch'
     && compareMode==='single' && !comparing && !inspectionEnabled && !cropOpen && (batchWorkflow.ui.phase==='closed'||batchWorkflow.ui.hidden===true);
   const captureReason=captureAllowed?'':'请导入图片，并在单视图代理预览中取色';
@@ -1725,9 +1718,10 @@ export default function App() {
                 if(target instanceof HTMLSelectElement || (target instanceof HTMLInputElement
                   && ['range','number','color','checkbox'].includes(target.type)))notifyInspectionEditIntent();
               }}>
-          <RetouchPanel whiteBalanceBusy={whiteBalanceWorkflow.workflow.busy()||wbPicker.active||wbPicker.pending} whiteBalancePanel={<WhiteBalanceControls owner={whiteBalanceWorkflow} value={doc?.exposure} pickerBusy={wbPicker.active||wbPicker.pending||sourcePatch.active||sourcePatch.pending||cloneStamp.active||cloneStamp.pending} picker={<WhiteBalancePickerControls owner={wbPicker} onStart={()=>{setBrushOn(false);setPickFace(false);colorSampler.cancel();cloneStamp.workflow.cancel();void wbPicker.workflow.start();}}/>}/>} presetPanel={<PresetPanel workflow={presetWorkflow}/>} status={status} doc={doc} hasImage={hasImage}
-                        sourcePatchPanel={<SourcePatchPanel owner={sourcePatch} blocked={wbPicker.active||wbPicker.pending||cloneStamp.pending} onStart={()=>{if(wbPicker.active||wbPicker.pending||cloneStamp.pending)return;cloneStamp.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();void sourcePatch.workflow.start();}}/>}
-                        cloneStampPanel={<CloneStampPanel owner={cloneStamp} blocked={sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending} onStart={()=>{setBrushOn(false);setPickFace(false);colorSampler.cancel();void cloneStamp.workflow.start();}}/>}
+          <RetouchPanel whiteBalanceBusy={whiteBalanceWorkflow.workflow.busy()||wbPicker.active||wbPicker.pending||localMasks.active||localMasks.pending} whiteBalancePanel={<WhiteBalanceControls owner={whiteBalanceWorkflow} value={doc?.exposure} pickerBusy={localMasks.active||localMasks.pending||wbPicker.active||wbPicker.pending||sourcePatch.active||sourcePatch.pending||cloneStamp.active||cloneStamp.pending} picker={<WhiteBalancePickerControls owner={wbPicker} onStart={()=>{setBrushOn(false);setPickFace(false);colorSampler.cancel();localMasks.workflow.cancel();cloneStamp.workflow.cancel();void wbPicker.workflow.start();}}/>}/>} presetPanel={<PresetPanel workflow={presetWorkflow}/>} status={status} doc={doc} hasImage={hasImage}
+                        sourcePatchPanel={<SourcePatchPanel owner={sourcePatch} blocked={localMasks.pending||wbPicker.active||wbPicker.pending||cloneStamp.pending} onStart={()=>{if(localMasks.pending||wbPicker.active||wbPicker.pending||cloneStamp.pending)return;localMasks.workflow.cancel();cloneStamp.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();void sourcePatch.workflow.start();}}/>}
+                        cloneStampPanel={<CloneStampPanel owner={cloneStamp} blocked={localMasks.pending||sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending} onStart={()=>{setBrushOn(false);setPickFace(false);colorSampler.cancel();localMasks.workflow.cancel();void cloneStamp.workflow.start();}}/>}
+                        localMasksPanel={<LocalMaskPanel owner={localMasks} report={doc?.local_masks} blocked={sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending||cloneStamp.active||cloneStamp.pending} onStart={(mutation,draw)=>{setBrushOn(false);setPickFace(false);colorSampler.cancel();cloneStamp.workflow.cancel();sourcePatch.workflow.cancel();wbPicker.workflow.cancel();void localMasks.workflow.start(mutation,draw);}}/>}
                         colorSamplePanel={<ColorSamplePanel sampler={colorSampler} reason={captureReason}
                           canArm={captureAllowed&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending}
                           onArm={()=>{setBrushOn(false);setPickFace(false);colorSampler.arm();}}/>}
@@ -1751,7 +1745,7 @@ export default function App() {
       )}
 
       <main className="stage">
-        <CloneStampStatus owner={cloneStamp}/><SourcePatchStatus owner={sourcePatch}/><WhiteBalancePickerStatus owner={wbPicker}/>
+        <LocalMaskStatus owner={localMasks}/><CloneStampStatus owner={cloneStamp}/><SourcePatchStatus owner={sourcePatch}/><WhiteBalancePickerStatus owner={wbPicker}/>
         {!!((project?.changed_count ?? 0) + (project?.missing_count ?? 0)) && (
           <section className="projectSourceWarning" role="alert" aria-label="工程原片校验提醒">
             <strong>工程原片需要核对</strong>
@@ -1789,7 +1783,7 @@ export default function App() {
                   )}
                 </div>
               )}
-              <Viewer colorSampler={colorSampler} cloneStamp={cloneStamp} sourcePatch={sourcePatch} whiteBalancePicker={wbPicker}
+              <Viewer localMasks={localMasks} colorSampler={colorSampler} cloneStamp={cloneStamp} sourcePatch={sourcePatch} whiteBalancePicker={wbPicker}
                 view={view} onView={(v) => {
                   // 滚轮/捏合改了倍率就退出 1:1；平移不算，仍是同一像素密度
                   if (v.fit) setInspectionEnabled(false);

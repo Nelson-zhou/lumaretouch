@@ -41,7 +41,8 @@ from .repair_record import RepairOp, check_repair_fields, validate_repair_ops
 
 LEGACY_SCHEMA = "lrt.project.v1"
 WB_SCHEMA = "lrt.project.v2"
-SCHEMA = "lrt.project.v3"
+REPAIR_SCHEMA = "lrt.project.v3"
+SCHEMA = "lrt.project.v4"
 SUFFIX = ".lrproject.json"
 
 # 上限：宁可显式丢弃，也不要"保存成功但下次打开少了一半配方"这种事
@@ -148,7 +149,7 @@ def validate(p: object) -> None:
     if not isinstance(p, dict):
         raise ProjectError(f"项目顶层不是对象：{type(p).__name__}")
     sv = p.get("schema_version")
-    if sv not in (LEGACY_SCHEMA, WB_SCHEMA, SCHEMA):
+    if sv not in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, SCHEMA):
         raise ProjectError(f"项目 schema_version={sv!r}，本版本认 {SCHEMA!r}")
     for k in ("project_id", "name", "docs", "assets"):
         if k not in p:
@@ -181,7 +182,10 @@ def validate(p: object) -> None:
                     WB.normalize_state(recipe, required=(sv != LEGACY_SCHEMA))
                 except ValueError as error:
                     raise ProjectError(f"Invalid white-balance recipe: {error}") from error
-                _validate_encoded_repairs(recipe, p["assets"], allow_legacy=(sv != SCHEMA))
+                _validate_encoded_repairs(recipe, p["assets"], allow_legacy=(sv not in (REPAIR_SCHEMA, SCHEMA)))
+                if "_local_masks" in recipe:
+                    from .local_mask_state import check
+                    check(recipe["_local_masks"])
 
 
 def _migrate(project):
@@ -193,11 +197,12 @@ def _migrate(project):
             for version in row["versions"]:
                 if version.get("recipe") is not None:
                     version["recipe"] = WB.normalize_state(version["recipe"])
-                    _migrate_repair_kinds(version["recipe"])
+                    if previous in (LEGACY_SCHEMA, WB_SCHEMA):
+                        _migrate_repair_kinds(version["recipe"])
         result["schema_version"] = SCHEMA
         result.setdefault("migration_notes", []).append(
-            f"Migrated {previous} to v3: legacy white balance retained; missing repair kinds are heal. "
-            "Source-patch records require a v3-capable reader.")
+            f"Migrated {previous} to v4: legacy white balance retained; only v1/v2 missing repair kinds migrate to heal. "
+            "Composed source-domain masks require a v4-capable reader.")
     return result
 
 
@@ -273,6 +278,9 @@ def _repair_fields(value, assets, *, allow_legacy=True, shape=None):
 def _validate_encoded_repairs(value, assets, *, allow_legacy):
     """Check every saved version, including inactive versions and redo stacks."""
     if isinstance(value, dict):
+        if "_local_masks" in value:
+            from .local_mask_state import check
+            check(value["_local_masks"])
         if value.get("__dc__") == "RepairOp":
             _repair_fields(value, assets, allow_legacy=allow_legacy)
             return
@@ -432,6 +440,9 @@ def encode(value: object, assets: dict, dropped: list, at: str) -> object:
     if isinstance(value, (list, tuple)):
         return [encode(v, assets, dropped, f"{at}[{i}]") for i, v in enumerate(value)]
     if isinstance(value, dict):
+        if "_local_masks" in value:
+            from .local_mask_state import check
+            check(value["_local_masks"])
         out = {}
         for k, v in value.items():
             if not isinstance(k, str):

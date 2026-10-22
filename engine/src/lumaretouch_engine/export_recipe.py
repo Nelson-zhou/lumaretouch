@@ -63,6 +63,7 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     elif float(snap.get("fabric_amount", 0)) != 0:
         raise ValueError("衣物细褶需要逐图分析衣物语义蒙版，禁止复用另一张图片的蒙版")
     if not for_document:
+        if spec.grade_scope == "objects": raise ValueError("Source-bound mask objects cannot transfer to another photo")
         skipped += ["repair", "light", "deform", "channel（笔迹与掩膜属于当前文档）",
                     "enhance（眼牙掩膜是从当前那一张脸的关键点画的，不能搬到别的图）",
                     "bg（换底遮罩是从当前那张图的色键/网络抠图算出来的，不能搬到别的图）"]
@@ -126,7 +127,17 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     # 画笔区域，skin 用当前档的人脸掩膜。两者都是代理帧坐标上的连续覆盖度，所以与
     # 修容/减淡笔迹走同一个 resample_field（双线性、uint8）——预览与导出是同一个连续场
     # 的两张网格，不是两套口径。
-    if spec.grade_scope != "all" and tuple(spec.grade) != (0.0, 0.0, 0.0, 1.0):
+    if spec.grade_scope == "objects":
+        from . import local_mask_state as LM
+        spec.local_masks = LM.check(snap.get("local_masks"))
+        _, required = LM.R.dependencies(spec.local_masks["recipe"])
+        if required and (spec.local_masks["semantic_owner"] is None or spec.local_masks["semantic_owner"] != snap.get("local_mask_owner")):
+            raise ValueError("Semantic mask source/backend/contract changed; export suspended")
+        for name in required:
+            if pc is None or name not in (pc.masks or {}):
+                raise ValueError("Required semantic mask is unavailable: " + name)
+            spec.local_mask_semantics[name] = resample_field(np.asarray(pc.masks[name], dtype=np.float32), (eh, ew))
+    if spec.grade_scope in ("skin", "brush") and tuple(spec.grade) != (0.0, 0.0, 0.0, 1.0):
         cov = None
         if spec.grade_scope == "brush":
             gm = snap.get("grade_mask")

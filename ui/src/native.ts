@@ -136,6 +136,7 @@ export const dragParametricCurve=(spec:CurveSpec,region:number,target:number)=>i
 export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_preview",{spec});
 
 export interface DocState {
+  local_masks?: import("./localMasks/model").LocalMaskReport;
   fabric?: import("./fabric/FabricPanel").FabricState;
   document_id?: string;
   levels?: LevelsSpec;
@@ -918,6 +919,7 @@ export interface EngineStatus {
     source_patch_capture_protocol?: number;
     source_patch_result_protocol?: number;
     clone_stamp_protocol?: number;
+    local_masks_result_protocol?: number;
     white_balance_result_protocol?: number;
     white_balance_capture_protocol?: number;
     color_capture_protocol?: number;

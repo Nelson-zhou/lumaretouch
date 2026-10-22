@@ -36,7 +36,7 @@ export interface RetouchProps {
   whiteBalancePanel?: React.ReactNode;
   whiteBalanceBusy?: boolean;
   colorSamplePanel?: React.ReactNode;
-  sourcePatchPanel?: React.ReactNode;cloneStampPanel?: React.ReactNode;
+  sourcePatchPanel?: React.ReactNode;cloneStampPanel?: React.ReactNode;localMasksPanel?: React.ReactNode;
   status: EngineStatus | null;
   doc: DocState | null;
   hasImage: boolean;
@@ -740,7 +740,7 @@ export default function RetouchPanel(props: RetouchProps) {
 
   const gradeBlock = (
     <div className="specBlock">
-      <div className="specBlockTitle">肤色定向</div>
+      <div className="specBlockTitle">局部调色</div>
       <Slider label="色相偏移" value={Math.round((grade?.dh ?? 0) * 100)}
         min={gradeBounds[0].min} max={gradeBounds[0].max} disabled={dim}
         onChange={(v) => ok(runGrade("set", { dh: v / 100 }), props)}
@@ -759,20 +759,21 @@ export default function RetouchPanel(props: RetouchProps) {
         onReset={() => ok(runGrade("amount", { amount: 0 }), props)} />
       <div className="specSeg">
         <span>作用范围</span>
-        {(["all", "skin", "brush"] as const).map((s) => {
+        {(["all", "skin", "brush", "objects"] as const).map((s) => {
           const on = (grade?.scope ?? "all") === s;
           const off = s === "brush" && maskPx === 0;
           return (
             <button key={s} className={on ? "on" : ""}
-              disabled={dim || !gradeScopes.includes(s) || off}
+              disabled={dim || !gradeScopes.includes(s) || off || s === "objects"}
               title={off ? "先用「局部调色笔」在画面里涂抹一块区域"
-                : s === "all" ? "整张图" : s === "skin" ? "只作用于肤色" : "只作用于涂抹区域"}
+                : s === "all" ? "整张图" : s === "skin" ? "只作用于肤色" : s === "objects" ? "使用下方保留的组合蒙版" : "只作用于涂抹区域"}
               onClick={() => ok(runGrade("scope", { scope: s }), props)}>
-              {s === "all" ? "全图" : s === "skin" ? "肤色" : "涂抹区域"}
+              {s === "all" ? "全图" : s === "skin" ? "肤色" : s === "objects" ? "组合蒙版" : "涂抹区域"}
             </button>
           );
         })}
       </div>
+      {props.localMasksPanel}
     </div>
   );
 
