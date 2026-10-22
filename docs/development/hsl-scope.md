@@ -1,6 +1,7 @@
 # Eight-color HSL preset/batch scope
 
-Status: implementation candidate, not yet executed or accepted. This closes a
+Status: basic CI/Qoder verification recorded below for the exact 9f35e43e candidate.
+Physical acceptance and the complete preset UI journey remain open. This closes a
 transfer gap in the existing color operator; image-action eyedroppers remain
 separate unfinished work in `action-eyedropper-plan.md`.
 
@@ -58,3 +59,37 @@ the new candidates, but a usable scoped-preset save UI is still **open**. A dedi
 preset workflow must provide name/scope inputs and actual-result confirmation,
 not clear inputs or announce success merely because a command was enqueued.
 Do not mark the entire preset user journey complete from backend tests alone.
+
+## Basic verification of 9f35e43e (2026-10-22 UTC)
+
+Exact remote `9f35e43e77d55c11254aa486a4d732e0f730b62a`, tree
+`d645d7afb0dd5a46e64a3d5e6efd15f7caa9c41e`:
+- CI [39708971868](https://github.com/Nelson-zhou/lumaretouch/actions/runs/39708971868)
+  completed 02:04:59. Engine 1082 passed / 427 skipped (71.41s); frontend 147
+  passed. Native/build/packaging jobs passed; GPU jobs were skipped.
+- Qoder frontend 147 passed, zero failed/skipped/cancelled/todo, exit 0,
+  02:06:51–02:06:52. Build exit 0, 02:07:10–02:07:15, no TypeScript errors,
+  90 Vite modules. The existing 650.82 kB JS chunk warning remains.
+- Qoder backend eight selected files: 109 passed, zero failed/errors/skipped,
+  exit 0, launcher 02:10:49–02:10:54, JUnit duration 2.928 seconds.
+  Counts: HSL scope25, HSL protocol1, registry26, presets18, frozen batch13,
+  batch sync9, parametric14, boundaries3. The synthetic-image protocol case
+  exercised actual SHM pixels, scoped preset application, one-step undo and
+  project reopen, not a substituted renderer.
+- Python3.12.15 / NumPy2.5.4 / Torch2.10.0+rocm7.0, real CPU execution.
+  Matching helper built exit0 at02:09:24; SHA256
+  `1265eccf85cdc3a37323d7841e0cce6c42e79ad063103cf1c9f496fcb801070d`.
+  Same-process candidate module origins/hashes and helper identity checked.
+- Source/candidate dependency locks matched before reuse; no installs/upgrades.
+  Exact candidate trees and existing base tracked files remained clean.
+
+Evidence remains in project-container-relative `.scratch/hsl-9f35e43e-backend/`
+and `.scratch/hsl-9f35e43e-frontend/`: full logs/trace/RC files, source/helper
+hashes, guarded launcher and `artifacts/junit-backend-hsl-9f35e43e.xml`.
+A pre-test read-only audit failed with an unbound B variable and was corrected;
+there was no failed product test or duplicate test run. The assertion
+`'-O' not in sys.flags` does not prove optimization is disabled; the captured
+launch command did not use -O. Pytest temporary roots were explicitly project-
+local; the helper build did not explicitly set TMPDIR, so do not claim every
+build temporary/cache write was project-local. No physical GUI/GPU/performance
+acceptance. These results do not cover subsequent uncommitted preset-workflow code.

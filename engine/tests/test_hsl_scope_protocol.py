@@ -13,26 +13,36 @@ def hsl_engine(tmp_path, monkeypatch, request):
     return request.getfixturevalue('engine')
 
 
-def test_hsl_scoped_preset_pixels_one_step_undo_and_project(hsl_engine, tmp_path):
+@pytest.mark.parametrize('correlated', [False, True])
+def test_hsl_scoped_preset_pixels_one_step_undo_and_project(hsl_engine, tmp_path, correlated):
     pytest.importorskip('torch')
     engine = hsl_engine
     path = tmp_path/'colors.png'; Image.fromarray(np.full((64, 64, 3), [160, 75, 45], np.uint8)).save(path)
     engine.send(cmd='load_image', path=str(path), device='cpu', strength=0)
-    shm = engine.wait_for('shm_ready', timeout=60); engine.wait_for('image_ready', timeout=60)
+    shm = engine.wait_for('shm_ready', timeout=60); image = engine.wait_for('image_ready', timeout=60)
+    document = image['load_id']
     peer = FrameShm(shm['name'])
     def pixels(): return np.frombuffer(peer.read_snapshot()[1], np.uint8).reshape(64, 64, 4).copy()
     try:
         engine.send(cmd='exposure', ev=.25); _wait_frame_mode(engine, 'exposure'); baseline = pixels()
         engine.send(cmd='hsl', action='set', band=0, dh=20, ds=-15, dl=10)
         _wait_frame_mode(engine, 'hsl'); edited = pixels(); assert np.any(edited != baseline)
-        engine.send(cmd='preset', action='save', id='hsl-colors', module_scope=[OP_HSL])
+        save_identity = {'request_id': 'save', 'document_id': document} if correlated else {}
+        engine.send(cmd='preset', action='save', id='hsl-colors', name='测试调色', module_scope=[OP_HSL], **save_identity)
         saved = engine.wait_for('preset_saved', timeout=30)
         assert list(saved['preset']['modules']) == [OP_HSL]
+        if correlated:
+            receipt = engine.wait_for('preset_result', timeout=30)
+            assert receipt['success'] and receipt['request_id'] == 'save' and receipt['document_id'] == document
         engine.send(cmd='hsl', action='clear'); _wait_frame_mode(engine, 'hsl')
         np.testing.assert_array_equal(pixels(), baseline); before = _hist(engine)
-        engine.send(cmd='preset', action='apply', id='hsl-colors')
+        apply_identity = {'request_id': 'apply', 'document_id': document} if correlated else {}
+        engine.send(cmd='preset', action='apply', id='hsl-colors', **apply_identity)
         applied = engine.wait_for('preset_applied', timeout=30); _wait_frame_mode(engine, 'preset')
         assert applied['modules'] == [OP_HSL]
+        if correlated:
+            receipt = engine.wait_for('preset_result', timeout=30)
+            assert receipt['success'] and receipt['doc_state']['history']['undo_steps'] == before['undo_steps'] + 1
         after = _hist(engine); assert after['undo_steps'] == before['undo_steps'] + 1
         assert after['doc_state']['exposure'] == before['doc_state']['exposure']
         np.testing.assert_array_equal(pixels(), edited)
@@ -46,5 +56,13 @@ def test_hsl_scoped_preset_pixels_one_step_undo_and_project(hsl_engine, tmp_path
         engine.wait_for('project_opened', timeout=60)
         assert _hist(engine)['doc_state']['hsl']['bands'][:3] == [20., -15., 10.]
         np.testing.assert_array_equal(pixels(), edited)
+        if correlated:
+            engine.send(cmd='preset', action='apply', id='hsl-colors', request_id='stale', document_id=document)
+            rejected = engine.wait_for('preset_result', timeout=30)
+            assert not rejected['success'] and not rejected['outcome_unknown']
+            engine.send(cmd='hsl', action='clear'); _wait_frame_mode(engine, 'hsl')
+            engine.send(cmd='preset', action='apply', id='hsl-colors', **apply_identity)
+            assert engine.wait_for('preset_result', timeout=30)['replayed']
+            np.testing.assert_array_equal(pixels(), baseline)
     finally:
         peer.close()

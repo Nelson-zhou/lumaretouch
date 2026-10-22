@@ -58,6 +58,7 @@ from . import tasks as T
 # → 把事实发成事件”，不在这里再摸一份“哪些参数属于哪个模块”——预设与批量必须同一语义，
 # 分开抄就会出“预设里没有的参数被批量偷偷同步了”。
 from . import scope as SC
+from . import preset_controller as PRS
 from . import hsl_recipe as HSL_RECIPE
 from . import preset_store as PS
 from .project import ProjectError
@@ -363,7 +364,7 @@ class Engine:
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -1236,8 +1237,8 @@ class Engine:
         controller.group_ms = self.HISTORY_GROUP_MS
         return controller
 
-    def _history_record(self, group: str, before: dict) -> None:
-        return self._history_controller().record(group, before)
+    def _history_record(self, group: str, before: dict, *, coalesce: bool = True) -> None:
+        return self._history_controller().record(group, before, coalesce=coalesce)
 
     def _history_report(self) -> dict:
         return self._history_controller().report()
@@ -1636,40 +1637,26 @@ class Engine:
                 # 「这张糊不糊」就是又造一个不可复算的出处
                 "pick": d.get("pick"), "pick_error": d.get("pick_error")}
 
-    def _preset_last_applied(self) -> dict | None:
-        """最后一次套用的预设，但只在“那几个模块现在还是预设里那一组”时才算数。
+    def _preset_controller(self):
+        controller = self.__dict__.get("_live_presets")
+        if controller is None:
+            controller = PRS.PresetController(PRS.PresetPorts(
+                guard=lambda label: self._guard_editable(label), document_id=lambda: self._load_id,
+                capture=lambda: self._capture_state(), replay=lambda state, **kw: self._replay_state(state, **kw),
+                face_check=lambda: self._face_known_single(None, live=True), status=lambda: self.doc_state(),
+                invalidate=lambda: setattr(self, "_vram", None)), emit=lambda event: emit(event))
+            self._live_presets = controller
+        return controller
 
-        套完预设又推了一下滑块，那一张就不再等于任何预设了——下拉接着显示
-        “暖调（色彩）”就是谎报。判据拿参数比，不拿“中间有没有发过命令”猜：撤销、重做、
-        切文档、手改都会落到参数上，参数自己会说。不匹配就回 None，让 UI 空着。
-        """
-        rec = self._preset_last
-        if not rec:
-            return None
-        try:
-            cur = SC.params_of(self._capture_state(), rec["ops"])
-        except Exception:
-            return None
-        return {"id": rec["id"], "name": rec["name"]} if cur == rec["params"] else None
+    @property
+    def _preset_last(self): return self._preset_controller().last
 
-    def _preset_state(self) -> dict:
-        """预设面只有一个组装点（理由同 `_project_state`）：`preset_list` 事件与
-        `session_state` 里那份必须是同一次读盘的结果，写两处就会漂。
+    @_preset_last.setter
+    def _preset_last(self, value): self._preset_controller().last = value
 
-        这里确实会读一次用户预设目录（几个小 JSON）。`session_state` 每批缩略图后一条，
-        而目录里通常只有内置两个 + 用户几个：几十微秒量级。真要省的那一天，缓存键
-        必须是目录 mtime + 文件数，不能是“我记得没改过”。
-        读不了不等于没预设：错误随 `errors` 报出去，不静默给空列表。
-        """
-        try:
-            docs, errors = PS.list_all()
-        except Exception as e:
-            docs = []
-            errors = [{"file": PS.preset_dir(),
-                       "error": f"读预设目录失败({type(e).__name__}): {e}"}]
-        return {"list": docs, "errors": errors, "modules": SC.describe(),
-                "dir": PS.preset_dir(), "schema": SC.PRESET_SCHEMA,
-                "last_applied": self._preset_last_applied()}
+    def _preset_last_applied(self): return self._preset_controller().last_applied()
+
+    def _preset_state(self): return self._preset_controller().state()
 
     def _sync_state(self) -> dict:
         return self._batch_controller().summary()
@@ -6626,8 +6613,8 @@ class Engine:
     # 所以名单本身就是可校验的：少写一个方法或多写一个名字，都在开工第一帧响，
     # 而不是等到用户发那条命令时回一句"未知命令"。
     # ------------------------------------------------------------ 预设与批量（LNX-P0-PRESET / LNX-P0-BATCH）
-    PRESET_ACTIONS = ("list", "apply", "save", "import", "delete")
-    PRESET_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note"}
+    PRESET_ACTIONS = PRS.ACTIONS
+    PRESET_KEYS = PRS.LEGACY_KEYS | {"request_id", "document_id"}
     BATCH_ACTIONS = BS.ACTIONS
     BATCH_KEYS = BS.KEYS
     # 冻结件里 conflict_policy 只有这两个值，而两个都是**不覆盖**：没有 overwrite
@@ -6681,97 +6668,11 @@ class Engine:
             return f"shm 与会话尺寸不配，拒绝 {who}"
         return None
 
-    def cmd_preset(self, p: dict):
-        """模块预设（LNX-P0-PRESET / PRESET-001、002）。
+    def cmd_preset(self, p: dict): self._preset_controller().handle_command(p)
 
-        作用域不是这里发明的：`scope.MODULES` 按冻结注册表那组 operation_id 划分，
-        “同模块后应用覆盖、预设外的模块一律不碰”全部在 `scope.apply_modules` 里。
-        一次 apply = 一个撤销步（走 `_replay_state` 与 EDIT_CMDS，不是逐条命令各自入栈）。
-        """
-        unknown = set(p) - self.PRESET_KEYS
-        if unknown:
-            emit({"event": "error", "error": f"preset 收到不认识的参数：{sorted(unknown)}"})
-            return
-        action = p.get("action", "list")
-        if action not in self.PRESET_ACTIONS:
-            emit({"event": "error", "error": f"未知 preset action: {action}"
-                  f"（可用：{'/'.join(self.PRESET_ACTIONS)}）"})
-            return
-        if action == "list":
-            emit({"event": "preset_list", **self._preset_state()})
-            return
-        # 剩下四条都要有个能写的会话或一个能落的目录
-        if action in ("apply", "save"):
-            why = self._guard_editable(f"preset {action}")
-            if why:
-                emit({"event": "error", "error": why})
-                return
-        try:
-            if action == "apply":
-                self._preset_apply(p)
-            elif action == "save":
-                self._preset_save(p)
-            elif action == "import":
-                path = str(p.get("path") or "")
-                if not path:
-                    raise SC.ScopeError("preset import 需要 path")
-                doc = PS.load_file(path)                  # 过大/非 JSON/脚本/未知 schema 在这一层就碎
-                # `load_file` 返回的是已校验副本（带着 builtin=False）；save 里还要再校一次，
-                # 而“文件自报 builtin”是拒的——所以这里把派生字段剔掉再交给落盘层。
-                doc = {k: v for k, v in doc.items() if k != "builtin"}
-                if p.get("id"):
-                    doc = {**doc, "id": str(p["id"])}
-                saved = PS.save(doc, force=bool(p.get("force")))
-                emit({"event": "preset_imported", "preset": doc, "path": saved,
-                      "dir": PS.preset_dir()})
-            else:   # delete
-                gone = PS.delete(str(p.get("id") or ""))
-                emit({"event": "preset_deleted", "path": gone, "id": p.get("id")})
-        except SC.ScopeError as e:
-            # 整条拒：预设被拒时必须一个参数都没动（与 P0-*-BOUNDARY 同一个口径），
-            # 而这一点天然成立——校验全部在 `_preset_apply` 落状态之前跑完。
-            emit({"event": "error", "error": f"preset {action} 被拒：{e}"})
+    def _preset_apply(self, p: dict): return self._preset_controller().apply(p)
 
-    def _preset_apply(self, p: dict) -> None:
-        pid = str(p.get("id") or "")
-        if not pid:
-            raise SC.ScopeError("preset apply 需要 id（预设名从 preset list 里拿，"
-                                "前端不抄第二份名单）")
-        doc = PS.find(pid)
-        mods = doc["modules"]
-        ops = list(mods)
-        for op in ops:
-            if SC.MODULES[op]["single_face"]:
-                verdict, reason = self._face_known_single(None, live=True)
-                if verdict != "ok":
-                    raise SC.ScopeError(f"{op} 不能作用在这张图上：{reason}"
-                                        "（其他模块也不顺手盖：整条拒比半条好）")
-        from .preset_transaction import apply_with_rollback
-        previous = self._capture_state(); before = SC.params_of(previous, ops)
-        st = SC.apply_modules(previous, mods)
-        fr = apply_with_rollback(self._replay_state, previous, st, preset_id=pid, emit=emit,
-                                 invalidate=lambda: setattr(self, "_vram", None))
-        # “现在等于哪一个预设”是引擎侧的事实（套完又被手改就不算了），UI 只读这一份
-        self._preset_last = {"id": pid, "name": doc["name"], "ops": ops,
-                             "params": SC.params_of(st, ops)}
-        render_ms = fr.pop("render_ms")
-        emit({"event": "preset_applied", "id": pid, "kind": doc["kind"], "name": doc["name"],
-              "modules": ops, "before": before, "after": SC.params_of(st, ops),
-              "render_ms": render_ms, "doc_state": self.doc_state()})
-        emit(fr)
-
-    def _preset_save(self, p: dict) -> None:
-        """把当前文档的选定模块抽成预设（注册表的 lnx.preset.v1.save）。"""
-        requested = p.get("module_scope")
-        ops = SC.check_scope(list(SC.transferable_ops()) if requested is None else requested)
-        st = self._capture_state()
-        doc = {"schema": SC.PRESET_SCHEMA, "id": p.get("id") or "",
-               "name": p.get("name") or str(p.get("id") or ""), "kind": p.get("kind") or "custom",
-               "note": p.get("note") or "",
-               "modules": SC.params_of(st, ops)}
-        clean = SC.validate_preset(doc)
-        saved = PS.save(clean, force=bool(p.get("force")))
-        emit({"event": "preset_saved", "preset": clean, "path": saved})
+    def _preset_save(self, p: dict): return self._preset_controller().save(p)
 
     def _batch_controller(self):
         controller = self.__dict__.get("_batch_sync")
@@ -6907,6 +6808,7 @@ class Engine:
         if not line:
             return
         request_id = None
+        msg = {}; name = ""; dispatch_error = None
         try:
             msg = json.loads(line)
             request_id = msg.pop("_host_request_id", None)
@@ -6941,14 +6843,21 @@ class Engine:
                 try:
                     fn(msg)
                 finally:
-                    self._history_record(group, before)
+                    self._history_record(group, before, coalesce=not (name == "preset" and msg.get("action") == "apply"))
             else:
                 fn(msg)
         except Exception as e:  # 协议层不许因单条消息崩溃
+            dispatch_error = f"{type(e).__name__}: {e}"
             emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
         finally:
-            if request_id is not None:
-                emit({"event": "command_done", "request_id": request_id})
+            try:
+                if name == "preset" and isinstance(msg, dict):
+                    self._preset_controller().finish(msg, dispatch_error)
+            except Exception as error:
+                emit({"event": "error", "error": f"preset receipt failed: {error}"})
+            finally:
+                if request_id is not None:
+                    emit({"event": "command_done", "request_id": request_id})
 
     def run(self):
         table = self._dispatch_table()

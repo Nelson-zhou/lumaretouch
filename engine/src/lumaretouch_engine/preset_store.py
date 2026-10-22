@@ -15,12 +15,38 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
+import stat
+import errno
 
 from .scope import (PRESET_MAX_BYTES, PRESET_SCHEMA, ScopeError, dump_preset, safe_slug,
                     validate_preset)
 
 DIR_ENV = "LRT_PRESET_DIR"
 FNAME_RE = re.compile(r"^[a-z0-9._-]{1,64}\.json$")
+
+
+class PresetStorageError(ScopeError):
+    def __init__(self, message, *, outcome_unknown=False, committed=False):
+        super().__init__(message)
+        self.outcome_unknown = outcome_unknown
+        self.committed = committed
+
+
+def _storage_error(error, *, committing=False, committed=False):
+    definite = {errno.EACCES, errno.EPERM, errno.ENOENT, errno.ENOTDIR, errno.EISDIR,
+                errno.ENOSPC, errno.EDQUOT, errno.EROFS, errno.EEXIST, errno.EXDEV,
+                errno.ENAMETOOLONG, errno.EMLINK}
+    unknown = committed or (committing and getattr(error, "errno", None) not in definite)
+    certainty = True if committed else None if unknown else False
+    return PresetStorageError(str(error), outcome_unknown=unknown, committed=certainty)
+
+
+def _sync_parent(path):
+    if os.name == "posix":
+        fd = os.open(os.path.dirname(path), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try: os.fsync(fd)
+        finally: os.close(fd)
 
 
 def preset_dir() -> str:
@@ -85,13 +111,19 @@ def load_file(path: str, *, max_bytes: int = PRESET_MAX_BYTES) -> dict:
     体积上限在**打开文件之前**用 stat 判一次、读完再判一次：前者防"拿一个 8 GB 的
     文件当预设"（一次 read 就能把内存打满），后者防 stat 与实读之间文件被换掉。
     """
-    if not os.path.isfile(path):
-        raise ScopeError(f"预设文件不存在：{path}")
-    size = os.path.getsize(path)
-    if size > max_bytes:
-        raise ScopeError(f"预设文件过大（{size} > {max_bytes} 字节）：这不是参数文件")
-    with open(path, "rb") as fh:
-        raw = fh.read()
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0))
+    except FileNotFoundError as error:
+        raise ScopeError(f"预设文件不存在：{path}") from error
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode): raise ScopeError("预设必须是普通文件")
+        if info.st_size > max_bytes:
+            raise ScopeError(f"预设文件过大（{info.st_size} > {max_bytes} 字节）：这不是参数文件")
+        with os.fdopen(fd, "rb", closefd=False) as fh:
+            raw = fh.read(max_bytes + 1)
+    finally:
+        os.close(fd)
     if len(raw) > max_bytes:
         raise ScopeError(f"预设文件过大（实读 {len(raw)} > {max_bytes} 字节）")
     try:
@@ -149,17 +181,37 @@ def save(doc: dict, *, force: bool = False, directory: str | None = None) -> str
     path = _path_for(clean["id"], directory)
     if os.path.exists(path) and not force:
         raise ScopeError(f"预设 {clean['id']} 已存在（{path}）：要覆盖请显式给 force")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + ".tmp"
     # 写下去的那一份不带 `builtin`：它是派生字段，写进文件就会被读回来时当作
     # “文件自报内置”而拒——自己写的文件自己读不了，这一类“写的与读的不是一套”
     # 本轮就是在写完后跑了一次 round-trip 才响出来的。
     payload = {k: v for k, v in clean.items() if k != "builtin"}
-    with open(tmp, "w", encoding="utf-8") as fh:
-        fh.write(dump_preset(payload))
-        fh.flush()
-        os.fsync(fh.fileno())
-    os.replace(tmp, path)         # 原子替换：预设目录里不留半截文件
+    tmp = None; committing = False; committed = False
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=os.path.dirname(path),
+                                         prefix=f".{clean['id']}.", suffix=".tmp", delete=False) as fh:
+            tmp = fh.name
+            fh.write(dump_preset(payload))
+            fh.flush()
+            os.fsync(fh.fileno())
+        committing = True
+        if force:
+            os.replace(tmp, path)
+        else:
+            # POSIX link atomically fails if the destination appeared since our
+            # precheck. Never replace a concurrently-created preset without force.
+            try:
+                os.link(tmp, path)
+            except FileExistsError as error:
+                raise ScopeError(f"预设 {clean['id']} 已存在，未覆盖：{path}") from error
+        committed = True
+        _sync_parent(path)
+    except (OSError, UnicodeError) as error:
+        raise _storage_error(error, committing=committing, committed=committed) from error
+    finally:
+        if tmp is not None:
+            try: os.unlink(tmp)
+            except OSError: pass  # A committed file is not a failed save because cleanup failed.
     return path
 
 
@@ -169,7 +221,10 @@ def delete(preset_id: str, *, directory: str | None = None) -> str:
     path = _path_for(preset_id, directory)
     if not os.path.isfile(path):
         raise ScopeError(f"没有这个预设文件：{path}")
-    os.remove(path)
+    try: os.remove(path)
+    except OSError as error: raise _storage_error(error, committing=True) from error
+    try: _sync_parent(path)
+    except OSError as error: raise _storage_error(error, committed=True) from error
     return path
 
 

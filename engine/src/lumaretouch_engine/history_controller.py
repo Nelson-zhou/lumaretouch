@@ -32,7 +32,7 @@ class HistoryController:
         self.group = ""
         self.group_ns = 0
 
-    def record(self, group: str, before: dict) -> None:
+    def record(self, group: str, before: dict, *, coalesce: bool = True) -> None:
         """一条编辑命令执行完（不论成功还是抛错）后调。
 
         快照是**执行前**抄的，所以"被拒绝的命令"天然不占一步：它整条 return，
@@ -52,7 +52,7 @@ class HistoryController:
         self.ports.mark_dirty()
         now = self.clock()
         same_gesture = False
-        if group and self.group == group \
+        if coalesce and group and self.group == group \
                 and (group.startswith(("curves:gesture:", "levels:gesture:")) or
                      (now - self.group_ns) / 1e6 < self.group_ms):
             same_gesture = True
