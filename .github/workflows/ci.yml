@@ -48,12 +48,19 @@ jobs:
           .venv/bin/python -c 'import torch; assert torch.__version__ == "2.10.0+cpu"; assert torch.version.cuda is None and torch.version.hip is None'
           .venv/bin/python -m pytest -q tests/test_hsl_scope_protocol.py --junitxml="$RUNNER_TEMP/preset-protocol.xml"
           .venv/bin/python -c 'import os,xml.etree.ElementTree as E; cases=E.parse(os.environ["RUNNER_TEMP"]+"/preset-protocol.xml").getroot().findall(".//testcase"); assert len(cases)==3; assert not any(c.find("skipped") is not None or c.find("failure") is not None or c.find("error") is not None for c in cases)'
+      - name: WB Rust bridge and production-stage CPU parity
+        working-directory: engine
+        run: |
+          .venv/bin/python -m pytest -q tests/test_white_balance_math.py --junitxml="$RUNNER_TEMP/wb-bridge.xml"
+          .venv/bin/python -c 'import os,xml.etree.ElementTree as E; cases=E.parse(os.environ["RUNNER_TEMP"]+"/wb-bridge.xml").getroot().findall(".//testcase"); assert len(cases)==16; assert not any(c.find("skipped") is not None or c.find("failure") is not None or c.find("error") is not None for c in cases)'
       - name: Preserve real preset protocol evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: preset-protocol-${{ github.sha }}
-          path: ${{ runner.temp }}/preset-protocol.xml
+          path: |
+            ${{ runner.temp }}/preset-protocol.xml
+            ${{ runner.temp }}/wb-bridge.xml
           if-no-files-found: warn
 
   ui:

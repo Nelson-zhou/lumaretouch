@@ -247,6 +247,8 @@ class PreviewPipeline:
         # 影调四项与 EV 同一层：都是逐点、无位置、无掩膜的整图变换。
         self.exposure_params: tuple = (0.0,) * 7
         self.exposure_ref_k: float = REFERENCE_K
+        self.wb_options = None
+        self.prepared_wb = None
         self.last_exposure_ms: float = 0.0
         # 八色 HSL（原创扩展）：与曝光层同一条纪律（逐点、无位置、无掩膜、中性逐
         # 字节恒等），但它是按色相分段的窗口变换，所以单独一组数、单独一帧记账。
@@ -1437,27 +1439,45 @@ class PreviewPipeline:
 
     # ---- P0：全局曝光 / 白平衡 -----------------------------------------------
     def has_exposure(self) -> bool:
-        return bool(self.exposure_params != (0.0,) * 7)
+        return bool(self.exposure_params != (0.0,) * 7 or
+                    (getattr(self, "prepared_wb", None) is not None and self.prepared_wb != (1.0, 1.0, 1.0)))
 
     def set_exposure(self, ev: float = 0.0, temperature_shift: float = 0.0,
                      tint_shift: float = 0.0, ref_k: float | None = None,
                      contrast: float = 0.0, highlights: float = 0.0,
-                     shadows: float = 0.0, saturation: float = 0.0) -> dict:
+                     shadows: float = 0.0, saturation: float = 0.0,
+                     wb_options=None) -> dict:
         """先全量校验后一次性提交：越界/NaN 整条拒，不夹取也不留半截状态。
 
         参考白 (ref_k) 单独一条口：它不是用户滑杆、而是来片的 as-shot 色温。
         有 EXIF 就喂真值，没有就留默认 D65——“开尔文偏移”对任何源都成立的原因就在此。
         """
-        e, dk, tn, rk = exposure_check(ev, temperature_shift, tint_shift,
-                                       float(ref_k) if ref_k else self.exposure_ref_k)
+        if wb_options is not None:
+            from .white_balance_math import _number
+            for raw in (ev, temperature_shift, tint_shift, contrast, highlights, shadows, saturation):
+                _number(raw)
+            reference = self.exposure_ref_k if ref_k is None else _number(ref_k)
+        else:
+            reference = float(ref_k) if ref_k else self.exposure_ref_k
+        e, dk, tn, rk = exposure_check(ev, temperature_shift, tint_shift, reference)
         c, h, s, sa = check_tone(contrast, highlights, shadows, saturation)
+        options = prepared = None
+        if wb_options is not None:
+            from .white_balance_recipe import check_options, compile_gains
+            options = check_options(wb_options)
+            prepared = compile_gains(options, rk, dk, tn)
+            combined = tuple(g * (2.0 ** e) for g in prepared)
+            if not all(math.isfinite(g) and g > 0 for g in combined):
+                raise ValueError("WB gain and EV combination overflows or underflows")
         self.exposure_params = (e, dk, tn, c, h, s, sa)
+        self.wb_options, self.prepared_wb = options, prepared
         self.exposure_ref_k = rk
         return self.exposure_state()
 
     def clear_exposure(self) -> dict:
         self.exposure_params = (0.0,) * 7
         self.exposure_ref_k = REFERENCE_K
+        self.wb_options = self.prepared_wb = None
         self.last_exposure_ms = 0.0
         return self.exposure_state()
 
@@ -1491,7 +1511,8 @@ class PreviewPipeline:
         t0 = time.perf_counter()
         e, dk, tn, c, h, s, sa = self.exposure_params
         out = exposure_t(t, e, dk, tn, ref_k=self.exposure_ref_k,
-                         contrast=c, highlights=h, shadows=s, saturation=sa)
+                         contrast=c, highlights=h, shadows=s, saturation=sa,
+                         prepared_wb=getattr(self, "prepared_wb", None))
         if not torch.isfinite(out).all():
             raise ValueError(f"曝光/白平衡产出非有限值，已拒：{self.exposure_params} "
                              f"ref={self.exposure_ref_k}")
@@ -2006,6 +2027,7 @@ def warm_device(device: str, side: int = 64) -> float:
         # 曝光层同理：三个数留着就是下一个会话开局“已点火”，而用户一个滑块也没碰
         pipe.exposure_params = (0.0,) * 7
         pipe.exposure_ref_k = REFERENCE_K
+        pipe.wb_options = pipe.prepared_wb = None
         pipe.last_exposure_ms = 0.0
         pipe.hsl_bands = (0.0,) * 24
         pipe.last_hsl_ms = 0.0

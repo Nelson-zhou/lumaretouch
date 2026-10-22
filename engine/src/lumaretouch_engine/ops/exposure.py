@@ -209,14 +209,22 @@ def _slin_t(x):
     return torch.where(lo, 12.92 * l, 1.055 * l ** (1.0 / _SRGB_GAMMA) - 0.055)
 
 
-def _gains(ev: float, temp_shift_k: float, tint_shift: float, ref_k: float) -> np.ndarray:
-    return ev_gain(ev) * wb_gains(temp_shift_k, tint_shift, ref_k)
+def _gains(ev: float, temp_shift_k: float, tint_shift: float, ref_k: float,
+           prepared_wb=None) -> np.ndarray:
+    if prepared_wb is None:
+        return ev_gain(ev) * wb_gains(temp_shift_k, tint_shift, ref_k)
+    # Prepared at recipe installation. No subprocess, model or mutable cache here.
+    from ..white_balance_math import _vector
+    factor = ev_gain(ev)
+    combined = tuple(factor * value for value in _vector(prepared_wb))
+    return np.asarray(_vector(combined), dtype=np.float64)
 
 
 def exposure_np(x: np.ndarray, ev: float = 0.0, temp_shift_k: float = 0.0,
                tint_shift: float = 0.0, ref_k: float = REFERENCE_K,
                contrast: float = 0.0, highlights: float = 0.0,
-               shadows: float = 0.0, saturation: float = 0.0) -> np.ndarray:
+               shadows: float = 0.0, saturation: float = 0.0,
+               prepared_wb=None) -> np.ndarray:
     """CPU 真值臂。x 形状 (…,3) 或 (1,3,H,W)，float，**gamma 编码**值。
 
     中性恒等的口径在这里要说清：sRGB 传递函数的往返是解析式，float 上给的不是
@@ -225,7 +233,7 @@ def exposure_np(x: np.ndarray, ev: float = 0.0, temp_shift_k: float = 0.0,
     把这两件事分开写，是为了以后有人改链时能看出“短路不是装饰”。
     """
     a = np.asarray(x, dtype=np.float64)
-    g = _gains(ev, temp_shift_k, tint_shift, ref_k)
+    g = _gains(ev, temp_shift_k, tint_shift, ref_k, prepared_wb)
     lin = _lin_np(a)
     if a.ndim >= 1 and a.shape[-1] == 3:
         out = _slin_np(lin * g)
@@ -242,11 +250,12 @@ def exposure_np(x: np.ndarray, ev: float = 0.0, temp_shift_k: float = 0.0,
 def exposure_t(x, ev: float = 0.0, temp_shift_k: float = 0.0,
                tint_shift: float = 0.0, ref_k: float = REFERENCE_K,
                contrast: float = 0.0, highlights: float = 0.0,
-               shadows: float = 0.0, saturation: float = 0.0):
+               shadows: float = 0.0, saturation: float = 0.0,
+               prepared_wb=None):
     """GPU 生产臂，与 np 臂同一条算式（同样先线性化、算完再编码回去）。"""
     if torch is None:                  # pragma: no cover
         raise RuntimeError("exposure_t 需要 torch；纯 numpy 环境请用 exposure_np")
-    g = _gains(ev, temp_shift_k, tint_shift, ref_k)
+    g = _gains(ev, temp_shift_k, tint_shift, ref_k, prepared_wb)
     t = torch.as_tensor(g, dtype=torch.float64, device=x.device)
     lin = _lin_t(x.double())
     view = t.view(1, 3, 1, 1) if x.ndim == 4 else t

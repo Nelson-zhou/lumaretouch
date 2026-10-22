@@ -1,7 +1,8 @@
 # Versioned white balance and neutral picking
 
 Status: integration design. A standalone Rust scalar candidate now exists in
-core/white_balance, with CI tests pending for this change. No production WB
+core/white_balance. Candidate 0c452175 passed seven scalar tests in CI39723480395;
+all non-GPU jobs passed, GPU jobs skipped. No production WB
 algorithm, project schema or picker is enabled. Legacy rendering must not be changed in place.
 Requirement anchor: LNX-REF-PC-32455-C-b220a0c332; see action-eyedropper-plan.md.
 
