@@ -37,6 +37,9 @@ mod white_balance_capture_api;
 mod batch_host;
 mod batch_api;
 mod color_capture_api;
+mod prompted_mask_host;
+mod prompted_mask_api;
+mod prompted_model_api;
 mod source_patch_host;
 mod source_patch_capture_host;
 mod source_patch_api;
@@ -205,6 +208,8 @@ pub struct AppState {
     color_capture: Mutex<color_capture_host::CaptureHost>,
     source_patch: Mutex<source_patch_host::SourcePatchHost>,
     local_masks: Mutex<local_mask_host::LocalMaskHost>,
+    prompted_masks: Mutex<prompted_mask_host::PromptedMaskHost>,
+    prompted_model: Arc<Mutex<prompted_model_api::ModelHost>>,
     source_patch_capture: Mutex<source_patch_capture_host::SourcePatchCaptureHost>,
     white_balance_capture: Mutex<white_balance_capture_host::WhiteBalanceCaptureHost>,
     batch_results: Mutex<batch_host::BatchHost>,
@@ -317,6 +322,8 @@ impl AppState {
             color_capture: Mutex::new(color_capture_host::CaptureHost::default()),
             source_patch: Mutex::new(source_patch_host::SourcePatchHost::default()),
             local_masks: Mutex::new(local_mask_host::LocalMaskHost::default()),
+            prompted_masks: Mutex::new(prompted_mask_host::PromptedMaskHost::default()),
+            prompted_model: Arc::new(Mutex::new(prompted_model_api::ModelHost::default())),
             source_patch_capture: Mutex::new(source_patch_capture_host::SourcePatchCaptureHost::default()),
             white_balance_capture: Mutex::new(white_balance_capture_host::WhiteBalanceCaptureHost::default()),
             batch_results: Mutex::new(batch_host::BatchHost::default()),
@@ -791,6 +798,7 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     st.color_capture.lock().unwrap().reset(inspection_epoch);
     st.source_patch.lock().unwrap().reset(inspection_epoch);
     st.local_masks.lock().unwrap().reset(inspection_epoch);
+    st.prompted_masks.lock().unwrap().reset(inspection_epoch);
     st.source_patch_capture.lock().unwrap().reset(inspection_epoch);
     st.white_balance_capture.lock().unwrap().reset(inspection_epoch);
     st.batch_results.lock().unwrap().reset(inspection_epoch);
@@ -2004,6 +2012,7 @@ fn report(line: String) {
 
 #[tauri::command]
 fn quit(state: State<'_, Arc<AppState>>) {
+    prompted_model_api::shutdown(&state);
     state.source_patch_capture.lock().unwrap().invalidate();
     state.white_balance_capture.lock().unwrap().invalidate();
     state.inspection.lock().unwrap().invalidate();
@@ -2033,8 +2042,11 @@ fn main() {
             source_patch_api::source_patch, source_patch_api::source_patch_result, clone_stamp_api::clone_stamp, local_mask_api::local_masks, local_mask_api::local_masks_result,
             white_balance_capture_api::white_balance_capture, white_balance_capture_api::white_balance_capture_status, white_balance_capture_api::white_balance_capture_frame, white_balance_capture_api::white_balance_pick,
             project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
+            prompted_mask_api::prompted_masks, prompted_mask_api::prompted_masks_status,
+            prompted_model_api::prompted_model, prompted_model_api::prompted_model_status,
             report, quit
         ])
-        .run(tauri::generate_context!())
-        .expect("运行 LumaRetouch 失败");
+        .build(tauri::generate_context!())
+        .expect("运行 LumaRetouch 失败")
+        .run(move |_, event| { if matches!(event, tauri::RunEvent::Exit) { prompted_model_api::shutdown(&state); } });
 }

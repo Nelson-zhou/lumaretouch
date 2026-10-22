@@ -371,7 +371,7 @@ class Engine:
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -5334,6 +5334,10 @@ class Engine:
 
     def cmd_local_masks(self, p): self._local_mask_controller().apply(p)
 
+    def cmd_prompted_masks(self, p):
+        from .prompted_mask_controller import controller
+        controller(self, emit).handle(p)
+
     def cmd_source_patch_capture(self, p): self._source_patch_controller().capture.handle(p)
 
     def cmd_source_patch(self, p): self._source_patch_controller().handle(p)
@@ -6677,7 +6681,7 @@ class Engine:
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "white_balance_capture", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "light",
                "deform", "lut", "grade", "export", "exposure", "white_balance", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -6728,17 +6732,19 @@ class Engine:
             if name not in ("hello", "color_scopes", "color_capture") and not (
                     name=="inspection_snapshot" and msg.get("action","status")=="status"):
                 self._color_capture_controller().invalidate()
-            if name not in ("hello", "source_patch_capture", "color_scopes") and not (
+            if name not in ("hello", "source_patch_capture", "prompted_masks", "color_scopes") and not (
                     name == "inspection_snapshot" and msg.get("action", "status") == "status"):
                 owner = self.__dict__.get("_source_patch_owner")
                 if owner is not None: owner.capture.invalidate()
+                prompted = self.__dict__.get('_prompted_mask_owner')
+                if prompted is not None: prompted.cancel()
             if name not in ("hello", "white_balance_capture", "color_scopes") and not (
                     name == "inspection_snapshot" and msg.get("action", "status") == "status"):
                 owner = self.__dict__.get("_white_balance_owner")
                 if owner is not None: owner.capture.invalidate()
             # The executor cancels before any other known command can mutate
             # source arrays/recipes, including history, load, export and shutdown.
-            if name not in ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "white_balance_capture"):
+            if name not in ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture"):
                 self._cancel_snapshot("command:" + name)
                 heavy = name in ("export", "bench_start") or (name == "task" and msg.get("action") in ("resume", "retry"))
                 if heavy and self._inspection_controller().worker_running:
@@ -6834,6 +6840,8 @@ class Engine:
         try:
             reader.start()
             while not self._quit:
+                prompted = self.__dict__.get('_prompted_mask_owner')
+                if prompted is not None: prompted.tick()
                 try:
                     line = inbox.get_nowait()
                 except queue.Empty:
@@ -6866,6 +6874,8 @@ class Engine:
                 os.close(wake_write)
                 self._command_inbox = None
                 self._finish_inspection_shutdown()
+                prompted = self.__dict__.get('_prompted_mask_owner')
+                if prompted is not None: prompted.cancel()
                 owner = self.__dict__.get("_white_balance_owner")
                 if owner is not None: owner.capture.invalidate()
                 owner = self.__dict__.get("_source_patch_owner")

@@ -18,6 +18,11 @@ fn mutation(value: &Value) -> Result<(), String> {
         Some("move") if value["id"].as_str().is_some_and(|id| !id.is_empty() && id.len() <= 128)
             && value["index"].as_u64().is_some_and(|index| index < 64) => Ok(()),
         Some("bind") if value["enabled"].is_boolean() => Ok(()),
+        Some("accept_prompted") if value.as_object().is_some_and(|v| v.len() == 8)
+            && value["preview_id"].as_str().is_some_and(|v| id16(v).is_ok())
+            && value["candidate"].as_u64().is_some_and(|v| v < 3)
+            && ["id", "name", "operation"].iter().all(|k| value[*k].is_string())
+            && value["opacity"].is_number() && value["feather"].is_number() => Ok(()),
         Some("clear") => Ok(()),
         _ => Err("invalid local mask mutation".into()),
     }

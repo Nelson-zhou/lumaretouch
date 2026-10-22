@@ -103,8 +103,10 @@ def sync(engine, *, strict=False):
     key = None
     try:
         stamp = file_stamp(row['path'])
+        from . import prompted_mask_resolver as P
+        prompted_stamp = P.dependency_stamp() if P.active(value['recipe']) else None
         key = (json.dumps(value, sort_keys=True), stamp, id(pipe.src_f32), id(pc),
-               json.dumps(current_owner(engine), sort_keys=True))
+               json.dumps(current_owner(engine), sort_keys=True), prompted_stamp)
         if getattr(pipe, '_local_mask_key', None) == key:
             pipe.grade_scope = 'objects'
             if strict and pipe.local_mask_suspended: raise ValueError(pipe.local_mask_suspended)
@@ -115,7 +117,8 @@ def sync(engine, *, strict=False):
         needs_rgb, channels = R.dependencies(value['recipe'])
         if channels and (value['semantic_owner'] is None or value['semantic_owner'] != current_owner(engine)):
             raise ValueError('Analysis backend or semantic contract changed; mask is suspended')
-        semantic = getattr(pc, 'masks', None) or {}
+        semantic = dict(getattr(pc, 'masks', None) or {})
+        semantic.update(P.fields(value['recipe'], value['source'], row['path'], (pipe.h, pipe.w)))
         rgb = pipe.src_f32[0].permute(1, 2, 0).detach().cpu().numpy() if needs_rgb else None
         weight = R.raster(value['recipe'], (pipe.h, pipe.w), rgb=rgb, semantic=semantic)
         pipe.set_local_mask(weight)
@@ -126,7 +129,7 @@ def sync(engine, *, strict=False):
         if strict: raise
 
 
-def export_prepare(spec, source):
+def export_prepare(spec, source, *, cancelled=lambda: False):
     if spec.grade_scope != 'objects': return
     if spec.local_masks is None: raise ValueError('Composed grade mask recipe is missing')
     value = check(spec.local_masks)
@@ -134,8 +137,14 @@ def export_prepare(spec, source):
     if value['source'] and (h, w) != (value['source']['height'], value['source']['width']):
         raise ValueError('Export source dimensions differ from retained mask source')
     # RGB stays in this process; the raster bridge sends bounded tiles only.
-    spec.grade_mask = R.raster(value['recipe'], (h, w), rgb=source,
-                               semantic=spec.local_mask_semantics)
+    from . import prompted_mask_resolver as P
+    semantics = dict(spec.local_mask_semantics)
+    if P.active(value['recipe']):
+        if not spec.local_mask_source_path:
+            raise ValueError('Prompted export requires the bound original source path')
+        semantics.update(P.fields(value['recipe'], value['source'], spec.local_mask_source_path,
+                                  (h, w), force=True, cancelled=cancelled))
+    spec.grade_mask = R.raster(value['recipe'], (h, w), rgb=source, semantic=semantics)
 
 
 def diagnostic(engine):
@@ -151,7 +160,9 @@ def diagnostic(engine):
         if channels and (value['semantic_owner'] is None or value['semantic_owner'] != current_owner(engine)):
             raise ValueError('Semantic analysis unavailable or changed')
         rgb = pipe.src_f32[0].permute(1, 2, 0).detach().cpu().numpy() if needs_rgb else None
-        masks = getattr(engine._precompute, 'masks', None) or {}
+        masks = dict(getattr(engine._precompute, 'masks', None) or {})
+        from .prompted_mask_resolver import fields
+        masks.update(fields(value['recipe'], value['source'], row['path'], (pipe.h, pipe.w)))
         return R.raster(value['recipe'], (pipe.h, pipe.w), rgb=rgb, semantic=masks), None
     except Exception as error:
         return np.zeros((pipe.h, pipe.w), np.uint8), str(error)
@@ -165,6 +176,9 @@ def check_export_decode(snap, path, before, shape):
     source = value['source']
     if source is not None and tuple(shape) != (source['height'], source['width']):
         raise ValueError('Full-resolution source dimensions changed; export suspended')
+    # Runtime-only source location. The retained project contains its digest,
+    # not a proxy raster or a provider-owned duplicate photograph.
+    snap['local_mask_source_path'] = path
 
 
 def sample_valid_rows(valid):

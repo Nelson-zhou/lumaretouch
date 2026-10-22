@@ -1,0 +1,9 @@
+.promptedBackdrop{position:fixed;inset:0;z-index:10000;background:#000a;display:flex;align-items:center;justify-content:center;padding:18px;color:#eee}
+.promptedDialog{background:#24262b;border:1px solid #646873;border-radius:12px;box-shadow:0 12px 60px #0009;width:min(1100px,96vw);max-height:94vh;overflow:auto;padding:18px;outline:none}
+.promptedDialog header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.promptedDialog p,.promptedDialog small{font-size:12px;line-height:1.5}.promptedDialog small{display:block;color:#c5c8d1}
+.promptedToolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.promptedDialog button,.promptedDialog select,.promptedDialog input{font:inherit}.promptedDialog button{padding:5px 9px}.promptedDialog button[aria-pressed=true]{outline:2px solid #53d7c7}.promptedDialog label{display:inline-flex;align-items:center;gap:6px;margin-right:10px}
+.promptedDialog fieldset{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;border:1px solid #626672}
+.promptedImageArea{display:flex;justify-content:center;background:#111;overflow:hidden}.promptedImageStack{position:relative;max-width:100%;width:fit-content;touch-action:none;user-select:none;line-height:0;cursor:crosshair}
+.promptedSource{display:block;max-width:100%;max-height:52vh;width:auto;height:auto;object-fit:contain}.promptedCandidate,.promptedMarkers{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.promptedCandidate{object-fit:contain}.promptedModel{border:1px solid #575b66;padding:8px;margin:8px 0}.promptedModel summary{cursor:pointer}

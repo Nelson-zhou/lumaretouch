@@ -12,7 +12,7 @@ GEOMETRY = {'brush': ('points', 'axes'), 'linear': ('start', 'end', 'cross'),
             'radial': ('center', 'axes')}
 
 
-def prepare_mutation(engine, capture, mutation):
+def prepare_mutation(engine, capture, mutation, *, accepted_prompted=False):
     if type(mutation) is not dict: raise ValueError('Mask mutation must be an object')
     action = mutation.get('action')
     fields = {'upsert': {'action', 'object', 'coordinate_space'}, 'delete': {'action', 'id'},
@@ -26,6 +26,11 @@ def prepare_mutation(engine, capture, mutation):
         obj = mutation['object']
         normalized = S.R.check_stack({'version': 1, 'domain': 'source-normalized', 'objects': [obj]})['objects'][0]
         index = next((i for i, row in enumerate(objects) if row['id'] == normalized['id']), None)
+        if normalized['kind'] == 'prompted' and not accepted_prompted:
+            if (index is None or objects[index]['kind'] != 'prompted'
+                    or normalized['selection'] != objects[index]['selection']
+                    or mutation['coordinate_space'] != 'source'):
+                raise ValueError('New AI selections require an explicitly reviewed engine candidate')
         if mutation['coordinate_space'] == 'capture':
             from .local_mask_geometry import inverse_object
             normalized = inverse_object(capture['spec'], normalized, capture['valid'], capture['descriptor']['full_source'])
@@ -105,7 +110,13 @@ class MaskController:
             capture = owner._matching(p, recipe=True)
             if not capture['eligible'] or capture['descriptor']['domain'] != 'source-input':
                 raise ValueError('Review an immutable original-source capture before editing masks')
-            value, scope = prepare_mutation(e, capture, p['mutation'])
+            mutation = p['mutation']
+            accepted = type(mutation) is dict and mutation.get('action') == 'accept_prompted'
+            if accepted:
+                from .prompted_mask_controller import controller
+                obj = controller(e, self.emit).accepted_object(mutation, {k: p[k] for k in PROOF_KEYS})
+                mutation = {'action': 'upsert', 'object': obj, 'coordinate_space': 'capture'}
+            value, scope = prepare_mutation(e, capture, mutation, accepted_prompted=accepted)
             self.pending['state'], self.pending['scope'] = value, scope
             owner.invalidate()
             return True

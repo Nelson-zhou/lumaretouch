@@ -3,9 +3,11 @@ import type {LocalMaskOwner} from './useLocalMaskWorkflow';
 import {drawingKind,geometryDescription,MASK_LABELS,newMask,OPERATION_LABELS,type LocalMaskReport,type MaskKind,type MaskMutation,type MaskObject,type MaskOperation} from './model';
 import {RangeControls} from './RangeControls';
 import './localMasks.css';
+import {PromptedMaskDialog} from '../promptedMasks/PromptedMaskDialog';
 export function LocalMaskPanel({owner,report,onStart,blocked=false}:{owner:LocalMaskOwner;report?:LocalMaskReport;onStart:(mutation:MaskMutation|null,draw?:boolean)=>void;blocked?:boolean}){
   const {state,workflow,context,active,pending}=owner;
   const [selected,setSelected]=useState<string|null>(null),[draft,setDraft]=useState<MaskObject>(()=>newMask('brush'));
+  const [aiOpen,setAiOpen]=useState(false);
   const [diameter,setDiameter]=useState(.05);
   const objects=report?.recipe?.objects??[],channels=report?.channels??[];
   const stored=objects.find(o=>o.id===selected),storedKey=JSON.stringify(stored??null);
@@ -17,7 +19,7 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false}:{owner:Local
     const mutation=request.mutation;if(mutation.action!=='upsert')return;
     const saved=objects.find(o=>o.id===mutation.object.id);
     if(saved){setSelected(saved.id);setDraft(structuredClone(saved));}
-    else{setSelected(null);setDraft(newMask(mutation.object.kind,channels[0]??''));}
+    else{setSelected(null);setDraft(newMask(mutation.object.kind==='prompted'?'brush':mutation.object.kind,channels[0]??''));}
   },[state.phase,state.request?.request_id]);
   const locked=blocked||active||pending||!context.enabled||context.canStart===false;
   const full=draft.kind==='full';
@@ -34,6 +36,7 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false}:{owner:Local
     <strong>组合蒙版</strong>
     <small>只限制上方色相、饱和、明度与混入比例，不限制全局 LUT。几何与范围基于原始源图，不是形变后的最终画面。</small>
     <div className="localMaskToolbar">
+      <button disabled={locked||objects.length>=64} onClick={()=>{setAiOpen(true);onStart(null);}}>AI 提示选区</button>
       <button disabled={locked} onClick={()=>onStart(null)}>查看已保存范围</button>
       <button disabled={locked||!objects.length||report?.bound} onClick={()=>onStart({action:'bind',enabled:true})}>用于本组调色</button>
       <button disabled={locked||!report?.bound} onClick={()=>onStart({action:'bind',enabled:false})}>恢复全图作用</button>
@@ -55,9 +58,10 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false}:{owner:Local
     <fieldset disabled={locked}>
       <legend>{selected?'编辑选中对象':'新建对象'}</legend>
       <label>对象类型<select value={draft.kind} onChange={e=>create(e.target.value as MaskKind)} disabled={!!selected}>
-        {(Object.keys(MASK_LABELS) as MaskKind[]).map(kind=><option key={kind} value={kind} disabled={kind==='semantic'&&!channels.length}>{MASK_LABELS[kind]}</option>)}
+        {(Object.keys(MASK_LABELS) as MaskKind[]).filter(kind=>kind!=='prompted'||selected).map(kind=><option key={kind} value={kind} disabled={kind==='semantic'&&!channels.length}>{MASK_LABELS[kind]}</option>)}
       </select></label>
-      {selected&&<button onClick={()=>create(draft.kind)}>新建同类对象</button>}
+      {selected&&draft.kind==='prompted'&&<button onClick={()=>create('brush')}>新建普通对象</button>}
+      {selected&&draft.kind!=='prompted'&&<button onClick={()=>create(draft.kind)}>新建同类对象</button>}
       <label>名称<input value={draft.name} maxLength={80} disabled={full&&!!selected} onChange={e=>patch({name:e.target.value})}/></label>
       <label><input type="checkbox" checked={draft.enabled} disabled={full} onChange={e=>patch({enabled:e.target.checked})}/>启用对象</label>
       <label>组合方式<select value={draft.operation} disabled={full} onChange={e=>patch({operation:e.target.value as MaskOperation})}>{(Object.keys(OPERATION_LABELS) as MaskOperation[]).map(op=><option key={op} value={op}>{OPERATION_LABELS[op]}</option>)}</select></label>
@@ -91,6 +95,7 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false}:{owner:Local
       {state.mutation&&<button disabled={state.phase!=='target'||!state.geometryReady} onClick={()=>void workflow.apply()}>应用本次修改</button>}
       <button onClick={()=>workflow.cancel()}>{state.mutation?'取消，不修改':'关闭范围查看'}</button>
     </div>}
+    {aiOpen&&<PromptedMaskDialog owner={owner} onClose={()=>setAiOpen(false)}/>}
     {!context.enabled&&context.reason&&<small>{context.reason}</small>}
     {state.message&&<p role="status">{state.message}</p>}
     {state.phase==='uncertain'&&<div className="localMaskWarning"><p>结果未确认，不会重新发送。</p><button onClick={()=>void workflow.check()}>查询原操作结果</button><button disabled={!context.enabled||context.documentId===state.request?.document_id} onClick={()=>workflow.acknowledgeAfterReload()}>已重新打开照片</button></div>}

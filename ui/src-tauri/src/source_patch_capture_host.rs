@@ -176,6 +176,11 @@ impl SourcePatchCaptureHost {
         self.record.as_mut().unwrap().phase = Phase::Eligible;
         Ok(proof)
     }
+    pub fn eligible_proof(&self, epoch: [u8;16], capture: &str, ticket: &str) -> Result<Proof, String> {
+        let r = self.matching(capture, ticket)?;
+        if epoch != self.epoch || epoch == [0;16] || r.phase != Phase::Eligible { return Err("source capture is not eligible".into()); }
+        r.proof.clone().ok_or("source capture proof unavailable".into())
+    }
     pub fn redeem(&mut self, epoch: [u8;16], capture: &str, ticket: &str) -> Result<Proof, String> {
         let r = self.matching(capture, ticket)?;
         if epoch != self.epoch || epoch == [0;16] || r.phase != Phase::Eligible { return Err("repair-input capture is not eligible for apply".into()); }

@@ -28,13 +28,13 @@ MAX_TILE_PIXELS = 2_000_000
 MAX_PACKET_BYTES = 128 * 1024 * 1024
 TILE = 512
 TIMEOUT = 60.0
-KINDS = ('full', 'brush', 'linear', 'radial', 'color_range', 'luminance_range', 'semantic')
+KINDS = ('full', 'brush', 'linear', 'radial', 'color_range', 'luminance_range', 'semantic', 'prompted')
 OPERATIONS = ('add', 'subtract', 'intersect')
 COMMON = {'id', 'name', 'enabled', 'operation', 'kind', 'opacity', 'feather'}
 EXTRA = {'full': set(), 'brush': {'points', 'axes'},
          'linear': {'start', 'end', 'cross'}, 'radial': {'center', 'axes'},
          'color_range': {'color', 'tolerance'}, 'luminance_range': {'low', 'high'},
-         'semantic': {'channel'}}
+         'semantic': {'channel'}, 'prompted': {'selection'}}
 
 
 class MaskUnavailable(ValueError):
@@ -110,6 +110,9 @@ def check_object(raw):
         if type(channel) is not str or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', channel):
             raise ValueError('Invalid local mask semantic channel')
         out['channel'] = channel
+    elif kind == 'prompted':
+        from .prompted_mask_source import check_binding
+        out['selection'] = check_binding(raw['selection'])
     return out
 
 
@@ -125,6 +128,8 @@ def check_stack(raw):
         raise ValueError('Only one protected full-image mask is allowed')
     if sum(len(o.get('points', [])) for o in objects) > MAX_TOTAL_POINTS:
         raise ValueError('Local mask stack exceeds the total brush-point budget')
+    if sum(o['kind'] == 'prompted' and o['enabled'] for o in objects) > 8:
+        raise ValueError('At most eight prompted selections can be enabled within this inference budget')
     return dict(version=VERSION, domain=DOMAIN, objects=objects)
 
 
@@ -192,6 +197,9 @@ def _brush_work(obj, tile, shape):
 
 def validate_budget(stack, shape):
     stack = check_stack(stack)
+    if any(o['kind'] == 'prompted' for o in stack['objects']):
+        from .prompted_mask_resolver import lower
+        stack = lower(stack)
     shape = _shape(shape)
     active = [o for o in stack['objects'] if o['enabled']]
     needs_rgb, channels = dependencies(stack)
@@ -340,6 +348,9 @@ def raster(stack, shape, rgb=None, semantic=None):
     MaskUnavailable before raster allocation. No fallback can broaden a mask.
     """
     stack, shape = check_stack(stack), _shape(shape)
+    if any(o['kind'] == 'prompted' for o in stack['objects']):
+        from .prompted_mask_resolver import lower
+        stack = lower(stack)
     plan = validate_budget(stack, shape)
     needs_rgb, channels = dependencies(stack)
     if len(channels) > 16:

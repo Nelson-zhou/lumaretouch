@@ -130,6 +130,7 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     if spec.grade_scope == "objects":
         from . import local_mask_state as LM
         spec.local_masks = LM.check(snap.get("local_masks"))
+        spec.local_mask_source_path = snap.get("local_mask_source_path")
         _, required = LM.R.dependencies(spec.local_masks["recipe"])
         if required and (spec.local_masks["semantic_owner"] is None or spec.local_masks["semantic_owner"] != snap.get("local_mask_owner")):
             raise ValueError("Semantic mask source/backend/contract changed; export suspended")

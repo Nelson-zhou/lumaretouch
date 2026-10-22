@@ -1,7 +1,7 @@
 import {parseCaptureFrame,type VerifiedCapture} from '../captureFrame.ts';
 import type {CaptureDescriptor} from '../captureModel';
 import type {CloneStampCaptureStatus} from '../cloneStamp/workflow';
-import type {MaskMutation,MaskObject} from './model';
+import type {MaskMutation,MaskObject,PromptAcceptance} from './model';
 import type {Point} from '../sourcePatch/geometry';
 import type {RangePatch} from './RangeControls';
 export interface LocalMaskContext {enabled:boolean;canStart?:boolean;documentId:string;contextKey:string;reason?:string}
@@ -158,6 +158,10 @@ export function createLocalMaskWorkflow(api:LocalMaskTransport,options:{refresh:
     }catch(error){if(active&&token===life){discard();publish({phase:'uncertain',frame:null,request,message:`结果未确认：${String(error)}`});}}
     finally{if(token===life)running=false;}
   }
+  function acceptPrompted(mutation:PromptAcceptance){
+    if(!active||running||pending()||!owner||state.phase!=='target')return false;
+    publish({mutation:structuredClone(mutation),draw:false,geometryReady:true,message:'已审核 AI 提示选区，正在提交一次修改'});return true;
+  }
   async function apply(){
     const o=owner;
     if(!active||running||pending()||!o||!o.ticket||state.phase!=='target'||!state.mutation||!state.geometryReady)return;
@@ -167,7 +171,7 @@ export function createLocalMaskWorkflow(api:LocalMaskTransport,options:{refresh:
     try{await bounded(api.submit(request),timeout);}catch{/* Transport failure may follow execution. Query the original request only. */}
     if(!active||token!==life)return;running=false;await query(request);
   }
-  return {snapshot:()=>state,subscribe:(f:(s:LocalMaskState)=>void)=>{listeners.add(f);return()=>{listeners.delete(f);};},context:updateContext,start,cancel,failed,presented,geometry,range,sample,apply,
+  return {snapshot:()=>state,subscribe:(f:(s:LocalMaskState)=>void)=>{listeners.add(f);return()=>{listeners.delete(f);};},context:updateContext,start,cancel,failed,presented,geometry,range,sample,acceptPrompted,apply,
     overlay(showOverlay:boolean){publish({showOverlay});},
     beginGeometry(){if(state.phase==='target'&&state.draw)publish({geometryReady:false});},
     gestureCancelled(message:string){if(state.phase==='target')publish({message});},busy:pending,capturing:()=>!!owner,

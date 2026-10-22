@@ -142,6 +142,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             st.white_balance_results.lock().unwrap().ended(inspection_epoch);
             st.source_patch.lock().unwrap().ended(inspection_epoch);
             st.local_masks.lock().unwrap().ended(inspection_epoch);
+            st.prompted_masks.lock().unwrap().ended(inspection_epoch);
         });
     }
 
@@ -168,6 +169,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "batch_result"=>state.batch_results.lock().unwrap().receive(inspection_epoch,&v),
         "preset_result"=>state.preset_results.lock().unwrap().receive(inspection_epoch,&v),
         "white_balance_result"=>state.white_balance_results.lock().unwrap().receive(inspection_epoch,&v),
+        "prompted_masks"=>state.prompted_masks.lock().unwrap().receive(inspection_epoch,&v),
         "local_masks_result"=>state.local_masks.lock().unwrap().receive(inspection_epoch,&v),
         "source_patch_result"=>state.source_patch.lock().unwrap().receive(inspection_epoch,&v),
         "shm_ready" => {

@@ -55,7 +55,12 @@ consumer, including a missing subtraction operand. Valid all-zero probabilities
 mean an empty selection, not an unavailable source. Export resamples the actual
 model field to the output grid; it must not claim new full-resolution model detail.
 
-## Separate next-model proposal, not shipped
+## Separate next-model proposal, now followed by a code-only package
+
+The proposal below has a connected implementation in
+[`prompted-ai-selection-scope.md`](prompted-ai-selection-scope.md). It remains
+unexecuted and unaccepted; it does not turn these semantic-category controls into
+pet classification or automatic generic-subject recognition.
 
 Choose one image-only SAM 2.1 Hiera Tiny adapter for retained positive/negative
 click and box prompts; no video tracking or model marketplace. Official

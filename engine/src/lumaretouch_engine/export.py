@@ -136,6 +136,7 @@ class ExportSpec:
     grade_mask: np.ndarray | None = None
     local_masks: dict | None = None
     local_mask_semantics: dict = field(default_factory=dict)
+    local_mask_source_path: str | None = None  # ephemeral verified source, never a persisted raster
     # M6/P1-2 换底：与预览同一份 matte 与背景色（导出尺寸、(H,W) uint8 覆盖度、
     # bg_ref 是 [0,1] 三分量）。换底只活在预览而不进导出就是“屏幕换了、盘上没换”——
     # 前景仍在原位、只是背后的色没变，是最难从缩略图看出来的一类不一致。
@@ -477,7 +478,13 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     if src_u8.ndim != 3 or src_u8.shape[2] != 3 or src_u8.dtype != dtype:
         raise ExportError(f"导出要 (H,W,3) {np.dtype(dtype).name}，得到 {src_u8.shape} {src_u8.dtype}")
     from .local_mask_state import export_prepare
-    export_prepare(spec, src_u8)
+    def mask_cancelled():
+        # Existing inspection/export owners may raise cancellation in progress.
+        # Prompted inference runs in a killable child, never an uninterruptible
+        # long Torch call on this render thread.
+        if progress: progress(0, 1, (time.perf_counter()-t_function)*1000.)
+        return False
+    export_prepare(spec, src_u8, cancelled=mask_cancelled)
     spec.check()
     # 纯校验全部排在 torch 守卫之前：没装 torch 的环境也要拿到同一句参数拒绝，
     # 而不是先被"导出需要 torch"抢掉——那样 CI 的 CPU job 根本测不到这些分支。

@@ -201,6 +201,38 @@
       ],
       "status": "本地集成及第13轮逐文件全套回归通过；单张真人质量回归通过；婚纱/多人/多肤色/逆光/发丝边缘总体质量仍未验收",
       "bundled_path": "usr/lib/LumaRetouch/engine/src/lumaretouch_engine/data/selfie_multiclass_256x256.tflite"
+    },
+    {
+      "id": "sam2.1-hiera-tiny",
+      "display": "Meta SAM 2.1 Hiera Tiny 提示选区扩展",
+      "capability": [
+        "正负点击/框选交互分割"
+      ],
+      "tier": "fetched",
+      "upstream_project": "https://github.com/facebookresearch/sam2",
+      "artifact": "sam2.1_hiera_tiny.pt",
+      "artifact_url": "https://huggingface.co/facebook/sam2.1-hiera-tiny/resolve/36f406a75c9be63c7f429da63246273f028c6fd4/sam2.1_hiera_tiny.pt",
+      "revision": "36f406a75c9be63c7f429da63246273f028c6fd4",
+      "code_revision": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+      "size_bytes": 156008466,
+      "sha256": "7402e0d864fa82708a20fbd15bc84245c2f26dff0eb43a4b5b93452deb34be69",
+      "code_license": "Apache-2.0",
+      "weights_license": "Apache-2.0",
+      "evidence": "一手",
+      "evidence_note": "2026-10-22直接读取固定提交官方README明确checkpoint/code为Apache-2.0，完整LICENSE与README归档。固定HF revision tree API公布LFS SHA256与字节数，已归档；未下载权重，不声称实测权重哈希。运行时下载后必须按该摘要和长度核验。",
+      "attribution": "Copyright (c) Meta Platforms, Inc. and affiliates. Apache License 2.0.",
+      "obligations": [
+        "随副本保留完整Apache-2.0许可和版权声明",
+        "保留上游附带的第三方归属说明；修改文件须声明修改"
+      ],
+      "use_restrictions": [],
+      "known_limits": [
+        "模型不理解头发/衣服等语义类别名称；提示选区不等于类别识别",
+        "未执行安装、推理或真实照片质量验收",
+        "不会取代透明发丝精修/人工蒙版"
+      ],
+      "status": "仅代码接入；明确扩展安装操作后可获取，开图和推理不会联网；尚未执行安装与验收",
+      "provenance": "sam2.1-hiera-tiny-provenance.md"
     }
   ],
   "datasets": [
