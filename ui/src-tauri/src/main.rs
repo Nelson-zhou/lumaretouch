@@ -28,6 +28,8 @@ mod color_capture_host;
 mod receipt_host;
 mod preset_host;
 mod preset_api;
+mod white_balance_api;
+mod white_balance_host;
 mod batch_host;
 mod batch_api;
 mod color_capture_api;
@@ -193,6 +195,7 @@ pub struct AppState {
     color_capture: Mutex<color_capture_host::CaptureHost>,
     batch_results: Mutex<batch_host::BatchHost>,
     preset_results: Mutex<preset_host::PresetHost>,
+    white_balance_results: Mutex<white_balance_host::WhiteBalanceHost>,
     /// 最近一条 session_state（M5 底片条）：格子列表、当前索引、有没有缩略图。
     /// 这一份里**不带 base64**——控制通道那条“像素不进 JSON”的规矩只在缩略图上开了
     /// 一个一次性的例外，宿主不该把它长期握在轮询载荷里。
@@ -300,6 +303,7 @@ impl AppState {
             color_capture: Mutex::new(color_capture_host::CaptureHost::default()),
             batch_results: Mutex::new(batch_host::BatchHost::default()),
             preset_results: Mutex::new(preset_host::PresetHost::default()),
+            white_balance_results: Mutex::new(white_balance_host::WhiteBalanceHost::default()),
             session: Mutex::new(None),
             thumbs: Mutex::new(std::collections::HashMap::new()),
             session_rev: Mutex::new(0),
@@ -640,7 +644,7 @@ impl AppState {
         if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
         let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
         let handle=guard.as_ref().ok_or_else(|| "引擎未启动".to_string())?;
-        if name=="batch" {batch_api::enqueue(self,handle,cmd)?;}else if name=="preset" {preset_api::enqueue(self,handle,cmd)?;}else{handle.send(cmd)?;}
+        if name=="batch" {batch_api::enqueue(self,handle,cmd)?;}else if name=="preset" {preset_api::enqueue(self,handle,cmd)?;}else if name=="white_balance" {white_balance_api::enqueue(self,handle,cmd)?;}else{handle.send(cmd)?;}
         if edited {
             *self.history_dirty.lock().unwrap() = true;
         }
@@ -761,6 +765,7 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     st.color_capture.lock().unwrap().reset(inspection_epoch);
     st.batch_results.lock().unwrap().reset(inspection_epoch);
     st.preset_results.lock().unwrap().reset(inspection_epoch);
+    st.white_balance_results.lock().unwrap().reset(inspection_epoch);
     *st.inspection_root.lock().unwrap()=Some(inspection_root.clone());
     let h = engine::spawn(&py, &src, &session, st.clone(),inspection_epoch,inspection_root);
     let pid = h.pid();
@@ -1975,7 +1980,7 @@ fn main() {
             inpaint, light, deform, lut, grade, enhance, background, export, session, filmstrip, history,
             color_capture_api::capture_arm, color_capture_api::capture_status, color_capture_api::capture_frame,
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
-            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, batch_api::batch, batch_api::batch_result, face, pick,
+            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
             report, quit
         ])
         .run(tauri::generate_context!())

@@ -74,3 +74,43 @@ def test_wb_real_pixels_preset_undo_project_and_export(wb_engine,tmp_path):
         assert np.max(np.abs(exported.astype(int)-edited[:,:,:3].astype(int)))<=1
     finally:
         peer.close()
+
+
+def test_one_shot_wb_actions_have_post_history_receipts_and_independent_undo(wb_engine,tmp_path):
+    pytest.importorskip('torch')
+    e=wb_engine;source=tmp_path/'actions.png'
+    Image.fromarray(np.full((64,64,3),[100,120,140],np.uint8)).save(source)
+    e.send(cmd='load_image',path=str(source),device='cpu',strength=0)
+    image=e.wait_for('image_ready',timeout=60);doc=image['load_id']
+    e.send(cmd='white_balance',action='set_algorithm',algorithm=W.CORRECTED,request_id='neutral-mode',document_id=doc)
+    result=e.wait_for('white_balance_result',timeout=30)
+    assert result['success'] and result['before']['reference_k'] is None and result['after']['reference_k'] is None
+    e.send(cmd='history',action='undo');e.wait_for('history_state',timeout=30)
+    e.send(cmd='exposure',ev=.4,temperature_shift=500,tint_shift=.2,reference_k=7000)
+    _wait_frame_mode(e,'exposure');before=_hist(e)
+    e.send(cmd='white_balance',action='set_algorithm',algorithm=W.CORRECTED,request_id='switch',document_id=doc)
+    switched=e.wait_for('white_balance_result',timeout=30)
+    assert switched['success'] and switched['history']['undo_steps']==before['undo_steps']+1
+    assert switched['after']['temperature_shift']==500 and switched['after']['reference_k']==7000
+    e.send(cmd='white_balance',action='reset',request_id='reset',document_id=doc)
+    reset=e.wait_for('white_balance_result',timeout=30)
+    assert reset['success'] and reset['history']['undo_steps']==before['undo_steps']+2
+    assert reset['after']['ev']==.4 and reset['after']['reference_k']==7000
+    assert reset['after']['options']['algorithm']==W.CORRECTED and reset['after']['temperature_shift']==reset['after']['tint_shift']==0
+    e.send(cmd='history',action='undo');e.wait_for('history_state',timeout=30)
+    assert _hist(e)['doc_state']['exposure']['temperature_shift']==500
+    e.send(cmd='history',action='undo');e.wait_for('history_state',timeout=30)
+    assert _hist(e)['doc_state']['exposure']['options']['algorithm']==W.LEGACY
+    for _ in range(2):
+        e.send(cmd='history',action='redo');e.wait_for('history_state',timeout=30)
+    count=_hist(e)['undo_steps']
+    e.send(cmd='white_balance',action='reset',request_id='noop',document_id=doc)
+    noop=e.wait_for('white_balance_result',timeout=30)
+    assert noop['success'] and noop['no_change'] and noop['history']['undo_steps']==count
+    e.send(cmd='exposure',ev=1);_wait_frame_mode(e,'exposure')
+    e.send(cmd='white_balance',action='reset',request_id='reset',document_id=doc)
+    assert e.wait_for('white_balance_result',timeout=30)['replayed']
+    assert _hist(e)['doc_state']['exposure']['ev']==1
+    e.send(cmd='white_balance',action='reset',request_id='stale',document_id='old-photo')
+    assert 'Photo changed' in e.wait_for('error',timeout=30)['error']
+    assert not e.wait_for('white_balance_result',timeout=30)['success']

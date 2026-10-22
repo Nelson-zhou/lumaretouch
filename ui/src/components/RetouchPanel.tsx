@@ -31,6 +31,8 @@ export type BrushMode = "heal" | "dodge" | "burn" | "color";
 
 export interface RetouchProps {
   presetPanel?: React.ReactNode;
+  whiteBalancePanel?: React.ReactNode;
+  whiteBalanceBusy?: boolean;
   colorSamplePanel?: React.ReactNode;
   status: EngineStatus | null;
   doc: DocState | null;
@@ -529,7 +531,7 @@ export default function RetouchPanel(props: RetouchProps) {
         return (
           <Slider key={leaf.path} label={label}
             value={Math.round(ex?.temperature_shift ?? 0)} min={-2000} max={2000} step={20}
-            unit="K" disabled={dim}
+            unit="K" disabled={dim||props.whiteBalanceBusy}
             onChange={(v) => commitExposure({ temperature_shift: v })}
             onReset={() => commitExposure({ temperature_shift: 0 })} />
         );
@@ -537,7 +539,7 @@ export default function RetouchPanel(props: RetouchProps) {
         return (
           <Slider key={leaf.path} label={label}
             value={Math.round((ex?.tint_shift ?? 0) * 100)} min={-100} max={100}
-            disabled={dim}
+            disabled={dim||props.whiteBalanceBusy}
             onChange={(v) => commitExposure({ tint_shift: v / 100 })}
             onReset={() => commitExposure({ tint_shift: 0 })} />
         );
@@ -628,6 +630,7 @@ export default function RetouchPanel(props: RetouchProps) {
   /** 规格树里需要额外画一块的节点：目前只有 HSL 的八色色段选择器。
    *  三格滑杆仍是规格里的叶子（HSL/色相…），这里只决定“改哪一段”。 */
   const renderExtra = (node: SpecNode, featureId?:string): React.ReactNode => {
+    if(featureId==="PC-32455"&&node.full==="白平衡")return props.whiteBalancePanel;
     if(featureId==="PC-32455"&&node.full==="直方图")return <HistogramPanel
       key={status?.image?.load_id??"empty"} documentId={status?.image?.load_id??""} snapshotId={doc?.document_id}
       revision={status?.doc_rev??-1} result={status?.color_scopes} disabled={!props.hasImage||status?.ready_caps?.color_scopes_protocol!==1} onDone={props.onDone}/>;

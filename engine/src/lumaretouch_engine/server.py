@@ -61,6 +61,7 @@ from . import scope as SC
 from . import preset_controller as PRS
 from . import hsl_recipe as HSL_RECIPE
 from . import white_balance_recipe as WB
+from .white_balance_controller import WhiteBalanceController, WhiteBalancePorts
 from . import preset_store as PS
 from .project import ProjectError
 from . import session as S
@@ -366,7 +367,7 @@ class Engine:
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -1166,7 +1167,7 @@ class Engine:
     # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
     # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
     EDIT_CMDS = ("set_strength", "inpaint", "light", "deform", "lut", "grade", "background",
-                 "crop", "exposure", "hsl", "curves", "levels", "preset", "batch", "face", "enhance")
+                 "crop", "exposure", "white_balance", "hsl", "curves", "levels", "preset", "batch", "face", "enhance")
     # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
     # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
     # 而 batch 改的就是活动文档的配方——不在这里它就会“同步完了而徽章不亮”。
@@ -5180,7 +5181,7 @@ class Engine:
                 _gs(int(row["src_w"]), int(row["src_h"]), self._crop_rect, self._crop_rotation))
         emit(fr)
 
-    def cmd_exposure(self, p: dict):
+    def cmd_exposure(self, p: dict, *, preserve_reference=False):
         """全局曝光与白平衡（P0 注册表的 lnx.exposure / lnx.white_balance）。
 
         铁律逐字沿用 cmd_grade/cmd_lut：跑靶互斥、先全量校验后一次性提交、被拒整条
@@ -5240,7 +5241,7 @@ class Engine:
                               float(st["tone_highlights"]),
                               float(st["tone_shadows"]),
                               float(st["tone_saturation"]))
-            self._exposure_ref_k = float(st["exposure_reference_k"])
+            self._exposure_ref_k = prev_ref if preserve_reference else float(st["exposure_reference_k"])
             self._wb_options = options
         try:
             fr = self._write_current_frame("exposure")
@@ -5268,6 +5269,21 @@ class Engine:
         fr["exposure"].update(self._vram.exposure_state())
         fr["doc_state"] = self.doc_state()          # 同 crop：让宿主的滑块跟着这一笔走
         emit(fr)
+        return True
+
+    def _white_balance_controller(self):
+        controller = self.__dict__.get("_white_balance_owner")
+        if controller is None:
+            controller = WhiteBalanceController(WhiteBalancePorts(
+                guard=lambda:self._guard_editable("white balance"),
+                document_id=lambda:self._load_id, status=lambda:self.doc_state(),
+                apply=lambda patch:self.cmd_exposure(patch, preserve_reference=True),
+                needs_reload=lambda:self._vram is None), emit=lambda event:emit(event))
+            self._white_balance_owner = controller
+        return controller
+
+    def cmd_white_balance(self, p):
+        self._white_balance_controller().handle(p)
 
     def _levels_controller(self):
         controller = self.__dict__.get("_levels_owner")
@@ -6790,7 +6806,7 @@ class Engine:
 
     HANDLED = ("hello", "inspection_snapshot", "color_scopes", "color_capture", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "light",
-               "deform", "lut", "grade", "export", "exposure", "hsl", "curves", "levels", "crop", "background",
+               "deform", "lut", "grade", "export", "exposure", "white_balance", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
                # 挑图（LNX-PICK-001）。它不在 EDIT_CMDS 里，所以既不进撤销栈也不打脏标记：
                # 它是读出来的一格旁注，不是一次编辑动作
@@ -6853,7 +6869,7 @@ class Engine:
                 try:
                     fn(msg)
                 finally:
-                    self._history_record(group, before, coalesce=not (name == "preset" and msg.get("action") == "apply"))
+                    self._history_record(group, before, coalesce=not (name == "white_balance" or (name == "preset" and msg.get("action") == "apply")))
             else:
                 fn(msg)
         except Exception as e:  # 协议层不许因单条消息崩溃
@@ -6861,10 +6877,12 @@ class Engine:
             emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
         finally:
             try:
+                if name == "white_balance" and isinstance(msg, dict):
+                    self._white_balance_controller().finish(msg, dispatch_error)
                 if name == "preset" and isinstance(msg, dict):
                     self._preset_controller().finish(msg, dispatch_error)
             except Exception as error:
-                emit({"event": "error", "error": f"preset receipt failed: {error}"})
+                emit({"event": "error", "error": f"{name} receipt failed: {error}"})
             finally:
                 if request_id is not None:
                     emit({"event": "command_done", "request_id": request_id})

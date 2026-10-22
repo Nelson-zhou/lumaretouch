@@ -1,0 +1,4 @@
+.whiteBalanceControls{display:grid;gap:8px;padding:8px 0;font-size:12px}
+.whiteBalanceButtons{display:flex;gap:6px;flex-wrap:wrap}
+.whiteBalanceControls p{margin:0;overflow-wrap:anywhere}
+.whiteBalanceControls small{opacity:.75;line-height:1.5}

@@ -1,3 +1,5 @@
+import {useWhiteBalanceWorkflow} from "./whiteBalance/useWhiteBalanceWorkflow";
+import {WhiteBalanceControls} from "./whiteBalance/WhiteBalanceControls";
 import {createStatusFence} from "./statusFence";
 import {usePresetWorkflow} from "./presets/usePresetWorkflow";
 import {PresetPanel} from "./presets/PresetPanel";
@@ -1585,6 +1587,10 @@ export default function App() {
     await refreshStatusWithErrors(true)
   }
 
+  const whiteBalanceWorkflow=useWhiteBalanceWorkflow({documentId:doc?.document_id??'',
+    reason:!status?.engine_alive?'引擎尚未就绪':status?.ready_caps?.white_balance_result_protocol!==1?'当前引擎不支持此操作，请更新匹配版本':!hasImage?'请先导入照片':exporting?'导出进行中':status?.edit_queue?.in_flight||status?.edit_queue?.pending?'有编辑操作正在处理':'照片状态正在同步',
+    enabled:!!status?.engine_alive&&status?.ready_caps?.white_balance_result_protocol===1&&hasImage&&!exporting
+      &&!!doc?.document_id&&status?.image?.load_id===doc.document_id&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending},refreshFromEngine);
   const presetWorkflow=usePresetWorkflow({enabled:!!status?.engine_alive&&status?.ready_caps?.preset_result_protocol===1,
     editable:hasImage&&!exporting&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending,
     documentId:doc?.document_id??''},presetState,refreshFromEngine,{ok:faceOk,why:faceWhy});
@@ -1690,7 +1696,7 @@ export default function App() {
                 if(target instanceof HTMLSelectElement || (target instanceof HTMLInputElement
                   && ['range','number','color','checkbox'].includes(target.type)))notifyInspectionEditIntent();
               }}>
-          <RetouchPanel presetPanel={<PresetPanel workflow={presetWorkflow}/>} status={status} doc={doc} hasImage={hasImage}
+          <RetouchPanel whiteBalanceBusy={whiteBalanceWorkflow.workflow.busy()} whiteBalancePanel={<WhiteBalanceControls owner={whiteBalanceWorkflow} value={doc?.exposure}/>} presetPanel={<PresetPanel workflow={presetWorkflow}/>} status={status} doc={doc} hasImage={hasImage}
                         colorSamplePanel={<ColorSamplePanel sampler={colorSampler} reason={captureReason}
                           canArm={captureAllowed&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending}
                           onArm={()=>{setBrushOn(false);setPickFace(false);colorSampler.arm();}}/>}

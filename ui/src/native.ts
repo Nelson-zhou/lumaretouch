@@ -174,6 +174,7 @@ export interface DocState {
               /** 影调四项（原创扩展，与 EV 同一层）：-100…100，0 = 关 */
               contrast?: number; highlights?: number; shadows?: number;
               saturation?: number;
+              options?: {version:1;algorithm:"legacy-xyz-ratio-v1"|"linear-srgb-d-white-ratio-v1";picked_gains:[number,number,number]};
               reference_k: number | null; lit: boolean };
   /** 八色 HSL（原创扩展，与曝光层同一条链）：`bands` 是 8 段 × (色相/饱和度/明亮度)
    *  展平后的 24 个数；段名与色相中心也从引擎来（前端不抄一份色相表，那里迟早分叉）。
@@ -911,6 +912,7 @@ export interface EngineStatus {
    *  这些“引擎说什么能力”的清单都从这一份读。老宿主没报时为 undefined——那时那一排
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
+    white_balance_result_protocol?: number;
     color_capture_protocol?: number;
     batch_preflight_protocol?: number;
     preset_result_protocol?: number;
