@@ -1,6 +1,6 @@
 # Product coverage checkpoint — 2026-10-22
 
-Published code checkpoint: 083f6f149d886fb076df1e04a8f138efa6620aa3. This updates the
+Published code checkpoint: a6474a77060d7c8ae6d4099f91eb7ffd5326b614. This updates the
 older sampled audits, not a claim to have independently accepted every handbook
 requirement. The original product handbook and AI development package remain the
 scope; deferred real-device validation does not remove any feature.
@@ -37,8 +37,8 @@ must be read with subsequent corrections, not copied as today's missing-feature 
    code, not independent runtime or photographic acceptance.
 2. Detailed portrait families: independent body, hair, makeup, clothing, hand/foot
    and many blemish/reshaping controls. One related slider does not close a family.
-3. Local editing: remaining automatic/category/free/quick AI selection, mask
-   batch/preset groups, effect recovery and full liquify protection. Retained composable brush/linear/
+3. Local editing: remaining automatic/category/free/quick AI selection and recovery
+   for effect families whose underlying operators are still missing. Retained composable brush/linear/
    radial/color/luminance objects and real portrait-category sources are now wired
    to the existing grade consumer; this does not make LUT or every adjustment local. Source-sampled patch and genuine
    clone-stamp brush are connected in code (source-patch-tool.md / clone-stamp-tool.md),
@@ -115,8 +115,24 @@ and semantic-mask-source-scope.md for exact covered and unimplemented controls.
   the grade consumer precedes deformation was incorrect. The established image
   operator order was not changed to accommodate masks.
 - Independent local-grade groups and real mask batch/preset append/replace are
-  currently being implemented. They are not yet included in this published
-  checkpoint. Tool-specific recovery brushes are also in development, not done.
+  published at this checkpoint. Explicit group selection retains whole-group
+  semantics; source-bound brush/SAM groups are not silently ported across photos.
+  See local-mask-transfer-scope.md and local-grade-consumers-2026-10-22.md.
+- Operator-local recovery for skin smoothing, fine fabric creases and background
+  replacement is connected, with source-bound retained gestures and original-size
+  replay. This does not close recovery for all still-missing effect families.
+- Local-grade numeric gestures now preview the actual main pipeline and commit
+  one history entry per gesture, without a per-change review dialog. This is not
+  measured latency acceptance; the legacy SAM slot's repeated dependency hashing
+  remains a separate performance issue. See live-local-grade-gestures.md.
+- Manual liquify's nine tools, protection/reconstruction, retained source-bound
+  strokes, project v7 and original-resolution RGB8/RGB16 replay have been written
+  and published at a6474a77060d7c8ae6d4099f91eb7ffd5326b614. See
+  manual-liquify-scope.md for unverified boundaries. The base
+  composable-mask schema was v4; v5 groups and v6 recovery migrate into v7.
+- Studio background cleanup, lens/perspective corrections and sky replacement
+  are being implemented in parallel. Isolated helpers are not completed product
+  integrations and must not be reported as published or accepted.
 
 No local application, build, typecheck, model installation/download or inference
 was run for these recent packages. Existing automatic CI results and eventual
