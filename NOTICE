@@ -6,7 +6,7 @@ LumaRetouch — 第三方资产与署名声明（NOTICE）
 
 本发行物的许可分层（详见 docs/model-licenses/）：
 
-  1. 本仓库自研代码 ................ GPL-3.0-or-later（见 LICENSE）
+  1. 本仓库自研与下述移植代码 ...... GPL-3.0-or-later（见 LICENSE）
   2. 系统库与运行时依赖 ............ 各自许可，见 THIRD-PARTY 段
   3. 模型权重 ...................... 各自许可；适用性按具体资产核验
   4. 测试样片与文档图片 ............ 见 docs/model-licenses/README.md 的样片段
@@ -47,6 +47,18 @@ LumaRetouch — 第三方资产与署名声明（NOTICE）
   许可：**S-Lab License 1.0 —— 自定义的非商业许可，不是 CC 也不是 MIT/Apache**
   上游：https://github.com/sczhou/CodeFormer
   额外义务：条款要求保留作者与机构署名；商业使用须另行联系权利人。
+
+移植代码（保留上游署名）
+----------------------------------------------------------------
+* 参数曲线数学基础：RawTherapee 5.12 的 rtengine/curves.h、diagonalcurves.cc。
+  Copyright (c) 2004-2010 Gabor Horvath <hgabor@rawtherapee.com>。
+  许可：GNU General Public License version 3 or later；WITHOUT ANY WARRANTY。
+  上游：https://github.com/RawTherapee/RawTherapee/tree/5.12/rtengine
+  许可：https://github.com/RawTherapee/RawTherapee/blob/5.12/LICENSE
+  本地：core/curves/parametric.rs；完整 GPL 文本随 LICENSE 分发。
+  修改：Rust 移植、对数域稳定计算、显式恒等旁路、区间外恒等延续、
+        分区校验、固定浮点 LUT 及有界二进制适配器。
+  不宣称本软件整个颜色管线与 RawTherapee 位级等价。
 
 依赖库（代码层，摘要）
 ----------------------------------------------------------------

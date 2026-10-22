@@ -1,8 +1,9 @@
 //! Headless adapter for recipe restore/batch processing: no GUI or Python compiler.
 mod curve;
+mod parametric;
 #[path="../levels/levels.rs"]
 mod levels;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 fn main() {
     if let Err(e)=run() {eprintln!("{e}");std::process::exit(2);}
 }
@@ -12,6 +13,7 @@ fn run()->Result<(),String>{
     if input.len()>16384 {return Err("curve request exceeds 16 KiB".into());}
     let mut tokens=input.split_whitespace();
     let first=tokens.next().ok_or("missing point count")?;
+    if first=="parametric" {return parametric_table(&mut tokens);}
     if first=="levels" {return levels_reference(&mut tokens);}
     let luminance=first=="luminance";
     let count=if luminance {tokens.next().ok_or("missing point count")?} else {first};
@@ -64,4 +66,17 @@ fn levels_reference(tokens:&mut std::str::SplitWhitespace<'_>)->Result<(),String
         rows.push(format!("[{},{},{}]",out[0],out[1],out[2]));
     }
     println!("[{}]",rows.join(","));Ok(())
+}
+
+fn parametric_table(tokens:&mut std::str::SplitWhitespace<'_>)->Result<(),String>{
+    let enabled=match tokens.next(){Some("1")=>true,Some("0")=>false,_=>return Err("parametric enabled must be 0/1".into())};
+    let mut values=[0.;4];let mut splits=[0.;3];
+    for value in values.iter_mut().chain(splits.iter_mut()){
+        *value=tokens.next().ok_or("missing parametric parameter")?.parse().map_err(|_|"invalid parametric parameter")?;
+    }
+    if tokens.next().is_some(){return Err("unexpected parametric trailing input".into());}
+    let curve=parametric::Curve::new(parametric::Spec{enabled,values,splits}).map_err(str::to_owned)?;
+    let table=curve.compile().map_err(str::to_owned)?;
+    let bytes=curve.encode(&table).map_err(str::to_owned)?;
+    let mut out=io::stdout().lock();out.write_all(&bytes).map_err(|e|e.to_string())?;out.flush().map_err(|e|e.to_string())
 }

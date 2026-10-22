@@ -5,7 +5,8 @@ RGB/master point-curve code is wired into the application; integrated regression
 verification is in progress. Do not count the full handbook curves requirements
 as complete: native UI acceptance and the explicitly missing modes below remain.
 
-- Rust standard library only; no new runtime package or third-party source copied.
+- Rust standard library only; no new runtime package. PCHIP is independently implemented;
+  the separate parametric family adapts attributed GPL-3.0-or-later upstream code.
 - Shape-preserving PCHIP derivatives, normalized interval coefficients, 2–64 points.
 - Fixed endpoint x coordinates, editable endpoint y, minimum x spacing 1e-5.
 - Intentional nonmonotone curves supported; no interpolating overshoot per interval.
@@ -99,3 +100,12 @@ passed, but the new native nonidentity midpoint test compared floating JSON
 numbers exactly (0.5000000000000001 versus 0.5). That assertion now uses the same
 1e-12 numerical tolerance as the scalar core tests. Identity bypass remains
 bit-exact; no production curve arithmetic or rejection guard was loosened.
+
+## Parametric core candidate (not yet integrated)
+
+`parametric.rs` adapts the RawTherapee 5.12 parametric basis, with original copyright,
+GPL-3.0-or-later notice and modifications documented in the source and NOTICE.
+Its headless adapter emits a bounded LPC1 binary LUT; existing JSON point protocols
+are unchanged. Native editor and engine wiring are not implemented by this core
+alone. See docs/development/parametric-curves-plan.md for exact contracts and the
+remaining acceptance gates. Do not report the feature complete from core tests.

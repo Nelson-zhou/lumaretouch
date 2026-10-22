@@ -77,6 +77,12 @@ jobs:
           rustc --edition=2021 core/curves/main.rs -o "$RUNNER_TEMP/lrt-curve-compiler"
           printf '3 0 0 0.5 1 1 1\n' | "$RUNNER_TEMP/lrt-curve-compiler" > "$RUNNER_TEMP/lrt-curves.json"
           python3 -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/lrt-curves.json")); assert d["version"]==1 and not d["identity"] and len(d["segments"])==2'
+      - name: Rust parametric curve contracts
+        run: |
+          rustc --edition=2021 --test core/curves/parametric.rs -o "$RUNNER_TEMP/lrt-parametric-test"
+          "$RUNNER_TEMP/lrt-parametric-test" --nocapture
+          printf 'parametric 1 47 -32 19 -8 .25 .5 .75\n' | "$RUNNER_TEMP/lrt-curve-compiler" > "$RUNNER_TEMP/lrt-parametric.bin"
+          python3 -c 'import os,struct; b=open(os.environ["RUNNER_TEMP"]+"/lrt-parametric.bin","rb").read(); assert len(b)==262188; h=struct.unpack("<4sHHII3d",b[:40]); assert h==(b"LPC1",1,40,65537,1,.25,.5,.75); v=struct.unpack("<65537f",b[40:]); assert v[0]==0 and v[-1]==1 and all(a<=z for a,z in zip(v,v[1:]))'
       - name: Frame-bound presentation and preview transport
         run: rustc --edition=2021 --test tools/preview-wire-tests.rs -o "$RUNNER_TEMP/lrt-preview-wire" && "$RUNNER_TEMP/lrt-preview-wire"
       - name: Identified capture binary contract
