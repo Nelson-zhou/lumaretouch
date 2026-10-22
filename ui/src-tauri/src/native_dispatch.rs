@@ -18,7 +18,9 @@ impl AppState {
         let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
         inspection.invalidate();
         let guard=self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
-        guard.as_ref().ok_or("引擎未启动")?.send_interactive(key,cmd)?;
+        let handle = guard.as_ref().ok_or("引擎未启动")?;
+        crate::sample_library_api::invalidate_captures(handle)?;
+        handle.send_interactive(key,cmd)?;
         *self.history_dirty.lock().unwrap()=true;
         Ok(())
     }
@@ -45,6 +47,9 @@ impl AppState {
         if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
         let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
         let handle=guard.as_ref().ok_or_else(|| "引擎未启动".to_string())?;
+        if crate::sample_library_api::invalidates_capture(&cmd) {
+            crate::sample_library_api::invalidate_captures(handle)?;
+        }
         match name.as_str() {
             "people" => crate::people_api::enqueue(handle, cmd)?,
             "brow_shape" => crate::brow_shape_api::enqueue(handle, cmd)?,
@@ -70,4 +75,10 @@ impl AppState {
         }
         Ok(())
     }
+}
+
+/// 把结果回显到 `tauri dev` 的标准输出，便于跑靶脚本直接采集。
+#[tauri::command]
+pub(crate) fn report(line: String) {
+    println!("{line}");
 }

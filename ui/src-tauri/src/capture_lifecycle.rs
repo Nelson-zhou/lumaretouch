@@ -22,6 +22,7 @@ impl AppState {
 
 
     pub(crate) fn reset_capture_hosts(&self, epoch: [u8; 16]) {
+        crate::sample_library_api::reset(epoch);
         self.color_capture.lock().unwrap().reset(epoch);
         self.source_patch.lock().unwrap().reset(epoch);
         self.local_masks.lock().unwrap().reset(epoch);

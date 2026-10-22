@@ -55,6 +55,7 @@ export interface RetouchProps {
   effectRecoveryPanel?: React.ReactNode; manualLiquifyPanel?: React.ReactNode;
   studioBackgroundPanel?: React.ReactNode; skyReplacementPanel?: React.ReactNode; opticsPanel?: React.ReactNode;
   presetPanel?: React.ReactNode;
+  sampleLibraryPanel?: React.ReactNode;
   whiteBalancePanel?: React.ReactNode;
   whiteBalanceBusy?: boolean;
   colorSamplePanel?: React.ReactNode;
@@ -956,7 +957,7 @@ export default function RetouchPanel(props: RetouchProps) {
   );
 
   const blockFor = (fid: string): React.ReactNode => {
-    if (fid === "PC-32452") return <>{props.presetPanel}{lutBlock}</>;
+    if (fid === "PC-32452") return <>{props.sampleLibraryPanel}{props.presetPanel}{lutBlock}</>;
     if (fid === "PC-32454") return gradeBlock;
     if (fid === "PC-32481") return props.effectRecoveryPanel;
     if (fid === "PC-32479") return props.manualLiquifyPanel;
@@ -1029,6 +1030,10 @@ export default function RetouchPanel(props: RetouchProps) {
                       return <div><DisabledRow name={name}/><p className="toolRouteNote">{leaf.path === "祛除瑕疵涂抹笔" ? "通用祛瑕疵恢复尚未接通；上方磨皮、面部祛纹及唇妆恢复仅处理各自效果。" : "当前仅支持衣物细褶恢复，不代表全部衣服褶皱恢复。"}</p></div>;
                     if(f.id==='PC-32477'&&leaf.path==='衣服祛褶皱/祛细褶皱')return null;
                     if(f.id==='PC-32482'&&((leaf.path==='修补工具'&&props.sourcePatchPanel)||(leaf.path==='仿制图章'&&props.cloneStampPanel)))return null;
+                    if (f.id === "PC-32452" && props.sampleLibraryPanel && [
+                      "AI追色/样片来源/自定义导入样片", "AI追色/导入样片",
+                      "AI追色/将当前结果图创建为样片", "AI追色/创建为样片",
+                    ].includes(leaf.path)) return null;
                     const kind = WIRED[`${f.id}|${leaf.path}`];
                     return kind ? renderWired(leaf, name, kind)
                       : <DisabledRow key={leaf.path} name={name}

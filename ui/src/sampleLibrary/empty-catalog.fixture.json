@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "revision": 0,
+  "groups": [{"id": "ungrouped", "name": "未分组"}],
+  "capacity": {"active": 0, "limit": 2000, "per_import": 1000},
+  "storage": {"bytes": 0, "library_bytes": 0, "shared_reference_bytes": 0, "free_disk_bytes": 0, "shared_free_disk_bytes": 0, "budget_bytes": 17179869184},
+  "warnings": [],
+  "counts": {"active": 0, "trash": 0, "total": 0},
+  "group_counts": {"ungrouped": {"active": 0, "trash": 0}},
+  "order_ids": []
+}

@@ -1,0 +1,198 @@
+{
+  "schema": 1,
+  "scope": "Local user-owned sample management only",
+  "assigned_source_base": "fa3536650080f0909690770664fa6f8869a5bd06",
+  "frozen_utc": "2026-10-22T19:51:02Z",
+  "requirement_ids": [
+    "PC-32452-C-af312f51a2",
+    "PC-32452-C-9ac5aa4d79",
+    "PC-32452-C-831245a683",
+    "PC-32452-C-faf6a4e2e8",
+    "PC-32452-C-710056cf5d",
+    "LNX-REF-PC-32452-C-af312f51a2",
+    "LNX-REF-PC-32452-C-9ac5aa4d79",
+    "LNX-REF-PC-32452-C-831245a683",
+    "LNX-REF-PC-32452-C-faf6a4e2e8",
+    "LNX-REF-PC-32452-C-710056cf5d"
+  ],
+  "primary_sources": [
+    "https://www.pixcakeai.com/guide/32452",
+    "https://docs.digikam.org/en/left_sidebar/albums_view.html",
+    "https://github.com/python-pillow/Pillow/blob/main/LICENSE"
+  ],
+  "baseline_sha256": {
+    "../baseline_probe/manual-text.txt": "24e4e5820834c59a49d7fad3cc065526e12c8ac32b42f18c2cb329cdb9ea3f76",
+    "../baseline_probe/AI开发资料包/功能需求验收映射.json": "b3d5fbe7a75ce3d7cde7a39193b1f86b5ec634399eac36d667ed8ebbabeca748"
+  },
+  "verification": {
+    "python_ast_files": 12,
+    "ts_tsx_syntax_files": 11,
+    "json_source_fixtures": 2,
+    "rust_review": "SOURCE STRUCTURE / WIRING / BOUNDS / WHITESPACE ONLY; no Rust AST parser available",
+    "authored_acceptance_fixtures": 20,
+    "runtime_tests": "NOT RUN",
+    "compiler_typecheck_build": "NOT RUN",
+    "product_import_execution": "NOT RUN",
+    "shared_integration": "SOURCE WIRED, RUNTIME ACCEPTANCE PENDING",
+    "line_caps": {
+      "ui/src/App.tsx": {
+        "lines": 2105,
+        "cap": 2121
+      },
+      "ui/src-tauri/src/main.rs": {
+        "lines": 2017,
+        "cap": 2021
+      },
+      "engine/src/lumaretouch_engine/server.py": {
+        "lines": 7021,
+        "cap": 7046
+      }
+    }
+  },
+  "files": {
+    "docs/sample_library/README.md": {
+      "sha256": "38e3d12d94aba4f474cadbe109345c92ed7d7f1158985c006c1d0497e7ae91a3",
+      "bytes": 17116
+    },
+    "engine/src/lumaretouch_engine/command_reader.py": {
+      "sha256": "6bbf057ea03bdd27785dc35f7f20ee1d6b3d028b8a4a6fdd3b3ba574a9399386",
+      "bytes": 1540
+    },
+    "engine/src/lumaretouch_engine/reference_color_engine.py": {
+      "sha256": "54a7624f6f37c7cea6331900226a9d87da238b6b13aa517c6f7a573b438d8de2",
+      "bytes": 5838
+    },
+    "engine/src/lumaretouch_engine/sample_library_capture.py": {
+      "sha256": "a7e90ff5bb8424d8280c7b39de25c3ba6cca4fc660aef2c4dcb3b3d57c88bb82",
+      "bytes": 6896
+    },
+    "engine/src/lumaretouch_engine/sample_library_command.py": {
+      "sha256": "b4ab8b2176836c84b5a4150ba264106238aa8f1a7267d9db76d4ba686ab8d457",
+      "bytes": 2873
+    },
+    "engine/src/lumaretouch_engine/sample_library_controller.py": {
+      "sha256": "63bb543407bb80023cbaec14315ab1218e9e77b9f1e89b46a465f2aac4835a6e",
+      "bytes": 18637
+    },
+    "engine/src/lumaretouch_engine/sample_library_host.py": {
+      "sha256": "16c21b618e0dc5e50666c93b92a2770fe4ac18a46d1f8b38306dc939935852ed",
+      "bytes": 7217
+    },
+    "engine/src/lumaretouch_engine/sample_library_images.py": {
+      "sha256": "de43742ced907ecf278f472ecd8a33726040452dff42ced1c0b9952b72e0509b",
+      "bytes": 11796
+    },
+    "engine/src/lumaretouch_engine/sample_library_query.py": {
+      "sha256": "f2180498deaad5e058c4fc5e19b64edf5db5bf0c145625206b423b631dfae4e6",
+      "bytes": 5003
+    },
+    "engine/src/lumaretouch_engine/sample_library_state.py": {
+      "sha256": "6c692325106e914cbad6a9676428a4a91ed3ee9c7bcaf29e407b9b8730a925a3",
+      "bytes": 6903
+    },
+    "engine/src/lumaretouch_engine/sample_library_store.py": {
+      "sha256": "97c5576a2366168642c0acfbd137d4848a0f3f27c962014fc98ca4bfb8225a9b",
+      "bytes": 12826
+    },
+    "engine/src/lumaretouch_engine/server.py": {
+      "sha256": "1f2fc03ff53aecd16d269b08a48792df7106c47923bb093df58364f5c98f95ba",
+      "bytes": 458062
+    },
+    "engine/tests/test_sample_library.py": {
+      "sha256": "733c502fa0aa496ae264ceeea76bc8231d96be7a5f440beb336bca0c4578299a",
+      "bytes": 14589
+    },
+    "ui/src-tauri/src/capture_lifecycle.rs": {
+      "sha256": "e9b60c4387853579bf271033dfc9738e2f5e6d4327cdeeb2173d8b2934836f95",
+      "bytes": 2748
+    },
+    "ui/src-tauri/src/dispatch.rs": {
+      "sha256": "5f6de2cd05d242b607c076b573f071fd0b2eead6568dc3ef59bbc2ef7b0a6779",
+      "bytes": 5441
+    },
+    "ui/src-tauri/src/engine.rs": {
+      "sha256": "6dde71c11b730e64d13cb8ab2d956a96b484a5214e4d0ece1f920b969ba45bbe",
+      "bytes": 26879
+    },
+    "ui/src-tauri/src/main.rs": {
+      "sha256": "c1b9fc1e6aeb8b90b9b4415ac988fc5ab24c5a9e3b660b5cdc55bda145670586",
+      "bytes": 101484
+    },
+    "ui/src-tauri/src/native_dispatch.rs": {
+      "sha256": "21487fb091b77339e582ec723b725508e89586de761d0d50ad72838ada2fadea",
+      "bytes": 5960
+    },
+    "ui/src-tauri/src/sample_library_api.rs": {
+      "sha256": "191ef96637117c18dbfdadf0ac57b67bfc623b174ce0225f74db1b4468f363a7",
+      "bytes": 21963
+    },
+    "ui/src/App.tsx": {
+      "sha256": "5afc7e8fc2344e3fbb34a93e1eb825e32a3f4625e755b9df302138bcfd52c7bc",
+      "bytes": 124366
+    },
+    "ui/src/components/RetouchPanel.tsx": {
+      "sha256": "65a490819a5fb9c768a51e87722561a2cf3fd13b4361de1198f783808d01c567",
+      "bytes": 52510
+    },
+    "ui/src/native.ts": {
+      "sha256": "7e03d9c04d26baf9158e7f153a3b4e03cede252691b4840a3137601027b8e513",
+      "bytes": 88678
+    },
+    "ui/src/sampleLibrary/README.md": {
+      "sha256": "f708e83dfdc3147cd2498b8be16c1694e232fa6c29ee7135e1eb08a0095471ef",
+      "bytes": 15777
+    },
+    "ui/src/sampleLibrary/REVIEW.md": {
+      "sha256": "c946ed607a0c3bfde05047829c300e60b732ecc4e633100aa59a14be8a8a091f",
+      "bytes": 12067
+    },
+    "ui/src/sampleLibrary/SampleLibraryHost.tsx": {
+      "sha256": "1e5d75acec32b7abac31e65437c42249d29f36e8fd15573cd356e607abd6b5a9",
+      "bytes": 2879
+    },
+    "ui/src/sampleLibrary/SampleLibraryPanel.tsx": {
+      "sha256": "d7e6ceb85ce0844bbbb87cc28083a5bc972a592e289af43f63369d558ff88e6a",
+      "bytes": 28994
+    },
+    "ui/src/sampleLibrary/WorkspaceTopbar.tsx": {
+      "sha256": "261923bb7b0191ede4061d7587d3b1f8bf51a88aaa76cfbc4b09b10395ac71a1",
+      "bytes": 1546
+    },
+    "ui/src/sampleLibrary/adapter.ts": {
+      "sha256": "6fe0f296a1a877166dd9620276f39b3ada801a984dc774b4243fc6c32a1bf810",
+      "bytes": 9816
+    },
+    "ui/src/sampleLibrary/empty-catalog.fixture.json": {
+      "sha256": "866fd3cf9ee7d1a05719c72e5d0b3319b089feb835d2980ea87586624fd3053b",
+      "bytes": 460
+    },
+    "ui/src/sampleLibrary/empty-page.fixture.json": {
+      "sha256": "5a7c3efc32e829df6b70daba1b30a4500540247b14287895e906ce08055aa798",
+      "bytes": 104
+    },
+    "ui/src/sampleLibrary/model.ts": {
+      "sha256": "d46e84b43da06aa8fa1d2ab0de8dbaaa5b293072b94c089ad1d63cb5145cfc70",
+      "bytes": 16260
+    },
+    "ui/src/sampleLibrary/nativePort.ts": {
+      "sha256": "36dc3e1f1d71a25130667c813fc65d202c60efcf287c6811ae2b3cbe07a87940",
+      "bytes": 10136
+    },
+    "ui/src/sampleLibrary/sampleLibrary.css": {
+      "sha256": "bb433064850cd66a580fd7f549a59f7158368788658c2c6418f8d4c803591436",
+      "bytes": 6654
+    },
+    "ui/src/sampleLibrary/useSampleLibrary.ts": {
+      "sha256": "b730ced76d5ec68fccbf727792717bad0bebc8d45f50f3401c2b1364dac2bf86",
+      "bytes": 17649
+    },
+    "ui/src/sampleLibrary/useSampleLibraryHost.ts": {
+      "sha256": "4f3d4eec48c5025c881fc3cdd848bf141e06f6939d2fb9dce6097e3b66864003",
+      "bytes": 3962
+    }
+  },
+  "manifest_self_hash": "Excluded to avoid recursive hashing; hash manifest externally at publication.",
+  "integration_source_base": "46a8ccb37323843b3ac74ed7985fe9691e45d061",
+  "integration_source_tree": "0b8ddb1b2a199f476d0e158e0b78c89a88edd1dd",
+  "manifest_self_excluded": true
+}

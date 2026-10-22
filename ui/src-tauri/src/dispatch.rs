@@ -53,8 +53,11 @@ impl Dispatcher {
             s.in_flight=Some(id);
             drop(s);
             cmd["_host_request_id"]=json!(id);
-            let line=serde_json::to_string(&cmd).map_err(|e|e.to_string())?;
-            if let Err(e)=stdin.write_all(line.as_bytes()).and_then(|_|stdin.write_all(b"\n")).and_then(|_|stdin.flush()) {
+            let mut line=serde_json::to_vec(&cmd).map_err(|e|e.to_string())?;
+            line.push(b'\n');
+            // One complete record per write_all; the engine's shared stdin writer
+            // holds its mutex across this entire call, including partial OS writes.
+            if let Err(e)=stdin.write_all(&line).and_then(|_|stdin.flush()) {
                 self.close();return Err(format!("写引擎 stdin 失败，未重试：{e}"));
             }
         }

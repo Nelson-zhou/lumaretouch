@@ -11,7 +11,6 @@ import json
 import math
 import os
 import queue
-import select
 import sys
 import threading
 import time
@@ -70,6 +69,8 @@ from .preview_lifecycle import PreviewLifecycleMixin
 from .portrait_geometry_dispatch import PortraitGeometryMixin
 from .people_host import PeopleHostMixin
 from .workflow_ports import WorkflowPortsMixin
+from .sample_library_host import SampleLibraryHostMixin
+from .command_reader import read_commands
 from . import optics_state as OPS, optics_runtime as OPR
 from . import sky_replacement_state as SKS, sky_replacement_runtime as SKR
 from . import scope as SC
@@ -177,7 +178,7 @@ class _TaskControl:
         self.cancel = threading.Event()
 
 
-class Engine(PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, WorkflowPortsMixin):
+class Engine(PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, WorkflowPortsMixin, SampleLibraryHostMixin):
     def __init__(self, session: str):
         self.session = session
         self.shm: FrameShm | None = None
@@ -386,7 +387,7 @@ class Engine(PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitG
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"reference_color_protocol":1, "studio_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"reference_color_protocol":1,"sample_library_protocol":1, "studio_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -6771,7 +6772,7 @@ class Engine(PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitG
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("hello", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("hello", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light",
                "deform", "lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -6810,6 +6811,8 @@ class Engine(PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitG
             if fn is None:
                 emit({"event": "error", "error": f"未知命令: {name}"})
                 return
+            if name in ('sample_library', 'sample_library_cancel'):
+                fn(msg); return
             if name not in ('hello', 'local_grade_live'):
                 live_grade = self.__dict__.get('_local_grade_live_owner')
                 if live_grade is not None: live_grade.invalidate()
@@ -6933,7 +6936,7 @@ class Engine(PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitG
 
     def run(self):
         table = self._dispatch_table()
-        # Reader only enqueues; all editing and snapshot ticks stay on this one
+        # Reader enqueues or sets cancellation Events; editing and ticks stay on this one
         # execution sequence. One queued line bounds read-ahead/backpressure.
         inbox = queue.Queue(maxsize=1)
         reader_stop = threading.Event()
@@ -6951,39 +6954,10 @@ class Engine(PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitG
                 self.shm.close()
                 self.shm.unlink()
             raise
-        def enqueue(line):
-            while not reader_stop.is_set():
-                try:
-                    inbox.put(line, timeout=.05)
-                    return True
-                except queue.Full:
-                    pass
-            return False
-        def read_commands():
-            pending = bytearray()
-            try:
-                while not reader_stop.is_set():
-                    ready, _, _ = select.select([input_fd, wake_read], [], [])
-                    if wake_read in ready:
-                        return
-                    chunk = os.read(input_fd, 65536)
-                    if not chunk:
-                        if pending and not enqueue(pending.decode("utf-8")):
-                            return
-                        enqueue("")
-                        return
-                    pending.extend(chunk)
-                    while True:
-                        newline = pending.find(b"\n")
-                        if newline < 0:
-                            break
-                        line = pending[:newline+1].decode("utf-8")
-                        del pending[:newline+1]
-                        if not enqueue(line):
-                            return
-            except Exception as exc:
-                enqueue({"read_error": str(exc)})
-        reader = threading.Thread(target=read_commands, name="command-reader")
+        sample_host = self._sample_library_host()
+        reader = threading.Thread(target=read_commands, name="command-reader",
+            args=(input_fd, wake_read, inbox, reader_stop),
+            kwargs={"ingress": sample_host.observe_line, "on_eof": sample_host.stop})
         try:
             reader.start()
             while not self._quit:
@@ -7010,6 +6984,7 @@ class Engine(PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitG
                     break
                 self._process_line(line, table)
         finally:
+            sample_host.stop()
             reader_stop.set()
             try:
                 os.write(wake_write, b"x")

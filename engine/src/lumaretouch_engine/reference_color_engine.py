@@ -6,6 +6,9 @@ from .optics_candidate_identity import fingerprint
 
 
 def render(engine,row,candidate_state,document_id,revision,*,reference=False,cancelled=lambda:False):
+    def check_cancel(*_progress):
+        if cancelled(): raise ValueError('完整参考渲染已取消，未提交样片或编辑')
+    check_cancel()
     admit(candidate_state)
     from .decode import load_full,is_raw,_source_bits
     from .export_recipe import build_export_spec
@@ -36,7 +39,9 @@ def render(engine,row,candidate_state,document_id,revision,*,reference=False,can
         with Image.open(path) as image:
             if image.width*image.height>limit:raise ValueError('目标源图超过本次完整编辑内存预算')
             bits=16 if _source_bits(image)>8 else 8
+    check_cancel()
     decoded=load_full(path,max_px=limit,device='cpu',want_bits=bits)
+    check_cancel()
     if M.file_stamp(path)!=stamp:raise ValueError('自动目标在解码期间变化')
     if (decoded.h,decoded.w)!=(decoded.src_h,decoded.src_w) or decoded.draft_used or (decoded.raw or {}).get('used_preview') or (decoded.raw or {}).get('half_size'):
         raise ValueError('参考统一要求真实完整原片，不能使用代理或相机预览')
@@ -56,7 +61,8 @@ def render(engine,row,candidate_state,document_id,revision,*,reference=False,can
     if skipped:raise ValueError('自动预检不能略过目标上游效果：'+', '.join(map(str,skipped)))
     from .reference_color_runtime import verify_export
     verify_export(snap,path,(decoded.h,decoded.w))
-    rgb,_=export_float(decoded.rgb,spec,geometry=(snap['crop_rect'],snap['crop_rotation']))
+    rgb,_=export_float(decoded.rgb,spec,geometry=(snap['crop_rect'],snap['crop_rotation']),progress=check_cancel)
+    check_cancel()
     if (M.file_stamp(path)!=stamp or str(versions.version(row).revision)!=str(revision)
             or fingerprint(candidate_state)!=candidate_key):
         raise ValueError('参考或目标完整候选在预检期间变化')

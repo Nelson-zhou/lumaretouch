@@ -944,6 +944,7 @@ export interface EngineStatus {
     eye_shape_protocol?: number;
     mouth_shape_protocol?: number;
     reference_color_protocol?: number;
+    sample_library_protocol?: number;
     effect_recovery_protocol?: number;
     optics_protocol?: number;
     sky_replacement_protocol?: number;

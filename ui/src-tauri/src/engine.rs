@@ -1,7 +1,7 @@
 //! 引擎子进程：spawn + JSON lines 事件回读。
 
-use std::io::{BufRead, BufReader};
-use std::process::{Child, Command, Stdio};
+use std::io::{self, BufRead, BufReader, Write};
+use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
@@ -11,9 +11,32 @@ use serde_json::{json, Value};
 use crate::shm::ShmReader;
 use crate::AppState;
 
+/// The normal dispatcher and cancellation control lane share exactly one writer.
+/// Each complete JSON line holds this mutex until every byte has been written.
+#[derive(Clone)]
+struct EngineInput(Arc<Mutex<Option<ChildStdin>>>);
+impl EngineInput {
+    fn with_writer<T>(&self, write: impl FnOnce(&mut ChildStdin) -> io::Result<T>) -> io::Result<T> {
+        let mut guard = self.0.lock().map_err(|_| io::Error::new(io::ErrorKind::Other, "engine stdin lock poisoned"))?;
+        let writer = guard.as_mut().ok_or_else(|| io::Error::new(io::ErrorKind::BrokenPipe, "engine stdin closed"))?;
+        write(writer)
+    }
+    fn close(&self) {
+        // Recover the writer even after poisoning: all clones must observe EOF.
+        let mut guard = self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        drop(guard.take());
+    }
+}
+impl Write for EngineInput {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> { self.with_writer(|writer| writer.write(bytes)) }
+    fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> { self.with_writer(|writer| writer.write_all(bytes)) }
+    fn flush(&mut self) -> io::Result<()> { self.with_writer(|writer| writer.flush()) }
+}
+
 pub struct EngineHandle {
     epoch:[u8;16],
     dispatcher: Arc<crate::dispatch::Dispatcher>,
+    input: EngineInput,
     child: Arc<Mutex<Child>>,
     alive: Arc<AtomicBool>,
     inspection_root: Arc<crate::inspection_io::Root>,
@@ -22,10 +45,33 @@ pub struct EngineHandle {
 impl EngineHandle {
     pub fn epoch(&self)->[u8;16]{self.epoch}
     pub fn send(&self, cmd: Value) -> Result<(), String> {
+        // Some reviewed native APIs send directly, outside AppState dispatch.
+        // Fence them too, including shutdown; library reads are explicitly exempt.
+        if crate::sample_library_api::invalidates_capture(&cmd) {
+            crate::sample_library_api::invalidate_captures(self)?;
+        }
         self.dispatcher.enqueue(None, cmd)
     }
 
+    /// Cancellation is the only out-of-band command. It must reach the Python
+    /// reader while the acknowledged command is still rendering/importing.
+    pub(crate) fn cancel_sample_library(&self, request_id: &str) -> Result<(), String> {
+        if !self.is_alive() { return Err("引擎已结束；取消结果未确认".into()); }
+        let mut line = serde_json::to_vec(&json!({"cmd":"sample_library_cancel", "request_id":request_id}))
+            .map_err(|error| error.to_string())?;
+        line.push(b'\n');
+        if let Err(error) = self.input.with_writer(|writer| writer.write_all(&line).and_then(|_| writer.flush())) {
+            self.dispatcher.close();
+            self.input.close();
+            return Err(format!("取消请求写入失败，未重试：{error}"));
+        }
+        Ok(())
+    }
+
     pub fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
+        if crate::sample_library_api::invalidates_capture(&cmd) {
+            crate::sample_library_api::invalidate_captures(self)?;
+        }
         self.dispatcher.enqueue(Some(key), cmd)
     }
 
@@ -70,11 +116,16 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
         .spawn()
         .unwrap_or_else(|e| panic!("启动引擎失败 ({py}): {e}"));
 
-    let stdin = child.stdin.take().expect("拿不到引擎 stdin");
+    let input = EngineInput(Arc::new(Mutex::new(Some(child.stdin.take().expect("拿不到引擎 stdin")))));
     let dispatcher = crate::dispatch::Dispatcher::new();
     {
-        let d=dispatcher.clone(); let st=state.clone();
-        thread::spawn(move || { if let Err(e)=d.run(stdin) { d.close(); st.push_log(e); } });
+        let d=dispatcher.clone(); let st=state.clone(); let stdin=input.clone();
+        thread::spawn(move || {
+            if let Err(error) = d.run(stdin.clone()) { d.close(); st.push_log(error); }
+            // The handle retains a control-lane clone; explicitly close every
+            // clone after dispatch ends so write failures cannot suppress EOF.
+            stdin.close();
+        });
     }
     let stdout = child.stdout.take().expect("拿不到引擎 stdout");
     let stderr = child.stderr.take().expect("拿不到引擎 stderr");
@@ -139,6 +190,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             }
             // Drain every accepted stdout event before synthesizing unknown outcomes.
             crate::people_api::ended(inspection_epoch);
+            crate::sample_library_api::ended(inspection_epoch);
             st.batch_results.lock().unwrap().ended(inspection_epoch);
             st.preset_results.lock().unwrap().ended(inspection_epoch);
             st.white_balance_results.lock().unwrap().ended(inspection_epoch);
@@ -165,6 +217,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
     EngineHandle {
         epoch:inspection_epoch,
         dispatcher,
+        input,
         child,
         alive,
         inspection_root,
@@ -182,6 +235,8 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
     };
     match v.get("event").and_then(|e| e.as_str()).unwrap_or("") {
         "inspection_snapshot"=>state.on_inspection_event(inspection_epoch,&v),
+        "sample_library_result" => crate::sample_library_api::receive(inspection_epoch, &v),
+        "sample_library_cancel_ack" => (),
         "batch_result"=>state.batch_results.lock().unwrap().receive(inspection_epoch,&v),
         "people_result" => {
             crate::people_api::receive(inspection_epoch, &v);
@@ -272,6 +327,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             let mut inspection=state.inspection.lock().unwrap();
             if inspection.epoch!=inspection_epoch{return;}
             inspection.ready(inspection_epoch,v["inspection_protocol"].as_u64()==Some(1));
+            crate::sample_library_api::ready(inspection_epoch, v["sample_library_protocol"].as_u64() == Some(1));
             state.batch_results.lock().unwrap().ready(inspection_epoch,v["batch_preflight_protocol"].as_u64()==Some(1));
             state.preset_results.lock().unwrap().ready(inspection_epoch,v["preset_result_protocol"].as_u64()==Some(1));
             state.white_balance_results.lock().unwrap().ready(inspection_epoch,v["white_balance_result_protocol"].as_u64()==Some(1));

@@ -35,6 +35,7 @@ mod capture_wire;
 mod color_capture_host;
 mod receipt_host;
 mod people_api;
+mod sample_library_api;
 mod portrait_api;
 mod preset_host;
 mod preset_api;
@@ -1967,12 +1968,6 @@ fn m0_env() -> Value {
     })
 }
 
-/// 把结果回显到 `tauri dev` 的标准输出，便于跑靶脚本直接采集。
-#[tauri::command]
-fn report(line: String) {
-    println!("{line}");
-}
-
 
 fn main() {
     let state = Arc::new(AppState::new());
@@ -1990,6 +1985,7 @@ fn main() {
             engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, compare_status, precompute,
             inpaint, light, portrait_api::deform, lut, grade, portrait_api::enhance, background, export, session, filmstrip, history,
             people_api::people,
+            sample_library_api::sample_library, sample_library_api::sample_library_choose,
             color_capture_api::capture_arm, color_capture_api::capture_status, color_capture_api::capture_frame,
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
             source_patch_api::source_patch_capture, source_patch_api::source_patch_capture_status, source_patch_api::source_patch_capture_frame,
@@ -2013,7 +2009,7 @@ fn main() {
             project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, lip_makeup_api::lip_makeup, brow_shape_api::brow_shape, nose_shape_api::nose_shape, eye_shape_api::eye_shape, mouth_shape_api::mouth_shape, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
             prompted_mask_api::prompted_masks, prompted_mask_api::prompted_masks_status,
             prompted_model_api::prompted_model, prompted_model_api::prompted_model_status,
-            report, app_shutdown::quit
+            native_dispatch::report, app_shutdown::quit
         ])
         .build(tauri::generate_context!())
         .expect("运行 LumaRetouch 失败")
