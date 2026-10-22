@@ -64,6 +64,7 @@ from .deform import (IRIS_LEFT, IRIS_RIM_LEFT, IRIS_RIM_RIGHT, IRIS_RIGHT, LIP_I
                      LIP_INNER_TOP, MOUTH_CORNER_LEFT, MOUTH_CORNER_RIGHT)
 from .grade import hsv_to_rgb_np, rgb_to_hsv_np, smoothstep
 
+AMOUNT_KEYS = ("sclera", "iris", "teeth", "dark_circles", "eye_bags")
 SUBS = ("sclera", "iris", "teeth")      # 三个子功能，顺序即权重场第 0 轴的顺序
 AMOUNT_LIMIT = 1.0                      # 滑块值域 [0,1]；这一层没有负档（"反向"无安全含义）
 NUM_LANDMARKS = 478
@@ -136,12 +137,12 @@ def check_amounts(amounts) -> dict:
         given = amounts
     else:
         raise EnhanceError(f"enhance 参数要是字典，得到 {type(amounts).__name__}")
-    unknown = sorted(set(given) - set(SUBS))
+    unknown = sorted(set(given) - set(AMOUNT_KEYS))
     if unknown:
         raise EnhanceError(f"enhance 不认这些子功能：{', '.join(unknown)}"
-                           f"（可用：{', '.join(SUBS)}）")
+                           f"（可用：{', '.join(AMOUNT_KEYS)}）")
     out = {}
-    for k in SUBS:
+    for k in AMOUNT_KEYS:
         v = given.get(k, 0.0)
         try:
             f = float(v)

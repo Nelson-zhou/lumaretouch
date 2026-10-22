@@ -23,3 +23,11 @@ Modifications for LumaRetouch, 2026-10-22:
 The corresponding source is distributed in this repository/package. Retain this
 notice and the accompanying AGPL-3.0 license with copies of these derived files.
 This notice does not relicense unrelated LumaRetouch or third-party components.
+
+Additional under-eye derived files:
+  under_eye.py, eye_filters.py, eye_colour.py
+  Full source hashes and adaptation notes: UNDER_EYE_NOTICE in this directory.
+  Same author, pinned upstream revision and AGPL-3.0-only terms apply.
+
+Fine clothing-crease support also derives from this same pinned revision.
+See FABRIC_NOTICE for original files, changes and retained AGPL-3.0-only terms.

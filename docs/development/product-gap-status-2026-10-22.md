@@ -1,6 +1,6 @@
 # Product coverage checkpoint — 2026-10-22
 
-Baseline source tree:5e5b32f108b2510554583bf0459604403a561565. This updates the
+Latest published code checkpoint:1150ca6fe12b87e5a3f00180a6816949059fcc66. This updates the
 older sampled audits, not a claim to have independently accepted every handbook
 requirement. The original product handbook and AI development package remain the
 scope; deferred real-device validation does not remove any feature.
@@ -35,7 +35,8 @@ must be read with subsequent corrections, not copied as today's missing-feature 
 2. Detailed portrait families: independent body, hair, makeup, clothing, hand/foot
    and many blemish/reshaping controls. One related slider does not close a family.
 3. Local editing: persisted composable mask-object stack, selectors/ranges/gradients,
-   independent sampled patch/clone, effect recovery and full liquify protection.
+   independent clone, effect recovery and full liquify protection. Source-sampled
+   patch is now connected in code (see source-patch-tool.md), not yet accepted.
 4. Multi-person/cross-image workflows: grouping, parameter-level inheritance and
    explicitly confirmed cross-image identity associations.
 5. Advanced delivery: watermark/layout/printing and other specified output workflows.
@@ -63,5 +64,24 @@ Direct related projects have been identified for source-level comparison:
 README features are claims to inspect, not proof of quality or drop-in compatibility.
 Pin source revisions, trace UI→processing→export, inspect tests, separate code and
 model licensing, and compare integration cost before copying or choosing a new base.
-No external code has been imported and this checkpoint does not change this project's
-license, branch policy, installed application or original functional scope.
+RapidRetouch source-patch code has now been adapted with AGPL-3.0-only attribution
+and bundled license; subsequent under-eye/clothing adapters retain the same source
+obligations. Existing unrelated source licenses remain unchanged. The development
+branch policy, installed application and original functional scope are unchanged.
+
+## Development-first delivery policy
+
+User confirmed on 2026-10-22 that complete function packages take priority over
+per-change regression loops. Continue implementation without waiting for each CI
+result; consolidate behavioral and physical acceptance at phase end. Keep necessary
+interface/compile correctness, preserve tests already written, and label unverified
+work explicitly rather than reporting it as accepted.
+
+Additional development-first code packages (not acceptance claims):
+- Independent dark-circle and eye-bag controls use actual selected-face landmarks,
+  retained source-derived correction, history/project and full-resolution replay.
+  The preserve-aegyo-sal control and broader makeup family remain separate gaps.
+- Fine clothing-crease correction uses the actual semantic clothes channel and
+  connects state/history/project/preview/full export. It is not garment synthesis,
+  coarse-fold removal or upper/lower garment separation. Cross-image processing
+  without that image's own clothing mask is explicitly rejected.

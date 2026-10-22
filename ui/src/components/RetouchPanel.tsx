@@ -1,3 +1,4 @@
+import {FabricPanel} from "../fabric/FabricPanel";
 import {HistogramPanel} from "./HistogramPanel";
 import {LevelsEditor} from "./LevelsEditor";
 import { CurveEditor } from "./CurveEditor";
@@ -235,6 +236,8 @@ const WIRED: Record<string, string> = {
   "PC-32466|脸型预设/幼态": "deform.preset:幼态",
   "PC-32466|脸型预设/英气": "deform.preset:英气",
   "PC-32468|微笑嘴角": "deform.smile",
+  "PC-32464|面部祛瑕疵/祛黑眼圈": "enh.dark_circles",
+  "PC-32464|面部祛瑕疵/祛眼袋": "enh.eye_bags",
   // 五官细节
   "PC-32470|亮眼/眼白": "enh.sclera",
   "PC-32470|亮眼/眼瞳": "enh.iris",
@@ -284,6 +287,8 @@ const WIRE_LABEL: Record<string, string> = {
   "deform.big_eye": "大眼",
   "deform.small_chin": "小下巴",
   "deform.smile": "微笑",
+  "enh.dark_circles": "祛黑眼圈",
+  "enh.eye_bags": "祛眼袋",
   "enh.sclera": "眼白提亮",
   "enh.iris": "眼瞳提亮",
   "enh.teeth": "牙齿美白",
@@ -503,6 +508,8 @@ export default function RetouchPanel(props: RetouchProps) {
             onReset={() => commitDeform({ [key]: 0 })} />
         );
       }
+      case "enh.dark_circles":
+      case "enh.eye_bags":
       case "enh.sclera":
       case "enh.iris":
       case "enh.teeth": {
@@ -814,6 +821,7 @@ export default function RetouchPanel(props: RetouchProps) {
     if (fid === "PC-32454") return gradeBlock;
     if (fid === "PC-32475") return bgBlock;
     if (fid === "PC-47209") return historyBlock;
+    if (fid === "PC-32477") return <FabricPanel value={doc?.fabric} documentId={doc?.document_id} revision={status?.doc_rev??0} disabled={dim} onDone={props.onDone} note={props.note}/>;
     if (fid === "PC-32482") return <>{props.sourcePatchPanel}{brushBlock}</>;
     return null;
   };
@@ -923,6 +931,7 @@ export default function RetouchPanel(props: RetouchProps) {
                 <SpecNodes nodes={tree}
                   openPaths={openPathsFor(f)} renderExtra={node=>renderExtra(node,f.id)}
                   renderLeaf={(leaf, name) => {
+                    if(f.id==='PC-32477'&&leaf.path==='衣服祛褶皱/祛细褶皱')return null;
                     if(f.id==='PC-32482'&&leaf.path==='修补工具'&&props.sourcePatchPanel)return null;
                     const kind = WIRED[`${f.id}|${leaf.path}`];
                     return kind ? renderWired(leaf, name, kind)

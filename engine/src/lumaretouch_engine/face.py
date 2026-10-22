@@ -471,11 +471,15 @@ class MediaPipeFace:
         if not cm:
             raise RuntimeError("MediaPipe 分割没返回置信度掩膜（旧代码读的是 seg.mask，这个属性在 "
                                "ImageSegmenter 上不存在，静默拿到空值会被当成“检不到”而跳层）")
-        from .semantic_masks import skin_from_multiclass, skin_edit_weight
+        from .semantic_masks import skin_from_multiclass, skin_edit_weight, clothes_from_multiclass
         confidence = []
         for channel in cm:
             value = channel.numpy_view
             confidence.append(value() if callable(value) else value)
+        clothes = clothes_from_multiclass(confidence)
+        if clothes.shape != (h, w):
+            clothes = _resize_float(clothes, h, w)
+        clothes = skin_edit_weight(clothes)
         mask = skin_from_multiclass(confidence)
         if mask.shape != (h, w):
             mask = _resize_float(mask, h, w)
@@ -495,7 +499,7 @@ class MediaPipeFace:
             all_landmarks=all_pts,
             face_index=0,
             # Only body-skin + face-skin, never the whole person probability.
-            masks={"skin": mask},
+            masks={"skin": mask, "clothes": clothes},
             backend=self.name,
             t_detect_ms=t_detect,
             t_masks_ms=t_masks,

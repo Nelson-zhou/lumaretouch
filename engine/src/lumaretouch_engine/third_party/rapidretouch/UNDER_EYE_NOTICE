@@ -1,0 +1,26 @@
+RapidRetouch-derived under-eye correction
+Original author: Chris Cork
+License: GNU Affero General Public License version 3 only (AGPL-3.0-only)
+Upstream: https://github.com/crispin81/RapidRetouch
+Pinned revision: 5e9d9c1d2770ff29d11a3879e5a90aad5887e028
+
+Derived files: under_eye.py, eye_filters.py, eye_colour.py in this directory.
+Original files: engine/src/rapidretouch_engine/tools/eyes.py, filters.py, colour.py.
+Full license: LICENSE in this directory.
+
+Modifications for LumaRetouch, 2026-10-22:
+- Retain only dark-circle tone interpolation and eye-bag frequency/crease correction.
+- Neutral zero defaults; leave LumaRetouch's existing eyes/teeth controls unchanged.
+- Lazy OpenCV dependency and direct NumPy transfer functions for bounded face ROIs.
+- Protect eye openings, face boundary and unchanged pixels from conversion round-trip.
+- Guard degenerate lower-lid segment denominators.
+- Selected-face source-ROI delta adapter solves before export tile clipping.
+
+Corresponding source is included in the engine package. Preserve this notice and
+LICENSE when redistributing. No warranty. This notice does not relicense unrelated
+LumaRetouch code. GPLv3 section 13 / AGPLv3 combined-work obligations still apply.
+
+Original Git blob identities (source file bytes):
+  eyes.py:    5e743fc551fb284815675252735d10ca8fc2bbbc
+  filters.py: b3fd98ffb2324989c8c9ea800e3aff239e97f8db
+  colour.py:  52725cdcbce8d0fac0b1286285c3c59beececc1d

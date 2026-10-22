@@ -57,6 +57,11 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
                       scale=int(snap.get("scale", 1)),
                       upscale_backend=str(snap.get("upscale_backend", "lanczos3")),
                       sharpen_amount=float(snap.get("sharpen", 0.0)))
+    from .fabric_export import configure_export
+    if for_document:
+        configure_export(spec, snap, eh, ew)
+    elif float(snap.get("fabric_amount", 0)) != 0:
+        raise ValueError("衣物细褶需要逐图分析衣物语义蒙版，禁止复用另一张图片的蒙版")
     if not for_document:
         skipped += ["repair", "light", "deform", "channel（笔迹与掩膜属于当前文档）",
                     "enhance（眼牙掩膜是从当前那一张脸的关键点画的，不能搬到别的图）",

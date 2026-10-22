@@ -14,6 +14,7 @@ mod edit_commands;
 #[path = "../../../core/levels/levels.rs"]
 mod levels_core;
 mod levels_api;
+mod fabric_api;
 mod color_scopes_api;
 mod color_scopes_host;
 mod engine;
@@ -1183,8 +1184,12 @@ fn enhance(
     sclera: Option<f64>,
     iris: Option<f64>,
     teeth: Option<f64>,
+    dark_circles: Option<f64>,
+    eye_bags: Option<f64>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "enhance", "action": action});
+    if let Some(v) = dark_circles { cmd["dark_circles"] = json!(v); }
+    if let Some(v) = eye_bags { cmd["eye_bags"] = json!(v); }
     if let Some(v) = sclera {
         cmd["sclera"] = json!(v);
     }
@@ -1997,7 +2002,7 @@ fn main() {
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
             source_patch_api::source_patch_capture, source_patch_api::source_patch_capture_status, source_patch_api::source_patch_capture_frame,
             source_patch_api::source_patch, source_patch_api::source_patch_result,
-            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
+            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
             report, quit
         ])
         .run(tauri::generate_context!())

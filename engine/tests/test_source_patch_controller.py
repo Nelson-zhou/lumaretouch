@@ -69,9 +69,9 @@ def test_cached_retry_never_requires_a_live_capture_or_applies_again():
     assert not events[-1]["success"] and len(calls) == 1
 
 
-def test_zero_raster_displacement_is_no_change_without_a_history_step():
+def test_exact_zero_displacement_is_no_change_without_a_history_step():
     owner, _, events, calls, prepared, _ = fixture()
-    p = request(offset=[.001, 0.])
+    p = request(offset=[0., 0.])
     assert not owner.prepare(p)
     owner.finish(p)
     assert events[-1]["success"] and events[-1]["no_change"]

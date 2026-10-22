@@ -49,3 +49,16 @@ def skin_edit_weight(probability):
     if not np.isfinite(p).all() or np.any(p < 0) or np.any(p > 1):
         raise ValueError("skin probability must be finite and within [0,1]")
     return np.ascontiguousarray(np.maximum(2 * p - 1, 0))
+
+
+def clothes_from_multiclass(confidence_masks):
+    """Keep only the documented clothes class, after the same strict validation.
+
+    A class must beat all other classes combined. No person-mask or skin inverse
+    fallback is allowed: hair, arms and background are not clothes.
+    """
+    skin_from_multiclass(confidence_masks)
+    value = np.asarray(confidence_masks[4], dtype=np.float32)
+    if value.ndim == 3:
+        value = value[..., 0]
+    return np.ascontiguousarray(np.clip(value, 0, 1))

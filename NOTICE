@@ -96,3 +96,13 @@ lumaretouch_engine/third_party/rapidretouch/NOTICE 与 LICENSE。
 
 GPLv3 与 AGPLv3 组合部分按 GPLv3 第13条适用组合义务，包括 AGPLv3
 对通过网络交互用户的对应源码提供要求；不会因保留分文件许可而免除该义务。
+
+RapidRetouch 眼下修正复用
+  third_party/rapidretouch/under_eye.py、eye_filters.py、eye_colour.py 保留
+  AGPL-3.0-only；黑眼圈与眼袋默认归零，复用边界/出处/修改详见同目录
+  UNDER_EYE_NOTICE，完整许可为 LICENSE。原作者 Chris Cork，固定版本同上。
+
+RapidRetouch 衣物细褶复用
+  ops/fabric.py 与 ops/fabric_math.py 保留 AGPL-3.0-only；仅在真实衣物
+  语义蒙版内处理细褶明暗，不属于衣物生成。出处与修改见
+  lumaretouch_engine/third_party/rapidretouch/FABRIC_NOTICE，完整许可同目录 LICENSE。

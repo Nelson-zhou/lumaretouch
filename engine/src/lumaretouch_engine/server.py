@@ -39,6 +39,7 @@ from .ops import curves as CURVES
 from .ops import levels as LEVELS
 from .levels_controller import LevelsController, LevelsPorts
 from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
+from . import fabric_controller as FABRIC
 from .ops import enhance as ENH
 from .ops.grade import DH_LIMIT, DS_LIMIT, DV_LIMIT, GradeError, check_params
 from .ops.hsl import (BAND_CENTERS, BAND_NAMES, HUE_LIMIT as HSL_HUE_LIMIT,
@@ -269,7 +270,8 @@ class Engine:
         # 而画面确实"有人在动"，看不出来。
         # `_enhance_defer` 是 CORE-001 那一课的直接产物：关键点不随工程文件走，重开那一刻
         # 必然出现"用户有一层美白而场还没画出来"，没有这一格就会像上一版那样整层归零。
-        self._enhance = dict(amounts={k: 0.0 for k in ENH.SUBS}, built=False, box=None)
+        self._enhance = dict(amounts={k: 0.0 for k in ENH.AMOUNT_KEYS}, built=False, box=None)
+        self._fabric_amount = 0.0
         self._enhance_defer = False
         # P0 全局曝光/白平衡：会话侧同样只存那三个数（加一个参考白）。它必须与
         # _grade 走完全一样的生命周期：初始化、换设备重挂、快照、状态上报——漏一个
@@ -417,7 +419,7 @@ class Engine:
               "deform_kinds": list(KINDS),
               # 眼牙增强（PORTRAIT-009）的三个子功能名单与值域同样由引擎说：前端自己
               # 抄一份"眼白/虹膜/牙齿"就是下一轮加一格时漏改的那一处（而且 TS 一句不报）
-              "enhance_subs": list(ENH.SUBS),
+              "enhance_subs": list(ENH.AMOUNT_KEYS),
               "enhance_range": [0.0, float(ENH.AMOUNT_LIMIT)],
               "enhance_actions": list(self.ENHANCE_ACTIONS),
               # 人脸名单能收的动作（PORTRAIT-006）：前端自己刻一份就是下一轮加动作时
@@ -863,7 +865,7 @@ class Engine:
     # ------------------------------------------------------------ 文档状态（M5-a 底片条）
     # 「一份文档状态到底包含哪些字段」只有这一处名单。新加一层而不进来，切文档就会
     # 静默丢掉那一层 —— 那是本仓最贵的一族坑（「会话迁了、图层没迁」）的新变体。
-    DOC_FIELDS = ("_strength", "_params", "_channel", "_repair_ops", "_redo_ops", "_op_seq",
+    DOC_FIELDS = ("_fabric_amount", "_strength", "_params", "_channel", "_repair_ops", "_redo_ops", "_op_seq",
                   "_light_ops", "_light_redo", "_light", "_deform", "_deform_defer",
                   "_deform_default", "_deform_overrides", "_lut",
                   "_lut_amount",
@@ -905,7 +907,7 @@ class Engine:
         本身一条没错——旧图的掩膜/笔迹对新图没有任何意义。今天它多了一个身份：底片条
         里「这张图还没被调过」的定义。同一个口径写两处就会漂，所以抽成一份。
         """
-        fresh = {"_strength": _clamp_strength(DEFAULT_STRENGTH),
+        fresh = {"_fabric_amount": 0.0, "_strength": _clamp_strength(DEFAULT_STRENGTH),
                 "_params": dict(radius=DEFAULT_RADIUS, eps=DEFAULT_EPS,
                                 texture_radius=DEFAULT_TEXTURE_RADIUS,
                                 broad_gain=DEFAULT_BROAD_GAIN, mid_gain=DEFAULT_MID_GAIN,
@@ -922,7 +924,7 @@ class Engine:
                 "_lut": None, "_lut_amount": 1.0, "_lut_preset": None,
                 "_grade": (0.0, 0.0, 0.0, 1.0),
                 "_grade_scope": "all", "_grade_mask": None,
-                "_enhance": dict(amounts={k: 0.0 for k in ENH.SUBS}, built=False, box=None),
+                "_enhance": dict(amounts={k: 0.0 for k in ENH.AMOUNT_KEYS}, built=False, box=None),
                 "_enhance_defer": False,
                 "_bg": dict(active=False, matte=None, bg=None, backend=None,
                              tol=None, softness=None),
@@ -952,7 +954,7 @@ class Engine:
         """把 live 字段抄成一份可存的字典。容器一律新抄：存进去的状态与 live 字段共享
         同一个 list，下一次 append 会同时改掉两个文档的状态——查起来就像「切了一次文档，
         上一张的笔迹自己多了一笔」。"""
-        st = {"_strength": float(self._strength), "_channel": self._channel,
+        st = {"_fabric_amount": float(self._fabric_amount), "_strength": float(self._strength), "_channel": self._channel,
               "_params": dict(self._params), "_light": dict(self._light),
               "_deform": {"amounts": dict(self._deform["amounts"]),
                           "built": bool(self._deform["built"])},
@@ -1002,6 +1004,7 @@ class Engine:
         for key in ("_repair_ops", "_redo_ops"):
             validate_repair_ops(st.get(key, []), shape=st.get("_proxy"))
         # Validate WB and compile before changing any live field.
+        st = {**st, "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0))}
         st = WB.normalize_state(st)
         WB.prepare_state(st)
         # Old projects predate curves. Validate/deep-copy before changing any live field.
@@ -1042,7 +1045,7 @@ class Engine:
         # built/defer 可能是 None。一律归一，判据（"有没有这一层"）不许时灵时不灵
         _en = self._enhance or {}
         _am = {}
-        for _k in ENH.SUBS:
+        for _k in ENH.AMOUNT_KEYS:
             try:
                 _am[_k] = float((_en.get("amounts") or {}).get(_k, 0.0) or 0.0)
             except (TypeError, ValueError):
@@ -1171,7 +1174,7 @@ class Engine:
     # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
     # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
     EDIT_CMDS = ("set_strength", "inpaint", "source_patch", "light", "deform", "lut", "grade", "background",
-                 "crop", "exposure", "white_balance", "hsl", "curves", "levels", "preset", "batch", "face", "enhance")
+                 "crop", "exposure", "white_balance", "hsl", "curves", "levels", "preset", "batch", "face", "enhance", "fabric")
     # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
     # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
     # 而 batch 改的就是活动文档的配方——不在这里它就会“同步完了而徽章不亮”。
@@ -1400,6 +1403,7 @@ class Engine:
         elif self._channel:
             emit({"event": "engine_warn", "warn": "蒙版尚未恢复：保留编辑参数，暂不应用该范围的磨皮，不回退为全图"})
         effective_strength, effective_channel = self._retouch_render_args()
+        FABRIC.sync(self)
         pipe.render(effective_strength, channel=effective_channel, **self._params)
         with self._wlock:
             seq, t_emit, slot = shm.write_frame(pipe.read_back(), presentation=self._frame_presentation(str(t0), (d.src_w,d.src_h)))
@@ -1515,7 +1519,7 @@ class Engine:
                 crop["out_full"] = list(_gsz(int(row["src_w"]), int(row["src_h"]),
                                              tuple(self._crop_rect),
                                              float(self._crop_rotation)))
-        return {"document_id": self._load_id,
+        return {"document_id": self._load_id, "fabric": FABRIC.status(self),
                 "strength": float(self._strength), "params": dict(self._params),
                 "channel": self._channel,
                 "history": self._history_report(),
@@ -1545,7 +1549,7 @@ class Engine:
                 # 原因"。UI 的开关与提示必须从这里取：自己记一份就会在换图/重开工程/换人选
                 # 之后替引擎说谎（这一层的 reason 有五种来源，都不是前端能推出来的）
                 "enhance": {"amounts": dict(self._enhance["amounts"]),
-                            "subs": list(ENH.SUBS),
+                            "subs": list(ENH.AMOUNT_KEYS),
                             "limit": [0.0, float(ENH.AMOUNT_LIMIT)],
                             "lit": bool(self._vram.has_enhance()) if self._vram else False,
                             "built": bool(self._enhance["built"]),
@@ -1554,10 +1558,10 @@ class Engine:
                                     else None),
                             "gated_px": {k: int(((self._vram.enhance_facts if self._vram
                                                   else {}) or {}).get(k, {})
-                                                 .get("gated_px", 0)) for k in ENH.SUBS},
+                                                 .get("gated_px", 0)) for k in ENH.AMOUNT_KEYS},
                             "reason": {k: ((self._vram.enhance_facts if self._vram else {})
                                            or {}).get(k, {}).get("reason")
-                                       for k in ENH.SUBS}},
+                                       for k in ENH.AMOUNT_KEYS}},
                 "exposure": {"ev": float(self._exposure[0]),
                              "temperature_shift": float(self._exposure[1]),
                              "tint_shift": float(self._exposure[2]),
@@ -1585,7 +1589,7 @@ class Engine:
 
     def _state_edits(self, st: dict) -> dict:
         """一份状态（live 抄出来的或底片条格子里存着的）里有哪些层。"""
-        return {"repair": len(st["_repair_ops"]), "light": len(st["_light_ops"]),
+        return {"fabric": bool(st.get("_fabric_amount", 0.0)), "repair": len(st["_repair_ops"]), "light": len(st["_light_ops"]),
                 "deform": any(abs(float(v)) > 0.0 for v in st["_deform"]["amounts"].values()),
                 "lut": st["_lut"] is not None, "lut_preset": st["_lut_preset"],
                 "grade": st["_grade"] != (0.0, 0.0, 0.0, 1.0),
@@ -2775,7 +2779,7 @@ class Engine:
 
 
     # ---- PORTRAIT-009：眼牙局部增强 -----------------------------------------
-    ENHANCE_KEYS = {"cmd", "action", "sclera", "iris", "teeth"}
+    ENHANCE_KEYS = {"cmd", "action", *ENH.AMOUNT_KEYS}
     ENHANCE_ACTIONS = ("set", "clear")
 
     def _enhance_intent(self, st: dict | None = None) -> bool:
@@ -2920,6 +2924,8 @@ class Engine:
             payload["note"] = note
         emit(payload)
 
+    def cmd_fabric(self, p: dict): return FABRIC.handle(self, p, emit)
+
     def cmd_enhance(self, p: dict):
         """眼牙局部增强（LNX-PORTRAIT-009）：眼白提亮 / 虹膜增强 / 牙齿美白，各自独立启停。
 
@@ -2936,7 +2942,7 @@ class Engine:
         unknown = sorted(set(p) - self.ENHANCE_KEYS)
         if unknown:
             emit({"event": "error", "error": f"enhance 收到不认识的参数：{', '.join(unknown)}"
-                  "（可用：action / sclera / iris / teeth，名单在 ready 的 enhance_subs 里）"})
+                  "（可用：action / sclera / iris / teeth / dark_circles / eye_bags，名单在 ready 的 enhance_subs 里）"})
             return
         action = p.get("action", "set")
         if action not in self.ENHANCE_ACTIONS:
@@ -2949,14 +2955,14 @@ class Engine:
         if self.bench is not None and self.bench.is_alive():
             emit({"event": "error", "error": "跑靶进行中，拒绝 enhance：先 bench_stop"})
             return
-        given = {k: p[k] for k in ENH.SUBS if p.get(k) is not None}
+        given = {k: p[k] for k in ENH.AMOUNT_KEYS if p.get(k) is not None}
         if action == "set" and not given:
-            emit({"event": "error", "error": "enhance set 什么也没给：三个子功能里至少给一个，"
+            emit({"event": "error", "error": "enhance set 什么也没给：子功能里至少给一个，"
                   "或者走 clear 把整层关掉"})
             return
         merged = dict(self._enhance["amounts"])
         if action == "clear":
-            merged = {k: 0.0 for k in ENH.SUBS}
+            merged = {k: 0.0 for k in ENH.AMOUNT_KEYS}
         else:
             merged.update(given)
         try:
@@ -3179,6 +3185,8 @@ class Engine:
         # 眼牙层同理是"关键点是它的唯一来源"的那一层（PORTRAIT-009）：换后端重算后
         # 不重画掩膜，就是"上报说 mediapipe、屏幕上还在按模板几何美白"
         self._rehang_enhance(pc, replayed_for="precompute")
+        if self._fabric_amount: emit(self._write_current_frame("fabric_rebuild"))
+        self.emit_session_state()
 
     def _rebuild_deform_for_landmarks(self, pc, *, write_frame: bool = True) -> None:
         """关键点更新后重建已常驻的形变层：滑块值保留，单位场跟着新几何走。
@@ -3436,6 +3444,7 @@ class Engine:
                                f"!= 会话 {self._vram.w}x{self._vram.h}：不许把会话尺寸的帧写进别人的槽")
         t0 = monotonic_ns()
         # Original viewing bypasses all layers, rather than merely setting skin strength0.
+        if not original: FABRIC.sync(self)
         st, channel = (0.0, None) if original else self._retouch_render_args()
         if original:
             self._vram.render_original()
@@ -5780,6 +5789,7 @@ class Engine:
                 # 通道必须跟着会话一起迁移：不传 channel 的话，报表里 active_channel 还是 skin，
                 # 而给用户补发的是一帧全图渲染——字段与实际执行不一致正是本仓最贵那个坑的形状
                 strength, channel = self._retouch_render_args()
+                FABRIC.sync(self)
                 self._vram.render(strength, channel=channel, **self._params)
                 with self._wlock:
                     seq, t_emit, slot = self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation())
@@ -5821,6 +5831,7 @@ class Engine:
                     repair_ops=list(st.get("_repair_ops") or []),
                     deform=dict(st.get("_deform") or {"amounts": {}, "built": False}),
                     deform_defer=bool(st.get("_deform_defer")),
+                    fabric_amount=float(st.get("_fabric_amount", 0.0)),
                     enhance=dict(st.get("_enhance") or {"amounts": {}, "built": False}),
                     enhance_defer=bool(st.get("_enhance_defer")),
                     channel=st.get("_channel"),
@@ -6080,6 +6091,7 @@ class Engine:
                     lut=self._lut, lut_amount=self._lut_amount, light=dict(self._light),
                     light_ops=list(self._light_ops), repair_ops=list(self._repair_ops),
                     deform=dict(self._deform), deform_defer=bool(self._deform_defer),
+                    fabric_amount=self._fabric_amount,
                     enhance=dict(self._enhance), enhance_defer=bool(self._enhance_defer),
                     channel=self._channel,
                     # P1-2 换底：snap 必须把 _bg 也带上，否则 _export_snapshot 里那句
@@ -6364,7 +6376,7 @@ class Engine:
             "grade_scope": "all", "lut": None, "lut_amount": 0.0,
             "repair_ops": [], "light_ops": [], "deform": {},
             "crop_rect": (0.0, 0.0, 1.0, 1.0), "crop_rotation": 0.0,
-            "exposure": (0.0,) * 7, "wb_options": WB.default_options(), "hsl": (0.0,) * 24, "enhance": {},
+            "exposure": (0.0,) * 7, "wb_options": WB.default_options(), "hsl": (0.0,) * 24, "enhance": {}, "fabric_amount": 0.0,
             "curves": CURVES.default_curves(), "levels": LEVELS.default_levels(),
         }
         fields = {"_" + key: snap.get(key, value) for key, value in defaults.items()}
@@ -6433,6 +6445,7 @@ class Engine:
             b.append("八色 HSL（有色调偏移）")
         # 眼/牙增强：amounts 里任一非零就是像素级编辑（与 deform 同规：
         # 「条目存在」不等于「作用了」——只有非零位移/非零额度才真的改像素）。
+        if self._fabric_amount: b.append("衣物细褶淡化（有有效调整）")
         _en = (self._enhance or {}).get("amounts") or {}
         _en_nz = sum(1 for v in _en.values() if abs(float(v)) > 0.0)
         if _en_nz:
@@ -6826,7 +6839,7 @@ class Engine:
                # 眼牙增强（LNX-PORTRAIT-009）：它是一次编辑（进撤销栈、打脏标记），所以
                # 两个名单都要有它——上一轮加曝光时只改一边，得到的就是"拖完按撤销纹丝不动
                # 而 UI 一句也不说为什么"（CORE-006 为此专门加了一条用例）
-               "enhance")
+               "enhance", "fabric")
     _HANDLED_LAMBDA = ("bench_stop",)      # 唯一不开成 cmd_* 的那条：只是置停止位
 
     def _dispatch_table(self) -> dict:

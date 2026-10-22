@@ -1,0 +1,21 @@
+RapidRetouch-derived fine clothing-crease brightness correction
+Original author: Chris Cork
+License: GNU Affero General Public License version 3 only (AGPL-3.0-only)
+Upstream: https://github.com/crispin81/RapidRetouch
+Pinned revision: 5e9d9c1d2770ff29d11a3879e5a90aad5887e028
+
+Derived files: ops/fabric.py, ops/fabric_math.py
+Original files: engine/src/rapidretouch_engine/tools/fabric.py,
+  engine/src/rapidretouch_engine/tools/filters.py (blur and masked_blur),
+  engine/src/rapidretouch_engine/tools/colour.py (sRGB transfer functions).
+
+Lumaretouch modifications, 2026-10-22: heuristic clothes-mask generation is not
+included. Explicit MediaPipe six-class semantic clothing support is used instead;
+non-clothing pixels are excluded after measurement. Colour transforms run locally
+without the upstream parallel scheduler. CPU measurement is cached; slider gain
+runs on the existing Torch device. Full-size export measures the complete image
+once before slicing the same field into export tiles.
+
+This corrects fine fabric shading, not garment synthesis or full wrinkle removal.
+The corresponding source is distributed with this package. Retain this notice and
+the accompanying LICENSE with copies of these derived files.

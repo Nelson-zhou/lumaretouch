@@ -42,6 +42,7 @@ from .optional_dependencies import optional_module
 torch = optional_module("torch")
 
 from .ops import enhance as ENH
+from . import under_eye_layer as UNDER
 from .ops.deform import (analytic_frontal_landmarks, controls, face_frame,
                          support_radii, tps_field_from_state, tps_solve)
 from .ops.grade import GradeError, check_params
@@ -143,6 +144,9 @@ class ExportSpec:
     # 不拿预览档那张小掩膜放大——放大一份"身份"掩膜等于把眼睛涂到眉毛上，而且
     # 内容门的相对统计会跟着插值得到的假边一起漂。
     enhance: dict = field(default_factory=dict)
+    fabric_amount: float = 0.0
+    fabric_mask: np.ndarray | None = None
+    fabric_face_px: float | None = None
     # P0 全局曝光/白平衡：(ev, temperature_shift, tint_shift)。导出走的是同一个
     # PreviewPipeline，所以它与预览是同一份算式而不是“第二次实现”——这正是
     # “所见即所出”能当验收口径的原因。reference_k 缺省用层的默认（D65）。
@@ -177,6 +181,9 @@ class ExportSpec:
             WB.prepare_state(state)
         except (ValueError, RuntimeError, OSError) as error:
             raise ExportError(f"White balance export rejected: {error}") from error
+        from .fabric_stage import check_amount
+        self.fabric_amount = check_amount(self.fabric_amount)
+        if self.fabric_amount and self.fabric_mask is None: raise ExportError("衣物细褶缺少衣物语义蒙版")
         self.curves = CURVES.check_curves(self.curves)
         self.levels = LEVELS.check_levels(self.levels)
         s = float(self.strength)
@@ -493,8 +500,11 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     # 而每块重算会把羽化截断在块边界上（那会在出片里留下一条笔直的眼白接缝）。
     # 排在这里而不是最前面：内容门判的是“这份底图上的组”——消除笔先把口腔里的
     # 异物掉掉，那一组的均值就变了，与预览里“先修完再挂眼牙层”是同一条链。
+    from .fabric_export import prepare_export
+    fabric_field = prepare_export(spec, src_u8, base_f, divisor)
     enh_reg = None
     enh_weight = None
+    under_layer = None
     enhance_ms = 0.0
     if any(float(vv) != 0.0 for vv in (spec.enhance or {}).values()):
         t_e = time.perf_counter()
@@ -504,6 +514,13 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         e_win = (base_f[ey0:ey0 + eeh, ex0:ex0 + eew] if base_f is not None
                  else src_u8[ey0:ey0 + eeh, ex0:ex0 + eew].astype(np.float32) / divisor)
         enh_weight, _enh_facts = ENH.refine(enh_reg, np.ascontiguousarray(e_win))
+        if any(spec.enhance.get(k, 0) for k in UNDER.KEYS):
+            uwindow, ulm = UNDER.bounds(spec.landmarks, h, w)
+            uy, ux, uh, uw = uwindow
+            upixels = (base_f[uy:uy+uh, ux:ux+uw] if base_f is not None else
+                       src_u8[uy:uy+uh, ux:ux+uw].astype(np.float32) / divisor)
+            under_layer = UNDER.UnderEyeLayer(uwindow, upixels, ulm)
+            under_layer.solve(spec.enhance)
         enhance_ms = (time.perf_counter() - t_e) * 1000.0
     scale = int(spec.scale)
     plan = UpscalePlan(h, w, scale)          # 表只算一次，每块取自己那一段
@@ -538,6 +555,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                 # 导出器不该去碰那几个字段（“能只改两条的三条状态”是 M2 审过的病）
                 pipe.set_light_ops(sub)
                 pipe.set_light_params(spec.light_exposure, spec.light_radius)
+        if fabric_field is not None:
+            pipe.fabric.install(fabric_field[cy0:cy1, cx0:cx1], spec.fabric_amount)
         if delta is not None and spec.deform_amounts:
             pipe.adopt_deform_field(delta[:, cy0:cy1, cx0:cx1].contiguous().to(device))
         if enh_reg is not None:
@@ -546,6 +565,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             pipe.set_enhance_field(enh_reg.window, enh_weight, origin=(cy0, cx0))
             if spec.enhance:
                 pipe.set_enhance(spec.enhance)
+        if under_layer is not None:
+            UNDER.attach_delta(pipe, under_layer.window, under_layer.delta, origin=(cy0, cx0))
         # 旧调用方可能仍只带 EV/WB 三项：先补长到 7 元组，再判中性/取影调四项。
         expo = (tuple(float(v) for v in spec.exposure) + (0.0,) * 7)[:7]
         if expo != (0.0,) * 7 or WB.has_picks(spec.wb_options) or spec.wb_options["algorithm"] == WB.CORRECTED:
@@ -655,7 +676,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         # 这一层的"重画掩膜"成本单独报：它与形变解场是两种一次性的钱，混在
         # field_ms 里就看不出该优化谁（导出账单里每一段都要能归因，否则只是把没说的话当作没事）
         "enhance_field_ms": round(enhance_ms, 1),
-        "enhance": dict(spec.enhance or {}),
+        "enhance": dict(spec.enhance or {}), "fabric_amount": spec.fabric_amount,
         "per_tile_ms": round(ms / max(len(rects), 1), 2),
         "seg_ms": {**{k: round(v, 2) for k, v in seg.items()},
                    **{k: round(v, 2) for k, v in io.items()}},

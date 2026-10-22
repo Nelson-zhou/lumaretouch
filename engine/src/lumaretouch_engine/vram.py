@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from .ops import curves as curve_ops
 from .levels_stage import LevelsStage
+from .fabric_stage import FabricStage
 
 import math
 from dataclasses import dataclass
@@ -35,6 +36,7 @@ from .ops.deform import (KINDS, analytic_frontal_landmarks, check_amounts,
                          identity_grid, unit_field, warp_t, prepare_warp_t, apply_prepared_warp_t)
 from .ops.light import dodge_burn_t, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
 from .ops import enhance as ENH
+from . import under_eye_layer as UNDER
 from .ops.grade import (DH_LIMIT, DS_LIMIT, DV_LIMIT, check_params, grade_t)
 from .ops.geometry import (MAX_ANGLE as GEOM_ANGLE_LIMIT, check as geometry_check,
                           crop_rotate_t, is_identity as geometry_identity,
@@ -103,6 +105,7 @@ class PreviewPipeline:
         else:
             self.fallback = None
         self.device = torch.device(device)
+        self.fabric = FabricStage(self.device)
         # 源图 float 与 uint8 都留着：float 供滤波，uint8 供"恢复原图"这类需要原始像素的操作
         self.src_u8: torch.Tensor | None = None
         self.src_f32: torch.Tensor | None = None
@@ -196,7 +199,11 @@ class PreviewPipeline:
         # 判据取**源片**那份颜色而不是屏幕上那份：这一层找的是“这里是不是眼白/牙齿”
         # （身份），身份必须在未上色的像素上判，否则一张橙色 LUT 会把嘴唇认成牙齿
         # （与肤色定向“所见即所调”的口径相反，差别写在 ops/enhance.py 头部）。
-        self.enhance_amounts: dict = {k: 0.0 for k in ENH.SUBS}
+        self.enhance_amounts: dict = {k: 0.0 for k in ENH.AMOUNT_KEYS}
+        self.enhance_lm_sig = None
+        self.under_eye_layer = None
+        self.under_eye_delta = None
+        self.under_eye_local = None
         self.enhance_field = None        # (3,fh,fw) float32 [0,1]，窗口那一片的权重原件
         self.enhance_gpu = None          # 同一份的上卡副本
         self.enhance_window = None       # 画布坐标 (y0,x0,fh,fw)（报出去用）
@@ -277,6 +284,7 @@ class PreviewPipeline:
     def _begin_source(self, src_f32, *, src_u8) -> None:
         """两条装载入口的公共体：会话状态的重置只有一份，不靠"两边都记得改"。"""
         self.src_u8 = src_u8
+        self.fabric.clear()
         self.src_f32 = src_f32
         self.frame_gpu = torch.empty((self.h, self.w, 4), dtype=torch.uint8, device=self.device)
         self.frame_gpu[..., 3] = 255
@@ -306,6 +314,10 @@ class PreviewPipeline:
         只放场、不放参数：参数（三个数）是用户意图，属于文档状态，由命令层与工程档管；
         场是这份意图在这张图上的落地物，可以随时从关键点重算。
         """
+        self.enhance_lm_sig = None
+        self.under_eye_layer = None
+        self.under_eye_delta = None
+        self.under_eye_local = None
         self.enhance_field = None
         self.enhance_gpu = None
         self.enhance_window = None
@@ -471,7 +483,7 @@ class PreviewPipeline:
         # 输出变换之前做=局部修容层在调整图层下面，是工业流程而不是随手选）。
         # 八色 HSL 紧跟曝光层之后、LUT 之前：它读的是曝光后的那份颜色，而表是
         # 输出变换（把 HSL 放在表后面就是“调完再套一层风格”，两份调整互相污染）。
-        out = self.apply_enhance(self.apply_deform(out))
+        out = self.apply_enhance(self.apply_deform(self.fabric.apply(out)))
         if scope_tap is not None: scope_tap("wb-input", out)
         if render_stage == 'wb-input':
             return out
@@ -1578,7 +1590,9 @@ class PreviewPipeline:
         """
         if not any(float(v) != 0.0 for v in self.enhance_amounts.values()):
             return False
-        return bool(self.enhance_gpu is not None and float(self.enhance_gpu.max()) > 0.0)
+        return bool((self.under_eye_delta is not None and bool(self.under_eye_delta.any())) or
+                    (self.enhance_gpu is not None and any(self.enhance_amounts.get(k, 0) > 0 and
+                     float(self.enhance_gpu[i].max()) > 0 for i, k in enumerate(ENH.SUBS))))
 
     def build_enhance(self, landmarks) -> dict:
         """从 478 点重画这一层：几何栅格 + 内容门，然后上一次卡。
@@ -1601,6 +1615,12 @@ class PreviewPipeline:
         self.enhance_lm_sig = self._lm_fingerprint(landmarks)
         self.enhance_window = tuple(reg.window)
         self.enhance_local = tuple(reg.window)     # 会话原点就是画布原点
+        window, lm = UNDER.bounds(landmarks, self.h, self.w)
+        uy, ux, uh, uw = window
+        under_source = self.repair_base if self.repair_base is not None else self.src_f32
+        pixels = under_source[0, :, uy:uy+uh, ux:ux+uw].permute(1, 2, 0).to("cpu", torch.float32).numpy()
+        self.under_eye_layer = UNDER.UnderEyeLayer(window, pixels, lm)
+        self.under_eye_layer.source_version = self.repair_version
         self.enhance_facts = facts
         self.enhance_info = reg.info
         self.enhance_build_ms = round((time.perf_counter() - t0) * 1000.0, 2)
@@ -1649,6 +1669,10 @@ class PreviewPipeline:
 
     def clear_enhance_field(self) -> None:
         """放下权重场（参数不动）。没场的层就是没点火，`has_enhance()` 会如实说 false。"""
+        self.enhance_lm_sig = None
+        self.under_eye_layer = None
+        self.under_eye_delta = None
+        self.under_eye_local = None
         self.enhance_field = None
         self.enhance_gpu = None
         self.enhance_window = None
@@ -1657,7 +1681,13 @@ class PreviewPipeline:
 
     def set_enhance(self, amounts) -> dict:
         """提交三个数。先全量校验，后才写入——被拒不留半截状态（与各层 setter 同规）。"""
-        self.enhance_amounts = ENH.check_amounts(amounts)
+        checked = ENH.check_amounts(amounts)
+        UNDER.refresh_source(self)
+        if self.under_eye_layer is not None:
+            delta = self.under_eye_layer.solve(checked)
+            UNDER.attach_delta(self, self.under_eye_layer.window, delta)
+            self.enhance_facts.update(self.under_eye_layer.facts)
+        self.enhance_amounts = checked
         return self._enhance_payload(layer_recomputed=False)
 
     def clear_enhance(self) -> dict:
@@ -1668,7 +1698,7 @@ class PreviewPipeline:
         占一块没人能看见的常驻显存（`lit=false` 而 `bytes_enhance>0` 就是那种打脸）。
         要重新点火走 build_enhance（关键点还在，重算几百微秒）。
         """
-        self.enhance_amounts = {k: 0.0 for k in ENH.SUBS}
+        self.enhance_amounts = {k: 0.0 for k in ENH.AMOUNT_KEYS}
         self.clear_enhance_field()
         self.enhance_facts = {}
         self.enhance_info = {}
@@ -1679,9 +1709,16 @@ class PreviewPipeline:
     def apply_enhance(self, t):
         """每帧只走这里。没活就直接把张量递回去（一个算子也不跑，连混合都不做）。"""
         self.last_enhance_ms = 0.0
+        UNDER.refresh_source(self)
         if not self.has_enhance():
             return t
         t0 = time.perf_counter()
+        if self.enhance_local is None:
+            out = UNDER.apply_delta(self, t)
+            if self.device.type != "cpu":
+                torch.cuda.synchronize(self.device)
+            self.last_enhance_ms = (time.perf_counter() - t0) * 1000.0
+            return out
         ly0, lx0, lh, lw = self.enhance_local
         sub = t[:, :, ly0:ly0 + lh, lx0:lx0 + lw]
         eff = ENH.enhance_t(sub, self.enhance_gpu, self.enhance_amounts)
@@ -1690,6 +1727,7 @@ class PreviewPipeline:
         # 但这里窗口外那些像素连混合式都不该进——它们离掩膜有几百像素远）
         out = t.clone()
         out[:, :, ly0:ly0 + lh, lx0:lx0 + lw] = eff
+        out = UNDER.apply_delta(self, out)
         if self.device.type != "cpu":
             torch.cuda.synchronize(self.device)
         self.last_enhance_ms = (time.perf_counter() - t0) * 1000.0
@@ -1698,6 +1736,12 @@ class PreviewPipeline:
     def enhance_resident_bytes(self) -> int:
         """本层账单：窗口那一片 float32 权重场。没挂就是 0（不是“查过没有”的 0）。"""
         n = 0
+        if self.under_eye_delta is not None:
+            n += self.under_eye_delta.numel() * self.under_eye_delta.element_size()
+        if self.under_eye_layer is not None:
+            n += self.under_eye_layer.source.nbytes
+            if self.under_eye_layer.delta is not None:
+                n += self.under_eye_layer.delta.nbytes
         if self.enhance_gpu is not None:
             n += int(self.enhance_gpu.numel() * self.enhance_gpu.element_size())
         if self.enhance_field is not None:
@@ -1712,7 +1756,7 @@ class PreviewPipeline:
         推断出来的那一句在换图之后就是说谎。
         """
         a = dict(self.enhance_amounts)
-        subs = list(ENH.SUBS)
+        subs = list(ENH.AMOUNT_KEYS)
         facts = self.enhance_facts or {}
         return {
             "enhance_amounts": {k: float(a[k]) for k in subs},

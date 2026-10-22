@@ -12,7 +12,7 @@ export function notifyInspectionEditIntent(){
   if(typeof window!=='undefined')window.dispatchEvent(new Event(INSPECTION_EDIT_INTENT));
 }
 const inspectionMutations=new Set(['start_engine','shutdown_engine','load_image','set_strength','precompute',
-  'inpaint','light','deform','lut','grade','enhance','background','exposure','hsl','curves','levels','crop','compare',
+  'inpaint','light','deform','lut','grade','enhance','background','exposure','hsl','curves','levels','fabric','crop','compare',
   'session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
   const send=()=>{if(inspectionMutations.has(command))notifyInspectionEditIntent();return tauriInvoke<T>(command,args,options);};
@@ -99,6 +99,7 @@ export interface SessionEdits {
   grade: boolean;
   /** 眼牙层有没有活（三个子功能里至少一个非零）。可选：老引擎没报这一格 */
   enhance?: boolean;
+  fabric?: boolean;
   channel: string | null;
 }
 
@@ -134,6 +135,7 @@ export const dragParametricCurve=(spec:CurveSpec,region:number,target:number)=>i
 export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_preview",{spec});
 
 export interface DocState {
+  fabric?: import("./fabric/FabricPanel").FabricState;
   document_id?: string;
   levels?: LevelsSpec;
   curves?: CurveSpec;
@@ -1315,10 +1317,12 @@ export const runLut = (
  */
 export const runEnhance = (
   action: EnhanceInfo["action"],
-  opts?: { sclera?: number; iris?: number; teeth?: number },
+  opts?: { sclera?: number; iris?: number; teeth?: number; dark_circles?: number; eye_bags?: number },
 ) =>
   invoke<{ requested: boolean }>("enhance", {
     action,
+    darkCircles: opts?.dark_circles,
+    eyeBags: opts?.eye_bags,
     sclera: opts?.sclera,
     iris: opts?.iris,
     teeth: opts?.teeth,
@@ -1637,3 +1641,6 @@ export const inspectionApi = {status:inspectionStatus,start:inspectionStart,pull
 export const runLevels=(action:'set'|'clear',spec:LevelsSpec|undefined,documentId:string,
   gestureId?:string,interactive=false,requestId?:string)=>invoke<{requested:boolean}>('levels',
     {action,spec,documentId,gestureId,interactive,requestId});
+
+/** Enqueue only; authoritative fabric value arrives through document state. */
+export const runFabric=(amount:number,documentId:string)=>invoke<{requested:boolean}>("fabric",{action:amount===0?"clear":"set",amount,documentId});
