@@ -912,6 +912,8 @@ export interface EngineStatus {
    *  这些“引擎说什么能力”的清单都从这一份读。老宿主没报时为 undefined——那时那一排
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
+    source_patch_capture_protocol?: number;
+    source_patch_result_protocol?: number;
     white_balance_result_protocol?: number;
     color_capture_protocol?: number;
     batch_preflight_protocol?: number;

@@ -3,7 +3,7 @@ name = "lumaretouch-engine"
 version = "1.12.1"
 description = "LumaRetouch 图像与推理引擎（GPU 管线 + 共享内存裸帧通路）"
 requires-python = ">=3.12"
-license = { text = "GPL-3.0-or-later" }   # 见 docs/adr/0001；各第三方声明按实际许可随副本传递
+license = { text = "GPL-3.0-or-later AND AGPL-3.0-only" }   # 见 docs/adr/0001；各第三方声明按实际许可随副本传递
 # Pillow 用于真图解码（M1-3a）：许可 MIT-CMU（CMU 字库基金会那套 BSD 同族许可，
 # 见 importlib.metadata 的 License-Expression）；依赖按实际许可逐项审查。
 dependencies = ["numpy>=2.1", "pillow>=11", "tifffile==2026.10.15", "imagecodecs==2026.10.10"]

@@ -162,7 +162,7 @@ selfcheck() {
 import sys, json, os
 from lumaretouch_engine.privacy import require_offline_or_exit, policy_status
 require_offline_or_exit()
-import numpy, PIL, tifffile, imagecodecs
+import numpy, PIL, tifffile, imagecodecs, cv2
 import torch
 import lumaretouch_engine.server as _server   # 真正的 import 链
 from lumaretouch_engine import __version__
@@ -224,7 +224,7 @@ if [ "$dry" = 1 ]; then
 --dry-run，未动磁盘。将执行：
   1) 建 venv     $(command -v uv >/dev/null && echo "uv venv --seed --python 3.12 $prefix" || echo "python3 -m venv $prefix")
   2) 装 torch 轮子 $(command -v uv >/dev/null && echo "uv pip install --python $pybin ${index:+--index-url $index }-r $eff_req" || echo "$pybin -m pip install -r $eff_req")
-  3) 装引擎依赖  $(command -v uv >/dev/null && echo "uv pip install --python $pybin 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10'" || echo "$pybin -m pip install 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10'")
+  3) 装引擎依赖  $(command -v uv >/dev/null && echo "uv pip install --python $pybin 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10' 'opencv-contrib-python==5.0.0.93'" || echo "$pybin -m pip install 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10' 'opencv-contrib-python==5.0.0.93'")
   4) 自检        PYTHONPATH=$engine_src $pybin -c 'import lumaretouch_engine.server'
 TXT
   exit 0
@@ -258,10 +258,10 @@ if command -v uv >/dev/null 2>&1; then
   echo "→ 装 GPU 变体（uv 的缓存命中走硬链接，第二次装几乎不占新磁盘）"
   uv pip install --python "$pybin" "${idx_args[@]}" -r "$eff_req"
   echo "→ 装引擎运行时依赖"
-  uv pip install --python "$pybin" 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10'
+  uv pip install --python "$pybin" 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10' 'opencv-contrib-python==5.0.0.93'
 else
   "$pybin" -m pip install "${idx_args[@]}" -r "$eff_req"
-  "$pybin" -m pip install 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10'
+  "$pybin" -m pip install 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10' 'opencv-contrib-python==5.0.0.93'
 fi
 [ -n "$index" ] && rm -f "$eff_req"
 

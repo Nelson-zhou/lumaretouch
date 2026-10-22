@@ -56,19 +56,19 @@ def project_file(tmp_path):
     return project,source,tmp_path/'project.json'
 
 
-def test_v1_migration_save_v2_preserves_legacy_and_caller(tmp_path):
+def test_v1_migration_save_v3_preserves_legacy_and_caller(tmp_path):
     project,source,path=project_file(tmp_path)
     project['schema_version']=P.LEGACY_SCHEMA
     recipe=project['docs'][0]['versions'][0]['recipe'];del recipe['_wb_options']
     before=copy.deepcopy(project)
     P.save(project,str(path))
     assert project==before
-    saved=json.loads(path.read_text());assert saved['schema_version']=='lrt.project.v2'
+    saved=json.loads(path.read_text());assert saved['schema_version']=='lrt.project.v3'
     back=P.load(str(path));recipe,_=P.active_recipe(back,str(source))
     assert recipe['_wb_options']==W.default_options() and recipe['_exposure_ref_k']==7000
     # Read a literal old file too; writer normalization is not evidence of old-reader migration.
     path.write_text(json.dumps(before));back=P.load(str(path))
-    assert back['schema_version']=='lrt.project.v2' and back['migration_notes']
+    assert back['schema_version']=='lrt.project.v3' and back['migration_notes']
 
 
 def test_v2_missing_or_invalid_inactive_version_rejects_without_overwrite(tmp_path):

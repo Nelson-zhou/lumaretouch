@@ -46,7 +46,7 @@ def test_wb_real_pixels_preset_undo_project_and_export(wb_engine,tmp_path):
         e.send(cmd='history',action='redo');e.wait_for('history_state',timeout=30)
         np.testing.assert_array_equal(pixels(),edited)
         _,saved_project=_create_and_save(e,tmp_path)
-        document=json.loads(Path(saved_project['path']).read_text());assert document['schema_version']=='lrt.project.v2'
+        document=json.loads(Path(saved_project['path']).read_text());assert document['schema_version']=='lrt.project.v3'
         bad=copy.deepcopy(document);inactive=copy.deepcopy(bad['docs'][0]['versions'][0]);inactive['id']='bad-inactive'
         inactive['recipe']['_wb_options']['algorithm']='unknown';bad['docs'][0]['versions'].append(inactive)
         bad_path=tmp_path/'bad.json';bad_path.write_text(json.dumps(bad))

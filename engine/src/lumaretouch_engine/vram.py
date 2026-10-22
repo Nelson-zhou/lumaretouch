@@ -17,7 +17,7 @@ from .ops import curves as curve_ops
 from .levels_stage import LevelsStage
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 import time
@@ -29,7 +29,8 @@ torch = optional_module("torch")
 from .ops.guided import (bands_t, combine_t, mix_masked,
                          DEFAULT_BROAD_GAIN, DEFAULT_DETAIL_GAIN, DEFAULT_EPS,
                          DEFAULT_MID_GAIN, DEFAULT_RADIUS, DEFAULT_TEXTURE_RADIUS)
-from .ops.inpaint import crop_apply_t, hole_extent, inpaint_t, levels_for, mask_bbox
+from .repair_record import DEFAULT_REPAIR, RepairOp, validate_repair_ops
+from .repair_replay import replay_repair_t
 from .ops.deform import (KINDS, analytic_frontal_landmarks, check_amounts,
                          identity_grid, unit_field, warp_t, prepare_warp_t, apply_prepared_warp_t)
 from .ops.light import dodge_burn_t, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
@@ -51,33 +52,6 @@ from .quant import quantize_t
 # 磨皮参数默认值只有一个出处：ops.guided（探针量出来的），这里只转发不改数。
 # 以前在这里写字面量、server 里又写一份，就是 M1-2 那次「默认值改了但调用方还带着
 # 旧字面量」的同构隐患。
-
-# 消除笔（M1-4）默认参数。refine_iters=6 不是凑的：整幅跑“平滑1/PM6”在产品代理档 9.4 ms，
-# 比 PM2 多 4 ms 买到的是孔径 6→5.1 LSB、口径 12→6.3 LSB；而 PM12 再翻一倍时间只多拿 0.2 LSB。
-# pad 是裁块边距下限，洞大时按 hole 半径自动扩（mask_bbox 里的 grow）。
-DEFAULT_REPAIR = dict(smooth_iters=1, refine_iters=6, kappa=0.06, pad=32, grow=1.5)
-
-
-@dataclass
-class RepairOp:
-    """一次消除笔操作：只存画笔覆盖度（uint8, 0..255）与参数，**不存结果**。
-
-    为什么不存结果：存 `(3,H,W) float32` 补丁在产品代理档是 6.8 MB/笔，五十笔就是 340 MB；
-    而修补算子是确定性的，重算一次几毫秒。只存输入等于天然支持撤销/重做与换设备重建，
-    也不需要一套“图层产物”的失效逻辑——这与决策 11（非破坏、重放）是同一条路。
-    """
-
-    op_id: int
-    weight: np.ndarray            # (H,W) uint8，画笔覆盖度
-    params: dict = field(default_factory=lambda: dict(DEFAULT_REPAIR))
-
-    @property
-    def area_px(self) -> int:
-        return int((self.weight > 0).sum())
-
-    def nbytes(self) -> int:
-        return int(self.weight.nbytes)
-
 
 @dataclass
 class LightOp:
@@ -684,27 +658,8 @@ class PreviewPipeline:
         if self.src_f32 is None:
             raise RuntimeError("先 load_rgb_u8 再打消除笔")
         t0 = time.perf_counter()
-        painted = 0
-        boxes: list = []
-        cur = self.src_f32
-        for op in ops:
-            p = dict(op.params)
-            wsub_np = op.weight.astype(np.float32) / 255.0
-            painted += int((op.weight > 0).sum())
-            box = mask_bbox(wsub_np, pad=int(p.get("pad", DEFAULT_REPAIR["pad"])),
-                            grow=float(p.get("grow", DEFAULT_REPAIR["grow"])))
-            if box is None:
-                continue
-            y0, y1, x0, x1 = box
-            lv = levels_for(hole_extent(wsub_np), y1 - y0, x1 - x0)
-            sub = cur[..., y0:y1, x0:x1]
-            wsub = torch.from_numpy(np.ascontiguousarray(wsub_np[None, None, y0:y1, x0:x1])).to(self.device)
-            fill = inpaint_t(sub, wsub, levels=lv,
-                             smooth_iters=int(p.get("smooth_iters", DEFAULT_REPAIR["smooth_iters"])),
-                             refine_iters=int(p.get("refine_iters", DEFAULT_REPAIR["refine_iters"])),
-                             kappa=float(p.get("kappa", DEFAULT_REPAIR["kappa"])))
-            cur = crop_apply_t(cur, box, fill)
-            boxes.append([int(v) for v in box])
+        validate_repair_ops(redo, shape=(self.h, self.w))
+        cur, boxes, painted = replay_repair_t(self.src_f32, ops)
         base = cur if cur is not self.src_f32 else None
         box0 = boxes[0] if len(boxes) == 1 else None
         ms = (time.perf_counter() - t0) * 1000.0

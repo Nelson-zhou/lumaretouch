@@ -19,6 +19,7 @@
 配方里那些活着的张量（消除笔/修容的画笔覆盖度、换底掩膜、调色表原件）不是 JSON：
 `encode()` 把它们变成内容寻址的资产（sha256 去重：二十张图共用一张表，文件里只有
 一份），认不出的类型当场记进 `dropped` 而不是静默消失。
+修补记录例外：笔迹、来源坐标或算法版本缺一项都会改变成片，必须整份拒绝，不能丢弃后继续。
 """
 from __future__ import annotations
 
@@ -36,9 +37,11 @@ import time
 import uuid
 
 import numpy as np
+from .repair_record import RepairOp, check_repair_fields, validate_repair_ops
 
 LEGACY_SCHEMA = "lrt.project.v1"
-SCHEMA = "lrt.project.v2"
+WB_SCHEMA = "lrt.project.v2"
+SCHEMA = "lrt.project.v3"
 SUFFIX = ".lrproject.json"
 
 # 上限：宁可显式丢弃，也不要"保存成功但下次打开少了一半配方"这种事
@@ -145,7 +148,7 @@ def validate(p: object) -> None:
     if not isinstance(p, dict):
         raise ProjectError(f"项目顶层不是对象：{type(p).__name__}")
     sv = p.get("schema_version")
-    if sv not in (LEGACY_SCHEMA, SCHEMA):
+    if sv not in (LEGACY_SCHEMA, WB_SCHEMA, SCHEMA):
         raise ProjectError(f"项目 schema_version={sv!r}，本版本认 {SCHEMA!r}")
     for k in ("project_id", "name", "docs", "assets"):
         if k not in p:
@@ -175,22 +178,131 @@ def validate(p: object) -> None:
             recipe = version.get("recipe")
             if recipe is not None:
                 try:
-                    WB.normalize_state(recipe, required=(sv == SCHEMA))
+                    WB.normalize_state(recipe, required=(sv != LEGACY_SCHEMA))
                 except ValueError as error:
                     raise ProjectError(f"Invalid white-balance recipe: {error}") from error
+                _validate_encoded_repairs(recipe, p["assets"], allow_legacy=(sv != SCHEMA))
 
 
 def _migrate(project):
-    """Own nested versions; never mutate a caller's v1 document while saving."""
+    """Own nested versions; preserve legacy pixels and record explicit heal kinds."""
     result = copy.deepcopy(project)
-    if result["schema_version"] == LEGACY_SCHEMA:
+    previous = result["schema_version"]
+    if previous != SCHEMA:
         for row in result["docs"]:
             for version in row["versions"]:
                 if version.get("recipe") is not None:
                     version["recipe"] = WB.normalize_state(version["recipe"])
+                    _migrate_repair_kinds(version["recipe"])
         result["schema_version"] = SCHEMA
-        result["migration_notes"] = ["Legacy white balance retained from project v1; v2 saves require a v2-capable reader."]
+        result.setdefault("migration_notes", []).append(
+            f"Migrated {previous} to v3: legacy white balance retained; missing repair kinds are heal. "
+            "Source-patch records require a v3-capable reader.")
     return result
+
+
+_REPAIR_STACKS = frozenset(("_repair_ops", "_redo_ops", "repair_ops", "redo_ops"))
+
+
+def _repair_weight(ref, assets):
+    """Repair coverage is required data, not a best-effort generic asset."""
+    try:
+        if (type(ref) is not dict or set(ref) - {"__asset__", "at"}
+                or ("at" in ref and type(ref["at"]) is not str)):
+            raise ValueError("Repair coverage must reference an asset")
+        key = ref.get("__asset__")
+        if (type(key) is not str or len(key) != 71 or not key.startswith("sha256:")
+                or any(c not in "0123456789abcdef" for c in key[7:])):
+            raise ValueError("Invalid repair coverage asset reference")
+        asset = assets.get(key)
+        if type(asset) is not dict or set(asset) != {"kind", "shape", "dtype", "bytes", "b64"}:
+            raise ValueError("Missing repair coverage asset")
+        shape = asset.get("shape")
+        if (not isinstance(shape, list) or len(shape) != 2
+                or any(type(v) is not int or v < 1 for v in shape)
+                or shape[0] * shape[1] > 100_000_000
+                or asset.get("dtype") != "uint8"):
+            raise ValueError("Repair coverage asset must be bounded (H,W) uint8")
+        size, encoded = asset.get("bytes"), asset.get("b64")
+        if (type(size) is not int or not 0 <= size <= MAX_ASSET_BYTES
+                or type(encoded) is not str or len(encoded) > ((MAX_ASSET_BYTES + 2) // 3) * 4):
+            raise ValueError("Repair coverage asset exceeds its byte budget")
+        raw = base64.b64decode(encoded, validate=True)
+        if len(raw) != size or hashlib.sha256(raw).hexdigest() != key[7:]:
+            raise ValueError("Repair coverage asset length/hash mismatch")
+        if asset.get("kind") == "raw":
+            return np.frombuffer(raw, dtype=np.uint8).reshape(shape).copy()
+        if asset.get("kind") != "png":
+            raise ValueError("Unsupported repair coverage asset encoding")
+        # Check the actual dimensions before Pillow can allocate/decompress a
+        # forged PNG whose tiny metadata shape conceals an enormous raster.
+        if (len(raw) < 29 or raw[:8] != b"\x89PNG\r\n\x1a\n" or raw[12:16] != b"IHDR"
+                or int.from_bytes(raw[16:20], "big") != shape[1]
+                or int.from_bytes(raw[20:24], "big") != shape[0]
+                or raw[24:26] != b"\x08\x00"):
+            raise ValueError("Repair PNG header does not match its exact shape/type")
+        from PIL import Image
+        with Image.open(io.BytesIO(raw)) as im:
+            if im.format != "PNG" or im.mode != "L" or im.size != (shape[1], shape[0]):
+                raise ValueError("Repair PNG asset does not match its exact shape/type")
+            return np.array(im, dtype=np.uint8, copy=True)
+    except (ValueError, TypeError, KeyError, OSError) as error:
+        raise ProjectError(f"Invalid repair coverage asset: {error}") from error
+
+
+def _repair_fields(value, assets, *, allow_legacy=True, shape=None):
+    if (type(value) is not dict or set(value) != {"__dc__", "fields"}
+            or value.get("__dc__") != "RepairOp" or type(value.get("fields")) is not dict):
+        raise ProjectError("Repair stack contains an unknown or malformed RepairOp")
+    fields = dict(value["fields"])
+    # Validate kind/params and exact field names before reading any large asset.
+    required = {"op_id", "weight", "params"}
+    if not required <= set(fields) or set(fields) - (required | {"kind"}):
+        raise ProjectError("Invalid RepairOp fields")
+    from .repair_record import check_repair_params
+    try:
+        if not allow_legacy and "kind" not in fields:
+            raise ValueError("RepairOp kind is required in project v3")
+        check_repair_params(fields.get("kind", "heal"), fields["params"])
+        fields["weight"] = _repair_weight(fields["weight"], assets)
+        return check_repair_fields(fields, shape=shape, allow_legacy=allow_legacy)
+    except ValueError as error:
+        raise ProjectError(f"Invalid RepairOp: {error}") from error
+
+
+def _validate_encoded_repairs(value, assets, *, allow_legacy):
+    """Check every saved version, including inactive versions and redo stacks."""
+    if isinstance(value, dict):
+        if value.get("__dc__") == "RepairOp":
+            _repair_fields(value, assets, allow_legacy=allow_legacy)
+            return
+        for key, child in value.items():
+            if key in _REPAIR_STACKS:
+                if type(child) is not list:
+                    raise ProjectError(f"Repair stack {key} must be a list")
+                shape = value.get("_proxy")
+                if shape is not None and (not isinstance(shape, (list, tuple)) or len(shape) != 2
+                        or any(type(n) is not int or n < 1 for n in shape)):
+                    raise ProjectError("Invalid repair proxy dimensions")
+                for record in child:
+                    _repair_fields(record, assets, allow_legacy=allow_legacy, shape=shape)
+            else:
+                _validate_encoded_repairs(child, assets, allow_legacy=allow_legacy)
+    elif isinstance(value, list):
+        for child in value:
+            _validate_encoded_repairs(child, assets, allow_legacy=allow_legacy)
+
+
+def _migrate_repair_kinds(value):
+    if isinstance(value, dict):
+        if value.get("__dc__") == "RepairOp":
+            value["fields"].setdefault("kind", "heal")
+        else:
+            for child in value.values():
+                _migrate_repair_kinds(child)
+    elif isinstance(value, list):
+        for child in value:
+            _migrate_repair_kinds(child)
 
 
 # ---------------------------------------------------------------- 指纹
@@ -303,6 +415,16 @@ def encode(value: object, assets: dict, dropped: list, at: str) -> object:
         return _encode_array(value, assets, dropped, at)
     if isinstance(value, (bytes, bytearray)):
         return _encode_blob(bytes(value), assets, dropped, at, kind="bytes")
+    if type(value) is RepairOp:
+        try:
+            clean = check_repair_fields(vars(value), allow_legacy=False)
+        except ValueError as error:
+            raise ProjectError(f"Invalid RepairOp: {error}") from error
+        failed = []
+        encoded = {k: encode(v, assets, failed, f"{at}.{k}") for k, v in clean.items()}
+        if failed:
+            raise ProjectError(f"RepairOp cannot be saved without data loss: {failed}")
+        return {"__dc__": "RepairOp", "fields": encoded}
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return {"__dc__": type(value).__name__,
                 "fields": {k: encode(v, assets, dropped, f"{at}.{k}")
@@ -363,6 +485,13 @@ def decode(value: object, assets: dict, dropped: list, at: str,
     本层不 import 计算模块——持久层反向依赖 GPU 管线会形成循环，
     而且让"读一个 JSON"这件事取决于 torch 在不在。"""
     if isinstance(value, dict):
+        if value.get("__dc__") == "RepairOp":
+            fields = _repair_fields(value, assets)
+            cls = (dc_types or {}).get("RepairOp", RepairOp)
+            try:
+                return cls(**fields)
+            except (TypeError, ValueError) as error:
+                raise ProjectError(f"RepairOp reconstruction failed: {error}") from error
         if "__asset__" in value:
             a = assets.get(value["__asset__"])
             if a is None:
@@ -395,6 +524,8 @@ def decode(value: object, assets: dict, dropped: list, at: str,
             except (TypeError, ValueError) as e:
                 dropped.append({"at": at, "reason": f"{value['__dc__']} 重建失败：{e}"})
                 return None
+        if _REPAIR_STACKS.intersection(value):
+            _validate_encoded_repairs(value, assets, allow_legacy=True)
         return {k: decode(v, assets, dropped, f"{at}.{k}", dc_types)
                 for k, v in value.items()}
     if isinstance(value, list):
@@ -481,12 +612,16 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
     if recipe is not None:
         try:
             recipe = WB.normalize_state(recipe)
+            for key in _REPAIR_STACKS.intersection(recipe):
+                validate_repair_ops(recipe[key], shape=recipe.get("_proxy"))
         except ValueError as error:
-            raise ProjectError(f"Invalid white-balance recipe: {error}") from error
+            raise ProjectError(f"Invalid project recipe: {error}") from error
     fp = fp or fingerprint(path)
     dropped: list = []
-    assets = project.setdefault("assets", {})
+    assets = dict(project.get("assets", {}))
     enc = encode(recipe, assets, dropped, "recipe") if recipe is not None else None
+    _validate_encoded_repairs(enc, assets, allow_legacy=False)
+    project["assets"] = assets
     row = find_doc(project, fp["path"])
     if row is None:
         row = {"path": fp["path"], "fingerprint": fp, "tags": list(tags or []),

@@ -67,7 +67,7 @@ LumaRetouch — 第三方资产与署名声明（NOTICE）
   GTK / WebKitGTK ... LGPL-2.1+ / LGPL-2.1+（随系统，不进本包）
   PyTorch ........... BSD-3-Clause（引擎运行时，装机时按显卡厂商单独拉取）
   ONNX Runtime ...... MIT（若后续接入推理）
-  OpenCV ............ Apache-2.0（若后续接入）
+  OpenCV ............ Apache-2.0（独立来源修补与人脸分析运行时）
   Tauri 2 / Rust .... MIT 或 Apache-2.0（双许可择一）
   MediaPipe (pip 包) . Apache-2.0
 
@@ -84,3 +84,15 @@ Copyright Google LLC. Author: Adel Ahmadyan. Apache License, Version 2.0.
 The original model bytes are unmodified. License text: docs/model-licenses/archive/mediapipe-LICENSE.txt.
 Model card: https://storage.googleapis.com/mediapipe-assets/Model%20Card%20Multiclass%20Segmentation.pdf
 Not pixel-perfect; limitations and artifact hash: docs/model-licenses/models.json.
+
+源代码复用：RapidRetouch 独立来源修补
+------------------------------------------------------------------
+ops/source_patch.py 及 third_party/rapidretouch/patch_filters.py 改编自
+Chris Cork 的 RapidRetouch（5e9d9c1d2770ff29d11a3879e5a90aad5887e028）。
+这些派生文件保留 AGPL-3.0-only，不改写为本项目其它代码的 GPL-3.0-or-later。
+原始出处、Git blob、修改说明及完整许可随引擎源码位于：
+lumaretouch_engine/third_party/rapidretouch/NOTICE 与 LICENSE。
+本项目提供这些派生文件的对应源码；此声明不替代各依赖/模型自己的许可。
+
+GPLv3 与 AGPLv3 组合部分按 GPLv3 第13条适用组合义务，包括 AGPLv3
+对通过网络交互用户的对应源码提供要求；不会因保留分文件许可而免除该义务。

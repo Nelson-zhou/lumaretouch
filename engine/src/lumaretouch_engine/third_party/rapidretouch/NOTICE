@@ -1,0 +1,25 @@
+RapidRetouch-derived source patch implementation
+Original author: Chris Cork
+License: GNU Affero General Public License version 3 only (AGPL-3.0-only)
+Upstream: https://github.com/crispin81/RapidRetouch
+Pinned revision: 5e9d9c1d2770ff29d11a3879e5a90aad5887e028
+
+Derived files in this package:
+  ops/source_patch.py
+  third_party/rapidretouch/patch_filters.py
+
+Original files:
+  engine/src/rapidretouch_engine/tools/patch.py
+    Git blob: b10ed5c030e119c1d1a8337250373fb78fe9890a
+  engine/src/rapidretouch_engine/tools/filters.py (blur and masked_blur only)
+    Git blob: b3fd98ffb2324989c8c9ea800e3aff239e97f8db
+
+Modifications for LumaRetouch, 2026-10-22:
+  Strict versioned input validation; explicit failure instead of silent no-op;
+  common source/target context clipping; explicit selected-neighbourhood support;
+  finite float32 output and exact outside-region preservation; existing sRGB
+  transfer functions; local ROI adapter boundaries and regression coverage.
+
+The corresponding source is distributed in this repository/package. Retain this
+notice and the accompanying AGPL-3.0 license with copies of these derived files.
+This notice does not relicense unrelated LumaRetouch or third-party components.

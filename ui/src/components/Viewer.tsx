@@ -1,5 +1,7 @@
 import {ColorSampleOverlay} from './ColorSampleOverlay';
 import type {ColorSampler} from '../useColorSampler';
+import {SourcePatchOverlay} from '../sourcePatch/SourcePatchOverlay';
+import type {SourcePatchOwner} from '../sourcePatch/useSourcePatchWorkflow';
 import {composition,displayGeometry,frameAdmission,type DisplayGeometry} from "../previewComposition";
 /**
  * WebGL2 视口：rAF 驱动，从宿主取裸帧 → texSubImage2D → 绘制 → 双 rAF 后回执。
@@ -93,8 +95,10 @@ export default function Viewer({
   inspection,
   onInspectionState,
   colorSampler,
+  sourcePatch,
 }: {
   colorSampler?:ColorSampler;
+  sourcePatch?:SourcePatchOwner;
   inspection?: { enabled:boolean; oneToOne:boolean; comparing:boolean; key:string; width:number; height:number };
   onInspectionState?: (state:InspectionUiState)=>void;
   active: boolean;
@@ -145,7 +149,7 @@ export default function Viewer({
 }) {
   const [sampleClip,setSampleClip]=useState<HTMLDivElement|null>(null);
   // 变换只加在显示层（镜像画布）上：GL 渲染源与测量回路一个字也不改
-  const coordinateLocked = paintLocked || compareMode !== "single" || !!inspection?.enabled;
+  const coordinateLocked = paintLocked || compareMode !== "single" || !!inspection?.enabled || !!sourcePatch?.active || !!sourcePatch?.pending;
   const invalidateInspection = useRef<()=>void>(()=>{});
   const brushActive = !!brush?.on && !coordinateLocked;
   const pickActive = !!pick?.on && !coordinateLocked;
@@ -730,6 +734,7 @@ export default function Viewer({
            onDoubleClick={() => { invalidateInspection.current(); onView(VIEW_HOME); }}
            title="滚轮缩放 · 拖拽平移 · 双击适应窗口">
         {colorSampler&&<ColorSampleOverlay sampler={colorSampler} clip={sampleClip} box={box} view={view}/>}
+        {sourcePatch&&<SourcePatchOverlay owner={sourcePatch} clip={sampleClip} box={box} view={view}/>}
         {/* GL 画布退成纯渲染源：不参与布局，也不指望它上屏（见上面那段）。 */}
         {/* glVisible 是给"官方开关能不能替掉镜像层"那个对照实验用的：把 GL 画布放回
             可见位，看它自己上不上得了屏。生产路径不依赖它。 */}

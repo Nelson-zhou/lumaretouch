@@ -41,7 +41,7 @@ def _recipe():
             "_grade": (0.1, -0.2, 0.0, 0.8), "_exposure": (0.5, -100.0, 0.0),
             "_crop_rect": (0.1, 0.2, 0.7, 0.95), "_crop_rotation": -7.5,
             "_lut": None, "_lut_amount": 1.0, "_channel": "skin",
-            "_repair_ops": [Op(1, np.arange(8 * 8, dtype=np.uint8).reshape(8, 8), 0.25)],
+            "_fixture_ops": [Op(1, np.arange(8 * 8, dtype=np.uint8).reshape(8, 8), 0.25)],
             "_light_ops": [], "_precompute": None, "_proxy": (32, 24)}
 
 
@@ -65,7 +65,7 @@ def test_round_trip_restores_docs_tags_trash_and_recipe(tmp_path, src):
     assert dropped == [], f"往返路上丢了东西：{dropped}"
     assert recipe["_strength"] == 0.4 and recipe["_crop_rotation"] == -7.5
     assert recipe["_grade"] == [0.1, -0.2, 0.0, 0.8]
-    op = recipe["_repair_ops"][0]
+    op = recipe["_fixture_ops"][0]
     assert isinstance(op, Op) and op.op_id == 1 and float(op.gain) == 0.25
     assert np.array_equal(op.cover, np.arange(64, dtype=np.uint8).reshape(8, 8))
 

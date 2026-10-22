@@ -1,6 +1,11 @@
 # WB action sampling foundation
 
-Status: candidate infrastructure, not a usable eyedropper yet. No local execution.
+Status: verified infrastructure, not a usable eyedropper yet. No local execution.
+Candidate5e5b32f108b2510554583bf0459604403a561565 passed CI39750120470, all non-GPU
+jobs successful; GPU jobs skipped. Dedicated CPU Torch foundation:61 passed,
+0 skipped,1.40s. Existing WB40, geometry112 and preset3 tests remained green.
+Lightweight engine:1252 passed,485 skipped,72.26s. These do not prove GUI/photographic
+acceptance or completion of the action picker.
 Controller redemption, native presented-capture integration, input-preview lifecycle,
 UI entry points and actual desktop/photographic acceptance remain outstanding.
 
@@ -75,7 +80,8 @@ order, projected clipping/coverage, independent NumPy geometry, real nonneutral
 filter overshoot, normal output order/pixel compatibility, every warm-key family,
 and synthetic cgroup hierarchies including migration/failure. CI runs with CPU
 Torch and rejects skips; Rust policy tests have a standalone harness. No results
-for this candidate are claimed until its exact-commit CI completes.
+beyond those exact-commit checks are claimed. Reference run:
+https://github.com/Nelson-zhou/lumaretouch/actions/runs/39750120470 .
 
 ## Official/community comparison
 

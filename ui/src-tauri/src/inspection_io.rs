@@ -25,6 +25,46 @@ impl Root {
     pub fn cleanup(&self)->Result<(),String>{
         match fs::remove_dir_all(&self.path){Ok(())=>Ok(()),Err(e) if e.kind()==std::io::ErrorKind::NotFound=>Ok(()),Err(e)=>Err(e.to_string())}
     }
+    /// A complete LRCP packet at a path derived solely from a registered native
+    /// identity. No engine-provided path, mmap, SHM mutation or unbounded read.
+    pub fn read_capture(&self,expected:&crate::capture_wire::Identity)->Result<Vec<u8>,String>{
+        use crate::capture_wire::{HEADER_BYTES,MAX_PAYLOAD};
+        let header=expected.header().map_err(str::to_owned)?;
+        let payload=expected.payload_len().map_err(str::to_owned)?;
+        if payload>MAX_PAYLOAD{return Err("source patch capture exceeds 128 MiB budget".into());}
+        let total=HEADER_BYTES.checked_add(payload).ok_or("capture packet length overflow")?;
+        let job=format!("lumaretouch-source-patch-{}-{}",crate::frame_identity::hex(expected.capture),expected.ticket);
+        let name=CString::new(job).map_err(|_|"invalid source patch capture name")?;
+        let fd=unsafe{libc::openat(self.directory.as_raw_fd(),name.as_ptr(),libc::O_RDONLY|libc::O_DIRECTORY|libc::O_NOFOLLOW|libc::O_CLOEXEC|libc::O_NONBLOCK)};
+        if fd<0{return Err(std::io::Error::last_os_error().to_string());}
+        let directory=unsafe{File::from_raw_fd(fd)};
+        let dm=directory.metadata().map_err(|e|e.to_string())?;
+        if !dm.is_dir() || dm.uid()!=unsafe{libc::geteuid()} || dm.mode()&0o7777!=0o700{
+            return Err("source patch capture directory ownership/mode invalid".into());
+        }
+        let name=CString::new("capture.lrcp").unwrap();
+        let fd=unsafe{libc::openat(directory.as_raw_fd(),name.as_ptr(),libc::O_RDONLY|libc::O_NOFOLLOW|libc::O_CLOEXEC|libc::O_NONBLOCK)};
+        if fd<0{return Err(std::io::Error::last_os_error().to_string());}
+        let mut file=unsafe{File::from_raw_fd(fd)};
+        let info=file.metadata().map_err(|e|e.to_string())?;
+        if !info.is_file() || info.uid()!=unsafe{libc::geteuid()} || info.mode()&0o7777!=0o600 || info.nlink()!=1 || info.len()!=total as u64{
+            return Err("source patch capture type/owner/mode/length invalid".into());
+        }
+        let mut prefix=[0u8;HEADER_BYTES];file.read_exact(&mut prefix).map_err(|e|e.to_string())?;
+        if prefix!=header{return Err("source patch capture LRCP identity/header mismatch".into());}
+        let mut bytes=Vec::new();bytes.try_reserve_exact(total).map_err(|e|e.to_string())?;
+        bytes.extend_from_slice(&prefix);bytes.resize(total,0);
+        file.read_exact(&mut bytes[HEADER_BYTES..]).map_err(|e|e.to_string())?;
+        let mut extra=[0u8;1];
+        if file.read(&mut extra).map_err(|e|e.to_string())?!=0{return Err("source patch capture grew during read".into());}
+        let after=file.metadata().map_err(|e|e.to_string())?;
+        if after.len()!=info.len() || after.mode()!=info.mode() || after.uid()!=info.uid() || after.nlink()!=1
+            || after.mtime()!=info.mtime() || after.mtime_nsec()!=info.mtime_nsec()
+            || after.ctime()!=info.ctime() || after.ctime_nsec()!=info.ctime_nsec(){
+            return Err("source patch capture changed during read".into());
+        }
+        Ok(bytes)
+    }
     pub fn read(&self,path:&Path,epoch:[u8;16],request:&Request)->Result<Vec<u8>,String>{
         let relative=path.strip_prefix(&self.path).map_err(|_|"inspection result escapes its host root")?;
         let parts:Vec<_>=relative.components().collect();
@@ -90,5 +130,48 @@ mod tests{
         assert!(root.read(Path::new("/tmp/result.lrif"),[7;16],&request()).is_err());
         File::create(&path).unwrap().set_len(129+PATCH_PIXELS*4).unwrap();
         assert!(root.read(&path,[7;16],&request()).is_err());root.cleanup().unwrap();
+    }
+    fn capture_identity()->crate::capture_wire::Identity{crate::capture_wire::Identity{
+        epoch:[1;16],instance:[2;16],capture:[3;16],seq:1,generation:7,document:123,ticket:9,
+        width:2,height:1,presentation_width:2,presentation_height:1}}
+    fn capture_job(root:&Root,id:&crate::capture_wire::Identity)->PathBuf{
+        let dir=root.path.join(format!("lumaretouch-source-patch-{}-{}",crate::frame_identity::hex(id.capture),id.ticket));
+        fs::DirBuilder::new().mode(0o700).create(&dir).unwrap();dir
+    }
+    fn capture_packet(id:&crate::capture_wire::Identity)->Vec<u8>{
+        let mut bytes=id.header().unwrap().to_vec();bytes.resize(crate::capture_wire::HEADER_BYTES+id.payload_len().unwrap(),37);bytes
+    }
+    fn write_capture(path:&Path,bytes:&[u8]){
+        use std::io::Write;
+        let mut f=OpenOptions::new().write(true).create_new(true).mode(0o600).open(path).unwrap();f.write_all(bytes).unwrap();
+    }
+    #[test] fn capture_reader_accepts_exact_private_lrcp_and_rejects_other_identity(){
+        let root=Root::create([41;16]).unwrap();let id=capture_identity();let dir=capture_job(&root,&id);let path=dir.join("capture.lrcp");
+        let bytes=capture_packet(&id);write_capture(&path,&bytes);assert_eq!(root.read_capture(&id).unwrap(),bytes);
+        let mut wrong=id.clone();wrong.generation+=1;assert!(root.read_capture(&wrong).is_err());
+        wrong=id.clone();wrong.instance=[4;16];assert!(root.read_capture(&wrong).is_err());
+        wrong=id;wrong.ticket+=1;assert!(root.read_capture(&wrong).is_err());root.cleanup().unwrap();
+    }
+    #[test] fn capture_reader_rejects_file_and_directory_symlinks_and_fifo_without_blocking(){
+        let root=Root::create([42;16]).unwrap();let id=capture_identity();let dir=capture_job(&root,&id);let path=dir.join("capture.lrcp");
+        std::os::unix::fs::symlink("/dev/null",&path).unwrap();assert!(root.read_capture(&id).is_err());fs::remove_file(&path).unwrap();
+        let name=CString::new(path.to_str().unwrap()).unwrap();assert_eq!(unsafe{libc::mkfifo(name.as_ptr(),0o600)},0);
+        assert!(root.read_capture(&id).is_err());fs::remove_file(&path).unwrap();fs::remove_dir(&dir).unwrap();
+        std::os::unix::fs::symlink(&root.path,&dir).unwrap();assert!(root.read_capture(&id).is_err());root.cleanup().unwrap();
+    }
+    #[test] fn capture_reader_rejects_permissions_lengths_reserved_bytes_and_links(){
+        use std::os::unix::fs::PermissionsExt;
+        let root=Root::create([43;16]).unwrap();let id=capture_identity();let dir=capture_job(&root,&id);let path=dir.join("capture.lrcp");
+        let bytes=capture_packet(&id);write_capture(&path,&bytes);
+        fs::set_permissions(&path,fs::Permissions::from_mode(0o644)).unwrap();assert!(root.read_capture(&id).is_err());
+        fs::set_permissions(&path,fs::Permissions::from_mode(0o600)).unwrap();
+        fs::set_permissions(&dir,fs::Permissions::from_mode(0o755)).unwrap();assert!(root.read_capture(&id).is_err());
+        fs::set_permissions(&dir,fs::Permissions::from_mode(0o700)).unwrap();
+        let link=dir.join("other");fs::hard_link(&path,&link).unwrap();assert!(root.read_capture(&id).is_err());fs::remove_file(link).unwrap();
+        for invalid in [bytes[..bytes.len()-1].to_vec(),[bytes.as_slice(),&[0]].concat(),{
+            let mut v=bytes.clone();v[112]=1;v
+        }]{fs::remove_file(&path).unwrap();write_capture(&path,&invalid);assert!(root.read_capture(&id).is_err());}
+        fs::remove_file(&path).unwrap();let mut huge=id;huge.width=u32::MAX;
+        assert!(root.read_capture(&huge).is_err());root.cleanup().unwrap();
     }
 }

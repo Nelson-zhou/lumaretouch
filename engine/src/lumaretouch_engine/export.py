@@ -48,7 +48,8 @@ from .ops.grade import GradeError, check_params
 from .ops import curves as CURVES
 from .ops import levels as LEVELS
 from .ops.hsl import check_hsl
-from .ops.inpaint import hole_extent, levels_for, mask_bbox, inpaint_t, crop_apply_t
+from .repair_record import validate_repair_ops
+from .repair_replay import replay_repair_t
 from .ops.lut import DEFAULT_LUT_AMOUNT, LutError, check_amount
 from .ops.upscale import Plan as UpscalePlan
 from .ops.upscale import check_scale, unsharp_bands_np, unsharp_float_bands_np
@@ -164,6 +165,10 @@ class ExportSpec:
 
     def check(self) -> None:
         """参数在进入昂贵通路之前先过一遍唯一校验口径（与各层 setter 同源）。"""
+        try:
+            validate_repair_ops(self.repair)
+        except ValueError as error:
+            raise ExportError(f"Invalid repair export: {error}") from error
         try:
             state = WB.normalize_state({"_exposure": self.exposure,
                 "_exposure_ref_k": self.exposure_ref_k,
@@ -391,35 +396,17 @@ def apply_repair_full(src_u8: np.ndarray, ops: list, device: str):
     并集会让第二笔的周围含上第一笔的旧坑）。
     """
     h, w = src_u8.shape[:2]
-    for op in ops:
-        if not isinstance(op, RepairOp):
-            raise ExportError(f"消除笔图层必须是 RepairOp，得到 {type(op).__name__}："
-                              "weight 需是导出尺寸的 (H,W) uint8")
+    try:
+        validate_repair_ops(ops, shape=(h, w))
+    except ValueError as error:
+        raise ExportError(f"Invalid repair export: {error}") from error
     arr = np.ascontiguousarray(src_u8.transpose(2, 0, 1))[None]
     if src_u8.dtype not in (np.uint8, np.uint16):
         raise ExportError("消除笔源图需要 uint8 或 uint16")
     divisor = 65535.0 if src_u8.dtype == np.uint16 else 255.0
     cur = torch.from_numpy(arr).to(device).to(torch.float32).div_(divisor)
-    boxes = []
     t0 = time.perf_counter()
-    for op in ops:
-        wsub_np = op.weight.astype(np.float32) / 255.0
-        if wsub_np.shape[:2] != (h, w):
-            raise ExportError(f"消除笔掩膜尺寸 {wsub_np.shape[:2]} != 导出尺寸 {(h, w)}")
-        p = dict(op.params)
-        box = mask_bbox(wsub_np, pad=int(p.get("pad", 32)), grow=float(p.get("grow", 1.5)))
-        if box is None:
-            continue
-        y0, y1, x0, x1 = box
-        lv = levels_for(hole_extent(wsub_np), y1 - y0, x1 - x0)
-        sub = cur[..., y0:y1, x0:x1]
-        wsub = torch.from_numpy(np.ascontiguousarray(wsub_np[None, None, y0:y1, x0:x1])).to(device)
-        fill = inpaint_t(sub, wsub, levels=lv,
-                         smooth_iters=int(p.get("smooth_iters", 1)),
-                         refine_iters=int(p.get("refine_iters", 6)),
-                         kappa=float(p.get("kappa", 0.06)))
-        cur = crop_apply_t(cur, box, fill)
-        boxes.append([int(v) for v in box])
+    cur, boxes, _ = replay_repair_t(cur, ops)
     ms = (time.perf_counter() - t0) * 1000.0
     out = cur[0].permute(1, 2, 0).cpu().numpy().astype(np.float32)
     del cur

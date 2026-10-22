@@ -10,6 +10,7 @@ from .export import ExportSpec, resample_field
 from .vram import RepairOp, LightOp
 from .ops import curves as CURVES
 from .ops import levels as LEVELS
+from .repair_record import check_repair_params, validate_repair_ops
 
 
 def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
@@ -68,9 +69,11 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
             spec.grade_scope = "all"
             skipped.append("grade 整层（局部调色作用域属于当前文档，不能搬到别的图）")
         return spec, skipped
+    validate_repair_ops(snap["repair_ops"])
     spec.repair = [RepairOp(op_id=op.op_id,
                             weight=resample_field(op.weight, (eh, ew), uint8=True),
-                            params=dict(op.params)) for op in snap["repair_ops"]]
+                            kind=op.kind, params=check_repair_params(op.kind, op.params))
+                   for op in snap["repair_ops"]]
     spec.light = [LightOp(op_id=op.op_id,
                           weight=resample_field(op.weight, (eh, ew), uint8=True),
                           sign=op.sign) for op in snap["light_ops"]]

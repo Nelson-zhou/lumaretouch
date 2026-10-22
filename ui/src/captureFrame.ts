@@ -3,14 +3,15 @@ export const CAPTURE_HEADER_BYTES=128;
 export const CAPTURE_MAX_BYTES=128*1024*1024;
 export interface VerifiedCapture {readonly descriptor:Readonly<CaptureDescriptor>;readonly rgba:Uint8ClampedArray<ArrayBuffer>}
 const hex=(view:DataView,offset:number)=>Array.from({length:16},(_,i)=>view.getUint8(offset+i).toString(16).padStart(2,'0')).join('');
-export function parseCaptureFrame(buffer:ArrayBuffer,expected:CaptureDescriptor):VerifiedCapture {
+export function parseCaptureFrame(buffer:ArrayBuffer,expected:CaptureDescriptor,expectedDomain:CaptureDescriptor['domain']='proxy-output'):VerifiedCapture {
   if(buffer.byteLength<CAPTURE_HEADER_BYTES||buffer.byteLength>CAPTURE_MAX_BYTES+CAPTURE_HEADER_BYTES)
     throw new Error('采样画面长度越界');
   const v=new DataView(buffer);
   if(v.getUint32(0,false)!==0x4c524350||v.getUint16(4,true)!==1||v.getUint16(6,true)!==128)
     throw new Error('采样画面协议不匹配');
   for(let i=112;i<128;i++)if(v.getUint8(i)!==0)throw new Error('采样画面保留字段不为零');
-  if(expected.version!==1||expected.domain!=='proxy-output'||expected.profile!=='working-srgb'||expected.quality!=='proxy-float-output')
+  const quality=expectedDomain==='repair-input'?'proxy-float-input':'proxy-float-output';
+  if(!['proxy-output','repair-input'].includes(expectedDomain)||expected.version!==1||expected.domain!==expectedDomain||expected.profile!=='working-srgb'||expected.quality!==quality)
     throw new Error('不支持的采样画面来源');
   for(const [field,offset] of [['epoch',8],['shm_instance',24],['capture_id',40]] as const){
     const value=hex(v,offset);

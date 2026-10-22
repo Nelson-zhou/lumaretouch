@@ -443,7 +443,7 @@ def test_repair_rebuild_failure_leaves_no_trace(session, monkeypatch):
     三半状态：图层含新笔、底图回落 src_f32、而 `repair_version` 没变 ⇒ 下一帧的滤波
     缓存**精确命中旧底图**的结果。新底图 × 旧滤波混进同一帧，报表上一个错也看不见。
     """
-    from lumaretouch_engine import vram
+    from lumaretouch_engine import repair_replay
 
     session.add_repair(_op(session, 40, 40, 5, op_id=1))
     session.retouch(0.5)                         # 建好滤波缓存
@@ -455,7 +455,7 @@ def test_repair_rebuild_failure_leaves_no_trace(session, monkeypatch):
     def boom(*a, **kw):
         raise RuntimeError("注入的失败：裁块过大 OOM 一类")
 
-    monkeypatch.setattr(vram, "inpaint_t", boom)
+    monkeypatch.setattr(repair_replay, "inpaint_t", boom)
     with pytest.raises(RuntimeError, match="注入的失败"):
         session.add_repair(_op(session, 90, 20, 6, op_id=2))
     monkeypatch.undo()
