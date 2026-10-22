@@ -99,13 +99,14 @@ fn dab(field: &mut [Pixel], r: &Request, s: &Stroke, center:[f64;2], motion:[f64
 }
 
 pub fn replay(r:&Request) -> Result<Vec<Pixel>, &'static str> {
-    let mut field=vec![Pixel::default();r.w*r.h];let mut work=0;let mut dabs=0;
+    let mut field=vec![Pixel::default();r.w*r.h];let mut work=0;let mut dabs:usize=0;
     for s in &r.strokes {
         let [a,b,c,d]=s.axes;let det=a*d-b*c;
         let first=s.points[0];
         // A click is one 16 ms dab; timestamps then integrate real held duration.
+        dabs=dabs.checked_add(1).ok_or("liquify dab budget overflow")?;
+        if dabs>MAX_DABS {return Err("liquify replay exceeds 32768 dabs");}
         dab(&mut field,r,s,[first[0],first[1]],[0.0,0.0],first[2],16.0,&mut work)?;
-        dabs+=1;
         for pair in s.points.windows(2) {
             let p=pair[0];let q=pair[1];let dx=q[0]-p[0];let dy=q[1]-p[1];
             let distance=((d*dx-c*dy)/det).hypot((-b*dx+a*dy)/det);

@@ -1,0 +1,60 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+use serde_json::{json,Value};
+use std::sync::{Mutex,OnceLock};
+use crate::receipt_host::{ReceiptHost,ReceiptKind};
+const KEYS:[&str;9]=["size","width","vertical","horizontal","gummy","m_lip","tilt","upper","lower"];
+fn text(v:&Value)->bool{v.as_str().is_some_and(|s|!s.is_empty()&&s.len()<=128)}
+fn recipe(v:&Value)->bool {
+    v.as_object().is_some_and(|m|m.len()==10) && v["version"].as_u64()==Some(1)
+        && KEYS.iter().all(|k| {
+            if *k == "gummy" {
+                v[*k].as_object().is_some_and(|m|m.len()==3)
+                    && v[*k]["linked"].is_boolean()
+                    && ["left","right"].iter().all(|side|
+                        v[*k][*side].as_f64().is_some_and(|n|n.is_finite()&&(0.0..=1.0).contains(&n)))
+            } else { v[*k].as_f64().is_some_and(|n|n.is_finite()&&n.abs()<=1.) }
+        })
+}
+
+struct MouthKind;
+impl ReceiptKind for MouthKind{
+    const NAME:&'static str="mouth_shape";const ACTIONS:&'static [&'static str]=&["edit"];
+    fn valid(v:&Value,d:Option<&str>)->bool{
+        v["protocol"]==1&&v["document_id"].as_str()==d&&v["success"].is_boolean()&&v["outcome_unknown"].is_boolean()
+            &&text(&v["face_id"])&&text(&v["gesture_id"])&&text(&v["control"])
+            &&(v["success"]!=true||(v["outcome_unknown"]==false&&v["frame_emitted"]==true&&recipe(&v["recipe"])&&v["revision"].as_u64().is_some()))
+    }
+}
+#[derive(Default)]
+struct Mailbox{epoch:[u8;16],host:ReceiptHost<MouthKind>}
+fn mailbox()->&'static Mutex<Mailbox>{static BOX:OnceLock<Mutex<Mailbox>>=OnceLock::new();BOX.get_or_init(||Mutex::new(Mailbox::default()))}
+pub(crate) fn enqueue(handle:&crate::engine::EngineHandle,mut command:Value)->Result<(),String>{
+    let epoch=command.as_object_mut().ok_or("嘴形命令无效")?.remove("host_epoch").ok_or("嘴形缺少引擎身份")?;
+    if epoch.as_str()!=Some(crate::frame_identity::hex(handle.epoch()).as_str()){return Err("嘴形引擎已变化；未向新引擎重发".into());}
+    handle.send(command)
+}
+pub(crate) fn receive(epoch:[u8;16],v:&Value){if let Ok(mut m)=mailbox().lock(){m.host.receive(epoch,v);}}
+#[tauri::command]
+pub(crate) fn mouth_shape(state:tauri::State<'_,std::sync::Arc<crate::AppState>>,request:Value)->Result<Value,String>{
+    let object=request.as_object().ok_or("嘴形请求必须是对象")?;
+    let id=request["request_id"].as_str().filter(|s|!s.is_empty()&&s.len()<=128).ok_or("嘴形请求身份无效")?;
+    let epoch={let guard=state.engine.lock().map_err(|_|"引擎锁失败")?;{let handle=guard.as_ref().ok_or("引擎不可用；结果未确认")?;if !handle.is_alive(){return Err("引擎已退出；结果未确认".into());}handle.epoch()}};
+    if request["action"]=="status"{
+        if object.len()!=2{return Err("嘴形查询字段无效".into());}
+        let m=mailbox().lock().map_err(|_|"嘴形结果锁失败")?;
+        if m.epoch!=epoch{return Ok(json!({"phase":"unavailable","request_id":id,"error":"引擎已重启，原请求结果未确认"}));}
+        return Ok(m.host.status(id));
+    }
+    if request["action"]!="edit"||object.len()!=8||!["document_id","face_id","gesture_id","control"].iter().all(|k|text(&request[*k]))
+        ||!recipe(&request["recipe"])||!recipe(&request["base"])||!(request["control"]=="all"||KEYS.iter().any(|k|request["control"]==*k)){
+        return Err("嘴形编辑字段无效".into());
+    }
+    if state.ready_caps.lock().map_err(|_|"能力锁失败")?["mouth_shape_protocol"]!=2{return Err("引擎缺少确认式嘴形协议".into());}
+    {let mut m=mailbox().lock().map_err(|_|"嘴形结果锁失败")?;
+        if m.epoch!=epoch{m.epoch=epoch;m.host.reset(epoch);m.host.ready(epoch,true);}
+        m.host.begin_bound(epoch,id,"edit",request["document_id"].as_str())?;}
+    let mut command=request.clone();command.as_object_mut().unwrap().remove("action");command["cmd"]=json!("mouth_shape");command["host_epoch"]=json!(crate::frame_identity::hex(epoch));
+    // No interactive-key dropping: UI owns one pending operation and the latest intent.
+    // A send error does not assert non-execution; original ID stays queryable.
+    state.send_to_engine(command)?;Ok(json!({"requested":true}))
+}

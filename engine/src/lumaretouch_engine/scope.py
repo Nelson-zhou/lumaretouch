@@ -39,7 +39,7 @@ from . import studio_background_scope as STUDIO
 from . import optics_scope as OPTICS, optics_auto_scope as OPTICS_AUTO
 from . import facial_wrinkle_scope as WRINKLES
 from . import lip_makeup_scope as LIP
-from . import brow_shape_scope as BROW, nose_shape_scope as NOSE
+from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
 
 SCHEMA = "lrt.scope.v1"
@@ -89,6 +89,12 @@ MODULES: dict[str, dict] = {
     NOSE.OP: {"params": ("recipe",), "state_fields": NOSE.FIELDS, "single_face": True,
               "transferable": True, "cmd": "nose_shape", "read": NOSE.params_of, "write": NOSE.install,
               "why_not": "仅六项二维参数；目标重新确认真实人物与可见鼻部，不复制源图身份、网格或蒙版"},
+    EYE.OP: {"params": ("recipe",), "state_fields": EYE.FIELDS, "single_face": True,
+              "transferable": True, "cmd": "eye_shape", "read": EYE.params_of, "write": EYE.install,
+              "why_not": "仅十项双侧二维参数；目标重新确认真实人物与可见眼部，不复制源图身份、网格或蒙版"},
+    MOUTH.OP: {"params": ("recipe",), "state_fields": MOUTH.FIELDS, "single_face": True,
+              "transferable": True, "cmd": "mouth_shape", "read": MOUTH.params_of, "write": MOUTH.install,
+              "why_not": "仅九项二维参数；目标重新确认真实人物与可见唇部，不复制源图身份、网格或蒙版"},
     OPTICS_AUTO.OP: {"params": ("request",), "state_fields": OPTICS_AUTO.FIELDS, "single_face": False,
                 "transferable": True, "cmd": "optics", "read": OPTICS_AUTO.params_of, "write": OPTICS_AUTO.install,
                 "why_not": "逐图重匹配配置与重新解算，含手动数值；必须冻结预检，不复制源图矩阵、配置或引导线"},
@@ -276,6 +282,12 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == NOSE.OP:
         try: return NOSE.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == EYE.OP:
+        try: return EYE.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == MOUTH.OP:
+        try: return MOUTH.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == LIP.OP:
         try: return LIP.check_params(params)

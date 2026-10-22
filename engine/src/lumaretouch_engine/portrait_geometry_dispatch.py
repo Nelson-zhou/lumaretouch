@@ -23,3 +23,19 @@ class PortraitGeometryMixin:
     def finish_nose_shape(self,p,error):
         from .nose_shape_receipts import finish
         finish(self,p,error,_emit)
+
+    def cmd_eye_shape(self,p):
+        from .eye_shape_receipts import apply
+        apply(self,p,_emit)
+
+    def finish_eye_shape(self,p,error):
+        from .eye_shape_receipts import finish
+        finish(self,p,error,_emit)
+
+    def cmd_mouth_shape(self,p):
+        from .mouth_shape_receipts import apply
+        apply(self,p,_emit)
+
+    def finish_mouth_shape(self,p,error):
+        from .mouth_shape_receipts import finish
+        finish(self,p,error,_emit)

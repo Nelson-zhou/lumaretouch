@@ -61,11 +61,20 @@ def db_digest(files):
 def build(cache,output,python):
     if sys.platform!='linux':fail('this release builder supports Linux only')
     if output.exists():fail('output must be a new directory; no existing bundle is overwritten')
+    selected_python=shutil.which(str(python))
+    if selected_python is None:fail('selected release Python is not executable: '+str(python))
+    # Keep the venv's executable path: resolving its symlink would select the
+    # base interpreter and lose the already admitted build dependencies.
+    python=os.path.abspath(selected_python)
+    build_env=os.environ.copy()
+    build_env.pop('PYTHONHOME',None);build_env.pop('PYTHONPATH',None)
+    build_env.update(PATH=str(Path(python).parent)+os.pathsep+os.environ.get('PATH',''),
+                     PYTHONNOUSERSITE='1',PIP_NO_INDEX='1',PIP_DISABLE_PIP_VERSION_CHECK='1')
     for executable in ('git','cmake','pkg-config','cc','c++','readelf'):
         if shutil.which(executable) is None:fail('missing release build prerequisite: '+executable)
-    run(['pkg-config','--exists','glib-2.0'])
+    run(['pkg-config','--exists','glib-2.0'],env=build_env)
     # Explicit prerequisites, no resolver/build-isolation dependency downloads.
-    run([python,'-c','import setuptools,numpy,Cython,wheel,lxml; import sys; assert sys.version_info[:2] == (3,12), "release runtime requires CPython 3.12"'])
+    run([python,'-c','import setuptools,numpy,Cython,wheel,lxml; import sys; assert sys.version_info[:2] == (3,12), "release runtime requires CPython 3.12"'],env=build_env)
     cache.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='optics-build-',dir=cache) as tmp:
         work=Path(tmp);sources={};sources_hash={}
@@ -73,10 +82,17 @@ def build(cache,output,python):
             sources[name]=work/name
             sources_hash[name]=unpack_source(cache,name,sources[name],work/(name+'.tar'))
         prefix=work/'prefix';native_build=work/'native-build'
+        # Pinned Lensfun 0.3.4 apps/CMakeLists.txt uses FIND_PROGRAM(PYTHON
+        # "python3"), not FindPython's Python_EXECUTABLE. Its python-package ALL
+        # target still runs with INSTALL_PYTHON_MODULE=OFF, so bind it explicitly.
         run(['cmake','-S',sources['lensfun'],'-B',native_build,'-DCMAKE_BUILD_TYPE=Release','-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
+             '-DPYTHON:FILEPATH='+python,
              '-DBUILD_STATIC=OFF','-DBUILD_TESTS=OFF','-DBUILD_DOC=OFF','-DBUILD_LENSTOOL=OFF','-DINSTALL_HELPER_SCRIPTS=OFF','-DINSTALL_PYTHON_MODULE=OFF',
-             '-DCMAKE_INSTALL_LIBDIR=lib','-DCMAKE_INSTALL_PREFIX='+str(prefix)])
-        run(['cmake','--build',native_build,'--parallel',str(min(4,os.cpu_count() or 1))]);run(['cmake','--install',native_build])
+             '-DCMAKE_INSTALL_LIBDIR=lib','-DCMAKE_INSTALL_PREFIX='+str(prefix)],env=build_env)
+        cmake_python=[line.split('=',1)[1] for line in (native_build/'CMakeCache.txt').read_text().splitlines() if line.startswith('PYTHON:FILEPATH=')]
+        if cmake_python!=[python]:fail('Lensfun CMake did not retain the admitted build Python')
+        run(['cmake','--build',native_build,'--parallel',str(min(4,os.cpu_count() or 1))],env=build_env)
+        run(['cmake','--install',native_build],env=build_env)
         # Independent modern calibration snapshot, converted by the OFFICIAL
         # converter rather than rewriting calibration math or freezing 2023 XML.
         db_source=sources['lensfun_database'];converter=db_source/lock()['lensfun_database']['converter']
@@ -86,7 +102,7 @@ def build(cache,output,python):
         converted=work/'converted';database=work/'database';database.mkdir()
         run([python,'-c',
              'import sys; from pathlib import Path; sys.path.insert(0,sys.argv[1]); import xml_converter as c; c.generate_database_tarballs([c.XMLFile(str(p)) for p in sorted(Path(sys.argv[2]).glob("*.xml"))],int(sys.argv[3]),sys.argv[4])',
-             converter.parent,db_source/'data/db',timestamp,converted])
+             converter.parent,db_source/'data/db',timestamp,converted],env=build_env)
         with tarfile.open(converted/'version_1.tar.bz2') as archive:
             members=archive.getmembers()
             if not members or len(members)>4096 or sum(m.size for m in members)>32*1024*1024:fail('converted database budget exceeded')
@@ -97,7 +113,7 @@ def build(cache,output,python):
         if not xml or len(xml)>4096 or sum(p.stat().st_size for p in xml)>32*1024*1024:fail('invalid released database')
         wrapper=sources['lensfunpy'];db_target=wrapper/'lensfunpy/db_files';db_target.mkdir(exist_ok=True)
         for path in xml:shutil.copyfile(path,db_target/path.name)
-        env=os.environ.copy();env.update(PIP_NO_INDEX='1',PIP_DISABLE_PIP_VERSION_CHECK='1',PYTHONNOUSERSITE='1',
+        env=build_env.copy();env.update(
             PKG_CONFIG_PATH=str(prefix/'lib/pkgconfig'),LD_LIBRARY_PATH=str(prefix/'lib'),LDFLAGS='-Wl,-rpath,$ORIGIN/_native')
         wheels=work/'wheels';wheels.mkdir()
         run([python,'-m','pip','wheel','--no-index','--no-deps','--no-build-isolation','--wheel-dir',wheels,wrapper],env=env)
@@ -137,12 +153,13 @@ def build(cache,output,python):
                'database_format':1,'database_source_sha256':db_digest((db_source/'data/db').glob('*.xml')),
                'database_converter_sha256':sha(converter.read_bytes()),'database_source_epoch':timestamp,
                'libc':list(platform.libc_ver()),
-               'python':capture([python,'-c','import sys; print(sys.version)']),'python_tag':'cp312','machine':platform.machine(),'platform':platform.platform(),
+               'python':capture([python,'-c','import sys; print(sys.version)'],env=build_env),'python_tag':'cp312','machine':platform.machine(),'platform':platform.platform(),
+               'build_python_executable':python,'cmake_python_executable':cmake_python[0],
                'application_commit':capture(['git','-C',HERE.parent,'rev-parse','HEAD']),
-               'build_python_dependencies':capture([python,'-m','pip','freeze','--all']),
+               'build_python_dependencies':capture([python,'-m','pip','freeze','--all'],env=build_env),
                'wrapper_linkage':linkage,
-               'glib':capture(['pkg-config','--modversion','glib-2.0']),'compiler':capture(['cc','--version']),
-               'cmake':capture(['cmake','--version']),'status':'built-not-product-accepted'}
+               'glib':capture(['pkg-config','--modversion','glib-2.0'],env=build_env),'compiler':capture(['cc','--version'],env=build_env),
+               'cmake':capture(['cmake','--version'],env=build_env),'status':'built-not-product-accepted'}
         contents['lensfunpy/optics-provenance.json']=json.dumps(facts,sort_keys=True,indent=2).encode()
         buffer=io.StringIO();writer=csv.writer(buffer,lineterminator='\n')
         for name,data in sorted(contents.items()):writer.writerow([name,'sha256='+base64.urlsafe_b64encode(hashlib.sha256(data).digest()).decode().rstrip('='),len(data)])

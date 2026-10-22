@@ -403,6 +403,253 @@
       "transferable": true,
       "source_requirement": "PC-32471-C-944899f5fd",
       "reason": "Existing version-1 three-control lip enhancement recipe, not a lipstick asset or global makeup strength. Numeric bounds are local product policy. Transfers intent only; target owns anatomy, visibility and recovery. Registry omission corrected; no new acceptance claim."
+    },
+    {
+      "operation_id": "lnx.eye_shape.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "size": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "iris_size": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "height": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "width": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "spacing": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "inner_corner": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "outer_corner": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "lower_lid": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "tilt": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "position": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        }
+      },
+      "hard_range": {
+        "version": 1,
+        "size": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "iris_size": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "height": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "width": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "spacing": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "inner_corner": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "outer_corner": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "lower_lid": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "tilt": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "position": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        }
+      },
+      "transferable": true,
+      "source_requirement": "PC-32466-C-9069cc8f2c",
+      "reason": "Ten distinct bilateral projected-2D eye controls, numeric ranges local policy. Target recomputes geometry and source-pixel observability. Legacy big_eye retained unchanged; new overall size refuses coexistence, no lossless conversion claimed. Implementation pending runtime/photo acceptance."
+    },
+    {
+      "operation_id": "lnx.mouth_shape.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "size": 0,
+        "width": 0,
+        "vertical": 0,
+        "horizontal": 0,
+        "m_lip": 0,
+        "tilt": 0,
+        "upper": 0,
+        "lower": 0,
+        "gummy": {
+          "linked": true,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "range": {
+        "version": [
+          1,
+          1
+        ],
+        "size": [
+          -1,
+          1
+        ],
+        "width": [
+          -1,
+          1
+        ],
+        "vertical": [
+          -1,
+          1
+        ],
+        "horizontal": [
+          -1,
+          1
+        ],
+        "m_lip": [
+          -1,
+          1
+        ],
+        "tilt": [
+          -1,
+          1
+        ],
+        "upper": [
+          -1,
+          1
+        ],
+        "lower": [
+          -1,
+          1
+        ],
+        "gummy": {
+          "linked": "boolean",
+          "left": [
+            0,
+            1
+          ],
+          "right": [
+            0,
+            1
+          ]
+        }
+      },
+      "transferable": true,
+      "source_requirement": "PC-32466-C-cbb4c198e8",
+      "reason": "Nine distinct observed-texture 2D mouth controls. Only gummy has bilateral unlock; nonnegative upper-lip-down coverage. Vertical positive down; tilt sign explicitly local policy. Legacy smile and lip makeup unchanged and stacking disclosed. Target recomputes original-source evidence; source implementation pending runtime/photo acceptance."
     }
   ]
 }

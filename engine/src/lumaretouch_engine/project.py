@@ -196,8 +196,10 @@ def validate(p: object) -> None:
         except ValueError as error: raise ProjectError(str(error)) from error
         from .brow_shape_project import validate_records as validate_brows
         from .nose_shape_project import validate_records as validate_noses
+        from .eye_shape_project import validate_records as validate_eyes
+        from .mouth_shape_project import validate_records as validate_mouth
         from .lip_makeup_project import validate_records as validate_lips
-        try: validate_lips(row); validate_brows(row); validate_noses(row)
+        try: validate_lips(row); validate_brows(row); validate_noses(row); validate_eyes(row); validate_mouth(row)
         except ValueError as error: raise ProjectError(str(error)) from error
         from .optics_project import validate_records as validate_optics
         try: validate_optics(row,required=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)),allowed=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)))
@@ -564,6 +566,12 @@ def encode(value: object, assets: dict, dropped: list, at: str) -> object:
         if '_brow_shape' in value:
             from .brow_shape_project import validate_records
             validate_records(value)
+        if '_eye_shape' in value:
+            from .eye_shape_project import validate_records
+            validate_records(value)
+        if '_mouth_shape' in value:
+            from .mouth_shape_project import validate_records
+            validate_records(value)
         if '_nose_shape' in value:
             from .nose_shape_project import validate_records
             validate_records(value)
@@ -640,6 +648,12 @@ def decode(value: object, assets: dict, dropped: list, at: str,
             _check_manual_liquify_record(value['_manual_liquify'])
         if '_brow_shape' in value:
             from .brow_shape_project import validate_records
+            validate_records(value)
+        if '_eye_shape' in value:
+            from .eye_shape_project import validate_records
+            validate_records(value)
+        if '_mouth_shape' in value:
+            from .mouth_shape_project import validate_records
             validate_records(value)
         if '_nose_shape' in value:
             from .nose_shape_project import validate_records
@@ -789,8 +803,10 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
             validate_sky(recipe,required=(project.get("schema_version") in (SKY_SCHEMA, SCHEMA)),allowed=(project.get("schema_version") in (SKY_SCHEMA, SCHEMA)),semantic=(project.get("schema_version")==SCHEMA))
             from .brow_shape_project import validate_records as validate_brows
             from .nose_shape_project import validate_records as validate_noses
+            from .eye_shape_project import validate_records as validate_eyes
+            from .mouth_shape_project import validate_records as validate_mouth
             from .lip_makeup_project import validate_records as validate_lips
-            validate_lips(recipe); validate_brows(recipe); validate_noses(recipe)
+            validate_lips(recipe); validate_brows(recipe); validate_noses(recipe); validate_eyes(recipe); validate_mouth(recipe)
             from .optics_project import validate_records as validate_optics
             validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)))
             from .studio_background_project import validate_records as validate_studio
@@ -847,8 +863,10 @@ def active_recipe(project: dict, path: str, dc_types: dict | None = None) -> obj
                 validate_sky(recipe,required=(project.get("schema_version") in (SKY_SCHEMA, SCHEMA)),allowed=(project.get("schema_version") in (SKY_SCHEMA, SCHEMA)),semantic=(project.get("schema_version")==SCHEMA))
                 from .brow_shape_project import validate_records as validate_brows
                 from .nose_shape_project import validate_records as validate_noses
+                from .eye_shape_project import validate_records as validate_eyes
+                from .mouth_shape_project import validate_records as validate_mouth
                 from .lip_makeup_project import validate_records as validate_lips
-                validate_lips(recipe); validate_brows(recipe); validate_noses(recipe)
+                validate_lips(recipe); validate_brows(recipe); validate_noses(recipe); validate_eyes(recipe); validate_mouth(recipe)
                 from .optics_project import validate_records as validate_optics
                 validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SCHEMA)))
                 from .studio_background_project import validate_records as validate_studio

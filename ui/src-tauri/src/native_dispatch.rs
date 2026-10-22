@@ -48,6 +48,8 @@ impl AppState {
         match name.as_str() {
             "brow_shape" => crate::brow_shape_api::enqueue(handle, cmd)?,
             "nose_shape" => crate::nose_shape_api::enqueue(handle, cmd)?,
+            "eye_shape" => crate::eye_shape_api::enqueue(handle, cmd)?,
+            "mouth_shape" => crate::mouth_shape_api::enqueue(handle, cmd)?,
             "batch" => crate::batch_api::enqueue(self, handle, cmd)?,
             "preset" => crate::preset_api::enqueue(self, handle, cmd)?,
             "white_balance" => crate::white_balance_api::enqueue(self, handle, cmd)?,

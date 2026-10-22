@@ -23,8 +23,10 @@ def require_warm_prefix(pipeline, strength, params):
         if strength != 0 and (pipeline.light_res is None or pipeline.light_res_key != (pipeline.filter_key,*suffix)):
             raise ValueError('Wait for the current photo preview before using the WB picker (filtered light cache)')
     from .brow_shape_runtime import has_brow
-    from .nose_shape_runtime import has_nose,warp_key
-    if pipeline.has_deform() or has_brow(pipeline) or has_nose(pipeline):
+    from .nose_shape_runtime import has_nose
+    from .eye_shape_runtime import has_eye
+    from .mouth_shape_runtime import has_mouth,warp_key
+    if pipeline.has_deform() or has_brow(pipeline) or has_nose(pipeline) or has_eye(pipeline) or has_mouth(pipeline):
         key=warp_key(pipeline)
         if pipeline._deform_warp_key != key:
             raise ValueError('Wait for the current photo preview before using the WB picker (deformation cache)')

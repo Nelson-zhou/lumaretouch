@@ -184,6 +184,8 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "batch_result"=>state.batch_results.lock().unwrap().receive(inspection_epoch,&v),
         "brow_shape_result"=>{crate::brow_shape_api::receive(inspection_epoch,&v);if v.get("doc_state").is_some(){state.on_layer_frame(&v);}},
         "nose_shape_result"=>{crate::nose_shape_api::receive(inspection_epoch,&v);if v.get("doc_state").is_some(){state.on_layer_frame(&v);}},
+        "eye_shape_result"=>{crate::eye_shape_api::receive(inspection_epoch,&v);if v.get("doc_state").is_some(){state.on_layer_frame(&v);}},
+        "mouth_shape_result"=>{crate::mouth_shape_api::receive(inspection_epoch,&v);if v.get("doc_state").is_some(){state.on_layer_frame(&v);}},
         "preset_result"=>state.preset_results.lock().unwrap().receive(inspection_epoch,&v),
         "white_balance_result"=>state.white_balance_results.lock().unwrap().receive(inspection_epoch,&v),
         "color_picker_result"=>state.color_picker_results.lock().unwrap().receive(inspection_epoch,&v),

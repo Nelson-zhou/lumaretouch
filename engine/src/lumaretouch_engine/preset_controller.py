@@ -4,7 +4,7 @@ The dispatcher calls finish() after its history bookkeeping. Legacy events remai
 available. Receipt replay is bounded to this engine session/cache; clients must
 query an uncertain request, never automatically resubmit a mutation.
 """
-from . import brow_shape_scope as BROW, nose_shape_scope as NOSE
+from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from collections import OrderedDict
 from copy import deepcopy
 from dataclasses import dataclass
@@ -229,10 +229,12 @@ class PresetController:
             SKY.validate_target(state["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
         if BROW.OP in ops and OA.OP not in ops: BROW.validate_target(state,self.ports.target_row())
         if NOSE.OP in ops and OA.OP not in ops: NOSE.validate_target(state,self.ports.target_row())
+        if EYE.OP in ops and OA.OP not in ops: EYE.validate_target(state,self.ports.target_row())
+        if MOUTH.OP in ops and OA.OP not in ops: MOUTH.validate_target(state,self.ports.target_row())
         if p.get('preflight_token') is not None:self.ports.advance()
         self._effect_started = True
         frame = apply_with_rollback(self.ports.replay, previous, state, preset_id=pid,
-                                    emit=self.emit, invalidate=self.ports.invalidate, strict_local=LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops)
+                                    emit=self.emit, invalidate=self.ports.invalidate, strict_local=LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops)
         after = OA.before_params(state, ops)
         self.last = {"id": pid, "name": doc["name"], "ops": ops, "params": after}
         render_ms = frame.pop("render_ms")

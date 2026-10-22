@@ -47,8 +47,8 @@ torch = optional_module("torch")
 from .ops import enhance as ENH
 from . import under_eye_layer as UNDER
 from . import lip_makeup_runtime as LIPR, lip_makeup_state as LIPS
-from . import brow_shape_runtime as BROWR, brow_shape_state as BROWS, nose_shape_runtime as NOSER, nose_shape_state as NOSES
-from .nose_shape_field import compose_delta as compose_geometry_delta
+from . import brow_shape_runtime as BROWR, brow_shape_state as BROWS, nose_shape_runtime as NOSER, nose_shape_state as NOSES, eye_shape_state as EYES, eye_shape_runtime as EYER, mouth_shape_state as MOUTHS, mouth_shape_runtime as MOUTHR
+from .mouth_shape_field import compose_delta as compose_geometry_delta
 from . import facial_wrinkle_runtime as WRUNTIME, facial_wrinkle_state as WSTATE
 from .ops.deform import (analytic_frontal_landmarks, controls, face_frame,
                          support_radii, tps_field_from_state, tps_solve)
@@ -180,6 +180,10 @@ class ExportSpec:
     brow_shape_face: object | None = None
     nose_shape: dict | None = None
     nose_shape_face: object | None = None
+    eye_shape: dict | None = None
+    eye_shape_face: object | None = None
+    mouth_shape: dict | None = None
+    mouth_shape_face: object | None = None
     lip_makeup: dict | None = None
     lip_makeup_face: dict | None = None
     facial_wrinkle_skin: np.ndarray | None = None
@@ -273,6 +277,8 @@ class ExportSpec:
         self.lip_makeup = LIPS.check(self.lip_makeup)
         self.brow_shape = BROWS.check(self.brow_shape)
         self.nose_shape = NOSES.check(self.nose_shape)
+        self.eye_shape = EYES.check(self.eye_shape)
+        self.mouth_shape = MOUTHS.check(self.mouth_shape)
         from .local_grade_layers import check as check_groups
         from .local_grade_stage import check_fields
         self.local_grade_groups = check_groups(self.local_grade_groups)
@@ -731,7 +737,9 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         field_ms = (time.perf_counter() - t_f) * 1000.0
     brow_field = BROWR.export_field(spec, src_u8, divisor=65535 if src_u8.dtype == np.uint16 else 255)
     nose_field = NOSER.export_field(spec, src_u8, divisor=65535 if src_u8.dtype == np.uint16 else 255)
-    delta, peak = compose_geometry_delta(delta, brow_field, nose_field, (h,w))
+    eye_field = EYER.export_field(spec, src_u8, divisor=65535 if src_u8.dtype == np.uint16 else 255)
+    mouth_field = MOUTHR.export_field(spec, src_u8, divisor=65535 if src_u8.dtype == np.uint16 else 255)
+    delta, peak = compose_geometry_delta(delta, brow_field, nose_field, eye_field, mouth_field, (h,w))
     if isinstance(delta,np.ndarray): delta = torch.from_numpy(delta)
     margin = spec.margin_px(peak, manual_peak)
     if margin > MAX_MARGIN:
@@ -817,6 +825,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             pipe.adopt_deform_field(delta[:, cy0:cy1, cx0:cx1].contiguous().to(device))
             pipe.brow_shape_combined = brow_field is not None and brow_field.state is not None
             pipe.nose_shape_combined = nose_field is not None and nose_field.state is not None
+            pipe.eye_shape_combined = eye_field is not None and eye_field.state is not None
+            pipe.mouth_shape_combined = mouth_field is not None and mouth_field.state is not None
+            if pipe.mouth_shape_combined:
+                pipe.mouth_shape_teeth_support = mouth_field.teeth_support[cy0:cy1,cx0:cx1]
         if enh_reg is not None:
             # 先挂场再提交参数：set_enhance 只改三个数，而 has_enhance() 要同时看到场，
             # 反过来写会有一瞬"参数点火而场上没有额度"——那一瞬里 lit 报的是假话
@@ -978,6 +990,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         "brow_shape_full_resolution": brow_field is not None,
         "nose_shape": nose_field.facts if nose_field else {},
         "nose_shape_full_resolution": nose_field is not None,
+        "eye_shape": eye_field.facts if eye_field else {},
+        "eye_shape_full_resolution": eye_field is not None,
+        "mouth_shape": mouth_field.facts if mouth_field else {},
+        "mouth_shape_full_resolution": mouth_field is not None,
         "lip_makeup_bytes": lip_layer.resident_bytes() if lip_layer is not None else 0,
         "facial_wrinkles": dict(wrinkle_layer.facts) if wrinkle_layer is not None else {},
         "facial_wrinkle_full_resolution": wrinkle_layer is not None,

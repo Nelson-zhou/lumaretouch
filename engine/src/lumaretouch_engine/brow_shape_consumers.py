@@ -7,6 +7,8 @@ def apply_enhance(pipe,t):
         y,x,h,w=pipe.enhance_local
         weight=torch.zeros((1,3,pipe.h,pipe.w),device=pipe.device,dtype=torch.float32)
         weight[:,:,y:y+h,x:x+w]=pipe.enhance_gpu[None]
+        from .mouth_shape_consumers import gate_teeth_source
+        weight=gate_teeth_source(pipe,weight)
         weight=pipe.align_source_grade_mask(weight)[0]
         out=ENH.enhance_t(out,weight,pipe.enhance_amounts)
     if pipe.under_eye_delta is not None:

@@ -1,3 +1,7 @@
+import {MouthShapeControls} from "../mouthShape/MouthShapeControls";
+import {neutral as neutralMouth} from "../mouthShape/model";
+import {EyeShapeControls} from "../eyeShape/EyeShapeControls";
+import {neutral as neutralEyes} from "../eyeShape/model";
 import {withoutCoveredLeaves} from "../toolRouting/coverage";
 import {revealTool,type ToolLocation} from "../toolRouting/RetouchToolActivity";
 import {NoseShapeControls} from "../noseShape/NoseShapeControls";
@@ -216,6 +220,27 @@ function FaceAvatar({ face, thumb, all }: {
  * 面板不提前放行。
  */
 const WIRED: Record<string, string> = {
+  "PC-32466|嘴巴": "mouth.family",
+  "PC-32466|嘴巴/大小": "mouth.size",
+  "PC-32466|嘴巴/嘴宽": "mouth.width",
+  "PC-32466|嘴巴/上下": "mouth.vertical",
+  "PC-32466|嘴巴/左右": "mouth.horizontal",
+  "PC-32466|嘴巴/露龈调整": "mouth.gummy",
+  "PC-32466|嘴巴/M唇": "mouth.m_lip",
+  "PC-32466|嘴巴/倾斜": "mouth.tilt",
+  "PC-32466|嘴巴/丰上唇": "mouth.upper",
+  "PC-32466|嘴巴/丰下唇": "mouth.lower",
+  "PC-32466|眼睛": "eye.family",
+  "PC-32466|眼睛/整体大小": "eye.size",
+  "PC-32466|眼睛/眼瞳大小": "eye.iris_size",
+  "PC-32466|眼睛/眼高": "eye.height",
+  "PC-32466|眼睛/眼宽": "eye.width",
+  "PC-32466|眼睛/眼距": "eye.spacing",
+  "PC-32466|眼睛/内眼角": "eye.inner_corner",
+  "PC-32466|眼睛/外眼角": "eye.outer_corner",
+  "PC-32466|眼睛/眼睑下至": "eye.lower_lid",
+  "PC-32466|眼睛/倾斜": "eye.tilt",
+  "PC-32466|眼睛/位置": "eye.position",
   "PC-32466|鼻子": "nose.family",
   "PC-32466|鼻子/大小": "nose.size",
   "PC-32466|鼻子/鼻高": "nose.height",
@@ -281,7 +306,7 @@ const WIRED: Record<string, string> = {
   "PC-32465|水润磨皮-脸部/身体": "skin.radius",
   // 面部重塑 / 表情
   "PC-32466|脸型/瘦脸": "deform.slim_face",
-  "PC-32466|眼睛/整体大小": "deform.big_eye",
+
   "PC-32466|脸型/收下巴": "deform.small_chin",
   "PC-32466|脸型预设/经典": "deform.preset:经典",
   "PC-32466|脸型预设/幼态": "deform.preset:幼态",
@@ -520,6 +545,18 @@ export default function RetouchPanel(props: RetouchProps) {
   const renderWired = (leaf: SpecSubcontrol, name: string,
                        kind: string): React.ReactNode => {
     const label = WIRE_LABEL[kind] ?? name;
+    if (kind === "mouth.family") return <MouthShapeControls key={leaf.path} value={doc?.mouth_shape?.recipe??neutralMouth()}
+      facts={doc?.mouth_shape?.controls} disabled={dim||!props.faceOk||!!props.whiteBalanceBusy||status?.ready_caps?.mouth_shape_protocol!==2}
+      why={props.faceOk?(doc?.mouth_shape?.native_available===false?"嘴形 Rust 核心不可用，调整会明确拒绝；仍可重置旧参数。请使用完整打包版本。":doc?.mouth_shape?.suspended??undefined):props.faceWhy}
+      legacy={doc?.mouth_shape?.legacy_smile??amounts.smile??0}
+      documentId={doc?.document_id??""} faceId={doc?.mouth_shape?.selected_face_id??""} revision={doc?.mouth_shape?.revision??0}/>;
+    if (kind.startsWith("mouth.")) return null;
+    if (kind === "eye.family") return <EyeShapeControls key={leaf.path} value={doc?.eye_shape?.recipe??neutralEyes()}
+      facts={doc?.eye_shape?.controls} disabled={dim||!props.faceOk||!!props.whiteBalanceBusy||status?.ready_caps?.eye_shape_protocol!==2}
+      why={props.faceOk?(doc?.eye_shape?.native_available===false?"眼形 Rust 核心未安装；调整会明确拒绝，请使用完整打包版本。":doc?.eye_shape?.suspended??undefined):props.faceWhy}
+      legacy={doc?.eye_shape?.legacy_big_eye??amounts.big_eye??0} clearLegacy={()=>commitDeform({big_eye:0})}
+      documentId={doc?.document_id??""} faceId={doc?.eye_shape?.selected_face_id??""} revision={doc?.eye_shape?.revision??0}/>;
+    if (kind.startsWith("eye.")) return null;
     if (kind === "nose.family") return <NoseShapeControls key={leaf.path} value={doc?.nose_shape?.recipe??neutralNose()}
       facts={doc?.nose_shape?.controls} disabled={dim||!props.faceOk||!!props.whiteBalanceBusy||status?.ready_caps?.nose_shape_protocol!==2}
       why={props.faceOk?(doc?.nose_shape?.suspended??undefined):props.faceWhy}
