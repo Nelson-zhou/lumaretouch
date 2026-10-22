@@ -1,4 +1,4 @@
-//! Corrected white-balance scalar foundation; not wired into production rendering yet.
+//! Corrected white-balance scalar math used by versioned recipe installation.
 //! Independently implemented published CIE D equations and linear-sRGB matrix facts.
 //! Source anchors and compatibility constraints: README.md and the versioning plan.
 //! This is a diagonal white-ratio adjustment, NOT a full Bradford adaptation.

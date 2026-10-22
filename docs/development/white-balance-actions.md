@@ -36,10 +36,19 @@ cannot publish into the replacement owner. A confirmed mutation remains confirme
 if subsequent status refresh fails. Old receipt state is never installed into the
 current document. Native status refresh continues to use the existing status fence.
 
-## Verification still required for this candidate
+## Verified automated evidence and remaining acceptance
 
-CI includes backend controller failure/dedup/UTF8/bounds tests, a real synthetic
-engine mode/reset/undo protocol flow, native mailbox tests and frontend lifecycle
-unit tests. These new tests have not yet run for this candidate at this edit.
-Actual desktop interaction, visual quality, GPU behavior and slider latency remain
-separate acceptance, not inferred from unit tests or a successful build.
+Candidate de5e8e2f26277bab9a30ec87ce12e0d4626d36c3 passed
+https://github.com/Nelson-zhou/lumaretouch/actions/runs/39744013157 . All non-GPU
+jobs passed; GPU jobs skipped. Evidence:
+- Lightweight engine:1158 passed,433 skipped,71.87s.
+- Separate CPU Torch preset protocol:3 passed,0 skipped,4.44s.
+- WB bridge/state/controller/actual mode-reset-undo protocol:40 passed,0 skipped,4.28s.
+- Frontend:176 passed,0 failed, including10 WB lifecycle tests.
+- Rust WB mailbox:3 passed; Rust checking, frontend typechecking and builds passed.
+
+Lifecycle tests include hung send/query/refresh, old-document replies and stale
+confirmation after owner disposal/reactivation. Backend evidence includes terminal
+receipts after history, no-op/deduplication, bounded invalid identities and preserved
+non-WB settings. Actual desktop interaction, visual quality, GPU behavior and slider
+latency remain separate acceptance, not inferred from these results.

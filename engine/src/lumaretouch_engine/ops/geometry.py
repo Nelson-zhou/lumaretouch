@@ -154,10 +154,22 @@ def _sample_bilinear_np(src: np.ndarray, sx: np.ndarray, sy: np.ndarray) -> np.n
     h, w, c = src.shape
     x0 = np.floor(sx).astype(np.int64); y0 = np.floor(sy).astype(np.int64)
     fx = sx - x0; fy = sy - y0
-    valid = (x0 >= 0) & (x0 < w - 1) & (y0 >= 0) & (y0 < h - 1)
-    x0c = np.clip(x0, 0, w - 2); y0c = np.clip(y0, 0, h - 2)
-    p00 = src[y0c, x0c]; p10 = src[y0c, x0c + 1]
-    p01 = src[y0c + 1, x0c]; p11 = src[y0c + 1, x0c + 1]
+    if w == 1 or h == 1:
+        # A singleton axis has one pixel cell, not an empty interpolation domain.
+        # For these degenerate images only, use the half-pixel cell footprint on
+        # both axes and clamp interpolation to the edge pixel inside that cell.
+        # Normal images below keep their exact legacy boundary/arithmetic.
+        valid = (sx >= -0.5) & (sx <= w - 0.5) & (sy >= -0.5) & (sy <= h - 0.5)
+        cx = np.clip(sx, 0, w - 1); cy = np.clip(sy, 0, h - 1)
+        x0c = np.floor(cx).astype(np.int64); y0c = np.floor(cy).astype(np.int64)
+        x1c = np.minimum(x0c + 1, w - 1); y1c = np.minimum(y0c + 1, h - 1)
+        fx = cx - x0c; fy = cy - y0c
+    else:
+        valid = (x0 >= 0) & (x0 < w - 1) & (y0 >= 0) & (y0 < h - 1)
+        x0c = np.clip(x0, 0, w - 2); y0c = np.clip(y0, 0, h - 2)
+        x1c = x0c + 1; y1c = y0c + 1
+    p00 = src[y0c, x0c]; p10 = src[y0c, x1c]
+    p01 = src[y1c, x0c]; p11 = src[y1c, x1c]
     fx3 = fx[..., None]; fy3 = fy[..., None]
     top = p00 + (p10 - p00) * fx3
     bot = p01 + (p11 - p01) * fx3
@@ -190,10 +202,18 @@ def _sample_bilinear_t(src, sx, sy):
     h, w, c = src.shape
     x0 = torch.floor(sx).to(torch.long); y0 = torch.floor(sy).to(torch.long)
     fx = (sx - x0.to(src.dtype))[..., None]; fy = (sy - y0.to(src.dtype))[..., None]
-    valid = (x0 >= 0) & (x0 < w - 1) & (y0 >= 0) & (y0 < h - 1)
-    x0c = x0.clamp(0, w - 2); y0c = y0.clamp(0, h - 2)
-    p00 = src[y0c, x0c]; p10 = src[y0c, x0c + 1]
-    p01 = src[y0c + 1, x0c]; p11 = src[y0c + 1, x0c + 1]
+    if w == 1 or h == 1:
+        valid = (sx >= -0.5) & (sx <= w - 0.5) & (sy >= -0.5) & (sy <= h - 0.5)
+        cx = sx.clamp(0, w - 1); cy = sy.clamp(0, h - 1)
+        x0c = cx.floor().to(torch.long); y0c = cy.floor().to(torch.long)
+        x1c = (x0c + 1).clamp(max=w - 1); y1c = (y0c + 1).clamp(max=h - 1)
+        fx = (cx - x0c.to(cx.dtype))[..., None]; fy = (cy - y0c.to(cy.dtype))[..., None]
+    else:
+        valid = (x0 >= 0) & (x0 < w - 1) & (y0 >= 0) & (y0 < h - 1)
+        x0c = x0.clamp(0, w - 2); y0c = y0.clamp(0, h - 2)
+        x1c = x0c + 1; y1c = y0c + 1
+    p00 = src[y0c, x0c]; p10 = src[y0c, x1c]
+    p01 = src[y1c, x0c]; p11 = src[y1c, x1c]
     top = p00 + (p10 - p00) * fx
     bot = p01 + (p11 - p01) * fx
     v = top + (bot - top) * fy
@@ -220,8 +240,12 @@ def crop_rotate_t(arr, rect, rotation_degrees: float, *, uint8: bool = True):
     ow, oh = out_size(cw, ch, [0.0, 0.0, 1.0, 1.0], r)
     dtype = cur.dtype if cur.is_floating_point() else torch.float32
     src = cur.to(dtype)
-    ys, xs = torch.meshgrid(torch.arange(oh, dtype=dtype, device=cur.device),
-                            torch.arange(ow, dtype=dtype, device=cur.device), indexing="ij")
+    # Exact half-pixel membership must not differ from NumPy when e.g. cos(60°)
+    # is just above0.5 in binary64 but rounds to0.5 in float32. Only this newly
+    # defined degenerate path uses double coordinates; ordinary images are frozen.
+    coordinate_dtype = torch.float64 if cw == 1 or ch == 1 else dtype
+    ys, xs = torch.meshgrid(torch.arange(oh, dtype=coordinate_dtype, device=cur.device),
+                            torch.arange(ow, dtype=coordinate_dtype, device=cur.device), indexing="ij")
     ang = math.radians(-r)
     ca, sa = math.cos(ang), math.sin(ang)
     dx = xs - (ow - 1) / 2.0
@@ -229,6 +253,8 @@ def crop_rotate_t(arr, rect, rotation_degrees: float, *, uint8: bool = True):
     sx = ca * dx - sa * dy + (cw - 1) / 2.0
     sy = sa * dx + ca * dy + (ch - 1) / 2.0
     out = _sample_bilinear_t(src, sx, sy)
+    if cw == 1 or ch == 1:
+        out = out.to(dtype)
     if uint8 and not cur.is_floating_point():
         out = out.round().clamp_(0.0, 255.0).to(torch.uint8)
     return out

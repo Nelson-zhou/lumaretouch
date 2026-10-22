@@ -1,9 +1,9 @@
 # Versioned white balance and neutral picking
 
-Status: integration design. A standalone Rust scalar candidate now exists in
-core/white_balance. Candidate 0c452175 passed seven scalar tests in CI39723480395;
-all non-GPU jobs passed, GPU jobs skipped. No production WB
-algorithm, project schema or picker is enabled. Legacy rendering must not be changed in place.
+Status: versioned scalar, state/transfer and algorithm/reset controls integrated.
+Candidate de5e8e2f passed CI39744013157: all non-GPU jobs passed, GPU jobs skipped.
+The action eyedropper remains under development. Legacy rendering is preserved;
+new photos still default to legacy rather than silently enabling corrected mode.
 Requirement anchor: LNX-REF-PC-32455-C-b220a0c332; see action-eyedropper-plan.md.
 
 ## Proven legacy issues and compatibility boundary
@@ -157,13 +157,15 @@ as globally transactional merely because that later curve check is safe.
 
 ## State/transfer integration candidate
 
-The pending integration carries explicit options through document capture/replay,
+The verified state integration77add60a carries explicit options through document capture/replay,
 project v2 writing and v1 legacy migration, scoped presets, batch candidate
 validation, both export snapshots, ExportSpec and master16 bypass guards. Project
 opening preflights every saved version before replacing the workspace. Ordinary
 slider edits retain the selected algorithm and full rollback restores picks and
 reference, including zero-scalar recipes. A failed rollback invalidates rendering.
 
-No picker UI or automatic legacy-algorithm conversion is enabled. This increment's
-new whole-flow tests must pass before treating these paths as verified. Root does
-not execute them locally; exact-commit CI is the current runnable verification.
+No picker UI or automatic legacy-algorithm conversion is enabled. State integration
+passed31 WB cases in CI39740442969. Algorithm/reset controls de5e8e2f passed40 WB
+cases in CI39744013157; see white-balance-actions.md. Root does not execute product
+code locally; exact-commit CI provides current runnable verification. Actual desktop,
+GPU and representative photographic acceptance remain outstanding.

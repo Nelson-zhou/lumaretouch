@@ -1,7 +1,8 @@
 # White-balance scalar foundation
 
-Not integrated into the product. Legacy Python WB remains untouched. The current
-file is an independently written pure Rust mathematical candidate with no image,
+Integrated through the packaged scalar helper, versioned recipe state and explicit
+algorithm/reset actions. Legacy Python WB remains unchanged. This independently
+written pure Rust mathematical module has no image,
 filesystem, subprocess, network or third-party runtime dependency. CI is configured to execute its
 unit tests. Candidate 0c452175 passed all seven tests in CI39723480395 (0.05s, no skips). Root does not run product code locally.
 
@@ -12,7 +13,8 @@ unit tests. Candidate 0c452175 passed all seven tests in CI39723480395 (0.05s, n
   Action sample noise/clipping/gain limits, geometry and provenance are NOT supplied
   by this math module and cannot be bypassed merely because a vector is finite.
 - A sampled domain grid is a regression test, not a proof over every real number.
-- No production algorithm capability, picker button or project version is enabled.
+- Corrected mode is explicit and undoable. Fresh photos still default to legacy.
+- A real action eyedropper is not yet enabled; neutral math alone is not that feature.
 
 Sources of mathematical definitions/fixtures (not copied application code):
 - W3C CSS Color4 CRD2026-10-20 conversion matrices:
@@ -22,15 +24,13 @@ Sources of mathematical definitions/fixtures (not copied application code):
 - Exact community source pins, migration and acceptance obligations are in
   docs/development/white-balance-versioning-plan.md.
 
-Before integration, choose and verify the bounded Python/Rust scalar ABI, preserve
-legacy rendering, implement complete state/preset/project/export migration, and
-close all picked-only bypass paths. Do not use a slow whole-image JSON bridge.
+The bounded scalar ABI, state/preset/project v2 migration, export/batch and
+picked-only activation are integrated. Independent Decimal combined-gain fixtures
+and actual helper/production-stage tests complement the scalar tests. See
+`docs/development/white-balance-actions.md` for exact-commit evidence and remaining
+GUI/GPU/photographic acceptance.
 
-Before freezing the algorithm identifier, add independent combined temperature/
-tint RGB-gain fixtures. Existing direction/identity/domain tests do not establish
-full independent numerical parity for that composition.
-
-## Bridge integration candidate
+## Bridge integration
 
 The existing packaged math helper now has a bounded `white-balance-v1` scalar
 command with strict action, argument-count and reply validation. Python recipe
@@ -39,7 +39,8 @@ consumes the vector without spawning a process. A 256-entry scalar cache is boun
 Legacy calls remain on their unchanged numerical path. Picked-only vectors activate
 the low-level preview stage and invalid preparation leaves its old state intact.
 
-These low-level hooks are NOT a completed user feature. Server state, project and
-preset migration, frozen export/batch, undo and UI must be wired before enabling
-corrected recipes. The current bridge change adds a test-only independent Decimal
-oracle and actual helper/stage tests, which passed on d6b401af in CI39738251607: 16 cases, no skips, in1.24s.
+The initial bridge's independent Decimal oracle and actual helper/stage tests
+passed on d6b401af in CI39738251607: 16 cases, no skips, in1.24s. Later integration
+77add60a passed31 WB cases; user controls de5e8e2f passed40 WB cases in CI39744013157
+(no skips,4.28s),176 frontend cases, native mailbox tests and builds. These are
+synthetic/automated evidence, not desktop visual acceptance.

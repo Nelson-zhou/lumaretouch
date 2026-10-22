@@ -53,6 +53,11 @@ jobs:
         run: |
           .venv/bin/python -m pytest -q tests/test_white_balance_math.py tests/test_white_balance_transfer.py tests/test_white_balance_protocol.py tests/test_white_balance_controller.py --junitxml="$RUNNER_TEMP/wb-bridge.xml"
           .venv/bin/python -c 'import os,xml.etree.ElementTree as E; cases=E.parse(os.environ["RUNNER_TEMP"]+"/wb-bridge.xml").getroot().findall(".//testcase"); assert len(cases)==40; assert not any(c.find("skipped") is not None or c.find("failure") is not None or c.find("error") is not None for c in cases)'
+      - name: Geometry legacy and singleton CPU Torch parity
+        working-directory: engine
+        run: |
+          .venv/bin/python -m pytest -q tests/test_geometry.py tests/test_geometry_singleton.py --junitxml="$RUNNER_TEMP/geometry.xml"
+          .venv/bin/python -c 'import os,xml.etree.ElementTree as E; cases=E.parse(os.environ["RUNNER_TEMP"]+"/geometry.xml").getroot().findall(".//testcase"); assert len(cases)>=85; assert not any(c.find("skipped") is not None or c.find("failure") is not None or c.find("error") is not None for c in cases)'
       - name: Preserve real preset protocol evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -61,6 +66,7 @@ jobs:
           path: |
             ${{ runner.temp }}/preset-protocol.xml
             ${{ runner.temp }}/wb-bridge.xml
+            ${{ runner.temp }}/geometry.xml
           if-no-files-found: warn
 
   ui:
