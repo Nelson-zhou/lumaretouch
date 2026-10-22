@@ -36,6 +36,7 @@ from . import hsl_recipe as HSL_RECIPE
 from . import white_balance_recipe as WB
 from . import local_grade_layers as LOCAL_GRADE
 from . import studio_background_scope as STUDIO
+from . import optics_scope as OPTICS
 
 SCHEMA = "lrt.scope.v1"
 PRESET_SCHEMA = "lrt.preset.v1"
@@ -78,6 +79,9 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: operation_id → 契约。`single_face` 的模块只能作用在"已知只有一张脸"的文档上；
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
+    OPTICS.OP: {"params": ("recipe",), "state_fields": OPTICS.FIELDS, "single_face": False,
+                "transferable": True, "cmd": "optics", "read": OPTICS.params_of, "write": OPTICS.install,
+                "why_not": "仅手动数值；目标保留自己的镜头配置、自动结果与引导线，改变畸变前须重新分析"},
     STUDIO.OP: {"params": ("recipe",), "state_fields": STUDIO.FIELDS, "single_face": False,
                 "transferable": True, "cmd": "studio_background", "read": STUDIO.params_of, "write": STUDIO.install,
                 "why_not": "只同步强度；目标必须已有自己的背景/地面范围，保护和恢复笔迹不复制"},
@@ -239,6 +243,9 @@ def check_params(op: str, params: dict) -> dict:
         parts = [f"{k}：{unmodeled_reason(op, k)}" if unmodeled_reason(op, k) else f"{k}（未知参数）"
                  for k in unknown]
         raise ScopeError(f"{op} 收到不可作用的参数：" + "；".join(parts))
+    if op == OPTICS.OP:
+        try: return OPTICS.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
     if op == STUDIO.OP:
         try: return STUDIO.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error

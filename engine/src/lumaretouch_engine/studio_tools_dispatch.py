@@ -37,3 +37,13 @@ class StudioToolsMixin:
     def cmd_studio_background_preview(self, p):
         from .studio_background_preview import controller
         controller(self, _emit).handle(p)
+
+    def _optics_controller(self):
+        from .optics_controller import controller
+        return controller(self, _emit)
+
+    def cmd_optics(self, p): self._optics_controller().apply(p)
+
+    def cmd_optics_preview(self, p):
+        from .optics_preview import controller
+        controller(self, _emit).handle(p)

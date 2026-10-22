@@ -1,11 +1,12 @@
 """Latest-wins cancellable Rust replay; image rendering stays on engine sequence.
 
-Unlike recovery painting, the sole drawing surface is the real processed output.
-Its producer-owned projection/revision and presentation acknowledgment authorize
-geometry. No source-locator acknowledgment is repurposed as output proof.
+The drawing surface contains processed pixels before optics, never a source
+locator. A separate final optical render is read-only and must also be presented.
+The owned document/projection/optics revision binds both views to one candidate.
 """
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
+from hashlib import sha256
 import base64
 import io
 import json
@@ -14,7 +15,16 @@ import threading
 from . import manual_liquify_state as S, manual_liquify_runtime as R, local_mask_state as M
 from .manual_liquify_stage import ManualLiquifyStage
 from .manual_liquify_field import replay
-from .effect_recovery_preview import image, MAX_REVIEW_BYTES
+from .effect_recovery_preview import image
+
+PREVIEW_PROTOCOL = 2
+MAX_REVIEW_BYTES = 12 * 1024 * 1024
+MAX_IMAGE_BYTES = 4 * 1024 * 1024
+
+def optics_signature(engine):
+    from .optics_state import check
+    value = check(getattr(engine, "_optics", None))
+    return sha256(json.dumps(value, sort_keys=True, allow_nan=False, separators=(",", ":")).encode()).hexdigest()
 
 
 def ident(value):
@@ -27,7 +37,7 @@ def context(engine):
     # Reuse the exact established Projection and document-version source, not
     # the source capture pixels or its eligibility flag.
     metadata, spec = engine._source_patch_controller().capture._context()
-    return metadata, spec
+    return {**metadata, 'optics_signature': optics_signature(engine)}, spec
 
 
 def render(engine, stage, baseline=None):
@@ -37,19 +47,29 @@ def render(engine, stage, baseline=None):
     from .effect_recovery_runtime import sync as recovery
     fabric(engine); masks(engine, strict=True); grades(engine, strict=True); recovery(engine, strict=True); R.sync(engine, strict=True)
     from .studio_background_runtime import sync as studio
-    studio(engine, strict=True)
+    from .optics_runtime import sync as optics
+    from .optics_stage import OpticsStage
+    from .optics_state import active as optics_active
+    studio(engine, strict=True); optics(engine, strict=True)
+    signature = optics_signature(engine)
     pipe = engine._vram
-    old = pipe.manual_liquify
+    old, old_optics = pipe.manual_liquify, pipe.optics
+    optical = optics_active(old_optics.value)
     strength, channel = engine._retouch_render_args()
     presentation = engine._frame_presentation()
     try:
+        # Only this main-sequence render temporarily bypasses optics. Neither
+        # retained recipe nor document history changes. The source is already
+        # processed through background, studio and the existing manual layer.
+        pipe.optics = OpticsStage()
         before, dimensions = (image(pipe.retouch(strength, channel=channel, **engine._params), presentation)
                               if baseline is None else baseline)
         pipe.manual_liquify = stage
         after, after_dimensions = image(pipe.retouch(strength, channel=channel, **engine._params), presentation)
         if dimensions != after_dimensions: raise ValueError('液化预览构图变化')
-        # Protection lives at final canvas coordinates. Only crop/rotate it for
-        # the display; applying manual warp again would move a fixed protection.
+        # Protection belongs to the pre-optics drawable canvas. Only crop and
+        # rotate it; neither manual warp nor optical/photo corrections may move
+        # or tint this retained destination protection overlay.
         import numpy as np
         import torch
         from PIL import Image
@@ -61,11 +81,25 @@ def render(engine, stage, baseline=None):
         picture = Image.fromarray(rgba, 'RGBA').resize(dimensions, Image.Resampling.BILINEAR)
         buffer = io.BytesIO(); picture.save(buffer, format='PNG')
         protection = 'data:image/png;base64,'+base64.b64encode(buffer.getvalue()).decode('ascii')
+        pipe.optics = old_optics
+        # A neutral optics stage is an exact pass-through. Otherwise render the
+        # same candidate through the real optical stage, not an enlarged proxy
+        # remap or a coordinate-only approximation of its nonlinear sampling.
+        final, final_dimensions = (image(pipe.retouch(strength, channel=channel, **engine._params), presentation)
+                                   if optical else (after, dimensions))
     finally:
-        pipe.manual_liquify = old
-    if len(before)+len(after)+len(protection) > MAX_REVIEW_BYTES: raise ValueError('液化预览超过 6 MiB')
+        pipe.manual_liquify, pipe.optics = old, old_optics
+    if optics_signature(engine) != signature: raise ValueError('液化双视图渲染期间镜头/透视状态变化')
+    pictures = (before, after, protection, final)
+    if any(len(p) > MAX_IMAGE_BYTES for p in pictures) or sum(map(len, pictures)) > MAX_REVIEW_BYTES:
+        raise ValueError('液化双视图预览超过每图 4 MiB 或总计 12 MiB')
     return {'before': before, 'after': after, 'protection': protection, 'width': dimensions[0], 'height': dimensions[1],
-            'domain': S.DOMAIN, 'quality': 'proxy-render-srgb8', 'note': '真实全效果代理渲染；全尺寸按保留矢量重新计算，不放大此图'}
+            'domain': S.DOMAIN, 'quality': 'proxy-render-srgb8', 'drawing_space': 'pre-optics',
+            'optics_signature': signature, 'optics_active': bool(optical),
+            'final_review': {'after': final, 'width': final_dimensions[0], 'height': final_dimensions[1],
+                             'quality': 'proxy-render-srgb8', 'domain': 'final-optical-output', 'read_only': True,
+                             'optics_signature': signature},
+            'note': '左侧在镜头/透视之前绘制，右侧只读查看同一笔的最终效果；全尺寸按保留矢量重放'}
 
 
 class LiquifyPreview:
@@ -98,8 +132,9 @@ class LiquifyPreview:
         return session
 
     def event(self, p, **values):
-        return {'event': 'manual_liquify_preview', 'protocol': 1, 'preview_id': p.get('preview_id'),
-                'session_id': p.get('session_id'), 'document_id': p.get('document_id'), **values}
+        return {'event': 'manual_liquify_preview', 'protocol': PREVIEW_PROTOCOL, 'preview_id': p.get('preview_id'),
+                'session_id': p.get('session_id'), 'document_id': p.get('document_id'),
+                'optics_signature': self.session['metadata']['optics_signature'] if self.session else None, **values}
 
     def handle(self, p):
         try:
@@ -130,7 +165,7 @@ class LiquifyPreview:
                     self.session = {'id': p['session_id'], 'metadata': metadata, 'capture': capture, 'shown': False,
                                     'path': row['path'], 'stamp': stamp, 'binding': binding}
                 session = self.matching(p)
-                if not viewing and not session['shown']: raise ValueError('液化全效果画布尚未确认显示')
+                if not viewing and not session['shown']: raise ValueError('液化绘制图与最终光学图尚未确认显示')
                 value = S.check(getattr(self.engine, '_manual_liquify', None)) if viewing else S.prepare_mutation(
                     self.engine, session['capture'], p['mutation'], verified_binding=session['binding'])
                 if value['source'] is not None and value['source'] != session['binding']:
@@ -167,6 +202,9 @@ class LiquifyPreview:
                     stage.set(field, required=bool(job['value']['strokes']))
                     result = render(self.engine, stage, self.session.get('baseline'))
                     self.matching(p)
+                    if result['optics_signature'] != self.session['metadata']['optics_signature']:
+                        raise ValueError('液化最终光学预览不属于当前会话')
+                    # This cache is exclusively the pre-optics, pre-gesture view.
                     self.session['baseline'] = (result['before'], (result['width'], result['height']))
                     self.record = {**job, 'stage': stage, 'presented': False}
                     self.emit(self.event(p, state='ready', success=True, result=result,

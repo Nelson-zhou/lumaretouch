@@ -16,6 +16,7 @@ bash "$here/build-curve-compiler.sh" "$stage/lumaretouch_engine/bin/curve-compil
 bash "$here/build-color-scopes.sh" "$stage/lumaretouch_engine/bin/color-scopes"
 bash "$here/build-local-masks.sh" "$stage/lumaretouch_engine/bin/local-masks"
 bash "$here/build-manual-liquify.sh" "$stage/lumaretouch_engine/bin/manual-liquify"
+bash "$here/build-optics.sh" "$stage/lumaretouch_engine/bin/liblrt_optics.so"
 bash "$here/build-studio-background.sh" "$stage/lumaretouch_engine/bin/studio-background"
 # Distribute the exact adapted worker sources and LGPL/GPL texts with its binary.
 mkdir -p "$stage/lumaretouch_engine/third_party/manual_liquify"
@@ -53,3 +54,8 @@ cp "$here/../packaging/VERSION" "$rt/VERSION"   # 发布校验拿它对账，运
 echo "引擎已暂存: $stage"
 find "$stage" -name '*.py' | sed 's|^|  · |'
 echo "  · setup-runtime.sh + $(ls "$rt" | tr '\n' ' ')"
+
+# Optics kernel is our GPL source; optional Lensfun/db are separately staged, never downloaded here.
+mkdir -p "$stage/lumaretouch_engine/third_party/optics"
+cp "$here/../core/optics/lib.rs" "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/optics/"
+cp "$here/../docs/optics/DEPENDENCIES.md" "$stage/lumaretouch_engine/third_party/optics/"

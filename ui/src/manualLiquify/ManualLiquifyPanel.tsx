@@ -14,13 +14,13 @@ export function ManualLiquifyPanel({owner,report,disabled=false}:{owner:ManualLi
   const locked=state.strokeActive||state.ending||owner.pending;
   const number=(key:'size'|'density'|'pressure'|'rate',value:number)=>setSettings(p=>({...p,[key]:value}));
   return <section className="manualLiquifyPanel" aria-label="手动液化">
-    <strong>手动液化 · N</strong><p><small>在真实当前效果上精细塑形；松手保存一笔，历史可撤销。</small></p>
+    <strong>手动液化 · N</strong><p><small>在镜头/透视之前的真实效果上塑形，并查看最终光学效果；每笔可撤销。</small></p>
     <button disabled={disabled||owner.pending||!owner.context.enabled||owner.context.canStart===false} onClick={()=>void workflow.start()}>进入手动液化{report?.strokes.length?` · ${report.strokes.length} 笔`:''}</button>
     {report?.suspended&&<p role="alert">液化已暂停：{report.suspended}。不能忽略缺失笔迹后继续出片。</p>}
     {!state.open&&state.message&&<p role="status">{state.message}</p>}
     {state.phase==='uncertain'&&!state.open&&<button onClick={()=>void workflow.check()}>查询原笔迹结果</button>}
     {state.open&&createPortal(<div className="liquifyWorkspace" role="dialog" aria-modal="true" aria-label="手动液化工作区">
-      <header><strong>手动液化</strong><span>真实全效果 · 每笔松手自动保存 · Esc 结束</span><button ref={close} onClick={()=>workflow.cancel()}>结束液化</button></header>
+      <header><strong>手动液化</strong><span>左侧可绘制，右侧最终效果只读 · 显示最终图后保存 · Esc 结束</span><button ref={close} onClick={()=>workflow.cancel()}>结束液化</button></header>
       <div className="liquifyModes" role="group" aria-label="液化工具">{(Object.keys(LABELS) as LiquifyMode[]).map(mode=><button key={mode} disabled={locked} aria-pressed={settings.mode===mode}
         onClick={()=>setSettings(p=>({...p,mode}))}>{LABELS[mode]}</button>)}</div>
       <div className="liquifyControls">
@@ -35,7 +35,7 @@ export function ManualLiquifyPanel({owner,report,disabled=false}:{owner:ManualLi
         <label>画布缩放 <select disabled={locked} value={zoom} onChange={e=>setZoom(Number(e.target.value))}>{[50,75,100,150,200,300,400].map(v=><option key={v} value={v}>{v}%</option>)}</select></label>
         <small>{settings.mode==='reconstruct'?'重建只恢复手动形变，不撤回自动美型或调色':settings.mode==='freeze'||settings.mode==='thaw'?'红色代表当前位置的冻结保护；冻结不会倒退已有手动形变':settings.mode==='left'?'沿绘制时画面的水平方向向左推动':'密度控制作用范围，压力与速率控制力度；笔设备压力叠乘，按住可持续作用'}</small></div>
       <LiquifyCanvas owner={owner} settings={settings} showBefore={before} zoom={zoom}/>
-      <footer><p role="status">{state.message}</p><small>矢量笔迹在全尺寸重新计算。当前显示为代理反馈，不代表全尺寸照片验收。</small>
+      <footer><p role="status">{state.message}</p><small>矢量笔迹在全尺寸重新计算。两侧均为真实代理渲染；左侧不含镜头/透视，不代表全尺寸照片验收。</small>
         <div className="liquifyHistoryTools">{report?.strokes.length? <>
           <button disabled={locked||state.phase!=='drawing'} onClick={()=>workflow.mutate({action:'delete',id:report.strokes.at(-1)!.id})}>删除最后一笔</button>
           <button disabled={locked||state.phase!=='drawing'} onClick={()=>workflow.mutate({action:'clear'})}>重置全部手动液化与保护</button>

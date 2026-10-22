@@ -145,6 +145,8 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             st.color_picker_probes.lock().unwrap().ended(inspection_epoch);
             st.source_patch.lock().unwrap().ended(inspection_epoch);
             st.local_masks.lock().unwrap().ended(inspection_epoch);
+            st.optics.lock().unwrap().ended(inspection_epoch);
+            st.optics_preview.lock().unwrap().ended(inspection_epoch);
             st.studio_background.lock().unwrap().ended(inspection_epoch);
             st.studio_background_preview.lock().unwrap().ended(inspection_epoch);
             st.manual_liquify.lock().unwrap().ended(inspection_epoch);
@@ -183,6 +185,8 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "color_picker_probe_result"=>state.color_picker_probes.lock().unwrap().receive(inspection_epoch,&v),
         "prompted_masks"=>state.prompted_masks.lock().unwrap().receive(inspection_epoch,&v),
         "local_masks_result"=>state.local_masks.lock().unwrap().receive(inspection_epoch,&v),
+        "optics_result"=>state.optics.lock().unwrap().receive(inspection_epoch,&v),
+        "optics_preview"=>state.optics_preview.lock().unwrap().receive(inspection_epoch,&v),
         "studio_background_result"=>state.studio_background.lock().unwrap().receive(inspection_epoch,&v),
         "studio_background_preview"=>state.studio_background_preview.lock().unwrap().receive(inspection_epoch,&v),
         "manual_liquify_result"=>state.manual_liquify.lock().unwrap().receive(inspection_epoch,&v),
@@ -258,6 +262,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             state.white_balance_results.lock().unwrap().ready(inspection_epoch,v["white_balance_result_protocol"].as_u64()==Some(1));
             state.source_patch.lock().unwrap().ready(inspection_epoch,v["source_patch_result_protocol"].as_u64()==Some(1));
             state.local_masks.lock().unwrap().ready(inspection_epoch,v["local_masks_result_protocol"].as_u64()==Some(1));
+            state.optics.lock().unwrap().ready(inspection_epoch,v["optics_protocol"].as_u64()==Some(1));
             state.studio_background.lock().unwrap().ready(inspection_epoch,v["studio_background_protocol"].as_u64()==Some(1));
             state.manual_liquify.lock().unwrap().ready(inspection_epoch,v["manual_liquify_protocol"].as_u64()==Some(1));
             state.effect_recovery.lock().unwrap().ready(inspection_epoch,v["effect_recovery_protocol"].as_u64()==Some(1));

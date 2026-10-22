@@ -17,7 +17,9 @@ fn mutation(v:&Value)->Result<(),String>{
 fn supported(state:&AppState)->Result<(),String>{
     if state.ready_caps.lock().map_err(|_|"capability lock poisoned")?["manual_liquify_protocol"]!=1{
         return Err("engine does not support manual liquify".into());
-    }Ok(())
+    }
+    if state.ready_caps.lock().map_err(|_|"capability lock poisoned")?["manual_liquify_preview_protocol"]!=2{return Err("engine does not support pre-optics dual-view preview".into());}
+    Ok(())
 }
 #[tauri::command]
 pub(crate) fn manual_liquify_preview(state:State<'_,Arc<AppState>>,action:String,preview_id:String,session_id:String,document_id:String,mutation:Option<Value>)->Result<Value,String>{

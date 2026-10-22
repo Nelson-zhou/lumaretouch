@@ -93,6 +93,7 @@ export interface ImageReady {
 export interface SessionEdits {
   effect_recovery?: number;
   manual_liquify?: number;
+  optics?: boolean;
   curves?: boolean;
   levels?: boolean;
   repair: number;
@@ -140,6 +141,7 @@ export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_pre
 
 export interface DocState {
   effect_recovery?: import("./effectRecovery/model").RecoveryReport;
+  optics?: import("./optics/model").OpticsReport;
   studio_background?: import("./studioBackground/model").Report;
   manual_liquify?: import("./manualLiquify/model").LiquifyReport;
   local_masks?: import("./localMasks/model").LocalMaskReport;
@@ -923,6 +925,8 @@ export interface EngineStatus {
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
     effect_recovery_protocol?: number;
+    optics_protocol?: number;
+    manual_liquify_preview_protocol?: number;
     studio_background_protocol?: number;
     manual_liquify_protocol?: number;
     local_grade_live_protocol?: number;

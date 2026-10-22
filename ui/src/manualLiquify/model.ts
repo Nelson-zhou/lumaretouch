@@ -2,7 +2,8 @@ export type LiquifyMode='push'|'reconstruct'|'smooth'|'rotate'|'pucker'|'bloat'|
 export const LABELS:Record<LiquifyMode,string>={push:'向前变形',reconstruct:'重建',smooth:'平滑',rotate:'旋转',pucker:'褶皱',bloat:'膨胀',left:'左推',freeze:'冻结',thaw:'解冻'};
 export interface LiquifyStroke {id:string;mode:LiquifyMode;axes:[[number,number],[number,number]];points:[number,number,number,number][];density:number;pressure:number;rate:number;fixed_edges:boolean;direction:1|-1}
 export interface BrushSettings {mode:LiquifyMode;size:number;density:number;pressure:number;rate:number;fixedEdges:boolean;direction:1|-1;showMask:boolean}
-export interface LiquifyImage {before:string;after:string;protection:string;width:number;height:number;domain:'post-effects-pre-crop-normalized';quality:'proxy-render-srgb8';note:string}
+export interface LiquifyFinalReview {after:string;width:number;height:number;domain:'final-optical-output';quality:'proxy-render-srgb8';read_only:true;optics_signature:string}
+export interface LiquifyImage {before:string;after:string;protection:string;width:number;height:number;domain:'post-effects-pre-crop-normalized';quality:'proxy-render-srgb8';drawing_space:'pre-optics';optics_signature:string;optics_active:boolean;final_review:LiquifyFinalReview;note:string}
 export interface LiquifyReport {version:1;domain:string;strokes:LiquifyStroke[];suspended:string|null;bytes_field:number;boundaries:string[]}
 export type LiquifyMutation={action:'view'|'clear'}|{action:'delete';id:string}|{action:'stroke';stroke:LiquifyStroke};
 export interface LiquifyRequest {request_id:string;preview_id:string;session_id:string;document_id:string}

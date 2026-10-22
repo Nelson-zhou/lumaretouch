@@ -20,6 +20,7 @@ from .local_grade_stage import LocalGradeStage
 from .effect_recovery_stage import EffectRecoveryStage
 from .manual_liquify_stage import ManualLiquifyStage
 from .studio_background_stage import StudioBackgroundStage
+from .optics_stage import OpticsStage
 
 import math
 from dataclasses import dataclass
@@ -117,6 +118,8 @@ class PreviewPipeline:
         self._manual_liquify_key = None
         self.studio_background = StudioBackgroundStage(self.device, (self.h, self.w))
         self._studio_background_key = None
+        self.optics = OpticsStage()
+        self._optics_key = None
         # 源图 float 与 uint8 都留着：float 供滤波，uint8 供"恢复原图"这类需要原始像素的操作
         self.src_u8: torch.Tensor | None = None
         self.src_f32: torch.Tensor | None = None
@@ -306,6 +309,8 @@ class PreviewPipeline:
         self._manual_liquify_key = None
         self.studio_background = StudioBackgroundStage(self.device, (self.h, self.w))
         self._studio_background_key = None
+        self.optics = OpticsStage()
+        self._optics_key = None
         self.src_f32 = src_f32
         self.frame_gpu = torch.empty((self.h, self.w, 4), dtype=torch.uint8, device=self.device)
         self.frame_gpu[..., 3] = 255
@@ -462,7 +467,7 @@ class PreviewPipeline:
         全图 `(1-s)*img + s*out`，分通道 `mix_masked(img, out, s, weight)`。
         因此 strength=0 恒等那条承诺一分不改：`0*out` 仍然恒为 0。
         """
-        if render_stage not in ('output', 'wb-input'):
+        if render_stage not in ('output', 'wb-input', 'optics-input'):
             raise ValueError('Unknown production render stage')
         if self.src_f32 is None:
             raise RuntimeError("先 load_rgb_u8 再 render")
@@ -508,6 +513,8 @@ class PreviewPipeline:
         out = self.local_grade_layers.apply(out, self.align_source_grade_mask)
         out = self.apply_background(out)
         out = self.manual_liquify.apply(out)
+        if render_stage == 'optics-input': return out
+        out = self.optics.apply(out)
         out = self.apply_geometry(out)
         if scope_tap is not None: scope_tap("output", out)
         return out

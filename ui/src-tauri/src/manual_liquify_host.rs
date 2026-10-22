@@ -40,7 +40,7 @@ impl LiquifyPreviewHost {
         if epoch==[0;16]||epoch!=self.epoch{return Err("manual liquify engine changed".into());}
         if self.bound.as_ref().is_some_and(|b|b.2==preview){return Err("use a fresh liquify preview ID".into());}
         self.invalidate();self.bound=Some((document.into(),session.into(),preview.into()));
-        self.value=Some(json!({"protocol":1,"state":"running","success":true,"document_id":document,"session_id":session,"preview_id":preview}));Ok(())
+        self.value=Some(json!({"protocol":2,"state":"running","success":true,"document_id":document,"session_id":session,"preview_id":preview}));Ok(())
     }
     pub fn matches(&self,epoch:[u8;16],document:&str,session:&str,preview:&str)->bool{
         epoch!=[0;16]&&epoch==self.epoch&&self.bound.as_ref().is_some_and(|b|b.0==document&&b.1==session&&b.2==preview)
@@ -48,21 +48,28 @@ impl LiquifyPreviewHost {
     pub fn receive(&mut self,epoch:[u8;16],v:&Value){
         let Some((document,session,preview))=self.bound.as_ref()else{return};
         if epoch!=self.epoch||v["document_id"]!=document.as_str()||v["session_id"]!=session.as_str()||v["preview_id"]!=preview.as_str()||self.redeemed{return;}
-        let image=||{let r=&v["result"];
+        let image=||{let r=&v["result"];let final_view=&r["final_review"];
+            let dimensions=|x:&Value|["width","height"].iter().all(|k|x[*k].as_u64().is_some_and(|n|(1..=800).contains(&n)));
+            let pictures=[&r["before"],&r["after"],&r["protection"],&final_view["after"]];
             r["domain"]=="post-effects-pre-crop-normalized"&&r["quality"]=="proxy-render-srgb8"
-            &&["width","height"].iter().all(|k|r[*k].as_u64().is_some_and(|n|(1..=800).contains(&n)))
-            &&["before","after","protection"].iter().all(|k|r[*k].as_str().is_some_and(|s|s.starts_with("data:image/png;base64,")&&s.len()<=4*1024*1024))
+            &&r["drawing_space"]=="pre-optics"&&r["optics_active"].is_boolean()&&dimensions(r)
+            &&r["optics_signature"].as_str().is_some_and(|s|s.len()==64&&s.bytes().all(|b|b.is_ascii_hexdigit()&&!b.is_ascii_uppercase()))
+            &&v["optics_signature"]==r["optics_signature"]&&final_view["optics_signature"]==r["optics_signature"]
+            &&final_view["domain"]=="final-optical-output"&&final_view["quality"]=="proxy-render-srgb8"&&final_view["read_only"]==true&&dimensions(final_view)
+            &&pictures.iter().all(|p|p.as_str().is_some_and(|s|s.starts_with("data:image/png;base64,")&&s.len()<=4*1024*1024))
+            &&pictures.iter().map(|p|p.as_str().map_or(0,str::len)).sum::<usize>()<=12*1024*1024
             &&v["recipe_document_id"].as_str().is_some_and(|s|id16(s).is_ok())
             &&v["recipe_revision"].as_str().is_some_and(|s|s.parse::<u64>().is_ok())};
-        let valid=v["protocol"]==1&&v.to_string().len()<=6*1024*1024+16384&&match v["state"].as_str(){
+        let valid=v["protocol"]==2&&v.to_string().len()<=12*1024*1024+16384&&match v["state"].as_str(){
             Some("ready")=>v["success"]==true&&image(),
-            Some("presented")=>v["success"]==true&&self.delivered&&self.presentation_requested,
+            Some("presented")=>v["success"]==true&&self.delivered&&self.presentation_requested
+                &&self.value.as_ref().is_some_and(|r|v["optics_signature"]==r["optics_signature"]),
             Some("failed")=>v["success"]==false,
             Some("cancelled")=>v["success"]==true,
             _=>false,
         };
         if !valid{
-            self.shown=false;self.value=Some(json!({"protocol":1,"state":"failed","success":false,"document_id":document,"session_id":session,"preview_id":preview,"error":"invalid manual liquify preview"}));
+            self.delivered=false;self.presentation_requested=false;self.shown=false;self.value=Some(json!({"protocol":2,"state":"failed","success":false,"document_id":document,"session_id":session,"preview_id":preview,"error":"invalid manual liquify preview"}));
         }else if v["state"]=="presented"{
             self.shown=true;if let Some(value)=self.value.as_mut(){value["state"]=json!("presented");}
         }else{self.delivered=false;self.shown=false;self.presentation_requested=false;self.value=Some(v.clone());}

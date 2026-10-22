@@ -147,6 +147,9 @@ class ExportSpec:
     effect_recovery_path: str | None = None  # ephemeral verified original source
     effect_recovery_stamp: list | None = None  # full-decode identity, never rebased
     effect_recovery_fields: list | None = None  # disposable full-source uint8 masks
+    optics: dict | None = None
+    optics_path: str | None = None
+    optics_stamp: list | None = None
     studio_background: dict | None = None
     studio_background_path: str | None = None
     studio_background_stamp: list | None = None
@@ -231,6 +234,10 @@ class ExportSpec:
         except ValueError as error:
             raise ExportError(f'手动液化导出配方无效：{error}') from error
 
+    def check_optics(self) -> None:
+        from .optics_export import check_spec
+        check_spec(self)
+
     def check_studio_background(self) -> None:
         from .studio_background_export import check_spec
         check_spec(self)
@@ -240,6 +247,7 @@ class ExportSpec:
         self.check_effect_recovery()
         self.check_manual_liquify()
         self.check_studio_background()
+        self.check_optics()
         from .local_grade_layers import check as check_groups
         from .local_grade_stage import check_fields
         self.local_grade_groups = check_groups(self.local_grade_groups)
@@ -623,6 +631,13 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     from .manual_liquify_runtime import export_prepare as prepare_manual_liquify, attach_tile as attach_manual_tile
     spec.check_effect_recovery()
     spec.check_manual_liquify()
+    spec.check_optics()
+    from .optics_state import active as optics_enabled
+    optical = optics_enabled(spec.optics)
+    optical_budget = 0
+    if optical:
+        from .optics_export import admit
+        optical_budget = admit(src_u8.shape[:2],int(spec.scale),spec.optics)
     manual_source_stamp = None
     if spec.manual_liquify["strokes"]:
         manual_source_stamp = file_stamp(spec.manual_liquify_path)
@@ -724,7 +739,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     scale = int(spec.scale)
     plan = UpscalePlan(h, w, scale)          # 表只算一次，每块取自己那一段
     out_h, out_w = plan.out_h, plan.out_w
-    out = np.zeros((out_h, out_w, 3), np.float32 if bits == 16 else np.uint8)
+    out = np.zeros((h,w,3) if optical else (out_h,out_w,3), np.float32 if bits==16 or optical else np.uint8)
     seg = {"filter": 0.0, "light": 0.0, "deform": 0.0, "exposure": 0.0,
            "lut": 0.0, "grade": 0.0, "local_grade": 0.0, "enhance": 0.0, "bg": 0.0, "manual_liquify": 0.0}
     upscale_ms = 0.0
@@ -824,7 +839,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                               detail_gain=spec.detail_gain, mid_gain=spec.mid_gain,
                               broad_gain=spec.broad_gain, texture_radius=spec.texture_radius,
                               channel=spec.channel if spec.masks is not None else None)
-        if bits == 16:
+        if bits == 16 or optical:
             rendered = pipe.retouch(spec.strength, **render_options)
             t_r = time.perf_counter()
             got = np.ascontiguousarray(rendered[0].permute(1, 2, 0).detach().cpu().numpy())
@@ -833,7 +848,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             pipe.render(spec.strength, **render_options)
             t_r = time.perf_counter()
             got = pipe.read_back()[..., :3]
-        if scale == 1:
+        if scale == 1 or optical:
             out[y0:y1, x0:x1] = got[y0 - cy0:y1 - cy0, x0 - cx0:x1 - cx0]
         else:
             # 把本块有数区渲染结果按全局权重表放大到输出坐标里对应那一段。
@@ -855,12 +870,19 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         if progress is not None:
             progress(i + 1, len(rects), (time.perf_counter() - t0) * 1000.0)
     ms = (time.perf_counter() - t_all) * 1000.0
+    optics_facts = {"applied":False}
+    if optical:
+        from .optics_runtime import apply_export
+        from .optics_export import upscale as optical_upscale
+        out,optics_facts=apply_export(out,spec,cancelled=mask_cancelled)
+        t_u=time.perf_counter();out=optical_upscale(out,plan,cancelled=mask_cancelled)
+        upscale_ms+=(time.perf_counter()-t_u)*1000.
     sharpen_ms = 0.0
     if float(spec.sharpen_amount) > 0.0:
         # 出片锐化排在放大之后、且切的是已经完整的输出图：带 halo 拿真像素，
         # 只有图的真边缘才用 replicate——所以与整图直锐逐字节同一，不拿近似当默认
         t_s = time.perf_counter()
-        sharpener = unsharp_float_bands_np if bits == 16 else unsharp_bands_np
+        sharpener = unsharp_float_bands_np if bits == 16 or optical else unsharp_bands_np
         out = sharpener(out, radius=float(spec.sharpen_radius),
                                amount=float(spec.sharpen_amount),
                                threshold=float(spec.sharpen_threshold))
@@ -875,6 +897,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                           "geometry_ms": round((time.perf_counter() - t_geometry) * 1000, 2)}
     if bits == 16:
         out = quantize16_np(out)
+    elif optical:
+        out = np.clip(np.rint(out*255.),0,255).astype(np.uint8)
     if group_source_stamp is not None and file_stamp(spec.local_mask_source_path) != group_source_stamp:
         raise ExportError('Independent local-grade source changed during rendering')
     from .studio_background_state import active as studio_active
@@ -895,6 +919,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         "tile": int(tile), "tiles": len(rects), "margin_px": int(margin),
         "deform_peak_px": round(peak, 3), "total_ms": round((time.perf_counter() - t_function) * 1000, 1),
         "field_ms": round(field_ms, 1),
+        "optics": optics_facts, "optics_admission_bytes": optical_budget,
         "manual_liquify_field_ms": round(manual_field_ms, 1),
         "manual_liquify_peak_px": round(manual_peak, 3),
         "manual_liquify_field_cpu_bytes": (0 if spec.manual_liquify_field is None else int(spec.manual_liquify_field.nbytes)),

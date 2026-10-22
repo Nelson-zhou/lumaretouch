@@ -6,14 +6,22 @@ export interface LiquifyTransport {
 }
 type Phase='idle'|'previewing'|'drawing'|'sending'|'waiting'|'success'|'failure'|'uncertain';
 export interface LiquifyState {phase:Phase;open:boolean;image:LiquifyImage|null;previewId:string|null;message:string;strokeActive:boolean;ending:boolean;request:LiquifyRequest|null}
-interface Session {id:string;document:string;context:string}
+interface Session {id:string;document:string;context:string;opticsSignature?:string}
 interface Candidate {id:string;mutation:LiquifyMutation;final:boolean;sequence:number}
 const initial=():LiquifyState=>({phase:'idle',open:false,image:null,previewId:null,message:'',strokeActive:false,ending:false,request:null});
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 function image(v:unknown):LiquifyImage {
+  const dimensions=(r:Record<string,unknown>)=>[r.width,r.height].every(n=>Number.isSafeInteger(n)&&Number(n)>0&&Number(n)<=800);
+  const png=(s:unknown)=>typeof s==='string'&&s.startsWith('data:image/png;base64,')&&s.length<=4*1024*1024;
   if(!object(v)||v.domain!=='post-effects-pre-crop-normalized'||v.quality!=='proxy-render-srgb8'||
-    ![v.width,v.height].every(n=>Number.isSafeInteger(n)&&Number(n)>0&&Number(n)<=800)||
-    ![v.before,v.after,v.protection].every(s=>typeof s==='string'&&s.startsWith('data:image/png;base64,')&&s.length<=4*1024*1024))throw Error('液化画布不是有效的真实输出');
+    v.drawing_space!=='pre-optics'||typeof v.optics_active!=='boolean'||typeof v.optics_signature!=='string'||
+    !/^[0-9a-f]{64}$/.test(v.optics_signature)||!dimensions(v))throw Error('液化绘制域或光学版本不兼容');
+  const final=v.final_review;
+  if(!object(final)||final.domain!=='final-optical-output'||final.quality!=='proxy-render-srgb8'||final.read_only!==true||
+    final.optics_signature!==v.optics_signature||!dimensions(final))throw Error('缺少同一版本的只读最终光学预览');
+  const pictures=[v.before,v.after,v.protection,final.after];
+  if(!pictures.every(png)||pictures.reduce<number>((n,p)=>n+(typeof p==='string'?p.length:0),0)>12*1024*1024)
+    throw Error('液化双视图不是有效的有界真实输出');
   return v as unknown as LiquifyImage;
 }
 function bounded<T>(p:Promise<T>,ms:number):Promise<T>{let timer:ReturnType<typeof setTimeout>|undefined;
@@ -66,10 +74,13 @@ export function createLiquifyWorkflow(api:LiquifyTransport,options:{refresh:()=>
       const deadline=Date.now()+timeout;
       while(current(s,c)){
         const raw=await bounded(api.status(c.id),deadline-Date.now());if(!current(s,c))return;
-        if(!object(raw)||raw.preview_id!==c.id||raw.session_id!==s.id||raw.document_id!==s.document)throw Error('液化预览身份变化');
+        if(!object(raw)||raw.protocol!==2||raw.preview_id!==c.id||raw.session_id!==s.id||raw.document_id!==s.document)throw Error('液化预览身份变化');
         if(raw.state==='running'){await bounded(sleep(40),deadline-Date.now());continue;}
         if(raw.state!=='ready'||raw.success!==true)throw Error(typeof raw.error==='string'?raw.error:'液化预览未完成');
-        shown=c;publish({image:image(raw.result),previewId:c.id,phase:state.strokeActive?'drawing':'previewing',message:c.final?'正在显示最终液化效果…':'在当前全效果画面上拖动；每笔松手自动保存'});return;
+        const output=image(raw.result);
+        if(raw.optics_signature!==output.optics_signature||(s.opticsSignature&&s.opticsSignature!==output.optics_signature))throw Error('液化会话中的镜头/透视状态已变化');
+        s.opticsSignature=output.optics_signature;
+        shown=c;publish({image:output,previewId:c.id,phase:state.strokeActive?'drawing':'previewing',message:c.final?'请查看右侧本笔最终光学效果，显示后保存…':'左侧在镜头/透视前绘制，右侧只读查看最终效果'});return;
       }
     }catch(error){if(current(s,c))failed(error);}
     finally{if(token===life){rendering=false;if(latest)pump();}}
@@ -78,7 +89,7 @@ export function createLiquifyWorkflow(api:LiquifyTransport,options:{refresh:()=>
     if(!active||session||pending())return;
     if(!context.enabled||context.canStart===false||!context.documentId){failed(context.reason||'请等待照片可编辑');return;}
     session={id:id(),document:context.documentId,context:context.contextKey};continueDrawing=true;resumeReady=false;
-    publish({phase:'previewing',open:true,image:continuation?state.image:null,previewId:null,strokeActive:false,ending:false,request:null,message:'正在准备真实全效果液化画布…'});
+    publish({phase:'previewing',open:true,image:continuation?state.image:null,previewId:null,strokeActive:false,ending:false,request:null,message:'正在准备镜头/透视前绘制图与最终光学预览…'});
     schedule({action:'view'},false,true);
   }
   async function presented(preview:string){
@@ -90,10 +101,10 @@ export function createLiquifyWorkflow(api:LiquifyTransport,options:{refresh:()=>
       const deadline=Date.now()+timeout;
       while(current(s,c)&&token===life&&!latest){
         const raw=await bounded(api.status(c.id),deadline-Date.now());if(!current(s,c)||token!==life||latest)return;
-        if(!object(raw)||raw.preview_id!==c.id)throw Error('液化输出显示证明失效');
+        if(!object(raw)||raw.protocol!==2||raw.preview_id!==c.id||raw.session_id!==s.id||raw.document_id!==s.document||raw.optics_signature!==s.opticsSignature)throw Error('液化双视图显示证明或光学版本失效');
         if(raw.state==='presented'){
           if(c.final&&!state.strokeActive)await apply(s,c);
-          else publish({phase:'drawing',message:'真实当前输出 · 松手保存一笔 · Esc 结束'});
+          else publish({phase:'drawing',message:'左侧绘制 · 右侧最终光学只读预览 · 松手保存一笔 · Esc 结束'});
           return;
         }
         if(raw.state!=='ready')throw Error(typeof raw.error==='string'?raw.error:'液化显示未确认');

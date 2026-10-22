@@ -1,0 +1,12 @@
+# Optional optics dependencies. NOT installed or resolved in this development task.
+# Do not add this file automatically to application start or base dependency sync.
+# Release engineering must stage an audited, offline wheelhouse and lock hashes.
+# Linux source-build lensfunpy against replaceable distribution Lensfun, rather
+# than redistributing an unaudited wheel's bundled libraries and database.
+# Primary package release: https://pypi.org/project/lensfunpy/1.18.0/
+lensfunpy==1.18.0
+# Explicit candidate range, NOT a validated platform lock or binary license audit.
+# OpenCV LSD was restored after the old license conflict; minimum avoids removal.
+opencv-python-headless>=4.5.4,<5
+# ExifTool and Lensfun are separately installed system programs/libraries, not
+# Python dependencies. No model weights are needed or downloaded by this feature.

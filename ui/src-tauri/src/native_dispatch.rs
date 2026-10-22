@@ -6,6 +6,7 @@ impl AppState {
     pub(crate) fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
         self.source_patch_capture.lock().map_err(|_|"source patch capture lock poisoned")?.invalidate();
         self.recovery_preview.lock().map_err(|_|"recovery preview lock poisoned")?.invalidate();
+        self.optics_preview.lock().map_err(|_|"optics preview lock poisoned")?.invalidate();
         self.studio_background_preview.lock().map_err(|_|"studio preview lock poisoned")?.invalidate();
         self.liquify_preview.lock().map_err(|_|"liquify preview lock poisoned")?.invalidate();
         self.white_balance_capture.lock().map_err(|_|"WB capture lock poisoned")?.invalidate();
@@ -32,6 +33,7 @@ impl AppState {
         if name!="hello" {self.color_capture.lock().map_err(|_|"capture lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {self.liquify_preview.lock().map_err(|_|"liquify preview lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {self.studio_background_preview.lock().map_err(|_|"studio preview lock poisoned")?.invalidate();}
+        if name!="hello" && name!="inspection_snapshot" {self.optics_preview.lock().map_err(|_|"optics preview lock poisoned")?.invalidate();}
         let edited = self.history_edit_cmds.lock().unwrap().iter().any(|c| c == &name);
         let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
         if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
@@ -43,6 +45,7 @@ impl AppState {
             "white_balance" => crate::white_balance_api::enqueue(self, handle, cmd)?,
             "color_picker" => crate::color_picker_api::enqueue(self, handle, cmd)?,
             "local_masks" => crate::local_mask_api::enqueue(self, handle, cmd)?,
+            "optics" => crate::optics_api::enqueue(self, handle, cmd)?,
             "studio_background" => crate::studio_background_api::enqueue(self, handle, cmd)?,
             "manual_liquify" => crate::manual_liquify_api::enqueue(self, handle, cmd)?,
             "effect_recovery" => crate::effect_recovery_api::enqueue(self, handle, cmd)?,

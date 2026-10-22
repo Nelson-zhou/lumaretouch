@@ -56,6 +56,8 @@ mod manual_liquify_host;
 mod manual_liquify_api;
 mod studio_background_host;
 mod studio_background_api;
+mod optics_host;
+mod optics_api;
 mod effect_recovery_host;
 mod effect_recovery_api;
 mod local_grade_live_host;
@@ -223,6 +225,8 @@ pub struct AppState {
     color_capture: Mutex<color_capture_host::CaptureHost>,
     source_patch: Mutex<source_patch_host::SourcePatchHost>,
     local_masks: Mutex<local_mask_host::LocalMaskHost>,
+    optics: Mutex<optics_host::OpticsHost>,
+    optics_preview: Mutex<optics_host::OpticsPreviewHost>,
     studio_background: Mutex<studio_background_host::StudioBackgroundHost>,
     studio_background_preview: Mutex<studio_background_host::StudioBackgroundPreviewHost>,
     manual_liquify: Mutex<manual_liquify_host::LiquifyHost>,
@@ -347,6 +351,8 @@ impl AppState {
             color_capture: Mutex::new(color_capture_host::CaptureHost::default()),
             source_patch: Mutex::new(source_patch_host::SourcePatchHost::default()),
             local_masks: Mutex::new(local_mask_host::LocalMaskHost::default()),
+            optics: Mutex::new(optics_host::OpticsHost::default()),
+            optics_preview: Mutex::new(optics_host::OpticsPreviewHost::default()),
             studio_background: Mutex::new(studio_background_host::StudioBackgroundHost::default()),
             studio_background_preview: Mutex::new(studio_background_host::StudioBackgroundPreviewHost::default()),
             manual_liquify: Mutex::new(manual_liquify_host::LiquifyHost::default()),
@@ -467,7 +473,7 @@ impl AppState {
 
     pub fn on_lut_ready(&self, v: &Value) {
         self.source_patch_capture.lock().unwrap().invalidate();
-        self.recovery_preview.lock().unwrap().invalidate(); self.liquify_preview.lock().unwrap().invalidate(); self.studio_background_preview.lock().unwrap().invalidate();
+        self.recovery_preview.lock().unwrap().invalidate(); self.liquify_preview.lock().unwrap().invalidate(); self.studio_background_preview.lock().unwrap().invalidate(); self.optics_preview.lock().unwrap().invalidate();
         self.white_balance_capture.lock().unwrap().invalidate();
         self.color_picker_capture.lock().unwrap().invalidate();
         *self.lut.lock().unwrap() = Some(v.clone());
@@ -1661,7 +1667,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
 #[tauri::command]
 fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     state.source_patch_capture.lock().unwrap().invalidate();
-    state.recovery_preview.lock().unwrap().invalidate(); state.liquify_preview.lock().unwrap().invalidate(); state.studio_background_preview.lock().unwrap().invalidate();
+    state.recovery_preview.lock().unwrap().invalidate(); state.liquify_preview.lock().unwrap().invalidate(); state.studio_background_preview.lock().unwrap().invalidate(); state.optics_preview.lock().unwrap().invalidate();
     state.white_balance_capture.lock().unwrap().invalidate();
     state.color_picker_capture.lock().unwrap().invalidate();
     state.color_capture.lock().unwrap().invalidate();
@@ -1998,7 +2004,7 @@ fn report(line: String) {
 fn quit(state: State<'_, Arc<AppState>>) {
     prompted_model_api::shutdown(&state);
     state.source_patch_capture.lock().unwrap().invalidate();
-    state.recovery_preview.lock().unwrap().invalidate(); state.liquify_preview.lock().unwrap().invalidate(); state.studio_background_preview.lock().unwrap().invalidate();
+    state.recovery_preview.lock().unwrap().invalidate(); state.liquify_preview.lock().unwrap().invalidate(); state.studio_background_preview.lock().unwrap().invalidate(); state.optics_preview.lock().unwrap().invalidate();
     state.white_balance_capture.lock().unwrap().invalidate();
     state.color_picker_capture.lock().unwrap().invalidate();
     state.inspection.lock().unwrap().invalidate();
@@ -2026,6 +2032,7 @@ fn main() {
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
             source_patch_api::source_patch_capture, source_patch_api::source_patch_capture_status, source_patch_api::source_patch_capture_frame,
             source_patch_api::source_patch, source_patch_api::source_patch_result, clone_stamp_api::clone_stamp, local_mask_api::local_masks, local_mask_api::local_masks_result,
+            optics_api::optics, optics_api::optics_result, optics_api::optics_preview, optics_api::optics_preview_status,
             studio_background_api::studio_background, studio_background_api::studio_background_result,
             studio_background_api::studio_background_preview, studio_background_api::studio_background_preview_status,
             manual_liquify_api::manual_liquify, manual_liquify_api::manual_liquify_result,

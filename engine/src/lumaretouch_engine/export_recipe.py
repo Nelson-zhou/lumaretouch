@@ -65,6 +65,9 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     from .studio_background_runtime import configure_export as configure_studio
     configure_studio(spec, snap, (eh, ew), for_document=for_document)
     spec.check_studio_background()
+    from .optics_runtime import configure_export as configure_optics
+    configure_optics(spec,snap,(eh,ew),for_document=for_document)
+    spec.check_optics()
     from .effect_recovery_runtime import configure_export as configure_effect_recovery
     configure_effect_recovery(spec, snap, (eh, ew), for_document=for_document)
     spec.check_effect_recovery()
