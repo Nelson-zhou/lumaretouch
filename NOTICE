@@ -106,3 +106,5 @@ RapidRetouch 衣物细褶复用
   ops/fabric.py 与 ops/fabric_math.py 保留 AGPL-3.0-only；仅在真实衣物
   语义蒙版内处理细褶明暗，不属于衣物生成。出处与修改见
   lumaretouch_engine/third_party/rapidretouch/FABRIC_NOTICE，完整许可同目录 LICENSE。
+  同源 eye_detail.py 补充祛红血丝与已有高光增强（人物左右独立），同样保留
+  AGPL-3.0-only；不包含合成眼神光或睫毛素材，详见 UNDER_EYE_NOTICE。

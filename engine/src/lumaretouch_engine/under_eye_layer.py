@@ -1,4 +1,4 @@
-"""Source-derived under-eye correction, shared by preview and tiled export.
+"""Source-derived under-eye and eye-detail correction, shared by preview and tiled export.
 
 A complete face ROI is solved before cropping into export tiles: reference skin
 and crease filters must never see tile edges. Existing eye/teeth masks stay 3-D.
@@ -7,8 +7,14 @@ from __future__ import annotations
 import numpy as np
 from .ops import enhance as ENH
 from .third_party.rapidretouch import under_eye as EYES
+from .third_party.rapidretouch import eye_detail as DETAIL
 
-KEYS = ("dark_circles", "eye_bags")
+KEYS = ("dark_circles", "eye_bags", "veins", "catchlight_left", "catchlight_right")
+
+def correct(source, landmarks, key):
+    faces = [landmarks.astype(np.float32)]
+    out = EYES.apply(source, faces, EYES.Params(*key[:2]))
+    return DETAIL.apply(out, faces, dict(zip(KEYS, key)))
 
 
 def bounds(landmarks, h, w):
@@ -39,21 +45,23 @@ class UnderEyeLayer:
             self.facts = {k: {"gated_px": 0, "geom_px": 0, "reason": "disabled"} for k in KEYS}
             return None
         if EYES.cv2 is None:
-            raise ENH.EnhanceError("眼下修正需要 OpenCV；未生成替代效果")
-        corrected = EYES.apply(self.source, [self.landmarks.astype(np.float32)], EYES.Params(*key))
+            raise ENH.EnhanceError("眼部局部修正需要 OpenCV；未生成替代效果")
+        corrected = correct(self.source, self.landmarks, key)
         delta = np.ascontiguousarray(corrected - self.source)
         if not np.isfinite(delta).all():
-            raise ENH.EnhanceError("眼下修正产生非有限值，整层拒绝")
+            raise ENH.EnhanceError("眼部局部修正产生非有限值，整层拒绝")
         facts = {}
         # Each enabled control gets its own measured support, never inferred from another slider.
         for i, k in enumerate(KEYS):
-            single = [0.0, 0.0]
+            if not key[i]:
+                facts[k] = {"gated_px": 0, "geom_px": 0, "reason": "disabled"}
+                continue
+            single = [0.0] * len(KEYS)
             single[i] = key[i]
-            one = corrected if sum(v != 0 for v in key) == 1 and key[i] else EYES.apply(
-                self.source, [self.landmarks.astype(np.float32)], EYES.Params(*single))
+            one = corrected if sum(v != 0 for v in key) == 1 and key[i] else correct(self.source, self.landmarks, single)
             count = int(np.count_nonzero(np.max(np.abs(one - self.source), axis=2) > 1e-7))
             facts[k] = {"gated_px": count, "geom_px": count,
-                             "reason": None if count else ("disabled" if not key[i] else "no_eligible_under_eye_pixels")}
+                             "reason": None if count else ("disabled" if not key[i] else "no_eligible_eye_pixels")}
         self.delta, self.key, self.facts = delta, key, facts
         return delta
 

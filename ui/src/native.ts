@@ -1322,12 +1322,15 @@ export const runLut = (
  */
 export const runEnhance = (
   action: EnhanceInfo["action"],
-  opts?: { sclera?: number; iris?: number; teeth?: number; dark_circles?: number; eye_bags?: number },
+  opts?: { sclera?: number; iris?: number; teeth?: number; dark_circles?: number; eye_bags?: number; veins?: number; catchlight_left?: number; catchlight_right?: number },
 ) =>
   invoke<{ requested: boolean }>("enhance", {
     action,
     darkCircles: opts?.dark_circles,
     eyeBags: opts?.eye_bags,
+    veins: opts?.veins,
+    catchlightLeft: opts?.catchlight_left,
+    catchlightRight: opts?.catchlight_right,
     sclera: opts?.sclera,
     iris: opts?.iris,
     teeth: opts?.teeth,

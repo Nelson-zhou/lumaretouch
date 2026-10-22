@@ -185,7 +185,7 @@ export default function App() {
   // 眼牙三格（LNX-PORTRAIT-009）。名单一律来自 ready 的 enhance_subs：这四个初值只是
   // "引擎还没说话之前显示 0"，不是名单（与形变那几个数同一条纪律）。
   const [enhanceAmounts, setEnhanceAmounts] = useState<Record<string, number>>({
-    sclera: 0, iris: 0, teeth: 0, dark_circles: 0, eye_bags: 0,
+    sclera: 0, iris: 0, teeth: 0, dark_circles: 0, eye_bags: 0, veins: 0, catchlight_left: 0, catchlight_right: 0,
   });
   const [lastEnhance, setLastEnhance] = useState<EnhanceInfo | null>(null);
   // 几何可信度两个读数：基本量（share）与开关（warn）。存基本量而不是对象：
@@ -325,7 +325,7 @@ export default function App() {
     setChannel(ds.channel ?? "");
     setLightExposure(ds.light.exposure);
     setDeformAmounts({ slim_face: 0, big_eye: 0, small_chin: 0, smile: 0, ...ds.deform.amounts });
-    setEnhanceAmounts({ sclera: 0, iris: 0, teeth: 0, dark_circles: 0, eye_bags: 0, ...(ds.enhance?.amounts ?? {}) });
+    setEnhanceAmounts({ sclera: 0, iris: 0, teeth: 0, dark_circles: 0, eye_bags: 0, veins: 0, catchlight_left: 0, catchlight_right: 0, ...(ds.enhance?.amounts ?? {}) });
     setLutAmount(ds.lut.amount);
     setGradeAmounts({ dh: ds.grade.dh, ds: ds.grade.ds, dv: ds.grade.dv });
     setGradeMix(ds.grade.amount);
@@ -347,9 +347,9 @@ export default function App() {
         // defer/invalidate 那两条不能把滑块弹回零：那两句说的是"引擎现在认不认得人"，
         // 而"用户改过什么"是另一件事（PORTRAIT-004 定下的分层，形变那边同一课）
         if (st.enhance.action === "invalidate") {
-          setEnhanceAmounts({ sclera: 0, iris: 0, teeth: 0, dark_circles: 0, eye_bags: 0, ...(st.enhance.dropped_amounts ?? {}) });
+          setEnhanceAmounts({ sclera: 0, iris: 0, teeth: 0, dark_circles: 0, eye_bags: 0, veins: 0, catchlight_left: 0, catchlight_right: 0, ...(st.enhance.dropped_amounts ?? {}) });
         } else {
-          setEnhanceAmounts({ sclera: 0, iris: 0, teeth: 0, dark_circles: 0, eye_bags: 0, ...st.enhance.amounts });
+          setEnhanceAmounts({ sclera: 0, iris: 0, teeth: 0, dark_circles: 0, eye_bags: 0, veins: 0, catchlight_left: 0, catchlight_right: 0, ...st.enhance.amounts });
         }
       }
       if (st.deform) {

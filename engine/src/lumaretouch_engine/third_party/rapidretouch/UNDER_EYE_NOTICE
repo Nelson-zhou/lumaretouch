@@ -24,3 +24,10 @@ Original Git blob identities (source file bytes):
   eyes.py:    5e743fc551fb284815675252735d10ca8fc2bbbc
   filters.py: b3fd98ffb2324989c8c9ea800e3aff239e97f8db
   colour.py:  52725cdcbce8d0fac0b1286285c3c59beececc1d
+
+Additional eye_detail.py adaptation, same pinned source and terms:
+- Extract scleral red-vessel correction and existing catchlight enhancement only.
+- Independent zero-default vein and left/right catchlight controls.
+- Clip highlight support to the actual eye opening and preserve unchanged pixels.
+- Shared complete-face source ROI and repair invalidation before export tiling.
+- No synthetic catchlight placement, iris hue/saturation, lash assets or gaze edits.

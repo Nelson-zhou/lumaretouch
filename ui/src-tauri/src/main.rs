@@ -1183,7 +1183,7 @@ fn lut(
     Ok(json!({"requested": true}))
 }
 
-/// 眼牙局部增强（LNX-PORTRAIT-009）：三个子功能独立启停。
+/// 眼牙局部增强：各子功能独立启停，已有高光支持左右独立。
 ///
 /// 一律"给了才附"：部分提交语义靠的就是"没给"与"给了 0"的区别，宿主替引擎填 0.0
 /// 就等于把另外两格抹零（与 grade/deform 同一条规矩）。
@@ -1196,10 +1196,16 @@ fn enhance(
     teeth: Option<f64>,
     dark_circles: Option<f64>,
     eye_bags: Option<f64>,
+    veins: Option<f64>,
+    catchlight_left: Option<f64>,
+    catchlight_right: Option<f64>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "enhance", "action": action});
     if let Some(v) = dark_circles { cmd["dark_circles"] = json!(v); }
     if let Some(v) = eye_bags { cmd["eye_bags"] = json!(v); }
+    if let Some(v) = veins { cmd["veins"] = json!(v); }
+    if let Some(v) = catchlight_left { cmd["catchlight_left"] = json!(v); }
+    if let Some(v) = catchlight_right { cmd["catchlight_right"] = json!(v); }
     if let Some(v) = sclera {
         cmd["sclera"] = json!(v);
     }

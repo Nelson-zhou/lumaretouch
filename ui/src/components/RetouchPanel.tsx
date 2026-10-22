@@ -1,3 +1,4 @@
+import { EyeHighlightsControl } from "./EyeHighlightsControl";
 import {FabricPanel} from "../fabric/FabricPanel";
 import {HistogramPanel} from "./HistogramPanel";
 import {LevelsEditor} from "./LevelsEditor";
@@ -241,6 +242,8 @@ const WIRED: Record<string, string> = {
   // 五官细节
   "PC-32470|亮眼/眼白": "enh.sclera",
   "PC-32470|亮眼/眼瞳": "enh.iris",
+  "PC-32470|祛红血丝": "enh.veins",
+  "PC-32470|亮眼/眼睛高光": "enh.catchlight",
   "PC-32469|牙齿美白": "enh.teeth",
   // 色彩与光影
   "PC-32455|影调/曝光": "exp.ev",
@@ -272,6 +275,8 @@ const WIRED: Record<string, string> = {
 
 /** 独立来源区域修补不冒充 heal 或仿制图章；缺少独立面板时保留明确说明。 */
 const LEAF_NOTE: Record<string, string> = {
+  "PC-32470|眼神光": "可放置眼神光素材尚未实现；亮眼中的眼睛高光仅增强原片已有高光。",
+  "PC-32470|眼神光/程度": "素材眼神光尚未接通，不用现有高光增强替代。",
   "PC-32482|修补工具": "来源区域修补需要独立取样视图与匹配版本的引擎；不会使用消除笔替代。",
   "PC-32482|仿制图章": "仿制图章尚未实现持续采样点与逐笔来源偏移；来源区域修补不是仿制图章。",
 };
@@ -291,6 +296,8 @@ const WIRE_LABEL: Record<string, string> = {
   "enh.eye_bags": "祛眼袋",
   "enh.sclera": "眼白提亮",
   "enh.iris": "眼瞳提亮",
+  "enh.veins": "祛红血丝",
+  "enh.catchlight": "眼睛高光",
   "enh.teeth": "牙齿美白",
   "exp.ev": "曝光",
   "exp.temp": "色温",
@@ -508,6 +515,11 @@ export default function RetouchPanel(props: RetouchProps) {
             onReset={() => commitDeform({ [key]: 0 })} />
         );
       }
+      case "enh.catchlight":
+        return <EyeHighlightsControl key={leaf.path} amounts={enhAmounts}
+          disabled={dim || !props.faceOk} reason={props.faceOk ? undefined : props.faceWhy}
+          commit={commitEnhance} Slider={Slider} />;
+      case "enh.veins":
       case "enh.dark_circles":
       case "enh.eye_bags":
       case "enh.sclera":

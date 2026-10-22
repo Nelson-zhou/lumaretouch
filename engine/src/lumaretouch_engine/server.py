@@ -2941,7 +2941,7 @@ class Engine:
         unknown = sorted(set(p) - self.ENHANCE_KEYS)
         if unknown:
             emit({"event": "error", "error": f"enhance 收到不认识的参数：{', '.join(unknown)}"
-                  "（可用：action / sclera / iris / teeth / dark_circles / eye_bags，名单在 ready 的 enhance_subs 里）"})
+                  "（可用参数名单见 ready 的 enhance_subs，已有高光支持 catchlight_left / catchlight_right）"})
             return
         action = p.get("action", "set")
         if action not in self.ENHANCE_ACTIONS:
