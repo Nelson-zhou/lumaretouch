@@ -22,6 +22,12 @@ export function batchScopeOptions(modules: readonly {operation_id: string; trans
   }
   if(supported.has('lnx.studio_background.v1')) out.push({label:'影棚背景强度（目标须已有范围）',ops:['lnx.studio_background.v1']});
   if(supported.has('lnx.optics_manual.v1')) out.push({label:'镜头/透视手动参数（不复制自动结果）',ops:['lnx.optics_manual.v1']});
+  if(supported.has('lnx.optics_auto.v1')){
+    out.push({label:'镜头/透视逐图自动重算（含手动参数）',ops:['lnx.optics_auto.v1']});
+    if(global.length)out.push({label:'全图配方 + 镜头/透视逐图重算',ops:[...global.map(([op])=>op),'lnx.optics_auto.v1']});
+  }
+  if(supported.has('lnx.lip_makeup.v1'))out.push({label:'唇妆增强（三控件，逐张须单脸）',ops:['lnx.lip_makeup.v1']});
+  if(supported.has('lnx.facial_wrinkles.v1'))out.push({label:'面部祛纹八部位（逐张须单脸，仅参数）',ops:['lnx.facial_wrinkles.v1']});
   return out;
 }
 

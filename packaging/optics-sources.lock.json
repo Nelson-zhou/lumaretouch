@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "lensfun": {
+    "repository": "https://github.com/lensfun/lensfun.git",
+    "commit": "101c745e847a5de4a1e569a94368ce2027198598",
+    "version": "0.3.4",
+    "license": "LGPL-3.0-or-later",
+    "release": "https://github.com/lensfun/lensfun/releases/tag/v0.3.4"
+  },
+  "lensfunpy": {
+    "repository": "https://github.com/letmaik/lensfunpy.git",
+    "commit": "458a24475ae03ec52f0fac4fea786120ef5a503f",
+    "version": "1.18.0",
+    "license": "MIT",
+    "release": "https://pypi.org/project/lensfunpy/1.18.0/"
+  },
+  "opencv": {
+    "provided_by": "normal setup-runtime.sh",
+    "distribution": "opencv-contrib-python",
+    "version": "5.0.0.93",
+    "install_second_cv2_distribution": false
+  },
+  "note": "Independent official immutable library, wrapper and calibration pins. Database selected from the official repository on 2026-10-22, converted by its own official v2-to-v1 converter for stable Lensfun. ACM-only calibrations are unavailable, not approximated. No automatic updates. Artifact/source SHA256 are emitted by the release producer; compiler output is not claimed bit-reproducible.",
+  "lensfun_database": {
+    "repository": "https://github.com/lensfun/lensfun.git",
+    "commit": "b98997f7f1c020d0fac3136c2abbf06126385971",
+    "version": "2026-10-20",
+    "license": "CC-BY-SA-3.0",
+    "source_format": 2,
+    "runtime_format": 1,
+    "converter": "tools/update_database/xml_converter.py",
+    "converter_git_blob": "42bd88ea2bb6a54df9322c18fcd9e52287f58fb9",
+    "provenance": "https://github.com/lensfun/lensfun/commit/b98997f7f1c020d0fac3136c2abbf06126385971"
+  }
+}

@@ -1,89 +1,78 @@
-# Optics optional acquisition and redistribution
+# Optical dependencies, acquisition and redistribution
 
-Nothing below has been installed, built, resolved, fetched or accepted by this
-implementation task. These are explicit packaging steps, not application startup
-actions. There is no model-weight download or alleged trained perspective model.
+This task changed source only: no dependency build/install/download, product run,
+test, typecheck or quality acceptance occurred. The concrete normal packaging path
+is now [INSTALL.md](INSTALL.md), not merely optional requirements.
 
-## Components and provenance
+## Independent pinned sources
 
-- Original Rust ABI and manual transform code: repository GPL-3.0-or-later source.
-- Lensfun library: official documentation specifies LGPLv3 for libraries and
-  GPLv3 for bundled applications; the lens database is separately CC-BY-SA3.0.
-  Library attribution is not sufficient for database redistribution.
-  https://lensfun.github.io/manual/latest/license.html
-- lensfunpy1.18.0: MIT Python/Cython wrapper. Linux upstream setup uses pkg-config
-  to link Lensfun. Prefer a Linux source build against a replaceable system
-  library. Do not assume the wheel's bundled native libraries/database have only
-  the wrapper's MIT license or that `--no-binary` proves redistribution compliance.
-  https://pypi.org/project/lensfunpy/1.18.0/
-  https://github.com/letmaik/lensfunpy/blob/master/setup.py
-- OpenCV: use an audited recent4.x build exposing LSD. Versions4.1.0–4.5.3 had
-  its implementation removed; official docs say restoration followed MIT
-  publication of NFA code. Review actual OpenCV and all wheel component notices,
-  not only the Python package name. Distribution source/system builds are valid
-  alternatives. https://docs.opencv.org/4.x/db/d73/classcv_1_1LineSegmentDetector.html
-- ExifTool: optional camera/lens metadata reader, licensed under the same terms
-  as Perl. Preserve the applicable upstream license notices with a distributed
-  copy, and audit the exact distro package. https://exiftool.org/
-  https://exiftool.org/exiftool_pod2.html
+- Lensfun **library** 0.3.4, official commit
+  `101c745e847a5de4a1e569a94368ce2027198598`, library LGPL-3.0-or-later.
+  Its source applications are GPL; they are not installed as app runtime helpers.
+- Official **database**, independently pinned at
+  `b98997f7f1c020d0fac3136c2abbf06126385971`, 2026-10-20, selected from the official
+  commit listing on 2026-10-22. CC-BY-SA-3.0 with original author attributions.
+  Its own official `xml_converter.py` blob
+  `42bd88ea2bb6a54df9322c18fcd9e52287f58fb9` converts v2 to compatible v1. This
+  conversion drops unsupported ACM records; unavailable branches remain explicit.
+  We do not freeze lens coverage to the library's old 2023 release or fabricate
+  replacement coefficients. Both original/converted hashes and change notice ship.
+- lensfunpy 1.18.0, official commit
+  `458a24475ae03ec52f0fac4fea786120ef5a503f`, MIT wrapper. Built against the actual
+  replaceable Lensfun shared library, not an assumed-MIT opaque vendor wheel.
+- Existing normal engine OpenCV: `opencv-contrib-python==5.0.0.93`. Do not install
+  an additional headless/cv2 distribution. Actual LSD detection/solver is used,
+  never a fixed guessed transform or pretended ML model. There are no weights.
+- ExifTool is a normal Debian `libimage-exiftool-perl` dependency for RAW metadata,
+  with developer override `LRT_EXIFTOOL`. Perl/ExifTool license and source are
+  supplied through the distribution package, not mislabeled as wrapper MIT.
+- Original Rust transform/remap ABI: repository GPL-3.0-or-later, built/staged
+  with its corresponding source. Missing or mismatched ABI fails visibly.
 
-## Explicit staged release process
+The source lock records exact official repositories/commits. The release producer
+emits and checks actual source archive SHA256, XML digest and wheel SHA256, platform,
+ABI, linkage, compiler and application commit. Full source archives and legal texts
+(including database CC-BY-SA text) accompany the library/wrapper. Source pinning
+is reproducible provenance, not a claim of byte-identical compiler output. The
+system GLib and C/C++ runtimes remain dynamic distribution dependencies. Audit the
+actual release artifact, system dependencies and full wheel notices before shipping.
 
-1. Choose target distro/architecture and record exact Lensfun, OpenCV, ExifTool,
-   Python, NumPy and wrapper versions. Acquire from official vendor repositories
-   or well-known registries only in a separate authorized release setup step.
-   This task has not approved or executed dependency installation.
-2. Resolve the complete dependency tree in that setup environment; record hashes,
-   sources, versions, license texts and notice files. Produce an offline wheelhouse
-   and a platform lock. `requirements-optics.txt` is a candidate declaration,
-   NOT a resolved lock or an assertion that all wheels were audited.
-3. For Linux, build lensfunpy from the staged source using distro Lensfun headers
-   and pkg-config. Verify actual dynamic linkage and replacement of Lensfun.
-   If redistributing LGPL components, provide required source/relink/replacement
-   materials as appropriate. If choosing a bundled wheel, separately audit its
-   native dependency tree and satisfy those actual terms before shipping.
-4. Stage a SPECIFIC official Lensfun XML database snapshot, with its author
-   attribution, source/version, CC-BY-SA3.0 license and change notices if modified.
-   Do not silently update this snapshot. A project pins XML digest and runtime
-   Lensfun+wrapper versions; a changed/missing snapshot suspends its correction.
-5. Configure `LRT_LENSFUN_DB` to the staged directory. Only its immediate XML files
-   are loaded; no common/system/bundled fallback. Bound to4096 XML files /32MiB,
-   rejecting symlinks and change-during-load. Keep external symlink/path/permissions
-   assumptions visible in release review. No network updater is called.
-6. ExifTool may be supplied by a system package or an explicit `LRT_EXIFTOOL` path.
-   Runtime disables per-user ExifTool executable config and requests only make,
-   model, lens name, focal length, aperture, subject distance and orientation.
-   No GPS, owner or serial is retained. The subprocess has15-second and32KiB
-   output bounds. It never writes source tags or sends files off-machine.
-7. Build the Rust kernel with `bash packaging/build-optics.sh` as an explicit
-   packaging action, not at runtime. Ship the ABI1 `.so` with its corresponding
-   Rust source. Missing/mismatched ABI produces a visible error.
-8. Execute and record local optical quality/precision/interaction/packaging
-   acceptance in the authorized Qoder environment before release enablement.
+Normal setup installs the prepared bundle offline, never compiles Lensfun for users.
+CI and `build-deb.sh` have an actual source producer before staging. Only explicit
+release acquisition fetches official source and pinned build tools. The app does
+not update databases or download models. No build was run in this task.
 
-## Absence is a visible state, not success
+## Runtime absence and safety
 
-Missing Lensfun/DB/calibration or ambiguous camera/lens leaves RAW auto correction
-off with a reason. NonRAW starts off. Manual distortion/vignette and guided/manual
-perspective need the Rust core but not Lensfun/OpenCV/ExifTool. Automatic perspective
-needs actual OpenCV LSD; absence/low confidence rejects the request, never substitutes
-fixed geometry. Unknown aperture/distance disables calibrated vignetting, not all
-other available calibration. Internally Lensfun requires arguments for inactive
-branches;0 aperture /1000m are sent only when vignetting was not requested, never
-retained as claimed measured data. Manual metadata selection is explicit in UI.
+Missing/ambiguous profile or incomplete metadata never silently succeeds. RAW auto
+correction defaults on only after real usable profile resolution; nonRAW defaults
+off. Manual distortion/vignette and manual/guided perspective need Rust but not
+Lensfun/OpenCV. Unknown aperture/distance disables calibrated vignetting, not
+unrelated available calibration. Internal inactive-branch placeholder arguments
+are never retained or represented as measured metadata.
 
-## Calculation sources
+The bundled database is loaded only after source/provenance/version/hash checks.
+An explicit `LRT_LENSFUN_DB` chooses a separate local directory, with no common-DB
+fallback. XML count/size/symlink/change checks remain bounded. A changed database or
+library invalidates frozen proof and retained correction rather than silently
+re-solving. ExifTool uses no per-user executable config, reads only camera/lens
+calibration tags, retains no GPS/owner/serial, has 15-second/32-KiB limits, and never
+writes the source or uploads photos.
 
-Lensfun returns inverse geometry and per-channel coordinates; callers must
-actually resample RGB. This package does so with its Rust sampler:
-https://lensfun.github.io/manual/latest/structlfModifier.html
-https://letmaik.github.io/lensfunpy/api/lensfunpy.Modifier.html
+## Primary calculation and license sources
 
-Camera/lens lookup, calibration availability and explicit database paths:
-https://letmaik.github.io/lensfunpy/api/lensfunpy.Database.html
-https://letmaik.github.io/lensfunpy/api/lensfunpy.Lens.html
+- https://github.com/lensfun/lensfun/tree/101c745e847a5de4a1e569a94368ce2027198598
+- https://github.com/lensfun/lensfun/commit/b98997f7f1c020d0fac3136c2abbf06126385971
+- https://github.com/lensfun/lensfun/blob/b98997f7f1c020d0fac3136c2abbf06126385971/tools/update_database/xml_converter.py
+- https://github.com/lensfun/lensfun/blob/master/docs/make-release-0.3.x.txt
+- https://lensfun.github.io/manual/latest/license.html
+- https://lensfun.github.io/manual/latest/structlfModifier.html
+- https://letmaik.github.io/lensfunpy/api/lensfunpy.Modifier.html
+- https://letmaik.github.io/lensfunpy/api/lensfunpy.Database.html
+- https://github.com/letmaik/lensfunpy/blob/458a24475ae03ec52f0fac4fea786120ef5a503f/setup.py
+- https://docs.opencv.org/4.x/db/d73/classcv_1_1LineSegmentDetector.html
+- https://exiftool.org/exiftool_pod2.html
 
-The wrapper's initialize method returns None; actual enabled branches are probed
-through generated geometry and color gains, rather than treating a database
-record or a nonexistent return bitmask as proof of correction:
-https://github.com/letmaik/lensfunpy/blob/master/lensfunpy/_lensfun.pyx
+Lensfun supplies coordinates/gains, which the Rust sampler actually applies.
+A database record alone, or the wrapper initialize method's None return value,
+is never treated as proof of applied correction.

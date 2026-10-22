@@ -36,9 +36,11 @@ class EffectRecoveryStage:
         self.device, self.shape = device, tuple(shape)
         self.fields = {}
         self.suspended = None
+        self.suspended_targets = {}
         self.required = set()
 
     def set(self, fields, *, state=None, reason=None):
+        self.suspended_targets = {}
         if reason is not None:
             if type(reason) is not str or not reason or fields or state is None:
                 raise ValueError('挂起效果恢复必须保留目标配方和可见原因')
@@ -56,7 +58,7 @@ class EffectRecoveryStage:
         S.target(target)
         if target not in self.required:
             return after
-        if self.suspended:
+        if self.suspended or target in self.suspended_targets:
             # Fail closed: suspend only this operator, with the reason exposed
             # in doc_state. Ignoring a lost recovery mask would restore an
             # unwanted automatic effect. Export never permits this branch.

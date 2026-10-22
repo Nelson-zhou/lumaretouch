@@ -104,7 +104,7 @@ def solve_guides(guides, shape):
 def automatic(rgb, mode):
     if mode not in ('smart','horizontal','vertical'): raise ValueError('自动透视模式无效')
     try: cv = importlib.import_module('cv2')
-    except ImportError as error: raise RuntimeError('自动透视需要显式安装 OpenCV；手动和引导线仍可用，不会下载模型') from error
+    except ImportError as error: raise RuntimeError('自动透视需要既有 OpenCV 运行时；请运行发行包 setup-runtime.sh 修复，不要并装第二个 cv2 包。手动和引导线仍可用，不会下载模型') from error
     image = np.asarray(rgb)
     if image.ndim != 3 or image.shape[2] != 3 or not np.isfinite(image).all(): raise ValueError('自动透视必须使用真实镜头校正后的 RGB')
     h,w = image.shape[:2]

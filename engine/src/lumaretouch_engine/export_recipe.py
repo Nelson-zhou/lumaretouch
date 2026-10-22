@@ -5,6 +5,8 @@ Mask resampling allocates full-resolution assets, so the caller must admit the
 render and dimensions before calling this function. Missing-layer reports remain
 mandatory and full-quality inspection must reject any skipped active layers.
 """
+from . import facial_wrinkle_state as WSTATE, facial_wrinkle_runtime as WRUNTIME
+from . import lip_makeup_state as LIPS, lip_makeup_runtime as LIPR
 from . import white_balance_recipe as WB
 from .export import ExportSpec, resample_field
 from .vram import RepairOp, LightOp
@@ -91,6 +93,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
         configure_export(spec, snap, eh, ew)
     elif float(snap.get("fabric_amount", 0)) != 0:
         raise ValueError("衣物细褶需要逐图分析衣物语义蒙版，禁止复用另一张图片的蒙版")
+    if not for_document and LIPS.active(snap.get("lip_makeup")):
+        raise ValueError("唇妆需逐图绑定真实选中人物，请先同步参数到目标照片")
     if not for_document:
         if spec.grade_scope == "objects": raise ValueError("Source-bound mask objects cannot transfer to another photo")
         skipped += ["repair", "light", "deform", "channel（笔迹与掩膜属于当前文档）",
@@ -134,16 +138,23 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     # 按**导出尺寸**重画掩膜（不放大预览档那张小掩膜：放大一份"身份"会涂错位置，
     # 而内容门的相对统计也会跟着插值得到的假边一起漂）。
     en = snap.get("enhance") or {}
-    enh_amounts = {k: float(v) for k, v in (en.get("amounts") or {}).items()
-                   if float(v) != 0.0}
-    if enh_amounts and not (en.get("built") or snap.get("enhance_defer")):
-        skipped.append("enhance（配方非零但图层未构建且未标记可重建；不能报为完整应用）")
-    if enh_amounts and (en.get("built") or snap.get("enhance_defer")):
-        if pc is None:
-            skipped.append("enhance（没有可用的关键点，掩膜画不出来）")
+    from .ops import enhance as ENH
+    enh_amounts = ENH.check_amounts(en.get("amounts") or {})
+    if WSTATE.active_enhance(enh_amounts):
+        missing = ("人物增强参数非零但未构建且不可重建" if not (en.get("built") or snap.get("enhance_defer"))
+                   else "人物增强缺少当前选中人物的关键点" if pc is None else None)
+        if missing:
+            if WSTATE.active(enh_amounts): raise ValueError(missing + "；不能静默省略面部祛纹导出")
+            skipped.append("enhance（" + missing + "）")
         else:
             spec.enhance = enh_amounts
             spec.landmarks = np.asarray(pc.landmarks, dtype=np.float32)
+            WRUNTIME.configure_export(spec, snap, eh, ew)
+    spec.lip_makeup = LIPS.check(snap.get("lip_makeup"))
+    if LIPS.active(spec.lip_makeup):
+        if pc is None: raise ValueError("唇妆导出缺少当前选中人物")
+        spec.landmarks = np.asarray(pc.landmarks, dtype=np.float32)
+        LIPR.configure_export(spec, snap, eh, ew)
     if snap["channel"]:
         if pc is None:
             skipped.append(f"channel:{snap['channel']}（没有掩膜）")

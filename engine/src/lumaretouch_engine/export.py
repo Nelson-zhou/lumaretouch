@@ -46,6 +46,8 @@ torch = optional_module("torch")
 
 from .ops import enhance as ENH
 from . import under_eye_layer as UNDER
+from . import lip_makeup_runtime as LIPR, lip_makeup_state as LIPS
+from . import facial_wrinkle_runtime as WRUNTIME, facial_wrinkle_state as WSTATE
 from .ops.deform import (analytic_frontal_landmarks, controls, face_frame,
                          support_radii, tps_field_from_state, tps_solve)
 from .ops.grade import GradeError, check_params
@@ -172,6 +174,11 @@ class ExportSpec:
     # 不拿预览档那张小掩膜放大——放大一份"身份"掩膜等于把眼睛涂到眉毛上，而且
     # 内容门的相对统计会跟着插值得到的假边一起漂。
     enhance: dict = field(default_factory=dict)
+    lip_makeup: dict | None = None
+    lip_makeup_face: dict | None = None
+    facial_wrinkle_skin: np.ndarray | None = None
+    facial_wrinkle_backend: str | None = None
+    facial_wrinkle_model_identity: str | None = None
     fabric_amount: float = 0.0
     fabric_mask: np.ndarray | None = None
     fabric_face_px: float | None = None
@@ -257,6 +264,7 @@ class ExportSpec:
         self.check_studio_background()
         self.check_optics()
         self.check_sky_replacement()
+        self.lip_makeup = LIPS.check(self.lip_makeup)
         from .local_grade_layers import check as check_groups
         from .local_grade_stage import check_fields
         self.local_grade_groups = check_groups(self.local_grade_groups)
@@ -308,7 +316,7 @@ class ExportSpec:
                 self.enhance = ENH.check_amounts(self.enhance)
             except ENH.EnhanceError as e:
                 raise ExportError(f"眼牙增强参数非法：{e}") from None
-        if (any(float(v) != 0.0 for v in (self.enhance or {}).values())
+        if (WSTATE.active_enhance(self.enhance or {})
                 and self.landmarks is None):
             raise ExportError("眼牙增强导出需要关键点：这一层的掩膜是从 478 点重画出来的，"
                               "没有关键点就没有这一层（不拿上一张脸的场来凑，也不拿默认矩形猜）")
@@ -730,11 +738,13 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     # 异物掉掉，那一组的均值就变了，与预览里“先修完再挂眼牙层”是同一条链。
     from .fabric_export import prepare_export
     fabric_field = prepare_export(spec, src_u8, base_f, divisor)
+    wrinkle_layer = WRUNTIME.prepare_export(spec, src_u8, base_f, divisor)
+    lip_layer = LIPR.prepare_export(spec, src_u8, base_f, divisor)
     enh_reg = None
     enh_weight = None
     under_layer = None
     enhance_ms = 0.0
-    if any(float(vv) != 0.0 for vv in (spec.enhance or {}).values()):
+    if any(float(vv) != 0.0 for key, vv in (spec.enhance or {}).items() if key not in WSTATE.INTENT_KEYS):
         t_e = time.perf_counter()
         enh_reg = ENH.geometry(spec.landmarks, h, w)
         ey0, ex0, eeh, eew = enh_reg.window
@@ -797,8 +807,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             # 先挂场再提交参数：set_enhance 只改三个数，而 has_enhance() 要同时看到场，
             # 反过来写会有一瞬"参数点火而场上没有额度"——那一瞬里 lit 报的是假话
             pipe.set_enhance_field(enh_reg.window, enh_weight, origin=(cy0, cx0))
-            if spec.enhance:
-                pipe.set_enhance(spec.enhance)
+        WRUNTIME.install_export_tile(pipe, wrinkle_layer, (cy0, cx0), spec.enhance or {})
+        LIPR.install_export_tile(pipe, lip_layer, (cy0, cx0), spec.lip_makeup)
+        if spec.enhance:
+            pipe.set_enhance(spec.enhance)
         if under_layer is not None:
             UNDER.attach_delta(pipe, under_layer.window, under_layer.delta, origin=(cy0, cx0))
         # 旧调用方可能仍只带 EV/WB 三项：先补长到 7 元组，再判中性/取影调四项。
@@ -945,7 +957,14 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         # 这一层的"重画掩膜"成本单独报：它与形变解场是两种一次性的钱，混在
         # field_ms 里就看不出该优化谁（导出账单里每一段都要能归因，否则只是把没说的话当作没事）
         "enhance_field_ms": round(enhance_ms, 1),
-        "enhance": dict(spec.enhance or {}), "fabric_amount": spec.fabric_amount,
+        "enhance": dict(spec.enhance or {}),
+        "lip_makeup": dict(lip_layer.facts) if lip_layer is not None else {},
+        "lip_makeup_full_resolution": lip_layer is not None,
+        "lip_makeup_bytes": lip_layer.resident_bytes() if lip_layer is not None else 0,
+        "facial_wrinkles": dict(wrinkle_layer.facts) if wrinkle_layer is not None else {},
+        "facial_wrinkle_full_resolution": wrinkle_layer is not None,
+        "facial_wrinkle_bytes": wrinkle_layer.resident_bytes() if wrinkle_layer is not None else 0,
+        "fabric_amount": spec.fabric_amount,
         "per_tile_ms": round(ms / max(len(rects), 1), 2),
         "seg_ms": {**{k: round(v, 2) for k, v in seg.items()},
                    **{k: round(v, 2) for k, v in io.items()}},

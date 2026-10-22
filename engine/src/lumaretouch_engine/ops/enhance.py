@@ -31,14 +31,11 @@
 它是规则，不是分割网络，也不叫 AI。模块名、事件字段与 UI 文案一律写"几何掩膜 + 内容门"，
 不出现"智能识别/AI 修复"这种说法。
 
-链上位置：`apply_enhance` 盖在 `apply_deform` 之后、`apply_exposure` 之前（vram.retouch）。
-两个理由都是硬的：
-  · 形变会把眼睑/唇的位置搬走，而掩膜按**未形变**的关键点画。增强在形变之前做，
-    网格采样会把增强后的像素一起搬（大眼满档把眼睑环外扩 35% 虹膜半径）；反过来把
-    掩膜盖在已形变的图上等于拿旧坐标涂新位置——眼白会糊到下眼睑上。
-  · 曝光/白平衡/LUT 是整幅输出变换，作用在增强之后的像素上是均匀的。把增强放到表
-    之后，用户把表拉暗时眼白牙齿会跟着变暗——工业流程里局部修容层在调整图层**下面**
-    （先修完再套风格），不是"套完风格再补一刀"。
+链上位置以 vram.retouch 的真实调用为准：原有眼牙 `apply_enhance` 仍在
+`apply_deform` 之后、`apply_exposure` 之前。本次不把这条旧链描述成形变前处理。
+新增的八区域面部祛纹只在这里复用参数协议，不进入 `_sub_effects`：其冻结修复源
+推导出的独立修正由专门消费者在自动形变之前叠加，随后与像素一起采样移动。
+曝光、白平衡与后续风格调色仍处理已经叠加的像素，不回写祛纹分析源。
 与 `apply_grade` 的口径差别要写清：定向层的窗口看的是**屏幕上那份颜色**（"所见即所调"），
 而本层的内容门看的是**源片那份颜色**——它判的是"这里是不是牙/是不是眼白"（身份），
 身份必须在未上色的像素上判，否则一张橙色 LUT 会把嘴唇认成牙齿。
@@ -57,6 +54,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from ..optional_dependencies import optional_module
+from .. import facial_wrinkle_state as WRINKLES
 
 torch = optional_module("torch")
 
@@ -64,7 +62,8 @@ from .deform import (IRIS_LEFT, IRIS_RIM_LEFT, IRIS_RIM_RIGHT, IRIS_RIGHT, LIP_I
                      LIP_INNER_TOP, MOUTH_CORNER_LEFT, MOUTH_CORNER_RIGHT)
 from .grade import hsv_to_rgb_np, rgb_to_hsv_np, smoothstep
 
-AMOUNT_KEYS = ("sclera", "iris", "teeth", "dark_circles", "eye_bags", "veins", "catchlight_left", "catchlight_right")
+AMOUNT_KEYS = ("sclera", "iris", "teeth", "dark_circles", "eye_bags", "veins", "catchlight_left", "catchlight_right") + WRINKLES.INTENT_KEYS
+EFFECT_KEYS = tuple(key for key in AMOUNT_KEYS if key != WRINKLES.LINK_KEY)
 SUBS = ("sclera", "iris", "teeth")      # 三个子功能，顺序即权重场第 0 轴的顺序
 AMOUNT_LIMIT = 1.0                      # 滑块值域 [0,1]；这一层没有负档（"反向"无安全含义）
 NUM_LANDMARKS = 478
@@ -141,8 +140,17 @@ def check_amounts(amounts) -> dict:
     if unknown:
         raise EnhanceError(f"enhance 不认这些子功能：{', '.join(unknown)}"
                            f"（可用：{', '.join(AMOUNT_KEYS)}）")
+    # Validate family metadata before legacy float conversion: bool/string and
+    # fractional unlock values must never become accepted continuous amounts.
+    try:
+        wrinkle_values = WRINKLES.check(given)
+    except ValueError as error:
+        raise EnhanceError(str(error)) from None
     out = {}
     for k in AMOUNT_KEYS:
+        if k in wrinkle_values:
+            out[k] = wrinkle_values[k]
+            continue
         v = given.get(k, 0.0)
         try:
             f = float(v)

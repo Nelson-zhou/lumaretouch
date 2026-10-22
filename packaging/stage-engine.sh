@@ -16,6 +16,14 @@ bash "$here/build-curve-compiler.sh" "$stage/lumaretouch_engine/bin/curve-compil
 bash "$here/build-color-scopes.sh" "$stage/lumaretouch_engine/bin/color-scopes"
 bash "$here/build-local-masks.sh" "$stage/lumaretouch_engine/bin/local-masks"
 bash "$here/build-manual-liquify.sh" "$stage/lumaretouch_engine/bin/manual-liquify"
+bash "$here/build-lip-makeup.sh" "$stage/lumaretouch_engine/bin/liblrt_lip_makeup.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/lip_makeup"
+cp "$here/../core/lip_makeup/lib.rs" "$here/../LICENSE" "$here/../docs/LIP-MAKEUP-INTEGRATION.md" "$here/../docs/model-licenses/archive/mediapipe-LICENSE.txt" "$stage/lumaretouch_engine/third_party/lip_makeup/"
+bash "$here/build-facial-wrinkles.sh" "$stage/lumaretouch_engine/bin/liblrt_facial_wrinkles.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/facial_wrinkles"
+cp "$here/../core/facial_wrinkles/lib.rs" "$stage/lumaretouch_engine/third_party/facial_wrinkles/"
+cp "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/facial_wrinkles/COPYING"
+cp "$here/../docs/FACIAL-WRINKLES-INTEGRATION.md" "$stage/lumaretouch_engine/third_party/facial_wrinkles/README.md"
 bash "$here/build-optics.sh" "$stage/lumaretouch_engine/bin/liblrt_optics.so"
 bash "$here/build-studio-background.sh" "$stage/lumaretouch_engine/bin/studio-background"
 # Distribute the exact adapted worker sources and LGPL/GPL texts with its binary.
@@ -31,6 +39,11 @@ rt="$stage/runtime"
 # 继续打进 .deb（上面那条 mediapipe 的规矩只能靠不残留来保证）。
 [ -d "$rt" ] && find "$rt" -type f -delete
 mkdir -p "$rt"
+# Verified, prebuilt Lensfun runtime: supplied by the coordinated optics package.
+cp "$here/setup-optics.py" "$stage/setup-optics.py"
+cp "$here/optics-sources.lock.json" "$stage/runtime/optics-sources.lock.json"
+cp "$here/../docs/optics/INSTALL.md" "$stage/runtime/OPTICS-INSTALL.md"
+bash "$here/stage-optics-runtime.sh" "$stage"
 cp "$here/../packaging/setup-runtime.sh" "$stage/setup-runtime.sh"
 chmod +x "$stage/setup-runtime.sh"
 cp "$here/../engine/requirements-rocm.txt" "$here/../engine/requirements-cuda.txt" "$rt/"

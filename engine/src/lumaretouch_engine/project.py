@@ -193,6 +193,9 @@ def validate(p: object) -> None:
         from .sky_replacement_project import validate_records as validate_sky
         try: validate_sky(row,required=(sv==SCHEMA),allowed=(sv==SCHEMA))
         except ValueError as error: raise ProjectError(str(error)) from error
+        from .lip_makeup_project import validate_records as validate_lips
+        try: validate_lips(row)
+        except ValueError as error: raise ProjectError(str(error)) from error
         from .optics_project import validate_records as validate_optics
         try: validate_optics(row,required=(sv in (OPTICS_SCHEMA,SCHEMA)),allowed=(sv in (OPTICS_SCHEMA,SCHEMA)))
         except ValueError as error: raise ProjectError(str(error)) from error
@@ -555,6 +558,9 @@ def encode(value: object, assets: dict, dropped: list, at: str) -> object:
             _check_effect_recovery_record(value['_effect_recovery'])
         if '_manual_liquify' in value:
             _check_manual_liquify_record(value['_manual_liquify'])
+        if '_lip_makeup' in value:
+            from .lip_makeup_project import check_saved
+            check_saved(value['_lip_makeup'])
         if '_optics' in value:
             from .optics_project import validate_records
             validate_records(value)
@@ -623,6 +629,9 @@ def decode(value: object, assets: dict, dropped: list, at: str,
             _check_effect_recovery_record(value['_effect_recovery'])
         if '_manual_liquify' in value:
             _check_manual_liquify_record(value['_manual_liquify'])
+        if '_lip_makeup' in value:
+            from .lip_makeup_project import check_saved
+            check_saved(value['_lip_makeup'])
         if '_optics' in value:
             from .optics_project import validate_records
             validate_records(value)
@@ -763,6 +772,8 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
                 _check_manual_liquify_record(recipe.get("_manual_liquify"))
             from .sky_replacement_project import validate_records as validate_sky
             validate_sky(recipe,required=(project.get("schema_version")==SCHEMA),allowed=(project.get("schema_version")==SCHEMA))
+            from .lip_makeup_project import validate_records as validate_lips
+            validate_lips(recipe)
             from .optics_project import validate_records as validate_optics
             validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SCHEMA)))
             from .studio_background_project import validate_records as validate_studio
@@ -817,6 +828,8 @@ def active_recipe(project: dict, path: str, dc_types: dict | None = None) -> obj
                 _check_manual_liquify_record(recipe.get("_manual_liquify"))
                 from .sky_replacement_project import validate_records as validate_sky
                 validate_sky(recipe,required=(project.get("schema_version")==SCHEMA),allowed=(project.get("schema_version")==SCHEMA))
+                from .lip_makeup_project import validate_records as validate_lips
+                validate_lips(recipe)
                 from .optics_project import validate_records as validate_optics
                 validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SCHEMA)))
                 from .studio_background_project import validate_records as validate_studio

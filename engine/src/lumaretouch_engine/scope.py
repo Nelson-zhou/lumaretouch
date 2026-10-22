@@ -36,7 +36,9 @@ from . import hsl_recipe as HSL_RECIPE
 from . import white_balance_recipe as WB
 from . import local_grade_layers as LOCAL_GRADE
 from . import studio_background_scope as STUDIO
-from . import optics_scope as OPTICS
+from . import optics_scope as OPTICS, optics_auto_scope as OPTICS_AUTO
+from . import facial_wrinkle_scope as WRINKLES
+from . import lip_makeup_scope as LIP
 from . import sky_replacement_scope as SKY
 
 SCHEMA = "lrt.scope.v1"
@@ -80,6 +82,15 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: operation_id → 契约。`single_face` 的模块只能作用在"已知只有一张脸"的文档上；
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
+    OPTICS_AUTO.OP: {"params": ("request",), "state_fields": OPTICS_AUTO.FIELDS, "single_face": False,
+                "transferable": True, "cmd": "optics", "read": OPTICS_AUTO.params_of, "write": OPTICS_AUTO.install,
+                "why_not": "逐图重匹配配置与重新解算，含手动数值；必须冻结预检，不复制源图矩阵、配置或引导线"},
+    LIP.OP: {"params": ("recipe",), "state_fields": LIP.FIELDS, "single_face": True,
+             "transferable": True, "cmd": "lip_makeup", "read": LIP.params_of, "write": LIP.install,
+             "why_not": "仅三项唇妆参数；目标须有自己的真实人脸与嘴唇可见性，恢复笔迹不复制"},
+    WRINKLES.OP: {"params": ("recipe",), "state_fields": WRINKLES.FIELDS, "single_face": True,
+                "transferable": True, "cmd": "enhance", "read": WRINKLES.params_of, "write": WRINKLES.install,
+                "why_not": "仅区域强度与左右联动状态；目标须有自己的真实单脸与皮肤分析，恢复笔迹不复制"},
     SKY.OP: {"params": ("recipe",), "state_fields": SKY.FIELDS, "single_face": False,
              "transferable": True, "cmd": "sky_replacement", "read": SKY.params_of, "write": SKY.install,
              "why_not": "仅天空素材与参数；目标必须已有自己的天空、人物声明及所需水面/地平线，不复制区域"},
@@ -250,6 +261,15 @@ def check_params(op: str, params: dict) -> dict:
     if op == SKY.OP:
         try: return SKY.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
+    if op == OPTICS_AUTO.OP:
+        try: return OPTICS_AUTO.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == LIP.OP:
+        try: return LIP.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == WRINKLES.OP:
+        try: return WRINKLES.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
     if op == OPTICS.OP:
         try: return OPTICS.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
@@ -338,6 +358,7 @@ def check_scope(ops) -> list[str]:
             raise ScopeError(f"module_scope 里有不可作用的模块 {op!r}：{MODULES[op].get('why_not')}")
         if op not in out:
             out.append(op)
+    if OPTICS.OP in out and OPTICS_AUTO.OP in out: raise ScopeError("镜头/透视手动保留模式与自动重算模式不能同时选择")
     _check_shared_strength(out, {})
     return out
 
@@ -383,9 +404,10 @@ def apply_modules(state: dict, mods: dict[str, dict], *, local_replace_legacy=Fa
 
 def restore_modules(current, previous, ops):
     """Restore only reviewed modules; retain exact legacy local-grade fields."""
-    ordinary = [op for op in ops if op != OP_LOCAL_GRADE]
+    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP)]
     result = apply_modules(current, params_of(previous, ordinary)) if ordinary else dict(current)
     if OP_LOCAL_GRADE in ops: LOCAL_GRADE.restore(result, previous)
+    if OPTICS_AUTO.OP in ops: OPTICS_AUTO.restore(result, previous)
     return result
 
 
@@ -437,6 +459,7 @@ def validate_preset(doc, *, builtin: bool = False) -> dict:
         if op == OP_LOCAL_GRADE:
             try: LOCAL_GRADE.portable(clean[op]['groups'])
             except ValueError as error: raise ScopeError(str(error)) from error
+    check_scope(list(clean))
     _check_shared_strength(list(clean), clean)
     return {"schema": PRESET_SCHEMA, "id": pid, "name": name, "kind": kind,
             "modules": clean, "author": str(doc.get("author") or "")[:80],

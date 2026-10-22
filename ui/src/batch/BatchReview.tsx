@@ -1,3 +1,4 @@
+import {AutomaticTransferReview} from '../optics/AutomaticTransferReview';
 import {MaskTransferEvidenceView} from '../localMasks/transfer';
 import {useEffect,useRef} from 'react';
 import type {BatchUi,BatchTarget} from './batchWorkflow';
@@ -43,7 +44,7 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
         {state.phase==='preflighting'&&<p>正在冻结源图配方并检查目标照片，尚未修改任何照片。</p>}
         {busy&&<p>正在等待引擎的实际结果，请勿重复提交。入队不代表已经完成。</p>}
         {state.message&&<p className="batchWarning">{state.message}</p>}
-        {(state.phase==='uncertain'||result?.outcome_unknown)&&<p className="batchWarning">部分改动可能已经生效。关闭此窗口不会撤销已发送的任务，收起后仍保留本次任务；请再次查询，或检查照片后明确结束跟踪，勿盲目重复同步。</p>}
+        {(state.phase==='uncertain'||result?.outcome_unknown)&&<p className="batchWarning">{state.operation==='preflight'?'只读预检尚未确认完成，尚未修改照片；收起后保留同一任务，请继续查询，不会重复解算。':'部分改动可能已经生效。关闭此窗口不会撤销已发送的任务，收起后仍保留本次任务；请再次查询，或检查照片后明确结束跟踪，勿盲目重复同步。'}</p>}
         {result?.success&&<p>{state.operation==='undo'?`已恢复 ${result.restored?.length??0} 张，冲突 ${result.conflicts?.length??0} 张。`:
           `已同步 ${result.target_outcomes?.filter(t=>t.outcome==='applied').length??0} 张，跳过 ${result.target_outcomes?.filter(t=>t.outcome==='skipped').length??0} 张。`}</p>}
       </div>
@@ -59,6 +60,7 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
       {!!targets.length&&<ul className="batchTargets">{targets.map(t=><li key={t.document_id} title={t.path}>
         <span>{file(t.path)}</span><span>{t.outcome==='applied'?'已同步':t.outcome==='unknown'?'结果未确认':t.outcome==='not_applied'?'未执行':reason(t.blocked)}</span>
         {t.local_mask_transfer&&<MaskTransferEvidenceView value={t.local_mask_transfer}/>}
+        {t.optical_transfer&&<AutomaticTransferReview report={t.optical_transfer}/>}
       </li>)}</ul>}
       {!!plan?.rejected_docs?.length&&<ul>{plan.rejected_docs.map((r,i)=><li key={i}>{String(r.doc)}：{r.error}</li>)}</ul>}
       {!!result?.conflicts?.length&&<ul>{result.conflicts.map((r,i)=><li key={i}>{file(r.path)}：{r.reason}</li>)}</ul>}

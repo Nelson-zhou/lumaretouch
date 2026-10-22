@@ -10,7 +10,7 @@ import time
 
 def read(path):
     binary = os.environ.get('LRT_EXIFTOOL') or shutil.which('exiftool')
-    if not binary or not Path(binary).is_file(): raise RuntimeError('RAW 镜头元数据读取需要显式安装 ExifTool；未自动下载')
+    if not binary or not Path(binary).is_file(): raise RuntimeError('RAW 镜头元数据缺少 ExifTool；正常 deb 依赖 libimage-exiftool-perl，请修复系统包或显式设置 LRT_EXIFTOOL。未自动下载')
     # -config '' disables executable per-user config. Only whitelisted camera
     # calibration tags leave the helper; GPS, owner, serial and paths are ignored.
     command = [str(Path(binary).resolve()),'-config','','-j','-n','-Make','-Model','-LensMake','-LensModel',

@@ -43,6 +43,8 @@ from .ops.deform import (KINDS, analytic_frontal_landmarks, check_amounts,
 from .ops.light import dodge_burn_t, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
 from .ops import enhance as ENH
 from . import under_eye_layer as UNDER
+from . import lip_makeup_runtime as LIPR, lip_makeup_layer as LIPL, lip_makeup_state as LIPS
+from . import facial_wrinkle_runtime as WRUNTIME, facial_wrinkle_layer as WLAYER, facial_wrinkle_state as WSTATE
 from .ops.grade import (DH_LIMIT, DS_LIMIT, DV_LIMIT, check_params, grade_t)
 from .ops.geometry import (MAX_ANGLE as GEOM_ANGLE_LIMIT, check as geometry_check,
                           crop_rotate_t, is_identity as geometry_identity,
@@ -218,7 +220,10 @@ class PreviewPipeline:
         # 判据取**源片**那份颜色而不是屏幕上那份：这一层找的是“这里是不是眼白/牙齿”
         # （身份），身份必须在未上色的像素上判，否则一张橙色 LUT 会把嘴唇认成牙齿
         # （与肤色定向“所见即所调”的口径相反，差别写在 ops/enhance.py 头部）。
+        WRUNTIME.clear_face(self)
+        LIPR.clear_face(self); self.lip_makeup = LIPS.neutral(); self.lip_makeup_suspended = None
         self.enhance_amounts: dict = {k: 0.0 for k in ENH.AMOUNT_KEYS}
+        WRUNTIME.clear_layer(self)
         self.enhance_lm_sig = None
         self.under_eye_layer = None
         self.under_eye_delta = None
@@ -345,6 +350,8 @@ class PreviewPipeline:
         只放场、不放参数：参数（三个数）是用户意图，属于文档状态，由命令层与工程档管；
         场是这份意图在这张图上的落地物，可以随时从关键点重算。
         """
+        WRUNTIME.clear_face(self)
+        LIPR.clear_face(self); self.lip_makeup = LIPS.neutral(); self.lip_makeup_suspended = None
         self.enhance_lm_sig = None
         self.under_eye_layer = None
         self.under_eye_delta = None
@@ -498,7 +505,7 @@ class PreviewPipeline:
             # Recover only smoothing's contribution, preserving repair and light.
             out = self.effect_recovery.apply('skin_smoothing', base, out)
         # Actual order: repair/light + smoothing/recovery -> fabric/recovery ->
-        # automatic deform -> enhance -> exposure -> levels -> curves -> HSL ->
+        # studio -> facial wrinkles/recovery -> automatic deform -> enhance -> exposure -> levels -> curves -> HSL ->
         # LUT -> legacy grade -> independent local grades -> background/recovery
         # -> manual liquify -> geometry. Source masks stay at their own consumers;
         # the final manual stage moves the complete processed RGB only.
@@ -506,6 +513,10 @@ class PreviewPipeline:
         # later effects continue to consume the recovered pixels normally.
         out = self.effect_recovery.apply('fabric_fine', out, self.fabric.apply(out))
         out = self.studio_background.apply(out)
+        WLAYER.refresh_source(self)
+        out = self.effect_recovery.apply('facial_wrinkles', out, WLAYER.apply_delta(self, out))
+        LIPR.refresh_source(self)
+        out = self.effect_recovery.apply('lip_makeup', out, LIPL.apply_delta(self, out))
         out = self.apply_enhance(self.apply_deform(out))
         if scope_tap is not None: scope_tap("wb-input", out)
         if render_stage == 'wb-input':
@@ -551,6 +562,8 @@ class PreviewPipeline:
                 f"{precompute.landmarks.nbytes}→{lb}；常驻张量与 CPU 原件不是同一份东西")
         # 先写新引用再释放旧张量：掩膜按通道堆在一起，旧的不放会多占一份显存
         # （torch 会自动回收引用计数的旧张量，这里注释只说清为什么不需要手动 clear）
+        WRUNTIME.install_face(self, precompute)
+        LIPR.install_face(self, precompute)
         self.masks_gpu = masks
         self.mask_names = names
         self.landmarks_gpu = lm
@@ -568,6 +581,8 @@ class PreviewPipeline:
         self.masks_gpu = None
         self.mask_names = []
         self.landmarks_gpu = None
+        WRUNTIME.clear_face(self)
+        LIPR.clear_face(self); self.lip_makeup = LIPS.neutral(); self.lip_makeup_suspended = None
         # 调色作用域里 skin 是唯一靠掩膜活着的那个：掩膜一走还留着 scope=skin，
         # 下一帧渲染就是一条取不到权重的异常（与下面单位场“无源之水”同一条理由）。
         # brush 靠的是自己那份区域，不受 clear_face 影响。
@@ -1664,13 +1679,14 @@ class PreviewPipeline:
         几何校验拒了的侧脸）是一层没点火的层。让 `lit=true` 与画面互相打脸，就是面板替
         引擎说谎——所以判据必须把场也算进来（`grade` 那层没有这个问题：它的场是用户画的）。
         """
-        if not any(float(v) != 0.0 for v in self.enhance_amounts.values()):
+        if not WSTATE.active_enhance(self.enhance_amounts):
             return False
-        return bool((self.under_eye_delta is not None and bool(self.under_eye_delta.any())) or
+        return bool((self.facial_wrinkle_delta is not None and bool(self.facial_wrinkle_delta.any())) or
+                    (self.under_eye_delta is not None and bool(self.under_eye_delta.any())) or
                     (self.enhance_gpu is not None and any(self.enhance_amounts.get(k, 0) > 0 and
                      float(self.enhance_gpu[i].max()) > 0 for i, k in enumerate(ENH.SUBS))))
 
-    def build_enhance(self, landmarks) -> dict:
+    def build_enhance(self, landmarks, *, amounts=None) -> dict:
         """从 478 点重画这一层：几何栅格 + 内容门，然后上一次卡。
 
         挂层成本一次性报出去（`enhance_build_ms`）：它与每帧的 `enhance_ms` 是两种钱，
@@ -1679,6 +1695,17 @@ class PreviewPipeline:
         if self.src_f32 is None:
             raise RuntimeError("build_enhance 需要先 load_rgb_u8/load_rgb_f32")
         t0 = time.perf_counter()
+        requested = ENH.check_amounts(self.enhance_amounts if amounts is None else amounts)
+        if WSTATE.active(requested) and not any(requested[k] for k in ENH.AMOUNT_KEYS if k not in WSTATE.INTENT_KEYS):
+            # Wrinkle-only work must not inherit older eye ROI rejection for a
+            # clipped face. Its regions independently report visible support.
+            self.clear_enhance_field()
+            self.enhance_facts = {}
+            self.enhance_info = {}
+            self.enhance_lm_sig = self._lm_fingerprint(landmarks)
+            WRUNTIME.build_preview(self, landmarks)
+            self.enhance_build_ms = round((time.perf_counter() - t0) * 1000, 2)
+            return self._enhance_payload(layer_recomputed=True)
         reg = ENH.geometry(landmarks, self.h, self.w)
         y0, x0, fh, fw = reg.window
         # 只把窗口那一片搬下来（不是整幅）：内容门要的只是这一块，而整幅 D2H 在
@@ -1698,6 +1725,7 @@ class PreviewPipeline:
         self.under_eye_layer = UNDER.UnderEyeLayer(window, pixels, lm)
         self.under_eye_layer.source_version = self.repair_version
         self.enhance_facts = facts
+        WRUNTIME.build_preview(self, landmarks)
         self.enhance_info = reg.info
         self.enhance_build_ms = round((time.perf_counter() - t0) * 1000.0, 2)
         return self._enhance_payload(layer_recomputed=True, build_ms=self.enhance_build_ms)
@@ -1739,12 +1767,15 @@ class PreviewPipeline:
         arr = np.ascontiguousarray(np.asarray(landmarks, dtype=np.float32))
         return hash(arr.tobytes())
 
-    def enhance_needs_rebuild(self, landmarks) -> bool:
+    def enhance_needs_rebuild(self, landmarks, *, amounts=None) -> bool:
         """这张场还能不能复用：没挂过、或关键点变了，就得重画。"""
+        if amounts is not None and self.enhance_gpu is None and any(amounts.get(k, 0) for k in ENH.AMOUNT_KEYS if k not in WSTATE.INTENT_KEYS):
+            return True
         return self.enhance_lm_sig != self._lm_fingerprint(landmarks)
 
     def clear_enhance_field(self) -> None:
         """放下权重场（参数不动）。没场的层就是没点火，`has_enhance()` 会如实说 false。"""
+        WRUNTIME.clear_layer(self)
         self.enhance_lm_sig = None
         self.under_eye_layer = None
         self.under_eye_delta = None
@@ -1758,6 +1789,8 @@ class PreviewPipeline:
     def set_enhance(self, amounts) -> dict:
         """提交三个数。先全量校验，后才写入——被拒不留半截状态（与各层 setter 同规）。"""
         checked = ENH.check_amounts(amounts)
+        WLAYER.refresh_source(self)
+        WRUNTIME.solve_preview(self, checked)
         UNDER.refresh_source(self)
         if self.under_eye_layer is not None:
             delta = self.under_eye_layer.solve(checked)
@@ -1811,7 +1844,7 @@ class PreviewPipeline:
 
     def enhance_resident_bytes(self) -> int:
         """本层账单：窗口那一片 float32 权重场。没挂就是 0（不是“查过没有”的 0）。"""
-        n = 0
+        n = WRUNTIME.resident_bytes(self) + LIPR.resident_bytes(self)
         if self.under_eye_delta is not None:
             n += self.under_eye_delta.numel() * self.under_eye_delta.element_size()
         if self.under_eye_layer is not None:
@@ -1832,15 +1865,16 @@ class PreviewPipeline:
         推断出来的那一句在换图之后就是说谎。
         """
         a = dict(self.enhance_amounts)
-        subs = list(ENH.AMOUNT_KEYS)
+        subs = list(ENH.EFFECT_KEYS)
         facts = self.enhance_facts or {}
         return {
-            "enhance_amounts": {k: float(a[k]) for k in subs},
+            "enhance_amounts": {k: float(a[k]) for k in ENH.AMOUNT_KEYS},
             "enhance_subs": subs,
             "enhance_limit": float(ENH.AMOUNT_LIMIT),
-            "enhance_set": bool(any(float(a[k]) != 0.0 for k in subs)),
+            "enhance_set": WSTATE.active_enhance(a),
+            "enhance_facial_wrinkles": {k: dict(facts.get(k) or {}) for k in WSTATE.KEYS},
             "enhance_lit": bool(self.has_enhance()),
-            "enhance_built": bool(self.enhance_gpu is not None),
+            "enhance_built": bool(self.enhance_gpu is not None or self.facial_wrinkle_layer is not None or self.facial_wrinkle_tile_key is not None),
             "enhance_gated_px": {k: int((facts.get(k) or {}).get("gated_px", 0)) for k in subs},
             "enhance_geom_px": {k: int((facts.get(k) or {}).get("geom_px", 0)) for k in subs},
             "enhance_reason": {k: (facts.get(k) or {}).get("reason") for k in subs},

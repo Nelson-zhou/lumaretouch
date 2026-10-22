@@ -15,6 +15,8 @@ mod edit_commands;
 mod levels_core;
 mod levels_api;
 mod fabric_api;
+mod lip_makeup_api;
+mod facial_wrinkle_api;
 mod layout_print_api;
 mod color_scopes_api;
 mod color_scopes_host;
@@ -1207,22 +1209,10 @@ fn enhance(
     veins: Option<f64>,
     catchlight_left: Option<f64>,
     catchlight_right: Option<f64>,
+    wrinkles: Option<Value>,
 ) -> Result<Value, String> {
-    let mut cmd = json!({"cmd": "enhance", "action": action});
-    if let Some(v) = dark_circles { cmd["dark_circles"] = json!(v); }
-    if let Some(v) = eye_bags { cmd["eye_bags"] = json!(v); }
-    if let Some(v) = veins { cmd["veins"] = json!(v); }
-    if let Some(v) = catchlight_left { cmd["catchlight_left"] = json!(v); }
-    if let Some(v) = catchlight_right { cmd["catchlight_right"] = json!(v); }
-    if let Some(v) = sclera {
-        cmd["sclera"] = json!(v);
-    }
-    if let Some(v) = iris {
-        cmd["iris"] = json!(v);
-    }
-    if let Some(v) = teeth {
-        cmd["teeth"] = json!(v);
-    }
+    let cmd = facial_wrinkle_api::enhance_command(&action,
+        [sclera, iris, teeth, dark_circles, eye_bags, veins, catchlight_left, catchlight_right], wrinkles)?;
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
 }
@@ -2051,7 +2041,7 @@ fn main() {
             color_picker_capture_api::color_picker_capture, color_picker_capture_api::color_picker_capture_status, color_picker_capture_api::color_picker_capture_frame,
             color_picker_api::color_picker, color_picker_api::color_picker_result,
             white_balance_capture_api::white_balance_capture, white_balance_capture_api::white_balance_capture_status, white_balance_capture_api::white_balance_capture_frame, white_balance_capture_api::white_balance_pick,
-            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
+            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, lip_makeup_api::lip_makeup, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
             prompted_mask_api::prompted_masks, prompted_mask_api::prompted_masks_status,
             prompted_model_api::prompted_model, prompted_model_api::prompted_model_status,
             report, quit

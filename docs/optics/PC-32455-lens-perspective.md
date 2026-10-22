@@ -188,19 +188,17 @@ resource failure and exact neutral old behavior. Representative RAW+nonRAW image
 are required before claiming optical quality. These are acceptance obligations,
 not invented pass results or a regression-writing campaign.
 
-## Remaining implementation item: frozen automatic transfer
+## Automatic transfer and runtime follow-up
 
-This package is a staged optics delivery, not completion of automatic preset/batch
-transfer. The interactive automatic lens and perspective controls are connected;
-the automatic per-target transfer helper is not yet exposed by transactional UI.
-Concrete missing seams: `batch_preflight_controller.PlanPorts` has no target
-pre-optics raster/metadata preparation callback, and its target preparation calls
-`local_grade_runtime.prepare_modules` only. `local_grade_preset_review.prepare`
-currently rejects presets without local-grade groups. Both frozen review records
-need a source/DB/version-bound optical preparation and commit-time revalidation,
-plus a portable auto-request scope separate from its resolved per-target result.
-A raw source thumbnail is not a valid substitute for the target's frozen edited
-pre-optics raster. The follow-up must expose smart/horizontal/vertical and real
-Lensfun rematching as per-target requests, report each failed target, retain
-one-shot preflight/undo, and never copy source profile/solve/guides. This work stays
-open; manual-only portability is not a claim that it was removed from scope.
+The previously recorded frozen automatic-transfer implementation gap is now wired
+through both transaction controllers and real preset/batch review UI. See
+[AUTOMATIC-TRANSFER-HOOKS.md](AUTOMATIC-TRANSFER-HOOKS.md) for full candidate binding,
+per-target matching/solver, proof validation, errors and exact undo. No source
+profile, guide or solved matrix is copied. This closes the source-wiring gap, not
+Qoder's unrun behavioral/quality acceptance.
+
+Normal packaging now produces and carries the actual optical runtime/database
+bundle before staging, rather than only shipping optional requirements. See
+[INSTALL.md](INSTALL.md) for the independent current official calibration pin,
+official compatibility conversion, offline installation, licenses and platform
+requirements. No dependency build/install/download was executed in this task.

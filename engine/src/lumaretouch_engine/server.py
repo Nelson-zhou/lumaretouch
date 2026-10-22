@@ -41,6 +41,8 @@ from .levels_controller import LevelsController, LevelsPorts
 from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
 from . import fabric_controller as FABRIC
 from .ops import enhance as ENH
+from . import facial_wrinkle_state as WSTATE
+from . import lip_makeup_state as LIPS, lip_makeup_runtime as LIPR, lip_makeup_command as LIPC
 from .ops.grade import DH_LIMIT, DS_LIMIT, DV_LIMIT, GradeError, check_params
 from .ops.hsl import (BAND_CENTERS, BAND_NAMES, HUE_LIMIT as HSL_HUE_LIMIT,
                       LUM_LIMIT as HSL_LUM_LIMIT, SAT_LIMIT as HSL_SAT_LIMIT)
@@ -272,7 +274,7 @@ class Engine(StudioToolsMixin):
         self._grade_scope = "all"
         self._grade_mask = None
         self._local_masks = LM.empty(); self._local_grade_layers = LG.empty()
-        self._effect_recovery = ERS.empty(); self._manual_liquify = MLS.empty(); self._studio_background = SBS.empty(); self._optics = OPS.empty(); self._sky_replacement = SKS.empty()
+        self._effect_recovery = ERS.empty(); self._manual_liquify = MLS.empty(); self._studio_background = SBS.empty(); self._optics = OPS.empty(); self._sky_replacement = SKS.empty(); self._lip_makeup = LIPS.neutral()
         # PORTRAIT-009 眼牙增强：三个子功能的值 + 会话里有没有那份场 + **它属于哪一张脸**。
         # `box` 这一格不是装饰：这一层的掩膜是从**那一张**的 478 点画出来的。换人选时若
         # 不认脸盒，就会把 A 的美白静默涂到 B 身上——那是 SCOPE-001 拦的同一件事，
@@ -379,7 +381,7 @@ class Engine(StudioToolsMixin):
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "studio_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1,"lip_makeup_protocol":1, "studio_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -428,7 +430,7 @@ class Engine(StudioToolsMixin):
               "deform_kinds": list(KINDS),
               # 眼牙增强（PORTRAIT-009）的三个子功能名单与值域同样由引擎说：前端自己
               # 抄一份"眼白/虹膜/牙齿"就是下一轮加一格时漏改的那一处（而且 TS 一句不报）
-              "enhance_subs": list(ENH.AMOUNT_KEYS),
+              "enhance_subs": list(ENH.EFFECT_KEYS),
               "enhance_range": [0.0, float(ENH.AMOUNT_LIMIT)],
               "enhance_actions": list(self.ENHANCE_ACTIONS),
               # 人脸名单能收的动作（PORTRAIT-006）：前端自己刻一份就是下一轮加动作时
@@ -878,7 +880,7 @@ class Engine(StudioToolsMixin):
                   "_light_ops", "_light_redo", "_light", "_deform", "_deform_defer",
                   "_deform_default", "_deform_overrides", "_lut",
                   "_lut_amount",
-                  "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_local_masks", "_local_grade_layers", "_effect_recovery", "_manual_liquify", "_studio_background", "_optics", "_sky_replacement", "_bg",
+                  "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_local_masks", "_local_grade_layers", "_effect_recovery", "_manual_liquify", "_studio_background", "_optics", "_sky_replacement", "_lip_makeup", "_bg",
                   "_enhance", "_enhance_defer",
                   "_precompute", "_precompute_backend", "_face_index", "_face_box",
                   "_face_explicit", "_face_manual",
@@ -932,7 +934,7 @@ class Engine(StudioToolsMixin):
                 "_deform_default": {k: 0.0 for k in KINDS}, "_deform_overrides": [],
                 "_lut": None, "_lut_amount": 1.0, "_lut_preset": None,
                 "_grade": (0.0, 0.0, 0.0, 1.0),
-                "_grade_scope": "all", "_grade_mask": None, "_local_masks": LM.empty(), "_local_grade_layers": LG.empty(), "_effect_recovery": ERS.empty(), "_manual_liquify": MLS.empty(), "_studio_background": SBS.empty(), "_optics": OPS.empty(), "_sky_replacement": SKS.empty(),
+                "_grade_scope": "all", "_grade_mask": None, "_local_masks": LM.empty(), "_local_grade_layers": LG.empty(), "_effect_recovery": ERS.empty(), "_manual_liquify": MLS.empty(), "_studio_background": SBS.empty(), "_optics": OPS.empty(), "_sky_replacement": SKS.empty(), "_lip_makeup": LIPS.neutral(),
                 "_enhance": dict(amounts={k: 0.0 for k in ENH.AMOUNT_KEYS}, built=False, box=None),
                 "_enhance_defer": False,
                 "_bg": dict(active=False, matte=None, bg=None, backend=None,
@@ -979,7 +981,7 @@ class Engine(StudioToolsMixin):
               # 不会互相改；真要出现就地写，这里就得改成拷贝。
               "_lut": self._lut, "_lut_amount": float(self._lut_amount),
               "_lut_preset": self._lut_preset, "_grade": tuple(self._grade),
-              "_grade_scope": str(self._grade_scope), "_grade_mask": self._grade_mask, "_local_masks": LM.check(self._local_masks), "_local_grade_layers": LG.check(self._local_grade_layers), "_effect_recovery": ERS.check(self._effect_recovery), "_manual_liquify": MLS.check(self._manual_liquify), "_studio_background": SBS.check(self._studio_background), "_optics": OPS.check(self._optics), "_sky_replacement": SKS.check(self._sky_replacement),
+              "_grade_scope": str(self._grade_scope), "_grade_mask": self._grade_mask, "_local_masks": LM.check(self._local_masks), "_local_grade_layers": LG.check(self._local_grade_layers), "_effect_recovery": ERS.check(self._effect_recovery), "_manual_liquify": MLS.check(self._manual_liquify), "_studio_background": SBS.check(self._studio_background), "_optics": OPS.check(self._optics), "_sky_replacement": SKS.check(self._sky_replacement), "_lip_makeup": LIPS.check(self._lip_makeup),
               # 整份新抄：amounts 那个 dict 不能与 live 共享（同 _capture_state 头部那条理由，
               # 两个文档共用一个 dict，下一笔 set 会同时改掉两份状态）
               "_enhance": {"amounts": dict(self._enhance["amounts"]),
@@ -1013,7 +1015,7 @@ class Engine(StudioToolsMixin):
         for key in ("_repair_ops", "_redo_ops"):
             validate_repair_ops(st.get(key, []), shape=st.get("_proxy"))
         # Validate WB and compile before changing any live field.
-        st = {**st, "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0)), "_local_masks": LM.check(st.get("_local_masks")), "_local_grade_layers": LG.check(st.get("_local_grade_layers")), "_effect_recovery": ERS.check(st.get("_effect_recovery")), "_manual_liquify": MLS.check(st.get("_manual_liquify")), "_studio_background": SBS.check(st.get("_studio_background")), "_optics": OPS.check(st.get("_optics")), "_sky_replacement": SKS.check(st.get("_sky_replacement"))}
+        st = {**st, "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0)), "_local_masks": LM.check(st.get("_local_masks")), "_local_grade_layers": LG.check(st.get("_local_grade_layers")), "_effect_recovery": ERS.check(st.get("_effect_recovery")), "_manual_liquify": MLS.check(st.get("_manual_liquify")), "_studio_background": SBS.check(st.get("_studio_background")), "_optics": OPS.check(st.get("_optics")), "_sky_replacement": SKS.check(st.get("_sky_replacement")), "_lip_makeup": LIPS.check(st.get("_lip_makeup"))}
         st = WB.normalize_state(st)
         WB.prepare_state(st)
         # Old projects predate curves. Validate/deep-copy before changing any live field.
@@ -1053,8 +1055,12 @@ class Engine(StudioToolsMixin):
         # 眼牙那一份从 JSON 回来时：amounts 可能是 list/字符串/缺键，box 可能是数组，
         # built/defer 可能是 None。一律归一，判据（"有没有这一层"）不许时灵时不灵
         _en = self._enhance or {}
+        _wrinkle = WSTATE.check(_en.get("amounts") or {})
         _am = {}
         for _k in ENH.AMOUNT_KEYS:
+            if _k in _wrinkle:
+                _am[_k] = _wrinkle[_k]
+                continue
             try:
                 _am[_k] = float((_en.get("amounts") or {}).get(_k, 0.0) or 0.0)
             except (TypeError, ValueError):
@@ -1063,7 +1069,7 @@ class Engine(StudioToolsMixin):
         self._enhance = {"amounts": _am, "built": bool(_en.get("built")),
                          "box": (None if not _box else tuple(float(v) for v in _box))}
         self._enhance_defer = bool(self._enhance_defer)
-        if not any(v != 0.0 for v in _am.values()):
+        if not WSTATE.active_enhance(_am):
             # 全零不构成一层：defer 留着只会在下一次分析后报一个"画了个空场"
             self._enhance_defer = False
         self._bg = dict(self._bg)
@@ -1184,7 +1190,7 @@ class Engine(StudioToolsMixin):
     # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
     # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
     EDIT_CMDS = ("set_strength", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light", "deform", "lut", "grade", "background",
-                 "crop", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "preset", "batch", "face", "enhance", "fabric")
+                 "crop", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "preset", "batch", "face", "enhance", "lip_makeup", "fabric")
     # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
     # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
     # 而 batch 改的就是活动文档的配方——不在这里它就会“同步完了而徽章不亮”。
@@ -1420,7 +1426,7 @@ class Engine(StudioToolsMixin):
             emit({"event": "engine_warn", "warn": "蒙版尚未恢复：保留编辑参数，暂不应用该范围的磨皮，不回退为全图"})
         effective_strength, effective_channel = self._retouch_render_args()
         FABRIC.sync(self)
-        LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self)
+        LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self)
         SKR.render_proxy(self,lambda:pipe.render(effective_strength, channel=effective_channel, **self._params))
         with self._wlock:
             seq, t_emit, slot = shm.write_frame(pipe.read_back(), presentation=self._frame_presentation(str(t0), (d.src_w,d.src_h)))
@@ -1537,7 +1543,7 @@ class Engine(StudioToolsMixin):
                 crop["out_full"] = list(_gsz(int(row["src_w"]), int(row["src_h"]),
                                              tuple(self._crop_rect),
                                              float(self._crop_rotation)))
-        return {"document_id": self._load_id, "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self),
+        return {"document_id": self._load_id, "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self), "lip_makeup": LIPR.report(self),
                 "strength": float(self._strength), "params": dict(self._params),
                 "channel": self._channel,
                 "history": self._history_report(),
@@ -1567,19 +1573,20 @@ class Engine(StudioToolsMixin):
                 # 原因"。UI 的开关与提示必须从这里取：自己记一份就会在换图/重开工程/换人选
                 # 之后替引擎说谎（这一层的 reason 有五种来源，都不是前端能推出来的）
                 "enhance": {"amounts": dict(self._enhance["amounts"]),
-                            "subs": list(ENH.AMOUNT_KEYS),
+                            "subs": list(ENH.EFFECT_KEYS),
                             "limit": [0.0, float(ENH.AMOUNT_LIMIT)],
                             "lit": bool(self._vram.has_enhance()) if self._vram else False,
                             "built": bool(self._enhance["built"]),
                             "defer": bool(self._enhance_defer),
                             "box": (list(self._enhance["box"]) if self._enhance.get("box")
                                     else None),
+                            "facial_wrinkles": {k: dict((self._vram.enhance_facts if self._vram else {}).get(k) or {}) for k in WSTATE.KEYS},
                             "gated_px": {k: int(((self._vram.enhance_facts if self._vram
                                                   else {}) or {}).get(k, {})
-                                                 .get("gated_px", 0)) for k in ENH.AMOUNT_KEYS},
+                                                 .get("gated_px", 0)) for k in ENH.EFFECT_KEYS},
                             "reason": {k: ((self._vram.enhance_facts if self._vram else {})
                                            or {}).get(k, {}).get("reason")
-                                       for k in ENH.AMOUNT_KEYS}},
+                                       for k in ENH.EFFECT_KEYS}},
                 "exposure": {"ev": float(self._exposure[0]),
                              "temperature_shift": float(self._exposure[1]),
                              "tint_shift": float(self._exposure[2]),
@@ -1613,13 +1620,12 @@ class Engine(StudioToolsMixin):
                 "manual_liquify": len(MLS.check(st.get("_manual_liquify"))["strokes"]),
                 "optics": OPS.active(st.get("_optics")),
                 "sky_replacement": SKS.check(st.get("_sky_replacement"))["enabled"],
-                "studio_background": SBS.active(st.get("_studio_background")),
+                "studio_background": SBS.active(st.get("_studio_background")), "lip_makeup": LIPS.active(st.get("_lip_makeup")),
                 "fabric": bool(st.get("_fabric_amount", 0.0)), "repair": len(st["_repair_ops"]), "light": len(st["_light_ops"]),
                 "deform": any(abs(float(v)) > 0.0 for v in st["_deform"]["amounts"].values()),
                 "lut": st["_lut"] is not None, "lut_preset": st["_lut_preset"],
                 "grade": st["_grade"] != (0.0, 0.0, 0.0, 1.0),
-                "enhance": any(float(v) != 0.0
-                               for v in (st["_enhance"]["amounts"] or {}).values()),
+                "enhance": WSTATE.active_enhance(st["_enhance"]["amounts"] or {}),
                 # 旧工程档里可能还没有这一格：缺键按“没调过”算，不拿 KeyError 把
                 # 整条底片条打成红。
                 "hsl": any(float(v) != 0.0 for v in (st.get("_hsl") or ())),
@@ -1665,10 +1671,15 @@ class Engine(StudioToolsMixin):
                 # 「这张糊不糊」就是又造一个不可复算的出处
                 "pick": d.get("pick"), "pick_error": d.get("pick_error")}
 
+    def _prepare_optics_target(self, row, candidate, document_id, revision):
+        from .optics_transfer_engine import prepare_target
+        return prepare_target(self, row, candidate, document_id, revision)
+
     def _preset_controller(self):
         controller = self.__dict__.get("_live_presets")
         if controller is None:
             controller = PRS.PresetController(PRS.PresetPorts(
+                prepare_optics=self._prepare_optics_target,
                 guard=lambda label: self._guard_editable(label), document_id=lambda: self._load_id,
                 capture=lambda: self._capture_state(), replay=lambda state, **kw: self._replay_state(state, **kw),
                 face_check=lambda: self._face_known_single(None, live=True), status=lambda: self.doc_state(),
@@ -2420,6 +2431,7 @@ class Engine(StudioToolsMixin):
         # 三层里任何一层有劲儿都要补这一次分析（判据与 `_deform_intent` 同一处）：
         # 只认 `_deform["amounts"]` 会漏掉“多人图重开后还没有脸盒，而默认/覆盖都在等”
         # 那一种——合成出来是零，而用户的活儿实实在在还在那两份里
+        if LIPS.active(st.get("_lip_makeup")): return True
         if self._enhance_intent(st):
             # 眼牙那一层（PORTRAIT-009）与形变同一条：它的掩膜是从关键点重画的，
             # 没有关键点就没有这一层。少认这一格就是"重开工程后美白静消失"
@@ -2805,13 +2817,16 @@ class Engine(StudioToolsMixin):
         硬套会造出"一个函数两种语义"的那种可读性债务。
         """
         en = (st if st is not None else self._capture_state())["_enhance"]
-        return any(float(v) != 0.0 for v in (en.get("amounts") or {}).values())
+        return WSTATE.active_enhance(en.get("amounts") or {})
 
     def _drop_enhance(self, why: str) -> None:
         """放下会话里那一场（参数与脸盒留在文档状态里）。"""
         if self._vram is not None:
             self._vram.clear_enhance_field()
-        self._enhance = dict(amounts=dict(self._enhance["amounts"]), built=False, box=None)
+        self._enhance = dict(amounts=dict(self._enhance["amounts"]), built=False, box=self._enhance.get("box"))
+
+    def cmd_lip_makeup(self, p):
+        LIPC.apply(self, p, emit)
 
     def _restore_enhance(self, prev: dict) -> None:
         """被拒/回滚时把文档状态与会话那一场一起退回上一版（不留半截）。"""
@@ -2820,14 +2835,17 @@ class Engine(StudioToolsMixin):
         self._enhance_defer = bool(prev.get("_defer"))
         if self._vram is None:
             return
-        if not any(float(v) != 0.0 for v in self._enhance["amounts"].values()):
+        if not WSTATE.active_enhance(self._enhance["amounts"]):
             self._vram.clear_enhance()
+            self._vram.set_enhance(self._enhance["amounts"])
         elif prev.get("built") and self._precompute is not None:
             try:
-                self._vram.build_enhance(self._precompute.landmarks)
+                self._vram.build_enhance(self._precompute.landmarks, amounts=self._enhance["amounts"])
                 self._vram.set_enhance(self._enhance["amounts"])
             except Exception:                            # noqa: BLE001
                 self._vram.clear_enhance_field()
+        else:
+            self._vram.clear_enhance_field()
 
     def _rehang_enhance(self, pc=None, *, replayed_for: str, write_frame: bool = True) -> None:
         """关键点回来后把这一层接回去（重开工程 / 迁会话 / 换后端 / 换人选都走这里）。
@@ -2879,7 +2897,7 @@ class Engine(StudioToolsMixin):
                 self._refresh_frame_after_drop("enhance")
             return
         try:
-            info = self._vram.build_enhance(pc.landmarks)
+            info = self._vram.build_enhance(pc.landmarks, amounts=self._enhance["amounts"])
             self._vram.set_enhance(self._enhance["amounts"])
             info = self._vram._enhance_payload(layer_recomputed=True)
         except (ENH.EnhanceError, ValueError, RuntimeError) as e:
@@ -2989,7 +3007,7 @@ class Engine(StudioToolsMixin):
         prev = {"amounts": dict(self._enhance["amounts"]), "built": bool(self._enhance["built"]),
                 "box": self._enhance.get("box"), "_defer": bool(self._enhance_defer)}
         pc = self._precompute
-        if any(v != 0.0 for v in amounts.values()):
+        if WSTATE.active_enhance(amounts):
             # SCOPE-001：这一层的作用面是"某一个人"。多人图里没显式选定就不许替用户选
             blocked, why = self._face_guard()
             if blocked:
@@ -3013,30 +3031,29 @@ class Engine(StudioToolsMixin):
                       "（template/synthetic 只服务通路回归）"})
                 return
         try:
-            if any(v != 0.0 for v in amounts.values()):
+            if WSTATE.active_enhance(amounts):
                 # build_enhance 的返回值不直接用：set_enhance 之后那份才是最终状态，
                 # 而两处都从同一个 `_enhance_payload` 组装（事件只有一个形状来源）。
                 # 场只在几何变了的时候重画（关键点没变而滑块动了 = 只改系数）。
                 # 这条复用判据不是性能偏好：它是"拖滑块时到底有没有重算掩膜"那一句
                 # 产品主张的实现，而性能那一臂把它当回归判据（拖动期间 layer_recomputed
                 # 必须一路 False）。
-                rebuilt = self._vram.enhance_needs_rebuild(pc.landmarks)
+                rebuilt = self._vram.enhance_needs_rebuild(pc.landmarks, amounts=amounts)
                 if rebuilt:
-                    self._vram.build_enhance(pc.landmarks)
+                    self._vram.build_enhance(pc.landmarks, amounts=amounts)
                 self._vram.set_enhance(amounts)
                 info = self._vram._enhance_payload(layer_recomputed=rebuilt)
                 self._enhance = dict(amounts=dict(amounts), built=True,
                                      box=self._person_key(self._face_box))
                 self._enhance_defer = False
             else:
-                info = self._vram.clear_enhance()
+                self._vram.clear_enhance()
+                info = self._vram.set_enhance(amounts)
                 self._enhance = dict(amounts=amounts, built=False, box=None)
                 self._enhance_defer = False
         except (ENH.EnhanceError, ValueError, RuntimeError) as e:
-            self._vram.clear_enhance_field()
-            self._enhance = dict(amounts=dict(amounts), built=False, box=None)
-            emit({"event": "error", "error": f"眼牙增强这一层挂不上，参数已生效但整层放下："
-                  f"{type(e).__name__}: {e}"})
+            self._restore_enhance(prev)
+            emit({"event": "error", "error": f"人物增强未提交，已保留上一配方：{type(e).__name__}: {e}"})
             return
         try:
             fr = self._write_current_frame("enhance")
@@ -3459,7 +3476,7 @@ class Engine(StudioToolsMixin):
                                f"!= 会话 {self._vram.w}x{self._vram.h}：不许把会话尺寸的帧写进别人的槽")
         t0 = monotonic_ns()
         # Original viewing bypasses all layers, rather than merely setting skin strength0.
-        if not original: FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self)
+        if not original: FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self)
         st, channel = (0.0, None) if original else self._retouch_render_args()
         if original:
             self._vram.render_original()
@@ -5648,7 +5665,7 @@ class Engine(StudioToolsMixin):
                 # 通道必须跟着会话一起迁移：不传 channel 的话，报表里 active_channel 还是 skin，
                 # 而给用户补发的是一帧全图渲染——字段与实际执行不一致正是本仓最贵那个坑的形状
                 strength, channel = self._retouch_render_args()
-                FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self)
+                FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self)
                 SKR.render_proxy(self,lambda:self._vram.render(strength, channel=channel, **self._params))
                 with self._wlock:
                     seq, t_emit, slot = self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation())
@@ -5677,7 +5694,7 @@ class Engine(StudioToolsMixin):
                     grade=tuple(st.get("_grade", (0.0, 0.0, 0.0, 1.0))),
                     grade_scope=str(st.get("_grade_scope") or "all"),
                     grade_mask=st.get("_grade_mask"), local_masks=LM.check(st.get("_local_masks")), local_mask_owner=LM.owner_from_state(st), local_grade_groups=LG.check(st.get("_local_grade_layers")),
-                    effect_recovery=ERS.check(st.get("_effect_recovery")), manual_liquify=MLS.check(st.get("_manual_liquify")), studio_background=SBS.check(st.get("_studio_background")), optics=OPS.check(st.get("_optics")), sky_replacement=SKS.check(st.get("_sky_replacement")),
+                    effect_recovery=ERS.check(st.get("_effect_recovery")), manual_liquify=MLS.check(st.get("_manual_liquify")), studio_background=SBS.check(st.get("_studio_background")), optics=OPS.check(st.get("_optics")), sky_replacement=SKS.check(st.get("_sky_replacement")), lip_makeup=LIPS.check(st.get("_lip_makeup")),
                     exposure=tuple(st.get("_exposure", (0.0,) * 7)),
                     exposure_ref_k=st.get("_exposure_ref_k"),
                     wb_options=WB.normalize_state(st)["_wb_options"],
@@ -5774,7 +5791,8 @@ class Engine(StudioToolsMixin):
             raise ExportError("该图片缺少所选蒙版，不能用全图处理替代局部作用域")
         if for_document:
             targeted = any(float(x) != 0 for x in ((snap.get("deform") or {}).get("amounts") or {}).values())
-            targeted |= any(float(x) != 0 for x in ((snap.get("enhance") or {}).get("amounts") or {}).values())
+            targeted |= LIPS.active(snap.get("lip_makeup"))
+            targeted |= WSTATE.active_enhance((snap.get("enhance") or {}).get("amounts") or {})
             if targeted:
                 raise ExportError("人物定向编辑缺少选定关键点，请完成该图片的分析后导出，不能替用户选择人物")
         from .face import MediaPipeFace
@@ -5964,7 +5982,7 @@ class Engine(StudioToolsMixin):
         # 这一批里前几张与后几张用的就不是同一套设置（而事件里只写了一份）
         snap = dict(strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
                     grade_scope=str(self._grade_scope), grade_mask=self._grade_mask, local_masks=LM.check(self._local_masks), local_mask_owner=LM.current_owner(self), local_grade_groups=LG.check(self._local_grade_layers),
-                    effect_recovery=ERS.check(self._effect_recovery), manual_liquify=MLS.check(self._manual_liquify), studio_background=SBS.check(self._studio_background), optics=OPS.check(self._optics), sky_replacement=SKS.check(self._sky_replacement),
+                    effect_recovery=ERS.check(self._effect_recovery), manual_liquify=MLS.check(self._manual_liquify), studio_background=SBS.check(self._studio_background), optics=OPS.check(self._optics), sky_replacement=SKS.check(self._sky_replacement), lip_makeup=LIPS.check(self._lip_makeup),
                     exposure=tuple(self._exposure), exposure_ref_k=self._exposure_ref_k,
                     wb_options=WB.check_options(self._wb_options),
                     hsl=tuple(self._hsl),
@@ -6278,6 +6296,7 @@ class Engine(StudioToolsMixin):
         fields["_studio_background"] = SBS.check(snap.get("studio_background"))
         fields["_optics"] = OPS.check(snap.get("optics"))
         fields["_sky_replacement"] = SKS.check(snap.get("sky_replacement"))
+        fields["_lip_makeup"] = LIPS.check(snap.get("lip_makeup"))
         return Engine._master16_blockers(SimpleNamespace(**fields),
             scale=snap.get("scale", 1), sharpen=snap.get("sharpen", 0.0))
 
@@ -6300,6 +6319,7 @@ class Engine(StudioToolsMixin):
         if SKS.check(getattr(self,'_sky_replacement',None))['enabled']:
             b.append('换天空（原件素材及区域全尺寸浮点重放）')
         if OPS.active(getattr(self,'_optics',None)): b.append('镜头/透视校正（完整浮点全局映射）')
+        if LIPS.active(getattr(self, '_lip_makeup', None)): b.append('唇妆增强（三个独立控件）')
         if SBS.active(getattr(self, '_studio_background', None)):
             b.append('影棚背景调整（须完整源图重新计算）')
         if ERS.enabled(getattr(self, '_effect_recovery', None)):
@@ -6606,7 +6626,7 @@ class Engine(StudioToolsMixin):
         self._attach_pipeline(self._src_rgb, adopt=True)
         if self._precompute is not None:
             self._rehang_precompute(replayed_for=replayed_for)
-        if strict_local: LM.sync(self, strict=True); LGR.sync(self, strict=True); ERR.sync(self, strict=True); MLR.sync(self, strict=True); SBR.sync(self, strict=True); OPR.sync(self, strict=True); SKR.sync(self, strict=True)
+        if strict_local: LM.sync(self, strict=True); LGR.sync(self, strict=True); ERR.sync(self, strict=True); MLR.sync(self, strict=True); SBR.sync(self, strict=True); OPR.sync(self, strict=True); SKR.sync(self, strict=True); LIPR.sync(self, strict=True)
         return self._write_current_frame(mode)
 
     def _face_known_single(self, row: dict | None, *, live: bool) -> tuple[str, str]:
@@ -6656,7 +6676,7 @@ class Engine(StudioToolsMixin):
                     current_index=lambda: self._doc_index,
                     remember_current=lambda: self._remember_current(),
                     index_of=lambda path: self._index_of(path)),
-                BS.BatchEditor(guard=lambda label: self._guard_editable(label),
+                BS.BatchEditor(prepare_optics=self._prepare_optics_target, guard=lambda label: self._guard_editable(label),
                     capture=lambda: self._capture_state(),
                     replay=lambda state, **kw: self._replay_state(state, **kw),
                     face_known_single=lambda row, **kw: self._face_known_single(row, **kw),
@@ -6762,7 +6782,7 @@ class Engine(StudioToolsMixin):
                # 眼牙增强（LNX-PORTRAIT-009）：它是一次编辑（进撤销栈、打脏标记），所以
                # 两个名单都要有它——上一轮加曝光时只改一边，得到的就是"拖完按撤销纹丝不动
                # 而 UI 一句也不说为什么"（CORE-006 为此专门加了一条用例）
-               "enhance", "fabric")
+               "enhance", "lip_makeup", "fabric")
     _HANDLED_LAMBDA = ("bench_stop",)      # 唯一不开成 cmd_* 的那条：只是置停止位
 
     def _dispatch_table(self) -> dict:

@@ -154,6 +154,39 @@ if [ -x "$prefix/bin/pip" ]; then
   echo "→ 运行时已存在：$prefix（幂等重跑 = 校验 + 补装）"
 fi
 
+# Normal releases ship a CPython 3.12 wheel, matching the existing uv runtime.
+# Locate the installer independently of src/: Tauri maps engine/src separately.
+optics_bundle=""
+optics_installer=""
+for base in "$here" "$engine_src" "$(dirname "$engine_src")"; do
+  if [ -f "$base/runtime/optics/BUNDLE.json" ] && [ -f "$base/setup-optics.py" ]; then
+    optics_bundle="$base/runtime/optics"; optics_installer="$base/setup-optics.py"; break
+  fi
+done
+if [ -z "$optics_bundle" ] && [ -f "$repo/build/optics/bundle/BUNDLE.json" ] && [ -f "$here/setup-optics.py" ]; then
+  optics_bundle="$repo/build/optics/bundle"; optics_installer="$here/setup-optics.py"
+fi
+export LRT_OPTICS_REQUIRED=0
+venv_python=python3
+if [ -n "$optics_bundle" ]; then
+  export LRT_OPTICS_REQUIRED=1
+  if [ "$dry" != 1 ]; then
+    # Check source/checksum/architecture/libc BEFORE any torch download.
+    python3 "$optics_installer" verify --bundle "$optics_bundle"
+    if [ -x "$pybin" ] && { [ "$force_new" = 0 ] || [ "$recheck" = 1 ]; }; then
+      "$pybin" -c 'import sys; assert sys.implementation.name == "cpython" and sys.version_info[:2] == (3,12), "此发行包要求 CPython 3.12。已有环境不会被静默替换，请另选 --prefix 或明确 --force-new。"'
+    elif ! command -v uv >/dev/null 2>&1; then
+      if command -v python3.12 >/dev/null 2>&1; then venv_python=python3.12
+      elif python3 -c 'import sys; assert sys.implementation.name == "cpython" and sys.version_info[:2] == (3,12)' 2>/dev/null; then venv_python=python3
+      else
+        echo "× 发行包使用 CPython 3.12；当前没有 uv 或 python3.12。请先安装官方 uv 或发行版 Python 3.12 + venv，再运行本脚本。未下载 GPU 依赖，未改动已有环境。" >&2
+        exit 1
+      fi
+    fi
+  else venv_python=python3.12
+  fi
+fi
+
 # ---------------------------------------------------------------- 自检
 # 自检跑的是引擎真正的 import 链，不是"torch 能不能 import"：server.py 一路会拉
 # vram/ops/guided 等模块，缺哪个包、哪个符号在这里就露出来了。
@@ -201,6 +234,11 @@ try:
                             all(v != "MISSING" for v in _models.values()) else "unavailable")
 except Exception as _e:
     info["face_backend"] = f"error: {type(_e).__name__}: {_e}"
+if os.environ.get("LRT_OPTICS_REQUIRED") == "1":
+    from lumaretouch_engine.optics_lensfun import database as _optics_database
+    _module, _database, _digest, _version = _optics_database()
+    info["optics_runtime"] = _version
+    info["optics_database_sha256"] = _digest
 print("LRT_RUNTIME_SELFCHK " + json.dumps(info, ensure_ascii=False))
 _variant = os.environ.get("LRT_VARIANT", "auto")
 if _variant != "cpu" and not info["gpu_available"]:
@@ -222,10 +260,11 @@ fi
 if [ "$dry" = 1 ]; then
   cat <<TXT
 --dry-run，未动磁盘。将执行：
-  1) 建 venv     $(command -v uv >/dev/null && echo "uv venv --seed --python 3.12 $prefix" || echo "python3 -m venv $prefix")
+  1) 建 venv     $(command -v uv >/dev/null && echo "uv venv --seed --python 3.12 $prefix" || echo "$venv_python -m venv $prefix")
   2) 装 torch 轮子 $(command -v uv >/dev/null && echo "uv pip install --python $pybin ${index:+--index-url $index }-r $eff_req" || echo "$pybin -m pip install -r $eff_req")
   3) 装引擎依赖  $(command -v uv >/dev/null && echo "uv pip install --python $pybin 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10' 'opencv-contrib-python==5.0.0.93'" || echo "$pybin -m pip install 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10' 'opencv-contrib-python==5.0.0.93'")
-  4) 自检        PYTHONPATH=$engine_src $pybin -c 'import lumaretouch_engine.server'
+  4) 随包镜头库（若已暂存）离线安装：$optics_installer install --bundle $optics_bundle --python $pybin
+  5) 自检        PYTHONPATH=$engine_src $pybin -c 'import lumaretouch_engine.server'
 TXT
   exit 0
 fi
@@ -250,8 +289,8 @@ elif command -v uv >/dev/null 2>&1; then
   [ "$force_new" = 1 ] && clear_arg=(--clear)
   uv venv "${clear_arg[@]}" --seed --python 3.12 "$prefix"
 else
-  echo "→ python3 -m venv：$prefix"
-  python3 -m venv "$prefix"
+  echo "→ $venv_python -m venv：$prefix"
+  "$venv_python" -m venv "$prefix"
   "$pybin" -m pip install --upgrade pip
 fi
 if command -v uv >/dev/null 2>&1; then
@@ -264,6 +303,16 @@ else
   "$pybin" -m pip install 'numpy>=2.1' 'pillow>=11' 'tifffile==2026.10.15' 'imagecodecs==2026.10.10' 'opencv-contrib-python==5.0.0.93'
 fi
 [ -n "$index" ] && rm -f "$eff_req"
+
+# Release packaging supplies a verified native Lensfun + XML wheel. This step is
+# OFFLINE, with no compiler, source fetch, dependency resolver or model download.
+if [ -n "$optics_bundle" ]; then
+  echo "→ 离线安装随包 Lensfun 镜头运行库与冻结数据库"
+  "$pybin" "$optics_installer" install --bundle "$optics_bundle" --python "$pybin"
+else
+  echo "  ! 开发源码未暂存镜头运行包；自动镜头校正不可用，手动功能仍可用。见 docs/optics/INSTALL.md"
+fi
+
 
 # 人脸关键点运行时（MediaPipe FaceMesh，Apache-2.0）。
 # 单独一步而不并进 GPU 清单：那份带 --index-url 指向 pytorch 专仓，把 PyPI 包写进去

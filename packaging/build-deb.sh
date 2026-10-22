@@ -26,6 +26,10 @@ cd "$here/.."
 # 随包清单、runtime/VERSION、本机路径全部在暂存目录里，而它原本到 tauri 的
 # beforeBuildCommand 才生成——不先刷，这一道判的是**上一轮**暂存的那一份（M8 改版本号时
 # 就在这一条上红了一次：包内 runtime/VERSION 还是旧号）。
+# Produce the actual Lensfun library/database bundle before the existing consumer.
+# This explicit release command announces official-source/build-tool acquisition;
+# LRT_OPTICS_OFFLINE=1 accepts only an already verified same-commit bundle.
+bash packaging/prepare-optics-release.sh --acquire
 bash packaging/stage-engine.sh
 
 # 运行时环境测试（本轮新增，事故驱动）：那一遍必须在有 torch 的那个 venv 里跑，

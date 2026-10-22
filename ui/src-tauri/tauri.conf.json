@@ -34,6 +34,7 @@
     "resources": {
       "gen/engine-stage/lumaretouch_engine": "engine/src/lumaretouch_engine",
       "gen/engine-stage/setup-runtime.sh": "engine/setup-runtime.sh",
+      "gen/engine-stage/setup-optics.py": "engine/setup-optics.py",
       "gen/engine-stage/runtime": "engine/runtime"
     },
     "icon": [
@@ -48,6 +49,7 @@
           "libwebkit2gtk-4.1-0",
           "libgtk-3-0t64",
           "libraw23t64",
+          "libimage-exiftool-perl",
           "liblcms2-2",
           "libseccomp2"
         ]

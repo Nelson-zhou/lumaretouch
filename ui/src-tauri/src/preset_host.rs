@@ -15,6 +15,37 @@ fn preset(value: &Value) -> bool {
     value["schema"] == "lrt.preset.v1" && text(&value["id"]) && text(&value["name"])
         && text(&value["kind"]) && value["builtin"].is_boolean() && value["modules"].as_object().is_some_and(|m| !m.is_empty() && m.values().all(Value::is_object))
 }
+fn optical_review(value: &Value, document: &Value, revision: &Value, params: &Value) -> bool {
+    let hash = |v: &Value| v.as_str().is_some_and(|s| s.len()==64 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
+    let number = |v: &Value, lo: f64, hi: f64| v.as_f64().is_some_and(|n| n.is_finite() && n>=lo && n<=hi);
+    let mode=value["auto_mode"].as_str();
+    if value["version"]!=1 || value["success"]!=true || &value["document_id"]!=document || &value["revision"]!=revision
+        || !hash(&value["proof"]) || !hash(&value["candidate_key"]) || !number(&value["crop_zoom"],1.,32.)
+        || !matches!(mode,Some("off"|"smart"|"horizontal"|"vertical")) || !value["lens_auto"].is_boolean()
+        || value["auto_mode"]!=params["request"]["auto_mode"] || value["lens_auto"]!=params["request"]["lens_auto"] { return false; }
+    let a=&value["analysis"];
+    if mode==Some("off") { if !a.is_null(){return false;} }
+    else if !text(&a["method"]) || !number(&a["confidence"],0.45,1.) || !a["lines"].as_u64().is_some_and(|n| (4..=512).contains(&n))
+        || !number(&a["residual_degrees"],0.,90.) || !a["message"].is_string() {return false;}
+    let p=&value["lens"];
+    if value["lens_auto"]==true {
+        if !hash(&p["database_sha256"]) || !text(&p["library_version"]) || !text(&p["camera_model"]) || !text(&p["lens_model"])
+            || !number(&p["focal"],0.1,10000.) || !p["flags"].as_array().is_some_and(|a| !a.is_empty() && a.iter().all(|f| matches!(f.as_str(),Some("distortion"|"tca"|"vignette")))) {return false;}
+    } else if !p.is_null(){return false;}
+    if let Some(c)=value.get("comparison") {
+        let (Some(before),Some(after))=(c["before"].as_str(),c["after"].as_str()) else{return false;};
+        if c["domain"]!="post-manual-liquify-pre-crop-normalized" || !["width","height"].iter().all(|k|c[*k].as_u64().is_some_and(|n|(1..=320).contains(&n)))
+            || before.len()+after.len()>1024*1024 || ![before,after].iter().all(|s|s.starts_with("data:image/png;base64,iVBOR") && s[22..].bytes().all(|b|b.is_ascii_alphanumeric()||b"+/=".contains(&b))) {return false;}
+    }
+    true
+}
+fn reviewed_types(value: &Value) -> bool {
+    let Some(ops)=value["module_scope"].as_array() else{return false;};
+    let local=ops.iter().any(|op|op=="lnx.local_grade.v1");
+    let optics=ops.iter().any(|op|op=="lnx.optics_auto.v1");
+    (local||optics) && (!local||value["local_mask_transfer"].is_object())
+        && (!optics||optical_review(&value["optical_transfer"],&value["document_id"],&value["revision"],&value["applies"]["lnx.optics_auto.v1"]))
+}
 impl ReceiptKind for PresetKind {
     const NAME: &'static str = "preset";
     const ACTIONS: &'static [&'static str] = &["list", "preflight", "apply", "save", "import", "delete"];
@@ -33,7 +64,7 @@ impl ReceiptKind for PresetKind {
             Some("preflight") => text(&value["id"]) && scope(&value["module_scope"])
                 && modules(&value["applies"], &value["module_scope"])
                 && value["preflight_token"].as_str().is_some_and(|s| s.len() == 32 && s.bytes().all(|b| b.is_ascii_hexdigit()))
-                && value["local_mask_transfer"].is_object() && text(&value["revision"]),
+                && reviewed_types(value) && text(&value["revision"]),
             Some("list") => value["catalog"]["available"] == true && value["catalog"]["list"].as_array().is_some_and(|items| items.iter().all(preset))
                 && value["catalog"]["errors"].is_array() && value["catalog"]["modules"].is_array(),
             Some("apply") => text(&value["id"]) && scope(&value["module_scope"]) && modules(&value["before"], &value["module_scope"])

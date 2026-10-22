@@ -7,6 +7,7 @@ reported as applied correction. Missing/ambiguous metadata remains visible.
 import importlib
 import importlib.metadata
 import os
+import json
 from pathlib import Path
 from hashlib import sha256
 import numpy as np
@@ -15,10 +16,33 @@ from . import optics_state as S
 MAX_DB_BYTES = 32*1024*1024
 
 
+def install_hint():
+    parents=Path(__file__).resolve().parents
+    root=next((p for p in (parents[2],parents[1],parents[3]/'packaging') if (p/'setup-optics.py').is_file()),parents[2])
+    return ('正常发行包的 setup-runtime.sh 会离线安装随附镜头库，无需用户编译。缺失时用该运行时 Python 执行：'
+            +str(root/'setup-optics.py')+' install --bundle '+str(root/'runtime/optics')
+            +' --python <当前引擎 Python 路径>；说明：'+str(root/'runtime/OPTICS-INSTALL.md')
+            +'。开发源码见 packaging/setup-optics.py 与 docs/optics/INSTALL.md；不自动下载。')
+
+
 def database():
+    try: module = importlib.import_module('lensfunpy')
+    except (ImportError,OSError) as error: raise RuntimeError('Lensfun 运行库缺失或不能链接；'+install_hint()) from error
     directory = os.environ.get('LRT_LENSFUN_DB')
-    if not directory: raise RuntimeError('镜头数据库未配置；可使用手动畸变/暗角。需要显式安装 Lensfun 数据包并设置 LRT_LENSFUN_DB')
-    root = Path(directory)
+    expected = None
+    if directory: root = Path(directory)
+    else:
+        root = Path(module.__file__).resolve().parent/'db_files'
+        manifest = root.parent/'optics-provenance.json'
+        if not manifest.is_file() or manifest.is_symlink() or manifest.stat().st_size>256*1024:
+            raise RuntimeError('未找到发行包的已验证镜头数据库；'+install_hint())
+        provenance = json.loads(manifest.read_text(encoding='utf-8'))
+        sources = provenance.get('sources',{})
+        if provenance.get('version')!=1 or provenance.get('database_directory')!='db_files' or provenance.get('database_format')!=1 or sources.get('lensfun_database',{}).get('commit')!='b98997f7f1c020d0fac3136c2abbf06126385971' or sources.get('lensfun',{}).get('commit')!='101c745e847a5de4a1e569a94368ce2027198598' or sources.get('lensfunpy',{}).get('commit')!='458a24475ae03ec52f0fac4fea786120ef5a503f':
+            raise ValueError('镜头运行包来源与本发行版本不符；请修复运行时或显式配置 LRT_LENSFUN_DB')
+        expected = provenance.get('database_sha256')
+        if type(expected) is not str or len(expected)!=64 or any(c not in '0123456789abcdef' for c in expected):raise ValueError('随包数据库缺少有效摘要')
+        if tuple(module.lensfun_version[:3])!=(0,3,4) or importlib.metadata.version('lensfunpy')!='1.18.0':raise ValueError('随包镜头库实际版本与来源清单不一致')
     if not root.is_dir() or root.is_symlink(): raise ValueError('镜头数据库必须是本地真实目录')
     files = sorted(root.glob('*.xml'))
     if not files or len(files) > 4096: raise ValueError('镜头数据库缺少 XML 或超过数量限制')
@@ -31,8 +55,7 @@ def database():
         data = path.read_bytes()
         digest.update(path.name.encode()); digest.update(b'\0'); digest.update(data)
         stamps.append((path, before.st_size, before.st_mtime_ns))
-    try: module = importlib.import_module('lensfunpy')
-    except ImportError as error: raise RuntimeError('Lensfun 可选库未安装；手动调整仍可使用，不会自动安装') from error
+    if expected is not None and digest.hexdigest()!=expected: raise ValueError('随包镜头数据库已改变，拒绝冒充原发行标定')
     db = module.Database(paths=[str(p) for p in files], load_common=False, load_bundled=False)
     if any((p.stat().st_size, p.stat().st_mtime_ns) != (size, stamp) for p,size,stamp in stamps):
         raise ValueError('镜头数据库在加载时变化')

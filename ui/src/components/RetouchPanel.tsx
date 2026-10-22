@@ -1,3 +1,7 @@
+import {LipMakeupControls} from "../lipMakeup/LipMakeupControls";
+import {neutral as neutralLips} from "../lipMakeup/model";
+import { FacialWrinkleControl } from "../facialWrinkles/FacialWrinkleControl";
+import type { Region as WrinkleRegion } from "../facialWrinkles/model";
 import { EyeHighlightsControl } from "./EyeHighlightsControl";
 import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {FabricPanel} from "../fabric/FabricPanel";
@@ -19,7 +23,7 @@ import { TOOL_GROUPS, toolGroupOf, type ToolGroup } from "../toolNavigation";
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  runBackground, runCrop, runDeform, runEnhance, runExposure, runFace, runGrade,
+  runLipMakeup, runBackground, runCrop, runDeform, runEnhance, runExposure, runFace, runGrade,
   runHistory, runHsl, runLut, setStrength,
   type DocState, type EngineStatus, type FacePerson,
 } from "../native";
@@ -203,6 +207,20 @@ function FaceAvatar({ face, thumb, all }: {
  * 面板不提前放行。
  */
 const WIRED: Record<string, string> = {
+  "PC-32471|唇妆增强": "lip.family",
+  "PC-32471|唇妆增强/饱和度": "lip.saturation",
+  "PC-32471|唇妆增强/明度": "lip.brightness",
+  "PC-32471|唇妆增强/立体度": "lip.dimensionality",
+  "PC-32464|面部祛纹": "wrinkle.family",
+  "PC-32464|面部祛纹/祛抬头纹": "wrinkle.forehead",
+  "PC-32464|面部祛纹/祛川字纹": "wrinkle.glabellar",
+  "PC-32464|面部祛纹/祛眼周纹": "wrinkle.eye_area",
+  "PC-32464|面部祛纹/祛鼻背纹": "wrinkle.nose",
+  "PC-32464|面部祛纹/祛法令纹": "wrinkle.nasolabial",
+  "PC-32464|面部祛纹/祛脸颊纹": "wrinkle.cheek",
+  "PC-32464|面部祛纹/祛木偶纹": "wrinkle.marionette",
+  "PC-32464|面部祛纹/祛嘴周纹": "wrinkle.mouth_surround",
+
   "PC-32455|直方图": "histogram.control",
   "PC-32455|色阶/输入黑场": "levels.control",
   "PC-32455|色阶/输入灰场": "levels.control",
@@ -463,6 +481,19 @@ export default function RetouchPanel(props: RetouchProps) {
   const renderWired = (leaf: SpecSubcontrol, name: string,
                        kind: string): React.ReactNode => {
     const label = WIRE_LABEL[kind] ?? name;
+    if (kind === "lip.family") return <LipMakeupControls key={leaf.path} value={doc?.lip_makeup?.recipe??neutralLips()}
+      fact={doc?.lip_makeup?.facts} disabled={dim||!props.faceOk||!!props.whiteBalanceBusy||status?.ready_caps?.lip_makeup_protocol!==1}
+      reason={props.faceOk?(doc?.lip_makeup?.suspended??undefined):props.faceWhy}
+      commit={(recipe,control)=>doc?.document_id&&ok(runLipMakeup(recipe,doc.document_id,control),props)} Slider={Slider}/>;
+    if (kind.startsWith("lip.")) return null;
+    if (kind === "wrinkle.family") return <p key={leaf.path} className="muted"
+      data-control-id="PC-32464-C-d9e8e03577">八个部位独立调节；法令纹可左右联动或解锁。只淡化线状细纹，保留五官与皮肤纹理。</p>;
+    if (kind.startsWith("wrinkle.")) return <FacialWrinkleControl key={leaf.path}
+      region={kind.slice("wrinkle.".length) as WrinkleRegion} amounts={enhAmounts}
+      facts={doc?.enhance?.facial_wrinkles}
+      disabled={dim || !props.faceOk} reason={props.faceOk ? undefined : props.faceWhy}
+      commit={commitEnhance} Slider={Slider} />;
+
     if (kind.startsWith("deform.preset:")) {
       const preset = kind.split(":")[1];
       return (

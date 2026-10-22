@@ -1,3 +1,5 @@
+import {AutomaticTransferReview} from '../optics/AutomaticTransferReview';
+import {OPTICS_AUTO_OP} from '../optics/transferReviewModel';
 import {LOCAL_GRADE_OP,MaskTransferControls,MaskTransferEvidenceView,transferGroupsFromParams} from '../localMasks/transfer';
 import type {PresetWorkflowBinding} from './usePresetWorkflow';
 import {moduleLabel,presetLabel,unavailableScope} from './presetModel';
@@ -8,7 +10,7 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
   const faceBlocked=!w.face.ok&&modules.some(m=>selectedOps.includes(m.operation_id)&&m.single_face);
   const rows=[...modules,...chosen.filter(op=>!modules.some(m=>m.operation_id===op))
     .map(operation_id=>({operation_id,params:[],transferable:false,single_face:false,reason:'当前引擎不再提供这个模块'}))];
-  const verbs={list:'刷新列表',preflight:'预检局部预设',apply:'应用预设',save:'保存预设',import:'导入预设',delete:'删除预设'};
+  const verbs={list:'刷新列表',preflight:'预检目标预设',apply:'应用预设',save:'保存预设',import:'导入预设',delete:'删除预设'};
   const oldDocument=!!w.ui.submitted?.options.documentId&&w.ui.submitted.options.documentId!==w.context.documentId;
   const nameLength=Array.from(w.form.name.trim()).length;
   return <section className="modulePresets" aria-label="模块预设">
@@ -28,12 +30,12 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {unavailableScope(selectedOps,modules).length>0&&<p>包含当前不可用模块，不能应用。</p>}
     </div>}
     <div className="presetButtons">
-      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{selectedOps.includes(LOCAL_GRADE_OP)?'预检所选局部预设':'应用所选'}</button>
+      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{selectedOps.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP].includes(op))?'预检所选预设':'应用所选'}</button>
       <button disabled={!w.context.enabled||w.busy} onClick={()=>void w.refresh()}>刷新列表</button>
       <button disabled={!w.context.enabled||w.busy||!w.selected||w.selected.builtin} onClick={()=>void w.remove()}>删除所选</button>
     </div>
     {selectedOps.includes(LOCAL_GRADE_OP)&&<MaskTransferControls groups={transferGroupsFromParams(w.selected?.modules[LOCAL_GRADE_OP])} value={w.localMaskTransfer} onChange={w.setLocalMaskTransfer} disabled={w.busy}/>}
-    {w.review?.local_mask_transfer&&<div className="presetDetail"><strong>冻结的目标预检，尚未应用</strong><MaskTransferEvidenceView value={w.review.local_mask_transfer}/><button disabled={w.busy||!w.context.editable} onClick={()=>void w.confirmLocal()}>确认本次局部预设并应用</button></div>}
+    {w.review&&<div className="presetDetail"><strong>冻结的目标预检，尚未应用</strong>{w.review.local_mask_transfer&&<MaskTransferEvidenceView value={w.review.local_mask_transfer}/>} {w.review.optical_transfer&&<AutomaticTransferReview report={w.review.optical_transfer}/>}<button disabled={w.busy||!w.context.editable} onClick={()=>void w.confirmLocal()}>确认本次目标预设并应用</button></div>}
     <fieldset><legend>保存当前照片的模块参数</legend>
       <label>预设名称<input aria-label="预设名称" value={w.form.name} maxLength={160} placeholder="例如：室外婚纱暖调" onChange={e=>w.setName(e.target.value)}/><small>{nameLength}/80 字符</small></label>
       {nameLength>80&&<p role="alert">名称过长，请缩短到 80 个字符以内。</p>}
@@ -60,7 +62,7 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {oldDocument&&<p>这笔操作属于之前的照片，不会用旧回执覆盖当前照片的控制项。</p>}
       {w.ui.result?.requires_reload&&<p>应用失败且未能恢复图像，请重新打开照片。</p>}
     </div>
-    {w.ui.phase==='uncertain'&&<div className="presetUncertain"><p>结果尚未确认。不会自动重试，也不能据此认定没有保存或应用。</p>
+    {w.ui.phase==='uncertain'&&<div className="presetUncertain"><p>{w.ui.action==='preflight'?'只读预检仍未确认完成，尚未应用；可以查询同一笔任务，不会重复解算。':'结果尚未确认。不会自动重试，也不能据此认定没有保存或应用。'}</p>
       <button onClick={()=>void w.query()}>查询同一笔结果</button><button onClick={()=>void w.inspect()}>请求当前状态供核对</button>
       <button onClick={w.acknowledgeInspection}>我已核对，结束本次等待</button>
     </div>}

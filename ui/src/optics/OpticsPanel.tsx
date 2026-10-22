@@ -53,7 +53,7 @@ export function OpticsPanel({owner,report,disabled=false}:{owner:OpticsOwner;rep
     return <label className="opticsSlider" key={key}>{LABELS[key]}<input type="range" min={min} max={max} step={step} value={value} disabled={locked||!state.presented} onChange={e=>update(Number(e.target.value))} onPointerUp={e=>commit(Number(e.currentTarget.value))} onKeyUp={e=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown'].includes(e.key))commit(Number(e.currentTarget.value));}}/>
       <input aria-label={`${LABELS[key]}数值`} type="number" min={min} max={max} step={step} value={value} disabled={locked||!state.presented} onChange={e=>update(Number(e.target.value))} onBlur={e=>{const v=Number(e.target.value);if(v!==Number((image?.recipe[section] as unknown as Record<string,unknown>)?.[key]))commit(v);}}/></label>;
   }
-  return <section className="opticsPanel" aria-label="镜头调整与透视矫正"><strong>镜头调整 / 透视矫正</strong><p><small>真实镜头标定、手动畸变与暗角、自动线段分析和可编辑引导线。</small></p>
+  return <section className="opticsPanel" aria-label="镜头调整与透视矫正"><strong>镜头调整 / 透视矫正</strong>{report?.install_hint&&<details><summary>镜头运行库安装与修复</summary><p>{report.install_hint}</p></details>}<p><small>真实镜头标定、手动畸变与暗角、自动线段分析和可编辑引导线。</small></p>
     <button disabled={disabled||owner.pending} onClick={()=>void owner.start()}>调整镜头与透视</button>
     {report?.note&&<p><small>{report.note}</small></p>}{report?.suspended&&<p role="alert">已暂停：{report.suspended}</p>}
     {!state.open&&state.message&&<p role="status">{state.message}</p>}{!state.open&&state.phase==='uncertain'&&<button onClick={()=>void owner.check()}>查询原操作结果</button>}
@@ -83,7 +83,7 @@ export function OpticsPanel({owner,report,disabled=false}:{owner:OpticsOwner;rep
         <div className="opticsComparisons"><figure><figcaption>镜头/透视之前（只读）</figcaption><img key={`before-${state.previewId}`} src={image.before} width={image.width} height={image.height} alt="镜头透视之前，已包括原有全部效果和裁剪的真实画面" onLoad={()=>didLoad('before')}/></figure>
           <figure><figcaption>当前镜头/透视结果（只读）</figcaption><div className={draft?.perspective.show_guides?'opticsResult opticsGrid':'opticsResult'}><img key={`after-${state.previewId}`} src={image.after} width={image.width} height={image.height} alt="实际镜头和透视校正结果，已应用最终裁剪" onLoad={()=>didLoad('after')}/></div></figure></div>
         <h3>透视引导线画布</h3><GuideCanvas key={`input-${state.previewId}`} source={image.input} width={image.input_width} height={image.input_height} guides={draft?.perspective.guides??[]} disabled={locked||!state.presented} onLoad={()=>didLoad('input')} onChange={guides=>void owner.preview({action:'guides',guides})}/>
-      </>}</div></main><footer><p role="status">{state.message}</p>{state.phase==='failed'&&<><button onClick={()=>void owner.preview({action:'view'})}>返回上一有效预览</button><button onClick={()=>void owner.preview({action:'reset'})}>重置镜头/透视并审阅</button></>}<small>预览是当前生产链的真实代理反馈，非全尺寸验收。批量/预设仅同步手动数值；目标保留自己的镜头配置和透视分析，自动结果不复制。</small>
+      </>}</div></main><footer><p role="status">{state.message}</p>{state.phase==='failed'&&<><button onClick={()=>void owner.preview({action:'view'})}>返回上一有效预览</button><button onClick={()=>void owner.preview({action:'reset'})}>重置镜头/透视并审阅</button></>}<small>预览是当前生产链的真实代理反馈，非全尺寸验收。批量/预设可选手动参数或逐目标自动重算；须审阅完整候选，源照片的镜头身份、矩阵和引导线不复制。</small>
         <button disabled={!ready||!state.dirty||locked} onClick={()=>void owner.apply()}>应用本次修改</button>{state.phase==='uncertain'&&<button onClick={()=>void owner.check()}>查询原结果，不重复提交</button>}
       </footer></div>,document.body)}
   </section>;

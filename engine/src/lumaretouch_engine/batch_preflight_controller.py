@@ -3,7 +3,8 @@ from dataclasses import dataclass
 from typing import Callable
 import json
 from . import scope as SC
-from . import sky_replacement_scope as SKY
+from . import sky_replacement_scope as SKY, optics_auto_scope as OA
+from . import optics_transfer_review as OR
 from . import local_grade_layers as LG
 from . import local_grade_runtime as LR
 from .batch_preflight import PreflightStore,FrozenTarget,canonical
@@ -17,6 +18,7 @@ class PlanPorts:
     targets:Callable
     face_check:Callable
     commit:Callable
+    prepare_optics:Callable|None=None
 
 class FrozenBatchController:
     def __init__(self,ports,versions,emit,clock):
@@ -68,21 +70,30 @@ class FrozenBatchController:
                 targets=[];public=[]
                 for i in indices:
                     row=rows[i];v=self.versions.version(row);live=i==index
-                    before=SC.params_of(source if live else row['state'],ops);blocked=self._blocked(row,ops,live)
-                    prepared=None;transfer=None
+                    before=OA.before_params(source if live else row['state'],ops);blocked=self._blocked(row,ops,live)
+                    prepared=None;transfer=None;optics_record=None;optical_transfer=None
                     if not blocked and LG.OP in ops:
                         try:prepared,transfer=LR.prepare_modules(source if live else row['state'],mods,row,local_options,preview=len(public)<12)
                         except Exception as error:blocked=str(error)[:2000]
                     if not blocked and SKY.OP in ops:
                         try:
-                            candidate=SC.apply_modules(source if live else row["state"],prepared or mods)
+                            candidate=OA.candidate(source if live else row["state"],prepared or mods,local_replace_legacy=bool(transfer and transfer["legacy_removed"]))
                             SKY.validate_target(candidate["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
                         except Exception as error: blocked=str(error)[:2000]
+                    if not blocked and OA.OP in ops:
+                        try:
+                            if self.ports.prepare_optics is None:raise ValueError('本引擎缺少目标完整编辑预检端口')
+                            original=source if live else row['state']
+                            candidate=OA.candidate(original,prepared or mods,local_replace_legacy=bool(transfer and transfer['legacy_removed']))
+                            target_input=self.ports.prepare_optics(row,candidate,v.document_id,str(v.revision))
+                            optics_record,optical_transfer=OR.prepare(mods[OA.OP],target_input,before_state=original,preview=len(public)<2)
+                        except Exception as error:blocked=str(error)[:2000]
                     private_transfer=None if transfer is None else {k:v for k,v in transfer.items() if k!='preview_jpeg'}
                     targets.append(FrozenTarget(v.document_id,v.revision,i,row['path'],blocked,canonical(before),
-                        None if prepared is None else canonical(prepared),None if private_transfer is None else canonical(private_transfer)))
+                        None if prepared is None else canonical(prepared),None if private_transfer is None else canonical(private_transfer),
+                        None if optics_record is None else canonical(optics_record)))
                     public.append({'index':i,'path':row['path'],'live':live,'blocked':blocked,'before':before,
-                                   'document_id':v.document_id,'revision':str(v.revision),'local_mask_transfer':transfer})
+                                   'document_id':v.document_id,'revision':str(v.revision),'local_mask_transfer':transfer,'optical_transfer':optical_transfer})
                 plan=self.store.create(self.versions.workspace,version.document_id,version.revision,source_row['path'],
                     ops,mods,policy,targets,rejected)
                 body={'event':'batch_preflight','success':True,'module_scope':ops,'source':'current',
@@ -106,7 +117,7 @@ class FrozenBatchController:
                 else:
                     index,row=found;actual=self.versions.version(row).revision
                     if actual!=target.revision:blocked='target was edited after preflight; preflight again'
-                    elif canonical(SC.params_of(live_state if index==current else row['state'],plan.modules))!=target.before_json:
+                    elif canonical(OA.before_params(live_state if index==current else row['state'],plan.modules))!=target.before_json:
                         blocked='target parameters changed outside the reviewed snapshot'
                     elif not blocked:blocked=self._blocked(row,plan.modules,index==current)
                     if not blocked and LG.OP in plan.modules:
@@ -114,10 +125,18 @@ class FrozenBatchController:
                         except Exception as error:blocked=str(error)[:2000]
                     if not blocked and SKY.OP in plan.modules:
                         try:
-                            candidate=SC.apply_modules(live_state if index==current else row['state'],json.loads(target.prepared_json) if target.prepared_json is not None else plan.params())
+                            candidate=OA.candidate(live_state if index==current else row['state'],json.loads(target.prepared_json) if target.prepared_json is not None else plan.params(),local_replace_legacy=bool(target.transfer_json and json.loads(target.transfer_json)['legacy_removed']))
                             SKY.validate_target(candidate['_sky_replacement'],row['path'],(row['src_h'],row['src_w']))
                         except Exception as error: blocked=str(error)[:2000]
+                    if not blocked and OA.OP in plan.modules:
+                        try:
+                            original=live_state if index==current else row['state']
+                            prepared=json.loads(target.prepared_json) if target.prepared_json is not None else plan.params()
+                            candidate=OA.candidate(original,prepared,local_replace_legacy=bool(target.transfer_json and json.loads(target.transfer_json)['legacy_removed']))
+                            OA.verify_target(json.loads(target.optics_json),original,candidate,row,target.document_id,target.revision,prepared[OA.OP])
+                        except Exception as error:blocked=str(error)[:2000]
                 resolved.append({'index':index,'path':target.path,'blocked':blocked,'document_id':target.document_id,
+                    '_optics_prepared':None if target.optics_json is None else json.loads(target.optics_json),
                     '_prepared_modules':None if target.prepared_json is None else json.loads(target.prepared_json),
                     '_local_replace_legacy':False if target.transfer_json is None else json.loads(target.transfer_json)['legacy_removed'],
                     'reviewed_index':target.index,'expected_revision':str(target.revision),'current_revision':None if actual is None else str(actual)})

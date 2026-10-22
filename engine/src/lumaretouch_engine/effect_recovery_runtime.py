@@ -1,6 +1,7 @@
 """Source ownership, disposable Rust LMR2 masks, and export preparation."""
 import json
 from . import effect_recovery_state as S, local_mask_state as M
+from . import facial_wrinkle_recovery as FACE
 from .effect_recovery_stage import EffectRecoveryStage, check_fields
 
 
@@ -9,7 +10,12 @@ def availability(engine):
     strength, _ = engine._retouch_render_args() if pipe is not None else (0, None)
     from .fabric_controller import status
     fabric = status(engine)
+    lip = getattr(pipe, 'lip_makeup_delta', None) if pipe else None
+    lip_suspended = getattr(getattr(pipe, 'effect_recovery', None), 'suspended_targets', {}).get('lip_makeup') if pipe else None
     return {
+        'facial_wrinkles': FACE.availability(pipe),
+        'lip_makeup': {'active': bool(lip is not None and lip.any() and not lip_suspended),
+                       'reason': lip_suspended or (None if lip is not None and bool(lip.any()) else '请先启用当前人物的唇妆增强')},
         'skin_smoothing': {'active': pipe is not None and strength != 0,
                            'reason': None if strength != 0 else '请先开启磨皮；只恢复本机现有磨皮/肌理算子'},
         'fabric_fine': {'active': bool(fabric['lit']), 'reason': fabric['reason'] or (None if fabric['lit'] else '请先开启衣物细褶')},
@@ -46,11 +52,12 @@ def prepare_stage(engine, value):
         raise ValueError('生成恢复蒙版时源文件已变化')
     stage = EffectRecoveryStage(pipe.device, (pipe.h, pipe.w))
     stage.set(fields, state=value)
+    FACE.suspend_only_target(stage, value, value["source"], engine._precompute)
     if M.file_stamp(row['path']) != before:
         raise ValueError('恢复蒙版装载到处理设备时源图变化')
     # The commit must use the stamp actually verified above, not read a newer
     # stamp after preparing old pixels and accidentally bless it as current.
-    stage.verified_source_key = (json.dumps(value, sort_keys=True), before, id(pipe.src_f32))
+    stage.verified_source_key = stage_key(engine, value, source_stamp=before)
     return stage
 
 
@@ -78,9 +85,10 @@ def sync(engine, *, strict=False):
             raise
 
 
-def stage_key(engine, value):
+def stage_key(engine, value, *, source_stamp=None):
     row = engine._docs[engine._doc_index]
-    return (json.dumps(value, sort_keys=True), M.file_stamp(row['path']), id(engine._vram.src_f32))
+    face_key = FACE.identity_key(engine._precompute) if any(r['target'] in FACE.FACE_TARGETS for r in value['targets']) else None
+    return (json.dumps(value, sort_keys=True), M.file_stamp(row['path']) if source_stamp is None else source_stamp, id(engine._vram.src_f32), face_key)
 
 
 def report(engine):
@@ -94,12 +102,14 @@ def report(engine):
         'enabled': rows[name]['enabled'] if name in rows else True,
         'strokes': rows[name]['recipe']['objects'] if name in rows else [],
     } for name in S.TARGETS], 'suspended': getattr(stage, 'suspended', None),
+        'suspended_targets': dict(getattr(stage, 'suspended_targets', {})),
         'bytes_masks': stage.resident_bytes() if stage else 0,
         'boundaries': ['不恢复全部原图，也不擦掉曝光、曲线、LUT、局部调色或手工修补',
             '影棚背景祛瑕/祛穿帮/光影/断层使用背景调整工作区内的专属恢复；此处不混合其他算子',
             '尚未支持：独立人物瑕疵恢复、眼镜反光、碎发/白发、天空',
             '官方矩阵排除：祛油光、唇纹、双下巴、副乳；当前恢复笔不能用于这些效果',
-            '恢复笔迹只属于当前源照片，不参与批量同步或预设']}
+            '恢复笔迹只属于当前源照片，不参与批量同步或预设',
+            '面部祛纹与唇妆恢复还绑定实际选中人物；重新检测不按人脸序号猜测身份']}
 
 
 def verify_snapshot(snap, path, shape=None):
@@ -108,6 +118,7 @@ def verify_snapshot(snap, path, shape=None):
         return
     before = M.file_stamp(path)
     M.verify_source(value, path, shape)
+    FACE.verify(value, value["source"], snap.get("precompute"))
     if shape is not None:
         S.validate_budget(value, shape)
     if M.file_stamp(path) != before:

@@ -13,7 +13,7 @@ from typing import Callable
 from . import scope as SC, preset_store as PS
 from .preset_transaction import apply_with_rollback, PresetApplyError
 from . import local_grade_layers as LG
-from . import sky_replacement_scope as SKY
+from . import sky_replacement_scope as SKY, optics_auto_scope as OA
 
 ACTIONS = ("list", "preflight", "apply", "save", "import", "delete")
 LEGACY_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note", "local_mask_transfer", "preflight_token"}
@@ -38,6 +38,7 @@ class PresetPorts:
     target_row: Callable[[], dict] = lambda: {}
     revision: Callable[[], str] = lambda: ''
     advance: Callable[[], None] = lambda: None
+    prepare_optics: Callable | None = None
 
 
 class PresetController:
@@ -49,7 +50,7 @@ class PresetController:
 
     def last_applied(self):
         if not self.last: return None
-        try: current = SC.params_of(self.ports.capture(), self.last["ops"])
+        try: current = OA.before_params(self.ports.capture(), self.last["ops"])
         except Exception: return None
         return {"id": self.last["id"], "name": self.last["name"]} if current == self.last["params"] else None
 
@@ -133,7 +134,7 @@ class PresetController:
                         verdict, reason = self.ports.face_check()
                         if verdict != 'ok': raise SC.ScopeError(f'{op}：{reason}')
                 evidence = self.reviews.prepare(doc, self.ports.capture(), self.ports.target_row(),
-                    self.ports.document_id(), self.ports.revision(), p.get('local_mask_transfer'))
+                    self.ports.document_id(), self.ports.revision(), p.get('local_mask_transfer'), self.ports.prepare_optics)
             elif action == "apply": evidence = self.apply(p)
             elif action == "save": evidence = self.save(p)
             elif action == "import":
@@ -212,22 +213,24 @@ class PresetController:
             doc, mods = record['preset'], record['modules']
         else:
             doc = PS.find(pid); mods = doc['modules']
-            if LG.OP in mods: raise SC.ScopeError('含独立局部调色的预设必须先查看目标预检，再确认应用')
+            if LG.OP in mods or OA.OP in mods: raise SC.ScopeError('含局部组或自动镜头/透视的预设必须先查看本目标预检，再确认应用')
         ops = list(mods)
         for op in ops:
             if SC.MODULES[op]["single_face"]:
                 verdict, reason = self.ports.face_check()
                 if verdict != "ok": raise SC.ScopeError(f"{op} 不能作用在这张图上：{reason}")
-        before = SC.params_of(previous, ops)
-        if p.get('preflight_token') is not None: self.ports.advance()
-        state = SC.apply_modules(previous, mods, local_replace_legacy=bool(p.get('preflight_token') and record['transfer']['legacy_removed']))
+        before = OA.before_params(previous, ops)
+        state = OA.candidate(previous, mods, local_replace_legacy=bool(p.get('preflight_token') and record['transfer'] and record['transfer']['legacy_removed']))
+        if OA.OP in ops:
+            state['_optics']=OA.verify_target(record['optics'],previous,state,self.ports.target_row(),self.ports.document_id(),self.ports.revision(),mods[OA.OP])
         if SKY.OP in ops:
             row=self.ports.target_row()
             SKY.validate_target(state["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
+        if p.get('preflight_token') is not None:self.ports.advance()
         self._effect_started = True
         frame = apply_with_rollback(self.ports.replay, previous, state, preset_id=pid,
-                                    emit=self.emit, invalidate=self.ports.invalidate, strict_local=LG.OP in ops or SKY.OP in ops)
-        after = SC.params_of(state, ops)
+                                    emit=self.emit, invalidate=self.ports.invalidate, strict_local=LG.OP in ops or SKY.OP in ops or OA.OP in ops)
+        after = OA.before_params(state, ops)
         self.last = {"id": pid, "name": doc["name"], "ops": ops, "params": after}
         render_ms = frame.pop("render_ms")
         self.emit({"event": "preset_applied", "id": pid, "kind": doc["kind"], "name": doc["name"],
@@ -238,7 +241,7 @@ class PresetController:
 
     def save(self, p):
         requested = p.get("module_scope")
-        ops = SC.check_scope(list(SC.transferable_ops()) if requested is None else requested)
+        ops = SC.check_scope([op for op in SC.transferable_ops() if op!=OA.OP] if requested is None else requested)
         mods = SC.params_of(self.ports.capture(), ops)
         if SKY.OP in mods and mods[SKY.OP]["recipe"]["enabled"]:
             from .sky_replacement_assets import verify

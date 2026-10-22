@@ -68,6 +68,7 @@ def command_group(name: str, msg: dict) -> str:
     同一个滑块连发五十条 → 同一个组 → 合并成一步；换另一个滑块（参数名不同）就是新的一步。
     拿值当组名会出两件事：拖回原位那种"值又变回去"合并不了，而把 action 与路径参数
     （rle/paths）算进组名会让每一笔都是新组——那正好是我们要区分的两种动作。"""
+    if name == "lip_makeup": return "lip_makeup:" + str(msg.get("control", "all"))
     if name in ("curves", "levels") and isinstance(msg.get("gesture_id"), str) and msg["gesture_id"]:
         return name + ":gesture:" + msg["gesture_id"][:128]
     keys = sorted(k for k in msg if k not in ("cmd", "action"))

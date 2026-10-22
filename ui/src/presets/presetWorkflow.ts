@@ -1,3 +1,4 @@
+import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../optics/transferReviewModel';
 import {validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence,type TransferGroupChoice} from '../localMasks/transferModel.ts';
 /** Completion-only receipts. Never install a historical receipt's doc_state into controls. */
 import type {PresetInfo, PresetState} from '../native';
@@ -5,7 +6,7 @@ export type PresetAction = 'list'|'preflight'|'apply'|'save'|'import'|'delete';
 export type PresetOptions = {id?:string;name?:string;path?:string;kind?:string;note?:string;force?:boolean;
   moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string};
 export type PresetReply = {protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
-  preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
+  revision?:string;optical_transfer?:OpticalTargetReview;preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
   before?:Record<string,unknown>;after?:Record<string,unknown>;doc_state?:Record<string,unknown>;
   error?:string;requires_reload?:boolean;rolled_back?:boolean;operation_committed?:boolean|null};
 export type PresetContext = {enabled:boolean;editable:boolean;documentId:string;sourceGroups?:TransferGroupChoice[]};
@@ -35,8 +36,12 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
   const wanted=action==='save'?opts.moduleScope:expectedScope;
   if(wanted&&!sameScope(result.module_scope,wanted))throw Error('实际作用模块与选择不一致');
   if(action==='preflight'){
-    if(!text(result.preflight_token)||!/^[a-f0-9]{32}$/.test(result.preflight_token)||!moduleKeys(result.applies,result.module_scope)||!validTransferEvidence(result.local_mask_transfer))throw Error('局部预设预检结果不完整');
-    if(!sameTransferOptions(result.local_mask_transfer.policy,opts.localMaskTransfer))throw Error('局部预设策略与请求不一致');
+    if(!text(result.revision)||!text(result.preflight_token)||!/^[a-f0-9]{32}$/.test(result.preflight_token)||!moduleKeys(result.applies,result.module_scope))throw Error('冻结预设预检结果不完整');
+    if(result.module_scope.includes('lnx.local_grade.v1')){
+      if(!validTransferEvidence(result.local_mask_transfer)||!sameTransferOptions(result.local_mask_transfer.policy,opts.localMaskTransfer))throw Error('局部预设预检证据或策略不匹配');
+    }
+    if(result.module_scope.includes(OPTICS_AUTO_OP)&&!validOpticalReview(result.optical_transfer,opts.documentId??'',result.revision,result.applies?.[OPTICS_AUTO_OP]))throw Error('自动镜头/透视目标预检证据不完整');
+    if(!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP].includes(op)))throw Error('预设不含需要冻结预检的模块');
     return;
   }
   if(action==='apply'){
@@ -67,7 +72,7 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
   }
   function uncertain(request:Pending,error:unknown){
     if(!active(request.generation))return;
-    if(['list','preflight'].includes(request.action)){pending=null;set({phase:'error',message:String(error)});}
+    if(request.action==='list'){pending=null;set({phase:'error',message:String(error)});}
     else set({phase:'uncertain',message:String(error)});
   }
   async function poll(request:Pending,deadline=now()+(config.timeoutMs??120000)){
@@ -80,7 +85,7 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
           const result=response.result;
           if(!result)throw Error('缺少预设完成结果');
           validatePresetReply(result,request.action,request.options,request.id,request.expectedScope);
-          if(result.outcome_unknown){if(['list','preflight'].includes(request.action))pending=null;set({phase:['list','preflight'].includes(request.action)?'error':'uncertain',result,message:result.error??'执行结果未确认，请先核对实际状态'});return;}
+          if(result.outcome_unknown){if(request.action==='list')pending=null;set({phase:request.action==='list'?'error':'uncertain',result,message:result.error??'执行结果未确认，请先核对实际状态'});return;}
           pending=null;set({phase:result.success?'done':'error',result,message:result.error??''});return;
         }
         if(response.phase!=='pending')throw Error(response.error??'结果不可查，不代表操作未执行');

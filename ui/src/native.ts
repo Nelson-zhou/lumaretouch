@@ -1,3 +1,4 @@
+import { transportPatch as wrinkleTransport, type WrinkleKey, type RegionFact } from "./facialWrinkles/model";
 import type {MaskTransferOptions} from './localMasks/transfer';
 import type {WatermarkSettings} from "./watermark/model";
 import {curveBarrierRequired,settleCurveEdit,isCurveEditBusy} from './curveEditBarrier';
@@ -14,7 +15,7 @@ export function notifyInspectionEditIntent(){
   if(typeof window!=='undefined')window.dispatchEvent(new Event(INSPECTION_EDIT_INTENT));
 }
 const inspectionMutations=new Set(['start_engine','shutdown_engine','load_image','set_strength','precompute',
-  'inpaint','light','deform','lut','grade','enhance','background','exposure','hsl','curves','levels','fabric','crop','compare',
+  'inpaint','light','deform','lut','grade','enhance','lip_makeup','background','exposure','hsl','curves','levels','fabric','crop','compare',
   'session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
   const send=()=>{if(inspectionMutations.has(command))notifyInspectionEditIntent();return tauriInvoke<T>(command,args,options);};
@@ -142,6 +143,7 @@ export const dragParametricCurve=(spec:CurveSpec,region:number,target:number)=>i
 export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_preview",{spec});
 
 export interface DocState {
+  lip_makeup?: {version:1;recipe:import("./lipMakeup/model").LipMakeup;facts:import("./lipMakeup/model").LipFact;suspended:string|null;bytes_fields:number};
   effect_recovery?: import("./effectRecovery/model").RecoveryReport;
   optics?: import("./optics/model").OpticsReport;
   sky_replacement?: import("./skyReplacement/model").SkyReport;
@@ -571,6 +573,7 @@ export interface FaceState {
 
 /** 眼牙局部增强在引擎里的那一格账（doc_state.enhance 与 enhance_done 同一个组装点）。 */
 export interface EnhanceDoc {
+  facial_wrinkles?: Record<string, RegionFact>;
   /** 三个子功能当前的滑块值，[0,1]；0 就是这一格没开 */
   amounts: Record<string, number>;
   /** 子功能名单：面板画几条滑块由引擎这一格决定，前端不刻第二份 */
@@ -600,6 +603,7 @@ export interface EnhanceInfo extends Omit<EnhanceDoc, "reason"> {
   render_ms: number;
   total_ms: number;
   /** 下面这些是宿主槽位里那份嵌套账（与 `_enhance_payload` 同名） */
+  enhance_facial_wrinkles?: Record<string, RegionFact>;
   enhance_subs?: string[];
   enhance_limit?: number;
   enhance_geom_px?: Record<string, number>;
@@ -927,6 +931,7 @@ export interface EngineStatus {
    *  这些“引擎说什么能力”的清单都从这一份读。老宿主没报时为 undefined——那时那一排
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
+    lip_makeup_protocol?: number;
     effect_recovery_protocol?: number;
     optics_protocol?: number;
     sky_replacement_protocol?: number;
@@ -965,7 +970,8 @@ export interface EngineStatus {
     deform_range?: number[];
     /** 眼牙增强（LNX-PORTRAIT-009）：子功能名单、值域与动作名单。面板画几条滑块
      *  由这几格决定——引擎加了第四个子功能而屏幕上没有，就是双出处的形状。 */
-    enhance_subs?: string[];
+    enhance_facial_wrinkles?: Record<string, RegionFact>;
+  enhance_subs?: string[];
     enhance_range?: number[];
     enhance_actions?: string[];
     /** 人脸名单能收哪些动作（LNX-PORTRAIT-006）：面板上 ✕/↺/⌫/「框一位」这几格
@@ -1345,7 +1351,7 @@ export const runLut = (
  */
 export const runEnhance = (
   action: EnhanceInfo["action"],
-  opts?: { sclera?: number; iris?: number; teeth?: number; dark_circles?: number; eye_bags?: number; veins?: number; catchlight_left?: number; catchlight_right?: number },
+  opts?: { sclera?: number; iris?: number; teeth?: number; dark_circles?: number; eye_bags?: number; veins?: number; catchlight_left?: number; catchlight_right?: number } & Partial<Record<WrinkleKey, number>>,
 ) =>
   invoke<{ requested: boolean }>("enhance", {
     action,
@@ -1354,6 +1360,7 @@ export const runEnhance = (
     veins: opts?.veins,
     catchlightLeft: opts?.catchlight_left,
     catchlightRight: opts?.catchlight_right,
+    wrinkles: wrinkleTransport(opts),
     sclera: opts?.sclera,
     iris: opts?.iris,
     teeth: opts?.teeth,
@@ -1370,7 +1377,7 @@ export const enhanceStateOf = (
     // 不在这里换下来，`reason[sub]` 就是在字符串上取下标，恒 undefined——于是
     // "闭嘴样本的牙齿那一格为什么不动"这句在屏幕上永远显示不出来（而 DoD §3 要的
     // 正是"禁用必须带原因"）。其余字段两形同名同值，直接摊平用。
-    return { ...ev, reason: ev.enhance_reason ?? undefined };
+    return { ...ev, reason: ev.enhance_reason ?? undefined, facial_wrinkles: ev.enhance_facial_wrinkles };
   }
   return doc?.enhance ?? null;
 };
@@ -1677,3 +1684,7 @@ export const runLevels=(action:'set'|'clear',spec:LevelsSpec|undefined,documentI
 
 /** Enqueue only; authoritative fabric value arrives through document state. */
 export const runFabric=(amount:number,documentId:string)=>invoke<{requested:boolean}>("fabric",{action:amount===0?"clear":"set",amount,documentId});
+
+/** Accepted edits update doc_state only after the engine rendered the recipe. */
+export const runLipMakeup=(recipe:import("./lipMakeup/model").LipMakeup,documentId:string,control:import("./lipMakeup/model").LipKey|"all"="all")=>
+  invoke<{requested:boolean}>("lip_makeup",{recipe,documentId,control});

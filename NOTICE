@@ -119,3 +119,24 @@ Copyright 2011 Michael Muré；LGPL-3.0-or-later；WITHOUT ANY WARRANTY。
 图像采样仍复用现有 Torch 路径，不声称与 GEGL 或 PixCake 位级等价。
 完整源码、改动说明、COPYING.LESSER 与 GPL 文本随二进制位于
 lumaretouch_engine/third_party/manual_liquify/。
+
+RapidRetouch 八区域面部祛纹适配
+  facial_wrinkle_geometry.py 与 facial_wrinkle_layer.py 保留 AGPL-3.0-only。
+  复用 Chris Cork 的固定版本 5e9d9c1d2770ff29d11a3879e5a90aad5887e028
+  眼周线检测、纹理保留抬升与色彩重照明；上游并非八区域实现。
+  八区域几何、语义支持保护及 Rust 最大值重叠组合为本项目新增。
+  上游原文许可与归属随 third_party/rapidretouch/LICENSE、UNDER_EYE_NOTICE
+  分发；修改说明见 docs/FACIAL-WRINKLES-INTEGRATION.md。
+  Rust 原创组合源码及 GPL-3.0-or-later 许可随引擎 third_party/facial_wrinkles 分发。
+
+Lip makeup three-control enhancement
+  core/lip_makeup/lib.rs is original GPL-3.0-or-later Lab control math.
+  It modifies existing low/mid-frequency lip shading, not generated highlights.
+  Landmark topology corresponds to MediaPipe face_mesh_connections.py:
+  Copyright 2021 The MediaPipe Authors, Apache License 2.0.
+  https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/python/solutions/face_mesh_connections.py
+  https://www.apache.org/licenses/LICENSE-2.0
+  Existing NumPy/OpenCV geometry, filtering and colour conversion are reused.
+  RapidRetouch 5e9d9c1d2770ff29d11a3879e5a90aad5887e028 mouth tests were compared;
+  its mouth.py implementation was unavailable and was not copied or reviewed.
+  Source, license and limitations ship in third_party/lip_makeup/.

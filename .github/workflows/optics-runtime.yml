@@ -1,0 +1,24 @@
+name: Build pinned optical runtime
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Official distribution build prerequisites
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake pkg-config libglib2.0-dev python3.12-venv binutils
+      - name: Produce pinned native runtime, database and corresponding source bundle
+        run: bash packaging/prepare-optics-release.sh --acquire
+      - name: Preserve same-run, same-commit release input
+        uses: actions/upload-artifact@v4
+        with:
+          name: optics-linux-x86_64-cp312-${{ github.sha }}
+          path: build/optics/bundle/
+          if-no-files-found: error
+          retention-days: 14

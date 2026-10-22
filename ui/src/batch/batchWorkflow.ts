@@ -1,9 +1,10 @@
+import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../optics/transferReviewModel';
 import {LOCAL_GRADE_OP,validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence} from '../localMasks/transferModel.ts';
 /** Reviewed batch lifecycle. A queued command is not evidence of successful edits. */
 export type BatchAction='preflight'|'commit'|'undo';
 export type BatchOptions={docs?:string[];moduleScope?:string[];conflictPolicy?:string;batchId?:string;preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions};
 export type BatchTarget={index:number|null;path:string;document_id:string;revision?:string;blocked?:string|null;
-  expected_revision?:string;current_revision?:string|null;result_revision?:string|null;outcome?:string;before?:unknown;local_mask_transfer?:MaskTransferEvidence};
+  expected_revision?:string;current_revision?:string|null;result_revision?:string|null;outcome?:string;before?:unknown;local_mask_transfer?:MaskTransferEvidence;optical_transfer?:OpticalTargetReview};
 export type BatchReply={request_id:string;action:BatchAction;success:boolean;error?:string;outcome_unknown?:boolean;
   local_mask_transfer?:MaskTransferOptions;preflight_token?:string;source_snapshot?:{document_id:string;revision:string;path:string};source_changed_since_preflight?:boolean;
   module_scope?:string[];applies?:Record<string,unknown>;policy?:string;targets?:unknown[];target_outcomes?:BatchTarget[];
@@ -52,6 +53,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       if(!t||typeof t.path!=='string'||!identity(t.document_id)||!revision(t.revision)
         ||!Number.isInteger(t.index)||(t.index??-1)<0||ids.has(t.document_id))throw Error('预检目标身份不完整');
       if(scope.includes(LOCAL_GRADE_OP)&&!t.blocked&&(!validTransferEvidence(t.local_mask_transfer)||!sameTransferOptions(t.local_mask_transfer.policy,transfer)))throw Error('缺少匹配的目标局部组预检证据');
+      if(scope.includes(OPTICS_AUTO_OP)&&!t.blocked&&!validOpticalReview(t.optical_transfer,t.document_id,t.revision,result.applies[OPTICS_AUTO_OP]))throw Error('缺少匹配的自动镜头/透视目标预检证据');
       ids.add(t.document_id);if(t.blocked)blocked++;
     }
     if(blocked!==result.blocked)throw Error('预检受阻数量不一致');
@@ -99,8 +101,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
         await pause(150);
       }
     }catch(error){if(active(request.generation)){
-      if(request.action==='preflight'){pending=null;set({phase:'error',message:String(error)});}
-      else set({phase:'uncertain',message:String(error)});
+      set({phase:'uncertain',message:String(error)});
     }}
   }
   async function submit(action:BatchAction,opts:BatchOptions){
@@ -113,8 +114,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       if(!accepted.requested)throw Error('批量请求未确认入队');
       await poll(request,deadline);
     }catch(error){if(active(g)){
-      if(action==='preflight'){pending=null;set({phase:'error',message:String(error)});}
-      else set({phase:'uncertain',message:String(error)});
+      set({phase:'uncertain',message:String(error)});
     }}
   }
   async function start(){
@@ -136,7 +136,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   }
   async function query(){
     if(state.phase!=='uncertain'||!pending)return;
-    set({phase:'committing',hidden:false,message:''});await poll(pending);
+    set({phase:pending.action==='preflight'?'preflighting':'committing',hidden:false,message:''});await poll(pending);
   }
   function acknowledgeInspection(){
     if(state.phase!=='uncertain')return;

@@ -1,3 +1,4 @@
+import {OPTICS_AUTO_OP,OPTICS_MANUAL_OP} from '../optics/transferReviewModel';
 import {defaultMaskTransfer,LOCAL_GRADE_OP} from '../localMasks/transfer';
 import {useEffect,useReducer,useRef,useState} from 'react';
 import {confirm,open} from '@tauri-apps/plugin-dialog';
@@ -52,10 +53,10 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
       setNote(value.face.why||'这个预设的部分模块需要可用的单脸');return;
     }
     dispatch({type:'select',id});setNote('');
-    await current()?.submit(ops.includes(LOCAL_GRADE_OP)?'preflight':'apply',{id,...(ops.includes(LOCAL_GRADE_OP)?{localMaskTransfer:value.localMaskTransfer}:{})},ops);
+    await current()?.submit(ops.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP].includes(op))?'preflight':'apply',{id,...(ops.includes(LOCAL_GRADE_OP)?{localMaskTransfer:value.localMaskTransfer}:{})},ops);
   }
   const review=ui.action==='preflight'&&ui.result?.success&&ui.result.id===form.selectedId&&ui.result.document_id===context.documentId
-    &&JSON.stringify(ui.submitted?.options.localMaskTransfer)===JSON.stringify(localMaskTransfer)?ui.result:null;
+    &&(!ui.result.module_scope?.includes(LOCAL_GRADE_OP)||JSON.stringify(ui.submitted?.options.localMaskTransfer)===JSON.stringify(localMaskTransfer))?ui.result:null;
   async function confirmLocal(){
     if(locked()||!review?.preflight_token||!review.module_scope)return;
     await current()?.submit('apply',{id:review.id,preflightToken:review.preflight_token},review.module_scope);
@@ -83,7 +84,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   return {ui,form,note,selected,catalog,context,dialogBusy,face,localMaskTransfer,setLocalMaskTransfer,saveMaskTransfer,setSaveMaskTransfer,review,confirmLocal,
     busy:dialogBusy||ui.phase==='working'||ui.phase==='uncertain',
     setName:(value:string)=>dispatch({type:'name',value}),select:(id:string)=>dispatch({type:'select',id}),
-    setScope:(ops:string[])=>dispatch({type:'scope',ops}),save,apply,importFile,remove,refresh,inspect,
+    setScope:(ops:string[])=>dispatch({type:'scope',ops:ops.includes(OPTICS_AUTO_OP)&&ops.includes(OPTICS_MANUAL_OP)?ops.filter(op=>op!==(ops[ops.length-1]===OPTICS_MANUAL_OP?OPTICS_AUTO_OP:OPTICS_MANUAL_OP)):ops}),save,apply,importFile,remove,refresh,inspect,
     applyByLabel:(label:string)=>{const list=latest.current.catalog?.list??[];const p=presetFromLabel(label,list);if(!p){setNote('预设标签不存在或有歧义，请在模块预设面板按 ID 选择');return;}return apply(p.id);},
     query:()=>current()?.query(),acknowledgeInspection:()=>flow.current?.acknowledgeInspection()};
 }

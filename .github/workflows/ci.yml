@@ -5,6 +5,11 @@ on:
   pull_request:
 
 jobs:
+  optics-runtime:
+    uses: ./.github/workflows/optics-runtime.yml
+    permissions:
+      contents: read
+
   engine:
     name: 引擎测试（CPU 参考实现对拍）
     runs-on: ubuntu-24.04
@@ -89,6 +94,7 @@ jobs:
           if-no-files-found: warn
 
   ui:
+    needs: optics-runtime
     name: UI 类型检查与构建
     runs-on: ubuntu-24.04
     steps:
@@ -104,6 +110,11 @@ jobs:
       # gen/engine-stage/*，而 tauri_build::build() 在 check 阶段就校验这些源目录存在——
       # 干净 checkout 里没有它们，cargo check 直接红（历史口径就是“Rust 检查在准备 staging
       # 资源后才通过”）。beforeBuildCommand 只在 tauri build 跑，救不了裸 cargo check。
+      - name: Receive verified optical runtime from this workflow and commit
+        uses: actions/download-artifact@v4
+        with:
+          name: optics-linux-x86_64-cp312-${{ github.sha }}
+          path: build/optics/bundle
       - name: 暂存引擎资源（cargo check 的前置）
         working-directory: ui
         run: npm run stage:engine
