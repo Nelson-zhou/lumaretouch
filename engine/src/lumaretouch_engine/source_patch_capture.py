@@ -119,7 +119,7 @@ class CaptureController:
                'ticket':p.get('ticket'),'success':False}
         try:
             allowed={'cmd','action','capture_id','ticket','document_id'}
-            allowed|={'epoch', 'purpose'} if action=='arm' else {'generation'}
+            allowed|={'epoch', 'purpose', 'group_id'} if action=='arm' else {'generation'}
             if set(p)-allowed or action not in ('arm','presented','cancel'):
                 raise ValueError('Invalid repair capture command')
             if not _hex(p.get('capture_id')) or not _uint(p.get('ticket')) or not _uint(p.get('document_id')):
@@ -135,6 +135,11 @@ class CaptureController:
                 if not _hex(p.get('epoch')):raise ValueError('Invalid repair capture epoch')
                 purpose=p.get('purpose', 'repair')
                 if purpose not in ('repair', 'local-masks'): raise ValueError('Invalid capture purpose')
+                group_id=p.get('group_id')
+                if ((purpose != 'local-masks' and 'group_id' in p)
+                        or (group_id is not None and (type(group_id) is not str
+                            or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}',group_id)))):
+                    raise ValueError('Invalid local-mask capture group')
                 context,spec=self._context()
                 if context['document_id']!=p['document_id']:raise ValueError('Repair document changed')
                 if self.generation==MAX_U64:raise ValueError('Repair generation exhausted; restart engine')
@@ -158,7 +163,11 @@ class CaptureController:
                 mask_reason = None
                 if purpose == 'local-masks':
                     from .local_mask_state import diagnostic, sample_valid_rows
-                    mask, mask_reason = diagnostic(self.engine)
+                    if group_id is None:
+                        mask, mask_reason = diagnostic(self.engine)
+                    else:
+                        from .local_grade_runtime import diagnostic as group_diagnostic
+                        mask, mask_reason = group_diagnostic(self.engine, group_id)
                     field = torch.as_tensor(mask.astype(np.float32)/255., device=pipeline.device)[None,None]
                     rgba[...,3] = quantize_t(spec.apply(field)[0,0]).contiguous().cpu().numpy()
 
@@ -166,7 +175,8 @@ class CaptureController:
                    'profile':'working-srgb','epoch':p['epoch'],'shm_instance':uuid.uuid4().hex,
                    'seq':'1','generation':str(self.generation),'capture_id':p['capture_id'],'ticket':p['ticket'],
                    'width':spec.width,'height':spec.height,'projection':spec.descriptor()}
-                if purpose == 'local-masks': d.update(mask_overlay=True, mask_suspended=mask_reason, sample_valid_rows=sample_valid_rows(valid))
+                if purpose == 'local-masks': d.update(mask_overlay=True, mask_group_id=group_id,
+                    mask_suspended=mask_reason, sample_valid_rows=sample_valid_rows(valid))
                 current,current_spec=self._context()
                 if current!=context or current_spec!=spec:raise ValueError('Repair input changed while capturing')
                 root=os.environ.get('LRT_INSPECTION_ROOT')

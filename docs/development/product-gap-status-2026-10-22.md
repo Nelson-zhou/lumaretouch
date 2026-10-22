@@ -1,6 +1,6 @@
 # Product coverage checkpoint — 2026-10-22
 
-Published code checkpoint:d5b1f281d901ab49f5101f1b10df7f7cdcc920a0. This updates the
+Published code checkpoint: 083f6f149d886fb076df1e04a8f138efa6620aa3. This updates the
 older sampled audits, not a claim to have independently accepted every handbook
 requirement. The original product handbook and AI development package remain the
 scope; deferred real-device validation does not remove any feature.
@@ -18,8 +18,10 @@ whole-product completion percentage is currently established.
   and identity handling. Native/physical quality acceptance remains separate.
 - Exposure, versioned WB algorithm/reset, levels, RGB/channel/linear-Y point curves,
   parametric curves, legacy-HSV8 HSL, crop/rotation and partial portrait operators.
-- Bounded stage histogram/readout and identified RGB/Lab colour sampling. These are
-  not the four action eyedroppers or full-source real-time analytics.
+- Bounded stage histogram/readout and identified RGB/Lab colour sampling. WB,
+  levels black/white, curve targeted dragging and HSL hue dragging now also have
+  connected action paths. Their frozen-stage previews are not final full-chain
+  images or full-source real-time analytics; see targeted-color-pickers.md.
 - Project/history, complete-scope presets, frozen-source/target batch preflight,
   correlated receipts, conflict-aware scoped undo and export task handling.
 - True RGB16 input/float editing/RGB16 output paths; not an8-bit left-shift substitute.
@@ -30,12 +32,13 @@ must be read with subsequent corrections, not copied as today's missing-feature 
 
 ## Major functional groups still incomplete
 
-1. Professional colour completion: levels/curves/HSL action pickers, AI colour
-   matching and group consistency, lens/perspective/calibration requirements.
+1. Professional colour completion: AI colour matching and group consistency,
+   lens/perspective/calibration requirements. Action pickers now have connected
+   code, not independent runtime or photographic acceptance.
 2. Detailed portrait families: independent body, hair, makeup, clothing, hand/foot
    and many blemish/reshaping controls. One related slider does not close a family.
-3. Local editing: remaining AI selection, mask batch/preset/display subcontrols,
-   effect recovery and full liquify protection. Retained composable brush/linear/
+3. Local editing: remaining automatic/category/free/quick AI selection, mask
+   batch/preset groups, effect recovery and full liquify protection. Retained composable brush/linear/
    radial/color/luminance objects and real portrait-category sources are now wired
    to the existing grade consumer; this does not make LUT or every adjustment local. Source-sampled patch and genuine
    clone-stamp brush are connected in code (source-patch-tool.md / clone-stamp-tool.md),
@@ -96,3 +99,26 @@ The composable mask package uses project v4 and retains v1–v3 migrations. Its
 source/model identity and Rust worker implementation are unverified integrations,
 not evidence of runtime or image-quality acceptance. See composable-local-mask-scope.md
 and semantic-mask-source-scope.md for exact covered and unimplemented controls.
+
+## Subsequent connected packages, still pending runtime acceptance
+
+- SAM2.1 Tiny positive/negative points and box prompting, reviewed candidates,
+  retained source/model-bound selections and explicit optional installation are
+  connected. This is not pet classification or generic automatic subject selection.
+  See prompted-ai-selection-scope.md for exact resource limits and licensing.
+- PC-32454 child72 is true colour-range selection inversion, not merely inversion
+  of the overlay. Child75 is a read-only luminance/retained-coverage diagnostic,
+  not a live draft mask. The matching Rust worker now uses LMR2.
+- Source-domain object coverage is transformed by the same deformation grid as
+  the image before the existing post-LUT grade consumer. The actual pipeline has
+  deformation before exposure/levels/curves/HSL/LUT/grade; the old statement that
+  the grade consumer precedes deformation was incorrect. The established image
+  operator order was not changed to accommodate masks.
+- Independent local-grade groups and real mask batch/preset append/replace are
+  currently being implemented. They are not yet included in this published
+  checkpoint. Tool-specific recovery brushes are also in development, not done.
+
+No local application, build, typecheck, model installation/download or inference
+was run for these recent packages. Existing automatic CI results and eventual
+Qoder/physical checks must be recorded separately; published code is not an
+installation or acceptance result.

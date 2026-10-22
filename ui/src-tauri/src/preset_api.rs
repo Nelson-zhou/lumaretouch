@@ -29,8 +29,10 @@ pub(crate) fn preset(
     module_scope: Option<Vec<String>>,
     request_id: Option<String>,
     document_id: Option<String>,
+    local_mask_transfer: Option<Value>,
+    preflight_token: Option<String>,
 ) -> Result<Value, String> {
-    const ACTIONS: [&str; 5] = ["list", "apply", "save", "import", "delete"];
+    const ACTIONS: [&str; 6] = ["list", "preflight", "apply", "save", "import", "delete"];
     if !ACTIONS.contains(&action.as_str()) {
         return Err(format!("preset 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
     }
@@ -47,6 +49,8 @@ pub(crate) fn preset(
         ("force", force.map(Value::from)),
         ("request_id", request_id.map(Value::from)),
         ("document_id", document_id.map(Value::from)),
+        ("local_mask_transfer", local_mask_transfer),
+        ("preflight_token", preflight_token.map(Value::from)),
     ] {
         if let Some(v) = v {
             cmd[k] = v;

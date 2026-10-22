@@ -145,6 +145,9 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             st.color_picker_probes.lock().unwrap().ended(inspection_epoch);
             st.source_patch.lock().unwrap().ended(inspection_epoch);
             st.local_masks.lock().unwrap().ended(inspection_epoch);
+            st.effect_recovery.lock().unwrap().ended(inspection_epoch);
+            st.recovery_preview.lock().unwrap().ended(inspection_epoch);
+            st.local_grade_live.lock().unwrap().ended(inspection_epoch);
             st.prompted_masks.lock().unwrap().ended(inspection_epoch);
         });
     }
@@ -176,6 +179,9 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "color_picker_probe_result"=>state.color_picker_probes.lock().unwrap().receive(inspection_epoch,&v),
         "prompted_masks"=>state.prompted_masks.lock().unwrap().receive(inspection_epoch,&v),
         "local_masks_result"=>state.local_masks.lock().unwrap().receive(inspection_epoch,&v),
+        "effect_recovery_result"=>state.effect_recovery.lock().unwrap().receive(inspection_epoch,&v),
+        "effect_recovery_preview"=>state.recovery_preview.lock().unwrap().receive(inspection_epoch,&v),
+        "local_grade_live_result"=>state.local_grade_live.lock().unwrap().receive(inspection_epoch,&v),
         "source_patch_result"=>state.source_patch.lock().unwrap().receive(inspection_epoch,&v),
         "shm_ready" => {
             let name = v["name"].as_str().unwrap_or("").to_string();
@@ -244,6 +250,8 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             state.white_balance_results.lock().unwrap().ready(inspection_epoch,v["white_balance_result_protocol"].as_u64()==Some(1));
             state.source_patch.lock().unwrap().ready(inspection_epoch,v["source_patch_result_protocol"].as_u64()==Some(1));
             state.local_masks.lock().unwrap().ready(inspection_epoch,v["local_masks_result_protocol"].as_u64()==Some(1));
+            state.effect_recovery.lock().unwrap().ready(inspection_epoch,v["effect_recovery_protocol"].as_u64()==Some(1));
+            state.local_grade_live.lock().unwrap().ready(inspection_epoch,v["local_grade_live_protocol"].as_u64()==Some(1));
             state.source_patch_capture.lock().unwrap().ready(inspection_epoch,v["source_patch_capture_protocol"].as_u64()==Some(1));
             state.white_balance_capture.lock().unwrap().ready(inspection_epoch,v["white_balance_capture_protocol"].as_u64()==Some(1));
             state.color_picker_capture.lock().unwrap().ready(inspection_epoch,v["color_picker_capture_protocol"].as_u64()==Some(1));

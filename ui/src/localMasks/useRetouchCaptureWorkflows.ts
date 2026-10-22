@@ -1,4 +1,4 @@
-import {useEffect} from 'react';
+import {useEffect,useRef} from 'react';
 import {useColorActionPicker} from '../colorActions/useColorActionPicker';
 import type {EngineStatus} from '../native';
 import {useSourcePatchWorkflow} from '../sourcePatch/useSourcePatchWorkflow';
@@ -6,9 +6,14 @@ import {useWhiteBalancePickerWorkflow} from '../whiteBalance/useWhiteBalancePick
 import {useCloneStampWorkflow} from '../cloneStamp/useCloneStampWorkflow';
 import {useLocalMaskWorkflow} from './useLocalMaskWorkflow';
 import type {LocalMaskContext} from './workflow';
+import {useEffectRecoveryWorkflow} from '../effectRecovery/useEffectRecoveryWorkflow';
+import type {RecoveryReport} from '../effectRecovery/model';
+import {useLiveGradeWorkflow,type LiveGradeOwner} from './useLiveGradeWorkflow';
 /** App-scoped owners survive panel collapse. Drawing modes never share a capture lease. */
 export function useRetouchCaptureWorkflows(context:LocalMaskContext,caps:EngineStatus['ready_caps'],samplingKey:string,
-  refresh:()=>Promise<void>,brushOn:boolean,pickFace:boolean){
+  refresh:()=>Promise<void>,brushOn:boolean,pickFace:boolean,
+  recoveryOptions:{report?:RecoveryReport;prepare:()=>void}){
+  const liveOwner=useRef<LiveGradeOwner|null>(null);
   const sourcePatch=useSourcePatchWorkflow(context,refresh);
   const wbPicker=useWhiteBalancePickerWorkflow({...context,enabled:context.enabled&&!sourcePatch.active&&!sourcePatch.pending&&caps?.white_balance_capture_protocol===1,
     reason:caps?.white_balance_capture_protocol!==1?'当前引擎不支持白平衡输入取样，请更新匹配版本':'请结束其他操作，并切回单视图代理预览'},refresh);
@@ -19,10 +24,17 @@ export function useRetouchCaptureWorkflows(context:LocalMaskContext,caps:EngineS
   const colorPicker=useColorActionPicker({...context,enabled:context.enabled&&!sourcePatch.pending&&!wbPicker.pending&&!cloneStamp.pending&&!localMasks.pending&&
     caps?.color_picker_capture_protocol===1&&caps?.color_picker_result_protocol===1,
     reason:caps?.color_picker_capture_protocol!==1||caps?.color_picker_result_protocol!==1?'当前引擎不支持定向色彩调整，请更新匹配版本':context.reason},refresh);
+  const otherCapture=sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending||cloneStamp.active||cloneStamp.pending||localMasks.active||localMasks.pending||colorPicker.active||colorPicker.pending;
+  const recovery=useEffectRecoveryWorkflow({...context,enabled:context.enabled&&!otherCapture&&!liveOwner.current?.workflow.busy()&&caps?.effect_recovery_protocol===1,
+    reason:caps?.effect_recovery_protocol!==1?'当前引擎不支持专属恢复画笔，请更新匹配版本':context.reason},refresh,recoveryOptions.report,recoveryOptions.prepare);
+  const liveGrade=useLiveGradeWorkflow({documentId:context.documentId,canStart:context.canStart,
+    enabled:context.enabled&&!otherCapture&&!recovery.active&&!recovery.pending&&caps?.local_grade_live_protocol===1},refresh);
+  liveOwner.current=liveGrade;
   useEffect(()=>{
     if(!brushOn&&!pickFace)return;
-    for(const owner of [sourcePatch,wbPicker,cloneStamp,localMasks,colorPicker])
+    for(const owner of [sourcePatch,wbPicker,cloneStamp,localMasks,colorPicker,recovery])
       if(owner.workflow.capturing()&&!owner.workflow.busy())owner.workflow.cancel('已切换工具，未提交的手势已取消');
-  },[brushOn,pickFace,sourcePatch.workflow,wbPicker.workflow,cloneStamp.workflow,localMasks.workflow,colorPicker.workflow]);
-  return {sourcePatch,wbPicker,cloneStamp,localMasks,colorPicker};
+    if(liveGrade.busy)liveGrade.workflow.cancel('已切换画笔工具，未提交调色已取消');
+  },[brushOn,pickFace,sourcePatch.workflow,wbPicker.workflow,cloneStamp.workflow,localMasks.workflow,colorPicker.workflow,recovery.workflow,liveGrade.workflow]);
+  return {sourcePatch,wbPicker,cloneStamp,localMasks,colorPicker,recovery,liveGrade};
 }

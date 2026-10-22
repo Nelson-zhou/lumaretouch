@@ -70,10 +70,11 @@ pub(crate) fn enqueue(state: &AppState, handle: &EngineHandle, mut command: Valu
 
 #[tauri::command]
 pub(crate) fn source_patch_capture(state: State<'_, Arc<AppState>>, action: String,
-    capture_id: String, ticket: Option<String>, document_id: String, purpose: Option<String>) -> Result<Value, String> {
+    capture_id: String, ticket: Option<String>, document_id: String, purpose: Option<String>, group_id: Option<String>) -> Result<Value, String> {
     id16(&capture_id)?; token(&document_id)?;
     if action != "arm" && purpose.is_some() { return Err("capture purpose is only accepted when arming".into()); }
     let domain = match purpose.as_deref() { None | Some("repair") => "repair-input", Some("local-masks") => "source-input", _ => return Err("invalid capture purpose".into()) };
+    if group_id.is_some() && (action != "arm" || domain != "source-input") { return Err("group ID is only accepted when arming local masks".into()); }
     match action.as_str() {
         "arm" => {
             if ticket.is_some() { return Err("arm does not accept an existing capture ticket".into()); }
@@ -89,9 +90,10 @@ pub(crate) fn source_patch_capture(state: State<'_, Arc<AppState>>, action: Stri
             };
             let handle = engine(&state)?;
             let mut capture = state.source_patch_capture.lock().map_err(|_| "source patch capture lock poisoned")?;
-            let ticket = capture.begin_for_domain(handle.epoch(), capture_id.clone(), document_id.clone(), revision, domain)?;
-            let command = json!({"cmd":"source_patch_capture","action":"arm","capture_id":capture_id,
+            let ticket = capture.begin_for_scope(handle.epoch(), capture_id.clone(), document_id.clone(), revision, domain, group_id.clone())?;
+            let mut command = json!({"cmd":"source_patch_capture","action":"arm","capture_id":capture_id,
                 "ticket":ticket,"document_id":document_id,"epoch":hex(handle.epoch()),"purpose":purpose.unwrap_or_else(|| "repair".into())});
+            if domain == "source-input" { command["group_id"] = json!(group_id); }
             if let Err(error) = handle.send(command) {
                 capture.cancel(&capture_id, Some(&ticket), &document_id); return Err(error);
             }

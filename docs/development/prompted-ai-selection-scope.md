@@ -91,3 +91,17 @@ loads those same immutable buffers, avoiding hash-then-reopen races.
 See [official provenance and pinned identities](../model-licenses/sam2.1-hiera-tiny-provenance.md).
 The registry tier is `fetched`, not `bundled`; staged release-weight gates remain
 unchanged. Optional absence does not prevent base installation or startup.
+
+### SEC-001 static guard boundary
+
+The P0 no-egress scan retains all scan roots and patterns. Its only installation
+exception is the exact three reviewed `urllib.request` statements in
+`prompted_model_install.py`, each required exactly once. The file itself is not
+excluded, and no telemetry or other HTTP client is exempt. Companion assertions
+pin the fixed checkpoint GET without request payload, explicit `--install` CLI
+branch versus read-only status, native fixed argv with no photograph parameter,
+the sole explicit UI install button, checksum/size gates, and the unchanged
+fail-closed engine seccomp startup. This distinguishes an authorized optional
+download from image-process egress; it does not certify arbitrary Python/Rust
+data flow or replace the existing runtime offline tests. This guard update was
+made by static inspection of the reported CI failure, without running tests.

@@ -12,7 +12,7 @@ GEOMETRY = {'brush': ('points', 'axes'), 'linear': ('start', 'end', 'cross'),
             'radial': ('center', 'axes')}
 
 
-def prepare_mutation(engine, capture, mutation, *, accepted_prompted=False):
+def prepare_mutation(engine, capture, mutation, *, accepted_prompted=False, semantic_owner=None):
     if type(mutation) is not dict: raise ValueError('Mask mutation must be an object')
     action = mutation.get('action')
     fields = {'upsert': {'action', 'object', 'coordinate_space'}, 'delete': {'action', 'id'},
@@ -44,7 +44,7 @@ def prepare_mutation(engine, capture, mutation, *, accepted_prompted=False):
         if objects and old['source'] != source: raise ValueError('Source changed; retained masks cannot be rebound silently')
         new['source'] = source
         if normalized['kind'] == 'semantic':
-            owner = S.current_owner(engine)
+            owner = semantic_owner or S.current_owner(engine)
             if owner is None: raise ValueError('Analyze this photo before choosing a semantic channel')
             existing = any(o['kind'] == 'semantic' for o in old['recipe']['objects'])
             if existing and old['semantic_owner'] != owner:
@@ -111,6 +111,16 @@ class MaskController:
             if not capture['eligible'] or capture['descriptor']['domain'] != 'source-input':
                 raise ValueError('Review an immutable original-source capture before editing masks')
             mutation = p['mutation']
+            group_edit = type(mutation) is dict and str(mutation.get('action','')).startswith('layer_')
+            group_id = mutation.get('id') if group_edit else None
+            if (group_edit and type(group_id) is not str) or capture['descriptor'].get('mask_group_id') != group_id:
+                raise ValueError('Captured mask coverage belongs to another group; capture the target group again')
+            if group_edit:
+                from .local_grade_edit import prepare
+                self.pending['layers'] = prepare(e, capture, mutation)
+                self.pending['state'], self.pending['scope'] = e._local_masks, e._grade_scope
+                owner.invalidate()
+                return True
             accepted = type(mutation) is dict and mutation.get('action') == 'accept_prompted'
             if accepted:
                 from .prompted_mask_controller import controller
@@ -128,22 +138,29 @@ class MaskController:
         pending = self.pending
         if pending is None or 'state' not in pending: raise ValueError('Mask mutation has no prepared capture proof')
         e = self.engine
-        previous = (e._local_masks, e._grade_scope)
+        from . import local_grade_layers as L, local_grade_runtime as LR
+        previous = (e._local_masks, e._grade_scope, L.check(getattr(e, '_local_grade_layers', None)))
         pipe_before = dict(vars(e._vram))
         result = pending['result']
         try:
             pending['started'] = True
             e._local_masks, e._grade_scope = pending['state'], pending['scope']
+            e._local_grade_layers = pending.get('layers', previous[2])
+            if 'layers' in pending: LR.sync(e, strict=True)
             if e._grade_scope == 'objects': S.sync(e, strict=True)
             else: e._vram.set_grade_scope(e._grade_scope)
             frame = e._write_current_frame('local_masks')
             frame['doc_state'] = e.doc_state()
             self.emit(frame)
-            result.update(success=True, no_change=(previous == (e._local_masks, e._grade_scope)))
+            result.update(success=True, no_change=(previous == (e._local_masks, e._grade_scope, e._local_grade_layers)))
         except Exception as error:
-            e._local_masks, e._grade_scope = previous
+            e._local_masks, e._grade_scope, e._local_grade_layers = previous
             vars(e._vram).clear(); vars(e._vram).update(pipe_before)
+            # The stage owns nested tensors; restoring the outer pipeline dict
+            # cannot restore an in-place stage.set. Rebuild the old group set.
+            e._vram._local_grade_layers_key = None
             try:
+                LR.sync(e, strict=True)
                 frame = e._write_current_frame('local_masks_rollback')
                 frame['doc_state'] = e.doc_state(); self.emit(frame)
             except Exception:

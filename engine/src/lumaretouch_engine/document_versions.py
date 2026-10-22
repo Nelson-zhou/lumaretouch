@@ -54,7 +54,9 @@ def fences_current_document(name,p,edit_commands):
     """
     action=p.get('action','')
     if name=='batch':return False
-    if name=='preset':return action=='apply'
+    # Reviewed local preset claims validate the old revision before advancing
+    # their own fence. Ordinary preset applies keep the existing dispatcher path.
+    if name=='preset':return action=='apply' and p.get('preflight_token') is None
     if name=='history':return action in ('undo','redo','clear')
     if action in ('state','list','get','limits','preflight','validate'):return False
     return name in edit_commands or name in ('precompute','set_device')

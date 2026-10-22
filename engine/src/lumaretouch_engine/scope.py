@@ -34,6 +34,7 @@ from .ops import curves as CURVES
 from .ops import levels as LEVELS
 from . import hsl_recipe as HSL_RECIPE
 from . import white_balance_recipe as WB
+from . import local_grade_layers as LOCAL_GRADE
 
 SCHEMA = "lrt.scope.v1"
 PRESET_SCHEMA = "lrt.preset.v1"
@@ -50,6 +51,7 @@ OP_CROP = "lnx.crop.v1"
 OP_SKIN = "lnx.skin.v1"
 OP_BLEMISH = "lnx.blemish.v1"
 OP_MASK = "lnx.mask.v1"
+OP_LOCAL_GRADE = LOCAL_GRADE.OP
 
 # 每个模块：参数名 → (从文档状态读, 往文档状态写)。状态字典就是 `server._capture_state()`
 # 那一份（键名以 `_` 打头），所以"预设作用的"与"底片条存的"是同一份字段，没有第三份表示。
@@ -75,6 +77,12 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: operation_id → 契约。`single_face` 的模块只能作用在"已知只有一张脸"的文档上；
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
+    OP_LOCAL_GRADE: {
+        "params": ("groups",), "state_fields": LOCAL_GRADE.FIELDS,
+        "single_face": False, "transferable": True, "cmd": "local_masks",
+        "read": LOCAL_GRADE.params_of, "write": LOCAL_GRADE.install,
+        "transfer_review": "independent-local-grade-v1",
+    },
     OP_HSL: {
         "params": ("recipe",), "state_fields": ("_hsl",), "single_face": False,
         "transferable": True, "cmd": "hsl",
@@ -184,6 +192,7 @@ def describe() -> list[dict]:
                     "transferable": m["transferable"], "single_face": m["single_face"],
                     "unmodeled": dict(m.get("unmodeled") or {}),
                     "reason": m.get("why_not")})
+        if m.get("transfer_review"): out[-1]["transfer_review"] = m["transfer_review"]
     return out
 
 
@@ -226,6 +235,9 @@ def check_params(op: str, params: dict) -> dict:
         parts = [f"{k}：{unmodeled_reason(op, k)}" if unmodeled_reason(op, k) else f"{k}（未知参数）"
                  for k in unknown]
         raise ScopeError(f"{op} 收到不可作用的参数：" + "；".join(parts))
+    if op == OP_LOCAL_GRADE:
+        try: return LOCAL_GRADE.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
     if op == OP_WHITE_BALANCE:
         try: return WB.check_transfer_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
@@ -326,7 +338,7 @@ def _check_shared_strength(ops: list[str], mods: dict[str, dict]) -> None:
                          "（冻结件：两个「强度」必须同一个含义）")
 
 
-def apply_modules(state: dict, mods: dict[str, dict]) -> dict:
+def apply_modules(state: dict, mods: dict[str, dict], *, local_replace_legacy=False) -> dict:
     """把 {operation_id: 参数} 盖到一份文档状态上，返回**新的一份**。
 
     同模块覆盖语义（PRESET-001）：预设里出现的那个模块，参数是**整模块替换**——预设里
@@ -340,11 +352,20 @@ def apply_modules(state: dict, mods: dict[str, dict]) -> dict:
     for op in ops:
         clean = check_params(op, mods[op])
         MODULES[op]["write"](out, clean)
+    if OP_LOCAL_GRADE in ops and local_replace_legacy: LOCAL_GRADE.clear_legacy(out)
     # 磨皮那位共用强度：两个模块都出现时，后一次 write 不该把前一次的解释推翻掉
     if all(op in ops for op in SHARED_STRENGTH_OPS):
         s = _strength_from(mods[OP_SKIN] if OP_SKIN in mods else mods[OP_BLEMISH])
         out["_strength"] = s
     return out
+
+
+def restore_modules(current, previous, ops):
+    """Restore only reviewed modules; retain exact legacy local-grade fields."""
+    ordinary = [op for op in ops if op != OP_LOCAL_GRADE]
+    result = apply_modules(current, params_of(previous, ordinary)) if ordinary else dict(current)
+    if OP_LOCAL_GRADE in ops: LOCAL_GRADE.restore(result, previous)
+    return result
 
 
 # ------------------------------------------------------------------ 预设文件
@@ -392,6 +413,9 @@ def validate_preset(doc, *, builtin: bool = False) -> dict:
     clean: dict[str, dict] = {}
     for op, params in mods.items():
         clean[op] = check_params(op, params or {})
+        if op == OP_LOCAL_GRADE:
+            try: LOCAL_GRADE.portable(clean[op]['groups'])
+            except ValueError as error: raise ScopeError(str(error)) from error
     _check_shared_strength(list(clean), clean)
     return {"schema": PRESET_SCHEMA, "id": pid, "name": name, "kind": kind,
             "modules": clean, "author": str(doc.get("author") or "")[:80],

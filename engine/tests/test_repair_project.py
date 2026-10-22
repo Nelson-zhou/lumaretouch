@@ -36,7 +36,7 @@ def test_mixed_records_and_redo_roundtrip_with_independent_parameters(tmp_path):
     before = source.read_bytes()
     P.save(project, str(path))
     loaded = P.load(str(path))
-    assert loaded["schema_version"] == "lrt.project.v4"
+    assert loaded["schema_version"] == P.SCHEMA
     recipe, dropped = P.active_recipe(loaded, str(source))
     assert not dropped and source.read_bytes() == before
     assert [op.kind for op in recipe["_repair_ops"]] == ["heal", "source_patch"]

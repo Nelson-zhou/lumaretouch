@@ -24,6 +24,11 @@ fn mutation(value: &Value) -> Result<(), String> {
             && ["id", "name", "operation"].iter().all(|k| value[*k].is_string())
             && value["opacity"].is_number() && value["feather"].is_number() => Ok(()),
         Some("clear") => Ok(()),
+        Some("layer_update") if value["id"].is_string() && value["name"].is_string()
+            && value["enabled"].is_boolean() && value["grade"].as_array().is_some_and(|v| v.len() == 4 && v.iter().all(Value::is_number)) => Ok(()),
+        Some("layer_delete") if value["id"].is_string() => Ok(()),
+        Some("layer_move") if value["id"].is_string() && value["index"].as_u64().is_some_and(|v| v < 8) => Ok(()),
+        Some("layer_mask") if value["id"].is_string() && matches!(value["mutation"]["action"].as_str(), Some("upsert" | "delete" | "move")) => mutation(&value["mutation"]),
         _ => Err("invalid local mask mutation".into()),
     }
 }
@@ -54,6 +59,8 @@ pub(crate) fn local_masks(state: State<'_, Arc<AppState>>, action: String, reque
     let proof = state.source_patch_capture.lock().map_err(|_| "source patch capture lock poisoned")?
         .redeem(handle.epoch(), &capture_id, &ticket)?;
     if proof.descriptor["domain"] != "source-input" { return Err("local masks require original source-input capture".into()); }
+    let group = if mutation["action"].as_str().is_some_and(|action| action.starts_with("layer_")) { mutation["id"].clone() } else { Value::Null };
+    if proof.descriptor["mask_group_id"] != group { return Err("local mask capture belongs to another group; capture the selected group again".into()); }
     state.send_to_engine(json!({"cmd":"local_masks","action":"apply","request_id":request_id,
         "host_epoch":hex(proof.identity.epoch),"document_id":proof.identity.document.to_string(),
         "capture_id":capture_id,"ticket":ticket,"generation":proof.identity.generation.to_string(),

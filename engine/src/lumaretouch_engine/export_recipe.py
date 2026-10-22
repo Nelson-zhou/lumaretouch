@@ -57,6 +57,21 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
                       scale=int(snap.get("scale", 1)),
                       upscale_backend=str(snap.get("upscale_backend", "lanczos3")),
                       sharpen_amount=float(snap.get("sharpen", 0.0)))
+    from .effect_recovery_runtime import configure_export as configure_effect_recovery
+    configure_effect_recovery(spec, snap, (eh, ew), for_document=for_document)
+    spec.check_effect_recovery()
+    from . import local_grade_layers as LG
+    spec.local_grade_groups = LG.check(snap.get("local_grade_groups"))
+    LG.validate_budget(spec.local_grade_groups, (eh, ew))
+    spec.local_mask_source_path = snap.get("local_mask_source_path")
+    spec.local_grade_source_stamp = snap.get("local_grade_source_stamp")
+    if spec.local_grade_groups['layers']:
+        if not for_document:
+            raise ValueError('Independent local grades must be explicitly rebound to this document before export')
+        if not spec.local_mask_source_path:
+            raise ValueError('Independent local-grade export is missing its verified original source')
+        from .local_grade_source import verify_snapshot
+        verify_snapshot(snap, spec.local_mask_source_path, (eh, ew))
     from .fabric_export import configure_export
     if for_document:
         configure_export(spec, snap, eh, ew)

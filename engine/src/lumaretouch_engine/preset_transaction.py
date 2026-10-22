@@ -11,9 +11,9 @@ class PresetApplyError(ScopeError):
 
 
 def apply_with_rollback(replay: Callable, before: dict, after: dict, *, preset_id: str,
-                        emit: Callable, invalidate: Callable) -> dict:
+                        emit: Callable, invalidate: Callable, strict_local=False) -> dict:
     try:
-        return replay(after, mode="preset", replayed_for=f"preset:{preset_id}")
+        return replay(after, mode="preset", replayed_for=f"preset:{preset_id}", **({'strict_local':True} if strict_local else {}))
     except Exception as error:
         try:
             frame = replay(before, mode="preset_rollback", replayed_for=f"preset_rollback:{preset_id}")

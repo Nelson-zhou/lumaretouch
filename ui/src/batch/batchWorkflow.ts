@@ -1,15 +1,16 @@
+import {LOCAL_GRADE_OP,validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence} from '../localMasks/transferModel.ts';
 /** Reviewed batch lifecycle. A queued command is not evidence of successful edits. */
 export type BatchAction='preflight'|'commit'|'undo';
-export type BatchOptions={docs?:string[];moduleScope?:string[];conflictPolicy?:string;batchId?:string;preflightToken?:string;requestId?:string};
+export type BatchOptions={docs?:string[];moduleScope?:string[];conflictPolicy?:string;batchId?:string;preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions};
 export type BatchTarget={index:number|null;path:string;document_id:string;revision?:string;blocked?:string|null;
-  expected_revision?:string;current_revision?:string|null;result_revision?:string|null;outcome?:string;before?:unknown};
+  expected_revision?:string;current_revision?:string|null;result_revision?:string|null;outcome?:string;before?:unknown;local_mask_transfer?:MaskTransferEvidence};
 export type BatchReply={request_id:string;action:BatchAction;success:boolean;error?:string;outcome_unknown?:boolean;
-  preflight_token?:string;source_snapshot?:{document_id:string;revision:string;path:string};source_changed_since_preflight?:boolean;
+  local_mask_transfer?:MaskTransferOptions;preflight_token?:string;source_snapshot?:{document_id:string;revision:string;path:string};source_changed_since_preflight?:boolean;
   module_scope?:string[];applies?:Record<string,unknown>;policy?:string;targets?:unknown[];target_outcomes?:BatchTarget[];
   rejected_docs?:Array<{doc:unknown;error:string}>;ok?:number;blocked?:number;restored?:number[];conflicts?:Array<{path:string;reason:string}>};
 export type BatchPlan=Omit<BatchReply,'targets'|'success'|'preflight_token'|'source_snapshot'|'module_scope'|'applies'|'ok'|'blocked'>&{success:true;preflight_token:string;source_snapshot:{document_id:string;revision:string;path:string};
   module_scope:string[];targets:BatchTarget[];applies:Record<string,unknown>;ok:number;blocked:number};
-export type BatchContext={docs:string[];moduleScope:string[];conflictPolicy:string;sourceDocumentId:string;enabled:boolean;label:string};
+export type BatchContext={docs:string[];moduleScope:string[];conflictPolicy:string;sourceDocumentId:string;enabled:boolean;label:string;localMaskTransfer?:MaskTransferOptions};
 export type BatchUi={phase:'closed'|'preflighting'|'review'|'committing'|'uncertain'|'done'|'error';
   hidden?:boolean;operation:BatchAction;plan:BatchPlan|null;result:BatchReply|null;message:string;scopeLabel:string};
 export type BatchTransport={request:(action:BatchAction,options:BatchOptions)=>Promise<{requested:boolean}>;
@@ -21,7 +22,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   const now=options.now??(()=>performance.now());
   let context:BatchContext={docs:[],moduleScope:[],conflictPolicy:'skip_and_report',sourceDocumentId:'',enabled:false,label:''};
   let key='',generation=0,disposed=false;
-  let pending:{id:string;action:BatchAction;generation:number;token?:string;scope?:string[];policy?:string}|null=null;
+  let pending:{id:string;action:BatchAction;generation:number;token?:string;scope?:string[];policy?:string;transfer?:MaskTransferOptions}|null=null;
   let state:BatchUi={phase:'closed',operation:'preflight',plan:null,result:null,message:'',scopeLabel:''};
   const set=(patch:Partial<BatchUi>)=>{state={...state,...patch};if(!disposed)publish(state);};
   const active=(g:number)=>!disposed&&g===generation;
@@ -31,13 +32,14 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     generation++;pending=null;set({phase:'closed',hidden:false,plan:null,result:null,message:''});
   }
   function updateContext(next:BatchContext){
-    const nextKey=JSON.stringify([next.docs,next.moduleScope,next.conflictPolicy,next.sourceDocumentId,next.enabled]);
+    const nextKey=JSON.stringify([next.docs,next.moduleScope,next.conflictPolicy,next.sourceDocumentId,next.enabled,next.localMaskTransfer]);
     if(key!==nextKey&&['preflighting','review'].includes(state.phase))close();
     context={...next,docs:[...next.docs],moduleScope:[...next.moduleScope]};key=nextKey;
   }
   const identity=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{32}$/.test(v);
   const revision=(v:unknown)=>typeof v==='string'&&v.length<=20&&/^\d+$/.test(v)&&BigInt(v)<=18446744073709551615n;
-  function planFrom(result:BatchReply,scope:string[],policy:string):BatchPlan{
+  function planFrom(result:BatchReply,scope:string[],policy:string,transfer?:MaskTransferOptions):BatchPlan{
+    if(scope.includes(LOCAL_GRADE_OP)&&!sameTransferOptions(result.local_mask_transfer,transfer))throw Error('局部迁移策略与请求不一致');
     if(!identity(result.preflight_token)||!result.source_snapshot||!identity(result.source_snapshot.document_id)
       ||!revision(result.source_snapshot.revision)||typeof result.source_snapshot.path!=='string'
       ||!Array.isArray(result.targets)||!Array.isArray(result.module_scope)||!result.applies||Array.isArray(result.applies)
@@ -49,6 +51,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     for(const item of result.targets){const t=item as BatchTarget;
       if(!t||typeof t.path!=='string'||!identity(t.document_id)||!revision(t.revision)
         ||!Number.isInteger(t.index)||(t.index??-1)<0||ids.has(t.document_id))throw Error('预检目标身份不完整');
+      if(scope.includes(LOCAL_GRADE_OP)&&!t.blocked&&(!validTransferEvidence(t.local_mask_transfer)||!sameTransferOptions(t.local_mask_transfer.policy,transfer)))throw Error('缺少匹配的目标局部组预检证据');
       ids.add(t.document_id);if(t.blocked)blocked++;
     }
     if(blocked!==result.blocked)throw Error('预检受阻数量不一致');
@@ -84,7 +87,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
           if(!result||result.request_id!==request.id||result.action!==request.action||typeof result.success!=='boolean')throw Error('批量结果身份不匹配');
           if(result.success&&request.action==='commit'&&result.preflight_token!==request.token)throw Error('批量结果不属于本次预检');
           if(result.success&&request.action==='preflight'){
-            const plan=planFrom(result,request.scope??[],request.policy??'');pending=null;set({phase:'review',plan,result:null,message:''});return;
+            const plan=planFrom(result,request.scope??[],request.policy??'',request.transfer);pending=null;set({phase:'review',plan,result:null,message:''});return;
           }
           if(result.outcome_unknown&&request.action!=='preflight'){set({phase:'uncertain',result,message:result.error??'执行结果未确认'});return;}
           if(result.success&&request.action==='commit')checkCommitted(result);
@@ -102,7 +105,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   }
   async function submit(action:BatchAction,opts:BatchOptions){
     const g=++generation,id=uuid(),deadline=now()+(options.timeoutMs??120000);
-    const request={id,action,generation:g,token:opts.preflightToken,scope:opts.moduleScope,policy:opts.conflictPolicy};pending=request;
+    const request={id,action,generation:g,token:opts.preflightToken,scope:opts.moduleScope,policy:opts.conflictPolicy,transfer:opts.localMaskTransfer};pending=request;
     set({phase:action==='preflight'?'preflighting':'committing',hidden:false,operation:action,result:null,message:''});
     try{
       const accepted=await bounded(api.request(action,{...opts,requestId:id}),deadline);
@@ -119,7 +122,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     if(disposed||['committing','preflighting'].includes(state.phase))return;
     if(!context.enabled||!context.docs.length||!context.moduleScope.length){set({phase:'error',plan:null,result:null,message:'请选择照片与作用范围，并使用支持批量预检的配套引擎'});return;}
     set({plan:null,result:null,scopeLabel:context.label});
-    await submit('preflight',{docs:[...context.docs],moduleScope:[...context.moduleScope],conflictPolicy:context.conflictPolicy});
+    await submit('preflight',{docs:[...context.docs],moduleScope:[...context.moduleScope],conflictPolicy:context.conflictPolicy,localMaskTransfer:context.moduleScope.includes(LOCAL_GRADE_OP)?context.localMaskTransfer:undefined});
   }
   async function commit(){
     if(state.phase!=='review'||!state.plan||state.plan.ok<1)return;

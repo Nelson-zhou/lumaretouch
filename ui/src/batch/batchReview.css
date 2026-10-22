@@ -19,3 +19,5 @@
 .batchActions button.primary,.batchReview button.primary{background:var(--acc);color:#1b1b1b;border-color:var(--acc)}
 .batchActions button:disabled,.batchReview button:disabled{opacity:.4;cursor:default}
 .batchActions :focus-visible,.batchReview :focus-visible,.batchPending:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+
+.batchTargets li{flex-wrap:wrap}.batchSettings>div{max-height:70vh;overflow:auto}

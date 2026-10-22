@@ -11,7 +11,7 @@ from .document_versions import DocumentVersions
 from .batch_preflight_controller import FrozenBatchController,PlanPorts
 
 ACTIONS = ("preflight", "commit", "undo", "state")
-KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id"}
+KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer"}
 POLICIES = ("skip_and_report", "recheck")
 
 @dataclass(frozen=True)
@@ -127,6 +127,8 @@ class BatchSyncController:
                 self.preflight.emit_result(p,{**body,"success":True})
                 return
             ops = SC.check_scope(p.get("module_scope"))
+            if SC.OP_LOCAL_GRADE in ops:
+                raise SC.ScopeError('独立局部调色必须先逐目标预检，再用冻结 token 提交；不允许未审核直传')
             policy = p.get("conflict_policy", "skip_and_report")
             if policy not in POLICIES:
                 raise SC.ScopeError(f"conflict_policy 未知：{policy!r}"
@@ -175,7 +177,7 @@ class BatchSyncController:
                 raise SC.ScopeError("target history is invalid; no target was written")
             self.versions.check_advance(row)
             before = dict(row["state"]) if r["index"] != live_idx else dict(self.editor.capture())
-            new = SC.apply_modules(before, mods)
+            new = SC.apply_modules(before, r.get('_prepared_modules') or mods, local_replace_legacy=r.get('_local_replace_legacy', False))
             WB.prepare_state(new)
             planned.append((r["index"], before, new))
             applied_rows.append(r)
@@ -189,7 +191,8 @@ class BatchSyncController:
         live_plan=next((item for item in planned if item[0]==live_idx),None)
         if live_plan is not None:
             idx,before,new=live_plan;self.versions.advance(self.documents.rows()[idx])
-            try:fr=self.editor.replay(new,mode="batch",replayed_for=f"batch:{batch_id}")
+            try:fr=self.editor.replay(new,mode="batch",replayed_for=f"batch:{batch_id}",
+                                      **({'strict_local':True} if SC.OP_LOCAL_GRADE in ops else {}))
             except Exception as error:
                 try:
                     rollback=self.editor.replay(before,mode="batch",replayed_for=f"batch_rollback:{batch_id}")
@@ -208,7 +211,8 @@ class BatchSyncController:
                 if len(row["undo"]) > self.history_limit:del row["undo"][0]
                 row["redo"].clear()
             targets[str(idx)] = {"path": row["path"], "before": before,
-                "applied":SC.params_of(new, ops),"live":idx==live_idx,"document_id":self.versions.version(row).document_id}
+                "applied":SC.params_of(new, ops),"live":idx==live_idx,"document_id":self.versions.version(row).document_id,
+                "local_key":SC.LOCAL_GRADE.undo_key(new) if SC.OP_LOCAL_GRADE in ops else None}
         self.ledger[batch_id] = {"ops": ops, "targets": targets, "at_ns": self.monotonic(),
                                    "undone": False, "policy": policy,"source_snapshot":source_snapshot}
         self.last_result = {"kind": "commit", "batch_id": batch_id,
@@ -261,6 +265,10 @@ class BatchSyncController:
                 continue
             row = self.documents.rows()[idx]
             cur = row["state"]
+            if rec.get('local_key') is not None and SC.LOCAL_GRADE.undo_key(cur) != rec['local_key']:
+                conflicts.append({'index':idx,'path':rec['path'],
+                    'reason':'局部组、旧调色槽或关联 LUT 已在同步后修改；不覆盖后续编辑'})
+                continue
             if SC.params_of(cur, ops) != rec["applied"]:
                 conflicts.append({"index": idx, "path": rec["path"],
                                   "reason": "同步后又被编辑过：不抹后续修改",
@@ -269,7 +277,7 @@ class BatchSyncController:
             # Conflict checks are scoped; restoration must use the same scope.
             # Restoring the whole old snapshot would erase later unrelated edits.
             try:
-                restored_state = SC.apply_modules(cur, SC.params_of(rec["before"], ops))
+                restored_state = SC.restore_modules(cur, rec["before"], ops)
                 WB.prepare_state(restored_state)
                 self.versions.check_advance(row)
             except Exception as error:

@@ -16,6 +16,10 @@ export function batchScopeOptions(modules: readonly {operation_id: string; trans
     for (const [op, label] of global) out.push({label: `仅${label}`, ops: [op]});
   }
   if (skin.length) out.push({label: '仅磨皮（逐张须单脸）', ops: skin});
+  if(supported.has('lnx.local_grade.v1')) {
+    out.push({label:'仅局部调色组（预检追加/替换）',ops:['lnx.local_grade.v1']});
+    if(global.length)out.push({label:'全图配方 + 局部调色组',ops:[...global.map(([op])=>op),'lnx.local_grade.v1']});
+  }
   return out;
 }
 

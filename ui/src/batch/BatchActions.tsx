@@ -1,7 +1,8 @@
+import {MaskTransferControls,type MaskTransferOptions,type TransferGroupChoice} from '../localMasks/transfer';
 /** A real, reachable photo-recipe workflow, separate from file-export controls. */
 export function BatchActions(props:{count:number;scopes:Array<{label:string;ops:string[]}>;scope:string;policy:string;
   onScope:(value:string)=>void;onPolicy:(value:string)=>void;ready:boolean;busy:boolean;unresolved:boolean;
-  canUndo:boolean;note:string;onReview:()=>unknown;onUndo:()=>unknown}){
+  groups?:TransferGroupChoice[];localMaskTransfer?:MaskTransferOptions;onLocalMaskTransfer?:(v:MaskTransferOptions)=>void;canUndo:boolean;note:string;onReview:()=>unknown;onUndo:()=>unknown}){
   const hasScope = props.scopes.some(s => s.label === props.scope && s.ops.length > 0);
   return <section className="batchActions" aria-label="批量配方同步">
     <div><strong>配方同步</strong><span>底片条已选 {props.count} 张（Ctrl / Shift 多选）</span></div>
@@ -14,6 +15,7 @@ export function BatchActions(props:{count:number;scopes:Array<{label:string;ops:
     <label>目标变化时<select value={props.policy} disabled={props.busy||props.unresolved} onChange={e=>props.onPolicy(e.target.value)}>
       <option value="skip_and_report">跳过并逐张报告</option><option value="recheck">整批不写入，重新预检</option></select></label>
       <small>{props.note}</small>
+      {props.localMaskTransfer&&props.onLocalMaskTransfer&&<MaskTransferControls groups={props.groups} value={props.localMaskTransfer} onChange={props.onLocalMaskTransfer} disabled={props.busy||props.unresolved}/>}
     </div></details>
     {!props.ready&&<small>需要已打开照片及支持批量预检的配套引擎。</small>}
   </section>;

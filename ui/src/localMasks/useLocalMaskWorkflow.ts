@@ -5,7 +5,7 @@ import {settleCurveEdit} from '../curveEditBarrier';
 import {createLocalMaskWorkflow,type LocalMaskContext,type LocalMaskTransport} from './workflow';
 let ownIntent=false;
 const api:LocalMaskTransport={
-  arm:async(captureId,documentId)=>{await settleCurveEdit();return invoke('source_patch_capture',{action:'arm',captureId,ticket:null,documentId,purpose:'local-masks'});},
+  arm:async(captureId,documentId,groupId)=>{await settleCurveEdit();return invoke('source_patch_capture',{action:'arm',captureId,ticket:null,documentId,purpose:'local-masks',groupId});},
   status:(captureId,ticket)=>invoke('source_patch_capture_status',{captureId,ticket}),
   frame:(captureId,ticket)=>invoke('source_patch_capture_frame',{captureId,ticket}),
   presented:(captureId,ticket,documentId)=>invoke('source_patch_capture',{action:'presented',captureId,ticket,documentId}),

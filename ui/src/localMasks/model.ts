@@ -1,4 +1,5 @@
 import type {Point} from '../sourcePatch/geometry';
+import type {TransferGroupChoice} from './transferModel';
 export type MaskKind='brush'|'linear'|'radial'|'color_range'|'luminance_range'|'semantic'|'full'|'prompted';
 export type MaskOperation='add'|'subtract'|'intersect';
 interface Common {id:string;name:string;enabled:boolean;operation:MaskOperation;opacity:number;feather:number}
@@ -14,10 +15,25 @@ export type MaskObject=Common & (
   {kind:'luminance_range';low:number;high:number}|
   {kind:'semantic';channel:string}|
   {kind:'full'}|{kind:'prompted';selection:PromptSelection});
-export interface LocalMaskReport {recipe:{version:1;domain:'source-normalized';objects:MaskObject[]};bound:boolean;suspended:string|null;channels:string[];channel_labels?:Record<string,string>;semantic_scope?:'whole-photo-category'}
+export interface LocalGradeLayer {id:string;name:string;enabled:boolean;grade:[number,number,number,number];mask:{recipe:{version:1;domain:'source-normalized';objects:MaskObject[]}};types:string[]}
+export interface LocalGradeReport {version:1;layers:LocalGradeLayer[];suspended:string|null;max_layers:number;grade_limits:[number,number,number]}
+export interface LocalMaskReport {recipe:{version:1;domain:'source-normalized';objects:MaskObject[]};bound:boolean;suspended:string|null;channels:string[];channel_labels?:Record<string,string>;semantic_scope?:'whole-photo-category';layers?:LocalGradeReport;transfer_groups?:TransferGroupChoice[]}
 export type PromptAcceptance={action:'accept_prompted';preview_id:string;candidate:number;id:string;name:string;operation:MaskOperation;opacity:number;feather:number};
-export type MaskMutation=PromptAcceptance|{action:'upsert';coordinate_space:'capture'|'source';object:MaskObject}|
+export type BaseMaskMutation={action:'upsert';coordinate_space:'capture'|'source';object:MaskObject}|
   {action:'delete';id:string}|{action:'move';id:string;index:number}|{action:'bind';enabled:boolean}|{action:'clear'};
+export type LayerMutation={action:'layer_update';id:string;name:string;enabled:boolean;grade:[number,number,number,number]}|
+  {action:'layer_delete';id:string}|{action:'layer_move';id:string;index:number}|{action:'layer_mask';id:string;mutation:BaseMaskMutation};
+export type MaskMutation=PromptAcceptance|BaseMaskMutation|LayerMutation;
+export function mutationGroupId(mutation:MaskMutation|null):string|null {
+  return mutation&&(mutation.action==='layer_update'||mutation.action==='layer_delete'||mutation.action==='layer_move'||mutation.action==='layer_mask')?mutation.id:null;
+}
+export function objectMutation(mutation:MaskMutation|null):Extract<BaseMaskMutation,{action:'upsert'}>|null {
+  const inner=mutation?.action==='layer_mask'?mutation.mutation:mutation;
+  return inner?.action==='upsert'?inner:null;
+}
+export function withObjectMutation(mutation:MaskMutation,inner:Extract<BaseMaskMutation,{action:'upsert'}>):MaskMutation {
+  return mutation.action==='layer_mask'?{...mutation,mutation:inner}:inner;
+}
 export const MASK_LABELS:Record<MaskKind,string>={brush:'画笔',linear:'线性渐变',radial:'径向渐变',color_range:'颜色范围',luminance_range:'亮度范围',semantic:'语义区域',full:'全图',prompted:'AI提示选区'};
 export const OPERATION_LABELS:Record<MaskOperation,string>={add:'添加（最大值）',subtract:'减去',intersect:'交集（最小值）'};
 export const MASK_SOURCE_LABEL='蒙版编辑视图：原始源图，保留构图，不含修补、磨皮、形变或调色；不是最终效果图';

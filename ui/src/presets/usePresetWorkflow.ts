@@ -1,3 +1,4 @@
+import {defaultMaskTransfer,LOCAL_GRADE_OP} from '../localMasks/transfer';
 import {useEffect,useReducer,useRef,useState} from 'react';
 import {confirm,open} from '@tauri-apps/plugin-dialog';
 import {runPreset,readPresetResult,type PresetState} from '../native';
@@ -5,8 +6,11 @@ import {createPresetWorkflow,initialPresetUi,type PresetContext,type PresetUi} f
 import {initialPresetForm,presetFormReducer,presetFromLabel,unavailableScope} from './presetModel';
 export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null,onRefresh:()=>Promise<void>,face:{ok:boolean;why:string}){
   const [ui,setUi]=useState<PresetUi>(initialPresetUi),[form,dispatch]=useReducer(presetFormReducer,initialPresetForm);
+  const [localMaskTransfer,setLocalMaskTransfer]=useState(defaultMaskTransfer),[saveMaskTransfer,setSaveMaskTransfer]=useState(defaultMaskTransfer);
+  useEffect(()=>setLocalMaskTransfer(v=>({...v,groups:null})),[form.selectedId]);
+  useEffect(()=>setSaveMaskTransfer(v=>({...v,groups:null})),[context.documentId]);
   const [note,setNote]=useState(''),[dialogBusy,setDialogBusy]=useState(false);
-  const latest=useRef({context,catalog,onRefresh,face,form});latest.current={context,catalog,onRefresh,face,form};
+  const latest=useRef({context,catalog,onRefresh,face,form,localMaskTransfer,saveMaskTransfer});latest.current={context,catalog,onRefresh,face,form,localMaskTransfer,saveMaskTransfer};
   const flow=useRef<ReturnType<typeof createPresetWorkflow>|null>(null),dialogLock=useRef(false),savedRevision=useRef(0);
   useEffect(()=>{
     let live=true,reported='';
@@ -37,7 +41,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
     const missing=unavailableScope(value.form.scope,value.catalog?.modules??[]);
     if(missing.length){setNote('有已不可用的模块，请取消这些选择后再保存');return;}
     savedRevision.current=value.form.nameRevision;setNote('');
-    await current()?.submit('save',{id:`user-${crypto.randomUUID()}`,name:value.form.name.trim(),kind:'custom',moduleScope:[...value.form.scope]});
+    await current()?.submit('save',{id:`user-${crypto.randomUUID()}`,name:value.form.name.trim(),kind:'custom',moduleScope:[...value.form.scope],localMaskTransfer:value.form.scope.includes(LOCAL_GRADE_OP)?value.saveMaskTransfer:undefined});
   }
   async function apply(id=form.selectedId){
     if(locked())return;const value=latest.current,preset=value.catalog?.list.find(p=>p.id===id);
@@ -47,7 +51,14 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
     if(!value.face.ok&&value.catalog?.modules.some(m=>ops.includes(m.operation_id)&&m.single_face)){
       setNote(value.face.why||'这个预设的部分模块需要可用的单脸');return;
     }
-    dispatch({type:'select',id});setNote('');await current()?.submit('apply',{id},ops);
+    dispatch({type:'select',id});setNote('');
+    await current()?.submit(ops.includes(LOCAL_GRADE_OP)?'preflight':'apply',{id,...(ops.includes(LOCAL_GRADE_OP)?{localMaskTransfer:value.localMaskTransfer}:{})},ops);
+  }
+  const review=ui.action==='preflight'&&ui.result?.success&&ui.result.id===form.selectedId&&ui.result.document_id===context.documentId
+    &&JSON.stringify(ui.submitted?.options.localMaskTransfer)===JSON.stringify(localMaskTransfer)?ui.result:null;
+  async function confirmLocal(){
+    if(locked()||!review?.preflight_token||!review.module_scope)return;
+    await current()?.submit('apply',{id:review.id,preflightToken:review.preflight_token},review.module_scope);
   }
   async function importFile(asCopy=false){
     if(locked())return;dialogLock.current=true;setDialogBusy(true);setNote('');
@@ -69,7 +80,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   }
   async function refresh(){if(locked())return;setNote('');await current()?.submit('list');}
   async function inspect(){try{await latest.current.onRefresh();setNote('已请求当前状态，请核对照片与预设列表；不会重复提交操作。');}catch(error){setNote(String(error));}}
-  return {ui,form,note,selected,catalog,context,dialogBusy,face,
+  return {ui,form,note,selected,catalog,context,dialogBusy,face,localMaskTransfer,setLocalMaskTransfer,saveMaskTransfer,setSaveMaskTransfer,review,confirmLocal,
     busy:dialogBusy||ui.phase==='working'||ui.phase==='uncertain',
     setName:(value:string)=>dispatch({type:'name',value}),select:(id:string)=>dispatch({type:'select',id}),
     setScope:(ops:string[])=>dispatch({type:'scope',ops}),save,apply,importFile,remove,refresh,inspect,

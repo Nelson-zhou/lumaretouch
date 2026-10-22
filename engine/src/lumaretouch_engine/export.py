@@ -137,6 +137,13 @@ class ExportSpec:
     local_masks: dict | None = None
     local_mask_semantics: dict = field(default_factory=dict)
     local_mask_source_path: str | None = None  # ephemeral verified source, never a persisted raster
+    local_grade_groups: dict | None = None    # retained ordered groups, not merged masks
+    local_grade_fields: list | None = None    # disposable full-source uint8 rasters
+    local_grade_source_stamp: list | None = None  # decode-to-render source race guard
+    effect_recovery: dict | None = None      # retained source-bound brush vectors
+    effect_recovery_path: str | None = None  # ephemeral verified original source
+    effect_recovery_stamp: list | None = None  # full-decode identity, never rebased
+    effect_recovery_fields: list | None = None  # disposable full-source uint8 masks
     # M6/P1-2 换底：与预览同一份 matte 与背景色（导出尺寸、(H,W) uint8 覆盖度、
     # bg_ref 是 [0,1] 三分量）。换底只活在预览而不进导出就是“屏幕换了、盘上没换”——
     # 前景仍在原位、只是背后的色没变，是最难从缩略图看出来的一类不一致。
@@ -170,8 +177,37 @@ class ExportSpec:
     sharpen_radius: int = 2
     sharpen_threshold: float = 0.01
 
+    def check_effect_recovery(self) -> None:
+        """Validate retained intent and optional full-source fields before work."""
+        from .effect_recovery_state import check
+        from .effect_recovery_stage import check_fields
+        try:
+            self.effect_recovery = check(self.effect_recovery)
+            path, stamp = self.effect_recovery_path, self.effect_recovery_stamp
+            if path is not None and (type(path) is not str or not path or '\x00' in path):
+                raise ValueError('效果恢复源图路径无效')
+            if stamp is not None and (type(stamp) is not list or len(stamp) != 5
+                    or any(type(n) is not int for n in stamp)):
+                raise ValueError('效果恢复源图解码凭据无效')
+            if self.effect_recovery['targets'] and (path is None or stamp is None):
+                raise ValueError('效果恢复导出缺少经过验证的源图路径或解码凭据')
+            if self.effect_recovery_fields is not None:
+                source = self.effect_recovery['source']
+                shape = (source['height'], source['width']) if source is not None else None
+                check_fields(self.effect_recovery_fields, shape, state=self.effect_recovery)
+        except ValueError as error:
+            raise ExportError(f'效果恢复导出配方无效：{error}') from error
+
     def check(self) -> None:
         """参数在进入昂贵通路之前先过一遍唯一校验口径（与各层 setter 同源）。"""
+        self.check_effect_recovery()
+        from .local_grade_layers import check as check_groups
+        from .local_grade_stage import check_fields
+        self.local_grade_groups = check_groups(self.local_grade_groups)
+        if self.local_grade_groups['layers'] and not self.local_mask_source_path:
+            raise ExportError('Independent local-grade export requires its bound original source path')
+        if self.local_grade_fields is not None:
+            check_fields(self.local_grade_fields, groups=self.local_grade_groups)
         try:
             validate_repair_ops(self.repair)
         except ValueError as error:
@@ -477,7 +513,26 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     divisor = 65535.0 if bits == 16 else 255.0
     if src_u8.ndim != 3 or src_u8.shape[2] != 3 or src_u8.dtype != dtype:
         raise ExportError(f"导出要 (H,W,3) {np.dtype(dtype).name}，得到 {src_u8.shape} {src_u8.dtype}")
-    from .local_mask_state import export_prepare
+    from .local_mask_state import export_prepare, file_stamp
+    from .local_grade_runtime import export_prepare as prepare_local_grades
+    from .local_grade_layers import check as check_groups
+    from .local_grade_stage import check_fields
+    from .effect_recovery_runtime import export_prepare as prepare_effect_recovery, attach_tile
+    spec.check_effect_recovery()
+    recovery_source_stamp = None
+    if spec.effect_recovery['targets']:
+        recovery_source_stamp = file_stamp(spec.effect_recovery_path)
+        if list(recovery_source_stamp) != spec.effect_recovery_stamp:
+            raise ExportError('效果恢复源图自全尺寸解码后变化，停止导出')
+    groups = check_groups(spec.local_grade_groups)
+    group_source_stamp = None
+    if groups['layers']:
+        if not spec.local_mask_source_path:
+            raise ExportError('Independent local-grade export is missing its original source path')
+        group_source_stamp = file_stamp(spec.local_mask_source_path)
+        if (spec.local_grade_source_stamp is not None
+                and list(group_source_stamp) != spec.local_grade_source_stamp):
+            raise ExportError('Independent local-grade source changed since full decode')
     def mask_cancelled():
         # Existing inspection/export owners may raise cancellation in progress.
         # Prompted inference runs in a killable child, never an uninterruptible
@@ -485,6 +540,15 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         if progress: progress(0, 1, (time.perf_counter()-t_function)*1000.)
         return False
     export_prepare(spec, src_u8, cancelled=mask_cancelled)
+    # Rasters are disposable. Drop a previous full render's fields before
+    # allocating replacements instead of silently doubling the CPU mask budget.
+    spec.local_grade_fields = None
+    prepare_local_grades(spec, src_u8, cancelled=mask_cancelled)
+    check_fields(spec.local_grade_fields, src_u8.shape[:2], groups=groups)
+    spec.effect_recovery_fields = None
+    prepare_effect_recovery(spec, src_u8.shape[:2], cancelled=mask_cancelled)
+    if group_source_stamp is not None and file_stamp(spec.local_mask_source_path) != group_source_stamp:
+        raise ExportError('Independent local-grade source changed during mask preparation')
     spec.check()
     # 纯校验全部排在 torch 守卫之前：没装 torch 的环境也要拿到同一句参数拒绝，
     # 而不是先被"导出需要 torch"抢掉——那样 CI 的 CPU job 根本测不到这些分支。
@@ -542,7 +606,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     out_h, out_w = plan.out_h, plan.out_w
     out = np.zeros((out_h, out_w, 3), np.float32 if bits == 16 else np.uint8)
     seg = {"filter": 0.0, "light": 0.0, "deform": 0.0, "exposure": 0.0,
-           "lut": 0.0, "grade": 0.0, "enhance": 0.0, "bg": 0.0}
+           "lut": 0.0, "grade": 0.0, "local_grade": 0.0, "enhance": 0.0, "bg": 0.0}
     upscale_ms = 0.0
     # 三段非算子开销。为什么不只记算子：上一版只记五个算子段，跑靶量到"分段合计只占
     # 整帧 27%"——那 73% 不知道去哪了（真因是每块一次 empty_cache，把分配器缓存全
@@ -561,6 +625,9 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             pipe.load_rgb_f32(np.ascontiguousarray(src_u8[cy0:cy1, cx0:cx1], dtype=np.float32) / divisor)
         else:
             pipe.load_rgb_u8(src_u8[cy0:cy1, cx0:cx1])
+        # Rasterize once at source dimensions, then take the identical tile halo
+        # used by all operators. RGB8/RGB16 share this float recovery stage.
+        attach_tile(pipe, spec, (cy0, cx0, cy1, cx1))
         t_c = time.perf_counter()
         io["setup"] += (t_c - t0) * 1000.0
         if spec.light:
@@ -605,7 +672,12 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                 # 逐像素对应：调色是逐点的（margin 里那些像素不参与它），所以按与补丁
                 # 完全相同的窗口切区域就行，不需要重采样也不需要外边扩。
                 sub = spec.grade_mask[cy0:cy1, cx0:cx1]
-                if int((sub > 0).sum()) > 0:
+                if spec.grade_scope == "objects":
+                    # Objects live in the source domain, unlike the legacy
+                    # brush display mask. Reuse the actual image warp at grade
+                    # time; the existing displacement margin covers sampling.
+                    pipe.set_local_mask(sub)
+                elif int((sub > 0).sum()) > 0:
                     # 与预览同一份库层入口：先挂区域再切作用域（brush 无区域会被当场拒）
                     pipe.set_grade_mask(sub, mode="replace")
                     pipe.set_grade_scope("brush")
@@ -613,6 +685,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                     # 这一块完全在区域外：整层不挂 = 该块逐字节与原片同（而不是拿
                     # scope=brush 去撞一个“无区域”的异常，也不是默默全图调色）
                     pipe.clear_grade()
+        pipe.local_grade_layers.set([
+            {'id': item['id'], 'grade': item['grade'],
+             'weight': item['weight'][cy0:cy1, cx0:cx1]}
+            for item in spec.local_grade_fields])
         if spec.bg_matte is not None and spec.bg_ref is not None:
             # P1-2 换底：与 grade_mask 同一个切窗（逐像素对应，外边扩那些像素不参与
             # 混合，只喂给带限算子）；遮罩是代理档上算好后 resample 到导出尺寸的连续覆盖度，
@@ -677,6 +753,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                           "geometry_ms": round((time.perf_counter() - t_geometry) * 1000, 2)}
     if bits == 16:
         out = quantize16_np(out)
+    if group_source_stamp is not None and file_stamp(spec.local_mask_source_path) != group_source_stamp:
+        raise ExportError('Independent local-grade source changed during rendering')
+    if recovery_source_stamp is not None and file_stamp(spec.effect_recovery_path) != recovery_source_stamp:
+        raise ExportError('效果恢复源图在渲染过程中变化，停止导出')
     peak_bytes = int(delta.numel() * 4) if delta is not None else 0
     return out, {
         "bits": bits, "warp_precision": "float64" if bits == 16 else "float32",
@@ -696,6 +776,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         "seg_ms": {**{k: round(v, 2) for k, v in seg.items()},
                    **{k: round(v, 2) for k, v in io.items()}},
         "delta_cpu_mb": round(peak_bytes / 2**20, 1),
+        "local_grade_groups": len(spec.local_grade_fields),
+        "local_grade_mask_cpu_bytes": sum(int(item['weight'].nbytes) for item in spec.local_grade_fields),
+        "effect_recovery_targets": [item['target'] for item in spec.effect_recovery_fields],
+        "effect_recovery_mask_cpu_bytes": sum(int(item['weight'].nbytes) for item in spec.effect_recovery_fields),
         "channel": spec.channel, **repair_stats, **geometry_facts,
     }
 

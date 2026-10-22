@@ -17,9 +17,9 @@ fn preset(value: &Value) -> bool {
 }
 impl ReceiptKind for PresetKind {
     const NAME: &'static str = "preset";
-    const ACTIONS: &'static [&'static str] = &["list", "apply", "save", "import", "delete"];
+    const ACTIONS: &'static [&'static str] = &["list", "preflight", "apply", "save", "import", "delete"];
     fn valid_request(action: &str, document: Option<&str>) -> bool {
-        if ["apply", "save"].contains(&action) {
+        if ["apply", "preflight", "save"].contains(&action) {
             document.is_some_and(|d| !d.is_empty() && d.len() <= 128 && d.chars().count() <= 64)
         } else { document.is_none() }
     }
@@ -30,6 +30,10 @@ impl ReceiptKind for PresetKind {
         if document.is_some() && value["document_id"].as_str() != document { return false; }
         if !success { return true; }
         match value["action"].as_str() {
+            Some("preflight") => text(&value["id"]) && scope(&value["module_scope"])
+                && modules(&value["applies"], &value["module_scope"])
+                && value["preflight_token"].as_str().is_some_and(|s| s.len() == 32 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+                && value["local_mask_transfer"].is_object() && text(&value["revision"]),
             Some("list") => value["catalog"]["available"] == true && value["catalog"]["list"].as_array().is_some_and(|items| items.iter().all(preset))
                 && value["catalog"]["errors"].is_array() && value["catalog"]["modules"].is_array(),
             Some("apply") => text(&value["id"]) && scope(&value["module_scope"]) && modules(&value["before"], &value["module_scope"])

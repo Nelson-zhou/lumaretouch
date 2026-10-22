@@ -1,3 +1,4 @@
+import {MaskTransferEvidenceView} from '../localMasks/transfer';
 import {useEffect,useRef} from 'react';
 import type {BatchUi,BatchTarget} from './batchWorkflow';
 import './batchReview.css';
@@ -57,6 +58,7 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
       </>}
       {!!targets.length&&<ul className="batchTargets">{targets.map(t=><li key={t.document_id} title={t.path}>
         <span>{file(t.path)}</span><span>{t.outcome==='applied'?'已同步':t.outcome==='unknown'?'结果未确认':t.outcome==='not_applied'?'未执行':reason(t.blocked)}</span>
+        {t.local_mask_transfer&&<MaskTransferEvidenceView value={t.local_mask_transfer}/>}
       </li>)}</ul>}
       {!!plan?.rejected_docs?.length&&<ul>{plan.rejected_docs.map((r,i)=><li key={i}>{String(r.doc)}：{r.error}</li>)}</ul>}
       {!!result?.conflicts?.length&&<ul>{result.conflicts.map((r,i)=><li key={i}>{file(r.path)}：{r.reason}</li>)}</ul>}

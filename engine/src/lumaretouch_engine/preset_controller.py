@@ -12,11 +12,13 @@ import json
 from typing import Callable
 from . import scope as SC, preset_store as PS
 from .preset_transaction import apply_with_rollback, PresetApplyError
+from . import local_grade_layers as LG
 
-ACTIONS = ("list", "apply", "save", "import", "delete")
-LEGACY_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note"}
-FIELDS = {"list": set(), "apply": {"id", "document_id"},
-          "save": {"id", "name", "kind", "force", "note", "module_scope", "document_id"},
+ACTIONS = ("list", "preflight", "apply", "save", "import", "delete")
+LEGACY_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note", "local_mask_transfer", "preflight_token"}
+FIELDS = {"list": set(), "apply": {"id", "document_id", "preflight_token"},
+          "preflight": {"id", "document_id", "local_mask_transfer"},
+          "save": {"id", "name", "kind", "force", "note", "module_scope", "document_id", "local_mask_transfer"},
           "import": {"path", "id", "force"}, "delete": {"id"}}
 MAX_RECEIPTS = 64
 MAX_RESULT_BYTES = 8 * 1024 * 1024
@@ -32,12 +34,17 @@ class PresetPorts:
     face_check: Callable[[], tuple[str, str]]
     status: Callable[[], dict]
     invalidate: Callable[[], None]
+    target_row: Callable[[], dict] = lambda: {}
+    revision: Callable[[], str] = lambda: ''
+    advance: Callable[[], None] = lambda: None
 
 
 class PresetController:
     def __init__(self, ports: PresetPorts, emit: Callable[[dict], None]):
         self.ports = ports; self.emit = emit; self.last = None
         self._receipts = OrderedDict(); self._pending = {}; self._effect_started = False
+        from .local_grade_preset_review import PresetReviews
+        self.reviews = PresetReviews()
 
     def last_applied(self):
         if not self.last: return None
@@ -76,7 +83,7 @@ class PresetController:
             if "force" in p and type(p["force"]) is not bool: raise SC.ScopeError("force 必须是布尔值")
             for key in ("id", "name", "path", "kind", "note"):
                 if key in p and type(p[key]) is not str: raise SC.ScopeError(f"{key} 必须是字符串")
-            for key in ({"id"} if action in ("apply", "save", "delete") else {"path"} if action == "import" else set()):
+            for key in ({"id"} if action in ("apply", "preflight", "save", "delete") else {"path"} if action == "import" else set()):
                 if not p.get(key, "").strip(): raise SC.ScopeError(f"preset {action} 需要 {key}")
             if action == "save":
                 if not p.get("name", "").strip(): raise SC.ScopeError("预设名称不能为空")
@@ -86,11 +93,11 @@ class PresetController:
                 if type(scope) is not list or any(type(op) is not str for op in scope):
                     raise SC.ScopeError("module_scope 必须是模块名数组")
                 SC.check_scope(p.get("module_scope"))  # New UI must choose explicitly.
-            if action in ("apply", "save"):
+            if action in ("apply", "preflight", "save"):
                 document = self.document_identity(p)
                 if document is None or document != self.ports.document_id():
                     raise SC.ScopeError("照片已经变化，请在当前照片上重新选择操作")
-        if action in ("apply", "save"):
+        if action in ("apply", "preflight", "save"):
             reason = self.ports.guard(f"preset {action}")
             if reason: raise SC.ScopeError(reason)
         return action
@@ -100,7 +107,7 @@ class PresetController:
         action = raw_action if type(raw_action) is str and raw_action in ACTIONS else "invalid"
         result = {"event": "preset_result", "protocol": 1, "request_id": request, "action": action,
                   "success": False, "outcome_unknown": False}
-        if action in ("apply", "save"):
+        if action in ("apply", "preflight", "save"):
             result["document_id"] = self.document_identity(p)
         digest = None; self._effect_started = False
         try:
@@ -118,6 +125,14 @@ class PresetController:
                 catalog = self.state(); event = {"event": "preset_list", **catalog}; self.emit(event)
                 if not catalog["available"]: raise SC.ScopeError("无法读取预设目录，详见目录错误")
                 evidence = {"catalog": catalog}
+            elif action == "preflight":
+                doc = PS.find(p['id'])
+                for op in doc['modules']:
+                    if SC.MODULES[op]['single_face']:
+                        verdict, reason = self.ports.face_check()
+                        if verdict != 'ok': raise SC.ScopeError(f'{op}：{reason}')
+                evidence = self.reviews.prepare(doc, self.ports.capture(), self.ports.target_row(),
+                    self.ports.document_id(), self.ports.revision(), p.get('local_mask_transfer'))
             elif action == "apply": evidence = self.apply(p)
             elif action == "save": evidence = self.save(p)
             elif action == "import":
@@ -189,15 +204,24 @@ class PresetController:
     def apply(self, p):
         pid = str(p.get("id") or "")
         if not pid: raise SC.ScopeError("preset apply 需要 id")
-        doc = PS.find(pid); mods = doc["modules"]; ops = list(mods)
+        previous = self.ports.capture()
+        if p.get('preflight_token') is not None:
+            record = self.reviews.claim(p['preflight_token'], pid, previous, self.ports.target_row(),
+                                       self.ports.document_id(), self.ports.revision())
+            doc, mods = record['preset'], record['modules']
+        else:
+            doc = PS.find(pid); mods = doc['modules']
+            if LG.OP in mods: raise SC.ScopeError('含独立局部调色的预设必须先查看目标预检，再确认应用')
+        ops = list(mods)
         for op in ops:
             if SC.MODULES[op]["single_face"]:
                 verdict, reason = self.ports.face_check()
                 if verdict != "ok": raise SC.ScopeError(f"{op} 不能作用在这张图上：{reason}")
-        previous = self.ports.capture(); before = SC.params_of(previous, ops)
-        state = SC.apply_modules(previous, mods); self._effect_started = True
+        before = SC.params_of(previous, ops)
+        if p.get('preflight_token') is not None: self.ports.advance()
+        state = SC.apply_modules(previous, mods, local_replace_legacy=bool(p.get('preflight_token') and record['transfer']['legacy_removed'])); self._effect_started = True
         frame = apply_with_rollback(self.ports.replay, previous, state, preset_id=pid,
-                                    emit=self.emit, invalidate=self.ports.invalidate)
+                                    emit=self.emit, invalidate=self.ports.invalidate, strict_local=LG.OP in ops)
         after = SC.params_of(state, ops)
         self.last = {"id": pid, "name": doc["name"], "ops": ops, "params": after}
         render_ms = frame.pop("render_ms")
@@ -205,13 +229,22 @@ class PresetController:
                    "modules": ops, "before": before, "after": after, "render_ms": render_ms, "doc_state": self.ports.status()})
         self.emit(frame)
         return {"id": pid, "name": doc["name"], "module_scope": ops, "before": before, "after": after,
-                "document_id": self.ports.document_id()}
+                "document_id": self.ports.document_id(), "preflight_token":p.get('preflight_token')}
 
     def save(self, p):
         requested = p.get("module_scope")
         ops = SC.check_scope(list(SC.transferable_ops()) if requested is None else requested)
+        mods = SC.params_of(self.ports.capture(), ops)
+        if LG.OP in mods:
+            policy = LG.options(p.get('local_mask_transfer'))
+            chosen, _ = LG.choose(mods[LG.OP]['groups'], policy)
+            if not chosen: raise SC.ScopeError('所选类型没有可保存的局部调色组')
+            mods[LG.OP] = {'groups': LG.portable({'version':1,'layers':chosen})}
+            from .local_grade_runtime import verify_original
+            verify_original(mods[LG.OP]['groups'], self.ports.target_row())
+        elif p.get('local_mask_transfer') is not None: raise SC.ScopeError('未选择独立局部调色模块，不能附带蒙版迁移选项')
         doc = {"schema": SC.PRESET_SCHEMA, "id": p.get("id") or "", "name": p.get("name") or str(p.get("id") or ""),
-               "kind": p.get("kind") or "custom", "note": p.get("note") or "", "modules": SC.params_of(self.ports.capture(), ops)}
+               "kind": p.get("kind") or "custom", "note": p.get("note") or "", "modules": mods}
         clean = SC.validate_preset(doc); self._effect_started = True
         saved = PS.save(clean, force=bool(p.get("force")))
         self.emit({"event": "preset_saved", "preset": clean, "path": saved})

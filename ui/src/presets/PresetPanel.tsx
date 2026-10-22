@@ -1,3 +1,4 @@
+import {LOCAL_GRADE_OP,MaskTransferControls,MaskTransferEvidenceView,transferGroupsFromParams} from '../localMasks/transfer';
 import type {PresetWorkflowBinding} from './usePresetWorkflow';
 import {moduleLabel,presetLabel,unavailableScope} from './presetModel';
 import './presets.css';
@@ -7,7 +8,7 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
   const faceBlocked=!w.face.ok&&modules.some(m=>selectedOps.includes(m.operation_id)&&m.single_face);
   const rows=[...modules,...chosen.filter(op=>!modules.some(m=>m.operation_id===op))
     .map(operation_id=>({operation_id,params:[],transferable:false,single_face:false,reason:'当前引擎不再提供这个模块'}))];
-  const verbs={list:'刷新列表',apply:'应用预设',save:'保存预设',import:'导入预设',delete:'删除预设'};
+  const verbs={list:'刷新列表',preflight:'预检局部预设',apply:'应用预设',save:'保存预设',import:'导入预设',delete:'删除预设'};
   const oldDocument=!!w.ui.submitted?.options.documentId&&w.ui.submitted.options.documentId!==w.context.documentId;
   const nameLength=Array.from(w.form.name.trim()).length;
   return <section className="modulePresets" aria-label="模块预设">
@@ -27,10 +28,12 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {unavailableScope(selectedOps,modules).length>0&&<p>包含当前不可用模块，不能应用。</p>}
     </div>}
     <div className="presetButtons">
-      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>应用所选</button>
+      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{selectedOps.includes(LOCAL_GRADE_OP)?'预检所选局部预设':'应用所选'}</button>
       <button disabled={!w.context.enabled||w.busy} onClick={()=>void w.refresh()}>刷新列表</button>
       <button disabled={!w.context.enabled||w.busy||!w.selected||w.selected.builtin} onClick={()=>void w.remove()}>删除所选</button>
     </div>
+    {selectedOps.includes(LOCAL_GRADE_OP)&&<MaskTransferControls groups={transferGroupsFromParams(w.selected?.modules[LOCAL_GRADE_OP])} value={w.localMaskTransfer} onChange={w.setLocalMaskTransfer} disabled={w.busy}/>}
+    {w.review?.local_mask_transfer&&<div className="presetDetail"><strong>冻结的目标预检，尚未应用</strong><MaskTransferEvidenceView value={w.review.local_mask_transfer}/><button disabled={w.busy||!w.context.editable} onClick={()=>void w.confirmLocal()}>确认本次局部预设并应用</button></div>}
     <fieldset><legend>保存当前照片的模块参数</legend>
       <label>预设名称<input aria-label="预设名称" value={w.form.name} maxLength={160} placeholder="例如：室外婚纱暖调" onChange={e=>w.setName(e.target.value)}/><small>{nameLength}/80 字符</small></label>
       {nameLength>80&&<p role="alert">名称过长，请缩短到 80 个字符以内。</p>}
@@ -41,6 +44,7 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
           onChange={e=>w.setScope(e.target.checked?[...chosen,m.operation_id]:chosen.filter(op=>op!==m.operation_id))}/>
         <span>{moduleLabel(m.operation_id)}{m.single_face&&<small>应用时须单脸</small>}{!m.transferable&&<small>{m.reason||'暂不可用'}</small>}</span>
       </label>)}</div>
+      {chosen.includes(LOCAL_GRADE_OP)&&<MaskTransferControls saveOnly groups={w.context.sourceGroups} value={w.saveMaskTransfer} onChange={w.setSaveMaskTransfer} disabled={w.busy}/>}
       {unavailable.length>0&&<p role="alert">请取消已不可用模块：{unavailable.map(moduleLabel).join('、')}</p>}
       {!chosen.length&&<p>请明确选择要保存的模块，不会自动保存全部调整。</p>}
       {!w.context.editable&&<p>保存和应用需要可编辑照片；导入、删除和浏览不需要打开照片。</p>}

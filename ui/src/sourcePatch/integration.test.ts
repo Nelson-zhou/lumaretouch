@@ -10,9 +10,9 @@ test('App owns one workflow outside conditional panels and exposes pending statu
   assert.equal((owners.match(/\buseSourcePatchWorkflow\(/g)??[]).length,1);
   const ownerCall=app.indexOf('=useRetouchCaptureWorkflows(');
   assert.ok(ownerCall>=0&&ownerCall<app.indexOf('<RetouchPanel'));
-  assert.match(app,/const \{sourcePatch,wbPicker,cloneStamp,localMasks\}=useRetouchCaptureWorkflows/);
+  assert.match(app,/const \{sourcePatch,wbPicker,cloneStamp,localMasks,colorPicker\}=useRetouchCaptureWorkflows/);
   assert.match(owners,/const sourcePatch=useSourcePatchWorkflow\(context,refresh\)/);
-  assert.match(owners,/return \{sourcePatch,wbPicker,cloneStamp,localMasks\}/);
+  assert.match(owners,/return \{sourcePatch,wbPicker,cloneStamp,localMasks,colorPicker\}/);
   assert.match(app,/<SourcePatchStatus owner=\{sourcePatch\}/);
   assert.match(app,/<Viewer[^>]*sourcePatch=\{sourcePatch\}/);
   assert.match(app,/source_patch_capture_protocol===1&&caps\?\.source_patch_result_protocol===1/);

@@ -1,7 +1,10 @@
 """Frozen batch review/commit policy, using explicit document/editor ports."""
 from dataclasses import dataclass
 from typing import Callable
+import json
 from . import scope as SC
+from . import local_grade_layers as LG
+from . import local_grade_runtime as LR
 from .batch_preflight import PreflightStore,FrozenTarget,canonical
 
 @dataclass(frozen=True)
@@ -53,19 +56,34 @@ class FrozenBatchController:
                 rows=self.ports.rows();index=self.ports.current()
                 if not 0<=index<len(rows):raise SC.ScopeError('no active source document')
                 source=self.ports.capture();source_row=rows[index];version=self.versions.version(source_row)
+                mods=SC.params_of(source,ops)
+                local_options=p.get('local_mask_transfer')
+                if LG.OP in ops:
+                    local_options=LG.options(local_options)
+                    selected,_=LG.choose(mods[LG.OP]['groups'],local_options)
+                    LG.portable({'version':1,'layers':selected})
+                    LR.verify_original({'version':1,'layers':selected},source_row)
+                elif local_options is not None:raise SC.ScopeError('局部蒙版选项需要明确选择独立局部调色模块')
                 targets=[];public=[]
                 for i in indices:
                     row=rows[i];v=self.versions.version(row);live=i==index
                     before=SC.params_of(source if live else row['state'],ops);blocked=self._blocked(row,ops,live)
-                    targets.append(FrozenTarget(v.document_id,v.revision,i,row['path'],blocked,canonical(before)))
+                    prepared=None;transfer=None
+                    if not blocked and LG.OP in ops:
+                        try:prepared,transfer=LR.prepare_modules(source if live else row['state'],mods,row,local_options,preview=len(public)<12)
+                        except Exception as error:blocked=str(error)[:2000]
+                    private_transfer=None if transfer is None else {k:v for k,v in transfer.items() if k!='preview_jpeg'}
+                    targets.append(FrozenTarget(v.document_id,v.revision,i,row['path'],blocked,canonical(before),
+                        None if prepared is None else canonical(prepared),None if private_transfer is None else canonical(private_transfer)))
                     public.append({'index':i,'path':row['path'],'live':live,'blocked':blocked,'before':before,
-                                   'document_id':v.document_id,'revision':str(v.revision)})
+                                   'document_id':v.document_id,'revision':str(v.revision),'local_mask_transfer':transfer})
                 plan=self.store.create(self.versions.workspace,version.document_id,version.revision,source_row['path'],
-                    ops,SC.params_of(source,ops),policy,targets,rejected)
+                    ops,mods,policy,targets,rejected)
                 body={'event':'batch_preflight','success':True,'module_scope':ops,'source':'current',
                     'source_snapshot':self._source(plan),'applies':plan.params(),'policy':policy,'targets':public,
                     'rejected_docs':rejected,'ok':sum(not r['blocked'] for r in public),'blocked':sum(bool(r['blocked']) for r in public),
                     'preflight_token':plan.token,'workspace_generation':plan.workspace,'expires_ns':str(plan.expires_ns)}
+                if LG.OP in ops:body['local_mask_transfer']=local_options
                 self.emit(body);self.emit_result(p,body);return
             if set(p)-{'cmd','action','preflight_token','request_id'}:
                 raise SC.ScopeError('token commit cannot change source, targets, modules or policy; preflight again')
@@ -85,7 +103,12 @@ class FrozenBatchController:
                     elif canonical(SC.params_of(live_state if index==current else row['state'],plan.modules))!=target.before_json:
                         blocked='target parameters changed outside the reviewed snapshot'
                     elif not blocked:blocked=self._blocked(row,plan.modules,index==current)
+                    if not blocked and LG.OP in plan.modules:
+                        try:LR.verify_modules(json.loads(target.prepared_json),row,json.loads(target.transfer_json))
+                        except Exception as error:blocked=str(error)[:2000]
                 resolved.append({'index':index,'path':target.path,'blocked':blocked,'document_id':target.document_id,
+                    '_prepared_modules':None if target.prepared_json is None else json.loads(target.prepared_json),
+                    '_local_replace_legacy':False if target.transfer_json is None else json.loads(target.transfer_json)['legacy_removed'],
                     'reviewed_index':target.index,'expected_revision':str(target.revision),'current_revision':None if actual is None else str(actual)})
             source=by_id.get(plan.source_id)
             source_changed=source is None or self.versions.version(source[1]).revision!=plan.source_revision
@@ -98,14 +121,14 @@ class FrozenBatchController:
             for row in resolved:
                 found=by_id.get(row['document_id'])
                 after=None if found is None else str(self.versions.version(found[1]).revision)
-                outcomes.append({**row,'result_revision':after,'outcome':'skipped' if row['blocked'] else 'applied'})
+                outcomes.append({**{k:v for k,v in row.items() if not k.startswith('_')},'result_revision':after,'outcome':'skipped' if row['blocked'] else 'applied'})
             result.update(success=True,target_outcomes=outcomes,preflight_token=plan.token,workspace_generation=plan.workspace,
                 source_snapshot=self._source(plan),source_changed_since_preflight=source_changed,source_missing=source is None)
             result=self.store.finish(plan,result);self.emit_result(p,result)
         except Exception as error:
             result={'success':False,'error':str(error)[:2000],'requires_preflight':True,
                     'outcome_unknown':commit_started,
-                    'target_outcomes':[{**r,'outcome':'conflict' if r['blocked'] else ('unknown' if commit_started else 'not_applied')} for r in resolved],
+                    'target_outcomes':[{**{k:v for k,v in r.items() if not k.startswith('_')},'outcome':'conflict' if r['blocked'] else ('unknown' if commit_started else 'not_applied')} for r in resolved],
                     'preflight_token':p.get('preflight_token'),'workspace_generation':self.versions.workspace}
             if plan is not None and p.get('action')=='commit':result=self.store.finish(plan,result)
             self.emit({'event':'error','error':'batch '+str(p.get('action'))+' rejected: '+result['error']})

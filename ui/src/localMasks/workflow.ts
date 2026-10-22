@@ -2,13 +2,14 @@ import {parseCaptureFrame,type VerifiedCapture} from '../captureFrame.ts';
 import type {CaptureDescriptor} from '../captureModel';
 import type {CloneStampCaptureStatus} from '../cloneStamp/workflow';
 import type {MaskMutation,MaskObject,PromptAcceptance} from './model';
+import {mutationGroupId,objectMutation,withObjectMutation} from './model.ts';
 import type {Point} from '../sourcePatch/geometry';
 import type {RangePatch} from './RangeControls';
 import {luminanceMapUnavailableReason,sourceLuminanceFromSrgb8} from './display.ts';
 export interface LocalMaskContext {enabled:boolean;canStart?:boolean;documentId:string;contextKey:string;reason?:string}
 export interface LocalMaskRequest {request_id:string;capture_id:string;ticket:string;document_id:string;mutation:MaskMutation}
 export interface LocalMaskTransport {
-  arm:(captureId:string,documentId:string)=>Promise<{ticket:string}>;
+  arm:(captureId:string,documentId:string,groupId:string|null)=>Promise<{ticket:string}>;
   status:(captureId:string,ticket:string)=>Promise<CloneStampCaptureStatus>;
   frame:(captureId:string,ticket:string)=>Promise<ArrayBuffer>;
   presented:(captureId:string,ticket:string,documentId:string)=>Promise<{eligible:boolean}>;
@@ -18,10 +19,10 @@ export interface LocalMaskTransport {
 }
 export interface LocalMaskState {
   phase:'idle'|'arming'|'painting'|'target'|'sending'|'waiting'|'success'|'failure'|'uncertain';
-  showOverlay:boolean;showLuminanceMap:boolean;frame:VerifiedCapture|null;mutation:MaskMutation|null;draw:boolean;geometryReady:boolean;request:LocalMaskRequest|null;message:string;
+  groupId:string|null;showOverlay:boolean;showLuminanceMap:boolean;frame:VerifiedCapture|null;mutation:MaskMutation|null;draw:boolean;geometryReady:boolean;request:LocalMaskRequest|null;message:string;
 }
-interface CaptureOwner {id:string;ticket:string|null;documentId:string;contextKey:string;ack:Promise<boolean>|null}
-const initial=():LocalMaskState=>({phase:'idle',showOverlay:true,showLuminanceMap:false,frame:null,mutation:null,draw:false,geometryReady:false,request:null,message:''});
+interface CaptureOwner {id:string;ticket:string|null;documentId:string;contextKey:string;groupId:string|null;ack:Promise<boolean>|null}
+const initial=():LocalMaskState=>({phase:'idle',groupId:null,showOverlay:true,showLuminanceMap:false,frame:null,mutation:null,draw:false,geometryReady:false,request:null,message:''});
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const count=(v:unknown)=>Number.isSafeInteger(v)&&Number(v)>=0;
 function bounded<T>(promise:Promise<T>,milliseconds:number):Promise<T>{
@@ -57,14 +58,22 @@ export function createLocalMaskWorkflow(api:LocalMaskTransport,options:{refresh:
     if(owner&&(!next.enabled||next.documentId!==owner.documentId||next.contextKey!==owner.contextKey))
       cancel(next.reason||'照片或编辑状态变化，未提交蒙版已取消');
   }
-  async function start(mutation:MaskMutation|null,draw=false){
-    if(!active||running||pending()||owner)return;
+  function selectGroup(groupId:string|null){
+    if(pending()||running)return false;
+    if(owner&&owner.groupId!==groupId)cancel('已切换蒙版组，原组的冻结画面与未提交修改已取消');
+    return true;
+  }
+  async function start(mutation:MaskMutation|null,draw=false,groupId:string|null=null){
+    if(!active||running||pending())return;
+    const targetGroup=mutation?mutationGroupId(mutation):groupId;
+    if(groupId!==null&&groupId!==targetGroup){failed('请求的蒙版组与修改目标不一致');return;}
+    if(!selectGroup(targetGroup)||owner)return;
     if(!context.enabled||context.canStart===false||!context.documentId){publish({phase:'failure',message:context.reason||'请等待照片与引擎就绪'});return;}
-    const o:CaptureOwner={id:id(),ticket:null,documentId:context.documentId,contextKey:context.contextKey,ack:null};owner=o;
-    publish({...initial(),phase:'arming',mutation:structuredClone(mutation),draw,geometryReady:!draw,message:'正在冻结原始源图…'});
+    const o:CaptureOwner={id:id(),ticket:null,documentId:context.documentId,contextKey:context.contextKey,groupId:targetGroup,ack:null};owner=o;
+    publish({...initial(),groupId:targetGroup,phase:'arming',mutation:structuredClone(mutation),draw,geometryReady:!draw,message:targetGroup?'正在冻结原始源图与所选组的已保存范围…':'正在冻结原始源图…'});
     const deadline=Date.now()+timeout;
     try{
-      const arm=api.arm(o.id,o.documentId).then(receipt=>{o.ticket=receipt.ticket;if(!current(o))release(o);return receipt;});
+      const arm=api.arm(o.id,o.documentId,o.groupId).then(receipt=>{o.ticket=receipt.ticket;if(!current(o))release(o);return receipt;});
       const receipt=await bounded(arm,deadline-Date.now());if(!current(o))return;
       if(!/^[1-9]\d*$/.test(receipt.ticket))throw Error('蒙版取样票据无效');
       while(current(o)){
@@ -75,6 +84,7 @@ export function createLocalMaskWorkflow(api:LocalMaskTransport,options:{refresh:
         if(report.phase==='ready'){
           const d=report.descriptor;
           if(!d||d.capture_id!==o.id||d.ticket!==receipt.ticket||d.document_id!==o.documentId||d.domain!=='source-input'||d.mask_overlay!==true)throw Error('蒙版必须使用原始源图');
+          if((d.mask_group_id??null)!==o.groupId)throw Error('冻结范围不属于所选蒙版组，请重新捕获');
           const buffer=await bounded(api.frame(o.id,receipt.ticket),deadline-Date.now());if(!current(o))return;
           const frame=parseCaptureFrame(buffer,d,'source-input');
           publish({phase:'painting',frame,message:'正在显示原始源图…'});
@@ -100,12 +110,13 @@ export function createLocalMaskWorkflow(api:LocalMaskTransport,options:{refresh:
     })();return o.ack;
   }
   function geometry(mask:MaskObject){
-    if(state.phase!=='target'||!state.draw||state.mutation?.action!=='upsert'||state.mutation.object.id!==mask.id)return;
-    publish({mutation:{action:'upsert',coordinate_space:'capture',object:structuredClone(mask)},geometryReady:true,message:'几何已准备；可重新拖动替换，点击应用后保留为可编辑对象'});
+    if(state.phase!=='target'||!state.draw||objectMutation(state.mutation)?.object.id!==mask.id)return;
+    publish({mutation:withObjectMutation(state.mutation!,{action:'upsert',coordinate_space:'capture',object:structuredClone(mask)}),geometryReady:true,message:'几何已准备；可重新拖动替换，点击应用后保留为可编辑对象'});
   }
   function range(patch:RangePatch){
-    if(state.phase!=='target'||state.mutation?.action!=='upsert')return;
-    const object=state.mutation.object;
+    const inner=objectMutation(state.mutation);
+    if(state.phase!=='target'||!inner)return;
+    const object=inner.object;
     let next:MaskObject;
     if(object.kind==='color_range'){
       const color=patch.color??object.color,tolerance=patch.tolerance??object.tolerance,invert=patch.invert??object.invert??false;
@@ -116,11 +127,12 @@ export function createLocalMaskWorkflow(api:LocalMaskTransport,options:{refresh:
       if(!Number.isFinite(low)||!Number.isFinite(high)||low<0||high>1||low>high)return;
       next={...object,low,high};
     }else return;
-    publish({mutation:{...state.mutation,object:next},geometryReady:true});
+    publish({mutation:withObjectMutation(state.mutation!,{...inner,object:next}),geometryReady:true});
   }
   function sample(point:Point){
-    if(state.phase!=='target'||!state.frame||state.mutation?.action!=='upsert'||point.some(n=>!Number.isFinite(n)||n<0||n>1))return;
-    const object=state.mutation.object,d=state.frame.descriptor;
+    const inner=objectMutation(state.mutation);
+    if(state.phase!=='target'||!state.frame||!inner||point.some(n=>!Number.isFinite(n)||n<0||n>1))return;
+    const object=inner.object,d=state.frame.descriptor;
     const x=Math.min(d.width-1,Math.floor(point[0]*d.width)),y=Math.min(d.height-1,Math.floor(point[1]*d.height)),offset=(y*d.width+x)*4;
     const row=d.sample_valid_rows?.[y];
     if(!row||row.length!==2||!row.every(Number.isSafeInteger)||row[0]<0||row[1]>d.width||x<row[0]||x>=row[1]){
@@ -160,19 +172,20 @@ export function createLocalMaskWorkflow(api:LocalMaskTransport,options:{refresh:
     finally{if(token===life)running=false;}
   }
   function acceptPrompted(mutation:PromptAcceptance){
-    if(!active||running||pending()||!owner||state.phase!=='target')return false;
+    if(!active||running||pending()||!owner||owner.groupId!==null||state.phase!=='target')return false;
     publish({mutation:structuredClone(mutation),draw:false,geometryReady:true,message:'已审核 AI 提示选区，正在提交一次修改'});return true;
   }
   async function apply(){
     const o=owner;
     if(!active||running||pending()||!o||!o.ticket||state.phase!=='target'||!state.mutation||!state.geometryReady)return;
+    if(mutationGroupId(state.mutation)!==o.groupId||(state.frame?.descriptor.mask_group_id??null)!==o.groupId){failed('蒙版组与已显示范围不一致，请重新捕获');return;}
     if(!context.enabled||context.documentId!==o.documentId||context.contextKey!==o.contextKey){cancel('照片或编辑状态已变化，未提交蒙版');return;}
     const request:LocalMaskRequest={request_id:`local-masks-${id()}`,capture_id:o.id,ticket:o.ticket,document_id:o.documentId,mutation:structuredClone(state.mutation)};
     const token=life;running=true;publish({phase:'sending',request,message:'正在提交一次蒙版修改…'});
     try{await bounded(api.submit(request),timeout);}catch{/* Transport failure may follow execution. Query the original request only. */}
     if(!active||token!==life)return;running=false;await query(request);
   }
-  return {snapshot:()=>state,subscribe:(f:(s:LocalMaskState)=>void)=>{listeners.add(f);return()=>{listeners.delete(f);};},context:updateContext,start,cancel,failed,presented,geometry,range,sample,acceptPrompted,apply,
+  return {snapshot:()=>state,subscribe:(f:(s:LocalMaskState)=>void)=>{listeners.add(f);return()=>{listeners.delete(f);};},context:updateContext,start,selectGroup,cancel,failed,presented,geometry,range,sample,acceptPrompted,apply,
     overlay(showOverlay:boolean){publish({showOverlay});},
     luminanceMap(showLuminanceMap:boolean){
       if(state.phase!=='target'||!state.frame)return;

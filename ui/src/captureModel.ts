@@ -10,6 +10,8 @@ export interface CaptureDescriptor {
   projection?:Record<string,unknown>;
   recipe_document_id?:string;recipe_revision?:string;
   mask_overlay?:boolean;mask_suspended?:string|null;sample_valid_rows?:[number,number][]|null;
+  /** null/omitted is the legacy mask slot; a retained group ID binds its own saved alpha. */
+  mask_group_id?:string|null;
 }
 export interface CapturePoint {x:number;y:number;size:1|3|5|11}
 export interface CaptureRegion {x:number;y:number;width:number;height:number}

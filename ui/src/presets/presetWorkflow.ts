@@ -1,13 +1,14 @@
+import {validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence,type TransferGroupChoice} from '../localMasks/transferModel.ts';
 /** Completion-only receipts. Never install a historical receipt's doc_state into controls. */
 import type {PresetInfo, PresetState} from '../native';
-export type PresetAction = 'list'|'apply'|'save'|'import'|'delete';
+export type PresetAction = 'list'|'preflight'|'apply'|'save'|'import'|'delete';
 export type PresetOptions = {id?:string;name?:string;path?:string;kind?:string;note?:string;force?:boolean;
-  moduleScope?:string[];requestId?:string;documentId?:string};
+  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string};
 export type PresetReply = {protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
-  document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
+  preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
   before?:Record<string,unknown>;after?:Record<string,unknown>;doc_state?:Record<string,unknown>;
   error?:string;requires_reload?:boolean;rolled_back?:boolean;operation_committed?:boolean|null};
-export type PresetContext = {enabled:boolean;editable:boolean;documentId:string};
+export type PresetContext = {enabled:boolean;editable:boolean;documentId:string;sourceGroups?:TransferGroupChoice[]};
 export type PresetUi = {phase:'idle'|'working'|'uncertain'|'done'|'error';action:PresetAction|null;
   result:PresetReply|null;message:string;submitted:{action:PresetAction;options:PresetOptions;requestId:string}|null};
 export type PresetTransport = {request:(action:PresetAction,options:PresetOptions)=>Promise<{requested:boolean}>;
@@ -21,7 +22,7 @@ const moduleKeys = (value:unknown,ops:string[]) => object(value) && sameScope(Ob
 export function validatePresetReply(result:PresetReply,action:PresetAction,opts:PresetOptions,requestId:string,expectedScope?:string[]){
   if(!result || result.protocol!==1 || result.request_id!==requestId || result.action!==action
     || typeof result.success!=='boolean' || typeof result.outcome_unknown!=='boolean' || (result.success&&result.outcome_unknown))throw Error('预设回执身份或状态不完整');
-  if(['apply','save'].includes(action)&&result.document_id!==opts.documentId)throw Error('预设结果不属于本次照片');
+  if(['apply','preflight','save'].includes(action)&&result.document_id!==opts.documentId)throw Error('预设结果不属于本次照片');
   if(!result.success)return;
   if(action==='list'){
     if(!result.catalog || result.catalog.available!==true || !Array.isArray(result.catalog.list)
@@ -33,7 +34,13 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
   if(!scope(result.module_scope))throw Error('缺少实际作用模块');
   const wanted=action==='save'?opts.moduleScope:expectedScope;
   if(wanted&&!sameScope(result.module_scope,wanted))throw Error('实际作用模块与选择不一致');
+  if(action==='preflight'){
+    if(!text(result.preflight_token)||!/^[a-f0-9]{32}$/.test(result.preflight_token)||!moduleKeys(result.applies,result.module_scope)||!validTransferEvidence(result.local_mask_transfer))throw Error('局部预设预检结果不完整');
+    if(!sameTransferOptions(result.local_mask_transfer.policy,opts.localMaskTransfer))throw Error('局部预设策略与请求不一致');
+    return;
+  }
   if(action==='apply'){
+    if(opts.preflightToken&&result.preflight_token!==opts.preflightToken)throw Error('预设应用不属于本次冻结预检');
     if(!moduleKeys(result.before,result.module_scope)||!moduleKeys(result.after,result.module_scope)
       || !object(result.doc_state)||result.doc_state.document_id!==opts.documentId)throw Error('缺少实际应用状态');
   }else{
@@ -60,7 +67,7 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
   }
   function uncertain(request:Pending,error:unknown){
     if(!active(request.generation))return;
-    if(request.action==='list'){pending=null;set({phase:'error',message:String(error)});}
+    if(['list','preflight'].includes(request.action)){pending=null;set({phase:'error',message:String(error)});}
     else set({phase:'uncertain',message:String(error)});
   }
   async function poll(request:Pending,deadline=now()+(config.timeoutMs??120000)){
@@ -73,7 +80,7 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
           const result=response.result;
           if(!result)throw Error('缺少预设完成结果');
           validatePresetReply(result,request.action,request.options,request.id,request.expectedScope);
-          if(result.outcome_unknown){if(request.action==='list')pending=null;set({phase:request.action==='list'?'error':'uncertain',result,message:result.error??'执行结果未确认，请先核对实际状态'});return;}
+          if(result.outcome_unknown){if(['list','preflight'].includes(request.action))pending=null;set({phase:['list','preflight'].includes(request.action)?'error':'uncertain',result,message:result.error??'执行结果未确认，请先核对实际状态'});return;}
           pending=null;set({phase:result.success?'done':'error',result,message:result.error??''});return;
         }
         if(response.phase!=='pending')throw Error(response.error??'结果不可查，不代表操作未执行');
@@ -84,7 +91,7 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
   }
   async function submit(action:PresetAction,options:PresetOptions={},expectedScope?:string[]){
     if(disposed||pending||state.phase==='working'||state.phase==='uncertain')return;
-    const editing=action==='apply'||action==='save';
+    const editing=['apply','preflight','save'].includes(action);
     if(!context.enabled||(editing&&(!context.editable||!context.documentId))){
       set({phase:'error',action,result:null,message:editing?'需要可编辑照片和支持预设回执的配套引擎':'当前引擎不支持预设回执'});return;
     }

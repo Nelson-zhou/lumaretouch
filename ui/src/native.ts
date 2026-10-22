@@ -1,3 +1,4 @@
+import type {MaskTransferOptions} from './localMasks/transfer';
 import type {WatermarkSettings} from "./watermark/model";
 import {curveBarrierRequired,settleCurveEdit,isCurveEditBusy} from './curveEditBarrier';
 import type {PresetReply} from './presets/presetWorkflow';
@@ -90,6 +91,7 @@ export interface ImageReady {
 
 /** 一格底片条上"这张调了什么"（引擎按图层数与开关报，不靠前端自己看像素）。 */
 export interface SessionEdits {
+  effect_recovery?: number;
   curves?: boolean;
   levels?: boolean;
   repair: number;
@@ -136,6 +138,7 @@ export const dragParametricCurve=(spec:CurveSpec,region:number,target:number)=>i
 export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_preview",{spec});
 
 export interface DocState {
+  effect_recovery?: import("./effectRecovery/model").RecoveryReport;
   local_masks?: import("./localMasks/model").LocalMaskReport;
   fabric?: import("./fabric/FabricPanel").FabricState;
   document_id?: string;
@@ -916,6 +919,8 @@ export interface EngineStatus {
    *  这些“引擎说什么能力”的清单都从这一份读。老宿主没报时为 undefined——那时那一排
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
+    effect_recovery_protocol?: number;
+    local_grade_live_protocol?: number;
     source_patch_capture_protocol?: number;
     source_patch_result_protocol?: number;
     clone_stamp_protocol?: number;
@@ -1578,12 +1583,12 @@ export const runTask = (
 /** 模块预设（LNX-P0-PRESET / PRESET-001、002）：作用域与合法性全在引擎的 scope.py，
  *  这里既不列模块名单也不写量程（与 exposure/crop 同一条理由：抄一份就漂一份）。 */
 export const runPreset = (
-  action: "list" | "apply" | "save" | "import" | "delete",
+  action: "list" | "preflight" | "apply" | "save" | "import" | "delete",
   opts: { id?: string; name?: string; path?: string; kind?: string; note?: string;
-          force?: boolean; moduleScope?: string[]; requestId?: string; documentId?: string } = {},
+          force?: boolean; moduleScope?: string[]; requestId?: string; documentId?: string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string } = {},
 ) => invoke<{ requested: boolean }>("preset", {
   action, id: opts.id, name: opts.name, path: opts.path, kind: opts.kind, note: opts.note,
-  force: opts.force, moduleScope: opts.moduleScope, requestId: opts.requestId, documentId: opts.documentId,
+  force: opts.force, moduleScope: opts.moduleScope, requestId: opts.requestId, documentId: opts.documentId,localMaskTransfer:opts.localMaskTransfer,preflightToken:opts.preflightToken,
 });
 export const readPresetResult=(requestId:string)=>invoke<{phase:string;request_id:string;result?:PresetReply;error?:string}>("preset_result",{requestId});
 
@@ -1592,10 +1597,10 @@ export const readPresetResult=(requestId:string)=>invoke<{phase:string;request_i
 export const runBatch = (
   action: "preflight" | "commit" | "undo" | "state",
   opts: { docs?: string[]; moduleScope?: string[]; conflictPolicy?: string;
-          batchId?: string; preflightToken?:string;requestId?:string } = {},
+          batchId?: string; preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions } = {},
 ) => invoke<{ requested: boolean }>("batch", {
   action, docs: opts.docs, moduleScope: opts.moduleScope,
-  conflictPolicy: opts.conflictPolicy, batchId: opts.batchId,preflightToken:opts.preflightToken,requestId:opts.requestId,
+  conflictPolicy: opts.conflictPolicy, batchId: opts.batchId,preflightToken:opts.preflightToken,requestId:opts.requestId,localMaskTransfer:opts.localMaskTransfer,
 });
 export const readBatchResult=(requestId:string)=>invoke<{phase:string;request_id:string;result?:BatchReply;error?:string}>("batch_result",{requestId});
 

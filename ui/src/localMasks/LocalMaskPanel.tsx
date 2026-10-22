@@ -5,7 +5,10 @@ import {RangeControls} from './RangeControls';
 import {luminanceMapUnavailableReason} from './display';
 import './localMasks.css';
 import {PromptedMaskDialog} from '../promptedMasks/PromptedMaskDialog';
-export function LocalMaskPanel({owner,report,onStart,blocked=false}:{owner:LocalMaskOwner;report?:LocalMaskReport;onStart:(mutation:MaskMutation|null,draw?:boolean)=>void;blocked?:boolean}){
+import {LocalGradePanel} from './LocalGradePanel';
+import {objectMutation} from './model';
+import type {LiveGradeOwner} from './useLiveGradeWorkflow';
+export function LocalMaskPanel({owner,report,onStart,blocked=false,liveGrade}:{owner:LocalMaskOwner;report?:LocalMaskReport;onStart:(mutation:MaskMutation|null,draw?:boolean,groupId?:string|null)=>void;blocked?:boolean;liveGrade?:LiveGradeOwner}){
   const {state,workflow,context,active,pending}=owner;
   const [selected,setSelected]=useState<string|null>(null),[draft,setDraft]=useState<MaskObject>(()=>newMask('brush'));
   const [aiOpen,setAiOpen]=useState(false);
@@ -22,7 +25,9 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false}:{owner:Local
     if(saved){setSelected(saved.id);setDraft(structuredClone(saved));}
     else{setSelected(null);setDraft(newMask(mutation.object.kind==='prompted'?'brush':mutation.object.kind,channels[0]??''));}
   },[state.phase,state.request?.request_id]);
-  const locked=blocked||active||pending||!context.enabled||context.canStart===false;
+  const baseLocked=blocked||active||pending||!context.enabled;
+  const locked=baseLocked||context.canStart===false||!!liveGrade?.busy;
+  const liveLocked=baseLocked||(!liveGrade?.busy&&context.canStart===false);
   const full=draft.kind==='full';
   const patch=(value:Partial<MaskObject>)=>setDraft({...draft,...value} as MaskObject);
   const create=(kind:MaskKind)=>{setSelected(null);setDraft(newMask(kind,channels[0]??''));};
@@ -34,6 +39,9 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false}:{owner:Local
   const canAdd=objects.length<64&&!(draft.kind==='full'&&objects.some(o=>o.kind==='full'));
   const invalidSemantic=draft.kind==='semantic'&&!channels.includes(draft.channel);
   const luminanceUnavailable=luminanceMapUnavailableReason(state.frame?.descriptor??null);
+  const reviewedObject=objectMutation(state.mutation)?.object;
+  const reviewedGroup=report?.layers?.layers.find(group=>group.id===state.groupId);
+  const coverageLabel=state.groupId?`“${reviewedGroup?.name??state.groupId}”组`:'旧编辑器蒙版';
   return <section className="localMaskPanel" aria-label="可组合局部蒙版" data-readonly-scopes>
     <strong>组合蒙版</strong>
     <small>只限制上方色相、饱和、明度与混入比例，不限制全局 LUT。几何与范围基于原始源图，不是形变后的最终画面。</small>
@@ -48,7 +56,7 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false}:{owner:Local
     <small>列表自上而下合成，从空蒙版开始；添加取最大值，减去扣除，交集取最小值。空列表或全部关闭时效果为零。</small>
     <ol className="localMaskList">
       {objects.map((object,index)=><li key={object.id} className={selected===object.id?'selected':''}>
-        <button className="localMaskSelect" disabled={active||pending} onClick={()=>{setSelected(object.id);setDraft(structuredClone(object));}} title={geometryDescription(object)}>
+        <button className="localMaskSelect" disabled={blocked||pending||liveGrade?.busy} onClick={()=>{if(workflow.selectGroup(null)){setSelected(object.id);setDraft(structuredClone(object));}}} title={geometryDescription(object)}>
           <span>{object.enabled?'●':'○'} {object.name}</span><small>{MASK_LABELS[object.kind]} · {OPERATION_LABELS[object.operation]}</small>
         </button>
         <button aria-label={`${object.name} 上移`} disabled={locked||index===0||object.kind==='full'} onClick={()=>onStart({action:'move',id:object.id,index:index-1})}>↑</button>
@@ -84,18 +92,21 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false}:{owner:Local
       </div>
       {selected&&drawingKind(draft.kind)&&<small>参数修改保留原有源图几何；重绘会替换选中对象的几何，不增加另一对象。</small>}
     </fieldset>
-    {active&&<label><input type="checkbox" checked={state.showOverlay||state.showLuminanceMap} disabled={state.showLuminanceMap} onChange={e=>workflow.overlay(e.target.checked)}/>显示已保存组合范围（青色）</label>}
+    <LocalGradePanel report={report?.layers} locked={locked} liveLocked={liveLocked} liveGrade={liveGrade} documentId={context.documentId} selectionLocked={blocked||pending||!context.enabled||context.canStart===false||!!liveGrade?.busy} onSelectGroup={id=>{setAiOpen(false);return workflow.selectGroup(id);}} onStart={onStart}/>
+    {active&&<label><input type="checkbox" checked={state.showOverlay||state.showLuminanceMap} disabled={state.showLuminanceMap} onChange={e=>workflow.overlay(e.target.checked)}/>显示{coverageLabel}已保存组合范围（青色）</label>}
+    {active&&reviewedGroup?.enabled===false&&<small>本组调色当前关闭；这里仍显示本组保留的蒙版范围，查看不会启用效果。</small>}
     {active&&<label title={luminanceUnavailable??'仅切换源图亮度与已保存组合范围的诊断显示，不修改蒙版或历史'}><input type="checkbox" checked={state.showLuminanceMap} disabled={state.phase!=='target'||!!luminanceUnavailable} onChange={e=>workflow.luminanceMap(e.target.checked)}/>显示明亮度图（已保存组合范围）</label>}
     {active&&state.frame&&luminanceUnavailable&&<small>亮度图不可用：{luminanceUnavailable}。仍可查看彩色源图并手动设定范围。</small>}
     {active&&state.showLuminanceMap&&<small>灰度由原始源图 8 位代理的线性亮度 Y 计算，青色来自引擎已保存组合蒙版，均为代理诊断。未应用的亮度区间、颜色反相与其他草稿不在此图中；应用后请重新打开“查看已保存范围”。关闭此开关恢复彩色，不写历史。</small>}
     {active&&<small>青色为引擎计算的已保存范围，不包含本次尚未应用的参数或几何。原始源图仅用于定位，关闭编辑视图后查看最终调色结果。</small>}
     {active&&<div className="localMaskReview">
+      {state.mutation?.action.startsWith('layer_')&&<><strong>待审核独立局部调色组修改</strong><pre>{JSON.stringify(state.mutation,null,2)}</pre><small>青色由{coverageLabel}自己的已保存对象按原运算顺序重新计算，不是旧编辑器范围，也不包括待提交草稿。关闭编辑视图后查看最终调色结果。</small></>}
       <strong>{state.mutation?.action==='upsert'?`待应用：${state.mutation.object.name}`:state.mutation?.action==='delete'?`待删除：${objects.find(o=>o.id===(state.mutation as {id:string}).id)?.name??state.mutation.id}`:state.mutation?.action==='move'?`待移到第 ${state.mutation.index+1} 位：${objects.find(o=>o.id===(state.mutation as {id:string}).id)?.name??state.mutation.id}`:state.mutation?.action==='bind'?(state.mutation.enabled?'待绑定组合蒙版':'待恢复全图作用'):'查看已保存组合范围'}</strong>
       <small>{state.mutation?(state.draw?'拖动绘制仅暂存轮廓；重新拖动会替换本次草稿，应用后才写入历史。':'请核对本次操作与当前源图，应用后才写入历史。'):'只查看已保存范围，不修改蒙版或历史。'}</small>
-      {state.mutation?.action==='upsert'&&['color_range','luminance_range'].includes(state.mutation.object.kind)&&<fieldset disabled={state.phase!=='target'}><legend>范围吸管与参数</legend>
+      {reviewedObject&&['color_range','luminance_range'].includes(reviewedObject.kind)&&<fieldset disabled={state.phase!=='target'}><legend>范围吸管与参数</legend>
         <small>点击冻结的原始源图取样。吸管读的是显示用 8 位代理像素，属于近似值；实际范围仍在原始浮点源图上计算。亮度吸管保留当前区间宽度。</small>
         {state.frame&&!state.frame.descriptor.sample_valid_rows&&<small>此画面未提供采样有效域，吸管不可用；手动参数仍可使用。</small>}
-        <RangeControls object={state.mutation.object} onChange={workflow.range}/>
+        <RangeControls object={reviewedObject} onChange={workflow.range}/>
       </fieldset>}
       {state.mutation&&<button disabled={state.phase!=='target'||!state.geometryReady} onClick={()=>void workflow.apply()}>应用本次修改</button>}
       <button onClick={()=>workflow.cancel()}>{state.mutation?'取消，不修改':'关闭范围查看'}</button>

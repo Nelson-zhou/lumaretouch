@@ -42,7 +42,9 @@ from .repair_record import RepairOp, check_repair_fields, validate_repair_ops
 LEGACY_SCHEMA = "lrt.project.v1"
 WB_SCHEMA = "lrt.project.v2"
 REPAIR_SCHEMA = "lrt.project.v3"
-SCHEMA = "lrt.project.v4"
+MASK_SCHEMA = "lrt.project.v4"
+GRADE_SCHEMA = "lrt.project.v5"
+SCHEMA = "lrt.project.v6"
 SUFFIX = ".lrproject.json"
 
 # 上限：宁可显式丢弃，也不要"保存成功但下次打开少了一半配方"这种事
@@ -149,7 +151,7 @@ def validate(p: object) -> None:
     if not isinstance(p, dict):
         raise ProjectError(f"项目顶层不是对象：{type(p).__name__}")
     sv = p.get("schema_version")
-    if sv not in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, SCHEMA):
+    if sv not in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, MASK_SCHEMA, GRADE_SCHEMA, SCHEMA):
         raise ProjectError(f"项目 schema_version={sv!r}，本版本认 {SCHEMA!r}")
     for k in ("project_id", "name", "docs", "assets"):
         if k not in p:
@@ -182,10 +184,12 @@ def validate(p: object) -> None:
                     WB.normalize_state(recipe, required=(sv != LEGACY_SCHEMA))
                 except ValueError as error:
                     raise ProjectError(f"Invalid white-balance recipe: {error}") from error
-                _validate_encoded_repairs(recipe, p["assets"], allow_legacy=(sv not in (REPAIR_SCHEMA, SCHEMA)))
-                if "_local_masks" in recipe:
-                    from .local_mask_state import check
-                    check(recipe["_local_masks"])
+        # Check the complete owned row, not only its active recipe: inactive
+        # versions, document snapshots and nested history must fail together.
+        _validate_encoded_repairs(row, p["assets"],
+            allow_legacy=(sv in (LEGACY_SCHEMA, WB_SCHEMA)),
+            allow_local_grades=(sv in (GRADE_SCHEMA, SCHEMA)),
+            allow_effect_recovery=(sv == SCHEMA))
 
 
 def _migrate(project):
@@ -199,10 +203,16 @@ def _migrate(project):
                     version["recipe"] = WB.normalize_state(version["recipe"])
                     if previous in (LEGACY_SCHEMA, WB_SCHEMA):
                         _migrate_repair_kinds(version["recipe"])
+                    if previous in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, MASK_SCHEMA):
+                        _migrate_local_grade_states(version["recipe"], root=True)
+                    from .effect_recovery_state import migrate_legacy_states
+                    migrate_legacy_states(version["recipe"], root=True)
         result["schema_version"] = SCHEMA
         result.setdefault("migration_notes", []).append(
-            f"Migrated {previous} to v4: legacy white balance retained; only v1/v2 missing repair kinds migrate to heal. "
-            "Composed source-domain masks require a v4-capable reader.")
+            f"Migrated {previous} to v6: legacy white balance retained; only v1/v2 missing repair kinds migrate to heal. "
+            "Existing scalar grades and composed masks keep their exact order; v5 independent grade groups are preserved. "
+            "Only v1-v4 independent groups start empty. Effect recovery starts empty for every pre-v6 recipe. "
+            "Retained recovery requires a v6-capable reader; older readers must reject this schema.")
     return result
 
 
@@ -275,12 +285,21 @@ def _repair_fields(value, assets, *, allow_legacy=True, shape=None):
         raise ProjectError(f"Invalid RepairOp: {error}") from error
 
 
-def _validate_encoded_repairs(value, assets, *, allow_legacy):
+def _validate_encoded_repairs(value, assets, *, allow_legacy, allow_local_grades=True,
+                              allow_effect_recovery=True):
     """Check every saved version, including inactive versions and redo stacks."""
     if isinstance(value, dict):
         if "_local_masks" in value:
             from .local_mask_state import check
             check(value["_local_masks"])
+        if "_local_grade_layers" in value:
+            if not allow_local_grades:
+                raise ProjectError('Independent local grades cannot be stored under a pre-v5 schema')
+            _check_local_grade_record(value['_local_grade_layers'])
+        if '_effect_recovery' in value:
+            if not allow_effect_recovery:
+                raise ProjectError('Effect recovery cannot be stored under a pre-v6 schema')
+            _check_effect_recovery_record(value['_effect_recovery'])
         if value.get("__dc__") == "RepairOp":
             _repair_fields(value, assets, allow_legacy=allow_legacy)
             return
@@ -295,10 +314,47 @@ def _validate_encoded_repairs(value, assets, *, allow_legacy):
                 for record in child:
                     _repair_fields(record, assets, allow_legacy=allow_legacy, shape=shape)
             else:
-                _validate_encoded_repairs(child, assets, allow_legacy=allow_legacy)
+                _validate_encoded_repairs(child, assets, allow_legacy=allow_legacy,
+                                          allow_local_grades=allow_local_grades,
+                                          allow_effect_recovery=allow_effect_recovery)
     elif isinstance(value, list):
         for child in value:
-            _validate_encoded_repairs(child, assets, allow_legacy=allow_legacy)
+            _validate_encoded_repairs(child, assets, allow_legacy=allow_legacy,
+                                      allow_local_grades=allow_local_grades,
+                                      allow_effect_recovery=allow_effect_recovery)
+
+
+def _check_effect_recovery_record(value):
+    from .effect_recovery_state import check_saved_record
+    try:
+        check_saved_record(value)
+    except ValueError as error:
+        raise ProjectError(f'Invalid effect-recovery recipe: {error}') from error
+
+
+def _check_local_grade_record(value):
+    from .local_grade_layers import check
+    try:
+        # Missing old state defaults to empty at replay, but an explicitly saved
+        # null must not silently erase the intent of a v5 group record.
+        if type(value) is not dict:
+            raise ValueError('Retained local-grade record must be an object')
+        check(value)
+    except ValueError as error:
+        raise ProjectError(f'Invalid independent local-grade recipe: {error}') from error
+
+
+def _migrate_local_grade_states(value, *, root=False):
+    """Add only empty layers to every legacy document/history state, owned copy."""
+    if isinstance(value, dict):
+        for child in list(value.values()):
+            _migrate_local_grade_states(child)
+        if root or any(key in value for key in ('_grade', '_grade_scope', '_local_masks')):
+            from .local_grade_layers import empty
+            value['_local_grade_layers'] = empty()
+    elif isinstance(value, list):
+        for child in value:
+            _migrate_local_grade_states(child)
 
 
 def _migrate_repair_kinds(value):
@@ -443,6 +499,10 @@ def encode(value: object, assets: dict, dropped: list, at: str) -> object:
         if "_local_masks" in value:
             from .local_mask_state import check
             check(value["_local_masks"])
+        if '_local_grade_layers' in value:
+            _check_local_grade_record(value['_local_grade_layers'])
+        if '_effect_recovery' in value:
+            _check_effect_recovery_record(value['_effect_recovery'])
         out = {}
         for k, v in value.items():
             if not isinstance(k, str):
@@ -496,6 +556,10 @@ def decode(value: object, assets: dict, dropped: list, at: str,
     本层不 import 计算模块——持久层反向依赖 GPU 管线会形成循环，
     而且让"读一个 JSON"这件事取决于 torch 在不在。"""
     if isinstance(value, dict):
+        if '_local_grade_layers' in value:
+            _check_local_grade_record(value['_local_grade_layers'])
+        if '_effect_recovery' in value:
+            _check_effect_recovery_record(value['_effect_recovery'])
         if value.get("__dc__") == "RepairOp":
             fields = _repair_fields(value, assets)
             cls = (dc_types or {}).get("RepairOp", RepairOp)

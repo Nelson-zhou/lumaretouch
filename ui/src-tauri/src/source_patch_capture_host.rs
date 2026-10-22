@@ -14,7 +14,7 @@ pub(crate) struct Proof {
 enum Phase { Arming, Ready, Copying, Copied, Eligible, Redeemed }
 struct Record {
     capture: String, document: String, ticket: u64, revision: usize,
-    phase: Phase, proof: Option<Proof>, domain: &'static str,
+    phase: Phase, proof: Option<Proof>, domain: &'static str, group: Option<String>,
 }
 #[derive(Default)]
 pub(crate) struct SourcePatchCaptureHost {
@@ -70,13 +70,18 @@ impl SourcePatchCaptureHost {
         self.begin_for_domain(epoch, capture, document, host_revision, "repair-input")
     }
     pub fn begin_for_domain(&mut self, epoch: [u8;16], capture: String, document: String, host_revision: usize, domain: &'static str) -> Result<String, String> {
+        self.begin_for_scope(epoch, capture, document, host_revision, domain, None)
+    }
+    pub fn begin_for_scope(&mut self, epoch: [u8;16], capture: String, document: String, host_revision: usize, domain: &'static str, group: Option<String>) -> Result<String, String> {
         if !["repair-input", "source-input"].contains(&domain) { return Err("invalid input capture domain".into()); }
+        if group.as_ref().is_some_and(|id| domain != "source-input" || id.is_empty() || id.len() > 64
+            || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')) { return Err("invalid mask capture group".into()); }
         id16(&capture)?; token(&document)?;
         if epoch == [0;16] || self.epoch != epoch || !self.supported { return Err("repair-input capture is unavailable".into()); }
         self.counter = self.counter.checked_add(1).ok_or("source patch capture ticket exhausted")?;
         let ticket = self.counter;
         self.invalidate();
-        self.record = Some(Record { capture, document, ticket, revision: host_revision, phase: Phase::Arming, proof: None, domain });
+        self.record = Some(Record { capture, document, ticket, revision: host_revision, phase: Phase::Arming, proof: None, domain, group });
         Ok(ticket.to_string())
     }
     pub fn armed_event(&mut self, epoch: [u8;16], event: &Value, host_revision: usize) {
@@ -93,6 +98,7 @@ impl SourcePatchCaptureHost {
                 return Err("repair-input descriptor contract mismatch".into());
             }
             if record.domain == "source-input" && (d["mask_overlay"] != true
+                || d["mask_group_id"] != json!(record.group)
                 || !(d["mask_suspended"].is_null() || d["mask_suspended"].as_str().is_some_and(|s| s.len() <= 2000))) {
                 return Err("source-input coverage overlay contract mismatch".into());
             }
@@ -126,6 +132,7 @@ impl SourcePatchCaptureHost {
             }
             if record.domain == "source-input" {
                 descriptor["mask_overlay"] = json!(true); descriptor["mask_suspended"] = d["mask_suspended"].clone();
+                descriptor["mask_group_id"] = d["mask_group_id"].clone();
                 descriptor["sample_valid_rows"] = d["sample_valid_rows"].clone();
             }
             descriptor["capture_id"] = json!(record.capture); descriptor["ticket"] = json!(record.ticket.to_string());

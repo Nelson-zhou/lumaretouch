@@ -59,6 +59,8 @@ from . import tasks as T
 # → 把事实发成事件”，不在这里再摸一份“哪些参数属于哪个模块”——预设与批量必须同一语义，
 # 分开抄就会出“预设里没有的参数被批量偷偷同步了”。
 from . import local_mask_state as LM
+from . import effect_recovery_state as ERS, effect_recovery_runtime as ERR
+from . import local_grade_layers as LG, local_grade_runtime as LGR, local_grade_source as LGS
 from . import scope as SC
 from . import preset_controller as PRS
 from . import hsl_recipe as HSL_RECIPE
@@ -264,7 +266,8 @@ class Engine:
         # 「命令收下而画面不动」的形状，所以作废必须一起作，不留半截。
         self._grade_scope = "all"
         self._grade_mask = None
-        self._local_masks = LM.empty()
+        self._local_masks = LM.empty(); self._local_grade_layers = LG.empty()
+        self._effect_recovery = ERS.empty()
         # PORTRAIT-009 眼牙增强：三个子功能的值 + 会话里有没有那份场 + **它属于哪一张脸**。
         # `box` 这一格不是装饰：这一层的掩膜是从**那一张**的 478 点画出来的。换人选时若
         # 不认脸盒，就会把 A 的美白静默涂到 B 身上——那是 SCOPE-001 拦的同一件事，
@@ -371,7 +374,7 @@ class Engine:
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -870,7 +873,7 @@ class Engine:
                   "_light_ops", "_light_redo", "_light", "_deform", "_deform_defer",
                   "_deform_default", "_deform_overrides", "_lut",
                   "_lut_amount",
-                  "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_local_masks", "_bg",
+                  "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_local_masks", "_local_grade_layers", "_effect_recovery", "_bg",
                   "_enhance", "_enhance_defer",
                   "_precompute", "_precompute_backend", "_face_index", "_face_box",
                   "_face_explicit", "_face_manual",
@@ -924,7 +927,7 @@ class Engine:
                 "_deform_default": {k: 0.0 for k in KINDS}, "_deform_overrides": [],
                 "_lut": None, "_lut_amount": 1.0, "_lut_preset": None,
                 "_grade": (0.0, 0.0, 0.0, 1.0),
-                "_grade_scope": "all", "_grade_mask": None, "_local_masks": LM.empty(),
+                "_grade_scope": "all", "_grade_mask": None, "_local_masks": LM.empty(), "_local_grade_layers": LG.empty(), "_effect_recovery": ERS.empty(),
                 "_enhance": dict(amounts={k: 0.0 for k in ENH.AMOUNT_KEYS}, built=False, box=None),
                 "_enhance_defer": False,
                 "_bg": dict(active=False, matte=None, bg=None, backend=None,
@@ -971,7 +974,7 @@ class Engine:
               # 不会互相改；真要出现就地写，这里就得改成拷贝。
               "_lut": self._lut, "_lut_amount": float(self._lut_amount),
               "_lut_preset": self._lut_preset, "_grade": tuple(self._grade),
-              "_grade_scope": str(self._grade_scope), "_grade_mask": self._grade_mask, "_local_masks": LM.check(self._local_masks),
+              "_grade_scope": str(self._grade_scope), "_grade_mask": self._grade_mask, "_local_masks": LM.check(self._local_masks), "_local_grade_layers": LG.check(self._local_grade_layers), "_effect_recovery": ERS.check(self._effect_recovery),
               # 整份新抄：amounts 那个 dict 不能与 live 共享（同 _capture_state 头部那条理由，
               # 两个文档共用一个 dict，下一笔 set 会同时改掉两份状态）
               "_enhance": {"amounts": dict(self._enhance["amounts"]),
@@ -1005,7 +1008,7 @@ class Engine:
         for key in ("_repair_ops", "_redo_ops"):
             validate_repair_ops(st.get(key, []), shape=st.get("_proxy"))
         # Validate WB and compile before changing any live field.
-        st = {**st, "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0)), "_local_masks": LM.check(st.get("_local_masks"))}
+        st = {**st, "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0)), "_local_masks": LM.check(st.get("_local_masks")), "_local_grade_layers": LG.check(st.get("_local_grade_layers")), "_effect_recovery": ERS.check(st.get("_effect_recovery"))}
         st = WB.normalize_state(st)
         WB.prepare_state(st)
         # Old projects predate curves. Validate/deep-copy before changing any live field.
@@ -1175,7 +1178,7 @@ class Engine:
     # 却不在这份名单里，于是拖完曝光按撤销——参数纹丝不动，而 UI 上没有任何一处会说"为什么
     # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
     # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
-    EDIT_CMDS = ("set_strength", "inpaint", "source_patch", "clone_stamp", "local_masks", "light", "deform", "lut", "grade", "background",
+    EDIT_CMDS = ("set_strength", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "light", "deform", "lut", "grade", "background",
                  "crop", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "preset", "batch", "face", "enhance", "fabric")
     # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
     # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
@@ -1410,7 +1413,7 @@ class Engine:
             emit({"event": "engine_warn", "warn": "蒙版尚未恢复：保留编辑参数，暂不应用该范围的磨皮，不回退为全图"})
         effective_strength, effective_channel = self._retouch_render_args()
         FABRIC.sync(self)
-        LM.sync(self)
+        LM.sync(self); LGR.sync(self); ERR.sync(self)
         pipe.render(effective_strength, channel=effective_channel, **self._params)
         with self._wlock:
             seq, t_emit, slot = shm.write_frame(pipe.read_back(), presentation=self._frame_presentation(str(t0), (d.src_w,d.src_h)))
@@ -1446,6 +1449,7 @@ class Engine:
               # 以下是**当前文档**的图层账单。第一次导入时它们必须是 0（那一层还没人动过），
               # 而切回一张画过笔的图时它们就是那几笔的真实占用——那时报 0 才是错。
               "bytes_light": pipe.light_resident_bytes(),
+              "bytes_effect_recovery": pipe.effect_recovery_resident_bytes(),
               "bytes_deform": pipe.deform_resident_bytes(),
               # 预热会话那张临时表不能让真会话继承（不然这里会多报 428 KB 而用户一张
               # 预设也没点）；同理，切回一张挂了表的图时这里就应当非 0。
@@ -1526,7 +1530,7 @@ class Engine:
                 crop["out_full"] = list(_gsz(int(row["src_w"]), int(row["src_h"]),
                                              tuple(self._crop_rect),
                                              float(self._crop_rotation)))
-        return {"document_id": self._load_id, "fabric": FABRIC.status(self), "local_masks": LM.state(self),
+        return {"document_id": self._load_id, "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self),
                 "strength": float(self._strength), "params": dict(self._params),
                 "channel": self._channel,
                 "history": self._history_report(),
@@ -1597,6 +1601,8 @@ class Engine:
     def _state_edits(self, st: dict) -> dict:
         """一份状态（live 抄出来的或底片条格子里存着的）里有哪些层。"""
         return {"local_masks": len((st.get("_local_masks") or LM.empty())["recipe"]["objects"]),
+                "local_grade_layers": len(LG.check(st.get("_local_grade_layers"))["layers"]),
+                "effect_recovery": len(ERS.check(st.get("_effect_recovery"))["targets"]),
                 "fabric": bool(st.get("_fabric_amount", 0.0)), "repair": len(st["_repair_ops"]), "light": len(st["_light_ops"]),
                 "deform": any(abs(float(v)) > 0.0 for v in st["_deform"]["amounts"].values()),
                 "lut": st["_lut"] is not None, "lut_preset": st["_lut_preset"],
@@ -1655,7 +1661,9 @@ class Engine:
                 guard=lambda label: self._guard_editable(label), document_id=lambda: self._load_id,
                 capture=lambda: self._capture_state(), replay=lambda state, **kw: self._replay_state(state, **kw),
                 face_check=lambda: self._face_known_single(None, live=True), status=lambda: self.doc_state(),
-                invalidate=lambda: setattr(self, "_vram", None)), emit=lambda event: emit(event))
+                invalidate=lambda: setattr(self, "_vram", None), target_row=lambda: self._docs[self._doc_index],
+                revision=lambda: str(self._document_versions().version(self._docs[self._doc_index]).revision),
+                advance=lambda: self._fence_current_document()), emit=lambda event: emit(event))
             self._live_presets = controller
         return controller
 
@@ -3440,7 +3448,7 @@ class Engine:
                                f"!= 会话 {self._vram.w}x{self._vram.h}：不许把会话尺寸的帧写进别人的槽")
         t0 = monotonic_ns()
         # Original viewing bypasses all layers, rather than merely setting skin strength0.
-        if not original: FABRIC.sync(self); LM.sync(self)
+        if not original: FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self)
         st, channel = (0.0, None) if original else self._retouch_render_args()
         if original:
             self._vram.render_original()
@@ -3451,7 +3459,7 @@ class Engine:
             seq, t_emit, slot = self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation(kind="original" if original else "edited"))
         return {"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
                 "w": self.shm.w, "h": self.shm.h, "mode": mode, "render_ms": round(render_ms, 2),
-                "strength": st}
+                "strength": st, "bytes_effect_recovery": self._vram.effect_recovery_resident_bytes()}
 
     def cmd_compare(self, p: dict):
         """临时显示完整解码原图，绕过全部编辑；松手恢复完整配方。
@@ -5342,6 +5350,20 @@ class Engine:
 
     def cmd_local_masks(self, p): self._local_mask_controller().apply(p)
 
+    def _effect_recovery_controller(self):
+        from .effect_recovery_controller import controller
+        return controller(self, emit)
+
+    def cmd_effect_recovery(self, p): self._effect_recovery_controller().apply(p)
+
+    def cmd_local_grade_live(self, p):
+        from .local_grade_live import controller
+        controller(self, emit).handle(p)
+
+    def cmd_effect_recovery_preview(self, p):
+        from .effect_recovery_preview import controller
+        controller(self, emit).handle(p)
+
     def cmd_prompted_masks(self, p):
         from .prompted_mask_controller import controller
         controller(self, emit).handle(p)
@@ -5623,7 +5645,7 @@ class Engine:
                 # 通道必须跟着会话一起迁移：不传 channel 的话，报表里 active_channel 还是 skin，
                 # 而给用户补发的是一帧全图渲染——字段与实际执行不一致正是本仓最贵那个坑的形状
                 strength, channel = self._retouch_render_args()
-                FABRIC.sync(self)
+                FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self)
                 self._vram.render(strength, channel=channel, **self._params)
                 with self._wlock:
                     seq, t_emit, slot = self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation())
@@ -5651,7 +5673,8 @@ class Engine:
                     params=dict(st.get("_params") or self._params),
                     grade=tuple(st.get("_grade", (0.0, 0.0, 0.0, 1.0))),
                     grade_scope=str(st.get("_grade_scope") or "all"),
-                    grade_mask=st.get("_grade_mask"), local_masks=LM.check(st.get("_local_masks")), local_mask_owner=LM.owner_from_state(st),
+                    grade_mask=st.get("_grade_mask"), local_masks=LM.check(st.get("_local_masks")), local_mask_owner=LM.owner_from_state(st), local_grade_groups=LG.check(st.get("_local_grade_layers")),
+                    effect_recovery=ERS.check(st.get("_effect_recovery")),
                     exposure=tuple(st.get("_exposure", (0.0,) * 7)),
                     exposure_ref_k=st.get("_exposure_ref_k"),
                     wb_options=WB.normalize_state(st)["_wb_options"],
@@ -5712,6 +5735,12 @@ class Engine:
         if snap.get("grade_scope") == "objects":
             if not for_document: raise ExportError("Source-bound mask objects cannot transfer to another photo")
             LM.verify_source(LM.check(snap.get("local_masks")), path)
+        if LGS.has_groups(snap):
+            if not for_document: raise ExportError("独立局部调色不能借用其他照片，请先通过目标预检同步")
+            LGS.verify_snapshot(snap, path)
+        if ERS.check(snap.get("effect_recovery"))["targets"]:
+            if not for_document: raise ExportError("恢复笔迹不能借用其他源照片")
+            ERR.verify_snapshot(snap, path)
         channel_active = bool(snap.get("channel")) and float(snap.get("strength", 0)) != 0
         grade_active = (str(snap.get("grade_scope", "all")) == "skin"
                         and float(tuple(snap.get("grade", (0, 0, 0, 1)))[3]) != 0
@@ -5919,7 +5948,8 @@ class Engine:
         # 参数在命令线程里全部拍定：worker 里不再读 self._*，否则中途改一下滑块，
         # 这一批里前几张与后几张用的就不是同一套设置（而事件里只写了一份）
         snap = dict(strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
-                    grade_scope=str(self._grade_scope), grade_mask=self._grade_mask, local_masks=LM.check(self._local_masks), local_mask_owner=LM.current_owner(self),
+                    grade_scope=str(self._grade_scope), grade_mask=self._grade_mask, local_masks=LM.check(self._local_masks), local_mask_owner=LM.current_owner(self), local_grade_groups=LG.check(self._local_grade_layers),
+                    effect_recovery=ERS.check(self._effect_recovery),
                     exposure=tuple(self._exposure), exposure_ref_k=self._exposure_ref_k,
                     wb_options=WB.check_options(self._wb_options),
                     hsl=tuple(self._hsl),
@@ -6227,6 +6257,8 @@ class Engine:
         }
         fields = {"_" + key: snap.get(key, value) for key, value in defaults.items()}
         fields["_bg"] = snap.get("_bg", {})
+        fields["_local_grade_layers"] = LG.check(snap.get("local_grade_groups"))
+        fields["_effect_recovery"] = ERS.check(snap.get("effect_recovery"))
         return Engine._master16_blockers(SimpleNamespace(**fields),
             scale=snap.get("scale", 1), sharpen=snap.get("sharpen", 0.0))
 
@@ -6242,6 +6274,10 @@ class Engine:
         也不能默默降级。
         """
         b: list = []
+        if any(layer['enabled'] for layer in LG.check(getattr(self, '_local_grade_layers', None))['layers']):
+            b.append('独立局部调色组（须验证所有启用组，不能绕过编辑路径）')
+        if ERS.enabled(getattr(self, '_effect_recovery', None)):
+            b.append('效果恢复笔迹（须验证源图与全尺寸蒙版，不能绕过编辑路径）')
         if float(self._strength) != 0.0:
             b.append(f"磨皮强度={self._strength}")
         grade = list(self._grade) + [0.0, 0.0, 0.0, 0.0]
@@ -6330,7 +6366,7 @@ class Engine:
             try:
                 image_started = monotonic_ns()
                 snap_i, for_doc_i = snap_by_path.get(path, (snap, path == doc))
-                mask_source_stamp = LM.file_stamp(path) if snap_i.get("grade_scope") == "objects" else None
+                mask_source_stamp = LM.file_stamp(path) if snap_i.get("grade_scope") == "objects" or LGS.has_groups(snap_i) or bool(ERS.check(snap_i.get("effect_recovery"))["targets"]) else None
                 stage = "semantic_analysis"
                 snap_i, for_doc_i = self._prepare_export_snapshot(path, snap_i, for_doc_i)
                 analysis_ms = round((monotonic_ns() - image_started) / 1e6, 2)
@@ -6346,7 +6382,7 @@ class Engine:
                         stage = "decode16"
                         decode_started = monotonic_ns()
                         d = load_full(path, device=snap_i["device"], want_bits=16)
-                        LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w))
+                        LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w))
                         decode_ms = (monotonic_ns() - decode_started) / 1e6
                         spec, skipped = self._export_snapshot(snap_i, d.h, d.w, for_document=for_doc_i)
                         stage = "edit16"
@@ -6407,7 +6443,7 @@ class Engine:
                           "ok": True})
                     continue
                 d = load_full(path, device=self.device)
-                LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w))
+                LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w))
                 stage = "render"
                 # P1-1：这一张用它自己那份配方（当前档=现拍 snap；其它档=它存的 state；
                 # 裸文件=共享参数且 for_document=False）。批级 export_done 仍读 snap。
@@ -6532,7 +6568,7 @@ class Engine:
     # 不是漏写，是 EXPORT-001“无提示不覆盖”的同一条要求（ADR-0003）。
     BATCH_POLICIES = BS.POLICIES
 
-    def _replay_state(self, st: dict, *, mode: str, replayed_for: str) -> dict:
+    def _replay_state(self, st: dict, *, mode: str, replayed_for: str, strict_local=False) -> dict:
         """装回一份状态并重建会话，返回那一帧。
 
         重放逻辑只有一份：这里调的就是 `cmd_history` / 换设备 / 切文档用的那三个原始
@@ -6544,6 +6580,7 @@ class Engine:
         self._attach_pipeline(self._src_rgb, adopt=True)
         if self._precompute is not None:
             self._rehang_precompute(replayed_for=replayed_for)
+        if strict_local: LM.sync(self, strict=True); LGR.sync(self, strict=True); ERR.sync(self, strict=True)
         return self._write_current_frame(mode)
 
     def _face_known_single(self, row: dict | None, *, live: bool) -> tuple[str, str]:
@@ -6689,8 +6726,8 @@ class Engine:
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
-               "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "light",
+    HANDLED = ("hello", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
+               "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "light",
                "deform", "lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
                # 挑图（LNX-PICK-001）。它不在 EDIT_CMDS 里，所以既不进撤销栈也不打脏标记：
@@ -6728,8 +6765,13 @@ class Engine:
             if fn is None:
                 emit({"event": "error", "error": f"未知命令: {name}"})
                 return
+            if name not in ('hello', 'local_grade_live'):
+                live_grade = self.__dict__.get('_local_grade_live_owner')
+                if live_grade is not None: live_grade.invalidate()
             if name in ("source_patch", "clone_stamp") and not self._source_patch_controller().prepare(msg):
                 return  # Receipt/cache replay and rejected proofs never advance the fence.
+            if name == "effect_recovery" and not self._effect_recovery_controller().prepare(msg):
+                return
             if name == "local_masks" and not self._local_mask_controller().prepare(msg):
                 return
             if name == "white_balance" and not self._white_balance_controller().prepare(msg):
@@ -6742,12 +6784,14 @@ class Engine:
             if name not in ("hello", "color_scopes", "color_capture") and not (
                     name=="inspection_snapshot" and msg.get("action","status")=="status"):
                 self._color_capture_controller().invalidate()
-            if name not in ("hello", "source_patch_capture", "prompted_masks", "color_scopes") and not (
+            if name not in ("hello", "source_patch_capture", "prompted_masks", "effect_recovery_preview", "color_scopes") and not (
                     name == "inspection_snapshot" and msg.get("action", "status") == "status"):
                 owner = self.__dict__.get("_source_patch_owner")
                 if owner is not None: owner.capture.invalidate()
                 prompted = self.__dict__.get('_prompted_mask_owner')
                 if prompted is not None: prompted.cancel()
+                recovery = self.__dict__.get('_effect_recovery_preview_owner')
+                if recovery is not None: recovery.cancel()
             if name not in ("hello", "white_balance_capture", "color_scopes") and not (
                     name == "inspection_snapshot" and msg.get("action", "status") == "status"):
                 owner = self.__dict__.get("_white_balance_owner")
@@ -6758,7 +6802,7 @@ class Engine:
                 if owner is not None: owner.capture.invalidate()
             # The executor cancels before any other known command can mutate
             # source arrays/recipes, including history, load, export and shutdown.
-            if name not in ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe"):
+            if name not in ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "effect_recovery_preview", "white_balance_capture", "color_picker_capture", "color_picker_probe"):
                 self._cancel_snapshot("command:" + name)
                 heavy = name in ("export", "bench_start") or (name == "task" and msg.get("action") in ("resume", "retry"))
                 if heavy and self._inspection_controller().worker_running:
@@ -6776,7 +6820,7 @@ class Engine:
                 try:
                     fn(msg)
                 finally:
-                    self._history_record(group, before, coalesce=not (name in ("white_balance", "color_picker", "source_patch", "clone_stamp", "local_masks") or (name == "preset" and msg.get("action") == "apply")))
+                    self._history_record(group, before, coalesce=not (name in ("white_balance", "color_picker", "source_patch", "clone_stamp", "local_masks", "effect_recovery") or (name == "preset" and msg.get("action") == "apply")))
             else:
                 fn(msg)
         except Exception as e:  # 协议层不许因单条消息崩溃
@@ -6784,6 +6828,8 @@ class Engine:
             emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
         finally:
             try:
+                if name == "effect_recovery" and isinstance(msg, dict):
+                    self._effect_recovery_controller().finish(msg, dispatch_error)
                 if name == "local_masks" and isinstance(msg, dict):
                     self._local_mask_controller().finish(msg, dispatch_error)
                 if name == "color_picker" and isinstance(msg, dict):
@@ -6892,6 +6938,8 @@ class Engine:
                 self._finish_inspection_shutdown()
                 prompted = self.__dict__.get('_prompted_mask_owner')
                 if prompted is not None: prompted.cancel()
+                recovery = self.__dict__.get('_effect_recovery_preview_owner')
+                if recovery is not None: recovery.cancel()
                 owner = self.__dict__.get("_white_balance_owner")
                 if owner is not None: owner.capture.invalidate()
                 owner = self.__dict__.get("_source_patch_owner")

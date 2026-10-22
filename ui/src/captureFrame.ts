@@ -13,6 +13,9 @@ export function parseCaptureFrame(buffer:ArrayBuffer,expected:CaptureDescriptor,
   const quality=expectedDomain==='wb-input'?'proxy-linear-input':(expectedDomain==='repair-input'||expectedDomain==='source-input'||expectedDomain==='color-action-input')?'proxy-float-input':'proxy-float-output';
   if(!['proxy-output','repair-input','source-input','wb-input','color-action-input'].includes(expectedDomain)||expected.version!==1||expected.domain!==expectedDomain||expected.profile!=='working-srgb'||expected.quality!==quality)
     throw new Error('不支持的采样画面来源');
+  if(expected.mask_group_id!==undefined&&expected.mask_group_id!==null
+    &&(expectedDomain!=='source-input'||typeof expected.mask_group_id!=='string'||!/^[-A-Za-z0-9_]{1,64}$/.test(expected.mask_group_id)))
+    throw new Error('采样蒙版组身份无效');
   for(const [field,offset] of [['epoch',8],['shm_instance',24],['capture_id',40]] as const){
     const value=hex(v,offset);
     if(value==='0'.repeat(32)||value!==expected[field])throw new Error('采样画面身份已失效');

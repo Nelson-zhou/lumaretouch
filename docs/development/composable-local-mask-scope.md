@@ -10,12 +10,15 @@ packaging stage; absence fails explicitly, not through a fallback approximation.
 Handbook 局部调色 and frozen AI package PC-32454 controls 11–15 cover brush,
 linear/radial gradients, color and luminance ranges; 17 covers feather; 18–24
 cover retained object controls and composition. Objects feed the EXISTING grade
-hue/saturation/value/amount consumer before deformation. They do not create a
-local-adjustment layer framework. LUT remains global; exposure/HSL/curves/levels,
+hue/saturation/value/amount consumer after deformation and LUT. Source masks
+are warped with the actual deformation grid before mixing. The later explicit
+transfer package adds independent local-grade groups at this same adjacent
+post-LUT position, without reordering the legacy chain. LUT remains global; exposure/HSL/curves/levels,
 repair and other consumers are not silently reinterpreted as object-scoped.
 Controls 1–9/16 have only the honest semantic subset documented separately in
-semantic-mask-source-scope.md. Controls 25–26 batch/template workflows are not
-claimed complete. PC-32454 as a whole is not complete or accepted.
+semantic-mask-source-scope.md. Controls 25–26 now have a written end-to-end group/preset/batch implementation;
+see [transfer scope](local-mask-transfer-scope.md). They remain runtime-unverified
+and are not claimed accepted. PC-32454 as a whole is not complete or accepted.
 
 ## Input, editing and persistence
 
@@ -33,8 +36,10 @@ Objects retain ID, name, enabled state, operation, opacity, feather and geometry
 or range parameters. Existing objects can be edited, redrawn, ordered or deleted.
 The full-image object cannot be edited, hidden, moved or deleted. Removing other
 objects may shift its index without changing it. The common undo/redo state and
-project v4 encode these objects, including inactive versions. Older v3 readers
-reject v4 instead of silently dropping masks; v3 repair strictness is retained.
+project v5 encode these objects and independent grade groups, including inactive
+versions. Explicit v1–v4 migration preserves old semantics; older readers reject
+v5 instead of silently dropping groups. The former v4 mask and v3 repair
+strictness are retained.
 Legacy all/skin/brush scopes and brush assets remain distinct and compatible.
 
 ## Raster and preview truth

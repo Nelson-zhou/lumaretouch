@@ -771,9 +771,9 @@ def test_multipage_container_is_refused_not_silently_first_page(engine, tmp_path
 def test_no_egress_or_telemetry_anywhere_in_the_shipped_code():
     """SEC-001 不收集隐私遥测：默认不发送图像、人脸向量、EXIF 或文件路径。
 
-    静态可判的部分就静态判（比"跑一次看有没有网络流量"更能覆盖分支）：整个交付物里
-    不许出现任何出网调用面。这不是"暂时没接上"，而是产品定义本身——离线普惠、本地优先，
-    代码里若出现一个 http 客户端，评审时它必须是个事故而不是一行普通代码。
+    图像处理、状态查询和遥测仍不许出现出网调用面。唯一经显式授权的例外是独立
+    SAM 安装进程的固定下载；不跳过文件或目录，只放行下述三条已审语句，同时钉住
+    固定 GET、无照片参数、显式按钮及引擎 seccomp 边界。新增联网面仍须报错。
     真正的"这台机器没出过网"由 packaging/preflight.sh 与装机自证那一段负责（LINUX-001）。
     """
     roots = ["engine/src/lumaretouch_engine", "ui/src", "ui/src-tauri/src", "packaging",
@@ -786,6 +786,75 @@ def test_no_egress_or_telemetry_anywhere_in_the_shipped_code():
         r"pycurl\b", r"\bgql\b.*execute", r"\btelemetry\b", r"\btrack[_i]?(ng|er)\b",
         r"\bAnalytics\b", r"\bSentryClient\b", r"\.upload_to\b",
     ]
+    import ast
+    installer_path = 'engine/src/lumaretouch_engine/prompted_model_install.py'
+    installer = (REPO / installer_path).read_text(encoding='utf-8')
+    tree = ast.parse(installer)
+    functions = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    # Exact statements, not a file-wide urllib exemption. Duplicate statements
+    # are rejected too, including moving a second opener into status/preview.
+    reviewed = {
+        'import urllib.request': 0,
+        'class _HTTPSRedirect(urllib.request.HTTPRedirectHandler):': 0,
+        'opener = urllib.request.build_opener(_HTTPSRedirect())': 0,
+    }
+    def expression(source):
+        return ast.dump(ast.parse(source, mode='eval').body, include_attributes=False)
+    def calls(node, name):
+        return [n for n in ast.walk(node) if isinstance(n, ast.Call)
+                and ((isinstance(n.func, ast.Name) and n.func.id == name)
+                     or (isinstance(n.func, ast.Attribute) and n.func.attr == name))]
+    opens = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Attribute) and isinstance(n.func.value, ast.Name)
+             and n.func.value.id == 'opener']
+    assert len(opens) == 1 and opens[0] in list(ast.walk(functions['install_model']))
+    assert ast.dump(opens[0], include_attributes=False) == expression('opener.open(CHECKPOINT_URL, timeout=30)')
+    builders = calls(tree, 'build_opener')
+    assert len(builders) == 1 and builders[0] in list(ast.walk(functions['install_model']))
+    assert ast.dump(builders[0], include_attributes=False) == expression('urllib.request.build_opener(_HTTPSRedirect())')
+    installs = calls(tree, 'install_model')
+    assert len(installs) == 1 and installs[0] in list(ast.walk(functions['main']))
+    branch = next(n for n in ast.walk(functions['main'])
+                  if isinstance(n, ast.IfExp) and n.body is installs[0])
+    assert ast.dump(branch.test, include_attributes=False) == expression('args.install')
+    assert ast.dump(branch.orelse, include_attributes=False) == expression('model_status()')
+    options = calls(functions['main'], 'add_argument')
+    assert [ast.literal_eval(n.args[0]) for n in options] == ['--install', '--status']
+    assert 'add_mutually_exclusive_group(required=True)' in installer
+    assert '"--index-url", "https://pypi.org/simple"' in installer
+    assert '"--isolated", "install", "--no-deps"' in installer
+    assert 'count != CHECKPOINT_SIZE_BYTES or digest.hexdigest() != CHECKPOINT_SHA256' in installer
+    assert 'if not newurl.startswith("https://"):' in installer
+    # Engine imports may read/verify installed bytes, never call installation.
+    for path in (REPO / 'engine/src/lumaretouch_engine').rglob('*.py'):
+        if path == REPO / installer_path:
+            continue
+        source = path.read_text(encoding='utf-8')
+        assert 'install_model' not in source, f'Installation leaked into engine path: {path}'
+    native = (REPO / 'ui/src-tauri/src/prompted_model_api.rs').read_text(encoding='utf-8')
+    assert "fn prompted_model(state: State<'_, Arc<AppState>>, action: String)" in native
+    assert 'Command::new(py)' in native and 'Command::new("sh")' not in native
+    assert native.count('command.args(') == 1 and not re.search(r'command\.(?:arg|raw_arg)\s*\(', native)
+    assert 'command.args(["-m", "lumaretouch_engine.prompted_model_install", if action == "install" { "--install" } else { "--status" }])' in native
+    assert 'matches!(action.as_str(), "status"|"install"|"cancel")' in native
+    assert '.stdin(Stdio::null())' in native
+    setup_path = REPO / 'ui/src/promptedMasks/PromptedModelSetup.tsx'
+    setup = setup_path.read_text(encoding='utf-8')
+    assert setup.count("run('install')") == 1
+    assert "onClick={()=>void run('install')}" in setup
+    assert "useEffect(()=>{alive.current=true;void run('status');" in setup
+    for path in (REPO / 'ui/src').rglob('*'):
+        if path.is_file() and path.suffix in ('.ts', '.tsx') and path != setup_path:
+            assert not re.search(r"['\"]prompted_model['\"]", path.read_text(encoding='utf-8')), path
+    bootstrap = (REPO / 'engine/src/lumaretouch_engine/bootstrap.py').read_text(encoding='utf-8')
+    assert bootstrap.index('require_offline_or_exit()') < bootstrap.index('from .server import main')
+    privacy = (REPO / 'engine/src/lumaretouch_engine/privacy.py').read_text(encoding='utf-8')
+    denied = next(n.value for n in ast.parse(privacy).body if isinstance(n, ast.Assign)
+                  and any(isinstance(t, ast.Name) and t.id == '_DENIED' for t in n.targets))
+    assert {'socket', 'connect', 'sendto', 'sendmsg', 'sendmmsg', 'io_uring_setup'} <= set(ast.literal_eval(denied))
+    for boundary in ('for attr in (3,4):', 'lib.seccomp_load(ctx)',
+                     'closed=_close_inherited_sockets()', '_native_probe()', 'raise SystemExit(2) from exc'):
+        assert boundary in privacy
     hits = []
     for r in roots:
         base = REPO / r
@@ -800,7 +869,13 @@ def test_no_egress_or_telemetry_anywhere_in_the_shipped_code():
                     continue            # Rust 侧没有浏览器的 fetch；这里只判前端与脚本
                 for m in re.finditer(pat, text):
                     line = text[:m.start()].count("\n") + 1
+                    statement = text.splitlines()[line - 1].strip()
+                    if (f == REPO / installer_path and pat == r"\burllib\.request\b"
+                            and statement in reviewed):
+                        reviewed[statement] += 1
+                        continue
                     hits.append(f"{f.relative_to(REPO)}:{line}: {pat}")
+    assert all(count == 1 for count in reviewed.values()), reviewed
     assert not hits, "发现出网/遥测的调用面：\n" + "\n".join(hits[:12])
 
 

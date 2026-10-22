@@ -5,6 +5,7 @@ use crate::AppState;
 impl AppState {
     pub(crate) fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
         self.source_patch_capture.lock().map_err(|_|"source patch capture lock poisoned")?.invalidate();
+        self.recovery_preview.lock().map_err(|_|"recovery preview lock poisoned")?.invalidate();
         self.white_balance_capture.lock().map_err(|_|"WB capture lock poisoned")?.invalidate();
         self.color_picker_capture.lock().map_err(|_|"color picker capture lock poisoned")?.invalidate();
         self.color_capture.lock().map_err(|_|"capture lock poisoned")?.invalidate();
@@ -22,6 +23,7 @@ impl AppState {
         // 宿主不数步数、不自己判哪条命令算编辑——名单由引擎的 ready 报
         let name = cmd.get("cmd").and_then(|c| c.as_str()).unwrap_or("").to_string();
         if name!="hello" && name!="inspection_snapshot" {self.source_patch_capture.lock().map_err(|_|"source patch capture lock poisoned")?.invalidate();}
+        if name!="hello" && name!="inspection_snapshot" {self.recovery_preview.lock().map_err(|_|"recovery preview lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {self.white_balance_capture.lock().map_err(|_|"WB capture lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {self.color_picker_capture.lock().map_err(|_|"color picker capture lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {self.color_scopes.lock().map_err(|_|"scope lock poisoned")?.invalidate();}
@@ -37,6 +39,8 @@ impl AppState {
             "white_balance" => crate::white_balance_api::enqueue(self, handle, cmd)?,
             "color_picker" => crate::color_picker_api::enqueue(self, handle, cmd)?,
             "local_masks" => crate::local_mask_api::enqueue(self, handle, cmd)?,
+            "effect_recovery" => crate::effect_recovery_api::enqueue(self, handle, cmd)?,
+            "local_grade_live" => crate::local_grade_live_api::enqueue(self, handle, cmd)?,
             "source_patch" | "clone_stamp" => crate::source_patch_api::enqueue(self, handle, cmd)?,
             _ => handle.send(cmd)?,
         }

@@ -8,3 +8,6 @@
 .localMaskList li{display:flex;gap:3px;padding:4px;border:1px solid transparent;border-radius:5px;align-items:center}
 .localMaskList li.selected{border-color:#88a2d0;background:#273142}.localMaskSelect{flex:1;min-width:0;text-align:left;overflow-wrap:anywhere}
 .localMaskWarning{background:#433623;color:#f1d3a1;padding:8px;border-radius:6px}.localMaskReview{display:grid;gap:7px;border:1px solid #85a6dc;border-radius:6px;padding:9px}
+
+.localGradePanel{display:grid;gap:7px;border-top:1px solid #555;padding-top:8px}.localGradePanel ol{padding-left:18px;display:grid;gap:5px}.localGradePanel li{display:flex;flex-wrap:wrap;gap:4px}.localMaskReview pre{max-height:160px;overflow:auto;white-space:pre-wrap;font-size:11px}
+.maskTransferOptions{display:grid;gap:8px;min-width:0}.maskTransferOptions label{display:flex;gap:6px;align-items:center}.maskTransferOptions small,.maskTransferEvidence small{display:block;line-height:1.5;color:var(--muted,#a8aab4)}.maskTransferEvidence{flex-basis:100%;width:100%;border-left:2px solid #5cc;padding-left:9px}.maskTransferEvidence img{display:block;max-width:100%;height:auto}

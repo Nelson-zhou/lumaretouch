@@ -16,6 +16,8 @@ from __future__ import annotations
 from .ops import curves as curve_ops
 from .levels_stage import LevelsStage
 from .fabric_stage import FabricStage
+from .local_grade_stage import LocalGradeStage
+from .effect_recovery_stage import EffectRecoveryStage
 
 import math
 from dataclasses import dataclass
@@ -106,6 +108,9 @@ class PreviewPipeline:
             self.fallback = None
         self.device = torch.device(device)
         self.fabric = FabricStage(self.device)
+        self.local_grade_layers = LocalGradeStage(self.device, (h, w))
+        self.effect_recovery = EffectRecoveryStage(self.device, (h, w))
+        self._effect_recovery_key = None
         # 源图 float 与 uint8 都留着：float 供滤波，uint8 供"恢复原图"这类需要原始像素的操作
         self.src_u8: torch.Tensor | None = None
         self.src_f32: torch.Tensor | None = None
@@ -287,6 +292,10 @@ class PreviewPipeline:
         """两条装载入口的公共体：会话状态的重置只有一份，不靠"两边都记得改"。"""
         self.src_u8 = src_u8
         self.fabric.clear()
+        self.local_grade_layers.set([])
+        self._local_grade_layers_key = None
+        self.effect_recovery = EffectRecoveryStage(self.device, (self.h, self.w))
+        self._effect_recovery_key = None
         self.src_f32 = src_f32
         self.frame_gpu = torch.empty((self.h, self.w, 4), dtype=torch.uint8, device=self.device)
         self.frame_gpu[..., 3] = 255
@@ -466,26 +475,16 @@ class PreviewPipeline:
             result = self.lighten_result()
             out = mix_masked(base, result, strength, self.mask(channel)) if channel is not None \
                 else (1.0 - strength) * base + strength * result
-        # M2-b：形变盖在最后。为什么不盖在底图上：那样拖任意一个滑块都要把 9 ms 的
-        # 分带重跑（底图变了），零推理那条承诺就碎了。盖在最后每帧只多一次 grid_sample。
-        # M3-a2：调色再盖在形变之后。它是逐点的“输出变换”，与像素位置无关，所以
-        # 放在链尾既不参与任何缓存键，也不会被后面的重采样抹调（反过来把调色放在
-        # 形变前，grid_sample 会对已调色的值做插值——插值与调色不交换，色彩过渡会多吃一份）。
-        # M3-b：肤色定向盖在调色之后（链的最尾）。这个位置不是随手选的，探针 E 节量过：
-        # 它与“定向在表之前”差 11–12 LSB / 8–9% 像素（乘性量与表里的饱和缩放不交换），
-        # 而窗口落在表之前时，用户看到的皮肤有 0.11% 滑块管不到、另有 1.20% 被误管。
-        # “所见即所调”要求窗口找的是屏幕上那份颜色，所以它在 lut 之后。
-        # 换底必须在链尾（所有调色/肤色之后）：合成的是屏幕上那份颜色叠新背景，
-        # 放在前面会让磨皮/lut 作用到即将被背景替换掉的旧底上（与 M3-b “链尾不污染上游”同一条）。
-        # P0：曝光/白平衡插在 lut **之前**（它是场景线性域的输入变换，表是输出变换）。
-        # 裁剪/旋转盖在所有像素层之后（链的最外尾）：笔迹与形变坐标都属于**未剪**的那张图，
-        # 把它们先剪再算会让同一支消除笔在剪后落在别处——次序反过来就是另一件事了。
-        # PORTRAIT-009：眼牙增强夹在形变之后、曝光之前。两个理由都是硬的，写在
-        # ops/enhance.py 头部的“链上位置”那一节（形变之前做=掩膜跟着像素一起搬；
-        # 输出变换之前做=局部修容层在调整图层下面，是工业流程而不是随手选）。
-        # 八色 HSL 紧跟曝光层之后、LUT 之前：它读的是曝光后的那份颜色，而表是
-        # 输出变换（把 HSL 放在表后面就是“调完再套一层风格”，两份调整互相污染）。
-        out = self.apply_enhance(self.apply_deform(self.fabric.apply(out)))
+            # Recover only smoothing's contribution, preserving repair and light.
+            out = self.effect_recovery.apply('skin_smoothing', base, out)
+        # Actual order: repair/light + smoothing/recovery -> fabric/recovery ->
+        # automatic deform -> enhance -> exposure -> levels -> curves -> HSL ->
+        # LUT -> legacy grade -> independent local grades -> background/recovery
+        # -> geometry. Neither deformation nor grade is the whole graph's tail.
+        # Recovery at an operator mixes only that operator's own input/output;
+        # later effects continue to consume the recovered pixels normally.
+        out = self.effect_recovery.apply('fabric_fine', out, self.fabric.apply(out))
+        out = self.apply_enhance(self.apply_deform(out))
         if scope_tap is not None: scope_tap("wb-input", out)
         if render_stage == 'wb-input':
             return out
@@ -493,8 +492,9 @@ class PreviewPipeline:
         if scope_tap is not None: scope_tap("levels-input", out)
         out = self.apply_levels(out)
         if scope_tap is not None: scope_tap("curves-input", out)
-        out = self.apply_geometry(self.apply_background(self.apply_grade(self.apply_lut(
-            self.apply_hsl(self.apply_curves(out))))))
+        out = self.apply_grade(self.apply_lut(self.apply_hsl(self.apply_curves(out))))
+        out = self.local_grade_layers.apply(out, self.align_source_grade_mask)
+        out = self.apply_geometry(self.apply_background(out))
         if scope_tap is not None: scope_tap("output", out)
         return out
 
@@ -1609,8 +1609,17 @@ class PreviewPipeline:
     def grade_resident_bytes(self) -> int:
         """本层账单：以前恒为 0（它不持有张量），局部调色起，brush 作用域会常驻一份
         掩膜权重。报实数而不是报 0：“查过、确实没占显存”才是那句话，“不报”等于藏账。"""
-        return sum(int(t.numel() * t.element_size()) for t in
-                   (self._grade_mask_gpu, self._local_mask_gpu) if t is not None)
+        return self.local_grade_layers.resident_bytes() + sum(
+            int(t.numel() * t.element_size()) for t in
+            (self._grade_mask_gpu, self._local_mask_gpu) if t is not None)
+
+    def effect_recovery_resident_bytes(self) -> int:
+        """Disposable per-operator uint8 masks, not persisted image buffers."""
+        return self.effect_recovery.resident_bytes()
+
+    @property
+    def last_local_grade_ms(self):
+        return self.local_grade_layers.last_ms
 
     # ---- PORTRAIT-009：眼牙局部增强 ---------------------------------------
     def has_enhance(self) -> bool:
@@ -1875,6 +1884,9 @@ class PreviewPipeline:
         t0 = time.perf_counter()
         from .ops.matting import composite_t
         out = composite_t(t, self.bg_matte, self.bg_ref)
+        # t already contains every foreground edit. Never blend with src_f32.
+        out = self.effect_recovery.apply('background_replace', t, out,
+                                         align=self.align_source_grade_mask)
         if not torch.isfinite(out).all():
             raise ValueError("换底合成产出非有限值，已拒（不写回也不缓存）")
         if self.device.type != "cpu":

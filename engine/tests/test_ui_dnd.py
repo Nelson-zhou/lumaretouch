@@ -253,8 +253,16 @@ def test_one_to_one_zoom_is_recomputed_when_the_window_resizes():
     assert "const [oneToOne, setOneToOne] = useState(false)" in APP
     assert "if (!oneToOne) return;" in APP, "100% 没有随 fitScale 重算的路径"
     assert "zoom: 1 / Math.max(1e-6, dpr * fitScale)" in APP
-    assert 'className={oneToOne ? "on" : ""} onClick={zoomOne}' in APP, \
+    # Inspect the actual 100% button, not adjacency of two props: pending color
+    # commits now disable it without changing its 1:1 state or resize semantics.
+    button = re.search(r'<button\b([^>]*)>\s*100%</button>', APP)
+    assert button, "缺少实际的 100% 按钮"
+    props = button.group(1)
+    assert 'className={oneToOne ? "on" : ""}' in props, \
         "100% 按钮的选中态还挂在 !view.fit 上（自由缩放也会亮）"
+    assert 'onClick={zoomOne}' in props, "100% 按钮未连接到 1:1 缩放动作"
+    assert 'disabled={colorPicker.pending}' in props, "未确认的定向调整期间允许竞争坐标工具"
+    assert "}, [oneToOne, fitScale]);" in APP, "1:1 重算未依赖窗口 fitScale 变化"
     assert "if (v.fit || v.zoom !== view.zoom) setOneToOne(false)" in APP, \
         "滚轮放大后没退出 1:1 档，徽标会继续自称 100%"
 

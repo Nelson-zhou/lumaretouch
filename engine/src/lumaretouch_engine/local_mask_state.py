@@ -1,7 +1,8 @@
 """Retained mask intent, source binding and disposable preview fields.
 
-The grade consumer is before deformation. Geometry and range selection refer to
-immutable working-sRGB source pixels, not repaired or final displayed pixels.
+The grade consumer follows deformation and LUT. Geometry and range selection
+refer to immutable working-sRGB source pixels; the real deformation grid warps
+the composed mask at the grade mixer, never inferred from displayed pixels.
 """
 from copy import deepcopy
 import hashlib
@@ -88,7 +89,12 @@ def state(engine):
     value = check(getattr(engine, '_local_masks', None))
     pipe = engine._vram
     from .semantic_sources import SOURCE_LABELS
+    from . import local_grade_layers as L
     return {'recipe': value['recipe'], 'bound': engine._grade_scope == 'objects',
+            'transfer_groups': L.inventory({'_local_masks':value, '_grade_scope':engine._grade_scope,
+                '_grade':engine._grade, '_local_grade_layers':getattr(engine,'_local_grade_layers',None)}),
+            'layers': L.report({'_local_grade_layers': getattr(engine, '_local_grade_layers', None)},
+                               getattr(getattr(pipe, 'local_grade_layers', None), 'suspended', None)),
             'channel_labels': dict(SOURCE_LABELS), 'semantic_scope': 'whole-photo-category',
             'suspended': getattr(pipe, 'local_mask_suspended', None),
             'channels': sorted((getattr(engine._precompute, 'masks', None) or {}).keys()) if current_owner(engine) else []}

@@ -52,6 +52,11 @@ mod source_patch_api;
 mod clone_stamp_api;
 mod local_mask_api;
 mod local_mask_host;
+mod effect_recovery_host;
+mod effect_recovery_api;
+mod local_grade_live_host;
+mod local_grade_live_api;
+mod capture_lifecycle;
 mod inspection_host;
 mod inspection_io;
 mod inspection_api;
@@ -214,6 +219,9 @@ pub struct AppState {
     color_capture: Mutex<color_capture_host::CaptureHost>,
     source_patch: Mutex<source_patch_host::SourcePatchHost>,
     local_masks: Mutex<local_mask_host::LocalMaskHost>,
+    effect_recovery: Mutex<effect_recovery_host::RecoveryHost>,
+    recovery_preview: Mutex<effect_recovery_host::RecoveryPreviewHost>,
+    local_grade_live: Mutex<local_grade_live_host::LiveGradeHost>,
     prompted_masks: Mutex<prompted_mask_host::PromptedMaskHost>,
     prompted_model: Arc<Mutex<prompted_model_api::ModelHost>>,
     source_patch_capture: Mutex<source_patch_capture_host::SourcePatchCaptureHost>,
@@ -331,6 +339,9 @@ impl AppState {
             color_capture: Mutex::new(color_capture_host::CaptureHost::default()),
             source_patch: Mutex::new(source_patch_host::SourcePatchHost::default()),
             local_masks: Mutex::new(local_mask_host::LocalMaskHost::default()),
+            effect_recovery: Mutex::new(effect_recovery_host::RecoveryHost::default()),
+            recovery_preview: Mutex::new(effect_recovery_host::RecoveryPreviewHost::default()),
+            local_grade_live: Mutex::new(local_grade_live_host::LiveGradeHost::default()),
             prompted_masks: Mutex::new(prompted_mask_host::PromptedMaskHost::default()),
             prompted_model: Arc::new(Mutex::new(prompted_model_api::ModelHost::default())),
             source_patch_capture: Mutex::new(source_patch_capture_host::SourcePatchCaptureHost::default()),
@@ -400,6 +411,7 @@ impl AppState {
     /// 三条带 doc_state 的事件都进这里落一份"引擎最新说的文档状态 + 它是谁说的"。
     fn note_doc(&self, v: &Value, src: &str) {
         self.source_patch_capture.lock().unwrap().invalidate();
+        self.recovery_preview.lock().unwrap().invalidate();
         self.white_balance_capture.lock().unwrap().invalidate();
         self.color_picker_capture.lock().unwrap().invalidate();
         self.note_face(v, src);
@@ -459,6 +471,7 @@ impl AppState {
 
     pub fn on_lut_ready(&self, v: &Value) {
         self.source_patch_capture.lock().unwrap().invalidate();
+        self.recovery_preview.lock().unwrap().invalidate();
         self.white_balance_capture.lock().unwrap().invalidate();
         self.color_picker_capture.lock().unwrap().invalidate();
         *self.lut.lock().unwrap() = Some(v.clone());
@@ -776,18 +789,7 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     let inspection_root=Arc::new(inspection_io::Root::create(inspection_epoch)?);
     st.inspection.lock().unwrap().reset(inspection_epoch)?;
     *st.ready_caps.lock().unwrap()=json!({});
-    st.color_capture.lock().unwrap().reset(inspection_epoch);
-    st.source_patch.lock().unwrap().reset(inspection_epoch);
-    st.local_masks.lock().unwrap().reset(inspection_epoch);
-    st.prompted_masks.lock().unwrap().reset(inspection_epoch);
-    st.source_patch_capture.lock().unwrap().reset(inspection_epoch);
-    st.white_balance_capture.lock().unwrap().reset(inspection_epoch);
-    st.color_picker_capture.lock().unwrap().reset(inspection_epoch);
-    st.color_picker_results.lock().unwrap().reset(inspection_epoch);
-    st.color_picker_probes.lock().unwrap().reset(inspection_epoch);
-    st.batch_results.lock().unwrap().reset(inspection_epoch);
-    st.preset_results.lock().unwrap().reset(inspection_epoch);
-    st.white_balance_results.lock().unwrap().reset(inspection_epoch);
+    st.reset_capture_hosts(inspection_epoch);
     *st.inspection_root.lock().unwrap()=Some(inspection_root.clone());
     let h = engine::spawn(&py, &src, &session, st.clone(),inspection_epoch,inspection_root);
     let pid = h.pid();
@@ -1663,6 +1665,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
 #[tauri::command]
 fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     state.source_patch_capture.lock().unwrap().invalidate();
+    state.recovery_preview.lock().unwrap().invalidate();
     state.white_balance_capture.lock().unwrap().invalidate();
     state.color_picker_capture.lock().unwrap().invalidate();
     state.color_capture.lock().unwrap().invalidate();
@@ -1999,6 +2002,7 @@ fn report(line: String) {
 fn quit(state: State<'_, Arc<AppState>>) {
     prompted_model_api::shutdown(&state);
     state.source_patch_capture.lock().unwrap().invalidate();
+    state.recovery_preview.lock().unwrap().invalidate();
     state.white_balance_capture.lock().unwrap().invalidate();
     state.color_picker_capture.lock().unwrap().invalidate();
     state.inspection.lock().unwrap().invalidate();
@@ -2026,6 +2030,9 @@ fn main() {
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
             source_patch_api::source_patch_capture, source_patch_api::source_patch_capture_status, source_patch_api::source_patch_capture_frame,
             source_patch_api::source_patch, source_patch_api::source_patch_result, clone_stamp_api::clone_stamp, local_mask_api::local_masks, local_mask_api::local_masks_result,
+            effect_recovery_api::effect_recovery, effect_recovery_api::effect_recovery_result,
+            effect_recovery_api::effect_recovery_preview, effect_recovery_api::effect_recovery_preview_status,
+            local_grade_live_api::local_grade_live, local_grade_live_api::local_grade_live_result,
             color_picker_capture_api::color_picker_capture, color_picker_capture_api::color_picker_capture_status, color_picker_capture_api::color_picker_capture_frame,
             color_picker_api::color_picker, color_picker_api::color_picker_result,
             white_balance_capture_api::white_balance_capture, white_balance_capture_api::white_balance_capture_status, white_balance_capture_api::white_balance_capture_frame, white_balance_capture_api::white_balance_pick,
