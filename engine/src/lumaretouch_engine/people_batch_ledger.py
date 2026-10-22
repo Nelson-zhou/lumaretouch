@@ -26,12 +26,16 @@ def commit(owner,engine,before,candidate,*,request_id,prepare=True):
         found=owner.versions.find(owner.documents.rows(),target['document_id'])
         if found is None or found[1]['path']!=target['path'] or owner.versions.version(found[1]).revision!=target['revision']:
             raise ValueError('People batch target changed during preparation')
-    frame=engine._people_publish_graph(candidate,assets)
+    # Perform fallible clock/result preparation before publishing any graph.
+    # A failed publication may leave a sequence gap; IDs must not rewind/reuse.
     owner.sequence+=1;bid=f'batch-{owner.sequence:03d}-{int(owner.clock()*1000)}'
-    owner.ledger[bid]={'ops':[OP],'targets':targets,'at_ns':owner.monotonic(),'undone':False,
+    entry={'ops':[OP],'targets':targets,'at_ns':owner.monotonic(),'undone':False,
         'policy':'protected_scoped_graph','people_changes':changes,'request_id':request_id}
-    owner.last_result={'kind':'commit','batch_id':bid,'applied':[int(k) for k in targets],'skipped':[]}
-    owner.editor.mark_dirty();engine._people_shared_mutation=True
+    result={'kind':'commit','batch_id':bid,'applied':[int(k) for k in targets],'skipped':[]}
+    frame=engine._people_publish_graph(candidate,assets)
+    owner.ledger[bid]=entry;owner.last_result=result
+    # Keep protected group history even if the final dirty notification fails.
+    engine._people_shared_mutation=True;owner.editor.mark_dirty()
     return bid,frame
 
 

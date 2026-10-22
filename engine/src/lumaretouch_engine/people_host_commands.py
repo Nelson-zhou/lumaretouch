@@ -79,13 +79,18 @@ def apply(engine,raw,emit):
         if records[request].get('digest')!=digest:raise ValueError('People request identity was reused with different content')
         return # Finish emits the original correlated result, never applies twice.
     records[request]={'success':False,'digest':digest};state,binding,target=checked(engine,p);asset=binding['asset_sha256']
+    records[request]['before_fence']=engine._people_owner().fence
     action=p.get('action');payload=p.get('payload');created=None;batch_id=None
     if action in ('select','target'):
         if payload!={} or set(p)!={'document_id','document_epoch','document_revision','state_revision','association_revision','request_id','target','action','payload'}:raise ValueError('Invalid editing cursor command')
+        # Cursor state can change before document fencing or synchronization fails.
         if action=='select':
             if target['scope']!='face':raise ValueError('Selection needs an exact retained face')
+            records[request]['side_effects_started']=True
             select(engine,state,asset,target)
-        else:engine._people_targets[asset]=deepcopy(target)
+        else:
+            records[request]['side_effects_started']=True
+            engine._people_targets[asset]=deepcopy(target)
         engine._fence_current_document();engine._people_shared_mutation=True
         # Cursor/scope changes never require image rendering and must remain
         # reachable while a requested face is suspended for correction.
@@ -93,6 +98,7 @@ def apply(engine,raw,emit):
     else:
         if action=='analyse_face':
             if payload!={} or target['scope']!='face':raise ValueError('Region analysis needs an explicit face')
+            records[request]['side_effects_started']=True
             candidate,ref=analyse(engine,state,target['face_ref'])
             target={'scope':'face','target_id':ref['face_instance_id'],'face_ref':ref}
         elif action=='resolve_legacy':
@@ -110,7 +116,7 @@ def apply(engine,raw,emit):
         if action=='analyse_face':select(engine,engine._people_owner().snapshot(),asset,target)
         if frame is not None:frame['doc_state']=engine.doc_state()
     if frame is not None:emit(frame)
-    records[request]={'success':True,'digest':digest,'frame_emitted':frame is not None,'created_id':created,'batch_id':batch_id}
+    records[request].update(success=True,frame_emitted=frame is not None,created_id=created,batch_id=batch_id)
     while len(records)>128:records.popitem(last=False)
 
 
@@ -122,10 +128,20 @@ def finish(engine,p,error,emit):
         emit({'event':'people_result','protocol':1,'action':p.get('action'),'request_id':p['request_id'],'document_id':p.get('document_id'),
               'success':False,'error':'People request identity was reused with different content','outcome_unknown':False,'doc_state':engine.doc_state()});return
     if 'result' in old:emit(old['result']);return
+    # Publication can succeed before status emission or history recording fails.
+    # Rollback also advances the graph fence; neither case is a proven refusal.
+    fence_changed=(old.get('before_fence') is not None and
+                   engine._people_owner().fence!=old['before_fence'])
+    unknown=engine._vram is None or bool(error and
+        (old.get('success') or old.get('side_effects_started') or fence_changed))
     result={'event':'people_result','protocol':1,'action':p.get('action'),'request_id':p['request_id'],'document_id':p.get('document_id'),
-        'success':bool(old.get('success')) and not error,'error':error,'outcome_unknown':engine._vram is None,
+        'success':bool(old.get('success')) and not error,'error':error,'outcome_unknown':unknown,
         'created_id':old.get('created_id'),'batch_id':old.get('batch_id'),'frame_emitted':old.get('frame_emitted',False)}
-    if engine._vram is not None:result['doc_state']=engine.doc_state()
+    if engine._vram is not None:
+        try:result['doc_state']=engine.doc_state()
+        except Exception as state_error:
+            result.update(success=False,outcome_unknown=True,
+                error=f"{error or 'People result state unavailable'}; {type(state_error).__name__}: {state_error}")
     records[p['request_id']]={'result':result,'digest':digest}
     while len(records)>128:records.popitem(last=False)
     emit(result)

@@ -1,0 +1,43 @@
+{
+  "validation": "Authored source scenarios only. No product imports, execution or tests run.",
+  "scope": "Conservative receipt classification and existing group-ledger publication ordering; not a new reconciliation or retry engine.",
+  "cases": [
+    {
+      "scenario": "Invalid captured document or payload before a mutation",
+      "expect": "Known refusal when graph and operation-owned state have not changed."
+    },
+    {
+      "scenario": "Graph publication succeeds, then doc_state or frame emission fails",
+      "expect": "Outcome unknown, never a confirmed refusal; no automatic reapply."
+    },
+    {
+      "scenario": "Handler succeeds, then document history recording fails",
+      "expect": "Keep original receipt fencing and report outcome unknown."
+    },
+    {
+      "scenario": "Publication rolls back while monotonic fences advance",
+      "expect": "Conservatively unknown; never infer an unchanged fence or rewind it."
+    },
+    {
+      "scenario": "Cursor/reanalysis state changes before a later failure",
+      "expect": "Outcome unknown, even if graph fence did not move."
+    },
+    {
+      "scenario": "Result-state construction itself fails",
+      "expect": "Emit correlated unknown result instead of dropping the terminal event."
+    },
+    {
+      "scenario": "Shared ledger clock fails",
+      "expect": "No graph published; reserved sequence gaps are allowed."
+    },
+    {
+      "scenario": "Shared dirty notification fails after publication",
+      "expect": "Protected group ledger and shared-mutation marker are retained; no duplicate document-only history."
+    },
+    {
+      "scenario": "Identical request repeats",
+      "expect": "Original correlated result, no duplicate application."
+    }
+  ],
+  "remaining": "Unknown outcomes require inspection/reconciliation; this change does not claim automated reconciliation, clean rollback, compilation or runtime acceptance."
+}
