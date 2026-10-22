@@ -7,7 +7,11 @@ def state_signature(st: dict) -> str:
     （1e-16 的差不能算"改过"），_deform/_grade 又是嵌套结构。"""
     d = {}
     for k, v in st.items():
-        if k == "_lut":
+        if k == "_semantic_colour_mask_assets":
+            d[k] = sorted(v)  # Recipe contains hash/shape references; immutable raw arrays never stringify.
+        elif k == "_semantic_colour_bundle":
+            d[k] = st.get("_semantic_colour",{}).get("reference")
+        elif k == "_lut":
             # 表按对象身份比：内容相同的两张表是两个不同的调色动作，同一张表重复
             # 提交才是空操作。拷一份内容来比会把 33³ 的表在每次滑块时读一遍。
             d[k] = None if v is None else f"obj:{id(v)}"

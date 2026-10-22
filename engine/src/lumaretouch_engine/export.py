@@ -201,6 +201,10 @@ class ExportSpec:
     exposure_ref_k: float | None = None
     wb_options: dict | None = None
     reference_color: dict | None = None
+    semantic_colour: dict | None = None
+    semantic_colour_binding: dict | None = None
+    semantic_colour_source_path: str | None = None
+    semantic_colour_source_stamp: tuple | None = None
     float_output: bool = False  # internal full-precision analysis, never an encoded file
     provenance_output: bool = False
     provenance_result: np.ndarray | None = None
@@ -680,7 +684,11 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     optical = optics_enabled(spec.optics)
     from .reference_color_stage import ReferenceColorStage
     reference_stage=ReferenceColorStage(spec.reference_color)
-    floating=bits==16 or optical or reference_stage.active or spec.float_output
+    from .semantic_colour_stage import SemanticColourStage
+    from .semantic_colour_runtime import verify_render_source as verify_semantic_source
+    verify_semantic_source(spec)
+    semantic_stage=SemanticColourStage(spec.semantic_colour,binding=spec.semantic_colour_binding)
+    floating=bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output
     if spec.provenance_output and (not spec.float_output or spec.scale!=1): raise ExportError("来源支持只用于原尺寸浮点分析")
     optical_budget = 0
     if optical:
@@ -980,6 +988,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         geometry_facts = {"crop_applied": not is_identity(*geometry),
                           "geometry_ms": round((time.perf_counter() - t_geometry) * 1000, 2)}
     out=reference_stage.apply_np(out)
+    out=semantic_stage.apply_np(out)
+    verify_semantic_source(spec)
     if support is not None: spec.provenance_result=np.all(support>=.999999,axis=2)
     if bits == 16 and not spec.float_output:
         out = quantize16_np(out)

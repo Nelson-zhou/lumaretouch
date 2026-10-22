@@ -36,6 +36,7 @@ mod color_capture_host;
 mod receipt_host;
 mod people_api;
 mod sample_library_api;
+mod semantic_colour_api;
 mod portrait_api;
 mod preset_host;
 mod preset_api;
@@ -89,12 +90,8 @@ use tauri::State;
 
 use shm::ShmReader;
 
-/// 原生单调时钟纳秒：与引擎侧 CLOCK_MONOTONIC 同基，跨进程可直接相减。
-pub fn now_ns() -> u64 {
-    let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts) };
-    (ts.tv_sec as u64) * 1_000_000_000 + (ts.tv_nsec as u64)
-}
+mod monotonic_clock;
+pub use monotonic_clock::now_ns;
 
 #[derive(Serialize, Clone)]
 pub struct Sample {
@@ -1984,7 +1981,7 @@ fn main() {
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, m0_env, load_image, set_strength, compare, compare_status, precompute,
             inpaint, light, portrait_api::deform, lut, grade, portrait_api::enhance, background, export, session, filmstrip, history,
-            people_api::people,
+            people_api::people, semantic_colour_api::semantic_colour,
             sample_library_api::sample_library, sample_library_api::sample_library_choose,
             color_capture_api::capture_arm, color_capture_api::capture_status, color_capture_api::capture_frame,
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,

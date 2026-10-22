@@ -563,7 +563,7 @@ export default function RetouchPanel(props: RetouchProps) {
       reason={props.faceOk?(doc?.lip_makeup?.suspended??undefined):props.faceWhy}
       commit={(recipe,control)=>{
         if (doc?.people) {
-          const keys = control === 'all' ? ['saturation','brightness','dimensionality'] as const : [control];
+          const keys = control === undefined ? ['saturation','brightness','dimensionality'] as const : [control];
           commitPeopleLeaves(keys.map(key=>({operation_id:'lnx.lip_makeup.v1',parameter_path:`/${key}`,unset:false,value:recipe[key]})));
         } else if (doc?.document_id) ok(runLipMakeup(recipe,doc.document_id,control,capturedPeople),props);
       }} Slider={Slider}/>;

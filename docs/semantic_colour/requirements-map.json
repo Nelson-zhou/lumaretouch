@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "note": "Exact baseline IDs; single-photo source integration is present, runtime and photographic acceptance remain UNRUN. Library/style/scene-synthesis families excluded.",
+  "controls": [
+    {
+      "control_id": "PC-32452-C-fbe73f0159",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-fbe73f0159",
+      "control_path": "AI追色",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-20622a1901",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-20622a1901",
+      "control_path": "AI追色/应用AI追色",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-4ffef14e32",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-4ffef14e32",
+      "control_path": "AI追色/应用AI追色/第一步：选择AI追色模式",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-6bc7d19de9",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-6bc7d19de9",
+      "control_path": "AI追色/应用AI追色/第一步：选择AI追色模式/关闭「精准控制」模式",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-a8bb7fedf1",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-a8bb7fedf1",
+      "control_path": "AI追色/应用AI追色/第一步：选择AI追色模式/开启「精准控制」模式",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-22025a98c5",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-22025a98c5",
+      "control_path": "AI追色/应用AI追色/第三步：选择AI追色模型",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "ADAPTED_ONE_BACKEND_TWO_REGULARIZATION_POLICIES_NOT_TWO_TRAINED_MODELS",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-e92914a50b",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-e92914a50b",
+      "control_path": "AI追色/批量同步&保存预设",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "PORTABLE_INTENT_ONLY_BATCH_HOST_NOT_CONNECTED",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-a6bb17749a",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-a6bb17749a",
+      "control_path": "局部追色",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-765234dfde",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-765234dfde",
+      "control_path": "全图调整/程度",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-ba031c1bf1",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-ba031c1bf1",
+      "control_path": "全图调整/影调",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-fc758fb168",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-fc758fb168",
+      "control_path": "全图调整/色彩",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-408957d7ab",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-408957d7ab",
+      "control_path": "AI追色/精准控制",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-633b863a30",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-633b863a30",
+      "control_path": "AI追色/极致",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-526ef81feb",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-526ef81feb",
+      "control_path": "AI追色/和谐",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-a6f71ac905",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-a6f71ac905",
+      "control_path": "AI追色/重置",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-e84df35afd",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-e84df35afd",
+      "control_path": "AI追色/蒙版列表",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-f2d32e3b5d",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-f2d32e3b5d",
+      "control_path": "局部追色/样片参考蒙版",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-7d17c74c6f",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-7d17c74c6f",
+      "control_path": "局部追色/精修目标蒙版",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32452-C-a388714cae",
+      "linux_requirement_id": "LNX-REF-PC-32452-C-a388714cae",
+      "control_path": "局部追色/开始追色",
+      "source_url": "https://www.pixcakeai.com/guide/32452",
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ class PreviewLifecycleMixin:
 
     def _tick_owned_previews(self):
         for key in ('_manual_liquify_preview_owner', '_sky_replacement_preview_owner',
-                    '_studio_background_preview_owner', '_prompted_mask_owner', '_sky_semantic_owner'):
+                    '_studio_background_preview_owner', '_prompted_mask_owner', '_sky_semantic_owner', '_semantic_colour_owner'):
             owner = self.__dict__.get(key)
             if owner is not None:
                 owner.tick()

@@ -5,7 +5,7 @@ import {ConfirmedPeopleTransfer} from './people/ConfirmedPeopleTransfer';
 import {usePeopleWorkflow} from './people/usePeopleWorkflow';
 import {portraitAccess} from './people/portraitAccess';
 import {peopleContext, peopleAssetContext, type PeopleContext} from './people/model';
-import {ReferenceColorControls} from './referenceColor/ReferenceColorControls';
+import {ColourTransferTools} from './semanticColour/ColourTransferTools';
 import {RetouchToolActivity,type ToolLocation} from "./toolRouting/RetouchToolActivity";
 import { neutral as neutralWrinkles } from "./facialWrinkles/model";
 import {ExportQueuePanel} from './components/ExportQueuePanel';
@@ -449,11 +449,10 @@ export default function App() {
         if (key !== docKey.current) {
           docKey.current = key;
           applyDocState(st.image.doc_state, "image_ready");
-          // 换图 = 回到适应窗口、回到所有人；对比的原图快照作废重取
+          // 换图回到适应窗口；人物目标由当前文档的 canonical people 状态恢复。
           setOneToOne(false);
           setInspectionEnabled(false);
           setView(VIEW_HOME);
-          setFaceScope("all");
           setHasOriginal(false);
         }
       } else {
@@ -1836,7 +1835,7 @@ export default function App() {
             <ConfirmedPeopleTransfer owner={peopleWorkflow} targets={selPaths} currentPath={strip?.current??''} enabled={hasImage&&!exporting&&status?.ready_caps?.people_protocol===1&&status?.ready_caps?.batch_preflight_protocol===1} onComplete={()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));}}/>
             {strip && strip.count > 0 && (
               <>
-                <ReferenceColorControls sourceDocumentId={doc?.document_id??''} currentPath={strip.current??''} targets={selPaths} enabled={hasImage&&status?.ready_caps?.reference_color_protocol===1} onComplete={()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));}}/>
+                <ColourTransferTools selectedSample={sampleLibrary.selectedReference} semanticEnabled={hasImage&&status?.ready_caps?.semantic_colour_protocol===1} refreshKey={String(status?.doc_rev??0)} sourceDocumentId={doc?.document_id??''} currentPath={strip.current??''} targets={selPaths} enabled={hasImage&&status?.ready_caps?.reference_color_protocol===1} onComplete={()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));}}/>
                 <BatchActions count={selPaths.length} scopes={syncScopes} scope={effectiveScope.label}
                   groups={doc?.local_masks?.transfer_groups} localMaskTransfer={syncScopeOps.includes(LOCAL_GRADE_OP)?localMaskTransfer:undefined} onLocalMaskTransfer={setLocalMaskTransfer} policy={batchPolicy} onScope={setSyncScopeLabel} onPolicy={setBatchPolicy} note={syncNote}
                   ready={hasImage&&status?.ready_caps?.batch_preflight_protocol===1} busy={['committing','preflighting'].includes(batchWorkflow.ui.phase)}

@@ -76,6 +76,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     spec.check_optics()
     from .reference_color_runtime import configure_export as configure_reference
     configure_reference(spec,snap,for_document=for_document)
+    from .semantic_colour_runtime import configure_export as configure_semantic_colour
+    configure_semantic_colour(spec,snap,(eh,ew),for_document=for_document)
     from .sky_replacement_runtime import configure_export as configure_sky
     configure_sky(spec,snap,(eh,ew),for_document=for_document)
     spec.check_sky_replacement()

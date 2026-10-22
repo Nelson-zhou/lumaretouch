@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "execution_status": "UNRUN",
+  "source": "https://www.pixcakeai.com/guide/32452",
+  "baseline": "功能需求验收映射.json: PC-32452 initially research/P1; no dedicated accepted cases",
+  "cases": [
+    {
+      "id": "SC-001",
+      "name": "Same image and neutral strengths preserve identity including signed zero, RGB16 and extended float",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-002",
+      "name": "Masked-out pixels exact, masks independent and overlapping residuals conserved",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-003",
+      "name": "Same colour different semantic objects and changed composition defeat nonsemantic histogram baseline",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-004",
+      "name": "Hair and clothes outside orange skin gate genuinely recolour; six-class others never labelled background",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-005",
+      "name": "Frozen FLOAT32-NPZ edited/cropped reference analyzed from rendered pixels, never original path",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-006",
+      "name": "RGB16 preview/full export agreement, final native resolution retained",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-007",
+      "name": "Independent 0/100/200 overall, tone and colour; quick/precise same recipe",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-008",
+      "name": "Edit/delete/reset local masks and params without changing existing manual edits",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-009",
+      "name": "Cancel repeated starts, close/reopen, document/sample switch, late receipts and stale review",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-010",
+      "name": "Persist/reopen without model; missing reference blocks reanalysis not valid retained replay",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-011",
+      "name": "Geometry changes visibly suspend retained masks; face editing cursor does not",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-012",
+      "name": "Diverse real skin tones, backlight, mixed light, hair boundaries, clothes, occlusion, multiple people, seams and gamut",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-013",
+      "name": "Full-resolution peak RAM admission, worker deadline, no six full-resolution float mask copies",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-014",
+      "name": "Local dual masks both have support; no cross-image binding reuse; local batch rejected",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-015",
+      "name": "Different batch targets independently reanalyzed/fitted with offsets and owned-field undo",
+      "status": "NOT_CONNECTED"
+    },
+    {
+      "id": "SC-016",
+      "name": "Sky and lip-specific semantic support plus independent-person correspondence",
+      "status": "NOT_CONNECTED"
+    },
+    {
+      "id": "SC-017",
+      "name": "Source bytes replaced in-place after proposal or export admission are rejected; unchanged upstream colour edits retain masks without inference",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-018",
+      "name": "Project v12 restores private assets and schema v11 sky semantics; corrupted inactive versions fail and older readers reject v12",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-019",
+      "name": "Lost native acknowledgments reconcile by ID without mutation retry; late cancellation fences capture, terminal receipt release does not leak mailbox budget",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-020",
+      "name": "Semantic read actions preserve sample-library capture; shared atomic writer and editing invalidation remain correct",
+      "status": "UNRUN"
+    }
+  ]
+}

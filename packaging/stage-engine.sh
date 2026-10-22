@@ -96,3 +96,10 @@ mkdir -p "$stage/lumaretouch_engine/third_party/reference_color/core/reference_c
 cp "$here/../core/reference_color/lib.rs" "$stage/lumaretouch_engine/third_party/reference_color/core/reference_color/"
 cp "$here/../core/curves/curve.rs" "$stage/lumaretouch_engine/third_party/reference_color/core/curves/"
 cp "$here/../LICENSE" "$here/../docs/REFERENCE-COLOR-INTEGRATION.md" "$stage/lumaretouch_engine/third_party/reference_color/"
+
+# Genuine neural-guided editable colour recipe: original Rust evaluator + fitter.
+bash "$here/build-semantic-colour.sh" "$stage/lumaretouch_engine/bin/liblrt_semantic_colour.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/semantic_colour/core/semantic_colour" "$stage/lumaretouch_engine/third_party/semantic_colour/core/curves"
+cp "$here/../core/semantic_colour/"*.rs "$stage/lumaretouch_engine/third_party/semantic_colour/core/semantic_colour/"
+cp "$here/../core/curves/curve.rs" "$stage/lumaretouch_engine/third_party/semantic_colour/core/curves/"
+cp "$here/../LICENSE" "$here/../docs/semantic_colour/README.md" "$stage/lumaretouch_engine/third_party/semantic_colour/"
