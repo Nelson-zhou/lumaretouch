@@ -15,6 +15,7 @@ mod edit_commands;
 mod levels_core;
 mod levels_api;
 mod fabric_api;
+mod layout_print_api;
 mod color_scopes_api;
 mod color_scopes_host;
 mod engine;
@@ -1295,6 +1296,7 @@ fn export(
     metadata_include_gps: Option<bool>,
     conflict_policy: Option<String>,
     watermark: Option<Value>,
+    layout: Option<Value>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "export", "action": "start", "out_dir": out_dir});
     if let Some(v) = format {
@@ -1327,6 +1329,7 @@ fn export(
         ("metadata_include_gps", metadata_include_gps.map(Value::from)),
         ("conflict_policy", conflict_policy.map(Value::from)),
         ("watermark", watermark),
+        ("layout", layout),
     ] {
         if let Some(v) = v {
             cmd[k] = v;
@@ -2006,6 +2009,7 @@ fn main() {
         .manage(state.clone())
         .manage(Launcher(state.clone()))
         .invoke_handler(tauri::generate_handler![
+            layout_print_api::print_layout, layout_print_api::open_layout_pdf,
             inspection_api::inspection_start, inspection_api::inspection_status,
             inspection_api::inspection_cancel, inspection_api::inspection_pull, inspection_api::inspection_release,
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,

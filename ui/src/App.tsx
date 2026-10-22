@@ -1,5 +1,7 @@
 import {useWhiteBalancePickerWorkflow} from './whiteBalance/useWhiteBalancePicker';
 import {WhiteBalancePickerControls,WhiteBalancePickerStatus} from './whiteBalance/WhiteBalancePickerControls';
+import {LayoutControls} from "./layout/LayoutControls";
+import {useLayoutSettings} from "./layout/model";
 import {WatermarkControls, WatermarkReceipt} from "./watermark/WatermarkControls";
 import {useWatermarkSettings} from "./watermark/model";
 import {useWhiteBalanceWorkflow} from "./whiteBalance/useWhiteBalanceWorkflow";
@@ -211,6 +213,7 @@ export default function App() {
   // tile 不预先填一个数：行程与默认值都来自 ready 报的 export_caps，前端抄一份就会在
   // 引擎改口径时把"能导"变成"导错"。
   const {watermark, setWatermark, storageError: watermarkStorageError} = useWatermarkSettings();
+  const layoutModel = useLayoutSettings();
   const [exportDir, setExportDir] = useState("/tmp/luma-export");
   const [exportFormat, setExportFormat] = useState("jpg");
   const [exportQuality, setExportQuality] = useState(95);
@@ -1201,7 +1204,7 @@ export default function App() {
           tiffCompression: combo.tiffCompression,
           metadataIncludeGps: exportGps,
           conflictPolicy: exportConflict,
-          watermark,
+          watermark, layout: layoutModel.layout,
         })
           .then(() => refreshStatus())
           .then(() => watchExportOutcome(before));
@@ -2107,6 +2110,7 @@ export default function App() {
                   写入 GPS
                 </label>
               </div>
+              <LayoutControls model={layoutModel} disabled={exporting} selected={exportTargets.length || (hasImage ? 1 : 0)} receipt={status?.export?.layout_result}/>
               <WatermarkControls value={watermark} onChange={setWatermark} disabled={exporting} storageError={watermarkStorageError}/>
               <label className="exDir">输出目录
                 <input value={exportDir} onChange={(e) => setExportDir(e.target.value)} />

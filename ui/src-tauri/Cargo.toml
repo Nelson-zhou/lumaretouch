@@ -19,3 +19,7 @@ libc = "0.2"
 
 [profile.dev]
 opt-level = 1
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Tauri already uses GTK 3; reuse its print dialog, GdkPixbuf and Cairo.
+gtk = "0.18"

@@ -1066,6 +1066,7 @@ export interface ExportedImage {
 
 /** 一批导出的终态（引擎侧 export_done，M4）。 */
 export interface ExportDone {
+  layout_result?: import("./layout/model").LayoutReceipt | null;
   total: number;
   failed: number;
   out_dir: string;
@@ -1403,7 +1404,7 @@ export const runExport = (
   opts?: { format?: string; quality?: number; tile?: number; images?: string[];
            scale?: number; sharpen?: number; upscaleBackend?: string;
            bitDepth?: number; outputProfile?: string; tiffCompression?: string;
-           metadataIncludeGps?: boolean; conflictPolicy?: string; watermark?: WatermarkSettings },
+           metadataIncludeGps?: boolean; conflictPolicy?: string; watermark?: WatermarkSettings; layout?: import("./layout/model").LayoutSpec },
 ) =>
   invoke<{ requested: boolean }>("export", {
     outDir,
@@ -1423,6 +1424,7 @@ export const runExport = (
     metadataIncludeGps: opts?.metadataIncludeGps,
     conflictPolicy: opts?.conflictPolicy,
     watermark: opts?.watermark,
+    layout: opts?.layout,
   });
 
 export {parseFrameHead,type ParsedFrame} from './previewFrame';

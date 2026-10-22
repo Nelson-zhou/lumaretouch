@@ -1,0 +1,8 @@
+.layoutControls { font-size:12px; line-height:1.5; }
+.layoutControls input[type="number"], .layoutControls input[type="text"], .layoutControls input:not([type]), .layoutControls select {
+  min-width:0; max-width:100%; box-sizing:border-box; background:#151515; color:#ddd;
+  border:1px solid #444; border-radius:5px; padding:6px 8px;
+}
+.layoutControls button { margin:5px 6px 5px 0; padding:6px 10px; }
+.layoutControls [role="alert"] { color:#ffb49d; }
+.layoutControls p { color:#bbb; }

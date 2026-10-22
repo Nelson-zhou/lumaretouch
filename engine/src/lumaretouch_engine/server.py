@@ -5795,7 +5795,7 @@ class Engine:
                    "scale", "sharpen", "upscale_backend", "bit_depth",
                    # d2c 那四格：名字进白名单不等于接通，下面逐条校验完才进 snap
                    "output_profile", "tiff_compression", "metadata_include_gps",
-                   "conflict_policy", "watermark"}
+                   "conflict_policy", "watermark", "layout"}
 
     def _state_to_export_snap(self, st: dict, *, device, scale, upscale_backend,
                               sharpen) -> dict:
@@ -6101,10 +6101,12 @@ class Engine:
         # another image in a 16-bit passthrough batch.
         snap_by_path = self._export_snap_by_path(images, doc, snap)
         from . import watermark as WM
+        from .layout_spec import normalize as normalize_layout, LAYOUT_ITEM
         try:
             snap["export_watermark"] = WM.freeze_settings(p.get("watermark"))
+            snap["export_layout"] = normalize_layout(p.get("layout"))
         except (ValueError, TypeError, OSError) as error:
-            emit({"event": "error", "error": f"水印设置无效：{error}"})
+            emit({"event": "error", "error": f"水印/排版设置无效：{error}"})
             return
         # Pixel edits are now routed to the float/RGB16 pipeline per image.
         # The neutral classifier remains below to select exact passthrough;
@@ -6122,7 +6124,7 @@ class Engine:
         # 而开发 venv 里这批用例全部 skip（没 torch），只有运行时 venv 才响得出来）
         opts = {"output_profile": output_profile, "tiff_compression": tiff_comp,
                 "metadata_include_gps": bool(include_gps), "conflict_policy": conflict_policy,
-                "watermark": WM.public_settings(snap.get("export_watermark"))}
+                "watermark": WM.public_settings(snap.get("export_watermark")), "layout": snap.get("export_layout")}
         # P1-1：为这批每一张预解析各自的配方（命令线程读 _docs，worker 不再读 live）。
         self._export_args = (list(images), out_dir, fmt, quality, tile, doc, snap, bit_depth,
                              opts, snap_by_path)
@@ -6135,7 +6137,7 @@ class Engine:
                           {"images": list(images), "out_dir": out_dir, "format": fmt,
                            "quality": quality, "tile": tile, "bit_depth": bit_depth,
                            "doc": doc, **opts},
-                          list(images), task_id=f"exp{self._task_seq}-{os.getpid()}")
+                          list(images) + ([LAYOUT_ITEM] if snap.get("export_layout") else []), task_id=f"exp{self._task_seq}-{os.getpid()}")
         # `recipe_persisted` 说的是“这份配方快照现在还在不在会话里”，不是“有没有写过
         # 工程文件”：当场建账的批次必然还在（_task_args 刚收过），只有从盘上读回来的
         # 那一份才 False。上一版在这里写死 False，于是重试的门在**本会话内**也是关着
@@ -6209,7 +6211,7 @@ class Engine:
                           out=rec.get("out"))
         else:
             T.item_result(task, path, "succeeded", out=rec.get("out"),
-                          detail={"bytes": rec.get("bytes")})
+                          detail={"bytes": rec.get("bytes"), "layout_usable": not any(o.get("skipped") for o in rec.get("outputs", []) or [] if o.get("path") == rec.get("out"))})
         self._emit_task(task, f"第 {T.counts(task)['succeeded'] + T.counts(task)['failed']} "
                               f"条已定")
 
@@ -6618,6 +6620,10 @@ class Engine:
             emit({"event": "export_progress", "index": idx, "total": n, "path": path,
                   "ok": "error" not in results[-1]})
             self._task_item(task, path, results[-1])
+        layout_result = None
+        if snap.get("export_layout"):
+            from .layout_delivery import finish_layout
+            layout_result = finish_layout(self, task, snap["export_layout"], out_dir)
         if task is not None:
             # 收尾状态由条目账算出来，不由“循环跑完了”宣布：部分失败报成 succeeded
             # 就是 TASK-003 拒绝的那种“把失败折成完成”
@@ -6648,7 +6654,7 @@ class Engine:
               "task_state": (task or {}).get("state"),
               "cancelled": _cancelled_final,
               "out_dir": out_dir, "format": fmt, "quality": quality, "tile": tile,
-              "bit_depth": bit_depth, **opts,
+              "bit_depth": bit_depth, "layout_result": layout_result, **opts,
               "scale": int(snap["scale"]), "sharpen": float(snap["sharpen"]),
               # 后端名字只在真做了放大时才报：批级别写"lanczos3"而每张图的账单写 None，
               # 就是在同一件事上给两个答案（没放大时"用了哪个后端"这句话本身不成立）
