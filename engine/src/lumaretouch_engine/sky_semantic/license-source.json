@@ -1,0 +1,8 @@
+{
+  "repository": "SHI-Labs/OneFormer",
+  "path": "LICENSE",
+  "git_blob": "8ea0dead0eae2bb8274320bfb16f633c3f386dda",
+  "sha256": "ef5b1fbc15ed7852965f64e98ff690cde0f1394e8f7f128cad78a198eac094cf",
+  "note": "The official pinned model card independently declares MIT for the model weights.",
+  "source_url": "https://api.github.com/repos/SHI-Labs/OneFormer/git/blobs/8ea0dead0eae2bb8274320bfb16f633c3f386dda"
+}

@@ -1,0 +1,118 @@
+{
+  "id": "lumaretouch-oneformer-semantic",
+  "version": "5.20.2+lumaretouch.semantic1",
+  "upstream_commit": "18329f1065382e54db698e242cf98bd3f3e5a766",
+  "patches": [
+    {
+      "path": "transformers/dependency_versions_check.py",
+      "upstream_git_blob": "9f9edb40eb51bf1907c9f575cdb4c9424ec967d5",
+      "before_sha256": "523dcce519f7f0c0e32e0e6af43033d931a739dbe4743a70ad2af11a356e9103",
+      "after_sha256": "13cebd4a9b1dfa1dbccfe5510e9378227e55dbaa472e2579b420581f877047a8",
+      "replacements": [
+        {
+          "old": "    \"regex\",\n",
+          "new": ""
+        }
+      ]
+    },
+    {
+      "path": "transformers/utils/__init__.py",
+      "upstream_git_blob": "f6c34a30e9174a5fcebe67dc5aa3af4bda4dba18",
+      "before_sha256": "3c75dbd01816055862cf6519fd1720a67d8dc75a960b51cab770764920d1ed94",
+      "after_sha256": "37b198cd0f09291b0af1805524c39f55a01d801a28fbf5028f2d1050e38b43a4",
+      "replacements": [
+        {
+          "old": "from .auto_docstring import (\n    ClassAttrs,\n    ClassDocstring,\n    ImageProcessorArgs,\n    ModelArgs,\n    ModelOutputArgs,\n    auto_class_docstring,\n    auto_docstring,\n    get_args_doc_from_source,\n    parse_docstring,\n    set_min_indent,\n)",
+          "new": "from ._lumaretouch_doc_identity import auto_class_docstring, auto_docstring"
+        }
+      ]
+    },
+    {
+      "path": "transformers/models/oneformer/modeling_oneformer.py",
+      "upstream_git_blob": "a88c258f2eac86be92df8cc1e5842b8e7463451e",
+      "before_sha256": "a22c106432a7d5101e54dc8f47f2e137b3b94c9c86a2f34d13026c7579b16bfd",
+      "after_sha256": "74e85e55abd8dd2a19d179a13f606b60be3bd3e28aea4546f6497eb4d7bf5e15",
+      "replacements": [
+        {
+          "old": "from ...backbone_utils import load_backbone",
+          "new": "from ..swin.modeling_swin import SwinBackbone"
+        },
+        {
+          "old": "from ...modeling_layers import GradientCheckpointingLayer",
+          "new": "from ..._lumaretouch_semantic_support import GradientCheckpointingLayer"
+        },
+        {
+          "old": "self.encoder = load_backbone(config)",
+          "new": "self.encoder = SwinBackbone(config.backbone_config)"
+        }
+      ]
+    },
+    {
+      "path": "transformers/models/swin/modeling_swin.py",
+      "upstream_git_blob": "ab51ec1b5986b7b6a8a4a2e50b508c5538d746e9",
+      "before_sha256": "a17c47a9cec2e3ef2f8af2edea5c3817708eeb2eade69bbeea78dbf4493c4067",
+      "after_sha256": "e45a52e835d9031252d8f051410bff68dcede24a1b25e21a85431515969d3134",
+      "replacements": [
+        {
+          "old": "from ...modeling_layers import GradientCheckpointingLayer",
+          "new": "from ..._lumaretouch_semantic_support import GradientCheckpointingLayer"
+        },
+        {
+          "old": "from ...processing_utils import Unpack",
+          "new": "from typing_extensions import Unpack"
+        }
+      ]
+    },
+    {
+      "path": "transformers/modeling_utils.py",
+      "upstream_git_blob": "daffe67a2e390fa466f37acec94a541b51105553",
+      "before_sha256": "553412f58334f65abba617f3b344828698dbf63615e109159fd03dafd3422d38",
+      "after_sha256": "73307dddddb89c16fdce339de66fee07afd2321785b7d7a774cd0b5d67c7d540",
+      "replacements": [
+        {
+          "old": "from .modeling_layers import GradientCheckpointingLayer",
+          "new": "from ._lumaretouch_semantic_support import GradientCheckpointingLayer"
+        }
+      ]
+    },
+    {
+      "path": "transformers/__init__.py",
+      "upstream_git_blob": "37f83bf1ea3a19c0224f40ea579628162e817579",
+      "before_sha256": "9c2731469aaaa3d8448780ef0b9f87c254cde39193542018a3b6c9cd36f03501",
+      "after_sha256": "2db84990543a80561f9075c4386172354fd3bb98c3799bc59892056d2bfd3692",
+      "replacements": [
+        {
+          "old": "__version__ = \"5.20.2\"",
+          "new": "__version__ = \"5.20.2+lumaretouch.semantic1\""
+        }
+      ]
+    },
+    {
+      "path": "transformers/configuration_utils.py",
+      "upstream_git_blob": "36a6c032529335f52113f50e03d312a12519351c",
+      "before_sha256": "9b27e37bfcfa33fdcca8389ddac6bcd87285057aa64fbb1205d380909525c736",
+      "after_sha256": "f726c38513ad8927290f41b0567fc61c93114ae394026cf1e0f151289fe6a92b",
+      "replacements": [
+        {
+          "old": "from .modeling_gguf_pytorch_utils import load_gguf_checkpoint\n",
+          "new": ""
+        },
+        {
+          "old": "                    config_dict = load_gguf_checkpoint(resolved_config_file, return_tensors=False)[\"config\"]",
+          "new": "                    # Semantic fork: legacy GGUF tokenizer dependencies are only needed for explicit GGUF reads.\n                    from .modeling_gguf_pytorch_utils import load_gguf_checkpoint\n                    config_dict = load_gguf_checkpoint(resolved_config_file, return_tensors=False)[\"config\"]"
+        }
+      ]
+    }
+  ],
+  "support": {
+    "path": "transformers/_lumaretouch_semantic_support.py",
+    "sha256": "147d9f8b71775d2fe8756ba02ebdff2bf9a8972f96cd8ecb3bbbe4facec0380a",
+    "upstream": "src/transformers/modeling_layers.py",
+    "upstream_git_blob": "57e440247c1b191eba36b396f95c25344ad75827"
+  },
+  "documentation_adapter": {
+    "path": "transformers/utils/_lumaretouch_doc_identity.py",
+    "sha256": "53791f38d8de2989f224449eac8744fa525edaacdf5f47e84163775c89e5f0ee",
+    "authorship": "LumaRetouch project; not a regex or Transformers API compatibility shim"
+  }
+}

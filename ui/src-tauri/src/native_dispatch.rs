@@ -8,6 +8,7 @@ impl AppState {
         self.recovery_preview.lock().map_err(|_|"recovery preview lock poisoned")?.invalidate();
         self.optics_preview.lock().map_err(|_|"optics preview lock poisoned")?.invalidate();
         self.sky_preview.lock().map_err(|_|"sky preview lock poisoned")?.invalidate();
+        self.sky_semantic.lock().map_err(|_|"semantic lock poisoned")?.invalidate();
         self.studio_background_preview.lock().map_err(|_|"studio preview lock poisoned")?.invalidate();
         self.liquify_preview.lock().map_err(|_|"liquify preview lock poisoned")?.invalidate();
         self.white_balance_capture.lock().map_err(|_|"WB capture lock poisoned")?.invalidate();
@@ -35,13 +36,17 @@ impl AppState {
         if name!="hello" && name!="inspection_snapshot" {self.liquify_preview.lock().map_err(|_|"liquify preview lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {self.studio_background_preview.lock().map_err(|_|"studio preview lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {self.optics_preview.lock().map_err(|_|"optics preview lock poisoned")?.invalidate();}
-        if name!="hello" && name!="inspection_snapshot" {self.sky_preview.lock().map_err(|_|"sky preview lock poisoned")?.invalidate();}
+        if name!="hello" && name!="inspection_snapshot" {
+            self.sky_preview.lock().map_err(|_|"sky preview lock poisoned")?.invalidate();
+            self.sky_semantic.lock().map_err(|_|"semantic lock poisoned")?.invalidate();
+        }
         let edited = self.history_edit_cmds.lock().unwrap().iter().any(|c| c == &name);
         let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
         if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
         let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
         let handle=guard.as_ref().ok_or_else(|| "引擎未启动".to_string())?;
         match name.as_str() {
+            "brow_shape" => crate::brow_shape_api::enqueue(handle, cmd)?,
             "batch" => crate::batch_api::enqueue(self, handle, cmd)?,
             "preset" => crate::preset_api::enqueue(self, handle, cmd)?,
             "white_balance" => crate::white_balance_api::enqueue(self, handle, cmd)?,

@@ -204,6 +204,161 @@
       "transferable": true,
       "source_requirement": "LNX-REF-PC-32455-C-b220a0c332",
       "reason": "Versioned white-balance algorithm and replacement gains. Omission in imported legacy payloads preserves target reference; it is not replaced by this explicit neutral object. Corrected daylight domain requires reference and shifted white in 4000–25000 K. Picker UI remains separate."
+    },
+    {
+      "operation_id": "lnx.brow_shape.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "thickness": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "spacing": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "tilt": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "arch": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "position": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "inner_length": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        },
+        "outer_length": {
+          "linked": true,
+          "left": 0.0,
+          "right": 0.0
+        }
+      },
+      "hard_range": {
+        "version": 1,
+        "thickness": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "spacing": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "tilt": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "arch": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "position": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "inner_length": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        },
+        "outer_length": {
+          "linked": "boolean",
+          "left": [
+            -1,
+            1
+          ],
+          "right": [
+            -1,
+            1
+          ]
+        }
+      },
+      "transferable": true,
+      "source_requirement": "PC-32466-C-a25ee7adaa",
+      "reason": "Existing version-1 seven-control person-relative bilateral eyebrow recipe. Numeric bounds are local product policy. Parameter-only transfer recomputes target geometry and visibility; no source identities, fields or masks copied. Registry omission corrected; no new acceptance claim."
+    },
+    {
+      "operation_id": "lnx.lip_makeup.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "saturation": 0.0,
+        "brightness": 0.0,
+        "dimensionality": 0.0
+      },
+      "hard_range": {
+        "version": 1,
+        "saturation": [
+          -1,
+          1
+        ],
+        "brightness": [
+          -1,
+          1
+        ],
+        "dimensionality": [
+          -1,
+          1
+        ]
+      },
+      "transferable": true,
+      "source_requirement": "PC-32471-C-944899f5fd",
+      "reason": "Existing version-1 three-control lip enhancement recipe, not a lipstick asset or global makeup strength. Numeric bounds are local product policy. Transfers intent only; target owns anatomy, visibility and recovery. Registry omission corrected; no new acceptance claim."
     }
   ]
 }

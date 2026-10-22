@@ -47,6 +47,8 @@ torch = optional_module("torch")
 from .ops import enhance as ENH
 from . import under_eye_layer as UNDER
 from . import lip_makeup_runtime as LIPR, lip_makeup_state as LIPS
+from . import brow_shape_runtime as BROWR, brow_shape_state as BROWS
+from .brow_shape_field import compose_delta as compose_brow_delta
 from . import facial_wrinkle_runtime as WRUNTIME, facial_wrinkle_state as WSTATE
 from .ops.deform import (analytic_frontal_landmarks, controls, face_frame,
                          support_radii, tps_field_from_state, tps_solve)
@@ -174,6 +176,8 @@ class ExportSpec:
     # 不拿预览档那张小掩膜放大——放大一份"身份"掩膜等于把眼睛涂到眉毛上，而且
     # 内容门的相对统计会跟着插值得到的假边一起漂。
     enhance: dict = field(default_factory=dict)
+    brow_shape: dict | None = None
+    brow_shape_face: object | None = None
     lip_makeup: dict | None = None
     lip_makeup_face: dict | None = None
     facial_wrinkle_skin: np.ndarray | None = None
@@ -265,6 +269,7 @@ class ExportSpec:
         self.check_optics()
         self.check_sky_replacement()
         self.lip_makeup = LIPS.check(self.lip_makeup)
+        self.brow_shape = BROWS.check(self.brow_shape)
         from .local_grade_layers import check as check_groups
         from .local_grade_stage import check_fields
         self.local_grade_groups = check_groups(self.local_grade_groups)
@@ -721,6 +726,9 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         t_f = time.perf_counter()
         delta, peak = composed_delta(spec.landmarks, spec.deform_amounts, h, w, device)
         field_ms = (time.perf_counter() - t_f) * 1000.0
+    brow_field = BROWR.export_field(spec, src_u8, divisor=65535 if src_u8.dtype == np.uint16 else 255)
+    delta, peak = compose_brow_delta(delta, brow_field, (h,w))
+    if isinstance(delta,np.ndarray): delta = torch.from_numpy(delta)
     margin = spec.margin_px(peak, manual_peak)
     if margin > MAX_MARGIN:
         raise ExportError(f"这组参数的作用面宽到 margin={margin} px（超过 {MAX_MARGIN}），"
@@ -801,8 +809,9 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                 pipe.set_light_params(spec.light_exposure, spec.light_radius)
         if fabric_field is not None:
             pipe.fabric.install(fabric_field[cy0:cy1, cx0:cx1], spec.fabric_amount)
-        if delta is not None and spec.deform_amounts:
+        if delta is not None:
             pipe.adopt_deform_field(delta[:, cy0:cy1, cx0:cx1].contiguous().to(device))
+            pipe.brow_shape_combined = brow_field is not None and brow_field.state is not None
         if enh_reg is not None:
             # 先挂场再提交参数：set_enhance 只改三个数，而 has_enhance() 要同时看到场，
             # 反过来写会有一瞬"参数点火而场上没有额度"——那一瞬里 lit 报的是假话
@@ -960,6 +969,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         "enhance": dict(spec.enhance or {}),
         "lip_makeup": dict(lip_layer.facts) if lip_layer is not None else {},
         "lip_makeup_full_resolution": lip_layer is not None,
+        "brow_shape": brow_field.facts if brow_field else {},
+        "brow_shape_full_resolution": brow_field is not None,
         "lip_makeup_bytes": lip_layer.resident_bytes() if lip_layer is not None else 0,
         "facial_wrinkles": dict(wrinkle_layer.facts) if wrinkle_layer is not None else {},
         "facial_wrinkle_full_resolution": wrinkle_layer is not None,

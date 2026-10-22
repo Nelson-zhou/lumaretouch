@@ -15,7 +15,7 @@ export function notifyInspectionEditIntent(){
   if(typeof window!=='undefined')window.dispatchEvent(new Event(INSPECTION_EDIT_INTENT));
 }
 const inspectionMutations=new Set(['start_engine','shutdown_engine','load_image','set_strength','precompute',
-  'inpaint','light','deform','lut','grade','enhance','lip_makeup','background','exposure','hsl','curves','levels','fabric','crop','compare',
+  'inpaint','light','deform','lut','grade','enhance','lip_makeup','brow_shape','background','exposure','hsl','curves','levels','fabric','crop','compare',
   'session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
   const send=()=>{if(inspectionMutations.has(command))notifyInspectionEditIntent();return tauriInvoke<T>(command,args,options);};
@@ -143,6 +143,7 @@ export const dragParametricCurve=(spec:CurveSpec,region:number,target:number)=>i
 export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_preview",{spec});
 
 export interface DocState {
+  brow_shape?: {version:1;revision:number;selected_face_id:string;recipe:import("./browShape/model").BrowShape;sides:Partial<Record<import("./browShape/model").BrowSide,import("./browShape/model").BrowFact>>;suspended:string|null;bytes_fields:number};
   lip_makeup?: {version:1;recipe:import("./lipMakeup/model").LipMakeup;facts:import("./lipMakeup/model").LipFact;suspended:string|null;bytes_fields:number};
   effect_recovery?: import("./effectRecovery/model").RecoveryReport;
   optics?: import("./optics/model").OpticsReport;
@@ -932,9 +933,11 @@ export interface EngineStatus {
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
     lip_makeup_protocol?: number;
+    brow_shape_protocol?: number;
     effect_recovery_protocol?: number;
     optics_protocol?: number;
     sky_replacement_protocol?: number;
+    sky_semantic_protocol?: number;
     manual_liquify_preview_protocol?: number;
     studio_background_protocol?: number;
     manual_liquify_protocol?: number;
@@ -1688,3 +1691,11 @@ export const runFabric=(amount:number,documentId:string)=>invoke<{requested:bool
 /** Accepted edits update doc_state only after the engine rendered the recipe. */
 export const runLipMakeup=(recipe:import("./lipMakeup/model").LipMakeup,documentId:string,control:import("./lipMakeup/model").LipKey|"all"="all")=>
   invoke<{requested:boolean}>("lip_makeup",{recipe,documentId,control});
+
+type BrowRequest={action:'edit';request_id:string;gesture_id:string;document_id:string;face_id:string;control:string;recipe:import('./browShape/model').BrowShape;base:import('./browShape/model').BrowShape};
+export function runBrowShapeRequest(request:{action:'status';request_id:string}):Promise<import('./browShape/latestIntent').Mailbox<import('./browShape/model').BrowShape>>;
+export function runBrowShapeRequest(request:BrowRequest):Promise<{requested:boolean}>;
+export function runBrowShapeRequest(request:BrowRequest|{action:'status';request_id:string}){
+  // Receipt lookups are read-only and must not invalidate editing captures.
+  return request.action==='status'?tauriInvoke<import('./browShape/latestIntent').Mailbox<import('./browShape/model').BrowShape>>("brow_shape",{request}):invoke<{requested:boolean}>("brow_shape",{request});
+}

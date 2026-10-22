@@ -10,12 +10,20 @@ mkdir -p "$stage"
 ( cd "$here/../engine/src" && tar cf - --exclude='__pycache__' --exclude='*.pyc' . ) \
   | ( cd "$stage" && tar xf - )
 
+# Optional semantic source/locks/notices are part of the package; acquired
+# weights and private wheels live outside this tree in the user's data directory.
+mkdir -p "$stage/lumaretouch_engine/third_party/sky_semantic"
+cp "$here/../docs/development/sky-semantic-proposals.md" "$stage/lumaretouch_engine/third_party/sky_semantic/README.md"
+
 # Ship the Rust compiler used by headless recipe restore and batch processing.
 # Build into staging, not the source tree, so no host-specific binary is committed.
 bash "$here/build-curve-compiler.sh" "$stage/lumaretouch_engine/bin/curve-compiler"
 bash "$here/build-color-scopes.sh" "$stage/lumaretouch_engine/bin/color-scopes"
 bash "$here/build-local-masks.sh" "$stage/lumaretouch_engine/bin/local-masks"
 bash "$here/build-manual-liquify.sh" "$stage/lumaretouch_engine/bin/manual-liquify"
+bash "$here/build-brow-shape.sh" "$stage/lumaretouch_engine/bin/liblrt_brow_shape.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/brow_shape"
+cp "$here/../core/brow_shape/lib.rs" "$here/../LICENSE" "$here/../docs/BROW-SHAPE-INTEGRATION.md" "$here/../docs/model-licenses/archive/mediapipe-LICENSE.txt" "$stage/lumaretouch_engine/third_party/brow_shape/"
 bash "$here/build-lip-makeup.sh" "$stage/lumaretouch_engine/bin/liblrt_lip_makeup.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/lip_makeup"
 cp "$here/../core/lip_makeup/lib.rs" "$here/../LICENSE" "$here/../docs/LIP-MAKEUP-INTEGRATION.md" "$here/../docs/model-licenses/archive/mediapipe-LICENSE.txt" "$stage/lumaretouch_engine/third_party/lip_makeup/"

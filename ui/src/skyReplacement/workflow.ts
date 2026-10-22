@@ -11,7 +11,7 @@ interface Candidate {id:string;mutation:SkyMutation;version:number}
 const initial=():SkyState=>({phase:'idle',open:false,locatorReady:false,drawing:false,draft:null,image:null,previewId:null,target:'sky',message:'',error:null,dirty:false,committable:false,request:null,undo:0,redo:0});
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 function image(v:unknown):SkyImage {
-  if(!object(v)||v.domain!=='source-normalized'||v.output_domain!=='production-output'||v.quality!=='proxy-render-srgb8'||v.automatic_detection!==false||
+  if(!object(v)||v.domain!=='source-normalized'||v.output_domain!=='production-output'||v.quality!=='proxy-render-srgb8'||typeof v.automatic_detection!=='boolean'||
     ![v.width,v.height,v.source_width,v.source_height].every(n=>Number.isSafeInteger(n)&&Number(n)>0&&Number(n)<=800)||
     ![v.source,v.after,v.overlay].every(s=>typeof s==='string'&&s.startsWith('data:image/png;base64,')&&s.length<=4*1024*1024))throw Error('天空预览不是有效的源图定位与真实输出');
   return v as unknown as SkyImage;
@@ -147,6 +147,7 @@ export function createSkyWorkflow(api:SkyTransport,options:{refresh:()=>Promise<
     cancelGesture(){if(!gesture)return;const old=gesture;gesture=null;publish({drawing:false});replace(old,false);},
     undo(){if(!state.draft||gesture||pending()||!past.length)return;future.push(structuredClone(state.draft));const value=past.pop()!;replace(value,false);publish({undo:past.length,redo:future.length});},
     redo(){if(!state.draft||gesture||pending()||!future.length)return;past.push(structuredClone(state.draft));const value=future.pop()!;replace(value,false);publish({undo:past.length,redo:future.length});},
+    semanticBinding(){return session&&state.locatorReady&&!pending()&&!gesture?{documentId:session.document,sessionId:session.id}:null;},
     busy:pending,capturing:()=>!!session,identity:()=>session?.id??null,externalEdit(){if(session&&!pending())cancel('其他效果正在调整，未提交天空草稿已取消');},
     check:async()=>{if(state.request&&!querying&&['waiting','uncertain'].includes(state.phase))await query(state.request);},
     activate(){active=true;},stop(){const uncertain=pending();discard();active=false;querying=false;state=uncertain?{...state,phase:'uncertain',message:'原操作结果待确认，不会重发'}:initial();},

@@ -39,12 +39,13 @@ from . import studio_background_scope as STUDIO
 from . import optics_scope as OPTICS, optics_auto_scope as OPTICS_AUTO
 from . import facial_wrinkle_scope as WRINKLES
 from . import lip_makeup_scope as LIP
+from . import brow_shape_scope as BROW
 from . import sky_replacement_scope as SKY
 
 SCHEMA = "lrt.scope.v1"
 PRESET_SCHEMA = "lrt.preset.v1"
 PRESET_MAX_BYTES = 256 * 1024        # 预设是纯参数文本；超过这个量就是别的东西伪装进来的
-PRESET_MAX_MODULES = 16
+PRESET_MAX_MODULES = 32
 
 # 冻结注册表里 editable 的那几个 operation_id（写在这里而不是去读文件：见模块 docstring）。
 OP_CURVES = "lnx.curves.v1"
@@ -82,6 +83,9 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: operation_id → 契约。`single_face` 的模块只能作用在"已知只有一张脸"的文档上；
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
+    BROW.OP: {"params": ("recipe",), "state_fields": BROW.FIELDS, "single_face": True,
+              "transferable": True, "cmd": "brow_shape", "read": BROW.params_of, "write": BROW.install,
+              "why_not": "仅七项双侧参数；目标重新确认真实人物与可见眉毛，不复制源图身份、网格或蒙版"},
     OPTICS_AUTO.OP: {"params": ("request",), "state_fields": OPTICS_AUTO.FIELDS, "single_face": False,
                 "transferable": True, "cmd": "optics", "read": OPTICS_AUTO.params_of, "write": OPTICS_AUTO.install,
                 "why_not": "逐图重匹配配置与重新解算，含手动数值；必须冻结预检，不复制源图矩阵、配置或引导线"},
@@ -263,6 +267,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == OPTICS_AUTO.OP:
         try: return OPTICS_AUTO.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == BROW.OP:
+        try: return BROW.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == LIP.OP:
         try: return LIP.check_params(params)

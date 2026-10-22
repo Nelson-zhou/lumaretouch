@@ -1,0 +1,441 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-10-22",
+  "scope": "Bounded source-delivery index only; no completion percentage or whole-product denominator.",
+  "baseline": "Supplied Linux handbook and AI development package acceptance mapping; original research statuses are not overwritten.",
+  "published_checkpoint": {
+    "branch": "fix/interaction-regressions",
+    "commit": "667b4180cb64c1748bf1dc741f6a67fdb7939e9e",
+    "tree": "88abf8401edd6b5afa1f5f37706b5c6c00815741",
+    "inspected_equivalent_commit": "3d66a74d0cd4e0ac2246562c168af8bc00c072a3",
+    "remote_evidence": "Verified by coordinating agent; no remote request in this documentation task."
+  },
+  "status_policy": {
+    "source_connected": "Connected in cited source, not executed or accepted.",
+    "known_incomplete": "Confirmed defect or missing path remains.",
+    "in_progress": "Not frozen or published in this checkpoint.",
+    "no_evidence": "Not assessed by this bounded update; not proof of absence.",
+    "missing": "Use only for established absent functionality.",
+    "runtime_acceptance": "Unverified for all entries; no CI or physical acceptance inferred.",
+    "source_fixed_unverified": "Previously confirmed defect addressed in a local source snapshot; execution and remote publication not verified."
+  },
+  "groups": [
+    {
+      "group": "facial_wrinkles",
+      "feature_id": "PC-32464",
+      "source_status": "source_connected",
+      "published": true,
+      "runtime_acceptance": "unverified",
+      "evidence_document": "docs/FACIAL-WRINKLES-INTEGRATION.md",
+      "controls": [
+        {
+          "control_id": "PC-32464-C-d9e8e03577",
+          "control_path": "面部祛纹",
+          "linux_requirement_id": "LNX-REF-PC-32464-C-d9e8e03577",
+          "record_kind": "family_heading"
+        },
+        {
+          "control_id": "PC-32464-C-294d9a2188",
+          "control_path": "面部祛纹/祛抬头纹",
+          "linux_requirement_id": "LNX-REF-PC-32464-C-294d9a2188",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32464-C-3e1a0bb386",
+          "control_path": "面部祛纹/祛川字纹",
+          "linux_requirement_id": "LNX-REF-PC-32464-C-3e1a0bb386",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32464-C-24f710ab2b",
+          "control_path": "面部祛纹/祛眼周纹",
+          "linux_requirement_id": "LNX-REF-PC-32464-C-24f710ab2b",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32464-C-fcd0c13b5f",
+          "control_path": "面部祛纹/祛鼻背纹",
+          "linux_requirement_id": "LNX-REF-PC-32464-C-fcd0c13b5f",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32464-C-942d0bfb79",
+          "control_path": "面部祛纹/祛法令纹",
+          "linux_requirement_id": "LNX-REF-PC-32464-C-942d0bfb79",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32464-C-f28262041d",
+          "control_path": "面部祛纹/祛脸颊纹",
+          "linux_requirement_id": "LNX-REF-PC-32464-C-f28262041d",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32464-C-5aa8868572",
+          "control_path": "面部祛纹/祛木偶纹",
+          "linux_requirement_id": "LNX-REF-PC-32464-C-5aa8868572",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32464-C-22b2d6e2a0",
+          "control_path": "面部祛纹/祛嘴周纹",
+          "linux_requirement_id": "LNX-REF-PC-32464-C-22b2d6e2a0",
+          "record_kind": "control_or_behavior"
+        }
+      ]
+    },
+    {
+      "group": "lip_makeup_subgroup",
+      "feature_id": "PC-32471",
+      "source_status": "source_connected",
+      "published": true,
+      "runtime_acceptance": "unverified",
+      "evidence_document": "docs/LIP-MAKEUP-INTEGRATION.md",
+      "controls": [
+        {
+          "control_id": "PC-32471-C-944899f5fd",
+          "control_path": "唇妆增强",
+          "linux_requirement_id": "LNX-REF-PC-32471-C-944899f5fd",
+          "record_kind": "family_heading"
+        },
+        {
+          "control_id": "PC-32471-C-3d1502871b",
+          "control_path": "唇妆增强/饱和度",
+          "linux_requirement_id": "LNX-REF-PC-32471-C-3d1502871b",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32471-C-d5fc30a763",
+          "control_path": "唇妆增强/明度",
+          "linux_requirement_id": "LNX-REF-PC-32471-C-d5fc30a763",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32471-C-21e4a8d464",
+          "control_path": "唇妆增强/立体度",
+          "linux_requirement_id": "LNX-REF-PC-32471-C-21e4a8d464",
+          "record_kind": "control_or_behavior"
+        }
+      ]
+    },
+    {
+      "group": "lens_perspective",
+      "feature_id": "PC-32455",
+      "source_status": "source_connected_with_parent_ui_hook_in_progress",
+      "published": true,
+      "runtime_acceptance": "unverified",
+      "evidence_document": "docs/optics/PC-32455-lens-perspective.md",
+      "controls": [
+        {
+          "control_id": "PC-32455-C-df80f90191",
+          "control_path": "镜头调整",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-df80f90191",
+          "record_kind": "family_heading"
+        },
+        {
+          "control_id": "PC-32455-C-8503f7df6c",
+          "control_path": "镜头调整/RAW格式图片",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-8503f7df6c",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-f652e5e464",
+          "control_path": "镜头调整/非RAW格式图片",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-f652e5e464",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-b75e31f8df",
+          "control_path": "透视矫正",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-b75e31f8df",
+          "record_kind": "family_heading"
+        },
+        {
+          "control_id": "PC-32455-C-9fa03b233c",
+          "control_path": "镜头调整/镜头矫正开关",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-9fa03b233c",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-7f0e3965e8",
+          "control_path": "镜头调整/畸变矫正",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-7f0e3965e8",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-e1dc351e67",
+          "control_path": "镜头调整/锁定裁剪",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-e1dc351e67",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-97e25fa700",
+          "control_path": "镜头调整/暗角调节",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-97e25fa700",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-34a1b1823c",
+          "control_path": "镜头调整/中点调节",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-34a1b1823c",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-171eace8b1",
+          "control_path": "透视矫正/AI透视矫正",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-171eace8b1",
+          "record_kind": "parent_enable",
+          "source_status": "in_progress",
+          "boundary": "Parent toggle for smart/horizontal/vertical modes, not a distinct neural-model requirement; real enable and perspective-only reset UI wiring in progress.",
+          "official_reference": "https://wiki.pixcakeai.com/guide/9398.html"
+        },
+        {
+          "control_id": "PC-32455-C-cb1d7f388c",
+          "control_path": "透视矫正/智能",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-cb1d7f388c",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-7a3b74734c",
+          "control_path": "透视矫正/水平自动",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-7a3b74734c",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-744036c8c7",
+          "control_path": "透视矫正/垂直自动",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-744036c8c7",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-a2317750e5",
+          "control_path": "透视矫正/引导线",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-a2317750e5",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-2ae6b603af",
+          "control_path": "透视矫正/垂直",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-2ae6b603af",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-3600bc8b78",
+          "control_path": "透视矫正/水平",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-3600bc8b78",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-8b5c326b67",
+          "control_path": "透视矫正/旋转",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-8b5c326b67",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-e7242daf5b",
+          "control_path": "透视矫正/长宽比",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-e7242daf5b",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-a930092c46",
+          "control_path": "透视矫正/缩放",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-a930092c46",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-372d7fd6b9",
+          "control_path": "透视矫正/水平偏移",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-372d7fd6b9",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-f51e766b17",
+          "control_path": "透视矫正/垂直偏移",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-f51e766b17",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-f6f6b349fd",
+          "control_path": "透视矫正/辅助线",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-f6f6b349fd",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32455-C-65d14e4b47",
+          "control_path": "透视矫正/锁定裁剪",
+          "linux_requirement_id": "LNX-REF-PC-32455-C-65d14e4b47",
+          "record_kind": "control_or_behavior"
+        }
+      ]
+    },
+    {
+      "group": "eyebrow_geometry",
+      "feature_id": "PC-32466",
+      "source_status": "source_fixed_unverified",
+      "published": false,
+      "runtime_acceptance": "unverified",
+      "evidence_document": "docs/BROW-SHAPE-INTEGRATION.md",
+      "controls": [
+        {
+          "control_id": "PC-32466-C-a25ee7adaa",
+          "control_path": "眉毛",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-a25ee7adaa",
+          "record_kind": "family_heading"
+        },
+        {
+          "control_id": "PC-32466-C-3a0e5b3aa6",
+          "control_path": "眉毛/粗细",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-3a0e5b3aa6",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32466-C-aef1ac96b6",
+          "control_path": "眉毛/眉距",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-aef1ac96b6",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32466-C-75f4aab5d9",
+          "control_path": "眉毛/倾斜",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-75f4aab5d9",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32466-C-5cd2097ba1",
+          "control_path": "眉毛/形状",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-5cd2097ba1",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32466-C-3b36aa8899",
+          "control_path": "眉毛/位置",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-3b36aa8899",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32466-C-b7ff3a0ac6",
+          "control_path": "眉毛/眉头长短",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-b7ff3a0ac6",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32466-C-29f403bf68",
+          "control_path": "眉毛/眉尾长短",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-29f403bf68",
+          "record_kind": "control_or_behavior"
+        }
+      ],
+      "local_commit": "7fdced66332ae1a5ffc967730f8ee10223f04acc",
+      "publication_status": "local_unpublished"
+    },
+    {
+      "group": "nose_geometry",
+      "feature_id": "PC-32466",
+      "source_status": "in_progress",
+      "published": false,
+      "runtime_acceptance": "unverified",
+      "evidence_document": null,
+      "controls": [
+        {
+          "control_id": "PC-32466-C-ba582ff45d",
+          "control_path": "鼻子",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-ba582ff45d",
+          "record_kind": "family_heading"
+        },
+        {
+          "control_id": "PC-32466-C-0025490aa7",
+          "control_path": "鼻子/大小",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-0025490aa7",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32466-C-180241806a",
+          "control_path": "鼻子/鼻高",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-180241806a",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32466-C-1ef85157f8",
+          "control_path": "鼻子/左右",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-1ef85157f8",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32466-C-6598ad2758",
+          "control_path": "鼻子/鼻梁",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-6598ad2758",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32466-C-aed80c5608",
+          "control_path": "鼻子/鼻翼",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-aed80c5608",
+          "record_kind": "control_or_behavior"
+        },
+        {
+          "control_id": "PC-32466-C-aec9e15569",
+          "control_path": "鼻子/鼻尖",
+          "linux_requirement_id": "LNX-REF-PC-32466-C-aec9e15569",
+          "record_kind": "control_or_behavior"
+        }
+      ],
+      "integration_stage": "shared_integration_in_progress"
+    }
+  ],
+  "workflow_updates": [
+    {
+      "id": "lnx.optics_auto.v1",
+      "source_status": "source_connected",
+      "evidence": "docs/optics/AUTOMATIC-TRANSFER-HOOKS.md",
+      "boundary": "Each target recomputes real profile/solve from complete candidate; no source profile, matrix or guide transfer."
+    },
+    {
+      "id": "optics_runtime_producer",
+      "source_status": "source_connected",
+      "evidence": "docs/optics/INSTALL.md",
+      "boundary": "Producer and offline install wiring exist; no artifact built or install accepted."
+    },
+    {
+      "id": "automatic_sky_water_person",
+      "source_status": "source_connected",
+      "published": false,
+      "boundary": "Optional real OneFormer source integration includes app/native/engine/project/export hooks; model installation, inference and runtime equivalence unrun. Published explicit-region sky is a separate path.",
+      "local_commit": "329b07ac6ff5ef5eabffa71ad4cce885025e8675",
+      "publication_status": "local_unpublished",
+      "runtime_acceptance": "unverified",
+      "evidence": "docs/development/sky-semantic-proposals.md"
+    }
+  ],
+  "known_blockers": {
+    "nose": [
+      "Six-control shared integration in progress; 鼻高 is head-local vertical position, not scale."
+    ],
+    "perspective_parent_ui": [
+      "PC-32455-C-171eace8b1 real parent enable toggle and perspective-only reset are being connected; no separate neural-model gap is established."
+    ]
+  },
+  "local_unpublished_eyebrow_commits": [
+    "82b9a55f3d6eab9728bf39d4464dc9afb8e705bc",
+    "bc7456e8d264f982eeca275d080f6ae12721639c",
+    "7fdced66332ae1a5ffc967730f8ee10223f04acc"
+  ],
+  "existing_exact_maps": {
+    "studio": "docs/development/studio-background-scope.md",
+    "explicit_region_sky": "docs/development/sky-replacement-controls.json"
+  },
+  "acceptance_performed": [],
+  "verification_method": "Fixed git source/document reads and data-only documentation editing; no tests/build/runtime/download/install/commit/push.",
+  "source_fixed_unverified": {
+    "eyebrow": {
+      "commit": "7fdced66332ae1a5ffc967730f8ee10223f04acc",
+      "publication_status": "local_unpublished",
+      "fixes": [
+        "Post-history receipts advance CAS; one-inflight/latest-intent gesture sequencing.",
+        "Source/face/epoch/gesture ownership; uncertainty lookup never resubmits mutation.",
+        "Explicit gesture history; actual target landmarks and required keyword argument."
+      ],
+      "runtime_acceptance": "unverified"
+    }
+  }
+}

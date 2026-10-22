@@ -1,0 +1,966 @@
+{
+  "version": 1,
+  "model_id": "shi-labs/oneformer_ade20k_swin_tiny",
+  "revision": "05f2812b1eccf9909b3897777450f8d68148cafc",
+  "license": "MIT",
+  "license_evidence": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/blob/05f2812b1eccf9909b3897777450f8d68148cafc/README.md",
+  "files": [
+    {
+      "filename": "README.md",
+      "url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/resolve/05f2812b1eccf9909b3897777450f8d68148cafc/README.md",
+      "source_url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/raw/05f2812b1eccf9909b3897777450f8d68148cafc/README.md",
+      "size": 3744,
+      "sha256": "728e7588013101171a2b209d5dbcc38be413cf6775e2377ddee9e0b117f73774",
+      "git_blob_sha1": "424c77e60ce46602a4d871e7d23ff9e3b3d276f2"
+    },
+    {
+      "filename": "config.json",
+      "url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/resolve/05f2812b1eccf9909b3897777450f8d68148cafc/config.json",
+      "source_url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/raw/05f2812b1eccf9909b3897777450f8d68148cafc/config.json",
+      "size": 84284,
+      "sha256": "091cbc7c980128ae63b2a15d882923f326f85926ef163adad00c24bd90228896",
+      "git_blob_sha1": "6c7669710c9f39b98e6f35e3c53a3b3d343ea9ec"
+    },
+    {
+      "filename": "preprocessor_config.json",
+      "url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/resolve/05f2812b1eccf9909b3897777450f8d68148cafc/preprocessor_config.json",
+      "source_url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/raw/05f2812b1eccf9909b3897777450f8d68148cafc/preprocessor_config.json",
+      "size": 8709,
+      "sha256": "2c3c403d8414263e732996bb2ffeab80dd5ced0068ab11bfe5adf476ef75823c",
+      "git_blob_sha1": "b20c190f44df6d96d9d848c620afa744479decb5"
+    },
+    {
+      "filename": "merges.txt",
+      "url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/resolve/05f2812b1eccf9909b3897777450f8d68148cafc/merges.txt",
+      "source_url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/raw/05f2812b1eccf9909b3897777450f8d68148cafc/merges.txt",
+      "size": 524619,
+      "sha256": "9fd691f7c8039210e0fced15865466c65820d09b63988b0174bfe25de299051a",
+      "git_blob_sha1": "76e821f1b6f0a9709293c3b6b51ed90980b3166b"
+    },
+    {
+      "filename": "special_tokens_map.json",
+      "url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/resolve/05f2812b1eccf9909b3897777450f8d68148cafc/special_tokens_map.json",
+      "source_url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/raw/05f2812b1eccf9909b3897777450f8d68148cafc/special_tokens_map.json",
+      "size": 472,
+      "sha256": "c4864a9376a8401918425bed71fc14fc0e81f9b59ec45c1cf96cccb2df508eac",
+      "git_blob_sha1": "2c2130b544c0c5a72d5d00da071ba130a9800fb2"
+    },
+    {
+      "filename": "tokenizer_config.json",
+      "url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/resolve/05f2812b1eccf9909b3897777450f8d68148cafc/tokenizer_config.json",
+      "source_url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/raw/05f2812b1eccf9909b3897777450f8d68148cafc/tokenizer_config.json",
+      "size": 807,
+      "sha256": "64dd88e64d791e3be4d38be62d7e77e0a24df9e79205ac740af505aa2e94c367",
+      "git_blob_sha1": "ff922fde52c7c398017e928789536d87dd1a08dd"
+    },
+    {
+      "filename": "vocab.json",
+      "url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/resolve/05f2812b1eccf9909b3897777450f8d68148cafc/vocab.json",
+      "source_url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/raw/05f2812b1eccf9909b3897777450f8d68148cafc/vocab.json",
+      "size": 1059962,
+      "sha256": "e089ad92ba36837a0d31433e555c8f45fe601ab5c221d4f607ded32d9f7a4349",
+      "git_blob_sha1": "469be27c5c010538f845f518c4f5e8574c78f7c8"
+    },
+    {
+      "filename": "pytorch_model.bin",
+      "url": "https://huggingface.co/shi-labs/oneformer_ade20k_swin_tiny/resolve/05f2812b1eccf9909b3897777450f8d68148cafc/pytorch_model.bin",
+      "size": 203389501,
+      "sha256": "909b07dbf4129c2bbb8df4498e35dcd46f305e3ec45329d3ff6d4f0360de27f3",
+      "format": "pytorch-state-dict",
+      "loading": "weights_only=True; no allowlisted globals"
+    }
+  ],
+  "runtime": [
+    {
+      "name": "transformers",
+      "version": "5.20.2",
+      "metadata_url": "https://pypi.org/pypi/transformers/5.20.2/json",
+      "license": "Apache 2.0 License",
+      "license_classifiers": [],
+      "requires_python": ">=3.10.0",
+      "requires_dist": [
+        "huggingface-hub<3.0,>=1.31.0",
+        "numpy>=1.17",
+        "packaging>=20.0",
+        "pyyaml>=5.1",
+        "tokenizers<0.24.0,>=0.23.1",
+        "typer",
+        "safetensors>=0.8.0",
+        "tqdm>=4.60"
+      ],
+      "wheels": [
+        {
+          "filename": "transformers-5.20.2-py3-none-any.whl",
+          "size": 12844921,
+          "url": "https://files.pythonhosted.org/packages/96/b6/724faefed06913dd3e42e0476fe2c42448675c42f687a12bf810aa098005/transformers-5.20.2-py3-none-any.whl",
+          "requires_python": ">=3.10.0",
+          "sha256": "7ae75dbc1fb3922aff1b6c97b9e5479d6cf26fd86a8866bfb71324190479f807"
+        }
+      ],
+      "project_urls": {
+        "Homepage": "https://github.com/huggingface/transformers"
+      },
+      "vulnerabilities": [],
+      "modified_by": "lumaretouch-oneformer-semantic/5.20.2+lumaretouch.semantic1"
+    },
+    {
+      "name": "huggingface-hub",
+      "version": "1.31.0",
+      "metadata_url": "https://pypi.org/pypi/huggingface-hub/1.31.0/json",
+      "license": "Apache-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "requires_python": ">=3.10.0",
+      "requires_dist": [
+        "click<9.0.0,>=8.4.2",
+        "filelock>=3.10.0",
+        "fsspec>=2023.5.0",
+        "hf-xet<2.0.0,>=1.5.2; platform_machine == \"x86_64\" or platform_machine == \"amd64\" or platform_machine == \"AMD64\" or platform_machine == \"arm64\" or platform_machine == \"aarch64\"",
+        "httpx<1,>=0.23.0",
+        "packaging>=20.9",
+        "pyyaml>=5.1",
+        "tqdm>=4.42.1",
+        "typing-extensions>=4.1.0"
+      ],
+      "wheels": [
+        {
+          "filename": "huggingface_hub-1.31.0-py3-none-any.whl",
+          "size": 798313,
+          "url": "https://files.pythonhosted.org/packages/c3/7f/3f886a625043b77312b80da2f2bf00b5ecbf5a73061af1aa0259cd258c9d/huggingface_hub-1.31.0-py3-none-any.whl",
+          "requires_python": ">=3.10.0",
+          "sha256": "9dbb6a503cbe2494ea666695207e7262d410659e09134059deb83e5480864667"
+        }
+      ],
+      "project_urls": {
+        "Homepage": "https://github.com/huggingface/huggingface_hub"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "tokenizers",
+      "version": "0.23.3",
+      "metadata_url": "https://pypi.org/pypi/tokenizers/0.23.3/json",
+      "license": "Apache-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "requires_python": ">=3.10",
+      "requires_dist": [
+        "huggingface-hub<3.0,>=0.16.4"
+      ],
+      "wheels": [
+        {
+          "filename": "tokenizers-0.23.3-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+          "size": 3519944,
+          "url": "https://files.pythonhosted.org/packages/15/fc/ae987741829b1cd547668c4c94be732ae3eefd1d74344e64c3d2ca714acd/tokenizers-0.23.3-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+          "requires_python": ">=3.10",
+          "sha256": "ec82e80e65a862275b97c3d90b7a523df8d9519ee48aeb4e9625b2cc909274e0"
+        },
+        {
+          "filename": "tokenizers-0.23.3-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+          "size": 3396193,
+          "url": "https://files.pythonhosted.org/packages/3a/40/6706b82693715581457c6d5423eaa7faae576bb0526c5738a57085eb4449/tokenizers-0.23.3-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+          "requires_python": ">=3.10",
+          "sha256": "376851d22bcf9d650a5c3090bb83e6cf9e895fbf0595369fa4cd43c1f69b5f87"
+        },
+        {
+          "filename": "tokenizers-0.23.3-cp314-cp314t-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+          "size": 3491678,
+          "url": "https://files.pythonhosted.org/packages/e3/08/b1cbae8dc8fc7c91f992ac2d87a086e9b3f25a28814047ca16a82fe8c87b/tokenizers-0.23.3-cp314-cp314t-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+          "requires_python": ">=3.10",
+          "sha256": "de536665495cb4b409d25bade41963f801aff4225c19a6b804b048f7d14e34c7"
+        },
+        {
+          "filename": "tokenizers-0.23.3-cp314-cp314t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+          "size": 3367420,
+          "url": "https://files.pythonhosted.org/packages/3e/0d/aac0cb2f3a1fdbef514145b4c5f2df4d05deeb1ee8f73ae641a1b4a62a85/tokenizers-0.23.3-cp314-cp314t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+          "requires_python": ">=3.10",
+          "sha256": "5cc24bb457dd4a8af89c8fcb40074d570129ec473df2a866c276ee55db4749d7"
+        }
+      ],
+      "project_urls": {
+        "Homepage": "https://github.com/huggingface/tokenizers",
+        "Source": "https://github.com/huggingface/tokenizers"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "safetensors",
+      "version": "0.8.0",
+      "metadata_url": "https://pypi.org/pypi/safetensors/0.8.0/json",
+      "license": "Apache-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "requires_python": ">=3.10",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "safetensors-0.8.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+          "size": 502844,
+          "url": "https://files.pythonhosted.org/packages/09/7d/65a7de0af421317bb36a067241e4235fff194eed60b961ed6d3f59a3fc60/safetensors-0.8.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+          "requires_python": ">=3.10",
+          "sha256": "7a46e5ff292c356d6991e60942ba7f79817682d3a2cef0702136448cb9c4d235"
+        },
+        {
+          "filename": "safetensors-0.8.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+          "size": 516040,
+          "url": "https://files.pythonhosted.org/packages/28/50/f203ff3a3ddfe19308efc83c5a3a29ed02bf786732ec35e68bf9162f3365/safetensors-0.8.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+          "requires_python": ">=3.10",
+          "sha256": "fd6f3f93c9a0a7cc2788ee63fb763353d4bd2e89b0751bc78fcf7dda00bea774"
+        }
+      ],
+      "project_urls": {
+        "Homepage": "https://github.com/huggingface/safetensors",
+        "Source": "https://github.com/huggingface/safetensors"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "packaging",
+      "version": "26.3",
+      "metadata_url": "https://pypi.org/pypi/packaging/26.3/json",
+      "license": "Apache-2.0 OR BSD-2-Clause",
+      "license_classifiers": [],
+      "requires_python": ">=3.9",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "packaging-26.3-py3-none-any.whl",
+          "size": 129956,
+          "url": "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl",
+          "requires_python": ">=3.9",
+          "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c"
+        }
+      ],
+      "project_urls": {
+        "Documentation": "https://packaging.pypa.io/",
+        "Source": "https://github.com/pypa/packaging"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "pyyaml",
+      "version": "6.0.3",
+      "metadata_url": "https://pypi.org/pypi/pyyaml/6.0.3/json",
+      "license": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "requires_python": ">=3.8",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "pyyaml-6.0.3-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+          "size": 775116,
+          "url": "https://files.pythonhosted.org/packages/ed/23/7a778b6bd0b9a8039df8b1b1d80e2e2ad78aa04171592c8a5c43a56a6af4/pyyaml-6.0.3-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+          "requires_python": ">=3.8",
+          "sha256": "9149cad251584d5fb4981be1ecde53a1ca46c891a79788c0df828d2f166bda28"
+        },
+        {
+          "filename": "pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+          "size": 807870,
+          "url": "https://files.pythonhosted.org/packages/8b/9d/b3589d3877982d4f2329302ef98a8026e7f4443c765c46cfecc8858c6b4b/pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+          "requires_python": ">=3.8",
+          "sha256": "ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc"
+        },
+        {
+          "filename": "pyyaml-6.0.3-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+          "size": 767081,
+          "url": "https://files.pythonhosted.org/packages/50/31/b20f376d3f810b9b2371e72ef5adb33879b25edb7a6d072cb7ca0c486398/pyyaml-6.0.3-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+          "requires_python": ">=3.8",
+          "sha256": "ee2922902c45ae8ccada2c5b501ab86c36525b883eff4255313a253a3160861c"
+        },
+        {
+          "filename": "pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+          "size": 801626,
+          "url": "https://files.pythonhosted.org/packages/74/27/e5b8f34d02d9995b80abcef563ea1f8b56d20134d8f4e5e81733b1feceb2/pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+          "requires_python": ">=3.8",
+          "sha256": "0f29edc409a6392443abf94b9cf89ce99889a1dd5376d94316ae5145dfedd5d6"
+        },
+        {
+          "filename": "pyyaml-6.0.3-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+          "size": 766454,
+          "url": "https://files.pythonhosted.org/packages/92/b5/47e807c2623074914e29dabd16cbbdd4bf5e9b2db9f8090fa64411fc5382/pyyaml-6.0.3-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+          "requires_python": ">=3.8",
+          "sha256": "501a031947e3a9025ed4405a168e6ef5ae3126c59f90ce0cd6f2bfc477be31b7"
+        },
+        {
+          "filename": "pyyaml-6.0.3-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+          "size": 794175,
+          "url": "https://files.pythonhosted.org/packages/88/f9/16491d7ed2a919954993e48aa941b200f38040928474c9e85ea9e64222c3/pyyaml-6.0.3-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+          "requires_python": ">=3.8",
+          "sha256": "c458b6d084f9b935061bc36216e8a69a7e293a2f1e68bf956dcd9e6cbcd143f5"
+        },
+        {
+          "filename": "pyyaml-6.0.3-cp314-cp314t-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+          "size": 831901,
+          "url": "https://files.pythonhosted.org/packages/7b/5b/3babb19104a46945cf816d047db2788bcaf8c94527a805610b0289a01c6b/pyyaml-6.0.3-cp314-cp314t-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+          "requires_python": ">=3.8",
+          "sha256": "6adc77889b628398debc7b65c073bcb99c4a0237b248cacaf3fe8a557563ef6c"
+        },
+        {
+          "filename": "pyyaml-6.0.3-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+          "size": 839261,
+          "url": "https://files.pythonhosted.org/packages/b1/5e/f77dc6b9036943e285ba76b49e118d9ea929885becb0a29ba8a7c75e29fe/pyyaml-6.0.3-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+          "requires_python": ">=3.8",
+          "sha256": "00c4bdeba853cc34e7dd471f16b4114f4162dc03e6b7afcc2128711f0eca823c"
+        }
+      ],
+      "project_urls": {
+        "Bug Tracker": "https://github.com/yaml/pyyaml/issues",
+        "CI": "https://github.com/yaml/pyyaml/actions",
+        "Documentation": "https://pyyaml.org/wiki/PyYAMLDocumentation",
+        "Download": "https://pypi.org/project/PyYAML/",
+        "Homepage": "https://pyyaml.org/",
+        "Mailing lists": "http://lists.sourceforge.net/lists/listinfo/yaml-core",
+        "Source Code": "https://github.com/yaml/pyyaml"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "tqdm",
+      "version": "4.70.1",
+      "metadata_url": "https://pypi.org/pypi/tqdm/4.70.1/json",
+      "license": "MPL-2.0 AND MIT",
+      "license_classifiers": [],
+      "requires_python": ">=3.8",
+      "requires_dist": [
+        "colorama; platform_system == \"Windows\""
+      ],
+      "wheels": [
+        {
+          "filename": "tqdm-4.70.1-py3-none-any.whl",
+          "size": 80199,
+          "url": "https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl",
+          "requires_python": ">=3.8",
+          "sha256": "c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73"
+        }
+      ],
+      "project_urls": {
+        "changelog": "https://tqdm.github.io/releases",
+        "homepage": "https://tqdm.github.io",
+        "repository": "https://github.com/tqdm/tqdm",
+        "wiki": "https://github.com/tqdm/tqdm/wiki"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "typer",
+      "version": "0.27.3",
+      "metadata_url": "https://pypi.org/pypi/typer/0.27.3/json",
+      "license": "MIT",
+      "license_classifiers": [],
+      "requires_python": ">=3.10",
+      "requires_dist": [
+        "shellingham>=1.3.0",
+        "rich>=13.8.0",
+        "annotated-doc>=0.0.2",
+        "colorama; platform_system == \"Windows\""
+      ],
+      "wheels": [
+        {
+          "filename": "typer-0.27.3-py3-none-any.whl",
+          "size": 123312,
+          "url": "https://files.pythonhosted.org/packages/07/ea/2e31b67051e91a133189e9c000c222502ddc6969856416de0d095de4c0b0/typer-0.27.3-py3-none-any.whl",
+          "requires_python": ">=3.10",
+          "sha256": "e50022f28b82a86313e54501317a1db64bf8f8d036ff8cfe5ca7e47675454aff"
+        }
+      ],
+      "project_urls": {
+        "Changelog": "https://typer.tiangolo.com/release-notes/",
+        "Documentation": "https://typer.tiangolo.com",
+        "Homepage": "https://github.com/fastapi/typer",
+        "Issues": "https://github.com/fastapi/typer/issues",
+        "Repository": "https://github.com/fastapi/typer"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "filelock",
+      "version": "4.2.4",
+      "metadata_url": "https://pypi.org/pypi/filelock/4.2.4/json",
+      "license": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "requires_python": ">=3.11",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "filelock-4.2.4-py3-none-any.whl",
+          "size": 162475,
+          "url": "https://files.pythonhosted.org/packages/e0/1b/5e74289a1878e666bb4b65fe5805a04cafcac2aa5f519ef1ead67ef91c56/filelock-4.2.4-py3-none-any.whl",
+          "requires_python": ">=3.11",
+          "sha256": "301241438c57936ef93f4243a94f2559022268bfcf9b375a9a72eb0f8db8358e"
+        }
+      ],
+      "project_urls": {
+        "Documentation": "https://py-filelock.readthedocs.io",
+        "Homepage": "https://github.com/tox-dev/py-filelock",
+        "Source": "https://github.com/tox-dev/py-filelock",
+        "Tracker": "https://github.com/tox-dev/py-filelock/issues"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "fsspec",
+      "version": "2026.9.0",
+      "metadata_url": "https://pypi.org/pypi/fsspec/2026.9.0/json",
+      "license": "BSD-3-Clause",
+      "license_classifiers": [],
+      "requires_python": ">=3.10",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "fsspec-2026.9.0-py3-none-any.whl",
+          "size": 221738,
+          "url": "https://files.pythonhosted.org/packages/6c/c0/a98505f18594f1bce828bb159cec0fcf9860562f1a2c85913409fc8f3d9e/fsspec-2026.9.0-py3-none-any.whl",
+          "requires_python": ">=3.10",
+          "sha256": "8dd6e646e99ea382bd85f97a45e6b526a442d79423a7dc673f1e2756d05fcb5f"
+        }
+      ],
+      "project_urls": {
+        "Changelog": "https://filesystem-spec.readthedocs.io/en/latest/changelog.html",
+        "Documentation": "https://filesystem-spec.readthedocs.io/en/latest/",
+        "Homepage": "https://github.com/fsspec/filesystem_spec"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "hf-xet",
+      "version": "1.7.0",
+      "metadata_url": "https://pypi.org/pypi/hf-xet/1.7.0/json",
+      "license": "Apache-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "requires_python": ">=3.8",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "hf_xet-1.7.0-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+          "size": 4201962,
+          "url": "https://files.pythonhosted.org/packages/e5/c2/0d1eaa5da13bbf9c896badc7f380601c7d973a87a6ffb4d100267c4536c1/hf_xet-1.7.0-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+          "requires_python": ">=3.8",
+          "sha256": "87dab080f8f7d32781c2586904e3603f4e60d09bfc727706c3ae419e0829beeb"
+        },
+        {
+          "filename": "hf_xet-1.7.0-cp314-cp314t-manylinux_2_28_aarch64.whl",
+          "size": 3982978,
+          "url": "https://files.pythonhosted.org/packages/23/2d/225d5b11a9ca7d31b9470a57f2b2be1a5cef8b84325a2146aeb4589e226c/hf_xet-1.7.0-cp314-cp314t-manylinux_2_28_aarch64.whl",
+          "requires_python": ">=3.8",
+          "sha256": "b01fe18dbbd151a2403d2c64ed30dc6547b00d6babab9a617d77c7acdb81ee66"
+        }
+      ],
+      "project_urls": {
+        "Documentation": "https://huggingface.co/docs/hub/xet/index",
+        "Homepage": "https://github.com/huggingface/xet-core",
+        "Issues": "https://github.com/huggingface/xet-core/issues",
+        "Repository": "https://github.com/huggingface/xet-core.git"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "httpx",
+      "version": "0.28.1",
+      "metadata_url": "https://pypi.org/pypi/httpx/0.28.1/json",
+      "license": "BSD-3-Clause",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "requires_python": ">=3.8",
+      "requires_dist": [
+        "anyio",
+        "certifi",
+        "httpcore==1.*",
+        "idna"
+      ],
+      "wheels": [
+        {
+          "filename": "httpx-0.28.1-py3-none-any.whl",
+          "size": 73517,
+          "url": "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl",
+          "requires_python": ">=3.8",
+          "sha256": "d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad"
+        }
+      ],
+      "project_urls": {
+        "Changelog": "https://github.com/encode/httpx/blob/master/CHANGELOG.md",
+        "Documentation": "https://www.python-httpx.org",
+        "Homepage": "https://github.com/encode/httpx",
+        "Source": "https://github.com/encode/httpx"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "click",
+      "version": "8.5.0",
+      "metadata_url": "https://pypi.org/pypi/click/8.5.0/json",
+      "license": "BSD-3-Clause",
+      "license_classifiers": [],
+      "requires_python": ">=3.10",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "click-8.5.0-py3-none-any.whl",
+          "size": 125251,
+          "url": "https://files.pythonhosted.org/packages/58/50/6c0d534c5f134586a8e1ba4e330569e32f057e33372ae556463212fb4cd3/click-8.5.0-py3-none-any.whl",
+          "requires_python": ">=3.10",
+          "sha256": "255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360"
+        }
+      ],
+      "project_urls": {
+        "Changes": "https://click.palletsprojects.com/page/changes/",
+        "Chat": "https://discord.gg/pallets",
+        "Documentation": "https://click.palletsprojects.com/",
+        "Donate": "https://palletsprojects.com/donate",
+        "Source": "https://github.com/pallets/click/"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "typing-extensions",
+      "version": "4.16.0",
+      "metadata_url": "https://pypi.org/pypi/typing-extensions/4.16.0/json",
+      "license": "PSF-2.0",
+      "license_classifiers": [],
+      "requires_python": ">=3.9",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "typing_extensions-4.16.0-py3-none-any.whl",
+          "size": 45571,
+          "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+          "requires_python": ">=3.9",
+          "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
+        }
+      ],
+      "project_urls": {
+        "Bug Tracker": "https://github.com/python/typing_extensions/issues",
+        "Changes": "https://github.com/python/typing_extensions/blob/main/CHANGELOG.md",
+        "Documentation": "https://typing-extensions.readthedocs.io/",
+        "Home": "https://github.com/python/typing_extensions",
+        "Q & A": "https://github.com/python/typing/discussions",
+        "Repository": "https://github.com/python/typing_extensions"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "anyio",
+      "version": "4.15.1",
+      "metadata_url": "https://pypi.org/pypi/anyio/4.15.1/json",
+      "license": "MIT",
+      "license_classifiers": [],
+      "requires_python": ">=3.10",
+      "requires_dist": [
+        "exceptiongroup>=1.0.2; python_version < \"3.11\"",
+        "idna>=2.8",
+        "typing_extensions>=4.16.0; python_version < \"3.15\""
+      ],
+      "wheels": [
+        {
+          "filename": "anyio-4.15.1-py3-none-any.whl",
+          "size": 132079,
+          "url": "https://files.pythonhosted.org/packages/12/b8/4bd346e22b28902df4d651910f5242c28d84e4a5c2435ca5c3f797ed7e2e/anyio-4.15.1-py3-none-any.whl",
+          "requires_python": ">=3.10",
+          "sha256": "6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101"
+        }
+      ],
+      "project_urls": {
+        "Changelog": "https://anyio.readthedocs.io/en/stable/versionhistory.html",
+        "Documentation": "https://anyio.readthedocs.io/en/latest/",
+        "Issue tracker": "https://github.com/agronholm/anyio/issues",
+        "Source code": "https://github.com/agronholm/anyio"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "certifi",
+      "version": "2026.10.19",
+      "metadata_url": "https://pypi.org/pypi/certifi/2026.10.19/json",
+      "license": "MPL-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)"
+      ],
+      "requires_python": ">=3.7",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "certifi-2026.10.19-py3-none-any.whl",
+          "size": 136464,
+          "url": "https://files.pythonhosted.org/packages/c4/51/29046e48f693c54e5b7412216d447a1d8362c9653148d98c02cdf65fa733/certifi-2026.10.19-py3-none-any.whl",
+          "requires_python": ">=3.7",
+          "sha256": "42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b"
+        }
+      ],
+      "project_urls": {
+        "Homepage": "https://github.com/certifi/python-certifi",
+        "Source": "https://github.com/certifi/python-certifi"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "httpcore",
+      "version": "1.0.9",
+      "metadata_url": "https://pypi.org/pypi/httpcore/1.0.9/json",
+      "license": "BSD-3-Clause",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "requires_python": ">=3.8",
+      "requires_dist": [
+        "certifi",
+        "h11>=0.16"
+      ],
+      "wheels": [
+        {
+          "filename": "httpcore-1.0.9-py3-none-any.whl",
+          "size": 78784,
+          "url": "https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl",
+          "requires_python": ">=3.8",
+          "sha256": "2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55"
+        }
+      ],
+      "project_urls": {
+        "Documentation": "https://www.encode.io/httpcore",
+        "Homepage": "https://www.encode.io/httpcore/",
+        "Source": "https://github.com/encode/httpcore"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "idna",
+      "version": "3.20",
+      "metadata_url": "https://pypi.org/pypi/idna/3.20/json",
+      "license": "BSD-3-Clause",
+      "license_classifiers": [],
+      "requires_python": ">=3.9",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "idna-3.20-py3-none-any.whl",
+          "size": 69583,
+          "url": "https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl",
+          "requires_python": ">=3.9",
+          "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c"
+        }
+      ],
+      "project_urls": {
+        "Changelog": "https://github.com/kjd/idna/blob/master/HISTORY.md",
+        "Issue tracker": "https://github.com/kjd/idna/issues",
+        "Source": "https://github.com/kjd/idna"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "shellingham",
+      "version": "1.5.4",
+      "metadata_url": "https://pypi.org/pypi/shellingham/1.5.4/json",
+      "license": "ISC License",
+      "license_classifiers": [
+        "License :: OSI Approved :: ISC License (ISCL)"
+      ],
+      "requires_python": ">=3.7",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "shellingham-1.5.4-py2.py3-none-any.whl",
+          "size": 9755,
+          "url": "https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl",
+          "requires_python": ">=3.7",
+          "sha256": "7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686"
+        }
+      ],
+      "project_urls": {
+        "Homepage": "https://github.com/sarugaku/shellingham"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "rich",
+      "version": "15.0.0",
+      "metadata_url": "https://pypi.org/pypi/rich/15.0.0/json",
+      "license": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "requires_python": ">=3.9.0",
+      "requires_dist": [
+        "markdown-it-py>=2.2.0",
+        "pygments<3.0.0,>=2.13.0"
+      ],
+      "wheels": [
+        {
+          "filename": "rich-15.0.0-py3-none-any.whl",
+          "size": 310654,
+          "url": "https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl",
+          "requires_python": ">=3.9.0",
+          "sha256": "33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb"
+        }
+      ],
+      "project_urls": {
+        "Documentation": "https://rich.readthedocs.io/en/latest/",
+        "Homepage": "https://github.com/Textualize/rich"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "annotated-doc",
+      "version": "0.0.5",
+      "metadata_url": "https://pypi.org/pypi/annotated-doc/0.0.5/json",
+      "license": "MIT",
+      "license_classifiers": [],
+      "requires_python": ">=3.9",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "annotated_doc-0.0.5-py3-none-any.whl",
+          "size": 5302,
+          "url": "https://files.pythonhosted.org/packages/3e/30/e900b21425a860e195f32e37657aa1f7c7f2b1bfb26f03ca209b90933c06/annotated_doc-0.0.5-py3-none-any.whl",
+          "requires_python": ">=3.9",
+          "sha256": "117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101"
+        }
+      ],
+      "project_urls": {
+        "Changelog": "https://github.com/fastapi/annotated-doc/release-notes.md",
+        "Documentation": "https://github.com/fastapi/annotated-doc",
+        "Homepage": "https://github.com/fastapi/annotated-doc",
+        "Issues": "https://github.com/fastapi/annotated-doc/issues",
+        "Repository": "https://github.com/fastapi/annotated-doc"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "markdown-it-py",
+      "version": "4.2.0",
+      "metadata_url": "https://pypi.org/pypi/markdown-it-py/4.2.0/json",
+      "license": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "requires_python": ">=3.10",
+      "requires_dist": [
+        "mdurl~=0.1"
+      ],
+      "wheels": [
+        {
+          "filename": "markdown_it_py-4.2.0-py3-none-any.whl",
+          "size": 91687,
+          "url": "https://files.pythonhosted.org/packages/b3/81/4da04ced5a082363ecfa159c010d200ecbd959ae410c10c0264a38cac0f5/markdown_it_py-4.2.0-py3-none-any.whl",
+          "requires_python": ">=3.10",
+          "sha256": "9f7ebbcd14fe59494226453aed97c1070d83f8d24b6fc3a3bcf9a38092641c4a"
+        }
+      ],
+      "project_urls": {
+        "Documentation": "https://markdown-it-py.readthedocs.io",
+        "Homepage": "https://github.com/executablebooks/markdown-it-py"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "pygments",
+      "version": "2.21.0",
+      "metadata_url": "https://pypi.org/pypi/pygments/2.21.0/json",
+      "license": "BSD-2-Clause",
+      "license_classifiers": [],
+      "requires_python": ">=3.9",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "pygments-2.21.0-py3-none-any.whl",
+          "size": 1250147,
+          "url": "https://files.pythonhosted.org/packages/71/46/17f022dd3e953bf20a04a028a21ec746d942f8d2af30fa0f124fa0e6a684/pygments-2.21.0-py3-none-any.whl",
+          "requires_python": ">=3.9",
+          "sha256": "2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9"
+        }
+      ],
+      "project_urls": {
+        "Bug Tracker": "https://github.com/pygments/pygments/issues",
+        "Changelog": "https://github.com/pygments/pygments/blob/master/CHANGES",
+        "Documentation": "https://pygments.org/docs",
+        "Homepage": "https://pygments.org",
+        "Source": "https://github.com/pygments/pygments"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "mdurl",
+      "version": "0.1.2",
+      "metadata_url": "https://pypi.org/pypi/mdurl/0.1.2/json",
+      "license": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "requires_python": ">=3.7",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "mdurl-0.1.2-py3-none-any.whl",
+          "size": 9979,
+          "url": "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl",
+          "requires_python": ">=3.7",
+          "sha256": "84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8"
+        }
+      ],
+      "project_urls": {
+        "Homepage": "https://github.com/executablebooks/mdurl"
+      },
+      "vulnerabilities": []
+    },
+    {
+      "name": "h11",
+      "version": "0.16.0",
+      "metadata_url": "https://pypi.org/pypi/h11/0.16.0/json",
+      "license": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ],
+      "requires_python": ">=3.8",
+      "requires_dist": [],
+      "wheels": [
+        {
+          "filename": "h11-0.16.0-py3-none-any.whl",
+          "size": 37515,
+          "url": "https://files.pythonhosted.org/packages/04/4b/29cac41a4d98d144bf5f6d33995617b185d14b22401f75ca86f384e87ff1/h11-0.16.0-py3-none-any.whl",
+          "requires_python": ">=3.8",
+          "sha256": "63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86"
+        }
+      ],
+      "project_urls": {
+        "Homepage": "https://github.com/python-hyper/h11"
+      },
+      "vulnerabilities": []
+    }
+  ],
+  "host_requirements": {
+    "python": ">=3.12,<3.15",
+    "torch": ">=2.6",
+    "torchvision": ">=0.21",
+    "numpy": ">=2.1",
+    "pillow": ">=11"
+  },
+  "host_policy": "Never replace the selected engine Torch/torchvision/NumPy/Pillow; capture actual versions in proposal proof. Host variants are not claimed hermetic.",
+  "classes": {
+    "sky": [
+      2
+    ],
+    "person": [
+      12
+    ],
+    "water": [
+      21,
+      26,
+      60,
+      109,
+      128
+    ]
+  },
+  "class_labels": {
+    "2": "sky",
+    "12": "person",
+    "21": "water",
+    "26": "sea",
+    "60": "river",
+    "109": "pool",
+    "128": "lake"
+  },
+  "task": {
+    "text": "the task is semantic",
+    "token_ids": [
+      49406,
+      518,
+      10549,
+      533,
+      29119,
+      1550,
+      49407,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "rule": "Pinned CLIP BPE; BOS + five word-piece IDs + EOS; pad EOS IDs are multiplied by zero attention mask, as official OneFormerProcessor._preprocess_text.",
+    "pieces": [
+      "the</w>",
+      "task</w>",
+      "is</w>",
+      "seman",
+      "tic</w>"
+    ]
+  },
+  "acceptance": {
+    "runtime": "unrun",
+    "inference": "unrun",
+    "equivalence": "unverified",
+    "quality": "unaccepted",
+    "benchmarks": null
+  }
+}

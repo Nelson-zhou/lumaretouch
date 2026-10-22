@@ -1,0 +1,253 @@
+{
+  "package": "optional-sky-semantic-proposals-integrated",
+  "base_commit": "bc7456e8d264f982eeca275d080f6ae12721639c",
+  "status": "source-integrated-runtime-unaccepted",
+  "shared_files_modified": true,
+  "model_downloaded": false,
+  "installed": false,
+  "inference_run": false,
+  "tests_build_typecheck_run": false,
+  "runtime_equivalence_verified": false,
+  "excluded_unrelated_work": [
+    "brow-shape receipt/latest-intent follow-up",
+    "nose-shape package",
+    "root delivery documents"
+  ],
+  "line_caps": {
+    "ui/src/App.tsx": 2160,
+    "ui/src-tauri/src/main.rs": 2060,
+    "engine/src/lumaretouch_engine/server.py": 7065
+  },
+  "files": [
+    {
+      "path": "NOTICE",
+      "bytes": 9666,
+      "sha256": "f00007259fd766e9b4bb822b68a457d1dd0759d0d46c7071611237c20bd613ac"
+    },
+    {
+      "path": "docs/development/sky-semantic-proposals.md",
+      "bytes": 16361,
+      "sha256": "caeb3933cc5e1ecd107c0548aeb600676b2a84b069d93e46fcf7c0208aa1d969"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preview_lifecycle.py",
+      "bytes": 1144,
+      "sha256": "983664c8c043bbcb797571a3cd3c54ee625f752832db4d071c187c3ed1bb8108"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "bytes": 48505,
+      "sha256": "b37491adbaa7055fbb6ba5b759ba9aa53556828304dd0d0791bf253ad30796d2"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "bytes": 454160,
+      "sha256": "cd2bcc6fced298ad5432d61b9fef47f561e6ac310b3e13e6b1978ffefc8d04c1"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_preview.py",
+      "bytes": 15944,
+      "sha256": "263d81e066bb0fe676abf6a130f2ae260861a556499cc9d3b74216938ad454d4"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_project.py",
+      "bytes": 1289,
+      "sha256": "89df56cc7d5ff552920f7645b3594b1fbe163cd136015a4cd241b898f6ed83ae"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_runtime.py",
+      "bytes": 12643,
+      "sha256": "8ee654293db2e4e0ae3e3fd9607dfcf695660cf1bdb177184d360d9176218a1f"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_scope.py",
+      "bytes": 3413,
+      "sha256": "52ed79783ccc46e5a5a68c5c99359f9bbaf80617cc817e2a955ecd608b0f9b0a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_state.py",
+      "bytes": 9372,
+      "sha256": "62500e5151a89a015c72368b8e6023d98a329efed859490055883520212959c7"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/ONEFORMER-LICENSE-MIT.txt",
+      "bytes": 1065,
+      "sha256": "ef5b1fbc15ed7852965f64e98ff690cde0f1394e8f7f128cad78a198eac094cf"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/TRANSFORMERS-LICENSE-APACHE2.txt",
+      "bytes": 12331,
+      "sha256": "8707eef0533987efc5b155d64761eeb6e20793f50b9bd1a68dad1cf4719d0ed8"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/__init__.py",
+      "bytes": 90,
+      "sha256": "fb00489fc9e3500b4aa01ab16f53f0ff3b3d00626d6b0ccd0612927abb15cd50"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/assets-lock.json",
+      "bytes": 38085,
+      "sha256": "6f671e3f3b80c2545e3799188579df9818b1b198693f4d034a94e348fa40315a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/checkpointing_support.py.txt",
+      "bytes": 3601,
+      "sha256": "147d9f8b71775d2fe8756ba02ebdff2bf9a8972f96cd8ecb3bbbe4facec0380a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/controller.py",
+      "bytes": 4172,
+      "sha256": "859b0318c48fd07c4894207997c8841b24385b4b6e32689ddddddeaa74189950"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/doc_identity.py.txt",
+      "bytes": 627,
+      "sha256": "53791f38d8de2989f224449eac8744fa525edaacdf5f47e84163775c89e5f0ee"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/fork-patches.json",
+      "bytes": 5388,
+      "sha256": "21a0735a56da446bdc2a0f62866c9e52eb9a59102bd2c3472924f9d83f0ab6d9"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/install.py",
+      "bytes": 11958,
+      "sha256": "7775f7416201744431eb60995746ebc650b6f32f781d5723083a07b4e1a3db6e"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/job.py",
+      "bytes": 3280,
+      "sha256": "3dc1daad1ee97a6efdab7b77d64973cd7367c7fb4d6d85160f35f4308943d290"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/license-source.json",
+      "bytes": 412,
+      "sha256": "d354a1e75e543c1004bc03ea693ecb9e78feb59abbf1326aa2c0f9dbed6f412c"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/manifest.py",
+      "bytes": 6232,
+      "sha256": "d73be56575fbbf49ffe187e6a0345f01b5b8afb422c4fa3de3ca447a9d41743d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/predict.py",
+      "bytes": 9628,
+      "sha256": "deb03499dcbc474d905bb62adc85a14d4d14b36107c02e56f7898a04fa72581c"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/resolver.py",
+      "bytes": 5364,
+      "sha256": "0bdd78311c08784265a2a47051d428f85030325bf85c12066f92150ce125ebb9"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/review.py",
+      "bytes": 3664,
+      "sha256": "de12591f57d54d8926f5bf10d6d3ba5db3fcaa319cf923ab4202c314bcd3074a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/state.py",
+      "bytes": 3660,
+      "sha256": "8db1988add5aed81426428c29ce6af6ed04a3fecc58c10ed05cad840f8deabcc"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/task_tokens.py",
+      "bytes": 2003,
+      "sha256": "fabe3b1cbfb9cd731aaa11f014d669f06a8c76f18098fee5708e80d310cacb7b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/worker.py",
+      "bytes": 3639,
+      "sha256": "6339ecc4675d5e8c9938f9ce71e107845c747e17ecb22dbc24b8cbf2de6dad4b"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "bytes": 6382,
+      "sha256": "6afc81ecfc85b9a1d942d83426200e6d73750125e4d2250fd505d64dbe944c4c"
+    },
+    {
+      "path": "ui/src-tauri/src/app_shutdown.rs",
+      "bytes": 1083,
+      "sha256": "e7ac7c9af8e257f972697fe85ed33220a8d45ccd0f581e478cc6afe9c9f91cc2"
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "bytes": 2699,
+      "sha256": "32df554fe36f1dbddbc437fdd44ab3d9bf860706f18066e8096b2feec7c2def2"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "bytes": 22946,
+      "sha256": "f1713f2c563fb4cd04bce97680d236819b326fa64e8661a5758fe5de029e512b"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "bytes": 102600,
+      "sha256": "782e82f880d5aae26a0541165194b9b9b0bc974e7bdeca5786ec870f6ae1b3c6"
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "bytes": 5190,
+      "sha256": "3d6f5cadd11625ffcc4da625c2dc2a475fefea3f0ceffc481968d4fc71937443"
+    },
+    {
+      "path": "ui/src-tauri/src/sky_replacement_host.rs",
+      "bytes": 6615,
+      "sha256": "6ecb896f9a1fe99061166450100f21ea6a6409edb6b85a028adac68c49024390"
+    },
+    {
+      "path": "ui/src-tauri/src/sky_semantic_api.rs",
+      "bytes": 8722,
+      "sha256": "c8bd8b72c7e01fe6548b004d6f1d7a0482cd49fdbb968aefb41a81af6122efb2"
+    },
+    {
+      "path": "ui/src-tauri/src/sky_semantic_model_api.rs",
+      "bytes": 7953,
+      "sha256": "9c83f2816068070e79f0ad7588983d64bf3d740cb34d26e2a829c8b7405cad7a"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "bytes": 83231,
+      "sha256": "431da06dbb90c4bf8aff66fd2aec234a4d0c2244c4ab43605dcca7d0b1c2e719"
+    },
+    {
+      "path": "ui/src/skyReplacement/SkyReplacementPanel.tsx",
+      "bytes": 11542,
+      "sha256": "6ba3c95a42dab44950e224145cb785a923fb006ee6a5d3950539e24ad8bdd778"
+    },
+    {
+      "path": "ui/src/skyReplacement/model.ts",
+      "bytes": 4546,
+      "sha256": "5e0c3dcceb70fb47b29d0505dd0d0b863216512b3b29b9fb6ac175fb7ddfb22e"
+    },
+    {
+      "path": "ui/src/skyReplacement/useSkyReplacementWorkflow.ts",
+      "bytes": 2523,
+      "sha256": "aea12f7a3c7378121229680dc7eda5847f793e164d503e0231a30bc1654f33d8"
+    },
+    {
+      "path": "ui/src/skyReplacement/workflow.ts",
+      "bytes": 13506,
+      "sha256": "ef829f871b1060c2996bca3adc5eb0ad98a18c52c8f49f97ac70f8f444c19e50"
+    },
+    {
+      "path": "ui/src/skySemantic/SkySemanticPanel.tsx",
+      "bytes": 9424,
+      "sha256": "8964663e45dd8d7567f1e62826e5861f18be7358f6436b516ab14870452365d3"
+    },
+    {
+      "path": "ui/src/skySemantic/model.ts",
+      "bytes": 1826,
+      "sha256": "8686765fd1498a2645206516018415f9c0f2a034a6954fbebd332387ed8581c7"
+    },
+    {
+      "path": "ui/src/skySemantic/ports.ts",
+      "bytes": 4078,
+      "sha256": "943cc80fec3f1685d915458d32bd29c529ac10640f1d7b99f569bdea7d53e1ed"
+    },
+    {
+      "path": "ui/src/skySemantic/skySemantic.css",
+      "bytes": 1028,
+      "sha256": "6f25ed1f2239b4c194457b90275f0be207af3c23660715ccdc8c67f039bbcdbf"
+    }
+  ]
+}

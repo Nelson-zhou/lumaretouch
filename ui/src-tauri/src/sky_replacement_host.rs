@@ -32,6 +32,11 @@ pub(crate) struct SkyReplacementPreviewHost {
     epoch:[u8;16],bound:Option<(String,String,String)>,value:Option<Value>,delivered:bool,presentation_requested:bool,shown:bool,redeemed:bool,
 }
 impl SkyReplacementPreviewHost {
+    pub fn source_session(&self, epoch:[u8;16], document:&str, session:&str, shown:bool)->bool {
+        epoch != [0;16] && epoch == self.epoch && !self.redeemed
+            && self.bound.as_ref().is_some_and(|b| b.0 == document && b.1 == session)
+            && (!shown || self.shown)
+    }
     pub fn invalidate(&mut self){self.bound=None;self.value=None;self.delivered=false;self.presentation_requested=false;self.shown=false;self.redeemed=false;}
     pub fn reset(&mut self,epoch:[u8;16]){self.invalidate();self.epoch=epoch;}
     pub fn ended(&mut self,epoch:[u8;16]){if self.epoch==epoch{self.reset([0;16]);}}
@@ -49,7 +54,7 @@ impl SkyReplacementPreviewHost {
         let Some((document,session,preview))=self.bound.as_ref()else{return};
         if epoch!=self.epoch||v["document_id"]!=document.as_str()||v["session_id"]!=session.as_str()||v["preview_id"]!=preview.as_str()||self.redeemed{return;}
         let image=||{let r=&v["result"];
-            r["domain"]=="source-normalized"&&r["quality"]=="proxy-render-srgb8"&&r["output_domain"]=="production-output"&&r["automatic_detection"]==false
+            r["domain"]=="source-normalized"&&r["quality"]=="proxy-render-srgb8"&&r["output_domain"]=="production-output"&&r["automatic_detection"].is_boolean()
             &&matches!(r["target"].as_str(),Some("sky"|"person"|"water"|"recovery"))
             &&["source_width","source_height"].iter().all(|k|r[*k].as_u64().is_some_and(|n|(1..=800).contains(&n)))
             &&v["committable"].is_boolean()&&v["editable"].is_object()&&(v["validation_error"].is_null()||v["validation_error"].is_string())

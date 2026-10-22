@@ -20,6 +20,17 @@ LumaRetouch — 第三方资产与署名声明（NOTICE）
 模型权重署名（Attribution）
 ----------------------------------------------------------------
 
+[明确选择后获取；不内置权重]
+
+* SHI Labs OneFormer ADE20K Swin Tiny（天空/人物/水面语义初选）
+  模型：shi-labs/oneformer_ade20k_swin_tiny，固定版本 05f2812b1eccf9909b3897777450f8d68148cafc。
+  官方模型卡标注 MIT；保留 SHI Labs 原始许可全文和来源身份。
+  私有 Transformers 语义专用分支 5.20.2+lumaretouch.semantic1：Apache-2.0；
+  保留原始权利声明、原始 wheel 许可及明确补丁，非通用 Transformers 替代品。
+  获取清单、每个文件的 SHA256、运行库许可和支持边界见
+  engine/src/lumaretouch_engine/sky_semantic/ 与 docs/development/sky-semantic-proposals.md。
+  不包含 regex；不下载或提供授权不明的天空图库。须用户审核初选并可手工修正。
+
 [内置 tier=bundled]
 
 * MediaPipe Face Landmarker（478 点 3D 人脸关键点 + 52 blendshape 模型束）

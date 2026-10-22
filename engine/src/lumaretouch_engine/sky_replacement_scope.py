@@ -48,7 +48,7 @@ def validate_target(value,path,shape):
     # validates/replays the ORIGINAL grid, not this disposable readiness proof.
     from .decode import proxy_size
     w,h = proxy_size(shape[1],shape[0],budget=1_000_000)
-    prepared = R.prepare(value,(h,w))
+    prepared = R.prepare(value,(h,w),source_path=path,force_semantic=True)
     # Sampling bounds can be checked without copying RGB or pixels to a device.
     from .ops.sky_replacement import sample
     import numpy as np

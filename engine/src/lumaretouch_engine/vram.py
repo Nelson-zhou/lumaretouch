@@ -44,6 +44,7 @@ from .ops.light import dodge_burn_t, DEFAULT_DB_EXPOSURE, DEFAULT_DB_RADIUS
 from .ops import enhance as ENH
 from . import under_eye_layer as UNDER
 from . import lip_makeup_runtime as LIPR, lip_makeup_layer as LIPL, lip_makeup_state as LIPS
+from . import brow_shape_runtime as BROWR, brow_shape_state as BROWS
 from . import facial_wrinkle_runtime as WRUNTIME, facial_wrinkle_layer as WLAYER, facial_wrinkle_state as WSTATE
 from .ops.grade import (DH_LIMIT, DS_LIMIT, DV_LIMIT, check_params, grade_t)
 from .ops.geometry import (MAX_ANGLE as GEOM_ANGLE_LIMIT, check as geometry_check,
@@ -222,6 +223,7 @@ class PreviewPipeline:
         # （与肤色定向“所见即所调”的口径相反，差别写在 ops/enhance.py 头部）。
         WRUNTIME.clear_face(self)
         LIPR.clear_face(self); self.lip_makeup = LIPS.neutral(); self.lip_makeup_suspended = None
+        BROWR.clear(self); self.brow_shape = BROWS.neutral(); self.brow_shape_suspended = None
         self.enhance_amounts: dict = {k: 0.0 for k in ENH.AMOUNT_KEYS}
         WRUNTIME.clear_layer(self)
         self.enhance_lm_sig = None
@@ -352,6 +354,7 @@ class PreviewPipeline:
         """
         WRUNTIME.clear_face(self)
         LIPR.clear_face(self); self.lip_makeup = LIPS.neutral(); self.lip_makeup_suspended = None
+        BROWR.clear(self); self.brow_shape = BROWS.neutral(); self.brow_shape_suspended = None
         self.enhance_lm_sig = None
         self.under_eye_layer = None
         self.under_eye_delta = None
@@ -583,6 +586,7 @@ class PreviewPipeline:
         self.landmarks_gpu = None
         WRUNTIME.clear_face(self)
         LIPR.clear_face(self); self.lip_makeup = LIPS.neutral(); self.lip_makeup_suspended = None
+        BROWR.clear(self); self.brow_shape = BROWS.neutral(); self.brow_shape_suspended = None
         # 调色作用域里 skin 是唯一靠掩膜活着的那个：掩膜一走还留着 scope=skin，
         # 下一帧渲染就是一条取不到权重的异常（与下面单位场“无源之水”同一条理由）。
         # brush 靠的是自己那份区域，不受 clear_face 影响。
@@ -1073,16 +1077,18 @@ class PreviewPipeline:
     def apply_deform(self, t):
         """把当前形变层施加到一份常驻张量上。每帧只走这里，不走 TPS 解算。"""
         self.last_deform_ms = 0.0
-        if not self.has_deform():
+        if not self.has_deform() and not BROWR.has_brow(self):
             return t
         t0 = time.perf_counter()
         key = (self.deform_version, tuple(sorted(self.deform_amounts.items())), self.high_precision_warp)
+        if BROWR.has_brow(self): key += (self.brow_shape_version,)
         if key != self._deform_warp_key:
             delta = None
             for kind, unit in self.deform_units.items():
                 amount = self.deform_amounts.get(kind, 0.0)
                 if amount != 0.0:
                     delta = unit * amount if delta is None else delta + unit * amount
+            delta = BROWR.joint_delta(self, delta)
             base = self.deform_grid_base
             if self.high_precision_warp:
                 # RGB16 exposes normalized-float32 grid rounding as visible LSB
@@ -1270,10 +1276,11 @@ class PreviewPipeline:
                 # 掩膜在、就是没有那一格：拿 KeyError 去撞每帧渲染等于把一次性
                 # 校验挪到无休止的失败里（set_channel 早就按同一份名单校过）。
                 raise RuntimeError(f"掩膜里没有 skin 通道（可用：{', '.join(self.mask_names)}）")
-            return self.mask("skin")
+            weight = self.mask("skin")
+            return self.align_source_grade_mask(weight) if BROWR.has_brow(self) or getattr(self,"brow_shape_combined",False) else weight
         if self._grade_mask_gpu is None:
             raise RuntimeError("brush 作用域要画笔画出的区域，而当前一份也没有")
-        return self._grade_mask_gpu
+        return self.align_source_grade_mask(self._grade_mask_gpu) if BROWR.has_brow(self) or getattr(self,"brow_shape_combined",False) else self._grade_mask_gpu
 
     def align_source_grade_mask(self, weight):
         """Map source-domain coverage into the actual post-deformation grade stage.
@@ -1283,7 +1290,7 @@ class PreviewPipeline:
         """
         if weight is None:
             raise ValueError("Source-domain grade coverage is unavailable")
-        if not self.has_deform():
+        if not self.has_deform() and not BROWR.has_brow(self):
             return weight
         image_warp_ms = self.last_deform_ms
         try:
@@ -1822,6 +1829,9 @@ class PreviewPipeline:
         if not self.has_enhance():
             return t
         t0 = time.perf_counter()
+        if BROWR.has_brow(self) or getattr(self,"brow_shape_combined",False):
+            from .brow_shape_consumers import apply_enhance
+            return apply_enhance(self,t)
         if self.enhance_local is None:
             out = UNDER.apply_delta(self, t)
             if self.device.type != "cpu":
@@ -1845,6 +1855,8 @@ class PreviewPipeline:
     def enhance_resident_bytes(self) -> int:
         """本层账单：窗口那一片 float32 权重场。没挂就是 0（不是“查过没有”的 0）。"""
         n = WRUNTIME.resident_bytes(self) + LIPR.resident_bytes(self)
+        brow = getattr(self,"brow_shape_field",None)
+        n += brow.resident_bytes() if brow else 0
         if self.under_eye_delta is not None:
             n += self.under_eye_delta.numel() * self.under_eye_delta.element_size()
         if self.under_eye_layer is not None:
@@ -1954,7 +1966,8 @@ class PreviewPipeline:
             return t
         t0 = time.perf_counter()
         from .ops.matting import composite_t
-        out = composite_t(t, self.bg_matte, self.bg_ref)
+        matte = self.align_source_grade_mask(self.bg_matte) if BROWR.has_brow(self) or getattr(self,"brow_shape_combined",False) else self.bg_matte
+        out = composite_t(t, matte, self.bg_ref)
         # t already contains every foreground edit. Never blend with src_f32.
         out = self.effect_recovery.apply('background_replace', t, out,
                                          align=self.align_source_grade_mask)

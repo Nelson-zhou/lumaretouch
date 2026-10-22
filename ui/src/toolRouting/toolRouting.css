@@ -1,0 +1,7 @@
+/* hidden keeps original owners and panel-local drafts mounted without occupying layout. */
+.side[hidden],.retouchToolActivity[hidden]{display:none!important}
+.retouchToolActivity{flex:none;padding:6px 14px;border-bottom:1px solid #424650;background:#232832;font-size:12px;max-height:140px;overflow:auto}
+.retouchToolActivity>div{display:flex;align-items:center;gap:10px;padding:3px 0}
+.retouchToolActivity span{flex:1;min-width:0;overflow-wrap:anywhere}
+.retouchToolActivity button,.toolRouteLink{background:#303a48;color:inherit;border:1px solid #586779;border-radius:4px;padding:4px 8px}
+.toolRouteNote{font-size:12px;color:#bbc3ce;line-height:1.5;padding:6px 0}

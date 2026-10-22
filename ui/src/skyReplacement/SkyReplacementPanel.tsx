@@ -1,3 +1,4 @@
+import {SkySemanticPanel} from '../skySemantic/SkySemanticPanel';
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {open} from '@tauri-apps/plugin-dialog';
@@ -23,7 +24,7 @@ export function SkyReplacementPanel({owner,report,disabled=false}:{owner:SkyRepl
   function slider(control:SkyControl){
     if(!draft)return null;
     const unavailable=(control.key==='person'&&draft.person_mode!=='marked')||
-      (['reflection','reflection_blur'].includes(control.key)&&(!draft.regions.water.objects.length||draft.horizon===null));
+      (['reflection','reflection_blur'].includes(control.key)&&((!draft.regions.water.objects.length&&draft.semantic?.regions.water===undefined)||draft.horizon===null));
     return <label key={control.key} className="skySlider" data-control-id={`PC-32476-C-${control.id}`}>{control.label}
       <input type="range" min={control.min} max={control.max} step={control.step} value={draft.parameters[control.key]} disabled={blocked||unavailable}
         onPointerDown={()=>workflow.beginGesture()} onPointerUp={()=>workflow.endGesture()} onPointerCancel={()=>workflow.cancelGesture()}
@@ -34,7 +35,7 @@ export function SkyReplacementPanel({owner,report,disabled=false}:{owner:SkyRepl
     </label>;
   }
   return <section className="skyReplacementPanel" aria-label="换天空" data-feature-id="PC-32476">
-    <strong>换天空</strong><p><small>自有素材 · 手动标记真实天空/水面 · 浮点融合</small></p>
+    <strong>换天空</strong><p><small>自有素材 · 可选语义初选 + 手动画笔 · 浮点融合</small></p>
     <button ref={launcher} disabled={disabled||owner.pending||!owner.context.enabled||owner.context.canStart===false} onClick={()=>void workflow.start()}>编辑天空{report?.enabled?' · 已启用':''}</button>
     {report?.suspended&&<p role="alert">换天空已暂停：{report.suspended}。修正前不能忽略本效果出片。</p>}
     {!state.open&&state.message&&<p role="status">{state.message}</p>}
@@ -46,7 +47,7 @@ export function SkyReplacementPanel({owner,report,disabled=false}:{owner:SkyRepl
       if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
       else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
     }}>
-      <header><strong>换天空</strong><span>没有自动天空/水面检测。左侧明确标记，右侧查看真实效果。</span><button ref={close} onClick={()=>workflow.cancel()}>取消 / Esc</button></header>
+      <header><strong>换天空</strong><span>自动初选必须审核，可用左侧画笔修正。右侧查看真实效果。</span><button ref={close} onClick={()=>workflow.cancel()}>取消 / Esc</button></header>
       <div className="skyWorkspaceBody"><aside>
         <section data-control-id="PC-32476-C-1f5b94eaeb"><h3>天空素材与区域</h3>
           <button disabled={blocked} onClick={()=>void choose()}>选择自己的天空照片</button>
@@ -60,11 +61,25 @@ export function SkyReplacementPanel({owner,report,disabled=false}:{owner:SkyRepl
           <label><input type="checkbox" checked={showMask} disabled={state.drawing} onChange={e=>setShowMask(e.target.checked)}/>显示标记叠层</label>
           <label>定位缩放 <select value={zoom} disabled={state.drawing} onChange={e=>setZoom(Number(e.target.value))}>{[100,150,200,300,400].map(value=><option key={value} value={value}>{value}%</option>)}</select></label>
           <button disabled={blocked||!draft||!maskOf(draft,state.target).objects.length} onClick={()=>draft&&workflow.replace(withMask(draft,state.target,emptyMask()))}>清空当前区域</button>
-          <label><input type="checkbox" checked={draft?.person_mode==='none'} disabled={blocked||!!draft?.regions.person.objects.length}
+          <label><input type="checkbox" checked={draft?.person_mode==='none'} disabled={blocked||!!draft?.regions.person.objects.length||draft?.semantic?.regions.person!==undefined}
             onChange={e=>draft&&workflow.replace({...draft,person_mode:e.target.checked?'none':'unmarked'})}/>照片中没有人物</label>
-          <p><small>有人物时请完整涂抹人物，防止把人物当景物染色。恢复画笔只还原本次换天空的贡献，不恢复整张原图。</small></p>
+          <p><small>有人物时请完整涂抹人物或审核人物自动初选，防止把人物当景物染色。恢复画笔只还原本次换天空的贡献，不恢复整张原图。</small></p>
           <label><input type="checkbox" checked={draft?.enabled??false} disabled={blocked} onChange={e=>draft&&workflow.replace({...draft,enabled:e.target.checked})}/>启用天空替换</label>
         </section>
+        <SkySemanticPanel ports={owner.semantic} disabled={blocked} active={!!draft?.semantic}
+          onDraft={semantic=>{
+            const current=workflow.snapshot().draft;
+            if(!current||owner.pending)return;
+            workflow.replace({...current,semantic,person_mode:semantic.regions.person!==undefined?'marked':current.person_mode});
+          }} onRemove={()=>{
+            const current=workflow.snapshot().draft;
+            if(!current||owner.pending)return;
+            workflow.replace({...current,semantic:null,
+              person_mode:current.person_mode==='marked'&&!current.regions.person.objects.length?'unmarked':current.person_mode,
+              enabled:current.enabled&&!!current.regions.sky.objects.length&&
+                (current.person_mode==='none'||!!current.regions.person.objects.length)});
+          }}/>
+        {state.image?.semantic_suspended&&<p role="alert">自动选区未显示：{state.image.semantic_suspended}。当前仅显示手工笔迹；请获取模型或移除自动初选。</p>}
         <details open><summary>天空调整</summary>
           <label data-control-id="PC-32476-C-62a11b207d"><input type="checkbox" checked={draft?.parameters.flip??false} disabled={blocked}
             onChange={e=>draft&&workflow.replace({...draft,parameters:{...draft.parameters,flip:e.target.checked}})}/>水平翻转天空</label>
@@ -85,7 +100,7 @@ export function SkyReplacementPanel({owner,report,disabled=false}:{owner:SkyRepl
         <div className="skyDraftHistory"><button disabled={blocked||!state.undo} onClick={()=>workflow.undo()}>撤销草稿</button><button disabled={blocked||!state.redo} onClick={()=>workflow.redo()}>重做草稿</button></div>
         <p role={state.error?'alert':'status'}>{state.message}</p>{report?.boundaries.map(line=><p key={line}><small>{line}</small></p>)}
       </main></div>
-      <footer><small>当前为代理反馈。应用一次记入一次历史，项目保留矢量区域和素材身份，全尺寸 RGB8/RGB16 共用浮点效果。</small>
+      <footer><small>当前为代理反馈。应用一次记入一次历史，项目保留区域笔迹、自动初选来源和素材身份，全尺寸 RGB8/RGB16 共用浮点效果。</small>
         {state.phase==='uncertain'&&<button onClick={()=>void workflow.check()}>查询原操作，不重复提交</button>}
         <button disabled={blocked||!state.dirty||!state.committable||state.phase!=='editing'} onClick={()=>void workflow.apply()}>应用天空修改</button>
       </footer>

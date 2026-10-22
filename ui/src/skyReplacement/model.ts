@@ -1,11 +1,12 @@
+import type {SemanticDescriptor} from '../skySemantic/model';
 export type SkyTarget='sky'|'person'|'water'|'recovery';
 export type SkyScalar='vertical'|'horizontal'|'angle'|'scale'|'edge'|'gradient'|'temperature'|'tint'|'saturation'|'brightness'|'blur'|'opacity'|'scene'|'person'|'reflection'|'reflection_blur';
 export type SkyParameters=Record<SkyScalar,number>&{flip:boolean};
 export interface SkyStroke {id:string;name:string;enabled:boolean;operation:'add'|'subtract';kind:'brush';opacity:number;feather:number;points:[number,number][];axes:[[number,number],[number,number]]}
 export interface SkyMask {version:1;domain:'source-normalized';objects:SkyStroke[]}
-export interface SkyDraft {enabled:boolean;asset_path:string|null;asset_choice:string|null;parameters:SkyParameters;regions:Record<'sky'|'person'|'water',SkyMask>;person_mode:'unmarked'|'none'|'marked';horizon:number|null;recovery:SkyMask}
-export interface SkyImage {source:string;after:string;overlay:string;width:number;height:number;source_width:number;source_height:number;domain:'source-normalized';output_domain:'production-output';quality:'proxy-render-srgb8';target:SkyTarget;automatic_detection:false;note:string}
-export interface SkyReport {version:1;enabled:boolean;editable:SkyDraft;asset:{path:string;sha256:string;width:number;height:number;bits:number;working_color:string;icc_sha256:string|null}|null;suspended:string|null;automatic_detection:false;working_color:string;bytes:number;boundaries:string[]}
+export interface SkyDraft {enabled:boolean;asset_path:string|null;asset_choice:string|null;parameters:SkyParameters;regions:Record<'sky'|'person'|'water',SkyMask>;person_mode:'unmarked'|'none'|'marked';horizon:number|null;recovery:SkyMask;semantic:SemanticDescriptor|null}
+export interface SkyImage {source:string;after:string;overlay:string;width:number;height:number;source_width:number;source_height:number;domain:'source-normalized';output_domain:'production-output';quality:'proxy-render-srgb8';target:SkyTarget;automatic_detection:boolean;semantic_suspended?:string|null;note:string}
+export interface SkyReport {version:2;enabled:boolean;editable:SkyDraft;asset:{path:string;sha256:string;width:number;height:number;bits:number;working_color:string;icc_sha256:string|null}|null;suspended:string|null;automatic_detection:boolean;working_color:string;bytes:number;boundaries:string[]}
 export type SkyMutation={action:'view';target:SkyTarget}|{action:'replace';target:SkyTarget;draft:SkyDraft};
 export interface SkyRequest {request_id:string;preview_id:string;session_id:string;document_id:string}
 export interface SkyControl {key:SkyScalar;label:string;min:number;max:number;step:number;id:string;unit?:string}
@@ -33,7 +34,7 @@ export function emptyMask():SkyMask{return {version:1,domain:'source-normalized'
 export function maskOf(draft:SkyDraft,target:SkyTarget):SkyMask{return target==='recovery'?draft.recovery:draft.regions[target];}
 export function withMask(draft:SkyDraft,target:SkyTarget,mask:SkyMask):SkyDraft{
   if(target==='recovery')return {...draft,recovery:mask};
-  return {...draft,regions:{...draft.regions,[target]:mask},...(target==='person'?{person_mode:mask.objects.length?'marked' as const:'unmarked' as const}:{})};
+  return {...draft,regions:{...draft.regions,[target]:mask},...(target==='person'?{person_mode:(mask.objects.length||draft.semantic?.regions.person!==undefined)?'marked' as const:'unmarked' as const}:{})};
 }
 export function newStroke(point:[number,number],width:number,height:number,target:SkyTarget,size:number,erase:boolean,opacity:number):SkyStroke{
   const radius=Math.min(width,height)*size/200;

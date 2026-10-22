@@ -7,18 +7,25 @@ from .ops import sky_replacement as O
 from .sky_replacement_stage import SkyReplacementStage
 
 
-def raster(value, shape, *, cancelled=lambda: False):
+def raster(value, shape, *, source_path=None, force_semantic=False, cancelled=lambda: False):
     value = S.check(value)
     S.validate_budget(value, shape)
     from .cpu_memory_budget import available_estimate
     # Masks + signed distances + Gaussian temporaries. Assets admitted separately.
     if shape[0]*shape[1]*40 + 32*1024**2 > max(0,available_estimate()-256*1024**2)*.65:
         raise ValueError('换天空区域计算内存不足；不放大代理蒙版用于导出')
+    from .sky_semantic import resolver as semantic
+    proposal = None
+    if value['semantic'] is not None:
+        if source_path is None:
+            raise ValueError('自动选区缺少其原照片路径；不会使用显示代理代替')
+        proposal = semantic.resolve(value['semantic'], source_path, force=force_semantic, cancelled=cancelled)
     fields = {}
     for key, stack in [*value['regions'].items(), ('recovery', value['recovery'])]:
         if cancelled():
             raise InterruptedError('换天空区域计算已取消')
-        fields[key] = B.R.raster(stack, shape)
+        fields[key] = (semantic.raster_region(stack, shape, value['semantic'], proposal, key)
+                       if proposal is not None and key != 'recovery' else B.R.raster(stack, shape))
     if value['enabled']:
         if not np.any(fields['sky']) or np.all(fields['sky'] > 254):
             raise ValueError('天空标记为空或覆盖全幅；请明确标记真实天空')
@@ -34,11 +41,21 @@ def raster(value, shape, *, cancelled=lambda: False):
     return fields
 
 
-def prepare(value, shape, *, asset=None, cancelled=lambda: False):
+def prepare(value, shape, *, asset=None, source_path=None, force_semantic=False, cancelled=lambda: False):
     value = S.check(value)
     S.ready(value)
-    raw = raster(value, shape, cancelled=cancelled)
-    prepared = {'value': value, 'shape': tuple(shape), 'raw_fields': raw, 'fields': None}
+    semantic_suspended = None
+    try:
+        raw = raster(value, shape, source_path=source_path, force_semantic=force_semantic, cancelled=cancelled)
+    except InterruptedError:
+        raise
+    except Exception as error:
+        if value['enabled'] or value['semantic'] is None:
+            raise
+        semantic_suspended = str(error)[:2000]
+        raw = raster({**value, 'semantic': None, 'person_mode': 'marked' if value['regions']['person']['objects'] else 'unmarked'},
+                     shape, cancelled=cancelled)
+    prepared = {'value': value, 'shape': tuple(shape), 'raw_fields': raw, 'fields': None, 'semantic_suspended': semantic_suspended}
     if not value['enabled']:
         return prepared
     from .cpu_memory_budget import available_estimate
@@ -71,6 +88,9 @@ def verified_value(engine, value):
     B.verify_source(value, row['path'], (row['src_h'],row['src_w']))
     if value['enabled']:
         A.verify(value['asset'])
+        if value['semantic']:
+            from .sky_semantic.manifest import verify
+            verify()
         if engine._vram.has_background():
             raise ValueError('换天空与换背景不能同时启用；请先关闭当前换背景')
     if B.file_stamp(row['path']) != before:
@@ -81,7 +101,9 @@ def verified_value(engine, value):
 def stage_key(engine, value):
     row = engine._docs[engine._doc_index]
     asset = value['asset']
-    return (json.dumps(value,sort_keys=True), B.file_stamp(row['path']) if value['enabled'] else None, id(engine._vram.src_f32),
+    from .sky_semantic.manifest import installation_stamp
+    semantic_stamp = installation_stamp() if value['semantic'] and value['enabled'] else None
+    return (semantic_stamp, json.dumps(value,sort_keys=True), B.file_stamp(row['path']) if value['enabled'] else None, id(engine._vram.src_f32),
             getattr(engine._vram,'deform_version',None), tuple(sorted(engine._vram.deform_amounts.items())),
             B.file_stamp(asset['path']) if asset and value['enabled'] else None)
 
@@ -95,12 +117,15 @@ def sync(engine, *, strict=False):
     try:
         key = stage_key(engine,value)
         if getattr(pipe,'_sky_replacement_key',None) == key:
+            if strict and value['enabled'] and value['semantic']:
+                from .sky_semantic.resolver import resolve
+                resolve(value['semantic'], engine._docs[engine._doc_index]['path'], force=True)
             if strict and pipe.sky_replacement.suspended:
                 raise ValueError(pipe.sky_replacement.suspended)
             return
         if value["enabled"]: verified_value(engine,value)
         stage = SkyReplacementStage(pipe.device,(pipe.h,pipe.w))
-        stage.set(value,prepare(value,(pipe.h,pipe.w)) if value['enabled'] else None)
+        stage.set(value,prepare(value,(pipe.h,pipe.w),source_path=engine._docs[engine._doc_index]['path'],force_semantic=strict) if value['enabled'] else None)
         pipe.sky_replacement,pipe._sky_replacement_key = stage,key
     except Exception as error:
         stage = SkyReplacementStage(pipe.device,(pipe.h,pipe.w))
@@ -115,9 +140,9 @@ def report(engine):
     stage = getattr(engine._vram,'sky_replacement',None)
     return {'version': S.VERSION, 'enabled': value['enabled'], 'editable': S.editable(value),
             'asset': value['asset'], 'suspended': getattr(stage,'suspended',None),
-            'automatic_detection': False, 'working_color': 'encoded-srgb',
+            'automatic_detection': value['semantic'] is not None, 'semantic_optional': True, 'working_color': 'encoded-srgb',
             'bytes': stage.resident_bytes() if stage else 0,
-            'boundaries': ['请手动标记天空、人物和水面；没有自动天空/水面语义检测，不把人像蒙版反选当天空',
+            'boundaries': ['可选本地语义模型提出天空、人物和水面选区；必须逐区域检查，可叠加画笔修正。模型缺失时仍可独立手动标记',
                 '人物/景物 -100 保留换天空前对应色彩；0 有基础氛围映射，正向增强',
                 '素材由你提供，项目引用原件；缺失或 SHA-256 改变会暂停效果与导出',
                 '恢复只撤回换天空、其氛围和水面反射，不撤回其他调色、修补或液化',
@@ -173,7 +198,7 @@ def export_prepare(spec,shape,*,cancelled=lambda:False):
     if list(before) != spec.sky_replacement_stamp:
         raise ValueError('换天空源图在全尺寸解码之后变化')
     B.verify_source(value,spec.sky_replacement_path,shape)
-    spec.sky_replacement_prepared = prepare(value,shape,cancelled=cancelled)
+    spec.sky_replacement_prepared = prepare(value,shape,source_path=spec.sky_replacement_path,force_semantic=True,cancelled=cancelled)
     if B.file_stamp(spec.sky_replacement_path) != before:
         spec.sky_replacement_prepared = None
         raise ValueError('准备全尺寸换天空时源图变化')

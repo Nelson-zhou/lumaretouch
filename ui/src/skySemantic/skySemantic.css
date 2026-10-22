@@ -1,0 +1,14 @@
+.sky-semantic {border-top:1px solid #454552;margin-top:12px;padding-top:8px;font-size:12px;}
+.sky-semantic p {line-height:1.5;}
+.sky-semantic-warning {color:#f3c17d;}
+.sky-semantic label {display:block;margin:6px 0;}
+.sky-semantic button,.sky-semantic select {margin:4px;padding:5px 8px;}
+.sky-semantic a {color:#88c3ff;}
+.sky-semantic-regions {display:flex;gap:6px;flex-wrap:wrap;}
+.sky-semantic-regions small {display:block;color:#f3c17d;}
+.sky-semantic-locator {position:relative;max-width:640px;line-height:0;}
+.sky-semantic-locator>img:first-child {width:100%;height:auto;display:block;}
+.sky-semantic-overlay {position:absolute;inset:0;pointer-events:none;opacity:.5;mask-size:100% 100%;mask-mode:luminance;-webkit-mask-size:100% 100%;}
+.sky-semantic-overlay.sky {background:#43aaff;}.sky-semantic-overlay.person {background:#ffb428;}.sky-semantic-overlay.water {background:#28e6c8;}
+.sky-semantic-mask-load {position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}
+.sky-semantic progress {max-width:180px;}

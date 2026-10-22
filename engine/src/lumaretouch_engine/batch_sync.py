@@ -3,6 +3,7 @@
 Session owns document rows; this controller borrows them only during synchronous
 commands. The controller alone owns batch identities, undo ledger and summaries.
 """
+from . import brow_shape_scope as BROW
 from . import white_balance_recipe as WB
 from dataclasses import dataclass
 from typing import Callable
@@ -190,6 +191,7 @@ class BatchSyncController:
                 new['_optics']=OA.verify_target(r['_optics_prepared'],before,new,row,version.document_id,version.revision,prepared[OA.OP])
             if SKY.OP in ops:
                 SKY.validate_target(new["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
+            if BROW.OP in ops and OA.OP not in ops: BROW.validate_target(new,row)
             WB.prepare_state(new)
             planned.append((r["index"], before, new))
             applied_rows.append(r)
@@ -204,7 +206,7 @@ class BatchSyncController:
         if live_plan is not None:
             idx,before,new=live_plan;self.versions.advance(self.documents.rows()[idx])
             try:fr=self.editor.replay(new,mode="batch",replayed_for=f"batch:{batch_id}",
-                                      **({'strict_local':True} if SC.OP_LOCAL_GRADE in ops or SKY.OP in ops or OA.OP in ops else {}))
+                                      **({'strict_local':True} if SC.OP_LOCAL_GRADE in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops else {}))
             except Exception as error:
                 try:
                     rollback=self.editor.replay(before,mode="batch",replayed_for=f"batch_rollback:{batch_id}")

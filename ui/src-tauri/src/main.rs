@@ -16,6 +16,7 @@ mod levels_core;
 mod levels_api;
 mod fabric_api;
 mod lip_makeup_api;
+mod brow_shape_api;
 mod facial_wrinkle_api;
 mod layout_print_api;
 mod color_scopes_api;
@@ -60,6 +61,9 @@ mod studio_background_host;
 mod studio_background_api;
 mod sky_replacement_host;
 mod sky_replacement_api;
+mod sky_semantic_api;
+mod sky_semantic_model_api;
+mod app_shutdown;
 mod optics_host;
 mod optics_api;
 mod effect_recovery_host;
@@ -231,6 +235,8 @@ pub struct AppState {
     local_masks: Mutex<local_mask_host::LocalMaskHost>,
     sky_replacement: Mutex<sky_replacement_host::SkyReplacementHost>,
     sky_preview: Mutex<sky_replacement_host::SkyReplacementPreviewHost>,
+    sky_semantic: Mutex<sky_semantic_api::SemanticHost>,
+    sky_semantic_model: Arc<Mutex<sky_semantic_model_api::ModelHost>>,
     optics: Mutex<optics_host::OpticsHost>,
     optics_preview: Mutex<optics_host::OpticsPreviewHost>,
     studio_background: Mutex<studio_background_host::StudioBackgroundHost>,
@@ -359,6 +365,8 @@ impl AppState {
             local_masks: Mutex::new(local_mask_host::LocalMaskHost::default()),
             sky_replacement: Mutex::new(sky_replacement_host::SkyReplacementHost::default()),
             sky_preview: Mutex::new(sky_replacement_host::SkyReplacementPreviewHost::default()),
+            sky_semantic: Mutex::new(sky_semantic_api::SemanticHost::default()),
+            sky_semantic_model: Arc::new(Mutex::new(sky_semantic_model_api::ModelHost::default())),
             optics: Mutex::new(optics_host::OpticsHost::default()),
             optics_preview: Mutex::new(optics_host::OpticsPreviewHost::default()),
             studio_background: Mutex::new(studio_background_host::StudioBackgroundHost::default()),
@@ -482,6 +490,7 @@ impl AppState {
     pub fn on_lut_ready(&self, v: &Value) {
         self.source_patch_capture.lock().unwrap().invalidate();
         self.recovery_preview.lock().unwrap().invalidate(); self.liquify_preview.lock().unwrap().invalidate(); self.studio_background_preview.lock().unwrap().invalidate(); self.optics_preview.lock().unwrap().invalidate(); self.sky_preview.lock().unwrap().invalidate();
+        self.sky_semantic.lock().unwrap().invalidate();
         self.white_balance_capture.lock().unwrap().invalidate();
         self.color_picker_capture.lock().unwrap().invalidate();
         *self.lut.lock().unwrap() = Some(v.clone());
@@ -1664,6 +1673,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
 fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     state.source_patch_capture.lock().unwrap().invalidate();
     state.recovery_preview.lock().unwrap().invalidate(); state.liquify_preview.lock().unwrap().invalidate(); state.studio_background_preview.lock().unwrap().invalidate(); state.optics_preview.lock().unwrap().invalidate(); state.sky_preview.lock().unwrap().invalidate();
+    state.sky_semantic.lock().unwrap().invalidate();
     state.white_balance_capture.lock().unwrap().invalidate();
     state.color_picker_capture.lock().unwrap().invalidate();
     state.color_capture.lock().unwrap().invalidate();
@@ -1996,18 +2006,6 @@ fn report(line: String) {
     println!("{line}");
 }
 
-#[tauri::command]
-fn quit(state: State<'_, Arc<AppState>>) {
-    prompted_model_api::shutdown(&state);
-    state.source_patch_capture.lock().unwrap().invalidate();
-    state.recovery_preview.lock().unwrap().invalidate(); state.liquify_preview.lock().unwrap().invalidate(); state.studio_background_preview.lock().unwrap().invalidate(); state.optics_preview.lock().unwrap().invalidate(); state.sky_preview.lock().unwrap().invalidate();
-    state.white_balance_capture.lock().unwrap().invalidate();
-    state.color_picker_capture.lock().unwrap().invalidate();
-    state.inspection.lock().unwrap().invalidate();
-    let handle=state.engine.lock().unwrap().clone();
-    if let Some(handle)=handle{handle.shutdown();}
-    std::process::exit(0);
-}
 
 fn main() {
     let state = Arc::new(AppState::new());
@@ -2030,6 +2028,9 @@ fn main() {
             source_patch_api::source_patch, source_patch_api::source_patch_result, clone_stamp_api::clone_stamp, local_mask_api::local_masks, local_mask_api::local_masks_result,
             sky_replacement_api::sky_replacement, sky_replacement_api::sky_replacement_result,
             sky_replacement_api::sky_replacement_preview, sky_replacement_api::sky_replacement_preview_status,
+            sky_semantic_api::sky_semantic, sky_semantic_api::sky_semantic_result,
+            sky_semantic_api::sky_semantic_proposal_status,
+            sky_semantic_model_api::sky_semantic_model, sky_semantic_model_api::sky_semantic_model_status,
             optics_api::optics, optics_api::optics_result, optics_api::optics_preview, optics_api::optics_preview_status,
             studio_background_api::studio_background, studio_background_api::studio_background_result,
             studio_background_api::studio_background_preview, studio_background_api::studio_background_preview_status,
@@ -2041,12 +2042,12 @@ fn main() {
             color_picker_capture_api::color_picker_capture, color_picker_capture_api::color_picker_capture_status, color_picker_capture_api::color_picker_capture_frame,
             color_picker_api::color_picker, color_picker_api::color_picker_result,
             white_balance_capture_api::white_balance_capture, white_balance_capture_api::white_balance_capture_status, white_balance_capture_api::white_balance_capture_frame, white_balance_capture_api::white_balance_pick,
-            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, lip_makeup_api::lip_makeup, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
+            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, lip_makeup_api::lip_makeup, brow_shape_api::brow_shape, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
             prompted_mask_api::prompted_masks, prompted_mask_api::prompted_masks_status,
             prompted_model_api::prompted_model, prompted_model_api::prompted_model_status,
-            report, quit
+            report, app_shutdown::quit
         ])
         .build(tauri::generate_context!())
         .expect("运行 LumaRetouch 失败")
-        .run(move |_, event| { if matches!(event, tauri::RunEvent::Exit) { prompted_model_api::shutdown(&state); } });
+        .run(move |_, event| { if matches!(event, tauri::RunEvent::Exit) { app_shutdown::optional_models(&state); } });
 }

@@ -147,6 +147,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             st.local_masks.lock().unwrap().ended(inspection_epoch);
             st.sky_replacement.lock().unwrap().ended(inspection_epoch);
             st.sky_preview.lock().unwrap().ended(inspection_epoch);
+            st.sky_semantic.lock().unwrap().ended(inspection_epoch);
             st.optics.lock().unwrap().ended(inspection_epoch);
             st.optics_preview.lock().unwrap().ended(inspection_epoch);
             st.studio_background.lock().unwrap().ended(inspection_epoch);
@@ -181,6 +182,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
     match v.get("event").and_then(|e| e.as_str()).unwrap_or("") {
         "inspection_snapshot"=>state.on_inspection_event(inspection_epoch,&v),
         "batch_result"=>state.batch_results.lock().unwrap().receive(inspection_epoch,&v),
+        "brow_shape_result"=>{crate::brow_shape_api::receive(inspection_epoch,&v);if v.get("doc_state").is_some(){state.on_layer_frame(&v);}},
         "preset_result"=>state.preset_results.lock().unwrap().receive(inspection_epoch,&v),
         "white_balance_result"=>state.white_balance_results.lock().unwrap().receive(inspection_epoch,&v),
         "color_picker_result"=>state.color_picker_results.lock().unwrap().receive(inspection_epoch,&v),
@@ -191,6 +193,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "optics_preview"=>state.optics_preview.lock().unwrap().receive(inspection_epoch,&v),
         "sky_replacement_result"=>state.sky_replacement.lock().unwrap().receive(inspection_epoch,&v),
         "sky_replacement_preview"=>state.sky_preview.lock().unwrap().receive(inspection_epoch,&v),
+        "sky_semantic_result"|"sky_semantic_proposal"=>state.sky_semantic.lock().unwrap().receive(inspection_epoch,&v),
         "studio_background_result"=>state.studio_background.lock().unwrap().receive(inspection_epoch,&v),
         "studio_background_preview"=>state.studio_background_preview.lock().unwrap().receive(inspection_epoch,&v),
         "manual_liquify_result"=>state.manual_liquify.lock().unwrap().receive(inspection_epoch,&v),

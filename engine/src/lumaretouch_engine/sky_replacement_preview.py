@@ -73,7 +73,7 @@ def render(engine, stage, source_image, fields, target):
     return {'source':source,'after':after,'overlay':marked,'width':dimensions[0],'height':dimensions[1],
             'source_width':source_dimensions[0],'source_height':source_dimensions[1],
             'domain':'source-normalized','output_domain':'production-output','quality':'proxy-render-srgb8',
-            'target':target,'automatic_detection':False,
+            'target':target,'automatic_detection':stage.value.get('semantic') is not None,
             'note':'左侧是未变形/未裁剪的原照片定位；右侧是真实当前输出。导出重放原始尺寸区域与原件，不放大此预览'}
 
 
@@ -163,7 +163,7 @@ class SkyPreview:
             self.record = None
             self.latest = {'request':deepcopy(p),'raw':raw,'viewing':viewing,
                            'binding':deepcopy(session['binding']),'asset':session['asset'],
-                           'expected':current['asset'],'asset_choices':deepcopy(session['asset_choices']),'source_image':session['source_image']}
+                           'source_path':session['path'],'expected':current['asset'],'asset_choices':deepcopy(session['asset_choices']),'source_image':session['source_image']}
             self.tick()
         except Exception as error:
             self.emit(self.event(p,state='failed',success=False,error=str(error)[:2000]))
@@ -193,7 +193,7 @@ class SkyPreview:
                 # Disabling a broken linked effect must remain possible without
                 # deleting its source-bound intent or replacing the missing asset.
                 value = S.from_editable(raw,job['binding'],expected)
-                return value,R.prepare(value,shape,cancelled=stop.is_set),asset,None,accepted_choice
+                return value,R.prepare(value,shape,source_path=job['source_path'],cancelled=stop.is_set),asset,None,accepted_choice
             elif not explicitly_chosen and expected is None:
                 raise ValueError('新素材需要明确选择，不能悄悄替换路径')
             elif explicitly_chosen or asset is None or asset.binding != expected or B.file_stamp(path) != asset.stamp:
@@ -201,7 +201,7 @@ class SkyPreview:
                 if explicitly_chosen:
                     accepted_choice = (choice,deepcopy(asset.binding))
             value = S.from_editable(raw,job['binding'],asset.binding if asset else None)
-            prepared = R.prepare(value,shape,asset=asset,cancelled=stop.is_set)
+            prepared = R.prepare(value,shape,asset=asset,source_path=job['source_path'],cancelled=stop.is_set)
         except InterruptedError:
             raise
         except Exception as error:
@@ -212,7 +212,7 @@ class SkyPreview:
             fallback['enabled'] = False
             fallback['asset_path'] = None
             value = S.from_editable(fallback,job['binding'],None)
-            prepared = R.prepare(value,shape,cancelled=stop.is_set)
+            prepared = R.prepare(value,shape,source_path=job['source_path'],cancelled=stop.is_set)
         return value,prepared,asset,issue,accepted_choice
 
     def tick(self):
@@ -240,6 +240,8 @@ class SkyPreview:
                         issue = str(error)[:2000]
                         stage = SkyReplacementStage(pipe.device,(pipe.h,pipe.w))
                         result = render(self.engine,stage,job['source_image'],prepared['raw_fields'],p['mutation']['target'])
+                    result['semantic_suspended'] = prepared.get('semantic_suspended')
+                    result['automatic_detection'] = value['semantic'] is not None and not prepared.get('semantic_suspended')
                     self.matching(p)
                     if value['enabled'] and B.file_stamp(value['asset']['path']) != prepared['asset_stamp']:
                         raise ValueError('素材在预览渲染期间变化，请重新选择')
