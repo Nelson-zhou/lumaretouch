@@ -147,6 +147,10 @@ class ExportSpec:
     effect_recovery_path: str | None = None  # ephemeral verified original source
     effect_recovery_stamp: list | None = None  # full-decode identity, never rebased
     effect_recovery_fields: list | None = None  # disposable full-source uint8 masks
+    studio_background: dict | None = None
+    studio_background_path: str | None = None
+    studio_background_stamp: list | None = None
+    studio_background_prepared: dict | None = None
     manual_liquify: dict | None = None       # retained source-bound ordered gestures
     manual_liquify_path: str | None = None   # verified original, never a proxy
     manual_liquify_stamp: list | None = None # decode-to-render identity guard
@@ -227,10 +231,15 @@ class ExportSpec:
         except ValueError as error:
             raise ExportError(f'手动液化导出配方无效：{error}') from error
 
+    def check_studio_background(self) -> None:
+        from .studio_background_export import check_spec
+        check_spec(self)
+
     def check(self) -> None:
         """参数在进入昂贵通路之前先过一遍唯一校验口径（与各层 setter 同源）。"""
         self.check_effect_recovery()
         self.check_manual_liquify()
+        self.check_studio_background()
         from .local_grade_layers import check as check_groups
         from .local_grade_stage import check_fields
         self.local_grade_groups = check_groups(self.local_grade_groups)
@@ -413,6 +422,8 @@ def _admit_manual_tile(spec, h, w, tile, margin, bits, device, manual_peak):
     full_bytes = h*w*(12 if bits == 16 else 3)*int(spec.scale)**2
     full_bytes += h*w*(12 if spec.repair else 0)
     full_bytes += h*w*(4 if spec.fabric_amount else 0)
+    from .studio_background_export import resident_bytes as studio_bytes
+    full_bytes += studio_bytes(spec)
     headroom = 64*1024*1024
     target = torch.device(device)
     if target.type == 'cuda' and not torch.cuda.is_available():
@@ -637,6 +648,9 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         # long Torch call on this render thread.
         if progress: progress(0, 1, (time.perf_counter()-t_function)*1000.)
         return False
+    from .studio_background_export import prepare_export as prepare_studio
+    from .studio_background_runtime import attach_tile as attach_studio_tile
+    prepare_studio(spec, src_u8, cancelled=mask_cancelled)
     export_prepare(spec, src_u8, cancelled=mask_cancelled)
     # Rasters are disposable. Drop a previous full render's fields before
     # allocating replacements instead of silently doubling the CPU mask budget.
@@ -735,6 +749,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         # used by all operators. RGB8/RGB16 share this float recovery stage.
         attach_tile(pipe, spec, (cy0, cx0, cy1, cx1))
         attach_manual_tile(pipe, spec, (cy0, cx0, cy1, cx1))
+        attach_studio_tile(pipe, spec, (cy0, cx0, cy1, cx1))
         t_c = time.perf_counter()
         io["setup"] += (t_c - t0) * 1000.0
         if spec.light:
@@ -862,6 +877,9 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         out = quantize16_np(out)
     if group_source_stamp is not None and file_stamp(spec.local_mask_source_path) != group_source_stamp:
         raise ExportError('Independent local-grade source changed during rendering')
+    from .studio_background_state import active as studio_active
+    if studio_active(spec.studio_background) and list(file_stamp(spec.studio_background_path)) != spec.studio_background_stamp:
+        raise ExportError('背景源图在完整出片过程中变化')
     if recovery_source_stamp is not None and file_stamp(spec.effect_recovery_path) != recovery_source_stamp:
         raise ExportError('效果恢复源图在渲染过程中变化，停止导出')
     if manual_source_stamp is not None and file_stamp(spec.manual_liquify_path) != manual_source_stamp:

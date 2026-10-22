@@ -1,5 +1,5 @@
 import type {PresetInfo,ScopeModule} from '../native';
-const labels:Record<string,string>={'lnx.local_grade.v1':'独立局部调色组','lnx.exposure.v1':'曝光','lnx.white_balance.v1':'白平衡','lnx.levels.v1':'色阶',
+const labels:Record<string,string>={'lnx.studio_background.v1':'影棚背景强度（范围不复制）','lnx.local_grade.v1':'独立局部调色组','lnx.exposure.v1':'曝光','lnx.white_balance.v1':'白平衡','lnx.levels.v1':'色阶',
   'lnx.curves.v1':'曲线','lnx.hsl.v1':'HSL','lnx.crop.v1':'裁剪','lnx.skin.v1':'磨皮','lnx.blemish.v1':'瑕疵处理','lnx.skin_mask.v1':'皮肤蒙版'};
 export const moduleLabel=(op:string)=>labels[op]??op;
 export function presetLabel(preset:PresetInfo,list:PresetInfo[]){

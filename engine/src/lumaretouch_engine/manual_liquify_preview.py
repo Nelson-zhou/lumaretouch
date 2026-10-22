@@ -36,6 +36,8 @@ def render(engine, stage, baseline=None):
     from .local_grade_runtime import sync as grades
     from .effect_recovery_runtime import sync as recovery
     fabric(engine); masks(engine, strict=True); grades(engine, strict=True); recovery(engine, strict=True); R.sync(engine, strict=True)
+    from .studio_background_runtime import sync as studio
+    studio(engine, strict=True)
     pipe = engine._vram
     old = pipe.manual_liquify
     strength, channel = engine._retouch_render_args()

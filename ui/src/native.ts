@@ -140,6 +140,7 @@ export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_pre
 
 export interface DocState {
   effect_recovery?: import("./effectRecovery/model").RecoveryReport;
+  studio_background?: import("./studioBackground/model").Report;
   manual_liquify?: import("./manualLiquify/model").LiquifyReport;
   local_masks?: import("./localMasks/model").LocalMaskReport;
   fabric?: import("./fabric/FabricPanel").FabricState;
@@ -922,6 +923,7 @@ export interface EngineStatus {
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
     effect_recovery_protocol?: number;
+    studio_background_protocol?: number;
     manual_liquify_protocol?: number;
     local_grade_live_protocol?: number;
     source_patch_capture_protocol?: number;

@@ -1,0 +1,240 @@
+{
+  "feature_id": "PC-32474",
+  "status": "implementation-written-unrun; shared integration frozen and released",
+  "schema": "lrt.project.v8",
+  "verification": "Static source inspection only. No product run, test, build, typecheck, installation, model download, commit or push. Qoder local acceptance pending.",
+  "controls": 19,
+  "files": [
+    {
+      "path": "core/studio_background/README.md",
+      "sha256": "64bcba2488224ac09e901062133bcef196d454fe8128955fa195c5518bf94af0",
+      "kind": "new"
+    },
+    {
+      "path": "core/studio_background/main.rs",
+      "sha256": "6a791e0fda64d1170975ea29ed5130144e5a8c754a1a1d505db96d902762f1bf",
+      "kind": "new"
+    },
+    {
+      "path": "docs/development/studio-background-scope.md",
+      "sha256": "0b3167fa149756f5b41e22b076dd40ee2aaea012226fd08f9229fb7bafbf8757",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_preview.py",
+      "sha256": "81d33a1c0e4fcb3193ea2b2730ff8ee4b5ebbd3e5c5dce4d70f5cbffb6223338",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_runtime.py",
+      "sha256": "a71f9dc56d91370a1524100a28baec56e9048e4255105e8317abb408872e5da6",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "c02520394fab5292936ace0d5443f277172b723b75894bd974c67a5088061e13",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "e06fafd0c3ba1b538fe53fdac73ccb5ebe3e647486139a105fb4b68bc5589ed5",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/inspection_worker.py",
+      "sha256": "b28af25bfa1c6a5a5d9fa9b1c2ba41e6ba58019c5d75694a199267d54577f050",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/manual_liquify_preview.py",
+      "sha256": "0a1fd0fd40fd1b7732148a813dcff6e1546e631d57ce9f5307d45b03ef7ab99f",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/ops/studio_background.py",
+      "sha256": "fb1ef254809b7b3e642c22f5dc652db9b90d55d23a1237ec9c4f4ad4384bbc5c",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "61f85c387c8af7dcde414fbf115d52c3e204d0a9f75e966c610ef8530d462b7d",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "82d23f0521aa6f0e8083479ee840c147584f7303bc894c99e01b1b2725c978a6",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "bf86e5793dd9bac161ddc6b379641ff8fd98ced64d9f4f048db8ce2436f25358",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_background_controller.py",
+      "sha256": "f38e6be54360d6a9b3384ba51140ca528b126b6c5d76de3a2609d3823f7bd273",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_background_export.py",
+      "sha256": "cc649e964ed879042049c070997cd1c5ad7fe8a82d2c90fcdb6e37af2d27fded",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_background_masks.py",
+      "sha256": "d8a933863a6733c8034a8901fed32846b97cf6cf8b620695d6eaa8565366c106",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_background_preview.py",
+      "sha256": "3740845eba3964e61d8f5375fe88af2b91ac497d39433fd99cb24f54f71cfcd7",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_background_project.py",
+      "sha256": "712a067fe61773b179769f42744dc8d016266b4cd1a9333d25e26cf683e3bb1d",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_background_runtime.py",
+      "sha256": "062ac0774fbf2708825f7155d786c9b04bc8597c38a1dba7fb83538898a4d14e",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_background_scope.py",
+      "sha256": "75f285f6cc6b5d208522235f5aab11b8348066e1ce6fd44911072e25131f8417",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_background_stage.py",
+      "sha256": "6f20fd09f6bc06a7470206b9942e747be177698b90944ff35d0edaaef8b85095",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_background_state.py",
+      "sha256": "7c17e37784c14507fa53fb79028376a4f96ac8b4cffcfb623c610ab26109762f",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_tools_dispatch.py",
+      "sha256": "8d6e79bdba50cb6b4bf23438eb29f6136eb800236f1daf6eaeb4f0e4e6f0cc8f",
+      "kind": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "ff0ecc733b6fa737a52ade729f3e014766b2cc18a25115b542b035ffde77891c",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "packaging/build-studio-background.sh",
+      "sha256": "9b55004bac7e7de29222bcae94304e2cc984f182bc7031292628b393af696b2f",
+      "kind": "new"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "e860d90d640493d06f4acb1ea3dd307f04fe1c64b45946e4b42eab87f7f48544",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "sha256": "fd39cc1f96b96e7a6a3cd4b786ce6a3f71345d842a74396a54bbd6135097ef22",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "dd7d84cf80c2b48668e6e1bacac8214312e0a556f63a8c6e3fc7037c4b18712e",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "bb36aad586b7fcbadaa1521db335391592473920f25daa7ee16b2bd0f51343b8",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "a4deabeae532829015ca26cae91412cb7020767ed23a0c594b8cebaa0404703a",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "ui/src-tauri/src/studio_background_api.rs",
+      "sha256": "035fcf408b3202eb4056a8774f78951ea86c530ed59a1f3e6a9d1a07b04ea9f6",
+      "kind": "new"
+    },
+    {
+      "path": "ui/src-tauri/src/studio_background_host.rs",
+      "sha256": "e899cf9f12deae4783142971904dc6884fb1034155f999a6e3c7f732105fb39f",
+      "kind": "new"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "d5690724eaf2625213f9fb310bd18ca0bbb02ae68346b63cabbe21b43aae51cb",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "ui/src/batch/batchScopeOptions.ts",
+      "sha256": "d2b942791126891507d557f46294a415eb469136ee8a0e1b68ab21e0f15dd992",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "ui/src/components/ExportQueuePanel.tsx",
+      "sha256": "b7f0993058653ad029ce338d905a0c0b110ad9d7ade7fe36e73885f511c2b0c0",
+      "kind": "new"
+    },
+    {
+      "path": "ui/src/localMasks/useRetouchCaptureWorkflows.ts",
+      "sha256": "f3d554f17e693d663aa83e28daa11292b1c061e38956cd4da4707112e69ba93a",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "0e62e579cd4c7adb9ecda2015256e7d95aa165be916affb5c095d3272caef16f",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "e42394024b9fdbf90fb961f74036d093768ae303e0a7dcb5fb795a593828531d",
+      "kind": "modified-shared"
+    },
+    {
+      "path": "ui/src/studioBackground/RetouchToolsPanels.tsx",
+      "sha256": "3b24b292ad583af337ddccdfc834ff7e244e0a2bbe677ace67132ccf4414ec44",
+      "kind": "new"
+    },
+    {
+      "path": "ui/src/studioBackground/StudioBackgroundPanel.tsx",
+      "sha256": "b4707c4871967999ee04fe32522ef4225f0873c7199fdcc028b668f9c2e3bb2b",
+      "kind": "new"
+    },
+    {
+      "path": "ui/src/studioBackground/StudioCanvas.tsx",
+      "sha256": "09e23689879f9966c541b8107639f8bb87af56c21449ae1d03dfe4c5be70681a",
+      "kind": "new"
+    },
+    {
+      "path": "ui/src/studioBackground/model.ts",
+      "sha256": "e9ae31fc5ed65cdf02f83590aeb04487abea88ed83df125e9c1e190c7dedb1da",
+      "kind": "new"
+    },
+    {
+      "path": "ui/src/studioBackground/studioBackground.css",
+      "sha256": "bac77f4aeddc93056136d730f60f43d6f14646d670d2d241e91cf462af1a62df",
+      "kind": "new"
+    },
+    {
+      "path": "ui/src/studioBackground/useStudioBackgroundWorkflow.ts",
+      "sha256": "5acb9c087a8b7971833fd88a8a79d495edeb331859379af16850c739ee1e31ff",
+      "kind": "new"
+    },
+    {
+      "path": "ui/src/studioBackground/workflow.ts",
+      "sha256": "c6cb3ea14de53a4be1882f5e0c1e9af7577ee00064e1c7bb17738477bdea3e80",
+      "kind": "new"
+    }
+  ],
+  "shared_line_counts": {
+    "ui/src/App.tsx": 2128,
+    "ui/src-tauri/src/main.rs": 2047,
+    "engine/src/lumaretouch_engine/server.py": 6993
+  },
+  "excluded": "Other owners optics/sky/facial-wrinkle files and docs/development/product-gap-status-2026-10-22.md are not this package."
+}

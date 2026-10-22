@@ -20,6 +20,7 @@ export function batchScopeOptions(modules: readonly {operation_id: string; trans
     out.push({label:'仅局部调色组（预检追加/替换）',ops:['lnx.local_grade.v1']});
     if(global.length)out.push({label:'全图配方 + 局部调色组',ops:[...global.map(([op])=>op),'lnx.local_grade.v1']});
   }
+  if(supported.has('lnx.studio_background.v1')) out.push({label:'影棚背景强度（目标须已有范围）',ops:['lnx.studio_background.v1']});
   return out;
 }
 

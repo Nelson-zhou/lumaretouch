@@ -43,6 +43,8 @@ def render_review(engine, stage):
     grades(engine, strict=True)
     R.sync(engine, strict=True)
     manual(engine, strict=True)
+    from .studio_background_runtime import sync as studio
+    studio(engine, strict=True)
     pipe = engine._vram
     old = pipe.effect_recovery
     strength, channel = engine._retouch_render_args()

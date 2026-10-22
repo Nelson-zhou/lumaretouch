@@ -19,6 +19,7 @@ from .fabric_stage import FabricStage
 from .local_grade_stage import LocalGradeStage
 from .effect_recovery_stage import EffectRecoveryStage
 from .manual_liquify_stage import ManualLiquifyStage
+from .studio_background_stage import StudioBackgroundStage
 
 import math
 from dataclasses import dataclass
@@ -114,6 +115,8 @@ class PreviewPipeline:
         self._effect_recovery_key = None
         self.manual_liquify = ManualLiquifyStage(self.device, (self.h, self.w), self.high_precision_warp)
         self._manual_liquify_key = None
+        self.studio_background = StudioBackgroundStage(self.device, (self.h, self.w))
+        self._studio_background_key = None
         # 源图 float 与 uint8 都留着：float 供滤波，uint8 供"恢复原图"这类需要原始像素的操作
         self.src_u8: torch.Tensor | None = None
         self.src_f32: torch.Tensor | None = None
@@ -301,6 +304,8 @@ class PreviewPipeline:
         self._effect_recovery_key = None
         self.manual_liquify = ManualLiquifyStage(self.device, (self.h, self.w), self.high_precision_warp)
         self._manual_liquify_key = None
+        self.studio_background = StudioBackgroundStage(self.device, (self.h, self.w))
+        self._studio_background_key = None
         self.src_f32 = src_f32
         self.frame_gpu = torch.empty((self.h, self.w, 4), dtype=torch.uint8, device=self.device)
         self.frame_gpu[..., 3] = 255
@@ -490,6 +495,7 @@ class PreviewPipeline:
         # Recovery at an operator mixes only that operator's own input/output;
         # later effects continue to consume the recovered pixels normally.
         out = self.effect_recovery.apply('fabric_fine', out, self.fabric.apply(out))
+        out = self.studio_background.apply(out)
         out = self.apply_enhance(self.apply_deform(out))
         if scope_tap is not None: scope_tap("wb-input", out)
         if render_stage == 'wb-input':

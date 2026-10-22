@@ -96,7 +96,8 @@ def report(engine):
     } for name in S.TARGETS], 'suspended': getattr(stage, 'suspended', None),
         'bytes_masks': stage.resident_bytes() if stage else 0,
         'boundaries': ['不恢复全部原图，也不擦掉曝光、曲线、LUT、局部调色或手工修补',
-            '尚未支持：独立瑕疵恢复、眼镜反光、碎发/白发、天空、背景祛瑕/祛穿帮',
+            '影棚背景祛瑕/祛穿帮/光影/断层使用背景调整工作区内的专属恢复；此处不混合其他算子',
+            '尚未支持：独立人物瑕疵恢复、眼镜反光、碎发/白发、天空',
             '官方矩阵排除：祛油光、唇纹、双下巴、副乳；当前恢复笔不能用于这些效果',
             '恢复笔迹只属于当前源照片，不参与批量同步或预设']}
 

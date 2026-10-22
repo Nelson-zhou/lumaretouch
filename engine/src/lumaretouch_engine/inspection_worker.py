@@ -83,6 +83,7 @@ def render(directory):
     from .local_grade_source import has_groups, verify_snapshot, check_export_decode
     from . import effect_recovery_runtime as recovery
     from . import manual_liquify_runtime as manual
+    from . import studio_background_runtime as studio
     from .local_mask_state import file_stamp
     group_source_stamp = file_stamp(path) if has_groups(snap) else None
     recovery_source_stamp = file_stamp(path)
@@ -90,6 +91,7 @@ def render(directory):
     verify_snapshot(snap, path, tuple(reversed(request['source_size'])))
     recovery.verify_snapshot(snap, path, tuple(reversed(request['source_size'])))
     manual.verify_snapshot(snap, path, tuple(reversed(request['source_size'])))
+    studio.verify_snapshot(snap, path, tuple(reversed(request['source_size'])))
     if is_raw(path):
         bits = 16
     else:
@@ -103,6 +105,7 @@ def render(directory):
     check_export_decode(snap, path, group_source_stamp, (decoded.h, decoded.w))
     recovery.check_export_decode(snap, path, recovery_source_stamp, (decoded.h, decoded.w))
     manual.check_export_decode(snap, path, manual_source_stamp, (decoded.h, decoded.w))
+    studio.check_export_decode(snap, path, manual_source_stamp, (decoded.h, decoded.w))
     if snap.get("grade_scope") == "objects":
         from .local_mask_state import check, verify_source
         verify_source(check(snap.get("local_masks")), path, (decoded.h, decoded.w))
