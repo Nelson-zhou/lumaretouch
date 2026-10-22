@@ -33,6 +33,9 @@ impl Root {
     pub fn read_wb_capture(&self,expected:&crate::capture_wire::Identity)->Result<Vec<u8>,String>{
         self.read_action_capture(expected,"white-balance")
     }
+    pub fn read_color_picker_capture(&self,expected:&crate::capture_wire::Identity)->Result<Vec<u8>,String>{
+        self.read_action_capture(expected,"color-picker")
+    }
     fn read_action_capture(&self,expected:&crate::capture_wire::Identity,kind:&str)->Result<Vec<u8>,String>{
         use crate::capture_wire::{HEADER_BYTES,MAX_PAYLOAD};
         let header=expected.header().map_err(str::to_owned)?;
@@ -180,4 +183,17 @@ mod tests{
         fs::remove_file(&path).unwrap();let mut huge=id;huge.width=u32::MAX;
         assert!(root.read_capture(&huge).is_err());root.cleanup().unwrap();
     }
+    #[test] fn color_picker_reader_uses_its_own_private_job_and_exact_identity(){
+        let root=Root::create([44;16]).unwrap();let id=capture_identity();
+        let source_dir=capture_job(&root,&id);let bytes=capture_packet(&id);
+        write_capture(&source_dir.join("capture.lrcp"),&bytes);
+        assert!(root.read_color_picker_capture(&id).is_err());
+        let dir=root.path.join(format!("lumaretouch-color-picker-{}-{}",crate::frame_identity::hex(id.capture),id.ticket));
+        fs::DirBuilder::new().mode(0o700).create(&dir).unwrap();
+        write_capture(&dir.join("capture.lrcp"),&bytes);
+        assert_eq!(root.read_color_picker_capture(&id).unwrap(),bytes);
+        let mut wrong=id;wrong.generation+=1;
+        assert!(root.read_color_picker_capture(&wrong).is_err());root.cleanup().unwrap();
+    }
+
 }

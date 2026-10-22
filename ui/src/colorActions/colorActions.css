@@ -1,0 +1,6 @@
+.colorActionToolbar{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.colorActionReadout{display:grid;gap:7px;padding:10px;font-size:12px;line-height:1.5;background:#1b2531;border:1px solid #47607c;border-radius:6px}
+.colorActionReadout small{opacity:.86}.colorActionReadout figure{margin:0}.colorActionReadout img{width:100%;height:auto;max-height:220px;object-fit:contain;background:#101216;display:block}
+.colorActionReadout figcaption{font-size:11px;padding:4px 0;color:#bfd9ee}.colorActionDelta{display:grid;grid-template-columns:1fr 60px;gap:4px}.colorActionDelta input{grid-column:1}.colorActionDelta output{grid-column:2;align-self:center}
+.colorActionFloating{position:absolute;right:12px;bottom:44px;z-index:12;width:min(300px,42%);max-height:70%;overflow:auto;pointer-events:auto}
+.colorActionMarker{position:absolute;border:1px solid white;box-shadow:0 0 0 1px #172332;pointer-events:none}

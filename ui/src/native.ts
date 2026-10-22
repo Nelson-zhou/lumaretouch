@@ -922,6 +922,8 @@ export interface EngineStatus {
     local_masks_result_protocol?: number;
     white_balance_result_protocol?: number;
     white_balance_capture_protocol?: number;
+    color_picker_capture_protocol?: number;
+    color_picker_result_protocol?: number;
     color_capture_protocol?: number;
     batch_preflight_protocol?: number;
     preset_result_protocol?: number;

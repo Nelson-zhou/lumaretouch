@@ -1,4 +1,5 @@
 import { EyeHighlightsControl } from "./EyeHighlightsControl";
+import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {FabricPanel} from "../fabric/FabricPanel";
 import {HistogramPanel} from "./HistogramPanel";
 import {LevelsEditor} from "./LevelsEditor";
@@ -36,6 +37,7 @@ export interface RetouchProps {
   whiteBalancePanel?: React.ReactNode;
   whiteBalanceBusy?: boolean;
   colorSamplePanel?: React.ReactNode;
+  colorActions?: ColorActionControlsProps;
   sourcePatchPanel?: React.ReactNode;cloneStampPanel?: React.ReactNode;localMasksPanel?: React.ReactNode;
   status: EngineStatus | null;
   doc: DocState | null;
@@ -214,6 +216,11 @@ const WIRED: Record<string, string> = {
   "PC-32455|色阶/红": "levels.control",
   "PC-32455|色阶/绿": "levels.control",
   "PC-32455|色阶/蓝": "levels.control",
+  "PC-32455|色阶/吸管工具": "levels.control",
+  "PC-32455|色阶/黑场吸管": "levels.control",
+  "PC-32455|色阶/白场吸管": "levels.control",
+  "PC-32455|曲线/曲线吸管": "curves.control",
+  "PC-32455|HSL/HSL吸管": "color.picker",
   "PC-32455|曲线/RGB": "curves.control",
   "PC-32455|曲线/红": "curves.control",
   "PC-32455|曲线/绿": "curves.control",
@@ -379,7 +386,7 @@ function hexToRgb(hex: string): number[] {
 
 export default function RetouchPanel(props: RetouchProps) {
   const { doc, status } = props;
-  const dim = !props.hasImage;
+  const dim = !props.hasImage||!!props.colorActions?.owner.pending;
   const skinReady = skinMaskReady(status?.precompute?.mask_channels, status?.precompute?.mask_nonzero_pixels);
   const skinWhy = props.faceScope !== "all" ? "单人物磨皮尚未接通，请选择所有人"
     : skinReady ? "" : "尚无有效皮肤掩膜，请先完成人像分析";
@@ -472,6 +479,7 @@ export default function RetouchPanel(props: RetouchProps) {
     switch (kind) {
       case "histogram.control": return null;
       case "levels.control": return null;
+      case "color.picker": return null; // real targeted control lives with its tool group
       case "curves.control": return null; // implemented together in CurveEditor
       case "skin.strength":
         return (
@@ -653,23 +661,25 @@ export default function RetouchPanel(props: RetouchProps) {
     if (featureId === "PC-32455" && node.full === "色阶") return <LevelsEditor
       key={status?.image?.load_id??"empty"} value={doc?.levels} documentId={status?.image?.load_id??""}
       snapshotId={doc?.document_id} documentRevision={status?.doc_rev??-1}
-      disabled={!props.hasImage} result={status?.levels_result} onDone={props.onDone} note={props.note}/>;
+      disabled={!props.hasImage||!!props.colorActions?.owner.pending} result={status?.levels_result} onDone={props.onDone} note={props.note} picker={props.colorActions}/>;
     if (featureId === "PC-32455" && node.full === "曲线") return <CurveEditor
       key={status?.image?.load_id ?? status?.image?.doc ?? "empty"} value={doc?.curves}
       documentId={status?.image?.load_id??""} snapshotId={doc?.document_id} documentRevision={status?.doc_rev??-1}
-      disabled={!props.hasImage} parametricSupported={status?.ready_caps?.curve_recipe_versions?.includes(3)===true} result={status?.curve_result} error={status?.last_error??null} onDone={props.onDone} note={props.note}/>;
+      disabled={!props.hasImage||!!props.colorActions?.owner.pending} parametricSupported={status?.ready_caps?.curve_recipe_versions?.includes(3)===true} result={status?.curve_result} error={status?.last_error??null} onDone={props.onDone} note={props.note} picker={props.colorActions}/>;
     if (node.full !== "HSL") return null;
     return (
-      <div className="hslChips" key="hsl-chips" data-hsl-band={hslBand}>
+      <div key="hsl-chips">{props.colorActions&&<div className="colorActionToolbar"><ColorActionLaunch {...props.colorActions} action="hsl"/>
+        <small>图像取样后左右拖动定向色相。读数为 HSL，八色渲染仍为 HSV 算子。</small></div>}
+      <div className="hslChips" data-hsl-band={hslBand}>
         {HSL_BANDS.map((n, i) => (
           <button key={n} title={`${n}色`}
             className={"hslChip" + (i === hslBand ? " on" : "")}
             style={{ background: HSL_CHIP_COLORS[i] }}
             onClick={() => setHslBand(i)}>{n}</button>
         ))}
-        <button className="hslChip reset" title="八段全部归零"
+        <button className="hslChip reset" title="八段全部归零" disabled={dim}
           onClick={() => ok(runHsl("clear"), props)}>归零</button>
-      </div>
+      </div></div>
     );
   };
 
@@ -965,7 +975,7 @@ export default function RetouchPanel(props: RetouchProps) {
       <nav className="rtToolNav" aria-label="精修工具分类">
         {TOOL_GROUPS.map(group => (
           <button key={group.id} type="button" aria-pressed={!query && toolGroup === group.id}
-            title={group.label} onClick={() => { setToolGroup(group.id); setQ(""); }}>
+            title={group.label} onClick={() => { if(props.colorActions?.owner.active)props.colorActions.owner.workflow.cancel('已切换工具，未提交的定向调整已取消');setToolGroup(group.id); setQ(""); }}>
             {group.label}
           </button>
         ))}

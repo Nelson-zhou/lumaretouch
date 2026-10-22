@@ -34,6 +34,12 @@ mod white_balance_api;
 mod white_balance_host;
 mod white_balance_capture_host;
 mod white_balance_capture_api;
+mod color_picker_capture_host;
+mod color_picker_capture_api;
+mod color_picker_host;
+mod color_picker_preview_wire;
+mod color_picker_api;
+mod native_dispatch;
 mod batch_host;
 mod batch_api;
 mod color_capture_api;
@@ -212,6 +218,9 @@ pub struct AppState {
     prompted_model: Arc<Mutex<prompted_model_api::ModelHost>>,
     source_patch_capture: Mutex<source_patch_capture_host::SourcePatchCaptureHost>,
     white_balance_capture: Mutex<white_balance_capture_host::WhiteBalanceCaptureHost>,
+    color_picker_capture: Mutex<color_picker_capture_host::ColorPickerCaptureHost>,
+    color_picker_results: Mutex<color_picker_host::ColorPickerHost>,
+    color_picker_probes: Mutex<color_picker_host::ColorPickerProbeHost>,
     batch_results: Mutex<batch_host::BatchHost>,
     preset_results: Mutex<preset_host::PresetHost>,
     white_balance_results: Mutex<white_balance_host::WhiteBalanceHost>,
@@ -326,6 +335,9 @@ impl AppState {
             prompted_model: Arc::new(Mutex::new(prompted_model_api::ModelHost::default())),
             source_patch_capture: Mutex::new(source_patch_capture_host::SourcePatchCaptureHost::default()),
             white_balance_capture: Mutex::new(white_balance_capture_host::WhiteBalanceCaptureHost::default()),
+            color_picker_capture: Mutex::new(color_picker_capture_host::ColorPickerCaptureHost::default()),
+            color_picker_results: Mutex::new(color_picker_host::ColorPickerHost::default()),
+            color_picker_probes: Mutex::new(color_picker_host::ColorPickerProbeHost::default()),
             batch_results: Mutex::new(batch_host::BatchHost::default()),
             preset_results: Mutex::new(preset_host::PresetHost::default()),
             white_balance_results: Mutex::new(white_balance_host::WhiteBalanceHost::default()),
@@ -389,6 +401,7 @@ impl AppState {
     fn note_doc(&self, v: &Value, src: &str) {
         self.source_patch_capture.lock().unwrap().invalidate();
         self.white_balance_capture.lock().unwrap().invalidate();
+        self.color_picker_capture.lock().unwrap().invalidate();
         self.note_face(v, src);
         {
             let mut report = self.doc_report.lock().unwrap();
@@ -447,6 +460,7 @@ impl AppState {
     pub fn on_lut_ready(&self, v: &Value) {
         self.source_patch_capture.lock().unwrap().invalidate();
         self.white_balance_capture.lock().unwrap().invalidate();
+        self.color_picker_capture.lock().unwrap().invalidate();
         *self.lut.lock().unwrap() = Some(v.clone());
         // lut_done 不带整份 doc_state，但面板的“当前预设”只能来自引擎。
         // 这里把调色这一格并回缓存，UI 不用自己记“我刚点了哪张卡”；
@@ -650,39 +664,6 @@ impl AppState {
     pub fn on_bench_done(&self) {
         self.frames.lock().unwrap().bench_done = true;
     }
-
-    fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
-        self.source_patch_capture.lock().map_err(|_|"source patch capture lock poisoned")?.invalidate();
-        self.white_balance_capture.lock().map_err(|_|"WB capture lock poisoned")?.invalidate();
-        self.color_capture.lock().map_err(|_|"capture lock poisoned")?.invalidate();
-        self.color_scopes.lock().map_err(|_|"scope lock poisoned")?.invalidate();
-        let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
-        inspection.invalidate();
-        let guard=self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
-        guard.as_ref().ok_or("引擎未启动")?.send_interactive(key,cmd)?;
-        *self.history_dirty.lock().unwrap()=true;
-        Ok(())
-    }
-
-    fn send_to_engine(&self, cmd: Value) -> Result<(), String> {
-        // M5-b：命令名先取出来（cmd 下面会被 send 吃掉）。它只用来标"可能有新的一步"，
-        // 宿主不数步数、不自己判哪条命令算编辑——名单由引擎的 ready 报
-        let name = cmd.get("cmd").and_then(|c| c.as_str()).unwrap_or("").to_string();
-        if name!="hello" && name!="inspection_snapshot" {self.source_patch_capture.lock().map_err(|_|"source patch capture lock poisoned")?.invalidate();}
-        if name!="hello" && name!="inspection_snapshot" {self.white_balance_capture.lock().map_err(|_|"WB capture lock poisoned")?.invalidate();}
-        if name!="hello" && name!="inspection_snapshot" {self.color_scopes.lock().map_err(|_|"scope lock poisoned")?.invalidate();}
-        if name!="hello" {self.color_capture.lock().map_err(|_|"capture lock poisoned")?.invalidate();}
-        let edited = self.history_edit_cmds.lock().unwrap().iter().any(|c| c == &name);
-        let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
-        if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
-        let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
-        let handle=guard.as_ref().ok_or_else(|| "引擎未启动".to_string())?;
-        if name=="batch" {batch_api::enqueue(self,handle,cmd)?;}else if name=="preset" {preset_api::enqueue(self,handle,cmd)?;}else if name=="white_balance" {white_balance_api::enqueue(self,handle,cmd)?;}else if name=="local_masks" {local_mask_api::enqueue(self,handle,cmd)?;}else if name=="source_patch" || name=="clone_stamp" {source_patch_api::enqueue(self,handle,cmd)?;}else{handle.send(cmd)?;}
-        if edited {
-            *self.history_dirty.lock().unwrap() = true;
-        }
-        Ok(())
-    }
 }
 
 // ---------------------------------------------------------------- 命令
@@ -801,6 +782,9 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     st.prompted_masks.lock().unwrap().reset(inspection_epoch);
     st.source_patch_capture.lock().unwrap().reset(inspection_epoch);
     st.white_balance_capture.lock().unwrap().reset(inspection_epoch);
+    st.color_picker_capture.lock().unwrap().reset(inspection_epoch);
+    st.color_picker_results.lock().unwrap().reset(inspection_epoch);
+    st.color_picker_probes.lock().unwrap().reset(inspection_epoch);
     st.batch_results.lock().unwrap().reset(inspection_epoch);
     st.preset_results.lock().unwrap().reset(inspection_epoch);
     st.white_balance_results.lock().unwrap().reset(inspection_epoch);
@@ -1680,6 +1664,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
 fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     state.source_patch_capture.lock().unwrap().invalidate();
     state.white_balance_capture.lock().unwrap().invalidate();
+    state.color_picker_capture.lock().unwrap().invalidate();
     state.color_capture.lock().unwrap().invalidate();
     state.inspection.lock().unwrap().invalidate();
     state.color_scopes.lock().unwrap().invalidate();
@@ -2015,6 +2000,7 @@ fn quit(state: State<'_, Arc<AppState>>) {
     prompted_model_api::shutdown(&state);
     state.source_patch_capture.lock().unwrap().invalidate();
     state.white_balance_capture.lock().unwrap().invalidate();
+    state.color_picker_capture.lock().unwrap().invalidate();
     state.inspection.lock().unwrap().invalidate();
     let handle=state.engine.lock().unwrap().clone();
     if let Some(handle)=handle{handle.shutdown();}
@@ -2040,6 +2026,8 @@ fn main() {
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
             source_patch_api::source_patch_capture, source_patch_api::source_patch_capture_status, source_patch_api::source_patch_capture_frame,
             source_patch_api::source_patch, source_patch_api::source_patch_result, clone_stamp_api::clone_stamp, local_mask_api::local_masks, local_mask_api::local_masks_result,
+            color_picker_capture_api::color_picker_capture, color_picker_capture_api::color_picker_capture_status, color_picker_capture_api::color_picker_capture_frame,
+            color_picker_api::color_picker, color_picker_api::color_picker_result,
             white_balance_capture_api::white_balance_capture, white_balance_capture_api::white_balance_capture_status, white_balance_capture_api::white_balance_capture_frame, white_balance_capture_api::white_balance_pick,
             project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
             prompted_mask_api::prompted_masks, prompted_mask_api::prompted_masks_status,

@@ -1,4 +1,5 @@
 import {useEffect} from 'react';
+import {useColorActionPicker} from '../colorActions/useColorActionPicker';
 import type {EngineStatus} from '../native';
 import {useSourcePatchWorkflow} from '../sourcePatch/useSourcePatchWorkflow';
 import {useWhiteBalancePickerWorkflow} from '../whiteBalance/useWhiteBalancePicker';
@@ -15,10 +16,13 @@ export function useRetouchCaptureWorkflows(context:LocalMaskContext,caps:EngineS
     reason:caps?.clone_stamp_protocol!==1?'当前引擎不支持仿制图章，请更新匹配版本':context.reason},refresh);
   const localMasks=useLocalMaskWorkflow({...context,enabled:context.enabled&&!sourcePatch.active&&!sourcePatch.pending&&!wbPicker.active&&!wbPicker.pending&&!cloneStamp.active&&!cloneStamp.pending&&caps?.local_masks_result_protocol===1,
     reason:caps?.local_masks_result_protocol!==1?'当前引擎不支持组合蒙版，请更新匹配版本':context.reason},refresh);
+  const colorPicker=useColorActionPicker({...context,enabled:context.enabled&&!sourcePatch.pending&&!wbPicker.pending&&!cloneStamp.pending&&!localMasks.pending&&
+    caps?.color_picker_capture_protocol===1&&caps?.color_picker_result_protocol===1,
+    reason:caps?.color_picker_capture_protocol!==1||caps?.color_picker_result_protocol!==1?'当前引擎不支持定向色彩调整，请更新匹配版本':context.reason},refresh);
   useEffect(()=>{
     if(!brushOn&&!pickFace)return;
-    for(const owner of [sourcePatch,wbPicker,cloneStamp,localMasks])
+    for(const owner of [sourcePatch,wbPicker,cloneStamp,localMasks,colorPicker])
       if(owner.workflow.capturing()&&!owner.workflow.busy())owner.workflow.cancel('已切换工具，未提交的手势已取消');
-  },[brushOn,pickFace,sourcePatch.workflow,wbPicker.workflow,cloneStamp.workflow,localMasks.workflow]);
-  return {sourcePatch,wbPicker,cloneStamp,localMasks};
+  },[brushOn,pickFace,sourcePatch.workflow,wbPicker.workflow,cloneStamp.workflow,localMasks.workflow,colorPicker.workflow]);
+  return {sourcePatch,wbPicker,cloneStamp,localMasks,colorPicker};
 }

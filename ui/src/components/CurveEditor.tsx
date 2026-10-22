@@ -1,4 +1,5 @@
 import {ParametricCurveEditor} from './ParametricCurveEditor';
+import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {canReconcileEdit} from '../editReceipts';
 import {curveSignature as signature, movedCurvePoint, matchesCurveResult, editableCurveSpec as copy, parametricCurveSpec, curveEditSnapshot, type EditableCurveSpec} from "../curveModel";
 import {useEffect, useRef, useState} from 'react';
@@ -8,7 +9,7 @@ const channels:CurveChannel[]=['master','red','green','blue','luminance'];
 const names=['RGB','红','绿','蓝','亮度'];
 const colors=['#ddd','#ef7373','#79cd8d','#77aaff','#e8c779'];
 const clamp=(v:number,lo=0,hi=1)=>Math.max(lo,Math.min(hi,v));
-export function CurveEditor({value,documentId,snapshotId,documentRevision,disabled,parametricSupported,result,onDone,note}:{value?:CurveSpec;documentId:string;snapshotId?:string;documentRevision:number;disabled:boolean;parametricSupported:boolean;
+export function CurveEditor({value,documentId,snapshotId,documentRevision,disabled,parametricSupported,result,onDone,note,picker}:{value?:CurveSpec;documentId:string;snapshotId?:string;documentRevision:number;disabled:boolean;parametricSupported:boolean;picker?:ColorActionControlsProps;
   result?:{request_id:string;document_id:string;host_doc_rev:number;success:boolean;spec:CurveSpec}|null;
   error:string|null;onDone:()=>void;note:(s:string)=>void}){
   const [draft,setDraft]=useState<EditableCurveSpec>(()=>copy(value??neutralCurves()));
@@ -77,9 +78,9 @@ export function CurveEditor({value,documentId,snapshotId,documentRevision,disabl
   return <fieldset disabled={disabled} className="curveEditor" style={{margin:0,padding:8,border:'1px solid #45454b',borderRadius:6}}>
     <legend>曲线</legend>
     <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:8}}>
-      <button type="button" aria-pressed={mode==='point'} disabled={paramBusy||!!drag.current} onClick={()=>setMode('point')}>点曲线</button>
+      <button type="button" aria-pressed={mode==='point'} disabled={paramBusy||!!drag.current} onClick={()=>{if(picker?.owner.active)picker.owner.workflow.cancel();setMode('point');}}>点曲线</button>
       <button type="button" aria-pressed={mode==='parametric'} disabled={!parametricSupported||paramBusy||!!drag.current}
-        title={parametricSupported?'四区域参数曲线':'当前引擎尚未支持参数曲线'} onClick={()=>setMode('parametric')}>参数曲线</button>
+        title={parametricSupported?'四区域参数曲线':'当前引擎尚未支持参数曲线'} onClick={()=>{if(picker?.owner.active)picker.owner.workflow.cancel();setMode('parametric');}}>参数曲线</button>
       <label><input type="checkbox" checked={draft.enabled} disabled={paramBusy||!!drag.current}
         onChange={e=>submit({...copy(live.current),enabled:e.target.checked})}/>启用曲线</label>
       <button type="button" disabled={paramBusy||!!drag.current} onClick={()=>{setSelected(0);submit(neutralCurves());}}>重置全部</button>
@@ -87,10 +88,12 @@ export function CurveEditor({value,documentId,snapshotId,documentRevision,disabl
     {mode==='parametric'?<ParametricCurveEditor value={raw.current} samples={samples} disabled={disabled||!parametricSupported}
       resetToken={resetToken} submit={submit} onBusy={paramBusyChanged} note={note}/>:<>
     {channel==='luminance'&&<small>线性 sRGB 亮度 Y 保色曲线；非 Lab L*。黑场抬升使用中性补偿。</small>}
+    {picker&&<div className="colorActionToolbar"><ColorActionLaunch {...picker} blocked={picker.blocked||!draft.enabled||paramBusy||!!drag.current||!!pending.current} action="curve" channel={channel}/>
+      <small>{draft.enabled?'在照片中点击选点，上下拖动调整此通道输出。':'请先启用曲线，再使用定向调整。'}</small></div>}
     <div style={{display:'flex',gap:4,marginBottom:8}}>
       {channels.map((c,i)=><button type="button" key={c} aria-pressed={channel===c}
         style={{color:colors[i],fontWeight:channel===c?'bold':'normal'}}
-        onClick={()=>{finish();setChannel(c);setSelected(0);}}>{names[i]}</button>)}
+        onClick={()=>{finish();if(picker?.owner.active&&picker.owner.state.action==='curve')picker.owner.workflow.cancel('曲线通道已切换，请重新在照片中选点');setChannel(c);setSelected(0);}}>{names[i]}</button>)}
     </div>
     <svg viewBox="0 0 256 256" role="img" aria-label={`${names[channels.indexOf(channel)]}点曲线，点击添加节点，拖动调整`} tabIndex={disabled?-1:0}
       style={{width:'100%',display:'block',background:'#202025',touchAction:'none',cursor:disabled?'default':'crosshair'}}

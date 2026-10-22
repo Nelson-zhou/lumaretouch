@@ -103,6 +103,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             st.color_capture.lock().unwrap().engine_ended(inspection_epoch);
             st.source_patch_capture.lock().unwrap().engine_ended(inspection_epoch);
             st.white_balance_capture.lock().unwrap().engine_ended(inspection_epoch);
+            st.color_picker_capture.lock().unwrap().engine_ended(inspection_epoch);
             if exited{if let Err(e)=root.cleanup(){st.push_log(format!("inspection cleanup: {e}"));}}
         });
     }
@@ -140,6 +141,8 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             st.batch_results.lock().unwrap().ended(inspection_epoch);
             st.preset_results.lock().unwrap().ended(inspection_epoch);
             st.white_balance_results.lock().unwrap().ended(inspection_epoch);
+            st.color_picker_results.lock().unwrap().ended(inspection_epoch);
+            st.color_picker_probes.lock().unwrap().ended(inspection_epoch);
             st.source_patch.lock().unwrap().ended(inspection_epoch);
             st.local_masks.lock().unwrap().ended(inspection_epoch);
             st.prompted_masks.lock().unwrap().ended(inspection_epoch);
@@ -169,6 +172,8 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "batch_result"=>state.batch_results.lock().unwrap().receive(inspection_epoch,&v),
         "preset_result"=>state.preset_results.lock().unwrap().receive(inspection_epoch,&v),
         "white_balance_result"=>state.white_balance_results.lock().unwrap().receive(inspection_epoch,&v),
+        "color_picker_result"=>state.color_picker_results.lock().unwrap().receive(inspection_epoch,&v),
+        "color_picker_probe_result"=>state.color_picker_probes.lock().unwrap().receive(inspection_epoch,&v),
         "prompted_masks"=>state.prompted_masks.lock().unwrap().receive(inspection_epoch,&v),
         "local_masks_result"=>state.local_masks.lock().unwrap().receive(inspection_epoch,&v),
         "source_patch_result"=>state.source_patch.lock().unwrap().receive(inspection_epoch,&v),
@@ -201,6 +206,10 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "source_patch_capture" => {
             let revision=*state.doc_rev.lock().unwrap();
             state.source_patch_capture.lock().unwrap().armed_event(inspection_epoch,&v,revision);
+        }
+        "color_picker_capture" => {
+            let revision=*state.doc_rev.lock().unwrap();
+            state.color_picker_capture.lock().unwrap().armed_event(inspection_epoch,&v,revision);
         }
         "white_balance_capture" => {
             let revision=*state.doc_rev.lock().unwrap();
@@ -237,6 +246,9 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             state.local_masks.lock().unwrap().ready(inspection_epoch,v["local_masks_result_protocol"].as_u64()==Some(1));
             state.source_patch_capture.lock().unwrap().ready(inspection_epoch,v["source_patch_capture_protocol"].as_u64()==Some(1));
             state.white_balance_capture.lock().unwrap().ready(inspection_epoch,v["white_balance_capture_protocol"].as_u64()==Some(1));
+            state.color_picker_capture.lock().unwrap().ready(inspection_epoch,v["color_picker_capture_protocol"].as_u64()==Some(1));
+            state.color_picker_results.lock().unwrap().ready(inspection_epoch,v["color_picker_result_protocol"].as_u64()==Some(1));
+            state.color_picker_probes.lock().unwrap().ready(inspection_epoch,v["color_picker_result_protocol"].as_u64()==Some(1));
             // M3-b：引擎报上来的内置预设清单（按钮文字与提交名都靠它）。
             // 不写这一臂就会落进下面的 other 分支：只进日志，前端永远拿不到。
             state.on_ready(&v);

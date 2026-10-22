@@ -41,7 +41,7 @@ def header(d):
 
 def write_capture(root, d, rgba, *, purpose="source-patch"):
     """Descriptor-relative exclusive creation beneath the native private root."""
-    if purpose not in ('source-patch', 'white-balance'):
+    if purpose not in ('source-patch', 'white-balance', 'color-picker'):
         raise ValueError('Unsupported private capture purpose')
     root=Path(root)
     flags=os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC

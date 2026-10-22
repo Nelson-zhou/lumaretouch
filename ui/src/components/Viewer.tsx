@@ -1,4 +1,6 @@
 import {LocalMaskOverlay} from '../localMasks/LocalMaskOverlay';
+import {ColorActionOverlay} from '../colorActions/ColorActionOverlay';
+import type {ColorActionOwner} from '../colorActions/useColorActionPicker';
 import type {LocalMaskOwner} from '../localMasks/useLocalMaskWorkflow';
 import {WhiteBalancePickerOverlay} from '../whiteBalance/WhiteBalancePickerOverlay';
 import type {WhiteBalancePickerOwner} from '../whiteBalance/useWhiteBalancePicker';
@@ -101,9 +103,10 @@ export default function Viewer({
   inspection,
   onInspectionState,
   colorSampler,
-  sourcePatch,whiteBalancePicker,cloneStamp,localMasks,
+  sourcePatch,whiteBalancePicker,cloneStamp,localMasks,colorPicker,
 }: {
   colorSampler?:ColorSampler;
+  colorPicker?:ColorActionOwner;
   localMasks?:LocalMaskOwner;cloneStamp?:CloneStampOwner;sourcePatch?:SourcePatchOwner;whiteBalancePicker?:WhiteBalancePickerOwner;
   inspection?: { enabled:boolean; oneToOne:boolean; comparing:boolean; key:string; width:number; height:number };
   onInspectionState?: (state:InspectionUiState)=>void;
@@ -155,7 +158,7 @@ export default function Viewer({
 }) {
   const [sampleClip,setSampleClip]=useState<HTMLDivElement|null>(null);
   // 变换只加在显示层（镜像画布）上：GL 渲染源与测量回路一个字也不改
-  const coordinateLocked = !!localMasks?.active || !!localMasks?.pending || !!cloneStamp?.active || !!cloneStamp?.pending || !!whiteBalancePicker?.active || !!whiteBalancePicker?.pending || paintLocked || compareMode !== "single" || !!inspection?.enabled || !!sourcePatch?.active || !!sourcePatch?.pending;
+  const coordinateLocked = !!colorPicker?.active || !!colorPicker?.pending || !!localMasks?.active || !!localMasks?.pending || !!cloneStamp?.active || !!cloneStamp?.pending || !!whiteBalancePicker?.active || !!whiteBalancePicker?.pending || paintLocked || compareMode !== "single" || !!inspection?.enabled || !!sourcePatch?.active || !!sourcePatch?.pending;
   const invalidateInspection = useRef<()=>void>(()=>{});
   const brushActive = !!brush?.on && !coordinateLocked;
   const pickActive = !!pick?.on && !coordinateLocked;
@@ -740,6 +743,7 @@ export default function Viewer({
            onDoubleClick={() => { invalidateInspection.current(); onView(VIEW_HOME); }}
            title="滚轮缩放 · 拖拽平移 · 双击适应窗口">
         {colorSampler&&<ColorSampleOverlay sampler={colorSampler} clip={sampleClip} box={box} view={view}/>}
+        {colorPicker&&<ColorActionOverlay owner={colorPicker} clip={sampleClip} box={box} view={view}/>}
         {whiteBalancePicker&&<WhiteBalancePickerOverlay owner={whiteBalancePicker} clip={sampleClip} box={box} view={view}/>}
         {localMasks&&<LocalMaskOverlay owner={localMasks} clip={sampleClip} box={box} view={view}/>}
         {cloneStamp&&<CloneStampOverlay owner={cloneStamp} clip={sampleClip} box={box} view={view}/>}

@@ -10,8 +10,8 @@ export function parseCaptureFrame(buffer:ArrayBuffer,expected:CaptureDescriptor,
   if(v.getUint32(0,false)!==0x4c524350||v.getUint16(4,true)!==1||v.getUint16(6,true)!==128)
     throw new Error('采样画面协议不匹配');
   for(let i=112;i<128;i++)if(v.getUint8(i)!==0)throw new Error('采样画面保留字段不为零');
-  const quality=expectedDomain==='wb-input'?'proxy-linear-input':(expectedDomain==='repair-input'||expectedDomain==='source-input')?'proxy-float-input':'proxy-float-output';
-  if(!['proxy-output','repair-input','source-input','wb-input'].includes(expectedDomain)||expected.version!==1||expected.domain!==expectedDomain||expected.profile!=='working-srgb'||expected.quality!==quality)
+  const quality=expectedDomain==='wb-input'?'proxy-linear-input':(expectedDomain==='repair-input'||expectedDomain==='source-input'||expectedDomain==='color-action-input')?'proxy-float-input':'proxy-float-output';
+  if(!['proxy-output','repair-input','source-input','wb-input','color-action-input'].includes(expectedDomain)||expected.version!==1||expected.domain!==expectedDomain||expected.profile!=='working-srgb'||expected.quality!==quality)
     throw new Error('不支持的采样画面来源');
   for(const [field,offset] of [['epoch',8],['shm_instance',24],['capture_id',40]] as const){
     const value=hex(v,offset);

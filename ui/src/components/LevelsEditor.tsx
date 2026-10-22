@@ -1,4 +1,5 @@
 import {canReconcileEdit} from '../editReceipts';
+import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {useEffect,useRef,useState} from 'react';
 import {runLevels} from '../native';
 import {LEVEL_CHANNELS,LEVEL_KEYS,changedLevel,levelsSignature,neutralBand,neutralLevels,levelsMidpoint,gammaFromMidpoint,
@@ -15,10 +16,10 @@ function LevelNumber({value,label,onValue}:{value:number;label:string;onValue:(v
     onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();
       if(e.key==='Escape'){cancelled.current=true;setText(String(value));e.currentTarget.blur();}}}/>;
 }
-export function LevelsEditor({value,documentId,snapshotId,documentRevision,disabled,result,onDone,note}:{
+export function LevelsEditor({value,documentId,snapshotId,documentRevision,disabled,result,onDone,note,picker}:{
   value?:LevelsSpec;documentId:string;snapshotId?:string;documentRevision:number;disabled:boolean;
   result?:{request_id:string;document_id:string;host_doc_rev:number;success:boolean;spec:LevelsSpec;error:string|null}|null;
-  onDone:()=>void;note:(text:string)=>void;
+  onDone:()=>void;note:(text:string)=>void;picker?:ColorActionControlsProps;
 }){
   const [draft,setDraft]=useState(()=>structuredClone(value??neutralLevels()));
   const [channel,setChannel]=useState<LevelsChannel>('master');
@@ -55,6 +56,9 @@ export function LevelsEditor({value,documentId,snapshotId,documentRevision,disab
   function change(key:LevelKey,value:number){try{submit(changedLevel(live.current,channel,key,value),drag.current?.id,!!drag.current);}catch(e){note(String(e));}}
   return <fieldset disabled={disabled||!documentId||snapshotId!==documentId||!value} className="levelsEditor" style={{margin:0,padding:8,border:'1px solid #45454b',borderRadius:6}}>
     <legend>色阶</legend>
+    {picker&&<div className="colorActionToolbar" data-spec-control="PC-32455-C-8ebf8ee682"><ColorActionLaunch {...picker} blocked={picker.blocked||!draft.enabled||!!drag.current||!!pending.current} action="levels_black"/>
+      <ColorActionLaunch {...picker} blocked={picker.blocked||!draft.enabled||!!drag.current||!!pending.current} action="levels_white"/>
+      <small>{draft.enabled?'RGB 黑白场取样作用于三通道；不是白平衡中性吸管。':'请先启用色阶，再使用黑白场吸管。'}</small></div>}
     <div style={{display:'flex',gap:4,marginBottom:8}}>
       {LEVEL_CHANNELS.map(c=><button type="button" key={c} aria-pressed={channel===c}
         onClick={()=>{finish();setChannel(c);}}>{names[c]}</button>)}

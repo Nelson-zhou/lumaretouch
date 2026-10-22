@@ -1220,7 +1220,7 @@ class PreviewPipeline:
         if self.grade_scope == "all":
             return None
         if self.grade_scope == "objects":
-            return self._local_mask_gpu
+            return self.align_source_grade_mask(self._local_mask_gpu)
         if self.grade_scope == "skin":
             if self.masks_gpu is None:
                 raise RuntimeError("skin 作用域要人脸掩膜，而本会话还没 precompute")
@@ -1232,6 +1232,22 @@ class PreviewPipeline:
         if self._grade_mask_gpu is None:
             raise RuntimeError("brush 作用域要画笔画出的区域，而当前一份也没有")
         return self._grade_mask_gpu
+
+    def align_source_grade_mask(self, weight):
+        """Map source-domain coverage into the actual post-deformation grade stage.
+
+        Reuse the image warp, including its unchanged pixels, border policy and
+        RGB16 float64 grid. Do not reorder the established colour pipeline.
+        """
+        if weight is None:
+            raise ValueError("Source-domain grade coverage is unavailable")
+        if not self.has_deform():
+            return weight
+        image_warp_ms = self.last_deform_ms
+        try:
+            return self.apply_deform(weight)
+        finally:
+            self.last_deform_ms = image_warp_ms
 
     def set_local_mask(self, weight, *, reason=None):
         arr = np.asarray(weight)

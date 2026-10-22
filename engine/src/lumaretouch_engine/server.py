@@ -371,7 +371,7 @@ class Engine:
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -1176,7 +1176,7 @@ class Engine:
     # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
     # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
     EDIT_CMDS = ("set_strength", "inpaint", "source_patch", "clone_stamp", "local_masks", "light", "deform", "lut", "grade", "background",
-                 "crop", "exposure", "white_balance", "hsl", "curves", "levels", "preset", "batch", "face", "enhance", "fabric")
+                 "crop", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "preset", "batch", "face", "enhance", "fabric")
     # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
     # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
     # 而 batch 改的就是活动文档的配方——不在这里它就会“同步完了而徽章不亮”。
@@ -5289,6 +5289,14 @@ class Engine:
     def cmd_white_balance(self, p):
         self._white_balance_controller().handle(p)
 
+    def _color_picker_controller(self):
+        from .color_picker_controller import controller
+        return controller(self, lambda event: emit(event))
+
+    def cmd_color_picker_capture(self, p): self._color_picker_controller().capture.handle(p)
+    def cmd_color_picker_probe(self, p): self._color_picker_controller().capture.probe(p)
+    def cmd_color_picker(self, p): self._color_picker_controller().handle(p)
+
     def _levels_controller(self):
         controller = self.__dict__.get("_levels_owner")
         if controller is None:
@@ -6681,9 +6689,9 @@ class Engine:
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "light",
-               "deform", "lut", "grade", "export", "exposure", "white_balance", "hsl", "curves", "levels", "crop", "background",
+               "deform", "lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
                # 挑图（LNX-PICK-001）。它不在 EDIT_CMDS 里，所以既不进撤销栈也不打脏标记：
                # 它是读出来的一格旁注，不是一次编辑动作
@@ -6726,6 +6734,8 @@ class Engine:
                 return
             if name == "white_balance" and not self._white_balance_controller().prepare(msg):
                 return  # Pick proof and scalar policy are checked before mutation fencing.
+            if name == "color_picker" and not self._color_picker_controller().prepare(msg):
+                return  # The exact frozen stage proof and scalar plan precede mutation.
             from .document_versions import fences_current_document
             if fences_current_document(name,msg,self.EDIT_CMDS):
                 self._fence_current_document()
@@ -6742,9 +6752,13 @@ class Engine:
                     name == "inspection_snapshot" and msg.get("action", "status") == "status"):
                 owner = self.__dict__.get("_white_balance_owner")
                 if owner is not None: owner.capture.invalidate()
+            if name not in ("hello", "color_picker_capture", "color_picker_probe", "color_scopes") and not (
+                    name == "inspection_snapshot" and msg.get("action", "status") == "status"):
+                owner = self.__dict__.get("_color_picker_owner")
+                if owner is not None: owner.capture.invalidate()
             # The executor cancels before any other known command can mutate
             # source arrays/recipes, including history, load, export and shutdown.
-            if name not in ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture"):
+            if name not in ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe"):
                 self._cancel_snapshot("command:" + name)
                 heavy = name in ("export", "bench_start") or (name == "task" and msg.get("action") in ("resume", "retry"))
                 if heavy and self._inspection_controller().worker_running:
@@ -6762,7 +6776,7 @@ class Engine:
                 try:
                     fn(msg)
                 finally:
-                    self._history_record(group, before, coalesce=not (name in ("white_balance", "source_patch", "clone_stamp", "local_masks") or (name == "preset" and msg.get("action") == "apply")))
+                    self._history_record(group, before, coalesce=not (name in ("white_balance", "color_picker", "source_patch", "clone_stamp", "local_masks") or (name == "preset" and msg.get("action") == "apply")))
             else:
                 fn(msg)
         except Exception as e:  # 协议层不许因单条消息崩溃
@@ -6772,6 +6786,8 @@ class Engine:
             try:
                 if name == "local_masks" and isinstance(msg, dict):
                     self._local_mask_controller().finish(msg, dispatch_error)
+                if name == "color_picker" and isinstance(msg, dict):
+                    self._color_picker_controller().finish(msg, dispatch_error)
                 if name == "white_balance" and isinstance(msg, dict):
                     self._white_balance_controller().finish(msg, dispatch_error)
                 if name == "preset" and isinstance(msg, dict):
@@ -6879,6 +6895,8 @@ class Engine:
                 owner = self.__dict__.get("_white_balance_owner")
                 if owner is not None: owner.capture.invalidate()
                 owner = self.__dict__.get("_source_patch_owner")
+                if owner is not None: owner.capture.invalidate()
+                owner = self.__dict__.get("_color_picker_owner")
                 if owner is not None: owner.capture.invalidate()
                 self.stop_flag.set()
                 if self.shm:
