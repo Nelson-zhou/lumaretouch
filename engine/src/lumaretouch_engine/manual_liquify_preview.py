@@ -52,6 +52,8 @@ def render(engine, stage, baseline=None):
     from .optics_state import active as optics_active
     studio(engine, strict=True); optics(engine, strict=True)
     signature = optics_signature(engine)
+    from .sky_replacement_runtime import sync as sky
+    sky(engine,strict=True)
     pipe = engine._vram
     old, old_optics = pipe.manual_liquify, pipe.optics
     optical = optics_active(old_optics.value)

@@ -21,6 +21,7 @@ from .effect_recovery_stage import EffectRecoveryStage
 from .manual_liquify_stage import ManualLiquifyStage
 from .studio_background_stage import StudioBackgroundStage
 from .optics_stage import OpticsStage
+from .sky_replacement_stage import SkyReplacementStage
 
 import math
 from dataclasses import dataclass
@@ -118,6 +119,8 @@ class PreviewPipeline:
         self._manual_liquify_key = None
         self.studio_background = StudioBackgroundStage(self.device, (self.h, self.w))
         self._studio_background_key = None
+        self.sky_replacement = SkyReplacementStage(self.device, (self.h,self.w))
+        self._sky_replacement_key = None
         self.optics = OpticsStage()
         self._optics_key = None
         # 源图 float 与 uint8 都留着：float 供滤波，uint8 供"恢复原图"这类需要原始像素的操作
@@ -309,6 +312,8 @@ class PreviewPipeline:
         self._manual_liquify_key = None
         self.studio_background = StudioBackgroundStage(self.device, (self.h, self.w))
         self._studio_background_key = None
+        self.sky_replacement = SkyReplacementStage(self.device, (self.h,self.w))
+        self._sky_replacement_key = None
         self.optics = OpticsStage()
         self._optics_key = None
         self.src_f32 = src_f32
@@ -511,6 +516,7 @@ class PreviewPipeline:
         if scope_tap is not None: scope_tap("curves-input", out)
         out = self.apply_grade(self.apply_lut(self.apply_hsl(self.apply_curves(out))))
         out = self.local_grade_layers.apply(out, self.align_source_grade_mask)
+        out = self.sky_replacement.apply(out,self.align_source_grade_mask)
         out = self.apply_background(out)
         out = self.manual_liquify.apply(out)
         if render_stage == 'optics-input': return out
@@ -1858,6 +1864,8 @@ class PreviewPipeline:
         matte：(H,W) [0,1] float 或 uint8(0..255)。bg：(3,) [0,1] 单色，或 image_bg 为 (H,W,3)
         整幅背景（二者取其一）。任何形状/非有限不匹配都拒，不往 shm 里递一块坏帧。
         """
+        if self.sky_replacement.value["enabled"]:
+            raise ValueError("完整换背景会覆盖天空替换，请先关闭天空效果")
         if matte.shape != (self.h, self.w):
             raise ValueError(f"遮罩形状 {matte.shape} 与会话 {self.h}x{self.w} 不符")
         m = np.asarray(matte, dtype=np.float64)

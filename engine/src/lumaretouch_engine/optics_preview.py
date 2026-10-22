@@ -21,6 +21,8 @@ def upstream(engine):
     from .effect_recovery_runtime import sync as recovery
     from .manual_liquify_runtime import sync as liquify
     fabric(engine); masks(engine,strict=True); grades(engine,strict=True); recovery(engine,strict=True); liquify(engine,strict=True); studio(engine,strict=True)
+    from .sky_replacement_runtime import sync as sky
+    sky(engine,strict=True)
     strength,channel = engine._retouch_render_args()
     return engine._vram.retouch(strength,channel=channel,render_stage='optics-input',**engine._params)
 

@@ -147,6 +147,10 @@ class ExportSpec:
     effect_recovery_path: str | None = None  # ephemeral verified original source
     effect_recovery_stamp: list | None = None  # full-decode identity, never rebased
     effect_recovery_fields: list | None = None  # disposable full-source uint8 masks
+    sky_replacement: dict | None = None
+    sky_replacement_path: str | None = None
+    sky_replacement_stamp: list | None = None
+    sky_replacement_prepared: dict | None = None
     optics: dict | None = None
     optics_path: str | None = None
     optics_stamp: list | None = None
@@ -234,6 +238,10 @@ class ExportSpec:
         except ValueError as error:
             raise ExportError(f'手动液化导出配方无效：{error}') from error
 
+    def check_sky_replacement(self) -> None:
+        from .sky_replacement_export import check_spec
+        check_spec(self)
+
     def check_optics(self) -> None:
         from .optics_export import check_spec
         check_spec(self)
@@ -248,6 +256,7 @@ class ExportSpec:
         self.check_manual_liquify()
         self.check_studio_background()
         self.check_optics()
+        self.check_sky_replacement()
         from .local_grade_layers import check as check_groups
         from .local_grade_stage import check_fields
         self.local_grade_groups = check_groups(self.local_grade_groups)
@@ -632,6 +641,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     spec.check_effect_recovery()
     spec.check_manual_liquify()
     spec.check_optics()
+    spec.check_sky_replacement()
     from .optics_state import active as optics_enabled
     optical = optics_enabled(spec.optics)
     optical_budget = 0
@@ -666,6 +676,9 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     from .studio_background_export import prepare_export as prepare_studio
     from .studio_background_runtime import attach_tile as attach_studio_tile
     prepare_studio(spec, src_u8, cancelled=mask_cancelled)
+    from .sky_replacement_runtime import export_prepare as prepare_sky, attach_tile as attach_sky_tile, finish_export as finish_sky
+    from .sky_replacement_export import admit_tile as admit_sky, resident_bytes as sky_bytes
+    prepare_sky(spec,src_u8.shape[:2],cancelled=mask_cancelled)
     export_prepare(spec, src_u8, cancelled=mask_cancelled)
     # Rasters are disposable. Drop a previous full render's fields before
     # allocating replacements instead of silently doubling the CPU mask budget.
@@ -705,6 +718,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         raise ExportError(f"这组参数的作用面宽到 margin={margin} px（超过 {MAX_MARGIN}），"
                           "请调小滤波半径或形变范围；不会截短边界继续出片")
     manual_tile_budget = _admit_manual_tile(spec, h, w, tile, margin, bits, device, manual_peak)
+    sky_tile_budget = admit_sky(spec,h,w,tile,margin,bits,device)
     base_f = None
     repair_stats = {}
     if spec.repair:
@@ -765,6 +779,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         attach_tile(pipe, spec, (cy0, cx0, cy1, cx1))
         attach_manual_tile(pipe, spec, (cy0, cx0, cy1, cx1))
         attach_studio_tile(pipe, spec, (cy0, cx0, cy1, cx1))
+        attach_sky_tile(pipe,spec,(cy0,cx0,cy1,cx1))
         t_c = time.perf_counter()
         io["setup"] += (t_c - t0) * 1000.0
         if spec.light:
@@ -901,6 +916,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         out = np.clip(np.rint(out*255.),0,255).astype(np.uint8)
     if group_source_stamp is not None and file_stamp(spec.local_mask_source_path) != group_source_stamp:
         raise ExportError('Independent local-grade source changed during rendering')
+    finish_sky(spec)
     from .studio_background_state import active as studio_active
     if studio_active(spec.studio_background) and list(file_stamp(spec.studio_background_path)) != spec.studio_background_stamp:
         raise ExportError('背景源图在完整出片过程中变化')
@@ -924,6 +940,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         "manual_liquify_peak_px": round(manual_peak, 3),
         "manual_liquify_field_cpu_bytes": (0 if spec.manual_liquify_field is None else int(spec.manual_liquify_field.nbytes)),
         "manual_liquify_tile_estimate_bytes": manual_tile_budget,
+        "sky_replacement_cpu_bytes": sky_bytes(spec),
+        "sky_replacement_tile_estimate_bytes": sky_tile_budget,
         # 这一层的"重画掩膜"成本单独报：它与形变解场是两种一次性的钱，混在
         # field_ms 里就看不出该优化谁（导出账单里每一段都要能归因，否则只是把没说的话当作没事）
         "enhance_field_ms": round(enhance_ms, 1),

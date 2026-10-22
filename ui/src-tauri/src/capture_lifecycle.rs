@@ -6,7 +6,7 @@ impl AppState {
     /// 三条带 doc_state 的事件都进这里落一份"引擎最新说的文档状态 + 它是谁说的"。
     pub(crate) fn note_doc(&self, v: &Value, src: &str) {
         self.source_patch_capture.lock().unwrap().invalidate();
-        self.recovery_preview.lock().unwrap().invalidate(); self.liquify_preview.lock().unwrap().invalidate(); self.studio_background_preview.lock().unwrap().invalidate(); self.optics_preview.lock().unwrap().invalidate();
+        self.recovery_preview.lock().unwrap().invalidate(); self.liquify_preview.lock().unwrap().invalidate(); self.studio_background_preview.lock().unwrap().invalidate(); self.optics_preview.lock().unwrap().invalidate(); self.sky_preview.lock().unwrap().invalidate();
         self.white_balance_capture.lock().unwrap().invalidate();
         self.color_picker_capture.lock().unwrap().invalidate();
         self.note_face(v, src);
@@ -33,6 +33,8 @@ impl AppState {
         self.batch_results.lock().unwrap().reset(epoch);
         self.preset_results.lock().unwrap().reset(epoch);
         self.white_balance_results.lock().unwrap().reset(epoch);
+        self.sky_replacement.lock().unwrap().reset(epoch);
+        self.sky_preview.lock().unwrap().reset(epoch);
         self.optics.lock().unwrap().reset(epoch);
         self.optics_preview.lock().unwrap().reset(epoch);
         self.studio_background.lock().unwrap().reset(epoch);

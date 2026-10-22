@@ -45,6 +45,10 @@ def render_review(engine, stage):
     manual(engine, strict=True)
     from .studio_background_runtime import sync as studio
     studio(engine, strict=True)
+    from .sky_replacement_runtime import sync as sky
+    sky(engine,strict=True)
+    from .optics_runtime import sync as optics
+    optics(engine,strict=True)
     pipe = engine._vram
     old = pipe.effect_recovery
     strength, channel = engine._retouch_render_args()

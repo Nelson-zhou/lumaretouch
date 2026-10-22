@@ -47,7 +47,8 @@ GRADE_SCHEMA = "lrt.project.v5"
 RECOVERY_SCHEMA = "lrt.project.v6"
 MANUAL_SCHEMA = "lrt.project.v7"
 STUDIO_SCHEMA = "lrt.project.v8"
-SCHEMA = "lrt.project.v9"
+OPTICS_SCHEMA = "lrt.project.v9"
+SCHEMA = "lrt.project.v10"
 SUFFIX = ".lrproject.json"
 
 # 上限：宁可显式丢弃，也不要"保存成功但下次打开少了一半配方"这种事
@@ -154,7 +155,7 @@ def validate(p: object) -> None:
     if not isinstance(p, dict):
         raise ProjectError(f"项目顶层不是对象：{type(p).__name__}")
     sv = p.get("schema_version")
-    if sv not in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, MASK_SCHEMA, GRADE_SCHEMA, RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, SCHEMA):
+    if sv not in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, MASK_SCHEMA, GRADE_SCHEMA, RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SCHEMA):
         raise ProjectError(f"项目 schema_version={sv!r}，本版本认 {SCHEMA!r}")
     for k in ("project_id", "name", "docs", "assets"):
         if k not in p:
@@ -187,21 +188,24 @@ def validate(p: object) -> None:
                     WB.normalize_state(recipe, required=(sv != LEGACY_SCHEMA))
                 except ValueError as error:
                     raise ProjectError(f"Invalid white-balance recipe: {error}") from error
-                if sv in (MANUAL_SCHEMA, STUDIO_SCHEMA, SCHEMA):
+                if sv in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SCHEMA):
                     _check_manual_liquify_record(recipe.get("_manual_liquify"))
+        from .sky_replacement_project import validate_records as validate_sky
+        try: validate_sky(row,required=(sv==SCHEMA),allowed=(sv==SCHEMA))
+        except ValueError as error: raise ProjectError(str(error)) from error
         from .optics_project import validate_records as validate_optics
-        try: validate_optics(row,required=(sv==SCHEMA),allowed=(sv==SCHEMA))
+        try: validate_optics(row,required=(sv in (OPTICS_SCHEMA,SCHEMA)),allowed=(sv in (OPTICS_SCHEMA,SCHEMA)))
         except ValueError as error: raise ProjectError(str(error)) from error
         from .studio_background_project import validate_records as validate_studio
-        try: validate_studio(row, required=(sv in (STUDIO_SCHEMA,SCHEMA)), allowed=(sv in (STUDIO_SCHEMA,SCHEMA)))
+        try: validate_studio(row, required=(sv in (STUDIO_SCHEMA,OPTICS_SCHEMA,SCHEMA)), allowed=(sv in (STUDIO_SCHEMA,OPTICS_SCHEMA,SCHEMA)))
         except ValueError as error: raise ProjectError(str(error)) from error
         # Check the complete owned row, not only its active recipe: inactive
         # versions, document snapshots and nested history must fail together.
         _validate_encoded_repairs(row, p["assets"],
             allow_legacy=(sv in (LEGACY_SCHEMA, WB_SCHEMA)),
-            allow_local_grades=(sv in (GRADE_SCHEMA, RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, SCHEMA)),
-            allow_effect_recovery=(sv in (RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, SCHEMA)),
-            require_manual_liquify=(sv in (MANUAL_SCHEMA, STUDIO_SCHEMA, SCHEMA)))
+            allow_local_grades=(sv in (GRADE_SCHEMA, RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SCHEMA)),
+            allow_effect_recovery=(sv in (RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SCHEMA)),
+            require_manual_liquify=(sv in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SCHEMA)))
 
 
 def _migrate(project):
@@ -212,12 +216,14 @@ def _migrate(project):
         from .manual_liquify_state import migrate_legacy_states as migrate_manual
         from .studio_background_state import migrate_legacy_states as migrate_studio
         from .optics_state import migrate_legacy_states as migrate_optics
+        from .sky_replacement_state import migrate_legacy_states as migrate_sky
         for row in result["docs"]:
             # Include document snapshots and inactive/nested history states, not
             # just the selected version. Existing manual records are never erased.
             migrate_manual(row)
             migrate_studio(row)
             migrate_optics(row)
+            migrate_sky(row)
             for version in row["versions"]:
                 if version.get("recipe") is not None:
                     version["recipe"] = WB.normalize_state(version["recipe"])
@@ -231,13 +237,15 @@ def _migrate(project):
                     migrate_manual(version["recipe"], root=True)
                     migrate_studio(version["recipe"], root=True)
                     migrate_optics(version["recipe"], root=True)
+                    migrate_sky(version["recipe"], root=True)
         result["schema_version"] = SCHEMA
         result.setdefault("migration_notes", []).append(
-            f"Migrated {previous} to v9: legacy white balance retained; only v1/v2 missing repair kinds migrate to heal. "
+            f"Migrated {previous} to v10: legacy white balance retained; only v1/v2 missing repair kinds migrate to heal. "
             "Existing scalar grades and composed masks keep their exact order; v5 independent grade groups and v7 manual liquify are preserved. Studio background starts neutral only where absent. New post-manual optics starts exactly neutral where absent; old operators are not reordered. "
             "Only v1-v4 independent groups start empty; only pre-v6 effect recovery starts empty. "
             "Existing v6 recovery is preserved. Manual liquify starts empty only where absent in v1-v6. "
-            "Retained manual liquify requires a v7-capable reader; older readers must reject this schema.")
+            "Sky replacement starts neutral only where absent; v10 preserves original source/asset bindings and explicit region vectors. "
+            "Readers older than v10 must reject this schema rather than silently discard new effects.")
         validate(result)
     return result
 
@@ -550,6 +558,9 @@ def encode(value: object, assets: dict, dropped: list, at: str) -> object:
         if '_optics' in value:
             from .optics_project import validate_records
             validate_records(value)
+        if '_sky_replacement' in value:
+            from .sky_replacement_state import check_saved_record
+            check_saved_record(value['_sky_replacement'])
         if '_studio_background' in value:
             from .studio_background_state import check_saved_record
             check_saved_record(value['_studio_background'])
@@ -615,6 +626,9 @@ def decode(value: object, assets: dict, dropped: list, at: str,
         if '_optics' in value:
             from .optics_project import validate_records
             validate_records(value)
+        if '_sky_replacement' in value:
+            from .sky_replacement_state import check_saved_record
+            check_saved_record(value['_sky_replacement'])
         if '_studio_background' in value:
             from .studio_background_state import check_saved_record
             check_saved_record(value['_studio_background'])
@@ -745,12 +759,14 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
     if recipe is not None:
         try:
             recipe = WB.normalize_state(recipe)
-            if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, SCHEMA):
+            if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SCHEMA):
                 _check_manual_liquify_record(recipe.get("_manual_liquify"))
+            from .sky_replacement_project import validate_records as validate_sky
+            validate_sky(recipe,required=(project.get("schema_version")==SCHEMA),allowed=(project.get("schema_version")==SCHEMA))
             from .optics_project import validate_records as validate_optics
-            validate_optics(recipe,required=(project.get("schema_version")==SCHEMA),allowed=(project.get("schema_version")==SCHEMA))
+            validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SCHEMA)))
             from .studio_background_project import validate_records as validate_studio
-            validate_studio(recipe, required=(project.get("schema_version") in (STUDIO_SCHEMA,SCHEMA)), allowed=(project.get("schema_version") in (STUDIO_SCHEMA,SCHEMA)))
+            validate_studio(recipe, required=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SCHEMA)), allowed=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SCHEMA)))
             for key in _REPAIR_STACKS.intersection(recipe):
                 validate_repair_ops(recipe[key], shape=recipe.get("_proxy"))
         except ValueError as error:
@@ -760,7 +776,7 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
     assets = dict(project.get("assets", {}))
     enc = encode(recipe, assets, dropped, "recipe") if recipe is not None else None
     _validate_encoded_repairs(enc, assets, allow_legacy=False,
-                              require_manual_liquify=(project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, SCHEMA)))
+                              require_manual_liquify=(project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SCHEMA)))
     project["assets"] = assets
     row = find_doc(project, fp["path"])
     if row is None:
@@ -795,14 +811,16 @@ def active_recipe(project: dict, path: str, dc_types: dict | None = None) -> obj
     for v in row.get("versions", []):
         if v["id"] == vid:
             recipe = v.get("recipe")
-            if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, SCHEMA) and recipe is not None:
+            if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SCHEMA) and recipe is not None:
                 if type(recipe) is not dict:
                     raise ProjectError("Project v7 recipe must be an object")
                 _check_manual_liquify_record(recipe.get("_manual_liquify"))
+                from .sky_replacement_project import validate_records as validate_sky
+                validate_sky(recipe,required=(project.get("schema_version")==SCHEMA),allowed=(project.get("schema_version")==SCHEMA))
                 from .optics_project import validate_records as validate_optics
-                validate_optics(recipe,required=(project.get("schema_version")==SCHEMA),allowed=(project.get("schema_version")==SCHEMA))
+                validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SCHEMA)))
                 from .studio_background_project import validate_records as validate_studio
-                validate_studio(recipe, required=(project.get("schema_version") in (STUDIO_SCHEMA,SCHEMA)), allowed=(project.get("schema_version") in (STUDIO_SCHEMA,SCHEMA)))
+                validate_studio(recipe, required=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SCHEMA)), allowed=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SCHEMA)))
                 _validate_encoded_repairs(recipe, project.get("assets") or {}, allow_legacy=False,
                                           require_manual_liquify=True)
             dropped: list = []

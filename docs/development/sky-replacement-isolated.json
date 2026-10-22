@@ -1,0 +1,5 @@
+{
+  "feature_id": "PC-32476",
+  "status": "Historical isolated-package inventory superseded by sky-replacement-freeze.json after shared integration. No execution acceptance.",
+  "superseded_by": "docs/development/sky-replacement-freeze.json"
+}

@@ -47,3 +47,13 @@ class StudioToolsMixin:
     def cmd_optics_preview(self, p):
         from .optics_preview import controller
         controller(self, _emit).handle(p)
+
+    def _sky_replacement_controller(self):
+        from .sky_replacement_controller import controller
+        return controller(self, _emit)
+
+    def cmd_sky_replacement(self, p): self._sky_replacement_controller().apply(p)
+
+    def cmd_sky_replacement_preview(self, p):
+        from .sky_replacement_preview import controller
+        controller(self, _emit).handle(p)

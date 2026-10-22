@@ -68,6 +68,9 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     from .optics_runtime import configure_export as configure_optics
     configure_optics(spec,snap,(eh,ew),for_document=for_document)
     spec.check_optics()
+    from .sky_replacement_runtime import configure_export as configure_sky
+    configure_sky(spec,snap,(eh,ew),for_document=for_document)
+    spec.check_sky_replacement()
     from .effect_recovery_runtime import configure_export as configure_effect_recovery
     configure_effect_recovery(spec, snap, (eh, ew), for_document=for_document)
     spec.check_effect_recovery()

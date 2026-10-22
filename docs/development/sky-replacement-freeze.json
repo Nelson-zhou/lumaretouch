@@ -1,0 +1,312 @@
+{
+  "feature_id": "PC-32476",
+  "base_commit": "721c459fdf8c1f6f04c01ad1bf12ceaca28ebcce",
+  "schema": "lrt.project.v10",
+  "status": "Explicit-region sky replacement integrated in source; automatic sky/water proposal remains an implementation gap; all runtime acceptance unrun.",
+  "verification": "Source reads/edits and data-only manifest hashing only. No product, tests, build, typecheck, models, installation, commit or push executed by this worker.",
+  "manifest_path": "docs/development/sky-replacement-freeze.json",
+  "manifest_not_self_hashed": true,
+  "files": [
+    {
+      "path": "docs/development/sky-replacement-controls.json",
+      "sha256": "2296774da116732b8b55c5e77519e786e2c416c6f057c2a13cbf7381bf93392c",
+      "bytes": 6295,
+      "lines": 166
+    },
+    {
+      "path": "docs/development/sky-replacement-isolated.json",
+      "sha256": "9a13d8ae7e15dabf6fbad44127f5c9208687688cb4b6e329df5f35d8dd1e90ee",
+      "bytes": 244,
+      "lines": 5
+    },
+    {
+      "path": "docs/sky-replacement-pc-32476.md",
+      "sha256": "cb512dc5f4d269dc7c5fc00f7fda5133d67670977ce292812b37301d38365ecc",
+      "bytes": 12777,
+      "lines": 92
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight_controller.py",
+      "sha256": "ef5003ef95b22d961e1a476d937ce3fdb6b3f7fcc1199edf04a8b04ac592ad7e",
+      "bytes": 10627,
+      "lines": 150
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "ac80744e7d0ab1a436704ef72485fb3e190deea279fc63294603d8284891d200",
+      "bytes": 19218,
+      "lines": 343
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_preview.py",
+      "sha256": "22c5aa9e9c08737fbd5e0d83c2cabe7373386e8da984e5e706d454e30813e80a",
+      "bytes": 6784,
+      "lines": 150
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "e0b78e318d66de0e682a61d5f32826d13942d31ff0c3ebe7c9101e789f7e97a2",
+      "bytes": 103376,
+      "lines": 1722
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "c9fba131ec7e3e1fb593459fcc92fee819a1b00b8f1b7813314163bcee93e63d",
+      "bytes": 15309,
+      "lines": 225
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/inspection_worker.py",
+      "sha256": "699ca046aff9974ce6d75dd0b7c6907269e9f6bf9c71ae220b296d5bda2b31bc",
+      "bytes": 8743,
+      "lines": 176
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_preset_review.py",
+      "sha256": "3878ca8392e5ec32693060e975c61eb701d62a6193013f70d695dc5715338af7",
+      "bytes": 2695,
+      "lines": 44
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/manual_liquify_preview.py",
+      "sha256": "040b7f40233526bcebc18971fd024d295e61f66ba100d2b5bfa20268b6dba3cf",
+      "bytes": 13730,
+      "lines": 238
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/ops/sky_replacement.py",
+      "sha256": "a6168b79f8d645bc5bc7efdad24ecc62a28655e693034aac955000e22dd92c29",
+      "bytes": 6745,
+      "lines": 141
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/optics_preview.py",
+      "sha256": "ba83c38c45b5fa673a3896a94971d0acf9d4a647da8d5bdbcb95ac180b9e6850",
+      "bytes": 10108,
+      "lines": 148
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "sha256": "e42242d19ba6801683a459262167847cc833cb354ff1aff7d18d1018266b59b9",
+      "bytes": 16120,
+      "lines": 259
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "98e4c566c6bd802a4ee4a218edb727b9b07c391d4b353183aca74e4927b47ee6",
+      "bytes": 46770,
+      "lines": 884
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "f82b900776b887c66fd35d3a3129087215030b5e7d7f44b3fe46dd98d396a38e",
+      "bytes": 25955,
+      "lines": 468
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "f11c79401a8772f7b4e922791f664deca6e8cf8e9375d7bb9f191731c2b0b743",
+      "bytes": 452219,
+      "lines": 7037
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_assets.py",
+      "sha256": "661c2b9c565890eecd85099af5b8795acb55b8b19397e27f230c1670333169a3",
+      "bytes": 5445,
+      "lines": 105
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_controller.py",
+      "sha256": "690943f5bc7ebcbe84bd5a86e6fd8c24a14fdab518d096a971280ea12f4593ee",
+      "bytes": 5101,
+      "lines": 88
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_export.py",
+      "sha256": "a8f8f23723e14a79fe5987549ddaa97f33e46c8c928590eccaa4349cd056c2a2",
+      "bytes": 3962,
+      "lines": 78
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_presets.py",
+      "sha256": "4e0a06b9ab29b3190f0ab934d7480f38b03ef3f4eeb47ba900e9010a52a57a69",
+      "bytes": 1373,
+      "lines": 33
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_preview.py",
+      "sha256": "3f3d72003620315416fd973ff194246520705805df3af7aa7a1fcf985b719e39",
+      "bytes": 15576,
+      "lines": 278
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_project.py",
+      "sha256": "b55b4db07a21d6efb6b694422f70ae3f9b0e4bf094134c32a5354aaafd109190",
+      "bytes": 1000,
+      "lines": 19
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_runtime.py",
+      "sha256": "c14d2c548bfa2af59ad61e0bbfb5c4b92d7fad5f3e3450704e3290d037bc8506",
+      "bytes": 10831,
+      "lines": 228
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_scope.py",
+      "sha256": "b281f4cfb997fda4c272836249f1bf7e0fd10dee4c4a6af9384ab1429dd0e5aa",
+      "bytes": 3376,
+      "lines": 65
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_stage.py",
+      "sha256": "d4c0f95c3a5ba15c324ab9a25b84973b8183c98e200ab66db83f0a14b4c1ded0",
+      "bytes": 5931,
+      "lines": 106
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_state.py",
+      "sha256": "328e09e7e8a07d3a72b964fb5890bdf41626b548146bc80373b4d8f94019dec2",
+      "bytes": 8190,
+      "lines": 158
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_background_preview.py",
+      "sha256": "4168ad9e4c421a7b67a4c616315ff3b74db23130b5c9088f79d0e0f8cf666b5c",
+      "bytes": 9632,
+      "lines": 155
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_tools_dispatch.py",
+      "sha256": "b5f820765162cf532c67ed934b38ea16a5f4b861922ee3fd904de0fba8174e05",
+      "bytes": 2100,
+      "lines": 59
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "8b147b4de70f958065a100b328a6e93aa0501113402189ea0c89604e2c816d0e",
+      "bytes": 120433,
+      "lines": 2110
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "sha256": "19ca3b03743b15bff68dc0fe61a5b30cff39983ab51a3974d625197a00f421a5",
+      "bytes": 2587,
+      "lines": 48
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "8a99b32f97f3cd617db987dfcc9db7763c4e2b39f85fbc10871aec795e9d26bf",
+      "bytes": 22757,
+      "lines": 437
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "e930d4a710a8e5730c2cf266d566af7f8cd512444cf05da846868b93f516164b",
+      "bytes": 102882,
+      "lines": 2062
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "4bd84de1025710326077b0cd25acdaa5218b384bf6a5ba52ff53740a5141b249",
+      "bytes": 4994,
+      "lines": 64
+    },
+    {
+      "path": "ui/src-tauri/src/sky_replacement_api.rs",
+      "sha256": "94bcc80864553a15c15c8592058c5e4389313f49161a47ebeb5c2df19731a0ef",
+      "bytes": 4878,
+      "lines": 70
+    },
+    {
+      "path": "ui/src-tauri/src/sky_replacement_host.rs",
+      "sha256": "ab1481125864b80e67877a3a2ed285e64b81f6b8297cd27b4d2e688f54cb8ec1",
+      "bytes": 6317,
+      "lines": 88
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "c45284603e1e30fd2f832aa80261c173a228d64d17cf71f30d9b4ad3fd22ae2e",
+      "bytes": 124045,
+      "lines": 2130
+    },
+    {
+      "path": "ui/src/localMasks/useRetouchCaptureWorkflows.ts",
+      "sha256": "66892eb150d387918111c961f836bd1ef0465da30744bc06d3404ed7d1ec7c70",
+      "bytes": 7093,
+      "lines": 57
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "953dfed7d26cdc0983f2796171af3f8aac36341a32bcdd3875ccf95afaa56465",
+      "bytes": 81765,
+      "lines": 1679
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "4b81491068777d00b3c6e9fe47047d3cf6543ced5387604c8ddaad3bc99de601",
+      "bytes": 2294,
+      "lines": 30
+    },
+    {
+      "path": "ui/src/skyReplacement/SkyCanvas.tsx",
+      "sha256": "cbd53dafb0e345a24f05e9d2de1a8c16b605234c03e89070d40a848f9aaed4fd",
+      "bytes": 5574,
+      "lines": 67
+    },
+    {
+      "path": "ui/src/skyReplacement/SkyReplacementPanel.tsx",
+      "sha256": "d6075ccd5a7dc73abc17b6873371fdb84f425df39c59d6bb0f716541baa804dc",
+      "bytes": 10291,
+      "lines": 94
+    },
+    {
+      "path": "ui/src/skyReplacement/model.ts",
+      "sha256": "b7cbe24a605ba57c060152f268d78157ddeab5edcf8f044036f8cdccedbd02e0",
+      "bytes": 4369,
+      "lines": 42
+    },
+    {
+      "path": "ui/src/skyReplacement/skyReplacement.css",
+      "sha256": "8d0ae7d4d2705c4979ea974e66da51041a7acc6040f2a4490d18d0847448ecc2",
+      "bytes": 3181,
+      "lines": 3
+    },
+    {
+      "path": "ui/src/skyReplacement/useSkyReplacementWorkflow.ts",
+      "sha256": "d94577ef52fda7782f242fb14fecbda8060fe35bddc2b94092393d102cd0746e",
+      "bytes": 2384,
+      "lines": 30
+    },
+    {
+      "path": "ui/src/skyReplacement/workflow.ts",
+      "sha256": "936ebf9af8ed2965ec4c4227f20f4ded1b49a910ca87e4f1f3aee8db3cceffb5",
+      "bytes": 13357,
+      "lines": 154
+    },
+    {
+      "path": "ui/src/studioBackground/RetouchToolsPanels.tsx",
+      "sha256": "a958470eb94aa2f6b1ef7f6d4f1caa6cb50b935fd9e89ef43dba9f6e9037dcb1",
+      "bytes": 2464,
+      "lines": 21
+    }
+  ],
+  "excluded_parallel_paths": [
+    "engine/src/lumaretouch_engine/ops/enhance.py",
+    "ui/src/components/RetouchPanel.tsx",
+    "ui/src/presets/PresetPanel.tsx",
+    "ui/src/presets/presetWorkflow.ts",
+    "ui/src/presets/usePresetWorkflow.ts",
+    "ui/src/batch/BatchReview.tsx",
+    "ui/src/batch/batchWorkflow.ts",
+    "ui/src/batch/batchScopeOptions.ts",
+    "ui/src-tauri/src/preset_host.rs"
+  ],
+  "remaining_acceptance": [
+    "Build/typecheck and engine/native protocol validation",
+    "Real source/mask/asset identity, cancellation and receipt races",
+    "RGB16 low-bit retention, ICC and export tile equivalence",
+    "Project v1-v10 migration, nested history and missing-asset recovery",
+    "Per-target preset/batch and scoped undo",
+    "Optional genuinely semantic automatic sky/water proposal not implemented"
+  ]
+}

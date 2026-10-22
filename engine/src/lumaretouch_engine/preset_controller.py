@@ -13,6 +13,7 @@ from typing import Callable
 from . import scope as SC, preset_store as PS
 from .preset_transaction import apply_with_rollback, PresetApplyError
 from . import local_grade_layers as LG
+from . import sky_replacement_scope as SKY
 
 ACTIONS = ("list", "preflight", "apply", "save", "import", "delete")
 LEGACY_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note", "local_mask_transfer", "preflight_token"}
@@ -219,9 +220,13 @@ class PresetController:
                 if verdict != "ok": raise SC.ScopeError(f"{op} 不能作用在这张图上：{reason}")
         before = SC.params_of(previous, ops)
         if p.get('preflight_token') is not None: self.ports.advance()
-        state = SC.apply_modules(previous, mods, local_replace_legacy=bool(p.get('preflight_token') and record['transfer']['legacy_removed'])); self._effect_started = True
+        state = SC.apply_modules(previous, mods, local_replace_legacy=bool(p.get('preflight_token') and record['transfer']['legacy_removed']))
+        if SKY.OP in ops:
+            row=self.ports.target_row()
+            SKY.validate_target(state["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
+        self._effect_started = True
         frame = apply_with_rollback(self.ports.replay, previous, state, preset_id=pid,
-                                    emit=self.emit, invalidate=self.ports.invalidate, strict_local=LG.OP in ops)
+                                    emit=self.emit, invalidate=self.ports.invalidate, strict_local=LG.OP in ops or SKY.OP in ops)
         after = SC.params_of(state, ops)
         self.last = {"id": pid, "name": doc["name"], "ops": ops, "params": after}
         render_ms = frame.pop("render_ms")
@@ -235,6 +240,9 @@ class PresetController:
         requested = p.get("module_scope")
         ops = SC.check_scope(list(SC.transferable_ops()) if requested is None else requested)
         mods = SC.params_of(self.ports.capture(), ops)
+        if SKY.OP in mods and mods[SKY.OP]["recipe"]["enabled"]:
+            from .sky_replacement_assets import verify
+            verify(mods[SKY.OP]["recipe"]["asset"])
         if LG.OP in mods:
             policy = LG.options(p.get('local_mask_transfer'))
             chosen, _ = LG.choose(mods[LG.OP]['groups'], policy)

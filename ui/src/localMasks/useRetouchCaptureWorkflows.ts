@@ -1,3 +1,4 @@
+import {useSkyReplacementWorkflow,type SkyReplacementOwner} from '../skyReplacement/useSkyReplacementWorkflow';
 import {useOpticsWorkflow,type OpticsOwner} from '../optics/useOpticsWorkflow';
 import {useStudioBackgroundWorkflow,type StudioOwner} from '../studioBackground/useStudioBackgroundWorkflow';
 import {useEffect,useRef} from 'react';
@@ -16,9 +17,9 @@ import {useLiveGradeWorkflow,type LiveGradeOwner} from './useLiveGradeWorkflow';
 export function useRetouchCaptureWorkflows(context:LocalMaskContext,caps:EngineStatus['ready_caps'],samplingKey:string,
   refresh:()=>Promise<void>,brushOn:boolean,pickFace:boolean,
   recoveryOptions:{report?:RecoveryReport;prepare:()=>void}){
-  const opticsOwner=useRef<OpticsOwner|null>(null);
+  const opticsOwner=useRef<OpticsOwner|null>(null),skyOwner=useRef<SkyReplacementOwner|null>(null);
   const studioOwner=useRef<StudioOwner|null>(null),liveOwner=useRef<LiveGradeOwner|null>(null),manualOwner=useRef<ManualLiquifyOwner|null>(null);
-  const common={...context,enabled:context.enabled&&!opticsOwner.current?.active&&!opticsOwner.current?.pending&&!studioOwner.current?.active&&!studioOwner.current?.pending&&!manualOwner.current?.active&&!manualOwner.current?.pending};
+  const common={...context,enabled:context.enabled&&!skyOwner.current?.active&&!skyOwner.current?.pending&&!opticsOwner.current?.active&&!opticsOwner.current?.pending&&!studioOwner.current?.active&&!studioOwner.current?.pending&&!manualOwner.current?.active&&!manualOwner.current?.pending};
   const sourcePatch=useSourcePatchWorkflow(common,refresh);
   const wbPicker=useWhiteBalancePickerWorkflow({...common,enabled:common.enabled&&!sourcePatch.active&&!sourcePatch.pending&&caps?.white_balance_capture_protocol===1,
     reason:caps?.white_balance_capture_protocol!==1?'当前引擎不支持白平衡输入取样，请更新匹配版本':'请结束其他操作，并切回单视图代理预览'},refresh);
@@ -35,19 +36,22 @@ export function useRetouchCaptureWorkflows(context:LocalMaskContext,caps:EngineS
   const liveGrade=useLiveGradeWorkflow({documentId:context.documentId,canStart:context.canStart,
     enabled:common.enabled&&!otherCapture&&!recovery.active&&!recovery.pending&&caps?.local_grade_live_protocol===1},refresh);
   liveOwner.current=liveGrade;
-  const manual=useManualLiquifyWorkflow({...context,enabled:context.enabled&&!opticsOwner.current?.active&&!opticsOwner.current?.pending&&!studioOwner.current?.active&&!studioOwner.current?.pending&&!otherCapture&&!recovery.active&&!recovery.pending&&!liveGrade.busy&&caps?.manual_liquify_protocol===1&&caps?.manual_liquify_preview_protocol===2,
+  const manual=useManualLiquifyWorkflow({...context,enabled:context.enabled&&!skyOwner.current?.active&&!skyOwner.current?.pending&&!opticsOwner.current?.active&&!opticsOwner.current?.pending&&!studioOwner.current?.active&&!studioOwner.current?.pending&&!otherCapture&&!recovery.active&&!recovery.pending&&!liveGrade.busy&&caps?.manual_liquify_protocol===1&&caps?.manual_liquify_preview_protocol===2,
     reason:caps?.manual_liquify_protocol!==1||caps?.manual_liquify_preview_protocol!==2?'当前引擎不支持手动液化，请更新匹配版本':context.reason},refresh,recoveryOptions.prepare);
   manualOwner.current=manual;
-  const studio=useStudioBackgroundWorkflow({...context,enabled:context.enabled&&!opticsOwner.current?.active&&!opticsOwner.current?.pending&&!otherCapture&&!recovery.active&&!recovery.pending&&!manual.active&&!manual.pending&&!liveGrade.busy&&caps?.studio_background_protocol===1},refresh,recoveryOptions.prepare);
+  const studio=useStudioBackgroundWorkflow({...context,enabled:context.enabled&&!skyOwner.current?.active&&!skyOwner.current?.pending&&!opticsOwner.current?.active&&!opticsOwner.current?.pending&&!otherCapture&&!recovery.active&&!recovery.pending&&!manual.active&&!manual.pending&&!liveGrade.busy&&caps?.studio_background_protocol===1},refresh,recoveryOptions.prepare);
   studioOwner.current=studio;
-  const optics=useOpticsWorkflow({...context,enabled:context.enabled&&!otherCapture&&!recovery.active&&!recovery.pending&&!manual.active&&!manual.pending&&!studio.active&&!studio.pending&&!liveGrade.busy&&caps?.optics_protocol===1},refresh,recoveryOptions.prepare);
+  const optics=useOpticsWorkflow({...context,enabled:context.enabled&&!skyOwner.current?.active&&!skyOwner.current?.pending&&!otherCapture&&!recovery.active&&!recovery.pending&&!manual.active&&!manual.pending&&!studio.active&&!studio.pending&&!liveGrade.busy&&caps?.optics_protocol===1},refresh,recoveryOptions.prepare);
   opticsOwner.current=optics;
+  const sky=useSkyReplacementWorkflow({...context,enabled:context.enabled&&!otherCapture&&!recovery.active&&!recovery.pending&&!manual.active&&!manual.pending&&!studio.active&&!studio.pending&&!optics.active&&!optics.pending&&!liveGrade.busy&&caps?.sky_replacement_protocol===1,
+    reason:caps?.sky_replacement_protocol!==1?"当前引擎不支持换天空，请更新匹配版本":context.reason},refresh,recoveryOptions.prepare);
+  skyOwner.current=sky;
   useEffect(()=>{
     if(!brushOn&&!pickFace)return;
     if(optics.active&&!optics.pending)optics.cancel('已切换工具，未应用的镜头/透视修改已丢弃');
-    for(const owner of [sourcePatch,wbPicker,cloneStamp,localMasks,colorPicker,recovery,manual,studio])
+    for(const owner of [sourcePatch,wbPicker,cloneStamp,localMasks,colorPicker,recovery,manual,studio,sky])
       if(owner.workflow.capturing()&&!owner.workflow.busy())owner.workflow.cancel('已切换工具，未提交的手势已取消');
     if(liveGrade.busy)liveGrade.workflow.cancel('已切换画笔工具，未提交调色已取消');
-  },[brushOn,pickFace,sourcePatch.workflow,wbPicker.workflow,cloneStamp.workflow,localMasks.workflow,colorPicker.workflow,recovery.workflow,liveGrade.workflow,manual.workflow,studio.workflow,optics.active,optics.pending,optics.cancel]);
-  return {sourcePatch,wbPicker,cloneStamp,localMasks,colorPicker,recovery,liveGrade,manual,studio,optics};
+  },[brushOn,pickFace,sourcePatch.workflow,wbPicker.workflow,cloneStamp.workflow,localMasks.workflow,colorPicker.workflow,recovery.workflow,liveGrade.workflow,manual.workflow,studio.workflow,sky.workflow,optics.active,optics.pending,optics.cancel]);
+  return {sourcePatch,wbPicker,cloneStamp,localMasks,colorPicker,recovery,liveGrade,manual,studio,optics,sky};
 }

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Callable
 import json
 from . import scope as SC
+from . import sky_replacement_scope as SKY
 from . import local_grade_layers as LG
 from . import local_grade_runtime as LR
 from .batch_preflight import PreflightStore,FrozenTarget,canonical
@@ -72,6 +73,11 @@ class FrozenBatchController:
                     if not blocked and LG.OP in ops:
                         try:prepared,transfer=LR.prepare_modules(source if live else row['state'],mods,row,local_options,preview=len(public)<12)
                         except Exception as error:blocked=str(error)[:2000]
+                    if not blocked and SKY.OP in ops:
+                        try:
+                            candidate=SC.apply_modules(source if live else row["state"],prepared or mods)
+                            SKY.validate_target(candidate["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
+                        except Exception as error: blocked=str(error)[:2000]
                     private_transfer=None if transfer is None else {k:v for k,v in transfer.items() if k!='preview_jpeg'}
                     targets.append(FrozenTarget(v.document_id,v.revision,i,row['path'],blocked,canonical(before),
                         None if prepared is None else canonical(prepared),None if private_transfer is None else canonical(private_transfer)))
@@ -106,6 +112,11 @@ class FrozenBatchController:
                     if not blocked and LG.OP in plan.modules:
                         try:LR.verify_modules(json.loads(target.prepared_json),row,json.loads(target.transfer_json))
                         except Exception as error:blocked=str(error)[:2000]
+                    if not blocked and SKY.OP in plan.modules:
+                        try:
+                            candidate=SC.apply_modules(live_state if index==current else row['state'],json.loads(target.prepared_json) if target.prepared_json is not None else plan.params())
+                            SKY.validate_target(candidate['_sky_replacement'],row['path'],(row['src_h'],row['src_w']))
+                        except Exception as error: blocked=str(error)[:2000]
                 resolved.append({'index':index,'path':target.path,'blocked':blocked,'document_id':target.document_id,
                     '_prepared_modules':None if target.prepared_json is None else json.loads(target.prepared_json),
                     '_local_replace_legacy':False if target.transfer_json is None else json.loads(target.transfer_json)['legacy_removed'],

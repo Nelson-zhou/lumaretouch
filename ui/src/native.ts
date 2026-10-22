@@ -94,6 +94,8 @@ export interface SessionEdits {
   effect_recovery?: number;
   manual_liquify?: number;
   optics?: boolean;
+  sky_replacement?: boolean;
+  studio_background?: boolean;
   curves?: boolean;
   levels?: boolean;
   repair: number;
@@ -142,6 +144,7 @@ export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_pre
 export interface DocState {
   effect_recovery?: import("./effectRecovery/model").RecoveryReport;
   optics?: import("./optics/model").OpticsReport;
+  sky_replacement?: import("./skyReplacement/model").SkyReport;
   studio_background?: import("./studioBackground/model").Report;
   manual_liquify?: import("./manualLiquify/model").LiquifyReport;
   local_masks?: import("./localMasks/model").LocalMaskReport;
@@ -926,6 +929,7 @@ export interface EngineStatus {
   ready_caps?: {
     effect_recovery_protocol?: number;
     optics_protocol?: number;
+    sky_replacement_protocol?: number;
     manual_liquify_preview_protocol?: number;
     studio_background_protocol?: number;
     manual_liquify_protocol?: number;

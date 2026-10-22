@@ -42,6 +42,10 @@ def render(engine,stage,prepared,target):
     from .effect_recovery_runtime import sync as recovery
     from .manual_liquify_runtime import sync as manual
     fabric(engine);masks(engine,strict=True);grades(engine,strict=True);recovery(engine,strict=True);manual(engine,strict=True);R.sync(engine,strict=False)
+    from .sky_replacement_runtime import sync as sky
+    sky(engine,strict=True)
+    from .optics_runtime import sync as optics
+    optics(engine,strict=True)
     pipe=engine._vram;old=pipe.studio_background
     paused=bool(old.required and old.suspended)
     if paused:

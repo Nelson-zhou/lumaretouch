@@ -14,6 +14,10 @@ class PresetReviews:
         modules = preset['modules']
         if LG.OP not in modules: raise ValueError('此预设不含独立局部调色，无需局部蒙版预检')
         prepared, transfer = LR.prepare_modules(state, modules, row, options, preview=True)
+        from . import sky_replacement_scope as SKY
+        if SKY.OP in prepared:
+            candidate=SC.apply_modules(state,prepared)
+            SKY.validate_target(candidate["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
         token = uuid.uuid4().hex
         record = {'preset': deepcopy(preset), 'modules': prepared, 'transfer': transfer,
                   'document_id': document_id, 'revision': str(revision), 'path': row['path'],

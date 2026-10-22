@@ -145,6 +145,8 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             st.color_picker_probes.lock().unwrap().ended(inspection_epoch);
             st.source_patch.lock().unwrap().ended(inspection_epoch);
             st.local_masks.lock().unwrap().ended(inspection_epoch);
+            st.sky_replacement.lock().unwrap().ended(inspection_epoch);
+            st.sky_preview.lock().unwrap().ended(inspection_epoch);
             st.optics.lock().unwrap().ended(inspection_epoch);
             st.optics_preview.lock().unwrap().ended(inspection_epoch);
             st.studio_background.lock().unwrap().ended(inspection_epoch);
@@ -187,6 +189,8 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "local_masks_result"=>state.local_masks.lock().unwrap().receive(inspection_epoch,&v),
         "optics_result"=>state.optics.lock().unwrap().receive(inspection_epoch,&v),
         "optics_preview"=>state.optics_preview.lock().unwrap().receive(inspection_epoch,&v),
+        "sky_replacement_result"=>state.sky_replacement.lock().unwrap().receive(inspection_epoch,&v),
+        "sky_replacement_preview"=>state.sky_preview.lock().unwrap().receive(inspection_epoch,&v),
         "studio_background_result"=>state.studio_background.lock().unwrap().receive(inspection_epoch,&v),
         "studio_background_preview"=>state.studio_background_preview.lock().unwrap().receive(inspection_epoch,&v),
         "manual_liquify_result"=>state.manual_liquify.lock().unwrap().receive(inspection_epoch,&v),

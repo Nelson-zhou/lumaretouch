@@ -85,6 +85,7 @@ def render(directory):
     from . import manual_liquify_runtime as manual
     from . import studio_background_runtime as studio
     from . import optics_runtime as optics
+    from . import sky_replacement_runtime as sky
     from .local_mask_state import file_stamp
     group_source_stamp = file_stamp(path) if has_groups(snap) else None
     recovery_source_stamp = file_stamp(path)
@@ -94,6 +95,7 @@ def render(directory):
     manual.verify_snapshot(snap, path, tuple(reversed(request['source_size'])))
     studio.verify_snapshot(snap, path, tuple(reversed(request['source_size'])))
     optics.verify_snapshot(snap,path,tuple(reversed(request['source_size'])))
+    sky.verify_snapshot(snap,path,tuple(reversed(request['source_size'])))
     if is_raw(path):
         bits = 16
     else:
@@ -109,6 +111,7 @@ def render(directory):
     manual.check_export_decode(snap, path, manual_source_stamp, (decoded.h, decoded.w))
     studio.check_export_decode(snap, path, manual_source_stamp, (decoded.h, decoded.w))
     optics.check_export_decode(snap,path,manual_source_stamp,(decoded.h,decoded.w))
+    sky.check_export_decode(snap,path,manual_source_stamp,(decoded.h,decoded.w))
     if snap.get("grade_scope") == "objects":
         from .local_mask_state import check, verify_source
         verify_source(check(snap.get("local_masks")), path, (decoded.h, decoded.w))

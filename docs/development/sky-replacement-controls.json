@@ -1,0 +1,166 @@
+{
+  "feature_id": "PC-32476",
+  "status": "source-mapping-only; not executed or accepted",
+  "controls": [
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-1f5b94eaeb",
+      "control_path": "天空调整",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-1f5b94eaeb",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-2db62a27f5",
+      "control_path": "人景调整",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-2db62a27f5",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-aef60501f4",
+      "control_path": "人景调整/景物色彩（偏向天空）",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-aef60501f4",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-0b58cf183b",
+      "control_path": "人景调整/人物色彩（偏向天空）",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-0b58cf183b",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-47bf45fbb5",
+      "control_path": "水面调整",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-47bf45fbb5",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-98eade3987",
+      "control_path": "水面调整/景物反射",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-98eade3987",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-3da6103009",
+      "control_path": "水面调整/景物水效虚化",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-3da6103009",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-c68a287a5a",
+      "control_path": "手动涂抹画笔",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-c68a287a5a",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-6b87bf7388",
+      "control_path": "天空调整/垂直位置",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-6b87bf7388",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-679dae32e6",
+      "control_path": "天空调整/水平位置",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-679dae32e6",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-62a11b207d",
+      "control_path": "天空调整/天空翻转",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-62a11b207d",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-48ec19a95a",
+      "control_path": "天空调整/角度",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-48ec19a95a",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-703d8271d5",
+      "control_path": "天空调整/边缘过渡",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-703d8271d5",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-999e4bf2f2",
+      "control_path": "天空调整/天空渐变",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-999e4bf2f2",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-106048a96f",
+      "control_path": "天空调整/色温",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-106048a96f",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-dcca1d21c9",
+      "control_path": "天空调整/色调",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-dcca1d21c9",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-482ce42caa",
+      "control_path": "天空调整/饱和度",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-482ce42caa",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-329a11842f",
+      "control_path": "天空调整/亮度",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-329a11842f",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-4a4a602101",
+      "control_path": "天空调整/虚化",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-4a4a602101",
+      "ui_identifier_present_in_source": true
+    },
+    {
+      "feature_id": "PC-32476",
+      "control_id": "PC-32476-C-d57398ba6c",
+      "control_path": "天空调整/不透明度",
+      "source_url": "https://www.pixcakeai.com/guide/32476",
+      "linux_requirement_id": "LNX-REF-PC-32476-C-d57398ba6c",
+      "ui_identifier_present_in_source": true
+    }
+  ]
+}

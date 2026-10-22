@@ -7,6 +7,7 @@ from . import white_balance_recipe as WB
 from dataclasses import dataclass
 from typing import Callable
 from . import scope as SC
+from . import sky_replacement_scope as SKY
 from .document_versions import DocumentVersions
 from .batch_preflight_controller import FrozenBatchController,PlanPorts
 
@@ -127,6 +128,8 @@ class BatchSyncController:
                 self.preflight.emit_result(p,{**body,"success":True})
                 return
             ops = SC.check_scope(p.get("module_scope"))
+            if SKY.OP in ops:
+                raise SC.ScopeError("换天空批量必须逐目标预检，再用冻结 token 提交；不会猜测天空或复制源图区域")
             if SC.OP_LOCAL_GRADE in ops:
                 raise SC.ScopeError('独立局部调色必须先逐目标预检，再用冻结 token 提交；不允许未审核直传')
             policy = p.get("conflict_policy", "skip_and_report")
@@ -178,6 +181,8 @@ class BatchSyncController:
             self.versions.check_advance(row)
             before = dict(row["state"]) if r["index"] != live_idx else dict(self.editor.capture())
             new = SC.apply_modules(before, r.get('_prepared_modules') or mods, local_replace_legacy=r.get('_local_replace_legacy', False))
+            if SKY.OP in ops:
+                SKY.validate_target(new["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
             WB.prepare_state(new)
             planned.append((r["index"], before, new))
             applied_rows.append(r)
@@ -192,7 +197,7 @@ class BatchSyncController:
         if live_plan is not None:
             idx,before,new=live_plan;self.versions.advance(self.documents.rows()[idx])
             try:fr=self.editor.replay(new,mode="batch",replayed_for=f"batch:{batch_id}",
-                                      **({'strict_local':True} if SC.OP_LOCAL_GRADE in ops else {}))
+                                      **({'strict_local':True} if SC.OP_LOCAL_GRADE in ops or SKY.OP in ops else {}))
             except Exception as error:
                 try:
                     rollback=self.editor.replay(before,mode="batch",replayed_for=f"batch_rollback:{batch_id}")
@@ -278,6 +283,8 @@ class BatchSyncController:
             # Restoring the whole old snapshot would erase later unrelated edits.
             try:
                 restored_state = SC.restore_modules(cur, rec["before"], ops)
+                if SKY.OP in ops:
+                    SKY.validate_target(restored_state["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
                 WB.prepare_state(restored_state)
                 self.versions.check_advance(row)
             except Exception as error:

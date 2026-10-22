@@ -37,6 +37,7 @@ from . import white_balance_recipe as WB
 from . import local_grade_layers as LOCAL_GRADE
 from . import studio_background_scope as STUDIO
 from . import optics_scope as OPTICS
+from . import sky_replacement_scope as SKY
 
 SCHEMA = "lrt.scope.v1"
 PRESET_SCHEMA = "lrt.preset.v1"
@@ -79,6 +80,9 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: operation_id → 契约。`single_face` 的模块只能作用在"已知只有一张脸"的文档上；
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
+    SKY.OP: {"params": ("recipe",), "state_fields": SKY.FIELDS, "single_face": False,
+             "transferable": True, "cmd": "sky_replacement", "read": SKY.params_of, "write": SKY.install,
+             "why_not": "仅天空素材与参数；目标必须已有自己的天空、人物声明及所需水面/地平线，不复制区域"},
     OPTICS.OP: {"params": ("recipe",), "state_fields": OPTICS.FIELDS, "single_face": False,
                 "transferable": True, "cmd": "optics", "read": OPTICS.params_of, "write": OPTICS.install,
                 "why_not": "仅手动数值；目标保留自己的镜头配置、自动结果与引导线，改变畸变前须重新分析"},
@@ -243,6 +247,9 @@ def check_params(op: str, params: dict) -> dict:
         parts = [f"{k}：{unmodeled_reason(op, k)}" if unmodeled_reason(op, k) else f"{k}（未知参数）"
                  for k in unknown]
         raise ScopeError(f"{op} 收到不可作用的参数：" + "；".join(parts))
+    if op == SKY.OP:
+        try: return SKY.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
     if op == OPTICS.OP:
         try: return OPTICS.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
