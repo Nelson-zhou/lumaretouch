@@ -105,6 +105,8 @@ jobs:
         run: rustc --edition=2021 --test ui/src-tauri/src/frame_identity.rs -o /tmp/lrt-frame-id-tests && /tmp/lrt-frame-id-tests
       - name: Rust colour scopes contract
         run: rustc --edition=2021 --test core/color_scopes/main.rs -o /tmp/lrt-scopes-tests && /tmp/lrt-scopes-tests
+      - name: Rust white-balance scalar foundation
+        run: rustc --edition=2021 --test core/white_balance/white_balance.rs -o "$RUNNER_TEMP/lrt-wb-tests" && "$RUNNER_TEMP/lrt-wb-tests"
       - name: Rust levels contract
         run: rustc --edition=2021 --test core/levels/levels.rs -o /tmp/lrt-levels-tests && /tmp/lrt-levels-tests
       - name: cargo check

@@ -42,3 +42,30 @@ https://github.com/Comfy-Org/ComfyUI/blob/master/SECURITY.md
 https://github.com/lllyasviel/IC-Light
 The IC-Light README illustrates why dependencies matter: its example BRIA RMBG1.4
 component has a non-commercial restriction despite the repository's Apache-2.0 code.
+
+## Confirmed one-click requirement (2026-10-22 UTC)
+
+The user reaffirmed ID-photo background replacement as an example and explicitly
+requires choosing an extension to automatically download its model and make the
+feature usable without manual environment configuration. This is a product
+requirement, not evidence that installation or inference has shipped.
+
+Proposed acceptance criteria:
+
+- A first-time user installs a curated extension from the native catalogue without
+  finding weights, installing Python packages or wiring ComfyUI nodes manually.
+- Show required download size, disk and hardware requirements before installation.
+  Installation progress distinguishes downloading, verification, runtime preparation
+  and a bounded readiness check. A downloaded model alone is not “ready.”
+- Interrupted downloads resume; corrupt files fail verification; failed setup offers
+  retry without disabling ordinary editing or destroying a previous working version.
+- The ID-photo panel offers red, white, blue and custom backgrounds, preserves the
+  source face, supports edge inspection and reversible result acceptance/export.
+  Background replacement alone must not claim official ID-photo compliance.
+- Offline reuse works after successful installation of all required components.
+  Uninstall respects models shared with other installed extensions and user photos.
+- Record pinned component versions and model licences; keep unsupported devices
+  explicit rather than presenting an extension as universally compatible.
+
+These criteria need implementation and end-to-end evidence before completion.
+The existing handbook feature backlog remains in scope.

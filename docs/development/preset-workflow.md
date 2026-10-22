@@ -127,5 +127,10 @@ by project binding, not represented as a pass. Desktop installation unchanged.
 The next coverage increment adds a third real protocol case without an open
 photo: list, import, conflict without overwrite, import as a new ID, builtin
 protection, delete, missing-file rejection and final catalog/disk evidence.
-This added case is not yet executed as of this edit. A positive result must not
-be inferred from c1afbf7's two-case run.
+Remote `4bef65438c8992d9771a26a5c9222f20d280776e`, tree
+`cee2b067014a1f6172ccdfc5f94c61fb923a78a8`, subsequently passed
+[CI39716659546](https://github.com/Nelson-zhou/lumaretouch/actions/runs/39716659546).
+Engine job119620270065 logged1122 passed/429 skipped in71.01s in the lightweight
+suite, then all three real protocol cases passed in4.35s with no skips. All
+non-GPU jobs succeeded; GPU jobs skipped. These are synthetic-image/no-photo
+engine checks, not real wedding-photo or physical desktop acceptance.
