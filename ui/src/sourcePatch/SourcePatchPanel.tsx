@@ -2,7 +2,7 @@ import type {SourcePatchOwner} from './useSourcePatchWorkflow';
 import {SOURCE_PATCH_LABEL} from './workflow';
 import './sourcePatch.css';
 
-export function SourcePatchPanel({owner,onStart}:{owner:SourcePatchOwner;onStart?:()=>void}){
+export function SourcePatchPanel({owner,onStart,blocked=false}:{owner:SourcePatchOwner;onStart?:()=>void;blocked?:boolean}){
   const {workflow,state,context,active,pending}=owner;
   // The workflow validates the polygon once and clamps drag offsets; apply revalidates.
   const canApply=state.phase==='source'&&Math.hypot(...state.offset)>=1e-8&&context.enabled&&!pending;
@@ -12,7 +12,7 @@ export function SourcePatchPanel({owner,onStart}:{owner:SourcePatchOwner;onStart
     <p>圈选目标 → 拖动同形来源 → 应用修补</p>
     <small>只平移来源，不缩放或旋转。松开指针只确认选区，不会修改照片。</small>
     <div className="sourcePatchButtons">
-      <button disabled={!context.enabled||context.canStart===false||active||pending} onClick={()=>onStart?onStart():void workflow.start()}>开始选区修补</button>
+      <button disabled={blocked||!context.enabled||context.canStart===false||active||pending} onClick={()=>onStart?onStart():void workflow.start()}>开始选区修补</button>
       <button disabled={!['target','source'].includes(state.phase)} onClick={()=>workflow.resetTarget()}>重画目标</button>
       <button disabled={!canApply} onClick={()=>void workflow.apply()}>应用修补</button>
       <button disabled={!active} onClick={()=>workflow.cancel()}>取消</button>

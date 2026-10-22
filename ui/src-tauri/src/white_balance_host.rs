@@ -11,13 +11,24 @@ fn exposure(v: &Value) -> bool {
         && ["ev","temperature_shift","tint_shift","contrast","highlights","shadows","saturation"].iter().all(|k| v[*k].as_f64().is_some_and(f64::is_finite))
         && v.get("reference_k").is_some() && (v["reference_k"].is_null() || v["reference_k"].as_f64().is_some_and(|x| x.is_finite()&&(1000.0..=40000.0).contains(&x)))
 }
+fn pick_parts(bound: Option<&str>) -> Option<(&str, &str, &str)> {
+    let mut values=bound?.split('|');
+    let (document,capture,ticket)=(values.next()?,values.next()?,values.next()?);
+    if values.next().is_some() || crate::source_patch_host::binding(document,capture,ticket).is_err(){return None;}
+    Some((document,capture,ticket))
+}
 impl ReceiptKind for WhiteBalanceKind {
     const NAME: &'static str = "white_balance";
-    const ACTIONS: &'static [&'static str] = &["set_algorithm", "reset"];
-    fn valid_request(_: &str, document: Option<&str>) -> bool {
-        document.is_some_and(|d| !d.is_empty() && d.len()<=64)
+    const ACTIONS: &'static [&'static str] = &["set_algorithm", "reset", "pick", "clear_pick"];
+    fn valid_request(action: &str, document: Option<&str>) -> bool {
+        if action=="pick" {pick_parts(document).is_some()} else {document.is_some_and(|d| !d.is_empty() && d.len()<=64)}
     }
-    fn valid(v: &Value, document: Option<&str>) -> bool {
+    fn valid(v: &Value, bound: Option<&str>) -> bool {
+        let document=if v["action"]=="pick" {
+            let Some((doc,capture,ticket))=pick_parts(bound) else{return false};
+            if v["capture_id"].as_str()!=Some(capture) || v["ticket"].as_str()!=Some(ticket){return false;}
+            Some(doc)
+        } else {bound};
         let (Some(success),Some(unknown))=(v["success"].as_bool(),v["outcome_unknown"].as_bool()) else{return false};
         if v["protocol"]!=1 || v["document_id"].as_str()!=document || !v["requires_reload"].is_boolean() || (success&&unknown){return false;}
         if !success{return true;}
@@ -28,6 +39,9 @@ impl ReceiptKind for WhiteBalanceKind {
         match v["action"].as_str(){
             Some("set_algorithm")=>before["temperature_shift"]==after["temperature_shift"] && before["tint_shift"]==after["tint_shift"]
                 && before["options"]["picked_gains"]==after["options"]["picked_gains"],
+            Some("pick") | Some("clear_pick")=>before["temperature_shift"]==after["temperature_shift"]
+                && before["tint_shift"]==after["tint_shift"] && before["options"]["algorithm"]==after["options"]["algorithm"]
+                && (v["action"]!="clear_pick" || after["options"]["picked_gains"].as_array().is_some_and(|a|a.iter().all(|n|n.as_f64()==Some(1.0)))),
             Some("reset")=>after["temperature_shift"].as_f64()==Some(0.0) && after["tint_shift"].as_f64()==Some(0.0)
                 && before["options"]["algorithm"]==after["options"]["algorithm"]
                 && after["options"]["picked_gains"].as_array().is_some_and(|a|a.iter().all(|n|n.as_f64()==Some(1.0))),
@@ -36,7 +50,9 @@ impl ReceiptKind for WhiteBalanceKind {
     }
     fn decorate_failure(value: &mut Value, document: Option<&str>){
         value["protocol"]=json!(1);value["requires_reload"]=json!(true);
-        if let Some(doc)=document{value["document_id"]=json!(doc);}
+        if let Some((doc,capture,ticket))=pick_parts(document){
+            value["document_id"]=json!(doc);value["capture_id"]=json!(capture);value["ticket"]=json!(ticket);
+        } else if let Some(doc)=document{value["document_id"]=json!(doc);}
     }
 }
 pub(crate) type WhiteBalanceHost = ReceiptHost<WhiteBalanceKind>;

@@ -918,6 +918,7 @@ export interface EngineStatus {
     source_patch_capture_protocol?: number;
     source_patch_result_protocol?: number;
     white_balance_result_protocol?: number;
+    white_balance_capture_protocol?: number;
     color_capture_protocol?: number;
     batch_preflight_protocol?: number;
     preset_result_protocol?: number;

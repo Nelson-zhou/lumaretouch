@@ -62,7 +62,6 @@ from . import scope as SC
 from . import preset_controller as PRS
 from . import hsl_recipe as HSL_RECIPE
 from . import white_balance_recipe as WB
-from .white_balance_controller import WhiteBalanceController, WhiteBalancePorts
 from . import preset_store as PS
 from .project import ProjectError
 from . import session as S
@@ -370,7 +369,7 @@ class Engine:
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -5285,15 +5284,10 @@ class Engine:
         return True
 
     def _white_balance_controller(self):
-        controller = self.__dict__.get("_white_balance_owner")
-        if controller is None:
-            controller = WhiteBalanceController(WhiteBalancePorts(
-                guard=lambda:self._guard_editable("white balance"),
-                document_id=lambda:self._load_id, status=lambda:self.doc_state(),
-                apply=lambda patch:self.cmd_exposure(patch, preserve_reference=True),
-                needs_reload=lambda:self._vram is None), emit=lambda event:emit(event))
-            self._white_balance_owner = controller
-        return controller
+        from .white_balance_controller import get_controller
+        return get_controller(self, lambda event: emit(event))
+
+    def cmd_white_balance_capture(self, p): self._white_balance_controller().capture.handle(p)
 
     def cmd_white_balance(self, p):
         self._white_balance_controller().handle(p)
@@ -6843,7 +6837,7 @@ class Engine:
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "white_balance_capture", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "light",
                "deform", "lut", "grade", "export", "exposure", "white_balance", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -6884,6 +6878,8 @@ class Engine:
                 return
             if name == "source_patch" and not self._source_patch_controller().prepare(msg):
                 return  # Receipt/cache replay and rejected proofs never advance the fence.
+            if name == "white_balance" and not self._white_balance_controller().prepare(msg):
+                return  # Pick proof and scalar policy are checked before mutation fencing.
             from .document_versions import fences_current_document
             if fences_current_document(name,msg,self.EDIT_CMDS):
                 self._fence_current_document()
@@ -6894,9 +6890,13 @@ class Engine:
                     name == "inspection_snapshot" and msg.get("action", "status") == "status"):
                 owner = self.__dict__.get("_source_patch_owner")
                 if owner is not None: owner.capture.invalidate()
+            if name not in ("hello", "white_balance_capture", "color_scopes") and not (
+                    name == "inspection_snapshot" and msg.get("action", "status") == "status"):
+                owner = self.__dict__.get("_white_balance_owner")
+                if owner is not None: owner.capture.invalidate()
             # The executor cancels before any other known command can mutate
             # source arrays/recipes, including history, load, export and shutdown.
-            if name not in ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture"):
+            if name not in ("hello", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "white_balance_capture"):
                 self._cancel_snapshot("command:" + name)
                 heavy = name in ("export", "bench_start") or (name == "task" and msg.get("action") in ("resume", "retry"))
                 if heavy and self._inspection_controller().worker_running:
@@ -7022,6 +7022,8 @@ class Engine:
                 os.close(wake_write)
                 self._command_inbox = None
                 self._finish_inspection_shutdown()
+                owner = self.__dict__.get("_white_balance_owner")
+                if owner is not None: owner.capture.invalidate()
                 owner = self.__dict__.get("_source_patch_owner")
                 if owner is not None: owner.capture.invalidate()
                 self.stop_flag.set()

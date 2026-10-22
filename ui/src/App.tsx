@@ -1,3 +1,5 @@
+import {useWhiteBalancePickerWorkflow} from './whiteBalance/useWhiteBalancePicker';
+import {WhiteBalancePickerControls,WhiteBalancePickerStatus} from './whiteBalance/WhiteBalancePickerControls';
 import {WatermarkControls, WatermarkReceipt} from "./watermark/WatermarkControls";
 import {useWatermarkSettings} from "./watermark/model";
 import {useWhiteBalanceWorkflow} from "./whiteBalance/useWhiteBalanceWorkflow";
@@ -1668,7 +1670,11 @@ export default function App() {
     contextKey:JSON.stringify([pid,status?.doc_rev,status?.image?.load_id,workspace,compareMode,comparing,inspectionEnabled,cropOpen]),
     reason:!sourcePatchSupported?'当前引擎不支持来源区域修补，请更新匹配版本':!sourcePatchCanStart?'正在等待命令队列空闲':'请等待编辑完成，并切回单视图代理预览'},refreshFromEngine);
   useEffect(()=>{if((brushOn||pickFace)&&sourcePatch.workflow.capturing()&&!sourcePatch.workflow.busy())sourcePatch.workflow.cancel('已切换工具，未提交的修补选区已取消');},[brushOn,pickFace,sourcePatch.workflow]);
-  const captureAllowed=!!status?.engine_alive && status?.ready_caps?.color_capture_protocol===1&&!sourcePatch.active&&!sourcePatch.pending
+  const wbPicker=useWhiteBalancePickerWorkflow({enabled:sourcePatchAllowed&&!sourcePatch.active&&!sourcePatch.pending&&caps?.white_balance_capture_protocol===1,
+    canStart:sourcePatchCanStart,documentId:doc?.document_id??'',contextKey:JSON.stringify([pid,status?.doc_rev,status?.image?.load_id,workspace,compareMode,comparing,inspectionEnabled,cropOpen]),
+    reason:caps?.white_balance_capture_protocol!==1?'当前引擎不支持白平衡输入取样，请更新匹配版本':'请结束其他操作，并切回单视图代理预览'},refreshFromEngine);
+  useEffect(()=>{if((brushOn||pickFace)&&wbPicker.workflow.capturing()&&!wbPicker.workflow.busy())wbPicker.workflow.cancel('已切换工具，未提交的白平衡取样已取消');},[brushOn,pickFace,wbPicker.workflow]);
+  const captureAllowed=!!status?.engine_alive && status?.ready_caps?.color_capture_protocol===1&&!sourcePatch.active&&!sourcePatch.pending&&!wbPicker.active&&!wbPicker.pending
     && !!doc?.document_id && status.image?.load_id===doc.document_id && workspace==='retouch'
     && compareMode==='single' && !comparing && !inspectionEnabled && !cropOpen && (batchWorkflow.ui.phase==='closed'||batchWorkflow.ui.hidden===true);
   const captureReason=captureAllowed?'':'请导入图片，并在单视图代理预览中取色';
@@ -1712,8 +1718,8 @@ export default function App() {
                 if(target instanceof HTMLSelectElement || (target instanceof HTMLInputElement
                   && ['range','number','color','checkbox'].includes(target.type)))notifyInspectionEditIntent();
               }}>
-          <RetouchPanel whiteBalanceBusy={whiteBalanceWorkflow.workflow.busy()} whiteBalancePanel={<WhiteBalanceControls owner={whiteBalanceWorkflow} value={doc?.exposure}/>} presetPanel={<PresetPanel workflow={presetWorkflow}/>} status={status} doc={doc} hasImage={hasImage}
-                        sourcePatchPanel={<SourcePatchPanel owner={sourcePatch} onStart={()=>{setBrushOn(false);setPickFace(false);colorSampler.cancel();void sourcePatch.workflow.start();}}/>}
+          <RetouchPanel whiteBalanceBusy={whiteBalanceWorkflow.workflow.busy()||wbPicker.active||wbPicker.pending} whiteBalancePanel={<WhiteBalanceControls owner={whiteBalanceWorkflow} value={doc?.exposure} pickerBusy={wbPicker.active||wbPicker.pending||sourcePatch.active||sourcePatch.pending} picker={<WhiteBalancePickerControls owner={wbPicker} onStart={()=>{setBrushOn(false);setPickFace(false);colorSampler.cancel();void wbPicker.workflow.start();}}/>}/>} presetPanel={<PresetPanel workflow={presetWorkflow}/>} status={status} doc={doc} hasImage={hasImage}
+                        sourcePatchPanel={<SourcePatchPanel owner={sourcePatch} blocked={wbPicker.active||wbPicker.pending} onStart={()=>{if(wbPicker.active||wbPicker.pending)return;setBrushOn(false);setPickFace(false);colorSampler.cancel();void sourcePatch.workflow.start();}}/>}
                         colorSamplePanel={<ColorSamplePanel sampler={colorSampler} reason={captureReason}
                           canArm={captureAllowed&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending}
                           onArm={()=>{setBrushOn(false);setPickFace(false);colorSampler.arm();}}/>}
@@ -1737,7 +1743,7 @@ export default function App() {
       )}
 
       <main className="stage">
-        <SourcePatchStatus owner={sourcePatch}/>
+        <SourcePatchStatus owner={sourcePatch}/><WhiteBalancePickerStatus owner={wbPicker}/>
         {!!((project?.changed_count ?? 0) + (project?.missing_count ?? 0)) && (
           <section className="projectSourceWarning" role="alert" aria-label="工程原片校验提醒">
             <strong>工程原片需要核对</strong>
@@ -1775,7 +1781,7 @@ export default function App() {
                   )}
                 </div>
               )}
-              <Viewer colorSampler={colorSampler} sourcePatch={sourcePatch}
+              <Viewer colorSampler={colorSampler} sourcePatch={sourcePatch} whiteBalancePicker={wbPicker}
                 view={view} onView={(v) => {
                   // 滚轮/捏合改了倍率就退出 1:1；平移不算，仍是同一像素密度
                   if (v.fit) setInspectionEnabled(false);

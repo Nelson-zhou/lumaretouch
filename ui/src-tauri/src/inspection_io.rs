@@ -28,12 +28,18 @@ impl Root {
     /// A complete LRCP packet at a path derived solely from a registered native
     /// identity. No engine-provided path, mmap, SHM mutation or unbounded read.
     pub fn read_capture(&self,expected:&crate::capture_wire::Identity)->Result<Vec<u8>,String>{
+        self.read_action_capture(expected,"source-patch")
+    }
+    pub fn read_wb_capture(&self,expected:&crate::capture_wire::Identity)->Result<Vec<u8>,String>{
+        self.read_action_capture(expected,"white-balance")
+    }
+    fn read_action_capture(&self,expected:&crate::capture_wire::Identity,kind:&str)->Result<Vec<u8>,String>{
         use crate::capture_wire::{HEADER_BYTES,MAX_PAYLOAD};
         let header=expected.header().map_err(str::to_owned)?;
         let payload=expected.payload_len().map_err(str::to_owned)?;
         if payload>MAX_PAYLOAD{return Err("source patch capture exceeds 128 MiB budget".into());}
         let total=HEADER_BYTES.checked_add(payload).ok_or("capture packet length overflow")?;
-        let job=format!("lumaretouch-source-patch-{}-{}",crate::frame_identity::hex(expected.capture),expected.ticket);
+        let job=format!("lumaretouch-{kind}-{}-{}",crate::frame_identity::hex(expected.capture),expected.ticket);
         let name=CString::new(job).map_err(|_|"invalid source patch capture name")?;
         let fd=unsafe{libc::openat(self.directory.as_raw_fd(),name.as_ptr(),libc::O_RDONLY|libc::O_DIRECTORY|libc::O_NOFOLLOW|libc::O_CLOEXEC|libc::O_NONBLOCK)};
         if fd<0{return Err(std::io::Error::last_os_error().to_string());}

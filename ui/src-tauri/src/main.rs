@@ -31,6 +31,8 @@ mod preset_host;
 mod preset_api;
 mod white_balance_api;
 mod white_balance_host;
+mod white_balance_capture_host;
+mod white_balance_capture_api;
 mod batch_host;
 mod batch_api;
 mod color_capture_api;
@@ -199,6 +201,7 @@ pub struct AppState {
     color_capture: Mutex<color_capture_host::CaptureHost>,
     source_patch: Mutex<source_patch_host::SourcePatchHost>,
     source_patch_capture: Mutex<source_patch_capture_host::SourcePatchCaptureHost>,
+    white_balance_capture: Mutex<white_balance_capture_host::WhiteBalanceCaptureHost>,
     batch_results: Mutex<batch_host::BatchHost>,
     preset_results: Mutex<preset_host::PresetHost>,
     white_balance_results: Mutex<white_balance_host::WhiteBalanceHost>,
@@ -309,6 +312,7 @@ impl AppState {
             color_capture: Mutex::new(color_capture_host::CaptureHost::default()),
             source_patch: Mutex::new(source_patch_host::SourcePatchHost::default()),
             source_patch_capture: Mutex::new(source_patch_capture_host::SourcePatchCaptureHost::default()),
+            white_balance_capture: Mutex::new(white_balance_capture_host::WhiteBalanceCaptureHost::default()),
             batch_results: Mutex::new(batch_host::BatchHost::default()),
             preset_results: Mutex::new(preset_host::PresetHost::default()),
             white_balance_results: Mutex::new(white_balance_host::WhiteBalanceHost::default()),
@@ -371,6 +375,7 @@ impl AppState {
     /// 三条带 doc_state 的事件都进这里落一份"引擎最新说的文档状态 + 它是谁说的"。
     fn note_doc(&self, v: &Value, src: &str) {
         self.source_patch_capture.lock().unwrap().invalidate();
+        self.white_balance_capture.lock().unwrap().invalidate();
         self.note_face(v, src);
         {
             let mut report = self.doc_report.lock().unwrap();
@@ -428,6 +433,7 @@ impl AppState {
 
     pub fn on_lut_ready(&self, v: &Value) {
         self.source_patch_capture.lock().unwrap().invalidate();
+        self.white_balance_capture.lock().unwrap().invalidate();
         *self.lut.lock().unwrap() = Some(v.clone());
         // lut_done 不带整份 doc_state，但面板的“当前预设”只能来自引擎。
         // 这里把调色这一格并回缓存，UI 不用自己记“我刚点了哪张卡”；
@@ -634,6 +640,7 @@ impl AppState {
 
     fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
         self.source_patch_capture.lock().map_err(|_|"source patch capture lock poisoned")?.invalidate();
+        self.white_balance_capture.lock().map_err(|_|"WB capture lock poisoned")?.invalidate();
         self.color_capture.lock().map_err(|_|"capture lock poisoned")?.invalidate();
         self.color_scopes.lock().map_err(|_|"scope lock poisoned")?.invalidate();
         let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
@@ -649,6 +656,7 @@ impl AppState {
         // 宿主不数步数、不自己判哪条命令算编辑——名单由引擎的 ready 报
         let name = cmd.get("cmd").and_then(|c| c.as_str()).unwrap_or("").to_string();
         if name!="hello" && name!="inspection_snapshot" {self.source_patch_capture.lock().map_err(|_|"source patch capture lock poisoned")?.invalidate();}
+        if name!="hello" && name!="inspection_snapshot" {self.white_balance_capture.lock().map_err(|_|"WB capture lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {self.color_scopes.lock().map_err(|_|"scope lock poisoned")?.invalidate();}
         if name!="hello" {self.color_capture.lock().map_err(|_|"capture lock poisoned")?.invalidate();}
         let edited = self.history_edit_cmds.lock().unwrap().iter().any(|c| c == &name);
@@ -777,6 +785,7 @@ fn start_engine(app: tauri::AppHandle, launcher: State<'_, Launcher>, py: String
     st.color_capture.lock().unwrap().reset(inspection_epoch);
     st.source_patch.lock().unwrap().reset(inspection_epoch);
     st.source_patch_capture.lock().unwrap().reset(inspection_epoch);
+    st.white_balance_capture.lock().unwrap().reset(inspection_epoch);
     st.batch_results.lock().unwrap().reset(inspection_epoch);
     st.preset_results.lock().unwrap().reset(inspection_epoch);
     st.white_balance_results.lock().unwrap().reset(inspection_epoch);
@@ -1647,6 +1656,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
 #[tauri::command]
 fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     state.source_patch_capture.lock().unwrap().invalidate();
+    state.white_balance_capture.lock().unwrap().invalidate();
     state.color_capture.lock().unwrap().invalidate();
     state.inspection.lock().unwrap().invalidate();
     state.color_scopes.lock().unwrap().invalidate();
@@ -1980,6 +1990,7 @@ fn report(line: String) {
 #[tauri::command]
 fn quit(state: State<'_, Arc<AppState>>) {
     state.source_patch_capture.lock().unwrap().invalidate();
+    state.white_balance_capture.lock().unwrap().invalidate();
     state.inspection.lock().unwrap().invalidate();
     let handle=state.engine.lock().unwrap().clone();
     if let Some(handle)=handle{handle.shutdown();}
@@ -2004,6 +2015,7 @@ fn main() {
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
             source_patch_api::source_patch_capture, source_patch_api::source_patch_capture_status, source_patch_api::source_patch_capture_frame,
             source_patch_api::source_patch, source_patch_api::source_patch_result,
+            white_balance_capture_api::white_balance_capture, white_balance_capture_api::white_balance_capture_status, white_balance_capture_api::white_balance_capture_frame, white_balance_capture_api::white_balance_pick,
             project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
             report, quit
         ])

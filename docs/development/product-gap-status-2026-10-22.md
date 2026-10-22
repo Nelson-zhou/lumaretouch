@@ -30,7 +30,7 @@ must be read with subsequent corrections, not copied as today's missing-feature 
 
 ## Major functional groups still incomplete
 
-1. Professional colour completion: WB/levels/curves/HSL action pickers, AI colour
+1. Professional colour completion: levels/curves/HSL action pickers, AI colour
    matching and group consistency, lens/perspective/calibration requirements.
 2. Detailed portrait families: independent body, hair, makeup, clothing, hand/foot
    and many blemish/reshaping controls. One related slider does not close a family.
@@ -39,12 +39,14 @@ must be read with subsequent corrections, not copied as today's missing-feature 
    patch is now connected in code (see source-patch-tool.md), not yet accepted.
 4. Multi-person/cross-image workflows: grouping, parameter-level inheritance and
    explicitly confirmed cross-image identity associations.
-5. Advanced delivery: watermark/layout/printing and other specified output workflows.
+5. Advanced delivery: layout/printing and other specified output workflows. Export
+   watermark code is connected; see export-watermark-implementation.md, not accepted.
 6. Creative/generative tools and the separately requested optional extension flow.
 
 These are major groupings, not six equally sized tasks or a complete item-level count.
-WB picker sampling/math infrastructure passed61 dedicated cases, but its capture
-redemption, native/UI lifecycle and complete click-to-edit path are not implemented.
+WB picker sampling/math infrastructure passed61 dedicated cases historically.
+Its capture redemption, native/UI lifecycle and click-to-edit path are now connected
+in code; this integration remains unverified. See white-balance-picker-implementation.md.
 
 ## Separate final validation track
 

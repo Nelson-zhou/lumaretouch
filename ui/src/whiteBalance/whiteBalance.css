@@ -2,3 +2,5 @@
 .whiteBalanceButtons{display:flex;gap:6px;flex-wrap:wrap}
 .whiteBalanceControls p{margin:0;overflow-wrap:anywhere}
 .whiteBalanceControls small{opacity:.75;line-height:1.5}
+
+.whiteBalancePickerControls{display:flex;flex-wrap:wrap;gap:6px}.whiteBalancePickerControls small,.whiteBalancePickerControls p{flex-basis:100%;line-height:1.5;margin:0}

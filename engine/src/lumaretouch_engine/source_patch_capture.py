@@ -39,12 +39,14 @@ def header(d):
     return h
 
 
-def write_capture(root, d, rgba):
+def write_capture(root, d, rgba, *, purpose="source-patch"):
     """Descriptor-relative exclusive creation beneath the native private root."""
+    if purpose not in ('source-patch', 'white-balance'):
+        raise ValueError('Unsupported private capture purpose')
     root=Path(root)
     flags=os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC
     rootfd=os.open(root,flags)
-    name='lumaretouch-source-patch-'+d['capture_id']+'-'+d['ticket']
+    name='lumaretouch-'+purpose+'-'+d['capture_id']+'-'+d['ticket']
     directory=None;created=False
     try:
         info=os.fstat(rootfd)

@@ -102,6 +102,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             st.on_inspection_engine_end(inspection_epoch);
             st.color_capture.lock().unwrap().engine_ended(inspection_epoch);
             st.source_patch_capture.lock().unwrap().engine_ended(inspection_epoch);
+            st.white_balance_capture.lock().unwrap().engine_ended(inspection_epoch);
             if exited{if let Err(e)=root.cleanup(){st.push_log(format!("inspection cleanup: {e}"));}}
         });
     }
@@ -197,6 +198,10 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             let revision=*state.doc_rev.lock().unwrap();
             state.source_patch_capture.lock().unwrap().armed_event(inspection_epoch,&v,revision);
         }
+        "white_balance_capture" => {
+            let revision=*state.doc_rev.lock().unwrap();
+            state.white_balance_capture.lock().unwrap().armed_event(inspection_epoch,&v,revision);
+        }
         "color_scopes" => {
             let revision=*state.doc_rev.lock().unwrap();
             state.color_scopes.lock().unwrap().complete(&v,revision);
@@ -226,6 +231,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             state.white_balance_results.lock().unwrap().ready(inspection_epoch,v["white_balance_result_protocol"].as_u64()==Some(1));
             state.source_patch.lock().unwrap().ready(inspection_epoch,v["source_patch_result_protocol"].as_u64()==Some(1));
             state.source_patch_capture.lock().unwrap().ready(inspection_epoch,v["source_patch_capture_protocol"].as_u64()==Some(1));
+            state.white_balance_capture.lock().unwrap().ready(inspection_epoch,v["white_balance_capture_protocol"].as_u64()==Some(1));
             // M3-b：引擎报上来的内置预设清单（按钮文字与提交名都靠它）。
             // 不写这一臂就会落进下面的 other 分支：只进日志，前端永远拿不到。
             state.on_ready(&v);

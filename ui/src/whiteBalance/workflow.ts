@@ -1,5 +1,5 @@
 export type Algorithm='legacy-xyz-ratio-v1'|'linear-srgb-d-white-ratio-v1';
-export type Request={request_id:string;document_id:string;action:'set_algorithm'|'reset';algorithm?:Algorithm};
+export type Request={request_id:string;document_id:string;action:'set_algorithm'|'reset'|'clear_pick';algorithm?:Algorithm};
 export type Context={enabled:boolean;documentId:string;reason?:string};
 export type State={phase:'idle'|'sending'|'waiting'|'success'|'failure'|'uncertain';message:string;request?:Request};
 export type Ports={send:(r:Request)=>Promise<unknown>;query:(id:string)=>Promise<unknown>;refresh:()=>Promise<void>;id:()=>string;sleep:(ms:number)=>Promise<void>;timeoutMs?:number};
@@ -33,6 +33,7 @@ export function createWhiteBalanceWorkflow(ports:Ports){
         if(!object(r.after)||!object(r.after.options))throw Error('白平衡结果缺少参数证据');
         if(request.action==='set_algorithm'&&r.after.options.algorithm!==request.algorithm)throw Error('白平衡算法结果与请求不符');
         if(request.action==='reset'&&(r.after.temperature_shift!==0||r.after.tint_shift!==0||!Array.isArray(r.after.options.picked_gains)||r.after.options.picked_gains.length!==3||!r.after.options.picked_gains.every(v=>v===1)))throw Error('白平衡重置结果不完整');
+        if(request.action==='clear_pick'&&(!Array.isArray(r.after.options.picked_gains)||r.after.options.picked_gains.length!==3||!r.after.options.picked_gains.every(v=>v===1)))throw Error('中性点清除结果不完整');
         let refreshFailed=false;
         try{await bounded(ports.refresh(),Math.min(timeout,3000));}catch{refreshFailed=true;}
         if(token!==generation)return;
