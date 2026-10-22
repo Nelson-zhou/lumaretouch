@@ -1,3 +1,4 @@
+import type {WatermarkSettings} from "./watermark/model";
 import {curveBarrierRequired,settleCurveEdit,isCurveEditBusy} from './curveEditBarrier';
 import type {PresetReply} from './presets/presetWorkflow';
 import type {BatchReply} from './batch/batchWorkflow';
@@ -1014,6 +1015,8 @@ export interface TaskState {
  */
 export interface ExportedImage {
   path: string;
+  outputs?: {path: string | null; variant: string; skipped?: boolean}[];
+  watermark?: {enabled: boolean; orientation?: string; asset_sha256?: string};
   /** 16-bit 母档读回差值必须为0；档位/低8位是诊断而非纯色图拒绝条件。
    *  冲突跳过时没有读回，三个诊断值为null。 */
   bits?: number;
@@ -1399,7 +1402,7 @@ export const runExport = (
   opts?: { format?: string; quality?: number; tile?: number; images?: string[];
            scale?: number; sharpen?: number; upscaleBackend?: string;
            bitDepth?: number; outputProfile?: string; tiffCompression?: string;
-           metadataIncludeGps?: boolean; conflictPolicy?: string },
+           metadataIncludeGps?: boolean; conflictPolicy?: string; watermark?: WatermarkSettings },
 ) =>
   invoke<{ requested: boolean }>("export", {
     outDir,
@@ -1418,6 +1421,7 @@ export const runExport = (
     tiffCompression: opts?.tiffCompression,
     metadataIncludeGps: opts?.metadataIncludeGps,
     conflictPolicy: opts?.conflictPolicy,
+    watermark: opts?.watermark,
   });
 
 export {parseFrameHead,type ParsedFrame} from './previewFrame';

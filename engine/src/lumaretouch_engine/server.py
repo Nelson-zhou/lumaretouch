@@ -5801,7 +5801,7 @@ class Engine:
                    "scale", "sharpen", "upscale_backend", "bit_depth",
                    # d2c 那四格：名字进白名单不等于接通，下面逐条校验完才进 snap
                    "output_profile", "tiff_compression", "metadata_include_gps",
-                   "conflict_policy"}
+                   "conflict_policy", "watermark"}
 
     def _state_to_export_snap(self, st: dict, *, device, scale, upscale_backend,
                               sharpen) -> dict:
@@ -6106,6 +6106,12 @@ class Engine:
         # fields. Otherwise a neutral active image silently bypasses edits on
         # another image in a 16-bit passthrough batch.
         snap_by_path = self._export_snap_by_path(images, doc, snap)
+        from . import watermark as WM
+        try:
+            snap["export_watermark"] = WM.freeze_settings(p.get("watermark"))
+        except (ValueError, TypeError, OSError) as error:
+            emit({"event": "error", "error": f"水印设置无效：{error}"})
+            return
         # Pixel edits are now routed to the float/RGB16 pipeline per image.
         # The neutral classifier remains below to select exact passthrough;
         # it must not be used to silently omit nonneutral frozen recipes.
@@ -6121,7 +6127,8 @@ class Engine:
         # `**opts` 引的是一个不存在的名字——于是每一次批量导出都在 cmd_export 里 NameError，
         # 而开发 venv 里这批用例全部 skip（没 torch），只有运行时 venv 才响得出来）
         opts = {"output_profile": output_profile, "tiff_compression": tiff_comp,
-                "metadata_include_gps": bool(include_gps), "conflict_policy": conflict_policy}
+                "metadata_include_gps": bool(include_gps), "conflict_policy": conflict_policy,
+                "watermark": WM.public_settings(snap.get("export_watermark"))}
         # P1-1：为这批每一张预解析各自的配方（命令线程读 _docs，worker 不再读 live）。
         self._export_args = (list(images), out_dir, fmt, quality, tile, doc, snap, bit_depth,
                              opts, snap_by_path)
@@ -6463,7 +6470,9 @@ class Engine:
 
     def _export_loop(self):
         from .decode import load_full
+        from .watermark_delivery import write_delivery8, export_delivery16
         images, out_dir, fmt, quality, tile, doc, snap, bit_depth, opts, snap_by_path = self._export_args
+        watermark = snap.get("export_watermark")
         task = self._export_task
         n = len(images)
         if task is not None and task["state"] != T.RUNNING:
@@ -6493,17 +6502,19 @@ class Engine:
                                   conflict_policy=opts["conflict_policy"],
                                   metadata_include_gps=opts["metadata_include_gps"],
                                   tiff_compression=opts["tiff_compression"])
-                    if self._master16_snapshot_blockers(snap_i):
+                    if watermark or self._master16_snapshot_blockers(snap_i):
                         stage = "decode16"
                         decode_started = monotonic_ns()
                         d = load_full(path, device=snap_i["device"], want_bits=16)
                         decode_ms = (monotonic_ns() - decode_started) / 1e6
                         spec, skipped = self._export_snapshot(snap_i, d.h, d.w, for_document=for_doc_i)
                         stage = "edit16"
-                        r = export_edited_16bit(d, spec, out_path, device=snap_i["device"], tile=tile,
+                        render16 = export_delivery16 if watermark else export_edited_16bit
+                        wm_args = {"watermark": watermark} if watermark else {}
+                        r = render16(d, spec, out_path, device=snap_i["device"], tile=tile,
                                                crop_rect=tuple(snap_i.get("crop_rect") or (0, 0, 1, 1)),
                                                rotation_degrees=float(snap_i.get("crop_rotation") or 0),
-                                               decode_ms=decode_ms, **common)
+                                               decode_ms=decode_ms, **wm_args, **common)
                     else:
                         stage = "master16"
                         r = export_master_16bit(path, out_path, device=snap_i["device"], **common)
@@ -6545,6 +6556,7 @@ class Engine:
                                     # 冲突跳过用 out_skipped，不把两个语义挤进一个键
                                     "pipeline": r.get("pipeline"),
                                     "render_stats": r.get("render_stats"),
+                                    "watermark": r.get("watermark"), "outputs": r.get("outputs"),
                                     "skipped": skipped})
                     # 16-bit 那一路也得有逐图进度与台账结局：以前它 continue 得过早，
                     # 既不发 export_progress 也不记条目——于是 RAW 批量导出在进度条上
@@ -6578,7 +6590,7 @@ class Engine:
                     raise _ExportError(
                         "RAW 源暂不携带源 ICC：这条通道没读元数据，不是文件里没有。"
                         "请改选 srgb，或把一个真实的 .icc 文件路径当 output_profile 递进来")
-                info = write_file(frame, out_path, quality=quality,
+                info = write_delivery8(frame, out_path, quality=quality, watermark=watermark,
                                   output_profile=opts["output_profile"],
                                   source_icc=d.source_icc, source_exif=d.source_exif,
                                   metadata_include_gps=opts["metadata_include_gps"],
@@ -6603,10 +6615,12 @@ class Engine:
                                 "gps_written": info.get("gps_written"),
                                 "orientation_dropped": info.get("orientation_dropped"),
                                 "tiff_compression": info.get("tiff_compression"),
+                                "watermark": info.get("watermark"), "outputs": info.get("outputs"),
                                 "skipped": skipped, **st})
             except Exception as e:      # 逐图失败不能带倒整批
                 failed += 1
-                results.append({"path": path, "stage": stage, "error": f"{type(e).__name__}: {e}"})
+                results.append({"path": path, "stage": stage, "error": f"{type(e).__name__}: {e}",
+                                "outputs": getattr(e, "outputs", [])})
             emit({"event": "export_progress", "index": idx, "total": n, "path": path,
                   "ok": "error" not in results[-1]})
             self._task_item(task, path, results[-1])

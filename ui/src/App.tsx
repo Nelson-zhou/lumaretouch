@@ -1,3 +1,5 @@
+import {WatermarkControls, WatermarkReceipt} from "./watermark/WatermarkControls";
+import {useWatermarkSettings} from "./watermark/model";
 import {useWhiteBalanceWorkflow} from "./whiteBalance/useWhiteBalanceWorkflow";
 import {WhiteBalanceControls} from "./whiteBalance/WhiteBalanceControls";
 import {useSourcePatchWorkflow} from './sourcePatch/useSourcePatchWorkflow';
@@ -206,6 +208,7 @@ export default function App() {
   // 批量出片（M4）：满幅导出跑在引擎的 worker 线程里，UI 只能从事件拿进度与终态。
   // tile 不预先填一个数：行程与默认值都来自 ready 报的 export_caps，前端抄一份就会在
   // 引擎改口径时把"能导"变成"导错"。
+  const {watermark, setWatermark, storageError: watermarkStorageError} = useWatermarkSettings();
   const [exportDir, setExportDir] = useState("/tmp/luma-export");
   const [exportFormat, setExportFormat] = useState("jpg");
   const [exportQuality, setExportQuality] = useState(95);
@@ -1196,6 +1199,7 @@ export default function App() {
           tiffCompression: combo.tiffCompression,
           metadataIncludeGps: exportGps,
           conflictPolicy: exportConflict,
+          watermark,
         })
           .then(() => refreshStatus())
           .then(() => watchExportOutcome(before));
@@ -2021,11 +2025,12 @@ export default function App() {
                     : now ? "导出中" : "待导出";
                   return (
                     <div className={"qRow" + (done ? (done.error ? " bad" : " ok") : "")}
-                         key={p}>
+                         key={p} title={done?.error}>
                       <span className="qName">{d?.name ?? p.split("/").pop() ?? p}</span>
                       <span className="qFmt">{exportBits16 ? "16-bit TIFF"
                         : exportFormat.toUpperCase()}</span>
                       <em>{state}</em>
+                      <WatermarkReceipt outputs={done?.outputs}/>
                     </div>
                   );
                 }) : <div className="qEmpty">先在底片条或图库选择要导出的照片</div>}
@@ -2095,10 +2100,8 @@ export default function App() {
                          onChange={(e) => setExportGps(e.target.checked)} />
                   写入 GPS
                 </label>
-                <label className="exCheck off" title="水印将在后续版本提供">
-                  <input type="checkbox" disabled /> 水印
-                </label>
               </div>
+              <WatermarkControls value={watermark} onChange={setWatermark} disabled={exporting} storageError={watermarkStorageError}/>
               <label className="exDir">输出目录
                 <input value={exportDir} onChange={(e) => setExportDir(e.target.value)} />
               </label>

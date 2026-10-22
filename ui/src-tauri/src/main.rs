@@ -1285,6 +1285,7 @@ fn export(
     tiff_compression: Option<String>,
     metadata_include_gps: Option<bool>,
     conflict_policy: Option<String>,
+    watermark: Option<Value>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "export", "action": "start", "out_dir": out_dir});
     if let Some(v) = format {
@@ -1316,6 +1317,7 @@ fn export(
         ("tiff_compression", tiff_compression.map(Value::from)),
         ("metadata_include_gps", metadata_include_gps.map(Value::from)),
         ("conflict_policy", conflict_policy.map(Value::from)),
+        ("watermark", watermark),
     ] {
         if let Some(v) = v {
             cmd[k] = v;
