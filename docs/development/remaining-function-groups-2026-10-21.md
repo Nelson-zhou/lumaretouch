@@ -45,3 +45,10 @@ CI/Qoder verification on62c33128 (production equivalent backend33ee297d). The
 ordinary crop-aspect code path and comparison containment are corrected candidates;
 physical desktop visual acceptance remains pending. See frame-presentation-
 verification-2026-10-21.md. This does not close any of the six feature groups above.
+
+Subsequent batch implementation: frozen source/target review, conservative revision
+fences, identity-based resolution, skip/recheck protection, scoped undo, parked dirty
+tracking and the reachable native/UI confirmation/receipt flow passed basic checks
+on c7594167. See frozen-batch-verification-2026-10-21.md. This closes that sampled
+functional gap at the code/basic-regression level, not its real GUI/large-batch
+acceptance or the full handbook. The other five sampled function groups remain.

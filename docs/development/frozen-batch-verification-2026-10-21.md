@@ -48,7 +48,41 @@ reorder/remove/re-add, workspace invalidation, scoped undo, parked dirty trackin
 revision exhaustion admission, claim-before-write and unknown-outcome/idempotency.
 It does not prove crash durability or exhaustive lifecycle/GUI behavior.
 
-Native epoch-bound receipt ownership and the React review flow are included in the
-next integrated candidate. Their tests/build/typecheck are **pending** at this
-checkpoint. The installed desktop application has not been replaced. Full handbook
-coverage and real-machine quality/performance acceptance remain open.
+## Integrated native/UI result
+
+Corrected remote `c7594167c5df2311f505f96d2184b87aed6070ca`, tree
+`2693d215d20b7e3ed343552038afacc2d656c9ab`, passed non-GPU CI run `39683725492`.
+Engine job `119512389249`: **1045 passed, 422 skipped in 70.42s**. UI job
+`119512388881`: **126 frontend tests**, TypeScript/Vite build, cargo check and
+**5 batch_host Rust tests** passed, alongside the existing native regression groups.
+GPU jobs remain skipped.
+https://github.com/Nelson-zhou/lumaretouch/actions/runs/39683725492
+
+Qoder dedicated `lumaretouch-ui-c7594167`:
+- npm test at **22:06:20 UTC**: **126 passed, 0 failed/skipped/cancelled/todo**,
+  including all 13 batchWorkflow cases; reporter 420.341523 ms, wall 0.559356125 s.
+- npm run build **22:06:34–22:06:38 UTC**, rc 0, 0 TypeScript errors,
+  Vite 6.4.4, 86 modules, dist 684 KiB reported; wall 4.416468390 s.
+- Node v24.22.0 / npm 11.19.1. Existing dependencies were copied only after the
+  package-lock SHA256 matched `89152a5d85f307d166834ab4d81b9b89f3e146f7874ccd07c17b899fe4e7b01e`.
+- Exact candidate SHA/tree and zero tracked changes before/after verified.
+- `.scratch/ui-regression/logs/stage{1-npm-test,2-npm-build}.{trace.log,rc.txt}`
+  retains commands, actual times and results.
+- App.tsx SHA256 `d07f644dfa2cc8984478cbee7d96eafd04a0af7b222b52bdfbbb31cbd135b1f3`.
+- batchWorkflow.ts SHA256 `d90c9759c269abce0b035d066cf69abb331614e770b27aa74b7f53be29afcd31`.
+- batchWorkflow.test.ts SHA256 `556234f0e02d3e224f4425dbe9af23d7882ae65af487ed7944a39ac08667a026`.
+- BatchActions.tsx SHA256 `93f73c97c149dc5413cff528e022756813a84489b9e9888651fa2c1d14c2014f`.
+
+Preserved frontend failure: `0f6c38782b545a30a1f511916c981f86a3ced721` passed
+126 npm tests at 22:02:49 UTC (474.478653 ms reporter; 0.613913065 s wall), but
+build returned rc 2 at 22:03:27 UTC. Moving the compact toolbar outside the fixed
+filmstrip omitted one JSX fragment closure. CI job `119510655806` and Qoder both
+reported TS17008/TS1381/TS17015/TS1382. Vite did not run and no dist was produced.
+The missing closure was fixed; tests/guards were not weakened. Failed logs remain
+in the separate `lumaretouch-ui-0f6c3878` worktree. Corrected checks used a new
+worktree, not an overwritten failure record.
+
+The recipe review/confirmation/target protection/correlated result loop has passed
+basic verification. The installed desktop application has not been replaced. Real
+GUI, 1000-image throughput, hardware quality/performance and full handbook coverage
+remain open. Runtime review records are bounded and not crash-durable transactions.

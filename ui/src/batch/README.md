@@ -14,5 +14,5 @@ That acknowledgment neither cancels nor rolls back an already-submitted operatio
 
 Tests are listed in `ui/package.json`. Native receipt contracts live in
 `ui/src-tauri/src/batch_host.rs`; engine snapshot/conflict tests are separate. The
-initial integrated candidate still requires CI/Qoder checks and later real GUI
-acceptance. No physical presentation or full-product completion is implied.
+integrated candidate passed basic CI/Qoder checks on c7594167; real GUI
+acceptance remains pending. See docs/development/frozen-batch-verification-2026-10-21.md. No physical presentation or full-product completion is implied.

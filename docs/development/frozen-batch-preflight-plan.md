@@ -2,8 +2,8 @@
 
 Original AI acceptance BATCH-001 preserves source-version snapshot; BATCH-002
 protects targets edited after preflight. The new token backend freezes source/targets and consumes reviewed plans. It is
-verified in focused Qoder backend checks; native/UI review wiring is now present
-but awaits its own checks at this checkpoint.
+verified in focused Qoder backend checks; the native/UI review flow has also passed
+its basic CI/Qoder checks. See frozen-batch-verification-2026-10-21.md.
 Legacy commits without a token remain explicitly direct_unreviewed compatibility
 operations. The narrow scoped-undo correction alone did not close this gap.
 
@@ -76,7 +76,7 @@ and parked undo retaining unrelated edits; no conflicts from pure reads/selectio
 - Lifecycle fences cover explicit strength, proxy recovery, internal precompute,
   failed face reattachment and device migration, not only normal edit commands.
 - Native epoch-bound receipt ownership and the user review dialog are wired in
-  this candidate; basic native/UI checks and hardware acceptance remain pending.
+  this candidate and passed basic checks; physical GUI/hardware acceptance remains pending.
 
 ## Official / mature open-source comparison
 
