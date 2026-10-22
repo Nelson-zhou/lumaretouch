@@ -445,7 +445,7 @@ class PreviewPipeline:
                 mid_gain: float = DEFAULT_MID_GAIN,
                 broad_gain: float = DEFAULT_BROAD_GAIN,
                 texture_radius: int = DEFAULT_TEXTURE_RADIUS,
-                channel: str | None = None, scope_tap=None):
+                channel: str | None = None, scope_tap=None, render_stage="output"):
         """只跑算法，返回显存里的 float (1,3,H,W)。滑块每动一次调一次。
 
         channel 给定时走分通道渲染（掩膜加权），不给定时全图。两条都是纯 GPU。
@@ -455,6 +455,8 @@ class PreviewPipeline:
         全图 `(1-s)*img + s*out`，分通道 `mix_masked(img, out, s, weight)`。
         因此 strength=0 恒等那条承诺一分不改：`0*out` 仍然恒为 0。
         """
+        if render_stage not in ('output', 'wb-input'):
+            raise ValueError('Unknown production render stage')
         if self.src_f32 is None:
             raise RuntimeError("先 load_rgb_u8 再 render")
         # 每帧的 db 应用成本从 0 起算：它必须只由“这一帧真跑了什么”给出，
@@ -495,7 +497,11 @@ class PreviewPipeline:
         # 输出变换之前做=局部修容层在调整图层下面，是工业流程而不是随手选）。
         # 八色 HSL 紧跟曝光层之后、LUT 之前：它读的是曝光后的那份颜色，而表是
         # 输出变换（把 HSL 放在表后面就是“调完再套一层风格”，两份调整互相污染）。
-        out = self.apply_exposure(self.apply_enhance(self.apply_deform(out)))
+        out = self.apply_enhance(self.apply_deform(out))
+        if scope_tap is not None: scope_tap("wb-input", out)
+        if render_stage == 'wb-input':
+            return out
+        out = self.apply_exposure(out)
         if scope_tap is not None: scope_tap("levels-input", out)
         out = self.apply_levels(out)
         if scope_tap is not None: scope_tap("curves-input", out)
@@ -1411,27 +1417,9 @@ class PreviewPipeline:
         self.last_geometry_ms = 0.0
         if not self.has_geometry():
             return t
-        import torch.nn.functional as NF
-        # 链上的张量是 (1,3,H,W)（见 retouch 的返回约定），而 ops.geometry 的两臂按
-        # (H,W,3) 写——这个布局差别在单测里看不见（那里直接喂 HW3），是接进真链第一次
-        # 出帧才炸出来的（permute: input.dim()=4）。所以这里显式转一次，出去也转回来。
-        if t.dim() == 4:
-            n, c, hh, ww = t.shape
-            hw3 = t.permute(0, 2, 3, 1)[0]
-        else:
-            n, c, hh, ww = None, None, None, None
-            hw3 = t
+        from .geometry_projection import project
         t0 = time.perf_counter()
-        out = crop_rotate_t(hw3, self.crop_rect, self.crop_rotation, uint8=False)
-        h, w = int(self.h), int(self.w)
-        if (out.shape[0], out.shape[1]) != (h, w):
-            out = NF.interpolate(out.permute(2, 0, 1)[None], size=(h, w),
-                                 mode="bilinear", align_corners=False)[0].permute(1, 2, 0)
-        if n is not None:
-            out = out.permute(2, 0, 1).contiguous()[None]
-        if not torch.isfinite(out).all():
-            raise ValueError(f"裁剪/旋转产出非有限值，已拒：{self.crop_rect} "
-                             f"{self.crop_rotation}")
+        out = project(t, self.crop_rect, self.crop_rotation, (int(self.w), int(self.h)))
         if self.device.type != "cpu":
             torch.cuda.synchronize(self.device)
         self.last_geometry_ms = (time.perf_counter() - t0) * 1000.0

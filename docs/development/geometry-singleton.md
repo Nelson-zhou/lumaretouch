@@ -1,6 +1,9 @@
 # One-pixel crop axes under arbitrary rotation
 
-Status: candidate, awaiting exact-commit CI. No local execution performed.
+Verified candidate87e1f59ba276c14bd8706f6c9f8fb03110e205c1 passed CI39745935554.
+Geometry suites:112 passed,0 skipped,0.91s. All non-GPU jobs passed; GPU skipped.
+Lightweight engine:1202 passed,474 skipped. Separate WB40 and preset3 cases also
+passed without skips. No local execution or desktop/GPU acceptance performed.
 
 A legal normalized crop can round to one source pixel in either dimension. The
 legacy four-neighbour validity test then had no valid interval (`x0 < width-1`

@@ -7,6 +7,8 @@ mod levels;
 mod white_balance;
 #[path="../white_balance/wire.rs"]
 mod white_balance_wire;
+#[path="../white_balance/picker.rs"]
+mod white_balance_picker;
 use std::io::{self, Read, Write};
 fn main() {
     if let Err(e)=run() {eprintln!("{e}");std::process::exit(2);}
@@ -19,6 +21,7 @@ fn run()->Result<(),String>{
     let first=tokens.next().ok_or("missing point count")?;
     if first=="parametric-reference" {return parametric_reference(&mut tokens);}
     if first=="parametric" {return parametric_table(&mut tokens);}
+    if first=="white-balance-pick-v1" {println!("{}",white_balance_picker::handle(&mut tokens)?);return Ok(());}
     if first=="white-balance-v1" {println!("{}",white_balance_wire::handle(&mut tokens)?);return Ok(());}
     if first=="levels" {return levels_reference(&mut tokens);}
     let luminance=first=="luminance";
