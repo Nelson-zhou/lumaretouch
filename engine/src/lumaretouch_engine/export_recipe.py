@@ -5,6 +5,7 @@ Mask resampling allocates full-resolution assets, so the caller must admit the
 render and dimensions before calling this function. Missing-layer reports remain
 mandatory and full-quality inspection must reject any skipped active layers.
 """
+from . import white_balance_recipe as WB
 from .export import ExportSpec, resample_field
 from .vram import RepairOp, LightOp
 from .ops import curves as CURVES
@@ -47,6 +48,7 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
                       # 不是直接索引——拿历史快照导出应当“没有曝光层”，不是报错。
                       exposure=tuple(snap.get("exposure", (0.0,) * 7)),
                       exposure_ref_k=snap.get("exposure_ref_k"),
+                      wb_options=WB.check_options(snap["wb_options"]) if "wb_options" in snap else WB.default_options(),
                       hsl=tuple(snap.get("hsl", (0.0,) * 24)),
                       curves=CURVES.check_curves(snap.get("curves")), levels=LEVELS.check_levels(snap.get("levels")),
                       lut_amount=float(snap["lut_amount"]),

@@ -3,6 +3,7 @@
 Session owns document rows; this controller borrows them only during synchronous
 commands. The controller alone owns batch identities, undo ledger and summaries.
 """
+from . import white_balance_recipe as WB
 from dataclasses import dataclass
 from typing import Callable
 from . import scope as SC
@@ -175,6 +176,7 @@ class BatchSyncController:
             self.versions.check_advance(row)
             before = dict(row["state"]) if r["index"] != live_idx else dict(self.editor.capture())
             new = SC.apply_modules(before, mods)
+            WB.prepare_state(new)
             planned.append((r["index"], before, new))
             applied_rows.append(r)
         if not planned:
@@ -247,7 +249,7 @@ class BatchSyncController:
         # “同步后又被编辑”那一笔还停在 live 字段里，而 row["state"] 还是 commit 时那一版，
         # 一比就“没冲突”——本轮实测就是这个 bug：被编辑过的那一格也被还原了。
         self.documents.remember_current()
-        restored, conflicts = [], []
+        restored, conflicts, planned = [], [], []
         for key, rec in b["targets"].items():
             idx = int(key)
             if rec.get("document_id"):
@@ -266,12 +268,38 @@ class BatchSyncController:
                 continue
             # Conflict checks are scoped; restoration must use the same scope.
             # Restoring the whole old snapshot would erase later unrelated edits.
-            restored_state = SC.apply_modules(cur, SC.params_of(rec["before"], ops))
+            try:
+                restored_state = SC.apply_modules(cur, SC.params_of(rec["before"], ops))
+                WB.prepare_state(restored_state)
+                self.versions.check_advance(row)
+            except Exception as error:
+                conflicts.append({"index": idx, "path": rec["path"],
+                                  "reason": f"还原配方与后续修改不兼容：{str(error)[:500]}"})
+                continue
+            planned.append((idx, row, cur, restored_state))
+        # Validate every candidate first, then render the active target before any
+        # parked writes. An invalid cross-module combination is an explicit conflict.
+        live_idx = self.documents.current_index()
+        live = next((item for item in planned if item[0] == live_idx), None)
+        if live is not None:
+            _, row, previous, restored_state = live
             self.versions.advance(row)
-            if idx == self.documents.current_index():
-                # 活动那一格不能只改存档：画面就挂在会话上，不重放就是“事件说还原了
-                # 而屏幕上还是同步后那一版”。
-                self.editor.replay(restored_state, mode="batch", replayed_for=f"batch_undo:{bid}")
+            try:
+                frame = self.editor.replay(restored_state, mode="batch", replayed_for=f"batch_undo:{bid}")
+                if frame is not None:
+                    self.emit(frame)
+            except Exception as error:
+                try:
+                    frame = self.editor.replay(previous, mode="batch", replayed_for=f"batch_undo_rollback:{bid}")
+                    if frame is not None:
+                        self.emit(frame)
+                except Exception as rollback_error:
+                    self.editor.invalidate()
+                    self.emit({"event": "engine_warn", "warn": f"batch undo rollback failed: {rollback_error}; reload the active document"})
+                raise SC.ScopeError(f"batch undo live target failed before parked writes: {error}") from error
+        for idx, row, previous, restored_state in planned:
+            if idx != live_idx:
+                self.versions.advance(row)
             row["state"] = restored_state
             self.editor.mark_dirty()
             restored.append(idx)

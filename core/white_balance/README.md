@@ -42,4 +42,4 @@ the low-level preview stage and invalid preparation leaves its old state intact.
 These low-level hooks are NOT a completed user feature. Server state, project and
 preset migration, frozen export/batch, undo and UI must be wired before enabling
 corrected recipes. The current bridge change adds a test-only independent Decimal
-oracle and actual helper/stage tests, whose exact-candidate CI is pending.
+oracle and actual helper/stage tests, which passed on d6b401af in CI39738251607: 16 cases, no skips, in1.24s.

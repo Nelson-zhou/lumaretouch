@@ -153,3 +153,17 @@ recipe semantics; check_curves in _apply_state rejects unsupported known curve
 versions before live field assignment. The project workspace can already have
 been replaced earlier. Do not describe the existing whole project-open operation
 as globally transactional merely because that later curve check is safe.
+
+
+## State/transfer integration candidate
+
+The pending integration carries explicit options through document capture/replay,
+project v2 writing and v1 legacy migration, scoped presets, batch candidate
+validation, both export snapshots, ExportSpec and master16 bypass guards. Project
+opening preflights every saved version before replacing the workspace. Ordinary
+slider edits retain the selected algorithm and full rollback restores picks and
+reference, including zero-scalar recipes. A failed rollback invalidates rendering.
+
+No picker UI or automatic legacy-algorithm conversion is enabled. This increment's
+new whole-flow tests must pass before treating these paths as verified. Root does
+not execute them locally; exact-commit CI is the current runnable verification.

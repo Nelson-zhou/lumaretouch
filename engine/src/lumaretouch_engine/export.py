@@ -28,6 +28,8 @@ margin 少 8 px 时差异像素就成倍涨并且一半压在网格线上（那�
 """
 from __future__ import annotations
 
+from . import white_balance_recipe as WB
+
 import math
 import os
 import time
@@ -146,6 +148,7 @@ class ExportSpec:
     # (ev, temperature_shift, tint_shift, contrast, highlights, shadows, saturation)
     exposure: tuple = (0.0,) * 7
     exposure_ref_k: float | None = None
+    wb_options: dict | None = None
     # 八色 HSL：24 个数 = 8 段 × (色相/饱和度/明亮度)。与预览同一条链序
     # （曝光之后、LUT 之前），所以导出与屏上是同一份式子。
     hsl: tuple = (0.0,) * 24
@@ -161,6 +164,14 @@ class ExportSpec:
 
     def check(self) -> None:
         """参数在进入昂贵通路之前先过一遍唯一校验口径（与各层 setter 同源）。"""
+        try:
+            state = WB.normalize_state({"_exposure": self.exposure,
+                "_exposure_ref_k": self.exposure_ref_k,
+                "_wb_options": WB.default_options() if self.wb_options is None else self.wb_options})
+            self.wb_options = state["_wb_options"]
+            WB.prepare_state(state)
+        except (ValueError, RuntimeError, OSError) as error:
+            raise ExportError(f"White balance export rejected: {error}") from error
         self.curves = CURVES.check_curves(self.curves)
         self.levels = LEVELS.check_levels(self.levels)
         s = float(self.strength)
@@ -550,14 +561,14 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                 pipe.set_enhance(spec.enhance)
         # 旧调用方可能仍只带 EV/WB 三项：先补长到 7 元组，再判中性/取影调四项。
         expo = (tuple(float(v) for v in spec.exposure) + (0.0,) * 7)[:7]
-        if expo != (0.0,) * 7:
+        if expo != (0.0,) * 7 or WB.has_picks(spec.wb_options) or spec.wb_options["algorithm"] == WB.CORRECTED:
             # 插在 cube/grade 之前提交：与预览链里 apply_exposure 的位置一致（lut 前）。
             # 提交顺位不影响数值（链序在 render 里定死），但保持“按链序挂图层”这个习惯，
             # 以后谁改链序时不会在这里多一个错因不明的不同步。
             pipe.set_exposure(expo[0], expo[1], expo[2],
                               ref_k=spec.exposure_ref_k,
                               contrast=expo[3], highlights=expo[4],
-                              shadows=expo[5], saturation=expo[6])
+                              shadows=expo[5], saturation=expo[6], wb_options=spec.wb_options)
         if not LEVELS.is_identity(spec.levels): pipe.set_levels(spec.levels)
         if not CURVES.is_identity(spec.curves):
             pipe.set_curves(spec.curves)

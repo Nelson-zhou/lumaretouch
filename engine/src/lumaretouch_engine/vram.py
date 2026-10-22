@@ -1463,12 +1463,10 @@ class PreviewPipeline:
         c, h, s, sa = check_tone(contrast, highlights, shadows, saturation)
         options = prepared = None
         if wb_options is not None:
-            from .white_balance_recipe import check_options, compile_gains
+            from .white_balance_recipe import check_options, prepare_state
             options = check_options(wb_options)
-            prepared = compile_gains(options, rk, dk, tn)
-            combined = tuple(g * (2.0 ** e) for g in prepared)
-            if not all(math.isfinite(g) and g > 0 for g in combined):
-                raise ValueError("WB gain and EV combination overflows or underflows")
+            prepared = prepare_state({"_wb_options": options, "_exposure_ref_k": rk,
+                                      "_exposure": (e, dk, tn, c, h, s, sa)})
         self.exposure_params = (e, dk, tn, c, h, s, sa)
         self.wb_options, self.prepared_wb = options, prepared
         self.exposure_ref_k = rk

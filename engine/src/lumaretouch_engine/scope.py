@@ -33,6 +33,7 @@ import math
 from .ops import curves as CURVES
 from .ops import levels as LEVELS
 from . import hsl_recipe as HSL_RECIPE
+from . import white_balance_recipe as WB
 
 SCHEMA = "lrt.scope.v1"
 PRESET_SCHEMA = "lrt.preset.v1"
@@ -106,16 +107,10 @@ MODULES: dict[str, dict] = {
                        st["_exposure"][5], st["_exposure"][6])),
     },
     OP_WHITE_BALANCE: {
-        "params": ("temperature_shift", "tint_shift"), "state_fields": ("_exposure",),
+        "params": ("temperature_shift", "tint_shift", "options"),
+        "state_fields": ("_exposure", "_exposure_ref_k", "_wb_options"),
         "single_face": False, "transferable": True, "cmd": "exposure",
-        "read": lambda st: {"temperature_shift": float(st["_exposure"][1]),
-                            "tint_shift": float(st["_exposure"][2])},
-        "write": lambda st, v: st.update(
-            _exposure=(st["_exposure"][0],
-                       float(v.get("temperature_shift", NEUTRAL_TEMP)),
-                       float(v.get("tint_shift", NEUTRAL_TINT)),
-                       st["_exposure"][3], st["_exposure"][4],
-                       st["_exposure"][5], st["_exposure"][6])),
+        "read": WB.transfer_from_state, "write": WB.apply_transfer,
     },
     OP_CROP: {
         "params": ("rect_normalized", "rotation_degrees"),
@@ -212,7 +207,7 @@ def _finite(value, where: str) -> float:
 
 
 def check_params(op: str, params: dict) -> dict:
-    """校验一个模块的参数并返回干净副本（未给的键回冻结中性值）。
+    """校验一个模块的参数并返回干净副本（未给的键回冻结中性值；旧 WB options 缺省保留目标参考白）。
 
     未知键**整条拒**：预设文件里多出一个键，要么是别的版本写的（schema 该拦），要么是
     有人想把参数塞进它不属于的模块。静默忽略就是"导入后参数少了一半而没人知道"。
@@ -231,6 +226,9 @@ def check_params(op: str, params: dict) -> dict:
         parts = [f"{k}：{unmodeled_reason(op, k)}" if unmodeled_reason(op, k) else f"{k}（未知参数）"
                  for k in unknown]
         raise ScopeError(f"{op} 收到不可作用的参数：" + "；".join(parts))
+    if op == OP_WHITE_BALANCE:
+        try: return WB.check_transfer_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
     if op == OP_HSL:
         try: return {"recipe": HSL_RECIPE.check_recipe(params.get("recipe"))}
         except ValueError as error: raise ScopeError(str(error)) from error
@@ -272,6 +270,7 @@ def check_params(op: str, params: dict) -> dict:
 
 
 def _neutral_of(op: str, key: str):
+    if op == OP_WHITE_BALANCE and key == "options": return WB.neutral_transfer_options()
     if op == OP_HSL and key == "recipe": return HSL_RECIPE.default_recipe()
     if op == OP_LEVELS and key == "recipe": return LEVELS.default_levels()
     if op == OP_CURVES and key == "recipe":
@@ -331,7 +330,7 @@ def apply_modules(state: dict, mods: dict[str, dict]) -> dict:
     """把 {operation_id: 参数} 盖到一份文档状态上，返回**新的一份**。
 
     同模块覆盖语义（PRESET-001）：预设里出现的那个模块，参数是**整模块替换**——预设里
-    没写的键回到冻结中性值，而不是留着目标图上原来的值。这正是"先套人像预设再套色彩
+    没写的键回到冻结中性值；旧 WB options 缺省保留目标参考白。其它键不保留目标原值。这正是"先套人像预设再套色彩
     预设"能预期重放的原因：两次套完的结果与目标图原来有什么无关（作用域内）。
     """
     ops = list(mods)

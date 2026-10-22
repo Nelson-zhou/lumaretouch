@@ -60,6 +60,7 @@ from . import tasks as T
 from . import scope as SC
 from . import preset_controller as PRS
 from . import hsl_recipe as HSL_RECIPE
+from . import white_balance_recipe as WB
 from . import preset_store as PS
 from .project import ProjectError
 from . import session as S
@@ -275,6 +276,7 @@ class Engine:
         self._crop_rotation = 0.0
         self._exposure = (0.0,) * 7
         self._exposure_ref_k = None
+        self._wb_options = WB.default_options()
         # 八色 HSL（原创扩展）：24 个数 = 8 段 × (色相/饱和度/明亮度)。与曝光层
         # 同一条生命周期（初始化、重挂、快照、上报），否则又是“切张图滑块还在、
         # 画面已经回中性”。
@@ -815,26 +817,13 @@ class Engine:
             # 两个偏移全为 0），那时三元组还是中性值而白平衡已偏离默认光源。只看三元组
             # 就会“会话迁了、参考光源没迁”：新会话按默认 K 数渲染，而宿主侧滑块的位置
             # 说的是另一个数——与上面那段担心是同一个错误，只是藏在另一个键上。
-            if self._exposure != (0.0,) * 7 or self._exposure_ref_k is not None:
-                try:
-                    st = pipe.set_exposure(self._exposure[0], self._exposure[1],
-                                           self._exposure[2], ref_k=self._exposure_ref_k,
-                                           contrast=self._exposure[3],
-                                           highlights=self._exposure[4],
-                                           shadows=self._exposure[5],
-                                           saturation=self._exposure[6])
-                    self._exposure = (float(st["exposure_ev"]),
-                                      float(st["exposure_temperature_shift"]),
-                                      float(st["exposure_tint_shift"]),
-                                      float(st["tone_contrast"]),
-                                      float(st["tone_highlights"]),
-                                      float(st["tone_shadows"]),
-                                      float(st["tone_saturation"]))
-                    self._exposure_ref_k = float(st["exposure_reference_k"])
-                except (RuntimeError, ValueError) as e:
-                    emit({"event": "engine_warn",
-                          "warn": f"新会话重提交曝光/白平衡失败，已整层清除（{type(e).__name__}）：{e}"})
-                    self._exposure = (0.0,) * 7
+            if (self._exposure != (0.0,) * 7 or self._exposure_ref_k is not None
+                    or WB.has_picks(self._wb_options) or self._wb_options["algorithm"] == WB.CORRECTED):
+                st = pipe.set_exposure(*self._exposure[:3], ref_k=self._exposure_ref_k,
+                                       contrast=self._exposure[3], highlights=self._exposure[4],
+                                       shadows=self._exposure[5], saturation=self._exposure[6],
+                                       wb_options=self._wb_options)
+                self._exposure_ref_k = float(st["exposure_reference_k"])
             # Curves are independent of LUTs and must survive every session rebuild.
             if not LEVELS.is_identity(self._levels): pipe.set_levels(self._levels)
             if not CURVES.is_identity(self._curves):
@@ -881,7 +870,7 @@ class Engine:
                   "_precompute", "_precompute_backend", "_face_index", "_face_box",
                   "_face_explicit", "_face_manual",
          "_exposure",
-         "_exposure_ref_k", "_hsl", "_curves", "_levels", "_crop_rect", "_crop_rotation")
+         "_exposure_ref_k", "_wb_options", "_hsl", "_curves", "_levels", "_crop_rect", "_crop_rotation")
     # 代理档一变就作废的那些层：它们的坐标是**这一档代理帧**上的像素坐标。
     PROXY_BOUND = ("_channel", "_repair_ops", "_redo_ops", "_light_ops", "_light_redo",
                    "_deform", "_deform_defer", "_deform_default", "_deform_overrides",
@@ -946,7 +935,7 @@ class Engine:
                 # 新列表**，不能是类级常量：两张图共用一个 list，关掉 A 图那一只误检就
                 # 会把 B 图同位置的脸也关掉（与 `_deform["amounts"]` 整份新抄同一条理由）
                 "_face_manual": {"disabled": [], "added": []},
-                "_exposure": (0.0,) * 7, "_exposure_ref_k": None,
+                "_exposure": (0.0,) * 7, "_exposure_ref_k": None, "_wb_options": WB.default_options(),
                 "_hsl": (0.0,) * 24, "_curves": CURVES.default_curves(), "_levels": LEVELS.default_levels(),
                 "_crop_rect": (0.0, 0.0, 1.0, 1.0), "_crop_rotation": 0.0,
                 # 掩膜/笔迹/形变场都活在**那一档代理尺寸**上，所以尺寸也是状态的一部分。
@@ -986,6 +975,7 @@ class Engine:
                                    tuple(float(v) for v in self._enhance["box"]))},
               "_enhance_defer": bool(self._enhance_defer),
               "_exposure": tuple(self._exposure), "_exposure_ref_k": self._exposure_ref_k,
+              "_wb_options": WB.check_options(self._wb_options),
               "_hsl": tuple(self._hsl), "_curves": CURVES.check_curves(self._curves), "_levels": self._levels,
               "_crop_rect": tuple(self._crop_rect), "_crop_rotation": float(self._crop_rotation),
               "_bg": dict(self._bg),
@@ -1006,6 +996,9 @@ class Engine:
         return st
 
     def _apply_state(self, st: dict) -> None:
+        # Validate WB and compile before changing any live field.
+        st = WB.normalize_state(st)
+        WB.prepare_state(st)
         # Old projects predate curves. Validate/deep-copy before changing any live field.
         st = {**st, "_curves": CURVES.check_curves(st.get("_curves")), "_levels": LEVELS.check_levels(st.get("_levels")),
               "_hsl": HSL_RECIPE.normalize_state(st.get("_hsl", HSL_RECIPE.NEUTRAL))}
@@ -1063,7 +1056,7 @@ class Engine:
         # 这是双向错配的另一格：不是图层没迁，是类型让判据说了谎。
         self._crop_rect = tuple(float(x) for x in self._crop_rect)
         self._crop_rotation = float(self._crop_rotation)
-        self._exposure = tuple(float(x) for x in self._exposure)
+        self._exposure = (tuple(float(x) for x in self._exposure) + (0.0,) * 7)[:7]
         self._exposure_ref_k = None if self._exposure_ref_k is None \
             else float(self._exposure_ref_k)
         self._strength = _clamp_strength(self._strength)
@@ -1568,7 +1561,8 @@ class Engine:
                              "shadows": float(self._exposure[5]),
                              "saturation": float(self._exposure[6]),
                              "reference_k": self._exposure_ref_k,
-                             "lit": self._exposure != (0.0,) * 7},
+                             "options": WB.check_options(self._wb_options),
+                             "lit": self._exposure != (0.0,) * 7 or WB.has_picks(self._wb_options)},
                 # 八色 HSL：数组顺序与 ops/hsl.py 的 BAND_NAMES 一一对应；量程也
                 # 从引擎报（UI 不抄一份数）。
                 "curves": CURVES.check_curves(self._curves), "levels": self._levels,
@@ -2522,7 +2516,11 @@ class Engine:
             t0 = monotonic_ns()
             try:
                 prj = PJ.load(path)
-            except (ProjectError, OSError) as e:
+                for document in prj["docs"]:
+                    for version in document["versions"]:
+                        if version.get("recipe") is not None:
+                            WB.prepare_state(version["recipe"])
+            except (ValueError, RuntimeError, OSError) as e:
                 emit({"event": "error", "error": f"项目打开失败：{e}"})
                 return
             dc = {"RepairOp": RepairOp, "LightOp": LightOp}
@@ -2550,6 +2548,9 @@ class Engine:
                             # load_image 会把它当刚扫出来的新图，把宿主要的那步 precompute 跳掉
                             "opened": True})
                 rows.append(row)
+            for candidate in rows:
+                WB.prepare_state(candidate["state"])
+            notes.extend({"reason": note} for note in prj.get("migration_notes", []))
             with self._doclock:
                 self._docs = rows
             self._document_versions().new_workspace()
@@ -5201,16 +5202,18 @@ class Engine:
             return
         prev = tuple(self._exposure)
         prev_ref = self._exposure_ref_k
+        prev_options = WB.check_options(self._wb_options)
         if action == "clear":
             st = self._vram.clear_exposure()
             self._exposure = (0.0,) * 7
             self._exposure_ref_k = None
+            self._wb_options = WB.default_options()
         else:
             given = {k: p[k] for k in ("ev", "temperature_shift", "tint_shift",
                                         "contrast", "highlights", "shadows",
                                         "saturation")
                      if p.get(k) is not None}
-            if not given and p.get("reference_k") is None:
+            if not given and p.get("reference_k") is None and "wb_options" not in p:
                 emit({"event": "error", "error": "exposure set 什么也没给：至少给一个参数，"
                       "或者走 clear 把整层关掉"})
                 return
@@ -5221,12 +5224,13 @@ class Engine:
             for k, v in given.items():
                 cur[names[k]] = v
             try:
+                options = WB.check_options(p["wb_options"]) if "wb_options" in p else prev_options
                 # 部分提交：拖一个滑块不该把另两个抹零，但合出来的那组必须整组校过
                 st = self._vram.set_exposure(cur[0], cur[1], cur[2],
                                              ref_k=p.get("reference_k", self._exposure_ref_k),
                                              contrast=cur[3], highlights=cur[4],
-                                             shadows=cur[5], saturation=cur[6])
-            except ValueError as e:
+                                             shadows=cur[5], saturation=cur[6], wb_options=options)
+            except (ValueError, RuntimeError, OSError) as e:
                 emit({"event": "error", "error": f"曝光/白平衡被拒，整条不生效：{e}"})
                 return
             self._exposure = (float(st["exposure_ev"]),
@@ -5237,26 +5241,28 @@ class Engine:
                               float(st["tone_shadows"]),
                               float(st["tone_saturation"]))
             self._exposure_ref_k = float(st["exposure_reference_k"])
+            self._wb_options = options
         try:
             fr = self._write_current_frame("exposure")
         except Exception as e:
             self._exposure = prev
             self._exposure_ref_k = prev_ref
+            self._wb_options = prev_options
+            rollback_ok = True
             try:
-                if prev == (0.0,) * 7:
-                    self._vram.clear_exposure()
-                else:
-                    self._vram.set_exposure(prev[0], prev[1], prev[2], ref_k=prev_ref,
-                                            contrast=prev[3], highlights=prev[4],
-                                            shadows=prev[5], saturation=prev[6])
+                self._vram.set_exposure(*prev[:3], ref_k=6500.0 if prev_ref is None else prev_ref,
+                                        contrast=prev[3], highlights=prev[4], shadows=prev[5],
+                                        saturation=prev[6], wb_options=prev_options)
                 back = self._write_current_frame("exposure")
                 back.pop("render_ms", None)
                 emit(back)
             except Exception:      # 回滚后仍出不了一帧：能说清的只有“重新导图”
+                self._vram = None
+                rollback_ok = False
                 emit({"event": "engine_warn", "warn": "曝光回滚后仍无法出帧，本会话不可信，"
                       "请重新导入图片"})
-            emit({"event": "error", "error": f"曝光渲染失败，已退回上一状态（"
-                  f"{type(e).__name__}）：{e}"})
+            outcome = "已退回上一状态" if rollback_ok else "配方已恢复，但画面回滚失败；请重新导入"
+            emit({"event": "error", "error": f"曝光渲染失败，{outcome}（{type(e).__name__}）：{e}"})
             return
         fr.setdefault("exposure", {})
         fr["exposure"].update(self._vram.exposure_state())
@@ -5776,6 +5782,7 @@ class Engine:
                     grade_mask=st.get("_grade_mask"),
                     exposure=tuple(st.get("_exposure", (0.0,) * 7)),
                     exposure_ref_k=st.get("_exposure_ref_k"),
+                    wb_options=WB.normalize_state(st)["_wb_options"],
                     hsl=tuple(st.get("_hsl", (0.0,) * 24)),
                     curves=CURVES.check_curves(st.get("_curves")), levels=LEVELS.check_levels(st.get("_levels")),
                     crop_rect=tuple(st.get("_crop_rect", (0.0, 0.0, 1.0, 1.0))),
@@ -6038,6 +6045,7 @@ class Engine:
         snap = dict(strength=self._strength, params=dict(self._params), grade=tuple(self._grade),
                     grade_scope=str(self._grade_scope), grade_mask=self._grade_mask,
                     exposure=tuple(self._exposure), exposure_ref_k=self._exposure_ref_k,
+                    wb_options=WB.check_options(self._wb_options),
                     hsl=tuple(self._hsl),
                     curves=CURVES.check_curves(self._curves), levels=self._levels,
                     crop_rect=tuple(self._crop_rect), crop_rotation=float(self._crop_rotation),
@@ -6328,7 +6336,7 @@ class Engine:
             "grade_scope": "all", "lut": None, "lut_amount": 0.0,
             "repair_ops": [], "light_ops": [], "deform": {},
             "crop_rect": (0.0, 0.0, 1.0, 1.0), "crop_rotation": 0.0,
-            "exposure": (0.0,) * 7, "hsl": (0.0,) * 24, "enhance": {},
+            "exposure": (0.0,) * 7, "wb_options": WB.default_options(), "hsl": (0.0,) * 24, "enhance": {},
             "curves": CURVES.default_curves(), "levels": LEVELS.default_levels(),
         }
         fields = {"_" + key: snap.get(key, value) for key, value in defaults.items()}
@@ -6386,6 +6394,8 @@ class Engine:
         expo = list(self._exposure) + [0.0] * 7
         if any(abs(float(v)) > 0.0 for v in expo[:7]):
             b.append(f"曝光/白平衡/影调={tuple(round(float(v), 4) for v in expo[:7])}")
+        if WB.has_picks(getattr(self, "_wb_options", WB.default_options())):
+            b.append("白平衡中性点校正")
         # 八色 HSL：24 元组（8 段 × 色相/饱和度/明亮度），任一分量非零都会动像素。
         if not LEVELS.is_identity(getattr(self, "_levels", None)): b.append("色阶（有有效调整）")
         if not CURVES.is_identity(getattr(self, "_curves", None)):

@@ -562,7 +562,7 @@ def test_hostile_or_incompatible_project_is_inert(engine, tmp_path):
     _created, saved = _create_and_save(engine, tmp_path, name="恶意输入")
     pfile = saved["path"]
     doc = json.loads(Path(pfile).read_text(encoding="utf-8"))
-    assert doc["schema_version"] == "lrt.project.v1", doc["schema_version"]
+    assert doc["schema_version"] == "lrt.project.v2", doc["schema_version"]
     marker = "/tmp/lrt-pwned"
     recipe = doc["docs"][0]["versions"][0]["recipe"]
     recipe["__exec__"] = "__import__('os').open(r'%s','w').write('x')" % marker

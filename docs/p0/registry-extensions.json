@@ -174,6 +174,36 @@
       "transferable": true,
       "source_requirement": "LNX-REF-PC-32455-C-3791959b40",
       "reason": "Versioned preset/batch envelope for the existing eight-color HSV/smoothstep operator. Pixel math and legacy tuple state are unchanged; this is not true HSL or an implemented image-action eyedropper."
+    },
+    {
+      "operation_id": "lnx.white_balance.v1",
+      "parameter_key": "options",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "algorithm": "legacy-xyz-ratio-v1",
+        "picked_gains": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "reference_k": 6500.0
+      },
+      "hard_range": {
+        "version": 1,
+        "algorithms": [
+          "legacy-xyz-ratio-v1",
+          "linear-srgb-d-white-ratio-v1"
+        ],
+        "picked_gains": "three finite positive numbers",
+        "reference_k": [
+          1000,
+          40000
+        ]
+      },
+      "transferable": true,
+      "source_requirement": "LNX-REF-PC-32455-C-b220a0c332",
+      "reason": "Versioned white-balance algorithm and replacement gains. Omission in imported legacy payloads preserves target reference; it is not replaced by this explicit neutral object. Corrected daylight domain requires reference and shifted white in 4000–25000 K. Picker UI remains separate."
     }
   ]
 }

@@ -23,6 +23,8 @@
 from __future__ import annotations
 
 import base64
+import copy
+from . import white_balance_recipe as WB
 import dataclasses
 import hashlib
 import io
@@ -35,7 +37,8 @@ import uuid
 
 import numpy as np
 
-SCHEMA = "lrt.project.v1"
+LEGACY_SCHEMA = "lrt.project.v1"
+SCHEMA = "lrt.project.v2"
 SUFFIX = ".lrproject.json"
 
 # 上限：宁可显式丢弃，也不要"保存成功但下次打开少了一半配方"这种事
@@ -72,7 +75,8 @@ def save(project: dict, path: str) -> dict:
     "写下去的是这一份"，而不是"我调过一次 write"。
     """
     path = os.path.abspath(str(path))
-    body = dict(project)
+    validate(project)
+    body = _migrate(project)
     body["updated_ns"] = int(time.time_ns())
     # 每次保存都重新盖写手戳：记的是“最后一次写下它的环境”，不是“创建时的环境”。
     # 只创一次的话，一份被三个版本轮流编辑的工程会拿最早那一个冒充自己。
@@ -126,6 +130,7 @@ def load(path: str) -> dict:
         # 报错必须说清是格式问题，而不是笼统一句"打不开"
         raise ProjectError(f"项目文件损坏或不是本机写过的格式（{type(e).__name__}）：{e}") from e
     validate(p)
+    p = _migrate(p)
     p["_source_path"] = path
     p["_source_sha256"] = hashlib.sha256(raw).hexdigest()
     return p
@@ -140,7 +145,7 @@ def validate(p: object) -> None:
     if not isinstance(p, dict):
         raise ProjectError(f"项目顶层不是对象：{type(p).__name__}")
     sv = p.get("schema_version")
-    if sv != SCHEMA:
+    if sv not in (LEGACY_SCHEMA, SCHEMA):
         raise ProjectError(f"项目 schema_version={sv!r}，本版本认 {SCHEMA!r}")
     for k in ("project_id", "name", "docs", "assets"):
         if k not in p:
@@ -162,6 +167,30 @@ def validate(p: object) -> None:
         # 整个工程里几百张图一起锁在外面
         if "active_version" not in row:
             raise ProjectError(f"docs[{i}] 缺 active_version")
+
+
+        for version in row["versions"]:
+            if not isinstance(version, dict):
+                raise ProjectError("Project version must be an object")
+            recipe = version.get("recipe")
+            if recipe is not None:
+                try:
+                    WB.normalize_state(recipe, required=(sv == SCHEMA))
+                except ValueError as error:
+                    raise ProjectError(f"Invalid white-balance recipe: {error}") from error
+
+
+def _migrate(project):
+    """Own nested versions; never mutate a caller's v1 document while saving."""
+    result = copy.deepcopy(project)
+    if result["schema_version"] == LEGACY_SCHEMA:
+        for row in result["docs"]:
+            for version in row["versions"]:
+                if version.get("recipe") is not None:
+                    version["recipe"] = WB.normalize_state(version["recipe"])
+        result["schema_version"] = SCHEMA
+        result["migration_notes"] = ["Legacy white balance retained from project v1; v2 saves require a v2-capable reader."]
+    return result
 
 
 # ---------------------------------------------------------------- 指纹
@@ -449,6 +478,11 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
     而它的身份得在多次保存之间稳定（否则“活动版本”每次保存都换一个名字，
     重开后宿主拿到的 id 与上次看到的不是同一个）。不传就是新建一个命名版本。
     """
+    if recipe is not None:
+        try:
+            recipe = WB.normalize_state(recipe)
+        except ValueError as error:
+            raise ProjectError(f"Invalid white-balance recipe: {error}") from error
     fp = fp or fingerprint(path)
     dropped: list = []
     assets = project.setdefault("assets", {})

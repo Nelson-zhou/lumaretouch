@@ -51,8 +51,8 @@ jobs:
       - name: WB Rust bridge and production-stage CPU parity
         working-directory: engine
         run: |
-          .venv/bin/python -m pytest -q tests/test_white_balance_math.py --junitxml="$RUNNER_TEMP/wb-bridge.xml"
-          .venv/bin/python -c 'import os,xml.etree.ElementTree as E; cases=E.parse(os.environ["RUNNER_TEMP"]+"/wb-bridge.xml").getroot().findall(".//testcase"); assert len(cases)==16; assert not any(c.find("skipped") is not None or c.find("failure") is not None or c.find("error") is not None for c in cases)'
+          .venv/bin/python -m pytest -q tests/test_white_balance_math.py tests/test_white_balance_transfer.py tests/test_white_balance_protocol.py --junitxml="$RUNNER_TEMP/wb-bridge.xml"
+          .venv/bin/python -c 'import os,xml.etree.ElementTree as E; cases=E.parse(os.environ["RUNNER_TEMP"]+"/wb-bridge.xml").getroot().findall(".//testcase"); assert len(cases)==31; assert not any(c.find("skipped") is not None or c.find("failure") is not None or c.find("error") is not None for c in cases)'
       - name: Preserve real preset protocol evidence
         if: always()
         uses: actions/upload-artifact@v4
