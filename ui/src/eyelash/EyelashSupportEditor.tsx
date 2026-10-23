@@ -9,7 +9,12 @@ type Stroke={id:string;name:string;enabled:true;operation:'add'|'subtract';kind:
 type Stack={version:1;domain:'source-normalized';objects:Stroke[]};
 type Review={root_recipe:Stack;extension_recipe:Stack;visible:true;unoccluded:true;ownership_confirmed:true;open_eye:true};
 type Draft=Record<Side,Record<Zone,Stroke[]>>;
-const fresh=():Draft=>Object.fromEntries(PARTS.map(p=>[p,{root_recipe:[],extension_recipe:[]}])) as Draft;
+const fresh=():Draft=>({
+ left_upper:{root_recipe:[],extension_recipe:[]},
+ left_lower:{root_recipe:[],extension_recipe:[]},
+ right_upper:{root_recipe:[],extension_recipe:[]},
+ right_lower:{root_recipe:[],extension_recipe:[]},
+});
 const labels={left_upper:'人物左上睫毛',left_lower:'人物左下睫毛',right_upper:'人物右上睫毛',right_lower:'人物右下睫毛'};
 export function EyelashSupportEditor({faceKey,source,image,disabled,onReview}:{faceKey:string;source:Source;image:SourceImage|null;disabled:boolean;onReview:(eyes:Partial<Record<Side,Review>>)=>Promise<void>}){
  const [part,setPart]=useState<Side>('left_upper'),[zone,setZone]=useState<Zone>('root_recipe'),[draft,setDraft]=useState(fresh),[confirmed,setConfirmed]=useState<Partial<Record<Side,boolean>>>({});
