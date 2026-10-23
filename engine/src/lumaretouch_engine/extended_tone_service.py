@@ -22,7 +22,7 @@ class Service:
                 if rid not in self.events and len(self.events)<64:self.events[rid]=threading.Event()
                 for key,event in self.events.items():
                     if key!=rid and not (key==self.active and self.published):event.set()
-            elif cmd not in ('hello','primary_calibration_state','extended_tone_state','extended_tone_receipt','colour_grading_state','selective_colour_state','color_scopes') and p.get('action') not in ('state','status','list','get','preflight','validate'):
+            elif cmd not in ('hello','primary_calibration_state','photo_detail_state','photo_detail_receipt','extended_tone_state','extended_tone_receipt','colour_grading_state','selective_colour_state','color_scopes') and p.get('action') not in ('state','status','list','get','preflight','validate'):
                 for key,event in self.events.items():
                     if not (key==self.active and self.published):event.set()
         return False

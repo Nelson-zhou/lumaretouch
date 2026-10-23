@@ -1,0 +1,15 @@
+{
+  "status":"AUTHORED_UNRUN",
+  "execution":"Only authorized local QA; no execution performed here",
+  "cases":[
+    {"id":"DETAIL-NEUTRAL","checks":["uint8/uint16/f32 bit exact disabled or three amounts zero","native library absent does not break neutral","signed zero preserved"]},
+    {"id":"DETAIL-SHARP","checks":["edge/impulse: amount raises acutance","radius changes support","detail increases fine low-amplitude structure enhancement","measure halo overshoot, skin pores, hair and fabric at 100%"]},
+    {"id":"DETAIL-LUMA","checks":["fixed seeded grayscale noise: amount reduces variance","higher luma detail reduces noise more, NOT inverse Adobe","contrast changes residual integration without global exposure change","compare fine-line retention, skin and shadow gradients"]},
+    {"id":"DETAIL-CHROMA","checks":["equal-luminance chroma noise reduced independently","higher detail preserves narrow color edges but may preserve blotches","higher smoothness smooths broad color transitions","check color bleed, neutral axis and weighted luminance preservation"]},
+    {"id":"DETAIL-RENDER","checks":["full export versus scale=1 inspection crop parity","no seams across every export tile boundary","wide/tall/odd/1x1 frames","negative HDR and >1 retained, NaN/infinity/oversized refused","RAW/JPEG/TIFF16, primary/levels/curves/HSL/grading/selective/CUBE/monochrome preserved"]},
+    {"id":"DETAIL-TRANSACTION","checks":["one edit one existing history entry","undo/redo exact recipe and frame","render failure rolls back recipe, frame, dirty flag, history","cancel before and during native render","new edit/load cancels old unpublished render","duplicate ID idempotent, changed payload rejects","unknown result/restart never resends"]},
+    {"id":"DETAIL-PERSISTENCE","checks":["v20 roundtrip all nine controls","v19 defaults neutral without dropping earlier operators","old schema cannot smuggle detail","unknown algorithm/version/nonfinite/bool/extra fields rejected","preset/batch all-or-none existing group undo, nonactive document export"]},
+    {"id":"DETAIL-UI","checks":["three fieldsets, nine keyboard/numeric/slider controls","per-control reset, group reset, cancel draft","double apply, remount pending, switching photos, stale readback","missing native explicitly disabled","all 13 exact handbook anchors"]},
+    {"id":"DETAIL-RESOURCES","checks":["24/45/100 MP peak RSS and cold/warm latency measured","memory admission rejection not resize","cancel latency measured under worst support","no GPU-half downgrade or AI model invocation"]}
+  ]
+}

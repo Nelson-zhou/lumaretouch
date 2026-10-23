@@ -23,6 +23,7 @@ from .studio_background_stage import StudioBackgroundStage
 from .optics_stage import OpticsStage
 from .reference_color_stage import ReferenceColorStage
 from .extended_tone_stage import ExtendedToneStage
+from .photo_detail_stage import PhotoDetailStage
 from .colour_grading_stage import ColourGradingStage
 from .primary_calibration_stage import PrimaryCalibrationStage
 from .primary_calibration_state import neutral as neutral_primary_calibration
@@ -137,6 +138,7 @@ class PreviewPipeline:
         self._sky_replacement_key = None
         self.optics = OpticsStage()
         self.extended_tone = ExtendedToneStage(None)
+        self.photo_detail = PhotoDetailStage(None)
         self.colour_grading = ColourGradingStage(neutral_colour_grading())
         self.selective_colour = SelectiveColourStage(neutral_selective_colour())
         self.primary_calibration = PrimaryCalibrationStage(neutral_primary_calibration())
@@ -348,6 +350,7 @@ class PreviewPipeline:
         self._sky_replacement_key = None
         self.optics = OpticsStage()
         self.extended_tone = ExtendedToneStage(None)
+        self.photo_detail = PhotoDetailStage(None)
         self.colour_grading = ColourGradingStage(neutral_colour_grading())
         self.selective_colour = SelectiveColourStage(neutral_selective_colour())
         self.primary_calibration = PrimaryCalibrationStage(neutral_primary_calibration())
@@ -598,6 +601,7 @@ class PreviewPipeline:
         out = self.semantic_colour.apply_t(out,strict=False)
         out = self.colour_grading.apply_t(out)
         out = self.selective_colour.apply_t(out)
+        out = self.photo_detail.apply_t(out)
         out = self.extended_tone.finish_t(out)
         if scope_tap is not None: scope_tap("output", out)
         return out

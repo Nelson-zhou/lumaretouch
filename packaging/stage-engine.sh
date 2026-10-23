@@ -194,3 +194,8 @@ cp "$here/../core/selective_colour/lib.rs" "$here/../LICENSE" "$here/../docs/sel
 bash "$here/build-primary-calibration.sh" "$stage/lumaretouch_engine/bin/liblrt_primary_calibration.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/primary_calibration"
 cp "$here/../core/primary_calibration/lib.rs" "$here/../LICENSE" "$here/../docs/primary-calibration/CONTRACT.md" "$stage/lumaretouch_engine/third_party/primary_calibration/"
+
+# Original non-AI photo detail; explicit package build, never runtime compilation.
+rustc --edition=2021 --crate-type cdylib -C opt-level=3 "$here/../core/photo_detail/photo_detail.rs" -o "$stage/lumaretouch_engine/bin/liblrt_photo_detail.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/photo_detail"
+cp "$here/../core/photo_detail/photo_detail.rs" "$here/../LICENSE" "$here/../docs/photo-detail/README.md" "$stage/lumaretouch_engine/third_party/photo_detail/"

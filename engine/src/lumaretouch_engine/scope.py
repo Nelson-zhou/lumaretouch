@@ -45,6 +45,7 @@ from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
 from . import custom_lut_scope as CUSTOM_LUT
 from . import extended_tone_scope as EXTENDED_TONE
+from . import photo_detail_scope as PHOTO_DETAIL
 from . import colour_grading_scope as COLOUR_GRADING
 from . import primary_calibration_scope as PRIMARY_CALIBRATION
 from . import selective_colour_scope as SELECTIVE_COLOUR
@@ -90,6 +91,7 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: operation_id → 契约。`single_face` 的模块只能作用在"已知只有一张脸"的文档上；
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
+    PHOTO_DETAIL.OP: {"params": ("recipe",), "state_fields": PHOTO_DETAIL.FIELDS, "single_face": False, "transferable": True, "cmd": "photo_detail", "label": "照片细节（非 AI）", "read": PHOTO_DETAIL.params_of, "write": PHOTO_DETAIL.install},
     COLOUR_GRADING.OP: {"params": ("recipe",), "state_fields": COLOUR_GRADING.FIELDS, "single_face": False, "transferable": True, "cmd": "colour_grading", "label": "颜色分级", "read": COLOUR_GRADING.params_of, "write": COLOUR_GRADING.install},
     SELECTIVE_COLOUR.OP: {"params": ("recipe",), "state_fields": SELECTIVE_COLOUR.FIELDS, "single_face": False, "transferable": True, "cmd": "selective_colour", "label": "可选颜色", "read": SELECTIVE_COLOUR.params_of, "write": SELECTIVE_COLOUR.install},
     PRIMARY_CALIBRATION.OP: {"params": ("recipe",), "state_fields": PRIMARY_CALIBRATION.FIELDS, "single_face": False, "transferable": True, "cmd": "primary_calibration", "label": "RGB 原色校准", "read": PRIMARY_CALIBRATION.params_of, "write": PRIMARY_CALIBRATION.install},
@@ -361,6 +363,9 @@ def check_params(op: str, params: dict) -> dict:
     if op == SELECTIVE_COLOUR.OP:
         try: return SELECTIVE_COLOUR.check_params(params)
         except ValueError as exc: raise ScopeError(str(exc)) from exc
+    if op == PHOTO_DETAIL.OP:
+        try: return PHOTO_DETAIL.check_params(params)
+        except ValueError as e: raise ScopeError(str(e)) from e
     if op == EXTENDED_TONE.OP:
         try: return EXTENDED_TONE.check_params(params)
         except ValueError as exc: raise ScopeError(str(exc)) from exc
@@ -432,6 +437,7 @@ def _neutral_of(op: str, key: str):
     if op == COLOUR_GRADING.OP and key == "recipe": return COLOUR_GRADING.S.neutral()
     if op == PRIMARY_CALIBRATION.OP and key == "recipe": return PRIMARY_CALIBRATION.S.neutral()
     if op == SELECTIVE_COLOUR.OP and key == "recipe": return SELECTIVE_COLOUR.S.neutral()
+    if op == PHOTO_DETAIL.OP and key == "recipe": return PHOTO_DETAIL.S.default()
     if op == EXTENDED_TONE.OP and key == "recipe": return EXTENDED_TONE.S.default()
     if op == OP_WHITE_BALANCE and key == "options": return WB.neutral_transfer_options()
     if op == OP_HSL and key == "recipe": return HSL_RECIPE.default_recipe()

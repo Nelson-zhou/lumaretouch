@@ -16,7 +16,7 @@ export const INSPECTION_EDIT_INTENT='lumaretouch-inspection-edit-intent';
 export function notifyInspectionEditIntent(){
   if(typeof window!=='undefined')window.dispatchEvent(new Event(INSPECTION_EDIT_INTENT));
 }
-const inspectionMutations=new Set(['primary_calibration_request','selective_colour_request','colour_grading_request','extended_tone_request','start_engine','shutdown_engine','load_image','set_strength','precompute',
+const inspectionMutations=new Set(['photo_detail_request','primary_calibration_request','selective_colour_request','colour_grading_request','extended_tone_request','start_engine','shutdown_engine','load_image','set_strength','precompute',
   'inpaint','light','deform','lut','grade','enhance','lip_makeup','brow_shape','nose_shape','eye_shape','mouth_shape','background','exposure','hsl','curves','levels','fabric','crop','compare',
   'shoulder_shape','leg_shape','waist_shape','leg_length','neck_shape','arm_shape','people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
@@ -97,6 +97,7 @@ export interface SessionEdits {
   colour_grading?: boolean;
   primary_calibration?: boolean;
   selective_colour?: boolean;
+  photo_detail?: boolean;
   extended_tone?: boolean;
   effect_recovery?: number;
   manual_liquify?: number;
@@ -152,6 +153,7 @@ export interface DocState {
   colour_grading?: {recipe:import('./colourGrading/model').Recipe;algorithm:string;note:string};
   primary_calibration?: {recipe:import('./primaryCalibration/model').Recipe;algorithm:string;note:string};
   selective_colour?: {recipe:import('./selectiveColour/model').Recipe;algorithm:string;note:string};
+  photo_detail?: {spec:import('./photoDetail/model').Spec;active:boolean;available:boolean};
   extended_tone?: {spec:import('./extendedTone/model').Spec;active:boolean;monochrome:boolean;available:boolean};
   people?: PeopleView;
   shoulder_shape?: import('./shoulderShape/model').ShoulderView;
@@ -956,6 +958,7 @@ export interface EngineStatus {
     colour_grading_protocol?: number;
     primary_calibration_protocol?: number;
     selective_colour_protocol?: number;
+    photo_detail_protocol?: number;
     extended_tone_protocol?: number;
     lip_makeup_protocol?: number;
     eye_light_protocol?: number;

@@ -1,0 +1,122 @@
+{
+  "status": "SOURCE_CONNECTED_UNRUN",
+  "base": "48115f45",
+  "project_baseline": 19,
+  "requested_project_schema": 20,
+  "shared_edits_authorized": true,
+  "requirements": [
+    {
+      "id": "LNX-REF-PC-32455-C-5ce4ed5694",
+      "status": "SOURCE_CONNECTED_UNRUN"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-89d0a0d750",
+      "status": "SOURCE_CONNECTED_UNRUN"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-e9c7dd33a1",
+      "status": "SOURCE_CONNECTED_UNRUN"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-d0f17720d3",
+      "status": "SOURCE_CONNECTED_UNRUN"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-583a2e6a82",
+      "status": "SOURCE_CONNECTED_UNRUN"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-8a30a7dc6e",
+      "status": "SOURCE_CONNECTED_UNRUN"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-16888f9a2b",
+      "status": "SOURCE_CONNECTED_UNRUN"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-39567e3766",
+      "status": "SOURCE_CONNECTED_UNRUN"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-220c6c8d23",
+      "status": "SOURCE_CONNECTED_UNRUN"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-a7d79be72d",
+      "status": "SOURCE_CONNECTED_UNRUN"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-f91cc0b7ee",
+      "status": "SOURCE_CONNECTED_UNRUN"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-dbd69ac908",
+      "status": "SOURCE_CONNECTED_UNRUN"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-5b97b902d4",
+      "status": "SOURCE_CONNECTED_UNRUN"
+    }
+  ],
+  "hooks": [
+    {
+      "target": "engine/src/lumaretouch_engine/server.py",
+      "required": "Initialize _photo_detail using photo_detail_state.default(); include in DOC_FIELDS, history capture/apply, empty state, reattach sync_current, current and nonactive export snapshots, project and document scope. cmd_photo_detail uses Service.execute; cmd_photo_detail_state emits correlated readback; receipt command uses controller query. Install Service in reader ingress, stop on shutdown, add publication fence to _write_current_frame. No automatic EDIT_CMDS history for photo_detail. doc_state carries status and native capability.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "engine/src/lumaretouch_engine/vram.py",
+      "required": "Initialize/reset PhotoDetailStage(None). After selective_colour.apply_t and before extended_tone.finish_t and photo grain, call photo_detail.apply_t on full frame f32. NEVER run detail in export tiles; export tiled pipeline must leave this stage neutral.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "engine/src/lumaretouch_engine/export.py",
+      "required": "ExportSpec.photo_detail checked v1; ensure floating=True if active. Apply PhotoDetailStage(...,scale=1,cancelled=tone_cancelled).apply_np(out) once on assembled frame immediately after selective_colour_stage.apply_np and before final monochrome/grain/geometry/quantization. Preserve all earlier primary/extended-tone/levels/curves/grading/selective/CUBE code. Admission before full-frame buffers, no per-tile detail call.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "engine/src/lumaretouch_engine/export_snapshot.py + export_recipe.py",
+      "required": "Add photo_detail/_photo_detail to snapshot capture and recipe keyed mapping for active and queued/nonactive photos. Freeze checked recipe; no dependency on current photo state.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "engine/src/lumaretouch_engine/project.py",
+      "required": "Advance writer schema from v19 to agreed v20, preserve all accepted previous schema versions and migration validators. Validate _photo_detail recursively, permit only new schema; older absent values default neutral. Add to capture and restore allowlists, avoid silent unknown-field removal.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "engine/src/lumaretouch_engine/scope.py + ui/src/presets/presetModel.ts + ui/src/batch/batchScopeOptions.ts",
+      "required": "Register module photo_detail and op lnx.photo_detail.v1 using photo_detail_scope; fields (_photo_detail,). Use existing atomic batch/preset history machinery. Reject local-mask scope; global only.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "ui/src-tauri/src/main.rs + engine.rs",
+      "required": "Declare photo_detail_api; register photo_detail_request/status/cancel. Route only photo_detail_result and photo_detail_state result envelopes to photo_detail_api.receive(epoch,event). Preserve epoch, no resend. Mirror doc_state after success as existing tone API does.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "ui/src/native.ts + ui/src/components/RetouchPanel.tsx",
+      "required": "Add doc_state photo_detail typed status and verified feature capability. Mount ConnectedPhotoDetailPanel with documentId/revision/disabled/available. Same revision/history data as existing panels; disable unavailable Rust core and preserve pending identity.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "inspection full-resolution render path",
+      "required": "Use checked photo_detail recipe from immutable inspection snapshot. Evaluate full frame scale=1, crop afterwards. Do not invoke spatial operation on ROI only; no proxy passed off as 100% inspection.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "existing reader services: extended_tone, grading, selective, primary, custom_lut, grain",
+      "required": "Add photo_detail_state/photo_detail_receipt as read-only to cancellation exclusions so status queries do not supersede edits. Mutating photo_detail still cancels any older unpublished effect, as existing protocol requires.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "packaging/stage-engine.sh + build manifest",
+      "required": "Invoke core/photo_detail/build_photo_detail.sh only in authorized build environment. Package liblrt_photo_detail.so ABI1, validate native ABI before advertising capability. No runtime auto-compile.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    }
+  ],
+  "validation": "Python AST and JSON parse only; Rust/TS/build/tests/numerical/performance/visual all UNRUN",
+  "project_schema": 20,
+  "actual_pipeline": "Preserved optics/geometry/reference/semantic/grading/selective order; one whole edited-canvas detail operation before monochrome. Preview uses explicit proxy/source ratio, native export/inspection 1, enlarged export explicit magnification. Tile stages stay neutral.",
+  "remaining": "All compiler/typecheck/executable tests/native ABI runtime/numerical/performance/visual checks UNRUN; no Git writes."
+}

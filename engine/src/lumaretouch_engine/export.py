@@ -203,6 +203,7 @@ class ExportSpec:
     exposure: tuple = (0.0,) * 7
     exposure_ref_k: float | None = None
     wb_options: dict | None = None
+    photo_detail: dict | None = None
     extended_tone: dict | None = None
     colour_grading: dict | None = None
     selective_colour: dict | None = None
@@ -287,6 +288,8 @@ class ExportSpec:
         """参数在进入昂贵通路之前先过一遍唯一校验口径（与各层 setter 同源）。"""
         from .extended_tone_state import check as check_tone
         self.extended_tone=check_tone(self.extended_tone)
+        from .photo_detail_state import check as check_detail
+        self.photo_detail=check_detail(self.photo_detail)
         from .colour_grading_state import check as check_grading, neutral as neutral_grading
         self.colour_grading=neutral_grading() if self.colour_grading is None else check_grading(self.colour_grading)
         from .primary_calibration_native import admit as admit_primary
@@ -689,6 +692,11 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     from .extended_tone_state import check as check_tone, active as tone_active
     from .extended_tone_stage import ExtendedToneStage
     from .extended_tone_native import admit as admit_tone
+    from .photo_detail_state import check as check_detail, active as detail_active
+    from .photo_detail_stage import PhotoDetailStage
+    from .photo_detail_native import admit as admit_detail
+    detail_recipe=check_detail(spec.photo_detail)
+    if detail_active(detail_recipe):admit_detail(src_u8.shape[0]*src_u8.shape[1]*int(spec.scale)**2)
     tone_recipe=check_tone(spec.extended_tone)
     tone_prepass=bool(getattr(spec,'_extended_tone_prepass',False))
     tone_field=None
@@ -739,7 +747,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     verify_body_source(spec)
     verify_hair_source(spec)
     semantic_stage=SemanticColourStage(spec.semantic_colour,binding=spec.semantic_colour_binding)
-    floating=bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass or colour_grading_stage.active or selective_colour_stage.active or primary_calibration_stage.active
+    floating=detail_active(detail_recipe) or bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass or colour_grading_stage.active or selective_colour_stage.active or primary_calibration_stage.active
     if spec.provenance_output and (not spec.float_output or spec.scale!=1): raise ExportError("来源支持只用于原尺寸浮点分析")
     optical_budget = 0
     if optical:
@@ -1051,6 +1059,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     out=semantic_stage.apply_np(out)
     out=colour_grading_stage.apply_np(out,cancelled=tone_cancelled)
     out=selective_colour_stage.apply_np(out,cancelled=tone_cancelled)
+    # Whole assembled edited canvas only; tile pipelines retain neutral detail stages.
+    out=PhotoDetailStage(detail_recipe,scale=float(spec.scale),cancelled=tone_cancelled).apply_np(out)
     out=ExtendedToneStage(tone_recipe,cancelled=tone_cancelled).finish_np(out)
     verify_semantic_source(spec)
     verify_body_source(spec)

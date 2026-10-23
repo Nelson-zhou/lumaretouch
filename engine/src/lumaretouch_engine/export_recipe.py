@@ -64,6 +64,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
                       sharpen_amount=float(snap.get("sharpen", 0.0)))
     from .extended_tone_project import configure_export as configure_extended_tone
     configure_extended_tone(spec,snap)
+    from .photo_detail_project import configure_export as configure_photo_detail
+    configure_photo_detail(spec,snap)
     from .colour_grading_adapters import configure_export as configure_grading
     configure_grading(spec,snap)
     from .selective_colour_adapters import configure_export as configure_selective
