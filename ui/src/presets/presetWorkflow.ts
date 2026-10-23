@@ -1,5 +1,6 @@
 import {CROP_OP,validCropReview,type CropReview} from '../cropTransfer/model.ts';
 import {SPILL_TRANSFER_OP,validSpillTransfer,validSpillTransferAck,type SpillTransferEvidence,type SpillTransferAck} from '../spillRemoval/transferModel.ts';
+import {SHADOW_TRANSFER_OP,validShadowTransfer,validShadowTransferAck,type ShadowTransferEvidence,type ShadowTransferAck} from '../originalShadow/transferModel.ts';
 import {validReferenceReview,type ReferenceReview} from '../referenceColor/ReferenceColorReview';
 import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../optics/transferReviewModel';
 import {validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence,type TransferGroupChoice} from '../localMasks/transferModel.ts';
@@ -8,10 +9,10 @@ import type {PresetInfo, PresetState} from '../native';
 import {validXmpAck, validXmpReport, validXmpSummary, validXmpTransfer, validXmpReviewAck, type XmpAck, type XmpReport, type XmpSummary, type XmpTransfer, type XmpReviewAck} from '../xmpImport/model.ts';
 export type PresetAction = 'list'|'preflight'|'apply'|'save'|'import'|'delete'|'xmp_inspect';
 export type PresetOptions = {id?:string;name?:string;path?:string;kind?:string;note?:string;force?:boolean;
-  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;spillReviewAck?:SpillTransferAck[];
+  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;spillReviewAck?:SpillTransferAck[];shadowReviewAck?:ShadowTransferAck[];
   xmpAck?:XmpAck;xmpReviewAck?:XmpReviewAck;/** UI-only captured expected source, never sent as authority. */xmpExpected?:XmpSummary};
 export type PresetReply = {protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
-  xmp_report?:XmpReport;xmp_transfer?:XmpTransfer;source_proof?:unknown;spill_transfer?:SpillTransferEvidence;
+  xmp_report?:XmpReport;xmp_transfer?:XmpTransfer;source_proof?:unknown;spill_transfer?:SpillTransferEvidence;shadow_transfer?:ShadowTransferEvidence;
   crop_transfer?:CropReview;reference_color?:ReferenceReview;revision?:string;optical_transfer?:OpticalTargetReview;preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
   before?:Record<string,unknown>;after?:Record<string,unknown>;doc_state?:Record<string,unknown>;
   error?:string;requires_reload?:boolean;rolled_back?:boolean;operation_committed?:boolean|null};
@@ -50,6 +51,8 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
     if(!text(result.revision)||!text(result.preflight_token)||!/^[a-f0-9]{32}$/.test(result.preflight_token)||!moduleKeys(result.applies,result.module_scope))throw Error('冻结预设预检结果不完整');
     if(result.module_scope.includes(SPILL_TRANSFER_OP)&&(!validSpillTransfer(result.spill_transfer,opts.documentId??'',result.revision,result.applies?.[SPILL_TRANSFER_OP],result.source_proof)
       ||result.module_scope.includes('lnx.id_background.v1')))throw Error('祛反光预设缺少本目标、参数及来源匹配的真实前后预览，或混入未审核背景迁移');
+    if(result.module_scope.includes(SHADOW_TRANSFER_OP)&&(!validShadowTransfer(result.shadow_transfer,opts.documentId??'',result.revision,result.applies?.[SHADOW_TRANSFER_OP],result.source_proof)
+      ||(result.module_scope.includes('lnx.id_background.v1')||result.module_scope.includes(SPILL_TRANSFER_OP))))throw Error('原图阴影预设缺少本目标、参数及来源匹配的真实前后预览，或混入未审核背景迁移');
     if(result.module_scope.includes('lnx.local_grade.v1')){
       if(!validTransferEvidence(result.local_mask_transfer)||!sameTransferOptions(result.local_mask_transfer.policy,opts.localMaskTransfer))throw Error('局部预设预检证据或策略不匹配');
     }
@@ -61,7 +64,7 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
         ||result.xmp_report.source_sha256!==opts.xmpExpected.source_sha256||result.xmp_report.report_sha256!==opts.xmpExpected.report.report_sha256
         ||!validXmpTransfer(result.xmp_transfer,opts.documentId??'',result.revision,opts.xmpExpected.source_sha256))throw Error('缺少匹配本预设、当前照片和冻结版本的 XMP 前后像素证据');
     }
-    if(!opts.xmpExpected&&!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1',CROP_OP,'lnx.spill_removal.v1'].includes(op)))throw Error('预设不含需要冻结预检的模块');
+    if(!opts.xmpExpected&&!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1',CROP_OP,'lnx.spill_removal.v1',SHADOW_TRANSFER_OP].includes(op)))throw Error('预设不含需要冻结预检的模块');
     return;
   }
   if(action==='apply'){
@@ -151,11 +154,24 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
     if(options.spillReviewAck!==undefined&&action!=='apply'){
       set({phase:'error',action,result:null,message:'祛反光视觉确认只允许用于已冻结预设的应用。'});return;
     }
+    const shadow=action==='apply'&&(expectedScope?.includes(SHADOW_TRANSFER_OP)||frozen?.module_scope?.includes(SHADOW_TRANSFER_OP)||options.shadowReviewAck!==undefined);
+    if(shadow&&(!frozen?.shadow_transfer||!frozen.preflight_token||options.preflightToken!==frozen.preflight_token
+      ||options.id!==frozen.id||frozen.document_id!==context.documentId||state.submitted?.reviewContextKey!==context.reviewContextKey
+      ||!frozen.module_scope||!frozen.module_scope.includes(SHADOW_TRANSFER_OP)||expectedScope!==undefined&&!sameScope(expectedScope,frozen.module_scope)
+      ||!validShadowTransfer(frozen.shadow_transfer,context.documentId,frozen.revision,frozen.applies?.[SHADOW_TRANSFER_OP],frozen.source_proof)
+      ||!validShadowTransferAck(options.shadowReviewAck,[frozen.shadow_transfer]))){
+      set({message:'请先查看并明确确认当前照片的原图阴影前后效果，再应用这次冻结预设。'});return;
+    }
+    if(options.shadowReviewAck!==undefined&&action!=='apply'){
+      set({phase:'error',action,result:null,message:'原图阴影视觉确认只允许用于已冻结预设的应用。'});return;
+    }
+    if((expectedScope?.includes(SHADOW_TRANSFER_OP)&&expectedScope.some(op=>[SPILL_TRANSFER_OP,'lnx.id_background.v1'].includes(op)))){set({message:'原图阴影标量同步不能与整套背景或祛染同步混用；请分开审核。'});return;}
     const id=uuid(),g=++generation,deadline=now()+(config.timeoutMs??120000);
     const captured={...options,moduleScope:options.moduleScope?[...options.moduleScope]:undefined,
       ...(options.xmpAck?{xmpAck:{...options.xmpAck,selected:[...options.xmpAck.selected]}}:{}),
       ...(options.xmpReviewAck?{xmpReviewAck:{...options.xmpReviewAck}}:{}),
       ...(options.spillReviewAck?{spillReviewAck:options.spillReviewAck.map(ack=>({...ack}))}:{}),
+      ...(options.shadowReviewAck?{shadowReviewAck:options.shadowReviewAck.map(ack=>({...ack}))}:{}),
       ...(options.xmpExpected?{xmpExpected:structuredClone(options.xmpExpected)}:{}),
       ...(editing?{documentId:context.documentId}:{}),requestId:id};
     const request:Pending={contextGeneration,id,action,options:captured,expectedScope:expectedScope?[...expectedScope]:undefined,generation:g};pending=request;

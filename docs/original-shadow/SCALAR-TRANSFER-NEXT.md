@@ -1,7 +1,9 @@
 # Original-shadow scalar transfer: explicit remaining source work
 
-Read-only source audit, 2026-10-23. Not implemented or accepted by the direct
-painting slice. Keep whole-ID nonneutral original-shadow refusal intact.
+Read-only source audit captured with the direct-painting slice, 2026-10-23.
+The subsequent [scalar-transfer source implementation](SCALAR-TRANSFER-IMPLEMENTATION.md)
+follows this map; runtime/quality acceptance is still UNRUN. Keep whole-ID
+nonneutral original-shadow refusal intact.
 
 ## Permitted proposed payload
 

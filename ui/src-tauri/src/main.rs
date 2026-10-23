@@ -57,6 +57,7 @@ mod hair_colour_api;
 mod portrait_api;
 mod preset_host;
 mod spill_transfer_protocol;
+mod original_shadow_transfer_protocol;
 mod preset_api;
 mod preset_organisation_api;
 mod source_relocation_api;

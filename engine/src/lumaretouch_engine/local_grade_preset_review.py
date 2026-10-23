@@ -10,27 +10,30 @@ from . import sky_replacement_scope as SKY, optics_auto_scope as OA, optics_tran
 from .batch_preflight import canonical
 from . import creative_derived_transfer as DERIVED, creative_derived_source as SOURCE
 from . import spill_transfer_review as SPILL_REVIEW
+from . import original_shadow_transfer_review as SHADOW_REVIEW
 
 _NO_SPILL_ACK = object()
+_NO_SHADOW_ACK = object()
 
 
 class PresetReviews:
     def __init__(self):self.pending=OrderedDict()
 
-    def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None,prepare_crop=None,verify_crop=None,prepare_xmp=None,verify_xmp=None,prepare_spill=None,verify_spill=None):
+    def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None,prepare_crop=None,verify_crop=None,prepare_xmp=None,verify_xmp=None,prepare_spill=None,verify_spill=None,prepare_shadow=None,verify_shadow=None):
         modules=DERIVED.require_modules(state,preset['modules']);SC.check_scope(list(modules))
         xmp=preset.get("xmp_import")
         derived=SOURCE.record(state) is not None
-        if xmp is None and not derived and LG.OP not in modules and OA.OP not in modules and RC.OP not in modules and SC.OP_CROP not in modules and SC.SPILL_REMOVAL.OP not in modules:raise ValueError('此预设不含需要冻结目标预检的模块')
+        if xmp is None and not derived and LG.OP not in modules and OA.OP not in modules and RC.OP not in modules and SC.OP_CROP not in modules and SC.SPILL_REMOVAL.OP not in modules and SC.ORIGINAL_SHADOW.OP not in modules:raise ValueError('此预设不含需要冻结目标预检的模块')
         # Current captured state owns the effective source, not a stale parked
         # row state. Originals retain their existing review contract.
-        proof=SOURCE.row_proof({**row,'state':state}) if xmp is not None or derived or SC.OP_CROP in modules or SC.SPILL_REMOVAL.OP in modules else None
+        proof=SOURCE.row_proof({**row,'state':state}) if xmp is not None or derived or SC.OP_CROP in modules or SC.SPILL_REMOVAL.OP in modules or SC.ORIGINAL_SHADOW.OP in modules else None
         if LG.OP in modules:prepared,transfer=LR.prepare_modules(state,modules,row,options,preview=True)
         else:
             if options is not None:raise ValueError('未选择局部组，不能附带蒙版选项')
             prepared,transfer=deepcopy(modules),None
         candidate=OA.candidate(state,prepared,local_replace_legacy=bool(transfer and transfer['legacy_removed']))
         if SC.SPILL_REMOVAL.OP in prepared:SC.SPILL_REMOVAL.validate_target(candidate,row["path"],(row["src_h"],row["src_w"]))
+        if SC.ORIGINAL_SHADOW.OP in prepared:SC.ORIGINAL_SHADOW.validate_target(candidate,row["path"],(row["src_h"],row["src_w"]))
         if SKY.OP in prepared:SKY.validate_target(candidate['_sky_replacement'],row['path'],(row['src_h'],row['src_w']))
         if BROW.OP in prepared and OA.OP not in prepared:BROW.validate_target(candidate,row)
         if NOSE.OP in prepared and OA.OP not in prepared:NOSE.validate_target(candidate,row)
@@ -62,6 +65,12 @@ class PresetReviews:
             spill_record,spill_transfer=prepare_spill(row,state,candidate,document_id,str(revision))
             spill_record=SPILL_REVIEW.checked(spill_record)
             verify_spill(row,state,candidate,document_id,str(revision),spill_record)
+        shadow_record=None;shadow_transfer=None
+        if SC.ORIGINAL_SHADOW.OP in prepared:
+            if prepare_shadow is None or verify_shadow is None:raise ValueError('原图阴影预设需要完整目标前后图预览和审核端口')
+            shadow_record,shadow_transfer=prepare_shadow(row,state,candidate,document_id,str(revision))
+            shadow_record=SHADOW_REVIEW.checked(shadow_record)
+            verify_shadow(row,state,candidate,document_id,str(revision),shadow_record)
         xmp_record=None;xmp_transfer=None
         if xmp is not None:
             if prepare_xmp is None or verify_xmp is None:raise ValueError('XMP requires actual full-target image review ports')
@@ -69,7 +78,7 @@ class PresetReviews:
             verify_xmp(row,state,candidate,document_id,str(revision),xmp['source_sha256'],xmp_record)
         if proof is not None:SOURCE.verify_row({**row,'state':state},proof)
         token=uuid.uuid4().hex
-        record={'preset':deepcopy(preset),'modules':prepared,'transfer':transfer,'optics':optical_record,'reference':reference_record,'crop':crop_record,'xmp':xmp_record,'spill':spill_record,
+        record={'preset':deepcopy(preset),'modules':prepared,'transfer':transfer,'optics':optical_record,'reference':reference_record,'crop':crop_record,'xmp':xmp_record,'spill':spill_record,'shadow':shadow_record,
                 'document_id':document_id,'revision':str(revision),'path':row['path'],
                 'row_document_id':row.get('document_id'),'source_proof':proof,
                 'before':canonical(OA.before_params(state,list(modules))),'local_key':LG.undo_key(state) if LG.OP in modules else None,
@@ -80,9 +89,10 @@ class PresetReviews:
                 'preflight_token':token,'applies':deepcopy(prepared),'local_mask_transfer':transfer,'optical_transfer':optical_transfer,'reference_color':reference_record,
                 'document_id':document_id,'revision':str(revision),'source_proof':deepcopy(proof),'crop_transfer':crop_transfer,
                 **({'spill_transfer':spill_transfer} if SC.SPILL_REMOVAL.OP in prepared else {}),
+                **({'shadow_transfer':shadow_transfer} if SC.ORIGINAL_SHADOW.OP in prepared else {}),
                 **({'xmp_transfer':xmp_transfer,'xmp_report':deepcopy(xmp['report'])} if xmp is not None else {})}
 
-    def claim(self,token,preset_id,state,row,document_id,revision,verify_crop=None,verify_xmp=None,xmp_review_ack=None,verify_spill=None,spill_review_ack=_NO_SPILL_ACK):
+    def claim(self,token,preset_id,state,row,document_id,revision,verify_crop=None,verify_xmp=None,xmp_review_ack=None,verify_spill=None,spill_review_ack=_NO_SPILL_ACK,verify_shadow=None,shadow_review_ack=_NO_SHADOW_ACK):
         if type(token) is not str or token not in self.pending:raise ValueError('目标预设预检已失效或使用，请重新预检')
         record=self.pending[token]
         if time.monotonic()>=record['expires']:raise ValueError('目标预设预检已过期，请重新预检')
@@ -105,6 +115,7 @@ class PresetReviews:
         if LG.OP in record['modules']:LR.verify_modules(record['modules'],{**row,'state':state},record['transfer'])
         candidate=OA.candidate(state,record['modules'],local_replace_legacy=bool(record['transfer'] and record['transfer']['legacy_removed']))
         if SC.SPILL_REMOVAL.OP in record['modules']:SC.SPILL_REMOVAL.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
+        if SC.ORIGINAL_SHADOW.OP in record['modules']:SC.ORIGINAL_SHADOW.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
         if SKY.OP in record['modules']:SKY.validate_target(candidate['_sky_replacement'],row['path'],(row['src_h'],row['src_w']))
         if BROW.OP in record['modules'] and OA.OP not in record['modules']:BROW.validate_target(candidate,row)
         if NOSE.OP in record['modules'] and OA.OP not in record['modules']:NOSE.validate_target(candidate,row)
@@ -126,6 +137,12 @@ class PresetReviews:
             SPILL_REVIEW.acknowledgments(spill_review_ack,[spill])
             verify_spill(row,state,candidate,document_id,str(revision),spill)
         elif spill_review_ack is not _NO_SPILL_ACK:raise ValueError('未选择祛染色模块，不能附带目标图审核确认')
+        if SC.ORIGINAL_SHADOW.OP in record['modules']:
+            if verify_shadow is None:raise ValueError('原图阴影预设缺少冻结目标前后图审核端口')
+            shadow=SHADOW_REVIEW.checked(record.get('shadow'))
+            SHADOW_REVIEW.acknowledgments(shadow_review_ack,[shadow])
+            verify_shadow(row,state,candidate,document_id,str(revision),shadow)
+        elif shadow_review_ack is not _NO_SHADOW_ACK:raise ValueError('未选择原图阴影模块，不能附带目标图审核确认')
         xmp=record['preset'].get('xmp_import')
         if xmp is not None:
             if verify_xmp is None:raise ValueError('XMP review verifier unavailable')

@@ -2,6 +2,8 @@ import {CROP_OP,cropReviewKey,cropImagesReady} from '../cropTransfer/model';
 import {CropTransferReview} from '../cropTransfer/CropTransferReview';
 import {SPILL_TRANSFER_OP,spillTransferReviewKey,spillTransferImagesReady,spillTransferAck,type SpillTransferAck} from '../spillRemoval/transferModel';
 import {SpillTransferReview} from '../spillRemoval/SpillTransferReview';
+import {SHADOW_TRANSFER_OP,shadowTransferReviewKey,shadowTransferImagesReady,shadowTransferAck,type ShadowTransferAck} from '../originalShadow/transferModel';
+import {ShadowTransferReview} from '../originalShadow/ShadowTransferReview';
 import {AssociationEvidence} from '../people/AssociationEvidence';
 import {PeopleTransferEvidence} from '../people/transferReview';
 import {ReferenceColorReview} from '../referenceColor/ReferenceColorReview';
@@ -20,14 +22,15 @@ function reason(text:string|null|undefined){
     'target parameters changed outside the reviewed snapshot':'参数与预检快照不同，已保护',
   };return known[text]??text;
 }
-export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClose,peoplePreview,commitBlockedReason}:{state:BatchUi;onCommit:(spillReviewAck?:SpillTransferAck[])=>unknown;
+export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClose,peoplePreview,commitBlockedReason}:{state:BatchUi;onCommit:(spillReviewAck?:SpillTransferAck[],shadowReviewAck?:ShadowTransferAck[])=>unknown;
   onReview:()=>unknown;onQuery:()=>unknown;onAcknowledge:()=>void;onClose:()=>void;peoplePreview?:ReactNode;commitBlockedReason?:string}){
   const [cropImages,setCropImages]=useState<Record<string,boolean>>({});
   const [spillImages,setSpillImages]=useState<Record<string,boolean>>({});
+  const [shadowImages,setShadowImages]=useState<Record<string,boolean>>({});
   const dialog=useRef<HTMLElement>(null),close=useRef(onClose);close.current=onClose;
   useEffect(()=>setCropImages({}),[state.plan?.preflight_token]);
   const open=state.phase!=='closed'&&!state.hidden,busy=state.phase==='committing';
-  useEffect(()=>setSpillImages({}),[state.plan?.preflight_token,state.plan?.request_id,open]);
+  useEffect(()=>{setSpillImages({});setShadowImages({});},[state.plan?.preflight_token,state.plan?.request_id,open]);
   useEffect(()=>{
     if(!open)return;
     const previous=document.activeElement as HTMLElement|null;dialog.current?.focus();
@@ -51,7 +54,9 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
   const cropReady=cropImagesReady(plan?.preflight_token??'',cropTargets.map(t=>t.crop_transfer),cropImages);
   const spillTargets=plan?.module_scope.includes(SPILL_TRANSFER_OP)?plan.targets.filter(t=>!t.blocked):[];
   const spillReady=spillTransferImagesReady(plan?.preflight_token??'',spillTargets.map(t=>t.spill_transfer),spillImages);
-  const blockedReason=commitBlockedReason||(!cropReady?'请等待每张目标的实际裁剪预览通过显示校验，再确认同步。':!spillReady?'请逐张查看并勾选所有可同步目标的祛反光前后效果。':undefined);
+  const shadowTargets=plan?.module_scope.includes(SHADOW_TRANSFER_OP)?plan.targets.filter(t=>!t.blocked):[];
+  const shadowReady=shadowTransferImagesReady(plan?.preflight_token??'',shadowTargets.map(t=>t.shadow_transfer),shadowImages);
+  const blockedReason=commitBlockedReason||(!cropReady?'请等待每张目标的实际裁剪预览通过显示校验，再确认同步。':!spillReady?'请逐张查看并勾选所有可同步目标的祛反光前后效果。':!shadowReady?'请逐张查看并勾选所有可同步目标的原图阴影前后效果。':undefined);
   const title=state.operation==='redo'?'重做批量同步':state.operation==='undo'?'撤销批量同步':'批量同步预检';
   return <div className="batchReviewBackdrop">
     <section ref={dialog} tabIndex={-1} className="batchReview" role="dialog" aria-modal="true" aria-labelledby="batchReviewTitle">
@@ -79,6 +84,7 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
         <span>{file(t.path)}</span><span>{t.outcome==='applied'?'已同步':t.outcome==='unknown'?'结果未确认':t.outcome==='not_applied'?'未执行':reason(t.blocked)}</span>
         {plan?.module_scope.includes(CROP_OP)&&!t.blocked&&t.crop_transfer&&<CropTransferReview key={cropReviewKey(plan.preflight_token,t.crop_transfer)} value={t.crop_transfer} reviewKey={cropReviewKey(plan.preflight_token,t.crop_transfer)} onReady={(key,ready)=>setCropImages(old=>old[key]===ready?old:{...old,[key]:ready})}/>}
         {plan?.module_scope.includes(SPILL_TRANSFER_OP)&&!t.blocked&&t.spill_transfer&&<SpillTransferReview key={`${plan.request_id}:${spillTransferReviewKey(plan.preflight_token,t.spill_transfer)}`} value={t.spill_transfer} reviewKey={spillTransferReviewKey(plan.preflight_token,t.spill_transfer)} disabled={busy||state.phase!=='review'} onReady={(key,ready)=>setSpillImages(old=>old[key]===ready?old:{...old,[key]:ready})}/>}
+        {plan?.module_scope.includes(SHADOW_TRANSFER_OP)&&!t.blocked&&t.shadow_transfer&&<ShadowTransferReview key={`${plan.request_id}:${shadowTransferReviewKey(plan.preflight_token,t.shadow_transfer)}`} value={t.shadow_transfer} reviewKey={shadowTransferReviewKey(plan.preflight_token,t.shadow_transfer)} disabled={busy||state.phase!=='review'} onReady={(key,ready)=>setShadowImages(old=>old[key]===ready?old:{...old,[key]:ready})}/>}
         {t.people_transfer&&<PeopleTransferEvidence value={t.people_transfer}/>}
         {t.local_mask_transfer&&<MaskTransferEvidenceView value={t.local_mask_transfer}/>}
         {t.reference_color&&<ReferenceColorReview value={t.reference_color}/>}
@@ -88,7 +94,7 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
       {!!result?.conflicts?.length&&<ul>{result.conflicts.map((r,i)=><li key={i}>{file(r.path)}：{r.reason}</li>)}</ul>}
       <footer>
         {state.phase==='review'&&blockedReason&&<p role="status">{blockedReason}</p>}
-        {state.phase==='review'&&<button className="tb primary" disabled={!!blockedReason||!plan?.ok||(plan.policy==='recheck'&&plan.blocked>0)} onClick={()=>{if(!blockedReason)onCommit(plan?.module_scope.includes(SPILL_TRANSFER_OP)?spillTransferAck(spillTargets.map(t=>t.spill_transfer!)):undefined);}}>{plan?.persistent_association?'确认全部成员与持久关联操作':plan?.applies.target_policy==='explicit_face_map'?'仅确认本次人脸配对与参数并同步':'确认本次配方并同步'}</button>}
+        {state.phase==='review'&&<button className="tb primary" disabled={!!blockedReason||!plan?.ok||(plan.policy==='recheck'&&plan.blocked>0)} onClick={()=>{if(!blockedReason)onCommit(plan?.module_scope.includes(SPILL_TRANSFER_OP)?spillTransferAck(spillTargets.map(t=>t.spill_transfer!)):undefined,plan?.module_scope.includes(SHADOW_TRANSFER_OP)?shadowTransferAck(shadowTargets.map(t=>t.shadow_transfer!)):undefined);}}>{plan?.persistent_association?'确认全部成员与持久关联操作':plan?.applies.target_policy==='explicit_face_map'?'仅确认本次人脸配对与参数并同步':'确认本次配方并同步'}</button>}
         {['review','error','done'].includes(state.phase)&&!['undo','redo'].includes(state.operation)&&<button className="tb" onClick={onReview}>重新预检</button>}
         {state.phase==='uncertain'&&<><button className="tb" onClick={onAcknowledge}>我已检查照片，结束本次跟踪</button><button className="tb primary" onClick={onQuery}>再次查询这次任务</button></>}
       </footer>

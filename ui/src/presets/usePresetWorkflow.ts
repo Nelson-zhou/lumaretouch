@@ -1,5 +1,6 @@
 import {CROP_OP,cropReviewKey} from '../cropTransfer/model';
 import {SPILL_TRANSFER_OP,spillTransferReviewKey,spillTransferAck} from '../spillRemoval/transferModel';
+import {SHADOW_TRANSFER_OP,shadowTransferReviewKey,shadowTransferAck} from '../originalShadow/transferModel';
 import {OPTICS_AUTO_OP,OPTICS_MANUAL_OP} from '../optics/transferReviewModel';
 import {defaultMaskTransfer,LOCAL_GRADE_OP} from '../localMasks/transfer';
 import {useEffect,useReducer,useRef,useState} from 'react';
@@ -13,6 +14,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   const [cropImage,setCropImage]=useState<{key:string;ready:boolean}>({key:'',ready:false});
   const [xmpImage,setXmpImage]=useState<{key:string;ready:boolean}>({key:'',ready:false});
   const [spillImage,setSpillImage]=useState<{key:string;ready:boolean}>({key:'',ready:false});
+  const [shadowImage,setShadowImage]=useState<{key:string;ready:boolean}>({key:'',ready:false});
   const [xmpImport,setXmpImport]=useState<XmpImportDraft|null>(null);
   const xmpDraft=useRef<XmpImportDraft|null>(null),xmpImportTarget=useRef<{path:string;id?:string}|null>(null);
   const [ui,setUi]=useState<PresetUi>(initialPresetUi),[form,dispatch]=useReducer(presetFormReducer,initialPresetForm);
@@ -57,6 +59,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
     const missing=unavailableScope(value.form.scope,value.catalog?.modules??[]);
     if(missing.length){setNote('有已不可用的模块，请取消这些选择后再保存');return;}
     savedRevision.current=value.form.nameRevision;setNote('');
+    if(value.form.scope.includes(SHADOW_TRANSFER_OP)&&value.form.scope.some(op=>[SPILL_TRANSFER_OP,'lnx.id_background.v1'].includes(op))){setNote('请将原图阴影与祛染、整套背景分开保存，目标需分别审核。');return;}
     await current()?.submit('save',{id:`user-${crypto.randomUUID()}`,name:value.form.name.trim(),kind:'custom',moduleScope:[...value.form.scope],localMaskTransfer:value.form.scope.includes(LOCAL_GRADE_OP)?value.saveMaskTransfer:undefined});
   }
   async function apply(id=form.selectedId){
@@ -65,12 +68,13 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
     const ops=Object.keys(preset.modules);
     if(preset.xmp_import!==undefined&&value.catalog?.xmp_import_protocol!==1){setNote('当前引擎未声明 XMP 检查和逐图审核协议，不能应用该预设。');return;}
     if(preset.xmp_import!==undefined&&!validXmpSummary(preset.xmp_import,ops)){setNote('XMP 来源摘要或选择不完整，不能应用；请重新检查导入文件。');return;}
+    if(ops.includes(SHADOW_TRANSFER_OP)&&ops.some(op=>[SPILL_TRANSFER_OP,'lnx.id_background.v1'].includes(op))){setNote('此预设混合了原图阴影与祛染或整套背景，请拆分为独立预设并分别审核。');return;}
     if(unavailableScope(ops,value.catalog?.modules??[]).length){setNote('这个预设包含当前引擎不可用的模块');return;}
     if(!value.face.ok&&value.catalog?.modules.some(m=>ops.includes(m.operation_id)&&m.single_face)){
       setNote(value.face.why||'这个预设的部分模块需要可用的单脸');return;
     }
     dispatch({type:'select',id});setNote('');
-    await current()?.submit(preset.xmp_import||ops.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP,"lnx.spill_removal.v1"].includes(op))?'preflight':'apply',
+    await current()?.submit(preset.xmp_import||ops.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP,"lnx.spill_removal.v1",SHADOW_TRANSFER_OP].includes(op))?'preflight':'apply',
       {id,...(preset.xmp_import?{xmpExpected:preset.xmp_import}:{}),...(ops.includes(LOCAL_GRADE_OP)?{localMaskTransfer:value.localMaskTransfer}:{})},ops);
   }
   const review=ui.action==='preflight'&&ui.submitted?.reviewContextKey===context.reviewContextKey&&ui.result?.success&&ui.result.id===form.selectedId&&ui.result.document_id===context.documentId
@@ -82,8 +86,11 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   const spillKey=review?.spill_transfer&&review.preflight_token?spillTransferReviewKey(`${review.preflight_token}:${review.request_id}`,review.spill_transfer):'';
   const spillReady=!review?.module_scope?.includes(SPILL_TRANSFER_OP)||!!spillKey&&spillImage.key===spillKey&&spillImage.ready;
   useEffect(()=>setSpillImage({key:'',ready:false}),[spillKey]);
+  const shadowKey=review?.shadow_transfer&&review.preflight_token?shadowTransferReviewKey(`${review.preflight_token}:${review.request_id}`,review.shadow_transfer):'';
+  const shadowReady=!review?.module_scope?.includes(SHADOW_TRANSFER_OP)||!!shadowKey&&shadowImage.key===shadowKey&&shadowImage.ready;
+  useEffect(()=>setShadowImage({key:'',ready:false}),[shadowKey]);
   async function confirmLocal(){
-    if(locked()||!cropReady||!xmpReady||!spillReady||!review?.preflight_token||!review.module_scope)return;
+    if(locked()||!cropReady||!xmpReady||!spillReady||!shadowReady||!review?.preflight_token||!review.module_scope)return;
     const controller=current();
     if(controller?.snapshot().result?.preflight_token!==review.preflight_token)return;
     const expected=ui.submitted?.options.xmpExpected;
@@ -91,6 +98,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
       ||selected.xmp_import.report.report_sha256!==expected.report.report_sha256))return;
     await controller.submit('apply',{id:review.id,preflightToken:review.preflight_token,
       ...(review.module_scope.includes(SPILL_TRANSFER_OP)&&review.spill_transfer?{spillReviewAck:spillTransferAck([review.spill_transfer])}:{}),
+      ...(review.module_scope.includes(SHADOW_TRANSFER_OP)&&review.shadow_transfer?{shadowReviewAck:shadowTransferAck([review.shadow_transfer])}:{}),
       ...(expected&&review.xmp_transfer&&review.xmp_report?{xmpExpected:expected,xmpReviewAck:xmpReviewAck(review.xmp_transfer,review.xmp_report)}:{})},review.module_scope);
   }
   async function importFile(asCopy=false,xmp=false){
@@ -127,7 +135,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   async function refresh(){if(locked())return;setNote('');await current()?.submit('list');}
   async function inspect(){try{await latest.current.onRefresh();setNote('已请求当前状态，请核对照片与预设列表；不会重复提交操作。');}catch(error){setNote(String(error));}}
   return {ui,form,note,selected,catalog,context,dialogBusy,face,localMaskTransfer,setLocalMaskTransfer,saveMaskTransfer,setSaveMaskTransfer,review,confirmLocal,cropKey,cropReady,setCropImage,
-    spillKey,spillReady,setSpillImage,dismissReview:()=>{setSpillImage({key:'',ready:false});current()?.dismissReview();},
+    shadowKey,shadowReady,setShadowImage,spillKey,spillReady,setSpillImage,dismissReview:()=>{setSpillImage({key:'',ready:false});setShadowImage({key:'',ready:false});current()?.dismissReview();},
     xmpKey,xmpReady,setXmpImage,xmpImport,cancelXmpImport,confirmXmpImport,
     busy:dialogBusy||!!xmpImport||ui.phase==='working'||ui.phase==='uncertain',
     setName:(value:string)=>dispatch({type:'name',value}),select:(id:string)=>dispatch({type:'select',id}),

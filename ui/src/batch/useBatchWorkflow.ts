@@ -1,3 +1,4 @@
+import type {ShadowTransferAck} from '../originalShadow/transferModel';
 import {useEffect,useRef,useState} from 'react';
 import type {SpillTransferAck} from '../spillRemoval/transferModel';
 import {createBatchWorkflow,type BatchContext,type BatchUi} from './batchWorkflow';
@@ -18,6 +19,6 @@ export function useBatchWorkflow(context:BatchContext,onComplete:()=>void){
   const contextKey=JSON.stringify(context);
   useEffect(()=>{ref.current?.updateContext(context);},[contextKey]);
   const current=()=>{ref.current?.updateContext(latest.current.context);return ref.current;};
-  return {ui,start:()=>current()?.start(),commit:(ack?:SpillTransferAck[])=>current()?.commit(ack),undo:(id:string)=>current()?.undo(id),redo:(id:string)=>current()?.redo(id),
+  return {ui,start:()=>current()?.start(),commit:(ack?:SpillTransferAck[],shadowAck?:ShadowTransferAck[])=>current()?.commit(ack,shadowAck),undo:(id:string)=>current()?.undo(id),redo:(id:string)=>current()?.redo(id),
     query:()=>current()?.query(),acknowledgeInspection:()=>ref.current?.acknowledgeInspection(),close:()=>ref.current?.close()};
 }

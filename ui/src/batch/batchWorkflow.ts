@@ -5,11 +5,12 @@ import {validReferenceReview,type ReferenceReview} from '../referenceColor/Refer
 import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../optics/transferReviewModel';
 import {LOCAL_GRADE_OP,validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence} from '../localMasks/transferModel.ts';
 import {SPILL_TRANSFER_OP as SPILL_OP,SPILL_TRANSFER_LIMITS,spillTransferParameters,validSpillTransfer,validSpillTransferAck,type SpillTransferEvidence,type SpillTransferAck} from '../spillRemoval/transferModel.ts';
+import {SHADOW_TRANSFER_OP as SHADOW_OP,SHADOW_TRANSFER_LIMITS,shadowTransferParameters,validShadowTransfer,validShadowTransferAck,type ShadowTransferEvidence,type ShadowTransferAck} from '../originalShadow/transferModel.ts';
 /** Reviewed batch lifecycle. A queued command is not evidence of successful edits. */
 export type BatchAction='preflight'|'commit'|'undo'|'redo';
-export type BatchOptions={docs?:string[];moduleScope?:string[];conflictPolicy?:string;batchId?:string;preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest;spillReviewAck?:SpillTransferAck[]};
+export type BatchOptions={docs?:string[];moduleScope?:string[];conflictPolicy?:string;batchId?:string;preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest;spillReviewAck?:SpillTransferAck[];shadowReviewAck?:ShadowTransferAck[]};
 export type BatchTarget={index:number|null;path:string;document_id:string;revision?:string;blocked?:string|null;
-  source_proof?:unknown;expected_revision?:string;current_revision?:string|null;result_revision?:string|null;outcome?:string;before?:unknown;spill_transfer?:SpillTransferEvidence;crop_transfer?:CropReview;local_mask_transfer?:MaskTransferEvidence;optical_transfer?:OpticalTargetReview;reference_color?:ReferenceReview;people_transfer?:PeopleTransferReview|null;association?:AssociationTarget['association']};
+  source_proof?:unknown;expected_revision?:string;current_revision?:string|null;result_revision?:string|null;outcome?:string;before?:unknown;spill_transfer?:SpillTransferEvidence;shadow_transfer?:ShadowTransferEvidence;crop_transfer?:CropReview;local_mask_transfer?:MaskTransferEvidence;optical_transfer?:OpticalTargetReview;reference_color?:ReferenceReview;people_transfer?:PeopleTransferReview|null;association?:AssociationTarget['association']};
 type BatchSource={document_id:string;revision:string;path:string;source_proof?:unknown};
 export type BatchReply={batch_id?:string;request_id:string;action:BatchAction;success:boolean;error?:string;outcome_unknown?:boolean;
   persistent_association?:AssociationReview;association_source?:BatchTarget;source_outcome?:BatchTarget;people_transfer?:boolean;local_mask_transfer?:MaskTransferOptions;preflight_token?:string;source_snapshot?:BatchSource;source_changed_since_preflight?:boolean;
@@ -66,6 +67,10 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     if(spill&&(scope.includes('lnx.id_background.v1')||result.source_snapshot.document_id!==context.sourceDocumentId||!sourceProof(result.source_snapshot.source_proof)
       ||!spillTransferParameters(result.applies[SPILL_OP])))throw Error('祛反光预检缺少真实源图证明或包含非标量参数');
     if(spill&&result.targets.length>SPILL_TRANSFER_LIMITS.targets)throw Error('祛反光审核最多同时选择 8 张目标，不能省略逐图审核');
+    const shadow=scope.includes(SHADOW_OP);
+    if(shadow&&((scope.includes('lnx.id_background.v1')||scope.includes(SPILL_OP))||result.source_snapshot.document_id!==context.sourceDocumentId||!sourceProof(result.source_snapshot.source_proof)
+      ||!shadowTransferParameters(result.applies[SHADOW_OP])))throw Error('原图阴影预检缺少真实源图证明或包含非标量参数');
+    if(shadow&&result.targets.length>SHADOW_TRANSFER_LIMITS.targets)throw Error('原图阴影审核最多同时选择 8 张目标，不能省略逐图审核');
     if(people&&(!peopleProof||result.people_transfer!==true||!samePeopleRequest(result.applies,people)
       ||result.source_snapshot.document_id!==peopleProofDocument(peopleProof).document_id
       ||result.source_snapshot.revision!==String(peopleProofDocument(peopleProof).revision)))throw Error('人物迁移源图、关联或参数选择与请求不符');
@@ -90,6 +95,15 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
           throw Error('祛反光目标缺少自己的来源证明或冻结背景依赖');
         if(!validSpillTransfer(t.spill_transfer,t.document_id,t.revision,result.applies[SPILL_OP],t.source_proof))
           throw Error('祛反光目标缺少匹配本图、参数及来源的真实前后预览');
+      }
+      if(shadow&&t.blocked!=null&&(typeof t.blocked!=='string'||!t.blocked))throw Error('原图阴影目标受阻状态无效');
+      if(shadow&&!t.blocked){
+        const before=object(t.before)?t.before[SHADOW_OP]:null;
+        if(!sourceProof(t.source_proof)||!object(before)||Object.keys(before).length!==1||!hash(before.target_recipe_key)
+          ||t.document_id===result.source_snapshot.document_id&&!sameSourceProof(t.source_proof,result.source_snapshot.source_proof))
+          throw Error('原图阴影目标缺少自己的来源证明或冻结背景依赖');
+        if(!validShadowTransfer(t.shadow_transfer,t.document_id,t.revision,result.applies[SHADOW_OP],t.source_proof))
+          throw Error('原图阴影目标缺少匹配本图、参数及来源的真实前后预览');
       }
       if(scope.includes(LOCAL_GRADE_OP)&&!t.blocked&&(!validTransferEvidence(t.local_mask_transfer)||!sameTransferOptions(t.local_mask_transfer.policy,transfer)))throw Error('缺少匹配的目标局部组预检证据');
       if(scope.includes(OPTICS_AUTO_OP)&&!t.blocked&&!validOpticalReview(t.optical_transfer,t.document_id,t.revision,result.applies[OPTICS_AUTO_OP]))throw Error('缺少匹配的自动镜头/透视目标预检证据');
@@ -116,6 +130,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       ||result.source_snapshot?.document_id!==plan.source_snapshot.document_id
       ||result.source_snapshot?.revision!==plan.source_snapshot.revision||result.source_snapshot?.path!==plan.source_snapshot.path)throw Error('提交结果缺少冻结源图或目标明细');
     if(plan.module_scope.includes(SPILL_OP)&&!sameSourceProof(result.source_snapshot?.source_proof,plan.source_snapshot.source_proof))throw Error('祛反光提交来源证明与冻结预检不同');
+    if(plan.module_scope.includes(SHADOW_OP)&&!sameSourceProof(result.source_snapshot?.source_proof,plan.source_snapshot.source_proof))throw Error('原图阴影提交来源证明与冻结预检不同');
     if(plan.persistent_association){const source=result.source_outcome,before=plan.association_source;
       if(!sameAssociationReview(result.persistent_association,plan.persistent_association))throw Error('持久关联提交内容或版本与冻结审核不同');
       if(!source||!before||source.document_id!==before.document_id||source.path!==before.path||source.expected_revision!==before.revision||source.outcome!=='applied'||!revision(source.result_revision)||BigInt(source.result_revision)<=BigInt(before.revision??'0'))throw Error('持久关联缺少源成员的实际提交结果');}
@@ -183,10 +198,12 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     if(disposed||['committing','preflighting'].includes(state.phase))return;
     if(!context.enabled||!context.docs.length||(!context.moduleScope.length&&!(context.peopleTransfer?.target_policy==='persistent_association'&&context.peopleTransfer.operation==='unlink'))){set({phase:'error',plan:null,result:null,message:'请选择照片与作用范围，并使用支持批量预检的配套引擎'});return;}
     if(context.moduleScope.includes(SPILL_OP)&&context.docs.length>SPILL_TRANSFER_LIMITS.targets){set({phase:'error',plan:null,result:null,message:'祛反光审核每批最多 8 张目标，请减少选择；不会只审核前几张。'});return;}
+    if(context.moduleScope.includes(SHADOW_OP)&&context.docs.length>SHADOW_TRANSFER_LIMITS.targets){set({phase:'error',plan:null,result:null,message:'原图阴影审核每批最多 8 张目标，请减少选择；不会只审核前几张。'});return;}
+    if(context.moduleScope.includes(SHADOW_OP)&&context.moduleScope.some(op=>[SPILL_OP,'lnx.id_background.v1'].includes(op))){set({phase:'error',plan:null,result:null,message:'原图阴影标量不能与祛染或整套背景一起同步，请分别预检并审核。'});return;}
     set({plan:null,result:null,scopeLabel:context.label});
     await submit('preflight',{docs:[...context.docs],moduleScope:[...context.moduleScope],conflictPolicy:context.conflictPolicy,localMaskTransfer:context.moduleScope.includes(LOCAL_GRADE_OP)?context.localMaskTransfer:undefined,referenceColor:context.referenceColor,peopleTransfer:context.peopleTransfer});
   }
-  async function commit(spillReviewAck?:SpillTransferAck[]){
+  async function commit(spillReviewAck?:SpillTransferAck[],shadowReviewAck?:ShadowTransferAck[]){
     if(state.phase!=='review'||!state.plan||state.plan.ok<1)return;
     if(state.plan.policy==='recheck'&&state.plan.blocked>0){set({message:'有受阻目标，请重新预检或修改选择'});return;}
     const spill=state.plan.module_scope.includes(SPILL_OP),targets=state.plan.targets.filter(target=>!target.blocked);
@@ -194,7 +211,12 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       ||!validSpillTransferAck(spillReviewAck,targets.map(target=>target.spill_transfer!)))){
       set({message:'请先逐张查看并确认所有可同步目标的祛反光前后预览。'});return;
     }
-    await submit('commit',{preflightToken:state.plan.preflight_token,...(spill?{spillReviewAck:spillReviewAck!.map(ack=>({...ack}))}:{})});
+    const shadow=state.plan.module_scope.includes(SHADOW_OP);
+    if(shadow&&(spill||targets.some(target=>!validShadowTransfer(target.shadow_transfer,target.document_id,target.revision,state.plan!.applies[SHADOW_OP],target.source_proof))
+      ||!validShadowTransferAck(shadowReviewAck,targets.map(target=>target.shadow_transfer!)))){
+      set({message:'请先逐张查看并确认所有可同步目标的原图阴影前后预览。'});return;
+    }
+    await submit('commit',{preflightToken:state.plan.preflight_token,...(spill?{spillReviewAck:spillReviewAck!.map(ack=>({...ack}))}:{}),...(shadow?{shadowReviewAck:shadowReviewAck!.map(ack=>({...ack}))}:{})});
   }
   async function undo(batchId:string){
     if(state.phase==='uncertain'){set({hidden:false});return;}

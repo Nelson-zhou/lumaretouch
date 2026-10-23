@@ -94,9 +94,12 @@ neutral original-shadow intent, including samples, applicability acknowledgment,
 strength and blend. It must show real before/after pixels before commit. Other
 parameter-only scopes keep their existing ownership rules. This conservative
 whole-ID limitation is not claimed as complete preset/batch support.
-Dedicated per-target original-shadow batch/preset review is not implemented;
-[the remaining integration map](SCALAR-TRANSFER-NEXT.md) specifies the target-owned
-proof, scalar-only payload, review and history prerequisites.
+Dedicated per-target original-shadow scalar batch/preset review now has a
+[source implementation](SCALAR-TRANSFER-IMPLEMENTATION.md): only enabled, strength
+and blend transfer; every target retains and reviews its own evidence. The
+[earlier integration map](SCALAR-TRANSFER-NEXT.md) records the prerequisites, not
+a separate feature count. Runtime, quality and persistence acceptance remains
+UNRUN, and whole-ID with nonneutral shadow remains refused.
 The existing source-local mask-object selection remains available. A dedicated
 two-role whole-source canvas additionally prepares independent lit-floor and
 retention erase/restore vectors. The display PNG and approximate overlay never

@@ -20,6 +20,8 @@ export function batchScopeOptions(modules: readonly {operation_id: string; trans
     out.push({label:'仅局部调色组（预检追加/替换）',ops:['lnx.local_grade.v1']});
     if(global.length)out.push({label:'全图配方 + 局部调色组',ops:[...global.map(([op])=>op),'lnx.local_grade.v1']});
   }
+  if(supported.has('lnx.original_shadow.v1')) out.push({label:'原图阴影（仅参数；目标须独立地面样本与逐图审核）',ops:['lnx.original_shadow.v1']});
+  if(supported.has('lnx.spill_removal.v1')) out.push({label:'祛背景色反光（仅参数；目标逐图审核）',ops:['lnx.spill_removal.v1']});
   if(supported.has('lnx.studio_background.v1')) out.push({label:'影棚背景强度（目标须已有范围）',ops:['lnx.studio_background.v1']});
   if(supported.has('lnx.optics_manual.v1')) out.push({label:'镜头/透视手动参数（不复制自动结果）',ops:['lnx.optics_manual.v1']});
   if(supported.has('lnx.optics_auto.v1')){

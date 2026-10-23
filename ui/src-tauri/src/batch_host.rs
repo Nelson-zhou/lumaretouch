@@ -2,6 +2,7 @@
 use serde_json::Value;
 use crate::receipt_host::{ReceiptHost, ReceiptKind};
 use crate::spill_transfer_protocol::{self as spill, hex, revision, source_proof as spill_source, SPILL_OP};
+use crate::original_shadow_transfer_protocol::{self as shadow, SHADOW_OP};
 pub(crate) struct BatchKind;
 fn spill_preflight(value: &Value) -> bool {
     let (Some(ops), Some(applies), Some(targets)) = (value["module_scope"].as_array(),
@@ -39,6 +40,42 @@ fn spill_preflight(value: &Value) -> bool {
     value["blocked"].as_u64() == Some(blocked)
         && value["ok"].as_u64() == Some(targets.len() as u64 - blocked)
 }
+fn shadow_preflight(value: &Value) -> bool {
+    let (Some(ops), Some(applies), Some(targets)) = (value["module_scope"].as_array(),
+        value["applies"].as_object(), value["targets"].as_array()) else { return false; };
+    if targets.len() > shadow::MAX_TARGETS { return false; }
+    let mut selected = std::collections::BTreeSet::new();
+    if ops.iter().any(|op| op.as_str().map_or(true, |op| !selected.insert(op)))
+        || selected.contains("lnx.id_background.v1") || selected.contains("lnx.spill_removal.v1") || applies.len() != ops.len()
+        || !selected.iter().all(|op| applies.get(*op).is_some_and(Value::is_object)) { return false; }
+    let params = &value["applies"][SHADOW_OP];
+    if !shadow::parameters(params) { return false; }
+    let source = &value["source_snapshot"];
+    if !hex(&value["preflight_token"], 32) || !hex(&source["document_id"], 32)
+        || !revision(&source["revision"]) || !source["path"].is_string()
+        || !shadow::source_proof(&source["source_proof"]) || !value["rejected_docs"].is_array()
+        || !matches!(value["policy"].as_str(), Some("skip_and_report" | "recheck")) { return false; }
+    let mut ids = std::collections::BTreeSet::new();
+    let mut blocked = 0_u64;
+    for target in targets {
+        if !hex(&target["document_id"], 32) || !revision(&target["revision"])
+            || !target["path"].is_string() || target["index"].as_u64().is_none()
+            || !ids.insert(target["document_id"].as_str().unwrap()) { return false; }
+        if !target["blocked"].is_null() {
+            if !target["blocked"].as_str().is_some_and(|s| !s.is_empty()) { return false; }
+            blocked += 1;
+            continue;
+        }
+        let before = &target["before"][SHADOW_OP];
+        if !shadow::source_proof(&target["source_proof"])
+            || before.as_object().map_or(true, |m| m.len() != 1)
+            || !hex(&before["target_recipe_key"], 64)
+            || !shadow::transfer(&target["shadow_transfer"], &target["document_id"], &target["revision"], params, &target["source_proof"])
+            || (target["document_id"] == source["document_id"] && target["source_proof"] != source["source_proof"]) { return false; }
+    }
+    value["blocked"].as_u64() == Some(blocked)
+        && value["ok"].as_u64() == Some(targets.len() as u64 - blocked)
+}
 impl ReceiptKind for BatchKind {
     const NAME: &'static str = "batch";
     const ACTIONS: &'static [&'static str] = &["preflight", "commit", "undo", "redo", "people_targets"];
@@ -47,6 +84,9 @@ impl ReceiptKind for BatchKind {
             && (value["success"] != true || value["action"] != "preflight"
                 || !value["module_scope"].as_array().is_some_and(|ops| ops.iter().any(|op| op == SPILL_OP))
                 || spill_preflight(value))
+            && (value["success"] != true || value["action"] != "preflight"
+                || !value["module_scope"].as_array().is_some_and(|ops| ops.iter().any(|op| op == SHADOW_OP))
+                || shadow_preflight(value))
     }
 }
 pub(crate) type BatchHost = ReceiptHost<BatchKind>;
@@ -184,6 +224,29 @@ mod tests {
         h.receive([1;16],&json!({"request_id":"a","action":"commit","success":"true"}));
         assert_eq!(h.status("a")["result"]["success"],false);
         assert_eq!(h.status("a")["result"]["outcome_unknown"],true);
+    }
+
+    #[test] fn shadow_each_target_requires_owned_pixels_even_when_disabled() {
+        let mut value=spill_review();
+        let params=json!({"enabled":false,"strength":0,"blend":"normal"});
+        value["module_scope"]=json!([SHADOW_OP]);value["applies"]=json!({(SHADOW_OP):params});
+        value["targets"][0]["before"]=json!({(SHADOW_OP):{"target_recipe_key":"d".repeat(64)}});
+        let target=&value["targets"][0];
+        let pair=shadow::tests::sample_transfer(&target["document_id"],&target["revision"],&params,&target["source_proof"]);
+        value["targets"][0].as_object_mut().unwrap().remove("spill_transfer");value["targets"][0]["shadow_transfer"]=pair;
+        assert!(BatchKind::valid(&value,None));
+        for key in ["shadow_transfer","source_proof","before"] {
+            let mut bad=value.clone();bad["targets"][0].as_object_mut().unwrap().remove(key);assert!(!BatchKind::valid(&bad,None));
+        }
+        let mut bad=value.clone();bad["targets"][0]["shadow_transfer"]["source_proof"]=bad["source_snapshot"]["source_proof"].clone();
+        assert!(!BatchKind::valid(&bad,None));
+        for op in [SPILL_OP,"lnx.id_background.v1"] {
+            let mut bad=value.clone();bad["module_scope"].as_array_mut().unwrap().push(json!(op));bad["applies"][op]=json!({});
+            assert!(!BatchKind::valid(&bad,None));
+        }
+        let mut host=BatchHost::default();host.reset([1;16]);host.ready([1;16],true);host.begin([1;16],"spill","preflight").unwrap();
+        value["targets"][0]["shadow_transfer"]["after"]["sha256"]=json!("e".repeat(64));host.receive([1;16],&value);
+        assert_eq!(host.status("spill")["result"]["success"],false);
     }
 
 }

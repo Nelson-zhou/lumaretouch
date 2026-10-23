@@ -2,6 +2,7 @@
 use serde_json::{json, Value};
 use crate::receipt_host::{ReceiptHost, ReceiptKind};
 use crate::spill_transfer_protocol as spill;
+use crate::original_shadow_transfer_protocol as shadow;
 #[path = "xmp_preset_protocol.rs"]
 pub(crate) mod xmp_protocol;
 pub(crate) struct PresetKind;
@@ -73,8 +74,12 @@ fn reviewed_types(value: &Value) -> bool {
     let optics=ops.iter().any(|op|op=="lnx.optics_auto.v1");
     let crop=ops.iter().any(|op|op=="lnx.crop.v1");
     let has_spill=ops.iter().any(|op|op==spill::SPILL_OP);
+    let has_shadow=ops.iter().any(|op|op==shadow::SHADOW_OP);
     let xmp=!value["xmp_report"].is_null()||!value["xmp_transfer"].is_null();
-    (local||optics||crop||xmp||has_spill)
+    (local||optics||crop||xmp||has_spill||has_shadow)
+        && (!has_shadow || (!has_spill && !ops.iter().any(|op|op=="lnx.id_background.v1")
+            && shadow::hex(&value["preflight_token"],32)
+            && shadow::transfer(&value["shadow_transfer"],&value["document_id"],&value["revision"],&value["applies"][shadow::SHADOW_OP],&value["source_proof"])))
         && (!has_spill || (spill::hex(&value["preflight_token"], 32)
             && !ops.iter().any(|op|op=="lnx.id_background.v1")
             && spill::transfer(&value["spill_transfer"], &value["document_id"], &value["revision"], &value["applies"][spill::SPILL_OP], &value["source_proof"])))
@@ -226,6 +231,22 @@ mod tests {
         v["module_scope"] = json!(["hsl"]); v["preset"]["modules"] = json!({}); assert!(!PresetKind::valid(&v, Some("doc")));
         v["action"] = json!("apply"); v["before"] = json!({}); v["after"] = json!({});
         v["doc_state"] = json!({"document_id":"doc"}); assert!(!PresetKind::valid(&v, Some("doc")));
+    }
+
+    #[test] fn shadow_preset_requires_its_own_pair_and_refuses_combined_scopes() {
+        let mut value=spill_review();let params=json!({"enabled":true,"strength":45,"blend":"softlight"});
+        value["module_scope"]=json!([shadow::SHADOW_OP]);value["applies"]=json!({(shadow::SHADOW_OP):params});
+        value.as_object_mut().unwrap().remove("spill_transfer");
+        value["shadow_transfer"]=shadow::tests::sample_transfer(&value["document_id"],&value["revision"],&params,&value["source_proof"]);
+        assert!(PresetKind::valid(&value,Some("loaded-photo")));
+        for key in ["shadow_transfer","source_proof","revision"] {
+            let mut bad=value.clone();bad.as_object_mut().unwrap().remove(key);assert!(!PresetKind::valid(&bad,Some("loaded-photo")));
+        }
+        for op in [spill::SPILL_OP,"lnx.id_background.v1"] {
+            let mut bad=value.clone();bad["module_scope"].as_array_mut().unwrap().push(json!(op));bad["applies"][op]=json!({});
+            assert!(!PresetKind::valid(&bad,Some("loaded-photo")));
+        }
+        let mut bad=value;bad["shadow_transfer"]["parameters"]["retention"]=json!({});assert!(!PresetKind::valid(&bad,Some("loaded-photo")));
     }
 
 }

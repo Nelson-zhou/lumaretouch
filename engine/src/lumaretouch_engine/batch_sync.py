@@ -13,9 +13,10 @@ from .document_versions import DocumentVersions
 from .batch_preflight_controller import FrozenBatchController,PlanPorts
 from . import creative_derived_source as SOURCE, creative_derived_transfer as TRANSFER
 from . import spill_transfer_review as SR
+from . import original_shadow_transfer_review as SHR
 
 ACTIONS = ("preflight", "commit", "undo", "redo", "state", "people_targets")
-KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color", "people_transfer", "spill_review_ack"}
+KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color", "people_transfer", "spill_review_ack", "shadow_review_ack"}
 POLICIES = ("skip_and_report", "recheck")
 
 
@@ -41,6 +42,20 @@ def verify_history_source(row, record, ops, previous):
                 or spill['candidate_sha256']!=fingerprint(record['after'])
                 or spill['parameters']!=SC.SPILL_REMOVAL.params_of(record['after'])):
             raise ValueError('Spill history no longer matches its reviewed target and saved states')
+    if SC.ORIGINAL_SHADOW.OP in ops:
+        from .optics_candidate_identity import fingerprint
+        # Generic shadow batches are session-only: project persistence restores
+        # people-owned batch entries, never a legacy shadow ledger. Existing
+        # per-document undo stacks remain on their separate unchanged path.
+        shadow=SHR.checked(record.get('shadow_review'))
+        # These are saved transaction snapshots, not today's full state. Scoped
+        # undo may preserve later unrelated edits without demanding a rerender.
+        if (shadow['document_id']!=record.get('document_id') or shadow['source_proof']!=proof
+                or shadow['revision']!=record.get('reviewed_revision')
+                or shadow['before_sha256']!=fingerprint(record['before'])
+                or shadow['candidate_sha256']!=fingerprint(record['after'])
+                or shadow['parameters']!=SC.ORIGINAL_SHADOW.params_of(record['after'])):
+            raise ValueError('Original-shadow history no longer matches its reviewed target and saved states')
     if SC.OP_CROP in ops:
         crop=record.get('crop_review')
         if crop is None:
@@ -86,6 +101,9 @@ class BatchEditor:
     verify_crop: Callable | None = None
     prepare_spill: Callable | None = None
     verify_spill: Callable | None = None
+    prepare_shadow: Callable | None = None
+    verify_shadow: Callable | None = None
+    history_identity: Callable | None = None
 
 class BatchSyncController:
     def __init__(self, documents: BatchDocuments, editor: BatchEditor,
@@ -103,7 +121,7 @@ class BatchSyncController:
         self.versions=versions if versions is not None else DocumentVersions()
         self.preflight=FrozenBatchController(PlanPorts(lambda:self.documents.rows(),lambda:self.documents.current_index(),
             lambda:self.documents.remember_current(),lambda:self.editor.capture(),lambda docs:self.target_indices(docs),
-            lambda row,**kw:self.editor.face_known_single(row,**kw),lambda *a,**kw:self.commit(*a,**kw),self.editor.prepare_optics,self.editor.prepare_reference,self.editor.capture_reference,self.editor.people_transfer,self.editor.prepare_crop,self.editor.verify_crop,self.editor.prepare_spill,self.editor.verify_spill),
+            lambda row,**kw:self.editor.face_known_single(row,**kw),lambda *a,**kw:self.commit(*a,**kw),self.editor.prepare_optics,self.editor.prepare_reference,self.editor.capture_reference,self.editor.people_transfer,self.editor.prepare_crop,self.editor.verify_crop,self.editor.prepare_spill,self.editor.verify_spill,self.editor.prepare_shadow,self.editor.verify_shadow),
             self.versions,lambda event:self.emit(event),monotonic)
 
     def target_indices(self, docs) -> tuple[list[int], list[dict]]:
@@ -167,6 +185,9 @@ class BatchSyncController:
         if 'spill_review_ack' in p and (action!='commit' or p.get('preflight_token') is None):
             self._reject(p,'Spill visual acknowledgment is accepted only for a frozen commit')
             return
+        if 'shadow_review_ack' in p and (action!='commit' or p.get('preflight_token') is None):
+            self._reject(p,'Original-shadow visual acknowledgment is accepted only for a frozen commit')
+            return
         if action == "state":
             self.emit({"event": "batch_state", "batches": [
                 {"batch_id": k, "ops": v["ops"], "targets": len(v["targets"]),
@@ -207,7 +228,7 @@ class BatchSyncController:
                         return
                 elif "people_changes" in self.ledger.get(str(p.get("batch_id")),{}):
                     body=restore_people(self,p)
-                else:body=restore_group(self,p) if action=="redo" or RC.OP in self.ledger.get(str(p.get("batch_id")),{}).get("ops",[]) else self.undo(p)
+                else:body=restore_group(self,p) if action=="redo" or SC.ORIGINAL_SHADOW.OP in self.ledger.get(str(p.get("batch_id")),{}).get("ops",[]) or RC.OP in self.ledger.get(str(p.get("batch_id")),{}).get("ops",[]) else self.undo(p)
                 self.preflight.emit_result(p,{**body,"success":True})
                 return
             if p.get("people_transfer") is not None:raise SC.ScopeError("People transfer requires a frozen preflight token")
@@ -215,6 +236,7 @@ class BatchSyncController:
             if SC.SEMANTIC.OP in ops:raise SC.ScopeError(SC.SEMANTIC.REASON)
             if SC.OP_CROP in ops:raise SC.ScopeError('Crop requires a frozen per-target visual preflight before commit')
             if SC.SPILL_REMOVAL.OP in ops:raise SC.ScopeError("祛反光参数必须先逐目标冻结预检，不复制其他照片范围")
+            if SC.ORIGINAL_SHADOW.OP in ops:raise SC.ScopeError("原图阴影参数必须先逐目标冻结预检，不复制其他照片范围")
             if ID_BACKGROUND.OP in ops:raise SC.ScopeError("证件照背景必须先逐目标预检，不会复制其他照片的审核范围")
             if SKY.OP in ops:
                 raise SC.ScopeError("换天空批量必须逐目标预检，再用冻结 token 提交；不会猜测天空或复制源图区域")
@@ -279,7 +301,7 @@ class BatchSyncController:
         live_idx = self.documents.current_index()
         planned: list[tuple[int, dict, dict]] = []
         applied_rows = []
-        proofs={};crop_proofs={};spill_proofs={}
+        proofs={};crop_proofs={};spill_proofs={};shadow_proofs={}
         source_proof=(source_snapshot or {}).get('source_proof')
         if source_proof is not None:source_proof=SOURCE.check_row_proof(source_proof)
         source_state=self.editor.capture()
@@ -334,6 +356,16 @@ class BatchSyncController:
                 self.editor.verify_spill(row,before,new,version.document_id,str(version.revision),spill_record)
                 spill_proofs[r['index']]=spill_record
             if SC.SPILL_REMOVAL.OP in ops:SC.SPILL_REMOVAL.validate_target(new,row["path"],(row["src_h"],row["src_w"]))
+            if SC.ORIGINAL_SHADOW.OP in ops:
+                if r.get('_shadow_prepared') is None or self.editor.verify_shadow is None:
+                    raise SC.ScopeError('Original-shadow requires its frozen full before/after target review; direct commit refused')
+                version=self.versions.version(row)
+                shadow_record=SHR.checked(r['_shadow_prepared'])
+                if proof is None or shadow_record['source_proof']!=proof:
+                    raise SC.ScopeError('Original-shadow review lacks the same frozen target source proof')
+                self.editor.verify_shadow(row,before,new,version.document_id,str(version.revision),shadow_record)
+                shadow_proofs[r['index']]=shadow_record
+            if SC.ORIGINAL_SHADOW.OP in ops:SC.ORIGINAL_SHADOW.validate_target(new,row["path"],(row["src_h"],row["src_w"]))
             if ID_BACKGROUND.OP in ops:ID_BACKGROUND.validate_target(new,row["path"],(row["src_h"],row["src_w"]))
             if SKY.OP in ops:
                 SKY.validate_target(new["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
@@ -359,6 +391,10 @@ class BatchSyncController:
                 row=self.documents.rows()[idx];version=self.versions.version(row)
                 actual=self.editor.capture() if idx==live_idx else row['state']
                 self.editor.verify_spill(row,actual,new,version.document_id,str(version.revision),spill_proofs[idx])
+            if idx in shadow_proofs:
+                row=self.documents.rows()[idx];version=self.versions.version(row)
+                actual=self.editor.capture() if idx==live_idx else row['state']
+                self.editor.verify_shadow(row,actual,new,version.document_id,str(version.revision),shadow_proofs[idx])
         self.sequence += 1
         batch_id = f"batch-{self.sequence:03d}-{int(self.clock() * 1000)}"
         targets: dict[str, dict] = {}
@@ -370,9 +406,11 @@ class BatchSyncController:
             published_version=self.versions.version(self.documents.rows()[idx])
             try:
                 fr=self.editor.replay(new,mode="batch",replayed_for=f"batch:{batch_id}",
-                                      **({'strict_local':True} if SC.SPILL_REMOVAL.OP in ops or SC.OP_CROP in ops or SOURCE.record(new) is not None or ID_BACKGROUND.OP in ops or SC.OP_LOCAL_GRADE in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops else {}))
+                                      **({'strict_local':True} if SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops or SC.OP_CROP in ops or SOURCE.record(new) is not None or ID_BACKGROUND.OP in ops or SC.OP_LOCAL_GRADE in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops else {}))
                 if SC.SPILL_REMOVAL.OP in ops and SC.SPILL_REMOVAL.undo_key(self.editor.capture()) != SC.SPILL_REMOVAL.undo_key(new):
                     raise SC.ScopeError('祛反光目标依赖在批量重放期间变化')
+                if SC.ORIGINAL_SHADOW.OP in ops and SC.ORIGINAL_SHADOW.undo_key(self.editor.capture()) != SC.ORIGINAL_SHADOW.undo_key(new):
+                    raise SC.ScopeError('原图阴影目标依赖在批量重放期间变化')
                 # A render may be expensive. Do not publish parked candidates
                 # whose provenance changed while the active target rendered.
                 for target_index,target_before,target_candidate in planned:
@@ -400,6 +438,17 @@ class BatchSyncController:
                             spill_proof={**spill_proof,'revision':str(published_version.revision)}
                             actual_before=target_before;actual_candidate=self.editor.capture()
                         self.editor.verify_spill(target,actual_before,actual_candidate,version.document_id,str(version.revision),spill_proof)
+                    if target_index in shadow_proofs:
+                        target=self.documents.rows()[target_index];version=self.versions.version(target)
+                        shadow_proof=shadow_proofs[target_index]
+                        actual_before=target['state'];actual_candidate=target_candidate
+                        if target_index==live_idx:
+                            if version!=published_version:raise SC.ScopeError('Active shadow target changed during publication')
+                            # Bind the actual replayed full state, but retain the
+                            # original reviewed revision in durable history.
+                            shadow_proof={**shadow_proof,'revision':str(published_version.revision)}
+                            actual_before=target_before;actual_candidate=self.editor.capture()
+                        self.editor.verify_shadow(target,actual_before,actual_candidate,version.document_id,str(version.revision),shadow_proof)
             except Exception as error:
                 try:
                     rollback=self.editor.replay(before,mode="batch",replayed_for=f"batch_rollback:{batch_id}")
@@ -407,6 +456,10 @@ class BatchSyncController:
                         row=self.documents.rows()[idx];version=self.versions.version(row)
                         expected=SR.rollback_record(spill_proofs[idx],before,str(version.revision))
                         self.editor.verify_spill(row,before,self.editor.capture(),version.document_id,str(version.revision),expected)
+                    if idx in shadow_proofs:
+                        row=self.documents.rows()[idx];version=self.versions.version(row)
+                        expected=SHR.rollback_record(shadow_proofs[idx],before,str(version.revision))
+                        self.editor.verify_shadow(row,before,self.editor.capture(),version.document_id,str(version.revision),expected)
                     if rollback is not None:self.emit(rollback)
                 except Exception as rollback_error:
                     self.editor.invalidate()
@@ -421,12 +474,13 @@ class BatchSyncController:
                 row["undo"].append(before)
                 if len(row["undo"]) > self.history_limit:del row["undo"][0]
                 row["redo"].clear()
-            targets[str(idx)] = {"path": row["path"], "before": dict(before) if idx in spill_proofs else before,
-                "after": dict(new) if idx in spill_proofs else new,
+            targets[str(idx)] = {"path": row["path"], "before": dict(before) if idx in spill_proofs or idx in shadow_proofs else before,
+                "after": dict(new) if idx in spill_proofs or idx in shadow_proofs else new,
                 "applied":OA.before_params(new, ops),"live":idx==live_idx,"document_id":self.versions.version(row).document_id,
                 **({'source_proof':proofs[idx]} if proofs[idx] is not None else {}),
                 **({'crop_review':crop_proofs[idx]} if idx in crop_proofs else {}),
                 **({'spill_review':spill_proofs[idx],'reviewed_revision':spill_proofs[idx]['revision']} if idx in spill_proofs else {}),
+                **({'shadow_review':shadow_proofs[idx],'reviewed_revision':shadow_proofs[idx]['revision']} if idx in shadow_proofs else {}),
                 "local_key":SC.LOCAL_GRADE.undo_key(new) if SC.OP_LOCAL_GRADE in ops else None}
         self.ledger[batch_id] = {"ops": ops, "targets": targets, "at_ns": self.monotonic(),
                                    "undone": False, "policy": policy,"source_snapshot":source_snapshot}

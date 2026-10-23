@@ -49,7 +49,9 @@ def before_params(state,ops):
     from . import id_background_scope as ID_BACKGROUND
     from . import fringe_repair_scope as FRINGE
     from . import spill_removal_scope as SPILL
-    result=SC.params_of(state,[op for op in ops if op not in (OP,RC.OP,ID_BACKGROUND.OP,FRINGE.OP,SPILL.OP)])
+    from . import original_shadow_scope as SHADOW
+    result=SC.params_of(state,[op for op in ops if op not in (OP,RC.OP,ID_BACKGROUND.OP,FRINGE.OP,SPILL.OP,SHADOW.OP)])
+    if SHADOW.OP in ops:result[SHADOW.OP]={"target_recipe_key":SHADOW.undo_key(state)}
     if SPILL.OP in ops:result[SPILL.OP]={"target_recipe_key":SPILL.undo_key(state)}
     if FRINGE.OP in ops:result[FRINGE.OP]={"target_recipe_key":FRINGE.undo_key(state)}
     if ID_BACKGROUND.OP in ops:result[ID_BACKGROUND.OP]={"target_recipe_key":ID_BACKGROUND.undo_key(state)}

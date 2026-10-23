@@ -1,0 +1,256 @@
+{
+  "baseline": "603135d23607dfb6017f0faccf4eb377cc0ae4ff",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Original-shadow scalar-only per-target preset/batch transfer with target-owned samples and subject, real full-source before/after review, strict ordered acknowledgments, commit/rollback/history source+people proof; explicit scope picker discovery.",
+  "files": [
+    {
+      "path": "docs/creative-layers/NEXT-MATERIAL-FEATURES.md",
+      "sha256": "65adad805bd4e397c6afa25db2b645aa35ffb3acbdef73530b91743db691672a",
+      "bytes": 7138
+    },
+    {
+      "path": "docs/original-shadow/IMPLEMENTATION.md",
+      "sha256": "cdd7cbf36a92f087bf4df304b8680dabf1b6b7a98db48aec11b49815a3625f5d",
+      "bytes": 10797
+    },
+    {
+      "path": "docs/original-shadow/SCALAR-TRANSFER-IMPLEMENTATION.md",
+      "sha256": "3bcc6e42cd30e7da41fe116815bc8d6c5444d8067bfadad7f3b9439fedaa60db",
+      "bytes": 4147
+    },
+    {
+      "path": "docs/original-shadow/SCALAR-TRANSFER-NEXT.md",
+      "sha256": "f8c4642d62ccc4f72de5ed93b0342c5bf59d17599205d51aae5916a2f4151219",
+      "bytes": 3047
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_group_history.py",
+      "sha256": "0f7edfaa2fd1cb5fe26a796604750400c922d2c7e68eabfcfdad963a6a035b8f",
+      "bytes": 7493
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight.py",
+      "sha256": "260efb61bdfebbc540d11876a9eb64a0982ae2d5b6cfecc9acf816bd66c8fa1a",
+      "bytes": 9602
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight_controller.py",
+      "sha256": "734ef7c61073e78804b590307ab2830accf58ca02522e48f10ed7cc3ee21e714",
+      "bytes": 36454
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "05246029f3da446d89c901ca3886ae643f32799a1305fccdb9f16a907816dd29",
+      "bytes": 41665
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_preset_review.py",
+      "sha256": "ecce7702de4606f0864f9daf21490d50c04765ea530d66c430b2f027e20e1958",
+      "bytes": 13025
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/optics_auto_scope.py",
+      "sha256": "09bc53e5f0ae65b0318a72da145fd74e5f044873dd583d9eb1417fe170bc8b4d",
+      "bytes": 4269
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/original_shadow_scope.py",
+      "sha256": "74e52d57b23505213564d879cffd4e1d842a93f039e26147668bf488eed6733b",
+      "bytes": 3537
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/original_shadow_transfer_review.py",
+      "sha256": "80a7e9e25f8bffc249037bb3efe9eacc54f9ffac45f84dfdc5710d09449c9bfa",
+      "bytes": 13510
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "sha256": "edcc130b11b9a8ab6213b66f6879c0c07c2dcff5b04419ea6b9c2055f4c763d2",
+      "bytes": 26791
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "dcfd7a32bcb656b6c9d7f62335acf6aaabeb5473de8d180a397da59b6ee623a2",
+      "bytes": 45306
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "96ab5b8d291c7e58bf7178543e0201656bcce7c940da8253eae526d46257b8b8",
+      "bytes": 7447
+    },
+    {
+      "path": "engine/tests/test_original_shadow_scope_unrun.py",
+      "sha256": "ae27bac11d83a492ed9168a02708f36d660c03df1e6b8ebbee6b030f0c26c8d8",
+      "bytes": 6220
+    },
+    {
+      "path": "engine/tests/test_original_shadow_transfer_consumers_unrun.py",
+      "sha256": "478442d37bb93e36f0aa0b50e5a22c0f2eb1f8c34f75ccb278d72b27abeccf72",
+      "bytes": 8013
+    },
+    {
+      "path": "engine/tests/test_original_shadow_transfer_review_unrun.py",
+      "sha256": "15154202b0ae3f838c523c1c5b511c221521b29a7fd1c62524fd5193899f9fe1",
+      "bytes": 22527
+    },
+    {
+      "path": "ui/package.json",
+      "sha256": "39ef8227ee0ec3a8b74a2f4456db51906ab6dab6bcb6a8e7dbffbda3f9c8f1f1",
+      "bytes": 2053
+    },
+    {
+      "path": "ui/src-tauri/src/batch_api.rs",
+      "sha256": "ea2349d7fd2f5cbe10f0f7d0d07dd7929b764da97b1fe2aea984965d0d3951bf",
+      "bytes": 4602
+    },
+    {
+      "path": "ui/src-tauri/src/batch_host.rs",
+      "sha256": "2e3342d02b19b47e7a9aa3db575154ec71f245b8489a40d232cdd77973f20079",
+      "bytes": 16583
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "eebecc439738592024e6203a409428d71686f8bcf6a7b81bfc26ea91bcc93a92",
+      "bytes": 101368
+    },
+    {
+      "path": "ui/src-tauri/src/original_shadow_transfer_protocol.rs",
+      "sha256": "28747d94e8c967f97d2cd0fe4161a082f49cc21047af63ee69409be7d1521d80",
+      "bytes": 9343
+    },
+    {
+      "path": "ui/src-tauri/src/original_shadow_transfer_protocol_tests.rs",
+      "sha256": "3c9d17d899621a10c7fd1ba2637ef1e6435ce6a7e872a19cd11a8e229037ff1e",
+      "bytes": 11044
+    },
+    {
+      "path": "ui/src-tauri/src/preset_api.rs",
+      "sha256": "6d489ed8a36b1217a898ce17151dc3bbf3fe7a2c5785fe19d349b52dfc6f8feb",
+      "bytes": 4460
+    },
+    {
+      "path": "ui/src-tauri/src/preset_host.rs",
+      "sha256": "77682c70aa4fac507f77fe25a5c224b2341a0bb3c8001eac353abf8cd12bbe52",
+      "bytes": 19442
+    },
+    {
+      "path": "ui/src/batch/BatchReview.tsx",
+      "sha256": "3f399957421315f6519a9ea7e78534a81a461d8b7f8d72cd97ee85afa4805483",
+      "bytes": 11570
+    },
+    {
+      "path": "ui/src/batch/batchScopeOptions.test.ts",
+      "sha256": "926c62038064586618b72cca8abfb0e86cd022c5e17bab96977af81c8e59183a",
+      "bytes": 2546
+    },
+    {
+      "path": "ui/src/batch/batchScopeOptions.ts",
+      "sha256": "68c6ac3aca63b4f6e2fe583c1fa26ef329c61662c231acefdf00e14cb06429e3",
+      "bytes": 4904
+    },
+    {
+      "path": "ui/src/batch/batchWorkflow.ts",
+      "sha256": "1ca27dcd6b1d27a36667df8c3fb8e6c4286c115c89d931c08af5dff99f859788",
+      "bytes": 24356
+    },
+    {
+      "path": "ui/src/batch/useBatchWorkflow.ts",
+      "sha256": "24bc259828ccf63353ec042d40fcb893bdf7e1b5ea8dcc232ca4674884762a07",
+      "bytes": 1700
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "a5dec30475c21c527dc6fbd13a7ec5a68a36f18389f65a298967bb62ee207dbd",
+      "bytes": 99870
+    },
+    {
+      "path": "ui/src/originalShadow/ShadowTransferReview.tsx",
+      "sha256": "889155399b47a5801a4002c273e5d219a7af84c9e09169504b6300f27d95ad81",
+      "bytes": 4912
+    },
+    {
+      "path": "ui/src/originalShadow/TRANSFER-UNRUN.md",
+      "sha256": "456576f392027ca1ff2446e1c987dcadc2958d8fe2df3bcda7afeb71681702d2",
+      "bytes": 1494
+    },
+    {
+      "path": "ui/src/originalShadow/transferBatch.unrun.test.ts",
+      "sha256": "b2b0c512ae6c451a006c3fee3601909e8ddba28c013dc803741fc03baff4b56b",
+      "bytes": 4368
+    },
+    {
+      "path": "ui/src/originalShadow/transferModel.ts",
+      "sha256": "3b75ca5b122e2a7b717a7a778d70c0a4f069470b7881221d4e3e974e299424bb",
+      "bytes": 6906
+    },
+    {
+      "path": "ui/src/originalShadow/transferModel.unrun.test.ts",
+      "sha256": "f96ad05958f15efb87c3808ab35c97372e968ab3a955e35587f0940dea3e78f9",
+      "bytes": 7340
+    },
+    {
+      "path": "ui/src/originalShadow/transferPreset.unrun.test.ts",
+      "sha256": "c54d2fe0fed0df8c81825007dbe8b84f6f45c15ea60822698c152545890967d6",
+      "bytes": 7044
+    },
+    {
+      "path": "ui/src/presets/PresetPanel.tsx",
+      "sha256": "bf987c44ed78b73eff5f8a036a45c533963bd66a2dfef97ceca7255a673fee09",
+      "bytes": 11147
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "9db5cc40066597fcf3182ac83ce35ff1d15badfce276bdd9a4dd3b2ce4e88dc5",
+      "bytes": 4224
+    },
+    {
+      "path": "ui/src/presets/presetWorkflow.ts",
+      "sha256": "c6d100ae0b5b0a515df428121ea4f5f836fd7443b76644f330085ec310fc1152",
+      "bytes": 18632
+    },
+    {
+      "path": "ui/src/presets/usePresetWorkflow.ts",
+      "sha256": "5b52dfeefcd4b445266c59700f1367b441233204a4775a9f00dd99fbbe67e6fb",
+      "bytes": 13635
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1005,
+    "json_documents": 1,
+    "toml_documents": 3,
+    "git_diff_check": "clean",
+    "changed_python_duplicate_definitions": "none",
+    "line_caps": {
+      "ui/src/App.tsx": 2122,
+      "ui/src-tauri/src/main.rs": 2042,
+      "engine/src/lumaretouch_engine/server.py": 6971
+    },
+    "native_review": "lexical delimiters only, not compilation",
+    "independent_review": "no remaining definite inspected source blocker after repairs",
+    "timestamp_utc": "2026-10-23T22:56:04.765859+00:00"
+  },
+  "unrun": [
+    "product imports",
+    "tests",
+    "build",
+    "typecheck",
+    "compiler",
+    "inference",
+    "photo quality",
+    "runtime interactions",
+    "packaging"
+  ],
+  "remaining": [
+    "AI extraction and model/weight rights/inference integration",
+    "Nonuniform, dark, reflective, textured floor and same-colour stain ambiguity",
+    "Whole-ID nonneutral original-shadow portability and simultaneous spill/shadow scalar transfer deliberately refused",
+    "Generic batch history remains session-only, no cross-restart batch undo claim",
+    "Mixed-person presets retain candidate graph restrictions",
+    "Broader alpha/HDR pipeline and existing mask coverage precision limitations"
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

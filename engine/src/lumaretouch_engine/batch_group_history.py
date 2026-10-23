@@ -27,6 +27,7 @@ def restore_group(owner,request):
                 TRANSFER.require_restoration(current,previous,restored,ops,rec['source_proof'])
                 SOURCE.verify_row({**row,'state':restored},rec['source_proof'])
             if SC.SPILL_REMOVAL.OP in ops:SC.SPILL_REMOVAL.validate_target(restored,row['path'],(row['src_h'],row['src_w']))
+            if SC.ORIGINAL_SHADOW.OP in ops:SC.ORIGINAL_SHADOW.validate_target(restored,row['path'],(row['src_h'],row['src_w']))
             if SC.FRINGE_REPAIR.OP in ops:SC.FRINGE_REPAIR.validate_target(restored,row['path'],(row['src_h'],row['src_w']))
             if RC.OP in ops:
                 value=RS.check(restored.get(RS.KEY));RR.verify_export({'reference_color':value},row['path'],(row['src_h'],row['src_w']))
@@ -44,16 +45,45 @@ def restore_group(owner,request):
     active=next((item for item in planned if item[0]==live),None)
     if active:
         _,row,before,after=active
+        shadow_history=SC.ORIGINAL_SHADOW.OP in ops
+        if shadow_history:
+            from .optics_candidate_identity import fingerprint
+            frozen_identity=(owner.documents.current_index(),row['path'],owner.versions.version(row).document_id)
+            frozen_before=fingerprint(before);frozen_after=fingerprint(after)
+            if owner.editor.history_identity is None:raise ValueError('Original-shadow history identity port unavailable')
+            reviewed_version=owner.versions.version(row)
+            identities={frozen_before:owner.editor.history_identity(row,before,reviewed_version.document_id,str(reviewed_version.revision)),
+                        frozen_after:owner.editor.history_identity(row,after,reviewed_version.document_id,str(reviewed_version.revision))}
         owner.versions.advance(row)
+        frozen_revision=owner.versions.version(row).revision
+        def verify_shadow_replay(expected_state,expected_fingerprint):
+            if not shadow_history:return
+            if (owner.documents.current_index(),row['path'],owner.versions.version(row).document_id)!=frozen_identity or owner.documents.rows()[frozen_identity[0]] is not row:
+                raise ValueError('Original-shadow history target changed during replay')
+            if owner.versions.version(row).revision!=frozen_revision:
+                raise ValueError('Original-shadow history revision changed during replay')
+            actual=owner.editor.capture()
+            if fingerprint(actual)!=expected_fingerprint or SC.ORIGINAL_SHADOW.undo_key(actual)!=SC.ORIGINAL_SHADOW.undo_key(expected_state):
+                raise ValueError('Original-shadow history did not retain the frozen full state')
+            if proofs[frozen_identity[0]] is None:raise ValueError('Original-shadow history lacks source proof')
+            SOURCE.verify_row({**row,'state':actual},proofs[frozen_identity[0]])
+            expected={**identities[expected_fingerprint],'revision':str(frozen_revision)}
+            if owner.editor.history_identity(row,actual,frozen_identity[2],str(frozen_revision))!=expected:
+                raise ValueError('Original-shadow history source, full state or people graph changed')
         try:
             frame=owner.editor.replay(after,mode='batch',replayed_for=f'batch_group:{bid}',strict_local=True)
+            if shadow_history:verify_shadow_replay(after,frozen_after)
             if SC.SPILL_REMOVAL.OP in ops and SC.SPILL_REMOVAL.undo_key(owner.editor.capture()) != SC.SPILL_REMOVAL.undo_key(after):
                 raise ValueError('祛反光目标依赖在组历史重放期间变化')
+            if SC.ORIGINAL_SHADOW.OP in ops and SC.ORIGINAL_SHADOW.undo_key(owner.editor.capture()) != SC.ORIGINAL_SHADOW.undo_key(after):
+                raise ValueError('原图阴影目标依赖在组历史重放期间变化')
             for index,target,_,_ in planned:
                 if proofs[index] is not None:
                     SOURCE.verify_row({**target,'state':owner.editor.capture() if index==live else target['state']},proofs[index])
         except Exception:
-            try:owner.editor.replay(before,mode='batch',replayed_for=f'batch_group_rollback:{bid}')
+            try:
+                owner.editor.replay(before,mode='batch',replayed_for=f'batch_group_rollback:{bid}',**({'strict_local':True} if shadow_history else {}))
+                if shadow_history:verify_shadow_replay(before,frozen_before)
             except Exception:owner.editor.invalidate()
             raise
     for index,row,before,after in planned:

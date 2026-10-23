@@ -24,3 +24,14 @@ test('lost HSL selection cannot silently broaden to a global recipe', () => {
   assert.deepEqual(resolveBatchScope(choices, ''), choices[0]);
   assert.deepEqual(resolveBatchScope(choices, '仅曝光'), {label: '仅曝光', ops: ['lnx.exposure.v1']});
 });
+
+// AUTHORED / UNRUN: scalar visual-review modules stay explicit and isolated.
+test('shadow and spill are individually discoverable without broadening global defaults', () => {
+  const choices=batchScopeOptions(['lnx.exposure.v1','lnx.original_shadow.v1','lnx.spill_removal.v1'].map(operation_id=>({operation_id,transferable:true})));
+  assert.deepEqual(choices[0].ops,['lnx.exposure.v1']);
+  for(const op of ['lnx.original_shadow.v1','lnx.spill_removal.v1']) {
+    assert.equal(choices.filter(choice=>choice.ops.includes(op)).length,1);
+    assert.deepEqual(choices.find(choice=>choice.ops.includes(op))?.ops,[op]);
+  }
+  assert.deepEqual(batchScopeOptions([{operation_id:'lnx.original_shadow.v1',transferable:false}]),[]);
+});
