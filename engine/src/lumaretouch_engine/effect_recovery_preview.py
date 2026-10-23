@@ -126,15 +126,20 @@ class RecoveryPreview:
                              else S.check(getattr(self.engine, '_effect_recovery', None)))
                 else:
                     value = S.prepare_mutation(self.engine, capture, mutation)
+                from .creative_derived_recovery import GLOBAL_TARGETS, global_context, assert_review
+                global_proof = global_context(self.engine, mutation['target']) if mutation['target'] in GLOBAL_TARGETS else None
                 stage = R.prepare_stage(self.engine, value)
                 stage.people_recovery = PEOPLE.prepare(self.engine, value, mutation['target'])
                 result = render_review(self.engine, stage)
                 self._matching(p)
-                self.record = {'id': ident, 'proof': proof, 'value': value,
+                candidate_record = {'id': ident, 'proof': proof, 'value': value,
                                'target': p['mutation']['target'], 'presented': False,
                                'people_context': (deepcopy(stage.people_recovery['context'])
                                                   if stage.people_recovery is not None else None),
+                               'global_context': deepcopy(global_proof),
                                'committable': not viewing}
+                assert_review(self.engine, candidate_record)
+                self.record = candidate_record
                 event.update(state='ready', success=True, result=result, target=p['mutation']['target'])
             else:
                 record = self.record
@@ -144,6 +149,8 @@ class RecoveryPreview:
                     self.cancel()
                     event.update(state='cancelled', success=True)
                 else:
+                    from .creative_derived_recovery import assert_review
+                    assert_review(self.engine, record)
                     record['presented'] = True
                     event.update(state='presented', success=True)
         except Exception as error:
@@ -157,6 +164,8 @@ class RecoveryPreview:
         if (record is None or record['id'] != p.get('preview_id') or not record['presented'] or not record['committable']
                 or record['proof'] != {k: p[k] for k in PROOF_KEYS}):
             raise ValueError('请先查看此笔真实效果预览，不能提交未显示或过期的修改')
+        from .creative_derived_recovery import assert_review
+        assert_review(self.engine, record)
         value = S.check(record['value'])
         stage = R.prepare_stage(self.engine, value)
         if PEOPLE.handles(self.engine, record['target']):

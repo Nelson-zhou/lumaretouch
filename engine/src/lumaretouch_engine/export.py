@@ -145,6 +145,8 @@ class ExportSpec:
     local_mask_semantics: dict = field(default_factory=dict)
     local_mask_source_path: str | None = None  # ephemeral verified source, never a persisted raster
     creative_mask_context: dict | None = None  # ephemeral effective-source/category proof
+    creative_fabric_context: dict | None = None  # frozen measured clothes/scale evidence
+    creative_recovery_context: dict | None = None  # effective-source global vector ownership
     local_grade_groups: dict | None = None    # retained ordered groups, not merged masks
     local_grade_fields: list | None = None    # disposable full-source uint8 rasters
     local_grade_source_stamp: list | None = None  # decode-to-render source race guard
@@ -749,6 +751,12 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry):
     if resolved.repair:
         from .creative_derived_repair_export import stamp_pixels
         stamp_pixels(resolved,source)
+    if resolved.creative_fabric_context is not None:
+        from .creative_derived_fabric import stamp_pixels
+        stamp_pixels(resolved,source)
+    if resolved.creative_recovery_context is not None:
+        from .creative_derived_global_recovery import stamp_pixels
+        stamp_pixels(resolved,source)
     if resolved.creative_mask_context is not None:
         from .creative_derived_masks import stamp_pixels
         stamp_pixels(resolved,source)
@@ -909,7 +917,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     prepare_local_grades(spec, src_u8, cancelled=mask_cancelled)
     check_fields(spec.local_grade_fields, src_u8.shape[:2], groups=groups)
     spec.effect_recovery_fields = None
-    prepare_effect_recovery(spec, src_u8.shape[:2], cancelled=mask_cancelled)
+    prepare_effect_recovery(spec, src_u8.shape[:2], cancelled=mask_cancelled, source_pixels=src_u8)
     # Replay the vector recipe ONCE at original dimensions. Never enlarge a
     # proxy field or replay independent tiles whose field composition would differ.
     t_manual = time.perf_counter()

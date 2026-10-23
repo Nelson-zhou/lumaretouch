@@ -9,7 +9,7 @@ fn request_id(value: &str) -> Result<(), String> {
     Ok(())
 }
 fn target(value: &Value) -> bool {
-    matches!(value.as_str(), Some("skin_smoothing"|"fabric_fine"|"background_replace"))
+    crate::effect_recovery_host::supported_target(value)
 }
 fn mutation(value: &Value) -> Result<(), String> {
     if !value.is_object() || value.to_string().len() > 128*1024 || !target(&value["target"]) {
@@ -117,4 +117,29 @@ pub(crate) fn effect_recovery(state: State<'_, Arc<AppState>>, request_id: Strin
 pub(crate) fn effect_recovery_result(state: State<'_, Arc<AppState>>, request_id: String) -> Result<Value, String> {
     self::request_id(&request_id)?;
     Ok(state.effect_recovery.lock().map_err(|_| "recovery receipt lock poisoned")?.status(&request_id))
+}
+
+// Source fixtures only; no native tests have been run in this authoring slice.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reviewed_face_mutations_use_the_same_exact_target_contract() {
+        for name in ["facial_wrinkles", "lip_makeup", "eye_light", "blush_makeup",
+            "lipstick", "eyeliner", "eyelash", "brow_makeup", "iris_makeup",
+            "skin_smoothing", "fabric_fine", "background_replace"] {
+            assert!(mutation(&json!({"action":"view","target":name})).is_ok());
+            assert!(mutation(&json!({"action":"clear","target":name})).is_ok());
+            assert!(mutation(&json!({"action":"enable","target":name,"enabled":false})).is_ok());
+            assert!(mutation(&json!({"action":"view","target":name,"source":"other"})).is_err());
+            assert!(mutation(&json!({"action":"stroke","target":name,
+                "stroke":{"kind":"brush","points":[]}})).is_err());
+        }
+        for name in ["sky", "hair", "fabric_coarse", "all", "Eye_light"] {
+            assert!(mutation(&json!({"action":"view","target":name})).is_err());
+        }
+        assert!(!target(&Value::Null));
+        assert!(!target(&json!(["eye_light"])));
+    }
 }

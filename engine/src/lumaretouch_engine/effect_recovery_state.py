@@ -122,7 +122,12 @@ def prepare_mutation(engine, capture, mutation):
         from .creative_derived_recovery import source_binding
         binding = source_binding(engine)
     else:
-        binding = M.bind_source(engine)
+        from .creative_derived_source import record
+        if record(engine) is not None:
+            from .creative_derived_global_recovery import mutation_binding
+            binding = mutation_binding(engine,name)
+        else:
+            binding = M.bind_source(engine)
     if value['source'] is not None and value['source'] != binding:
         raise ValueError('源图身份改变，恢复笔迹不能重新绑定到另一张照片')
     rows = value['targets']

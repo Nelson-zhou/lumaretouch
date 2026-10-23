@@ -6,6 +6,17 @@ use crate::color_capture_host::{id16, token};
 pub(crate) struct RecoveryKind;
 pub(crate) type RecoveryHost = ReceiptHost<RecoveryKind>;
 
+/// Exact existing operator family contract shared by request and review paths.
+/// Face ownership is still checked by the engine; this grants no source bypass.
+pub(crate) fn supported_target(value: &Value) -> bool {
+    matches!(value.as_str(), Some(
+        "skin_smoothing" | "fabric_fine" | "background_replace"
+        | "facial_wrinkles" | "lip_makeup" | "eye_light" | "blush_makeup"
+        | "lipstick" | "eyeliner" | "eyelash" | "brow_makeup" | "iris_makeup"
+    ))
+}
+
+
 pub(crate) fn binding(document: &str, capture: &str, ticket: &str, preview: &str) -> Result<String, String> {
     token(document)?; id16(capture)?; token(ticket)?; id16(preview)?;
     Ok(format!("{document}|{capture}|{ticket}|{preview}"))
@@ -81,7 +92,7 @@ impl RecoveryPreviewHost {
                 && ["width", "height"].iter().all(|k| r[*k].as_u64().is_some_and(|n| (1..=800).contains(&n)))
                 && ["before", "after"].iter().all(|k| r[*k].as_str().is_some_and(|s|
                     s.len() <= 4*1024*1024 && s.starts_with("data:image/png;base64,")))
-                && matches!(v["target"].as_str(), Some("skin_smoothing"|"fabric_fine"|"background_replace"))
+                && supported_target(&v["target"])
         };
         let valid = v["protocol"] == 1 && v["success"].is_boolean() && v.to_string().len() <= 6*1024*1024+16384
             && match v["state"].as_str() {
@@ -122,5 +133,69 @@ impl RecoveryPreviewHost {
         if !self.shown || self.redeemed { return Err("rendered recovery comparison was not acknowledged or was already consumed".into()); }
         self.redeemed = true;
         Ok(())
+    }
+}
+
+// Source fixtures only; runtime/native acceptance remains UNRUN.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    const FACES: [&str; 9] = ["facial_wrinkles", "lip_makeup", "eye_light", "blush_makeup",
+        "lipstick", "eyeliner", "eyelash", "brow_makeup", "iris_makeup"];
+    const PREVIEW: &str = "11111111111111111111111111111111";
+    const CAPTURE: &str = "22222222222222222222222222222222";
+
+    fn ready(target: &str) -> Value {
+        json!({"protocol":1,"state":"ready","success":true,"preview_id":PREVIEW,
+            "capture_id":CAPTURE,"ticket":"3","document_id":"4","target":target,
+            "result":{"domain":"production-output","quality":"proxy-render-srgb8",
+                "width":8,"height":8,"before":"data:image/png;base64,fixture",
+                "after":"data:image/png;base64,fixture"}})
+    }
+
+    #[test]
+    fn exact_face_targets_keep_delivery_presentation_and_single_use_fences() {
+        for target in FACES {
+            let epoch = [1; 16];
+            let mut host = RecoveryPreviewHost::default();
+            host.reset(epoch);
+            host.begin(epoch, PREVIEW, CAPTURE, "3", "4").unwrap();
+            host.receive(epoch, &ready(target));
+            assert!(host.redeem().is_err());
+            assert!(host.allow_presented().is_err());
+            assert_eq!(host.status(epoch, PREVIEW)["state"], "ready");
+            assert!(host.redeem().is_err());
+            host.allow_presented().unwrap();
+            let mut presented = ready(target);
+            presented["state"] = json!("presented");
+            host.receive(epoch, &presented);
+            host.redeem().unwrap();
+            assert!(host.redeem().is_err());
+        }
+    }
+
+    #[test]
+    fn unknown_targets_and_wrong_source_review_cannot_be_redeemed() {
+        let epoch = [1; 16];
+        for target in ["sky", "skin", "hair", "all", "fabric_coarse", "eye_light_extra"] {
+            assert!(!supported_target(&json!(target)));
+            let mut host = RecoveryPreviewHost::default();
+            host.reset(epoch);
+            host.begin(epoch, PREVIEW, CAPTURE, "3", "4").unwrap();
+            host.receive(epoch, &ready(target));
+            assert_eq!(host.status(epoch, PREVIEW)["state"], "failed");
+            assert!(host.allow_presented().is_err());
+            assert!(host.redeem().is_err());
+        }
+        let mut host = RecoveryPreviewHost::default();
+        host.reset(epoch);
+        host.begin(epoch, PREVIEW, CAPTURE, "3", "4").unwrap();
+        let mut wrong = ready("eye_light");
+        wrong["document_id"] = json!("5");
+        host.receive(epoch, &wrong);
+        assert_eq!(host.status(epoch, PREVIEW)["state"], "running");
+        assert!(host.allow_presented().is_err());
+        host.receive([2; 16], &ready("eye_light"));
+        assert!(host.redeem().is_err());
     }
 }

@@ -139,6 +139,8 @@ def _stage(snapshot, validation):
         base = validation.record(base)
         if base['kind'] != 'rgba':
             raise ValueError('Creative base must be a standalone RGBA asset')
+        from .creative_derived_global_recovery import validate_state
+        validate_state({**snapshot, BASE_KEY: base})
     return document
 
 

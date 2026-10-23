@@ -32,6 +32,10 @@ def availability(engine):
     from . import people_recovery as PEOPLE
     if PEOPLE.managed(engine):
         result.update(PEOPLE.availability(engine))
+    from .creative_derived_source import record
+    if record(engine) is not None:
+        for target in ('skin_smoothing', 'background_replace'):
+            result[target] = {'active': False, 'reason': '此回流源的磨皮/换底算子尚未完成来源适配；不会借用原图分析'}
     return result
 
 
@@ -59,8 +63,14 @@ def prepare_stage(engine, value):
     before = M.file_stamp(row['path'])
     if row.get('_local_source_stamp') != before:
         raise ValueError('解码后源文件已变化，请重新打开照片')
-    M.verify_source(value, row['path'], (row['src_h'], row['src_w']))
-    fields = raster_fields(value, row['path'], (pipe.h, pipe.w))
+    from . import creative_derived_source as D
+    if D.record(engine) is not None:
+        from . import creative_derived_global_recovery as G
+        value = G.validate(value, D.binding(engine))
+        fields = G.preview_fields(engine, value)
+    else:
+        M.verify_source(value, row['path'], (row['src_h'], row['src_w']))
+        fields = raster_fields(value, row['path'], (pipe.h, pipe.w))
     if M.file_stamp(row['path']) != before:
         raise ValueError('生成恢复蒙版时源文件已变化')
     stage = EffectRecoveryStage(pipe.device, (pipe.h, pipe.w))
@@ -80,6 +90,10 @@ def sync(engine, *, strict=False):
         return
     from .people_recovery import global_value
     value = global_value(engine)
+    from .creative_derived_source import record, binding
+    if record(engine) is not None:
+        from .creative_derived_global_recovery import validate
+        value = validate(value, binding(engine))
     if not hasattr(pipe, 'effect_recovery'):
         pipe.effect_recovery = EffectRecoveryStage(pipe.device, (pipe.h, pipe.w))
     key = None
@@ -104,6 +118,9 @@ def stage_key(engine, value, *, source_stamp=None):
     face_key = FACE.identity_key(engine._precompute) if any(r['target'] in FACE.FACE_TARGETS for r in value['targets']) else None
     from .creative_derived_source import record,binding
     effective = binding(engine) if record(engine) is not None else None
+    if effective is not None and value['targets']:
+        from .creative_derived_repair_runtime import verify_pipeline
+        verify_pipeline(engine._vram, effective)
     return (json.dumps(value, sort_keys=True), M.file_stamp(row['path']) if source_stamp is None else source_stamp, id(engine._vram.src_f32), face_key,
             json.dumps(effective,sort_keys=True))
 
@@ -140,6 +157,11 @@ def report(engine):
 
 
 def verify_snapshot(snap, path, shape=None):
+    from .creative_derived_source import record
+    if record(snap) is not None:
+        from .creative_derived_global_recovery import verify_snapshot as verify_derived
+        verify_derived(snap, path, shape)
+        return
     value = S.check(snap.get('effect_recovery'))
     if not value['targets']:
         return
@@ -168,6 +190,12 @@ def configure_export(spec, snap, shape, *, for_document):
     value = S.check(snap.get('effect_recovery'))
     if value['targets'] and not for_document:
         raise ValueError('恢复笔迹只能在其源照片导出，不能自动复制到其他照片')
+    from .creative_derived_source import record
+    if record(snap) is not None:
+        from .creative_derived_global_recovery import verify_snapshot as verify_derived
+        value = verify_derived(snap, snap.get('effect_recovery_path'), shape)
+        from copy import deepcopy
+        spec.creative_recovery_context = deepcopy(snap.get('creative_recovery_context'))
     spec.effect_recovery = value
     spec.effect_recovery_path = snap.get('effect_recovery_path')
     spec.effect_recovery_stamp = snap.get('effect_recovery_stamp')
@@ -178,7 +206,7 @@ def configure_export(spec, snap, shape, *, for_document):
         verify_snapshot(snap, spec.effect_recovery_path, shape)
 
 
-def export_prepare(spec, shape, *, cancelled=lambda: False):
+def export_prepare(spec, shape, *, cancelled=lambda: False, source_pixels=None):
     value = S.check(spec.effect_recovery)
     if not value['targets']:
         spec.effect_recovery_fields = []
@@ -187,8 +215,17 @@ def export_prepare(spec, shape, *, cancelled=lambda: False):
     before = M.file_stamp(path)
     if spec.effect_recovery_stamp is None or list(before) != spec.effect_recovery_stamp:
         raise ValueError('效果恢复源图自全尺寸解码后变化，停止导出')
-    M.verify_source(value, path, shape)
-    spec.effect_recovery_fields = raster_fields(value, path, shape, cancelled=cancelled)
+    if getattr(spec, 'creative_base', None) is not None:
+        from . import creative_derived_global_recovery as G, creative_derived_source as D
+        source = D.binding({'creative_base': spec.creative_base})
+        if tuple(shape) != (source['height'], source['width']):
+            raise ValueError('Recovery export extent differs from immutable source')
+        G.verify_context(spec.creative_recovery_context, source, value, path)
+        G.verify_pixels(spec, source_pixels)
+        spec.effect_recovery_fields = G.raster(value, source, shape, cancelled=cancelled)
+    else:
+        M.verify_source(value, path, shape)
+        spec.effect_recovery_fields = raster_fields(value, path, shape, cancelled=cancelled)
     if M.file_stamp(path) != before:
         raise ValueError('生成全尺寸恢复蒙版时源图变化，停止导出')
 

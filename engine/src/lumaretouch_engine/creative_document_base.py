@@ -156,9 +156,15 @@ def require_rebound_snapshot(snapshot):
         blocked.append('original facial deformation')
     if any(float(v) != 0 for v in (snapshot.get('enhance') or {}).get('amounts', {}).values()):
         blocked.append('original portrait enhancement')
-    if float(snapshot.get('fabric_amount', 0)) or (snapshot.get('_bg') or {}).get('active'):
-        blocked.append('original fabric/background mask')
-    if ER.check(snapshot.get('effect_recovery'))['targets'] or ML.check(snapshot.get('manual_liquify'))['strokes']:
+    if float(snapshot.get('fabric_amount', 0)):
+        from .creative_derived_fabric import verify_snapshot as verify_fabric
+        verify_fabric(snapshot)
+    if (snapshot.get('_bg') or {}).get('active'):
+        blocked.append('original background mask')
+    if ER.check(snapshot.get('effect_recovery'))['targets']:
+        from .creative_derived_global_recovery import verify_snapshot as verify_recovery
+        verify_recovery(snapshot)
+    if ML.check(snapshot.get('manual_liquify'))['strokes']:
         blocked.append('original source-bound local edits')
     if SKY.check(snapshot.get('sky_replacement'))['enabled']:
         blocked.append('sky')
@@ -183,7 +189,7 @@ def require_rebound_spec(spec):
     """Same fail-closed gate for direct library callers bypassing snapshots."""
     snapshot = {key: getattr(spec, key, None) for key in (
         'creative_base', 'people', 'body_pose', 'body_pose_source_proof', 'channel', 'grade_scope',
-        'fabric_amount', 'local_masks', 'local_grade_groups', 'creative_mask_context', 'effect_recovery', 'manual_liquify',
+        'fabric_amount', 'creative_fabric_context', 'local_masks', 'local_grade_groups', 'creative_mask_context', 'effect_recovery', 'creative_recovery_context', 'manual_liquify',
         'studio_background', 'id_background', 'optics', 'sky_replacement',
         'reference_color', 'semantic_colour', 'lip_makeup', 'brow_shape',
         'nose_shape', 'eye_shape', 'mouth_shape', 'colour_editor')}

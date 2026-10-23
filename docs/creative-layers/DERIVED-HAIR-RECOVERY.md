@@ -1,6 +1,9 @@
 # M14 derived hair and face-owned effect recovery
 
 Historical slice: subsequent body-source support is in [DERIVED-BODY.md](DERIVED-BODY.md).
+Fabric/global recovery and the native face-recovery target bridge continue in
+[DERIVED-FABRIC-RECOVERY.md](DERIVED-FABRIC-RECOVERY.md); later slices supersede the
+corresponding residuals below, not their UNRUN acceptance status.
 
 Source-only continuation of `5d921d8abcd48a2ef8a3d25a6bf0174747bd7958`.
 Runtime/native/numerical/visual acceptance: **UNRUN**. This continues handbook

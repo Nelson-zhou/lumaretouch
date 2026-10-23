@@ -5,13 +5,24 @@ from .fabric_stage import FabricStage, check_amount, clothing_mask, face_scale, 
 
 def status(engine):
     import numpy as np
-    mask = clothing_mask(engine._precompute)
+    from .creative_derived_source import record
+    if record(engine) is not None:
+        from .creative_derived_fabric import preview
+        try:
+            context, _, owned_key = preview(engine)
+            mask = context['mask']
+        except Exception as error:
+            return {'amount': getattr(engine, '_fabric_amount', 0.0), 'available': False, 'lit': False,
+                    'scope': 'all_clothes', 'reason': str(error)}
+    else:
+        owned_key = None
+        mask = clothing_mask(engine._precompute)
     dependency = optional_module('cv2') is not None
     available = dependency and mask is not None and bool(np.any(np.asarray(mask) > 1e-3))
     stage = getattr(engine._vram, 'fabric', None)
     amount = getattr(engine, '_fabric_amount', 0.0)
     return {'amount': amount, 'available': available,
-            'lit': bool(available and amount and stage is not None and stage.field is not None),
+            'lit': bool(available and amount and stage is not None and stage.field is not None and (owned_key is None or stage.key == owned_key)),
             'scope': 'all_clothes',
             'reason': None if available else '当前运行环境缺少 OpenCV，衣物细褶不可用' if not dependency else '衣物语义蒙版不可用，请先完成人像分析；不会用皮肤反选或人物轮廓代替'}
 
@@ -25,8 +36,23 @@ def sync(engine):
         pipe.fabric = FabricStage(pipe.device)
     stage = pipe.fabric
     amount = check_amount(getattr(engine, '_fabric_amount', 0.0))
+    if amount == 0:
+        stage.clear()
+        return
+    from .creative_derived_source import record
+    if record(engine) is not None:
+        import numpy as np
+        from .creative_derived_fabric import preview, face_scale as owned_scale
+        context, pixels, key = preview(engine)
+        if optional_module('cv2') is None or not np.any(context['mask'] > 1e-3):
+            raise ValueError('Derived fabric requires OpenCV and measured clothes support')
+        if stage.key != key:
+            stage.install(measure_field(pixels, context['mask'], owned_scale(context, pipe.h, pipe.w)), amount)
+            stage.key = key
+        stage.amount = amount
+        return
     mask = clothing_mask(engine._precompute)
-    if amount == 0 or not status(engine)['available']:
+    if not status(engine)['available']:
         stage.clear()
         return
     source = pipe.base()

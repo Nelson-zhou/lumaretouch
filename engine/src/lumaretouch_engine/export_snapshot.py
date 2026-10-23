@@ -55,6 +55,12 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
     from .virtual_copy_people import view
     snap=capture_body(view(self,people_context) if people_context is not None else self,snap,st,source_path or self._doc_path,people_graph)
     if creative_base is not None:
+        if snap['fabric_amount']:
+            from .creative_derived_fabric import capture as capture_fabric
+            snap['creative_fabric_context']=capture_fabric(st,source_path or self._doc_path)
+        if snap['effect_recovery']['targets']:
+            from .creative_derived_global_recovery import capture as capture_recovery
+            snap['creative_recovery_context']=capture_recovery(st,snap['effect_recovery'],source_path or self._doc_path)
         from .creative_derived_masks import masks, capture
         values=masks(snap)
         if values:snap['creative_mask_context']=capture(st,values,source_path or self._doc_path,active_values=masks(snap,active_only=True))

@@ -114,6 +114,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     from . import local_grade_layers as LG
     spec.local_grade_groups = LG.check(snap.get("local_grade_groups"))
     spec.creative_mask_context = snap.get('creative_mask_context')
+    spec.creative_fabric_context = snap.get('creative_fabric_context')
+    spec.creative_recovery_context = snap.get('creative_recovery_context')
     LG.validate_budget(spec.local_grade_groups, (eh, ew))
     spec.local_mask_source_path = snap.get("local_mask_source_path")
     spec.local_grade_source_stamp = snap.get("local_grade_source_stamp")

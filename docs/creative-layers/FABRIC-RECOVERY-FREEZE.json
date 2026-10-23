@@ -1,0 +1,140 @@
+{
+  "baseline": "95ed4f10ace05ad386cb4b9227699a7870f32a9d",
+  "scope": "M14 immutable derived fabric consumer, reviewed fabric recovery, project source ownership and existing face-recovery native target bridge",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "files": [
+    {
+      "path": "docs/creative-layers/DERIVED-FABRIC-RECOVERY.md",
+      "sha256": "b903fdad457b06343b8a4cf314b628c16d35b182d7c64e7ebab50c440c999d0a",
+      "bytes": 7523
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-HAIR-RECOVERY.md",
+      "sha256": "ec9dbdf0f382e35bdb09fccde248f972012cb93502e6ef318ed7276a98fcb9e0",
+      "bytes": 8330
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_fabric.py",
+      "sha256": "3e4268c4fa62ad1cbaf466a942b349137436868b5002ec6ef95e2e37a73b8f76",
+      "bytes": 8079
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_global_recovery.py",
+      "sha256": "5e1321e43dd6982868a5bf9b592ed3ed267f3011d74180a354c26dfb5fca349a",
+      "bytes": 5357
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_recovery.py",
+      "sha256": "fef07d2d217e4752718c8d08357c9b1e39ca966fbfaf3e90f612a5262a333971",
+      "bytes": 10560
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "sha256": "50513628a0d0498af13f6266a4df406afbcdde1cc6359f137ebaef9d4ad8a94c",
+      "bytes": 19501
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "6eb4a7f759070ad924716c986fcf9d2d479213f5fb5378e4179df0e9e6c13740",
+      "bytes": 23835
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_project.py",
+      "sha256": "889226810bef406287e2a63a24d98c324a440cfccc493c6e21acd52896845ff1",
+      "bytes": 10816
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_preview.py",
+      "sha256": "56cd50fa9c1392bbbc58cb19a0b89281f8598e3700bbd0b1e841969d7831aa8d",
+      "bytes": 9089
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_runtime.py",
+      "sha256": "61cbee3272660a2cacf36d2e9d129c3ba34d097b8b4adc61d6df127d4f3714ec",
+      "bytes": 12569
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_state.py",
+      "sha256": "ddd02e0f2c1a4c15ff5f083c2b226023024a6bf9ec39b904298c7d3a05adbdcf",
+      "bytes": 9411
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "623808f829c082b4be9528a598060b428082059011364d607d9992da2d03dd20",
+      "bytes": 126459
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "d388c83299dda684511fe8232976776f8199ac626ff50d362a54afdb7fb0f167",
+      "bytes": 20135
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "sha256": "c2e626cacdad4ab03a61ef69fd9f09ffe85aaa5c8f3a15ee43560694a37fc9ca",
+      "bytes": 5762
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/fabric_controller.py",
+      "sha256": "61b6713b78d5d1e4860157cbdbee75c2a47051a9b686d61c5bd3dd5af57b0037",
+      "bytes": 4423
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/fabric_export.py",
+      "sha256": "67187ccd84c7358c964f3258680638bace78163d1647eb12c3fc5e8e748ac7a0",
+      "bytes": 2052
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "bafdc379b5c6934102ab67eda9b85b7bb10896115939705f062692e99ab2d45f",
+      "bytes": 461845
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_fabric.py",
+      "sha256": "7d808d5f3f43962068a5f1320e4ecaf51c5393b19c4f51a127d335b21a24db21",
+      "bytes": 3862
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_fabric_persistence.py",
+      "sha256": "5fbc0b96dea81db4ef1b4939ee1aa927724bd751446469eea9ea9e35cd271971",
+      "bytes": 2027
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_fabric_recovery_review.py",
+      "sha256": "8b5e3bca4db0ae8c7e1adcc366ee0a138ce83dd976cd03ee2d41be2fc5649629",
+      "bytes": 5328
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_global_recovery.py",
+      "sha256": "2f89686dbd45c1aeaf2618ecfe0dc34b0787dda0095bab70021341097a0759ed",
+      "bytes": 5652
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_api.rs",
+      "sha256": "5e1ef960ba08474f22ff6821eff135e32d17753ddea8312f783240a6e785952d",
+      "bytes": 8509
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_host.rs",
+      "sha256": "74ed8c834ea458bcad863acdee3aa9641a2571ea6d1be610c26c3dffc54d1d4d",
+      "bytes": 10215
+    }
+  ],
+  "verification": {
+    "static_python_ast_files": 19,
+    "python_rust_fixtures": "AUTHORED_UNRUN",
+    "product_import_execution": "NOT_RUN",
+    "build_typecheck_inference": "NOT_RUN",
+    "line_counts": {
+      "ui/src/App.tsx": 2096,
+      "ui/src-tauri/src/main.rs": 2015,
+      "engine/src/lumaretouch_engine/server.py": 6945
+    }
+  },
+  "residuals": [
+    "Existing all-clothes fine-crease algorithm only; coarse/upper/lower/link/blemish/sweat/edge controls not implemented by this port",
+    "Smoothing and background effective-source consumers/recovery remain fenced",
+    "Shared target transfer requires actual per-target identity review and analysis",
+    "Photo return alpha/HDR refusal unchanged",
+    "Numerical quality, native/UI/persistence runtime, precision, latency and memory acceptance UNRUN"
+  ]
+}

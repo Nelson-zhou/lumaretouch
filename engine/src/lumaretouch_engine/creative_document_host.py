@@ -338,6 +338,10 @@ def guard_command(engine, name, request):
         raise ValueError('会话含创意回流图；跨图人像/批量计划尚未支持该来源，请先关闭回流图或撤销回流，避免借用原图分析。')
     if getattr(engine, '_creative_base', None) is None:
         return
+    if name == 'fabric':
+        from .creative_derived_fabric import require_command as require_fabric
+        require_fabric(engine,request)
+        return # Exact measured-clothes consumer, not a blanket source exemption.
     from .creative_derived_repair_commands import handles as handles_repair, require_command as require_repair
     if handles_repair(engine,name,request):
         require_repair(engine,name,request)
