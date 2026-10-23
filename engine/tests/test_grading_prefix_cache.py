@@ -117,7 +117,7 @@ def test_default_off_context_does_not_inspect_runtime_or_call_provider():
     assert preview_context(engine, 'colour_grading_preview', False) is None
 
 
-def test_enabled_without_audited_provider_still_falls_back():
+def test_enabled_outside_grading_preview_still_falls_back():
     from types import SimpleNamespace
     from lumaretouch_engine.grading_prefix_cache import preview_context
     cache = GradingPrefixCache(); cache.enabled = True

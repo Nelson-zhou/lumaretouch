@@ -95,15 +95,13 @@ class GradingPrefixCache:
 def preview_context(engine, mode, original):
     """Called only AFTER normal runtime synchronization and frame guards.
 
-    A future audited provider must return immutable bytes covering ALL live
-    upstream state, including uncommitted overrides, masks and runtime content,
-    plus actual colour-space/domain identifiers; None means uncertain. There is
-    deliberately no production provider or user-facing enable switch yet.
+    The narrow provider proves all excluded consumers are runtime no-ops and
+    captures every input of allowed exposure/WB/HSL operators. None means
+    uncertain. The production default remains off pending local acceptance.
     """
     pipe = engine._vram
     cache = pipe.grading_prefix_cache
-    provider = getattr(engine, '_grading_prefix_audited_context', None)
-    if (not cache.enabled or provider is None or original
+    if (not cache.enabled or original
             or mode != 'colour_grading_preview'
             or not getattr(engine, '_colour_grading_preview_active', False)):
         return None
@@ -111,7 +109,7 @@ def preview_context(engine, mode, original):
     from . import sky_replacement_state as sky
     if editor.active(engine) or grain.active(engine):
         return None
-    if pipe.sky_replacement.value != sky.empty():
+    if pipe.sky_replacement.value != sky.empty() or pipe.sky_replacement.suspended:
         return None
     if any(value for name, value in vars(engine).items()
            if name.endswith('_preview_active') and name != '_colour_grading_preview_active'):
@@ -124,7 +122,8 @@ def preview_context(engine, mode, original):
             or tuple(src.shape) != (1, 3, pipe.h, pipe.w)):
         return None
     try:
-        snapshot = provider()
+        from .grading_prefix_context import narrow_context
+        snapshot = narrow_context(engine)
     except Exception:
         return None  # Uncertain snapshot is never permission to reuse pixels.
     if (not isinstance(snapshot, tuple) or len(snapshot) != 3
@@ -132,7 +131,11 @@ def preview_context(engine, mode, original):
             or not all(isinstance(v, str) and v for v in snapshot[1:])):
         return None
     from .extended_tone_host import revision
+    try:
+        source_version = src._version
+    except RuntimeError:
+        return None
     return PrefixKey(str(engine._load_id), revision(engine),
-                     (id(pipe), id(src), src._version, str(engine._doc_path)),
+                     (id(pipe), id(src), source_version, str(engine._doc_path)),
                      cache.generation, tuple(src.shape), str(src.device),
                      str(src.dtype), snapshot[1], snapshot[2], snapshot[0])

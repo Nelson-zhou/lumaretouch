@@ -1,11 +1,12 @@
 # PhotoCraft preview idea adaptation (not enabled)
 
 Status: original-design implementation, **default off and not production-enabled**.
-There is no UI, environment-variable, recipe or IPC activation. The private engine
-cache's `enabled` flag alone is insufficient: an audited live-upstream context
-provider must also exist. None is installed. Complete invalidation coverage for
-all runtime-only state and temporary previews has NOT been proven. This change
-therefore claims no measured or user-visible speed improvement.
+There is no UI, environment-variable, recipe or IPC activation. A real production
+context provider now exists for the deliberately narrow RGB8/exposure/HSL lane
+described below. Local acceptance can set the private cache's `enabled` flag to
+exercise it without fabricated contexts. The flag remains False by default.
+Broad runtime-state coverage and runtime acceptance have NOT been established.
+This change claims no measured or user-visible speed improvement.
 
 ## Pinned research and provenance
 
@@ -52,17 +53,70 @@ mutation is covered.
 
 ## Required before any enablement
 
-Implement and audit `_grading_prefix_audited_context` to return immutable bytes
-covering ALL upstream live state, including unsaved/temporary overrides, tensor
-and mask content changes, assets, source identity and relevant runtime readiness,
-plus actual colour-space and signal-domain labels. Never substitute persisted
-recipe/revision alone, object identity alone, or a generic assumed sRGB label.
-The additional key covers load/document, revision, source tensor identity/version,
-pipeline identity, baseline generation, dimensions, device and dtype. Unknown
-context must return None and execute the original full render. Audit every
-load/close/history/edit/temporary-preview/compare/context path, including calls
-that do not enter the transport. Eligibility remains after normal runtime sync;
-cache lookup remains after normal readiness checks. Do not weaken those guards.
+The real `grading_prefix_context.narrow_context` provider admits only an RGB8
+proxy with zero smoothing and no channel, optional exposure/WB and HSL, and every
+other prefix consumer proven inactive by its actual runtime early-return inputs.
+It does not inspect only persisted recipes and does not hash opaque runtime
+objects. Unknown/missing attributes or nonfinite/non-plain scalar state miss.
+
+The context includes exact finite exposure parameters, reference temperature,
+prepared WB gains, all 24 HSL values and filter-validation arguments as canonical
+JSON bytes. Source/load/document/revision/generation/dimensions/device/dtype are
+in PrefixKey. Source tensor mutation is covered by its PyTorch version counter;
+tensors without a version counter are ineligible. The colour-space/domain labels
+name the existing encoded working-RGB proxy contract, not a new inferred ICC
+conversion. Decoder ICC handling, original-source rendering and export are
+unchanged. These labels are not permission to cache arbitrary external tensors.
+
+### Static consumer audit for the narrow lane
+
+- `vram._retouch_prefix`: strength exactly zero, channel None. `base()` chooses
+  repaired pixels if present, so repair_base/repair_ops are excluded. No masks or
+  smoothing products are consumed in this lane. Filter validation still executes
+  before cache lookup.
+- `vram._apply_light_cached`: field absent; no dodge/burn operand. Its numeric
+  exposure and the legacy grade amount must remain finite scalar values.
+- `FabricStage.apply`, `EffectRecoveryStage.apply`, `StudioBackgroundStage.apply`:
+  amount/field, required/fields/suspensions and required/fields/suspension are
+  checked directly. No recovery or studio field is admitted.
+- `people_pipeline.active`, `people_engine_runtime.require_ready`: no prepared
+  people graph and no suspension. Readiness is still checked on every retouch,
+  including cache hits. `people_host._people_sync` returns without a graph for
+  an unanalyzed source, so this lane is reachable without artificial fixtures.
+- `facial_wrinkle_layer.refresh_source/apply_delta`, `under_eye_layer.refresh_source`,
+  `lip_makeup_runtime.refresh_source`, `lip_makeup_layer.apply_delta`: source layers
+  and deltas must be absent; enhancement amounts zero and lip recipe neutral.
+  Nothing can be lazily rebuilt behind a supposedly neutral recipe.
+- `vram.apply_deform/apply_enhance`: no unit/face-geometry fields or enhancement
+  inputs; zero amount maps. Suspended face geometry is excluded conservatively.
+- `vram.apply_exposure` reads only exposure_params, exposure_ref_k and prepared_wb;
+  all are captured. `white_balance_recipe.prepare_state` returns the actual three
+  gains (or None). `vram.apply_hsl` reads the captured 24 scalar bands.
+- `PrimaryCalibrationStage.apply_t`, `ExtendedToneStage.apply_t`: inactive flags
+  are required and tone override is absent. `LevelsStage.apply`, `vram.apply_curves`:
+  no compiled active operands. LUT object/volume absent, grade parameters zero.
+- `LocalGradeStage.apply`, `SkyReplacementStage._apply`: no local fields or
+  suspension; sky must be exactly empty and not suspended. No sky fallback is
+  made cacheable. `vram.apply_background`: no active/background tensors.
+- `ManualLiquifyStage.apply`, `OpticsStage.apply`: no field/active optics and no
+  suspension, preserving their pre-no-op error guards. Geometry is identity.
+- `ReferenceColorStage.apply_t`, `SemanticColourStage.apply_t`: inactive flags;
+  semantic suspension excluded. This ends the prefix consumer list.
+- Other owned preview objects, inspection/prompted/semantic/live-grade owners
+  and override slots exclude eligibility even while idle; active preview/publication flags and original-source editor/grain are
+  independently excluded. Ineligible frame contexts evict retained snapshots.
+
+Each post-prefix/store/hit recheck reruns these predicates and captures current
+operator arguments, so direct live parameter changes do not require a history
+revision to miss. External non-preview ingress invalidates generation; direct
+non-grading renders/source replacement also invalidate it. Broader spatial,
+portrait, masked, source-derived, external-asset and temporary-preview combinations
+are intentionally unsupported, not assumed to share this audit.
+
+Before enabling by default, Qoder must validate this lane against actual engine
+transactions, threading/device behavior and pixel output. Expanding it requires
+an explicit consumer-by-consumer context/invalidation audit, not removing rejects.
+Do not weaken runtime sync, readiness, validation or publication guards.
 
 ## Validation handoff (UNRUN)
 
