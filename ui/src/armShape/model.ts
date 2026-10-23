@@ -40,7 +40,7 @@ export function reviewKey(view:ArmView,segment:Segment):string{return `${viewKey
 export function targets(segment:Segment,linked:boolean,whole:boolean):Segment[]{const side=segment.startsWith('left_')?'left':'right';const part=segment.endsWith('_upper')?'upper':'forearm';return SEGMENTS.filter(k=>(linked||k.startsWith(side+'_'))&&(whole||k.endsWith('_'+part)));}
 export function available(body:BodyChoice,segment:Segment):boolean{return body.enabled&&JOINTS[segment].every(i=>{const p=body.points[i];return !!p&&p.index===i&&[p.x,p.y,p.z,p.visibility,p.presence].every(Number.isFinite)&&p.x>0&&p.x<1&&p.y>0&&p.y<1&&p.visibility>=.8&&p.presence>=.8;});}
 export function canApply(body:BodyChoice,keys:Segment[],strategy:Strategy):boolean{return keys.every(k=>available(body,k)&&body.operations[k].enabled&&body.operations[k].reviewed&&body.operations[k].support?.strategy===strategy);}
-export function request(view:ArmView,action:Action|'proposal',payload:Record<string,unknown>,gesture_id=crypto.randomUUID()):Request{
+export function request(view:ArmView,action:Action|'proposal',payload:Record<string,unknown>,gesture_id:string=crypto.randomUUID()):Request{
  if(!view.selected_body_ref)throw Error('先选择实际检测到的身体。');
  return {request_id:crypto.randomUUID(),gesture_id,document_id:view.binding.document_id,document_epoch:view.binding.document_epoch,document_revision:view.binding.document_revision,state_revision:view.state_revision,association_revision:view.association_revision,people_association_revision:view.people_association_revision,body_graph_sha256:view.body_graph_sha256,people_graph_sha256:view.people_graph_sha256,body_ref:{...view.selected_body_ref},family_id:FAMILY_ID,action,payload,
  // Source belongs in BodyRef/binding fences, not an extra protocol field.

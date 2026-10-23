@@ -12,7 +12,7 @@ export function ArmShapePanel({controller,transport,source,onSelectBody,disabled
  if(!view)return <section className="arm-shape"><p>等待实际身体状态；未伪造可用能力。</p></section>;
  const body=view.bodies.find(b=>refKey(b.body_ref)===refKey(view.selected_body_ref)),keys=targets(segment,linked,whole),recipe=state.recipe[segment];
  const ready=!disabled&&!!body&&canApply(body,keys,strategy),uncertain=state.phase==='uncertain',busy=disabled||state.phase!=='idle';
- function edit(amount:number,gestureId=crypto.randomUUID()){try{if(disabled)throw Error('请先等待当前工具请求完成。');controller.edit(keys,linked,strategy,amount,gestureId);setMessage('');}catch(e){setMessage(e instanceof Error?e.message:'未应用');}}
+ function edit(amount:number,gestureId:string=crypto.randomUUID()){try{if(disabled)throw Error('请先等待当前工具请求完成。');controller.edit(keys,linked,strategy,amount,gestureId);setMessage('');}catch(e){setMessage(e instanceof Error?e.message:'未应用');}}
  return <section className="arm-shape" aria-label="AI瘦手臂与瘦手臂" data-operation="lnx.arm_shape.v1" data-control-id={REQUIREMENT_ID}><h3>AI瘦手臂 / 瘦手臂</h3><p>普通可见轮廓与待复核分割候选分开记录，不是全自动识别。本地运行与画质验收未完成。</p>
  <label>实际身体<select value={refKey(view.selected_body_ref)} disabled={busy} onChange={e=>{const choice=view.bodies.find(b=>refKey(b.body_ref)===e.target.value);if(choice)onSelectBody(choice.body_ref);}}><option value="none">请选择</option>{view.bodies.map((b,i)=><option key={refKey(b.body_ref)} value={refKey(b.body_ref)}>身体 {i+1} · {b.body_ref.body_instance_id.slice(0,8)}</option>)}</select></label>
  <label>策略<select disabled={busy} value={strategy} onChange={e=>setStrategy(e.target.value as Strategy)}><option value="reviewed-contour">普通：复核可见轮廓</option><option value="sam2-prompted-contour">AI：SAM2 待复核分割候选</option></select></label>

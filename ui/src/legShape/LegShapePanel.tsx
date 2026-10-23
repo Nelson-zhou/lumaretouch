@@ -14,7 +14,7 @@ export function LegShapePanel({view,controller,sourceImage,onSelect,onOpenBodyAn
  const busy=disabled||state.phase!=='idle'||!contextCurrent;const canEdit=!disabled&&contextCurrent&&!!body&&body.enabled&&body.operation_enabled&&body.reviewed&&state.phase!=='uncertain';
  const [error,setError]=useState('');const gesture=useRef<string|null>(null);
  useEffect(()=>{setError('');gesture.current=null;},[shown.binding.document_epoch,shown.binding.document_id,refKey(shown.selected_body_ref)]);
- function edit(change:(recipe:LegRecipe)=>LegRecipe,id=crypto.randomUUID()){try{controller.edit(change,id);setError('');}catch(e){setError(e instanceof Error?e.message:'调整未发送。');}}
+ function edit(change:(recipe:LegRecipe)=>LegRecipe,id:string=crypto.randomUUID()){try{controller.edit(change,id);setError('');}catch(e){setError(e instanceof Error?e.message:'调整未发送。');}}
  async function action(fn:()=>Promise<void>){try{await fn();setError('');}catch(e){setError(e instanceof Error?e.message:'操作未完成。');}}
  const mixed=recipe.thigh!==recipe.calf;
  return <section className="leg-shape-panel" aria-label="可见腿部线条调整" data-operation="lnx.leg_shape.v1"><h3>瘦腿 · 大腿 / 小腿</h3>
