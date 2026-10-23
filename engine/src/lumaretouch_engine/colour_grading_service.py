@@ -15,6 +15,10 @@ class Service:
         except Exception:return False
         if not isinstance(p,dict):return False
         cmd=p.get('cmd');action=p.get('action');rid=p.get('request_id');invalidate=False;consumed=False
+        # Baseline lifetime is NOT controller request epoch. Slider preview ingress
+        # cancels older work, but only non-preview intent invalidates its base.
+        if not (cmd == 'colour_grading' and action == 'preview'):
+            self.invalidate_baseline()
         with self.lock:
             if cmd=='colour_grading_abort':
                 event=self.events.get(rid) if isinstance(rid,str) else None
@@ -34,6 +38,12 @@ class Service:
         # Never acquire controller lock under publication lock: commit uses reverse.
         if invalidate and self.owner is not None:self.owner.invalidate()
         return consumed
+    def invalidate_baseline(self):
+        if self.owner is not None:
+            pipe = getattr(self.owner.host.engine, '_vram', None)
+            if pipe is not None:
+                pipe.grading_prefix_cache.invalidate()
+
     def cancelled(self):
         with self.lock:
             event=self.events.get(self.active)
@@ -70,6 +80,7 @@ class Service:
         return {'document_id':str(engine._load_id),'revision':revision(engine),
                 **A.report(engine),'requires_reload':bool(self.owner is not None and self.owner.host.requires_reload and self.owner.host.failure_document==str(engine._load_id)),'available':(Path(__file__).parent/'bin/liblrt_colour_grading.so').is_file()}
     def stop(self):
+        self.invalidate_baseline()
         with self.lock:
             for event in self.events.values():event.set()
         if self.owner is not None:self.owner.invalidate()

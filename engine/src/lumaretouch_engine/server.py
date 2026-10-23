@@ -3504,15 +3504,27 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
         if self.shm is None or (self.shm.w, self.shm.h) != (self._vram.w, self._vram.h):
             raise RuntimeError(f"shm {getattr(self.shm, 'w', '?')}x{getattr(self.shm, 'h', '?')} "
                                f"!= 会话 {self._vram.w}x{self._vram.h}：不许把会话尺寸的帧写进别人的槽")
+        if mode != 'colour_grading_preview' or original:
+            self._vram.grading_prefix_cache.invalidate()
         t0 = monotonic_ns()
         # Original viewing bypasses all layers, rather than merely setting skin strength0.
         if not original: FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
         st, channel = (0.0, None) if original else self._retouch_render_args()
+        from .grading_prefix_cache import preview_context
+        prefix_key = preview_context(self, mode, original)
+        if prefix_key is None:
+            self._vram.grading_prefix_cache.invalidate()
+        def prefix_current():
+            return (not getattr(self, '_colour_grading_cancelled', lambda: False)()
+                    and prefix_key is not None
+                    and preview_context(self, mode, original) == prefix_key)
+        prefix_options = ({'prefix_key': prefix_key, 'prefix_current': prefix_current}
+                          if prefix_key is not None else {})
         unapplied=not original and mode.startswith("history_") and bool(self._people_open_flags())
         if original or unapplied:
             self._vram.render_original()
         else:
-            CER.render_preview(self) if CER.active(self) else PGR.render_preview(self) if PGR.active(self) else SKR.render_proxy(self,lambda:self._vram.render(st, channel=channel, **self._params),
+            CER.render_preview(self) if CER.active(self) else PGR.render_preview(self) if PGR.active(self) else SKR.render_proxy(self,lambda:self._vram.render(st, channel=channel, **self._params, **prefix_options),
                              allow_suspended=mode not in ("preset","batch","sky_replacement"))
         render_ms = (monotonic_ns() - t0) / 1e6
         with self._wlock:

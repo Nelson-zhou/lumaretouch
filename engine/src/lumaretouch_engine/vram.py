@@ -118,6 +118,8 @@ class PreviewPipeline:
     def __init__(self, device: str, w: int, h: int, *, high_precision_warp: bool = False):
         if torch is None:
             raise RuntimeError("torch 未安装，显存常驻预览路径不可用（装 rocm/cuda/cpu 任一变体）")
+        from .grading_prefix_cache import GradingPrefixCache
+        self.grading_prefix_cache = GradingPrefixCache()
         self.w, self.h = w, h
         self.high_precision_warp = bool(high_precision_warp)
         want_cuda = device.startswith("cuda")
@@ -339,6 +341,7 @@ class PreviewPipeline:
 
     def _begin_source(self, src_f32, *, src_u8) -> None:
         """两条装载入口的公共体：会话状态的重置只有一份，不靠"两边都记得改"。"""
+        self.grading_prefix_cache.invalidate()
         self.src_u8 = src_u8
         self.fabric.clear()
         self.local_grade_layers.set([])
@@ -518,7 +521,8 @@ class PreviewPipeline:
                 mid_gain: float = DEFAULT_MID_GAIN,
                 broad_gain: float = DEFAULT_BROAD_GAIN,
                 texture_radius: int = DEFAULT_TEXTURE_RADIUS,
-                channel: str | None = None, scope_tap=None, render_stage="output"):
+                channel: str | None = None, scope_tap=None, render_stage="output",
+                prefix_key=None, prefix_current=None):
         """只跑算法，返回显存里的 float (1,3,H,W)。滑块每动一次调一次。
 
         channel 给定时走分通道渲染（掩膜加权），不给定时全图。两条都是纯 GPU。
@@ -534,6 +538,25 @@ class PreviewPipeline:
             raise ValueError('Unknown production render stage')
         if self.src_f32 is None:
             raise RuntimeError("先 load_rgb_u8 再 render")
+        build = lambda: self._retouch_prefix(
+            strength, radius, eps, detail_gain, mid_gain, broad_gain,
+            texture_radius, channel, scope_tap, render_stage)
+        # Inspections/taps must run the full pipeline and all their callbacks.
+        if prefix_key is not None and prefix_current is not None and scope_tap is None and render_stage == 'output':
+            self._filter_parameters(radius, eps, detail_gain, mid_gain, broad_gain, texture_radius)
+            if channel is not None:
+                self.mask(channel)
+            out = self.grading_prefix_cache.resolve(prefix_key, build, prefix_current)
+        else:
+            self.grading_prefix_cache.prefix_builds += 1
+            out = build()
+        if render_stage in ('wb-input', 'extended-tone-input', 'optics-input'):
+            return out
+        return self._retouch_suffix(out, scope_tap, render_stage)
+
+    def _retouch_prefix(self, strength, radius, eps, detail_gain, mid_gain,
+                        broad_gain, texture_radius, channel, scope_tap, render_stage):
+        """Canonical pipeline through semantic colour, shared by every render."""
         # 每帧的 db 应用成本从 0 起算：它必须只由“这一帧真跑了什么”给出，
         # 不能把上一次建层的成本混进来（那是事件驱动的一次性账，另走 light_ms）
         self.last_light_ms = 0.0
@@ -603,6 +626,11 @@ class PreviewPipeline:
         out = self.apply_geometry(out)
         out = self.reference_color.apply_t(out)
         out = self.semantic_colour.apply_t(out,strict=False)
+        return out
+
+    def _retouch_suffix(self, out, scope_tap=None, render_stage="output"):
+        """Canonical grading-to-output sequence; never owns the cached tensor."""
+        self.grading_prefix_cache.suffix_runs += 1
         out = self.colour_grading.apply_t(out)
         out = self.selective_colour.apply_t(out)
         if render_stage == 'colour-editor-input':
