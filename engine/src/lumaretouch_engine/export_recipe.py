@@ -77,6 +77,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     configure_extended_tone(spec,snap)
     from .photo_detail_project import configure_export as configure_photo_detail
     configure_photo_detail(spec,snap)
+    from .fringe_repair_project import configure_export as configure_fringe
+    configure_fringe(spec,snap,(eh,ew),for_document=for_document)
     from .photo_grain_adapters import configure_export as configure_grain
     configure_grain(spec,snap)
     from .colour_grading_adapters import configure_export as configure_grading

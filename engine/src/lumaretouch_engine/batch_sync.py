@@ -444,8 +444,9 @@ class BatchSyncController:
                 verify_history_source(row,rec,ops,rec['before'])
                 restored_state = SC.restore_modules(cur, rec["before"], ops)
                 if rec.get('source_proof') is not None:
-                    TRANSFER.require_candidate(cur,restored_state,SC.params_of(rec['before'],ops),rec['source_proof'])
+                    TRANSFER.require_restoration(cur,rec['before'],restored_state,ops,rec['source_proof'])
                     SOURCE.verify_row({**row,'state':restored_state},rec['source_proof'])
+                if SC.FRINGE_REPAIR.OP in ops:SC.FRINGE_REPAIR.validate_target(restored_state,row['path'],(row['src_h'],row['src_w']))
                 if ID_BACKGROUND.OP in ops:ID_BACKGROUND.validate_target(restored_state,row["path"],(row["src_h"],row["src_w"]))
                 if SKY.OP in ops:
                     SKY.validate_target(restored_state["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))

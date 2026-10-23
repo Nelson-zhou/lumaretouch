@@ -204,6 +204,11 @@ rustc --edition=2021 --crate-type cdylib -C opt-level=3 "$here/../core/photo_det
 mkdir -p "$stage/lumaretouch_engine/third_party/photo_detail"
 cp "$here/../core/photo_detail/photo_detail.rs" "$here/../LICENSE" "$here/../docs/photo-detail/README.md" "$stage/lumaretouch_engine/third_party/photo_detail/"
 
+# Original guided black/white halo correction; build-time only, acceptance UNRUN.
+rustc --edition=2021 --crate-type cdylib -C opt-level=3 "$here/../core/fringe_repair/lib.rs" -o "$stage/lumaretouch_engine/bin/liblrt_fringe_repair.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/fringe_repair"
+cp "$here/../core/fringe_repair/lib.rs" "$here/../core/fringe_repair/fringe_repair.h" "$here/../LICENSE" "$here/../docs/fringe-repair/KERNEL.md" "$stage/lumaretouch_engine/third_party/fringe_repair/"
+
 # Original deterministic source-coordinate photo grain, build-time only.
 bash "$here/build-photo-grain.sh" "$stage/lumaretouch_engine/bin/liblrt_photo_grain.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/photo_grain"

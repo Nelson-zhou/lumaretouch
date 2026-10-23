@@ -4,7 +4,7 @@ Static reconciliation at ff0984c556f7dc2f366cd85e68448105b904175f. Historical co
 is not a current missing-feature count. Source-connected does not mean tested or
 accepted. Returned-source adapters are not additional handbook features.
 
-## Next selected feature: black/white-edge repair
+## Selected feature: black/white-edge repair, source implementation now authored
 
 Exact prefix `LNX-REF-PC-AlCcjw85ql-C-`:
 `6d78bc490e` entry, `f4f0ead111` enabled state, `2173a021fd` strength,
@@ -13,8 +13,13 @@ Exact prefix `LNX-REF-PC-AlCcjw85ql-C-`:
 Supplied handbook lines 705–710 and ui/src/spec/refine.json describe edges of
 people, hair, clothing and accessories; enabled on entry; editable correction
 coverage followed by explicit update; preset and batch support. Undisclosed numeric
-ranges/defaults must not be represented as official facts. Current source has
-catalogue/title/spec entries but no implemented operator/live feature.
+ranges/defaults must not be represented as official facts. The new source slice
+adds an original guided Rust operator, actual review UI, owned vector coverage,
+full-source render/export, retained history/project state and per-target parameter
+transfer. See [exact implementation and limits](../fringe-repair/README.md).
+All numerical, photographic, runtime and packaging acceptance remains UNRUN.
+The source-guide method targets newly introduced achromatic halos; baked-in halos
+are not guaranteed, so this does not establish full official feature acceptance.
 
 A coherent Rust-first implementation must correct actual bright/dark halos while
 preserving legitimate rim light, white clothing, fine hair, jewellery and texture.
@@ -67,8 +72,9 @@ Technique reading started at the authors' guided-filter project:
 https://people.csail.mit.edu/kaiming/eccv10/index.html . Its edge-aware local-linear
 filter is a possible primitive, not proof of a complete fringe-repair solution or
 photographic quality. No referenced code was downloaded, copied or executed. A
-final algorithm choice requires further primary-source review and explicit failure
-cases for real rim light, fine hair and contaminated boundary colour.
+implemented original directional method is documented with explicit failure
+cases for real rim light, fine hair and contaminated boundary colour. Numerical
+fixtures are authored but UNRUN; this reading is not a quality certification.
 
 Further primary reading: Farbman et al., *Edge-Preserving Decompositions for
 Multi-Scale Tone and Detail Manipulation* (SIGGRAPH 2008), author-hosted publication

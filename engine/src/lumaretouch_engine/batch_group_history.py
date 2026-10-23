@@ -24,8 +24,9 @@ def restore_group(owner,request):
             verify_history_source(row,rec,ops,previous)
             restored=SC.restore_modules(current,previous,ops)
             if rec.get('source_proof') is not None:
-                TRANSFER.require_candidate(current,restored,SC.params_of(previous,ops),rec['source_proof'])
+                TRANSFER.require_restoration(current,previous,restored,ops,rec['source_proof'])
                 SOURCE.verify_row({**row,'state':restored},rec['source_proof'])
+            if SC.FRINGE_REPAIR.OP in ops:SC.FRINGE_REPAIR.validate_target(restored,row['path'],(row['src_h'],row['src_w']))
             if RC.OP in ops:
                 value=RS.check(restored.get(RS.KEY));RR.verify_export({'reference_color':value},row['path'],(row['src_h'],row['src_w']))
             if OA.OP in ops:OA.validate_restoration(restored,row)

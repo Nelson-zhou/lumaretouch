@@ -5,6 +5,7 @@ The private full canvas is sampled only after all editing, including monochrome.
 """
 import numpy as np
 from . import photo_grain_state as S
+from . import fringe_repair_render as FR
 
 
 def available():
@@ -48,13 +49,17 @@ def render_preview(engine, *, pack=True, editor_mode=None):
     w,h=row.get('src_w'),row.get('src_h')
     if not w or not h:raise ValueError('Grain preview missing verified original dimensions')
     admit(w,h)
+    if FR.active(engine) or getattr(engine,'_fringe_repair_capture_coverage',False):
+        FR.admit(w,h,(tuple(engine._crop_rect),float(engine._crop_rotation)))
+    if getattr(engine,'_fringe_repair_capture_coverage',False):
+        engine._fringe_repair_review_coverage=None
     before=file_stamp(path);document=str(engine._load_id)
     from .extended_tone_host import revision
     rev=revision(engine)
     def cancelled():
         if editor_mode=="input" and engine._colour_editor_service().capture_cancel.is_set():return True
         if getattr(engine,'_photo_grain_cancelled',lambda:False)():return True
-        for key in ('_colour_editor_cancelled','_colour_grading_cancelled','_selective_colour_cancelled','_primary_calibration_cancelled','_photo_detail_cancelled','_extended_tone_cancelled'):
+        for key in ('_colour_editor_cancelled','_colour_grading_cancelled','_selective_colour_cancelled','_primary_calibration_cancelled','_photo_detail_cancelled','_extended_tone_cancelled','_fringe_repair_cancelled'):
             if getattr(engine,key,lambda:False)():return True
         return str(engine._load_id)!=document or revision(engine)!=rev
     def progress(*_):
@@ -63,6 +68,10 @@ def render_preview(engine, *, pack=True, editor_mode=None):
     state=engine._capture_state()
     override=getattr(engine,'_photo_grain_render_override',None)
     if override is not None:state={**state,S.KEY:S.check(override)}
+    fringe_override=getattr(engine,'_fringe_repair_render_override',None)
+    if fringe_override is not None:
+        from . import fringe_repair_state as FS
+        state={**state,FS.KEY:FS.check(fringe_override)}
     # These existing temporary preview stages intentionally do not persist state.
     for name in ('colour_editor','colour_grading','selective_colour','primary_calibration'):
         if getattr(engine,'_'+name+'_preview_active',False):
@@ -88,10 +97,12 @@ def render_preview(engine, *, pack=True, editor_mode=None):
     from . import common_background_source as common_background
     for module in (LM,LG,ER,ML,SB,OP,SK,common_background):module.check_export_decode(snap,path,before,original_hw)
     BP.check_export_decode(snap,path,before,original_hw);verify_export(snap,path,original_hw)
+    FR.check_export_decode(snap,path,before,original_hw)
     if snap.get("grade_scope")=="objects":snap["local_mask_source_path"]=path
     spec,skipped=build_export_spec(snap,h,w,for_document=for_doc)
     if skipped:raise ValueError('Full-source grain preview cannot omit layers: '+', '.join(map(str,skipped)))
     spec.float_output=True
+    spec._fringe_repair_capture_coverage=bool(getattr(engine,'_fringe_repair_capture_coverage',False))
     if editor_mode is not None:
         spec._colour_editor_mode=editor_mode
         from .colour_editor_native import FullDomain
@@ -123,6 +134,16 @@ def render_preview(engine, *, pack=True, editor_mode=None):
         coverage_t=torch.from_numpy(np.ascontiguousarray(coverage,dtype=np.float32))[None,None]
         if tuple(coverage_t.shape[-2:])!=target:coverage_t=F.interpolate(coverage_t,size=target,mode='area')
         engine._colour_editor_input_coverage=coverage_t.to(engine._vram.device)
+    if spec._fringe_repair_capture_coverage:
+        coverage=getattr(spec,'_fringe_repair_coverage',None)
+        if coverage is not None:
+            coverage_t=torch.from_numpy(np.ascontiguousarray(coverage,dtype=np.float32))[None,None]
+            if tuple(coverage_t.shape[-2:])!=target:
+                coverage_t=F.interpolate(coverage_t,size=target,mode='area')
+            engine._fringe_repair_review_coverage=coverage_t.to(engine._vram.device)
+            del spec._fringe_repair_coverage
+        elif editor_mode not in ('input','view'):
+            raise ValueError('Fringe review lacks its actual processing-eligibility mask')
     tensor=tensor.to(engine._vram.device)
     if pack:engine._vram.pack(tensor)
     engine._sky_proxy_suspended=None

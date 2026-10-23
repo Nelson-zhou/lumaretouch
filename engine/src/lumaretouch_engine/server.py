@@ -13,6 +13,9 @@ from . import selective_colour_state as SCSL, selective_colour_adapters as SCLA
 from . import colour_editor_state as CES, colour_editor_adapters as CEA, colour_editor_runtime as CER
 from . import extended_tone_state as ETS, extended_tone_host as ETH
 from . import photo_detail_state as PDS, photo_detail_host as PDH
+from . import fringe_repair_state as FRS, fringe_repair_native as FRN
+from .fringe_repair_host import FringeRepairHostMixin
+from . import fringe_repair_render as FRR
 from . import canvas_guides_host as CGH
 
 import argparse
@@ -206,7 +209,7 @@ class _TaskControl:
         self.cancel = threading.Event()
 
 
-class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, WorkflowPortsMixin, SampleLibraryHostMixin, SemanticColourHostMixin):
+class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, WorkflowPortsMixin, SampleLibraryHostMixin, SemanticColourHostMixin):
     def __init__(self, session: str):
         self.session = session
         self.shm: FrameShm | None = None
@@ -326,6 +329,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         self._crop_rotation = 0.0
         self._extended_tone = ETS.default()
         self._photo_detail = PDS.default()
+        self._fringe_repair = FRS.neutral()
         self._photo_grain = PGS.neutral()
         self._photo_grain_source_renderer = lambda **kw: self._write_current_frame(kw["reason"])
         self._colour_grading = CGS.neutral()
@@ -425,7 +429,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "preset_organisation_protocol": 1, "source_relocation_protocol": 1, "managed_import_protocol": 1, "project_recovery_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "heal_vector_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"eyeliner_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyeliner.so").is_file()),"iris_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_iris_makeup.so").is_file()),"eyelash_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyelash.so").is_file()),"brow_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_brow_makeup.so").is_file()),"lipstick_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_lipstick.so").is_file()),"blush_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_blush_makeup.so").is_file()),"eye_light_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eye_light.so").is_file()),"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"primary_calibration_protocol":int(self._primary_calibration_service().available()),"colour_editor_protocol":int((Path(__file__).parent/"bin/liblrt_colour_editor.so").is_file()),"selective_colour_protocol":int((Path(__file__).parent/"bin/liblrt_selective_colour.so").is_file()),"photo_grain_protocol":int(PGR.available()),"colour_grading_protocol":int((Path(__file__).parent/"bin/liblrt_colour_grading.so").is_file()),"photo_detail_protocol":int(PDH.available()),"extended_tone_protocol":int((Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()),"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1,"arm_shape_protocol":1,"waist_shape_protocol":1,"neck_shape_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_neck_shape.so").is_file()),"leg_length_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_leg_length.so").is_file()), "studio_background_protocol": 1, "common_background_protocol": 1, "common_background_readback_protocol": 1, "id_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "preset_organisation_protocol": 1, "source_relocation_protocol": 1, "managed_import_protocol": 1, "project_recovery_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "heal_vector_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"eyeliner_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyeliner.so").is_file()),"iris_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_iris_makeup.so").is_file()),"eyelash_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyelash.so").is_file()),"brow_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_brow_makeup.so").is_file()),"lipstick_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_lipstick.so").is_file()),"blush_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_blush_makeup.so").is_file()),"eye_light_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eye_light.so").is_file()),"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"primary_calibration_protocol":int(self._primary_calibration_service().available()),"colour_editor_protocol":int((Path(__file__).parent/"bin/liblrt_colour_editor.so").is_file()),"selective_colour_protocol":int((Path(__file__).parent/"bin/liblrt_selective_colour.so").is_file()),"photo_grain_protocol":int(PGR.available()),"colour_grading_protocol":int((Path(__file__).parent/"bin/liblrt_colour_grading.so").is_file()),"photo_detail_protocol":int(PDH.available()),"fringe_repair_protocol":int(FRN.available()),"extended_tone_protocol":int((Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()),"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1,"arm_shape_protocol":1,"waist_shape_protocol":1,"neck_shape_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_neck_shape.so").is_file()),"leg_length_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_leg_length.so").is_file()), "studio_background_protocol": 1, "common_background_protocol": 1, "common_background_readback_protocol": 1, "id_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -805,7 +809,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             emit({"event": "engine_warn", "warn": pipe.fallback})
         if adopt:
             self._vram = pipe
-            pipe.photo_grain_source_output = lambda: CER.render_preview(self,pack=False) if CER.active(self) else PGR.render_preview(self,pack=False) if PGR.active(self) else None
+            pipe.photo_grain_source_output = lambda: CER.render_preview(self,pack=False) if CER.active(self) else PGR.render_preview(self,pack=False) if PGR.active(self) or self._fringe_active() else None
             pipe.colour_editor_source_input = lambda: CER.render_preview(self,pack=False,input_only=True)
             self._src_rgb = original_rgb
             from .creative_derived_repair_runtime import bind as bind_repair_source
@@ -937,7 +941,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                   "_precompute", "_precompute_backend", "_face_index", "_face_box",
                   "_face_explicit", "_face_manual",
          "_exposure",
-         "_exposure_ref_k", "_primary_calibration", "_selective_colour", "_colour_editor", "_photo_grain", "_colour_grading", "_extended_tone", "_photo_detail", "_wb_options", "_hsl", "_curves", "_levels", "_crop_rect", "_crop_rotation")
+         "_exposure_ref_k", "_primary_calibration", "_selective_colour", "_colour_editor", "_photo_grain", "_colour_grading", "_extended_tone", "_photo_detail", "_fringe_repair", "_wb_options", "_hsl", "_curves", "_levels", "_crop_rect", "_crop_rotation")
     # 代理档一变就作废的那些层：它们的坐标是**这一档代理帧**上的像素坐标。
     PROXY_BOUND = ("_channel", "_repair_ops", "_redo_ops", "_light_ops", "_light_redo",
                    "_deform", "_deform_defer", "_deform_default", "_deform_overrides",
@@ -1002,7 +1006,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 # 新列表**，不能是类级常量：两张图共用一个 list，关掉 A 图那一只误检就
                 # 会把 B 图同位置的脸也关掉（与 `_deform["amounts"]` 整份新抄同一条理由）
                 "_face_manual": {"disabled": [], "added": []},
-                "_exposure": (0.0,) * 7, "_extended_tone": ETS.default(), "_photo_detail": PDS.default(), "_photo_grain": PGS.neutral(), "_colour_grading": CGS.neutral(), "_primary_calibration": PCS.neutral(), "_selective_colour": SCSL.neutral(), "_colour_editor": CES.neutral(), "_exposure_ref_k": None, "_wb_options": WB.default_options(),
+                "_exposure": (0.0,) * 7, "_extended_tone": ETS.default(), "_photo_detail": PDS.default(), "_fringe_repair": FRS.neutral(), "_photo_grain": PGS.neutral(), "_colour_grading": CGS.neutral(), "_primary_calibration": PCS.neutral(), "_selective_colour": SCSL.neutral(), "_colour_editor": CES.neutral(), "_exposure_ref_k": None, "_wb_options": WB.default_options(),
                 "_hsl": (0.0,) * 24, "_curves": CURVES.default_curves(), "_levels": LEVELS.default_levels(),
                 "_crop_rect": (0.0, 0.0, 1.0, 1.0), "_crop_rotation": 0.0,
                 # 掩膜/笔迹/形变场都活在**那一档代理尺寸**上，所以尺寸也是状态的一部分。
@@ -1042,7 +1046,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                            "box": (None if self._enhance.get("box") is None else
                                    tuple(float(v) for v in self._enhance["box"]))},
               "_enhance_defer": bool(self._enhance_defer),
-              "_photo_grain": PGS.check(self._photo_grain), "_colour_grading": CGS.check(self._colour_grading), "_primary_calibration": PCS.check(self._primary_calibration), "_selective_colour": SCSL.check(self._selective_colour), "_colour_editor": CES.check(self._colour_editor), "_extended_tone": ETS.check(self._extended_tone), "_photo_detail": PDS.check(self._photo_detail), "_exposure": tuple(self._exposure), "_exposure_ref_k": self._exposure_ref_k,
+              "_photo_grain": PGS.check(self._photo_grain), "_colour_grading": CGS.check(self._colour_grading), "_primary_calibration": PCS.check(self._primary_calibration), "_selective_colour": SCSL.check(self._selective_colour), "_colour_editor": CES.check(self._colour_editor), "_extended_tone": ETS.check(self._extended_tone), "_photo_detail": PDS.check(self._photo_detail), "_fringe_repair": FRS.check(self._fringe_repair), "_exposure": tuple(self._exposure), "_exposure_ref_k": self._exposure_ref_k,
               "_wb_options": WB.check_options(self._wb_options),
               "_hsl": tuple(self._hsl), "_curves": CURVES.check_curves(self._curves), "_levels": self._levels,
               "_crop_rect": tuple(self._crop_rect), "_crop_rotation": float(self._crop_rotation),
@@ -1079,7 +1083,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         from .creative_derived_id_background import validate_state as validate_id
         validate_id(st)
         # Validate WB and compile before changing any live field.
-        st = {**st, "_photo_grain": PGS.from_state(st), "_colour_grading": CGS.from_state(st), "_primary_calibration": PCA.admit(PCS.from_state(st)), "_selective_colour": SCSL.from_state(st), "_colour_editor": CES.from_state(st), "_extended_tone": ETS.check(st.get("_extended_tone")), "_photo_detail": PDS.check(st.get("_photo_detail")), **self._semantic_restore(st), **self._body_fields(st), "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0)), "_local_masks": LM.check(st.get("_local_masks")), "_local_grade_layers": LG.check(st.get("_local_grade_layers")), "_effect_recovery": ERS.check(st.get("_effect_recovery")), "_manual_liquify": MLS.check(st.get("_manual_liquify")), "_studio_background": SBS.check(st.get("_studio_background")), "_id_background": IDS.check(st.get("_id_background")), "_id_background_bundle": st.get("_id_background_bundle"), "_optics": OPS.check(st.get("_optics")), "_sky_replacement": SKS.check(st.get("_sky_replacement")), "_blush_makeup_library": BLUSHLIB.check(st["_blush_makeup_library"]) if "_blush_makeup_library" in st else BLUSHLIB.empty(), "_lipstick_library": LIPSTICKLIB.check(st["_lipstick_library"]) if "_lipstick_library" in st else LIPSTICKLIB.empty(), "_eyeliner_library": EYELINERLIB.check(st["_eyeliner_library"]) if "_eyeliner_library" in st else EYELINERLIB.empty(), "_eyelash_library": EYELASHLIB.check(st["_eyelash_library"]) if "_eyelash_library" in st else EYELASHLIB.empty(), "_brow_makeup_library": BROWMAKEUPLIB.check(st["_brow_makeup_library"]) if "_brow_makeup_library" in st else BROWMAKEUPLIB.empty(), "_lip_makeup": LIPS.check(st.get("_lip_makeup")), "_brow_shape": BROWS.check(st.get("_brow_shape")), "_brow_shape_owner": st.get("_brow_shape_owner"), "_nose_shape": NOSES.check(st.get("_nose_shape")), "_nose_shape_owner": st.get("_nose_shape_owner"), "_eye_shape": EYES.check(st.get("_eye_shape")), "_eye_shape_owner": st.get("_eye_shape_owner"), "_mouth_shape": MOUTHS.check(st.get("_mouth_shape")), "_mouth_shape_owner": st.get("_mouth_shape_owner"), "_reference_color": RCS.check(st.get("_reference_color")), "_reference_color_bundle": st.get("_reference_color_bundle")}
+        st = {**st, "_photo_grain": PGS.from_state(st), "_colour_grading": CGS.from_state(st), "_primary_calibration": PCA.admit(PCS.from_state(st)), "_selective_colour": SCSL.from_state(st), "_colour_editor": CES.from_state(st), "_extended_tone": ETS.check(st.get("_extended_tone")), "_photo_detail": PDS.check(st.get("_photo_detail")), "_fringe_repair": FRS.from_state(st), **self._semantic_restore(st), **self._body_fields(st), "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0)), "_local_masks": LM.check(st.get("_local_masks")), "_local_grade_layers": LG.check(st.get("_local_grade_layers")), "_effect_recovery": ERS.check(st.get("_effect_recovery")), "_manual_liquify": MLS.check(st.get("_manual_liquify")), "_studio_background": SBS.check(st.get("_studio_background")), "_id_background": IDS.check(st.get("_id_background")), "_id_background_bundle": st.get("_id_background_bundle"), "_optics": OPS.check(st.get("_optics")), "_sky_replacement": SKS.check(st.get("_sky_replacement")), "_blush_makeup_library": BLUSHLIB.check(st["_blush_makeup_library"]) if "_blush_makeup_library" in st else BLUSHLIB.empty(), "_lipstick_library": LIPSTICKLIB.check(st["_lipstick_library"]) if "_lipstick_library" in st else LIPSTICKLIB.empty(), "_eyeliner_library": EYELINERLIB.check(st["_eyeliner_library"]) if "_eyeliner_library" in st else EYELINERLIB.empty(), "_eyelash_library": EYELASHLIB.check(st["_eyelash_library"]) if "_eyelash_library" in st else EYELASHLIB.empty(), "_brow_makeup_library": BROWMAKEUPLIB.check(st["_brow_makeup_library"]) if "_brow_makeup_library" in st else BROWMAKEUPLIB.empty(), "_lip_makeup": LIPS.check(st.get("_lip_makeup")), "_brow_shape": BROWS.check(st.get("_brow_shape")), "_brow_shape_owner": st.get("_brow_shape_owner"), "_nose_shape": NOSES.check(st.get("_nose_shape")), "_nose_shape_owner": st.get("_nose_shape_owner"), "_eye_shape": EYES.check(st.get("_eye_shape")), "_eye_shape_owner": st.get("_eye_shape_owner"), "_mouth_shape": MOUTHS.check(st.get("_mouth_shape")), "_mouth_shape_owner": st.get("_mouth_shape_owner"), "_reference_color": RCS.check(st.get("_reference_color")), "_reference_color_bundle": st.get("_reference_color_bundle")}
         st = {**st, **CDH.restore_fields(st)}
         st = WB.normalize_state(st)
         WB.prepare_state(st)
@@ -1260,7 +1264,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
     # 却不在这份名单里，于是拖完曝光按撤销——参数纹丝不动，而 UI 上没有任何一处会说"为什么
     # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
     # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
-    EDIT_CMDS = ("common_background", "set_strength", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light", "deform", "lut", "grade", "background",
+    EDIT_CMDS = ("fringe_repair", "common_background", "set_strength", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light", "deform", "lut", "grade", "background",
                  "crop", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "preset", "batch", "face", "enhance", "lip_makeup", "brow_shape", "nose_shape", "eye_shape", "mouth_shape", "people", "hair_colour", "fabric")
     # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
     # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
@@ -1638,7 +1642,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 crop["out_full"] = list(_gsz(int(row["src_w"]), int(row["src_h"]),
                                              tuple(self._crop_rect),
                                              float(self._crop_rotation)))
-        return {"document_id": self._load_id, "source_uid": CDH.source_uid(self), "photo_detail": {**PDS.status(self._photo_detail),"available":PDH.available()}, "photo_grain": PGA.report(self), "colour_grading": CGA.report(self), "primary_calibration": PCA.report(self), "selective_colour": SCLA.report(self), "colour_editor": CEA.report(self), "extended_tone": {**ETS.status(self._extended_tone), "available": (Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()}, "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "id_background": IDR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self), "lip_makeup": LIPR.report(self), "brow_shape": BROWR.report(self), "nose_shape": NOSER.report(self), "eye_shape": EYER.report(self), "mouth_shape": MOUTHR.report(self), "reference_color": RCR.report(self), "semantic_colour": SCR.report(self), **self._body_report(),
+        return {"fringe_repair":self._fringe_status(), "document_id": self._load_id, "source_uid": CDH.source_uid(self), "photo_detail": {**PDS.status(self._photo_detail),"available":PDH.available()}, "photo_grain": PGA.report(self), "colour_grading": CGA.report(self), "primary_calibration": PCA.report(self), "selective_colour": SCLA.report(self), "colour_editor": CEA.report(self), "extended_tone": {**ETS.status(self._extended_tone), "available": (Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()}, "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "id_background": IDR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self), "lip_makeup": LIPR.report(self), "brow_shape": BROWR.report(self), "nose_shape": NOSER.report(self), "eye_shape": EYER.report(self), "mouth_shape": MOUTHR.report(self), "reference_color": RCR.report(self), "semantic_colour": SCR.report(self), **self._body_report(),
                 "canvas_guides": CGH.report(self),
                 "strength": float(self._strength), "params": dict(self._params),
                 "channel": self._channel,
@@ -1710,7 +1714,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
 
     def _state_edits(self, st: dict) -> dict:
         """一份状态（live 抄出来的或底片条格子里存着的）里有哪些层。"""
-        return {"photo_detail": PDS.active(st.get("_photo_detail")), "photo_grain": PGS.active(PGS.from_state(st)), "colour_grading": CGS.active(CGS.from_state(st)), "primary_calibration": PCS.active(PCS.from_state(st)), "selective_colour": SCSL.active(SCSL.from_state(st)), "colour_editor": CES.active(CES.from_state(st)), "extended_tone": ETS.active(st.get("_extended_tone")), "local_masks": len((st.get("_local_masks") or LM.empty())["recipe"]["objects"]),
+        return {"fringe_repair":FRS.active(FRS.from_state(st)), "photo_detail": PDS.active(st.get("_photo_detail")), "photo_grain": PGS.active(PGS.from_state(st)), "colour_grading": CGS.active(CGS.from_state(st)), "primary_calibration": PCS.active(PCS.from_state(st)), "selective_colour": SCSL.active(SCSL.from_state(st)), "colour_editor": CES.active(CES.from_state(st)), "extended_tone": ETS.active(st.get("_extended_tone")), "local_masks": len((st.get("_local_masks") or LM.empty())["recipe"]["objects"]),
                 "local_grade_layers": len(LG.check(st.get("_local_grade_layers"))["layers"]),
                 "effect_recovery": len(ERS.check(st.get("_effect_recovery"))["targets"]),
                 "manual_liquify": len(MLS.check(st.get("_manual_liquify"))["strokes"]),
@@ -6249,7 +6253,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                         decode_started = monotonic_ns()
                         d = load_full(path, device=snap_i["device"], want_bits=8 if snap_i.get("creative_base") is not None else 16)
                         verify_decode(path, immutable_stamp)
-                        LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
+                        LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); FRR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
                         decode_ms = (monotonic_ns() - decode_started) / 1e6
                         spec, skipped = self._export_snapshot(snap_i, d.h, d.w, for_document=for_doc_i)
                         stage = "edit16"
@@ -6314,7 +6318,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                     continue
                 d = load_full(path, device=self.device)
                 verify_decode(path, immutable_stamp)
-                LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
+                LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); FRR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
                 stage = "render"
                 # P1-1：这一张用它自己那份配方（当前档=现拍 snap；其它档=它存的 state；
                 # 裸文件=共享参数且 for_document=False）。批级 export_done 仍读 snap。
@@ -6322,14 +6326,14 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                                                       for_document=for_doc_i)
                 stage = "write"
                 out_path = EDR.primary_target(destination_plan, entry_id) if destination_plan else os.path.join(out_dir, entry.get("stem", os.path.splitext(os.path.basename(path))[0]) + "." + fmt)
-                frame, st = export_image(d.rgb, spec, device=snap_i["device"], tile=tile, geometry=(tuple(snap_i.get("crop_rect") or (0.,0.,1.,1.)),float(snap_i.get("crop_rotation") or 0.)) if RCS.active(spec.reference_color) or SCS.active(spec.semantic_colour) or CGS.active(spec.colour_grading) or CES.active(spec.colour_editor) or SCSL.active(spec.selective_colour) or PDS.active(spec.photo_detail) or PGS.active(spec.photo_grain) else None)
+                frame, st = export_image(d.rgb, spec, device=snap_i["device"], tile=tile, geometry=(tuple(snap_i.get("crop_rect") or (0.,0.,1.,1.)),float(snap_i.get("crop_rotation") or 0.)) if RCS.active(spec.reference_color) or SCS.active(spec.semantic_colour) or CGS.active(spec.colour_grading) or CES.active(spec.colour_editor) or SCSL.active(spec.selective_colour) or PDS.active(spec.photo_detail) or PGS.active(spec.photo_grain) or FRS.active(spec.fringe_repair) else None)
                 # 与预览链同序：几何在所有像素层之后。反过来先剪再算，同一支消除笔
                 # 在剪后的图上会落在别处——那不是"批量应用设置"，那是另一张图。
                 from .ops.geometry import crop_rotate_np, is_identity as geom_ident
                 rect0 = tuple(snap_i.get("crop_rect") or (0.0, 0.0, 1.0, 1.0))
                 rot0 = float(snap_i.get("crop_rotation") or 0.0)
                 t_g = monotonic_ns()
-                if not geom_ident(rect0, rot0) and not (RCS.active(spec.reference_color) or SCS.active(spec.semantic_colour) or CGS.active(spec.colour_grading) or CES.active(spec.colour_editor) or SCSL.active(spec.selective_colour) or PDS.active(spec.photo_detail) or PGS.active(spec.photo_grain)):
+                if not geom_ident(rect0, rot0) and not (RCS.active(spec.reference_color) or SCS.active(spec.semantic_colour) or CGS.active(spec.colour_grading) or CES.active(spec.colour_editor) or SCSL.active(spec.selective_colour) or PDS.active(spec.photo_detail) or PGS.active(spec.photo_grain) or FRS.active(spec.fringe_repair)):
                     frame = crop_rotate_np(frame, rect0, rot0)
                 st["geometry_ms"] = round((monotonic_ns() - t_g) / 1e6, 2)
                 st["crop_applied"] = bool(not geom_ident(rect0, rot0))
@@ -6586,7 +6590,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("common_background", "common_background_preview", "common_background_readback", "creative_document", "canvas_guides", "project_recovery", "managed_import", "project_package", "export_destination", "virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("fringe_repair", "fringe_repair_preview", "common_background", "common_background_preview", "common_background_readback", "creative_document", "canvas_guides", "project_recovery", "managed_import", "project_package", "export_destination", "virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light",
                "deform", "lut", "custom_lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -6717,6 +6721,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 return
             from .creative_common_background_host import invalidate_other
             invalidate_other(self,name,msg)
+            if name not in ('fringe_repair','fringe_repair_preview','hello') and not (name=='inspection_snapshot' and msg.get('action','status')=='status'):self._fringe_cancel_preview()
             if name not in ('hello','color_picker_capture'):
                 id_capture=self.__dict__.get('_id_background_capture_owner')
                 if id_capture is not None:id_capture.invalidate()
@@ -6724,7 +6729,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             if name not in ('hello','colour_editor_state','colour_editor_sample','color_picker_capture','color_scopes'):
                 editor_capture=self.__dict__.get('_colour_editor_capture_owner')
                 if editor_capture is not None: editor_capture.invalidate()
-            if name in ('colour_editor','colour_editor_state','colour_editor_sample','photo_grain','photo_grain_state','photo_detail','photo_detail_state','photo_detail_receipt','primary_calibration','primary_calibration_state','selective_colour','selective_colour_state','colour_grading','colour_grading_state','extended_tone','extended_tone_state','extended_tone_receipt','shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape','custom_lut','sample_library', 'sample_library_cancel','semantic_colour','semantic_colour_cancel'):
+            if name in ('fringe_repair','fringe_repair_preview','colour_editor','colour_editor_state','colour_editor_sample','photo_grain','photo_grain_state','photo_detail','photo_detail_state','photo_detail_receipt','primary_calibration','primary_calibration_state','selective_colour','selective_colour_state','colour_grading','colour_grading_state','extended_tone','extended_tone_state','extended_tone_receipt','shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape','custom_lut','sample_library', 'sample_library_cancel','semantic_colour','semantic_colour_cancel'):
                 fn(msg); return
             if name not in ('hello', 'local_grade_live'):
                 live_grade = self.__dict__.get('_local_grade_live_owner')
@@ -6748,7 +6753,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             if name == "color_picker" and not self._color_picker_controller().prepare(msg):
                 return  # The exact frozen stage proof and scalar plan precede mutation.
             from .document_versions import fences_current_document
-            if name!="common_background" and fences_current_document(name,msg,self.EDIT_CMDS) and not (name=="background" and str(msg.get("action","")).startswith("id_")):
+            if name not in ("common_background","fringe_repair") and fences_current_document(name,msg,self.EDIT_CMDS) and not (name=="background" and str(msg.get("action","")).startswith("id_")):
                 self._fence_current_document()
             if name not in ("hello", "color_scopes", "color_capture") and not (
                     name=="inspection_snapshot" and msg.get("action","status")=="status"):
@@ -6824,6 +6829,9 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
         finally:
             try:
+                if dispatch_error and name in ('fringe_repair','fringe_repair_preview'):
+                    from .fringe_repair_host import dispatch_rejected as fringe_rejected
+                    fringe_rejected(msg,dispatch_error,bool(recovery_boundary and recovery_boundary['started']),emit)
                 if dispatch_error and name in ('common_background','common_background_preview'):
                     from .creative_common_background_host import rejected
                     rejected(self,msg,dispatch_error,emit)

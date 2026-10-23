@@ -47,6 +47,9 @@ impl EngineHandle {
     pub fn send(&self, cmd: Value) -> Result<(), String> {
         crate::project_recovery_fence::issued(self.epoch, &cmd)?;
         if crate::common_background_readback::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
+        // Fringe review/presentation/cancellation never mutate the document or
+        // revoke unrelated sample-library/semantic-colour capture ownership.
+        if cmd["cmd"] == "fringe_repair_preview" { return self.dispatcher.enqueue(None, cmd); }
         if cmd["cmd"]=="project_recovery" || cmd["cmd"]=="canvas_guides" {return self.dispatcher.enqueue(None,cmd);}
         if crate::managed_import_api::read_only(&cmd) || crate::batch_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if cmd["cmd"] == "virtual_copy" && matches!(cmd["action"].as_str(), Some("state" | "query")) {
@@ -187,8 +190,8 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
         thread::spawn(move || {
             while let Ok(line) = rx.recv() {
                 if let Ok(v)=serde_json::from_str::<Value>(&line) {
-                    // Common outcomes settle only after exact binding validation.
-                    if v["event"] != "common_background_result" {
+                    // Reviewed outcomes settle only after exact original validation.
+                    if v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" {
                         crate::project_recovery_fence::observed(inspection_epoch, &v);
                     }
                     if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {
@@ -233,6 +236,9 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             st.common_background.lock().unwrap().ended(inspection_epoch);
             crate::common_background_readback::ended(inspection_epoch);
             st.common_background_preview.lock().unwrap().ended(inspection_epoch);
+            st.fringe_repair.lock().unwrap().ended(inspection_epoch);
+            crate::fringe_repair_audit::ended(inspection_epoch);
+            st.fringe_repair_preview.lock().unwrap().ended(inspection_epoch);
             st.manual_liquify.lock().unwrap().ended(inspection_epoch);
             st.liquify_preview.lock().unwrap().ended(inspection_epoch);
             st.effect_recovery.lock().unwrap().ended(inspection_epoch);
@@ -321,6 +327,11 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         },
         "common_background_readback"=>crate::common_background_readback::receive(inspection_epoch,&v),
         "common_background_preview"=>state.common_background_preview.lock().unwrap().receive(inspection_epoch,&v),
+        "fringe_repair_result"=>{
+            state.fringe_repair.lock().unwrap().receive(inspection_epoch,&v);
+            crate::fringe_repair_audit::receive_apply(inspection_epoch,&v);
+        },
+        "fringe_repair_preview"=>state.fringe_repair_preview.lock().unwrap().receive(inspection_epoch,&v),
         "manual_liquify_result"=>state.manual_liquify.lock().unwrap().receive(inspection_epoch,&v),
         "manual_liquify_preview"=>state.liquify_preview.lock().unwrap().receive(inspection_epoch,&v),
         "effect_recovery_result"=>state.effect_recovery.lock().unwrap().receive(inspection_epoch,&v),
@@ -406,6 +417,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             state.optics.lock().unwrap().ready(inspection_epoch,v["optics_protocol"].as_u64()==Some(1));
             state.studio_background.lock().unwrap().ready(inspection_epoch,v["studio_background_protocol"].as_u64()==Some(1));
             state.common_background.lock().unwrap().ready(inspection_epoch,v["common_background_protocol"].as_u64()==Some(1));
+            state.fringe_repair.lock().unwrap().ready(inspection_epoch,v["fringe_repair_protocol"].as_u64()==Some(1));
             state.manual_liquify.lock().unwrap().ready(inspection_epoch,v["manual_liquify_protocol"].as_u64()==Some(1));
             state.effect_recovery.lock().unwrap().ready(inspection_epoch,v["effect_recovery_protocol"].as_u64()==Some(1));
             state.local_grade_live.lock().unwrap().ready(inspection_epoch,v["local_grade_live_protocol"].as_u64()==Some(1));

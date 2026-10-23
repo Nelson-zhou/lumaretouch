@@ -84,3 +84,24 @@ def require_candidate(before, after, modules, source_proof=None):
     if not _same(expected, after):
         raise SC.ScopeError('合成来源的参数迁移不能改写目标像素、来源、分析或所选模块以外的状态')
     return after
+
+
+def require_restoration(current, previous, restored, ops, source_proof=None):
+    """Admit same-target history only, not portable source-bound coverage.
+
+    Transfer commits still use require_candidate's parameter-reset semantics.
+    Here the history owner separately verifies the frozen target source proof;
+    reconstructing the scoped prior target is the only accepted difference.
+    """
+    derived, values = _context(current, source_proof, (previous, restored))
+    if not derived:
+        return restored
+    from . import scope as SC
+    if set(ops) - SC.DERIVED_PARAMETER_OPS:
+        raise SC.ScopeError('合成来源历史不能读取或恢复未经支持的模块')
+    SC.check_derived_modules(SC.params_of(previous, ops))
+    _photo_sources(values)
+    expected = SC.restore_modules(current, previous, ops)
+    if not _same(expected, restored):
+        raise SC.ScopeError('合成来源历史只能恢复已审核目标的所选模块，不能改写来源或其他状态')
+    return restored

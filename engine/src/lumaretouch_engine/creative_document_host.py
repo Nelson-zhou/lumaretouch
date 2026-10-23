@@ -351,6 +351,10 @@ def guard_command(engine, name, request):
         from .creative_sky_host import require_command as require_sky
         require_sky(engine,name,request)
         return
+    if name in ('fringe_repair','fringe_repair_preview'):
+        from .fringe_repair_host import require_derived
+        require_derived(engine,name,request)
+        return
     if name in ('common_background','common_background_preview'):
         from .creative_common_background_host import require_command as require_common
         require_common(engine,name,request)

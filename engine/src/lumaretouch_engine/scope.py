@@ -48,6 +48,7 @@ from . import custom_lut_scope as CUSTOM_LUT
 from . import extended_tone_scope as EXTENDED_TONE
 from . import photo_grain_scope as PHOTO_GRAIN
 from . import photo_detail_scope as PHOTO_DETAIL
+from . import fringe_repair_scope as FRINGE_REPAIR
 from . import colour_grading_scope as COLOUR_GRADING
 from . import primary_calibration_scope as PRIMARY_CALIBRATION
 from . import selective_colour_scope as SELECTIVE_COLOUR
@@ -94,6 +95,10 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: operation_id → 契约。`single_face` 的模块只能作用在"已知只有一张脸"的文档上；
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
+    FRINGE_REPAIR.OP: {"params": ("enabled", "strength"), "state_fields": FRINGE_REPAIR.FIELDS,
+        "single_face": False, "transferable": True, "cmd": "fringe_repair", "label": "黑白边缘修复",
+        "read": FRINGE_REPAIR.params_of, "write": FRINGE_REPAIR.install,
+        "why_not": "仅同步启用与程度；每张图独立计算边缘支持，源身份和增减笔迹不复制"},
     PHOTO_DETAIL.OP: {"params": ("recipe",), "state_fields": PHOTO_DETAIL.FIELDS, "single_face": False, "transferable": True, "cmd": "photo_detail", "label": "照片细节（非 AI）", "read": PHOTO_DETAIL.params_of, "write": PHOTO_DETAIL.install},
     COLOUR_GRADING.OP: {"params": ("recipe",), "state_fields": COLOUR_GRADING.FIELDS, "single_face": False, "transferable": True, "cmd": "colour_grading", "label": "颜色分级", "read": COLOUR_GRADING.params_of, "write": COLOUR_GRADING.install},
     PHOTO_GRAIN.OP: {"params": ("recipe",), "state_fields": PHOTO_GRAIN.FIELDS, "single_face": False, "transferable": True, "cmd": "photo_grain", "label": "照片颗粒", "read": PHOTO_GRAIN.params_of, "write": PHOTO_GRAIN.install},
@@ -362,6 +367,9 @@ def check_params(op: str, params: dict) -> dict:
     if op == LIPSTICK.OP:
         try: return LIPSTICK.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
+    if op == FRINGE_REPAIR.OP:
+        try: return FRINGE_REPAIR.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
     if op == PHOTO_GRAIN.OP:
         try: return PHOTO_GRAIN.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
@@ -451,6 +459,7 @@ def check_params(op: str, params: dict) -> dict:
 
 
 def _neutral_of(op: str, key: str):
+    if op == FRINGE_REPAIR.OP: return FRINGE_REPAIR.S.neutral()[key]
     if op == PHOTO_GRAIN.OP and key == "recipe": return PHOTO_GRAIN.S.neutral()
     if op == COLOUR_GRADING.OP and key == "recipe": return COLOUR_GRADING.S.neutral()
     if op == PRIMARY_CALIBRATION.OP and key == "recipe": return PRIMARY_CALIBRATION.S.neutral()
@@ -521,7 +530,7 @@ def _check_shared_strength(ops: list[str], mods: dict[str, dict]) -> None:
 # review. This parameter validator alone never authorizes a transfer commit.
 DERIVED_PARAMETER_OPS = frozenset((
     OP_EXPOSURE, OP_WHITE_BALANCE, OP_LEVELS, OP_CURVES, OP_HSL,
-    EXTENDED_TONE.OP, PHOTO_DETAIL.OP, PHOTO_GRAIN.OP, COLOUR_GRADING.OP,
+    EXTENDED_TONE.OP, PHOTO_DETAIL.OP, PHOTO_GRAIN.OP, COLOUR_GRADING.OP, FRINGE_REPAIR.OP,
     PRIMARY_CALIBRATION.OP, SELECTIVE_COLOUR.OP, COLOUR_EDITOR.OP, OP_CROP,
 ))
 
@@ -565,7 +574,7 @@ def apply_modules(state: dict, mods: dict[str, dict], *, local_replace_legacy=Fa
 
 
 def restore_modules(current, previous, ops):
-    """Restore only reviewed modules; retain exact legacy local-grade fields."""
+    """Restore reviewed target state, including nonportable coverage on undo."""
     from .creative_derived_transfer import involved, require_modules
     if involved(current, related_states=(previous,)):
         # Check the scope before reading unsupported snapshot consumers. Both
@@ -573,13 +582,14 @@ def restore_modules(current, previous, ops):
         if set(ops) - DERIVED_PARAMETER_OPS:
             raise ScopeError('合成来源的通用历史不能恢复未经支持的模块')
         require_modules(current, params_of(previous, ops), related_states=(previous,))
-    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP,REFERENCE.OP,SEMANTIC.OP,ID_BACKGROUND.OP)]
+    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP,REFERENCE.OP,SEMANTIC.OP,ID_BACKGROUND.OP,FRINGE_REPAIR.OP)]
     result = apply_modules(current, params_of(previous, ordinary)) if ordinary else dict(current)
     if OP_LOCAL_GRADE in ops: LOCAL_GRADE.restore(result, previous)
     if OPTICS_AUTO.OP in ops: OPTICS_AUTO.restore(result, previous)
     if REFERENCE.OP in ops: REFERENCE.restore(result, previous)
     if SEMANTIC.OP in ops: SEMANTIC.restore(result, previous)
     if ID_BACKGROUND.OP in ops: ID_BACKGROUND.restore(result, previous)
+    if FRINGE_REPAIR.OP in ops: FRINGE_REPAIR.restore(result, previous)
     return result
 
 

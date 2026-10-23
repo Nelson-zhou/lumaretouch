@@ -1,3 +1,5 @@
+import {FringeRepairPanel} from '../fringeRepair/FringeRepairPanel';
+import type {FringeRepairOwner} from '../fringeRepair/useFringeRepairWorkflow';
 import {ConnectedPhotoGrainPanel} from '../photoGrain/ConnectedPhotoGrainPanel';
 import {CommonBackgroundPanel} from '../commonBackground/CommonBackgroundPanel';
 import type {CommonBackgroundOwner} from '../commonBackground/useCommonBackgroundWorkflow';
@@ -69,6 +71,7 @@ export interface RetouchProps {
   effectRecoveryPanel?: React.ReactNode; manualLiquifyPanel?: React.ReactNode;
   studioBackgroundPanel?: React.ReactNode; skyReplacementPanel?: React.ReactNode; opticsPanel?: React.ReactNode;
   commonBackgroundOwner?: CommonBackgroundOwner;
+  fringeRepairOwner?: FringeRepairOwner;
   presetPanel?: React.ReactNode;
   sampleLibraryPanel?: React.ReactNode;
   shoulderPanel?: React.ReactNode;
@@ -1021,6 +1024,7 @@ export default function RetouchPanel(props: RetouchProps) {
     if (fid === "PC-32474") return props.studioBackgroundPanel;
     if (fid === "PC-32476") return props.skyReplacementPanel;
     if (fid === "PC-32475") return bgBlock;
+    if (fid === "PC-AlCcjw85ql") return <FringeRepairPanel mode="launcher" owner={props.fringeRepairOwner} disabled={dim||status?.ready_caps?.fringe_repair_protocol!==1}/>;
     if (fid === "PC-47209") return historyBlock;
     if (fid === "PC-32477") return <FabricPanel value={doc?.fabric} documentId={doc?.document_id} revision={status?.doc_rev??0} disabled={dim} onDone={props.onDone} note={props.note}/>;
     if (fid === "PC-32482") return <>{props.healBrushPanel}{props.sourcePatchPanel}{props.cloneStampPanel}{brushBlock}</>;

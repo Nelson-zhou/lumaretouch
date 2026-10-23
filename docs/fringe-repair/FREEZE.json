@@ -1,0 +1,368 @@
+{
+  "baseline": "5c8e7019181974b4a30fc9071f1a0f1c850ef913",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Original Rust guided newly-introduced achromatic fringe correction; source-owned add/erase review and single history apply; full-source preview/export; parameter-only per-target presets/batch. Baked-in halos and full photographic acceptance not established.",
+  "files": [
+    {
+      "path": "core/fringe_repair/Cargo.toml",
+      "sha256": "a73e97353d79539262396cab3e97caf658c29404c73c0e8b595cea311f648410",
+      "bytes": 172
+    },
+    {
+      "path": "core/fringe_repair/build_fringe_repair.sh",
+      "sha256": "b3f68a0d72fa0fc3b48b71938475c103ecaed7c124a92afd56df1d8ab94c15be",
+      "bytes": 373
+    },
+    {
+      "path": "core/fringe_repair/fringe_repair.h",
+      "sha256": "168f3a8aff311f3e2607ba0a462d293af446140ab1501fa0e670f70a088f1553",
+      "bytes": 1834
+    },
+    {
+      "path": "core/fringe_repair/lib.rs",
+      "sha256": "a9964326c1cfdfda9b8fad521cdbfcefb4aee7b0195c5788fc130f28baaa5f19",
+      "bytes": 16706
+    },
+    {
+      "path": "core/fringe_repair/tests.rs",
+      "sha256": "ecbb1d3bc7136c0f51b320a3a40bd3c5bcc1555ec522e2098467bc5befffab70",
+      "bytes": 7501
+    },
+    {
+      "path": "docs/creative-layers/NEXT-MATERIAL-FEATURES.md",
+      "sha256": "0d8fd426dc952d97a0ae283ee049a00cb533d11e19db8503ac9efddb4554a472",
+      "bytes": 5695
+    },
+    {
+      "path": "docs/fringe-repair/KERNEL.md",
+      "sha256": "6b6ff3584d0b7bcd8da158a4bc3a3b90796a5fac41f82723dc6b2ef36688962c",
+      "bytes": 12624
+    },
+    {
+      "path": "docs/fringe-repair/README.md",
+      "sha256": "07299bc2774afa42523f14187086edd4076ed299a156ee9711e86d817b34cd8f",
+      "bytes": 6628
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "b3e2cd459f1533cf3bf9449bf15c695fc3d5610c95ef272e7831d9431f99080a",
+      "bytes": 18424
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_group_history.py",
+      "sha256": "e2c24a187a2ae07495b2816a528fe715c84e4f417001127747f017de9cecd7b6",
+      "bytes": 4402
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "a7a7dd306a1064a0be8d5a98885fb86aa4155fef19da32259297a98e62add01c",
+      "bytes": 32061
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_transfer.py",
+      "sha256": "c0e685f42a09f0c275e7f059b54292939a082bf96365c73b9c790c4bb708595c",
+      "bytes": 4618
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "sha256": "0d243a5566fc90d39b730f49324c7064f1c28117f8a713b011c8f3b43c628b86",
+      "bytes": 20466
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "0e78f1f07a956c51f2c1dbea94de83aa5053a9ee662d81355a3265792696270f",
+      "bytes": 25442
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "fe4fb5831d63dad1497ce769eb82cd6c74e1b85cf5dc3e55be11d7cbdc589e4f",
+      "bytes": 131993
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "bd8e18a340fa2a9dca36b65f876d80d10a39453bd086b920c1f8ca5ff62e22e4",
+      "bytes": 20823
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "sha256": "140c49924df214de510d4a2e3d741cbbc7a14e15a8a9a0ea071c8bfb0e0ab72d",
+      "bytes": 8619
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/fringe_repair_controller.py",
+      "sha256": "c9bae2ff2d572636fa42509813af251357d3587acfcb607b17eebbd009567133",
+      "bytes": 4285
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/fringe_repair_geometry.py",
+      "sha256": "9b3352b284e26cbd10a98f339a015c368801bad846cb0d3023136da911dcbd08",
+      "bytes": 6926
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/fringe_repair_host.py",
+      "sha256": "2668f4ec3aeb6c7ad36c96468dbfeb9c481860d1238e21eeda181923c0bf8434",
+      "bytes": 2367
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/fringe_repair_native.py",
+      "sha256": "aa53e8349fd7350e33fb7de9fb301e18460b3807a9a4608041f4788ba44be70f",
+      "bytes": 4460
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/fringe_repair_project.py",
+      "sha256": "33803bb620184130507b9087bf0e80fb02b49086763a07c932d5788521d47fd8",
+      "bytes": 2274
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/fringe_repair_render.py",
+      "sha256": "3bc3309670c9260efa085ad29d927e1e59bdf588c75bdb545ceab85afe5e2ecb",
+      "bytes": 7626
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/fringe_repair_review.py",
+      "sha256": "9ade4b43d3f15fdcee7a5ff3d98f6a171126a92fd064da74aa553ff541cc4296",
+      "bytes": 8366
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/fringe_repair_scope.py",
+      "sha256": "4e43b6fc800d6755048f759ea980ec42410e595aac480e4e93c1cbd4f08b795f",
+      "bytes": 1383
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/fringe_repair_state.py",
+      "sha256": "f8f7ab2d2737f51eb543314d22c02f9ac76f87be529bf0468a4aa4a37ee6c01b",
+      "bytes": 6459
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_quality.py",
+      "sha256": "9ef1fae1b83aae12524e74885403baa0cd48f5cf61a93011da1bcd191ae23059",
+      "bytes": 6444
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/inspection_worker.py",
+      "sha256": "3f1f3fa2153082f1f95df249c583ad0b01415468bc539c48d7f4f4209729405d",
+      "bytes": 11114
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/master16_policy.py",
+      "sha256": "77b85d09cf2b1d71c668855a77b4e01a91312a53f24f0f7b2393230f24af26d3",
+      "bytes": 12082
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/optics_auto_scope.py",
+      "sha256": "3c39ce02a87809c1ddb629d7d811edf7532e353057d3fcedec6def8390786564",
+      "bytes": 3982
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_export.py",
+      "sha256": "9c4f86b22b9c851a58434777872f5b0354df105b257dffb202568aa95733ec60",
+      "bytes": 2013
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_runtime.py",
+      "sha256": "853aab6a00a844514ac53ee8acb6bbfa890aa7c07988199bda176fdd49670bc4",
+      "bytes": 8669
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preview_lifecycle.py",
+      "sha256": "c568861ee8047545422109926efc87992e8570822d9302cdee0f425c7cf67c22",
+      "bytes": 1533
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "a68b5c7f612ac4c1d00b96a475cc12de2a3c25e8b025fb93a5e513ff189830ef",
+      "bytes": 77993
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "0628865373cf19d24d00e5d7e79634922889c9797da8036a6dc36f29f40f0c43",
+      "bytes": 42743
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "72c002ea339571d2f4762ec2397bd46c50c38af4d3c4562b98f445ad31ad01c4",
+      "bytes": 465452
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "e4d24947563ca593ebf1aaef624631b47507dbc95c6484bf9798b99dcfd28a26",
+      "bytes": 135012
+    },
+    {
+      "path": "engine/tests/fringe_repair_fixtures/README.md",
+      "sha256": "5f00c89d362edcc44c8b87434ddaf48d6de8a4953a44855561374bac2751cbcb",
+      "bytes": 1346
+    },
+    {
+      "path": "engine/tests/fringe_repair_fixtures/test_geometry_unrun.py",
+      "sha256": "941b4fdc83cbf25603287e86cc20d12e7b76418a81e4306f2f65a9dc80789118",
+      "bytes": 5341
+    },
+    {
+      "path": "engine/tests/fringe_repair_fixtures/test_render_unrun.py",
+      "sha256": "281e3f454e2a0816ed0e262ef4f6ae977e746279bbdbe8859fff1bda811cc83e",
+      "bytes": 12291
+    },
+    {
+      "path": "engine/tests/fringe_repair_fixtures/test_review_receipts_unrun.py",
+      "sha256": "e00b94909e1cb0872e8fa5a936e45d5593227fa6d837052ade896f95ba9406b2",
+      "bytes": 3684
+    },
+    {
+      "path": "engine/tests/fringe_repair_fixtures/test_state_scope_project_unrun.py",
+      "sha256": "0ecb0af776b80e2aa2590b13b16cf0679a87867c26c546b373ac7e3969a5d3e3",
+      "bytes": 9434
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "26f5ae4a4706308a2e79089280bf82f6b24b274d88ba839dd4f56422c3e14d0d",
+      "bytes": 19216
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "sha256": "15e815bdc4518c273dea2888a389ddce555ef36e7394e10efef44ea1001a69e7",
+      "bytes": 3511
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "a9882af46acace18b8f21bd911b77ded7fc9f72ea7723cef59291242b69c1906",
+      "bytes": 37597
+    },
+    {
+      "path": "ui/src-tauri/src/fringe_repair_api.rs",
+      "sha256": "58a37cc54e7dc92f87e7f595906a71d36b0049756ba210f93a1f32e02ad00f29",
+      "bytes": 8782
+    },
+    {
+      "path": "ui/src-tauri/src/fringe_repair_api_tests.rs",
+      "sha256": "df8cf9caa94931dd5150abd4ff647ee7bbe023888eed64c861eaf95de1d8b96b",
+      "bytes": 2285
+    },
+    {
+      "path": "ui/src-tauri/src/fringe_repair_audit.rs",
+      "sha256": "16ff3ebec87a2f3b8cd0a6b1cc3fefe68db9c476c3a2c852e3f7caa5fed35342",
+      "bytes": 10182
+    },
+    {
+      "path": "ui/src-tauri/src/fringe_repair_audit_tests.rs",
+      "sha256": "6fd0e92a8323f6cd7ea3f8c2be3ee525077e2558ae3e6f5094af07a6151f69ba",
+      "bytes": 6520
+    },
+    {
+      "path": "ui/src-tauri/src/fringe_repair_host.rs",
+      "sha256": "899b1d27cb3b24509da88878f901148eec9e929d1b375d72f12beda255c9a8da",
+      "bytes": 12983
+    },
+    {
+      "path": "ui/src-tauri/src/fringe_repair_host_tests.rs",
+      "sha256": "ee90d6f2a2e74699a4683fc93e2599be12a4daf6316ac75b75e98fed23f740ab",
+      "bytes": 9117
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "d69f8cf98a8ee93080bdb67f47b8b6acf3ca82d1819de3445a54458f961d40da",
+      "bytes": 101300
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "5d4979c5a3d01ac5973d247739d4d22bf669c8ee9b5cd9376b5ea55583ff1d9c",
+      "bytes": 9083
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "38e3b769fc30d7ceb9088951d259065aeff2c56eb2dd57a1ddd4428c300f5614",
+      "bytes": 149019
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "b9a51a16852a60420aa4ff47e8b6d6d99942adaf3570e40bbcbedfdb7de6442b",
+      "bytes": 59433
+    },
+    {
+      "path": "ui/src/fringeRepair/ACCEPTANCE_UNRUN.md",
+      "sha256": "7d45b3e4873c09d30a4f65b7a68771fb131822b4a4b1de39ac0eb116218aff99",
+      "bytes": 6059
+    },
+    {
+      "path": "ui/src/fringeRepair/FringeCoverageCanvas.tsx",
+      "sha256": "0798178693914d3a5b353c79fab7ac79c09d8ba1f4e134956bb33f712914b73e",
+      "bytes": 11829
+    },
+    {
+      "path": "ui/src/fringeRepair/FringeRepairPanel.tsx",
+      "sha256": "da1e3510c695ed06b6128850cc84c6af5278da4322274b9bd48f60ce6c5e38f3",
+      "bytes": 11874
+    },
+    {
+      "path": "ui/src/fringeRepair/fringeRepair.css",
+      "sha256": "dcbc85bb15a9eb05e6521b84e619b6b60c660c0c71204ee984c11ced1e5bc2ec",
+      "bytes": 3484
+    },
+    {
+      "path": "ui/src/fringeRepair/model.ts",
+      "sha256": "d89253d560bab9f788e006b0bfedbd4201c29f0731ea42c840a140a271159f4f",
+      "bytes": 8823
+    },
+    {
+      "path": "ui/src/fringeRepair/protocol.ts",
+      "sha256": "c9b7660d4af493a6366119a4ec8f17cad97c21edca593bbb5d8d41af2b2b8709",
+      "bytes": 3344
+    },
+    {
+      "path": "ui/src/fringeRepair/receipts.ts",
+      "sha256": "71c2b221bfa1f9a13479d2d99adb675f473d184201c84eaecdb67ae894d86bc1",
+      "bytes": 3363
+    },
+    {
+      "path": "ui/src/fringeRepair/useFringeRepairWorkflow.ts",
+      "sha256": "d1c3ba7995af9a4ea1e5aa6ec35bb9e99077b707e12c6978683f6e0bc00fd0e6",
+      "bytes": 4217
+    },
+    {
+      "path": "ui/src/fringeRepair/workflow.ts",
+      "sha256": "86ef1646fc12f257003a94c7a41c13795578fce5a6a64be9b4c59c2d35b65e9f",
+      "bytes": 15960
+    },
+    {
+      "path": "ui/src/fringeRepair/workflow.unrun.test.ts",
+      "sha256": "fd7a4f907f578a9bf0a02a83c7613503eeee1e3d746ae373bf92465276905b83",
+      "bytes": 9842
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "0f5dea055e8ea0204f44bbe15014201008491c993cbfc6791a3adc9f839c6cac",
+      "bytes": 99065
+    }
+  ],
+  "validation": {
+    "static_only": [
+      "Python AST parse",
+      "JSON parse",
+      "read-only source contract audits",
+      "git diff --check"
+    ],
+    "unrun": [
+      "build",
+      "compiler",
+      "typecheck",
+      "tests",
+      "inference",
+      "numerical acceptance",
+      "photographic quality",
+      "performance",
+      "package execution"
+    ],
+    "ceilings": {
+      "App.tsx": 2121,
+      "main.rs": 2040,
+      "server.py": 6984
+    }
+  },
+  "residuals": [
+    "Baked-in fringe restoration is not guaranteed by the source-guide algorithm.",
+    "Candidate review is full-source-rendered then downsampled; saved result uses original-size inspector.",
+    "Wider returned-source alpha/HDR pipeline remains explicitly unsupported, without clipping.",
+    "Receipts are application-process durable only; unknown outcomes remain query-only, with no blind retry.",
+    "Other handbook gaps, including spill removal, XMP process compatibility, generated passerby candidates and original-shadow extraction, remain open."
+  ]
+}

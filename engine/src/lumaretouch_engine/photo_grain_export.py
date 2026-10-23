@@ -9,6 +9,8 @@ def render_delivery(source,spec,*,renderer,device,tile,progress,bits,geometry):
     upstream=copy(spec)
     upstream.scale=1;upstream.sharpen_amount=0.;upstream.float_output=True
     full,stats=renderer(source,upstream,device=device,tile=tile,progress=progress,bits=bits,geometry=geometry)
+    if hasattr(upstream,'_fringe_repair_coverage'):
+        spec._fringe_repair_coverage=upstream._fringe_repair_coverage
     def cancelled():
         if progress:progress(0,1,0.)
         return False
@@ -24,6 +26,9 @@ def render_delivery(source,spec,*,renderer,device,tile,progress,bits,geometry):
     if not spec.float_output:
         maximum=65535 if bits==16 else 255
         out=np.rint(np.clip(out,0,1)*maximum).astype(np.uint16 if bits==16 else np.uint8)
+    from . import fringe_repair_state as FS
+    fringe_active=FS.active(spec.fringe_repair) if spec.fringe_repair is not None else False
     return out,{**stats,'w':out.shape[1],'h':out.shape[0],'px':out.shape[0]*out.shape[1],
                 'scale':int(spec.scale),'photo_grain_delivery':'source-edit-then-resize-sharpen',
+                'fringe_repair_delivery':'source-edit-then-resize-sharpen' if fringe_active else None,
                 'sharpen_amount':float(spec.sharpen_amount)}

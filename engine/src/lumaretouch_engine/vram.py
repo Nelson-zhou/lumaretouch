@@ -662,6 +662,9 @@ class PreviewPipeline:
         # Active editor is rendered on original source below, never this proxy.
         out = self.photo_detail.apply_t(out)
         out = self.extended_tone.finish_t(out)
+        # The host's source callback also owns full-resolution fringe repair.
+        # Never apply the fringe detector to this proxy or inside export tiles:
+        # the callback supplies its completed source-sized finishing pipeline.
         source_output=getattr(self,"photo_grain_source_output",None)
         if source_output is not None:
             grained=source_output()

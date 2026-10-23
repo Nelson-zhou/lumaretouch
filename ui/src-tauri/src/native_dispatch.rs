@@ -5,6 +5,7 @@ use crate::AppState;
 impl AppState {
     pub(crate) fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
         self.common_background_preview.lock().map_err(|_|"common background preview lock poisoned")?.invalidate();
+        self.fringe_repair_preview.lock().map_err(|_|"fringe repair preview lock poisoned")?.invalidate();
         self.source_patch_capture.lock().map_err(|_|"source patch capture lock poisoned")?.invalidate();
         self.recovery_preview.lock().map_err(|_|"recovery preview lock poisoned")?.invalidate();
         self.optics_preview.lock().map_err(|_|"optics preview lock poisoned")?.invalidate();
@@ -31,6 +32,7 @@ impl AppState {
         // 宿主不数步数、不自己判哪条命令算编辑——名单由引擎的 ready 报
         let name = cmd.get("cmd").and_then(|c| c.as_str()).unwrap_or("").to_string();
         if name == "common_background" { crate::common_background_readback::precheck_client(&cmd)?; }
+        if name == "fringe_repair" { crate::fringe_repair_audit::precheck_client(&cmd)?; }
         // Arm selection and owned proposal queries/cancellation do not alter
         // image pixels or revoke unrelated capture lifetimes.
         // A library view changes neither image history nor any capture lease.
@@ -59,6 +61,9 @@ impl AppState {
         // Every other mutation still invalidates it before entering the queue.
         if name!="hello" && name!="inspection_snapshot" && name!="common_background" {
             self.common_background_preview.lock().map_err(|_|"common background preview lock poisoned")?.invalidate();
+        }
+        if name!="hello" && name!="inspection_snapshot" && name!="fringe_repair" {
+            self.fringe_repair_preview.lock().map_err(|_|"fringe repair preview lock poisoned")?.invalidate();
         }
         if name!="hello" && name!="inspection_snapshot" {self.optics_preview.lock().map_err(|_|"optics preview lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {
@@ -97,6 +102,7 @@ impl AppState {
             "optics" => crate::optics_api::enqueue(self, handle, cmd)?,
             "studio_background" => crate::studio_background_api::enqueue(self, handle, cmd)?,
             "common_background" => crate::common_background_api::enqueue(self, handle, cmd)?,
+            "fringe_repair" => crate::fringe_repair_api::enqueue(self, handle, cmd)?,
             "manual_liquify" => crate::manual_liquify_api::enqueue(self, handle, cmd)?,
             "effect_recovery" => crate::effect_recovery_api::enqueue(self, handle, cmd)?,
             "local_grade_live" => crate::local_grade_live_api::enqueue(self, handle, cmd)?,

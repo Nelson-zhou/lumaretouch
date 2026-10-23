@@ -86,6 +86,14 @@ class ProjectError(ValueError):
     （`except (ValueError, ...)`）本来就吃它，不需要为持久层再开一条臂。"""
 
 
+def _validate_fringe_records(value, *, allowed=True):
+    from .fringe_repair_project import validate_records
+    try:
+        validate_records(value, allowed=allowed)
+    except (ValueError, TypeError, KeyError, OverflowError) as error:
+        raise ProjectError(f"Invalid fringe repair records: {error}") from error
+
+
 def _validate_creative_records(value, assets=None, *, allowed=True, blob_cache=None):
     """Creative pixels are required replay data, never a best-effort drop."""
     from .creative_document_project import validate_records
@@ -214,6 +222,7 @@ def validate(p: object) -> None:
     try: validate_managed_import(p)
     except (ValueError,TypeError,KeyError,AttributeError) as error: raise ProjectError(str(error)) from error
     sv = p.get("schema_version")
+    _validate_fringe_records(p, allowed=(sv == SCHEMA))
     from .primary_calibration_adapters import validate_records as validate_primary
     try:validate_primary(p,allowed=sv in (PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
     except (ValueError,TypeError,KeyError,RuntimeError,OSError) as error:raise ProjectError(str(error)) from error
@@ -324,6 +333,15 @@ def _migrate(project):
     """Own nested versions; preserve legacy pixels and record explicit heal kinds."""
     result = copy.deepcopy(project)
     previous = result["schema_version"]
+    _validate_fringe_records(result, allowed=(previous == SCHEMA))
+    from .fringe_repair_project import migrate_states as migrate_fringe
+    # v23 remains the logical-document contract. Optional new state starts
+    # disabled in every retained old document/history, never library-wide on.
+    migrate_fringe(result)
+    for row in result['docs']:
+        for version in row['versions']:
+            if version.get('recipe') is not None:
+                migrate_fringe(version['recipe'], root=True)
     if previous not in (COLOUR_EDITOR_SCHEMA, SCHEMA):
         from .manual_liquify_state import migrate_legacy_states as migrate_manual
         from .studio_background_state import migrate_legacy_states as migrate_studio
@@ -654,6 +672,7 @@ def _from_png_bytes(raw: bytes, shape: list[int]) -> np.ndarray:
 
 def encode(value: object, assets: dict, dropped: list, at: str) -> object:
     """Validate the complete creative subtree before any asset-table mutation."""
+    _validate_fringe_records(value)
     _validate_creative_records(value)
     staged_assets = dict(assets)
     try:
@@ -823,6 +842,7 @@ def _encode_blob(raw: bytes, assets: dict, dropped: list, at: str, *, kind: str,
 def decode(value: object, assets: dict, dropped: list, at: str,
            dc_types: dict | None = None) -> object:
     """Strictly preflight creative bytes before the generic best-effort codec."""
+    _validate_fringe_records(value)
     creative_cache = {}
     _validate_creative_records(value, assets, blob_cache=creative_cache)
     return _decode(value, assets, dropped, at, dc_types, creative_cache)
@@ -1057,6 +1077,7 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
     """
     if recipe is not None:
         try:
+            _validate_fringe_records(recipe, allowed=(project.get("schema_version") == SCHEMA))
             _validate_creative_records(recipe, allowed=(project.get("schema_version") == SCHEMA))
             recipe = WB.normalize_state(recipe)
             if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA):
@@ -1162,6 +1183,7 @@ def active_recipe(project: dict, path: str | None = None, dc_types: dict | None 
     for v in row.get("versions", []):
         if v["id"] == vid:
             recipe = v.get("recipe")
+            _validate_fringe_records(recipe, allowed=(project.get("schema_version") == SCHEMA))
             _validate_creative_records(recipe, project.get("assets") or {},
                                        allowed=(project.get("schema_version") == SCHEMA))
             if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA) and recipe is not None:

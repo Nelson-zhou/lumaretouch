@@ -1,6 +1,7 @@
 """One neutral RGB16 pass-through policy for live and frozen export state."""
 from .ops import curves as CURVES,levels as LEVELS
 from . import photo_grain_state as PGS
+from . import fringe_repair_state as FRS
 from . import colour_editor_state as CES
 from . import white_balance_recipe as WB,local_grade_layers as LG,effect_recovery_state as ERS
 from . import manual_liquify_state as MLS,studio_background_state as SBS,optics_state as OPS,sky_replacement_state as SKS
@@ -31,6 +32,7 @@ class Master16PolicyMixin:
         fields['_creative_base'] = snap.get('creative_base')
         fields["_colour_editor"] = CES.check(snap["colour_editor"]) if "colour_editor" in snap else CES.neutral()
         fields["_photo_grain"] = PGS.check(snap["photo_grain"]) if "photo_grain" in snap else PGS.neutral()
+        fields["_fringe_repair"] = FRS.check(snap["fringe_repair"]) if "fringe_repair" in snap else FRS.neutral()
         fields["_bg"] = snap.get("_bg", {})
         fields["_local_grade_layers"] = LG.check(snap.get("local_grade_groups"))
         fields["_effect_recovery"] = ERS.check(snap.get("effect_recovery"))
@@ -69,6 +71,7 @@ class Master16PolicyMixin:
             b.append('创意合成底图（须使用真实全尺寸合成像素，不能直通原文件）')
         if CES.active(getattr(self,"_colour_editor",CES.neutral())):b.append("连续色彩编辑器（全源图统一目标，不可直通）")
         if PGS.active(getattr(self,"_photo_grain",PGS.neutral())):b.append("确定性源像素颗粒（须完整浮点编辑，不能直通）")
+        if FRS.active(getattr(self,"_fringe_repair",FRS.neutral())):b.append("黑白边缘修复（逐图重算边缘支持，不可直通）")
         from .body_pose_render import fastpath_blocker
         if fastpath_blocker(getattr(self,"_body_pose_bank",None)):b.append("身体几何（源图姿态与完整尺寸共同映射，不可直通）")
         if any(layer['enabled'] for layer in LG.check(getattr(self, '_local_grade_layers', None))['layers']):

@@ -1,6 +1,7 @@
 from copy import deepcopy
 from . import id_background_state as IDBS
 from . import photo_grain_state as PGS
+from . import fringe_repair_state as FRS
 from . import primary_calibration_state as PCS
 from . import colour_grading_state as CGS
 from . import selective_colour_state as SCSL
@@ -30,7 +31,7 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
                     grade_scope=str(st.get("_grade_scope") or "all"),
                     grade_mask=st.get("_grade_mask"), local_masks=LM.check(st.get("_local_masks")), local_mask_owner=LM.owner_from_state(st), local_grade_groups=LG.check(st.get("_local_grade_layers")),
                     effect_recovery=ERS.check(st.get("_effect_recovery")), manual_liquify=MLS.check(st.get("_manual_liquify")), studio_background=SBS.check(st.get("_studio_background")), optics=OPS.check(st.get("_optics")), sky_replacement=SKS.check(st.get("_sky_replacement")), lip_makeup=LIPS.check(st.get("_lip_makeup")), brow_shape=BROWS.check(st.get("_brow_shape")), brow_shape_owner=st.get("_brow_shape_owner"), nose_shape=NOSES.check(st.get("_nose_shape")), nose_shape_owner=st.get("_nose_shape_owner"), eye_shape=EYES.check(st.get("_eye_shape")), eye_shape_owner=st.get("_eye_shape_owner"), reference_color=RCS.check(st.get("_reference_color")), mouth_shape=MOUTHS.check(st.get("_mouth_shape")), mouth_shape_owner=st.get("_mouth_shape_owner"),
-                    extended_tone=ETS.check(st.get("_extended_tone")), photo_detail=PDS.check(st.get("_photo_detail")), photo_grain=PGS.from_state(st), colour_grading=CGS.from_state(st), selective_colour=SCSL.from_state(st), colour_editor=CES.from_state(st), primary_calibration=PCS.from_state(st),
+                    extended_tone=ETS.check(st.get("_extended_tone")), photo_detail=PDS.check(st.get("_photo_detail")), photo_grain=PGS.from_state(st), fringe_repair=FRS.from_state(st), colour_grading=CGS.from_state(st), selective_colour=SCSL.from_state(st), colour_editor=CES.from_state(st), primary_calibration=PCS.from_state(st),
                     exposure=tuple(st.get("_exposure", (0.0,) * 7)),
                     exposure_ref_k=st.get("_exposure_ref_k"),
                     wb_options=WB.normalize_state(st)["_wb_options"],
@@ -52,6 +53,22 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
                     precompute=st.get("_precompute"),
                     device=device, scale=scale, upscale_backend=upscale_backend,
                     sharpen=sharpen)
+    if snap['fringe_repair']['source'] is not None:
+        from .creative_derived_source import binding as source_binding
+        path = source_path or self._doc_path
+        before = LM.file_stamp(path)
+        dimensions = None
+        if creative_base is None:
+            rows = [row for row in self._docs if row.get('document_id') == document_id and row.get('path') == path]
+            if document_id is None or len(rows) != 1:
+                raise ValueError('Fringe repair snapshot lacks its exact source document')
+            dimensions = (rows[0].get('src_w'), rows[0].get('src_h'))
+        source = source_binding(st, path, dimensions)
+        if source != snap['fringe_repair']['source'] or LM.file_stamp(path) != before:
+            raise ValueError('Fringe repair snapshot source changed or belongs to another image')
+        snap['fringe_repair_source'] = source
+        snap['fringe_repair_path'] = path
+        snap['fringe_repair_stamp'] = list(before)
     from .creative_derived_repairs import validate_stacks
     validate_stacks(st)
     from .body_pose_render import capture as capture_body

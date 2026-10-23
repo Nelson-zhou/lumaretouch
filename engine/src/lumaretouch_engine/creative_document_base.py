@@ -161,6 +161,8 @@ def require_rebound_snapshot(snapshot):
     if float(snapshot.get('fabric_amount', 0)):
         from .creative_derived_fabric import verify_snapshot as verify_fabric
         verify_fabric(snapshot)
+    from .fringe_repair_state import verify_source as verify_fringe, neutral as neutral_fringe
+    verify_fringe(neutral_fringe() if snapshot.get('fringe_repair') is None else snapshot['fringe_repair'],snapshot)
     from .creative_derived_common_background import verify_snapshot as verify_common
     verify_common(snapshot)
     if ER.check(snapshot.get('effect_recovery'))['targets']:
@@ -198,7 +200,7 @@ def require_rebound_spec(spec):
         'fabric_amount', 'creative_fabric_context', 'local_masks', 'local_grade_groups', 'creative_mask_context', 'effect_recovery', 'creative_recovery_context', 'manual_liquify',
         'studio_background', 'creative_studio_context', 'id_background', 'id_background_bundle', 'creative_id_background_context', 'optics', 'sky_replacement', 'creative_sky_context',
         'reference_color', 'semantic_colour', 'lip_makeup', 'brow_shape',
-        'nose_shape', 'eye_shape', 'mouth_shape', 'colour_editor')}
+        'nose_shape', 'eye_shape', 'mouth_shape', 'colour_editor', 'fringe_repair')}
     snapshot['params']={key:getattr(spec,key) for key in ('radius','eps','texture_radius','broad_gain','mid_gain','detail_gain')}
     snapshot.update(repair_ops=spec.repair, light_ops=spec.light,
         deform={'amounts': spec.deform_amounts}, enhance={'amounts': spec.enhance},
@@ -211,14 +213,14 @@ def require_rebound_spec(spec):
 def _neutral_snapshot(snapshot):
     """Conservative neutral gate for lossless alpha/HDR canonical passthrough."""
     from .master16_policy import Master16PolicyMixin
-    from . import extended_tone_state as ET, photo_detail_state as PD
+    from . import extended_tone_state as ET, photo_detail_state as PD, fringe_repair_state as FR
     from . import colour_grading_state as CG, selective_colour_state as SC
     from . import primary_calibration_state as PC, id_background_state as ID
     bare = dict(snapshot)
     bare['creative_base'] = None
     if Master16PolicyMixin._master16_snapshot_blockers(bare):
         return False
-    if ET.active(bare.get('extended_tone')) or PD.active(bare.get('photo_detail')) or ID.active(bare.get('id_background')):
+    if ET.active(bare.get('extended_tone')) or PD.active(bare.get('photo_detail')) or ID.active(bare.get('id_background')) or FR.active(bare.get('fringe_repair') or FR.neutral()):
         return False
     for module, key in ((CG, 'colour_grading'), (SC, 'selective_colour'), (PC, 'primary_calibration')):
         if module.active(bare.get(key) if bare.get(key) is not None else module.neutral()):
@@ -346,7 +348,8 @@ def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False
         from . import id_background_runtime as ident, optics_runtime as optics
         from . import sky_replacement_runtime as sky, body_pose_render as body
         shape = source_shape(snap, source.shape[:2])
-        for owner in (LM, groups, recovery, manual, studio, ident, optics, sky, body):
+        from . import fringe_repair_render as fringe
+        for owner in (LM, groups, recovery, manual, studio, ident, optics, sky, body, fringe):
             owner.check_export_decode(snap, path, before, shape)
         from .reference_color_runtime import verify_export
         verify_export(snap, path, shape)

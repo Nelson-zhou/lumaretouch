@@ -223,6 +223,9 @@ class ExportSpec:
     wb_options: dict | None = None
     photo_grain: dict | None = None
     photo_detail: dict | None = None
+    fringe_repair: dict | None = None
+    fringe_repair_path: str | None = None
+    fringe_repair_stamp: list | None = None
     extended_tone: dict | None = None
     colour_grading: dict | None = None
     selective_colour: dict | None = None
@@ -319,6 +322,8 @@ class ExportSpec:
         self.extended_tone=check_tone(self.extended_tone)
         from .photo_detail_state import check as check_detail
         self.photo_detail=check_detail(self.photo_detail)
+        from .fringe_repair_state import check as check_fringe, neutral as neutral_fringe
+        self.fringe_repair=neutral_fringe() if self.fringe_repair is None else check_fringe(self.fringe_repair)
         from .photo_grain_state import check as check_grain, neutral as neutral_grain
         self.photo_grain=neutral_grain() if self.photo_grain is None else check_grain(self.photo_grain)
         from .colour_grading_state import check as check_grading, neutral as neutral_grading
@@ -793,6 +798,8 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry):
         # The input picker consumes coverage through its caller-owned spec.
         # Source resolution uses a private shallow copy, not a different owner.
         original._colour_editor_capture_coverage = resolved._colour_editor_capture_coverage
+    if hasattr(resolved, '_fringe_repair_coverage'):
+        original._fringe_repair_coverage = resolved._fringe_repair_coverage
     original.provenance_result = (np.zeros(frame.shape[:2], dtype=bool)
         if original.provenance_output else None)
     if not original.float_output:
@@ -827,7 +834,13 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     editor_mode=getattr(spec,'_colour_editor_mode','render')
     if editor_mode not in ('render','input','view'): raise ExportError('Invalid editor render mode')
     editor_needed=editor_active(editor_recipe) or editor_mode!='render'
-    if (grain_active(grain_recipe) or editor_needed) and not getattr(spec,'_extended_tone_prepass',False):
+    from . import fringe_repair_state as fringe_state, fringe_repair_render as fringe_render
+    fringe_recipe=fringe_state.neutral() if spec.fringe_repair is None else fringe_state.check(spec.fringe_repair)
+    fringe_render.verify_export(spec,src_u8.shape[:2])
+    fringe_active=fringe_state.active(fringe_recipe)
+    fringe_needed=(fringe_active or getattr(spec,'_fringe_repair_capture_coverage',False)) and editor_mode=='render' and not getattr(spec,'_extended_tone_prepass',False)
+    if fringe_needed:fringe_render.admit(src_u8.shape[1],src_u8.shape[0],geometry)
+    if (grain_active(grain_recipe) or editor_needed or fringe_needed) and not getattr(spec,'_extended_tone_prepass',False):
         from .photo_grain_runtime import admit
         admit(src_u8.shape[1],src_u8.shape[0],int(spec.scale))
         # Grain is a source-resolution effect. Delivery resize/sharpen follow the
@@ -893,7 +906,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     verify_body_source(spec)
     verify_hair_source(spec)
     semantic_stage=SemanticColourStage(spec.semantic_colour,binding=spec.semantic_colour_binding)
-    floating=creative_source or detail_active(detail_recipe) or bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass or colour_grading_stage.active or selective_colour_stage.active or primary_calibration_stage.active or grain_active(grain_recipe) or editor_needed
+    floating=creative_source or detail_active(detail_recipe) or bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass or colour_grading_stage.active or selective_colour_stage.active or primary_calibration_stage.active or grain_active(grain_recipe) or editor_needed or fringe_needed
     if spec.provenance_output and (not spec.float_output or spec.scale!=1): raise ExportError("来源支持只用于原尺寸浮点分析")
     optical_budget = 0
     if optical:
@@ -1026,6 +1039,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     plan = UpscalePlan(h, w, scale)          # 表只算一次，每块取自己那一段
     out_h, out_w = plan.out_h, plan.out_w
     out = np.zeros((h,w,3) if optical else (out_h,out_w,3), np.float32 if floating else np.uint8)
+    fringe_guide=np.empty((h,w,3),np.float32) if fringe_needed and fringe_active else None
     support=np.zeros((h,w,3),np.float32) if spec.provenance_output else None
     editor_mask=None
     if editor_needed and editor_recipe['scope']=='local' and not tone_prepass:
@@ -1171,6 +1185,12 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             coverage_t=pipe.manual_liquify.apply(coverage_t)
             mapped=coverage_t[0].permute(1,2,0).detach().cpu().numpy()
             editor_mask[y0:y1,x0:x1]=mapped[y0-cy0:y1-cy0,x0-cx0:x1-cx0]
+        if fringe_guide is not None:
+            # Same tile source, complete composed image warp and manual field.
+            # Keep only the exact interior, never independent tile edge support.
+            guide=fringe_render.guide_tile(pipe)
+            fringe_guide[y0:y1,x0:x1]=guide[y0-cy0:y1-cy0,x0-cx0:x1-cx0]
+            del guide
         if support is not None:
             from .reference_color_provenance import source_support
             evidence=source_support(pipe,(cy0,cx0,cy1,cx1),(h,w),spec)
@@ -1211,6 +1231,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         from .optics_runtime import apply_export
         from .optics_export import upscale as optical_upscale
         out,optics_facts=apply_export(out,spec,cancelled=mask_cancelled)
+        if fringe_guide is not None:
+            fringe_guide=fringe_render.optical_guide(fringe_guide,spec,cancelled=mask_cancelled)
         if editor_mask is not None:
             from .reference_color_provenance import optical_support
             editor_mask=optical_support(editor_mask,spec)
@@ -1234,11 +1256,17 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         from .ops.geometry import crop_rotate_np, is_identity
         t_geometry = time.perf_counter()
         out = crop_rotate_np(out, *geometry, uint8=False)
+        if fringe_guide is not None:fringe_guide=crop_rotate_np(fringe_guide,*geometry,uint8=False)
         if support is not None: support=crop_rotate_np(support,*geometry,uint8=False)
         if editor_mask is not None:editor_mask=crop_rotate_np(editor_mask,*geometry,uint8=False)
         out_h, out_w = out.shape[:2]
         geometry_facts = {"crop_applied": not is_identity(*geometry),
                           "geometry_ms": round((time.perf_counter() - t_geometry) * 1000, 2)}
+    if fringe_needed:
+        # Arbitrary-angle NumPy crop uses f64 sampling. The established edit
+        # domain and native finishing ABI are f32, not an RGB8 detour.
+        out=np.ascontiguousarray(out,dtype=np.float32)
+        if fringe_guide is not None:fringe_guide=np.ascontiguousarray(fringe_guide,dtype=np.float32)
     out=reference_stage.apply_np(out)
     out=semantic_stage.apply_np(out)
     out=colour_grading_stage.apply_np(out,cancelled=tone_cancelled)
@@ -1270,6 +1298,9 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     # through all final source/asset validation below before publication.
     if editor_mode=='render':
         out=PhotoDetailStage(detail_recipe,scale=float(spec.scale),cancelled=tone_cancelled).apply_np(out)
+        if fringe_needed:
+            out=fringe_render.apply_export(out,fringe_guide,spec,source_size=(w,h),geometry=geometry,cancelled=tone_cancelled)
+            del fringe_guide
         if grain_active(grain_recipe):
             from .photo_grain_native import apply_canvas
             out=apply_canvas(np.ascontiguousarray(out,dtype=np.float32),grain_recipe,source_size=(w,h),geometry=geometry,cancelled=tone_cancelled)
@@ -1277,6 +1308,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     verify_semantic_source(spec)
     verify_body_source(spec)
     verify_hair_source(spec)
+    fringe_render.verify_export(spec,(h,w))
     if support is not None: spec.provenance_result=np.all(support>=.999999,axis=2)
     if bits == 16 and not spec.float_output:
         out = quantize16_np(out)
@@ -1301,6 +1333,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     body_outcome=export_outcome(people_prepared,out,(w,h))
     return out, {
         "body_pose":body_outcome,
+        "fringe_repair": {"active":bool(fringe_needed and fringe_active),
+            "algorithm":fringe_recipe['algorithm'],"source_resolution":bool(fringe_needed),
+            "guide":"repaired-effective-source-through-real-geometry" if fringe_needed and fringe_active else None,
+            "coverage":"processing-eligibility-not-candidate-detection" if fringe_needed else None},
         "background_matte_contract": ("canonical-float-frozen-reference-key-v2" if spec.common_background_key.get('version')==2 else "full-source-frozen-reference-key-v1") if spec.common_background_key is not None else ("legacy-proxy-resampled" if spec.bg_matte is not None else None),
         "bits": bits, "warp_precision": "float64" if bits == 16 else "float32",
         "w": out_w, "h": out_h, "px": out_w * out_h, "src_mb": round(h * w * 3 * src_u8.dtype.itemsize / 1e6, 2),

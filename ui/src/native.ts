@@ -17,7 +17,7 @@ export function notifyInspectionEditIntent(){
   if(typeof window!=='undefined')window.dispatchEvent(new Event(INSPECTION_EDIT_INTENT));
 }
 const inspectionMutations=new Set(['photo_grain_request','photo_detail_request','primary_calibration_request','selective_colour_request','colour_grading_request','extended_tone_request','start_engine','shutdown_engine','load_image','set_strength','precompute',
-  'inpaint','light','deform','lut','grade','enhance','lip_makeup','brow_shape','nose_shape','eye_shape','mouth_shape','background','common_background','exposure','hsl','curves','levels','fabric','crop','compare',
+  'inpaint','light','deform','lut','grade','enhance','lip_makeup','brow_shape','nose_shape','eye_shape','mouth_shape','background','common_background','fringe_repair','exposure','hsl','curves','levels','fabric','crop','compare',
   'shoulder_shape','leg_shape','waist_shape','leg_length','neck_shape','arm_shape','people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
   const mutation=inspectionMutations.has(command)&&!(command==='session'&&(args as Record<string,unknown>|undefined)?.action==='query');
@@ -1004,6 +1004,7 @@ export interface EngineStatus {
     manual_liquify_preview_protocol?: number;
     studio_background_protocol?: number;
     common_background_protocol?: number;
+    fringe_repair_protocol?: number;
     common_background_readback_protocol?: number;
     id_background_protocol?: number;
     manual_liquify_protocol?: number;

@@ -25,7 +25,7 @@ class PreviewLifecycleMixin:
             owner = self.__dict__.get(key)
             if owner is not None:
                 owner.close()
-        for key in ('_prompted_mask_owner', '_effect_recovery_preview_owner', '_common_background_preview_owner'):
+        for key in ('_prompted_mask_owner', '_effect_recovery_preview_owner', '_common_background_preview_owner', '_fringe_repair_preview_owner'):
             owner = self.__dict__.get(key)
             if owner is not None:
                 owner.cancel()

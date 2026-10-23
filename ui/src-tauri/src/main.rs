@@ -97,6 +97,9 @@ mod studio_background_api;
 mod common_background_host;
 mod common_background_api;
 mod common_background_readback;
+mod fringe_repair_host;
+mod fringe_repair_api;
+mod fringe_repair_audit;
 mod id_background_api;
 mod sky_replacement_host;
 mod sky_replacement_api;
@@ -278,6 +281,8 @@ pub struct AppState {
     studio_background_preview: Mutex<studio_background_host::StudioBackgroundPreviewHost>,
     common_background: Mutex<common_background_host::CommonBackgroundHost>,
     common_background_preview: Mutex<common_background_host::CommonBackgroundPreviewHost>,
+    fringe_repair: Mutex<fringe_repair_host::FringeRepairHost>,
+    fringe_repair_preview: Mutex<fringe_repair_host::FringeRepairPreviewHost>,
     manual_liquify: Mutex<manual_liquify_host::LiquifyHost>,
     liquify_preview: Mutex<manual_liquify_host::LiquifyPreviewHost>,
     effect_recovery: Mutex<effect_recovery_host::RecoveryHost>,
@@ -410,6 +415,8 @@ impl AppState {
             studio_background_preview: Mutex::new(studio_background_host::StudioBackgroundPreviewHost::default()),
             common_background: Mutex::new(common_background_host::CommonBackgroundHost::default()),
             common_background_preview: Mutex::new(common_background_host::CommonBackgroundPreviewHost::default()),
+            fringe_repair: Mutex::new(fringe_repair_host::FringeRepairHost::default()),
+            fringe_repair_preview: Mutex::new(fringe_repair_host::FringeRepairPreviewHost::default()),
             manual_liquify: Mutex::new(manual_liquify_host::LiquifyHost::default()),
             liquify_preview: Mutex::new(manual_liquify_host::LiquifyPreviewHost::default()),
             effect_recovery: Mutex::new(effect_recovery_host::RecoveryHost::default()),
@@ -528,6 +535,7 @@ impl AppState {
 
     pub fn on_lut_ready(&self, v: &Value) {
         self.common_background_preview.lock().unwrap().invalidate();
+        self.fringe_repair_preview.lock().unwrap().invalidate();
         self.source_patch_capture.lock().unwrap().invalidate();
         self.recovery_preview.lock().unwrap().invalidate(); self.liquify_preview.lock().unwrap().invalidate(); self.studio_background_preview.lock().unwrap().invalidate(); self.optics_preview.lock().unwrap().invalidate(); self.sky_preview.lock().unwrap().invalidate();
         self.sky_semantic.lock().unwrap().invalidate();
@@ -1703,6 +1711,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
 #[tauri::command]
 fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
     state.common_background_preview.lock().unwrap().invalidate();
+    state.fringe_repair_preview.lock().unwrap().invalidate();
     state.source_patch_capture.lock().unwrap().invalidate();
     state.recovery_preview.lock().unwrap().invalidate(); state.liquify_preview.lock().unwrap().invalidate(); state.studio_background_preview.lock().unwrap().invalidate(); state.optics_preview.lock().unwrap().invalidate(); state.sky_preview.lock().unwrap().invalidate();
     state.sky_semantic.lock().unwrap().invalidate();
@@ -2001,6 +2010,9 @@ fn main() {
             common_background_api::common_background_preview, common_background_api::common_background_preview_status,
             common_background_readback::common_background_readback, common_background_readback::common_background_readback_status,
             common_background_readback::common_background_audit,
+            fringe_repair_api::fringe_repair, fringe_repair_api::fringe_repair_result,
+            fringe_repair_api::fringe_repair_preview, fringe_repair_api::fringe_repair_preview_status,
+            fringe_repair_audit::fringe_repair_audit,
             manual_liquify_api::manual_liquify, manual_liquify_api::manual_liquify_result,
             manual_liquify_api::manual_liquify_preview, manual_liquify_api::manual_liquify_preview_status,
             effect_recovery_api::effect_recovery, effect_recovery_api::effect_recovery_result,

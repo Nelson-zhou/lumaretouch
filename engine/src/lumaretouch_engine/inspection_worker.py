@@ -133,6 +133,8 @@ def render(directory):
     check_export_decode(snap, path, group_source_stamp, (decoded.h, decoded.w))
     recovery.check_export_decode(snap, path, recovery_source_stamp, (decoded.h, decoded.w))
     manual.check_export_decode(snap, path, manual_source_stamp, (decoded.h, decoded.w))
+    from .fringe_repair_render import check_export_decode as fringe_decode
+    fringe_decode(snap,path,manual_source_stamp,(decoded.h,decoded.w))
     studio.check_export_decode(snap, path, manual_source_stamp, (decoded.h, decoded.w))
     id_background.check_export_decode(snap, path, manual_source_stamp, (decoded.h, decoded.w))
     optics.check_export_decode(snap,path,manual_source_stamp,(decoded.h,decoded.w))
