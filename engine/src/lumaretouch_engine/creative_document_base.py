@@ -1,0 +1,340 @@
+"""Non-destructive bridge between immutable creative pixels and the photo editor.
+
+The original path/bytes are never replaced. A returned base is a canonical asset
+record, not a pathname, display proxy, or live ndarray. Only presentation may
+matte/clip its alpha and HDR. The existing RGB photo/export pipeline currently
+accepts opaque SDR bases and explicitly rejects unsupported alpha/HDR instead
+of quietly flattening or clipping them. Numerical bridges are packaged Rust.
+"""
+from copy import deepcopy
+
+from .creative_document_assets import validate_asset, make_asset, MAX_ORIGINAL_BYTES, MAX_PIXELS
+
+DISPLAY_MATTE_LINEAR = (0.18, 0.18, 0.18)
+DEFAULT_WORK_BYTES = 512_000_000
+MAX_WORK_BYTES = 4_000_000_000
+
+
+def check(record):
+    if record is None:
+        return None
+    validate_asset(record)
+    if record['kind'] != 'rgba':
+        raise ValueError('A creative photo baseline must be a full RGBA asset')
+    return record
+
+
+def from_state(state):
+    """State and frozen export snapshots intentionally use different key names."""
+    if type(state) is not dict:
+        raise ValueError('Creative baseline requires an owned document state')
+    return check(state.get('_creative_base') if '_creative_base' in state else state.get('creative_base'))
+
+
+def source_shape(state, original_hw):
+    record = from_state(state)
+    return (record['height'], record['width']) if record is not None else tuple(original_hw)
+
+
+def _pixels(record):
+    import numpy as np
+    record = check(record)
+    if record is None:
+        raise ValueError('Missing creative baseline')
+    # Immutable bytes-backed view. No integer quantization and no mutable cache.
+    return np.frombuffer(record['content'], dtype='<f4').reshape(record['height'], record['width'], 4)
+
+
+def export_source(record, *, cancelled=lambda: False, max_bytes=DEFAULT_WORK_BYTES):
+    """Exact full-resolution f32 working RGB, with no implicit matte/tone map.
+
+    RGB8/RGB16 encoding is performed only at the ordinary final export boundary.
+    Native rejection preserves the canonical asset, including alpha/signed HDR.
+    """
+    import numpy as np
+    from .creative_layer_native import encode_opaque_sdr_rgb
+    record = check(record)
+    if record is None:
+        raise ValueError('Missing creative baseline')
+    if type(max_bytes) is not int or not 1 <= max_bytes <= MAX_WORK_BYTES:
+        raise ValueError('Invalid creative export-source working budget')
+    if record['width'] * record['height'] * 12 + 8_388_608 > max_bytes:
+        raise ValueError('Full creative export-source conversion exceeds working memory budget')
+    return encode_opaque_sdr_rgb(np.asarray(_pixels(record), dtype=np.float32), cancelled=cancelled)
+
+
+def proxy_for_state(original_rgb, state, *, max_pixels=None,
+                    matte=DISPLAY_MATTE_LINEAR, max_bytes=DEFAULT_WORK_BYTES):
+    """Display-only proxy at the returned canvas aspect, never an export input.
+
+    Resample premultiplied linear channels before the explicit display matte and
+    SDR transfer. A single source float plane is staged at a time, not a second
+    full RGBA canvas. The original comparison buffer is returned unchanged when
+    no creative baseline exists; the host retains it separately in either case.
+    """
+    record = from_state(state)
+    if record is None:
+        return original_rgb
+    import numpy as np
+    from PIL import Image
+    from .decode import proxy_size, PROXY_PIXELS, MAX_BUDGET
+    from .creative_layer_native import display_rgba
+    if max_pixels is None:
+        max_pixels = min(PROXY_PIXELS, int(original_rgb.shape[0]) * int(original_rgb.shape[1]))
+    if type(max_pixels) is not int or not 1 <= max_pixels <= MAX_BUDGET:
+        raise ValueError('Invalid creative display pixel budget')
+    if type(max_bytes) is not int or not 1 <= max_bytes <= MAX_WORK_BYTES:
+        raise ValueError('Invalid creative display working budget')
+    width, height = record['width'], record['height']
+    ow, oh = proxy_size(width, height, max_pixels)
+    if ow > width or oh > height or ow * oh > max_pixels:
+        # The ordinary proxy helper aligns both axes to eight. Very thin creative
+        # canvases may not fit that alignment; do not enlarge or exceed the cap.
+        ratio = min(1.0, (max_pixels / (width * height)) ** 0.5)
+        ow, oh = max(1, int(width * ratio)), max(1, int(height * ratio))
+        if ow * oh > max_pixels:
+            if ow >= oh:
+                ow = max(1, max_pixels // oh)
+            else:
+                oh = max(1, max_pixels // ow)
+    pixels = _pixels(record)
+    if (ow, oh) != (width, height):
+        # One original F-mode plane, destination RGBA, one resized plane, RGB8,
+        # and bounded transfer staging. Retained immutable asset storage is not
+        # counted twice as a new temporary allocation.
+        if width * height * 4 + ow * oh * 24 + 8_388_608 > max_bytes:
+            raise ValueError('Creative display resampling exceeds working memory budget')
+        reduced = np.empty((oh, ow, 4), dtype=np.float32)
+        for channel in range(4):
+            # BOX has nonnegative weights: no negative alpha or ringing outside
+            # the premultiplied HDR contract at a sharp transparent boundary.
+            plane = Image.fromarray(pixels[:, :, channel], mode='F')
+            resized = plane.resize((ow, oh), resample=Image.Resampling.BOX)
+            reduced[:, :, channel] = np.asarray(resized, dtype=np.float32)
+            plane.close(); resized.close()
+        pixels = reduced
+    elif width * height * 3 + 8_388_608 > max_bytes:
+        raise ValueError('Creative display conversion exceeds working memory budget')
+    return display_rgba(np.asarray(pixels, dtype=np.float32), matte=matte)
+
+
+def require_rebound_snapshot(snapshot):
+    """Original-file analysis is not evidence about newly composited pixels.
+
+    Until those source owners support content-addressed creative baselines,
+    reject their requests before resampling masks or performing inference. Do
+    not silently re-use old faces simply because canvas dimensions still match.
+    """
+    if from_state(snapshot) is None:
+        return
+    from . import local_grade_layers as LG, effect_recovery_state as ER
+    from . import manual_liquify_state as ML, studio_background_state as SB
+    from . import id_background_state as ID, optics_state as OP, sky_replacement_state as SKY
+    from . import reference_color_state as RC, semantic_colour_state as SC
+    from . import lip_makeup_state as LIP, brow_shape_state as BROW, nose_shape_state as NOSE
+    from . import eye_shape_state as EYE, mouth_shape_state as MOUTH
+    from . import colour_editor_state as CE
+    blocked = []
+    if snapshot.get('people') is not None or snapshot.get('body_pose') is not None:
+        blocked.append('original people/body observations')
+    if snapshot.get('channel') or snapshot.get('grade_scope', 'all') != 'all':
+        blocked.append('original scoped masks')
+    if snapshot.get('repair_ops') or snapshot.get('light_ops'):
+        blocked.append('unbound repair/light strokes')
+    if any(float(v) != 0 for v in (snapshot.get('deform') or {}).get('amounts', {}).values()):
+        blocked.append('original facial deformation')
+    if any(float(v) != 0 for v in (snapshot.get('enhance') or {}).get('amounts', {}).values()):
+        blocked.append('original portrait enhancement')
+    if float(snapshot.get('fabric_amount', 0)) or (snapshot.get('_bg') or {}).get('active'):
+        blocked.append('original fabric/background mask')
+    if LG.check(snapshot.get('local_grade_groups'))['layers'] or ER.check(snapshot.get('effect_recovery'))['targets'] or ML.check(snapshot.get('manual_liquify'))['strokes']:
+        blocked.append('original source-bound local edits')
+    if SKY.check(snapshot.get('sky_replacement'))['enabled']:
+        blocked.append('sky')
+    for label, module, key in (
+            ('studio background', SB, 'studio_background'), ('ID background', ID, 'id_background'),
+            ('reference colour', RC, 'reference_color'),
+            ('semantic colour', SC, 'semantic_colour'), ('lip makeup', LIP, 'lip_makeup'),
+            ('brow shape', BROW, 'brow_shape'), ('nose shape', NOSE, 'nose_shape'),
+            ('eye shape', EYE, 'eye_shape'), ('mouth shape', MOUTH, 'mouth_shape')):
+        if module.active(snapshot.get(key)):
+            blocked.append(label)
+    if OP.source_bound(OP.check(snapshot.get('optics'))):
+        blocked.append('original lens/perspective analysis')
+    editor = snapshot.get('colour_editor')
+    if editor is not None and CE.check(editor)['scope'] == 'local':
+        blocked.append('local colour editor')
+    if blocked:
+        raise ValueError('Creative baseline needs content-bound re-analysis before these edits: ' + ', '.join(blocked))
+
+
+def require_rebound_spec(spec):
+    """Same fail-closed gate for direct library callers bypassing snapshots."""
+    snapshot = {key: getattr(spec, key, None) for key in (
+        'creative_base', 'people', 'body_pose', 'channel', 'grade_scope',
+        'fabric_amount', 'local_grade_groups', 'effect_recovery', 'manual_liquify',
+        'studio_background', 'id_background', 'optics', 'sky_replacement',
+        'reference_color', 'semantic_colour', 'lip_makeup', 'brow_shape',
+        'nose_shape', 'eye_shape', 'mouth_shape', 'colour_editor')}
+    snapshot.update(repair_ops=spec.repair, light_ops=spec.light,
+        deform={'amounts': spec.deform_amounts}, enhance={'amounts': spec.enhance},
+        _bg={'active': spec.bg_matte is not None or spec.bg_ref is not None})
+    require_rebound_snapshot(snapshot)
+
+
+def _neutral_snapshot(snapshot):
+    """Conservative neutral gate for lossless alpha/HDR canonical passthrough."""
+    from .master16_policy import Master16PolicyMixin
+    from . import extended_tone_state as ET, photo_detail_state as PD
+    from . import colour_grading_state as CG, selective_colour_state as SC
+    from . import primary_calibration_state as PC, id_background_state as ID
+    bare = dict(snapshot)
+    bare['creative_base'] = None
+    if Master16PolicyMixin._master16_snapshot_blockers(bare):
+        return False
+    if ET.active(bare.get('extended_tone')) or PD.active(bare.get('photo_detail')) or ID.active(bare.get('id_background')):
+        return False
+    for module, key in ((CG, 'colour_grading'), (SC, 'selective_colour'), (PC, 'primary_calibration')):
+        if module.active(bare.get(key) if bare.get(key) is not None else module.neutral()):
+            return False
+    return True
+
+
+def _working_source(path, original, *, max_pixels, device):
+    """Full native precision source for existing edits, never load_rgb/proxy."""
+    import numpy as np
+    from .decode import load_full, is_raw, _source_bits
+    from .export import _srgb_bytes
+    from .color16 import convert_rgb16
+    from PIL import Image
+    # The general decoder intentionally lacks RGB16 PNG; reuse the explicit
+    # imagecodecs/ICC path, whose f32 normalization distinguishes all 65536 bins.
+    if original.startswith(b'\x89PNG\r\n\x1a\n') and original[24] == 16:
+        from .creative_document_import import _png
+        rgb, alpha, _icc = _png(original)
+        if not np.all(alpha == 1):
+            raise ValueError('Existing RGB edits cannot discard source transparency')
+        return np.rint(rgb * 65535.0).astype(np.uint16)
+    if is_raw(path):
+        bits = 16
+    else:
+        with Image.open(path) as image:
+            bits = 16 if _source_bits(image) > 8 else 8
+    decoded = load_full(path, max_px=max_pixels, device=device, want_bits=bits)
+    if (decoded.h, decoded.w) != (decoded.src_h, decoded.src_w) or decoded.draft_used or (decoded.raw or {}).get('used_preview') or (decoded.raw or {}).get('half_size'):
+        raise ValueError('Creative capture requires genuine full-resolution source pixels')
+    if bits == 16 and decoded.rgb.dtype != np.uint16:
+        raise ValueError('Creative capture refused a reduced-precision source')
+    source = decoded.rgb
+    if source.dtype == np.uint16 and decoded.source_icc:
+        source = convert_rgb16(source, decoded.source_icc, _srgb_bytes())
+    return source
+
+
+def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False,
+                          max_bytes=DEFAULT_WORK_BYTES):
+    """Freeze current full-resolution edits into a real canonical base record.
+
+    Same recipe/source guards, crop, effects and float output as file export.
+    Missing active layers reject the capture. The caller holds document ownership
+    and commits only after its final revision check. This function changes no live
+    document, source file, sliders, history, or comparison buffer.
+    """
+    import numpy as np
+    from pathlib import Path
+    from . import local_mask_state as LM, virtual_copy_people as VP
+    from .creative_document_import import import_file
+    from .creative_layer_native import linearize_rgba, linearize_extended_rgba
+    from .export import export_float
+    from .export_recipe import build_export_spec
+    from .decode import is_raw
+    if type(max_bytes) is not int or not 1 <= max_bytes <= MAX_WORK_BYTES:
+        raise ValueError('Invalid creative full-capture memory budget')
+    def poll(*_args):
+        if cancelled():
+            raise InterruptedError('Creative full-resolution capture cancelled')
+    poll()
+    path = row['path']; before = LM.file_stamp(path)
+    version = engine._document_versions().version(row)
+    frozen = deepcopy(state)
+    if not frozen.get('_params') or not frozen.get('_light'):
+        raise ValueError('Creative capture needs complete owned editing state, not current-document parameter fallbacks')
+    snap = engine._state_to_export_snap(frozen, device='cpu', scale=1,
+        upscale_backend='lanczos3', sharpen=0., source_path=path,
+        people_context=VP.row_context(engine, row), people_graph=VP.row_snapshot(engine, row))
+    record = from_state(frozen)
+    source = None
+    if record is None:
+        if not is_raw(path):
+            identity = import_file(path, assets, max_bytes=max_bytes, cancelled=cancelled)
+            record = assets.get(identity, 'rgba')
+        else:
+            size = Path(path).stat().st_size
+            if size > MAX_ORIGINAL_BYTES or size * 2 > max_bytes:
+                raise ValueError('Creative RAW source exceeds retained-byte budget')
+            with open(path, 'rb') as handle:
+                original = handle.read(min(MAX_ORIGINAL_BYTES, max_bytes // 2) + 1)
+            if len(original) > min(MAX_ORIGINAL_BYTES, max_bytes // 2):
+                raise ValueError('Creative RAW source grew during capture')
+            from .ops import libraw
+            dimensions = libraw.identify(path)
+            limit = max(0, (max_bytes - 2 * len(original)) // 96)
+            if dimensions is None or dimensions['w'] * dimensions['h'] > limit:
+                raise ValueError('Creative RAW full-resolution capture exceeds memory budget')
+            source = _working_source(path, original, max_pixels=limit, device='cpu')
+            rgba = np.empty((*source.shape[:2], 4), dtype=np.float32)
+            rgba[:, :, :3] = source.astype(np.float32) / 65535.0
+            rgba[:, :, 3] = 1.0
+            linear = linearize_rgba(rgba, cancelled=cancelled)
+            record = make_asset('rgba', source.shape[1], source.shape[0], linear.astype('<f4', copy=False).tobytes(), original=original)
+            del linear, rgba
+            assets.intern(record)
+    poll()
+    if LM.file_stamp(path) != before:
+        raise ValueError('Original source changed during creative capture')
+    if _neutral_snapshot(snap):
+        # No transfer roundtrip, quantization, alpha loss, or HDR clipping.
+        result = deepcopy(record)
+    else:
+        pixels = record['width'] * record['height']
+        from .ops.geometry import out_size
+        ow, oh = out_size(record['width'], record['height'], snap['crop_rect'], snap['crop_rotation'])
+        if ow * oh > MAX_PIXELS:
+            raise ValueError('Creative full edited canvas exceeds the canonical asset pixel budget')
+        if max(pixels, ow * oh) * 96 + 2 * len(record['original']) > max_bytes:
+            raise ValueError('Full current-edit creative capture exceeds its declared memory budget; no proxy fallback')
+        if not np.all(_pixels(record)[:, :, 3] == 1):
+            raise ValueError('Current RGB edits cannot preserve transparent source alpha; creative source remains unchanged')
+        if from_state(frozen) is None and source is None:
+            source = _working_source(path, record['original'], max_pixels=pixels, device='cpu')
+        elif source is None:
+            # Supplied ndarray is only a shape carrier; exporter resolves the
+            # canonical base exactly once. No full-sized integer placeholder.
+            source = np.empty((0, 0, 3), dtype=np.uint8)
+        snap, for_document = engine._prepare_export_snapshot(path, snap, True)
+        from . import local_grade_source as groups, effect_recovery_runtime as recovery
+        from . import manual_liquify_runtime as manual, studio_background_runtime as studio
+        from . import id_background_runtime as ident, optics_runtime as optics
+        from . import sky_replacement_runtime as sky, body_pose_render as body
+        shape = source_shape(snap, source.shape[:2])
+        for owner in (LM, groups, recovery, manual, studio, ident, optics, sky, body):
+            owner.check_export_decode(snap, path, before, shape)
+        from .reference_color_runtime import verify_export
+        verify_export(snap, path, shape)
+        spec, skipped = build_export_spec(snap, *shape, for_document=for_document)
+        if skipped:
+            raise ValueError('Creative capture cannot omit current edits: ' + ', '.join(map(str, skipped)))
+        rgb, _facts = export_float(source, spec,
+            geometry=(snap['crop_rect'], snap['crop_rotation']), progress=poll, provenance=False)
+        rgba = np.empty((*rgb.shape[:2], 4), dtype=np.float32)
+        rgba[:, :, :3] = rgb; rgba[:, :, 3] = 1.0
+        del rgb
+        linear = linearize_extended_rgba(rgba, cancelled=cancelled)
+        del rgba
+        result = make_asset('rgba', linear.shape[1], linear.shape[0],
+            linear.astype('<f4', copy=False).tobytes(), original=record['original'], icc=record['icc'])
+    poll()
+    if LM.file_stamp(path) != before or engine._document_versions().version(row) != version:
+        raise ValueError('Creative capture source/document changed before publication')
+    assets.intern(result)
+    return result

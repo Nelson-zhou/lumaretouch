@@ -101,6 +101,7 @@ class Packages:
                     return {'status':'preview','preview':{'preview_id':token,'manifest_sha256':inspected['manifest_sha256'],
                         'dependencies':inspected['manifest']['dependencies'],
                         'embedded_assets':inspected['manifest'].get('embedded_assets',[]),
+                        'mandatory_blobs':inspected['manifest'].get('mandatory_blobs',[]),
                         'model_dependencies':inspected['manifest'].get('model_dependencies'), 'warnings':['恢复到新目录，现有文件不会覆盖；打开工程是单独操作。']}}
                 self._start(rid, preview); return
             if action not in ('create','restore'): raise ValueError('未知便携包操作')
@@ -117,6 +118,7 @@ class Packages:
                     current = A.inspect_archive(plan['archive_path'], cancel=self.cancel.is_set, progress=self.progress,
                                                 dependency_validator=D.validate_inventory)
                     if current['manifest_sha256'] != plan['manifest_sha256']: raise ValueError('包在预览后变化，请重新预览')
+                    del current
                     return A.restore_archive(plan['archive_path'], destination, self.cancel.is_set, self.progress,
                                              dependency_validator=D.validate_inventory, project_validator=self.validate, operation_id=rid)
             self._start(rid, work, destination=destination)
@@ -124,13 +126,15 @@ class Packages:
     def readback(self, p):
         destination = p['destination']
         if p.get('mode') == 'restore':
-            value = A.readback_restore(destination, cancel=self.cancel.is_set, progress=self.progress, dependency_validator=D.validate_inventory)
+            value = A.readback_restore(destination, cancel=self.cancel.is_set, progress=self.progress,
+                                       dependency_validator=D.validate_inventory, project_validator=self.validate)
             if value.get('operation_id') != p.get('operation_id'): raise ValueError('目标恢复回执不属于原操作')
             if p.get('manifest_sha256') and value['manifest_sha256'] != p['manifest_sha256']: raise ValueError('目标清单与原预览不一致')
             return value
         if p.get('mode') != 'create': raise ValueError('缺少原操作类型，不能猜测恢复结果')
         value = A.inspect_archive(destination, cancel=self.cancel.is_set, progress=self.progress,
                                   dependency_validator=D.validate_inventory)
+        self.validate(value['project'])
         if value['manifest'].get('operation_id') != p.get('operation_id'): raise ValueError('目标工程包不属于原操作')
         return {'destination':destination,'manifest_sha256':value['manifest_sha256'],
                 'missing_dependencies':[d for d in value['manifest']['dependencies'] if d.get('status') != 'bundled']}

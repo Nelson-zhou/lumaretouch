@@ -15,7 +15,16 @@ from .ops import curves as CURVES, levels as LEVELS
 
 
 def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_path=None,people_graph=None,people_context=None):
-    snap = dict(id_background=IDBS.check(st.get("_id_background")), id_background_bundle=deepcopy(st.get("_id_background_bundle")), people=self._people_export_snapshot(st,source_path,people_graph,context=people_context), strength=float(st.get("_strength", 0.0)),
+    from .creative_document_base import check as check_creative_base
+    creative_base = deepcopy(check_creative_base(st.get("_creative_base")))
+    # A validated returned base owns the already-baked portrait/body pixels.
+    # The original graph remains intact for comparison/history, but dormant
+    # until undo restores base=None. Do not even capture/bind that graph to the
+    # new pixel source. New source-bound edits are fenced by the host, and any
+    # explicit source-bound scalar recipes still fail the export binding gate.
+    people = (None if creative_base is not None else
+        self._people_export_snapshot(st,source_path,people_graph,context=people_context))
+    snap = dict(creative_base=creative_base, id_background=IDBS.check(st.get("_id_background")), id_background_bundle=deepcopy(st.get("_id_background_bundle")), people=people, strength=float(st.get("_strength", 0.0)),
                     params=dict(st.get("_params") or self._params),
                     grade=tuple(st.get("_grade", (0.0, 0.0, 0.0, 1.0))),
                     grade_scope=str(st.get("_grade_scope") or "all"),
@@ -43,7 +52,10 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
                     precompute=st.get("_precompute"),
                     device=device, scale=scale, upscale_backend=upscale_backend,
                     sharpen=sharpen)
-    from .body_pose_render import capture as capture_body
-    from .virtual_copy_people import view
-    snap=capture_body(view(self,people_context) if people_context is not None else self,snap,st,source_path or self._doc_path,people_graph)
+    if creative_base is None:
+        from .body_pose_render import capture as capture_body
+        from .virtual_copy_people import view
+        snap=capture_body(view(self,people_context) if people_context is not None else self,snap,st,source_path or self._doc_path,people_graph)
+    else:
+        snap['body_pose'] = None
     return self._semantic_snapshot(snap,st,source_path)

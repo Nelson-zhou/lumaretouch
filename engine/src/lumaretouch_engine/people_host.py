@@ -75,6 +75,14 @@ class PeopleHostMixin:
         return source,state,analyses
 
     def _people_sync(self,*,strict=False):
+        if getattr(self, '_creative_base', None) is not None:
+            # A validated returned bake owns these pixels. Original-file graph
+            # remains retained for undo, never replayed on the derived canvas.
+            if self._vram is not None:
+                from .people_pipeline import clear
+                clear(self._vram); self._vram.people_suspended = None
+            self._people_render_enabled = False
+            return
         if self._vram is None or not self._docs or self._doc_index<0:return
         body_bank=self._body_bank()
         if self._precompute is None and '_people_graph_owner' not in self.__dict__ and not body_bank['bodies']:return
@@ -98,6 +106,7 @@ class PeopleHostMixin:
 
     def _people_mirror(self):
         """Legacy controls are editing views only; final output uses every face."""
+        if getattr(self, '_creative_base', None) is not None: return
         owner=self._people_owner();source=self._people_source();state=owner.snapshot()
         selected=self._people_cursors.get(source['sha256'])
         if selected not in state['faces']:return
@@ -122,6 +131,7 @@ class PeopleHostMixin:
         self._vram.enhance_facts={**facts.get('enhance',{}),**facts.get('facial_wrinkles',{}),**facts.get('eye_detail',{})}
 
     def _people_report(self):
+        if getattr(self, '_creative_base', None) is not None: return None
         if not self._people_managed():return None
         from .people_ui import report
         try:

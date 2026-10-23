@@ -180,6 +180,8 @@ export interface DocState {
   local_masks?: import("./localMasks/model").LocalMaskReport;
   fabric?: import("./fabric/FabricPanel").FabricState;
   document_id?: string;
+  /** Stable source identity, distinct from document_id's current load epoch. */
+  source_uid?: string;
   levels?: LevelsSpec;
   curves?: CurveSpec;
   strength: number;
@@ -962,6 +964,7 @@ export interface EngineStatus {
    *  这些“引擎说什么能力”的清单都从这一份读。老宿主没报时为 undefined——那时那一排
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
+    creative_document_protocol?: number;
     canvas_guides_protocol?: number;
     export_destination_protocol?: number;
     colour_grading_protocol?: number;

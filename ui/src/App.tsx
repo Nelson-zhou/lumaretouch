@@ -1,6 +1,8 @@
 import {useCanvasGuides} from './canvasGuides/useCanvasGuides';
 import {useGuideModeGuards} from './canvasGuides/useGuideModeGuards';
 import {GuideControls} from './canvasGuides/GuideControls';
+import {CreativeWorkspace} from './creativeLayers/CreativeWorkspace';
+import {useCreativeWorkspace} from './creativeLayers/useCreativeWorkspace';
 import {ExportDestinationPanel} from './exportDestination/ExportDestinationPanel';
 import {initialDestination, type DestinationPreview} from './exportDestination/model';
 import {exportDestinationApi, INSPECTION_EDIT_INTENT, chooseImportFolder} from './native';
@@ -87,7 +89,6 @@ import Viewer, { VIEW_HOME, type CompareMode, type Hud, type View } from "./comp
 import RegistryPanel from "./components/RegistryPanel";
 import RetouchPanel from "./components/RetouchPanel";
 import CropModal from "./components/CropModal";
-import { TOOLS, TOOL_CATEGORIES } from "./spec";
 import { REGISTRY, keyOf, sectionTitleOf, type SectionId } from "./p0";
 import { clickRle } from "./brush";
 import { reconcileExportCombo } from "./exportModel";
@@ -192,6 +193,7 @@ export default function App() {
   const [tierLabel, setTierLabel] = useState("tier2");
   const poll = useRef<number | null>(null);
   const armBusyRef=useRef(false);
+  const creativeRoute=useRef<{active:boolean;pending:boolean;importPaths:(paths:string[])=>Promise<void>;history:(direction:'undo'|'redo')=>Promise<void>}|null>(null);
 
   // ---- 精修台（M1-3c/M1-4）：图路径、磨皮参数、通道、画笔 ----
   const [comparing, setComparing] = useState(false);   // 按住看原图中（不改会话强度）
@@ -546,6 +548,7 @@ export default function App() {
     const isText = (el: HTMLElement | null) =>
       !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
     const down = (e: KeyboardEvent) => {
+      if(creativeRoute.current?.active||creativeRoute.current?.pending)return;
       if(armBusyRef.current)return;
       if (document.querySelector('.batchReviewBackdrop, .recoveryWorkspace, .liquifyWorkspace, .studioWorkspace, .skyWorkspace')) return;
       if (e.code !== "Space" || e.repeat || isText(e.target as HTMLElement)) return;
@@ -579,6 +582,8 @@ export default function App() {
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
       e.preventDefault();
       const redo = k === "y" || e.shiftKey;
+      if(creativeRoute.current?.active){void creativeRoute.current.history(redo?'redo':'undo');return;}
+      if(creativeRoute.current?.pending)return;
       runHistory(redo ? "redo" : "undo")
         .then(() => refreshStatus())
         .catch((err) => setDragNote(String(err)));
@@ -797,6 +802,8 @@ export default function App() {
    *  先 scan 再打开第一张，不同目录就明说只打开了第一张（不许静默丢文件）。 */
   async function onDropPaths(raw: string[]) {
     setDropHint(false);
+    if(creativeRoute.current?.active){await creativeRoute.current.importPaths(raw);return;}
+    if(creativeRoute.current?.pending){setDragNote('创意文档操作仍待核对，未切换照片。');return;}
     if(armBusyRef.current){setDragNote('身体调整请求仍待完成，未导入拖入的照片。');return;}
     if (!raw.length) return;
     const exts = (await engineStatus().catch(() => null))?.image_exts ?? null;
@@ -1787,6 +1794,12 @@ export default function App() {
   const hair=useHairColourPort(peopleWorkflow.enabled&&status?.ready_caps?.hair_colour_protocol===1&&!hairBusy
     &&!!doc?.document_id&&status.image?.load_id===doc.document_id,refreshFromEngine);
   const guideCategoryOpen=useGuideModeGuards();
+  const creative=useCreativeWorkspace({sourceUid:doc?.source_uid??'',loadId:doc?.document_id??'',engineKey:String(pid??''),hostRevision:status?.doc_rev??-1,
+    active:workspace==='creative',available:!!status?.engine_alive&&caps?.creative_document_protocol===1&&hasImage&&status.image?.load_id===doc?.document_id,
+    busy:busy||exporting||idBackgroundBusy||peopleWorkflow.state.pending||peopleWorkflow.state.uncertain||shoulders.busy||legs.busy||arms.busy||waist.busy||length.busy||neck.busy
+      ||sky.pending||optics.pending||studio.pending||manual.pending||recovery.pending||liveGrade.busy||colorPicker.pending||localMasks.pending||cloneStamp.pending||sourcePatch.pending||wbPicker.pending
+      ||whiteBalanceWorkflow.workflow.busy()||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||!(batchWorkflow.ui.phase==='closed'||batchWorkflow.ui.hidden===true)},refreshFromEngine);
+  creativeRoute.current={active:workspace==='creative',pending:creative.pending,importPaths:creative.importPaths,history:creative.history};
   const guides=useCanvasGuides({loadId:doc?.document_id??'',report:doc?.canvas_guides,center:doc?.crop?[(doc.crop.rect[0]+doc.crop.rect[2])/2,(doc.crop.rect[1]+doc.crop.rect[3])/2]:undefined,
     contextKey:JSON.stringify([pid,doc?.document_id,doc?.crop,view,workspace]),modes:{
       available:!!status?.engine_alive&&caps?.canvas_guides_protocol===1&&hasImage&&status.image?.load_id===doc?.document_id&&workspace==='retouch',
@@ -1798,11 +1811,12 @@ export default function App() {
   // Keep uncertain arm/waist mutations and proposal cancellation from racing other UI edits.
   // Original-receipt checks, popup Close and the activity locator remain accessible.
   const guardArmWork=(event:import('react').SyntheticEvent)=>{
+    if(creative.pending&&event.target instanceof Element&&!event.target.closest('.creative-layers,.creative-connection')){event.preventDefault();event.stopPropagation();return;}
     if(event.target instanceof Element&&((idBackgroundBusy&&!event.target.closest('.idBackgroundPanel,.id-background-picker'))||((arms.busy||waist.busy||length.busy||neck.busy)&&!event.target.closest('[data-arm-workflow],[data-waist-workflow],[data-leg-length-workflow],[data-neck-workflow],.retouchToolActivity')))){event.preventDefault();event.stopPropagation();}
   };
   return (
     <div className={"app ws-" + workspace} onClickCapture={guardArmWork} onPointerDownCapture={guardArmWork} onKeyDownCapture={guardArmWork}>
-      <WorkspaceTopbar workspace={workspace} onWorkspace={setWorkspace} busy={busy||arms.busy||waist.busy||length.busy||neck.busy} hasImage={hasImage}
+      <WorkspaceTopbar workspace={workspace} onWorkspace={setWorkspace} busy={busy||arms.busy||waist.busy||length.busy||neck.busy||creative.pending} hasImage={hasImage}
         currentPath={strip?.current} onOpenPhoto={() => { setWorkspace("retouch"); void openAndImport(); }}
         libraryEnabled={sampleLibrary.enabled} onLibrary={() => sampleLibrary.show('manage')}/>
       <SampleLibraryHost owner={sampleLibrary}/>
@@ -1990,67 +2004,9 @@ export default function App() {
           </>
         )}
 
-        {workspace === "creative" && (
-          <section className="creativeView">
-            <div className="creativeHead">
-              <div>
-                <h2>创意</h2>
-                <span>让照片拥有更多表达</span>
-              </div>
-              <button className="chip" disabled={!hasImage}
-                onClick={() => setWorkspace("retouch")}>回到画布</button>
-            </div>
-            <div className="creativeBody">
-              <div className="creativeCards">
-                {TOOL_CATEGORIES.map((cat) => (
-                  <div className="cGroup" key={cat}>
-                    <h3>{cat}</h3>
-                    <div className="cCards">
-                      {TOOLS.filter((t) => t.category === cat).map((tool) => {
-                        const wired = tool.name.includes("智能消除");
-                        return (
-                          <button key={tool.id}
-                            className={"cCard" + (wired ? " on" : " off")}
-                            disabled={!wired || !hasImage}
-                            title={wired
-                              ? "在画布上使用消除笔"
-                              : "该工具将在后续版本提供"}
-                            onClick={() => {
-                              if (!wired||sky.active||sky.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy) return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();
-                              setWorkspace("retouch");
-                              setBrushMode("heal");
-                              setBrushOn(true);
-                            }}>
-                            <b>{tool.name}</b>
-                            <span>{(tool.interaction || tool.output || "").slice(0, 46)}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <aside className="layerPanel">
-                <h3>图层与历史</h3>
-                <ul>
-                  <li><span>基础图</span><em>只读</em></li>
-                  <li><span>高低频磨皮</span><em>{doc?.strength ? "已启用" : "未启用"}</em></li>
-                  <li><span>面部重塑</span><em>{Object.values(doc?.deform.amounts ?? {}).some((v) => v)
-                    ? "已启用" : "未启用"}</em></li>
-                  <li><span>色彩与风格</span><em>{doc?.lut.lit ? "LUT 已启用" : "未启用"}</em></li>
-                  <li><span>眼牙增强</span><em>{doc?.enhance?.built ? "已启用" : "未启用"}</em></li>
-                  <li><span>裁剪与旋转</span><em>{doc?.crop?.lit ? "已启用" : "未启用"}</em></li>
-                </ul>
-                <div className="layerHist">
-                  撤销 {doc?.history.undo_steps ?? 0} 步 · 重做 {doc?.history.redo_steps ?? 0} 步
-                </div>
-                <div className="layerHist">
-                  {strip?.docs.length ?? 0} 张在底片条 · 选中 {sel.size} 张
-                </div>
-              </aside>
-            </div>
-          </section>
-        )}
+        {workspace === "creative" && <CreativeWorkspace owner={creative} hasImage={hasImage} available={caps?.creative_document_protocol===1}
+          onBack={()=>setWorkspace('retouch')} healBlocked={sky.active||sky.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy}
+          onHeal={()=>{colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setWorkspace('retouch');setBrushMode('heal');setBrushOn(true);}}/>}
 
         {workspace === "export" && (
           <section className="exportView">

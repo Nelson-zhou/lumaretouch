@@ -1,4 +1,4 @@
-"""Bounded package inventory; replay assets stay in the validated project JSON.
+"""Bounded package inventory; creative raw blobs are mandatory project state.
 
 Only authoritative source paths and sky replacement asset bindings are relocatable.
 Other paths are provenance, not permission to read arbitrary local files.
@@ -59,10 +59,15 @@ def inventory(project, include_originals=False, include_references=False):
 
 
 def summary(project, dependencies):
+    from . import creative_document_storage as CS
+    stored_project, blobs = CS.pack(project)
+    mandatory = [{'sha256':key[7:], 'size':len(raw), 'archive_path':f'blobs/{key[7:]}'}
+                 for key, raw in sorted(blobs.items())]
     embedded = []
-    for identity, asset in project.get('assets', {}).items():
+    for identity, asset in stored_project.get('assets', {}).items():
         embedded.append({'id': identity, 'type': 'embedded-replay-asset', 'kind': asset.get('kind'),
-                         'bytes': asset.get('bytes'), 'status': 'mandatory-in-project',
+                         'bytes': asset.get('bytes'), 'include': True,
+                         'status': 'mandatory-blob' if 'blob' in asset else 'mandatory-in-project',
                          'licence': 'retained user project asset; rights not inferred'})
     rows = []
     for dep in dependencies:
@@ -72,9 +77,12 @@ def summary(project, dependencies):
                    bytes=os.path.getsize(dep['path']) if exists else 0)
         rows.append(row)
     return {'dependencies': rows, 'embedded_assets': embedded,
-            'bytes': sum(r['bytes'] for r in rows if r['include']),
+            'mandatory_blobs': mandatory,
+            'mandatory_blob_bytes': sum(row['size'] for row in mandatory),
+            'bytes': sum(r['bytes'] for r in rows if r['include']) + sum(row['size'] for row in mandatory),
             'model_dependencies': model_inventory(project),
             'warnings': ['内嵌参考、LUT、人物/身体支持、证件照背景及历史完整保留；选项只控制外部原片/天空参考。',
+                         '创意图层、浮点像素、已编码原始素材与历史块均为必带数据，不受原片/参考选项影响。',
                          '仅打包您有权携带的本地素材；模型权重不打包、不下载。',
                          '未选或缺失依赖会保留明确缺失记录，恢复后需重定位原片或重新选择天空素材。']}
 

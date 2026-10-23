@@ -35,13 +35,21 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
 
     from .people_export import isolated_snapshot
     snap=isolated_snapshot(snap,for_document=for_document)
+    from .creative_document_base import from_state as creative_base, require_rebound_snapshot
+    base = creative_base(snap)
+    if base is not None:
+        if not for_document:
+            raise ValueError('A creative baseline belongs to one document, not another batch photo')
+        if (eh, ew) != (base['height'], base['width']):
+            raise ValueError('Export recipe must use the creative canvas dimensions, not the original file geometry')
+        require_rebound_snapshot(snap)
     p = snap["params"]
     skipped: list = list(snap.get("export_skipped", []))
     if snap.get("channel") and float(snap.get("strength", 0)) != 0:
         if not for_document or snap.get("precompute") is None:
             from .export import ExportError
             raise ExportError("缺少这张图片的蒙版，禁止把局部磨皮扩大为全图")
-    spec = ExportSpec(strength=float(snap["strength"]), radius=int(p["radius"]),
+    spec = ExportSpec(creative_base=base, strength=float(snap["strength"]), radius=int(p["radius"]),
                       eps=float(p["eps"]), texture_radius=int(p["texture_radius"]),
                       broad_gain=float(p["broad_gain"]), mid_gain=float(p["mid_gain"]),
                       detail_gain=float(p["detail_gain"]),

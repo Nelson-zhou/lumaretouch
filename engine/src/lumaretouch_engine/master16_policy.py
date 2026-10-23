@@ -28,6 +28,7 @@ class Master16PolicyMixin:
             "curves": CURVES.default_curves(), "levels": LEVELS.default_levels(),
         }
         fields = {"_" + key: snap.get(key, value) for key, value in defaults.items()}
+        fields['_creative_base'] = snap.get('creative_base')
         fields["_colour_editor"] = CES.check(snap["colour_editor"]) if "colour_editor" in snap else CES.neutral()
         fields["_photo_grain"] = PGS.check(snap["photo_grain"]) if "photo_grain" in snap else PGS.neutral()
         fields["_bg"] = snap.get("_bg", {})
@@ -64,6 +65,8 @@ class Master16PolicyMixin:
         也不能默默降级。
         """
         b: list = []
+        if getattr(self, '_creative_base', None) is not None:
+            b.append('创意合成底图（须使用真实全尺寸合成像素，不能直通原文件）')
         if CES.active(getattr(self,"_colour_editor",CES.neutral())):b.append("连续色彩编辑器（全源图统一目标，不可直通）")
         if PGS.active(getattr(self,"_photo_grain",PGS.neutral())):b.append("确定性源像素颗粒（须完整浮点编辑，不能直通）")
         from .body_pose_render import fastpath_blocker

@@ -1,6 +1,6 @@
 """项目持久化（LNX-P0-PROJECT；验收 CORE-001 / CORE-007 / CORE-008）。
 
-一份项目 = 一个 JSON 文件。为什么不是 SQLite：
+一份项目 = 一个有界 JSON 清单及可选的不可变创意素材 sidecar。为什么不是 SQLite：
 
 * CORE-008 要求"事务执行中注入进程终止，重开后恢复到**完整旧版本或完整新版本**，
   没有半个配方或损坏数据库"。同一文件系统上的 `os.replace` 是原子的：崩溃点只可能
@@ -9,7 +9,8 @@
 * 写的频率是"每次保存一次"，不是"每秒一千次事务"——数据库引擎在这里是纯成本。
 * 依赖最干净：零新依赖，纯开源；出问题的时候人能直接 `cat` 那个文件。离线普惠产品
   的自检门槛应当是"看得见的字节"，不是"需要一个客户端才读得懂的库"。
-* 便携：项目文件跟着照片走，拷走就是整个工程。
+* 带创意素材的工程必须连同旁边隐藏的 .lrt-creative-* 素材目录搬移；
+  推荐使用便携包，强制携带所有创意像素、原始编码字节和历史素材。
 
 代价也写清楚（这是本层存在的另一个理由）：整份文档在内存里编一次 JSON，因此
 **项目不适合大到几百张带自定义调色表**。上限写死在 `MAX_*` 常量里，超限的资产
@@ -33,6 +34,7 @@ import json
 import math
 import os
 import sys
+import tempfile
 import time
 import uuid
 
@@ -84,6 +86,15 @@ class ProjectError(ValueError):
     （`except (ValueError, ...)`）本来就吃它，不需要为持久层再开一条臂。"""
 
 
+def _validate_creative_records(value, assets=None, *, allowed=True, blob_cache=None):
+    """Creative pixels are required replay data, never a best-effort drop."""
+    from .creative_document_project import validate_records
+    try:
+        validate_records(value, assets=assets, allowed=allowed, blob_cache=blob_cache)
+    except (ValueError, TypeError, KeyError, OverflowError) as error:
+        raise ProjectError(f"Invalid creative project records: {error}") from error
+
+
 # ---------------------------------------------------------------- 原子落盘
 def _fsync_dir(path: str) -> None:
     """把目录项也刷下去。只 fsync 文件本身，掉电后那个新名字可能还没进目录——
@@ -101,13 +112,19 @@ def save(project: dict, path: str) -> dict:
     返回可验事实（字节数与整份文件的 sha256）：`project_saved` 事件要报的是
     "写下去的是这一份"，而不是"我调过一次 write"。
     """
-    path = os.path.abspath(str(path))
+    return _save_prepared(_prepare_save(project), path)
+
+
+def _prepare_save(project):
+    """Validate and serialize once so recovery can reserve exact disk bytes."""
     validate(project)
     body = _migrate(project)
     body["updated_ns"] = int(time.time_ns())
     # 每次保存都重新盖写手戳：记的是“最后一次写下它的环境”，不是“创建时的环境”。
     # 只创一次的话，一份被三个版本轮流编辑的工程会拿最早那一个冒充自己。
     body["writer"] = writer_stamp()
+    from . import creative_document_storage as creative_storage
+    body, creative_blobs = creative_storage.pack(body)
     try:
         data = json.dumps(body, ensure_ascii=False, indent=1,
                           allow_nan=False).encode("utf-8")
@@ -118,12 +135,24 @@ def save(project: dict, path: str) -> dict:
     if len(data) > MAX_PROJECT_BYTES:
         raise ProjectError(f"项目 {len(data)} 字节超过上限 {MAX_PROJECT_BYTES}："
                            f"这一版不把工程当照片备份，请拆项目或减少自定义调色表")
+    return body, data, creative_blobs
+
+
+def _save_prepared(prepared, path):
+    """Commit an owned result from _prepare_save, never untrusted raw input."""
+    from . import creative_document_storage as creative_storage
+    body, data, creative_blobs = prepared
+    path = os.path.abspath(str(path))
     d = os.path.dirname(path) or "."
     os.makedirs(d, exist_ok=True)
-    tmp = os.path.join(d, f".{os.path.basename(path)}.{os.getpid()}.tmp")
+    # Immutable payloads become durable before the only commit point, below.
+    # A failed/interrupted save may retain unused blobs, never break old history.
+    blob_info = creative_storage.write_blobs(body, creative_blobs, path,
+        reserve_bytes=creative_storage.RESERVE_BYTES + len(data))
+    fd, tmp = tempfile.mkstemp(prefix='.lrt-project-', suffix='.tmp', dir=d)
     t0 = time.monotonic_ns()
     try:
-        with open(tmp, "wb") as f:
+        with os.fdopen(fd, "wb") as f:
             f.write(data)
             f.flush()
             os.fsync(f.fileno())
@@ -140,22 +169,29 @@ def save(project: dict, path: str) -> dict:
     return {"path": path, "bytes": len(data),
             "sha256": hashlib.sha256(data).hexdigest(),
             "write_ms": round((time.monotonic_ns() - t0) / 1e6, 2),
-            "updated_ns": body["updated_ns"]}
+            "updated_ns": body["updated_ns"], **blob_info}
 
 
 def load(path: str) -> dict:
     path = os.path.abspath(str(path))
     try:
         with open(path, "rb") as f:
-            raw = f.read()
+            raw = f.read(MAX_PROJECT_BYTES + 1)
     except OSError as e:
         raise ProjectError(f"项目打不开：{e}") from e
+    if len(raw) > MAX_PROJECT_BYTES:
+        raise ProjectError('Project manifest exceeds its byte budget')
     try:
         p = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
         # 半截文件在这里只会以"读不出 JSON"出现——那正是 CORE-008 要区分的情形，
         # 报错必须说清是格式问题，而不是笼统一句"打不开"
         raise ProjectError(f"项目文件损坏或不是本机写过的格式（{type(e).__name__}）：{e}") from e
+    from . import creative_document_storage as creative_storage
+    try:
+        p = creative_storage.hydrate(p, creative_storage.read_blobs(p, path))
+    except (ValueError, TypeError, KeyError, OSError) as error:
+        raise ProjectError(f'Invalid creative sidecar: {error}') from error
     validate(p)
     p = _migrate(p)
     p["_source_path"] = path
@@ -211,6 +247,9 @@ def validate(p: object) -> None:
             raise ProjectError(f"项目缺顶层键 {k!r}")
     if not isinstance(p["docs"], list) or not isinstance(p["assets"], dict):
         raise ProjectError("项目的 docs/assets 形状不对（应为 list / dict）")
+    # Includes inactive versions and document_history (both undo and redo),
+    # before migration or publication. Old files without these keys stay valid.
+    _validate_creative_records(p, p["assets"], allowed=(sv == SCHEMA))
     if sv == SCHEMA:
         try:
             VC.validate_identity(p)
@@ -601,6 +640,22 @@ def _from_png_bytes(raw: bytes, shape: list[int]) -> np.ndarray:
 
 
 def encode(value: object, assets: dict, dropped: list, at: str) -> object:
+    """Validate the complete creative subtree before any asset-table mutation."""
+    _validate_creative_records(value)
+    staged_assets = dict(assets)
+    try:
+        encoded = _encode(value, staged_assets, dropped, at)
+    except ValueError as error:
+        raise ProjectError(f'Project encoding rejected: {error}') from error
+    # Canonical byte hashes can already exist as another generic asset kind.
+    # Refuse that collision rather than write a creative byte field which would
+    # decode as an array (or be silently dropped) on the next open.
+    _validate_creative_records(encoded, staged_assets)
+    assets.update(staged_assets)
+    return encoded
+
+
+def _encode(value: object, assets: dict, dropped: list, at: str) -> object:
     """递归转成 JSON 安全值。不认识的东西**必须留话**，不能静静消失。"""
     from .custom_lut_asset import CustomCube
     if isinstance(value, CustomCube):
@@ -623,16 +678,16 @@ def encode(value: object, assets: dict, dropped: list, at: str) -> object:
         except ValueError as error:
             raise ProjectError(f"Invalid RepairOp: {error}") from error
         failed = []
-        encoded = {k: encode(v, assets, failed, f"{at}.{k}") for k, v in clean.items()}
+        encoded = {k: _encode(v, assets, failed, f"{at}.{k}") for k, v in clean.items()}
         if failed:
             raise ProjectError(f"RepairOp cannot be saved without data loss: {failed}")
         return {"__dc__": "RepairOp", "fields": encoded}
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return {"__dc__": type(value).__name__,
-                "fields": {k: encode(v, assets, dropped, f"{at}.{k}")
+                "fields": {k: _encode(v, assets, dropped, f"{at}.{k}")
                            for k, v in dataclasses.asdict(value).items()}}
     if isinstance(value, (list, tuple)):
-        return [encode(v, assets, dropped, f"{at}[{i}]") for i, v in enumerate(value)]
+        return [_encode(v, assets, dropped, f"{at}[{i}]") for i, v in enumerate(value)]
     if isinstance(value, dict):
         if "_local_masks" in value:
             from .local_mask_state import check
@@ -699,7 +754,15 @@ def encode(value: object, assets: dict, dropped: list, at: str) -> object:
             if not isinstance(k, str):
                 dropped.append({"at": at, "reason": f"字典键 {k!r} 不是字符串"})
                 continue
-            out[k] = encode(v, assets, dropped, f"{at}.{k}")
+            if k == '_creative_asset_records':
+                from .creative_document_project import encode_record
+                out[k] = {identity: encode_record(record, assets) for identity, record in v.items()}
+                continue
+            if k == '_creative_base' and v is not None:
+                from .creative_document_project import encode_record
+                out[k] = encode_record(v, assets)
+                continue
+            out[k] = _encode(v, assets, dropped, f"{at}.{k}")
         return out
     # torch 张量与其它活对象：常驻产物，重挂得走引擎那条重放路，不塞进项目文件
     dropped.append({"at": at, "reason": f"类型 {type(value).__name__} 不可序列化，"
@@ -743,10 +806,21 @@ def _encode_blob(raw: bytes, assets: dict, dropped: list, at: str, *, kind: str,
 
 def decode(value: object, assets: dict, dropped: list, at: str,
            dc_types: dict | None = None) -> object:
+    """Strictly preflight creative bytes before the generic best-effort codec."""
+    creative_cache = {}
+    _validate_creative_records(value, assets, blob_cache=creative_cache)
+    return _decode(value, assets, dropped, at, dc_types, creative_cache)
+
+
+def _decode(value: object, assets: dict, dropped: list, at: str,
+            dc_types: dict | None = None, creative_cache=None) -> object:
     """`encode()` 的逆。dc_types 由调用方给（server 认得 RepairOp/LightOp），
     本层不 import 计算模块——持久层反向依赖 GPU 管线会形成循环，
     而且让"读一个 JSON"这件事取决于 torch 在不在。"""
     if isinstance(value, dict):
+        if '__creative_bytes__' in value:
+            from .creative_document_storage import decode_bytes
+            return decode_bytes(value, assets, cache=creative_cache)
         if "__custom_cube__" in value:
             from .custom_lut_asset import CustomCube
             from .custom_lut_native import MAX_BYTES
@@ -855,7 +929,7 @@ def decode(value: object, assets: dict, dropped: list, at: str,
             if cls is None:
                 dropped.append({"at": at, "reason": f"不认识的数据类 {value['__dc__']}"})
                 return None
-            fields = {k: decode(v, assets, dropped, f"{at}.{k}", dc_types)
+            fields = {k: _decode(v, assets, dropped, f"{at}.{k}", dc_types, creative_cache)
                       for k, v in (value.get("fields") or {}).items()}
             try:
                 return cls(**fields)
@@ -864,10 +938,10 @@ def decode(value: object, assets: dict, dropped: list, at: str,
                 return None
         if _REPAIR_STACKS.intersection(value):
             _validate_encoded_repairs(value, assets, allow_legacy=True)
-        return {k: decode(v, assets, dropped, f"{at}.{k}", dc_types)
+        return {k: _decode(v, assets, dropped, f"{at}.{k}", dc_types, creative_cache)
                 for k, v in value.items()}
     if isinstance(value, list):
-        return [decode(v, assets, dropped, f"{at}[{i}]", dc_types)
+        return [_decode(v, assets, dropped, f"{at}[{i}]", dc_types, creative_cache)
                 for i, v in enumerate(value)]
     return value
 
@@ -963,6 +1037,7 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
     """
     if recipe is not None:
         try:
+            _validate_creative_records(recipe, allowed=(project.get("schema_version") == SCHEMA))
             recipe = WB.normalize_state(recipe)
             if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA):
                 _check_manual_liquify_record(recipe.get("_manual_liquify"))
@@ -1065,6 +1140,8 @@ def active_recipe(project: dict, path: str | None = None, dc_types: dict | None 
     for v in row.get("versions", []):
         if v["id"] == vid:
             recipe = v.get("recipe")
+            _validate_creative_records(recipe, project.get("assets") or {},
+                                       allowed=(project.get("schema_version") == SCHEMA))
             if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA) and recipe is not None:
                 if type(recipe) is not dict:
                     raise ProjectError("Project v7 recipe must be an object")

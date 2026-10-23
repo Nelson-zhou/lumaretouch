@@ -65,6 +65,7 @@ mod project_recovery_api;
 mod project_recovery_fence;
 mod virtual_copy_api;
 mod canvas_guides_api;
+mod creative_layers_api;
 mod export_destination_port;
 mod export_target_size_port;
 mod white_balance_api;
@@ -562,6 +563,19 @@ impl AppState {
     /// 裁剪/曝光那一类 frame 事件：它们带 doc_state，不进这一格的话面板上的数字
     /// 就停在上一笔（而拖拽帧不带 doc_state，一条也不进）。高频路径上只多一次
     /// `Option` 判断。pub 而 note_doc 不 pub：判定只在 note_doc 一处，这里只多一个入口。
+    pub fn on_creative_geometry(&self, v: &Value) {
+        let mut image = self.image.lock().unwrap();
+        if let Some(current) = image.as_mut() {
+            // This event is emitted only by the serialized engine transition,
+            // including rollback. A baked baseline deliberately rotates load_id.
+            for key in ["w", "h", "src_w", "src_h", "path", "load_id"] {
+                if let Some(value) = v.get(key) { current[key] = value.clone(); }
+            }
+        }
+        drop(image);
+        self.note_doc(v, "creative_geometry");
+    }
+
     pub fn on_layer_frame(&self, v: &Value) {
         self.note_doc(v, "frame");
     }
@@ -1985,6 +1999,7 @@ fn main() {
             export_destination_port::choose_import_folder, export_destination_port::export_destination, export_destination_port::export_destination_result, export_destination_port::export_destination_release,
             virtual_copy_api::virtual_copy_request, virtual_copy_api::virtual_copy_status,
             canvas_guides_api::canvas_guides_request, canvas_guides_api::canvas_guides_status,
+            creative_layers_api::creative_document_request, creative_layers_api::creative_document_status,
             managed_import_api::managed_import_request, managed_import_api::managed_import_status,
             source_relocation_api::source_relocation_request, source_relocation_api::source_relocation_status,
             project_recovery_api::project_recovery_request, project_recovery_api::project_recovery_status,

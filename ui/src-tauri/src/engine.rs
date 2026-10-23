@@ -256,6 +256,8 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
     };
     match v.get("event").and_then(|e| e.as_str()).unwrap_or("") {
         "inspection_snapshot"=>state.on_inspection_event(inspection_epoch,&v),
+        "creative_geometry" => state.on_creative_geometry(&v),
+        "creative_document_state" | "creative_document_result" => { crate::creative_layers_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d| d.is_object()) { state.on_layer_frame(&v); } },
         "shoulder_shape_result" => { crate::shoulder_shape_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some() { state.on_layer_frame(&v); } },
         "leg_shape_result" => { crate::leg_shape_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|doc| doc.is_object()) { state.on_layer_frame(&v); } },
         "waist_shape_result" => { crate::waist_shape_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|doc| doc.is_object()) { state.on_layer_frame(&v); } },

@@ -1,0 +1,376 @@
+{
+  "schema": 1,
+  "status": "source-integrated-frozen; runtime acceptance UNRUN",
+  "base_commit": "8d6d02b85133d7b63cba2045759d4e2ba934e7cc",
+  "scope": [
+    "M11 creative layer document",
+    "M12 canvas/layer transforms",
+    "M14 bounded return bridge, incomplete source-bound reanalysis"
+  ],
+  "not_claimed": [
+    "M13 candidate generation",
+    "32 AI tools completion",
+    "runtime/visual/numerical acceptance",
+    "unconditional 24 MP performance"
+  ],
+  "integration_map": "docs/creative-layers/IMPLEMENTATION.md",
+  "ui_map": "ui/src/creativeLayers/INTEGRATION.unrun.md",
+  "native_contract": "core/creative_layers/ABI.md",
+  "checks": [
+    "Python static AST only",
+    "git diff --check read-only",
+    "SHA-256 source manifest"
+  ],
+  "unrun": [
+    "product imports",
+    "tests",
+    "native build/compiler",
+    "UI typecheck/build",
+    "inference",
+    "product execution",
+    "visual/numerical/performance/crash acceptance"
+  ],
+  "line_counts": {
+    "ui/src/App.tsx": 2091,
+    "ui/src-tauri/src/main.rs": 2015,
+    "engine/src/lumaretouch_engine/server.py": 6932
+  },
+  "files": [
+    {
+      "path": "core/creative_layers/ABI.md",
+      "sha256": "bcef9342e8b0ec2f980a9fa4d03c419adfe924d3b538f275a54242a9adf043b4",
+      "bytes": 13662,
+      "ownership": "new"
+    },
+    {
+      "path": "core/creative_layers/Cargo.toml",
+      "sha256": "8c06a3a3e8d8eeccf6439d8b3843885115b61336d8537bbc0ab79c4a89dc8874",
+      "bytes": 174,
+      "ownership": "new"
+    },
+    {
+      "path": "core/creative_layers/build_creative_layers.sh",
+      "sha256": "f6f0319a4b199ba7f0bcb9a50b8027621b2dd8527987224f72b716ec6f07b013",
+      "bytes": 455,
+      "ownership": "new"
+    },
+    {
+      "path": "core/creative_layers/creative_layers.h",
+      "sha256": "1cb3d124ec717183affdb669714526bba7abdad955e1134d88acb60c6be6bdb9",
+      "bytes": 1307,
+      "ownership": "new"
+    },
+    {
+      "path": "core/creative_layers/lib.rs",
+      "sha256": "865e57ed571e8133010668c9a5501d9b2d35f1c1e2b6393afc367bc241075b95",
+      "bytes": 18356,
+      "ownership": "new"
+    },
+    {
+      "path": "core/creative_layers/tests.rs",
+      "sha256": "b41ecbeb9637bcebf1cce5a47d0160e66308ed2484883312efde1ff55e863f9a",
+      "bytes": 14603,
+      "ownership": "new"
+    },
+    {
+      "path": "docs/creative-layers/IMPLEMENTATION.md",
+      "sha256": "230ea1a597dea49d4bcd9119da849373de6af9ec637c2098d23ed2c5a4963dcf",
+      "bytes": 10415,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_assets.py",
+      "sha256": "5178ec55197c25fdaeb9268cd90e9a6f2a45d359ba21d2136c3ecc604c777d01",
+      "bytes": 5973,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "sha256": "ac82e50e61ed82daab2233767337bad3884c8972d56066f5e38549b30d9a4de9",
+      "bytes": 18543,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_controller.py",
+      "sha256": "c05778dc4b6876a6583b26534383e9932f85a76428d436cdd7d4e74b4c7ea039",
+      "bytes": 9969,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "3a9855afe70a63304c0a5baa217e5e7589b7e9a546b86941aa281ce9b14b5ef8",
+      "bytes": 21831,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_import.py",
+      "sha256": "12b889fa96eb703adaae241c9e223aa5e8566027a349c2db1278b71f72ae295c",
+      "bytes": 12300,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_project.py",
+      "sha256": "bb06387686f45c35f5aa05b4bc89667de90f5c9f3c53a2c34fd04a00165dff8a",
+      "bytes": 10694,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_render.py",
+      "sha256": "3d4f0689f7403a55420163945ba268074503f493166da9714cf2a956f51195af",
+      "bytes": 8420,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_state.py",
+      "sha256": "15225a3000057b7b383e3d7cde7e6dfdcf90842e9ee417e0ccf550b32921c80e",
+      "bytes": 15841,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_storage.py",
+      "sha256": "c6b834668e16de1b0d2cd520718ac7ecd1bb6ca14499e0b2d8791fd4b8e37822",
+      "bytes": 15440,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_layer_native.py",
+      "sha256": "f5b6b578bdb2fceb669e6ce5a9bc5e504b9fe6a7f34d473dfce4491d60b442d5",
+      "bytes": 18843,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "ef6db3d34112c12e94c7910397a8367a422523fa879bc7efece9b5e57ce9d2df",
+      "bytes": 124672,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "0e909c639c07b960d78b56d5995ed11407fe928c261470c68c149a97c4254c85",
+      "bytes": 19456,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "sha256": "cb8a383c5828750abfecf48719ed3e72cebbd443998a933c84c3f244470abeeb",
+      "bytes": 5253,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_controller.py",
+      "sha256": "b9a3a7e3c4d3fac9ee6499a484a1442675c04b6a0d034a4c2e59a1428e17ecc0",
+      "bytes": 10619,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "3006bd34bd6db4f8147efdaebff5a2808d8476b2e7841f98244c1ead9e211c2a",
+      "bytes": 7266,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/master16_policy.py",
+      "sha256": "864c51ab2d23018217281488a3adac8eaa3e35f45bc905b64d61dd8de27c4de8",
+      "bytes": 11783,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_candidate_render.py",
+      "sha256": "5266b479f8c98bf409cfc196600ed8b67e98855153abb07660cff68f9c4a1054",
+      "bytes": 3288,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "1b468373dd6622a583edfe786648a12f58d87cfd57bb1329501c4757a6741644",
+      "bytes": 19666,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_runtime.py",
+      "sha256": "e4cdb1cf185c4499066cbb800886087ee572bc709db19c0b568e482a0968fbab",
+      "bytes": 7225,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "37737845dfc787a634ebdc355c0158b064ddb5e5155f6d2c3f017cf3593adaf3",
+      "bytes": 75462,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_package_archive.py",
+      "sha256": "6a5b3210182b2a6504c538451456c11a486cca12ffe9a9c4ea2aed122651656a",
+      "bytes": 36859,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_package_dependencies.py",
+      "sha256": "a92f321c4291e20787a84363807fdbcba0e0c7fe5767be4a96cef00882865275",
+      "bytes": 7492,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_package_host.py",
+      "sha256": "3470c1a162c97367422241326cce04b208ae52997b49f0fd372977b44cdff6a3",
+      "bytes": 11241,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "4b70aa324b6bd5b4147a0fab12928b61570d1e69416b3da2c3a363e29c401297",
+      "bytes": 6574,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_scheduler.py",
+      "sha256": "aaf2af8b5f5ecd5fbdb8bfd00fca53d975562ff9e8caaddca8c7555fe7cb825a",
+      "bytes": 7758,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_store.py",
+      "sha256": "e3582db50c18baf2e55252b1d21c2b6bc11350ae4c1fd69947940ce17af2e1bf",
+      "bytes": 19647,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "45cafcdc11caaae2e0a04e439e200aa972121be9230ebd506d3ef1b1401273f3",
+      "bytes": 460926,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_blob_storage_contract.py",
+      "sha256": "e1d768b912405669be49a167070a2bfa4aa3410d0686862abf3c69c73f9a48b8",
+      "bytes": 5951,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_document_contract.py",
+      "sha256": "f64e827d5fa1ccb46f823a815267e393995f45cc11d37c1aef892e5c5a738b56",
+      "bytes": 9304,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_history_outcome_contract.py",
+      "sha256": "c5429350c4afdcedc10f9090682be05a45dc3c7b1005a62253d796d1d13bfb97",
+      "bytes": 3671,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_package_blob_contract.py",
+      "sha256": "737f6fe5fcdac7cf405837c5737a0e5b57cfce1e425ee5302adca8ee4f4d80a1",
+      "bytes": 12766,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_project_codec_contract.py",
+      "sha256": "bea76ccd74767d7b813b94d4a68b802f7352867a3469ad9c3e25ea23eb9713b5",
+      "bytes": 18272,
+      "ownership": "new"
+    },
+    {
+      "path": "packaging/build-creative-layers.sh",
+      "sha256": "f568116d887c27ab74267078b60109693955e18bfef8e6604450e45ee1980b4d",
+      "bytes": 361,
+      "ownership": "new"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "9b9316f4cbc1ced83971a88402bbeb1f4cb2ffc3788d0add098bbc1412d56389",
+      "bytes": 18718,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "ui/src-tauri/src/creative_layers_api.rs",
+      "sha256": "b575fd9897595b6fbbe0984532074ac8830fa33433ea6ef37e958f5fee9b509d",
+      "bytes": 8299,
+      "ownership": "new"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "39b57bab1827efbde67884cb7de24ef15f43c0479de7b4c018855056d8a46472",
+      "bytes": 35554,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "e4c9be5c79a73022fddea1c7180ffef6b7c11d39fe567e2cf77107c7f817f70d",
+      "bytes": 99501,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "7cd34d851781f83f9ac1761a6cc3e1a295429eb83b4b896edef5665ccd931231",
+      "bytes": 140254,
+      "ownership": "shared-modified"
+    },
+    {
+      "path": "ui/src/creativeLayers/CreativeLayersPanel.tsx",
+      "sha256": "25518b54324ce236054c39c507e8f9dd0a4e0525e602f8dc8f94253c2c2f8c6d",
+      "bytes": 23969,
+      "ownership": "new"
+    },
+    {
+      "path": "ui/src/creativeLayers/CreativeWorkspace.tsx",
+      "sha256": "f4d04f9f2e614d557812d48e3a50817d25c5be0040ffc966dcd45c83b17b1a8f",
+      "bytes": 2735,
+      "ownership": "new"
+    },
+    {
+      "path": "ui/src/creativeLayers/INTEGRATION.unrun.md",
+      "sha256": "78d00abe043bb3c4c462aa3c9d7f85aa0ce98c68ef7e7453325117a26ce67910",
+      "bytes": 11328,
+      "ownership": "new"
+    },
+    {
+      "path": "ui/src/creativeLayers/client.test.ts",
+      "sha256": "73c724db87182508220ce1600826c283a6f10e58fcdca96c251b49826b90d7f9",
+      "bytes": 9350,
+      "ownership": "new"
+    },
+    {
+      "path": "ui/src/creativeLayers/client.ts",
+      "sha256": "7e902fd78eee050bf9b6b2c055afab3722bce986990eb59a37876b364e92b4dd",
+      "bytes": 10122,
+      "ownership": "new"
+    },
+    {
+      "path": "ui/src/creativeLayers/creativeLayers.css",
+      "sha256": "172d7202512d9ac77c483dfd6ade27bb5475092d21b44731de75634bcb57b905",
+      "bytes": 5674,
+      "ownership": "new"
+    },
+    {
+      "path": "ui/src/creativeLayers/index.ts",
+      "sha256": "8fc706a8d838dfbd60a860cec084ab11207d255dcdcc23314e6ec05a5cb652e3",
+      "bytes": 232,
+      "ownership": "new"
+    },
+    {
+      "path": "ui/src/creativeLayers/model.ts",
+      "sha256": "2409a0af78f4c3b93278623ca735df80f5cd26e2c5d3262f73e6c39f610024d0",
+      "bytes": 11006,
+      "ownership": "new"
+    },
+    {
+      "path": "ui/src/creativeLayers/nativePort.ts",
+      "sha256": "4f678bf52444fe88e8810725092e9ae2b10d2cca06fd4998db059704010f6b6d",
+      "bytes": 7234,
+      "ownership": "new"
+    },
+    {
+      "path": "ui/src/creativeLayers/useCreativeWorkspace.ts",
+      "sha256": "9950accc5b04cf65e8e7a9b1a56c29e16258f5088f6b93b9131303ccc589d822",
+      "bytes": 14775,
+      "ownership": "new"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "6442a1daa771d00bbb453fb4ca76d2505a279b222967a621a25cdc171d3cceb3",
+      "bytes": 97017,
+      "ownership": "shared-modified"
+    }
+  ]
+}

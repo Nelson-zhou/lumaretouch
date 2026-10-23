@@ -50,7 +50,7 @@ def finish(engine, boundary, error=None):
         'project','session','history','virtual_copy','managed_import','source_relocation',
         'people','batch','primary_calibration','colour_editor','selective_colour','colour_grading',
         'photo_grain','photo_detail','extended_tone','shoulder_shape','leg_shape','arm_shape',
-        'waist_shape','leg_length','neck_shape','custom_lut','semantic_colour'):
+        'waist_shape','leg_length','neck_shape','custom_lut','semantic_colour','creative_document'):
         if message.get('action') not in ('state','query','status','receipt','list','context'):
             runtime.revision += 1
 

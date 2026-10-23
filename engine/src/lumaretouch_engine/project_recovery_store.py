@@ -1,7 +1,8 @@
 """Local immutable crash candidates. No original-project writes or automatic restore.
 
 The commit point is renaming a fully fsynced directory into candidates/. A
-candidate contains the existing project serializer's bytes plus a hash receipt.
+candidate contains the existing project serializer's manifest, mandatory raw
+creative blob sidecar, and a hash receipt. All count toward its unchanged budget.
 Partial staging directories are never offered as committed recovery candidates.
 """
 from __future__ import annotations
@@ -18,6 +19,7 @@ import time
 import uuid
 
 from . import project as PJ
+from . import creative_document_storage as CS
 
 
 class RecoveryError(ValueError):
@@ -137,9 +139,9 @@ class RecoveryStore:
         if usage['bytes'] + size > self.budget_bytes or usage['free_bytes'] - size < self.reserve_bytes:
             raise RecoveryError("Autosave paused: disk budget/reserve exhausted; retained versions were not deleted")
 
-    def publish(self, frozen: bytes, metadata: dict, commit_guard) -> dict:
+    def publish(self, frozen, metadata: dict, commit_guard) -> dict:
         """Worker-only. guard holds the scheduler epoch lock for publication."""
-        project = json.loads(frozen)
+        project = CS.thaw(frozen)
         PJ.validate(project)
         no_dropped(project)
         validate_assets(project)
@@ -148,22 +150,27 @@ class RecoveryStore:
         with self.locked():
             if len(list((self.root / 'candidates').iterdir())) >= self.max_candidates:
                 raise RecoveryError("Recovery candidate limit reached; review retained versions")
-            # Serializer indentation can enlarge compact input. Reserve its hard
-            # maximum, not an optimistic estimate, before writing anything.
-            self.capacity(PJ.MAX_PROJECT_BYTES + 1_048_576)
+            # Reserve the exact, already validated serialized manifest and raw
+            # blobs, plus the bounded receipt. Charging the manifest hard maximum
+            # would wrongly reject a 24 MP source + returned base near 768 MB.
+            prepared = PJ._prepare_save(project)
+            self.capacity(len(prepared[1]) + 1_048_576
+                          + sum(len(raw) for raw in prepared[2].values()))
             token = str(uuid.uuid4())
             stage = self.root / 'staging' / token
             stage.mkdir(mode=0o700)
             path = stage / ('project' + PJ.SUFFIX)
-            info = PJ.save(project, str(path))
+            info = PJ._save_prepared(prepared, str(path))
             os.chmod(path, 0o600)
             raw = read_bounded(path, PJ.MAX_PROJECT_BYTES)
             if digest(raw) != info['sha256']:
                 raise RecoveryError("Autosave readback hash mismatch")
-            PJ.validate(json.loads(raw))
+            verified = PJ.load(str(path))
+            PJ.validate(verified)
             receipt = {**metadata, 'schema': 'lrt.recovery.v1', 'candidate_id': token,
                        'project_id': project['project_id'], 'project_sha256': digest(raw),
-                       'project_bytes': len(raw), 'created_ns': time.time_ns(),
+                       'project_bytes': len(raw), 'creative_blob_bytes': info['blob_bytes'],
+                       'creative_blob_count': info['blob_count'], 'created_ns': time.time_ns(),
                        'phase': 'committed', 'kind': metadata.get('kind', 'autosave')}
             receipt_raw = json_bytes(receipt)
             if len(receipt_raw) > 1_048_576:
@@ -186,7 +193,8 @@ class RecoveryStore:
         raw = read_bounded(path / ('project' + PJ.SUFFIX), PJ.MAX_PROJECT_BYTES)
         if receipt.get('candidate_id') != token or receipt.get('phase') != 'committed' or digest(raw) != receipt.get('project_sha256'):
             raise RecoveryError("Recovery candidate identity/hash mismatch")
-        project = json.loads(raw)
+        manifest = json.loads(raw)
+        project = CS.hydrate(manifest, CS.read_blobs(manifest, path / ('project' + PJ.SUFFIX)))
         PJ.validate(project)
         no_dropped(project)
         validate_assets(project)
@@ -305,7 +313,7 @@ class RecoveryStore:
         metadata = {key:receipt[key] for key in ('revision','original_path','native_receipts') if key in receipt}
         metadata.update(kind='version_snapshot', relinked_from=token)
         if self.cancelled(): raise InterruptedError('来源核对已取消')
-        result = self.publish(json_bytes(project), metadata, contextlib.nullcontext)
+        result = self.publish(CS.freeze(project, PJ.MAX_PROJECT_BYTES), metadata, contextlib.nullcontext)
         return {'phase':'relinked_copy', 'candidate_id':result['candidate_id'], 'receipt':result}
 
     def operation_started(self, request):
@@ -348,7 +356,8 @@ class RecoveryStore:
         """
         source_path = Path(source).absolute()
         raw = read_bounded(source_path, PJ.MAX_PROJECT_BYTES)
-        old = json.loads(raw)
+        old_manifest = json.loads(raw)
+        old = CS.hydrate(old_manifest, CS.read_blobs(old_manifest, source_path))
         PJ.validate(old)
         if old['schema_version'] == PJ.SCHEMA:
             return {'required': False, 'source_sha256': digest(raw)}

@@ -77,6 +77,7 @@ from . import manual_liquify_state as MLS, manual_liquify_runtime as MLR
 from . import local_grade_layers as LG, local_grade_runtime as LGR, local_grade_source as LGS
 from . import studio_background_state as SBS, studio_background_runtime as SBR
 from . import id_background_state as IDS, id_background_runtime as IDR
+from . import creative_document_host as CDH
 from .studio_tools_dispatch import StudioToolsMixin
 from .preview_lifecycle import PreviewLifecycleMixin
 from .portrait_geometry_dispatch import PortraitGeometryMixin
@@ -306,6 +307,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         # 「命令收下而画面不动」的形状，所以作废必须一起作，不留半截。
         self._grade_scope = "all"
         self._grade_mask = None
+        self._creative_document = None; self._creative_asset_records = {}; self._creative_base = None
         self._local_masks = LM.empty(); self._local_grade_layers = LG.empty()
         self._effect_recovery = ERS.empty(); self._manual_liquify = MLS.empty(); self._studio_background = SBS.empty(); self._id_background = IDS.empty(); self._id_background_bundle = None; self._optics = OPS.empty(); self._sky_replacement = SKS.empty(); self._blush_makeup_library = BLUSHLIB.empty(); self._lipstick_library = LIPSTICKLIB.empty(); self._eyeliner_library = EYELINERLIB.empty(); self._eyelash_library = EYELASHLIB.empty(); self._brow_makeup_library = BROWMAKEUPLIB.empty(); self._lip_makeup = LIPS.neutral(); self._brow_shape = BROWS.neutral(); self._brow_shape_owner = None; self._nose_shape = NOSES.neutral(); self._nose_shape_owner = None; self._eye_shape = EYES.neutral(); self._eye_shape_owner = None; self._mouth_shape = MOUTHS.neutral(); self._mouth_shape_owner = None; self._reference_color = RCS.empty(); self._reference_color_bundle = None; self._semantic_init(); self._body_init()
         # PORTRAIT-009 眼牙增强：三个子功能的值 + 会话里有没有那份场 + **它属于哪一张脸**。
@@ -495,6 +497,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
               "history_max": self.HISTORY_MAX,
               "history_group_ms": self.HISTORY_GROUP_MS,
               "history_edit_cmds": list(self.EDIT_CMDS),
+              "creative_document_protocol": 1,
               "canvas_guides_protocol": 1,
               "canvas_guides_actions": ["state", "set", "undo", "redo"],
               # 项目面的能力名单由引擎报出去（与 export 的格式名单同一条理由）：
@@ -792,6 +795,10 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         bench_done.pipe_device 都会对着那张彩条图说话。"""
         from .vram import make_pipeline
 
+        original_rgb = rgb
+        if adopt and getattr(self, "_creative_base", None) is not None:
+            from .creative_document_base import proxy_for_state
+            rgb = proxy_for_state(rgb, {"_creative_base":self._creative_base}, max_pixels=self._proxy_budget, max_bytes=CDH.memory_budget())
         h, w = int(rgb.shape[0]), int(rgb.shape[1])
         pipe = make_pipeline(self.device, w, h, rgb)
         if pipe.fallback:
@@ -800,7 +807,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             self._vram = pipe
             pipe.photo_grain_source_output = lambda: CER.render_preview(self,pack=False) if CER.active(self) else PGR.render_preview(self,pack=False) if PGR.active(self) else None
             pipe.colour_editor_source_input = lambda: CER.render_preview(self,pack=False,input_only=True)
-            self._src_rgb = rgb
+            self._src_rgb = original_rgb
             # 会话新建在另一个设备上：旧张量全在那边，这里按存下的画笔重放一遍。
             # 不重放就是“会话迁了、图层没迁”，与 M1-3a 那个“会话在 CPU 上跑却标 cuda”同形。
             if self._repair_ops or self._redo_ops:
@@ -925,7 +932,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
     # ------------------------------------------------------------ 文档状态（M5-a 底片条）
     # 「一份文档状态到底包含哪些字段」只有这一处名单。新加一层而不进来，切文档就会
     # 静默丢掉那一层 —— 那是本仓最贵的一族坑（「会话迁了、图层没迁」）的新变体。
-    DOC_FIELDS = ("_fabric_amount", "_strength", "_params", "_channel", "_repair_ops", "_redo_ops", "_op_seq",
+    DOC_FIELDS = (*CDH.FIELDS, "_fabric_amount", "_strength", "_params", "_channel", "_repair_ops", "_redo_ops", "_op_seq",
                   "_light_ops", "_light_redo", "_light", "_deform", "_deform_defer",
                   "_deform_default", "_deform_overrides", "_lut",
                   "_lut_amount",
@@ -1006,6 +1013,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 "_proxy": None}
         # 名单守卫的另一半：起始状态与 _capture_state 必须覆盖同一批字段。
         # 只守一侧等于把“新图层忘了登记进默认值”这件事留给运行时去撞
+        fresh.update(CDH.neutral())
         assert set(fresh) == set(self.DOC_FIELDS) | {"_proxy"}, \
             "起始状态名单与 DOC_FIELDS 漂移了（新图层没给默认值）"
         return fresh
@@ -1056,6 +1064,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
               "_proxy": ((int(self._vram.h), int(self._vram.w))
                          if (self._vram is not None and self._image_loaded) else None)}
         # 名单与实际字段漂移了要当场响，不要“新图层静静切不回来”
+        st.update(CDH.fields(self))
         assert set(st) == set(self.DOC_FIELDS) | {"_proxy"}, "文档状态名单与实际字段漂移了"
         return st
 
@@ -1065,11 +1074,13 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             validate_repair_ops(st.get(key, []), shape=st.get("_proxy"))
         # Validate WB and compile before changing any live field.
         st = {**st, "_photo_grain": PGS.from_state(st), "_colour_grading": CGS.from_state(st), "_primary_calibration": PCA.admit(PCS.from_state(st)), "_selective_colour": SCSL.from_state(st), "_colour_editor": CES.from_state(st), "_extended_tone": ETS.check(st.get("_extended_tone")), "_photo_detail": PDS.check(st.get("_photo_detail")), **self._semantic_restore(st), **self._body_fields(st), "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0)), "_local_masks": LM.check(st.get("_local_masks")), "_local_grade_layers": LG.check(st.get("_local_grade_layers")), "_effect_recovery": ERS.check(st.get("_effect_recovery")), "_manual_liquify": MLS.check(st.get("_manual_liquify")), "_studio_background": SBS.check(st.get("_studio_background")), "_id_background": IDS.check(st.get("_id_background")), "_id_background_bundle": st.get("_id_background_bundle"), "_optics": OPS.check(st.get("_optics")), "_sky_replacement": SKS.check(st.get("_sky_replacement")), "_blush_makeup_library": BLUSHLIB.check(st["_blush_makeup_library"]) if "_blush_makeup_library" in st else BLUSHLIB.empty(), "_lipstick_library": LIPSTICKLIB.check(st["_lipstick_library"]) if "_lipstick_library" in st else LIPSTICKLIB.empty(), "_eyeliner_library": EYELINERLIB.check(st["_eyeliner_library"]) if "_eyeliner_library" in st else EYELINERLIB.empty(), "_eyelash_library": EYELASHLIB.check(st["_eyelash_library"]) if "_eyelash_library" in st else EYELASHLIB.empty(), "_brow_makeup_library": BROWMAKEUPLIB.check(st["_brow_makeup_library"]) if "_brow_makeup_library" in st else BROWMAKEUPLIB.empty(), "_lip_makeup": LIPS.check(st.get("_lip_makeup")), "_brow_shape": BROWS.check(st.get("_brow_shape")), "_brow_shape_owner": st.get("_brow_shape_owner"), "_nose_shape": NOSES.check(st.get("_nose_shape")), "_nose_shape_owner": st.get("_nose_shape_owner"), "_eye_shape": EYES.check(st.get("_eye_shape")), "_eye_shape_owner": st.get("_eye_shape_owner"), "_mouth_shape": MOUTHS.check(st.get("_mouth_shape")), "_mouth_shape_owner": st.get("_mouth_shape_owner"), "_reference_color": RCS.check(st.get("_reference_color")), "_reference_color_bundle": st.get("_reference_color_bundle")}
+        st = {**st, **CDH.restore_fields(st)}
         st = WB.normalize_state(st)
         WB.prepare_state(st)
         # Old projects predate curves. Validate/deep-copy before changing any live field.
         st = {**st, "_curves": CURVES.check_curves(st.get("_curves")), "_levels": LEVELS.check_levels(st.get("_levels")),
               "_hsl": HSL_RECIPE.normalize_state(st.get("_hsl", HSL_RECIPE.NEUTRAL))}
+        CDH.rotate(self)
         for k in self.DOC_FIELDS:
             v = st[k]                 # 缺键就是名单漂移，让它响
             setattr(self, k, v)
@@ -1285,9 +1296,12 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
     def _history_restore_frame(self, snap: dict, mode: str):
         self._history_apply(snap)
         self._attach_pipeline(self._src_rgb, adopt=True)
+        self._ensure_shm(self._vram.w, self._vram.h)
         if self._precompute is not None:
             self._rehang_precompute(replayed_for=mode)
-        return self._write_current_frame(mode)
+        frame = self._write_current_frame(mode)
+        CDH.publish_geometry(self, emit)
+        return frame
 
     def _history_controller(self):
         controller = self.__dict__.get("_live_history")
@@ -1316,6 +1330,9 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
 
     def _history_bind(self, row: dict | None) -> None:
         return self._history_controller().bind(row)
+
+    def cmd_creative_document(self, p: dict):
+        return CDH.handle(self, p, emit)
 
     def cmd_history(self, p: dict):
         return self._history_controller().handle_command(p)
@@ -1389,6 +1406,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         try:
             source_stamp = LM.file_stamp(p["path"])
             d = load_rgb(p["path"], budget, device=self._effective_device())
+            if selected >= 0:
+                d = CDH.decoded_for_state(d, self._docs[selected]["state"], max_pixels=budget)
             if source_stamp != LM.file_stamp(p["path"]): raise ValueError("Source changed during decode")
         except Exception as e:
             tail = "（视口上那一张是相机内嵌预览，编辑没生效）" if self._preview_info else ""
@@ -1468,12 +1487,13 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
     def _open_session(self, d, p: dict, *, t0: int, strength: float | None, switched: bool,
                       device_prepare_ms: float = 0.0):
         """已有源图 → 建会话 → 重挂该重挂的层 → 出帧。新导入与底片条切换共用这一段。"""
+        self._creative_original_dimensions = getattr(d, "_creative_original_dimensions", (d.src_w, d.src_h))
         restore_channel = p.get("channel", self._channel)
         restore_grade_scope = self._grade_scope
         shm = self._ensure_shm(d.w, d.h)
         t_a = monotonic_ns()
         self._people_prepare_open(d,p)
-        pipe = self._attach_pipeline(d.rgb)      # 按引擎侧字段重放图层（见 _attach_pipeline）
+        pipe = self._attach_pipeline(CDH.original_proxy(d))      # 按引擎侧字段重放图层（见 _attach_pipeline）
         self._image_loaded = True
         optics_row = self._docs[self._doc_index]
         library_capture_decoded(optics_row, d)
@@ -1601,13 +1621,12 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             crop["crop_out"] = list(_gsz(int(self._vram.w), int(self._vram.h),
                                          tuple(self._crop_rect),
                                          float(self._crop_rotation)))
-            row = next((d for d in self._docs
-                        if d["path"] == os.path.abspath(str(self._doc_path or ""))), None)
+            row = self._docs[self._doc_index] if 0 <= self._doc_index < len(self._docs) else None
             if row and row.get("src_w") and row.get("src_h"):
                 crop["out_full"] = list(_gsz(int(row["src_w"]), int(row["src_h"]),
                                              tuple(self._crop_rect),
                                              float(self._crop_rotation)))
-        return {"document_id": self._load_id, "photo_detail": {**PDS.status(self._photo_detail),"available":PDH.available()}, "photo_grain": PGA.report(self), "colour_grading": CGA.report(self), "primary_calibration": PCA.report(self), "selective_colour": SCLA.report(self), "colour_editor": CEA.report(self), "extended_tone": {**ETS.status(self._extended_tone), "available": (Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()}, "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "id_background": IDR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self), "lip_makeup": LIPR.report(self), "brow_shape": BROWR.report(self), "nose_shape": NOSER.report(self), "eye_shape": EYER.report(self), "mouth_shape": MOUTHR.report(self), "reference_color": RCR.report(self), "semantic_colour": SCR.report(self), **self._body_report(),
+        return {"document_id": self._load_id, "source_uid": CDH.source_uid(self), "photo_detail": {**PDS.status(self._photo_detail),"available":PDH.available()}, "photo_grain": PGA.report(self), "colour_grading": CGA.report(self), "primary_calibration": PCA.report(self), "selective_colour": SCLA.report(self), "colour_editor": CEA.report(self), "extended_tone": {**ETS.status(self._extended_tone), "available": (Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()}, "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "id_background": IDR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self), "lip_makeup": LIPR.report(self), "brow_shape": BROWR.report(self), "nose_shape": NOSER.report(self), "eye_shape": EYER.report(self), "mouth_shape": MOUTHR.report(self), "reference_color": RCR.report(self), "semantic_colour": SCR.report(self), **self._body_report(),
                 "canvas_guides": CGH.report(self),
                 "strength": float(self._strength), "params": dict(self._params),
                 "channel": self._channel,
@@ -5577,6 +5596,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         reshape, eye/teeth and background coordinates remain document-specific.
         The copied snapshot never mutates the current document or batch recipe.
         """
+        from .creative_document_base import require_rebound_snapshot
+        require_rebound_snapshot(snap)
         from .export import ExportError
         from .people_export import verify_source as verify_people_source, isolated_snapshot
         verify_people_source(snap,path);snap=isolated_snapshot(snap,for_document=for_document)
@@ -5648,6 +5669,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         # One shared evaluator: background inspection must not construct a fake
         # Engine or maintain a second, incomplete interpretation of the recipe.
         from .export_recipe import build_export_spec
+        from .creative_document_base import source_shape
+        eh, ew = source_shape(snap, (eh, ew))
         return build_export_spec(snap, eh, ew, for_document=for_document)
 
     def cmd_export_destination(self, p):
@@ -6192,7 +6215,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                     if watermark or self._master16_snapshot_blockers(snap_i):
                         stage = "decode16"
                         decode_started = monotonic_ns()
-                        d = load_full(path, device=snap_i["device"], want_bits=16)
+                        d = load_full(path, device=snap_i["device"], want_bits=8 if snap_i.get("creative_base") is not None else 16)
                         verify_decode(path, immutable_stamp)
                         LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
                         decode_ms = (monotonic_ns() - decode_started) / 1e6
@@ -6531,7 +6554,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("canvas_guides", "project_recovery", "managed_import", "project_package", "export_destination", "virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("creative_document", "canvas_guides", "project_recovery", "managed_import", "project_package", "export_destination", "virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light",
                "deform", "lut", "custom_lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -6622,6 +6645,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             package = self.__dict__.get("_project_package_controller")
             if package is not None and package.blocks(name, msg):
                 raise ValueError("便携包操作进行中，请等待或取消后查询结果")
+            CDH.guard_command(self, name, msg)
             relocation = self.__dict__.get('_source_relocation_controller')
             if name == 'virtual_copy' and relocation is not None:
                 with relocation.lock: fn(msg)
@@ -6634,6 +6658,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                           'success': False, 'outcome_unknown': False, 'error': reason})
                     return
                 raise ValueError(reason)
+            if name == 'creative_document' and msg.get('action') == 'state':
+                fn(msg); return  # Read-only polling must not revoke capture/edit owners.
             if name in ('project_recovery', 'managed_import', 'project_package', 'source_relocation', 'virtual_copy', 'canvas_guides'):
                 fn(msg); return  # Path transactions never enter recipe history/capture invalidation.
             if relocation is not None and name == 'project' and msg.get('action') == 'state':
@@ -6757,6 +6783,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
         finally:
             try:
+                if dispatch_error and name == 'creative_document':
+                    CDH.dispatch_rejected(msg, dispatch_error, bool(recovery_boundary and recovery_boundary['started']), emit)
                 if dispatch_error and name == 'canvas_guides':
                     CGH.rejected(self, msg, dispatch_error, emit)
                 if dispatch_error and name=="project_recovery":

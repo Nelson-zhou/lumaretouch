@@ -72,12 +72,21 @@ def render_preview(engine, *, pack=True, editor_mode=None):
             state={**state,'_'+name:recipe}
     snap=engine._state_to_export_snap(state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0,source_path=path)
     snap,for_doc=engine._prepare_export_snapshot(path,snap,True)
-    d=load_full(path,max_px=100000000,device='cpu',want_bits=16)
-    if (d.w,d.h)!=(w,h) or (d.src_w,d.src_h)!=(w,h) or d.draft_used or (d.raw or {}).get('used_preview'):
+    from .creative_document_base import source_shape
+    creative_base=snap.get('creative_base') is not None
+    # The original file still owns source identity and decode guards. A baked
+    # canvas separately owns the render dimensions and float working pixels.
+    # RGB8 here is only an unused original-file decode, never the creative
+    # source and never a fallback for its full-float asset.
+    d=load_full(path,max_px=100000000,device='cpu',want_bits=8 if creative_base else 16)
+    original_hw=(d.src_h,d.src_w)
+    if (d.h,d.w)!=original_hw or d.draft_used or (d.raw or {}).get('used_preview'):
         raise ValueError('Grain requires original-resolution decode, not camera/display proxy')
+    if source_shape(snap,original_hw)!=(h,w):
+        raise ValueError('Grain render dimensions no longer match the current pixel source')
     if file_stamp(path)!=before:raise ValueError('Grain source changed during decode')
-    for module in (LM,LG,ER,ML,SB,OP,SK):module.check_export_decode(snap,path,before,(h,w))
-    BP.check_export_decode(snap,path,before,(h,w));verify_export(snap,path,(h,w))
+    for module in (LM,LG,ER,ML,SB,OP,SK):module.check_export_decode(snap,path,before,original_hw)
+    BP.check_export_decode(snap,path,before,original_hw);verify_export(snap,path,original_hw)
     if snap.get("grade_scope")=="objects":snap["local_mask_source_path"]=path
     spec,skipped=build_export_spec(snap,h,w,for_document=for_doc)
     if skipped:raise ValueError('Full-source grain preview cannot omit layers: '+', '.join(map(str,skipped)))
@@ -91,12 +100,12 @@ def render_preview(engine, *, pack=True, editor_mode=None):
     geometry=(tuple(snap['crop_rect']),float(snap['crop_rotation']))
     source=d.rgb
     if source.dtype==np.uint16:
-        if d.source_icc:
+        if d.source_icc and not creative_base:
             from .color16 import convert_rgb16
             source=convert_rgb16(source,d.source_icc,_srgb_bytes())
         full,_=export_image16(source,spec,device='cpu',progress=progress,crop_rect=geometry[0],rotation_degrees=geometry[1])
     elif source.dtype==np.uint8:
-        if (d.raw or {}) or int(d.src_bits)>8:raise ValueError('High-bit-depth grain source cannot use RGB8')
+        if not creative_base and ((d.raw or {}) or int(d.src_bits)>8):raise ValueError('High-bit-depth grain source cannot use RGB8')
         full,_=export_image(source,spec,device='cpu',progress=progress,geometry=geometry)
     else:raise ValueError('Unsupported original grain source precision')
     progress()

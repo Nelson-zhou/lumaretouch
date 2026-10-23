@@ -235,6 +235,9 @@ class ExportSpec:
     sharpen_amount: float = 0.0
     sharpen_radius: int = 2
     sharpen_threshold: float = 0.01
+    # Append fields to preserve existing positional library callers.
+    # Canonical immutable RGBA record; original source path remains untouched.
+    creative_base: dict | None = None
 
     def check_effect_recovery(self) -> None:
         """Validate retained intent and optional full-source fields before work."""
@@ -297,6 +300,8 @@ class ExportSpec:
 
     def check(self) -> None:
         """参数在进入昂贵通路之前先过一遍唯一校验口径（与各层 setter 同源）。"""
+        from .creative_document_base import check as check_creative_base
+        check_creative_base(self.creative_base)
         from .extended_tone_state import check as check_tone
         self.extended_tone=check_tone(self.extended_tone)
         from .photo_detail_state import check as check_detail
@@ -674,15 +679,15 @@ def _rest(op, cls):
 def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
                  tile: int = DEFAULT_TILE, progress=None, geometry=None) -> tuple:
     """Existing RGB8 entry point; do not silently promote source precision."""
-    return _export_image_impl(src_u8, spec, device=device, tile=tile,
-                              progress=progress, bits=8, geometry=geometry)
+    return _run_export(src_u8, spec, device=device, tile=tile,
+                       progress=progress, bits=8, geometry=geometry)
 
 
-def export_float(src, spec, *, geometry, progress=None):
+def export_float(src, spec, *, geometry, progress=None, provenance=True):
     """Internal actual fully edited original-resolution RGB and provenance tap."""
-    spec.float_output=True;spec.provenance_output=True
-    return _export_image_impl(src,spec,device='cpu',tile=DEFAULT_TILE,progress=progress,
-                              bits=16 if src.dtype==np.uint16 else 8,geometry=geometry)
+    spec.float_output=True;spec.provenance_output=bool(provenance)
+    return _run_export(src,spec,device='cpu',tile=DEFAULT_TILE,progress=progress,
+                       bits=16 if src.dtype==np.uint16 else 8,geometry=geometry)
 
 
 def export_image16(src_u16: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
@@ -693,8 +698,57 @@ def export_image16(src_u16: np.ndarray, spec: ExportSpec, *, device: str = "cuda
     This is the editing-library entry point used by the application's end-to-end
     RAW/TIFF decode, recipe, crop and color-managed file-export integration.
     """
-    return _export_image_impl(src_u16, spec, device=device, tile=tile,
-                              progress=progress, bits=16, geometry=(crop_rect, rotation_degrees))
+    return _run_export(src_u16, spec, device=device, tile=tile,
+                       progress=progress, bits=16, geometry=(crop_rect, rotation_degrees))
+
+
+def _run_export(source, spec, *, device, tile, progress, bits, geometry):
+    """Resolve a creative source once, outside recursive full-frame prepasses.
+
+    Source precision and file precision are independent. Creative pixels remain
+    float through all edit/delivery passes; RGB8/RGB16 quantization happens once
+    here only after an explicit alpha/HDR admissibility check. Internal float
+    captures preserve extended results instead of quantizing them for display.
+    """
+    if spec.creative_base is None:
+        return _export_image_impl(source, spec, device=device, tile=tile,
+            progress=progress, bits=bits, geometry=geometry)
+    from copy import copy
+    from .creative_document_base import export_source, require_rebound_spec
+    require_rebound_spec(spec)
+    original = spec
+    resolved = copy(spec)
+    resolved._creative_source_resolved = True
+    resolved.float_output = True
+    # A creative composite cannot masquerade as unchanged original-scene
+    # evidence for reference matching. Capture callers need pixels, not a
+    # fabricated original-photo support map.
+    resolved.provenance_output = False
+    def cancelled():
+        if progress:
+            progress(0, 1, 0.)
+        return False
+    from .cpu_memory_budget import available_estimate
+    work_bytes = min(4_000_000_000, max(1, int(available_estimate()) // 2))
+    source = export_source(spec.creative_base, cancelled=cancelled, max_bytes=work_bytes)
+    frame, facts = _export_image_impl(source, resolved, device=device, tile=tile,
+        progress=progress, bits=bits, geometry=geometry)
+    if hasattr(resolved, '_colour_editor_capture_coverage'):
+        # The input picker consumes coverage through its caller-owned spec.
+        # Source resolution uses a private shallow copy, not a different owner.
+        original._colour_editor_capture_coverage = resolved._colour_editor_capture_coverage
+    original.provenance_result = (np.zeros(frame.shape[:2], dtype=bool)
+        if original.provenance_output else None)
+    if not original.float_output:
+        if not np.isfinite(frame).all() or np.any(frame < 0) or np.any(frame > 1):
+            raise ExportError('Creative output has signed/HDR values that this RGB8/RGB16 encoder cannot preserve; no implicit clipping or tone mapping')
+        frame = quantize16_np(frame) if bits == 16 else np.rint(frame * 255.).astype(np.uint8)
+    facts = {**facts, 'creative_base': spec.creative_base['id'],
+        'creative_source_bits': 32, 'creative_source_encoding': 'linear-srgb-d65',
+        'creative_alpha_policy': 'opaque-only; no export matte',
+        'creative_hdr_policy': 'float retained; integer output rejects out-of-range',
+        'original_scene_evidence': False}
+    return frame, facts
 
 
 def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
@@ -703,8 +757,11 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     if geometry is not None:
         from .ops.geometry import check as check_geometry
         check_geometry(*geometry)
-    dtype = np.uint16 if bits == 16 else np.uint8
-    divisor = 65535.0 if bits == 16 else 255.0
+    creative_source = bool(getattr(spec, '_creative_source_resolved', False))
+    if spec.creative_base is not None and not creative_source:
+        raise ExportError('Creative source must enter through the single public export resolver')
+    dtype = np.float32 if creative_source else np.uint16 if bits == 16 else np.uint8
+    divisor = 1.0 if creative_source else 65535.0 if bits == 16 else 255.0
     if src_u8.ndim != 3 or src_u8.shape[2] != 3 or src_u8.dtype != dtype:
         raise ExportError(f"导出要 (H,W,3) {np.dtype(dtype).name}，得到 {src_u8.shape} {src_u8.dtype}")
     from .photo_grain_state import check as check_grain, neutral as neutral_grain, active as grain_active
@@ -780,7 +837,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     verify_body_source(spec)
     verify_hair_source(spec)
     semantic_stage=SemanticColourStage(spec.semantic_colour,binding=spec.semantic_colour_binding)
-    floating=detail_active(detail_recipe) or bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass or colour_grading_stage.active or selective_colour_stage.active or primary_calibration_stage.active or grain_active(grain_recipe) or editor_needed
+    floating=creative_source or detail_active(detail_recipe) or bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass or colour_grading_stage.active or selective_colour_stage.active or primary_calibration_stage.active or grain_active(grain_recipe) or editor_needed
     if spec.provenance_output and (not spec.float_output or spec.scale!=1): raise ExportError("来源支持只用于原尺寸浮点分析")
     optical_budget = 0
     if optical:
@@ -926,10 +983,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         cy1, cx1 = min(y1 + margin, h), min(x1 + margin, w)
         th, tw = cy1 - cy0, cx1 - cx0
         t0 = time.perf_counter()
-        pipe = PreviewPipeline(device, tw, th, high_precision_warp=(bits == 16))
+        pipe = PreviewPipeline(device, tw, th, high_precision_warp=(bits == 16 or creative_source))
         if base_f is not None:
             pipe.load_rgb_f32(np.ascontiguousarray(base_f[cy0:cy1, cx0:cx1]))
-        elif bits == 16:
+        elif bits == 16 or creative_source:
             pipe.load_rgb_f32(np.ascontiguousarray(src_u8[cy0:cy1, cx0:cx1], dtype=np.float32) / divisor)
         else:
             pipe.load_rgb_u8(src_u8[cy0:cy1, cx0:cx1])
@@ -1913,7 +1970,8 @@ def render_edited_rgb16(decoded, spec: ExportSpec, *, device: str = "cpu",
                         rotation_degrees: float = 0.0, output_profile: str = "srgb",
                         progress=None):
     """Shared high-precision render/ICC path. Returns pixels, ICC and facts; no file IO."""
-    if decoded.rgb.dtype != np.uint16 or (decoded.raw or {}).get("used_preview"):
+    creative_source = spec.creative_base is not None
+    if not creative_source and (decoded.rgb.dtype != np.uint16 or (decoded.raw or {}).get("used_preview")):
         raise ExportError("16-bit 编辑需要真实 uint16 源，不接受8-bit显示代理")
     from .color16 import convert_rgb16
     working_icc = _srgb_bytes()
@@ -1921,7 +1979,7 @@ def render_edited_rgb16(decoded, spec: ExportSpec, *, device: str = "cpu",
     t_color = time.perf_counter()
     source = decoded.rgb
     input_converted = False
-    if decoded.source_icc:
+    if decoded.source_icc and not creative_source:
         source = convert_rgb16(source, decoded.source_icc, working_icc)
         input_converted = decoded.source_icc != working_icc
     input_color_ms = (time.perf_counter() - t_color) * 1000
@@ -1932,17 +1990,19 @@ def render_edited_rgb16(decoded, spec: ExportSpec, *, device: str = "cpu",
     if output_converted:
         frame = convert_rgb16(frame, working_icc, target_icc)
     color_ms = input_color_ms + (time.perf_counter() - t_color) * 1000
-    return frame, target_icc, { "src_w": decoded.src_w, "src_h": decoded.src_h,
-            "src_format": decoded.fmt, "source": (decoded.raw or {}).get("source"),
+    return frame, target_icc, { "src_w": spec.creative_base['width'] if creative_source else decoded.src_w,
+            "src_h": spec.creative_base['height'] if creative_source else decoded.src_h,
+            "src_format": 'creative-linear-rgba-f32' if creative_source else decoded.fmt,
+            "source": 'creative_composite' if creative_source else (decoded.raw or {}).get("source"),
             "bits": 16, "icc_source": str(output_profile),
             "color_converted": input_converted or output_converted,
             "color_conversion_ms": round(color_ms, 2),
             "render_stats": render_stats, "pipeline": "float32_rgb16",
-            "working_color_space": "sRGB", "decoded_bits": 16,
+            "working_color_space": "sRGB", "decoded_bits": 32 if creative_source else 16,
             # LibRaw output_bps describes the developed RGB, not the sensor file bit depth.
             "source_bits": (int(decoded.src_bits)
                             if (decoded.raw or {}).get("source") in (None, "tiff16") else None),
-            "notes": list(decoded.notes) + ["真实RGB16源经float32或更高精度编辑；显示uint8缓冲不作为导出输入"]}
+            "notes": list(decoded.notes) + (["创意合成原件以完整float32输入编辑；仅最终编码为RGB16，未使用显示代理"] if creative_source else ["真实RGB16源经float32或更高精度编辑；显示uint8缓冲不作为导出输入"])}
 
 
 def export_edited_16bit(decoded, spec: ExportSpec, out_path: str, *,

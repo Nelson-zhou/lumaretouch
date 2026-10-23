@@ -12,6 +12,7 @@ import threading
 import time
 
 from .project_recovery_store import RecoveryError, no_dropped
+from . import creative_document_storage as CS
 
 
 class AutosaveScheduler:
@@ -69,16 +70,13 @@ class AutosaveScheduler:
             if self.closed or project_id != self.project_id:
                 raise RecoveryError('Project is not active')
         no_dropped(project)
-        # Bounded encoding avoids allocating another unbounded full string.
-        chunks, count = [], 0
-        for chunk in json.JSONEncoder(ensure_ascii=False, allow_nan=False,
-                                     separators=(',', ':')).iterencode(project):
-            raw = chunk.encode('utf-8')
-            count += len(raw)
-            if count > self.snapshot_bytes:
-                raise RecoveryError('Autosave snapshot budget exceeded; save manually without dropping assets')
-            chunks.append(raw)
-        frozen = b''.join(chunks)
+        # The existing limit governs the manifest, not base64-expanded float
+        # pixels. Immutable byte chunks travel out of band under the unchanged
+        # creative-store and recovery disk budgets, never a lossy codec.
+        try:
+            frozen = CS.freeze(project, self.snapshot_bytes)
+        except ValueError as error:
+            raise RecoveryError(f'Autosave snapshot unavailable: {error}') from error
         # Freeze request receipts too. They are evidence, not commands to replay.
         receipts = json.loads(json.dumps(native_receipts, allow_nan=False))
         metadata = {'revision': revision, 'original_path': original_path,

@@ -7,7 +7,11 @@ def state_signature(st: dict) -> str:
     （1e-16 的差不能算"改过"），_deform/_grade 又是嵌套结构。"""
     d = {}
     for k, v in st.items():
-        if k == "_id_background_bundle":
+        if k == "_creative_asset_records":
+            d[k] = sorted(v or {})
+        elif k == "_creative_base":
+            d[k] = None if v is None else v["id"]
+        elif k == "_id_background_bundle":
             d[k] = None if v is None else v["binding"]
         elif k == "_semantic_colour_mask_assets":
             d[k] = sorted(v)  # Recipe contains hash/shape references; immutable raw arrays never stringify.

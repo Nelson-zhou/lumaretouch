@@ -1,5 +1,11 @@
 """Prepare a parked graph target with the existing original-source export path."""
 def validate(engine,row,candidate):
+    # Returned pixels already contain the original portrait intent. That graph
+    # is dormant for undo, not a target for a new cross-document mutation. Fail
+    # before original-file decode or snapshot capture can ignore the candidate
+    # and incorrectly certify an unchanged baked canvas as a successful edit.
+    if (row.get('state') or {}).get('_creative_base') is not None:
+        raise ValueError('People transfer target is a creative baseline; derived-source portrait preflight is required')
     from . import local_mask_state as M
     from .decode import load_full,is_raw,_source_bits
     from .cpu_memory_budget import available_estimate

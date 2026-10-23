@@ -86,52 +86,77 @@ class HistoryController:
         self.redo = list((row or {}).get("redo") or [])
         self.group, self.group_ns = "", 0
 
-    def handle_command(self, p: dict):
+    def handle_command(self, p: dict) -> dict:
+        """Return a truthful transaction outcome in addition to legacy UI events.
+
+        Callers must not infer success from stack sizes. Once restore/stack writes
+        start, an unexpected exception is unknown unless rollback is confirmed.
+        A failed publication must not escape as a false no-change acknowledgement.
+        """
+        outcome = {"status": "rejected"}
+        try:
+            return self._handle_command(p, outcome)
+        except Exception as error:
+            message = f"history 操作未完成：{type(error).__name__}: {error}"
+            if outcome["status"] == "unknown":
+                message += "；结果需要核对，请勿重复操作"
+            try:
+                self.emit({"event": "error", "error": message})
+            except Exception:
+                pass  # Even a failed event sink must leave a structured outcome.
+            return {"status": outcome["status"], "message": message}
+
+    def _handle_command(self, p: dict, outcome: dict) -> dict:
         """撤销/重做：整条链只有一份实现——装回快照，然后用 _attach_pipeline 按
         那些字段重放图层（与换设备、切文档同一条路），不写第二份重放。"""
         unknown = set(p) - {"cmd", "action"}
         if unknown:
-            self.emit({"event": "error", "error": f"history 收到不认识的参数：{sorted(unknown)}"})
-            return
+            message = f"history 收到不认识的参数：{sorted(unknown)}"
+            self.emit({"event": "error", "error": message})
+            return {"status": "rejected", "message": message}
         action = p.get("action", "state")
         if action not in ACTIONS:
-            self.emit({"event": "error", "error": f"未知 history action: {action}"
-                  f"（可用：{'/'.join(ACTIONS)}）"})
-            return
+            message = f"未知 history action: {action}（可用：{'/'.join(ACTIONS)}）"
+            self.emit({"event": "error", "error": message})
+            return {"status": "rejected", "message": message}
         if action == "state":
             self.emit({"event": "history_state", "action": action, "doc_state": self.ports.status(),
                   **self.report()})
-            return
+            return {"status": "no_change"}
         if action == "clear":
+            changed = bool(self.undo or self.redo)
+            outcome["status"] = "unknown"
             if self.undo or self.redo:self.ports.mark_dirty()
             self.undo, self.redo = [], []
             self.group, self.group_ns = "", 0
             self.ports.remember_current()
             self.emit({"event": "history_state", "action": "clear", "doc_state": self.ports.status(),
                   **self.report()})
-            return
+            return {"status": "applied" if changed else "no_change"}
         # 与 set_strength 同一条守卫：跑靶线程在写 frame_gpu，这里也写同一块；
         # 导出线程拿着的是"撤销前那一版"的笔迹，画面与账单会分头说话
         reason = self.ports.guard(action)
         if reason:
             self.emit({"event": "error", "error": reason})
-            return
+            return {"status": "rejected", "message": reason}
         stack = self.undo if action == "undo" else self.redo
         other = self.redo if action == "undo" else self.undo
         if not stack:
             # 退无可退不是错误：快捷键按多了是常态，报 noop 让按钮跟着灰下去
             self.emit({"event": "history_state", "action": action, "noop": True,
                   "doc_state": self.ports.status(), **self.report()})
-            return
+            return {"status": "no_change"}
         snap = stack[-1]
         current = self.ports.capture()
-        if tuple(snap.get("_proxy") or ()) != tuple(current.get("_proxy") or ()):
+        from .creative_document_host import proxy_transition
+        if tuple(snap.get("_proxy") or ()) != tuple(current.get("_proxy") or ()) and not proxy_transition(current, snap):
             # 正常路径不会到这里（代理档一变就清历史），留着是为了"清没清干净"这件事
             # 不能靠注释保证——快照的像素坐标与新尺寸不配时重放会渲染出半截画面
-            self.emit({"event": "error", "error": f"{action} 那一格的快照属于另一档代理尺寸："
-                  f"{snap.get('_proxy')} vs {current.get('_proxy')}，已拒绝"})
-            return
+            message = f"{action} 那一格的快照属于另一档代理尺寸：{snap.get('_proxy')} vs {current.get('_proxy')}，已拒绝"
+            self.emit({"event": "error", "error": message})
+            return {"status": "rejected", "message": message}
         t0 = self.clock()
+        outcome["status"] = "unknown"
         try:
             fr = self.ports.restore_frame(snap, f"history_{action}")
         except Exception as e:
@@ -139,14 +164,15 @@ class HistoryController:
             try:
                 self.ports.restore_frame(current, "history_rollback")
                 rolled = True
+                outcome["status"] = "rejected"
             except Exception as e2:
                 rolled = False
                 self.emit({"event": "engine_warn",
                       "warn": f"history {action} 失败后回滚也失败（{type(e2).__name__}: {e2}）："
                               "画面与状态可能不一致，请重新导入这张图"})
-            self.emit({"event": "error", "error": f"history {action} 失败："
-                  f"{type(e).__name__}: {e}" + ("" if rolled else "；且回滚失败")})
-            return
+            message = f"history {action} 失败：{type(e).__name__}: {e}" + ("" if rolled else "；且回滚失败，结果需要核对，请勿重复操作")
+            self.emit({"event": "error", "error": message})
+            return {"status": "rejected" if rolled else "unknown", "message": message}
         ms = round((self.clock() - t0) / 1e6, 2)
         if self.ports.signature(current) != self.ports.signature(self.ports.capture()):
             self.ports.note_edit()
@@ -162,4 +188,5 @@ class HistoryController:
               "render_ms": render_ms, "doc_state": self.ports.status(),
               **self.report()})
         self.emit(fr)
+        return {"status": "applied"}
 
