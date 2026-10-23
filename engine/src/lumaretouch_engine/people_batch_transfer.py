@@ -230,4 +230,9 @@ def commit(engine,controller,p,plan):
 
 def handle(engine,controller,p,plan):
     if plan is None and p.get('action')=='people_targets':return I.inventory(engine,controller,p)
+    selected=p.get('people_transfer')
+    if ((plan is None and type(selected) is dict and selected.get('target_policy')=='persistent_association')
+            or (plan is not None and plan.params()[MARKER].get('mode')=='persistent_association')):
+        from . import people_cross_owner_workflow as associations
+        return associations.preflight(engine,controller,p) if plan is None else associations.commit(engine,controller,p,plan)
     return preflight(engine,controller,p) if plan is None else commit(engine,controller,p,plan)

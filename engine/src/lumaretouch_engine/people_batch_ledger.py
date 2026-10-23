@@ -86,6 +86,8 @@ def prepare_scoped(engine,plans,targets):
 
 
 def _publish(owner,engine,plans,targets):
+    from .people_cross_owner_ledger import validate_plans
+    validate_plans(plans,targets)
     _verify(owner,engine,plans,targets)
     committed=[]
     try:

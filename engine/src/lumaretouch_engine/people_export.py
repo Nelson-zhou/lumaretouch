@@ -12,6 +12,9 @@ def fastpath_blocker(snapshot):
     where refusal is visible rather than exporting an unedited original.
     """
     if snapshot is None:return False
+    # Association projections always enter the checked export path, even when
+    # currently neutral; passthrough must not bypass document ownership.
+    if any('cross_owner' in person for person in snapshot['state']['persons'].values()):return True
     from . import people_resolver as R
     state=S.check(snapshot['state']);asset=S.digest(snapshot['asset_sha256'])
     if any(row['asset_sha256']==asset and row['status']=='unresolved' for row in state['unresolved_legacy']):return True
@@ -30,6 +33,8 @@ def isolated_snapshot(snapshot,*,for_document):
     """Retained legacy mirrors are not a second copy of a bank's visual effects."""
     people=snapshot.get('people')
     if people is None:return snapshot
+    from .people_document_owner import validate_snapshot
+    validate_snapshot(people,snapshot.get('people_document_id'))
     if not for_document:raise ValueError('People graph must be frozen for this exact target photo')
     S.check(people['state']);S.digest(people['asset_sha256']);ASSETS.check_store(people.get('support_assets',{}))
     snap=dict(snapshot)
@@ -50,6 +55,9 @@ def prepare(spec,source,repaired):
     from .people_engine_runtime import prepare_export
     from .cpu_memory_budget import available_estimate
     snapshot=spec.people
+    document_id=getattr(spec,'people_document_id',None)
+    from .people_document_owner import validate_snapshot
+    validate_snapshot(snapshot,document_id)
     replay_evidence=None
     if getattr(spec,'body_pose',None) is not None:
         from .creative_derived_body_export import verify_spec, verify_pixels
@@ -59,11 +67,11 @@ def prepare(spec,source,repaired):
             from .creative_derived_repair_export import verify_replayed
             replay_evidence=verify_replayed(spec,repaired)
         from .creative_derived_effects import require_graph
-        require_graph(snapshot['state'],snapshot['creative_source'])
+        require_graph(snapshot['state'],snapshot['creative_source'],document_id=document_id)
         from .creative_derived_recovery import validate_supports
         validate_supports(snapshot['state'],snapshot.get('support_assets',{}),snapshot['creative_source'])
     recovery=ASSETS.raster(snapshot['state'],snapshot.get('support_assets',{}),snapshot['asset_sha256'],source.shape[:2])
-    return prepare_export(snapshot,source,repaired,creative_repair_evidence=replay_evidence,byte_budget=available_estimate(),recovery_assets=recovery,body_pose=getattr(spec,'body_pose',None),body_source_path=None if snapshot.get('creative_source') is not None else getattr(spec,'body_pose_source_path',None))
+    return prepare_export(snapshot,source,repaired,document_id=document_id,creative_repair_evidence=replay_evidence,byte_budget=available_estimate(),recovery_assets=recovery,body_pose=getattr(spec,'body_pose',None),body_source_path=None if snapshot.get('creative_source') is not None else getattr(spec,'body_pose_source_path',None))
 
 
 def verify_source(snapshot,path):
@@ -76,13 +84,16 @@ def verify_source(snapshot,path):
             if source_digest(path)!=body['source']['sha256']:raise ValueError('Frozen body observations belong to another source asset')
     people=snapshot.get('people')
     if people is None:return
+    document_id=snapshot.get('people_document_id')
+    from .people_document_owner import validate_snapshot
+    validate_snapshot(people,document_id)
     from .creative_derived_source import binding, record
     if record(snapshot) is not None:
         source=binding(snapshot,path)
         if people.get('creative_source')!=source or people['asset_sha256']!=source['sha256']:
             raise ValueError('Frozen people graph belongs to another creative source')
         from .creative_derived_effects import require_graph
-        require_graph(people['state'],source)
+        require_graph(people['state'],source,document_id=document_id)
         return
     if people.get('creative_source') is not None:
         raise ValueError('Creative people evidence is missing its immutable source')

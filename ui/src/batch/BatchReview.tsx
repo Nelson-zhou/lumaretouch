@@ -1,5 +1,6 @@
 import {CROP_OP,cropReviewKey,cropImagesReady} from '../cropTransfer/model';
 import {CropTransferReview} from '../cropTransfer/CropTransferReview';
+import {AssociationEvidence} from '../people/AssociationEvidence';
 import {PeopleTransferEvidence} from '../people/transferReview';
 import {ReferenceColorReview} from '../referenceColor/ReferenceColorReview';
 import {AutomaticTransferReview} from '../optics/AutomaticTransferReview';
@@ -60,11 +61,12 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
       {plan&&<>
         <p title={plan.source_snapshot.path}>源图：{file(plan.source_snapshot.path)} · 预检版本 {plan.source_snapshot.revision}</p>
         <p>{state.scopeLabel} · {plan.module_scope.length} 个模块</p>
-        <p>{plan.people_transfer?(plan.applies.target_policy==='explicit_face_map'?'只向本次手动指定的人脸同步勾选参数；不建立持久人物关联。源图、目标、人物状态或关联改变后必须重新预检。':'只向明确确认的同一人物同步勾选参数；源图、目标或关联改变后必须重新预检。'):plan.module_scope.includes('lnx.reference_color.v1')?'参考或目标在预检后修改则拒绝，必须重新审核。样片保持不变，整组撤销/重做保留其他手动编辑。':'固定使用预检时的配方；目标照片若在预检后修改，不会被覆盖。'}</p>
+        <p>{plan.persistent_association?'持久关联操作包括源成员，所有独立成员同时审核与提交；只继承共同标量参数，不共享蒙版、关键点或局部素材。':plan.people_transfer?(plan.applies.target_policy==='explicit_face_map'?'只向本次手动指定的人脸同步勾选参数；不建立持久人物关联。源图、目标、人物状态或关联改变后必须重新预检。':'只向明确确认的同一人物同步勾选参数；源图、目标或关联改变后必须重新预检。'):plan.module_scope.includes('lnx.reference_color.v1')?'参考或目标在预检后修改则拒绝，必须重新审核。样片保持不变，整组撤销/重做保留其他手动编辑。':'固定使用预检时的配方；目标照片若在预检后修改，不会被覆盖。'}</p>
         <p>预检可同步 {plan.ok} 张 · 受阻 {plan.blocked} 张 · 无效选择 {plan.rejected_docs?.length??0} 张</p>
         <p>冲突处理：{plan.policy==='recheck'?'任一目标变化则整批不写入，重新预检':'跳过有变化的目标，并逐张报告'}</p>
         {result?.source_changed_since_preflight&&<p>源图在预检后已变化，本次仍使用已确认的旧版本配方。</p>}
         <details><summary>查看冻结的模块与参数</summary><pre>{JSON.stringify(plan.applies,null,2)}</pre></details>
+        {plan.persistent_association&&<AssociationEvidence value={plan.persistent_association} source={plan.association_source} sourceOutcome={result?.source_outcome}/>}
         {peoplePreview}
       </>}
       {!!targets.length&&<ul className="batchTargets">{targets.map(t=><li key={t.document_id} title={t.path}>
@@ -79,7 +81,7 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
       {!!result?.conflicts?.length&&<ul>{result.conflicts.map((r,i)=><li key={i}>{file(r.path)}：{r.reason}</li>)}</ul>}
       <footer>
         {state.phase==='review'&&blockedReason&&<p role="status">{blockedReason}</p>}
-        {state.phase==='review'&&<button className="tb primary" disabled={!!blockedReason||!plan?.ok||(plan.policy==='recheck'&&plan.blocked>0)} onClick={()=>{if(!blockedReason)onCommit();}}>{plan?.applies.target_policy==='explicit_face_map'?'仅确认本次人脸配对与参数并同步':'确认本次配方并同步'}</button>}
+        {state.phase==='review'&&<button className="tb primary" disabled={!!blockedReason||!plan?.ok||(plan.policy==='recheck'&&plan.blocked>0)} onClick={()=>{if(!blockedReason)onCommit();}}>{plan?.persistent_association?'确认全部成员与持久关联操作':plan?.applies.target_policy==='explicit_face_map'?'仅确认本次人脸配对与参数并同步':'确认本次配方并同步'}</button>}
         {['review','error','done'].includes(state.phase)&&!['undo','redo'].includes(state.operation)&&<button className="tb" onClick={onReview}>重新预检</button>}
         {state.phase==='uncertain'&&<><button className="tb" onClick={onAcknowledge}>我已检查照片，结束本次跟踪</button><button className="tb primary" onClick={onQuery}>再次查询这次任务</button></>}
       </footer>

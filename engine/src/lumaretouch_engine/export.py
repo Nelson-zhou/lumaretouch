@@ -189,6 +189,7 @@ class ExportSpec:
     # 内容门的相对统计会跟着插值得到的假边一起漂。
     enhance: dict = field(default_factory=dict)
     people: dict | None = None
+    people_document_id: str | None = None
     body_pose: dict | None = None
     body_pose_source_path: str | None = None
     body_pose_source_stamp: list | None = None

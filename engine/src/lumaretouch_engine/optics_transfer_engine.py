@@ -37,7 +37,7 @@ def prepare_target(engine,row,candidate_state,document_id,revision,*,cancelled=l
     if M.file_stamp(path)!=stamp:raise ValueError('自动目标在解码期间变化')
     source={'sha256':M.source_digest(path),'width':decoded.w,'height':decoded.h}
     from . import virtual_copy_people as VP
-    snap=engine._state_to_export_snap(candidate_state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=path,people_context=VP.row_context(engine,row),people_graph=VP.row_snapshot(engine,row))
+    snap=engine._state_to_export_snap(candidate_state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=path,people_context=VP.row_context(engine,row),people_graph=VP.row_snapshot(engine,row),people_document_id=engine._document_versions().version(row).document_id)
     snap['optics']=S.empty();snap['crop_rect']=(0.,0.,1.,1.);snap['crop_rotation']=0.
     # Match the owned full-source inspection/export guards. No replacement face
     # selection or inferred scope is synthesized for an unanalyzed target.

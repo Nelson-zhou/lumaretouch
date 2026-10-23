@@ -132,7 +132,9 @@ def check(state):
             digest(asset['content_sha256']); token(asset['kind'])
     for key, person in state['persons'].items():
         token(key)
-        if person != {'anonymous': True}: raise ValueError('Persons are anonymous links, not identity facts')
+        if (type(person) is not dict or set(person) not in ({'anonymous'},{'anonymous','cross_owner'})
+                or person.get('anonymous') is not True):
+            raise ValueError('Persons are anonymous links, not identity facts')
     for key, group in state['groups'].items():
         token(key)
         if type(group) is not dict or set(group) != {'label', 'priority', 'face_ids'}:
@@ -193,6 +195,9 @@ def check(state):
             ref = check_ref(record['binding'])
             if ref['asset_sha256'] != record['asset_sha256'] or ref['face_instance_id'] not in state['faces']:
                 raise ValueError('Legacy archive cannot change source ownership')
+    if any('cross_owner' in person for person in state['persons'].values()):
+        from .people_cross_owner import validate_graph
+        validate_graph(state)
     # Only JSON data belongs here; masks/arrays remain in source-owned asset storage.
     try: encoded = json.dumps(state, allow_nan=False)
     except (TypeError, ValueError) as exc: raise ValueError('People state must be portable JSON') from exc
@@ -203,6 +208,8 @@ def check(state):
 def set_override(state, scope, target_id, operation_id, path, value, *, unset=False):
     out = check(state)
     if scope not in SCOPES: raise ValueError('Invalid override scope')
+    if scope == 'person' and 'cross_owner' in out['persons'].get(target_id, {}):
+        raise ValueError('Reviewed cross-owner intent requires an atomic association transaction')
     token(operation_id); parameter_path(path)
     if type(unset) is not bool: raise ValueError('Unset must be explicit')
     if scope == 'all_people':

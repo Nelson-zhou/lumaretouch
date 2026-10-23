@@ -196,17 +196,19 @@ def require_command(engine, name, request):
     if not engine._people_managed() or engine._precompute is None or engine._precompute.backend != 'mediapipe':
         raise ValueError('Reanalyse this composite with the actual portrait backend before editing')
     verify_precompute(engine,engine._precompute)
-    require_graph(state,owned)
+    require_graph(state,owned,document_id=current['document_id'])
 
 
-def require_graph(state, binding):
+def require_graph(state, binding, *, document_id=None):
     """Also used by replay/export: persisted recipes cannot bypass admission."""
     from . import people_state as S, people_algorithms as A
     from .people_resolver import resolve
     from .creative_derived_recovery import TARGETS
     owned = source(binding); state = S.check(state); asset = owned['sha256']
+    from .people_cross_owner import validate_owner
+    accepted = validate_owner(state,asset,document_id)
     faces = {key:face for key,face in state['faces'].items() if face['asset_sha256'] == asset}
-    if any(link['face_instance_id'] in faces for link in state['links']) or any(set(group['face_ids']) & set(faces) for group in state['groups'].values()):
+    if any(link['face_instance_id'] in faces and link['person_id'] not in accepted for link in state['links']) or any(set(group['face_ids']) & set(faces) for group in state['groups'].values()):
         raise ValueError('Derived portrait graph cannot inherit shared person/group inputs')
     for key,face in faces.items():
         for kind,descriptor in face['local_assets'].items():
@@ -219,6 +221,6 @@ def require_graph(state, binding):
         if any(value != A.specifications()[operation][0] for operation,value in values.items() if operation not in OPERATIONS):
             raise ValueError('Derived portrait graph contains an unadapted operation')
     for row in state['overrides']:
-        if (row['scope'] == 'face' and row['target_id'] in faces) or (row['scope'] == 'all_people' and row['target_id'] == asset):
+        if (row['scope'] == 'face' and row['target_id'] in faces) or (row['scope'] == 'all_people' and row['target_id'] == asset) or (row['scope'] == 'person' and row['target_id'] in accepted):
             _leaf(row['operation_id'],row['parameter_path'],row['value'])
     return state

@@ -174,6 +174,8 @@ def inherit(engine, source, target):
     """Create a copy's initial portrait recipe; never inherit undo or fences."""
     _remember_active(engine)
     value = _snapshot(_context(engine, source))
+    from .people_cross_owner import detach_copy
+    value['people_graph'] = detach_copy(value['people_graph'])
     target.pop(RUNTIME, None)
     target['_people_new_import'] = False
     target[KEY] = check(value)

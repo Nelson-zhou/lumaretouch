@@ -1,3 +1,4 @@
+import {sameAssociationRequest, type AssociationRequest} from './associationProof';
 import type {FaceRef, ParameterValue} from './model';
 
 export type DocumentFence = {document_id: string; epoch: string; revision: number};
@@ -20,7 +21,7 @@ export type ExplicitPeopleRequest = SelectedParameters & {
   target_policy: 'explicit_face_map'; source: PeopleEndpointProof;
   targets: {target: PeopleEndpointProof; target_refs: FaceRef[]}[];
 };
-export type PeopleTransferRequest = SelectedParameters & {target_policy: 'confirmed_person_only'} | ExplicitPeopleRequest;
+export type PeopleTransferRequest = SelectedParameters & {target_policy: 'confirmed_person_only'} | ExplicitPeopleRequest | AssociationRequest;
 type ReviewBase = {
   version: 1; source_document: DocumentFence; target_document: DocumentFence;
   source_ref: FaceRef; target_refs: FaceRef[];
@@ -91,6 +92,7 @@ function validSelection(v: unknown): v is Record<string, string[]> {
     && new Set(paths).size === paths.length);
 }
 export function samePeopleRequest(value: unknown, expected: PeopleTransferRequest): boolean {
+  if (expected.target_policy === 'persistent_association') return sameAssociationRequest(value, expected);
   if (!object(value) || !validFaceRef(value.source_ref) || !sameFace(value.source_ref, expected.source_ref)
     || value.target_policy !== expected.target_policy || !validSelection(value.selection) || !validSelection(expected.selection)) return false;
   const selection = value.selection, ops = Object.keys(expected.selection).sort();
@@ -117,6 +119,7 @@ export function samePeopleRequest(value: unknown, expected: PeopleTransferReques
 }
 export function validPeopleReview(value: unknown, request: PeopleTransferRequest, proof: PeopleTransferProof,
   target: {document_id: string; revision?: string}): value is PeopleTransferReview {
+  if (request.target_policy === 'persistent_association') return false;
   if (!object(value) || !samePeopleRequest(request, request)) return false;
   const v = value as unknown as PeopleTransferReview;
   if (v.version !== 1 || !validFaceRef(v.source_ref) || !sameFace(v.source_ref, request.source_ref)

@@ -106,7 +106,7 @@ def require_command(engine,name,message):
     source=binding(engine);bank=validate(engine._body_bank(),source)
     people=engine._people_owner().snapshot()
     from .creative_derived_effects import require_graph
-    require_graph(people,source)
+    require_graph(people,source,document_id=engine._people_binding()['document_id'])
     if action=='view':
         if request!={}:raise ValueError('Body view cannot override source inputs')
     elif action in ('select','analyse','reanalyse') and (name!='arm_shape' or action=='select'):

@@ -48,7 +48,7 @@ def render(engine,row,candidate_state,document_id,revision,*,reference=False,can
     if bits==16 and str(decoded.rgb.dtype)!='uint16':raise ValueError('高位深输入未保留真实 RGB16')
     source={'sha256':M.source_digest(path),'width':decoded.w,'height':decoded.h}
     from . import virtual_copy_people as VP
-    snap=engine._state_to_export_snap(candidate_state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=path,people_context=VP.row_context(engine,row),people_graph=VP.row_snapshot(engine,row))
+    snap=engine._state_to_export_snap(candidate_state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=path,people_context=VP.row_context(engine,row),people_graph=VP.row_snapshot(engine,row),people_document_id=engine._document_versions().version(row).document_id)
     from .people_export import verify_source as verify_people, isolated_snapshot
     verify_people(snap,path);snap=isolated_snapshot(snap,for_document=True)
     if not reference:snap['reference_color']=S.empty()

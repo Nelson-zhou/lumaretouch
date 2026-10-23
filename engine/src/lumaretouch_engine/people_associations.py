@@ -5,6 +5,10 @@ from . import people_state as S
 
 def set_link(state, face_id, person_id, status, *, user_confirmed=False):
     out = S.check(state)
+    if ('cross_owner' in out['persons'].get(person_id, {}) or any(
+            link['face_instance_id']==face_id and 'cross_owner' in out['persons'][link['person_id']]
+            for link in out['links'])):
+        raise ValueError('Reviewed cross-owner membership requires its atomic association transaction')
     if face_id not in out['faces'] or person_id not in out['persons'] or status not in S.LINK_STATES:
         raise ValueError('Unknown face, person or association status')
     if type(user_confirmed) is not bool: raise ValueError('Confirmation must be an explicit boolean')

@@ -64,13 +64,15 @@ def verify_analysis(face, analysis, shape):
     return lm
 
 
-def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32, recovery_assets=None, repaired=None,
+def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=None, max_faces=32, recovery_assets=None, repaired=None,
             creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None):
     state = S.check(state)
+    from .people_cross_owner import validate_owner
+    validate_owner(state,asset_sha256,document_id)
     source_only = creative_source is not None
     if source_only:
         from .creative_derived_effects import require_graph
-        require_graph(state,creative_source)
+        require_graph(state,creative_source,document_id=document_id)
         if asset_sha256 != creative_source['sha256']:
             raise ValueError('Derived portrait graph source mismatch')
         if hair_source_path is not None:

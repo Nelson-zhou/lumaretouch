@@ -94,7 +94,7 @@ def render(engine,row,candidate_state,document_id,revision,*,people_graph=None,c
         if bits==16 and str(decoded.rgb.dtype)!='uint16':raise ValueError('Full target preparation requires genuine RGB16 input')
         pixels=decoded.rgb;h,w=decoded.h,decoded.w
     checkpoint()
-    snap=engine._state_to_export_snap(state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=path,people_graph=graph,people_context=context)
+    snap=engine._state_to_export_snap(state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=path,people_graph=graph,people_context=context,people_document_id=engine._document_versions().version(row).document_id)
     from .people_export import isolated_snapshot,verify_source
     verify_source(snap,path);snap=isolated_snapshot(snap,for_document=True)
     if base is not None:

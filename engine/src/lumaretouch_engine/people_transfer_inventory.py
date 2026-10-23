@@ -111,10 +111,25 @@ def entry(engine, row):
     if latest is None:
         raise ValueError('Portrait owner became unavailable during face-choice preparation')
     verify(engine, row, latest, expected, source_row=_source_row(engine, row))
+    # Capsules identify a last accepted person-intent projection, not a claim
+    # that remote members are currently available. Review must independently
+    # resolve every member's exact owner/source/FaceRef before editing it.
+    from .people_cross_owner import check_descriptor
+    associations = []
+    for person in graph['persons'].values():
+        if 'cross_owner' not in person:
+            continue
+        capsule = check_descriptor(person['cross_owner'])
+        local = next(member for member in capsule['members']
+                     if member['document_id'] == capsule['local_document_id'])
+        if (capsule['local_document_id'] == expected['document']['document_id']
+                and local['ref']['asset_sha256'] == asset):
+            associations.append(capsule)
+    associations.sort(key=lambda capsule: capsule['association_id'])
     return {**expected, 'faces': [{'face_ref': S.face_ref(face), 'box': list(face['box']),
               'enabled': face['enabled'], 'analysis_status': face['evidence']['status']}
               for face in sorted(faces, key=lambda face: face['face_instance_id'])],
-            'source_preview': preview, 'blocked': None}
+            'source_preview': preview, 'associations': associations, 'blocked': None}
 
 
 def inventory(engine, controller, request):

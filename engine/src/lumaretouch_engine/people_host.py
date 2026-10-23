@@ -84,6 +84,9 @@ class PeopleHostMixin:
         from . import people_engine_runtime as R
         try:
             source,state,analyses=self._people_bind();asset=source['sha256']
+            from .people_cross_owner import validate_owner
+            document_id=self._people_binding()['document_id']
+            validate_owner(state,asset,document_id)
             from .creative_derived_source import record
             if record(self) is not None:
                 from .creative_derived_repair_runtime import verify_pipeline
@@ -92,7 +95,7 @@ class PeopleHostMixin:
             if not body_bank['bodies'] and not any(f['asset_sha256']==asset for f in state['faces'].values()) and not any(r['asset_sha256']==asset and r['status']=='unresolved' for r in state['unresolved_legacy']) and not any(r['scope']=='all_people' and r['target_id']==asset for r in state['overrides']):
                 from .people_pipeline import clear
                 clear(self._vram);self._vram.people_suspended=None;return
-            key=(asset,self._people_owner().fence,id(self._precompute),id(self._vram.src_f32),id(self._vram.repair_base),self._body_identity())
+            key=(document_id,asset,self._people_owner().fence,id(self._precompute),id(self._vram.src_f32),id(self._vram.repair_base),self._body_identity())
             if getattr(self._vram,'people_key',None)!=key:
                 from .cpu_memory_budget import available_estimate
                 owned_inputs=OWNED.preview(self,state,body_bank=body_bank,body_source=source)
@@ -107,10 +110,13 @@ class PeopleHostMixin:
     def _people_mirror(self):
         """Legacy controls are editing views only; final output uses every face."""
         owner=self._people_owner();source=self._people_source();state=owner.snapshot()
+        from .people_cross_owner import validate_owner
+        document_id=self._people_binding()['document_id']
+        validate_owner(state,source['sha256'],document_id)
         if getattr(self, '_creative_base', None) is not None:
             from .creative_derived_effects import require_graph
             from .creative_derived_source import verify_precompute
-            require_graph(state,source); verify_precompute(self,self._precompute)
+            require_graph(state,source,document_id=document_id); verify_precompute(self,self._precompute)
         selected=self._people_cursors.get(source['sha256'])
         if selected not in state['faces']:return
         resolved=resolve(state,selected,A.defaults())
@@ -209,6 +215,8 @@ class PeopleHostMixin:
     def _people_save(self,project):
         from .virtual_copy_people import save_project
         self._people_owner();save_project(self,project)
+        from .people_cross_owner_project import validate_project
+        validate_project(project)
         from .people_history_persistence import save
         save(self,project)
 
@@ -216,11 +224,15 @@ class PeopleHostMixin:
         from .people_project import validate_records
         from .people_history_persistence import prepare
         validate_records(project);HAIR.validate(project)
+        from .people_cross_owner_project import validate_project
+        validate_project(project)
         return prepare(project,rows,self.HISTORY_MAX)
 
     def _people_load(self,project,prepared_history=None):
         from .people_project import validate_records
         validate_records(project)
+        from .people_cross_owner_project import validate_project
+        validate_project(project)
         HAIR.load(self,project)
         self._people_graph_owner=PeopleGraphOwner(project.get('people_graph'))
         self._people_support=SUPPORT.check_store(project.get('people_support_assets',{}))
@@ -232,17 +244,21 @@ class PeopleHostMixin:
         from .people_history_persistence import restore
         restore(self,project,prepared_history)
 
-    def _people_export_snapshot(self,state,source_path=None,graph=None,*,context=None):
+    def _people_export_snapshot(self,state,source_path=None,graph=None,*,context=None,document_id=None):
         from .people_snapshot import capture
         from .virtual_copy_people import export_context,view
         if source_path is None:source_path=self._doc_path
         if not source_path:return None
+        from .people_document_owner import capture as capture_owner
+        document_id=capture_owner(self,state,source_path,document_id=document_id,context_supplied=context is not None)
         context=export_context(self,state,source_path,context)
         retained_host=view(self,context)
         from .creative_derived_source import binding, verify_precompute
         source=binding(state,source_path) if state.get('_creative_base') is not None else None
         asset=source['sha256'] if source is not None else SOURCE.source_digest(source_path)
         graph=context['people_graph'] if graph is None else S.check(graph)
+        from .people_cross_owner import validate_owner
+        validate_owner(graph,asset,document_id)
         retained=any(f['asset_sha256']==asset for f in graph['faces'].values()) or any(r['asset_sha256']==asset and r['status']=='unresolved' for r in graph['unresolved_legacy']) or any(r['scope']=='all_people' and r['target_id']==asset for r in graph['overrides'])
         if not retained:return None
         analyses={}
@@ -259,10 +275,10 @@ class PeopleHostMixin:
             from .hair_colour_replay import analyses as retained_hair_analyses
             restored=retained_hair_analyses(retained_host,graph,binding)
             if restored is not None:analyses=restored
-        result=capture(graph,asset,analyses);result['support_assets']=deepcopy(context['people_support_assets'])
+        result=capture(graph,asset,analyses);result['document_id']=document_id;result['support_assets']=deepcopy(context['people_support_assets'])
         if state.get('_creative_base') is not None:
             from .creative_derived_effects import require_graph
-            require_graph(graph,source)
+            require_graph(graph,source,document_id=document_id)
             result['creative_source'] = source
             from .creative_derived_hair import capture as capture_hair
             return capture_hair(retained_host,state,result,pc,source)

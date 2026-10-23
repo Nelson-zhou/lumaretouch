@@ -285,7 +285,7 @@ def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False
         raise ValueError('Creative capture needs complete owned editing state, not current-document parameter fallbacks')
     snap = engine._state_to_export_snap(frozen, device='cpu', scale=1,
         upscale_backend='lanczos3', sharpen=0., source_path=path,
-        people_context=VP.row_context(engine, row), people_graph=VP.row_snapshot(engine, row))
+        people_context=VP.row_context(engine, row), people_graph=VP.row_snapshot(engine, row),people_document_id=version.document_id)
     from .people_export import verify_source, isolated_snapshot
     verify_source(snap,path)
     snap=isolated_snapshot(snap,for_document=True)

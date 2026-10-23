@@ -10,10 +10,13 @@ _MISSING = object()
 def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support_bank=_MISSING):
     state = engine._people_owner().snapshot() if state is None else state
     support_bank=engine._people_support if support_bank is _MISSING else support_bank
+    document_id=engine._people_binding()['document_id']
+    from .people_cross_owner import validate_owner
+    validate_owner(state,engine._people_source()['sha256'],document_id)
     from .creative_derived_source import record, binding, analysis_rgb, verify_precompute
     if record(engine) is not None:
         from .creative_derived_effects import require_graph
-        owned = binding(engine); require_graph(state,owned)
+        owned = binding(engine); require_graph(state,owned,document_id=document_id)
         verify_precompute(engine,engine._precompute)
         from .creative_derived_makeup import validate_supports, input_banks
         validate_supports(state,support_bank,owned['sha256'])
@@ -35,11 +38,11 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support
         # canonical review bank; it verifies source, face and landmark ownership.
         # The runtime
         # checks the pipeline RGB against this owned inference/display proxy.
-        return {'creative_source':owned,'creative_proxy':analysis_rgb(engine),
+        return {'document_id':document_id,'creative_source':owned,'creative_proxy':analysis_rgb(engine),
                 **input_banks(support_bank),**hair_inputs,
                 'body_bank':body,'body_source':owned,'body_source_pixels':body_pixels}
     from .hair_colour_project import preview_kwargs
-    return {**preview_kwargs(engine, state),
+    return {'document_id':document_id,**preview_kwargs(engine, state),
             'eye_light_assets': support_bank,
             'blush_makeup_assets': support_bank,
             'lipstick_assets': support_bank,

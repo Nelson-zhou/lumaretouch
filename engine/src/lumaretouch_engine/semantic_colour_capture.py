@@ -92,7 +92,7 @@ def render(engine,row,state,document_id,revision,*,cancelled=lambda:False):
     if M.file_stamp(path)!=stamp:raise ValueError('AI 追色原图在解码时变化')
     source={'sha256':M.source_digest(path),'width':decoded.w,'height':decoded.h}
     from . import virtual_copy_people as VP
-    snap=engine._state_to_export_snap(state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=path,people_context=VP.row_context(engine,row),people_graph=VP.row_snapshot(engine,row))
+    snap=engine._state_to_export_snap(state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=path,people_context=VP.row_context(engine,row),people_graph=VP.row_snapshot(engine,row),people_document_id=engine._document_versions().version(row).document_id)
     people=snap.get('people');key=candidate_key(state,people);geometry=geometry_key(state,people)
     snap['semantic_colour']=S.empty();snap['semantic_colour_mask_assets']={}  # Only our previous contribution is removed.
     from . import body_pose_render as body_render, id_background_runtime as id_background

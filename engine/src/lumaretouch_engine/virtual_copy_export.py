@@ -74,6 +74,7 @@ def freeze(engine, chosen, snap):
             from .virtual_copy_people import row_snapshot, row_context
             options['people_graph'] = row_snapshot(engine,row)
             options['people_context'] = row_context(engine,row)
+            options['people_document_id'] = engine._document_versions().version(row).document_id
             local = engine._state_to_export_snap(state,**options)
         else: local = snap
         snapshots[key] = (deepcopy(local),is_document)

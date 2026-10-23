@@ -250,6 +250,10 @@ def validate(p: object) -> None:
     # Includes inactive versions and document_history (both undo and redo),
     # before migration or publication. Old files without these keys stay valid.
     _validate_creative_records(p, p["assets"], allowed=(sv == SCHEMA))
+    from .people_cross_owner_project import validate_project as validate_cross_owner
+    try: validate_cross_owner(p)
+    except (ValueError, TypeError, KeyError) as error:
+        raise ProjectError(f'Invalid cross-owner portrait association: {error}') from error
     if sv == SCHEMA:
         try:
             VC.validate_identity(p)

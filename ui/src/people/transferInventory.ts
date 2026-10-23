@@ -1,3 +1,4 @@
+import {validCapsule,type AssociationCapsule} from './associationProof';
 import type {FaceRef, PeopleBinding} from './model';
 import {documentId, safeRevision, sameFace, validEndpoint, validFaceRef,
   type ExplicitPeopleRequest, type PeopleEndpointProof} from './transferProof.ts';
@@ -5,7 +6,7 @@ import {documentId, safeRevision, sameFace, validEndpoint, validFaceRef,
 export const PEOPLE_TRANSFER_LIMITS = {targets: 16, faces: 128, previewEdge: 320, previewBase64: 400000} as const;
 export type InventoryFace = {face_ref: FaceRef; box: [number, number, number, number]; enabled: boolean;
   analysis_status: 'verified' | 'unresolved' | 'synthetic'};
-export type InventoryEntry = PeopleEndpointProof & {faces: InventoryFace[]; blocked: null;
+export type InventoryEntry = PeopleEndpointProof & {faces: InventoryFace[]; blocked: null; associations?:AssociationCapsule[];
   source_preview: {mime: 'image/png'; base64: string; width: number; height: number; source_sha256: string}};
 export type BlockedInventoryEntry = {document: {document_id: string}; blocked: string};
 export type PeopleInventoryResult = {request_id: string; action: 'people_targets'; success: true; people_transfer: true;
@@ -25,6 +26,7 @@ export function validInventoryEntry(value: unknown): value is InventoryEntry {
   if (!object(value) || value.blocked !== null) return false;
   const v = value as unknown as InventoryEntry;
   if (!validEndpoint(endpointOf(v)) || !Array.isArray(v.faces) || !v.faces.length || v.faces.length > PEOPLE_TRANSFER_LIMITS.faces) return false;
+  if(v.associations!==undefined&&(!Array.isArray(v.associations)||v.associations.length>4096||!v.associations.every(c=>validCapsule(c)&&c.local_document_id===v.document.document_id)))return false;
   const ids = new Set<string>();
   for (const row of v.faces) {
     if (!row || !validFaceRef(row.face_ref) || row.face_ref.asset_sha256 !== v.source_proof.asset_sha256

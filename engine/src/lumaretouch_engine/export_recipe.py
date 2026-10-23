@@ -86,6 +86,9 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     from .primary_calibration_adapters import configure_export as configure_primary
     configure_primary(spec,snap)
     spec.people=snap.get("people")
+    spec.people_document_id=snap.get("people_document_id")
+    from .people_document_owner import validate_snapshot as validate_people_owner
+    validate_people_owner(spec.people,spec.people_document_id)
     from .body_pose_render import configure_export as configure_body
     configure_body(spec,snap,(eh,ew),for_document=for_document)
     # Source-bound final shaping must be checked before the generic-export return.
