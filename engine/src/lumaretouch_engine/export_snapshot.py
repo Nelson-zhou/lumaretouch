@@ -19,7 +19,7 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
     creative_base = deepcopy(check_creative_base(st.get("_creative_base")))
     # Select only observations measured on this exact immutable pixel source.
     # Original graph slices remain retained for history but cannot enter the
-    # returned composite's portrait snapshot. Body remains separately fenced.
+    # returned composite's portrait snapshot. Body owns a separate source proof.
     people = self._people_export_snapshot(st,source_path,people_graph,context=people_context)
     snap = dict(creative_base=creative_base, id_background=IDBS.check(st.get("_id_background")), id_background_bundle=deepcopy(st.get("_id_background_bundle")), people=people, strength=float(st.get("_strength", 0.0)),
                     params=dict(st.get("_params") or self._params),
@@ -49,10 +49,7 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
                     precompute=st.get("_precompute"),
                     device=device, scale=scale, upscale_backend=upscale_backend,
                     sharpen=sharpen)
-    if creative_base is None:
-        from .body_pose_render import capture as capture_body
-        from .virtual_copy_people import view
-        snap=capture_body(view(self,people_context) if people_context is not None else self,snap,st,source_path or self._doc_path,people_graph)
-    else:
-        snap['body_pose'] = None
+    from .body_pose_render import capture as capture_body
+    from .virtual_copy_people import view
+    snap=capture_body(view(self,people_context) if people_context is not None else self,snap,st,source_path or self._doc_path,people_graph)
     return self._semantic_snapshot(snap,st,source_path)

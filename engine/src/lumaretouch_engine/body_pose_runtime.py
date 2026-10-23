@@ -1,7 +1,7 @@
 """Real MediaPipe Tasks IMAGE producer. No face-box skeleton or inferred anatomy.
 
-The host supplies canonical RGB8 analysis pixels from the original image, not an
-already retouched preview. The original RGB8/16 render buffer is never changed.
+The host supplies canonical RGB8 analysis pixels from the effective immutable source, not an
+already retouched preview. The full RGB8/16 or derived float render buffer is never replaced by model input.
 """
 from hashlib import sha256
 from importlib.metadata import version

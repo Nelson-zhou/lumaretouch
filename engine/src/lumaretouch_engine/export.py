@@ -185,6 +185,7 @@ class ExportSpec:
     body_pose: dict | None = None
     body_pose_source_path: str | None = None
     body_pose_source_stamp: list | None = None
+    body_pose_source_proof: dict | None = None
     brow_shape: dict | None = None
     brow_shape_face: object | None = None
     nose_shape: dict | None = None
@@ -731,6 +732,9 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry):
     from .cpu_memory_budget import available_estimate
     work_bytes = min(4_000_000_000, max(1, int(available_estimate()) // 2))
     source = export_source(spec.creative_base, cancelled=cancelled, max_bytes=work_bytes)
+    if resolved.body_pose is not None:
+        from .creative_derived_body_export import stamp_pixels
+        stamp_pixels(resolved,source)
     frame, facts = _export_image_impl(source, resolved, device=device, tile=tile,
         progress=progress, bits=bits, geometry=geometry)
     if hasattr(resolved, '_colour_editor_capture_coverage'):

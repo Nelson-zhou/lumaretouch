@@ -199,7 +199,8 @@ class ProposalPorts:
     binding:Callable
     read_bank:Callable
     read_people:Callable
-    source_path:Callable  # host-owned current canonical path; never from payload
+    source_path:Callable  # host-owned original path; never from payload
+    source_input:Callable | None = None  # immutable derived model input, never UI data
 
 
 class ArmProposalHost:
@@ -218,7 +219,13 @@ class ArmProposalHost:
         from .arm_shape_selection import ownership_evidence
         evidence=ownership_evidence(record,[r['record'] for r in state['bodies'].values()],people)
         context={k:p[k] for k in ('document_id','document_epoch','body_graph_sha256','people_graph_sha256')}
-        return self.jobs.start(p['request_id'],self.ports.source_path(),record,payload['segment'],payload['region'],evidence,payload['device'],context)
+        source_input=self.ports.source_input() if self.ports.source_input is not None else None
+        path=self.ports.source_path() if source_input is None else None
+        # Capturing full immutable source pixels may be expensive: recheck all fences.
+        envelope(raw,self.ports.binding(),P.check(self.ports.read_bank()),self.ports.read_people())
+        if source_input is None:
+            return self.jobs.start(p['request_id'],path,record,payload['segment'],payload['region'],evidence,payload['device'],context)
+        return self.jobs.start(p['request_id'],path,record,payload['segment'],payload['region'],evidence,payload['device'],context,source_input=source_input)
 
     def status(self,job_id):
         result=self.jobs.status(job_id)

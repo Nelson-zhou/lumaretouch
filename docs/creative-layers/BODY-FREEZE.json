@@ -1,0 +1,250 @@
+{
+  "baseline": "fb75d09ce4252afebeed850e6c2aed0e0af28dd8",
+  "scope": "M14 effective-source body acquisition, reviewed immutable arm SAM input, joint preview/export and source-switch history",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "files": [
+    {
+      "path": "docs/creative-layers/DERIVED-BODY.md",
+      "sha256": "d61d217bc8096be2a07696be118f528d0d2da9d23b26c600207b13c091473de8",
+      "bytes": 8368
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-HAIR-RECOVERY.md",
+      "sha256": "b55f3fb337a732afdd9128c65b65ed6e2212836a6c2401a0cf31a783c2663bff",
+      "bytes": 8101
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/arm_shape_field.py",
+      "sha256": "25c796ad92e08b5f9ea7e4659044bb439cb4d4e77574e3284ab351f60dec2c50",
+      "bytes": 5657
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/arm_shape_host.py",
+      "sha256": "6e5511722022726c06a2662c275409e1633e02a24409d75eb5860a46f5ee6d96",
+      "bytes": 19071
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/arm_shape_job.py",
+      "sha256": "e1431095ee361e1fa0367c6175d3d209a39ac0ee64e8c2d22752d085c4d66b2d",
+      "bytes": 10447
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/arm_shape_registered_host.py",
+      "sha256": "dfdda48a32a83fc0d654cd7bb9153985f41dc6d2f161314fe152156ef605add0",
+      "bytes": 3493
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/arm_shape_selection.py",
+      "sha256": "592f1d91df019d5b9f7eb7318df192280c88f05b3eb5912123ff36da1531a3be",
+      "bytes": 14677
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_commands.py",
+      "sha256": "f5821899151445fb11ce30f1b0d40d516e1aa7d7f87da3d8f363fb14c7e8a4d6",
+      "bytes": 11828
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_document_history.py",
+      "sha256": "623ae185e39c5753e2eac450964c7ec218091f2e660892c661f205a8cd3fea0a",
+      "bytes": 6461
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_host.py",
+      "sha256": "8af28cd8dbe59760769b2858b16001b9ae187addfd85c338c7120db8def68627",
+      "bytes": 15633
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_render.py",
+      "sha256": "1c92c5319d18bcbccbe7715deb58d26b4754aeb1b5f39a375bd0821d20e9e9ef",
+      "bytes": 11233
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_runtime.py",
+      "sha256": "35867acdab5af98890a13e6f549cc81fcf14de01be473d2f01accdab579493ce",
+      "bytes": 3243
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_arm_input.py",
+      "sha256": "9f8170c8e61037a376dc9ada3c42ba909aa0a165a7f0deb4995522b4fe15ce64",
+      "bytes": 4492
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_body.py",
+      "sha256": "86664ac7951f80ab0661f3ae7fa433588bd4e0af7026cc1b5fb3d351bd8e3931",
+      "bytes": 8231
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_body_export.py",
+      "sha256": "bd68717ac857fb058c469b7add16d7c69d85f2e784142408fb707a054536ba66",
+      "bytes": 3688
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "sha256": "61af73bc9e273dcc2be26dc2cf2e203f40ad9e56b0f9d9d59e5cc1b93b41ca77",
+      "bytes": 19035
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "06d3609791f75fb59fbacbe281e84d55fac140cd99e6711e10d951d3e8b59eb4",
+      "bytes": 22958
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "dba9a70fb79920401a12c9f76b9fc7c0efb694d841a3353e94396802c9fc540e",
+      "bytes": 124859
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "sha256": "d49aaf3934af5fc7b278c75f8d90f6e903d800b602bafb7314e3bb45ffe1b878",
+      "bytes": 4964
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "04c86e52d5d36171270ae9116893eef7300397cd279f6567eeeba92a1815b098",
+      "bytes": 9035
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "88ed3c62e4336b655f9f9f45065a87a7d50ca05a9417f03d41bd4648ca2df7fe",
+      "bytes": 5059
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "sha256": "77c692b3b52ab50af1e7caeef5f67202b5e83ca5bb62a7f5e82fb7517e6a395b",
+      "bytes": 3020
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_arm_input.py",
+      "sha256": "5f7409bac378bfa085b3b6448451701a7f2d58f059ebb118a24b9af67f036010",
+      "bytes": 4044
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_body_commands.py",
+      "sha256": "65be2607c1400bdaed7336d1ea2558f313dc6ea88a39a7205b7bcb622eaf36b3",
+      "bytes": 9992
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_body_export.py",
+      "sha256": "5c4301d461b2273ac5738ef1f6383f8c1165db760c1ee2b8e111d75c9d41c67b",
+      "bytes": 8055
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_body_history.py",
+      "sha256": "a4aa726857117e8f4ec02d2de3d2721531ff7b47f732880b5341d749e9f6174b",
+      "bytes": 4132
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_body_runtime.py",
+      "sha256": "5fed0bb578c104d381f486bdefac89dbb75fba87857babbb26cb348c2753b37c",
+      "bytes": 2977
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_effects_contract.py",
+      "sha256": "6b8af9ca303d9003889099ff2dde6eebf984656f948e562e38cd8c845fc2e690",
+      "bytes": 16267
+    },
+    {
+      "path": "ui/src/armShape/ArmShapePanel.tsx",
+      "sha256": "faece08e3673829d87eddbf1f5257c6abf0d7569ec7d12197325843449f83571",
+      "bytes": 5545
+    },
+    {
+      "path": "ui/src/armShape/ArmSupportEditor.tsx",
+      "sha256": "6b16f7eb1805e6f3aacf2f09598a387be83bdb02bd2d3575a02ec154542b18c7",
+      "bytes": 15535
+    },
+    {
+      "path": "ui/src/legLength/LegLengthPanel.tsx",
+      "sha256": "7a30d3e615b10f7f6e310e502150e69259f009bbec8deacf604e417d7dfa37c9",
+      "bytes": 5659
+    },
+    {
+      "path": "ui/src/legLength/LegLengthSupportEditor.tsx",
+      "sha256": "9a8d128791ab5c8d0d6f425637de2db536cede29cc6e0c27eb9d4eeae9ed9f45",
+      "bytes": 5598
+    },
+    {
+      "path": "ui/src/legLength/LegLengthWorkspace.tsx",
+      "sha256": "a6e0e172db047048f61959dbfee07689b1c39e415ee162ef0cae9030701e873b",
+      "bytes": 1808
+    },
+    {
+      "path": "ui/src/legShape/BodyShapeTools.tsx",
+      "sha256": "9285d5ada0aadb5ce6763a7c7834c6a966142560f1c19db121637da21d89dcbf",
+      "bytes": 10616
+    },
+    {
+      "path": "ui/src/legShape/LegShapePanel.tsx",
+      "sha256": "3831b3591724ad66401ae6844aefe96d189e8d0327df637ecca226134a4e26d5",
+      "bytes": 5545
+    },
+    {
+      "path": "ui/src/legShape/LegSupportEditor.tsx",
+      "sha256": "3abf4225904d15fbdbd434de0131bee9940bedd391bea5c911214e0072d022d8",
+      "bytes": 10274
+    },
+    {
+      "path": "ui/src/neckShape/NeckSupportEditor.tsx",
+      "sha256": "21b68e58031fe94f82068deca23a9d3f5f89a2b50f465368188eec2ab138b2d6",
+      "bytes": 6396
+    },
+    {
+      "path": "ui/src/neckShape/NeckWorkspace.tsx",
+      "sha256": "6969956d8b25e753d65918468ca1a723ea601a468aa3a98e2d957bee49f94581",
+      "bytes": 1806
+    },
+    {
+      "path": "ui/src/shoulderShape/ShoulderShapePanel.tsx",
+      "sha256": "b8651d04686ff8df1306b8840051d4c8f695a3a170718c066c74412459d1c10e",
+      "bytes": 8329
+    },
+    {
+      "path": "ui/src/shoulderShape/ShoulderShapeTools.tsx",
+      "sha256": "834b130b3078ab2672b61aff7dc2f5db49343e6ac6b68baba07c11a129fb9bb1",
+      "bytes": 7149
+    },
+    {
+      "path": "ui/src/waistShape/WaistShapePanel.tsx",
+      "sha256": "d5fc79349280d06ff5feecaf62a8ba9894a1ad3d3d61d079198f7450bbf9a833",
+      "bytes": 4940
+    },
+    {
+      "path": "ui/src/waistShape/WaistSupportEditor.tsx",
+      "sha256": "1c96f4283c45385803ba2e9a148c69711835ea9fa8a2e84d0577750370a7cb7a",
+      "bytes": 10899
+    },
+    {
+      "path": "ui/src/waistShape/WaistWorkspace.tsx",
+      "sha256": "86f36427abb1740214ea72d386d2b38eba5fa9bd42ce192a2a50248629a38991",
+      "bytes": 1770
+    }
+  ],
+  "verification": {
+    "python_ast_parsed": 26,
+    "diff_whitespace": "clean",
+    "product_imports": "UNRUN",
+    "tests": "UNRUN",
+    "build": "UNRUN",
+    "typecheck": "UNRUN",
+    "inference": "UNRUN",
+    "native_visual_acceptance": "UNRUN",
+    "caps": {
+      "App.tsx": 2091,
+      "main.rs": 2015,
+      "server.py": 6939
+    }
+  },
+  "integration_map": "docs/creative-layers/DERIVED-BODY.md",
+  "remaining": [
+    "General local/prompted masks and prompted hair masks remain fenced",
+    "Shared-person/cross-image/generic batch remains fenced",
+    "Unadapted repair/light/global recovery remain fenced",
+    "Alpha/HDR photo return remains explicitly refused",
+    "Real native/model/project roundtrip/24 MP QA unrun"
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

@@ -1,5 +1,7 @@
 # M14 derived hair and face-owned effect recovery
 
+Historical slice: subsequent body-source support is in [DERIVED-BODY.md](DERIVED-BODY.md).
+
 Source-only continuation of `5d921d8abcd48a2ef8a3d25a6bf0174747bd7958`.
 Runtime/native/numerical/visual acceptance: **UNRUN**. This continues handbook
 return `LNX-REF-WF-127932-a9c143a25d` and history

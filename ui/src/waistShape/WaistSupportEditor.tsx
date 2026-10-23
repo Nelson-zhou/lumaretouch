@@ -21,7 +21,7 @@ export function WaistSupportEditor({body,image,disabled,onReview}:{body:BodyChoi
   if(!available||!axis)return;const matrix=event.currentTarget.getScreenCTM();if(!matrix)return;
   const q=new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse()),x=q.x/axis.w,y=q.y/axis.h;
   try{
-   if(x<=0||x>=1||y<=0||y>=1)throw Error('测量点必须位于原图内部。');
+   if(x<=0||x>=1||y<=0||y>=1)throw Error('测量点必须位于当前来源图内部。');
    if(target==='selection'||target==='exclusion'){
     if(!corner){setCorner([x,y]);return;}
     const box:Box=[Math.min(x,corner[0]),Math.min(y,corner[1]),Math.max(x,corner[0]),Math.max(y,corner[1])];setCorner(null);
@@ -41,7 +41,7 @@ export function WaistSupportEditor({body,image,disabled,onReview}:{body:BodyChoi
    if(Math.abs(v)<2||Math.abs(v)>.8*axis.length)throw Error('轮廓半宽超出本产品可验证范围。');
    const widths=[...draft[target]];widths[station]=Math.abs(v)/axis.scale;change({...draft,[target]:widths});
    if(station<8)setStation(station+1);else if(target==='negative'){setTarget('positive');setStation(0);}else setTarget('selection');
-  }catch(e){setError(e instanceof Error?e.message:'原图测量未采纳。');}
+  }catch(e){setError(e instanceof Error?e.message:'当前来源图测量未采纳。');}
  }
  async function save(){try{
   if(!available||Object.keys(CONFIRMATIONS).some(k=>flags[k]!==true))throw Error('请逐项完成源图复核。');
@@ -49,10 +49,10 @@ export function WaistSupportEditor({body,image,disabled,onReview}:{body:BodyChoi
   await onReview(support);setError('');
  }catch(e){setError(e instanceof Error?e.message:'复核未保存。');}}
  const boxShape=(box:Box,color:string,key:string)=><rect key={key} x={box[0]*(body.source.width-1)} y={box[1]*(body.source.height-1)} width={(box[2]-box[0])*(body.source.width-1)} height={(box[3]-box[1])*(body.source.height-1)} fill={color} fillOpacity={.1} stroke={color} strokeWidth={Math.max(1,(axis?.scale??1)*.002)}/>;
- return <fieldset className="leg-support-editor" disabled={disabled}><legend>原图腰部可见轮廓复核</legend>
+ return <fieldset className="leg-support-editor" disabled={disabled}><legend>当前来源图腰部可见轮廓复核</legend>
   <p>先点上界、下界，再分别沿九条截线测量两侧可见轮廓。肩髋点只确定方向，不推算腰线或腰围；修改上下界会清空轮廓测量。松衣只调整衣物外轮廓，不补全隐藏身体。</p>
-  {!matched&&<p role="status">缺少匹配源图的完整映射回执，不能复核。</p>}{matched&&loaded!==imageKey&&<p role="status">等待未变形原图参考加载并核对像素尺寸。</p>}{!reliable&&<p role="status">肩髋实际定位不完整或置信度不足，人工勾选不能覆盖此限制。</p>}
-  {matched&&image&&<><p>全图参考 {image.displayWidth} × {image.displayHeight}；源图 {image.source.width} × {image.source.height}。显示图非最终效果。</p><div className="leg-source-image"><img key={imageKey} src={image.url} alt="用于腰部轮廓复核的未变形全图参考" draggable={false} onLoad={e=>{if(e.currentTarget.naturalWidth===image.displayWidth&&e.currentTarget.naturalHeight===image.displayHeight)setLoaded(imageKey);else{setLoaded('');setError('图像实际尺寸不匹配，不允许测量。');}}} onError={()=>{setLoaded('');setError('原图加载失败。');}}/><svg viewBox={sourceViewport(image)} preserveAspectRatio="none" onClick={pick} aria-label="点击源图测量上下界与双侧轮廓">
+  {!matched&&<p role="status">缺少匹配源图的完整映射回执，不能复核。</p>}{matched&&loaded!==imageKey&&<p role="status">等待未变形当前来源图参考加载并核对像素尺寸。</p>}{!reliable&&<p role="status">肩髋实际定位不完整或置信度不足，人工勾选不能覆盖此限制。</p>}
+  {matched&&image&&<><p>全图参考 {image.displayWidth} × {image.displayHeight}；源图 {image.source.width} × {image.source.height}。显示图非最终效果。</p><div className="leg-source-image"><img key={imageKey} src={image.url} alt="用于腰部轮廓复核的未变形全图参考" draggable={false} onLoad={e=>{if(e.currentTarget.naturalWidth===image.displayWidth&&e.currentTarget.naturalHeight===image.displayHeight)setLoaded(imageKey);else{setLoaded('');setError('图像实际尺寸不匹配，不允许测量。');}}} onError={()=>{setLoaded('');setError('当前来源图加载失败。');}}/><svg viewBox={sourceViewport(image)} preserveAspectRatio="none" onClick={pick} aria-label="点击源图测量上下界与双侧轮廓">
    {draft.selection_box&&boxShape(draft.selection_box,'#53e3ce','selection')}{draft.exclusions.map((b,i)=>boxShape(b,'#ff6868',`exclusion-${i}`))}
    {corner&&axis&&<circle cx={corner[0]*axis.w} cy={corner[1]*axis.h} r={axis.scale*.006} fill="#f4cb7c"/>}
    {axis&&<g stroke="#f4cb7c" fill="none" strokeWidth={Math.max(1,axis.scale*.002)}><line x1={axis.ax} y1={axis.ay} x2={axis.ax+axis.dx} y2={axis.ay+axis.dy}/>{[draft.upper,draft.lower].map((t,i)=>t!==null?<line key={i} x1={axis.ax+axis.dx*t-axis.nx*axis.length*.4} y1={axis.ay+axis.dy*t-axis.ny*axis.length*.4} x2={axis.ax+axis.dx*t+axis.nx*axis.length*.4} y2={axis.ay+axis.dy*t+axis.ny*axis.length*.4}/>:null)}</g>}

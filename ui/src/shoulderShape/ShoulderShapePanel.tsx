@@ -29,9 +29,9 @@ export function ShoulderShapePanel({view,controller,disabled,model,reviewAvailab
   {body&&<>
    {!!body.unapplied_operations?.length&&<p role="alert">此身体还保留本界面不能应用的操作：{body.unapplied_operations.join('、')}。它们未被丢弃，启用时将阻止导出，不能把未应用意图当作成功结果。</p>}
    {body.unapplied_operations?.map(operation_id=><button key={operation_id} type="button" disabled={busy} onClick={()=>void act(()=>controller.action('operation_status',{operation_id,enabled:false}))}>保留参数并停用未应用操作 {operation_id}</button>)}
-   <p>请在原图定位叠层中核对头部、双肩、双肘和髋部可见点均属于此身体。低置信度或遮挡点不能通过手动确认强行启用。</p>
+   <p>请在当前来源图定位叠层中核对头部、双肩、双肘和髋部可见点均属于此身体。低置信度或遮挡点不能通过手动确认强行启用。</p>
    <button type="button" disabled={busy||!reviewAvailable||!canReview(body)} onClick={()=>void act(()=>controller.action('review',{points_sha256:body.points_sha256,visible_anchors:[...ANCHORS],ownership_confirmed:true}))}>确认这些锚点清晰可见且归属此身体</button>
-   {!reviewAvailable&&<p role="status">请先显示当前身体的原图定位叠层，再确认锚点。</p>}
+   {!reviewAvailable&&<p role="status">请先显示当前身体的当前来源图定位叠层，再确认锚点。</p>}
    {!canReview(body)&&<p role="status">至少一个必要锚点无法可靠确认，请换用清晰完整视角或重新分析，不会重建不可见部位。</p>}
    <label>明确关联到已确认的匿名人物<select value={person} disabled={busy} onChange={e=>setPerson(e.currentTarget.value)}><option value="">请选择，不按最近人脸猜测</option>{Object.keys(shown.persons).map((id,i)=><option key={id} value={id}>匿名人物 {i+1}</option>)}</select></label>
    <button type="button" disabled={busy||!person||!shown.persons[person]} onClick={()=>void act(()=>controller.action('associate',{person_id:person,user_confirmed:true}))}>确认身体与人物关联</button>

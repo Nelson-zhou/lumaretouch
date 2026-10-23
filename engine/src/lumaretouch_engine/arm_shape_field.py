@@ -31,8 +31,11 @@ class ArmField:
         if self.record['model_id']!=M.MODEL_ID or self.record['model_sha256']!=M.MODEL_SHA256:
             raise ValueError('Arm pose model identity changed; explicit reanalysis is needed')
         if support['selection'] is not None:
-            if not isinstance(source_pixels,np.ndarray): raise ValueError('Neural contour replay needs verified full-source inference pixels')
-            if source_pixels.shape!=(source['height'],source['width'],3): raise ValueError('Neural support cannot be verified with a preview/proxy input')
+            if type(source_pixels) is not dict:
+                if not isinstance(source_pixels,np.ndarray): raise ValueError('Neural contour replay needs verified full-source inference pixels')
+                if source_pixels.shape!=(source['height'],source['width'],3): raise ValueError('Neural support cannot be verified with a preview/proxy input')
+            # Dict is only the canonical-source-bound immutable model packet;
+            # verify_input rejects arbitrary proxies, stale source and bytes.
             from .arm_shape_selection import verify_input
             verify_input(source_pixels,support['selection'])
         h,w=self.shape;a,b=(self.record['points'][i] for i in S.JOINTS[self.segment])

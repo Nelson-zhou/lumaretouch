@@ -149,7 +149,7 @@ class BodyPoseHostMixin(ArmRegisteredHostMixin):
 
     def _body_history_restore(self,snapshot):
         from .body_pose_document_history import restore
-        return {**snapshot,D.KEY:P.pack(restore(self._body_bank(),snapshot))}
+        return {**snapshot,D.KEY:P.pack(restore(self._body_bank(),snapshot,current_state={'_creative_base':getattr(self,'_creative_base',None)}))}
 
     def cmd_shoulder_shape(self,message):
         from .body_pose_commands import BodyTransport

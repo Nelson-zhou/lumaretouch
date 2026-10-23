@@ -15,7 +15,7 @@ export function WaistShapePanel({view,controller,sourceImage,onSelect,onOpenBody
  function edit(change:(r:WaistRecipe)=>WaistRecipe,id:string=crypto.randomUUID()){try{controller.edit(change,id);setError('');}catch(e){setError(e instanceof Error?e.message:'调整未发送。');}}
  async function action(fn:()=>Promise<void>){try{await fn();setError('');}catch(e){setError(e instanceof Error?e.message:'操作未完成。');}}
  return <section className="leg-shape-panel" aria-label="瘦腰可见轮廓调整" data-operation="lnx.waist_shape.v1" data-requirement-id={REQUIREMENT_ID}>
-  <h3>瘦腰 · 向内收紧可见轮廓</h3><p>独立复核双侧腰部及上下界。仅变形真实可见的原图皮肤或衣物，不补全隐藏身体，也不改变腰长或上身长。本项是手动审核轮廓，不冒称 AI 腰部识别。</p>
+  <h3>瘦腰 · 向内收紧可见轮廓</h3><p>独立复核双侧腰部及上下界。仅变形真实可见的当前来源图皮肤或衣物，不补全隐藏身体，也不改变腰长或上身长。本项是手动审核轮廓，不冒称 AI 腰部识别。</p>
   <button type="button" disabled={busy} onClick={onOpenBodyAnalysis}>打开真实身体定位与人物关联</button>
   {!shown.bodies.length&&<p role="status">尚无真实身体定位，请先分析当前源图。</p>}
   <div className="leg-body-choices">{shown.bodies.map((b,i)=><button key={refKey(b.body_ref)} type="button" disabled={busy} aria-pressed={refKey(b.body_ref)===refKey(shown.selected_body_ref)} onClick={()=>onSelect(b.body_ref)}>身体 {i+1}{b.reviewed?' · 瘦腰已复核':' · 瘦腰待复核'}{!b.enabled?' · 身体已停用':''}</button>)}</div>

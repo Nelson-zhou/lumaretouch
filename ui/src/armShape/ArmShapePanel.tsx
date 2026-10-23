@@ -26,6 +26,6 @@ export function ArmShapePanel({controller,transport,source,onSelectBody,disabled
  {!ready&&<p>先完成每个目标分段对应策略的可见源图复核。只有一只手臂可见时保持解锁，并只选有证据的分段。</p>}
  {uncertain&&<button onClick={()=>void controller.reconcile()}>查询原请求结果（不重发）</button>}
  <p role="status">{state.message||message}</p>{view.refusals.map((r,i)=><p role="alert" key={i}>{r.reason}</p>)}
- {body&&source?<ArmSupportEditor key={`${reviewKey(view,segment)}:${strategy}`} body={body} view={view} segment={segment} strategy={strategy} source={source} controller={controller} transport={transport} disabled={busy}/>:<p>需要与当前照片绑定的标准原图，才能查看真实选区并复核。</p>}
+ {body&&source?<ArmSupportEditor key={`${reviewKey(view,segment)}:${strategy}`} body={body} view={view} segment={segment} strategy={strategy} source={source} controller={controller} transport={transport} disabled={busy}/>:<p>需要与当前照片绑定的标准当前来源图，才能查看真实选区并复核。</p>}
  <small>{REQUIREMENT_ID} · 关联 PORTRAIT-008 不代表本项已验收。过渡范围中的背景与衣物纹理可能随形变移动。</small></section>;
 }

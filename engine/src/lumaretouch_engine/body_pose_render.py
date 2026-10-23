@@ -14,7 +14,7 @@ def retained(bank):return bool(bank['bodies'])
 
 def check_source(bank,frame):
     frame=E.source(frame)
-    if any(row['record']['source']!=frame for row in bank['bodies'].values()):raise ValueError('Retained body observations belong to another original source/orientation/dimensions')
+    if any(row['record']['source']!=frame for row in bank['bodies'].values()):raise ValueError('Retained body observations belong to another effective source/orientation/dimensions')
     return frame
 
 
@@ -45,6 +45,11 @@ def prepare(prepared,bank,people,frame,*,byte_budget,source_pixels=None,source_p
         # Verification is image-input replay, not another model invocation. Do
         # not hash a proxy or relabel RGB16 as an original RGB8 source.
         reserve=frame['width']*frame['height']*(32 if source_pixels is None else 8)+64*1024*1024
+        if type(source_pixels) is dict:
+            from .creative_derived_arm_input import decode
+            if set(source_pixels)!={'descriptor','pixels'}:raise ValueError('Invalid immutable arm replay packet')
+            decode(source_pixels['descriptor'],source_pixels['pixels'],frame)
+            reserve=len(source_pixels['pixels'])*3+64*1024*1024
         if reserve>=budget:raise ValueError('Insufficient common-map budget for exact full-source arm selection replay')
         budget-=reserve
         if source_pixels is None:
@@ -64,17 +69,27 @@ def prepare(prepared,bank,people,frame,*,byte_budget,source_pixels=None,source_p
 
 def capture(engine,snap,state,path,people_graph=None):
     bank=D.bank(state)
-    snap['body_pose']=None
+    snap['body_pose']=None;snap['body_pose_source_proof']=None
     if not retained(bank):return snap
     from .local_mask_state import source_digest
     if not path:raise ValueError('Body export needs its exact target source path')
     records=list(bank['bodies'].values());frame=records[0]['record']['source']
-    if source_digest(path)!=frame['sha256']:raise ValueError('Body export source bytes changed')
+    from .creative_derived_source import record,binding
+    derived=record(state) is not None
+    if derived:
+        from .creative_derived_body_export import capture_proof
+        if frame!=source(binding(state)):raise ValueError('Body export observations belong to another effective source')
+        snap['body_pose_source_proof']=capture_proof(state,path)
+    elif source_digest(path)!=frame['sha256']:raise ValueError('Body export source bytes changed')
     check_source(bank,frame);snap['body_pose']=P.snapshot(bank,frame)
     if snap.get('people') is None:
         from .people_snapshot import capture as capture_people
         snap['people']=capture_people(engine._people_owner().snapshot() if people_graph is None else people_graph,frame['sha256'],{})
         snap['people']['support_assets']=deepcopy(engine._people_support)
+        if derived:snap['people']['creative_source']=binding(state)
+    if derived:
+        from .creative_derived_body_export import verify_snapshot
+        verify_snapshot(snap,path)
     return snap
 
 
@@ -84,7 +99,13 @@ def check_export_decode(snap,path,before,shape):
     from .local_mask_state import file_stamp,source_digest
     if before is None or file_stamp(path)!=before:raise ValueError('Body source changed during original-resolution decode')
     frame=frozen['source'];P.check_snapshot(frozen,frame)
-    if (frame['height'],frame['width'])!=tuple(shape) or source_digest(path)!=frame['sha256']:raise ValueError('Decoded body source identity or dimensions differ from retained observations')
+    from .creative_derived_source import record
+    if record(snap) is not None:
+        from .creative_derived_body_export import verify_snapshot
+        verify_snapshot(snap,path)
+    elif snap.get('body_pose_source_proof') is not None or source_digest(path)!=frame['sha256']:
+        raise ValueError('Decoded body source identity differs from retained observations')
+    if (frame['height'],frame['width'])!=tuple(shape):raise ValueError('Decoded body source dimensions differ from retained observations')
     if file_stamp(path)!=before:raise ValueError('Body source changed during decoded-source verification')
     snap['body_pose_source_path']=path;snap['body_pose_source_stamp']=list(before)
 
@@ -92,11 +113,14 @@ def check_export_decode(snap,path,before,shape):
 def verify_render_source(spec):
     if getattr(spec,'body_pose',None) is None:return
     from .local_mask_state import file_stamp
+    from .creative_derived_body_export import verify_spec
+    verify_spec(spec)
     if not spec.body_pose_source_path or list(file_stamp(spec.body_pose_source_path))!=spec.body_pose_source_stamp:raise ValueError('Body source changed after verified full-resolution decode')
 
 
 def configure_export(spec,snap,shape,*,for_document):
     frozen=snap.get('body_pose');spec.body_pose=frozen
+    spec.body_pose_source_proof=deepcopy(snap.get('body_pose_source_proof'))
     if frozen is None:return
     if not for_document:raise ValueError('Body reviews/pose cannot be copied to another image; explicitly transfer values and prepare that target')
     frame=frozen['source'];P.check_snapshot(frozen,frame)

@@ -142,7 +142,8 @@ def require_rebound_snapshot(snapshot):
         if people.get('creative_source') != source or people.get('asset_sha256') != source['sha256']:
             blocked.append('unbound original people observations')
     if snapshot.get('body_pose') is not None:
-        blocked.append('unbound body observations')
+        from .creative_derived_body_export import verify_snapshot
+        verify_snapshot(snapshot)
     if snapshot.get('channel') or snapshot.get('grade_scope', 'all') != 'all':
         blocked.append('original scoped masks')
     if snapshot.get('repair_ops') or snapshot.get('light_ops'):
@@ -177,7 +178,7 @@ def require_rebound_snapshot(snapshot):
 def require_rebound_spec(spec):
     """Same fail-closed gate for direct library callers bypassing snapshots."""
     snapshot = {key: getattr(spec, key, None) for key in (
-        'creative_base', 'people', 'body_pose', 'channel', 'grade_scope',
+        'creative_base', 'people', 'body_pose', 'body_pose_source_proof', 'channel', 'grade_scope',
         'fabric_amount', 'local_grade_groups', 'effect_recovery', 'manual_liquify',
         'studio_background', 'id_background', 'optics', 'sky_replacement',
         'reference_color', 'semantic_colour', 'lip_makeup', 'brow_shape',

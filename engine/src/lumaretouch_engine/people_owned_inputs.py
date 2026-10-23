@@ -22,8 +22,13 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support
         from .creative_derived_hair import preview_inputs
         hair_inputs=preview_inputs(engine,state,owned)
         body = engine._body_bank() if body_bank is _MISSING else body_bank
-        if body is not None and (body['bodies'] or body['analysis_runs'] or body['support_assets']):
-            raise ValueError('Derived portrait preview cannot consume original-file body observations')
+        from .creative_derived_body import validate as validate_body
+        if body is not None:validate_body(body,owned)
+        body_pixels=None
+        from .body_pose_render import needs_arm_replay
+        if body is not None and needs_arm_replay(body):
+            from .creative_derived_arm_input import capture
+            body_pixels=capture(engine)
         if body_source is not None and body_source != owned:
             raise ValueError('Derived portrait preview source differs from its retained binding')
         # No resolver receives the original path. Reviewed makeup receives only the
@@ -31,7 +36,8 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support
         # The runtime
         # checks the pipeline RGB against this owned inference/display proxy.
         return {'creative_source':owned,'creative_proxy':analysis_rgb(engine),
-                **input_banks(support_bank),**hair_inputs}
+                **input_banks(support_bank),**hair_inputs,
+                'body_bank':body,'body_source':owned,'body_source_pixels':body_pixels}
     from .hair_colour_project import preview_kwargs
     return {**preview_kwargs(engine, state),
             'eye_light_assets': support_bank,

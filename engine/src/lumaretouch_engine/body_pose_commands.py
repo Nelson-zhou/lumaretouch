@@ -93,9 +93,27 @@ def apply(engine,message):
         from .body_pose_runtime import analyse
         from .cpu_memory_budget import available_estimate
         import numpy as np
-        rgb=np.array(engine._src_rgb,dtype=np.uint8,copy=True);rgb.setflags(write=False)
-        run=analyse(rgb,R.source(engine._people_source()),byte_budget=available_estimate())
-        checked_binding(engine,binding)
+        from hashlib import sha256
+        from .creative_derived_source import analysis_rgb, binding as source_binding, verify
+        source=source_binding(engine)
+        current_rgb=np.asarray(analysis_rgb(engine))
+        if current_rgb.dtype!=np.uint8 or current_rgb.ndim!=3 or current_rgb.shape[2]!=3:
+            raise ValueError('Body analysis needs the actual canonical RGB8 model input')
+        rgb=np.array(current_rgb,copy=True);rgb.setflags(write=False)
+        input_digest=sha256(memoryview(np.ascontiguousarray(rgb))).hexdigest()
+        run=analyse(rgb,R.source(source),byte_budget=available_estimate())
+        checked_binding(engine,binding);verify(source,engine)
+        # A source label alone is not proof: bind every retained observation to
+        # the exact immutable RGB8 buffer actually submitted to the producer.
+        if run['source']!=R.source(source):raise ValueError('Body producer returned another source')
+        for record in run['records']:
+            E.check(record)
+            if (record['source']!=run['source'] or record['input_rgb_sha256']!=input_digest
+                    or record['input_dimensions']!=[rgb.shape[1],rgb.shape[0]]):
+                raise ValueError('Body evidence does not bind the actual analysis pixels')
+        current_rgb=np.asarray(analysis_rgb(engine))
+        if current_rgb.shape!=rgb.shape or current_rgb.dtype!=np.uint8 or sha256(memoryview(np.ascontiguousarray(current_rgb))).hexdigest()!=input_digest:
+            raise ValueError('Body analysis pixels changed before publication')
         bank=engine._body_bank()
         if not bank['bodies']:
             commit_observations(engine,B.add_run(bank,run),message['request_id'],operation)

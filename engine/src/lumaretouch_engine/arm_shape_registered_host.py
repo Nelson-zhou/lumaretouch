@@ -28,8 +28,9 @@ class ArmRegisteredHostMixin:
         owner=self.__dict__.get('_arm_proposal_owner')
         if owner is None:
             from .arm_shape_job import ArmProposalJobs
+            from .creative_derived_arm_input import capture
             owner=H.ArmProposalHost(H.ProposalPorts(self._people_binding,self._body_bank,
-                lambda:self._people_owner().snapshot(),lambda:self._doc_path),ArmProposalJobs())
+                lambda:self._people_owner().snapshot(),lambda:self._doc_path,lambda:capture(self)),ArmProposalJobs())
             self._arm_proposal_owner=owner
         return owner
 

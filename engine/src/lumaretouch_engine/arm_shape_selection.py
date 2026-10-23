@@ -114,7 +114,7 @@ def measured_widths(selection,record,segment):
     return negative,positive
 
 
-def propose(path,record,segment,scope,ownership,*,device='cpu',cancelled=lambda:False):
+def propose(path,record,segment,scope,ownership,*,device='cpu',cancelled=lambda:False,source_input=None):
     """Run only as a cancellable owned job. No auto-install, no manual fallback.
 
     Callers must expose every candidate/refusal and exact source overlay. This
@@ -123,7 +123,12 @@ def propose(path,record,segment,scope,ownership,*,device='cpu',cancelled=lambda:
     from . import prompted_model_install as I
     record=E.check(record);scope=S.region(scope);S.axis(record,segment);check_ownership(ownership,record)
     source={k:record['source'][k] for k in ('sha256','width','height')}
-    pixels=P.decode_source(path,source,device='cpu')
+    if source_input is None:
+        pixels=P.decode_source(path,source,device='cpu')
+    else:
+        if path is not None:raise ValueError('Derived arm input must not carry an original file path')
+        from .creative_derived_arm_input import decode
+        pixels=decode(source_input['descriptor'],source_input['pixels'],source)
     runtime=I.installed_runtime_identity()
     predictor=P.Predictor(device);result=predictor.predict(pixels,prompts(record,segment,scope),cancelled=cancelled)
     if I.installed_runtime_identity()!=runtime: raise ValueError('SAM runtime changed during proposal')
@@ -161,7 +166,13 @@ def verify_input(pixels,selection):
     Retained reviewed mask pixels are replayable assets. They are not a claim that
     a new inference ran; runtime/weights need not be installed for their replay.
     """
-    _,digest=P.inference_image(pixels)
+    from .creative_derived_arm_input import inference_image, decode
+    if type(pixels) is dict:
+        if set(pixels)!={'descriptor','pixels'}:raise ValueError('Invalid immutable arm replay input')
+        decode(pixels['descriptor'],pixels['pixels'],selection['source'])
+        digest=pixels['descriptor']['input_sha256']
+    else:
+        _,digest=inference_image(pixels)
     if digest!=selection['binding']['input_sha256']:
         raise ValueError('Actual source inference pixels differ from the retained SAM selection')
 

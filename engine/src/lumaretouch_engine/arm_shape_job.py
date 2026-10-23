@@ -47,9 +47,19 @@ def _run(directory,parent_pid):
     root=Path(directory)
     try:
         request=_read_file(root/'request.json',256*1024)
-        if type(request) is not dict or set(request)!={'path','record','segment','scope','ownership','device'}:raise ValueError('Invalid arm worker request')
+        if type(request) is not dict or set(request) not in ({'path','record','segment','scope','ownership','device'}, {'path','record','segment','scope','ownership','device','source_input'}):raise ValueError('Invalid arm worker request')
+        source_input=None
+        if 'source_input' in request:
+            from . import creative_derived_arm_input as D
+            descriptor=D.check_descriptor(request['source_input'],request['record']['source'])
+            if request['path'] is not None:raise ValueError('Derived worker cannot read an original source path')
+            input_path=root/'source.rgb8';info=input_path.lstat()
+            if not stat.S_ISREG(info.st_mode) or info.st_size!=descriptor['width']*descriptor['height']*3 or info.st_size>D.MAX_BYTES:raise ValueError('Invalid immutable arm worker input file')
+            with input_path.open('rb') as stream:data=stream.read(D.MAX_BYTES+1)
+            D.decode(descriptor,data,request['record']['source'])
+            source_input={'descriptor':descriptor,'pixels':data}
         from .arm_shape_selection import propose
-        result={'success':True,'proposal':propose(request['path'],request['record'],request['segment'],request['scope'],request['ownership'],device=request['device'])}
+        result={'success':True,'proposal':propose(request['path'],request['record'],request['segment'],request['scope'],request['ownership'],device=request['device'],source_input=source_input)}
         _write_result(root,result)
     except Exception as error:
         (root/'result.partial').unlink(missing_ok=True)
@@ -62,7 +72,7 @@ class ArmProposalJobs:
         if type(max_jobs) is not int or not 1<=max_jobs<=8 or type(max_retained_bytes) is not int or not 1024*1024<=max_retained_bytes<=32*1024*1024:raise ValueError('Invalid arm proposal job budget')
         self.max_jobs=max_jobs;self.max_retained_bytes=max_retained_bytes;self.jobs={};self.cancelled_ids=set();self.closed=False
 
-    def start(self,job_id,path,record,segment,scope,ownership,device,context):
+    def start(self,job_id,path,record,segment,scope,ownership,device,context,*,source_input=None):
         E.token(job_id)
         if self.closed or job_id in self.cancelled_ids:
             return {'phase':'done','job_id':job_id,'success':False,'error':'Arm proposal was cancelled or its owner closed before start','proposal':None}
@@ -73,6 +83,11 @@ class ArmProposalJobs:
         if type(context) is not dict or set(context)!={'document_id','document_epoch','body_graph_sha256','people_graph_sha256'}:raise ValueError('Arm job needs exact document/body/people context')
         E.token(context['document_id']);E.token(context['document_epoch']);E.digest(context['body_graph_sha256']);E.digest(context['people_graph_sha256'])
         request={'path':str(path),'record':record,'segment':segment,'scope':scope,'ownership':ownership,'device':device}
+        if source_input is not None:
+            from . import creative_derived_arm_input as D
+            if path is not None or type(source_input) is not dict or set(source_input)!={'descriptor','pixels'}:raise ValueError('Invalid derived arm input admission')
+            D.decode(source_input['descriptor'],source_input['pixels'],record['source'])
+            request['path']=None;request['source_input']=deepcopy(source_input['descriptor'])
         identity=E.content_digest({**request,'context':context})
         if job_id in self.jobs:
             if self.jobs[job_id]['identity']!=identity:raise ValueError('Arm proposal ID reused with changed inputs')
@@ -86,6 +101,8 @@ class ArmProposalJobs:
         if len(encoded)>256*1024:raise ValueError('Arm proposal request exceeds budget')
         directory=tempfile.TemporaryDirectory(prefix='lumaretouch-arm-proposal-');root=Path(directory.name)
         try:
+            if source_input is not None:
+                with (root/'source.rgb8').open('xb') as output:output.write(source_input['pixels'])
             (root/'request.json').write_bytes(encoded)
             process=subprocess.Popen([sys.executable,'-m','lumaretouch_engine.arm_shape_job','--worker-directory',directory.name,'--parent-pid',str(os.getpid())],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,close_fds=True,start_new_session=True)
         except BaseException:directory.cleanup();raise

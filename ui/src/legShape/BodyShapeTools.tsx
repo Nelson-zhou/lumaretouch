@@ -56,7 +56,7 @@ export function BodyShapeTools({shoulders,legs,arms,waist,length,neck,blocked}:{
   <section data-leg-length-workflow aria-label="长腿" data-feature-id="PC-32473" data-control-id="PC-32473-C-d79658697a" data-requirement-id="LNX-REF-PC-32473-C-d79658697a" data-tool-anchor="长腿">
    <p>长腿：整体同时设置大腿和小腿长度，也可分项调整。独立复核髋、膝、踝和完整脚部，不是瘦腿宽度、增高或全身 AI 塑形。</p>
    <span data-tool-anchor="长腿/大腿"/><span data-tool-anchor="长腿/小腿"/>
-   <button type="button" disabled={lengthBlocked||length.busy} onClick={openLength}>打开腿长与原图过渡区复核</button>
+   <button type="button" disabled={lengthBlocked||length.busy} onClick={openLength}>打开腿长与当前来源图过渡区复核</button>
    {!length.supported&&<p role="status">配套腿长原生核心未就绪，不能应用。</p>}
    {length.busy&&<p role="status">{length.uncertain||length.state.phase==='uncertain'?'腿长结果待核对，不会重发。':'正在处理腿长请求。'}</p>}
    {(length.uncertain||length.state.phase==='uncertain')&&<button type="button" onClick={()=>void act(length.check)}>查询原腿长请求</button>}
@@ -64,7 +64,7 @@ export function BodyShapeTools({shoulders,legs,arms,waist,length,neck,blocked}:{
   </section>
   <section data-neck-workflow aria-label="脖子长度与宽度" data-feature-id="PC-32473" data-tool-anchor="脖子长度">
    <span data-tool-anchor="瘦脖子"/><p>脖子长度与宽度：完整头部头发连贯移动，左右宽度可独立解锁。不是天鹅颈。</p>
-   <button type="button" disabled={neckBlocked||neck.busy} onClick={openNeck}>打开颈部长宽与原图复核</button>
+   <button type="button" disabled={neckBlocked||neck.busy} onClick={openNeck}>打开颈部长宽与当前来源图复核</button>
    {!neck.supported&&<p role="status">配套颈部原生核心未就绪，不能应用。</p>}
    {neck.busy&&<p role="status">颈部请求处理中或待核对，不会重发。</p>}
    {(neck.uncertain||neck.state.phase==='uncertain')&&<button type="button" onClick={()=>void act(neck.check)}>查询原颈部请求</button>}{neck.message&&<p role="status">{neck.message}</p>}
@@ -72,19 +72,19 @@ export function BodyShapeTools({shoulders,legs,arms,waist,length,neck,blocked}:{
   {workspace==='neck'&&<NeckWorkspace owner={neck} blocked={neckBlocked} onClose={()=>setWorkspace(null)} onOpenBodyAnalysis={openShoulders}/>}
   {workspace==='length' &&<LegLengthWorkspace owner={length} blocked={lengthBlocked} onClose={()=>setWorkspace(null)} onOpenBodyAnalysis={openShoulders}/>}
   {workspace==='waist'&&<WaistWorkspace owner={waist} blocked={waistBlocked} onClose={()=>setWorkspace(null)} onOpenBodyAnalysis={openShoulders}/>}
-  {workspace==='leg'&&<div className="legWorkspace" role="dialog" aria-modal="true" aria-label="原图腿部定位与可见轮廓调整">
+  {workspace==='leg'&&<div className="legWorkspace" role="dialog" aria-modal="true" aria-label="当前来源图腿部定位与可见轮廓调整">
    <div className="leg-toolbar"><b>腿部可见轮廓复核</b><span>这里显示未修饰的全图参考缩略图；关闭后在主画布查看结果。</span><button type="button" onClick={()=>setWorkspace(null)}>关闭定位窗口</button></div>
    <div className="leg-workspace-content">
-    <button type="button" disabled={legBlocked||legs.busy} onClick={()=>void act(()=>legs.run('view'))}>刷新身体状态与原图参考</button>
+    <button type="button" disabled={legBlocked||legs.busy} onClick={()=>void act(()=>legs.run('view'))}>刷新身体状态与当前来源图参考</button>
     {legs.view?<LegShapePanel view={legs.view} controller={legs.controller} sourceImage={legs.source} disabled={legBlocked||!!legs.task} onSelect={ref=>void act(()=>legs.run('select',ref))} onOpenBodyAnalysis={openShoulders}/>:<><p role="status">等待真实文档的身体状态，不会生成示意骨架。</p><button type="button" disabled={blocked||legs.busy||!shoulders.enabled} onClick={openShoulders}>打开真实身体定位与人物关联</button></>}
     {[legs.message,error].filter(Boolean).map((text,i)=><p role="alert" key={i}>{text}</p>)}
     {(legs.uncertain||legs.state.phase==='uncertain')&&<button type="button" onClick={()=>void act(legs.check)}>查询原请求结果，不重发</button>}
    </div>
   </div>}
-  {workspace==='arm'&&<div className="legWorkspace" data-arm-workflow role="dialog" aria-modal="true" aria-label="原图手臂定位与可见轮廓调整">
+  {workspace==='arm'&&<div className="legWorkspace" data-arm-workflow role="dialog" aria-modal="true" aria-label="当前来源图手臂定位与可见轮廓调整">
    <div className="leg-toolbar"><b>手臂源图复核</b><span>未修饰的全图参考，不是效果图。关闭不撤销已提交调整。</span><button type="button" onClick={()=>setWorkspace(null)}>关闭复核窗口</button></div>
    <div className="leg-workspace-content">
-    <button type="button" disabled={armBlocked||arms.busy} onClick={()=>void act(()=>arms.run('view'))}>刷新身体状态与原图参考</button>
+    <button type="button" disabled={armBlocked||arms.busy} onClick={()=>void act(()=>arms.run('view'))}>刷新身体状态与当前来源图参考</button>
     <button type="button" disabled={blocked||arms.busy||legs.busy||!shoulders.enabled} onClick={openShoulders}>打开真实身体定位与人物关联</button>
     {arms.view?<ArmShapePanel controller={arms.controller} transport={arms.transport} source={arms.source} disabled={armBlocked||!!arms.task||arms.proposalBusy} onSelectBody={ref=>void act(()=>arms.run('select',ref))}/>:<p role="status">等待当前照片的真实身体状态，不会从人脸框伪造手臂骨架。</p>}
     {[arms.message,error].filter(Boolean).map((text,i)=><p role="alert" key={i}>{text}</p>)}

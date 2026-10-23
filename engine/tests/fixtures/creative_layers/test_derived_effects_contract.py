@@ -10,7 +10,7 @@ import hashlib
 import numpy as np
 import pytest
 from lumaretouch_engine import creative_derived_effects as C, creative_derived_source as D
-from lumaretouch_engine import people_state as S, people_algorithms as A
+from lumaretouch_engine import people_state as S, people_algorithms as A, body_pose_state as BODY
 from lumaretouch_engine.creative_document_assets import make_asset
 
 
@@ -34,7 +34,7 @@ def fixture(monkeypatch):
         _people_owner=lambda:SimpleNamespace(snapshot=lambda:deepcopy(state)),
         _people_binding=lambda:{'document_id':'doc','document_epoch':'epoch','document_revision':0,'asset_sha256':owned['sha256']},
         _people_managed=lambda:True,_people_source=lambda:owned,
-        _body_bank=lambda:{'bodies':{},'analysis_runs':{},'support_assets':{}})
+        _body_bank=BODY.empty)
     monkeypatch.setattr(D,'analysis_rgb',lambda _:rgb)
     D.stamp_precompute(engine,pc,rgb)
     return engine,state,context,owned,rgb
@@ -163,10 +163,10 @@ def test_preview_forwarding_never_resolves_original_hair_or_body(monkeypatch):
     def forbidden(*args,**kwargs):raise AssertionError('Original hair resolver called')
     monkeypatch.setattr(H,'preview_kwargs',forbidden)
     inputs=I.preview(engine,state,body_source=owned)
-    assert set(inputs)=={'creative_source','creative_proxy','hair_assets','hair_evidence',*(name+'_assets' for name in ('eye_light','lipstick','blush_makeup','eyeliner','eyelash','brow_makeup','iris_makeup'))}
+    assert set(inputs)=={'creative_source','creative_proxy','hair_assets','hair_evidence','body_bank','body_source','body_source_pixels',*(name+'_assets' for name in ('eye_light','lipstick','blush_makeup','eyeliner','eyelash','brow_makeup','iris_makeup'))}
     assert inputs['creative_source']==owned and inputs['creative_proxy'] is rgb
-    with pytest.raises(ValueError,match='body'):
-        I.preview(engine,state,body_bank={'bodies':{'unadapted':{}},'analysis_runs':{},'support_assets':{}})
+    bad=BODY.empty();bad['analysis_runs']['a'*64]=[]
+    with pytest.raises(ValueError):I.preview(engine,state,body_bank=bad)
 
 
 def test_preview_checks_actual_pipeline_pixels_before_source_only_preparation(monkeypatch):
