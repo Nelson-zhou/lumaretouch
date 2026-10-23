@@ -1111,7 +1111,9 @@ export interface ExportedImage {
   out_skipped?: boolean; skip_reason?: string | null; renamed_from?: string | null; destination_plan_id?: string;
   document_id?:string; source_asset_id?:string; recipe_version_id?:string; copy_number?:number;
   path: string;
-  outputs?: {path: string | null; variant: string; skipped?: boolean}[];
+  target_size?: import("./exportTargetSize/model").TargetSizeReceipt | null;
+  directory_fsync?: boolean;
+  outputs?: {path: string | null; variant: string; skipped?: boolean; target_size?: import("./exportTargetSize/model").TargetSizeReceipt; reason?: string | null; directory_fsync?: boolean}[];
   watermark?: {enabled: boolean; orientation?: string; asset_sha256?: string};
   /** 16-bit 母档读回差值必须为0；档位/低8位是诊断而非纯色图拒绝条件。
    *  冲突跳过时没有读回，三个诊断值为null。 */
@@ -1166,7 +1168,8 @@ export interface ExportDone {
   failed: number;
   out_dir: string;
   format: string;
-  quality: number;
+  quality: number | null;
+  target_size?: import("./exportTargetSize/model").TargetSizePolicy | null;
   tile: number;
   /** 这一批用的倍率/后端/锐量（引擎拍一次报一次，不是前端自己记得） */
   scale?: number;
@@ -1503,13 +1506,14 @@ export const runBackground = (
  */
 export const runExport = (
   outDir: string,
-  opts?: { destinationPolicy?: import("./exportDestination/model").DestinationPolicy; destinationPlanId?: string; intentRevision?: number; format?: string; quality?: number; tile?: number; images?: string[]; documentIds?:string[];
+  opts?: { destinationPolicy?: import("./exportDestination/model").DestinationPolicy; destinationPlanId?: string; intentRevision?: number; format?: string; quality?: number; targetSize?: import("./exportTargetSize/model").TargetSizePolicy; tile?: number; images?: string[]; documentIds?:string[];
            scale?: number; sharpen?: number; upscaleBackend?: string;
            bitDepth?: number; outputProfile?: string; tiffCompression?: string;
            metadataIncludeGps?: boolean; conflictPolicy?: string; watermark?: WatermarkSettings; layout?: import("./layout/model").LayoutSpec },
 ) =>
   invoke<{ requested: boolean }>("export", {
     outDir,
+    targetSize: opts?.targetSize,
     destinationPolicy: opts?.destinationPolicy,
     destinationPlanId: opts?.destinationPlanId,
     intentRevision: opts?.intentRevision,

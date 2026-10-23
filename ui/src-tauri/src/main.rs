@@ -61,6 +61,7 @@ mod preset_organisation_api;
 mod source_relocation_api;
 mod virtual_copy_api;
 mod export_destination_port;
+mod export_target_size_port;
 mod white_balance_api;
 mod white_balance_host;
 mod white_balance_capture_host;
@@ -1304,6 +1305,7 @@ fn export(
     conflict_policy: Option<String>,
     watermark: Option<Value>,
     layout: Option<Value>,
+    target_size: Option<Value>,
     destination_policy: Option<Value>,
     destination_plan_id: Option<String>,
     intent_revision: Option<u64>,
@@ -1349,6 +1351,7 @@ fn export(
             cmd[k] = v;
         }
     }
+    export_target_size_port::attach_target_size(&mut cmd, target_size)?;
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
 }

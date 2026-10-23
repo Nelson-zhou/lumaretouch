@@ -1,0 +1,118 @@
+{
+  "schema": 1,
+  "execution_status": "UNRUN",
+  "workflow": "WF-32483-30b6eae726",
+  "linux_requirement": "LNX-REF-WF-32483-30b6eae726",
+  "cases": [
+    {
+      "id": "TARGET-001",
+      "case": "Nonmonotonic sizes q4=1100,q3=800,q2=1000,q1=900; target1000 tolerance0",
+      "expect": "quality2 matched, no binary-search pruning"
+    },
+    {
+      "id": "TARGET-002",
+      "case": "Entire allowed quality range misses tolerance",
+      "expect": "unreachable only after exhaustive measured search; no output by default"
+    },
+    {
+      "id": "TARGET-003",
+      "case": "Attempt/time budget interrupts range",
+      "expect": "budget_exhausted, not infeasible; no output unless explicit best effort"
+    },
+    {
+      "id": "TARGET-004",
+      "case": "Metadata exceeds target at every quality",
+      "expect": "actual final-byte measurements include ICC/EXIF, preserve metadata, unreachable warning"
+    },
+    {
+      "id": "TARGET-005",
+      "case": "Cancel before/after encode and immediately before publication",
+      "expect": "no partial output; after atomic commit retain complete file and report committed"
+    },
+    {
+      "id": "TARGET-006",
+      "case": "Zero/negative/boolean/fractional/nonfinite target; tolerance>target; min>max; unknown keys",
+      "expect": "reject before render/queue admission"
+    },
+    {
+      "id": "TARGET-007",
+      "case": "PNG/TIFF/WebP or RGB16 request",
+      "expect": "unsupported, no dimension/format/depth substitution"
+    },
+    {
+      "id": "TARGET-008",
+      "case": "RGB8 already edited, cropped, watermarked; mutate live recipe during retries",
+      "expect": "one frozen image per output variant; every attempt identical pixels/options except quality"
+    },
+    {
+      "id": "TARGET-009",
+      "case": "GPS excluded/included; orientation from input; custom/source/sRGB ICC",
+      "expect": "same existing conversion/privacy behavior and output readback evidence"
+    },
+    {
+      "id": "TARGET-010",
+      "case": "Destination collision created between check and publish; symlink collision",
+      "expect": "never replace; skip or unique name; source remains byte-identical"
+    },
+    {
+      "id": "TARGET-011",
+      "case": "Marked and clean outputs differ in size; second variant fails",
+      "expect": "independent target receipts; existing partial-output receipts preserved"
+    },
+    {
+      "id": "TARGET-012",
+      "case": "Retry task after live controls changed",
+      "expect": "frozen target_size in task opts reused; restarted session cannot silently use current recipe"
+    },
+    {
+      "id": "TARGET-013",
+      "case": "MB versus MiB and exact tolerance edges",
+      "expect": "decimal vs binary explicit; inclusive ±B; no rounding to another target"
+    },
+    {
+      "id": "TARGET-014",
+      "case": "All encodes hit byte-buffer cap",
+      "expect": "encoded_budget_exhausted, never claim unreachable"
+    },
+    {
+      "id": "TARGET-015",
+      "case": "Nearest candidates tie",
+      "expect": "higher quality retained deterministically"
+    },
+    {
+      "id": "TARGET-016",
+      "case": "UI keyboard inputs invalid, format changes to TIFF, repeated export click during work",
+      "expect": "inline explanation, disabled while busy, no silent mode reset/conversion"
+    },
+    {
+      "id": "TARGET-017",
+      "case": "Encoder exception or corrupted JPEG/ICC/EXIF readback",
+      "expect": "failure with no published output; preserve original"
+    },
+    {
+      "id": "TARGET-018",
+      "case": "Disk full, unsupported hard links, directory fsync failure",
+      "expect": "no replace fallback; distinguish no output from committed but durability unconfirmed"
+    },
+    {
+      "id": "TARGET-019",
+      "case": "Change any target field after destination preview",
+      "expect": "Preview invalidated; preview and start normalize same policy and hash; stale plan rejected"
+    },
+    {
+      "id": "TARGET-020",
+      "case": "Frozen destination skip or new collision; missing authorized destination ancestor",
+      "expect": "Skip avoids encoding; raced target fails without rename; create_missing follows frozen policy"
+    },
+    {
+      "id": "TARGET-021",
+      "case": "Normal quality mode, virtual-copy IDs and layout PNG/PDF enabled",
+      "expect": "Legacy quality path preserved; target receipts identify each document and clean variant; layout output not mislabeled target-constrained"
+    },
+    {
+      "id": "TARGET-022",
+      "case": "Unreachable or partial watermark failure then task persistence/retry",
+      "expect": "Main error and persisted detail retain target receipt; successful variants preserved; frozen policy reused"
+    }
+  ]
+}

@@ -5800,7 +5800,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                       "w": self.shm.w, "h": self.shm.h, "mode": "device_switch", **SKR.proxy_flags(self)})
 
     # ------------------------------------------------------------ M4 全尺寸导出
-    EXPORT_KEYS = {"cmd", "action", "images", "out_dir", "format", "quality", "tile",
+    EXPORT_KEYS = {"cmd", "action", "images", "out_dir", "format", "quality", "tile", "target_size",
                    "scale", "sharpen", "upscale_backend", "bit_depth",
                    # d2c 那四格：名字进白名单不等于接通，下面逐条校验完才进 snap
                    "output_profile", "tiff_compression", "metadata_include_gps",
@@ -6068,6 +6068,12 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                                "JPEG/WebP 是有损的，PNG 编码器不吃三通道 16-bit"
                                "（实测 Pillow 拒 uint16 RGB）——不拿降到 8-bit 冒充 16-bit 出片"})
                 return
+        from .export_target_size_adapter import request_policy
+        try:
+            target_size = request_policy(p, format=fmt, bit_depth=bit_depth)
+        except ValueError as error:
+            respond({"event":"error", "error":str(error)})
+            return
         # d2c：ICC / 压缩 / 元数据 / 冲突策略。四条都在命令线程里校验完，理由与
         # sharpen 那条一样——worker 里拦下时 export_progress 已经发出去了。
         from .export import ExportError as _ExportError
@@ -6124,13 +6130,13 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         # （opts 必须先有名字再进元组：上一版把字面量直接写在元组里，而下面建台账的
         # `**opts` 引的是一个不存在的名字——于是每一次批量导出都在 cmd_export 里 NameError，
         # 而开发 venv 里这批用例全部 skip（没 torch），只有运行时 venv 才响得出来）
-        opts = {"output_profile": output_profile, "tiff_compression": tiff_comp,
+        opts = {"target_size": target_size, "output_profile": output_profile, "tiff_compression": tiff_comp,
                 "metadata_include_gps": bool(include_gps), "conflict_policy": conflict_policy,
                 "watermark": WM.public_settings(snap.get("export_watermark")), "layout": snap.get("export_layout"), "document_entries": export_entries}
         destination_plan = None
         if p.get("destination_policy") is not None:
             from . import export_destination_runtime as EDR
-            settings = {"format":fmt, "quality":quality, "tile":tile, "bit_depth":bit_depth,
+            settings = {"format":fmt, "quality":None if target_size else quality, "tile":tile, "bit_depth":bit_depth,
                         "scale":scale, "sharpen":sharpen, "upscale_backend":backend,
                         **{k:v for k,v in opts.items() if k != "document_entries"}}
             try:
@@ -6163,7 +6169,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         self._task_seq += 1
         task = T.new_task("export",
                           {"images": list(images), "out_dir": out_dir, "format": fmt,
-                           "quality": quality, "tile": tile, "bit_depth": bit_depth,
+                           "quality": None if target_size else quality, "tile": tile, "bit_depth": bit_depth,
                            "doc": doc, **opts},
                           entry_ids + ([LAYOUT_ITEM] if snap.get("export_layout") else []), task_id=f"exp{self._task_seq}-{os.getpid()}")
         # `recipe_persisted` 说的是“这份配方快照现在还在不在会话里”，不是“有没有写过
@@ -6237,13 +6243,13 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             return
         if "error" in rec:
             T.item_result(task, path, "failed", reason=rec["error"],
-                          detail={"stage": rec.get("stage"), "outputs":rec.get("outputs",[]), "destination_plan_id":rec.get("destination_plan_id"), "planned_target":rec.get("planned_target")})
+                          detail={"target_size":rec.get("target_size"), "encoder_quality":rec.get("encoder_quality"), "directory_fsync":rec.get("directory_fsync"), "stage": rec.get("stage"), "outputs":rec.get("outputs",[]), "destination_plan_id":rec.get("destination_plan_id"), "planned_target":rec.get("planned_target")})
         elif rec.get("out_skipped"):
             T.item_result(task, path, "skipped", reason=rec.get("skip_reason"),
-                          out=rec.get("out"), detail={"outputs":rec.get("outputs",[]),"destination_plan_id":rec.get("destination_plan_id")})
+                          out=rec.get("out"), detail={"target_size":rec.get("target_size"), "encoder_quality":rec.get("encoder_quality"), "directory_fsync":rec.get("directory_fsync"), "outputs":rec.get("outputs",[]),"destination_plan_id":rec.get("destination_plan_id")})
         else:
             T.item_result(task, path, "succeeded", out=rec.get("out"),
-                          detail={"bytes": rec.get("bytes"), "outputs":rec.get("outputs",[]), "renamed_from":rec.get("renamed_from"), "destination_plan_id":rec.get("destination_plan_id"), "layout_usable": not any(o.get("skipped") for o in rec.get("outputs", []) or [] if o.get("path") == rec.get("out"))})
+                          detail={"target_size":rec.get("target_size"), "encoder_quality":rec.get("encoder_quality"), "directory_fsync":rec.get("directory_fsync"), "bytes": rec.get("bytes"), "outputs":rec.get("outputs",[]), "renamed_from":rec.get("renamed_from"), "destination_plan_id":rec.get("destination_plan_id"), "layout_usable": not any(o.get("skipped") for o in rec.get("outputs", []) or [] if o.get("path") == rec.get("out"))})
         self._emit_task(task, f"第 {T.counts(task)['succeeded'] + T.counts(task)['failed']} "
                               f"条已定")
 
@@ -6408,9 +6414,11 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
 
     def _export_loop(self):
         from .decode import load_full
-        from .watermark_delivery import write_delivery8, export_delivery16
+        from .watermark_delivery import export_delivery16
+        from .export_target_size_adapter import write_delivery as write_delivery8
         images, out_dir, fmt, quality, tile, doc, snap, bit_depth, opts, snap_by_path = self._export_args
         watermark = snap.get("export_watermark")
+        target_ctl = self._task_ctl  # Capture this batch control; never use a newer retry control.
         task = self._export_task
         n = len(images)
         if task is not None and task["state"] != T.RUNNING:
@@ -6545,6 +6553,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                         "RAW 源暂不携带源 ICC：这条通道没读元数据，不是文件里没有。"
                         "请改选 srgb，或把一个真实的 .icc 文件路径当 output_profile 递进来")
                 info = EDR.run(destination_plan, entry_id, write_delivery8, frame, out_path, quality=quality, watermark=watermark,
+                                  target_size=opts.get("target_size"),
+                                  cancelled=lambda: bool(target_ctl and target_ctl.cancel.is_set()),
                                   output_profile=opts["output_profile"],
                                   source_icc=d.source_icc, source_exif=d.source_exif,
                                   metadata_include_gps=opts["metadata_include_gps"],
@@ -6552,6 +6562,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                                   tiff_compression=opts["tiff_compression"])
                 results.append({"path": path, "out": info["path"], "format": info["format"],
                                 "bytes": info["bytes"], "write_ms": info["write_ms"],
+                                "target_size": info.get("target_size"), "directory_fsync": info.get("directory_fsync"),
                                 # PNG 实际压缩档位（非 PNG 为 None）：这里是从 info 里
                                 # 摘键组装的，不补这一笔就会在协议边界上静默丢掉——
                                 # quality 95 与文件按哪个档位写的对不上账，批量报表里看不出来
@@ -6574,7 +6585,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             except Exception as e:      # 逐图失败不能带倒整批
                 failed += 1
                 results.append({"path": path, "stage": stage, "error": f"{type(e).__name__}: {e}",
-                                "outputs": getattr(e, "outputs", [])})
+                                "outputs": getattr(e, "outputs", []), "target_size": getattr(e, "target_size", None)})
             emit({"event": "export_progress", "index": idx, "total": n, "path": path, "document_id":entry.get("document_id"),
                   "ok": "error" not in results[-1]})
             EDR.decorate(results[-1], destination_plan, entry_id)
@@ -6613,7 +6624,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
               "task_id": (task or {}).get("task_id"),
               "task_state": (task or {}).get("state"),
               "cancelled": _cancelled_final,
-              "out_dir": out_dir, "format": fmt, "quality": quality, "tile": tile,
+              "out_dir": out_dir, "format": fmt, "quality": None if opts.get("target_size") else quality, "tile": tile,
               "bit_depth": bit_depth, "layout_result": layout_result, **opts,
               "scale": int(snap["scale"]), "sharpen": float(snap["sharpen"]),
               # 后端名字只在真做了放大时才报：批级别写"lanczos3"而每张图的账单写 None，

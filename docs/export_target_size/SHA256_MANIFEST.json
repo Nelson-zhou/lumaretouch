@@ -1,0 +1,123 @@
+{
+  "schema": 1,
+  "task": "coreM10 approximate target-byte export",
+  "status": "shared_product_route_authored_static_only",
+  "runtime_validation": "UNRUN",
+  "baseline_commit_prefix": "a3741ad6",
+  "files": [
+    {
+      "path": "docs/export_target_size/IMPLEMENTATION.md",
+      "sha256": "c76c728aa21448dbf9ccd647ac4a3b834d6a454763f6a8149c6335743852f202"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_target_size_adapter.py",
+      "sha256": "0beb21d85f485dd505fd5eb832b55408ae8fa7b085bdace5d7b87f8b95f13fd3"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_target_size_policy.py",
+      "sha256": "bcd6191f534032435dc821cbcbc99128c686c8a14ae0702e53a98f3f28e94b0e"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_target_size_search.py",
+      "sha256": "47ce12ba3070917820b8285e9d78b1130f4db04d4e2fa67096bfcf585260ebc2"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_target_size_writer.py",
+      "sha256": "27e85e01469bcb8b8c89bbb27d0ae85e3040d05f5c2fcebb6af5936042557166"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "467427f1ac262e2aca22b52fdff05e11b13f2d4c50a8897224b8a41e2aab0eff"
+    },
+    {
+      "path": "engine/tests/export_target_size_search_cases.py",
+      "sha256": "05280810451fcd6d5310eabf9b0ed30bd9d3e060d00e8ebc0aae3ecb106e01ef"
+    },
+    {
+      "path": "engine/tests/export_target_size_writer_cases.py",
+      "sha256": "34b532b8bbd5dd59ee949d8bfd60ecc837cc585ad00e2dead63c07b064d8fe07"
+    },
+    {
+      "path": "engine/tests/fixtures/export_target_size/acceptance.json",
+      "sha256": "b8c95dd537f7e88e9b732047b103e56db863a438dc54a76b08bb5930f251ce7f"
+    },
+    {
+      "path": "ui/src-tauri/src/export_target_size_port.rs",
+      "sha256": "257bf1c061ff69a881ac1d07610d5e166f44b3e18ac6a4ddc6e91f8d3585c9db"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "7c8f17753b2f4615ac6187d39241158298f1c35afe69bbc4109bed30dd4758a4"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "07b5ec7da565a030bf4e58990ee99c9678534a5edcda2c7cd9fe18e73916339a"
+    },
+    {
+      "path": "ui/src/components/ExportQueuePanel.tsx",
+      "sha256": "c3a5e6a96ff873cc162e1ae2d32eb29560ce730a1c96fd61ffdaa411ded679f5"
+    },
+    {
+      "path": "ui/src/exportTargetSize/TargetSizeControls.tsx",
+      "sha256": "cd0c3cab5ae8230261b58c91d001a4058e191c49279978e0c5461fde955aca79"
+    },
+    {
+      "path": "ui/src/exportTargetSize/model.ts",
+      "sha256": "95e72906cff26ffb07c0926210b96d40b705175a37819b5fae969e39af3b4cdb"
+    },
+    {
+      "path": "ui/src/exportTargetSize/nativePort.ts",
+      "sha256": "b8e364f3b89b9ecc34087be2f90bbcbdf302c55979b7e3ab8ab45d95a09e2504"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "3dfbc5f99936d9e9b4cb82116462cf1deeba18ee2834e5b38bfbc38015f626ce"
+    }
+  ],
+  "dependencies": [
+    "engine/src/lumaretouch_engine/export.py",
+    "engine/src/lumaretouch_engine/watermark_delivery.py",
+    "engine/src/lumaretouch_engine/export_destination_commit.py",
+    "engine/src/lumaretouch_engine/export_destination_policy.py"
+  ],
+  "shared_files_modified": [
+    "ui/src/App.tsx",
+    "ui/src/native.ts",
+    "ui/src/components/ExportQueuePanel.tsx",
+    "ui/src-tauri/src/main.rs",
+    "engine/src/lumaretouch_engine/server.py"
+  ],
+  "integration_base_commit": "b64782014c3923a99d9a264f5e0e214ba1b24d71",
+  "validation": {
+    "python_ast_files": [
+      "engine/src/lumaretouch_engine/export_target_size_adapter.py",
+      "engine/src/lumaretouch_engine/export_target_size_policy.py",
+      "engine/src/lumaretouch_engine/export_target_size_search.py",
+      "engine/src/lumaretouch_engine/export_target_size_writer.py",
+      "engine/src/lumaretouch_engine/server.py",
+      "engine/tests/export_target_size_search_cases.py",
+      "engine/tests/export_target_size_writer_cases.py"
+    ],
+    "json_parse": "completed",
+    "typescript_rust": "source inspection only; no compiler/typecheck",
+    "runtime_encoding_tests_build": "UNRUN"
+  },
+  "dependency_sha256": [
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "268062846a0304bba307d6430c1780cf960a87d904d5e7d238b52143d9a7ffd0"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/watermark_delivery.py",
+      "sha256": "6ed8fef8a17761814d9bb178469db760fe3ab797586cb86a3169a18e73893b42"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_destination_commit.py",
+      "sha256": "0395076e2b2b8c81cc66ef584d8be5a252955b609bf9b9f690b2b0d28c6fe47b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_destination_policy.py",
+      "sha256": "9aee4efa6df6af56a174fb62a574b2ce5d3f84fdcec39405805f4d1fc620aca6"
+    }
+  ]
+}

@@ -29,6 +29,9 @@ import {peopleContext, peopleAssetContext, type PeopleContext} from './people/mo
 import {ColourTransferTools} from './semanticColour/ColourTransferTools';
 import {RetouchToolActivity,type ToolLocation} from "./toolRouting/RetouchToolActivity";
 import { neutral as neutralWrinkles } from "./facialWrinkles/model";
+import {TargetSizeControls} from './exportTargetSize/TargetSizeControls';
+import {initialTargetSize, targetSizePolicy} from './exportTargetSize/model';
+import {targetSizeArguments} from './exportTargetSize/nativePort';
 import {ExportQueuePanel} from './components/ExportQueuePanel';
 import {defaultMaskTransfer,LOCAL_GRADE_OP} from './localMasks/transfer';
 import {ColorActionStatus} from './colorActions/ColorActionControls';
@@ -283,6 +286,7 @@ export default function App() {
   const [exportFormat, setExportFormat] = useState("jpg");
   const [idBackgroundBusy,setIdBackgroundBusy]=useState(false);
   const [exportQuality, setExportQuality] = useState(95);
+  const [exportTargetSize, setExportTargetSize] = useState({...initialTargetSize});
   // 放大（M7）：倍率与出片锐量。1 / 0.0 就是"不上这一层"——默认必须是原样出片，
   // 而不是一个没人同意的默认美化。
   const [exportScale, setExportScale] = useState(1);
@@ -1261,7 +1265,8 @@ export default function App() {
    *  倍率/锐量为 1/0 时也不给：那两个值就是“这一层没开”，递上去与递默认值是两回事。 */
   function destinationOptions() {
     const combo = reconcileExportCombo(exportBits16, exportFormat, exportTiffComp);
-    return {out_dir:exportDir, format:combo.format, quality:exportQuality,
+    const target = targetSizePolicy(exportTargetSize, combo.format, exportBits16 ? 16 : 8);
+    return {out_dir:exportDir, format:combo.format, ...(target ? {target_size:target} : {quality:exportQuality}),
       ...(exportTile.trim() ? {tile:Number(exportTile)} : {}),
       ...(exportScale !== 1 ? {scale:exportScale} : {}),
       ...(exportSharpen > 0 ? {sharpen:exportSharpen} : {}),
@@ -1295,7 +1300,7 @@ export default function App() {
       const before = (await engineStatus())?.last_error ?? null;
       const combo = reconcileExportCombo(exportBits16, exportFormat, exportTiffComp);
       await runExport(exportDir, {
-        format:combo.format, quality:exportQuality,
+        format:combo.format, ...targetSizeArguments(targetSizePolicy(exportTargetSize, combo.format, exportBits16 ? 16 : 8), exportQuality),
         tile:exportTile.trim() ? Number(exportTile) : undefined,
         scale:exportScale !== 1 ? exportScale : undefined,
         sharpen:exportSharpen > 0 ? exportSharpen : undefined,
@@ -1478,7 +1483,7 @@ export default function App() {
   /** 底片条上被选中的那几张（没选就只导当前这张） */
   const selPaths = (library.pending||library.error?[]:library.docs).filter(d=>sel.has(d.document_id)).map(d=>d.document_id);
   const exportTargets = sel.size ? selPaths : (hasImage ? (strip?.docs.filter(d=>d.loaded).map(d=>d.document_id)??[]) : []);
-  const destinationSignature = JSON.stringify([destinationPolicy, exportDir, exportFormat, exportQuality,
+  const destinationSignature = JSON.stringify([destinationPolicy, exportDir, exportFormat, exportQuality, exportTargetSize,
     exportScale, exportSharpen, exportBits16, exportTiffComp, exportGps, exportConflict,
     exportProfile, exportTile, watermark, layoutModel.layout, exportTargets, status?.doc_rev, status?.engine_alive, workspace]);
   destinationInput.current = destinationSignature;
@@ -2061,10 +2066,11 @@ export default function App() {
                   </select>
                 </label>
                 <label>质量
-                  <input type="range" min={60} max={100} value={exportQuality}
+                  <input type="range" min={60} max={100} value={exportQuality} disabled={exportTargetSize.enabled || exporting || destinationBusy}
                          onChange={(e) => setExportQuality(+e.target.value)} />
                   <em>{exportQuality}</em>
                 </label>
+                <TargetSizeControls value={exportTargetSize} onChange={setExportTargetSize} format={exportBits16 ? "tif" : exportFormat} bitDepth={exportBits16 ? 16 : 8} busy={exporting || destinationBusy}/>
                 <label>尺寸
                   <select value={exportScale} onChange={(e) => setExportScale(+e.target.value)}>
                     <option value={1}>1× 原尺寸</option>
