@@ -16,7 +16,7 @@ export const INSPECTION_EDIT_INTENT='lumaretouch-inspection-edit-intent';
 export function notifyInspectionEditIntent(){
   if(typeof window!=='undefined')window.dispatchEvent(new Event(INSPECTION_EDIT_INTENT));
 }
-const inspectionMutations=new Set(['extended_tone_request','start_engine','shutdown_engine','load_image','set_strength','precompute',
+const inspectionMutations=new Set(['colour_grading_request','extended_tone_request','start_engine','shutdown_engine','load_image','set_strength','precompute',
   'inpaint','light','deform','lut','grade','enhance','lip_makeup','brow_shape','nose_shape','eye_shape','mouth_shape','background','exposure','hsl','curves','levels','fabric','crop','compare',
   'shoulder_shape','leg_shape','waist_shape','leg_length','neck_shape','arm_shape','people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
@@ -94,6 +94,7 @@ export interface ImageReady {
 
 /** 一格底片条上"这张调了什么"（引擎按图层数与开关报，不靠前端自己看像素）。 */
 export interface SessionEdits {
+  colour_grading?: boolean;
   extended_tone?: boolean;
   effect_recovery?: number;
   manual_liquify?: number;
@@ -146,6 +147,7 @@ export const dragParametricCurve=(spec:CurveSpec,region:number,target:number)=>i
 export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_preview",{spec});
 
 export interface DocState {
+  colour_grading?: {recipe:import('./colourGrading/model').Recipe;algorithm:string;note:string};
   extended_tone?: {spec:import('./extendedTone/model').Spec;active:boolean;monochrome:boolean;available:boolean};
   people?: PeopleView;
   shoulder_shape?: import('./shoulderShape/model').ShoulderView;
@@ -947,6 +949,7 @@ export interface EngineStatus {
    *  这些“引擎说什么能力”的清单都从这一份读。老宿主没报时为 undefined——那时那一排
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
+    colour_grading_protocol?: number;
     extended_tone_protocol?: number;
     lip_makeup_protocol?: number;
     eye_light_protocol?: number;

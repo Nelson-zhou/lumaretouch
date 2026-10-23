@@ -45,6 +45,7 @@ from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
 from . import custom_lut_scope as CUSTOM_LUT
 from . import extended_tone_scope as EXTENDED_TONE
+from . import colour_grading_scope as COLOUR_GRADING
 
 SCHEMA = "lrt.scope.v1"
 PRESET_SCHEMA = "lrt.preset.v1"
@@ -87,6 +88,7 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: operation_id → 契约。`single_face` 的模块只能作用在"已知只有一张脸"的文档上；
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
+    COLOUR_GRADING.OP: {"params": ("recipe",), "state_fields": COLOUR_GRADING.FIELDS, "single_face": False, "transferable": True, "cmd": "colour_grading", "label": "颜色分级", "read": COLOUR_GRADING.params_of, "write": COLOUR_GRADING.install},
     EXTENDED_TONE.OP: {"params": ("recipe",), "state_fields": EXTENDED_TONE.FIELDS, "single_face": False,
         "transferable": True, "cmd": "extended_tone", "label": "扩展影调", "read": EXTENDED_TONE.params_of, "write": EXTENDED_TONE.install},
     SEMANTIC.OP: {"params": ("intent",), "state_fields": SEMANTIC.FIELDS, "single_face": False,
@@ -346,6 +348,9 @@ def check_params(op: str, params: dict) -> dict:
     if op == LIPSTICK.OP:
         try: return LIPSTICK.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
+    if op == COLOUR_GRADING.OP:
+        try: return COLOUR_GRADING.check_params(params)
+        except ValueError as exc: raise ScopeError(str(exc)) from exc
     if op == EXTENDED_TONE.OP:
         try: return EXTENDED_TONE.check_params(params)
         except ValueError as exc: raise ScopeError(str(exc)) from exc
@@ -414,6 +419,7 @@ def check_params(op: str, params: dict) -> dict:
 
 
 def _neutral_of(op: str, key: str):
+    if op == COLOUR_GRADING.OP and key == "recipe": return COLOUR_GRADING.S.neutral()
     if op == EXTENDED_TONE.OP and key == "recipe": return EXTENDED_TONE.S.default()
     if op == OP_WHITE_BALANCE and key == "options": return WB.neutral_transfer_options()
     if op == OP_HSL and key == "recipe": return HSL_RECIPE.default_recipe()

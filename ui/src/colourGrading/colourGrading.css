@@ -1,0 +1,10 @@
+.colourGrading fieldset {border:0;padding:0;min-width:0}
+.colourGradingTabs {display:flex;gap:4px;flex-wrap:wrap}
+.colourGradingTabs [aria-pressed="true"] {outline:2px solid currentColor}
+.colourGradingWheel {width:180px;height:180px;max-width:100%;border-radius:50%;position:relative;margin:16px auto;touch-action:none;background:radial-gradient(circle,white,transparent),conic-gradient(from 90deg,red,magenta,blue,cyan,lime,yellow,red)}
+.colourGradingWheel:focus-visible {outline:3px solid Highlight;outline-offset:4px}
+.colourGradingPoint {position:absolute;transform:translate(-50%,-50%);height:12px;width:12px;border:2px solid white;box-shadow:0 0 0 2px black;border-radius:50%;pointer-events:none}
+.colourGrading label {display:flex;gap:6px;align-items:center;margin:8px 0}
+.colourGrading input[type="range"] {min-width:40px;flex:1}
+.colourGrading input[type="number"] {width:64px}
+.colourGrading p,.colourGrading small {font-size:12px;line-height:1.5}

@@ -159,3 +159,8 @@ Original eyelash materials
   (The MediaPipe Authors, Apache-2.0); existing model licensing remains applicable.
   Source, licence, MediaPipe licence and integration limits ship together in
   lumaretouch_engine/third_party/eyelash/. Runtime/visual acceptance is UNRUN.
+
+Colour grading (core/colour_grading): original Lumaretouch GPL-3.0-or-later
+float32 tonal-mask grading. Vendor documentation informed control semantics;
+no vendor code, LUTs, imagery or model weights are included. See
+ docs/colour-grading/CONTRACT.md for domain and provenance limitations.

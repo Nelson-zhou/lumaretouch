@@ -23,6 +23,8 @@ from .studio_background_stage import StudioBackgroundStage
 from .optics_stage import OpticsStage
 from .reference_color_stage import ReferenceColorStage
 from .extended_tone_stage import ExtendedToneStage
+from .colour_grading_stage import ColourGradingStage
+from .colour_grading_state import neutral as neutral_colour_grading
 from .semantic_colour_stage import SemanticColourStage
 from .sky_replacement_stage import SkyReplacementStage
 
@@ -131,6 +133,7 @@ class PreviewPipeline:
         self._sky_replacement_key = None
         self.optics = OpticsStage()
         self.extended_tone = ExtendedToneStage(None)
+        self.colour_grading = ColourGradingStage(neutral_colour_grading())
         self.extended_tone_override = None
         self.reference_color = ReferenceColorStage(None)
         self.semantic_colour = SemanticColourStage(None)
@@ -339,6 +342,7 @@ class PreviewPipeline:
         self._sky_replacement_key = None
         self.optics = OpticsStage()
         self.extended_tone = ExtendedToneStage(None)
+        self.colour_grading = ColourGradingStage(neutral_colour_grading())
         self.extended_tone_override = None
         self.reference_color = ReferenceColorStage(None)
         self.semantic_colour = SemanticColourStage(None)
@@ -581,6 +585,7 @@ class PreviewPipeline:
         out = self.apply_geometry(out)
         out = self.reference_color.apply_t(out)
         out = self.semantic_colour.apply_t(out,strict=False)
+        out = self.colour_grading.apply_t(out)
         out = self.extended_tone.finish_t(out)
         if scope_tap is not None: scope_tap("output", out)
         return out

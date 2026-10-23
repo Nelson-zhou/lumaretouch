@@ -204,6 +204,7 @@ class ExportSpec:
     exposure_ref_k: float | None = None
     wb_options: dict | None = None
     extended_tone: dict | None = None
+    colour_grading: dict | None = None
     reference_color: dict | None = None
     semantic_colour: dict | None = None
     semantic_colour_binding: dict | None = None
@@ -284,6 +285,8 @@ class ExportSpec:
         """参数在进入昂贵通路之前先过一遍唯一校验口径（与各层 setter 同源）。"""
         from .extended_tone_state import check as check_tone
         self.extended_tone=check_tone(self.extended_tone)
+        from .colour_grading_state import check as check_grading, neutral as neutral_grading
+        self.colour_grading=neutral_grading() if self.colour_grading is None else check_grading(self.colour_grading)
         self.check_effect_recovery()
         self.check_manual_liquify()
         self.check_studio_background()
@@ -715,6 +718,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     optical = optics_enabled(spec.optics) and not tone_prepass
     from .reference_color_stage import ReferenceColorStage
     reference_stage=ReferenceColorStage(spec.reference_color)
+    from .colour_grading_adapters import export_stage as grading_stage
+    colour_grading_stage=grading_stage(spec)
     from .semantic_colour_stage import SemanticColourStage
     from .semantic_colour_runtime import verify_render_source as verify_semantic_source
     from .body_pose_render import verify_render_source as verify_body_source
@@ -723,7 +728,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     verify_body_source(spec)
     verify_hair_source(spec)
     semantic_stage=SemanticColourStage(spec.semantic_colour,binding=spec.semantic_colour_binding)
-    floating=bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass
+    floating=bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass or colour_grading_stage.active
     if spec.provenance_output and (not spec.float_output or spec.scale!=1): raise ExportError("来源支持只用于原尺寸浮点分析")
     optical_budget = 0
     if optical:
@@ -1031,6 +1036,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                           "geometry_ms": round((time.perf_counter() - t_geometry) * 1000, 2)}
     out=reference_stage.apply_np(out)
     out=semantic_stage.apply_np(out)
+    out=colour_grading_stage.apply_np(out,cancelled=tone_cancelled)
     out=ExtendedToneStage(tone_recipe,cancelled=tone_cancelled).finish_np(out)
     verify_semantic_source(spec)
     verify_body_source(spec)

@@ -1,0 +1,19 @@
+{
+  "status": "SOURCE_CONNECTED_UNRUN",
+  "integration_base": "40227cd94931e3651fb84a4572de0d412c65403d",
+  "scope": "PC-32455-C-f13fcb2a36 plus seven exact children; not entire colour family",
+  "routes": {
+    "native_kernel": ["core/colour_grading/lib.rs", "engine/src/lumaretouch_engine/colour_grading_native.py"],
+    "preview_pipeline": ["engine/src/lumaretouch_engine/server.py", "engine/src/lumaretouch_engine/vram.py", "engine/src/lumaretouch_engine/colour_grading_host.py", "engine/src/lumaretouch_engine/colour_grading_stage.py"],
+    "cancel_publication": ["engine/src/lumaretouch_engine/colour_grading_service.py", "engine/src/lumaretouch_engine/colour_grading_controller.py", "engine/src/lumaretouch_engine/server.py"],
+    "history_project": ["engine/src/lumaretouch_engine/colour_grading_host.py", "engine/src/lumaretouch_engine/colour_grading_adapters.py", "engine/src/lumaretouch_engine/project.py", "engine/src/lumaretouch_engine/server.py"],
+    "preset_batch": ["engine/src/lumaretouch_engine/scope.py", "engine/src/lumaretouch_engine/colour_grading_scope.py", "ui/src/batch/batchScopeOptions.ts", "ui/src/presets/presetModel.ts"],
+    "export": ["engine/src/lumaretouch_engine/export_snapshot.py", "engine/src/lumaretouch_engine/export_recipe.py", "engine/src/lumaretouch_engine/export.py", "engine/src/lumaretouch_engine/server.py"],
+    "native_ui": ["ui/src-tauri/src/colour_grading_api.rs", "ui/src-tauri/src/main.rs", "ui/src-tauri/src/engine.rs", "ui/src/native.ts", "ui/src/colourGrading/nativePort.ts", "ui/src/colourGrading/ConnectedColourGradingPanel.tsx", "ui/src/colourGrading/ColourGradingPanel.tsx", "ui/src/colourGrading/workflow.ts", "ui/src/components/RetouchPanel.tsx", "ui/src/toolRouting/coverage.ts"],
+    "package": ["packaging/build-colour-grading.sh", "packaging/stage-engine.sh", "NOTICE"]
+  },
+  "project_schema": "v17 current; v16 tone, v15 CUBE, v14 hair retained",
+  "pixel_order": "existing extended-tone exposure boundary unchanged; geometry -> reference -> semantic -> colour grading -> existing final monochrome -> terminal quantization",
+  "safety": "reader intent cancellation, immediate pre-shm publication fence, exact epoch/document/request/seq/slot and compositor-presented verification, one controller-owned history entry, no uncertain-edit retries",
+  "remaining": "All compilation/typechecks/imports/tests/runtime/visual/performance acceptance UNRUN. CPU Rust bridge is not a GPU performance claim."
+}

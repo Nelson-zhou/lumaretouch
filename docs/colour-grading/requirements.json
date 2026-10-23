@@ -1,0 +1,74 @@
+{
+  "scope": "one colour-grading workflow; no whole-family completion",
+  "baseline_sha256": {
+    "AI开发资料包/功能需求验收映射.json": "b3d5fbe7a75ce3d7cde7a39193b1f86b5ec634399eac36d667ed8ebbabeca748",
+    "manual-text.txt": "24e4e5820834c59a49d7fad3cc065526e12c8ac32b42f18c2cb329cdb9ea3f76"
+  },
+  "controls": [
+    {
+      "control_id": "PC-32455-C-f13fcb2a36",
+      "control_path": "颜色分级",
+      "linux_requirement_id": "LNX-REF-PC-32455-C-f13fcb2a36",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32455-C-70e9de0dd5",
+      "control_path": "颜色分级/高光",
+      "linux_requirement_id": "LNX-REF-PC-32455-C-70e9de0dd5",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32455-C-e9dd04bf09",
+      "control_path": "颜色分级/阴影",
+      "linux_requirement_id": "LNX-REF-PC-32455-C-e9dd04bf09",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32455-C-af57303f9a",
+      "control_path": "颜色分级/中间调",
+      "linux_requirement_id": "LNX-REF-PC-32455-C-af57303f9a",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32455-C-9dbe7ace64",
+      "control_path": "颜色分级/全局",
+      "linux_requirement_id": "LNX-REF-PC-32455-C-9dbe7ace64",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32455-C-a068ef2242",
+      "control_path": "颜色分级/混合",
+      "linux_requirement_id": "LNX-REF-PC-32455-C-a068ef2242",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32455-C-f4147a1001",
+      "control_path": "颜色分级/平衡",
+      "linux_requirement_id": "LNX-REF-PC-32455-C-f4147a1001",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "runtime_acceptance": "UNRUN"
+    },
+    {
+      "control_id": "PC-32455-C-a25ffd787b",
+      "control_path": "颜色分级/明亮度",
+      "linux_requirement_id": "LNX-REF-PC-32455-C-a25ffd787b",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "runtime_acceptance": "UNRUN"
+    }
+  ],
+  "integration_base": "40227cd94931e3651fb84a4572de0d412c65403d"
+}

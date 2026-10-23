@@ -179,3 +179,8 @@ cp "$here/../core/custom_lut/lib.rs" "$here/../LICENSE" "$here/../docs/custom-lu
 rustc --edition=2021 --crate-type cdylib -C opt-level=3 "$here/../core/extended_tone/extended_tone.rs" -o "$stage/lumaretouch_engine/bin/liblrt_extended_tone.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/extended_tone"
 cp "$here/../core/extended_tone/extended_tone.rs" "$here/../LICENSE" "$here/../docs/extended-tone/README.md" "$stage/lumaretouch_engine/third_party/extended_tone/"
+
+# Original independent colour-grading float32 ABI1; never compiled at runtime.
+bash "$here/build-colour-grading.sh" "$stage/lumaretouch_engine/bin/liblrt_colour_grading.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/colour_grading"
+cp "$here/../core/colour_grading/lib.rs" "$here/../LICENSE" "$here/../docs/colour-grading/CONTRACT.md" "$stage/lumaretouch_engine/third_party/colour_grading/"
