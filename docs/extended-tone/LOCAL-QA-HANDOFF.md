@@ -1,0 +1,14 @@
+# Local QA handoff — not executed here
+
+Shared baseline 96483d3fd5cf6b21fdf6e919b5673ea0bd749a40. See frozen manifest for exact source bytes. No build/compile/typecheck/test/inference/render was run by the author. All following items require the authorized local tester.
+
+1. Build the original Rust core as ABI2 using core/extended_tone/build_extended_tone.sh. Run the Rust unit cases and engine/tests/test_extended_tone_contract.py. This source review does NOT prove compilation.
+2. Run normal frontend TypeScript/tests and Tauri build. Check real events extended_tone_result/extended_tone_readback, epoch-bound retained receipts and 4096/64 limits. A transport enqueue acknowledgment is not completion.
+3. Test open, arbitrary upstream edit, apply, double-click, query, document switch, cancel while native filtering, cancel at publication race, remount, engine restart, explicit readback acknowledgment. Verify no duplicate writes and no old-document overwrite. Test history/frame failure injection including rollback failure.
+4. Check seven controls separately with grayscale ramps, colored patches, multi-frequency texture, step edges, portrait pores/hair, colored and neutral haze, negative/HDR float32, RGB16 one-count differences, zero and feather masks. UI mask authoring is not part of this global workflow.
+5. Compare same-size preview and original export with every other effect nonneutral, especially custom CUBE, levels, curves, local grade, sky, manual geometry, optics and crop. Exposure-only prepass must stop before levels; downstream override must occur at exactly this boundary. No per-tile haze statistics. Test at least three tile sizes and the actual edge/halo regions.
+6. Test original monochrome mode: saved vibrance persists while ineffective, every downstream color effect participates then the final Rust output is grayscale. This is deliberately not labeled XMP/profile support.
+7. v16 save/open/undo/redo; migrate v15 containing real CUBE asset and v14 source-owned hair support. Match preserved bytes and recipes. Ensure previous-schema files carrying tone fields reject rather than silently downgrade. Check independent module selection for presets and batch group history, rollback and inactive/queued-document exports. Preserve the existing 48MiB portable and 2MiB compact batch bounds.
+8. Measure 24MP/100MP memory and latency on target machines. Working-set admission may reject a full-resolution operation when safe memory budget is insufficient; it must NOT reduce resolution or silently drop tone. Confirm cancellation polling and bounded progress messages. Two upstream passes are intentional correctness-first overhead, not claimed real-time performance.
+
+Only runtime evidence can promote any acceptance case from UNRUN. Source connection is not a visual-quality pass or complete handbook acceptance.

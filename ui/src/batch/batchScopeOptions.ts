@@ -1,7 +1,7 @@
 /** Labels and selectable scopes use only capabilities reported by the engine. */
 const globalModules = [
   ['lnx.exposure.v1', '曝光'], ['lnx.white_balance.v1', '白平衡'],
-  ['lnx.levels.v1', '色阶'], ['lnx.curves.v1', '曲线'],
+  ['lnx.extended_tone.v1', '扩展影调（逐图重算）'], ['lnx.levels.v1', '色阶'], ['lnx.curves.v1', '曲线'],
   ['lnx.hsl.v1', 'HSL'], ['lnx.crop.v1', '裁剪'],
 ] as const;
 

@@ -62,6 +62,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
                       scale=int(snap.get("scale", 1)),
                       upscale_backend=str(snap.get("upscale_backend", "lanczos3")),
                       sharpen_amount=float(snap.get("sharpen", 0.0)))
+    from .extended_tone_project import configure_export as configure_extended_tone
+    configure_extended_tone(spec,snap)
     spec.people=snap.get("people")
     from .body_pose_render import configure_export as configure_body
     configure_body(spec,snap,(eh,ew),for_document=for_document)

@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {INSPECTION_EDIT_INTENT,requestColorScopes} from '../native';
 import {histogramPoints,matchesScope,type ScopeResult,type ScopeStage} from '../colorScopesModel';
-const stages:Record<ScopeStage,string>={original:'工作空间原图（未裁剪）','levels-input':'色阶输入（曝光后）',
+const stages:Record<ScopeStage,string>={original:'工作空间原图（未裁剪）','levels-input':'色阶输入（曝光与扩展影调后）',
   'curves-input':'曲线输入（色阶后）',output:'最终结果（量化前）'};
 const colours=['#f47777','#7acc8a','#7aa8ff','#ddd'];
 export function HistogramPanel({documentId,snapshotId,revision,result,disabled,onDone}:{

@@ -1,0 +1,140 @@
+{
+  "execution": "NONE",
+  "cases": [
+    {
+      "id": "ET-001",
+      "description": "Seven mappings and original ranges match baseline; no exposure aliases",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-002",
+      "description": "All-zero and disabled recipes preserve uint8,uint16,float32,negative/HDR,signed zero bit-exact",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-003",
+      "description": "Invalid fields, booleans, NaN/Inf, range, unknown schema and algorithm refuse without mutation",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-004",
+      "description": "Brightness affects midtones but not black/white endpoints; whites/blacks affect distinct tonal tails",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-005",
+      "description": "Constant field texture/clarity no change; fine and coarse spatial patterns respond separately",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-006",
+      "description": "Step edges, ramps, skin pores, hair and noisy shadows: halos, gradient reversal and noise visual review",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-007",
+      "description": "Negative/positive dehaze, uniform/colored haze, skies and HDR; no unwanted neutral color cast",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-008",
+      "description": "Vibrance selective weaker on saturated colors; grayscale neutral; black-white profile suppresses effect without erasing saved value",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-009",
+      "description": "Zero/one/soft masks exact blend; invalid shape/range fails; edges do not treat zero-mask boundary as image boundary",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-010",
+      "description": "RGB16 sub8-bit distinctions retained; float32 HDR no normalization or output clipping",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-011",
+      "description": "Preview scale vs 100% reference and assembled export boundary; no tile seams or per-tile haze variation",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-012",
+      "description": "Exact request replay commits once; reused ID with changed request rejects; unknown receipt never auto-retries",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-013",
+      "description": "Document switch during send/query never applies returned recipe to new photo",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-014",
+      "description": "Frame/history failure restores recipe, frame, undo/redo, dirty flag; rollback failure reports unknown/reload",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-015",
+      "description": "Undo/redo, device change, close/reopen, queued export restore identical complete recipe",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-016",
+      "description": "Project and preset serialize version/algorithm/all controls; unsupported version refuses",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-017",
+      "description": "Batch atomic group undo, rollback and per-image dehaze recomputation; no active-document leakage",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-018",
+      "description": "UI repeated clicks, slider typing, cancel/reset, disabled/native missing, keyboard, remount, refresh and engine restart",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-019",
+      "description": "Exact UI seven controls mount; handbook navigation routes reach active control, no fake disabled completion",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-020",
+      "description": "24MP/100MP memory/admission, timing, cancellation and progress tested on target Linux CPU/GPU",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-021",
+      "description": "Original-source license and installed ABI1 missing/mismatch packaging failures",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-022",
+      "description": "Full original portrait/landscape scene set reviewed side-by-side; no visual acceptance from source-only tests",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-023",
+      "description": "Project v16 roundtrip preserves v15 CUBE bytes and v14 hair; previous schema cannot carry hidden extended-tone recipe",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-024",
+      "description": "Latest-intent/cancel before native, during bilateral, before publication, after publication; history/dirty rollback exact",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-025",
+      "description": "Engine restart returns unknown, explicit readback shows current document/recipe, user acknowledgment clears only pending identity",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-026",
+      "description": "Memory admission refusal before full-frame allocations, no reduced precision/proxy fallback; cooperative cancellation and progress",
+      "status": "UNRUN"
+    },
+    {
+      "id": "ET-027",
+      "description": "Full-frame exposure prepass and downstream override with LUT, levels, curves, local grades, sky, optics/crop and RGB16 preserve all effects",
+      "status": "UNRUN"
+    }
+  ]
+}

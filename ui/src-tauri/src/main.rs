@@ -5,6 +5,7 @@
 // 把载荷拆成两次 merge——拆了以后"轮询里到底有什么"就变成两处代码，比递归难对账得多。
 #![recursion_limit = "256"]
 mod custom_lut_api;
+mod extended_tone_api;
 
 #[path = "../../../core/curves/curve.rs"]
 mod point_curve;
@@ -1905,6 +1906,7 @@ fn main() {
             inspection_api::inspection_cancel, inspection_api::inspection_pull, inspection_api::inspection_release,
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, diagnostic_env_api::m0_env, load_image, set_strength, compare, compare_status, precompute,
+            extended_tone_api::extended_tone_request, extended_tone_api::extended_tone_status, extended_tone_api::extended_tone_cancel,
             custom_lut_api::custom_lut_choose, custom_lut_api::custom_lut_request, custom_lut_api::custom_lut_status, custom_lut_api::custom_lut_cancel,
             inpaint, light, portrait_api::deform, lut, grade, portrait_api::enhance, background, export, session, filmstrip, history,
             people_api::people, shoulder_shape_api::shoulder_shape, leg_shape_api::leg_shape, waist_shape_api::waist_shape, leg_length_api::leg_length, neck_shape_api::neck_shape, arm_shape_api::arm_shape, body_pose_model_api::body_pose_model, body_pose_model_api::body_pose_model_status, semantic_colour_api::semantic_colour, hair_colour_api::hair_colour,

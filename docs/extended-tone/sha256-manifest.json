@@ -1,0 +1,224 @@
+{
+  "status": "FROZEN_SOURCE_CONNECTED_UNRUN",
+  "baseline": "96483d3fd5cf6b21fdf6e919b5673ea0bd749a40",
+  "shared_files": [
+    "engine/src/lumaretouch_engine/server.py",
+    "engine/src/lumaretouch_engine/vram.py",
+    "engine/src/lumaretouch_engine/export.py",
+    "engine/src/lumaretouch_engine/export_recipe.py",
+    "engine/src/lumaretouch_engine/export_snapshot.py",
+    "engine/src/lumaretouch_engine/scope.py",
+    "engine/src/lumaretouch_engine/project.py",
+    "packaging/stage-engine.sh",
+    "ui/src-tauri/src/engine.rs",
+    "ui/src-tauri/src/main.rs",
+    "ui/src/batch/batchScopeOptions.ts",
+    "ui/src/components/HistogramPanel.tsx",
+    "ui/src/components/RetouchPanel.tsx",
+    "ui/src/native.ts",
+    "ui/src/presets/presetModel.ts",
+    "ui/src/toolRouting/coverage.ts"
+  ],
+  "checks": {
+    "python_ast": "16 source files parsed without import",
+    "json": "static parse only",
+    "diff_whitespace": "checked",
+    "rust": "NOT_COMPILED",
+    "typescript": "NOT_TYPECHECKED",
+    "tests": "UNRUN",
+    "visual": "UNRUN",
+    "runtime": "UNRUN"
+  },
+  "files": [
+    {
+      "path": "core/extended_tone/build_extended_tone.sh",
+      "sha256": "42e340f679156d0c3e04516f3923fcd39a44a49c398026d58b3d3225e21e52b3",
+      "bytes": 375
+    },
+    {
+      "path": "core/extended_tone/extended_tone.rs",
+      "sha256": "4394a501ac0c3f2a3ad6fadb31de981f038c35539fdace14054f5980ff7df71b",
+      "bytes": 10190
+    },
+    {
+      "path": "docs/extended-tone/LOCAL-QA-HANDOFF.md",
+      "sha256": "f7bb6f0954609137aadbbec754da6af992e279691683a7cd96ce31247b33588e",
+      "bytes": 2845
+    },
+    {
+      "path": "docs/extended-tone/README.md",
+      "sha256": "21fb642b034aeb4ce1fc8395873b33d31327a44c159068ef46a5c5c6c15d09a9",
+      "bytes": 9210
+    },
+    {
+      "path": "docs/extended-tone/acceptance-cases.json",
+      "sha256": "2b550033971c15d6a3d43d28fba5811f1331afab66b8de97e2d1648b56cde0df",
+      "bytes": 5098
+    },
+    {
+      "path": "docs/extended-tone/integration-map.json",
+      "sha256": "11c281ea478d5803d761de106a5e133132e8197871b0637faa373460e44df8bd",
+      "bytes": 4855
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "df9f53a075a91327e878fe26f1e9cf8801004b9cf4d8dc10591c827b98e8be28",
+      "bytes": 112940
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "942d8ed774fbacbb9d0fcc79d424d5b8af8ee0bafa1eeaf8c620978c7408107e",
+      "bytes": 17814
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "sha256": "f03688a2cc1961dff9d17790a22d2ad0b60865ae770e9e55e2bc305020b385c8",
+      "bytes": 3722
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/extended_tone_controller.py",
+      "sha256": "4f2dc552a78b7bb827f15b7f968506c2fa66461a1415d92b78e944f836b8f833",
+      "bytes": 4374
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/extended_tone_host.py",
+      "sha256": "9ac2f76dac166b6f3d91981abb08d2d5c9c8d6c66b3947044d5804c73a89a776",
+      "bytes": 4818
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/extended_tone_native.py",
+      "sha256": "3efbb859ae7f666c06803572f1967d40ea257f03183685f96491ada52858806f",
+      "bytes": 4947
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/extended_tone_project.py",
+      "sha256": "92f8c161cc20e3b0410eb101c245c8fdb4e5fa979c1aea745f6ba1e666035e43",
+      "bytes": 2220
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/extended_tone_scope.py",
+      "sha256": "58d68f5900dae726bd697cd8068bd3eaf82c9166d95549b45bd351f4ec54ce1f",
+      "bytes": 406
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/extended_tone_service.py",
+      "sha256": "d25aa76a16d5fc8b646f021bfca466dbe7cd6fbeef42ffea5e1cab83476d367f",
+      "bytes": 3207
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/extended_tone_stage.py",
+      "sha256": "2adc22d647078069826fe81a32b075aeaa1f2162e2967896347c63cb75ca3c0f",
+      "bytes": 2087
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/extended_tone_state.py",
+      "sha256": "2d1d1e9f42735c7d9a9d75b72cdcec7efc5bf00a8f63cd05ac38fa7bd825d1cb",
+      "bytes": 2066
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "a6288053708814b75c95ff99f6c7ad6e578746d25bcfca1ccf89ec127f2ed9aa",
+      "bytes": 57511
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "2091a782b529ea9b19d381103db62dabe02e0bf5bf5dbc7df254540dac2e2813",
+      "bytes": 35908
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "de9a9ff85f9aa6f35403c68a92bec2fa1d1bcc2d5f7124eeea2acc7ef598f615",
+      "bytes": 450537
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "e35ed6fb70307e8e7ceda31d18be9ccbdf3154cb504dffee9e2a1cc6b071c97e",
+      "bytes": 128862
+    },
+    {
+      "path": "engine/tests/test_extended_tone_contract.py",
+      "sha256": "2894441230e9ebeadc843434425847b60a602c7ced9d2f5c1d8f64ab704dcded",
+      "bytes": 6405
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "924cc7cd00adb4bcb2e52caa8d9bc634583a8d0130b6b1db97f0e224807ca8d1",
+      "bytes": 15948
+    },
+    {
+      "path": "ui/src/batch/batchScopeOptions.ts",
+      "sha256": "28ff2969ce772e3ffe99d2921bc8233f22dcee3945e63358782e3ef619370b6d",
+      "bytes": 4159
+    },
+    {
+      "path": "ui/src/components/HistogramPanel.tsx",
+      "sha256": "51d98edf4320e49ed91525f836436b5c937b2c47c3b68631a2b4779f5d44495d",
+      "bytes": 5409
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "caa10c1c75843687bb5d030dca5347fbbd7191f833db820f70b6f7f461c4eb72",
+      "bytes": 57962
+    },
+    {
+      "path": "ui/src/extendedTone/ConnectedExtendedTonePanel.tsx",
+      "sha256": "0c98ee6022601984ac62377a9a23715af87a55362a108dc3c393b1db9468550f",
+      "bytes": 1597
+    },
+    {
+      "path": "ui/src/extendedTone/ExtendedTonePanel.tsx",
+      "sha256": "8382f39200bb9aee25aa6c6b507cdc9c2c474cf16fd3953707d170d507291e8e",
+      "bytes": 7395
+    },
+    {
+      "path": "ui/src/extendedTone/model.test.ts",
+      "sha256": "787fcc893ad210c28195bab0e22f3a599e888d0741aeb9be424565f4eccb4ae1",
+      "bytes": 887
+    },
+    {
+      "path": "ui/src/extendedTone/model.ts",
+      "sha256": "a828ee6048de9f7b0a16ebd6c5f7b5d1b19003417f92c8a90ef8650337523484",
+      "bytes": 2387
+    },
+    {
+      "path": "ui/src/extendedTone/nativePort.ts",
+      "sha256": "96fa60bebf688d25163ba79497f3fe62b1d7c9efed242f2d5eab0220c5b219d2",
+      "bytes": 1498
+    },
+    {
+      "path": "ui/src/extendedTone/transport.ts",
+      "sha256": "ceb11a1f585def66e7884b59802e1102cbf664b3a1931ea700ef1edf5f054e31",
+      "bytes": 1075
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "31e4d025cee8a36a571cd8b0ac05ead9105d1e5f49705d4cf252674d251d9b01",
+      "bytes": 93225
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "0fac5509807576a22cfc270cca385ba967e2398c277ba6340072be2d2befea31",
+      "bytes": 3584
+    },
+    {
+      "path": "ui/src/toolRouting/coverage.ts",
+      "sha256": "29649658509a63a748d18520b76d17bf96dd811d426f2027415f7e22b1c09b5b",
+      "bytes": 3875
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "656ffc4cb193f6eae18a04e7037f866f59c1f0d821ce09484e67b95fb403ebc7",
+      "bytes": 31670
+    },
+    {
+      "path": "ui/src-tauri/src/extended_tone_api.rs",
+      "sha256": "a72dba1c6178471c477f951b2b4154d6e0d247f320dc9c410e17ebede6100cd6",
+      "bytes": 3572
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "917088ea8f98c533eb10a5516e557371a1a1b7101997e2a1ab327f095c26c1c6",
+      "bytes": 94892
+    }
+  ]
+}

@@ -203,6 +203,7 @@ class ExportSpec:
     exposure: tuple = (0.0,) * 7
     exposure_ref_k: float | None = None
     wb_options: dict | None = None
+    extended_tone: dict | None = None
     reference_color: dict | None = None
     semantic_colour: dict | None = None
     semantic_colour_binding: dict | None = None
@@ -281,6 +282,8 @@ class ExportSpec:
 
     def check(self) -> None:
         """参数在进入昂贵通路之前先过一遍唯一校验口径（与各层 setter 同源）。"""
+        from .extended_tone_state import check as check_tone
+        self.extended_tone=check_tone(self.extended_tone)
         self.check_effect_recovery()
         self.check_manual_liquify()
         self.check_studio_background()
@@ -673,6 +676,31 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     divisor = 65535.0 if bits == 16 else 255.0
     if src_u8.ndim != 3 or src_u8.shape[2] != 3 or src_u8.dtype != dtype:
         raise ExportError(f"导出要 (H,W,3) {np.dtype(dtype).name}，得到 {src_u8.shape} {src_u8.dtype}")
+    from .extended_tone_state import check as check_tone, active as tone_active
+    from .extended_tone_stage import ExtendedToneStage
+    from .extended_tone_native import admit as admit_tone
+    tone_recipe=check_tone(spec.extended_tone)
+    tone_prepass=bool(getattr(spec,'_extended_tone_prepass',False))
+    tone_field=None
+    tone_poll_at=[0.]
+    def tone_cancelled():
+        now=time.perf_counter()
+        if progress and now-tone_poll_at[0]>=0.05:
+            tone_poll_at[0]=now
+            progress(0,1,(now-t_function)*1000.)
+        return False
+    from .extended_tone_state import effective as tone_controls
+    if any(tone_controls(tone_recipe)) and not tone_prepass:
+        # Full-frame exposure boundary, not per-tile atmospheric estimates. The
+        # second pass resumes downstream on this exact field with existing halo.
+        from copy import copy
+        admit_tone(src_u8.shape[0]*src_u8.shape[1])
+        upstream=copy(spec)
+        upstream._extended_tone_prepass=True
+        upstream.scale=1;upstream.sharpen_amount=0.;upstream.float_output=True;upstream.provenance_output=False
+        tone_input,_=_export_image_impl(src_u8,upstream,device=device,tile=tile,progress=progress,bits=bits,geometry=None)
+        tone_field=ExtendedToneStage(tone_recipe,scale=1.,cancelled=tone_cancelled).apply_np(tone_input)
+        del tone_input,upstream
     from .local_mask_state import export_prepare, file_stamp
     from .local_grade_runtime import export_prepare as prepare_local_grades
     from .local_grade_layers import check as check_groups
@@ -684,7 +712,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     spec.check_optics()
     spec.check_sky_replacement()
     from .optics_state import active as optics_enabled
-    optical = optics_enabled(spec.optics)
+    optical = optics_enabled(spec.optics) and not tone_prepass
     from .reference_color_stage import ReferenceColorStage
     reference_stage=ReferenceColorStage(spec.reference_color)
     from .semantic_colour_stage import SemanticColourStage
@@ -695,7 +723,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     verify_body_source(spec)
     verify_hair_source(spec)
     semantic_stage=SemanticColourStage(spec.semantic_colour,binding=spec.semantic_colour_binding)
-    floating=bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output
+    floating=bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass
     if spec.provenance_output and (not spec.float_output or spec.scale!=1): raise ExportError("来源支持只用于原尺寸浮点分析")
     optical_budget = 0
     if optical:
@@ -930,8 +958,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                               detail_gain=spec.detail_gain, mid_gain=spec.mid_gain,
                               broad_gain=spec.broad_gain, texture_radius=spec.texture_radius,
                               channel=spec.channel if spec.masks is not None else None)
+        if tone_field is not None:
+            pipe.extended_tone_override=torch.from_numpy(np.ascontiguousarray(tone_field[cy0:cy1,cx0:cx1].transpose(2,0,1))).unsqueeze(0).to(pipe.src_f32.device)
         if floating:
-            rendered = pipe.retouch(spec.strength, **render_options)
+            rendered = pipe.retouch(spec.strength, **render_options, render_stage='extended-tone-input' if tone_prepass else 'output')
             t_r = time.perf_counter()
             got = np.ascontiguousarray(rendered[0].permute(1, 2, 0).detach().cpu().numpy())
             del rendered
@@ -964,6 +994,11 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         del pipe
         if progress is not None:
             progress(i + 1, len(rects), (time.perf_counter() - t0) * 1000.0)
+    if tone_prepass:
+        finish_sky(spec)
+        verify_body_source(spec);verify_hair_source(spec);verify_semantic_source(spec)
+        return out, {'extended_tone_boundary':'exposure-output','prepass':True}
+    del tone_field
     ms = (time.perf_counter() - t_all) * 1000.0
     optics_facts = {"applied":False}
     if optical:
@@ -996,6 +1031,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                           "geometry_ms": round((time.perf_counter() - t_geometry) * 1000, 2)}
     out=reference_stage.apply_np(out)
     out=semantic_stage.apply_np(out)
+    out=ExtendedToneStage(tone_recipe,cancelled=tone_cancelled).finish_np(out)
     verify_semantic_source(spec)
     verify_body_source(spec)
     verify_hair_source(spec)

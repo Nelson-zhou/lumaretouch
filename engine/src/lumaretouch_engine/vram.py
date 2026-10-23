@@ -22,6 +22,7 @@ from .manual_liquify_stage import ManualLiquifyStage
 from .studio_background_stage import StudioBackgroundStage
 from .optics_stage import OpticsStage
 from .reference_color_stage import ReferenceColorStage
+from .extended_tone_stage import ExtendedToneStage
 from .semantic_colour_stage import SemanticColourStage
 from .sky_replacement_stage import SkyReplacementStage
 
@@ -129,6 +130,8 @@ class PreviewPipeline:
         self.sky_replacement = SkyReplacementStage(self.device, (self.h,self.w))
         self._sky_replacement_key = None
         self.optics = OpticsStage()
+        self.extended_tone = ExtendedToneStage(None)
+        self.extended_tone_override = None
         self.reference_color = ReferenceColorStage(None)
         self.semantic_colour = SemanticColourStage(None)
         self._optics_key = None
@@ -335,6 +338,8 @@ class PreviewPipeline:
         self.sky_replacement = SkyReplacementStage(self.device, (self.h,self.w))
         self._sky_replacement_key = None
         self.optics = OpticsStage()
+        self.extended_tone = ExtendedToneStage(None)
+        self.extended_tone_override = None
         self.reference_color = ReferenceColorStage(None)
         self.semantic_colour = SemanticColourStage(None)
         self._optics_key = None
@@ -506,7 +511,7 @@ class PreviewPipeline:
         """
         from .people_engine_runtime import require_ready
         require_ready(self)
-        if render_stage not in ('output', 'wb-input', 'optics-input'):
+        if render_stage not in ('output', 'wb-input', 'extended-tone-input', 'optics-input'):
             raise ValueError('Unknown production render stage')
         if self.src_f32 is None:
             raise RuntimeError("先 load_rgb_u8 再 render")
@@ -561,6 +566,8 @@ class PreviewPipeline:
         if render_stage == 'wb-input':
             return out
         out = self.apply_exposure(out)
+        if render_stage == 'extended-tone-input':return out
+        out = self.extended_tone_override if self.extended_tone_override is not None else self.extended_tone.apply_t(out)
         if scope_tap is not None: scope_tap("levels-input", out)
         out = self.apply_levels(out)
         if scope_tap is not None: scope_tap("curves-input", out)
@@ -574,6 +581,7 @@ class PreviewPipeline:
         out = self.apply_geometry(out)
         out = self.reference_color.apply_t(out)
         out = self.semantic_colour.apply_t(out,strict=False)
+        out = self.extended_tone.finish_t(out)
         if scope_tap is not None: scope_tap("output", out)
         return out
 

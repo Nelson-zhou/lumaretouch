@@ -2,7 +2,7 @@
 from . import local_mask_state as LM, local_grade_layers as LG, effect_recovery_state as ERS
 from . import manual_liquify_state as MLS, studio_background_state as SBS, optics_state as OPS, sky_replacement_state as SKS
 from . import lip_makeup_state as LIPS, brow_shape_state as BROWS, nose_shape_state as NOSES, eye_shape_state as EYES, mouth_shape_state as MOUTHS
-from . import reference_color_state as RCS, white_balance_recipe as WB
+from . import reference_color_state as RCS, white_balance_recipe as WB, extended_tone_state as ETS
 from .ops import curves as CURVES, levels as LEVELS
 
 
@@ -13,6 +13,7 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
                     grade_scope=str(st.get("_grade_scope") or "all"),
                     grade_mask=st.get("_grade_mask"), local_masks=LM.check(st.get("_local_masks")), local_mask_owner=LM.owner_from_state(st), local_grade_groups=LG.check(st.get("_local_grade_layers")),
                     effect_recovery=ERS.check(st.get("_effect_recovery")), manual_liquify=MLS.check(st.get("_manual_liquify")), studio_background=SBS.check(st.get("_studio_background")), optics=OPS.check(st.get("_optics")), sky_replacement=SKS.check(st.get("_sky_replacement")), lip_makeup=LIPS.check(st.get("_lip_makeup")), brow_shape=BROWS.check(st.get("_brow_shape")), brow_shape_owner=st.get("_brow_shape_owner"), nose_shape=NOSES.check(st.get("_nose_shape")), nose_shape_owner=st.get("_nose_shape_owner"), eye_shape=EYES.check(st.get("_eye_shape")), eye_shape_owner=st.get("_eye_shape_owner"), reference_color=RCS.check(st.get("_reference_color")), mouth_shape=MOUTHS.check(st.get("_mouth_shape")), mouth_shape_owner=st.get("_mouth_shape_owner"),
+                    extended_tone=ETS.check(st.get("_extended_tone")),
                     exposure=tuple(st.get("_exposure", (0.0,) * 7)),
                     exposure_ref_k=st.get("_exposure_ref_k"),
                     wb_options=WB.normalize_state(st)["_wb_options"],

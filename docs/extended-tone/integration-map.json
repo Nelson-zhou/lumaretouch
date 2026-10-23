@@ -1,0 +1,70 @@
+{
+  "status": "SOURCE_CONNECTED_UNRUN",
+  "shared_edits_authorized": true,
+  "hooks": [
+    {
+      "target": "server.py",
+      "required": "Initialize _extended_tone=S.default(); add field to DOC_FIELDS, empty/capture/apply state; call host.sync after pipeline reattach using verified proxy/source ratio and actual monochrome flag. Do not add controller owner to persisted state.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "server.py",
+      "required": "Expose cmd_extended_tone via host.controller(...).handle(p), cmd_extended_tone_receipt returning controller.query(p[request_id]); advertise protocol only when fixed ABI library installed AND hooks wired; add doc_state extended_tone=S.status(...). Receipt query is read-only.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "server.py / history policy",
+      "required": "Use controller-owned history commit. Do NOT add extended_tone to automatic dispatch EDIT_CMDS; otherwise duplicate history. Add allowed command routing without automatic record. Existing generic signature captures recipe once DOC_FIELDS/capture hooked.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "vram.py",
+      "required": "Initialize/reset ExtendedToneStage; run apply_t on float32 full-frame display-sRGB output directly after exposure and before levels/curves. Never cast to half. Determine exact matching export boundary before enabling controls.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "export.py",
+      "required": "Add ExportSpec.extended_tone; validate snapshot; force floating intermediate when active. Split full-frame upstream exposure assembly from downstream levels/curves; call render_export_full_frame exactly once at the matching boundary. Do not call per tile or only after all color stages.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "server.py export snapshot/target paths",
+      "required": "Pass _extended_tone in every snapshot, including queued/nonactive documents; configure_export expects internal-key snapshot. Pass monochrome from each target, not active document.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "project.py / session.py",
+      "required": "Add recipe to all allowlists/new-document defaults; call validate_records during decode/encode and restore through typed checker. Old documents missing field default neutral; unknown version rejects, never drops.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "scope.py / preset_controller.py / batch_sync.py",
+      "required": "Register independent extended_tone module. preset_export/preset_apply and batch_replace prepare validated copies; existing all-or-none document group transaction owns mutation/history. Mask-bearing requests must not be silently treated as global.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "ui/src protocol/types/API",
+      "required": "Route send and result/receipt events with exact request_id and document_id. extendedToneTransport requires subscribe/send implementation, not a Promise that resolves on send acknowledgment. Surface errors and capability-disabled reason.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "ui/src/components/RetouchPanel.tsx",
+      "required": "Mount ExtendedTonePanel with live doc_state, verified native/integration readiness, monochrome flag, document ID, send/query and refresh callbacks. Preserve unresolved request handling across remount; supply explicit reload/reconcile flow for engine restart unknown receipts.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "ui/src/toolRouting/coverage.ts",
+      "required": "Register seven full handbook IDs only after all shared hooks and tests pass. Each ID is SOURCE_CONNECTED_UNRUN after this grant. Do not claim visual acceptance.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    },
+    {
+      "target": "packaging build manifests",
+      "required": "Explicitly invoke authored build script and include exact liblrt_extended_tone.so ABI 2 in distribution. No auto-build on import; missing native must disable UI with reason.",
+      "status": "SOURCE_CONNECTED_RUNTIME_UNRUN"
+    }
+  ],
+  "baseline": "96483d3fd5cf6b21fdf6e919b5673ea0bd749a40",
+  "actual_export": "Exposure-only full-frame float prepass -> one Rust operation -> tile halo override at same exposure boundary -> existing downstream effects -> final original monochrome mode -> quantization.",
+  "monochrome": "Explicit persisted original output mode, not external profile/XMP support.",
+  "remaining": "All compilation, typechecks, numerical/integration/runtime/performance/visual cases UNRUN."
+}

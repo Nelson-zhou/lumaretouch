@@ -174,3 +174,8 @@ cp "$here/../core/iris_makeup/lib.rs" "$here/../LICENSE" "$here/../docs/iris-mak
 rustc --edition=2021 --crate-type cdylib -C opt-level=3 "$here/../core/custom_lut/lib.rs" -o "$stage/lumaretouch_engine/bin/liblrt_custom_lut.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/custom_lut"
 cp "$here/../core/custom_lut/lib.rs" "$here/../LICENSE" "$here/../docs/custom-lut/README.md" "$stage/lumaretouch_engine/third_party/custom_lut/"
+
+# Original extended-tone ABI2 with cooperative cancellation.
+rustc --edition=2021 --crate-type cdylib -C opt-level=3 "$here/../core/extended_tone/extended_tone.rs" -o "$stage/lumaretouch_engine/bin/liblrt_extended_tone.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/extended_tone"
+cp "$here/../core/extended_tone/extended_tone.rs" "$here/../LICENSE" "$here/../docs/extended-tone/README.md" "$stage/lumaretouch_engine/third_party/extended_tone/"
