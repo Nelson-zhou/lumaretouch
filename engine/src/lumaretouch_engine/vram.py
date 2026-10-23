@@ -24,6 +24,8 @@ from .optics_stage import OpticsStage
 from .reference_color_stage import ReferenceColorStage
 from .extended_tone_stage import ExtendedToneStage
 from .colour_grading_stage import ColourGradingStage
+from .primary_calibration_stage import PrimaryCalibrationStage
+from .primary_calibration_state import neutral as neutral_primary_calibration
 from .selective_colour_stage import SelectiveColourStage
 from .selective_colour_state import neutral as neutral_selective_colour
 from .colour_grading_state import neutral as neutral_colour_grading
@@ -137,6 +139,7 @@ class PreviewPipeline:
         self.extended_tone = ExtendedToneStage(None)
         self.colour_grading = ColourGradingStage(neutral_colour_grading())
         self.selective_colour = SelectiveColourStage(neutral_selective_colour())
+        self.primary_calibration = PrimaryCalibrationStage(neutral_primary_calibration())
         self.extended_tone_override = None
         self.reference_color = ReferenceColorStage(None)
         self.semantic_colour = SemanticColourStage(None)
@@ -347,6 +350,7 @@ class PreviewPipeline:
         self.extended_tone = ExtendedToneStage(None)
         self.colour_grading = ColourGradingStage(neutral_colour_grading())
         self.selective_colour = SelectiveColourStage(neutral_selective_colour())
+        self.primary_calibration = PrimaryCalibrationStage(neutral_primary_calibration())
         self.extended_tone_override = None
         self.reference_color = ReferenceColorStage(None)
         self.semantic_colour = SemanticColourStage(None)
@@ -574,6 +578,9 @@ class PreviewPipeline:
         if render_stage == 'wb-input':
             return out
         out = self.apply_exposure(out)
+        # Full-frame tone override already contains primary calibration.
+        if self.extended_tone_override is None:
+            out = self.primary_calibration.apply_t(out)
         if render_stage == 'extended-tone-input':return out
         out = self.extended_tone_override if self.extended_tone_override is not None else self.extended_tone.apply_t(out)
         if scope_tap is not None: scope_tap("levels-input", out)

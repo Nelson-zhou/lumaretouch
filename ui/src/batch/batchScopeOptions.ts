@@ -1,7 +1,7 @@
 /** Labels and selectable scopes use only capabilities reported by the engine. */
 const globalModules = [
   ['lnx.exposure.v1', '曝光'], ['lnx.white_balance.v1', '白平衡'],
-  ['lnx.selective_colour.v1', '可选颜色（九色域 CMYK）'], ['lnx.colour_grading.v1', '颜色分级（四轮、混合、平衡）'], ['lnx.extended_tone.v1', '扩展影调（逐图重算）'], ['lnx.levels.v1', '色阶'], ['lnx.curves.v1', '曲线'],
+  ['lnx.primary_calibration.v1', 'RGB 原色校准（三原色色相/饱和度）'], ['lnx.selective_colour.v1', '可选颜色（九色域 CMYK）'], ['lnx.colour_grading.v1', '颜色分级（四轮、混合、平衡）'], ['lnx.extended_tone.v1', '扩展影调（逐图重算）'], ['lnx.levels.v1', '色阶'], ['lnx.curves.v1', '曲线'],
   ['lnx.hsl.v1', 'HSL'], ['lnx.crop.v1', '裁剪'],
 ] as const;
 

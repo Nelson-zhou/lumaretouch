@@ -68,6 +68,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     configure_grading(spec,snap)
     from .selective_colour_adapters import configure_export as configure_selective
     configure_selective(spec,snap)
+    from .primary_calibration_adapters import configure_export as configure_primary
+    configure_primary(spec,snap)
     spec.people=snap.get("people")
     from .body_pose_render import configure_export as configure_body
     configure_body(spec,snap,(eh,ew),for_document=for_document)

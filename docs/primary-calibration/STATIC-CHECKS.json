@@ -1,0 +1,18 @@
+{
+  "status": "STATIC_SOURCE_ONLY",
+  "python_ast_parsed": 22,
+  "future_import_order": "checked",
+  "requirements_rows": 10,
+  "source_order_checks": [
+    "exposure -> primary -> tone-input",
+    "final grading -> selective -> monochrome",
+    "no final export primary reapplication",
+    "v19/v18 schema gates"
+  ],
+  "runtime_tests": "UNRUN",
+  "rust_compile": "UNRUN",
+  "typescript_typecheck": "UNRUN",
+  "build": "UNRUN",
+  "product_imports": "NOT_PERFORMED",
+  "git_writes": "NOT_PERFORMED"
+}

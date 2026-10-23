@@ -15,7 +15,11 @@ class PreviewLifecycleMixin:
             if owner is not None:
                 owner.tick()
 
-    def _close_owned_previews(self):
+    def _close_owned_previews(self, *, exclude=None):
+        # Commit closes competing previews without cancelling its own publication.
+        primary = self.__dict__.get("_primary_calibration_service_owner")
+        if primary is not None and exclude != "primary_calibration":
+            primary.stop()
         for key in ('_manual_liquify_preview_owner', '_sky_replacement_preview_owner',
                     '_optics_preview_owner', '_studio_background_preview_owner', '_sky_semantic_owner'):
             owner = self.__dict__.get(key)

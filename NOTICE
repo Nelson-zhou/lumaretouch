@@ -169,3 +169,5 @@ Selective colour (core/selective_colour): original Lumaretouch GPL-3.0-or-later
 float32 RGB-family CMYK adjustments. Adobe/FFmpeg documentation informed control
 semantics; no vendor code or assets are included. The nine-way partition and
 additive black rule are original. See docs/selective-colour/CONTRACT.md.
+
+RGB primary calibration: original Lumaretouch float32 xy-primary basis implementation, GPL-3.0-or-later. No third-party numerical implementation copied. Reference concepts: darktable RGB primaries documentation.

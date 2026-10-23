@@ -1,0 +1,162 @@
+[
+  {
+    "feature_id": "PC-32455",
+    "control_id": "PC-32455-C-45230cc916",
+    "control_path": "校准",
+    "source_url": "https://www.pixcakeai.com/guide/32455",
+    "linux_requirement_id": "LNX-REF-PC-32455-C-45230cc916",
+    "phase": "P1",
+    "acceptance_case_ids": [],
+    "related_module_case_ids": [
+      "COLOR-001"
+    ],
+    "status": "研究",
+    "coverage_status": "待补专项用例",
+    "note": "相关模块用例不是此子控件已覆盖或已实现证据。",
+    "implementation_status": "SOURCE_CONNECTED_UNRUN"
+  },
+  {
+    "feature_id": "PC-32455",
+    "control_id": "PC-32455-C-e77705a980",
+    "control_path": "校准/红原色",
+    "source_url": "https://www.pixcakeai.com/guide/32455",
+    "linux_requirement_id": "LNX-REF-PC-32455-C-e77705a980",
+    "phase": "P1",
+    "acceptance_case_ids": [],
+    "related_module_case_ids": [
+      "COLOR-001"
+    ],
+    "status": "研究",
+    "coverage_status": "待补专项用例",
+    "note": "相关模块用例不是此子控件已覆盖或已实现证据。",
+    "implementation_status": "SOURCE_CONNECTED_UNRUN"
+  },
+  {
+    "feature_id": "PC-32455",
+    "control_id": "PC-32455-C-0c32421d72",
+    "control_path": "校准/绿原色",
+    "source_url": "https://www.pixcakeai.com/guide/32455",
+    "linux_requirement_id": "LNX-REF-PC-32455-C-0c32421d72",
+    "phase": "P1",
+    "acceptance_case_ids": [],
+    "related_module_case_ids": [
+      "COLOR-001"
+    ],
+    "status": "研究",
+    "coverage_status": "待补专项用例",
+    "note": "相关模块用例不是此子控件已覆盖或已实现证据。",
+    "implementation_status": "SOURCE_CONNECTED_UNRUN"
+  },
+  {
+    "feature_id": "PC-32455",
+    "control_id": "PC-32455-C-d5582f85c3",
+    "control_path": "校准/蓝原色",
+    "source_url": "https://www.pixcakeai.com/guide/32455",
+    "linux_requirement_id": "LNX-REF-PC-32455-C-d5582f85c3",
+    "phase": "P1",
+    "acceptance_case_ids": [],
+    "related_module_case_ids": [
+      "COLOR-001"
+    ],
+    "status": "研究",
+    "coverage_status": "待补专项用例",
+    "note": "相关模块用例不是此子控件已覆盖或已实现证据。",
+    "implementation_status": "SOURCE_CONNECTED_UNRUN"
+  },
+  {
+    "feature_id": "PC-32455",
+    "control_id": "PC-32455-C-e0d4cbbc08",
+    "control_path": "校准/红原色色相",
+    "source_url": "https://www.pixcakeai.com/guide/32455",
+    "linux_requirement_id": "LNX-REF-PC-32455-C-e0d4cbbc08",
+    "phase": "P1",
+    "acceptance_case_ids": [],
+    "related_module_case_ids": [
+      "COLOR-001"
+    ],
+    "status": "研究",
+    "coverage_status": "待补专项用例",
+    "note": "相关模块用例不是此子控件已覆盖或已实现证据。",
+    "implementation_status": "SOURCE_CONNECTED_UNRUN"
+  },
+  {
+    "feature_id": "PC-32455",
+    "control_id": "PC-32455-C-22cf1cc100",
+    "control_path": "校准/红原色饱和度",
+    "source_url": "https://www.pixcakeai.com/guide/32455",
+    "linux_requirement_id": "LNX-REF-PC-32455-C-22cf1cc100",
+    "phase": "P1",
+    "acceptance_case_ids": [],
+    "related_module_case_ids": [
+      "COLOR-001"
+    ],
+    "status": "研究",
+    "coverage_status": "待补专项用例",
+    "note": "相关模块用例不是此子控件已覆盖或已实现证据。",
+    "implementation_status": "SOURCE_CONNECTED_UNRUN"
+  },
+  {
+    "feature_id": "PC-32455",
+    "control_id": "PC-32455-C-32971f959b",
+    "control_path": "校准/绿原色色相",
+    "source_url": "https://www.pixcakeai.com/guide/32455",
+    "linux_requirement_id": "LNX-REF-PC-32455-C-32971f959b",
+    "phase": "P1",
+    "acceptance_case_ids": [],
+    "related_module_case_ids": [
+      "COLOR-001"
+    ],
+    "status": "研究",
+    "coverage_status": "待补专项用例",
+    "note": "相关模块用例不是此子控件已覆盖或已实现证据。",
+    "implementation_status": "SOURCE_CONNECTED_UNRUN"
+  },
+  {
+    "feature_id": "PC-32455",
+    "control_id": "PC-32455-C-667f8eaedd",
+    "control_path": "校准/绿原色饱和度",
+    "source_url": "https://www.pixcakeai.com/guide/32455",
+    "linux_requirement_id": "LNX-REF-PC-32455-C-667f8eaedd",
+    "phase": "P1",
+    "acceptance_case_ids": [],
+    "related_module_case_ids": [
+      "COLOR-001"
+    ],
+    "status": "研究",
+    "coverage_status": "待补专项用例",
+    "note": "相关模块用例不是此子控件已覆盖或已实现证据。",
+    "implementation_status": "SOURCE_CONNECTED_UNRUN"
+  },
+  {
+    "feature_id": "PC-32455",
+    "control_id": "PC-32455-C-a4fd10da21",
+    "control_path": "校准/蓝原色色相",
+    "source_url": "https://www.pixcakeai.com/guide/32455",
+    "linux_requirement_id": "LNX-REF-PC-32455-C-a4fd10da21",
+    "phase": "P1",
+    "acceptance_case_ids": [],
+    "related_module_case_ids": [
+      "COLOR-001"
+    ],
+    "status": "研究",
+    "coverage_status": "待补专项用例",
+    "note": "相关模块用例不是此子控件已覆盖或已实现证据。",
+    "implementation_status": "SOURCE_CONNECTED_UNRUN"
+  },
+  {
+    "feature_id": "PC-32455",
+    "control_id": "PC-32455-C-e087104fdd",
+    "control_path": "校准/蓝原色饱和度",
+    "source_url": "https://www.pixcakeai.com/guide/32455",
+    "linux_requirement_id": "LNX-REF-PC-32455-C-e087104fdd",
+    "phase": "P1",
+    "acceptance_case_ids": [],
+    "related_module_case_ids": [
+      "COLOR-001"
+    ],
+    "status": "研究",
+    "coverage_status": "待补专项用例",
+    "note": "相关模块用例不是此子控件已覆盖或已实现证据。",
+    "implementation_status": "SOURCE_CONNECTED_UNRUN"
+  }
+]

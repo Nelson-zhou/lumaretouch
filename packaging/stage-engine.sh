@@ -189,3 +189,8 @@ cp "$here/../core/colour_grading/lib.rs" "$here/../LICENSE" "$here/../docs/colou
 bash "$here/build-selective-colour.sh" "$stage/lumaretouch_engine/bin/liblrt_selective_colour.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/selective_colour"
 cp "$here/../core/selective_colour/lib.rs" "$here/../LICENSE" "$here/../docs/selective-colour/CONTRACT.md" "$stage/lumaretouch_engine/third_party/selective_colour/"
+
+# Original RGB primary calibration ABI1; offline build-time only.
+bash "$here/build-primary-calibration.sh" "$stage/lumaretouch_engine/bin/liblrt_primary_calibration.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/primary_calibration"
+cp "$here/../core/primary_calibration/lib.rs" "$here/../LICENSE" "$here/../docs/primary-calibration/CONTRACT.md" "$stage/lumaretouch_engine/third_party/primary_calibration/"

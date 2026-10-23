@@ -1,0 +1,11 @@
+# Acceptance plan: entirely UNRUN
+
+- Kernel: neutral bit identity (including negative zero), grayscale bit identity for non-neutral settings, all six controls independently change chromatic samples, positive hue direction for each primary, matrix white conservation, invalid xy/nonpositive determinant/near-singular condition/negative weights rejected, unknown mode and aliases rejected with output untouched.
+- Pixels: 8-bit and 16-bit quantization only at boundary; near-neighbor RGB16 remains distinct; signed float32 and highlights >1 retained; non-sRGB tags rejected; no uint8 bridge; empty/NaN/Inf/over-limit input rejects; alpha remains unchanged outside RGB kernel.
+- State: all ten exact requirement rows mapped; omitted legacy key neutral; explicit null/unknown keys/version/algorithm/space fail; full history/preset/project/batch/export snapshots retain six controls, no pixel/cache/identity leakage; invalid one-target batch fails all before mutation.
+- UI: six sliders and numeric controls, keyboard operation, per-primary reset and reset-all, explicit apply/cancel; admission rejection is visible without committed mutation; no false HSL labels.
+- Races: preview A then B, delayed A publication, cancel during Rust chunk, document switch, external edit/undo/redo, close/unmount, stale request/revision/epoch/seq/slot, unpresented frame, uncertain commit query, conflicting ID, same-id retries exactly once, bounded mailbox overflow, failed history rollback, reload after failed rollback.
+- Pipeline: after WB/exposure before tone input; full-frame tone prepass includes calibration once; tiled export and preview match on same ROI/resolution; both tone active and neutral, RGB16 and float export, multiple tile sizes.
+- Performance/visual: actual CPU/GPU bridge measurements on target Linux hardware, skin tones/gray ramps/color chart/HDR highlights/negative out-of-gamut samples. Review gamut excursions and extreme controls without claiming photographic equivalence to another product.
+
+Fixtures in core/primary_calibration/lib.rs, engine/tests/primary_calibration_fixtures, and ui/src/primaryCalibration/model.test.ts are executable test designs but have not run. Shared hooks are now source-connected; UI workflow/end-to-end still await authorized execution.

@@ -29,7 +29,7 @@ class Service:
                     if p.get('action') in ('select','import','recover'):
                         for key,event in self.events.items():
                             if key!=rid and not (self.active==key and self.published):event.set()
-            elif cmd in ('selective_colour','colour_grading','extended_tone','set_strength','inpaint','source_patch','clone_stamp','local_masks','effect_recovery','manual_liquify','studio_background','optics','sky_replacement','light','deform','lut','grade','background','crop','exposure','white_balance','color_picker','hsl','curves','levels','preset','batch','face','enhance','people','hair_colour','fabric','history','load_image','session','project','set_device','shutdown','compare') and p.get('action') not in ('state','status','list','get','preflight','validate'):
+            elif cmd in ('primary_calibration','selective_colour','colour_grading','extended_tone','set_strength','inpaint','source_patch','clone_stamp','local_masks','effect_recovery','manual_liquify','studio_background','optics','sky_replacement','light','deform','lut','grade','background','crop','exposure','white_balance','color_picker','hsl','curves','levels','preset','batch','face','enhance','people','hair_colour','fabric','history','load_image','session','project','set_device','shutdown','compare') and p.get('action') not in ('state','status','list','get','preflight','validate'):
                 for key,event in self.events.items():
                     if not (self.active==key and self.published):event.set()
         return False

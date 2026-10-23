@@ -1,0 +1,53 @@
+{
+  "status": "SOURCE_CONNECTED_UNRUN",
+  "integration_base": "874aaa2e6661a2a4430bfb2b04014c28f1e07f55",
+  "project_schema": 19,
+  "preserved_schema_versions": {
+    "selective": 18,
+    "grading": 17,
+    "tone": 16,
+    "cube": 15,
+    "hair": 14
+  },
+  "stage_order": [
+    "exposure_and_white_balance",
+    "primary_calibration",
+    "extended-tone-input tap",
+    "extended_tone",
+    "levels",
+    "curves",
+    "HSL",
+    "LUT"
+  ],
+  "final_order_preserved": [
+    "colour_grading",
+    "selective_colour",
+    "monochrome"
+  ],
+  "tone_prepass": "included once; final override skips repeat",
+  "shared_files": [
+    "engine/src/lumaretouch_engine/server.py",
+    "engine/src/lumaretouch_engine/vram.py",
+    "engine/src/lumaretouch_engine/export.py",
+    "engine/src/lumaretouch_engine/export_snapshot.py",
+    "engine/src/lumaretouch_engine/export_recipe.py",
+    "engine/src/lumaretouch_engine/project.py",
+    "engine/src/lumaretouch_engine/scope.py",
+    "ui/src-tauri/src/main.rs",
+    "ui/src-tauri/src/engine.rs",
+    "ui/src/native.ts",
+    "ui/src/components/RetouchPanel.tsx",
+    "ui/src/batch/batchScopeOptions.ts",
+    "ui/src/presets/presetModel.ts",
+    "ui/src/toolRouting/coverage.ts",
+    "packaging/stage-engine.sh",
+    "NOTICE",
+    "engine/src/lumaretouch_engine/preview_lifecycle.py",
+    "engine/src/lumaretouch_engine/colour_grading_service.py",
+    "engine/src/lumaretouch_engine/selective_colour_service.py",
+    "engine/src/lumaretouch_engine/extended_tone_service.py",
+    "engine/src/lumaretouch_engine/custom_lut_service.py"
+  ],
+  "requirements_count": 10,
+  "verification": "AST, JSON, source-order and SHA256 only; all runtime acceptance UNRUN"
+}

@@ -206,6 +206,7 @@ class ExportSpec:
     extended_tone: dict | None = None
     colour_grading: dict | None = None
     selective_colour: dict | None = None
+    primary_calibration: dict | None = None
     reference_color: dict | None = None
     semantic_colour: dict | None = None
     semantic_colour_binding: dict | None = None
@@ -288,6 +289,9 @@ class ExportSpec:
         self.extended_tone=check_tone(self.extended_tone)
         from .colour_grading_state import check as check_grading, neutral as neutral_grading
         self.colour_grading=neutral_grading() if self.colour_grading is None else check_grading(self.colour_grading)
+        from .primary_calibration_native import admit as admit_primary
+        from .primary_calibration_state import neutral as neutral_primary
+        self.primary_calibration=admit_primary(neutral_primary() if self.primary_calibration is None else self.primary_calibration)
         from .selective_colour_state import check as check_selective, neutral as neutral_selective
         self.selective_colour=neutral_selective() if self.selective_colour is None else check_selective(self.selective_colour)
         self.check_effect_recovery()
@@ -725,6 +729,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     colour_grading_stage=grading_stage(spec)
     from .selective_colour_adapters import export_stage as selective_stage
     selective_colour_stage=selective_stage(spec)
+    from .primary_calibration_adapters import export_stage as primary_stage
+    primary_calibration_stage=primary_stage(spec)
     from .semantic_colour_stage import SemanticColourStage
     from .semantic_colour_runtime import verify_render_source as verify_semantic_source
     from .body_pose_render import verify_render_source as verify_body_source
@@ -733,7 +739,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     verify_body_source(spec)
     verify_hair_source(spec)
     semantic_stage=SemanticColourStage(spec.semantic_colour,binding=spec.semantic_colour_binding)
-    floating=bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass or colour_grading_stage.active or selective_colour_stage.active
+    floating=bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass or colour_grading_stage.active or selective_colour_stage.active or primary_calibration_stage.active
     if spec.provenance_output and (not spec.float_output or spec.scale!=1): raise ExportError("来源支持只用于原尺寸浮点分析")
     optical_budget = 0
     if optical:
@@ -877,6 +883,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             pipe.load_rgb_f32(np.ascontiguousarray(src_u8[cy0:cy1, cx0:cx1], dtype=np.float32) / divisor)
         else:
             pipe.load_rgb_u8(src_u8[cy0:cy1, cx0:cx1])
+        pipe.primary_calibration=primary_stage(spec)
+        pipe.primary_calibration.cancelled=tone_cancelled
         # Rasterize once at source dimensions, then take the identical tile halo
         # used by all operators. RGB8/RGB16 share this float recovery stage.
         if people_prepared is not None:

@@ -7,6 +7,7 @@
 mod custom_lut_api;
 mod extended_tone_api;
 mod colour_grading_api;
+mod primary_calibration_api;
 mod selective_colour_api;
 
 #[path = "../../../core/curves/curve.rs"]
@@ -1908,6 +1909,7 @@ fn main() {
             inspection_api::inspection_cancel, inspection_api::inspection_pull, inspection_api::inspection_release,
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, diagnostic_env_api::m0_env, load_image, set_strength, compare, compare_status, precompute,
+            primary_calibration_api::primary_calibration_abort, primary_calibration_api::primary_calibration_request, primary_calibration_api::primary_calibration_status, primary_calibration_api::primary_calibration_frame_status,
             selective_colour_api::selective_colour_abort, selective_colour_api::selective_colour_request, selective_colour_api::selective_colour_status, selective_colour_api::selective_colour_frame_status,
             colour_grading_api::colour_grading_abort, colour_grading_api::colour_grading_request, colour_grading_api::colour_grading_status, colour_grading_api::colour_grading_frame_status,
             extended_tone_api::extended_tone_request, extended_tone_api::extended_tone_status, extended_tone_api::extended_tone_cancel,
