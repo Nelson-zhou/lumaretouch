@@ -46,7 +46,7 @@ impl EngineHandle {
     pub fn epoch(&self)->[u8;16]{self.epoch}
     pub fn send(&self, cmd: Value) -> Result<(), String> {
         crate::project_recovery_fence::issued(self.epoch, &cmd)?;
-        if cmd["cmd"]=="project_recovery" {return self.dispatcher.enqueue(None,cmd);}
+        if cmd["cmd"]=="project_recovery" || cmd["cmd"]=="canvas_guides" {return self.dispatcher.enqueue(None,cmd);}
         if crate::managed_import_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if cmd["cmd"] == "virtual_copy" && matches!(cmd["action"].as_str(), Some("state" | "query")) {
             return self.dispatcher.enqueue(None, cmd);
@@ -275,6 +275,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "custom_lut_result" => { crate::custom_lut_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
         "export_destination_result" => crate::export_destination_port::receive(inspection_epoch, &v),
         "virtual_copy_result" => crate::virtual_copy_api::receive(inspection_epoch, &v),
+        "canvas_guides_result" => crate::canvas_guides_api::receive(state, inspection_epoch, &v),
         "project_recovery_result" => crate::project_recovery_api::receive(inspection_epoch, &v),
         "project_package_result" => crate::project_package_api::receive(inspection_epoch, &v),
         "managed_import_result" => crate::managed_import_api::receive(inspection_epoch, &v),

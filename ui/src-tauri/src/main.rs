@@ -64,6 +64,7 @@ mod project_package_api;
 mod project_recovery_api;
 mod project_recovery_fence;
 mod virtual_copy_api;
+mod canvas_guides_api;
 mod export_destination_port;
 mod export_target_size_port;
 mod white_balance_api;
@@ -1983,6 +1984,7 @@ fn main() {
             white_balance_capture_api::white_balance_capture, white_balance_capture_api::white_balance_capture_status, white_balance_capture_api::white_balance_capture_frame, white_balance_capture_api::white_balance_pick,
             export_destination_port::choose_import_folder, export_destination_port::export_destination, export_destination_port::export_destination_result, export_destination_port::export_destination_release,
             virtual_copy_api::virtual_copy_request, virtual_copy_api::virtual_copy_status,
+            canvas_guides_api::canvas_guides_request, canvas_guides_api::canvas_guides_status,
             managed_import_api::managed_import_request, managed_import_api::managed_import_status,
             source_relocation_api::source_relocation_request, source_relocation_api::source_relocation_status,
             project_recovery_api::project_recovery_request, project_recovery_api::project_recovery_status,

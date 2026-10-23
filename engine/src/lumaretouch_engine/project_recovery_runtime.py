@@ -36,7 +36,7 @@ def finish(engine, boundary, error=None):
     if boundary is None:
         return
     message = boundary['message']
-    if not boundary['started'] or message.get('cmd') == 'project_recovery':
+    if not boundary['started'] or message.get('cmd') in ('project_recovery', 'canvas_guides'):
         return
     runtime = engine.__dict__.get('_project_recovery_runtime')
     if runtime is None:

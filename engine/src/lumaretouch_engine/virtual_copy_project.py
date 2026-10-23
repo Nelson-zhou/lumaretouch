@@ -5,6 +5,8 @@ from .virtual_copy_host import IDENTITY_KEYS
 
 def save_row(project, runtime, stored, codec):
     stored.update({k:runtime[k] for k in IDENTITY_KEYS})
+    from .canvas_guides import save_row as save_guides
+    save_guides(runtime, stored)
     from .managed_import_project import save_row as save_import
     save_import(runtime, stored)
     from .export_destination_import import origin, validate
@@ -27,6 +29,8 @@ def save_row(project, runtime, stored, codec):
 
 def restore_row(project, stored, runtime, codec, dc_types):
     runtime.update({k:stored[k] for k in IDENTITY_KEYS})
+    from .canvas_guides import restore_row as restore_guides
+    restore_guides(stored, runtime)
     from .managed_import_project import restore_row as restore_import
     restore_import(stored, runtime)
     from .virtual_copy_people import decode

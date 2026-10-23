@@ -220,6 +220,11 @@ def validate(p: object) -> None:
     for i, row in enumerate(p["docs"]):
         if not isinstance(row, dict) or not isinstance(row.get("path"), str):
             raise ProjectError(f"docs[{i}] 缺 path 或形状不对")
+        from .canvas_guides import validate_row as validate_guides
+        try:
+            validate_guides(row)
+        except (ValueError, TypeError, KeyError) as error:
+            raise ProjectError(f'Invalid canvas guides for docs[{i}]: {error}') from error
         rp = row["path"]
         if rp in seen and sv != SCHEMA:
             raise ProjectError(f"docs[{i}] 的 path 与前面重复：{rp}")

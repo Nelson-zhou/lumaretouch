@@ -1,9 +1,12 @@
+import {StaticGuideLines} from '../canvasGuides/GuideOverlay';
+import type {GuideOwner} from '../canvasGuides/useCanvasGuides';
+import type {DocState} from '../native';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {PointerEvent as ReactPointerEvent} from 'react';
 import type {ManualLiquifyOwner} from './useManualLiquifyWorkflow';
 import {newStroke,type BrushSettings,type LiquifyStroke} from './model';
 interface Gesture {pointer:number;stroke:LiquifyStroke;rect:DOMRect;started:number;position:[number,number];pressure:number;timer:ReturnType<typeof setInterval>}
-export function LiquifyCanvas({owner,settings,showBefore,zoom}:{owner:ManualLiquifyOwner;settings:BrushSettings;showBefore:boolean;zoom:number}){
+export function LiquifyCanvas({owner,settings,showBefore,zoom,guides,guideSourceSize,guideCrop}:{guides?:GuideOwner;guideSourceSize?:[number,number];guideCrop?:DocState['crop'];owner:ManualLiquifyOwner;settings:BrushSettings;showBefore:boolean;zoom:number}){
   const {state,workflow}=owner,image=state.image;
   const node=useRef<HTMLDivElement|null>(null),review=useRef<HTMLImageElement|null>(null),gesture=useRef<Gesture|null>(null);
   const [reviewVisible,setReviewVisible]=useState(false);
@@ -96,6 +99,7 @@ export function LiquifyCanvas({owner,settings,showBefore,zoom}:{owner:ManualLiqu
       onLoad={()=>setLoaded(v=>({...v,after:image.after}))} onError={()=>workflow.failed('液化输出无法显示')}/>
     <img src={image.protection} alt="红色冻结保护蒙版" className={settings.showMask&&!showBefore?'':'concealed'}
       onLoad={()=>setLoaded(v=>({...v,protection:image.protection}))} onError={()=>workflow.failed('冻结保护蒙版无法显示')}/>
+    {guides&&!guides.hidden&&!showBefore&&guideSourceSize&&<StaticGuideLines state={guides.state} sourceSize={guideSourceSize} crop={guideCrop}/>}
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">{cursor&&!showBefore&&<>
       <ellipse cx={cursor[0]*100} cy={cursor[1]*100} rx={settings.size/2*Math.min(1,1/aspect)} ry={settings.size/2*Math.min(1,aspect)} className="liquifyCursor"/>
       <ellipse cx={cursor[0]*100} cy={cursor[1]*100} rx={settings.size/2*Math.min(1,1/aspect)*settings.density/100} ry={settings.size/2*Math.min(1,aspect)*settings.density/100} className="liquifyDensity"/>

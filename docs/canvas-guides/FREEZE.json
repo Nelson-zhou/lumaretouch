@@ -1,0 +1,183 @@
+{
+  "scope": "editable canvas guides / missingcoreM16",
+  "base_commit": "9f1cbba5",
+  "frozen_at": "2026-10-23T11:05:40Z",
+  "status": "implementation_candidate_runtime_UNRUN",
+  "no_git_writes": true,
+  "roots_lines": {
+    "ui/src/App.tsx": 2135,
+    "ui/src-tauri/src/main.rs": 2000,
+    "engine/src/lumaretouch_engine/server.py": 6904
+  },
+  "verification": {
+    "static_source": "TS/TSX AST syntax only: 16 files, zero parse diagnostics; Python AST only: 9 files; mapping JSON parsed; git diff whitespace clean. No product imports or execution.",
+    "typecheck": "UNRUN",
+    "tests": "UNRUN",
+    "native_build": "UNRUN",
+    "visual": "UNRUN",
+    "export_pixel_equivalence": "UNRUN"
+  },
+  "files": [
+    {
+      "path": "docs/canvas-guides/acceptance.md",
+      "sha256": "274c3c8a07459ba2c13c2fd241aba2c3dee7cda1d7fb8a6c18c8b40285b21762",
+      "bytes": 5873
+    },
+    {
+      "path": "docs/canvas-guides/mapping.json",
+      "sha256": "59c8c01bb2f89e4bb7377f86730ebd72eae2e78e1c6d9556942b8edc2ad8588f",
+      "bytes": 3047
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/canvas_guides.py",
+      "sha256": "049025ab7d748074a6a6c93b19225b9a35cb77211597ed182c4133d335d73d3d",
+      "bytes": 4475
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/canvas_guides_host.py",
+      "sha256": "4cae72051f01084372d1064094eeebd425c557616cf0d82cac12630651ec2dd1",
+      "bytes": 5550
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "dece2ddba2e90b214fa1cf961de2ad55650ec5116fd397ef3669045b99427e87",
+      "bytes": 71221
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "65c346029a6aa03e70dffa78eedeb5398dc5e8c7974983582069078450f1334f",
+      "bytes": 6554
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "ae2a7f758f76d388305b4cc1d482945305ec156ffa3f5e4ed78dbb9353b60a47",
+      "bytes": 459123
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_host.py",
+      "sha256": "1ef07e00d20fc87d469f9b7e87ab1db6d15325ece01fe395f845aae622b388db",
+      "bytes": 10700
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_project.py",
+      "sha256": "1c7699b7dfc821a02e09ed9770602921844cdf76ecdf215f094a75705d3abaa2",
+      "bytes": 3973
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_storage.py",
+      "sha256": "a10ab56273324c01b2eb1da1587bc1c0f0346b800627d0df1f78b1c532e0d302",
+      "bytes": 15029
+    },
+    {
+      "path": "engine/tests/test_canvas_guides.py",
+      "sha256": "8624f00fba43bee5da879bac4e5da06edb624a235ec4fdf958639ee2d35380ef",
+      "bytes": 12029
+    },
+    {
+      "path": "ui/src-tauri/src/canvas_guides_api.rs",
+      "sha256": "e2f27fbd19d312437e4d1336d68ea8b52a744c13965c164a26073e8d576aea3e",
+      "bytes": 8583
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "28cada69c792c48055580786164f668b82212b39c9be38494ef0e747cfcb1d6f",
+      "bytes": 35278
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "46d9c7d5da59b040720a7159f0961ace3acc4a97e2a9560fd53c85a5492b4c3d",
+      "bytes": 98802
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "e8074336f808be3abdebf2af4b431c573970c752040f7c62a6bbb6b4f04822b8",
+      "bytes": 7668
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "680444c32f53b31f76d3a88107948eb498c8ddb28485894036a70c7403fd59a9",
+      "bytes": 141055
+    },
+    {
+      "path": "ui/src/canvasGuides/GuideControls.tsx",
+      "sha256": "b138a4db399f152ff765d471ecd4deb1339224bdc52e3705dde7a09f1d1b3625",
+      "bytes": 2843
+    },
+    {
+      "path": "ui/src/canvasGuides/GuideOverlay.tsx",
+      "sha256": "0856d05af1c588be11a1b9b529f3988890c429e33314b37d1bbc96c12d425ee9",
+      "bytes": 12463
+    },
+    {
+      "path": "ui/src/canvasGuides/geometry.test.ts",
+      "sha256": "5b541e53677431800558c0ad3f1523f9ac8be5775399a9d32980da7bc591528c",
+      "bytes": 6229
+    },
+    {
+      "path": "ui/src/canvasGuides/geometry.ts",
+      "sha256": "fa6ec8c10f3ba1ec7dc1590d3e3e64b6848b1d88aa17a2843ce5328324dc790a",
+      "bytes": 5849
+    },
+    {
+      "path": "ui/src/canvasGuides/guides.css",
+      "sha256": "1622c607326ebebcd2507ee04f4d240433f229af45f99e785398328de689d24f",
+      "bytes": 2498
+    },
+    {
+      "path": "ui/src/canvasGuides/model.test.ts",
+      "sha256": "1aab147696de71f83a9109317fcb2c9b675dc4eb711845bd17c8fe90a6522c8c",
+      "bytes": 1527
+    },
+    {
+      "path": "ui/src/canvasGuides/model.ts",
+      "sha256": "af98d56ffd71efab19555de3cb4ef1b979709df872757fe4e8d79d496c2a1a95",
+      "bytes": 2076
+    },
+    {
+      "path": "ui/src/canvasGuides/nativePort.ts",
+      "sha256": "f4ce86969ca54921eae7cb53fa8fda79dafc3c080cddfdec224b9694bb7e6727",
+      "bytes": 1331
+    },
+    {
+      "path": "ui/src/canvasGuides/useCanvasGuides.ts",
+      "sha256": "ef90bddd93220eb71ac7d63408b21b1ffb0fe47b0695ee02074300af499f5aef",
+      "bytes": 5974
+    },
+    {
+      "path": "ui/src/canvasGuides/useGuideModeGuards.ts",
+      "sha256": "3b9427e21456a442ed0b4d0fe3e4a0ab02dc0185fe2d0e1c066654a520d2c983",
+      "bytes": 1002
+    },
+    {
+      "path": "ui/src/components/Viewer.tsx",
+      "sha256": "bc3c493f551df7fdce0eac1a2fdeb17cd26ffdec7c25741ebaa57137faf29e95",
+      "bytes": 41835
+    },
+    {
+      "path": "ui/src/manualLiquify/LiquifyCanvas.tsx",
+      "sha256": "b362223e2865ea9b9b6645f34645608284c06d59d275161a6c5c8031f4b77277",
+      "bytes": 9977
+    },
+    {
+      "path": "ui/src/manualLiquify/ManualLiquifyPanel.tsx",
+      "sha256": "c8a3ee7eaa5120e78a44464687cff01bcfd666111902c20a7a8e17cc4e5c7577",
+      "bytes": 5905
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "22a4e76b61923bdb008905bae9598bcf6baab7f4cbd24fa30500b7af8ad4ef22",
+      "bytes": 96872
+    },
+    {
+      "path": "ui/src/people/PeoplePanel.tsx",
+      "sha256": "09364e708f93daec17a56906a91a8cb1cc242672e9815419ed4a8279d4ddb043",
+      "bytes": 15670
+    },
+    {
+      "path": "ui/src/studioBackground/RetouchToolsPanels.tsx",
+      "sha256": "a23c58764e96e542e163a86dd1f702f495ea73c9253d0c0f054e45e1157e45d5",
+      "bytes": 2866
+    }
+  ],
+  "manifest_note": "This manifest lists all 32 payload files. FREEZE.json is the 33rd changed delivery file and intentionally has no self-hash. Unrelated creative-layer files and older manifests are excluded."
+}

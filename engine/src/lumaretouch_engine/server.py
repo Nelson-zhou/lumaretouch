@@ -13,6 +13,7 @@ from . import selective_colour_state as SCSL, selective_colour_adapters as SCLA
 from . import colour_editor_state as CES, colour_editor_adapters as CEA, colour_editor_runtime as CER
 from . import extended_tone_state as ETS, extended_tone_host as ETH
 from . import photo_detail_state as PDS, photo_detail_host as PDH
+from . import canvas_guides_host as CGH
 
 import argparse
 import copy
@@ -494,6 +495,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
               "history_max": self.HISTORY_MAX,
               "history_group_ms": self.HISTORY_GROUP_MS,
               "history_edit_cmds": list(self.EDIT_CMDS),
+              "canvas_guides_protocol": 1,
+              "canvas_guides_actions": ["state", "set", "undo", "redo"],
               # 项目面的能力名单由引擎报出去（与 export 的格式名单同一条理由）：
               # 前端抄一份 action 名单，两边分叉时“不支持”与“拼错了”长得一模一样
               "project_actions": list(self.PROJECT_ACTIONS),
@@ -1605,6 +1608,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                                              tuple(self._crop_rect),
                                              float(self._crop_rotation)))
         return {"document_id": self._load_id, "photo_detail": {**PDS.status(self._photo_detail),"available":PDH.available()}, "photo_grain": PGA.report(self), "colour_grading": CGA.report(self), "primary_calibration": PCA.report(self), "selective_colour": SCLA.report(self), "colour_editor": CEA.report(self), "extended_tone": {**ETS.status(self._extended_tone), "available": (Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()}, "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "id_background": IDR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self), "lip_makeup": LIPR.report(self), "brow_shape": BROWR.report(self), "nose_shape": NOSER.report(self), "eye_shape": EYER.report(self), "mouth_shape": MOUTHR.report(self), "reference_color": RCR.report(self), "semantic_colour": SCR.report(self), **self._body_report(),
+                "canvas_guides": CGH.report(self),
                 "strength": float(self._strength), "params": dict(self._params),
                 "channel": self._channel,
                 "history": self._history_report(),
@@ -6527,7 +6531,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("project_recovery", "managed_import", "project_package", "export_destination", "virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("canvas_guides", "project_recovery", "managed_import", "project_package", "export_destination", "virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light",
                "deform", "lut", "custom_lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -6539,6 +6543,9 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                # 而 UI 一句也不说为什么"（CORE-006 为此专门加了一条用例）
                "enhance", "lip_makeup", "brow_shape", "nose_shape", "eye_shape", "mouth_shape", "people", "hair_colour", "fabric")
     _HANDLED_LAMBDA = ("bench_stop",)      # 唯一不开成 cmd_* 的那条：只是置停止位
+
+    def cmd_canvas_guides(self, p):
+        return CGH.handle(self, p, emit)
 
     def cmd_virtual_copy(self, p):
         from .virtual_copy_host import VirtualCopies
@@ -6627,7 +6634,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                           'success': False, 'outcome_unknown': False, 'error': reason})
                     return
                 raise ValueError(reason)
-            if name in ('project_recovery', 'managed_import', 'project_package', 'source_relocation', 'virtual_copy'):
+            if name in ('project_recovery', 'managed_import', 'project_package', 'source_relocation', 'virtual_copy', 'canvas_guides'):
                 fn(msg); return  # Path transactions never enter recipe history/capture invalidation.
             if relocation is not None and name == 'project' and msg.get('action') == 'state':
                 with relocation.lock: fn(msg)
@@ -6750,6 +6757,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
         finally:
             try:
+                if dispatch_error and name == 'canvas_guides':
+                    CGH.rejected(self, msg, dispatch_error, emit)
                 if dispatch_error and name=="project_recovery":
                     emit({'event':'project_recovery_result','request_id':msg.get('request_id'),
                           'project_id':msg.get('project_id'),'action':msg.get('action'),

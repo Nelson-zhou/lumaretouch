@@ -254,6 +254,8 @@ def create_copy(project, document_id, *, new_document_id=None, recipe_version_id
                                 if r["root_document_id"] == parent["root_document_id"])
     if row["copy_number"] > 9007199254740991: raise ValueError("Copy numbering exceeds protocol integer range")
     row["document_revision"] = 0
+    from .canvas_guides import copy_record
+    row['canvas_guides'] = copy_record(parent.get('canvas_guides'))
     row.pop("_lrt_runtime_version", None)
     row["trashed"] = False
     if "document_history" in row:

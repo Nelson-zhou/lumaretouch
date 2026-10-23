@@ -64,7 +64,7 @@ export function PeoplePanel({owner, busy, thumb, onFaceAdd, faceAdding}: Props) 
       onClick={() => void submit('target', {}, allTarget)}>编辑本照片全部人物默认</button>
     <p role="status">当前编辑范围：{targetLabel(value)}。仅改动明确调整的参数，不清除已有逐项覆盖。</p>
     {value.editing_target?.scope !== 'face' && <p>下方人像滑块显示所选人脸的有效预览值，并非共享默认值。调整某一项会写入当前编辑范围，其他项保留继承。</p>}
-    {face && <details data-control-id={IDS.detectionCorrection}><summary>纠正检测与人工标签</summary>
+    {face && <details data-guide-category-editor data-control-id={IDS.detectionCorrection}><summary>纠正检测与人工标签</summary>
       <button type="button" data-control-id={IDS.addDisableFace} disabled={disabled}
         onClick={() => void submit('face_status', {enabled: !face.enabled})}>{face.enabled ? '禁用误检（保留历史）' : '重新启用此脸'}</button>
       {face.analysis_status !== 'verified' && <button type="button" disabled={disabled}

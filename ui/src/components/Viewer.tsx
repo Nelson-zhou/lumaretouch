@@ -1,3 +1,5 @@
+import {GuideOverlay} from '../canvasGuides/GuideOverlay';
+import type {GuideOwner} from '../canvasGuides/useCanvasGuides';
 import {LocalMaskOverlay} from '../localMasks/LocalMaskOverlay';
 import {ColorActionOverlay} from '../colorActions/ColorActionOverlay';
 import type {ColorActionOwner} from '../colorActions/useColorActionPicker';
@@ -102,9 +104,10 @@ export default function Viewer({
   onFitScale,
   inspection,
   onInspectionState,
-  colorSampler,
+  colorSampler,guides,guideCrop,guideSourceSize,
   sourcePatch,whiteBalancePicker,cloneStamp,localMasks,colorPicker,
 }: {
+  guides?:GuideOwner;guideCrop?:{rect:number[];rotation_degrees:number;neutral:boolean;out_full?:[number,number]|null};guideSourceSize?:[number,number];
   colorSampler?:ColorSampler;
   colorPicker?:ColorActionOwner;
   localMasks?:LocalMaskOwner;cloneStamp?:CloneStampOwner;sourcePatch?:SourcePatchOwner;whiteBalancePicker?:WhiteBalancePickerOwner;
@@ -204,7 +207,7 @@ export default function Viewer({
   const sizeRef = useRef({ w: 0, h: 0 });
   // 帧尺寸与 Fit 倍率：100% 的换算与卷帘的落点都靠它，不能靠猜
   const [frameDim, setFrameDim] = useState({ w: 0, h: 0 });
-  const [presentation,setPresentation]=useState<{displayWidth:number;displayHeight:number;compositionOnly:boolean}|null>(null);
+  const [presentation,setPresentation]=useState<{displayWidth:number;displayHeight:number;compositionOnly:boolean;documentId:string|null;geometry:string|null;kind:number}|null>(null);
   const displayDim={w:presentation?.displayWidth??frameDim.w,h:presentation?.displayHeight??frameDim.h};
   const [dpr,setDpr]=useState(()=>window.devicePixelRatio||1);
   const [editRevision,setEditRevision]=useState(0);
@@ -697,7 +700,7 @@ export default function Viewer({
               Object.assign(mirror.style,{left:`${r.left}px`,top:`${r.top}px`,width:`${r.width}px`,height:`${r.height}px`,right:'auto',bottom:'auto',objectFit:'fill',transform:'none'});}
           }
           setPresentation(previous=>previous?.displayWidth===layout.displayWidth&&previous?.displayHeight===layout.displayHeight
-            &&previous?.compositionOnly===layout.compositionOnly?previous:{displayWidth:layout.displayWidth,displayHeight:layout.displayHeight,compositionOnly:layout.compositionOnly});
+            &&previous?.compositionOnly===layout.compositionOnly&&previous.documentId===displayedFrame.documentId&&previous.geometry===displayedFrame.geometry&&previous.kind===displayedFrame.kind?previous:{displayWidth:layout.displayWidth,displayHeight:layout.displayHeight,compositionOnly:layout.compositionOnly,documentId:displayedFrame.documentId,geometry:displayedFrame.geometry,kind:displayedFrame.kind});
           compositionDirty = false;
         }
       }
@@ -748,6 +751,7 @@ export default function Viewer({
         {localMasks&&<LocalMaskOverlay owner={localMasks} clip={sampleClip} box={box} view={view}/>}
         {cloneStamp&&<CloneStampOverlay owner={cloneStamp} clip={sampleClip} box={box} view={view}/>}
         {sourcePatch&&<SourcePatchOverlay owner={sourcePatch} clip={sampleClip} box={box} view={view}/>}
+        {guides&&guideSourceSize&&<GuideOverlay owner={guides} clip={sampleClip} box={box} rect={disp} crop={guideCrop} sourceSize={guideSourceSize} presentationDocumentId={presentation?.kind===1?presentation.documentId:null} presentationGeometry={presentation?.geometry??null}/>}
         {/* GL 画布退成纯渲染源：不参与布局，也不指望它上屏（见上面那段）。 */}
         {/* glVisible 是给"官方开关能不能替掉镜像层"那个对照实验用的：把 GL 画布放回
             可见位，看它自己上不上得了屏。生产路径不依赖它。 */}

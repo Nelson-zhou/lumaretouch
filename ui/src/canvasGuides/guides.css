@@ -1,0 +1,25 @@
+.canvasGuideHitSurface,.canvasGuideVisuals{position:absolute;inset:0;display:block;overflow:hidden;pointer-events:none;user-select:none}
+.canvasGuideHitSurface{z-index:5;touch-action:none}
+.canvasGuideHandle{outline:none}
+.canvasGuideHandle line{stroke:transparent;stroke-width:14;fill:none;pointer-events:stroke;vector-effect:non-scaling-stroke;cursor:move;touch-action:none}
+.canvasGuideHitSurface.locked .canvasGuideHandle line{pointer-events:none;cursor:default}
+.canvasGuideVisuals{z-index:15}
+.canvasGuideStatic{width:100%;height:100%}
+.canvasGuideVisuals line{fill:none;vector-effect:non-scaling-stroke}
+.canvasGuideShadow{stroke:#081b27b3;stroke-width:3}
+.canvasGuideStroke{stroke:#70d9ff;stroke-width:1}
+.canvasGuideVisuals .selected .canvasGuideStroke{stroke:#ffd780;stroke-width:2}
+.canvasGuideMenu{position:absolute;z-index:30;display:grid;gap:3px;min-width:180px;max-width:100%;padding:5px;border:1px solid #536474;border-radius:6px;background:#172029;color:#eef7ff;box-shadow:0 4px 14px #0008;font-size:12px}
+.canvasGuideMenu button{text-align:left;white-space:normal;padding:7px 10px;background:transparent;color:inherit;border:0;border-radius:3px;cursor:pointer}
+.canvasGuideMenu button:hover,.canvasGuideMenu button:focus-visible{background:#344a5c;outline:2px solid #70d9ff;outline-offset:-2px}
+.guideControls{position:relative;font-size:12px}
+.guideControls>summary{list-style:none;cursor:pointer;white-space:nowrap;padding:5px 8px;border:1px solid #45525f;border-radius:5px;color:#d9e9f7}
+.guideControls>summary::-webkit-details-marker{display:none}
+.guideControls>summary:focus-visible{outline:2px solid #70d9ff;outline-offset:2px}
+.guideControls[open]>summary{background:#2d4253;border-color:#70d9ff}
+.guideMenu{position:absolute;left:0;right:auto;top:calc(100% + 6px);z-index:60;display:grid;gap:6px;width:280px;max-width:calc(100vw - 24px);max-height:70vh;overflow:auto;padding:10px;border:1px solid #536474;border-radius:6px;background:#172029;color:#eef7ff;box-shadow:0 4px 14px #0008}
+.guideMenu p{margin:0;line-height:1.5;white-space:normal;overflow-wrap:anywhere}
+.guideMenu button{text-align:left;white-space:normal;padding:6px 8px}
+.guideMenu button:disabled{opacity:.5;cursor:default}
+
+.guideCoordinateList{display:grid;gap:5px;max-height:180px;overflow:auto}.guideCoordinateList>div{display:flex;align-items:center;justify-content:space-between;gap:4px}.guideCoordinateList label{font-size:11px}.guideCoordinateList input{width:72px;max-width:100%;margin-left:3px}

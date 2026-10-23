@@ -122,6 +122,8 @@ class VirtualCopies:
                         row = deepcopy(source)
                         row.update(document_id=uuid.uuid4().hex,recipe_version_id=uuid.uuid4().hex,
                                    copy_number=number,document_revision=0,undo=[],redo=[],fingerprint=fp)
+                        from .canvas_guides import KEY, copy_record
+                        row[KEY] = copy_record(source.get(KEY))
                         row.pop('_lrt_runtime_version',None)
                         row.pop('_project_version_id',None)
                         row['_history_owned'] = True
