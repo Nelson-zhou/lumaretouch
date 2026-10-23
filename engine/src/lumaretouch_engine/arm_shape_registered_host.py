@@ -54,7 +54,7 @@ class ArmRegisteredHostMixin:
         name=message.get('cmd');action=message.get('action')
         if name in ('hello','arm_shape'):return
         if name in ('session','project','history','batch','task','preset') and action in ('state','list'):return
-        if name in ('shoulder_shape','leg_shape','waist_shape','leg_length') and action in ('view','select','status'):return
+        if name in ('shoulder_shape','leg_shape','waist_shape','leg_length','neck_shape') and action in ('view','select','status'):return
         # Other work may change the source, association or memory admission.
         # End only this owned read-only model process, not another feature's edit.
         self._arm_cancel_proposals()

@@ -151,3 +151,8 @@ bash "$here/build-leg-length.sh" "$stage/lumaretouch_engine/bin/liblrt_leg_lengt
 mkdir -p "$stage/lumaretouch_engine/third_party/leg_length"
 cp "$here/../core/leg_length/lib.rs" "$here/../LICENSE" "$here/../docs/leg-length/README.md" "$stage/lumaretouch_engine/third_party/leg_length/"
 cp "$here/../engine/src/lumaretouch_engine/body_pose_licenses/"*.txt "$stage/lumaretouch_engine/third_party/leg_length/"
+
+# Original reviewed neck length/width core.
+bash "$here/build-neck-shape.sh" "$stage/lumaretouch_engine/bin/liblrt_neck_shape.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/neck_shape"
+cp "$here/../core/neck_shape/lib.rs" "$here/../LICENSE" "$here/../docs/neck-shape/README.md" "$stage/lumaretouch_engine/third_party/neck_shape/"

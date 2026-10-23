@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "family": "neck_shape",
+  "operation_id": "lnx.neck_shape.v1",
+  "base": "f68a5d7d",
+  "status": "source-integrated-execution-UNRUN",
+  "quality": "UNRUN",
+  "requirements": {
+    "length": "LNX-REF-PC-32473-C-903ca47834",
+    "width": "LNX-REF-PC-32473-C-614d728bcd"
+  },
+  "excluded_requirements": [
+    "LNX-REF-PC-32473-C-013faf626e"
+  ],
+  "ports": {
+    "policy": "neck_shape_state.policies",
+    "fields": "neck_shape_runtime.prepare_fields",
+    "host": "neck_shape_host.NeckHostAdapter",
+    "view": "neck_shape_host.view",
+    "project": "neck_shape_project",
+    "adapter": "neck_shape_adapter",
+    "ui": "neckShape/NeckShapePanel",
+    "workflow": "neckShape/useNeckWorkflow (canonical document binding and native runNeckShape)",
+    "native": "neckShape/nativeTransport.createNeckPort"
+  },
+  "acceptance": "Source paths connected, not execution acceptance. All numerical/visual/history/project14/RGB16/native/UI gates UNRUN.",
+  "integration_base": "07d80c10bb8a73042875ac67b1fdd4c27ac74b9f",
+  "shared_changes_integrated": [
+    "Register policy in body_pose_operations.policies",
+    "Register frozen active order after existing v5 without changing neutral v1-v5",
+    "Register family routing/presenter and shared host adapter",
+    "Prepare neck fields alongside ALL existing body families, pass exact source_frame and people graph",
+    "Use existing body command mailbox/status/release and source preview, add neck_shape_result; no extra owner",
+    "Register neck native/Tauri dispatch and ready protocol only once connected",
+    "App tool routing, source view, busy/export barrier and owner hooks",
+    "Ensure project14 frozen snapshot, undo/redo, RGB16 export and target-owned parameter-transfer paths use canonical policies/order",
+    "Package explicit Rust core build without runtime compilation"
+  ],
+  "shared_files": [
+    "engine/src/lumaretouch_engine/arm_shape_registered_host.py",
+    "engine/src/lumaretouch_engine/body_pose_commands.py",
+    "engine/src/lumaretouch_engine/body_pose_families.py",
+    "engine/src/lumaretouch_engine/body_pose_geometry.py",
+    "engine/src/lumaretouch_engine/body_pose_host.py",
+    "engine/src/lumaretouch_engine/body_pose_operations.py",
+    "engine/src/lumaretouch_engine/body_pose_render.py",
+    "engine/src/lumaretouch_engine/history_controller.py",
+    "engine/src/lumaretouch_engine/history_policy.py",
+    "engine/src/lumaretouch_engine/neck_shape_project.py",
+    "engine/src/lumaretouch_engine/server.py",
+    "packaging/build-neck-shape.sh",
+    "packaging/stage-engine.sh",
+    "ui/src-tauri/src/capture_lifecycle.rs",
+    "ui/src-tauri/src/engine.rs",
+    "ui/src-tauri/src/main.rs",
+    "ui/src-tauri/src/native_dispatch.rs",
+    "ui/src-tauri/src/neck_shape_api.rs",
+    "ui/src/App.tsx",
+    "ui/src/legShape/BodyShapeTools.tsx",
+    "ui/src/native.ts",
+    "ui/src/toolRouting/coverage.ts"
+  ]
+}

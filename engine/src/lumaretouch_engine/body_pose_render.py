@@ -38,7 +38,7 @@ def wrap_prepared(prepared,bank,people,frame):
 
 def prepare(prepared,bank,people,frame,*,byte_budget,source_pixels=None,source_path=None):
     from .people_geometry_identity import digest
-    from . import leg_shape_runtime as legs, waist_shape_runtime as waist, leg_length_runtime as length
+    from . import leg_shape_runtime as legs, waist_shape_runtime as waist, leg_length_runtime as length, neck_shape_runtime as neck
     frame=check_source(bank,source(frame));bank=P.check(bank)
     replay=None;budget=byte_budget
     if needs_arm_replay(bank):
@@ -55,6 +55,7 @@ def prepare(prepared,bank,people,frame,*,byte_budget,source_pixels=None,source_p
     fields=legs.prepare_fields(bank,frame['sha256'],tuple(prepared.geometry.delta.shape[1:3]),people_state=people,byte_budget=budget)
     fields=tuple(fields)+waist.prepare_fields(bank,frame['sha256'],tuple(prepared.geometry.delta.shape[1:3]),people_state=people,byte_budget=budget,source_frame=frame)
     fields=tuple(fields)+length.prepare_fields(bank,frame['sha256'],tuple(prepared.geometry.delta.shape[1:3]),people_state=people,byte_budget=budget)
+    fields=tuple(fields)+neck.prepare_fields(bank,frame['sha256'],tuple(prepared.geometry.delta.shape[1:3]),people_state=people,byte_budget=budget,source_frame=frame)
     wrapper=A.prepare_common(prepared,prepared.face_fields,bank,people,frame,
         people_geometry_identity=digest({'state':people,'asset_sha256':frame['sha256']}),byte_budget=budget,
         source_pixels=replay,extra_body_fields=fields,body_operation_order=P.effective_order(bank))
@@ -118,6 +119,7 @@ def geometry_record(state):
                 recipe=deepcopy(item['recipe'])
                 if operation_id==O.SHOULDER_OPERATION:
                     for pair in ('square','width'):recipe[pair].pop('linked',None)
+                if operation_id=='lnx.neck_shape.v1':recipe['width'].pop('linked',None)
                 operations[operation_id]={'recipe':recipe,'support_sha256':item['support_sha256']}
         if operations:rows.append({'record':row['record'],'operations':operations})
     return {'version':1,'body_order':P.effective_order(bank).record(),'body_then_face':'body-then-face-inverse-v1','bodies':rows} if rows else None

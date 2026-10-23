@@ -25,9 +25,12 @@ WAIST_BODY_ORDER=FrozenBodyOrder(4,(*PORTRAIT_BODY_ORDER.operation_ids,'lnx.wais
 
 LEG_LENGTH_BODY_ORDER=FrozenBodyOrder(5,(*WAIST_BODY_ORDER.operation_ids,'lnx.leg_length.v1'))
 
+NECK_BODY_ORDER=FrozenBodyOrder(6,(*LEG_LENGTH_BODY_ORDER.operation_ids,'lnx.neck_shape.v1'))
+
 def effective_order(state):
     """One authoritative chain. Neutral new families preserve older map identity."""
     active={op for row in state['bodies'].values() for op in O.active_operations(row)}
+    if 'lnx.neck_shape.v1' in active:return NECK_BODY_ORDER
     if 'lnx.leg_length.v1' in active:return LEG_LENGTH_BODY_ORDER
     if 'lnx.waist_shape.v1' in active:return WAIST_BODY_ORDER
     if active.intersection(ARM_OPERATION_IDS):return PORTRAIT_BODY_ORDER

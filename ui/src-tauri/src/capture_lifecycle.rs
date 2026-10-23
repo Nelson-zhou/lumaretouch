@@ -26,6 +26,7 @@ impl AppState {
         crate::leg_shape_api::reset(epoch);
         crate::waist_shape_api::reset(epoch);
         crate::leg_length_api::reset(epoch);
+        crate::neck_shape_api::reset(epoch);
         crate::arm_shape_api::reset(epoch);
         crate::sample_library_api::reset(epoch);
         crate::semantic_colour_api::reset(epoch);

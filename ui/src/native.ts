@@ -18,7 +18,7 @@ export function notifyInspectionEditIntent(){
 }
 const inspectionMutations=new Set(['start_engine','shutdown_engine','load_image','set_strength','precompute',
   'inpaint','light','deform','lut','grade','enhance','lip_makeup','brow_shape','nose_shape','eye_shape','mouth_shape','background','exposure','hsl','curves','levels','fabric','crop','compare',
-  'shoulder_shape','leg_shape','waist_shape','leg_length','arm_shape','people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
+  'shoulder_shape','leg_shape','waist_shape','leg_length','neck_shape','arm_shape','people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
   const send=()=>{if(inspectionMutations.has(command))notifyInspectionEditIntent();return tauriInvoke<T>(command,args,options);};
   if(isCurveEditBusy()&&curveBarrierRequired(command,(args as Record<string,unknown>|undefined)?.action,inspectionMutations.has(command))){
@@ -149,6 +149,7 @@ export interface DocState {
   shoulder_shape?: import('./shoulderShape/model').ShoulderView;
   leg_shape?: import('./legShape/model').LegView;
   waist_shape?: import('./waistShape/model').WaistView;
+  neck_shape?: import('./neckShape/model').NeckView;
   leg_length?: import('./legLength/model').LegLengthView;
   arm_shape?: import('./armShape/model').ArmView;
   brow_shape?: {version:1;revision:number;selected_face_id:string;recipe:import("./browShape/model").BrowShape;sides:Partial<Record<import("./browShape/model").BrowSide,import("./browShape/model").BrowFact>>;suspended:string|null;bytes_fields:number};
@@ -957,6 +958,7 @@ export interface EngineStatus {
     shoulder_shape_protocol?: number;
     leg_shape_protocol?: number;
     waist_shape_protocol?: number;
+    neck_shape_protocol?: number;
     leg_length_protocol?: number;
     arm_shape_protocol?: number;
     semantic_colour_protocol?: number;
@@ -1793,4 +1795,9 @@ export function runArmShape(request:import('./armShape/nativeTransport').Command
 export function runLegLength(request:import('./legLength/nativeTransport').Command|{action:'mailbox_status'|'release';request_id:string}):Promise<import('./legLength/nativeTransport').Mailbox>{
   return ['view','status','mailbox_status','release'].includes(request.action)
     ? tauriInvoke<import('./legLength/nativeTransport').Mailbox>('leg_length',{request}) : invoke<import('./legLength/nativeTransport').Mailbox>('leg_length',{request});
+}
+
+export function runNeckShape(request:import('./neckShape/nativeTransport').Command|{action:'mailbox_status'|'release';request_id:string}):Promise<import('./neckShape/nativeTransport').Mailbox>{
+  return ['view','status','mailbox_status','release'].includes(request.action)
+    ? tauriInvoke<import('./neckShape/nativeTransport').Mailbox>('neck_shape',{request}) : invoke<import('./neckShape/nativeTransport').Mailbox>('neck_shape',{request});
 }

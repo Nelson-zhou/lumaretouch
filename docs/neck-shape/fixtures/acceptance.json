@@ -1,0 +1,12 @@
+{"version":1,"status":"UNRUN","cases":[
+{"id":"NECK-001","expect":"negative length shortens and positive length lengthens actual visible neck; connected full head/hair/face translated continuously"},
+{"id":"NECK-002","expect":"negative width thickens and positive width thins; left/right unlock persists through history/project; relink retains differing existing values"},
+{"id":"NECK-003","expect":"missing/occluded contour, collar, hair, severe perspective, cropped head/hair, missing explicit association each refuse"},
+{"id":"NECK-004","expect":"other face/body/arm/exclusion touching transition refuses all-or-nothing"},
+{"id":"NECK-005","expect":"continuous arbitrary-coordinate inverse residual, derivative contraction, Jacobian, max displacement gates"},
+{"id":"NECK-006","expect":"neutral preserves all v1-v5 identities and pixels; combined shoulders/legs/arms/waist/leg-length/face uses single original-source RGB sample"},
+{"id":"NECK-007","expect":"original RGB8/RGB16/HDR export recomputes full-resolution geometry and preserves project14/history/receipt barriers"},
+{"id":"NECK-008","expect":"stale source/analysis/support/body/person/face graph, timeout, duplicate changed request, undo/redo, project corruption and target transfer refuse safely"},
+{"id":"NECK-009","expect":"source image loaded dimensions and full-frame mapping verified before review; no native or model missing fallback"},
+{"id":"NECK-010","expect":"naturalness and background/cloth transition reviewed honestly on diverse real original portraits; not passed by synthetic fixture or slider presence"}
+]}

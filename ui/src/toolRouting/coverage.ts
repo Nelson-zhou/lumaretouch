@@ -4,7 +4,7 @@ import type {SpecNode} from "../spec";
  * Optics auxiliary grid and editable solve guides are distinct implemented controls.
  * RAW workflows remain explicit gaps; automatic perspective is one enable plus three modes. */
 const COVERED: Record<string, ReadonlySet<string>> = {
-  "PC-32473": new Set(["直角肩", "肩膀宽度", "AI瘦手臂&瘦手臂", "瘦腰", "瘦腿", "瘦腿/大腿", "瘦腿/小腿", "长腿", "长腿/大腿", "长腿/小腿"]),
+  "PC-32473": new Set(["直角肩", "肩膀宽度", "脖子长度", "瘦脖子", "AI瘦手臂&瘦手臂", "瘦腰", "瘦腿", "瘦腿/大腿", "瘦腿/小腿", "长腿", "长腿/大腿", "长腿/小腿"]),
   "PC-32479": new Set([
     "向前变形",
     "重建",
