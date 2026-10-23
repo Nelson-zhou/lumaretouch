@@ -94,6 +94,8 @@ mod manual_liquify_host;
 mod manual_liquify_api;
 mod studio_background_host;
 mod studio_background_api;
+mod common_background_host;
+mod common_background_api;
 mod id_background_api;
 mod sky_replacement_host;
 mod sky_replacement_api;
@@ -273,6 +275,8 @@ pub struct AppState {
     optics_preview: Mutex<optics_host::OpticsPreviewHost>,
     studio_background: Mutex<studio_background_host::StudioBackgroundHost>,
     studio_background_preview: Mutex<studio_background_host::StudioBackgroundPreviewHost>,
+    common_background: Mutex<common_background_host::CommonBackgroundHost>,
+    common_background_preview: Mutex<common_background_host::CommonBackgroundPreviewHost>,
     manual_liquify: Mutex<manual_liquify_host::LiquifyHost>,
     liquify_preview: Mutex<manual_liquify_host::LiquifyPreviewHost>,
     effect_recovery: Mutex<effect_recovery_host::RecoveryHost>,
@@ -403,6 +407,8 @@ impl AppState {
             optics_preview: Mutex::new(optics_host::OpticsPreviewHost::default()),
             studio_background: Mutex::new(studio_background_host::StudioBackgroundHost::default()),
             studio_background_preview: Mutex::new(studio_background_host::StudioBackgroundPreviewHost::default()),
+            common_background: Mutex::new(common_background_host::CommonBackgroundHost::default()),
+            common_background_preview: Mutex::new(common_background_host::CommonBackgroundPreviewHost::default()),
             manual_liquify: Mutex::new(manual_liquify_host::LiquifyHost::default()),
             liquify_preview: Mutex::new(manual_liquify_host::LiquifyPreviewHost::default()),
             effect_recovery: Mutex::new(effect_recovery_host::RecoveryHost::default()),
@@ -520,6 +526,7 @@ impl AppState {
     }
 
     pub fn on_lut_ready(&self, v: &Value) {
+        self.common_background_preview.lock().unwrap().invalidate();
         self.source_patch_capture.lock().unwrap().invalidate();
         self.recovery_preview.lock().unwrap().invalidate(); self.liquify_preview.lock().unwrap().invalidate(); self.studio_background_preview.lock().unwrap().invalidate(); self.optics_preview.lock().unwrap().invalidate(); self.sky_preview.lock().unwrap().invalidate();
         self.sky_semantic.lock().unwrap().invalidate();
@@ -1694,6 +1701,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
 
 #[tauri::command]
 fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
+    state.common_background_preview.lock().unwrap().invalidate();
     state.source_patch_capture.lock().unwrap().invalidate();
     state.recovery_preview.lock().unwrap().invalidate(); state.liquify_preview.lock().unwrap().invalidate(); state.studio_background_preview.lock().unwrap().invalidate(); state.optics_preview.lock().unwrap().invalidate(); state.sky_preview.lock().unwrap().invalidate();
     state.sky_semantic.lock().unwrap().invalidate();
@@ -1988,6 +1996,8 @@ fn main() {
             id_background_api::id_background_request, id_background_api::id_background_status,
             studio_background_api::studio_background, studio_background_api::studio_background_result,
             studio_background_api::studio_background_preview, studio_background_api::studio_background_preview_status,
+            common_background_api::common_background, common_background_api::common_background_result,
+            common_background_api::common_background_preview, common_background_api::common_background_preview_status,
             manual_liquify_api::manual_liquify, manual_liquify_api::manual_liquify_result,
             manual_liquify_api::manual_liquify_preview, manual_liquify_api::manual_liquify_preview_status,
             effect_recovery_api::effect_recovery, effect_recovery_api::effect_recovery_result,

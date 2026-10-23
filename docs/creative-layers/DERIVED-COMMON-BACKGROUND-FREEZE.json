@@ -1,0 +1,279 @@
+{
+  "baseline": "038d91eabfe198dddf69966f22409eab4d8f3f7c",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Reviewed canonical-source common color-key v2, float composition, separate consumer recovery, actual-image native/UI proof and existing history/export ownership; no neural/HDR/alpha/shared-transfer completion.",
+  "files": [
+    {
+      "path": "docs/creative-layers/COMMON-BACKGROUND-SOURCE.md",
+      "sha256": "71b4be86189e7ecd17ef3ced5ff9fea9f22d42366810c6148ce4502e40860577",
+      "bytes": 7413
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-COMMON-BACKGROUND.md",
+      "sha256": "290d483060e0d1502acb4cf848f63a0a399c9122c3387fad125eb6c23cb9b721",
+      "bytes": 7279
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/common_background_controller.py",
+      "sha256": "b39047cb0fcadbf3958dc09d07f734da7e682be32455f8e847948374d27e9e72",
+      "bytes": 4153
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/common_background_preview_source.py",
+      "sha256": "efea9435b7ae63568e0db1b4d51e0c40ce6ef5d2054a970e44af807ac7d0ad29",
+      "bytes": 4581
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/common_background_recovery.py",
+      "sha256": "434dac3c879c95f4097b0347e966ed2cb515f7356f59970f4e4f2c6bbd0a9a7e",
+      "bytes": 11581
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/common_background_review.py",
+      "sha256": "5a1e2c8c575df49d158c57df8f67eaf2370f5a8040d23d073b2c8dbb0964aa00",
+      "bytes": 6845
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/common_background_source.py",
+      "sha256": "4fa31ec12614d82cfadc6add1bbf862b1c0e98cb3e27f8df1610806b68933aeb",
+      "bytes": 9304
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_common_background_host.py",
+      "sha256": "bdf5b5b7ff26a4c28e1ed2d86b0b7341a9c71e5f5cd6585e941346a866f32387",
+      "bytes": 2629
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_common_background.py",
+      "sha256": "c91acdda8ea59a9bd19a76d5a699bc43a0c1b0da85e15f8e31403b4cf363a9ac",
+      "bytes": 5446
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_global_recovery.py",
+      "sha256": "952317afbee5c087e25cc9c533fe4b56ca7c5a8d43c5e89793ea347976d7ed2d",
+      "bytes": 6436
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_recovery.py",
+      "sha256": "a1d9456297f07eaa49d46f118f6280dd8683e091c324f12668a6a2d7fb285df1",
+      "bytes": 12166
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "sha256": "bbd7382497cdeade9708aa0dfe6c345fb966227ad442bbda60b37eb53567a91d",
+      "bytes": 20093
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "261b4c76e4a2d280ccbf7a971f61027028702f7b1843653a5b1dba58d30b8b5e",
+      "bytes": 25268
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_project.py",
+      "sha256": "230854f98f37511c976bcae2bea1a88de38077eea81dafe84164d3fd75b4930f",
+      "bytes": 11349
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_controller.py",
+      "sha256": "cc1e38cc1ac70976545bd8cd5bc70417e81edd930720891afe0692617cf0db48",
+      "bytes": 6545
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_preview.py",
+      "sha256": "7a69d1a434ae202e22dffc2a87da7836cded0baebe4bfc7b45d39751ea0713da",
+      "bytes": 11208
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_runtime.py",
+      "sha256": "5c9001ab9d5f1baa6ef3b0bb58d170eb7a3bae85ef8db0b66c8c4436bcc1dfd6",
+      "bytes": 15239
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "558bf8360db488d8dbfbdef670e560f691c83843ad05d472601aa1d84d3f3fbb",
+      "bytes": 129334
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_project.py",
+      "sha256": "b8cee243743cf4938f195bf6fac2e1bbe1cb431f130bf5a45fc2857fe507d910",
+      "bytes": 2982
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_stage.py",
+      "sha256": "6f66f236414136a5350242a301068d8c67c6d124f185a302ecde970c1feb643d",
+      "bytes": 1495
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/ops/matting.py",
+      "sha256": "58f52d166ff1af91888348ed0c30e81cce82945278b9e0e13e578ba512a1d2a5",
+      "bytes": 8627
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preview_lifecycle.py",
+      "sha256": "4b43b8aa7446b9b6124a3efd633479872a038f978b6b7788e07c992e298eca36",
+      "bytes": 1501
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "d98300f08b779786af0d986f1d8dc97d0c7cd1184aeea4d980bdcbc235964390",
+      "bytes": 6697
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "9db2559703be7f0ed86489e907dd7bea0b9eabded32c73c5e1ae30085a94bc5e",
+      "bytes": 463881
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_tools_dispatch.py",
+      "sha256": "9877740dd8f765d691a4199a4145ef412c8d477e6cb1f99cd71a559a7fe4ed2d",
+      "bytes": 2388
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "08dd9b6b8906de288d64a92ffe64d7bfdd58fad7a8993b17bdb98d1468b00b2e",
+      "bytes": 134775
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_common_background_export_ownership_unrun.py",
+      "sha256": "33a4c557e720f939c53557c4c0b74b2cd49a0206b366c60c9f8d2908e2ad45b1",
+      "bytes": 6545
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_common_background_recovery_unrun.py",
+      "sha256": "3c8a588e55f8f92c953a6f35a1cf47addf6c6e9a08f8da4f70e3c38cc878bbc3",
+      "bytes": 10684
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_common_background_unrun.py",
+      "sha256": "8c0d6d8395402bd214811c7331759314d4c53ac3b15c076a72e271ff43e6a055",
+      "bytes": 7173
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_global_recovery.py",
+      "sha256": "802162d286315c90f3a4118c90d3cd808889e3a3bd17ec96811ca64a189a20e4",
+      "bytes": 6143
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_id_background_recovery_unrun.py",
+      "sha256": "712b6c9729a62a63eddb2172ce8089785a5ad30691aedf0773a32876f47050ea",
+      "bytes": 4825
+    },
+    {
+      "path": "ui/src-tauri/src/app_shutdown.rs",
+      "sha256": "55bbcc7c0cde8f47893303a4dece2a6a8bd77f8f43327c7f1278737ebe3a19cf",
+      "bytes": 1193
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "sha256": "b75976e52099f4bd31f71be9b81a5d0f412656c4a5b9fe8e86ed4752e5145480",
+      "bytes": 3324
+    },
+    {
+      "path": "ui/src-tauri/src/common_background_api.rs",
+      "sha256": "fbf760ac6c43547544a0673b98e67cefb9162aba73d7d81f4fc2e16bad2bde3b",
+      "bytes": 7937
+    },
+    {
+      "path": "ui/src-tauri/src/common_background_host.rs",
+      "sha256": "dc784d5f973f0dbb53033078bb239419250476209251fc37a73b6cabf3a1c9c3",
+      "bytes": 18736
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "674fe42ef77689ad4b3415dbe8ad8b33f8ced4cec7fc14b6821c6928f850af4d",
+      "bytes": 36095
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "0d7983fa4e19037daf4011deb308b77f037f5938908a6cf1695936d299b346ee",
+      "bytes": 100295
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "e0024dc83ff50fe2fe5e042a2b1c888c6e3cec9aed305acd6c15496061dd7ddd",
+      "bytes": 8493
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "e2e6366526056dcb121d8b91b9a67ffde03de8554da75a7ddf013dac1c934a35",
+      "bytes": 145536
+    },
+    {
+      "path": "ui/src/commonBackground/ACCEPTANCE_UNRUN.md",
+      "sha256": "c48a770b828b88ca6af70b7c6aced8f99574bc2c6b81a147fed78c73bca5e7e9",
+      "bytes": 4521
+    },
+    {
+      "path": "ui/src/commonBackground/CommonBackgroundPanel.tsx",
+      "sha256": "1f3a40ab972033d605f84f13103bae57e5461c270c824f76388923aab501e2b5",
+      "bytes": 9197
+    },
+    {
+      "path": "ui/src/commonBackground/commonBackground.css",
+      "sha256": "6b82c2ce8341345131e561c8cffa756665b5d2d25215157c6047342425ab0941",
+      "bytes": 1992
+    },
+    {
+      "path": "ui/src/commonBackground/model.ts",
+      "sha256": "405fbaabb525b9796619931ab6da931219fca8777cd0f21af4c114ec45907b16",
+      "bytes": 2813
+    },
+    {
+      "path": "ui/src/commonBackground/useCommonBackgroundWorkflow.ts",
+      "sha256": "217431028de59f3f9873e7f80a2bd53d05346594644bfd1ec7d0cf592a974b27",
+      "bytes": 2587
+    },
+    {
+      "path": "ui/src/commonBackground/workflow.ts",
+      "sha256": "a4dcadc836a24de6a13fc512f0c3ed1abb754bd2f4a648fdb66056777b187bc0",
+      "bytes": 12805
+    },
+    {
+      "path": "ui/src/commonBackground/workflow.unrun.test.ts",
+      "sha256": "1b2dabbccaaa18826737e1a83b5771e437b6edb319dae1e64b816f1334ca6256",
+      "bytes": 12843
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "0af65eac07e4de7229b972b9a2dd87578f546fae7b19dc5e7782ec0293c1258d",
+      "bytes": 59154
+    },
+    {
+      "path": "ui/src/components/useOriginalCompareKeys.ts",
+      "sha256": "0c5cbdcb1617d142ec1d818ee5c9a286ed9377afab326ff2bad255104b336149",
+      "bytes": 1536
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "11173640b9024ceba4a11705bba612802afdea57d4d4cadebe47ebd927f12ab0",
+      "bytes": 98047
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 29,
+    "diff_whitespace": "git diff --check clean",
+    "line_counts": {
+      "ui/src/App.tsx": 2106,
+      "ui/src-tauri/src/main.rs": 2025,
+      "engine/src/lumaretouch_engine/server.py": 6974
+    }
+  },
+  "unrun_fixtures": {
+    "new_python_functions": 38,
+    "new_native_rust_functions": 9,
+    "new_ui_workflow_cases": 18,
+    "status": "AUTHORED_UNRUN; no tests, imports, builds, typecheck or numerical acceptance"
+  },
+  "excluded_unrelated_paths": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "remaining": [
+    "Unknown apply retains receipt and edit lock; dedicated verified reload/reconciliation UI absent.",
+    "Custom neural backend not official BiRefNet compatibility; full-resolution derived neural acquisition unadapted.",
+    "Common image-background assets/pickers, spill removal, original-shadow segmentation, general alpha/HDR and shared transfer unfinished.",
+    "Existing global proxy-size reset still clears legacy pixel-layer undo/redo.",
+    "Actual numerical, visual, native build, performance, export and project lifecycle validation UNRUN."
+  ]
+}

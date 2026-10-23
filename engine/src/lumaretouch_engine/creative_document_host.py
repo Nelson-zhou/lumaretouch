@@ -351,6 +351,10 @@ def guard_command(engine, name, request):
         from .creative_sky_host import require_command as require_sky
         require_sky(engine,name,request)
         return
+    if name in ('common_background','common_background_preview'):
+        from .creative_common_background_host import require_command as require_common
+        require_common(engine,name,request)
+        return
     if name in ('studio_background','studio_background_preview'):
         from .creative_studio_host import require_command as require_studio
         require_studio(engine,name,request)

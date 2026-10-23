@@ -11,6 +11,7 @@ pub(crate) fn optional_models(state:&AppState) {
 
 #[tauri::command]
 pub(crate) fn quit(state: State<'_, Arc<AppState>>) {
+    state.common_background_preview.lock().unwrap().invalidate();
     optional_models(&state);
     state.sky_semantic.lock().unwrap().invalidate();
     state.source_patch_capture.lock().unwrap().invalidate();

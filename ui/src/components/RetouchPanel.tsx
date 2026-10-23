@@ -1,4 +1,6 @@
 import {ConnectedPhotoGrainPanel} from '../photoGrain/ConnectedPhotoGrainPanel';
+import {CommonBackgroundPanel} from '../commonBackground/CommonBackgroundPanel';
+import type {CommonBackgroundOwner} from '../commonBackground/useCommonBackgroundWorkflow';
 import {ConnectedPrimaryCalibrationPanel} from "../primaryCalibration/ConnectedPrimaryCalibrationPanel";
 import {ConnectedColourEditorPanel} from "../colourEditor/ConnectedColourEditorPanel";
 import {ConnectedSelectiveColourPanel} from "../selectiveColour/ConnectedSelectiveColourPanel";
@@ -49,7 +51,7 @@ import { TOOL_GROUPS, toolGroupOf, type ToolGroup } from "../toolNavigation";
  */
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  runLipMakeup, runBackground, runCrop, runDeform, runEnhance, runExposure, runGrade,
+  runLipMakeup, runCrop, runDeform, runEnhance, runExposure, runGrade,
   runHistory, runHsl, runLut, setStrength,
   type DocState, type EngineStatus,
 } from "../native";
@@ -66,6 +68,7 @@ export interface RetouchProps {
   toolLocation?: ToolLocation | null;
   effectRecoveryPanel?: React.ReactNode; manualLiquifyPanel?: React.ReactNode;
   studioBackgroundPanel?: React.ReactNode; skyReplacementPanel?: React.ReactNode; opticsPanel?: React.ReactNode;
+  commonBackgroundOwner?: CommonBackgroundOwner;
   presetPanel?: React.ReactNode;
   sampleLibraryPanel?: React.ReactNode;
   shoulderPanel?: React.ReactNode;
@@ -492,14 +495,6 @@ const ARCHIVE_IDS = new Set([
   "PC-121089", "PC-124704", "PC-32552",
 ]);
 
-function hexToRgb(hex: string): number[] {
-  const h = hex.replace("#", "");
-  const n = h.length === 3
-    ? h.split("").map((c) => parseInt(c + c, 16))
-    : [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
-  return n.map((v) => (Number.isFinite(v) ? Math.max(0, Math.min(255, v)) : 255));
-}
-
 export default function RetouchPanel(props: RetouchProps) {
   const { doc, status } = props;
   const dim = !props.hasImage||props.hairPort.pending()||!!props.colorActions?.owner.pending||(props.people.state.pending && props.people.state.pendingAction !== 'patch')||props.people.state.uncertain;
@@ -522,7 +517,6 @@ export default function RetouchPanel(props: RetouchProps) {
   useLayoutEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = q.trim() ? 0 : (scrollPositions.current[toolGroup] ?? 0);
   }, [toolGroup, q]);
-  const [bgHex, setBgHex] = useState("#ffffff");
   const [openSeen, setOpenSeen] = useState<Record<string, boolean>>({});
   const [navigationTarget, setNavigationTarget] = useState<ToolLocation | null>(null);
   const navigateTool = (featureId: string, path?: string) => {
@@ -581,11 +575,6 @@ export default function RetouchPanel(props: RetouchProps) {
     if (next > 180) next -= 360;
     if (next < -180) next += 360;
     ok(runCrop("set", doc?.crop?.rect ?? [0, 0, 1, 1], next), props);
-  };
-
-  const applyBg = () => {
-    const backend = status?.matting_backends?.baseline?.[0] ?? "color_key";
-    ok(runBackground("set", { backend, bg: hexToRgb(bgHex) }), props);
   };
 
   const lutOn = !!doc?.lut.lit;
@@ -974,19 +963,8 @@ export default function RetouchPanel(props: RetouchProps) {
     </div>
   );
 
-  const bgBlock = (
-    <div className="specBlock">
-      <div className="specBlockTitle">证件照换底</div>
-      <div className="specSeg">
-        <span>底色</span>
-        <input type="color" value={bgHex} disabled={dim}
-          onChange={(e) => setBgHex(e.target.value)} title="选择纯色背景" />
-        <button className="on" disabled={dim} onClick={applyBg}>应用换底</button>
-        <button disabled={dim || !status?.background?.bg_active}
-          onClick={() => ok(runBackground("clear"), props)}>还原</button>
-      </div>
-    </div>
-  );
+  const bgBlock = <CommonBackgroundPanel mode="launcher" owner={props.commonBackgroundOwner}
+    disabled={dim || status?.ready_caps?.common_background_protocol !== 1}/>;
 
   const historyBlock = (
     <div className="specSeg">
@@ -1051,6 +1029,7 @@ export default function RetouchPanel(props: RetouchProps) {
 
   return (
     <PortraitRevision.Provider value={doc?.people ? `${doc.people.binding.document_id}:${doc.people.revision}:${JSON.stringify(doc.people.editing_target)}` : ''}>
+      <CommonBackgroundPanel mode="workspace" owner={props.commonBackgroundOwner}/>
     <div className="retouch" data-spec-total={SPEC_COUNTS.features}
          data-spec-controls={SPEC_COUNTS.subcontrols}>
       <div className="rtContent" ref={contentRef} onScroll={(e) => {

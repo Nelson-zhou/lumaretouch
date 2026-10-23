@@ -28,13 +28,20 @@ def prepared(monkeypatch):
     return spec,pixels,source
 
 
-def test_disabled_foreign_and_unadapted_global_rows_refuse():
+def test_disabled_foreign_rows_and_unowned_common_consumers_refuse():
     source={'sha256':'a'*64,'width':4,'height':4};value=recipe(source,enabled=False)
     assert not S.enabled(G.validate(value,source))
     with pytest.raises(ValueError):G.validate(value,{**source,'sha256':'b'*64})
-    for name in ('background_replace',):
-        bad=deepcopy(value);bad['targets'][0]['target']=name
-        with pytest.raises(ValueError):G.validate(bad,source)
+    from test_common_background_recovery_unrun import snapshot
+    from lumaretouch_engine import common_background_recovery as C
+    snap=snapshot(enabled=False)
+    assert C.validate_state(snap,snap['effect_recovery'])==snap['effect_recovery']
+    bad=deepcopy(snap);bad['_bg']['key_recipe']['source']['sha256']='f'*64
+    with pytest.raises(ValueError):C.validate_state(bad,bad['effect_recovery'])
+    for backend in ('color_key','rvm'):
+        bad=deepcopy(snap);bad['_bg'].pop('key_recipe');bad['_bg']['backend']=backend
+        bad['_bg']['matte']=np.ones((4,4),np.uint8)
+        with pytest.raises(ValueError):C.validate_state(bad,bad['effect_recovery'])
 
 
 def test_snapshot_retains_vectors_and_original_provenance(monkeypatch):

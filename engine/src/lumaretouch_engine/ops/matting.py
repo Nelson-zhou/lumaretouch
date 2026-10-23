@@ -92,6 +92,22 @@ def _slin_t(a):
     return torch.where(a <= 0.0031308, a * 12.92, 1.055 * a.clamp_min(1e-12).pow(1.0 / 2.4) - 0.055)
 
 
+def composite_linear_fields_t(rgb, alpha, linear_background):
+    """Shared ID/derived-common float composition; never clip edited radiance.
+
+    RGB is encoded sRGB, background is linear sRGB; alpha is straight coverage.
+    Fully opaque foreground is bit-preserved. Source admission is separate.
+    """
+    import torch
+    a = alpha.clamp(0, 1)
+    linear = torch.where(rgb <= 0.04045, rgb / 12.92,
+                         ((rgb + 0.055) / 1.055).clamp_min(0).pow(2.4))
+    mixed = linear * a + linear_background * (1 - a)
+    encoded = torch.where(mixed <= 0.0031308, mixed * 12.92,
+                          1.055 * mixed.clamp_min(0).pow(1 / 2.4) - 0.055)
+    return torch.where(a >= 1, rgb, encoded)
+
+
 def composite_t(fg, alpha, bg):
     """GPU 生产路：与 composite_np 同一串式子（float32 在线性光下合成）。
 

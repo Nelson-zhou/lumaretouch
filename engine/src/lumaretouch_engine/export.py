@@ -760,6 +760,9 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry):
     if resolved.repair:
         from .creative_derived_repair_export import stamp_pixels
         stamp_pixels(resolved,source)
+    if resolved.common_background_key is not None:
+        from .creative_derived_common_background import stamp_pixels
+        stamp_pixels(resolved,source)
     if resolved.creative_sky_context is not None:
         from .creative_derived_sky import stamp_pixels
         stamp_pixels(resolved,source)
@@ -1134,7 +1137,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             # P1-2 换底：与 grade_mask 同一个切窗（逐像素对应，外边扩那些像素不参与
             # 混合，只喂给带限算子）；遮罩是代理档上算好后 resample 到导出尺寸的连续覆盖度，
             # 与预览链上那次 set_background 走的是同一份 composite_t 算式。
-            pipe.set_background(spec.bg_matte[cy0:cy1, cx0:cx1], list(spec.bg_ref))
+            pipe.set_background(spec.bg_matte[cy0:cy1, cx0:cx1], list(spec.bg_ref),
+                preserve_extended=(getattr(spec,'common_background_key',None) or {}).get('version')==2)
         if spec.channel is not None and spec.masks is not None:
             carrier = _MaskCarrier(spec.masks[:, cy0:cy1, cx0:cx1], spec.landmarks)
             carrier._carrier_names = list(spec.mask_names)
@@ -1196,6 +1200,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         finish_sky(spec)
         finish_id_background(spec)
         finish_common(spec)
+        from .common_background_recovery import verify_export as verify_common_recovery
+        verify_common_recovery(spec)
         verify_body_source(spec);verify_hair_source(spec);verify_semantic_source(spec)
         return out, {'extended_tone_boundary':'exposure-output','prepass':True}
     del tone_field
@@ -1281,6 +1287,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     finish_sky(spec)
     finish_id_background(spec)
     finish_common(spec)
+    from .common_background_recovery import verify_export as verify_common_recovery
+    verify_common_recovery(spec)
     from .studio_background_state import active as studio_active
     if studio_active(spec.studio_background) and list(file_stamp(spec.studio_background_path)) != spec.studio_background_stamp:
         raise ExportError('背景源图在完整出片过程中变化')
@@ -1293,7 +1301,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     body_outcome=export_outcome(people_prepared,out,(w,h))
     return out, {
         "body_pose":body_outcome,
-        "background_matte_contract": "full-source-frozen-reference-key-v1" if spec.common_background_key is not None else ("legacy-proxy-resampled" if spec.bg_matte is not None else None),
+        "background_matte_contract": ("canonical-float-frozen-reference-key-v2" if spec.common_background_key.get('version')==2 else "full-source-frozen-reference-key-v1") if spec.common_background_key is not None else ("legacy-proxy-resampled" if spec.bg_matte is not None else None),
         "bits": bits, "warp_precision": "float64" if bits == 16 else "float32",
         "w": out_w, "h": out_h, "px": out_w * out_h, "src_mb": round(h * w * 3 * src_u8.dtype.itemsize / 1e6, 2),
         "src_w": w, "src_h": h, "scale": scale,

@@ -21,8 +21,15 @@ def test_distinct_target_and_source_bound_vectors():
     value=recovery()
     assert S.target('id_background')!='background_replace'
     assert G.validate(value,SOURCE)==value
-    bad=deepcopy(value);bad['targets'][0]['target']='background_replace'
-    with pytest.raises(ValueError):G.validate(bad,SOURCE)
+    common=deepcopy(value);common['targets'][0]['target']='background_replace'
+    assert G.validate(common,SOURCE)==common
+    # Admitting common vectors is not permission to reuse an ID or legacy matte
+    # consumer. Its independent owner admits only its actual version-2 key.
+    from test_common_background_recovery_unrun import snapshot
+    from lumaretouch_engine import common_background_recovery as C
+    snap=snapshot();assert C.validate_state(snap,snap['effect_recovery'])==snap['effect_recovery']
+    snap['_bg'].pop('key_recipe')
+    with pytest.raises(ValueError):C.validate_state(snap,snap['effect_recovery'])
     with pytest.raises(ValueError):G.validate(value,{**SOURCE,'sha256':'b'*64})
 
 

@@ -1,4 +1,4 @@
-"""Reviewed face, fabric, smoothing and dedicated ID recovery for an immutable returned source.
+"""Reviewed face, fabric, smoothing, common key and dedicated ID recovery.
 
 Face ownership stays separate from the reviewed global consumers. No other global
 operator or second history owner is admitted; recovery attenuates one delta.
@@ -7,7 +7,7 @@ import hashlib
 import json
 from .facial_wrinkle_recovery import FACE_TARGETS as TARGETS
 
-GLOBAL_TARGETS = frozenset(('fabric_fine', 'skin_smoothing', 'id_background'))
+GLOBAL_TARGETS = frozenset(('fabric_fine', 'skin_smoothing', 'background_replace', 'id_background'))
 
 COMMANDS = frozenset(('source_patch_capture','effect_recovery_preview','effect_recovery'))
 
@@ -47,6 +47,10 @@ def global_context(engine,target):
         from .id_background_recovery import context
         from .effect_recovery_state import check
         return {'target':target,'consumer':context(engine),'recovery':check(getattr(engine,'_effect_recovery',None))}
+    if target == 'background_replace':
+        from .common_background_recovery import context
+        from .effect_recovery_state import check
+        return {'target':target,'consumer':context(engine),'recovery':check(getattr(engine,'_effect_recovery',None))}
     if record(engine) is None:return None
     if target not in GLOBAL_TARGETS:
         raise ValueError('This global recovery consumer is not derived-source adapted')
@@ -63,6 +67,10 @@ def assert_review(engine,record):
     if record['target'] == 'id_background':
         if record.get('people_context') is not None or record.get('global_context') != global_context(engine,'id_background'):
             raise ValueError('ID recovery compositor source, recipe, asset or fields changed')
+        return
+    if record['target'] == 'background_replace':
+        if record.get('people_context') is not None or record.get('global_context') != global_context(engine,'background_replace'):
+            raise ValueError('Common recovery source, key, color, matte, geometry or activation changed')
         return
     if source_record(engine) is None:
         if record.get('global_context') is not None:
@@ -160,7 +168,7 @@ def require_command(engine,name,request):
     if name=='effect_recovery_preview' and action=='preview':
         mutation=request['mutation']
         if type(mutation) is not dict or mutation.get('target') not in TARGETS | GLOBAL_TARGETS:
-            raise ValueError('Only reviewed face, fabric, smoothing and dedicated ID operators support derived recovery')
+            raise ValueError('Only reviewed face, fabric, smoothing, common key and dedicated ID operators support derived recovery')
         allowed={'view':{'action','target'},'stroke':{'action','target','stroke'},
                  'clear':{'action','target'},'enable':{'action','target','enabled'},
                  'delete':{'action','target','id'}}

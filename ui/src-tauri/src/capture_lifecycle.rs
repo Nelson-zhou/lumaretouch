@@ -5,6 +5,7 @@ use serde_json::{Value,json};
 impl AppState {
     /// 三条带 doc_state 的事件都进这里落一份"引擎最新说的文档状态 + 它是谁说的"。
     pub(crate) fn note_doc(&self, v: &Value, src: &str) {
+        self.common_background_preview.lock().unwrap().invalidate();
         self.source_patch_capture.lock().unwrap().invalidate();
         self.recovery_preview.lock().unwrap().invalidate(); self.liquify_preview.lock().unwrap().invalidate(); self.studio_background_preview.lock().unwrap().invalidate(); self.optics_preview.lock().unwrap().invalidate(); self.sky_preview.lock().unwrap().invalidate();
         self.sky_semantic.lock().unwrap().invalidate();
@@ -50,6 +51,8 @@ impl AppState {
         self.optics_preview.lock().unwrap().reset(epoch);
         self.studio_background.lock().unwrap().reset(epoch);
         self.studio_background_preview.lock().unwrap().reset(epoch);
+        self.common_background.lock().unwrap().reset(epoch);
+        self.common_background_preview.lock().unwrap().reset(epoch);
         self.manual_liquify.lock().unwrap().reset(epoch);
         self.liquify_preview.lock().unwrap().reset(epoch);
         self.effect_recovery.lock().unwrap().reset(epoch);

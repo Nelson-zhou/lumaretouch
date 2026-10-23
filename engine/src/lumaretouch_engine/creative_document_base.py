@@ -161,8 +161,8 @@ def require_rebound_snapshot(snapshot):
     if float(snapshot.get('fabric_amount', 0)):
         from .creative_derived_fabric import verify_snapshot as verify_fabric
         verify_fabric(snapshot)
-    if (snapshot.get('_bg') or {}).get('active'):
-        blocked.append('original background mask')
+    from .creative_derived_common_background import verify_snapshot as verify_common
+    verify_common(snapshot)
     if ER.check(snapshot.get('effect_recovery'))['targets']:
         from .creative_derived_global_recovery import verify_snapshot as verify_recovery
         verify_recovery(snapshot)
@@ -203,6 +203,8 @@ def require_rebound_spec(spec):
     snapshot.update(repair_ops=spec.repair, light_ops=spec.light,
         deform={'amounts': spec.deform_amounts}, enhance={'amounts': spec.enhance},
         _bg={'active': spec.bg_matte is not None or spec.bg_ref is not None})
+    from .creative_derived_common_background import spec_state as common_state
+    snapshot['_bg']=common_state(spec)['_bg']
     require_rebound_snapshot(snapshot)
 
 

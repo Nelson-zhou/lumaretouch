@@ -57,3 +57,11 @@ class StudioToolsMixin:
     def cmd_sky_replacement_preview(self, p):
         from .sky_replacement_preview import controller
         controller(self, _emit).handle(p)
+
+    def cmd_common_background(self,p):
+        from .common_background_controller import controller
+        controller(self,_emit).handle(p)
+
+    def cmd_common_background_preview(self,p):
+        from .common_background_review import controller
+        controller(self,_emit).handle(p)

@@ -1,3 +1,7 @@
+> Historical original-source slice. The subsequent derived reviewed transport and
+> shared float primitive are documented in DERIVED-COMMON-BACKGROUND.md; the
+> original v1 compatibility contract and remaining neural limitations below remain.
+
 # Common background: deterministic full-source key replay
 
 Status: source implementation only. No product imports, execution, numerical tests,

@@ -30,6 +30,9 @@ def validate_records(value,assets=None):
         if "_bg" in value:
             from .common_background_source import check as check_common
             check_common(value["_bg"])
+            if "_creative_base" in value or "creative_base" in value:
+                from .creative_derived_common_background import validate_state
+                validate_state(value)
         if '_effect_recovery' in value or 'effect_recovery' in value:
             from .id_background_recovery import validate_state
             from .effect_recovery_state import check

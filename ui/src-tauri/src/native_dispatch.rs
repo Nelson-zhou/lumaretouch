@@ -4,6 +4,7 @@ use crate::AppState;
 
 impl AppState {
     pub(crate) fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
+        self.common_background_preview.lock().map_err(|_|"common background preview lock poisoned")?.invalidate();
         self.source_patch_capture.lock().map_err(|_|"source patch capture lock poisoned")?.invalidate();
         self.recovery_preview.lock().map_err(|_|"recovery preview lock poisoned")?.invalidate();
         self.optics_preview.lock().map_err(|_|"optics preview lock poisoned")?.invalidate();
@@ -53,6 +54,11 @@ impl AppState {
         if name!="hello" {self.color_capture.lock().map_err(|_|"capture lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {self.liquify_preview.lock().map_err(|_|"liquify preview lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {self.studio_background_preview.lock().map_err(|_|"studio preview lock poisoned")?.invalidate();}
+        // Common apply redeems its own exact proof while admitting the command.
+        // Every other mutation still invalidates it before entering the queue.
+        if name!="hello" && name!="inspection_snapshot" && name!="common_background" {
+            self.common_background_preview.lock().map_err(|_|"common background preview lock poisoned")?.invalidate();
+        }
         if name!="hello" && name!="inspection_snapshot" {self.optics_preview.lock().map_err(|_|"optics preview lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {
             self.sky_preview.lock().map_err(|_|"sky preview lock poisoned")?.invalidate();
@@ -89,6 +95,7 @@ impl AppState {
             "sky_replacement" => crate::sky_replacement_api::enqueue(self, handle, cmd)?,
             "optics" => crate::optics_api::enqueue(self, handle, cmd)?,
             "studio_background" => crate::studio_background_api::enqueue(self, handle, cmd)?,
+            "common_background" => crate::common_background_api::enqueue(self, handle, cmd)?,
             "manual_liquify" => crate::manual_liquify_api::enqueue(self, handle, cmd)?,
             "effect_recovery" => crate::effect_recovery_api::enqueue(self, handle, cmd)?,
             "local_grade_live" => crate::local_grade_live_api::enqueue(self, handle, cmd)?,

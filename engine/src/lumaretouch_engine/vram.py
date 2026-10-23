@@ -2069,7 +2069,7 @@ class PreviewPipeline:
     def has_background(self) -> bool:
         return bool(self.bg_active and self.bg_matte is not None and self.bg_ref is not None)
 
-    def set_background(self, matte, bg, *, image_bg=None) -> dict:
+    def set_background(self, matte, bg, *, image_bg=None, preserve_extended=False) -> dict:
         """提交一组常驻换底：先全量校验、后才写回（被拒不留半截）。同 set_grade 的铁律。
 
         matte：(H,W) [0,1] float 或 uint8(0..255)。bg：(3,) [0,1] 单色，或 image_bg 为 (H,W,3)
@@ -2103,6 +2103,7 @@ class PreviewPipeline:
                                 device=self.device)
         mt = torch.as_tensor(m, dtype=torch.float32, device=self.device)[None, None].contiguous()
         self.bg_matte, self.bg_ref = mt, bref
+        self._common_background_preserve = bool(preserve_extended)
         self.bg_active = True
         return self._bg_payload()
 
@@ -2110,6 +2111,7 @@ class PreviewPipeline:
         self.bg_matte = None
         self.bg_ref = None
         self.bg_active = False
+        self._common_background_preserve = False
         self.last_bg_ms = 0.0
         return self._bg_payload()
 
@@ -2130,9 +2132,11 @@ class PreviewPipeline:
         if not self.has_background():
             return t
         t0 = time.perf_counter()
-        from .ops.matting import composite_t
+        from .ops.matting import composite_t, composite_linear_fields_t, _lin_t
         matte = self.align_source_grade_mask(self.bg_matte) if MOUTHR.has_source_geometry(self) else self.bg_matte
-        out = composite_t(t, matte, self.bg_ref)
+        out = (composite_linear_fields_t(t, matte, _lin_t(self.bg_ref))
+               if getattr(self, '_common_background_preserve', False)
+               else composite_t(t, matte, self.bg_ref))
         # t already contains every foreground edit. Never blend with src_f32.
         out = self.effect_recovery.apply('background_replace', t, out,
                                          align=self.align_source_grade_mask)

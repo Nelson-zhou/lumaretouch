@@ -22,9 +22,6 @@ class IDBackgroundStage:
         if self.suspended: raise ValueError('证件照换背景已暂停：'+self.suspended)
         if not self.required:return rgb
         if self.fields is None:raise ValueError('缺少证件照换背景场')
-        torch=optional_module('torch');packed=align(self.fields)
-        a=packed[:,:1].clamp(0,1);bg=packed[:,1:]
-        linear=torch.where(rgb<=0.04045,rgb/12.92,((rgb+0.055)/1.055).clamp_min(0).pow(2.4))
-        mixed=linear*a+bg*(1-a)
-        encoded=torch.where(mixed<=0.0031308,mixed*12.92,1.055*mixed.clamp_min(0).pow(1/2.4)-0.055)
-        return torch.where(a>=1,rgb,encoded)
+        from .ops.matting import composite_linear_fields_t
+        packed=align(self.fields)
+        return composite_linear_fields_t(rgb,packed[:,:1],packed[:,1:])

@@ -19,10 +19,14 @@ def check(bg):
     value=bg.get('key_recipe')
     if value is None:return None
     if type(bg.get('active')) is not bool:raise ValueError('Invalid common background active state')
-    if type(value) is not dict or set(value)!={'version','contract','source','reference','reference_grid','tol','softness'}:
+    fields={'version','contract','source','reference','reference_grid','tol','softness'}
+    if type(value) is not dict or set(value)!=(fields|{'original_sha256'} if value.get('version')==2 else fields):
         raise ValueError('Invalid versioned common background key')
-    if type(value['version']) is not int or value['version']!=1 or value['contract']!=CONTRACT or bg.get('backend')!='color_key':
+    from .creative_derived_common_background import CONTRACT as DERIVED
+    if type(value['version']) is not int or value['version'] not in (1,2) or value['contract']!=({1:CONTRACT,2:DERIVED}[value['version']]) or bg.get('backend')!='color_key':
         raise ValueError('Unsupported common background replay contract')
+    if value['version']==2 and (type(value['original_sha256']) is not str or not re.fullmatch('[0-9a-f]{64}',value['original_sha256'])):
+        raise ValueError('Common replacement original provenance missing')
     source=value['source']
     if type(source) is not dict or set(source)!={'sha256','width','height'} or type(source.get('sha256')) is not str or not re.fullmatch('[0-9a-f]{64}',source['sha256']):
         raise ValueError('Common background source identity missing')
@@ -46,7 +50,8 @@ def check(bg):
 
 def capture(engine,source,*,tol,softness):
     if getattr(engine,'_creative_base',None) is not None:
-        raise ValueError('Common background derived-source acquisition awaits reviewed transport')
+        from .creative_derived_common_background import capture as capture_derived
+        return capture_derived(engine,tol=tol,softness=softness)
     from .ops.matting import _edge_median,_to_unit
     return {'version':1,'contract':CONTRACT,'source':M.bind_source(engine),
         'reference':_edge_median(_to_unit(source)).tolist(),
@@ -58,62 +63,82 @@ def verify_snapshot(snap,path,shape=None):
     value=check(snap.get('_bg'))
     if value is None:return
     if snap.get('creative_base') is not None or snap.get('_creative_base') is not None:
-        raise ValueError('Legacy key cannot reuse original analysis on a creative source')
+        from .creative_derived_common_background import verify_snapshot as verify_derived
+        return verify_derived(snap,path,shape)
+    if value['version']!=1:raise ValueError('Derived common recipe cannot bind original pixels')
     M.verify_source(value,path,shape)
 
 
 def check_export_decode(snap,path,before,shape):
     if check(snap.get('_bg')) is None:return
     if before is None or M.file_stamp(path)!=before:raise ValueError('Common background source changed during decode')
-    verify_snapshot(snap,path,shape)
+    verify_snapshot(snap,path,None if snap.get('creative_base') is not None else shape)
     if M.file_stamp(path)!=before:raise ValueError('Common background source changed during verification')
     snap['common_background_path']=path;snap['common_background_stamp']=list(before)
 
 
 def verify_live(engine):
-    import json
-    bg=getattr(engine,'_bg',None);value=check(bg)
-    if value is None:return
-    row=engine._docs[engine._doc_index];stamp=M.file_stamp(row['path'])
-    if row.get('_local_source_stamp')!=stamp:raise ValueError('Common background source changed after preview decode')
-    if getattr(engine,'_creative_base',None) is not None:raise ValueError('Legacy key is not a derived-source recipe')
-    key=(json.dumps(value,sort_keys=True),stamp,id(engine._vram.src_f32))
-    if getattr(engine._vram,'_common_background_source_key',None)!=key:
-        M.verify_source(value,row['path'],(row['src_h'],row['src_w']))
-        engine._vram._common_background_source_key=key
+    from .common_background_preview_source import verify_live as verify
+    return verify(engine)
+
+
+def consumer_proof(engine):
+    from .common_background_preview_source import consumer_proof as proof
+    return proof(engine)
 
 
 def configure_export(spec,snap,*,for_document):
     value=check(snap.get('_bg'))
-    if value is None or not snap['_bg'].get('active'):return False
+    spec._common_background_retained=None
+    spec.common_background_key=None;spec.common_background_color=None
+    spec.common_background_path=None;spec.common_background_stamp=None
+    if value is None:return False
     if not for_document:raise ValueError('Common background key belongs to one source, not another batch target')
-    if spec.creative_base is not None:raise ValueError('Common background derived replay is not yet supported')
-    spec.common_background_key=value
+    from .creative_derived_common_background import validate_state
+    validate_state(snap)
+    retained={'active':snap['_bg']['active'],'backend':'color_key','key_recipe':value,
+        'bg':list(snap['_bg']['bg']),'tol':value['tol'],'softness':value['softness']}
+    # The actual export owner must agree too, even for direct build callers.
+    validate_state({'creative_base':getattr(spec,'creative_base',None),'_bg':retained})
+    spec._common_background_retained=deepcopy(retained)
     spec.common_background_path=snap.get('common_background_path')
-    spec.common_background_stamp=snap.get('common_background_stamp')
+    spec.common_background_stamp=deepcopy(snap.get('common_background_stamp'))
+    # An inactive versioned key remains owned intent, not an active compositor.
+    # Keep it separately so rebound checks do not discard disabled recovery.
+    if not retained['active']:return False
+    spec.common_background_key=deepcopy(value)
     # The disposable matte is produced only after full source pixels arrive.
     spec.common_background_color=tuple(snap['_bg']['bg'])
     return True
 
 
 def prepare_export(spec,pixels,*,cancelled=lambda:False):
-    value=spec.common_background_key
+    from .creative_derived_common_background import spec_state,validate_state
+    state=spec_state(spec);value=validate_state(state)
+    # Check owner/version before either early return. A direct original spec
+    # cannot replay v2, nor can inactive metadata hide a foreign derived key.
     if value is None:return
-    value=check({'active':True,'key_recipe':value,'backend':'color_key','tol':value.get('tol'),'softness':value.get('softness'),'bg':spec.common_background_color})
-    if spec.creative_base is not None:raise ValueError('Common background cannot consume a derived source yet')
+    if not state['_bg']['active']:
+        finish_export(spec)
+        verify_snapshot(state,spec.common_background_path,pixels.shape[:2])
+        return
     import numpy as np
     from .ops.matting import key_matte_np
     from .cpu_memory_budget import available_estimate
     spec.bg_matte=None;spec.bg_ref=None
-    if pixels.ndim!=3 or pixels.shape[2]!=3 or pixels.dtype not in (np.uint8,np.uint16):
+    derived=spec.creative_base is not None
+    if derived:
+        from .creative_derived_common_background import verify_pixels
+        verify_pixels(spec,pixels)
+    if pixels.ndim!=3 or pixels.shape[2]!=3 or (not derived and pixels.dtype not in (np.uint8,np.uint16)):
         raise ValueError('Common background requires genuine decoded RGB8/RGB16, not clipped float/HDR')
     h,w=pixels.shape[:2]
     if h*w>MAX_PIXELS or h*w*4+w*256*96>max(0,available_estimate()-256*1024*1024):
         raise ValueError('Full common background matte exceeds memory budget; no proxy fallback')
     finish_export(spec)
-    M.verify_source(value,spec.common_background_path,(h,w))
+    if not derived:M.verify_source(value,spec.common_background_path,(h,w))
     matte=np.empty((h,w),dtype=np.float32)
-    divisor=65535. if pixels.dtype==np.uint16 else 255.
+    divisor=1. if derived else (65535. if pixels.dtype==np.uint16 else 255.)
     for y in range(0,h,256):
         if cancelled():raise InterruptedError('Common background replay cancelled')
         stripe=pixels[y:y+256].astype(np.float64)/divisor
@@ -123,7 +148,8 @@ def prepare_export(spec,pixels,*,cancelled=lambda:False):
 
 
 def finish_export(spec):
-    if spec.common_background_key is None:return
+    from .creative_derived_common_background import spec_state,validate_state
+    if validate_state(spec_state(spec)) is None:return
     if not spec.common_background_path or spec.common_background_stamp is None or list(M.file_stamp(spec.common_background_path))!=spec.common_background_stamp:
         raise ValueError('Common background full-source decode identity missing or changed')
 
@@ -138,19 +164,10 @@ def preserve_proxy_recipe(state,out):
 def rehang(engine,pipe,emit):
     bg=engine._bg;value=check(bg)
     if value is not None:
-        verify_live(engine)
-        if not bg.get('active'):return
-        import numpy as np
-        from .ops.matting import key_matte_np
-        pixels=engine._src_rgb
-        if pixels is None or pixels.shape[:2]!=(pipe.h,pipe.w):raise ValueError('Common background preview source grid unavailable')
-        alpha=key_matte_np(pixels,ref=value['reference'],tol=value['tol'],softness=value['softness'])
-        matte=np.rint(alpha*255.).astype(np.uint8)
-        pipe.set_background(matte,bg['bg'])
-        engine._bg=dict(bg,matte=matte)
+        from .common_background_preview_source import install
+        install(engine)
         return
-    # Historical proxy records keep their prior migration behavior. They are
-    # not silently reinterpreted as new deterministic source recipes.
+    # Historical proxy records keep their prior migration behavior.
     if bg.get('active') and bg.get('matte') is not None:
         try:pipe.set_background(bg['matte'],bg['bg'])
         except (RuntimeError,ValueError) as error:

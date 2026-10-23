@@ -226,6 +226,8 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             st.optics_preview.lock().unwrap().ended(inspection_epoch);
             st.studio_background.lock().unwrap().ended(inspection_epoch);
             st.studio_background_preview.lock().unwrap().ended(inspection_epoch);
+            st.common_background.lock().unwrap().ended(inspection_epoch);
+            st.common_background_preview.lock().unwrap().ended(inspection_epoch);
             st.manual_liquify.lock().unwrap().ended(inspection_epoch);
             st.liquify_preview.lock().unwrap().ended(inspection_epoch);
             st.effect_recovery.lock().unwrap().ended(inspection_epoch);
@@ -308,6 +310,8 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "id_background_result"=>crate::id_background_api::receive(inspection_epoch,&v),
         "studio_background_result"=>state.studio_background.lock().unwrap().receive(inspection_epoch,&v),
         "studio_background_preview"=>state.studio_background_preview.lock().unwrap().receive(inspection_epoch,&v),
+        "common_background_result"=>state.common_background.lock().unwrap().receive(inspection_epoch,&v),
+        "common_background_preview"=>state.common_background_preview.lock().unwrap().receive(inspection_epoch,&v),
         "manual_liquify_result"=>state.manual_liquify.lock().unwrap().receive(inspection_epoch,&v),
         "manual_liquify_preview"=>state.liquify_preview.lock().unwrap().receive(inspection_epoch,&v),
         "effect_recovery_result"=>state.effect_recovery.lock().unwrap().receive(inspection_epoch,&v),
@@ -392,6 +396,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             state.local_masks.lock().unwrap().ready(inspection_epoch,v["local_masks_result_protocol"].as_u64()==Some(1));
             state.optics.lock().unwrap().ready(inspection_epoch,v["optics_protocol"].as_u64()==Some(1));
             state.studio_background.lock().unwrap().ready(inspection_epoch,v["studio_background_protocol"].as_u64()==Some(1));
+            state.common_background.lock().unwrap().ready(inspection_epoch,v["common_background_protocol"].as_u64()==Some(1));
             state.manual_liquify.lock().unwrap().ready(inspection_epoch,v["manual_liquify_protocol"].as_u64()==Some(1));
             state.effect_recovery.lock().unwrap().ready(inspection_epoch,v["effect_recovery_protocol"].as_u64()==Some(1));
             state.local_grade_live.lock().unwrap().ready(inspection_epoch,v["local_grade_live_protocol"].as_u64()==Some(1));

@@ -34,7 +34,7 @@ def image(pixels, presentation):
     return 'data:image/png;base64,' + base64.b64encode(buffer.getvalue()).decode('ascii'), dimensions
 
 
-def render_review(engine, stage):
+def sync_review_pipeline(engine):
     from .fabric_controller import sync as fabric
     from .local_mask_state import sync as masks
     from .local_grade_runtime import sync as grades
@@ -56,6 +56,30 @@ def render_review(engine, stage):
     optics(engine,strict=True)
     if PEOPLE.managed(engine):
         engine._people_sync(strict=True)
+
+
+def render_current(engine):
+    """Render synchronized current effects without swapping a stale recovery stage."""
+    from . import lip_makeup_runtime as lip, brow_shape_runtime as brow
+    from . import nose_shape_runtime as nose, eye_shape_runtime as eye, mouth_shape_runtime as mouth
+    from . import reference_color_runtime as reference, semantic_colour_runtime as semantic
+    from . import extended_tone_host as tone, photo_detail_host as detail
+    from . import colour_grading_adapters as grading, selective_colour_adapters as selective
+    from . import colour_editor_adapters as editor, primary_calibration_adapters as calibration
+    from . import colour_editor_runtime as editor_render, photo_grain_runtime as grain
+    for stage in (lip,brow,nose,eye,mouth):stage.sync(engine)
+    sync_review_pipeline(engine)
+    reference.sync(engine);semantic.sync(engine);tone.sync_current(engine);detail.sync_current(engine)
+    for stage in (grading,selective,editor,calibration):stage.sync(engine)
+    strength, channel = engine._retouch_render_args()
+    pixels=(editor_render.render_preview(engine,pack=False) if editor_render.active(engine)
+            else grain.render_preview(engine,pack=False) if grain.active(engine)
+            else engine._vram.retouch(strength,channel=channel,**engine._params))
+    return image(pixels,engine._frame_presentation())
+
+
+def render_review(engine, stage):
+    sync_review_pipeline(engine)
     pipe = engine._vram
     old = pipe.effect_recovery
     old_people = {key: getattr(pipe, key, None) for key in
@@ -177,6 +201,8 @@ class RecoveryPreview:
         stage = R.prepare_stage(self.engine, value)
         if record['target'] == 'id_background':
             stage.id_recovery_context=deepcopy(record['global_context']['consumer'])
+        if record['target'] == 'background_replace':
+            stage.common_recovery_context=deepcopy(record['global_context']['consumer'])
         if PEOPLE.handles(self.engine, record['target']):
             if record['people_context'] is None:
                 raise ValueError('人物恢复预览缺少确切人物归属，请重新查看本笔')
