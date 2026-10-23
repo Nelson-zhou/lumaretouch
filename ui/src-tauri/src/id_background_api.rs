@@ -12,6 +12,11 @@ fn expire_previews(rows:&mut HashMap<String,Row>,keep:&str){
   row.result=Some(json!({"event":"id_background_result","protocol":1,"action":"id_spill_preview","request_id":id,"document_id":row.request["document_id"],"success":false,"outcome_unknown":false,"requires_reload":false,"error":"此祛染预览已被更新的审核替代；未修改照片，请重新生成预览"}));
  }}
 }
+fn expire_paint_sources(rows:&mut HashMap<String,Row>,keep:&str){
+ for (id,row) in rows.iter_mut(){if id!=keep&&row.request["action"]=="id_spill_paint_source"&&row.result.as_ref().is_some_and(|result|result["paint_source"].is_object()){
+  row.result=Some(json!({"event":"id_background_result","protocol":1,"action":"id_spill_paint_source","request_id":id,"document_id":row.request["document_id"],"success":false,"outcome_unknown":false,"requires_reload":false,"error":"此源图画笔读取已被更新的来源替代；未修改照片，请重新读取源图"}));
+ }}
+}
 fn spill_budget(rows:&HashMap<String,Row>)->usize{
  rows.values().filter(|row|spill::is_spill(&row.request)).map(|row|
   row.request.to_string().len()+row.result.as_ref().map_or(spill::MAX_REVIEW_BYTES,|value|value.to_string().len())).sum()
@@ -31,10 +36,12 @@ pub(crate) fn receive(epoch:[u8;16],value:&Value){
  let Some(id)=value["request_id"].as_str() else{return};
  if let Ok(mut m)=mailbox().lock(){
  if m.get(id).is_some_and(|row|row.epoch==epoch&&row.result.is_none()&&row.request["action"]=="id_spill_preview"&&value["document_id"]==row.request["document_id"]){expire_previews(&mut m,id);}
+ if m.get(id).is_some_and(|row|row.epoch==epoch&&row.result.is_none()&&row.request["action"]=="id_spill_paint_source"&&value["document_id"]==row.request["document_id"]){expire_paint_sources(&mut m,id);}
+ let paint_fence=m.get(id).map_or(true,|row|row.request.get("paint").is_none()||value["success"]!=true||m.values().any(|source|source.epoch==epoch&&source.result.as_ref().is_some_and(|result|spill::painted_review_matches(&row.request,value,&source.request,result))));
  if let Some(row)=m.get_mut(id){if row.epoch==epoch&&row.result.is_none()&&value["document_id"]==row.request["document_id"]{
   let mut v=value.clone();if let Some(o)=v.as_object_mut(){o.remove("doc_state");}
   if spill::is_spill(&row.request){
-   if spill::receipt(&v,&row.request){row.result=Some(v);}else{
+   if spill::receipt(&v,&row.request)&&paint_fence{row.result=Some(v);}else{
     let mutation=row.request["action"]=="id_spill_apply";
     row.result=Some(json!({"event":"id_background_result","protocol":1,"action":row.request["action"],"request_id":id,"document_id":row.request["document_id"],"success":false,"outcome_unknown":mutation,"requires_reload":mutation,"error":"祛染回执未通过照片、配方或有界 PNG 验证；不得重复应用"}));
    }
@@ -59,10 +66,10 @@ fn request_inner(state:&AppState,request:Value,attempted:&mut bool,admitted:&mut
  if request.to_string().len()>65536{return Err("证件照背景请求超过 64 KiB".into());}
  let id=request["request_id"].as_str().filter(|s|!s.is_empty()&&s.len()<=128).ok_or("缺少背景请求身份")?.to_owned();
  let document=request["document_id"].as_str().filter(|s|!s.is_empty()&&s.len()<=256).ok_or("缺少照片身份")?;
- if request["cmd"]!="background"||!matches!(request["action"].as_str(),Some("id_state"|"id_set"|"id_review"|"id_import"|"id_clear"|"id_sample"|"id_spill_preview"|"id_spill_apply")){return Err("未知证件照背景命令".into());}
+ if request["cmd"]!="background"||!matches!(request["action"].as_str(),Some("id_state"|"id_set"|"id_review"|"id_import"|"id_clear"|"id_sample"|"id_spill_preview"|"id_spill_apply"|"id_spill_paint_source")){return Err("未知证件照背景命令".into());}
  if request["action"]=="id_set"&&(request["recipe"].get("spill").is_some()||request.get("spill").is_some()){return Err("祛染状态只能通过独立前后审核应用，不能从背景配方直接修改".into());}
  spill::command(&request)?;
- let read=matches!(request["action"].as_str(),Some("id_state"|"id_sample"|"id_spill_preview"));
+ let read=matches!(request["action"].as_str(),Some("id_state"|"id_sample"|"id_spill_preview"|"id_spill_paint_source"));
  let handle=state.engine.lock().map_err(|_|"引擎锁错误")?.clone().ok_or("引擎未启动")?;let epoch=handle.epoch();
  {let report=state.doc_report.lock().map_err(|_|"照片状态锁错误")?;if report.as_ref().and_then(|v|v["doc_state"]["document_id"].as_str())!=Some(document){return Err("照片已切换，请重新读取背景状态".into());}}
  if request["action"]=="id_sample" {
@@ -79,10 +86,15 @@ fn request_inner(state:&AppState,request:Value,attempted:&mut bool,admitted:&mut
    if !m.values().any(|row|row.epoch==epoch&&row.result.as_ref().is_some_and(|result|spill::apply_matches(&request,&row.request,result))){return Err("未找到与照片、配方及 PNG 摘要匹配的祛染审核".into());}
   }
   if request["action"]=="id_spill_preview" {
+   if request.get("paint").is_some()&&!m.values().any(|row|row.epoch==epoch&&row.result.as_ref().is_some_and(|result|spill::paint_matches(&request,&row.request,result))){return Err("未找到同一照片、配方与不可变来源的已确认画笔读取；未发送".into());}
    // Only the newest completed preview is useful; do not retain many MiB of
    // superseded PNGs. Mutation receipts themselves remain available to query.
    expire_previews(&mut m,&id);
    if m.values().filter(|row|row.request["action"]=="id_spill_preview"&&row.result.is_none()).count()>=8{return Err("祛染预览仍有未确认请求，请先查询原操作".into());}
+  }
+  if request["action"]=="id_spill_paint_source" {
+   expire_previews(&mut m,&id);expire_paint_sources(&mut m,&id);
+   if m.values().filter(|row|row.request["action"]=="id_spill_paint_source"&&row.result.is_none()).count()>=8{return Err("源图读取仍有未确认请求，请先查询原操作".into());}
   }
   // Reserve the bounded future receipt before dispatch, including for apply.
   // Pending requests and confirmed mutation receipts are never evicted.
@@ -136,5 +148,16 @@ mod tests {
   assert!(!retain_not_sent(&mut rows,&request,false,"engine unavailable"));assert!(rows["apply"].result.is_none());
   assert!(retain_not_sent(&mut rows,&request,true,"known unsent lock refusal"));
   assert_eq!(rows["apply"].result.as_ref().unwrap()["not_sent"],true);
+ }
+ #[test]
+ fn superseded_source_pixels_expire_without_erasing_pending_reads_or_mutations(){
+  let mut rows=HashMap::new();let request=json!({"action":"id_spill_paint_source","document_id":"photo"});
+  rows.insert("source-old".into(),Row{epoch:[1;16],request:request.clone(),result:Some(json!({"success":true,"paint_source":{"token":"e".repeat(32)}}))});
+  rows.insert("source-pending".into(),Row{epoch:[1;16],request,result:None});
+  let mutation=json!({"success":true,"history":{"undo_steps":1}});
+  rows.insert("apply".into(),Row{epoch:[1;16],request:json!({"action":"id_spill_apply"}),result:Some(mutation.clone())});
+  expire_paint_sources(&mut rows,"source-new");
+  assert_eq!(rows.len(),3);assert!(rows["source-pending"].result.is_none());assert_eq!(rows["apply"].result,Some(mutation));
+  let old=rows["source-old"].result.as_ref().unwrap();assert_eq!(old["success"],false);assert_eq!(old["request_id"],"source-old");assert!(old.get("paint_source").is_none());
  }
 }

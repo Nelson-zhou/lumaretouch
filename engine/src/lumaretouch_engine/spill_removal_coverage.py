@@ -10,7 +10,21 @@ import json
 from . import local_mask_state as M, local_mask_recipe as R
 
 VERSION = 1
+PAINT_VERSION = 2
 KINDS = frozenset(('brush', 'linear', 'radial'))
+AUTOMATIC_BASE_ID = 'spill-automatic-base'
+
+
+def automatic_base():
+    """Internal coverage=1 seed, not foreground or contamination evidence.
+
+    Only the direct-paint append path creates this object, when the retained
+    spill coverage was automatic (None). It is never accepted by v1 review.
+    The source/token-owning controller must not accept a client-supplied mask.
+    """
+    return {'id': AUTOMATIC_BASE_ID, 'name': 'Automatic spill coverage',
+            'enabled': True, 'operation': 'add', 'kind': 'full',
+            'opacity': 1., 'feather': 0.}
 
 
 def digest(mask):
@@ -21,12 +35,20 @@ def digest(mask):
 def check_binding(raw):
     fields = {'version', 'reviewed', 'mask', 'recipe_sha256'}
     if (type(raw) is not dict or set(raw) != fields or type(raw['version']) is not int
-            or raw['version'] != VERSION or raw['reviewed'] is not True):
+            or raw['version'] not in (VERSION, PAINT_VERSION) or raw['reviewed'] is not True):
         raise ValueError('祛染色手工覆盖度必须经独立源图审核')
     mask = M.check(raw['mask'])
     if mask['source'] is None or mask['semantic_owner'] is not None or not mask['recipe']['objects']:
         raise ValueError('祛染色覆盖度需要自己的源图与非空手工矢量')
-    if any(obj['kind'] not in KINDS for obj in mask['recipe']['objects']):
+    objects = mask['recipe']['objects']
+    vectors = objects
+    if raw['version'] == PAINT_VERSION and any(obj['kind'] == 'full' for obj in objects):
+        # Automatic coverage has an exact, protected leading identity. The
+        # appended strokes still gate the estimator; they never replace it.
+        if len(objects) < 2 or objects[0] != automatic_base():
+            raise ValueError('祛染色自动覆盖度底层必须由源图涂抹流程创建且不可移动或编辑')
+        vectors = objects[1:]
+    if any(obj['kind'] not in KINDS for obj in vectors):
         raise ValueError('祛染色手工覆盖度仅接受画笔、线性和径向矢量，不借用语义或提示蒙版')
     if raw['recipe_sha256'] != digest(mask):
         raise ValueError('祛染色手工覆盖度审核摘要不匹配')

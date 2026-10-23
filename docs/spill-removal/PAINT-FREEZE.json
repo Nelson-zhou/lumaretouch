@@ -1,0 +1,190 @@
+{
+  "baseline": "3eac16c976fcfab2d1855356774a385399b78e2a",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Direct source-owned erase/restore interaction for LNX-REF-PC-32475-C-4bc238dfa1 under spill-removal e999ab085a, with actual full-output review and unified history. Includes shared candidate RGB16 ICC/alpha/PNG-depth correctness boundary, not new ordinary PNG16 codec support.",
+  "files": [
+    {
+      "path": "docs/creative-layers/NEXT-MATERIAL-FEATURES.md",
+      "sha256": "c4ab425e02c834120bfef1c7f6f1f5746b0802ec84fa06ba43af9d2328689016",
+      "bytes": 6533
+    },
+    {
+      "path": "docs/spill-removal/PAINT-README.md",
+      "sha256": "ba6e65346f79911b08d3098c50b7eb5b66494cdf1bdb93ff2c5f99bad0fd363a",
+      "bytes": 5617
+    },
+    {
+      "path": "docs/spill-removal/README.md",
+      "sha256": "2268b6ebcd65c59159e321c25728bf73d369234be8cacb8918b56a875e1b35ff",
+      "bytes": 11354
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_id_background_host.py",
+      "sha256": "0ece54ce82db16f40a746384c01aa37abb45ed53c3e12e23a99a3fb57ab35514",
+      "bytes": 3854
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_candidate_render.py",
+      "sha256": "a46d0f687a49922fd1f3cd0ddd1b88e46433b3b0361cc600684bd5cb457873b2",
+      "bytes": 8548
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_source_working.py",
+      "sha256": "0a6cdb12f2a90195d607ca2eb69cd5badfe02bcb93c3f6a41fd2c090efe0b66d",
+      "bytes": 2670
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "c936aef20f7609f97028b6456e0fa3313ff29084aadf1238093cb8f77f4eaac2",
+      "bytes": 6988
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "0c585892e188f11ebcfd30b3da031ed73108ff7ebb2d8ac2c0b22878043f2bee",
+      "bytes": 465521
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_controller.py",
+      "sha256": "172621e2ddcdb31aad64314ee256d8fc5f64fe0ca7d59bff68bab71531e6f98a",
+      "bytes": 9375
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_coverage.py",
+      "sha256": "8964b92cde29507ec176ee7712c17045664917c9503a709ffef210f95956ba28",
+      "bytes": 6047
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_paint_source.py",
+      "sha256": "38abb8d44256f64c2de9460536c3f9cad435b8fd7a5f16b0f1dbb50706bdbc47",
+      "bytes": 11409
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_paint_vectors.py",
+      "sha256": "2a6b8bbfc306304084938c4a911bf72cb6642fcf76ac8427ed67092cb1adaefe",
+      "bytes": 4266
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_review.py",
+      "sha256": "07d6c41bbc69568cec58bdd44e55b0b53bc83a15f5d4a3734a0351df3aa99d70",
+      "bytes": 8532
+    },
+    {
+      "path": "engine/tests/test_full_source_working_unrun.py",
+      "sha256": "ff779f8e1c6dd46f176aae31dd51ce464a879d9c9b89b165593d702fc228b369",
+      "bytes": 6630
+    },
+    {
+      "path": "engine/tests/test_spill_paint_source_unrun.py",
+      "sha256": "19f46414c5abccca99502ebd081fe178beefa82b50cd33017ca444282145daba",
+      "bytes": 11859
+    },
+    {
+      "path": "engine/tests/test_spill_paint_transactions_unrun.py",
+      "sha256": "3879bdf3a79c352d0817849c32307001d41caa1b6f23b9c2320d1c48306a1917",
+      "bytes": 3323
+    },
+    {
+      "path": "engine/tests/test_spill_paint_vectors_unrun.py",
+      "sha256": "c3d2a5c7dd61d22b4aaedb63b4a08cc8eeb7cfb767cb84bede46cfd1909d8ba6",
+      "bytes": 12131
+    },
+    {
+      "path": "ui/src-tauri/src/id_background_api.rs",
+      "sha256": "6e339bd7cb7424f4bfa4d28ade102e4af54582c953d12b7ca2ccb1e777ce9450",
+      "bytes": 14332
+    },
+    {
+      "path": "ui/src-tauri/src/spill_removal_protocol.rs",
+      "sha256": "cfa4d699826e35d609da19beca2ddd967cc2d3d67d374cc23b962f8979e07b99",
+      "bytes": 14532
+    },
+    {
+      "path": "ui/src-tauri/src/spill_removal_protocol_tests.rs",
+      "sha256": "e1cc9e34cf0011d92845e6dfbe7e788a54dd95058710a26be2c778df47e78a03",
+      "bytes": 9097
+    },
+    {
+      "path": "ui/src/idBackground/IdBackgroundPanel.tsx",
+      "sha256": "bdf5af16fd2ec92acfb74ad3044f9b29baaa6e05402178a689dd2704cc604dd6",
+      "bytes": 13323
+    },
+    {
+      "path": "ui/src/idBackground/model.ts",
+      "sha256": "f68764e29ad780c3e97010f5a245dd283a8244808e09163efbe425c2a0b85ec5",
+      "bytes": 3037
+    },
+    {
+      "path": "ui/src/idBackground/useIdBackground.ts",
+      "sha256": "67357d0071c5b902af7f22e82007fcf41dc7d21e7e8b67c6226181efa6901b4b",
+      "bytes": 10414
+    },
+    {
+      "path": "ui/src/spillRemoval/SpillRemovalPanel.tsx",
+      "sha256": "88e73f063579ab94d32c02759dbd008522123977a15ec1c8b07f24c1db5b529f",
+      "bytes": 8789
+    },
+    {
+      "path": "ui/src/spillRemoval/SpillSourcePaint.tsx",
+      "sha256": "47fa5a36ccb7f4ae9728807a93f9b3b485b1e9372b5456f99245ffa6333e7b50",
+      "bytes": 12808
+    },
+    {
+      "path": "ui/src/spillRemoval/UNRUN-acceptance.md",
+      "sha256": "1173e19a5828f27df3ec51322535c638c8117e9dc3e6982cd3fc2fba9a949c09",
+      "bytes": 8974
+    },
+    {
+      "path": "ui/src/spillRemoval/model.test.ts",
+      "sha256": "ad12c36242409e44ea89dcb38e1ca7fc40c222d06d2696bde763baa45fe1a89f",
+      "bytes": 7983
+    },
+    {
+      "path": "ui/src/spillRemoval/model.ts",
+      "sha256": "43e19200857fe83383abb4837815421135e6f6a359af3755e5879c546afa05eb",
+      "bytes": 9480
+    },
+    {
+      "path": "ui/src/spillRemoval/spillRemoval.css",
+      "sha256": "3c67e249e69fcc52c72dcae0f308640af7339942f87aedc0c0d6074adf44ea8a",
+      "bytes": 1100
+    }
+  ],
+  "verification": {
+    "performed": [
+      "Python stdlib AST parse of 974 source/fixture files without product imports",
+      "UI package JSON parsing",
+      "Read-only git diff whitespace check",
+      "Independent source integration audit",
+      "Exact per-file SHA-256 and byte counts"
+    ],
+    "not_performed": [
+      "product imports/execution",
+      "tests",
+      "build/compiler/typecheck",
+      "inference/download",
+      "React/native runtime or pointer acceptance",
+      "image quality/numerical/parity acceptance",
+      "performance or memory measurement"
+    ],
+    "ceilings": {
+      "App.tsx": 2121,
+      "main.rs": 2040,
+      "server.py": 6984
+    }
+  },
+  "residuals": [
+    "Direct painting is source-connected but pointer behavior, compiled native route, source/coverage display, history/reopen and export need real local QA.",
+    "Source locator is a <=512px display derivative, not 100% source inspection; local overlay feather is approximate and never the applied mask.",
+    "Existing Rust erase subtracts and restore max-unions; partial restore strokes are not cumulative. Coverage uses existing 8-bit raster and only restricts estimator confidence.",
+    "Five-minute source token, 64 KiB command, retained vector/work/memory budgets remain explicit; failed drafts are not silently truncated or resampled.",
+    "Per-target visual batch review remains unfinished; existing transfer preflight proves parameters/source dependencies, not every parked image render.",
+    "Ordinary original-file PNG16 retouch decoder/export remains unsupported and now cannot silently become RGB8 in full candidate/source review. Existing true PNG16 creative/background asset paths remain unchanged.",
+    "Nonopaque/HDR source support is not widened or clipped. Shared full candidate now refuses source alpha instead of silently dropping it.",
+    "Deep opaque reflections, genuine same-colour objects, finite solver limitations and numerical/photographic acceptance remain unresolved; whole feature is not accepted."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

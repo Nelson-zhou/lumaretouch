@@ -34,6 +34,8 @@ Numerical and photographic quality acceptance remains separate from source work.
 - PC-32475 spill removal: `LNX-REF-PC-32475-C-e999ab085a` and manual coverage
   `LNX-REF-PC-32475-C-4bc238dfa1`. A bounded colour-estimation and selective
   correction source slice is now authored; see [scope](../spill-removal/README.md).
+  Direct source-owned erase/restore drafts and genuine before/after review are
+  also authored ([paint contract](../spill-removal/PAINT-README.md)), still UNRUN.
   Fixed-alpha boundary decontamination is not enough to identify reflected light
   on opaque foreground: the separate near-edge heuristic, manual exclusions and
   actual target review do not resolve deep spill or genuine matching-colour

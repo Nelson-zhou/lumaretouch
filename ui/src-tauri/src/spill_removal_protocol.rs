@@ -21,20 +21,44 @@ fn revision(value: &Value) -> Option<u64> {
     if value.is_empty() || value.len() > 20 || (value.len() > 1 && value.starts_with('0')) || !value.bytes().all(|b| b.is_ascii_digit()) { return None; }
     value.parse().ok()
 }
-pub(super) fn is_spill(value: &Value) -> bool { matches!(value["action"].as_str(), Some("id_spill_preview" | "id_spill_apply")) }
+pub(super) fn is_spill(value: &Value) -> bool { matches!(value["action"].as_str(), Some("id_spill_preview" | "id_spill_apply" | "id_spill_paint_source")) }
+fn bounded_number(value: &Value, low: f64, high: f64) -> bool { value.as_f64().is_some_and(|n| n.is_finite() && (low..=high).contains(&n)) }
+fn paint(value: &Value) -> bool {
+    if !fields(value, &["token", "strokes"]) || !token(&value["token"]) { return false; }
+    let Some(strokes) = value["strokes"].as_array() else { return false; };
+    if strokes.is_empty() || strokes.len() > 63 { return false; }
+    let mut ids = std::collections::BTreeSet::new(); let mut total = 0usize;
+    strokes.iter().all(|stroke| {
+        if !fields(stroke, &["id", "mode", "points", "radius", "opacity", "feather"]) || !object_id(&stroke["id"])
+            || !ids.insert(stroke["id"].as_str().unwrap_or_default()) || !matches!(stroke["mode"].as_str(), Some("erase" | "restore"))
+            || !bounded_number(&stroke["radius"], 0.0001, 0.5) || !bounded_number(&stroke["opacity"], 0.0, 1.0)
+            || !bounded_number(&stroke["feather"], 0.0, 100.0) { return false; }
+        let Some(points) = stroke["points"].as_array() else { return false; };
+        total += points.len();
+        !points.is_empty() && points.len() <= 1024 && total <= 8192 && points.iter().all(|point|
+            point.as_array().is_some_and(|pair| pair.len() == 2 && pair.iter().all(|n| bounded_number(n, 0.0, 1.0))))
+    })
+}
 pub(super) fn command(value: &Value) -> Result<(), String> {
     if !is_spill(value) { return Ok(()); }
     if value["cmd"] != "background" || !text(&value["request_id"], 128) || !text(&value["document_id"], 256)
         || !text(&value["recipe_document_id"], 256) || revision(&value["recipe_revision"]).is_none() {
         return Err("祛染请求缺少当前照片与配方版本".into());
     }
-    if value["action"] == "id_spill_preview" {
-        if !fields(value, &["cmd", "action", "request_id", "document_id", "recipe_document_id", "recipe_revision", "parameters", "coverage_ids", "coverage_reviewed"])
+    if value["action"] == "id_spill_paint_source" {
+        if !fields(value, &["cmd", "action", "request_id", "document_id", "recipe_document_id", "recipe_revision"]) { return Err("祛染源图读取只接受当前来源与配方版本".into()); }
+    } else if value["action"] == "id_spill_preview" {
+        let has_paint = value.get("paint").is_some();
+        let names = if has_paint { vec!["cmd", "action", "request_id", "document_id", "recipe_document_id", "recipe_revision", "parameters", "coverage_ids", "coverage_reviewed", "paint"] }
+            else { vec!["cmd", "action", "request_id", "document_id", "recipe_document_id", "recipe_revision", "parameters", "coverage_ids", "coverage_reviewed"] };
+        if !fields(value, &names)
             || !fields(&value["parameters"], &["enabled", "strength"]) || !value["parameters"]["enabled"].is_boolean()
             || !value["parameters"]["strength"].as_f64().is_some_and(|n| n.is_finite() && (0.0..=100.0).contains(&n))
             || !value["coverage_reviewed"].is_boolean() { return Err("祛染预览参数无效".into()); }
         let ids = &value["coverage_ids"];
-        if ids.is_null() {
+        if has_paint {
+            if !ids.is_null() || value["coverage_reviewed"] != true || !paint(&value["paint"]) { return Err("源图笔画必须独立审核且不能混合其他覆盖选择".into()); }
+        } else if ids.is_null() {
             if value["coverage_reviewed"] != false { return Err("保留当前覆盖不能伪造新的手工审核".into()); }
         } else {
             let ids = ids.as_array().ok_or("祛染覆盖必须是当前源图对象列表")?;
@@ -118,20 +142,43 @@ fn review(value: &Value, request: &Value) -> bool {
         && image(&value["before"]) && image(&value["after"])
         && value["boundaries"].as_array().is_some_and(|items| items.len() <= 32 && items.iter().all(|item| item.as_str().is_some_and(|s| s.len() <= 4096)))
 }
+fn paint_source(value: &Value, request: &Value) -> bool {
+    if !fields(value, &["version", "token", "recipe_document_id", "recipe_revision", "source", "domain", "image", "coverage"])
+        || value["version"] != 1 || !token(&value["token"]) || value["domain"] != "source-normalized"
+        || value["recipe_document_id"] != request["recipe_document_id"] || value["recipe_revision"] != request["recipe_revision"]
+        || !fields(&value["source"], &["sha256", "width", "height"]) || !hash(&value["source"]["sha256"])
+        || !image(&value["image"]) || !image(&value["coverage"]) { return false; }
+    let (Some(width), Some(height)) = (value["source"]["width"].as_u64(), value["source"]["height"].as_u64()) else { return false; };
+    if !(1..=1000000).contains(&width) || !(1..=1000000).contains(&height) { return false; }
+    let scale = (512.0 / width.max(height) as f64).min(1.0);
+    let display_width = ((width as f64 * scale + 0.5).floor() as u64).max(1);
+    let display_height = ((height as f64 * scale + 0.5).floor() as u64).max(1);
+    ["image", "coverage"].iter().all(|key| value[*key]["width"].as_u64() == Some(display_width) && value[*key]["height"].as_u64() == Some(display_height))
+}
 pub(super) fn receipt(value: &Value, request: &Value) -> bool {
     if value.to_string().len() > MAX_REVIEW_BYTES || value["event"] != "id_background_result" || value["protocol"] != 1
         || value["action"] != request["action"] || value["request_id"] != request["request_id"] || value["document_id"] != request["document_id"]
         || !value["success"].is_boolean() || ["outcome_unknown", "requires_reload"].iter().any(|key| value.get(*key).is_some_and(|v| !v.is_boolean()))
         || (value["success"] == true && (value["outcome_unknown"] == true || value["requires_reload"] == true)) { return false; }
-    if value["success"] != true { return value.get("review").map_or(true, |v| v.is_null()); }
+    if value["success"] != true { return value.get("review").map_or(true, |v| v.is_null()) && value.get("paint_source").map_or(true, |v| v.is_null()); }
     let report = &value["report"];
     if report["recipe_document_id"] != request["recipe_document_id"] { return false; }
-    if request["action"] == "id_spill_preview" {
-        report["recipe_revision"] == request["recipe_revision"] && review(&value["review"], request)
+    if request["action"] == "id_spill_paint_source" {
+        report["recipe_revision"] == request["recipe_revision"] && paint_source(&value["paint_source"], request) && value.get("review").map_or(true, |v| v.is_null())
+    } else if request["action"] == "id_spill_preview" {
+        report["recipe_revision"] == request["recipe_revision"] && review(&value["review"], request) && value.get("paint_source").map_or(true, |v| v.is_null())
     } else {
         revision(&report["recipe_revision"]).zip(revision(&request["recipe_revision"])).is_some_and(|(after, before)| after >= before)
-            && value.get("review").map_or(true, |v| v.is_null())
+            && value.get("review").map_or(true, |v| v.is_null()) && value.get("paint_source").map_or(true, |v| v.is_null())
     }
+}
+pub(super) fn paint_matches(request: &Value, original: &Value, result: &Value) -> bool {
+    request["action"] == "id_spill_preview" && original["action"] == "id_spill_paint_source" && result["success"] == true
+        && receipt(result, original) && ["document_id", "recipe_document_id", "recipe_revision"].iter().all(|key| request[*key] == original[*key])
+        && request["paint"]["token"] == result["paint_source"]["token"]
+}
+pub(super) fn painted_review_matches(request: &Value, result: &Value, original: &Value, source_result: &Value) -> bool {
+    paint_matches(request, original, source_result) && result["review"]["source"] == source_result["paint_source"]["source"]
 }
 pub(super) fn apply_matches(request: &Value, original: &Value, result: &Value) -> bool {
     original["action"] == "id_spill_preview" && result["success"] == true && result["review"].is_object()

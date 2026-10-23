@@ -71,9 +71,10 @@ at the exact source dimensions. The existing coverage raster is quantized to
 The user can retain the current snapshot, explicitly choose automatic coverage,
 or review a new selection. Manual coverage gates automatic confidence, so an
 erase is an exclusion and a restore cannot force uncertain pixels to change.
-The current panel selects snapshots created in the existing source-mask editor;
-it does not yet provide a dedicated in-panel erase/restore painting experience.
-The manual-brush handbook requirement therefore remains partial.
+The panel can retain snapshots created in the existing source-mask editor.
+A subsequent [direct source-owned erase/restore slice](PAINT-README.md) adds its
+own raw-source canvas and reviewed brush drafts. Its interaction and all
+photographic acceptance remain UNRUN; this is not full feature acceptance.
 
 Preview is not a hidden live apply/undo: it renders complete before and candidate
 states independently through the real full-source exporter. Only after rendering
@@ -158,6 +159,9 @@ no claim is made that preflight rendered or visually approved every parked photo
   source proof, budgets and full export/tile lifecycle.
 - `reference_color_provenance.py`: corrected foreground is not misreported as
   untouched original-colour support.
+- `spill_removal_paint_source.py`, `spill_removal_paint_vectors.py`,
+  `full_source_working.py`: direct source-normalized brush drafts, genuine-source
+  locator and shared RGB16 ICC/alpha/bit-depth boundary.
 - `spill_removal_review.py`, `spill_removal_controller.py`, existing ID dispatcher
   and derived host: actual before/after review, one-use commit and unified history.
 - `ui/src/spillRemoval`, `ui/src/idBackground`, native ID request/receipt module:
@@ -168,5 +172,6 @@ no claim is made that preflight rendered or visually approved every parked photo
   group history: narrow original/derived scalar transport with target-owned
   colour recomputation. The broader ID transfer guard remains intact.
 
-Consult `FREEZE.json` for the exact captured payload. It is a source manifest,
-not a functional-acceptance certificate.
+Consult `FREEZE.json` for the initial payload and `PAINT-FREEZE.json` for the
+direct-painting follow-on. They are source manifests, not functional-acceptance
+certificates.

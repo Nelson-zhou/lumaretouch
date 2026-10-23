@@ -33,6 +33,46 @@ fn preview_receipt() -> Value {
         "report":{"recipe_document_id":"a".repeat(32),"recipe_revision":"7"},
         "review":{"version":1,"token":"b".repeat(32),"recipe_document_id":"a".repeat(32),"recipe_revision":"7","source":{"sha256":"c".repeat(64),"width":6000,"height":4000},"candidate_sha256":"d".repeat(64),"before":image("1"),"after":image("2"),"boundaries":[]}})
 }
+fn source_request() -> Value {
+    json!({"cmd":"background","action":"id_spill_paint_source","request_id":"source-1","document_id":"photo","recipe_document_id":"a".repeat(32),"recipe_revision":"7"})
+}
+fn source_receipt() -> Value {
+    let image = json!({"mime":"image/png","width":1,"height":1,"sha256":"1".repeat(64),"base64":encoded_png()});
+    json!({"event":"id_background_result","protocol":1,"action":"id_spill_paint_source","request_id":"source-1","document_id":"photo","success":true,
+        "report":{"recipe_document_id":"a".repeat(32),"recipe_revision":"7"},
+        "paint_source":{"version":1,"token":"e".repeat(32),"recipe_document_id":"a".repeat(32),"recipe_revision":"7","source":{"sha256":"c".repeat(64),"width":1,"height":1},"domain":"source-normalized","image":image.clone(),"coverage":image}})
+}
+fn paint_request() -> Value {
+    let mut request = preview_request(); request["coverage_reviewed"] = json!(true);
+    request["paint"] = json!({"token":"e".repeat(32),"strokes":[{"id":"brush-1","mode":"erase","points":[[0.25,0.5],[0.75,0.5]],"radius":0.025,"opacity":0.5,"feather":25}]}); request
+}
+#[test]
+fn source_read_and_paint_are_exact_bounded_and_never_mix_coverage_choices() {
+    assert!(command(&source_request()).is_ok()); assert!(receipt(&source_receipt(), &source_request())); assert!(command(&paint_request()).is_ok());
+    let mut request = source_request(); request["source"] = json!({}); assert!(command(&request).is_err());
+    let mut request = paint_request(); request["coverage_ids"] = json!([]); assert!(command(&request).is_err());
+    let mut request = paint_request(); request["coverage_reviewed"] = json!(false); assert!(command(&request).is_err());
+    for (field, value) in [("mode", json!("add")), ("radius", json!(0.00009)), ("radius", json!(0.50001)), ("opacity", json!(1.01)), ("feather", json!(101)), ("points", json!([[1.01, 0]])), ("points", json!([])), ("extra", json!(true))] {
+        let mut request = paint_request(); request["paint"]["strokes"][0][field] = value; assert!(command(&request).is_err());
+    }
+    let mut request = paint_request(); let stroke = request["paint"]["strokes"][0].clone(); request["paint"]["strokes"] = json!([stroke.clone(), stroke]); assert!(command(&request).is_err());
+    let mut request = paint_request(); request["paint"]["strokes"][0]["points"] = json!(vec![vec![0.5, 0.5]; 1025]); assert!(command(&request).is_err());
+    let mut result = source_receipt(); result["paint_source"]["domain"] = json!("output-normalized"); assert!(!receipt(&result, &source_request()));
+    let mut result = source_receipt(); result["paint_source"]["source"]["width"] = json!(6000); assert!(!receipt(&result, &source_request()));
+    let mut result = source_receipt(); result["paint_source"]["source"]["foreign_owner"] = json!("other"); assert!(!receipt(&result, &source_request()));
+}
+#[test]
+fn paint_and_result_match_only_prior_successful_source_receipt_and_exact_source() {
+    assert!(paint_matches(&paint_request(), &source_request(), &source_receipt()));
+    for (field, value) in [("document_id", json!("other")), ("recipe_revision", json!("8"))] {
+        let mut request = paint_request(); request[field] = value; assert!(!paint_matches(&request, &source_request(), &source_receipt()));
+    }
+    let mut request = paint_request(); request["paint"]["token"] = json!("f".repeat(32)); assert!(!paint_matches(&request, &source_request(), &source_receipt()));
+    let mut result = source_receipt(); result["success"] = json!(false); assert!(!paint_matches(&paint_request(), &source_request(), &result));
+    let mut result = preview_receipt(); result["review"]["source"] = source_receipt()["paint_source"]["source"].clone();
+    assert!(painted_review_matches(&paint_request(), &result, &source_request(), &source_receipt()));
+    result["review"]["source"]["sha256"] = json!("f".repeat(64)); assert!(!painted_review_matches(&paint_request(), &result, &source_request(), &source_receipt()));
+}
 #[test]
 fn command_requires_independent_review_and_exact_fields() {
     assert!(command(&preview_request()).is_ok()); assert!(command(&apply_request()).is_ok());

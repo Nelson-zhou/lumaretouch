@@ -1,12 +1,16 @@
 import type {MaskObject} from '../localMasks/model';
 
-export const SPILL_LIMITS={edge:640,pngBytes:1024*1024,base64:1398104,objects:64} as const;
+export const SPILL_LIMITS={edge:640,paintEdge:512,pngBytes:1024*1024,base64:1398104,objects:64,strokes:63,pointsPerStroke:1024,points:8192,requestBytes:65536,radiusMin:0.0001,radiusMax:0.5} as const;
 export type SpillRecipe={version:1;algorithm:'lrt-spill-removal-v1';enabled:boolean;strength:number;coverage:null|{reviewed:true;[key:string]:unknown}};
 export type SpillParameters={enabled:boolean;strength:number};
 export type SpillImage={mime:'image/png';width:number;height:number;sha256:string;base64:string};
 export type SpillFence={recipe_document_id:string;recipe_revision:string};
 export type SpillReview=SpillFence&{version:1;token:string;source:{sha256:string;width:number;height:number};candidate_sha256:string;before:SpillImage;after:SpillImage;boundaries:string[]};
-export type SpillPreviewFields={parameters:SpillParameters;coverage_ids:null|string[];coverage_reviewed:boolean};
+export type SpillPaintSource=SpillFence&{version:1;token:string;source:{sha256:string;width:number;height:number};domain:'source-normalized';image:SpillImage;coverage:SpillImage};
+export type SpillStroke={id:string;mode:'erase'|'restore';points:[number,number][];radius:number;opacity:number;feather:number};
+export type SpillPaint={token:string;strokes:SpillStroke[]};
+export type SpillPaintGeometry={left:number;top:number;width:number;height:number};
+export type SpillPreviewFields={parameters:SpillParameters;coverage_ids:null|string[];coverage_reviewed:boolean;paint?:SpillPaint};
 export type SpillApplyFields={token:string;reviewed:true;before_sha256:string;after_sha256:string};
 export type SpillNotSent={requested:false;not_sent:true;protocol:1;action:string;request_id:string;document_id:string;error:string};
 const object=(v:unknown):v is Record<string,unknown>=>v!==null&&typeof v==='object'&&!Array.isArray(v);
@@ -36,6 +40,39 @@ export function validSpillReview(v:unknown,fence:SpillFence):v is SpillReview{
   &&validSpillImage(v.before)&&validSpillImage(v.after)&&v.before.width===v.after.width&&v.before.height===v.after.height
   &&Array.isArray(v.boundaries)&&v.boundaries.length<=32&&v.boundaries.every(s=>typeof s==='string'&&s.length<=4096);
 }
+/** Display samples cover the entire immutable source, not the output crop. */
+export function spillSourceDisplaySize(width:number,height:number):[number,number]{
+ const scale=Math.min(1,SPILL_LIMITS.paintEdge/Math.max(width,height));
+ return [Math.max(1,Math.floor(width*scale+.5)),Math.max(1,Math.floor(height*scale+.5))];
+}
+export function validSpillPaintSource(v:unknown,fence:SpillFence):v is SpillPaintSource{
+ if(!object(v)||!fields(v,['version','token','recipe_document_id','recipe_revision','source','domain','image','coverage'])
+  ||v.version!==1||!spillToken(v.token)||v.domain!=='source-normalized'||!fence.recipe_document_id||v.recipe_document_id!==fence.recipe_document_id
+  ||!spillRevision(v.recipe_revision)||v.recipe_revision!==fence.recipe_revision||!object(v.source)||!fields(v.source,['sha256','width','height'])
+  ||!hash(v.source.sha256)||!size(v.source.width,1000000)||!size(v.source.height,1000000)||!validSpillImage(v.image)||!validSpillImage(v.coverage))return false;
+ const [width,height]=spillSourceDisplaySize(v.source.width,v.source.height);
+ return v.image.width===width&&v.image.height===height&&v.coverage.width===width&&v.coverage.height===height;
+}
+export function validSpillPaint(value:unknown):value is SpillPaint{
+ if(!object(value)||!fields(value,['token','strokes'])||!spillToken(value.token)||!Array.isArray(value.strokes)||!value.strokes.length||value.strokes.length>SPILL_LIMITS.strokes)return false;
+ let total=0;const ids=new Set<string>();
+ return value.strokes.every(stroke=>{
+  if(!object(stroke)||!fields(stroke,['id','mode','points','radius','opacity','feather'])||!spillObjectId(stroke.id)||ids.has(stroke.id)
+   ||!['erase','restore'].includes(stroke.mode as string)||!Array.isArray(stroke.points)||!stroke.points.length||stroke.points.length>SPILL_LIMITS.pointsPerStroke)return false;
+  ids.add(stroke.id);total+=stroke.points.length;
+  return total<=SPILL_LIMITS.points&&[['radius',SPILL_LIMITS.radiusMin,SPILL_LIMITS.radiusMax],['opacity',0,1],['feather',0,100]].every(([key,min,max])=>{
+   const n=stroke[key as string];return typeof n==='number'&&Number.isFinite(n)&&n>=Number(min)&&n<=Number(max);
+  })&&stroke.points.every(point=>Array.isArray(point)&&point.length===2&&point.every(n=>typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=1));
+ });
+}
+export function spillPaintSourceKey(value:SpillPaintSource):string{return JSON.stringify([value.token,value.recipe_document_id,value.recipe_revision,value.source,value.image.sha256,value.coverage.sha256]);}
+export function spillSourcePoint(clientX:number,clientY:number,rect:SpillPaintGeometry):[number,number]|null{
+ if(![clientX,clientY,rect.left,rect.top,rect.width,rect.height].every(Number.isFinite)||rect.width<=0||rect.height<=0)return null;
+ const x=(clientX-rect.left)/rect.width,y=(clientY-rect.top)/rect.height;
+ return x>=0&&x<=1&&y>=0&&y<=1?[Math.round(x*1000000)/1000000,Math.round(y*1000000)/1000000]:null;
+}
+/** Includes envelope fields at the call site; the native 64 KiB cap is unchanged. */
+export function spillRequestFits(value:unknown):boolean{return new TextEncoder().encode(JSON.stringify(value)).length<=SPILL_LIMITS.requestBytes;}
 /** Real browser decode/load is a separate requirement from byte hashing. */
 export async function verifySpillImage(value:SpillImage):Promise<boolean>{
  try{
@@ -56,6 +93,6 @@ export const manualSpillObject=(value:MaskObject):boolean=>value.enabled&&(value
 export function validSpillPreviewFields(value:SpillPreviewFields):boolean{
  const ids=value.coverage_ids;
  return typeof value.parameters.enabled==='boolean'&&Number.isFinite(value.parameters.strength)&&value.parameters.strength>=0&&value.parameters.strength<=100
-  &&typeof value.coverage_reviewed==='boolean'&&(ids===null?!value.coverage_reviewed:Array.isArray(ids)&&ids.length<=SPILL_LIMITS.objects&&new Set(ids).size===ids.length
+  &&typeof value.coverage_reviewed==='boolean'&&(value.paint!==undefined?ids===null&&value.coverage_reviewed&&validSpillPaint(value.paint):ids===null?!value.coverage_reviewed:Array.isArray(ids)&&ids.length<=SPILL_LIMITS.objects&&new Set(ids).size===ids.length
    &&ids.every(spillObjectId)&&(ids.length>0?value.coverage_reviewed:!value.coverage_reviewed));
 }

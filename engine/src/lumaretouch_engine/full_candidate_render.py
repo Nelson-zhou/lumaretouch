@@ -52,7 +52,8 @@ def render(engine,row,candidate_state,document_id,revision,*,people_graph=None,c
     from . import local_mask_state as M
     from . import creative_derived_source as SOURCE, virtual_copy_people as V
     from .creative_document_base import from_state, require_rebound_snapshot
-    from .decode import load_full,is_raw,_source_bits
+    from .decode import load_full,is_raw
+    from .full_source_working import source_bits,require_opaque_8bit,working_rgb
     from .cpu_memory_budget import available_estimate
     from .export_recipe import build_export_spec
     from .export import export_float
@@ -87,12 +88,13 @@ def render(engine,row,candidate_state,document_id,revision,*,people_graph=None,c
         else:
             with Image.open(path) as image:
                 if image.width*image.height>limit:raise ValueError('Original target exceeds the portrait preparation budget')
-                bits=16 if _source_bits(image)>8 else 8
+                bits=16 if source_bits(path,image)>8 else 8
+                if bits==8:require_opaque_8bit(image)
         decoded=load_full(path,max_px=limit,device='cpu',want_bits=bits)
         if (decoded.h,decoded.w)!=(decoded.src_h,decoded.src_w) or decoded.draft_used or (decoded.raw or {}).get('used_preview') or (decoded.raw or {}).get('half_size'):
             raise ValueError('People target preparation cannot use reduced source pixels')
         if bits==16 and str(decoded.rgb.dtype)!='uint16':raise ValueError('Full target preparation requires genuine RGB16 input')
-        pixels=decoded.rgb;h,w=decoded.h,decoded.w
+        pixels=working_rgb(decoded);h,w=decoded.h,decoded.w
     checkpoint()
     snap=engine._state_to_export_snap(state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=path,people_graph=graph,people_context=context,people_document_id=engine._document_versions().version(row).document_id)
     from .people_export import isolated_snapshot,verify_source

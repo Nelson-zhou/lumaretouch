@@ -100,7 +100,12 @@ class Review:
         ids = request['coverage_ids']; reviewed = request['coverage_reviewed']
         if type(reviewed) is not bool:
             raise ValueError('手工覆盖确认必须是布尔值')
-        if ids is None:
+        if 'paint' in request:
+            if ids is not None or reviewed is not True:
+                raise ValueError('直接绘制覆盖不能混入其他对象选择，且必须确认源图覆盖')
+            from .spill_removal_paint_source import owner as paint_owner
+            spill['coverage'] = paint_owner(engine).coverage(request, request['paint'])
+        elif ids is None:
             if reviewed: raise ValueError('保留覆盖不能伪造新的审核确认')
         elif type(ids) is list and not ids:
             if reviewed: raise ValueError('自动范围不能伪造手工审核确认')

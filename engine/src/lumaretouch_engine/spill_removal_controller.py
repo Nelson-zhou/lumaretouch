@@ -7,8 +7,9 @@ from copy import deepcopy
 from hashlib import sha256
 import json
 
-ACTIONS = frozenset(('id_spill_preview', 'id_spill_apply'))
+ACTIONS = frozenset(('id_spill_preview', 'id_spill_apply', 'id_spill_paint_source'))
 EXTRA = {
+    'id_spill_paint_source': set(),
     'id_spill_preview': {'parameters', 'coverage_ids', 'coverage_reviewed'},
     'id_spill_apply': {'token', 'reviewed', 'before_sha256', 'after_sha256'},
 }
@@ -24,8 +25,10 @@ def _bytes(value):
 def envelope(request):
     action = request.get('action')
     if (action not in ACTIONS or request.get('cmd') != 'background'
-            or set(request) != BASE | EXTRA[action]):
+            or set(request) != BASE | EXTRA[action] | ({'paint'} if action == 'id_spill_preview' and 'paint' in request else set())):
         raise ValueError('祛反光请求字段不完整或不兼容')
+    if _bytes(request) > 65536:
+        raise ValueError('祛反光请求超过 64 KiB；请减少单次笔划数量')
     rid = request.get('request_id')
     if type(rid) is not str or not 1 <= len(rid) <= 128:
         raise ValueError('祛反光请求身份无效')
@@ -57,12 +60,13 @@ class Controller:
                 raise ValueError('祛反光回执容量已满，请保存并重启应用；未提交修改')
             reason = engine._guard_editable('background spill removal')
             if reason: raise ValueError(reason)
-            if request['action'] == 'id_spill_preview':
+            if request['action'] in ('id_spill_preview', 'id_spill_paint_source'):
+                payload = 'review' if request['action'] == 'id_spill_preview' else 'paint_source'
                 # Keep mutation receipts, but only one display pair. Old preview
                 # identities remain explicit expired tombstones, not unknown
                 # edits and not multi-gigabyte retained image histories.
                 for old_id, (old_digest, old_result) in list(self.cache.items()):
-                    if old_result.get('action') == 'id_spill_preview' and 'review' in old_result:
+                    if old_result.get('action') == request['action'] and payload in old_result:
                         expired = {key: old_result[key] for key in (
                             'event', 'protocol', 'action', 'request_id', 'document_id')}
                         expired.update(success=False, outcome_unknown=False, requires_reload=False,
@@ -70,10 +74,15 @@ class Controller:
                         self.cache[old_id] = (old_digest, expired)
                 if sum(_bytes(item[1]) for item in self.cache.values()) + _bytes(R.report(engine)) + 3 * 1024 * 1024 > MAX_RECEIPT_BYTES:
                     raise ValueError('祛反光回执字节预算已满，请保存并重启应用；未提交修改')
-                review = owner(engine).preview(request)
-                result.update(success=True, review=review, report=R.report(engine))
+                if request['action'] == 'id_spill_paint_source':
+                    from .spill_removal_paint_source import owner as paint_owner
+                    public = paint_owner(engine).prepare(request)
+                else:
+                    public = owner(engine).preview(request)
+                result.update(success=True, report=R.report(engine))
+                result[payload] = public
                 if _bytes(result) > MAX_RESULT_BYTES:
-                    result.pop('review', None); result.pop('report', None)
+                    result.pop(payload, None); result.pop('report', None)
                     raise ValueError('祛反光预览回执超过传输预算；未提交修改')
                 return
             record = owner(engine).claim(request)
