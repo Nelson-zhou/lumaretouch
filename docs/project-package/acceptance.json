@@ -1,0 +1,67 @@
+{
+  "runtime": "UNRUN",
+  "requirements": [
+    "LNX-P0-PROJECT",
+    "LNX-CORE-004",
+    "LNX-REF-WF-121298-2ca1392931",
+    "LNX-REF-WF-192117-f01ea02b58"
+  ],
+  "cases": [
+    {
+      "id": "PACKAGE-SOURCE-READONLY",
+      "status": "AUTHORED_UNRUN"
+    },
+    {
+      "id": "PACKAGE-FULLSHA-ROUNDTRIP",
+      "status": "AUTHORED_UNRUN"
+    },
+    {
+      "id": "PACKAGE-EXCLUDED-MISSING",
+      "status": "AUTHORED_UNRUN"
+    },
+    {
+      "id": "PACKAGE-INDEPENDENT-COPIES",
+      "status": "AUTHORED_UNRUN"
+    },
+    {
+      "id": "PACKAGE-HISTORY-PEOPLE-BODY-IDBACKGROUND-LUT",
+      "status": "AUTHORED_UNRUN"
+    },
+    {
+      "id": "PACKAGE-SKY-REFERENCE-REPAIR",
+      "status": "AUTHORED_UNRUN"
+    },
+    {
+      "id": "PACKAGE-LEGACY-OPEN-SAVE-MIGRATION",
+      "status": "AUTHORED_UNRUN"
+    },
+    {
+      "id": "PACKAGE-DUPLICATE-CASE-UNICODE-TRAVERSAL-SYMLINK-BOMB",
+      "status": "AUTHORED_UNRUN"
+    },
+    {
+      "id": "PACKAGE-CANCEL-COPY-VERIFY-PUBLISH",
+      "status": "AUTHORED_UNRUN"
+    },
+    {
+      "id": "PACKAGE-DESTINATION-RACE-NOCLOBBER",
+      "status": "AUTHORED_UNRUN"
+    },
+    {
+      "id": "PACKAGE-RELOAD-UNKNOWN-READBACK",
+      "status": "AUTHORED_UNRUN"
+    },
+    {
+      "id": "PACKAGE-FAILED-CANCEL-READBACK",
+      "status": "AUTHORED_UNRUN"
+    },
+    {
+      "id": "PACKAGE-OPERATION-RECEIPT-CORRELATION",
+      "status": "AUTHORED_UNRUN"
+    },
+    {
+      "id": "PACKAGE-MODEL-LICENCE-NOTRANSFER",
+      "status": "AUTHORED_UNRUN"
+    }
+  ]
+}

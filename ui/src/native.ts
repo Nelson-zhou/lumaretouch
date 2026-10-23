@@ -1848,3 +1848,7 @@ export const exportDestinationApi = destinationPort(<T>(command:string, payload:
   settleCurveEdit().then(() => invoke<T>(command, payload)));
 
 export const chooseImportFolder = () => invoke<string|null>("choose_import_folder");
+
+/** Portable packages use retained transport receipts; never retry uncertain writes. */
+export const projectPackageRequest=(request:Record<string,unknown>)=>invoke('project_package_request',{request:{cmd:'project_package',...request}});
+export const projectPackageReceipt=<T,>(requestId:string)=>invoke<{phase:string;result:T|null}>('project_package_status',{requestId});

@@ -892,7 +892,21 @@
       "status": "pending_independent_verification",
       "implementation": [],
       "verification": [],
-      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过"
+      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过",
+      "package_scope_evidence": {
+        "status": "source_connected_runtime_unrun",
+        "narrow_scope": "Portable project package, explicit dependency selection, bounded no-clobber restoration and missing dependency repair entry; not whole-row acceptance.",
+        "implementation": [
+          "engine/src/lumaretouch_engine/project_package_host.py",
+          "engine/src/lumaretouch_engine/project_package_archive.py",
+          "ui/src/projects/ProjectPackagePanel.tsx"
+        ],
+        "verification": [
+          "docs/project-package/README.md",
+          "engine/tests/test_project_package_archive.py (AUTHORED_UNRUN)",
+          "ui/src/projects/projectPackage.unrun.md (AUTHORED_UNRUN)"
+        ]
+      }
     },
     {
       "id": "workflow:121298",
@@ -904,7 +918,21 @@
       "status": "pending_independent_verification",
       "implementation": [],
       "verification": [],
-      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过"
+      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过",
+      "package_scope_evidence": {
+        "status": "source_connected_runtime_unrun",
+        "narrow_scope": "Portable project package, explicit dependency selection, bounded no-clobber restoration and missing dependency repair entry; not whole-row acceptance.",
+        "implementation": [
+          "engine/src/lumaretouch_engine/project_package_host.py",
+          "engine/src/lumaretouch_engine/project_package_archive.py",
+          "ui/src/projects/ProjectPackagePanel.tsx"
+        ],
+        "verification": [
+          "docs/project-package/README.md",
+          "engine/tests/test_project_package_archive.py (AUTHORED_UNRUN)",
+          "ui/src/projects/projectPackage.unrun.md (AUTHORED_UNRUN)"
+        ]
+      }
     },
     {
       "id": "creative:205366",
@@ -1595,7 +1623,21 @@
       "status": "pending_independent_verification",
       "implementation": [],
       "verification": [],
-      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过"
+      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过",
+      "package_scope_evidence": {
+        "status": "source_connected_runtime_unrun",
+        "narrow_scope": "Portable project package, explicit dependency selection, bounded no-clobber restoration and missing dependency repair entry; not whole-row acceptance.",
+        "implementation": [
+          "engine/src/lumaretouch_engine/project_package_host.py",
+          "engine/src/lumaretouch_engine/project_package_archive.py",
+          "ui/src/projects/ProjectPackagePanel.tsx"
+        ],
+        "verification": [
+          "docs/project-package/README.md",
+          "engine/tests/test_project_package_archive.py (AUTHORED_UNRUN)",
+          "ui/src/projects/projectPackage.unrun.md (AUTHORED_UNRUN)"
+        ]
+      }
     },
     {
       "id": "acceptance:CORE-005",
@@ -12393,7 +12435,21 @@
       ],
       "implementation": [],
       "verification": [],
-      "scope_note": "注册表条目存在不等于功能完成；未知默认值与范围保留原始null语义"
+      "scope_note": "注册表条目存在不等于功能完成；未知默认值与范围保留原始null语义",
+      "package_scope_evidence": {
+        "status": "source_connected_runtime_unrun",
+        "narrow_scope": "Portable project package, explicit dependency selection, bounded no-clobber restoration and missing dependency repair entry; not whole-row acceptance.",
+        "implementation": [
+          "engine/src/lumaretouch_engine/project_package_host.py",
+          "engine/src/lumaretouch_engine/project_package_archive.py",
+          "ui/src/projects/ProjectPackagePanel.tsx"
+        ],
+        "verification": [
+          "docs/project-package/README.md",
+          "engine/tests/test_project_package_archive.py (AUTHORED_UNRUN)",
+          "ui/src/projects/projectPackage.unrun.md (AUTHORED_UNRUN)"
+        ]
+      }
     },
     {
       "id": "parameter:lnx.project.v1|open",
@@ -12431,7 +12487,21 @@
       ],
       "implementation": [],
       "verification": [],
-      "scope_note": "注册表条目存在不等于功能完成；未知默认值与范围保留原始null语义"
+      "scope_note": "注册表条目存在不等于功能完成；未知默认值与范围保留原始null语义",
+      "package_scope_evidence": {
+        "status": "source_connected_runtime_unrun",
+        "narrow_scope": "Portable project package, explicit dependency selection, bounded no-clobber restoration and missing dependency repair entry; not whole-row acceptance.",
+        "implementation": [
+          "engine/src/lumaretouch_engine/project_package_host.py",
+          "engine/src/lumaretouch_engine/project_package_archive.py",
+          "ui/src/projects/ProjectPackagePanel.tsx"
+        ],
+        "verification": [
+          "docs/project-package/README.md",
+          "engine/tests/test_project_package_archive.py (AUTHORED_UNRUN)",
+          "ui/src/projects/projectPackage.unrun.md (AUTHORED_UNRUN)"
+        ]
+      }
     },
     {
       "id": "parameter:lnx.project.v1|save",
@@ -12469,7 +12539,21 @@
       ],
       "implementation": [],
       "verification": [],
-      "scope_note": "注册表条目存在不等于功能完成；未知默认值与范围保留原始null语义"
+      "scope_note": "注册表条目存在不等于功能完成；未知默认值与范围保留原始null语义",
+      "package_scope_evidence": {
+        "status": "source_connected_runtime_unrun",
+        "narrow_scope": "Portable project package, explicit dependency selection, bounded no-clobber restoration and missing dependency repair entry; not whole-row acceptance.",
+        "implementation": [
+          "engine/src/lumaretouch_engine/project_package_host.py",
+          "engine/src/lumaretouch_engine/project_package_archive.py",
+          "ui/src/projects/ProjectPackagePanel.tsx"
+        ],
+        "verification": [
+          "docs/project-package/README.md",
+          "engine/tests/test_project_package_archive.py (AUTHORED_UNRUN)",
+          "ui/src/projects/projectPackage.unrun.md (AUTHORED_UNRUN)"
+        ]
+      }
     },
     {
       "id": "parameter:lnx.import.v1|choose_files",

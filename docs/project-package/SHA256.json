@@ -1,0 +1,88 @@
+{
+  "status": "SOURCE_CONNECTED_RUNTIME_UNRUN",
+  "static_checks": [
+    "Python AST parsed only",
+    "JSON parsed only",
+    "Existing cmd_project executable AST identical after extraction, ignoring docstring indentation"
+  ],
+  "runtime_tests": "UNRUN",
+  "lines": {
+    "ui/src/App.tsx": 2122,
+    "ui/src-tauri/src/main.rs": 1993,
+    "engine/src/lumaretouch_engine/server.py": 6831
+  },
+  "files": [
+    {
+      "path": "engine/src/lumaretouch_engine/project_package_archive.py",
+      "sha256": "bdfd54465140e405bd328539b81ac27b2aa58b630dbd83dc3683523d5af92c53"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_package_dependencies.py",
+      "sha256": "7b3331d8331b3d3b5e2a94975c01dd1bac208513a8746aff1cf13f4cef5ba0db"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_package_host.py",
+      "sha256": "f94e17478a03ef9262b2d097945ea09b5473cd62df7295961c856e3d7da804c1"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_package_project_commands.py",
+      "sha256": "ede118fce8d02bd4b1691370b6f6875b8f36144f89d7eec8b096636ed147c470"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "4e3ad6a62b6a643c519633adda49dbe0879890a3e6eede3c19619d557144ae69"
+    },
+    {
+      "path": "engine/tests/test_project_package_archive.py",
+      "sha256": "0dfac3712282042e3167451ef282f547bbc27d4a5ed2310b98359fd2e9f28bdd"
+    },
+    {
+      "path": "engine/tests/test_project_package_dependencies.py",
+      "sha256": "4a1358700e5ef540df05580c683d8ea91e3d69b06c424b77b6c874f1137df1f6"
+    },
+    {
+      "path": "ui/src/projects/ProjectPackagePanel.tsx",
+      "sha256": "9fa9eee1aa369d994a8520dd971f3e968cd804119088e5a1f99da42f7f39f859"
+    },
+    {
+      "path": "ui/src/projects/useProjectPackage.ts",
+      "sha256": "3edcf5bf7d0b62ae8c7439cb2c831943f84b51c664c0103d8fd94752cbf6652d"
+    },
+    {
+      "path": "ui/src/projects/ProjectWorkspace.tsx",
+      "sha256": "726d608f4099ef40a819b07c3ce8dede504ebde56f3f5fcb0458f066e58cb0b2"
+    },
+    {
+      "path": "ui/src/projects/projectPackage.unrun.md",
+      "sha256": "44577bbb7b33bae589d48a11cbef471eb570ac97fdb83d83b9fabfd9ad3a2164"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "4b49d0467e97009f9cad410d0b6e5608d1f680f73e31c9400e87f0a67502bdb0"
+    },
+    {
+      "path": "ui/src-tauri/src/project_package_api.rs",
+      "sha256": "069cf4917151db502f882800c878dd5adb4008a7411136d67503c02c951d7330"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "5721a9dc0d2994d8705f05233d224f09205481281c7285ff4f18f2f50b6d2bc1"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "70459e6a181a4ff59e287bd857d8e64d3c5444d3d95d714ef8e2738b083ab1d6"
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "3b6e1bcf30fd0151a396d07f91d7458d99bddfa7d3205f692e081efec782949d"
+    },
+    {
+      "path": "docs/project-package/README.md",
+      "sha256": "83e4f9958d7e02dd75839bcd17352aa8402104edaa266b1b0f133644e30651ec"
+    },
+    {
+      "path": "docs/project-package/acceptance.json",
+      "sha256": "047b2a6a322c0fc860316c6b32ece3d3878fbd6e92ded1c9aa1eb172a01b4ada"
+    }
+  ]
+}
