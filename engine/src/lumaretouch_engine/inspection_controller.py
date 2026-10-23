@@ -91,7 +91,8 @@ class InspectionController:
                 from .inspection_job import InspectionJob
                 request = self.request
                 self.job = InspectionJob(self.result,
-                    request["path"], request["source_identity"], config, request["max_asset_bytes"])
+                    request["path"], request["source_identity"], config, request["max_asset_bytes"],
+                    source_asset_id=request.get('source_asset_id'))
                 self.result = None
                 self.state = "spooling"
             else:
@@ -189,6 +190,11 @@ class InspectionController:
                                                          max_asset_bytes=limit)
             from .render_snapshot import SnapshotTransaction
             snap = self._capture_snapshot()
+            from .creative_document_base import from_state
+            base = from_state(snap)
+            self.request['source_asset_id'] = base['id'] if base is not None else None
+            if config is not None and base is not None and config['source_size'] != [base['width'], base['height']]:
+                raise ValueError('Inspection admission differs from canonical creative dimensions')
             self.tx = SnapshotTransaction(snap, max_asset_bytes=limit)
         except Exception as exc:
             self.state = "failed"

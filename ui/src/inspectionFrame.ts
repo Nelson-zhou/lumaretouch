@@ -58,7 +58,7 @@ export function parseInspectionFrame(buffer:ArrayBuffer, expected:InspectionExpe
     throw new Error('Inspection pixel format/profile/quality mismatch');
   }
   const decodedBits=view.getUint16(104,true),sourceBits=view.getUint16(106,true);
-  if(![8,16].includes(decodedBits)||sourceBits>32)throw new Error('Inspection precision metadata invalid');
+  if(![8,16,32].includes(decodedBits)||sourceBits>32)throw new Error('Inspection precision metadata invalid');
   for(let i=108;i<128;i++)if(view.getUint8(i)!==0)throw new Error('Inspection reserved bytes must be zero');
   // Exact byteLength equality above proves this conversion is representable.
   const pixels=new Uint8ClampedArray(buffer,HEADER,Number(length));

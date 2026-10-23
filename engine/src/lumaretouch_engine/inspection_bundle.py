@@ -59,9 +59,18 @@ class BundleWriter:
         text_bytes = 0
         descriptors = []
         total = 0
+        numeric_arrays = 0
+
+        def payload(v):
+            nonlocal total
+            i = len(self._arrays)
+            descriptors.append(dict(dtype=v.dtype.str, shape=list(v.shape), offset=total, nbytes=int(v.nbytes)))
+            total += int(v.nbytes)
+            self._arrays.append(v)
+            return i
 
         def encode(v, depth=0):
-            nonlocal count, total, text_bytes
+            nonlocal count, total, text_bytes, numeric_arrays
             count += 1
             if count > MAX_NODES or depth > MAX_DEPTH:
                 raise ValueError('Bundle structure exceeds budget')
@@ -80,18 +89,17 @@ class BundleWriter:
                     raise ValueError('Bundle text exceeds budget')
                 return v
             if typ is CustomCube:
-                return ["custom_cube", encode(v.asset_id,depth+1), encode(v.title,depth+1), encode(np.frombuffer(v.content,dtype=np.uint8),depth+1)]
+                return ["custom_cube", encode(v.asset_id,depth+1), encode(v.title,depth+1), encode(v.content,depth+1)]
+            if typ is bytes:
+                return ['bytes', payload(np.frombuffer(v, dtype=np.uint8))]
             if typ is np.ndarray:
                 if not v.flags.c_contiguous or v.flags.writeable or v.dtype.metadata is not None:
                     raise ValueError('Bundle needs privately owned readonly contiguous arrays')
                 _dtype(v.dtype.str)
                 if v.ndim > 32:
                     raise ValueError('Too many array dimensions')
-                i = len(self._arrays)
-                descriptors.append(dict(dtype=v.dtype.str, shape=list(v.shape), offset=total, nbytes=int(v.nbytes)))
-                total += int(v.nbytes)
-                self._arrays.append(v)
-                return ['array', i]
+                numeric_arrays += 1
+                return ['array', payload(v)]
             if typ is dict:
                 if any(type(k) is not str for k in v):
                     raise ValueError('Bundle dict keys must be strings')
@@ -107,7 +115,7 @@ class BundleWriter:
 
         tree = encode(owned.value)
         _integer(total, 0, 512 * 1024 * 1024)
-        if total != owned.asset_bytes or len(self._arrays) != owned.array_count:
+        if total != owned.asset_bytes or numeric_arrays != owned.array_count:
             raise ValueError('Owned snapshot accounting changed')
         self.asset_bytes = total
         self._manifest = json.dumps(dict(version=1, asset_bytes=total, arrays=descriptors, tree=tree),
@@ -270,12 +278,17 @@ def read_bundle(directory, *, max_asset_bytes):
             title = display_name(decode(v[2], arrays, depth+1))
             data = decode(v[3], arrays, depth+1)
             if arrays is None: return None
+            if type(data) is bytes:
+                if not 0 < len(data) <= 32*1024*1024: raise ValueError('Invalid custom LUT bundle asset')
+                return CustomCube(data,ident,title)
             if not isinstance(data,np.ndarray) or data.dtype!=np.uint8 or data.ndim!=1 or not 0<len(data)<=32*1024*1024: raise ValueError('Invalid custom LUT bundle asset')
             return CustomCube(data.tobytes(),ident,title)
-        if tag == 'array' and len(v) == 2:
+        if tag in ('array', 'bytes') and len(v) == 2:
             i = _integer(v[1], 0, len(validated)-1)
+            if tag == 'bytes' and (validated[i][0] != np.dtype('uint8') or len(validated[i][1]) != 1):
+                raise ValueError('Immutable bundle bytes require a byte vector')
             references.append(i)
-            return None if arrays is None else arrays[i]
+            return None if arrays is None else (arrays[i].tobytes() if tag == 'bytes' else arrays[i])
         if tag in ('list', 'tuple') and len(v) == 2 and type(v[1]) is list:
             out = [decode(x, arrays, depth+1) for x in v[1]]
             return out if tag == 'list' else tuple(out)

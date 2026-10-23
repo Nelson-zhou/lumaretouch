@@ -7,7 +7,7 @@ before decoding, freeze the recipe, and reject stale results before publication.
 from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
-from .export import ExportError, ExportSpec, DEFAULT_TILE, render_edited_rgb16, export_image
+from .export import ExportError, ExportSpec, DEFAULT_TILE, render_edited_rgb16, export_image, export_image16
 from .ops.geometry import check as check_geometry, out_size, crop_rotate_np
 
 
@@ -44,17 +44,25 @@ def render_inspection_roi(decoded, spec: ExportSpec, roi, *, max_source_pixels: 
         raise ExportError('Accurate inspection cannot silently omit layers: '+', '.join(map(str,skipped_layers)))
     if type(max_source_pixels) is not int or type(max_display_pixels) is not int or min(max_source_pixels,max_display_pixels)<=0:
         raise ValueError('Explicit positive source/display pixel budgets required')
-    source=decoded.rgb
-    if source.ndim!=3 or source.shape[2]!=3 or source.dtype not in (np.dtype('uint8'),np.dtype('uint16')):
-        raise ExportError('Full-source RGB8 or RGB16 required')
-    height,width=source.shape[:2]
-    raw=decoded.raw or {}
-    if (width,height)!=(decoded.src_w,decoded.src_h) or decoded.draft_used or raw.get('used_preview') is True or raw.get('source')=='libraw_preview' or raw.get('half_size',False) not in (False,0,None):
-        raise ExportError('Display proxies/camera previews cannot become full-quality source')
+    from .creative_document_base import check as check_base, require_rebound_spec
+    base = check_base(spec.creative_base)
+    if base is not None:
+        require_rebound_spec(spec)
+        height, width = base['height'], base['width']
+        source = None
+        raw = {}
+    else:
+        source=decoded.rgb
+        if source.ndim!=3 or source.shape[2]!=3 or source.dtype not in (np.dtype('uint8'),np.dtype('uint16')):
+            raise ExportError('Full-source RGB8 or RGB16 required')
+        height,width=source.shape[:2]
+        raw=decoded.raw or {}
+        if (width,height)!=(decoded.src_w,decoded.src_h) or decoded.draft_used or raw.get('used_preview') is True or raw.get('source')=='libraw_preview' or raw.get('half_size',False) not in (False,0,None):
+            raise ExportError('Display proxies/camera previews cannot become full-quality source')
+        if source.dtype==np.uint8 and (raw or int(decoded.src_bits)>8):
+            raise ExportError('High-bit-depth source requires its true RGB16 decode')
     if width*height>max_source_pixels:
         raise ExportError('Source exceeds admitted full-quality pixel budget; no silent downscale')
-    if source.dtype==np.uint8 and (raw or int(decoded.src_bits)>8):
-        raise ExportError('High-bit-depth source requires its true RGB16 decode')
     if spec.scale!=1 or spec.sharpen_amount!=0:
         raise ExportError('100% inspection excludes export-only resizing/sharpening')
     check_geometry(crop_rect,rotation_degrees)
@@ -68,7 +76,13 @@ def render_inspection_roi(decoded, spec: ExportSpec, roi, *, max_source_pixels: 
         raise ExportError('ROI exceeds display pixel budget; no silent downscale')
     spec.check()
     def progress(*_):check_cancel()
-    if source.dtype==np.uint16:
+    if base is not None:
+        # Public export resolver owns the single canonical float32 conversion.
+        # Empty carrier is never rendered and does not impersonate original
+        # pixels. Crop/rotation are applied exactly once at baked dimensions.
+        full,_=export_image16(np.empty((0,0,3),np.uint16),spec,device=device,tile=tile,
+            progress=progress,crop_rect=crop_rect,rotation_degrees=rotation_degrees)
+    elif source.dtype==np.uint16:
         full,_,_=render_edited_rgb16(decoded,spec,device=device,tile=tile,crop_rect=crop_rect,
                                     rotation_degrees=rotation_degrees,output_profile='srgb',progress=progress)
     else:
@@ -84,10 +98,12 @@ def render_inspection_roi(decoded, spec: ExportSpec, roi, *, max_source_pixels: 
     check_cancel()
     if full.shape[:2]!=(canvas_height,canvas_width):
         raise ExportError('Rendered canvas dimensions differ from ROI coordinate contract')
+    if full.dtype not in (np.dtype('uint8'), np.dtype('uint16')):
+        raise ExportError('Inspection display conversion requires final RGB8/RGB16, not unchecked float output')
     patch=full[y:y+h,x:x+w]
     rgb=((patch.astype(np.uint32)+128)//257).astype(np.uint8) if patch.dtype==np.uint16 else patch
     rgba=np.empty((h,w,4),np.uint8);rgba[...,:3]=rgb;rgba[...,3]=255
     check_cancel()
     return InspectionPixels(rgba,canvas_width,canvas_height,(x,y,w,h),
-        decoded_bits=16 if source.dtype==np.uint16 else 8,
-        source_bits=int(decoded.src_bits) if raw.get("source") in (None,"tiff16") else None)
+        decoded_bits=32 if base is not None else 16 if source.dtype==np.uint16 else 8,
+        source_bits=None if base is not None else int(decoded.src_bits) if raw.get("source") in (None,"tiff16") else None)

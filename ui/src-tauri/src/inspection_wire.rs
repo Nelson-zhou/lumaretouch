@@ -33,7 +33,7 @@ pub fn parse_header(bytes:&[u8], epoch:[u8;16], expected:&Request,
         return Err("inspection format/profile/quality/reserved mismatch");
     }
     let decoded_bits=u16_at(104); let source=u16_at(106);
-    if ![8,16].contains(&decoded_bits) || source>32 {
+    if ![8,16,32].contains(&decoded_bits) || source>32 {
         return Err("inspection precision metadata invalid");
     }
     let ticket=Ticket{id:u64_at(24),document:u64_at(32),source_generation:u64_at(40),
@@ -96,6 +96,11 @@ mod tests {
         let p=packet();let (h,px)=parse_packet(&p,[7;16],&request(),&budget(),8).unwrap();
         assert_eq!(h.ticket.id,9007199254740993);assert_eq!(h.source_bits,None);
         assert_eq!(px,&[1,2,3,255,4,5,6,255]);assert_eq!(px.as_ptr(),p[128..].as_ptr());
+    }
+    #[test] fn canonical_float_source_precision_is_not_original_precision(){
+        let mut p=packet();p[104..106].copy_from_slice(&32u16.to_le_bytes());
+        let (h,_)=parse_packet(&p,[7;16],&request(),&budget(),8).unwrap();
+        assert_eq!(h.decoded_bits,32);assert_eq!(h.source_bits,None);
     }
     #[test] fn rejects_short_extra_and_truncated_payload(){
         let p=packet();for n in [0,127,128,135]{assert!(parse_packet(&p[..n],[7;16],&request(),&budget(),8).is_err());}

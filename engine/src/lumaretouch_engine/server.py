@@ -1269,8 +1269,10 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         """装回一份快照：预计算保持当前这一份，其余整份覆盖。"""
         snap=self._body_history_restore(snap)
         st = self._capture_state()
-        self._people_history_apply(snap.get("_people_history"),snap.get("_people_transition"))
+        self._people_history_apply(snap.get("_people_history"),snap.get("_people_transition"),source_state=snap)
         self._apply_state({**st, **snap})
+        from .creative_derived_source import restore_history_source
+        restore_history_source(self)
         # 选型与关键点必须是一对：`_precompute` 不进历史快照而 `_face_index` 进（PORTRAIT-003）。
         # 不重放这一格就会“状态说在改 0 号、画面在改 1 号”——两张脸都确实被推过，看不出来。
         # 拿它放在 cmd_history 里是第二份出处：回滚那一条臂会漏掉。
@@ -2984,6 +2986,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         t0 = monotonic_ns()
         try:
             fn = face_mod.build(backend, p.get("model_dir"))
+            if self._creative_base is not None and fn.name != "mediapipe":
+                raise ValueError("创意回流重新分析需要真实 MediaPipe 后端，不接受模板替代")
         except face_mod.MissingBackend as e:
             emit({"event": "error", "error": f"预计算后端不可用({backend}): {e}"})
             return
@@ -2994,7 +2998,9 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         if backend == "auto" and fn.name != backend and getattr(fn, "notes", None):
             emit({"event": "engine_warn", "warn": f"auto 回落 {fn.name}: {fn.notes[-1]}"})
         try:
-            pc = fn(self._src_rgb)
+            from .creative_derived_source import analysis_rgb, stamp_precompute
+            analysis_input = analysis_rgb(self)
+            pc = stamp_precompute(self, fn(analysis_input), analysis_input)
         except Exception as e:
             emit({"event": "error", "error": f"预计算失败({type(e).__name__}): {e}"})
             return
@@ -3023,6 +3029,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         t3 = monotonic_ns()
         self._precompute = pc
         self._precompute_backend = pc.backend
+        if self._creative_base is not None: self._people_sync(strict=True)
         if channel:
             self._channel = channel
         emit(self._precompute_ready_event(pc, info,
@@ -3867,7 +3874,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                                        "没找回，账仍保留"})
                 continue
             try:
-                lm, info = face_mod.detect_region(backend, self._src_rgb, rect)
+                lm, info = face_mod.detect_region(backend, CDH.analysis_rgb(self), rect)
                 pc = pc.with_manual_face(lm)
             except Exception as e:                        # noqa: BLE001
                 lost.append({"rect": list(rect),
@@ -4240,7 +4247,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             emit({"event": "error", "error": f"区域检测后端不可用({backend}): {e}"})
             return
         try:
-            lm, info = face_mod.detect_region(fn, self._src_rgb, key)
+            lm, info = face_mod.detect_region(fn, CDH.analysis_rgb(self), key)
             pc2 = self._precompute.with_manual_face(lm)
         except Exception as e:                        # noqa: BLE001
             emit({"event": "error", "error":
@@ -5597,10 +5604,10 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         The copied snapshot never mutates the current document or batch recipe.
         """
         from .creative_document_base import require_rebound_snapshot
-        require_rebound_snapshot(snap)
         from .export import ExportError
         from .people_export import verify_source as verify_people_source, isolated_snapshot
         verify_people_source(snap,path);snap=isolated_snapshot(snap,for_document=for_document)
+        require_rebound_snapshot(snap)
         if snap.get("grade_scope") == "objects":
             if not for_document: raise ExportError("Source-bound mask objects cannot transfer to another photo")
             LM.verify_source(LM.check(snap.get("local_masks")), path)

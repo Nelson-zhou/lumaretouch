@@ -44,7 +44,7 @@ def encode_header(pixels: InspectionPixels, *, epoch: bytes, ticket: tuple[int, 
             raise ValueError('Inspection RGBA must be opaque')
     bits = pixels.decoded_bits
     source = 0 if pixels.source_bits is None else pixels.source_bits
-    if type(bits) is not int or bits not in (8, 16) or type(source) is not int or not 0 <= source <= 32:
+    if type(bits) is not int or bits not in (8, 16, 32) or type(source) is not int or not 0 <= source <= 32:
         raise ValueError('Invalid inspection precision metadata')
     return _LAYOUT.pack(b'LRIF', 1, HEADER_BYTES, epoch, *ticket, *dimensions,
                         payload, 0x41424752, 1, 1, bits, source, bytes(20))

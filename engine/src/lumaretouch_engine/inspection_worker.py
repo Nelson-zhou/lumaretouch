@@ -55,7 +55,6 @@ def render(directory):
     from .decode import load_full, is_raw, _source_bits
     from .export_recipe import build_export_spec
     from .full_quality import render_inspection_roi
-    from .inspection_wire import encode_header
     from .inspection_job import validate_config
     from PIL import Image
     import torch
@@ -67,12 +66,12 @@ def render(directory):
     if len(raw) != size:
         raise ValueError('Inspection request changed')
     request = json.loads(raw)
-    expected = {'path', 'source_identity', 'epoch', 'ticket', 'roi', 'source_size',
+    expected = {'path', 'source_identity', 'source_asset_id', 'epoch', 'ticket', 'roi', 'source_size',
                 'canvas_size', 'max_source_pixels', 'max_display_pixels', 'max_asset_bytes',
                 'max_address_bytes', 'timeout_seconds'}
     if type(request) is not dict or set(request) != expected:
         raise ValueError('Unknown inspection request')
-    validate_config({k:v for k,v in request.items() if k not in ('path','source_identity','max_asset_bytes')})
+    validate_config({k:v for k,v in request.items() if k not in ('path','source_identity','source_asset_id','max_asset_bytes')})
     path = request['path']
     if type(path) is not str or not path or len(path) > 32768:
         raise ValueError('Invalid inspection source path')
@@ -80,8 +79,29 @@ def render(directory):
     if before != request['source_identity']:
         raise ValueError('Inspection source changed before decode')
     snap = read_bundle(directory, max_asset_bytes=request['max_asset_bytes'])
+    from .creative_document_base import from_state, require_rebound_snapshot
+    base = from_state(snap)
+    if request['source_asset_id'] != (base['id'] if base is not None else None):
+        raise ValueError('Inspection canonical source identity mismatch')
     from .people_export import verify_source as verify_people, isolated_snapshot
     verify_people(snap,path);snap=isolated_snapshot(snap,for_document=True)
+    if base is not None:
+        # Original path remains provenance only. Never decode or borrow its
+        # observations/pixels for this independently hashed baked source.
+        if [base['width'], base['height']] != request['source_size']:
+            raise ValueError('Creative inspection dimensions differ from admission')
+        require_rebound_snapshot(snap)
+        spec, skipped = build_export_spec(snap, base['height'], base['width'], for_document=True)
+        pixels = render_inspection_roi(None, spec, request['roi'],
+            max_source_pixels=request['max_source_pixels'], max_display_pixels=request['max_display_pixels'],
+            device='cpu', crop_rect=tuple(snap.get('crop_rect', (0,0,1,1))),
+            rotation_degrees=float(snap.get('crop_rotation', 0)), skipped_layers=skipped)
+        if [pixels.canvas_width, pixels.canvas_height] != request['canvas_size']:
+            raise ValueError('Rendered creative canvas differs from admission')
+        if source_identity(path) != before:
+            raise ValueError('Original provenance changed during creative inspection')
+        _write_pixels(directory, request, pixels)
+        return
     from .local_grade_source import has_groups, verify_snapshot, check_export_decode
     from . import effect_recovery_runtime as recovery
     from . import manual_liquify_runtime as manual
@@ -134,6 +154,11 @@ def render(directory):
         raise ValueError('Rendered canvas differs from admitted canvas')
     if source_identity(path) != before:
         raise ValueError('Inspection source changed during render')
+    _write_pixels(directory, request, pixels)
+
+
+def _write_pixels(directory, request, pixels):
+    from .inspection_wire import encode_header
     header = encode_header(pixels, epoch=bytes.fromhex(request['epoch']),
         ticket=tuple(int(x) for x in request['ticket']), max_payload=request['max_display_pixels']*4)
     # Fixed private filenames only; never an export path supplied by the UI.

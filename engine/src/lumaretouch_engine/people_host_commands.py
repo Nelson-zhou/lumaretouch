@@ -48,17 +48,21 @@ def analyse(engine,state,face_ref):
     from .facial_wrinkle_runtime import skin_support
     import numpy as np
     face=state['faces'][face_ref['face_instance_id']];source=engine._people_source()
+    from .creative_derived_source import analysis_rgb, stamp_precompute, verify_precompute
+    rgb=analysis_rgb(engine)
+    verify_precompute(engine,engine._precompute)
     if face['local_assets']:raise ValueError('Reanalysis cannot silently rebind existing source-owned recovery; retain it and review explicitly')
     with F.MediaPipeFace() as backend:
-        points,_=F.detect_region(backend,engine._src_rgb,face['box'])
+        points,_=F.detect_region(backend,rgb,face['box'])
         pc=SimpleNamespace(backend='mediapipe',detector_model_sha256=backend.detector_model_sha256,semantic_model_sha256=backend.semantic_model_sha256)
         evidence=B.evidence(pc,points,(source['width'],source['height']))
         original=engine._precompute
         if original is None:
-            original=F.FacePrecompute(landmarks=points,masks=backend.semantic_masks(engine._src_rgb),backend='mediapipe',
+            original=F.FacePrecompute(landmarks=points,masks=backend.semantic_masks(rgb),backend='mediapipe',
                 t_detect_ms=0.,t_masks_ms=0.,face_box=tuple(face['box']),all_landmarks=[points],manual=(0,),
                 detector_model_sha256=backend.detector_model_sha256,semantic_model_sha256=backend.semantic_model_sha256)
             engine._precompute=original;engine._precompute_backend='mediapipe'
+            stamp_precompute(engine,original,rgb)
         if original.semantic_model_sha256!=evidence['semantic_model_sha256']:
             raise ValueError('Region analysis lacks matching full-source semantic evidence')
     out=G.reanalyse(state,source['sha256'],{face_ref['face_instance_id']:evidence},expected_revision=state['revision'],user_confirmed=True)

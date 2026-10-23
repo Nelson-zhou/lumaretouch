@@ -20,7 +20,18 @@ def scoped_state(snapshot):
 def decorate(before,after):
     left=before.get('_people_history');right=after.get('_people_history')
     if left is None or right is None:return before
-    if left['asset_sha256']!=right['asset_sha256']:raise ValueError('Document history cannot cross source assets')
+    if left['asset_sha256']!=right['asset_sha256']:
+        # A return/undo changes the active immutable source, not another asset's
+        # portrait recipe. Retain both graph slices; never invent a cross-source
+        # sparse patch. Each side must prove its own canonical source identity.
+        from .creative_derived_source import binding
+        for state,ref in ((before,left),(after,right)):
+            if state.get('_creative_base') is not None and binding(state)['sha256']!=ref['asset_sha256']:
+                raise ValueError('History portrait slice does not own its creative source')
+        if (before.get('_creative_base') or {}).get('id')==(after.get('_creative_base') or {}).get('id'):
+            raise ValueError('Document history cannot cross unrelated source assets')
+        value=dict(before);value.pop(KEY,None)
+        return value
     value=dict(before)
     value[KEY]={'asset_sha256':left['asset_sha256'],'association_fence':left['association_fence'],
                 'changes':between(scoped_state(left),scoped_state(right))}

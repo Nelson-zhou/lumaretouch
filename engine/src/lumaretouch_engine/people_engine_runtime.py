@@ -51,8 +51,17 @@ def require_ready(pipe):
 def prepare_export(snapshot,source,repaired,*,byte_budget,recovery_assets=None,body_pose=None,body_source_path=None):
     """Original RGB8/16 enters once; all face solvers run before tile slicing."""
     from .people_snapshot import at_dimensions
-    if source.dtype not in (np.uint8,np.uint16):raise ValueError('People export needs original RGB8/16')
-    divisor=255 if source.dtype==np.uint8 else 65535
+    creative=snapshot.get('creative_source')
+    if creative is not None:
+        if (source.dtype!=np.float32 or source.ndim!=3 or source.shape[2]!=3
+                or (creative['height'],creative['width'])!=source.shape[:2]
+                or creative['sha256']!=snapshot['asset_sha256']
+                or not np.isfinite(source).all() or np.any(source<0) or np.any(source>1)):
+            raise ValueError('People export requires the verified creative float32 working source')
+        divisor=1
+    else:
+        if source.dtype not in (np.uint8,np.uint16):raise ValueError('People export needs original RGB8/16')
+        divisor=255 if source.dtype==np.uint8 else 65535
     state,asset,analyses=at_dimensions(snapshot,tuple(source.shape[:2]))
     rgb=np.array(source.astype(np.float32)/divisor,dtype=np.float32,copy=True)
     rgb.setflags(write=False)

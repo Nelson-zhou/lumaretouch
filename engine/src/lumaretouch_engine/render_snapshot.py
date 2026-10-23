@@ -38,7 +38,7 @@ def _owned_with_array_copier(value: dict, *, max_asset_bytes: int,
 
     Dataclass records retain their existing types and semantics; this does not
     declare unsupported effects renderable. Downstream recipe validation and
-    missing-layer checks remain mandatory. Budget covers array payloads only;
+    missing-layer checks remain mandatory. Budget covers numeric arrays and immutable byte payloads;
     Python/container overhead is separately bounded by node/string limits.
     """
     from .vram import RepairOp, LightOp
@@ -84,6 +84,13 @@ def _owned_with_array_copier(value: dict, *, max_asset_bytes: int,
             count["bytes"] += len(v.content)
             if count["bytes"] > max_asset_bytes: raise SnapshotError("Custom LUT exceeds snapshot asset budget")
             inspect(v.asset_id, depth + 1); inspect(v.title, depth + 1)
+            return
+        if typ is bytes:
+            # Canonical creative assets are immutable, but retained bytes still
+            # consume the admitted snapshot/spool budget. Never accept bytearray.
+            count['bytes'] += len(v)
+            if count['bytes'] > max_asset_bytes:
+                raise SnapshotError('Snapshot immutable bytes exceed asset budget')
             return
         if typ is np.ndarray:
             if v.dtype.kind not in 'uif' or v.dtype.fields is not None or v.dtype.metadata is not None:

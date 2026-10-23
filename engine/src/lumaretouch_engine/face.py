@@ -114,6 +114,8 @@ class FacePrecompute:
     detector_model_sha256: str | None = None
     detection_limit: int = SCOPE_MAX_FACES
     detection_limit_reached: bool = False
+    # Exact effective-source proof for returned-composite inference; None is legacy file input.
+    input_source_binding: dict | None = None
 
     def faces(self) -> list[dict]:
         """可选人脸名单（归一化盒 + 面积占比）。这是“能选哪几个人”的唯一出处：

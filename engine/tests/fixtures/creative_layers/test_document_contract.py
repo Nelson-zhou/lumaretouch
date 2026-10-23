@@ -169,8 +169,7 @@ def test_returned_base_source_bound_commands_fail_before_dispatch():
     from lumaretouch_engine.creative_document_host import guard_command
     engine = SimpleNamespace(_creative_base={'id':'opaque-base'})
     for name, request in (
-        ('face', {'action':'select'}), ('precompute', {}),
-        ('precompute', {'action':'state'}), ('set_strength', {'action':'state'}),
+        ('face', {'action':'select'}), ('set_strength', {'action':'state'}),
         ('grade', {'action':'mask'}),
         ('colour_editor', {'action':'preview','recipe':{'scope':'local'}}),
         ('preset', {'action':'apply'}),
@@ -179,6 +178,7 @@ def test_returned_base_source_bound_commands_fail_before_dispatch():
     for name, request in (
         ('exposure', {}), ('crop', {}), ('grade', {'scope':'all'}),
         ('creative_document', {'action':'command'}), ('colour_editor_state', {}),
+        ('precompute', {'backend':'mediapipe'}), ('inspection_snapshot', {'action':'start'}),
     ):
         guard_command(engine,name,request)
 

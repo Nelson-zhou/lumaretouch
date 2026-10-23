@@ -36,10 +36,18 @@ def save(engine,project):
             # history to resurrect from the last project save.
             histories.pop(key,None)
         if not retained:continue
-        refs={snap['_people_history']['asset_sha256'] for stack in stacks.values() for snap in stack if snap.get('_people_history') is not None}
-        refs.update(key for stack in stacks.values() for snap in stack for key in body_assets(snap))
-        if len(refs)!=1:raise ValueError('Document stack mixes source assets')
-        asset=next(iter(refs))
+        # The physical original still anchors relocation/admission. Each
+        # creative history frame proves its own immutable content independently.
+        asset=asset_for(row)
+        for stack in stacks.values():
+            for snap in stack:
+                from .creative_derived_source import binding
+                expected=binding(snap)['sha256'] if snap.get('_creative_base') is not None else asset
+                ref=snap.get('_people_history')
+                if ref is not None and ref['asset_sha256']!=expected:
+                    raise ValueError('Portrait history does not own its frame source')
+                if body_assets(snap)-{expected}:
+                    raise ValueError('Body history does not own its frame source')
         histories[key]={'document_id':row['document_id'],'asset_sha256':asset,'path':row['path'],
                         'stacks':P.encode(stacks,project['assets'],dropped,'people_history.'+key)}
     if dropped:raise ValueError('People history cannot be saved lossily: '+str(dropped))
@@ -88,13 +96,16 @@ def prepare(project,rows,limit):
                 from .body_pose_project import validate_records as validate_body
                 validate_body(snapshot)
                 from .body_pose_document_history import assets as body_assets
-                if body_assets(snapshot)-{asset}:raise ValueError('Saved body history names another source')
+                from .creative_derived_source import binding
+                expected=binding(snapshot)['sha256'] if snapshot.get('_creative_base') is not None else asset
+                if body_assets(snapshot)-{expected}:raise ValueError('Saved body history names another source')
                 ref=snapshot.get('_people_history')
                 if ref is not None:
                     required={'asset_sha256','faces','overrides','unresolved_legacy','analysis_run','association_revision','asset_fence','association_fence'}
-                    if type(ref) is not dict or set(ref)!=required or ref['asset_sha256']!=asset:
+                    if type(ref) is not dict or set(ref) not in (required,required|{'source_context_sha256'}) or ref['asset_sha256']!=expected:
                         raise ValueError('Saved document history names another source or incomplete scope')
                     for field in ('association_revision','association_fence','asset_fence'):S.revision(ref[field])
+                    if 'source_context_sha256' in ref:S.digest(ref['source_context_sha256'])
         if legacy:
             matches=[i for i,row in enumerate(rows) if not row.get('copy_number',0) and row['path']==record['path']]
         else:

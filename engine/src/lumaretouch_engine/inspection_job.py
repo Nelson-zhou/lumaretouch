@@ -46,10 +46,11 @@ def validate_config(value):
 
 
 class InspectionJob:
-    def __init__(self, owned, path, identity, config, max_asset_bytes):
+    def __init__(self, owned, path, identity, config, max_asset_bytes, *, source_asset_id=None):
         self.config = validate_config(config)
         self.request = dict(self.config)
-        self.request.update(path=path, source_identity=identity, max_asset_bytes=max_asset_bytes)
+        self.request.update(path=path, source_identity=identity, max_asset_bytes=max_asset_bytes,
+                            source_asset_id=source_asset_id)
         self.state = 'spooling'
         self.asset_bytes = owned.asset_bytes
         self.error = None

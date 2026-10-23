@@ -19,6 +19,11 @@ test('shared Python/Rust/JS vector preserves identity through JSON ack',()=>{
   assert.equal(frame.pixels.buffer,buffer);
   assert.deepEqual(Array.from(frame.pixels),[1,2,3,255,4,5,6,255]);
 });
+test('creative canonical float precision does not inherit original sensor precision',()=>{
+  const buffer=golden();new DataView(buffer).setUint16(104,32,true);
+  const frame=parseInspectionFrame(buffer,expected());
+  assert.equal(frame.decodedBits,32);assert.equal(frame.sourceBits,null);
+});
 test('u64 maximum identity never rounds through Number',()=>{
   const buffer=golden(),e=expected();e.ticket.id='18446744073709551615';
   new DataView(buffer).setBigUint64(24,18446744073709551615n,true);

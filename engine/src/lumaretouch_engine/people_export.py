@@ -61,5 +61,13 @@ def verify_source(snapshot,path):
         if source_digest(path)!=body['source']['sha256']:raise ValueError('Frozen body observations belong to another source asset')
     people=snapshot.get('people')
     if people is None:return
+    from .creative_derived_source import binding, record
+    if record(snapshot) is not None:
+        source=binding(snapshot,path)
+        if people.get('creative_source')!=source or people['asset_sha256']!=source['sha256']:
+            raise ValueError('Frozen people graph belongs to another creative source')
+        return
+    if people.get('creative_source') is not None:
+        raise ValueError('Creative people evidence is missing its immutable source')
     from .local_mask_state import source_digest
     if source_digest(path)!=people['asset_sha256']:raise ValueError('Frozen people graph belongs to another source asset')

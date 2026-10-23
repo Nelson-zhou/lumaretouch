@@ -30,7 +30,8 @@ class PeopleHostMixin:
         return owner(self)
 
     def _people_source(self):
-        return SOURCE.bind_source(self)
+        from .creative_derived_source import binding
+        return binding(self)
 
     def _people_binding(self):
         source=self._people_source();version=self._document_versions().version(self._docs[self._doc_index])
@@ -41,6 +42,8 @@ class PeopleHostMixin:
         return bool(getattr(self,'_people_render_enabled',False) and getattr(self,'_people_path',None)==self._doc_path and self._vram is not None)
 
     def _people_bind(self):
+        from .creative_derived_source import verify_precompute
+        verify_precompute(self, self._precompute)
         owner=self._people_owner();source=self._people_source();asset=source['sha256'];pc=self._precompute
         state=owner.snapshot()
         if pc is None:
@@ -75,14 +78,6 @@ class PeopleHostMixin:
         return source,state,analyses
 
     def _people_sync(self,*,strict=False):
-        if getattr(self, '_creative_base', None) is not None:
-            # A validated returned bake owns these pixels. Original-file graph
-            # remains retained for undo, never replayed on the derived canvas.
-            if self._vram is not None:
-                from .people_pipeline import clear
-                clear(self._vram); self._vram.people_suspended = None
-            self._people_render_enabled = False
-            return
         if self._vram is None or not self._docs or self._doc_index<0:return
         body_bank=self._body_bank()
         if self._precompute is None and '_people_graph_owner' not in self.__dict__ and not body_bank['bodies']:return
@@ -131,7 +126,6 @@ class PeopleHostMixin:
         self._vram.enhance_facts={**facts.get('enhance',{}),**facts.get('facial_wrinkles',{}),**facts.get('eye_detail',{})}
 
     def _people_report(self):
-        if getattr(self, '_creative_base', None) is not None: return None
         if not self._people_managed():return None
         from .people_ui import report
         try:
@@ -167,12 +161,37 @@ class PeopleHostMixin:
 
     def _people_history_capture(self):
         if not self._people_managed():return None
-        return self._people_owner().capture_document(self._people_source()['sha256'])
-
-    def _people_history_apply(self,snapshot,transition=None):
-        if snapshot is None:return
+        from .people_source_context import digest
         owner=self._people_owner();asset=self._people_source()['sha256']
+        result=owner.capture_document(asset)
+        result['source_context_sha256']=digest(owner.snapshot(),asset)
+        return result
+
+    def _people_history_apply(self,snapshot,transition=None,*,source_state=None):
+        if snapshot is None:return
+        from .creative_derived_source import binding
+        owner=self._people_owner()
+        asset=(binding(source_state,self._doc_path)['sha256'] if source_state is not None and source_state.get('_creative_base') is not None
+               else SOURCE.source_digest(self._doc_path) if source_state is not None else self._people_source()['sha256'])
         if snapshot['asset_sha256']!=asset:raise ValueError('People history belongs to another source')
+        if source_state is not None and asset!=self._people_source()['sha256']:
+            from .people_graph_owner import document_slice
+            graph=owner.snapshot()
+            retained=document_slice(graph,asset)
+            expected={key:snapshot[key] for key in retained}
+            proof=snapshot.get('source_context_sha256')
+            if proof is not None:
+                from .people_source_context import digest
+                S.digest(proof)
+                if proof!=digest(graph,asset):
+                    raise ValueError('Source portrait associations or effective recipe changed; undo cannot overwrite them')
+                retained.pop('association_revision');expected.pop('association_revision')
+            if retained!=expected:
+                raise ValueError('Retained source portrait recipe changed; source-switch undo cannot overwrite it')
+            # Both source slices remain in the graph. Switching the base is not
+            # authority to reapply old edits over a concurrently edited source.
+            self._people_analysis_key=None
+            return
         if transition is not None:
             from .people_document_history import restore
             candidate=restore(owner,transition,asset)
@@ -212,11 +231,15 @@ class PeopleHostMixin:
         if not source_path:return None
         context=export_context(self,state,source_path,context)
         retained_host=view(self,context)
-        asset=SOURCE.source_digest(source_path);graph=context['people_graph'] if graph is None else S.check(graph)
+        from .creative_derived_source import binding, verify_precompute
+        source=binding(state,source_path) if state.get('_creative_base') is not None else None
+        asset=source['sha256'] if source is not None else SOURCE.source_digest(source_path)
+        graph=context['people_graph'] if graph is None else S.check(graph)
         retained=any(f['asset_sha256']==asset for f in graph['faces'].values()) or any(r['asset_sha256']==asset and r['status']=='unresolved' for r in graph['unresolved_legacy']) or any(r['scope']=='all_people' and r['target_id']==asset for r in graph['overrides'])
         if not retained:return None
         analyses={}
         pc=state.get('_precompute')
+        verify_precompute(state,pc)
         if pc is not None and any(f['asset_sha256']==asset for f in graph['faces'].values()):
             face=next(f for f in graph['faces'].values() if f['asset_sha256']==asset)
             ev=face['evidence']
@@ -229,6 +252,8 @@ class PeopleHostMixin:
             restored=retained_hair_analyses(retained_host,graph,binding)
             if restored is not None:analyses=restored
         result=capture(graph,asset,analyses);result['support_assets']=deepcopy(context['people_support_assets'])
+        if state.get('_creative_base') is not None:
+            result['creative_source'] = source
         return result if binding is None else HAIR.capture(retained_host,result,pc,binding,source_path=source_path)
 
     def cmd_people(self,p):
@@ -282,7 +307,10 @@ class PeopleHostMixin:
             owner.commit(candidate,expected_fence=fence);self._people_analysis_key=None
             from .virtual_copy_people import scope_rows
             for row in scope_rows(self):
-                if SOURCE.source_digest(row['path']) in assets:self._document_versions().advance(row)
+                from .creative_derived_source import binding
+                state=row.get('state') or {}
+                asset=binding(state,row['path'])['sha256'] if state.get('_creative_base') is not None else SOURCE.source_digest(row['path'])
+                if asset in assets:self._document_versions().advance(row)
             self._people_sync(strict=True)
             frame=self._write_current_frame('people');frame['doc_state']=self.doc_state()
             self._project_dirty=True

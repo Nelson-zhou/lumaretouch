@@ -200,7 +200,9 @@ class CreativeHost:
             row = e._new_row(source['path'],state=state,budget=source.get('budget'))
             row['source_asset_id'] = source['source_asset_id']; row['fingerprint'] = fp
             row['label'] = (source.get('label') or source.get('name') or '照片')+' · 创意新图'
-            row['_people_new_import'] = True
+            from . import virtual_copy_people as VP, people_state as PS
+            row[VP.KEY] = {'version':1,'people_graph':PS.empty(),**{key:{} for key in VP.FIELDS}}
+            row['_people_new_import'] = False
             state['_creative_document']['source_uid'] = row['document_id']
             state['_creative_document']['document_id'] = uuid.uuid4().hex
             state['_creative_document']['revision'] = 0
@@ -319,20 +321,21 @@ def handle(engine,p,emit):
 def guard_command(engine, name, request):
     """Do not let original-path analyses edit newly composited content.
 
-    This is an explicit compatibility boundary, not a claim of re-analysis.
-    Dedicated inspection/status commands remain available; source-bound edits wait for a real
-    derived-source owner. The original source and its undo states remain intact.
+    Actual derived-source analysis and inspection have dedicated owned paths.
+    Effect mutations and cross-document planners remain fenced until all their
+    consumers own that source. The original and its undo states remain intact.
     """
     # These planners can mutate parked targets, not just the active row. Until
     # their target validators own derived content, fail closed for this session.
-    if name in ('people','batch','semantic_colour') and any(
+    local_analysis = name == 'people' and request.get('action') in ('select','target','analyse_face') and (request.get('target') or {}).get('scope') in ('face','all_people')
+    if name in ('people','batch','semantic_colour') and not local_analysis and any(
             (row.get('state') or {}).get('_creative_base') is not None
             for row in getattr(engine, '_docs', [])):
         raise ValueError('会话含创意回流图；跨图人像/批量计划尚未支持该来源，请先关闭回流图或撤销回流，避免借用原图分析。')
     if getattr(engine, '_creative_base', None) is None:
         return
     source_bound = {
-        'precompute', 'set_strength', 'inpaint', 'light', 'face', 'people',
+        'set_strength', 'inpaint', 'light', 'face', 'people',
         'deform', 'enhance', 'fabric', 'background', 'local_masks',
         'prompted_masks', 'source_patch_capture', 'source_patch', 'clone_stamp',
         'effect_recovery', 'effect_recovery_preview', 'manual_liquify',
@@ -346,16 +349,16 @@ def guard_command(engine, name, request):
     # Do not trust a generic action='state': legacy commands may ignore it.
     # Dedicated *_state/status commands remain available outside this set.
     blocked = name in source_bound
+    if local_analysis: blocked = False
     if name == 'background' and request.get('action') == 'id_state':
         blocked = False  # This exact controller branch validates fields and only reports.
     blocked |= name == 'color_picker_capture' and request.get('picker_action') in ('id_background','id_background_subject','id_background_reference')
-    blocked |= name == 'inspection_snapshot' and request.get('action', 'status') not in ('status','cancel')
     blocked |= name == 'grade' and (request.get('scope', 'all') != 'all' or request.get('action') == 'mask')
     blocked |= name == 'colour_editor' and (request.get('recipe') or {}).get('scope', 'global') == 'local'
     blocked |= name == 'preset' and request.get('action') in ('apply', 'preflight')
     blocked |= name == 'batch' and request.get('action') not in ('state', 'query', 'cancel', 'list')
     if blocked:
-        raise ValueError('创意回流后的该工具需要针对合成图重新绑定来源；当前不会借用原图的人脸、蒙版或分析。可继续全局调色、裁剪、图层编辑，或撤销回流。')
+        raise ValueError('该工具尚未适配合成来源；不会借用原图的人脸、蒙版或分析。已支持合成图真实重新分析、100%检查、全局调色、裁剪与图层编辑，或可撤销回流。')
 
 
 def dispatch_rejected(request, message, started, emit):
@@ -387,3 +390,8 @@ def require_photo_return(record):
         chunk = pixels[start:start+65536]
         if not (chunk[:,3] == 1).all() or not ((chunk[:,:3] >= 0) & (chunk[:,:3] <= 1)).all():
             raise ValueError('当前修图回流仅支持不透明 SDR；透明度与 HDR 图层数据已保留，未展平或裁切。')
+
+
+def analysis_rgb(engine):
+    from .creative_derived_source import analysis_rgb as resolve
+    return resolve(engine)

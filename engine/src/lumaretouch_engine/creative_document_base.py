@@ -135,8 +135,14 @@ def require_rebound_snapshot(snapshot):
     from . import eye_shape_state as EYE, mouth_shape_state as MOUTH
     from . import colour_editor_state as CE
     blocked = []
-    if snapshot.get('people') is not None or snapshot.get('body_pose') is not None:
-        blocked.append('original people/body observations')
+    people = snapshot.get('people')
+    if people is not None:
+        from .creative_derived_source import binding
+        source = binding(snapshot)
+        if people.get('creative_source') != source or people.get('asset_sha256') != source['sha256']:
+            blocked.append('unbound original people observations')
+    if snapshot.get('body_pose') is not None:
+        blocked.append('unbound body observations')
     if snapshot.get('channel') or snapshot.get('grade_scope', 'all') != 'all':
         blocked.append('original scoped masks')
     if snapshot.get('repair_ops') or snapshot.get('light_ops'):

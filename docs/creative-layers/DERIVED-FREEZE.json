@@ -1,0 +1,223 @@
+{
+  "schema": 1,
+  "status": "source-integrated-frozen; runtime acceptance UNRUN",
+  "base_commit": "3a0cb19e05085e7af9b1fd7287ffe84cb58befab",
+  "scope": [
+    "M14 genuine immutable derived-source identity",
+    "composite-input MediaPipe reanalysis binding",
+    "returned-base full-source inspection",
+    "source-specific unified history protection"
+  ],
+  "not_claimed": [
+    "M14 complete",
+    "derived effect consumers or cross-image planners complete",
+    "transparent/HDR photo return",
+    "M13 generation",
+    "32 AI tools complete",
+    "runtime/numerical/visual acceptance",
+    "unconditional 24 MP workflow"
+  ],
+  "integration_map": "docs/creative-layers/DERIVED-SOURCE.md",
+  "checks": {
+    "python_ast_files": 25,
+    "product_imports": false,
+    "execution": false,
+    "tests": "UNRUN",
+    "build_compiler_typecheck": "UNRUN",
+    "inference": "UNRUN",
+    "whitespace": "git diff --check",
+    "hashes": "SHA-256"
+  },
+  "line_counts": {
+    "ui/src/App.tsx": 2091,
+    "ui/src-tauri/src/main.rs": 2015,
+    "engine/src/lumaretouch_engine/server.py": 6939
+  },
+  "files": [
+    {
+      "path": "docs/CREATIVE-INSPECTION-SOURCE.md",
+      "sha256": "70fe5bffe579b97c31dcbd883f0ef5232c9fec19d83bd8f7075a44796364ad70",
+      "bytes": 3534,
+      "ownership": "new"
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-SOURCE.md",
+      "sha256": "fbfb8461dac178738183902f90fee4e168bcf0ee88ab9c2ef035cccecaf8071d",
+      "bytes": 5065,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_source.py",
+      "sha256": "8e005423347abd358a49f28a4251c05c4cef20d15261d77a20da0588dbf5de1c",
+      "bytes": 5475,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "sha256": "0d2408da1a3979ece0fe6a9a7b8d1c8e261b9c5bf5d6ba3abc4c93089f19ee38",
+      "bytes": 18817,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "bd51bcbbad4b64796fad5a9bb1db89249e6712db8e5138d65de4a59bb7f3fccb",
+      "bytes": 22228,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "sha256": "58c133f0519037ada989ace8710ececce7e65f02dc4bca2b0aee1a8666806eb2",
+      "bytes": 5046,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face.py",
+      "sha256": "73a4657f807261fe298a0138c76895ca915d22032b71e4061c6de057a84a7db9",
+      "bytes": 42484,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_quality.py",
+      "sha256": "7d3b2006996857b00cc5c4481bed93a98599df1e38fef20be0abed9dcf700ee2",
+      "bytes": 6342,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/inspection_bundle.py",
+      "sha256": "a85a08b400d0ecf1afff376c35aef6c9ddfff823a8ef8a3af755cf0f9bbb4738",
+      "bytes": 15028,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/inspection_controller.py",
+      "sha256": "30254f100f62a838c76c26b47b86b292ea768b6f35aca78b1adf1956891aa400",
+      "bytes": 9751,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/inspection_job.py",
+      "sha256": "87ec773f40f5328b13ced7268b906cd7d3559cf62479662a1e31509ce5586587",
+      "bytes": 7240,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/inspection_wire.py",
+      "sha256": "f5a1f0be58ac03a38de0c72958e0064fb0baa33865646abbfc3a0d14dca5331c",
+      "bytes": 2984,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/inspection_worker.py",
+      "sha256": "9fef0ac3ca7ceea82e56828261011408df328bf34ed296e187d24acc217d795c",
+      "bytes": 10968,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_document_history.py",
+      "sha256": "fba7ec203041cf86d6b37ff040576c08738e1bc8a0c18b971eb1c32407270e8b",
+      "bytes": 4190,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "b507a0dc653a19e383f92e5edd730e2a851b23b3a97a23b5943b48b277de83b8",
+      "bytes": 6473,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "0ecce00aa9e78c857401b34a91ab27604c6cfe3ae9cec5c54c998d031ae516c6",
+      "bytes": 4202,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_history_persistence.py",
+      "sha256": "50c1cee166bcbb73e860f39b1fe3e45143b447584e70a46e7f101cd9ae9b8362",
+      "bytes": 10429,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "3bcefc3c303c010421f6a11c5eee52c7a3d9dc99f8b20ce83fd15262e112900c",
+      "bytes": 21446,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "413c4fb7a2f0f04edfef6fab38c18911254f8b1ff3558ca8886d757ade57ac1f",
+      "bytes": 16828,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_open.py",
+      "sha256": "8ed054ebeaf88c00523051aff8399a79538a751be7b66e512d72470fb944ce59",
+      "bytes": 3255,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_source_context.py",
+      "sha256": "8a24046429903e3ca77b7d3dd5f6802b639a50e5fa5f72b7c09dbab85bdaa0e8",
+      "bytes": 1434,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/render_snapshot.py",
+      "sha256": "528d432c7afe54a9bb6dd74c4b3b42ae7cf4ac6d1380496ac023285157d4834c",
+      "bytes": 10806,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "3aae05f0a9337d24d7aa14016095ee0fe22fb33fca682541853e46f9dd3b4363",
+      "bytes": 461500,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_history_context.py",
+      "sha256": "8db5afe029d94a55c17c9f449a816d6dc43dd959b34832877e27c7b053c90258",
+      "bytes": 4767,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_source_contract.py",
+      "sha256": "3c10b5eade50954bbcc8d265b732c720f6644b96bdae0bc279084af7bbc9c88b",
+      "bytes": 2806,
+      "ownership": "new"
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_document_contract.py",
+      "sha256": "8d4b885f42ce05a1ee7105b03a31c860ddcd9faf2835c05fea0447dbf9ba0a1f",
+      "bytes": 9334,
+      "ownership": "modified"
+    },
+    {
+      "path": "engine/tests/test_creative_inspection_source.py",
+      "sha256": "fb9d59557c1dc11b1563af86f094a48edc44385b1d7f7e2d4cdcc7a2c1b7d0b0",
+      "bytes": 7801,
+      "ownership": "new"
+    },
+    {
+      "path": "ui/src-tauri/src/inspection_wire.rs",
+      "sha256": "56cc0ebba5f3c7e5e454cc5ab06974f03b4cdfd846035f45fe1352f28701e84c",
+      "bytes": 8473,
+      "ownership": "modified"
+    },
+    {
+      "path": "ui/src/inspectionFrame.test.ts",
+      "sha256": "574eb94f7a2ccb80cc52337ac4f348a7bb3ce06899f9fd174e3f379d09031f17",
+      "bytes": 3924,
+      "ownership": "modified"
+    },
+    {
+      "path": "ui/src/inspectionFrame.ts",
+      "sha256": "8fddab4eaea74cef2435f78f0459ed01c72d7fbe4d0f029f7e63ca592c85909a",
+      "bytes": 3892,
+      "ownership": "modified"
+    }
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}
