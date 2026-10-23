@@ -1,0 +1,146 @@
+{
+  "status": "UNRUN",
+  "requirements": [
+    {
+      "linux_requirement_id": "LNX-REF-PC-32471-C-79b10e6c77",
+      "control": "family",
+      "status": "source_authored_not_accepted"
+    },
+    {
+      "linux_requirement_id": "LNX-REF-PC-32471-C-afeef2f365",
+      "control": "recommended",
+      "status": "source_authored_not_accepted"
+    },
+    {
+      "linux_requirement_id": "LNX-REF-PC-32471-C-aa527d3820",
+      "control": "eyedropper",
+      "status": "source_authored_not_accepted"
+    },
+    {
+      "linux_requirement_id": "LNX-REF-PC-32471-C-7143856a26",
+      "control": "rgb",
+      "status": "source_authored_not_accepted"
+    },
+    {
+      "linux_requirement_id": "LNX-REF-PC-32471-C-ff8f73cbc7",
+      "control": "hex",
+      "status": "source_authored_not_accepted"
+    },
+    {
+      "linux_requirement_id": "LNX-REF-PC-32471-C-adcea25fde",
+      "control": "saved",
+      "status": "source_authored_not_accepted"
+    },
+    {
+      "linux_requirement_id": "LNX-REF-PC-32471-C-4c9236d46f",
+      "control": "satin",
+      "status": "source_authored_not_accepted"
+    },
+    {
+      "linux_requirement_id": "LNX-REF-PC-32471-C-499cecca98",
+      "control": "matte",
+      "status": "source_authored_not_accepted"
+    },
+    {
+      "linux_requirement_id": "LNX-REF-PC-32471-C-d0e1f03b0f",
+      "control": "cream",
+      "status": "source_authored_not_accepted"
+    },
+    {
+      "linux_requirement_id": "LNX-REF-PC-32471-C-565b3b9081",
+      "control": "pearl",
+      "status": "source_authored_not_accepted"
+    },
+    {
+      "linux_requirement_id": "LNX-REF-PC-32471-C-bdd6881023",
+      "control": "water_gloss",
+      "status": "source_authored_not_accepted"
+    }
+  ],
+  "cases": [
+    {
+      "case": "all_13_patterns_at_same_colour_are_spatially_distinct",
+      "status": "UNRUN"
+    },
+    {
+      "case": "five_textures_same_pattern_colour_existing_detail",
+      "status": "UNRUN"
+    },
+    {
+      "case": "zero_strength_bit_exact_no_native_load",
+      "status": "UNRUN"
+    },
+    {
+      "case": "support_zero_exact_no_delta",
+      "status": "UNRUN"
+    },
+    {
+      "case": "dark_lipstick_not_skin_threshold_rejected",
+      "status": "UNRUN"
+    },
+    {
+      "case": "outer_ring_and_inner_cavity_teeth_unchanged",
+      "status": "UNRUN"
+    },
+    {
+      "case": "rolled_measured_landmark_coordinates",
+      "status": "UNRUN"
+    },
+    {
+      "case": "sideface_clipped_crossed_small_lips_rejected",
+      "status": "UNRUN"
+    },
+    {
+      "case": "unknown_occluder_review_and_recovery",
+      "status": "UNRUN"
+    },
+    {
+      "case": "stale_source_face_landmark_review_rejected",
+      "status": "UNRUN"
+    },
+    {
+      "case": "RGB_HEX_invalid_and_lowercase_normalization",
+      "status": "UNRUN"
+    },
+    {
+      "case": "six_favourites_duplicate_seventh_remove",
+      "status": "UNRUN"
+    },
+    {
+      "case": "picker_stale_capture_and_face_change_rejected",
+      "status": "UNRUN"
+    },
+    {
+      "case": "source_owned_recovery_and_overlap",
+      "status": "UNRUN"
+    },
+    {
+      "case": "undo_redo_project_dormant_graph_roundtrip",
+      "status": "UNRUN"
+    },
+    {
+      "case": "preset_intent_only_target_review_required",
+      "status": "UNRUN"
+    },
+    {
+      "case": "confirmed_batch_target_own_analysis",
+      "status": "UNRUN"
+    },
+    {
+      "case": "full_resolution_tiled_export_parity_RGB16",
+      "status": "UNRUN"
+    },
+    {
+      "case": "HDR_out_of_range_rejected_without_clipping",
+      "status": "UNRUN"
+    },
+    {
+      "case": "native_missing_ABI_mismatch_atomic_failure",
+      "status": "UNRUN"
+    },
+    {
+      "case": "rapid_latest_intent_receipt_undo_switch",
+      "status": "UNRUN"
+    }
+  ]
+}

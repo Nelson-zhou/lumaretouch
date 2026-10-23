@@ -1,0 +1,259 @@
+{
+  "version": 2,
+  "base": "f68a5d7d",
+  "status": "source_integrated_runtime_UNRUN",
+  "shared_files": [
+    "engine/src/lumaretouch_engine/people_algorithms.py",
+    "engine/src/lumaretouch_engine/people_effects.py",
+    "engine/src/lumaretouch_engine/people_render_runtime.py",
+    "engine/src/lumaretouch_engine/people_engine_runtime.py",
+    "engine/src/lumaretouch_engine/people_owned_inputs.py",
+    "engine/src/lumaretouch_engine/people_pipeline.py",
+    "engine/src/lumaretouch_engine/people_export.py",
+    "engine/src/lumaretouch_engine/facial_wrinkle_recovery.py",
+    "engine/src/lumaretouch_engine/vram.py",
+    "engine/src/lumaretouch_engine/people_support_assets.py",
+    "engine/src/lumaretouch_engine/people_host_commands.py",
+    "engine/src/lumaretouch_engine/people_host.py",
+    "engine/src/lumaretouch_engine/people_project.py",
+    "engine/src/lumaretouch_engine/history_policy.py",
+    "engine/src/lumaretouch_engine/effect_recovery_state.py",
+    "engine/src/lumaretouch_engine/effect_recovery_runtime.py",
+    "engine/src/lumaretouch_engine/server.py",
+    "engine/src/lumaretouch_engine/workflow_ports.py",
+    "engine/src/lumaretouch_engine/scope.py",
+    "engine/src/lumaretouch_engine/people_scope.py",
+    "packaging/stage-engine.sh",
+    "ui/src/people/model.ts",
+    "ui/src/native.ts",
+    "ui/src/effectRecovery/model.ts",
+    "ui/src/presets/presetModel.ts",
+    "ui/src/batch/batchScopeOptions.ts",
+    "ui/src/components/RetouchPanel.tsx",
+    "ui/src/App.tsx",
+    "ui/src-tauri/src/people_api.rs"
+  ],
+  "excluded_parallel_slices": [
+    "eyeliner",
+    "neck_lines"
+  ],
+  "files": [
+    {
+      "path": "core/lipstick/lib.rs",
+      "sha256": "cffb4da08cbc52f71793d17e2ba57487583d578dddf5be5d6c4b1aa2c0fd6358"
+    },
+    {
+      "path": "docs/lipstick/INTEGRATION.md",
+      "sha256": "2af34bd8c3ba4a5749213021b828a613f9877cbe3c95b574af3f4148537656b9"
+    },
+    {
+      "path": "docs/lipstick/acceptance.json",
+      "sha256": "3e0019ade85459527ba1af56966e97337ad473f37232df3abe3ba702446f92a2"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_runtime.py",
+      "sha256": "53261c41efea3d466e33b24f30040f1181b7b16692ab6223ed50b311a8f2c937"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_state.py",
+      "sha256": "8ad45f84ceb445af284ef55192423fa206c66ec1e06b03c0de393ff6b91e66e0"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_wrinkle_recovery.py",
+      "sha256": "7868a007a19fb4f1473ae9c83c0d78aa5bf045fb9aba5d0e4af261c0a3691d7b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "0ed48eb5ff0c776ae5bd3585b7860f2b8408ce2521b782ac30714b21fbd3abca"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lipstick_adapters.py",
+      "sha256": "e343947493e882be90a044e3302b55adfc70c858a937e143a76479081c27cb50"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lipstick_catalogue.py",
+      "sha256": "ac6efe4f47755e2cf41b4b4f6e2b59541b9b82cd48c9369dad8b5c503946ecb0"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lipstick_geometry.py",
+      "sha256": "d174c20c7d6011a6f7d895c2c339e927dd5794447499bc3ac62ec0c415548477"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lipstick_host.py",
+      "sha256": "f348f5d55a69751ee5e65ed6ad904389c4f0384498c5c9f483ccc05ef4b93d2f"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lipstick_layer.py",
+      "sha256": "9a8859277dd4b7e2829219253d2076ddc196641b12f98494830f274dce1be127"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lipstick_native.py",
+      "sha256": "e11a81b433e128d479273a683a0fa826e9bd37056eb152ad776c772ed2388c79"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lipstick_patterns.json",
+      "sha256": "cd6b3295d031349e1c5bc031c391018d2aedf93e2cbce8dce54e2781ea7908e7"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lipstick_project.py",
+      "sha256": "dec4b6431475c22678dbbe38ad34fe0b267b83c37b4e1a9588b0682b34c859ce"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lipstick_scope.py",
+      "sha256": "c598eaa56873d4a2b188b4fbb8f0a8812df71e1774653274cf4b32f402e9360f"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lipstick_state.py",
+      "sha256": "2a6699a4ee12082e81a2a66ca8deb702b48dff1e6fb11d4488036df696b6fb12"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lipstick_support.py",
+      "sha256": "c4350483f13c34a847fea958fd7d712de6d51661611bf499a963cb8dd0205ed2"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "b8d0766a068100de63075c3518aca66c1d3bba876ce9235ea45bb52dc501fa39"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "sha256": "c66d5dc0522a97ba82abf65df7ccd12cfa20b490dbfedcec8adf9b1222085ab8"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "658f10e3dd1b6260ec6fca8c45ecd60705b9593dbf8e622cc307ae10d178de50"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "2dcc5b3521cd24724f029d38a69b6640faf76aa93853ecc27a8d971c65a1a782"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "0eb0cc50c22c1df5891ccf9a64fad12496bcd8adef9dea2b69cf5c3446b3106e"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "e0395b6afcd56c06b7a2d8749cb289cec8ae4273f1a13ee55c5d950023539e9c"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "sha256": "a16d4023e2872a156d846d4bb0cdd81b84078cb72c26ff8c9e9dd08ac827c37b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "sha256": "134c4544b95d3039f32f3853a0256faf43faa3663e74432655bb4169da2a3c34"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_project.py",
+      "sha256": "3ea3ca5aa7af750e4ec197fe916e1b135049ee117f75d0784271c23f68da22e1"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "f98848f6b541e748dd63cd97195f8c8bad0b871b081c6c18eaebadc64c354c36"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "d4832e7e6b36358d9be21aa6f236b15e7913e20e62e20839088560fb03403416"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_support_assets.py",
+      "sha256": "ad485c6136f48c1743804cc57efe56c92b71a0de4d651b2ce16b40cc8397d389"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "75c56bb9d960c730885af379bdf11b2ab53f60bf9e9ef76c2186a465f39e4958"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "b18392342333d3d2e65a046b5a8e58e9243ae8321618e29327c6e800bc33db99"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "4d3d497c4517ce5dd59571eaafb20ad8f8b222fa800d8c51819bf61a52fbe4e7"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "4e5af5996dc8f2fc44c48a41d1d72971380752c6ffe766dcc85fc058c71ee406"
+    },
+    {
+      "path": "engine/tests/fixtures/lipstick/contract_unrun.py",
+      "sha256": "25796f663d9ca014486146559672270062b457b2b41568c97b90a3b03a4b0449"
+    },
+    {
+      "path": "engine/tests/fixtures/lipstick/recipes.json",
+      "sha256": "1d80eaea36723815f86dd3cf5851f84799f1e7d1fce620c73ba0a19a7ca3fc63"
+    },
+    {
+      "path": "packaging/build-lipstick.sh",
+      "sha256": "847b3e0fb7c16a5849674cf5435fe0b4d93d4dddbbe9abc8ab7e70bb3e587c67"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "1fe3dd5790a0f413872f64d04152bd55acbaf635df5126c7f63111cb0f5b287e"
+    },
+    {
+      "path": "ui/src-tauri/src/people_api.rs",
+      "sha256": "13776d8c79b69f543703e295f5117e978d04773a0e544326b815e46025a2c224"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "b4d5119d989751519fa0f7a72800ce25bd6ad69272ece026801803e5113d6f83"
+    },
+    {
+      "path": "ui/src/batch/batchScopeOptions.ts",
+      "sha256": "ef2820540f567389a2a3bf8d967f5c31c3783414d03e7789b33c57cbd8f73758"
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "590ea6d8ad67cff306aa621be57011f8a199eee2aa62462c29ce1759ca836623"
+    },
+    {
+      "path": "ui/src/effectRecovery/model.ts",
+      "sha256": "a00873861d4b503c24a0fd923be9d8fb3c94a5147ceefe4800917397734e4b88"
+    },
+    {
+      "path": "ui/src/lipstick/LipstickControls.tsx",
+      "sha256": "f57471e8fb405f0b52f36135044b96052afb1fea43dbe4e9f4d3551a1cef14f4"
+    },
+    {
+      "path": "ui/src/lipstick/LipstickPanel.tsx",
+      "sha256": "35730834c7d9a510dfedfb8bd45d522761ed47756fd0111ea2ae75402789530a"
+    },
+    {
+      "path": "ui/src/lipstick/LipstickSupportEditor.tsx",
+      "sha256": "b5ad76f8b28030923e15fb3052c0a1152479c1c012f5b73a6079daec4e98f099"
+    },
+    {
+      "path": "ui/src/lipstick/catalogue.ts",
+      "sha256": "be8f3a5da68f0efd41ad5a3b1439e7a576b64640d1d876ec8c6618e9f427892b"
+    },
+    {
+      "path": "ui/src/lipstick/lipstick.css",
+      "sha256": "5eafb6d976aaa0d740bad1210e09adb7b191949b1f9e3e63a2fbadbfc5fa3307"
+    },
+    {
+      "path": "ui/src/lipstick/model.ts",
+      "sha256": "92dd7e454a06bceb2a498cb5537469c0c54eef5d3f5cf83e69023906c9baf26e"
+    },
+    {
+      "path": "ui/src/lipstick/picker.ts",
+      "sha256": "308320b0637d39bc803388bb9ae45cc0c7be69f3f2e70645b27c49364880e08e"
+    },
+    {
+      "path": "ui/src/lipstick/useLipstickPicker.ts",
+      "sha256": "e41eedd22747e5700e280d37028ec644f82f835112001429ea68f2702cecc682"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "e28834ae294217964b08c7a5a9ed27f7c1c807d2cce7740b3e873862b8fe18e3"
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "cd956c570d6c5d41b7e728b772dfa88b61263e3ce12d2aed8363f57eef051cda"
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "68a9643cfa100456fc9905d33073c9260d2667eb9ab863548d92d727ed6cdf04"
+    }
+  ],
+  "self": "docs/lipstick/manifest.json is intentionally not self-hashed"
+}

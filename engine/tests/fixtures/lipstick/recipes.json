@@ -1,0 +1,461 @@
+{
+  "purpose": "recipe-only contract vectors, not anatomy or visual acceptance",
+  "status": "UNRUN",
+  "recipes": [
+    {
+      "version": 1,
+      "pattern": "full",
+      "texture": "satin",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "full",
+      "texture": "matte",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "full",
+      "texture": "cream",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "full",
+      "texture": "pearl",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "full",
+      "texture": "water_gloss",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "inner_bloom",
+      "texture": "satin",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "inner_bloom",
+      "texture": "matte",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "inner_bloom",
+      "texture": "cream",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "inner_bloom",
+      "texture": "pearl",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "inner_bloom",
+      "texture": "water_gloss",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "soft_edge",
+      "texture": "satin",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "soft_edge",
+      "texture": "matte",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "soft_edge",
+      "texture": "cream",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "soft_edge",
+      "texture": "pearl",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "soft_edge",
+      "texture": "water_gloss",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "contour",
+      "texture": "satin",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "contour",
+      "texture": "matte",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "contour",
+      "texture": "cream",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "contour",
+      "texture": "pearl",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "contour",
+      "texture": "water_gloss",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "center_glow",
+      "texture": "satin",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "center_glow",
+      "texture": "matte",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "center_glow",
+      "texture": "cream",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "center_glow",
+      "texture": "pearl",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "center_glow",
+      "texture": "water_gloss",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "upper_focus",
+      "texture": "satin",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "upper_focus",
+      "texture": "matte",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "upper_focus",
+      "texture": "cream",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "upper_focus",
+      "texture": "pearl",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "upper_focus",
+      "texture": "water_gloss",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "lower_focus",
+      "texture": "satin",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "lower_focus",
+      "texture": "matte",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "lower_focus",
+      "texture": "cream",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "lower_focus",
+      "texture": "pearl",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "lower_focus",
+      "texture": "water_gloss",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "cupid",
+      "texture": "satin",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "cupid",
+      "texture": "matte",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "cupid",
+      "texture": "cream",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "cupid",
+      "texture": "pearl",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "cupid",
+      "texture": "water_gloss",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "corner_fade",
+      "texture": "satin",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "corner_fade",
+      "texture": "matte",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "corner_fade",
+      "texture": "cream",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "corner_fade",
+      "texture": "pearl",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "corner_fade",
+      "texture": "water_gloss",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "vertical_ombre",
+      "texture": "satin",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "vertical_ombre",
+      "texture": "matte",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "vertical_ombre",
+      "texture": "cream",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "vertical_ombre",
+      "texture": "pearl",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "vertical_ombre",
+      "texture": "water_gloss",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "horizontal_ombre",
+      "texture": "satin",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "horizontal_ombre",
+      "texture": "matte",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "horizontal_ombre",
+      "texture": "cream",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "horizontal_ombre",
+      "texture": "pearl",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "horizontal_ombre",
+      "texture": "water_gloss",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "double_rim",
+      "texture": "satin",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "double_rim",
+      "texture": "matte",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "double_rim",
+      "texture": "cream",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "double_rim",
+      "texture": "pearl",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "double_rim",
+      "texture": "water_gloss",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "petal",
+      "texture": "satin",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "petal",
+      "texture": "matte",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "petal",
+      "texture": "cream",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "petal",
+      "texture": "pearl",
+      "strength": 0.7,
+      "colour": "#120B18"
+    },
+    {
+      "version": 1,
+      "pattern": "petal",
+      "texture": "water_gloss",
+      "strength": 0.7,
+      "colour": "#120B18"
+    }
+  ]
+}

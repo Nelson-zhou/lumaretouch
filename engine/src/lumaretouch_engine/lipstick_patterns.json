@@ -1,0 +1,143 @@
+{
+  "version": 1,
+  "provenance": "Original analytic coverage functions; no reference assets or generated anatomy.",
+  "patterns": [
+    {
+      "id": "full",
+      "kernel": 0,
+      "label": "均匀覆色",
+      "recommended": [
+        "#A94359",
+        "#C75C67",
+        "#7E314B"
+      ]
+    },
+    {
+      "id": "inner_bloom",
+      "kernel": 1,
+      "label": "内缘晕染",
+      "recommended": [
+        "#B75D49",
+        "#8B3655",
+        "#D27680"
+      ]
+    },
+    {
+      "id": "soft_edge",
+      "kernel": 2,
+      "label": "柔边雾染",
+      "recommended": [
+        "#A94359",
+        "#C75C67",
+        "#7E314B"
+      ]
+    },
+    {
+      "id": "contour",
+      "kernel": 3,
+      "label": "外缘描染",
+      "recommended": [
+        "#B75D49",
+        "#8B3655",
+        "#D27680"
+      ]
+    },
+    {
+      "id": "center_glow",
+      "kernel": 4,
+      "label": "中央聚色",
+      "recommended": [
+        "#A94359",
+        "#C75C67",
+        "#7E314B"
+      ]
+    },
+    {
+      "id": "upper_focus",
+      "kernel": 5,
+      "label": "上唇强调",
+      "recommended": [
+        "#B75D49",
+        "#8B3655",
+        "#D27680"
+      ]
+    },
+    {
+      "id": "lower_focus",
+      "kernel": 6,
+      "label": "下唇强调",
+      "recommended": [
+        "#A94359",
+        "#C75C67",
+        "#7E314B"
+      ]
+    },
+    {
+      "id": "cupid",
+      "kernel": 7,
+      "label": "唇峰聚色",
+      "recommended": [
+        "#B75D49",
+        "#8B3655",
+        "#D27680"
+      ]
+    },
+    {
+      "id": "corner_fade",
+      "kernel": 8,
+      "label": "唇角渐隐",
+      "recommended": [
+        "#A94359",
+        "#C75C67",
+        "#7E314B"
+      ]
+    },
+    {
+      "id": "vertical_ombre",
+      "kernel": 9,
+      "label": "纵向渐染",
+      "recommended": [
+        "#B75D49",
+        "#8B3655",
+        "#D27680"
+      ]
+    },
+    {
+      "id": "horizontal_ombre",
+      "kernel": 10,
+      "label": "横向渐染",
+      "recommended": [
+        "#A94359",
+        "#C75C67",
+        "#7E314B"
+      ]
+    },
+    {
+      "id": "double_rim",
+      "kernel": 11,
+      "label": "双缘层染",
+      "recommended": [
+        "#B75D49",
+        "#8B3655",
+        "#D27680"
+      ]
+    },
+    {
+      "id": "petal",
+      "kernel": 12,
+      "label": "花瓣分区",
+      "recommended": [
+        "#A94359",
+        "#C75C67",
+        "#7E314B"
+      ]
+    }
+  ],
+  "textures": [
+    "satin",
+    "matte",
+    "cream",
+    "pearl",
+    "water_gloss"
+  ]
+}

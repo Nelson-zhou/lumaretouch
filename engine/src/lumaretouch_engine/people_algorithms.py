@@ -3,7 +3,7 @@ from . import people_resolver as R
 from . import brow_shape_state as B, nose_shape_state as N, eye_shape_state as E, mouth_shape_state as M
 from . import lip_makeup_state as L, facial_wrinkle_state as W, hair_colour_state as HAIR
 from .ops import deform as D, enhance as H
-from . import eye_light_state as EYE_LIGHT, blush_makeup_state as BLUSH
+from . import eye_light_state as EYE_LIGHT, blush_makeup_state as BLUSH, lipstick_state as LIPSTICK
 
 DEFORM = 'lnx.deform.v1'
 ENHANCE = 'lnx.enhance.v1'
@@ -25,7 +25,7 @@ def specifications():
             ENHANCE: (check_enhance({}), check_enhance), WRINKLES: (W.check({}), W.check),
             HAIR.OPERATION: (HAIR.neutral(), HAIR.check),
             EYE_LIGHT.OPERATION: (EYE_LIGHT.neutral(), EYE_LIGHT.check),
-            BLUSH.OP: (BLUSH.neutral(), BLUSH.check)}
+            BLUSH.OP: (BLUSH.neutral(), BLUSH.check), LIPSTICK.OP: (LIPSTICK.neutral(), LIPSTICK.check)}
 
 
 def leaves(value, prefix=''):

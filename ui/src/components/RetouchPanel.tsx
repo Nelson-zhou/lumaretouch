@@ -68,6 +68,7 @@ export interface RetouchProps {
   whiteBalanceBusy?: boolean;
   colorSamplePanel?: React.ReactNode;
   blushMakeupPanel?: React.ReactNode;
+  lipstickPanel?: React.ReactNode;
   colorActions?: ColorActionControlsProps;
   sourcePatchPanel?: React.ReactNode;cloneStampPanel?: React.ReactNode;localMasksPanel?: React.ReactNode;
   status: EngineStatus | null;
@@ -256,6 +257,17 @@ const WIRED: Record<string, string> = {
   "PC-32466|眉毛/眉头长短": "brow.inner_length",
   "PC-32466|眉毛/眉尾长短": "brow.outer_length",
 
+  "PC-32471|局部妆容/口红": "lipstick.family",
+  "PC-32471|局部妆容/口红/推荐颜色": "lipstick.recommended",
+  "PC-32471|局部妆容/口红/吸管": "lipstick.eyedropper",
+  "PC-32471|局部妆容/口红/RGB": "lipstick.rgb",
+  "PC-32471|局部妆容/口红/HEX": "lipstick.hex",
+  "PC-32471|局部妆容/口红/收藏颜色": "lipstick.saved",
+  "PC-32471|局部妆容/口红/缎面": "lipstick.satin",
+  "PC-32471|局部妆容/口红/哑光": "lipstick.matte",
+  "PC-32471|局部妆容/口红/奶油": "lipstick.cream",
+  "PC-32471|局部妆容/口红/珠光": "lipstick.pearl",
+  "PC-32471|局部妆容/口红/水光": "lipstick.water_gloss",
   "PC-32471|局部妆容/腮红": "blush.family",
   "PC-32471|局部妆容/腮红/推荐颜色": "blush.recommended",
   "PC-32471|局部妆容/腮红/吸管": "blush.eyedropper",
@@ -581,6 +593,8 @@ export default function RetouchPanel(props: RetouchProps) {
       why={props.faceOk?(doc?.brow_shape?.suspended??undefined):props.faceWhy}
       documentId={doc?.document_id??""} faceId={doc?.brow_shape?.selected_face_id??""} revision={doc?.brow_shape?.revision??0} peopleContext={capturedPeople}/>;
     if (kind.startsWith("brow.")) return null;
+    if (kind === "lipstick.family") return <div key={leaf.path}>{props.lipstickPanel}</div>;
+    if (kind.startsWith("lipstick.")) return null;
     if (kind === "blush.family") return <div key={leaf.path}>{props.blushMakeupPanel}</div>;
     if (kind.startsWith("blush.")) return null;
     if (kind === "lip.family") return <LipMakeupControls key={leaf.path} value={doc?.lip_makeup?.recipe??neutralLips()}
