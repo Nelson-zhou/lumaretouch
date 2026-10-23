@@ -9,6 +9,7 @@ const IDENTITY_KEYS: &[&str] = &[
 ];
 
 pub(crate) fn selection(action: &str, channel: &str) -> Result<(), String> {
+    if action == "colour_editor" && channel == "master" { return Ok(()); }
     if !ACTIONS.contains(&action)
         || !["master", "red", "green", "blue", "luminance"].contains(&channel)
         || (action != "curve" && channel != "master") {
@@ -17,7 +18,8 @@ pub(crate) fn selection(action: &str, channel: &str) -> Result<(), String> {
     Ok(())
 }
 pub(crate) fn stage(action: &str, channel: &str) -> String {
-    if action.starts_with("levels_") { "levels-input".into() }
+    if action == "colour_editor" { "colour-editor-input".into() }
+    else if action.starts_with("levels_") { "levels-input".into() }
     else if action == "hsl" { "hsl-input".into() }
     else { format!("curve-{channel}-input") }
 }

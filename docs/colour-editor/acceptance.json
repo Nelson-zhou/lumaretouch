@@ -1,0 +1,174 @@
+{
+  "schema": 1,
+  "baseline_commit": "7e8d29e549abbf546a44b023186c7a56fa33e63e",
+  "baseline_project_schema": 21,
+  "required_project_schema": 22,
+  "runtime_status": "UNRUN",
+  "controls": [
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-ba6ba1778d",
+      "control_path": "色彩编辑器",
+      "case_id": "CE-001",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Independent continuous editor, complete workflow, no HSL/CMYK alias",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    },
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-e8a8d47afc",
+      "control_path": "色彩编辑器/色轮范围",
+      "case_id": "CE-002",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Wheel pointer and numeric controls select wider/narrower wrapped hue interval",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    },
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-214f651fb6",
+      "control_path": "色彩编辑器/色彩平滑&亮度平滑",
+      "case_id": "CE-003",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Colour/luminance boundaries are smooth in colour domain, never spatial blur",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    },
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-0494c16eaf",
+      "control_path": "色彩编辑器/色彩平滑",
+      "case_id": "CE-004",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Colour smoothness changes hue/saturation boundary only when unlinked",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    },
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-24532d7880",
+      "control_path": "色彩编辑器/亮度平滑",
+      "case_id": "CE-005",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Luminance smoothness changes luminance boundary only when unlinked",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    },
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-65c4f6f110",
+      "control_path": "色彩编辑器/联动锁",
+      "case_id": "CE-006",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Link synchronizes both values, unlink preserves independently editable values",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    },
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-4e50d85350",
+      "control_path": "色彩编辑器/色相偏移",
+      "case_id": "CE-007",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Hue offset accepts -100,0,100; default zero and neutral identity",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    },
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-8576f76897",
+      "control_path": "色彩编辑器/饱和度偏移",
+      "case_id": "CE-008",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Saturation offset accepts -100,0,100; default zero and neutral identity",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    },
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-53bacf8a09",
+      "control_path": "色彩编辑器/明亮度偏移",
+      "case_id": "CE-009",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Luminance offset accepts -100,0,100; default zero and neutral identity",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    },
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-a3c3fec4b0",
+      "control_path": "色彩编辑器/色彩均匀度",
+      "case_id": "CE-010",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Uniformity source target is full-domain deterministic, invalidated by upstream/mask",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    },
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-366f0ee88b",
+      "control_path": "色彩编辑器/色相均匀度",
+      "case_id": "CE-011",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Hue uniformity converges by shortest circular distance; negative disperses",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    },
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-bb43ada39c",
+      "control_path": "色彩编辑器/饱和度均匀度",
+      "case_id": "CE-012",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Saturation uniformity converges/disperses around full-source weighted target",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    },
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-e507f9204b",
+      "control_path": "色彩编辑器/明亮度均匀度",
+      "case_id": "CE-013",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Luminance uniformity converges/disperses around full-source weighted target",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    },
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-eb654a89e8",
+      "control_path": "色彩编辑器/显示所选色彩范围",
+      "case_id": "CE-014",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Selected colour/rest grey includes external-mask exclusion; never export/history",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    },
+    {
+      "requirement_id": "LNX-REF-PC-32455-C-cd2ffcde59",
+      "control_path": "色彩编辑器/反转色彩范围",
+      "case_id": "CE-015",
+      "status": "UNRUN",
+      "implementation": "integrated source; runtime and visual acceptance UNRUN",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "expected": "Invert complements selection before multiplying external mask",
+      "fixture": "fixtures/behaviour.json",
+      "test_evidence": "UNRUN; no executed pass"
+    }
+  ]
+}

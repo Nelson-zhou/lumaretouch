@@ -16,6 +16,7 @@ pub(crate) fn enqueue(state:&AppState,handle:&EngineHandle,mut command:Value)->R
 #[tauri::command]
 pub(crate) fn color_picker(state:State<'_,Arc<AppState>>,request_id:String,capture_id:String,ticket:String,
     action:String,channel:String,region:Region,delta:f64,preview:bool)->Result<Value,String>{
+    if action=="colour_editor" {return Err("Use colour editor verified sample, not HSL/curve mutation".into());}
     id(&request_id)?;id16(&capture_id)?;token(&ticket)?;region.validate()?;crate::color_picker_host::selection(&action,&channel)?;
     let limit=if action=="hsl"{60.}else if action=="curve"{1.}else{0.};
     if !delta.is_finite()||delta.abs()>limit{return Err("color picker drag out of range".into());}

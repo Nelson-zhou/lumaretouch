@@ -72,6 +72,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     configure_grading(spec,snap)
     from .selective_colour_adapters import configure_export as configure_selective
     configure_selective(spec,snap)
+    from .colour_editor_adapters import configure_export as configure_editor
+    configure_editor(spec,snap)
     from .primary_calibration_adapters import configure_export as configure_primary
     configure_primary(spec,snap)
     spec.people=snap.get("people")
@@ -126,6 +128,7 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     if not for_document and LIPS.active(snap.get("lip_makeup")):
         raise ValueError("唇妆需逐图绑定真实选中人物，请先同步参数到目标照片")
     if not for_document:
+        if (spec.colour_editor or {}).get("scope")=="local": raise ValueError("Local colour editor requires this target document mask; cannot transplant a source mask")
         if spec.grade_scope == "objects": raise ValueError("Source-bound mask objects cannot transfer to another photo")
         skipped += ["repair", "light", "deform", "channel（笔迹与掩膜属于当前文档）",
                     "enhance（眼牙掩膜是从当前那一张脸的关键点画的，不能搬到别的图）",
@@ -212,7 +215,7 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
             if pc is None or name not in (pc.masks or {}):
                 raise ValueError("Required semantic mask is unavailable: " + name)
             spec.local_mask_semantics[name] = resample_field(np.asarray(pc.masks[name], dtype=np.float32), (eh, ew))
-    if spec.grade_scope in ("skin", "brush") and tuple(spec.grade) != (0.0, 0.0, 0.0, 1.0):
+    if spec.grade_scope in ("skin", "brush") and (tuple(spec.grade) != (0.0, 0.0, 0.0, 1.0) or (spec.colour_editor or {}).get("scope")=="local"):
         cov = None
         if spec.grade_scope == "brush":
             gm = snap.get("grade_mask")

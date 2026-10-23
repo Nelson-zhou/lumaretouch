@@ -1,0 +1,14 @@
+export type Recipe={version:1;algorithm:'lrt-continuous-colour-editor-v1';working_space:'extended-srgb-d65';scope:'all'|'local';selection:{hue:number;half_width:number;saturation:[number,number];luminance:[number,number]};colour_smoothness:number;luminance_smoothness:number;linked:boolean;offsets:[number,number,number];uniformity:[number,number,number];invert:boolean};
+export function neutral():Recipe{return {version:1,algorithm:'lrt-continuous-colour-editor-v1',working_space:'extended-srgb-d65',scope:'all',selection:{hue:0,half_width:.08,saturation:[0,1],luminance:[0,1]},colour_smoothness:.1,luminance_smoothness:.1,linked:true,offsets:[0,0,0],uniformity:[0,0,0],invert:false};}
+function num(v:number,lo:number,hi:number){if(typeof v!=='number'||!Number.isFinite(v)||v<lo||v>hi)throw Error('色彩编辑器数值越界');return v;}
+export function checked(r:Recipe):Recipe{
+ if(!r||Object.keys(r).sort().join()!==Object.keys(neutral()).sort().join()||r.version!==1||r.algorithm!=='lrt-continuous-colour-editor-v1'||r.working_space!=='extended-srgb-d65'||!['all','local'].includes(r.scope)||typeof r.invert!=='boolean'||typeof r.linked!=='boolean')throw Error('色彩编辑器配方无效');
+ const s=r.selection;if(!s||Object.keys(s).sort().join()!=='half_width,hue,luminance,saturation')throw Error('色域字段不完整');num(s.hue,0,1);num(s.half_width,0,.5);
+ for(const pair of [s.saturation,s.luminance]){if(!Array.isArray(pair)||pair.length!==2)throw Error('色域区间无效');pair.forEach(v=>num(v,0,1));if(pair[0]>pair[1])throw Error('区间起点不能超过终点');}
+ for(const a of [r.offsets,r.uniformity]){if(!Array.isArray(a)||a.length!==3)throw Error('需要三个 H/S/L 分量');a.forEach(v=>num(v,-100,100));}
+ num(r.colour_smoothness,0,1);num(r.luminance_smoothness,0,1);if(r.linked&&r.colour_smoothness!==r.luminance_smoothness)throw Error('联动平滑值不一致');return structuredClone(r);
+}
+export function smoothing(r:Recipe,k:'colour_smoothness'|'luminance_smoothness',v:number):Recipe{const n=checked(r);n[k]=v;if(n.linked)n.colour_smoothness=n.luminance_smoothness=v;return checked(n);}
+export type SampleProof={document_id:string;capture_id:string;ticket:string;generation:string;recipe_document_id:string;recipe_revision:string};
+export type VerifiedSample={proof:SampleProof;source_stage:'colour-editor-input';hsl:[number,number,number]};
+export function sampled(r:Recipe,s:VerifiedSample,expected:SampleProof):Recipe{for(const k of ['document_id','capture_id','ticket','generation','recipe_document_id','recipe_revision'] as (keyof SampleProof)[])if(s.proof[k]!==expected[k])throw Error('吸管画面已过期');if(s.source_stage!=='colour-editor-input')throw Error('不能从显示结果反推输入');s.hsl.forEach(v=>num(v,0,1));const n=checked(r);n.selection.hue=s.hsl[0];n.selection.saturation=[Math.max(0,s.hsl[1]-.2),Math.min(1,s.hsl[1]+.2)];n.selection.luminance=[Math.max(0,s.hsl[2]-.2),Math.min(1,s.hsl[2]+.2)];return checked(n);}

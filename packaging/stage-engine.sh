@@ -204,3 +204,7 @@ cp "$here/../core/photo_detail/photo_detail.rs" "$here/../LICENSE" "$here/../doc
 bash "$here/build-photo-grain.sh" "$stage/lumaretouch_engine/bin/liblrt_photo_grain.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/photo_grain"
 cp "$here/../core/photo_grain/lib.rs" "$here/../LICENSE" "$here/../docs/photo-grain/CONTRACT.md" "$stage/lumaretouch_engine/third_party/photo_grain/"
+
+bash "$here/build-colour-editor.sh" "$stage/lumaretouch_engine/bin/liblrt_colour_editor.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/colour_editor"
+cp "$here/../core/colour_editor/lib.rs" "$here/../LICENSE" "$here/../docs/colour-editor/INTEGRATION.md" "$stage/lumaretouch_engine/third_party/colour_editor/"

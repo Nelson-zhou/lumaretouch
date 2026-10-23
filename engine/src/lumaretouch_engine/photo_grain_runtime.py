@@ -30,7 +30,7 @@ def admit(w,h,scale=1):
     return reserve
 
 
-def render_preview(engine, *, pack=True):
+def render_preview(engine, *, pack=True, editor_mode=None):
     from .decode import load_full
     from .local_mask_state import file_stamp
     from .export import export_image, export_image16, _srgb_bytes
@@ -52,8 +52,9 @@ def render_preview(engine, *, pack=True):
     from .extended_tone_host import revision
     rev=revision(engine)
     def cancelled():
+        if editor_mode=="input" and engine._colour_editor_service().capture_cancel.is_set():return True
         if getattr(engine,'_photo_grain_cancelled',lambda:False)():return True
-        for key in ('_colour_grading_cancelled','_selective_colour_cancelled','_primary_calibration_cancelled','_photo_detail_cancelled','_extended_tone_cancelled'):
+        for key in ('_colour_editor_cancelled','_colour_grading_cancelled','_selective_colour_cancelled','_primary_calibration_cancelled','_photo_detail_cancelled','_extended_tone_cancelled'):
             if getattr(engine,key,lambda:False)():return True
         return str(engine._load_id)!=document or revision(engine)!=rev
     def progress(*_):
@@ -63,7 +64,7 @@ def render_preview(engine, *, pack=True):
     override=getattr(engine,'_photo_grain_render_override',None)
     if override is not None:state={**state,S.KEY:S.check(override)}
     # These existing temporary preview stages intentionally do not persist state.
-    for name in ('colour_grading','selective_colour','primary_calibration'):
+    for name in ('colour_editor','colour_grading','selective_colour','primary_calibration'):
         if getattr(engine,'_'+name+'_preview_active',False):
             stage=getattr(engine._vram,name,None)
             recipe=getattr(stage,'recipe',None)
@@ -81,6 +82,12 @@ def render_preview(engine, *, pack=True):
     spec,skipped=build_export_spec(snap,h,w,for_document=for_doc)
     if skipped:raise ValueError('Full-source grain preview cannot omit layers: '+', '.join(map(str,skipped)))
     spec.float_output=True
+    if editor_mode is not None:
+        spec._colour_editor_mode=editor_mode
+        from .colour_editor_native import FullDomain
+        domain=engine.__dict__.get('_colour_editor_domain_cache')
+        if domain is None: domain=FullDomain();engine._colour_editor_domain_cache=domain
+        spec._colour_editor_domain=domain
     geometry=(tuple(snap['crop_rect']),float(snap['crop_rotation']))
     source=d.rgb
     if source.dtype==np.uint16:
@@ -100,6 +107,12 @@ def render_preview(engine, *, pack=True):
         # Area averages genuine full-source grain; never sample fresh proxy noise.
         tensor=F.interpolate(tensor,size=target,mode='area')
     progress()
+    if editor_mode=='input':
+        coverage=getattr(spec,'_colour_editor_capture_coverage',None)
+        if coverage is None:raise ValueError('Verified editor input missing source coverage')
+        coverage_t=torch.from_numpy(np.ascontiguousarray(coverage,dtype=np.float32))[None,None]
+        if tuple(coverage_t.shape[-2:])!=target:coverage_t=F.interpolate(coverage_t,size=target,mode='area')
+        engine._colour_editor_input_coverage=coverage_t.to(engine._vram.device)
     tensor=tensor.to(engine._vram.device)
     if pack:engine._vram.pack(tensor)
     engine._sky_proxy_suspended=None

@@ -28,7 +28,7 @@ class Service:
                     for key,event in self.events.items():
                         if key!=rid and not (key==self.active and self.published):event.set()
                     invalidate=True
-            elif cmd not in ('hello','primary_calibration_state','photo_grain','photo_grain_state','colour_grading_state','selective_colour_state','color_scopes','extended_tone_state','extended_tone_receipt') and action not in ('state','status','list','get','preflight','validate'):
+            elif cmd not in ('hello','primary_calibration_state','photo_grain','photo_grain_state','colour_grading_state','selective_colour_state','colour_editor_state','colour_editor_sample','color_picker_capture','color_scopes','extended_tone_state','extended_tone_receipt') and action not in ('state','status','list','get','preflight','validate'):
                 for key,event in self.events.items():
                     if not (key==self.active and self.published):event.set()
                 invalidate=True

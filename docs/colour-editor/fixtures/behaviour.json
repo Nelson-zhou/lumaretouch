@@ -1,0 +1,148 @@
+{
+  "status": "UNRUN",
+  "vectors": [
+    {
+      "name": "neutral_exact",
+      "rgb": [
+        -0.1,
+        0.5,
+        2.0
+      ],
+      "offsets": [
+        0,
+        0,
+        0
+      ],
+      "uniformity": [
+        0,
+        0,
+        0
+      ],
+      "expect": "bit-identical; binary not required"
+    },
+    {
+      "name": "hue_wrap",
+      "hues": [
+        0.99,
+        0.01,
+        0.5
+      ],
+      "center": 0,
+      "half_width": 0.03,
+      "smoothness": 0,
+      "expect_weights": [
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "name": "invert_external",
+      "selection": [
+        1,
+        0,
+        0.25
+      ],
+      "external_mask": [
+        0,
+        0.5,
+        1
+      ],
+      "invert": true,
+      "expect_weights": [
+        0,
+        0.5,
+        0.75
+      ]
+    },
+    {
+      "name": "uniformity_positive",
+      "input_s": [
+        0.2,
+        0.8
+      ],
+      "uniformity_s": 100,
+      "expect_s": [
+        0.5,
+        0.5
+      ]
+    },
+    {
+      "name": "uniformity_negative",
+      "input_s": [
+        0.3,
+        0.7
+      ],
+      "uniformity_s": -100,
+      "expect_s": [
+        0.1,
+        0.9
+      ]
+    },
+    {
+      "name": "luminance_only_boundary",
+      "expect": "Changing luminance smoothing cannot spatially blur edges or widen hue bounds when unlinked"
+    },
+    {
+      "name": "canonical_target",
+      "expect": "Full source stats equal across preview scales, ROI/tile order, export; reject missing or stale preparation"
+    },
+    {
+      "name": "mask_invalidation",
+      "expect": "Changing mask revision or samples invalidates canonical statistics"
+    },
+    {
+      "name": "view_only",
+      "expect": "No recipe/history/export differences when show range toggled"
+    },
+    {
+      "name": "headroom",
+      "rgb": [
+        -0.1,
+        0.4,
+        2.0
+      ],
+      "expect": "finite float32 with black/headroom preserved; no SDR clamp"
+    },
+    {
+      "name": "stale_picker",
+      "expect": "Wrong generation/document/revision/source stage rejected without recipe/history mutation"
+    },
+    {
+      "name": "cancel_every_chunk",
+      "expect": "No partial pixel publication or history commit"
+    },
+    {
+      "name": "commit_replay",
+      "expect": "One history entry; duplicate ID different content rejected; unknown status never resent"
+    },
+    {
+      "name": "batch_partial_failure",
+      "expect": "All-or-nothing recipe group, independently prepared statistics"
+    },
+    {
+      "name": "project_roundtrip",
+      "expect": "v22 retains exact recipe; v21 and older injection rejected; old missing key neutral"
+    },
+    {
+      "name": "local_mask_geometry",
+      "expect": "Objects follow portrait warp then manual/optics/crop; outside transformed mask unchanged even inverted"
+    },
+    {
+      "name": "original_source_preview",
+      "expect": "Preview equals downsampled canonical full source editor output; no proxy statistics or fresh proxy grain"
+    },
+    {
+      "name": "master16_active_editor",
+      "expect": "Non-neutral editor blocks passthrough and renders in float"
+    },
+    {
+      "name": "input_capture_not_double_projected",
+      "expect": "Crop/rotation applied once before verified input display; native proof corresponds to sampled float pixels"
+    },
+    {
+      "name": "v21_compatibility",
+      "expect": "Existing grain data remains valid and round-trips through v22, including v20 detail/v19 primary"
+    }
+  ]
+}

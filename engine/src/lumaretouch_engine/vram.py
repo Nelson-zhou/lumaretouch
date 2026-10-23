@@ -28,6 +28,8 @@ from .colour_grading_stage import ColourGradingStage
 from .primary_calibration_stage import PrimaryCalibrationStage
 from .primary_calibration_state import neutral as neutral_primary_calibration
 from .selective_colour_stage import SelectiveColourStage
+from .colour_editor_stage import ColourEditorStage
+from .colour_editor_state import neutral as neutral_colour_editor
 from .selective_colour_state import neutral as neutral_selective_colour
 from .colour_grading_state import neutral as neutral_colour_grading
 from .semantic_colour_stage import SemanticColourStage
@@ -141,6 +143,7 @@ class PreviewPipeline:
         self.photo_detail = PhotoDetailStage(None)
         self.colour_grading = ColourGradingStage(neutral_colour_grading())
         self.selective_colour = SelectiveColourStage(neutral_selective_colour())
+        self.colour_editor = ColourEditorStage(neutral_colour_editor())
         self.primary_calibration = PrimaryCalibrationStage(neutral_primary_calibration())
         self.extended_tone_override = None
         self.reference_color = ReferenceColorStage(None)
@@ -353,6 +356,7 @@ class PreviewPipeline:
         self.photo_detail = PhotoDetailStage(None)
         self.colour_grading = ColourGradingStage(neutral_colour_grading())
         self.selective_colour = SelectiveColourStage(neutral_selective_colour())
+        self.colour_editor = ColourEditorStage(neutral_colour_editor())
         self.primary_calibration = PrimaryCalibrationStage(neutral_primary_calibration())
         self.extended_tone_override = None
         self.reference_color = ReferenceColorStage(None)
@@ -526,7 +530,7 @@ class PreviewPipeline:
         """
         from .people_engine_runtime import require_ready
         require_ready(self)
-        if render_stage not in ('output', 'wb-input', 'extended-tone-input', 'optics-input'):
+        if render_stage not in ('output', 'wb-input', 'extended-tone-input', 'optics-input', 'colour-editor-input'):
             raise ValueError('Unknown production render stage')
         if self.src_f32 is None:
             raise RuntimeError("先 load_rgb_u8 再 render")
@@ -601,6 +605,11 @@ class PreviewPipeline:
         out = self.semantic_colour.apply_t(out,strict=False)
         out = self.colour_grading.apply_t(out)
         out = self.selective_colour.apply_t(out)
+        if render_stage == 'colour-editor-input':
+            source_input=getattr(self,'colour_editor_source_input',None)
+            if source_input is None: raise ValueError('Original-source colour editor capture unavailable')
+            return source_input()
+        # Active editor is rendered on original source below, never this proxy.
         out = self.photo_detail.apply_t(out)
         out = self.extended_tone.finish_t(out)
         source_output=getattr(self,"photo_grain_source_output",None)

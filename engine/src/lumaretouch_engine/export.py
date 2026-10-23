@@ -208,6 +208,7 @@ class ExportSpec:
     extended_tone: dict | None = None
     colour_grading: dict | None = None
     selective_colour: dict | None = None
+    colour_editor: dict | None = None
     primary_calibration: dict | None = None
     reference_color: dict | None = None
     semantic_colour: dict | None = None
@@ -300,6 +301,8 @@ class ExportSpec:
         self.primary_calibration=admit_primary(neutral_primary() if self.primary_calibration is None else self.primary_calibration)
         from .selective_colour_state import check as check_selective, neutral as neutral_selective
         self.selective_colour=neutral_selective() if self.selective_colour is None else check_selective(self.selective_colour)
+        from .colour_editor_state import check as check_editor, neutral as neutral_editor
+        self.colour_editor=neutral_editor() if self.colour_editor is None else check_editor(self.colour_editor)
         self.check_effect_recovery()
         self.check_manual_liquify()
         self.check_studio_background()
@@ -694,7 +697,12 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         raise ExportError(f"导出要 (H,W,3) {np.dtype(dtype).name}，得到 {src_u8.shape} {src_u8.dtype}")
     from .photo_grain_state import check as check_grain, neutral as neutral_grain, active as grain_active
     grain_recipe=neutral_grain() if spec.photo_grain is None else check_grain(spec.photo_grain)
-    if grain_active(grain_recipe) and not getattr(spec,'_extended_tone_prepass',False):
+    from .colour_editor_state import from_state as editor_from_state, active as editor_active
+    editor_recipe=editor_from_state({'_colour_editor':spec.colour_editor}) if spec.colour_editor is not None else editor_from_state({})
+    editor_mode=getattr(spec,'_colour_editor_mode','render')
+    if editor_mode not in ('render','input','view'): raise ExportError('Invalid editor render mode')
+    editor_needed=editor_active(editor_recipe) or editor_mode!='render'
+    if (grain_active(grain_recipe) or editor_needed) and not getattr(spec,'_extended_tone_prepass',False):
         from .photo_grain_runtime import admit
         admit(src_u8.shape[1],src_u8.shape[0],int(spec.scale))
         # Grain is a source-resolution effect. Delivery resize/sharpen follow the
@@ -760,7 +768,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     verify_body_source(spec)
     verify_hair_source(spec)
     semantic_stage=SemanticColourStage(spec.semantic_colour,binding=spec.semantic_colour_binding)
-    floating=detail_active(detail_recipe) or bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass or colour_grading_stage.active or selective_colour_stage.active or primary_calibration_stage.active or grain_active(grain_recipe)
+    floating=detail_active(detail_recipe) or bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass or colour_grading_stage.active or selective_colour_stage.active or primary_calibration_stage.active or grain_active(grain_recipe) or editor_needed
     if spec.provenance_output and (not spec.float_output or spec.scale!=1): raise ExportError("来源支持只用于原尺寸浮点分析")
     optical_budget = 0
     if optical:
@@ -884,6 +892,11 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     out_h, out_w = plan.out_h, plan.out_w
     out = np.zeros((h,w,3) if optical else (out_h,out_w,3), np.float32 if floating else np.uint8)
     support=np.zeros((h,w,3),np.float32) if spec.provenance_output else None
+    editor_mask=None
+    if editor_needed and editor_recipe['scope']=='local' and not tone_prepass:
+        if spec.grade_scope=='all' or spec.grade_mask is None: raise ExportError('局部色彩编辑器需要当前有效蒙版，不能扩大至全图')
+        if np.asarray(spec.grade_mask).shape!=(h,w): raise ExportError('Colour editor external mask differs from source domain')
+        editor_mask=np.zeros((h,w,3),np.float32)
     seg = {"filter": 0.0, "light": 0.0, "deform": 0.0, "exposure": 0.0,
            "lut": 0.0, "grade": 0.0, "local_grade": 0.0, "enhance": 0.0, "bg": 0.0, "manual_liquify": 0.0}
     upscale_ms = 0.0
@@ -1008,6 +1021,13 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             pipe.render(spec.strength, **render_options)
             t_r = time.perf_counter()
             got = pipe.read_back()[..., :3]
+        if editor_mask is not None:
+            weight=np.asarray(spec.grade_mask[cy0:cy1,cx0:cx1],dtype=np.float32)/255.
+            coverage_t=torch.from_numpy(np.repeat(weight[...,None],3,axis=2)).permute(2,0,1)[None].to(pipe.device)
+            if spec.grade_scope=='objects':coverage_t=pipe.align_source_grade_mask(coverage_t)
+            coverage_t=pipe.manual_liquify.apply(coverage_t)
+            mapped=coverage_t[0].permute(1,2,0).detach().cpu().numpy()
+            editor_mask[y0:y1,x0:x1]=mapped[y0-cy0:y1-cy0,x0-cx0:x1-cx0]
         if support is not None:
             from .reference_color_provenance import source_support
             evidence=source_support(pipe,(cy0,cx0,cy1,cx1),(h,w),spec)
@@ -1044,6 +1064,9 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         from .optics_runtime import apply_export
         from .optics_export import upscale as optical_upscale
         out,optics_facts=apply_export(out,spec,cancelled=mask_cancelled)
+        if editor_mask is not None:
+            from .reference_color_provenance import optical_support
+            editor_mask=optical_support(editor_mask,spec)
         if support is not None:
             from .reference_color_provenance import optical_support
             support=optical_support(support,spec)
@@ -1065,6 +1088,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         t_geometry = time.perf_counter()
         out = crop_rotate_np(out, *geometry, uint8=False)
         if support is not None: support=crop_rotate_np(support,*geometry,uint8=False)
+        if editor_mask is not None:editor_mask=crop_rotate_np(editor_mask,*geometry,uint8=False)
         out_h, out_w = out.shape[:2]
         geometry_facts = {"crop_applied": not is_identity(*geometry),
                           "geometry_ms": round((time.perf_counter() - t_geometry) * 1000, 2)}
@@ -1072,12 +1096,37 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     out=semantic_stage.apply_np(out)
     out=colour_grading_stage.apply_np(out,cancelled=tone_cancelled)
     out=selective_colour_stage.apply_np(out,cancelled=tone_cancelled)
-    # Whole assembled edited canvas only; tile pipelines retain neutral detail stages.
-    out=PhotoDetailStage(detail_recipe,scale=float(spec.scale),cancelled=tone_cancelled).apply_np(out)
-    if grain_active(grain_recipe):
-        from .photo_grain_native import apply_canvas
-        out=apply_canvas(np.ascontiguousarray(out,dtype=np.float32),grain_recipe,source_size=(w,h),geometry=geometry,cancelled=tone_cancelled)
-    out=ExtendedToneStage(tone_recipe,cancelled=tone_cancelled).finish_np(out)
+    if editor_needed and not tone_prepass:
+        from .colour_editor_stage import ColourEditorStage
+        editor=ColourEditorStage(editor_recipe)
+        if hasattr(spec,'_colour_editor_domain'): editor.domain=spec._colour_editor_domain
+        frozen=np.ascontiguousarray(out,dtype=np.float32)
+        # Full source before delivery resampling. Transparent geometry padding is
+        # excluded; the same external mask gates inversion and range view.
+        from .photo_grain_geometry import mapping as editor_geometry
+        mapping=editor_geometry((w,h),geometry,(frozen.shape[1],frozen.shape[0]))
+        coverage=np.empty(frozen.shape[:2],dtype=np.float32)
+        for yy in range(frozen.shape[0]):
+            if yy%64==0:tone_cancelled()
+            coverage[yy]=mapping(0,yy,frozen.shape[1])[:,2]
+        if editor_mode=="input":spec._colour_editor_capture_coverage=coverage.copy()
+        if editor_mask is not None:
+            if editor_mask.shape!=frozen.shape: raise ExportError('Transformed external mask does not match editor canvas')
+            coverage*=np.clip(np.min(editor_mask,axis=2),0,1)
+        editor.external_mask=coverage
+        if editor_mode=='input':
+            out=frozen
+        else:
+            editor.prepare_source(frozen,('source',str(w)+'x'+str(h),str(geometry),'geometry-coverage-v1'),mask=coverage,cancelled=tone_cancelled)
+            out=editor.apply_np(frozen,purpose='selection-view' if editor_mode=='view' else 'export',cancelled=tone_cancelled)
+    # Presentation-only input/view bypass downstream finishing, but still pass
+    # through all final source/asset validation below before publication.
+    if editor_mode=='render':
+        out=PhotoDetailStage(detail_recipe,scale=float(spec.scale),cancelled=tone_cancelled).apply_np(out)
+        if grain_active(grain_recipe):
+            from .photo_grain_native import apply_canvas
+            out=apply_canvas(np.ascontiguousarray(out,dtype=np.float32),grain_recipe,source_size=(w,h),geometry=geometry,cancelled=tone_cancelled)
+        out=ExtendedToneStage(tone_recipe,cancelled=tone_cancelled).finish_np(out)
     verify_semantic_source(spec)
     verify_body_source(spec)
     verify_hair_source(spec)

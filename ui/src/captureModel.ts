@@ -4,7 +4,7 @@ export interface CaptureDescriptor {
   generation:string;seq:string;document_id:string;
   width:number;height:number;presentation_width:number;presentation_height:number;
   domain:'proxy-output'|'repair-input'|'source-input'|'wb-input'|'color-action-input';quality:'proxy-float-output'|'proxy-float-input'|'proxy-linear-input';profile:'working-srgb';
-  picker_action?:'levels_black'|'levels_white'|'curve'|'hsl';
+  picker_action?:'levels_black'|'levels_white'|'curve'|'hsl'|'colour_editor';
   picker_channel?:'master'|'red'|'green'|'blue'|'luminance'|null;source_stage?:string;
   /** Repair captures carry producer-owned source projection; the UI never derives source pixels from it. */
   projection?:Record<string,unknown>;

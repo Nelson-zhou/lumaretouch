@@ -960,6 +960,7 @@ export interface EngineStatus {
     colour_grading_protocol?: number;
     primary_calibration_protocol?: number;
     selective_colour_protocol?: number;
+    colour_editor_protocol?: number;
     photo_grain_protocol?: number;
     photo_detail_protocol?: number;
     extended_tone_protocol?: number;
