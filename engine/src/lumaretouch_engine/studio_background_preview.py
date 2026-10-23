@@ -6,6 +6,7 @@ An exact ready preview must be delivered and acknowledged before one commit.
 """
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
+from hashlib import sha256
 import base64
 import io
 import json
@@ -26,6 +27,87 @@ def ident(value):
 
 def context(engine):
     return engine._source_patch_controller().capture._context()
+
+
+def _array_key(value):
+    if value is None:return None
+    if type(value) is not np.ndarray or value.dtype!=np.float32 or not np.isfinite(value).all():
+        raise ValueError('背景预览输入或准备场不是有效 float32 数据')
+    digest=sha256()
+    for row in value:digest.update(memoryview(np.ascontiguousarray(row)).cast('B'))
+    return (tuple(value.shape),str(value.dtype),digest.hexdigest())
+
+
+def _recipe_key(value):
+    return json.dumps(value,sort_keys=True,allow_nan=False,separators=(',',':'))
+
+
+def capture_inputs(engine,value):
+    """Freeze exactly the pre-repair bytes measured by the existing solver.
+
+    Document revisions alone cannot detect a replaced composite or in-place
+    semantic field mutation. These internal proofs never come from the UI.
+    """
+    from .creative_derived_source import record
+    value=S.check(value)
+    derived=record(engine) is not None
+    if derived:
+        from .creative_derived_studio import preview
+        owned,source,before=preview(engine,value)
+        background=None if owned is None else owned['mask']
+    else:
+        value=R.verify(engine,value);before=R.key(engine,value)
+        source=engine._vram.src_f32[0].permute(1,2,0).detach().cpu().numpy()
+        background=R.semantic(engine,value)
+    source=np.array(source,copy=True)
+    if background is not None:background=np.array(background,copy=True)
+    proof={'derived':derived,'runtime_key':before,'recipe':_recipe_key(value),
+           'source_pixels':_array_key(source),'background_pixels':_array_key(background)}
+    if source.shape!=(engine._vram.h,engine._vram.w,3):
+        raise ValueError('背景预览源图尺寸与实际管线不一致')
+    if background is not None and (background.shape!=source.shape[:2] or np.any((background<0)|(background>1))):
+        raise ValueError('背景预览语义范围与实际源图不一致')
+    if R.key(engine,value)!=before:raise ValueError('背景预览源图或分析在捕获时变化')
+    source.setflags(write=False)
+    if background is not None:background.setflags(write=False)
+    return proof,source,background
+
+
+def _prepared_key(prepared,shape):
+    from .studio_background_stage import check_prepared
+    check_prepared(prepared,shape)
+    if set(prepared['masks'])!={'background','floor','protect','intrusion','blemish'}:
+        raise ValueError('背景定位蒙版缺失或包含未知目标')
+    for mask in prepared['masks'].values():
+        if (type(mask) is not np.ndarray or mask.dtype!=np.float32 or mask.shape!=tuple(shape)
+                or not np.isfinite(mask).all() or np.any((mask<0)|(mask>1))):
+            raise ValueError('背景定位蒙版与准备来源不一致')
+    return (tuple((group,tuple((name,_array_key(value)) for name,value in sorted(prepared[group].items())))
+                  for group in ('fields','recovery','masks')),
+            _recipe_key({'analysis':prepared['analysis'],'method':prepared['method']}))
+
+
+def _prepare_owned(source,value,background,proof,stop):
+    if (_array_key(source)!=proof['source_pixels'] or _array_key(background)!=proof['background_pixels']
+            or _recipe_key(value)!=proof['recipe']):
+        raise ValueError('背景工作输入已不属于捕获的预览')
+    prepared=prepare(source,value,semantic_background=background,cancelled=stop.is_set)
+    if (_array_key(source)!=proof['source_pixels'] or _array_key(background)!=proof['background_pixels']
+            or _recipe_key(value)!=proof['recipe']):
+        raise ValueError('背景计算修改了其捕获输入')
+    prepared_key=_prepared_key(prepared,source.shape[:2])
+    for group in ('fields','recovery','masks'):
+        for value in prepared[group].values():value.setflags(write=False)
+    return {'input_proof':deepcopy(proof),'prepared':prepared,'prepared_key':prepared_key}
+
+
+def _stage_key(stage):
+    def signature(tensor):
+        return (id(tensor),tensor.data_ptr(),int(tensor._version),tuple(tensor.shape),
+                str(tensor.dtype),str(tensor.device))
+    return (id(stage),tuple(stage.shape),stage.required,stage.suspended,
+            tuple((group,tuple((name,signature(value)) for name,value in sorted(getattr(stage,group).items())))
+                  for group in ('fields','recovery')),_recipe_key(stage.analysis))
 
 
 def png(a,dimensions):
@@ -86,7 +168,24 @@ class StudioPreview:
         metadata,spec=context(self.engine);s=self.session
         if s is None or s['id']!=p.get('session_id') or s['metadata']!=metadata or s['spec']!=spec or metadata['document_id']!=p.get('document_id'):
             raise ValueError('背景定位源图或编辑版本变化，请重新进入')
+        source_proof,_,_=capture_inputs(self.engine,S.empty())
+        if s['source_proof']!=source_proof:
+            raise ValueError('背景定位的实际像素来源或修补输入已变化，请重新进入')
         return s
+    def verify_inputs(self,record):
+        actual,_,_=capture_inputs(self.engine,record['value'])
+        if actual!=record['input_proof']:
+            raise ValueError('背景预览的来源、参数或语义范围已变化，旧计算结果不可提交')
+    def verify_record(self,p):
+        self.matching(p);record=self.record
+        if record is None or record['request']['preview_id']!=p.get('preview_id') or self.job or self.latest:
+            raise ValueError('背景预览已被替代')
+        self.verify_inputs(record)
+        if (_prepared_key(record['prepared'],(self.engine._vram.h,self.engine._vram.w))!=record['prepared_key']
+                or _stage_key(record['stage'])!=record['stage_key']
+                or record['stage'].verified_source_key!=record['input_proof']['runtime_key']):
+            raise ValueError('背景已显示效果场发生变化，请重新预览')
+        return record
     def event(self,p,**values):
         return {'event':'studio_background_preview','protocol':1,**{k:p.get(k) for k in ('preview_id','session_id','document_id')},**values}
     def handle(self,p):
@@ -107,17 +206,18 @@ class StudioPreview:
                     if not viewing:raise ValueError('请先显示当前原图定位与真实效果')
                     self.cancel();metadata,spec=context(self.engine)
                     if metadata['document_id']!=p['document_id']:raise ValueError('背景照片已切换')
-                    self.session={'id':p['session_id'],'metadata':metadata,'spec':spec,'shown':False}
+                    source_proof,_,_=capture_inputs(self.engine,S.empty())
+                    self.session={'id':p['session_id'],'metadata':metadata,'spec':spec,'shown':False,'source_proof':source_proof}
                 session=self.matching(p)
                 if not viewing and not session['shown']:raise ValueError('原图定位画面尚未确认显示')
                 value=S.check(getattr(self.engine,'_studio_background',None)) if viewing else S.bind_proposal(self.engine,m['proposal'])
-                R.verify(self.engine,value)
+                input_proof,source,background=capture_inputs(self.engine,value)
                 if self.job:self.job['stop'].set()
-                self.record=None;self.latest={'request':deepcopy(p),'value':value,'committable':not viewing}
+                self.record=None;self.latest={'request':deepcopy(p),'value':deepcopy(value),'committable':not viewing,
+                    'input_proof':input_proof,'source':source,'background':background}
                 self.tick()
             else:
-                self.matching(p);record=self.record
-                if record is None or record['request']['preview_id']!=p['preview_id']:raise ValueError('背景预览已被替代')
+                record=self.verify_record(p)
                 record['presented']=True;self.session['shown']=True
                 self.emit(self.event(p,state='presented',success=True))
         except Exception as error:
@@ -128,21 +228,38 @@ class StudioPreview:
             if not job['stop'].is_set() and self.session is not None and self.latest is None:
                 p=job['request']
                 try:
-                    self.matching(p);prepared=job['future'].result();stage=R.prepare_stage(self.engine,job['value'],prepared=prepared)
-                    result=render(self.engine,stage,prepared,p['mutation']['target']);self.matching(p)
-                    self.record={**job,'stage':stage,'presented':False}
+                    self.matching(p);self.verify_inputs(job);outcome=job['future'].result()
+                    if outcome['input_proof']!=job['input_proof']:
+                        raise ValueError('背景计算返回了其他预览的输入证明')
+                    prepared=outcome['prepared'];prepared_key=outcome['prepared_key']
+                    if _prepared_key(prepared,(self.engine._vram.h,self.engine._vram.w))!=prepared_key:
+                        raise ValueError('背景准备场在完成前变化')
+                    stage=R.prepare_stage(self.engine,job['value'],prepared=prepared)
+                    if stage.verified_source_key!=job['input_proof']['runtime_key']:
+                        raise ValueError('背景准备场不能重新绑定到变化后的来源')
+                    stage_key=_stage_key(stage)
+                    result=render(self.engine,stage,prepared,p['mutation']['target'])
+                    self.matching(p);self.verify_inputs(job)
+                    if (_stage_key(stage)!=stage_key
+                            or _prepared_key(prepared,(self.engine._vram.h,self.engine._vram.w))!=prepared_key):
+                        raise ValueError('背景准备场在显示过程中变化')
+                    self.record={**{k:v for k,v in job.items() if k not in ('future','source','background')},
+                        'stage':stage,'stage_key':stage_key,'prepared':prepared,'prepared_key':prepared_key,'presented':False}
                     self.emit(self.event(p,state='ready',success=True,result=result,
                         recipe_document_id=self.session['metadata']['recipe_document_id'],recipe_revision=self.session['metadata']['recipe_revision']))
                 except Exception as error:
                     self.cancel();self.emit(self.event(p,state='failed',success=False,error=str(error)[:2000]))
         if self.job is None and self.latest is not None:
-            job,self.latest=self.latest,None;stop=threading.Event();value=job['value']
-            source=self.engine._vram.src_f32[0].permute(1,2,0).detach().cpu().numpy().copy()
-            background=R.semantic(self.engine,value)
-            job.update(stop=stop,future=self.pool.submit(prepare,source,value,semantic_background=background,cancelled=stop.is_set));self.job=job
+            job,self.latest=self.latest,None;stop=threading.Event()
+            try:
+                self.matching(job['request']);self.verify_inputs(job)
+                job.update(stop=stop,future=self.pool.submit(_prepare_owned,job['source'],deepcopy(job['value']),
+                    job['background'],deepcopy(job['input_proof']),stop));self.job=job
+            except Exception as error:
+                self.cancel();self.emit(self.event(job['request'],state='failed',success=False,error=str(error)[:2000]))
     def prepare(self,p):
-        self.matching(p);record=self.record
-        if record is None or record['request']['preview_id']!=p.get('preview_id') or not record['presented'] or not record['committable'] or self.job or self.latest:
+        record=self.verify_record(p)
+        if not record['presented'] or not record['committable']:
             raise ValueError('请先更新并查看本次背景效果，再确定；旧预览不能提交')
         value=R.verify(self.engine,record['value'])
         if record['stage'].verified_source_key!=R.key(self.engine,value):raise ValueError('背景准备效果的来源已变化')

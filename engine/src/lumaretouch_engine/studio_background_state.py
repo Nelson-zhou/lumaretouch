@@ -103,11 +103,23 @@ def bind_proposal(engine, raw):
     """UI proposes controls/vectors only; source and semantic identity are producer-owned."""
     if type(raw) is not dict or set(raw) != {'parameters', 'region_mode', 'strokes'}:
         raise ValueError('背景修改只接受参数、范围来源和保留矢量笔迹')
-    old = check(getattr(engine, '_studio_background', None)); binding = M.bind_source(engine)
+    from . import creative_derived_source as D
+    old = check(getattr(engine, '_studio_background', None))
+    derived = D.record(engine) is not None
+    binding = D.binding(engine) if derived else M.bind_source(engine)
     if old['source'] is not None and old['source'] != binding:
         raise ValueError('背景笔迹源图已变化，请重新打开；不会转绑旧笔迹')
+    if derived and raw['region_mode'] == 'semantic_background':
+        pc = getattr(engine, '_precompute', None)
+        if pc is None:
+            raise ValueError('合成图自动背景范围需要当前合成像素的真实分析')
+        D.verify_precompute(engine, pc)
     owner = M.current_owner(engine) if raw['region_mode'] == 'semantic_background' else None
     value = check({**empty(), **raw, 'source': binding, 'semantic_owner': owner})
+    if derived:
+        # Validate the actual owned field too, not only a model-name label.
+        from .creative_derived_studio import verify
+        value = verify(engine, value)
     validate_budget(value, (binding['height'], binding['width']))
     return value
 

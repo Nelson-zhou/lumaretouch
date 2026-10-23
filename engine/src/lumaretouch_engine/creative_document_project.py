@@ -141,6 +141,8 @@ def _stage(snapshot, validation):
             raise ValueError('Creative base must be a standalone RGBA asset')
         from .creative_derived_global_recovery import validate_state
         validate_state({**snapshot, BASE_KEY: base})
+        from .creative_derived_studio import validate_state as validate_studio
+        validate_studio({**snapshot, BASE_KEY: base})
     return document
 
 

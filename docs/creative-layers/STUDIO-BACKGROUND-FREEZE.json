@@ -1,0 +1,108 @@
+{
+  "baseline": "2ab9d1345c2ce47592e63c82e5626ce42e5d81aa",
+  "scope": "M14 derived-source studio cleanup, actual semantic/manual regions, reviewed per-operator recovery, immutable preview/export/history and inspection binding",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "files": [
+    {
+      "path": "docs/creative-layers/DERIVED-STUDIO-BACKGROUND.md",
+      "sha256": "01b6dc365cd16faafbdb91928ec3a3ac283747d5fdf580973edf93ffc029ee9e",
+      "bytes": 6177
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_studio.py",
+      "sha256": "1dc04e983bd4185683c8e1c1ff24e672c907543bcf2435ab6b251d8d42599145",
+      "bytes": 12784
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "sha256": "ce72e37bdc210a94eeb243ff83675cc0433c8ce29eed0012e990f1e797062825",
+      "bytes": 19815
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "92b275557f31404a622add79f9a76795426776668f96ed7b4c1a99550f74c074",
+      "bytes": 24273
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_project.py",
+      "sha256": "b62176964734018382b10bdf3b393124fc1b2720c9aa186958a97c7d81308fa3",
+      "bytes": 10949
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_smoothing_host.py",
+      "sha256": "4fbdddc71ccc551ce1b842628af75feb59282ae0b169256704c46f156f8c726c",
+      "bytes": 1561
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_studio_host.py",
+      "sha256": "a4492a064dd99e7d9064fef48d0e587b9090728721e7f7801966bee85c46c19b",
+      "bytes": 3866
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "1cb0c1b11baf80505a10f67538e9cde5523c063ab3219f960e5b1de365dbcea2",
+      "bytes": 127670
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "sha256": "dcff353abb96d94d1d25ec4905746a8ee6d56a29ce5014c67886002be5562590",
+      "bytes": 6402
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "72241b6e8af68e0b6488182fb475e609641f2cf1c860485160ac72d98bc41807",
+      "bytes": 462838
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_background_export.py",
+      "sha256": "b45fbdc4a1d475e8047e8d40a0cc2a8ed1a1925d07ce896ad1574ef83e055e13",
+      "bytes": 3122
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_background_preview.py",
+      "sha256": "f3fe09468dd0b8fee7875080eaf5bbf9ab4aee774a1c34f07b5e87d56d622961",
+      "bytes": 16367
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_background_runtime.py",
+      "sha256": "88025483d657c217344e431e85389099e56c2e873a78a4eaafdb17752abf4dd4",
+      "bytes": 9235
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_background_state.py",
+      "sha256": "d5fcb02419ec498e6c09896ffc4b8f89710f22ed85950a54ef1cb5324de3f244",
+      "bytes": 7706
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_studio_integration.py",
+      "sha256": "a477e8ab7ace096cd9d2abf8dded51d7ce3814d6d75fc093f224a80c544bf7af",
+      "bytes": 3324
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_studio_live.py",
+      "sha256": "5775112cd55e995167e7075b7183a725220e3625cfa9ee7107acae983e086adb",
+      "bytes": 12753
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_studio_proofs.py",
+      "sha256": "4e361cdbc1f44251dba58f8e4a045bfbb01dc13f61fcd4a6ce7957eb804e817a",
+      "bytes": 11240
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 16,
+    "line_counts": {
+      "ui/src/App.tsx": 2096,
+      "ui/src-tauri/src/main.rs": 2015,
+      "engine/src/lumaretouch_engine/server.py": 6962
+    },
+    "fixtures": "UNRUN; 32 authored test functions, parameterizations not executed"
+  },
+  "residuals": [
+    "Sky and ID replacement source consumers remain fenced",
+    "Legacy background replacement/common recovery and cross-image transfer remain fenced",
+    "Missing/stale retained semantic analysis requires reanalysis; no unreviewed manual-reset bypass",
+    "Transparent/HDR returns remain explicitly unsupported in portrait RGB path",
+    "Native/product/build/typecheck/model/visual/memory/latency acceptance UNRUN"
+  ]
+}

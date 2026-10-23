@@ -44,6 +44,9 @@ def prepare_export(spec,source,*,cancelled=lambda:False):
     check_spec(spec);value=spec.studio_background
     if not S.active(value):spec.studio_background_prepared=None;return
     if cancelled():raise InterruptedError('背景导出已取消')
+    if getattr(spec,'creative_base',None) is not None:
+        from .creative_derived_studio import verify_export
+        verify_export(spec,source)  # Before model observation conversion or inference.
     field,owner=full_semantic(source,value)
     R.export_prepare(spec,source,semantic_background=field,semantic_owner=owner,cancelled=cancelled)
 

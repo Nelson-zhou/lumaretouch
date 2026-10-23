@@ -167,6 +167,7 @@ class ExportSpec:
     id_background_path: str | None = None
     id_background_stamp: list | None = None
     id_background_prepared: dict | None = None
+    creative_studio_context: dict | None = None
     studio_background: dict | None = None
     studio_background_path: str | None = None
     studio_background_stamp: list | None = None
@@ -751,6 +752,9 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry):
     source = export_source(spec.creative_base, cancelled=cancelled, max_bytes=work_bytes)
     if resolved.repair:
         from .creative_derived_repair_export import stamp_pixels
+        stamp_pixels(resolved,source)
+    if resolved.creative_studio_context is not None:
+        from .creative_derived_studio import stamp_pixels
         stamp_pixels(resolved,source)
     if resolved.creative_smoothing_context is not None:
         from .creative_derived_smoothing import stamp_pixels

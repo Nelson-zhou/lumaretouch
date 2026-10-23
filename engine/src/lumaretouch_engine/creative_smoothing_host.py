@@ -24,6 +24,9 @@ def render_args(engine):
 
 def needs_analysis(engine):
     """Semantic effects can exist even when no face was detected or retained."""
+    from .studio_background_state import check as studio_recipe
+    studio=studio_recipe(getattr(engine,'_studio_background',None))
     return bool(getattr(engine,'_creative_base',None) is not None and (
+        studio['region_mode']=='semantic_background' or
         getattr(engine,'_fabric_amount',0) or
         (getattr(engine,'_strength',0) and getattr(engine,'_channel',None))))
