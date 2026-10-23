@@ -33,7 +33,7 @@ def _original_pixels(path, source, budget):
     """Decode the bound original at genuine precision, never load_rgb or SHM.
 
     Match full_candidate_render's existing load_full boundary and orientation.
-    Its current load_full route supports full RGB16 RAW/TIFF, not PNG16. Shared
+    Its load_full route supports genuine RGB16 RAW/TIFF/PNG source pixels. Shared
     source-bit admission and working-profile conversion keep the locator equal
     to the actual full candidate inputs rather than inventing another decoder.
     Decoder errors are terminal: no 8-bit, proxy, or alternate-file fallback.

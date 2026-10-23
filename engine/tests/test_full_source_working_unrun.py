@@ -95,16 +95,19 @@ def png16_bytes():
 
 
 @pytest.mark.parametrize('name', ['source.png', 'png-disguised-as-jpeg.jpg'])
-def test_png16_is_detected_from_header_and_refused_without_rgb8_fallback(tmp_path, monkeypatch, name):
+def test_png16_is_detected_and_decoded_without_rgb8_fallback(tmp_path, monkeypatch, name):
     path = tmp_path / name
     path.write_bytes(png16_bytes())
     def forbidden(*args, **kwargs):
-        raise AssertionError('Unsupported PNG16 must not enter Pillow RGB8')
+        raise AssertionError('PNG16 must not enter Pillow RGB8')
     monkeypatch.setattr(D, '_load_full_pillow', forbidden)
     with Image.open(path) as header:
         assert W.source_bits(str(path), header) == 16
-        with pytest.raises(ValueError, match='16-bit'):
-            D.load_full(str(path), want_bits=16)
+        decoded = D.load_full(str(path), want_bits=16)
+        assert decoded.src_bits == 16
+        assert decoded.raw['source'] == 'png16'
+        np.testing.assert_array_equal(decoded.rgb, rgb16())
+        np.testing.assert_array_equal(W.working_rgb(decoded), rgb16())
 
 
 @pytest.mark.parametrize('mutation', ['short', 'signature', 'chunk', 'width', 'bits'])

@@ -1,0 +1,164 @@
+{
+  "baseline": "3cc38d32f28ef71af954fae5b0f5065ea657d3d9",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Genuine original PNG16 retouch source decode, proxy, ICC/alpha/SDR admission, full-source inspection/candidates and native16/final-only RGB8 export. Shared precision correctness, not a new handbook feature count.",
+  "files": [
+    {
+      "path": "docs/png16-source/README.md",
+      "sha256": "82a690a95cb48af39ec3932ce13bbaf2713820c62eb25fbda033ec33e6dc63fb",
+      "bytes": 5633
+    },
+    {
+      "path": "docs/png16-source/UNRUN-ACCEPTANCE.md",
+      "sha256": "f49e5b29867eaf9c8c3f955488fb0f2d57af3b25e3df30e9d729334dd9640d50",
+      "bytes": 2921
+    },
+    {
+      "path": "docs/spill-removal/PAINT-README.md",
+      "sha256": "a1508eca579db3402d2d2f885916691f64f5e6e9bc7bbbeaec4e1f53b1fb052e",
+      "bytes": 5641
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_shape_scope.py",
+      "sha256": "40b1f71a6ee4c09df11c20c9dba396dce33b535c0f2b997a35138d566112800f",
+      "bytes": 2607
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "sha256": "e9241bfbfea8306fc2ebeb7b64c454a4ab9b347fdc67b26592ed9dc63838b762",
+      "bytes": 20045
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/decode.py",
+      "sha256": "a5ad0855224da68569dbf06a972971fa3a929588fb6496a17bf60ff2733eecc5",
+      "bytes": 45348
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "f22f3a7127545eb8065a12385ef83e8679903e4da0ec93543e44c7cb9a9bab33",
+      "bytes": 131845
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_delivery_render.py",
+      "sha256": "c4e77d2cb8fd85720d39818bdb02d6e33245596a22ae318ba10a9488ceba148a",
+      "bytes": 6158
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_shape_scope.py",
+      "sha256": "c7bf8d1f6977f6e1c33e37a8df6f581f6f74dc199a001e888e69fbae9341b0fd",
+      "bytes": 2914
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_quality.py",
+      "sha256": "3d53833f9d026d8552388caa7f5fb09577f370087e1192f49b128be551c007b0",
+      "bytes": 6452
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_source_working.py",
+      "sha256": "b4d9f7c290e742e75624c642a6d47c2829bc6285d4e55f99bc815b58e88c595a",
+      "bytes": 2652
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/inspection_worker.py",
+      "sha256": "e2d09b897660bb5be444b3cca33ce506280b3c768d1a88bd8ec8e8dd1860fde8",
+      "bytes": 11907
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/mouth_shape_scope.py",
+      "sha256": "b2fe6b4d1eec27e4ebad603a9a238579e17ee5d2d846bfed58ba781e39d706f1",
+      "bytes": 2943
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/nose_shape_scope.py",
+      "sha256": "c61c030cde14791250b6fac6acc6cfc08f148c8398706d123d27937ca0e417ba",
+      "bytes": 2745
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/optics_lensfun.py",
+      "sha256": "b3d96f42b0a8b6660ac1c85b41ab35d4241ded260146c6181bb71332dd492b6c",
+      "bytes": 14917
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/optics_transfer_engine.py",
+      "sha256": "1655db5e28ae8ff8cfa90e61f9d2c8b867943f9e669d148919f01099f4bbec9e",
+      "bytes": 4302
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/png16_source.py",
+      "sha256": "8a5c2ac9d2672b9218aa5dca9499d15aafc011a0133231389e221314c95e8588",
+      "bytes": 15189
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/prompted_mask_source.py",
+      "sha256": "70d8d78f9a53ae321293ef3ce952cffee7368bdd1095026fcc676122b7960962",
+      "bytes": 11777
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_engine.py",
+      "sha256": "cb524e220d503dd997dacecaea6d40e606120053f2402ba8c812059bb4fb722e",
+      "bytes": 6468
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/semantic_colour_capture.py",
+      "sha256": "68838373b0c822b574d943b71a7334158c570ad31eba030d2b064bfd8746d491",
+      "bytes": 7899
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "43de83f11551f7168ffdef5a7a5235a61de1c8d573fea69518f8f73238500a2b",
+      "bytes": 463939
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_paint_source.py",
+      "sha256": "2bd7091fbbad5048fbcbcd1f340991d6d1dad7bb2631f05774097e1c7833189c",
+      "bytes": 11411
+    },
+    {
+      "path": "engine/tests/test_decode_png16_source_unrun.py",
+      "sha256": "120c08ceb163c71d95a43598c37317481c94581ee13ef97822bd61e7812cdb87",
+      "bytes": 16773
+    },
+    {
+      "path": "engine/tests/test_full_source_working_unrun.py",
+      "sha256": "a2afb097b139579c8afaa32340512b6d5079714449556fb63b2d559a0a03db00",
+      "bytes": 6773
+    },
+    {
+      "path": "engine/tests/test_png16_delivery8_unrun.py",
+      "sha256": "190c37fb43700ef8576db3f9a36a8f8fc662c24c83b1732df9c5d6a043984e21",
+      "bytes": 15465
+    },
+    {
+      "path": "engine/tests/test_png16_full_consumers_unrun.py",
+      "sha256": "70c115a22ab370d72d6f71fdcb532658cc6069a8909ecd846fb7ab917fec529e",
+      "bytes": 12960
+    },
+    {
+      "path": "engine/tests/test_png16_shared_source_unrun.py",
+      "sha256": "5954573f3446ffff292722f127627dabeeecf4183ed268072c2233934ec1e8d1",
+      "bytes": 2733
+    }
+  ],
+  "verification": {
+    "python_ast_files": 979,
+    "ui_package_json": "parsed",
+    "product_imports": "NOT_RUN",
+    "tests": "AUTHORED_UNRUN",
+    "build_typecheck_inference": "NOT_RUN",
+    "independent_review": "Read-only source review found no remaining concrete blocker after memory admission correction; not runtime acceptance.",
+    "line_caps": {
+      "App.tsx": 2121,
+      "main.rs": 2040,
+      "server.py": 6972
+    }
+  },
+  "remaining": [
+    "Sample/reference-library PNG16 and RGB16 ICC selection remain explicitly unsupported.",
+    "Transparent RGB retouch, broader alpha/HDR and non-sRGB cICP/unsupported colour metadata remain guarded; existing creative/background asset support is unchanged.",
+    "PNG16 input uses TIFF16 output for native16 delivery; PNG output remains RGB8.",
+    "Spill source paint locator remains512px, per-target visual batch review and photographic quality remain unfinished.",
+    "All codec, numerical, UI, export, performance and model acceptance remains UNRUN."
+  ],
+  "payload_count": 27,
+  "payload_bytes": 840417
+}

@@ -1770,10 +1770,9 @@ def write_file(rgb: np.ndarray, path: str, *, quality: int = 95,
 
 # ------------------------------------------------------------------ 16-bit 母档直通（M9-e）
 #
-# 为什么单独一条路，而不是给 export_image 加一个 dtype 分支：export_image 的整条链
-# （图层、掩膜、放大、锐化、色阶）都在 uint8 上算。把 16-bit 塞进去要么先降到 8 再升
-# 回 16（那是假 16-bit，比不做更坏），要么每层另写一套 16-bit 数学（那是另一个里程
-# 碑）。“直通”就是直通：母档解出来什么样就写什么样；图层上有东西时只能拒，不能假装做过。
+# 中性母档直通与真实浮点编辑是两条明确路径。源可来自 RAW、RGB16 TIFF 或 PNG16；
+# 有编辑时由 export_edited_16bit 走共享浮点链，不先降为 RGB8 再补位。
+# 直通只在中性配方成立，且仍按请求执行源/目标 ICC 转换；它不能跳过有效图层。
 #
 # 为什么不叫 Pillow 保存：实测 `Image.fromarray` 直接拒 uint16 的三通道数组
 # （Cannot handle this data type: (1, 1, 3), <u2），而它自己的 16-bit 路径只有单通道
@@ -2048,7 +2047,7 @@ def export_master_16bit(path: str, out_path: str, *, device: str | None = None,
     src = (d.raw or {}).get("source")
     if arr.dtype != np.uint16:
         raise ExportError(f"这张图没有 16-bit 母档（解出来是 {arr.dtype}，source={src}）："
-                          "16-bit 直通只对真带 16-bit 数据的 RAW 成立，"
+                          "16-bit 直通需要真实 RAW、RGB16 TIFF 或 PNG16 解码，"
                           "不拿 8-bit 左移补零冒充。要 8-bit 出片请用常规导出。")
     if (d.raw or {}).get("used_preview"):
         raise ExportError("16-bit 直通的像素来自相机内嵌预览（source=libraw_preview）："
@@ -2059,7 +2058,7 @@ def export_master_16bit(path: str, out_path: str, *, device: str | None = None,
     t_color = time.perf_counter()
     if target_icc:
         from .color16 import convert_rgb16
-        # TIFF pixels retain their source encoding; LibRaw output is configured
+        # TIFF/PNG16 pixels retain source encoding; LibRaw output is configured
         # as sRGB. No-profile RGB follows the same explicit sRGB assumption as
         # the normal input path. Conversion never stages through uint8.
         input_icc = d.source_icc or _srgb_bytes()
@@ -2113,7 +2112,7 @@ def render_edited_rgb16(decoded, spec: ExportSpec, *, device: str = "cpu",
             "working_color_space": "sRGB", "decoded_bits": 32 if creative_source else 16,
             # LibRaw output_bps describes the developed RGB, not the sensor file bit depth.
             "source_bits": (int(decoded.src_bits)
-                            if (decoded.raw or {}).get("source") in (None, "tiff16") else None),
+                            if (decoded.raw or {}).get("source") in (None, "tiff16", "png16") else None),
             "notes": list(decoded.notes) + (["创意合成原件以完整float32输入编辑；仅最终编码为RGB16，未使用显示代理"] if creative_source else ["真实RGB16源经float32或更高精度编辑；显示uint8缓冲不作为导出输入"])}
 
 

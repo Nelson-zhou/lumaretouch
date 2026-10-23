@@ -49,14 +49,34 @@ def limits(address_bytes, output_bytes, cpu_seconds):
         os.environ[key] = '1'
 
 
+def _decode_original(path, max_source_pixels):
+    """Select native precision before decoding; never inspect RGB16 through RGB8."""
+    from .decode import load_full, is_raw
+    from .full_source_working import source_bits, require_opaque_8bit
+    from PIL import Image
+    if is_raw(path):
+        bits = 16
+    else:
+        with Image.open(path) as image:
+            if image.width * image.height > max_source_pixels:
+                raise ValueError('Inspection source exceeds its admitted pixel budget')
+            bits = 16 if source_bits(path, image) > 8 else 8
+            if bits == 8:
+                require_opaque_8bit(image)
+    decoded = load_full(path, max_px=max_source_pixels, device='cpu', want_bits=bits)
+    if bits == 16 and str(decoded.rgb.dtype) != 'uint16':
+        raise ValueError('Full-source inspection requires genuine RGB16 decoding')
+    # Leave uint16 in its source encoding. render_inspection_roi delegates its
+    # single ICC conversion to render_edited_rgb16, just like edited export.
+    return decoded
+
+
 def render(directory):
     # All dependencies below are deliberately imported only after limits().
     from .inspection_bundle import read_bundle, _open_regular
-    from .decode import load_full, is_raw, _source_bits
     from .export_recipe import build_export_spec
     from .full_quality import render_inspection_roi
     from .inspection_job import validate_config
-    from PIL import Image
     import torch
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
@@ -120,12 +140,7 @@ def render(directory):
     id_background.verify_snapshot(snap, path, tuple(reversed(request['source_size'])))
     optics.verify_snapshot(snap,path,tuple(reversed(request['source_size'])))
     sky.verify_snapshot(snap,path,tuple(reversed(request['source_size'])))
-    if is_raw(path):
-        bits = 16
-    else:
-        with Image.open(path) as im:
-            bits = 16 if _source_bits(im) > 8 else 8
-    decoded = load_full(path, max_px=request['max_source_pixels'], device='cpu', want_bits=bits)
+    decoded = _decode_original(path, request['max_source_pixels'])
     if [decoded.w, decoded.h] != request['source_size']:
         raise ValueError('Full decode dimensions differ from admitted source')
     if source_identity(path) != before:

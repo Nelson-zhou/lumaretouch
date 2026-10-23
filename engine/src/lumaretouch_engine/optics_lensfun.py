@@ -66,7 +66,7 @@ def database():
 def metadata(decoded, path=None):
     """Read only lens/camera tags; RAW can use explicitly installed ExifTool."""
     raw = getattr(decoded,'raw',None) or {}
-    is_raw = bool(raw) and raw.get('source')!='tiff16'
+    is_raw = bool(raw) and raw.get('source') not in ('tiff16', 'png16')
     result = {'is_raw':is_raw,'camera_maker':'','camera_model':'','lens_maker':'','lens_model':'',
               'focal':None,'aperture':None,'distance':None,'orientation':1,'note':''}
     if is_raw and raw.get('used_preview'): result['note'] = '当前为内嵌预览，不能证明未做过相机镜头校正'

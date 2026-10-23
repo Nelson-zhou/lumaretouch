@@ -165,12 +165,16 @@ def _decoded_from_raw(res: dict, budget: int | None) -> "Decoded":
 
 def load_rgb(path: str, budget: int = PROXY_PIXELS, device: str | None = None,
              *, allow_preview: bool = False) -> Decoded:
-    """真实图 → 代理帧。JPEG/PNG 走 Pillow；相机 RAW 走下面那两条 RAW 通道。
+    """真实图 → 代理帧。PNG16 走真 uint16 codec；其它位图走 Pillow。
 
     RAW 那条分支在最前面就分掉：它需要自己的位深/摆正/缩放口径，而把这些塞进
     Pillow 那段只会让两条路都变成“有点像”的路径（load_full 的注释里记着同一课）。
     """
     budget = clamp_budget(budget)
+    from .png16_source import source_header
+    png = source_header(path)
+    if png is not None and png.bits == 16:
+        return _png16_working_8bit(_load_16bit_png_full(path, MAX_EXPORT_PIXELS), budget=budget)
     if allow_preview:
         # 这个开关只属于浏览那一条通道（见下面那段分界规则）：默认关着，
         # 因为 load_rgb 的产物是要进常驻层被编辑的，而预览不是我们渲的图
@@ -214,6 +218,12 @@ def is_raw(path: str) -> bool:
     格式，只决定进不进 RAW 分支——进去以后解不开照样如实抛，不静默换成别的渲染。
     """
     from . import raw as raw_mod
+    if raw_ext(path) in RAW_EXTS:
+        # A renamed PNG remains PNG for source admission/analysis as well as
+        # decoding. Do not send its dimensions to LibRaw because of a suffix.
+        from .png16_source import source_header
+        if source_header(path) is not None:
+            return False
     return raw_ext(path) in RAW_EXTS or raw_mod.has_raw_ifd(path)
 
 
@@ -427,10 +437,17 @@ def _refuse_multipage(im, path: str) -> None:
 def _source_bits(im) -> int:
     """报源图每通道真实位深（只用于“不能静默降位”的可见性，不拿它把预览升到 16-bit）。
 
-    TIFF 读 BitsPerSample(258)，PNG 读 info["bits"]，Pillow 的单通道 16-bit 模式（I;16*）按 16；
+    TIFF 读 BitsPerSample(258)，文件型 PNG 读真实 IHDR（RGB 模式不能证明是 8-bit），
+    Pillow 的单通道 16-bit 模式（I;16*）按 16；
     拿不到就当 8。这不是为了在预览里保留高位——工作层就是 8-bit RGBA 代理——而是让
     “一张 16-bit 源正被当作 8-bit 显示”这件事从静默变成可审计（P0 首版验收项①）。
     """
+    if getattr(im, "format", None) == "PNG" and getattr(im, "filename", None):
+        from .png16_source import source_header
+        header = source_header(im.filename)
+        if header is None or (header.width, header.height) != im.size:
+            raise ValueError("PNG header 与已打开源图的尺寸或格式不一致")
+        return header.bits
     try:
         bps = im.tag_v2.get(258) if hasattr(im, "tag_v2") else None
     except Exception:
@@ -442,12 +459,77 @@ def _source_bits(im) -> int:
     if im.mode in ("I;16", "I;16B", "I;16L", "I;16N"):
         return 16
     bits = im.info.get("bits")
+    if isinstance(bits, int) and bits > 0:
+        return bits
     if isinstance(bits, (tuple, list)) and bits:
         try:
             return int(max(bits))
         except (TypeError, ValueError):
             pass
     return 8
+
+
+def _load_16bit_png_full(path: str, max_px: int) -> Decoded:
+    """Original PNG16 pixels remain source-encoded, matching the TIFF16 contract."""
+    from .png16_source import load_opaque_rgb16
+    source = load_opaque_rgb16(path, max_px=max_px)
+    h, w = source.rgb.shape[:2]
+    d = Decoded(rgb=source.rgb, src_w=w, src_h=h, fmt="PNG",
+                t_open_ms=source.open_ms, t_decode_ms=source.decode_ms,
+                t_orient_ms=source.orient_ms, t_scale_ms=0.0,
+                t_total_ms=source.total_ms, src_bits=16,
+                source_icc=source.source_icc, source_exif=source.source_exif)
+    d.raw = {"source": "png16", "bits": 16, "used_preview": False, "half_size": False}
+    d.notes.append(f"16-bit PNG 真解码：{w}×{h} uint16（已有 imagecodecs/libpng），低位未降位")
+    if source.source_icc:
+        d.notes.append("保留源 ICC 与源编码 uint16；进入工作空间时用 16-bit ICC 转换，不经 RGB8")
+    elif source.colour_hint == "srgb":
+        d.notes.append("PNG 明确声明普通 SDR sRGB 编码")
+    else:
+        d.notes.append("PNG 没有 ICC 或其它非 sRGB/HDR 声明：按普通 SDR sRGB 输入假设处理")
+    if source.orientation != 1:
+        d.notes.append(f"16-bit 像素按 PNG EXIF orientation={source.orientation} 无损摆正")
+    return d
+
+
+def _png16_working_8bit(d: Decoded, *, budget: int | None = None) -> Decoded:
+    """ICC first, optional existing LANCZOS second, display quantization last.
+
+    The retained ICC still describes the source file, not these already-sRGB
+    uint8 pixels. Consumers must not apply it a second time to this output.
+    """
+    started = time.perf_counter()
+    working = d.rgb
+    if d.source_icc:
+        from .color16 import convert_rgb16
+        from .export import _srgb_bytes
+        working = convert_rgb16(working, d.source_icc, _srgb_bytes())
+        d.notes.append("源 ICC 已在真实 16-bit 像素上转换至 sRGB 工作空间，再生成 RGB8")
+    size = proxy_size(d.src_w, d.src_h, budget) if budget is not None else (d.src_w, d.src_h)
+    out = np.empty((size[1], size[0], 3), dtype=np.uint8)
+    # Stage one float plane at a time, never an RGB8 image for ICC/resampling.
+    # Float32 represents every uint16 integer exactly; any interpolation remains
+    # display-only, and the genuine full-source path above is never mutated.
+    for channel in range(3):
+        if size == (d.src_w, d.src_h):
+            values = working[:, :, channel].astype(np.uint32)
+            out[:, :, channel] = ((values + 128) // 257).astype(np.uint8)
+        else:
+            with Image.fromarray(working[:, :, channel].astype(np.float32)) as plane:
+                with plane.resize(size, Image.LANCZOS) as resized:
+                    values = np.asarray(resized, dtype=np.float32)
+                    out[:, :, channel] = np.clip(np.rint(values / 257.0), 0, 255).astype(np.uint8)
+    elapsed = (time.perf_counter() - started) * 1000.0
+    d.rgb = out
+    d.t_scale_ms += elapsed
+    d.t_total_ms += elapsed
+    d.notes.append("源为 16-bit，工作 sRGB 转换后量化为 8-bit 显示/出片（非静默降位）；原件仍是真 uint16")
+    if budget is None:
+        d.notes.append("满幅解码（8-bit 输出，不缩放）")
+    else:
+        d.notes.append("源图已在代理档以内，未缩放" if size == (d.src_w, d.src_h)
+                       else "代理使用已转换工作 sRGB 的高精度通道 LANCZOS 缩放后再量化")
+    return d
 
 
 def _load_16bit_tiff_full(path: str, max_px: int) -> Decoded:
@@ -616,7 +698,7 @@ MAX_EXPORT_PIXELS = 120_000_000
 
 def load_full(path: str, max_px: int = MAX_EXPORT_PIXELS, device: str | None = None,
               *, want_bits: int = 8) -> Decoded:
-    """满幅解码（不缩放）：导出通路用。JPEG/PNG 走 Pillow，RAW 走上面那两条真解码臂。
+    """满幅解码（不缩放）：PNG16 用真 codec，普通位图 Pillow，RAW 用真解码臂。
 
     `want_bits=16` 用于母档及高位深编辑导出：`rgb` 的 dtype 是 uint16。
     显示代理独立走 8-bit；高位深出片不能反过来读取该显示缓冲。
@@ -631,6 +713,11 @@ def load_full(path: str, max_px: int = MAX_EXPORT_PIXELS, device: str | None = N
     want = int(want_bits)
     if want not in (8, 16):
         raise ValueError(f"want_bits 只认 8 或 16（收到 {want_bits!r}）")
+    from .png16_source import source_header
+    png = source_header(path)
+    if png is not None and png.bits == 16:
+        decoded = _load_16bit_png_full(path, max_px)
+        return decoded if want == 16 else _png16_working_8bit(decoded)
     if is_raw(path):
         why = None
         if raw_mod.has_raw_ifd(path) and want == 8:
@@ -657,8 +744,8 @@ def load_full(path: str, max_px: int = MAX_EXPORT_PIXELS, device: str | None = N
             # P0：16bpc RGB TIFF 走真 16-bit 解码（不降位、不左移补零）；
             # 读不出真 16-bit 的变体在 _load_16bit_tiff_full 里明确拒，而不是退回 8-bit。
             return _load_16bit_tiff_full(path, max_px)
-        raise ValueError(f"16-bit 直通只对相机 RAW 或 16bpc RGB TIFF 成立"
-                         f"（这张是 {ext or '无后缀'}）：普通 JPEG/PNG/8-bit 图里没有 16-bit 母档可直通，"
+        raise ValueError(f"16-bit 直通只对相机 RAW、16bpc RGB TIFF 或真实 PNG16 成立"
+                         f"（这张是 {ext or '无后缀'}）：普通 JPEG/8-bit PNG 里没有 16-bit 母档可直通，"
                          "不拿 8-bit 左移补零冒充。要 8-bit 出片请用常规导出。")
     return _load_full_pillow(path, max_px)
 

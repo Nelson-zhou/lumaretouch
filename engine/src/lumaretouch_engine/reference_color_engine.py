@@ -10,7 +10,8 @@ def render(engine,row,candidate_state,document_id,revision,*,reference=False,can
         if cancelled(): raise ValueError('完整参考渲染已取消，未提交样片或编辑')
     check_cancel()
     admit(candidate_state)
-    from .decode import load_full,is_raw,_source_bits
+    from .decode import load_full,is_raw
+    from .full_source_working import source_bits,require_opaque_8bit,working_rgb
     from .export_recipe import build_export_spec
     from .cpu_memory_budget import available_estimate
     from .export import export_float
@@ -38,7 +39,8 @@ def render(engine,row,candidate_state,document_id,revision,*,reference=False,can
     else:
         with Image.open(path) as image:
             if image.width*image.height>limit:raise ValueError('目标源图超过本次完整编辑内存预算')
-            bits=16 if _source_bits(image)>8 else 8
+            bits=16 if source_bits(path,image)>8 else 8
+            if bits==8:require_opaque_8bit(image)
     check_cancel()
     decoded=load_full(path,max_px=limit,device='cpu',want_bits=bits)
     check_cancel()
@@ -64,7 +66,9 @@ def render(engine,row,candidate_state,document_id,revision,*,reference=False,can
     if skipped:raise ValueError('自动预检不能略过目标上游效果：'+', '.join(map(str,skipped)))
     from .reference_color_runtime import verify_export
     verify_export(snap,path,(decoded.h,decoded.w))
-    rgb,_=export_float(decoded.rgb,spec,geometry=(snap['crop_rect'],snap['crop_rotation']),progress=check_cancel)
+    # RGB16 decoders retain source ICC encoding; the float renderer consumes
+    # working sRGB. RGB8 was already converted in load_full and is not redone.
+    rgb,_=export_float(working_rgb(decoded),spec,geometry=(snap['crop_rect'],snap['crop_rotation']),progress=check_cancel)
     check_cancel()
     if (M.file_stamp(path)!=stamp or str(versions.version(row).revision)!=str(revision)
             or fingerprint(candidate_state)!=candidate_key):

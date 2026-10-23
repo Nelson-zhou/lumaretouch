@@ -59,7 +59,8 @@ def geometry_key(state,people=None):
     return fingerprint(geometry)
 
 def render(engine,row,state,document_id,revision,*,cancelled=lambda:False):
-    from .decode import load_full,is_raw,_source_bits
+    from .decode import load_full,is_raw
+    from .full_source_working import source_bits,require_opaque_8bit,working_rgb
     from .export_recipe import build_export_spec
     from .cpu_memory_budget import available_estimate
     from .export import _export_image_impl,DEFAULT_TILE
@@ -82,7 +83,8 @@ def render(engine,row,state,document_id,revision,*,cancelled=lambda:False):
     else:
         with Image.open(path) as image:
             if image.width*image.height>limit:raise ValueError('AI 追色原尺寸超出双图冻结预算')
-            bits=16 if _source_bits(image)>8 else 8
+            bits=16 if source_bits(path,image)>8 else 8
+            if bits==8:require_opaque_8bit(image)
     if cancelled():raise InterruptedError('AI 追色冻结已取消')
     decoded=load_full(path,max_px=limit,device='cpu',want_bits=bits)
     if cancelled():raise InterruptedError('AI 追色冻结已取消')
@@ -106,6 +108,8 @@ def render(engine,row,state,document_id,revision,*,cancelled=lambda:False):
     spec.float_output=True;spec.provenance_output=False
     def progress(*_):
         if cancelled():raise InterruptedError('AI 追色冻结已取消')
-    rgb,_=_export_image_impl(decoded.rgb,spec,device='cpu',tile=DEFAULT_TILE,progress=progress,bits=bits,geometry=(snap['crop_rect'],snap['crop_rotation']))
+    # Keep actual uint16 samples through the single source-to-working ICC
+    # conversion, before float editing; never color-manage RGB8 a second time.
+    rgb,_=_export_image_impl(working_rgb(decoded),spec,device='cpu',tile=DEFAULT_TILE,progress=progress,bits=bits,geometry=(snap['crop_rect'],snap['crop_rotation']))
     if cancelled() or M.file_stamp(path)!=stamp or str(versions.version(row).revision)!=str(revision):raise ValueError('AI 追色冻结期间目标或源图改变')
     return freeze(rgb,source=source,geometry_sha256=geometry,state_key=key,document_id=document_id,revision=revision,owned=True)

@@ -36,6 +36,7 @@ def validate_target(state,row):
     if not S.active(recipe): return
     from types import SimpleNamespace
     from .decode import load_full
+    from .full_source_working import working_rgb
     from .cpu_memory_budget import available_estimate
     from .local_mask_state import file_stamp
     from .nose_shape_runtime import export_field
@@ -51,6 +52,7 @@ def validate_target(state,row):
         raise ValueError('目标原图在鼻形验证期间变化')
     spec=SimpleNamespace(nose_shape=recipe,nose_shape_face=pc)
     spec.landmarks=pc.landmarks
-    export_field(spec,decoded.rgb,divisor=65535 if decoded.rgb.dtype.itemsize==2 else 255)
+    source=working_rgb(decoded)
+    export_field(spec,source,divisor=65535 if source.dtype.itemsize==2 else 255)
     if file_stamp(row['path'])!=stamp:
         raise ValueError('目标原图在鼻形验证期间变化，未提交目标参数')

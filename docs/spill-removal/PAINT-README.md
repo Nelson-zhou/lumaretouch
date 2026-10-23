@@ -23,10 +23,10 @@ alpha/HDR is refused, not flattened or clipped to make painting appear available
 A shared `full_source_working` helper makes source locator and full candidate
 review apply the same RGB16 source-ICC to working-sRGB conversion. Existing
 RGB8 decoded working pixels are not converted a second time. PNG IHDR depth
-is detected explicitly: the ordinary retouch decoder still lacks PNG16 support,
-so that path now refuses instead of accidentally using Pillow RGB8. Genuine
-PNG16 creative-layer/background-asset import support remains unchanged.
-Completing ordinary PNG16 retouch decode/export is a separate unfinished path.
+is detected explicitly. The subsequent [original PNG16 source slice](../png16-source/README.md)
+connects genuine decoding and export rather than accidentally using Pillow RGB8.
+Genuine PNG16 creative-layer/background-asset import support remains unchanged.
+This is source wiring, not numerical, photographic or runtime acceptance.
 
 The source image is reduced only for display, to a longest side of 512 pixels;
 true source dimensions remain in the proof. PNG bytes are never image assets,

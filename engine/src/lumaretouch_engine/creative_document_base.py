@@ -231,32 +231,24 @@ def _neutral_snapshot(snapshot):
 def _working_source(path, original, *, max_pixels, device):
     """Full native precision source for existing edits, never load_rgb/proxy."""
     import numpy as np
-    from .decode import load_full, is_raw, _source_bits
-    from .export import _srgb_bytes
-    from .color16 import convert_rgb16
+    from .decode import load_full, is_raw
+    from .full_source_working import source_bits, require_opaque_8bit, working_rgb
     from PIL import Image
-    # The general decoder intentionally lacks RGB16 PNG; reuse the explicit
-    # imagecodecs/ICC path, whose f32 normalization distinguishes all 65536 bins.
-    if original.startswith(b'\x89PNG\r\n\x1a\n') and original[24] == 16:
-        from .creative_document_import import _png
-        rgb, alpha, _icc = _png(original)
-        if not np.all(alpha == 1):
-            raise ValueError('Existing RGB edits cannot discard source transparency')
-        return np.rint(rgb * 65535.0).astype(np.uint16)
+    # Ordinary capture shares inspection/export's native decoder. Creative
+    # import keeps its independent alpha-capable immutable encoded-asset path.
     if is_raw(path):
         bits = 16
     else:
         with Image.open(path) as image:
-            bits = 16 if _source_bits(image) > 8 else 8
+            bits = 16 if source_bits(path, image) > 8 else 8
+            if bits == 8:
+                require_opaque_8bit(image)
     decoded = load_full(path, max_px=max_pixels, device=device, want_bits=bits)
     if (decoded.h, decoded.w) != (decoded.src_h, decoded.src_w) or decoded.draft_used or (decoded.raw or {}).get('used_preview') or (decoded.raw or {}).get('half_size'):
         raise ValueError('Creative capture requires genuine full-resolution source pixels')
     if bits == 16 and decoded.rgb.dtype != np.uint16:
         raise ValueError('Creative capture refused a reduced-precision source')
-    source = decoded.rgb
-    if source.dtype == np.uint16 and decoded.source_icc:
-        source = convert_rgb16(source, decoded.source_icc, _srgb_bytes())
-    return source
+    return working_rgb(decoded)
 
 
 def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False,

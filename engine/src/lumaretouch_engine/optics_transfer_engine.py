@@ -4,7 +4,8 @@ from .optics_candidate_identity import fingerprint
 
 
 def prepare_target(engine,row,candidate_state,document_id,revision,*,cancelled=lambda:False):
-    from .decode import load_full,is_raw,_source_bits
+    from .decode import load_full,is_raw
+    from .full_source_working import source_bits,require_opaque_8bit
     from .export_recipe import build_export_spec
     from .cpu_memory_budget import available_estimate
     from .optics_transfer_input import render_target
@@ -32,8 +33,10 @@ def prepare_target(engine,row,candidate_state,document_id,revision,*,cancelled=l
     else:
         with Image.open(path) as image:
             if image.width*image.height>limit:raise ValueError('目标源图超过本次完整编辑内存预算')
-            bits=16 if _source_bits(image)>8 else 8
+            bits=16 if source_bits(path,image)>8 else 8
+            if bits==8:require_opaque_8bit(image)
     decoded=load_full(path,max_px=limit,device='cpu',want_bits=bits)
+    if bits==16 and str(decoded.rgb.dtype)!='uint16':raise ValueError('高位深目标未保留真实 RGB16')
     if M.file_stamp(path)!=stamp:raise ValueError('自动目标在解码期间变化')
     source={'sha256':M.source_digest(path),'width':decoded.w,'height':decoded.h}
     from . import virtual_copy_people as VP

@@ -6205,6 +6205,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
 
     def _export_loop(self):
         from .decode import load_full
+        from .export_delivery_render import decode_for_delivery8, render_delivery8, check_source_profile
         from .watermark_delivery import export_delivery16
         from .export_target_size_adapter import write_delivery as write_delivery8
         images, out_dir, fmt, quality, tile, doc, snap, bit_depth, opts, snap_by_path = self._export_args
@@ -6316,7 +6317,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                     emit({"event": "export_progress", "index": idx, "total": n, "path": path, "document_id":entry.get("document_id"),
                           "ok": True})
                     continue
-                d = load_full(path, device=self.device)
+                d = decode_for_delivery8(path, device=snap_i["device"], creative_base=snap_i.get("creative_base"))
                 verify_decode(path, immutable_stamp)
                 LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); FRR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
                 stage = "render"
@@ -6326,23 +6327,10 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                                                       for_document=for_doc_i)
                 stage = "write"
                 out_path = EDR.primary_target(destination_plan, entry_id) if destination_plan else os.path.join(out_dir, entry.get("stem", os.path.splitext(os.path.basename(path))[0]) + "." + fmt)
-                frame, st = export_image(d.rgb, spec, device=snap_i["device"], tile=tile, geometry=(tuple(snap_i.get("crop_rect") or (0.,0.,1.,1.)),float(snap_i.get("crop_rotation") or 0.)) if RCS.active(spec.reference_color) or SCS.active(spec.semantic_colour) or CGS.active(spec.colour_grading) or CES.active(spec.colour_editor) or SCSL.active(spec.selective_colour) or PDS.active(spec.photo_detail) or PGS.active(spec.photo_grain) or FRS.active(spec.fringe_repair) else None)
-                # 与预览链同序：几何在所有像素层之后。反过来先剪再算，同一支消除笔
-                # 在剪后的图上会落在别处——那不是"批量应用设置"，那是另一张图。
-                from .ops.geometry import crop_rotate_np, is_identity as geom_ident
-                rect0 = tuple(snap_i.get("crop_rect") or (0.0, 0.0, 1.0, 1.0))
-                rot0 = float(snap_i.get("crop_rotation") or 0.0)
-                t_g = monotonic_ns()
-                if not geom_ident(rect0, rot0) and not (RCS.active(spec.reference_color) or SCS.active(spec.semantic_colour) or CGS.active(spec.colour_grading) or CES.active(spec.colour_editor) or SCSL.active(spec.selective_colour) or PDS.active(spec.photo_detail) or PGS.active(spec.photo_grain) or FRS.active(spec.fringe_repair)):
-                    frame = crop_rotate_np(frame, rect0, rot0)
-                st["geometry_ms"] = round((monotonic_ns() - t_g) / 1e6, 2)
-                st["crop_applied"] = bool(not geom_ident(rect0, rot0))
-                if opts["output_profile"] == "source" and d.raw is not None:
-                    # RAW 那两支不提取源 ICC（见 decode._note_no_source_metadata）：
-                    # 让它走到 write_file 里报“源文件没有 ICC”是把“没读”说成“没有”
-                    raise _ExportError(
-                        "RAW 源暂不携带源 ICC：这条通道没读元数据，不是文件里没有。"
-                        "请改选 srgb，或把一个真实的 .icc 文件路径当 output_profile 递进来")
+                frame, st = render_delivery8(d, spec, device=snap_i["device"], tile=tile,
+                    crop_rect=tuple(snap_i.get("crop_rect") or (0., 0., 1., 1.)),
+                    rotation_degrees=float(snap_i.get("crop_rotation") or 0.))
+                check_source_profile(d, opts["output_profile"])
                 info = EDR.run(destination_plan, entry_id, write_delivery8, frame, out_path, quality=quality, watermark=watermark,
                                   target_size=opts.get("target_size"),
                                   cancelled=lambda: bool(target_ctl and target_ctl.cancel.is_set()),

@@ -112,7 +112,8 @@ def inference_image(source):
 def decode_source(path, binding, *, device='cpu'):
     """Same true-bit-depth input/ICC policy as export, with immutable-file guard."""
     from .local_mask_state import file_stamp, source_digest
-    from .decode import load_full, is_raw, _source_bits
+    from .decode import load_full, is_raw
+    from .full_source_working import source_bits, require_opaque_8bit, working_rgb
     if type(binding) is not dict or set(binding) != {'sha256', 'width', 'height'}:
         raise ValueError('Prompted selection source binding is missing')
     if any(type(binding[k]) is not int or binding[k] < 1 for k in ('width', 'height')):
@@ -128,19 +129,20 @@ def decode_source(path, binding, *, device='cpu'):
         bits = 16
     else:
         with Image.open(path) as image:
-            bits = 16 if _source_bits(image) > 8 else 8
+            bits = 16 if source_bits(path, image) > 8 else 8
+            if bits == 8:
+                require_opaque_8bit(image)
     decoded = load_full(path, max_px=MAX_PIXELS, device=device, want_bits=bits)
     if file_stamp(path) != stamp or source_digest(path) != binding['sha256']:
         raise PromptedUnavailable('Source changed during prompted-selection decoding')
     source = decoded.rgb
-    if (source.shape[:2] != (binding['height'], binding['width']) or decoded.draft_used
-            or (decoded.raw or {}).get('used_preview')):
+    if (source.shape[:2] != (binding['height'], binding['width'])
+            or (decoded.w, decoded.h) != (decoded.src_w, decoded.src_h) or decoded.draft_used
+            or (decoded.raw or {}).get('used_preview') or (decoded.raw or {}).get('half_size')):
         raise PromptedUnavailable('Prompted input is not the bound full source')
-    if source.dtype == np.uint16 and decoded.source_icc:
-        from .color16 import convert_rgb16
-        from .export import _srgb_bytes
-        source = convert_rgb16(source, decoded.source_icc, _srgb_bytes())
-    return source
+    if bits == 16 and source.dtype != np.uint16:
+        raise PromptedUnavailable('Prompted high-bit source requires genuine RGB16 decoding')
+    return working_rgb(decoded)
 
 
 class Predictor:

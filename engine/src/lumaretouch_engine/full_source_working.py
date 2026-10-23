@@ -1,7 +1,7 @@
 """Shared genuine-source precision and encoded-sRGB input boundary.
 
-This is not a decoder or a new format adapter. In particular, detecting PNG16
-must lead to the existing load_full(want_bits=16) refusal, never Pillow RGB8.
+This is not a decoder or a new format adapter. Detecting PNG16 selects the
+genuine load_full(want_bits=16) codec, never Pillow RGB8.
 """
 
 
@@ -26,7 +26,7 @@ def require_opaque_8bit(image):
 
     Call only after checking native precision. High-bit transparency must never
     be inspected through Pillow RGB8; genuine RGB16 TIFF rejects extra channels
-    in load_full, and this source boundary does not support PNG16 decoding.
+    in load_full, and PNG16 checks native alpha/tRNS in its genuine decoder.
     """
     if 'A' not in image.getbands() and 'transparency' not in image.info:
         return
@@ -46,7 +46,7 @@ def working_rgb(decoded):
     """Return native RGB in the same working space as ordinary edited export.
 
     load_full's uint8 arm already converted embedded ICC to working sRGB.
-    Its uint16 TIFF arm retains source encoding; RAW16 is developed as sRGB.
+    Its uint16 TIFF/PNG arms retain source encoding; RAW16 is developed as sRGB.
     Only uint16 embedded profiles need conversion, using the export's existing
     LittleCMS16 path. Never downcast, mutate the decoder or convert RGB8 twice.
     """

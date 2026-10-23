@@ -107,4 +107,4 @@ def render_inspection_roi(decoded, spec: ExportSpec, roi, *, max_source_pixels: 
     check_cancel()
     return InspectionPixels(rgba,canvas_width,canvas_height,(x,y,w,h),
         decoded_bits=32 if base is not None else 16 if source.dtype==np.uint16 else 8,
-        source_bits=None if base is not None else int(decoded.src_bits) if raw.get("source") in (None,"tiff16") else None)
+        source_bits=None if base is not None else int(decoded.src_bits) if raw.get("source") in (None,"tiff16","png16") else None)
