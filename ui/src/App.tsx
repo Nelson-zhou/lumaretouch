@@ -1,3 +1,6 @@
+import {useShoulderWorkflow} from './shoulderShape/useShoulderWorkflow';
+import {ShoulderShapeTools} from './shoulderShape/ShoulderShapeTools';
+import {useOriginalCompareKeys} from './components/useOriginalCompareKeys';
 import {useSampleLibraryHost} from './sampleLibrary/useSampleLibraryHost';
 import {SampleLibraryHost,SampleLibraryLaunch} from './sampleLibrary/SampleLibraryHost';
 import {WorkspaceTopbar} from './sampleLibrary/WorkspaceTopbar';
@@ -1598,6 +1601,7 @@ export default function App() {
     await refreshStatusWithErrors(true)
   }
 
+  const shoulders = useShoulderWorkflow(status, doc, refreshFromEngine);
   const peopleWorkflow = usePeopleWorkflow(status, doc, refreshFromEngine);
   const whiteBalanceWorkflow=useWhiteBalanceWorkflow({documentId:doc?.document_id??'',
     reason:!status?.engine_alive?'引擎尚未就绪':status?.ready_caps?.white_balance_result_protocol!==1?'当前引擎不支持此操作，请更新匹配版本':!hasImage?'请先导入照片':exporting?'导出进行中':status?.edit_queue?.in_flight||status?.edit_queue?.pending?'有编辑操作正在处理':'照片状态正在同步',
@@ -1615,34 +1619,7 @@ export default function App() {
   const onBatchSync=()=>batchWorkflow.start();
   const onBatchUndo=()=>syncState?.last?batchWorkflow.undo(syncState.last):undefined;
 
-  // 空格按住出原图、松开回修好的那版（DoD §3 的“按住空格实时对拍”）。
-  // 光标在输入框里或按钮上时不抢：那是用户在打字/激活控件。
-  useEffect(() => {
-    const busyTarget = (el: EventTarget | null) => {
-      const n = el as HTMLElement | null;
-      return !!n && (n.tagName === "INPUT" || n.tagName === "TEXTAREA"
-        || n.tagName === "SELECT" || n.tagName === "BUTTON" || n.isContentEditable);
-    };
-    const down = (e: KeyboardEvent) => {
-      if (document.querySelector('.batchReviewBackdrop, .recoveryWorkspace, .liquifyWorkspace, .studioWorkspace, .skyWorkspace')) return;
-      if (e.code !== "Space" || e.repeat || busyTarget(e.target)) return;
-      e.preventDefault();
-      void cmpHold();
-    };
-    const up = (e: KeyboardEvent) => {
-      if (document.querySelector('.liquifyWorkspace, .studioWorkspace, .skyWorkspace')) return;
-      if (e.code !== "Space" || busyTarget(e.target)) return;
-      e.preventDefault();
-      void cmpOff();
-    };
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
-    return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pid]);
+  useOriginalCompareKeys(pid, cmpHold, cmpOff);
 
   // 引擎进程此刻在不在（M5-c）。报回缺失（新壳配旧宿主）时退回"看 pid"的旧行为，
   // 而不是当成"没在跑"——那会把刚起好的引擎显示成已死。
@@ -1698,7 +1675,7 @@ export default function App() {
                 if(target instanceof HTMLSelectElement || (target instanceof HTMLInputElement
                   && ['range','number','color','checkbox'].includes(target.type)))notifyInspectionEditIntent();
               }}>
-          <RetouchPanel sampleLibraryPanel={<SampleLibraryLaunch owner={sampleLibrary}/>} toolLocation={toolLocation} {...createRetouchToolSlots({sky,skyReport:doc?.sky_replacement,optics,opticsReport:doc?.optics,manual,recovery,studio,manualReport:doc?.manual_liquify,recoveryReport,studioReport:doc?.studio_background,busy:liveGrade.busy})} colorActions={{owner:colorPicker,blocked:sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||sourcePatch.pending||wbPicker.pending||cloneStamp.pending||localMasks.pending,onStart:(action,channel)=>{if(sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||sourcePatch.pending||wbPicker.pending||cloneStamp.pending||localMasks.pending)return;setBrushOn(false);setPickFace(false);colorSampler.cancel();sourcePatch.workflow.cancel();wbPicker.workflow.cancel();cloneStamp.workflow.cancel();localMasks.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();void colorPicker.workflow.start(action,channel);}}} whiteBalanceBusy={optics.active||optics.pending||studio.active||studio.pending||sourcePatch.active||sourcePatch.pending||cloneStamp.active||cloneStamp.pending||sky.active||sky.pending||manual.active||recovery.active||manual.pending||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||whiteBalanceWorkflow.workflow.busy()||wbPicker.active||wbPicker.pending||localMasks.active||localMasks.pending} whiteBalancePanel={<WhiteBalanceControls owner={whiteBalanceWorkflow} value={doc?.exposure} pickerBusy={sky.active||sky.pending||manual.active||recovery.active||manual.pending||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||localMasks.active||localMasks.pending||wbPicker.active||wbPicker.pending||sourcePatch.active||sourcePatch.pending||cloneStamp.active||cloneStamp.pending} picker={<WhiteBalancePickerControls owner={{...wbPicker,context:{...wbPicker.context,canStart:wbPicker.context.canStart!==false&&!manual.active&&!manual.pending&&!colorPicker.pending&&!recovery.pending&&!liveGrade.busy}}} onStart={()=>{if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();localMasks.workflow.cancel();cloneStamp.workflow.cancel();void wbPicker.workflow.start();}}/>}/>} presetPanel={<PresetPanel workflow={presetWorkflow}/>} status={status} doc={doc} hasImage={hasImage}
+          <RetouchPanel shoulderPanel={<ShoulderShapeTools owner={shoulders} blocked={sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||manual.active||manual.pending||recovery.active||recovery.pending||liveGrade.busy||sourcePatch.pending||cloneStamp.pending||localMasks.pending||colorPicker.pending||wbPicker.pending}/>} sampleLibraryPanel={<SampleLibraryLaunch owner={sampleLibrary}/>} toolLocation={toolLocation} {...createRetouchToolSlots({sky,skyReport:doc?.sky_replacement,optics,opticsReport:doc?.optics,manual,recovery,studio,manualReport:doc?.manual_liquify,recoveryReport,studioReport:doc?.studio_background,busy:liveGrade.busy})} colorActions={{owner:colorPicker,blocked:sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||sourcePatch.pending||wbPicker.pending||cloneStamp.pending||localMasks.pending,onStart:(action,channel)=>{if(sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||sourcePatch.pending||wbPicker.pending||cloneStamp.pending||localMasks.pending)return;setBrushOn(false);setPickFace(false);colorSampler.cancel();sourcePatch.workflow.cancel();wbPicker.workflow.cancel();cloneStamp.workflow.cancel();localMasks.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();void colorPicker.workflow.start(action,channel);}}} whiteBalanceBusy={optics.active||optics.pending||studio.active||studio.pending||sourcePatch.active||sourcePatch.pending||cloneStamp.active||cloneStamp.pending||sky.active||sky.pending||manual.active||recovery.active||manual.pending||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||whiteBalanceWorkflow.workflow.busy()||wbPicker.active||wbPicker.pending||localMasks.active||localMasks.pending} whiteBalancePanel={<WhiteBalanceControls owner={whiteBalanceWorkflow} value={doc?.exposure} pickerBusy={sky.active||sky.pending||manual.active||recovery.active||manual.pending||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||localMasks.active||localMasks.pending||wbPicker.active||wbPicker.pending||sourcePatch.active||sourcePatch.pending||cloneStamp.active||cloneStamp.pending} picker={<WhiteBalancePickerControls owner={{...wbPicker,context:{...wbPicker.context,canStart:wbPicker.context.canStart!==false&&!manual.active&&!manual.pending&&!colorPicker.pending&&!recovery.pending&&!liveGrade.busy}}} onStart={()=>{if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();localMasks.workflow.cancel();cloneStamp.workflow.cancel();void wbPicker.workflow.start();}}/>}/>} presetPanel={<PresetPanel workflow={presetWorkflow}/>} status={status} doc={doc} hasImage={hasImage}
                         sourcePatchPanel={<SourcePatchPanel owner={sourcePatch} blocked={sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||colorPicker.pending||localMasks.pending||wbPicker.active||wbPicker.pending||cloneStamp.pending} onStart={()=>{if(sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||colorPicker.pending||localMasks.pending||wbPicker.active||wbPicker.pending||cloneStamp.pending)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();localMasks.workflow.cancel();cloneStamp.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();void sourcePatch.workflow.start();}}/>}
                         cloneStampPanel={<CloneStampPanel owner={cloneStamp} blocked={sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||colorPicker.pending||localMasks.pending||sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending} onStart={()=>{if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();localMasks.workflow.cancel();void cloneStamp.workflow.start();}}/>}
                         localMasksPanel={<LocalMaskPanel liveGrade={liveGrade} owner={localMasks} report={doc?.local_masks} blocked={sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||manual.active||manual.pending||recovery.pending||colorPicker.pending||sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending||cloneStamp.active||cloneStamp.pending} onStart={(mutation,draw,groupId)=>{if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();cloneStamp.workflow.cancel();sourcePatch.workflow.cancel();wbPicker.workflow.cancel();void localMasks.workflow.start(mutation,draw,groupId);}}/>}

@@ -26,7 +26,8 @@ def validate(engine,row,candidate):
     snap=engine._state_to_export_snap(row['state'],device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=path,people_graph=candidate)
     from .people_export import isolated_snapshot,verify_source
     verify_source(snap,path);snap=isolated_snapshot(snap,for_document=True)
-    for owner in (groups,recovery,manual,studio,sky):owner.check_export_decode(snap,path,stamp,(decoded.h,decoded.w))
+    from . import body_pose_render as body_render
+    for owner in (groups,recovery,manual,studio,sky,body_render):owner.check_export_decode(snap,path,stamp,(decoded.h,decoded.w))
     if snap.get('grade_scope')=='objects':
         M.verify_source(M.check(snap.get('local_masks')),path,(decoded.h,decoded.w));snap['local_mask_source_path']=path
     spec,skipped=build_export_spec(snap,decoded.h,decoded.w,for_document=True)

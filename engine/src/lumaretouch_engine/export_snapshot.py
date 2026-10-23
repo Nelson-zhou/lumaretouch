@@ -34,4 +34,6 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
                     precompute=st.get("_precompute"),
                     device=device, scale=scale, upscale_backend=upscale_backend,
                     sharpen=sharpen)
+    from .body_pose_render import capture as capture_body
+    snap=capture_body(self,snap,st,source_path or self._doc_path,people_graph)
     return self._semantic_snapshot(snap,st,source_path)

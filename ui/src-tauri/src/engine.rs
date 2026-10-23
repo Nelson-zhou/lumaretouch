@@ -47,10 +47,10 @@ impl EngineHandle {
     pub fn send(&self, cmd: Value) -> Result<(), String> {
         // Some reviewed native APIs send directly, outside AppState dispatch.
         // Fence them too, including shutdown; library reads are explicitly exempt.
-        if crate::sample_library_api::invalidates_capture(&cmd) && !crate::semantic_colour_api::read_only(&cmd) {
+        if crate::sample_library_api::invalidates_capture(&cmd) && !crate::semantic_colour_api::read_only(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) {
             crate::sample_library_api::invalidate_captures(self)?;
         }
-        if crate::semantic_colour_api::invalidates_capture(&cmd) { crate::semantic_colour_api::invalidate_captures(self)?; }
+        if crate::semantic_colour_api::invalidates_capture(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) { crate::semantic_colour_api::invalidate_captures(self)?; }
         self.dispatcher.enqueue(None, cmd)
     }
 
@@ -72,10 +72,10 @@ impl EngineHandle {
     }
 
     pub fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
-        if crate::sample_library_api::invalidates_capture(&cmd) && !crate::semantic_colour_api::read_only(&cmd) {
+        if crate::sample_library_api::invalidates_capture(&cmd) && !crate::semantic_colour_api::read_only(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) {
             crate::sample_library_api::invalidate_captures(self)?;
         }
-        if crate::semantic_colour_api::invalidates_capture(&cmd) { crate::semantic_colour_api::invalidate_captures(self)?; }
+        if crate::semantic_colour_api::invalidates_capture(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) { crate::semantic_colour_api::invalidate_captures(self)?; }
         self.dispatcher.enqueue(Some(key), cmd)
     }
 
@@ -193,6 +193,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                 handle_event(&st, &line,inspection_epoch);
             }
             // Drain every accepted stdout event before synthesizing unknown outcomes.
+            crate::shoulder_shape_api::ended(inspection_epoch);
             crate::people_api::ended(inspection_epoch);
             crate::sample_library_api::ended(inspection_epoch);
             crate::semantic_colour_api::ended(inspection_epoch);
@@ -240,6 +241,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
     };
     match v.get("event").and_then(|e| e.as_str()).unwrap_or("") {
         "inspection_snapshot"=>state.on_inspection_event(inspection_epoch,&v),
+        "shoulder_shape_result" => { crate::shoulder_shape_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some() { state.on_layer_frame(&v); } },
         "semantic_colour_result" => crate::semantic_colour_api::receive(inspection_epoch, &v),
         "sample_library_result" => crate::sample_library_api::receive(inspection_epoch, &v),
         "sample_library_cancel_ack" => (),
@@ -333,6 +335,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             let mut inspection=state.inspection.lock().unwrap();
             if inspection.epoch!=inspection_epoch{return;}
             inspection.ready(inspection_epoch,v["inspection_protocol"].as_u64()==Some(1));
+            crate::shoulder_shape_api::ready(inspection_epoch, v["shoulder_shape_protocol"].as_u64() == Some(1));
             crate::sample_library_api::ready(inspection_epoch, v["sample_library_protocol"].as_u64() == Some(1));
             crate::semantic_colour_api::ready(inspection_epoch,v["semantic_colour_protocol"].as_u64()==Some(1));
             state.batch_results.lock().unwrap().ready(inspection_epoch,v["batch_preflight_protocol"].as_u64()==Some(1));

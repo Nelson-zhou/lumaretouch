@@ -18,7 +18,7 @@ export function notifyInspectionEditIntent(){
 }
 const inspectionMutations=new Set(['start_engine','shutdown_engine','load_image','set_strength','precompute',
   'inpaint','light','deform','lut','grade','enhance','lip_makeup','brow_shape','nose_shape','eye_shape','mouth_shape','background','exposure','hsl','curves','levels','fabric','crop','compare',
-  'people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
+  'shoulder_shape','people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
   const send=()=>{if(inspectionMutations.has(command))notifyInspectionEditIntent();return tauriInvoke<T>(command,args,options);};
   if(isCurveEditBusy()&&curveBarrierRequired(command,(args as Record<string,unknown>|undefined)?.action,inspectionMutations.has(command))){
@@ -146,6 +146,7 @@ export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_pre
 
 export interface DocState {
   people?: PeopleView;
+  shoulder_shape?: import('./shoulderShape/model').ShoulderView;
   brow_shape?: {version:1;revision:number;selected_face_id:string;recipe:import("./browShape/model").BrowShape;sides:Partial<Record<import("./browShape/model").BrowSide,import("./browShape/model").BrowFact>>;suspended:string|null;bytes_fields:number};
   nose_shape?: {version:1;revision:number;selected_face_id:string;recipe:import("./noseShape/model").NoseShape;controls:Partial<Record<import("./noseShape/model").NoseKey,import("./noseShape/model").NoseFact>>;suspended:string|null;bytes_fields:number};
   eye_shape?: {version:1;revision:number;selected_face_id:string;recipe:import("./eyeShape/model").EyeShape;controls:Partial<Record<string,import("./eyeShape/model").EyeFact>>;suspended:string|null;bytes_fields:number;legacy_big_eye:number;native_available:boolean};
@@ -944,6 +945,7 @@ export interface EngineStatus {
     eye_shape_protocol?: number;
     mouth_shape_protocol?: number;
     reference_color_protocol?: number;
+    shoulder_shape_protocol?: number;
     semantic_colour_protocol?: number;
     sample_library_protocol?: number;
     effect_recovery_protocol?: number;
@@ -1746,3 +1748,12 @@ export function runPeopleRequest(request: PeopleAction | {action: 'status'; requ
   return request.action === 'status' ? tauriInvoke<PeopleMailbox>('people', {request})
     : invoke<{requested: boolean}>('people', {request});
 }
+
+/** Shoulder control and model receipts are read-only; edits retain normal capture fences. */
+export function runShoulderShape(request:import('./shoulderShape/nativePort').Command|{action:'mailbox_status'|'release';request_id:string}):Promise<import('./shoulderShape/nativePort').Mailbox>{
+  return ['view','install','status','mailbox_status','release'].includes(request.action)
+    ? tauriInvoke<import('./shoulderShape/nativePort').Mailbox>('shoulder_shape',{request}) : invoke<import('./shoulderShape/nativePort').Mailbox>('shoulder_shape',{request});
+}
+
+export const runBodyPoseModel=(action:'install'|'cancel',requestId:string)=>tauriInvoke<import('./shoulderShape/useShoulderModel').ModelTask>('body_pose_model',{action,requestId});
+export const bodyPoseModelStatus=()=>tauriInvoke<import('./shoulderShape/useShoulderModel').ModelTask>('body_pose_model_status');

@@ -59,7 +59,10 @@ def state_signature(st: dict) -> str:
             d[k] = {"active": bool(v.get("active")), "bg": v.get("bg"),
                     "backend": v.get("backend"), "tol": v.get("tol"),
                     "softness": v.get("softness"), "matte": _matte_sig}
-        elif k == '_people_transition':
+        elif k == '_body_pose_bank':
+            from .body_pose_document_history import signature
+            d[k]=signature(v)
+        elif k in ('_people_transition','_body_pose_transition'):
             continue
         elif k == '_people_history':
             d[k]=None if v is None else {name:value for name,value in v.items() if name not in ('asset_fence','association_fence','association_revision')}
@@ -76,6 +79,7 @@ def command_group(name: str, msg: dict) -> str:
     同一个滑块连发五十条 → 同一个组 → 合并成一步；换另一个滑块（参数名不同）就是新的一步。
     拿值当组名会出两件事：拖回原位那种"值又变回去"合并不了，而把 action 与路径参数
     （rle/paths）算进组名会让每一笔都是新组——那正好是我们要区分的两种动作。"""
+    if name=="shoulder_shape":return "shoulder_shape:gesture:"+str((msg.get("request") or {}).get("gesture_id",msg.get("request_id","missing")))[:128]
     if name=="people":
         target=msg.get('target') or {};patches=(msg.get('payload') or {}).get('patches') or []
         return 'people:'+str(target.get('scope'))+':'+str(target.get('target_id'))+':'+str(msg.get('action'))+':'+','.join(sorted(str(p.get('operation_id'))+str(p.get('parameter_path')) for p in patches))

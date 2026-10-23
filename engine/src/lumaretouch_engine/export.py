@@ -177,6 +177,9 @@ class ExportSpec:
     # 内容门的相对统计会跟着插值得到的假边一起漂。
     enhance: dict = field(default_factory=dict)
     people: dict | None = None
+    body_pose: dict | None = None
+    body_pose_source_path: str | None = None
+    body_pose_source_stamp: list | None = None
     brow_shape: dict | None = None
     brow_shape_face: object | None = None
     nose_shape: dict | None = None
@@ -686,7 +689,9 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     reference_stage=ReferenceColorStage(spec.reference_color)
     from .semantic_colour_stage import SemanticColourStage
     from .semantic_colour_runtime import verify_render_source as verify_semantic_source
+    from .body_pose_render import verify_render_source as verify_body_source
     verify_semantic_source(spec)
+    verify_body_source(spec)
     semantic_stage=SemanticColourStage(spec.semantic_colour,binding=spec.semantic_colour_binding)
     floating=bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output
     if spec.provenance_output and (not spec.float_output or spec.scale!=1): raise ExportError("来源支持只用于原尺寸浮点分析")
@@ -990,6 +995,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     out=reference_stage.apply_np(out)
     out=semantic_stage.apply_np(out)
     verify_semantic_source(spec)
+    verify_body_source(spec)
     if support is not None: spec.provenance_result=np.all(support>=.999999,axis=2)
     if bits == 16 and not spec.float_output:
         out = quantize16_np(out)
@@ -1006,7 +1012,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     if manual_source_stamp is not None and file_stamp(spec.manual_liquify_path) != manual_source_stamp:
         raise ExportError("手动液化源图在渲染过程中变化，停止导出")
     peak_bytes = int(delta.numel() * 4) if delta is not None else 0
+    from .body_pose_render import export_outcome
+    body_outcome=export_outcome(people_prepared,out,(w,h))
     return out, {
+        "body_pose":body_outcome,
         "bits": bits, "warp_precision": "float64" if bits == 16 else "float32",
         "w": out_w, "h": out_h, "px": out_w * out_h, "src_mb": round(h * w * 3 * src_u8.dtype.itemsize / 1e6, 2),
         "src_w": w, "src_h": h, "scale": scale,

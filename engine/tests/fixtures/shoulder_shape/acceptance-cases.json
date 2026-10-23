@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "status": "authored-not-run",
+  "module_case": "PORTRAIT-008",
+  "requirements": ["LNX-REF-PC-32473-C-1b5aae1f25", "LNX-REF-PC-32473-C-57c31b17e1"],
+  "not_photographic_evidence": true,
+  "cases": [
+    {"id":"SHOULDER-001","purpose":"Actual full33 MediaPipe detection, exact source/model/input evidence and visible head/shoulder/elbow/hip review","expected":"Retain actual points, no face box skeleton"},
+    {"id":"SHOULDER-002","purpose":"Neutral source RGB8/RGB16, masks and recovery fields","expected":"Exact identity; no generated pixels"},
+    {"id":"SHOULDER-003","purpose":"Independent shoulder line and signed width on each anatomical side, non-destructive relink","expected":"Correct sign, preserved old asymmetric values, next linked edit synchronizes only its control"},
+    {"id":"SHOULDER-004","purpose":"Occluded head/elbow/hip, edge crop, extreme roll/depth, low-confidence synthetic input","expected":"Visible refusal, no hidden-body reconstruction"},
+    {"id":"SHOULDER-005","purpose":"Adjacent bodies/foreign face intersecting support, missing person link, changed association","expected":"Explicit ownership correction; never silently choose face/list index"},
+    {"id":"SHOULDER-006","purpose":"Supported separated people with individually reviewed visible anchors and explicit body-person links","expected":"Not blanket unsupported, but independent image-quality acceptance required"},
+    {"id":"SHOULDER-007","purpose":"Existing face+shoulder geometry, off-grid queries, final Jacobian across bands","expected":"Versioned sequential composition, one RGB/mask/recovery sample, reject folds"},
+    {"id":"SHOULDER-008","purpose":"Reset, undo/redo, save/reopen, selection change, reanalysis, source change, target recompute","expected":"Stable BodyRef; retained intent; stale evidence cannot rebind"},
+    {"id":"SHOULDER-009","purpose":"Original-resolution RGB16 export and preview correspondence","expected":"Original source preparation, no enlarged proxy correction; actual outcome pixel digest"},
+    {"id":"SHOULDER-010","purpose":"Timeout, duplicate request, uncertain publication, document switch mid-drag","expected":"Query original receipt without automatic mutation retry; no cross-target edit"},
+    {"id":"SHOULDER-011","purpose":"Optional model exact /1 download, corrupt bytes, latest-version mismatch, offline startup, missing runtime/native library","expected":"Fail closed, no inference-time network/fallback; accurate readiness states"},
+    {"id":"SHOULDER-012","purpose":"Blinded naturalness review including patterned background, garment seams and neck transition","expected":"Observed quality result and reject-rate report; no invented acceptance from unit checks"}
+  ]
+}

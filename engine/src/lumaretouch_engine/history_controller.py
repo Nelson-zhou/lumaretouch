@@ -32,7 +32,7 @@ class HistoryController:
         self.group = ""
         self.group_ns = 0
 
-    def record(self, group: str, before: dict, *, coalesce: bool = True) -> None:
+    def record(self, group: str, before: dict, *, coalesce: bool = True, after: dict | None = None) -> None:
         """一条编辑命令执行完（不论成功还是抛错）后调。
 
         快照是**执行前**抄的，所以"被拒绝的命令"天然不占一步：它整条 return，
@@ -40,7 +40,7 @@ class HistoryController:
         半改完的状态正是最需要一次撤销能修回去的时候。
         """
         try:
-            after = self.ports.capture()
+            if after is None:after = self.ports.capture()
         except AssertionError:
             return                      # 名单漂移由命令自己响，这里不叠第二份错
         if self.ports.signature(before) == self.ports.signature(after):
@@ -53,10 +53,10 @@ class HistoryController:
         now = self.clock()
         same_gesture = False
         if coalesce and group and self.group == group \
-                and (group.startswith(("curves:gesture:", "levels:gesture:", "brow_shape:gesture:", "nose_shape:gesture:", "eye_shape:gesture:", "mouth_shape:gesture:")) or
+                and (group.startswith(("curves:gesture:", "levels:gesture:", "brow_shape:gesture:", "nose_shape:gesture:", "eye_shape:gesture:", "mouth_shape:gesture:", "shoulder_shape:gesture:")) or
                      (now - self.group_ns) / 1e6 < self.group_ms):
             same_gesture = True
-        from .people_document_history import decorate
+        from .body_pose_history_chain import decorate
         before=decorate(before,after)
         if same_gesture and self.undo:self.undo[-1]=decorate(self.undo[-1],after)
         if not same_gesture:
@@ -64,7 +64,7 @@ class HistoryController:
             if len(self.undo) > self.limit:
                 # 丢最老的：这一条是内存账，不是功能边界（64 步 × 每份几 KB）
                 del self.undo[0]
-        if same_gesture and group.startswith(("curves:gesture:", "levels:gesture:", "brow_shape:gesture:", "nose_shape:gesture:", "eye_shape:gesture:", "mouth_shape:gesture:")) and self.undo \
+        if same_gesture and group.startswith(("curves:gesture:", "levels:gesture:", "brow_shape:gesture:", "nose_shape:gesture:", "eye_shape:gesture:", "mouth_shape:gesture:", "shoulder_shape:gesture:")) and self.undo \
                 and self.ports.signature(self.undo[-1]) == self.ports.signature(after):
             self.undo.pop()  # dragging/cancelling back to the start is not an undo step
             group = ""
@@ -101,6 +101,7 @@ class HistoryController:
                   **self.report()})
             return
         if action == "clear":
+            if self.undo or self.redo:self.ports.mark_dirty()
             self.undo, self.redo = [], []
             self.group, self.group_ns = "", 0
             self.ports.remember_current()
@@ -146,7 +147,7 @@ class HistoryController:
             return
         ms = round((self.clock() - t0) / 1e6, 2)
         stack.pop()
-        from .people_document_history import decorate
+        from .body_pose_history_chain import decorate
         other.append(decorate(current,self.ports.capture()))
         if len(other) > self.limit:
             del other[0]

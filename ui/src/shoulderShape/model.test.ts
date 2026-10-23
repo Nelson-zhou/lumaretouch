@@ -1,0 +1,7 @@
+// Authored only; not run in source-only tranche.
+import test from 'node:test';import assert from 'node:assert/strict';
+import {neutral,adjust,link,check,request,canReview,type ShoulderView} from './model.ts';
+test('relink preserves existing independent side values',()=>{let r=link(neutral(),'width',false);r=adjust(r,'width','left',.3);r=adjust(r,'width','right',-.2);r=link(r,'width',true);assert.equal(r.width.left,.3);assert.equal(r.width.right,-.2);r=adjust(r,'width','left',.7);assert.equal(r.width.right,.7);});
+test('square is nonnegative while width is bilateral signed',()=>{assert.throws(()=>adjust(neutral(),'square','left',-.01));assert.equal(adjust(neutral(),'width','left',-.7).width.right,-.7);assert.throws(()=>check({...neutral(),version:2} as never));});
+test('request must not leak asset field into exact envelope or use a face ID',()=>{const view={binding:{document_id:'doc',document_epoch:'epoch',document_revision:2,asset_sha256:'a'.repeat(64)},state_revision:1,association_revision:0,people_association_revision:0,selected_body_ref:{asset_sha256:'a'.repeat(64),body_instance_id:'body:one',analysis_revision:0}} as ShoulderView;const r=request(view,'unlink',{},'gesture');assert.equal('asset_sha256' in r,false);assert.equal('face_instance_id' in r.body_ref,false);});
+test('missing actual pose confidence cannot be manually promoted',()=>{assert.equal(canReview({points:Array.from({length:33},(_,index)=>({index,x:.5,y:.5,z:0,visibility:0,presence:0}))} as never),false);});

@@ -1,0 +1,19 @@
+MediaPipe Pose Landmarker Full, float16 revision 1
+Original model authors: Google. Model card credits Valentin Bazarevsky,
+Ivan Grishchenko and Eduard Gabriel Bazavan, Google (April 16, 2021).
+Model bundle and MediaPipe source code: Apache License, Version 2.0.
+
+Model license evidence, independent of the code license:
+https://storage.googleapis.com/mediapipe-assets/Model%20Card%20BlazePose%20GHUM%203D.pdf (page 2)
+https://github.com/google-ai-edge/mediapipe/issues/6306 (Google collaborator response, June 10, 2026)
+Code: https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/tasks/python/vision/pose_landmarker.py
+
+LumaRetouch uses only 2D measured body outputs for an original local image warp.
+It does not distribute or load any separate GHUM/SMPL mesh, model, body topology,
+shape weights, image-generation model, or inferred demographic attributes.
+This notice is a distributor attribution, not a claim of Google endorsement.
+The software and models are supplied without warranty; see APACHE-2.0.txt.
+
+The bundled files here are license/attribution text only. No model or runtime
+binaries are included by this source tranche. A future optional installer copies
+these notices next to its independently SHA-256-verified model bytes.

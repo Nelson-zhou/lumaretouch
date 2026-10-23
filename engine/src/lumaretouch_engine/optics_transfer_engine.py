@@ -36,11 +36,12 @@ def prepare_target(engine,row,candidate_state,document_id,revision,*,cancelled=l
     decoded=load_full(path,max_px=limit,device='cpu',want_bits=bits)
     if M.file_stamp(path)!=stamp:raise ValueError('自动目标在解码期间变化')
     source={'sha256':M.source_digest(path),'width':decoded.w,'height':decoded.h}
-    snap=engine._state_to_export_snap(candidate_state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.)
+    snap=engine._state_to_export_snap(candidate_state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=path)
     snap['optics']=S.empty();snap['crop_rect']=(0.,0.,1.,1.);snap['crop_rotation']=0.
     # Match the owned full-source inspection/export guards. No replacement face
     # selection or inferred scope is synthesized for an unanalyzed target.
-    for owner in (groups,recovery,manual,studio,sky):
+    from . import body_pose_render as body_render
+    for owner in (groups,recovery,manual,studio,sky,body_render):
         owner.check_export_decode(snap,path,stamp,(decoded.h,decoded.w))
     if snap.get('grade_scope')=='objects':
         M.verify_source(M.check(snap.get('local_masks')),path,(decoded.h,decoded.w));snap['local_mask_source_path']=path

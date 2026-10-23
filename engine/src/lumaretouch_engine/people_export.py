@@ -29,10 +29,14 @@ def prepare(spec,source,repaired):
     from .cpu_memory_budget import available_estimate
     snapshot=spec.people
     recovery=ASSETS.raster(snapshot['state'],snapshot.get('support_assets',{}),snapshot['asset_sha256'],source.shape[:2])
-    return prepare_export(snapshot,source,repaired,byte_budget=available_estimate(),recovery_assets=recovery)
+    return prepare_export(snapshot,source,repaired,byte_budget=available_estimate(),recovery_assets=recovery,body_pose=getattr(spec,'body_pose',None))
 
 
 def verify_source(snapshot,path):
+    body=snapshot.get('body_pose')
+    if body is not None:
+        from .local_mask_state import source_digest
+        if source_digest(path)!=body['source']['sha256']:raise ValueError('Frozen body observations belong to another source asset')
     people=snapshot.get('people')
     if people is None:return
     from .local_mask_state import source_digest

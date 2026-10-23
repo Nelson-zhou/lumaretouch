@@ -10,11 +10,20 @@ def asset_for(row):
 def save(engine,project):
     # Keep unavailable-photo histories from the loaded project unchanged. A
     # missing original is not permission to discard its unresolved edit history.
+    from .body_pose_document_history import assets as body_assets
     histories=deepcopy((engine._project or {}).get('people_document_history',{}));dropped=[]
     for row in engine._docs:
         stacks={name:row.get(name,[]) for name in ('undo','redo')}
-        if not any(snap.get('_people_history') is not None for stack in stacks.values() for snap in stack):continue
+        if row.get('_history_owned') and not any(stacks.values()):
+            # An explicitly cleared current document is not an unavailable-photo
+            # history to resurrect from the last project save.
+            try:histories.pop(asset_for(row),None)
+            except OSError:
+                from .body_pose_project import bank as body_bank
+                for key in body_bank(row.get('state') or {})['analysis_runs']:histories.pop(key,None)
+        if not any(snap.get('_people_history') is not None or body_assets(snap) for stack in stacks.values() for snap in stack):continue
         refs={snap['_people_history']['asset_sha256'] for stack in stacks.values() for snap in stack if snap.get('_people_history') is not None}
+        refs.update(key for stack in stacks.values() for snap in stack for key in body_assets(snap))
         if len(refs)!=1:raise ValueError('Document stack mixes source assets')
         asset=next(iter(refs))
         histories[asset]={'path':row['path'],'stacks':P.encode(stacks,project['assets'],dropped,'people_history.'+asset)}
@@ -55,6 +64,10 @@ def prepare(project,rows,limit):
             if type(stack) is not list or len(stack)>limit:raise ValueError('Saved people history exceeds its retained budget')
             for snapshot in stack:
                 if type(snapshot) is not dict:raise ValueError('Invalid document history snapshot')
+                from .body_pose_project import validate_records as validate_body
+                validate_body(snapshot)
+                from .body_pose_document_history import assets as body_assets
+                if body_assets(snapshot)-{asset}:raise ValueError('Saved body history names another source')
                 ref=snapshot.get('_people_history')
                 if ref is not None:
                     required={'asset_sha256','faces','overrides','unresolved_legacy','analysis_run','association_revision','asset_fence','association_fence'}
@@ -86,6 +99,7 @@ def restore(engine,project,prepared=None):
     staged,entries=prepare(project,engine._docs,engine.HISTORY_MAX) if prepared is None else prepared
     for index,stacks in staged.items():
         for name,stack in stacks.items():engine._docs[index][name]=stack
+        engine._docs[index]['_history_owned']=True
     if entries:
         owner=engine._batch_controller()
         for key,entry in entries.items():

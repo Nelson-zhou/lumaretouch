@@ -63,6 +63,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
                       upscale_backend=str(snap.get("upscale_backend", "lanczos3")),
                       sharpen_amount=float(snap.get("sharpen", 0.0)))
     spec.people=snap.get("people")
+    from .body_pose_render import configure_export as configure_body
+    configure_body(spec,snap,(eh,ew),for_document=for_document)
     # Source-bound final shaping must be checked before the generic-export return.
     # A nonempty manual recipe cannot be copied OR silently omitted across photos.
     from .manual_liquify_runtime import configure_export as configure_manual_liquify

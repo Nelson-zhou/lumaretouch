@@ -4,6 +4,7 @@ use tauri::State;
 use crate::AppState;
 
 pub(crate) fn optional_models(state:&AppState) {
+    crate::body_pose_model_api::shutdown();
     crate::prompted_model_api::shutdown(state);
     crate::sky_semantic_model_api::shutdown(state);
 }

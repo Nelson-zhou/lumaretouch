@@ -56,6 +56,7 @@ export interface RetouchProps {
   studioBackgroundPanel?: React.ReactNode; skyReplacementPanel?: React.ReactNode; opticsPanel?: React.ReactNode;
   presetPanel?: React.ReactNode;
   sampleLibraryPanel?: React.ReactNode;
+  shoulderPanel?: React.ReactNode;
   whiteBalancePanel?: React.ReactNode;
   whiteBalanceBusy?: boolean;
   colorSamplePanel?: React.ReactNode;
@@ -957,6 +958,7 @@ export default function RetouchPanel(props: RetouchProps) {
   );
 
   const blockFor = (fid: string): React.ReactNode => {
+    if (fid === "PC-32473") return props.shoulderPanel;
     if (fid === "PC-32452") return <>{props.sampleLibraryPanel}{props.presetPanel}{lutBlock}</>;
     if (fid === "PC-32454") return gradeBlock;
     if (fid === "PC-32481") return props.effectRecoveryPanel;

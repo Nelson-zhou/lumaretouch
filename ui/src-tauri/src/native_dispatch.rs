@@ -51,6 +51,7 @@ impl AppState {
             crate::sample_library_api::invalidate_captures(handle)?;
         }
         match name.as_str() {
+            "shoulder_shape" => crate::shoulder_shape_api::enqueue(handle, cmd)?,
             "people" => crate::people_api::enqueue(handle, cmd)?,
             "brow_shape" => crate::brow_shape_api::enqueue(handle, cmd)?,
             "nose_shape" => crate::nose_shape_api::enqueue(handle, cmd)?,

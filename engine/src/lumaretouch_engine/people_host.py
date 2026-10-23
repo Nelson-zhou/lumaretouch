@@ -79,19 +79,20 @@ class PeopleHostMixin:
 
     def _people_sync(self,*,strict=False):
         if self._vram is None or not self._docs or self._doc_index<0:return
-        if self._precompute is None and '_people_graph_owner' not in self.__dict__:return
+        body_bank=self._body_bank()
+        if self._precompute is None and '_people_graph_owner' not in self.__dict__ and not body_bank['bodies']:return
         from . import people_engine_runtime as R
         try:
             source,state,analyses=self._people_bind();asset=source['sha256']
             self._people_render_enabled=True;self._people_path=self._doc_path
-            if not any(f['asset_sha256']==asset for f in state['faces'].values()) and not any(r['asset_sha256']==asset and r['status']=='unresolved' for r in state['unresolved_legacy']) and not any(r['scope']=='all_people' and r['target_id']==asset for r in state['overrides']):
+            if not body_bank['bodies'] and not any(f['asset_sha256']==asset for f in state['faces'].values()) and not any(r['asset_sha256']==asset and r['status']=='unresolved' for r in state['unresolved_legacy']) and not any(r['scope']=='all_people' and r['target_id']==asset for r in state['overrides']):
                 from .people_pipeline import clear
                 clear(self._vram);self._vram.people_suspended=None;return
-            key=(asset,self._people_owner().fence,id(self._precompute),id(self._vram.src_f32),id(self._vram.repair_base))
+            key=(asset,self._people_owner().fence,id(self._precompute),id(self._vram.src_f32),id(self._vram.repair_base),self._body_identity())
             if getattr(self._vram,'people_key',None)!=key:
                 from .cpu_memory_budget import available_estimate
                 recovery=SUPPORT.raster(state,self._people_support,asset,(self._vram.h,self._vram.w))
-                R.synchronize(self._vram,state,asset,analyses,byte_budget=available_estimate(),recovery_assets=recovery)
+                R.synchronize(self._vram,state,asset,analyses,byte_budget=available_estimate(),recovery_assets=recovery,body_bank=body_bank if body_bank['bodies'] else None,body_source=source)
                 self._vram.people_key=key
             self._people_mirror()
         except (ValueError,RuntimeError,OSError) as error:
@@ -221,10 +222,10 @@ class PeopleHostMixin:
                     for k,f in sorted(state['faces'].items()) if f['asset_sha256']==asset]
         staged=None
         for asset in sorted(assets):
-            if asset!=current and signature(before,asset)==signature(candidate,asset):continue
+            if asset!=current and signature(before,asset)==signature(candidate,asset) and before['association_revision']==candidate['association_revision']:continue
             if asset==current:
                 recovery=SUPPORT.raster(candidate,self._people_support,asset,(self._vram.h,self._vram.w))
-                staged=prepare_preview(self._vram,candidate,asset,self._people_analyses.get(asset,{}),byte_budget=available_estimate(),recovery_assets=recovery)
+                staged=prepare_preview(self._vram,candidate,asset,self._people_analyses.get(asset,{}),byte_budget=available_estimate(),recovery_assets=recovery,body_bank=self._body_bank(),body_source=source)
             else:
                 row=next((row for row in self._docs if SOURCE.source_digest(row['path'])==asset),None)
                 if row is None:raise ValueError('A linked photo is unavailable; shared edits were not partially applied')

@@ -25,6 +25,9 @@ class PreparedPeople:
     effects: tuple
     facts: dict
     recovery: dict
+    face_fields: tuple=()
+    body_fields: tuple=()
+    body_operation_order: dict|None=None
 
     def apply_source_stage(self, stage, pixels):
         return E.apply(stage, pixels, self.effects, recovery=self.recovery)
@@ -122,4 +125,4 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
             failures.append({'face_instance_id':key,'reason':str(error)})
     if failures: raise PeoplePreparationRefused(failures)
     geometry = combine(fields, (h,w), byte_budget=byte_budget)
-    return PreparedPeople(plan, geometry, tuple(effects), facts, owned_recovery)
+    return PreparedPeople(plan, geometry, tuple(effects), facts, owned_recovery,tuple(fields))

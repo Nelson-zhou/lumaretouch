@@ -1899,6 +1899,7 @@ class PreviewPipeline:
         if PEOPLE_PIPE.active(self):
             n += sum(a.nbytes for record in self.people_prepared.effects for a in (record.delta,record.weights) if a is not None)
             n += sum(record["weight"].nbytes for record in self.people_prepared.recovery.values())
+            n += sum(field.resident_bytes() for field in (*self.people_prepared.face_fields,*self.people_prepared.body_fields))
         brow = getattr(self,"brow_shape_field",None)
         n += brow.resident_bytes() if brow else 0
         nose = getattr(self,"nose_shape_field",None)
