@@ -32,6 +32,11 @@ mkdir -p "$stage/lumaretouch_engine/third_party/mouth_shape"
 cp "$here/../core/mouth_shape/lib.rs" "$here/../LICENSE" "$here/../docs/MOUTH-SHAPE-INTEGRATION.md" "$here/../docs/model-licenses/archive/mediapipe-LICENSE.txt" "$stage/lumaretouch_engine/third_party/mouth_shape/"
 # Original shoulder solver plus separate optional Pose Landmarker notices. No
 # model bytes or runtime package acquisition is performed by engine startup.
+bash "$here/build-leg-shape.sh" "$stage/lumaretouch_engine/bin/liblrt_leg_shape.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/leg_shape"
+cp "$here/../core/leg_shape/lib.rs" "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/leg_shape/"
+cp "$here/../docs/leg-shape/README.md" "$stage/lumaretouch_engine/third_party/leg_shape/README.md"
+cp "$here/../engine/src/lumaretouch_engine/body_pose_licenses/"*.txt "$stage/lumaretouch_engine/third_party/leg_shape/"
 bash "$here/build-shoulder-shape.sh" "$stage/lumaretouch_engine/bin/liblrt_shoulder_shape.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/shoulder_shape"
 cp "$here/../core/shoulder_shape/lib.rs" "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/shoulder_shape/"

@@ -27,59 +27,65 @@ def source_preview(engine):
     E.whole_source_shape(source,(h,w))
     image=Image.fromarray(rgb,'RGB');image.thumbnail((1280,1280));buffer=io.BytesIO();image.save(buffer,format='PNG')
     data=buffer.getvalue()
+    if R.source(engine._people_source())!=source:raise ValueError('Body preview source changed during thumbnail preparation')
     if len(data)>6*1024*1024:raise ValueError('Body source preview exceeds 6 MiB')
-    return {'mime':'image/png','base64':base64.b64encode(data).decode('ascii'),'width':image.width,'height':image.height,'source_sha256':source['sha256']}
+    return {'mime':'image/png','base64':base64.b64encode(data).decode('ascii'),'width':image.width,'height':image.height,'source_sha256':source['sha256'],
+            'source_width':source['width'],'source_height':source['height'],'decoded_width':w,'decoded_height':h,
+            'mapping':'normalized_full_frame','orientation':E.ORIENTATION}
 
 
-def response(engine,*,preview=False,receipt=None):
-    result={'view':engine._body_view(),'model':acquisition.status()}
+def response(engine,*,preview=False,receipt=None,operation='shoulder_shape'):
+    result={'view':engine._body_view(operation),'model':acquisition.status()}
     if preview:result['source_preview']=source_preview(engine)
     if receipt is not None:result['receipt']=receipt
     return result
 
 
-def commit_observations(engine,candidate,request_id):
+def commit_observations(engine,candidate,request_id,operation='shoulder_shape'):
     before=engine._body_bank()
     try:prepared=engine._body_prepare(candidate)
     except (ValueError,RuntimeError,OSError) as error:prepared=H.UnappliedPreparation(str(error))
     # Detection/replacement retains genuine evidence even when an operation is
     # now unsupported. It must then display the explicitly unapplied original.
     from .shoulder_shape_project import history_patch
-    engine._body_publish(before,candidate,prepared,history_patch(before,candidate),{'request_id':request_id,'gesture_id':request_id})
+    request={'request_id':request_id,'gesture_id':request_id}
+    if operation=='leg_shape':request['operation_id']='lnx.leg_shape.v1'
+    engine._body_publish(before,candidate,prepared,history_patch(before,candidate),request)
 
 
 def apply(engine,message):
-    action=message['action'];request=message['request']
+    operation=message['cmd'];action=message['action'];request=message['request']
+    def current(**kwargs):return response(engine,operation=operation,**kwargs)
     if type(request) is not dict:raise ValueError('Body request must be an object')
     if action=='status':
         if set(request)!={'request_id'}:raise ValueError('Status needs the original inner request ID')
-        receipt=engine._body_status(E.token(request['request_id']));result={'receipt':receipt}
-        try:result['view']=engine._body_view()
+        receipt=engine._body_status(E.token(request['request_id']),operation);result={'receipt':receipt}
+        try:result['view']=engine._body_view(operation)
         except (ValueError,RuntimeError,OSError,IndexError) as error:result['view_error']=str(error)
         try:result['model']=acquisition.status()
         except (ValueError,RuntimeError,OSError) as error:result['model_error']=str(error)
         return result
-    why=engine._guard_editable('shoulder_shape')
+    why=engine._guard_editable(operation)
     if why:raise ValueError(why)
     engine._people_bind()
     if action=='view':
         if request!={}:raise ValueError('View does not mutate body intent')
-        return response(engine,preview=True)
+        return current(preview=True)
     if action=='select':
         if set(request)!={'binding','body_ref'}:raise ValueError('Select an explicit retained BodyRef')
         binding=checked_binding(engine,request['binding']);ref=E.ref(request['body_ref']);B.target(engine._body_bank(),ref)
         if ref['asset_sha256']!=binding['asset_sha256']:raise ValueError('Body selection belongs to another source')
         engine._body_cursors[binding['asset_sha256']]=ref
-        return response(engine,preview=True)
+        return current(preview=True)
     if action not in ('edit','analyse','reanalyse'):raise ValueError('Unsupported body action; optional model acquisition uses its separate native process')
-    engine._cancel_snapshot('shoulder_shape');engine._close_owned_previews()
+    engine._cancel_snapshot(operation);engine._close_owned_previews()
     if action=='edit':
         if request.get('request_id')==message['request_id']:raise ValueError('Inner edit and outer transport IDs must be distinct')
-        receipt=engine._body_adapter().execute(request)
+        receipt=engine._body_adapter(operation).execute(request)
         # If a notification failed after the authoritative outcome, reconcile it
         # without applying the request again.
-        if receipt.get('outcome_unknown'):receipt=engine._body_status(request['request_id'])
-        return response(engine,receipt=receipt)
+        if receipt.get('outcome_unknown'):receipt=engine._body_status(request['request_id'],operation)
+        return current(receipt=receipt)
     if action=='analyse':
         if set(request)!={'binding'}:raise ValueError('Analysis requires the exact current document binding')
         binding=checked_binding(engine,request['binding'])
@@ -91,14 +97,14 @@ def apply(engine,message):
         checked_binding(engine,binding)
         bank=engine._body_bank()
         if not bank['bodies']:
-            commit_observations(engine,B.add_run(bank,run),message['request_id'])
+            commit_observations(engine,B.add_run(bank,run),message['request_id'],operation)
             engine._body_candidates=None
-            return response(engine,preview=True)
+            return current(preview=True)
         run_id='pose-run:'+uuid.uuid4().hex
         engine._body_candidates={'run_id':run_id,'binding':binding,'run':run}
         choices=B.add_run(B.empty(),run)
         rows=H.view(choices,binding,selected_body_ref=None,people_state=engine._people_owner().snapshot())['bodies']
-        return {**response(engine,preview=True),'analysis_candidates':{'run_id':run_id,'bodies':rows}}
+        return {**current(preview=True),'analysis_candidates':{'run_id':run_id,'bodies':rows}}
     if set(request)!={'binding','body_ref','candidate_ref','run_id','user_confirmed'}:raise ValueError('Replacement needs an explicit old body and actual newly observed candidate')
     binding=checked_binding(engine,request['binding']);candidate=engine._body_candidates
     if candidate is None or candidate['binding']!=binding or candidate['run_id']!=request['run_id'] or request['user_confirmed'] is not True:raise ValueError('Body candidate run changed; analyse again and explicitly select ownership')
@@ -106,28 +112,30 @@ def apply(engine,message):
     matches=[row for row in candidate['run']['records'] if row['body_ref']==new]
     if len(matches)!=1:raise ValueError('Replacement must name one actual candidate, never nearest face or list position')
     bank=B.reanalyse(engine._body_bank(),old,matches[0],user_confirmed=True)
-    commit_observations(engine,bank,message['request_id']);engine._body_candidates=None
+    commit_observations(engine,bank,message['request_id'],operation);engine._body_candidates=None
     engine._body_cursors[binding['asset_sha256']]=deepcopy(bank['bodies'][old['body_instance_id']]['record']['body_ref'])
-    return response(engine,preview=True)
+    return current(preview=True)
 
 
 class BodyTransport:
-    def __init__(self):self.seen={};self.results=OrderedDict();self.bytes=0
+    def __init__(self,operation='shoulder_shape'):
+        if operation not in ('shoulder_shape','leg_shape'):raise ValueError('Unregistered body operation transport')
+        self.operation=operation;self.seen={};self.results=OrderedDict();self.bytes=0
 
     def handle(self,engine,message,emit):
-        terminal={'event':'shoulder_shape_result','protocol':1,'request_id':message.get('request_id'),'action':message.get('action')}
+        terminal={'event':self.operation+'_result','protocol':1,'request_id':message.get('request_id'),'action':message.get('action')}
         engine._body_mutation_started=False;ident=None;signature=None
         try:
-            if set(message)!={'cmd','request_id','action','request'} or message['cmd']!='shoulder_shape':raise ValueError('Invalid shoulder transport envelope')
+            if set(message)!={'cmd','request_id','action','request'} or message['cmd']!=self.operation:raise ValueError('Invalid body transport envelope')
             ident=E.token(message['request_id']);raw=encoded(message)
-            if len(raw)>256*1024:raise ValueError('Shoulder request exceeds 256 KiB budget')
+            if len(raw)>256*1024:raise ValueError('Body request exceeds 256 KiB budget')
             signature=E.content_digest(message)
             if ident in self.seen:
-                if self.seen[ident]!=signature:raise ValueError('Shoulder transport identity reused with different content')
+                if self.seen[ident]!=signature:raise ValueError('Body transport identity reused with different content')
                 if ident in self.results:emit(deepcopy(self.results[ident][0]));return
                 terminal.update(success=False,outcome_unknown=True,error='Retained response released; inspect authoritative inner receipt and current document, never automatically replay')
                 emit(terminal);return
-            if len(self.seen)>=65536:raise ValueError('Shoulder transport identity budget exhausted')
+            if len(self.seen)>=65536:raise ValueError('Body transport identity budget exhausted')
             self.seen[ident]=signature
             result=apply(engine,message);receipt=result.get('receipt')
             terminal.update(success=(True if message['action']=='status' else receipt.get('success',False)) if receipt else True,outcome_unknown=bool(receipt and receipt.get('outcome_unknown')),result=result)
@@ -137,7 +145,7 @@ class BodyTransport:
             if actual is not None and message.get('action') in ('analyse','reanalyse'):
                 # Real state/frame/history publication completed; only a later
                 # notification failed. This is a lookup, not a mutation retry.
-                try:terminal.update(success=True,outcome_unknown=False,result=response(engine))
+                try:terminal.update(success=True,outcome_unknown=False,result=response(engine,operation=self.operation))
                 except Exception:terminal.update(success=False,outcome_unknown=True,error=str(error))
             else:terminal.update(success=False,outcome_unknown=engine._body_mutation_started or message.get('action')=='status',error=str(error))
         if ident is not None and signature is not None and self.seen.get(ident)==signature:

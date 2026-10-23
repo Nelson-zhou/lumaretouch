@@ -60,7 +60,7 @@ def prepare_export(snapshot,source,repaired,*,byte_budget,recovery_assets=None,b
     prepared=prepare(state,asset,rgb,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,repaired=repaired,
         **hair_inputs(snapshot),force_hair_prompted=True)
     if body_pose is not None:
-        from .shoulder_shape_project import check_snapshot
+        from .leg_shape_project import check_snapshot
         from .body_pose_render import prepare as prepare_body
         frame=body_pose['source'];bank=check_snapshot(body_pose,frame)
         if (frame['height'],frame['width'])!=source.shape[:2]:raise ValueError('Body final preparation requires exact original dimensions')

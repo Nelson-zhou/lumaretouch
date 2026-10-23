@@ -6,9 +6,11 @@ import {refKey,type BodyRef} from './model';
 import type {ShoulderOwner} from './useShoulderWorkflow';
 import './shoulderShape.css';
 /** Isolated original-source workspace: never place canonical points on an edited frame. */
-export function ShoulderShapeTools({owner,blocked=false}:{owner:ShoulderOwner;blocked?:boolean}){
- const [open,setOpen]=useState(false),[loaded,setLoaded]=useState(false),[candidate,setCandidate]=useState<BodyRef|null>(null),[confirmed,setConfirmed]=useState(false),[error,setError]=useState('');
+export function ShoulderShapeTools({owner,blocked=false,workspaceOpen,onWorkspaceOpen}:{owner:ShoulderOwner;blocked?:boolean;workspaceOpen?:boolean;onWorkspaceOpen?:(open:boolean)=>void}){
+ const [localOpen,setLocalOpen]=useState(false),[loaded,setLoaded]=useState(false),[candidate,setCandidate]=useState<BodyRef|null>(null),[confirmed,setConfirmed]=useState(false),[error,setError]=useState('');
  const source=owner.source,view=owner.view;
+ const open=workspaceOpen??localOpen;
+ const setOpen=(value:boolean)=>{setLocalOpen(value);onWorkspaceOpen?.(value);};
  const sourceKey=source?`${view?.binding.document_epoch}:${view?.binding.document_id}:${source.source_sha256}`:'';
  useEffect(()=>{setLoaded(false);setCandidate(null);setConfirmed(false);},[sourceKey]);
  useEffect(()=>{setCandidate(null);setConfirmed(false);},[owner.candidates?.run_id]);

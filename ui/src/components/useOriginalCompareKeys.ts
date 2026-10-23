@@ -11,12 +11,12 @@ export function useOriginalCompareKeys(pid: number | null, hold: () => unknown, 
         || n.tagName === 'SELECT' || n.tagName === 'BUTTON' || n.isContentEditable);
     };
     const down = (e: KeyboardEvent) => {
-      if (document.querySelector('.batchReviewBackdrop, .recoveryWorkspace, .liquifyWorkspace, .studioWorkspace, .skyWorkspace, .shoulderWorkspace')) return;
+      if (document.querySelector('.batchReviewBackdrop, .recoveryWorkspace, .liquifyWorkspace, .studioWorkspace, .skyWorkspace, .shoulderWorkspace, .legWorkspace')) return;
       if (e.code !== 'Space' || e.repeat || busyTarget(e.target)) return;
       e.preventDefault(); void actions.current.hold();
     };
     const up = (e: KeyboardEvent) => {
-      if (document.querySelector('.liquifyWorkspace, .studioWorkspace, .skyWorkspace, .shoulderWorkspace')) return;
+      if (document.querySelector('.liquifyWorkspace, .studioWorkspace, .skyWorkspace, .shoulderWorkspace, .legWorkspace')) return;
       if (e.code !== 'Space' || busyTarget(e.target)) return;
       e.preventDefault(); void actions.current.release();
     };

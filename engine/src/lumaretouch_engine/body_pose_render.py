@@ -1,7 +1,7 @@
 """Body joins the actual common portrait map, before face inverse evaluation."""
 from copy import deepcopy
 from . import body_pose_evidence as E,body_pose_operations as O,body_pose_project as D
-from . import shoulder_shape_project as P,shoulder_shape_adapter as A
+from . import leg_shape_project as P,leg_shape_adapter as A
 from .body_pose_geometry import DEFAULT_BODY_ORDER
 
 
@@ -84,7 +84,7 @@ def geometry_record(state):
                     for pair in ('square','width'):recipe[pair].pop('linked',None)
                 operations[operation_id]={'recipe':recipe,'support_sha256':item['support_sha256']}
         if operations:rows.append({'record':row['record'],'operations':operations})
-    return {'version':1,'body_order':DEFAULT_BODY_ORDER.record(),'body_then_face':'body-then-face-inverse-v1','bodies':rows} if rows else None
+    return {'version':1,'body_order':P.effective_order(bank).record(),'body_then_face':'body-then-face-inverse-v1','bodies':rows} if rows else None
 
 
 def fastpath_blocker(value):

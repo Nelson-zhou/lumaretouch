@@ -1,0 +1,426 @@
+{
+  "version": 1,
+  "feature_id": "PC-32473",
+  "status": "AUTHORED_UNRUN",
+  "verification": "Static source/AST/data inspection only; no tests, compiler, typecheck, inference, product execution or image-quality acceptance performed.",
+  "cases": [
+    {
+      "case_id": "LEG-001",
+      "title": "Overall is an atomic simultaneous set of thigh/calf, never a stored third strength",
+      "procedure": "Drag overall, adjust split values, reopen controls, set overall again; verify exact two-value recipe and no doubled displacement",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-002",
+      "title": "Signed actual thigh deformation",
+      "procedure": "On accepted visible source, negative widens and positive narrows hip-to-knee contour; knees/hips remain fixed",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-003",
+      "title": "Signed actual calf deformation",
+      "procedure": "On accepted visible source, negative widens and positive narrows knee-to-ankle contour; knees/ankles remain fixed",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-004",
+      "title": "Neutral import and bit-exact identity",
+      "procedure": "Import/analyse/select and leave defaults; no native load for neutral, no pixels or portable amounts changed",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-005",
+      "title": "Exact actual33/model/source evidence",
+      "procedure": "Verify real installed Full float16/1 bytes, input pixel digest, full33-point digest and BodyRef; reject any mutated evidence",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-006",
+      "title": "Visible support not bone-centre width",
+      "procedure": "Start with no contour data; require all 24 reviewed widths and four falloff radii, no inferred defaults",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-007",
+      "title": "Skirt/occlusion/overlap refusal",
+      "procedure": "Use permitted real sources with covered contours, crossed or overlapping legs; explicit unavailable reason and zero applied effect",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-008",
+      "title": "Low confidence/cropped critical joints",
+      "procedure": "User confirmation must not upgrade low scores or out-of-frame hip/knee/ankle; retain request as unapplied",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-009",
+      "title": "Strong foreshortening/ambiguous pose refusal",
+      "procedure": "Exercise large depth/projected-length ratio, sharply bent legs and fixed other joint inside support; refuse without clamping",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-010",
+      "title": "Source support provenance and reanalysis",
+      "procedure": "Edit pose/source/revision or supply shoulder review to leg operation; refuse stale support and require leg-specific re-review",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-011",
+      "title": "Immutable support/history",
+      "procedure": "Change support twice, undo/redo; both immutable assets remain and exact prior pointers/reviews restored; no other operation overwritten",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-012",
+      "title": "Canonical people/BodyRef ownership",
+      "procedure": "Change person graph without relying only on association counter; stale commands/history/transfer refuse; no nearest face guessed",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-013",
+      "title": "Multi-person support refusal",
+      "procedure": "Include active/inactive nearby bodies/faces; conservative support cannot bend another person under silent priority",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-014",
+      "title": "C2 endpoints/outside support",
+      "procedure": "Numerically inspect actual joint points, off-grid boundaries and independent exterior points; unchanged outside, smooth endpoint taper",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-015",
+      "title": "Analytical and final Jacobians",
+      "procedure": "Compare native Jacobian to finite difference and exercise final common-map cell/band-seam gates; report refusals, not quality acceptance",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-016",
+      "title": "Same-BodyRef shoulder plus leg composition",
+      "procedure": "Combine nonneutral shoulder/thigh/calf with one BodyRef; one BodyGeometry in explicit v2 order, no duplicate body entries or independent grid addition",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-017",
+      "title": "Stale prepared field rejection",
+      "procedure": "Change recipe/review/support/association after preparing a leg field; input_binding_sha256 mismatch must block preview/export",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-018",
+      "title": "RGB8/16 and aligned masks/deltas",
+      "procedure": "At preview and original export compare common source map for RGB8/16, semantic/recovery masks and local deltas; exactly one source sampling pass",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-019",
+      "title": "Proxy/original recomputation",
+      "procedure": "Different preview/original dimensions rebuild all native fields; never enlarge proxy correction; source orientation normalized exactly once",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-020",
+      "title": "Budget/native missing refusal",
+      "procedure": "Exhaust admitted memory/receipt budget, remove or mismatch optional native core; exact blockers and no Python/image fallback",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-021",
+      "title": "Cross-photo amount-only transfer",
+      "procedure": "Confirmed anonymous person on both photos with target re-review; transfer exactly two amounts, never coordinates/masks/review; target prepared before publish",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-022",
+      "title": "Project/order round-trip",
+      "procedure": "Save/reopen active and undo/redo trees; verify one body bank, assets, versioned operation order and old reader capability refusal",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-023",
+      "title": "Unknown active operation refusal",
+      "procedure": "Preserve unknown future operation data through load/save, but refuse rendering enabled unsupported consumers rather than silently export partial state",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-024",
+      "title": "Slider repeated/cancelled gestures",
+      "procedure": "One inflight plus latest unsent edit; pointer cancel/blur and keyboard input preserve correct bases; overall does not add intensity",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-025",
+      "title": "Photo/selection/analysis switch race",
+      "procedure": "Switch source/BodyRef/analysis while request pending; discard unsent old intent and prevent late result from replacing current view",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-026",
+      "title": "Lost reply/query-only reconciliation",
+      "procedure": "Drop mutation response after commit; exact request receipt retained; query status without replay or duplicate history",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-027",
+      "title": "Original-image review race",
+      "procedure": "Change original URL/source before load, fail load or mismatched natural dimensions; disable contour capture until exact matching original loaded",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-028",
+      "title": "Actual publication receipt",
+      "procedure": "Prepared map alone cannot be marked rendered; verify actual published frame/pixel/map hashes, source, dtype, dimensions and one sample",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-029",
+      "title": "Naturalness and background review",
+      "procedure": "Use varied permitted real visible legs/clothing/background lines; inspect full-res edges, texture, joints and background bending; human visual judgment required",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-030",
+      "title": "No out-of-scope shape changes",
+      "procedure": "Verify no length/height/head-waist control, no demographic dependence, no hidden anatomy synthesis, and no model download/install on import",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-031",
+      "title": "Neutral leg installation retains v1 shoulder geometry identity",
+      "procedure": "Create shoulder-only colour masks, open leg editor, select/review/insert neutral leg; geometry identity and mask readiness remain unchanged. Active leg switches to explicit v2; undo/disable returns v1 without relabelling old snapshots.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-032",
+      "title": "Canonical v14 history and uncertain publication",
+      "procedure": "Edit legs after hair+shoulder+face edits, coalesce gesture, undo/redo/save/reopen. Drop notifications after publication and query original request; no duplicate mutation, second stack, lost hair input or replay across epochs.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-033",
+      "title": "Honest thumbnail correspondence and ALIGN=8 decode",
+      "procedure": "Review legs on odd original dimensions using canonical ALIGN=8 decoder proxy and bounded PNG. Verify original/decoded/display dimensions, normalized coordinates, source stamp checks and refusal of cropped/stale/fake full-resolution receipt.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-034",
+      "title": "Full owned inputs and all export paths",
+      "procedure": "Combine active hair, shoulder, legs, face, recovery and late reference/semantic colour. Inspect proxy plus original RGB8/16 export through each full-size consumer. Hair/source assets and decode stamps remain checked; all geometry uses one common sampler.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "LEG-035",
+      "title": "Mismatched publication is not notification uncertainty",
+      "procedure": "Inject an authoritative returned frame/map/order mismatch after publication; leg validation remains explicitly unresolved and status must not upgrade it from the generic success ledger. A genuine post-publication notification loss may reconcile without replay.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-6519e4b67b",
+        "LNX-REF-PC-32473-C-2cebb24a12",
+        "LNX-REF-PC-32473-C-c63c7afe15"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    }
+  ]
+}

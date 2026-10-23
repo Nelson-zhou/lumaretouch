@@ -2,40 +2,56 @@
 from copy import deepcopy
 from hashlib import sha256
 from . import body_pose_project as D,body_pose_state as B,body_pose_evidence as E
-from . import shoulder_shape_project as P,shoulder_shape_host as H,body_pose_render as R
+from . import shoulder_shape_project as P,shoulder_shape_host as H,body_pose_render as R,leg_shape_host as L
 
 
 class BodyPoseHostMixin:
     def _body_init(self):
         self._body_pose_bank=D.fields()[D.KEY];self._body_cursors={};self._body_candidates=None
-        self._body_last_outcome={};self._body_authoritative={};self._body_receipt_bytes=0;self._body_mutation_started=False
+        self._body_last_outcome={};self._body_authoritative={};self._body_receipt_bytes=0;self._body_mutation_started=False;self._leg_receipts={}
 
     def _body_fields(self,state=None):return D.fields(state)
     def _body_bank(self):return P.unpack(self._body_pose_bank)
     def _body_identity(self):return E.content_digest(self._body_bank())
 
-    def _body_adapter(self):
+    def _body_adapter(self,operation='shoulder_shape'):
+        if operation=='leg_shape':
+            owner=self.__dict__.get('_leg_edit_owner')
+            if owner is None:
+                owner=L.LegHostAdapter(L.HostPorts(self._people_binding,self._body_bank,lambda:self._people_owner().snapshot(),self._body_prepare,self._body_publish,self._leg_receipt_get,self._leg_receipt_put))
+                self._leg_edit_owner=owner
+            return owner
         owner=self.__dict__.get('_body_edit_owner')
         if owner is None:
             owner=H.ShoulderHostAdapter(H.HostPorts(self._people_binding,self._body_bank,lambda:self._people_owner().snapshot(),self._body_prepare,self._body_publish))
             self._body_edit_owner=owner
         return owner
 
-    def _body_view(self):
+    def _leg_receipt_get(self,request_id):return deepcopy(self._leg_receipts.get(request_id))
+
+    def _leg_receipt_put(self,request_id,digest,result):
+        E.token(request_id);E.digest(digest)
+        old=self._leg_receipts.get(request_id)
+        if old is not None and old['digest']!=digest:raise ValueError('Body receipt identity changed')
+        if old is None and len(self._leg_receipts)>=4096:raise ValueError('Leg receipt budget exhausted before mutation')
+        self._leg_receipts[request_id]={'digest':digest,'result':deepcopy(result)}
+
+    def _body_view(self,operation='shoulder_shape'):
         binding=self._people_binding();bank=self._body_bank();R.check_source(bank,R.source(self._people_source()))
         selected=self._body_cursors.get(binding['asset_sha256'])
         if selected is not None:
             try:B.target(bank,selected)
             except ValueError:selected=None;self._body_cursors.pop(binding['asset_sha256'],None)
         reason=getattr(self._vram,'people_suspended',None)
-        value=H.view(bank,binding,selected_body_ref=selected,people_state=self._people_owner().snapshot(),refusals=([{'body_ref':row['record']['body_ref'],'reason':reason} for row in bank['bodies'].values()] if reason else ()))
+        presenter=L if operation=='leg_shape' else H
+        value=presenter.view(bank,binding,selected_body_ref=selected,people_state=self._people_owner().snapshot(),refusals=([{'body_ref':row['record']['body_ref'],'reason':reason} for row in bank['bodies'].values()] if reason else ()))
         value['last_outcome']=deepcopy(self._body_last_outcome.get(binding['asset_sha256']))
         return value
 
     def _body_report(self):
         if not self._image_loaded or self._doc_index<0:return {}
-        try:return {'shoulder_shape':self._body_view()}
-        except (ValueError,RuntimeError,OSError,KeyError) as error:return {'shoulder_shape':None,'shoulder_shape_error':str(error)}
+        try:return {'shoulder_shape':self._body_view(),'leg_shape':self._body_view('leg_shape')}
+        except (ValueError,RuntimeError,OSError,KeyError) as error:return {'shoulder_shape':None,'leg_shape':None,'shoulder_shape_error':str(error),'leg_shape_error':str(error)}
 
     def _body_prepare(self,candidate):
         from . import people_engine_runtime as runtime,people_support_assets as support
@@ -48,20 +64,21 @@ class BodyPoseHostMixin:
     def _body_publish_frame(self,prepared,request):
         from . import people_pipeline as pipeline,people_engine_runtime as runtime,shoulder_shape_runtime as shoulder
         import numpy as np
+        operation='leg_shape' if request.get('operation_id')=='lnx.leg_shape.v1' else 'shoulder_shape'
         reason=prepared.reason if isinstance(prepared,H.UnappliedPreparation) else None
         if reason is None:
             try:
                 pipeline.install(self._vram,prepared);self._vram.people_suspended=None
                 source=self._people_source()
                 self._vram.people_key=(source['sha256'],self._people_owner().fence,id(self._precompute),id(self._vram.src_f32),id(self._vram.repair_base),self._body_identity())
-                frame=self._write_current_frame('shoulder_shape')
+                frame=self._write_current_frame(operation)
             except Exception as error:
                 reason='Body intent retained but edited output is suspended: '+str(error)
         if reason is not None:
             runtime.suspend(self._vram,reason)
             # If this actual fallback also fails, publication stays uncertain.
             # A stale edited frame is never described as the requested output.
-            frame=self._write_current_frame('shoulder_shape',original=True)
+            frame=self._write_current_frame(operation,original=True)
             frame.update(display_quality='original_unapplied',people_render_suspended=reason,suspended_effects=['body_geometry'])
         pixels=np.ascontiguousarray(self._vram.read_back()[:,:,:3]);source=self._people_source()
         frame_id=self.shm.instance_id.hex()+':'+str(frame['seq']);revision=self._people_binding()['document_revision']
@@ -83,6 +100,7 @@ class BodyPoseHostMixin:
     def _body_publish(self,before,candidate,prepared,patch,request):
         from .server import emit
         from .body_pose_commands import encoded
+        operation='leg_shape' if request.get('operation_id')=='lnx.leg_shape.v1' else 'shoulder_shape'
         try:
             before_history=self._history_capture();history_asset=self._people_source()['sha256'];packed=P.pack(candidate)
             estimate=len(encoded(candidate))+len(encoded(self._people_owner().snapshot()['persons']))+32768
@@ -99,19 +117,19 @@ class BodyPoseHostMixin:
         finally:
             # The same history owner must retain partially published intent too,
             # even if allocation/render/hash fails after the first write.
-            self._history_controller().record('shoulder_shape:gesture:'+request['gesture_id'],before_history,after=self._body_history_after(history_asset))
-        view=self._body_view()
+            self._history_controller().record(operation+':gesture:'+request['gesture_id'],before_history,after=self._body_history_after(history_asset))
+        view=self._body_view(operation)
         view['publication']={'request_id':request['request_id'],'rendered':reason is None,'unapplied_reason':reason}
         result={'phase':'done','protocol':1,'request_id':request['request_id'],'success':True,'outcome_unknown':False,'rendered':reason is None,'unapplied_reason':reason,'view':view}
         self._body_authoritative[request['request_id']]=deepcopy(result);self._body_receipt_bytes+=len(encoded(result))
         # Store the actual state/frame/history outcome before notifications.
-        emit(frame);emit({'event':'params_set','mode':'shoulder_shape','doc_state':self.doc_state()})
+        emit(frame);emit({'event':'params_set','mode':operation,'doc_state':self.doc_state()})
         return view
 
-    def _body_status(self,request_id):
-        owner=self._body_adapter();result=owner.status(request_id)
+    def _body_status(self,request_id,operation='shoulder_shape'):
+        owner=self._body_adapter(operation);result=owner.status(request_id)
         actual=self._body_authoritative.get(request_id)
-        if result.get('outcome_unknown') and actual is not None:owner.resolve_publication(request_id,actual_result=actual);result=owner.status(request_id)
+        if result.get('outcome_unknown') and not result.get('publication_invalid') and actual is not None:owner.resolve_publication(request_id,actual_result=actual);result=owner.status(request_id)
         return result
 
     def _body_history_restore(self,snapshot):
@@ -122,4 +140,10 @@ class BodyPoseHostMixin:
         from .body_pose_commands import BodyTransport
         from .server import emit
         owner=self.__dict__.setdefault('_body_transport',BodyTransport())
+        owner.handle(self,message,emit)
+
+    def cmd_leg_shape(self,message):
+        from .body_pose_commands import BodyTransport
+        from .server import emit
+        owner=self.__dict__.setdefault('_leg_transport',BodyTransport('leg_shape'))
         owner.handle(self,message,emit)
