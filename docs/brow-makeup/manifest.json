@@ -1,0 +1,310 @@
+{
+  "base": "a904c5e82cc936124678602be2f139194550d29e",
+  "status": "SOURCE_WIRED_RUNTIME_UNRUN",
+  "verification": "Static Python AST, JSON, source registration/import-path inspection and SHA-256 only; no product import/execution. All tests/build/compiler/typecheck/inference UNRUN.",
+  "shared_files": [
+    "engine/src/lumaretouch_engine/people_algorithms.py",
+    "engine/src/lumaretouch_engine/people_edit.py",
+    "engine/src/lumaretouch_engine/people_effects.py",
+    "engine/src/lumaretouch_engine/people_pipeline.py",
+    "engine/src/lumaretouch_engine/people_export.py",
+    "engine/src/lumaretouch_engine/facial_wrinkle_recovery.py",
+    "engine/src/lumaretouch_engine/people_render_runtime.py",
+    "engine/src/lumaretouch_engine/people_engine_runtime.py",
+    "engine/src/lumaretouch_engine/people_owned_inputs.py",
+    "engine/src/lumaretouch_engine/people_support_assets.py",
+    "engine/src/lumaretouch_engine/vram.py",
+    "engine/src/lumaretouch_engine/people_host_commands.py",
+    "engine/src/lumaretouch_engine/people_host.py",
+    "engine/src/lumaretouch_engine/people_project.py",
+    "engine/src/lumaretouch_engine/server.py",
+    "engine/src/lumaretouch_engine/history_policy.py",
+    "engine/src/lumaretouch_engine/scope.py",
+    "engine/src/lumaretouch_engine/people_scope.py",
+    "engine/src/lumaretouch_engine/workflow_ports.py",
+    "engine/src/lumaretouch_engine/effect_recovery_state.py",
+    "engine/src/lumaretouch_engine/effect_recovery_runtime.py",
+    "ui/src/people/model.ts",
+    "ui/src/native.ts",
+    "ui/src-tauri/src/people_api.rs",
+    "ui/src/components/RetouchPanel.tsx",
+    "ui/src/effectRecovery/model.ts",
+    "ui/src/presets/presetModel.ts",
+    "ui/src/batch/batchScopeOptions.ts",
+    "packaging/stage-engine.sh",
+    "ui/src/App.tsx"
+  ],
+  "python_ast_files": 32,
+  "files": [
+    {
+      "path": "core/brow_makeup/brow_makeup.rs",
+      "sha256": "2d2cce43adcd7251114ae0c5493790f3f5e4cf9597d0269a74853f1e484dfd15",
+      "bytes": 2656
+    },
+    {
+      "path": "docs/brow-makeup/README.md",
+      "sha256": "ebe9a46da9214860b1fcafabc343493bf5a0ffba50cb032faf090b04b2c606dd",
+      "bytes": 3901
+    },
+    {
+      "path": "docs/brow-makeup/acceptance.json",
+      "sha256": "b21bae759461f38192f12437b3dad68f7b36c36e730c8dbe7b42f59ba5f29fc0",
+      "bytes": 6019
+    },
+    {
+      "path": "docs/brow-makeup/integration-map.json",
+      "sha256": "d4af312c13bbaca7a931559d7f3b4512c3a7ae08acb09ba30709bfa8c5830357",
+      "bytes": 13281
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_makeup_adapters.py",
+      "sha256": "0f61d801678f9489d999bddf30cb7788b9ca657da9cafedc4b349014cf114d8f",
+      "bytes": 3308
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_makeup_catalogue.py",
+      "sha256": "0aa29ad361b52a0e2a06e563ad2338b611884ac40de9d872dbf9c642226f0ff9",
+      "bytes": 576
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_makeup_geometry.py",
+      "sha256": "eac237ad7f11d030c05a6deba65016f0c11495c1b153c2cf335a09769e2838b4",
+      "bytes": 4825
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_makeup_host.py",
+      "sha256": "d19d37c6ca093718ecc56c1b4af2ab1b5dbd735df8be9ac86b7cf57f91a984d6",
+      "bytes": 3765
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_makeup_native.py",
+      "sha256": "9a89e8200746dc0ea6c07a7a7e10bcf25c287c30959670944f4e4ca63b20021d",
+      "bytes": 1816
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_makeup_patterns.json",
+      "sha256": "4635e7bbf4d69249acb696310f986bb33d3d704cd3766556849b6bad38ce978a",
+      "bytes": 6637
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_makeup_people.py",
+      "sha256": "b4bd34c9f5e682234250a7313ff2dd764ac2f0a0963262278bb712b569bd1cec",
+      "bytes": 2218
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_makeup_project.py",
+      "sha256": "f6bd7ef9ee86c9e4e94cbfec71548ee17f9c0274e58eac8f6a37746155f37413",
+      "bytes": 1722
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_makeup_scope.py",
+      "sha256": "666460ea10866e081b444594d8802687e08c5103846c448a46093e6b48861362",
+      "bytes": 1829
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_makeup_state.py",
+      "sha256": "5453b2cc7c94bae9bc350eb38c88a6b8249cf0ab806ca0d762de96a82dda805b",
+      "bytes": 2812
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_makeup_support.py",
+      "sha256": "8a84f368d5b1c0c0bbc6982f96e44fa687656f99fa11711d6439a04f52ddba46",
+      "bytes": 5484
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_runtime.py",
+      "sha256": "9e2cfa5b1bf8848ff15d304c25245bacc97b0d8cf87aa3edc36db7d2ea6f77e1",
+      "bytes": 10042
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_state.py",
+      "sha256": "01ba0296a86ea466e46e89e5e83141c7fbb5925a533d980b654fa170cbf38bdb",
+      "bytes": 8877
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_wrinkle_recovery.py",
+      "sha256": "b45144c1559f88c881cca00f3532cb96e600e6b52c28aff0c2179465cad65738",
+      "bytes": 3781
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "902b682e7783a8a2e8d993f0c89ca98c0ea10e3429cfeeba418edce21fd92df2",
+      "bytes": 6863
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "508d6c74baa5d0c7c4fb7c3357862f1837daa11eafba1a826136821b962918e9",
+      "bytes": 3508
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_edit.py",
+      "sha256": "4334bfdb680f8c46937dd76c996e5b989ef245dc228844f707a9ca1ea2c9f256",
+      "bytes": 5589
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "sha256": "4e363161f12415764ef0a1eb39690cd76afbeb81c426cd904f5a215240f43aff",
+      "bytes": 6787
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "b9e20202f58317598c46d752f9e3e95b56f496d9cb17e1c4f5dc23a5e42409a8",
+      "bytes": 5629
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "d698d7bef6737d75cb2eebe443fe36509fad5c3b7d8f0be2b6908483c46cf7e3",
+      "bytes": 3715
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "64c4b87e720c348f076e1f62d477573ad23795923326f88aba0b99ef67413415",
+      "bytes": 18630
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "20deeaaa90b21d046be3ed70e2758bae80328481d8005142ae4ad44dd0ad190a",
+      "bytes": 15890
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "sha256": "99832579bcd8bb1ed97a0d0e1ff0511d1ea7a38d66d6e74a8ecd56d2e3b93ca7",
+      "bytes": 1098
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "sha256": "d9446d4e0af26f5877a3975e3ef9f4d0c8832c653529ae467fccd81a690697e6",
+      "bytes": 4952
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_project.py",
+      "sha256": "a06a4acce398f7f72b080f4a5eed9834b03cdf534ddc6b976c92e999ecc99776",
+      "bytes": 3229
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "a49430e103446f970c8cccd629710dbe674d6882ecbe1179cda14e48901a7658",
+      "bytes": 12779
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "69a9f6a7e08d37352907718fde605b9a11f9fa4cfe4765ef61f15cefd4de24b4",
+      "bytes": 4078
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_support_assets.py",
+      "sha256": "215ac43b6c38050151ea454d54b948d19035ea93c9b395eb75303e535ada20ac",
+      "bytes": 9822
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "60b3ba4964cfbada550f3974627ba47a5e5f74a23110705effb0bf194bcbaafb",
+      "bytes": 33737
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "49db5c97c1c42c392bb5e293ba1c73b4402c99ecdedb6ca7ecf1e5520fc023a9",
+      "bytes": 446706
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "ce7a34daf719d2bdfe168ca032a255a3d5a7a571b9bebd37ed1e4e465d283589",
+      "bytes": 127586
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "f8e840502e26eaa7c46efd1d1cb58dfb14e86f29c7d1388cf305d5a2699eec5d",
+      "bytes": 4677
+    },
+    {
+      "path": "engine/tests/fixtures/brow_makeup/test_contract.py",
+      "sha256": "72a3a5e8d2006451350aa11584697fb1e1e09b31c9ff1f4cb7d1a464abe39f4b",
+      "bytes": 2364
+    },
+    {
+      "path": "packaging/build-brow-makeup.sh",
+      "sha256": "5154a720ec56718320e1566c39a287c8df5b6f892a3104cc68905e0f1f9a7b88",
+      "bytes": 428
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "bddebb96ac208e0af0b2c20655040d80bd7211b89f9ddc34f2efd6f18c1c81d6",
+      "bytes": 14260
+    },
+    {
+      "path": "ui/src-tauri/src/people_api.rs",
+      "sha256": "deeb6888f73b0959cab3e9a86a2814bffbf46af63159ca5bcc29186ab55e4749",
+      "bytes": 6793
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "7d8fc4c9e4c3de3a67fb725f04d95c460d3f69d916f112301378bca70e66d253",
+      "bytes": 134182
+    },
+    {
+      "path": "ui/src/batch/batchScopeOptions.ts",
+      "sha256": "dd61924ef6c33be78a5bb68525514e8766294255bcb93bf201a4035ccfd32829",
+      "bytes": 3777
+    },
+    {
+      "path": "ui/src/browMakeup/BrowMakeupBrowControls.tsx",
+      "sha256": "2c211ff8e66eb40b7a151cfa64aaecb4aa433abd8f9100b8c293e93e47508318",
+      "bytes": 5428
+    },
+    {
+      "path": "ui/src/browMakeup/BrowMakeupPanel.tsx",
+      "sha256": "76269d090f0724908fc13137e33fa2ad699aa786efa2007f5d0d893e8cd9b3bb",
+      "bytes": 5027
+    },
+    {
+      "path": "ui/src/browMakeup/BrowMakeupSupportEditor.tsx",
+      "sha256": "863b5a99ffd3fe2939eb52caa7f09010d4a8ef184541eceb6a0a4af33e3cf682",
+      "bytes": 6056
+    },
+    {
+      "path": "ui/src/browMakeup/catalogue.ts",
+      "sha256": "d05e48f1ba6373e1e479e055c9cd84e89237e6cf47828ad744ad404474dbce33",
+      "bytes": 3341
+    },
+    {
+      "path": "ui/src/browMakeup/model.ts",
+      "sha256": "6981ab5f2d30bb58de4510961832220dd5b1116ba8fcbcc33ebf423be8bff9a6",
+      "bytes": 4329
+    },
+    {
+      "path": "ui/src/browMakeup/picker.ts",
+      "sha256": "f64e28f036e30549257840e68ff483344b83ac95b9e06d44cd7a1b674d93b080",
+      "bytes": 3162
+    },
+    {
+      "path": "ui/src/browMakeup/useBrowMakeupPicker.ts",
+      "sha256": "f55ab41eb5ec0e19814c4c01e9cba323986932ccb869563f1f2994cce256e34d",
+      "bytes": 2864
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "e603201617c67d834459b9be8a1263ea88f6fa6fd01e407175a995ac9aa5cdd6",
+      "bytes": 56895
+    },
+    {
+      "path": "ui/src/effectRecovery/model.ts",
+      "sha256": "f360c0665d1693d8aff8aae6399130bdee6959e4a1c916b24589ff57a6e66ced",
+      "bytes": 2067
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "96ba6f81aae3bd56b2f8cbb73fd68b3b47f32d9575539e0787b058f6dd32aa68",
+      "bytes": 92931
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "3a64d018ac9267e7f4fc9e1960cd836c953119ad3009d513250515e299ba4d90",
+      "bytes": 6832
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "5d49789f66069da0b898ca7f0c8ff569ad8ece487036e72824a61dc27c0379c5",
+      "bytes": 3275
+    }
+  ]
+}

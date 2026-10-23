@@ -14,6 +14,7 @@ def availability(engine):
     lip_suspended = getattr(getattr(pipe, 'effect_recovery', None), 'suspended_targets', {}).get('lip_makeup') if pipe else None
     result = {
         'eyeliner': {'active':False,'reason':'眼线恢复需要当前人物的已应用眼线图层'},
+        'brow_makeup': {'active':False,'reason':'眉妆恢复需要当前人物的已应用眉妆图层'},
         'lipstick': {'active':False,'reason':'口红恢复需要当前人物的已应用口红图层'},
         'blush_makeup': {'active':False,'reason':'腮红恢复需要当前人物的已应用腮红图层'},
         'eye_light': {'active':False,'reason':'眼神光恢复需要当前人物的已应用素材图层'},

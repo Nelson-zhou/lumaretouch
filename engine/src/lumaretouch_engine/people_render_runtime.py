@@ -65,7 +65,7 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32, recovery_assets=None, repaired=None,
-            hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None):
+            hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,brow_makeup_assets=None):
     state = S.check(state)
     if type(source) is not np.ndarray or source.dtype != np.float32 or source.ndim != 3 or source.shape[2] != 3 or not np.isfinite(source).all() or np.any((source < 0) | (source > 1)):
         raise ValueError('People preparation needs frozen working-sRGB float32 RGB')
@@ -98,6 +98,10 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
                 if stage=='eyeliner_visibility':
                     from .eyeliner_support import resolve as resolve_eyeliner_support
                     resolve_eyeliner_support(state,eyeliner_assets or {},entry['face_ref'])
+                    continue
+                if stage=='brow_makeup_visibility':
+                    from .brow_makeup_support import resolve as resolve_brow_makeup_support
+                    resolve_brow_makeup_support(state,brow_makeup_assets or {},entry['face_ref'])
                     continue
                 if stage=='lipstick_visibility':
                     from .lipstick_support import resolve as resolve_lipstick_support
@@ -133,6 +137,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
             local.extend(prepare_eye_light(state,eye_light_assets or {},entry['face_ref'],analysis,effect_source,values[EYE_LIGHT],source_revision=state['revision']))
             from .eyeliner_people import prepare as prepare_eyeliner
             local.extend(prepare_eyeliner(state,eyeliner_assets or {},entry['face_ref'],analysis,effect_source,values[A.EYELINER.OP],source_revision=state['revision']))
+            from .brow_makeup_people import prepare as prepare_brow_makeup
+            local.extend(prepare_brow_makeup(state,brow_makeup_assets or {},entry['face_ref'],analysis,effect_source,values[A.BROW_MAKEUP.OP],source_revision=state['revision']))
             # Preserve mouth's source-cavity teeth veto independently per face.
             mouth = field.fields[-1]
             if mouth is not None and mouth.state is not None:
@@ -149,6 +155,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
             facts[key] = {record.stage:record.facts for record in local}
             liner_facts=[record.facts for record in local if record.stage=='eyeliner']
             if liner_facts:facts[key]['eyeliner']={'eyes':liner_facts,'stage':'source-working-srgb'}
+            brow_facts=[record.facts for record in local if record.stage=='brow_makeup']
+            if brow_facts:facts[key]['brow_makeup']={'brows':brow_facts,'stage':'source-working-srgb'}
             eye_facts=[record.facts for record in local if record.stage=='eye_light']
             if eye_facts:facts[key]['eye_light']={'eyes':eye_facts,'stage':'source-working-srgb','physical_light_recovery':False}
             facts[key].update({name:part.facts for name,part in zip(('brow_shape','nose_shape','eye_shape','mouth_shape'),field.fields) if part is not None})

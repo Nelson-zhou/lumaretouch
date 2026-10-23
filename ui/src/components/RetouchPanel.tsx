@@ -69,6 +69,7 @@ export interface RetouchProps {
   colorSamplePanel?: React.ReactNode;
   blushMakeupPanel?: React.ReactNode;
   eyelinerPanel?: React.ReactNode;
+  browMakeupPanel?: React.ReactNode;
   lipstickPanel?: React.ReactNode;
   colorActions?: ColorActionControlsProps;
   sourcePatchPanel?: React.ReactNode;cloneStampPanel?: React.ReactNode;localMasksPanel?: React.ReactNode;
@@ -264,6 +265,12 @@ const WIRED: Record<string, string> = {
   "PC-32471|局部妆容/眼线/RGB": "eyeliner.rgb",
   "PC-32471|局部妆容/眼线/HEX": "eyeliner.hex",
   "PC-32471|局部妆容/眼线/收藏颜色": "eyeliner.saved",
+  "PC-32471|局部妆容/眉毛": "browMakeup.family",
+  "PC-32471|局部妆容/眉毛/推荐颜色": "browMakeup.recommended",
+  "PC-32471|局部妆容/眉毛/吸管": "browMakeup.eyedropper",
+  "PC-32471|局部妆容/眉毛/RGB": "browMakeup.rgb",
+  "PC-32471|局部妆容/眉毛/HEX": "browMakeup.hex",
+  "PC-32471|局部妆容/眉毛/收藏颜色": "browMakeup.saved",
   "PC-32471|局部妆容/口红": "lipstick.family",
   "PC-32471|局部妆容/口红/推荐颜色": "lipstick.recommended",
   "PC-32471|局部妆容/口红/吸管": "lipstick.eyedropper",
@@ -602,6 +609,8 @@ export default function RetouchPanel(props: RetouchProps) {
     if (kind.startsWith("brow.")) return null;
     if (kind === "eyeliner.family") return <div key={leaf.path}>{props.eyelinerPanel}</div>;
     if (kind.startsWith("eyeliner.")) return null;
+    if (kind === "browMakeup.family") return <div key={leaf.path}>{props.browMakeupPanel}</div>;
+    if (kind.startsWith("browMakeup.")) return null;
     if (kind === "lipstick.family") return <div key={leaf.path}>{props.lipstickPanel}</div>;
     if (kind.startsWith("lipstick.")) return null;
     if (kind === "blush.family") return <div key={leaf.path}>{props.blushMakeupPanel}</div>;

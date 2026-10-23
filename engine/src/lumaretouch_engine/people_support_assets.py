@@ -112,7 +112,7 @@ def raster(state,assets,asset_sha256,shape):
     for face in state['faces'].values():
         if face['asset_sha256']!=asset_sha256 or not face['enabled']:continue
         for target,descriptor in face['local_assets'].items():
-            if target in ('hair_colour','eye_light_visibility','blush_makeup_visibility','lipstick_visibility','eyeliner_visibility'):continue # Dedicated support consumers, never facial recovery.
+            if target in ('hair_colour','eye_light_visibility','blush_makeup_visibility','lipstick_visibility','eyeliner_visibility','brow_makeup_visibility'):continue # Dedicated support consumers, never facial recovery.
             checked=resolve(state,assets,S.face_ref(face),target);row=checked['targets'][0]
             work+=M.validate_budget(row['recipe'],shape)['work'] if row['enabled'] else 0
             rows.append((face,row,descriptor['content_sha256']))
@@ -138,6 +138,10 @@ def check_store(assets):
         ref=S.check_ref(record['face_ref'])
         if record.get('row',{}).get('target')=='eyeliner_visibility':
             from .eyeliner_support import check_record
+            check_record(record)
+            continue
+        if record.get('row',{}).get('target')=='brow_makeup_visibility':
+            from .brow_makeup_support import check_record
             check_record(record)
             continue
         if record.get('row',{}).get('target')=='lipstick_visibility':

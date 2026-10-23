@@ -12,7 +12,8 @@ class WorkflowPortsMixin:
         from .blush_makeup_scope import capture as capture_blush
         from .lipstick_scope import capture as capture_lipstick
         from .eyeliner_scope import capture as capture_eyeliner
-        return capture_eyeliner(self,capture_lipstick(self,capture_blush(self,capture(self))))
+        from .brow_makeup_scope import capture as capture_brow_makeup
+        return capture_brow_makeup(self,capture_eyeliner(self,capture_lipstick(self,capture_blush(self,capture(self)))))
 
     def _people_preset_replay(self,state,**kwargs):
         from .people_scope import replay_preset

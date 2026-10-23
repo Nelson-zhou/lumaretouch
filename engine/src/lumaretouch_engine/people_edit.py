@@ -41,7 +41,7 @@ def stage(command, state, *, document_id, document_epoch, document_revision,
                 neutral, validator = A.specifications()[op]
                 # Bilateral material linked equality is a whole-recipe atomic invariant,
                 # not a rejection of the first scalar in a two-eye transaction.
-                if op in (A.EYE_LIGHT.OPERATION,A.EYELINER.OP):neutral={**neutral,'linked':False}
+                if op in (A.EYE_LIGHT.OPERATION,A.EYELINER.OP,A.BROW_MAKEUP.OP):neutral={**neutral,'linked':False}
                 materialize({'conflicts':[], 'operations':{op:{path:{'value':patch['value']}}}},op,neutral,validator)
             out = S.set_override(out,target['scope'],target['target_id'],op,path,patch.get('value'),unset=patch['unset'])
     elif action == 'link':

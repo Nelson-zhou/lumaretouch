@@ -1,0 +1,111 @@
+{
+  "status": "AUTHORED_UNRUN",
+  "source": "https://www.pixcakeai.com/guide/32471",
+  "cases": [
+    {
+      "case_id": "BM-01",
+      "requirement_id": "LNX-REF-PC-32471-C-f8c081796f",
+      "acceptance": "14 distinct non-colour profiles and correctly labelled shape preview",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    },
+    {
+      "case_id": "BM-02",
+      "requirement_id": "LNX-REF-PC-32471-C-f8c081796f",
+      "acceptance": "Zero strength exact neutral; linked edit atomic; unlock independent; relink uses selected side",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    },
+    {
+      "case_id": "BM-03",
+      "requirement_id": "LNX-REF-PC-32471-C-f8c081796f",
+      "acceptance": "Actual portrait: both visible brows plus separate forehead review; known occluders excluded; real output quality",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    },
+    {
+      "case_id": "BM-04",
+      "requirement_id": "LNX-REF-PC-32471-C-f8c081796f",
+      "acceptance": "Reject stale, foreign, missing or hidden support, low resolution, cropped, foreshortened and no reliable dark brow",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    },
+    {
+      "case_id": "BM-05",
+      "requirement_id": "LNX-REF-PC-32471-C-cd82871a04",
+      "acceptance": "Per-pattern recommendations do not change pattern or unrelated side",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    },
+    {
+      "case_id": "BM-06",
+      "requirement_id": "LNX-REF-PC-32471-C-88e033710b",
+      "acceptance": "Picker requires exact producer/presentation receipt; stale document/target/graph/revision/side and late click rejected",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    },
+    {
+      "case_id": "BM-07",
+      "requirement_id": "LNX-REF-PC-32471-C-9fcbd519c2",
+      "acceptance": "RGB integers 0–255; reject bool, fraction, nonfinite, out-of-range and malformed triplet",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    },
+    {
+      "case_id": "BM-08",
+      "requirement_id": "LNX-REF-PC-32471-C-8b0e3a0ecc",
+      "acceptance": "HEX strict RRGGBB; uppercase normalization and invalid input preserved without commit",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    },
+    {
+      "case_id": "BM-09",
+      "requirement_id": "LNX-REF-PC-32471-C-d192a9d749",
+      "acceptance": "Six favourite limit, normalized duplicate idempotence, removal, no eviction; undo/redo/reopen persistence",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    },
+    {
+      "case_id": "BM-10",
+      "requirement_id": "LNX-REF-PC-32471-C-f8c081796f",
+      "acceptance": "Recovery removes only own brow contribution; zero-weight outside reviewed support unchanged",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    },
+    {
+      "case_id": "BM-11",
+      "requirement_id": "LNX-REF-PC-32471-C-f8c081796f",
+      "acceptance": "Two-person/group/all scope, independent per-face review, atomic refusal, source-bound replay and dormant override validation",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    },
+    {
+      "case_id": "BM-12",
+      "requirement_id": "LNX-REF-PC-32471-C-f8c081796f",
+      "acceptance": "Preview and full-size/tiled export agreement, nonuniform resize semantics, no tile seams, crop/geometric warp ordering",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    },
+    {
+      "case_id": "BM-13",
+      "requirement_id": "LNX-REF-PC-32471-C-f8c081796f",
+      "acceptance": "Preset and batch transfer recipe only, destination-owned review, catalogue mismatch explicit failure",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    },
+    {
+      "case_id": "BM-14",
+      "requirement_id": "LNX-REF-PC-32471-C-f8c081796f",
+      "acceptance": "ABI unavailable/mismatch, invalid atomic buffer, finite bounded delta, resource admission",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    },
+    {
+      "case_id": "BM-15",
+      "requirement_id": "LNX-REF-PC-32471-C-88e033710b",
+      "acceptance": "Repeated apply, pending/uncertain receipt, cancel/escape/navigation and late source preview do not commit stale edit",
+      "result": "UNRUN",
+      "required_evidence": "Local Qoder output tied to exact final manifest; real-photo cases need original image provenance and before/after review"
+    }
+  ]
+}

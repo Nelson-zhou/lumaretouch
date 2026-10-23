@@ -83,9 +83,10 @@ def command_group(name: str, msg: dict) -> str:
     if name=='hair_colour':return 'hair_colour:'+str((msg.get('people_context') or {}).get('target'))+':'+str(msg.get('request_id','missing'))
     if name=="people":
         if msg.get('action')=='eyeliner_palette':return 'people:eyeliner_palette:'+str(msg.get('request_id'))
+        if msg.get('action')=='brow_makeup_palette':return 'people:brow_makeup_palette:'+str(msg.get('request_id'))
         if msg.get('action')=='lipstick_palette':return 'people:lipstick_palette:'+str(msg.get('request_id'))
         if msg.get('action')=='blush_palette':return 'people:blush_palette:'+str(msg.get('request_id'))
-        if msg.get('action') in ('eye_light_review','blush_review','lipstick_review','eyeliner_review'):return 'people:'+str(msg.get('action'))+':'+str(msg.get('request_id'))
+        if msg.get('action') in ('eye_light_review','blush_review','lipstick_review','eyeliner_review','brow_makeup_review'):return 'people:'+str(msg.get('action'))+':'+str(msg.get('request_id'))
         target=msg.get('target') or {};patches=(msg.get('payload') or {}).get('patches') or []
         return 'people:'+str(target.get('scope'))+':'+str(target.get('target_id'))+':'+str(msg.get('action'))+':'+','.join(sorted(str(p.get('operation_id'))+str(p.get('parameter_path')) for p in patches))
     if name in ("brow_shape","nose_shape","eye_shape","mouth_shape"): return name+":gesture:" + str(msg.get("gesture_id", "missing"))[:128]

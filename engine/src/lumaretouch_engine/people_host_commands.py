@@ -89,6 +89,14 @@ def apply(engine,raw,emit):
         from .eyeliner_host import reference
         reference(engine,state,target,payload)
         frame=None
+    elif action=='brow_makeup_palette':
+        from .brow_makeup_host import palette_action
+        palette_action(engine,p)
+        frame=None
+    elif action=='brow_makeup_reference':
+        from .brow_makeup_host import reference
+        reference(engine,state,target,payload)
+        frame=None
     elif action=='lipstick_palette':
         from .lipstick_host import palette_action
         palette_action(engine,p)
@@ -131,6 +139,9 @@ def apply(engine,raw,emit):
             target={'scope':'face','target_id':ref['face_instance_id'],'face_ref':ref}
         elif action=='eyeliner_review':
             from .eyeliner_host import stage_review
+            candidate=stage_review(engine,state,target,payload)
+        elif action=='brow_makeup_review':
+            from .brow_makeup_host import stage_review
             candidate=stage_review(engine,state,target,payload)
         elif action=='lipstick_review':
             from .lipstick_host import stage_review

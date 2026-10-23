@@ -9,12 +9,12 @@ from . import local_mask_recipe as R, local_mask_state as M
 from . import facial_wrinkle_recovery as FACE
 
 VERSION = 1
-TARGETS = ('skin_smoothing', 'fabric_fine', 'facial_wrinkles', 'lip_makeup', 'eye_light', 'blush_makeup', 'lipstick', 'eyeliner', 'background_replace')
+TARGETS = ('skin_smoothing', 'fabric_fine', 'facial_wrinkles', 'lip_makeup', 'eye_light', 'blush_makeup', 'lipstick', 'eyeliner', 'brow_makeup', 'background_replace')
 LABELS = {'skin_smoothing': '磨皮与肌理', 'fabric_fine': '衣物细褶',
-          'background_replace': '换底边缘', 'facial_wrinkles': '面部祛纹八部位', 'lip_makeup': '唇妆增强', 'eye_light': '眼神光素材', 'blush_makeup': '腮红', 'lipstick': '口红', 'eyeliner': '眼线'}
+          'background_replace': '换底边缘', 'facial_wrinkles': '面部祛纹八部位', 'lip_makeup': '唇妆增强', 'eye_light': '眼神光素材', 'blush_makeup': '腮红', 'lipstick': '口红', 'eyeliner': '眼线', 'brow_makeup': '眉妆'}
 STAGES = {'skin_smoothing': 'pre-deform-smoothing', 'fabric_fine': 'pre-deform-fabric',
           'background_replace': 'post-grade-background', 'facial_wrinkles': 'pre-deform-facial-wrinkles',
-          'lip_makeup': 'pre-deform-lip-makeup', 'eye_light': 'pre-deform-eye-light', 'blush_makeup': 'pre-deform-blush-makeup', 'lipstick': 'pre-deform-lipstick', 'eyeliner': 'pre-deform-eyeliner'}
+          'lip_makeup': 'pre-deform-lip-makeup', 'eye_light': 'pre-deform-eye-light', 'blush_makeup': 'pre-deform-blush-makeup', 'lipstick': 'pre-deform-lipstick', 'eyeliner': 'pre-deform-eyeliner', 'brow_makeup': 'pre-deform-brow-makeup'}
 MAX_STROKES = 128
 MAX_MASK_PIXELS = 128_000_000
 
