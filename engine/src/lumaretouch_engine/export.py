@@ -155,6 +155,7 @@ class ExportSpec:
     effect_recovery_path: str | None = None  # ephemeral verified original source
     effect_recovery_stamp: list | None = None  # full-decode identity, never rebased
     effect_recovery_fields: list | None = None  # disposable full-source uint8 masks
+    creative_sky_context: dict | None = None
     sky_replacement: dict | None = None
     sky_replacement_path: str | None = None
     sky_replacement_stamp: list | None = None
@@ -753,6 +754,9 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry):
     if resolved.repair:
         from .creative_derived_repair_export import stamp_pixels
         stamp_pixels(resolved,source)
+    if resolved.creative_sky_context is not None:
+        from .creative_derived_sky import stamp_pixels
+        stamp_pixels(resolved,source)
     if resolved.creative_studio_context is not None:
         from .creative_derived_studio import stamp_pixels
         stamp_pixels(resolved,source)
@@ -917,7 +921,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     prepare_id_background(spec, src_u8, cancelled=mask_cancelled)
     from .sky_replacement_runtime import export_prepare as prepare_sky, attach_tile as attach_sky_tile, finish_export as finish_sky
     from .sky_replacement_export import admit_tile as admit_sky, resident_bytes as sky_bytes
-    prepare_sky(spec,src_u8.shape[:2],cancelled=mask_cancelled)
+    prepare_sky(spec,src_u8.shape[:2],cancelled=mask_cancelled,source_pixels=src_u8)
     export_prepare(spec, src_u8, cancelled=mask_cancelled)
     # Rasters are disposable. Drop a previous full render's fields before
     # allocating replacements instead of silently doubling the CPU mask budget.

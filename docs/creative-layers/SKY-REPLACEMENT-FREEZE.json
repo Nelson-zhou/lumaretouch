@@ -1,0 +1,104 @@
+{
+  "baseline": "f116db320146c7d590f6cd45a6661d53520931c4",
+  "scope": "M14 derived manual sky/person/water/recovery ownership, reviewed async source/asset/stage proofs, canonical full float export/inspection/history, true RGB16 PNG asset decoding",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "files": [
+    {
+      "path": "docs/creative-layers/DERIVED-SKY-REPLACEMENT.md",
+      "sha256": "35f6d0b7964e8f71e344b5a575694f11b3516b6493829738854cba20cf6309b1",
+      "bytes": 6606
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_sky.py",
+      "sha256": "f2724f8a1b16b972ca5508d635b403fb7bac6ae38e4db8934c8bcd619b4f91f3",
+      "bytes": 12044
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "sha256": "87e8816a5c9ceb53c6c5225443d40c39396a5caa71ebf32c1eea39bc09c02002",
+      "bytes": 19810
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "1426d7e8a25afdd763c2243af96390320f03d9de99a5076bddffaad6d94b345c",
+      "bytes": 24461
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_project.py",
+      "sha256": "73d3a2dd98def0ceb3823377025f9fa4501785968670713f582fb65191b40fb4",
+      "bytes": 11073
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_sky_host.py",
+      "sha256": "0e580428e4f38127927378da940edac856d7315a24d79d434ded472129bf2c06",
+      "bytes": 3691
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "4be0d84f32cb3536347bea9a87754bda72fdca5e7c452bcb4e0f77b7dd17e341",
+      "bytes": 127879
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "sha256": "0e2040090bceb787d9dfa1305e3119a338b9fd8bdfa332b84cc70a3a7ea3e601",
+      "bytes": 6829
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "1a0e4371c71e9cd5e900f327bbcb37ee7b90816cc15e4e71f173635ff1281225",
+      "bytes": 462986
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_assets.py",
+      "sha256": "4bec63a503fb362639e48324e67aa2dae0ee81d82ecb47024e9857f3ad162441",
+      "bytes": 8446
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_preview.py",
+      "sha256": "3f8ae402b92962b7e2a5fbff28c99d0cfb3544b384dade49c70554aa765d85a9",
+      "bytes": 27345
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_runtime.py",
+      "sha256": "6313294aed781aae82a0a2c79954a1abe74ec55fb4c867ed5cf78b31d23f46bf",
+      "bytes": 14528
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_sky_integration.py",
+      "sha256": "ae41c7ab7130a7e6acb555aacdd16c2f39e1a0b7d4bc36e87c07f3fae2362e07",
+      "bytes": 3021
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_sky_live.py",
+      "sha256": "8165897d773561af4c3ad39541a83b1e3a85bd5fcc831615f7ff895cf8d48660",
+      "bytes": 17875
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_sky_proofs.py",
+      "sha256": "cde38b9d6d77ce9d58d833a9201615d88010b69b48884af6022f9feb92cb943b",
+      "bytes": 16380
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_sky_highbit_assets.py",
+      "sha256": "5e9de795207855b66bff6c2ee5a719e112d1162342f2166d457feceb58b9e4b7",
+      "bytes": 13998
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 15,
+    "line_counts": {
+      "ui/src/App.tsx": 2096,
+      "ui/src-tauri/src/main.rs": 2015,
+      "engine/src/lumaretouch_engine/server.py": 6964
+    },
+    "fixture_functions": 63,
+    "fixtures": "UNRUN; parameterizations not executed"
+  },
+  "residuals": [
+    "Automatic derived OneFormer requires dedicated immutable input, exact replay and installation identity migration; remains fenced",
+    "ID replacement support/pickers/bundles and legacy replacement/common recovery remain fenced",
+    "Cross-image shared transfer still needs per-target source/analysis/review",
+    "Transparent/HDR returned sources remain explicitly unsupported by portrait RGB path; RGB16 asset support is not HDR",
+    "Native/product/build/typecheck/model/visual/memory/latency acceptance UNRUN"
+  ]
+}

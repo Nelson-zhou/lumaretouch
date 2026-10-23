@@ -40,40 +40,58 @@ def read(path, *, expected=None, cancelled=lambda: False):
     if expected is not None and (S.asset(expected)['path'] != path or expected['sha256'] != digest):
         raise ValueError('天空素材内容已变化；请重新选择，不会使用同名替代图')
     with Image.open(path) as picture:
+        if picture.format not in ('JPEG', 'PNG', 'TIFF', 'BMP'):
+            raise ValueError('文件内容不是支持的 JPG/PNG/TIFF/BMP 天空素材')
         _refuse_multipage(picture, path)
         w, h = picture.size
         if w * h > S.MAX_ASSET_PIXELS or max(w, h) >= 32767:
             raise ValueError('天空素材超过 3200 万像素或 OpenCV 坐标预算')
-        # Decode + color conversion + two float buffers have an explicit bound.
-        if w * h * 64 + 32 * 1024**2 > max(0, available_estimate() - 256 * 1024**2) * .65:
-            raise ValueError('读取天空素材的内存不足；不会缩小素材冒充原件')
         bits = _source_bits(picture)
-        if 'A' in picture.getbands() and picture.getchannel('A').getextrema() != (255, 255):
+        png_header = None
+        if picture.format == 'PNG':
+            # RGB16 PNG is exposed as RGB8 by Pillow; IHDR, not the suffix or
+            # Pillow mode, decides whether the genuine uint16 codec is needed.
+            with open(path, 'rb') as stream:
+                png_header = stream.read(33)
+            if (len(png_header) != 33 or png_header[:8] != b'\x89PNG\r\n\x1a\n'
+                    or png_header[8:16] != b'\x00\x00\x00\rIHDR'
+                    or int.from_bytes(png_header[16:20], 'big') != w
+                    or int.from_bytes(png_header[20:24], 'big') != h
+                    or png_header[24] not in (1, 2, 4, 8, 16)):
+                raise ValueError('PNG 天空素材文件头、位深或尺寸无效')
+            bits = png_header[24]
+        png16 = png_header is not None and bits == 16
+        # Decode + color conversion + two float buffers, plus the bounded PNG
+        # snapshot. The sky asset budget remains independent of ID backgrounds.
+        snapshot_bytes = before[2] if png16 else 0
+        if w * h * 64 + snapshot_bytes + 32 * 1024**2 > max(0, available_estimate() - 256 * 1024**2) * .65:
+            raise ValueError('读取天空素材的内存不足；不会缩小素材冒充原件')
+        if not png16 and 'A' in picture.getbands() and picture.getchannel('A').getextrema() != (255, 255):
             raise ValueError('天空素材包含透明像素，请选择完整不透明的天空照片')
         if 'transparency' in picture.info:
             raise ValueError('天空素材包含透明色，请先提供不透明天空照片')
-    # Pillow can expose 16-bit RGB PNG as mode RGB without an info['bits'] key.
-    # Inspect the standardized IHDR bit-depth byte before choosing the decoder.
-    if Path(path).suffix.lower() == '.png':
-        with open(path, 'rb') as stream:
-            header = stream.read(33)
-        if len(header) >= 29 and header[:8] == b'\x89PNG\r\n\x1a\n' and header[12:16] == b'IHDR':
-            bits = header[24]
-        if bits > 8:
-            raise ValueError('16-bit PNG 天空素材暂不支持无损颜色管理，请另存为 RGB16 TIFF；不会降为 8-bit')
-    decoded = load_full(path, max_px=S.MAX_ASSET_PIXELS, want_bits=16 if bits > 8 else 8)
-    pixels = decoded.rgb
-    if pixels.dtype not in (np.uint8, np.uint16) or pixels.shape != (decoded.src_h, decoded.src_w, 3):
+        source_icc = bytes(picture.info['icc_profile']) if picture.info.get('icc_profile') else None
+        orientation = int(picture.getexif().get(274, 1) or 1)
+    if png16:
+        pixels = _read_png16(path, png_header, (h, w), digest, source_icc, orientation, cancelled)
+        src_w, src_h = (h, w) if orientation in (5, 6, 7, 8) else (w, h)
+        src_bits = bits
+    else:
+        # Preserve the established JPEG/BMP/PNG8/RGB16 TIFF decoder and ICC path.
+        decoded = load_full(path, max_px=S.MAX_ASSET_PIXELS, want_bits=16 if bits > 8 else 8)
+        pixels = decoded.rgb
+        src_w, src_h, src_bits, source_icc = decoded.src_w, decoded.src_h, decoded.src_bits, decoded.source_icc
+        if pixels.dtype == np.uint16 and source_icc:
+            from .color16 import convert_rgb16
+            from .export import _srgb_bytes
+            pixels = convert_rgb16(pixels, source_icc, _srgb_bytes())
+    if pixels.dtype not in (np.uint8, np.uint16) or pixels.shape != (src_h, src_w, 3):
         raise ValueError('天空素材解码没有保留有效 RGB 像素')
-    if decoded.src_bits > 8 and pixels.dtype != np.uint16:
+    if src_bits > 8 and pixels.dtype != np.uint16:
         raise ValueError('高位深天空素材没有真正 RGB16 解码；不能退回 RGB8')
-    if pixels.dtype == np.uint16 and decoded.source_icc:
-        from .color16 import convert_rgb16
-        from .export import _srgb_bytes
-        pixels = convert_rgb16(pixels, decoded.source_icc, _srgb_bytes())
-    binding = S.asset({'path': path, 'sha256': digest, 'width': decoded.src_w, 'height': decoded.src_h,
+    binding = S.asset({'path': path, 'sha256': digest, 'width': src_w, 'height': src_h,
                        'bits': 16 if pixels.dtype == np.uint16 else 8, 'working_color': 'encoded-srgb',
-                       'icc_sha256': sha256(decoded.source_icc).hexdigest() if decoded.source_icc else None})
+                       'icc_sha256': sha256(source_icc).hexdigest() if source_icc else None})
     if expected is not None and binding != expected:
         raise ValueError('天空素材尺寸、位深或颜色档身份改变')
     if cancelled():
@@ -82,6 +100,41 @@ def read(path, *, expected=None, cancelled=lambda: False):
         raise ValueError('天空素材读取过程中发生变化')
     pixels.setflags(write=False)
     return SkyAsset(binding, pixels, before)
+
+
+def _read_png16(path, header, shape, digest, source_icc, orientation, cancelled):
+    """Opaque RGB16 adapter, reusing the ID-background codec/ICC contracts.
+
+    Do not call the full ID-background engine: its 10 MB, alpha-preserving,
+    linear-float asset representation is not the sky asset contract.
+    """
+    from .id_background_assets import _orient, _colour_manage
+    if header[25] not in (2, 6):
+        raise ValueError('16-bit PNG 天空素材要求 RGB/RGBA，不会把其它通道静默降为 RGB8')
+    if orientation not in range(1, 9):
+        raise ValueError('天空素材方向标签无效')
+    if cancelled():
+        raise InterruptedError('天空素材读取已取消')
+    with open(path, 'rb') as stream:
+        content = stream.read(S.MAX_ASSET_BYTES + 1)
+    if (not 0 < len(content) <= S.MAX_ASSET_BYTES or content[:33] != header
+            or sha256(content).hexdigest() != digest):
+        raise ValueError('PNG 天空素材读取过程中内容改变或超过 64 MiB')
+    # Same pinned imagecodecs/libpng path as ID backgrounds. No Pillow RGB8
+    # staging, integer expansion, clipping, or fallback on codec/ICC failure.
+    import imagecodecs
+    pixels = imagecodecs.png_decode(content)
+    channels = 4 if header[25] == 6 else 3
+    if pixels.dtype != np.uint16 or pixels.shape != (*shape, channels):
+        raise ValueError('PNG 天空素材解码没有保留文件头声明的 RGB16 位深、尺寸或通道')
+    if channels == 4:
+        # 65534 must not pass as opaque merely because Pillow rounds it to 255.
+        if np.any(pixels[:, :, 3] != 65535):
+            raise ValueError('天空素材包含透明像素，请选择完整不透明的天空照片')
+        pixels = pixels[:, :, :3]
+    if cancelled():
+        raise InterruptedError('天空素材读取已取消')
+    return _colour_manage(_orient(pixels, orientation), source_icc)
 
 
 def verify(value):

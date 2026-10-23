@@ -129,7 +129,7 @@ def require_rebound_snapshot(snapshot):
         return
     from . import local_grade_layers as LG, effect_recovery_state as ER
     from . import manual_liquify_state as ML
-    from . import id_background_state as ID, optics_state as OP, sky_replacement_state as SKY
+    from . import id_background_state as ID, optics_state as OP
     from . import reference_color_state as RC, semantic_colour_state as SC
     from . import lip_makeup_state as LIP, brow_shape_state as BROW, nose_shape_state as NOSE
     from . import eye_shape_state as EYE, mouth_shape_state as MOUTH
@@ -170,8 +170,8 @@ def require_rebound_snapshot(snapshot):
         blocked.append('original source-bound local edits')
     from .creative_derived_studio import verify_snapshot as verify_studio
     verify_studio(snapshot)
-    if SKY.check(snapshot.get('sky_replacement'))['enabled']:
-        blocked.append('sky')
+    from .creative_derived_sky import verify_snapshot as verify_sky
+    verify_sky(snapshot)
     for label, module, key in (
             ('ID background', ID, 'id_background'),
             ('reference colour', RC, 'reference_color'),
@@ -195,7 +195,7 @@ def require_rebound_spec(spec):
         'creative_base', 'people', 'body_pose', 'body_pose_source_proof', 'channel', 'grade_scope',
         'strength', 'creative_smoothing_context',
         'fabric_amount', 'creative_fabric_context', 'local_masks', 'local_grade_groups', 'creative_mask_context', 'effect_recovery', 'creative_recovery_context', 'manual_liquify',
-        'studio_background', 'creative_studio_context', 'id_background', 'optics', 'sky_replacement',
+        'studio_background', 'creative_studio_context', 'id_background', 'optics', 'sky_replacement', 'creative_sky_context',
         'reference_color', 'semantic_colour', 'lip_makeup', 'brow_shape',
         'nose_shape', 'eye_shape', 'mouth_shape', 'colour_editor')}
     snapshot['params']={key:getattr(spec,key) for key in ('radius','eps','texture_radius','broad_gain','mid_gain','detail_gain')}

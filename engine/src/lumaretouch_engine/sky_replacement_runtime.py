@@ -81,6 +81,9 @@ def prepare(value, shape, *, asset=None, source_path=None, force_semantic=False,
 
 
 def verified_value(engine, value):
+    if getattr(engine,"_creative_base",None) is not None:
+        from .creative_derived_sky import verify
+        return verify(engine,value)
     value = S.check(value)
     row = engine._docs[engine._doc_index]
     before = B.file_stamp(row['path'])
@@ -100,6 +103,9 @@ def verified_value(engine, value):
 
 
 def stage_key(engine, value):
+    if getattr(engine,"_creative_base",None) is not None:
+        from .creative_derived_sky import key
+        return key(engine,value)
     row = engine._docs[engine._doc_index]
     asset = value['asset']
     from .sky_semantic.manifest import installation_stamp
@@ -127,6 +133,8 @@ def sync(engine, *, strict=False):
         if value["enabled"]: verified_value(engine,value)
         stage = SkyReplacementStage(pipe.device,(pipe.h,pipe.w))
         stage.set(value,prepare(value,(pipe.h,pipe.w),source_path=engine._docs[engine._doc_index]['path'],force_semantic=strict) if value['enabled'] else None)
+        if getattr(engine,'_creative_base',None) is not None and stage_key(engine,value)!=key:
+            raise ValueError('Derived sky source or asset changed during stage preparation')
         pipe.sky_replacement,pipe._sky_replacement_key = stage,key
     except Exception as error:
         stage = SkyReplacementStage(pipe.device,(pipe.h,pipe.w))
@@ -143,14 +151,17 @@ def report(engine):
             'asset': value['asset'], 'suspended': getattr(stage,'suspended',None),
             'automatic_detection': value['semantic'] is not None, 'semantic_optional': True, 'working_color': 'encoded-srgb',
             'bytes': stage.resident_bytes() if stage else 0,
-            'boundaries': ['可选本地语义模型提出天空、人物和水面选区；必须逐区域检查，可叠加画笔修正。模型缺失时仍可独立手动标记',
+            'boundaries': [('回流图当前支持独立手动标记；自动天空模型的不可变输入与审核重放尚未适配，不能借用原图选区' if getattr(engine,'_creative_base',None) is not None else '可选本地语义模型提出天空、人物和水面选区；必须逐区域检查，可叠加画笔修正。模型缺失时仍可独立手动标记'),
                 '人物/景物 -100 保留换天空前对应色彩；0 有基础氛围映射，正向增强',
                 '素材由你提供，项目引用原件；缺失或 SHA-256 改变会暂停效果与导出',
                 '恢复只撤回换天空、其氛围和水面反射，不撤回其他调色、修补或液化',
-                '区域属于原照片；预设只带素材与参数，批量必须逐图已有有效标记']}
+                '区域属于各自不可变源图；预设只带素材与参数，批量必须逐图已有有效标记']}
 
 
 def verify_snapshot(snap,path,shape=None):
+    if snap.get("creative_base") is not None:
+        from .creative_derived_sky import verify_snapshot as derived_verify
+        return derived_verify(snap,path,shape)
     value = S.check(snap.get('sky_replacement'))
     if not value['enabled']: return
     before = B.file_stamp(path)
@@ -168,29 +179,34 @@ def verify_snapshot(snap,path,shape=None):
 
 def check_export_decode(snap,path,before,shape):
     value = S.check(snap.get('sky_replacement'))
-    if not value['enabled']:
+    if not value['enabled'] and not (snap.get('creative_base') is not None and snap.get('creative_sky_context') is not None):
         return
     if before is None or B.file_stamp(path) != before:
         raise ValueError('全尺寸解码时换天空源图变化')
-    verify_snapshot(snap,path,shape)
+    verify_snapshot(snap,path,None if snap.get("creative_base") is not None else shape)
+    if B.file_stamp(path)!=before:raise ValueError("Sky original provenance changed during verification")
     snap['sky_replacement_path'],snap['sky_replacement_stamp'] = path,list(before)
 
 
 def configure_export(spec,snap,shape,*,for_document):
     value = S.check(snap.get('sky_replacement'))
-    if value['enabled'] and not for_document:
+    if (value['enabled'] or snap.get('creative_base') is not None and snap.get('creative_sky_context') is not None) and not for_document:
         raise ValueError('换天空必须在每张目标照片上绑定其自己的区域；不能跨图复制坐标')
     spec.sky_replacement = value
     spec.sky_replacement_path = snap.get('sky_replacement_path')
     spec.sky_replacement_stamp = snap.get('sky_replacement_stamp')
     spec.sky_replacement_prepared = None
+    if snap.get("creative_base") is not None:
+        from .creative_derived_sky import verify_snapshot as derived_verify
+        derived_verify(snap,spec.sky_replacement_path,shape)
+        spec.creative_sky_context=deepcopy(snap.get("creative_sky_context"))
     if value['enabled']:
         if not spec.sky_replacement_path:
             raise ValueError('换天空全尺寸导出缺少已验证的源图')
         verify_snapshot(snap,spec.sky_replacement_path,shape)
 
 
-def export_prepare(spec,shape,*,cancelled=lambda:False):
+def export_prepare(spec,shape,*,cancelled=lambda:False,source_pixels=None):
     value = S.check(spec.sky_replacement)
     spec.sky_replacement_prepared = None
     if not value['enabled']:
@@ -198,7 +214,12 @@ def export_prepare(spec,shape,*,cancelled=lambda:False):
     before = B.file_stamp(spec.sky_replacement_path)
     if list(before) != spec.sky_replacement_stamp:
         raise ValueError('换天空源图在全尺寸解码之后变化')
-    B.verify_source(value,spec.sky_replacement_path,shape)
+    if getattr(spec,"creative_base",None) is not None:
+        from .creative_derived_sky import verify_export
+        verify_export(spec,source_pixels)
+        if tuple(shape)!=(value["source"]["height"],value["source"]["width"]):
+            raise ValueError("Derived sky export requires its complete source grid")
+    else:B.verify_source(value,spec.sky_replacement_path,shape)
     spec.sky_replacement_prepared = prepare(value,shape,source_path=spec.sky_replacement_path,force_semantic=True,cancelled=cancelled)
     if B.file_stamp(spec.sky_replacement_path) != before:
         spec.sky_replacement_prepared = None
