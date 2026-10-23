@@ -1697,7 +1697,7 @@ export default function App() {
       &&!!doc?.document_id&&status?.image?.load_id===doc.document_id&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending},refreshFromEngine);
   const presetWorkflow=usePresetWorkflow({enabled:!!status?.engine_alive&&status?.ready_caps?.preset_result_protocol===1,
     editable:hasImage&&!exporting&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending,
-    documentId:doc?.document_id??'',sourceGroups:doc?.local_masks?.transfer_groups},presetState,refreshFromEngine,{ok:faceOk,why:faceWhy});
+    documentId:doc?.document_id??'',reviewContextKey:JSON.stringify([pid,status?.doc_rev,status?.image?.load_id]),sourceGroups:doc?.local_masks?.transfer_groups},presetState,refreshFromEngine,{ok:faceOk,why:faceWhy});
   const onPresetApplyByName=(label:string)=>presetWorkflow.applyByLabel(label);
   const onPresetSave=()=>presetWorkflow.save();
 

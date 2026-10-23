@@ -1,3 +1,4 @@
+import {CROP_OP,CROP_LIMITS,validCropReview,type CropReview} from '../cropTransfer/model.ts';
 import {samePeopleRequest,validPeopleReview,peopleProofDocument,type PeopleTransferRequest,type PeopleTransferProof,type PeopleTransferReview} from '../people/transferProof.ts';
 import {validReferenceReview,type ReferenceReview} from '../referenceColor/ReferenceColorReview';
 import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../optics/transferReviewModel';
@@ -6,7 +7,7 @@ import {LOCAL_GRADE_OP,validTransferEvidence,sameTransferOptions,type MaskTransf
 export type BatchAction='preflight'|'commit'|'undo'|'redo';
 export type BatchOptions={docs?:string[];moduleScope?:string[];conflictPolicy?:string;batchId?:string;preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest};
 export type BatchTarget={index:number|null;path:string;document_id:string;revision?:string;blocked?:string|null;
-  expected_revision?:string;current_revision?:string|null;result_revision?:string|null;outcome?:string;before?:unknown;local_mask_transfer?:MaskTransferEvidence;optical_transfer?:OpticalTargetReview;reference_color?:ReferenceReview;people_transfer?:PeopleTransferReview|null};
+  expected_revision?:string;current_revision?:string|null;result_revision?:string|null;outcome?:string;before?:unknown;crop_transfer?:CropReview;local_mask_transfer?:MaskTransferEvidence;optical_transfer?:OpticalTargetReview;reference_color?:ReferenceReview;people_transfer?:PeopleTransferReview|null};
 export type BatchReply={batch_id?:string;request_id:string;action:BatchAction;success:boolean;error?:string;outcome_unknown?:boolean;
   people_transfer?:boolean;local_mask_transfer?:MaskTransferOptions;preflight_token?:string;source_snapshot?:{document_id:string;revision:string;path:string};source_changed_since_preflight?:boolean;
   module_scope?:string[];applies?:Record<string,unknown>;policy?:string;targets?:unknown[];target_outcomes?:BatchTarget[];
@@ -59,6 +60,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     const exactPeopleTargets=people?.target_policy==='explicit_face_map'?new Set(people.targets.map(row=>row.target.document.document_id)):null;
     if(exactPeopleTargets&&(!docs||docs.length!==exactPeopleTargets.size||new Set(docs).size!==docs.length
       ||docs.some(id=>!exactPeopleTargets.has(id))))throw Error('本次配对没有覆盖准确的目标照片名单');
+    if(scope.includes(CROP_OP)&&result.targets.length>CROP_LIMITS.targets)throw Error('裁剪审核不能省略目标预览，请减少目标数量');
     const ids=new Set<string>();let blocked=0;
     for(const item of result.targets){const t=item as BatchTarget;
       if(!t||typeof t.path!=='string'||!identity(t.document_id)||!revision(t.revision)
@@ -67,6 +69,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       if(scope.includes(LOCAL_GRADE_OP)&&!t.blocked&&(!validTransferEvidence(t.local_mask_transfer)||!sameTransferOptions(t.local_mask_transfer.policy,transfer)))throw Error('缺少匹配的目标局部组预检证据');
       if(scope.includes(OPTICS_AUTO_OP)&&!t.blocked&&!validOpticalReview(t.optical_transfer,t.document_id,t.revision,result.applies[OPTICS_AUTO_OP]))throw Error('缺少匹配的自动镜头/透视目标预检证据');
       if(scope.includes('lnx.reference_color.v1')&&!t.blocked&&(result.applies['lnx.reference_color.v1'] as {strength?:number})?.strength!==0&&!validReferenceReview(t.reference_color,t.document_id,t.revision??''))throw Error('缺少匹配的参考统一目标预检证据');
+      if(scope.includes(CROP_OP)&&!t.blocked&&!validCropReview(t.crop_transfer,t.document_id,t.revision,result.applies[CROP_OP]))throw Error('缺少匹配的本目标真实裁剪预览');
       if(people&&!t.blocked&&(!peopleProof||!validPeopleReview(t.people_transfer,people,peopleProof,t)))throw Error('缺少已确认人物及逐项参数的目标预检证据');
       ids.add(t.document_id);if(t.blocked)blocked++;
     }

@@ -517,12 +517,12 @@ def _check_shared_strength(ops: list[str], mods: dict[str, dict]) -> None:
 
 # This is a deliberately separate, closed admission set, not the much broader
 # transferable registry. Source/semantic/support consumers need their own ports.
-# Crop remains per-image: cross-image normalized crop still needs target visual
-# review, not just a list of normalized rectangle numbers.
+# Crop admission requires the batch/preset owner's frozen full-target visual
+# review. This parameter validator alone never authorizes a transfer commit.
 DERIVED_PARAMETER_OPS = frozenset((
     OP_EXPOSURE, OP_WHITE_BALANCE, OP_LEVELS, OP_CURVES, OP_HSL,
     EXTENDED_TONE.OP, PHOTO_DETAIL.OP, PHOTO_GRAIN.OP, COLOUR_GRADING.OP,
-    PRIMARY_CALIBRATION.OP, SELECTIVE_COLOUR.OP, COLOUR_EDITOR.OP,
+    PRIMARY_CALIBRATION.OP, SELECTIVE_COLOUR.OP, COLOUR_EDITOR.OP, OP_CROP,
 ))
 
 

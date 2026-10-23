@@ -32,6 +32,7 @@ class FrozenTarget:
     reference_json:str|None=None
     people_json:str|None=None
     source_proof_json:str|None=None
+    crop_json:str|None=None
 
 @dataclass(frozen=True)
 class FrozenPlan:
@@ -66,11 +67,16 @@ class PreflightStore:
                 if type(target.source_proof_json) is not str or len(target.source_proof_json)>4096:
                     raise ValueError('Invalid bounded batch target source proof')
                 check_row_proof(json.loads(target.source_proof_json))
+            if target.crop_json is not None:
+                from .crop_transfer_review import check_record
+                if type(target.crop_json) is not str or len(target.crop_json)>16384:
+                    raise ValueError('Invalid compact crop review proof')
+                check_record(json.loads(target.crop_json))
         now=self.clock();self._prune(now)
         # Validate the total metadata budget, not only each target independently.
         canonical({'source':[source_id,source_revision,source_path],'modules':modules,'params':params,
             'source_proof':source_proof,
-            'targets':[[t.document_id,t.revision,t.index,t.path,t.blocked,t.before_json,t.prepared_json,t.transfer_json,t.optics_json,t.reference_json,t.people_json,t.source_proof_json] for t in targets],'rejected':rejected})
+            'targets':[[t.document_id,t.revision,t.index,t.path,t.blocked,t.before_json,t.prepared_json,t.transfer_json,t.optics_json,t.reference_json,t.people_json,t.source_proof_json,t.crop_json] for t in targets],'rejected':rejected})
         plan=FrozenPlan(uuid.uuid4().hex,workspace,source_id,source_revision,source_path,tuple(modules),canonical(params),policy,
             tuple(targets),canonical(rejected),now,now+TTL_NS,None if source_proof is None else canonical(source_proof))
         self.pending[plan.token]=plan

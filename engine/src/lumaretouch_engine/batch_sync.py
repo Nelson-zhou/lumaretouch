@@ -26,6 +26,17 @@ def verify_history_source(row, record, ops, previous):
     """
     states=(row['state'],record['before'],record['after'])
     proof=record.get('source_proof')
+    if SC.OP_CROP in ops:
+        crop=record.get('crop_review')
+        if crop is None:
+            if any(SOURCE.record(state) is not None for state in states):
+                raise ValueError('Derived crop history lacks its reviewed visual proof')
+        else:
+            from .crop_transfer_review import check_record
+            crop=check_record(crop)
+            if (crop['document_id']!=record.get('document_id') or crop['source_proof']!=proof
+                    or crop['crop']!=SC.params_of(record['after'],[SC.OP_CROP])[SC.OP_CROP]):
+                raise ValueError('Crop history no longer matches its reviewed target and parameters')
     if proof is None:
         if any(SOURCE.record(state) is not None for state in states):
             raise ValueError('Legacy batch history lacks an effective-source proof')
@@ -56,6 +67,8 @@ class BatchEditor:
     capture_reference: Callable | None = None
     people_restore: Callable | None = None
     people_transfer: Callable | None = None
+    prepare_crop: Callable | None = None
+    verify_crop: Callable | None = None
 
 class BatchSyncController:
     def __init__(self, documents: BatchDocuments, editor: BatchEditor,
@@ -73,7 +86,7 @@ class BatchSyncController:
         self.versions=versions if versions is not None else DocumentVersions()
         self.preflight=FrozenBatchController(PlanPorts(lambda:self.documents.rows(),lambda:self.documents.current_index(),
             lambda:self.documents.remember_current(),lambda:self.editor.capture(),lambda docs:self.target_indices(docs),
-            lambda row,**kw:self.editor.face_known_single(row,**kw),lambda *a,**kw:self.commit(*a,**kw),self.editor.prepare_optics,self.editor.prepare_reference,self.editor.capture_reference,self.editor.people_transfer),
+            lambda row,**kw:self.editor.face_known_single(row,**kw),lambda *a,**kw:self.commit(*a,**kw),self.editor.prepare_optics,self.editor.prepare_reference,self.editor.capture_reference,self.editor.people_transfer,self.editor.prepare_crop,self.editor.verify_crop),
             self.versions,lambda event:self.emit(event),monotonic)
 
     def target_indices(self, docs) -> tuple[list[int], list[dict]]:
@@ -180,6 +193,7 @@ class BatchSyncController:
             if p.get("people_transfer") is not None:raise SC.ScopeError("People transfer requires a frozen preflight token")
             ops = SC.check_scope(p.get("module_scope"))
             if SC.SEMANTIC.OP in ops:raise SC.ScopeError(SC.SEMANTIC.REASON)
+            if SC.OP_CROP in ops:raise SC.ScopeError('Crop requires a frozen per-target visual preflight before commit')
             if ID_BACKGROUND.OP in ops:raise SC.ScopeError("证件照背景必须先逐目标预检，不会复制其他照片的审核范围")
             if SKY.OP in ops:
                 raise SC.ScopeError("换天空批量必须逐目标预检，再用冻结 token 提交；不会猜测天空或复制源图区域")
@@ -244,7 +258,7 @@ class BatchSyncController:
         live_idx = self.documents.current_index()
         planned: list[tuple[int, dict, dict]] = []
         applied_rows = []
-        proofs={}
+        proofs={};crop_proofs={}
         source_proof=(source_snapshot or {}).get('source_proof')
         if source_proof is not None:source_proof=SOURCE.check_row_proof(source_proof)
         source_state=self.editor.capture()
@@ -285,6 +299,12 @@ class BatchSyncController:
                 version=self.versions.version(row)
                 recipe=RC.verify_target(r.get('_reference_prepared'),before,new,row,version.document_id,version.revision,prepared[RC.OP])
                 RC.apply_verified(new,recipe)
+            if SC.OP_CROP in ops:
+                if r.get('_crop_prepared') is None or self.editor.verify_crop is None:
+                    raise SC.ScopeError('Crop requires its frozen actual target preview; direct commit refused')
+                version=self.versions.version(row)
+                self.editor.verify_crop(row,new,version.document_id,str(version.revision),r['_crop_prepared'])
+                crop_proofs[r['index']]=r['_crop_prepared']
             if ID_BACKGROUND.OP in ops:ID_BACKGROUND.validate_target(new,row["path"],(row["src_h"],row["src_w"]))
             if SKY.OP in ops:
                 SKY.validate_target(new["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
@@ -303,6 +323,9 @@ class BatchSyncController:
             if proofs[idx] is not None:
                 row=self.documents.rows()[idx]
                 SOURCE.verify_row({**row,'state':self.editor.capture() if idx==live_idx else row['state']},proofs[idx])
+            if idx in crop_proofs:
+                version=self.versions.version(self.documents.rows()[idx])
+                self.editor.verify_crop(self.documents.rows()[idx],new,version.document_id,str(version.revision),crop_proofs[idx])
         self.sequence += 1
         batch_id = f"batch-{self.sequence:03d}-{int(self.clock() * 1000)}"
         targets: dict[str, dict] = {}
@@ -311,15 +334,26 @@ class BatchSyncController:
         live_plan=next((item for item in planned if item[0]==live_idx),None)
         if live_plan is not None:
             idx,before,new=live_plan;self.versions.advance(self.documents.rows()[idx])
+            published_version=self.versions.version(self.documents.rows()[idx])
             try:
                 fr=self.editor.replay(new,mode="batch",replayed_for=f"batch:{batch_id}",
-                                      **({'strict_local':True} if SOURCE.record(new) is not None or ID_BACKGROUND.OP in ops or SC.OP_LOCAL_GRADE in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops else {}))
+                                      **({'strict_local':True} if SC.OP_CROP in ops or SOURCE.record(new) is not None or ID_BACKGROUND.OP in ops or SC.OP_LOCAL_GRADE in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops else {}))
                 # A render may be expensive. Do not publish parked candidates
                 # whose provenance changed while the active target rendered.
-                for target_index,_,_ in planned:
+                for target_index,_,target_candidate in planned:
                     if proofs[target_index] is not None:
                         target=self.documents.rows()[target_index]
                         SOURCE.verify_row({**target,'state':self.editor.capture() if target_index==live_idx else target['state']},proofs[target_index])
+                    if target_index in crop_proofs:
+                        target=self.documents.rows()[target_index];version=self.versions.version(target)
+                        crop_proof=crop_proofs[target_index]
+                        if target_index==live_idx:
+                            if version!=published_version:raise SC.ScopeError('Active crop target changed during publication')
+                            # Only this transaction's known advance may replace
+                            # the fence for a post-render check; durable review
+                            # evidence retains its original reviewed revision.
+                            crop_proof={**crop_proof,'revision':str(published_version.revision)}
+                        self.editor.verify_crop(target,target_candidate,version.document_id,str(version.revision),crop_proof)
             except Exception as error:
                 try:
                     rollback=self.editor.replay(before,mode="batch",replayed_for=f"batch_rollback:{batch_id}")
@@ -340,6 +374,7 @@ class BatchSyncController:
             targets[str(idx)] = {"path": row["path"], "before": before, "after": new,
                 "applied":OA.before_params(new, ops),"live":idx==live_idx,"document_id":self.versions.version(row).document_id,
                 **({'source_proof':proofs[idx]} if proofs[idx] is not None else {}),
+                **({'crop_review':crop_proofs[idx]} if idx in crop_proofs else {}),
                 "local_key":SC.LOCAL_GRADE.undo_key(new) if SC.OP_LOCAL_GRADE in ops else None}
         self.ledger[batch_id] = {"ops": ops, "targets": targets, "at_ns": self.monotonic(),
                                    "undone": False, "policy": policy,"source_snapshot":source_snapshot}

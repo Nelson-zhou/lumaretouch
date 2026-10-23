@@ -1,8 +1,10 @@
+import {CROP_OP,cropReviewKey,cropImagesReady} from '../cropTransfer/model';
+import {CropTransferReview} from '../cropTransfer/CropTransferReview';
 import {PeopleTransferEvidence} from '../people/transferReview';
 import {ReferenceColorReview} from '../referenceColor/ReferenceColorReview';
 import {AutomaticTransferReview} from '../optics/AutomaticTransferReview';
 import {MaskTransferEvidenceView} from '../localMasks/transfer';
-import {useEffect,useRef,type ReactNode} from 'react';
+import {useEffect,useRef,useState,type ReactNode} from 'react';
 import type {BatchUi,BatchTarget} from './batchWorkflow';
 import './batchReview.css';
 const file=(path:string)=>path.split('/').pop()||path;
@@ -17,7 +19,9 @@ function reason(text:string|null|undefined){
 }
 export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClose,peoplePreview,commitBlockedReason}:{state:BatchUi;onCommit:()=>unknown;
   onReview:()=>unknown;onQuery:()=>unknown;onAcknowledge:()=>void;onClose:()=>void;peoplePreview?:ReactNode;commitBlockedReason?:string}){
+  const [cropImages,setCropImages]=useState<Record<string,boolean>>({});
   const dialog=useRef<HTMLElement>(null),close=useRef(onClose);close.current=onClose;
+  useEffect(()=>setCropImages({}),[state.plan?.preflight_token]);
   const open=state.phase!=='closed'&&!state.hidden,busy=state.phase==='committing';
   useEffect(()=>{
     if(!open)return;
@@ -38,6 +42,9 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
   if(!open)return state.phase==='uncertain'?<button className="batchPending tb" onClick={onReview}>查看未确认的批量任务</button>:null;
   const plan=state.plan,result=state.result;
   const targets:BatchTarget[]=result?.target_outcomes??plan?.targets??[];
+  const cropTargets=plan?.module_scope.includes(CROP_OP)?plan.targets.filter(t=>!t.blocked):[];
+  const cropReady=cropImagesReady(plan?.preflight_token??'',cropTargets.map(t=>t.crop_transfer),cropImages);
+  const blockedReason=commitBlockedReason||(!cropReady?'请等待每张目标的实际裁剪预览通过显示校验，再确认同步。':undefined);
   const title=state.operation==='redo'?'重做批量同步':state.operation==='undo'?'撤销批量同步':'批量同步预检';
   return <div className="batchReviewBackdrop">
     <section ref={dialog} tabIndex={-1} className="batchReview" role="dialog" aria-modal="true" aria-labelledby="batchReviewTitle">
@@ -62,6 +69,7 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
       </>}
       {!!targets.length&&<ul className="batchTargets">{targets.map(t=><li key={t.document_id} title={t.path}>
         <span>{file(t.path)}</span><span>{t.outcome==='applied'?'已同步':t.outcome==='unknown'?'结果未确认':t.outcome==='not_applied'?'未执行':reason(t.blocked)}</span>
+        {plan?.module_scope.includes(CROP_OP)&&!t.blocked&&t.crop_transfer&&<CropTransferReview key={cropReviewKey(plan.preflight_token,t.crop_transfer)} value={t.crop_transfer} reviewKey={cropReviewKey(plan.preflight_token,t.crop_transfer)} onReady={(key,ready)=>setCropImages(old=>old[key]===ready?old:{...old,[key]:ready})}/>}
         {t.people_transfer&&<PeopleTransferEvidence value={t.people_transfer}/>}
         {t.local_mask_transfer&&<MaskTransferEvidenceView value={t.local_mask_transfer}/>}
         {t.reference_color&&<ReferenceColorReview value={t.reference_color}/>}
@@ -70,8 +78,8 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
       {!!plan?.rejected_docs?.length&&<ul>{plan.rejected_docs.map((r,i)=><li key={i}>{String(r.doc)}：{r.error}</li>)}</ul>}
       {!!result?.conflicts?.length&&<ul>{result.conflicts.map((r,i)=><li key={i}>{file(r.path)}：{r.reason}</li>)}</ul>}
       <footer>
-        {state.phase==='review'&&commitBlockedReason&&<p role="status">{commitBlockedReason}</p>}
-        {state.phase==='review'&&<button className="tb primary" disabled={!!commitBlockedReason||!plan?.ok||(plan.policy==='recheck'&&plan.blocked>0)} onClick={onCommit}>{plan?.applies.target_policy==='explicit_face_map'?'仅确认本次人脸配对与参数并同步':'确认本次配方并同步'}</button>}
+        {state.phase==='review'&&blockedReason&&<p role="status">{blockedReason}</p>}
+        {state.phase==='review'&&<button className="tb primary" disabled={!!blockedReason||!plan?.ok||(plan.policy==='recheck'&&plan.blocked>0)} onClick={()=>{if(!blockedReason)onCommit();}}>{plan?.applies.target_policy==='explicit_face_map'?'仅确认本次人脸配对与参数并同步':'确认本次配方并同步'}</button>}
         {['review','error','done'].includes(state.phase)&&!['undo','redo'].includes(state.operation)&&<button className="tb" onClick={onReview}>重新预检</button>}
         {state.phase==='uncertain'&&<><button className="tb" onClick={onAcknowledge}>我已检查照片，结束本次跟踪</button><button className="tb primary" onClick={onQuery}>再次查询这次任务</button></>}
       </footer>

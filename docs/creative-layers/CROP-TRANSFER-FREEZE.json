@@ -1,0 +1,198 @@
+{
+  "baseline": "9718b562caddb28a5d4410c20307c96df0a12043",
+  "scope": "M14 full edited target crop previews for reviewed original/derived batch and presets; canonical geometry, strict source and people proofs, existing history and native receipt reachability",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "files": [
+    {
+      "path": "docs/creative-layers/DERIVED-CROP-TRANSFER.md",
+      "sha256": "690bc614cad4eb52d36dfec370ecd94e1466f71eace97314140cfc2f8198e5c7",
+      "bytes": 6332
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-CROSS-IMAGE-TRANSFER.md",
+      "sha256": "0d3e7f5b59f28504283a07ebcd92ab74b20022cd013f57951ace3c8be5abdc9a",
+      "bytes": 11650
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight.py",
+      "sha256": "6104a154182bc3d367457b785fd852798491765bc0d7620e69477426c22b04df",
+      "bytes": 5482
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight_controller.py",
+      "sha256": "a664fd16ce10221688b466e1c1b8e6360e8d500f8f18282d336eebc5fab48404",
+      "bytes": 25478
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "067366abb95cf0fc5ff0e50879b5dce41c799cf6a6f54202aa994a3fd1a05ad3",
+      "bytes": 31938
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/crop_transfer_review.py",
+      "sha256": "e5421a1ccd6c3b4963f9fd9f6f9b856e3eeb6cd4f1ae282251db82f26dbeded6",
+      "bytes": 5396
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_candidate_render.py",
+      "sha256": "612d76102f1e19b5be417729dd698fbcfe9aab73de3dbfd956468be4db1e0235",
+      "bytes": 8302
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_preset_review.py",
+      "sha256": "dcbec941edc9bdbad3cd5d8792a898727458660e8a481119ca3292db062e99e5",
+      "bytes": 8447
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_candidate_render.py",
+      "sha256": "1a12c2447905d12699d1ca4c72ed032bcf8df2e23a88ffafe1cd0cb4b2131e7b",
+      "bytes": 320
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "sha256": "3e3b0dc62c3d455f036667d4bcbfda0b5220aa981d6d83f790608ddfe078769e",
+      "bytes": 20841
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_transaction.py",
+      "sha256": "bcd163feb2bf15bacb47960768ead0fb99f14fc1e2e548d91d632ca222a72816",
+      "bytes": 1379
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "26f48536f41ce0354dd0b56b8d90910722a4b76ba0de36e70af017025c5969f6",
+      "bytes": 41958
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "5ccb0f3bbb4f0ee1301c885f08ac278b948b0c13450aa35acd863ec88fb3b116",
+      "bytes": 5398
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_crop_preset_review_unrun.py",
+      "sha256": "8490a9a101c539e99674b2190ca87c2d9cd8e99b5112cb61b472240fe40fe11a",
+      "bytes": 5309
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_crop_transfer_review_unrun.py",
+      "sha256": "957b6dc797812712e3c2b57fd7fdd16da5433d0f83f408f37e9e513669e5e1fb",
+      "bytes": 4533
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_transfer_routes.py",
+      "sha256": "fdd0d78f568d1e508e72dcb09cffa3c02f30b7d646dedd9fa5f2d2ea7987f7ea",
+      "bytes": 4513
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_reviewed_crop_batch_unrun.py",
+      "sha256": "7598a68d89761673abeddc568de95bc6b18ea94d68457266f2475ac350a062cf",
+      "bytes": 7977
+    },
+    {
+      "path": "engine/tests/test_creative_derived_general_transfer.py",
+      "sha256": "c5c24e53aec1d25345009e1032cb4f354706985f7603796aa4b37821d94a235a",
+      "bytes": 11803
+    },
+    {
+      "path": "ui/src-tauri/src/preset_host.rs",
+      "sha256": "304af3081fb8911222c9916cb519b024961c30dc053fe73a3ef6a5176bb8d14d",
+      "bytes": 13798
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "121eb15647cc18b7dd69c5a904e2f447a86c39699edfe7bd9a053638b0b29238",
+      "bytes": 142361
+    },
+    {
+      "path": "ui/src/batch/BatchReview.tsx",
+      "sha256": "76c5928a9fb551d0e0127ad55f18898db039a1466fb77c7868ce6d8d6113ed5e",
+      "bytes": 8516
+    },
+    {
+      "path": "ui/src/batch/batchWorkflow.ts",
+      "sha256": "d6106555362a67ab16b3e441dd66a4c7e5f1df95e7467a1f723ace7544b39a4d",
+      "bytes": 16149
+    },
+    {
+      "path": "ui/src/cropTransfer/CropTransferReview.tsx",
+      "sha256": "91b8db2ce05f6b17e9610a4cb5c3bfef4a24588093036e0ff9fc20f4a981e144",
+      "bytes": 2661
+    },
+    {
+      "path": "ui/src/cropTransfer/model.test.ts",
+      "sha256": "48003ce4d6a0c1a6c06e82b42aa692656e2d38e74253a1c47fad3e29ede98e4d",
+      "bytes": 3232
+    },
+    {
+      "path": "ui/src/cropTransfer/model.ts",
+      "sha256": "23f48c25c2e141599c0efe5a64c1409b2e955c874913ed368f02005b4b09b0c0",
+      "bytes": 4336
+    },
+    {
+      "path": "ui/src/cropTransfer/workflows.test.ts",
+      "sha256": "22e652ef9b1fab8e62409bd0befe8d490b2e549ae6f6be485ffc30b341266362",
+      "bytes": 4482
+    },
+    {
+      "path": "ui/src/presets/PresetPanel.tsx",
+      "sha256": "6cdb29a2896f4f1da6c9945a1b7b0f40e0bece984f5becf342acd2ec0383e337",
+      "bytes": 8581
+    },
+    {
+      "path": "ui/src/presets/presetWorkflow.ts",
+      "sha256": "b996869a3e078f7469b52bd32c04c4ac0a96c0025b37e64418e1f4dbc48d3c65",
+      "bytes": 11649
+    },
+    {
+      "path": "ui/src/presets/usePresetWorkflow.ts",
+      "sha256": "3cea6ee820d16748bb94518dcf285c82ca78493f172022c68e234999d92b036b",
+      "bytes": 8310
+    }
+  ],
+  "static_validation": {
+    "python_ast_files": 16,
+    "python_fixture_files": [
+      {
+        "path": "engine/tests/fixtures/creative_layers/test_crop_preset_review_unrun.py",
+        "test_functions_in_file": 7
+      },
+      {
+        "path": "engine/tests/fixtures/creative_layers/test_crop_transfer_review_unrun.py",
+        "test_functions_in_file": 9
+      },
+      {
+        "path": "engine/tests/fixtures/creative_layers/test_derived_transfer_routes.py",
+        "test_functions_in_file": 9
+      },
+      {
+        "path": "engine/tests/fixtures/creative_layers/test_reviewed_crop_batch_unrun.py",
+        "test_functions_in_file": 9
+      },
+      {
+        "path": "engine/tests/test_creative_derived_general_transfer.py",
+        "test_functions_in_file": 14
+      }
+    ],
+    "fixture_execution": "UNRUN; counts include retained tests in edited fixtures",
+    "typescript_rust_validation": "Source inspection only; no compiler, typecheck, build or tests",
+    "line_counts": {
+      "ui/src/App.tsx": 2096,
+      "ui/src-tauri/src/main.rs": 2015,
+      "engine/src/lumaretouch_engine/server.py": 6969
+    }
+  },
+  "residuals": [
+    "Persistent cross-owner person associations and automatic identity candidates remain unfinished.",
+    "General support-bearing, semantic/reference/optics transfer remains guarded on derived sources.",
+    "Fresh unclassified imported targets require opening to establish document ownership before crop review.",
+    "Crop review is limited to sixteen targets with explicit full-source/output memory admission, no proxy fallback.",
+    "ID recovery, spill removal and original-shadow extraction remain unsupported.",
+    "Transparent/signed/HDR returned portrait sources remain refused without source clipping or flattening.",
+    "Runtime/native UI, decoder/model/device behavior, visual quality, full export, memory/cancellation, protected history and reload/package acceptance remain unverified."
+  ],
+  "excluded_unrelated_files": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

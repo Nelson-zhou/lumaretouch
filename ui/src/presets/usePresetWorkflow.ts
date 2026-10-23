@@ -1,3 +1,4 @@
+import {CROP_OP,cropReviewKey} from '../cropTransfer/model';
 import {OPTICS_AUTO_OP,OPTICS_MANUAL_OP} from '../optics/transferReviewModel';
 import {defaultMaskTransfer,LOCAL_GRADE_OP} from '../localMasks/transfer';
 import {useEffect,useReducer,useRef,useState} from 'react';
@@ -6,6 +7,7 @@ import {runPreset,readPresetResult,type PresetState} from '../native';
 import {createPresetWorkflow,initialPresetUi,type PresetContext,type PresetUi} from './presetWorkflow';
 import {initialPresetForm,presetFormReducer,presetFromLabel,unavailableScope} from './presetModel';
 export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null,onRefresh:()=>Promise<void>,face:{ok:boolean;why:string}){
+  const [cropImage,setCropImage]=useState<{key:string;ready:boolean}>({key:'',ready:false});
   const [ui,setUi]=useState<PresetUi>(initialPresetUi),[form,dispatch]=useReducer(presetFormReducer,initialPresetForm);
   const [localMaskTransfer,setLocalMaskTransfer]=useState(defaultMaskTransfer),[saveMaskTransfer,setSaveMaskTransfer]=useState(defaultMaskTransfer);
   useEffect(()=>setLocalMaskTransfer(v=>({...v,groups:null})),[form.selectedId]);
@@ -25,8 +27,10 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
           if(result.action==='import')dispatch({type:'imported',id:result.id});
           if(result.action==='delete')dispatch({type:'deleted',id:result.id});
         }
-        // This is a fresh state request, not installation of receipt.doc_state.
-        void Promise.resolve().then(()=>latest.current.onRefresh()).catch(error=>{if(live&&controller.snapshot().result?.request_id===result.request_id)setNote(`操作结果保持不变，但界面刷新失败：${String(error)}`);});
+        // A read-only preflight must not request session_state: that advances
+        // the host view revision and would invalidate its own visual review.
+        // Mutations still fetch fresh state, never install receipt.doc_state.
+        if(result.action!=='preflight')void Promise.resolve().then(()=>latest.current.onRefresh()).catch(error=>{if(live&&controller.snapshot().result?.request_id===result.request_id)setNote(`操作结果保持不变，但界面刷新失败：${String(error)}`);});
       }
     });
     flow.current=controller;controller.updateContext(latest.current.context);
@@ -53,13 +57,17 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
       setNote(value.face.why||'这个预设的部分模块需要可用的单脸');return;
     }
     dispatch({type:'select',id});setNote('');
-    await current()?.submit(ops.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1"].includes(op))?'preflight':'apply',{id,...(ops.includes(LOCAL_GRADE_OP)?{localMaskTransfer:value.localMaskTransfer}:{})},ops);
+    await current()?.submit(ops.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP].includes(op))?'preflight':'apply',{id,...(ops.includes(LOCAL_GRADE_OP)?{localMaskTransfer:value.localMaskTransfer}:{})},ops);
   }
-  const review=ui.action==='preflight'&&ui.result?.success&&ui.result.id===form.selectedId&&ui.result.document_id===context.documentId
+  const review=ui.action==='preflight'&&ui.submitted?.reviewContextKey===context.reviewContextKey&&ui.result?.success&&ui.result.id===form.selectedId&&ui.result.document_id===context.documentId
     &&(!ui.result.module_scope?.includes(LOCAL_GRADE_OP)||JSON.stringify(ui.submitted?.options.localMaskTransfer)===JSON.stringify(localMaskTransfer))?ui.result:null;
+  const cropKey=review?.crop_transfer&&review.preflight_token?cropReviewKey(review.preflight_token,review.crop_transfer):'';
+  const cropReady=!review?.module_scope?.includes(CROP_OP)||!!cropKey&&cropImage.key===cropKey&&cropImage.ready;
   async function confirmLocal(){
-    if(locked()||!review?.preflight_token||!review.module_scope)return;
-    await current()?.submit('apply',{id:review.id,preflightToken:review.preflight_token},review.module_scope);
+    if(locked()||!cropReady||!review?.preflight_token||!review.module_scope)return;
+    const controller=current();
+    if(controller?.snapshot().result?.preflight_token!==review.preflight_token)return;
+    await controller.submit('apply',{id:review.id,preflightToken:review.preflight_token},review.module_scope);
   }
   async function importFile(asCopy=false){
     if(locked())return;dialogLock.current=true;setDialogBusy(true);setNote('');
@@ -81,7 +89,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   }
   async function refresh(){if(locked())return;setNote('');await current()?.submit('list');}
   async function inspect(){try{await latest.current.onRefresh();setNote('已请求当前状态，请核对照片与预设列表；不会重复提交操作。');}catch(error){setNote(String(error));}}
-  return {ui,form,note,selected,catalog,context,dialogBusy,face,localMaskTransfer,setLocalMaskTransfer,saveMaskTransfer,setSaveMaskTransfer,review,confirmLocal,
+  return {ui,form,note,selected,catalog,context,dialogBusy,face,localMaskTransfer,setLocalMaskTransfer,saveMaskTransfer,setSaveMaskTransfer,review,confirmLocal,cropKey,cropReady,setCropImage,
     busy:dialogBusy||ui.phase==='working'||ui.phase==='uncertain',
     setName:(value:string)=>dispatch({type:'name',value}),select:(id:string)=>dispatch({type:'select',id}),
     setScope:(ops:string[])=>dispatch({type:'scope',ops:ops.includes(OPTICS_AUTO_OP)&&ops.includes(OPTICS_MANUAL_OP)?ops.filter(op=>op!==(ops[ops.length-1]===OPTICS_MANUAL_OP?OPTICS_AUTO_OP:OPTICS_MANUAL_OP)):ops}),save,apply,importFile,remove,refresh,inspect,

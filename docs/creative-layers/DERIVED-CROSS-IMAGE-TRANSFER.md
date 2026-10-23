@@ -17,7 +17,7 @@ This is two coherent routes:
 
 `creative_derived_transfer` and `scope.check_derived_modules` admit actual stored/frozen module objects, not request labels. Supported modules are exposure, white balance, levels, curves, HSL, extended tone, photo detail, photo grain, colour grading, primary calibration, selective colour and colour editor with canonical `scope=all`. Unsupported modules reject even when their supplied values happen to be neutral. General transfer does not transport local masks, support assets, landmarks, face identity, model outputs or canonical source pixels.
 
-Cross-image crop is deliberately not admitted here: the handbook requires normalized coordinates and target preview, while the general review currently presents parameters rather than a genuine target crop preview. Existing direct per-image crop remains available. Skin/blemish, local grades/masks, custom LUT, studio/ID/sky background, optics, reference/semantic colour and legacy portrait scopes are not enabled through this general route. Supported portrait parameters use the separate exact-face route below.
+Cross-image crop was excluded from this snapshot. Its subsequent source-only full-target preview implementation is documented in `DERIVED-CROP-TRANSFER.md`; both batch and preset routes require review. Existing direct per-image crop remains available. Skin/blemish, local grades/masks, custom LUT, studio/ID/sky background, optics, reference/semantic colour and legacy portrait scopes are not enabled through this general route. Supported portrait parameters use the separate exact-face route below.
 
 `batch_preflight` retains compact immutable source/target proof JSON within its existing total metadata budget. `batch_preflight_controller` binds current canonical content and original-file provenance for every selected eligible target whenever a source or selected target is derived. An original pathname alone cannot authorize a returned composite. Original-only workflows retain their existing contracts.
 
@@ -55,7 +55,7 @@ Remaining work is explicit:
 
 - Persistent cross-owner person associations, automatic similarity candidates and cross-owner person/group inheritance are not implemented by this one-transfer map.
 - Shared legacy person/group edits from an original active photograph into a parked derived owner remain refused. The new reviewed-face ledger evidence is not synthesized for that unadapted route. Existing derived local face/all-people edits retain their separate document publication path.
-- General support-bearing scope transfer and semantic/reference/optics planners remain guarded until each target has its own real analysis and review. General crop transfer needs genuine target visual review.
+- General support-bearing scope transfer and semantic/reference/optics planners remain guarded until each target has its own real analysis and review. The subsequent reviewed crop implementation is documented in `DERIVED-CROP-TRANSFER.md`.
 - Dedicated ID recovery, spill removal and original-shadow extraction remain outside this slice, as documented in `DERIVED-ID-BACKGROUND.md`.
 - Transparent/signed/HDR returned portrait sources remain refused; no implicit conversion is used to claim support.
 - Runtime/native GUI, model/device behavior, visual pairing usability, full-source export correctness, memory/cancellation behavior, project/package reload and local quality acceptance remain unverified.

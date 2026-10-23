@@ -87,6 +87,6 @@ def test_engine_inventory_precedes_capture_invalidation_and_recovery_mutation():
 
 def test_parked_people_candidate_does_not_validate_derived_masks_against_original_path():
     root=Path(__file__).resolve().parents[4]
-    source=(root/'engine/src/lumaretouch_engine/people_candidate_render.py').read_text()
+    source=(root/'engine/src/lumaretouch_engine/full_candidate_render.py').read_text()
     assert 'M.verify_snapshot(snap,path,(h,w))' in source
     assert "M.verify_source(M.check(snap.get('local_masks'))" not in source

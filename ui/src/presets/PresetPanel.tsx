@@ -1,3 +1,5 @@
+import {CROP_OP} from '../cropTransfer/model';
+import {CropTransferReview} from '../cropTransfer/CropTransferReview';
 import {PresetOrganisationPanel} from '../presetOrganisation/PresetOrganisationPanel';
 import {ReferenceColorReview} from '../referenceColor/ReferenceColorReview';
 import {AutomaticTransferReview} from '../optics/AutomaticTransferReview';
@@ -34,12 +36,12 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {unavailableScope(selectedOps,modules).length>0&&<p>包含当前不可用模块，不能应用。</p>}
     </div>}
     <div className="presetButtons">
-      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{selectedOps.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1"].includes(op))?'预检所选预设':'应用所选'}</button>
+      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{selectedOps.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP].includes(op))?'预检所选预设':'应用所选'}</button>
       <button disabled={!w.context.enabled||w.busy} onClick={()=>void w.refresh()}>刷新列表</button>
       <button disabled={!w.context.enabled||w.busy||!w.selected||w.selected.builtin} onClick={()=>void w.remove()}>移入回收站</button>
     </div>
     {selectedOps.includes(LOCAL_GRADE_OP)&&<MaskTransferControls groups={transferGroupsFromParams(w.selected?.modules[LOCAL_GRADE_OP])} value={w.localMaskTransfer} onChange={w.setLocalMaskTransfer} disabled={w.busy}/>}
-    {w.review&&<div className="presetDetail"><strong>冻结的目标预检，尚未应用</strong>{w.review.local_mask_transfer&&<MaskTransferEvidenceView value={w.review.local_mask_transfer}/>} {w.review.reference_color&&<ReferenceColorReview value={w.review.reference_color}/>} {w.review.optical_transfer&&<AutomaticTransferReview report={w.review.optical_transfer}/>}<button disabled={w.busy||!w.context.editable} onClick={()=>void w.confirmLocal()}>确认本次目标预设并应用</button></div>}
+    {w.review&&<div className="presetDetail"><strong>冻结的目标预检，尚未应用</strong>{w.review.local_mask_transfer&&<MaskTransferEvidenceView value={w.review.local_mask_transfer}/>} {w.review.reference_color&&<ReferenceColorReview value={w.review.reference_color}/>} {w.review.optical_transfer&&<AutomaticTransferReview report={w.review.optical_transfer}/>}{w.review.crop_transfer&&<CropTransferReview key={w.cropKey} value={w.review.crop_transfer} reviewKey={w.cropKey} onReady={(key,ready)=>w.setCropImage({key,ready})}/>}<button disabled={w.busy||!w.context.editable||!w.cropReady} onClick={()=>void w.confirmLocal()}>确认本次目标预设并应用</button></div>}
     <fieldset><legend>保存当前照片的模块参数</legend>
       <label>预设名称<input aria-label="预设名称" value={w.form.name} maxLength={160} placeholder="例如：室外婚纱暖调" onChange={e=>w.setName(e.target.value)}/><small>{nameLength}/80 字符</small></label>
       {nameLength>80&&<p role="alert">名称过长，请缩短到 80 个字符以内。</p>}

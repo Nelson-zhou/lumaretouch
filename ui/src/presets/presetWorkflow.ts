@@ -1,3 +1,4 @@
+import {CROP_OP,validCropReview,type CropReview} from '../cropTransfer/model.ts';
 import {validReferenceReview,type ReferenceReview} from '../referenceColor/ReferenceColorReview';
 import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../optics/transferReviewModel';
 import {validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence,type TransferGroupChoice} from '../localMasks/transferModel.ts';
@@ -7,12 +8,12 @@ export type PresetAction = 'list'|'preflight'|'apply'|'save'|'import'|'delete';
 export type PresetOptions = {id?:string;name?:string;path?:string;kind?:string;note?:string;force?:boolean;
   moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string};
 export type PresetReply = {protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
-  reference_color?:ReferenceReview;revision?:string;optical_transfer?:OpticalTargetReview;preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
+  crop_transfer?:CropReview;reference_color?:ReferenceReview;revision?:string;optical_transfer?:OpticalTargetReview;preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
   before?:Record<string,unknown>;after?:Record<string,unknown>;doc_state?:Record<string,unknown>;
   error?:string;requires_reload?:boolean;rolled_back?:boolean;operation_committed?:boolean|null};
-export type PresetContext = {enabled:boolean;editable:boolean;documentId:string;sourceGroups?:TransferGroupChoice[]};
+export type PresetContext = {enabled:boolean;editable:boolean;documentId:string;reviewContextKey?:string;sourceGroups?:TransferGroupChoice[]};
 export type PresetUi = {phase:'idle'|'working'|'uncertain'|'done'|'error';action:PresetAction|null;
-  result:PresetReply|null;message:string;submitted:{action:PresetAction;options:PresetOptions;requestId:string}|null};
+  result:PresetReply|null;message:string;submitted:{action:PresetAction;options:PresetOptions;requestId:string;reviewContextKey?:string}|null};
 export type PresetTransport = {request:(action:PresetAction,options:PresetOptions)=>Promise<{requested:boolean}>;
   read:(id:string)=>Promise<{phase:string;request_id:string;result?:PresetReply;error?:string}>};
 export const initialPresetUi:PresetUi = {phase:'idle',action:null,result:null,message:'',submitted:null};
@@ -43,7 +44,8 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
     }
     if(result.module_scope.includes('lnx.reference_color.v1')&&(result.applies?.['lnx.reference_color.v1'] as {strength?:number})?.strength!==0&&!validReferenceReview(result.reference_color,opts.documentId??'',result.revision))throw Error('参考统一目标证据不完整');
     if(result.module_scope.includes(OPTICS_AUTO_OP)&&!validOpticalReview(result.optical_transfer,opts.documentId??'',result.revision,result.applies?.[OPTICS_AUTO_OP]))throw Error('自动镜头/透视目标预检证据不完整');
-    if(!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1'].includes(op)))throw Error('预设不含需要冻结预检的模块');
+    if(result.module_scope.includes(CROP_OP)&&!validCropReview(result.crop_transfer,opts.documentId??'',result.revision,result.applies?.[CROP_OP]))throw Error('缺少匹配的本目标真实裁剪预览');
+    if(!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1',CROP_OP].includes(op)))throw Error('预设不含需要冻结预检的模块');
     return;
   }
   if(action==='apply'){
@@ -62,7 +64,8 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
   const uuid=config.uuid??(()=>crypto.randomUUID()),now=config.now??(()=>performance.now());
   const pause=config.pause??((ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms)));
   let context:PresetContext={enabled:false,editable:false,documentId:''},state={...initialPresetUi},disposed=false,generation=0;
-  type Pending={id:string;action:PresetAction;options:PresetOptions;expectedScope?:string[];generation:number};
+  let contextGeneration=0,contextKey='';
+  type Pending={contextGeneration:number;id:string;action:PresetAction;options:PresetOptions;expectedScope?:string[];generation:number};
   let pending:Pending|null=null;
   const active=(g:number)=>!disposed&&generation===g;
   const set=(patch:Partial<PresetUi>)=>{state={...state,...patch};if(!disposed)publish(state);};
@@ -87,6 +90,7 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
           const result=response.result;
           if(!result)throw Error('缺少预设完成结果');
           validatePresetReply(result,request.action,request.options,request.id,request.expectedScope);
+          if(request.action==='preflight'&&request.contextGeneration!==contextGeneration){pending=null;set({phase:'error',result:null,message:'目标照片或编辑上下文已经变化，旧预检不用于应用；请重新预检。'});return;}
           if(result.outcome_unknown){if(request.action==='list')pending=null;set({phase:request.action==='list'?'error':'uncertain',result,message:result.error??'执行结果未确认，请先核对实际状态'});return;}
           pending=null;set({phase:result.success?'done':'error',result,message:result.error??''});return;
         }
@@ -111,8 +115,8 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
     const id=uuid(),g=++generation,deadline=now()+(config.timeoutMs??120000);
     const captured={...options,moduleScope:options.moduleScope?[...options.moduleScope]:undefined,
       ...(editing?{documentId:context.documentId}:{}),requestId:id};
-    const request:Pending={id,action,options:captured,expectedScope:expectedScope?[...expectedScope]:undefined,generation:g};pending=request;
-    set({phase:'working',action,result:null,message:'',submitted:{action,options:captured,requestId:id}});
+    const request:Pending={contextGeneration,id,action,options:captured,expectedScope:expectedScope?[...expectedScope]:undefined,generation:g};pending=request;
+    set({phase:'working',action,result:null,message:'',submitted:{action,options:captured,requestId:id,reviewContextKey:context.reviewContextKey}});
     try{
       const accepted=await bounded(api.request(action,captured),deadline);
       if(!active(g))return;
@@ -122,6 +126,6 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
   }
   async function query(){if(!pending||state.phase!=='uncertain')return;set({phase:'working',result:null,message:''});await poll(pending);}
   function acknowledgeInspection(){if(state.phase!=='uncertain')return;generation++;pending=null;set({...initialPresetUi});}
-  return {submit,query,acknowledgeInspection,updateContext:(next:PresetContext)=>{context={...next};},snapshot:()=>state,
+  return {submit,query,acknowledgeInspection,updateContext:(next:PresetContext)=>{const key=JSON.stringify([next.documentId,next.reviewContextKey]);if(key!==contextKey){contextGeneration++;contextKey=key;if(state.action==='preflight'&&!pending)set({result:null});}context={...next};},snapshot:()=>state,
     dispose:()=>{disposed=true;generation++;pending=null;}};
 }

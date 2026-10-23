@@ -43,6 +43,8 @@ class PresetPorts:
     advance: Callable[[], None] = lambda: None
     prepare_optics: Callable | None = None
     prepare_reference: Callable | None = None
+    prepare_crop: Callable | None = None
+    verify_crop: Callable | None = None
 
 
 class PresetController:
@@ -142,7 +144,8 @@ class PresetController:
                         verdict, reason = self.ports.face_check()
                         if verdict != 'ok': raise SC.ScopeError(f'{op}：{reason}')
                 evidence = self.reviews.prepare(doc, state, self.ports.target_row(),
-                    self.ports.document_id(), self.ports.revision(), p.get('local_mask_transfer'), self.ports.prepare_optics, self.ports.prepare_reference)
+                    self.ports.document_id(), self.ports.revision(), p.get('local_mask_transfer'), self.ports.prepare_optics, self.ports.prepare_reference,
+                    self.ports.prepare_crop, self.ports.verify_crop)
             elif action == "apply": evidence = self.apply(p)
             elif action == "save": evidence = self.save(p)
             elif action == "import":
@@ -222,13 +225,13 @@ class PresetController:
         source_proof = None
         if p.get('preflight_token') is not None:
             record = self.reviews.claim(p['preflight_token'], pid, previous, self.ports.target_row(),
-                                       self.ports.document_id(), self.ports.revision())
+                                       self.ports.document_id(), self.ports.revision(), self.ports.verify_crop)
             doc, mods = record['preset'], record['modules']
             source_proof = record.get('source_proof')
         else:
             doc = PS.find(pid); mods = doc['modules']
             mods = DERIVED.require_modules(previous, mods)
-            if LG.OP in mods or OA.OP in mods or RC.OP in mods: raise SC.ScopeError('含局部组或自动镜头/透视的预设必须先查看本目标预检，再确认应用')
+            if LG.OP in mods or OA.OP in mods or RC.OP in mods or SC.OP_CROP in mods: raise SC.ScopeError('含裁剪、局部组或自动镜头/透视的预设必须先查看本目标预检，再确认应用')
             if SOURCE.record(previous) is not None:
                 source_proof = SOURCE.row_proof({**self.ports.target_row(), 'state':previous})
         DERIVED.require_modules(previous, mods, source_proof)
@@ -255,12 +258,28 @@ class PresetController:
         if EYE.OP in ops and OA.OP not in ops: EYE.validate_target(state,self.ports.target_row())
         if MOUTH.OP in ops and OA.OP not in ops: MOUTH.validate_target(state,self.ports.target_row())
         DERIVED.require_candidate(previous, state, mods, source_proof)
+        if SC.OP_CROP in ops:
+            if self.ports.verify_crop is None:raise SC.ScopeError('裁剪预设缺少完整目标审核端口')
+            self.ports.verify_crop(self.ports.target_row(),state,self.ports.document_id(),self.ports.revision(),record.get('crop'))
         if source_proof is not None:
             SOURCE.verify_row({**self.ports.target_row(), 'state':self.ports.capture()}, source_proof)
+        reviewed_row=self.ports.target_row()
+        reviewed_identity=(reviewed_row.get('document_id'),reviewed_row.get('path'),self.ports.document_id())
+        def verify_after():
+            current=self.ports.target_row()
+            if (current.get('document_id'),current.get('path'),self.ports.document_id())!=reviewed_identity:
+                raise SC.ScopeError('预设渲染期间目标文档发生变化')
+            if self.ports.revision()!=published_revision:raise SC.ScopeError('预设渲染期间目标版本发生变化')
+            if source_proof is not None:SOURCE.verify_row({**current,'state':self.ports.capture()},source_proof)
+            if SC.OP_CROP in ops:
+                proof=deepcopy(record['crop']);proof['revision']=str(published_revision)
+                self.ports.verify_crop(current,state,self.ports.document_id(),str(published_revision),proof)
         if p.get('preflight_token') is not None:self.ports.advance()
+        published_revision=self.ports.revision()
         self._effect_started = True
         frame = apply_with_rollback(self.ports.replay, previous, state, preset_id=pid,
-                                    emit=self.emit, invalidate=self.ports.invalidate, strict_local=SOURCE.record(state) is not None or ID_BACKGROUND.OP in ops or LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
+                                    emit=self.emit, invalidate=self.ports.invalidate, verify_after=verify_after if SC.OP_CROP in ops else None,
+                                    strict_local=SC.OP_CROP in ops or SOURCE.record(state) is not None or ID_BACKGROUND.OP in ops or LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
         after = OA.before_params(state, ops)
         self.last = {"id": pid, "name": doc["name"], "ops": ops, "params": after}
         render_ms = frame.pop("render_ms")

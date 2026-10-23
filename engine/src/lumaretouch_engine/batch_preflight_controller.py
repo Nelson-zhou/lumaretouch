@@ -8,7 +8,7 @@ from . import sky_replacement_scope as SKY, optics_auto_scope as OA, id_backgrou
 from . import optics_transfer_review as OR
 from . import local_grade_layers as LG
 from . import local_grade_runtime as LR
-from .batch_preflight import PreflightStore,FrozenTarget,canonical
+from .batch_preflight import PreflightStore,FrozenTarget,canonical,MAX_RESULT_BYTES
 from . import creative_derived_source as SOURCE, creative_derived_transfer as TRANSFER
 
 @dataclass(frozen=True)
@@ -24,6 +24,8 @@ class PlanPorts:
     prepare_reference:Callable|None=None
     capture_reference:Callable|None=None
     people_transfer:Callable|None=None
+    prepare_crop:Callable|None=None
+    verify_crop:Callable|None=None
 
 class FrozenBatchController:
     def __init__(self,ports,versions,emit,clock):
@@ -38,7 +40,7 @@ class FrozenBatchController:
         return None
 
     def emit_result(self,p,payload):
-        # Result mailbox has no render pixels or full document snapshot.
+        # Result mailbox excludes full frames/snapshots; bounded crop PNGs are review evidence.
         result={k:v for k,v in payload.items() if k not in ('event','doc_state','frame')}
         result.update(event='batch_result',action=p.get('action'),request_id=p.get('request_id'))
         if p.get('request_id') is not None:self.emit(result)
@@ -72,12 +74,14 @@ class FrozenBatchController:
                 ops=SC.check_scope(p.get('module_scope'));policy=p.get('conflict_policy','skip_and_report')
                 if policy not in ('skip_and_report','recheck'):raise SC.ScopeError(f'conflict_policy 未知：{policy!r}（可用：skip_and_report/recheck；没有 overwrite）')
                 if p.get('preflight_token') is not None:raise SC.ScopeError('preflight does not accept an old token')
-                indices,rejected=self.ports.targets(p.get('docs'));self.ports.remember()
+                indices,rejected=self.ports.targets(p.get('docs'))
+                if SC.OP_CROP in ops and len(indices)>16:raise SC.ScopeError('Crop visual review supports at most sixteen targets; no target was omitted')
+                self.ports.remember()
                 rows=self.ports.rows();index=self.ports.current()
                 if not 0<=index<len(rows):raise SC.ScopeError('no active source document')
                 source=self.ports.capture();source_row=rows[index];version=self.versions.version(source_row)
                 mods=SC.params_of(source,ops)
-                source_owned=SOURCE.record(source) is not None or any(SOURCE.record(rows[i].get('state') or {}) is not None for i in indices)
+                source_owned=SC.OP_CROP in ops or SOURCE.record(source) is not None or any(SOURCE.record(rows[i].get('state') or {}) is not None for i in indices)
                 source_proof=SOURCE.row_proof({**source_row,'state':source}) if source_owned else None
                 TRANSFER.require_modules(source,mods,source_proof)
                 reference_options=p.get('reference_color')
@@ -102,7 +106,7 @@ class FrozenBatchController:
                         if source_owned:target_proof=SOURCE.row_proof({**row,'state':target_state})
                         TRANSFER.require_modules(target_state,mods,source_proof)
                     except Exception as error:blocked=str(error)[:2000]
-                    prepared=None;transfer=None;optics_record=None;optical_transfer=None;reference_record=None
+                    prepared=None;transfer=None;optics_record=None;optical_transfer=None;reference_record=None;crop_record=None;crop_transfer=None
                     if RC.OP in ops and live:blocked="参考图保持不变，不作为统一目标"
                     if not blocked and LG.OP in ops:
                         try:prepared,transfer=LR.prepare_modules(source if live else row['state'],mods,row,local_options,preview=len(public)<12)
@@ -147,13 +151,27 @@ class FrozenBatchController:
                             if target_proof is not None:SOURCE.verify_row({**row,'state':self.ports.capture() if live else row['state']},target_proof)
                             if self.versions.version(row)!=v:raise ValueError('Target changed during parameter review')
                         except Exception as error:blocked=str(error)[:2000]
+                    if not blocked and SC.OP_CROP in ops:
+                        try:
+                            if self.ports.prepare_crop is None or self.ports.verify_crop is None:
+                                raise ValueError('Crop requires an actual full edited target preview adapter')
+                            candidate=OA.candidate(target_state,prepared or mods,local_replace_legacy=bool(transfer and transfer['legacy_removed']))
+                            if optics_record is not None:candidate['_optics']=optics_record['recipe']
+                            if reference_record is not None:
+                                RC.apply_verified(candidate,RC.verify_target(reference_record,target_state,candidate,row,v.document_id,v.revision,(prepared or mods)[RC.OP]))
+                            crop_record,crop_transfer=self.ports.prepare_crop(row,candidate,v.document_id,str(v.revision))
+                            self.ports.verify_crop(row,candidate,v.document_id,str(v.revision),crop_record)
+                            SOURCE.verify_row({**row,'state':self.ports.capture() if live else row['state']},target_proof)
+                            if self.versions.version(row)!=v:raise ValueError('Target changed during crop visual review')
+                        except Exception as error:blocked=str(error)[:2000];crop_record=None;crop_transfer=None
                     private_transfer=None if transfer is None else {k:v for k,v in transfer.items() if k!='preview_jpeg'}
                     targets.append(FrozenTarget(v.document_id,v.revision,i,row['path'],blocked,canonical(before),
                         None if prepared is None else canonical(prepared),None if private_transfer is None else canonical(private_transfer),
                         None if optics_record is None else canonical(optics_record),None if reference_record is None else canonical(reference_record),
-                        source_proof_json=None if target_proof is None else canonical(target_proof)))
+                        source_proof_json=None if target_proof is None else canonical(target_proof),
+                        crop_json=None if crop_record is None else canonical(crop_record)))
                     public.append({'index':i,'path':row['path'],'live':live,'blocked':blocked,'before':before,
-                                   'document_id':v.document_id,'revision':str(v.revision),'local_mask_transfer':transfer,'optical_transfer':optical_transfer,'reference_color':reference_record,
+                                   'document_id':v.document_id,'revision':str(v.revision),'local_mask_transfer':transfer,'optical_transfer':optical_transfer,'reference_color':reference_record,'crop_transfer':crop_transfer,
                                    **({'source_proof':target_proof} if source_owned else {})})
                 if source_proof is not None:
                     SOURCE.verify_row({**source_row,'state':self.ports.capture()},source_proof)
@@ -165,6 +183,12 @@ class FrozenBatchController:
                     'rejected_docs':rejected,'ok':sum(not r['blocked'] for r in public),'blocked':sum(bool(r['blocked']) for r in public),
                     'preflight_token':plan.token,'workspace_generation':plan.workspace,'expires_ns':str(plan.expires_ns)}
                 if LG.OP in ops:body['local_mask_transfer']=local_options
+                # All crop targets have display evidence. Never let the native
+                # mailbox silently lose an oversized otherwise-valid review.
+                try:canonical(body,MAX_RESULT_BYTES-4096)
+                except Exception:
+                    self.store.pending.pop(plan.token,None)
+                    raise
                 self.emit(body);self.emit_result(p,body);return
             if set(p)-{'cmd','action','preflight_token','request_id'}:
                 raise SC.ScopeError('token commit cannot change source, targets, modules or policy; preflight again')
@@ -221,8 +245,21 @@ class FrozenBatchController:
                             candidate=OA.candidate(original,prepared,local_replace_legacy=bool(target.transfer_json and json.loads(target.transfer_json)['legacy_removed']))
                             OA.verify_target(json.loads(target.optics_json),original,candidate,row,target.document_id,target.revision,prepared[OA.OP])
                         except Exception as error:blocked=str(error)[:2000]
+                    if not blocked and SC.OP_CROP in plan.modules:
+                        try:
+                            if target.crop_json is None or self.ports.verify_crop is None:
+                                raise ValueError('Crop commit is missing its actual reviewed target preview')
+                            original=live_state if index==current else row['state']
+                            prepared=json.loads(target.prepared_json) if target.prepared_json is not None else plan.params()
+                            candidate=OA.candidate(original,prepared,local_replace_legacy=bool(target.transfer_json and json.loads(target.transfer_json)['legacy_removed']))
+                            if target.optics_json is not None:candidate['_optics']=json.loads(target.optics_json)['recipe']
+                            if target.reference_json is not None:
+                                RC.apply_verified(candidate,RC.verify_target(json.loads(target.reference_json),original,candidate,row,target.document_id,target.revision,prepared[RC.OP]))
+                            self.ports.verify_crop(row,candidate,target.document_id,str(target.revision),json.loads(target.crop_json))
+                        except Exception as error:blocked=str(error)[:2000]
                 resolved.append({'index':index,'path':target.path,'blocked':blocked,'document_id':target.document_id,
                     '_source_proof':None if target.source_proof_json is None else json.loads(target.source_proof_json),
+                    '_crop_prepared':None if target.crop_json is None else json.loads(target.crop_json),
                     '_reference_prepared':None if target.reference_json is None else json.loads(target.reference_json),
                     '_optics_prepared':None if target.optics_json is None else json.loads(target.optics_json),
                     '_prepared_modules':None if target.prepared_json is None else json.loads(target.prepared_json),

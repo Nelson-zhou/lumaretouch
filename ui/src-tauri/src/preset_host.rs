@@ -39,12 +39,38 @@ fn optical_review(value: &Value, document: &Value, revision: &Value, params: &Va
     }
     true
 }
+fn crop_review(value:&Value,document:&Value,revision:&Value,params:&Value)->bool {
+    let hash=|v:&Value|v.as_str().is_some_and(|s|s.len()==64&&s.bytes().all(|b|b.is_ascii_digit()||(b'a'..=b'f').contains(&b)));
+    let size=|v:&Value|v.as_array().is_some_and(|a|a.len()==2&&a.iter().all(|n|n.as_u64().is_some_and(|n|n>0)));
+    if value.as_object().map_or(true,|m|m.len()!=10)||value["version"]!=1||&value["document_id"]!=document||&value["revision"]!=revision
+        ||!hash(&value["candidate_sha256"])||!hash(&value["people_sha256"])||&value["crop"]!=params
+        ||!size(&value["source_size"])||!size(&value["output_size"]){return false;}
+    let crop=&value["crop"];
+    let Some(rect)=crop["rect_normalized"].as_array() else{return false;};
+    if crop.as_object().map_or(true,|m|m.len()!=2)||rect.len()!=4
+        ||!rect.iter().all(|n|n.as_f64().is_some_and(|n|n.is_finite()&&(0.0..=1.0).contains(&n)))
+        ||rect[0].as_f64()>=rect[2].as_f64()||rect[1].as_f64()>=rect[3].as_f64()
+        ||!crop["rotation_degrees"].as_f64().is_some_and(|n|n.is_finite()&&(-180.0..=180.0).contains(&n)){return false;}
+    let source=&value["source_proof"];let creative=&source["creative_source"];
+    if source.as_object().map_or(true,|m|m.len()!=3||!m.contains_key("creative_source"))||!hash(&source["asset_sha256"])||!hash(&source["original_sha256"]){return false;}
+    if creative.is_null(){if source["asset_sha256"]!=source["original_sha256"]{return false;}}
+    else if creative.as_object().map_or(true,|m|m.len()!=3)||creative["sha256"]!=source["asset_sha256"]
+        ||creative["width"]!=value["source_size"][0]||creative["height"]!=value["source_size"][1]{return false;}
+    let preview=&value["preview"];
+    let Some(bytes)=preview["base64"].as_str() else{return false;};
+    preview.as_object().is_some_and(|m|m.len()==5)&&preview["mime"]=="image/png"&&hash(&preview["sha256"])
+        &&["width","height"].iter().all(|k|preview[*k].as_u64().is_some_and(|n|(1..=320).contains(&n)))
+        &&bytes.len()<=400000&&bytes.len()%4==0&&bytes.starts_with("iVBOR")
+        &&bytes.bytes().all(|b|b.is_ascii_alphanumeric()||b"+/=".contains(&b))
+}
 fn reviewed_types(value: &Value) -> bool {
     let Some(ops)=value["module_scope"].as_array() else{return false;};
     let local=ops.iter().any(|op|op=="lnx.local_grade.v1");
     let optics=ops.iter().any(|op|op=="lnx.optics_auto.v1");
-    (local||optics) && (!local||value["local_mask_transfer"].is_object())
+    let crop=ops.iter().any(|op|op=="lnx.crop.v1");
+    (local||optics||crop) && (!local||value["local_mask_transfer"].is_object())
         && (!optics||optical_review(&value["optical_transfer"],&value["document_id"],&value["revision"],&value["applies"]["lnx.optics_auto.v1"]))
+        && (!crop||crop_review(&value["crop_transfer"],&value["document_id"],&value["revision"],&value["applies"]["lnx.crop.v1"]))
 }
 impl ReceiptKind for PresetKind {
     const NAME: &'static str = "preset";
@@ -85,6 +111,23 @@ pub(crate) type PresetHost = ReceiptHost<PresetKind>;
 #[cfg(test)]
 mod tests {
     use super::*;
+    // AUTHORED / UNRUN. Synthetic receipt schema, not actual rendered PNG evidence.
+    #[test] fn crop_only_preflight_requires_bound_preview_evidence() {
+        let crop=json!({"rect_normalized":[0.0,0.0,1.0,1.0],"rotation_degrees":0.0});
+        let report=json!({"version":1,"document_id":"doc","revision":"3",
+            "source_proof":{"asset_sha256":"a".repeat(64),"original_sha256":"a".repeat(64),"creative_source":null},
+            "candidate_sha256":"b".repeat(64),"people_sha256":"c".repeat(64),"crop":crop,
+            "source_size":[640,480],"output_size":[640,480],
+            "preview":{"mime":"image/png","base64":"iVBORw==","width":320,"height":240,"sha256":"d".repeat(64)}});
+        let value=json!({"protocol":1,"action":"preflight","success":true,"outcome_unknown":false,"id":"crop",
+            "document_id":"doc","revision":"3","module_scope":["lnx.crop.v1"],"applies":{"lnx.crop.v1":crop},
+            "preflight_token":"f".repeat(32),"crop_transfer":report});
+        assert!(PresetKind::valid(&value,Some("doc")));
+        for key in ["crop_transfer","revision"] {let mut changed=value.clone();changed.as_object_mut().unwrap().remove(key);assert!(!PresetKind::valid(&changed,Some("doc")));}
+        let mut changed=value.clone();changed["crop_transfer"]["document_id"]=json!("other");assert!(!PresetKind::valid(&changed,Some("doc")));
+        changed=value.clone();changed["crop_transfer"]["crop"]["rotation_degrees"]=json!(45);assert!(!PresetKind::valid(&changed,Some("doc")));
+        changed=value.clone();changed["crop_transfer"]["preview"]["width"]=json!(321);assert!(!PresetKind::valid(&changed,Some("doc")));
+    }
     fn host() -> PresetHost { let mut h = PresetHost::default(); h.reset([1; 16]); h.ready([1; 16], true); h }
     #[test] fn editing_actions_require_document_identity_but_catalog_does_not() {
         let mut h = host(); assert!(h.begin([1; 16], "a", "apply").is_err());

@@ -43,7 +43,7 @@ def test_allowlist_is_closed_and_global_colour_editor_uses_actual_schema():
         'lnx.exposure.v1', 'lnx.white_balance.v1', 'lnx.levels.v1', 'lnx.curves.v1',
         'lnx.hsl.v1', 'lnx.extended_tone.v1', 'lnx.photo_detail.v1',
         'lnx.photo_grain.v1', 'lnx.colour_grading.v1', 'lnx.primary_calibration.v1',
-        'lnx.selective_colour.v1', 'lnx.colour_editor.v1',
+        'lnx.selective_colour.v1', 'lnx.colour_editor.v1', 'lnx.crop.v1',
     }
     modules = {SC.OP_EXPOSURE:{'ev':1.25}, SC.COLOUR_EDITOR.OP:{'recipe':CE.neutral()}}
     assert T.require_modules(state(), modules)[SC.COLOUR_EDITOR.OP]['recipe']['scope'] == 'all'
@@ -210,6 +210,8 @@ def test_derived_save_rejects_unsupported_actual_state_before_storage(tmp_path, 
     assert not writes
 
 
-def test_cross_image_crop_requires_actual_target_visual_review():
-    with pytest.raises(SC.ScopeError):
-        SC.check_derived_modules({SC.OP_CROP:SC.params_of({},[SC.OP_CROP])[SC.OP_CROP]})
+def test_cross_image_crop_requires_actual_target_visual_review(tmp_path):
+    value=state();target=row(tmp_path,value);modules=SC.params_of(value,[SC.OP_CROP])
+    assert SC.check_derived_modules(modules)==modules
+    with pytest.raises(ValueError,match='审核端口'):
+        PresetReviews().prepare(preset(modules),value,target,'load-1','7',None)
