@@ -74,6 +74,10 @@ def value(engine):
 
 def context(engine):
     source, state, face, ref = selection(engine, editing=True)
+    from .creative_derived_source import record
+    if record(engine) is not None:
+        from .creative_derived_recovery import source_binding
+        if source_binding(engine)!=source:raise ValueError('Recovery analysis belongs to another composite')
     # No detector index or person/group association can substitute for these
     # actual bytes. Selecting another face must invalidate a reviewed gesture.
     actual = FACE.owner(source, engine._precompute)
@@ -121,7 +125,7 @@ def prepare(engine, recovery, target, *, expected=None):
     fields = SUPPORT.raster(candidate, assets, asset, (pipe.h, pipe.w))
     from .people_owned_inputs import preview as owned_inputs
     prepared = prepare_preview(pipe, candidate, asset, engine._people_analyses.get(asset, {}),
-                               byte_budget=available_estimate(), recovery_assets=fields,**owned_inputs(engine,candidate))
+                               byte_budget=available_estimate(), recovery_assets=fields,**owned_inputs(engine,candidate,support_bank=assets))
     assert_context(engine, captured)
     return {'context': captured, 'before': before, 'candidate': candidate,
             'assets': assets, 'prepared': prepared, 'target': target,

@@ -260,7 +260,8 @@ class PeopleHostMixin:
             from .creative_derived_effects import require_graph
             require_graph(graph,source)
             result['creative_source'] = source
-            return result # Never call original-path hair capture for this source.
+            from .creative_derived_hair import capture as capture_hair
+            return capture_hair(retained_host,state,result,pc,source)
         return result if binding is None else HAIR.capture(retained_host,result,pc,binding,source_path=source_path)
 
     def cmd_people(self,p):

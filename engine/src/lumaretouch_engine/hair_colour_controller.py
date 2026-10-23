@@ -29,8 +29,13 @@ def context(engine, incoming):
         raise ValueError('头发选区与恢复笔只属于此照片中选中的单个人物，请先切换到人物独立编辑范围')
     face = A.verify_face(state, target['face_ref'], source)
     if not face['enabled']: raise ValueError('请先启用所选人物')
+    from .creative_derived_source import record, verify
+    derived = record(engine) is not None
+    if derived:
+        verify(source,engine)
+        rgb(engine) # Prove the displayed pipeline source and measured proxy agree.
     capture = {'people_context': deepcopy(incoming), 'face_ref': P.face_ref(face), 'source': source,
-        'graph_fence': engine._people_owner().fence, 'source_path': engine._doc_path,
+        'graph_fence': engine._people_owner().fence, 'source_path': None if derived else engine._doc_path,
         'source_identity': id(engine._vram.src_f32), 'repair_identity': id(engine._vram.repair_base)}
     return capture, state
 
@@ -47,7 +52,29 @@ def rgb(engine):
     if tensor is None: raise ValueError('Original source-view pixels are unavailable')
     result = np.array(tensor[0].permute(1,2,0).to('cpu', torch.float32).numpy(), dtype=np.float32, order='C', copy=True)
     if result.ndim != 3 or result.shape[2] != 3 or not np.isfinite(result).all(): raise ValueError('Invalid hair source view')
+    from .creative_derived_source import record, binding, verify_precompute, analysis_rgb
+    if record(engine) is not None:
+        owned = binding(engine); pc = getattr(engine,'_precompute',None)
+        if pc is None or pc.backend != 'mediapipe': raise ValueError('Derived hair review requires actual composite analysis')
+        verify_precompute(engine,pc)
+        proxy = analysis_rgb(engine)
+        if (engine._people_source() != owned or result.shape != proxy.shape or proxy.dtype != np.uint8
+                or not np.allclose(result,proxy.astype(np.float32)/255.,rtol=0,atol=np.finfo(np.float32).eps)):
+            raise ValueError('Hair source view differs from the actual derived analysis pixels')
+        if engine._vram.repair_base is not None:
+            raise ValueError('Derived hair review cannot use an unadapted repair source')
+        if binding(engine) != owned: raise ValueError('Hair effective source changed during review capture')
     return result
+
+
+def derived_record(engine, record):
+    """No original-file prompted resolver may enter a derived review/replay."""
+    from .creative_derived_source import record as base_record, verify
+    if record is None or base_record(engine) is None: return record
+    record = A.check(record); verify(record['source'],engine)
+    if any(obj['kind']=='prompted' for key in ('support','recovery') for obj in record[key]['objects']):
+        raise ValueError('Derived hair supports only reviewed brush/radial vectors; prompted source inference is not adapted')
+    return record
 
 
 def png(source, coverage=None, *, color=(.12, .85, .9)):
@@ -89,7 +116,13 @@ def report(engine, captured, state):
 def preview(engine, captured, state, action, payload):
     from .hair_colour_runtime import fields
     if type(payload) is not dict or set(payload) != {'mask'}: raise ValueError('Hair preview needs one source vector stack')
+    from .creative_derived_source import record as base_record
+    if base_record(engine) is not None:
+        checked = A.mask(payload['mask'],recovery=action=='preview_recovery')
+        if any(obj['kind']=='prompted' for obj in checked['objects']):
+            raise ValueError('Derived hair prompted support is not source adapted')
     old = selected_record(engine, captured, state)
+    derived_record(engine,old)
     evidence = SAVED.current(engine, captured['source'])
     if action == 'preview_support':
         record = A.reviewed(captured['face_ref'], captured['source'], A.mask(payload['mask']), evidence['model_sha256'],
@@ -97,6 +130,7 @@ def preview(engine, captured, state, action, payload):
     else:
         if old is None: raise ValueError('请先审核此人物的头发范围，再使用效果恢复')
         record = A.check({**old, 'recovery': A.mask(payload['mask'], recovery=True)})
+    record = derived_record(engine,record)
     source = rgb(engine); hair = E.at_dimensions(evidence, captured['source'], tuple(source.shape[:2]))
     weight, recovery = fields(record, source.shape[:2], hair, source_path=captured['source_path'])
     if np.count_nonzero(weight > .05) < 16: raise ValueError('选区内没有足够可信的头发，请纠正范围')
@@ -114,6 +148,7 @@ def preview(engine, captured, state, action, payload):
 
 
 def publish(engine, captured, state, record):
+    record = derived_record(engine,record)
     old_assets = PROJECT.store(engine)
     if record is None:
         candidate = A.detach(state, captured['face_ref']); assets = old_assets

@@ -118,7 +118,11 @@ def prepare_mutation(engine, capture, mutation):
         value = PEOPLE.value(engine)
     else:
         value = check(getattr(engine, '_effect_recovery', None))
-    binding = M.bind_source(engine)
+    if PEOPLE.handles(engine,name):
+        from .creative_derived_recovery import source_binding
+        binding = source_binding(engine)
+    else:
+        binding = M.bind_source(engine)
     if value['source'] is not None and value['source'] != binding:
         raise ValueError('源图身份改变，恢复笔迹不能重新绑定到另一张照片')
     rows = value['targets']

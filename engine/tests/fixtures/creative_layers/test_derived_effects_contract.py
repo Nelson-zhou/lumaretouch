@@ -133,7 +133,7 @@ def test_all_people_target_is_exact_current_derived_asset(monkeypatch):
 def test_current_graph_rejects_file_assets_shared_links_and_unsupported_intent(monkeypatch):
     _,state,context,owned,_=fixture(monkeypatch);key=context['target']['target_id']
     C.require_graph(state,owned)
-    unsupported=S.set_override(state,'face',key,'lnx.hair_colour.v1','/strength',.5)
+    unsupported=S.set_override(state,'face',key,'lnx.unadapted.v1','/strength',.5)
     with pytest.raises(ValueError):C.require_graph(unsupported,owned)
     supported=S.set_override(state,'face',key,'lnx.enhance.v1','/sclera',.5)
     C.require_graph(supported,owned)
@@ -163,7 +163,7 @@ def test_preview_forwarding_never_resolves_original_hair_or_body(monkeypatch):
     def forbidden(*args,**kwargs):raise AssertionError('Original hair resolver called')
     monkeypatch.setattr(H,'preview_kwargs',forbidden)
     inputs=I.preview(engine,state,body_source=owned)
-    assert set(inputs)=={'creative_source','creative_proxy',*(name+'_assets' for name in ('eye_light','lipstick','blush_makeup','eyeliner','eyelash','brow_makeup','iris_makeup'))}
+    assert set(inputs)=={'creative_source','creative_proxy','hair_assets','hair_evidence',*(name+'_assets' for name in ('eye_light','lipstick','blush_makeup','eyeliner','eyelash','brow_makeup','iris_makeup'))}
     assert inputs['creative_source']==owned and inputs['creative_proxy'] is rgb
     with pytest.raises(ValueError,match='body'):
         I.preview(engine,state,body_bank={'bodies':{'unadapted':{}},'analysis_runs':{},'support_assets':{}})

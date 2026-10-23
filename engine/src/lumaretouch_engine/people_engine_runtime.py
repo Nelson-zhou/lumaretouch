@@ -25,8 +25,10 @@ def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_asse
                 or creative_proxy.dtype != np.uint8 or creative_proxy.shape != rgb.shape
                 or not np.allclose(rgb,creative_proxy.astype(np.float32)/255.,rtol=0,atol=np.finfo(np.float32).eps)):
             raise ValueError('Portrait preview pixels differ from the owned composite analysis proxy')
-        if body_bank is not None or body_source_path is not None or hair_source_path is not None or hair_evidence is not None or recovery_assets:
+        if body_bank is not None or body_source_path is not None or hair_source_path is not None:
             raise ValueError('Derived portrait preview cannot acquire original-file support inputs')
+        from .creative_derived_recovery import validate_fields
+        validate_fields(state,creative_source,recovery_assets or {},rgb.shape[:2])
         if pipe.repair_base is not None:
             raise ValueError('Derived portrait repair source has not been adapted')
     elif creative_proxy is not None:
@@ -68,13 +70,15 @@ def prepare_export(snapshot,source,repaired,*,byte_budget,recovery_assets=None,b
     if creative is not None:
         from .creative_derived_effects import require_graph
         require_graph(snapshot['state'],creative)
-        if body_pose is not None or recovery_assets or repaired is not None:
-            raise ValueError('Derived portrait export cannot replay body, recovery or repair inputs')
+        if body_pose is not None or repaired is not None:
+            raise ValueError('Derived portrait export cannot replay body or repair inputs')
         if (source.dtype!=np.float32 or source.ndim!=3 or source.shape[2]!=3
                 or (creative['height'],creative['width'])!=source.shape[:2]
                 or creative['sha256']!=snapshot['asset_sha256']
                 or not np.isfinite(source).all() or np.any(source<0) or np.any(source>1)):
             raise ValueError('People export requires the verified creative float32 working source')
+        from .creative_derived_recovery import validate_fields
+        validate_fields(snapshot['state'],creative,recovery_assets or {},source.shape[:2])
         divisor=1
     else:
         if source.dtype not in (np.uint8,np.uint16):raise ValueError('People export needs original RGB8/16')
@@ -86,7 +90,8 @@ def prepare_export(snapshot,source,repaired,*,byte_budget,recovery_assets=None,b
         from .hair_colour_project import kwargs as hair_inputs
         source_inputs=hair_inputs(snapshot)
     else:
-        source_inputs={'creative_source':creative}
+        from .creative_derived_hair import export_inputs
+        source_inputs={'creative_source':creative,**export_inputs(snapshot)}
     prepared=prepare(state,asset,rgb,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,repaired=repaired,
         **source_inputs,force_hair_prompted=True,eye_light_assets=snapshot.get('support_assets',{}),blush_makeup_assets=snapshot.get('support_assets',{}),lipstick_assets=snapshot.get('support_assets',{}),eyeliner_assets=snapshot.get('support_assets',{}),eyelash_assets=snapshot.get('support_assets',{}),brow_makeup_assets=snapshot.get('support_assets',{}),iris_makeup_assets=snapshot.get('support_assets',{}))
     if body_pose is not None:

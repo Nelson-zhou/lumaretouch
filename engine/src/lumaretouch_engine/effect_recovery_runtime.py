@@ -102,7 +102,10 @@ def sync(engine, *, strict=False):
 def stage_key(engine, value, *, source_stamp=None):
     row = engine._docs[engine._doc_index]
     face_key = FACE.identity_key(engine._precompute) if any(r['target'] in FACE.FACE_TARGETS for r in value['targets']) else None
-    return (json.dumps(value, sort_keys=True), M.file_stamp(row['path']) if source_stamp is None else source_stamp, id(engine._vram.src_f32), face_key)
+    from .creative_derived_source import record,binding
+    effective = binding(engine) if record(engine) is not None else None
+    return (json.dumps(value, sort_keys=True), M.file_stamp(row['path']) if source_stamp is None else source_stamp, id(engine._vram.src_f32), face_key,
+            json.dumps(effective,sort_keys=True))
 
 
 def report(engine):

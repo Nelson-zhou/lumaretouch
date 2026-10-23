@@ -1,5 +1,8 @@
 # M14 returned-source reviewed makeup consumers
 
+Later continuation: `DERIVED-HAIR-RECOVERY.md` adds manual reviewed hair and
+face-owned operator recovery. The remaining list below records this makeup slice.
+
 Source-only continuation of `db90a3515327b23d19e1d7f7af36922c33e765b0`.
 Runtime, native, numerical and visual acceptance: **UNRUN**.
 This continues handbook `LNX-REF-WF-127932-a9c143a25d` (return for further

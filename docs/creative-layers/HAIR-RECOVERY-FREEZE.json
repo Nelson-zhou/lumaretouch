@@ -1,0 +1,150 @@
+{
+  "schema": 1,
+  "status": "source-integrated-frozen; runtime acceptance UNRUN",
+  "base_commit": "5d921d8abcd48a2ef8a3d25a6bf0174747bd7958",
+  "scope": [
+    "M14 manual reviewed derived hair colour/gloss and operator-only recovery",
+    "Exact face-owned recovery capture/review/commit and source-matched fields",
+    "Pathless actual-source preview/full float export inputs"
+  ],
+  "integration_map": "docs/creative-layers/DERIVED-HAIR-RECOVERY.md",
+  "checks": {
+    "python_ast_files": 19,
+    "whitespace": "git diff --check clean",
+    "product_imports": false,
+    "execution": false,
+    "tests": "UNRUN",
+    "build": false,
+    "typecheck": false,
+    "inference": false,
+    "caps": {
+      "App.tsx": 2091,
+      "main.rs": 2015,
+      "server.py": 6939
+    }
+  },
+  "not_claimed": [
+    "M14 complete",
+    "32 AI tools complete",
+    "Prompted hair or generic prompted/local-mask input",
+    "Body or arm-SAM derived support",
+    "Shared transfer enabled",
+    "Global recovery/repair/source patch",
+    "Transparent or HDR photo return",
+    "Derived file-only hair reopen shortcut",
+    "Runtime native numerical visual or recovery/package acceptance",
+    "Unconditional 24 MP workflow"
+  ],
+  "files": [
+    {
+      "path": "docs/creative-layers/DERIVED-HAIR-RECOVERY.md",
+      "sha256": "32a4729059fd63df83ad800a0ac8da60408156952d9b89fe5d7ee3104f072762",
+      "bytes": 8009
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-MAKEUP.md",
+      "sha256": "30336673f754638072a3a0ef999bda739d9aac3c7eab2b8b0bf1551dada98638",
+      "bytes": 7459
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "7bf8d84b597fe0394b3e739f7d7d94a6269ef64a9e77436646847afd9ea9d5fe",
+      "bytes": 13416
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_hair.py",
+      "sha256": "82ae1901b67c1ff6bfd5b504022e4f1f15f8ea64b65073ecdf07bf888efdee8b",
+      "bytes": 4777
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_makeup.py",
+      "sha256": "ea408128d6403bf2e321294876f106342a30384c9008e18b4da934f9643f79c7",
+      "bytes": 4372
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_recovery.py",
+      "sha256": "5fdcbc434dff5e90ad40aae021ed421a80c716003e6c9a507b3ec483dadf6306",
+      "bytes": 8773
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "ca9e7602cb9069d62097bbb711175abe0a012d38e19fc8b6af97e9000ad71e89",
+      "bytes": 22709
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_runtime.py",
+      "sha256": "17f10265da6b07ea00506613f316a78e69f4ec89032cd9540b277a8fa470c4cc",
+      "bytes": 10430
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_state.py",
+      "sha256": "99647f0caacecc7a4947026dfd6ceb13fd27276907f2e26c6df18bf67528a849",
+      "bytes": 9175
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_colour_controller.py",
+      "sha256": "7209da2f0e6c4ab750d3438b8047cff1c28836c4ce564e0b91131948408911e4",
+      "bytes": 15391
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_colour_evidence.py",
+      "sha256": "14c0e1654bfa0ec2af18959a549fe2ce67515393b67d6fb8a7cc6e525c51b05d",
+      "bytes": 5945
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "4ec9dcc6dd0b48df4d89bdd701983e0afd625ac093ccf93888a58c0b300db515",
+      "bytes": 8406
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "4ddb449977f9351b130d38e36198acc0e9a598d073d67041ec9fbabd71ba0c3f",
+      "bytes": 4661
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "104ff192fd335e112480f1012c8b7d789bee628cc29ac9ad8fe49f1105bea38b",
+      "bytes": 22065
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "sha256": "41da30318b6abca14a2caaf224bb4ff9481c0923e2fc5ca8e0714d15f06c1932",
+      "bytes": 2779
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_recovery.py",
+      "sha256": "fcf690f978cc74a632be7979306487d87152b6aef311458d360d26906281c72e",
+      "bytes": 9832
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "e467e467a6ba7b30e6ea7415c7a26f68886633aa53c4518d8c513ed63b06a376",
+      "bytes": 15862
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_effects_contract.py",
+      "sha256": "15868d83e346684634b750beaafae17638a3c84ccb23eee16ef892de5ab863db",
+      "bytes": 16276
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_hair_controller.py",
+      "sha256": "18d459dc4e5981e76cd2363bf2edd1a59b3e3a1eaa5968ec16952d2d682538df",
+      "bytes": 6618
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_hair_runtime.py",
+      "sha256": "519266726d252497b37e789552089a7e6717e4567d73f96357bfd8ce3ed1216f",
+      "bytes": 5908
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_recovery_contract.py",
+      "sha256": "6beb0d94728bd74b936b4c57bdc8394a6935d2dacca609bbc5720e06d1b9317c",
+      "bytes": 9268
+    },
+    {
+      "path": "ui/src/hairColour/HairSourceEditor.tsx",
+      "sha256": "26cb0bb99d3db7dec8940c3d5bd84fe29de77e36470ceb8b25dfabca740a8e43",
+      "bytes": 6030
+    }
+  ]
+}

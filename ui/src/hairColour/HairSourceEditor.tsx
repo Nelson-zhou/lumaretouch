@@ -40,7 +40,7 @@ export function HairSourceEditor({source,width,height,value,onChange,disabled}:{
     onChange({...value,objects:[...value.objects,object]});
   }
   return <div className="hair-source-editor">
-    <p>原始源图选区，青色添加、红色减去。这里只编辑人物归属，不从脸框自动扩张，不会改变原图。</p>
+    <p>当前源图选区，青色添加、红色减去。这里只编辑人物归属，不从脸框自动扩张，不会改变保留的源图。</p>
     <div className="hair-toolbar"><button type="button" disabled={disabled} aria-pressed={!subtract} onClick={()=>setSubtract(false)}>添加范围</button>
       <button type="button" disabled={disabled} aria-pressed={subtract} onClick={()=>setSubtract(true)}>擦除范围</button>
       <label>笔刷半径 <input type="range" min=".3" max="10" step=".1" value={radius} disabled={disabled} onChange={e=>setRadius(Number(e.target.value))}/>{radius}% 源图高度</label>

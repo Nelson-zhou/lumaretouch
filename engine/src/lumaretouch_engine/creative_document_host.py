@@ -338,6 +338,10 @@ def guard_command(engine, name, request):
         raise ValueError('会话含创意回流图；跨图人像/批量计划尚未支持该来源，请先关闭回流图或撤销回流，避免借用原图分析。')
     if getattr(engine, '_creative_base', None) is None:
         return
+    from .creative_derived_recovery import COMMANDS, require_command as require_recovery
+    if name in COMMANDS:
+        require_recovery(engine,name,request)
+        return # Exact live capture/review admission, not a generic tool exemption.
     if local_portrait:
         require_command(engine,name,request)
     source_bound = {

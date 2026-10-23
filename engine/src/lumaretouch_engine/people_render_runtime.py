@@ -73,8 +73,10 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
         require_graph(state,creative_source)
         if asset_sha256 != creative_source['sha256']:
             raise ValueError('Derived portrait graph source mismatch')
-        if repaired is not None or recovery_assets or hair_evidence is not None or hair_source_path is not None:
+        if repaired is not None or hair_source_path is not None:
             raise ValueError('Derived portrait runtime cannot acquire original-file inputs')
+        from .creative_derived_hair import validate as validate_hair
+        validate_hair(state,hair_assets or {},hair_evidence,creative_source)
         from .creative_derived_makeup import validate_supports
         # Each port carries the same canonical bank, but validate against its
         # actual supplied bank below rather than trusting that caller convention.
@@ -95,6 +97,9 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
     if not any(face['asset_sha256']==asset_sha256 for face in state['faces'].values()) and any(row['scope']=='all_people' and row['target_id']==asset_sha256 and row['value']!=A.defaults().get(row['operation_id'],{}).get(row['parameter_path']) for row in state['overrides']):
         raise ValueError('Requested photograph-wide portrait parameters have no retained face; add or analyse a face before rendering')
     h,w = source.shape[:2]
+    if source_only:
+        from .creative_derived_recovery import validate_fields
+        validate_fields(state,creative_source,recovery_assets or {},(h,w))
     # Conservative admission includes full-source algorithms and joint map. This
     # is a refusal bound, not a measured peak; never downsample requested export.
     if type(byte_budget) is not int or byte_budget < h*w*256 + 128*1024*1024:
@@ -201,7 +206,9 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
     if failures: raise PeoplePreparationRefused(failures)
     geometry = combine(fields, (h,w), byte_budget=byte_budget)
     prepared=PreparedPeople(plan, geometry, tuple(effects), facts, owned_recovery,tuple(fields))
-    if source_only: return prepared
+    if source_only:
+        from .creative_derived_hair import needed
+        if not needed(state,asset_sha256):return prepared
     from .hair_colour_runtime import prepare_bank
     hair, hair_facts=prepare_bank(state,asset_sha256,effect_source,plan,evidence=hair_evidence,assets=hair_assets,
         byte_budget=byte_budget-retained_bytes(prepared)-source.nbytes-(0 if repaired is None else repaired.nbytes),

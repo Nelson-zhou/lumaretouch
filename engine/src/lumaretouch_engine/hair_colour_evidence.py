@@ -94,10 +94,17 @@ def for_source(store, binding):
 
 
 def current(engine, binding, precompute=_MISSING):
+    from .creative_derived_source import record, verify, verify_precompute
+    derived = record(engine) is not None
+    if derived: verify(binding,engine)
     bank = engine.__dict__.setdefault('_hair_colour_evidence', {})
     saved = for_source(bank, binding)
     if saved is not None: return saved  # No model installation/load/inference.
-    value = E.capture(engine._precompute if precompute is _MISSING else precompute, binding)
+    pc = engine._precompute if precompute is _MISSING else precompute
+    if derived:
+        if pc is None: raise ValueError('Derived hair evidence requires actual composite analysis')
+        verify_precompute(engine,pc)
+    value = E.capture(pc, binding)
     engine._hair_colour_evidence, _ = retain(bank, value)
     return value
 

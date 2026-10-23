@@ -3,17 +3,18 @@
 This is an operation/parameter contract, not a blanket tool-name exemption.
 The existing people owner still validates revisions, stages every requested
 face and publishes through the existing history/receipt transaction. Path-based
-hair/body/selection/recovery consumers remain fenced. Reviewed makeup admits
-only its exact target-owned visibility review and effective-source reference.
+Body/general selection remain fenced. Reviewed makeup, manual hair support and
+face-owned recovery admit only their exact source/evidence/owner contracts.
 """
 import math
 from . import creative_derived_makeup as MAKEUP
+from . import creative_derived_hair as HAIR
 
 OPERATIONS = frozenset((
     'lnx.deform.v1', 'lnx.enhance.v1', 'lnx.facial_wrinkles.v1',
     'lnx.brow_shape.v1', 'lnx.nose_shape.v1', 'lnx.eye_shape.v1',
     'lnx.mouth_shape.v1', 'lnx.lip_makeup.v1', 'lnx.eye_light.v1',
-)) | MAKEUP.OPERATIONS
+)) | MAKEUP.OPERATIONS | {HAIR.OPERATION}
 LEGACY = {name: 'lnx.' + name + '.v1' for name in (
     'deform', 'enhance', 'brow_shape', 'nose_shape', 'eye_shape', 'mouth_shape', 'lip_makeup')}
 _CONTEXT = {'document_id','document_epoch','document_revision','state_revision','association_revision','target'}
@@ -66,6 +67,9 @@ def _leaf(operation, path, value):
     if operation in MAKEUP.OPERATIONS:
         MAKEUP.check_leaf(operation,path,value,neutral,validator)
         return
+    if operation == HAIR.OPERATION:
+        materialize({'conflicts':[], 'operations':{operation:{path:{'value':value}}}},operation,neutral,validator)
+        return
     if type(known[path]) is bool:
         if type(value) is not bool: raise ValueError('Portrait link flag must be boolean')
     elif type(value) not in (int,float) or not math.isfinite(value):
@@ -96,6 +100,11 @@ def _request(name, request):
     from . import people_state as S, people_algorithms as A
     if type(request) is not dict or request.get('cmd') != name:
         raise ValueError('Invalid derived portrait command')
+    if name == 'hair_colour':
+        HAIR.request(request)
+        context = _context(request['people_context'])
+        if context['target']['scope'] != 'face':raise ValueError('Hair review requires an exact local face')
+        return context
     if name == 'people':
         if set(request) != _ENVELOPE: raise ValueError('Unexpected people command fields')
         context = _context({key:request[key] for key in _CONTEXT})
@@ -180,7 +189,7 @@ def require_command(engine, name, request):
         raise ValueError('Portrait target belongs to another effective pixel source')
     if name != 'people' and target != engine._people_targets.get(owned['sha256']):
         raise ValueError('Portrait editing scope changed after this gesture')
-    if name not in ('people','deform','enhance') and request['document_id'] != engine._load_id:
+    if name in LEGACY and name not in ('deform','enhance') and request['document_id'] != engine._load_id:
         raise ValueError('Portrait document view changed')
     if name == 'people' and request['action'] in ('select','target','analyse_face','manual_add','face_status'):
         return # These can repair a suspended/unanalysed face without original pixels.
@@ -194,13 +203,14 @@ def require_graph(state, binding):
     """Also used by replay/export: persisted recipes cannot bypass admission."""
     from . import people_state as S, people_algorithms as A
     from .people_resolver import resolve
+    from .creative_derived_recovery import TARGETS
     owned = source(binding); state = S.check(state); asset = owned['sha256']
     faces = {key:face for key,face in state['faces'].items() if face['asset_sha256'] == asset}
     if any(link['face_instance_id'] in faces for link in state['links']) or any(set(group['face_ids']) & set(faces) for group in state['groups'].values()):
         raise ValueError('Derived portrait graph cannot inherit shared person/group inputs')
     for key,face in faces.items():
         for kind,descriptor in face['local_assets'].items():
-            if kind not in MAKEUP.SUPPORT_KINDS or descriptor['kind'] != kind or descriptor['owner'] != S.face_ref(face):
+            if kind not in MAKEUP.SUPPORT_KINDS | {'hair_colour'} | set(TARGETS) or descriptor['kind'] != kind or descriptor['owner'] != S.face_ref(face):
                 raise ValueError('Derived portrait graph cannot replay unadapted support/recovery assets')
         evidence = face['evidence']
         if (evidence['source_width'],evidence['source_height']) != (owned['width'],owned['height']):

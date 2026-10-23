@@ -53,6 +53,8 @@ def prepare(spec,source,repaired):
     if snapshot.get('creative_source') is not None:
         from .creative_derived_effects import require_graph
         require_graph(snapshot['state'],snapshot['creative_source'])
+        from .creative_derived_recovery import validate_supports
+        validate_supports(snapshot['state'],snapshot.get('support_assets',{}),snapshot['creative_source'])
     recovery=ASSETS.raster(snapshot['state'],snapshot.get('support_assets',{}),snapshot['asset_sha256'],source.shape[:2])
     return prepare_export(snapshot,source,repaired,byte_budget=available_estimate(),recovery_assets=recovery,body_pose=getattr(spec,'body_pose',None),body_source_path=getattr(spec,'body_pose_source_path',None))
 
