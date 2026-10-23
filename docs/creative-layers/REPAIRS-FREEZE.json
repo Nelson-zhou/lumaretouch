@@ -1,0 +1,170 @@
+{
+  "baseline": "4827f758110aa7afc5c8723d9a4e20eb97a44379",
+  "scope": "M14 source-owned reviewed source-patch/clone, durable active/redo records, atomic replay and canonical float export",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "files": [
+    {
+      "path": "docs/creative-layers/DERIVED-MASKS.md",
+      "sha256": "15349319f707071bec8f41e91103ee1f514f15d95fbdbfabf32278f2228b0731",
+      "bytes": 7801
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-REPAIRS.md",
+      "sha256": "6f5cf15aae43ab2325fad1331231b2c41c33752354430e1de4f4136e61526b08",
+      "bytes": 7277
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_repair_commands.py",
+      "sha256": "c5d1a8674efabfaed35e4f944c7c155af88a22cc28da36d3a4afdfa1c6b43594",
+      "bytes": 5442
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_repair_export.py",
+      "sha256": "3f3ab9ad7d9af9ce6aec130993090d08300abbf06ed5544740cbfe16245db894",
+      "bytes": 3261
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_repair_runtime.py",
+      "sha256": "39544a0d2a9a997aaa894d98e2170a8279a30a31eb3fe66699c9fdc4000bfd37",
+      "bytes": 4984
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_repairs.py",
+      "sha256": "e2ebe9caacf53fec6a2ca20d18cf9489efdab51a8ff2e21950cb598d08b80be7",
+      "bytes": 3628
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "sha256": "480af6f003aac24dd60c29d6b465bedb7bd56784dab80ba25249a65d83487b9d",
+      "bytes": 19209
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "b9e0aa0ca21256c2821fd0ec7b126fd3b66d124383ee5ed999aadcecabb3fb92",
+      "bytes": 23610
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "fddb6bb7efab1715fb6f1b4cc2d10cf8a981aaebe02e577a3be39f6dca6ad1c9",
+      "bytes": 125944
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "a12d0c97607a8d2c1a29d4712b8752724e52590c1b76ff149f2a040d600195f2",
+      "bytes": 19989
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "sha256": "06d692fd3e4e70e69e0ff227abef1b1677dd77dc4386d11ce29f4fb43587e284",
+      "bytes": 5306
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "2f0ee51ed6b70d0eaf8081077c6f50ef3561540d94c3802f8d5ce14ac129deb9",
+      "bytes": 7496
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "d47e507a2f68c2de01544e38aa617d0c311bbc4b55a3004a5c568502a74266a9",
+      "bytes": 9340
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "c93ae6801c344d63aa45acf74ac513dc18471c57959702abf786501069cc16f1",
+      "bytes": 5289
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "7e7b844d5b03af60ea143aec6b7e8de93ef7698a0105a505335e97b3f86a6b1b",
+      "bytes": 22335
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "a12401a02c685b253d6bb838148f58eb8d1835f911a1b5264136b24a39ada863",
+      "bytes": 16061
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "e8c3ad4967ebe065033dff0374489fd2adfbefe612f2591cf3f1b3977004c908",
+      "bytes": 76586
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/repair_record.py",
+      "sha256": "db5b4a1b1fd65aa68d06c3397aa1f00cdc6b532b247cb18e6d8918b921608af5",
+      "bytes": 4232
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "ae75a4df7dca8bd1729845faf2972a8da26d9b67cab7676704a12eaa01e0bf2f",
+      "bytes": 461684
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/source_patch_capture.py",
+      "sha256": "362ad1e507908992e3b628e5064e11546d2887c4f8de98a0edbbb31e258adb1e",
+      "bytes": 13598
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/source_patch_controller.py",
+      "sha256": "c4832a272d832f059d33edd1e77e46bbbbf00f8aa698013ad4ee0aee0faf4f26",
+      "bytes": 11613
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "1560f071cae8ff5fc35b18f246bc299237adc9431aae61209640b3e15dd34db5",
+      "bytes": 133488
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_body_runtime.py",
+      "sha256": "d6bf63ccc3062f2aa9f90a28dedf920b62703ae955ce7826f242ed61d48ff89f",
+      "bytes": 3110
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_effects_contract.py",
+      "sha256": "49ef87447b586b2f8487584c038004c5fe11b90845488794edc355464edfeafa",
+      "bytes": 16400
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_repair_commands.py",
+      "sha256": "984a9ce52523cdd8fac123253804760f7653fb551cb90d637a947a07a68bef13",
+      "bytes": 4566
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_repair_export.py",
+      "sha256": "71ed7db0ace870670cd33145a6eed506a6aedeac3f6b361ad854e31211567754",
+      "bytes": 3660
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_repair_integration.py",
+      "sha256": "145f63308f581fbd5cca51e24e49e0fa81b5fae0f986a6ed6767faece8c99cab",
+      "bytes": 2367
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_repair_records.py",
+      "sha256": "b95739df11523d006f91760caaca563855ec03807afb641a54ec1a0982460d72",
+      "bytes": 3454
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_repair_runtime.py",
+      "sha256": "698d14efd4a2c09cd52426b7894b8ec59dba067b8a3b8ad41c81bbd303611204",
+      "bytes": 3338
+    }
+  ],
+  "verification": {
+    "static_python_ast_files": 27,
+    "fixtures": "AUTHORED_UNRUN",
+    "product_import_execution": "NOT_RUN",
+    "build_typecheck_inference": "NOT_RUN",
+    "line_counts": {
+      "ui/src/App.tsx": 2091,
+      "ui/src-tauri/src/main.rs": 2015,
+      "engine/src/lumaretouch_engine/server.py": 6943
+    }
+  },
+  "residuals": [
+    "Generic inpaint proxy-RLE path remains fenced",
+    "Global recovery unadapted smoothing/fabric/background remains fenced",
+    "Shared transfer/planners require target-owned identity review",
+    "Opaque SDR photo return only; alpha/HDR refusal retained",
+    "No runtime or visual acceptance claimed"
+  ]
+}

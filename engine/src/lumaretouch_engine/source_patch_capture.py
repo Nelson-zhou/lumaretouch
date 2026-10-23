@@ -113,8 +113,12 @@ class CaptureController:
             raise ValueError('Repair document changed; capture again')
         from .creative_derived_source import record
         if record(self.engine) is not None or c.get('effective_source') is not None:
-            from .creative_derived_mask_commands import capture_binding, require_pixels
-            capture_binding(self.engine,c);require_pixels(self.engine)
+            if c['descriptor']['domain']=='repair-input':
+                from .creative_derived_repair_commands import capture_binding
+                capture_binding(self.engine,c)
+            else:
+                from .creative_derived_mask_commands import capture_binding, require_pixels
+                capture_binding(self.engine,c);require_pixels(self.engine)
         return c
 
     def handle(self,p):
@@ -147,8 +151,11 @@ class CaptureController:
                 context,spec=self._context()
                 from .creative_derived_source import record, binding, verify
                 effective_source=binding(self.engine) if record(self.engine) is not None else None
+                repair_proof=None
                 if effective_source is not None:
-                    if purpose!='local-masks':raise ValueError('Derived repair capture has not been adapted')
+                    if purpose=='repair':
+                        from .creative_derived_repair_commands import capture_state
+                        repair_proof=capture_state(self.engine)
                     if context['full_source']!=[effective_source['width'],effective_source['height']]:
                         raise ValueError('Derived capture canvas differs from immutable source')
                     from .creative_derived_mask_commands import require_pixels
@@ -193,10 +200,13 @@ class CaptureController:
                 if current!=context or current_spec!=spec:raise ValueError('Repair input changed while capturing')
                 if effective_source is not None:
                     verify(effective_source,self.engine);require_pixels(self.engine)
+                    if repair_proof is not None:
+                        from .creative_derived_repair_commands import verify_state
+                        verify_state(self.engine,repair_proof)
                 root=os.environ.get('LRT_INSPECTION_ROOT')
                 if not root:raise ValueError('Private repair capture root unavailable')
                 self.path=write_capture(root,d,rgba)
-                self.capture={'descriptor':d,'spec':spec,'eligible':False,'valid':valid,'effective_source':effective_source}
+                self.capture={'descriptor':d,'spec':spec,'eligible':False,'valid':valid,'effective_source':effective_source,'repair_proof':repair_proof}
                 event['descriptor']=d
             event['success']=True
         except Exception as error:
@@ -213,6 +223,7 @@ class CaptureController:
             params, weight = inverse_stroke(c['spec'], p.get('stroke'), c['valid'], c['descriptor']['full_source'])
             proof = {k:c['descriptor'][k] for k in ('document_id','capture_id','ticket','generation','recipe_document_id','recipe_revision')}
             proof.update(kind='clone_stamp', params=params, weight=weight)
+            if c.get('repair_proof') is not None:proof.update(c['repair_proof'])
             self.invalidate()
             return proof
         raw=check_recipe({'version':VERSION,'polygon':p.get('polygon'),'offset':p.get('offset')})
@@ -227,6 +238,7 @@ class CaptureController:
         if not np.any(weight):raise ValueError('Patch selection contains no pixels')
         proof={k:c['descriptor'][k] for k in ('document_id','capture_id','ticket','generation','recipe_document_id','recipe_revision')}
         proof.update(params=params,weight=weight)
+        if c.get('repair_proof') is not None:proof.update(c['repair_proof'])
         self.invalidate()
         return proof
 

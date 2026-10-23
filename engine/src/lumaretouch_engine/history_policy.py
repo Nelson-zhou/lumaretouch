@@ -72,6 +72,10 @@ def state_signature(st: dict) -> str:
             continue
         elif k == '_people_history':
             d[k]=None if v is None else {name:value for name,value in v.items() if name not in ('asset_fence','association_fence','association_revision')}
+        elif k in ("_repair_ops", "_redo_ops"):
+            if "_repair_stack_signature" not in d:
+                from .creative_derived_repairs import stack_digest
+                d["_repair_stack_signature"] = stack_digest(st)
         elif k == "_strength":
             d[k] = round(float(v), 6)
         elif k in ("_params", "_light"):

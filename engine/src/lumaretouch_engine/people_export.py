@@ -50,16 +50,20 @@ def prepare(spec,source,repaired):
     from .people_engine_runtime import prepare_export
     from .cpu_memory_budget import available_estimate
     snapshot=spec.people
+    replay_evidence=None
     if getattr(spec,'body_pose',None) is not None:
         from .creative_derived_body_export import verify_spec, verify_pixels
         if verify_spec(spec) is not None:verify_pixels(spec,source)
     if snapshot.get('creative_source') is not None:
+        if repaired is not None:
+            from .creative_derived_repair_export import verify_replayed
+            replay_evidence=verify_replayed(spec,repaired)
         from .creative_derived_effects import require_graph
         require_graph(snapshot['state'],snapshot['creative_source'])
         from .creative_derived_recovery import validate_supports
         validate_supports(snapshot['state'],snapshot.get('support_assets',{}),snapshot['creative_source'])
     recovery=ASSETS.raster(snapshot['state'],snapshot.get('support_assets',{}),snapshot['asset_sha256'],source.shape[:2])
-    return prepare_export(snapshot,source,repaired,byte_budget=available_estimate(),recovery_assets=recovery,body_pose=getattr(spec,'body_pose',None),body_source_path=None if snapshot.get('creative_source') is not None else getattr(spec,'body_pose_source_path',None))
+    return prepare_export(snapshot,source,repaired,creative_repair_evidence=replay_evidence,byte_budget=available_estimate(),recovery_assets=recovery,body_pose=getattr(spec,'body_pose',None),body_source_path=None if snapshot.get('creative_source') is not None else getattr(spec,'body_pose_source_path',None))
 
 
 def verify_source(snapshot,path):

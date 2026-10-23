@@ -429,13 +429,15 @@ def _repair_fields(value, assets, *, allow_legacy=True, shape=None):
     fields = dict(value["fields"])
     # Validate kind/params and exact field names before reading any large asset.
     required = {"op_id", "weight", "params"}
-    if not required <= set(fields) or set(fields) - (required | {"kind"}):
+    if not required <= set(fields) or set(fields) - (required | {"kind", "source_binding"}):
         raise ProjectError("Invalid RepairOp fields")
     from .repair_record import check_repair_params
+    from .creative_derived_repairs import check_binding
     try:
         if not allow_legacy and "kind" not in fields:
             raise ValueError("RepairOp kind is required in project v3")
         check_repair_params(fields.get("kind", "heal"), fields["params"])
+        check_binding(fields.get("source_binding"))
         fields["weight"] = _repair_weight(fields["weight"], assets)
         return check_repair_fields(fields, shape=shape, allow_legacy=allow_legacy)
     except ValueError as error:
@@ -474,8 +476,15 @@ def _validate_encoded_repairs(value, assets, *, allow_legacy, allow_local_grades
                 if shape is not None and (not isinstance(shape, (list, tuple)) or len(shape) != 2
                         or any(type(n) is not int or n < 1 for n in shape)):
                     raise ProjectError("Invalid repair proxy dimensions")
+                from .creative_derived_repairs import check_binding, validate_source_ops
+                base = value.get("_creative_base", value.get("creative_base"))
+                source = None if base is None else check_binding({
+                    "sha256": base["id"][7:], "width": base["width"], "height": base["height"]})
+                # Creative asset bytes are independently preflighted before this
+                # walk; validate every inactive version and redo stack as well.
                 for record in child:
-                    _repair_fields(record, assets, allow_legacy=allow_legacy, shape=shape)
+                    fields = _repair_fields(record, assets, allow_legacy=allow_legacy, shape=shape)
+                    validate_source_ops([RepairOp(**fields)], source)
             else:
                 _validate_encoded_repairs(child, assets, allow_legacy=allow_legacy,
                                           allow_local_grades=allow_local_grades,
@@ -749,6 +758,9 @@ def _encode(value: object, assets: dict, dropped: list, at: str) -> object:
         if '_studio_background' in value:
             from .studio_background_state import check_saved_record
             check_saved_record(value['_studio_background'])
+        if _REPAIR_STACKS.intersection(value):
+            from .creative_derived_repairs import validate_stacks
+            validate_stacks(value)
         out = {}
         for k, v in value.items():
             if not isinstance(k, str):
@@ -938,8 +950,12 @@ def _decode(value: object, assets: dict, dropped: list, at: str,
                 return None
         if _REPAIR_STACKS.intersection(value):
             _validate_encoded_repairs(value, assets, allow_legacy=True)
-        return {k: _decode(v, assets, dropped, f"{at}.{k}", dc_types, creative_cache)
-                for k, v in value.items()}
+        result = {k: _decode(v, assets, dropped, f"{at}.{k}", dc_types, creative_cache)
+                  for k, v in value.items()}
+        if _REPAIR_STACKS.intersection(result):
+            from .creative_derived_repairs import validate_stacks
+            validate_stacks(result)
+        return result
     if isinstance(value, list):
         return [_decode(v, assets, dropped, f"{at}[{i}]", dc_types, creative_cache)
                 for i, v in enumerate(value)]
@@ -1055,6 +1071,8 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
             validate_studio(recipe, required=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)), allowed=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
             for key in _REPAIR_STACKS.intersection(recipe):
                 validate_repair_ops(recipe[key], shape=recipe.get("_proxy"))
+            from .creative_derived_repairs import validate_stacks
+            validate_stacks(recipe)
         except ValueError as error:
             raise ProjectError(f"Invalid project recipe: {error}") from error
     fp = copy.deepcopy(fp) if fp is not None else fingerprint(path, full=True)

@@ -181,6 +181,9 @@ class PreviewPipeline:
         self.repair_ops: list[RepairOp] = []
         self.redo_ops: list[RepairOp] = []
         self.repair_base: torch.Tensor | None = None
+        self._creative_repair_source = None
+        self._creative_repair_input = None
+        self._creative_repair_evidence = None
         self.repair_version: int = 0
         self.last_repair_ms: float = 0.0
         self.repair_box: tuple | None = None
@@ -382,6 +385,9 @@ class PreviewPipeline:
         self.repair_ops = []
         self.redo_ops = []
         self.repair_base = None
+        self._creative_repair_source = None
+        self._creative_repair_input = None
+        self._creative_repair_evidence = None
         self.repair_box = None
         self.repair_version += 1
         self.last_repair_ms = 0.0
@@ -837,14 +843,18 @@ class PreviewPipeline:
             raise RuntimeError("先 load_rgb_u8 再打消除笔")
         t0 = time.perf_counter()
         validate_repair_ops(redo, shape=(self.h, self.w))
+        from .creative_derived_repair_runtime import prepare_commit, complete_commit
+        source_proof = prepare_commit(self, ops, redo)
         cur, boxes, painted = replay_repair_t(self.src_f32, ops)
         base = cur if cur is not self.src_f32 else None
+        replay_proof = complete_commit(self, source_proof, base)
         box0 = boxes[0] if len(boxes) == 1 else None
         ms = (time.perf_counter() - t0) * 1000.0
         # ---- 提交点：到这里后面全是赋值，没有可失败的步骤 ----
         self.repair_ops = ops
         self.redo_ops = redo
         self.repair_base = base
+        self._creative_repair_evidence = replay_proof
         self.repair_box = box0
         self.repair_version += 1
         self.retouched = None          # 底图变了，滤波缓存立即作废（不靠下一次发现）

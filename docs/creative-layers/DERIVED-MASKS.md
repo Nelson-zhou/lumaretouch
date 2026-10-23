@@ -117,3 +117,8 @@ must not be invented from labels. The
 uses RGB image input. Our bounded SDR conversion is application policy, not an
 upstream HDR guarantee. Existing pinned dependencies and licence notices remain;
 no upstream implementation or model was copied/downloaded in this slice.
+
+## Subsequent source adaptation
+
+[Derived repair and clone](DERIVED-REPAIRS.md) records the next source-only slice.
+The repair residual above is historical; generic inpaint/global recovery remain open.

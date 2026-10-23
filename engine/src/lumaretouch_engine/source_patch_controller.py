@@ -77,10 +77,14 @@ class SourcePatchController:
                 raise ValueError("Repair capture proof kind does not match request")
             result["kind"] = kind
             clean = check_repair_fields({"op_id": 0, "kind": kind,
-                                        "weight": proof.get("weight"), "params": proof.get("params")})
+                                        "weight": proof.get("weight"), "params": proof.get("params"),
+                                        "source_binding": proof.get("source_binding")})
             # No borrowed mutable coordinates or coverage survive capture invalidation.
             pending["proof"] = {**{key: proof[key] for key in PROOF_KEYS},
                                 "params": clean["params"], "weight": clean["weight"].copy(), "kind": kind}
+            if clean.get("source_binding") is not None:
+                from .creative_derived_repair_commands import INTERNAL_KEYS
+                pending["proof"].update({key:deepcopy(proof.get(key)) for key in INTERNAL_KEYS})
             h, w = clean["weight"].shape
             dx, dy = clean["params"]["offset"]
             if (dx == 0 and dy == 0) or (kind == "clone_stamp" and clean["params"]["opacity"] == 0):
@@ -163,7 +167,12 @@ def apply_to_engine(engine, proof, emit):
     pipeline_before = dict(vars(pipe))
     committed = False
     try:
-        op = RepairOp(engine._op_seq + 1, proof["weight"], proof["params"], proof.get("kind", "source_patch"))
+        from .creative_derived_source import record
+        if record(engine) is not None or proof.get("source_binding") is not None:
+            from .creative_derived_repair_commands import verify_state
+            verify_state(engine,proof)
+        op = RepairOp(engine._op_seq + 1, proof["weight"], proof["params"], proof.get("kind", "source_patch"),
+                      source_binding=deepcopy(proof.get("source_binding")))
         info = pipe.add_repair(op)
         committed = True
         engine._repair_ops, engine._redo_ops = list(pipe.repair_ops), list(pipe.redo_ops)

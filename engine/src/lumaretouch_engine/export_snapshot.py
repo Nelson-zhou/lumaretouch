@@ -49,6 +49,8 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
                     precompute=st.get("_precompute"),
                     device=device, scale=scale, upscale_backend=upscale_backend,
                     sharpen=sharpen)
+    from .creative_derived_repairs import validate_stacks
+    validate_stacks(st)
     from .body_pose_render import capture as capture_body
     from .virtual_copy_people import view
     snap=capture_body(view(self,people_context) if people_context is not None else self,snap,st,source_path or self._doc_path,people_graph)

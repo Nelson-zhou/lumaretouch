@@ -20,6 +20,8 @@ class RepairOp:
     params: dict = field(default_factory=lambda: dict(DEFAULT_REPAIR))
     # Last field deliberately preserves legacy RepairOp(id, weight, params).
     kind: str = "heal"
+    # None is historical physical-source ownership, never an implicit derived ID.
+    source_binding: dict | None = None
 
     @property
     def area_px(self) -> int:
@@ -61,7 +63,7 @@ def check_repair_params(kind, params):
 def check_repair_fields(fields, *, shape=None, allow_legacy=True):
     """Validate decoded fields, allowing only the historical missing kind."""
     required = {"op_id", "weight", "params"}
-    if type(fields) is not dict or set(fields) - (required | {"kind"}) or not required <= set(fields):
+    if type(fields) is not dict or set(fields) - (required | {"kind", "source_binding"}) or not required <= set(fields):
         raise ValueError("Invalid RepairOp fields")
     if "kind" not in fields and not allow_legacy:
         raise ValueError("RepairOp kind is required")
@@ -73,7 +75,9 @@ def check_repair_fields(fields, *, shape=None, allow_legacy=True):
     if shape is not None and weight.shape != tuple(shape):
         raise ValueError(f"Repair coverage 掩膜尺寸 {weight.shape} != expected {tuple(shape)}")
     kind = fields.get("kind", "heal")
+    from .creative_derived_repairs import check_binding
     return {"op_id": op_id, "weight": weight, "kind": kind,
+            "source_binding": check_binding(fields.get("source_binding")),
             "params": check_repair_params(kind, fields["params"])}
 
 

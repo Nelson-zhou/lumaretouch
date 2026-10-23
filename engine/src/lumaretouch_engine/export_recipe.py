@@ -5,6 +5,7 @@ Mask resampling allocates full-resolution assets, so the caller must admit the
 render and dimensions before calling this function. Missing-layer reports remain
 mandatory and full-quality inspection must reject any skipped active layers.
 """
+from copy import deepcopy
 from . import facial_wrinkle_state as WSTATE, facial_wrinkle_runtime as WRUNTIME
 from . import lip_makeup_state as LIPS, lip_makeup_runtime as LIPR
 from . import brow_shape_state as BROWS, brow_shape_runtime as BROWR, nose_shape_state as NOSES, eye_shape_state as EYES, eye_shape_runtime as EYER, mouth_shape_state as MOUTHS, mouth_shape_runtime as MOUTHR, nose_shape_runtime as NOSER
@@ -154,9 +155,12 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
         spec.check_id_background()
         return spec, skipped
     validate_repair_ops(snap["repair_ops"])
+    from .creative_derived_repairs import validate_stacks
+    validate_stacks(snap)
     spec.repair = [RepairOp(op_id=op.op_id,
                             weight=resample_field(op.weight, (eh, ew), uint8=True),
-                            kind=op.kind, params=check_repair_params(op.kind, op.params))
+                            kind=op.kind, params=check_repair_params(op.kind, op.params),
+                            source_binding=deepcopy(op.source_binding))
                    for op in snap["repair_ops"]]
     spec.light = [LightOp(op_id=op.op_id,
                           weight=resample_field(op.weight, (eh, ew), uint8=True),

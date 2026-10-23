@@ -173,7 +173,9 @@ def test_preview_checks_actual_pipeline_pixels_before_source_only_preparation(mo
     import torch
     from lumaretouch_engine import people_engine_runtime as R
     engine,state,_,owned,rgb=fixture(monkeypatch);calls=[]
-    pipe=SimpleNamespace(src_f32=torch.from_numpy(rgb.copy()).permute(2,0,1)[None].float()/255.,repair_base=None)
+    pipe=SimpleNamespace(src_f32=torch.from_numpy(rgb.copy()).permute(2,0,1)[None].float()/255.,repair_base=None,repair_ops=[],redo_ops=[])
+    from lumaretouch_engine.creative_derived_repair_runtime import bind
+    engine._vram=pipe;bind(engine)
     def prepare(*args,**kwargs):calls.append((args,kwargs));return 'prepared'
     monkeypatch.setattr(R,'prepare',prepare)
     assert R.prepare_preview(pipe,state,owned['sha256'],{},byte_budget=256*1024**2,

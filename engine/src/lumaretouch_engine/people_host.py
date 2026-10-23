@@ -84,6 +84,10 @@ class PeopleHostMixin:
         from . import people_engine_runtime as R
         try:
             source,state,analyses=self._people_bind();asset=source['sha256']
+            from .creative_derived_source import record
+            if record(self) is not None:
+                from .creative_derived_repair_runtime import verify_pipeline
+                verify_pipeline(self._vram,source) # Verify actual replay before any cache hit.
             self._people_render_enabled=True;self._people_path=self._doc_path
             if not body_bank['bodies'] and not any(f['asset_sha256']==asset for f in state['faces'].values()) and not any(r['asset_sha256']==asset and r['status']=='unresolved' for r in state['unresolved_legacy']) and not any(r['scope']=='all_people' and r['target_id']==asset for r in state['overrides']):
                 from .people_pipeline import clear

@@ -65,7 +65,7 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32, recovery_assets=None, repaired=None,
-            creative_source=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None):
+            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None):
     state = S.check(state)
     source_only = creative_source is not None
     if source_only:
@@ -73,8 +73,11 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
         require_graph(state,creative_source)
         if asset_sha256 != creative_source['sha256']:
             raise ValueError('Derived portrait graph source mismatch')
-        if repaired is not None or hair_source_path is not None:
+        if hair_source_path is not None:
             raise ValueError('Derived portrait runtime cannot acquire original-file inputs')
+        if repaired is not None:
+            from .creative_derived_repair_runtime import verify_evidence
+            verify_evidence(creative_repair_evidence,creative_source,source,repaired)
         from .creative_derived_hair import validate as validate_hair
         validate_hair(state,hair_assets or {},hair_evidence,creative_source)
         from .creative_derived_makeup import validate_supports

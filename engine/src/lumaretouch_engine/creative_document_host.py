@@ -338,10 +338,14 @@ def guard_command(engine, name, request):
         raise ValueError('会话含创意回流图；跨图人像/批量计划尚未支持该来源，请先关闭回流图或撤销回流，避免借用原图分析。')
     if getattr(engine, '_creative_base', None) is None:
         return
+    from .creative_derived_repair_commands import handles as handles_repair, require_command as require_repair
+    if handles_repair(engine,name,request):
+        require_repair(engine,name,request)
+        return # Exact reviewed source-patch/clone; generic heal remains fenced.
     from .creative_derived_mask_commands import COMMANDS as MASK_COMMANDS, require_command as require_mask
     if (name in MASK_COMMANDS and name!='grade') or (name=='grade' and request.get('action')=='scope' and request.get('scope')=='objects'):
         require_mask(engine,name,request)
-        return # Exact source-input capture/mask owners; repair remains refused.
+        return # Exact source-input mask owner, distinct from repair-input review.
     from .creative_derived_body import COMMANDS as BODY_COMMANDS, require_command as require_body
     if name in BODY_COMMANDS:
         require_body(engine,name,request)

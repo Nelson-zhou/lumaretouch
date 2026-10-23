@@ -19,7 +19,9 @@ def test_owned_preview_forwards_checked_body_without_original_path(monkeypatch):
 def test_preview_joint_owner_receives_immutable_packet_not_display_pixels(monkeypatch):
     import torch
     engine,state,_,source,rgb=fixture(monkeypatch)
-    pipe=SimpleNamespace(src_f32=torch.from_numpy(rgb.copy()).permute(2,0,1)[None].float()/255.,repair_base=None)
+    pipe=SimpleNamespace(src_f32=torch.from_numpy(rgb.copy()).permute(2,0,1)[None].float()/255.,repair_base=None,repair_ops=[],redo_ops=[])
+    from lumaretouch_engine.creative_derived_repair_runtime import bind
+    engine._vram=pipe;bind(engine)
     packet=object();calls=[]
     monkeypatch.setattr(R,'prepare',lambda *a,**k:'face-prepared')
     monkeypatch.setattr(R,'body_budget',lambda *a:500_000_000)

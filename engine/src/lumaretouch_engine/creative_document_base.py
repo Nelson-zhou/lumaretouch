@@ -148,8 +148,10 @@ def require_rebound_snapshot(snapshot):
     if masks(snapshot):verify_masks(snapshot)
     if snapshot.get('channel') or snapshot.get('grade_scope', 'all') not in ('all','objects'):
         blocked.append('original scoped masks')
-    if snapshot.get('repair_ops') or snapshot.get('light_ops'):
-        blocked.append('unbound repair/light strokes')
+    from .creative_derived_repairs import validate_stacks
+    validate_stacks(snapshot)
+    if snapshot.get('light_ops'):
+        blocked.append('unbound light strokes')
     if any(float(v) != 0 for v in (snapshot.get('deform') or {}).get('amounts', {}).values()):
         blocked.append('original facial deformation')
     if any(float(v) != 0 for v in (snapshot.get('enhance') or {}).get('amounts', {}).values()):

@@ -630,7 +630,7 @@ def composed_delta(landmarks, amounts, h: int, w: int, device: str):
     return acc, peak
 
 
-def apply_repair_full(src_u8: np.ndarray, ops: list, device: str):
+def apply_repair_full(src_u8: np.ndarray, ops: list, device: str, *, spec=None):
     """消除笔在**满幅**上按洞的 bbox 逐笔跑一次，返回 (H,W,3) float32 底图。
 
     为什么不在 tile 里跑：inpaint 是多尺度求解（`levels_for(hole_extent, box_h, box_w)`
@@ -645,9 +645,19 @@ def apply_repair_full(src_u8: np.ndarray, ops: list, device: str):
     except ValueError as error:
         raise ExportError(f"Invalid repair export: {error}") from error
     arr = np.ascontiguousarray(src_u8.transpose(2, 0, 1))[None]
-    if src_u8.dtype not in (np.uint8, np.uint16):
-        raise ExportError("消除笔源图需要 uint8 或 uint16")
-    divisor = 65535.0 if src_u8.dtype == np.uint16 else 255.0
+    derived = src_u8.dtype == np.float32
+    if derived:
+        from .creative_derived_repair_export import verify_pixels
+        if spec is None or ops is not spec.repair:
+            raise ExportError("Float repair requires the export-owned source and operation stack")
+        verify_pixels(spec,src_u8)
+        divisor = 1.0
+    else:
+        if src_u8.dtype not in (np.uint8, np.uint16):
+            raise ExportError("消除笔源图需要 uint8 或 uint16，或已验证的合成 float32 来源")
+        if any(getattr(op,'source_binding',None) is not None for op in ops):
+            raise ExportError("Derived repair records cannot replay on physical-original integer pixels")
+        divisor = 65535.0 if src_u8.dtype == np.uint16 else 255.0
     cur = torch.from_numpy(arr).to(device).to(torch.float32).div_(divisor)
     t0 = time.perf_counter()
     cur, boxes, _ = replay_repair_t(cur, ops)
@@ -658,6 +668,9 @@ def apply_repair_full(src_u8: np.ndarray, ops: list, device: str):
         torch.cuda.empty_cache()
     if not np.isfinite(out).all():
         raise ExportError("消除笔满幅结果含非有限值，已拒绝进入导出")
+    if derived:
+        from .creative_derived_repair_export import stamp_replayed
+        stamp_replayed(spec,src_u8,out)
     return out, {"repair_ms": round(ms, 2), "applied": len(boxes)}
 
 
@@ -733,6 +746,9 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry):
     from .cpu_memory_budget import available_estimate
     work_bytes = min(4_000_000_000, max(1, int(available_estimate()) // 2))
     source = export_source(spec.creative_base, cancelled=cancelled, max_bytes=work_bytes)
+    if resolved.repair:
+        from .creative_derived_repair_export import stamp_pixels
+        stamp_pixels(resolved,source)
     if resolved.creative_mask_context is not None:
         from .creative_derived_masks import stamp_pixels
         stamp_pixels(resolved,source)
@@ -915,7 +931,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     if torch is None:
         raise ExportError("导出需要 torch（装 rocm/cuda/cpu 任一变体）")
     base_f=None;repair_stats={}
-    if spec.repair:base_f,repair_stats=apply_repair_full(src_u8,spec.repair,device)
+    if spec.repair:base_f,repair_stats=apply_repair_full(src_u8,spec.repair,device,spec=spec)
     from .people_export import prepare as prepare_people
     people_start=time.perf_counter();people_prepared=prepare_people(spec,src_u8,base_f)
     people_prepare_ms=(time.perf_counter()-people_start)*1000.0 if people_prepared is not None else 0.0

@@ -18,6 +18,7 @@ def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_asse
     if source is None:raise ValueError('All-face rendering needs the current immutable source')
     rgb=np.array(source[0].permute(1,2,0).to('cpu',torch.float32).numpy(),dtype=np.float32,copy=True)
     rgb.setflags(write=False)
+    replay_evidence=None
     if creative_source is not None:
         from .creative_derived_effects import require_graph
         require_graph(state,creative_source)
@@ -33,8 +34,8 @@ def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_asse
             raise ValueError('Derived body preview source differs from immutable portrait owner')
         from .creative_derived_recovery import validate_fields
         validate_fields(state,creative_source,recovery_assets or {},rgb.shape[:2])
-        if pipe.repair_base is not None:
-            raise ValueError('Derived portrait repair source has not been adapted')
+        from .creative_derived_repair_runtime import verify_pipeline
+        replay_evidence=verify_pipeline(pipe,creative_source)
     elif creative_proxy is not None:
         raise ValueError('Derived preview proxy is missing its source binding')
     repaired=None
@@ -42,7 +43,7 @@ def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_asse
         repaired=np.array(pipe.repair_base[0].permute(1,2,0).to('cpu',torch.float32).numpy(),dtype=np.float32,copy=True)
         repaired.setflags(write=False)
     prepared=prepare(state,asset_sha256,rgb,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,repaired=repaired,
-        creative_source=creative_source,hair_assets=hair_assets,hair_evidence=hair_evidence,hair_source_path=hair_source_path,eye_light_assets=eye_light_assets,blush_makeup_assets=blush_makeup_assets,lipstick_assets=lipstick_assets,eyeliner_assets=eyeliner_assets,eyelash_assets=eyelash_assets,brow_makeup_assets=brow_makeup_assets,iris_makeup_assets=iris_makeup_assets)
+        creative_source=creative_source,creative_repair_evidence=replay_evidence,hair_assets=hair_assets,hair_evidence=hair_evidence,hair_source_path=hair_source_path,eye_light_assets=eye_light_assets,blush_makeup_assets=blush_makeup_assets,lipstick_assets=lipstick_assets,eyeliner_assets=eyeliner_assets,eyelash_assets=eyelash_assets,brow_makeup_assets=brow_makeup_assets,iris_makeup_assets=iris_makeup_assets)
     if body_bank is not None:
         from .body_pose_render import prepare as prepare_body
         prepared=prepare_body(prepared,body_bank,state,body_source,byte_budget=body_budget(prepared,byte_budget),source_path=body_source_path,source_pixels=body_source_pixels)
@@ -67,15 +68,18 @@ def require_ready(pipe):
     if reason:raise ValueError('Retained people edits are unresolved: '+reason)
 
 
-def prepare_export(snapshot,source,repaired,*,byte_budget,recovery_assets=None,body_pose=None,body_source_path=None):
+def prepare_export(snapshot,source,repaired,*,byte_budget,recovery_assets=None,body_pose=None,body_source_path=None,creative_repair_evidence=None):
     """Original RGB8/16 enters once; all face solvers run before tile slicing."""
     from .people_snapshot import at_dimensions
     creative=snapshot.get('creative_source')
     if creative is not None:
         from .creative_derived_effects import require_graph
         require_graph(snapshot['state'],creative)
-        if repaired is not None or body_source_path is not None:
-            raise ValueError('Derived portrait export cannot replay original-path body or repair inputs')
+        if body_source_path is not None:
+            raise ValueError('Derived portrait export cannot replay original-path body inputs')
+        if repaired is not None:
+            from .creative_derived_repair_runtime import verify_evidence
+            verify_evidence(creative_repair_evidence,creative,source,repaired)
         if (source.dtype!=np.float32 or source.ndim!=3 or source.shape[2]!=3
                 or (creative['height'],creative['width'])!=source.shape[:2]
                 or creative['sha256']!=snapshot['asset_sha256']
@@ -95,7 +99,7 @@ def prepare_export(snapshot,source,repaired,*,byte_budget,recovery_assets=None,b
         source_inputs=hair_inputs(snapshot)
     else:
         from .creative_derived_hair import export_inputs
-        source_inputs={'creative_source':creative,**export_inputs(snapshot)}
+        source_inputs={'creative_source':creative,'creative_repair_evidence':creative_repair_evidence,**export_inputs(snapshot)}
     prepared=prepare(state,asset,rgb,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,repaired=repaired,
         **source_inputs,force_hair_prompted=True,eye_light_assets=snapshot.get('support_assets',{}),blush_makeup_assets=snapshot.get('support_assets',{}),lipstick_assets=snapshot.get('support_assets',{}),eyeliner_assets=snapshot.get('support_assets',{}),eyelash_assets=snapshot.get('support_assets',{}),brow_makeup_assets=snapshot.get('support_assets',{}),iris_makeup_assets=snapshot.get('support_assets',{}))
     if body_pose is not None:
