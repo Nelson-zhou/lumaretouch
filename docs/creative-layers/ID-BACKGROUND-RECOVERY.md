@@ -28,7 +28,7 @@ Integration: target schema and durable vectors in `effect_recovery_state.py`; so
 
 ## Legacy common-background residual
 
-Legacy/common replacement is still proxy-bound. `id_background_legacy.py` creates a color-key or custom saliency matte from current proxy inputs; `_bg` persists its uint8 proxy matte and export resamples it. It lacks the complete immutable effective-source, full-resolution acquisition/replay and correlated reviewed mutation contract needed to admit derived sources honestly. Its native function is currently in `main.rs`, with an old uncorrelated `bg_done` interface. That path stays guarded.
+Legacy/common returned-source replacement remains guarded. A subsequent [bounded original-source color-key slice](COMMON-BACKGROUND-SOURCE.md) adds versioned full-source deterministic replay; unversioned and custom saliency records still retain their proxy-matte semantics. It lacks the complete immutable effective-source, full-resolution acquisition/replay and correlated reviewed mutation contract needed to admit derived sources honestly. Its native function is currently in `main.rs`, with an old uncorrelated `bg_done` interface. That path stays guarded.
 
 A future coherent legacy slice needs durable source/matte/model ownership, genuine effective-source acquisition, reviewed document/revision receipts, full-resolution replay and history rollback, followed by the legacy recovery consumer. The repository's `ops/birefnet.py` is a custom SHA-gated saliency implementation; compatibility with official BiRefNet checkpoints is not established. Neither renaming it nor routing legacy controls silently into ID replacement would satisfy these requirements.
 

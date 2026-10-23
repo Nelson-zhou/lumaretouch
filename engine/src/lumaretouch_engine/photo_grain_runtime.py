@@ -85,7 +85,8 @@ def render_preview(engine, *, pack=True, editor_mode=None):
     if source_shape(snap,original_hw)!=(h,w):
         raise ValueError('Grain render dimensions no longer match the current pixel source')
     if file_stamp(path)!=before:raise ValueError('Grain source changed during decode')
-    for module in (LM,LG,ER,ML,SB,OP,SK):module.check_export_decode(snap,path,before,original_hw)
+    from . import common_background_source as common_background
+    for module in (LM,LG,ER,ML,SB,OP,SK,common_background):module.check_export_decode(snap,path,before,original_hw)
     BP.check_export_decode(snap,path,before,original_hw);verify_export(snap,path,original_hw)
     if snap.get("grade_scope")=="objects":snap["local_mask_source_path"]=path
     spec,skipped=build_export_spec(snap,h,w,for_document=for_doc)

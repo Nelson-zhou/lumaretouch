@@ -1,0 +1,93 @@
+{
+  "baseline": "82f129e120f9a179d90fafd62d9ad641efb81031",
+  "scope": "Original-source legacy color-key versioned frozen-reference replay on full RGB8/RGB16; source fences, proxy intent preservation, history/project and all full-source consumer wiring. Derived and neural legacy paths remain guarded/unadapted.",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "files": [
+    {
+      "path": "docs/creative-layers/COMMON-BACKGROUND-SOURCE.md",
+      "sha256": "fdda0c9fea558226edaea3affcd276c0688c737795505b7dfea4a6011999b7a8",
+      "bytes": 7169
+    },
+    {
+      "path": "docs/creative-layers/ID-BACKGROUND-RECOVERY.md",
+      "sha256": "2b1baacef3413f193624cc911d4523f81662acdff5944079c3016b440613ab95",
+      "bytes": 6506
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/common_background_source.py",
+      "sha256": "82346a9def8e47ee1a35d7bfa3d770c876521d9488a2c113d878f3c70fbca9b0",
+      "bytes": 8462
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "6262201beb4f2836ba8253c0076f84a29b72363eb05df635a4615407942a5dad",
+      "bytes": 128733
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "1a73e964ddd59baa1d33934da68ae88568ce6412b4836e0efd5c914c62583da5",
+      "bytes": 20681
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "2f865898387b151d2ceac05f2fcb0594f580d3f0a0e6ad68577b4c9030434dce",
+      "bytes": 7669
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_legacy.py",
+      "sha256": "08d0f47e1bb8bb8f1f6bed4ec9539f4522c1f1ad8495eb63c6a080eb02bf8b0d",
+      "bytes": 6529
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_project.py",
+      "sha256": "8ffd6a514ca0c2cf0c739534d916d1a4129392b6cf00f3e9cb5947cd9a958bf3",
+      "bytes": 2795
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_runtime.py",
+      "sha256": "b6b257c0555ee2c66cc920d0fb36769b76aa6d49c77d5f7b41012e2afb5d6fd7",
+      "bytes": 15133
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/optics_transfer_engine.py",
+      "sha256": "4b647da4924b17b74ae2f8e7ff63506f46eb8436374e79ca370a02787cbf4a99",
+      "bytes": 4082
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_runtime.py",
+      "sha256": "a1aefacdc4647932050f5e026bd0f06220c2df8f90c015dc02fda37955eb4206",
+      "bytes": 7307
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_engine.py",
+      "sha256": "c69b7e24d9c9db02836888d8ffa87892c8c44c73384ba4415e0004aee47d44ca",
+      "bytes": 6181
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "3810545591a541d23a7904e3289c19b9cabcf416cd91cf09796a1313f182a20b",
+      "bytes": 463238
+    },
+    {
+      "path": "engine/tests/test_common_background_source_unrun.py",
+      "sha256": "f6aa0ce706dbeb509ac243620cb29b75b3a9faecbe9a44cdd84fda25f405ff9c",
+      "bytes": 4819
+    }
+  ],
+  "checks": {
+    "python_ast_files": 12,
+    "fixtures_authored_unrun": 11,
+    "product_imports_execution_tests_build_typecheck_inference": "NOT_RUN",
+    "line_counts": {
+      "ui/src/App.tsx": 2096,
+      "ui/src-tauri/src/main.rs": 2015,
+      "engine/src/lumaretouch_engine/server.py": 6967
+    }
+  },
+  "residual_map": "docs/creative-layers/COMMON-BACKGROUND-SOURCE.md",
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

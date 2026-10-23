@@ -905,14 +905,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 pipe.set_hsl(self._hsl)  # propagate to transaction rollback; never erase silently
             # 换底层（M6）：遮罩张量活在那块卡上，新会话必须用存下的遮罩重新上传一次。
             # 不重挂就是“会话迁了、换底还在宿主侧但画面回到底图”——lut/grade 写的那段担心在这一层同样成立。
-            if self._bg.get("active") and self._bg.get("matte") is not None:
-                try:
-                    pipe.set_background(self._bg["matte"], self._bg["bg"])
-                except (RuntimeError, ValueError) as e:
-                    emit({"event": "engine_warn",
-                          "warn": f"新会话重挂换底层失败，已整层清除（{type(e).__name__}）：{e}"})
-                    self._bg = dict(active=False, matte=None, bg=None, backend=None,
-                                    tol=None, softness=None)
+            from .common_background_source import rehang as rehang_common_background
+            rehang_common_background(self,pipe,emit)
             # 局部调色（COLOR-004）：作用域与区域同样必须跟着会话走。不重挂就是“会话迁了、
             # 屏幕上却变成全图调色”，而 grade_done 还写着 brush——与上面 lut/grade 同一条担心。
             # skin 那一臂在这里可能被推迟（掩膜要 _rehang_precompute 之后才有），那里会再调一次。
@@ -1195,6 +1189,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         out = dict(st)
         for k in self.PROXY_BOUND:
             out[k] = self._fresh_doc_state()[k]
+        from .common_background_source import preserve_proxy_recipe
+        preserve_proxy_recipe(st,out)
         if st.get("_creative_base") is not None:
             out["_channel"] = st.get("_channel")  # Preserve scope intent; never broaden missing skin masks.
         if st.get("_grade_scope") == "objects": out["_grade_scope"] = "objects"
@@ -5630,6 +5626,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         from .people_export import verify_source as verify_people_source, isolated_snapshot
         verify_people_source(snap,path);snap=isolated_snapshot(snap,for_document=for_document)
         require_rebound_snapshot(snap)
+        from .common_background_source import verify_snapshot as verify_common_background
+        verify_common_background(snap,path)
         if snap.get("grade_scope") == "objects":
             if not for_document: raise ExportError("Source-bound mask objects cannot transfer to another photo")
             LM.verify_snapshot(snap, path)
@@ -6234,7 +6232,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 immutable_stamp = verify_entry(entry, verified_sources)
                 snap_i, for_doc_i = snap_by_path.get(entry_id, (snap, path == doc))
                 from . import body_pose_render as body_render
-                mask_source_stamp = LM.file_stamp(path) if snap_i.get('body_pose') is not None or snap_i.get("grade_scope") == "objects" or LGS.has_groups(snap_i) or bool(ERS.check(snap_i.get("effect_recovery"))["targets"]) or bool(MLS.check(snap_i.get("manual_liquify"))["strokes"]) or SBS.check(snap_i.get("studio_background"))["source"] is not None or IDS.check(snap_i.get("id_background"))["source"] is not None or OPS.source_bound(OPS.check(snap_i.get("optics"))) or SKS.check(snap_i.get("sky_replacement"))["enabled"] or snap_i.get("creative_sky_context") is not None or snap_i.get("creative_id_background_context") is not None else None
+                mask_source_stamp = LM.file_stamp(path) if (snap_i.get("_bg") or {}).get("key_recipe") is not None or snap_i.get('body_pose') is not None or snap_i.get("grade_scope") == "objects" or LGS.has_groups(snap_i) or bool(ERS.check(snap_i.get("effect_recovery"))["targets"]) or bool(MLS.check(snap_i.get("manual_liquify"))["strokes"]) or SBS.check(snap_i.get("studio_background"))["source"] is not None or IDS.check(snap_i.get("id_background"))["source"] is not None or OPS.source_bound(OPS.check(snap_i.get("optics"))) or SKS.check(snap_i.get("sky_replacement"))["enabled"] or snap_i.get("creative_sky_context") is not None or snap_i.get("creative_id_background_context") is not None else None
                 stage = "semantic_analysis"
                 snap_i, for_doc_i = self._prepare_export_snapshot(path, snap_i, for_doc_i)
                 analysis_ms = round((monotonic_ns() - image_started) / 1e6, 2)

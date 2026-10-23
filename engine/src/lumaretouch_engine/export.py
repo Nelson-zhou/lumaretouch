@@ -183,6 +183,10 @@ class ExportSpec:
     # 前景仍在原位、只是背后的色没变，是最难从缩略图看出来的一类不一致。
     bg_matte: np.ndarray | None = None
     bg_ref: tuple | None = None
+    common_background_key: dict | None = None
+    common_background_color: tuple | None = None
+    common_background_path: str | None = None
+    common_background_stamp: list | None = None
     # PORTRAIT-009：眼牙局部增强的三个子功能值。这里**只带参数**，不带掩膜场：
     # 场是关键点的派生物，导出前按导出尺寸重画一份（与形变重解场同一条路）。
     # 不拿预览档那张小掩膜放大——放大一份"身份"掩膜等于把眼睛涂到眉毛上，而且
@@ -924,6 +928,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     from .id_background_export import admit_prepare as admit_id_background
     id_background_admission=admit_id_background(spec,src_u8.shape[:2],tile=tile,bits=bits)
     prepare_id_background(spec, src_u8, cancelled=mask_cancelled)
+    from .common_background_source import prepare_export as prepare_common, finish_export as finish_common
+    prepare_common(spec,src_u8,cancelled=mask_cancelled)
     from .sky_replacement_runtime import export_prepare as prepare_sky, attach_tile as attach_sky_tile, finish_export as finish_sky
     from .sky_replacement_export import admit_tile as admit_sky, resident_bytes as sky_bytes
     prepare_sky(spec,src_u8.shape[:2],cancelled=mask_cancelled,source_pixels=src_u8)
@@ -1189,6 +1195,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     if tone_prepass:
         finish_sky(spec)
         finish_id_background(spec)
+        finish_common(spec)
         verify_body_source(spec);verify_hair_source(spec);verify_semantic_source(spec)
         return out, {'extended_tone_boundary':'exposure-output','prepass':True}
     del tone_field
@@ -1273,6 +1280,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         raise ExportError('Independent local-grade source changed during rendering')
     finish_sky(spec)
     finish_id_background(spec)
+    finish_common(spec)
     from .studio_background_state import active as studio_active
     if studio_active(spec.studio_background) and list(file_stamp(spec.studio_background_path)) != spec.studio_background_stamp:
         raise ExportError('背景源图在完整出片过程中变化')
@@ -1285,6 +1293,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     body_outcome=export_outcome(people_prepared,out,(w,h))
     return out, {
         "body_pose":body_outcome,
+        "background_matte_contract": "full-source-frozen-reference-key-v1" if spec.common_background_key is not None else ("legacy-proxy-resampled" if spec.bg_matte is not None else None),
         "bits": bits, "warp_precision": "float64" if bits == 16 else "float32",
         "w": out_w, "h": out_h, "px": out_w * out_h, "src_mb": round(h * w * 3 * src_u8.dtype.itemsize / 1e6, 2),
         "src_w": w, "src_h": h, "scale": scale,

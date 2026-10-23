@@ -1,4 +1,7 @@
-"""Unchanged proxy-bound legacy path; not the reviewed ID workflow."""
+"""Legacy common replacement, with versioned deterministic key replay.
+
+The old neural/proxy path remains distinct from the reviewed ID workflow.
+"""
 from time import monotonic_ns
 from . import sky_replacement_state as SKS, studio_background_state as SBS
 def legacy_background(self, p: dict, emit):
@@ -8,7 +11,8 @@ def legacy_background(self, p: dict, emit):
     * `color_key`（默认）：确定性色键，拿当前代理图与背景参考色的色差算遮罩——零依赖、可测。
     * `birefnet`：神经网络自动抠图。权重不在就是 MissingBackend，整条拒绝——
       绝不静默退成色键然后报一个“抠图成功”（与消除笔的 lama 守卫同一条规矩）。
-    遮罩存为代理坐标 uint8，进 PROXY_BOUND（换代理档即作废）与统一历史栈（可撤销）。
+    新色键保留源绑定配方；代理 uint8 遮罩仅作缓存，导出在完整 RGB8/RGB16 重算。
+    历史及神经后端遮罩仍为代理坐标 uint8，换代理档作废；均归统一历史栈。
     """
     import numpy as np
 
@@ -71,6 +75,7 @@ def legacy_background(self, p: dict, emit):
         emit({"event": "error", "error": "源图尺寸与会话不符（先 load_image）"})
         return
     matte_u8 = None
+    key_recipe = None
     if backend == "color_key":
         from .ops.matting import key_matte_np
         tol = float(p.get("tol", 0.12))
@@ -78,7 +83,9 @@ def legacy_background(self, p: dict, emit):
         if not (0.0 <= tol <= 1.0 and 1e-3 <= softness <= 1.0):
             emit({"event": "error", "error": f"tol={tol}/softness={softness} 越界（tol∈[0,1]、softness∈[0.001,1]）"})
             return
-        a = key_matte_np(src, tol=tol, softness=softness)
+        from .common_background_source import capture
+        key_recipe = capture(self,src,tol=tol,softness=softness)
+        a = key_matte_np(src, ref=key_recipe["reference"], tol=tol, softness=softness)
         matte_u8 = np.round(np.clip(a, 0.0, 1.0) * 255.0).astype(np.uint8)
         if int((matte_u8 > 0).sum()) == 0:
             emit({"event": "error", "error": "色键遮罩全为 0：背景与前景太接近，调高 tol 或换 birefnet"})
@@ -99,10 +106,13 @@ def legacy_background(self, p: dict, emit):
     self._bg = dict(active=True, matte=matte_u8, bg=unit, backend=backend,
                     tol=float(p.get("tol", 0.12)) if backend == "color_key" else None,
                     softness=float(p.get("softness", 0.10)) if backend == "color_key" else None)
+    if key_recipe is not None:self._bg["key_recipe"] = key_recipe
     fr = self._write_current_frame("background")
     render_ms = fr.pop("render_ms")
     fill = round(float((matte_u8 > 127).mean()), 4)
     emit({"event": "bg_done", "action": "set", "backend": backend, "bg": bg_i,
+          "matte_contract": "full-source-key-replay-v1" if key_recipe else "legacy-proxy-matte",
+          "reference_sampling": "frozen-source-proxy-border" if key_recipe else None,
           "matte_fill_fg": fill, "bytes_bg": int(info["bytes_bg"]),
           "bg_ms": round(float(self._vram.last_bg_ms), 2), "render_ms": render_ms,
           "total_ms": round((monotonic_ns() - t_start) / 1e6, 2),

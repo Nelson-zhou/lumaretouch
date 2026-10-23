@@ -11,6 +11,8 @@ def available():
     return N.available()
 
 def verify_snapshot(snap,path,shape=None):
+    from .common_background_source import verify_snapshot as verify_common
+    verify_common(snap,path,shape)
     if snap.get('creative_base') is not None or snap.get('creative_id_background_context') is not None:
         from .creative_derived_id_background import verify_snapshot as derived_verify
         return derived_verify(snap,path,shape)
@@ -21,6 +23,8 @@ def verify_snapshot(snap,path,shape=None):
         if bundle is None or bundle['binding']!=value['background']['asset']:raise ValueError('背景素材身份不匹配')
 
 def check_export_decode(snap,path,before,shape):
+    from .common_background_source import check_export_decode as check_common
+    check_common(snap,path,before,shape)
     value=S.check(snap.get('id_background'))
     if value['source'] is None and snap.get('creative_id_background_context') is None:return
     if before is None or M.file_stamp(path)!=before:raise ValueError('证件照换背景源图在解码期间变化')
@@ -126,6 +130,8 @@ def _live_input(engine,value):
 def sync(engine,*,strict=False):
     pipe=engine._vram
     if pipe is None:return
+    from .common_background_source import verify_live
+    verify_live(engine)
     value=S.check(getattr(engine,'_id_background',None));stamp=None
     try:
         row=engine._docs[engine._doc_index]

@@ -71,6 +71,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
                       scale=int(snap.get("scale", 1)),
                       upscale_backend=str(snap.get("upscale_backend", "lanczos3")),
                       sharpen_amount=float(snap.get("sharpen", 0.0)))
+    from .common_background_source import configure_export as configure_common
+    _common_replay = configure_common(spec,snap,for_document=for_document)
     from .extended_tone_project import configure_export as configure_extended_tone
     configure_extended_tone(spec,snap)
     from .photo_detail_project import configure_export as configure_photo_detail
@@ -276,7 +278,7 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     # 只做两件事——按导出尺寸重采样覆盖度（与 grade_mask 同一 resample_field 入口，
     # 双线性、uint8），并把 [0,1] 三分量背景色原样带到 spec.bg_ref。链序由 PreviewPipeline
     # 保证：apply_grade 之后、手动液化和 apply_geometry 之前 apply_background——与预览逐帧同源。
-    _bgs = snap.get("_bg") or {}
+    _bgs = {} if _common_replay else (snap.get("_bg") or {})
     if _bgs.get("active") and (_bgs.get("matte") is None or _bgs.get("bg") is None):
         skipped.append("bg（换底已启用但缺少遮罩或背景色，不能静默省略）")
     if _bgs.get("active") and _bgs.get("matte") is not None and _bgs.get("bg") is not None:

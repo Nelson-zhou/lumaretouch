@@ -27,6 +27,9 @@ def _bundle(raw, assets):
 
 def validate_records(value,assets=None):
     if isinstance(value,dict):
+        if "_bg" in value:
+            from .common_background_source import check as check_common
+            check_common(value["_bg"])
         if '_effect_recovery' in value or 'effect_recovery' in value:
             from .id_background_recovery import validate_state
             from .effect_recovery_state import check

@@ -56,7 +56,9 @@ def state_signature(st: dict) -> str:
         elif k == "_bg":
             # P1-6：matte 与 _grade_mask 同一条签名口径（shape + 内容 sha1）。
             # 拿 (shape, sum) 会漏掉"同一张背景，把'人'抠到左边 vs 抠到右边"这一格。
-            mt = v.get("matte")
+            from .common_background_source import check as check_common
+            key_recipe=check_common(v)
+            mt = None if key_recipe is not None else v.get("matte")
             if mt is None:
                 _matte_sig = None
             else:
@@ -64,7 +66,7 @@ def state_signature(st: dict) -> str:
                 _matte_sig = (list(mt.shape), _hl.sha1(mt.tobytes()).hexdigest())
             d[k] = {"active": bool(v.get("active")), "bg": v.get("bg"),
                     "backend": v.get("backend"), "tol": v.get("tol"),
-                    "softness": v.get("softness"), "matte": _matte_sig}
+                    "softness": v.get("softness"), "matte": _matte_sig, "key_recipe": key_recipe}
         elif k == '_body_pose_bank':
             from .body_pose_document_history import signature
             d[k]=signature(v)

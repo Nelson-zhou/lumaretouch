@@ -55,7 +55,8 @@ def render(engine,row,candidate_state,document_id,revision,*,reference=False,can
     # Match the owned full-source inspection/export guards. No replacement face
     # selection or inferred scope is synthesized for an unanalyzed target.
     from . import body_pose_render as body_render
-    for owner in (groups,recovery,manual,studio,sky,body_render):
+    from . import common_background_source as common_background
+    for owner in (groups,recovery,manual,studio,sky,body_render,common_background):
         owner.check_export_decode(snap,path,stamp,(decoded.h,decoded.w))
     if snap.get('grade_scope')=='objects':
         M.verify_source(M.check(snap.get('local_masks')),path,(decoded.h,decoded.w));snap['local_mask_source_path']=path
