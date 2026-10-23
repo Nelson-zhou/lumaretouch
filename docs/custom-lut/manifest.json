@@ -1,0 +1,143 @@
+{
+  "baseline": "67d319b3d22240b909ed2424ddb34e1ce6208b43",
+  "requirement": "LNX-REF-PC-32455-C-f8f5161c78",
+  "status": "SOURCE_CONNECTED_UNRUN",
+  "validation": "Python AST only; all product execution, Rust compilation, typecheck and runtime tests UNRUN",
+  "shared_files": [
+    "engine/src/lumaretouch_engine/server.py",
+    "engine/src/lumaretouch_engine/vram.py",
+    "engine/src/lumaretouch_engine/project.py",
+    "engine/src/lumaretouch_engine/scope.py",
+    "engine/src/lumaretouch_engine/preset_controller.py",
+    "engine/src/lumaretouch_engine/render_snapshot.py",
+    "engine/src/lumaretouch_engine/inspection_bundle.py",
+    "ui/src-tauri/src/main.rs",
+    "ui/src-tauri/src/engine.rs",
+    "ui/src/native.ts",
+    "ui/src/components/RetouchPanel.tsx",
+    "ui/src/presets/presetModel.ts",
+    "packaging/stage-engine.sh"
+  ],
+  "files": [
+    {
+      "path": "core/custom_lut/build_custom_lut.sh",
+      "sha256": "3041a987190400c58a85e1ba1392cb9ba352e2d65db87aa08a3de9f8ac1859a7"
+    },
+    {
+      "path": "core/custom_lut/identity-2.cube",
+      "sha256": "d137dc4252942d7bddb05049d99cf76c4d0779b3a6006d35a73b32107b67a4f4"
+    },
+    {
+      "path": "core/custom_lut/lib.rs",
+      "sha256": "be48e9d6a46e3ea0031e6e63e8dd86c9552a60ca9b36150d97a2384b0eb4f552"
+    },
+    {
+      "path": "docs/custom-lut/INTEGRATION.md",
+      "sha256": "c166055f612636d800553a789f83ad87fa1543c0a2723a2ab37cee346fc71fbc"
+    },
+    {
+      "path": "docs/custom-lut/README.md",
+      "sha256": "949d0887ac05b66d91683a0a13af869605f62335d15afe8065a5c695de1dee04"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/custom_lut_asset.py",
+      "sha256": "205502bf3840569f43233a35f15dcd8a4f6e40b49b4ece833f72c197bdd52d08"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/custom_lut_controller.py",
+      "sha256": "31dd879de1f6750e33fdc33bb3e4520b7fac078af001feca7e387e972eddf181"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/custom_lut_library.py",
+      "sha256": "b72cdd511fc4a7f22dc9f58c89404bfa52186ddfaab49e05a1131d1cd6182547"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/custom_lut_native.py",
+      "sha256": "61ea0103b2809c7d55dc0472b1af7ddb948db3ca519a379bcf7ee725d34b1d8c"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/custom_lut_recipe.py",
+      "sha256": "008e264caf5eaa89b95e61106e7561930e7cfc3f8c09c553419297d0582577d9"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/custom_lut_scope.py",
+      "sha256": "043ec3023b791079c180fdcbd17a08a961d440199e879f4640ca4e19a8b086e7"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/custom_lut_service.py",
+      "sha256": "0d5e508cefb55c2b4da4ead21e38f12be1b16925728c79076b1cdf937a1cf45d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/inspection_bundle.py",
+      "sha256": "27ba39e8429211621315ef87a2aebbe62c51dba8f688ece8448f49f9415348f6"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "sha256": "8936d0466e2837e2cf2412444a49526870b5ad7b5b6940c47d9f46614c8a100d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "bab3d7bb594efe1aa2e329d84163124c56ae44f47f36d27a57bc4be63bd6e851"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/render_snapshot.py",
+      "sha256": "fb85f56edc29b68b838b83dccd9f8cae207c8d56c4e79a3d3faf6b4663b6f477"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "7fa573080ea37fb1dc8779eaed92f99fb9bb519a114d6cbcb41dac74fdcfc2e1"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "ebce1878911c21669d24842d754b23d4e60a0ebd5af74c8c7bb47e46b94ad990"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "4cd1b7caae18ca012a1e97f1d95308e602bfff2138bee8d0dc4803d6a49a7d76"
+    },
+    {
+      "path": "engine/tests/custom_lut_contract_test.py",
+      "sha256": "98d06b6b49e4800bd5fdb07d01444042246d562804c113790d588393957b46f9"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "1f4eac7273b341bfea81eb53cda4d407a24e51ba1870d6efb77847afacdf5184"
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "4c02eccd70506e60e6984cde0055446cb7acfeeeaace02aa92acac0720f88f62"
+    },
+    {
+      "path": "ui/src/customLut/ConnectedCustomLutPanel.tsx",
+      "sha256": "cc6d15c6e8a10396ae01e2e88f88636b79c40577bc00f78db714080c47b74ecb"
+    },
+    {
+      "path": "ui/src/customLut/CustomLutPanel.tsx",
+      "sha256": "e410aa8fde92341118d5a40cb4e5a313e959486e2aa828c51ef9b5e853abfaf2"
+    },
+    {
+      "path": "ui/src/customLut/nativePort.ts",
+      "sha256": "8b00571f404486725ac0aae8dae7e94aba13a22dd13020cbcdb4db5eacacf01c"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "bc7814f645971d8e0b910b8de5722dfe737a82f3a5df32b41954783801529012"
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "73000eeece5ed41d62cb8e8ee824d4ffd9c85ca1e5058fa771b80a3855e8837d"
+    },
+    {
+      "path": "ui/src-tauri/src/custom_lut_api.rs",
+      "sha256": "5a8a6da1e20cda25440fd0728c1be9b03151ba396fef385ef6260679f4b000a7"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "e009ea4a372a1d65ccbfcef87542b3fd8732d54f8a95004e37f7e805b41b872e"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "1b17c157a371e00c5edb8967cdd5319d61e7c823b5618143fab060acd433d665"
+    }
+  ]
+}

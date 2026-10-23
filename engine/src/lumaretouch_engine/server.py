@@ -163,6 +163,8 @@ def _clamp_strength(v) -> float:
 
 def emit(obj: dict) -> None:
     """stdout 会被主循环与跑靶线程同时写，必须串行化。"""
+    from .custom_lut_scope import public_view
+    obj = public_view(obj)
     with _EMIT_LOCK:
         sys.stdout.write(json.dumps(obj, separators=(",", ":")) + "\n")
         sys.stdout.flush()
@@ -810,6 +812,8 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                     pipe.set_lut(self._lut, self._lut_amount)
                     self._lut_amount = float(pipe.lut_amount)
                 except (LutError, RuntimeError, ValueError) as e:
+                    from .custom_lut_asset import CustomCube
+                    if isinstance(self._lut, CustomCube): raise
                     emit({"event": "engine_warn",
                           "warn": f"新会话重挂调色层失败，已整层清除（{type(e).__name__}）：{e}"})
                     self._lut = None
@@ -1576,7 +1580,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                            # UI 拿它把面板标成“待重新分析”，而不是把滑块弹回 0
                            "defer": bool(self._deform_defer)},
                 "lut": {"lit": self._lut is not None, "amount": float(self._lut_amount),
-                        "preset": self._lut_preset},
+                        "preset": self._lut_preset, "asset_id": getattr(self._lut, "asset_id", None)},
                 "grade": {"dh": float(self._grade[0]), "ds": float(self._grade[1]),
                           "dv": float(self._grade[2]), "amount": float(self._grade[3]),
                           "lit": self._grade != (0.0, 0.0, 0.0, 1.0),
@@ -3493,7 +3497,9 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                              allow_suspended=mode not in ("preset","batch","sky_replacement"))
         render_ms = (monotonic_ns() - t0) / 1e6
         with self._wlock:
-            seq, t_emit, slot = self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation(kind="original" if original or unapplied else "edited"))
+            publication = getattr(self, "_custom_lut_publication", None)
+            write = lambda: self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation(kind="original" if original or unapplied else "edited"))
+            seq, t_emit, slot = publication.publish(write) if publication is not None else write()
         return {"event": "frame", "seq": seq, "slot": slot, "t_emit_ns": t_emit,
                 "w": self.shm.w, "h": self.shm.h, "mode": mode, "render_ms": round(render_ms, 2),
                 "strength": st, "bytes_effect_recovery": self._vram.effect_recovery_resident_bytes(),
@@ -4782,6 +4788,25 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
         emit(fr)
 
     # ------------------------------------------------------------ 调色（M3-a2）与预设（M3-b）
+    def _custom_lut_service(self):
+        from .custom_lut_service import Service
+        if "_custom_lut_owner" not in self.__dict__: self._custom_lut_owner = Service()
+        return self._custom_lut_owner
+
+    def cmd_custom_lut(self, p):
+        return self._custom_lut_service().execute(self, p, emit)
+
+    def _custom_lut_reader_stop(self):
+        owner = self.__dict__.get("_custom_lut_owner")
+        if owner is not None:
+            with owner.lock:
+                for key, event in owner.events.items():
+                    if not (owner.active == key and owner.published): event.set()
+        self._owned_reader_stop()
+
+    def _custom_lut_ingress(self, line):
+        return self._custom_lut_service().ingress(line) or self._owned_command_ingress(line)
+
     def _resolve_lut_source(self, p: dict):
         """从命令里解析出那张表：path / text / preset 三个来源必给且只给一个。
 
@@ -4792,6 +4817,10 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
         为什么不“都给就用 text”：两个来源并存时先选一个就是替用户做决定，而两个表
         往往正好不一样——拿到哪个都是“对的那张的错版本”。当场拒比猜安全。
         """
+        if "_custom_cube" in p:
+            from .custom_lut_asset import CustomCube
+            if not isinstance(p["_custom_cube"], CustomCube): raise ValueError("非法自定义 LUT")
+            return p["_custom_cube"], None
         given = [k for k in ("path", "text", "preset") if p.get(k)]
         if len(given) != 1:
             emit({"event": "error",
@@ -5007,6 +5036,8 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
         except Exception as e:
             # 表/强度已写进常驻层而渲染抛了：必须退回上一条已证能出帧的状态。
             # cmd_deform 为同一个形状付过钱：“拒绝了但画面变了”比报错难查得多。
+            self._custom_lut_publication = None
+            self._vram.custom_lut_cancelled = lambda: False
             self._lut, self._lut_amount = prev
             self._grade = prev_grade
             self._lut_preset = prev_preset
@@ -5031,6 +5062,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                              total_ms=round((monotonic_ns() - t_start) / 1e6, 2),
                              preset_grade_cleared=grade_with_preset)
         emit(fr)
+        return True
 
     def _emit_grade_state(self, action: str, info: dict, *, render_ms: float = 0.0,
                           total_ms: float = 0.0) -> None:
@@ -6601,7 +6633,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
 
     HANDLED = ("hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light",
-               "deform", "lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
+               "deform", "lut", "custom_lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
                # 挑图（LNX-PICK-001）。它不在 EDIT_CMDS 里，所以既不进撤销栈也不打脏标记：
                # 它是读出来的一格旁注，不是一次编辑动作
@@ -6639,7 +6671,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                 emit({"event": "error", "error": f"未知命令: {name}"})
                 return
             self._arm_before_command(msg)
-            if name in ('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape','sample_library', 'sample_library_cancel','semantic_colour','semantic_colour_cancel'):
+            if name in ('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape','custom_lut','sample_library', 'sample_library_cancel','semantic_colour','semantic_colour_cancel'):
                 fn(msg); return
             if name not in ('hello', 'local_grade_live'):
                 live_grade = self.__dict__.get('_local_grade_live_owner')
@@ -6786,7 +6818,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
         sample_host = self._sample_library_host()
         reader = threading.Thread(target=read_commands, name="command-reader",
             args=(input_fd, wake_read, inbox, reader_stop),
-            kwargs={"ingress": self._owned_command_ingress, "on_eof": self._owned_reader_stop})
+            kwargs={"ingress": self._custom_lut_ingress, "on_eof": self._custom_lut_reader_stop})
         try:
             reader.start()
             while not self._quit:

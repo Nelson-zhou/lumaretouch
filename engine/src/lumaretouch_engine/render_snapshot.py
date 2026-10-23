@@ -44,6 +44,7 @@ def _owned_with_array_copier(value: dict, *, max_asset_bytes: int,
     from .vram import RepairOp, LightOp
     from .face import FacePrecompute
     from .ops.lut import CubeLut
+    from .custom_lut_asset import CustomCube
     records = (RepairOp, LightOp, FacePrecompute, CubeLut)
     limits = (max_asset_bytes, max_nodes, max_string_bytes)
     if any(type(n) is not int or n < 0 for n in limits) or max_nodes == 0:
@@ -78,6 +79,11 @@ def _owned_with_array_copier(value: dict, *, max_asset_bytes: int,
                     raise SnapshotError('Invalid UTF-8 snapshot text') from exc
                 if count['strings'] > max_string_bytes:
                     raise SnapshotError('Snapshot exceeds text budget')
+            return
+        if typ is CustomCube:
+            count["bytes"] += len(v.content)
+            if count["bytes"] > max_asset_bytes: raise SnapshotError("Custom LUT exceeds snapshot asset budget")
+            inspect(v.asset_id, depth + 1); inspect(v.title, depth + 1)
             return
         if typ is np.ndarray:
             if v.dtype.kind not in 'uif' or v.dtype.fields is not None or v.dtype.metadata is not None:
@@ -115,6 +121,7 @@ def _owned_with_array_copier(value: dict, *, max_asset_bytes: int,
 
     def clone(v):
         typ = type(v)
+        if typ is CustomCube: return v  # Frozen object with immutable bytes, no mutable arrays.
         if typ is np.ndarray:
             # array(copy=True) rather than ascontiguousarray: even an already
             # contiguous source must not keep a writable alias into the editor.

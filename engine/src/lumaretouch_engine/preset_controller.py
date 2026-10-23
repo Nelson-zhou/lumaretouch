@@ -183,6 +183,8 @@ class PresetController:
             try: result["doc_state"] = self.ports.status()
             except Exception as error:
                 result.update(success=False, outcome_unknown=True, error_code="state_confirmation_failed", error=str(error)[:2000])
+        from .custom_lut_scope import public_view
+        result = public_view(result)
         try:
             json.dumps(result, allow_nan=False, ensure_ascii=False).encode("utf-8")
             raw = json.dumps(result, allow_nan=False, ensure_ascii=True)
@@ -252,6 +254,8 @@ class PresetController:
         requested = p.get("module_scope")
         ops = SC.check_scope([op for op in SC.transferable_ops() if op not in (OA.OP,RC.OP)] if requested is None else requested)
         mods = SC.params_of(self.ports.capture(), ops)
+        if SC.CUSTOM_LUT.OP in mods:
+            mods[SC.CUSTOM_LUT.OP] = SC.CUSTOM_LUT.portable(mods[SC.CUSTOM_LUT.OP])
         if SKY.OP in mods and mods[SKY.OP]["recipe"]["enabled"]:
             from .sky_replacement_assets import verify
             verify(mods[SKY.OP]["recipe"]["asset"])

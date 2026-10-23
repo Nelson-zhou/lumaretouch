@@ -256,6 +256,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "semantic_colour_result" => crate::semantic_colour_api::receive(inspection_epoch, &v),
         "semantic_colour_progress" => crate::semantic_colour_api::progress(inspection_epoch, &v),
         "hair_colour_result" => { crate::hair_colour_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|doc| doc.is_object()) { state.on_layer_frame(&v); } },
+        "custom_lut_result" => { crate::custom_lut_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
         "sample_library_result" => crate::sample_library_api::receive(inspection_epoch, &v),
         "sample_library_cancel_ack" => (),
         "batch_result"=>state.batch_results.lock().unwrap().receive(inspection_epoch,&v),

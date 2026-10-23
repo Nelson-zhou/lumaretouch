@@ -187,7 +187,7 @@ export interface DocState {
   /** 多人图的分人编辑状态（PORTRAIT-003）。可选：老引擎的 doc_state 里没这一格，
    *  把它声明成必存就会在 JSON 边界上炸一个 TypeError 把整棵树拆掉。 */
   face?: FaceState;
-  lut: { lit: boolean; amount: number; preset: string | null };
+  lut: { lit: boolean; amount: number; preset: string | null; asset_id?: string | null };
   grade: { dh: number; ds: number; dv: number; amount: number; lit: boolean;
            /** COLOR-004 局部调色：作用域、引擎报的可选名单、区域盖了多少格。
             *  下拉框的选中值只能从这里读：换图、重开工程、撤销都会改它，前端自己

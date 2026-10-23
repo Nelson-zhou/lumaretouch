@@ -4,6 +4,7 @@ Only fixed record tags and numeric array bytes cross this boundary. Never pickle
 The owner supplies a new private directory and keeps inputs alive until spooling
 finishes or is cancelled. Byte-sized ticks bound copies, not disk latency.
 """
+from .custom_lut_asset import CustomCube
 from dataclasses import fields
 import json
 import math
@@ -78,6 +79,8 @@ class BundleWriter:
                 if text_bytes > MAX_TEXT:
                     raise ValueError('Bundle text exceeds budget')
                 return v
+            if typ is CustomCube:
+                return ["custom_cube", encode(v.asset_id,depth+1), encode(v.title,depth+1), encode(np.frombuffer(v.content,dtype=np.uint8),depth+1)]
             if typ is np.ndarray:
                 if not v.flags.c_contiguous or v.flags.writeable or v.dtype.metadata is not None:
                     raise ValueError('Bundle needs privately owned readonly contiguous arrays')
@@ -261,6 +264,14 @@ def read_bundle(directory, *, max_asset_bytes):
         if typ is not list or not v or type(v[0]) is not str:
             raise ValueError('Invalid bundle node')
         tag = v[0]
+        if tag == 'custom_cube' and len(v) == 4:
+            from .custom_lut_library import digest_id, display_name
+            ident = digest_id(decode(v[1], arrays, depth+1))
+            title = display_name(decode(v[2], arrays, depth+1))
+            data = decode(v[3], arrays, depth+1)
+            if arrays is None: return None
+            if not isinstance(data,np.ndarray) or data.dtype!=np.uint8 or data.ndim!=1 or not 0<len(data)<=32*1024*1024: raise ValueError('Invalid custom LUT bundle asset')
+            return CustomCube(data.tobytes(),ident,title)
         if tag == 'array' and len(v) == 2:
             i = _integer(v[1], 0, len(validated)-1)
             references.append(i)

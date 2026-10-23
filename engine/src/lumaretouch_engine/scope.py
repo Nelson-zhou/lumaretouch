@@ -43,10 +43,11 @@ from . import lip_makeup_scope as LIP, eye_light_scope as EYE_LIGHT, blush_makeu
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
+from . import custom_lut_scope as CUSTOM_LUT
 
 SCHEMA = "lrt.scope.v1"
 PRESET_SCHEMA = "lrt.preset.v1"
-PRESET_MAX_BYTES = 256 * 1024        # 预设是纯参数文本；超过这个量就是别的东西伪装进来的
+PRESET_MAX_BYTES = 48 * 1024 * 1024        # Bounded portable CUBE bytes + parameters; metadata receipts omit embedded bytes.
 PRESET_MAX_MODULES = 32
 
 # 冻结注册表里 editable 的那几个 operation_id（写在这里而不是去读文件：见模块 docstring）。
@@ -124,6 +125,9 @@ MODULES: dict[str, dict] = {
     LIPSTICK.OP: {"params": ("recipe",), "state_fields": LIPSTICK.FIELDS, "single_face": True,
                "transferable": True, "cmd": "people", "read": LIPSTICK.params_of, "write": LIPSTICK.install,
                "why_not": "仅口红图案、程度、颜色和质地；目标须审核真实可见唇部，不复制人物、蒙版、收藏或恢复笔迹"},
+    CUSTOM_LUT.OP: {"params": ("asset", "amount"), "state_fields": CUSTOM_LUT.FIELDS, "single_face": False,
+                    "transferable": True, "cmd": "lut", "read": CUSTOM_LUT.params_of, "write": CUSTOM_LUT.install,
+                    "why_not": "本地 CUBE 原始字节随预设携带，应用于 sRGB 编码；域外输入夹边，浮点输出不截断"},
     EYE_LIGHT.OP: {"params": ("recipe",), "state_fields": EYE_LIGHT.FIELDS, "single_face": True,
                    "transferable": True, "cmd": "people", "read": EYE_LIGHT.params_of, "write": EYE_LIGHT.install,
                    "why_not": "仅眼神光素材参数；目标人物须自行审核可见眼球，绝不复制归属、蒙版或恢复笔迹"},
@@ -338,6 +342,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == LIPSTICK.OP:
         try: return LIPSTICK.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == CUSTOM_LUT.OP:
+        try: return CUSTOM_LUT.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == EYE_LIGHT.OP:
         try: return EYE_LIGHT.check_params(params)

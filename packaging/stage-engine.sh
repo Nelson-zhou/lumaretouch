@@ -169,3 +169,8 @@ cp "$here/../core/neck_shape/lib.rs" "$here/../LICENSE" "$here/../docs/neck-shap
 # Original iris texture source and license accompany the native library.
 mkdir -p "$stage/lumaretouch_engine/third_party/iris_makeup"
 cp "$here/../core/iris_makeup/lib.rs" "$here/../LICENSE" "$here/../docs/iris-makeup/README.md" "$stage/lumaretouch_engine/third_party/iris_makeup/"
+
+# Original bounded custom CUBE parser/interpolator; no runtime compilation.
+rustc --edition=2021 --crate-type cdylib -C opt-level=3 "$here/../core/custom_lut/lib.rs" -o "$stage/lumaretouch_engine/bin/liblrt_custom_lut.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/custom_lut"
+cp "$here/../core/custom_lut/lib.rs" "$here/../LICENSE" "$here/../docs/custom-lut/README.md" "$stage/lumaretouch_engine/third_party/custom_lut/"

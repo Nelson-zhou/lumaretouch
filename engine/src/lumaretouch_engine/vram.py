@@ -59,6 +59,7 @@ from .ops.tone import TONE_LIMIT, check_tone
 from .ops.hsl import (BAND_CENTERS, BAND_NAMES, HUE_LIMIT as HSL_HUE_LIMIT,
                       LUM_LIMIT as HSL_LUM_LIMIT, SAT_LIMIT as HSL_SAT_LIMIT,
                       check_hsl, hsl_t)
+from .custom_lut_asset import CustomCube
 from .ops.lut import (DEFAULT_LUT_AMOUNT, QUALITY_SIZE_3D, CubeLut, LutError,
                       apply_lut_t, bake, check_amount)
 from .quant import quantize_t
@@ -1170,7 +1171,7 @@ class PreviewPipeline:
         与 has_light 同一条铁律：NaN 与 0.0 不相等，拿 `amount != 0.0` 当“生效”
         会把一层算不出东西的表报成在生效，而现场要到渲染期才抛。这里当场判假。
         """
-        if self.lut is None or self.lut.neutral or self.lut_vol is None:
+        if self.lut is None or self.lut.neutral or (self.lut_vol is None and not isinstance(self.lut, CustomCube)):
             return False
         a = float(self.lut_amount)
         return math.isfinite(a) and a != 0.0
@@ -1184,6 +1185,10 @@ class PreviewPipeline:
         """
         if torch is None:
             raise RuntimeError("torch 未安装，调色层不可用（装 rocm/cuda/cpu 任一变体）")
+        if isinstance(cube, CustomCube):
+            a = check_amount(self.lut_amount if amount is None else amount)
+            self.lut, self.lut_vol, self.lut_amount = cube, None, a
+            return self._lut_payload(mount_ms=0.0, layer_recomputed=True)
         if not isinstance(cube, CubeLut):
             raise LutError(f"set_lut 需要一张 CubeLut，得到 {type(cube).__name__}："
                            "先过 parse_cube / load_cube_file / bake")
@@ -1253,6 +1258,7 @@ class PreviewPipeline:
             "lut_size": (cube.size if cube else 0),
             "lut_title": (cube.title if cube else ""),
             "lut_source": (cube.source if cube else ""),
+            "lut_asset_id": getattr(cube, "asset_id", None),
             "lut_neutral": bool(cube.neutral) if cube else False,
             "lut_clipped": int(cube.clipped) if cube else 0,
             "lut_notes": list(cube.notes) if cube else [],
@@ -1279,6 +1285,10 @@ class PreviewPipeline:
         if not self.has_lut():
             return t
         t0 = time.perf_counter()
+        if isinstance(self.lut, CustomCube):
+            out = self.lut.apply_tensor(t, self.lut_amount, getattr(self, "custom_lut_cancelled", lambda: False))
+            self.last_lut_ms = (time.perf_counter() - t0) * 1000.0
+            return out
         graded = apply_lut_t(t, self.lut, vol=self.lut_vol)
         a = float(self.lut_amount)
         # a==1 不写 `(1-1)*t + 1*graded`：那在 IEEE 里对有限值是精确的，但白跑一次逐点

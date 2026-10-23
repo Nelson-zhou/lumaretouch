@@ -1,3 +1,4 @@
+import {ConnectedCustomLutPanel} from "../customLut/ConnectedCustomLutPanel";
 import {PeoplePanel} from '../people/PeoplePanel';
 import type {PeopleOwner} from '../people/usePeopleWorkflow';
 import {peopleContext, type ParameterPatch} from '../people/model';
@@ -580,7 +581,7 @@ export default function RetouchPanel(props: RetouchProps) {
     ok(runBackground("set", { backend, bg: hexToRgb(bgHex) }), props);
   };
 
-  const lutOn = !!doc?.lut.preset;
+  const lutOn = !!doc?.lut.lit;
   const lutAmt = doc?.lut.amount ?? 1;
   const gradeScopes = grade?.scopes ?? ["all", "skin"];
   const maskPx = grade?.mask_px ?? 0;
@@ -787,12 +788,8 @@ export default function RetouchPanel(props: RetouchProps) {
             value={Math.round(lutAmt * 100)} min={0} max={100}
             unit="%" disabled={dim || !lutOn}
             title={lutOn ? "拖动调整" : "先选择一个风格"}
-            onChange={(v) => ok(runLut("set", {
-              preset: doc?.lut.preset ?? undefined, amount: v / 100,
-            }), props)}
-            onReset={() => ok(runLut("set", {
-              preset: doc?.lut.preset ?? undefined, amount: 0,
-            }), props)} />
+            onChange={(v) => ok(runLut("amount", { amount: v / 100 }), props)}
+            onReset={() => ok(runLut("amount", { amount: 0 }), props)} />
         );
       case "crop.open":
         return (
@@ -915,7 +912,7 @@ export default function RetouchPanel(props: RetouchProps) {
           <button key={p.name}
             className={"lutCard" + (doc?.lut.preset === p.name ? " on" : "")}
             disabled={dim}
-            onClick={() => ok(runLut("set", { preset: p.name, amount: lutAmt || 1 }), props)}>
+            onClick={() => ok(runLut("set", { preset: p.name, amount: lutAmt }), props)}>
             <span className="lutThumb"
               style={props.thumb ? {
                 backgroundImage: `url(data:image/jpeg;base64,${props.thumb})`,
@@ -926,10 +923,7 @@ export default function RetouchPanel(props: RetouchProps) {
             <span className="lutName">{p.title}</span>
           </button>
         ))}
-        <button className="lutCard off" disabled title="自定义 LUT 导入将在后续版本提供">
-          <span className="lutThumb none dashed">+</span>
-          <span className="lutName">导入 LUT</span>
-        </button>
+
       </div>
     </>
   );
@@ -1034,6 +1028,7 @@ export default function RetouchPanel(props: RetouchProps) {
         patch={async patches=>{props.people.patch(patches);}} refresh={props.refreshHair}/>
       {props.people.state.message&&<p role="status">{props.people.state.message}</p>}
     </>;
+    if (fid === "PC-32455") return <>{lutBlock}{doc?.document_id && <ConnectedCustomLutPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} assetId={doc.lut.asset_id ?? null} amount={doc.lut.amount} />}</>;
     if (fid === "PC-32452") return <>{props.sampleLibraryPanel}{props.presetPanel}{lutBlock}</>;
     if (fid === "PC-32454") return gradeBlock;
     if (fid === "PC-32481") return props.effectRecoveryPanel;
@@ -1099,6 +1094,7 @@ export default function RetouchPanel(props: RetouchProps) {
                 <SpecNodes nodes={withoutCoveredLeaves(tree, f.id, f.id === "PC-32455" ? !!props.opticsPanel : !!custom)}
                   openPaths={openPathsFor(f)} renderExtra={node=>renderExtra(node,f.id)}
                   renderLeaf={(leaf, name) => {
+                    if(f.id==='PC-32455'&&['滤镜/我的/CUBE导入','滤镜/我的','滤镜/推荐'].includes(leaf.path))return null;
                     if(f.id==='PC-32452'&&leaf.path==='AI追色/批量同步&保存预设')return <SemanticColourWorkflowLaunch enabled={props.hasImage&&props.status?.ready_caps?.semantic_colour_workflow_protocol===1}/>;
                     if(f.id==='PC-32472'&&['发色选择','头发光泽'].includes(leaf.path))return null;
                     if (f.id === "PC-32481" && leaf.path === "背景调整涂抹笔" && props.studioBackgroundPanel)

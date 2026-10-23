@@ -4,6 +4,7 @@
 // PICK-001 加到那一步撞上默认 128 的上限。serde_json 的官方建议就是抬这个上限，而不是
 // 把载荷拆成两次 merge——拆了以后"轮询里到底有什么"就变成两处代码，比递归难对账得多。
 #![recursion_limit = "256"]
+mod custom_lut_api;
 
 #[path = "../../../core/curves/curve.rs"]
 mod point_curve;
@@ -515,6 +516,7 @@ impl AppState {
                 lut["lit"] = json!(v.get("lut_lit").and_then(|x| x.as_bool()).unwrap_or(false));
                 lut["amount"] = json!(v.get("lut_amount").and_then(|x| x.as_f64()).unwrap_or(1.0));
                 lut["preset"] = v.get("lut_preset").cloned().unwrap_or(Value::Null);
+                lut["asset_id"] = v.get("lut_asset_id").cloned().unwrap_or(Value::Null);
                 *self.doc_rev.lock().unwrap() += 1;
             }
         }
@@ -1903,6 +1905,7 @@ fn main() {
             inspection_api::inspection_cancel, inspection_api::inspection_pull, inspection_api::inspection_release,
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, diagnostic_env_api::m0_env, load_image, set_strength, compare, compare_status, precompute,
+            custom_lut_api::custom_lut_choose, custom_lut_api::custom_lut_request, custom_lut_api::custom_lut_status, custom_lut_api::custom_lut_cancel,
             inpaint, light, portrait_api::deform, lut, grade, portrait_api::enhance, background, export, session, filmstrip, history,
             people_api::people, shoulder_shape_api::shoulder_shape, leg_shape_api::leg_shape, waist_shape_api::waist_shape, leg_length_api::leg_length, neck_shape_api::neck_shape, arm_shape_api::arm_shape, body_pose_model_api::body_pose_model, body_pose_model_api::body_pose_model_status, semantic_colour_api::semantic_colour, hair_colour_api::hair_colour,
             sample_library_api::sample_library, sample_library_api::sample_library_choose,
