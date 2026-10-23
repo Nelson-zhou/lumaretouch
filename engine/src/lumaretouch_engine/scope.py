@@ -36,6 +36,7 @@ from . import hsl_recipe as HSL_RECIPE
 from . import white_balance_recipe as WB
 from . import local_grade_layers as LOCAL_GRADE
 from . import studio_background_scope as STUDIO
+from . import id_background_scope as ID_BACKGROUND
 from . import optics_scope as OPTICS, optics_auto_scope as OPTICS_AUTO
 from . import reference_color_scope as REFERENCE
 from . import facial_wrinkle_scope as WRINKLES
@@ -158,6 +159,9 @@ MODULES: dict[str, dict] = {
     OPTICS.OP: {"params": ("recipe",), "state_fields": OPTICS.FIELDS, "single_face": False,
                 "transferable": True, "cmd": "optics", "read": OPTICS.params_of, "write": OPTICS.install,
                 "why_not": "仅手动数值；目标保留自己的镜头配置、自动结果与引导线，改变畸变前须重新分析"},
+    ID_BACKGROUND.OP: {"params": ("recipe",), "state_fields": ID_BACKGROUND.FIELDS, "single_face": False,
+                "transferable": True, "cmd": "background", "read": ID_BACKGROUND.params_of, "write": ID_BACKGROUND.install,
+                "why_not": "仅复制颜色及设计参数；各目标保留独立审核范围，素材模式使用各目标自己的已绑定素材"},
     STUDIO.OP: {"params": ("recipe",), "state_fields": STUDIO.FIELDS, "single_face": False,
                 "transferable": True, "cmd": "studio_background", "read": STUDIO.params_of, "write": STUDIO.install,
                 "why_not": "只同步强度；目标必须已有自己的背景/地面范围，保护和恢复笔迹不复制"},
@@ -394,6 +398,9 @@ def check_params(op: str, params: dict) -> dict:
     if op == OPTICS.OP:
         try: return OPTICS.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
+    if op == ID_BACKGROUND.OP:
+        try: return ID_BACKGROUND.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
     if op == STUDIO.OP:
         try: return STUDIO.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
@@ -532,12 +539,13 @@ def apply_modules(state: dict, mods: dict[str, dict], *, local_replace_legacy=Fa
 
 def restore_modules(current, previous, ops):
     """Restore only reviewed modules; retain exact legacy local-grade fields."""
-    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP,REFERENCE.OP,SEMANTIC.OP)]
+    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP,REFERENCE.OP,SEMANTIC.OP,ID_BACKGROUND.OP)]
     result = apply_modules(current, params_of(previous, ordinary)) if ordinary else dict(current)
     if OP_LOCAL_GRADE in ops: LOCAL_GRADE.restore(result, previous)
     if OPTICS_AUTO.OP in ops: OPTICS_AUTO.restore(result, previous)
     if REFERENCE.OP in ops: REFERENCE.restore(result, previous)
     if SEMANTIC.OP in ops: SEMANTIC.restore(result, previous)
+    if ID_BACKGROUND.OP in ops: ID_BACKGROUND.restore(result, previous)
     return result
 
 

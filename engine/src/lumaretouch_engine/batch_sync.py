@@ -8,7 +8,7 @@ from . import white_balance_recipe as WB
 from dataclasses import dataclass
 from typing import Callable
 from . import scope as SC, reference_color_scope as RC
-from . import sky_replacement_scope as SKY, optics_auto_scope as OA
+from . import sky_replacement_scope as SKY, optics_auto_scope as OA, id_background_scope as ID_BACKGROUND
 from .document_versions import DocumentVersions
 from .batch_preflight_controller import FrozenBatchController,PlanPorts
 
@@ -152,6 +152,7 @@ class BatchSyncController:
             if p.get("people_transfer") is not None:raise SC.ScopeError("People transfer requires a frozen preflight token")
             ops = SC.check_scope(p.get("module_scope"))
             if SC.SEMANTIC.OP in ops:raise SC.ScopeError(SC.SEMANTIC.REASON)
+            if ID_BACKGROUND.OP in ops:raise SC.ScopeError("证件照背景必须先逐目标预检，不会复制其他照片的审核范围")
             if SKY.OP in ops:
                 raise SC.ScopeError("换天空批量必须逐目标预检，再用冻结 token 提交；不会猜测天空或复制源图区域")
             if RC.OP in ops:raise SC.ScopeError('参考统一必须先逐图预检')
@@ -216,6 +217,7 @@ class BatchSyncController:
                 version=self.versions.version(row)
                 recipe=RC.verify_target(r.get('_reference_prepared'),before,new,row,version.document_id,version.revision,prepared[RC.OP])
                 RC.apply_verified(new,recipe)
+            if ID_BACKGROUND.OP in ops:ID_BACKGROUND.validate_target(new,row["path"],(row["src_h"],row["src_w"]))
             if SKY.OP in ops:
                 SKY.validate_target(new["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
             if BROW.OP in ops and OA.OP not in ops: BROW.validate_target(new,row)
@@ -236,7 +238,7 @@ class BatchSyncController:
         if live_plan is not None:
             idx,before,new=live_plan;self.versions.advance(self.documents.rows()[idx])
             try:fr=self.editor.replay(new,mode="batch",replayed_for=f"batch:{batch_id}",
-                                      **({'strict_local':True} if SC.OP_LOCAL_GRADE in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops else {}))
+                                      **({'strict_local':True} if ID_BACKGROUND.OP in ops or SC.OP_LOCAL_GRADE in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops else {}))
             except Exception as error:
                 try:
                     rollback=self.editor.replay(before,mode="batch",replayed_for=f"batch_rollback:{batch_id}")
@@ -322,6 +324,7 @@ class BatchSyncController:
             # Restoring the whole old snapshot would erase later unrelated edits.
             try:
                 restored_state = SC.restore_modules(cur, rec["before"], ops)
+                if ID_BACKGROUND.OP in ops:ID_BACKGROUND.validate_target(restored_state,row["path"],(row["src_h"],row["src_w"]))
                 if SKY.OP in ops:
                     SKY.validate_target(restored_state["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
                 if OA.OP in ops:OA.validate_restoration(restored_state,row)

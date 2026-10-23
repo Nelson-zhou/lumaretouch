@@ -286,6 +286,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "sky_replacement_result"=>state.sky_replacement.lock().unwrap().receive(inspection_epoch,&v),
         "sky_replacement_preview"=>state.sky_preview.lock().unwrap().receive(inspection_epoch,&v),
         "sky_semantic_result"|"sky_semantic_proposal"=>state.sky_semantic.lock().unwrap().receive(inspection_epoch,&v),
+        "id_background_result"=>crate::id_background_api::receive(inspection_epoch,&v),
         "studio_background_result"=>state.studio_background.lock().unwrap().receive(inspection_epoch,&v),
         "studio_background_preview"=>state.studio_background_preview.lock().unwrap().receive(inspection_epoch,&v),
         "manual_liquify_result"=>state.manual_liquify.lock().unwrap().receive(inspection_epoch,&v),

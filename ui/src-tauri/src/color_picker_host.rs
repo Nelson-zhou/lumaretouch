@@ -9,7 +9,7 @@ const IDENTITY_KEYS: &[&str] = &[
 ];
 
 pub(crate) fn selection(action: &str, channel: &str) -> Result<(), String> {
-    if action == "colour_editor" && channel == "master" { return Ok(()); }
+    if matches!(action,"colour_editor"|"id_background"|"id_background_reference"|"id_background_subject") && channel == "master" { return Ok(()); }
     if !ACTIONS.contains(&action)
         || !["master", "red", "green", "blue", "luminance"].contains(&channel)
         || (action != "curve" && channel != "master") {
@@ -18,7 +18,10 @@ pub(crate) fn selection(action: &str, channel: &str) -> Result<(), String> {
     Ok(())
 }
 pub(crate) fn stage(action: &str, channel: &str) -> String {
-    if action == "colour_editor" { "colour-editor-input".into() }
+    if action == "id_background_reference" { "id-background-reference".into() }
+    else if action == "id_background_subject" { "id-background-subject".into() }
+    else if action == "id_background" { "id-background-source".into() }
+    else if action == "colour_editor" { "colour-editor-input".into() }
     else if action.starts_with("levels_") { "levels-input".into() }
     else if action == "hsl" { "hsl-input".into() }
     else { format!("curve-{channel}-input") }

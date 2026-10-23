@@ -158,6 +158,11 @@ class ExportSpec:
     optics: dict | None = None
     optics_path: str | None = None
     optics_stamp: list | None = None
+    id_background: dict | None = None
+    id_background_bundle: dict | None = None
+    id_background_path: str | None = None
+    id_background_stamp: list | None = None
+    id_background_prepared: dict | None = None
     studio_background: dict | None = None
     studio_background_path: str | None = None
     studio_background_stamp: list | None = None
@@ -282,6 +287,10 @@ class ExportSpec:
         from .optics_export import check_spec
         check_spec(self)
 
+    def check_id_background(self) -> None:
+        from .id_background_export import check_spec
+        check_spec(self)
+
     def check_studio_background(self) -> None:
         from .studio_background_export import check_spec
         check_spec(self)
@@ -306,6 +315,7 @@ class ExportSpec:
         self.check_effect_recovery()
         self.check_manual_liquify()
         self.check_studio_background()
+        self.check_id_background()
         self.check_optics()
         self.check_sky_replacement()
         self.lip_makeup = LIPS.check(self.lip_makeup)
@@ -497,6 +507,8 @@ def _admit_manual_tile(spec, h, w, tile, margin, bits, device, manual_peak):
     full_bytes += h*w*(4 if spec.fabric_amount else 0)
     from .studio_background_export import resident_bytes as studio_bytes
     full_bytes += studio_bytes(spec)
+    from .id_background_runtime import resident_bytes as id_background_bytes
+    full_bytes += id_background_bytes(spec)
     headroom = 64*1024*1024
     target = torch.device(device)
     if target.type == 'cuda' and not torch.cuda.is_available():
@@ -802,6 +814,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     from .studio_background_export import prepare_export as prepare_studio
     from .studio_background_runtime import attach_tile as attach_studio_tile
     prepare_studio(spec, src_u8, cancelled=mask_cancelled)
+    from .id_background_runtime import export_prepare as prepare_id_background, attach_tile as attach_id_background, finish_export as finish_id_background
+    from .id_background_export import admit_prepare as admit_id_background
+    id_background_admission=admit_id_background(spec,src_u8.shape[:2],tile=tile,bits=bits)
+    prepare_id_background(spec, src_u8, cancelled=mask_cancelled)
     from .sky_replacement_runtime import export_prepare as prepare_sky, attach_tile as attach_sky_tile, finish_export as finish_sky
     from .sky_replacement_export import admit_tile as admit_sky, resident_bytes as sky_bytes
     prepare_sky(spec,src_u8.shape[:2],cancelled=mask_cancelled)
@@ -927,6 +943,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         attach_tile(pipe, spec, (cy0, cx0, cy1, cx1))
         attach_manual_tile(pipe, spec, (cy0, cx0, cy1, cx1))
         attach_studio_tile(pipe, spec, (cy0, cx0, cy1, cx1))
+        attach_id_background(pipe, spec, (cy0, cx0, cy1, cx1))
         attach_sky_tile(pipe,spec,(cy0,cx0,cy1,cx1))
         t_c = time.perf_counter()
         io["setup"] += (t_c - t0) * 1000.0
@@ -1055,6 +1072,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             progress(i + 1, len(rects), (time.perf_counter() - t0) * 1000.0)
     if tone_prepass:
         finish_sky(spec)
+        finish_id_background(spec)
         verify_body_source(spec);verify_hair_source(spec);verify_semantic_source(spec)
         return out, {'extended_tone_boundary':'exposure-output','prepass':True}
     del tone_field
@@ -1138,6 +1156,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     if group_source_stamp is not None and file_stamp(spec.local_mask_source_path) != group_source_stamp:
         raise ExportError('Independent local-grade source changed during rendering')
     finish_sky(spec)
+    finish_id_background(spec)
     from .studio_background_state import active as studio_active
     if studio_active(spec.studio_background) and list(file_stamp(spec.studio_background_path)) != spec.studio_background_stamp:
         raise ExportError('背景源图在完整出片过程中变化')
@@ -1166,6 +1185,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         "manual_liquify_tile_estimate_bytes": manual_tile_budget,
         "sky_replacement_cpu_bytes": sky_bytes(spec),
         "sky_replacement_tile_estimate_bytes": sky_tile_budget,
+        "id_background_preparation_estimate_bytes": id_background_admission,
         # 这一层的"重画掩膜"成本单独报：它与形变解场是两种一次性的钱，混在
         # field_ms 里就看不出该优化谁（导出账单里每一段都要能归因，否则只是把没说的话当作没事）
         "enhance_field_ms": round(enhance_ms, 1),

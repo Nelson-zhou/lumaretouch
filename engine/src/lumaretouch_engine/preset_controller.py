@@ -14,7 +14,7 @@ from typing import Callable
 from . import scope as SC, preset_store as PS, reference_color_scope as RC
 from .preset_transaction import apply_with_rollback, PresetApplyError
 from . import local_grade_layers as LG
-from . import sky_replacement_scope as SKY, optics_auto_scope as OA
+from . import sky_replacement_scope as SKY, optics_auto_scope as OA, id_background_scope as ID_BACKGROUND
 
 ACTIONS = ("list", "preflight", "apply", "save", "import", "delete")
 LEGACY_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note", "local_mask_transfer", "preflight_token"}
@@ -230,6 +230,9 @@ class PresetController:
         if RC.OP in ops:
             recipe=RC.verify_target(record['reference'],previous,state,self.ports.target_row(),self.ports.document_id(),self.ports.revision(),mods[RC.OP])
             RC.apply_verified(state,recipe)
+        if ID_BACKGROUND.OP in ops:
+            row=self.ports.target_row()
+            ID_BACKGROUND.validate_target(state,row["path"],(row["src_h"],row["src_w"]))
         if SKY.OP in ops:
             row=self.ports.target_row()
             SKY.validate_target(state["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
@@ -240,7 +243,7 @@ class PresetController:
         if p.get('preflight_token') is not None:self.ports.advance()
         self._effect_started = True
         frame = apply_with_rollback(self.ports.replay, previous, state, preset_id=pid,
-                                    emit=self.emit, invalidate=self.ports.invalidate, strict_local=LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
+                                    emit=self.emit, invalidate=self.ports.invalidate, strict_local=ID_BACKGROUND.OP in ops or LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
         after = OA.before_params(state, ops)
         self.last = {"id": pid, "name": doc["name"], "ops": ops, "params": after}
         render_ms = frame.pop("render_ms")

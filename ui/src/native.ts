@@ -104,7 +104,7 @@ export interface SessionEdits {
   manual_liquify?: number;
   optics?: boolean;
   sky_replacement?: boolean;
-  studio_background?: boolean;
+  studio_background?: boolean; id_background?: boolean;
   curves?: boolean;
   levels?: boolean;
   repair: number;
@@ -151,6 +151,7 @@ export const dragParametricCurve=(spec:CurveSpec,region:number,target:number)=>i
 export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_preview",{spec});
 
 export interface DocState {
+  id_background?: import('./idBackground/model').Report;
   colour_grading?: {recipe:import('./colourGrading/model').Recipe;algorithm:string;note:string};
   primary_calibration?: {recipe:import('./primaryCalibration/model').Recipe;algorithm:string;note:string};
   selective_colour?: {recipe:import('./selectiveColour/model').Recipe;algorithm:string;note:string};
@@ -993,6 +994,7 @@ export interface EngineStatus {
     sky_semantic_protocol?: number;
     manual_liquify_preview_protocol?: number;
     studio_background_protocol?: number;
+    id_background_protocol?: number;
     manual_liquify_protocol?: number;
     local_grade_live_protocol?: number;
     source_patch_capture_protocol?: number;

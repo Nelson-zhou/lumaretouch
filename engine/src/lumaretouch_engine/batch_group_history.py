@@ -1,7 +1,7 @@
 """All-or-none scoped group undo/redo, preserving unrelated subsequent edits."""
 from . import scope as SC, optics_auto_scope as OA, reference_color_scope as RC
 from . import reference_color_state as RS, reference_color_runtime as RR
-from . import white_balance_recipe as WB
+from . import white_balance_recipe as WB, id_background_scope as ID_BACKGROUND
 
 
 def restore_group(owner,request):
@@ -22,6 +22,7 @@ def restore_group(owner,request):
             if RC.OP in ops:
                 value=RS.check(restored.get(RS.KEY));RR.verify_export({'reference_color':value},row['path'],(row['src_h'],row['src_w']))
             if OA.OP in ops:OA.validate_restoration(restored,row)
+            if ID_BACKGROUND.OP in ops:ID_BACKGROUND.validate_target(restored,row["path"],(row["src_h"],row["src_w"]))
             WB.prepare_state(restored);owner.versions.check_advance(row)
             if not isinstance(row.get('undo'),list) or not isinstance(row.get('redo'),list):raise ValueError('历史不可用')
             planned.append((index,row,current,restored))

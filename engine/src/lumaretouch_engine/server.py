@@ -74,6 +74,7 @@ from . import effect_recovery_state as ERS, effect_recovery_runtime as ERR
 from . import manual_liquify_state as MLS, manual_liquify_runtime as MLR
 from . import local_grade_layers as LG, local_grade_runtime as LGR, local_grade_source as LGS
 from . import studio_background_state as SBS, studio_background_runtime as SBR
+from . import id_background_state as IDS, id_background_runtime as IDR
 from .studio_tools_dispatch import StudioToolsMixin
 from .preview_lifecycle import PreviewLifecycleMixin
 from .portrait_geometry_dispatch import PortraitGeometryMixin
@@ -297,7 +298,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
         self._grade_scope = "all"
         self._grade_mask = None
         self._local_masks = LM.empty(); self._local_grade_layers = LG.empty()
-        self._effect_recovery = ERS.empty(); self._manual_liquify = MLS.empty(); self._studio_background = SBS.empty(); self._optics = OPS.empty(); self._sky_replacement = SKS.empty(); self._blush_makeup_library = BLUSHLIB.empty(); self._lipstick_library = LIPSTICKLIB.empty(); self._eyeliner_library = EYELINERLIB.empty(); self._eyelash_library = EYELASHLIB.empty(); self._brow_makeup_library = BROWMAKEUPLIB.empty(); self._lip_makeup = LIPS.neutral(); self._brow_shape = BROWS.neutral(); self._brow_shape_owner = None; self._nose_shape = NOSES.neutral(); self._nose_shape_owner = None; self._eye_shape = EYES.neutral(); self._eye_shape_owner = None; self._mouth_shape = MOUTHS.neutral(); self._mouth_shape_owner = None; self._reference_color = RCS.empty(); self._reference_color_bundle = None; self._semantic_init(); self._body_init()
+        self._effect_recovery = ERS.empty(); self._manual_liquify = MLS.empty(); self._studio_background = SBS.empty(); self._id_background = IDS.empty(); self._id_background_bundle = None; self._optics = OPS.empty(); self._sky_replacement = SKS.empty(); self._blush_makeup_library = BLUSHLIB.empty(); self._lipstick_library = LIPSTICKLIB.empty(); self._eyeliner_library = EYELINERLIB.empty(); self._eyelash_library = EYELASHLIB.empty(); self._brow_makeup_library = BROWMAKEUPLIB.empty(); self._lip_makeup = LIPS.neutral(); self._brow_shape = BROWS.neutral(); self._brow_shape_owner = None; self._nose_shape = NOSES.neutral(); self._nose_shape_owner = None; self._eye_shape = EYES.neutral(); self._eye_shape_owner = None; self._mouth_shape = MOUTHS.neutral(); self._mouth_shape_owner = None; self._reference_color = RCS.empty(); self._reference_color_bundle = None; self._semantic_init(); self._body_init()
         # PORTRAIT-009 眼牙增强：三个子功能的值 + 会话里有没有那份场 + **它属于哪一张脸**。
         # `box` 这一格不是装饰：这一层的掩膜是从**那一张**的 478 点画出来的。换人选时若
         # 不认脸盒，就会把 A 的美白静默涂到 B 身上——那是 SCOPE-001 拦的同一件事，
@@ -412,7 +413,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"eyeliner_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyeliner.so").is_file()),"iris_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_iris_makeup.so").is_file()),"eyelash_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyelash.so").is_file()),"brow_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_brow_makeup.so").is_file()),"lipstick_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_lipstick.so").is_file()),"blush_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_blush_makeup.so").is_file()),"eye_light_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eye_light.so").is_file()),"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"primary_calibration_protocol":int(self._primary_calibration_service().available()),"colour_editor_protocol":int((Path(__file__).parent/"bin/liblrt_colour_editor.so").is_file()),"selective_colour_protocol":int((Path(__file__).parent/"bin/liblrt_selective_colour.so").is_file()),"photo_grain_protocol":int(PGR.available()),"colour_grading_protocol":int((Path(__file__).parent/"bin/liblrt_colour_grading.so").is_file()),"photo_detail_protocol":int(PDH.available()),"extended_tone_protocol":int((Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()),"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1,"arm_shape_protocol":1,"waist_shape_protocol":1,"neck_shape_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_neck_shape.so").is_file()),"leg_length_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_leg_length.so").is_file()), "studio_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"eyeliner_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyeliner.so").is_file()),"iris_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_iris_makeup.so").is_file()),"eyelash_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyelash.so").is_file()),"brow_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_brow_makeup.so").is_file()),"lipstick_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_lipstick.so").is_file()),"blush_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_blush_makeup.so").is_file()),"eye_light_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eye_light.so").is_file()),"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"primary_calibration_protocol":int(self._primary_calibration_service().available()),"colour_editor_protocol":int((Path(__file__).parent/"bin/liblrt_colour_editor.so").is_file()),"selective_colour_protocol":int((Path(__file__).parent/"bin/liblrt_selective_colour.so").is_file()),"photo_grain_protocol":int(PGR.available()),"colour_grading_protocol":int((Path(__file__).parent/"bin/liblrt_colour_grading.so").is_file()),"photo_detail_protocol":int(PDH.available()),"extended_tone_protocol":int((Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()),"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1,"arm_shape_protocol":1,"waist_shape_protocol":1,"neck_shape_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_neck_shape.so").is_file()),"leg_length_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_leg_length.so").is_file()), "studio_background_protocol": 1, "id_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -916,7 +917,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                   "_light_ops", "_light_redo", "_light", "_deform", "_deform_defer",
                   "_deform_default", "_deform_overrides", "_lut",
                   "_lut_amount",
-                  "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_local_masks", "_local_grade_layers", "_effect_recovery", "_manual_liquify", "_studio_background", "_optics", "_sky_replacement", "_blush_makeup_library", "_lipstick_library", "_eyeliner_library", "_eyelash_library", "_brow_makeup_library", "_lip_makeup", "_brow_shape", "_brow_shape_owner", "_nose_shape", "_nose_shape_owner", "_eye_shape", "_eye_shape_owner", "_mouth_shape", "_mouth_shape_owner", "_reference_color", "_reference_color_bundle", "_semantic_colour", "_semantic_colour_bundle", "_semantic_colour_mask_assets", "_body_pose_bank", "_bg",
+                  "_lut_preset", "_grade", "_grade_scope", "_grade_mask", "_local_masks", "_local_grade_layers", "_effect_recovery", "_manual_liquify", "_studio_background", "_id_background", "_id_background_bundle", "_optics", "_sky_replacement", "_blush_makeup_library", "_lipstick_library", "_eyeliner_library", "_eyelash_library", "_brow_makeup_library", "_lip_makeup", "_brow_shape", "_brow_shape_owner", "_nose_shape", "_nose_shape_owner", "_eye_shape", "_eye_shape_owner", "_mouth_shape", "_mouth_shape_owner", "_reference_color", "_reference_color_bundle", "_semantic_colour", "_semantic_colour_bundle", "_semantic_colour_mask_assets", "_body_pose_bank", "_bg",
                   "_enhance", "_enhance_defer",
                   "_precompute", "_precompute_backend", "_face_index", "_face_box",
                   "_face_explicit", "_face_manual",
@@ -970,7 +971,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                 "_deform_default": {k: 0.0 for k in KINDS}, "_deform_overrides": [],
                 "_lut": None, "_lut_amount": 1.0, "_lut_preset": None,
                 "_grade": (0.0, 0.0, 0.0, 1.0),
-                "_grade_scope": "all", "_grade_mask": None, "_local_masks": LM.empty(), "_local_grade_layers": LG.empty(), "_effect_recovery": ERS.empty(), "_manual_liquify": MLS.empty(), "_studio_background": SBS.empty(), "_optics": OPS.empty(), "_sky_replacement": SKS.empty(), "_blush_makeup_library": BLUSHLIB.empty(), "_lipstick_library": LIPSTICKLIB.empty(), "_eyeliner_library": EYELINERLIB.empty(), "_eyelash_library": EYELASHLIB.empty(), "_brow_makeup_library": BROWMAKEUPLIB.empty(), "_lip_makeup": LIPS.neutral(), "_brow_shape": BROWS.neutral(), "_brow_shape_owner": None, "_nose_shape": NOSES.neutral(), "_nose_shape_owner": None, "_eye_shape": EYES.neutral(), "_eye_shape_owner": None, "_mouth_shape": MOUTHS.neutral(), "_mouth_shape_owner": None, "_reference_color": RCS.empty(), "_reference_color_bundle": None, **self._semantic_fields(), **self._body_fields(),
+                "_grade_scope": "all", "_grade_mask": None, "_local_masks": LM.empty(), "_local_grade_layers": LG.empty(), "_effect_recovery": ERS.empty(), "_manual_liquify": MLS.empty(), "_studio_background": SBS.empty(), "_id_background": IDS.empty(), "_id_background_bundle": None, "_optics": OPS.empty(), "_sky_replacement": SKS.empty(), "_blush_makeup_library": BLUSHLIB.empty(), "_lipstick_library": LIPSTICKLIB.empty(), "_eyeliner_library": EYELINERLIB.empty(), "_eyelash_library": EYELASHLIB.empty(), "_brow_makeup_library": BROWMAKEUPLIB.empty(), "_lip_makeup": LIPS.neutral(), "_brow_shape": BROWS.neutral(), "_brow_shape_owner": None, "_nose_shape": NOSES.neutral(), "_nose_shape_owner": None, "_eye_shape": EYES.neutral(), "_eye_shape_owner": None, "_mouth_shape": MOUTHS.neutral(), "_mouth_shape_owner": None, "_reference_color": RCS.empty(), "_reference_color_bundle": None, **self._semantic_fields(), **self._body_fields(),
                 "_enhance": dict(amounts={k: 0.0 for k in ENH.AMOUNT_KEYS}, built=False, box=None),
                 "_enhance_defer": False,
                 "_bg": dict(active=False, matte=None, bg=None, backend=None,
@@ -1017,7 +1018,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
               # 不会互相改；真要出现就地写，这里就得改成拷贝。
               "_lut": self._lut, "_lut_amount": float(self._lut_amount),
               "_lut_preset": self._lut_preset, "_grade": tuple(self._grade),
-              "_grade_scope": str(self._grade_scope), "_grade_mask": self._grade_mask, "_local_masks": LM.check(self._local_masks), "_local_grade_layers": LG.check(self._local_grade_layers), "_effect_recovery": ERS.check(self._effect_recovery), "_manual_liquify": MLS.check(self._manual_liquify), "_studio_background": SBS.check(self._studio_background), "_optics": OPS.check(self._optics), "_sky_replacement": SKS.check(self._sky_replacement), "_blush_makeup_library": BLUSHLIB.capture(self), "_lipstick_library": LIPSTICKLIB.capture(self), "_eyeliner_library": EYELINERLIB.capture(self), "_eyelash_library": EYELASHLIB.capture(self), "_brow_makeup_library": BROWMAKEUPLIB.capture(self), "_lip_makeup": LIPS.check(self._lip_makeup), "_brow_shape": BROWS.check(self._brow_shape), "_brow_shape_owner": self._brow_shape_owner, "_nose_shape": NOSES.check(self._nose_shape), "_nose_shape_owner": self._nose_shape_owner, "_eye_shape": EYES.check(self._eye_shape), "_eye_shape_owner": self._eye_shape_owner, "_mouth_shape": MOUTHS.check(self._mouth_shape), "_mouth_shape_owner": self._mouth_shape_owner, "_reference_color": RCS.check(self._reference_color), "_reference_color_bundle": self._reference_color_bundle, **self._semantic_capture(), **self._body_fields({"_body_pose_bank":self._body_pose_bank}),
+              "_grade_scope": str(self._grade_scope), "_grade_mask": self._grade_mask, "_local_masks": LM.check(self._local_masks), "_local_grade_layers": LG.check(self._local_grade_layers), "_effect_recovery": ERS.check(self._effect_recovery), "_manual_liquify": MLS.check(self._manual_liquify), "_studio_background": SBS.check(self._studio_background), "_id_background": IDS.check(self._id_background), "_id_background_bundle": self._id_background_bundle, "_optics": OPS.check(self._optics), "_sky_replacement": SKS.check(self._sky_replacement), "_blush_makeup_library": BLUSHLIB.capture(self), "_lipstick_library": LIPSTICKLIB.capture(self), "_eyeliner_library": EYELINERLIB.capture(self), "_eyelash_library": EYELASHLIB.capture(self), "_brow_makeup_library": BROWMAKEUPLIB.capture(self), "_lip_makeup": LIPS.check(self._lip_makeup), "_brow_shape": BROWS.check(self._brow_shape), "_brow_shape_owner": self._brow_shape_owner, "_nose_shape": NOSES.check(self._nose_shape), "_nose_shape_owner": self._nose_shape_owner, "_eye_shape": EYES.check(self._eye_shape), "_eye_shape_owner": self._eye_shape_owner, "_mouth_shape": MOUTHS.check(self._mouth_shape), "_mouth_shape_owner": self._mouth_shape_owner, "_reference_color": RCS.check(self._reference_color), "_reference_color_bundle": self._reference_color_bundle, **self._semantic_capture(), **self._body_fields({"_body_pose_bank":self._body_pose_bank}),
               # 整份新抄：amounts 那个 dict 不能与 live 共享（同 _capture_state 头部那条理由，
               # 两个文档共用一个 dict，下一笔 set 会同时改掉两份状态）
               "_enhance": {"amounts": dict(self._enhance["amounts"]),
@@ -1051,7 +1052,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
         for key in ("_repair_ops", "_redo_ops"):
             validate_repair_ops(st.get(key, []), shape=st.get("_proxy"))
         # Validate WB and compile before changing any live field.
-        st = {**st, "_photo_grain": PGS.from_state(st), "_colour_grading": CGS.from_state(st), "_primary_calibration": PCA.admit(PCS.from_state(st)), "_selective_colour": SCSL.from_state(st), "_colour_editor": CES.from_state(st), "_extended_tone": ETS.check(st.get("_extended_tone")), "_photo_detail": PDS.check(st.get("_photo_detail")), **self._semantic_restore(st), **self._body_fields(st), "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0)), "_local_masks": LM.check(st.get("_local_masks")), "_local_grade_layers": LG.check(st.get("_local_grade_layers")), "_effect_recovery": ERS.check(st.get("_effect_recovery")), "_manual_liquify": MLS.check(st.get("_manual_liquify")), "_studio_background": SBS.check(st.get("_studio_background")), "_optics": OPS.check(st.get("_optics")), "_sky_replacement": SKS.check(st.get("_sky_replacement")), "_blush_makeup_library": BLUSHLIB.check(st["_blush_makeup_library"]) if "_blush_makeup_library" in st else BLUSHLIB.empty(), "_lipstick_library": LIPSTICKLIB.check(st["_lipstick_library"]) if "_lipstick_library" in st else LIPSTICKLIB.empty(), "_eyeliner_library": EYELINERLIB.check(st["_eyeliner_library"]) if "_eyeliner_library" in st else EYELINERLIB.empty(), "_eyelash_library": EYELASHLIB.check(st["_eyelash_library"]) if "_eyelash_library" in st else EYELASHLIB.empty(), "_brow_makeup_library": BROWMAKEUPLIB.check(st["_brow_makeup_library"]) if "_brow_makeup_library" in st else BROWMAKEUPLIB.empty(), "_lip_makeup": LIPS.check(st.get("_lip_makeup")), "_brow_shape": BROWS.check(st.get("_brow_shape")), "_brow_shape_owner": st.get("_brow_shape_owner"), "_nose_shape": NOSES.check(st.get("_nose_shape")), "_nose_shape_owner": st.get("_nose_shape_owner"), "_eye_shape": EYES.check(st.get("_eye_shape")), "_eye_shape_owner": st.get("_eye_shape_owner"), "_mouth_shape": MOUTHS.check(st.get("_mouth_shape")), "_mouth_shape_owner": st.get("_mouth_shape_owner"), "_reference_color": RCS.check(st.get("_reference_color")), "_reference_color_bundle": st.get("_reference_color_bundle")}
+        st = {**st, "_photo_grain": PGS.from_state(st), "_colour_grading": CGS.from_state(st), "_primary_calibration": PCA.admit(PCS.from_state(st)), "_selective_colour": SCSL.from_state(st), "_colour_editor": CES.from_state(st), "_extended_tone": ETS.check(st.get("_extended_tone")), "_photo_detail": PDS.check(st.get("_photo_detail")), **self._semantic_restore(st), **self._body_fields(st), "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0)), "_local_masks": LM.check(st.get("_local_masks")), "_local_grade_layers": LG.check(st.get("_local_grade_layers")), "_effect_recovery": ERS.check(st.get("_effect_recovery")), "_manual_liquify": MLS.check(st.get("_manual_liquify")), "_studio_background": SBS.check(st.get("_studio_background")), "_id_background": IDS.check(st.get("_id_background")), "_id_background_bundle": st.get("_id_background_bundle"), "_optics": OPS.check(st.get("_optics")), "_sky_replacement": SKS.check(st.get("_sky_replacement")), "_blush_makeup_library": BLUSHLIB.check(st["_blush_makeup_library"]) if "_blush_makeup_library" in st else BLUSHLIB.empty(), "_lipstick_library": LIPSTICKLIB.check(st["_lipstick_library"]) if "_lipstick_library" in st else LIPSTICKLIB.empty(), "_eyeliner_library": EYELINERLIB.check(st["_eyeliner_library"]) if "_eyeliner_library" in st else EYELINERLIB.empty(), "_eyelash_library": EYELASHLIB.check(st["_eyelash_library"]) if "_eyelash_library" in st else EYELASHLIB.empty(), "_brow_makeup_library": BROWMAKEUPLIB.check(st["_brow_makeup_library"]) if "_brow_makeup_library" in st else BROWMAKEUPLIB.empty(), "_lip_makeup": LIPS.check(st.get("_lip_makeup")), "_brow_shape": BROWS.check(st.get("_brow_shape")), "_brow_shape_owner": st.get("_brow_shape_owner"), "_nose_shape": NOSES.check(st.get("_nose_shape")), "_nose_shape_owner": st.get("_nose_shape_owner"), "_eye_shape": EYES.check(st.get("_eye_shape")), "_eye_shape_owner": st.get("_eye_shape_owner"), "_mouth_shape": MOUTHS.check(st.get("_mouth_shape")), "_mouth_shape_owner": st.get("_mouth_shape_owner"), "_reference_color": RCS.check(st.get("_reference_color")), "_reference_color_bundle": st.get("_reference_color_bundle")}
         st = WB.normalize_state(st)
         WB.prepare_state(st)
         # Old projects predate curves. Validate/deep-copy before changing any live field.
@@ -1467,7 +1468,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
             emit({"event": "engine_warn", "warn": "蒙版尚未恢复：保留编辑参数，暂不应用该范围的磨皮，不回退为全图"})
         effective_strength, effective_channel = self._retouch_render_args()
         FABRIC.sync(self)
-        LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
+        LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); IDR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
         self._people_render_open(pipe,lambda:CER.render_preview(self) if CER.active(self) else PGR.render_preview(self) if PGR.active(self) else SKR.render_proxy(self,lambda:pipe.render(effective_strength, channel=effective_channel, **self._params)))
         with self._wlock:
             seq, t_emit, slot = shm.write_frame(pipe.read_back(), presentation=self._frame_presentation(str(t0), (d.src_w,d.src_h), "original" if self._people_open_flags() else "edited"))
@@ -1584,7 +1585,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                 crop["out_full"] = list(_gsz(int(row["src_w"]), int(row["src_h"]),
                                              tuple(self._crop_rect),
                                              float(self._crop_rotation)))
-        return {"document_id": self._load_id, "photo_detail": {**PDS.status(self._photo_detail),"available":PDH.available()}, "photo_grain": PGA.report(self), "colour_grading": CGA.report(self), "primary_calibration": PCA.report(self), "selective_colour": SCLA.report(self), "colour_editor": CEA.report(self), "extended_tone": {**ETS.status(self._extended_tone), "available": (Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()}, "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self), "lip_makeup": LIPR.report(self), "brow_shape": BROWR.report(self), "nose_shape": NOSER.report(self), "eye_shape": EYER.report(self), "mouth_shape": MOUTHR.report(self), "reference_color": RCR.report(self), "semantic_colour": SCR.report(self), **self._body_report(),
+        return {"document_id": self._load_id, "photo_detail": {**PDS.status(self._photo_detail),"available":PDH.available()}, "photo_grain": PGA.report(self), "colour_grading": CGA.report(self), "primary_calibration": PCA.report(self), "selective_colour": SCLA.report(self), "colour_editor": CEA.report(self), "extended_tone": {**ETS.status(self._extended_tone), "available": (Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()}, "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "id_background": IDR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self), "lip_makeup": LIPR.report(self), "brow_shape": BROWR.report(self), "nose_shape": NOSER.report(self), "eye_shape": EYER.report(self), "mouth_shape": MOUTHR.report(self), "reference_color": RCR.report(self), "semantic_colour": SCR.report(self), **self._body_report(),
                 "strength": float(self._strength), "params": dict(self._params),
                 "channel": self._channel,
                 "history": self._history_report(),
@@ -1661,7 +1662,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                 "manual_liquify": len(MLS.check(st.get("_manual_liquify"))["strokes"]),
                 "optics": OPS.active(st.get("_optics")),
                 "sky_replacement": SKS.check(st.get("_sky_replacement"))["enabled"],
-                "studio_background": SBS.active(st.get("_studio_background")), "lip_makeup": LIPS.active(st.get("_lip_makeup")), "brow_shape": BROWS.active(st.get("_brow_shape")), "nose_shape": NOSES.active(st.get("_nose_shape")), "eye_shape": EYES.active(st.get("_eye_shape")), "mouth_shape": MOUTHS.active(st.get("_mouth_shape")),
+                "studio_background": SBS.active(st.get("_studio_background")), "id_background": IDS.active(st.get("_id_background")), "lip_makeup": LIPS.active(st.get("_lip_makeup")), "brow_shape": BROWS.active(st.get("_brow_shape")), "nose_shape": NOSES.active(st.get("_nose_shape")), "eye_shape": EYES.active(st.get("_eye_shape")), "mouth_shape": MOUTHS.active(st.get("_mouth_shape")),
                 "fabric": bool(st.get("_fabric_amount", 0.0)), "repair": len(st["_repair_ops"]), "light": len(st["_light_ops"]),
                 "deform": any(abs(float(v)) > 0.0 for v in st["_deform"]["amounts"].values()),
                 "lut": st["_lut"] is not None, "lut_preset": st["_lut_preset"],
@@ -3508,7 +3509,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
             self._vram.grading_prefix_cache.invalidate()
         t0 = monotonic_ns()
         # Original viewing bypasses all layers, rather than merely setting skin strength0.
-        if not original: FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
+        if not original: FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); IDR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
         st, channel = (0.0, None) if original else self._retouch_render_args()
         from .grading_prefix_cache import preview_context
         prefix_key = preview_context(self, mode, original)
@@ -5210,112 +5211,10 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
               "strength": self._strength})
 
     def cmd_background(self, p: dict):
-        """抠图/换底（M6）：事件驱动——一次“换底”算一次遮罩，之后逐帧只做线性光合成。
-
-        两个后端，证据强度不同，不许混报：
-        * `color_key`（默认）：确定性色键，拿当前代理图与背景参考色的色差算遮罩——零依赖、可测。
-        * `birefnet`：神经网络自动抠图。权重不在就是 MissingBackend，整条拒绝——
-          绝不静默退成色键然后报一个“抠图成功”（与消除笔的 lama 守卫同一条规矩）。
-        遮罩存为代理坐标 uint8，进 PROXY_BOUND（换代理档即作废）与统一历史栈（可撤销）。
-        """
-        import numpy as np
-
-        action = p.get("action", "set")
-        if action not in ("set", "clear"):
-            emit({"event": "error", "error": f"未知 background action: {action}（可用：set/clear）"})
-            return
-        if not self._image_loaded or self._vram is None:
-            emit({"event": "error", "error": "尚未 load_image"})
-            return
-        if self.shm is None or (self.shm.w, self.shm.h) != (self._vram.w, self._vram.h):
-            emit({"event": "error", "error": f"shm {getattr(self.shm, 'w', '?')}x"
-                  f"{getattr(self.shm, 'h', '?')} != 会话 {self._vram.w}x{self._vram.h}，请先 load_image"})
-            return
-        if self.bench is not None and self.bench.is_alive():
-            emit({"event": "error", "error": "跑靶进行中，拒绝 background：先 bench_stop"})
-            return
-        extra = sorted(set(p) - {"cmd", "action", "backend", "bg", "tol", "softness"})
-        if extra:
-            emit({"event": "error", "error": f"background 收到不认识的参数：{', '.join(extra)}"
-                  "（可用：backend / bg / tol / softness）"})
-            return
-        t_start = monotonic_ns()
-        if action == "clear":
-            info = self._vram.clear_background()
-            self._bg = dict(active=False, matte=None, bg=None, backend=None,
-                            tol=None, softness=None)
-            fr = self._write_current_frame("background")
-            render_ms = fr.pop("render_ms")
-            emit({"event": "bg_done", "action": "clear", "bg_ms": round(float(self._vram.last_bg_ms), 2),
-                  "render_ms": render_ms,
-                  "total_ms": round((monotonic_ns() - t_start) / 1e6, 2),
-                  "device": str(self._vram.device), **info})
-            emit(fr)
-            return
-
-        if SKS.check(self._sky_replacement)["enabled"]:
-            raise ValueError("请先关闭换天空，再启用完整换背景，避免后层覆盖天空效果")
-        if SBS.active(self._studio_background):
-            raise ValueError("完整换底会覆盖影棚背景调整，请先关闭背景调整；笔迹会保留")
-        backend = p.get("backend", "color_key")
-        if backend not in ("color_key", "birefnet"):
-            emit({"event": "error", "error": f"未知抠图后端: {backend}（可用：color_key/birefnet）"})
-            return
-        bg = p.get("bg")
-        if (not isinstance(bg, (list, tuple))) or len(bg) != 3:
-            emit({"event": "error", "error": "background set 缺 bg：需 [r,g,b] 三个 0–255 整数"})
-            return
-        try:
-            bg_i = [int(v) for v in bg]
-        except (TypeError, ValueError):
-            emit({"event": "error", "error": f"bg 非整数三元：{bg!r}"})
-            return
-        if any(not 0 <= v <= 255 for v in bg_i):
-            emit({"event": "error", "error": f"bg 分量超出 0–255：{bg_i}"})
-            return
-        unit = [v / 255.0 for v in bg_i]
-        src = self._src_rgb
-        if src is None or src.shape[:2] != (self._vram.h, self._vram.w):
-            emit({"event": "error", "error": "源图尺寸与会话不符（先 load_image）"})
-            return
-        matte_u8 = None
-        if backend == "color_key":
-            from .ops.matting import key_matte_np
-            tol = float(p.get("tol", 0.12))
-            softness = float(p.get("softness", 0.10))
-            if not (0.0 <= tol <= 1.0 and 1e-3 <= softness <= 1.0):
-                emit({"event": "error", "error": f"tol={tol}/softness={softness} 越界（tol∈[0,1]、softness∈[0.001,1]）"})
-                return
-            a = key_matte_np(src, tol=tol, softness=softness)
-            matte_u8 = np.round(np.clip(a, 0.0, 1.0) * 255.0).astype(np.uint8)
-            if int((matte_u8 > 0).sum()) == 0:
-                emit({"event": "error", "error": "色键遮罩全为 0：背景与前景太接近，调高 tol 或换 birefnet"})
-                return
-        else:
-            from .ops import birefnet
-            try:
-                matte = birefnet.BiRefNetMatte(device=str(self._vram.device))(self._src_gpu_norm())
-            except birefnet.MissingBackend as e:
-                emit({"event": "error", "error": str(e)})   # 绝不静默退成色键
-                return
-            matte_u8 = (matte.detach().cpu().numpy() * 255.0).round().clip(0, 255).astype(np.uint8)
-        try:
-            info = self._vram.set_background(matte_u8, unit)
-        except (ValueError, RuntimeError) as e:
-            emit({"event": "error", "error": f"换底被拒，会话原样未动：{e}"})
-            return
-        self._bg = dict(active=True, matte=matte_u8, bg=unit, backend=backend,
-                        tol=float(p.get("tol", 0.12)) if backend == "color_key" else None,
-                        softness=float(p.get("softness", 0.10)) if backend == "color_key" else None)
-        fr = self._write_current_frame("background")
-        render_ms = fr.pop("render_ms")
-        fill = round(float((matte_u8 > 127).mean()), 4)
-        emit({"event": "bg_done", "action": "set", "backend": backend, "bg": bg_i,
-              "matte_fill_fg": fill, "bytes_bg": int(info["bytes_bg"]),
-              "bg_ms": round(float(self._vram.last_bg_ms), 2), "render_ms": render_ms,
-              "total_ms": round((monotonic_ns() - t_start) / 1e6, 2),
-              "device": str(self._vram.device), **info})
-        emit(fr)
+        from .id_background_legacy import legacy_background
+        if IDS.active(self._id_background) and p.get('action','set')=='set':
+            raise ValueError('请先关闭已审核证件照换背景')
+        return legacy_background(self,p,emit)
 
     def _src_gpu_norm(self):
         """当前会话源图 → (1,3,H,W) [0,1] float 常驻张量（供 birefnet 前向）。"""
@@ -5509,6 +5408,8 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
         return controller(self, lambda event: emit(event))
 
     def cmd_color_picker_capture(self, p):
+        from .id_background_picker import route_capture
+        if route_capture(self,p,emit): return
         owner=self.__dict__.get('_colour_editor_capture_owner')
         editor=p.get('picker_action')=='colour_editor' or (owner is not None and owner.capture is not None and owner.capture['descriptor']['capture_id']==p.get('capture_id'))
         if not editor: return self._color_picker_controller().capture.handle(p)
@@ -5851,7 +5752,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                 # 通道必须跟着会话一起迁移：不传 channel 的话，报表里 active_channel 还是 skin，
                 # 而给用户补发的是一帧全图渲染——字段与实际执行不一致正是本仓最贵那个坑的形状
                 strength, channel = self._retouch_render_args()
-                FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
+                FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); IDR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
                 CER.render_preview(self) if CER.active(self) else PGR.render_preview(self) if PGR.active(self) else SKR.render_proxy(self,lambda:self._vram.render(strength, channel=channel, **self._params))
                 with self._wlock:
                     seq, t_emit, slot = self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation())
@@ -5921,6 +5822,9 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
         if SBS.check(snap.get("studio_background"))["source"] is not None:
             if not for_document: raise ExportError("背景范围不能借用其他源照片")
             SBR.verify_snapshot(snap, path)
+        if IDS.active(snap.get("id_background")):
+            if not for_document: raise ExportError("证件照范围不能借用其他源照片")
+            IDR.verify_snapshot(snap,path)
         if SKS.check(snap.get("sky_replacement"))["enabled"]:
             if not for_document: raise ExportError("天空替换必须逐图使用自己的明确区域")
             SKR.verify_snapshot(snap,path)
@@ -6430,7 +6334,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                 image_started = monotonic_ns()
                 snap_i, for_doc_i = snap_by_path.get(path, (snap, path == doc))
                 from . import body_pose_render as body_render
-                mask_source_stamp = LM.file_stamp(path) if snap_i.get('body_pose') is not None or snap_i.get("grade_scope") == "objects" or LGS.has_groups(snap_i) or bool(ERS.check(snap_i.get("effect_recovery"))["targets"]) or bool(MLS.check(snap_i.get("manual_liquify"))["strokes"]) or SBS.check(snap_i.get("studio_background"))["source"] is not None or OPS.source_bound(OPS.check(snap_i.get("optics"))) or SKS.check(snap_i.get("sky_replacement"))["enabled"] else None
+                mask_source_stamp = LM.file_stamp(path) if snap_i.get('body_pose') is not None or snap_i.get("grade_scope") == "objects" or LGS.has_groups(snap_i) or bool(ERS.check(snap_i.get("effect_recovery"))["targets"]) or bool(MLS.check(snap_i.get("manual_liquify"))["strokes"]) or SBS.check(snap_i.get("studio_background"))["source"] is not None or IDS.check(snap_i.get("id_background"))["source"] is not None or OPS.source_bound(OPS.check(snap_i.get("optics"))) or SKS.check(snap_i.get("sky_replacement"))["enabled"] else None
                 stage = "semantic_analysis"
                 snap_i, for_doc_i = self._prepare_export_snapshot(path, snap_i, for_doc_i)
                 analysis_ms = round((monotonic_ns() - image_started) / 1e6, 2)
@@ -6446,7 +6350,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                         stage = "decode16"
                         decode_started = monotonic_ns()
                         d = load_full(path, device=snap_i["device"], want_bits=16)
-                        LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
+                        LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
                         decode_ms = (monotonic_ns() - decode_started) / 1e6
                         spec, skipped = self._export_snapshot(snap_i, d.h, d.w, for_document=for_doc_i)
                         stage = "edit16"
@@ -6507,7 +6411,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                           "ok": True})
                     continue
                 d = load_full(path, device=self.device)
-                LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
+                LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
                 stage = "render"
                 # P1-1：这一张用它自己那份配方（当前档=现拍 snap；其它档=它存的 state；
                 # 裸文件=共享参数且 for_document=False）。批级 export_done 仍读 snap。
@@ -6644,7 +6548,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
         self._attach_pipeline(self._src_rgb, adopt=True)
         if self._precompute is not None:
             self._rehang_precompute(replayed_for=replayed_for)
-        if strict_local: LM.sync(self, strict=True); LGR.sync(self, strict=True); ERR.sync(self, strict=True); MLR.sync(self, strict=True); SBR.sync(self, strict=True); OPR.sync(self, strict=True); SKR.sync(self, strict=True); LIPR.sync(self, strict=True); BROWR.sync(self, strict=True); NOSER.sync(self, strict=True); EYER.sync(self, strict=True); MOUTHR.sync(self, strict=True); self._people_sync(strict=True); RCR.sync(self, strict=True); SCR.sync(self, strict=True); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
+        if strict_local: LM.sync(self, strict=True); LGR.sync(self, strict=True); ERR.sync(self, strict=True); MLR.sync(self, strict=True); SBR.sync(self, strict=True); IDR.sync(self, strict=True); OPR.sync(self, strict=True); SKR.sync(self, strict=True); LIPR.sync(self, strict=True); BROWR.sync(self, strict=True); NOSER.sync(self, strict=True); EYER.sync(self, strict=True); MOUTHR.sync(self, strict=True); self._people_sync(strict=True); RCR.sync(self, strict=True); SCR.sync(self, strict=True); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
         return self._write_current_frame(mode)
 
     def _face_known_single(self, row: dict | None, *, live: bool) -> tuple[str, str]:
@@ -6805,6 +6709,12 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
             if fn is None:
                 emit({"event": "error", "error": f"未知命令: {name}"})
                 return
+            if name == "background" and msg.get("action") in ("id_state","id_sample"):
+                from .id_background_controller import controller
+                controller(self,emit).handle(msg); return
+            if name not in ('hello','color_picker_capture'):
+                id_capture=self.__dict__.get('_id_background_capture_owner')
+                if id_capture is not None:id_capture.invalidate()
             self._arm_before_command(msg)
             if name not in ('hello','colour_editor_state','colour_editor_sample','color_picker_capture','color_scopes'):
                 editor_capture=self.__dict__.get('_colour_editor_capture_owner')
@@ -6833,7 +6743,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
             if name == "color_picker" and not self._color_picker_controller().prepare(msg):
                 return  # The exact frozen stage proof and scalar plan precede mutation.
             from .document_versions import fences_current_document
-            if fences_current_document(name,msg,self.EDIT_CMDS):
+            if fences_current_document(name,msg,self.EDIT_CMDS) and not (name=="background" and str(msg.get("action","")).startswith("id_")):
                 self._fence_current_document()
             if name not in ("hello", "color_scopes", "color_capture") and not (
                     name=="inspection_snapshot" and msg.get("action","status")=="status"):
@@ -6883,6 +6793,9 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                         self._reject_bench(reason, msg.get("mode", "copy"))
                         return
                     raise ValueError(reason)
+            if name=="background" and str(msg.get("action","")).startswith("id_"):
+                from .id_background_controller import controller
+                controller(self,emit).handle(msg); return
             if name in self.EDIT_CMDS and (name!='hair_colour' or msg.get('action') in HAIR_MUTATIONS):
                 # 推送点只在这里这一处（见 EDIT_CMDS 的说明）：执行前抄快照，
                 # 执行后比对签名决定占不占一步。异常也记（finally）——半改完的
@@ -6901,6 +6814,8 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
             emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
         finally:
             try:
+                if dispatch_error and name=="background" and str(msg.get("action","")).startswith("id_"):
+                    emit({"event":"id_background_result","protocol":1,"request_id":msg.get("request_id"),"document_id":msg.get("document_id"),"action":msg.get("action"),"success":False,"error":dispatch_error,"outcome_unknown":False,"requires_reload":False})
                 if name == "brow_shape" and isinstance(msg, dict): self.finish_brow_shape(msg, dispatch_error)
                 if name == "nose_shape" and isinstance(msg, dict): self.finish_nose_shape(msg, dispatch_error)
                 if name == "eye_shape" and isinstance(msg, dict): self.finish_eye_shape(msg, dispatch_error)
@@ -6995,6 +6910,8 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                 self._command_inbox = None
                 self._finish_inspection_shutdown()
                 self._close_owned_previews(); self._arm_shutdown(); self._semantic_shutdown()
+                id_capture=self.__dict__.get('_id_background_capture_owner')
+                if id_capture is not None:id_capture.invalidate()
                 owner = self.__dict__.get("_white_balance_owner")
                 if owner is not None: owner.capture.invalidate()
                 owner = self.__dict__.get("_source_patch_owner")

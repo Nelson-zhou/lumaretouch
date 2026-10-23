@@ -86,6 +86,7 @@ def render(directory):
     from . import effect_recovery_runtime as recovery
     from . import manual_liquify_runtime as manual
     from . import studio_background_runtime as studio
+    from . import id_background_runtime as id_background
     from . import optics_runtime as optics
     from . import sky_replacement_runtime as sky
     from .local_mask_state import file_stamp
@@ -96,6 +97,7 @@ def render(directory):
     recovery.verify_snapshot(snap, path, tuple(reversed(request['source_size'])))
     manual.verify_snapshot(snap, path, tuple(reversed(request['source_size'])))
     studio.verify_snapshot(snap, path, tuple(reversed(request['source_size'])))
+    id_background.verify_snapshot(snap, path, tuple(reversed(request['source_size'])))
     optics.verify_snapshot(snap,path,tuple(reversed(request['source_size'])))
     sky.verify_snapshot(snap,path,tuple(reversed(request['source_size'])))
     if is_raw(path):
@@ -112,6 +114,7 @@ def render(directory):
     recovery.check_export_decode(snap, path, recovery_source_stamp, (decoded.h, decoded.w))
     manual.check_export_decode(snap, path, manual_source_stamp, (decoded.h, decoded.w))
     studio.check_export_decode(snap, path, manual_source_stamp, (decoded.h, decoded.w))
+    id_background.check_export_decode(snap, path, manual_source_stamp, (decoded.h, decoded.w))
     optics.check_export_decode(snap,path,manual_source_stamp,(decoded.h,decoded.w))
     sky.check_export_decode(snap,path,manual_source_stamp,(decoded.h,decoded.w))
     from . import body_pose_render as body_render

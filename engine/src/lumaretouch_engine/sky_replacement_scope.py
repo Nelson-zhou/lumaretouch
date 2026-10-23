@@ -29,6 +29,8 @@ def install(state,params):
     target = S.check(state.get('_sky_replacement'))
     value = S.check({**target,'enabled':recipe['enabled'],'asset':deepcopy(recipe['asset']),'parameters':deepcopy(recipe['parameters'])})
     if value['enabled']:
+        from .id_background_state import active as id_background_active
+        if id_background_active(state.get('_id_background')):raise ValueError('此照片已启用证件照换背景，不能同时换天空')
         if (state.get('_bg') or {}).get('active'):
             raise ValueError('此照片已启用完整换背景，不能同时换天空')
         S.ready(value)

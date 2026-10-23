@@ -86,6 +86,7 @@ cp "$here/../core/facial_wrinkles/lib.rs" "$stage/lumaretouch_engine/third_party
 cp "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/facial_wrinkles/COPYING"
 cp "$here/../docs/FACIAL-WRINKLES-INTEGRATION.md" "$stage/lumaretouch_engine/third_party/facial_wrinkles/README.md"
 bash "$here/build-optics.sh" "$stage/lumaretouch_engine/bin/liblrt_optics.so"
+bash "$here/build-id-background.sh" "$stage/lumaretouch_engine/bin/liblrt_id_background.so"
 bash "$here/build-studio-background.sh" "$stage/lumaretouch_engine/bin/studio-background"
 # Distribute the exact adapted worker sources and LGPL/GPL texts with its binary.
 mkdir -p "$stage/lumaretouch_engine/third_party/manual_liquify"

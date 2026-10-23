@@ -1,0 +1,308 @@
+{
+  "feature": "PC-32475",
+  "quality_complete": false,
+  "rows": [
+    {
+      "id": "LNX-REF-PC-32475-C-1452deafc6",
+      "path": "推荐",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-0ad4917a11",
+      "path": "推荐/推荐颜色",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-362b93303c",
+      "path": "推荐/自定义颜色",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-164fb6c4b1",
+      "path": "推荐/自定义颜色/颜色选择器",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-38bb2bc4b2",
+      "path": "推荐/自定义颜色/RGB",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-c631e62fd9",
+      "path": "推荐/自定义颜色/HEX",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-2ca4a58197",
+      "path": "推荐/自定义颜色/吸管",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "All three actual verified-frame modes wired; proxy-float samples; reviewed contact support required; runtime/UI/colour acceptance UNRUN"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-1836579d78",
+      "path": "推荐/自定义颜色/收藏",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-d47a3d519a",
+      "path": "推荐/自定义颜色/删除",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-7f1d9dd04c",
+      "path": "我的",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-4c863ef473",
+      "path": "我的/背景位置、大小调整",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-cd761bd630",
+      "path": "背景位置、大小调整/居中对齐",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-5824d5469d",
+      "path": "背景位置、大小调整/拉伸填充",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-8fa4b68f8d",
+      "path": "背景位置、大小调整/垂直位置",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-6300a5fbb6",
+      "path": "背景位置、大小调整/水平位置",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-09c2aca416",
+      "path": "背景位置、大小调整/大小",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-a2015579d0",
+      "path": "抠像保留范围",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-4169de2512",
+      "path": "抠像保留范围/主体",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-c0143cd19e",
+      "path": "抠像保留范围/主体及关联物品",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-d58738ab24",
+      "path": "抠像保留范围/主体+关联物品+非关联物品",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-94526faf72",
+      "path": "边缘调整",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-04405e4a9f",
+      "path": "不透明度",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-d50ebce956",
+      "path": "增加阴影",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-2dbfc5c48d",
+      "path": "增加阴影/阴影混合模式",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-59e8a4c5f3",
+      "path": "增加阴影/软投影",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-c3e0db4f53",
+      "path": "增加阴影/硬投影",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-93af2d246e",
+      "path": "增加阴影/剪影",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-427037b85c",
+      "path": "增加阴影/不透明度",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-63d8aedbf9",
+      "path": "增加阴影/阴影虚化",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-02c0300cd7",
+      "path": "增加阴影/渐变",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-f7a0f5d983",
+      "path": "增加阴影/正常",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-6778b740a1",
+      "path": "增加阴影/正片叠底",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-a50052e23b",
+      "path": "增加阴影/柔光",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-99bc6203fa",
+      "path": "增加阴影/水平",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-56e54c5094",
+      "path": "增加阴影/垂直",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-c549f5beef",
+      "path": "增加阴影/阴影距离",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    },
+    {
+      "id": "LNX-REF-PC-32475-C-a8447804ff",
+      "path": "增加阴影/阴影角度",
+      "status": "source-integrated-unaccepted",
+      "acceptance": "UNRUN",
+      "evidence": "docs/development/id-background-scope.md",
+      "limits": "Manual reviewed support and original 2D algorithm; no proprietary-equivalence or runtime-quality claim"
+    }
+  ],
+  "excluded": [
+    "442ced0175",
+    "ab010073e3",
+    "e999ab085a",
+    "4bc238dfa1"
+  ]
+}

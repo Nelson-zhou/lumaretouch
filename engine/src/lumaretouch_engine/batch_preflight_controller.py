@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Callable
 import json
 from . import scope as SC, reference_color_scope as RC
-from . import sky_replacement_scope as SKY, optics_auto_scope as OA
+from . import sky_replacement_scope as SKY, optics_auto_scope as OA, id_background_scope as ID_BACKGROUND
 from . import optics_transfer_review as OR
 from . import local_grade_layers as LG
 from . import local_grade_runtime as LR
@@ -98,6 +98,11 @@ class FrozenBatchController:
                     if not blocked and LG.OP in ops:
                         try:prepared,transfer=LR.prepare_modules(source if live else row['state'],mods,row,local_options,preview=len(public)<12)
                         except Exception as error:blocked=str(error)[:2000]
+                    if not blocked and ID_BACKGROUND.OP in ops:
+                        try:
+                            candidate=OA.candidate(source if live else row['state'],prepared or mods,local_replace_legacy=bool(transfer and transfer['legacy_removed']))
+                            ID_BACKGROUND.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
+                        except Exception as error:blocked=str(error)[:2000]
                     if not blocked and SKY.OP in ops:
                         try:
                             candidate=OA.candidate(source if live else row["state"],prepared or mods,local_replace_legacy=bool(transfer and transfer["legacy_removed"]))
@@ -160,6 +165,11 @@ class FrozenBatchController:
                     elif not blocked:blocked=self._blocked(row,plan.modules,index==current)
                     if not blocked and LG.OP in plan.modules:
                         try:LR.verify_modules(json.loads(target.prepared_json),row,json.loads(target.transfer_json))
+                        except Exception as error:blocked=str(error)[:2000]
+                    if not blocked and ID_BACKGROUND.OP in plan.modules:
+                        try:
+                            candidate=OA.candidate(live_state if index==current else row['state'],json.loads(target.prepared_json) if target.prepared_json is not None else plan.params(),local_replace_legacy=bool(target.transfer_json and json.loads(target.transfer_json)['legacy_removed']))
+                            ID_BACKGROUND.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
                         except Exception as error:blocked=str(error)[:2000]
                     if not blocked and SKY.OP in plan.modules:
                         try:

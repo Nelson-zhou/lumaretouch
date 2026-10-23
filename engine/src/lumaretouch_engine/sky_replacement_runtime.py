@@ -1,3 +1,4 @@
+from . import id_background_state as ID
 """Full source validation, bounded preparation and common preview/export stage."""
 from copy import deepcopy
 import json
@@ -91,7 +92,7 @@ def verified_value(engine, value):
         if value['semantic']:
             from .sky_semantic.manifest import verify
             verify()
-        if engine._vram.has_background():
+        if (engine._vram.has_background() or ID.active(getattr(engine,'_id_background',None))):
             raise ValueError('换天空与换背景不能同时启用；请先关闭当前换背景')
     if B.file_stamp(row['path']) != before:
         raise ValueError('验证换天空身份时源照片变化')

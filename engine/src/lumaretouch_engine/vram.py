@@ -20,6 +20,7 @@ from .local_grade_stage import LocalGradeStage
 from .effect_recovery_stage import EffectRecoveryStage
 from .manual_liquify_stage import ManualLiquifyStage
 from .studio_background_stage import StudioBackgroundStage
+from .id_background_stage import IDBackgroundStage
 from .optics_stage import OpticsStage
 from .reference_color_stage import ReferenceColorStage
 from .extended_tone_stage import ExtendedToneStage
@@ -138,6 +139,7 @@ class PreviewPipeline:
         self._manual_liquify_key = None
         self.studio_background = StudioBackgroundStage(self.device, (self.h, self.w))
         self._studio_background_key = None
+        self.id_background = IDBackgroundStage(self.device,(self.h,self.w)); self._id_background_key = None
         self.sky_replacement = SkyReplacementStage(self.device, (self.h,self.w))
         self._sky_replacement_key = None
         self.optics = OpticsStage()
@@ -352,6 +354,7 @@ class PreviewPipeline:
         self._manual_liquify_key = None
         self.studio_background = StudioBackgroundStage(self.device, (self.h, self.w))
         self._studio_background_key = None
+        self.id_background = IDBackgroundStage(self.device,(self.h,self.w)); self._id_background_key = None
         self.sky_replacement = SkyReplacementStage(self.device, (self.h,self.w))
         self._sky_replacement_key = None
         self.optics = OpticsStage()
@@ -620,6 +623,7 @@ class PreviewPipeline:
         out = self.local_grade_layers.apply(out, self.align_source_grade_mask)
         out = self.sky_replacement.apply(out,self.align_source_grade_mask)
         out = self.apply_background(out)
+        out = self.id_background.apply(out,self.align_source_grade_mask)
         out = self.manual_liquify.apply(out)
         if render_stage == 'optics-input': return out
         out = self.optics.apply(out)

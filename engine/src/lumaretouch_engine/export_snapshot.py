@@ -1,3 +1,5 @@
+from copy import deepcopy
+from . import id_background_state as IDBS
 from . import photo_grain_state as PGS
 from . import primary_calibration_state as PCS
 from . import colour_grading_state as CGS
@@ -13,7 +15,7 @@ from .ops import curves as CURVES, levels as LEVELS
 
 
 def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_path=None,people_graph=None):
-    snap = dict(people=self._people_export_snapshot(st,source_path,people_graph), strength=float(st.get("_strength", 0.0)),
+    snap = dict(id_background=IDBS.check(st.get("_id_background")), id_background_bundle=deepcopy(st.get("_id_background_bundle")), people=self._people_export_snapshot(st,source_path,people_graph), strength=float(st.get("_strength", 0.0)),
                     params=dict(st.get("_params") or self._params),
                     grade=tuple(st.get("_grade", (0.0, 0.0, 0.0, 1.0))),
                     grade_scope=str(st.get("_grade_scope") or "all"),

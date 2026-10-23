@@ -46,7 +46,9 @@ def undo_key(state):
 
 def before_params(state,ops):
     from . import scope as SC
-    result=SC.params_of(state,[op for op in ops if op not in (OP,RC.OP)])
+    from . import id_background_scope as ID_BACKGROUND
+    result=SC.params_of(state,[op for op in ops if op not in (OP,RC.OP,ID_BACKGROUND.OP)])
+    if ID_BACKGROUND.OP in ops:result[ID_BACKGROUND.OP]={"target_recipe_key":ID_BACKGROUND.undo_key(state)}
     if OP in ops:result[OP]={'target_recipe_key':undo_key(state)}
     if RC.OP in ops:result[RC.OP]={"target_recipe_key":RC.undo_key(state)}
     return result

@@ -18,6 +18,8 @@ def params_of(state):return {'recipe':S.portable(state.get('_studio_background')
 def install(state,params):
     params=check_params(params);target=S.apply_portable(state.get('_studio_background'),params['recipe'])
     if S.active(target):
+        from .id_background_state import active as id_background_active
+        if id_background_active(state.get('_id_background')):raise ValueError('此照片已启用证件照换背景，不能同时启用影棚背景调整')
         if (state.get('_bg') or {}).get('active'):raise ValueError('该目标已完整换底，会覆盖背景调整；先关闭换底')
         targets={s['target'] for s in target['strokes'] if s['operation']=='add' and s['opacity']>0 and s['flow']>0}
         if target['region_mode']=='manual' and not targets.intersection({'background','floor'}):

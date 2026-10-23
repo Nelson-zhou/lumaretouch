@@ -1,0 +1,29 @@
+{
+  "validation": "static-only",
+  "python_ast_files": 33,
+  "json_parse_files": 3,
+  "errors": [],
+  "new_rust_missing_leading_zero_candidates": [],
+  "line_counts": {
+    "ui/src/App.tsx": 2156,
+    "ui/src-tauri/src/main.rs": 1956,
+    "engine/src/lumaretouch_engine/server.py": 6937
+  },
+  "unrun": [
+    "product-import",
+    "unit-test",
+    "rust-compile",
+    "ui-build",
+    "typecheck",
+    "image-inference",
+    "pixel-quality",
+    "UI-interaction",
+    "full-source-export-runtime"
+  ],
+  "quality_complete": false,
+  "picker_modes": [
+    "verified-original-proxy-float",
+    "verified-library-reference-proxy-float",
+    "reviewed-contact-support-proxy-float"
+  ]
+}

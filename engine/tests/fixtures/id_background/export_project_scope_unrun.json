@@ -1,0 +1,16 @@
+{
+  "status": "UNRUN: source-authored acceptance plan, not execution evidence",
+  "cases": [
+    {"name":"project_nested_history_bundle", "setup":"Import one 9 MB RGB16 TIFF background with ICC; review source subject; apply; change shadow; undo; save project v22 and reopen", "expect":"Original byte chunks and SHA, ICC SHA, decoded pixel SHA, source review recipe and both undo states survive. No source file writes."},
+    {"name":"project_tampered_asset", "setup":"Alter one bundled byte, hash reference, binding, or nested-history source identity independently", "expect":"Entire malformed record fails; no missing-asset neutral fallback."},
+    {"name":"project_missing_additive_key", "setup":"Open existing v22 project without either ID-background key", "expect":"Existing edits retained; ID background neutral only when absent."},
+    {"name":"preset_target_review", "setup":"Save enabled solid-background style; apply to target lacking independently reviewed selected scope", "expect":"Reject without state/history mutation."},
+    {"name":"batch_target_assets", "setup":"Copy asset-mode style through frozen preflight to two reviewed targets with different immutable backgrounds", "expect":"Target masks, source IDs and each target's own background bytes retained; layout/edge/shadow parameters copied."},
+    {"name":"batch_conflict", "setup":"After preflight alter target mask review or replace its background; attempt commit; after commit alter review then undo batch", "expect":"Revision or target-recipe identity detects conflict; no overwrite of later work."},
+    {"name":"full_source_tile_equivalence", "setup":"Export reviewed source at multiple tile sizes including shadow beyond tile halo; compare full-source inspection to export", "expect":"One full-domain shadow/edge preparation then exact cropped fields; no proxy alpha enlargement and no seams."},
+    {"name":"original_source_change", "setup":"Change source bytes before decode, during preparation, or during render", "expect":"Fail source identity or stamp check; no export success."},
+    {"name":"budget_and_cancel", "setup":"Attempt >32MP and insufficient-memory full fields; cancel during support or native shadow preparation", "expect":"Explicit budget rejection/cancellation with no lower-quality replacement."},
+    {"name":"mutual_exclusion", "setup":"Enable old replacement matte, studio background or sky, then enable ID background through preset/batch/export", "expect":"Reject mutually exclusive combination in both edit and export routes."},
+    {"name":"prior_pipeline_gates", "setup":"Combine accepted ID background with color, people/body shaping, manual liquify, geometry and RGB16 output", "expect":"Current pipeline RGB composited, not original photo pasted back; all prior source and preview identity gates preserved."}
+  ]
+}

@@ -80,6 +80,10 @@ impl ColorPickerCaptureHost {
                 || d["epoch"] != hex(epoch) || d["seq"] != "1" || !dimension_pair(&d["full_source"]) {
                 return Err("color-action-input descriptor contract mismatch".into());
             }
+            if record.action.starts_with("id_background") {
+                let mode=match record.action.as_str(){"id_background"=>"original","id_background_reference"=>"reference","id_background_subject"=>"subject",_=>return Err("unknown ID picker source".into())};
+                if d["picker_mode"]!=mode || !d["source_binding"].as_object().is_some_and(|b|!b.is_empty()) || d["source_binding"].to_string().len()>4096 {return Err("ID picker source identity missing or oversized".into());}
+            }
             // Older capture consumers expect these aliases in the descriptor.
             // If supplied, they must agree; the registered record is authoritative.
             let ticket_text = record.ticket.to_string();
@@ -102,7 +106,7 @@ impl ColorPickerCaptureHost {
             // Do not retain arbitrary, potentially large event extension fields.
             let mut descriptor = json!({});
             for key in ["version","domain","quality","profile","epoch","shm_instance","seq","generation","document_id",
-                "recipe_document_id","recipe_revision","width","height","presentation_width","presentation_height","projection","full_source","picker_action","picker_channel","source_stage"] {
+                "recipe_document_id","recipe_revision","width","height","presentation_width","presentation_height","projection","full_source","picker_action","picker_channel","source_stage","picker_mode","source_binding"] {
                 descriptor[key] = d[key].clone();
             }
             descriptor["capture_id"] = json!(record.capture); descriptor["ticket"] = json!(record.ticket.to_string());

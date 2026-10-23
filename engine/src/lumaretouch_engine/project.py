@@ -247,6 +247,9 @@ def validate(p: object) -> None:
         from .optics_project import validate_records as validate_optics
         try: validate_optics(row,required=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)),allowed=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)))
         except ValueError as error: raise ProjectError(str(error)) from error
+        from .id_background_project import validate_records as validate_id_background
+        try: validate_id_background(row, assets=p['assets'])
+        except ValueError as error: raise ProjectError(str(error)) from error
         from .studio_background_project import validate_records as validate_studio
         try: validate_studio(row, required=(sv in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)), allowed=(sv in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)))
         except ValueError as error: raise ProjectError(str(error)) from error
@@ -661,6 +664,9 @@ def encode(value: object, assets: dict, dropped: list, at: str) -> object:
         if '_sky_replacement' in value:
             from .sky_replacement_state import check_saved_record
             check_saved_record(value['_sky_replacement'])
+        if '_id_background' in value:
+            from .id_background_project import validate_records as validate_id_background
+            validate_id_background(value, assets=assets)
         if '_studio_background' in value:
             from .studio_background_state import check_saved_record
             check_saved_record(value['_studio_background'])
@@ -784,6 +790,9 @@ def decode(value: object, assets: dict, dropped: list, at: str,
         if '_sky_replacement' in value:
             from .sky_replacement_state import check_saved_record
             check_saved_record(value['_sky_replacement'])
+        if '_id_background' in value:
+            from .id_background_project import validate_records as validate_id_background
+            validate_id_background(value, assets=assets)
         if '_studio_background' in value:
             from .studio_background_state import check_saved_record
             check_saved_record(value['_studio_background'])

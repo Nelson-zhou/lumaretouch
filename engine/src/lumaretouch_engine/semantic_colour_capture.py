@@ -94,8 +94,8 @@ def render(engine,row,state,document_id,revision,*,cancelled=lambda:False):
     snap=engine._state_to_export_snap(state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=path)
     people=snap.get('people');key=candidate_key(state,people);geometry=geometry_key(state,people)
     snap['semantic_colour']=S.empty();snap['semantic_colour_mask_assets']={}  # Only our previous contribution is removed.
-    from . import body_pose_render as body_render
-    for owner in (groups,recovery,manual,studio,sky,body_render):owner.check_export_decode(snap,path,stamp,(decoded.h,decoded.w))
+    from . import body_pose_render as body_render, id_background_runtime as id_background
+    for owner in (groups,recovery,manual,studio,sky,body_render,id_background):owner.check_export_decode(snap,path,stamp,(decoded.h,decoded.w))
     if snap.get('grade_scope')=='objects':
         M.verify_source(M.check(snap.get('local_masks')),path,(decoded.h,decoded.w));snap['local_mask_source_path']=path
     spec,skipped=build_export_spec(snap,decoded.h,decoded.w,for_document=True)

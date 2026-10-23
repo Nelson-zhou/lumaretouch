@@ -7,7 +7,9 @@ def state_signature(st: dict) -> str:
     （1e-16 的差不能算"改过"），_deform/_grade 又是嵌套结构。"""
     d = {}
     for k, v in st.items():
-        if k == "_semantic_colour_mask_assets":
+        if k == "_id_background_bundle":
+            d[k] = None if v is None else v["binding"]
+        elif k == "_semantic_colour_mask_assets":
             d[k] = sorted(v)  # Recipe contains hash/shape references; immutable raw arrays never stringify.
         elif k == "_semantic_colour_bundle":
             d[k] = st.get("_semantic_colour",{}).get("reference")

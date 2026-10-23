@@ -53,8 +53,9 @@ impl Drop for CaptureRead {
 
 #[tauri::command]
 pub(crate) fn color_picker_capture(state: State<'_, Arc<AppState>>, action: String,
-    capture_id: String, ticket: Option<String>, document_id: String, picker_action: Option<String>, picker_channel: Option<String>) -> Result<Value, String> {
+    capture_id: String, ticket: Option<String>, document_id: String, picker_action: Option<String>, picker_channel: Option<String>, reference: Option<Value>) -> Result<Value, String> {
     id16(&capture_id)?; token(&document_id)?;
+    if action!="arm" && reference.is_some(){return Err("reference is only valid while arming a capture".into());}
     match action.as_str() {
         "arm" => {
             if ticket.is_some() { return Err("arm does not accept an existing capture ticket".into()); }
@@ -64,6 +65,8 @@ pub(crate) fn color_picker_capture(state: State<'_, Arc<AppState>>, action: Stri
             let action = picker_action.ok_or("missing color picker action")?;
             let channel = picker_channel.ok_or("missing color picker channel")?;
             crate::color_picker_host::selection(&action, &channel)?;
+            if reference.is_some() && action!="id_background_reference" {return Err("reference is only accepted by the reference-image picker".into());}
+            if action=="id_background_reference" && !reference.as_ref().is_some_and(|v|v.is_object()&&v.to_string().len()<=4096){return Err("choose a verified library reference first".into());}
             let revision = {
                 let report = state.doc_report.lock().map_err(|_| "document lock poisoned")?;
                 if report.as_ref().and_then(|r| r["doc_state"]["document_id"].as_str()) != Some(document_id.as_str()) {
@@ -74,8 +77,9 @@ pub(crate) fn color_picker_capture(state: State<'_, Arc<AppState>>, action: Stri
             let handle = engine(&state)?;
             let mut capture = state.color_picker_capture.lock().map_err(|_| "targeted color capture lock poisoned")?;
             let ticket = capture.begin(handle.epoch(), capture_id.clone(), document_id.clone(), revision, action.clone(), channel.clone())?;
-            let command = json!({"cmd":"color_picker_capture","action":"arm","capture_id":capture_id,
+            let mut command = json!({"cmd":"color_picker_capture","action":"arm","capture_id":capture_id,
                 "ticket":ticket,"document_id":document_id,"epoch":hex(handle.epoch()),"picker_action":action,"picker_channel":channel});
+            if let Some(value)=reference {command["reference"]=value;}
             if let Err(error) = handle.send(command) {
                 capture.cancel(&capture_id, Some(&ticket), &document_id); return Err(error);
             }

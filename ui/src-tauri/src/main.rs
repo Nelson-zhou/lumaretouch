@@ -83,6 +83,7 @@ mod manual_liquify_host;
 mod manual_liquify_api;
 mod studio_background_host;
 mod studio_background_api;
+mod id_background_api;
 mod sky_replacement_host;
 mod sky_replacement_api;
 mod sky_semantic_api;
@@ -1933,6 +1934,7 @@ fn main() {
             sky_semantic_api::sky_semantic_proposal_status,
             sky_semantic_model_api::sky_semantic_model, sky_semantic_model_api::sky_semantic_model_status,
             optics_api::optics, optics_api::optics_result, optics_api::optics_preview, optics_api::optics_preview_status,
+            id_background_api::id_background_request, id_background_api::id_background_status,
             studio_background_api::studio_background, studio_background_api::studio_background_result,
             studio_background_api::studio_background_preview, studio_background_api::studio_background_preview_status,
             manual_liquify_api::manual_liquify, manual_liquify_api::manual_liquify_result,

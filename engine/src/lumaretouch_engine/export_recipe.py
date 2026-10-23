@@ -87,6 +87,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     from .studio_background_runtime import configure_export as configure_studio
     configure_studio(spec, snap, (eh, ew), for_document=for_document)
     spec.check_studio_background()
+    from .id_background_runtime import configure_export as configure_id_background
+    configure_id_background(spec, snap, (eh, ew), for_document=for_document)
     from .optics_runtime import configure_export as configure_optics
     configure_optics(spec,snap,(eh,ew),for_document=for_document)
     spec.check_optics()
@@ -140,6 +142,7 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
             spec.grade = (0.0, 0.0, 0.0, 1.0)
             spec.grade_scope = "all"
             skipped.append("grade 整层（局部调色作用域属于当前文档，不能搬到别的图）")
+        spec.check_id_background()
         return spec, skipped
     validate_repair_ops(snap["repair_ops"])
     spec.repair = [RepairOp(op_id=op.op_id,
@@ -269,5 +272,6 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
             else:
                 spec.bg_matte = resample_field(_mt, (eh, ew), uint8=True)
                 spec.bg_ref = _ref
+    spec.check_id_background()
     return spec, skipped
 

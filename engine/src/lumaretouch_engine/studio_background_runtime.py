@@ -1,3 +1,4 @@
+from . import id_background_state as ID
 """Studio recipe lifecycle and one full-domain preparation for tiled export."""
 from copy import deepcopy
 import json
@@ -14,7 +15,7 @@ def key(engine,value):
 
 def verify(engine,value):
     value=S.check(value);row=engine._docs[engine._doc_index];before=M.file_stamp(row['path'])
-    if S.active(value) and engine._vram.has_background(): raise ValueError('完整换底会覆盖影棚背景调整，请先关闭换底')
+    if S.active(value) and (engine._vram.has_background() or ID.active(getattr(engine,'_id_background',None))): raise ValueError('完整换底会覆盖影棚背景调整，请先关闭换底')
     if row.get('_local_source_stamp')!=before: raise ValueError('解码后原照片变化，请重新打开')
     M.verify_source(value,row['path'],(row['src_h'],row['src_w']))
     if value['region_mode']=='semantic_background' and value['semantic_owner']!=M.current_owner(engine):

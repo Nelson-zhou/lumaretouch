@@ -1,3 +1,6 @@
+import {IdBackgroundPanel} from './idBackground/IdBackgroundPanel';
+import {ExportColorSpace} from './components/ExportColorSpace';
+import {ExportMetadataOptions} from './components/ExportMetadataOptions';
 import {useNeckWorkflow} from './neckShape/useNeckWorkflow';
 import {useShoulderWorkflow} from './shoulderShape/useShoulderWorkflow';
 import {BodyShapeTools} from './legShape/BodyShapeTools';
@@ -255,6 +258,7 @@ export default function App() {
   const layoutModel = useLayoutSettings();
   const [exportDir, setExportDir] = useState("/tmp/luma-export");
   const [exportFormat, setExportFormat] = useState("jpg");
+  const [idBackgroundBusy,setIdBackgroundBusy]=useState(false);
   const [exportQuality, setExportQuality] = useState(95);
   // 放大（M7）：倍率与出片锐量。1 / 0.0 就是"不上这一层"——默认必须是原样出片，
   // 而不是一个没人同意的默认美化。
@@ -955,7 +959,7 @@ export default function App() {
   const isEditedDoc = (d: SessionDoc) => {
     const e = d.edits;
     return e.repair > 0 || e.light > 0 || e.deform || e.lut || e.grade
-      || !!e.enhance || !!e.channel || !!e.curves || !!e.levels || !!e.effect_recovery || !!e.manual_liquify || !!e.studio_background || !!e.optics || !!e.sky_replacement;
+      || !!e.enhance || !!e.channel || !!e.curves || !!e.levels || !!e.effect_recovery || !!e.manual_liquify || !!e.studio_background || !!e.id_background || !!e.optics || !!e.sky_replacement;
   };
   // 指针在窗口外松开、或按住时切走窗口：pointerup 可能永远不来，那样画面会停在原图。
   // 所以这三条兜底不是装饰——"松开没回来"比没有对比按钮更糟。
@@ -1675,7 +1679,7 @@ export default function App() {
     contextKey:JSON.stringify([pid,status?.doc_rev,status?.image?.load_id,workspace,compareMode,comparing,inspectionEnabled,cropOpen]),
     reason:!sourcePatchSupported?'当前引擎不支持源图取样，请更新匹配版本':!sourcePatchCanStart?'正在等待命令队列空闲':'请等待编辑完成，并切回单视图代理预览'},
     caps,JSON.stringify([pid,doc?.document_id,doc?.crop?.rect,doc?.crop?.rotation_degrees,workspace,compareMode,comparing,inspectionEnabled,cropOpen]),refreshFromEngine,brushOn,pickFace,{report:recoveryReport,prepare:()=>{setBrushOn(false);setPickFace(false);colorSampler.cancel();blushPicker.cancel();lipstickPicker.cancel();eyelinerPicker.cancel();browMakeupPicker.cancel();eyelashPicker.cancel();}});
-  const captureAllowed=!sky.active&&!sky.pending&&!optics.active&&!optics.pending&&!studio.active&&!studio.pending&&!manual.active&&!manual.pending&&!recovery.active&&!recovery.pending&&!liveGrade.busy&&!colorPicker.active&&!colorPicker.pending&&!localMasks.active&&!localMasks.pending&&!cloneStamp.active&&!cloneStamp.pending&&!!status?.engine_alive && status?.ready_caps?.color_capture_protocol===1&&!sourcePatch.active&&!sourcePatch.pending&&!wbPicker.active&&!wbPicker.pending
+  const captureAllowed=!idBackgroundBusy&&!sky.active&&!sky.pending&&!optics.active&&!optics.pending&&!studio.active&&!studio.pending&&!manual.active&&!manual.pending&&!recovery.active&&!recovery.pending&&!liveGrade.busy&&!colorPicker.active&&!colorPicker.pending&&!localMasks.active&&!localMasks.pending&&!cloneStamp.active&&!cloneStamp.pending&&!!status?.engine_alive && status?.ready_caps?.color_capture_protocol===1&&!sourcePatch.active&&!sourcePatch.pending&&!wbPicker.active&&!wbPicker.pending
     && !!doc?.document_id && status.image?.load_id===doc.document_id && workspace==='retouch'
     && compareMode==='single' && !comparing && !inspectionEnabled && !cropOpen && (batchWorkflow.ui.phase==='closed'||batchWorkflow.ui.hidden===true);
   const captureReason=captureAllowed?'':'请导入图片，并在单视图代理预览中取色';
@@ -1741,7 +1745,7 @@ export default function App() {
   // Keep uncertain arm/waist mutations and proposal cancellation from racing other UI edits.
   // Original-receipt checks, popup Close and the activity locator remain accessible.
   const guardArmWork=(event:import('react').SyntheticEvent)=>{
-    if((arms.busy||waist.busy||length.busy||neck.busy)&&event.target instanceof Element&&!event.target.closest('[data-arm-workflow],[data-waist-workflow],[data-leg-length-workflow],[data-neck-workflow],.retouchToolActivity')){event.preventDefault();event.stopPropagation();}
+    if(event.target instanceof Element&&((idBackgroundBusy&&!event.target.closest('.idBackgroundPanel,.id-background-picker'))||((arms.busy||waist.busy||length.busy||neck.busy)&&!event.target.closest('[data-arm-workflow],[data-waist-workflow],[data-leg-length-workflow],[data-neck-workflow],.retouchToolActivity')))){event.preventDefault();event.stopPropagation();}
   };
   return (
     <div className={"app ws-" + workspace} onClickCapture={guardArmWork} onPointerDownCapture={guardArmWork} onKeyDownCapture={guardArmWork}>
@@ -1759,6 +1763,7 @@ export default function App() {
                 if(target instanceof HTMLSelectElement || (target instanceof HTMLInputElement
                   && ['range','number','color','checkbox'].includes(target.type)))notifyInspectionEditIntent();
               }}>
+          <IdBackgroundPanel pickerDisabled={busy||exporting||peopleWorkflow.state.pending||peopleWorkflow.state.uncertain||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||brushOn||pickFace||whiteBalanceWorkflow.workflow.busy()||sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||manual.active||manual.pending||recovery.active||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||localMasks.active||localMasks.pending||cloneStamp.active||cloneStamp.pending||sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending||shoulders.busy||legs.busy||arms.busy||waist.busy||length.busy||neck.busy||eyelashPicker.active||browMakeupPicker.active||eyelinerPicker.active||lipstickPicker.active||blushPicker.active||workspace!=='retouch'||inspectionEnabled||cropOpen||!(batchWorkflow.ui.phase==='closed'||batchWorkflow.ui.hidden===true)} selectedReference={sampleLibrary.selectedReference} onSelectReference={()=>sampleLibrary.show('reference')} onBusy={setIdBackgroundBusy} documentId={doc?.document_id??''} hostRevision={status?.doc_rev??-1} disabled={hairBusy||!hasImage} available={status?.ready_caps?.id_background_protocol===1} masks={doc?.local_masks} onChanged={()=>{void refreshFromEngine();}}/>
           <RetouchPanel irisMakeupPanel={<IrisMakeupPanel people={peopleWorkflow} report={doc?.people?.iris_makeup??null} blocked={busy||exporting||!captureAllowed||eyelashPicker.active||browMakeupPicker.active||eyelinerPicker.active||lipstickPicker.active||blushPicker.active||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending}/>} eyelashPanel={<EyelashPanel people={peopleWorkflow} picker={eyelashPicker} blocked={busy||exporting||!captureAllowed||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} onArm={armEyelashPicker}/>} browMakeupPanel={<BrowMakeupPanel people={peopleWorkflow} picker={browMakeupPicker} blocked={busy||exporting||!captureAllowed||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} onArm={armBrowMakeupPicker}/>} eyelinerPanel={<EyelinerPanel people={peopleWorkflow} picker={eyelinerPicker} blocked={busy||exporting||!captureAllowed||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} onArm={armEyelinerPicker}/>} lipstickPanel={<LipstickPanel people={peopleWorkflow} picker={lipstickPicker} blocked={busy||exporting||!captureAllowed||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} onArm={armLipstickPicker}/>} blushMakeupPanel={<BlushMakeupPanel people={peopleWorkflow} picker={blushPicker} blocked={busy||exporting||!captureAllowed||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} onArm={armBlushPicker}/>} shoulderPanel={<BodyShapeTools shoulders={shoulders} legs={legs} arms={arms} waist={waist} length={length} neck={neck} blocked={bodyToolsBlocked}/>} sampleLibraryPanel={<SampleLibraryLaunch owner={sampleLibrary}/>} toolLocation={toolLocation} {...createRetouchToolSlots({sky,skyReport:doc?.sky_replacement,optics,opticsReport:doc?.optics,manual,recovery,studio,manualReport:doc?.manual_liquify,recoveryReport,studioReport:doc?.studio_background,busy:liveGrade.busy})} colorActions={{owner:colorPicker,blocked:sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||sourcePatch.pending||wbPicker.pending||cloneStamp.pending||localMasks.pending,onStart:(action,channel)=>{if(sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||sourcePatch.pending||wbPicker.pending||cloneStamp.pending||localMasks.pending)return;setBrushOn(false);setPickFace(false);colorSampler.cancel();blushPicker.cancel();lipstickPicker.cancel();eyelinerPicker.cancel();browMakeupPicker.cancel();eyelashPicker.cancel();sourcePatch.workflow.cancel();wbPicker.workflow.cancel();cloneStamp.workflow.cancel();localMasks.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();void colorPicker.workflow.start(action,channel);}}} whiteBalanceBusy={optics.active||optics.pending||studio.active||studio.pending||sourcePatch.active||sourcePatch.pending||cloneStamp.active||cloneStamp.pending||sky.active||sky.pending||manual.active||recovery.active||manual.pending||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||whiteBalanceWorkflow.workflow.busy()||wbPicker.active||wbPicker.pending||localMasks.active||localMasks.pending} whiteBalancePanel={<WhiteBalanceControls owner={whiteBalanceWorkflow} value={doc?.exposure} pickerBusy={sky.active||sky.pending||manual.active||recovery.active||manual.pending||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||localMasks.active||localMasks.pending||wbPicker.active||wbPicker.pending||sourcePatch.active||sourcePatch.pending||cloneStamp.active||cloneStamp.pending} picker={<WhiteBalancePickerControls owner={{...wbPicker,context:{...wbPicker.context,canStart:wbPicker.context.canStart!==false&&!manual.active&&!manual.pending&&!colorPicker.pending&&!recovery.pending&&!liveGrade.busy}}} onStart={()=>{if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();blushPicker.cancel();lipstickPicker.cancel();eyelinerPicker.cancel();browMakeupPicker.cancel();eyelashPicker.cancel();localMasks.workflow.cancel();cloneStamp.workflow.cancel();void wbPicker.workflow.start();}}/>}/>} presetPanel={<PresetPanel workflow={presetWorkflow}/>} status={status} doc={doc} hasImage={hasImage}
                         sourcePatchPanel={<SourcePatchPanel owner={sourcePatch} blocked={sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||colorPicker.pending||localMasks.pending||wbPicker.active||wbPicker.pending||cloneStamp.pending} onStart={()=>{if(sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||colorPicker.pending||localMasks.pending||wbPicker.active||wbPicker.pending||cloneStamp.pending)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();localMasks.workflow.cancel();cloneStamp.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();blushPicker.cancel();lipstickPicker.cancel();eyelinerPicker.cancel();browMakeupPicker.cancel();eyelashPicker.cancel();void sourcePatch.workflow.start();}}/>}
                         cloneStampPanel={<CloneStampPanel owner={cloneStamp} blocked={sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||colorPicker.pending||localMasks.pending||sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending} onStart={()=>{if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();blushPicker.cancel();lipstickPicker.cancel();eyelinerPicker.cancel();browMakeupPicker.cancel();eyelashPicker.cancel();localMasks.workflow.cancel();void cloneStamp.workflow.start();}}/>}
@@ -2104,34 +2109,14 @@ export default function App() {
                     <option value={4}>4×</option>
                   </select>
                 </label>
-                <label>色彩空间 ICC
-                  <select value={exportProfile} onChange={(e) => setExportProfile(e.target.value)}>
-                    <option value="srgb">sRGB（嵌入 ICC）</option>
-                    <option value="source">跟随源文件 ICC</option>
-                    <option value="adobergb" disabled>AdobeRGB</option>
-                    <option value="display_p3" disabled>Display P3</option>
-                  </select>
-                </label>
+                <ExportColorSpace value={exportProfile} onChange={setExportProfile}/>
                 <label>同名冲突
                   <select value={exportConflict} onChange={(e) => setExportConflict(e.target.value)}>
                     <option value="skip_and_report">跳过并报告</option>
                     <option value="recheck">重新检查</option>
                   </select>
                 </label>
-                <label className="exCheck">
-                  <input type="checkbox" checked={exportBits16}
-                         onChange={(e) => {
-                           setExportBits16(e.target.checked);
-                           // 切 16-bit 同时把面板格式收到 TIFF，不让控件停在会被后端拒的 jpg
-                           if (e.target.checked) setExportFormat("tif");
-                         }} />
-                  16-bit TIFF
-                </label>
-                <label className="exCheck">
-                  <input type="checkbox" checked={exportGps}
-                         onChange={(e) => setExportGps(e.target.checked)} />
-                  写入 GPS
-                </label>
+                <ExportMetadataOptions bits16={exportBits16} gps={exportGps} onBits16={setExportBits16} onGps={setExportGps} onFormat={setExportFormat}/>
               </div>
               <LayoutControls model={layoutModel} disabled={exporting} selected={exportTargets.length || (hasImage ? 1 : 0)} receipt={status?.export?.layout_result}/>
               <WatermarkControls value={watermark} onChange={setWatermark} disabled={exporting} storageError={watermarkStorageError}/>
