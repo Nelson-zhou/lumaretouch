@@ -1,0 +1,253 @@
+{
+  "base": "30494a6e",
+  "status": "SHARED_SOURCE_INTEGRATED_UNRUN",
+  "static_checks": [
+    "Changed Python AST syntax only",
+    "JSON parse only",
+    "Declared command/event/import source inspection",
+    "SHA256 source manifest"
+  ],
+  "not_run": [
+    "product imports",
+    "product execution",
+    "tests",
+    "build",
+    "compiler",
+    "typecheck",
+    "inference",
+    "install",
+    "download"
+  ],
+  "files": [
+    {
+      "path": "core/leg_length/ABI.md",
+      "sha256": "9a811af69d050303adb2125c45924f59b694aa75a96c6b883449ae364e308014",
+      "bytes": 1161
+    },
+    {
+      "path": "core/leg_length/lib.rs",
+      "sha256": "55b67b636fe7c3ac7919f2c6d610524082474a90c2f9881cc61f0970b64a2528",
+      "bytes": 6440
+    },
+    {
+      "path": "docs/leg-length/INTEGRATION.md",
+      "sha256": "a79b6872d6a95e6e443e17233253df10ad1dece1f9174c3cb2f0e0204eba9c02",
+      "bytes": 4221
+    },
+    {
+      "path": "docs/leg-length/README.md",
+      "sha256": "2b1ed12b0e7bdce44305d4069d0461dda9ea2d23aaf398b742d83a488d88da37",
+      "bytes": 3894
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/arm_shape_registered_host.py",
+      "sha256": "6ea0df93bdd3412372d60cb5a936eb8baef7801e4048b7a6733a0f4de67eb76d",
+      "bytes": 3399
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_commands.py",
+      "sha256": "f96fbc59d29c9b482507c83f9e59db00d4b693ef650602249e8a50ec63fd64e1",
+      "bytes": 10402
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_families.py",
+      "sha256": "de31c8b96374f561868583a32b325a6ec3a8309b3caf07a76b2bbdf7c712e908",
+      "bytes": 1422
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_geometry.py",
+      "sha256": "7fc773e6345eb6947324a70a82a12f349ae8a037623acf112b26615bf4a0739b",
+      "bytes": 8039
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_host.py",
+      "sha256": "7742beaeb7bdd3032060a9e5cb12bb6733a33e32e8f0cb2e976dcee5803153ca",
+      "bytes": 14062
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_operations.py",
+      "sha256": "d3489694735562311f97054fd21ba60859703f5ad974341ddbc143f4c1fbbb4d",
+      "bytes": 9818
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_render.py",
+      "sha256": "aa101b0eab4c026d956c0741146cc70d60371c347e2d7277bd61d83e229db7f2",
+      "bytes": 9534
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_controller.py",
+      "sha256": "428d971ebc00c651400a081438b55dfd12ee0424ba9d83a55140ec4a7e06fc2b",
+      "bytes": 8603
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "5a3c68fd99866018fa3102df296503b7ff5f5190ef32811ea9a6eebc50ce578f",
+      "bytes": 6214
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/leg_length_adapter.py",
+      "sha256": "4fb1e89e4b9c9d42bd5ad93e72caf9cf63502133af5b4c0a441f89e3969b288c",
+      "bytes": 2256
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/leg_length_field.py",
+      "sha256": "5fdf0112cbf801c5d4de28b78100f0477b813b572825868c2d374c610cf2792b",
+      "bytes": 4784
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/leg_length_host.py",
+      "sha256": "b5c07ef0e6880e9a9b741c0cf62226c0c6c508ea2cc05fdf886be279ad77ea9f",
+      "bytes": 13170
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/leg_length_native.py",
+      "sha256": "75da90b9ad08a3b1248b183e9bccba04ae195f6d634fca0553b4dfde097b6707",
+      "bytes": 2845
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/leg_length_project.py",
+      "sha256": "90af16d502f2bb7b36f229a1d3d9deb35e85b0f3ec644d58752bb5ad788e83df",
+      "bytes": 7915
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/leg_length_runtime.py",
+      "sha256": "be2e3a1c700dc0b2421c290b1aa8fd5509589555897f85d0d67f4599b7da399e",
+      "bytes": 4360
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/leg_length_state.py",
+      "sha256": "9264ce3fed963900437dbc08e68872ee544dae491589cf806c34c611256c0bd1",
+      "bytes": 4749
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "11cb566fd5e76e7b26e3eb7d9cb452cbabcb3529045e66f575f8ffad02f2f871",
+      "bytes": 444796
+    },
+    {
+      "path": "engine/tests/fixtures/leg_length/acceptance-cases.json",
+      "sha256": "c9d91d1d29ccdeacdb4cb0043830e8bc4680afb7fb4409f84289a00b15737196",
+      "bytes": 2538
+    },
+    {
+      "path": "engine/tests/fixtures/leg_length/synthetic-input.json",
+      "sha256": "cdf941031472397c576bb00095aab499d7a6bbc81019736f8b14742d49456e3c",
+      "bytes": 5190
+    },
+    {
+      "path": "packaging/build-leg-length.sh",
+      "sha256": "69e407f06a20ed6becbbd47a51710885674168fc0ffacf89756cf96c3b8a9dd6",
+      "bytes": 377
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "b3abf52dd417c982586a661cb7ee3068f8b3cb44efb51fdc3f6845b98eac3d1b",
+      "bytes": 12085
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "sha256": "82b6157ae49688232506451618ba276b760f2702e85c538b131680e257ea5598",
+      "bytes": 3026
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "434f2376c004775aab8383d4330df0f03592fcee0e5afa2f27ef9c61378a2b93",
+      "bytes": 30778
+    },
+    {
+      "path": "ui/src-tauri/src/leg_length_api.rs",
+      "sha256": "8b3cf953c1b092b67dbdd07649e4ddce81a3b52f4493a97ec37ea173fcae1d17",
+      "bytes": 19013
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "a1a97176184b49ba893bb97640dc4e3b9600c31db50f6c530f48eca1b390e976",
+      "bytes": 94423
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "18201bf8d693f9b21e70518570c87bc2901c525ef209eb0a0aa40f1e40b58648",
+      "bytes": 7022
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "4782fe24cd441e2180c7c33c33d5fd9a512ea52cdbce4e4b7572fd3e94f2454a",
+      "bytes": 128420
+    },
+    {
+      "path": "ui/src/legLength/LegLengthPanel.tsx",
+      "sha256": "e7a2abb2d61ab03117e5a38a1fcff4167bf2d9f2987ee22fd58c8c2061e9f2b4",
+      "bytes": 5643
+    },
+    {
+      "path": "ui/src/legLength/LegLengthSupportEditor.tsx",
+      "sha256": "db429acdaeae0a4d6e9bef729a84ea97a6b1e07569cdd4be612a51c3eb298afd",
+      "bytes": 5553
+    },
+    {
+      "path": "ui/src/legLength/LegLengthWorkspace.tsx",
+      "sha256": "66711fb328770f3b7dfb14b815b868ab202f6231b8edc644143f1da29d183b49",
+      "bytes": 1781
+    },
+    {
+      "path": "ui/src/legLength/context.ts",
+      "sha256": "24be83f02e58493b0036eddf131157e03e86f5fbd2ec286bddcf644f7fc8172e",
+      "bytes": 637
+    },
+    {
+      "path": "ui/src/legLength/controller.ts",
+      "sha256": "f728f263524951c014c1c303871e875640aa87bb7d17aec549f868864a3d1847",
+      "bytes": 5915
+    },
+    {
+      "path": "ui/src/legLength/legLength.css",
+      "sha256": "dea6eba8067f33991c18819bd42d1d55e7c0a6826ed3fb209b739a092e0969c9",
+      "bytes": 2084
+    },
+    {
+      "path": "ui/src/legLength/model.test.ts",
+      "sha256": "cd14d95a653fd98b44cadf00335e9cce48720509ff814ea39bca4e163513c6ff",
+      "bytes": 913
+    },
+    {
+      "path": "ui/src/legLength/model.ts",
+      "sha256": "488cd43c38d3577291e9d42b7843613f8136ed81b8557bf8b95627bb472a98ac",
+      "bytes": 5993
+    },
+    {
+      "path": "ui/src/legLength/nativeTransport.ts",
+      "sha256": "fd9a723eae50f3070c64705582ea5fb8cb990e6332b876a1c9db0c799a080097",
+      "bytes": 3547
+    },
+    {
+      "path": "ui/src/legLength/receipts.ts",
+      "sha256": "34fb317a0289351ae70a70116a659fdd1e2154f4a99771e2ca2ca410ea47337c",
+      "bytes": 1045
+    },
+    {
+      "path": "ui/src/legLength/sourcePreview.ts",
+      "sha256": "3e1882d756d6269615fb6f67e83a829b0534995764597b95308e03c1c7880fca",
+      "bytes": 2507
+    },
+    {
+      "path": "ui/src/legLength/useLegLengthWorkflow.ts",
+      "sha256": "e1baeb75bab40154f8163d695f4ebeb91eb0fb4cde099a369f0d860661dd245f",
+      "bytes": 6638
+    },
+    {
+      "path": "ui/src/legShape/BodyShapeTools.tsx",
+      "sha256": "1ebee7a5628235ee53278584c5b848dc745a8750444c25d337974fd367d7c817",
+      "bytes": 9217
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "395c0b19aa0545870b37a9ebc79a31fcabacb43d6ab71642e3d32e8f9c2e6ecf",
+      "bytes": 92217
+    },
+    {
+      "path": "ui/src/toolRouting/coverage.ts",
+      "sha256": "a4360a942d50088d1ace0a4203c7b50d9fa17501f64f823357d6e52e92d19d76",
+      "bytes": 3722
+    }
+  ]
+}

@@ -1,0 +1,308 @@
+{
+  "status": "UNRUN",
+  "not_photographic_acceptance": true,
+  "source_dimensions": [
+    1001,
+    1001
+  ],
+  "points": [
+    {
+      "index": 0,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 1,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 2,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 3,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 4,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 5,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 6,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 7,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 8,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 9,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 10,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 11,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 12,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 13,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 14,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 15,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 16,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 17,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 18,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 19,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 20,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 21,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 22,
+      "x": 0.5,
+      "y": 0.2,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 23,
+      "x": 0.3,
+      "y": 0.25,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 24,
+      "x": 0.7,
+      "y": 0.25,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 25,
+      "x": 0.3,
+      "y": 0.4,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 26,
+      "x": 0.7,
+      "y": 0.4,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 27,
+      "x": 0.3,
+      "y": 0.55,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 28,
+      "x": 0.7,
+      "y": 0.55,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 29,
+      "x": 0.3,
+      "y": 0.57,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 30,
+      "x": 0.7,
+      "y": 0.57,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 31,
+      "x": 0.3,
+      "y": 0.59,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    },
+    {
+      "index": 32,
+      "x": 0.7,
+      "y": 0.59,
+      "z": 0.0,
+      "visibility": 0.99,
+      "presence": 0.99
+    }
+  ],
+  "recipe": {
+    "version": 1,
+    "thigh": 0.25,
+    "calf": 0.25
+  },
+  "support": {
+    "version": 1,
+    "method": "user-reviewed-visible-length-support",
+    "legs": {
+      "left": {
+        "outer_left": 0.05,
+        "inner_left": 0.27,
+        "inner_right": 0.33,
+        "outer_right": 0.49,
+        "foot_end": 0.62,
+        "support_end": 0.95
+      },
+      "right": {
+        "outer_left": 0.51,
+        "inner_left": 0.67,
+        "inner_right": 0.73,
+        "outer_right": 0.95,
+        "foot_end": 0.62,
+        "support_end": 0.95
+      }
+    },
+    "joints_visible": true,
+    "separate_legs": true,
+    "not_foreshortened": true,
+    "ownership_confirmed": true,
+    "background_support_reviewed": true,
+    "foot_contours_visible": true,
+    "torso_transition_reviewed": true
+  }
+}

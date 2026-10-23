@@ -47,10 +47,10 @@ impl EngineHandle {
     pub fn send(&self, cmd: Value) -> Result<(), String> {
         // Some reviewed native APIs send directly, outside AppState dispatch.
         // Fence them too, including shutdown; library reads are explicitly exempt.
-        if crate::sample_library_api::invalidates_capture(&cmd) && !crate::semantic_colour_api::read_only(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) && !crate::leg_shape_api::read_only(&cmd) && !crate::waist_shape_api::read_only(&cmd) && !crate::arm_shape_api::read_only(&cmd) {
+        if crate::sample_library_api::invalidates_capture(&cmd) && !crate::semantic_colour_api::read_only(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) && !crate::leg_shape_api::read_only(&cmd) && !crate::waist_shape_api::read_only(&cmd) && !crate::leg_length_api::read_only(&cmd) && !crate::arm_shape_api::read_only(&cmd) {
             crate::sample_library_api::invalidate_captures(self)?;
         }
-        if crate::semantic_colour_api::invalidates_capture(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) && !crate::leg_shape_api::read_only(&cmd) && !crate::waist_shape_api::read_only(&cmd) && !crate::arm_shape_api::read_only(&cmd) { crate::semantic_colour_api::invalidate_captures(self)?; }
+        if crate::semantic_colour_api::invalidates_capture(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) && !crate::leg_shape_api::read_only(&cmd) && !crate::waist_shape_api::read_only(&cmd) && !crate::leg_length_api::read_only(&cmd) && !crate::arm_shape_api::read_only(&cmd) { crate::semantic_colour_api::invalidate_captures(self)?; }
         self.dispatcher.enqueue(None, cmd)
     }
 
@@ -72,10 +72,10 @@ impl EngineHandle {
     }
 
     pub fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
-        if crate::sample_library_api::invalidates_capture(&cmd) && !crate::semantic_colour_api::read_only(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) && !crate::leg_shape_api::read_only(&cmd) && !crate::waist_shape_api::read_only(&cmd) && !crate::arm_shape_api::read_only(&cmd) {
+        if crate::sample_library_api::invalidates_capture(&cmd) && !crate::semantic_colour_api::read_only(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) && !crate::leg_shape_api::read_only(&cmd) && !crate::waist_shape_api::read_only(&cmd) && !crate::leg_length_api::read_only(&cmd) && !crate::arm_shape_api::read_only(&cmd) {
             crate::sample_library_api::invalidate_captures(self)?;
         }
-        if crate::semantic_colour_api::invalidates_capture(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) && !crate::leg_shape_api::read_only(&cmd) && !crate::waist_shape_api::read_only(&cmd) && !crate::arm_shape_api::read_only(&cmd) { crate::semantic_colour_api::invalidate_captures(self)?; }
+        if crate::semantic_colour_api::invalidates_capture(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) && !crate::leg_shape_api::read_only(&cmd) && !crate::waist_shape_api::read_only(&cmd) && !crate::leg_length_api::read_only(&cmd) && !crate::arm_shape_api::read_only(&cmd) { crate::semantic_colour_api::invalidate_captures(self)?; }
         self.dispatcher.enqueue(Some(key), cmd)
     }
 
@@ -196,6 +196,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             crate::shoulder_shape_api::ended(inspection_epoch);
             crate::leg_shape_api::ended(inspection_epoch);
             crate::waist_shape_api::ended(inspection_epoch);
+            crate::leg_length_api::ended(inspection_epoch);
             crate::arm_shape_api::ended(inspection_epoch);
             crate::people_api::ended(inspection_epoch);
             crate::hair_colour_api::ended(inspection_epoch);
@@ -248,6 +249,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "shoulder_shape_result" => { crate::shoulder_shape_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some() { state.on_layer_frame(&v); } },
         "leg_shape_result" => { crate::leg_shape_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|doc| doc.is_object()) { state.on_layer_frame(&v); } },
         "waist_shape_result" => { crate::waist_shape_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|doc| doc.is_object()) { state.on_layer_frame(&v); } },
+        "leg_length_result" => { crate::leg_length_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|doc| doc.is_object()) { state.on_layer_frame(&v); } },
         "arm_shape_result" => { if crate::arm_shape_api::receive(inspection_epoch, &v) && v["action"] == "execute" && v.get("doc_state").is_some_and(|doc| doc.is_object()) { state.on_layer_frame(&v); } },
         "semantic_colour_result" => crate::semantic_colour_api::receive(inspection_epoch, &v),
         "semantic_colour_progress" => crate::semantic_colour_api::progress(inspection_epoch, &v),
@@ -347,6 +349,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             crate::shoulder_shape_api::ready(inspection_epoch, v["shoulder_shape_protocol"].as_u64() == Some(1));
             crate::leg_shape_api::ready(inspection_epoch, v["leg_shape_protocol"].as_u64() == Some(1));
             crate::waist_shape_api::ready(inspection_epoch, v["waist_shape_protocol"].as_u64() == Some(1));
+            crate::leg_length_api::ready(inspection_epoch, v["leg_length_protocol"].as_u64() == Some(1));
             crate::arm_shape_api::ready(inspection_epoch, v["arm_shape_protocol"].as_u64() == Some(1));
             crate::sample_library_api::ready(inspection_epoch, v["sample_library_protocol"].as_u64() == Some(1));
             crate::semantic_colour_api::ready(inspection_epoch,v["semantic_colour_protocol"].as_u64()==Some(1),v["semantic_colour_workflow_protocol"].as_u64()==Some(1));

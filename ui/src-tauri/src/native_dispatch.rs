@@ -62,6 +62,7 @@ impl AppState {
             "shoulder_shape" => crate::shoulder_shape_api::enqueue(handle, cmd)?,
             "leg_shape" => crate::leg_shape_api::enqueue(handle, cmd)?,
             "waist_shape" => crate::waist_shape_api::enqueue(handle, cmd)?,
+            "leg_length" => crate::leg_length_api::enqueue(handle, cmd)?,
             "arm_shape" => crate::arm_shape_api::enqueue(handle, cmd)?,
             "people" => crate::people_api::enqueue(handle, cmd)?,
             "hair_colour" => crate::hair_colour_api::enqueue(handle, cmd)?,

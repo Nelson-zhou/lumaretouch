@@ -2,14 +2,14 @@
 from copy import deepcopy
 from hashlib import sha256
 from . import body_pose_project as D,body_pose_state as B,body_pose_evidence as E
-from . import shoulder_shape_project as P,shoulder_shape_host as H,body_pose_render as R,leg_shape_host as L,arm_shape_host as A,waist_shape_host as W,body_pose_families as F
+from . import shoulder_shape_project as P,shoulder_shape_host as H,body_pose_render as R,leg_shape_host as L,arm_shape_host as A,waist_shape_host as W,leg_length_host as LL,body_pose_families as F
 from .arm_shape_registered_host import ArmRegisteredHostMixin
 
 
 class BodyPoseHostMixin(ArmRegisteredHostMixin):
     def _body_init(self):
         self._body_pose_bank=D.fields()[D.KEY];self._body_cursors={};self._body_candidates=None
-        self._body_last_outcome={};self._body_authoritative={};self._body_authoritative_requests={};self._body_receipt_bytes=0;self._body_mutation_started=False;self._leg_receipts={};self._waist_receipts={}
+        self._body_last_outcome={};self._body_authoritative={};self._body_authoritative_requests={};self._body_receipt_bytes=0;self._body_mutation_started=False;self._leg_receipts={};self._waist_receipts={};self._leg_length_receipts={}
 
     def _body_fields(self,state=None):return D.fields(state)
     def _body_bank(self):return P.unpack(self._body_pose_bank)
@@ -17,6 +17,7 @@ class BodyPoseHostMixin(ArmRegisteredHostMixin):
 
     def _body_adapter(self,operation='shoulder_shape'):
         if operation=='arm_shape':return self._arm_adapter()
+        if operation=='leg_length':return self._leg_length_adapter()
         if operation=='waist_shape':return self._waist_adapter()
         if operation=='leg_shape':
             owner=self.__dict__.get('_leg_edit_owner')
@@ -183,4 +184,28 @@ class BodyPoseHostMixin(ArmRegisteredHostMixin):
         from .body_pose_commands import BodyTransport
         from .server import emit
         owner=self.__dict__.setdefault('_waist_transport',BodyTransport('waist_shape'))
+        owner.handle(self,message,emit)
+
+    def _leg_length_adapter(self):
+        owner=self.__dict__.get('_leg_length_edit_owner')
+        if owner is None:
+            owner=LL.LegLengthHostAdapter(LL.HostPorts(self._people_binding,self._body_bank,lambda:self._people_owner().snapshot(),self._body_prepare,self._body_publish,self._leg_length_receipt_get,self._leg_length_receipt_put))
+            self._leg_length_edit_owner=owner
+        return owner
+
+    def _leg_length_receipt_get(self,request_id):return deepcopy(self._leg_length_receipts.get(request_id))
+
+    def _leg_length_receipt_put(self,request_id,digest,result):
+        E.token(request_id);E.digest(digest)
+        old=self._leg_length_receipts.get(request_id)
+        if old is not None and old['digest']!=digest:raise ValueError('Leg length receipt identity changed')
+        if old is not None and old['result'].get('phase')=='done' and not old['result'].get('outcome_unknown') and old['result']!=result:
+            raise ValueError('Terminal leg length receipt is immutable')
+        if old is None and len(self._leg_length_receipts)>=4096:raise ValueError('Leg length receipt budget exhausted before mutation')
+        self._leg_length_receipts[request_id]={'digest':digest,'result':deepcopy(result)}
+
+    def cmd_leg_length(self,message):
+        from .body_pose_commands import BodyTransport
+        from .server import emit
+        owner=self.__dict__.setdefault('_leg_length_transport',BodyTransport('leg_length'))
         owner.handle(self,message,emit)

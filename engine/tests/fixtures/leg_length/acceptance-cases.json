@@ -1,0 +1,106 @@
+{
+  "status": "UNRUN",
+  "reason": "No product execution/test/build/compiler/inference authorized",
+  "cases": [
+    {
+      "id": "LEG-LENGTH-001",
+      "name": "overall-atomic-set-not-third-warp",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-002",
+      "name": "independent-thigh-and-calf",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-003",
+      "name": "hip-fixed-knee-ankle-foot-continuity",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-004",
+      "name": "c2-joint-and-torso-boundaries",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-005",
+      "name": "foot-rigid-translation-plateau",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-006",
+      "name": "off-grid-inverse-residual-and-jacobian",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-007",
+      "name": "reject-crossed-cropped-hidden-joints-feet",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-008",
+      "name": "reject-perspective-and-insufficient-transition-room",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-009",
+      "name": "reject-lipschitz-and-displacement-budget",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-010",
+      "name": "source-bodyref-analysis-digest-isolation",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-011",
+      "name": "neutral-v1-v4-bitwise-replay",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-012",
+      "name": "active-v5-single-source-rgb-sample",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-013",
+      "name": "rgb16-hdr-no-quantization",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-014",
+      "name": "face-hair-body-mask-recovery-common-map",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-015",
+      "name": "project14-undo-redo-export-source-fence",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-016",
+      "name": "parameter-only-transfer-target-review",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-017",
+      "name": "uncertain-publication-query-no-resend",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-018",
+      "name": "rapid-slider-latest-unsent-wins",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-019",
+      "name": "source-picker-receipt-and-image-load-fence",
+      "status": "UNRUN"
+    },
+    {
+      "id": "LEG-LENGTH-020",
+      "name": "real-photo-naturalness-and-background-review",
+      "status": "UNRUN"
+    }
+  ]
+}

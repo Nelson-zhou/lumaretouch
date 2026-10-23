@@ -133,3 +133,8 @@ bash "$here/build-hair-colour.sh" "$stage/lumaretouch_engine/bin/liblrt_hair_col
 mkdir -p "$stage/lumaretouch_engine/third_party/hair_colour/core/hair_colour"
 cp "$here/../core/hair_colour/lib.rs" "$here/../core/hair_colour/README.md" "$stage/lumaretouch_engine/third_party/hair_colour/core/hair_colour/"
 cp "$here/../LICENSE" "$here/../docs/hair_colour/README.md" "$stage/lumaretouch_engine/third_party/hair_colour/"
+
+bash "$here/build-leg-length.sh" "$stage/lumaretouch_engine/bin/liblrt_leg_length.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/leg_length"
+cp "$here/../core/leg_length/lib.rs" "$here/../LICENSE" "$here/../docs/leg-length/README.md" "$stage/lumaretouch_engine/third_party/leg_length/"
+cp "$here/../engine/src/lumaretouch_engine/body_pose_licenses/"*.txt "$stage/lumaretouch_engine/third_party/leg_length/"

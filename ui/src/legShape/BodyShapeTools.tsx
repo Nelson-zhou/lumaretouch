@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import {useState} from 'react';
+import {LegLengthWorkspace} from '../legLength/LegLengthWorkspace';
+import type {LegLengthOwner} from '../legLength/useLegLengthWorkflow';
 import {WaistWorkspace} from '../waistShape/WaistWorkspace';
 import type {WaistOwner} from '../waistShape/useWaistWorkflow';
 import {ShoulderShapeTools} from '../shoulderShape/ShoulderShapeTools';
@@ -9,18 +11,20 @@ import type {LegOwner} from './useLegWorkflow';
 import {ArmShapePanel} from '../armShape/ArmShapePanel';
 import type {ArmOwner} from '../armShape/useArmWorkflow';
 /** Independent operation receipts and reviews share only the real body bank. */
-export function BodyShapeTools({shoulders,legs,arms,waist,blocked}:{shoulders:ShoulderOwner;legs:LegOwner;arms:ArmOwner;waist:WaistOwner;blocked:boolean}){
- const [workspace,setWorkspace]=useState<'shoulder'|'leg'|'arm'|'waist'|null>(null),[error,setError]=useState('');
+export function BodyShapeTools({shoulders,legs,arms,waist,length,blocked}:{shoulders:ShoulderOwner;legs:LegOwner;arms:ArmOwner;waist:WaistOwner;length:LegLengthOwner;blocked:boolean}){
+ const [workspace,setWorkspace]=useState<'shoulder'|'leg'|'arm'|'waist'|'length'|null>(null),[error,setError]=useState('');
  const act=async(work:()=>Promise<unknown>)=>{setError('');try{await work();}catch(e){setError(e instanceof Error?e.message:'操作未完成');}};
  const openShoulders=()=>{setWorkspace('shoulder');void act(()=>shoulders.run('view'));};
  const openLegs=()=>{setWorkspace('leg');void act(()=>legs.run('view'));};
  const openArms=()=>{setWorkspace('arm');if(!arms.busy)void act(()=>arms.run('view'));};
  const openWaist=()=>{setWorkspace('waist');void act(()=>waist.run('view'));};
- const waistBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||arms.busy||!waist.enabled;
- const legBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||arms.busy||waist.busy||!legs.enabled;
- const armBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||waist.busy||!arms.enabled;
+ const openLength=()=>{setWorkspace('length');void act(()=>length.run('view'));};
+ const lengthBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||arms.busy||waist.busy||!length.enabled;
+ const waistBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||arms.busy||length.busy||!waist.enabled;
+ const legBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||arms.busy||waist.busy||length.busy||!legs.enabled;
+ const armBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||waist.busy||length.busy||!arms.enabled;
  return <>
-  <ShoulderShapeTools owner={shoulders} blocked={blocked||legs.busy||arms.busy||waist.busy} workspaceOpen={workspace==='shoulder'} onWorkspaceOpen={open=>setWorkspace(open?'shoulder':null)}/>
+  <ShoulderShapeTools owner={shoulders} blocked={blocked||legs.busy||arms.busy||waist.busy||length.busy} workspaceOpen={workspace==='shoulder'} onWorkspaceOpen={open=>setWorkspace(open?'shoulder':null)}/>
   <section aria-label="AI瘦手臂与瘦手臂" data-feature-id="PC-32473" data-control-id="PC-32473-C-5d25f1744f" data-requirement-id="LNX-REF-PC-32473-C-5d25f1744f" data-tool-anchor="AI瘦手臂&瘦手臂" data-arm-workflow>
    <p>AI瘦手臂 / 瘦手臂：上臂、前臂与左右独立选择。AI 只提供待复核分割候选，不借用肩部或腿部复核权限。</p>
    <button type="button" disabled={armBlocked} onClick={openArms}>打开手臂调整与源图复核</button>
@@ -45,6 +49,16 @@ export function BodyShapeTools({shoulders,legs,arms,waist,blocked}:{shoulders:Sh
    {(legs.uncertain||legs.state.phase==='uncertain')&&<button type="button" onClick={()=>void act(legs.check)}>查询原请求结果</button>}
    {[legs.message,error].filter(Boolean).map((text,i)=><p role="status" key={i}>{text}</p>)}
   </section>
+  <section data-leg-length-workflow aria-label="长腿" data-feature-id="PC-32473" data-control-id="PC-32473-C-d79658697a" data-requirement-id="LNX-REF-PC-32473-C-d79658697a" data-tool-anchor="长腿">
+   <p>长腿：整体同时设置大腿和小腿长度，也可分项调整。独立复核髋、膝、踝和完整脚部，不是瘦腿宽度、增高或全身 AI 塑形。</p>
+   <span data-tool-anchor="长腿/大腿"/><span data-tool-anchor="长腿/小腿"/>
+   <button type="button" disabled={lengthBlocked||length.busy} onClick={openLength}>打开腿长与原图过渡区复核</button>
+   {!length.supported&&<p role="status">配套腿长原生核心未就绪，不能应用。</p>}
+   {length.busy&&<p role="status">{length.uncertain||length.state.phase==='uncertain'?'腿长结果待核对，不会重发。':'正在处理腿长请求。'}</p>}
+   {(length.uncertain||length.state.phase==='uncertain')&&<button type="button" onClick={()=>void act(length.check)}>查询原腿长请求</button>}
+   {length.message&&<p role="status">{length.message}</p>}
+  </section>
+  {workspace==='length'&&<LegLengthWorkspace owner={length} blocked={lengthBlocked} onClose={()=>setWorkspace(null)} onOpenBodyAnalysis={openShoulders}/>}
   {workspace==='waist'&&<WaistWorkspace owner={waist} blocked={waistBlocked} onClose={()=>setWorkspace(null)} onOpenBodyAnalysis={openShoulders}/>}
   {workspace==='leg'&&<div className="legWorkspace" role="dialog" aria-modal="true" aria-label="原图腿部定位与可见轮廓调整">
    <div className="leg-toolbar"><b>腿部可见轮廓复核</b><span>这里显示未修饰的全图参考缩略图；关闭后在主画布查看结果。</span><button type="button" onClick={()=>setWorkspace(null)}>关闭定位窗口</button></div>
