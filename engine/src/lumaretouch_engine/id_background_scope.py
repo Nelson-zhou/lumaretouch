@@ -28,7 +28,10 @@ def install(state,params):
 
 def validate_target(state,path,shape):
     value=S.check(state.get('_id_background'))
-    if value['source'] is not None:M.verify_source(value,path,shape)
+    if state.get('_creative_base') is not None:
+        from .creative_derived_id_background import validate_state
+        validate_state(state)  # Target-owned reviews only; planner admission stays fenced.
+    elif value['source'] is not None:M.verify_source(value,path,shape)
     if S.active(value):
         from .studio_background_state import active as studio_active
         from .sky_replacement_state import check as sky_check

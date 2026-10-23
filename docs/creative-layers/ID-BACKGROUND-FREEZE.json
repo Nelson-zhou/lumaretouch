@@ -1,0 +1,160 @@
+{
+  "baseline": "e89c80c41b7414f4b005f563753dfb3d3046f071",
+  "scope": "M14 derived-source ID background: independent owned support reviews, all three verified float pickers, native transactions, immutable high-bit assets, preview/full export/history and cache integrity",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "files": [
+    {
+      "path": "docs/creative-layers/DERIVED-AUTOMATIC-SKY.md",
+      "sha256": "49643eb0fee7a47fbfacf6518381f7a93fedf2d95d87b599a7f2b047a5821724",
+      "bytes": 8808
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-ID-BACKGROUND.md",
+      "sha256": "2fca223b11abd29cbdeea7b646316289dfd68e6aa32ab99895a5d790e0b5d742",
+      "bytes": 8752
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_arm_input.py",
+      "sha256": "df280fef92e4b2815f969c5a72e30807726069236112f0fede87ad4841a5a8f0",
+      "bytes": 5832
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_id_background.py",
+      "sha256": "408910bef88234d5db5f8b5b75fe92d2b53ec42fc09b2a4eddb3e7c0562f90bb",
+      "bytes": 15415
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "sha256": "3efa06afbd7543f13ff8d3c5c2cb5147ca590902e2be96e542d036e431995f16",
+      "bytes": 19917
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "0f09c25f5883f53eab85ed1c35bf0c7e0382eef08440bb6c44c63b6c15138626",
+      "bytes": 24662
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_project.py",
+      "sha256": "109a51ef1eea51e88ab0b45f29fc738e0f060d3b864f275f94b95fc983849461",
+      "bytes": 11205
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_id_background_host.py",
+      "sha256": "34873e4e5ad46855db75fd6ddb1780cc608c9407998ccca4fe60755e74ae74b3",
+      "bytes": 3497
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "88d6e623a3ede03007a1dea6d8209bf0b43dd5136da45e559880aa7dc8876a74",
+      "bytes": 128097
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "sha256": "fd36db300dbf85b744274b6837b6f2fb7a2f668e0048f9bc65d0d506ff098b3a",
+      "bytes": 7274
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_controller.py",
+      "sha256": "e9052f43dcc37a73d41eed9e0c93327690132ed92178e3be6db9a06e3f8e8960",
+      "bytes": 6248
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_export.py",
+      "sha256": "fd863c537c9b29d4653c6861a95cebc5566d6d08691dee1c99dcdd7de2faca59",
+      "bytes": 3062
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_picker.py",
+      "sha256": "363852f433554f1bdaa7d24ad3777e116e7d99637d2448d9c5496b0d14d41de0",
+      "bytes": 16461
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_runtime.py",
+      "sha256": "9c599f7e089d8308aae18c38041a0bb3e8476f0d9135964d1b0cdb0705070d87",
+      "bytes": 14330
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_scope.py",
+      "sha256": "e4a03c8e57cef33ffbb746afa758dbb430e024024e09bd9f1f5a232f6e661f41",
+      "bytes": 3286
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_support.py",
+      "sha256": "909fa35553329179b20893277c117ac5b504d83f09a980322c578e55314dc8a2",
+      "bytes": 8186
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "784f2266d2bb29f613a56a88f85d71d5a47cc19134105e8d0713913f0a0e5d92",
+      "bytes": 463152
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_id_background_picker.py",
+      "sha256": "c4e83b9d47b2926b671f7954f66e31f2091317fc5bd651ed51046303c3d53ad6",
+      "bytes": 15679
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_id_background_proofs.py",
+      "sha256": "635cfbbcc2a04b57848a310461b05262f72698cec3513929b324970beed8cd04",
+      "bytes": 18568
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_id_background_routes.py",
+      "sha256": "ae2e135b802e66a46c9eb5b059c30d9c56ad784568ce78ec4e2e55c0394e9e9a",
+      "bytes": 11259
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_prompted_cache_proofs.py",
+      "sha256": "64ed4f48dffddb9d2d033e27d223e6cd5e1e0eee882a6a3084609609510395c9",
+      "bytes": 5023
+    },
+    {
+      "path": "engine/tests/id_background_fixtures/test_derived_support_controller_unrun.py",
+      "sha256": "28664a800b6dee8a3a0341edca9ac132d2f5348b773c1d3eb38f6de71d996cc6",
+      "bytes": 19398
+    },
+    {
+      "path": "ui/src/idBackground/IdBackgroundPanel.tsx",
+      "sha256": "436d86383e636e7068d1703bbd26ddc57c3b6273f33fdf19a1e20bb53a30e8d9",
+      "bytes": 12806
+    },
+    {
+      "path": "ui/src/idBackground/VerifiedPicker.tsx",
+      "sha256": "ae638fd867e1b5777eb695f712cbda87f7eaba3e385901a7108a17a85fb61a0a",
+      "bytes": 7428
+    },
+    {
+      "path": "ui/src/idBackground/model.ts",
+      "sha256": "400f9ec1a1d193629c15e025c4bb75f99034a41d3cb3227ece19a8d71719b47d",
+      "bytes": 2527
+    },
+    {
+      "path": "ui/src/idBackground/pickerPort.ts",
+      "sha256": "196a22fdd89dd8e61d4f3c010fb730f298f4e0b964b7187c747631273d37f8f0",
+      "bytes": 1748
+    }
+  ],
+  "static_validation": {
+    "python_ast_files": 20,
+    "authored_fixture_files": 5,
+    "authored_test_functions": 76,
+    "fixture_execution": "UNRUN",
+    "line_counts": {
+      "ui/src/App.tsx": 2096,
+      "ui/src-tauri/src/main.rs": 2015,
+      "engine/src/lumaretouch_engine/server.py": 6966
+    }
+  },
+  "residuals": [
+    "Dedicated ID-background recovery is not implemented; legacy recovery cannot restore the separate ID compositor.",
+    "Spill removal and original-shadow extraction/AI retention are not implemented.",
+    "Shared transfer, legacy/background and unadapted effects remain fenced.",
+    "Transparent/signed/HDR returned portrait sources remain explicitly refused; no clipping.",
+    "Runtime/model/native GUI, decoding quality, memory/latency, exports and photographic acceptance remain unverified."
+  ],
+  "excluded_unrelated_files": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

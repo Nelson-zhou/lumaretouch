@@ -38,7 +38,7 @@ Integration owners: `creative_sky_host`/`creative_document_host` admit only the 
 
 Required local acceptance after source review: compare original-path preprocessing with its prior pinned byte contract; exercise a returned canvas whose dimensions differ from the original; display and acknowledge each proposed region; verify source/asset/repair edits invalidate stale proposals and final previews; compare full export with 100% inspection; test missing model, old descriptor, disabled repair, cancellation, altered packet, changed runtime inventory, and insufficient memory. Migration acceptance must include cancellation before publication, destination races, exact legacy receipt preservation, tampered wheel/runtime rejection, and warning reconciliation after committed publication. No such acceptance is implied by fixture authorship or static parsing.
 
-- ID-background support masks, prompted artifacts, picker modes and its separate stage still need their coherent effective-source port.
+- ID-background support masks, prompted artifacts, picker modes and its separate stage are continued in `DERIVED-ID-BACKGROUND.md`; dedicated ID recovery and original-shadow/spill algorithms remain incomplete.
 - Legacy/common background replacement recovery and cross-image/shared transfer remain fenced until target-owned analysis and review are adapted.
 - Transparent, signed and HDR returned sources remain refused by the portrait RGB path. RGB16 linked sky assets do not imply HDR compositing support.
 - Runtime model loading, device behavior, deterministic replay, actual migration/cancellation, full-resolution memory/latency, visual edges, reflection quality, native/UI interaction and photographic acceptance remain unverified.

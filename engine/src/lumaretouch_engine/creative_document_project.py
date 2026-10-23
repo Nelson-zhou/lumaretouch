@@ -145,6 +145,8 @@ def _stage(snapshot, validation):
         validate_studio({**snapshot, BASE_KEY: base})
         from .creative_derived_sky import validate_state as validate_sky
         validate_sky({**snapshot, BASE_KEY: base})
+        from .creative_derived_id_background import validate_state as validate_id
+        validate_id({**snapshot, BASE_KEY: base})
     return document
 
 

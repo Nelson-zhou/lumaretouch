@@ -1,4 +1,4 @@
-"""Fail-closed original-source export contract for reviewed ID background recipes."""
+"""Fail-closed native/derived export contract for reviewed ID background recipes."""
 from . import id_background_state as S, id_background_assets as A
 
 
@@ -8,6 +8,12 @@ def check_spec(spec):
         bundle=A.check_bundle(spec.id_background_bundle)
         if bundle is None or bundle['binding']!=value['background']['asset']:
             raise ValueError('证件照背景素材与保留配方身份不匹配')
+    if getattr(spec,"creative_base",None) is not None or getattr(spec,"creative_id_background_context",None) is not None:
+        from .creative_derived_id_background import verify_snapshot
+        verify_snapshot({"creative_base":getattr(spec,"creative_base",None),"id_background":value,
+            "id_background_bundle":spec.id_background_bundle,
+            "creative_id_background_context":getattr(spec,"creative_id_background_context",None)},
+            path=getattr(spec,"id_background_path",None))
     if not S.active(value):return
     from .studio_background_state import active as studio_active
     from .sky_replacement_state import check as sky_check

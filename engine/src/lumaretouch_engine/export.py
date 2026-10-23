@@ -165,6 +165,7 @@ class ExportSpec:
     optics_stamp: list | None = None
     id_background: dict | None = None
     id_background_bundle: dict | None = None
+    creative_id_background_context: dict | None = None
     id_background_path: str | None = None
     id_background_stamp: list | None = None
     id_background_prepared: dict | None = None
@@ -756,6 +757,9 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry):
         stamp_pixels(resolved,source)
     if resolved.creative_sky_context is not None:
         from .creative_derived_sky import stamp_pixels
+        stamp_pixels(resolved,source)
+    if resolved.creative_id_background_context is not None:
+        from .creative_derived_id_background import stamp_pixels
         stamp_pixels(resolved,source)
     if resolved.creative_studio_context is not None:
         from .creative_derived_studio import stamp_pixels

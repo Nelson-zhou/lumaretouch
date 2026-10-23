@@ -25,12 +25,12 @@ export function VerifiedPicker({documentId,mode,reference,onSample,onClose}:Prop
    while(live.current&&token===serial.current&&Date.now()<deadline){
     const r=await invoke<{phase:string;descriptor?:CaptureDescriptor;error?:string}>('color_picker_capture_status',{captureId:c.id,ticket:c.ticket});
     if(r.phase==='ready'){
-     const d=r.descriptor;if(!d||d.document_id!==documentId||d.capture_id!==c.id||d.ticket!==c.ticket||d.picker_action!==pickerActions[mode]||d.source_stage!==pickerStages[mode]||d.picker_mode!==mode||!d.source_binding)throw Error('原图输入身份不匹配');
+     const d=r.descriptor;if(!d||d.document_id!==documentId||d.capture_id!==c.id||d.ticket!==c.ticket||d.picker_action!==pickerActions[mode]||d.source_stage!==pickerStages[mode]||d.picker_mode!==mode||!d.source_binding)throw Error('当前源图输入身份不匹配');
      const bytes=await invoke<ArrayBuffer>('color_picker_capture_frame',{captureId:c.id,ticket:c.ticket});
      const verified=parseCaptureFrame(bytes,d,'color-action-input');if(live.current&&token===serial.current)setFrame(verified);return;
     }
     if(['error','stale','idle'].includes(r.phase))throw Error(r.error??'输入画面已失效');await pause();
-   }if(live.current)throw Error('原图输入读取超时，请取消后重试');
+   }if(live.current)throw Error('当前源图输入读取超时，请取消后重试');
   }catch(e){if(live.current)setMessage(String(e));}})();
   return()=>{live.current=false;++serial.current;void invoke('color_picker_capture',{action:'cancel',captureId:c.id,ticket:c.ticket,documentId}).catch(()=>{});};
  },[documentId,mode,reference]);

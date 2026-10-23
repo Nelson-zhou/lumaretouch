@@ -172,8 +172,9 @@ def require_rebound_snapshot(snapshot):
     verify_studio(snapshot)
     from .creative_derived_sky import verify_snapshot as verify_sky
     verify_sky(snapshot)
+    from .creative_derived_id_background import verify_snapshot as verify_id
+    verify_id(snapshot)
     for label, module, key in (
-            ('ID background', ID, 'id_background'),
             ('reference colour', RC, 'reference_color'),
             ('semantic colour', SC, 'semantic_colour'), ('lip makeup', LIP, 'lip_makeup'),
             ('brow shape', BROW, 'brow_shape'), ('nose shape', NOSE, 'nose_shape'),
@@ -195,7 +196,7 @@ def require_rebound_spec(spec):
         'creative_base', 'people', 'body_pose', 'body_pose_source_proof', 'channel', 'grade_scope',
         'strength', 'creative_smoothing_context',
         'fabric_amount', 'creative_fabric_context', 'local_masks', 'local_grade_groups', 'creative_mask_context', 'effect_recovery', 'creative_recovery_context', 'manual_liquify',
-        'studio_background', 'creative_studio_context', 'id_background', 'optics', 'sky_replacement', 'creative_sky_context',
+        'studio_background', 'creative_studio_context', 'id_background', 'id_background_bundle', 'creative_id_background_context', 'optics', 'sky_replacement', 'creative_sky_context',
         'reference_color', 'semantic_colour', 'lip_makeup', 'brow_shape',
         'nose_shape', 'eye_shape', 'mouth_shape', 'colour_editor')}
     snapshot['params']={key:getattr(spec,key) for key in ('radius','eps','texture_radius','broad_gain','mid_gain','detail_gain')}

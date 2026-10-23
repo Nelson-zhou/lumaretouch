@@ -1,0 +1,58 @@
+"""Exact native ID transactions and picker admission, not a background exemption."""
+from hashlib import sha256
+import json
+
+ACTIONS=frozenset(('id_state','id_sample','id_clear','id_import','id_set','id_review'))
+MODES=frozenset(('id_background','id_background_subject','id_background_reference'))
+
+
+def is_command(engine,name,request):
+    if name=='background':return request.get('action') in ACTIONS
+    if name!='color_picker_capture':return False
+    if request.get('picker_action') in MODES:return True
+    owner=engine.__dict__.get('_id_background_capture_owner')
+    capture=getattr(owner,'capture',None)
+    return capture is not None and capture['descriptor']['capture_id']==request.get('capture_id')
+
+
+def require_command(engine,name,request):
+    from . import creative_derived_id_background as C,id_background_state as S
+    if type(request) is not dict or request.get('cmd')!=name or not is_command(engine,name,request):
+        raise ValueError('Unknown derived ID background command')
+    action=request.get('action')
+    if name=='background':
+        rid=request.get('request_id')
+        if type(rid) is not str or not 1<=len(rid)<=128:raise ValueError('Invalid ID request identity')
+        owner=engine.__dict__.get('_id_background_owner')
+        cached=getattr(owner,'cache',{}).get(rid)
+        if cached is not None:
+            digest=sha256(json.dumps(request,sort_keys=True,allow_nan=False).encode()).hexdigest()
+            if digest!=cached[0]:raise ValueError('ID request identity reused with different content')
+            return  # Native terminal receipt remains authoritative after switching.
+        if action=='id_state':
+            if set(request)!={'cmd','action','request_id','document_id'}:raise ValueError('Invalid ID state request')
+            return  # Status must remain readable when an effect cannot render.
+        if action=='id_sample':
+            picker=engine.__dict__.get('_id_background_capture_owner')
+            if picker is None:raise ValueError('ID sample requires its presented source capture')
+            picker.matching(request)
+            return  # Native sample validates the exact envelope and eligibility.
+        extra={'id_clear':set(),'id_import':{'path'},'id_set':{'recipe'},'id_review':{'category','object_ids','reviewed'}}
+        if set(request)!={'cmd','action','request_id','document_id','recipe_document_id','recipe_revision'}|extra[action]:
+            raise ValueError('Invalid ID mutation envelope')
+    else:
+        allowed={'cmd','action','capture_id','ticket','document_id'}
+        allowed|={'epoch','picker_action','picker_channel','reference'} if action=='arm' else {'generation'}
+        if action not in ('arm','presented','cancel') or set(request)-allowed:
+            raise ValueError('Invalid ID capture envelope')
+        if action=='cancel':return  # Native owner checks identity and releases stale lease.
+        if action=='presented':
+            picker=engine.__dict__.get('_id_background_capture_owner')
+            if picker is None or picker.capture is None:raise ValueError('ID source capture expired')
+            from .id_background_picker import PROOF_KEYS
+            picker.matching({**request,**{k:picker.capture['descriptor'][k] for k in PROOF_KEYS}})
+            return
+    # Independent source proof allows disabling a broken active proposal without
+    # running its model or reusing the physical original as an input.
+    C.validate_state(engine)
+    C.preview(engine,S.empty())

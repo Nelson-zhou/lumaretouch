@@ -15,4 +15,4 @@ export function editable(r:Recipe){return {enabled:r.enabled,background:r.backgr
 export type PickerMode='original'|'reference'|'subject';
 export const pickerActions={original:'id_background',reference:'id_background_reference',subject:'id_background_subject'} as const;
 export const pickerStages={original:'id-background-source',reference:'id-background-reference',subject:'id-background-subject'} as const;
-export const pickerLabels={original:'原图',reference:'参考图',subject:'主体及关联物品'};
+export const pickerLabels={original:'当前源图',reference:'参考图',subject:'主体及关联物品'};
