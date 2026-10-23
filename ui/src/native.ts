@@ -1009,6 +1009,7 @@ export interface EngineStatus {
     source_patch_capture_protocol?: number;
     source_patch_result_protocol?: number;
     clone_stamp_protocol?: number;
+    heal_vector_protocol?: number;
     local_masks_result_protocol?: number;
     white_balance_result_protocol?: number;
     white_balance_capture_protocol?: number;

@@ -118,3 +118,8 @@ keeping explicit sampling and operator semantics; they do not establish
 algorithm equivalence or our quality acceptance. No GIMP implementation or other
 upstream code/model was copied or downloaded. Existing algorithm licences and
 notices remain in force; this slice changes ownership/transport, not licensing.
+
+## Subsequent source adaptation
+
+[Reviewed deterministic heal](DERIVED-HEAL.md) records the new vector brush path.
+Legacy derived RLE transport remains fenced; this repair slice is historical.

@@ -1,3 +1,5 @@
+import {HealBrushOverlay} from '../healBrush/HealBrushOverlay';
+import type {HealBrushOwner} from '../healBrush/useHealBrushWorkflow';
 import {GuideOverlay} from '../canvasGuides/GuideOverlay';
 import type {GuideOwner} from '../canvasGuides/useCanvasGuides';
 import {LocalMaskOverlay} from '../localMasks/LocalMaskOverlay';
@@ -105,12 +107,12 @@ export default function Viewer({
   inspection,
   onInspectionState,
   colorSampler,guides,guideCrop,guideSourceSize,
-  sourcePatch,whiteBalancePicker,cloneStamp,localMasks,colorPicker,
+  healBrush,sourcePatch,whiteBalancePicker,cloneStamp,localMasks,colorPicker,
 }: {
   guides?:GuideOwner;guideCrop?:{rect:number[];rotation_degrees:number;neutral:boolean;out_full?:[number,number]|null};guideSourceSize?:[number,number];
   colorSampler?:ColorSampler;
   colorPicker?:ColorActionOwner;
-  localMasks?:LocalMaskOwner;cloneStamp?:CloneStampOwner;sourcePatch?:SourcePatchOwner;whiteBalancePicker?:WhiteBalancePickerOwner;
+  healBrush?:HealBrushOwner;localMasks?:LocalMaskOwner;cloneStamp?:CloneStampOwner;sourcePatch?:SourcePatchOwner;whiteBalancePicker?:WhiteBalancePickerOwner;
   inspection?: { enabled:boolean; oneToOne:boolean; comparing:boolean; key:string; width:number; height:number };
   onInspectionState?: (state:InspectionUiState)=>void;
   active: boolean;
@@ -161,7 +163,7 @@ export default function Viewer({
 }) {
   const [sampleClip,setSampleClip]=useState<HTMLDivElement|null>(null);
   // 变换只加在显示层（镜像画布）上：GL 渲染源与测量回路一个字也不改
-  const coordinateLocked = !!colorPicker?.active || !!colorPicker?.pending || !!localMasks?.active || !!localMasks?.pending || !!cloneStamp?.active || !!cloneStamp?.pending || !!whiteBalancePicker?.active || !!whiteBalancePicker?.pending || paintLocked || compareMode !== "single" || !!inspection?.enabled || !!sourcePatch?.active || !!sourcePatch?.pending;
+  const coordinateLocked = !!healBrush?.active || !!healBrush?.pending || !!colorPicker?.active || !!colorPicker?.pending || !!localMasks?.active || !!localMasks?.pending || !!cloneStamp?.active || !!cloneStamp?.pending || !!whiteBalancePicker?.active || !!whiteBalancePicker?.pending || paintLocked || compareMode !== "single" || !!inspection?.enabled || !!sourcePatch?.active || !!sourcePatch?.pending;
   const invalidateInspection = useRef<()=>void>(()=>{});
   const brushActive = !!brush?.on && !coordinateLocked;
   const pickActive = !!pick?.on && !coordinateLocked;
@@ -749,6 +751,7 @@ export default function Viewer({
         {colorPicker&&<ColorActionOverlay owner={colorPicker} clip={sampleClip} box={box} view={view}/>}
         {whiteBalancePicker&&<WhiteBalancePickerOverlay owner={whiteBalancePicker} clip={sampleClip} box={box} view={view}/>}
         {localMasks&&<LocalMaskOverlay owner={localMasks} clip={sampleClip} box={box} view={view}/>}
+        {healBrush&&<HealBrushOverlay owner={healBrush} clip={sampleClip} box={box} view={view}/>}
         {cloneStamp&&<CloneStampOverlay owner={cloneStamp} clip={sampleClip} box={box} view={view}/>}
         {sourcePatch&&<SourcePatchOverlay owner={sourcePatch} clip={sampleClip} box={box} view={view}/>}
         {guides&&guideSourceSize&&<GuideOverlay owner={guides} clip={sampleClip} box={box} rect={disp} crop={guideCrop} sourceSize={guideSourceSize} presentationDocumentId={presentation?.kind===1?presentation.documentId:null} presentationGeometry={presentation?.geometry??null}/>}

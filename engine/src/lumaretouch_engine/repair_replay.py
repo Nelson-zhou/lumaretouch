@@ -19,6 +19,12 @@ def replay_repair_t(cur, ops):
     painted = 0
     for op in ops:
         painted += op.area_px
+        if op.kind == "heal_vector":
+            from .ops.heal_vector import apply_t
+            cur, box = apply_t(cur, op.params)
+            if box is not None:
+                boxes.append([int(v) for v in box])
+            continue
         if op.kind == "clone_stamp":
             from .ops.clone_stamp import apply_t
             cur, box = apply_t(cur, op.params)
@@ -31,7 +37,7 @@ def replay_repair_t(cur, ops):
             if box is not None:
                 boxes.append([int(v) for v in box])
             continue
-        # Validation above permits exactly heal/source_patch/clone_stamp. Keep the original
+        # Validation above permits exactly the declared heal/source-patch/clone/vector families. Keep the original
         # heal arithmetic and defaults, including its float32 coverage division.
         if op.kind != "heal":
             raise ValueError(f"Unknown repair kind: {op.kind!r}")

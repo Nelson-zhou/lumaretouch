@@ -1,0 +1,155 @@
+{
+  "baseline": "4965dbf60233e7da9c8274b15a543817b7cefeeb",
+  "scope": "M14 presented source-owned deterministic heal vector UI/native transport, normalized full-resolution replay and durable source history",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "files": [
+    {
+      "path": "docs/creative-layers/DERIVED-HEAL.md",
+      "sha256": "7e13c7013cb92853a813b03c6c21d9a26188a2aad27d0641c16e2ecaa90d51e7",
+      "bytes": 5949
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-REPAIRS.md",
+      "sha256": "66e5c20671df2299d61041c3e19c97f949c222d2af7932cb5baa2b92db54cbb6",
+      "bytes": 7471
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_repair_commands.py",
+      "sha256": "7a989384f7a48287199549e2c194ed4b592c82de975a4f6aaf7e02bc24414de7",
+      "bytes": 5499
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_repairs.py",
+      "sha256": "b3caf25a3a525721318e0a88c07350032ec45a8b14ecdd016775ef279ca7109b",
+      "bytes": 3642
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/heal_vector_geometry.py",
+      "sha256": "88af3b73af09f33cf869f4b3740d4fd3ff8084291fd1f8d18bcecf70d82bcdef",
+      "bytes": 1402
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/ops/heal_vector.py",
+      "sha256": "d2d8ae00628f1701cd07b441095cec53c7a8d8a2c1becf811bbe816cad8e490e",
+      "bytes": 4625
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/repair_record.py",
+      "sha256": "8148dfe97dcaecc2c0f97c759abd82852790df1485180d289b566db4bdadb004",
+      "bytes": 4363
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/repair_replay.py",
+      "sha256": "47b43ce836baf0871ba1c0004d2c4b9586404ae1835311feebbfd804dc65c83e",
+      "bytes": 2708
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "22177787dedf43cf1682a251e0cffa6740f5515ac6cc950350da0cc5145a33e2",
+      "bytes": 461711
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/source_patch_capture.py",
+      "sha256": "a9ad9edd7aed4e5b7919edfd5132b4c810b4cfa0e299e9ce7a6bffc4c292fe90",
+      "bytes": 14171
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/source_patch_controller.py",
+      "sha256": "b4606fac09def8d765e04e56b2ed2be2dd06562be33ec7becdb6d75374c53308",
+      "bytes": 11911
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_heal_vectors.py",
+      "sha256": "3aec19dfe5ef2272500d92e5963752d79ddab7f78b5d3d29e871936268c04052",
+      "bytes": 4201
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_heal_export_persistence.py",
+      "sha256": "c62062daaa8f063a9bd1c56728f2e7fe86e68eb50a8943efa819173f9b5b2512",
+      "bytes": 1856
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_reviewed_heal_transport.py",
+      "sha256": "a33768274f547a33f621ee5d0c7186746ffce844aa5932c9da607e86ebfd1e93",
+      "bytes": 3590
+    },
+    {
+      "path": "ui/src-tauri/src/source_patch_api.rs",
+      "sha256": "8f40138f2fc689282096e747bd410ae3f32f2f1c2ec2b4c748da06cec20372ad",
+      "bytes": 16973
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "210258c77f1b9ba7b14525a1c10428693b04b33a6724343df7ea7b3c27da8f65",
+      "bytes": 142283
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "50a2142140a649f713d9756e59ca750cdb105baa7547f1bac452f9f0b3039af3",
+      "bytes": 59823
+    },
+    {
+      "path": "ui/src/components/Viewer.tsx",
+      "sha256": "6ee91a193d86179601d30d96a6f6d71b6603f47440b09287e0adb44e201dcb04",
+      "bytes": 42152
+    },
+    {
+      "path": "ui/src/healBrush/HealBrushOverlay.tsx",
+      "sha256": "85f71ac64db2fcc3a773f69877b40a787660f21337d452eeb24bb1c127f6e069",
+      "bytes": 6606
+    },
+    {
+      "path": "ui/src/healBrush/HealBrushPanel.tsx",
+      "sha256": "a605dccb7096f79a6a0affc1d44828b6d006198bc09448afe5f5371088f4e23d",
+      "bytes": 2661
+    },
+    {
+      "path": "ui/src/healBrush/useHealBrushWorkflow.ts",
+      "sha256": "0ea0a460ef7f801bf7ee6afe684c964cc03e7a879161da1da6d4b432f4869246",
+      "bytes": 3113
+    },
+    {
+      "path": "ui/src/healBrush/workflow.test.ts",
+      "sha256": "fea2d567cb440db55216ff76160d43575562fe3b5b8b6acd902ac696af85223d",
+      "bytes": 7080
+    },
+    {
+      "path": "ui/src/healBrush/workflow.ts",
+      "sha256": "ea6f5dc26d8be92fd9eae7fee4f29d23425fb71d9040d0e4e387e1ebbab14881",
+      "bytes": 13689
+    },
+    {
+      "path": "ui/src/localMasks/useRetouchCaptureWorkflows.ts",
+      "sha256": "27060842796b0ae7dcc9db15fd8aea60de621b189938a14fef066ebc27654081",
+      "bytes": 8147
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "b322ff29e47448481a4180316e37c257ffe39b9a2800030d9513a9250cc98e55",
+      "bytes": 97052
+    },
+    {
+      "path": "ui/src/repairToolHonesty.test.ts",
+      "sha256": "e21b78cce3287edb5e2d43ce6de2ae4caccca3614be1846a126a8da1e0162581",
+      "bytes": 3009
+    }
+  ],
+  "verification": {
+    "static_python_ast_files": 12,
+    "python_rust_typescript_fixtures": "AUTHORED_UNRUN",
+    "product_import_execution": "NOT_RUN",
+    "build_typecheck_inference": "NOT_RUN",
+    "line_counts": {
+      "ui/src/App.tsx": 2096,
+      "ui/src-tauri/src/main.rs": 2015,
+      "engine/src/lumaretouch_engine/server.py": 6943
+    }
+  },
+  "residuals": [
+    "Legacy derived inpaint RLE remains fenced; reviewed vector path replaces ordinary UI heal",
+    "Deterministic builtin solver only, not LaMa/generative completion",
+    "Global recovery and shared target transfer remain unsupported",
+    "Photo return alpha/HDR refusal unchanged",
+    "Visual quality, precision, latency and runtime acceptance UNRUN"
+  ]
+}

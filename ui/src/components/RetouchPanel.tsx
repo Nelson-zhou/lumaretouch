@@ -82,7 +82,7 @@ export interface RetouchProps {
   browMakeupPanel?: React.ReactNode;
   lipstickPanel?: React.ReactNode;
   colorActions?: ColorActionControlsProps;
-  sourcePatchPanel?: React.ReactNode;cloneStampPanel?: React.ReactNode;localMasksPanel?: React.ReactNode;
+  healBrushPanel?: React.ReactNode;sourcePatchPanel?: React.ReactNode;cloneStampPanel?: React.ReactNode;localMasksPanel?: React.ReactNode;
   status: EngineStatus | null;
   doc: DocState | null;
   hasImage: boolean;
@@ -1011,7 +1011,7 @@ export default function RetouchPanel(props: RetouchProps) {
           ["color", "局部调色笔"],
           ["dodge", "减淡"],
           ["burn", "加深"],
-        ] as const).map(([mode, label]) => (
+        ] as const).filter(([mode])=>mode!=="heal"||!props.healBrushPanel).map(([mode, label]) => (
           <button key={mode} className={brushOn && brushMode === mode ? "on" : ""}
             disabled={dim}
             onClick={() => props.onBrush({ mode, on: true })}>{label}</button>
@@ -1045,7 +1045,7 @@ export default function RetouchPanel(props: RetouchProps) {
     if (fid === "PC-32475") return bgBlock;
     if (fid === "PC-47209") return historyBlock;
     if (fid === "PC-32477") return <FabricPanel value={doc?.fabric} documentId={doc?.document_id} revision={status?.doc_rev??0} disabled={dim} onDone={props.onDone} note={props.note}/>;
-    if (fid === "PC-32482") return <>{props.sourcePatchPanel}{props.cloneStampPanel}{brushBlock}</>;
+    if (fid === "PC-32482") return <>{props.healBrushPanel}{props.sourcePatchPanel}{props.cloneStampPanel}{brushBlock}</>;
     return null;
   };
 
@@ -1111,7 +1111,7 @@ export default function RetouchPanel(props: RetouchProps) {
                     if (f.id === "PC-32481" && props.effectRecoveryPanel && ["祛除瑕疵涂抹笔","衣服祛褶皱涂抹笔"].includes(leaf.path))
                       return <div><DisabledRow name={name}/><p className="toolRouteNote">{leaf.path === "祛除瑕疵涂抹笔" ? "通用祛瑕疵恢复尚未接通；上方磨皮、面部祛纹及唇妆恢复仅处理各自效果。" : "当前仅支持衣物细褶恢复，不代表全部衣服褶皱恢复。"}</p></div>;
                     if(f.id==='PC-32477'&&leaf.path==='衣服祛褶皱/祛细褶皱')return null;
-                    if(f.id==='PC-32482'&&((leaf.path==='修补工具'&&props.sourcePatchPanel)||(leaf.path==='仿制图章'&&props.cloneStampPanel)))return null;
+                    if(f.id==='PC-32482'&&((leaf.path==='污点修复画笔'&&props.healBrushPanel)||(leaf.path==='修补工具'&&props.sourcePatchPanel)||(leaf.path==='仿制图章'&&props.cloneStampPanel)))return null;
                     if (f.id === "PC-32452" && props.sampleLibraryPanel && [
                       "AI追色/样片来源/自定义导入样片", "AI追色/导入样片",
                       "AI追色/将当前结果图创建为样片", "AI追色/创建为样片",

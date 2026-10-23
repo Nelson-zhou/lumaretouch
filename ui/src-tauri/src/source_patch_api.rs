@@ -155,24 +155,59 @@ pub(crate) async fn source_patch_capture_frame(state: State<'_, Arc<AppState>>, 
     read.deliver()
 }
 
+/// Exact normalized heal brush; no sample donor, display RGB or proxy RLE.
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct HealStroke {
+    points: Vec<[f64; 2]>, size: f64, hardness: f64, opacity: f64,
+}
+impl HealStroke {
+    fn validate(&self) -> Result<(), String> {
+        if self.points.is_empty() || self.points.len() > 1024
+            || !self.points.iter().flatten().all(|n| n.is_finite() && (0.0..=1.0).contains(n))
+            || !self.size.is_finite() || !(0.001..=1.0).contains(&self.size)
+            || ![self.hardness,self.opacity].iter().all(|n| n.is_finite() && (0.0..=1.0).contains(n)) {
+            return Err("invalid normalized heal brush".into());
+        }
+        Ok(())
+    }
+}
+
 #[tauri::command]
 pub(crate) fn source_patch(state: State<'_, Arc<AppState>>, request_id: String, capture_id: String,
-    ticket: String, polygon: Vec<[f64;2]>, offset: [f64;2]) -> Result<Value, String> {
+    ticket: String, polygon: Option<Vec<[f64;2]>>, offset: Option<[f64;2]>,
+    kind: Option<String>, stroke: Option<HealStroke>) -> Result<Value, String> {
     if request_id.is_empty() || request_id.len() > 128 { return Err("invalid source patch request ID".into()); }
-    id16(&capture_id)?; token(&ticket)?; geometry(&polygon, &offset)?;
+    id16(&capture_id)?; token(&ticket)?;
+    // Validate the entire operator before redeeming the one-shot capture.
+    let payload = match (kind.as_deref(),stroke,polygon,offset) {
+        (None,None,Some(polygon),Some(offset)) => {
+            geometry(&polygon,&offset)?;
+            json!({"polygon":polygon,"offset":offset})
+        }
+        (Some("heal_vector"),Some(stroke),None,None) => {
+            stroke.validate()?;
+            if state.ready_caps.lock().map_err(|_| "capability lock poisoned")?["heal_vector_protocol"] != 1 {
+                return Err("current engine does not support reviewed vector heal".into());
+            }
+            json!({"kind":"heal_vector","stroke":stroke})
+        }
+        _ => return Err("repair operator fields must be exact patch or vector heal".into()),
+    };
     if state.ready_caps.lock().map_err(|_| "capability lock poisoned")?["source_patch_result_protocol"] != 1 {
         return Err("current engine does not support reviewed source patch actions".into());
     }
     let handle = engine(&state)?;
     // Redeem before the ordinary path invalidates all editable captures. No UI
     // RGB, projection, gains, generation, recipe ID or revision is accepted.
-    let proof = state.source_patch_capture.lock().map_err(|_| "source patch capture lock poisoned")?
+    let proof = state.source_patch_capture.lock().map_err(|_| "repair capture lock poisoned")?
         .redeem(handle.epoch(), &capture_id, &ticket)?;
     if proof.descriptor["domain"] != "repair-input" { return Err("source patch requires repair-input capture".into()); }
-    let command = json!({"cmd":"source_patch","action":"apply","request_id":request_id,
+    let mut command = json!({"cmd":"source_patch","action":"apply","request_id":request_id,
         "host_epoch":hex(proof.identity.epoch),"document_id":proof.identity.document.to_string(),"capture_id":capture_id,"ticket":ticket,
         "generation":proof.identity.generation.to_string(),"recipe_document_id":proof.recipe_document_id,
-        "recipe_revision":proof.recipe_revision,"polygon":polygon,"offset":offset});
+        "recipe_revision":proof.recipe_revision});
+    command.as_object_mut().ok_or("invalid repair command")?.extend(payload.as_object().ok_or("invalid repair payload")?.clone());
     state.send_to_engine(command)?;
     Ok(json!({"requested":true}))
 }
@@ -187,6 +222,20 @@ pub(crate) fn source_patch_result(state: State<'_, Arc<AppState>>, request_id: S
 mod tests {
     use super::*;
     const CAP: &str = "0123456789abcdef0123456789abcdef";
+    // AUTHORED / UNRUN: parsing rejects donor/RLE fields and nonfinite bounds.
+    #[test]
+    fn heal_stroke_is_exact_normalized_geometry() {
+        let valid=json!({"points":[[0.5,0.5]],"size":0.05,"hardness":0.6,"opacity":1.0});
+        let stroke:HealStroke=serde_json::from_value(valid.clone()).unwrap();
+        assert!(stroke.validate().is_ok());
+        let mut donor=valid.clone();donor["source"]=json!([0.1,0.1]);
+        assert!(serde_json::from_value::<HealStroke>(donor).is_err());
+        let mut outside=valid.clone();outside["points"]=json!([[1.1,0.5]]);
+        assert!(serde_json::from_value::<HealStroke>(outside).unwrap().validate().is_err());
+        let mut empty=valid;empty["points"]=json!([]);
+        assert!(serde_json::from_value::<HealStroke>(empty).unwrap().validate().is_err());
+    }
+
     fn ready_capture(host: &mut crate::source_patch_capture_host::SourcePatchCaptureHost) -> String {
         let ticket=host.begin([1;16],CAP.into(),"123".into(),4).unwrap();
         host.armed_event([1;16],&json!({"event":"source_patch_capture","action":"arm","success":true,"capture_id":CAP,"ticket":ticket,

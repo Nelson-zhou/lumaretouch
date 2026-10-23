@@ -2,9 +2,8 @@
  * P2-4（F13）回归：修补工具/仿制图章不许再借同一个 brush.heal 冒充已接通。
  *
  * 运行：node --experimental-strip-types --test src/repairToolHonesty.test.ts
- * 判据是静态钉 RetouchPanel.tsx 的接线（读文件、按块切）：只有"污点修复画笔"留在 WIRED，
- * 另两条摘掉、改由 LEAF_NOTE 置灰说明，且 DisabledRow 真的拿到那句 hint。回退（把两条
- * 塞回 WIRED 借 brush.heal）就红。
+ * AUTHORED / UNRUN. Static wiring keeps separate reviewed heal, patch and clone owners.
+ * Fallback explanations remain visible when a dedicated owner is absent.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -40,4 +39,21 @@ test("LEAF_NOTE 给修补/仿制各一句诚实说明", () => {
 test("置灰叶子确实把 hint 递给 DisabledRow", () => {
   assert.match(SRC, /<DisabledRow[^>]*hint=\{LEAF_NOTE\[/,
     "renderLeaf 没把 LEAF_NOTE 递给 DisabledRow，置灰了却没说明（F13 只做到一半）");
+});
+
+const APP=readFileSync(new URL("./App.tsx",import.meta.url),"utf-8");
+const VIEWER=readFileSync(new URL("./components/Viewer.tsx",import.meta.url),"utf-8");
+const OWNERS=readFileSync(new URL("./localMasks/useRetouchCaptureWorkflows.ts",import.meta.url),"utf-8");
+test("ordinary heal routes to presented vector capture, never legacy display RLE",()=>{
+  assert.match(APP,/healBrushPanel=\{<HealBrushPanel/);
+  assert.match(APP,/startReviewedHeal\(\);return;/);
+  assert.doesNotMatch(APP,/runInpaint\(/);
+  assert.doesNotMatch(APP,/setBrushMode\('heal'\);setBrushOn\(true\)/);
+  assert.match(APP,/locateTool\('PC-32482','污点修复画笔'\)/);
+  assert.match(VIEWER,/<HealBrushOverlay owner=\{healBrush\}/);
+  assert.match(VIEWER,/coordinateLocked = !!healBrush\?\.active/);
+  assert.match(OWNERS,/caps\?\.heal_vector_protocol===1/);
+  assert.match(OWNERS,/enabled:foreign.enabled&&!healPeers.current/);
+  assert.match(OWNERS,/healPeers.current=localMasks.active\|\|localMasks.pending\|\|colorPicker.active/);
+  assert.match(SRC,/props\.healBrushPanel\}\{props\.sourcePatchPanel\}\{props\.cloneStampPanel/);
 });

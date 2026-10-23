@@ -27,7 +27,7 @@ def validate_source_ops(ops,source):
         bound=check_binding(op.source_binding)
         if bound!=source:
             raise ValueError('Repair stack belongs to another immutable source')
-        if source is not None and op.kind not in ('source_patch','clone_stamp'):
+        if source is not None and op.kind not in ('source_patch','clone_stamp','heal_vector'):
             raise ValueError('Derived repair kind has no source-owned replay contract')
     return ops
 

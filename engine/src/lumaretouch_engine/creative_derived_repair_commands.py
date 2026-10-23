@@ -5,7 +5,7 @@ owned source, stack and float pixels, never a display bitmap or original mask.
 """
 from hashlib import sha256
 import numpy as np
-from .source_patch_controller import PROOF_KEYS,COMMAND_KEYS,CLONE_KEYS
+from .source_patch_controller import PROOF_KEYS,COMMAND_KEYS,CLONE_KEYS,HEAL_KEYS
 
 COMMANDS=frozenset(('source_patch_capture','source_patch','clone_stamp'))
 INTERNAL_KEYS=('source_binding','repair_stack_sha256','repair_pixels_sha256')
@@ -88,7 +88,7 @@ def require_command(engine,name,p):
         if not _uint(p['generation']):raise ValueError('Invalid repair generation')
         capture=engine._source_patch_controller().capture._matching(p)
         capture_binding(engine,capture);return
-    keys=CLONE_KEYS if name=='clone_stamp' else COMMAND_KEYS
+    keys=CLONE_KEYS if name=='clone_stamp' else HEAL_KEYS if p.get('kind')=='heal_vector' else COMMAND_KEYS
     if set(p)!=keys or p.get('action')!='apply' or (name=='clone_stamp' and p.get('kind')!='clone_stamp'):
         raise ValueError('Invalid derived repair apply envelope')
     if any(type(p[k]) is not str or not 1<=len(p[k])<=128 for k in ('request_id',*PROOF_KEYS)):

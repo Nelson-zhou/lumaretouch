@@ -218,6 +218,14 @@ class CaptureController:
         c=self._matching(p,recipe=True)
         if not c['eligible']:raise ValueError('Repair input was not presented')
         if c['descriptor']['domain'] != 'repair-input': raise ValueError('Repair requires its own input capture')
+        if p.get('kind') == 'heal_vector':
+            from .heal_vector_geometry import inverse_stroke
+            params, weight = inverse_stroke(c['spec'], p.get('stroke'), c['valid'], c['descriptor']['full_source'])
+            proof = {k:c['descriptor'][k] for k in ('document_id','capture_id','ticket','generation','recipe_document_id','recipe_revision')}
+            proof.update(kind='heal_vector', params=params, weight=weight)
+            if c.get('repair_proof') is not None:proof.update(c['repair_proof'])
+            self.invalidate()
+            return proof
         if p.get('kind') == 'clone_stamp':
             from .clone_stamp_geometry import inverse_stroke
             params, weight = inverse_stroke(c['spec'], p.get('stroke'), c['valid'], c['descriptor']['full_source'])

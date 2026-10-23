@@ -12,6 +12,7 @@ from .white_balance_controller import identity, error_text
 PROOF_KEYS = ("document_id", "capture_id", "ticket", "generation", "recipe_document_id", "recipe_revision")
 CLONE_KEYS = {"cmd", "action", "request_id", "kind", "stroke", *PROOF_KEYS}
 COMMAND_KEYS = {"cmd", "action", "request_id", "polygon", "offset", *PROOF_KEYS}
+HEAL_KEYS = {"cmd", "action", "request_id", "kind", "stroke", *PROOF_KEYS}
 
 
 @dataclass(frozen=True)
@@ -51,8 +52,8 @@ class SourcePatchController:
                   "success": False, "outcome_unknown": False, "requires_reload": False, "error": None}
         pending = self.pending = {"result": result, "digest": None, "proof": None, "started": False}
         try:
-            kind = "clone_stamp" if p.get("cmd") == "clone_stamp" else "source_patch"
-            keys = CLONE_KEYS if kind == "clone_stamp" else COMMAND_KEYS
+            kind = "clone_stamp" if p.get("cmd") == "clone_stamp" else "heal_vector" if p.get("kind") == "heal_vector" else "source_patch"
+            keys = CLONE_KEYS if kind == "clone_stamp" else HEAL_KEYS if kind == "heal_vector" else COMMAND_KEYS
             if (p.get("cmd") not in ("source_patch", "clone_stamp") or p.get("action") != "apply"
                     or set(p) != keys or (kind == "clone_stamp" and p.get("kind") != kind)):
                 raise ValueError("Invalid source-patch action or fields")
@@ -86,8 +87,10 @@ class SourcePatchController:
                 from .creative_derived_repair_commands import INTERNAL_KEYS
                 pending["proof"].update({key:deepcopy(proof.get(key)) for key in INTERNAL_KEYS})
             h, w = clean["weight"].shape
-            dx, dy = clean["params"]["offset"]
-            if (dx == 0 and dy == 0) or (kind == "clone_stamp" and clean["params"]["opacity"] == 0):
+            offset = clean["params"].get("offset")
+            neutral = kind != "heal_vector" and offset is not None and offset[0] == 0 and offset[1] == 0
+            neutral |= kind in ("clone_stamp", "heal_vector") and clean["params"]["opacity"] == 0
+            if neutral:
                 count = self.ports.status()["counts"]["repair"]
                 if type(count) is not int or count < 0:
                     raise ValueError("Invalid repair operation count")
