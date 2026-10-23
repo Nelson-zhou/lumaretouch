@@ -27,10 +27,10 @@ pub unsafe extern "C" fn lrt_optics_map(w: u32, h: u32, y0: u32, rows: u32,
         let px = (m[0]*dx+m[1]*dy+m[2])/den;
         let py = (m[3]*dx+m[4]*dy+m[5])/den;
         let r2 = ((px*w as f64).powi(2)+(py*h as f64).powi(2))/diag2;
-        let k = 1.+distortion*.002*r2;
+        let k = 1.+distortion*0.002*r2;
         let i = ((y*w+x) as usize)*2;
-        out[i] = (px*k+1.)*w as f64*.5-.5;
-        out[i+1] = (py*k+1.)*h as f64*.5-.5;
+        out[i] = (px*k+1.)*w as f64*0.5-0.5;
+        out[i+1] = (py*k+1.)*h as f64*0.5-0.5;
     }}
     0
 }
