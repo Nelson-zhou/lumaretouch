@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createPresetWorkflow,type PresetTransport,type PresetOptions,type PresetReply} from './presetWorkflow.ts';
+import {XMP_MODE,type XmpReport,type XmpSummary,type XmpTransfer} from '../xmpImport/model.ts';
 const op='lnx.hsl.v1',modules={[op]:{recipe:{version:1}}};
 const context={enabled:true,editable:true,documentId:'doc-1'};
 const tick=()=>new Promise<void>(r=>setImmediate(r));
@@ -82,4 +83,67 @@ test('disposed workflow ignores late receipts and does not notify or restart',as
 test('save rejects overlong names before mutation and accepts 80 Unicode code points',async()=>{
   const {flow,calls}=fixture();await flow.submit('save',{...save,name:'名'.repeat(81)});assert.equal(calls.length,0);
   await flow.submit('save',{...save,name:'😀'.repeat(80)});assert.equal(flow.snapshot().phase,'done');assert.equal(calls.length,1);
+});
+
+// XMP additions: AUTHORED / UNRUN. These test protocol ownership, not real photo rendering.
+const xmpOp='lnx.exposure.v1',xmpModules={[xmpOp]:{ev:1.25}};
+const xmpReport=():XmpReport=>({version:1,source_sha256:'a'.repeat(64),report_sha256:'b'.repeat(64),filename:'sample.xmp',byte_length:512,
+  process_version:'11.0',camera_raw_version:'15.0',can_import:true,properties:[],warnings:['Not Adobe rendering'],
+  adaptations:[{id:'exposure',title:'Native EV',module:xmpOp,reason:'Explicit parameter adaptation'}]});
+const xmpSummary=():XmpSummary=>({version:1,source_sha256:'a'.repeat(64),filename:'sample.xmp',selected:['exposure'],report:xmpReport(),read_only_summary:true});
+const xmpTransfer=():XmpTransfer=>({version:1,document_id:'doc-1',revision:'7',xmp_sha256:'a'.repeat(64),
+  source_proof:{asset_sha256:'c'.repeat(64),original_sha256:'c'.repeat(64),creative_source:null},
+  before_sha256:'d'.repeat(64),candidate_sha256:'e'.repeat(64),before_people_sha256:'f'.repeat(64),candidate_people_sha256:'f'.repeat(64),
+  source_size:[100,100],before_output_size:[100,100],after_output_size:[100,100],
+  before:{mime:'image/png',width:1,height:1,sha256:'1'.repeat(64),base64:'iVBORw=='},
+  after:{mime:'image/png',width:1,height:1,sha256:'2'.repeat(64),base64:'iVBORw=='}});
+const xmpPreflight=(id:string):PresetReply=>({protocol:1,request_id:id,action:'preflight',success:true,outcome_unknown:false,
+  document_id:'doc-1',id:'xmp-p',revision:'7',preflight_token:'0'.repeat(32),module_scope:[xmpOp],applies:xmpModules,
+  xmp_report:xmpReport(),xmp_transfer:xmpTransfer()});
+test('XMP inspection works without a photo and does not automatically import anything',async()=>{
+  const {flow,calls,api}=fixture();flow.updateContext({...context,editable:false,documentId:''});
+  api.read=async id=>({phase:'done',request_id:id,result:{protocol:1,request_id:id,action:'xmp_inspect',success:true,outcome_unknown:false,
+    path:'/sample.xmp',xmp_report:xmpReport()}});
+  await flow.submit('xmp_inspect',{path:'/sample.xmp'});assert.equal(flow.snapshot().phase,'done');
+  assert.equal(calls.length,1);assert.equal(calls[0].action,'xmp_inspect');assert.equal(calls[0].options.documentId,undefined);
+});
+test('XMP clean parser refusal is a known error and not an indefinite mutation lock',async()=>{
+  const {flow,calls,api}=fixture();api.read=async id=>({phase:'done',request_id:id,result:{protocol:1,request_id:id,action:'xmp_inspect',success:false,outcome_unknown:false,error:'Requires patched Expat 2.7.2'}});
+  await flow.submit('xmp_inspect',{path:'/sample.xmp'});assert.equal(flow.snapshot().phase,'error');
+  await flow.submit('xmp_inspect',{path:'/other.xmp'});assert.equal(calls.length,2);
+});
+test('XMP inspection transport uncertainty queries the same receipt and never imports or resubmits',async()=>{
+  const {flow,calls,api}=fixture({},15);api.read=async id=>({phase:'pending',request_id:id});
+  await flow.submit('xmp_inspect',{path:'/sample.xmp'});assert.equal(flow.snapshot().phase,'uncertain');
+  await flow.submit('xmp_inspect',{path:'/sample.xmp'});assert.equal(calls.length,1);
+  api.read=async id=>({phase:'done',request_id:id,result:{protocol:1,request_id:id,action:'xmp_inspect',success:true,outcome_unknown:false,path:'/sample.xmp',xmp_report:xmpReport()}});
+  await flow.query();assert.equal(flow.snapshot().phase,'done');assert.equal(calls.length,1);
+});
+test('inspection path mismatch cannot open a compatibility dialog as successful evidence',async()=>{
+  const {flow,api}=fixture();api.read=async id=>({phase:'done',request_id:id,result:{protocol:1,request_id:id,action:'xmp_inspect',success:true,outcome_unknown:false,path:'/other.xmp',xmp_report:xmpReport()}});
+  await flow.submit('xmp_inspect',{path:'/sample.xmp'});assert.equal(flow.snapshot().phase,'uncertain');
+});
+test('XMP preflight requires the selected preset source and full matching target evidence',async()=>{
+  for(const change of [false,true]){const {flow,api}=fixture();api.read=async id=>{
+    const result=xmpPreflight(id);if(change)result.xmp_transfer!.document_id='other';return {phase:'done',request_id:id,result};};
+    await flow.submit('preflight',{id:'xmp-p',xmpExpected:xmpSummary()},[xmpOp]);assert.equal(flow.snapshot().phase,change?'uncertain':'done');}
+});
+test('a document edit during XMP rendering invalidates even a completed preflight receipt',async()=>{
+  const waiting=deferred<Awaited<ReturnType<PresetTransport['read']>>>();const {flow,api}=fixture();api.read=()=>waiting.promise;
+  const work=flow.submit('preflight',{id:'xmp-p',xmpExpected:xmpSummary()},[xmpOp]);await tick();
+  flow.updateContext({...context,reviewContextKey:'new-revision'});waiting.resolve({phase:'done',request_id:'r1',result:xmpPreflight('r1')});
+  await work;assert.equal(flow.snapshot().phase,'error');assert.equal(flow.snapshot().result,null);
+});
+test('XMP apply cannot enqueue without a frozen review acknowledgment matching both source hashes',async()=>{
+  const {flow,calls}=fixture();await flow.submit('apply',{id:'xmp-p',xmpExpected:xmpSummary()},[xmpOp]);assert.equal(calls.length,0);
+  await flow.submit('apply',{id:'xmp-p',xmpExpected:xmpSummary(),preflightToken:'0'.repeat(32),xmpReviewAck:{source_sha256:'c'.repeat(64),report_sha256:'b'.repeat(64),before_sha256:'1'.repeat(64),after_sha256:'2'.repeat(64)}},[xmpOp]);
+  assert.equal(calls.length,0);assert.equal(flow.snapshot().phase,'error');
+});
+test('XMP import receipts must preserve the explicit selection and omit original XML bytes',async()=>{
+  for(const mismatch of [false,true]){const {flow,api}=fixture();api.read=async id=>{
+    const source=xmpSummary();if(mismatch)source.source_sha256='c'.repeat(64);
+    return {phase:'done',request_id:id,result:{protocol:1,request_id:id,action:'import',success:true,outcome_unknown:false,id:'xmp-p',path:'/saved.json',module_scope:[xmpOp],
+      preset:{schema:'lrt.preset.v1',id:'xmp-p',name:'XMP',kind:'color',builtin:false,modules:xmpModules,xmp_import:source}}};};
+    await flow.submit('import',{path:'/sample.xmp',xmpAck:{mode:XMP_MODE,source_sha256:'a'.repeat(64),report_sha256:'b'.repeat(64),selected:['exposure']}});
+    assert.equal(flow.snapshot().phase,mismatch?'uncertain':'done');}
 });

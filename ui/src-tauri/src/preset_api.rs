@@ -3,7 +3,16 @@ use std::sync::Arc;
 use serde_json::{json, Value};
 use tauri::State;
 use crate::{AppState, engine::EngineHandle};
+fn require_xmp_support(state: &AppState, command: &Value) -> Result<(), String> {
+    if (command["action"] == "xmp_inspect" || command.get("xmp_ack").is_some() || command.get("xmp_review_ack").is_some())
+        && state.ready_caps.lock().map_err(|_| "capability lock poisoned")?["xmp_import_protocol"] != 1 {
+        return Err("current engine does not support reviewed XMP parameter adaptation".into());
+    }
+    Ok(())
+}
 pub(crate) fn enqueue(state: &AppState, handle: &EngineHandle, command: Value) -> Result<(), String> {
+    crate::preset_host::xmp_protocol::command(&command)?;
+    require_xmp_support(state, &command)?;
     let Some(id) = command["request_id"].as_str().map(str::to_owned) else { return handle.send(command) };
     let action = command["action"].as_str().ok_or("missing preset action")?.to_owned();
     let mut host = state.preset_results.lock().map_err(|_| "preset receipt lock poisoned")?;
@@ -31,8 +40,10 @@ pub(crate) fn preset(
     document_id: Option<String>,
     local_mask_transfer: Option<Value>,
     preflight_token: Option<String>,
+    xmp_ack: Option<Value>,
+    xmp_review_ack: Option<Value>,
 ) -> Result<Value, String> {
-    const ACTIONS: [&str; 6] = ["list", "preflight", "apply", "save", "import", "delete"];
+    const ACTIONS: [&str; 7] = ["list", "preflight", "apply", "save", "import", "delete", "xmp_inspect"];
     if !ACTIONS.contains(&action.as_str()) {
         return Err(format!("preset 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
     }
@@ -51,6 +62,8 @@ pub(crate) fn preset(
         ("document_id", document_id.map(Value::from)),
         ("local_mask_transfer", local_mask_transfer),
         ("preflight_token", preflight_token.map(Value::from)),
+        ("xmp_ack", xmp_ack),
+        ("xmp_review_ack", xmp_review_ack),
     ] {
         if let Some(v) = v {
             cmd[k] = v;
@@ -59,6 +72,8 @@ pub(crate) fn preset(
     if let Some(v) = module_scope {
         cmd["module_scope"] = json!(v);
     }
+    crate::preset_host::xmp_protocol::command(&cmd)?;
+    require_xmp_support(&state, &cmd)?;
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
 }

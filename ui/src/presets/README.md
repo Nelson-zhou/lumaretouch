@@ -24,3 +24,32 @@ CI also executes preset_host::tests and existing batch_host::tests. The real
 engine protocol test covers legacy/correlated saves, SHM pixels, one-step undo,
 project reopen, stale identity rejection and no-mutation cached replay. Record
 actual pass/skip evidence in docs/development/preset-workflow.md before acceptance.
+
+## XMP adaptation source implementation (AUTHORED / UNRUN)
+
+- Dedicated original-XMP / portable-XMP JSON inspection and copy-import buttons
+  require catalog xmp_import_protocol=1. Inspection works without a photo and
+  never writes a preset. Ordinary JSON controls remain separate.
+- The compatibility dialog starts with no selected groups. It lists every
+  reported property, unsupported and invalid values, versions and bounded hashes.
+  Import needs explicit group selection and non-Adobe acknowledgment. The mode
+  only adapts observed ProcessVersion 11.0 syntax, never Adobe rendering behavior.
+- XMP-backed presets always preflight the current document. Both frozen PNGs
+  need successful browser decoding, exact dimensions, SHA-256 verification and
+  a visual-review checkbox before apply. Review is bound to token, source/report
+  hashes, document revision, effective source and people/recipe identities.
+- Native xmp_preset_protocol.rs validates public report/summary schemas, native
+  EV/explicit four-channel curves, PNG headers/dimensions and acknowledgment
+  shapes. WebCrypto performs PNG digest verification; the engine authoritatively
+  verifies the frozen token and both PNG hashes again before apply. Original XML
+  remains engine-side and is not a public receipt or executable UI asset.
+- Regression sources: existing presetWorkflow.test.ts additions, the new
+  xmpImport/model.test.ts, and xmp_preset_protocol_tests.rs. The new standalone
+  model test is not yet listed in the existing explicit npm test file list.
+
+No build, typecheck, tests, imports, runtime or screenshot checks were executed
+for this addition. Expat >= 2.7.2 is an unverified runtime prerequisite. Physical
+acceptance still needs real XMP/photo pairs, disabled controls until both images
+load, changed files, corrupt images, cancel/Escape/reopen, double clicks, document
+switch/edit during review, unknown outcomes, old engines, portable imports,
+one-step undo, project reopen and genuine full-resolution output comparison.

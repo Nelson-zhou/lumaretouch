@@ -8,13 +8,17 @@ import {LOCAL_GRADE_OP,MaskTransferControls,MaskTransferEvidenceView,transferGro
 import type {PresetWorkflowBinding} from './usePresetWorkflow';
 import {moduleLabel,presetLabel,unavailableScope} from './presetModel';
 import './presets.css';
+import {XmpCompatibilityDialog,XmpSummaryView} from '../xmpImport/XmpCompatibility';
+import {XmpPixelReview} from '../xmpImport/XmpPixelReview';
+import {validXmpSummary} from '../xmpImport/model';
 export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
   const list=w.catalog?.list??[],modules=w.catalog?.modules??[],chosen=w.form.scope;
   const unavailable=unavailableScope(chosen,modules),selectedOps=Object.keys(w.selected?.modules??{});
+  const xmpUnsupported=w.selected?.xmp_import!==undefined&&w.catalog?.xmp_import_protocol!==1;
   const faceBlocked=!w.face.ok&&modules.some(m=>selectedOps.includes(m.operation_id)&&m.single_face);
   const rows=[...modules,...chosen.filter(op=>!modules.some(m=>m.operation_id===op))
     .map(operation_id=>({operation_id,params:[],transferable:false,single_face:false,dedicated_transport:undefined,reason:'当前引擎不再提供这个模块'}))];
-  const verbs={list:'刷新列表',preflight:'预检目标预设',apply:'应用预设',save:'保存预设',import:'导入预设',delete:'移入预设回收站'};
+  const verbs={list:'刷新列表',preflight:'预检目标预设',apply:'应用预设',save:'保存预设',import:'导入预设',delete:'移入预设回收站',xmp_inspect:'检查 XMP 兼容性'};
   const oldDocument=!!w.ui.submitted?.options.documentId&&w.ui.submitted.options.documentId!==w.context.documentId;
   const nameLength=Array.from(w.form.name.trim()).length;
   return <section className="modulePresets" aria-label="模块预设">
@@ -32,16 +36,20 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
     </select></label>
     {w.selected&&<div className="presetDetail"><strong>{w.selected.name}</strong><small>ID：{w.selected.id}</small>
       <p>仅作用于：{selectedOps.map(moduleLabel).join('、')}</p>{w.selected.note&&<p>{w.selected.note}</p>}
+      {w.selected.xmp_import!==undefined&&(validXmpSummary(w.selected.xmp_import,selectedOps)?<XmpSummaryView value={w.selected.xmp_import}/>:<p role="alert">XMP 来源摘要不完整，禁止应用。</p>)}
+      {xmpUnsupported&&<p role="alert">当前引擎未声明 XMP 逐图审核协议，该预设不能应用。</p>}
       {faceBlocked&&<p>{w.face.why||'部分模块应用时需要可用单脸'}</p>}
       {unavailableScope(selectedOps,modules).length>0&&<p>包含当前不可用模块，不能应用。</p>}
     </div>}
     <div className="presetButtons">
-      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{selectedOps.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP].includes(op))?'预检所选预设':'应用所选'}</button>
+      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||xmpUnsupported||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{w.selected?.xmp_import||selectedOps.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP].includes(op))?'预检所选预设':'应用所选'}</button>
       <button disabled={!w.context.enabled||w.busy} onClick={()=>void w.refresh()}>刷新列表</button>
       <button disabled={!w.context.enabled||w.busy||!w.selected||w.selected.builtin} onClick={()=>void w.remove()}>移入回收站</button>
     </div>
     {selectedOps.includes(LOCAL_GRADE_OP)&&<MaskTransferControls groups={transferGroupsFromParams(w.selected?.modules[LOCAL_GRADE_OP])} value={w.localMaskTransfer} onChange={w.setLocalMaskTransfer} disabled={w.busy}/>}
-    {w.review&&<div className="presetDetail"><strong>冻结的目标预检，尚未应用</strong>{w.review.local_mask_transfer&&<MaskTransferEvidenceView value={w.review.local_mask_transfer}/>} {w.review.reference_color&&<ReferenceColorReview value={w.review.reference_color}/>} {w.review.optical_transfer&&<AutomaticTransferReview report={w.review.optical_transfer}/>}{w.review.crop_transfer&&<CropTransferReview key={w.cropKey} value={w.review.crop_transfer} reviewKey={w.cropKey} onReady={(key,ready)=>w.setCropImage({key,ready})}/>}<button disabled={w.busy||!w.context.editable||!w.cropReady} onClick={()=>void w.confirmLocal()}>确认本次目标预设并应用</button></div>}
+    {w.review&&<div className="presetDetail"><strong>冻结的目标预检，尚未应用</strong>{w.review.local_mask_transfer&&<MaskTransferEvidenceView value={w.review.local_mask_transfer}/>} {w.review.reference_color&&<ReferenceColorReview value={w.review.reference_color}/>} {w.review.optical_transfer&&<AutomaticTransferReview report={w.review.optical_transfer}/>}{w.review.crop_transfer&&<CropTransferReview key={w.cropKey} value={w.review.crop_transfer} reviewKey={w.cropKey} onReady={(key,ready)=>w.setCropImage({key,ready})}/>}
+      {w.review.xmp_transfer&&<XmpPixelReview key={w.xmpKey} value={w.review.xmp_transfer} reviewKey={w.xmpKey} onReady={(key,ready)=>w.setXmpImage({key,ready})}/>}
+      <button disabled={w.busy||!w.context.editable||!w.cropReady||!w.xmpReady} onClick={()=>void w.confirmLocal()}>确认本次目标预设并应用</button></div>}
     <fieldset><legend>保存当前照片的模块参数</legend>
       <label>预设名称<input aria-label="预设名称" value={w.form.name} maxLength={160} placeholder="例如：室外婚纱暖调" onChange={e=>w.setName(e.target.value)}/><small>{nameLength}/80 字符</small></label>
       {nameLength>80&&<p role="alert">名称过长，请缩短到 80 个字符以内。</p>}
@@ -59,7 +67,11 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.form.name.trim()||nameLength>80||!chosen.length||!!unavailable.length} onClick={()=>void w.save()}>保存为新预设</button>
     </fieldset>
     <div className="presetButtons"><button disabled={!w.context.enabled||w.busy} onClick={()=>void w.importFile()}>导入 JSON</button>
-      <button disabled={!w.context.enabled||w.busy} onClick={()=>void w.importFile(true)}>导入为新副本</button></div>
+      <button disabled={!w.context.enabled||w.busy} onClick={()=>void w.importFile(true)}>导入 JSON 为新副本</button>
+      <button data-feature-id="LNX-REF-WF-158978-398fbf9da9" disabled={!w.context.enabled||w.catalog?.xmp_import_protocol!==1||w.busy} onClick={()=>void w.importFile(false,true)}>导入 XMP（兼容检查）</button>
+      <button disabled={!w.context.enabled||w.catalog?.xmp_import_protocol!==1||w.busy} onClick={()=>void w.importFile(true,true)}>XMP 导入为新副本</button></div>
+    {w.xmpImport&&<XmpCompatibilityDialog key={w.xmpImport.report.report_sha256} report={w.xmpImport.report}
+      busy={w.ui.phase==='working'||w.ui.phase==='uncertain'} onCancel={w.cancelXmpImport} onImport={ack=>void w.confirmXmpImport(ack)}/>}
     <small>默认不覆盖同 ID 文件。遇到冲突可导入为新副本；内置预设不能删除。</small>
     <div role="status" aria-live="polite">
       {w.ui.phase==='working'&&<p>正在{w.ui.action?verbs[w.ui.action]:'处理'}，尚未确认完成…</p>}
@@ -68,7 +80,7 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {oldDocument&&<p>这笔操作属于之前的照片，不会用旧回执覆盖当前照片的控制项。</p>}
       {w.ui.result?.requires_reload&&<p>应用失败且未能恢复图像，请重新打开照片。</p>}
     </div>
-    {w.ui.phase==='uncertain'&&<div className="presetUncertain"><p>{w.ui.action==='preflight'?'只读预检仍未确认完成，尚未应用；可以查询同一笔任务，不会重复解算。':'结果尚未确认。不会自动重试，也不能据此认定没有保存或应用。'}</p>
+    {w.ui.phase==='uncertain'&&<div className="presetUncertain"><p>{w.ui.action==='preflight'||w.ui.action==='xmp_inspect'?'只读检查仍未确认完成，尚未导入或应用；可以查询同一笔任务，不会重复提交。':'结果尚未确认。不会自动重试，也不能据此认定没有保存或应用。'}</p>
       <button onClick={()=>void w.query()}>查询同一笔结果</button><button onClick={()=>void w.inspect()}>请求当前状态供核对</button>
       <button onClick={w.acknowledgeInspection}>我已核对，结束本次等待</button>
     </div>}

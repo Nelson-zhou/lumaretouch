@@ -18,12 +18,12 @@ from . import local_grade_layers as LG
 from . import sky_replacement_scope as SKY, optics_auto_scope as OA, id_background_scope as ID_BACKGROUND
 from . import creative_derived_transfer as DERIVED, creative_derived_source as SOURCE
 
-ACTIONS = ("list", "preflight", "apply", "save", "import", "delete")
+ACTIONS = ("list", "preflight", "apply", "save", "import", "delete", "xmp_inspect")
 LEGACY_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note", "local_mask_transfer", "preflight_token"}
-FIELDS = {"list": set(), "apply": {"id", "document_id", "preflight_token"},
+FIELDS = {"list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack"},
           "preflight": {"id", "document_id", "local_mask_transfer"},
           "save": {"id", "name", "kind", "force", "note", "module_scope", "document_id", "local_mask_transfer"},
-          "import": {"path", "id", "force"}, "delete": {"id"}}
+          "import": {"path", "id", "force", "xmp_ack"}, "xmp_inspect": {"path"}, "delete": {"id"}}
 MAX_RECEIPTS = 64
 MAX_RESULT_BYTES = 8 * 1024 * 1024
 MAX_CACHE_BYTES = 16 * 1024 * 1024
@@ -45,6 +45,8 @@ class PresetPorts:
     prepare_reference: Callable | None = None
     prepare_crop: Callable | None = None
     verify_crop: Callable | None = None
+    prepare_xmp: Callable | None = None
+    verify_xmp: Callable | None = None
 
 
 class PresetController:
@@ -67,7 +69,7 @@ class PresetController:
             available = False; docs = []
             errors = [{"file": PS.preset_dir(), "error": f"读预设目录失败：{error}"}]
         return {"list": docs, "errors": errors, "modules": SC.describe(), "dir": PS.preset_dir(),
-                "schema": SC.PRESET_SCHEMA, "last_applied": self.last_applied(), "available": available, "organisation_protocol": 1}
+                "schema": SC.PRESET_SCHEMA, "last_applied": self.last_applied(), "available": available, "organisation_protocol": 1, "xmp_import_protocol": 1}
 
     @staticmethod
     def request_id(p):
@@ -91,7 +93,7 @@ class PresetController:
             if "force" in p and type(p["force"]) is not bool: raise SC.ScopeError("force 必须是布尔值")
             for key in ("id", "name", "path", "kind", "note"):
                 if key in p and type(p[key]) is not str: raise SC.ScopeError(f"{key} 必须是字符串")
-            for key in ({"id"} if action in ("apply", "preflight", "save", "delete") else {"path"} if action == "import" else set()):
+            for key in ({"id"} if action in ("apply", "preflight", "save", "delete") else {"path"} if action in ("import", "xmp_inspect") else set()):
                 if not p.get(key, "").strip(): raise SC.ScopeError(f"preset {action} 需要 {key}")
             if action == "save":
                 if not p.get("name", "").strip(): raise SC.ScopeError("预设名称不能为空")
@@ -145,13 +147,21 @@ class PresetController:
                         if verdict != 'ok': raise SC.ScopeError(f'{op}：{reason}')
                 evidence = self.reviews.prepare(doc, state, self.ports.target_row(),
                     self.ports.document_id(), self.ports.revision(), p.get('local_mask_transfer'), self.ports.prepare_optics, self.ports.prepare_reference,
-                    self.ports.prepare_crop, self.ports.verify_crop)
+                    self.ports.prepare_crop, self.ports.verify_crop, self.ports.prepare_xmp, self.ports.verify_xmp)
+            elif action == "xmp_inspect":
+                from .preset_xmp_import import inspect
+                evidence = inspect(p["path"])
             elif action == "apply": evidence = self.apply(p)
             elif action == "save": evidence = self.save(p)
             elif action == "import":
                 path = str(p.get("path") or "")
                 if not path: raise SC.ScopeError("preset import 需要 path")
-                doc = {k: v for k, v in PS.load_file(path).items() if k != "builtin"}
+                if path.lower().endswith(".xmp") or "xmp_ack" in p:
+                    from .preset_xmp_import import load
+                    doc = load(path, p.get("xmp_ack"))
+                else:
+                    doc = {k: v for k, v in PS.load_file(path).items() if k != "builtin"}
+                    if "xmp_import" in doc: raise SC.ScopeError("Portable XMP presets require fresh compatibility acknowledgment; use XMP inspection")
                 if p.get("id"): doc["id"] = str(p["id"])
                 doc = SC.validate_preset(doc); self._effect_started = True
                 saved = PS.save(doc, force=bool(p.get("force")))
@@ -225,12 +235,14 @@ class PresetController:
         source_proof = None
         if p.get('preflight_token') is not None:
             record = self.reviews.claim(p['preflight_token'], pid, previous, self.ports.target_row(),
-                                       self.ports.document_id(), self.ports.revision(), self.ports.verify_crop)
+                                       self.ports.document_id(), self.ports.revision(), self.ports.verify_crop, self.ports.verify_xmp, p.get("xmp_review_ack"))
             doc, mods = record['preset'], record['modules']
             source_proof = record.get('source_proof')
         else:
             doc = PS.find(pid); mods = doc['modules']
             mods = DERIVED.require_modules(previous, mods)
+            if doc.get("xmp_import") is not None: raise SC.ScopeError("XMP adaptation requires current target-image review before apply")
+            if p.get("xmp_review_ack") is not None: raise SC.ScopeError("Unexpected XMP review acknowledgment")
             if LG.OP in mods or OA.OP in mods or RC.OP in mods or SC.OP_CROP in mods: raise SC.ScopeError('含裁剪、局部组或自动镜头/透视的预设必须先查看本目标预检，再确认应用')
             if SOURCE.record(previous) is not None:
                 source_proof = SOURCE.row_proof({**self.ports.target_row(), 'state':previous})
@@ -274,12 +286,15 @@ class PresetController:
             if SC.OP_CROP in ops:
                 proof=deepcopy(record['crop']);proof['revision']=str(published_revision)
                 self.ports.verify_crop(current,state,self.ports.document_id(),str(published_revision),proof)
+            if doc.get('xmp_import') is not None:
+                proof=deepcopy(record['xmp']);proof['revision']=str(published_revision)
+                self.ports.verify_xmp(current,previous,self.ports.capture(),self.ports.document_id(),str(published_revision),doc['xmp_import']['source_sha256'],proof)
         if p.get('preflight_token') is not None:self.ports.advance()
         published_revision=self.ports.revision()
         self._effect_started = True
         frame = apply_with_rollback(self.ports.replay, previous, state, preset_id=pid,
-                                    emit=self.emit, invalidate=self.ports.invalidate, verify_after=verify_after if SC.OP_CROP in ops else None,
-                                    strict_local=SC.OP_CROP in ops or SOURCE.record(state) is not None or ID_BACKGROUND.OP in ops or LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
+                                    emit=self.emit, invalidate=self.ports.invalidate, verify_after=verify_after if SC.OP_CROP in ops or doc.get("xmp_import") is not None else None,
+                                    strict_local=doc.get("xmp_import") is not None or SC.OP_CROP in ops or SOURCE.record(state) is not None or ID_BACKGROUND.OP in ops or LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
         after = OA.before_params(state, ops)
         self.last = {"id": pid, "name": doc["name"], "ops": ops, "params": after}
         render_ms = frame.pop("render_ms")

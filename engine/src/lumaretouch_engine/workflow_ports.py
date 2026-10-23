@@ -50,12 +50,21 @@ class WorkflowPortsMixin:
         return verify(self,row,candidate,document_id,revision,record)
 
 
+    def _prepare_xmp_target(self,row,before,candidate,document_id,revision,xmp_sha256):
+        from .xmp_target_review import prepare
+        return prepare(self,row,before,candidate,document_id,revision,xmp_sha256)
+
+    def _verify_xmp_target(self,row,before,candidate,document_id,revision,xmp_sha256,record):
+        from .xmp_target_review import verify
+        return verify(self,row,before,candidate,document_id,revision,xmp_sha256,record)
+
     def _preset_controller(self):
         controller = self.__dict__.get("_live_presets")
         if controller is None:
             controller = PRS.PresetController(PRS.PresetPorts(
                 prepare_optics=self._prepare_optics_target, prepare_reference=self._prepare_reference_target,
                 prepare_crop=self._prepare_crop_target, verify_crop=self._verify_crop_target,
+                prepare_xmp=self._prepare_xmp_target, verify_xmp=self._verify_xmp_target,
                 guard=lambda label: self._guard_editable(label), document_id=lambda: self._load_id,
                 capture=lambda: self._people_preset_capture(), replay=lambda state, **kw: self._people_preset_replay(state, **kw),
                 face_check=lambda: self._face_known_single(None, live=True), status=lambda: self.doc_state(),

@@ -105,8 +105,8 @@ def render(engine,row,candidate_state,document_id,revision,*,people_graph=None,c
         if frozen_base is None or frozen_base['id']!=base['id']:
             raise ValueError('Creative target snapshot replaced its immutable source')
         require_rebound_snapshot(snap)
-    from . import body_pose_render as body_render, id_background_runtime as id_background
-    for owner in (groups,recovery,manual,studio,sky,body_render,id_background):owner.check_export_decode(snap,path,stamp,(h,w))
+    from . import body_pose_render as body_render, id_background_runtime as id_background, fringe_repair_render as fringe
+    for owner in (groups,recovery,manual,studio,sky,body_render,id_background,fringe):owner.check_export_decode(snap,path,stamp,(h,w))
     if snap.get('grade_scope')=='objects':
         M.verify_snapshot(snap,path,(h,w));snap['local_mask_source_path']=path
     spec,skipped=build_export_spec(snap,h,w,for_document=True)

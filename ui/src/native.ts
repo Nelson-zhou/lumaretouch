@@ -303,6 +303,8 @@ export interface PresetInfo {
   modules: Record<string, Record<string, unknown>>;
   author?: string;
   note?: string;
+  /** Read-only compatibility summary; the original XML bytes never cross this boundary. */
+  xmp_import?: import('./xmpImport/model').XmpSummary;
 }
 
 /** `lnx.batch.v1.module_scope` 那一份契约的运行时报信：transferable=false 的格子
@@ -319,6 +321,7 @@ export interface ScopeModule {
 
 export interface PresetState {
   available?: boolean;
+  xmp_import_protocol?: number;
   list: PresetInfo[];
   errors: { file: string; error: string }[];
   modules: ScopeModule[];
@@ -1714,12 +1717,14 @@ export const runTask = (
 /** 模块预设（LNX-P0-PRESET / PRESET-001、002）：作用域与合法性全在引擎的 scope.py，
  *  这里既不列模块名单也不写量程（与 exposure/crop 同一条理由：抄一份就漂一份）。 */
 export const runPreset = (
-  action: "list" | "preflight" | "apply" | "save" | "import" | "delete",
+  action: "list" | "preflight" | "apply" | "save" | "import" | "delete" | "xmp_inspect",
   opts: { id?: string; name?: string; path?: string; kind?: string; note?: string;
-          force?: boolean; moduleScope?: string[]; requestId?: string; documentId?: string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};preflightToken?:string } = {},
+          force?: boolean; moduleScope?: string[]; requestId?: string; documentId?: string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};preflightToken?:string;
+          xmpAck?:import('./xmpImport/model').XmpAck;xmpReviewAck?:import('./xmpImport/model').XmpReviewAck } = {},
 ) => invoke<{ requested: boolean }>("preset", {
   action, id: opts.id, name: opts.name, path: opts.path, kind: opts.kind, note: opts.note,
   force: opts.force, moduleScope: opts.moduleScope, requestId: opts.requestId, documentId: opts.documentId,localMaskTransfer:opts.localMaskTransfer,referenceColor:opts.referenceColor,preflightToken:opts.preflightToken,
+  xmpAck:opts.xmpAck,xmpReviewAck:opts.xmpReviewAck,
 });
 export const readPresetResult=(requestId:string)=>invoke<{phase:string;request_id:string;result?:PresetReply;error?:string}>("preset_result",{requestId});
 

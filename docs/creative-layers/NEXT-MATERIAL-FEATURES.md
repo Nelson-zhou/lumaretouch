@@ -35,10 +35,14 @@ Numerical and photographic quality acceptance remains separate from source work.
   `LNX-REF-PC-32475-C-4bc238dfa1`. No canonical spill-correction state exists.
   Foreground/background colour estimation is a real dependency; global desaturation,
   matte erosion and an ID recovery brush are not substitutes.
-- Local XMP import: `LNX-REF-WF-158978-398fbf9da9`. Existing preset import is JSON.
-  Safe XML is only the first step: disclose unsupported or non-equivalent process
-  versions, curves, WB and profiles. Do not promise Adobe-identical rendering or
-  proprietary sharing-password compatibility.
+- Local XMP import: `LNX-REF-WF-158978-398fbf9da9`. A bounded native parameter
+  adaptation slice is now authored with immutable XML, explicit compatibility
+  consent and current-target before/after review; see [scope](../xmp-import/README.md).
+  Only observed PV11.0 syntax and selected EV/complete point curves are admitted,
+  without Adobe process emulation. WB/profiles/other process versions and many
+  effects remain unsupported. Expat security-version/package checks and all
+  functional/photographic acceptance remain UNRUN. Proprietary sharing codes
+  are not implemented. This is not whole-format compatibility completion.
 - AI passerby removal: `LNX-REF-WF-158249-a8278ceb16`, and generated removal-layer
   lifecycle `LNX-REF-WF-127932-22318776c0`. Automatic proposals, protected subjects,
   brush/lasso feathering, two candidates, regeneration and editable fusion masks

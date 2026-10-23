@@ -1,6 +1,8 @@
 //! Preset-specific protocol and document binding atop the shared mailbox.
 use serde_json::{json, Value};
 use crate::receipt_host::{ReceiptHost, ReceiptKind};
+#[path = "xmp_preset_protocol.rs"]
+pub(crate) mod xmp_protocol;
 pub(crate) struct PresetKind;
 fn text(value: &Value) -> bool { value.as_str().is_some_and(|s| !s.trim().is_empty()) }
 fn scope(value: &Value) -> bool {
@@ -14,6 +16,7 @@ fn modules(value: &Value, ops: &Value) -> bool {
 fn preset(value: &Value) -> bool {
     value["schema"] == "lrt.preset.v1" && text(&value["id"]) && text(&value["name"])
         && text(&value["kind"]) && value["builtin"].is_boolean() && value["modules"].as_object().is_some_and(|m| !m.is_empty() && m.values().all(Value::is_object))
+        && value.get("xmp_import").map_or(true, |xmp| xmp_protocol::summary(xmp, &value["modules"]))
 }
 fn optical_review(value: &Value, document: &Value, revision: &Value, params: &Value) -> bool {
     let hash = |v: &Value| v.as_str().is_some_and(|s| s.len()==64 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
@@ -68,13 +71,16 @@ fn reviewed_types(value: &Value) -> bool {
     let local=ops.iter().any(|op|op=="lnx.local_grade.v1");
     let optics=ops.iter().any(|op|op=="lnx.optics_auto.v1");
     let crop=ops.iter().any(|op|op=="lnx.crop.v1");
-    (local||optics||crop) && (!local||value["local_mask_transfer"].is_object())
+    let xmp=!value["xmp_report"].is_null()||!value["xmp_transfer"].is_null();
+    (local||optics||crop||xmp) && (!local||value["local_mask_transfer"].is_object())
         && (!optics||optical_review(&value["optical_transfer"],&value["document_id"],&value["revision"],&value["applies"]["lnx.optics_auto.v1"]))
         && (!crop||crop_review(&value["crop_transfer"],&value["document_id"],&value["revision"],&value["applies"]["lnx.crop.v1"]))
+        && (!xmp||(xmp_protocol::transfer(&value["xmp_transfer"],&value["document_id"],&value["revision"],&value["xmp_report"])
+            &&xmp_protocol::adapted_modules(&value["applies"],&value["xmp_report"])))
 }
 impl ReceiptKind for PresetKind {
     const NAME: &'static str = "preset";
-    const ACTIONS: &'static [&'static str] = &["list", "preflight", "apply", "save", "import", "delete"];
+    const ACTIONS: &'static [&'static str] = &["list", "preflight", "apply", "save", "import", "delete", "xmp_inspect"];
     fn valid_request(action: &str, document: Option<&str>) -> bool {
         if ["apply", "preflight", "save"].contains(&action) {
             document.is_some_and(|d| !d.is_empty() && d.len() <= 128 && d.chars().count() <= 64)
@@ -87,6 +93,7 @@ impl ReceiptKind for PresetKind {
         if document.is_some() && value["document_id"].as_str() != document { return false; }
         if !success { return true; }
         match value["action"].as_str() {
+            Some("xmp_inspect") => text(&value["path"]) && xmp_protocol::report(&value["xmp_report"]),
             Some("preflight") => text(&value["id"]) && scope(&value["module_scope"])
                 && modules(&value["applies"], &value["module_scope"])
                 && value["preflight_token"].as_str().is_some_and(|s| s.len() == 32 && s.bytes().all(|b| b.is_ascii_hexdigit()))
@@ -123,6 +130,8 @@ mod tests {
             "document_id":"doc","revision":"3","module_scope":["lnx.crop.v1"],"applies":{"lnx.crop.v1":crop},
             "preflight_token":"f".repeat(32),"crop_transfer":report});
         assert!(PresetKind::valid(&value,Some("doc")));
+        let mut legacy_null=value.clone();legacy_null["xmp_report"]=Value::Null;legacy_null["xmp_transfer"]=Value::Null;
+        assert!(PresetKind::valid(&legacy_null,Some("doc")));
         for key in ["crop_transfer","revision"] {let mut changed=value.clone();changed.as_object_mut().unwrap().remove(key);assert!(!PresetKind::valid(&changed,Some("doc")));}
         let mut changed=value.clone();changed["crop_transfer"]["document_id"]=json!("other");assert!(!PresetKind::valid(&changed,Some("doc")));
         changed=value.clone();changed["crop_transfer"]["crop"]["rotation_degrees"]=json!(45);assert!(!PresetKind::valid(&changed,Some("doc")));

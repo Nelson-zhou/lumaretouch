@@ -620,7 +620,7 @@ def validate_preset(doc, *, builtin: bool = False) -> dict:
     if "builtin" in doc:
         raise ScopeError("预设文件里不许自报 builtin：内置与否由引擎按目录判定"
                          "（文件能假扮内置，就能遮住真内置预设与绕开“内置不删”）")
-    unknown = sorted(set(doc) - {"schema", "id", "name", "kind", "modules", "author", "note"})
+    unknown = sorted(set(doc) - {"schema", "id", "name", "kind", "modules", "author", "note", "xmp_import"})
     if unknown:
         raise ScopeError(f"预设里有不认识的顶层键：{unknown}")
     pid = safe_slug(doc.get("id") or doc.get("name"), field="id")
@@ -644,9 +644,15 @@ def validate_preset(doc, *, builtin: bool = False) -> dict:
             except ValueError as error: raise ScopeError(str(error)) from error
     check_scope(list(clean))
     _check_shared_strength(list(clean), clean)
-    return {"schema": PRESET_SCHEMA, "id": pid, "name": name, "kind": kind,
+    result = {"schema": PRESET_SCHEMA, "id": pid, "name": name, "kind": kind,
             "modules": clean, "author": str(doc.get("author") or "")[:80],
             "note": str(doc.get("note") or "")[:200], "builtin": bool(builtin)}
+    if "xmp_import" in doc:
+        from .xmp_adaptation import check as check_xmp
+        if builtin: raise ScopeError("XMP adaptations cannot claim builtin provenance")
+        try: result["xmp_import"] = check_xmp(doc["xmp_import"], clean)
+        except (ValueError, TypeError, KeyError) as error: raise ScopeError("Invalid retained XMP adaptation: " + str(error)) from error
+    return result
 
 
 def safe_slug(value, *, field: str = "id") -> str:

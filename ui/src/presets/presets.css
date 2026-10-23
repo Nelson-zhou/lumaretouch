@@ -6,3 +6,10 @@
 .presetScopes label{display:flex;align-items:flex-start;gap:5px}.modulePresets small{display:block;opacity:.7;line-height:1.5;overflow-wrap:anywhere}
 .presetDetail,.presetUncertain{display:grid;gap:6px;padding:8px;border:1px solid var(--line,#343434);border-radius:6px}
 .modulePresets button:disabled{opacity:.45}.presetUncertain{border-color:#a77937}
+.xmpCompatibilityDialog{color:inherit;background:var(--panel,#202024);border:1px solid var(--line,#56565b);border-radius:10px;max-width:760px;width:calc(100vw - 48px);max-height:85vh;overflow:auto;padding:20px;box-sizing:border-box}
+.xmpCompatibilityDialog::backdrop{background:#0009}.xmpCompatibilityDialog h3{margin-top:0}.xmpCompatibilityDialog>*,.xmpReport>*{margin-bottom:12px}
+.xmpCompatibilityDialog fieldset label,.xmpPixelReview label{display:flex;align-items:flex-start;gap:8px}.xmpCompatibilityDialog fieldset{display:grid;gap:12px}
+.xmpReport dl{max-height:40vh;overflow:auto}.xmpProperty{padding:8px;border-bottom:1px solid var(--line,#444)}.xmpProperty dt{font-weight:600}.xmpProperty dd{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.xmpProperty-unsupported,.xmpProperty-invalid{border-left:3px solid #c79758}.xmpReport small{overflow-wrap:anywhere}
+.xmpComparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.xmpComparison figure{margin:0}.xmpComparison img{display:block;max-width:100%;height:auto;object-fit:contain}.xmpComparison figcaption{margin:8px 0}
+@media(max-width:500px){.xmpComparison{grid-template-columns:1fr}}

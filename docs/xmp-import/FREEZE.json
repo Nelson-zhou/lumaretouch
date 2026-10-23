@@ -1,0 +1,209 @@
+{
+  "baseline": "ba04e314aff6d20cf2edba85d198a77ef03ae27f",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Local XMP requirement LNX-REF-WF-158978-398fbf9da9: explicit native EV/complete point-curve adaptation for observed PV11.0 syntax, exact original XML, compatibility consent, target-owned before/after review and existing preset transaction. Not Adobe rendering equivalence or whole-format compatibility.",
+  "files": [
+    {
+      "path": "docs/creative-layers/NEXT-MATERIAL-FEATURES.md",
+      "sha256": "4ad84183075fdb004f23834d19bf5c25150c7cbc7a3a21656b10b48d157bd792",
+      "bytes": 6035
+    },
+    {
+      "path": "docs/xmp-import/README.md",
+      "sha256": "afa650396e3573e465b22937b7c475efb5a8eaaee8da71474210c8bf8f48d518",
+      "bytes": 7538
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_transfer_host.py",
+      "sha256": "0b4f8535fb60ef2285c892cb4d3254b5fc3d6dc69791d555f0d4658a0b63faa5",
+      "bytes": 2632
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/custom_lut_scope.py",
+      "sha256": "ce2a2b466156f41afc1820302425b7e3a93dbb7df98bbde20219f178926243ae",
+      "bytes": 2850
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_candidate_render.py",
+      "sha256": "160468c4908c724058df131155c56d4425dd71b7f777449b60dba3521f8ff42c",
+      "bytes": 8413
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_preset_review.py",
+      "sha256": "a5fbd7d3fb5604704971afca7de51a6374dc37b3f234fa4e4630151998da2a09",
+      "bytes": 9594
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "sha256": "04b2b41ac2f0a5355a3ce6a4c6a1a03515cad57eb577a23058b923465fa5fa97",
+      "bytes": 22255
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_xmp_import.py",
+      "sha256": "184f54960709385c16abe7711a2f61d754603019e25f242aa2ea23399bfa9a53",
+      "bytes": 2085
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "bc134e274f7afa6cd99a02753042192e0d7d8903c23187a9602236efc46a5826",
+      "bytes": 43157
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "789af8e94da5f8555ad0f159f04785d13b7c6d28668e47150f0f584b05e80ab5",
+      "bytes": 465478
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "277ff9b4bf86637a96ffafe5c24217d26deaed788dc9045a38206bed2483e5e9",
+      "bytes": 5935
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/xmp_adaptation.py",
+      "sha256": "d4642563b1c621bfd4520d4d0a54054c441664f1dd70881aadb178b355f46fff",
+      "bytes": 10458
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/xmp_document.py",
+      "sha256": "da7fc0c122f807e028b621a31d7215fb71bc6080f39c1e048178dcce0486dd5d",
+      "bytes": 25560
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/xmp_target_review.py",
+      "sha256": "cda5f8363b4d69b8fa6df0906736a4c61acf49ab936d094a010418d0994c8d8f",
+      "bytes": 11125
+    },
+    {
+      "path": "engine/tests/test_xmp_target_review_unrun.py",
+      "sha256": "7abb0d2a37f4b1a60c98f44a4732aabc3e0bad02f200c56193690e22dfc6ce10",
+      "bytes": 9275
+    },
+    {
+      "path": "engine/tests/xmp_import_fixtures/README.md",
+      "sha256": "2074b2565dbe987acd5b9164deccdf9d899a86e62a79fa2a1f84ae638aa24a24",
+      "bytes": 1127
+    },
+    {
+      "path": "engine/tests/xmp_import_fixtures/test_adaptation_unrun.py",
+      "sha256": "c0f68841b347f35f7dcabf49c81ef622019b268eb7ec1ce212383a3c52070289",
+      "bytes": 6435
+    },
+    {
+      "path": "engine/tests/xmp_import_fixtures/test_document_unrun.py",
+      "sha256": "8c55d37b2f1a0fe96cd17e10de34dfaf9a56bf02d9709f532c881164b0f2604c",
+      "bytes": 19977
+    },
+    {
+      "path": "ui/package.json",
+      "sha256": "384b69cd1bda69e91691432c009b2af74047ad8070f8ce571ddc0988bb085da2",
+      "bytes": 1722
+    },
+    {
+      "path": "ui/src-tauri/src/preset_api.rs",
+      "sha256": "fc8423365f31366690ee7c006f5bcdcfc842d418a74957fa6d897bf6bd66443a",
+      "bytes": 4051
+    },
+    {
+      "path": "ui/src-tauri/src/preset_host.rs",
+      "sha256": "af5e4e9cd9048af6894a95e57060fc3ecbd51338da4df1437225a53107fed06f",
+      "bytes": 14561
+    },
+    {
+      "path": "ui/src-tauri/src/xmp_preset_protocol.rs",
+      "sha256": "7e3968412ea41b566287202473c9abcec5ae3d9116aba3129a7eda0f1e12dd6f",
+      "bytes": 13124
+    },
+    {
+      "path": "ui/src-tauri/src/xmp_preset_protocol_tests.rs",
+      "sha256": "34c50da5e3725cd328e0f13c0e807b6bfe57f98634121da4b26ceeefe2665c1e",
+      "bytes": 9619
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "d2559867c6b905c7caa5e0070e2a382ae592ce6757846069465418ebe3cca97b",
+      "bytes": 99422
+    },
+    {
+      "path": "ui/src/presets/PresetPanel.tsx",
+      "sha256": "520f64cb76d37aa30dfb55ae7af6439406528edb8bb3762a81192bed48cd6357",
+      "bytes": 10129
+    },
+    {
+      "path": "ui/src/presets/README.md",
+      "sha256": "d4c9f72ebcee07996241893eed2e5cc0066db41d9bd64bbd5d421608bf1e97b8",
+      "bytes": 3787
+    },
+    {
+      "path": "ui/src/presets/presetWorkflow.test.ts",
+      "sha256": "38d0593720d385d1fd62e23260af69c452039c26d8ce657e67452e9a2fbe407e",
+      "bytes": 13659
+    },
+    {
+      "path": "ui/src/presets/presetWorkflow.ts",
+      "sha256": "149b5575716651233c2ce0c2923b5bd47f7fd9c1473858e46903948c3753af90",
+      "bytes": 14320
+    },
+    {
+      "path": "ui/src/presets/presets.css",
+      "sha256": "ceb50cd7ad6a50e3c299fa992fba7bfd63224e3ba2f729da3c075d524b9d5083",
+      "bytes": 2185
+    },
+    {
+      "path": "ui/src/presets/usePresetWorkflow.ts",
+      "sha256": "1555a9496b57f6fb923a27671f7b8bfa597f39845421aa396be437d96eeb825f",
+      "bytes": 11471
+    },
+    {
+      "path": "ui/src/xmpImport/XmpCompatibility.tsx",
+      "sha256": "0527044b05d147be1f0e312febb3774522a15369199311b7de4e09a990120b1f",
+      "bytes": 4858
+    },
+    {
+      "path": "ui/src/xmpImport/XmpPixelReview.tsx",
+      "sha256": "cbfc0dbd6ff3bdc65709afab98b7fc4ff53aaaff222fe567cd115f4498b56202",
+      "bytes": 3525
+    },
+    {
+      "path": "ui/src/xmpImport/model.test.ts",
+      "sha256": "cf8bd5b4909f79f417cb1d579eee15ade35a42106d55e3a0d3abcc212760538b",
+      "bytes": 7615
+    },
+    {
+      "path": "ui/src/xmpImport/model.ts",
+      "sha256": "d2db86470f8c2b8e20d00f1ee3decba04bb168668debad736bcf4514e35d33f8",
+      "bytes": 10077
+    }
+  ],
+  "validation": {
+    "static_only": [
+      "Python AST parse",
+      "JSON parse",
+      "read-only primary-source and contract audits",
+      "git diff --check"
+    ],
+    "unrun": [
+      "product imports",
+      "tests",
+      "build/compiler",
+      "typecheck",
+      "browser/runtime acceptance",
+      "photographic and pixel-parity acceptance",
+      "performance",
+      "packaged Expat and Rust availability"
+    ],
+    "ceilings": {
+      "App.tsx": 2121,
+      "main.rs": 2040,
+      "server.py": 6984
+    }
+  },
+  "residuals": [
+    "Expat >=2.7.2 is required; installed/packaged version is unverified.",
+    "Only exact observed PV11.0 syntax, selected Exposure2012 and complete four-channel PV2012 point arrays are adapted.",
+    "WB, profiles/looks, other process versions, local corrections, other Adobe effects and proprietary sharing codes remain unsupported and reported.",
+    "Native Rust PCHIP sRGB-display curves are not Adobe spline/domain equivalence.",
+    "Candidate review is full-source-rendered then downsampled to <=640px, not candidate 100% inspection.",
+    "Wider returned-source alpha/HDR remains explicitly fenced without clipping.",
+    "No measured preview/viewport pixel equivalence or real-photo quality acceptance has been established."
+  ]
+}

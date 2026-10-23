@@ -14,13 +14,14 @@ from . import creative_derived_transfer as DERIVED, creative_derived_source as S
 class PresetReviews:
     def __init__(self):self.pending=OrderedDict()
 
-    def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None,prepare_crop=None,verify_crop=None):
+    def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None,prepare_crop=None,verify_crop=None,prepare_xmp=None,verify_xmp=None):
         modules=DERIVED.require_modules(state,preset['modules']);SC.check_scope(list(modules))
+        xmp=preset.get("xmp_import")
         derived=SOURCE.record(state) is not None
-        if not derived and LG.OP not in modules and OA.OP not in modules and RC.OP not in modules and SC.OP_CROP not in modules:raise ValueError('此预设不含需要冻结目标预检的模块')
+        if xmp is None and not derived and LG.OP not in modules and OA.OP not in modules and RC.OP not in modules and SC.OP_CROP not in modules:raise ValueError('此预设不含需要冻结目标预检的模块')
         # Current captured state owns the effective source, not a stale parked
         # row state. Originals retain their existing review contract.
-        proof=SOURCE.row_proof({**row,'state':state}) if derived or SC.OP_CROP in modules else None
+        proof=SOURCE.row_proof({**row,'state':state}) if xmp is not None or derived or SC.OP_CROP in modules else None
         if LG.OP in modules:prepared,transfer=LR.prepare_modules(state,modules,row,options,preview=True)
         else:
             if options is not None:raise ValueError('未选择局部组，不能附带蒙版选项')
@@ -49,9 +50,14 @@ class PresetReviews:
             if reference_record is not None:RC.apply_verified(candidate,reference_record['recipe'])
             crop_record,crop_transfer=prepare_crop(row,candidate,document_id,str(revision))
             verify_crop(row,candidate,document_id,str(revision),crop_record)
+        xmp_record=None;xmp_transfer=None
+        if xmp is not None:
+            if prepare_xmp is None or verify_xmp is None:raise ValueError('XMP requires actual full-target image review ports')
+            xmp_record,xmp_transfer=prepare_xmp(row,state,candidate,document_id,str(revision),xmp['source_sha256'])
+            verify_xmp(row,state,candidate,document_id,str(revision),xmp['source_sha256'],xmp_record)
         if proof is not None:SOURCE.verify_row({**row,'state':state},proof)
         token=uuid.uuid4().hex
-        record={'preset':deepcopy(preset),'modules':prepared,'transfer':transfer,'optics':optical_record,'reference':reference_record,'crop':crop_record,
+        record={'preset':deepcopy(preset),'modules':prepared,'transfer':transfer,'optics':optical_record,'reference':reference_record,'crop':crop_record,'xmp':xmp_record,
                 'document_id':document_id,'revision':str(revision),'path':row['path'],
                 'row_document_id':row.get('document_id'),'source_proof':proof,
                 'before':canonical(OA.before_params(state,list(modules))),'local_key':LG.undo_key(state) if LG.OP in modules else None,
@@ -60,9 +66,9 @@ class PresetReviews:
         while len(self.pending)>8:self.pending.popitem(last=False)
         return {'id':preset['id'],'name':preset['name'],'module_scope':list(modules),
                 'preflight_token':token,'applies':deepcopy(prepared),'local_mask_transfer':transfer,'optical_transfer':optical_transfer,'reference_color':reference_record,
-                'document_id':document_id,'revision':str(revision),'source_proof':deepcopy(proof),'crop_transfer':crop_transfer}
+                'document_id':document_id,'revision':str(revision),'source_proof':deepcopy(proof),'crop_transfer':crop_transfer,**({'xmp_transfer':xmp_transfer,'xmp_report':deepcopy(xmp['report'])} if xmp is not None else {})}
 
-    def claim(self,token,preset_id,state,row,document_id,revision,verify_crop=None):
+    def claim(self,token,preset_id,state,row,document_id,revision,verify_crop=None,verify_xmp=None,xmp_review_ack=None):
         if type(token) is not str or token not in self.pending:raise ValueError('目标预设预检已失效或使用，请重新预检')
         record=self.pending[token]
         if time.monotonic()>=record['expires']:raise ValueError('目标预设预检已过期，请重新预检')
@@ -99,6 +105,13 @@ class PresetReviews:
             if record['optics'] is not None:candidate['_optics']=record['optics']['recipe']
             if record['reference'] is not None:RC.apply_verified(candidate,record['reference']['recipe'])
             verify_crop(row,candidate,document_id,str(revision),record.get('crop'))
+        xmp=record['preset'].get('xmp_import')
+        if xmp is not None:
+            if verify_xmp is None:raise ValueError('XMP review verifier unavailable')
+            from .preset_xmp_import import acknowledgment
+            acknowledgment(xmp_review_ack,record)
+            verify_xmp(row,state,candidate,document_id,str(revision),xmp['source_sha256'],record.get('xmp'))
+        elif xmp_review_ack is not None:raise ValueError('Unexpected XMP review acknowledgment')
         if proof is not None:SOURCE.verify_row({**row,'state':state},proof)
         del self.pending[token]
         return record

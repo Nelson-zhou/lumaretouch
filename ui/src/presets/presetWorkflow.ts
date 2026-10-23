@@ -4,10 +4,13 @@ import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../opt
 import {validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence,type TransferGroupChoice} from '../localMasks/transferModel.ts';
 /** Completion-only receipts. Never install a historical receipt's doc_state into controls. */
 import type {PresetInfo, PresetState} from '../native';
-export type PresetAction = 'list'|'preflight'|'apply'|'save'|'import'|'delete';
+import {validXmpAck, validXmpReport, validXmpSummary, validXmpTransfer, validXmpReviewAck, type XmpAck, type XmpReport, type XmpSummary, type XmpTransfer, type XmpReviewAck} from '../xmpImport/model.ts';
+export type PresetAction = 'list'|'preflight'|'apply'|'save'|'import'|'delete'|'xmp_inspect';
 export type PresetOptions = {id?:string;name?:string;path?:string;kind?:string;note?:string;force?:boolean;
-  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string};
+  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;
+  xmpAck?:XmpAck;xmpReviewAck?:XmpReviewAck;/** UI-only captured expected source, never sent as authority. */xmpExpected?:XmpSummary};
 export type PresetReply = {protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
+  xmp_report?:XmpReport;xmp_transfer?:XmpTransfer;
   crop_transfer?:CropReview;reference_color?:ReferenceReview;revision?:string;optical_transfer?:OpticalTargetReview;preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
   before?:Record<string,unknown>;after?:Record<string,unknown>;doc_state?:Record<string,unknown>;
   error?:string;requires_reload?:boolean;rolled_back?:boolean;operation_committed?:boolean|null};
@@ -27,9 +30,14 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
     || typeof result.success!=='boolean' || typeof result.outcome_unknown!=='boolean' || (result.success&&result.outcome_unknown))throw Error('预设回执身份或状态不完整');
   if(['apply','preflight','save'].includes(action)&&result.document_id!==opts.documentId)throw Error('预设结果不属于本次照片');
   if(!result.success)return;
+  if(action==='xmp_inspect'){
+    if(!text(result.path)||result.path!==opts.path||!validXmpReport(result.xmp_report))throw Error('XMP 检查路径或有界兼容报告不匹配');
+    return;
+  }
   if(action==='list'){
     if(!result.catalog || result.catalog.available!==true || !Array.isArray(result.catalog.list)
-      || !Array.isArray(result.catalog.errors) || !Array.isArray(result.catalog.modules))throw Error('预设目录结果不完整');
+      || !Array.isArray(result.catalog.errors) || !Array.isArray(result.catalog.modules)
+      || result.catalog.list.some(p=>p.xmp_import!==undefined&&!validXmpSummary(p.xmp_import,Object.keys(p.modules))))throw Error('预设目录结果不完整');
     return;
   }
   if(!text(result.id) || (opts.id!==undefined&&result.id!==opts.id))throw Error('预设结果与提交的预设不一致');
@@ -45,7 +53,12 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
     if(result.module_scope.includes('lnx.reference_color.v1')&&(result.applies?.['lnx.reference_color.v1'] as {strength?:number})?.strength!==0&&!validReferenceReview(result.reference_color,opts.documentId??'',result.revision))throw Error('参考统一目标证据不完整');
     if(result.module_scope.includes(OPTICS_AUTO_OP)&&!validOpticalReview(result.optical_transfer,opts.documentId??'',result.revision,result.applies?.[OPTICS_AUTO_OP]))throw Error('自动镜头/透视目标预检证据不完整');
     if(result.module_scope.includes(CROP_OP)&&!validCropReview(result.crop_transfer,opts.documentId??'',result.revision,result.applies?.[CROP_OP]))throw Error('缺少匹配的本目标真实裁剪预览');
-    if(!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1',CROP_OP].includes(op)))throw Error('预设不含需要冻结预检的模块');
+    if(opts.xmpExpected||result.xmp_report||result.xmp_transfer){
+      if(!validXmpSummary(opts.xmpExpected,result.module_scope)||!validXmpReport(result.xmp_report)
+        ||result.xmp_report.source_sha256!==opts.xmpExpected.source_sha256||result.xmp_report.report_sha256!==opts.xmpExpected.report.report_sha256
+        ||!validXmpTransfer(result.xmp_transfer,opts.documentId??'',result.revision,opts.xmpExpected.source_sha256))throw Error('缺少匹配本预设、当前照片和冻结版本的 XMP 前后像素证据');
+    }
+    if(!opts.xmpExpected&&!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1',CROP_OP].includes(op)))throw Error('预设不含需要冻结预检的模块');
     return;
   }
   if(action==='apply'){
@@ -57,6 +70,9 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
     if(!text(result.path)||!preset||preset.schema!=='lrt.preset.v1'||preset.id!==result.id||!text(preset.name)
       ||!text(preset.kind)||!moduleKeys(preset.modules,result.module_scope))throw Error('缺少实际保存的预设内容');
     if(action==='save'&&preset.name!==opts.name)throw Error('保存名称与提交不一致');
+    if(preset.xmp_import!==undefined&&!validXmpSummary(preset.xmp_import,result.module_scope))throw Error('XMP 预设来源摘要不完整');
+    if(opts.xmpAck&&(!validXmpSummary(preset.xmp_import,result.module_scope)||!validXmpAck(opts.xmpAck,preset.xmp_import.report)
+      ||!sameScope(preset.xmp_import.selected,opts.xmpAck.selected)))throw Error('导入结果与确认的 XMP 来源或参数选择不一致');
   }
 }
 export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi)=>void,
@@ -112,8 +128,19 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
     if(action==='save'&&Array.from(options.name??'').length>80){
       set({phase:'error',action,result:null,message:'预设名称最多 80 个字符，请缩短后保存'});return;
     }
+    if((action==='xmp_inspect'&&!text(options.path))||(options.xmpAck&&(action!=='import'||!validXmpAck(options.xmpAck)))){
+      set({phase:'error',action,result:null,message:'缺少有效的 XMP 路径或明确的参数适配确认'});return;
+    }
+    if(options.xmpExpected&&(!validXmpSummary(options.xmpExpected,expectedScope)
+      ||(action==='apply'&&(!options.preflightToken||!validXmpReviewAck(options.xmpReviewAck)
+        ||options.xmpReviewAck.source_sha256!==options.xmpExpected.source_sha256||options.xmpReviewAck.report_sha256!==options.xmpExpected.report.report_sha256)))){
+      set({phase:'error',action,result:null,message:'XMP 预设必须先检查当前照片的完整前后像素并确认'});return;
+    }
     const id=uuid(),g=++generation,deadline=now()+(config.timeoutMs??120000);
     const captured={...options,moduleScope:options.moduleScope?[...options.moduleScope]:undefined,
+      ...(options.xmpAck?{xmpAck:{...options.xmpAck,selected:[...options.xmpAck.selected]}}:{}),
+      ...(options.xmpReviewAck?{xmpReviewAck:{...options.xmpReviewAck}}:{}),
+      ...(options.xmpExpected?{xmpExpected:structuredClone(options.xmpExpected)}:{}),
       ...(editing?{documentId:context.documentId}:{}),requestId:id};
     const request:Pending={contextGeneration,id,action,options:captured,expectedScope:expectedScope?[...expectedScope]:undefined,generation:g};pending=request;
     set({phase:'working',action,result:null,message:'',submitted:{action,options:captured,requestId:id,reviewContextKey:context.reviewContextKey}});

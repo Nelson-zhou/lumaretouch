@@ -6,8 +6,13 @@ import {confirm,open} from '@tauri-apps/plugin-dialog';
 import {runPreset,readPresetResult,type PresetState} from '../native';
 import {createPresetWorkflow,initialPresetUi,type PresetContext,type PresetUi} from './presetWorkflow';
 import {initialPresetForm,presetFormReducer,presetFromLabel,unavailableScope} from './presetModel';
+import {validXmpAck,validXmpSummary,xmpReviewAck,xmpReviewKey,type XmpAck,type XmpReport} from '../xmpImport/model';
+type XmpImportDraft={path:string;id?:string;report:XmpReport};
 export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null,onRefresh:()=>Promise<void>,face:{ok:boolean;why:string}){
   const [cropImage,setCropImage]=useState<{key:string;ready:boolean}>({key:'',ready:false});
+  const [xmpImage,setXmpImage]=useState<{key:string;ready:boolean}>({key:'',ready:false});
+  const [xmpImport,setXmpImport]=useState<XmpImportDraft|null>(null);
+  const xmpDraft=useRef<XmpImportDraft|null>(null),xmpImportTarget=useRef<{path:string;id?:string}|null>(null);
   const [ui,setUi]=useState<PresetUi>(initialPresetUi),[form,dispatch]=useReducer(presetFormReducer,initialPresetForm);
   const [localMaskTransfer,setLocalMaskTransfer]=useState(defaultMaskTransfer),[saveMaskTransfer,setSaveMaskTransfer]=useState(defaultMaskTransfer);
   useEffect(()=>setLocalMaskTransfer(v=>({...v,groups:null})),[form.selectedId]);
@@ -27,10 +32,14 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
           if(result.action==='import')dispatch({type:'imported',id:result.id});
           if(result.action==='delete')dispatch({type:'deleted',id:result.id});
         }
+        const importTarget=xmpImportTarget.current;
+        if(result.success&&result.action==='xmp_inspect'&&result.xmp_report&&importTarget&&result.path===importTarget.path){
+          const draft={...importTarget,report:result.xmp_report};xmpDraft.current=draft;setXmpImport(draft);
+        }
         // A read-only preflight must not request session_state: that advances
         // the host view revision and would invalidate its own visual review.
         // Mutations still fetch fresh state, never install receipt.doc_state.
-        if(result.action!=='preflight')void Promise.resolve().then(()=>latest.current.onRefresh()).catch(error=>{if(live&&controller.snapshot().result?.request_id===result.request_id)setNote(`操作结果保持不变，但界面刷新失败：${String(error)}`);});
+        if(result.action!=='preflight'&&result.action!=='xmp_inspect')void Promise.resolve().then(()=>latest.current.onRefresh()).catch(error=>{if(live&&controller.snapshot().result?.request_id===result.request_id)setNote(`操作结果保持不变，但界面刷新失败：${String(error)}`);});
       }
     });
     flow.current=controller;controller.updateContext(latest.current.context);
@@ -39,7 +48,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   const contextKey=JSON.stringify(context);
   useEffect(()=>{flow.current?.updateContext(context);},[contextKey]);
   const current=()=>{flow.current?.updateContext(latest.current.context);return flow.current;};
-  const locked=()=>dialogLock.current||['working','uncertain'].includes(flow.current?.snapshot().phase??'');
+  const locked=()=>dialogLock.current||!!xmpDraft.current||['working','uncertain'].includes(flow.current?.snapshot().phase??'');
   const selected=catalog?.list.find(p=>p.id===form.selectedId);
   async function save(){
     if(locked())return;const value=latest.current;
@@ -52,30 +61,52 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
     if(locked())return;const value=latest.current,preset=value.catalog?.list.find(p=>p.id===id);
     if(!preset){setNote('请从当前列表选择预设');return;}
     const ops=Object.keys(preset.modules);
+    if(preset.xmp_import!==undefined&&value.catalog?.xmp_import_protocol!==1){setNote('当前引擎未声明 XMP 检查和逐图审核协议，不能应用该预设。');return;}
+    if(preset.xmp_import!==undefined&&!validXmpSummary(preset.xmp_import,ops)){setNote('XMP 来源摘要或选择不完整，不能应用；请重新检查导入文件。');return;}
     if(unavailableScope(ops,value.catalog?.modules??[]).length){setNote('这个预设包含当前引擎不可用的模块');return;}
     if(!value.face.ok&&value.catalog?.modules.some(m=>ops.includes(m.operation_id)&&m.single_face)){
       setNote(value.face.why||'这个预设的部分模块需要可用的单脸');return;
     }
     dispatch({type:'select',id});setNote('');
-    await current()?.submit(ops.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP].includes(op))?'preflight':'apply',{id,...(ops.includes(LOCAL_GRADE_OP)?{localMaskTransfer:value.localMaskTransfer}:{})},ops);
+    await current()?.submit(preset.xmp_import||ops.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP].includes(op))?'preflight':'apply',
+      {id,...(preset.xmp_import?{xmpExpected:preset.xmp_import}:{}),...(ops.includes(LOCAL_GRADE_OP)?{localMaskTransfer:value.localMaskTransfer}:{})},ops);
   }
   const review=ui.action==='preflight'&&ui.submitted?.reviewContextKey===context.reviewContextKey&&ui.result?.success&&ui.result.id===form.selectedId&&ui.result.document_id===context.documentId
     &&(!ui.result.module_scope?.includes(LOCAL_GRADE_OP)||JSON.stringify(ui.submitted?.options.localMaskTransfer)===JSON.stringify(localMaskTransfer))?ui.result:null;
   const cropKey=review?.crop_transfer&&review.preflight_token?cropReviewKey(review.preflight_token,review.crop_transfer):'';
   const cropReady=!review?.module_scope?.includes(CROP_OP)||!!cropKey&&cropImage.key===cropKey&&cropImage.ready;
+  const xmpKey=review?.xmp_transfer&&review.xmp_report&&review.preflight_token?xmpReviewKey(review.preflight_token,review.xmp_transfer,review.xmp_report):'';
+  const xmpReady=!selected?.xmp_import&&!review?.xmp_transfer||!!xmpKey&&xmpImage.key===xmpKey&&xmpImage.ready;
   async function confirmLocal(){
-    if(locked()||!cropReady||!review?.preflight_token||!review.module_scope)return;
+    if(locked()||!cropReady||!xmpReady||!review?.preflight_token||!review.module_scope)return;
     const controller=current();
     if(controller?.snapshot().result?.preflight_token!==review.preflight_token)return;
-    await controller.submit('apply',{id:review.id,preflightToken:review.preflight_token},review.module_scope);
+    const expected=ui.submitted?.options.xmpExpected;
+    if(selected?.xmp_import&&(latest.current.catalog?.xmp_import_protocol!==1||!expected||!validXmpSummary(selected.xmp_import,review.module_scope)||selected.xmp_import.source_sha256!==expected.source_sha256
+      ||selected.xmp_import.report.report_sha256!==expected.report.report_sha256))return;
+    await controller.submit('apply',{id:review.id,preflightToken:review.preflight_token,
+      ...(expected&&review.xmp_transfer&&review.xmp_report?{xmpExpected:expected,xmpReviewAck:xmpReviewAck(review.xmp_transfer,review.xmp_report)}:{})},review.module_scope);
   }
-  async function importFile(asCopy=false){
+  async function importFile(asCopy=false,xmp=false){
+    if(xmp&&latest.current.catalog?.xmp_import_protocol!==1){setNote('需要支持 XMP 检查与逐图审核的配套引擎。');return;}
     if(locked())return;dialogLock.current=true;setDialogBusy(true);setNote('');
     try{
-      const path=await open({title:asCopy?'导入为新预设副本':'导入预设',multiple:false,filters:[{name:'LumaRetouch 预设',extensions:['json']}]});
-      if(typeof path==='string'&&path)await current()?.submit('import',{path,...(asCopy?{id:`user-${crypto.randomUUID()}`}:{})});
+      const path=await open({title:xmp?'检查 XMP 参数兼容性':asCopy?'导入为新预设副本':'导入预设',multiple:false,
+        filters:[{name:xmp?'原始 XMP / 含 XMP 来源的便携 JSON':'LumaRetouch 预设',extensions:xmp?['xmp','json']:['json']}]});
+      if(typeof path==='string'&&path){
+        if(xmp){xmpImportTarget.current={path,...(asCopy?{id:`user-${crypto.randomUUID()}`}:{})};await current()?.submit('xmp_inspect',{path});}
+        else await current()?.submit('import',{path,...(asCopy?{id:`user-${crypto.randomUUID()}`}:{})});
+      }
     }catch(error){setNote(`打开导入对话框失败：${String(error)}`);}
     finally{dialogLock.current=false;setDialogBusy(false);}
+  }
+  function cancelXmpImport(){xmpDraft.current=null;xmpImportTarget.current=null;setXmpImport(null);}
+  async function confirmXmpImport(ack:XmpAck){
+    const draft=xmpDraft.current,controller=current();
+    if(!draft||!controller||['working','uncertain'].includes(controller.snapshot().phase)||!validXmpAck(ack,draft.report))return;
+    if(latest.current.catalog?.xmp_import_protocol!==1){setNote('引擎能力已变化，请关闭检查并重新连接配套引擎。');return;}
+    cancelXmpImport();setNote('');
+    await controller.submit('import',{path:draft.path,...(draft.id?{id:draft.id}:{}),xmpAck:ack});
   }
   async function remove(){
     if(locked())return;const preset=latest.current.catalog?.list.find(p=>p.id===latest.current.form.selectedId);
@@ -90,7 +121,8 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   async function refresh(){if(locked())return;setNote('');await current()?.submit('list');}
   async function inspect(){try{await latest.current.onRefresh();setNote('已请求当前状态，请核对照片与预设列表；不会重复提交操作。');}catch(error){setNote(String(error));}}
   return {ui,form,note,selected,catalog,context,dialogBusy,face,localMaskTransfer,setLocalMaskTransfer,saveMaskTransfer,setSaveMaskTransfer,review,confirmLocal,cropKey,cropReady,setCropImage,
-    busy:dialogBusy||ui.phase==='working'||ui.phase==='uncertain',
+    xmpKey,xmpReady,setXmpImage,xmpImport,cancelXmpImport,confirmXmpImport,
+    busy:dialogBusy||!!xmpImport||ui.phase==='working'||ui.phase==='uncertain',
     setName:(value:string)=>dispatch({type:'name',value}),select:(id:string)=>dispatch({type:'select',id}),
     setScope:(ops:string[])=>dispatch({type:'scope',ops:ops.includes(OPTICS_AUTO_OP)&&ops.includes(OPTICS_MANUAL_OP)?ops.filter(op=>op!==(ops[ops.length-1]===OPTICS_MANUAL_OP?OPTICS_AUTO_OP:OPTICS_MANUAL_OP)):ops}),save,apply,importFile,remove,refresh,inspect,
     applyByLabel:(label:string)=>{const list=latest.current.catalog?.list??[];const p=presetFromLabel(label,list);if(!p){setNote('预设标签不存在或有歧义，请在模块预设面板按 ID 选择');return;}return apply(p.id);},

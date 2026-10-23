@@ -41,6 +41,9 @@ def public_view(value):
     identity or batch preflight token, with authoritative full assets held in engine.
     """
     if isinstance(value,dict):
+        if set(value)=={'version','source_sha256','filename','source_base64','selected','report'}:
+            from .xmp_adaptation import public
+            return public(value)
         if set(value)=={'schema','sha256','name','cube_base64'} and value.get('schema')==1 and isinstance(value.get('cube_base64'),str):
             return {'schema':1,'sha256':value['sha256'],'name':value['name'],'embedded_base64_bytes':len(value['cube_base64']),'read_only_summary':True}
         return {k:public_view(v) for k,v in value.items()}
