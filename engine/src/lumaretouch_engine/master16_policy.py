@@ -1,5 +1,6 @@
 """One neutral RGB16 pass-through policy for live and frozen export state."""
 from .ops import curves as CURVES,levels as LEVELS
+from . import photo_grain_state as PGS
 from . import white_balance_recipe as WB,local_grade_layers as LG,effect_recovery_state as ERS
 from . import manual_liquify_state as MLS,studio_background_state as SBS,optics_state as OPS,sky_replacement_state as SKS
 from . import lip_makeup_state as LIPS,brow_shape_state as BROWS,nose_shape_state as NOSES,eye_shape_state as EYES,mouth_shape_state as MOUTHS
@@ -26,6 +27,7 @@ class Master16PolicyMixin:
             "curves": CURVES.default_curves(), "levels": LEVELS.default_levels(),
         }
         fields = {"_" + key: snap.get(key, value) for key, value in defaults.items()}
+        fields["_photo_grain"] = PGS.check(snap["photo_grain"]) if "photo_grain" in snap else PGS.neutral()
         fields["_bg"] = snap.get("_bg", {})
         fields["_local_grade_layers"] = LG.check(snap.get("local_grade_groups"))
         fields["_effect_recovery"] = ERS.check(snap.get("effect_recovery"))
@@ -60,6 +62,7 @@ class Master16PolicyMixin:
         也不能默默降级。
         """
         b: list = []
+        if PGS.active(getattr(self,"_photo_grain",PGS.neutral())):b.append("确定性源像素颗粒（须完整浮点编辑，不能直通）")
         from .body_pose_render import fastpath_blocker
         if fastpath_blocker(getattr(self,"_body_pose_bank",None)):b.append("身体几何（源图姿态与完整尺寸共同映射，不可直通）")
         if any(layer['enabled'] for layer in LG.check(getattr(self, '_local_grade_layers', None))['layers']):

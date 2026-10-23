@@ -1,0 +1,63 @@
+{
+  "status": "SOURCE_CONNECTED_UNRUN",
+  "reference": "https://www.pixcakeai.com/guide/32455",
+  "verified_date": "2026-10-23",
+  "requirements": [
+    {
+      "id": "LNX-REF-PC-32455-C-b82bd426d2",
+      "control": "颗粒",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "acceptance": "UNRUN",
+      "fixture": "engine/tests/photo_grain_fixtures/test_photo_grain_contract.py"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-3f4edf94f1",
+      "control": "颗粒效果",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "acceptance": "UNRUN",
+      "fixture": "engine/tests/photo_grain_fixtures/test_photo_grain_contract.py"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-14eea5887b",
+      "control": "阴影",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "acceptance": "UNRUN",
+      "fixture": "engine/tests/photo_grain_fixtures/test_photo_grain_contract.py"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-76329825cf",
+      "control": "中间调",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "acceptance": "UNRUN",
+      "fixture": "engine/tests/photo_grain_fixtures/test_photo_grain_contract.py"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-fe5375e0a0",
+      "control": "高光",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "acceptance": "UNRUN",
+      "fixture": "engine/tests/photo_grain_fixtures/test_photo_grain_contract.py"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-6f81c9689a",
+      "control": "颗粒大小",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "acceptance": "UNRUN",
+      "fixture": "engine/tests/photo_grain_fixtures/test_photo_grain_contract.py"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-adf8922693",
+      "control": "粗糙度",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "acceptance": "UNRUN",
+      "fixture": "engine/tests/photo_grain_fixtures/test_photo_grain_contract.py"
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-8949a7f5ce",
+      "control": "颗粒色彩",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "acceptance": "UNRUN",
+      "fixture": "engine/tests/photo_grain_fixtures/test_photo_grain_contract.py"
+    }
+  ]
+}

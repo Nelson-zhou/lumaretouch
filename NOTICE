@@ -171,3 +171,5 @@ semantics; no vendor code or assets are included. The nine-way partition and
 additive black rule are original. See docs/selective-colour/CONTRACT.md.
 
 RGB primary calibration: original Lumaretouch float32 xy-primary basis implementation, GPL-3.0-or-later. No third-party numerical implementation copied. Reference concepts: darktable RGB primaries documentation.
+
+Photo grain: original Lumaretouch deterministic source-coordinate Rust kernel, GPL-3.0-or-later. No external texture or model. See docs/photo-grain/CONTRACT.md.

@@ -203,6 +203,7 @@ class ExportSpec:
     exposure: tuple = (0.0,) * 7
     exposure_ref_k: float | None = None
     wb_options: dict | None = None
+    photo_grain: dict | None = None
     photo_detail: dict | None = None
     extended_tone: dict | None = None
     colour_grading: dict | None = None
@@ -290,6 +291,8 @@ class ExportSpec:
         self.extended_tone=check_tone(self.extended_tone)
         from .photo_detail_state import check as check_detail
         self.photo_detail=check_detail(self.photo_detail)
+        from .photo_grain_state import check as check_grain, neutral as neutral_grain
+        self.photo_grain=neutral_grain() if self.photo_grain is None else check_grain(self.photo_grain)
         from .colour_grading_state import check as check_grading, neutral as neutral_grading
         self.colour_grading=neutral_grading() if self.colour_grading is None else check_grading(self.colour_grading)
         from .primary_calibration_native import admit as admit_primary
@@ -689,6 +692,16 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     divisor = 65535.0 if bits == 16 else 255.0
     if src_u8.ndim != 3 or src_u8.shape[2] != 3 or src_u8.dtype != dtype:
         raise ExportError(f"导出要 (H,W,3) {np.dtype(dtype).name}，得到 {src_u8.shape} {src_u8.dtype}")
+    from .photo_grain_state import check as check_grain, neutral as neutral_grain, active as grain_active
+    grain_recipe=neutral_grain() if spec.photo_grain is None else check_grain(spec.photo_grain)
+    if grain_active(grain_recipe) and not getattr(spec,'_extended_tone_prepass',False):
+        from .photo_grain_runtime import admit
+        admit(src_u8.shape[1],src_u8.shape[0],int(spec.scale))
+        # Grain is a source-resolution effect. Delivery resize/sharpen follow the
+        # entire source edit chain; geometry/colour/detail order stays unchanged.
+        if int(spec.scale)!=1 or float(spec.sharpen_amount)!=0:
+            from .photo_grain_export import render_delivery
+            return render_delivery(src_u8,spec,renderer=_export_image_impl,device=device,tile=tile,progress=progress,bits=bits,geometry=geometry)
     from .extended_tone_state import check as check_tone, active as tone_active
     from .extended_tone_stage import ExtendedToneStage
     from .extended_tone_native import admit as admit_tone
@@ -747,7 +760,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     verify_body_source(spec)
     verify_hair_source(spec)
     semantic_stage=SemanticColourStage(spec.semantic_colour,binding=spec.semantic_colour_binding)
-    floating=detail_active(detail_recipe) or bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass or colour_grading_stage.active or selective_colour_stage.active or primary_calibration_stage.active
+    floating=detail_active(detail_recipe) or bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass or colour_grading_stage.active or selective_colour_stage.active or primary_calibration_stage.active or grain_active(grain_recipe)
     if spec.provenance_output and (not spec.float_output or spec.scale!=1): raise ExportError("来源支持只用于原尺寸浮点分析")
     optical_budget = 0
     if optical:
@@ -1061,6 +1074,9 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     out=selective_colour_stage.apply_np(out,cancelled=tone_cancelled)
     # Whole assembled edited canvas only; tile pipelines retain neutral detail stages.
     out=PhotoDetailStage(detail_recipe,scale=float(spec.scale),cancelled=tone_cancelled).apply_np(out)
+    if grain_active(grain_recipe):
+        from .photo_grain_native import apply_canvas
+        out=apply_canvas(np.ascontiguousarray(out,dtype=np.float32),grain_recipe,source_size=(w,h),geometry=geometry,cancelled=tone_cancelled)
     out=ExtendedToneStage(tone_recipe,cancelled=tone_cancelled).finish_np(out)
     verify_semantic_source(spec)
     verify_body_source(spec)

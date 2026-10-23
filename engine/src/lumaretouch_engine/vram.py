@@ -603,6 +603,10 @@ class PreviewPipeline:
         out = self.selective_colour.apply_t(out)
         out = self.photo_detail.apply_t(out)
         out = self.extended_tone.finish_t(out)
+        source_output=getattr(self,"photo_grain_source_output",None)
+        if source_output is not None:
+            grained=source_output()
+            if grained is not None:out=grained
         if scope_tap is not None: scope_tap("output", out)
         return out
 

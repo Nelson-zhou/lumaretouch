@@ -75,7 +75,8 @@ def render_inspection_roi(decoded, spec: ExportSpec, roi, *, max_source_pixels: 
         # load_full RGB8 already converts embedded ICC into working sRGB.
         from .reference_color_state import active as reference_active
         from .photo_detail_state import active as detail_active
-        matching=reference_active(spec.reference_color) or detail_active(spec.photo_detail)
+        from .photo_grain_state import active as grain_active
+        matching=reference_active(spec.reference_color) or detail_active(spec.photo_detail) or grain_active(spec.photo_grain)
         full,_=export_image(source,spec,device=device,tile=tile,progress=progress,geometry=(crop_rect,rotation_degrees) if matching else None)
         check_cancel()
         if not matching:full=crop_rotate_np(full,crop_rect,rotation_degrees)

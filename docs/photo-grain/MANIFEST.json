@@ -1,0 +1,212 @@
+{
+  "status": "SOURCE_CONNECTED_UNRUN",
+  "base": "66393d4a88633690a8769c76206e06c2b9413490",
+  "schema": 21,
+  "static_checks": {
+    "python_ast_files": 26,
+    "json_parse": true,
+    "product_import": false,
+    "runtime": false,
+    "tests": false,
+    "build": false,
+    "typecheck": false
+  },
+  "files": [
+    {
+      "path": "NOTICE",
+      "sha256": "9c72edab63db61c46d1d866b6f5273ea2e502978cf495f14beccf09f0d00e622"
+    },
+    {
+      "path": "core/photo_grain/lib.rs",
+      "sha256": "217704c1ed24398b003dd889add3ce1e33c3f4e0294be6f24709095c8e02a12a"
+    },
+    {
+      "path": "docs/photo-grain/ACCEPTANCE-UNRUN.md",
+      "sha256": "e0a3182e73170d8d10ee68ec7ece953e4332e1a44dee3b4a00195ba72c544296"
+    },
+    {
+      "path": "docs/photo-grain/CONTRACT.md",
+      "sha256": "92edc5ad473c6e2547c4c7a623aab7878f6b036cc35cdcc05e039e0bdef64bf5"
+    },
+    {
+      "path": "docs/photo-grain/INTEGRATION.md",
+      "sha256": "51be1029d068585561f23fc92fb5a89eb15e5b627f4087c1af0b3e8a8a937c28"
+    },
+    {
+      "path": "docs/photo-grain/SHARED_FILES.json",
+      "sha256": "6588f5f5dc12e10762ed6befdf56cf428dedee0dc712553f0657c6051ba0963a"
+    },
+    {
+      "path": "docs/photo-grain/integration-map.json",
+      "sha256": "bd3b9c4897f689f9afea432e40378abf34c6e1b02dc0eee867d81989dba9c10f"
+    },
+    {
+      "path": "docs/photo-grain/requirements.json",
+      "sha256": "be5c487bc21022a4f9e3fbc053c8710b090d8d6315cdb8dc5abb995f80ca6a74"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/colour_grading_service.py",
+      "sha256": "01b7cdc39a5223001f9c073efd0b22fdeaebf9472bf62fffd54506e311cff5fc"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "1e69aa5f16233b6bb504bc95c9da2f6726fd4356695be0c26807b62c7ad348be"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "76a9b06355ac18829c0ed757a3a039dba84d06c68626052fc7be3ba9d5af7baa"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "sha256": "b48c6a68121d6c1515d8569b7683f3d2fadaa0b436939200205cdf8433971795"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/extended_tone_service.py",
+      "sha256": "7ba2d987ead99f56811a3f67fca54322a980b5931bdfd0f2d8356ec98f6fc637"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_quality.py",
+      "sha256": "c6ad8651b4077ee9fbb9d3d25457db491d706e8757926034de53f911d7dd142f"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/master16_policy.py",
+      "sha256": "0b0d6e37ca7ba4d06ba222dd458510ec7d71746bc3274cd20b1b387706365a9c"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_adapters.py",
+      "sha256": "e2f0bfe1b2e18aa162249e1e30e807b8ca9ff588cced3d9dc423e5c199e1fd79"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_controller.py",
+      "sha256": "9127f02e49385f42bf70974c1c415f4f27ab6f6b6bcf7d5c1f08351938a79e9b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_export.py",
+      "sha256": "cceed26aecd99ca1cd880f0fae1f000f58c30ed2f1b6d3a52224bb6554d080bd"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_geometry.py",
+      "sha256": "9697fecc9fc7e9da5f704a5044122e00c2e97ec4e8521281f3919fbb9fbfe157"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_host.py",
+      "sha256": "733a9e7be3a3301eadd392db2f3ff6149bb9e19f0b3dea927d587aea5d6942f6"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_native.py",
+      "sha256": "a8be9d2a10cad29fdf21a25e8c7c02a03dd21638d0ade3599c7d725f33656365"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_runtime.py",
+      "sha256": "c3cf2cace50000d8c1dcf2a466fba36a19989773440cea161b8b3c8e42dac922"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_scope.py",
+      "sha256": "b9007757cd5868fd9a24d35bf92ea992e37f49e14a2ffff2bc3daa85b7578155"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_service.py",
+      "sha256": "d4f3023ea9046c32e42d0e993b94c84cac1c9dfa289f4ffa29a3df89e273b1f3"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_source.py",
+      "sha256": "686755ba9c66dd81899726b394648ae0eda3c4bcf7ac9649c8884cfb1d679031"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_stage.py",
+      "sha256": "e913b3caccbfecff6e095ae778ee16db283766504c4e1c80fdede3768cc16e86"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_state.py",
+      "sha256": "619c7316243c5d08c0775095632f0174831363b6394b796e82b623785a09f417"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/primary_calibration_service.py",
+      "sha256": "7daa19c00ce6f73cdd453f23defb2c8f884447d095092a03b43f8d2eaf857256"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "97b4048c2e53cddd4da04637213e3b099a5f1bd9d40b3d4bfd206ad851a339d4"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "5670810e7f82ccc4f3345fd4c8bdb35eeb0793862f3ef8ede80096b9faf1d5a5"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/selective_colour_service.py",
+      "sha256": "93e547bac18e6debb10cec1e3e83e2c1424daa2c268814966bb636f2e564a94e"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "4bfa6ae760ae4c43b5272fa9c37dcc2db5e87cd75d3f81faf0ca7b10f0d8f2cb"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "8451f445ae62e851189cbbf17d408dab5be9ed1485772ec7195fd98b12cae00b"
+    },
+    {
+      "path": "engine/tests/photo_grain_fixtures/test_photo_grain_contract.py",
+      "sha256": "7fd7200c9de117f82f982470cde2f73a4a55c450a321a9b59fca6a3e2c6777f9"
+    },
+    {
+      "path": "packaging/build-photo-grain.sh",
+      "sha256": "a9f3d7d653fd158731ab640a2980f76ab6791301577382493282ec88f7cc97e3"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "530b2b7e7429d835cd8f01e338f92ff4469f477eb123e8a17655915f2e74c688"
+    },
+    {
+      "path": "ui/src/batch/batchScopeOptions.ts",
+      "sha256": "c2b0a523d2064f69c7f8475204977c560fc9f4fb0f2e84bb1b7d2346990b8eea"
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "a94be77fd7dd035dea783531dc794b7d9220069e5b0c1e42a40c8e7086fe149d"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "d5c7311e80ecc686dfc35013f5e9513ceca10e32cfadf5a88505697b882a063d"
+    },
+    {
+      "path": "ui/src/photoGrain/ConnectedPhotoGrainPanel.tsx",
+      "sha256": "98614580fee8fb878b8d7b13bb6062e0cf28fdc63fcd4f9ef7ef78f6e49afcc1"
+    },
+    {
+      "path": "ui/src/photoGrain/PhotoGrainPanel.tsx",
+      "sha256": "bbd70c52fc5770e4c22892a9f13b39d6336b38761a3c8ba62d0c27ba398f0953"
+    },
+    {
+      "path": "ui/src/photoGrain/model.ts",
+      "sha256": "ecaeef051d1e3ab70edc6ae0183630742be1891c12e155ddb74743e02e35bbd7"
+    },
+    {
+      "path": "ui/src/photoGrain/nativePort.ts",
+      "sha256": "24a660d0b3323d316fb6ff1fc6a13f095c713c65f7b54b3d5da9621e4cc2c7a5"
+    },
+    {
+      "path": "ui/src/photoGrain/workflow.ts",
+      "sha256": "5b14d353950a73a9adbdafb725e56cfe076ce21b0b0a414a0e78001fbc057acf"
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "8dd4430c56f95f7cb294498f80243ec21a9b90ea32e423a6b5dbd26ac4848f82"
+    },
+    {
+      "path": "ui/src/toolRouting/coverage.ts",
+      "sha256": "53cdb674c18faec9a4b039f5982b72e9948aeb3c40af2e43dcdf5e9acbefcb3e"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "9410318875eebac9d226f4ffa4100f649a3c0f100ef2e1897d9e3f5f1365d654"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "7087acc0a844c352f4e09cdbede77c46093d1b60a908760345f99222b2310ec9"
+    },
+    {
+      "path": "ui/src-tauri/src/photo_grain_api.rs",
+      "sha256": "b733d760aba2734d414592ea2bad9482afc6760664bcc7961d65a0537a0d465f"
+    }
+  ]
+}

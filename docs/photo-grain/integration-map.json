@@ -1,0 +1,71 @@
+{
+  "status": "SOURCE_CONNECTED_UNRUN",
+  "base": "66393d4a88633690a8769c76206e06c2b9413490",
+  "shared_edits": true,
+  "source_schema": 20,
+  "target_schema": 21,
+  "routes": {
+    "native": [
+      "core/photo_grain/lib.rs",
+      "engine/src/lumaretouch_engine/photo_grain_native.py"
+    ],
+    "source_bridge": [
+      "engine/src/lumaretouch_engine/photo_grain_stage.py",
+      "engine/src/lumaretouch_engine/photo_grain_source.py"
+    ],
+    "engine": [
+      "engine/src/lumaretouch_engine/server.py",
+      "engine/src/lumaretouch_engine/vram.py"
+    ],
+    "persistence": [
+      "engine/src/lumaretouch_engine/project.py",
+      "engine/src/lumaretouch_engine/scope.py",
+      "engine/src/lumaretouch_engine/export_snapshot.py",
+      "engine/src/lumaretouch_engine/export_recipe.py"
+    ],
+    "render": [
+      "engine/src/lumaretouch_engine/export.py",
+      "engine/src/lumaretouch_engine/ops/geometry.py"
+    ],
+    "ui": [
+      "ui/src-tauri/src/main.rs",
+      "ui/src-tauri/src/engine.rs",
+      "ui/src/native.ts",
+      "ui/src/components/RetouchPanel.tsx",
+      "ui/src/toolRouting/coverage.ts",
+      "ui/src/batch/batchScopeOptions.ts",
+      "ui/src/presets/presetModel.ts"
+    ],
+    "packaging": [
+      "packaging/stage-engine.sh",
+      "packaging/build-photo-grain.sh",
+      "NOTICE"
+    ]
+  },
+  "source_contract": "full-source geometry/ref/semantic/grading/selective/detail -> inverse-source-mapped grain -> monochrome -> display downsample or delivery resize; no proxy noise",
+  "details": "INTEGRATION.md",
+  "shared_files": [
+    "NOTICE",
+    "engine/src/lumaretouch_engine/colour_grading_service.py",
+    "engine/src/lumaretouch_engine/export.py",
+    "engine/src/lumaretouch_engine/export_recipe.py",
+    "engine/src/lumaretouch_engine/export_snapshot.py",
+    "engine/src/lumaretouch_engine/extended_tone_service.py",
+    "engine/src/lumaretouch_engine/full_quality.py",
+    "engine/src/lumaretouch_engine/master16_policy.py",
+    "engine/src/lumaretouch_engine/primary_calibration_service.py",
+    "engine/src/lumaretouch_engine/project.py",
+    "engine/src/lumaretouch_engine/scope.py",
+    "engine/src/lumaretouch_engine/selective_colour_service.py",
+    "engine/src/lumaretouch_engine/server.py",
+    "engine/src/lumaretouch_engine/vram.py",
+    "packaging/stage-engine.sh",
+    "ui/src-tauri/src/engine.rs",
+    "ui/src-tauri/src/main.rs",
+    "ui/src/batch/batchScopeOptions.ts",
+    "ui/src/components/RetouchPanel.tsx",
+    "ui/src/native.ts",
+    "ui/src/presets/presetModel.ts",
+    "ui/src/toolRouting/coverage.ts"
+  ]
+}

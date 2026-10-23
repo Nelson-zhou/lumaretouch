@@ -1,0 +1,8 @@
+{
+  "status": "SOURCE_CONNECTED_UNRUN",
+  "shared_ownership": "RELEASED",
+  "manifest_sha256": "5eec3d507d22158880436c484b74469f96c2b2977cebd613e67b59ef5cfc27d0",
+  "file_count": 49,
+  "static_python_ast_files": 26,
+  "remaining": "All runtime/build/compiler/typecheck/test/visual/performance acceptance UNRUN; scaled crop rounding mismatches explicitly reject"
+}

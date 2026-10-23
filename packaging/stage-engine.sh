@@ -199,3 +199,8 @@ cp "$here/../core/primary_calibration/lib.rs" "$here/../LICENSE" "$here/../docs/
 rustc --edition=2021 --crate-type cdylib -C opt-level=3 "$here/../core/photo_detail/photo_detail.rs" -o "$stage/lumaretouch_engine/bin/liblrt_photo_detail.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/photo_detail"
 cp "$here/../core/photo_detail/photo_detail.rs" "$here/../LICENSE" "$here/../docs/photo-detail/README.md" "$stage/lumaretouch_engine/third_party/photo_detail/"
+
+# Original deterministic source-coordinate photo grain, build-time only.
+bash "$here/build-photo-grain.sh" "$stage/lumaretouch_engine/bin/liblrt_photo_grain.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/photo_grain"
+cp "$here/../core/photo_grain/lib.rs" "$here/../LICENSE" "$here/../docs/photo-grain/CONTRACT.md" "$stage/lumaretouch_engine/third_party/photo_grain/"

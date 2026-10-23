@@ -45,6 +45,7 @@ from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
 from . import custom_lut_scope as CUSTOM_LUT
 from . import extended_tone_scope as EXTENDED_TONE
+from . import photo_grain_scope as PHOTO_GRAIN
 from . import photo_detail_scope as PHOTO_DETAIL
 from . import colour_grading_scope as COLOUR_GRADING
 from . import primary_calibration_scope as PRIMARY_CALIBRATION
@@ -93,6 +94,7 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 MODULES: dict[str, dict] = {
     PHOTO_DETAIL.OP: {"params": ("recipe",), "state_fields": PHOTO_DETAIL.FIELDS, "single_face": False, "transferable": True, "cmd": "photo_detail", "label": "照片细节（非 AI）", "read": PHOTO_DETAIL.params_of, "write": PHOTO_DETAIL.install},
     COLOUR_GRADING.OP: {"params": ("recipe",), "state_fields": COLOUR_GRADING.FIELDS, "single_face": False, "transferable": True, "cmd": "colour_grading", "label": "颜色分级", "read": COLOUR_GRADING.params_of, "write": COLOUR_GRADING.install},
+    PHOTO_GRAIN.OP: {"params": ("recipe",), "state_fields": PHOTO_GRAIN.FIELDS, "single_face": False, "transferable": True, "cmd": "photo_grain", "label": "照片颗粒", "read": PHOTO_GRAIN.params_of, "write": PHOTO_GRAIN.install},
     SELECTIVE_COLOUR.OP: {"params": ("recipe",), "state_fields": SELECTIVE_COLOUR.FIELDS, "single_face": False, "transferable": True, "cmd": "selective_colour", "label": "可选颜色", "read": SELECTIVE_COLOUR.params_of, "write": SELECTIVE_COLOUR.install},
     PRIMARY_CALIBRATION.OP: {"params": ("recipe",), "state_fields": PRIMARY_CALIBRATION.FIELDS, "single_face": False, "transferable": True, "cmd": "primary_calibration", "label": "RGB 原色校准", "read": PRIMARY_CALIBRATION.params_of, "write": PRIMARY_CALIBRATION.install},
     EXTENDED_TONE.OP: {"params": ("recipe",), "state_fields": EXTENDED_TONE.FIELDS, "single_face": False,
@@ -354,6 +356,9 @@ def check_params(op: str, params: dict) -> dict:
     if op == LIPSTICK.OP:
         try: return LIPSTICK.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
+    if op == PHOTO_GRAIN.OP:
+        try: return PHOTO_GRAIN.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
     if op == COLOUR_GRADING.OP:
         try: return COLOUR_GRADING.check_params(params)
         except ValueError as exc: raise ScopeError(str(exc)) from exc
@@ -434,6 +439,7 @@ def check_params(op: str, params: dict) -> dict:
 
 
 def _neutral_of(op: str, key: str):
+    if op == PHOTO_GRAIN.OP and key == "recipe": return PHOTO_GRAIN.S.neutral()
     if op == COLOUR_GRADING.OP and key == "recipe": return COLOUR_GRADING.S.neutral()
     if op == PRIMARY_CALIBRATION.OP and key == "recipe": return PRIMARY_CALIBRATION.S.neutral()
     if op == SELECTIVE_COLOUR.OP and key == "recipe": return SELECTIVE_COLOUR.S.neutral()

@@ -7,6 +7,7 @@
 mod custom_lut_api;
 mod extended_tone_api;
 mod photo_detail_api;
+mod photo_grain_api;
 mod colour_grading_api;
 mod primary_calibration_api;
 mod selective_colour_api;
@@ -1912,6 +1913,7 @@ fn main() {
             engine_status, shutdown_engine, diagnostic_env_api::m0_env, load_image, set_strength, compare, compare_status, precompute,
             primary_calibration_api::primary_calibration_abort, primary_calibration_api::primary_calibration_request, primary_calibration_api::primary_calibration_status, primary_calibration_api::primary_calibration_frame_status,
             selective_colour_api::selective_colour_abort, selective_colour_api::selective_colour_request, selective_colour_api::selective_colour_status, selective_colour_api::selective_colour_frame_status,
+            photo_grain_api::photo_grain_abort, photo_grain_api::photo_grain_request, photo_grain_api::photo_grain_status, photo_grain_api::photo_grain_frame_status,
             colour_grading_api::colour_grading_abort, colour_grading_api::colour_grading_request, colour_grading_api::colour_grading_status, colour_grading_api::colour_grading_frame_status,
             photo_detail_api::photo_detail_request, photo_detail_api::photo_detail_status, photo_detail_api::photo_detail_cancel,
             extended_tone_api::extended_tone_request, extended_tone_api::extended_tone_status, extended_tone_api::extended_tone_cancel,
