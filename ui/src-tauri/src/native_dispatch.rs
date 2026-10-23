@@ -29,6 +29,12 @@ impl AppState {
         // M5-b：命令名先取出来（cmd 下面会被 send 吃掉）。它只用来标"可能有新的一步"，
         // 宿主不数步数、不自己判哪条命令算编辑——名单由引擎的 ready 报
         let name = cmd.get("cmd").and_then(|c| c.as_str()).unwrap_or("").to_string();
+        // Arm selection and owned proposal queries/cancellation do not alter
+        // image pixels or revoke unrelated capture lifetimes.
+        if crate::arm_shape_api::read_only(&cmd) {
+            let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
+            return crate::arm_shape_api::enqueue(guard.as_ref().ok_or("引擎未启动")?, cmd);
+        }
         if name!="hello" && name!="inspection_snapshot" {self.source_patch_capture.lock().map_err(|_|"source patch capture lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {self.recovery_preview.lock().map_err(|_|"recovery preview lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {self.white_balance_capture.lock().map_err(|_|"WB capture lock poisoned")?.invalidate();}
@@ -43,6 +49,7 @@ impl AppState {
             self.sky_semantic.lock().map_err(|_|"semantic lock poisoned")?.invalidate();
         }
         let edited = self.history_edit_cmds.lock().unwrap().iter().any(|c| c == &name)
+            && (name != "arm_shape" || cmd["action"] == "execute")
             && (name != "hair_colour" || matches!(cmd["action"].as_str(), Some("commit_support" | "commit_recovery" | "clear_recovery" | "clear_support")));
         let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
         if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
@@ -54,6 +61,7 @@ impl AppState {
         match name.as_str() {
             "shoulder_shape" => crate::shoulder_shape_api::enqueue(handle, cmd)?,
             "leg_shape" => crate::leg_shape_api::enqueue(handle, cmd)?,
+            "arm_shape" => crate::arm_shape_api::enqueue(handle, cmd)?,
             "people" => crate::people_api::enqueue(handle, cmd)?,
             "hair_colour" => crate::hair_colour_api::enqueue(handle, cmd)?,
             "brow_shape" => crate::brow_shape_api::enqueue(handle, cmd)?,

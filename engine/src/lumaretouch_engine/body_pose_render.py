@@ -1,7 +1,7 @@
 """Body joins the actual common portrait map, before face inverse evaluation."""
 from copy import deepcopy
 from . import body_pose_evidence as E,body_pose_operations as O,body_pose_project as D
-from . import leg_shape_project as P,leg_shape_adapter as A
+from . import arm_shape_project as P,arm_shape_adapter as A
 from .body_pose_geometry import DEFAULT_BODY_ORDER
 
 
@@ -18,10 +18,44 @@ def check_source(bank,frame):
     return frame
 
 
-def prepare(prepared,bank,people,frame,*,byte_budget):
+def needs_arm_replay(bank):
+    from . import arm_shape_state as S
+    return any(row['enabled'] and item['enabled'] and S.active(item['recipe']) and item['recipe']['strategy']=='sam2-prompted-contour'
+               for row in bank['bodies'].values() for op,item in row['operations'].items() if op in S.OPERATION_IDS.values())
+
+
+def wrap_prepared(prepared,bank,people,frame):
+    """Retain the actual common-map wrapper, not another preparation or warp."""
+    from . import shoulder_shape_adapter as C
     from .people_geometry_identity import digest
-    frame=check_source(bank,source(frame))
-    wrapper=A.prepare_common(prepared,prepared.face_fields,bank,people,frame,people_geometry_identity=digest({'state':people,'asset_sha256':frame['sha256']}),byte_budget=byte_budget)
+    from .body_pose_geometry import require_prepared
+    frame=check_source(bank,source(frame));order=P.effective_order(bank)
+    require_prepared(bank,frame['sha256'],prepared.body_fields,people_state=people)
+    if prepared.body_operation_order!=order.record():raise ValueError('Prepared body chain order differs from current registered operations')
+    ident=E.content_digest({'bank_identity':C.identity(bank,frame,digest({'state':people,'asset_sha256':frame['sha256']})),'body_order':order.record()})
+    return C.PreparedShoulders(prepared,tuple(prepared.body_fields),frame,ident,tuple(deepcopy(f.facts) for f in prepared.body_fields))
+
+
+def prepare(prepared,bank,people,frame,*,byte_budget,source_pixels=None,source_path=None):
+    from .people_geometry_identity import digest
+    from . import leg_shape_runtime as legs
+    frame=check_source(bank,source(frame));bank=P.check(bank)
+    replay=None;budget=byte_budget
+    if needs_arm_replay(bank):
+        # Verification is image-input replay, not another model invocation. Do
+        # not hash a proxy or relabel RGB16 as an original RGB8 source.
+        reserve=frame['width']*frame['height']*(32 if source_pixels is None else 8)+64*1024*1024
+        if reserve>=budget:raise ValueError('Insufficient common-map budget for exact full-source arm selection replay')
+        budget-=reserve
+        if source_pixels is None:
+            if not source_path:raise ValueError('Active SAM arm support needs the canonical source path')
+            from .prompted_mask_source import decode_source
+            replay=decode_source(source_path,{k:frame[k] for k in ('sha256','width','height')},device='cpu')
+        else:replay=source_pixels
+    fields=legs.prepare_fields(bank,frame['sha256'],tuple(prepared.geometry.delta.shape[1:3]),people_state=people,byte_budget=budget)
+    wrapper=A.prepare_common(prepared,prepared.face_fields,bank,people,frame,
+        people_geometry_identity=digest({'state':people,'asset_sha256':frame['sha256']}),byte_budget=budget,
+        source_pixels=replay,extra_body_fields=fields,body_operation_order=P.effective_order(bank))
     return wrapper.people
 
 

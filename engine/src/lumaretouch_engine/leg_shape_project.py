@@ -3,9 +3,9 @@
 from copy import deepcopy
 from . import body_pose_state as B, body_pose_evidence as E, leg_shape_state as S
 from . import shoulder_shape_project as P
-from .body_pose_geometry import FrozenBodyOrder, DEFAULT_BODY_ORDER
+from .body_pose_geometry import LEG_BODY_ORDER, effective_order as common_effective_order
 
-BODY_ORDER = FrozenBodyOrder(2,('lnx.shoulder_shape.v1', S.OPERATION_ID))
+BODY_ORDER = LEG_BODY_ORDER
 
 
 def check(state):
@@ -21,13 +21,8 @@ def unpack(value):
 
 
 def effective_order(state):
-    """Installation, neutral intent and editor cursors never relabel old geometry."""
-    state=check(state)
-    for row in state['bodies'].values():
-        item=row['operations'].get(S.OPERATION_ID)
-        if row['enabled'] and item is not None and item['enabled'] and S.active(item['recipe']):
-            return BODY_ORDER
-    return DEFAULT_BODY_ORDER
+    """Compatibility port to the sole registered body ordering authority."""
+    return common_effective_order(check(state))
 
 
 def snapshot(state,source):

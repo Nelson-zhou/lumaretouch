@@ -9,7 +9,7 @@ from .people_render_runtime import prepare, retained_bytes
 from . import people_pipeline as PIPE
 
 
-def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_assets=None,body_bank=None,body_source=None,
+def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_assets=None,body_bank=None,body_source=None,body_source_path=None,
                     hair_assets=None,hair_evidence=None,hair_source_path=None):
     import torch
     if body_bank is None and getattr(getattr(pipe,'people_prepared',None),'body_fields',()):
@@ -26,13 +26,13 @@ def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_asse
         hair_assets=hair_assets,hair_evidence=hair_evidence,hair_source_path=hair_source_path)
     if body_bank is not None:
         from .body_pose_render import prepare as prepare_body
-        prepared=prepare_body(prepared,body_bank,state,body_source,byte_budget=body_budget(prepared,byte_budget))
+        prepared=prepare_body(prepared,body_bank,state,body_source,byte_budget=body_budget(prepared,byte_budget),source_path=body_source_path)
     return prepared
 
 
-def synchronize(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_assets=None,body_bank=None,body_source=None,
+def synchronize(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_assets=None,body_bank=None,body_source=None,body_source_path=None,
                     hair_assets=None,hair_evidence=None,hair_source_path=None):
-    prepared=prepare_preview(pipe,state,asset_sha256,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,body_bank=body_bank,body_source=body_source,
+    prepared=prepare_preview(pipe,state,asset_sha256,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,body_bank=body_bank,body_source=body_source,body_source_path=body_source_path,
         hair_assets=hair_assets,hair_evidence=hair_evidence,hair_source_path=hair_source_path)
     PIPE.install(pipe,prepared);pipe.people_suspended=None
     return prepared
@@ -48,7 +48,7 @@ def require_ready(pipe):
     if reason:raise ValueError('Retained people edits are unresolved: '+reason)
 
 
-def prepare_export(snapshot,source,repaired,*,byte_budget,recovery_assets=None,body_pose=None):
+def prepare_export(snapshot,source,repaired,*,byte_budget,recovery_assets=None,body_pose=None,body_source_path=None):
     """Original RGB8/16 enters once; all face solvers run before tile slicing."""
     from .people_snapshot import at_dimensions
     if source.dtype not in (np.uint8,np.uint16):raise ValueError('People export needs original RGB8/16')
@@ -60,11 +60,14 @@ def prepare_export(snapshot,source,repaired,*,byte_budget,recovery_assets=None,b
     prepared=prepare(state,asset,rgb,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,repaired=repaired,
         **hair_inputs(snapshot),force_hair_prompted=True)
     if body_pose is not None:
-        from .leg_shape_project import check_snapshot
+        from .arm_shape_project import check_snapshot
         from .body_pose_render import prepare as prepare_body
         frame=body_pose['source'];bank=check_snapshot(body_pose,frame)
         if (frame['height'],frame['width'])!=source.shape[:2]:raise ValueError('Body final preparation requires exact original dimensions')
-        prepared=prepare_body(prepared,bank,state,frame,byte_budget=body_budget(prepared,byte_budget))
+        # Selection replay must use its canonical true-bit-depth decoder, even
+        # when the requested output is RGB8 from RAW/high-bit-depth TIFF.
+        # Output pixels retain their independent existing export decode path.
+        prepared=prepare_body(prepared,bank,state,frame,byte_budget=body_budget(prepared,byte_budget),source_path=body_source_path)
     return prepared
 
 

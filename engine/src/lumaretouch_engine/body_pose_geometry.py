@@ -17,6 +17,18 @@ class FrozenBodyOrder:
 
 
 DEFAULT_BODY_ORDER=FrozenBodyOrder(1,(O.SHOULDER_OPERATION,))
+LEG_BODY_ORDER=FrozenBodyOrder(2,(O.SHOULDER_OPERATION,'lnx.leg_shape.v1'))
+ARM_OPERATION_IDS=tuple('lnx.arm_shape.'+segment+'.v1' for segment in ('left_upper','left_forearm','right_upper','right_forearm'))
+PORTRAIT_BODY_ORDER=FrozenBodyOrder(3,(*LEG_BODY_ORDER.operation_ids,*ARM_OPERATION_IDS))
+
+
+def effective_order(state):
+    """One authoritative chain. Neutral new families preserve older map identity."""
+    active={op for row in state['bodies'].values() for op in O.active_operations(row)}
+    if active.intersection(ARM_OPERATION_IDS):return PORTRAIT_BODY_ORDER
+    if 'lnx.leg_shape.v1' in active:return LEG_BODY_ORDER
+    return DEFAULT_BODY_ORDER
+
 
 
 class BodyGeometry:

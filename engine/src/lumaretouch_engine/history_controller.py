@@ -53,7 +53,7 @@ class HistoryController:
         now = self.clock()
         same_gesture = False
         if coalesce and group and self.group == group \
-                and (group.startswith(("curves:gesture:", "levels:gesture:", "brow_shape:gesture:", "nose_shape:gesture:", "eye_shape:gesture:", "mouth_shape:gesture:", "shoulder_shape:gesture:", "leg_shape:gesture:")) or
+                and (group.startswith(("curves:gesture:", "levels:gesture:", "brow_shape:gesture:", "nose_shape:gesture:", "eye_shape:gesture:", "mouth_shape:gesture:", "shoulder_shape:gesture:", "leg_shape:gesture:", "arm_shape:gesture:")) or
                      (now - self.group_ns) / 1e6 < self.group_ms):
             same_gesture = True
         from .body_pose_history_chain import decorate
@@ -64,7 +64,7 @@ class HistoryController:
             if len(self.undo) > self.limit:
                 # 丢最老的：这一条是内存账，不是功能边界（64 步 × 每份几 KB）
                 del self.undo[0]
-        if same_gesture and group.startswith(("curves:gesture:", "levels:gesture:", "brow_shape:gesture:", "nose_shape:gesture:", "eye_shape:gesture:", "mouth_shape:gesture:", "shoulder_shape:gesture:", "leg_shape:gesture:")) and self.undo \
+        if same_gesture and group.startswith(("curves:gesture:", "levels:gesture:", "brow_shape:gesture:", "nose_shape:gesture:", "eye_shape:gesture:", "mouth_shape:gesture:", "shoulder_shape:gesture:", "leg_shape:gesture:", "arm_shape:gesture:")) and self.undo \
                 and self.ports.signature(self.undo[-1]) == self.ports.signature(after):
             self.undo.pop()  # dragging/cancelling back to the start is not an undo step
             group = ""

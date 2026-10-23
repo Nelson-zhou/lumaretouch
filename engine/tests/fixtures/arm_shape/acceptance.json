@@ -1,0 +1,653 @@
+{
+  "version": 1,
+  "feature_id": "PC-32473",
+  "control_id": "PC-32473-C-5d25f1744f",
+  "requirement_id": "LNX-REF-PC-32473-C-5d25f1744f",
+  "related_module_case_ids": [
+    "PORTRAIT-008"
+  ],
+  "status": "AUTHORED_UNRUN",
+  "quality_status": "NOT_ACCEPTED",
+  "cases": [
+    {
+      "case_id": "ARM-001",
+      "title": "Exact baseline mapping",
+      "procedure": "Verify PC-32473-C-5d25f1744f and LNX-REF-PC-32473-C-5d25f1744f are the sole visible-family control/requirement; PORTRAIT-008 is only related coverage.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-002",
+      "title": "Neutral import and source identity",
+      "procedure": "Open/analyse/select with amount zero; require identical pixels, no Rust/model load, no synthetic visible contour and no new effect.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-003",
+      "title": "Independent visible left arm",
+      "procedure": "Use a portrait with only left shoulder/elbow/wrist visible; apply left upper/forearm while right remains neutral and no hidden right joint is required.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-004",
+      "title": "Independent visible right arm",
+      "procedure": "Repeat with right arm only and inspect the left arm/background for unrequested change.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-005",
+      "title": "Partial forearm without shoulder",
+      "procedure": "Use visible elbow/wrist with occluded shoulder; only that forearm operation may be reviewed/applied, without elevating shoulder visibility.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-006",
+      "title": "Partial upper arm without wrist",
+      "procedure": "Use visible shoulder/elbow with hidden wrist; upper segment works independently while forearm refuses.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-007",
+      "title": "Linked all-or-nothing review",
+      "procedure": "Request both upper segments with one missing review; require total refusal before history/publication and no unilateral effect.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-008",
+      "title": "Linked matching strategies",
+      "procedure": "Request bilateral linked SAM while one side only has ordinary review; require total refusal, never manual fallback.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-009",
+      "title": "Whole-arm simultaneous set",
+      "procedure": "Set upper/forearm together then split; verify only those segment amounts change and there is no third overall deformation.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-010",
+      "title": "Original local numerical semantics",
+      "procedure": "Verify UI 0–100 maps 0–1, positive thins, zero resets, and all numbers/defaults are explicitly local choices.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-011",
+      "title": "Explicit manual contour measurement",
+      "procedure": "Review all 18 source cross-section clicks; missing/negative/cross-axis/invalid measurements refuse. Pose centres never supply widths.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-012",
+      "title": "Actual licensed SAM producer",
+      "procedure": "With the existing admitted extension installed locally, collect exact model/config/code/runtime receipts and actual masks from canonical source pixels; no new download or silent install.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-013",
+      "title": "Absent installed model",
+      "procedure": "Request SAM without its extension; show truthful failure and keep source/manual modes independent. No AI label on a manual fallback.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-014",
+      "title": "Mismatched model or installed runtime",
+      "procedure": "Modify test copies of runtime/config/weight bytes; require producer integrity refusal before inference and no fallback.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-015",
+      "title": "Actual model-input provenance",
+      "procedure": "Compare input hash against canonical true-bit-depth decoded working-sRGB source, including RGB16 conversion; proxy or retouched pixels must fail replay.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-016",
+      "title": "Review all actual candidates",
+      "procedure": "Expose the three unmodified binary candidate masks, candidate IDs and model scores; scores are not arm confidence. Refused candidates remain inspectable.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-017",
+      "title": "Torso leakage",
+      "procedure": "Use an actual full-person/torso-leaking candidate. Observed torso core or explicit torso exclusion intersection must refuse; never crop or erase it into an arm.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-018",
+      "title": "Other-person mask contamination",
+      "procedure": "Use adjacent people; candidate intersection with other observed body/face boxes must refuse, including selection outside the edited segment support.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-019",
+      "title": "Ownership window leakage",
+      "procedure": "Choose a candidate extending outside the explicit arm ownership window; refuse without clipping.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-020",
+      "title": "No width fabrication from mask failure",
+      "procedure": "Axis outside selection, holes, multiple disconnected intersections, tiny contour, unbounded ray or low model resolution each refuse; no pose-derived width substitute.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-021",
+      "title": "Exact source-owned mask replay",
+      "procedure": "Save/reopen reviewed mask losslessly; require identical mask/input/model receipts and contour widths without claiming a new inference.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-022",
+      "title": "Mask tampering and foreign review",
+      "procedure": "Flip packed pixels/hash/padding, import another body/source/segment mask, or submit raw neural widths to review; refuse each.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-023",
+      "title": "Actual ownership snapshot changes",
+      "procedure": "Add/reanalyse/remove another observed body or retained source face after proposal; old selection cannot authorize a new arm render.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-024",
+      "title": "Occlusion and crossing",
+      "procedure": "Test occluded arm, crossed arms, self-overlap, arm in front of torso and unclear torso-contact boundary; reject affected segment rather than complete hidden anatomy.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-025",
+      "title": "Strong foreshortening and folded arms",
+      "procedure": "Test depth-ambiguous/short arms and strong bends; show specific refusal and keep unrelated effects intact.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-026",
+      "title": "Visible loose sleeve",
+      "procedure": "Shape only reviewed visible sleeve silhouette; do not claim skin anatomy or fabricate an under-clothing arm contour.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-027",
+      "title": "Joint and endpoint continuity",
+      "procedure": "Inspect upper/forearm join at elbow, shoulder/wrist endpoints, oblique axes and contour stations; verify fixed endpoints and C2 taper, without a discontinuity.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-028",
+      "title": "Rust measured-profile effect",
+      "procedure": "Change actual reviewed width profile holding axes constant; numerical field must change. Verify positive thinning sign and finite analytical Jacobian.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-029",
+      "title": "Off-grid composition ordering",
+      "procedure": "Compose same-BodyRef shoulder, leg if installed, arm segments and face using declared order at displaced coordinates; refuse independently sampled-map addition.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-030",
+      "title": "Single RGB source sample",
+      "procedure": "Trace preview and final RGB8/16 sampling; ensure arms do not add an intermediate image warp and receipt sampling_passes equals exactly one.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-031",
+      "title": "Common semantic/recovery geometry",
+      "procedure": "Verify semantic/recovery masks and retouch deltas follow the same canonical map as RGB, with no stale source alignment.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-032",
+      "title": "Independent family preservation",
+      "procedure": "Combine arm edits with hair, face, shoulder, legs and late-colour settings; their independent values/history/effects must survive arm edits/reset/disable.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-033",
+      "title": "Support ownership overlap",
+      "procedure": "Use close bodies/faces and explicit keep-out regions; overlapping conservative arm support refuses without shrinking strength or dropping a field.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-034",
+      "title": "RGB8 and true RGB16 export",
+      "procedure": "Export original-resolution RGB8/16 using rebuilt fields and true original source, preserving dtype and bit-depth rather than enlarging a proxy.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-035",
+      "title": "Preview aspect and source fence",
+      "procedure": "Use canonical ALIGN8 preview sizes, wrong crop, wrong orientation, wrong source dimensions and new source file; only valid whole-source geometry is admitted.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-036",
+      "title": "Budget and large photograph",
+      "procedure": "Exercise model 64MP/2048-edge input cap, packed mask/runtime retention limits, active fields/bodies and common-map budget; no silent truncation or unbounded fallback.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-037",
+      "title": "Exact publication receipt",
+      "procedure": "Only actual published map/output bytes may yield a receipt. Missing/mismatched map/hash/source/order/frame/dimensions/sample count must remain failed or uncertain.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-038",
+      "title": "History and late graph changes",
+      "procedure": "Undo/redo arm support/recipe/enable without overwriting later arm edits or unrelated body/people/face changes; all assets remain immutable.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-039",
+      "title": "Project roundtrip and export snapshot",
+      "procedure": "Save/reopen active, disabled, neutral, undo/redo and queued export trees under project13/bodybank2; validate all owned assets/order before live mutation.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-040",
+      "title": "Reanalysis invalidates review",
+      "procedure": "Reanalyse actual pose; retain portable amounts as unapplied intent, invalidate review/support pointers and association, never bind old assets to new point digest.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-041",
+      "title": "Cross-photo parameter-only transfer",
+      "procedure": "Transfer requested segment intent only after same anonymous person and target evidence are independently confirmed; masks, points, support and authorization never cross photos.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-042",
+      "title": "Transfer unsupported target",
+      "procedure": "Transfer SAM/manual intent to target with hidden arm, wrong strategy support or changed source/people graph; refuse whole candidate and leave target untouched.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-043",
+      "title": "Cancelled inference and source close",
+      "procedure": "Cancel during CPU/GPU inference; close document/panel or switch source; terminate owned proposal, free queues/masks and never mutate body state.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-044",
+      "title": "Lost proposal acknowledgement",
+      "procedure": "Lose start response; query original request/job ID instead of issuing duplicate inference. Unknown/unavailable result is not successful segmentation.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-045",
+      "title": "Lost mutation publication",
+      "procedure": "Lose response after host publication; durable ledger must return authoritative exact request result. UI queries without resending or duplicating history.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-046",
+      "title": "Rapid gestures and target switch",
+      "procedure": "Rapid slider changes, strategy/link changes, old body switch and late response must not overwrite newer context. Coalesce only valid unsent intent.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-047",
+      "title": "Source-overlay review integrity",
+      "procedure": "Show exact canonical source plus actual mask hash-verified overlay and contour/falloff markers. Failed image/canvas/hash must disable confirmation.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-048",
+      "title": "Unregistered capability honesty",
+      "procedure": "Before shared App/native/server registration, no reachable completion claim. After integration verify all real route/command allowlist dispatch and scoped source-path acquisition.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-049",
+      "title": "No background damage guarantee",
+      "procedure": "Use patterned garments/backgrounds and inspect transition distortion at final resolution; disclose actual movement and reject unacceptable output rather than claiming zero damage.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-050",
+      "title": "License and distribution notices",
+      "procedure": "Confirm existing Apache model/code license notices and original GPL arm source are included by the eventual distributor; no unknown checkpoint or fallback library is packaged.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-051",
+      "title": "Registered shared portrait chain",
+      "procedure": "Use a permitted real portrait with active shoulder, leg, one arm, face geometry, hair and late colour; verify one declared off-grid chain and a single common source sampling stage, retaining all independent effects.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-052",
+      "title": "Canonical SAM replay for RGB8 exports",
+      "procedure": "Review actual SAM masks from RAW and RGB16 TIFF, then export JPEG/PNG RGB8 and TIFF RGB16. Verify the selection input hash comes from the same true-bit-depth/ICC decoder in both cases, not the output-depth decode.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-053",
+      "title": "Post-rename journal sync failure",
+      "procedure": "Inject parent-directory open/fsync/close failure after receipt atomic replacement; verify later status reads the observed content and does not become permanently hash-inconsistent or replay a mutation.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-054",
+      "title": "Lost terminal receipt write",
+      "procedure": "Inject a terminal receipt write failure before replacement after successful frame/history publication; query the original pending claim and reconcile only the actual matching authoritative outcome.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-055",
+      "title": "Invalid publication is not upgraded",
+      "procedure": "Force publication verification mismatch and terminal journal failure; later status must preserve the rejection and never upgrade pre-verification host success.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-056",
+      "title": "Cross-family request collision",
+      "procedure": "Reuse an arm inner request ID already used by shoulder or leg. Verify no arm publication or successful cross-family receipt reconciliation, including a failed final journal write.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-057",
+      "title": "Read-only capture lifetime",
+      "procedure": "Keep another valid source capture or semantic review open while reading arm views/status or requesting a proposal; verify no capture invalidation, source mutation or doc revision. Conflicting active workers must visibly refuse admission.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-058",
+      "title": "Owned model allocation lifecycle",
+      "procedure": "Start real SAM, close popup/switch photo/start another resource operation/exit engine and verify owned process termination, bounded results, original-ID tombstones, and no unseen model work after cancellation.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-059",
+      "title": "Project v14 independent persistence",
+      "procedure": "Save/reopen v14 with reviewed arm masks, shoulder, leg, hair and semantic preset/batch state plus undo/redo history; verify exact source assets and no cross-family overwrite or implicit inference on JSON load.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-060",
+      "title": "Packaged native ABI and notices",
+      "procedure": "Build the package locally, inspect staged liblrt_arm_shape.so, original GPL source and admitted SAM/MediaPipe notices, and load the actual ABI without runtime compilation or model downloads.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-061",
+      "title": "Native epoch and delayed callbacks",
+      "procedure": "Lose native start/execute acceptance, replace engine/document, query original requests and deliver delayed callbacks; verify no resubmission, stale adoption or orphan model job.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-062",
+      "title": "Neutral operation identity",
+      "procedure": "Compare geometry identity before/after installing or reviewing zero arms over shoulder-only and shoulder-plus-leg edits. Preserve v1/v2 order respectively; activate arms to v3 and return exactly to older identity when all are zero.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-063",
+      "title": "Status after source loss",
+      "procedure": "Publish an arm edit, remove or replace the source file, then query its original inner receipt. Preserve actual completed outcome without requiring a new view, new decode or replay.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "ARM-064",
+      "title": "One gesture and bounded UI masks",
+      "procedure": "Drag one slider through many values and verify one gesture history group, latest unsent coalescing and bounded completed/cancelled mask retention. Close and reopen popup without losing uncertain receipts.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-5d25f1744f"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    }
+  ]
+}

@@ -51,7 +51,7 @@ def prepare(spec,source,repaired):
     from .cpu_memory_budget import available_estimate
     snapshot=spec.people
     recovery=ASSETS.raster(snapshot['state'],snapshot.get('support_assets',{}),snapshot['asset_sha256'],source.shape[:2])
-    return prepare_export(snapshot,source,repaired,byte_budget=available_estimate(),recovery_assets=recovery,body_pose=getattr(spec,'body_pose',None))
+    return prepare_export(snapshot,source,repaired,byte_budget=available_estimate(),recovery_assets=recovery,body_pose=getattr(spec,'body_pose',None),body_source_path=getattr(spec,'body_pose_source_path',None))
 
 
 def verify_source(snapshot,path):

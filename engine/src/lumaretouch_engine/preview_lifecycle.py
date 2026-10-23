@@ -8,6 +8,7 @@ class PreviewLifecycleMixin:
         controller(self, emit).handle(command)
 
     def _tick_owned_previews(self):
+        self._arm_tick()
         for key in ('_manual_liquify_preview_owner', '_sky_replacement_preview_owner',
                     '_studio_background_preview_owner', '_prompted_mask_owner', '_sky_semantic_owner', '_semantic_colour_owner'):
             owner = self.__dict__.get(key)
