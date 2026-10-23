@@ -50,6 +50,14 @@ class WorkflowPortsMixin:
         return verify(self,row,candidate,document_id,revision,record)
 
 
+    def _prepare_spill_target(self,row,before,candidate,document_id,revision):
+        from .spill_transfer_review import prepare
+        return prepare(self,row,before,candidate,document_id,revision)
+
+    def _verify_spill_target(self,row,before,candidate,document_id,revision,record):
+        from .spill_transfer_review import verify
+        return verify(self,row,before,candidate,document_id,revision,record)
+
     def _prepare_xmp_target(self,row,before,candidate,document_id,revision,xmp_sha256):
         from .xmp_target_review import prepare
         return prepare(self,row,before,candidate,document_id,revision,xmp_sha256)
@@ -64,6 +72,7 @@ class WorkflowPortsMixin:
             controller = PRS.PresetController(PRS.PresetPorts(
                 prepare_optics=self._prepare_optics_target, prepare_reference=self._prepare_reference_target,
                 prepare_crop=self._prepare_crop_target, verify_crop=self._verify_crop_target,
+                prepare_spill=self._prepare_spill_target, verify_spill=self._verify_spill_target,
                 prepare_xmp=self._prepare_xmp_target, verify_xmp=self._verify_xmp_target,
                 guard=lambda label: self._guard_editable(label), document_id=lambda: self._load_id,
                 capture=lambda: self._people_preset_capture(), replay=lambda state, **kw: self._people_preset_replay(state, **kw),
@@ -92,7 +101,8 @@ class WorkflowPortsMixin:
                     current_index=lambda: self._doc_index,
                     remember_current=lambda: self._remember_current(),
                     index_of=lambda path: self._index_of(path)),
-                BS.BatchEditor(prepare_crop=self._prepare_crop_target, verify_crop=self._verify_crop_target, people_transfer=self._people_transfer_batch, people_restore=self._people_restore_batch, capture_reference=self._capture_reference, prepare_optics=self._prepare_optics_target, prepare_reference=self._prepare_reference_target, guard=lambda label: self._guard_editable(label),
+                BS.BatchEditor(prepare_crop=self._prepare_crop_target, verify_crop=self._verify_crop_target,
+                prepare_spill=self._prepare_spill_target, verify_spill=self._verify_spill_target, people_transfer=self._people_transfer_batch, people_restore=self._people_restore_batch, capture_reference=self._capture_reference, prepare_optics=self._prepare_optics_target, prepare_reference=self._prepare_reference_target, guard=lambda label: self._guard_editable(label),
                     capture=lambda: self._capture_state(),
                     replay=lambda state, **kw: self._replay_state(state, **kw),
                     face_known_single=lambda row, **kw: self._people_batch_face_check(row, **kw),

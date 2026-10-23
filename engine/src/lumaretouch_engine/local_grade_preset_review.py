@@ -9,12 +9,15 @@ from . import scope as SC, local_grade_layers as LG, local_grade_runtime as LR
 from . import sky_replacement_scope as SKY, optics_auto_scope as OA, optics_transfer_review as OR
 from .batch_preflight import canonical
 from . import creative_derived_transfer as DERIVED, creative_derived_source as SOURCE
+from . import spill_transfer_review as SPILL_REVIEW
+
+_NO_SPILL_ACK = object()
 
 
 class PresetReviews:
     def __init__(self):self.pending=OrderedDict()
 
-    def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None,prepare_crop=None,verify_crop=None,prepare_xmp=None,verify_xmp=None):
+    def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None,prepare_crop=None,verify_crop=None,prepare_xmp=None,verify_xmp=None,prepare_spill=None,verify_spill=None):
         modules=DERIVED.require_modules(state,preset['modules']);SC.check_scope(list(modules))
         xmp=preset.get("xmp_import")
         derived=SOURCE.record(state) is not None
@@ -43,14 +46,22 @@ class PresetReviews:
             if prepare_reference is None:raise ValueError('参考统一目标预检端口不可用')
             if optical_record is not None:candidate['_optics']=optical_record['recipe']
             reference_record=prepare_reference(row,candidate,document_id,str(revision),prepared[RC.OP])
+        # All full-target reviews must see the actual final combination, not a
+        # shadow that still contains the target's old optics/reference recipe.
+        if optical_record is not None:candidate['_optics']=optical_record['recipe']
+        if reference_record is not None:RC.apply_verified(candidate,reference_record['recipe'])
         DERIVED.require_candidate(state,candidate,prepared,proof)
         crop_record=None;crop_transfer=None
         if SC.OP_CROP in prepared:
             if prepare_crop is None or verify_crop is None:raise ValueError('裁剪预设需要完整目标预览和审核端口')
-            if optical_record is not None:candidate['_optics']=optical_record['recipe']
-            if reference_record is not None:RC.apply_verified(candidate,reference_record['recipe'])
             crop_record,crop_transfer=prepare_crop(row,candidate,document_id,str(revision))
             verify_crop(row,candidate,document_id,str(revision),crop_record)
+        spill_record=None;spill_transfer=None
+        if SC.SPILL_REMOVAL.OP in prepared:
+            if prepare_spill is None or verify_spill is None:raise ValueError('祛染色预设需要完整目标前后图预览和审核端口')
+            spill_record,spill_transfer=prepare_spill(row,state,candidate,document_id,str(revision))
+            spill_record=SPILL_REVIEW.checked(spill_record)
+            verify_spill(row,state,candidate,document_id,str(revision),spill_record)
         xmp_record=None;xmp_transfer=None
         if xmp is not None:
             if prepare_xmp is None or verify_xmp is None:raise ValueError('XMP requires actual full-target image review ports')
@@ -58,7 +69,7 @@ class PresetReviews:
             verify_xmp(row,state,candidate,document_id,str(revision),xmp['source_sha256'],xmp_record)
         if proof is not None:SOURCE.verify_row({**row,'state':state},proof)
         token=uuid.uuid4().hex
-        record={'preset':deepcopy(preset),'modules':prepared,'transfer':transfer,'optics':optical_record,'reference':reference_record,'crop':crop_record,'xmp':xmp_record,
+        record={'preset':deepcopy(preset),'modules':prepared,'transfer':transfer,'optics':optical_record,'reference':reference_record,'crop':crop_record,'xmp':xmp_record,'spill':spill_record,
                 'document_id':document_id,'revision':str(revision),'path':row['path'],
                 'row_document_id':row.get('document_id'),'source_proof':proof,
                 'before':canonical(OA.before_params(state,list(modules))),'local_key':LG.undo_key(state) if LG.OP in modules else None,
@@ -67,9 +78,11 @@ class PresetReviews:
         while len(self.pending)>8:self.pending.popitem(last=False)
         return {'id':preset['id'],'name':preset['name'],'module_scope':list(modules),
                 'preflight_token':token,'applies':deepcopy(prepared),'local_mask_transfer':transfer,'optical_transfer':optical_transfer,'reference_color':reference_record,
-                'document_id':document_id,'revision':str(revision),'source_proof':deepcopy(proof),'crop_transfer':crop_transfer,**({'xmp_transfer':xmp_transfer,'xmp_report':deepcopy(xmp['report'])} if xmp is not None else {})}
+                'document_id':document_id,'revision':str(revision),'source_proof':deepcopy(proof),'crop_transfer':crop_transfer,
+                **({'spill_transfer':spill_transfer} if SC.SPILL_REMOVAL.OP in prepared else {}),
+                **({'xmp_transfer':xmp_transfer,'xmp_report':deepcopy(xmp['report'])} if xmp is not None else {})}
 
-    def claim(self,token,preset_id,state,row,document_id,revision,verify_crop=None,verify_xmp=None,xmp_review_ack=None):
+    def claim(self,token,preset_id,state,row,document_id,revision,verify_crop=None,verify_xmp=None,xmp_review_ack=None,verify_spill=None,spill_review_ack=_NO_SPILL_ACK):
         if type(token) is not str or token not in self.pending:raise ValueError('目标预设预检已失效或使用，请重新预检')
         record=self.pending[token]
         if time.monotonic()>=record['expires']:raise ValueError('目标预设预检已过期，请重新预检')
@@ -101,12 +114,18 @@ class PresetReviews:
         if RC.OP in record['modules']:
             if OA.OP in record['modules']:candidate['_optics']=record['optics']['recipe']
             RC.verify_target(record['reference'],state,candidate,row,document_id,revision,record['modules'][RC.OP])
+        if record['optics'] is not None:candidate['_optics']=record['optics']['recipe']
+        if record['reference'] is not None:RC.apply_verified(candidate,record['reference']['recipe'])
         DERIVED.require_candidate(state,candidate,record['modules'],proof)
         if SC.OP_CROP in record['modules']:
             if verify_crop is None:raise ValueError('裁剪预设缺少冻结目标审核端口')
-            if record['optics'] is not None:candidate['_optics']=record['optics']['recipe']
-            if record['reference'] is not None:RC.apply_verified(candidate,record['reference']['recipe'])
             verify_crop(row,candidate,document_id,str(revision),record.get('crop'))
+        if SC.SPILL_REMOVAL.OP in record['modules']:
+            if verify_spill is None:raise ValueError('祛染色预设缺少冻结目标前后图审核端口')
+            spill=SPILL_REVIEW.checked(record.get('spill'))
+            SPILL_REVIEW.acknowledgments(spill_review_ack,[spill])
+            verify_spill(row,state,candidate,document_id,str(revision),spill)
+        elif spill_review_ack is not _NO_SPILL_ACK:raise ValueError('未选择祛染色模块，不能附带目标图审核确认')
         xmp=record['preset'].get('xmp_import')
         if xmp is not None:
             if verify_xmp is None:raise ValueError('XMP review verifier unavailable')

@@ -1,8 +1,9 @@
 """One portable scope: source reviews, spill vectors and assets stay target-owned.
 
 The operation ID remains stable. Its versioned portable recipe admits v1 and
-v2, but only spill enabled/strength travel; the target's independent manual
-coverage survives preset/batch application and is restored exactly by undo.
+v2 for faithful persisted recipes. Changing spill through whole-ID transfer is
+now refused until that wider route has visual review; use the dedicated scalar
+spill scope. Target-owned coverage and scoped historical restoration survive.
 """
 from . import id_background_state as S, id_background_assets as A
 from . import local_mask_state as M
@@ -19,7 +20,15 @@ def params_of(state):return {'recipe':S.portable(state.get('_id_background'))}
 
 
 def install(state,params):
-    value=S.apply_portable(state.get('_id_background'),check_params(params)['recipe'])
+    prior=S.check(state.get('_id_background'))
+    value=S.apply_portable(prior,check_params(params)['recipe'])
+    # Whole-ID transfer is not the dedicated spill visual review route. Never
+    # let that wider module bypass the new per-target spill acknowledgment.
+    from . import spill_removal_state as SPILL
+    before_spill,after_spill=S.spill_of(prior),S.spill_of(value)
+    if value!=prior and (SPILL.portable(before_spill)!=SPILL.portable(after_spill)
+            or SPILL.active(before_spill) or SPILL.active(after_spill)):
+        raise ValueError('整套证件照背景迁移涉及祛反光变更，尚无整套目标画面审核；请分别审核背景和专用祛反光模块，不会绕过逐图确认')
     if S.active(value):
         from .studio_background_state import active as studio_active
         from .sky_replacement_state import check as sky_check

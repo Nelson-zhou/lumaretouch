@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createPresetWorkflow,validatePresetReply,type PresetTransport,type PresetOptions,type PresetReply} from './presetWorkflow.ts';
 import {XMP_MODE,type XmpReport,type XmpSummary,type XmpTransfer} from '../xmpImport/model.ts';
+import {spillTransferAck,type SpillTransferEvidence} from '../spillRemoval/transferModel.ts';
 const op='lnx.hsl.v1',modules={[op]:{recipe:{version:1}}};
 const context={enabled:true,editable:true,documentId:'doc-1'};
 const tick=()=>new Promise<void>(r=>setImmediate(r));
@@ -148,18 +149,69 @@ test('XMP import receipts must preserve the explicit selection and omit original
     assert.equal(flow.snapshot().phase,mismatch?'uncertain':'done');}
 });
 
-// AUTHORED / UNRUN: scalar spill transfer must retain actual target ownership.
-test('spill preflight rejects missing or inconsistent effective source proof',()=>{
-  const op='lnx.spill_removal.v1',opts={id:'spill',documentId:'doc-1'};
-  const reply:PresetReply={protocol:1,request_id:'spill-review',action:'preflight',success:true,
-    outcome_unknown:false,document_id:'doc-1',id:'spill',module_scope:[op],revision:'4',
-    preflight_token:'1'.repeat(32),applies:{[op]:{enabled:true,strength:40}},
-    source_proof:{asset_sha256:'a'.repeat(64),original_sha256:'a'.repeat(64),creative_source:null}};
-  assert.doesNotThrow(()=>validatePresetReply(reply,'preflight',opts,'spill-review',[op]));
-  assert.throws(()=>validatePresetReply({...reply,source_proof:undefined},'preflight',opts,'spill-review',[op]));
-  assert.throws(()=>validatePresetReply({...reply,source_proof:{asset_sha256:'b'.repeat(64),
-    original_sha256:'a'.repeat(64),creative_source:null}},'preflight',opts,'spill-review',[op]));
-  assert.doesNotThrow(()=>validatePresetReply({...reply,source_proof:{asset_sha256:'b'.repeat(64),
-    original_sha256:'a'.repeat(64),creative_source:{sha256:'b'.repeat(64),width:12,height:8}}},
-    'preflight',opts,'spill-review',[op]));
+// AUTHORED / UNRUN: protocol metadata fixtures, not renderer or browser visual acceptance.
+const spillOp='lnx.spill_removal.v1',spillParams={enabled:true,strength:40};
+const spillVisual=():SpillTransferEvidence=>({version:1,document_id:'doc-1',revision:'4',
+  source_proof:{asset_sha256:'a'.repeat(64),original_sha256:'a'.repeat(64),creative_source:null},
+  before_sha256:'b'.repeat(64),candidate_sha256:'c'.repeat(64),before_people_sha256:'d'.repeat(64),candidate_people_sha256:'d'.repeat(64),
+  source_size:[12,8],before_output_size:[12,8],after_output_size:[12,8],parameters:{...spillParams},
+  before:{mime:'image/png',width:12,height:8,sha256:'e'.repeat(64),base64:'iVBORw=='},
+  after:{mime:'image/png',width:12,height:8,sha256:'f'.repeat(64),base64:'iVBORw=='}});
+const spillPreflight=(requestId='spill-review'):PresetReply=>({protocol:1,request_id:requestId,action:'preflight',success:true,
+  outcome_unknown:false,document_id:'doc-1',id:'spill',module_scope:[spillOp],revision:'4',
+  preflight_token:'1'.repeat(32),applies:{[spillOp]:{...spillParams}},source_proof:spillVisual().source_proof,spill_transfer:spillVisual()});
+function spillFixture(){
+  const value=fixture();
+  value.api.read=async id=>{
+    const request=value.calls.find(call=>call.options.requestId===id)!;
+    const result=request.action==='preflight'?spillPreflight(id):{...value.replies.get(id)!,module_scope:[spillOp],
+      preflight_token:request.options.preflightToken,before:{[spillOp]:{...spillParams}},after:{[spillOp]:{...spillParams}}};
+    return {phase:'done',request_id:id,result};
+  };return value;
+}
+test('spill preflight requires matching source, target, scalars and bounded visual proof',()=>{
+  const opts={id:'spill',documentId:'doc-1'};
+  assert.doesNotThrow(()=>validatePresetReply(spillPreflight(),'preflight',opts,'spill-review',[spillOp]));
+  const changes:Array<(reply:PresetReply)=>void>=[
+    reply=>{delete reply.source_proof;},reply=>{delete reply.spill_transfer;},
+    reply=>{reply.source_proof={asset_sha256:'b'.repeat(64),original_sha256:'a'.repeat(64),creative_source:null};},
+    reply=>{reply.spill_transfer!.document_id='another-load-id';},
+    reply=>{reply.spill_transfer!.revision='3';},
+    reply=>{reply.spill_transfer!.parameters.strength=41;},
+    reply=>{reply.applies![spillOp]={...spillParams,coverage:null};},
+    reply=>{reply.spill_transfer!.after.base64='iVBOR'+'A'.repeat(200003);},
+  ];
+  for(const change of changes){const reply=spillPreflight();change(reply);
+    assert.throws(()=>validatePresetReply(reply,'preflight',opts,'spill-review',[spillOp]));}
+  const derived=spillPreflight(),source={asset_sha256:'b'.repeat(64),original_sha256:'a'.repeat(64),creative_source:{sha256:'b'.repeat(64),width:12,height:8}};
+  derived.source_proof=source;derived.spill_transfer!.source_proof=source;
+  assert.doesNotThrow(()=>validatePresetReply(derived,'preflight',opts,'spill-review',[spillOp]));
+});
+test('spill apply waits for exactly the displayed PNG pair acknowledgment',async()=>{
+  const {flow,calls}=spillFixture();
+  await flow.submit('apply',{id:'spill'},[spillOp]);assert.equal(calls.length,0);
+  await flow.submit('preflight',{id:'spill'},[spillOp]);assert.equal(flow.snapshot().phase,'done');
+  const review=flow.snapshot().result!,ack=spillTransferAck([review.spill_transfer!]);
+  await flow.submit('apply',{id:'spill',preflightToken:review.preflight_token},[spillOp]);assert.equal(calls.length,1);
+  await flow.submit('apply',{id:'spill',preflightToken:review.preflight_token,spillReviewAck:[]},[spillOp]);assert.equal(calls.length,1);
+  await flow.submit('apply',{id:'spill',preflightToken:review.preflight_token,spillReviewAck:[{...ack[0],after_sha256:review.spill_transfer!.candidate_sha256}]},[spillOp]);assert.equal(calls.length,1);
+  await flow.submit('apply',{id:'spill',preflightToken:review.preflight_token,spillReviewAck:ack},[spillOp]);
+  assert.equal(calls.length,2);assert.equal(flow.snapshot().phase,'done');assert.deepEqual(calls[1].options.spillReviewAck,ack);
+  assert.notEqual(calls[1].options.spillReviewAck,ack);
+});
+test('dismissed or changed-context spill preflight cannot apply an old acknowledgment',async()=>{
+  for(const dismiss of [true,false]){
+    const {flow,calls}=spillFixture();await flow.submit('preflight',{id:'spill'},[spillOp]);const review=flow.snapshot().result!;
+    const ack=spillTransferAck([review.spill_transfer!]);
+    if(dismiss)flow.dismissReview();else flow.updateContext({...context,reviewContextKey:'changed-photo-revision'});
+    await flow.submit('apply',{id:'spill',preflightToken:review.preflight_token,spillReviewAck:ack},[spillOp]);assert.equal(calls.length,1);
+  }
+});
+test('spill cannot borrow another preset, token or target review for apply',async()=>{
+  for(const patch of [{id:'other'},{preflightToken:'2'.repeat(32)},
+    {spillReviewAck:[{...spillTransferAck([spillVisual()])[0],document_id:'other'}]}]){
+    const {flow,calls}=spillFixture();await flow.submit('preflight',{id:'spill'},[spillOp]);const review=flow.snapshot().result!;
+    await flow.submit('apply',{id:'spill',preflightToken:review.preflight_token,spillReviewAck:spillTransferAck([review.spill_transfer!]),...patch},[spillOp]);
+    assert.equal(calls.length,1);
+  }
 });

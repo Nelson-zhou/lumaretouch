@@ -1,6 +1,7 @@
 //! Preset-specific protocol and document binding atop the shared mailbox.
 use serde_json::{json, Value};
 use crate::receipt_host::{ReceiptHost, ReceiptKind};
+use crate::spill_transfer_protocol as spill;
 #[path = "xmp_preset_protocol.rs"]
 pub(crate) mod xmp_protocol;
 pub(crate) struct PresetKind;
@@ -66,22 +67,18 @@ fn crop_review(value:&Value,document:&Value,revision:&Value,params:&Value)->bool
         &&bytes.len()<=400000&&bytes.len()%4==0&&bytes.starts_with("iVBOR")
         &&bytes.bytes().all(|b|b.is_ascii_alphanumeric()||b"+/=".contains(&b))
 }
-fn spill_source(value:&Value)->bool {
-    let hash=|v:&Value|v.as_str().is_some_and(|s|s.len()==64&&s.bytes().all(|b|b.is_ascii_digit()||(b'a'..=b'f').contains(&b)));
-    if value.as_object().map_or(true,|m|m.len()!=3||!m.contains_key("creative_source"))||!hash(&value["asset_sha256"])||!hash(&value["original_sha256"]){return false;}
-    let c=&value["creative_source"];
-    if c.is_null(){return value["asset_sha256"]==value["original_sha256"];}
-    c.as_object().is_some_and(|m|m.len()==3)&&c["sha256"]==value["asset_sha256"]
-        &&["width","height"].iter().all(|k|c[*k].as_u64().is_some_and(|n|n>0&&n<=1_000_000))
-}
 fn reviewed_types(value: &Value) -> bool {
     let Some(ops)=value["module_scope"].as_array() else{return false;};
     let local=ops.iter().any(|op|op=="lnx.local_grade.v1");
     let optics=ops.iter().any(|op|op=="lnx.optics_auto.v1");
     let crop=ops.iter().any(|op|op=="lnx.crop.v1");
-    let spill=ops.iter().any(|op|op=="lnx.spill_removal.v1");
+    let has_spill=ops.iter().any(|op|op==spill::SPILL_OP);
     let xmp=!value["xmp_report"].is_null()||!value["xmp_transfer"].is_null();
-    (local||optics||crop||xmp||spill) && (!spill||spill_source(&value["source_proof"])) && (!local||value["local_mask_transfer"].is_object())
+    (local||optics||crop||xmp||has_spill)
+        && (!has_spill || (spill::hex(&value["preflight_token"], 32)
+            && !ops.iter().any(|op|op=="lnx.id_background.v1")
+            && spill::transfer(&value["spill_transfer"], &value["document_id"], &value["revision"], &value["applies"][spill::SPILL_OP], &value["source_proof"])))
+        && (!local||value["local_mask_transfer"].is_object())
         && (!optics||optical_review(&value["optical_transfer"],&value["document_id"],&value["revision"],&value["applies"]["lnx.optics_auto.v1"]))
         && (!crop||crop_review(&value["crop_transfer"],&value["document_id"],&value["revision"],&value["applies"]["lnx.crop.v1"]))
         && (!xmp||(xmp_protocol::transfer(&value["xmp_transfer"],&value["document_id"],&value["revision"],&value["xmp_report"])
@@ -127,6 +124,44 @@ pub(crate) type PresetHost = ReceiptHost<PresetKind>;
 #[cfg(test)]
 mod tests {
     use super::*;
+    // AUTHORED / UNRUN. Complete small PNG fixtures, not product-render evidence.
+    fn spill_review() -> Value {
+        let source=json!({"asset_sha256":"a".repeat(64),"original_sha256":"a".repeat(64),"creative_source":null});
+        let params=json!({"enabled":true,"strength":61});
+        let report=spill::tests::sample_transfer(&json!("loaded-photo"), &json!("3"), &params, &source);
+        json!({"protocol":1,"action":"preflight","success":true,"outcome_unknown":false,"request_id":"spill",
+            "id":"spill-preset","document_id":"loaded-photo","revision":"3","module_scope":[spill::SPILL_OP],
+            "applies":{(spill::SPILL_OP):params},"preflight_token":"f".repeat(32),"source_proof":source,"spill_transfer":report})
+    }
+    #[test] fn spill_preflight_requires_one_exact_bound_image_pair() {
+        let value=spill_review();assert!(PresetKind::valid(&value,Some("loaded-photo")));
+        for key in ["spill_transfer","source_proof","revision"] {
+            let mut changed=value.clone();changed.as_object_mut().unwrap().remove(key);
+            assert!(!PresetKind::valid(&changed,Some("loaded-photo")),"{key}");
+        }
+        for (key,replacement) in [("document_id",json!("other-photo")),("revision",json!("4")),
+            ("source_proof",Value::Null),("parameters",json!({"enabled":true,"strength":60}))] {
+            let mut changed=value.clone();changed["spill_transfer"][key]=replacement;
+            assert!(!PresetKind::valid(&changed,Some("loaded-photo")),"{key}");
+        }
+        let mut changed=value.clone();changed["revision"]=json!("03");changed["spill_transfer"]["revision"]=json!("03");
+        assert!(!PresetKind::valid(&changed,Some("loaded-photo")));
+        changed=value.clone();changed["spill_transfer"]["after"]["sha256"]=json!("e".repeat(64));
+        assert!(!PresetKind::valid(&changed,Some("loaded-photo")));
+        changed=value.clone();changed["module_scope"]=json!([spill::SPILL_OP,"lnx.id_background.v1"]);
+        changed["applies"]["lnx.id_background.v1"]=json!({"recipe":{}});
+        assert!(!PresetKind::valid(&changed,Some("loaded-photo")));
+        changed=value;changed["success"]=json!(false);changed["spill_transfer"]=Value::Null;
+        assert!(PresetKind::valid(&changed,Some("loaded-photo")));
+    }
+    #[test] fn corrupt_spill_png_receipt_is_unknown_and_keeps_document_binding() {
+        let mut h=host();h.begin_bound([1;16],"spill","preflight",Some("loaded-photo")).unwrap();
+        let mut value=spill_review();value["spill_transfer"]["before"]["base64"]=json!("iVBORw==");
+        h.receive([1;16],&value);
+        assert_eq!(h.status("spill")["result"]["success"],false);
+        assert_eq!(h.status("spill")["result"]["outcome_unknown"],true);
+        assert_eq!(h.status("spill")["result"]["document_id"],"loaded-photo");
+    }
     // AUTHORED / UNRUN. Synthetic receipt schema, not actual rendered PNG evidence.
     #[test] fn crop_only_preflight_requires_bound_preview_evidence() {
         let crop=json!({"rect_normalized":[0.0,0.0,1.0,1.0],"rotation_degrees":0.0});

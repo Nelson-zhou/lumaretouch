@@ -33,6 +33,7 @@ class FrozenTarget:
     people_json:str|None=None
     source_proof_json:str|None=None
     crop_json:str|None=None
+    spill_json:str|None=None
 
 @dataclass(frozen=True)
 class FrozenPlan:
@@ -60,6 +61,11 @@ class PreflightStore:
     def create(self,workspace,source_id,source_revision,source_path,modules,params,policy,targets,rejected,*,source_proof=None):
         if not targets or len(targets)>MAX_TARGETS:raise ValueError('invalid batch preflight target count')
         from .creative_derived_source import check_row_proof
+        from .spill_removal_scope import OP as SPILL_OP
+        spill=SPILL_OP in modules
+        if spill:
+            from .spill_transfer_review import MAX_TARGETS as SPILL_MAX_TARGETS
+            if len(targets)>SPILL_MAX_TARGETS:raise ValueError('Spill visual review supports at most eight targets; no target was omitted')
         if source_proof is not None:
             source_proof=check_row_proof(source_proof)
         for target in targets:
@@ -72,11 +78,23 @@ class PreflightStore:
                 if type(target.crop_json) is not str or len(target.crop_json)>16384:
                     raise ValueError('Invalid compact crop review proof')
                 check_record(json.loads(target.crop_json))
+            if target.spill_json is not None:
+                from .spill_transfer_review import checked
+                if not spill or type(target.spill_json) is not str or len(target.spill_json)>16384:
+                    raise ValueError('Invalid compact spill review proof')
+                record=checked(json.loads(target.spill_json))
+                modules_for_target=params if target.prepared_json is None else json.loads(target.prepared_json)
+                if (record['document_id']!=target.document_id or record['revision']!=str(target.revision)
+                        or target.source_proof_json is None or record['source_proof']!=json.loads(target.source_proof_json)
+                        or record['parameters']!=modules_for_target.get(SPILL_OP)):
+                    raise ValueError('Spill review does not belong to its frozen target')
+            elif spill and not target.blocked:
+                raise ValueError('Every eligible spill target requires full before/after review evidence')
         now=self.clock();self._prune(now)
         # Validate the total metadata budget, not only each target independently.
         canonical({'source':[source_id,source_revision,source_path],'modules':modules,'params':params,
             'source_proof':source_proof,
-            'targets':[[t.document_id,t.revision,t.index,t.path,t.blocked,t.before_json,t.prepared_json,t.transfer_json,t.optics_json,t.reference_json,t.people_json,t.source_proof_json,t.crop_json] for t in targets],'rejected':rejected})
+            'targets':[[t.document_id,t.revision,t.index,t.path,t.blocked,t.before_json,t.prepared_json,t.transfer_json,t.optics_json,t.reference_json,t.people_json,t.source_proof_json,t.crop_json,t.spill_json] for t in targets],'rejected':rejected})
         plan=FrozenPlan(uuid.uuid4().hex,workspace,source_id,source_revision,source_path,tuple(modules),canonical(params),policy,
             tuple(targets),canonical(rejected),now,now+TTL_NS,None if source_proof is None else canonical(source_proof))
         self.pending[plan.token]=plan
@@ -103,17 +121,26 @@ class PreflightStore:
         if generation!=workspace:raise ValueError('batch result belongs to another workspace')
         return json.loads(payload)
 
-    def claim(self,plan):
+    def claim(self,plan,*,spill_review_ack=None):
         # Consume before the first write: even failure to encode the final receipt
         # must never leave a successfully applied token available for reexecution.
         self.finish(plan,{'success':False,'outcome_unknown':True,'preflight_token':plan.token,
-            'error':'batch started; terminal outcome has not been recorded'})
+            'error':'batch started; terminal outcome has not been recorded',
+            **({'spill_review_ack':spill_review_ack} if spill_review_ack is not None else {})})
 
     def finish(self,plan,result):
         try:payload=canonical(result,MAX_RESULT_BYTES)
         except (ValueError,TypeError):
+            # A compact spill acknowledgment is also the terminal retry fence.
+            # Recover it from the frozen plan, not an oversized result payload.
+            from .spill_removal_scope import OP as SPILL_OP
+            ack={}
+            if SPILL_OP in plan.modules:
+                records=[json.loads(t.spill_json) for t in plan.targets if not t.blocked and t.spill_json is not None]
+                ack={'spill_review_ack':[{'document_id':r['document_id'],'revision':r['revision'],
+                    'before_sha256':r['before']['sha256'],'after_sha256':r['after']['sha256']} for r in records]}
             payload=canonical({'success':False,'outcome_unknown':True,'preflight_token':plan.token,
-                'error':'batch result could not be retained; inspect document state before a new batch'})
+                'error':'batch result could not be retained; inspect document state before a new batch',**ack})
         self.terminal[plan.token]=(plan.workspace,payload)
         self.pending.pop(plan.token,None)
         while (len(self.terminal)>MAX_TERMINAL or

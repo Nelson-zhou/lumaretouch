@@ -1,35 +1,18 @@
 //! Reviewed batch receipts use the shared epoch-bound mailbox.
 use serde_json::Value;
 use crate::receipt_host::{ReceiptHost, ReceiptKind};
+use crate::spill_transfer_protocol::{self as spill, hex, revision, source_proof as spill_source, SPILL_OP};
 pub(crate) struct BatchKind;
-const SPILL_OP: &str = "lnx.spill_removal.v1";
-fn hex(value: &Value, length: usize) -> bool {
-    value.as_str().is_some_and(|s| s.len() == length
-        && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)))
-}
-fn revision(value: &Value) -> bool {
-    value.as_str().is_some_and(|s| !s.is_empty() && s.len() <= 20
-        && s.bytes().all(|b| b.is_ascii_digit()) && s.parse::<u64>().is_ok())
-}
-fn spill_source(value: &Value) -> bool {
-    if value.as_object().map_or(true, |m| m.len() != 3 || !m.contains_key("creative_source"))
-        || !hex(&value["asset_sha256"], 64) || !hex(&value["original_sha256"], 64) { return false; }
-    let creative = &value["creative_source"];
-    if creative.is_null() { return value["asset_sha256"] == value["original_sha256"]; }
-    creative.as_object().is_some_and(|m| m.len() == 3)
-        && creative["sha256"] == value["asset_sha256"]
-        && ["width", "height"].iter().all(|k| creative[*k].as_u64().is_some_and(|n| n > 0 && n <= 9_007_199_254_740_991))
-}
 fn spill_preflight(value: &Value) -> bool {
     let (Some(ops), Some(applies), Some(targets)) = (value["module_scope"].as_array(),
         value["applies"].as_object(), value["targets"].as_array()) else { return false; };
+    if targets.len() > spill::MAX_TARGETS { return false; }
     let mut selected = std::collections::BTreeSet::new();
     if ops.iter().any(|op| op.as_str().map_or(true, |op| !selected.insert(op)))
         || selected.contains("lnx.id_background.v1") || applies.len() != ops.len()
         || !selected.iter().all(|op| applies.get(*op).is_some_and(Value::is_object)) { return false; }
     let params = &value["applies"][SPILL_OP];
-    if params.as_object().map_or(true, |m| m.len() != 2) || !params["enabled"].is_boolean()
-        || !params["strength"].as_f64().is_some_and(|n| n.is_finite() && (0.0..=100.0).contains(&n)) { return false; }
+    if !spill::parameters(params) { return false; }
     let source = &value["source_snapshot"];
     if !hex(&value["preflight_token"], 32) || !hex(&source["document_id"], 32)
         || !revision(&source["revision"]) || !source["path"].is_string()
@@ -50,6 +33,7 @@ fn spill_preflight(value: &Value) -> bool {
         if !spill_source(&target["source_proof"])
             || before.as_object().map_or(true, |m| m.len() != 1)
             || !hex(&before["target_recipe_key"], 64)
+            || !spill::transfer(&target["spill_transfer"], &target["document_id"], &target["revision"], params, &target["source_proof"])
             || (target["document_id"] == source["document_id"] && target["source_proof"] != source["source_proof"]) { return false; }
     }
     value["blocked"].as_u64() == Some(blocked)
@@ -71,9 +55,9 @@ pub(crate) type BatchHost = ReceiptHost<BatchKind>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    // AUTHORED / UNRUN: schema evidence only; no target image is rendered here.
+    // AUTHORED / UNRUN: small valid PNG fixtures, not actual target renders.
     fn spill_review() -> Value {
-        json!({"request_id":"spill","action":"preflight","success":true,
+        let mut value = json!({"request_id":"spill","action":"preflight","success":true,
             "preflight_token":"a".repeat(32),"module_scope":[SPILL_OP],
             "applies":{(SPILL_OP):{"enabled":true,"strength":61}},"policy":"skip_and_report",
             "source_snapshot":{"document_id":"b".repeat(32),"revision":"4","path":"/source.raw",
@@ -81,12 +65,16 @@ mod tests {
             "targets":[{"index":1,"path":"/target.raw","document_id":"c".repeat(32),"revision":"2","blocked":null,
                 "before":{(SPILL_OP):{"target_recipe_key":"d".repeat(64)}},
                 "source_proof":{"asset_sha256":"2".repeat(64),"original_sha256":"2".repeat(64),"creative_source":null}}],
-            "ok":1,"blocked":0,"rejected_docs":[]})
+            "ok":1,"blocked":0,"rejected_docs":[]});
+        let target = &value["targets"][0];
+        let transfer = spill::tests::sample_transfer(&target["document_id"], &target["revision"], &value["applies"][SPILL_OP], &target["source_proof"]);
+        value["targets"][0]["spill_transfer"] = transfer;
+        value
     }
     #[test] fn spill_review_requires_each_admitted_targets_owned_evidence() {
         let value = spill_review();
         assert!(BatchKind::valid(&value, None));
-        for path in ["/source_snapshot/source_proof", "/targets/0/source_proof", "/targets/0/before"] {
+        for path in ["/source_snapshot/source_proof", "/targets/0/source_proof", "/targets/0/before", "/targets/0/spill_transfer"] {
             let mut changed = value.clone(); *changed.pointer_mut(path).unwrap() = Value::Null;
             assert!(!BatchKind::valid(&changed, None), "{path}");
         }
@@ -101,6 +89,8 @@ mod tests {
         let mut value = spill_review();
         value["targets"][0]["source_proof"] = json!({"asset_sha256":"3".repeat(64),"original_sha256":"2".repeat(64),
             "creative_source":{"sha256":"3".repeat(64),"width":32,"height":24}});
+        value["targets"][0]["spill_transfer"]["source_proof"] = value["targets"][0]["source_proof"].clone();
+        value["targets"][0]["spill_transfer"]["source_size"] = json!([32,24]);
         assert!(BatchKind::valid(&value, None));
         value["targets"][0]["source_proof"]["creative_source"]["width"] = json!(0);
         assert!(!BatchKind::valid(&value, None));
@@ -125,6 +115,40 @@ mod tests {
         assert!(!BatchKind::valid(&changed, None));
         changed = value; changed["success"] = json!(false); changed["targets"] = Value::Null;
         assert!(BatchKind::valid(&changed, None));
+    }
+    #[test] fn spill_review_binds_each_target_and_bounds_total_selected_targets() {
+        let value = spill_review();
+        for (key, replacement) in [("document_id", json!("e".repeat(32))), ("revision", json!("3")),
+            ("parameters", json!({"enabled":true,"strength":60})), ("source_proof", Value::Null)] {
+            let mut changed = value.clone(); changed["targets"][0]["spill_transfer"][key] = replacement;
+            assert!(!BatchKind::valid(&changed, None), "{key}");
+        }
+        let mut changed = value.clone();
+        changed["targets"][0]["spill_transfer"]["before"]["sha256"] = json!("e".repeat(64));
+        assert!(!BatchKind::valid(&changed, None));
+        changed = value.clone(); changed["targets"][0]["revision"] = json!("02");
+        changed["targets"][0]["spill_transfer"]["revision"] = json!("02");
+        assert!(!BatchKind::valid(&changed, None));
+        let mut many = value.clone();
+        many["targets"] = json!((0..9).map(|index| {
+            let mut target = value["targets"][0].clone();
+            target["document_id"] = json!(format!("{index:032x}")); target["index"] = json!(index);
+            target["spill_transfer"]["document_id"] = target["document_id"].clone(); target
+        }).collect::<Vec<_>>());
+        many["ok"] = json!(9); assert!(!BatchKind::valid(&many, None));
+        many["targets"][8]["blocked"] = json!("independently reviewed target is unavailable");
+        many["targets"][8].as_object_mut().unwrap().remove("spill_transfer");
+        many["ok"] = json!(8); many["blocked"] = json!(1); assert!(!BatchKind::valid(&many, None));
+        many["targets"].as_array_mut().unwrap().remove(0);
+        many["ok"] = json!(7); assert!(BatchKind::valid(&many, None));
+    }
+    #[test] fn malformed_spill_pair_becomes_unknown_not_a_reviewable_success() {
+        let mut host=BatchHost::default();host.reset([1;16]);host.ready([1;16],true);
+        host.begin([1;16],"spill","preflight").unwrap();
+        let mut value=spill_review();value["targets"][0]["spill_transfer"]["after"]["sha256"]=json!("e".repeat(64));
+        host.receive([1;16],&value);
+        assert_eq!(host.status("spill")["result"]["success"],false);
+        assert_eq!(host.status("spill")["result"]["outcome_unknown"],true);
     }
     #[test]fn receipt_requires_epoch_request_and_action_and_first_terminal_wins(){
         let mut h=BatchHost::default();h.reset([1;16]);h.ready([1;16],true);h.begin([1;16],"a","commit").unwrap();

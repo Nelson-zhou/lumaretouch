@@ -171,7 +171,7 @@ MODULES: dict[str, dict] = {
                 "why_not": "仅手动数值；目标保留自己的镜头配置、自动结果与引导线，改变畸变前须重新分析"},
     ID_BACKGROUND.OP: {"params": ("recipe",), "state_fields": ID_BACKGROUND.FIELDS, "single_face": False,
                 "transferable": True, "cmd": "background", "read": ID_BACKGROUND.params_of, "write": ID_BACKGROUND.install,
-                "why_not": "仅复制颜色、设计与祛反光参数；各目标保留独立审核范围和手工祛反光覆盖，素材使用目标自己的绑定"},
+                "why_not": "仅复制颜色与设计；祛反光变更须使用独立逐图审核模块；各目标保留独立审核范围和手工祛反光覆盖，素材使用目标自己的绑定"},
     STUDIO.OP: {"params": ("recipe",), "state_fields": STUDIO.FIELDS, "single_face": False,
                 "transferable": True, "cmd": "studio_background", "read": STUDIO.params_of, "write": STUDIO.install,
                 "why_not": "只同步强度；目标必须已有自己的背景/地面范围，保护和恢复笔迹不复制"},

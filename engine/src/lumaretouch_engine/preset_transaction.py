@@ -11,7 +11,7 @@ class PresetApplyError(ScopeError):
 
 
 def apply_with_rollback(replay: Callable, before: dict, after: dict, *, preset_id: str,
-                        emit: Callable, invalidate: Callable, strict_local=False, verify_after=None) -> dict:
+                        emit: Callable, invalidate: Callable, strict_local=False, verify_after=None, verify_rollback=None) -> dict:
     try:
         frame=replay(after, mode="preset", replayed_for=f"preset:{preset_id}", **({'strict_local':True} if strict_local else {}))
         if verify_after is not None:verify_after()
@@ -19,6 +19,7 @@ def apply_with_rollback(replay: Callable, before: dict, after: dict, *, preset_i
     except Exception as error:
         try:
             frame = replay(before, mode="preset_rollback", replayed_for=f"preset_rollback:{preset_id}")
+            if verify_rollback is not None:verify_rollback()
         except Exception as rollback_error:
             invalidate()
             raise PresetApplyError(f"应用失败且回滚出帧失败，请重新打开图片；原错误：{error}；"

@@ -20,7 +20,7 @@ from . import creative_derived_transfer as DERIVED, creative_derived_source as S
 
 ACTIONS = ("list", "preflight", "apply", "save", "import", "delete", "xmp_inspect")
 LEGACY_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note", "local_mask_transfer", "preflight_token"}
-FIELDS = {"list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack"},
+FIELDS = {"list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack", "spill_review_ack"},
           "preflight": {"id", "document_id", "local_mask_transfer"},
           "save": {"id", "name", "kind", "force", "note", "module_scope", "document_id", "local_mask_transfer"},
           "import": {"path", "id", "force", "xmp_ack"}, "xmp_inspect": {"path"}, "delete": {"id"}}
@@ -47,6 +47,8 @@ class PresetPorts:
     verify_crop: Callable | None = None
     prepare_xmp: Callable | None = None
     verify_xmp: Callable | None = None
+    prepare_spill: Callable | None = None
+    verify_spill: Callable | None = None
 
 
 class PresetController:
@@ -147,7 +149,8 @@ class PresetController:
                         if verdict != 'ok': raise SC.ScopeError(f'{op}：{reason}')
                 evidence = self.reviews.prepare(doc, state, self.ports.target_row(),
                     self.ports.document_id(), self.ports.revision(), p.get('local_mask_transfer'), self.ports.prepare_optics, self.ports.prepare_reference,
-                    self.ports.prepare_crop, self.ports.verify_crop, self.ports.prepare_xmp, self.ports.verify_xmp)
+                    self.ports.prepare_crop, self.ports.verify_crop, self.ports.prepare_xmp, self.ports.verify_xmp,
+                    self.ports.prepare_spill, self.ports.verify_spill)
             elif action == "xmp_inspect":
                 from .preset_xmp_import import inspect
                 evidence = inspect(p["path"])
@@ -234,8 +237,10 @@ class PresetController:
         previous = self.ports.capture()
         source_proof = None
         if p.get('preflight_token') is not None:
+            spill_ack={'spill_review_ack':p['spill_review_ack']} if 'spill_review_ack' in p else {}
             record = self.reviews.claim(p['preflight_token'], pid, previous, self.ports.target_row(),
-                                       self.ports.document_id(), self.ports.revision(), self.ports.verify_crop, self.ports.verify_xmp, p.get("xmp_review_ack"))
+                                       self.ports.document_id(), self.ports.revision(), self.ports.verify_crop, self.ports.verify_xmp, p.get("xmp_review_ack"),
+                                       self.ports.verify_spill, **spill_ack)
             doc, mods = record['preset'], record['modules']
             source_proof = record.get('source_proof')
         else:
@@ -243,11 +248,14 @@ class PresetController:
             mods = DERIVED.require_modules(previous, mods)
             if doc.get("xmp_import") is not None: raise SC.ScopeError("XMP adaptation requires current target-image review before apply")
             if p.get("xmp_review_ack") is not None: raise SC.ScopeError("Unexpected XMP review acknowledgment")
+            if "spill_review_ack" in p: raise SC.ScopeError('祛染色目标图审核确认必须属于当前冻结预检')
             if SC.SPILL_REMOVAL.OP in mods or LG.OP in mods or OA.OP in mods or RC.OP in mods or SC.OP_CROP in mods: raise SC.ScopeError('含裁剪、局部组或自动镜头/透视的预设必须先查看本目标预检，再确认应用')
             if SOURCE.record(previous) is not None:
                 source_proof = SOURCE.row_proof({**self.ports.target_row(), 'state':previous})
         DERIVED.require_modules(previous, mods, source_proof)
         ops = list(mods)
+        if SC.SPILL_REMOVAL.OP not in ops and "spill_review_ack" in p:
+            raise SC.ScopeError('未选择祛染色模块，不能附带目标图审核确认')
         for op in ops:
             if SC.MODULES[op]["single_face"]:
                 verdict, reason = self.ports.face_check()
@@ -276,6 +284,9 @@ class PresetController:
         if SC.OP_CROP in ops:
             if self.ports.verify_crop is None:raise SC.ScopeError('裁剪预设缺少完整目标审核端口')
             self.ports.verify_crop(self.ports.target_row(),state,self.ports.document_id(),self.ports.revision(),record.get('crop'))
+        if SC.SPILL_REMOVAL.OP in ops:
+            if self.ports.verify_spill is None:raise SC.ScopeError('祛染色预设缺少完整目标前后图审核端口')
+            self.ports.verify_spill(self.ports.target_row(),previous,state,self.ports.document_id(),str(self.ports.revision()),record.get('spill'))
         if source_proof is not None:
             SOURCE.verify_row({**self.ports.target_row(), 'state':self.ports.capture()}, source_proof)
         reviewed_row=self.ports.target_row()
@@ -287,8 +298,11 @@ class PresetController:
             if self.ports.revision()!=published_revision:raise SC.ScopeError('预设渲染期间目标版本发生变化')
             if source_proof is not None:SOURCE.verify_row({**current,'state':self.ports.capture()},source_proof)
             if SC.SPILL_REMOVAL.OP in ops:
-                if SC.SPILL_REMOVAL.undo_key(self.ports.capture()) != SC.SPILL_REMOVAL.undo_key(state):
+                actual=self.ports.capture()
+                if SC.SPILL_REMOVAL.undo_key(actual) != SC.SPILL_REMOVAL.undo_key(state):
                     raise SC.ScopeError('祛反光目标依赖在重放期间变化')
+                proof=deepcopy(record['spill']);proof['revision']=str(published_revision)
+                self.ports.verify_spill(current,previous,actual,self.ports.document_id(),str(published_revision),proof)
             if SC.OP_CROP in ops:
                 proof=deepcopy(record['crop']);proof['revision']=str(published_revision)
                 self.ports.verify_crop(current,state,self.ports.document_id(),str(published_revision),proof)
@@ -296,10 +310,19 @@ class PresetController:
                 proof=deepcopy(record['xmp']);proof['revision']=str(published_revision)
                 self.ports.verify_xmp(current,previous,self.ports.capture(),self.ports.document_id(),str(published_revision),doc['xmp_import']['source_sha256'],proof)
         if p.get('preflight_token') is not None:self.ports.advance()
+        def verify_rollback():
+            current=self.ports.target_row()
+            if (current.get('document_id'),current.get('path'),self.ports.document_id())!=reviewed_identity:
+                raise SC.ScopeError('祛反光失败后目标已切换，无法确认回滚')
+            from .spill_transfer_review import rollback_record
+            rollback_revision=str(self.ports.revision())
+            prior=rollback_record(record['spill'],previous,rollback_revision)
+            self.ports.verify_spill(current,previous,self.ports.capture(),self.ports.document_id(),rollback_revision,prior)
         published_revision=self.ports.revision()
         self._effect_started = True
         frame = apply_with_rollback(self.ports.replay, previous, state, preset_id=pid,
-                                    emit=self.emit, invalidate=self.ports.invalidate, verify_after=verify_after if source_proof is not None or SC.OP_CROP in ops or doc.get("xmp_import") is not None else None,
+                                    emit=self.emit, invalidate=self.ports.invalidate, verify_after=verify_after if source_proof is not None or SC.SPILL_REMOVAL.OP in ops or SC.OP_CROP in ops or doc.get("xmp_import") is not None else None,
+                                    verify_rollback=verify_rollback if SC.SPILL_REMOVAL.OP in ops else None,
                                     strict_local=SC.SPILL_REMOVAL.OP in ops or doc.get("xmp_import") is not None or SC.OP_CROP in ops or SOURCE.record(state) is not None or ID_BACKGROUND.OP in ops or LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
         after = OA.before_params(state, ops)
         self.last = {"id": pid, "name": doc["name"], "ops": ops, "params": after}

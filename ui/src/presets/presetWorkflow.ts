@@ -1,4 +1,5 @@
-import {CROP_OP,validCropReview,sourceProof,type CropReview} from '../cropTransfer/model.ts';
+import {CROP_OP,validCropReview,type CropReview} from '../cropTransfer/model.ts';
+import {SPILL_TRANSFER_OP,validSpillTransfer,validSpillTransferAck,type SpillTransferEvidence,type SpillTransferAck} from '../spillRemoval/transferModel.ts';
 import {validReferenceReview,type ReferenceReview} from '../referenceColor/ReferenceColorReview';
 import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../optics/transferReviewModel';
 import {validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence,type TransferGroupChoice} from '../localMasks/transferModel.ts';
@@ -7,10 +8,10 @@ import type {PresetInfo, PresetState} from '../native';
 import {validXmpAck, validXmpReport, validXmpSummary, validXmpTransfer, validXmpReviewAck, type XmpAck, type XmpReport, type XmpSummary, type XmpTransfer, type XmpReviewAck} from '../xmpImport/model.ts';
 export type PresetAction = 'list'|'preflight'|'apply'|'save'|'import'|'delete'|'xmp_inspect';
 export type PresetOptions = {id?:string;name?:string;path?:string;kind?:string;note?:string;force?:boolean;
-  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;
+  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;spillReviewAck?:SpillTransferAck[];
   xmpAck?:XmpAck;xmpReviewAck?:XmpReviewAck;/** UI-only captured expected source, never sent as authority. */xmpExpected?:XmpSummary};
 export type PresetReply = {protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
-  xmp_report?:XmpReport;xmp_transfer?:XmpTransfer;source_proof?:unknown;
+  xmp_report?:XmpReport;xmp_transfer?:XmpTransfer;source_proof?:unknown;spill_transfer?:SpillTransferEvidence;
   crop_transfer?:CropReview;reference_color?:ReferenceReview;revision?:string;optical_transfer?:OpticalTargetReview;preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
   before?:Record<string,unknown>;after?:Record<string,unknown>;doc_state?:Record<string,unknown>;
   error?:string;requires_reload?:boolean;rolled_back?:boolean;operation_committed?:boolean|null};
@@ -47,7 +48,8 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
   if(wanted&&!sameScope(result.module_scope,wanted))throw Error('实际作用模块与选择不一致');
   if(action==='preflight'){
     if(!text(result.revision)||!text(result.preflight_token)||!/^[a-f0-9]{32}$/.test(result.preflight_token)||!moduleKeys(result.applies,result.module_scope))throw Error('冻结预设预检结果不完整');
-    if(result.module_scope.includes('lnx.spill_removal.v1')&&!sourceProof(result.source_proof))throw Error('祛反光预设缺少真实目标来源证明');
+    if(result.module_scope.includes(SPILL_TRANSFER_OP)&&(!validSpillTransfer(result.spill_transfer,opts.documentId??'',result.revision,result.applies?.[SPILL_TRANSFER_OP],result.source_proof)
+      ||result.module_scope.includes('lnx.id_background.v1')))throw Error('祛反光预设缺少本目标、参数及来源匹配的真实前后预览，或混入未审核背景迁移');
     if(result.module_scope.includes('lnx.local_grade.v1')){
       if(!validTransferEvidence(result.local_mask_transfer)||!sameTransferOptions(result.local_mask_transfer.policy,opts.localMaskTransfer))throw Error('局部预设预检证据或策略不匹配');
     }
@@ -137,10 +139,23 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
         ||options.xmpReviewAck.source_sha256!==options.xmpExpected.source_sha256||options.xmpReviewAck.report_sha256!==options.xmpExpected.report.report_sha256)))){
       set({phase:'error',action,result:null,message:'XMP 预设必须先检查当前照片的完整前后像素并确认'});return;
     }
+    const frozen=state.action==='preflight'&&state.phase==='done'&&state.result?.success?state.result:null;
+    const spill=action==='apply'&&(expectedScope?.includes(SPILL_TRANSFER_OP)||frozen?.module_scope?.includes(SPILL_TRANSFER_OP)||options.spillReviewAck!==undefined);
+    if(spill&&(!frozen?.spill_transfer||!frozen.preflight_token||options.preflightToken!==frozen.preflight_token
+      ||options.id!==frozen.id||frozen.document_id!==context.documentId||state.submitted?.reviewContextKey!==context.reviewContextKey
+      ||!frozen.module_scope||!frozen.module_scope.includes(SPILL_TRANSFER_OP)||expectedScope!==undefined&&!sameScope(expectedScope,frozen.module_scope)
+      ||!validSpillTransfer(frozen.spill_transfer,context.documentId,frozen.revision,frozen.applies?.[SPILL_TRANSFER_OP],frozen.source_proof)
+      ||!validSpillTransferAck(options.spillReviewAck,[frozen.spill_transfer]))){
+      set({message:'请先查看并明确确认当前照片的祛反光前后效果，再应用这次冻结预设。'});return;
+    }
+    if(options.spillReviewAck!==undefined&&action!=='apply'){
+      set({phase:'error',action,result:null,message:'祛反光视觉确认只允许用于已冻结预设的应用。'});return;
+    }
     const id=uuid(),g=++generation,deadline=now()+(config.timeoutMs??120000);
     const captured={...options,moduleScope:options.moduleScope?[...options.moduleScope]:undefined,
       ...(options.xmpAck?{xmpAck:{...options.xmpAck,selected:[...options.xmpAck.selected]}}:{}),
       ...(options.xmpReviewAck?{xmpReviewAck:{...options.xmpReviewAck}}:{}),
+      ...(options.spillReviewAck?{spillReviewAck:options.spillReviewAck.map(ack=>({...ack}))}:{}),
       ...(options.xmpExpected?{xmpExpected:structuredClone(options.xmpExpected)}:{}),
       ...(editing?{documentId:context.documentId}:{}),requestId:id};
     const request:Pending={contextGeneration,id,action,options:captured,expectedScope:expectedScope?[...expectedScope]:undefined,generation:g};pending=request;
@@ -154,6 +169,7 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
   }
   async function query(){if(!pending||state.phase!=='uncertain')return;set({phase:'working',result:null,message:''});await poll(pending);}
   function acknowledgeInspection(){if(state.phase!=='uncertain')return;generation++;pending=null;set({...initialPresetUi});}
-  return {submit,query,acknowledgeInspection,updateContext:(next:PresetContext)=>{const key=JSON.stringify([next.documentId,next.reviewContextKey]);if(key!==contextKey){contextGeneration++;contextKey=key;if(state.action==='preflight'&&!pending)set({result:null});}context={...next};},snapshot:()=>state,
+  function dismissReview(){if(pending||state.phase==='working'||state.phase==='uncertain')return;set({...initialPresetUi});}
+  return {submit,query,acknowledgeInspection,dismissReview,updateContext:(next:PresetContext)=>{const key=JSON.stringify([next.documentId,next.reviewContextKey]);if(key!==contextKey){contextGeneration++;contextKey=key;if(state.action==='preflight'&&!pending)set({result:null});}context={...next};},snapshot:()=>state,
     dispose:()=>{disposed=true;generation++;pending=null;}};
 }

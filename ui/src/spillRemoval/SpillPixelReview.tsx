@@ -25,7 +25,7 @@ export function SpillPixelReview({value,reviewKey,onReady}:{value:SpillReview;re
   })}</div>
   {!ready&&<p role="status">{failed||verified==='error'?'图像加载、尺寸或 SHA-256 校验失败，不能应用。请重新生成审核。':'正在加载并核验两张实际 PNG…'}</p>}
   <label><input type="checkbox" disabled={!ready} checked={acknowledged} onChange={event=>setAcknowledged(event.target.checked)}/>我已查看这次真实前后效果，接受所示祛染结果</label>
-  <small>审核图最长边 640 像素，不代表原尺寸画质验收。当前照片、配方或覆盖范围变化后必须重新审核。</small>
+  <small>审核图最长边 512 像素，不代表原尺寸画质验收。当前照片、配方或覆盖范围变化后必须重新审核。</small>
   {value.boundaries.map((boundary,index)=><p key={index}>{boundary}</p>)}
  </section>;
 }

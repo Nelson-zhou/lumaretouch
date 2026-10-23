@@ -86,8 +86,8 @@ were performed. Validate pointer/zoom behavior, PNG integrity, portrait/landscap
 radius geometry, stale-source rejection, RGB16/derived display, coverage replay,
 undo/reopen and preview/export parity in local QA.
 
-Per-target visual batch review is not part of this bounded slice. Existing batch
-preflight freezes source/dependency ownership and parameters but does not render
-every parked photo. Deep opaque reflections, same-colour foreground ambiguity,
+Per-target visual batch review was not part of this painting slice. The later
+[source-only visual continuation](TRANSFER-README.md) adds bounded target pairs
+and explicit approval without copying masks. Deep opaque reflections, same-colour foreground ambiguity,
 finite solver limitations and all numerical/photographic acceptance from the
 [parent implementation](README.md) remain explicit.

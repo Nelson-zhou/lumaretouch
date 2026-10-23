@@ -113,10 +113,14 @@ whole-ID-background derived transfer. A single transfer cannot contain both
 whole-ID and spill-only scopes because both would own these scalars. Scope undo
 freezes all ID dependencies but restores only the target's spill subrecipe/schema.
 Preset apply requires its frozen preflight, and batch requires per-target frozen
-preflight and source proofs. These transfer reviews concern parameters and
-ownership, not rendered spill previews for every target. Parked target numerical
+preflight and source proofs. The initial transfer reviews concerned parameters and
+ownership, not rendered spill previews for every target. See the source-only
+[per-target visual continuation](TRANSFER-README.md) for the new dedicated
+spill review route and explicit whole-ID guard. Parked target numerical
 fields are recalculated from their own source and matte when activated/exported;
-no claim is made that preflight rendered or visually approved every parked photo.
+the initial snapshot did not render or visually approve every parked photo.
+The continuation renders every eligible target within its explicit eight-target
+review bound, but runtime and photographic acceptance remain UNRUN.
 
 ## Explicit limitations and UNRUN acceptance
 

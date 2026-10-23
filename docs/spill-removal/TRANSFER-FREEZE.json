@@ -1,0 +1,232 @@
+{
+  "baseline": "8c110e464c21224b4bcc95e667ed92b63b1dc66f",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Dedicated spill scalar transfer with per-target full-stack before/after visual review, exact acknowledgment, immutable ownership and verified apply rollback; wider whole-ID spill transfer explicitly refused. Original-shadow requirement and primary research only, no extraction implementation.",
+  "files": [
+    {
+      "path": "docs/original-shadow/REQUIREMENT-AND-RESEARCH.md",
+      "sha256": "6420da41910e0f957c705fd73850bbf0c7e95bd0d8903a3f796a13a5c9a0542c",
+      "bytes": 4729
+    },
+    {
+      "path": "docs/spill-removal/PAINT-README.md",
+      "sha256": "a624e5784c61d3637eef6c5b55ed5901099ad56c7f36f30b927273269a58d804",
+      "bytes": 5662
+    },
+    {
+      "path": "docs/spill-removal/README.md",
+      "sha256": "7a288c91622ad6a870da1b79ed3daa5023a5254f1abe27f1624dcc1ceb76c77f",
+      "bytes": 11647
+    },
+    {
+      "path": "docs/spill-removal/TRANSFER-README.md",
+      "sha256": "051a615bcb1cb2b95b67383491efe295c2feeff9e285296689d8130296a012be",
+      "bytes": 7181
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight.py",
+      "sha256": "cb70b0e4e41e908e5ba4ead69c3bffcdaa865e1def44475ba554972d0d506cde",
+      "bytes": 7600
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight_controller.py",
+      "sha256": "3902dccdaa777bf1e64377ce8b4ffd439dc767682a80206eced378e0662ae70b",
+      "bytes": 30916
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "435316406a23e1686c5c4b3b549c4bfd7ea5fd6f3dc77a2ac0932ee888202f94",
+      "bytes": 36881
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_scope.py",
+      "sha256": "4a1160f593061e234c34e26fddceb3308a20e57b6087dab6967a68e907982be4",
+      "bytes": 4235
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_preset_review.py",
+      "sha256": "d78b8cdf6a69d5588b2ed61e5a8f98b05e89096c32d40e01cf89de0a9f3b39cd",
+      "bytes": 11354
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "sha256": "8f12c6a3226f3d69ec731cb2463efb992e3558962ae863bafb605a9b768661c6",
+      "bytes": 24701
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_transaction.py",
+      "sha256": "eba072d78b3ddea9f6a6d850aaf0d5f74a9cf7bd2a5fec1205fb0094574770a6",
+      "bytes": 1462
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "adafc3b0dccbe03fc43c40fb6d1d22930f01b675f3d1570845fa8eae0014ed43",
+      "bytes": 44223
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_transfer_review.py",
+      "sha256": "f63ce8bb884097caa21243d746c5fa2c0bafbf36f89390ab88fa7d6c35fabdc9",
+      "bytes": 13241
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "096a5c4721de5837a3726b93a770df7d1ae6ea62a54a238e93669111fa24e463",
+      "bytes": 6546
+    },
+    {
+      "path": "engine/tests/test_spill_batch_visual_unrun.py",
+      "sha256": "a2acc58012f12c87481f27d2f4cdecf049984a1f254ddbce3acc45ebdb7e44d7",
+      "bytes": 19998
+    },
+    {
+      "path": "engine/tests/test_spill_preset_visual_unrun.py",
+      "sha256": "41e322b78d38df8cc93fc21883630b633e7b5b118c72dcac872e0682071ab0a5",
+      "bytes": 20951
+    },
+    {
+      "path": "engine/tests/test_spill_transfer_review_unrun.py",
+      "sha256": "383a5178afb55660f586962a4e165ab363c64026123238a8905ff95428872107",
+      "bytes": 22537
+    },
+    {
+      "path": "engine/tests/test_spill_transfer_wiring_unrun.py",
+      "sha256": "c9b2418986434b9cd6c78d7bcb063e8426f27dc8c81a699b42277a61616851e5",
+      "bytes": 25637
+    },
+    {
+      "path": "ui/package.json",
+      "sha256": "d5d297a8a3d951917af2fc6bac63be8d1f9a88eb14ae555a4e1efda33f7c26b3",
+      "bytes": 1872
+    },
+    {
+      "path": "ui/src-tauri/Cargo.lock",
+      "sha256": "f70c0bc35155689c2769d71bbc0e2327353df7086bef83a7c164fd1eb783653b",
+      "bytes": 108416
+    },
+    {
+      "path": "ui/src-tauri/Cargo.toml",
+      "sha256": "82fe6d64db99ff69dff723b38f75d4f0fa904715c29d81946e4cf8d51631352b",
+      "bytes": 949
+    },
+    {
+      "path": "ui/src-tauri/src/batch_api.rs",
+      "sha256": "2f7ade6573dd7ce0fe993f4cb3827cb696ecb3e6b91de7b4352692650c143143",
+      "bytes": 4376
+    },
+    {
+      "path": "ui/src-tauri/src/batch_host.rs",
+      "sha256": "ed2f492786998c590cf52a4c9b180159a3d10690560d4bd541fd556aea591638",
+      "bytes": 12278
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "eb680768eaed17c40d59a77b37af903790b3f206059f5abbcc7de0e389cd8acf",
+      "bytes": 101329
+    },
+    {
+      "path": "ui/src-tauri/src/preset_api.rs",
+      "sha256": "31c4057bc9a574ccfa1ced53e54ac5dac48f145f984e7e020e2897a455991cb5",
+      "bytes": 4244
+    },
+    {
+      "path": "ui/src-tauri/src/preset_host.rs",
+      "sha256": "6bc90cd885ea3b5d3957c71b870be0f5af776efc130d86b8304cfc895ed8296b",
+      "bytes": 17806
+    },
+    {
+      "path": "ui/src-tauri/src/spill_transfer_protocol.rs",
+      "sha256": "a176452354a73fc024ce9d76b8f6edd2e9abf584cea7aeebcf3d84807b33c577",
+      "bytes": 8680
+    },
+    {
+      "path": "ui/src-tauri/src/spill_transfer_protocol_tests.rs",
+      "sha256": "0630b0342f702785e63b64857b03dcf192f25b3ea5fc7bd44c61be6ff6c02dd2",
+      "bytes": 10104
+    },
+    {
+      "path": "ui/src/batch/BatchReview.tsx",
+      "sha256": "618b801728ce4e22b8f474726e3d41ef5c728a6dedadc1cf9f170b6795498fd5",
+      "bytes": 10315
+    },
+    {
+      "path": "ui/src/batch/batchWorkflow.ts",
+      "sha256": "e1cab96a2595183792714c8485309d2b7cc837ce26d44f7764b8dc1b9b301bf6",
+      "bytes": 21413
+    },
+    {
+      "path": "ui/src/batch/spillBatchWorkflow.unrun.test.ts",
+      "sha256": "9b901ea0b36f8056d88bad1ee85119ee2945d9e06c0b5d9e799efc44dcc68eac",
+      "bytes": 9018
+    },
+    {
+      "path": "ui/src/batch/useBatchWorkflow.ts",
+      "sha256": "9db11100af5875e822505c0ccb912c3a7f6fcca373b008aefb273d01504caf35",
+      "bytes": 1587
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "cda876a66837da6a7cb932f1a337a47360f20c76804736707cb8a5a28b80704a",
+      "bytes": 99640
+    },
+    {
+      "path": "ui/src/presets/PresetPanel.tsx",
+      "sha256": "cee25de1bb84d0b3edf57730799f6f495d33dbe8fa4a69f10a723f0c07fbea04",
+      "bytes": 10672
+    },
+    {
+      "path": "ui/src/presets/presetWorkflow.test.ts",
+      "sha256": "43f5bc3b7e1b515a363c67f5b31322fa5bf66b66bdd7d3ca7c53750f5793c22a",
+      "bytes": 19017
+    },
+    {
+      "path": "ui/src/presets/presetWorkflow.ts",
+      "sha256": "831f908a4aa31b5f25e95016a35c6b729c199195b6b63f12b4832dcc8cd33c74",
+      "bytes": 16442
+    },
+    {
+      "path": "ui/src/presets/usePresetWorkflow.ts",
+      "sha256": "2cf8a78792772e044edb1bd8133d06af4ce7cd188d317892fb437fbab5805b30",
+      "bytes": 12331
+    },
+    {
+      "path": "ui/src/spillRemoval/SpillPixelReview.tsx",
+      "sha256": "76beade4dd4e3567090b6f785c142a0bde5a012092750c4ff387b86ddb5d8256",
+      "bytes": 2916
+    },
+    {
+      "path": "ui/src/spillRemoval/SpillTransferReview.tsx",
+      "sha256": "ccf48db4fbd1fe631d0de59818e4eedbbb77c953ac2a350cf912d46430d3538d",
+      "bytes": 4646
+    },
+    {
+      "path": "ui/src/spillRemoval/transferModel.ts",
+      "sha256": "f3c4c3177b11edf96318c7a13fa8e327b70913839f43e7ca5f3aac3c3126d2a0",
+      "bytes": 6695
+    },
+    {
+      "path": "ui/src/spillRemoval/transferModel.unrun.test.ts",
+      "sha256": "a913e6d28e41238c0950488401d4ff90af592f765a4995c95327122c1147461b",
+      "bytes": 8132
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 988,
+    "package_json": "parsed",
+    "cargo_toml_and_lock": "parsed",
+    "git_diff_check": "clean",
+    "line_counts": {
+      "ui/src/App.tsx": 2122,
+      "ui/src-tauri/src/main.rs": 2041,
+      "engine/src/lumaretouch_engine/server.py": 6971
+    }
+  },
+  "acceptance": "All numerical, photographic, native, integration, export and history acceptance UNRUN. No product execution/imports, tests, builds, compiler, typecheck, inference or downloads.",
+  "remaining": [
+    "At most eight total targets; display previews at most 256 pixels, not 100 percent edge inspection; large-batch pagination and cancellation unfinished.",
+    "Mixed managed-face candidate graph changes and replay-unstable legacy deform mirrors explicitly refused; live people binding must already be stable.",
+    "Whole-ID changes carrying active or changed spill refused pending wider visual integration.",
+    "Generic batch group ledger session-only; group undo/redo lacks broader post-replay full-state/people verification.",
+    "Deep opaque reflection, same-colour uncertainty, alpha/HDR and photographic quality limits unchanged.",
+    "Original-shadow extraction and seven mapped controls remain unimplemented."
+  ]
+}
