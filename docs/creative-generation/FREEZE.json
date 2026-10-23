@@ -1,0 +1,94 @@
+{
+  "baseline": "d62cccb3d4d28a230823391ae3dbe80fcc235e26",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN_CAPABILITY_UNAVAILABLE",
+  "scope": "Isolated genuine Kandinsky optional backend and protected Rust source-patch staging; no live UI/history integration; upstream model metadata/runtime provenance admission unfinished.",
+  "files": [
+    {
+      "path": "core/creative_generation_patch/Cargo.toml",
+      "sha256": "c5d4b11ce0244607edc92365a330db76aaaa16880a9b8c1197c5972243466fda",
+      "bytes": 184
+    },
+    {
+      "path": "core/creative_generation_patch/README.md",
+      "sha256": "683b8edfb288cc8699ae519690c5defc5fb2e35e2246ae5f4a7a83681babb376",
+      "bytes": 7093
+    },
+    {
+      "path": "core/creative_generation_patch/lib.rs",
+      "sha256": "cdc40ea9517bb35bfafce5bb3482fd655d9e3114776d79f8ffa4953e51f790f1",
+      "bytes": 12110
+    },
+    {
+      "path": "docs/creative-generation/IMPLEMENTATION.md",
+      "sha256": "738b9cf3c8e72462674b2a8ee5cb5625d728087f9461e6952f390da8a5eee7a3",
+      "bytes": 9239
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_generation_backend.py",
+      "sha256": "227d81379f5ec1927a0a13cdebf9ae79b494770a192f502943df43e7cda38808",
+      "bytes": 11497
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_generation_manifest.py",
+      "sha256": "0de2ff94583ba0907d32f86b8dcf2f7d5bef6e84c1c1667f8e31f815ea3a09f9",
+      "bytes": 3634
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_generation_pack.py",
+      "sha256": "8ec1308d1dea582d6b50b9e24517aabb5742943fb4ab1b550833aafe3d1637b3",
+      "bytes": 8284
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_generation_patch_native.py",
+      "sha256": "8b16e9c8be00554405afaf3067b9e667990019373a617af298e037bf968d74ac",
+      "bytes": 7730
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_generation_stage.py",
+      "sha256": "f7f1fd96f098108c8049d440c444d1bf210eb44c2b383ea2765434670dbceec0",
+      "bytes": 5273
+    },
+    {
+      "path": "engine/tests/test_creative_generation_backend_unrun.py",
+      "sha256": "e850d4dbdf1d384ef2e04cbbcaf5e57fba08bf232147b63756a2b2fbc818b8ea",
+      "bytes": 4998
+    },
+    {
+      "path": "engine/tests/test_creative_generation_pack_unrun.py",
+      "sha256": "8e05338e0b0281242f1cbca4efe6f2c8e45c0a9a6128dcdd2fed6f705b037a00",
+      "bytes": 4660
+    },
+    {
+      "path": "engine/tests/test_creative_generation_patch_native_unrun.py",
+      "sha256": "d7f4fbe31b26641167d68be6f4fd1fdcedd15b7650bf6d5cedb07f9574e5d0f8",
+      "bytes": 3408
+    },
+    {
+      "path": "engine/tests/test_creative_generation_stage_unrun.py",
+      "sha256": "61c1460f98303f3c92fbc31eeef73fe2b30109f28c6f9b6826c5a6d00ea0f563",
+      "bytes": 3062
+    },
+    {
+      "path": "packaging/build-creative-generation-patch.sh",
+      "sha256": "4fdd22514b52755c0a1f58c01d2343ba2632f99bff5a5a8ce28404045cd7ce88",
+      "bytes": 388
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 9,
+    "toml_files": 1,
+    "new_file_trailing_whitespace": "none",
+    "App_lines": 2122,
+    "main_lines": 2042,
+    "server_lines": 6971
+  },
+  "acceptance": "ALL runtime, build, inference, numerical, packaging, memory, latency and photographic checks UNRUN",
+  "remaining": [
+    "Official model config/tokenizer hashes, exact sizes and revision membership",
+    "Authenticated runtime-distribution admission and compatibility pins",
+    "Candidate schema, retention, project/history and pending-job UI integration",
+    "Actual per-target source-bound selection/protection review receipts",
+    "Automatic passerby proposal, batch generation, general large-ROI synthesis",
+    "Transparent/HDR generation and retouch return unsupported"
+  ]
+}
