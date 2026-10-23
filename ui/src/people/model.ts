@@ -53,6 +53,7 @@ export type PeopleView = {
   editing_overrides: Record<string, Record<string, ParameterValue>>;
   legacy_unresolved?: {id: string; legacy_key: string; intent: unknown; bindable: boolean}[];
   eyeliner?: import('../eyeliner/model').EyelinerView | null;
+  eyelash?: import('../eyelash/model').EyelashView | null;
   brow_makeup?: import('../browMakeup/model').BrowMakeupView | null;
   lipstick?: import('../lipstick/model').LipstickView | null;
   blush_makeup?: import('../blushMakeup/model').BlushView | null;
@@ -60,7 +61,7 @@ export type PeopleView = {
   analysis_notice?: string; refusals?: {face_instance_id: string; reason: string}[];
 }
 export type PeopleAction = PeopleEnvelope & {
-  action: 'patch' | 'link' | 'group' | 'face_status' | 'manual_add' | 'create_person' | 'select' | 'target' | 'analyse_face' | 'resolve_legacy' | 'eye_light_reference' | 'eye_light_review' | 'blush_palette' | 'blush_reference' | 'blush_review' | 'lipstick_palette' | 'lipstick_reference' | 'lipstick_review' | 'eyeliner_palette' | 'eyeliner_reference' | 'eyeliner_review' | 'brow_makeup_palette' | 'brow_makeup_reference' | 'brow_makeup_review';
+  action: 'patch' | 'link' | 'group' | 'face_status' | 'manual_add' | 'create_person' | 'select' | 'target' | 'analyse_face' | 'resolve_legacy' | 'eye_light_reference' | 'eye_light_review' | 'blush_palette' | 'blush_reference' | 'blush_review' | 'lipstick_palette' | 'lipstick_reference' | 'lipstick_review' | 'eyeliner_palette' | 'eyeliner_reference' | 'eyeliner_review' | 'eyelash_palette' | 'eyelash_reference' | 'eyelash_review' | 'brow_makeup_palette' | 'brow_makeup_reference' | 'brow_makeup_review';
   payload: Record<string, unknown>;
 }
 export type PeopleResult = {
@@ -101,7 +102,7 @@ export function operationLabel(id: string): string {
     'lnx.facial_wrinkles.v1': '面部细纹', 'lnx.lip_makeup.v1': '唇妆',
     'lnx.brow_shape.v1': '眉形', 'lnx.nose_shape.v1': '鼻形',
     'lnx.eye_shape.v1': '眼形', 'lnx.mouth_shape.v1': '嘴形',
-    'lnx.hair_colour.v1': '发色与已有高光光泽', 'lnx.eye_light.v1': '眼神光素材', 'lnx.blush_makeup.v1': '腮红', 'lnx.lipstick.v1': '口红', 'lnx.eyeliner.v1': '眼线', 'lnx.brow_makeup.v1': '眉妆'} as Record<string, string>)[id] ?? id;
+    'lnx.hair_colour.v1': '发色与已有高光光泽', 'lnx.eye_light.v1': '眼神光素材', 'lnx.blush_makeup.v1': '腮红', 'lnx.lipstick.v1': '口红', 'lnx.eyeliner.v1': '眼线', 'lnx.eyelash.v1': '睫毛（上下/左右独立）', 'lnx.brow_makeup.v1': '眉妆'} as Record<string, string>)[id] ?? id;
 }
 export function bindingKey(binding: PeopleBinding): string {
   return `${binding.document_epoch}:${binding.document_id}:${binding.asset_sha256}`;

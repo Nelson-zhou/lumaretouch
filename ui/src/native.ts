@@ -950,6 +950,7 @@ export interface EngineStatus {
     blush_makeup_protocol?: number;
     lipstick_protocol?: number;
     eyeliner_protocol?: number;
+    eyelash_protocol?: number;
     brow_makeup_protocol?: number;
     brow_shape_protocol?: number;
     nose_shape_protocol?: number;

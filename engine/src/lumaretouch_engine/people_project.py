@@ -8,6 +8,9 @@ def validate_records(value):
         from .eyeliner_project import check as check_eyeliner_library
         for name in ('eyeliner_library','_eyeliner_library'):
             if name in value:check_eyeliner_library(value[name])
+        from .eyelash_project import check as check_eyelash_library
+        for name in ('eyelash_library','_eyelash_library'):
+            if name in value:check_eyelash_library(value[name])
         from .brow_makeup_project import check as check_brow_makeup_library
         for name in ('brow_makeup_library','_brow_makeup_library'):
             if name in value:check_brow_makeup_library(value[name])
@@ -26,6 +29,8 @@ def validate_records(value):
                 validate_lipstick_graph(value[key])
                 from .eyeliner_state import validate_graph as validate_eyeliner_graph
                 validate_eyeliner_graph(value[key])
+                from .eyelash_state import validate_graph as validate_eyelash_graph
+                validate_eyelash_graph(value[key])
                 from .brow_makeup_state import validate_graph as validate_brow_makeup_graph
                 validate_brow_makeup_graph(value[key])
         if 'people_support_assets' in value:
@@ -39,6 +44,8 @@ def validate_records(value):
             validate_lipstick_support(value)
             from .eyeliner_support import validate_project as validate_eyeliner_support
             validate_eyeliner_support(value)
+            from .eyelash_support import validate_project as validate_eyelash_support
+            validate_eyelash_support(value)
             from .brow_makeup_support import validate_project as validate_brow_makeup_support
             validate_brow_makeup_support(value)
         if 'people_landmarks' in value:

@@ -1,0 +1,238 @@
+{
+  "status": "AUTHORED_UNRUN",
+  "source": "https://www.pixcakeai.com/guide/32471",
+  "requirements": {
+    "family": "LNX-REF-PC-32471-C-a985bd90b0",
+    "recommended": "LNX-REF-PC-32471-C-97176ce30b",
+    "picker": "LNX-REF-PC-32471-C-6188d1c325",
+    "rgb": "LNX-REF-PC-32471-C-cc564a6b8e",
+    "hex": "LNX-REF-PC-32471-C-7379840b33",
+    "saved": "LNX-REF-PC-32471-C-18779c33fa"
+  },
+  "cases": [
+    {
+      "case_id": "EYELASH-001",
+      "name": "four_parts",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Four independently restored part recipes; changing each unlocked part changes only its own leaves.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-002",
+      "name": "locks_lr",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "LR lock updates same lid on both eyes atomically; lower/upper remains independent when UD is unlocked.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-003",
+      "name": "locks_ud",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "UD lock updates both lids on same eye atomically; other eye independent when LR is unlocked.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-004",
+      "name": "locks_all",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Both locks update all four; partial linked payload rejects with no graph/history/image publication.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-005",
+      "name": "relink",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Relink chooses current side/lid consistently for every newly linked pair; no mismatch or silent loss.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-006",
+      "name": "catalogue",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "14 distinct pinned original profiles; each visually accepted on upper/lower left/right at proxy and source resolution.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-007",
+      "name": "neutral",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "All zero strengths produce bit-exact no change.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-008",
+      "name": "source_binding",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Source hash, landmark hash, face instance/revision mismatch rejects review/render.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-009",
+      "name": "root_extension",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "No lash without reviewed real root AND separate reviewed full extension zone; eyeliner review cannot authorize it.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-010",
+      "name": "unseen",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Profile/closed/cropped/tiny/degenerate/hidden portions are not reconstructed; active unsupported part rejects.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-011",
+      "name": "occluders",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Glasses frames/lenses reflection, hair, hands and other faces remain unchanged outside reviewed/exclusion ownership.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-012",
+      "name": "dense_sampling",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Thin occluder across fibre centreline rejects fibre; render mask preserves all forbidden pixels including antialias footprint.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-013",
+      "name": "atomic_render",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Failure on fourth part leaves earlier three unpublished; repeat across multi-person targets.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-014",
+      "name": "float_render",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Working-sRGB float32 delta and deterministic native output; no 8-bit intermediate.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-015",
+      "name": "scale_rotation",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Observed roots track rotated faces and native source export; masks rerasterized from normalized vectors.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-016",
+      "name": "recovery",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Canonical recovery removes only eyelash contribution and restores through undo/redo; no cloned owner.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-017",
+      "name": "history",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Edit/review/palette each follow one canonical correlated receipt and undo/redo; rejected mutation leaves previous state.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-018",
+      "name": "project",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Roundtrip current and dormant four-part recipes, locks, palette digest and historical support; tampering rejects before install.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-019",
+      "name": "preset_batch",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Only intent transfers; every batch target must independently validate person, root/extension evidence; no source masks copied.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-020",
+      "name": "colour_recommendations",
+      "requirement_id": "LNX-REF-PC-32471-C-97176ce30b",
+      "expected": "Every profile offers its own recommended group and selection updates the exact linked component.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-021",
+      "name": "picker_frame",
+      "requirement_id": "LNX-REF-PC-32471-C-6188d1c325",
+      "expected": "Accept only PRESENTED proxy working-sRGB float frame matching capture generation, document epoch and sample descriptor.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-022",
+      "name": "picker_race",
+      "requirement_id": "LNX-REF-PC-32471-C-6188d1c325",
+      "expected": "Document/target/revision change, cancellation, competing owner, stale click or duplicate apply cannot publish colour.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-023",
+      "name": "rgb",
+      "requirement_id": "LNX-REF-PC-32471-C-cc564a6b8e",
+      "expected": "Integer 0–255 RGB only; bool/fraction/NaN/overflow refused and equivalent HEX matches.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-024",
+      "name": "hex",
+      "requirement_id": "LNX-REF-PC-32471-C-7379840b33",
+      "expected": "Only six-digit #RRGGBB accepted; normalized uppercase.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-025",
+      "name": "six_favourites",
+      "requirement_id": "LNX-REF-PC-32471-C-18779c33fa",
+      "expected": "Save six unique colours, reject seventh without replacing any; duplicate idempotent; remove/re-add and project history work.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-026",
+      "name": "native_budget",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Missing native/ABI mismatch/nonfinite/ROI budget errors reject visibly; no download, inference, compiler or fallback.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-027",
+      "name": "no_change",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "Exact same target colour or zero coverage reports no measurable change, never fabricated application success.",
+      "status": "UNRUN",
+      "evidence": []
+    },
+    {
+      "case_id": "EYELASH-028",
+      "name": "ui_review",
+      "requirement_id": "LNX-REF-PC-32471-C-a985bd90b0",
+      "expected": "64 point records per zone, subtract edits, per-part confirmations, correct original-image source/size and context reset; review no cross-point connection.",
+      "status": "UNRUN",
+      "evidence": []
+    }
+  ]
+}

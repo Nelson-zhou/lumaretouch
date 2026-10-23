@@ -151,3 +151,11 @@ Lip makeup three-control enhancement
   RapidRetouch 5e9d9c1d2770ff29d11a3879e5a90aad5887e028 mouth tests were compared;
   its mouth.py implementation was unavailable and was not copied or reviewed.
   Source, license and limitations ship in third_party/lip_makeup/.
+
+Original eyelash materials
+  core/eyelash/eyelash.rs and eyelash_patterns.json define original procedural
+  tapered fibres, GPL-3.0-or-later; no PixCake art or model weights are included.
+  Observed eyelid index topology uses the existing MediaPipe Face Mesh mapping
+  (The MediaPipe Authors, Apache-2.0); existing model licensing remains applicable.
+  Source, licence, MediaPipe licence and integration limits ship together in
+  lumaretouch_engine/third_party/eyelash/. Runtime/visual acceptance is UNRUN.

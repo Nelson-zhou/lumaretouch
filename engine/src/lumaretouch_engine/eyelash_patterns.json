@@ -1,0 +1,216 @@
+{
+  "version": 1,
+  "provenance": "Original procedural lash fibres; no commercial assets",
+  "patterns": [
+    {
+      "id": "airy",
+      "label": "轻羽",
+      "count": 18,
+      "length": 0.16,
+      "curl": 0.07,
+      "width": 0.7,
+      "sweep": 0,
+      "variation": 0.08,
+      "recommended": [
+        "#28232A",
+        "#49372F",
+        "#655046"
+      ]
+    },
+    {
+      "id": "natural",
+      "label": "自然",
+      "count": 24,
+      "length": 0.19,
+      "curl": 0.08,
+      "width": 0.75,
+      "sweep": 0,
+      "variation": 0.115,
+      "recommended": [
+        "#201E24",
+        "#443543",
+        "#57433A"
+      ]
+    },
+    {
+      "id": "long",
+      "label": "纤长",
+      "count": 25,
+      "length": 0.27,
+      "curl": 0.1,
+      "width": 0.7,
+      "sweep": 0,
+      "variation": 0.15000000000000002,
+      "recommended": [
+        "#28232A",
+        "#49372F",
+        "#655046"
+      ]
+    },
+    {
+      "id": "dense",
+      "label": "浓密",
+      "count": 38,
+      "length": 0.22,
+      "curl": 0.08,
+      "width": 0.95,
+      "sweep": 0,
+      "variation": 0.185,
+      "recommended": [
+        "#201E24",
+        "#443543",
+        "#57433A"
+      ]
+    },
+    {
+      "id": "curl",
+      "label": "卷翘",
+      "count": 26,
+      "length": 0.24,
+      "curl": 0.2,
+      "width": 0.8,
+      "sweep": 0,
+      "variation": 0.08,
+      "recommended": [
+        "#28232A",
+        "#49372F",
+        "#655046"
+      ]
+    },
+    {
+      "id": "outer",
+      "label": "眼尾延伸",
+      "count": 26,
+      "length": 0.22,
+      "curl": 0.1,
+      "width": 0.8,
+      "sweep": 0.65,
+      "variation": 0.115,
+      "recommended": [
+        "#201E24",
+        "#443543",
+        "#57433A"
+      ]
+    },
+    {
+      "id": "round",
+      "label": "圆弧",
+      "count": 28,
+      "length": 0.24,
+      "curl": 0.08,
+      "width": 0.85,
+      "sweep": -0.2,
+      "variation": 0.15000000000000002,
+      "recommended": [
+        "#28232A",
+        "#49372F",
+        "#655046"
+      ]
+    },
+    {
+      "id": "wispy",
+      "label": "轻束",
+      "count": 22,
+      "length": 0.26,
+      "curl": 0.12,
+      "width": 0.7,
+      "sweep": 0.2,
+      "variation": 0.185,
+      "recommended": [
+        "#201E24",
+        "#443543",
+        "#57433A"
+      ]
+    },
+    {
+      "id": "fan",
+      "label": "扇形",
+      "count": 32,
+      "length": 0.22,
+      "curl": 0.22,
+      "width": 0.75,
+      "sweep": 0,
+      "variation": 0.08,
+      "recommended": [
+        "#28232A",
+        "#49372F",
+        "#655046"
+      ]
+    },
+    {
+      "id": "petal",
+      "label": "花瓣",
+      "count": 24,
+      "length": 0.23,
+      "curl": 0.14,
+      "width": 0.9,
+      "sweep": -0.3,
+      "variation": 0.115,
+      "recommended": [
+        "#201E24",
+        "#443543",
+        "#57433A"
+      ]
+    },
+    {
+      "id": "silk",
+      "label": "丝绒",
+      "count": 36,
+      "length": 0.18,
+      "curl": 0.07,
+      "width": 0.65,
+      "sweep": 0.1,
+      "variation": 0.15000000000000002,
+      "recommended": [
+        "#28232A",
+        "#49372F",
+        "#655046"
+      ]
+    },
+    {
+      "id": "defined",
+      "label": "清晰",
+      "count": 20,
+      "length": 0.23,
+      "curl": 0.06,
+      "width": 1.0,
+      "sweep": 0.3,
+      "variation": 0.185,
+      "recommended": [
+        "#201E24",
+        "#443543",
+        "#57433A"
+      ]
+    },
+    {
+      "id": "soft",
+      "label": "柔雾",
+      "count": 30,
+      "length": 0.17,
+      "curl": 0.1,
+      "width": 0.55,
+      "sweep": 0,
+      "variation": 0.08,
+      "recommended": [
+        "#28232A",
+        "#49372F",
+        "#655046"
+      ]
+    },
+    {
+      "id": "dramatic",
+      "label": "舞台",
+      "count": 40,
+      "length": 0.29,
+      "curl": 0.18,
+      "width": 1.1,
+      "sweep": 0.45,
+      "variation": 0.115,
+      "recommended": [
+        "#201E24",
+        "#443543",
+        "#57433A"
+      ]
+    }
+  ]
+}

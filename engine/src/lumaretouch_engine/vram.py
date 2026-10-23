@@ -545,6 +545,7 @@ class PreviewPipeline:
             out=PEOPLE_PIPE.source_effect(self,'blush_makeup',out)
             out=PEOPLE_PIPE.source_effect(self,'lipstick',out)
             out=PEOPLE_PIPE.source_effect(self,'eyeliner',out)
+            out=PEOPLE_PIPE.source_effect(self,'eyelash',out)
             out=PEOPLE_PIPE.source_effect(self,'brow_makeup',out)
             out=PEOPLE_PIPE.source_effect(self,'hair_colour',out)
             out=PEOPLE_PIPE.source_effect(self,'eye_light',out)
