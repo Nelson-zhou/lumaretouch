@@ -83,6 +83,8 @@ from .body_pose_host import BodyPoseHostMixin
 from .hair_colour_controller import HairColourHostMixin, MUTATIONS as HAIR_MUTATIONS
 from .people_host import PeopleHostMixin
 from .workflow_ports import WorkflowPortsMixin
+from . import library_query_host as LQ
+from .library_query_metadata import capture_decoded as library_capture_decoded, capture_file_identity as library_file_identity
 from .sample_library_host import SampleLibraryHostMixin
 from .semantic_colour_host import SemanticColourHostMixin
 from . import semantic_colour_state as SCS, semantic_colour_runtime as SCR
@@ -451,7 +453,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
               "export_bits": {"8": list(FORMATS), "16": ["tif", "tiff"]},
               # M5-a 底片条：行程与上限同样由引擎说。前端自己刻一份“长边 160”或
               # “最多 512 张”，下一轮改上限时就是漏改的那一处（它会静默把图截小）。
-              "session_actions": ["scan", "add", "select", "state", "thumbs", "stop_thumbs"],
+              "session_actions": ["scan", "add", "select", "state", "thumbs", "stop_thumbs", "query"],
               # 形变（M2-b / PORTRAIT-004）的 action 与作用层名单同样由引擎说：命令层的
               # 拒绝文案里承诺了“名单在 ready 里”，这一格不写实就是假承诺。前端自己刻
               # 一份“set/clear”就是下一轮加 inherit 时漏改的那一处（它会撞未知 action）
@@ -1200,6 +1202,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                 # 不随工程文件走（理由同 _precompute：是算出来的，不是用户画的）。
                 "pick": None, "pick_error": None}
         self._document_versions().version(row)
+        library_file_identity(row)
         return row
 
     def _remember_current(self) -> None:
@@ -1287,7 +1290,8 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                 guard=lambda action: self._history_guard(action),
                 remember_current=lambda: self._remember_current(),
                 status=lambda: self.doc_state(),
-                mark_dirty=lambda: setattr(self, "_project_dirty", True)),
+                mark_dirty=lambda: setattr(self, "_project_dirty", True),
+                note_edit=lambda: LQ.note_edit(self)),
                 emit=lambda event: emit(event), clock=lambda: monotonic_ns(),
                 limit=self.HISTORY_MAX, group_ms=self.HISTORY_GROUP_MS)
             self._live_history = controller
@@ -1455,6 +1459,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
         pipe = self._attach_pipeline(d.rgb)      # 按引擎侧字段重放图层（见 _attach_pipeline）
         self._image_loaded = True
         optics_row = self._docs[self._doc_index]
+        library_capture_decoded(optics_row, d)
         OPR.import_metadata(self,d,new=bool(optics_row.pop('_optics_new_import',False)))
         if strength is not None:
             self._fence_current_document()
@@ -1676,7 +1681,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
 
     # ------------------------------------------------------------ M5-a 底片条
     SESSION_KEYS = {"cmd", "action", "dir", "paths", "index", "limit", "edge",
-                    "quality", "thumbs"}
+                    "quality", "thumbs", "query", "request_id", "session_id", "selected_path"}
     # 每解这么多张让一次 GIL：缩略图解码是纯 CPU 活，而帧通路每秒要 60 次调度。
     # 该不该让、让多少不是拍出来的，是 m5-filmstrip-bench 那两臂量出来的。
     THUMB_BATCH = 4
@@ -1692,7 +1697,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
         用户以为第一格就是母档质量，调完发现不是，那比不标更坏。"""
         st = self._capture_state() if (i == self._doc_index and self._image_loaded) else d["state"]
         th = d["thumb"]
-        return {"index": i, "path": d["path"], "name": d["name"],
+        row = {"index": i, "path": d["path"], "name": d["name"],
                 "bytes_on_disk": d["bytes_on_disk"], "w": d["w"], "h": d["h"],
                 "src_w": d["src_w"], "src_h": d["src_h"],
                 "loaded": (i == self._doc_index and self._image_loaded),
@@ -1712,6 +1717,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                 # 挑图那一格（PICK-001）。徽章只能读引擎这份：前端自己按缩略图亮度判断
                 # 「这张糊不糊」就是又造一个不可复算的出处
                 "pick": d.get("pick"), "pick_error": d.get("pick_error")}
+        return LQ.enrich_row(self, i, d, row, st)
 
 
 
@@ -1729,6 +1735,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
         return self._batch_controller().summary()
 
     def emit_session_state(self, **extra) -> None:
+        rows = [self._doc_row_event(i, d) for i, d in enumerate(self._docs)]
         emit({"event": "session_state", "index": self._doc_index, "count": len(self._docs),
               "current": self._doc_path,
               # 当前文档的完整状态（live 取的，不是格子里存的快照）。宿主拿它重摆滑块，
@@ -1742,7 +1749,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
               # 预设清单与批量同步台账：UI 的下拉项与“撤销同步”按钮只能读引擎报的这两份
               #（前端自己扫目录、自己记 batch_id 就是两个会漂的地方）。
               "presets": self._preset_state(), "sync": self._sync_state(),
-              "docs": [self._doc_row_event(i, d) for i, d in enumerate(self._docs)], **extra})
+              "docs": rows, "library_query": LQ.query_state(self, rows), **extra})
 
     def _rows_from(self, paths: list) -> list:
         """把一份路径列表合成新的底片条，**保留已有格子的状态与缩略图**。
@@ -1854,6 +1861,10 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
             emit({"event": "error", "error": f"session 收到不认识的参数：{sorted(unknown)}"})
             return
         action = p.get("action", "state")
+        if action == "query":
+            LQ.set_query(self, p)
+            self.emit_session_state(view_only=True)
+            return
         if action == "scan":
             if "dir" not in p:
                 emit({"event": "error", "error": "session scan 需要 dir"})
@@ -1913,6 +1924,10 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                 return
             if not 0 <= idx < len(self._docs):
                 emit({"event": "error", "error": f"index={idx} 不在底片条里（共 {len(self._docs)} 格）"})
+                return
+            if ((p.get("session_id") is not None and p["session_id"] != LQ.session_id(self))
+                    or (p.get("selected_path") is not None and p["selected_path"] != self._docs[idx]["path"])):
+                emit({"event": "error", "error": "图库身份已变化，请刷新后重试选择"})
                 return
             if idx == self._doc_index and self._image_loaded:
                 # 重复点当前那一格不开新会话：白付一次解码与重建，而且会把未存快照的
@@ -6709,6 +6724,8 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
             if fn is None:
                 emit({"event": "error", "error": f"未知命令: {name}"})
                 return
+            if name == "session" and msg.get("action") == "query":
+                fn(msg); return  # View-only: do not fence or revoke any edit/capture owner.
             if name == "background" and msg.get("action") in ("id_state","id_sample"):
                 from .id_background_controller import controller
                 controller(self,emit).handle(msg); return

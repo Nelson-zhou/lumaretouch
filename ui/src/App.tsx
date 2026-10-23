@@ -1,3 +1,7 @@
+import {FilmstripGallery,LibraryGallery} from './libraryQuery/Gallery';
+import {LibraryQueryControls} from './libraryQuery/Controls';
+import {useLibraryQuery} from './libraryQuery/useLibraryQuery';
+import {ratingOf,flagOf} from './libraryQuery/model';
 import {IdBackgroundPanel} from './idBackground/IdBackgroundPanel';
 import {ExportColorSpace} from './components/ExportColorSpace';
 import {ExportMetadataOptions} from './components/ExportMetadataOptions';
@@ -278,7 +282,7 @@ export default function App() {
   // 底片条多选集（LNX-P0-BATCH / 图库批量化）：按 path 记，不按 index 记——
   // 重扫一次目录 index 会换而 path 不会
   const [sel, setSel] = useState<Set<string>>(new Set());
-  const selAnchor = useRef<number | null>(null);
+  const selAnchor = useRef<string | null>(null);
   const [batchTag, setBatchTag] = useState("");
   // 预设与批量同步（LNX-P0-PRESET / LNX-P0-BATCH）：清单、台账与上一笔的事实全部从
   // status.session 里读（引擎随 session_state 报），这里只记“界面上选中了哪一个”与
@@ -307,7 +311,6 @@ export default function App() {
   // 裁剪/旋转模态（P0 lnx.crop.v1）
   const [cropOpen, setCropOpen] = useState(false);
   // 图库的「已导出」：只认引擎 export_done 里真的写出去的那几张
-  const [exported, setExported] = useState<Set<string>>(new Set());
   // 对比：单视图 / 并排 / 卷帘；按住空格是单视图里的临时对比
   const [compareMode, setCompareMode] = useState<CompareMode>("single");
   const [swipe, setSwipe] = useState(0.5);
@@ -925,12 +928,30 @@ export default function App() {
     ? [status?.image?.src_w??0,status?.image?.src_h??0] : [0,0]);
   const inspectionKey=JSON.stringify([compareKey,status?.doc_rev,pid,inspectionRetry]);
 
+  const library=useLibraryQuery(strip,refreshStatus,`${status?.doc_rev??0}:${status?.export?.out_dir??''}:${status?.export?.total_ms??''}`);
+  const selectionSnapshot=useRef<{session:string;ids:Record<string,string>;trash:Record<string,boolean>}|null>(null);
+  useEffect(()=>{
+    const result=strip?.library_query;if(!result)return;
+    const previous=selectionSnapshot.current;
+    const trash=Object.fromEntries(strip.docs.map(d=>[d.path,d.trashed]));
+    setSel(old=>{const next=new Set([...old].filter(path=>previous?.session===result.session_id
+      &&previous.ids[path]===result.source_ids[path]&&!!result.source_ids[path]&&previous.trash[path]===trash[path]));
+      return next.size===old.size?old:next;});
+    if(previous?.session!==result.session_id||!result.paths.includes(selAnchor.current??''))selAnchor.current=null;
+    selectionSnapshot.current={session:result.session_id,ids:result.source_ids,trash};
+  },[strip]);
+  const libraryControls=<LibraryQueryControls query={library.query} onChange={library.change}
+    pending={library.pending||!library.supported} error={library.error} total={strip?.count??0}
+    visible={library.docs.length} selected={sel.size}
+    onSelectVisible={()=>setSel(prev=>new Set([...prev,...library.docs.map(d=>d.path)]))}
+    onClearSelection={()=>{setSel(new Set());selAnchor.current=null;}}/>;
+  async function cyclePick(d:SessionDoc){
+    const next=flagOf(d)==='unflagged'?'accepted':flagOf(d)==='accepted'?'rejected':'unflagged';
+    const tags=d.tags.filter(t=>!t.startsWith('flag:'));if(next!=='unflagged')tags.push(`flag:${next}`);
+    try{await runProject('tag',{doc:d.path,tags,label:d.label??''});await refreshStatus();}catch(e){setDragNote(String(e));}
+  }
   /** 底片条的评分/色标：落在工程记录的 tags/label 上（不碰原图）。
    *  评分用保留标签 `rating:N`；色标用 label（红/黄/绿/蓝/紫）。 */
-  const ratingOf = (d: SessionDoc) => {
-    const hit = (d.tags ?? []).find((x) => /^rating:[0-5]$/.test(x));
-    return hit ? Number(hit.slice(7)) : 0;
-  };
   async function setRating(d: SessionDoc, n: number) {
     const next = ratingOf(d) === n ? 0 : n;
     const tags = (d.tags ?? []).filter((x) => !x.startsWith("rating:"));
@@ -949,18 +970,6 @@ export default function App() {
       await refreshStatus();
     } catch (e) { setDragNote(String(e)); }
   }
-  const FLAG_COLOR: Record<string, string> = {
-    "红": "#e06c6c", "黄": "#e3c176", "绿": "#7bbf8a", "蓝": "#6f9fd8", "紫": "#b48ad8",
-  };
-  /** 图库三种标识都必须是真事实：RAW 看源后缀或相机预览，已编辑看工程里那几层，
-   *  已导出看 export_done 的 out 字段。前端不按“看起来像”猜。 */
-  const RAW_RE = /\.(dng|cr2|cr3|nef|arw|raf|orf|rw2|pef|srw|3fr|x3f|rwl|iiq)$/i;
-  const isRawDoc = (d: SessionDoc) => RAW_RE.test(d.path) || !!d.thumb?.preview;
-  const isEditedDoc = (d: SessionDoc) => {
-    const e = d.edits;
-    return e.repair > 0 || e.light > 0 || e.deform || e.lut || e.grade
-      || !!e.enhance || !!e.channel || !!e.curves || !!e.levels || !!e.effect_recovery || !!e.manual_liquify || !!e.studio_background || !!e.id_background || !!e.optics || !!e.sky_replacement;
-  };
   // 指针在窗口外松开、或按住时切走窗口：pointerup 可能永远不来，那样画面会停在原图。
   // 所以这三条兜底不是装饰——"松开没回来"比没有对比按钮更糟。
   useEffect(() => {
@@ -1290,7 +1299,9 @@ export default function App() {
   /** 点一格就换文档。引擎那边走的是 load_image 同一条路（守卫、状态存回、重挂同源），
    *  所以这里被拒（跑靶中/导出中）是正常路径，不是错误分支。 */
   function onPickDoc(index: number) {
-    runSession("select", { index })
+    if(library.pending||library.error)return;
+    const target=library.docs.find(d=>d.index===index);if(!target)return;
+    runSession("select", { index,selectedPath:target.path,sessionId:library.result?.session_id })
       .then(() => refreshStatus())
       .catch((e) => setDragNote(String(e)));
   }
@@ -1299,19 +1310,22 @@ export default function App() {
    *  普通点=打开那一张；Ctrl/Cmd+点=加减选；Shift+点=从上一次锚点到这一格的连续段。
    *  打开一张不清空多选集：批量导出时"选中的还是那几张"这件事不能被一次浏览打乱。 */
   function onCellClick(e: React.MouseEvent, index: number, path: string) {
+    if(library.pending||library.error)return;
     if (e.metaKey || e.ctrlKey) {
       setSel((prev) => { const n = new Set(prev); n.has(path) ? n.delete(path) : n.add(path); return n; });
-      selAnchor.current = index;
+      selAnchor.current = path;
       return;
     }
     if (e.shiftKey && selAnchor.current !== null) {
-      const docs = strip?.docs ?? [];
-      const a = Math.min(selAnchor.current, index), b = Math.max(selAnchor.current, index);
+      const docs = library.docs;
+      const anchor=docs.findIndex(d=>d.path===selAnchor.current), target=docs.findIndex(d=>d.path===path);
+      if(anchor<0||target<0){selAnchor.current=path;return;}
+      const a = Math.min(anchor,target), b = Math.max(anchor,target);
       setSel((prev) => { const n = new Set(prev);
-        docs.filter((d) => d.index >= a && d.index <= b).forEach((d) => n.add(d.path)); return n; });
+        docs.slice(a,b+1).forEach((d) => n.add(d.path)); return n; });
       return;
     }
-    selAnchor.current = index;
+    selAnchor.current = path;
     onPickDoc(index);
   }
 
@@ -1428,8 +1442,8 @@ export default function App() {
   const exporting = !!status?.export_progress;
   const projSuffix = caps?.project_suffix ?? ".lrproject.json";
   /** 底片条上被选中的那几张（没选就只导当前这张） */
-  const selPaths = Array.from(sel);
-  const exportTargets = selPaths.length ? selPaths : (hasImage && status?.image?.doc ? [status.image.doc] : []);
+  const selPaths = (library.pending||library.error?[]:library.docs).filter(d=>sel.has(d.path)).map(d=>d.path);
+  const exportTargets = sel.size ? selPaths : (hasImage && status?.image?.doc ? [status.image.doc] : []);
   const {ok: faceOk, why: faceWhy} = portraitAccess(status, doc, deformGeomWarn);
   const liveTask = tasks.length ? tasks[tasks.length - 1] : null;
   // 注册表上的格式名（jpeg/tiff）与引擎落盘用的后缀名（jpg/tif）不是一回事：
@@ -1650,23 +1664,6 @@ export default function App() {
   // 引擎进程此刻在不在（M5-c）。报回缺失（新壳配旧宿主）时退回"看 pid"的旧行为，
   // 而不是当成"没在跑"——那会把刚起好的引擎显示成已死。
   const engineAlive = status?.engine_alive ?? !!pid;
-
-  /** 图库的「已导出」：只认 export_done 里 out 真写出来的那些源图。 */
-  useEffect(() => {
-    const done = status?.export;
-    if (!done?.images?.length) return;
-    setExported((prev) => {
-      let changed = false;
-      const next = new Set(prev);
-      for (const img of done.images) {
-        if (img.path && img.out && !img.error && !next.has(img.path)) {
-          next.add(img.path);
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [status?.export]);
 
   const sourcePatchSupported=caps?.source_patch_capture_protocol===1&&caps?.source_patch_result_protocol===1;
   const sourcePatchAllowed=!!status?.engine_alive&&sourcePatchSupported&&hasImage&&!busy&&!exporting
@@ -1912,43 +1909,7 @@ export default function App() {
                   groups={doc?.local_masks?.transfer_groups} localMaskTransfer={syncScopeOps.includes(LOCAL_GRADE_OP)?localMaskTransfer:undefined} onLocalMaskTransfer={setLocalMaskTransfer} policy={batchPolicy} onScope={setSyncScopeLabel} onPolicy={setBatchPolicy} note={syncNote}
                   ready={hasImage&&status?.ready_caps?.batch_preflight_protocol===1} busy={['committing','preflighting'].includes(batchWorkflow.ui.phase)}
                   unresolved={batchWorkflow.ui.phase==='uncertain'} canUndo={!!syncState?.last} onReview={onBatchSync} onUndo={onBatchUndo}/>
-              <section className="gallery">
-                <div className="strip">
-                  {strip.docs.map((d) => {
-                    const rate = ratingOf(d);
-                    const flag = d.label ?? "";
-                    return (
-                      <div key={d.path}
-                           className={"cell" + (d.loaded ? " on" : "")
-                             + (sel.has(d.path) ? " sel" : "") + (d.trashed ? " trashed" : "")}
-                           role="button" tabIndex={0}
-                           title={d.name}
-                           onClick={(e) => onCellClick(e as unknown as React.MouseEvent, d.index, d.path)}
-                           onKeyDown={(e) => {
-                             if (e.key === "Enter") onPickDoc(d.index);
-                           }}>
-                        {d.thumb && thumbs[d.path] ? (
-                          <img alt={d.name} width={d.thumb.w} height={d.thumb.h}
-                               src={`data:image/jpeg;base64,${thumbs[d.path]}`} />
-                        ) : (
-                          <span className="ph">…</span>
-                        )}
-                        <span className="cellFlag"
-                              style={flag && FLAG_COLOR[flag] ? { background: FLAG_COLOR[flag] } : undefined}
-                              title={flag ? `色标：${flag}（点击更换）` : "色标（点击设置）"}
-                              onClick={(e) => { e.stopPropagation(); void cycleFlag(d); }} />
-                        <span className="cellStars" onClick={(e) => e.stopPropagation()}>
-                          {[1, 2, 3, 4, 5].map((n) => (
-                            <button key={n} className={n <= rate ? "on" : ""}
-                                    title={`${n} 星（再点一次清零）`}
-                                    onClick={() => void setRating(d, n)}>★</button>
-                          ))}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
+              <FilmstripGallery docs={library.docs} total={strip?.count??0} sel={sel} thumbs={thumbs} controls={libraryControls} facts={library.result?.facts} onPickDoc={onPickDoc} onCellClick={onCellClick} openAndImport={openAndImport} onRetouch={()=>setWorkspace("retouch")} setRating={setRating} cycleFlag={cycleFlag} cyclePick={cyclePick}/>
               </>
             )}
           </>
@@ -1959,53 +1920,7 @@ export default function App() {
           onEnterRetouch={() => setWorkspace("retouch")} />}
 
         {workspace === "library" && (
-          <section className="library">
-            <div className="libHead">
-              <div>
-                <h2>图库</h2>
-                <span>{strip?.count ?? 0} 张照片{sel.size ? ` · 已选 ${sel.size}` : ""}</span>
-              </div>
-              <button className="chip" onClick={() => void openAndImport()}>
-                打开照片
-              </button>
-            </div>
-            {strip && strip.docs.length > 0 ? (
-              <div className="libGrid">
-                {strip.docs.map((d) => (
-                  <button key={d.path}
-                          className={"libCard" + (d.loaded ? " cur" : "")}
-                          onClick={() => { onPickDoc(d.index); setWorkspace("retouch"); }}>
-                    <span className="libThumb">
-                      {d.thumb && thumbs[d.path]
-                        ? <img alt={d.name} src={`data:image/jpeg;base64,${thumbs[d.path]}`} />
-                        : <span className="ph">…</span>}
-                    </span>
-                    <span className="libMeta">
-                      <span className="libName">{d.name}</span>
-                      <span className="libTags">
-                        {isRawDoc(d) && <em className="tag raw">RAW</em>}
-                        {isEditedDoc(d) && <em className="tag edited">已编辑</em>}
-                        {exported.has(d.path) && <em className="tag done">已导出</em>}
-                      </span>
-                      <span className="libStars">
-                        {"★".repeat(ratingOf(d))}{"☆".repeat(5 - ratingOf(d))}
-                      </span>
-                    </span>
-                    {d.label && FLAG_COLOR[d.label] && (
-                      <i className="libFlag" style={{ background: FLAG_COLOR[d.label] }} />
-                    )}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="libEmpty" role="button" tabIndex={0}
-                   onClick={() => void openAndImport()}
-                   onKeyDown={(e) => { if (e.key === "Enter") void openAndImport(); }}>
-                <b>打开照片，开始第一批精修</b>
-                <span>支持 JPEG / PNG / TIFF / WebP / DNG；原片只读，编辑写工程记录</span>
-              </div>
-            )}
-          </section>
+          <LibraryGallery docs={library.docs} total={strip?.count??0} sel={sel} thumbs={thumbs} controls={libraryControls} facts={library.result?.facts} onPickDoc={onPickDoc} onCellClick={onCellClick} openAndImport={openAndImport} onRetouch={()=>setWorkspace("retouch")} setRating={setRating} cycleFlag={cycleFlag} cyclePick={cyclePick}/>
         )}
 
         {workspace === "creative" && (

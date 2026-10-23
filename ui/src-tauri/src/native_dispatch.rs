@@ -31,6 +31,11 @@ impl AppState {
         let name = cmd.get("cmd").and_then(|c| c.as_str()).unwrap_or("").to_string();
         // Arm selection and owned proposal queries/cancellation do not alter
         // image pixels or revoke unrelated capture lifetimes.
+        // A library view changes neither image history nor any capture lease.
+        if name == "session" && cmd.get("action").and_then(Value::as_str) == Some("query") {
+            let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
+            return guard.as_ref().ok_or("引擎未启动")?.send(cmd);
+        }
         if crate::arm_shape_api::read_only(&cmd) {
             let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
             return crate::arm_shape_api::enqueue(guard.as_ref().ok_or("引擎未启动")?, cmd);

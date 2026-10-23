@@ -27,6 +27,7 @@ import numpy as np
 from PIL import Image, UnidentifiedImageError
 
 from .decode import MIN_BUDGET, clamp_budget, load_rgb
+from .library_query_metadata import decoded_facts
 
 # 扩展名白名单：Pillow 认的位图族 + RAW 那一族（.dng 由自研读侧兜底，其余七个靠系统
 # LibRaw）。厂商容器收进来是**有条件**的，条件写在 decode.RAW_EXTS 与 raw.raw_backends()
@@ -158,6 +159,7 @@ def make_thumb(path: str, *, edge: int = EDGE, quality: int = THUMB_QUALITY) -> 
     return {"path": path, "name": os.path.basename(path),
             "w": int(im.size[0]), "h": int(im.size[1]),
             "src_w": d.src_w, "src_h": d.src_h, "format": d.fmt,
+            "library_metadata": decoded_facts(d),
             "preview": is_preview,          # 底片条这一格取的是相机内嵌预览，不是我们渲的
             "bytes": len(raw), "quality": q, "reencoded": reencoded, "resized": resized,
             "jpeg_b64": base64.b64encode(raw).decode("ascii"),

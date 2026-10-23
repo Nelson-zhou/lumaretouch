@@ -18,6 +18,7 @@ class HistoryPorts:
     remember_current: Callable[[], None]
     status: Callable[[], dict]
     mark_dirty: Callable[[], None]
+    note_edit: Callable[[], None] = lambda: None
 
 class HistoryController:
     def __init__(self, ports: HistoryPorts, emit: Callable[[dict], None],
@@ -50,6 +51,7 @@ class HistoryController:
         # 不在 EDIT_CMDS 里也不脏。刚保存完就亮“未保存”的徽章比不亮更坑：它让人
         # 以为保存没生效，于是一次又一次地存。
         self.ports.mark_dirty()
+        self.ports.note_edit()
         now = self.clock()
         same_gesture = False
         if coalesce and group and self.group == group \
@@ -146,6 +148,8 @@ class HistoryController:
                   f"{type(e).__name__}: {e}" + ("" if rolled else "；且回滚失败")})
             return
         ms = round((self.clock() - t0) / 1e6, 2)
+        if self.ports.signature(current) != self.ports.signature(self.ports.capture()):
+            self.ports.note_edit()
         stack.pop()
         from .body_pose_history_chain import decorate
         other.append(decorate(current,self.ports.capture()))

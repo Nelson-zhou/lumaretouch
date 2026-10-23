@@ -20,8 +20,9 @@ const inspectionMutations=new Set(['photo_grain_request','photo_detail_request',
   'inpaint','light','deform','lut','grade','enhance','lip_makeup','brow_shape','nose_shape','eye_shape','mouth_shape','background','exposure','hsl','curves','levels','fabric','crop','compare',
   'shoulder_shape','leg_shape','waist_shape','leg_length','neck_shape','arm_shape','people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
-  const send=()=>{if(inspectionMutations.has(command))notifyInspectionEditIntent();return tauriInvoke<T>(command,args,options);};
-  if(isCurveEditBusy()&&curveBarrierRequired(command,(args as Record<string,unknown>|undefined)?.action,inspectionMutations.has(command))){
+  const mutation=inspectionMutations.has(command)&&!(command==='session'&&(args as Record<string,unknown>|undefined)?.action==='query');
+  const send=()=>{if(mutation)notifyInspectionEditIntent();return tauriInvoke<T>(command,args,options);};
+  if(isCurveEditBusy()&&curveBarrierRequired(command,(args as Record<string,unknown>|undefined)?.action,mutation)){
     return settleCurveEdit().then(send);
   }
   return send();
@@ -430,6 +431,7 @@ export interface PickRun {
 
 /** 最近一条 session_state（底片条全貌 + 当前文档状态）。 */
 export interface SessionState {
+  library_query?: import("./libraryQuery/model").LibraryResult;
   index: number;
   count: number;
   current: string | null;
@@ -1624,9 +1626,9 @@ export const m0Env = () => invoke<M0Env>("m0_env");
 /** 底片条（M5-a）：一条转发六个动作的命令。参数一律"给了才附"，让引擎的默认值
  *  由引擎说（与 runExport 同一条理由）。 */
 export const runSession = (
-  action: "scan" | "add" | "select" | "state" | "thumbs" | "stop_thumbs",
+  action: "scan" | "add" | "select" | "state" | "thumbs" | "stop_thumbs" | "query",
   opts: { dir?: string; paths?: string[]; index?: number; edge?: number;
-          quality?: number; limit?: number; thumbs?: boolean } = {},
+          quality?: number; limit?: number; thumbs?: boolean; query?: import("./libraryQuery/model").LibraryQuery; requestId?:string;sessionId?:string;selectedPath?:string } = {},
 ) => invoke<{ requested: boolean }>("session", { action, ...opts });
 
 /** 挑图建议（LNX-PICK-001）：一条命令转发 analyze/stop/state。

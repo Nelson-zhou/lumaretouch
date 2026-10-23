@@ -595,7 +595,7 @@ impl AppState {
     pub fn on_session_state(&self, v: &Value) {
         *self.session.lock().unwrap() = Some(v.clone());
         // 同上：切文档那一条的 doc_state 就是新那一张的历史账
-        self.note_doc(v, "session_state");
+        if v.get("view_only").and_then(Value::as_bool) != Some(true) { self.note_doc(v, "session_state"); }
         *self.session_rev.lock().unwrap() += 1;
     }
 
@@ -1721,12 +1721,20 @@ fn session(
     quality: Option<i64>,
     limit: Option<i64>,
     thumbs: Option<bool>,
+    query: Option<Value>,
+    request_id: Option<String>,
+    session_id: Option<String>,
+    selected_path: Option<String>,
 ) -> Result<Value, String> {
-    const ACTIONS: [&str; 6] = ["scan", "add", "select", "state", "thumbs", "stop_thumbs"];
+    const ACTIONS: [&str; 7] = ["scan", "add", "select", "state", "thumbs", "stop_thumbs", "query"];
     if !ACTIONS.contains(&action.as_str()) {
         return Err(format!("session 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
     }
     let mut cmd = json!({"cmd": "session", "action": action});
+    if let Some(v)=query { cmd["query"]=v; }
+    if let Some(v)=request_id { cmd["request_id"]=json!(v); }
+    if let Some(v)=session_id { cmd["session_id"]=json!(v); }
+    if let Some(v)=selected_path { cmd["selected_path"]=json!(v); }
     if let Some(v) = dir {
         cmd["dir"] = json!(v);
     }
