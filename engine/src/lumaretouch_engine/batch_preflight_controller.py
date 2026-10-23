@@ -58,11 +58,15 @@ class FrozenBatchController:
             if p['action']=='preflight' and p.get('people_transfer') is not None:
                 if self.ports.people_transfer is None:raise ValueError('People transfer adapter unavailable')
                 self.ports.people_transfer(self,p,None);return
-            if p['action']=='commit' and self.ports.people_transfer is not None:
+            if p['action']=='commit':
                 if self.replay_completed(p):return
                 reviewed=self.store.get(p.get('preflight_token'),self.versions.workspace)
+                if '_semantic_colour_transfer' in reviewed.params():raise SC.ScopeError(SC.SEMANTIC.REASON)
                 if '_people_transfer' in reviewed.params():
+                    if self.ports.people_transfer is None:raise ValueError('People transfer adapter unavailable')
                     self.ports.people_transfer(self,p,reviewed);return
+            if p['action']=='preflight' and SC.SEMANTIC.OP in (p.get('module_scope') or []):
+                raise SC.ScopeError(SC.SEMANTIC.REASON)
             if p['action']=='preflight':
                 ops=SC.check_scope(p.get('module_scope'));policy=p.get('conflict_policy','skip_and_report')
                 if policy not in ('skip_and_report','recheck'):raise SC.ScopeError(f'conflict_policy 未知：{policy!r}（可用：skip_and_report/recheck；没有 overwrite）')

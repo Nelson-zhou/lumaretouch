@@ -52,3 +52,12 @@ depth of field, season or composition.
 SHA256SUMS freezes exact owned and touched shared contents, excluding itself.
 Any subsequent shared integration must retain this evidence and create a new
 content freeze rather than describing these runtime cases as already passed.
+
+## Later global batch/preset source integration
+
+The historical 2026-10-22 snapshot and its hash list above remain a record of that
+freeze. The global batch/preset NOT_CONNECTED statement is superseded by the
+2026-10-23 source integration in ../semantic_colour_batch/EVIDENCE.md and its new
+exact changed-file manifest. Current project v14 retains semantic assets introduced
+in v12. Sky/lips/prompted selection/person-instance gaps and every runtime or
+photographic acceptance claim remain unchanged and unaccepted.

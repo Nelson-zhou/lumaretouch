@@ -392,7 +392,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1, "studio_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1, "studio_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -2529,7 +2529,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                 return
             self._project_source_notice = {}
             self._project, self._project_path = prj, info["path"]
-            self._document_versions().new_workspace()
+            self._semantic_workspace_reset();self._document_versions().new_workspace()
             # 新建的是**空**工程，而底片条上那些活还在内存里：脏标记不能清成 False，
             # 否则徽章会说“已保存”而磁盘上一张图都没有——那比多亮一次危险得多。
             # （create 本身不丢工：它不动 _docs；真正会丢工的是 open，那一条另有守卫。）
@@ -2606,7 +2606,7 @@ class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, People
                 emit({"event":"error","error":"People project history rejected: "+str(error)});return
             with self._doclock:
                 self._docs = rows
-            self._document_versions().new_workspace()
+            self._semantic_workspace_reset();self._document_versions().new_workspace()
             # 工程带着自己那一档预览尺寸回来：代理档不只是“快不快”，逐点层（逐点掩膜/
             # 笔迹/形变场）就活在那一档的像素坐标上。拿默认档重开就会把刚恢复的笔迹当成
             # “尺寸不对”清掉——那正是“保存重开后配方少了一半”的形状。只有一致的预算才沿用；

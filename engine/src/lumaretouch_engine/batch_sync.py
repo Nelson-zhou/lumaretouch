@@ -132,13 +132,26 @@ class BatchSyncController:
             if action in ("undo","redo"):
                 from .batch_group_history import restore_group
                 from .people_batch_ledger import restore as restore_people
-                if "people_changes" in self.ledger.get(str(p.get("batch_id")),{}):
+                if self.ledger.get(str(p.get("batch_id")),{}).get("semantic_colour_owned"):
+                    from .semantic_colour_batch_ledger import restore as restore_semantic
+                    started=False
+                    def semantic_write_started():
+                        nonlocal started
+                        started=True
+                    try:body=restore_semantic(self,p,before_write=semantic_write_started)
+                    except Exception as error:
+                        self.emit({"event":"error","error":str(error)})
+                        self.preflight.emit_result(p,{"success":False,"error":str(error),"outcome_unknown":started,
+                            "batch_id":p.get("batch_id"),"requires_preflight":True})
+                        return
+                elif "people_changes" in self.ledger.get(str(p.get("batch_id")),{}):
                     body=restore_people(self,p)
                 else:body=restore_group(self,p) if action=="redo" or RC.OP in self.ledger.get(str(p.get("batch_id")),{}).get("ops",[]) else self.undo(p)
                 self.preflight.emit_result(p,{**body,"success":True})
                 return
             if p.get("people_transfer") is not None:raise SC.ScopeError("People transfer requires a frozen preflight token")
             ops = SC.check_scope(p.get("module_scope"))
+            if SC.SEMANTIC.OP in ops:raise SC.ScopeError(SC.SEMANTIC.REASON)
             if SKY.OP in ops:
                 raise SC.ScopeError("换天空批量必须逐目标预检，再用冻结 token 提交；不会猜测天空或复制源图区域")
             if RC.OP in ops:raise SC.ScopeError('参考统一必须先逐图预检')

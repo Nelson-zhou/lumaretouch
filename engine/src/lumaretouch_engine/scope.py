@@ -42,6 +42,7 @@ from . import facial_wrinkle_scope as WRINKLES
 from . import lip_makeup_scope as LIP
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
+from . import semantic_colour_scope as SEMANTIC
 
 SCHEMA = "lrt.scope.v1"
 PRESET_SCHEMA = "lrt.preset.v1"
@@ -84,6 +85,9 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: operation_id → 契约。`single_face` 的模块只能作用在"已知只有一张脸"的文档上；
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
+    SEMANTIC.OP: {"params": ("intent",), "state_fields": SEMANTIC.FIELDS, "single_face": False,
+                  "transferable": True, "cmd": "semantic_colour", "read": SEMANTIC.params_of, "write": SEMANTIC.install,
+                  "transfer_review": SEMANTIC.REVIEW, "dedicated_transport": "semantic_colour", "why_not": SEMANTIC.REASON},
     BROW.OP: {"params": ("recipe",), "state_fields": BROW.FIELDS, "single_face": True,
               "transferable": True, "cmd": "brow_shape", "read": BROW.params_of, "write": BROW.install,
               "why_not": "仅七项双侧参数；目标重新确认真实人物与可见眉毛，不复制源图身份、网格或蒙版"},
@@ -233,6 +237,7 @@ def describe() -> list[dict]:
                     "unmodeled": dict(m.get("unmodeled") or {}),
                     "reason": m.get("why_not")})
         if m.get("transfer_review"): out[-1]["transfer_review"] = m["transfer_review"]
+        if m.get("dedicated_transport"):out[-1]["dedicated_transport"]=m["dedicated_transport"]
     return out
 
 
@@ -275,6 +280,7 @@ def check_params(op: str, params: dict) -> dict:
         parts = [f"{k}：{unmodeled_reason(op, k)}" if unmodeled_reason(op, k) else f"{k}（未知参数）"
                  for k in unknown]
         raise ScopeError(f"{op} 收到不可作用的参数：" + "；".join(parts))
+    if op == SEMANTIC.OP:return SEMANTIC.check_params(params)
     if op == SKY.OP:
         try: return SKY.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
@@ -434,11 +440,12 @@ def apply_modules(state: dict, mods: dict[str, dict], *, local_replace_legacy=Fa
 
 def restore_modules(current, previous, ops):
     """Restore only reviewed modules; retain exact legacy local-grade fields."""
-    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP,REFERENCE.OP)]
+    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP,REFERENCE.OP,SEMANTIC.OP)]
     result = apply_modules(current, params_of(previous, ordinary)) if ordinary else dict(current)
     if OP_LOCAL_GRADE in ops: LOCAL_GRADE.restore(result, previous)
     if OPTICS_AUTO.OP in ops: OPTICS_AUTO.restore(result, previous)
     if REFERENCE.OP in ops: REFERENCE.restore(result, previous)
+    if SEMANTIC.OP in ops: SEMANTIC.restore(result, previous)
     return result
 
 
@@ -486,6 +493,7 @@ def validate_preset(doc, *, builtin: bool = False) -> dict:
         raise ScopeError(f"预设 kind 未知：{kind!r}（可用：{', '.join(sorted(kinds))}）")
     clean: dict[str, dict] = {}
     for op, params in mods.items():
+        if op==SEMANTIC.OP:raise ScopeError(SEMANTIC.REASON)
         clean[op] = check_params(op, params or {})
         if op == OP_LOCAL_GRADE:
             try: LOCAL_GRADE.portable(clean[op]['groups'])

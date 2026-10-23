@@ -286,6 +286,7 @@ export interface PresetInfo {
 /** `lnx.batch.v1.module_scope` 那一份契约的运行时报信：transferable=false 的格子
  *  带着“为什么没接通”，UI 直接拿它写禁用理由（不在前端刻第二份理由）。 */
 export interface ScopeModule {
+  dedicated_transport?: string;
   operation_id: string;
   params: string[];
   transferable: boolean;
@@ -949,6 +950,7 @@ export interface EngineStatus {
     shoulder_shape_protocol?: number;
     leg_shape_protocol?: number;
     semantic_colour_protocol?: number;
+    semantic_colour_workflow_protocol?: number;
     hair_colour_protocol?: number;
     sample_library_protocol?: number;
     effect_recovery_protocol?: number;

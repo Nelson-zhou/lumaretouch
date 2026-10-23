@@ -246,6 +246,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "shoulder_shape_result" => { crate::shoulder_shape_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some() { state.on_layer_frame(&v); } },
         "leg_shape_result" => { crate::leg_shape_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|doc| doc.is_object()) { state.on_layer_frame(&v); } },
         "semantic_colour_result" => crate::semantic_colour_api::receive(inspection_epoch, &v),
+        "semantic_colour_progress" => crate::semantic_colour_api::progress(inspection_epoch, &v),
         "hair_colour_result" => { crate::hair_colour_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|doc| doc.is_object()) { state.on_layer_frame(&v); } },
         "sample_library_result" => crate::sample_library_api::receive(inspection_epoch, &v),
         "sample_library_cancel_ack" => (),
@@ -342,7 +343,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             crate::shoulder_shape_api::ready(inspection_epoch, v["shoulder_shape_protocol"].as_u64() == Some(1));
             crate::leg_shape_api::ready(inspection_epoch, v["leg_shape_protocol"].as_u64() == Some(1));
             crate::sample_library_api::ready(inspection_epoch, v["sample_library_protocol"].as_u64() == Some(1));
-            crate::semantic_colour_api::ready(inspection_epoch,v["semantic_colour_protocol"].as_u64()==Some(1));
+            crate::semantic_colour_api::ready(inspection_epoch,v["semantic_colour_protocol"].as_u64()==Some(1),v["semantic_colour_workflow_protocol"].as_u64()==Some(1));
             state.batch_results.lock().unwrap().ready(inspection_epoch,v["batch_preflight_protocol"].as_u64()==Some(1));
             state.preset_results.lock().unwrap().ready(inspection_epoch,v["preset_result_protocol"].as_u64()==Some(1));
             state.white_balance_results.lock().unwrap().ready(inspection_epoch,v["white_balance_result_protocol"].as_u64()==Some(1));

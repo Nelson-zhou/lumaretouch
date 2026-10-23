@@ -82,7 +82,7 @@ class SemanticColourHost:
                 terminal.update(success=False,outcome_unknown=True,committed=None,error='旧回执已释放，禁止重放操作；请核对当前配方')
             else:
                 stop=self.register(ident)
-                if message['request'].get('action') in ('commit','edit') and not stop.is_set():
+                if message['request'].get('action') in ('commit','edit','batch_apply','batch_restore') and not stop.is_set():
                     engine._cancel_snapshot('semantic_colour')
                     engine._close_owned_previews()
                     for key in ('_color_capture_owner','_white_balance_owner','_source_patch_owner','_color_picker_owner'):
@@ -91,7 +91,13 @@ class SemanticColourHost:
                             capture=getattr(other,'capture',other)
                             if hasattr(capture,'invalidate'):capture.invalidate()
                 out=owner.execute(message['request'],cancelled=stop.is_set)
-                terminal.update(success=True,outcome_unknown=False,committed=owner.write_started,result=out)
+                # Batch publication may return an uncertain receipt instead of
+                # raising after token claim. Preserve its small evidence, but
+                # never turn that nested failure into a successful mutation.
+                if isinstance(out,dict) and out.get('outcome_unknown') is True:
+                    terminal.update(success=False,outcome_unknown=True,committed=None,result=out,
+                        error=str(out.get('error') or '写入结果需要逐目标核对')[:2000],error_code='outcome_unknown')
+                else:terminal.update(success=True,outcome_unknown=False,committed=owner.write_started,result=out)
                 if len(encoded(terminal))>MAX_RESULT:raise ValueError('AI 追色回执超出 8 MiB 限额，请核对当前配方')
         except Exception as error:
             terminal.pop('result',None)
@@ -140,7 +146,12 @@ class SemanticColourHostMixin:
     def _semantic_shutdown(self):
         self._semantic_colour_host().stop()
         owner=self.__dict__.get('_semantic_colour_owner')
-        if owner is not None:owner.close()
+        if owner is not None:owner.shutdown()
+    def _semantic_workspace_reset(self):
+        owner=self.__dict__.get('_semantic_colour_owner')
+        if owner is not None:owner.shutdown()
+        batch=self.__dict__.get('_batch_sync')
+        if batch is not None:batch.semantic_colour_inspection=None
     def _owned_command_ingress(self,line):
         return self._sample_library_host().observe_line(line) or self._semantic_colour_host().observe_line(line)
     def _owned_reader_stop(self):

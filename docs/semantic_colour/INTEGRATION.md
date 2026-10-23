@@ -8,7 +8,8 @@ Source wiring is present. Runtime, performance and photographic acceptance are U
   `_semantic_colour_mask_assets`. Init, neutral document state, capture/restore,
   history, project, frozen export and device replay preserve these fields.
   Decoded mask and full reference bundle hashes are checked at restore. Project
-  v12 preserves v11 sky semantics; older readers must reject rather than silently
+  v12 introduced these assets; current v14 preserves them and v11 sky semantics.
+  Older readers must reject unsupported schemas rather than silently
   omit the new late colour stage. No inference is required to replay an applied
   recipe from valid retained data.
 - `semantic_colour_host.SemanticColourHostMixin` owns its commands and cancellation
@@ -72,7 +73,9 @@ writes. Selected-mask previews are lazy and generation-fenced. `stage-engine.sh`
 builds the dependency-free native library and stages source/license attribution;
 no runtime compiler/network/model fallback is added.
 
-Batch/preset target recomputation and reference intent transport remain separate
-pending work. No scope/preset registration copies fitted gains. Local dual-image
-mode is explicitly excluded. New sky/landmark/SAM/people adapters are not claimed
+Dedicated global batch/preset recomputation and owned-reference transport are
+source-integrated in ../semantic_colour_batch/INTEGRATION.md. Generic scope/text-
+preset copying is explicitly refused. The workflow has a separate capability,
+bounded progress/cancellation and explicit unknown-write inspection. Local dual-
+image mode remains nonportable. New sky/landmark/SAM/people adapters are not claimed
 by the six-class implementation.

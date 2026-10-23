@@ -1,5 +1,5 @@
 import type {PresetInfo,ScopeModule} from '../native';
-const labels:Record<string,string>={'lnx.reference_color.v1':'同场景参考统一（逐图重算，样片需保留）','lnx.mouth_shape.v1':'嘴形九项（露龈可拆分，仅参数）','lnx.eye_shape.v1':'眼形十项（双侧二维几何，仅参数）','lnx.nose_shape.v1':'鼻形六项（二维几何，仅参数）','lnx.brow_shape.v1':'眉形七项（人物左右独立，仅参数）','lnx.lip_makeup.v1':'唇妆增强（三控件）','lnx.sky_replacement.v1':'换天空素材与参数（区域逐图保留）','lnx.optics_auto.v1':'镜头/透视逐图自动重算（含手动参数）','lnx.facial_wrinkles.v1':'面部祛纹八部位（人物与恢复笔迹不复制）','lnx.optics_manual.v1':'镜头/透视手动参数（不复制自动结果）','lnx.studio_background.v1':'影棚背景强度（范围不复制）','lnx.local_grade.v1':'独立局部调色组','lnx.exposure.v1':'曝光','lnx.white_balance.v1':'白平衡','lnx.levels.v1':'色阶',
+const labels:Record<string,string>={'lnx.semantic_colour.v1':'AI 语义追色（专用全图批量/便携预设）','lnx.reference_color.v1':'同场景参考统一（逐图重算，样片需保留）','lnx.mouth_shape.v1':'嘴形九项（露龈可拆分，仅参数）','lnx.eye_shape.v1':'眼形十项（双侧二维几何，仅参数）','lnx.nose_shape.v1':'鼻形六项（二维几何，仅参数）','lnx.brow_shape.v1':'眉形七项（人物左右独立，仅参数）','lnx.lip_makeup.v1':'唇妆增强（三控件）','lnx.sky_replacement.v1':'换天空素材与参数（区域逐图保留）','lnx.optics_auto.v1':'镜头/透视逐图自动重算（含手动参数）','lnx.facial_wrinkles.v1':'面部祛纹八部位（人物与恢复笔迹不复制）','lnx.optics_manual.v1':'镜头/透视手动参数（不复制自动结果）','lnx.studio_background.v1':'影棚背景强度（范围不复制）','lnx.local_grade.v1':'独立局部调色组','lnx.exposure.v1':'曝光','lnx.white_balance.v1':'白平衡','lnx.levels.v1':'色阶',
   'lnx.curves.v1':'曲线','lnx.hsl.v1':'HSL','lnx.crop.v1':'裁剪','lnx.skin.v1':'磨皮','lnx.blemish.v1':'瑕疵处理','lnx.skin_mask.v1':'皮肤蒙版'};
 export const moduleLabel=(op:string)=>labels[op]??op;
 export function presetLabel(preset:PresetInfo,list:PresetInfo[]){
@@ -20,7 +20,7 @@ export function presetFormReducer(state:PresetForm,action:FormAction):PresetForm
   }
 }
 export function unavailableScope(ops:string[],modules:ScopeModule[]){
-  const supported=new Set(modules.filter(m=>m.transferable===true).map(m=>m.operation_id));
+  const supported=new Set(modules.filter(m=>m.transferable===true&&!m.dedicated_transport).map(m=>m.operation_id));
   return ops.filter(op=>!supported.has(op));
 }
 /** Legacy string-valued registry controls must never guess between colliding labels. */

@@ -2,7 +2,9 @@ import {useEffect,useRef,useState} from 'react';
 import type {SelectedSampleReference} from '../sampleLibrary/model';
 import {CanvasMaskEditor} from './CanvasMaskEditor';
 import {useSemanticColour} from './useSemanticColour';
-import {BAND_NAMES,KNOTS,PARAMETER_LABELS,bounds,type CanvasMask,type Group,type Mode,type Port} from './model';
+import {BAND_NAMES,KNOTS,PARAMETER_LABELS,bounds,message,type CanvasMask,type Group,type Mode,type Result} from './model';
+import {SemanticColourWorkflow} from './SemanticColourWorkflow';
+import {portableRecipeReason,type BatchInspection,type WorkflowPort} from './workflowModel';
 import './semanticColour.css';
 
 function PreciseGroup({group,busy,onSave,onReset}:{group:Group;busy:boolean;onSave:(parameters:number[])=>void;onReset:()=>void}){
@@ -11,7 +13,7 @@ function PreciseGroup({group,busy,onSave,onReset}:{group:Group;busy:boolean;onSa
  const set=(i:number,v:number)=>setValues(p=>p.map((old,j)=>i===j?v:old));
  const input=(i:number)=>{const [min,max,step]=bounds(i);return <label key={i}>{PARAMETER_LABELS[i]}<input type="number" min={min} max={max} step={step} disabled={busy} value={values[i]} onChange={e=>set(i,Number(e.target.value))}/></label>;};
  return <div className="semantic-precise"><div className="semantic-values">{[0,1,2,3,4,5].map(input)}</div>
-  <details open><summary>真实 PCHIP 曲线</summary><select aria-label="追色曲线通道" value={channel} onChange={e=>setChannel(Number(e.target.value))}>{['总曲线','红','绿','蓝'].map((v,i)=><option value={i} key={v}>{v}</option>)}</select>
+  <details open><summary>真实 PCHIP 曲线</summary><select aria-label="追色曲线通道" disabled={busy} value={channel} onChange={e=>setChannel(Number(e.target.value))}>{['总曲线','红','绿','蓝'].map((v,i)=><option value={i} key={v}>{v}</option>)}</select>
    <svg className="semantic-curve" viewBox="0 0 240 160" role="img" aria-label="曲线控制点示意，实际输出使用 PCHIP 插值"><path d="M10 150L230 10" stroke="currentColor" opacity=".25"/>
     <polyline points={KNOTS.map((x,i)=>`${10+x*220},${150-values[6+channel*5+i]*140}`).join(' ')} fill="none" stroke="var(--semantic-accent)" strokeDasharray="4 3"/>
     {KNOTS.map((x,i)=><circle key={i} cx={10+x*220} cy={150-values[6+channel*5+i]*140} r="4" fill="var(--semantic-accent)"/>)}</svg>
@@ -23,14 +25,24 @@ function PreciseGroup({group,busy,onSave,onReset}:{group:Group;busy:boolean;onSa
  </div>;
 }
 
-export function SemanticColourPanel({port,documentKey,refreshKey,selectedSample,onChanged}:{port:Port;documentKey:string;refreshKey?:string;selectedSample:SelectedSampleReference|null;onChanged:()=>void}){
+export function SemanticColourPanel({port,workflowEnabled,documentKey,refreshKey,targets,selectedSample,onChanged,onWorkflowBusyChange}:{port:WorkflowPort;workflowEnabled:boolean;documentKey:string;refreshKey?:string;targets:string[];selectedSample:SelectedSampleReference|null;onChanged:()=>void;onWorkflowBusyChange?:(busy:boolean)=>void}){
  const flow=useSemanticColour(port,documentKey,onChanged);
  useEffect(()=>{if(refreshKey!==undefined)void flow.refresh().catch(()=>{});},[refreshKey,flow.refresh]);
  const [mode,setMode]=useState<Mode>('harmonious'),[local,setLocal]=useState(false),[precise,setPrecise]=useState(false),[strengths,setStrengths]=useState([100,100,100]);
  const [referenceMask,setReferenceMask]=useState<CanvasMask|null>(null),[targetMask,setTargetMask]=useState<CanvasMask|null>(null),[reviewed,setReviewed]=useState(false),[maskEdit,setMaskEdit]=useState<string|null>(null),[editingMask,setEditingMask]=useState<CanvasMask|null>(null),[maskOverlay,setMaskOverlay]=useState<string|undefined>(),[maskError,setMaskError]=useState('');
  const overlayTicket=useRef(0);
+ const [workflowBusy,setWorkflowBusy]=useState(false),[inspectionRequired,setInspectionRequired]=useState(false),[inspecting,setInspecting]=useState(false),[inspectionError,setInspectionError]=useState('');
+ const [inspection,setInspection]=useState<{state:Result;workflow:BatchInspection|null}|null>(null);
+ useEffect(()=>port.subscribeInspection?.(required=>{setInspectionRequired(required);if(!required)setInspection(null);}),[port]);
+ useEffect(()=>{onWorkflowBusyChange?.(workflowBusy||inspectionRequired);return()=>onWorkflowBusyChange?.(false);},[workflowBusy,inspectionRequired,onWorkflowBusyChange]);
+ const inspect=async()=>{setInspecting(true);setInspection(null);setInspectionError('');try{
+  if(!port.inspectMutationOutcome)throw new Error('当前接口不能确认未知写入，请保留现场并检查批次历史');
+  setInspection(await port.inspectMutationOutcome() as {state:Result;workflow:BatchInspection|null});
+ }catch(error){setInspectionError(message(error));}finally{setInspecting(false);}};
+ const acknowledgeInspection=async()=>{try{port.acknowledgeInspection?.();setInspection(null);await flow.cancel();await flow.refresh();onChanged();}catch(error){setInspectionError(message(error));}};
  const showMask=async(mask:CanvasMask)=>{const ticket=++overlayTicket.current;setMaskOverlay(undefined);setMaskError('');try{const result=await port.request('mask_overlay',{mask_id:mask.id,objects:mask.objects}) as {image:string};if(ticket===overlayTicket.current)setMaskOverlay(result.image);}catch(error){if(ticket===overlayTicket.current)setMaskError(String(error));}};
- const busy=['capturing','running','committing','editing'].includes(flow.phase);
+ const busy=workflowBusy||inspectionRequired||['capturing','running','committing','editing','uncertain'].includes(flow.phase);
+ const singlePending=flow.phase!=='idle'||!!flow.capture||!!flow.review;
  useEffect(()=>{setReferenceMask(flow.capture?.reference_selection??null);setTargetMask(flow.capture?.target_selection??null);setReviewed(false);},[flow.capture]);
  useEffect(()=>{setReviewed(false);},[flow.review?.proof]);
  useEffect(()=>{if(flow.report?.recipe){setStrengths([...flow.report.recipe.strengths]);setMode(flow.report.recipe.mode);}},[flow.report]);
@@ -45,8 +57,8 @@ export function SemanticColourPanel({port,documentKey,refreshKey,selectedSample,
   <p className="semantic-warning">本功能源码已接入不等于画质验收：推理、耗时、全幅导出和真实人像质量仍待本地验证。</p>
   {!selectedSample&&<p>请先在本地样片库选择一张自己的参考样片。</p>}
   <div className="semantic-toolbar"><button disabled={!reference||!flow.context||busy} onClick={()=>reference&&flow.freeze(reference)}>冻结当前双图</button>
-   {(flow.capture||busy)&&<button disabled={flow.phase==='committing'} onClick={()=>void flow.cancel()}>关闭 / 取消待处理结果</button>}
-   <button data-control-id={precise?"PC-32452-C-6bc7d19de9":"PC-32452-C-a8bb7fedf1"} onClick={()=>setPrecise(v=>!v)} aria-pressed={precise}>{precise?'切到快速视图':'精准视图'}</button></div>
+   {singlePending&&<button disabled={workflowBusy||flow.phase==='committing'} onClick={()=>void flow.cancel()}>关闭 / 取消待处理结果</button>}
+   <button disabled={workflowBusy} data-control-id={precise?"PC-32452-C-6bc7d19de9":"PC-32452-C-a8bb7fedf1"} onClick={()=>setPrecise(v=>!v)} aria-pressed={precise}>{precise?'切到快速视图':'精准视图'}</button></div>
   <div className="semantic-toolbar"><label data-control-id="PC-32452-C-22025a98c5">优化模式 <select disabled={busy} value={mode} onChange={e=>setMode(e.target.value as Mode)}><option data-control-id="PC-32452-C-526ef81feb" value="harmonious">和谐：较强原片保护</option><option data-control-id="PC-32452-C-633b863a30" value="extreme">极致：较强颜色匹配</option></select></label>
    <label data-control-id="PC-32452-C-a6bb17749a"><input type="checkbox" checked={local} disabled={busy} onChange={e=>setLocal(e.target.checked)}/>局部双图选择</label></div>
   <small>两个模式是同一真实后端的正则化策略，不是两个虚构训练模型。改变模式后需重新分析，不会在滑块拖动时自动重跑。</small>
@@ -64,7 +76,7 @@ export function SemanticColourPanel({port,documentKey,refreshKey,selectedSample,
    {flow.preview&&<><div className="semantic-dual semantic-images"><figure><img src={flow.preview.before} alt="追色前采样检查图"/><figcaption>之前</figcaption></figure><figure><img src={flow.preview.after} alt="追色后采样检查图"/><figcaption>之后</figcaption></figure></div><small>{flow.preview.notice}</small></>}
    <p>留出颜色残差：{flow.review.diagnostics[0][0].toFixed(4)} → {flow.review.diagnostics[0][1].toFixed(4)}；采样越界占比 {(flow.review.diagnostics[0][4]*100).toFixed(2)}%。这不是摄影质量评分。</p>
    <details><summary>语义覆盖与限制</summary>{flow.review.coverage.target.map((r,i)=><p key={r.class}>{r.class}：目标 {r.usable_pixels}；样片 {flow.review!.coverage.reference[i].usable_pixels} 个支持点</p>)}<ul>{flow.review.warnings.map(w=><li key={w}>{w}</li>)}</ul></details>
-   <label><input type="checkbox" checked={reviewed} onChange={e=>setReviewed(e.target.checked)}/>我已检查前后图、语义覆盖和限制</label>
+   <label><input type="checkbox" checked={reviewed} disabled={busy} onChange={e=>setReviewed(e.target.checked)}/>我已检查前后图、语义覆盖和限制</label>
    <button data-control-id="PC-32452-C-20622a1901" disabled={!reviewed||busy||flow.phase==='uncertain'} onClick={()=>void flow.commit()}>应用此冻结结果</button>
   </section>}
   {!flow.review&&recipe?.last_review&&<details><summary>上次 AI 初始估计的保留诊断</summary><p>颜色残差 {recipe.last_review.diagnostics[0][0].toFixed(4)} → {recipe.last_review.diagnostics[0][1].toFixed(4)}。这是已审核初始估计的记录，后续手动参数或蒙版编辑不会伪称重新拟合。</p><ul>{recipe.last_review.warnings.map(w=><li key={w}>{w}</li>)}</ul></details>}
@@ -76,8 +88,18 @@ export function SemanticColourPanel({port,documentKey,refreshKey,selectedSample,
     {precise?<PreciseGroup group={group} busy={busy} onSave={parameters=>flow.edit('group_parameters',{id:group.id,parameters})} onReset={()=>flow.edit('group_reset',{id:group.id})}/>:<p>切到精准视图编辑曝光、通道增益、曲线和八色参数。快速/精准视图使用同一配方。</p>}
    </details>)}
   </section>}
-  {maskEdit&&editingMask&&flow.capture&&<section><CanvasMaskEditor title={`编辑 ${editingMask.name}`} image={flow.capture.target.image} mask={editingMask} overlay={maskOverlay} onChange={m=>{overlayTicket.current++;setEditingMask(m);setMaskOverlay(undefined);}} disabled={busy}/><p>保留神经模型初选，手工标记在其后按顺序添加或擦除。</p><button disabled={busy} onClick={()=>void showMask(editingMask)}>查看实际合成蒙版</button>{maskError&&<p role="alert">{maskError}</p>}<button disabled={busy} onClick={()=>{void flow.edit('mask_objects',{id:maskEdit,objects:editingMask.objects});setMaskEdit(null);}}>保存蒙版编辑</button><button onClick={()=>{overlayTicket.current++;setMaskEdit(null);}}>放弃编辑</button></section>}
+  {maskEdit&&editingMask&&flow.capture&&<section><CanvasMaskEditor title={`编辑 ${editingMask.name}`} image={flow.capture.target.image} mask={editingMask} overlay={maskOverlay} onChange={m=>{overlayTicket.current++;setEditingMask(m);setMaskOverlay(undefined);}} disabled={busy}/><p>保留神经模型初选，手工标记在其后按顺序添加或擦除。</p><button disabled={busy} onClick={()=>void showMask(editingMask)}>查看实际合成蒙版</button>{maskError&&<p role="alert">{maskError}</p>}<button disabled={busy} onClick={()=>{void flow.edit('mask_objects',{id:maskEdit,objects:editingMask.objects});setMaskEdit(null);}}>保存蒙版编辑</button><button disabled={workflowBusy} onClick={()=>{overlayTicket.current++;setMaskEdit(null);}}>放弃编辑</button></section>}
   {flow.error&&<p role="alert" className="semantic-warning">{flow.error}</p>}
-  {flow.phase==='uncertain'&&<button onClick={()=>void flow.cancel()}>关闭待处理会话并核对当前结果</button>}
+  {flow.phase==='uncertain'&&!inspectionRequired&&<button disabled={workflowBusy} onClick={()=>void flow.cancel()}>关闭待处理会话并核对当前结果</button>}
+  {inspectionRequired&&<section className="semantic-inspection"><p role="alert">有未确认的编辑结果。自动刷新不会解除重复写入保护，请先读取实际状态并审核。</p>
+   <button disabled={inspecting||workflowBusy} onClick={()=>void inspect()}>{inspecting?'正在核对实际状态':'核对当前结果'}</button>
+   {inspection&&<><p>当前照片：{inspection.state.context?.document_id??'没有打开的照片'}；实际保留 {inspection.state.report?.recipe.groups.length??0} 个追色组。{inspection.state.report?.suspended??''}</p>
+    {inspection.workflow&&<><p>{inspection.workflow.inspection?.notice??'没有保留的批次写入检查记录。'} 可见追色批次：{inspection.workflow.batches.length}。</p>
+     {inspection.workflow.inspection?.targets.map(target=><p key={target.document_id}>{target.path}：{{before:'与写入前一致',after:'与候选写入后一致',both:'前后贡献相同',different:'存在其它差异',missing:'目标已移除',invalid:'资源无效'}[target.state]}{target.error?`；${target.error}`:''}</p>)}</>}
+    <p>核对不是撤销或重试。继续只允许重新建立并审核新方案，不会重发旧提交。</p>
+    <button disabled={inspecting||workflowBusy} onClick={()=>void acknowledgeInspection()}>我已检查实际结果，允许继续新操作</button></>}
+   {inspectionError&&<p role="alert">{inspectionError}</p>}</section>}
+  {workflowEnabled&&<SemanticColourWorkflow port={port} context={flow.context} documentKey={documentKey} targets={targets} disabled={singlePending||inspecting}
+   mutationBlocked={inspectionRequired} portableReason={portableRecipeReason(recipe,flow.report?.suspended)} onBusyChange={setWorkflowBusy} onChanged={()=>{void flow.refresh().catch(()=>{});onChanged();}}/>}
  </section>;
 }

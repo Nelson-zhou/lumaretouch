@@ -31,7 +31,14 @@ class SemanticColourController:
         if self.job is not None and self.job.state=='running':self.job.cancel()
         self.job=None;self.review=None;self.session=None
 
+    def shutdown(self):
+        self.close()
+        workflow=getattr(self,'workflow',None)
+        if workflow is not None:workflow.close()
+
     def tick(self):
+        workflow=getattr(self,'workflow',None)
+        if workflow is not None:workflow.tick()
         if self.session is not None and self.session["context"]!=self.context():self.close()
         if self.job is not None and self.job.state=="running":self.job.poll()
 
@@ -192,6 +199,8 @@ class SemanticColourController:
         if type(command) is not dict or len(json.dumps(command,allow_nan=False).encode())>2*1024*1024:
             raise ValueError('AI 追色命令大小或格式无效')
         action=command.get('action')
+        from .semantic_colour_workflow import ACTIONS,dispatch
+        if action in ACTIONS:return dispatch(self,command,cancelled=cancelled)
         fields={'state':{'action'},'capture':{'action','reference','context','session_id'},
             'start':{'action','session_id','mode','strengths','reference_selection','target_selection'},
             'poll':{'action','session_id'},'commit':{'action','session_id','proof','reviewed'},

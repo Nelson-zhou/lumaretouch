@@ -9,6 +9,7 @@ import {neutral as neutralMouth} from "../mouthShape/model";
 import {EyeShapeControls} from "../eyeShape/EyeShapeControls";
 import {neutral as neutralEyes} from "../eyeShape/model";
 import {withoutCoveredLeaves} from "../toolRouting/coverage";
+import {SemanticColourWorkflowLaunch} from '../semanticColour/workflowLaunch';
 import {revealTool,type ToolLocation} from "../toolRouting/RetouchToolActivity";
 import {NoseShapeControls} from "../noseShape/NoseShapeControls";
 import {neutral as neutralNose} from "../noseShape/model";
@@ -1036,6 +1037,7 @@ export default function RetouchPanel(props: RetouchProps) {
                 <SpecNodes nodes={withoutCoveredLeaves(tree, f.id, f.id === "PC-32455" ? !!props.opticsPanel : !!custom)}
                   openPaths={openPathsFor(f)} renderExtra={node=>renderExtra(node,f.id)}
                   renderLeaf={(leaf, name) => {
+                    if(f.id==='PC-32452'&&leaf.path==='AI追色/批量同步&保存预设')return <SemanticColourWorkflowLaunch enabled={props.hasImage&&props.status?.ready_caps?.semantic_colour_workflow_protocol===1}/>;
                     if(f.id==='PC-32472'&&['发色选择','头发光泽'].includes(leaf.path))return null;
                     if (f.id === "PC-32481" && leaf.path === "背景调整涂抹笔" && props.studioBackgroundPanel)
                       return <div className="toolRouteNote"><button className="toolRouteLink" onClick={()=>navigateTool("PC-32474")}>背景调整恢复画笔</button><p>进入背景调整，在编辑范围中选择对应的恢复目标。</p></div>;

@@ -77,7 +77,7 @@
     {
       "id": "SC-015",
       "name": "Different batch targets independently reanalyzed/fitted with offsets and owned-field undo",
-      "status": "NOT_CONNECTED"
+      "status": "UNRUN"
     },
     {
       "id": "SC-016",
@@ -91,7 +91,7 @@
     },
     {
       "id": "SC-018",
-      "name": "Project v12 restores private assets and schema v11 sky semantics; corrupted inactive versions fail and older readers reject v12",
+      "name": "Current project v14 preserves semantic v12 private assets and earlier sky semantics; corrupted inactive versions fail and older readers reject unsupported schemas",
       "status": "UNRUN"
     },
     {
@@ -102,6 +102,16 @@
     {
       "id": "SC-020",
       "name": "Semantic read actions preserve sample-library capture; shared atomic writer and editing invalidation remain correct",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-021",
+      "name": "Portable full-reference export consent, exact archive import, fresh target fit/review, bounded IPC and unknown-save readback",
+      "status": "UNRUN"
+    },
+    {
+      "id": "SC-022",
+      "name": "Global batch missing-class/invalid-offset refusal, cancellation before publication, explicit partial-write inspection, owned undo and preserved unrelated edits",
       "status": "UNRUN"
     }
   ]

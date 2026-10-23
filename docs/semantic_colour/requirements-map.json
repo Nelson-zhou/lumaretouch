@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Exact baseline IDs; single-photo source integration is present, runtime and photographic acceptance remain UNRUN. Library/style/scene-synthesis families excluded.",
+  "note": "Exact baseline IDs; single-photo plus dedicated global batch/preset source integration is present. Runtime and photographic acceptance remain UNRUN. Local mode/user marks are nonportable; library/style/scene-synthesis families excluded.",
   "controls": [
     {
       "control_id": "PC-32452-C-fbe73f0159",
@@ -55,8 +55,10 @@
       "linux_requirement_id": "LNX-REF-PC-32452-C-e92914a50b",
       "control_path": "AI追色/批量同步&保存预设",
       "source_url": "https://www.pixcakeai.com/guide/32452",
-      "status": "PORTABLE_INTENT_ONLY_BATCH_HOST_NOT_CONNECTED",
-      "runtime_acceptance": "UNRUN"
+      "status": "SOURCE_INTEGRATED_RUNTIME_ACCEPTANCE_PENDING",
+      "runtime_acceptance": "UNRUN",
+      "evidence": "../semantic_colour_batch/INTEGRATION.md",
+      "scope": "global-mode per-target recompute/review; portable owned-reference archive with explicit photo inclusion; local/user-mask intent refused"
     },
     {
       "control_id": "PC-32452-C-a6bb17749a",

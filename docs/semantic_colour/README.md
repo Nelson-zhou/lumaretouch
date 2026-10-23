@@ -1,6 +1,7 @@
 # PC-32452 semantic colour transfer: implementation evidence
 
-Status at source freeze: single-photo source integration is wired through UI,
+Current status: single-photo and dedicated global batch/preset source integration
+are wired through UI,
 native transport, engine, history, project, preview, export and packaging. Python/TypeScript AST inspection only. No model inference, Rust build,
 product import, tests, typecheck, performance measurement or image-quality
 acceptance was run. Qoder owns eventual local execution. This document is not a
@@ -95,9 +96,10 @@ lossless bundled sample. A failed apply restores only this module's prior state.
 - Generic SAM rendered-canvas selection is not connected; manual independent brush
   selection is implemented. Existing source-domain SAM masks cannot be reused as
   if they described an edited/cropped render.
-- Batch/preset intent is defined as per-target recomputation plus explicit manual
-  offsets, with no copied target gains/masks. Host batch/preset integration and
-  reference bundle transfer remain pending. No batch coverage is claimed.
+- Global batch/preset target recomputation, explicit manual offsets/class intent,
+  owned-field undo and portable full-reference archives are source-integrated.
+  See ../semantic_colour_batch/INTEGRATION.md. Local/user-mask intent is refused;
+  runtime, photographic and portability acceptance remain UNRUN.
 - The local library, commercial official/cloud samples, colour-style family,
   AI追色2.0 and scene synthesis are separate tasks, not covered by these modules.
 
@@ -170,6 +172,7 @@ labelled initial-fit only. No ordinary colour drag automatically launches a fit.
 
 See INTEGRATION.md for the actual command path and small-receipt ownership. The
 shared snapshot extraction keeps active and stored-document exports on one mapping.
-The project container is v12; v11 sky semantics remain supported and are not
-reinterpreted. Required next evidence is Qoder runtime execution, not another
-source-only claim. The current patch does not register batch/preset copying.
+The current project container is v14; semantic assets introduced in v12 and
+earlier sky semantics remain supported and are not reinterpreted. Required next
+evidence is Qoder runtime execution, not another source-only claim. Dedicated
+batch/preset registration performs target recomputation and refuses generic copying.

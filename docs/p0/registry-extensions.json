@@ -689,6 +689,18 @@
       "range": {
         "format": "sha256-bound locally retained rendered reference"
       }
+    },
+    {
+      "operation_id": "lnx.semantic_colour.v1",
+      "parameter_key": "intent",
+      "type": "object",
+      "neutral": null,
+      "transferable": true,
+      "source_requirement": "PC-32452-C-e92914a50b",
+      "range": {
+        "format": "semantic-colour-target-recompute-v1; explicit full-reference lrt.semantic-colour-preset.v1 resource"
+      },
+      "reason": "Dedicated cancellable semantic-colour transport; per-target rendered-canvas segmentation and Rust fit, original class intent and manual baseline offsets. Local/source marks nonportable; generic text presets or fitted-target parameter copying refused. Runtime and photographic acceptance UNRUN."
     }
   ]
 }

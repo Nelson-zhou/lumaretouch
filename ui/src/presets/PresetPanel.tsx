@@ -10,7 +10,7 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
   const unavailable=unavailableScope(chosen,modules),selectedOps=Object.keys(w.selected?.modules??{});
   const faceBlocked=!w.face.ok&&modules.some(m=>selectedOps.includes(m.operation_id)&&m.single_face);
   const rows=[...modules,...chosen.filter(op=>!modules.some(m=>m.operation_id===op))
-    .map(operation_id=>({operation_id,params:[],transferable:false,single_face:false,reason:'当前引擎不再提供这个模块'}))];
+    .map(operation_id=>({operation_id,params:[],transferable:false,single_face:false,dedicated_transport:undefined,reason:'当前引擎不再提供这个模块'}))];
   const verbs={list:'刷新列表',preflight:'预检目标预设',apply:'应用预设',save:'保存预设',import:'导入预设',delete:'删除预设'};
   const oldDocument=!!w.ui.submitted?.options.documentId&&w.ui.submitted.options.documentId!==w.context.documentId;
   const nameLength=Array.from(w.form.name.trim()).length;
@@ -40,12 +40,12 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
     <fieldset><legend>保存当前照片的模块参数</legend>
       <label>预设名称<input aria-label="预设名称" value={w.form.name} maxLength={160} placeholder="例如：室外婚纱暖调" onChange={e=>w.setName(e.target.value)}/><small>{nameLength}/80 字符</small></label>
       {nameLength>80&&<p role="alert">名称过长，请缩短到 80 个字符以内。</p>}
-      <div className="presetButtons"><button disabled={w.busy} onClick={()=>w.setScope(modules.filter(m=>m.transferable).map(m=>m.operation_id))}>全选可用模块</button>
+      <div className="presetButtons"><button disabled={w.busy} onClick={()=>w.setScope(modules.filter(m=>m.transferable&&!m.dedicated_transport).map(m=>m.operation_id))}>全选可用模块</button>
         <button disabled={w.busy} onClick={()=>w.setScope([])}>清空选择</button></div>
       <div className="presetScopes">{rows.map(m=><label key={m.operation_id} title={m.reason??''}>
-        <input type="checkbox" checked={chosen.includes(m.operation_id)} disabled={w.busy||(!m.transferable&&!chosen.includes(m.operation_id))}
+        <input type="checkbox" checked={chosen.includes(m.operation_id)} disabled={w.busy||((!m.transferable||!!m.dedicated_transport)&&!chosen.includes(m.operation_id))}
           onChange={e=>w.setScope(e.target.checked?[...chosen,m.operation_id]:chosen.filter(op=>op!==m.operation_id))}/>
-        <span>{moduleLabel(m.operation_id)}{m.single_face&&<small>应用时须单脸</small>}{!m.transferable&&<small>{m.reason||'暂不可用'}</small>}</span>
+        <span>{moduleLabel(m.operation_id)}{m.single_face&&<small>应用时须单脸</small>}{(!m.transferable||!!m.dedicated_transport)&&<small>{m.reason||'暂不可用'}</small>}</span>
       </label>)}</div>
       {chosen.includes(LOCAL_GRADE_OP)&&<MaskTransferControls saveOnly groups={w.context.sourceGroups} value={w.saveMaskTransfer} onChange={w.setSaveMaskTransfer} disabled={w.busy}/>}
       {unavailable.length>0&&<p role="alert">请取消已不可用模块：{unavailable.map(moduleLabel).join('、')}</p>}
