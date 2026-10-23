@@ -145,6 +145,7 @@ class ExportSpec:
     local_mask_semantics: dict = field(default_factory=dict)
     local_mask_source_path: str | None = None  # ephemeral verified source, never a persisted raster
     creative_mask_context: dict | None = None  # ephemeral effective-source/category proof
+    creative_smoothing_context: dict | None = None  # frozen source-owned smoothing scope
     creative_fabric_context: dict | None = None  # frozen measured clothes/scale evidence
     creative_recovery_context: dict | None = None  # effective-source global vector ownership
     local_grade_groups: dict | None = None    # retained ordered groups, not merged masks
@@ -555,7 +556,7 @@ class _MaskCarrier:
 
     def __init__(self, arr, landmarks):
         self._arr = np.ascontiguousarray(arr, dtype=np.float32)
-        self.landmarks = np.ascontiguousarray(landmarks, dtype=np.float32)
+        self.landmarks = np.empty((0,3),dtype=np.float32) if landmarks is None else np.ascontiguousarray(landmarks, dtype=np.float32)
 
     def stack(self):
         return self._arr, list(self._carrier_names or [])
@@ -750,6 +751,9 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry):
     source = export_source(spec.creative_base, cancelled=cancelled, max_bytes=work_bytes)
     if resolved.repair:
         from .creative_derived_repair_export import stamp_pixels
+        stamp_pixels(resolved,source)
+    if resolved.creative_smoothing_context is not None:
+        from .creative_derived_smoothing import stamp_pixels
         stamp_pixels(resolved,source)
     if resolved.creative_fabric_context is not None:
         from .creative_derived_fabric import stamp_pixels
@@ -968,6 +972,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     # 而每块重算会把羽化截断在块边界上（那会在出片里留下一条笔直的眼白接缝）。
     # 排在这里而不是最前面：内容门判的是“这份底图上的组”——消除笔先把口腔里的
     # 异物掉掉，那一组的均值就变了，与预览里“先修完再挂眼牙层”是同一条链。
+    smoothing_pixels = None
+    if spec.creative_smoothing_context is not None:
+        from .creative_derived_smoothing import verify_export as verify_smoothing_export
+        smoothing_pixels = verify_smoothing_export(spec,src_u8,base_f,divisor)
     from .fabric_export import prepare_export
     fabric_field = prepare_export(spec, src_u8, base_f, divisor)
     wrinkle_layer = WRUNTIME.prepare_export(spec, src_u8, base_f, divisor)
@@ -1112,6 +1120,12 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             carrier = _MaskCarrier(spec.masks[:, cy0:cy1, cx0:cx1], spec.landmarks)
             carrier._carrier_names = list(spec.mask_names)
             pipe.load_face(carrier)
+        if smoothing_pixels is not None:
+            from .creative_derived_smoothing_runtime import bind as bind_smoothing_tile
+            bind_smoothing_tile(pipe,spec.creative_smoothing_context['source'],
+                smoothing_pixels[cy0:cy1,cx0:cx1],mask_channel=spec.channel,
+                mask_pixels=None if spec.channel is None else spec.masks[0,cy0:cy1,cx0:cx1],
+                domain='export-tile',evidence_key=spec._creative_smoothing_pixels)
         render_options = dict(radius=spec.radius, eps=spec.eps,
                               detail_gain=spec.detail_gain, mid_gain=spec.mid_gain,
                               broad_gain=spec.broad_gain, texture_radius=spec.texture_radius,

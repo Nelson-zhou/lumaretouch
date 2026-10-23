@@ -7,7 +7,14 @@ from .effect_recovery_stage import EffectRecoveryStage, check_fields
 
 def availability(engine):
     pipe = engine._vram
-    strength, _ = engine._retouch_render_args() if pipe is not None else (0, None)
+    from .creative_derived_source import record
+    derived = record(engine) is not None
+    smoothing_error = None
+    try:
+        strength, _ = engine._retouch_render_args() if pipe is not None else (0, None)
+    except Exception as error:
+        if not derived:raise
+        strength, smoothing_error = 0., str(error)
     from .fabric_controller import status
     fabric = status(engine)
     lip = getattr(pipe, 'lip_makeup_delta', None) if pipe else None
@@ -32,10 +39,17 @@ def availability(engine):
     from . import people_recovery as PEOPLE
     if PEOPLE.managed(engine):
         result.update(PEOPLE.availability(engine))
-    from .creative_derived_source import record
-    if record(engine) is not None:
-        for target in ('skin_smoothing', 'background_replace'):
-            result[target] = {'active': False, 'reason': '此回流源的磨皮/换底算子尚未完成来源适配；不会借用原图分析'}
+    if derived:
+        result['background_replace'] = {'active': False, 'reason': '此回流源的换底算子尚未完成来源适配；不会借用原图分析'}
+        from .creative_derived_smoothing import recovery_context
+        try:
+            if smoothing_error is not None:raise ValueError(smoothing_error)
+            context = recovery_context(engine)
+            active = pipe is not None and context['recipe']['strength'] != 0
+            result['skin_smoothing'] = {'active': active,
+                'reason': None if active else '请先开启当前源的磨皮；只恢复本机现有磨皮/肌理算子'}
+        except Exception as error:
+            result['skin_smoothing'] = {'active': False, 'reason': str(error)}
     return result
 
 

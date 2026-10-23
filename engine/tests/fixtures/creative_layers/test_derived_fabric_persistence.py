@@ -41,6 +41,6 @@ def test_encoded_foreign_recovery_is_rejected_before_best_effort_decode():
 
 def test_unadapted_global_target_cannot_hide_disabled_in_history():
     value=state()
-    for target in ('skin_smoothing','background_replace'):
+    for target in ('background_replace',):
         bad=deepcopy(value);bad['_effect_recovery']['targets'][0]['target']=target
         with pytest.raises(ValueError):C.validate_history_frames([state(),bad])

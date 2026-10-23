@@ -23,7 +23,8 @@ def prepare(engine,decoded,request):
     if engine._precompute is not None:return
     state=engine._people_owner().snapshot();asset=engine._people_source()['sha256']
     faces=[face for face in state['faces'].values() if face['asset_sha256']==asset]
-    if not faces:return
+    from .creative_smoothing_host import needs_analysis
+    if not faces and not needs_analysis(engine):return
     from .hair_colour_replay import restore_open
     if getattr(engine,'_creative_base',None) is None and restore_open(engine,decoded):return
     from .face import build

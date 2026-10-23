@@ -146,7 +146,9 @@ def require_rebound_snapshot(snapshot):
         verify_snapshot(snapshot)
     from .creative_derived_masks import masks, verify_snapshot as verify_masks
     if masks(snapshot):verify_masks(snapshot)
-    if snapshot.get('channel') or snapshot.get('grade_scope', 'all') not in ('all','objects'):
+    from .creative_derived_smoothing import verify_snapshot as verify_smoothing
+    verify_smoothing(snapshot)
+    if snapshot.get('grade_scope', 'all') not in ('all','objects'):
         blocked.append('original scoped masks')
     from .creative_derived_repairs import validate_stacks
     validate_stacks(snapshot)
@@ -189,10 +191,12 @@ def require_rebound_spec(spec):
     """Same fail-closed gate for direct library callers bypassing snapshots."""
     snapshot = {key: getattr(spec, key, None) for key in (
         'creative_base', 'people', 'body_pose', 'body_pose_source_proof', 'channel', 'grade_scope',
+        'strength', 'creative_smoothing_context',
         'fabric_amount', 'creative_fabric_context', 'local_masks', 'local_grade_groups', 'creative_mask_context', 'effect_recovery', 'creative_recovery_context', 'manual_liquify',
         'studio_background', 'id_background', 'optics', 'sky_replacement',
         'reference_color', 'semantic_colour', 'lip_makeup', 'brow_shape',
         'nose_shape', 'eye_shape', 'mouth_shape', 'colour_editor')}
+    snapshot['params']={key:getattr(spec,key) for key in ('radius','eps','texture_radius','broad_gain','mid_gain','detail_gain')}
     snapshot.update(repair_ops=spec.repair, light_ops=spec.light,
         deform={'amounts': spec.deform_amounts}, enhance={'amounts': spec.enhance},
         _bg={'active': spec.bg_matte is not None or spec.bg_ref is not None})

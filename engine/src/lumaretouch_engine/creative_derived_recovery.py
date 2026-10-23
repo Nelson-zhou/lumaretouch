@@ -1,13 +1,13 @@
-"""Reviewed face and fabric recovery for an immutable returned source.
+"""Reviewed face, fabric and smoothing recovery for an immutable returned source.
 
-Face ownership stays separate from the global fabric consumer. No other global
+Face ownership stays separate from the reviewed global consumers. No other global
 operator or second history owner is admitted; recovery attenuates one delta.
 """
 import hashlib
 import json
 from .facial_wrinkle_recovery import FACE_TARGETS as TARGETS
 
-GLOBAL_TARGETS = frozenset(('fabric_fine',))
+GLOBAL_TARGETS = frozenset(('fabric_fine', 'skin_smoothing'))
 
 COMMANDS = frozenset(('source_patch_capture','effect_recovery_preview','effect_recovery'))
 
@@ -46,7 +46,10 @@ def global_context(engine,target):
     if record(engine) is None:return None
     if target not in GLOBAL_TARGETS:
         raise ValueError('This global recovery consumer is not derived-source adapted')
-    from .creative_derived_fabric import recovery_context
+    if target == 'skin_smoothing':
+        from .creative_derived_smoothing import recovery_context
+    else:
+        from .creative_derived_fabric import recovery_context
     return {'target':target,'consumer':recovery_context(engine),'recovery':_global_value(engine)}
 
 
@@ -60,7 +63,7 @@ def assert_review(engine,record):
     target=record['target']
     if target in GLOBAL_TARGETS:
         if record.get('people_context') is not None or record.get('global_context')!=global_context(engine,target):
-            raise ValueError('Derived fabric recovery source, recipe or measured evidence changed')
+            raise ValueError('Derived global recovery source, recipe or measured evidence changed')
     elif target in TARGETS:
         if record.get('global_context') is not None or record.get('people_context')!=_context(engine):
             raise ValueError('Derived recovery review source, face or graph changed')
@@ -145,7 +148,7 @@ def require_command(engine,name,request):
     if name=='effect_recovery_preview' and action=='preview':
         mutation=request['mutation']
         if type(mutation) is not dict or mutation.get('target') not in TARGETS | GLOBAL_TARGETS:
-            raise ValueError('Only reviewed face and fabric operators support derived recovery')
+            raise ValueError('Only reviewed face, fabric and smoothing operators support derived recovery')
         allowed={'view':{'action','target'},'stroke':{'action','target','stroke'},
                  'clear':{'action','target'},'enable':{'action','target','enabled'},
                  'delete':{'action','target','id'}}

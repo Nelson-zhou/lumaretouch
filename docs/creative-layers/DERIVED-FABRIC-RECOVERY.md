@@ -1,6 +1,10 @@
 # M14 derived fabric and reviewed global recovery
 
 Source-only continuation of `95ed4f10ace05ad386cb4b9227699a7870f32a9d`.
+Subsequent smoothing and its recovery source port is documented in
+[DERIVED-SMOOTHING.md](DERIVED-SMOOTHING.md); it supersedes that specific residual
+below, not the UNRUN acceptance boundary.
+
 All numerical, model, native, UI, persistence-runtime and visual acceptance is
 **UNRUN**. This is not completion of M14, the clothing module, or 32 AI tools.
 

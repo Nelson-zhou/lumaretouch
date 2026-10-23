@@ -372,6 +372,8 @@ class PreviewPipeline:
         self.semantic_colour = SemanticColourStage(None)
         self._optics_key = None
         self.src_f32 = src_f32
+        from .creative_derived_smoothing_runtime import reset as reset_smoothing_source
+        reset_smoothing_source(self)
         self.frame_gpu = torch.empty((self.h, self.w, 4), dtype=torch.uint8, device=self.device)
         self.frame_gpu[..., 3] = 255
         # 换图就是换源张量：旧滤波结果对新图没有任何意义，继续用等于拿别人的脸磨自己的皮
@@ -489,10 +491,13 @@ class PreviewPipeline:
             raise RuntimeError("先 load_rgb_u8 再 prepare")
         r, e, rf, g, mg, bg = self._filter_parameters(
             radius, eps, detail_gain, mid_gain, broad_gain, texture_radius)
-        bands_key = (r, e, rf, self.repair_version)
+        from . import creative_derived_smoothing_runtime as smoothing_source
+        source_key=smoothing_source.check(self,require=True,check_channel=False)
+        smoothing_source.cache_check(self)
+        bands_key = (r, e, rf, self.repair_version) if source_key is None else (r,e,rf,source_key,self.repair_version)
         # 成品键把修补版本放最后一位（M1-3c 起就是这个约定，测试与报表都按它读）：
         # 前面六个全是磨皮参数，第 7 位是底图身份。
-        key = (r, e, rf, bg, mg, g, self.repair_version)
+        key = (r, e, rf, bg, mg, g, self.repair_version) if source_key is None else (r,e,rf,bg,mg,g,source_key,self.repair_version)
         if not force and self.retouched is not None and self.filter_key == key:
             self.last_filter_ms = 0.0
             self.last_bands_ms = 0.0
@@ -520,6 +525,7 @@ class PreviewPipeline:
                              f"radius={r} eps={e} 增益=({bg},{mg},{g})")
         self.retouched = out
         self.filter_key = key
+        smoothing_source.cache_record(self)
         if self.device.type != "cpu":
             torch.cuda.synchronize(self.device)
         self.last_filter_ms = (time.perf_counter() - t0) * 1000.0
@@ -547,6 +553,8 @@ class PreviewPipeline:
             raise ValueError('Unknown production render stage')
         if self.src_f32 is None:
             raise RuntimeError("先 load_rgb_u8 再 render")
+        from .creative_derived_smoothing_runtime import check as check_smoothing_source
+        check_smoothing_source(self,channel,require=strength!=0.0 or channel is not None)
         build = lambda: self._retouch_prefix(
             strength, radius, eps, detail_gain, mid_gain, broad_gain,
             texture_radius, channel, scope_tap, render_stage)

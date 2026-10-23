@@ -338,6 +338,10 @@ def guard_command(engine, name, request):
         raise ValueError('会话含创意回流图；跨图人像/批量计划尚未支持该来源，请先关闭回流图或撤销回流，避免借用原图分析。')
     if getattr(engine, '_creative_base', None) is None:
         return
+    if name == 'set_strength':
+        from .creative_derived_smoothing import require_command as require_smoothing
+        require_smoothing(engine,request)
+        return # Actual owned smoothing source/channel, not unmasked fallback.
     if name == 'fabric':
         from .creative_derived_fabric import require_command as require_fabric
         require_fabric(engine,request)

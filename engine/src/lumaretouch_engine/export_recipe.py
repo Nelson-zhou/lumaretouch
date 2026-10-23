@@ -210,7 +210,10 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
         if pc is None: raise ValueError("唇妆导出缺少当前选中人物")
         spec.landmarks = np.asarray(pc.landmarks, dtype=np.float32)
         LIPR.configure_export(spec, snap, eh, ew)
-    if snap["channel"]:
+    if base is not None:
+        from .creative_derived_smoothing import configure_export as configure_smoothing
+        configure_smoothing(spec,snap,eh,ew)
+    elif snap["channel"]:
         if pc is None:
             skipped.append(f"channel:{snap['channel']}（没有掩膜）")
         else:

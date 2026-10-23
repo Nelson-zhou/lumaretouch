@@ -1189,6 +1189,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         out = dict(st)
         for k in self.PROXY_BOUND:
             out[k] = self._fresh_doc_state()[k]
+        if st.get("_creative_base") is not None:
+            out["_channel"] = st.get("_channel")  # Preserve scope intent; never broaden missing skin masks.
         if st.get("_grade_scope") == "objects": out["_grade_scope"] = "objects"
         out["_op_seq"] = 0
         out["_proxy"] = None
@@ -3256,10 +3258,15 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 emit({"event": "error", "error": f"参数 {k}={v} 超出范围 [{lo}, {hi}]"})
                 return
             params[k] = v
+        previous = self._strength, self._channel, self._params
         self._strength, self._channel, self._params = strength, channel, params
         # 出帧走与 cmd_inpaint 同一个入口：以前这里是一份手写的“render → 锁内写 shm → emit frame”，
         # 而写多份的下场已经受过（上一轮就是其中一份漏了尺寸守卫）。
-        fr = self._write_current_frame("drag")
+        try:
+            fr = self._write_current_frame("drag")
+        except Exception:
+            self._strength, self._channel, self._params = previous
+            raise
         render_ms = fr.pop("render_ms")
         # filter_ms > 0 就是这一帧重算了滤波（参数刚变）；0.0 才是拖拽期的常态。
         emit({"event": "params_set", "strength": self._strength, "channel": self._channel,
@@ -3286,6 +3293,9 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         Requested strength/channel stay in the recipe so reanalysis can restore them.
         Explicit unmasked API edits (channel=None) retain their existing semantics.
         """
+        if getattr(self,"_creative_base",None) is not None:
+            from .creative_smoothing_host import render_args
+            return render_args(self)
         if self._channel and self._channel not in self._vram.mask_names:
             return 0.0, None
         return self._strength, self._channel
@@ -5642,6 +5652,11 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         grade_active = (str(snap.get("grade_scope", "all")) == "skin"
                         and float(tuple(snap.get("grade", (0, 0, 0, 1)))[3]) != 0
                         and any(float(x) != 0 for x in tuple(snap.get("grade", (0, 0, 0, 1)))[:3]))
+        if snap.get('creative_base') is not None:
+            if not for_document:raise ExportError('Derived smoothing cannot reuse another target source')
+            from .creative_derived_smoothing import verify_snapshot as verify_smoothing
+            verify_smoothing(snap,path)
+            return snap, for_document  # Never infer derived masks from the physical original.
         if not channel_active and not grade_active:
             return snap, for_document
         def require_skin(pc):

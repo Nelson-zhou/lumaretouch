@@ -32,7 +32,7 @@ def test_disabled_foreign_and_unadapted_global_rows_refuse():
     source={'sha256':'a'*64,'width':4,'height':4};value=recipe(source,enabled=False)
     assert not S.enabled(G.validate(value,source))
     with pytest.raises(ValueError):G.validate(value,{**source,'sha256':'b'*64})
-    for name in ('skin_smoothing','background_replace'):
+    for name in ('background_replace',):
         bad=deepcopy(value);bad['targets'][0]['target']=name
         with pytest.raises(ValueError):G.validate(bad,source)
 
