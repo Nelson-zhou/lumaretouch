@@ -87,6 +87,7 @@ from . import library_query_host as LQ
 from .library_query_metadata import capture_decoded as library_capture_decoded, capture_file_identity as library_file_identity
 from .sample_library_host import SampleLibraryHostMixin
 from .preset_organisation_host import PresetOrganisationHostMixin
+from . import source_relocation_host as SRH
 from .semantic_colour_host import SemanticColourHostMixin
 from . import semantic_colour_state as SCS, semantic_colour_runtime as SCR
 from .command_reader import read_commands
@@ -389,6 +390,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         self._project_path_prev: str | None = None
         self._project_dirty = False
         self._project_saved_ns: int | None = None
+        self._project_disk_sha256: str | None = None
         # 批量任务台账（LNX-P0-TASK）：状态与审计轨迹在 tasks 层，这里是运行时的三个位。
         self._tasks: dict = {}            # task_id → 记录（插入序就是队列序）
         self._task_args: dict = {}        # task_id → 当时那份导出参数（含 numpy 图层，只活在会话）
@@ -416,7 +418,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "preset_organisation_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"eyeliner_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyeliner.so").is_file()),"iris_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_iris_makeup.so").is_file()),"eyelash_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyelash.so").is_file()),"brow_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_brow_makeup.so").is_file()),"lipstick_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_lipstick.so").is_file()),"blush_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_blush_makeup.so").is_file()),"eye_light_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eye_light.so").is_file()),"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"primary_calibration_protocol":int(self._primary_calibration_service().available()),"colour_editor_protocol":int((Path(__file__).parent/"bin/liblrt_colour_editor.so").is_file()),"selective_colour_protocol":int((Path(__file__).parent/"bin/liblrt_selective_colour.so").is_file()),"photo_grain_protocol":int(PGR.available()),"colour_grading_protocol":int((Path(__file__).parent/"bin/liblrt_colour_grading.so").is_file()),"photo_detail_protocol":int(PDH.available()),"extended_tone_protocol":int((Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()),"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1,"arm_shape_protocol":1,"waist_shape_protocol":1,"neck_shape_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_neck_shape.so").is_file()),"leg_length_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_leg_length.so").is_file()), "studio_background_protocol": 1, "id_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "preset_organisation_protocol": 1, "source_relocation_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"eyeliner_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyeliner.so").is_file()),"iris_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_iris_makeup.so").is_file()),"eyelash_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyelash.so").is_file()),"brow_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_brow_makeup.so").is_file()),"lipstick_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_lipstick.so").is_file()),"blush_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_blush_makeup.so").is_file()),"eye_light_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eye_light.so").is_file()),"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"primary_calibration_protocol":int(self._primary_calibration_service().available()),"colour_editor_protocol":int((Path(__file__).parent/"bin/liblrt_colour_editor.so").is_file()),"selective_colour_protocol":int((Path(__file__).parent/"bin/liblrt_selective_colour.so").is_file()),"photo_grain_protocol":int(PGR.available()),"colour_grading_protocol":int((Path(__file__).parent/"bin/liblrt_colour_grading.so").is_file()),"photo_detail_protocol":int(PDH.available()),"extended_tone_protocol":int((Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()),"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1,"arm_shape_protocol":1,"waist_shape_protocol":1,"neck_shape_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_neck_shape.so").is_file()),"leg_length_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_leg_length.so").is_file()), "studio_background_protocol": 1, "id_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -2337,6 +2339,10 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 "writer_match": ((p or {}).get("writer") == _current_writer())
                                  if p is not None else None,
                 "dropped_count": len((p or {}).get("dropped") or []),
+                "source_relocation": {"protocol": 1, "exact_fingerprint": "sha256-full-file",
+                    "runtime_verified": False,
+                    "busy": bool(getattr(self, '_source_relocation_controller', None) and self._source_relocation_controller.active),
+                    "requires_readback": bool(getattr(self, '_source_relocation_controller', None) and self._source_relocation_controller.uncertain)},
                 **getattr(self, "_project_source_notice", {})}
 
     def _project_build(self, base: dict | None) -> tuple[dict, dict]:
@@ -2576,6 +2582,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             # 否则徽章会说“已保存”而磁盘上一张图都没有——那比多亮一次危险得多。
             # （create 本身不丢工：它不动 _docs；真正会丢工的是 open，那一条另有守卫。）
             self._project_saved_ns = info["updated_ns"]
+            self._project_disk_sha256 = info["sha256"]
             self._project_dirty = bool(self._docs)
             emit({"event": "project_created", "requested_directory": os.path.abspath(directory),
                   "replaced": self._project_path_prev, "replaced_dirty": replaced_dirty,
@@ -2660,6 +2667,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             self._people_load(prj,people_history)
             self._project, self._project_path = prj, os.path.abspath(path)
             self._project_saved_ns, self._project_dirty = prj.get("updated_ns"), False
+            self._project_disk_sha256 = prj.get("_source_sha256")
             # 写手环境不一致：说出口，不拒开。同一份配方在另一版 numpy/torch 上算出的
             # 字节可能差几 LSB（逐层舍入方向），用户看到“重开后画面微妙不同”时得有一条
             # 能指认的原因，而不是只能怀疑自己记错了。旧版本工程没这一格也算不一致吗？
@@ -2746,6 +2754,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 return
             self._project = prj
             self._project_saved_ns, self._project_dirty = info["updated_ns"], False
+            self._project_disk_sha256 = info["sha256"]
             emit({"event": "project_saved", "bytes": info["bytes"], "sha256": info["sha256"],
                   "write_ms": info["write_ms"], "path": info["path"],
                   # 清单逐条发（上限 12 条，多了只报数）：“哪一层没存进去”必须能在批量
@@ -6534,6 +6543,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         return self.device
 
     def cmd_shutdown(self, _p: dict):
+        relocation = self.__dict__.get('_source_relocation_controller')
+        if relocation is not None: relocation.close()
         self.stop_flag.set()
         self._quit = True
         emit({"event": "bye"})
@@ -6686,7 +6697,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light",
                "deform", "lut", "custom_lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -6698,6 +6709,9 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                # 而 UI 一句也不说为什么"（CORE-006 为此专门加了一条用例）
                "enhance", "lip_makeup", "brow_shape", "nose_shape", "eye_shape", "mouth_shape", "people", "hair_colour", "fabric")
     _HANDLED_LAMBDA = ("bench_stop",)      # 唯一不开成 cmd_* 的那条：只是置停止位
+
+    def cmd_source_relocation(self, p):
+        SRH.handle(self, p, emit, PJ.validate)
 
     def _dispatch_table(self) -> dict:
         missing = [n for n in self.HANDLED
@@ -6725,10 +6739,27 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             if fn is None:
                 emit({"event": "error", "error": f"未知命令: {name}"})
                 return
+            relocation = self.__dict__.get('_source_relocation_controller')
+            if relocation is not None and relocation.blocks(name, msg):
+                reason = '原图重定位仍在进行或结果待确认；请查询原操作，暂不接受其他修改'
+                if name == 'preset_organisation':
+                    emit({'event': 'preset_organisation_result', 'protocol': 1,
+                          'request_id': msg.get('request_id'), 'action': msg.get('action'),
+                          'success': False, 'outcome_unknown': False, 'error': reason})
+                    return
+                raise ValueError(reason)
+            if name == 'source_relocation':
+                fn(msg); return  # Path transactions never enter recipe history/capture invalidation.
+            if relocation is not None and name == 'project' and msg.get('action') == 'state':
+                with relocation.lock: fn(msg)
+                return
             if name == "preset_organisation":
                 fn(msg); return  # Catalogue metadata never changes image history or capture fences.
             if name == "session" and msg.get("action") == "query":
-                fn(msg); return  # View-only: do not fence or revoke any edit/capture owner.
+                if relocation is not None:
+                    with relocation.lock: fn(msg)
+                else: fn(msg)
+                return  # View-only: do not fence or revoke any edit/capture owner.
             if name == "background" and msg.get("action") in ("id_state","id_sample"):
                 from .id_background_controller import controller
                 controller(self,emit).handle(msg); return
@@ -6895,11 +6926,13 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         try:
             reader.start()
             while not self._quit:
-                self._tick_owned_previews()
+                relocation = self.__dict__.get('_source_relocation_controller')
+                if relocation is None or not relocation.blocks('_owned_tick', {}):
+                    self._tick_owned_previews()
                 try:
                     line = inbox.get_nowait()
                 except queue.Empty:
-                    if self._snapshot_pending():
+                    if (relocation is None or not relocation.blocks('_snapshot_tick', {})) and self._snapshot_pending():
                         try:
                             self._tick_snapshot()
                         except Exception as exc:
@@ -6918,6 +6951,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                     break
                 self._process_line(line, table)
         finally:
+            relocation = self.__dict__.get('_source_relocation_controller')
+            if relocation is not None: relocation.close()
             self._owned_reader_stop()
             reader_stop.set()
             try:

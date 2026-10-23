@@ -288,7 +288,8 @@ class PeopleHostMixin:
         owner=self._people_owner();before=owner.snapshot()
         for rec in batch['targets'].values():
             found=self._document_versions().find(self._docs,rec['document_id'])
-            if found is None or found[1]['path']!=rec['path'] or SOURCE.source_digest(rec['path'])!=rec['asset_sha256']:
+            from .source_relocation_history import matches as source_path_matches
+            if found is None or not source_path_matches(found[1], rec['path']) or SOURCE.source_digest(found[1]['path'])!=rec['asset_sha256']:
                 raise ValueError('A people batch target changed or was removed; protected group restore refused')
         candidate=apply(before,batch['people_changes'],redo=redo)
         assets=affected_assets(before,candidate);assets.add(self._people_source()['sha256'])

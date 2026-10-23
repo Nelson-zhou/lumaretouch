@@ -1,0 +1,73 @@
+{
+  "status": "SOURCE_REGISTERED_STATIC_ONLY_RUNTIME_UNRUN",
+  "requirement_ids": [
+    "LNX-CORE-005",
+    "LNX-P0-PROJECT"
+  ],
+  "shared_edits": [
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "change": "Dispatch source_relocation before ordinary capture invalidation/edit fences: source_relocation_host.handle(self,msg,emit,PJ.validate). Before all other dispatch work, retrieve existing _source_relocation_controller and reject controller.blocks(name,msg) with correlated host failure. Do not put relocation in EDIT_CMDS. This gate must precede the session query/owner-specific early returns.",
+      "status": "authored and statically inspected; runtime UNRUN"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "change": "Expose bounded controller.report() as source_relocation support/state metadata after registration. Review prior asynchronous mutators and ensure admission cannot overlap their commit. Reject running bench/export/thumb/pick workers; source snapshot rechecks dirty state, workspace and document revisions.",
+      "status": "authored and statically inspected; runtime UNRUN"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "change": "Declare mod source_relocation_api; register source_relocation_request and source_relocation_status in generate_handler.",
+      "status": "authored and statically inspected; runtime UNRUN"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "change": "For event source_relocation_result, call crate::source_relocation_api::receive(inspection_epoch,&v). Do not forward it as image frame or recipe edit receipt.",
+      "status": "authored and statically inspected; runtime UNRUN"
+    },
+    {
+      "path": "ui/src/projects/ProjectWorkspace.tsx",
+      "change": "Mount SourceRelocationPanel only for open project, with stable projectKey=project.project_id plus project.path; onChanged triggers actual refresh. Expose refresh through the project workflow or explicitly pass a callback, do not simulate success.",
+      "status": "authored and statically inspected; runtime UNRUN"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "change": "ProjectState exposes source_relocation capability and uncertainty metadata.",
+      "status": "authored; runtime UNRUN"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_group_history.py",
+      "change": "Resolve retained old path only through canonical-ID row plus full-content verified relocation alias. Preserve historical records.",
+      "status": "authored; runtime UNRUN"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "change": "People group restore verifies retained alias against current full digest and original asset SHA. Active _people_path is updated in source relocation publication.",
+      "status": "authored; runtime UNRUN"
+    }
+  ],
+  "native_commands": [
+    "source_relocation_request",
+    "source_relocation_status"
+  ],
+  "engine_command": "source_relocation",
+  "actions": [
+    "state",
+    "scan",
+    "commit",
+    "cancel",
+    "query"
+  ],
+  "event": "source_relocation_result",
+  "metadata": "state.available, state.rows[].eligible/reason, busy, requires_readback, recovery_operation_id",
+  "verification": {
+    "python_ast": "PASS: source parse only, no imports/execution",
+    "json_parse": "PASS: JSON syntax only",
+    "tests": "UNRUN",
+    "build": "UNRUN",
+    "typecheck": "UNRUN",
+    "runtime": "UNRUN"
+  },
+  "recovery": "blocks allows explicit project.open(force=true) only while no relocation worker runs. Successful workspace change clears old uncertainty on next blocks/report/handle; failed open does not.",
+  "registration_base": "3ae8c1bf9a6f1cfe1ef77e6629a10dae0e25d88e"
+}

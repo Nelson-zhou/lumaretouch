@@ -30,6 +30,6 @@ export function useProjectWorkflow({refresh,notify,enterRetouch}:ProjectPorts){
     command:runProject,refresh,inspect:engineStatus,name:()=>name,
     setError,notify,remember,enterRetouch,
   });
-  return {name,setName,error,recent,...actions};
+  return {name,setName,error,recent,refresh,...actions};
 }
 export type ProjectWorkflow=ReturnType<typeof useProjectWorkflow>;

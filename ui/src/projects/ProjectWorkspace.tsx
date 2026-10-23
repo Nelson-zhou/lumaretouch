@@ -1,5 +1,6 @@
 /** Presentational project workspace; state and native I/O live in its domain hook. */
 import type {ProjectState} from '../native';
+import {SourceRelocationPanel} from '../sourceRelocation/SourceRelocationPanel';
 import type {ProjectWorkflow} from './useProjectWorkflow';
 export function ProjectWorkspace({workflow,project,projectSuffix,hasImage,onEnterRetouch}:{
   workflow:ProjectWorkflow;project:ProjectState|null;projectSuffix:string;hasImage:boolean;onEnterRetouch:()=>void;
@@ -57,6 +58,7 @@ export function ProjectWorkspace({workflow,project,projectSuffix,hasImage,onEnte
                 ) : <p>还没有打开过工程。</p>}
               </div>
             </div>
+            {project?.open&&<SourceRelocationPanel projectKey={`${project.project_id??''}:${project.path??''}`} onChanged={()=>{void workflow.refresh();}}/>}
             {workflow.error && <div className="projErr">{workflow.error}</div>}
           </section>
   );

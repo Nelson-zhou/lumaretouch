@@ -1,6 +1,7 @@
 """All-or-none scoped group undo/redo, preserving unrelated subsequent edits."""
 from . import scope as SC, optics_auto_scope as OA, reference_color_scope as RC
 from . import reference_color_state as RS, reference_color_runtime as RR
+from .source_relocation_history import matches as source_path_matches
 from . import white_balance_recipe as WB, id_background_scope as ID_BACKGROUND
 
 
@@ -14,7 +15,7 @@ def restore_group(owner,request):
         if found is None:conflicts.append({'path':rec['path'],'reason':'目标已移除'});continue
         index,row=found;current=row['state']
         expected=OA.before_params(rec['before'],ops) if redo else rec['applied']
-        if row['path']!=rec['path'] or OA.before_params(current,ops)!=expected:
+        if not source_path_matches(row, rec['path']) or OA.before_params(current,ops)!=expected:
             conflicts.append({'path':rec['path'],'reason':'作用域已另行编辑，不覆盖后续修改'});continue
         try:
             previous=rec['after'] if redo else rec['before']

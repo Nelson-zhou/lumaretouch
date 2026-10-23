@@ -1,0 +1,24 @@
+{
+  "status": "AUTHORED_UNRUN",
+  "requirements": ["LNX-CORE-005", "LNX-P0-PROJECT", "manual-text:1045"],
+  "fixtures": "Synthetic bytes only. No portrait, copyrighted image, model, or external download.",
+  "cases": [
+    {"id":"single_renamed_exact", "expected":"Full SHA256 and size match; explicit path confirmation; same runtime document ID; revision advances once; no history/recipe/support mutation."},
+    {"id":"multi_partial_selection", "expected":"Only explicitly selected candidate mappings commit, all in one project replace. Unselected missing rows remain missing."},
+    {"id":"same_name_different_content", "expected":"No candidate accepted; visible source-file-changed reason even if dimensions, file size, filename and head bytes match."},
+    {"id":"metadata_only_change", "expected":"EXIF orientation, ICC or metadata byte change fails full fingerprint, even if decoded pixels match."},
+    {"id":"legacy_head_only", "expected":"Disabled with full-hash evidence missing. Never upgrades by hashing a replacement and declaring it original."},
+    {"id":"duplicates", "expected":"Every identical candidate is listed; no first-candidate automatic selection; reject a path already owned by another project row."},
+    {"id":"permission_symlink_fifo", "expected":"Readable files only. Reject file or ancestor symlinks, FIFOs and devices. Bound errors; never follow permissions-denied fallback."},
+    {"id":"cancel_bounds", "expected":"Cancel checks each 1 MiB and directory item. At 120 seconds, 16 GiB, 10,000 entries, 16 levels or 256 candidates fail entire preview. OS read/fsync latency is not claimed immediately cancellable."},
+    {"id":"rename_during_hash", "expected":"FD before/after identity plus reopened path identity rejects replacement. Commit repeats complete hashes and stat identities."},
+    {"id":"old_path_reappears", "expected":"Abort transaction; no overwrite, deletion, auto import or cache substitution."},
+    {"id":"stale_project_or_workspace", "expected":"Reject dirty project, changed runtime document IDs/revisions/workspace, changed project digest or disk SHA. No overwrite of newer work."},
+    {"id":"pre_replace_failures", "expected":"Inject temp open, write, file fsync, compare-swap and replace failure. Old project remains complete; temporary output cleaned; source bytes unchanged."},
+    {"id":"post_replace_failure", "expected":"Inject directory fsync and in-memory publication failure. Unknown result fences mutations. Query exact operation verifies disk SHA and receipt, retries directory fsync and idempotently publishes without rewriting disk."},
+    {"id":"restart_after_replace", "expected":"Reopen project; retained persisted operation marker confirms operation. Existing application's cross-reopen runtime ID regeneration remains an explicit inherited limitation."},
+    {"id":"ui_lifecycle", "expected":"Double click, picker cancel, unmount during scan, remount during commit, project change and late receipts never commit or overwrite a newer preview. Query original operation after uncertainty; never resend commit."},
+    {"id":"native_routing", "expected":"Verify real Tauri dialog, registered commands, engine event receipt forwarding and pre-dispatch mutation gate. Pending source registration is not runtime completion."},
+    {"id":"report", "expected":"Project missing notice updates after durable success; support report exposes bounded source_relocation capability/state; no full image content/network upload."}
+  ]
+}

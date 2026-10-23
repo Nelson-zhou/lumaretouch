@@ -1,0 +1,103 @@
+{
+  "status": "FROZEN_SOURCE_REGISTERED_STATIC_ONLY",
+  "base": "3ae8c1bf9a6f1cfe1ef77e6629a10dae0e25d88e",
+  "runtime": "UNRUN",
+  "checks": "Python AST, JSON parse, source-text route/gate assertions and SHA256 only. No product imports, execution, tests, build, typecheck, compiler, inference, installation or Git writes.",
+  "files": [
+    {
+      "path": "docs/source_relocation/README.md",
+      "sha256": "4789740375abe1d2c286b3f360f24f30b9d9fb75ae0a5ec0ea0dc33f85282010",
+      "bytes": 7261
+    },
+    {
+      "path": "docs/source_relocation/integration_map.json",
+      "sha256": "a0a71d37e505bc2edf156eb062e3cf019537d262690f87973e53b56511b28f63",
+      "bytes": 3750
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_group_history.py",
+      "sha256": "ea0be7d897e8ef22f81c1b3eb235549fbcd0f87427ac8ab86c4a784e95c8e748",
+      "bytes": 3432
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "3be14a5ae5d7b403d73a97c4fa8c2dfe545795ad65ce5c31352518b299ae4e3f",
+      "bytes": 19054
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "d62dd04cb8deb23be912595f8b4e26f5d5bb7ae423234a25e791410f2d81df7a",
+      "bytes": 462817
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/source_relocation_history.py",
+      "sha256": "597a3961db93e838c0ff0180c17c9ded063e5ca307ed278ce9ba3a80277f8466",
+      "bytes": 986
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/source_relocation_host.py",
+      "sha256": "68bf4a31125e8d829759871d26415f755016a16dd1c149e6cd93bcf01516cb07",
+      "bytes": 19132
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/source_relocation_io.py",
+      "sha256": "d2e050e016ac58ba80eba263a1557de9df146cd8e80c6a844c4d2b4348d3b69f",
+      "bytes": 5954
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/source_relocation_transaction.py",
+      "sha256": "7b9dcf859b3383a46f03b770333a2a4d484bcfa8a88b048e7366cddcb9c5db73",
+      "bytes": 8679
+    },
+    {
+      "path": "engine/tests/fixtures/source_relocation/acceptance_unrun.json",
+      "sha256": "db36bf4e7d9c31d5699089e36b7400daa55fcdd8c5a45be013a77945df0e0da7",
+      "bytes": 3493
+    },
+    {
+      "path": "engine/tests/test_source_relocation_contract.py",
+      "sha256": "c6ad4784d872584e458aef46fb43a1a8e33a9b0551e30ed494e3e22a32e6c830",
+      "bytes": 7388
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "61eae3a9d2fe567ccead555e036bfa585b5601832689591b895a11424198136f",
+      "bytes": 94735
+    },
+    {
+      "path": "ui/src/projects/ProjectWorkspace.tsx",
+      "sha256": "0581aa11aef5c3d196bcf5e5cb711457cabcca0023dfb6200763024ed2213727",
+      "bytes": 3240
+    },
+    {
+      "path": "ui/src/projects/useProjectWorkflow.ts",
+      "sha256": "96f34bfd40ba0d60467cd1f43e6fe025881dc307adf80f653ca93b2867a5a525",
+      "bytes": 1608
+    },
+    {
+      "path": "ui/src/sourceRelocation/SourceRelocationPanel.tsx",
+      "sha256": "3ed20b8701cd43eb8f183be920133ba47d7d67d9e8c522ac1f6bd1428286c2f3",
+      "bytes": 9750
+    },
+    {
+      "path": "ui/src/sourceRelocation/nativePort.ts",
+      "sha256": "55331bc85b8840816aa411925e5d7ffcda8e2d4fff76e50eb7d9ed4a4444630b",
+      "bytes": 1551
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "fb3a7a28905ec0750055676155bf63ecb1bebd82fa6d585e96d516dfb80c9be7",
+      "bytes": 34103
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "f6685b212a51af207c86f0871a15669e15fe820453fe171f2923aea64aaf1dd3",
+      "bytes": 96961
+    },
+    {
+      "path": "ui/src-tauri/src/source_relocation_api.rs",
+      "sha256": "946eedd514e7d59f32c4cbacabd8fec998bfc2b4594cf3b53a8b15c231353323",
+      "bytes": 3612
+    }
+  ]
+}
