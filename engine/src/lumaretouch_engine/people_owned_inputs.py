@@ -8,8 +8,21 @@ _MISSING = object()
 
 
 def preview(engine, state=None, *, body_bank=_MISSING, body_source=None):
-    from .hair_colour_project import preview_kwargs
     state = engine._people_owner().snapshot() if state is None else state
+    from .creative_derived_source import record, binding, analysis_rgb, verify_precompute
+    if record(engine) is not None:
+        from .creative_derived_effects import require_graph
+        owned = binding(engine); require_graph(state,owned)
+        verify_precompute(engine,engine._precompute)
+        body = engine._body_bank() if body_bank is _MISSING else body_bank
+        if body is not None and (body['bodies'] or body['analysis_runs'] or body['support_assets']):
+            raise ValueError('Derived portrait preview cannot consume original-file body observations')
+        if body_source is not None and body_source != owned:
+            raise ValueError('Derived portrait preview source differs from its retained binding')
+        # No hair/body/reference resolver receives the original path. The runtime
+        # checks the pipeline RGB against this owned inference/display proxy.
+        return {'creative_source':owned,'creative_proxy':analysis_rgb(engine)}
+    from .hair_colour_project import preview_kwargs
     return {**preview_kwargs(engine, state),
             'eye_light_assets': engine._people_support,
             'blush_makeup_assets': engine._people_support,

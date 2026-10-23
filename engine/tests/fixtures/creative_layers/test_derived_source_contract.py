@@ -49,11 +49,11 @@ def test_changed_analysis_proxy_fails_live_replay(monkeypatch):
     with pytest.raises(ValueError):D.verify_precompute(engine,pc)
 
 
-def test_only_local_analysis_cursor_actions_bypass_cross_document_fence():
+def test_incomplete_local_analysis_envelopes_cannot_bypass_cross_document_fence():
     from lumaretouch_engine.creative_document_host import guard_command
     engine=SimpleNamespace(_creative_base=source(),_docs=[{'state':{'_creative_base':source()}}])
     for action in ('select','target','analyse_face'):
-        guard_command(engine,'people',{'action':action,'target':{'scope':'face'}})
+        with pytest.raises(ValueError):guard_command(engine,'people',{'action':action,'target':{'scope':'face'}})
     for action in ('patch','link','iris_review'):
         with pytest.raises(ValueError):guard_command(engine,'people',{'action':action,'target':{'scope':'face'}})
     with pytest.raises(ValueError):guard_command(engine,'people',{'action':'target','target':{'scope':'group'}})

@@ -31,7 +31,7 @@ fn validate(request: &Value) -> Result<bool, String> {
         return Err("创意文档修改缺少所有权或修订栅栏".into());
     }
     match action {
-        "open" | "state" => {},
+        "open" | "state" | "fresh_current" => {},
         "command" if request["command"].is_object() => {},
         "import_image" | "attach_mask" => {
             match (request.get("bytes_base64"), request.get("path")) {
@@ -130,4 +130,21 @@ pub(crate) fn creative_document_status(state: State<'_, Arc<AppState>>, request_
         return Ok(json!({"phase":"unknown","result":null}));
     };
     Ok(json!({"phase":if row.result.is_some() {"done"} else {"pending"},"result":row.result}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // AUTHORED / UNRUN: fresh capture is a mutation, never a read bypass.
+    #[test]
+    fn fresh_current_requires_full_owner_envelope() {
+        let mut request = json!({"cmd":"creative_document","action":"fresh_current",
+            "request_id":"fresh-1","source_uid":"photo-1"});
+        assert!(validate(&request).is_err());
+        request["document_id"] = json!("layers-1");
+        request["ownership_token"] = json!("owner-1");
+        request["expected_revision"] = json!(3);
+        assert_eq!(validate(&request), Ok(false));
+    }
 }

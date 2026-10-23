@@ -268,6 +268,9 @@ def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False
     snap = engine._state_to_export_snap(frozen, device='cpu', scale=1,
         upscale_backend='lanczos3', sharpen=0., source_path=path,
         people_context=VP.row_context(engine, row), people_graph=VP.row_snapshot(engine, row))
+    from .people_export import verify_source, isolated_snapshot
+    verify_source(snap,path)
+    snap=isolated_snapshot(snap,for_document=True)
     record = from_state(frozen)
     source = None
     if record is None:

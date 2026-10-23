@@ -106,7 +106,7 @@ export function useCreativeWorkspace(context: CreativeWorkspaceContext, onChange
     let sent = false;
     try {
       const payload = typeof fields === 'function' ? await fields() : fields;
-      operation.transition = payload.action === 'history' || payload.action === 'return';
+      operation.transition = payload.action === 'history' || payload.action === 'return' || payload.action === 'fresh_current';
       await settleCurveEdit();
       if (!sameContext(request, scope) || latest.current.busy) {
         pending.current = null; if (mounted.current) setUnresolved(null);
@@ -160,6 +160,11 @@ export function useCreativeWorkspace(context: CreativeWorkspaceContext, onChange
     const receipt = await submit({...bindingFor(state.state.authority), request_id: crypto.randomUUID()}, {action: 'import_image', path, filename});
     if (receipt.status === 'rejected' || receipt.status === 'unknown') updateMessage(receipt.message);
   }
+  async function freshCurrent(): Promise<void> {
+    const state = current.current?.state;
+    if (!state?.capabilities.fresh_current || !state.history?.recoverable_delete) return;
+    await submit({...bindingFor(state.authority), request_id: crypto.randomUUID()}, {action: 'fresh_current'});
+  }
   async function history(direction: 'undo' | 'redo'): Promise<void> {
     const state = current.current?.state;
     if (!state?.capabilities.history || !(direction === 'undo' ? state.history?.can_undo : state.history?.can_redo)) return;
@@ -177,6 +182,6 @@ export function useCreativeWorkspace(context: CreativeWorkspaceContext, onChange
   return {value: shown, ports, message, working, unresolved, pending: working || !!unresolved,
     busy: context.busy || working || !!unresolved || !!shown?.authority.busy,
     read: () => read(), reopen: () => read(true), needsReopen: reopenScope === scopeFor(context),
-    query: () => query(), importPaths, history};
+    query: () => query(), importPaths, history, freshCurrent};
 }
 export type CreativeWorkspaceOwner = ReturnType<typeof useCreativeWorkspace>;

@@ -1,5 +1,9 @@
 # M14 immutable derived-source continuation
 
+Subsequent source-only work: `DERIVED-EFFECTS.md` advances a bounded local portrait
+subset and explicit fresh-current capture. The residual list below records this
+identity slice; consult that continuation for the current narrowed boundaries.
+
 Status: source implementation and UNRUN fixtures, not functional acceptance.
 Baseline: local `3a0cb19e05085e7af9b1fd7287ffe84cb58befab`.
 This advances `LNX-REF-WF-127932-a9c143a25d` (return) and

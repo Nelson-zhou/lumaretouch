@@ -15,6 +15,9 @@ export function CreativeWorkspace({owner, hasImage, available, onBack, onHeal, h
       <button type="button" disabled={!hasImage || !available || owner.busy}
         onClick={() => void (owner.needsReopen ? owner.reopen() : owner.read())}>
         {owner.needsReopen ? '以当前照片重新打开创意文档' : '读取当前图层状态'}</button>
+      <button type="button" disabled={owner.busy || !owner.value?.capabilities.fresh_current || !owner.value?.history?.recoverable_delete}
+        title="以照片当前完整编辑结果新建图层文档；现有图层保留在撤销历史中，不会改写原片。"
+        onClick={() => void owner.freshCurrent()}>以当前照片编辑结果新建图层文档</button>
       {owner.unresolved && <button type="button" disabled={owner.working} onClick={() => void owner.query()}>核对原操作结果</button>}
       {owner.message && <p role={owner.unresolved ? 'alert' : 'status'}>{owner.message}</p>}
     </div>

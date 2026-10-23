@@ -50,6 +50,9 @@ def prepare(spec,source,repaired):
     from .people_engine_runtime import prepare_export
     from .cpu_memory_budget import available_estimate
     snapshot=spec.people
+    if snapshot.get('creative_source') is not None:
+        from .creative_derived_effects import require_graph
+        require_graph(snapshot['state'],snapshot['creative_source'])
     recovery=ASSETS.raster(snapshot['state'],snapshot.get('support_assets',{}),snapshot['asset_sha256'],source.shape[:2])
     return prepare_export(snapshot,source,repaired,byte_budget=available_estimate(),recovery_assets=recovery,body_pose=getattr(spec,'body_pose',None),body_source_path=getattr(spec,'body_pose_source_path',None))
 
@@ -66,6 +69,8 @@ def verify_source(snapshot,path):
         source=binding(snapshot,path)
         if people.get('creative_source')!=source or people['asset_sha256']!=source['sha256']:
             raise ValueError('Frozen people graph belongs to another creative source')
+        from .creative_derived_effects import require_graph
+        require_graph(people['state'],source)
         return
     if people.get('creative_source') is not None:
         raise ValueError('Creative people evidence is missing its immutable source')

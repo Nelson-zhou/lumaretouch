@@ -31,7 +31,7 @@ class LocalEffect:
         return self.delta
 
 
-def prepare(face_ref, landmarks, recipes, source, *, excluded, skin, backend, semantic_sha, blush_review=None, lipstick_review=None):
+def prepare(face_ref, landmarks, recipes, source, *, excluded, skin, backend, semantic_sha, blush_review=None, lipstick_review=None, source_only=False):
     """Source is frozen repaired working-sRGB, never another face's corrected RGB."""
     h, w = source.shape[:2]; records = []
     ref = S.check_ref(face_ref)
@@ -42,12 +42,13 @@ def prepare(face_ref, landmarks, recipes, source, *, excluded, skin, backend, se
                                backend=backend, identity=ref['face_instance_id'])
         delta = layer.solve(recipes[A.LIP])
         records.append(LocalEffect(ref, 'lip_makeup', window, delta=delta, facts=layer.facts))
-    from .blush_makeup_layer import prepare_record as prepare_blush
-    blush=prepare_blush(ref,landmarks,recipes[A.BLUSH.OP],source,excluded=excluded,skin=skin,backend=backend,semantic_sha=semantic_sha,reviewed=blush_review)
-    if blush is not None:records.append(blush)
-    from .lipstick_layer import prepare_record as prepare_lipstick
-    lipstick=prepare_lipstick(ref,landmarks,recipes[A.LIPSTICK.OP],source,excluded=excluded,backend=backend,semantic_sha=semantic_sha,reviewed=lipstick_review)
-    if lipstick is not None:records.append(lipstick)
+    if not source_only:
+        from .blush_makeup_layer import prepare_record as prepare_blush
+        blush=prepare_blush(ref,landmarks,recipes[A.BLUSH.OP],source,excluded=excluded,skin=skin,backend=backend,semantic_sha=semantic_sha,reviewed=blush_review)
+        if blush is not None:records.append(blush)
+        from .lipstick_layer import prepare_record as prepare_lipstick
+        lipstick=prepare_lipstick(ref,landmarks,recipes[A.LIPSTICK.OP],source,excluded=excluded,backend=backend,semantic_sha=semantic_sha,reviewed=lipstick_review)
+        if lipstick is not None:records.append(lipstick)
     amounts = recipes[A.WRINKLES]
     if W.active(amounts):
         if skin is None or semantic_sha is None: raise ValueError('Wrinkles need actual source skin evidence')

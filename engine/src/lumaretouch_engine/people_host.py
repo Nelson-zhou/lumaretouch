@@ -91,8 +91,9 @@ class PeopleHostMixin:
             key=(asset,self._people_owner().fence,id(self._precompute),id(self._vram.src_f32),id(self._vram.repair_base),self._body_identity())
             if getattr(self._vram,'people_key',None)!=key:
                 from .cpu_memory_budget import available_estimate
+                owned_inputs=OWNED.preview(self,state,body_bank=body_bank,body_source=source)
                 recovery=SUPPORT.raster(state,self._people_support,asset,(self._vram.h,self._vram.w))
-                R.synchronize(self._vram,state,asset,analyses,byte_budget=available_estimate(),recovery_assets=recovery,**OWNED.preview(self,state,body_bank=body_bank,body_source=source))
+                R.synchronize(self._vram,state,asset,analyses,byte_budget=available_estimate(),recovery_assets=recovery,**owned_inputs)
                 self._vram.people_key=key
             self._people_mirror()
         except (ValueError,RuntimeError,OSError) as error:
@@ -101,8 +102,11 @@ class PeopleHostMixin:
 
     def _people_mirror(self):
         """Legacy controls are editing views only; final output uses every face."""
-        if getattr(self, '_creative_base', None) is not None: return
         owner=self._people_owner();source=self._people_source();state=owner.snapshot()
+        if getattr(self, '_creative_base', None) is not None:
+            from .creative_derived_effects import require_graph
+            from .creative_derived_source import verify_precompute
+            require_graph(state,source); verify_precompute(self,self._precompute)
         selected=self._people_cursors.get(source['sha256'])
         if selected not in state['faces']:return
         resolved=resolve(state,selected,A.defaults())
@@ -247,13 +251,16 @@ class PeopleHostMixin:
             analyses=RA.restore_missing(graph,context['people_landmarks'],asset,pc,analyses)
         face=next((f for f in graph['faces'].values() if f['asset_sha256']==asset),None)
         binding=None if face is None else {'sha256':asset,'width':face['evidence']['source_width'],'height':face['evidence']['source_height']}
-        if pc is None and binding is not None:
+        if pc is None and binding is not None and state.get('_creative_base') is None:
             from .hair_colour_replay import analyses as retained_hair_analyses
             restored=retained_hair_analyses(retained_host,graph,binding)
             if restored is not None:analyses=restored
         result=capture(graph,asset,analyses);result['support_assets']=deepcopy(context['people_support_assets'])
         if state.get('_creative_base') is not None:
+            from .creative_derived_effects import require_graph
+            require_graph(graph,source)
             result['creative_source'] = source
+            return result # Never call original-path hair capture for this source.
         return result if binding is None else HAIR.capture(retained_host,result,pc,binding,source_path=source_path)
 
     def cmd_people(self,p):
@@ -283,10 +290,12 @@ class PeopleHostMixin:
         for asset in sorted(assets):
             if asset!=current and signature(before,asset)==signature(candidate,asset) and before['association_revision']==candidate['association_revision']:continue
             if asset==current:
+                owned_inputs=OWNED.preview(self,candidate,body_source=source)
                 recovery=SUPPORT.raster(candidate,self._people_support,asset,(self._vram.h,self._vram.w))
-                staged=prepare_preview(self._vram,candidate,asset,self._people_analyses.get(asset,{}),byte_budget=available_estimate(),recovery_assets=recovery,**OWNED.preview(self,candidate,body_source=source))
+                staged=prepare_preview(self._vram,candidate,asset,self._people_analyses.get(asset,{}),byte_budget=available_estimate(),recovery_assets=recovery,**owned_inputs)
             else:
-                row=next((row for row in scoped_rows if SOURCE.source_digest(row['path'])==asset),None)
+                from .creative_derived_source import row_asset
+                row=next((row for row in scoped_rows if row_asset(row)==asset),None)
                 if row is None:raise ValueError('A linked photo is unavailable; shared edits were not partially applied')
                 validate(self,row,candidate)
         self._people_staged=staged

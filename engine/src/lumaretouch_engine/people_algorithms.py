@@ -21,7 +21,7 @@ def check_enhance(value):
 
 def specifications():
     return {**{op: (module.neutral(), module.check) for op, module in zip(GEOMETRY, (B, N, E, M))},
-            LIP: (L.neutral(), L.check), DEFORM: (D.check_amounts({}), D.check_amounts),
+            LIP: (L.neutral(), L.check), DEFORM: (dict.fromkeys(D.KINDS, 0.0), D.check_amounts),
             ENHANCE: (check_enhance({}), check_enhance), WRINKLES: (W.check({}), W.check),
             HAIR.OPERATION: (HAIR.neutral(), HAIR.check),
             EYE_LIGHT.OPERATION: (EYE_LIGHT.neutral(), EYE_LIGHT.check),

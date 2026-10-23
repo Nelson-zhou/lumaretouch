@@ -5,7 +5,7 @@ import {checkedCreativeDocument, type CreativeAuthority, type CreativeHistory, t
 
 export interface CreativeCapabilities {
   command: boolean; import_image: boolean; attach_mask: boolean; remove_mask: boolean;
-  history: boolean; return_new: boolean; update_original: boolean;
+  history: boolean; return_new: boolean; update_original: boolean; fresh_current?: boolean;
 }
 export interface CreativeNativeState {
   authority: CreativeAuthority; preview: CreativePreview | null; history: CreativeHistory | null;
@@ -58,6 +58,7 @@ export function creativeNativeState(packet: CreativePacket): CreativeNativeState
   const capabilities = packet.capabilities;
   const names = ['command', 'import_image', 'attach_mask', 'remove_mask', 'history', 'return_new', 'update_original'] as const;
   if (!object(capabilities) || names.some(key => typeof capabilities[key] !== 'boolean')) throw Error('创意文档能力清单不完整。');
+  if (capabilities.fresh_current !== undefined && typeof capabilities.fresh_current !== 'boolean') throw Error('新建创意文档能力无效。');
   let history: CreativeHistory | null = null;
   if (packet.history !== null && packet.history !== undefined) {
     if (!object(packet.history) || ['can_undo', 'can_redo', 'recoverable_delete'].some(key => typeof (packet.history as Record<string, unknown>)[key] !== 'boolean'))

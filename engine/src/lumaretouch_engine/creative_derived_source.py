@@ -36,6 +36,72 @@ def verify(expected, state_or_engine, path=None, original_size=None):
     return actual
 
 
+def row_asset(row):
+    """Effective portrait identity for an exact remembered document row.
+
+    Unopened originals need not invent dimensions. A derived row instead owns
+    its validated canonical extent and content, independent of the shared path.
+    Callers must remember live state before using a parked-row transaction.
+    """
+    value = record(row.get('state') or {})
+    if value is not None:
+        return value['id'][7:]
+    from .local_mask_state import source_digest
+    return source_digest(row['path'])
+
+
+def check_row_proof(proof):
+    """Validate JSON-safe planner/history evidence without reading a file."""
+    from copy import deepcopy
+    from .people_state import digest
+    if type(proof) is not dict or set(proof) != {'asset_sha256','creative_source','original_sha256'}:
+        raise ValueError('Incomplete effective portrait source proof')
+    digest(proof['asset_sha256']); digest(proof['original_sha256'])
+    source = proof['creative_source']
+    if source is None:
+        if proof['asset_sha256'] != proof['original_sha256']:
+            raise ValueError('Original portrait proof names another source')
+    else:
+        if type(source) is not dict or set(source) != {'sha256','width','height'}:
+            raise ValueError('Incomplete derived portrait source extent')
+        digest(source['sha256'])
+        if source['sha256'] != proof['asset_sha256'] or any(type(source[key]) is not int or source[key] < 1 for key in ('width','height')):
+            raise ValueError('Invalid derived portrait source identity')
+    return deepcopy(proof)
+
+
+def row_proof(row):
+    """Keep immutable effective pixels and physical provenance as two proofs."""
+    state = row.get('state') or {}
+    value = record(state)
+    from .local_mask_state import source_digest
+    original = source_digest(row['path'])
+    source = None if value is None else {'sha256':value['id'][7:],'width':value['width'],'height':value['height']}
+    return check_row_proof({'asset_sha256':original if source is None else source['sha256'],
+                           'creative_source':source,'original_sha256':original})
+
+
+def verify_row(row, expected):
+    expected = check_row_proof(expected)
+    if row_proof(row) != expected:
+        raise ValueError('Effective portrait source or original provenance changed')
+    return expected
+
+
+def verify_row_target(row, target):
+    """New receipts own both sources; legacy receipts authorize originals only."""
+    if target.get('source_proof') is not None:
+        proof = verify_row(row,target['source_proof'])
+        if proof['asset_sha256'] != target['asset_sha256']:
+            raise ValueError('Portrait receipt has conflicting source identities')
+        return proof
+    if record(row.get('state') or {}) is not None:
+        raise ValueError('Legacy portrait receipt lacks derived-source proof')
+    if row_asset(row) != target['asset_sha256']:
+        raise ValueError('Portrait receipt belongs to another original source')
+    return None
+
+
 def analysis_rgb(engine):
     """Actual source proxy for inference, never original pixels under a new ID.
 

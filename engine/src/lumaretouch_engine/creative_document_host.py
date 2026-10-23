@@ -180,7 +180,7 @@ class CreativeHost:
                 'authority':{'document':deepcopy(doc),'ownership_token':token(self.e),'busy':self.controller.pending is not None} if doc is not None else None,
                 'preview':deepcopy(self.preview),
                 'history':{'can_undo':history['can_undo'],'can_redo':history['can_redo'],'recoverable_delete':True},
-                'capabilities':{key:available for key in ('command','import_image','attach_mask','remove_mask','history','return_new','update_original')}}
+                'capabilities':{key:available for key in ('command','import_image','attach_mask','remove_mask','history','return_new','update_original','fresh_current')}}
 
     def commit_return(self,plan):
         e = self.e
@@ -252,6 +252,9 @@ class CreativeHost:
                 self.emit({'event':event,'request_id':rid,'status':'ready',**self.report()}); return
             if action == 'command':
                 receipt = self.controller.command(envelope,p.get('command'))
+            elif action == 'fresh_current':
+                from .creative_document_refresh import fresh_current
+                receipt = fresh_current(self,envelope)
             elif action in ('import_image','attach_mask'):
                 self.controller._check(envelope,'import')
                 if self.controller.pending is not None: raise ValueError('创意回流仍在进行')
@@ -321,19 +324,22 @@ def handle(engine,p,emit):
 def guard_command(engine, name, request):
     """Do not let original-path analyses edit newly composited content.
 
-    Actual derived-source analysis and inspection have dedicated owned paths.
-    Effect mutations and cross-document planners remain fenced until all their
-    consumers own that source. The original and its undo states remain intact.
+    Actual derived-source analysis, inspection and an audited local portrait
+    subset have dedicated owned paths. Other effects and cross-document planners
+    remain fenced until all their consumers own that source. The original and its undo states remain intact.
     """
     # These planners can mutate parked targets, not just the active row. Until
     # their target validators own derived content, fail closed for this session.
-    local_analysis = name == 'people' and request.get('action') in ('select','target','analyse_face') and (request.get('target') or {}).get('scope') in ('face','all_people')
-    if name in ('people','batch','semantic_colour') and not local_analysis and any(
+    from .creative_derived_effects import is_local_command, require_command
+    local_portrait = is_local_command(name,request)
+    if name in ('people','batch','semantic_colour') and not local_portrait and any(
             (row.get('state') or {}).get('_creative_base') is not None
             for row in getattr(engine, '_docs', [])):
         raise ValueError('会话含创意回流图；跨图人像/批量计划尚未支持该来源，请先关闭回流图或撤销回流，避免借用原图分析。')
     if getattr(engine, '_creative_base', None) is None:
         return
+    if local_portrait:
+        require_command(engine,name,request)
     source_bound = {
         'set_strength', 'inpaint', 'light', 'face', 'people',
         'deform', 'enhance', 'fabric', 'background', 'local_masks',
@@ -349,7 +355,7 @@ def guard_command(engine, name, request):
     # Do not trust a generic action='state': legacy commands may ignore it.
     # Dedicated *_state/status commands remain available outside this set.
     blocked = name in source_bound
-    if local_analysis: blocked = False
+    if local_portrait: blocked = False
     if name == 'background' and request.get('action') == 'id_state':
         blocked = False  # This exact controller branch validates fields and only reports.
     blocked |= name == 'color_picker_capture' and request.get('picker_action') in ('id_background','id_background_subject','id_background_reference')

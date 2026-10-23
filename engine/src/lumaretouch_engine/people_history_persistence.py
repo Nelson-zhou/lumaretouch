@@ -139,6 +139,11 @@ def prepare(project,rows,limit):
         for rec in entry['targets'].values():
             if type(rec) is not dict or not {'path','document_id','revision','asset_sha256'}<=set(rec):raise ValueError('Invalid saved batch target')
             S.digest(rec['asset_sha256']);S.revision(rec['revision'])
+            if 'source_proof' in rec:
+                from .creative_derived_source import check_row_proof
+                proof=check_row_proof(rec['source_proof'])
+                if proof['asset_sha256']!=rec['asset_sha256']:
+                    raise ValueError('Saved portrait target has conflicting source evidence')
             if scopes is not None and rec.get('people_scope') not in seen:
                 raise ValueError('Saved portrait target has no graph scope')
         entries[str(key)]=entry
@@ -160,7 +165,14 @@ def restore(engine,project,prepared=None):
                 # Keep missing/replaced source entries, but never give them a new
                 # runtime identity; protected restore will explicitly refuse.
                 if len(matches)==1:
-                    try:matches=matches if asset_for(matches[0])==rec['asset_sha256'] else []
-                    except OSError:matches=[]
+                    try:
+                        if 'people_scoped_changes' in entry:
+                            from .creative_derived_source import verify_row_target
+                            verify_row_target(matches[0],rec)
+                        else:
+                            from .creative_derived_source import record
+                            if record(matches[0].get('state') or {}) is not None or asset_for(matches[0])!=rec['asset_sha256']:
+                                matches=[]
+                    except (OSError,ValueError):matches=[]
                 if len(matches)==1:rec['document_id']=owner.versions.version(matches[0]).document_id
             owner.ledger['people-restored-'+key]=entry

@@ -65,8 +65,16 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32, recovery_assets=None, repaired=None,
-            hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None):
+            creative_source=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None):
     state = S.check(state)
+    source_only = creative_source is not None
+    if source_only:
+        from .creative_derived_effects import require_graph
+        require_graph(state,creative_source)
+        if asset_sha256 != creative_source['sha256']:
+            raise ValueError('Derived portrait graph source mismatch')
+        if repaired is not None or recovery_assets or hair_evidence is not None or hair_source_path is not None:
+            raise ValueError('Derived portrait runtime cannot acquire original-file inputs')
     if type(source) is not np.ndarray or source.dtype != np.float32 or source.ndim != 3 or source.shape[2] != 3 or not np.isfinite(source).all() or np.any((source < 0) | (source > 1)):
         raise ValueError('People preparation needs frozen working-sRGB float32 RGB')
     effect_source = source if repaired is None else repaired
@@ -134,23 +142,26 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
                 owned['weight'].setflags(write=False); owned_recovery[(key,stage)] = owned
             lm = verify_analysis(face, analysis, (h,w))
             field = A.build_geometry(key, lm, values, source, analysis['excluded'], backend=face['evidence']['backend'])
-            from .lipstick_support import raster as lipstick_raster
-            lipstick_review=lipstick_raster(state,lipstick_assets or {},entry['face_ref'],(h,w)) if A.LIPSTICK.active(values[A.LIPSTICK.OP]) else None
-            from .blush_makeup_support import raster as blush_raster
-            blush_review=blush_raster(state,blush_makeup_assets or {},entry['face_ref'],(h,w)) if A.BLUSH.active(values[A.BLUSH.OP]) else None
+            blush_review=lipstick_review=None
+            if not source_only:
+                from .lipstick_support import raster as lipstick_raster
+                lipstick_review=lipstick_raster(state,lipstick_assets or {},entry['face_ref'],(h,w)) if A.LIPSTICK.active(values[A.LIPSTICK.OP]) else None
+                from .blush_makeup_support import raster as blush_raster
+                blush_review=blush_raster(state,blush_makeup_assets or {},entry['face_ref'],(h,w)) if A.BLUSH.active(values[A.BLUSH.OP]) else None
             local = E.prepare(entry['face_ref'], lm, values, effect_source, excluded=analysis['excluded'], skin=analysis['skin'],
-                              backend=face['evidence']['backend'], semantic_sha=face['evidence']['semantic_model_sha256'],blush_review=blush_review,lipstick_review=lipstick_review)
-            from .eye_light_people import prepare as prepare_eye_light
-            from .eye_light_state import OPERATION as EYE_LIGHT
-            local.extend(prepare_eye_light(state,eye_light_assets or {},entry['face_ref'],analysis,effect_source,values[EYE_LIGHT],source_revision=state['revision']))
-            from .eyeliner_people import prepare as prepare_eyeliner
-            local.extend(prepare_eyeliner(state,eyeliner_assets or {},entry['face_ref'],analysis,effect_source,values[A.EYELINER.OP],source_revision=state['revision']))
-            from .eyelash_people import prepare as prepare_eyelash
-            local.extend(prepare_eyelash(state,eyelash_assets or {},entry['face_ref'],analysis,effect_source,values[A.EYELASH.OP],source_revision=state['revision']))
-            from .brow_makeup_people import prepare as prepare_brow_makeup
-            local.extend(prepare_brow_makeup(state,brow_makeup_assets or {},entry['face_ref'],analysis,effect_source,values[A.BROW_MAKEUP.OP],source_revision=state['revision']))
-            from .iris_makeup_people import prepare as prepare_iris
-            local.extend(prepare_iris(state,iris_makeup_assets or {},entry['face_ref'],analysis,effect_source,values[A.IRIS.OP]))
+                              backend=face['evidence']['backend'], semantic_sha=face['evidence']['semantic_model_sha256'],blush_review=blush_review,lipstick_review=lipstick_review,source_only=source_only)
+            if not source_only:
+                from .eye_light_people import prepare as prepare_eye_light
+                from .eye_light_state import OPERATION as EYE_LIGHT
+                local.extend(prepare_eye_light(state,eye_light_assets or {},entry['face_ref'],analysis,effect_source,values[EYE_LIGHT],source_revision=state['revision']))
+                from .eyeliner_people import prepare as prepare_eyeliner
+                local.extend(prepare_eyeliner(state,eyeliner_assets or {},entry['face_ref'],analysis,effect_source,values[A.EYELINER.OP],source_revision=state['revision']))
+                from .eyelash_people import prepare as prepare_eyelash
+                local.extend(prepare_eyelash(state,eyelash_assets or {},entry['face_ref'],analysis,effect_source,values[A.EYELASH.OP],source_revision=state['revision']))
+                from .brow_makeup_people import prepare as prepare_brow_makeup
+                local.extend(prepare_brow_makeup(state,brow_makeup_assets or {},entry['face_ref'],analysis,effect_source,values[A.BROW_MAKEUP.OP],source_revision=state['revision']))
+                from .iris_makeup_people import prepare as prepare_iris
+                local.extend(prepare_iris(state,iris_makeup_assets or {},entry['face_ref'],analysis,effect_source,values[A.IRIS.OP]))
             # Preserve mouth's source-cavity teeth veto independently per face.
             mouth = field.fields[-1]
             if mouth is not None and mouth.state is not None:
@@ -179,6 +190,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
     if failures: raise PeoplePreparationRefused(failures)
     geometry = combine(fields, (h,w), byte_budget=byte_budget)
     prepared=PreparedPeople(plan, geometry, tuple(effects), facts, owned_recovery,tuple(fields))
+    if source_only: return prepared
     from .hair_colour_runtime import prepare_bank
     hair, hair_facts=prepare_bank(state,asset_sha256,effect_source,plan,evidence=hair_evidence,assets=hair_assets,
         byte_budget=byte_budget-retained_bytes(prepared)-source.nbytes-(0 if repaired is None else repaired.nbytes),

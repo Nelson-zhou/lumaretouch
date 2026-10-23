@@ -1,0 +1,205 @@
+"""Narrow source-only portrait admission for an immutable creative baseline.
+
+This is an operation/parameter contract, not a blanket tool-name exemption.
+The existing people owner still validates revisions, stages every requested
+face and publishes through the existing history/receipt transaction. Path-based
+hair/body/selection/recovery/reference consumers are intentionally not admitted.
+"""
+import math
+
+OPERATIONS = frozenset((
+    'lnx.deform.v1', 'lnx.enhance.v1', 'lnx.facial_wrinkles.v1',
+    'lnx.brow_shape.v1', 'lnx.nose_shape.v1', 'lnx.eye_shape.v1',
+    'lnx.mouth_shape.v1', 'lnx.lip_makeup.v1',
+))
+LEGACY = {name: 'lnx.' + name + '.v1' for name in (
+    'deform', 'enhance', 'brow_shape', 'nose_shape', 'eye_shape', 'mouth_shape', 'lip_makeup')}
+_CONTEXT = {'document_id','document_epoch','document_revision','state_revision','association_revision','target'}
+_ENVELOPE = _CONTEXT | {'cmd','request_id','action','payload'}
+
+
+def source(value):
+    from .people_state import digest
+    if type(value) is not dict or set(value) != {'sha256','width','height'}:
+        raise ValueError('Derived portrait source needs its exact immutable binding')
+    digest(value['sha256'])
+    if any(type(value[key]) is not int or value[key] < 1 for key in ('width','height')):
+        raise ValueError('Invalid derived portrait extent')
+    return dict(value)
+
+
+def _target(value):
+    from . import people_state as S
+    if type(value) is not dict or set(value) != {'scope','target_id','face_ref'}:
+        raise ValueError('Derived portrait changes require an explicit local target')
+    if value['scope'] == 'face':
+        ref = S.check_ref(value['face_ref'])
+        if ref['face_instance_id'] != value['target_id']:
+            raise ValueError('Derived portrait face target mismatch')
+    elif value['scope'] == 'all_people':
+        S.digest(value['target_id'])
+        if value['face_ref'] is not None: raise ValueError('Invalid photograph-wide portrait target')
+    else:
+        raise ValueError('Derived portrait editing does not admit shared person/group targets')
+    return value
+
+
+def _context(value):
+    from . import people_state as S
+    if type(value) is not dict or set(value) != _CONTEXT:
+        raise ValueError('Derived portrait gesture needs captured document and graph revisions')
+    for key in ('document_id','document_epoch'): S.token(value[key])
+    for key in ('document_revision','state_revision','association_revision'): S.revision(value[key])
+    _target(value['target'])
+    return value
+
+
+def _leaf(operation, path, value):
+    from . import people_algorithms as A
+    from .people_resolver import materialize
+    if operation not in OPERATIONS: raise ValueError('Portrait operation is not derived-source adapted')
+    neutral, validator = A.specifications()[operation]
+    known = A.leaves(neutral)
+    if path not in known: raise ValueError('Unknown derived portrait parameter')
+    if type(known[path]) is bool:
+        if type(value) is not bool: raise ValueError('Portrait link flag must be boolean')
+    elif type(value) not in (int,float) or not math.isfinite(value):
+        raise ValueError('Portrait amount must be a finite numeric scalar')
+    materialize({'conflicts':[], 'operations':{operation:{path:{'value':value}}}}, operation, neutral, validator)
+
+
+def _patches(payload):
+    from . import people_algorithms as A
+    if type(payload) is not dict or set(payload) != {'patches'} or type(payload['patches']) is not list or not 1 <= len(payload['patches']) <= 256:
+        raise ValueError('Derived portrait patch list must be bounded and explicit')
+    seen = set()
+    for patch in payload['patches']:
+        if type(patch) is not dict or type(patch.get('unset')) is not bool:
+            raise ValueError('Portrait patch needs explicit unset semantics')
+        fields = {'operation_id','parameter_path','unset'} | (set() if patch['unset'] else {'value'})
+        if set(patch) != fields: raise ValueError('Unexpected portrait patch fields')
+        op,path = patch['operation_id'],patch['parameter_path']
+        if type(op) is not str or type(path) is not str or (op,path) in seen:
+            raise ValueError('Invalid or duplicate portrait patch')
+        seen.add((op,path))
+        if op not in OPERATIONS or path not in A.defaults()[op]:
+            raise ValueError('Portrait parameter has no derived-source consumer')
+        if not patch['unset']: _leaf(op,path,patch['value'])
+
+
+def _request(name, request):
+    from . import people_state as S, people_algorithms as A
+    if type(request) is not dict or request.get('cmd') != name:
+        raise ValueError('Invalid derived portrait command')
+    if name == 'people':
+        if set(request) != _ENVELOPE: raise ValueError('Unexpected people command fields')
+        context = _context({key:request[key] for key in _CONTEXT})
+        S.token(request['request_id'])
+        action,payload,target = request['action'],request['payload'],context['target']
+        if action == 'patch': _patches(payload)
+        elif action in ('select','target','analyse_face'):
+            if payload != {} or type(payload) is not dict or (action != 'target' and target['scope'] != 'face'):
+                raise ValueError('Invalid local portrait cursor/analysis request')
+        elif action == 'manual_add':
+            if type(payload) is not dict or set(payload) != {'box'}: raise ValueError('Manual portrait addition accepts one source region')
+            box = payload['box']
+            if type(box) not in (list,tuple) or len(box) != 4 or any(type(v) not in (int,float) or not math.isfinite(v) for v in box) or not (0 <= box[0] < box[2] <= 1 and 0 <= box[1] < box[3] <= 1):
+                raise ValueError('Manual portrait region must be finite normalized bounds')
+        elif action == 'face_status':
+            if target['scope'] != 'face' or type(payload) is not dict or not payload or set(payload)-{'enabled','labels'}:
+                raise ValueError('Face status requires its exact current face')
+            if 'enabled' in payload and type(payload['enabled']) is not bool: raise ValueError('Invalid face enabled flag')
+            if 'labels' in payload:
+                labels = payload['labels']
+                if type(labels) is not dict or len(labels) > 32: raise ValueError('Invalid editable face labels')
+                for key,value in labels.items(): S.token(key); S.scalar(value)
+        else: raise ValueError('This people action is not derived-source adapted')
+        return context
+    if name not in LEGACY: raise ValueError('This command has no derived portrait adapter')
+    context = _context(request.get('people_context'))
+    operation = LEGACY[name]
+    if name == 'deform':
+        if set(request)-{'cmd','action','amounts','scope','people_context'} or request.get('action','set') not in ('set','clear','inherit'):
+            raise ValueError('Invalid derived deform gesture')
+        if request.get('scope','all') not in ('all','person'): raise ValueError('Invalid legacy deform scope')
+        given = request.get('amounts',{})
+        if type(given) is not dict or (request.get('action','set') == 'set' and not given): raise ValueError('Missing deform amounts')
+        for key,value in given.items(): _leaf(operation,'/'+key,value)
+    elif name == 'enhance':
+        from .ops.enhance import AMOUNT_KEYS
+        from .facial_wrinkle_state import INTENT_KEYS
+        if set(request)-{'cmd','action','people_context',*AMOUNT_KEYS} or request.get('action','set') not in ('set','clear'):
+            raise ValueError('Invalid derived enhance gesture')
+        given = {key:request[key] for key in AMOUNT_KEYS if key in request}
+        if request.get('action','set') == 'set' and not given: raise ValueError('Missing enhance amounts')
+        for key,value in given.items(): _leaf('lnx.facial_wrinkles.v1' if key in INTENT_KEYS else operation,'/'+key,value)
+    else:
+        expected = {'cmd','recipe','document_id','control','people_context'}
+        if name != 'lip_makeup': expected |= {'base','request_id','gesture_id','face_id'}
+        if set(request) != expected: raise ValueError('Invalid derived portrait recipe gesture')
+        neutral,validator = A.specifications()[operation]
+        if request['recipe'] is None: raise ValueError('Missing complete portrait recipe')
+        validator(request['recipe'])
+        if request['control'] not in (set(neutral)-{'version'}) | {'all'}: raise ValueError('Unknown portrait control')
+        S.token(request['document_id'])
+        if name != 'lip_makeup':
+            if request['base'] is None: raise ValueError('Missing confirmed portrait recipe base')
+            validator(request['base'])
+            for key in ('request_id','gesture_id','face_id'): S.token(request[key])
+    return context
+
+
+def is_local_command(name, request):
+    """Structural predicate only. Consumers still enforce live source/fences."""
+    try:
+        _request(name,request)
+        return True
+    except (ValueError,TypeError,KeyError):
+        return False
+
+
+def require_command(engine, name, request):
+    """Called before dispatcher mutation; never initializes analysis or a graph."""
+    from .creative_derived_source import record, binding, verify_precompute
+    from .people_command import validate_envelope
+    context = _request(name,request)
+    if record(engine) is None: return
+    owned = binding(engine)
+    state = engine._people_owner().snapshot()
+    current = engine._people_binding()
+    target = validate_envelope({**context,'request_id':request.get('request_id','derived-legacy')},state,
+        **{key:current[key] for key in ('document_id','document_epoch','document_revision')})
+    if (target['scope'] == 'face' and target['face_ref']['asset_sha256'] != owned['sha256']) or (target['scope'] == 'all_people' and target['target_id'] != owned['sha256']):
+        raise ValueError('Portrait target belongs to another effective pixel source')
+    if name != 'people' and target != engine._people_targets.get(owned['sha256']):
+        raise ValueError('Portrait editing scope changed after this gesture')
+    if name not in ('people','deform','enhance') and request['document_id'] != engine._load_id:
+        raise ValueError('Portrait document view changed')
+    if name == 'people' and request['action'] in ('select','target','analyse_face','manual_add','face_status'):
+        return # These can repair a suspended/unanalysed face without original pixels.
+    if not engine._people_managed() or engine._precompute is None or engine._precompute.backend != 'mediapipe':
+        raise ValueError('Reanalyse this composite with the actual portrait backend before editing')
+    verify_precompute(engine,engine._precompute)
+    require_graph(state,owned)
+
+
+def require_graph(state, binding):
+    """Also used by replay/export: persisted recipes cannot bypass admission."""
+    from . import people_state as S, people_algorithms as A
+    from .people_resolver import resolve
+    owned = source(binding); state = S.check(state); asset = owned['sha256']
+    faces = {key:face for key,face in state['faces'].items() if face['asset_sha256'] == asset}
+    if any(link['face_instance_id'] in faces for link in state['links']) or any(set(group['face_ids']) & set(faces) for group in state['groups'].values()):
+        raise ValueError('Derived portrait graph cannot inherit shared person/group inputs')
+    for key,face in faces.items():
+        if face['local_assets']: raise ValueError('Derived portrait graph cannot replay source-file support/recovery assets')
+        evidence = face['evidence']
+        if (evidence['source_width'],evidence['source_height']) != (owned['width'],owned['height']):
+            raise ValueError('Derived portrait evidence has another source extent')
+        values = A.recipes(resolve(state,key,A.defaults()))
+        if any(value != A.specifications()[operation][0] for operation,value in values.items() if operation not in OPERATIONS):
+            raise ValueError('Derived portrait graph contains an unadapted operation')
+    for row in state['overrides']:
+        if (row['scope'] == 'face' and row['target_id'] in faces) or (row['scope'] == 'all_people' and row['target_id'] == asset):
+            _leaf(row['operation_id'],row['parameter_path'],row['value'])
+    return state

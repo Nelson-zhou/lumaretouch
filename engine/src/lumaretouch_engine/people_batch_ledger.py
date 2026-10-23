@@ -7,28 +7,27 @@ without changing source identity, support evidence, or accepted associations.
 from copy import deepcopy
 from .people_graph_patch import between
 from .people_graph_owner import affected_assets
-from . import virtual_copy_people as V
+from . import virtual_copy_people as V, creative_derived_source as SOURCE
 
 OP='lnx.people_graph.v1'
 
 
 def _targets(owner,engine,plans):
-    from .local_mask_state import source_digest
     targets={}
     for identity,plan in plans.items():
         assets=affected_assets(plan['before'],plan['candidate'])
         for index,row in enumerate(owner.documents.rows()):
             if V.scope(row)!=identity:continue
-            asset=source_digest(row['path'])
+            proof=SOURCE.row_proof(row)
+            asset=proof['asset_sha256']
             if asset not in assets:continue
             version=owner.versions.check_advance(row)
             targets[str(index)]={'path':row['path'],'document_id':version.document_id,
-                'revision':version.revision,'asset_sha256':asset,'people_scope':identity}
+                'revision':version.revision,'asset_sha256':asset,'people_scope':identity,'source_proof':proof}
     return targets
 
 
 def _verify(owner,engine,plans,targets):
-    from .local_mask_state import source_digest
     for plan in plans.values():
         if V.row_owner(engine,plan['row']).snapshot()!=plan['before']:
             raise ValueError('Portrait graph changed during scoped batch preparation')
@@ -36,9 +35,9 @@ def _verify(owner,engine,plans,targets):
         found=owner.versions.find(owner.documents.rows(),target['document_id'])
         if (found is None or found[1]['path']!=target['path']
                 or owner.versions.version(found[1]).revision!=target['revision']
-                or V.scope(found[1])!=target['people_scope']
-                or source_digest(found[1]['path'])!=target['asset_sha256']):
+                or V.scope(found[1])!=target['people_scope']):
             raise ValueError('People batch target changed during preparation')
+        SOURCE.verify_row_target(found[1],target)
 
 
 def prepare_scoped(engine,plans,targets):
@@ -85,11 +84,13 @@ def _publish(owner,engine,plans,targets):
     finally:engine._people_staged=None
 
 
-def commit_scoped(owner,engine,plans,*,request_id,prepare=True):
+def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None):
     plans={identity:plan for identity,plan in plans.items() if between(plan['before'],plan['candidate'])}
     if not plans:return None
     owner.documents.remember_current()
-    targets=_targets(owner,engine,plans)
+    # Transfer callers retain the proof actually rendered. Re-freezing here
+    # could authorize changed source bytes after expensive target preparation.
+    targets=_targets(owner,engine,plans) if prepared_targets is None else deepcopy(prepared_targets)
     if not targets:raise ValueError('No retained portrait document can receive this batch')
     if prepare:prepare_scoped(engine,plans,targets)
     _verify(owner,engine,plans,targets)
@@ -115,15 +116,14 @@ def commit(owner,engine,before,candidate,*,request_id,prepare=True):
 
 def restore_scoped(engine,batch,redo):
     from .people_graph_patch import apply
-    from .local_mask_state import source_digest
     from .source_relocation_history import matches as source_path_matches
     owner=engine._batch_controller();plans={}
     for record in batch['targets'].values():
         found=owner.versions.find(engine._docs,record['document_id'])
         if (found is None or not source_path_matches(found[1],record['path'])
-                or source_digest(found[1]['path'])!=record['asset_sha256']
                 or V.scope(found[1])!=record.get('people_scope')):
             raise ValueError('A scoped portrait batch target changed or was removed')
+        SOURCE.verify_row_target(found[1],record)
     for record in batch['people_scoped_changes']:
         found=owner.versions.find(engine._docs,record['document_id'])
         if found is None or V.scope(found[1])!=record['scope']:
