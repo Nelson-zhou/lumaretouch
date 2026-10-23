@@ -33,6 +33,8 @@ def validate_records(value):
                 validate_eyelash_graph(value[key])
                 from .brow_makeup_state import validate_graph as validate_brow_makeup_graph
                 validate_brow_makeup_graph(value[key])
+                from .iris_makeup_state import validate_graph as validate_iris_graph
+                validate_iris_graph(value[key])
         if 'people_support_assets' in value:
             from .people_support_assets import check_store
             check_store(value['people_support_assets'])
@@ -48,6 +50,8 @@ def validate_records(value):
             validate_eyelash_support(value)
             from .brow_makeup_support import validate_project as validate_brow_makeup_support
             validate_brow_makeup_support(value)
+            from .iris_makeup_support import validate_project as validate_iris_support
+            validate_iris_support(value)
         if 'people_landmarks' in value:
             from .people_retained_analysis import check_store
             check_store(value['people_landmarks'])

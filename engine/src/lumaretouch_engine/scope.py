@@ -39,7 +39,7 @@ from . import studio_background_scope as STUDIO
 from . import optics_scope as OPTICS, optics_auto_scope as OPTICS_AUTO
 from . import reference_color_scope as REFERENCE
 from . import facial_wrinkle_scope as WRINKLES
-from . import lip_makeup_scope as LIP, eye_light_scope as EYE_LIGHT, blush_makeup_scope as BLUSH, lipstick_scope as LIPSTICK, eyeliner_scope as EYELINER, eyelash_scope as EYELASH, brow_makeup_scope as BROW_MAKEUP
+from . import lip_makeup_scope as LIP, eye_light_scope as EYE_LIGHT, blush_makeup_scope as BLUSH, lipstick_scope as LIPSTICK, eyeliner_scope as EYELINER, eyelash_scope as EYELASH, brow_makeup_scope as BROW_MAKEUP, iris_makeup_scope as IRIS
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
@@ -112,6 +112,9 @@ MODULES: dict[str, dict] = {
     EYELINER.OP: {"params": ("recipe",), "state_fields": EYELINER.FIELDS, "single_face": True,
                "transferable": True, "cmd": "people", "read": EYELINER.params_of, "write": EYELINER.install,
                "why_not": "仅逐眼眼线素材、程度、颜色与联动；目标需要独立眼睑审核，不复制眼球/眼睑蒙版或恢复笔迹"},
+    IRIS.OP: {"params": ("recipe",), "state_fields": IRIS.FIELDS, "single_face": True,
+              "transferable": True, "cmd": "people", "read": IRIS.params_of, "write": IRIS.install,
+              "why_not": "仅原创美瞳图案及程度；目标须独立虹膜、实测瞳孔和高光审核，不复制支持或恢复笔迹"},
     EYELASH.OP: {"params": ("recipe",), "state_fields": EYELASH.FIELDS, "single_face": True,
                "transferable": True, "cmd": "people", "read": EYELASH.params_of, "write": EYELASH.install,
                "why_not": "仅四部位睫毛素材、程度、颜色及双轴联动；目标须独立根部和延伸区审核，不复制源图支持或恢复笔迹"},
@@ -323,6 +326,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == EYELINER.OP:
         try: return EYELINER.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == IRIS.OP:
+        try: return IRIS.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == EYELASH.OP:
         try: return EYELASH.check_params(params)

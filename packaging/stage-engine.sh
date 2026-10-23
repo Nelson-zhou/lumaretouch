@@ -58,6 +58,7 @@ cp "$here/../core/eye_shape/lib.rs" "$here/../LICENSE" "$here/../docs/EYE-SHAPE-
 bash "$here/build-lip-makeup.sh" "$stage/lumaretouch_engine/bin/liblrt_lip_makeup.so"
 bash "$here/build-eye-light.sh" "$stage/lumaretouch_engine/bin/liblrt_eye_light.so"
 bash "$here/build-eyeliner.sh" "$stage/lumaretouch_engine/bin/liblrt_eyeliner.so"
+bash "$here/build-iris-makeup.sh" "$stage/lumaretouch_engine/bin/liblrt_iris_makeup.so"
 bash "$here/build-eyelash.sh" "$stage/lumaretouch_engine/bin/liblrt_eyelash.so"
 cp "$here/../engine/src/lumaretouch_engine/eyeliner_patterns.json" "$stage/lumaretouch_engine/"
 cp "$here/../engine/src/lumaretouch_engine/eyelash_patterns.json" "$stage/lumaretouch_engine/"
@@ -164,3 +165,7 @@ cp "$here/../engine/src/lumaretouch_engine/body_pose_licenses/"*.txt "$stage/lum
 bash "$here/build-neck-shape.sh" "$stage/lumaretouch_engine/bin/liblrt_neck_shape.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/neck_shape"
 cp "$here/../core/neck_shape/lib.rs" "$here/../LICENSE" "$here/../docs/neck-shape/README.md" "$stage/lumaretouch_engine/third_party/neck_shape/"
+
+# Original iris texture source and license accompany the native library.
+mkdir -p "$stage/lumaretouch_engine/third_party/iris_makeup"
+cp "$here/../core/iris_makeup/lib.rs" "$here/../LICENSE" "$here/../docs/iris-makeup/README.md" "$stage/lumaretouch_engine/third_party/iris_makeup/"

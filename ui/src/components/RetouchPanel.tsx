@@ -70,6 +70,7 @@ export interface RetouchProps {
   blushMakeupPanel?: React.ReactNode;
   eyelinerPanel?: React.ReactNode;
   eyelashPanel?: React.ReactNode;
+  irisMakeupPanel?: React.ReactNode;
   browMakeupPanel?: React.ReactNode;
   lipstickPanel?: React.ReactNode;
   colorActions?: ColorActionControlsProps;
@@ -261,6 +262,7 @@ const WIRED: Record<string, string> = {
   "PC-32466|眉毛/眉尾长短": "brow.outer_length",
 
   "PC-32471|局部妆容/眼线": "eyeliner.family",
+  "PC-32471|局部妆容/美瞳": "irisMakeup.family",
   "PC-32471|局部妆容/睫毛": "eyelash.family",
   "PC-32471|局部妆容/眼线/推荐颜色": "eyeliner.recommended",
   "PC-32471|局部妆容/睫毛/推荐颜色": "eyelash.recommended",
@@ -615,6 +617,7 @@ export default function RetouchPanel(props: RetouchProps) {
       documentId={doc?.document_id??""} faceId={doc?.brow_shape?.selected_face_id??""} revision={doc?.brow_shape?.revision??0} peopleContext={capturedPeople}/>;
     if (kind.startsWith("brow.")) return null;
     if (kind === "eyeliner.family") return <div key={leaf.path}>{props.eyelinerPanel}</div>;
+    if (kind === "irisMakeup.family") return <div key={leaf.path}>{props.irisMakeupPanel}</div>;
     if (kind === "eyelash.family") return <div key={leaf.path}>{props.eyelashPanel}</div>;
     if (kind.startsWith("eyeliner.")) return null;
     if (kind.startsWith("eyelash.")) return null;

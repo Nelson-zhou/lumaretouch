@@ -33,7 +33,9 @@ def replay_preset(engine,state,**kwargs):
     from .eyeliner_scope import capture as eyeliner_capture, OP as EYELINER
     from .eyelash_scope import capture as eyelash_capture, OP as EYELASH
     from .brow_makeup_scope import capture as brow_makeup_capture, OP as BROW_MAKEUP
+    from .iris_makeup_scope import capture as iris_capture, OP as IRIS
     current=eyelash_capture(engine,brow_makeup_capture(engine,eyeliner_capture(engine,lipstick_capture(engine,blush_capture(engine,preset_capture(engine))))));candidate=S.check(before);patches=[]
+    current=iris_capture(engine,current)
     fields=dict(zip(A.GEOMETRY,('_brow_shape','_nose_shape','_eye_shape','_mouth_shape')))
     fields[A.LIP]='_lip_makeup'
     # Ephemeral preset transport is consumed here; never a parallel render owner.
@@ -41,6 +43,7 @@ def replay_preset(engine,state,**kwargs):
     if '_blush_makeup_preset' in state:fields[BLUSH]='_blush_makeup_preset'
     if '_lipstick_preset' in state:fields[LIPSTICK]='_lipstick_preset'
     if '_eyeliner_preset' in state:fields[EYELINER]='_eyeliner_preset'
+    if '_iris_makeup_preset' in state:fields[IRIS]='_iris_makeup_preset'
     if '_eyelash_preset' in state:fields[EYELASH]='_eyelash_preset'
     if '_brow_makeup_preset' in state:fields[BROW_MAKEUP]='_brow_makeup_preset'
     for op,field in fields.items():
@@ -56,7 +59,7 @@ def replay_preset(engine,state,**kwargs):
     owner=engine._people_owner()
     try:
         owner.commit(candidate,expected_fence=owner.fence);engine._people_analysis_key=None
-        if any(op in (EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP) for op,_,_ in patches):kwargs['strict_local']=True
+        if any(op in (EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS) for op,_,_ in patches):kwargs['strict_local']=True
         return engine._replay_state(state,**kwargs)
     except Exception:
         before['association_revision']=owner.association_fence

@@ -16,6 +16,7 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None):
             'lipstick_assets': engine._people_support,
             'eyeliner_assets': engine._people_support,
             'eyelash_assets': engine._people_support,
+            'iris_makeup_assets': engine._people_support,
             'brow_makeup_assets': engine._people_support,
             'body_bank': engine._body_bank() if body_bank is _MISSING else body_bank,
             'body_source': engine._people_source() if body_source is None else body_source,

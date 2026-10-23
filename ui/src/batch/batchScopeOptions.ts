@@ -32,6 +32,7 @@ export function batchScopeOptions(modules: readonly {operation_id: string; trans
   if(supported.has('lnx.eye_shape.v1'))out.push({label:'眼形十项双侧（二维几何，目标逐图重算）',ops:['lnx.eye_shape.v1']});
   if(supported.has('lnx.brow_makeup.v1'))out.push({label:'眉妆（仅逐眉参数；目标须独立眉毛和额头审核）',ops:['lnx.brow_makeup.v1']});
   if(supported.has('lnx.eyeliner.v1'))out.push({label:'眼线（仅逐眼参数；目标须独立眼睑审核）',ops:['lnx.eyeliner.v1']});
+  if(supported.has('lnx.iris_makeup.v1'))out.push({label:'美瞳（图案与程度；目标须独立虹膜、实测瞳孔和高光审核）',ops:['lnx.iris_makeup.v1']});
   if(supported.has('lnx.eyelash.v1'))out.push({label:'睫毛（四部位参数；目标须独立根部及延伸区审核）',ops:['lnx.eyelash.v1']});
   if(supported.has('lnx.lipstick.v1'))out.push({label:'口红（仅参数；目标须独立可见唇部审核）',ops:['lnx.lipstick.v1']});
   if(supported.has('lnx.blush_makeup.v1'))out.push({label:'腮红（仅参数；目标须独立人物审核）',ops:['lnx.blush_makeup.v1']});

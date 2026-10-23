@@ -3,7 +3,7 @@ from . import people_resolver as R
 from . import brow_shape_state as B, nose_shape_state as N, eye_shape_state as E, mouth_shape_state as M
 from . import lip_makeup_state as L, facial_wrinkle_state as W, hair_colour_state as HAIR
 from .ops import deform as D, enhance as H
-from . import eye_light_state as EYE_LIGHT, blush_makeup_state as BLUSH, lipstick_state as LIPSTICK, eyeliner_state as EYELINER, eyelash_state as EYELASH, brow_makeup_state as BROW_MAKEUP
+from . import eye_light_state as EYE_LIGHT, blush_makeup_state as BLUSH, lipstick_state as LIPSTICK, eyeliner_state as EYELINER, eyelash_state as EYELASH, brow_makeup_state as BROW_MAKEUP, iris_makeup_state as IRIS
 
 DEFORM = 'lnx.deform.v1'
 ENHANCE = 'lnx.enhance.v1'
@@ -26,7 +26,7 @@ def specifications():
             HAIR.OPERATION: (HAIR.neutral(), HAIR.check),
             EYE_LIGHT.OPERATION: (EYE_LIGHT.neutral(), EYE_LIGHT.check),
             BLUSH.OP: (BLUSH.neutral(), BLUSH.check), LIPSTICK.OP: (LIPSTICK.neutral(), LIPSTICK.check),
-            EYELINER.OP: (EYELINER.neutral(), EYELINER.check), EYELASH.OP: (EYELASH.neutral(), EYELASH.check), BROW_MAKEUP.OP: (BROW_MAKEUP.neutral(), BROW_MAKEUP.check)}
+            EYELINER.OP: (EYELINER.neutral(), EYELINER.check), EYELASH.OP: (EYELASH.neutral(), EYELASH.check), IRIS.OP: (IRIS.neutral(), IRIS.check), BROW_MAKEUP.OP: (BROW_MAKEUP.neutral(), BROW_MAKEUP.check)}
 
 
 def leaves(value, prefix=''):
