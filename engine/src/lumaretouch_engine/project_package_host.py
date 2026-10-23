@@ -47,6 +47,8 @@ class Packages:
             if owner is not None and owner.is_alive(): raise ValueError('请等待后台任务结束')
         relocation = getattr(e, '_source_relocation_controller', None)
         if relocation and (relocation.active or relocation.uncertain): raise ValueError('请先确认原图重定位结果')
+        managed = getattr(e, "_managed_import_controller", None)
+        if managed and (managed.active or managed.uncertain): raise ValueError("请先确认导入结果，再创建便携包")
         project = copy.deepcopy(e._project)
         project.pop('_source_path', None); project.pop('_source_sha256', None)
         self.validate(project)

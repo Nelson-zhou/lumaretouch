@@ -1056,6 +1056,7 @@ export interface EngineStatus {
 
 /** 工程面（LNX-P0-PROJECT）：名字、脏标记、格数与"这一版没存进去的东西"。 */
 export interface ProjectState {
+  managed_import?: {protocol:number;runtime_verified:boolean;modes:string[];busy:boolean};
   source_relocation?: {protocol:number;exact_fingerprint:string;runtime_verified:boolean;busy:boolean;requires_readback:boolean};
   event?: string;
   open?: boolean;

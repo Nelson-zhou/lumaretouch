@@ -174,6 +174,9 @@ def validate(p: object) -> None:
     from .people_project import validate_records as validate_people
     try: validate_people(p)
     except (ValueError,TypeError,KeyError) as error: raise ProjectError(str(error)) from error
+    from .managed_import_project import validate as validate_managed_import
+    try: validate_managed_import(p)
+    except (ValueError,TypeError,KeyError,AttributeError) as error: raise ProjectError(str(error)) from error
     sv = p.get("schema_version")
     from .primary_calibration_adapters import validate_records as validate_primary
     try:validate_primary(p,allowed=sv in (PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))

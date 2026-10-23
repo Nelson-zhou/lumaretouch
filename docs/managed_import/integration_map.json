@@ -1,0 +1,34 @@
+{
+  "status": "SOURCE_REGISTERED_STATIC_ONLY_RUNTIME_UNRUN",
+  "commands": [
+    "managed_import_request",
+    "managed_import_status"
+  ],
+  "engine_command": "managed_import",
+  "event": "managed_import_result",
+  "shared_files": [
+    "engine/src/lumaretouch_engine/server.py",
+    "engine/src/lumaretouch_engine/project.py",
+    "engine/src/lumaretouch_engine/virtual_copy_project.py",
+    "engine/src/lumaretouch_engine/virtual_copy_export.py",
+    "engine/src/lumaretouch_engine/source_relocation_host.py",
+    "engine/src/lumaretouch_engine/project_package_host.py",
+    "ui/src/projects/ProjectWorkspace.tsx",
+    "ui/src/native.ts",
+    "ui/src-tauri/src/main.rs",
+    "ui/src-tauri/src/engine.rs",
+    "ui/src-tauri/src/native_dispatch.rs"
+  ],
+  "hooks": [
+    "server HANDLED/cmd/ready/project state/pre-mutation gate/background tick gates/shutdown/finally/_project_build receipts",
+    "project.validate managed metadata",
+    "virtual_copy_project save_row/restore_row provenance",
+    "virtual_copy_export logical basename",
+    "relocation snapshot and package snapshot reciprocal guards",
+    "ProjectWorkspace mounted panel",
+    "main native command registry",
+    "engine receive and read-only queue routing",
+    "native_dispatch read-only query/cancel lane"
+  ],
+  "runtime_acceptance": "UNRUN"
+}

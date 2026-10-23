@@ -5,6 +5,8 @@ from .virtual_copy_host import IDENTITY_KEYS
 
 def save_row(project, runtime, stored, codec):
     stored.update({k:runtime[k] for k in IDENTITY_KEYS})
+    from .managed_import_project import save_row as save_import
+    save_import(runtime, stored)
     from .export_destination_import import origin, validate
     stored['import_origin'] = deepcopy(validate(runtime.get('import_origin') or origin(runtime['path'], kind='legacy_parent')))
     stored['document_revision'] = runtime.get('document_revision',0)
@@ -25,6 +27,8 @@ def save_row(project, runtime, stored, codec):
 
 def restore_row(project, stored, runtime, codec, dc_types):
     runtime.update({k:stored[k] for k in IDENTITY_KEYS})
+    from .managed_import_project import restore_row as restore_import
+    restore_import(stored, runtime)
     from .virtual_copy_people import decode
     decode(runtime,stored)
     runtime['fingerprint'] = deepcopy(project['source_assets'][stored['source_asset_id']]['fingerprint'])

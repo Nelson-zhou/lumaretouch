@@ -1,0 +1,16 @@
+{
+  "status": "UNRUN",
+  "baseline": "manual-text.txt:1045; LNX-P0-IMPORT; CORE-002; CORE-003",
+  "cases": [
+    {"id":"MI-001","scenario":"reference default","expected":"existing paths retained; no managed files created"},
+    {"id":"MI-002","scenario":"copy two equal-content business originals","expected":"two source identities and documents; no hash deduplication"},
+    {"id":"MI-003","scenario":"collision","expected":"existing destination bytes unchanged; no project addition"},
+    {"id":"MI-004","scenario":"cancel before registration","expected":"no new documents; original bytes unchanged; complete orphan copies disclosed"},
+    {"id":"MI-005","scenario":"source changed or symlink swapped","expected":"fail closed; no false original identity"},
+    {"id":"MI-006","scenario":"project replace succeeded but directory fsync failed","expected":"unknown, mutation fence, same-operation readback, no resubmit"},
+    {"id":"MI-007","scenario":"normal save/reopen/virtual copy/relocation","expected":"managed provenance, SHA, receipt, hierarchy and independent histories preserved"},
+    {"id":"MI-008","scenario":"portable package or recovery concurrent with copy","expected":"mutual admission fence; no snapshot/commit race"},
+    {"id":"MI-009","scenario":"restart with committed operation","expected":"opened project receipt resolves success without additional documents"},
+    {"id":"MI-010","scenario":"restart before commit","expected":"unknown or failed, never fake success; no partial-byte resume claim"}
+  ]
+}

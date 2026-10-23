@@ -38,7 +38,8 @@ def bounded_stem(stem, suffix):
 
 
 def output_stem(row):
-    stem = os.path.splitext(os.path.basename(row['path']))[0]
+    logical_path = (row.get('managed_import') or {}).get('original_path', row['path'])
+    stem = os.path.splitext(os.path.basename(logical_path))[0]
     if not row.get('copy_number',0): return stem
     suffix = hashlib.sha256(row['document_id'].encode('utf-8')).hexdigest()
     return bounded_stem(stem,'-copy-'+str(row['copy_number'])+'-'+suffix)

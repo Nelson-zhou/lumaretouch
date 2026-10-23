@@ -54,6 +54,10 @@ class SourceRelocation:
 
     def _snapshot(self, ids=None):
         e = self.engine
+        managed = getattr(e, "_managed_import_controller", None)
+        package = getattr(e, "_project_package_controller", None)
+        if managed and (managed.active or managed.uncertain): raise ValueError("请先确认导入结果")
+        if package and package.active: raise ValueError("请先完成便携包操作")
         if e._project is None or not e._project_path: raise ValueError('请先打开并保存项目')
         if e._project_dirty: raise ValueError('工程有未保存修改，请先保存再重定位')
         for key in ('bench', '_export', '_thumbs', '_picks'):
