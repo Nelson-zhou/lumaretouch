@@ -42,7 +42,8 @@ impl AppState {
             self.sky_preview.lock().map_err(|_|"sky preview lock poisoned")?.invalidate();
             self.sky_semantic.lock().map_err(|_|"semantic lock poisoned")?.invalidate();
         }
-        let edited = self.history_edit_cmds.lock().unwrap().iter().any(|c| c == &name);
+        let edited = self.history_edit_cmds.lock().unwrap().iter().any(|c| c == &name)
+            && (name != "hair_colour" || matches!(cmd["action"].as_str(), Some("commit_support" | "commit_recovery" | "clear_recovery" | "clear_support")));
         let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
         if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
         let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
@@ -53,6 +54,7 @@ impl AppState {
         match name.as_str() {
             "shoulder_shape" => crate::shoulder_shape_api::enqueue(handle, cmd)?,
             "people" => crate::people_api::enqueue(handle, cmd)?,
+            "hair_colour" => crate::hair_colour_api::enqueue(handle, cmd)?,
             "brow_shape" => crate::brow_shape_api::enqueue(handle, cmd)?,
             "nose_shape" => crate::nose_shape_api::enqueue(handle, cmd)?,
             "eye_shape" => crate::eye_shape_api::enqueue(handle, cmd)?,

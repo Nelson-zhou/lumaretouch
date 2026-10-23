@@ -1,5 +1,6 @@
 import {useShoulderWorkflow} from './shoulderShape/useShoulderWorkflow';
 import {ShoulderShapeTools} from './shoulderShape/ShoulderShapeTools';
+import {useHairColourPort} from './hairColour/useHairColourPort';
 import {useOriginalCompareKeys} from './components/useOriginalCompareKeys';
 import {useSampleLibraryHost} from './sampleLibrary/useSampleLibraryHost';
 import {SampleLibraryHost,SampleLibraryLaunch} from './sampleLibrary/SampleLibraryHost';
@@ -1659,6 +1660,15 @@ export default function App() {
   const captureReason=captureAllowed?'':'请导入图片，并在单视图代理预览中取色';
   const colorSampler=useColorSampler({documentId:doc?.document_id??'',revision:status?.doc_rev??-1,
     allowed:captureAllowed,reason:captureReason},brushOn||pickFace);
+  const hairBusy=busy||exporting||shoulders.busy||peopleWorkflow.state.pending||peopleWorkflow.state.uncertain
+    ||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||brushOn||pickFace||whiteBalanceWorkflow.workflow.busy()
+    ||sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||manual.active||manual.pending
+    ||recovery.active||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||localMasks.active||localMasks.pending
+    ||cloneStamp.active||cloneStamp.pending||sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending
+    ||workspace!=='retouch'||compareMode!=='single'||comparing||inspectionEnabled||cropOpen
+    ||!(batchWorkflow.ui.phase==='closed'||batchWorkflow.ui.hidden===true);
+  const hair=useHairColourPort(peopleWorkflow.enabled&&status?.ready_caps?.hair_colour_protocol===1&&!hairBusy
+    &&!!doc?.document_id&&status.image?.load_id===doc.document_id,refreshFromEngine);
   return (
     <div className={"app ws-" + workspace}>
       <WorkspaceTopbar workspace={workspace} onWorkspace={setWorkspace} busy={busy} hasImage={hasImage}
@@ -1686,6 +1696,7 @@ export default function App() {
                         note={setDragNote} onDone={requestPanelRefresh}
                         thumb={strip?.current ? thumbs[strip.current] : undefined}
                         people={peopleWorkflow}
+                        hairPort={hair.port} hairBusy={hairBusy} refreshHair={refreshFromEngine}
                         brush={{ on: brushOn, mode: brushMode, radius: brushRadius }}
                         onBrush={(patch) => {
                           if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;if(patch.on)colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();
@@ -1703,6 +1714,7 @@ export default function App() {
 
       <main className="stage">
         <RetouchToolActivity onLocate={locateTool} items={[
+          {name:"发色与光泽",featureId:"PC-32472",path:"发色选择",active:false,pending:hair.state.pending,phase:hair.state.uncertain?'uncertain':'idle',message:hair.state.message,check:hair.check},
           {name:"效果恢复画笔",featureId:"PC-32481",active:recovery.active,pending:recovery.pending,phase:recovery.state.phase,message:recovery.state.message,check:recovery.workflow.check},
           {name:"手动液化",featureId:"PC-32479",active:manual.active,pending:manual.pending,phase:manual.state.phase,message:manual.state.message,check:manual.workflow.check},
           {name:"背景调整",featureId:"PC-32474",active:studio.active,pending:studio.pending,phase:studio.state.phase,message:studio.state.message,check:studio.workflow.check},

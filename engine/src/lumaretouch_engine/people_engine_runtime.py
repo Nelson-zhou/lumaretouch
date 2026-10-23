@@ -5,12 +5,15 @@ not association persistence. A failed requested graph cannot fall back to a stal
 single-selected-face image and claim it rendered the people bank.
 """
 import numpy as np
-from .people_render_runtime import prepare
+from .people_render_runtime import prepare, retained_bytes
 from . import people_pipeline as PIPE
 
 
-def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_assets=None,body_bank=None,body_source=None):
+def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_assets=None,body_bank=None,body_source=None,
+                    hair_assets=None,hair_evidence=None,hair_source_path=None):
     import torch
+    if body_bank is None and getattr(getattr(pipe,'people_prepared',None),'body_fields',()):
+        raise ValueError('Preview omitted independently retained body inputs')
     source=pipe.src_f32
     if source is None:raise ValueError('All-face rendering needs the current immutable source')
     rgb=np.array(source[0].permute(1,2,0).to('cpu',torch.float32).numpy(),dtype=np.float32,copy=True)
@@ -19,15 +22,18 @@ def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_asse
     if pipe.repair_base is not None:
         repaired=np.array(pipe.repair_base[0].permute(1,2,0).to('cpu',torch.float32).numpy(),dtype=np.float32,copy=True)
         repaired.setflags(write=False)
-    prepared=prepare(state,asset_sha256,rgb,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,repaired=repaired)
+    prepared=prepare(state,asset_sha256,rgb,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,repaired=repaired,
+        hair_assets=hair_assets,hair_evidence=hair_evidence,hair_source_path=hair_source_path)
     if body_bank is not None:
         from .body_pose_render import prepare as prepare_body
-        prepared=prepare_body(prepared,body_bank,state,body_source,byte_budget=byte_budget)
+        prepared=prepare_body(prepared,body_bank,state,body_source,byte_budget=body_budget(prepared,byte_budget))
     return prepared
 
 
-def synchronize(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_assets=None,body_bank=None,body_source=None):
-    prepared=prepare_preview(pipe,state,asset_sha256,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,body_bank=body_bank,body_source=body_source)
+def synchronize(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_assets=None,body_bank=None,body_source=None,
+                    hair_assets=None,hair_evidence=None,hair_source_path=None):
+    prepared=prepare_preview(pipe,state,asset_sha256,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,body_bank=body_bank,body_source=body_source,
+        hair_assets=hair_assets,hair_evidence=hair_evidence,hair_source_path=hair_source_path)
     PIPE.install(pipe,prepared);pipe.people_suspended=None
     return prepared
 
@@ -50,11 +56,22 @@ def prepare_export(snapshot,source,repaired,*,byte_budget,recovery_assets=None,b
     state,asset,analyses=at_dimensions(snapshot,tuple(source.shape[:2]))
     rgb=np.array(source.astype(np.float32)/divisor,dtype=np.float32,copy=True)
     rgb.setflags(write=False)
-    prepared=prepare(state,asset,rgb,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,repaired=repaired)
+    from .hair_colour_project import kwargs as hair_inputs
+    prepared=prepare(state,asset,rgb,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,repaired=repaired,
+        **hair_inputs(snapshot),force_hair_prompted=True)
     if body_pose is not None:
         from .shoulder_shape_project import check_snapshot
         from .body_pose_render import prepare as prepare_body
         frame=body_pose['source'];bank=check_snapshot(body_pose,frame)
         if (frame['height'],frame['width'])!=source.shape[:2]:raise ValueError('Body final preparation requires exact original dimensions')
-        prepared=prepare_body(prepared,bank,state,frame,byte_budget=byte_budget)
+        prepared=prepare_body(prepared,bank,state,frame,byte_budget=body_budget(prepared,byte_budget))
     return prepared
+
+
+def body_budget(prepared,budget):
+    # Body composition already counts retained face evaluators and both maps.
+    # Reserve independent colour/recovery arrays and source buffers as well.
+    colour=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights) if array is not None)
+    recovery=sum(record['weight'].nbytes for record in prepared.recovery.values())
+    h,w=prepared.geometry.delta.shape[1:3]
+    return budget-colour-recovery-h*w*24

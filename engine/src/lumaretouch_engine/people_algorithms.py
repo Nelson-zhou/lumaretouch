@@ -1,7 +1,7 @@
 """Existing portrait validators/solvers as per-face consumers, no global owner."""
 from . import people_resolver as R
 from . import brow_shape_state as B, nose_shape_state as N, eye_shape_state as E, mouth_shape_state as M
-from . import lip_makeup_state as L, facial_wrinkle_state as W
+from . import lip_makeup_state as L, facial_wrinkle_state as W, hair_colour_state as HAIR
 from .ops import deform as D, enhance as H
 
 DEFORM = 'lnx.deform.v1'
@@ -21,7 +21,8 @@ def check_enhance(value):
 def specifications():
     return {**{op: (module.neutral(), module.check) for op, module in zip(GEOMETRY, (B, N, E, M))},
             LIP: (L.neutral(), L.check), DEFORM: (D.check_amounts({}), D.check_amounts),
-            ENHANCE: (check_enhance({}), check_enhance), WRINKLES: (W.check({}), W.check)}
+            ENHANCE: (check_enhance({}), check_enhance), WRINKLES: (W.check({}), W.check),
+            HAIR.OPERATION: (HAIR.neutral(), HAIR.check)}
 
 
 def leaves(value, prefix=''):

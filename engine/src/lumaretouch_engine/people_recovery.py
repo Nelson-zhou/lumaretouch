@@ -119,8 +119,9 @@ def prepare(engine, recovery, target, *, expected=None):
     pipe = engine._vram
     asset = captured['source']['sha256']
     fields = SUPPORT.raster(candidate, assets, asset, (pipe.h, pipe.w))
+    from .people_owned_inputs import preview as owned_inputs
     prepared = prepare_preview(pipe, candidate, asset, engine._people_analyses.get(asset, {}),
-                               byte_budget=available_estimate(), recovery_assets=fields)
+                               byte_budget=available_estimate(), recovery_assets=fields,**owned_inputs(engine,candidate))
     assert_context(engine, captured)
     return {'context': captured, 'before': before, 'candidate': candidate,
             'assets': assets, 'prepared': prepared, 'target': target,

@@ -1,0 +1,187 @@
+{
+  "schema": 1,
+  "status": "AUTHORED_UNRUN",
+  "requirements": [
+    "LNX-REF-PC-32472-C-281e093d26",
+    "LNX-REF-PC-32472-C-29852ec2fd"
+  ],
+  "not_claimed": [
+    "whole_PC32472",
+    "commercial_palette_or_formula_parity",
+    "automatic_person_instance_segmentation",
+    "pixel_perfect_mask",
+    "local_runtime_pass"
+  ],
+  "cases": [
+    {
+      "id": "HAIR-001",
+      "subject": "neutral import",
+      "expect": "both amounts zero; no model/native/raster work solely for hair; bit-exact no-op"
+    },
+    {
+      "id": "HAIR-002",
+      "subject": "13 official names",
+      "expect": "all 13 match reference names, values/formula original; style selection at zero strength changes no RGB"
+    },
+    {
+      "id": "HAIR-003",
+      "subject": "RGB8 and RGB16 source",
+      "expect": "same float operator before output quantization, no RGB8 intermediary, complete original source dimensions"
+    },
+    {
+      "id": "HAIR-004",
+      "subject": "zero support",
+      "expect": "exact delta zero outside support; skin/background/other people's hair unchanged by this operator"
+    },
+    {
+      "id": "HAIR-005",
+      "subject": "one detected face with unobserved/occluded people",
+      "expect": "manual source-domain review still mandatory, no face-count census claim"
+    },
+    {
+      "id": "HAIR-006",
+      "subject": "long hair, group portraits and edge-cut hair",
+      "expect": "review can encompass long hair independent of facebox; overlap refuses, excludes neighbouring person"
+    },
+    {
+      "id": "HAIR-007",
+      "subject": "wrong/stale face, source, analysis and graph revision",
+      "expect": "review token rejected, no stale candidate publication"
+    },
+    {
+      "id": "HAIR-008",
+      "subject": "source mask vs rendered-canvas mask",
+      "expect": "wrong domain/schema rejected, no AI追色 mask reuse"
+    },
+    {
+      "id": "HAIR-009",
+      "subject": "flat hair gloss",
+      "expect": "no highlight evidence; active gloss request refuses rather than globally brightening hair"
+    },
+    {
+      "id": "HAIR-010",
+      "subject": "existing highlight bands and curly hair",
+      "expect": "gloss follows visible local structures; no fabricated strands; inspect false positives/noisy texture"
+    },
+    {
+      "id": "HAIR-011",
+      "subject": "deep-clipped blacks and saturated whites",
+      "expect": "no invented details; guard/no measurable change fact remains honest"
+    },
+    {
+      "id": "HAIR-012",
+      "subject": "all 13 colour strengths and natural black",
+      "expect": "non-black preserves local linear luminance before stage composition; black monotone darkens; inspect gamut edges"
+    },
+    {
+      "id": "HAIR-013",
+      "subject": "recovery",
+      "expect": "erase only hair operator delta; preserve other colour/skin edits and other people; full recovery reports fully_recovered"
+    },
+    {
+      "id": "HAIR-014",
+      "subject": "common deformation map",
+      "expect": "hair RGB, support, highlight/recovery fields share exact people warp once alongside facial and body maps"
+    },
+    {
+      "id": "HAIR-015",
+      "subject": "full-source tiled export",
+      "expect": "solve full-source once then crop with existing halos; no seam/statistic reset per tile; both8/16 outputs"
+    },
+    {
+      "id": "HAIR-016",
+      "subject": "undo/redo/project reopen",
+      "expect": "canonical graph pointer and immutable assets survive, wrong/missing hash refuses rather than dropping effect"
+    },
+    {
+      "id": "HAIR-017",
+      "subject": "confirmed-person/group transfer",
+      "expect": "scalar recipe inheritance only; target missing support refuses; masks/recovery do not cross photos"
+    },
+    {
+      "id": "HAIR-018",
+      "subject": "source support editing",
+      "expect": "add/subtract/undo-last/clear draft/close/review/commit all reachable; image normalized mapping correct for tall/wide photos"
+    },
+    {
+      "id": "HAIR-019",
+      "subject": "rapid edits and panel closure",
+      "expect": "no duplicate commits; source/face changes ignore late preview; long-lived port retains pending receipt on closure"
+    },
+    {
+      "id": "HAIR-020",
+      "subject": "lost acknowledgment and engine restart",
+      "expect": "query original request, unknown locked, no automatic resend or false rollback claim"
+    },
+    {
+      "id": "HAIR-021",
+      "subject": "model missing/SHA mismatch/native ABI missing",
+      "expect": "actionable refusal; no fallback weights or silently replaced algorithm"
+    },
+    {
+      "id": "HAIR-022",
+      "subject": "prompted support dependency",
+      "expect": "existing accepted binding recomputed from same source/model on full export; absent optional SAM runtime refuses"
+    },
+    {
+      "id": "HAIR-023",
+      "subject": "budgets",
+      "expect": "full-source native scratch and accumulated assets admitted before publication; no hidden downsample or partial faces"
+    },
+    {
+      "id": "HAIR-024",
+      "subject": "accessibility and empty/rejected states",
+      "expect": "labelled controls, checked review, visible refusal/recovery facts, no false completed badge"
+    },
+    {
+      "id": "HAIR-025",
+      "subject": "licensing/provenance",
+      "expect": "Google Apache2 source/model hash retained, no commercial colour assets/new generative weights, original algorithm disclosure"
+    },
+    {
+      "id": "HAIR-026",
+      "subject": "offline retained-evidence replay",
+      "expect": "hair-only saved effect replays without fresh face/semantic inference when exact measured landmarks and lossless hair fields are retained; other nonneutral effects keep their own evidence requirements"
+    },
+    {
+      "id": "HAIR-027",
+      "subject": "post-publication error",
+      "expect": "emit/report/history exception after graph publication cannot be called a confirmed refusal; changed fences retain unknown-outcome lock and original request correlation"
+    },
+    {
+      "id": "HAIR-028",
+      "subject": "lossless evidence corruption and decode budgets",
+      "expect": "exact float32 round trip; wrong hash/source/model/shape/oversize or trailing compressed payload rejects before publication; no silent new inference or quantization"
+    },
+    {
+      "id": "HAIR-029",
+      "subject": "v1–v14 project admission",
+      "expect": "all earlier migrations preserved, v13 body bank retained, old readers refuse v14; disguised old-schema hair fields and stale history asset references reject"
+    },
+    {
+      "id": "HAIR-030",
+      "subject": "RGB16 frozen-graph fastpath",
+      "expect": "nonneutral hair and unknown/conflicting people intent never copy original through neutral legacy mirrors; truly neutral detection census still eligible"
+    },
+    {
+      "id": "HAIR-031",
+      "subject": "mixed retained replay and preview callers",
+      "expect": "manual hair-only face replay needs no model while independent body geometry and late semantic colour retain their own evidence; body edit/facial recovery/history preview do not omit hair or body inputs"
+    },
+    {
+      "id": "HAIR-032",
+      "subject": "parked export and reference capture source race",
+      "expect": "exact parked target graph/landmarks/hair/body retained; original source changes during capture/decode/render refuse; no live-photo fallback or late rendered-canvas hair mask reuse"
+    }
+  ],
+  "execution": {
+    "rust_fixtures": "NOT_RUN",
+    "python_contracts": "NOT_RUN",
+    "native_abi": "NOT_RUN",
+    "typescript_typecheck": "NOT_RUN",
+    "ui_build": "NOT_RUN",
+    "product_start": "NOT_RUN",
+    "model_inference": "NOT_RUN",
+    "photographic_acceptance": "NOT_RUN"
+  }
+}

@@ -112,6 +112,7 @@ def raster(state,assets,asset_sha256,shape):
     for face in state['faces'].values():
         if face['asset_sha256']!=asset_sha256 or not face['enabled']:continue
         for target,descriptor in face['local_assets'].items():
+            if target=='hair_colour':continue # Checked/consumed by the separate source hair bank, never facial recovery.
             checked=resolve(state,assets,S.face_ref(face),target);row=checked['targets'][0]
             work+=M.validate_budget(row['recipe'],shape)['work'] if row['enabled'] else 0
             rows.append((face,row,descriptor['content_sha256']))

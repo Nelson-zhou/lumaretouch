@@ -40,6 +40,7 @@ mod body_pose_model_api;
 mod diagnostic_env_api;
 mod sample_library_api;
 mod semantic_colour_api;
+mod hair_colour_api;
 mod portrait_api;
 mod preset_host;
 mod preset_api;
@@ -1898,7 +1899,7 @@ fn main() {
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
             engine_status, shutdown_engine, diagnostic_env_api::m0_env, load_image, set_strength, compare, compare_status, precompute,
             inpaint, light, portrait_api::deform, lut, grade, portrait_api::enhance, background, export, session, filmstrip, history,
-            people_api::people, shoulder_shape_api::shoulder_shape, body_pose_model_api::body_pose_model, body_pose_model_api::body_pose_model_status, semantic_colour_api::semantic_colour,
+            people_api::people, shoulder_shape_api::shoulder_shape, body_pose_model_api::body_pose_model, body_pose_model_api::body_pose_model_status, semantic_colour_api::semantic_colour, hair_colour_api::hair_colour,
             sample_library_api::sample_library, sample_library_api::sample_library_choose,
             color_capture_api::capture_arm, color_capture_api::capture_status, color_capture_api::capture_frame,
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,

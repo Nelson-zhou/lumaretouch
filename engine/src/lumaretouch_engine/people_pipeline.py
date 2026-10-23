@@ -80,7 +80,7 @@ def _merge_delta(pipe,stage,*,align):
 
 def source_effect(pipe,stage,pixels):
     import torch
-    if stage not in ('facial_wrinkles','lip_makeup'):raise ValueError('This effect belongs after common geometry')
+    if stage not in ('facial_wrinkles','lip_makeup','hair_colour'):raise ValueError('This effect belongs after common geometry')
     delta=_merge_delta(pipe,stage,align=False)
     return torch.where(delta!=0,(pixels+delta).clamp(0,1),pixels)
 

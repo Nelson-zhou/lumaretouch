@@ -4,7 +4,7 @@ from . import people_state as S, people_algorithms as A, people_binding as B
 from . import people_retained_analysis as RA, people_support_assets as SUPPORT
 from .people_graph_owner import PeopleGraphOwner
 from .people_resolver import resolve
-from . import local_mask_state as SOURCE
+from . import local_mask_state as SOURCE, hair_colour_project as HAIR, people_owned_inputs as OWNED
 
 
 def emit(event):
@@ -92,7 +92,7 @@ class PeopleHostMixin:
             if getattr(self._vram,'people_key',None)!=key:
                 from .cpu_memory_budget import available_estimate
                 recovery=SUPPORT.raster(state,self._people_support,asset,(self._vram.h,self._vram.w))
-                R.synchronize(self._vram,state,asset,analyses,byte_budget=available_estimate(),recovery_assets=recovery,body_bank=body_bank if body_bank['bodies'] else None,body_source=source)
+                R.synchronize(self._vram,state,asset,analyses,byte_budget=available_estimate(),recovery_assets=recovery,**OWNED.preview(self,state,body_bank=body_bank,body_source=source))
                 self._vram.people_key=key
             self._people_mirror()
         except (ValueError,RuntimeError,OSError) as error:
@@ -165,16 +165,18 @@ class PeopleHostMixin:
         project['people_cursors']=deepcopy(self._people_cursors)
         from .people_history_persistence import save
         save(self,project)
+        HAIR.save(self,project)
 
     def _people_stage_project(self,project,rows):
         from .people_project import validate_records
         from .people_history_persistence import prepare
-        validate_records(project)
+        validate_records(project);HAIR.validate(project)
         return prepare(project,rows,self.HISTORY_MAX)
 
     def _people_load(self,project,prepared_history=None):
         from .people_project import validate_records
         validate_records(project)
+        HAIR.load(self,project)
         self._people_graph_owner=PeopleGraphOwner(project.get('people_graph'))
         self._people_support=SUPPORT.check_store(project.get('people_support_assets',{}))
         self._people_landmarks=RA.check_store(project.get('people_landmarks',{}))
@@ -197,8 +199,14 @@ class PeopleHostMixin:
             ev=face['evidence']
             _,analyses,_=B.bind(graph,asset,pc,source_dimensions=(ev['source_width'],ev['source_height']))
             analyses=RA.restore_missing(graph,self._people_landmarks,asset,pc,analyses)
+        face=next((f for f in graph['faces'].values() if f['asset_sha256']==asset),None)
+        binding=None if face is None else {'sha256':asset,'width':face['evidence']['source_width'],'height':face['evidence']['source_height']}
+        if pc is None and binding is not None:
+            from .hair_colour_replay import analyses as retained_hair_analyses
+            restored=retained_hair_analyses(self,graph,binding)
+            if restored is not None:analyses=restored
         result=capture(graph,asset,analyses);result['support_assets']=deepcopy(self._people_support)
-        return result
+        return result if binding is None else HAIR.capture(self,result,pc,binding,source_path=source_path)
 
     def cmd_people(self,p):
         from .people_host_commands import apply
@@ -225,7 +233,7 @@ class PeopleHostMixin:
             if asset!=current and signature(before,asset)==signature(candidate,asset) and before['association_revision']==candidate['association_revision']:continue
             if asset==current:
                 recovery=SUPPORT.raster(candidate,self._people_support,asset,(self._vram.h,self._vram.w))
-                staged=prepare_preview(self._vram,candidate,asset,self._people_analyses.get(asset,{}),byte_budget=available_estimate(),recovery_assets=recovery,body_bank=self._body_bank(),body_source=source)
+                staged=prepare_preview(self._vram,candidate,asset,self._people_analyses.get(asset,{}),byte_budget=available_estimate(),recovery_assets=recovery,**OWNED.preview(self,candidate,body_source=source))
             else:
                 row=next((row for row in self._docs if SOURCE.source_digest(row['path'])==asset),None)
                 if row is None:raise ValueError('A linked photo is unavailable; shared edits were not partially applied')

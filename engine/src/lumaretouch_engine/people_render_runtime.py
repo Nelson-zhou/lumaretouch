@@ -64,7 +64,8 @@ def verify_analysis(face, analysis, shape):
     return lm
 
 
-def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32, recovery_assets=None, repaired=None):
+def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32, recovery_assets=None, repaired=None,
+            hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False):
     state = S.check(state)
     if type(source) is not np.ndarray or source.dtype != np.float32 or source.ndim != 3 or source.shape[2] != 3 or not np.isfinite(source).all() or np.any((source < 0) | (source > 1)):
         raise ValueError('People preparation needs frozen working-sRGB float32 RGB')
@@ -94,6 +95,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
                 stage = asset['kind']
+                if stage=='hair_colour':continue # Full-source owned consumer below; not facebox recovery.
                 if stage not in E.STAGES:
                     raise ValueError('Source-owned local support requires an explicit consumer: ' + stage)
                 recovery = (recovery_assets or {}).get((key,stage))
@@ -125,4 +127,18 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
             failures.append({'face_instance_id':key,'reason':str(error)})
     if failures: raise PeoplePreparationRefused(failures)
     geometry = combine(fields, (h,w), byte_budget=byte_budget)
-    return PreparedPeople(plan, geometry, tuple(effects), facts, owned_recovery,tuple(fields))
+    prepared=PreparedPeople(plan, geometry, tuple(effects), facts, owned_recovery,tuple(fields))
+    from .hair_colour_runtime import prepare_bank
+    hair, hair_facts=prepare_bank(state,asset_sha256,effect_source,plan,evidence=hair_evidence,assets=hair_assets,
+        byte_budget=byte_budget-retained_bytes(prepared)-source.nbytes-(0 if repaired is None else repaired.nbytes),
+        source_path=hair_source_path,force_prompted=force_hair_prompted)
+    for key,fact in hair_facts.items():facts.setdefault(key,{})['hair_colour']=fact
+    return PreparedPeople(plan,geometry,tuple(effects)+hair,facts,owned_recovery,tuple(fields))
+
+
+def retained_bytes(prepared,*,include_geometry=True):
+    total=sum(field.resident_bytes() for field in (*prepared.face_fields,*prepared.body_fields))
+    total+=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights) if array is not None)
+    total+=sum(record['weight'].nbytes for record in prepared.recovery.values())
+    if include_geometry:total+=prepared.geometry.delta.nbytes+prepared.geometry.owner.nbytes
+    return total

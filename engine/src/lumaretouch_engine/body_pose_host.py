@@ -42,7 +42,8 @@ class BodyPoseHostMixin:
         from .cpu_memory_budget import available_estimate
         frame,people,analyses=self._people_bind();R.check_source(candidate,R.source(frame))
         recovery=support.raster(people,self._people_support,frame['sha256'],(self._vram.h,self._vram.w))
-        return runtime.prepare_preview(self._vram,people,frame['sha256'],analyses,byte_budget=available_estimate(),recovery_assets=recovery,body_bank=candidate,body_source=frame)
+        from .people_owned_inputs import preview as owned_inputs
+        return runtime.prepare_preview(self._vram,people,frame['sha256'],analyses,byte_budget=available_estimate(),recovery_assets=recovery,**owned_inputs(self,people,body_bank=candidate,body_source=frame))
 
     def _body_publish_frame(self,prepared,request):
         from . import people_pipeline as pipeline,people_engine_runtime as runtime,shoulder_shape_runtime as shoulder

@@ -42,8 +42,11 @@ class Master16PolicyMixin:
         fields["_mouth_shape"] = MOUTHS.check(snap.get("mouth_shape"))
         fields["_mouth_shape_owner"] = snap.get("mouth_shape_owner")
         fields["_body_pose_bank"]=(snap.get("body_pose") or {}).get("bank")
-        return Master16PolicyMixin._master16_blockers(SimpleNamespace(**fields),
+        blockers=Master16PolicyMixin._master16_blockers(SimpleNamespace(**fields),
             scale=snap.get("scale", 1), sharpen=snap.get("sharpen", 0.0))
+        from .people_export import fastpath_blocker
+        if fastpath_blocker(snap.get('people')):blockers.append('人物图保留的参数或源归属资产（须完整尺寸准备，不可直通）')
+        return blockers
 
     def _master16_blockers(self, *, scale: int, sharpen: float) -> list:
         """16-bit 直通能不能走：把“会改像素的那几项”逐个点名。

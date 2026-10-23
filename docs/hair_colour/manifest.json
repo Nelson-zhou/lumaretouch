@@ -1,0 +1,292 @@
+{
+  "schema": 1,
+  "phase": "shared_source_integrated_runtime_unrun",
+  "base_commit": "c56f78a78485487385d0ac0dfba5041b9879c7c8",
+  "base_tree": "b18764df45e8a83bf34dba607197a2e259d87e46",
+  "frozen_utc": "2026-10-23T02:29:26.891111+00:00",
+  "requirements": [
+    "LNX-REF-PC-32472-C-281e093d26",
+    "LNX-REF-PC-32472-C-29852ec2fd"
+  ],
+  "project_schema": "lrt.project.v14",
+  "retained_migrations": "v1–v13, including v13 independent body bank",
+  "execution": "NOT_RUN: no product imports, tests, builds, compiler/typecheck, inference, installs, downloads or git writes",
+  "static_inspection": {
+    "python_ast_files": 28,
+    "typescript_syntax_files": 9,
+    "typescript_syntax_diagnostics": 0,
+    "acceptance_json": true,
+    "authored_unrun_acceptance_cases": 32,
+    "whitespace_diff_check": true,
+    "bounded_prepare_callsite_scan": [
+      "people_host._people_sync",
+      "people_host._people_prepare_graph",
+      "body_pose_host._body_prepare",
+      "people_recovery.prepare",
+      "people_host._people_export_snapshot",
+      "people_engine_runtime.prepare_export",
+      "reference_color_engine.render"
+    ],
+    "line_caps": {
+      "ui/src/App.tsx": {
+        "lines": 2093,
+        "cap": 2160
+      },
+      "ui/src-tauri/src/main.rs": {
+        "lines": 1932,
+        "cap": 2060
+      },
+      "engine/src/lumaretouch_engine/server.py": {
+        "lines": 6847,
+        "cap": 7065
+      }
+    }
+  },
+  "files": [
+    {
+      "path": "core/hair_colour/README.md",
+      "sha256": "f9dd70e475359f9547d6960172e99dc8ef8b8288a8b56bab6471f18d1f9de429",
+      "bytes": 10788
+    },
+    {
+      "path": "core/hair_colour/lib.rs",
+      "sha256": "681e3bbef46f4d00b18a5d82931a131964eabef7af6aa6b81c378ef19ac78215",
+      "bytes": 21125
+    },
+    {
+      "path": "docs/hair_colour/INTEGRATION.md",
+      "sha256": "9c3b211611accac8b29458ef909529a6bc1d19251767c4370d5d37ab40453b91",
+      "bytes": 11049
+    },
+    {
+      "path": "docs/hair_colour/README.md",
+      "sha256": "6785670911807ee8ecb63e205dd28814de17b5e53c377dd561a5cbf3f8f3389f",
+      "bytes": 8525
+    },
+    {
+      "path": "docs/hair_colour/fixtures/acceptance.json",
+      "sha256": "ae1ef5578db8c45cec235ede8559b7fd4f9ca230562518eb2eeda2390f2484be",
+      "bytes": 7669
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_host.py",
+      "sha256": "bb9aa72320f5705cc3ea0cb5ed427a531bef537c57ee2fa18440a88af9ba6e27",
+      "bytes": 8548
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "b5b6c33500350affbca8073d157a85292e3fb9653b2de90cd3ab02c5edc90c53",
+      "bytes": 110770
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_colour_analysis.py",
+      "sha256": "4c02031392ee7ece2dd21712823218ee033091ad1c9ff89f07db9ce7f72c4227",
+      "bytes": 2886
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_colour_assets.py",
+      "sha256": "dd1850531828c13b7b090d7eb8072fd7a392e883a330c6857a78c5f83b9b383e",
+      "bytes": 7335
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_colour_controller.py",
+      "sha256": "c3c3fbd16528737c3ef6800f4f1ed61fff0abbe3c081ed8f4dc34cedbc7490e0",
+      "bytes": 13162
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_colour_evidence.py",
+      "sha256": "eace502993ce6260d1ed8a6dc34463c257a749f8949acd5e8497eb8f1525d87d",
+      "bytes": 5625
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_colour_native.py",
+      "sha256": "61824da6457620ce6f496485e5e879307bb88a5db02b8fdec34ca34539537ba0",
+      "bytes": 2526
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_colour_project.py",
+      "sha256": "03ee306b10a5f81b384dac29fd55a2735f789977070de76134168b89cd07d3b1",
+      "bytes": 5037
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_colour_replay.py",
+      "sha256": "ab0baafc0942c9c4ba509e8af080171d38f8603dd928146cee2d1bee2ea002e5",
+      "bytes": 3879
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_colour_runtime.py",
+      "sha256": "0172037f691e1849d387fca16bb7a9d72d664b6d8a56bb8652a1d1d29a9b2ada",
+      "bytes": 10608
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_colour_state.py",
+      "sha256": "05406b2b704d4595b72c78e7ffd46fe67bdd2c5b8ddb80c4a293e81a58cd5f94",
+      "bytes": 1870
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "e128ed79d7252d9bd49d74e113397d585156666549e7d675dc14b8e1455d30ae",
+      "bytes": 6168
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/master16_policy.py",
+      "sha256": "b2b8bdfad7ab32e2b687e116703e8163f941afcac6504f55ba2e4dcc35906d0c",
+      "bytes": 10960
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "902d2e62f478b7ac9721b91e55aee8daba6f19e94c53bdaaf87e44800afd68a8",
+      "bytes": 3045
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "sha256": "5e2d207653227c831d3405f29446d06e588a054593a1302324000fea954c9a71",
+      "bytes": 5966
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "6f2751e845c8dbaaf64974a8339bdb9ce1aa09405142db6dfc8508367f4b67fb",
+      "bytes": 4409
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "cc1abe55b0d2297ce62d71699fdf42a1d9f95185b7cb34717869d0ac3ec69ba3",
+      "bytes": 3592
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "b04b00f9f60ca585b6242d382a7b5defb900808ad2dba3fe6ee2013f185b9dd7",
+      "bytes": 17797
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_open.py",
+      "sha256": "5560fe146013dd08d28728efe1b9abadf1a7e4b8af15fbf2400b8470ef968bd1",
+      "bytes": 1959
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "sha256": "3b474bceff8553bad1c1522219dc0601f098eba9b18123cc82e0a6a6bb9bc5fb",
+      "bytes": 765
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "sha256": "4e98f30e9c98b0833f05089ff5df90dc20e1e56a8cfe88a8e8c41407e53525b2",
+      "bytes": 4849
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_recovery.py",
+      "sha256": "29f9a376d582c1027d899fa41eb75c97fae43dc724c5af6514e82e812074cc23",
+      "bytes": 9558
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "0ce7fcc01d80c6d051489aae1cfde063aa96dd2f3ef0215a4ce9dc2900c5010c",
+      "bytes": 9500
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_support_assets.py",
+      "sha256": "152dffe6d39be5a9470677bd7e38640d6ee0c5a2ad5a0877eb439ce27c27cc10",
+      "bytes": 8811
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "e2b00d687d5c5703cdb20b6d21312b7aa17b5b0719973443e1ad643b28a81b64",
+      "bytes": 54341
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "61aea7710058459cb93c79a315af186dc8bc2e74b06543eacad00ad4b1b22d57",
+      "bytes": 444328
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "f1c77381d6e57e9fb6b5cf9b7384919780f2f3100581f3fbe0ed8706530ff9c1",
+      "bytes": 127263
+    },
+    {
+      "path": "engine/tests/test_hair_colour_contract.py",
+      "sha256": "6de3e5742ded60cd874765df1628fc82f7f1d9339f836a34a819fe65696aad61",
+      "bytes": 8999
+    },
+    {
+      "path": "packaging/build-hair-colour.sh",
+      "sha256": "a484d342eaaddaa019dc1099e70a6bfc16baad24fd9777cedd16c2b3d2ef6dcd",
+      "bytes": 448
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "7ec0acd204a4d4772574450e540fba6573143255bb7c263b4bb8a4f2fb958dec",
+      "bytes": 9973
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "7d892624c5493aa7cfafe97071ed7bca57f2cfa0f4a4d69a041e5ce25ab49caa",
+      "bytes": 28542
+    },
+    {
+      "path": "ui/src-tauri/src/hair_colour_api.rs",
+      "sha256": "15424c53995b9032ac6f5a3e9324f62cb11dcaa611075f6eb6bb28d8c804d906",
+      "bytes": 3946
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "67dc66072490ffbd9a140216cba5ef502edfa0beed2732c425c2bc58ab18a375",
+      "bytes": 94234
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "07a009304a7aa43ea8fe70d720c7853c00539e19e9dc1e4b65a8054ad36fda78",
+      "bytes": 6274
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "4f83a995475f8cf74d23f8f3a196e9250c809fbac670acefa4b35d4162ea38c1",
+      "bytes": 125213
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "000a794808e23aceb6550f805d9990b854798eb9c4571c847b3cf67e024622d6",
+      "bytes": 53498
+    },
+    {
+      "path": "ui/src/hairColour/HairColourPanel.tsx",
+      "sha256": "77840550f4c8d2f14b79624ec582993279e6d51d32edc6744961cf3730103093",
+      "bytes": 8385
+    },
+    {
+      "path": "ui/src/hairColour/HairSourceEditor.tsx",
+      "sha256": "f86cfa95305da98d7fb99e56618362ea5addd9d9f3097a976f227e90fdcf0a62",
+      "bytes": 6021
+    },
+    {
+      "path": "ui/src/hairColour/hairColour.css",
+      "sha256": "e11375a3ce877a26f6617f0991043032a5f0c1bc26dfc9570a5dbcc7b0880b40",
+      "bytes": 890
+    },
+    {
+      "path": "ui/src/hairColour/model.ts",
+      "sha256": "ef02605af611a954215e1959ef3d2271dfc388042d96de8b8cc247f95f7a20cf",
+      "bytes": 4025
+    },
+    {
+      "path": "ui/src/hairColour/nativePort.ts",
+      "sha256": "c52b6f3f3e2c97381aaf2adb242fc94b6cb78a5a5a92a771d83d644186240c76",
+      "bytes": 4724
+    },
+    {
+      "path": "ui/src/hairColour/useHairColourPort.ts",
+      "sha256": "f2e62e9c9921f77cf04b2c3603e136a976972bd71301d043da1ed43a961747da",
+      "bytes": 668
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "8f7715198cc3ecbbf8d510e22597aac2155deb100a856aa198a0d15f8de05c00",
+      "bytes": 89742
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "4a9bb977c520038f33d2e040cfcf6880036374f0ef07975c85eecc713e842ecb",
+      "bytes": 6047
+    }
+  ]
+}

@@ -947,6 +947,7 @@ export interface EngineStatus {
     reference_color_protocol?: number;
     shoulder_shape_protocol?: number;
     semantic_colour_protocol?: number;
+    hair_colour_protocol?: number;
     sample_library_protocol?: number;
     effect_recovery_protocol?: number;
     optics_protocol?: number;

@@ -95,7 +95,8 @@ export function operationLabel(id: string): string {
   return ({'lnx.deform.v1': '基础脸型', 'lnx.enhance.v1': '眼牙与面部增强',
     'lnx.facial_wrinkles.v1': '面部细纹', 'lnx.lip_makeup.v1': '唇妆',
     'lnx.brow_shape.v1': '眉形', 'lnx.nose_shape.v1': '鼻形',
-    'lnx.eye_shape.v1': '眼形', 'lnx.mouth_shape.v1': '嘴形'} as Record<string, string>)[id] ?? id;
+    'lnx.eye_shape.v1': '眼形', 'lnx.mouth_shape.v1': '嘴形',
+    'lnx.hair_colour.v1': '发色与已有高光光泽'} as Record<string, string>)[id] ?? id;
 }
 export function bindingKey(binding: PeopleBinding): string {
   return `${binding.document_epoch}:${binding.document_id}:${binding.asset_sha256}`;

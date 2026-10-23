@@ -1,0 +1,15 @@
+"""One preview forwarding contract for independently owned portrait inputs.
+
+Every engine-owned preview path supplies body ownership and hair source evidence
+explicitly. An optional missing argument must not silently remove another edit.
+This helper does not own state, construct evidence, publish or warp anything.
+"""
+_MISSING = object()
+
+
+def preview(engine, state=None, *, body_bank=_MISSING, body_source=None):
+    from .hair_colour_project import preview_kwargs
+    state = engine._people_owner().snapshot() if state is None else state
+    return {**preview_kwargs(engine, state),
+            'body_bank': engine._body_bank() if body_bank is _MISSING else body_bank,
+            'body_source': engine._people_source() if body_source is None else body_source}

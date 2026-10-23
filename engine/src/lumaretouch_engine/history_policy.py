@@ -80,6 +80,7 @@ def command_group(name: str, msg: dict) -> str:
     拿值当组名会出两件事：拖回原位那种"值又变回去"合并不了，而把 action 与路径参数
     （rle/paths）算进组名会让每一笔都是新组——那正好是我们要区分的两种动作。"""
     if name=="shoulder_shape":return "shoulder_shape:gesture:"+str((msg.get("request") or {}).get("gesture_id",msg.get("request_id","missing")))[:128]
+    if name=='hair_colour':return 'hair_colour:'+str((msg.get('people_context') or {}).get('target'))+':'+str(msg.get('request_id','missing'))
     if name=="people":
         target=msg.get('target') or {};patches=(msg.get('payload') or {}).get('patches') or []
         return 'people:'+str(target.get('scope'))+':'+str(target.get('target_id'))+':'+str(msg.get('action'))+':'+','.join(sorted(str(p.get('operation_id'))+str(p.get('parameter_path')) for p in patches))

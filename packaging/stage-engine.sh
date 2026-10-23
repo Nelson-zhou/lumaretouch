@@ -110,3 +110,9 @@ mkdir -p "$stage/lumaretouch_engine/third_party/semantic_colour/core/semantic_co
 cp "$here/../core/semantic_colour/"*.rs "$stage/lumaretouch_engine/third_party/semantic_colour/core/semantic_colour/"
 cp "$here/../core/curves/curve.rs" "$stage/lumaretouch_engine/third_party/semantic_colour/core/curves/"
 cp "$here/../LICENSE" "$here/../docs/semantic_colour/README.md" "$stage/lumaretouch_engine/third_party/semantic_colour/"
+
+# Original source-domain hair colour and measured-highlight operator, no weights.
+bash "$here/build-hair-colour.sh" "$stage/lumaretouch_engine/bin/liblrt_hair_colour.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/hair_colour/core/hair_colour"
+cp "$here/../core/hair_colour/lib.rs" "$here/../core/hair_colour/README.md" "$stage/lumaretouch_engine/third_party/hair_colour/core/hair_colour/"
+cp "$here/../LICENSE" "$here/../docs/hair_colour/README.md" "$stage/lumaretouch_engine/third_party/hair_colour/"

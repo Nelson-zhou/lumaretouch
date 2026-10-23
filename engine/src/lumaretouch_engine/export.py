@@ -690,8 +690,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     from .semantic_colour_stage import SemanticColourStage
     from .semantic_colour_runtime import verify_render_source as verify_semantic_source
     from .body_pose_render import verify_render_source as verify_body_source
+    from .hair_colour_project import verify_render_source as verify_hair_source
     verify_semantic_source(spec)
     verify_body_source(spec)
+    verify_hair_source(spec)
     semantic_stage=SemanticColourStage(spec.semantic_colour,binding=spec.semantic_colour_binding)
     floating=bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output
     if spec.provenance_output and (not spec.float_output or spec.scale!=1): raise ExportError("来源支持只用于原尺寸浮点分析")
@@ -996,6 +998,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     out=semantic_stage.apply_np(out)
     verify_semantic_source(spec)
     verify_body_source(spec)
+    verify_hair_source(spec)
     if support is not None: spec.provenance_result=np.all(support>=.999999,axis=2)
     if bits == 16 and not spec.float_output:
         out = quantize16_np(out)

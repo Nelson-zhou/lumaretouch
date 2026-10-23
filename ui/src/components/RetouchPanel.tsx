@@ -2,6 +2,8 @@ import {PeoplePanel} from '../people/PeoplePanel';
 import type {PeopleOwner} from '../people/usePeopleWorkflow';
 import {peopleContext, type ParameterPatch} from '../people/model';
 import {portraitRequestsBusy} from '../people/portraitAccess';
+import {HairColourPanel} from '../hairColour/HairColourPanel';
+import type {HairPort} from '../hairColour/model';
 import {MouthShapeControls} from "../mouthShape/MouthShapeControls";
 import {neutral as neutralMouth} from "../mouthShape/model";
 import {EyeShapeControls} from "../eyeShape/EyeShapeControls";
@@ -57,6 +59,9 @@ export interface RetouchProps {
   presetPanel?: React.ReactNode;
   sampleLibraryPanel?: React.ReactNode;
   shoulderPanel?: React.ReactNode;
+  hairPort: HairPort;
+  hairBusy: boolean;
+  refreshHair: () => Promise<void>;
   whiteBalancePanel?: React.ReactNode;
   whiteBalanceBusy?: boolean;
   colorSamplePanel?: React.ReactNode;
@@ -439,7 +444,7 @@ function hexToRgb(hex: string): number[] {
 
 export default function RetouchPanel(props: RetouchProps) {
   const { doc, status } = props;
-  const dim = !props.hasImage||!!props.colorActions?.owner.pending||(props.people.state.pending && props.people.state.pendingAction !== 'patch')||props.people.state.uncertain;
+  const dim = !props.hasImage||props.hairPort.pending()||!!props.colorActions?.owner.pending||(props.people.state.pending && props.people.state.pendingAction !== 'patch')||props.people.state.uncertain;
   const capturedPeople = peopleContext(doc?.people);
   const skinReady = skinMaskReady(status?.precompute?.mask_channels, status?.precompute?.mask_nonzero_pixels);
   const skinWhy = skinReady ? "" : "尚无有效皮肤掩膜，请先完成人像分析";
@@ -959,6 +964,13 @@ export default function RetouchPanel(props: RetouchProps) {
 
   const blockFor = (fid: string): React.ReactNode => {
     if (fid === "PC-32473") return props.shoulderPanel;
+    if (fid === "PC-32472") return <>
+      {status?.ready_caps?.hair_colour_protocol!==1&&<p role="status">当前引擎未提供头发范围审核，请使用配套版本。</p>}
+      <HairColourPanel people={doc?.people??null} port={props.hairPort}
+        busy={dim||props.hairBusy||!props.people.enabled||status?.ready_caps?.hair_colour_protocol!==1||portraitRequestsBusy()}
+        patch={async patches=>{props.people.patch(patches);}} refresh={props.refreshHair}/>
+      {props.people.state.message&&<p role="status">{props.people.state.message}</p>}
+    </>;
     if (fid === "PC-32452") return <>{props.sampleLibraryPanel}{props.presetPanel}{lutBlock}</>;
     if (fid === "PC-32454") return gradeBlock;
     if (fid === "PC-32481") return props.effectRecoveryPanel;
@@ -1024,6 +1036,7 @@ export default function RetouchPanel(props: RetouchProps) {
                 <SpecNodes nodes={withoutCoveredLeaves(tree, f.id, f.id === "PC-32455" ? !!props.opticsPanel : !!custom)}
                   openPaths={openPathsFor(f)} renderExtra={node=>renderExtra(node,f.id)}
                   renderLeaf={(leaf, name) => {
+                    if(f.id==='PC-32472'&&['发色选择','头发光泽'].includes(leaf.path))return null;
                     if (f.id === "PC-32481" && leaf.path === "背景调整涂抹笔" && props.studioBackgroundPanel)
                       return <div className="toolRouteNote"><button className="toolRouteLink" onClick={()=>navigateTool("PC-32474")}>背景调整恢复画笔</button><p>进入背景调整，在编辑范围中选择对应的恢复目标。</p></div>;
                     if (f.id === "PC-32481" && leaf.path === "换天空涂抹笔" && props.skyReplacementPanel)

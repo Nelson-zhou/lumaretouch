@@ -7,6 +7,8 @@ def prepare(engine,decoded,request):
     state=engine._people_owner().snapshot();asset=SOURCE.source_digest(engine._doc_path)
     faces=[face for face in state['faces'].values() if face['asset_sha256']==asset]
     if not faces:return
+    from .hair_colour_replay import restore_open
+    if restore_open(engine,decoded):return
     from .face import build
     backend=(engine._precompute_backend or 'mediapipe')
     if backend=='auto':backend='mediapipe' # Never upgrade a frozen owner through a silent fallback.

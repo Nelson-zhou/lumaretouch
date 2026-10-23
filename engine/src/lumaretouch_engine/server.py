@@ -69,6 +69,7 @@ from .preview_lifecycle import PreviewLifecycleMixin
 from .portrait_geometry_dispatch import PortraitGeometryMixin
 from .master16_policy import Master16PolicyMixin
 from .body_pose_host import BodyPoseHostMixin
+from .hair_colour_controller import HairColourHostMixin, MUTATIONS as HAIR_MUTATIONS
 from .people_host import PeopleHostMixin
 from .workflow_ports import WorkflowPortsMixin
 from .sample_library_host import SampleLibraryHostMixin
@@ -182,7 +183,7 @@ class _TaskControl:
         self.cancel = threading.Event()
 
 
-class Engine(Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, WorkflowPortsMixin, SampleLibraryHostMixin, SemanticColourHostMixin):
+class Engine(HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, WorkflowPortsMixin, SampleLibraryHostMixin, SemanticColourHostMixin):
     def __init__(self, session: str):
         self.session = session
         self.shm: FrameShm | None = None
@@ -391,7 +392,7 @@ class Engine(Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLif
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"shoulder_shape_protocol":1, "studio_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"shoulder_shape_protocol":1, "studio_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -1201,7 +1202,7 @@ class Engine(Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLif
     # 撤销不了"（CORE-006 的新用例把它响出来了）。加一层时要同时改这里与 DOC_FIELDS，
     # 而 test_undo_redo_restores_recipe… 就是那个让人不能只改一边的守卫。
     EDIT_CMDS = ("set_strength", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light", "deform", "lut", "grade", "background",
-                 "crop", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "preset", "batch", "face", "enhance", "lip_makeup", "brow_shape", "nose_shape", "eye_shape", "mouth_shape", "people", "fabric")
+                 "crop", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "preset", "batch", "face", "enhance", "lip_makeup", "brow_shape", "nose_shape", "eye_shape", "mouth_shape", "people", "hair_colour", "fabric")
     # preset/batch 也在这份名单里，而且不是“凑数”：套一次预设必须能一次 Ctrl+Z 退回去
     # （逐条命令各自入栈会得到“一次预设 = 四五步撤销”，而 UI 上看不出为什么），
     # 而 batch 改的就是活动文档的配方——不在这里它就会“同步完了而徽章不亮”。
@@ -6596,7 +6597,7 @@ class Engine(Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLif
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("hello", "shoulder_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("hello", "hair_colour", "shoulder_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light",
                "deform", "lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -6606,7 +6607,7 @@ class Engine(Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLif
                # 眼牙增强（LNX-PORTRAIT-009）：它是一次编辑（进撤销栈、打脏标记），所以
                # 两个名单都要有它——上一轮加曝光时只改一边，得到的就是"拖完按撤销纹丝不动
                # 而 UI 一句也不说为什么"（CORE-006 为此专门加了一条用例）
-               "enhance", "lip_makeup", "brow_shape", "nose_shape", "eye_shape", "mouth_shape", "people", "fabric")
+               "enhance", "lip_makeup", "brow_shape", "nose_shape", "eye_shape", "mouth_shape", "people", "hair_colour", "fabric")
     _HANDLED_LAMBDA = ("bench_stop",)      # 唯一不开成 cmd_* 的那条：只是置停止位
 
     def _dispatch_table(self) -> dict:
@@ -6709,7 +6710,7 @@ class Engine(Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLif
                         self._reject_bench(reason, msg.get("mode", "copy"))
                         return
                     raise ValueError(reason)
-            if name in self.EDIT_CMDS:
+            if name in self.EDIT_CMDS and (name!='hair_colour' or msg.get('action') in HAIR_MUTATIONS):
                 # 推送点只在这里这一处（见 EDIT_CMDS 的说明）：执行前抄快照，
                 # 执行后比对签名决定占不占一步。异常也记（finally）——半改完的
                 # 状态正是最需要一次撤销能修回去的时候。
@@ -6719,7 +6720,7 @@ class Engine(Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLif
                 try:
                     fn(msg)
                 finally:
-                    if not self._people_shared_mutation:self._history_record(group, before, coalesce=not (name in ("white_balance", "color_picker", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement") or (name == "preset" and msg.get("action") == "apply")))
+                    if not self._people_shared_mutation:self._history_record(group, before, coalesce=not (name in ("hair_colour", "white_balance", "color_picker", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement") or (name == "preset" and msg.get("action") == "apply")))
             else:
                 fn(msg)
         except Exception as e:  # 协议层不许因单条消息崩溃
@@ -6732,6 +6733,7 @@ class Engine(Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLif
                 if name == "eye_shape" and isinstance(msg, dict): self.finish_eye_shape(msg, dispatch_error)
                 if name == "mouth_shape" and isinstance(msg, dict): self.finish_mouth_shape(msg, dispatch_error)
                 if name == "people" and isinstance(msg, dict): self.finish_people(msg, dispatch_error)
+                if name == "hair_colour" and isinstance(msg, dict): self.finish_hair_colour(msg, dispatch_error)
                 if name == "sky_replacement" and isinstance(msg, dict):
                     self._sky_replacement_controller().finish(msg, dispatch_error)
                 if name == "optics" and isinstance(msg, dict):

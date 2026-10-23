@@ -1,0 +1,11 @@
+.hair-colour-panel {display:flex;flex-direction:column;gap:.65rem}
+.hair-colour-panel label {display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.hair-colour-panel p {font-size:.83rem;line-height:1.5;margin:.25rem 0;color:var(--muted,#abb4c4)}
+.hair-toolbar {display:flex;flex-wrap:wrap;gap:.4rem;align-items:center}
+.hair-source-image {position:relative;width:100%;background:#15191e;overflow:hidden}
+.hair-source-image img,.hair-source-image canvas {position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:fill}
+.hair-source-image canvas {cursor:crosshair}
+.hair-overlay {display:block;max-width:100%;max-height:65vh;object-fit:contain;background:#15191e}
+.hair-review {border:1px solid var(--border,#384351);padding:.65rem;display:flex;flex-direction:column;gap:.6rem}
+
+.hair-source-viewport {max-height:70vh;overflow:auto;border:1px solid var(--border,#384351)}

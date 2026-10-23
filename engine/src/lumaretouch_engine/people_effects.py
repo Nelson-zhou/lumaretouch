@@ -10,7 +10,7 @@ from .facial_wrinkle_layer import FacialWrinkleLayer, bounds as wrinkle_bounds
 from .under_eye_layer import UnderEyeLayer, bounds as eye_bounds, KEYS as EYE_KEYS
 from .ops import enhance as H
 
-STAGES = ('facial_wrinkles', 'eye_detail', 'lip_makeup', 'enhance')
+STAGES = ('facial_wrinkles', 'eye_detail', 'lip_makeup', 'enhance', 'hair_colour')
 
 
 @dataclass(frozen=True)
