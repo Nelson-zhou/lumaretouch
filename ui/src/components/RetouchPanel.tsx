@@ -35,6 +35,7 @@ import type { Region as WrinkleRegion } from "../facialWrinkles/model";
 import { EyeHighlightsControl } from "./EyeHighlightsControl";
 import {teethColourReadiness, TEETH_CONTROL_IDS} from '../teethColour/model';
 import {redEyeReadiness, RED_EYE_CONTROL_ID} from '../redEye/model';
+import {ScleraPurifyControl} from '../scleraPurify/ScleraPurifyControl';
 import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {FabricPanel} from "../fabric/FabricPanel";
 import {HistogramPanel} from "./HistogramPanel";
@@ -374,6 +375,7 @@ const WIRED: Record<string, string> = {
   "PC-32470|亮眼/眼白": "enh.sclera",
   "PC-32470|亮眼/眼瞳": "enh.iris",
   "PC-32470|祛红血丝": "enh.veins",
+  "PC-32470|眼白净化": "enh.sclera_purify",
   "PC-32470|祛红眼": "enh.red_eye",
   "PC-32470|亮眼/眼睛高光": "enh.catchlight",
   "PC-32469|牙齿美白": "enh.teeth",
@@ -433,6 +435,7 @@ const WIRE_LABEL: Record<string, string> = {
   "enh.sclera": "眼白提亮",
   "enh.iris": "眼瞳提亮",
   "enh.veins": "祛红血丝",
+  "enh.sclera_purify": "眼白净化",
   "enh.red_eye": "祛红眼",
   "enh.catchlight": "眼睛高光",
   "enh.teeth": "牙齿美白",
@@ -743,6 +746,13 @@ export default function RetouchPanel(props: RetouchProps) {
               onClick={() => commitEnhance({teeth_brightness: 0, teeth_yellow_removal: 0})}>重置独立牙齿调整</button>}
         </div>;
       }
+      case "enh.sclera_purify":
+        return <ScleraPurifyControl key={leaf.path} amount={enhAmounts.sclera_purify ?? 0}
+          capability={doc?.enhance?.sclera_purify_available === undefined ? status?.enhance : doc?.enhance}
+          disabled={dim} faceOk={props.faceOk} faceWhy={props.faceWhy}
+          reason={doc?.enhance?.reason?.sclera_purify ?? status?.enhance?.enhance_reason?.sclera_purify}
+          resetDisabled={dim || props.people.state.pending || (doc?.people ? !capturedPeople : !doc)}
+          commit={commitEnhance} Slider={Slider} />;
       case "enh.red_eye": {
         const reason = !props.faceOk ? props.faceWhy : redEyeReady.reason
           ?? doc?.enhance?.reason?.red_eye ?? status?.enhance?.enhance_reason?.red_eye ?? undefined;

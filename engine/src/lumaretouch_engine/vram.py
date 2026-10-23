@@ -2052,7 +2052,7 @@ class PreviewPipeline:
         subs = list(ENH.EFFECT_KEYS)
         facts = self.enhance_facts or {}
         return {
-            **ENH.TEETH.capability(), **ENH.RED_EYE.capability(),
+            **ENH.TEETH.capability(), **ENH.RED_EYE.capability(), **ENH.PURIFY.capability(),
             "enhance_amounts": {k: float(a[k]) for k in ENH.AMOUNT_KEYS},
             "enhance_subs": subs,
             "enhance_limit": float(ENH.AMOUNT_LIMIT),

@@ -1,0 +1,157 @@
+{
+  "baseline": "83ea2ce34ecc2bb7a6872bbc40969f6c91d3ee12",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Dedicated eye-white purification scalar: original Rust same-eye donor-weighted median/local dark-outlier repair plus linear-luminance-preserving cast reduction, conservative independent sclera candidate geometry, canonical people/legacy/native UI/full-source export/preset and reviewed person-parameter batch. Partial semantics, not segmentation or official feature acceptance.",
+  "requirement_ids": [
+    "LNX-REF-PC-32470-C-26ab900915"
+  ],
+  "files": [
+    {
+      "path": "core/sclera_purify/Cargo.toml",
+      "sha256": "2afc39fff62cc2e2fae4b8beeb30349688dfb7309d87ac4f57010d7515d8e3d9",
+      "bytes": 222
+    },
+    {
+      "path": "core/sclera_purify/README.md",
+      "sha256": "6475b3428480d9eeb8c2587c72225c96bfd2b7d7f1433734389ba6cceb20b714",
+      "bytes": 13410
+    },
+    {
+      "path": "core/sclera_purify/lib.rs",
+      "sha256": "ca7648b525310d3904055824e421629ceb4b2a749505ef0b817e3a022a30ed80",
+      "bytes": 21033
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "d012cf4e976f8fbabc6f31093074482855194999421c65b90a4a1d1a9d6d1b32",
+      "bytes": 21399
+    },
+    {
+      "path": "docs/sclera-purify/IMPLEMENTATION.md",
+      "sha256": "c7f790ae73eda9970894c73b0db2145d588f533e34d945b9febb92df6fa9ed34",
+      "bytes": 8769
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/enhance_scope.py",
+      "sha256": "3a930ca3dcbc4ef8e916bcf5ac02383ee89ac399cfdebc83e9061abba4b6dba5",
+      "bytes": 4462
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "c7cd31e06563a98b6f0843c45fd9a29046aedcf7f586e4864ade591cf731da6c",
+      "bytes": 20967
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/ops/enhance.py",
+      "sha256": "ce0237ba8d522e0aaf4164515b8b6ed9b3f9edd523082fd92b38af2695856be7",
+      "bytes": 38566
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "ca811511033e3e6ecd747ae2f1554329c0a648a63365f8a6d1b822da486adc59",
+      "bytes": 5244
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sclera_purify_apply.py",
+      "sha256": "be911f255fa274043b86269fcd273e6328f0027f84c95131b8f91e36f80c5538",
+      "bytes": 6984
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sclera_purify_native.py",
+      "sha256": "b63c8beefcdac48ca9f38ecb187073ca4bec1ee06223875370f9690ad6566b23",
+      "bytes": 8585
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "ea6f485ddf4626b3c61c5e462e69b4bf991f07b192bad630f12117b3adffaede",
+      "bytes": 464461
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/under_eye_layer.py",
+      "sha256": "263fdb84d3e80680c654f33f0ca778d02b0f33575b163d4c1d6a5f4e92d921f4",
+      "bytes": 7062
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "7f98177d7e8513fc43d77e611b68bc2a9efee1b406e17790a962465ab34f170b",
+      "bytes": 135663
+    },
+    {
+      "path": "engine/tests/test_sclera_purify_integration_unrun.py",
+      "sha256": "2e88ec9f80677da6a8b7d36d0b5dc43110d90e01ea1f2311dd6d370f8f94fa3f",
+      "bytes": 5835
+    },
+    {
+      "path": "engine/tests/test_sclera_purify_native_unrun.py",
+      "sha256": "9f4d56a547e1e8493eeeb7c8f5d8c4b4480a0265c144dbd6f8e33bdc3e07c5bc",
+      "bytes": 14459
+    },
+    {
+      "path": "packaging/build-sclera-purify.sh",
+      "sha256": "167f6dc100c4772e0cd2b3ac834e42e316e047ad66da0dd83202708313aa1126",
+      "bytes": 641
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "eba06c2e0c156b0bdcae069fbe24e05493d0dfb4b2a89f56f4596568a65107f3",
+      "bytes": 21108
+    },
+    {
+      "path": "ui/src-tauri/src/facial_wrinkle_api.rs",
+      "sha256": "50e3eacea1632ef5a343baab4a24706b9a9df898dc8e10f1d556ae2501993eb1",
+      "bytes": 4168
+    },
+    {
+      "path": "ui/src-tauri/src/portrait_api.rs",
+      "sha256": "5c73647ecb9ace5549aec5ff8d379b83f8ec619776659a408bac7b173dd20c09",
+      "bytes": 2154
+    },
+    {
+      "path": "ui/src-tauri/src/sclera_purify_api_unrun.rs",
+      "sha256": "7729a72bb073c14478b9b41c63783a1b95af69676c78efa7266f5633cb459d89",
+      "bytes": 2533
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "b964b2dcf468f81f94d99c80d4133871efe16adf82b8665a32687540a8400033",
+      "bytes": 64032
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "24a461cc35a792f85f477f828583ca6803f228ead0bc43fe25feb67a2ee90772",
+      "bytes": 100431
+    },
+    {
+      "path": "ui/src/scleraPurify/ScleraPurifyControl.tsx",
+      "sha256": "391af978ae47f531039dce18abcee85f6fe6f9d246ad6a363abe501fa7d0db41",
+      "bytes": 1872
+    },
+    {
+      "path": "ui/src/scleraPurify/model.ts",
+      "sha256": "17aabec077d8bc120dca33954b6ad1a35eca4918b395ab27ddb6b3fc8ad91911",
+      "bytes": 686
+    },
+    {
+      "path": "ui/src/scleraPurify/wiring.unrun.test.ts",
+      "sha256": "725927ae3469caf28b279c3009ed81b178fb9ee15ed779b45e89cf7f38c5256e",
+      "bytes": 6102
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1028,
+    "json_files": 1,
+    "toml_files": 1,
+    "git_diff_check": "clean",
+    "App_lines": 2122,
+    "main_lines": 2042,
+    "server_lines": 6974
+  },
+  "acceptance": "All product imports, tests, builds, typechecks, numerical, memory, latency, natural-photo and package execution UNRUN",
+  "remaining": [
+    "Geometry/photometric candidates do not certify sclera or occlusion; glasses/lashes/reflections and anatomy can be misclassified",
+    "Only bounded small dark outliers and mild casts; broad blemishes, severe darkness, strong casts and missing texture remain incomplete",
+    "No new manual sclera mask, semantic model or dedicated recovery/review receipt; actual original/current comparison required",
+    "Generic legacy preset onto derived source refused; direct canonical controls and reviewed face-parameter transfer use effective source analysis",
+    "No alpha/HDR support, unconditional megapixel/performance guarantee or runtime/photographic acceptance"
+  ]
+}

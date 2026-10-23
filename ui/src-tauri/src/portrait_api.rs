@@ -42,6 +42,7 @@ pub(crate) fn enhance(
     eye_bags: Option<f64>,
     veins: Option<f64>,
     red_eye: Option<f64>,
+    sclera_purify: Option<f64>,
     catchlight_left: Option<f64>,
     catchlight_right: Option<f64>,
     wrinkles: Option<Value>,
@@ -51,6 +52,7 @@ pub(crate) fn enhance(
         [sclera, iris, teeth, dark_circles, eye_bags, veins, catchlight_left, catchlight_right],
         red_eye,
         [teeth_brightness, teeth_yellow_removal], wrinkles)?;
+    crate::facial_wrinkle_api::append_sclera_purify(&mut cmd, sclera_purify)?;
     crate::people_api::add_context(&mut cmd, people_context)?;
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))

@@ -59,6 +59,18 @@ pub fn enhance_command_with_red_eye(action: &str, legacy: [Option<f64>; 8], red_
     Ok(command)
 }
 
+/// Add only the independent eye-white purification leaf. Prior wrappers retain
+/// their signatures and sparse behavior; missing never means clear or alias.
+pub fn append_sclera_purify(command: &mut Value, value: Option<f64>) -> Result<(), String> {
+    let Some(amount) = value else { return Ok(()); };
+    if !amount.is_finite() || !(0.0..=1.0).contains(&amount) {
+        return Err("人物增强参数超出范围：sclera_purify".into());
+    }
+    let object = command.as_object_mut().ok_or("人物增强命令必须是对象")?;
+    object.insert("sclera_purify".into(), serde_json::json!(amount));
+    Ok(())
+}
+
 #[cfg(test)]
 #[path = "teeth_colour_api_unrun.rs"]
 mod teeth_colour_tests;
@@ -66,3 +78,7 @@ mod teeth_colour_tests;
 #[cfg(test)]
 #[path = "red_eye_api_unrun.rs"]
 mod red_eye_tests;
+
+#[cfg(test)]
+#[path = "sclera_purify_api_unrun.rs"]
+mod sclera_purify_tests;

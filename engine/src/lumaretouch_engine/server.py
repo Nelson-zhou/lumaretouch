@@ -1670,7 +1670,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                 # PORTRAIT-009：三个子功能的值、这一层真点火了没有、以及"没点火时那一句
                 # 原因"。UI 的开关与提示必须从这里取：自己记一份就会在换图/重开工程/换人选
                 # 之后替引擎说谎（这一层的 reason 有五种来源，都不是前端能推出来的）
-                "enhance": {**ENH.TEETH.capability(), **ENH.RED_EYE.capability(), "amounts": dict(self._enhance["amounts"]),
+                "enhance": {**ENH.TEETH.capability(), **ENH.RED_EYE.capability(), **ENH.PURIFY.capability(), "amounts": dict(self._enhance["amounts"]),
                             "subs": list(ENH.EFFECT_KEYS),
                             "limit": [0.0, float(ENH.AMOUNT_LIMIT)],
                             "lit": bool(self._vram.has_enhance()) if self._vram else False,
@@ -2886,7 +2886,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                 info = self._vram.set_enhance(amounts)
                 self._enhance = dict(amounts=amounts, built=False, box=None)
                 self._enhance_defer = False
-        except (ENH.EnhanceError, ValueError, RuntimeError) as e:
+        except (ENH.EnhanceError, ValueError, RuntimeError, MemoryError, OSError) as e:
             self._restore_enhance(prev)
             emit({"event": "error", "error": f"人物增强未提交，已保留上一配方：{type(e).__name__}: {e}"})
             return
@@ -6457,8 +6457,8 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
         if self._precompute is not None:
             self._rehang_precompute(replayed_for=replayed_for)
         if strict_local: LM.sync(self, strict=True); LGR.sync(self, strict=True); MLR.sync(self, strict=True); SBR.sync(self, strict=True); OPR.sync(self, strict=True); SKR.sync(self, strict=True); LIPR.sync(self, strict=True); BROWR.sync(self, strict=True); NOSER.sync(self, strict=True); EYER.sync(self, strict=True); MOUTHR.sync(self, strict=True); self._people_sync(strict=True); IDR.sync(self, strict=True); ERR.sync(self, strict=True); RCR.sync(self, strict=True); SCR.sync(self, strict=True); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
-        if strict_local and not self._people_managed() and (ENH.TEETH.active(self._enhance.get("amounts",{})) or ENH.RED_EYE.active(self._enhance.get("amounts",{}))) and not self._enhance.get("built"):
-            raise ValueError("独立牙齿/祛红眼预设未建立目标人物支持，拒绝静默保存无效果参数")
+        if strict_local and not self._people_managed() and (ENH.TEETH.active(self._enhance.get("amounts",{})) or ENH.RED_EYE.active(self._enhance.get("amounts",{})) or ENH.PURIFY.active(self._enhance.get("amounts",{}))) and not self._enhance.get("built"):
+            raise ValueError("独立牙齿/祛红眼/眼白净化预设未建立目标人物支持，拒绝静默保存无效果参数")
         return self._write_current_frame(mode)
 
     def _face_known_single(self, row: dict | None, *, live: bool) -> tuple[str, str]:

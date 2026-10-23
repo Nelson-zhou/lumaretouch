@@ -57,6 +57,7 @@ from ..optional_dependencies import optional_module
 from .. import facial_wrinkle_state as WRINKLES
 from .. import teeth_colour_apply as TEETH
 from .. import red_eye_apply as RED_EYE
+from .. import sclera_purify_apply as PURIFY
 
 torch = optional_module("torch")
 
@@ -64,7 +65,7 @@ from .deform import (IRIS_LEFT, IRIS_RIM_LEFT, IRIS_RIM_RIGHT, IRIS_RIGHT, LIP_I
                      LIP_INNER_TOP, MOUTH_CORNER_LEFT, MOUTH_CORNER_RIGHT)
 from .grade import hsv_to_rgb_np, rgb_to_hsv_np, smoothstep
 
-AMOUNT_KEYS = ("sclera", "iris", "teeth", "dark_circles", "eye_bags", "veins", "catchlight_left", "catchlight_right") + TEETH.KEYS + RED_EYE.KEYS + WRINKLES.INTENT_KEYS
+AMOUNT_KEYS = ("sclera", "iris", "teeth", "dark_circles", "eye_bags", "veins", "catchlight_left", "catchlight_right") + TEETH.KEYS + RED_EYE.KEYS + PURIFY.KEYS + WRINKLES.INTENT_KEYS
 EFFECT_KEYS = tuple(key for key in AMOUNT_KEYS if key != WRINKLES.LINK_KEY)
 SUBS = ("sclera", "iris", "teeth")      # 三个子功能，顺序即权重场第 0 轴的顺序
 PIXEL_KEYS = SUBS + TEETH.KEYS
@@ -155,8 +156,8 @@ def check_amounts(amounts) -> dict:
             out[k] = wrinkle_values[k]
             continue
         v = given.get(k, 0.0)
-        if k in TEETH.KEYS + RED_EYE.KEYS and type(v) not in (int, float):
-            raise EnhanceError("独立牙齿/祛红眼调整需要有限数值，不接受布尔或字符串")
+        if k in TEETH.KEYS + RED_EYE.KEYS + PURIFY.KEYS and type(v) not in (int, float):
+            raise EnhanceError("独立牙齿/祛红眼/眼白净化需要有限数值，不接受布尔或字符串")
         try:
             f = float(v)
         except (TypeError, ValueError):

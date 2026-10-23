@@ -9,18 +9,30 @@ from .ops import enhance as ENH
 from .third_party.rapidretouch import under_eye as EYES
 from .third_party.rapidretouch import eye_detail as DETAIL
 from . import red_eye_apply as RED_EYE
+from . import sclera_purify_apply as PURIFY
 
-KEYS = ("dark_circles", "eye_bags", "veins", "catchlight_left", "catchlight_right", "red_eye")
+KEYS = ("dark_circles", "eye_bags", "veins", "catchlight_left", "catchlight_right", "sclera_purify", "red_eye")
 
-def correct(source, landmarks, key, *, cancelled=lambda: False, red_eye_result=None):
+def correct(source, landmarks, key, *, cancelled=lambda: False, red_eye_result=None, purify_result=None):
     faces = [landmarks.astype(np.float32)]
-    # Red-eye is a separate original Rust consumer, not the old sclera filter.
-    out = (red_eye_result[0] if red_eye_result is not None else
-           RED_EYE.correct(source, landmarks, key[-1], cancelled=cancelled)[0]) if key[-1] else source
+    amounts = dict(zip(KEYS,key))
+    out = source
+    occupied = None
+    # Both new consumers measure the untouched source. Their geometric supports
+    # exclude one another; neither can borrow the other's altered reference.
+    for module,prepared,name in ((RED_EYE,red_eye_result,'red_eye'),(PURIFY,purify_result,'sclera_purify')):
+        if not amounts.get(name,0):continue
+        result = prepared if prepared is not None else module.correct(source,landmarks,amounts[name],cancelled=cancelled)
+        delta = result[0]-source
+        changed = np.any(delta!=0,axis=2)
+        if occupied is not None and np.any(occupied & changed):
+            raise ENH.EnhanceError('祛红眼与眼白净化的源支持重叠，拒绝重复修正')
+        occupied = changed if occupied is None else occupied|changed
+        out = np.where(delta!=0,out+delta,out)
     if any(key[:2]):
         out = EYES.apply(out, faces, EYES.Params(*key[:2]))
     if any(key[2:5]):
-        out = DETAIL.apply(out, faces, dict(zip(KEYS, key)))
+        out = DETAIL.apply(out, faces, amounts)
     return out
 
 
@@ -53,8 +65,17 @@ class UnderEyeLayer:
             return None
         if any(key[:5]) and EYES.cv2 is None:
             raise ENH.EnhanceError("眼部局部修正需要 OpenCV；未生成替代效果")
-        red_result = RED_EYE.correct(self.source, self.landmarks, key[-1], cancelled=cancelled) if key[-1] else None
-        corrected = correct(self.source, self.landmarks, key, cancelled=cancelled, red_eye_result=red_result)
+        named = dict(zip(KEYS,key))
+        if named['sclera_purify']:
+            from .cpu_memory_budget import available_estimate
+            # Additional full-face private results/composition arrays, beyond
+            # the already owned source; native per-eye scratch is admitted again.
+            extra = (7 if named['red_eye'] else 5)*self.source.nbytes + 4*self.source.shape[0]*self.source.shape[1]
+            if extra > available_estimate():
+                raise MemoryError('眼白净化源图私有缓冲预算不足；不降为代理图或发布半层')
+        red_result = RED_EYE.correct(self.source,self.landmarks,named['red_eye'],cancelled=cancelled) if named['red_eye'] else None
+        purify_result = PURIFY.correct(self.source,self.landmarks,named['sclera_purify'],cancelled=cancelled) if named['sclera_purify'] else None
+        corrected = correct(self.source,self.landmarks,key,cancelled=cancelled,red_eye_result=red_result,purify_result=purify_result)
         delta = np.ascontiguousarray(corrected - self.source)
         if not np.isfinite(delta).all():
             raise ENH.EnhanceError("眼部局部修正产生非有限值，整层拒绝")
@@ -66,6 +87,9 @@ class UnderEyeLayer:
                 continue
             if k == "red_eye":
                 facts[k] = red_result[1]
+                continue
+            if k == "sclera_purify":
+                facts[k] = purify_result[1]
                 continue
             single = [0.0] * len(KEYS)
             single[i] = key[i]
