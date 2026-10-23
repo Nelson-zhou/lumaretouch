@@ -181,3 +181,74 @@ fn terminal_receipts_keep_known_failure_distinct_from_uncertain_mutation() {
     result["report"]["recipe_revision"] = json!("6"); assert!(!receipt(&result,&apply));
     result["report"]["recipe_revision"] = json!("8"); result["shadow_review"] = preview_receipt()["shadow_review"].clone(); assert!(!receipt(&result,&apply));
 }
+
+pub(crate) fn paint_source_request() -> Value {
+    let mut request=preview_request();
+    for key in ["parameters","lit_ids","retention_ids","samples_reviewed","uniform_floor_confirmed"] {request.as_object_mut().unwrap().remove(key);}
+    request["action"]=json!("id_original_shadow_paint_source");request["request_id"]=json!("shadow-source-1");request
+}
+pub(crate) fn paint_source_receipt() -> Value {
+    let request=paint_source_request();
+    json!({"event":"id_background_result","protocol":1,"action":request["action"],"request_id":request["request_id"],
+        "document_id":request["document_id"],"success":true,"outcome_unknown":false,"requires_reload":false,
+        "report":{"recipe_document_id":request["recipe_document_id"],"recipe_revision":request["recipe_revision"]},
+        "shadow_paint_source":{"version":1,"token":"e".repeat(32),"recipe_document_id":request["recipe_document_id"],
+            "recipe_revision":request["recipe_revision"],"source":{"sha256":"c".repeat(64),"width":2,"height":1},
+            "domain":"source-normalized","image":sample_image(2,1,32),"lit_floor":sample_image(2,1,0),"retention":sample_image(2,1,0)}})
+}
+fn stroke(id:&str)->Value {json!({"id":id,"mode":"restore","points":[[0.2,0.5]],"radius":0.02,"opacity":1,"feather":20})}
+pub(crate) fn painted_request()->Value {
+    let mut request=preview_request();request["lit_ids"]=Value::Null;request["retention_ids"]=Value::Null;
+    request["paint"]=json!({"token":"e".repeat(32),"lit_strokes":[stroke("lit-dab")],"retention_strokes":[stroke("retained-dab")]});request
+}
+#[test]
+fn direct_shadow_canvas_requires_exact_source_and_three_hashed_uncropped_images(){
+    let request=paint_source_request();let result=paint_source_receipt();
+    assert!(command(&request).is_ok());assert!(receipt(&result,&request));
+    for key in ["image","lit_floor","retention"] {
+        let mut changed=result.clone();changed["shadow_paint_source"][key]=sample_image(1,1,0);assert!(!receipt(&changed,&request));
+        let mut changed=result.clone();changed["shadow_paint_source"][key]["sha256"]=json!("0".repeat(64));assert!(!receipt(&changed,&request));
+    }
+    for (key,value) in [("domain",json!("output-normalized")),("recipe_revision",json!("8")),("token",json!("0".repeat(32)))] {
+        let mut changed=result.clone();changed["shadow_paint_source"][key]=value;assert!(!receipt(&changed,&request));
+    }
+    let mut changed=result.clone();changed["shadow_paint_source"]["source"]["width"]=json!(6000);assert!(!receipt(&changed,&request));
+    let mut changed=result.clone();changed["history"]=json!({"undo_steps":1});assert!(!receipt(&changed,&request));
+    let mut changed=result.clone();changed["success"]=json!(false);assert!(!receipt(&changed,&request));
+    let mut changed=request.clone();changed["pixels"]=json!([]);assert!(command(&changed).is_err());
+}
+#[test]
+fn source_paint_requires_current_token_independent_roles_and_bounded_vector_intent(){
+    let request=painted_request();assert!(command(&request).is_ok());
+    assert!(paint_matches(&request,&paint_source_request(),&paint_source_receipt()));
+    let mut empty=request.clone();empty["paint"]["lit_strokes"]=json!([]);assert!(command(&empty).is_ok());
+    empty["paint"]["retention_strokes"]=json!([]);assert!(command(&empty).is_err());
+    let mut duplicate=request.clone();duplicate["paint"]["retention_strokes"][0]["id"]=json!("lit-dab");assert!(command(&duplicate).is_err());
+    for (key,value) in [("mode",json!("replace")),("radius",json!(0)),("radius",json!(0.5001)),("opacity",json!(2)),("feather",json!(-1)),("points",json!([[1.01,0.5]])),("pixels",json!([]))] {
+        let mut changed=request.clone();changed["paint"]["lit_strokes"][0][key]=value;assert!(command(&changed).is_err());
+    }
+    for (key,value) in [("lit_ids",json!(["foreign"])),("samples_reviewed",json!(false))] {
+        let mut changed=request.clone();changed[key]=value;assert!(command(&changed).is_err());
+    }
+    for (key,value) in [("recipe_revision",json!("8")),("document_id",json!("other"))] {
+        let mut changed=request.clone();changed[key]=value;assert!(!paint_matches(&changed,&paint_source_request(),&paint_source_receipt()));
+    }
+    let mut changed=request.clone();changed["paint"]["token"]=json!("f".repeat(32));assert!(!paint_matches(&changed,&paint_source_request(),&paint_source_receipt()));
+    let mut result=preview_receipt();assert!(!painted_review_matches(&request,&result,&paint_source_request(),&paint_source_receipt()));
+    result["shadow_review"]["source"]=paint_source_receipt()["shadow_paint_source"]["source"].clone();
+    assert!(painted_review_matches(&request,&result,&paint_source_request(),&paint_source_receipt()));
+}
+#[test]
+fn clear_samples_is_reviewed_full_neutral_intent_not_a_direct_mutation(){
+    let mut request=preview_request();request["parameters"]=json!({"enabled":false,"strength":100,"blend":"normal"});
+    request["lit_ids"]=Value::Null;request["retention_ids"]=Value::Null;request["samples_reviewed"]=json!(false);
+    request["uniform_floor_confirmed"]=json!(false);request["clear_samples"]=json!(true);
+    assert!(command(&request).is_ok());
+    for (key,value) in [("enabled",json!(true)),("strength",json!(50)),("blend",json!("multiply"))] {
+        let mut changed=request.clone();changed["parameters"][key]=value;assert!(command(&changed).is_err());
+    }
+    for (key,value) in [("samples_reviewed",json!(true)),("uniform_floor_confirmed",json!(true)),("clear_samples",json!(false)),("lit_ids",json!(["old"]))] {
+        let mut changed=request.clone();changed[key]=value;assert!(command(&changed).is_err());
+    }
+    let mut changed=request;changed["paint"]=painted_request()["paint"].clone();assert!(command(&changed).is_err());
+}

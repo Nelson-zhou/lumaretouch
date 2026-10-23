@@ -3,12 +3,12 @@ import {invoke} from '@tauri-apps/api/core';
 import {INSPECTION_EDIT_INTENT,notifyInspectionEditIntent} from '../native';
 import {settleCurveEdit} from '../curveEditBarrier';
 import {spillApplyFields,spillNotSent,spillRequestFits,validSpillPaintSource,validSpillReview,type SpillFence,type SpillReview} from '../spillRemoval/model';
-import {originalShadowApplyFields,originalShadowNotSent,originalShadowRequestFits,validOriginalShadowPreviewFields,validOriginalShadowReview,type OriginalShadowReview} from '../originalShadow/model';
+import {originalShadowApplyFields,originalShadowNotSent,originalShadowRequestFits,validOriginalShadowPreviewFields,validOriginalShadowReview,validOriginalShadowPaintSource,type OriginalShadowReview} from '../originalShadow/model';
 import type {Reply,Report} from './model';
 const pause=()=>new Promise<void>(resolve=>setTimeout(resolve,100));
 type Kind='read'|'source'|'preview'|'mutation';
 type Pending={id:string;document:string;kind:Kind;action:string;fence:SpillFence|null;reviewEpoch:number;shadowReviewEpoch:number;sourceEpoch:number};
-const shadowAction=(action:string)=>action==='id_original_shadow_preview'||action==='id_original_shadow_apply';
+const shadowAction=(action:string)=>action==='id_original_shadow_preview'||action==='id_original_shadow_apply'||action==='id_original_shadow_paint_source';
 const spillAction=(action:string)=>action==='id_spill_preview'||action==='id_spill_apply'||action==='id_spill_paint_source';
 
 export function useIdBackground(documentId:string,hostRevision:number,available:boolean,onChanged?:()=>void){
@@ -23,7 +23,7 @@ export function useIdBackground(documentId:string,hostRevision:number,available:
  function clearSpillReview(){reviewEpoch.current++;reviewRef.current=null;setSpillReview(null);}
  function clearShadowReview(){shadowReviewEpoch.current++;shadowReviewRef.current=null;setShadowReview(null);}
  function clearReviews(){clearSpillReview();clearShadowReview();}
- function clearPaintSource(){sourceEpoch.current++;const saved=reportRef.current;if(saved?.paint_source){const {paint_source:_,...rest}=saved;reportRef.current=rest;setReport(rest);}}
+ function clearPaintSource(){sourceEpoch.current++;const saved=reportRef.current;if(saved?.paint_source||saved?.shadow_paint_source){const {paint_source:_,shadow_paint_source:_shadow,...rest}=saved;reportRef.current=rest;setReport(rest);}}
  async function receipt(id:string):Promise<Reply|null>{
   const status=await invoke<{phase:string;result:Reply|null}>('id_background_status',{requestId:id});
   if(status.phase==='unknown')throw Error('原请求回执不可用。不会自动重发修改；请查询原操作核对。');
@@ -42,8 +42,8 @@ export function useIdBackground(documentId:string,hostRevision:number,available:
    return;
   }
   if(p.kind==='source'&&reply.success){
-   if(!p.fence||!validSpillPaintSource(reply.paint_source,p.fence)||!reply.report||reply.report.recipe_document_id!==p.fence.recipe_document_id||reply.report.recipe_revision!==p.fence.recipe_revision)throw Error('源图画笔回执缺少与当前配方相符的完整来源');
-   if(p.sourceEpoch!==sourceEpoch.current||reportRef.current?.recipe_document_id!==p.fence.recipe_document_id||reportRef.current?.recipe_revision!==p.fence.recipe_revision){pending.current=null;setMessage('读取期间照片或编辑状态已变化，请重新读取源图。');return;}
+   if(!p.fence||!(original?validOriginalShadowPaintSource(reply.shadow_paint_source,p.fence):validSpillPaintSource(reply.paint_source,p.fence))||!reply.report||reply.report.recipe_document_id!==p.fence.recipe_document_id||reply.report.recipe_revision!==p.fence.recipe_revision)throw Error('源图画笔回执缺少与当前配方相符的完整来源');
+   if(p.sourceEpoch!==sourceEpoch.current||original&&p.shadowReviewEpoch!==shadowReviewEpoch.current||reportRef.current?.recipe_document_id!==p.fence.recipe_document_id||reportRef.current?.recipe_revision!==p.fence.recipe_revision){pending.current=null;setMessage('读取期间照片或编辑状态已变化，请重新读取源图。');return;}
   }
   if(p.kind==='preview'&&reply.success){
    if(!p.fence||!reply.report||reply.report.recipe_document_id!==p.fence.recipe_document_id||reply.report.recipe_revision!==p.fence.recipe_revision)throw Error(`${label}预览缺少当前配方版本`);
@@ -62,18 +62,20 @@ export function useIdBackground(documentId:string,hostRevision:number,available:
    if(reviewRef.current&&(reviewRef.current.recipe_document_id!==reply.report.recipe_document_id||reviewRef.current.recipe_revision!==reply.report.recipe_revision))clearSpillReview();
    if(shadowReviewRef.current&&(shadowReviewRef.current.recipe_document_id!==reply.report.recipe_document_id||shadowReviewRef.current.recipe_revision!==reply.report.recipe_revision))clearShadowReview();
    const priorSource=reportRef.current?.paint_source;
-   const paint_source=p.kind==='source'&&reply.success?reply.paint_source:priorSource&&priorSource.recipe_document_id===reply.report.recipe_document_id&&priorSource.recipe_revision===reply.report.recipe_revision?priorSource:undefined;
+   const paint_source=p.kind==='source'&&!original&&reply.success?reply.paint_source:priorSource&&priorSource.recipe_document_id===reply.report.recipe_document_id&&priorSource.recipe_revision===reply.report.recipe_revision?priorSource:undefined;
    // Transient pixel receipts never enter the durable recipe or gain trust via a nested report.
-   const {paint_source:_untrusted,...received}=reply.report;
+   const {paint_source:_untrusted,shadow_paint_source:_untrustedShadow,...received}=reply.report;
+   const priorShadowSource=reportRef.current?.shadow_paint_source;
+   const shadow_paint_source=p.kind==='source'&&original&&reply.success?reply.shadow_paint_source:priorShadowSource&&priorShadowSource.recipe_document_id===reply.report.recipe_document_id&&priorShadowSource.recipe_revision===reply.report.recipe_revision?priorShadowSource:undefined;
    const reportFence={recipe_document_id:reply.report.recipe_document_id,recipe_revision:reply.report.recipe_revision};
-   const next:Report={...received,...(paint_source&&validSpillPaintSource(paint_source,reportFence)?{paint_source}:{})};
+   const next:Report={...received,...(paint_source&&validSpillPaintSource(paint_source,reportFence)?{paint_source}:{}),...(shadow_paint_source&&validOriginalShadowPaintSource(shadow_paint_source,reportFence)?{shadow_paint_source}:{})};
    reportRef.current=next;setReport(next);
   }
-  setMessage(reply.success?(p.kind==='preview'?`${label}候选已生成，请审核真实前后图像。`:p.kind==='source'?'已读取不可变源图，核验完成后可绘制祛染覆盖草稿。':p.action==='id_original_shadow_apply'?'原图阴影修改已确认。':p.action==='id_spill_apply'?'祛染修改已确认。':'已确认当前背景状态。'):(reply.error||'证件照背景未应用'));
+  setMessage(reply.success?(p.kind==='preview'?`${label}候选已生成，请审核真实前后图像。`:p.kind==='source'?`已读取不可变源图，核验完成后可绘制${label}范围草稿。`:p.action==='id_original_shadow_apply'?'原图阴影修改已确认。':p.action==='id_spill_apply'?'祛染修改已确认。':'已确认当前背景状态。'):(reply.error||'证件照背景未应用'));
   setUncertain(false);pending.current=null;if(p.kind==='mutation'&&reply.success)changed.current?.();
  }
  async function request(action:string,fields:Record<string,unknown>={},read=false){
-  const kind:Kind=action==='id_spill_paint_source'?'source':action==='id_spill_preview'||action==='id_original_shadow_preview'?'preview':read?'read':'mutation';
+  const kind:Kind=action==='id_spill_paint_source'||action==='id_original_shadow_paint_source'?'source':action==='id_spill_preview'||action==='id_original_shadow_preview'?'preview':read?'read':'mutation';
   if(flight.current||!available||(kind!=='read'&&uncertainRef.current))return;
   // An unresolved mutation must be reconciled by its original ID, never replaced with a new read.
   if(kind==='read'&&uncertainRef.current){
@@ -86,7 +88,7 @@ export function useIdBackground(documentId:string,hostRevision:number,available:
   if(action==='id_spill_apply'&&(!frozenReview||usedTokens.current.has(frozenReview.token)||Object.entries(spillApplyFields(frozenReview)).some(([key,value])=>fields[key]!==value))){setMessage('请先重新生成并审核当前祛染候选。');return;}
   if(action==='id_original_shadow_apply'&&(!frozenShadow||usedTokens.current.has(frozenShadow.token)||Object.entries(originalShadowApplyFields(frozenShadow)).some(([key,value])=>fields[key]!==value))){setMessage('请先重新生成并审核当前原图阴影候选。');return;}
   if(action==='id_original_shadow_preview'&&!validOriginalShadowPreviewFields(fields)){setMessage('请分别审核原图阴影的两组选区与均匀地面条件。');return;}
-  flight.current=true;setBusy(true);setMessage(kind==='read'?'正在读取背景状态…':kind==='source'?'正在读取当前完整源图与祛染覆盖…':kind==='preview'?`正在生成真实${original?'原图阴影':'祛染'}前后审核…`:'正在处理背景…');
+  flight.current=true;setBusy(true);setMessage(kind==='read'?'正在读取背景状态…':kind==='source'?`正在读取当前完整源图与${original?'原图阴影':'祛染'}范围…`:kind==='preview'?`正在生成真实${original?'原图阴影':'祛染'}前后审核…`:'正在处理背景…');
   try{
    if(kind!=='read'){await settleCurveEdit();if(doc!==current.current||token!==generation.current)return;}
    if(kind==='preview'&&(original?shadowAtStart!==shadowReviewEpoch.current:reviewAtStart!==reviewEpoch.current)){
@@ -107,7 +109,7 @@ export function useIdBackground(documentId:string,hostRevision:number,available:
     if(action==='id_original_shadow_apply')usedTokens.current.add(frozenShadow!.token);
     clearReviews();clearPaintSource();notifyInspectionEditIntent();
    }else if(kind==='preview'){if(original)clearShadowReview();else clearSpillReview();}
-   else if(kind==='source'){clearSpillReview();clearPaintSource();}
+   else if(kind==='source'){clearReviews();clearPaintSource();}
    const p:Pending={id,document:doc,kind,action,fence,reviewEpoch:reviewEpoch.current,shadowReviewEpoch:shadowReviewEpoch.current,sourceEpoch:sourceEpoch.current};pending.current=p;
    const admission=await invoke<unknown>('id_background_request',{request:payload}),expected={action,request_id:id,document_id:doc};
    const notSent=original?originalShadowNotSent(admission,expected):spillAction(action)&&spillNotSent(admission,expected);

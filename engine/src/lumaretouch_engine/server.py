@@ -6700,7 +6700,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
             from .creative_transfer_host import inventory_read_only
             if inventory_read_only(msg):
                 fn(msg); return  # No edit fence, history or capture invalidation.
-            if name == "background" and msg.get("action") in ("id_state","id_sample","id_spill_preview","id_spill_paint_source","id_original_shadow_preview"):
+            if name == "background" and msg.get("action") in ("id_state","id_sample","id_spill_preview","id_spill_paint_source","id_original_shadow_preview","id_original_shadow_paint_source"):
                 from .id_background_controller import controller
                 recovery_boundary['started'] = True
                 controller(self,emit).handle(msg)

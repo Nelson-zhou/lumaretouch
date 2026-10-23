@@ -93,7 +93,10 @@ def test_source_routes_are_not_disconnected_or_mutating_previews():
     assert "'_original_shadow_owner'" in host and 'shadow_envelope(request)' in host
     recovery = (root / 'project_recovery_runtime.py').read_text()
     assert "'id_original_shadow_preview'" in recovery
+    assert "'id_original_shadow_paint_source'" in recovery
+    assert "'id_original_shadow_paint_source'" in host
     server = (root / 'server.py').read_text()
     assert '"id_original_shadow_preview"' in server
+    assert '"id_original_shadow_paint_source"' in server
     export = (root / 'id_background_export.py').read_text()
     assert 'shadow_memory_estimate((h,w),spec.id_background)' in export

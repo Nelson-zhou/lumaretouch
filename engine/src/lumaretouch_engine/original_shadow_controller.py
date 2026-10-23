@@ -7,11 +7,12 @@ from copy import deepcopy
 from hashlib import sha256
 import json
 
-ACTIONS = frozenset(('id_original_shadow_preview', 'id_original_shadow_apply'))
+ACTIONS = frozenset(('id_original_shadow_preview', 'id_original_shadow_apply', 'id_original_shadow_paint_source'))
 EXTRA = {
     'id_original_shadow_preview': {'parameters', 'lit_ids', 'retention_ids',
                                    'samples_reviewed', 'uniform_floor_confirmed'},
     'id_original_shadow_apply': {'token', 'reviewed', 'before_sha256', 'after_sha256'},
+    'id_original_shadow_paint_source': set(),
 }
 BASE = {'cmd', 'action', 'request_id', 'document_id', 'recipe_document_id', 'recipe_revision'}
 MAX_RECEIPT_BYTES = 16 * 1024 * 1024
@@ -24,9 +25,13 @@ def _bytes(value):
 
 def envelope(request):
     action = request.get('action')
+    optional = {'paint', 'clear_samples'} if action == 'id_original_shadow_preview' else set()
     if (action not in ACTIONS or request.get('cmd') != 'background'
-            or set(request) != BASE | EXTRA[action]):
+            or not BASE | EXTRA[action] <= set(request)
+            or set(request) - (BASE | EXTRA[action] | optional)):
         raise ValueError('原阴影请求字段不完整或不兼容')
+    if 'clear_samples' in request and request['clear_samples'] is not True:
+        raise ValueError('清除原阴影样本字段只能省略或明确为 true')
     if _bytes(request) > 65536:
         raise ValueError('原阴影请求超过 64 KiB；请减少单次所选对象数量')
     rid = request.get('request_id')
@@ -59,6 +64,26 @@ class Controller:
                 raise ValueError('原阴影回执容量已满，请保存并重启应用；未提交修改')
             reason = engine._guard_editable('background original shadow')
             if reason: raise ValueError(reason)
+            if request['action'] == 'id_original_shadow_paint_source':
+                from .original_shadow_paint_source import owner as paint_owner
+                paint_owner(engine).record = None
+                owner(engine).review = None
+                for old_id, (old_digest, old_result) in list(self.cache.items()):
+                    if 'shadow_paint_source' in old_result or 'shadow_review' in old_result:
+                        expired = {key: old_result[key] for key in (
+                            'event', 'protocol', 'action', 'request_id', 'document_id')}
+                        expired.update(success=False, outcome_unknown=False, requires_reload=False,
+                                       error='旧原阴影画布或预览已过期；没有提交图片修改')
+                        self.cache[old_id] = (old_digest, expired)
+                if sum(_bytes(item[1]) for item in self.cache.values()) + MAX_RESULT_BYTES > MAX_RECEIPT_BYTES:
+                    raise ValueError('原阴影画布回执预算已满；未提交修改')
+                public = paint_owner(engine).prepare(request)
+                result.update(success=True, report=R.report(engine), shadow_paint_source=public)
+                if _bytes(result) > MAX_RESULT_BYTES:
+                    result.pop('shadow_paint_source', None); result.pop('report', None)
+                    paint_owner(engine).record = None
+                    raise ValueError('原阴影画布三张显示图超过总传输预算；未提交修改')
+                return
             if request['action'] == 'id_original_shadow_preview':
                 owner(engine).review = None
                 for old_id, (old_digest, old_result) in list(self.cache.items()):
@@ -122,6 +147,10 @@ class Controller:
             before = None
         except Exception as error:
             result['success'] = False; result['error'] = str(error)[:2000]
+            if request.get('action') == 'id_original_shadow_paint_source':
+                from .original_shadow_paint_source import owner as paint_owner
+                paint_owner(engine).record = None
+                result.pop('shadow_paint_source', None)
             if before is not None:
                 try:
                     engine._history_apply(before)

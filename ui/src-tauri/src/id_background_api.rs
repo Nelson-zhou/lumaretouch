@@ -25,6 +25,11 @@ fn expire_shadow_previews(rows:&mut HashMap<String,Row>,keep:&str){
   row.result=Some(json!({"event":"id_background_result","protocol":1,"action":"id_original_shadow_preview","request_id":id,"document_id":row.request["document_id"],"success":false,"outcome_unknown":false,"requires_reload":false,"error":"此原阴影预览已被更新的审核替代；未修改照片，请重新生成预览"}));
  }}
 }
+fn expire_shadow_sources(rows:&mut HashMap<String,Row>,keep:&str){
+ for (id,row) in rows.iter_mut(){if id!=keep&&row.request["action"]=="id_original_shadow_paint_source"&&row.result.as_ref().is_some_and(|result|result["shadow_paint_source"].is_object()){
+  row.result=Some(json!({"event":"id_background_result","protocol":1,"action":"id_original_shadow_paint_source","request_id":id,"document_id":row.request["document_id"],"success":false,"outcome_unknown":false,"requires_reload":false,"error":"原阴影源图画布已被新的读取替代；未修改照片，请重新读取"}));
+ }}
+}
 fn review_reserve(request:&Value)->usize{if shadow::is_shadow(request){shadow::MAX_REVIEW_BYTES}else{spill::MAX_REVIEW_BYTES}}
 fn review_budget(rows:&HashMap<String,Row>)->usize{
  rows.values().filter(|row|reviewed_action(&row.request)).map(|row|
@@ -56,6 +61,8 @@ pub(crate) fn receive(epoch:[u8;16],value:&Value){
  if m.get(id).is_some_and(|row|row.epoch==epoch&&row.result.is_none()&&row.request["action"]=="id_spill_preview"&&value["document_id"]==row.request["document_id"]){expire_previews(&mut m,id);}
  if m.get(id).is_some_and(|row|row.epoch==epoch&&row.result.is_none()&&row.request["action"]=="id_spill_paint_source"&&value["document_id"]==row.request["document_id"]){expire_paint_sources(&mut m,id);}
  if m.get(id).is_some_and(|row|row.epoch==epoch&&row.result.is_none()&&row.request["action"]=="id_original_shadow_preview"&&value["document_id"]==row.request["document_id"]&&shadow::receipt(value,&row.request)) {expire_shadow_previews(&mut m,id);}
+ if m.get(id).is_some_and(|row|row.epoch==epoch&&row.result.is_none()&&row.request["action"]=="id_original_shadow_paint_source"&&shadow::receipt(value,&row.request)){expire_shadow_sources(&mut m,id);expire_shadow_previews(&mut m,id);}
+ let shadow_paint_fence=m.get(id).map_or(true,|row|row.request.get("paint").is_none()||value["success"]!=true||m.values().any(|source|source.epoch==epoch&&source.result.as_ref().is_some_and(|result|shadow::painted_review_matches(&row.request,value,&source.request,result))));
  let paint_fence=m.get(id).map_or(true,|row|row.request.get("paint").is_none()||value["success"]!=true||m.values().any(|source|source.epoch==epoch&&source.result.as_ref().is_some_and(|result|spill::painted_review_matches(&row.request,value,&source.request,result))));
  if let Some(row)=m.get_mut(id){if row.epoch==epoch&&row.result.is_none()&&value["document_id"]==row.request["document_id"]{
   let mut v=value.clone();if let Some(o)=v.as_object_mut(){o.remove("doc_state");}
@@ -65,7 +72,7 @@ pub(crate) fn receive(epoch:[u8;16],value:&Value){
     row.result=Some(json!({"event":"id_background_result","protocol":1,"action":row.request["action"],"request_id":id,"document_id":row.request["document_id"],"success":false,"outcome_unknown":mutation,"requires_reload":mutation,"error":"祛染回执未通过照片、配方或有界 PNG 验证；不得重复应用"}));
    }
   }else if shadow::is_shadow(&row.request){
-   if shadow::receipt(&v,&row.request){row.result=Some(v);}else{
+   if shadow::receipt(&v,&row.request)&&shadow_paint_fence{row.result=Some(v);}else{
     let mutation=row.request["action"]=="id_original_shadow_apply";
     row.result=Some(json!({"event":"id_background_result","protocol":1,"action":row.request["action"],"request_id":id,"document_id":row.request["document_id"],"success":false,"outcome_unknown":mutation,"requires_reload":mutation,"error":"原阴影回执未通过照片、配方或有界 PNG 摘要验证；请查询原操作，不得重复应用"}));
    }
@@ -94,11 +101,11 @@ fn request_inner(state:&AppState,request:Value,attempted:&mut bool,admitted:&mut
  if request.to_string().len()>65536{return Err("证件照背景请求超过 64 KiB".into());}
  let id=request["request_id"].as_str().filter(|s|!s.is_empty()&&s.len()<=128).ok_or("缺少背景请求身份")?.to_owned();
  let document=request["document_id"].as_str().filter(|s|!s.is_empty()&&s.len()<=256).ok_or("缺少照片身份")?;
- if request["cmd"]!="background"||!matches!(request["action"].as_str(),Some("id_state"|"id_set"|"id_review"|"id_import"|"id_clear"|"id_sample"|"id_spill_preview"|"id_spill_apply"|"id_spill_paint_source"|"id_original_shadow_preview"|"id_original_shadow_apply")){return Err("未知证件照背景命令".into());}
+ if request["cmd"]!="background"||!matches!(request["action"].as_str(),Some("id_state"|"id_set"|"id_review"|"id_import"|"id_clear"|"id_sample"|"id_spill_preview"|"id_spill_apply"|"id_spill_paint_source"|"id_original_shadow_preview"|"id_original_shadow_apply"|"id_original_shadow_paint_source")){return Err("未知证件照背景命令".into());}
  if direct_reviewed_field(&request){return Err("祛染与原阴影状态只能通过独立前后审核应用，不能从背景配方直接修改".into());}
  spill::command(&request)?;
  shadow::command(&request)?;
- let read=matches!(request["action"].as_str(),Some("id_state"|"id_sample"|"id_spill_preview"|"id_spill_paint_source"|"id_original_shadow_preview"));
+ let read=matches!(request["action"].as_str(),Some("id_state"|"id_sample"|"id_spill_preview"|"id_spill_paint_source"|"id_original_shadow_preview"|"id_original_shadow_paint_source"));
  let handle=state.engine.lock().map_err(|_|"引擎锁错误")?.clone().ok_or("引擎未启动")?;let epoch=handle.epoch();
  {let report=state.doc_report.lock().map_err(|_|"照片状态锁错误")?;if report.as_ref().and_then(|v|v["doc_state"]["document_id"].as_str())!=Some(document){return Err("照片已切换，请重新读取背景状态".into());}}
  if request["action"]=="id_sample" {
@@ -130,8 +137,13 @@ fn request_inner(state:&AppState,request:Value,attempted:&mut bool,admitted:&mut
    if m.values().filter(|row|row.request["action"]=="id_spill_paint_source"&&row.result.is_none()).count()>=8{return Err("源图读取仍有未确认请求，请先查询原操作".into());}
   }
   if request["action"]=="id_original_shadow_preview" {
+   if request.get("paint").is_some()&&!m.values().any(|row|row.epoch==epoch&&row.result.as_ref().is_some_and(|result|shadow::paint_matches(&request,&row.request,result))){return Err("未找到同一照片、配方与不可变来源的原阴影画布；未发送".into());}
    expire_shadow_previews(&mut m,&id);
    if m.values().filter(|row|row.request["action"]=="id_original_shadow_preview"&&row.result.is_none()).count()>=8{return Err("原阴影预览仍有未确认请求，请先查询原操作".into());}
+  }
+  if request["action"]=="id_original_shadow_paint_source" {
+   expire_shadow_previews(&mut m,&id);expire_shadow_sources(&mut m,&id);
+   if m.values().filter(|row|row.request["action"]=="id_original_shadow_paint_source"&&row.result.is_none()).count()>=8{return Err("原阴影源图读取仍有未确认请求，请先查询原操作".into());}
   }
   // Reserve the bounded future receipt before dispatch, including for apply.
   // Pending requests and confirmed mutation receipts are never evicted.
@@ -287,4 +299,35 @@ mod tests {
   assert_eq!(mailbox().lock().unwrap()[&id].result.as_ref(),Some(&result));
   mailbox().lock().unwrap().remove(&id);
  }
+ #[test]
+ fn replacing_shadow_canvas_preserves_spill_and_uncertain_mutations(){
+  let mut rows=HashMap::new();
+  rows.insert("source".into(),Row{epoch:[1;16],request:shadow::tests::paint_source_request(),result:Some(shadow::tests::paint_source_receipt())});
+  rows.insert("pending".into(),Row{epoch:[1;16],request:shadow::tests::paint_source_request(),result:None});
+  let mutation=json!({"success":false,"outcome_unknown":true,"requires_reload":true});
+  rows.insert("apply".into(),Row{epoch:[1;16],request:json!({"action":"id_original_shadow_apply"}),result:Some(mutation.clone())});
+  let spill=json!({"paint_source":{"token":"f".repeat(32)}});
+  rows.insert("spill".into(),Row{epoch:[1;16],request:json!({"action":"id_spill_paint_source"}),result:Some(spill.clone())});
+  expire_shadow_sources(&mut rows,"new");
+  assert!(rows["pending"].result.is_none());assert_eq!(rows["apply"].result,Some(mutation));assert_eq!(rows["spill"].result,Some(spill));
+  assert!(rows["source"].result.as_ref().unwrap().get("shadow_paint_source").is_none());
+ }
+ #[test]
+ fn painted_review_with_different_source_is_read_failure_not_unknown_mutation(){
+  let epoch=[224;16];let source_request=shadow::tests::paint_source_request();let source_result=shadow::tests::paint_source_receipt();
+  let mut request=shadow::tests::painted_request();request["request_id"]=json!("shadow-source-mismatch-fixture");
+  let id=request["request_id"].as_str().unwrap().to_owned();
+  let source_id="shadow-paint-source-mismatch-fixture".to_string();
+  {let mut rows=mailbox().lock().unwrap();
+   rows.insert(source_id.clone(),Row{epoch,request:source_request,result:Some(source_result)});
+   rows.insert(id.clone(),Row{epoch,request:request.clone(),result:None});}
+  let mut result=shadow::tests::preview_receipt();result["request_id"]=request["request_id"].clone();
+  // The valid full-candidate receipt's source is 6000x4000, not this canvas's 2x1.
+  receive(epoch,&result);
+  {let mut rows=mailbox().lock().unwrap();let rejected=rows[&id].result.as_ref().unwrap();
+   assert_eq!(rejected["success"],false);assert_eq!(rejected["outcome_unknown"],false);assert_eq!(rejected["requires_reload"],false);
+   rows.remove(&id);rows.remove(&source_id);}
+  assert!(crate::project_recovery_fence::proof(epoch).is_ok());
+ }
+
 }

@@ -1,3 +1,4 @@
+import {validSpillPaint,spillSourceDisplaySize,type SpillStroke} from '../spillRemoval/model';
 import type {LocalMaskReport,MaskObject} from '../localMasks/model';
 
 export const ORIGINAL_SHADOW_LIMITS={edge:512,pngBytes:1024*1024,base64:1398104,objects:64,requestBytes:65536} as const;
@@ -9,7 +10,9 @@ export type OriginalShadowRecipe=OriginalShadowParameters&{version:1;algorithm:'
 export type OriginalShadowFence={recipe_document_id:string;recipe_revision:string};
 export type OriginalShadowImage={mime:'image/png';width:number;height:number;sha256:string;base64:string};
 export type OriginalShadowReview=OriginalShadowFence&{version:1;token:string;source:OriginalShadowSource;candidate_sha256:string;before:OriginalShadowImage;after:OriginalShadowImage;boundaries:string[]};
-export type OriginalShadowPreviewFields={parameters:OriginalShadowParameters;lit_ids:string[]|null;retention_ids:string[]|null;samples_reviewed:boolean;uniform_floor_confirmed:boolean};
+export type OriginalShadowPreviewFields={parameters:OriginalShadowParameters;lit_ids:string[]|null;retention_ids:string[]|null;samples_reviewed:boolean;uniform_floor_confirmed:boolean;paint?:OriginalShadowPaint;clear_samples?:boolean};
+export type OriginalShadowPaint={token:string;lit_strokes:SpillStroke[];retention_strokes:SpillStroke[]};
+export type OriginalShadowPaintSource=OriginalShadowFence&{version:1;token:string;source:OriginalShadowSource;domain:'source-normalized';image:OriginalShadowImage;lit_floor:OriginalShadowImage;retention:OriginalShadowImage};
 export type OriginalShadowApplyFields={token:string;reviewed:true;before_sha256:string;after_sha256:string};
 export type OriginalShadowNotSent={requested:false;not_sent:true;protocol:1;action:string;request_id:string;document_id:string;error:string};
 const object=(v:unknown):v is Record<string,unknown>=>v!==null&&typeof v==='object'&&!Array.isArray(v);
@@ -28,9 +31,12 @@ export function originalShadowSubjectEligible(value:{mask?:OriginalShadowBinding
  return !!objects?.length&&objects.every(object=>object.kind==='brush'||object.kind==='linear'||object.kind==='radial');
 }
 export function validOriginalShadowPreviewFields(value:unknown):value is OriginalShadowPreviewFields{
- if(!object(value)||!exact(value,['parameters','lit_ids','retention_ids','samples_reviewed','uniform_floor_confirmed'])||!object(value.parameters)
+ if(!object(value)||!exact(value,['parameters','lit_ids','retention_ids','samples_reviewed','uniform_floor_confirmed',...(value.paint!==undefined?['paint']:[]),...(value.clear_samples!==undefined?['clear_samples']:[])])||!object(value.parameters)
   ||!exact(value.parameters,['enabled','strength','blend']))return false;
- const p=value.parameters,replacing=value.lit_ids!==null||value.retention_ids!==null;
+ const p=value.parameters,replacing=value.lit_ids!==null||value.retention_ids!==null||value.paint!==undefined;
+ if(value.clear_samples!==undefined&&value.clear_samples!==true)return false;
+ if(value.clear_samples===true&&(p.enabled!==false||p.strength!==100||p.blend!=='normal'||value.lit_ids!==null||value.retention_ids!==null||value.samples_reviewed!==false||value.uniform_floor_confirmed!==false||value.paint!==undefined))return false;
+ if(value.paint!==undefined&&(value.lit_ids!==null||value.retention_ids!==null||!validOriginalShadowPaint(value.paint)))return false;
  return typeof p.enabled==='boolean'&&typeof p.strength==='number'&&Number.isFinite(p.strength)&&p.strength>=0&&p.strength<=100
   &&['normal','multiply','softlight'].includes(p.blend as string)&&typeof value.uniform_floor_confirmed==='boolean'
   &&(!p.enabled||value.uniform_floor_confirmed)&&value.samples_reviewed===replacing
@@ -93,3 +99,15 @@ export async function verifyOriginalShadowImage(value:OriginalShadowImage):Promi
   return Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('')===value.sha256;
  }catch{return false;}
 }
+
+export function validOriginalShadowPaint(value:unknown):value is OriginalShadowPaint{
+ if(!object(value)||!exact(value,['token','lit_strokes','retention_strokes'])||!token(value.token)||!Array.isArray(value.lit_strokes)||!Array.isArray(value.retention_strokes)||!value.lit_strokes.length&&!value.retention_strokes.length)return false;
+ if(![value.lit_strokes,value.retention_strokes].every(strokes=>!strokes.length||validSpillPaint({token:value.token,strokes})))return false;
+ const all=[...value.lit_strokes,...value.retention_strokes];return new Set(all.map(stroke=>stroke.id)).size===all.length;
+}
+export function validOriginalShadowPaintSource(value:unknown,fence:OriginalShadowFence):value is OriginalShadowPaintSource{
+ if(!object(value)||!exact(value,['version','token','recipe_document_id','recipe_revision','source','domain','image','lit_floor','retention'])||value.version!==1||!token(value.token)||value.domain!=='source-normalized'||!fence.recipe_document_id||value.recipe_document_id!==fence.recipe_document_id||!revision(value.recipe_revision)||value.recipe_revision!==fence.recipe_revision||!object(value.source)||!exact(value.source,['sha256','width','height'])||!hash(value.source.sha256)||!positive(value.source.width,1000000)||!positive(value.source.height,1000000))return false;
+ const [width,height]=spillSourceDisplaySize(value.source.width,value.source.height);
+ return [value.image,value.lit_floor,value.retention].every(image=>validOriginalShadowImage(image)&&image.width===width&&image.height===height);
+}
+export function originalShadowPaintSourceKey(value:OriginalShadowPaintSource):string{return JSON.stringify([value.token,value.recipe_document_id,value.recipe_revision,value.source,value.image.sha256,value.lit_floor.sha256,value.retention.sha256]);}

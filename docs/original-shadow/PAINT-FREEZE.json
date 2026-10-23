@@ -1,0 +1,163 @@
+{
+  "baseline": "38b5d7779dbed403bb956c43d7a158a0b8f4c966",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Independent immutable full-source original-shadow lit-floor/retention erase/restore canvas and reviewed full-neutral clear/reset; no AI or scalar batch/preset implementation.",
+  "files": [
+    {
+      "path": "docs/creative-layers/NEXT-MATERIAL-FEATURES.md",
+      "sha256": "076ef28723626dcccfe58fddc150db6590010d9792ee159d1327b7933e64cbdf",
+      "bytes": 7032
+    },
+    {
+      "path": "docs/original-shadow/IMPLEMENTATION.md",
+      "sha256": "b7ce31b2d49436fbae87db1b8749b4599266252b795ecd513394cf5bb23e830f",
+      "bytes": 10568
+    },
+    {
+      "path": "docs/original-shadow/SCALAR-TRANSFER-NEXT.md",
+      "sha256": "78b6507f337af9ab0e90af36d012e7285d0f7176812e94c48fd0a69f270ffd3e",
+      "bytes": 2914
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_id_background_host.py",
+      "sha256": "343884b4be9ac8518dc9d3b0df68cc179f5b5e57663cf4117a96c2dde1cae804",
+      "bytes": 4320
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/original_shadow_controller.py",
+      "sha256": "619313dff4b787aee8fcd1e0d98625d2088a108ff7b6f91f22477edfae4c7515",
+      "bytes": 12228
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/original_shadow_paint_source.py",
+      "sha256": "0454b49319b2656116e4443338cb70793f2626429c2aeeadb711c27d2fa20079",
+      "bytes": 5302
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/original_shadow_paint_vectors.py",
+      "sha256": "58b4cda2cfd0e8a50e267bce51df1a46642bc18b77c1565c247a798294c219b6",
+      "bytes": 2634
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/original_shadow_review.py",
+      "sha256": "276c21b423cd1a0f17dfd966c474a263e4bf0cc29e7d6939100e1e6dd36583d1",
+      "bytes": 9584
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "e3602193cc26fbd1fe09b1d3731de1b5eb572eaf9198d97d66adff80af83af7b",
+      "bytes": 7052
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "8a1fb499942ddeea1ddd10c097e5df6e2b98ac3e4ac81428246377c747ca4101",
+      "bytes": 463898
+    },
+    {
+      "path": "engine/tests/test_original_shadow_integration_unrun.py",
+      "sha256": "929411b1ae4180d4bd0b802f8d9f1904c27f161c8734e0769b8efeb7dd1d3474",
+      "bytes": 4397
+    },
+    {
+      "path": "engine/tests/test_original_shadow_paint_unrun.py",
+      "sha256": "76c400feb2dc01b024ab4f577b6c2838ceb8efddb7798787997bdf52cb3b021c",
+      "bytes": 8806
+    },
+    {
+      "path": "ui/src-tauri/src/id_background_api.rs",
+      "sha256": "f07184732a657309077e33fa78c0a09339d31c3a605674ee1961aac010988614",
+      "bytes": 28843
+    },
+    {
+      "path": "ui/src-tauri/src/original_shadow_protocol.rs",
+      "sha256": "383901ae3f9eab2e93277891ef236de5593259840d4c2ce89e524ec47993a2ad",
+      "bytes": 16405
+    },
+    {
+      "path": "ui/src-tauri/src/original_shadow_protocol_tests.rs",
+      "sha256": "4e9b7cf53603267d1f8e16a5b6d57f6ed791d1dc24606bb766c41aa0a50d60cb",
+      "bytes": 18064
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "sha256": "59b75745d2db6f95f18c7c4bf845fa330e7376cef41a92fa3d1212b815951ecd",
+      "bytes": 4967
+    },
+    {
+      "path": "ui/src/idBackground/model.ts",
+      "sha256": "0cc6f2e4311f0e73a2b8622a8ef77eb2cabbb6719445ab2b2263b2b538384623",
+      "bytes": 3525
+    },
+    {
+      "path": "ui/src/idBackground/useIdBackground.ts",
+      "sha256": "0c8db2063d1738f2fba8054ebcf2d3efbf383ee710281766e7df1792aaa6b5ad",
+      "bytes": 15583
+    },
+    {
+      "path": "ui/src/originalShadow/OriginalShadowPanel.tsx",
+      "sha256": "79d06ec68969eaa8f33e1fcfcb95263fd37d7c9c1a845976473836bb7092f0f2",
+      "bytes": 16830
+    },
+    {
+      "path": "ui/src/originalShadow/OriginalShadowSourcePaint.tsx",
+      "sha256": "3db0d870c8aec2e58517e28f0b76f65c4d234332252b6e9c779d82ecf8d0fafb",
+      "bytes": 13280
+    },
+    {
+      "path": "ui/src/originalShadow/UNRUN-acceptance.md",
+      "sha256": "9c337a16578c3a186d7043c7568e0cda719b033adbf16a91840565bf1dd515fc",
+      "bytes": 11280
+    },
+    {
+      "path": "ui/src/originalShadow/model.ts",
+      "sha256": "b25a114af35709617743277c3ed0d77d5167b446508e4ae2d80dfb1e49931a1e",
+      "bytes": 11738
+    },
+    {
+      "path": "ui/src/originalShadow/model.unrun.test.ts",
+      "sha256": "9195ccdb3774134c9a824204bf8fafecac356cdeda504de82be2c15303e49356",
+      "bytes": 12412
+    },
+    {
+      "path": "ui/src/originalShadow/originalShadow.css",
+      "sha256": "2bb0b69f0a32533b8db6b85e2a90400afed80e23350c829293e44941ad6cf36e",
+      "bytes": 1107
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1000,
+    "json_documents": 1,
+    "toml_documents": 3,
+    "git_diff_check": "clean",
+    "line_caps": {
+      "ui/src/App.tsx": 2122,
+      "ui/src-tauri/src/main.rs": 2041,
+      "engine/src/lumaretouch_engine/server.py": 6971
+    },
+    "native_review": "source lexical delimiters and independent read-only review; no compiler",
+    "timestamp_utc": "2026-10-23T22:49:02.999076+00:00"
+  },
+  "unrun": [
+    "product imports",
+    "tests",
+    "build",
+    "typecheck",
+    "compiler",
+    "inference",
+    "photo quality",
+    "runtime interactions",
+    "packaging"
+  ],
+  "remaining": [
+    "AI extraction and model/weight rights/inference integration",
+    "Nonuniform, dark, reflective, textured, same-colour stain ambiguity",
+    "Dedicated scalar per-target batch/preset review; whole-ID nonneutral shadow remains fenced",
+    "Broader alpha/HDR pipeline; existing native mask coverage precision",
+    "Source display is bounded RGB8 locator; retained evidence is source-owned vectors, not display bitmap"
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

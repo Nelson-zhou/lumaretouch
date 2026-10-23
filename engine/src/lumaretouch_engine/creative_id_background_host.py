@@ -2,7 +2,7 @@
 from hashlib import sha256
 import json
 
-ACTIONS=frozenset(('id_state','id_sample','id_clear','id_import','id_set','id_review','id_spill_preview','id_spill_apply','id_spill_paint_source','id_original_shadow_preview','id_original_shadow_apply'))
+ACTIONS=frozenset(('id_state','id_sample','id_clear','id_import','id_set','id_review','id_spill_preview','id_spill_apply','id_spill_paint_source','id_original_shadow_paint_source','id_original_shadow_preview','id_original_shadow_apply'))
 MODES=frozenset(('id_background','id_background_subject','id_background_reference'))
 
 
@@ -23,7 +23,7 @@ def require_command(engine,name,request):
     if name=='background':
         rid=request.get('request_id')
         if type(rid) is not str or not 1<=len(rid)<=128:raise ValueError('Invalid ID request identity')
-        owner_key=('_original_shadow_owner' if action in ('id_original_shadow_preview','id_original_shadow_apply') else
+        owner_key=('_original_shadow_owner' if action in ('id_original_shadow_paint_source','id_original_shadow_preview','id_original_shadow_apply') else
                    '_spill_removal_owner' if action in ('id_spill_preview','id_spill_apply','id_spill_paint_source') else '_id_background_owner')
         owner=engine.__dict__.get(owner_key)
         cached=getattr(owner,'cache',{}).get(rid)

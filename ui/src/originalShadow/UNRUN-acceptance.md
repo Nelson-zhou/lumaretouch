@@ -28,3 +28,15 @@ No product modules, scripts, app, test runner, compiler, typecheck, build, model
 ## Photographic / full-source acceptance remains UNRUN
 
 15. Inspect feet/props contact shadows, broad soft penumbrae, multiple shadows, no-shadow input, white clothing, same-hue stains, texture, dark floors, reflective surfaces and colored light. Quantify background texture leakage, true foreground preservation, neutral bypass, strength endpoints, blend equivalence/artistic behavior, native/derived ownership, full-source/tile/export alignment and time/memory cost. Review thumbnails do not establish native-resolution quality, numerical correctness, inference rights, speed or official seven-ID completion. No pass claim follows from these fixtures or the UI implementation.
+
+## Direct two-role source canvas and reset (AUTHORED / UNRUN)
+
+- Load original PNG16 and immutable returned source. Verify three PNG hashes, browser natural dimensions, opaque grayscale role masks and whole-source aspect before painting. Display RGB8 is only a locator, not retained raster evidence.
+- Paint independent lit-floor and retention restore/erase vectors from empty or saved roles. Confirm circular radius uses true source short edge, not thumbnail dimensions. Check portrait/landscape, zoom, scroll, resize, pointer exit/cancel/capture loss, focus loss and unmount. All interrupted gestures must be discarded.
+- Verify both roles are visibly loaded before enabling source-sample acknowledgment. Undo/reset affect only draft strokes. Each change invalidates prior before/after approval.
+- Reject stale source replies after document, host revision or mask/draft changes. Never accept a nested report as source evidence, or a spill source token as original-shadow evidence.
+- Read/source errors remain nonmutating. Real reviewed before/after and one-use apply remain required. Exceeding 64 KiB leaves draft intact and sends nothing.
+- Clear samples and reset generates a real neutral before/after candidate, requires visual review/apply, resets all shadow intent and is undoable. Missing kernel permits this only with inactive parent background; no invented preview or quality claim.
+- Test equal-color stains, nonuniform floor, dark floor and sample overlap failures. This UI does not solve model ambiguity. Batch/preset shadow transfer remains unavailable.
+
+- Source reload lifecycle: old canvas unmount/readiness cleanup must not count as user draft mutation or reject the new receipt. Readiness callbacks clear local apply readiness only. Explicit gesture-start and stroke-change callbacks invalidate the draft epoch; mask/host/user parameter changes during source capture still reject the reply. Verify this with delayed source replies and a second capture.

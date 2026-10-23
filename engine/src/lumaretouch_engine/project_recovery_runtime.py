@@ -38,7 +38,7 @@ def finish(engine, boundary, error=None):
     message = boundary['message']
     # Spill preview renders isolated candidates only. Even a rejected or failed
     # preview cannot dirty/taint committed project state or advance autosave.
-    if message.get('cmd') == 'background' and message.get('action') in ('id_spill_preview', 'id_spill_paint_source', 'id_original_shadow_preview'):
+    if message.get('cmd') == 'background' and message.get('action') in ('id_spill_preview', 'id_spill_paint_source', 'id_original_shadow_paint_source','id_original_shadow_preview'):
         return
     from .creative_transfer_host import inventory_read_only
     if inventory_read_only(message):return

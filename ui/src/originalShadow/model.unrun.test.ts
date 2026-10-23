@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {deflateSync} from 'node:zlib';
 import {editable,type Recipe} from '../idBackground/model.ts';
 import type {MaskObject} from '../localMasks/model.ts';
-import {originalShadowActive,originalShadowApplyFields,originalShadowManualObject,originalShadowNotSent,originalShadowRequestFits,originalShadowReviewKey,originalShadowSubjectEligible,validOriginalShadowImage,validOriginalShadowPreviewFields,validOriginalShadowReview,verifyOriginalShadowImage,type OriginalShadowBinding,type OriginalShadowImage,type OriginalShadowPreviewFields,type OriginalShadowRecipe,type OriginalShadowReview} from './model.ts';
+import {originalShadowActive,originalShadowApplyFields,validOriginalShadowPaint,validOriginalShadowPaintSource,originalShadowPaintSourceKey,originalShadowManualObject,originalShadowNotSent,originalShadowRequestFits,originalShadowReviewKey,originalShadowSubjectEligible,validOriginalShadowImage,validOriginalShadowPreviewFields,validOriginalShadowReview,verifyOriginalShadowImage,type OriginalShadowBinding,type OriginalShadowImage,type OriginalShadowPreviewFields,type OriginalShadowRecipe,type OriginalShadowReview} from './model.ts';
 
 const fence={recipe_document_id:'a'.repeat(32),recipe_revision:'7'};
 const source={sha256:'b'.repeat(64),width:6000,height:4000};
@@ -89,4 +89,27 @@ test('PNG byte verification requires canonical data, CRCs, SHA256, dimensions an
  assert.equal(await verifyOriginalShadowImage(image({color:0})),false);assert.equal(await verifyOriginalShadowImage(image({bitDepth:16})),false);
  assert.equal(await verifyOriginalShadowImage(image({idat:[chunk('IDAT',Buffer.alloc(0))]})),false);
  assert.equal(await verifyOriginalShadowImage(image({idat:[chunk('IDAT',Buffer.from([1])),chunk('tEXt',Buffer.from([1])),chunk('IDAT',Buffer.from([2]))]})),false);
+});
+
+
+test('independent direct role strokes require source token, explicit review and no selection mixing',()=>{
+ const stroke={id:'paint-one',mode:'restore',points:[[.2,.3]],radius:.025,opacity:1,feather:25};
+ const paint={token:'c'.repeat(32),lit_strokes:[stroke],retention_strokes:[]};
+ assert.equal(validOriginalShadowPaint(paint),true);
+ for(const patch of [{token:'0'.repeat(32)},{retention_strokes:[stroke]},{lit_strokes:[]},{extra:true},{lit_strokes:[{...stroke,points:[[1.1,.3]]}]}])assert.equal(validOriginalShadowPaint({...paint,...patch}),false);
+ const value={...fields(),lit_ids:null,retention_ids:null,paint};
+ assert.equal(validOriginalShadowPreviewFields(value),true);
+ assert.equal(validOriginalShadowPreviewFields({...value,samples_reviewed:false}),false);
+ assert.equal(validOriginalShadowPreviewFields({...value,lit_ids:['manual']}),false);
+});
+test('clear samples is a reviewed full-neutral reset request, not silent role removal',()=>{
+ const clear={parameters:{enabled:false,strength:100,blend:'normal'},lit_ids:null,retention_ids:null,samples_reviewed:false,uniform_floor_confirmed:false,clear_samples:true};
+ assert.equal(validOriginalShadowPreviewFields(clear),true);
+ for(const patch of [{samples_reviewed:true},{uniform_floor_confirmed:true},{lit_ids:['old']},{clear_samples:'true'},{clear_samples:false},{parameters:{enabled:false,strength:50,blend:'normal'}},{parameters:{enabled:false,strength:100,blend:'multiply'}}])assert.equal(validOriginalShadowPreviewFields({...clear,...patch}),false);
+});
+test('source canvas has exactly three whole-source bounded display images and independent identity',()=>{
+ const png=image(),value={version:1,token:'c'.repeat(32),...fence,source:{...source,width:1,height:1},domain:'source-normalized',image:png,lit_floor:png,retention:png};
+ assert.equal(validOriginalShadowPaintSource(value,fence),true);
+ for(const patch of [{coverage:png},{retention:{...png,width:2}},{source},{domain:'output-normalized'},{recipe_revision:'8'}])assert.equal(validOriginalShadowPaintSource({...value,...patch},fence),false);
+ if(validOriginalShadowPaintSource(value,fence))assert.notEqual(originalShadowPaintSourceKey(value),originalShadowPaintSourceKey({...value,retention:{...png,sha256:'f'.repeat(64)}}));
 });

@@ -89,12 +89,33 @@ its other fields; it does not pretend the missing kernel can generate a shadow.
 Whole-ID
 transfer cannot copy source samples or silently recompute an active estimate.
 The initial portability fence also refuses nonneutral retained shadow intent
-when disabled; there is no separate clear-samples action in this slice. Other
+when disabled. A reviewed clear-and-reset action now restores the complete
+neutral original-shadow intent, including samples, applicability acknowledgment,
+strength and blend. It must show real before/after pixels before commit. Other
 parameter-only scopes keep their existing ownership rules. This conservative
 whole-ID limitation is not claimed as complete preset/batch support.
-Dedicated per-target original-shadow batch/preset review is not implemented.
-The first retention interaction uses existing source-local brush objects; a new
-in-panel direct erase/restore canvas is not claimed.
+Dedicated per-target original-shadow batch/preset review is not implemented;
+[the remaining integration map](SCALAR-TRANSFER-NEXT.md) specifies the target-owned
+proof, scalar-only payload, review and history prerequisites.
+The existing source-local mask-object selection remains available. A dedicated
+two-role whole-source canvas additionally prepares independent lit-floor and
+retention erase/restore vectors. The display PNG and approximate overlay never
+become retained masks: existing Rust local-mask geometry is replayed at full
+source dimensions. Absent roles start at zero coverage, not the spill tool's
+full-image default. Each source capture has its own expiring token and frozen
+source/edit/person identity. Painting requires explicit sample review, uniform
+floor acknowledgment and the same real before/after transaction as other edits.
+Source reload discards draft strokes explicitly; per-role draft undo does not
+mutate committed document history. Erase subtracts coverage and restore uses max
+union, not repeated accumulation. Same-color stains and texture remain ambiguous.
+The three canvas PNGs share the existing 4 MiB aggregate receipt ceiling and
+16 MiB receipt-cache budget; oversized combined results fail and invalidate the
+new source token. Requests retain the 64 KiB ceiling. Neither UI display masks nor
+source PNGs are added to project state or undo snapshots.
+Canvas readiness is separate from edit intent: source-load/unmount notifications
+clear local apply readiness but cannot invalidate their own pending capture epoch.
+Actual gesture starts, completed strokes, changed masks and host/source edits
+invalidate review. These lifecycle contracts have only been statically reviewed.
 
 ## Seven requirement statuses remain separate
 
@@ -108,7 +129,7 @@ Prefix `LNX-REF-PC-32475-C-`; all statuses are source scope, never acceptance:
 | c959928d7a | Normal | Standard black-layer Normal |
 | b1b766d4ce | Multiply | Standard Multiply; black-layer result equals Normal |
 | 9e1c732ff8 | Soft Light | Standard artistic Soft Light, linear blend space |
-| 0513155f3d | Retention brush | Independent reviewed source-local mask selection; direct panel painting unfinished |
+| 0513155f3d | Retention brush | Independent reviewed source-local mask selection and direct source erase/restore canvas; runtime/quality UNRUN |
 
 The family therefore remains **partial**, even if all bounded source paths are
 connected. Do not count UI wiring, transport adapters or tests as extra features.

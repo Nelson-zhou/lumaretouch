@@ -59,8 +59,10 @@ Numerical and photographic quality acceptance remains separate from source work.
   projected shadows do not extract original shadows from floor/background/contact
   texture. A separate [manual-assisted uniform-floor estimate](../original-shadow/IMPLEMENTATION.md)
   is now source-connected with actual source measurements and review, not
-  relabelled synthetic projection. AI extraction, general textured floors and
-  direct in-panel retention painting remain unfinished. Adding blend controls
+  relabelled synthetic projection. Source-owned direct lit-floor/retention painting
+  and reviewed clear/reset now have a source path, with all runtime/quality checks
+  still UNRUN. AI extraction, general textured floors and dedicated per-target
+  scalar batch/preset review remain unfinished. Adding blend controls
   alone does not close this gap; all seven IDs remain separately mapped.
 
 ## Avoid double counting

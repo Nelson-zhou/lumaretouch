@@ -14,7 +14,7 @@ import uuid
 BOUNDARIES = [
     '手动选择同一均匀漫反射地面的无阴影参考与原阴影保留区；不是 AI 自动识别或通用阴影分离。',
     '纹理、反射、高光、彩色光和变化照明可能被误当作阴影；不适合复杂地面。',
-    '保留区使用现有源图局部画笔、线性或径向对象；不提供新的直接涂抹界面。',
+    '两组选区使用独立源图手工矢量；直接画布只显示缩小定位图，完整源图重放笔画后才生成此审核。',
     '原阴影与新投影互斥；仅使用独立审核的主体范围，不借用接触或全部保留范围。',
     '必须检查这组完整渲染的真实前后画面；数值、照片画质与性能尚未验收。',
 ]
@@ -88,16 +88,34 @@ def _proposal(engine, request):
     reviewed, confirmed = request['samples_reviewed'], request['uniform_floor_confirmed']
     if type(reviewed) is not bool or type(confirmed) is not bool:
         raise ValueError('原阴影样本审核与均匀地面确认必须是布尔值')
-    replacing = request['lit_ids'] is not None or request['retention_ids'] is not None
+    clear = request.get('clear_samples', False)
+    if 'clear_samples' in request and clear is not True:
+        raise ValueError('清除原阴影样本字段只能省略或明确为 true')
+    paint = request.get('paint')
+    if 'paint' in request and paint is None:
+        raise ValueError('原阴影画笔不能为空值')
+    replacing = request['lit_ids'] is not None or request['retention_ids'] is not None or paint is not None
     if reviewed != replacing:
         raise ValueError('替换原阴影样本需明确审核；保留样本不能伪造新的审核确认')
     value = I.check(getattr(engine, '_id_background', None))
+    if clear:
+        if (paint is not None or replacing or reviewed or confirmed
+                or parameters != {'enabled': False, 'strength': 100, 'blend': 'normal'}
+                or parameters['enabled'] is not False):
+            raise ValueError('清除样本必须关闭原阴影并恢复中性参数，不能同时提交选区或笔画')
+        return I.with_original_shadow(value, S.neutral())
     shadow = I.original_shadow_of(value)
     shadow.update(parameters)
     shadow['uniform_floor_confirmed'] = confirmed
-    for key, selection in (('lit_floor', 'lit_ids'), ('retention', 'retention_ids')):
-        if request[selection] is not None:
-            shadow[key] = S.review(engine, request[selection], reviewed)
+    if paint is not None:
+        if request['lit_ids'] is not None or request['retention_ids'] is not None:
+            raise ValueError('直接原阴影画笔不能同时替换局部对象选区')
+        from .original_shadow_paint_source import owner
+        shadow.update(owner(engine).bindings(request, paint))
+    else:
+        for key, selection in (('lit_floor', 'lit_ids'), ('retention', 'retention_ids')):
+            if request[selection] is not None:
+                shadow[key] = S.review(engine, request[selection], reviewed)
     shadow = S.check(shadow)
     if shadow['enabled'] and not I.active(value):
         raise ValueError('请先启用具有独立审核主体范围的证件照背景')
