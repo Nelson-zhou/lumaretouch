@@ -543,6 +543,7 @@ class PreviewPipeline:
             out=PEOPLE_PIPE.source_effect(self,'facial_wrinkles',out)
             out=PEOPLE_PIPE.source_effect(self,'lip_makeup',out)
             out=PEOPLE_PIPE.source_effect(self,'hair_colour',out)
+            out=PEOPLE_PIPE.source_effect(self,'eye_light',out)
         else:
             WLAYER.refresh_source(self)
             out = self.effect_recovery.apply('facial_wrinkles', out, WLAYER.apply_delta(self, out))

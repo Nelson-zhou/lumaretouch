@@ -56,6 +56,7 @@ bash "$here/build-eye-shape.sh" "$stage/lumaretouch_engine/bin/liblrt_eye_shape.
 mkdir -p "$stage/lumaretouch_engine/third_party/eye_shape"
 cp "$here/../core/eye_shape/lib.rs" "$here/../LICENSE" "$here/../docs/EYE-SHAPE-INTEGRATION.md" "$here/../docs/model-licenses/archive/mediapipe-LICENSE.txt" "$stage/lumaretouch_engine/third_party/eye_shape/"
 bash "$here/build-lip-makeup.sh" "$stage/lumaretouch_engine/bin/liblrt_lip_makeup.so"
+bash "$here/build-eye-light.sh" "$stage/lumaretouch_engine/bin/liblrt_eye_light.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/lip_makeup"
 cp "$here/../core/lip_makeup/lib.rs" "$here/../LICENSE" "$here/../docs/LIP-MAKEUP-INTEGRATION.md" "$here/../docs/model-licenses/archive/mediapipe-LICENSE.txt" "$stage/lumaretouch_engine/third_party/lip_makeup/"
 bash "$here/build-facial-wrinkles.sh" "$stage/lumaretouch_engine/bin/liblrt_facial_wrinkles.so"

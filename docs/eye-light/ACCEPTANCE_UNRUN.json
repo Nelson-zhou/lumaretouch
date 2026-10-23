@@ -1,0 +1,18 @@
+{
+  "status": "SOURCE_ONLY_UNRUN",
+  "baseline": "e43795633d9336c507b6158ea7495b13b3a6370a",
+  "cases": [
+    {"id":"EL-001","checks":"two original procedural asset patterns; independent per-eye persisted transforms and atomic linked editing; distinct from existing catchlight controls"},
+    {"id":"EL-002","checks":"strength zero byte-identical source; monotonic added light, no source clamping"},
+    {"id":"EL-003","checks":"horizontal/vertical ±100 move material by ±measured iris radius in observed eye basis"},
+    {"id":"EL-004","checks":"rotation endpoints ±180; 0 neutral; flip changes asymmetric ramp without moving eye geometry"},
+    {"id":"EL-005","checks":"outside eyelid polygon, measured iris, reviewed support remains exact source"},
+    {"id":"EL-006","checks":"closed/small/occluded/missing iris/unreviewed eye rejects atomically"},
+    {"id":"EL-007","checks":"stale source/revision/person/face/model binding rejected; batch never reuses review"},
+    {"id":"EL-008","checks":"float32 HDR >1 and negative source; RGB16 precision; no preview raster export"},
+    {"id":"EL-009","checks":"recovery 1 removes only eye-light; undo/redo and project reload restore recipe and host recovery vectors"},
+    {"id":"EL-010","checks":"full-resolution and tile results equivalent; real portrait visual QA and multilingual accessibility"}
+  ],
+  "required_local_validation": ["authorized Rust compile and unit tests", "Python native fixtures", "UI typecheck/tests", "real-photo review for all cases", "host integration end-to-end tests"],
+  "executed_runtime_checks": []
+}

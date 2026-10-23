@@ -82,6 +82,7 @@ def command_group(name: str, msg: dict) -> str:
     if name in ("shoulder_shape","leg_shape","arm_shape","waist_shape","leg_length"):return name+":gesture:"+str((msg.get("request") or {}).get("gesture_id",msg.get("request_id","missing")))[:128]
     if name=='hair_colour':return 'hair_colour:'+str((msg.get('people_context') or {}).get('target'))+':'+str(msg.get('request_id','missing'))
     if name=="people":
+        if msg.get('action')=='eye_light_review':return 'people:eye_light_review:'+str(msg.get('request_id'))
         target=msg.get('target') or {};patches=(msg.get('payload') or {}).get('patches') or []
         return 'people:'+str(target.get('scope'))+':'+str(target.get('target_id'))+':'+str(msg.get('action'))+':'+','.join(sorted(str(p.get('operation_id'))+str(p.get('parameter_path')) for p in patches))
     if name in ("brow_shape","nose_shape","eye_shape","mouth_shape"): return name+":gesture:" + str(msg.get("gesture_id", "missing"))[:128]

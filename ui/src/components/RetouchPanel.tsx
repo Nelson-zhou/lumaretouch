@@ -6,6 +6,7 @@ import {HairColourPanel} from '../hairColour/HairColourPanel';
 import type {HairPort} from '../hairColour/model';
 import {MouthShapeControls} from "../mouthShape/MouthShapeControls";
 import {neutral as neutralMouth} from "../mouthShape/model";
+import {EyeLightPanel} from '../eyeLight/EyeLightPanel';
 import {EyeShapeControls} from "../eyeShape/EyeShapeControls";
 import {neutral as neutralEyes} from "../eyeShape/model";
 import {withoutCoveredLeaves} from "../toolRouting/coverage";
@@ -211,6 +212,12 @@ const FACE_LABEL: Record<string, string> = {
  * 面板不提前放行。
  */
 const WIRED: Record<string, string> = {
+  "PC-32470|眼神光": "eye_light.family",
+  "PC-32470|眼神光/程度": "eye_light.strength",
+  "PC-32470|眼神光/垂直位置": "eye_light.vertical",
+  "PC-32470|眼神光/水平位置": "eye_light.horizontal",
+  "PC-32470|眼神光/旋转": "eye_light.rotation",
+  "PC-32470|眼神光/水平翻转": "eye_light.flip",
   "PC-32466|嘴巴": "mouth.family",
   "PC-32466|嘴巴/大小": "mouth.size",
   "PC-32466|嘴巴/嘴宽": "mouth.width",
@@ -549,6 +556,8 @@ export default function RetouchPanel(props: RetouchProps) {
       legacy={doc?.mouth_shape?.legacy_smile??amounts.smile??0}
       documentId={doc?.document_id??""} faceId={doc?.mouth_shape?.selected_face_id??""} revision={doc?.mouth_shape?.revision??0} peopleContext={capturedPeople}/>;
     if (kind.startsWith("mouth.")) return null;
+    if (kind === "eye_light.family") return <EyeLightPanel key={leaf.path} people={props.people} blocked={dim||props.hairBusy||!!props.whiteBalanceBusy||status?.ready_caps?.eye_light_protocol!==1}/>;
+    if (kind.startsWith("eye_light.")) return null;
     if (kind === "eye.family") return <EyeShapeControls key={leaf.path} value={doc?.eye_shape?.recipe??neutralEyes()}
       facts={doc?.eye_shape?.controls} disabled={dim||!props.faceOk||!!props.whiteBalanceBusy||status?.ready_caps?.eye_shape_protocol!==2}
       why={props.faceOk?(doc?.eye_shape?.native_available===false?"眼形 Rust 核心未安装；调整会明确拒绝，请使用完整打包版本。":doc?.eye_shape?.suspended??undefined):props.faceWhy}

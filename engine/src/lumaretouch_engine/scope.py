@@ -39,7 +39,7 @@ from . import studio_background_scope as STUDIO
 from . import optics_scope as OPTICS, optics_auto_scope as OPTICS_AUTO
 from . import reference_color_scope as REFERENCE
 from . import facial_wrinkle_scope as WRINKLES
-from . import lip_makeup_scope as LIP
+from . import lip_makeup_scope as LIP, eye_light_scope as EYE_LIGHT
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
@@ -106,6 +106,9 @@ MODULES: dict[str, dict] = {
     OPTICS_AUTO.OP: {"params": ("request",), "state_fields": OPTICS_AUTO.FIELDS, "single_face": False,
                 "transferable": True, "cmd": "optics", "read": OPTICS_AUTO.params_of, "write": OPTICS_AUTO.install,
                 "why_not": "逐图重匹配配置与重新解算，含手动数值；必须冻结预检，不复制源图矩阵、配置或引导线"},
+    EYE_LIGHT.OP: {"params": ("recipe",), "state_fields": EYE_LIGHT.FIELDS, "single_face": True,
+                   "transferable": True, "cmd": "people", "read": EYE_LIGHT.params_of, "write": EYE_LIGHT.install,
+                   "why_not": "仅眼神光素材参数；目标人物须自行审核可见眼球，绝不复制归属、蒙版或恢复笔迹"},
     LIP.OP: {"params": ("recipe",), "state_fields": LIP.FIELDS, "single_face": True,
              "transferable": True, "cmd": "lip_makeup", "read": LIP.params_of, "write": LIP.install,
              "why_not": "仅三项唇妆参数；目标须有自己的真实人脸与嘴唇可见性，恢复笔迹不复制"},
@@ -299,6 +302,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == MOUTH.OP:
         try: return MOUTH.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == EYE_LIGHT.OP:
+        try: return EYE_LIGHT.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == LIP.OP:
         try: return LIP.check_params(params)

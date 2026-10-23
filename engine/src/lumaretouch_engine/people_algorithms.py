@@ -3,6 +3,7 @@ from . import people_resolver as R
 from . import brow_shape_state as B, nose_shape_state as N, eye_shape_state as E, mouth_shape_state as M
 from . import lip_makeup_state as L, facial_wrinkle_state as W, hair_colour_state as HAIR
 from .ops import deform as D, enhance as H
+from . import eye_light_state as EYE_LIGHT
 
 DEFORM = 'lnx.deform.v1'
 ENHANCE = 'lnx.enhance.v1'
@@ -22,7 +23,8 @@ def specifications():
     return {**{op: (module.neutral(), module.check) for op, module in zip(GEOMETRY, (B, N, E, M))},
             LIP: (L.neutral(), L.check), DEFORM: (D.check_amounts({}), D.check_amounts),
             ENHANCE: (check_enhance({}), check_enhance), WRINKLES: (W.check({}), W.check),
-            HAIR.OPERATION: (HAIR.neutral(), HAIR.check)}
+            HAIR.OPERATION: (HAIR.neutral(), HAIR.check),
+            EYE_LIGHT.OPERATION: (EYE_LIGHT.neutral(), EYE_LIGHT.check)}
 
 
 def leaves(value, prefix=''):

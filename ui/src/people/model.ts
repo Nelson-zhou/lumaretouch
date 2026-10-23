@@ -52,10 +52,11 @@ export type PeopleView = {
   editing_target: PeopleTarget | null;
   editing_overrides: Record<string, Record<string, ParameterValue>>;
   legacy_unresolved?: {id: string; legacy_key: string; intent: unknown; bindable: boolean}[];
+  eye_light?: import('../eyeLight/model').EyeLightView | null;
   analysis_notice?: string; refusals?: {face_instance_id: string; reason: string}[];
 }
 export type PeopleAction = PeopleEnvelope & {
-  action: 'patch' | 'link' | 'group' | 'face_status' | 'manual_add' | 'create_person' | 'select' | 'target' | 'analyse_face' | 'resolve_legacy';
+  action: 'patch' | 'link' | 'group' | 'face_status' | 'manual_add' | 'create_person' | 'select' | 'target' | 'analyse_face' | 'resolve_legacy' | 'eye_light_reference' | 'eye_light_review';
   payload: Record<string, unknown>;
 }
 export type PeopleResult = {
@@ -96,7 +97,7 @@ export function operationLabel(id: string): string {
     'lnx.facial_wrinkles.v1': '面部细纹', 'lnx.lip_makeup.v1': '唇妆',
     'lnx.brow_shape.v1': '眉形', 'lnx.nose_shape.v1': '鼻形',
     'lnx.eye_shape.v1': '眼形', 'lnx.mouth_shape.v1': '嘴形',
-    'lnx.hair_colour.v1': '发色与已有高光光泽'} as Record<string, string>)[id] ?? id;
+    'lnx.hair_colour.v1': '发色与已有高光光泽', 'lnx.eye_light.v1': '眼神光素材'} as Record<string, string>)[id] ?? id;
 }
 export function bindingKey(binding: PeopleBinding): string {
   return `${binding.document_epoch}:${binding.document_id}:${binding.asset_sha256}`;

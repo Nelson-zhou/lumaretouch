@@ -39,6 +39,9 @@ def stage(command, state, *, document_id, document_epoch, document_revision,
             seen.add((op,path))
             if not patch['unset']:
                 neutral, validator = A.specifications()[op]
+                # Eye-light linked equality is a whole-recipe atomic invariant,
+                # not a rejection of the first scalar in a two-eye transaction.
+                if op==A.EYE_LIGHT.OPERATION:neutral={**neutral,'linked':False}
                 materialize({'conflicts':[], 'operations':{op:{path:{'value':patch['value']}}}},op,neutral,validator)
             out = S.set_override(out,target['scope'],target['target_id'],op,path,patch.get('value'),unset=patch['unset'])
     elif action == 'link':

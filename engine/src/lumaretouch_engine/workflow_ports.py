@@ -7,6 +7,10 @@ def emit(event):
     send(event)
 
 class WorkflowPortsMixin:
+    def _people_preset_capture(self):
+        from .eye_light_scope import capture
+        return capture(self)
+
     def _people_preset_replay(self,state,**kwargs):
         from .people_scope import replay_preset
         return replay_preset(self,state,**kwargs)
@@ -38,7 +42,7 @@ class WorkflowPortsMixin:
             controller = PRS.PresetController(PRS.PresetPorts(
                 prepare_optics=self._prepare_optics_target, prepare_reference=self._prepare_reference_target,
                 guard=lambda label: self._guard_editable(label), document_id=lambda: self._load_id,
-                capture=lambda: self._capture_state(), replay=lambda state, **kw: self._people_preset_replay(state, **kw),
+                capture=lambda: self._people_preset_capture(), replay=lambda state, **kw: self._people_preset_replay(state, **kw),
                 face_check=lambda: self._face_known_single(None, live=True), status=lambda: self.doc_state(),
                 invalidate=lambda: setattr(self, "_vram", None), target_row=lambda: self._docs[self._doc_index],
                 revision=lambda: str(self._document_versions().version(self._docs[self._doc_index]).revision),

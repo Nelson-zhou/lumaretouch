@@ -12,6 +12,8 @@ def validate_records(value):
         if 'people_support_assets' in value:
             from .people_support_assets import check_store
             check_store(value['people_support_assets'])
+            from .eye_light_support import validate_project
+            validate_project(value)
         if 'people_landmarks' in value:
             from .people_retained_analysis import check_store
             check_store(value['people_landmarks'])

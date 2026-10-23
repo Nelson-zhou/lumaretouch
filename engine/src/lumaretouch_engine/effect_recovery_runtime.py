@@ -13,6 +13,7 @@ def availability(engine):
     lip = getattr(pipe, 'lip_makeup_delta', None) if pipe else None
     lip_suspended = getattr(getattr(pipe, 'effect_recovery', None), 'suspended_targets', {}).get('lip_makeup') if pipe else None
     result = {
+        'eye_light': {'active':False,'reason':'眼神光恢复需要当前人物的已应用素材图层'},
         'facial_wrinkles': FACE.availability(pipe),
         'lip_makeup': {'active': bool(lip is not None and lip.any() and not lip_suspended),
                        'reason': lip_suspended or (None if lip is not None and bool(lip.any()) else '请先启用当前人物的唇妆增强')},
@@ -126,7 +127,7 @@ def report(engine):
             '尚未支持：独立人物瑕疵恢复、眼镜反光、碎发/白发、天空',
             '官方矩阵排除：祛油光、唇纹、双下巴、副乳；当前恢复笔不能用于这些效果',
             '恢复笔迹只属于当前源照片，不参与批量同步或预设',
-            '面部祛纹与唇妆恢复还绑定实际选中人物；重新检测不按人脸序号猜测身份']}
+            '面部祛纹、唇妆与眼神光恢复还绑定实际选中人物；重新检测不按人脸序号猜测身份']}
 
 
 def verify_snapshot(snap, path, shape=None):

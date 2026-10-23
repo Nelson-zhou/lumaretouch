@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use std::sync::{Mutex, OnceLock};
 use crate::receipt_host::{ReceiptHost, ReceiptKind};
 
-const PEOPLE_ACTIONS: &[&str] = &["patch", "link", "group", "face_status", "manual_add", "create_person", "select", "target", "analyse_face", "resolve_legacy"];
+const PEOPLE_ACTIONS: &[&str] = &["patch", "link", "group", "face_status", "manual_add", "create_person", "select", "target", "analyse_face", "resolve_legacy", "eye_light_reference", "eye_light_review"];
 fn text(value: &Value) -> bool { value.as_str().is_some_and(|s| !s.is_empty() && s.len() <= 128) }
 fn revision(value: &Value) -> bool { value.as_u64().is_some_and(|n| n <= 9_007_199_254_740_991) }
 fn digest(value: &Value) -> bool {

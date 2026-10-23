@@ -945,6 +945,7 @@ export interface EngineStatus {
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
     lip_makeup_protocol?: number;
+    eye_light_protocol?: number;
     brow_shape_protocol?: number;
     nose_shape_protocol?: number;
     eye_shape_protocol?: number;

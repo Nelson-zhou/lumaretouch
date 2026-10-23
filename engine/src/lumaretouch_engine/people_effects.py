@@ -10,7 +10,7 @@ from .facial_wrinkle_layer import FacialWrinkleLayer, bounds as wrinkle_bounds
 from .under_eye_layer import UnderEyeLayer, bounds as eye_bounds, KEYS as EYE_KEYS
 from .ops import enhance as H
 
-STAGES = ('facial_wrinkles', 'eye_detail', 'lip_makeup', 'enhance', 'hair_colour')
+STAGES = ('facial_wrinkles', 'eye_detail', 'lip_makeup', 'enhance', 'hair_colour', 'eye_light')
 
 
 @dataclass(frozen=True)
@@ -102,5 +102,7 @@ def apply(stage, current, records, *, recovery=None):
         active = np.any(delta != 0, axis=2); used = occupied[y:y+rh,x:x+rw]
         overlap += int(np.count_nonzero(active & used)); take = active & ~used
         total[y:y+rh,x:x+rw][take] = delta[take]; used[take] = True
-    out = np.where(total != 0, np.clip(current+total, 0, 1), current)
+    corrected=current+total
+    # Existing working-sRGB stages remain unchanged. Eye-light does not clip its HDR-capable delta.
+    out = np.where(total != 0, corrected if stage=='eye_light' else np.clip(corrected, 0, 1), current)
     return out, {'stage':stage, 'overlap_pixels':overlap, 'changed_pixels':int(np.count_nonzero(np.any(total != 0, axis=2)))}

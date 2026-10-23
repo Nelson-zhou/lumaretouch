@@ -65,7 +65,7 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32, recovery_assets=None, repaired=None,
-            hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False):
+            hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None):
     state = S.check(state)
     if type(source) is not np.ndarray or source.dtype != np.float32 or source.ndim != 3 or source.shape[2] != 3 or not np.isfinite(source).all() or np.any((source < 0) | (source > 1)):
         raise ValueError('People preparation needs frozen working-sRGB float32 RGB')
@@ -95,7 +95,11 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
                 stage = asset['kind']
-                if stage=='hair_colour':continue # Full-source owned consumer below; not facebox recovery.
+                if stage=='eye_light_visibility':
+                    from .eye_light_support import resolve as resolve_eye_support
+                    resolve_eye_support(state,eye_light_assets or {},entry['face_ref'])
+                    continue
+                if stage=='hair_colour':continue # Dedicated source-owned consumer, not recovery.
                 if stage not in E.STAGES:
                     raise ValueError('Source-owned local support requires an explicit consumer: ' + stage)
                 recovery = (recovery_assets or {}).get((key,stage))
@@ -108,6 +112,9 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
             field = A.build_geometry(key, lm, values, source, analysis['excluded'], backend=face['evidence']['backend'])
             local = E.prepare(entry['face_ref'], lm, values, effect_source, excluded=analysis['excluded'], skin=analysis['skin'],
                               backend=face['evidence']['backend'], semantic_sha=face['evidence']['semantic_model_sha256'])
+            from .eye_light_people import prepare as prepare_eye_light
+            from .eye_light_state import OPERATION as EYE_LIGHT
+            local.extend(prepare_eye_light(state,eye_light_assets or {},entry['face_ref'],analysis,effect_source,values[EYE_LIGHT],source_revision=state['revision']))
             # Preserve mouth's source-cavity teeth veto independently per face.
             mouth = field.fields[-1]
             if mouth is not None and mouth.state is not None:
@@ -122,6 +129,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
             if resident+h*w*256+128*1024*1024 > byte_budget: raise ValueError('Accumulated portrait fields exceed memory budget')
             fields.append(field); effects.extend(local)
             facts[key] = {record.stage:record.facts for record in local}
+            eye_facts=[record.facts for record in local if record.stage=='eye_light']
+            if eye_facts:facts[key]['eye_light']={'eyes':eye_facts,'stage':'source-working-srgb','physical_light_recovery':False}
             facts[key].update({name:part.facts for name,part in zip(('brow_shape','nose_shape','eye_shape','mouth_shape'),field.fields) if part is not None})
         except (ValueError, RuntimeError, OSError) as error:
             failures.append({'face_instance_id':key,'reason':str(error)})

@@ -81,7 +81,11 @@ def apply(engine,raw,emit):
     records[request]={'success':False,'digest':digest};state,binding,target=checked(engine,p);asset=binding['asset_sha256']
     records[request]['before_fence']=engine._people_owner().fence
     action=p.get('action');payload=p.get('payload');created=None;batch_id=None
-    if action in ('select','target'):
+    if action=='eye_light_reference':
+        from .eye_light_host import reference
+        reference(engine,state,target,payload)
+        frame=None
+    elif action in ('select','target'):
         if payload!={} or set(p)!={'document_id','document_epoch','document_revision','state_revision','association_revision','request_id','target','action','payload'}:raise ValueError('Invalid editing cursor command')
         # Cursor state can change before document fencing or synchronization fails.
         if action=='select':
@@ -101,6 +105,9 @@ def apply(engine,raw,emit):
             records[request]['side_effects_started']=True
             candidate,ref=analyse(engine,state,target['face_ref'])
             target={'scope':'face','target_id':ref['face_instance_id'],'face_ref':ref}
+        elif action=='eye_light_review':
+            from .eye_light_host import stage_review
+            candidate=stage_review(engine,state,target,payload)
         elif action=='resolve_legacy':
             from .people_legacy_review import resolve
             if type(payload) is not dict or set(payload)!={'archive_id','mode'}:raise ValueError('Invalid legacy review decision')

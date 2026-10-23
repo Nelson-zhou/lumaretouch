@@ -112,7 +112,7 @@ def raster(state,assets,asset_sha256,shape):
     for face in state['faces'].values():
         if face['asset_sha256']!=asset_sha256 or not face['enabled']:continue
         for target,descriptor in face['local_assets'].items():
-            if target=='hair_colour':continue # Checked/consumed by the separate source hair bank, never facial recovery.
+            if target in ('hair_colour','eye_light_visibility'):continue # Dedicated support consumers, never facial recovery.
             checked=resolve(state,assets,S.face_ref(face),target);row=checked['targets'][0]
             work+=M.validate_budget(row['recipe'],shape)['work'] if row['enabled'] else 0
             rows.append((face,row,descriptor['content_sha256']))
@@ -136,6 +136,10 @@ def check_store(assets):
         if type(record) is not dict or set(record)!={'version','face_ref','source','row'} or record['version']!=1 or content_digest(record)!=key:
             raise ValueError('Portrait recovery asset content hash/schema mismatch')
         ref=S.check_ref(record['face_ref'])
+        if record.get('row',{}).get('target')=='eye_light_visibility':
+            from .eye_light_support import check_record
+            check_record(record)
+            continue
         checked=R.check({'version':R.VERSION,'source':record['source'],'targets':[record['row']]})
         if checked['source']['sha256']!=ref['asset_sha256'] or checked['targets'][0]['target'] not in FACE_TARGETS:
             raise ValueError('Portrait recovery asset source or operator is invalid')

@@ -1,0 +1,308 @@
+{
+  "baseline": "e43795633d9336c507b6158ea7495b13b3a6370a",
+  "status": "SOURCE_INTEGRATED_UNRUN",
+  "shared_file_count": 27,
+  "python_ast_count": 31,
+  "changes": [
+    {
+      "path": "core/eye_light/build_eye_light.sh",
+      "before_sha256": null,
+      "sha256": "2bed7e960795618085d2f0b06c887cd6be3e704eaa77e2888886c735e230ac4c",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "core/eye_light/lib.rs",
+      "before_sha256": null,
+      "sha256": "1bf05f1ad6aef9f896e6d5ecd936c2bc9c3db6805b125dab9bd852d6694a1b2d",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "docs/eye-light/ACCEPTANCE_UNRUN.json",
+      "before_sha256": null,
+      "sha256": "185f1386c6c18f84e678e995d10868715ff8756d34ea4e5b8ff4fbb322616439",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "docs/eye-light/INTEGRATION.md",
+      "before_sha256": null,
+      "sha256": "9c60df7376a0781c0685541038adf04bd9e575af57a56cc45a90a4c954088b7c",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "docs/eye-light/README.md",
+      "before_sha256": null,
+      "sha256": "1ea20a336a9654972f709647e7d6734a64df3903b5819fb5b68cb3c557a5d4e0",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "docs/eye-light/STATIC_REVIEW.md",
+      "before_sha256": null,
+      "sha256": "baf73684130680c13bd4c9fcac955af635bbf55649e1a5b9ffe57c0ef5703a9a",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_runtime.py",
+      "before_sha256": "3d5143b8f76479265b907bfd761c891e43c7fae26bc057b6cadeb09081f1cce2",
+      "sha256": "206d237f565ecd0d123c14bea3189fa3f8584bc94cbe888ac3e1f9b055b15144",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_state.py",
+      "before_sha256": "9a13c32cb58994187ba4c6d1f2e5a087352d1c093da4b39addee12911143fde7",
+      "sha256": "e5a8930a446257fbdf0d75067e51adef89ed8fd1a9dbce67e354d56050fdd4c5",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_light_geometry.py",
+      "before_sha256": null,
+      "sha256": "b897554ccdf1d3947d4db788ffa0da182e35b990bc4b3c964cd96e6a6d1a8082",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_light_host.py",
+      "before_sha256": null,
+      "sha256": "7d3a449d12fde574a74275b2b0b366f38153171487aa2f3ce8b2387ccdc121a6",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_light_native.py",
+      "before_sha256": null,
+      "sha256": "3c9e0ce83746b8b776fb740ac3a34991c7952e6b00374386b2ca0b6dab376062",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_light_people.py",
+      "before_sha256": null,
+      "sha256": "a1e773f2edd1f1c73adebc76066bf2de2d0fda202bb30a1ebe6e570f70d805c1",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_light_runtime.py",
+      "before_sha256": null,
+      "sha256": "255924e812c431040fc7f302111572d7c811739593fd4c15575ff69b80510ed9",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_light_scope.py",
+      "before_sha256": null,
+      "sha256": "6071cdbfced01b4976d1c2d7d3db4456620690cc5978460c470ed0fd03ad0989",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_light_state.py",
+      "before_sha256": null,
+      "sha256": "16b4c6a14bda07588fc8647378d6c667e59671d6e08ac3cbebd2853fafb009bd",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_light_support.py",
+      "before_sha256": null,
+      "sha256": "ee840a892903da500690292b3281d800d1802cbd76a9f5efe3628edde8972298",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_wrinkle_recovery.py",
+      "before_sha256": "5bb2fd563b03796bde7109bfaeafd7a91379ede339989f40cb846fb40cb2f585",
+      "sha256": "2dab75331d6a4949e1df38581938e9c63d911d716d2967096137c6066d0508ea",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "before_sha256": "5a3c68fd99866018fa3102df296503b7ff5f5190ef32811ea9a6eebc50ce578f",
+      "sha256": "fb20e9e6801d5915dc6736d742196c8297f149ccd125bb4e78ff09c24d798016",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "before_sha256": "902d2e62f478b7ac9721b91e55aee8daba6f19e94c53bdaaf87e44800afd68a8",
+      "sha256": "ce9d5e206aa14fd94814cfe4ee0854212bd2a735d2bd3ea6258897bee2248045",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_edit.py",
+      "before_sha256": "a88cda40bcf820a6ad3172ac0299591fb5ab607ce1030a7452b81b40d22261b8",
+      "sha256": "64a9576cd48a04c9b13a33cda7c87fc9a666cb2dde198bf90e05466f1351ce90",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "before_sha256": "5e2d207653227c831d3405f29446d06e588a054593a1302324000fea954c9a71",
+      "sha256": "ed0387ffad5ee9bb78c4b3f654cab489b1a4866e91e7d05f83d9a9e69e543de9",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "before_sha256": "e5a558d560b507850798193dc24d61446cb64e6a68f3b44f70cf4f66ca37c2bc",
+      "sha256": "5bc127377dd1ba122f61fe31fcea170f0895021e0d75eabf2ed3b77e5c28e856",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "before_sha256": "1c19a460208ec907d9d689d27c1ed445c08b04eb580911868e3e987ba3eefaf2",
+      "sha256": "ad4d4fc735b449e6697a52f4b367198a4457405816569f0072de9b718f5a016b",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "before_sha256": "b04b00f9f60ca585b6242d382a7b5defb900808ad2dba3fe6ee2013f185b9dd7",
+      "sha256": "0e81e8d29b1f5f2349cc737aef12818a701640ec41d2af4fa85d73cd0ecbcec1",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "before_sha256": "01b06249838c55702799a7b365fb3b5e9cd438879fcec0336fdfa59c54547105",
+      "sha256": "450bbf988196e560fce286d7d32a96a9a6ef94f387188a91e1e8f35cf4864051",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "before_sha256": "d8d291d865f97a3c875c4c7f473965ce8560efaa364396f9174a5d31e875f2cd",
+      "sha256": "89d1b2322e1eb8045d4f1a6850979c420b3d45b9cc6937ea1fe9ef4746bbcfed",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "before_sha256": "4e98f30e9c98b0833f05089ff5df90dc20e1e56a8cfe88a8e8c41407e53525b2",
+      "sha256": "88d1bbaa28527f5b9ba13d4e04abfed1e66bde5fb7305ca428b009604a5bf138",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_project.py",
+      "before_sha256": "91cca165edf658ca85b00d9674175c89bd3666e9fc27b2530efeead4207c064c",
+      "sha256": "a0bff423ff6dd7aa303a5f45887dbe2eb1d3435d804eed9951d37f81c770c080",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "before_sha256": "0ce7fcc01d80c6d051489aae1cfde063aa96dd2f3ef0215a4ce9dc2900c5010c",
+      "sha256": "b6ac2ee371af19fae4a18fb60728cbe97763172ee479e699ce921c4a6047b2e2",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "before_sha256": "5bb132d15d720aa8c868531fff4ae2de6ab1bca1749a21becdd4f4fa7b51e4bf",
+      "sha256": "d7473e27a03e62d0d6f4876b794becd931112a23667b20e2e4ab4ff7c41f9e22",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_support_assets.py",
+      "before_sha256": "152dffe6d39be5a9470677bd7e38640d6ee0c5a2ad5a0877eb439ce27c27cc10",
+      "sha256": "47dcba0bcedee03432cc41a55f1ff0d5319fa9a1bbeebfc8e35420ae50f78d95",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "before_sha256": "c6d948f1618f10f5465a6004cd0d6f7418d7b9bf5156402e9cda759befbe1dab",
+      "sha256": "214ae71ae2e780e58a6314c4d6b5c7eacdb8a725d81316f116b88055c3f8b87b",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "before_sha256": "11cb566fd5e76e7b26e3eb7d9cb452cbabcb3529045e66f575f8ffad02f2f871",
+      "sha256": "2b0137dd2926329771657d107b6398fa5eec74458d213eb14d77375c8243b7a7",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "before_sha256": "f1c77381d6e57e9fb6b5cf9b7384919780f2f3100581f3fbe0ed8706530ff9c1",
+      "sha256": "3e2a162db2b7b7e982f242ea672fd1ef591306128bd516d51fa42ceb5f83cf73",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "before_sha256": "911729d229851df2dc96c3874bf092ae79924c40add3f08cb1f4eedea2074d23",
+      "sha256": "67198d7cf6ca3f334730108f1843b7444da1ca8ad203dfff49e0618dbe4cd287",
+      "change": "shared_modified"
+    },
+    {
+      "path": "engine/tests/eye_light/test_eye_light_contract.py",
+      "before_sha256": null,
+      "sha256": "e8df02342aab73cfb08c2387df9d75639be5ee39cce75d1cdd2f65a13141e0f1",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "engine/tests/eye_light/test_eye_light_integration.py",
+      "before_sha256": null,
+      "sha256": "3dc8df5aea697fca284b5eea36d80c47f4e81b45c557c58ff1a649c4248e022d",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "packaging/build-eye-light.sh",
+      "before_sha256": null,
+      "sha256": "bd7e6128c7ed2b863792ddbad8dab8c4bc3ad0e89d9cd60c116a793a9265ab08",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "before_sha256": "b3abf52dd417c982586a661cb7ee3068f8b3cb44efb51fdc3f6845b98eac3d1b",
+      "sha256": "87b8a0071211cad8c8ace395a89d19a3374f2c74a95767c6b0fdf0b58777b116",
+      "change": "shared_modified"
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "before_sha256": "922d6c106cd00237de2ef86fa44b2e3d98bbc248a5f78db0263d7b7b22934c36",
+      "sha256": "ebdaca61181b75d50ee1bf59beedfc1109c3e88cc5228b42ac7b56928dc83df7",
+      "change": "shared_modified"
+    },
+    {
+      "path": "ui/src/effectRecovery/model.ts",
+      "before_sha256": "8d2d498007d2776277644394fc3b19071797ec6896d829405fc51423c4e93d2a",
+      "sha256": "5d7efa3e0c7f1ad9ffcdadc4edc96b1f35d9319b29073ece82600b08c8aa647f",
+      "change": "shared_modified"
+    },
+    {
+      "path": "ui/src/eyeLight/EyeLightControls.tsx",
+      "before_sha256": null,
+      "sha256": "9142018f07b4016f924ab8c2924cee18f1f4157be9fb99c06f5a82e89da68bf7",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "ui/src/eyeLight/EyeLightPanel.tsx",
+      "before_sha256": null,
+      "sha256": "e80bb2c45edf40610926b59c03592752c53947469729747f1030b9b317fc4a5e",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "ui/src/eyeLight/EyeLightSupportEditor.tsx",
+      "before_sha256": null,
+      "sha256": "f2e665325298f12327f39b36426b9d5208a8231a0ed44ad588b0e6b4381008c3",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "ui/src/eyeLight/integration.test.ts",
+      "before_sha256": null,
+      "sha256": "2def0d8172b65a361c65d441daf0ebfc4f8b03b5859c0ce2d6890f8e089989a6",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "ui/src/eyeLight/model.test.ts",
+      "before_sha256": null,
+      "sha256": "e0b233bd43838bdf93c2f551ffe12be02905f4a9dd67ad6300fe13b1070f1202",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "ui/src/eyeLight/model.ts",
+      "before_sha256": null,
+      "sha256": "f69a8ee9f1e3cb660b517ddf7a2977be1f2c0402156cd486f529052a7334c2cd",
+      "change": "eye_light_new"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "before_sha256": "395c0b19aa0545870b37a9ebc79a31fcabacb43d6ab71642e3d32e8f9c2e6ecf",
+      "sha256": "7a8012a9725a8b26341fcf4783c72fc15dffc3580156ce25f5caab0e17cc906e",
+      "change": "shared_modified"
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "before_sha256": "4a9bb977c520038f33d2e040cfcf6880036374f0ef07975c85eecc713e842ecb",
+      "sha256": "ce908398736f80515a449162cc98804dd45fe557281c64ac7cedea8ed5702a7c",
+      "change": "shared_modified"
+    },
+    {
+      "path": "ui/src-tauri/src/people_api.rs",
+      "before_sha256": "cf5c203600dabed0a7b11584ce802045ad76da327fbcb133584c00fa119146fc",
+      "sha256": "11b6627db86683dd3cd2cdc6a618b45aa3468e034c685a6f38dc57a02f709a51",
+      "change": "shared_modified"
+    }
+  ]
+}
