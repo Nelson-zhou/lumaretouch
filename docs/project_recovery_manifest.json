@@ -1,0 +1,150 @@
+{
+  "status": "INTEGRATED_RUNTIME_UNRUN",
+  "base": "edfdd4977c92d776a622922fd7f777a4de5499b",
+  "checks": [
+    "Python AST parse only",
+    "JSON parse only",
+    "SHA256 source hashes only"
+  ],
+  "not_run": [
+    "product execution",
+    "tests",
+    "compiler",
+    "build",
+    "typecheck",
+    "inference",
+    "crash injection"
+  ],
+  "files": [
+    {
+      "path": "docs/project_recovery_integration.md",
+      "sha256": "7797f3702bad6af5a93743b2de6e18fa8718853af0b2140d92a0a30649bf4ade",
+      "bytes": 9497
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/managed_import_host.py",
+      "sha256": "3991d0cfe2be9ba37e010d9879113bb1e3917e0defd7a0f91d36d4cda28cb734",
+      "bytes": 12129
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "3071c98ee638d1bb7d0a68312151c1da305ee791c8e7c9f55ed8aee42ff5f4da",
+      "bytes": 70958
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_package_host.py",
+      "sha256": "bc9a762a3d463401961699e7a710076d19f4a06da9a45e88d6e375b94905316f",
+      "bytes": 11006
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_package_project_commands.py",
+      "sha256": "7f7c5ac925c6cca09171103edb5a1f35e9f65f9d88da6f464368fc00c7a30b6a",
+      "bytes": 19418
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_capture.py",
+      "sha256": "54d840553e3b3d62f7a77598557f3589dc6908f85c2c64f36be3974c0eb44508",
+      "bytes": 3350
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_host.py",
+      "sha256": "7a17cd411b092bb32aa36d7bb7a086d4ae170192f193034c7f8bb02167df6db1",
+      "bytes": 7674
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "770eac91366b0b804772c2ad41fd40bc69c7ab750e500ccf4a52c11c6b949425",
+      "bytes": 6535
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_scheduler.py",
+      "sha256": "ee9ed71d9016cb08d38fcfcd701c18b4fb358027d214fdfcb4efc500f4f245ec",
+      "bytes": 7840
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_store.py",
+      "sha256": "44cc6c54c063845a54c0d4e7f64cb211bc0393e14c7520ea706c214dc56586db",
+      "bytes": 18967
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "14f66ad85c603d54bfa5114fa906c18cc77b93da8e9fe1a297c1cd01a8167940",
+      "bytes": 458675
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/source_relocation_host.py",
+      "sha256": "7f6a95758fccef67e6c6dd05ac76d533fc84ed76a0d59b84a8d3e4f723dcb5cf",
+      "bytes": 19690
+    },
+    {
+      "path": "engine/tests/fixtures/project_recovery/acceptance_unrun.json",
+      "sha256": "e67713d041792230864b1066a079642e8a80b08d6a4d7fa307ba0ced0313dfa3",
+      "bytes": 4042
+    },
+    {
+      "path": "engine/tests/project_recovery_cases.py",
+      "sha256": "0cc807c9afe1c548906722f8b9853aa6489366df6e03c908e01a9d97f9bcf7bf",
+      "bytes": 7480
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "02eaf974fc8ebdd900d0ee254befca9ff1d49ae569329d6d30af20e049db05e0",
+      "bytes": 35149
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "e2baa3eec85a68e824d920467fc4af66ee2c9be19a5a62ef48dc242ff5873c17",
+      "bytes": 98684
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "c344adb280d9c40673faf54092ee2bba047278d0d0538f12ff8b4e8c918ef356",
+      "bytes": 7641
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_api.rs",
+      "sha256": "0b6d7daaf9140107b5a053fe60021a33a694ebdd465cab91bb95a6e1fda495d2",
+      "bytes": 4494
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "sha256": "fff0736a64ec4e94dde7a008ea53cf4af18d662ff541b599548635abec6035d8",
+      "bytes": 3702
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "b2e1a47ed35884f7dd80a64af11affcbb6ef2e91e5febd7d74218bbfcd659d20",
+      "bytes": 139048
+    },
+    {
+      "path": "ui/src/projectRecovery/RecoveryPanel.tsx",
+      "sha256": "f4d0e7580c6556e92eed0faf7093fc3a3e1b275ee902a7296a44f4206e9dd7b8",
+      "bytes": 6045
+    },
+    {
+      "path": "ui/src/projectRecovery/model.ts",
+      "sha256": "11b004520f98839c7689462f7735a74a9b223c870252f38ebc960d7d1bc26d9f",
+      "bytes": 4612
+    },
+    {
+      "path": "ui/src/projectRecovery/nativePort.ts",
+      "sha256": "af605630096e3d6cb21f9076c5e7effd16f06431cbcd98e75c56aef63857725c",
+      "bytes": 350
+    },
+    {
+      "path": "ui/src/projectRecovery/useProjectRecovery.ts",
+      "sha256": "c9a4fec6183266655c4e077060af27ea2aabd7adcfc0983b08fddb058c92f23d",
+      "bytes": 2482
+    },
+    {
+      "path": "ui/src/projects/ProjectWorkspace.tsx",
+      "sha256": "7c94d723916aa377aea68186ef28f0e50eb2ae71ef07166c119b474305fd6af3",
+      "bytes": 4376
+    },
+    {
+      "path": "ui/src/projects/useProjectWorkflow.ts",
+      "sha256": "7a9f2b349f8ede799371e58ae337b2a1a4ce52c818bf512277b523b4634c3c54",
+      "bytes": 1816
+    }
+  ]
+}

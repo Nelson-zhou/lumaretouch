@@ -844,6 +844,9 @@ def decode(value: object, assets: dict, dropped: list, at: str,
             return raw                      # bytes
         if "__dc__" in value:
             cls = (dc_types or {}).get(value["__dc__"])
+            if cls is None and value["__dc__"] == "FacePrecompute":
+                from .face import FacePrecompute
+                cls = FacePrecompute
             if cls is None:
                 dropped.append({"at": at, "reason": f"不认识的数据类 {value['__dc__']}"})
                 return None

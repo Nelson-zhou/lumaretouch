@@ -54,6 +54,8 @@ class SourceRelocation:
 
     def _snapshot(self, ids=None):
         e = self.engine
+        recovery = getattr(e, '_project_recovery_runtime', None)
+        if recovery and recovery.host.active: raise ValueError('请先完成工程恢复操作')
         managed = getattr(e, "_managed_import_controller", None)
         package = getattr(e, "_project_package_controller", None)
         if managed and (managed.active or managed.uncertain): raise ValueError("请先确认导入结果")

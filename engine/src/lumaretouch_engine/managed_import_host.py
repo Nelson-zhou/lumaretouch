@@ -46,6 +46,8 @@ class ManagedImport:
         from .virtual_copy_host import VirtualCopies
         VirtualCopies(self.engine,self.emit).guard()
         e = self.engine
+        recovery = getattr(e, '_project_recovery_runtime', None)
+        if recovery and recovery.host.active: raise ValueError('请先完成工程恢复操作')
         package = getattr(e,"_project_package_controller",None)
         if package and package.active: raise ValueError("请先完成便携包操作")
         if not e._project or not e._project_path: raise ValueError('复制导入前请先创建并保存工程')

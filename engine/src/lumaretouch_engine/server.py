@@ -178,6 +178,8 @@ def _clamp_strength(v) -> float:
 
 def emit(obj: dict) -> None:
     """stdout 会被主循环与跑靶线程同时写，必须串行化。"""
+    from .project_recovery_runtime import observe
+    observe(obj)
     from .custom_lut_scope import public_view
     obj = public_view(obj)
     with _EMIT_LOCK:
@@ -420,7 +422,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
 
     # ------------------------------------------------------------ 通路自检
     def cmd_hello(self, _p: dict):
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "preset_organisation_protocol": 1, "source_relocation_protocol": 1, "managed_import_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"eyeliner_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyeliner.so").is_file()),"iris_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_iris_makeup.so").is_file()),"eyelash_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyelash.so").is_file()),"brow_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_brow_makeup.so").is_file()),"lipstick_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_lipstick.so").is_file()),"blush_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_blush_makeup.so").is_file()),"eye_light_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eye_light.so").is_file()),"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"primary_calibration_protocol":int(self._primary_calibration_service().available()),"colour_editor_protocol":int((Path(__file__).parent/"bin/liblrt_colour_editor.so").is_file()),"selective_colour_protocol":int((Path(__file__).parent/"bin/liblrt_selective_colour.so").is_file()),"photo_grain_protocol":int(PGR.available()),"colour_grading_protocol":int((Path(__file__).parent/"bin/liblrt_colour_grading.so").is_file()),"photo_detail_protocol":int(PDH.available()),"extended_tone_protocol":int((Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()),"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1,"arm_shape_protocol":1,"waist_shape_protocol":1,"neck_shape_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_neck_shape.so").is_file()),"leg_length_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_leg_length.so").is_file()), "studio_background_protocol": 1, "id_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "preset_organisation_protocol": 1, "source_relocation_protocol": 1, "managed_import_protocol": 1, "project_recovery_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"eyeliner_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyeliner.so").is_file()),"iris_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_iris_makeup.so").is_file()),"eyelash_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyelash.so").is_file()),"brow_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_brow_makeup.so").is_file()),"lipstick_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_lipstick.so").is_file()),"blush_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_blush_makeup.so").is_file()),"eye_light_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eye_light.so").is_file()),"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"primary_calibration_protocol":int(self._primary_calibration_service().available()),"colour_editor_protocol":int((Path(__file__).parent/"bin/liblrt_colour_editor.so").is_file()),"selective_colour_protocol":int((Path(__file__).parent/"bin/liblrt_selective_colour.so").is_file()),"photo_grain_protocol":int(PGR.available()),"colour_grading_protocol":int((Path(__file__).parent/"bin/liblrt_colour_grading.so").is_file()),"photo_detail_protocol":int(PDH.available()),"extended_tone_protocol":int((Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()),"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1,"arm_shape_protocol":1,"waist_shape_protocol":1,"neck_shape_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_neck_shape.so").is_file()),"leg_length_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_leg_length.so").is_file()), "studio_background_protocol": 1, "id_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -2323,6 +2325,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 "writer_match": ((p or {}).get("writer") == _current_writer())
                                  if p is not None else None,
                 "dropped_count": len((p or {}).get("dropped") or []),
+                "project_recovery": {"protocol":1,"runtime_verified":False,
+                    "status":self._project_recovery_runtime.scheduler.status() if getattr(self,"_project_recovery_runtime",None) else {"phase":"idle"}},
                 "managed_import": {"protocol":1,"runtime_verified":False,"modes":["reference","copy"],
                     "busy":bool(getattr(self,"_managed_import_controller",None) and self._managed_import_controller.active)},
                 "source_relocation": {"protocol": 1, "exact_fingerprint": "sha256-full-file",
@@ -6363,6 +6367,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         return self.device
 
     def cmd_shutdown(self, _p: dict):
+        recovery = self.__dict__.get("_project_recovery_runtime")
+        if recovery is not None: recovery.host.close()
         managed = self.__dict__.get("_managed_import_controller")
         if managed is not None: managed.close()
         package = self.__dict__.get("_project_package_controller")
@@ -6521,7 +6527,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("managed_import", "project_package", "export_destination", "virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("project_recovery", "managed_import", "project_package", "export_destination", "virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light",
                "deform", "lut", "custom_lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -6539,6 +6545,24 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         if not hasattr(self, '_virtual_copy_controller'):
             self._virtual_copy_controller = VirtualCopies(self, emit)
         return self._virtual_copy_controller.handle(p)
+
+    def cmd_project_recovery(self, p):
+        from .project_recovery_runtime import owner
+        runtime = owner(self, emit)
+        if p.get('action') == 'checkpoint':
+            try:
+                result = runtime.checkpoint(p)
+                emit({'event':'project_recovery_result', 'request_id':p.get('request_id'),
+                      'project_id':p.get('project_id'), 'action':'checkpoint', 'success':True, **result})
+            except Exception as error:
+                emit({'event':'project_recovery_result', 'request_id':p.get('request_id'),
+                      'project_id':p.get('project_id'), 'action':'checkpoint', 'success':False,
+                      'error':str(error)})
+            return
+        if p.get('action') == 'snapshot':
+            if p.get('native_settled') is not True: raise ValueError('缺少宿主回执屏障')
+            runtime.native_receipts = p.get('native_receipts', [])
+        runtime.host.handle(p)
 
     def cmd_managed_import(self, p):
         return MIH.handle(self, p, emit)
@@ -6571,7 +6595,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         if not line:
             return
         request_id = None
-        msg = {}; name = ""; dispatch_error = None
+        msg = {}; name = ""; dispatch_error = None; recovery_boundary = None
         try:
             msg = json.loads(line)
             request_id = msg.pop("_host_request_id", None)
@@ -6580,6 +6604,11 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             if fn is None:
                 emit({"event": "error", "error": f"未知命令: {name}"})
                 return
+            from .project_recovery_runtime import begin
+            recovery_boundary, fn = begin(self, msg, fn)
+            recovery = self.__dict__.get('_project_recovery_runtime')
+            if recovery is not None and recovery.host.blocks(name, msg):
+                raise ValueError('项目恢复操作进行中，请等待原操作完成')
             managed = self.__dict__.get("_managed_import_controller")
             if managed is not None and managed.blocks(name, msg):
                 raise ValueError("导入正在进行或结果待确认，请查询原导入操作")
@@ -6598,7 +6627,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                           'success': False, 'outcome_unknown': False, 'error': reason})
                     return
                 raise ValueError(reason)
-            if name in ('managed_import', 'project_package', 'source_relocation', 'virtual_copy'):
+            if name in ('project_recovery', 'managed_import', 'project_package', 'source_relocation', 'virtual_copy'):
                 fn(msg); return  # Path transactions never enter recipe history/capture invalidation.
             if relocation is not None and name == 'project' and msg.get('action') == 'state':
                 with relocation.lock: fn(msg)
@@ -6612,7 +6641,10 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 return  # View-only: do not fence or revoke any edit/capture owner.
             if name == "background" and msg.get("action") in ("id_state","id_sample"):
                 from .id_background_controller import controller
-                controller(self,emit).handle(msg); return
+                recovery_boundary['started'] = True
+                controller(self,emit).handle(msg)
+                recovery_boundary['returned'] = True
+                return
             if name not in ('hello','color_picker_capture'):
                 id_capture=self.__dict__.get('_id_background_capture_owner')
                 if id_capture is not None:id_capture.invalidate()
@@ -6696,7 +6728,10 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                     raise ValueError(reason)
             if name=="background" and str(msg.get("action","")).startswith("id_"):
                 from .id_background_controller import controller
-                controller(self,emit).handle(msg); return
+                recovery_boundary['started'] = True
+                controller(self,emit).handle(msg)
+                recovery_boundary['returned'] = True
+                return
             if name in self.EDIT_CMDS and (name!='hair_colour' or msg.get('action') in HAIR_MUTATIONS):
                 # 推送点只在这里这一处（见 EDIT_CMDS 的说明）：执行前抄快照，
                 # 执行后比对签名决定占不占一步。异常也记（finally）——半改完的
@@ -6715,6 +6750,10 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
         finally:
             try:
+                if dispatch_error and name=="project_recovery":
+                    emit({'event':'project_recovery_result','request_id':msg.get('request_id'),
+                          'project_id':msg.get('project_id'),'action':msg.get('action'),
+                          'success':False,'error':dispatch_error})
                 if dispatch_error and name=="managed_import":
                     emit({"event":"managed_import_result","request_id":msg.get("request_id"),"status":"failed","error":dispatch_error})
                 if dispatch_error and name=="background" and str(msg.get("action","")).startswith("id_"):
@@ -6746,8 +6785,11 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 if name in ("source_patch", "clone_stamp") and isinstance(msg, dict):
                     self._source_patch_controller().finish(msg, dispatch_error)
             except Exception as error:
+                dispatch_error = str(error)
                 emit({"event": "error", "error": f"{name} receipt failed: {error}"})
             finally:
+                from .project_recovery_runtime import finish
+                finish(self, recovery_boundary, dispatch_error)
                 if request_id is not None:
                     emit({"event": "command_done", "request_id": request_id})
 
@@ -6806,6 +6848,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                     break
                 self._process_line(line, table)
         finally:
+            recovery = self.__dict__.get('_project_recovery_runtime')
+            if recovery is not None: recovery.host.close()
             managed = self.__dict__.get('_managed_import_controller')
             if managed is not None: managed.close()
             package = self.__dict__.get('_project_package_controller')

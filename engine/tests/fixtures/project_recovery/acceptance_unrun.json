@@ -1,0 +1,80 @@
+{
+  "requirement": "LNX-CORE-008",
+  "manual_line": 1047,
+  "status": "INTEGRATED_RUNTIME_UNRUN",
+  "cases": [
+    {
+      "id": "REC-001",
+      "scenario": "SIGKILL before/after project file fsync, receipt fsync, rename, destination-directory fsync",
+      "expect": "Only complete hash-verified candidates offered; staging retained but not offered; no silent durability claim after fsync error"
+    },
+    {
+      "id": "REC-002",
+      "scenario": "Editor command throws after partial graph mutation; native write pending/unknown; slider gesture still active",
+      "expect": "No committed autosave admission until proven settled transaction; dirty flag alone insufficient"
+    },
+    {
+      "id": "REC-003",
+      "scenario": "Root and virtual copies sharing one source, private people associations, inactive named versions, undo/redo, accepted generated masks",
+      "expect": "All canonical identities and all immutable assets survive; unsupported value blocks rather than drops"
+    },
+    {
+      "id": "REC-004",
+      "scenario": "Switch A→B→A while snapshot capture or write active; close panel during request",
+      "expect": "Old epoch cannot publish; pointer/composition pauses checkpoint; stale results cannot mutate new view; unknown mutation queried, not resent"
+    },
+    {
+      "id": "REC-005",
+      "scenario": "ENOSPC, reserve exhaustion, quota limit, permission denial, corrupted candidate, unreadable original",
+      "expect": "Visible blocked state; dirty state retained; no automatic cleanup or replacement of last good version"
+    },
+    {
+      "id": "REC-006",
+      "scenario": "Old schema migration, failed validation, concurrent original edit, future schema",
+      "expect": "Exact verified backup before migration; original remains byte-identical; newer schema rejected"
+    },
+    {
+      "id": "REC-007",
+      "scenario": "Source missing/moved, same size new content, tail-only change, full-hash unavailable",
+      "expect": "Explicit full-hash review; relink only identical source into a new candidate with all linked IDs and aliases retained; no stale-mask rendering"
+    },
+    {
+      "id": "REC-008",
+      "scenario": "Restore into existing directory; discard twice; recover trash; restart after uncertain restore",
+      "expect": "No overwrite; no permanent delete; inspect persisted candidate/destination instead of repeating unknown write"
+    },
+    {
+      "id": "REC-009",
+      "scenario": "Large project beyond 64 MB capture budget / 256 MB serializer budget; many snapshots",
+      "expect": "Bounded admission and visible backpressure; no ignored assets; no unbounded pending queue"
+    },
+    {
+      "id": "REC-010",
+      "scenario": "Application shutdown with queued and inflight autosave",
+      "expect": "Cancel invalidates uncommitted write; committed versions retained; shutdown does not claim flush/save; retain dirty-close confirmation"
+    },
+    {
+      "id": "REC-011",
+      "scenario": "New native protocol has unrecognized terminal result; direct EngineHandle send outside ordinary AppState dispatch",
+      "expect": "Native receipt fence pauses capture until reconciled; no empty-receipt assumption"
+    },
+    {
+      "id": "REC-012",
+      "scenario": "Copy-import provenance and receipts, private people scopes, FacePrecompute masks/landmarks, source aliases through crash restore",
+      "expect": "Exact codec roundtrip; no inference replacement or omitted immutable asset"
+    },
+    {
+      "id": "REC-013",
+      "scenario": "Crash after operation-started, destination creation, restore serialization or operation-result fsync",
+      "expect": "Persistent unresolved operation visible; no automatic replay; original and candidate remain intact"
+    }
+  ],
+  "required_local_evidence": [
+    "Python focused fixtures",
+    "TypeScript/Rust build and tests",
+    "real UI recovery/reopen screenshots",
+    "kill-point crash injection",
+    "memory/disk/timing measurements",
+    "full project serializer roundtrip with real immutable assets"
+  ]
+}

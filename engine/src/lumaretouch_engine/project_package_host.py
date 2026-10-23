@@ -40,6 +40,8 @@ class Packages:
 
     def snapshot(self):
         e = self.engine
+        recovery = getattr(e, '_project_recovery_runtime', None)
+        if recovery and recovery.host.active: raise ValueError('请先完成工程恢复操作')
         if e._project is None or not e._project_path: raise ValueError('请先打开工程')
         if e._project_dirty: raise ValueError('请先保存工程，再创建便携包；不会丢弃未保存修改')
         for key in ('bench', '_export', '_thumbs', '_picks'):

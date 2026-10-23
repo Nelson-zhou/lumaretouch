@@ -66,6 +66,8 @@ def handle(self, p: dict, emit, _current_writer):
             return
         self._project_source_notice = {}
         self._project, self._project_path = prj, info["path"]
+        from .project_recovery_runtime import owner as recovery_owner
+        recovery_owner(self, emit).switch()
         self._semantic_workspace_reset();self._document_versions().new_workspace()
         # 新建的是**空**工程，而底片条上那些活还在内存里：脏标记不能清成 False，
         # 否则徽章会说“已保存”而磁盘上一张图都没有——那比多亮一次危险得多。
@@ -103,7 +105,16 @@ def handle(self, p: dict, emit, _current_writer):
             return
         t0 = monotonic_ns()
         try:
-            prj = PJ.load(path)
+            from .project_recovery_runtime import owner as recovery_owner
+            backup = recovery_owner(self, emit).store.backup_before_migration(path)
+            if backup['required']:
+                prj = backup['project']
+                prj['_source_path'] = os.path.abspath(path)
+                prj['_source_sha256'] = backup['sha256']
+                emit({'event':'project_migration_backup', 'path':backup['backup_path'],
+                      'sha256':backup['sha256'], 'original_untouched':True})
+            else:
+                prj = PJ.load(path)
             for document in prj["docs"]:
                 for version in document["versions"]:
                     if version.get("recipe") is not None:
@@ -159,6 +170,8 @@ def handle(self, p: dict, emit, _current_writer):
             self._proxy_budget = proxy_budget
         self._people_load(prj,people_history)
         self._project, self._project_path = prj, os.path.abspath(path)
+        from .project_recovery_runtime import owner as recovery_owner
+        recovery_owner(self, emit).switch()
         self._project_saved_ns, self._project_dirty = prj.get("updated_ns"), False
         self._project_disk_sha256 = prj.get("_source_sha256")
         # 写手环境不一致：说出口，不拒开。同一份配方在另一版 numpy/torch 上算出的
@@ -227,7 +240,7 @@ def handle(self, p: dict, emit, _current_writer):
             # 但关键点不在工程文件里（它是派生物）：配方靠它的那几层必须在这里主动补
             # 一次分析，不然就是“重开后那一层形变悄悄消失”（CORE-001）。后端跟着存下来的
             # 那一个走：点名 mediapipe 而后端不在时报错，不静默回落成 template 凑一层假形变。
-            if self._recipe_needs_landmarks(target.get("state") or {}):
+            if self._recipe_needs_landmarks(target.get("state") or {}) and (target.get("state") or {}).get("_precompute") is None:
                 cmd["precompute"] = True
                 cmd["backend"] = ((target.get("state") or {}).get("_precompute_backend")
                                    or "mediapipe")

@@ -584,7 +584,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [refreshStatus]);
 
-  const projectFlow=useProjectWorkflow({refresh:refreshStatus,notify:setDragNote,
+  const projectFlow=useProjectWorkflow({projectId:status?.project?.project_id??'__recovery__',projectOpen:status?.project?.open===true,refresh:refreshStatus,notify:setDragNote,
     enterRetouch:()=>setWorkspace("retouch")});
 
   useViewportProbe(setImgPath);

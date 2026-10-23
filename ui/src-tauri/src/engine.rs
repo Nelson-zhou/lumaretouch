@@ -45,6 +45,8 @@ pub struct EngineHandle {
 impl EngineHandle {
     pub fn epoch(&self)->[u8;16]{self.epoch}
     pub fn send(&self, cmd: Value) -> Result<(), String> {
+        crate::project_recovery_fence::issued(self.epoch, &cmd)?;
+        if cmd["cmd"]=="project_recovery" {return self.dispatcher.enqueue(None,cmd);}
         if crate::managed_import_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if cmd["cmd"] == "virtual_copy" && matches!(cmd["action"].as_str(), Some("state" | "query")) {
             return self.dispatcher.enqueue(None, cmd);
@@ -76,6 +78,7 @@ impl EngineHandle {
     }
 
     pub fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
+        crate::project_recovery_fence::issued(self.epoch, &cmd)?;
         if cmd["cmd"] != "preset_organisation" && crate::sample_library_api::invalidates_capture(&cmd) && !crate::semantic_colour_api::read_only(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) && !crate::leg_shape_api::read_only(&cmd) && !crate::waist_shape_api::read_only(&cmd) && !crate::leg_length_api::read_only(&cmd) && !crate::neck_shape_api::read_only(&cmd) && !crate::arm_shape_api::read_only(&cmd) {
             crate::sample_library_api::invalidate_captures(self)?;
         }
@@ -183,6 +186,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
         thread::spawn(move || {
             while let Ok(line) = rx.recv() {
                 if let Ok(v)=serde_json::from_str::<Value>(&line) {
+                    crate::project_recovery_fence::observed(inspection_epoch, &v);
                     if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {
                         let why="宿主与引擎不匹配：引擎缺少命令完成回执，请使用同一版本的配套引擎";
                         *st.last_error.lock().unwrap()=Some(why.into());
@@ -271,6 +275,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "custom_lut_result" => { crate::custom_lut_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
         "export_destination_result" => crate::export_destination_port::receive(inspection_epoch, &v),
         "virtual_copy_result" => crate::virtual_copy_api::receive(inspection_epoch, &v),
+        "project_recovery_result" => crate::project_recovery_api::receive(inspection_epoch, &v),
         "project_package_result" => crate::project_package_api::receive(inspection_epoch, &v),
         "managed_import_result" => crate::managed_import_api::receive(inspection_epoch, &v),
         "source_relocation_result" => crate::source_relocation_api::receive(inspection_epoch, &v),

@@ -1,15 +1,19 @@
 /** Owns project forms, dialogs and recent-project persistence, not photo editing. */
 import {useState} from 'react';
+import {useProjectRecovery} from '../projectRecovery/useProjectRecovery';
 import {createProjectActions} from './projectActions';
 import {open as openDialog} from '@tauri-apps/plugin-dialog';
 import {runProject,engineStatus,type EngineStatus} from '../native';
 export type RecentProject={path:string;name:string;at:number};
 export interface ProjectPorts {
+  projectId:string;
+  projectOpen:boolean;
   refresh:()=>Promise<EngineStatus|undefined>;
   notify:(message:string)=>void;
   enterRetouch:()=>void;
 }
-export function useProjectWorkflow({refresh,notify,enterRetouch}:ProjectPorts){
+export function useProjectWorkflow({refresh,notify,enterRetouch,projectId,projectOpen}:ProjectPorts){
+  const recovery=useProjectRecovery(projectId,projectOpen);
   const [name,setName]=useState('');
   const [error,setError]=useState('');
   const [recent,setRecent]=useState<RecentProject[]>(()=>{
@@ -30,6 +34,6 @@ export function useProjectWorkflow({refresh,notify,enterRetouch}:ProjectPorts){
     command:runProject,refresh,inspect:engineStatus,name:()=>name,
     setError,notify,remember,enterRetouch,
   });
-  return {name,setName,error,recent,refresh,...actions};
+  return {name,setName,error,recent,refresh,recovery,...actions};
 }
 export type ProjectWorkflow=ReturnType<typeof useProjectWorkflow>;

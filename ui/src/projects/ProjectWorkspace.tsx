@@ -1,4 +1,6 @@
 /** Presentational project workspace; state and native I/O live in its domain hook. */
+import {RecoveryPanel} from '../projectRecovery/RecoveryPanel';
+import {open as openDialog} from '@tauri-apps/plugin-dialog';
 import type {ProjectState} from '../native';
 import {ManagedImportPanel} from '../managedImport/ManagedImportPanel';
 import {SourceRelocationPanel} from '../sourceRelocation/SourceRelocationPanel';
@@ -60,6 +62,10 @@ export function ProjectWorkspace({workflow,project,projectSuffix,hasImage,onEnte
                 ) : <p>还没有打开过工程。</p>}
               </div>
             </div>
+            <RecoveryPanel workflow={workflow.recovery.workflow} autosave={workflow.recovery.autosave}
+              chooseSource={async()=>{const path=await openDialog({title:'选择内容相同的原图'});return typeof path==='string'?path:null;}}
+              chooseNewDirectory={async()=>{const parent=await openDialog({directory:true,title:'选择恢复副本的父目录（将新建独立子目录）'});return typeof parent==='string'?`${parent}/Recovered-${crypto.randomUUID()}`:null;}}
+              openRestored={path=>workflow.openRecent(path,'恢复副本')}/>
             <ManagedImportPanel projectKey={`${project?.project_id??''}:${project?.path??''}`} onChanged={()=>{void workflow.refresh();}}/>
             <ProjectPackagePanel key={`${project?.project_id??''}:${project?.path??''}`} projectOpen={!!project?.open} onChanged={()=>{void workflow.refresh();}}/>
             {project?.open&&<SourceRelocationPanel projectKey={`${project.project_id??''}:${project.path??''}`} onChanged={()=>{void workflow.refresh();}}/>}
