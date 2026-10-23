@@ -1,11 +1,11 @@
-"""Immutable-source evidence for the existing manual sky/recovery consumer.
+"""Immutable-source evidence for the existing sky/recovery consumer.
 
 Sky selection and recovery remain normalized vector intent. The existing stage
 aligns them, the linked asset and its coverage through the actual image warp;
 this adapter neither measures a substitute source nor copies the sky solver.
 The physical photo is provenance, never the effective source or a semantic
-fallback. Automatic sky proposals need their own canonical-input adapter and
-are deliberately rejected here, including retained disabled proposals.
+fallback. Automatic proposals use a separately owned canonical model packet;
+the reduced semantic observation never substitutes for full render pixels.
 """
 from copy import deepcopy
 from hashlib import sha256
@@ -59,8 +59,8 @@ def validate(value,source):
     value=S.check(value)
     if value['source'] is not None and value['source']!=source:
         raise ValueError('Sky regions or recovery belong to another effective source')
-    if value['semantic'] is not None:
-        raise ValueError('Automatic sky selection has no immutable-source replay proof; explicitly remove or replace it with reviewed manual regions')
+    if value['semantic'] is not None and value['semantic']['source']!=source:
+        raise ValueError('Automatic sky proposal belongs to another effective source')
     S.validate_budget(value,(source['height'],source['width']))
     return value
 
@@ -76,6 +76,35 @@ def validate_state(owner):
 def recipe_digest(value):
     from . import sky_replacement_state as S
     return sha256(_json(S.check(value)).encode('utf-8')).hexdigest()
+
+
+def semantic_input(engine):
+    """Owned full-source model observation, never the display/analysis proxy.
+
+    Cache only immutable bounded model bytes. Canonical RGBA content is still
+    validated on every lookup, and alpha/HDR remain explicit export refusals.
+    The model-only quantization does not alter any render or history pixels.
+    """
+    from . import creative_derived_source as D,creative_document_base as B
+    from .creative_document_host import memory_budget
+    from .sky_semantic import immutable_input as I,manifest as M
+    record=D.record(engine)
+    if record is None:raise ValueError('Immutable sky input requires a returned source')
+    source=D.binding(engine);key=(record['id'],_json(M.identity()))
+    cached=engine.__dict__.get('_creative_sky_semantic_input')
+    if cached is not None and cached[0]==key:
+        packet=cached[1];I.check(packet,source);D.verify(source,engine)
+        if len(cached)!=3 or I.key(packet)!=cached[2]:
+            raise ValueError('Canonical sky model-input cache changed after source capture')
+        return deepcopy(packet)
+    budget=memory_budget()
+    if source['width']*source['height']*32+16_777_216>budget:
+        raise ValueError('Insufficient bounded memory for canonical sky model input')
+    pixels=B.export_source(record,max_bytes=budget)
+    packet=I.from_pixels(pixels,source)
+    I.check(packet,source);D.verify(source,engine)
+    engine._creative_sky_semantic_input=(key,packet,I.key(packet))
+    return deepcopy(packet)
 
 
 def _provenance(owner,path):

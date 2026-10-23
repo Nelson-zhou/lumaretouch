@@ -1,4 +1,5 @@
-//! Explicit optional-model installation outside the seccomp image engine.
+//! Explicit optional-model acquisition outside the seccomp image engine.
+//! Local migration is a separate helper action and never implies download consent.
 use std::{io::{BufRead, BufReader, Read}, process::{Child, Command, Stdio}, sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
 use serde_json::{json, Value};
 use tauri::State;
@@ -55,7 +56,7 @@ fn read_output<R: Read + Send + 'static>(pipe: R, host: Arc<Mutex<ModelHost>>, s
 
 #[tauri::command]
 pub(crate) fn sky_semantic_model(state: State<'_, Arc<AppState>>, action: String) -> Result<Value, String> {
-    if !matches!(action.as_str(), "status"|"install"|"cancel") { return Err("invalid optional model action".into()); }
+    if !matches!(action.as_str(), "status"|"install"|"migrate"|"cancel") { return Err("invalid optional model action".into()); }
     let shared = state.sky_semantic_model.clone();
     let mut host = shared.lock().map_err(|_| "optional model lock poisoned")?;
     if action == "cancel" { host.cancel(); return Ok(host.status()); }
@@ -68,7 +69,12 @@ pub(crate) fn sky_semantic_model(state: State<'_, Arc<AppState>>, action: String
         return Err("selected engine has no optional-model installer".into());
     }
     let mut command = Command::new(py);
-    command.args(["-m", "lumaretouch_engine.sky_semantic.install", if action == "install" { "--install" } else { "--status" }])
+    let operation = match action.as_str() {
+        "install" => "--install",
+        "migrate" => "--migrate",
+        _ => "--status",
+    };
+    command.args(["-m", "lumaretouch_engine.sky_semantic.install", operation])
         .env("PYTHONPATH", src).env("PYTHONUNBUFFERED", "1").env("PYTHONDONTWRITEBYTECODE", "1")
         .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(target_os = "linux")]

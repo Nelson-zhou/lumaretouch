@@ -1,5 +1,5 @@
 import {invoke} from '@tauri-apps/api/core';
-import type {Proposal, SemanticPorts} from './model';
+import type {InstallStatus, Proposal, SemanticPorts} from './model';
 
 type Source = {documentId:string;sessionId:string};
 type Binding = Source & {runId:string};
@@ -31,8 +31,9 @@ export function createSemanticPorts(owner:Owner):SemanticPorts {
     throw Error('自动选区响应超时；未提交任何天空修改');
   }
   return {
-    model:action=>invoke('sky_semantic_model',{action}),
-    pollModel:()=>invoke('sky_semantic_model_status'),
+    // Migration remains an explicit offline action, never a fallback to install.
+    model:action=>invoke<InstallStatus>('sky_semantic_model',{action}),
+    pollModel:()=>invoke<InstallStatus>('sky_semantic_model_status'),
     async start(device){
       const source=owner.semanticBinding();
       if(!source)throw Error('请先显示天空源图定位，再生成自动选区');

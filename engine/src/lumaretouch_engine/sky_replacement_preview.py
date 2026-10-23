@@ -93,10 +93,80 @@ def _asset_key(asset):
     return None if asset is None else (_recipe_key(asset.binding),tuple(asset.stamp),_array_key(asset.pixels))
 
 
+def _immutable_key(packet):
+    if packet is None:return None
+    from .sky_semantic.immutable_input import key
+    return key(packet)
+
+
+def _semantic_stamp():
+    """Missing installations invalidate effects, not the disable/remove UI."""
+    from .sky_semantic.manifest import installation_stamp
+    try:
+        return installation_stamp(),None
+    except Exception as error:
+        return None,(type(error).__name__,str(error)[:2000])
+
+
+def _capture_semantic(engine,binding):
+    """Freeze canonical inference bytes, not the unwarped display locator.
+
+    An unavailable canonical input is retained as an explicit repair-only
+    error. Neither that error nor a disabled draft permits original-file ML.
+    """
+    from .creative_derived_sky import semantic_input
+    from .sky_semantic.immutable_input import check
+    try:
+        return check(semantic_input(engine),binding),None
+    except Exception as error:
+        return None,str(error)[:2000] or '不可变天空语义输入无法验证'
+
+
+def _semantic_transport(job):
+    """Enforce the source choice even if work() bypasses UI admission."""
+    packet=job.get('immutable_input');error=job.get('immutable_error')
+    if not job['source_proof']['derived']:
+        if packet is not None or error is not None:
+            raise ValueError('原照片天空任务不能携带其他不可变来源')
+        return
+    if job['source_path'] is not None:
+        raise ValueError('不可变天空任务禁止使用原照片路径执行自动选区')
+    descriptor=job['raw'].get('semantic')
+    if descriptor is None:
+        if packet is not None or error is not None:
+            raise ValueError('手动天空任务不能保留其他自动选区输入')
+        return
+    from .sky_semantic.state import check as check_descriptor
+    descriptor=check_descriptor(descriptor)
+    if descriptor['source']!=job['binding']:
+        raise ValueError('天空自动选区属于另一份不可变来源')
+    if packet is not None:
+        from .sky_semantic.immutable_input import check
+        check(packet,job['binding'])
+        if error is not None:
+            raise ValueError('不可变天空输入不能同时成功与失败')
+    elif type(error) is not str or not 1<=len(error)<=2000:
+        raise ValueError('不可变天空任务缺少已捕获的输入证明或明确失败原因')
+
+
 def _job_key(job):
     return (_recipe_key(job['raw']),_recipe_key(job['binding']),_recipe_key(job['expected']),
             _recipe_key(job['asset_choices']),_asset_key(job['asset']),job['source_path'],
-            _recipe_key(job['source_proof']))
+            _recipe_key(job['source_proof']),_immutable_key(job.get('immutable_input')),
+            _recipe_key(job.get('immutable_error')),_recipe_key(job.get('semantic_stamp')))
+
+
+def _semantic_result(job,value,prepared):
+    if not job['source_proof']['derived']:
+        return
+    if value['semantic']!=job['raw'].get('semantic'):
+        raise ValueError('天空准备结果改变了已捕获的自动选区审核身份')
+    if not value['enabled'] or value['semantic'] is None:
+        return
+    from .sky_semantic.resolver import validate_input
+    validate_input(value['semantic'],job.get('immutable_input'))
+    if job.get('immutable_error') is not None or prepared.get('semantic_suspended') is not None:
+        raise ValueError('已启用的天空预览不能接受暂停的自动选区')
 
 
 def _prepared_key(prepared,value,shape):
@@ -153,16 +223,13 @@ def _stage_key(stage):
 
 def _work_owned(job,shape,stop):
     if _job_key(job)!=job['input_key']:raise ValueError('天空工作输入已不属于捕获的草稿')
-    # This fence belongs to the worker transport too, not only UI admission.
-    # A retained/stale semantic draft must never reach the physical-original
-    # resolver through work() or its disabled repair fallback.
-    if job['source_proof']['derived'] and job['raw'].get('semantic') is not None:
-        raise ValueError('当前不可变来源的自动天空选区尚无重放证明，请使用已审核的手动区域')
+    _semantic_transport(job)
     value,prepared,asset,issue,choice=SkyPreview.work(job,shape,stop)
     if _job_key(job)!=job['input_key']:raise ValueError('天空计算修改了其捕获输入')
     if job['source_proof']['derived']:
         from .creative_derived_sky import validate
         validate(value,job['binding'])
+    _semantic_result(job,value,prepared)
     prepared_key=_prepared_key(prepared,value,shape);_freeze_prepared(prepared)
     return {'input_key':job['input_key'],'value':value,'prepared':prepared,'prepared_key':prepared_key,
             'asset':asset,'asset_key':_asset_key(asset),'issue':issue,'accepted_choice':choice}
@@ -252,12 +319,21 @@ class SkyPreview:
         actual,_=capture_inputs(self.engine)
         if actual!=job['source_proof'] or _job_key(job)!=job['input_key']:
             raise ValueError('天空来源、已冻结草稿或素材选择身份变化，旧结果不可提交')
+        _semantic_transport(job)
+        if job['raw'].get('semantic') is not None:
+            if _semantic_stamp()!=job['semantic_stamp']:
+                raise ValueError('天空语义模型安装在审核期间变化，请重新预览')
+            if job['source_proof']['derived']:
+                packet,error=_capture_semantic(self.engine,job['binding'])
+                if _immutable_key(packet)!=_immutable_key(job.get('immutable_input')) or error!=job.get('immutable_error'):
+                    raise ValueError('天空自动选区的完整不可变来源或固定输入已变化')
 
     def verify_record(self,p):
         self.matching(p);record=self.record
         if (record is None or record['request']['preview_id']!=p.get('preview_id') or self.job or self.latest):
             raise ValueError('天空预览已经被新内容替代')
         self.verify_inputs(record)
+        _semantic_result(record,record['value'],record['prepared'])
         if (_prepared_key(record['prepared'],record['value'],(self.engine._vram.h,self.engine._vram.w))!=record['prepared_key']
                 or _stage_key(record['stage'])!=record['stage_key']
                 or _asset_key(record['resolved_asset'])!=record['resolved_asset_key']):
@@ -323,12 +399,19 @@ class SkyPreview:
                 validate(current,session['binding'])
             raw = S.editable(current) if viewing else deepcopy(mutation['draft'])
             validate_draft(self.engine,raw,session['binding'])
+            packet=immutable_error=semantic_stamp=None
+            if raw.get('semantic') is not None:
+                semantic_stamp=_semantic_stamp()
+                if session['source_proof']['derived']:
+                    packet,immutable_error=_capture_semantic(self.engine,session['binding'])
             if self.job:
                 self.job['stop'].set()
             self.record = None
             self.latest = {'request':deepcopy(p),'raw':raw,'viewing':viewing,
                            'binding':deepcopy(session['binding']),'asset':session['asset'],
-                           'source_path':session['path'],'expected':deepcopy(current['asset']),
+                           'source_path':None if session['source_proof']['derived'] else session['path'],
+                           'immutable_input':packet,'immutable_error':immutable_error,'semantic_stamp':semantic_stamp,
+                           'expected':deepcopy(current['asset']),
                            'asset_choices':deepcopy(session['asset_choices']),'source_image':session['source_image'],
                            'source_proof':deepcopy(session['source_proof'])}
             self.latest['input_key']=_job_key(self.latest)
@@ -339,7 +422,10 @@ class SkyPreview:
 
     @staticmethod
     def work(job,shape,stop):
+        _semantic_transport(job)
         raw,asset = job['raw'],job['asset']
+        semantic_inputs={'source_path':job['source_path'],'immutable_input':job.get('immutable_input'),
+                         'immutable_error':job.get('immutable_error')}
         path = raw.get('asset_path')
         choice = raw.get('asset_choice')
         if choice is not None:
@@ -362,7 +448,7 @@ class SkyPreview:
                 # Disabling a broken linked effect must remain possible without
                 # deleting its source-bound intent or replacing the missing asset.
                 value = S.from_editable(raw,job['binding'],expected)
-                return value,R.prepare(value,shape,source_path=job['source_path'],cancelled=stop.is_set),asset,None,accepted_choice
+                return value,R.prepare(value,shape,**semantic_inputs,cancelled=stop.is_set),asset,None,accepted_choice
             elif not explicitly_chosen and expected is None:
                 raise ValueError('新素材需要明确选择，不能悄悄替换路径')
             elif explicitly_chosen or asset is None or asset.binding != expected or B.file_stamp(path) != asset.stamp:
@@ -370,7 +456,7 @@ class SkyPreview:
                 if explicitly_chosen:
                     accepted_choice = (choice,deepcopy(asset.binding))
             value = S.from_editable(raw,job['binding'],asset.binding if asset else None)
-            prepared = R.prepare(value,shape,asset=asset,source_path=job['source_path'],cancelled=stop.is_set)
+            prepared = R.prepare(value,shape,asset=asset,**semantic_inputs,cancelled=stop.is_set)
         except InterruptedError:
             raise
         except Exception as error:
@@ -381,7 +467,7 @@ class SkyPreview:
             fallback['enabled'] = False
             fallback['asset_path'] = None
             value = S.from_editable(fallback,job['binding'],None)
-            prepared = R.prepare(value,shape,source_path=job['source_path'],cancelled=stop.is_set)
+            prepared = R.prepare(value,shape,**semantic_inputs,cancelled=stop.is_set)
         return value,prepared,asset,issue,accepted_choice
 
     def tick(self):
@@ -397,6 +483,7 @@ class SkyPreview:
                         raise ValueError('天空计算返回了其他草稿的输入证明')
                     value,prepared,asset,issue,accepted_choice=(outcome[name] for name in
                         ('value','prepared','asset','issue','accepted_choice'))
+                    _semantic_result(job,value,prepared)
                     prepared_key=outcome['prepared_key']
                     if (_prepared_key(prepared,value,(self.engine._vram.h,self.engine._vram.w))!=prepared_key
                             or _asset_key(asset)!=outcome['asset_key']):

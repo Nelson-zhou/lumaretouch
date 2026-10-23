@@ -13,6 +13,7 @@ from lumaretouch_engine import sky_replacement_state as S,sky_replacement_previe
 from lumaretouch_engine import sky_replacement_runtime as R,sky_replacement_assets as A
 from lumaretouch_engine import creative_sky_host as H,creative_derived_source as D,creative_derived_sky as C
 from lumaretouch_engine import local_mask_state as M
+from lumaretouch_engine.sky_semantic import immutable_input as I,manifest as SM,state as SS,resolver as SR
 
 SOURCE={'sha256':'a'*64,'width':8,'height':6}
 ASSET={'path':'/chosen-sky.png','sha256':'b'*64,'width':8,'height':6,
@@ -89,7 +90,9 @@ def fixture(monkeypatch):
     pipe=SimpleNamespace(h=6,w=8,device='cpu',src_f32=Tensor(np.full((1,3,6,8),.4,np.float32)),
                          has_background=lambda:False)
     engine=SimpleNamespace(_creative_base={'id':'returned-source'},_sky_replacement=S.empty(),_vram=pipe,
-        _doc_index=0,_docs=[{'path':'/physical-original.jpg'}],repair_key='repair-0',warp_key='warp-0',projection='projection-0')
+        _doc_index=0,_docs=[{'path':'/physical-original.jpg'}],repair_key='repair-0',warp_key='warp-0',projection='projection-0',
+        canonical_pixels=np.full((6,8,3),.4,np.float32),semantic_error=None,semantic_calls=[],
+        installation_stamp=('fixture',),installation_error=None)
     events=[];metadata={'document_id':'load','recipe_document_id':'recipe','recipe_revision':'0'}
     assets={ASSET['path']:A.SkyAsset(deepcopy(ASSET),np.full((6,8,3),128,np.uint8),STAMP)};reads=[];calculations=[]
     monkeypatch.setattr(D,'record',lambda e:e._creative_base)
@@ -121,11 +124,30 @@ def fixture(monkeypatch):
     monkeypatch.setattr(R,'stage_key',key);monkeypatch.setattr(C,'key',key)
     monkeypatch.setattr(C,'preview',lambda e,value=None:(None,e._vram.src_f32.array[0].transpose(1,2,0),
                                                        key(e,S.empty() if value is None else value)))
+    def semantic_input(e):
+        if e.semantic_error is not None:raise ValueError(e.semantic_error)
+        return I.from_pixels(e.canonical_pixels,SOURCE)
+    monkeypatch.setattr(C,'semantic_input',semantic_input)
+    def installation_stamp():
+        if engine.installation_error is not None:raise ValueError(engine.installation_error)
+        return engine.installation_stamp
+    monkeypatch.setattr(SM,'installation_stamp',installation_stamp)
     def prepare(value,shape,*,asset=None,**kwargs):
         calculations.append(deepcopy(value));S.ready(value)
-        assert value['semantic'] is None  # No physical-original semantic resolver.
+        assert kwargs.get('source_path') is None  # Never route this source through the original decoder.
+        suspended=None
+        if value['semantic'] is not None:
+            engine.semantic_calls.append({key:deepcopy(kwargs.get(key)) for key in
+                ('source_path','immutable_input','immutable_error')})
+            try:
+                if kwargs.get('immutable_error') is not None:raise ValueError(kwargs['immutable_error'])
+                SR.validate_input(value['semantic'],kwargs.get('immutable_input'))
+                SM.installation_stamp()
+            except ValueError as error:
+                if value['enabled']:raise
+                suspended=str(error)
         raw={name:np.zeros(shape,np.uint8) for name in (*S.REGIONS,'recovery')};raw['sky'][:2]=255
-        result={'value':deepcopy(value),'shape':shape,'raw_fields':raw,'fields':None,'semantic_suspended':None}
+        result={'value':deepcopy(value),'shape':shape,'raw_fields':raw,'fields':None,'semantic_suspended':suspended}
         if value['enabled']:
             result.update(fields={name:field.astype(np.float32)/255. for name,field in raw.items()},
                 asset=np.full((6,8,3),.4,np.float32),reflection=np.full((6,8,3),.4,np.float32),
@@ -270,7 +292,7 @@ def test_new_path_without_explicit_choice_is_not_committable(monkeypatch):
     assert not events[-1]['committable'] and events[-1]['validation_error']
 
 
-def test_semantic_draft_never_starts_worker_or_fallback_resolver(monkeypatch):
+def test_malformed_semantic_draft_never_starts_worker_or_fallback_resolver(monkeypatch):
     engine,owner,events,_,_,calculations=shown(monkeypatch);count=len(calculations)
     raw=draft();raw['semantic']={'unsupported':'must not reach original-photo resolver'}
     command=request(pid='3'*32,mutation={'action':'replace','target':'sky','draft':raw})
@@ -279,7 +301,7 @@ def test_semantic_draft_never_starts_worker_or_fallback_resolver(monkeypatch):
     assert owner.job is None and events[-1]['state']=='failed' and len(calculations)==count
 
 
-def test_worker_transport_independently_rejects_semantic_before_work(monkeypatch):
+def test_worker_transport_independently_rejects_malformed_semantic_before_work(monkeypatch):
     _,owner,_,_,_,calculations=shown(monkeypatch);count=len(calculations)
     owner.handle(request(pid='3'*32,mutation={'action':'replace','target':'sky','draft':draft()}))
     job=owner.job;job['raw']['semantic']={'stale':'unsupported proposal'}
@@ -308,7 +330,7 @@ def test_cancel_releases_stale_review_before_actual_source_checks(monkeypatch):
     assert [event['state'] for event in events]==['cancelled']
 
 
-def test_exact_host_only_admits_native_manual_review_route(monkeypatch):
+def test_exact_host_only_admits_native_review_protocol(monkeypatch):
     engine,owner,_,*_=reviewed(monkeypatch)
     H.require_command(engine,'sky_replacement',apply_request())
     H.require_command(engine,'sky_replacement_preview',request('presented',pid='3'*32))
@@ -330,3 +352,137 @@ def test_terminal_native_receipt_replays_without_live_source_or_review(monkeypat
     assert engine._sky_replacement_owner.cache['apply'][1] is receipt
     with pytest.raises(ValueError,match='different content'):
         H.require_command(engine,'sky_replacement',{**command,'preview_id':'6'*32})
+
+
+def semantic_draft(engine,*,enabled=True):
+    packet=C.semantic_input(engine)
+    raw=draft(enabled=enabled)
+    raw['semantic']=SS.check({'version':1,'domain':'source-normalized','source':deepcopy(SOURCE),
+        'model':SM.identity(),'host':{key:'fixture' for key in ('python','torch','torchvision','numpy','Pillow')},
+        'device':'cpu','input_sha256':packet['input_sha256'],'input_size':packet['input_size'],
+        'fields_sha256':{key:'c'*64 for key in SS.REGIONS},'regions':{'sky':.5}})
+    return raw
+
+
+def reviewed_semantic(monkeypatch):
+    state=shown(monkeypatch);engine,owner,events,*_=state
+    owner.handle(request(pid='3'*32,mutation={'action':'replace','target':'sky','draft':semantic_draft(engine)}))
+    complete(owner);owner.handle(request('presented',pid='3'*32))
+    assert events[-1]['state']=='presented'
+    return state
+
+
+def test_semantic_job_freezes_canonical_packet_not_locator_or_original(monkeypatch):
+    engine,owner,events,*_=shown(monkeypatch)
+    engine.canonical_pixels[:]=.75  # Distinguish the full-source transport from the display locator.
+    raw=semantic_draft(engine)
+    owner.handle(request(pid='3'*32,mutation={'action':'replace','target':'sky','draft':raw}))
+    job=owner.job
+    assert job['source_path'] is None and job['immutable_error'] is None
+    assert I.key(job['immutable_input'])==I.key(C.semantic_input(engine))
+    locator=engine._vram.src_f32.array[0].transpose(1,2,0)
+    assert I.key(job['immutable_input'])!=I.key(I.from_pixels(locator,SOURCE))
+    complete(owner);owner.handle(request('presented',pid='3'*32))
+    value,_=owner.prepare(apply_request())
+    assert value['semantic']==raw['semantic'] and events[-1]['state']=='presented'
+    assert engine.semantic_calls and all(call['source_path'] is None for call in engine.semantic_calls)
+
+
+@pytest.mark.parametrize('mutate',[
+    lambda job:job.update(source_path='/physical-original.jpg'),
+    lambda job:job.update(immutable_input=None,immutable_error=None),
+])
+def test_valid_semantic_worker_rejects_missing_or_dual_source_proof(monkeypatch,mutate):
+    engine,owner,_,_,_,calculations=shown(monkeypatch)
+    owner.handle(request(pid='3'*32,mutation={'action':'replace','target':'sky','draft':semantic_draft(engine)}))
+    job=owner.job;mutate(job);job['input_key']=P._job_key(job);count=len(calculations)
+    with pytest.raises(ValueError):P._work_owned(job,(6,8),SimpleNamespace(is_set=lambda:False))
+    with pytest.raises(ValueError):P.SkyPreview.work(job,(6,8),SimpleNamespace(is_set=lambda:False))
+    assert len(calculations)==count
+
+
+def test_canonical_capture_failure_keeps_disabled_semantic_repair(monkeypatch):
+    engine,owner,events,*_=shown(monkeypatch);raw=semantic_draft(engine)
+    engine.semantic_error='Canonical source unavailable; no original fallback'
+    owner.handle(request(pid='3'*32,mutation={'action':'replace','target':'sky','draft':raw}));complete(owner)
+    assert events[-1]['state']=='ready' and not events[-1]['committable'] and events[-1]['validation_error']
+    assert owner.record['prepared']['semantic_suspended']==engine.semantic_error
+    owner.handle(request('presented',pid='3'*32))
+    raw['enabled']=False;raw['asset_choice']=None
+    owner.handle(request(pid='5'*32,mutation={'action':'replace','target':'sky','draft':raw}));complete(owner)
+    assert events[-1]['committable'] and events[-1]['result']['semantic_suspended']==engine.semantic_error
+    owner.handle(request('presented',pid='5'*32));value,_=owner.prepare(apply_request(pid='5'*32))
+    assert not value['enabled'] and value['semantic']==raw['semantic'] and value['asset']==ASSET
+    assert all(call['source_path'] is None for call in engine.semantic_calls)
+
+
+def test_stale_model_descriptor_remains_disableable_without_original_fallback(monkeypatch):
+    engine,owner,events,*_=shown(monkeypatch);raw=semantic_draft(engine,enabled=False)
+    raw['semantic']['model']['revision']='f'*40
+    owner.handle(request(pid='3'*32,mutation={'action':'replace','target':'sky','draft':raw}));complete(owner)
+    assert events[-1]['state']=='ready' and events[-1]['committable']
+    assert events[-1]['result']['semantic_suspended']
+    owner.handle(request('presented',pid='3'*32));value,_=owner.prepare(apply_request())
+    assert not value['enabled'] and value['semantic']==raw['semantic']
+
+
+def test_missing_installation_keeps_view_and_explicit_disable_available(monkeypatch):
+    engine,owner,events,*_=shown(monkeypatch);raw=semantic_draft(engine)
+    engine.installation_error='The pinned model installation is missing'
+    engine._sky_replacement=S.from_editable(raw,SOURCE,ASSET)
+    owner.handle(request(pid='3'*32));complete(owner)
+    assert events[-1]['state']=='ready' and not events[-1]['committable']
+    assert events[-1]['result']['semantic_suspended']==engine.installation_error
+    owner.handle(request('presented',pid='3'*32))
+    raw['enabled']=False;raw['asset_choice']=None
+    owner.handle(request(pid='5'*32,mutation={'action':'replace','target':'sky','draft':raw}));complete(owner)
+    assert events[-1]['committable'] and events[-1]['result']['semantic_suspended']==engine.installation_error
+    owner.handle(request('presented',pid='5'*32));value,_=owner.prepare(apply_request(pid='5'*32))
+    assert not value['enabled'] and value['semantic']==raw['semantic']
+    assert all(call['source_path'] is None for call in engine.semantic_calls)
+
+
+def test_enabled_proposal_input_mismatch_is_repairable_but_not_committable(monkeypatch):
+    engine,owner,events,*_=shown(monkeypatch);raw=semantic_draft(engine)
+    raw['semantic']['input_sha256']='f'*64
+    owner.handle(request(pid='3'*32,mutation={'action':'replace','target':'sky','draft':raw}));complete(owner)
+    assert events[-1]['state']=='ready' and not events[-1]['committable']
+    assert events[-1]['validation_error'] and owner.record['prepared']['semantic_suspended']
+    assert all(call['source_path'] is None for call in engine.semantic_calls)
+
+
+def test_worker_cannot_substitute_another_proposal_with_the_same_input(monkeypatch):
+    engine,owner,events,*_=shown(monkeypatch)
+    original=P.SkyPreview.work
+    def substituted(job,shape,stop):
+        value,prepared,asset,issue,choice=original(job,shape,stop)
+        value['semantic']['fields_sha256']['sky']='d'*64
+        prepared['value']=deepcopy(value)
+        return value,prepared,asset,issue,choice
+    monkeypatch.setattr(P.SkyPreview,'work',staticmethod(substituted))
+    owner.handle(request(pid='3'*32,mutation={'action':'replace','target':'sky','draft':semantic_draft(engine)}))
+    complete(owner)
+    assert owner.record is None and events[-1]['state']=='failed'
+
+
+@pytest.mark.parametrize('mutate',[
+    lambda e:setattr(e,'canonical_pixels',np.full((6,8,3),.7,np.float32)),
+    lambda e:setattr(e,'installation_stamp',('removed',)),
+])
+def test_semantic_ready_rechecks_full_source_and_installation(monkeypatch,mutate):
+    engine,owner,events,*_=shown(monkeypatch)
+    owner.handle(request(pid='3'*32,mutation={'action':'replace','target':'sky','draft':semantic_draft(engine)}))
+    owner.job['future'].complete();mutate(engine);owner.tick()
+    assert owner.record is None and events[-1]['state']=='failed'
+
+
+@pytest.mark.parametrize('mutate',[
+    lambda e,o:e.canonical_pixels.__setitem__((0,0,0),.7),
+    lambda e,o:setattr(e,'installation_stamp',('removed',)),
+    lambda e,o:o.record['immutable_input'].__setitem__('pixels',b'broken'),
+    lambda e,o:o.record['value']['semantic']['regions'].__setitem__('sky',.9),
+])
+def test_semantic_presented_and_apply_recheck_packet_and_proposal(monkeypatch,mutate):
+    engine,owner,_,*_=reviewed_semantic(monkeypatch);mutate(engine,owner)
+    with pytest.raises(ValueError):owner.verify_record(request('presented',pid='3'*32))
+    with pytest.raises(ValueError):owner.prepare(apply_request())

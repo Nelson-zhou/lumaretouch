@@ -54,29 +54,37 @@ def host_identity():
 def prepare_image(source, processor):
     """Bounded semantic input only. Original 16-bit working pixels stay intact."""
     import numpy as np
-    from PIL import Image
-    if source.dtype not in (np.uint8, np.uint16) or source.ndim != 3 or source.shape[2] != 3:
+    from .immutable_input import prepare_rgb8, target_size
+    if (not isinstance(source, np.ndarray) or source.dtype not in (np.uint8, np.uint16)
+            or source.ndim != 3 or source.shape[2] != 3):
         raise ValueError('自动选区需要真实工作色域 RGB8/RGB16 源图')
+    target_size(int(source.shape[1]), int(source.shape[0]))
     if source.dtype == np.uint16:
         rgb = np.empty(source.shape, np.uint8)
         for y in range(0, source.shape[0], 128):
             rgb[y:y + 128] = ((source[y:y + 128].astype(np.uint32) + 128) // 257).astype(np.uint8)
     else:
         rgb = source
-    h, w = rgb.shape[:2]
-    # Same shortest/longest-edge policy as the official processor, with an
-    # explicit 1024 long-edge admission contract rather than its default 2048.
-    scale = min(512 / min(h, w), 1024 / max(h, w))
-    target = (max(1, int(w * scale)), max(1, int(h * scale)))
-    image = Image.fromarray(rgb).resize(target, Image.Resampling.BILINEAR)
-    pixels = np.asarray(image, dtype=np.uint8).copy()
-    if pixels.shape[0] * pixels.shape[1] > M.MAX_MASK_PIXELS:
-        raise ValueError('自动选区输入超过明确的推理预算')
-    digest = hashlib.sha256(M.CONTRACT.encode() + b'\0' + str(target).encode() + pixels.tobytes()).hexdigest()
-    return pixels, digest
+    return prepare_rgb8(rgb)
 
 
-def predict(source, device, *, installation=None):
+def prepare_input(source, *, immutable_input=None):
+    """Exclusive decoded-source or already-preprocessed canonical transport."""
+    from . import immutable_input as I
+    if immutable_input is not None:
+        if source is not None:
+            raise ValueError('自动选区不能同时使用解码源与规范输入包')
+        packet = I.check(immutable_input)
+        return I.array(packet), packet['input_sha256'], packet
+    if source is None:
+        raise ValueError('自动选区缺少真实输入源')
+    pixels, digest = prepare_image(source, None)
+    return pixels, digest, None
+
+
+def predict(source, device, *, installation=None, immutable_input=None):
+    # Validate before model loading; a prepared packet never visits a resizer.
+    pixels, digest, packet = prepare_input(source, immutable_input=immutable_input)
     root = installation if installation is not None else activate()[0]
     runtime = host_identity()
     import numpy as np
@@ -102,7 +110,6 @@ def predict(source, device, *, installation=None):
             or len(data.get('id2label', {})) != 150
             or any(data['id2label'].get(k) != label for k, label in lock['class_labels'].items())):
         raise ValueError('官方模型类别或结构身份不符合固定语义任务')
-    pixels, digest = prepare_image(source, processor)
     config = OneFormerConfig.from_dict(data)
     # Explicit built-in class construction, no AutoModel/from_pretrained or
     # remote-code execution. This sets the equivalent trust boundary to false.
@@ -164,7 +171,11 @@ def predict(source, device, *, installation=None):
         for key, ids in lock['classes'].items():
             fields[key] = (np.isin(labels, ids).astype(np.uint8) * 255)
             supports[key] = ((support[key] / total.clamp_min(1e-12)).clamp(0, 1) * 255).round().to(torch.uint8).cpu().numpy()
-    return {'fields': fields, 'supports': supports, 'input_sha256': digest,
-            'input_size': [pixels.shape[1], pixels.shape[0]], 'model': M.identity(),
-            'host': runtime, 'device': device, 'pixels': pixels,
-            'confidence_note': '类别支持度是未校准的相对分数，不是正确率。'}
+    result = {'fields': fields, 'supports': supports, 'input_sha256': digest,
+              'input_size': [pixels.shape[1], pixels.shape[0]], 'model': M.identity(),
+              'host': runtime, 'device': device, 'pixels': pixels,
+              'confidence_note': '类别支持度是未校准的相对分数，不是正确率。'}
+    if packet is not None:
+        from .immutable_input import metadata
+        result['_immutable_input'] = metadata(packet)
+    return result

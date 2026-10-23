@@ -1,13 +1,14 @@
-"""Exact manual sky-review admission on an immutable returned source.
+"""Exact sky-review admission on an immutable returned source.
 
-This does not admit automatic proposals, presets, batch commands or arbitrary
-background tools. Native receipt, transaction, rollback and history owners keep
+This does not admit presets, batch commands or arbitrary background tools.
+Automatic proposals remain draft-only and require the final output review.
+Native receipt, transaction, rollback and history owners keep
 their existing authority; this guard only proves the exact LIVE review route.
 """
 from hashlib import sha256
 import json
 
-COMMANDS=frozenset(('sky_replacement','sky_replacement_preview'))
+COMMANDS=frozenset(('sky_replacement','sky_replacement_preview','sky_semantic'))
 _PREVIEW={'cmd','action','preview_id','session_id','document_id'}
 _APPLY=_PREVIEW|{'request_id'}
 
@@ -22,6 +23,8 @@ def require_command(engine,name,request):
     from .sky_replacement_preview import ident,validate_draft
     if name not in COMMANDS or type(request) is not dict or request.get('cmd')!=name:
         raise ValueError('Unknown derived sky command')
+    if name=='sky_semantic':
+        return require_semantic(engine,request)
     action=request.get('action')
     fields=_APPLY if name=='sky_replacement' else _PREVIEW|({'mutation'} if action=='preview' else set())
     actions=('apply',) if name=='sky_replacement' else ('preview','presented','cancel')
@@ -63,3 +66,34 @@ def require_command(engine,name,request):
     if owner is None:raise ValueError('Derived sky review is no longer available')
     if action=='presented':owner.verify_record(request)
     else:owner.prepare(request)  # Read-only; the native apply owner consumes it.
+
+
+def require_semantic(engine,request):
+    """Admit only the existing native proposal lifecycle, never an edit."""
+    from . import creative_derived_source as D,creative_derived_sky as C,sky_replacement_state as S
+    from .sky_replacement_preview import ident
+    fields={'cmd','action','request_id','document_id','session_id','run_id'}
+    extras={'start':{'device'},'cancel':set(),'shown':{'proposal_id','region'},
+            'accept':{'proposal_id','regions'}}
+    action=request.get('action')
+    if action not in extras or set(request)!=fields|extras[action]:
+        raise ValueError('Derived automatic sky requires its exact native proposal envelope')
+    for key in ('request_id','session_id','run_id'):ident(request[key])
+    _identity(request['document_id'])
+    if action=='cancel':return
+    if D.record(engine) is None:raise ValueError('Automatic sky admission requires its immutable source')
+    C.preview(engine,S.empty())
+    owner=engine.__dict__.get('_sky_replacement_preview_owner')
+    if owner is None or not owner.matching(request)['shown']:
+        raise ValueError('Present the current sky locator before automatic selection')
+    if action=='start':
+        if request['device'] not in ('cpu','cuda') or request['request_id']!=request['run_id']:
+            raise ValueError('Automatic sky requires an explicit device and exact run identity')
+        C.semantic_input(engine)
+    else:
+        ident(request['proposal_id'])
+        semantic=engine.__dict__.get('_sky_semantic_owner')
+        binding={key:request[key] for key in ('document_id','session_id','run_id')}
+        if semantic is None or semantic.binding!=binding:
+            raise ValueError('Automatic sky proposal source session changed')
+        semantic.owner.matching(request['proposal_id'])

@@ -1,0 +1,180 @@
+{
+  "baseline": "e3dfe7b79c09f467f732fed52c52713678fdd5f2",
+  "scope": "M14 canonical OneFormer derived-source transport, reviewed automatic sky proposals and strict replay, explicit verified offline installation namespace migration",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "files": [
+    {
+      "path": "docs/creative-layers/DERIVED-AUTOMATIC-SKY.md",
+      "sha256": "1d19a63faafc562f8b7aa30b06d4093d670c483c250c03abba733dc4597ffc5f",
+      "bytes": 8734
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-SKY-REPLACEMENT.md",
+      "sha256": "62be304ae198066e93b583625ae71f96cd496a3f25d0f5233e63e5fb355d2f4a",
+      "bytes": 6923
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_sky.py",
+      "sha256": "7e2a1b9257cdb77265b825321ce18e53d7751a7b58cf7e80561b220d5bcfbd4c",
+      "bytes": 13520
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "8f48774a1b53f8f67ff036780ebdae4435d51a0ab5e2c4509456d7e08c121676",
+      "bytes": 24476
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_sky_host.py",
+      "sha256": "b52c41ba50f7e3b0295ae0feaa9e8fbce8578cc94cb4179473f8b62d8d581c50",
+      "bytes": 5619
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_preview.py",
+      "sha256": "139b009c940a90bb18507920de99d636e2f3c024ce0ec45d1b54777f1ef0b70a",
+      "bytes": 31486
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_replacement_runtime.py",
+      "sha256": "2a58dd11bedb1dc741fda02ef102d8d8e9a8c9d4dd8b1727d4a1653eb66403c5",
+      "bytes": 18129
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/controller.py",
+      "sha256": "17072b4dc6ba756049cb8ea189471105fc29c96082072f45e3272c04dd4139bd",
+      "bytes": 5283
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/immutable_input.py",
+      "sha256": "f336c763b62a0c89621deed6f5741b5750fb4d2234c79cf5b1f594b9fc6365b9",
+      "bytes": 9431
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/install.py",
+      "sha256": "0c7f8d90645124d86860d6ca6904462022d6abfdf1d945ae95b1617609d6846d",
+      "bytes": 13667
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/job.py",
+      "sha256": "f4c5ff3d21434db8f9befe862204f5b5a93cb7567a7d2ed1f0b145b1b23e0dfa",
+      "bytes": 4513
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/manifest.py",
+      "sha256": "07d3d4fe53e220ca731e6b74298ad304fcde9c6b1c7ee17b1633f1d42ec05a9e",
+      "bytes": 10664
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/migration.py",
+      "sha256": "2ffc419ee8a503296e5118642c8af341620f4c307322b549d66401930c8a6206",
+      "bytes": 11488
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/predict.py",
+      "sha256": "6d6149abdee5fc74825ecd3261c0ab2fdd3d3681404997d40827638e81878f14",
+      "bytes": 9993
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/resolver.py",
+      "sha256": "9b5249b8cab863e27ba8fa630055693d9abea2ab02e7629411982d3d6f89b79a",
+      "bytes": 10805
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/review.py",
+      "sha256": "b87d45a1f8a1e74762c199add20a27d1d1f4481b5c5c1a8a1133c5c0283ea06a",
+      "bytes": 8051
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sky_semantic/worker.py",
+      "sha256": "9bae99f6d8978cfd22febcfec7f728b96c2ee9b0b8fea2dedf927b58c087a36a",
+      "bytes": 4326
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_sky_live.py",
+      "sha256": "2f3630393debd20afd695b00e8fea8307f35d0472fff98ea270680c6ed79e19e",
+      "bytes": 27040
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_sky_proofs.py",
+      "sha256": "caac8b09aabf2031c8e915dbc6cdbf3f15158dd76f9a9483487494ece3331546",
+      "bytes": 16386
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_sky_semantic_review.py",
+      "sha256": "5ff9dd7f2b997ec7bbbe4b78f3a81c79a43730136f58f8dbe9cbb7c357f24315",
+      "bytes": 18220
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_sky_semantic_runtime.py",
+      "sha256": "7fad92fd2ef3a74d13928599bf68522e4d853cf0ce5e1af5c38ca46735ecc4e6",
+      "bytes": 10783
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_sky_immutable_packet.py",
+      "sha256": "b374d491269cdb5d5b11946f3734571d706fbe21b63be1abc5d90e8d2515071d",
+      "bytes": 9064
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_sky_immutable_transport.py",
+      "sha256": "7d3777bd2fbc5b37949072a9bcd96f6d3af2eddff68c1387e1e308ffa46c6c1f",
+      "bytes": 9499
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_sky_semantic_migration.py",
+      "sha256": "f88170fd62e209e11690e8f9a15266546a71ab29b90a50c0ded178158d0f95cb",
+      "bytes": 14668
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_sky_semantic_source_owner.py",
+      "sha256": "1730e0179a0aea8fb4ec9b6fd6ddf845bb929ae2a2773a899d1182b6c619e25a",
+      "bytes": 4347
+    },
+    {
+      "path": "ui/src-tauri/src/sky_semantic_model_api.rs",
+      "sha256": "76a23429627e2bf2b205ea5e533f70e1dfeafa6d1a3a9d7798d9cb22c128f508",
+      "bytes": 8141
+    },
+    {
+      "path": "ui/src/skySemantic/SkySemanticPanel.tsx",
+      "sha256": "0ac7f52ed13f3f2755f189dd785d2ca1406ca5c737546be7bfb4eb4b3bceca15",
+      "bytes": 13564
+    },
+    {
+      "path": "ui/src/skySemantic/model.ts",
+      "sha256": "89cd6b5f8dd83a19812f86b677b18ea4b7fa82b2460e837e41ea24da369b17cc",
+      "bytes": 2138
+    },
+    {
+      "path": "ui/src/skySemantic/ports.ts",
+      "sha256": "734073fa3934c8c4924d91ded4b3a1d54fd5bf7a3da431137ee8756655336b79",
+      "bytes": 4205
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 23,
+    "line_counts": {
+      "ui/src/App.tsx": 2096,
+      "ui/src-tauri/src/main.rs": 2015,
+      "engine/src/lumaretouch_engine/server.py": 6964
+    },
+    "fixture_functions": 121,
+    "fixture_counts": {
+      "engine/tests/fixtures/creative_layers/test_derived_sky_live.py": 27,
+      "engine/tests/fixtures/creative_layers/test_derived_sky_proofs.py": 18,
+      "engine/tests/fixtures/creative_layers/test_derived_sky_semantic_review.py": 15,
+      "engine/tests/fixtures/creative_layers/test_derived_sky_semantic_runtime.py": 12,
+      "engine/tests/fixtures/creative_layers/test_sky_immutable_packet.py": 14,
+      "engine/tests/fixtures/creative_layers/test_sky_immutable_transport.py": 11,
+      "engine/tests/fixtures/creative_layers/test_sky_semantic_migration.py": 17,
+      "engine/tests/fixtures/creative_layers/test_sky_semantic_source_owner.py": 7
+    },
+    "fixtures": "AUTHORED / UNRUN; includes modified prior fixtures; parametrizations not executed",
+    "whitespace": "git diff --check clean"
+  },
+  "residuals": [
+    "ID-background masks, prompted artifacts, picker modes and separate stage still require effective-source integration",
+    "Legacy/common background recovery and cross-image shared transfer remain guarded pending target-owned analysis/review",
+    "Transparent, signed and HDR returned sources explicitly refused by portrait RGB path; no clipping/flattening",
+    "Offline migration permits only exact e3dfe7b7 predecessor inventory; older reviewed descriptors remain stale and require regeneration/review",
+    "No product execution, imports, builds, typecheck, inference, model downloads, installation, visual/memory/latency or runtime acceptance performed"
+  ]
+}

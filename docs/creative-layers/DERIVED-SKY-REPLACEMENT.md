@@ -35,6 +35,8 @@ Official URL: https://www.pixcakeai.com/guide/32476 . The live read on 2026-10-2
 
 ## Automatic sky semantic work remains separate
 
+Historical boundary for this manual-sky freeze: the subsequent source-only automatic integration and installation migration are documented in `DERIVED-AUTOMATIC-SKY.md`. The following describes what this earlier snapshot intentionally left guarded, not a claim that later source integration has been runtime-tested.
+
 Automatic OneFormer proposals are still explicitly refused for derived sources, including retained semantic descriptors. Original-photo automatic support remains unchanged. This avoids borrowing original masks under a new source hash.
 
 The complete next dependency chain is `sky_semantic/controller`, `review`, `job`, `worker`, `resolver`, runtime raster/prepare and full-source export. It needs a dedicated immutable model-input packet derived from canonical floats, with actual source/input/transform proofs and exact reviewed-result replay. OneFormer owns a 512-short/1024-long bilinear transform, not the existing SAM/arm 2048-edge Lanczos transform. Merely reusing that packet would change model pixels.

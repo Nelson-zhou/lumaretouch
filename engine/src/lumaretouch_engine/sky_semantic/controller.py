@@ -9,11 +9,28 @@ class SemanticController:
     def __init__(self, engine, emit):
         self.engine, self.emit = engine, emit
         self.binding = None
-        self.owner = SemanticReview(self.context, self.proposal_event)
+        self.owner = SemanticReview(self.context, self.proposal_event, self.current_input)
 
     def context(self):
         from ..sky_replacement_preview import context
         return context(self.engine)
+
+    def current_input(self):
+        """Use the effective source owner, never relabel the physical original.
+
+        The locator remains display-only. A returned creative source supplies
+        its independently captured canonical inference packet instead of the
+        original pathname or the current RGB8 display/analysis proxy.
+        """
+        from ..sky_replacement_preview import controller
+        from ..creative_derived_source import record
+        session = controller(self.engine, self.emit).matching(self.binding)
+        source = deepcopy(session['binding'])
+        if record(self.engine) is None:
+            return session['path'], source, None
+        from ..creative_derived_sky import semantic_input
+        from .immutable_input import check
+        return None, source, check(semantic_input(self.engine), source)
 
     def proposal_event(self, value):
         if self.binding is not None:
@@ -50,8 +67,12 @@ class SemanticController:
                     reason = self.engine._guard_editable('sky semantic proposal')
                     if reason:
                         raise ValueError(reason)
+                    # Even a failed new capture must not expose the previous
+                    # proposal or shown acknowledgements under this new run.
+                    self.owner.cancel()
                     self.binding = binding
-                    result.update(self.owner.start(session['path'], deepcopy(session['binding']), command['device']), success=True)
+                    path, source, packet = self.current_input()
+                    result.update(self.owner.start(path, source, command['device'], immutable_input=packet), success=True)
                 elif action == 'shown':
                     self.owner.acknowledge(command['proposal_id'], command['region'])
                     result.update(success=True, state='shown')

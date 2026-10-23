@@ -119,9 +119,10 @@ def automatic():
 def test_automatic_proposals_never_rebind_to_the_physical_original(monkeypatch,active):
     bind_source(monkeypatch)
     value=recipe(active=active);value['semantic']=automatic()
-    with pytest.raises(ValueError,match='no immutable-source replay proof'):C.validate(value,SOURCE)
-    with pytest.raises(ValueError,match='no immutable-source replay proof'):
-        C.validate_state({'creative_base':object(),'sky_replacement':value})
+    assert C.validate(value,SOURCE)==value
+    assert C.validate_state({'creative_base':object(),'sky_replacement':value})==value
+    wrong=deepcopy(value);wrong['semantic']['source']['sha256']='2'*64
+    with pytest.raises(ValueError):C.validate(wrong,SOURCE)
     assert value['semantic'] is not None
     # An ordinary original photo retains its existing semantic contract.
     monkeypatch.setattr(D,'record',lambda owner:None)

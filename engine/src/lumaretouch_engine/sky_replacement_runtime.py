@@ -8,7 +8,8 @@ from .ops import sky_replacement as O
 from .sky_replacement_stage import SkyReplacementStage
 
 
-def raster(value, shape, *, source_path=None, force_semantic=False, cancelled=lambda: False):
+def raster(value, shape, *, source_path=None, immutable_input=None, immutable_error=None,
+           force_semantic=False, cancelled=lambda: False):
     value = S.check(value)
     S.validate_budget(value, shape)
     from .cpu_memory_budget import available_estimate
@@ -18,9 +19,16 @@ def raster(value, shape, *, source_path=None, force_semantic=False, cancelled=la
     from .sky_semantic import resolver as semantic
     proposal = None
     if value['semantic'] is not None:
-        if source_path is None:
-            raise ValueError('自动选区缺少其原照片路径；不会使用显示代理代替')
-        proposal = semantic.resolve(value['semantic'], source_path, force=force_semantic, cancelled=cancelled)
+        if immutable_input is not None and source_path is not None:
+            raise ValueError('自动选区不能同时使用不可变像素与原照片路径')
+        if immutable_error is not None:
+            if immutable_input is not None or source_path is not None:
+                raise ValueError('不可变天空输入失败后不能切换为其他来源')
+            raise ValueError(immutable_error)
+        if source_path is None and immutable_input is None:
+            raise ValueError('自动选区缺少已验证的原照片路径或完整不可变像素；不会使用显示代理代替')
+        proposal = semantic.resolve(value['semantic'], source_path, immutable_input=immutable_input,
+                                    force=force_semantic, cancelled=cancelled)
     fields = {}
     for key, stack in [*value['regions'].items(), ('recovery', value['recovery'])]:
         if cancelled():
@@ -42,12 +50,14 @@ def raster(value, shape, *, source_path=None, force_semantic=False, cancelled=la
     return fields
 
 
-def prepare(value, shape, *, asset=None, source_path=None, force_semantic=False, cancelled=lambda: False):
+def prepare(value, shape, *, asset=None, source_path=None, immutable_input=None, immutable_error=None,
+            force_semantic=False, cancelled=lambda: False):
     value = S.check(value)
     S.ready(value)
     semantic_suspended = None
     try:
-        raw = raster(value, shape, source_path=source_path, force_semantic=force_semantic, cancelled=cancelled)
+        raw = raster(value, shape, source_path=source_path, immutable_input=immutable_input,
+                     immutable_error=immutable_error, force_semantic=force_semantic, cancelled=cancelled)
     except InterruptedError:
         raise
     except Exception as error:
@@ -103,13 +113,13 @@ def verified_value(engine, value):
 
 
 def stage_key(engine, value):
-    if getattr(engine,"_creative_base",None) is not None:
-        from .creative_derived_sky import key
-        return key(engine,value)
-    row = engine._docs[engine._doc_index]
-    asset = value['asset']
     from .sky_semantic.manifest import installation_stamp
     semantic_stamp = installation_stamp() if value['semantic'] and value['enabled'] else None
+    if getattr(engine,"_creative_base",None) is not None:
+        from .creative_derived_sky import key
+        return key(engine,value),semantic_stamp
+    row = engine._docs[engine._doc_index]
+    asset = value['asset']
     return (semantic_stamp, json.dumps(value,sort_keys=True), B.file_stamp(row['path']) if value['enabled'] else None, id(engine._vram.src_f32),
             getattr(engine._vram,'deform_version',None), tuple(sorted(engine._vram.deform_amounts.items())),
             B.file_stamp(asset['path']) if asset and value['enabled'] else None)
@@ -123,17 +133,30 @@ def sync(engine, *, strict=False):
     key = None
     try:
         key = stage_key(engine,value)
+        derived = getattr(engine,'_creative_base',None) is not None
+        source_path = None if derived else engine._docs[engine._doc_index]['path']
+        packet = None
+        if derived and value['enabled'] and value['semantic'] is not None:
+            from .creative_derived_sky import semantic_input
+            from .sky_semantic.immutable_input import key as packet_key
+            from .sky_semantic.resolver import validate_input
+            packet = semantic_input(engine)
+            validate_input(value['semantic'],packet)
+            input_key = packet_key(packet)
         if getattr(pipe,'_sky_replacement_key',None) == key:
             if strict and value['enabled'] and value['semantic']:
                 from .sky_semantic.resolver import resolve
-                resolve(value['semantic'], engine._docs[engine._doc_index]['path'], force=True)
+                resolve(value['semantic'], source_path, immutable_input=packet, force=True)
+                if stage_key(engine,value)!=key or packet is not None and packet_key(semantic_input(engine))!=input_key:
+                    raise ValueError('天空来源或语义安装在严格重放期间变化')
             if strict and pipe.sky_replacement.suspended:
                 raise ValueError(pipe.sky_replacement.suspended)
             return
         if value["enabled"]: verified_value(engine,value)
         stage = SkyReplacementStage(pipe.device,(pipe.h,pipe.w))
-        stage.set(value,prepare(value,(pipe.h,pipe.w),source_path=engine._docs[engine._doc_index]['path'],force_semantic=strict) if value['enabled'] else None)
-        if getattr(engine,'_creative_base',None) is not None and stage_key(engine,value)!=key:
+        stage.set(value,prepare(value,(pipe.h,pipe.w),source_path=source_path,immutable_input=packet,
+                                force_semantic=strict) if value['enabled'] else None)
+        if derived and (stage_key(engine,value)!=key or packet is not None and packet_key(semantic_input(engine))!=input_key):
             raise ValueError('Derived sky source or asset changed during stage preparation')
         pipe.sky_replacement,pipe._sky_replacement_key = stage,key
     except Exception as error:
@@ -151,7 +174,7 @@ def report(engine):
             'asset': value['asset'], 'suspended': getattr(stage,'suspended',None),
             'automatic_detection': value['semantic'] is not None, 'semantic_optional': True, 'working_color': 'encoded-srgb',
             'bytes': stage.resident_bytes() if stage else 0,
-            'boundaries': [('回流图当前支持独立手动标记；自动天空模型的不可变输入与审核重放尚未适配，不能借用原图选区' if getattr(engine,'_creative_base',None) is not None else '可选本地语义模型提出天空、人物和水面选区；必须逐区域检查，可叠加画笔修正。模型缺失时仍可独立手动标记'),
+            'boundaries': [('回流图自动选区仅使用当前不可变来源的完整像素生成固定推理输入；逐区域审核后才能应用，导出严格重放，不借用原照片或显示代理' if getattr(engine,'_creative_base',None) is not None else '可选本地语义模型提出天空、人物和水面选区；必须逐区域检查，可叠加画笔修正。模型缺失时仍可独立手动标记'),
                 '人物/景物 -100 保留换天空前对应色彩；0 有基础氛围映射，正向增强',
                 '素材由你提供，项目引用原件；缺失或 SHA-256 改变会暂停效果与导出',
                 '恢复只撤回换天空、其氛围和水面反射，不撤回其他调色、修补或液化',
@@ -196,6 +219,8 @@ def configure_export(spec,snap,shape,*,for_document):
     spec.sky_replacement_path = snap.get('sky_replacement_path')
     spec.sky_replacement_stamp = snap.get('sky_replacement_stamp')
     spec.sky_replacement_prepared = None
+    spec._sky_replacement_immutable_input = None
+    spec._sky_replacement_replay_key = None
     if snap.get("creative_base") is not None:
         from .creative_derived_sky import verify_snapshot as derived_verify
         derived_verify(snap,spec.sky_replacement_path,shape)
@@ -209,21 +234,40 @@ def configure_export(spec,snap,shape,*,for_document):
 def export_prepare(spec,shape,*,cancelled=lambda:False,source_pixels=None):
     value = S.check(spec.sky_replacement)
     spec.sky_replacement_prepared = None
+    spec._sky_replacement_immutable_input = None
+    spec._sky_replacement_replay_key = None
     if not value['enabled']:
         return
     before = B.file_stamp(spec.sky_replacement_path)
     if list(before) != spec.sky_replacement_stamp:
         raise ValueError('换天空源图在全尺寸解码之后变化')
-    if getattr(spec,"creative_base",None) is not None:
+    derived = getattr(spec,"creative_base",None) is not None
+    packet = None
+    semantic_stamp = None
+    if derived:
         from .creative_derived_sky import verify_export
         verify_export(spec,source_pixels)
         if tuple(shape)!=(value["source"]["height"],value["source"]["width"]):
             raise ValueError("Derived sky export requires its complete source grid")
+        if value['semantic'] is not None:
+            from .sky_semantic import immutable_input as I,manifest as M
+            packet = I.from_pixels(source_pixels,value['source'])
+            semantic_stamp = M.installation_stamp()
+            replay_key = (json.dumps(value,sort_keys=True),I.key(packet),semantic_stamp)
     else:B.verify_source(value,spec.sky_replacement_path,shape)
-    spec.sky_replacement_prepared = prepare(value,shape,source_path=spec.sky_replacement_path,force_semantic=True,cancelled=cancelled)
+    prepared = prepare(value,shape,source_path=None if derived else spec.sky_replacement_path,
+                       immutable_input=packet,force_semantic=True,cancelled=cancelled)
+    if derived:
+        verify_export(spec,source_pixels)
+        if packet is not None and (json.dumps(S.check(spec.sky_replacement),sort_keys=True),
+                I.key(packet),M.installation_stamp())!=replay_key:
+            raise ValueError('不可变天空输入、配方或模型安装在严格导出准备期间变化')
     if B.file_stamp(spec.sky_replacement_path) != before:
-        spec.sky_replacement_prepared = None
         raise ValueError('准备全尺寸换天空时源图变化')
+    spec.sky_replacement_prepared = prepared
+    if packet is not None:
+        spec._sky_replacement_immutable_input = packet
+        spec._sky_replacement_replay_key = replay_key
 
 
 def attach_tile(pipe,spec,window):
@@ -234,13 +278,24 @@ def attach_tile(pipe,spec,window):
 
 
 def finish_export(spec):
-    if not S.check(spec.sky_replacement)['enabled']:
+    value = S.check(spec.sky_replacement)
+    replay_key = getattr(spec,'_sky_replacement_replay_key',None)
+    if replay_key is not None and (not value['enabled'] or value['semantic'] is None
+            or getattr(spec,'creative_base',None) is None):
+        raise ValueError('不可变天空严格导出配方被移除或换源')
+    if not value['enabled']:
         return
     if B.file_stamp(spec.sky_replacement_path) != tuple(spec.sky_replacement_stamp):
         raise ValueError('换天空导出期间源照片发生变化')
     prepared = spec.sky_replacement_prepared
     if prepared is None or B.file_stamp(spec.sky_replacement['asset']['path']) != prepared['asset_stamp']:
         raise ValueError('换天空导出期间素材发生变化')
+    if getattr(spec,'creative_base',None) is not None and value['semantic'] is not None:
+        from .sky_semantic import immutable_input as I,manifest as M
+        packet = I.check(getattr(spec,'_sky_replacement_immutable_input',None),value['source'])
+        actual = (json.dumps(value,sort_keys=True),I.key(packet),M.installation_stamp())
+        if prepared['value']!=value or actual!=getattr(spec,'_sky_replacement_replay_key',None):
+            raise ValueError('不可变天空来源、审核配方或模型安装在导出期间变化')
 
 
 def render_proxy(engine, render, *, allow_suspended=True):

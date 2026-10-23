@@ -26,20 +26,34 @@ def overlay_png(labels):
 
 def run(root):
     from .predict import activate, predict
-    installation, _receipt = activate()
-    from ..prompted_mask_source import decode_source
+    from . import immutable_input as I
     from .state import source
-    raw = (root / 'request.json').read_bytes()
-    if len(raw) > 65536:
-        raise ValueError('自动选区请求超出预算')
+    raw = I.read_regular_bytes(root / 'request.json', 65536)
     request = json.loads(raw)
-    if set(request) != {'path', 'source', 'device'}:
+    original = {'path', 'source', 'device'}
+    derived = {'immutable_input', 'source', 'device'}
+    if type(request) is not dict or set(request) not in (original, derived):
         raise ValueError('自动选区请求字段无效')
     binding = source(request['source'])
-    pixels = decode_source(request['path'], binding, device='cpu')
-    result = predict(pixels, request['device'], installation=installation)
+    if request['device'] not in ('cpu', 'cuda'):
+        raise ValueError('自动选区计算设备无效')
+    if set(request) == original:
+        if type(request['path']) is not str or not request['path']:
+            raise ValueError('自动选区源文件路径无效')
+        packet = None
+    else:
+        packet = I.read_packet(root, request['immutable_input'], binding)
+    installation, _receipt = activate()
+    if packet is None:
+        from ..prompted_mask_source import decode_source
+        pixels = decode_source(request['path'], binding, device='cpu')
+        result = predict(pixels, request['device'], installation=installation)
+    else:
+        result = predict(None, request['device'], installation=installation, immutable_input=packet)
     result['source'] = binding
     result['source_image'] = 'data:image/png;base64,' + png(result.pop('pixels'))
+    if packet is not None:
+        I.validate_result(packet, result)
     fields, supports = result.pop('fields'), result.pop('supports')
     result['fields_sha256'] = {key: hashlib.sha256(fields[key].tobytes() + supports[key].tobytes()).hexdigest()
                                for key in fields}
@@ -78,7 +92,7 @@ def main():
         install_offline_policy()
         run(root)
     except Exception as error:
-        with (root / 'error.json').open('w') as output:
+        with (root / 'error.json').open('x') as output:
             json.dump({'error': str(error)[:2000]}, output, ensure_ascii=False)
         raise SystemExit(1)
 

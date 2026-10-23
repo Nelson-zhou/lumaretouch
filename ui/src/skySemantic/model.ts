@@ -13,13 +13,15 @@ export interface Proposal {
   proposal_only?: boolean; review_required?: boolean; horizon_automatic?: false;
 }
 export interface InstallStatus {
-  running: boolean; error?: string | null;
-  result: {state: string; installed?: boolean; error?: string; reason?: string; received?: number; total?: number;
+  running: boolean; action?: 'idle' | 'status' | 'install' | 'migrate'; error?: string | null;
+  result: {state: string; phase?: string; installed?: boolean; error?: string; reason?: string; received?: number; total?: number;
     download_bytes?: number; weight_bytes?: number; license?: string; license_url?: string;
+    migration_available?: boolean; migration_bytes?: number; migration_source_identity?: Record<string, string>;
+    migration_reason?: string; migrated?: boolean; requires_descriptor_review?: boolean; publication_warning?: string;
     runtime?: {name: string; version: string; license: string; source: string}[]};
 }
 export interface SemanticPorts {
-  model(action: 'status' | 'install' | 'cancel'): Promise<InstallStatus>;
+  model(action: 'status' | 'install' | 'migrate' | 'cancel'): Promise<InstallStatus>;
   pollModel(): Promise<InstallStatus>;
   start(device: 'cpu' | 'cuda'): Promise<{proposal_id: string}>;
   cancel(): Promise<unknown>;

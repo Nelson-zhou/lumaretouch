@@ -105,11 +105,15 @@ def download(item, path, done, total):
     return done + count
 
 
-def archive_files(path):
+def archive_files(path, *, cancelled=lambda: False):
     """Yield bounded wheel data without importing it or interpreting scripts."""
     with zipfile.ZipFile(path) as archive:
         total = 0
+        if len(archive.infolist()) > M.MAX_INSTALL_FILES:
+            raise ValueError('固定运行库轮子条目超过预算')
         for info in archive.infolist():
+            if cancelled():
+                raise InterruptedError('自动选区校验已取消')
             if info.is_dir():
                 continue
             name = PurePosixPath(info.filename)
@@ -125,39 +129,24 @@ def archive_files(path):
             yield str(name), archive.read(info)
 
 
-def runtime_files(root, selected):
+def runtime_files(root, selected, *, cancelled=lambda: False):
     """Derive expected installed bytes from hash-locked original wheels + fork."""
     patches = json.loads((M.HERE / 'fork-patches.json').read_text())
     edits = {x['path']: x for x in patches['patches']}
     seen = set()
     for wheel in selected:
         archive = root / 'wheels' / wheel['filename']
-        if archive.is_symlink() or M.hash_file(archive, limit=wheel['size']) != (wheel['size'], wheel['sha256']):
-            raise ValueError('原始运行库轮子校验失败')
-        for name, data in archive_files(archive):
-            if name in seen:
-                raise ValueError('固定运行库文件冲突：' + name)
-            seen.add(name)
-            if name in edits:
-                patch = edits[name]
-                if hashlib.sha256(data).hexdigest() != patch['before_sha256']:
-                    raise ValueError('官方轮子源代码与已审计补丁不匹配：' + name)
-                text = data.decode()
-                for change in patch['replacements']:
-                    if text.count(change['old']) != 1:
-                        raise ValueError('语义运行库补丁上下文不唯一')
-                    text = text.replace(change['old'], change['new'], 1)
-                data = text.encode()
-                if hashlib.sha256(data).hexdigest() != patch['after_sha256']:
-                    raise ValueError('语义运行库补丁结果身份不匹配')
-            if name == 'transformers-5.20.2.dist-info/METADATA':
-                lines = data.decode().splitlines()
-                lines = [line for line in lines if not line.lower().startswith('requires-dist: regex')]
-                lines = [('Version: ' + M.FORK_VERSION) if line == 'Version: 5.20.2' else line for line in lines]
-                data = ('\n'.join(lines) + '\n').encode()
-            # RECORD describes the original wheel; the explicit fork receipt
-            # below owns installed hashes. Keep it as provenance, not a proof.
-            yield 'runtime/' + name, data
+        # Hash and unzip the same open regular inode; never reopen a pathname
+        # after its hash has been accepted.
+        with M.regular_file(archive, limit=wheel['size']) as stream:
+            before = M.file_identity(os.fstat(stream.fileno()))
+            if M.hash_stream(stream, limit=wheel['size'], cancelled=cancelled) != (wheel['size'], wheel['sha256']):
+                raise ValueError('原始运行库轮子校验失败')
+            stream.seek(0)
+            for name, data in _runtime_archive(stream, edits, seen, cancelled=cancelled):
+                yield name, data
+            if M.file_identity(os.fstat(stream.fileno())) != before:
+                raise ValueError('原始运行库轮子在解包校验期间变化')
     if not set(edits).issubset(seen):
         raise ValueError('官方轮子缺少预期的语义运行库源代码')
     support = (M.HERE / 'checkpointing_support.py.txt').read_bytes()
@@ -175,14 +164,47 @@ def runtime_files(root, selected):
     yield 'runtime/LUMARETOUCH_SEMANTIC_APACHE2.txt', (M.HERE / 'TRANSFORMERS-LICENSE-APACHE2.txt').read_bytes()
 
 
-def expected_files(root):
+def _runtime_archive(stream, edits, seen, *, cancelled):
+    for name, data in archive_files(stream, cancelled=cancelled):
+        if name in seen:
+            raise ValueError('固定运行库文件冲突：' + name)
+        seen.add(name)
+        if name in edits:
+            patch = edits[name]
+            if hashlib.sha256(data).hexdigest() != patch['before_sha256']:
+                raise ValueError('官方轮子源代码与已审计补丁不匹配：' + name)
+            text = data.decode()
+            for change in patch['replacements']:
+                if text.count(change['old']) != 1:
+                    raise ValueError('语义运行库补丁上下文不唯一')
+                text = text.replace(change['old'], change['new'], 1)
+            data = text.encode()
+            if hashlib.sha256(data).hexdigest() != patch['after_sha256']:
+                raise ValueError('语义运行库补丁结果身份不匹配')
+        if name == 'transformers-5.20.2.dist-info/METADATA':
+            lines = data.decode().splitlines()
+            lines = [line for line in lines if not line.lower().startswith('requires-dist: regex')]
+            lines = [('Version: ' + M.FORK_VERSION) if line == 'Version: 5.20.2' else line for line in lines]
+            data = ('\n'.join(lines) + '\n').encode()
+        # RECORD describes the original wheel; the explicit fork receipt
+        # below owns installed hashes. Keep it as provenance, not a proof.
+        yield 'runtime/' + name, data
+
+
+def expected_files(root, *, cancelled=lambda: False):
     expected = {}
     for item in M.lock()['files']:
         expected['model/' + item['filename']] = {'size': item['size'], 'sha256': item['sha256']}
     selected = wheels()
     for item in selected:
         expected['wheels/' + item['filename']] = {'size': item['size'], 'sha256': item['sha256']}
-    for name, data in runtime_files(root, selected):
+    total = sum(item['size'] for item in expected.values())
+    for name, data in runtime_files(root, selected, cancelled=cancelled):
+        if name in expected:
+            raise ValueError('固定安装清单包含重复文件')
+        total += len(data)
+        if len(expected) >= M.MAX_INSTALL_FILES or total > M.MAX_INSTALL_BYTES:
+            raise ValueError('固定安装清单超过文件数或总字节预算')
         expected[name] = {'size': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
     return expected
 
@@ -223,14 +245,24 @@ def install():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--install', action='store_true')
-    parser.add_argument('--status', action='store_true')
+    actions = parser.add_mutually_exclusive_group()
+    actions.add_argument('--install', action='store_true')
+    actions.add_argument('--status', action='store_true')
+    actions.add_argument('--migrate', action='store_true')
     args = parser.parse_args()
+    migration_cancelled = False
     def stop(_signal, _frame):
+        nonlocal migration_cancelled
+        if args.migrate:
+            migration_cancelled = True
+            return
         raise InterruptedError('可选模型下载已取消；未发布不完整安装')
     signal.signal(signal.SIGTERM, stop); signal.signal(signal.SIGINT, stop)
     try:
-        if args.install:
+        if args.migrate:
+            from .migration import migrate
+            migrate(cancelled=lambda: migration_cancelled)
+        elif args.install:
             install()
         else:
             value = plan()
@@ -238,6 +270,8 @@ def main():
                 M.verify(); value['installed'] = True
             except (ValueError, OSError) as error:
                 value['reason'] = str(error)
+                from .migration import status
+                value.update(status())
             emit(state='ready' if value['installed'] else 'unavailable', **value)
     except InterruptedError as error:
         emit(state='cancelled', error=str(error)); raise SystemExit(2)
