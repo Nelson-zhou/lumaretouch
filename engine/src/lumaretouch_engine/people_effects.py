@@ -42,10 +42,13 @@ def prepare(face_ref, landmarks, recipes, source, *, excluded, skin, backend, se
                                backend=backend, identity=ref['face_instance_id'])
         delta = layer.solve(recipes[A.LIP])
         records.append(LocalEffect(ref, 'lip_makeup', window, delta=delta, facts=layer.facts))
-    if not source_only:
+    # Both original and derived sources use these concrete reviewed consumers.
+    # Neutral recipes need no native call; missing review/semantics still refuse.
+    if A.BLUSH.active(recipes[A.BLUSH.OP]):
         from .blush_makeup_layer import prepare_record as prepare_blush
         blush=prepare_blush(ref,landmarks,recipes[A.BLUSH.OP],source,excluded=excluded,skin=skin,backend=backend,semantic_sha=semantic_sha,reviewed=blush_review)
         if blush is not None:records.append(blush)
+    if A.LIPSTICK.active(recipes[A.LIPSTICK.OP]):
         from .lipstick_layer import prepare_record as prepare_lipstick
         lipstick=prepare_lipstick(ref,landmarks,recipes[A.LIPSTICK.OP],source,excluded=excluded,backend=backend,semantic_sha=semantic_sha,reviewed=lipstick_review)
         if lipstick is not None:records.append(lipstick)

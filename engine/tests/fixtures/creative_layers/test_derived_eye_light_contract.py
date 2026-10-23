@@ -110,7 +110,7 @@ def test_unadapted_support_and_shared_targets_stay_fenced(monkeypatch):
     _,state,context,owned,assets=reviewed(monkeypatch)
     face=state['faces'][context['target']['target_id']]
     descriptor=face['local_assets'].pop(V.KIND)
-    face['local_assets']['iris_makeup_visibility']={**descriptor,'kind':'iris_makeup_visibility'}
+    face['local_assets']['repair']={**descriptor,'kind':'enhance'}
     with pytest.raises(ValueError):C.require_graph(state,owned)
     command=patch(context,E.OPERATION,'/linked',False)
     command['target']={'scope':'person','target_id':'person','face_ref':None}

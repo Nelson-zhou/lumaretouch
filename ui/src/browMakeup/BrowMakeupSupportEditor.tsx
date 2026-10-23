@@ -29,17 +29,17 @@ export function BrowMakeupSupportEditor({faceKey,source,image,disabled,onReview}
   if(!available||!Object.keys(brows).length)return;setSaving(true);try{await onReview(brows);setError('');}catch(e){setError(e instanceof Error?e.message:'审核未保存');}finally{setSaving(false);}
  }
  return <fieldset disabled={disabled||saving}><legend>眉毛与额头独立可见范围审核</legend>
-  <p>在原图分别涂选原有眉毛与其上方约一至两倍眉厚的清晰额头皮肤。不要把两区连成一笔，不要包含头发、镜框、手或其他遮挡物。审核不会生成隐藏眉毛；浅色或证据不足的眉毛可能被拒绝。</p>
-  {!available&&<p role="status">等待当前人物匹配的原图参考加载。</p>}
+  <p>在当前源图分别涂选原有眉毛与其上方约一至两倍眉厚的清晰额头皮肤。不要把两区连成一笔，不要包含头发、镜框、手或其他遮挡物。审核不会生成隐藏眉毛；浅色或证据不足的眉毛可能被拒绝。</p>
+  {!available&&<p role="status">等待当前人物匹配的当前源图参考加载。</p>}
   {image&&matchesSource(image,source)&&<div style={{position:'relative',width:'100%',aspectRatio:`${image.displayWidth}/${image.displayHeight}`}}>
-   <img key={imageKey} src={image.url} alt="未变形原图，用于独立眉毛和额头审核" style={{width:'100%',height:'100%'}} onLoad={e=>{if(e.currentTarget.naturalWidth===image.displayWidth&&e.currentTarget.naturalHeight===image.displayHeight)setLoaded(imageKey);else setError('原图参考回执尺寸不符');}} onError={()=>setLoaded('')}/>
+   <img key={imageKey} src={image.url} alt="未应用当前修图的源图，用于独立眉毛和额头审核" style={{width:'100%',height:'100%'}} onLoad={e=>{if(e.currentTarget.naturalWidth===image.displayWidth&&e.currentTarget.naturalHeight===image.displayHeight)setLoaded(imageKey);else setError('当前源图参考回执尺寸不符');}} onError={()=>setLoaded('')}/>
    <svg style={{position:'absolute',inset:0,width:'100%',height:'100%'}} viewBox={sourceViewport(image)} preserveAspectRatio="none" onClick={pick} aria-label="点选当前区域笔划">
     {KEYS.map(k=><g key={k} stroke={k.endsWith('brow')?'#35dfd0':'#ffd16c'} fill="none" strokeWidth={radius*2} strokeLinecap="round" strokeLinejoin="round" opacity={k===active ? 0.7 : 0.3}><polyline points={points[k].map(p=>`${p[0]*(source.width-1)},${p[1]*(source.height-1)}`).join(' ')}/>{points[k].map((p,i)=><circle key={i} cx={p[0]*(source.width-1)} cy={p[1]*(source.height-1)} r={radius} stroke="none" fill={k.endsWith('brow')?'#35dfd0':'#ffd16c'}/>)}</g>)}
    </svg>
   </div>}
   <label>人物眉侧<select value={side} onChange={e=>setSide(e.target.value as Side)}><option value="left">人物左眉</option><option value="right">人物右眉</option></select></label>
   <label>独立区域<select value={region} onChange={e=>setRegion(e.target.value as Region)}><option value="brow">原有眉毛</option><option value="forehead">邻近额头皮肤</option></select></label>
-  <label>笔刷半径（原图像素）<input type="number" min={1} max={50} value={radius} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)&&n>=1&&n<=50){setRadius(n);setFlags({left:false,right:false});}}}/></label>
+  <label>笔刷半径（当前源图像素）<input type="number" min={1} max={50} value={radius} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)&&n>=1&&n<=50){setRadius(n);setFlags({left:false,right:false});}}}/></label>
   <button type="button" onClick={()=>{setPoints(p=>({...p,[active]:[]}));setFlags(f=>({...f,[side]:false}));}}>清空当前区域笔划</button>
   <label><input type="checkbox" disabled={!available||!points[`${side}-brow`].length||!points[`${side}-forehead`].length} checked={flags[side]} onChange={e=>setFlags(f=>({...f,[side]:e.target.checked}))}/>当前侧眉毛与额头均清晰可见、无遮挡，两个区域分别绘制且属于选中人物</label>
   <button type="button" disabled={!available} onClick={()=>void save()}>保存逐眉审核</button>{error&&<p role="alert">{error}</p>}

@@ -101,7 +101,7 @@ def test_legacy_routes_require_owned_local_target_and_complete_recipe(monkeypatc
     lambda p:p['payload']['patches'][0].update(value=float('nan')),
     lambda p:p['payload']['patches'][0].update(path='/original.jpg'),
     lambda p:p['payload']['patches'].append(deepcopy(p['payload']['patches'][0])),
-    lambda p:p.update(action='iris_reference',payload={}),
+    lambda p:p.update(action='hair_reference',payload={}),
     lambda p:p.update(action='link',payload={}),
     lambda p:p.update(target={'scope':'group','target_id':'group','face_ref':None}),
 ])
@@ -163,7 +163,7 @@ def test_preview_forwarding_never_resolves_original_hair_or_body(monkeypatch):
     def forbidden(*args,**kwargs):raise AssertionError('Original hair resolver called')
     monkeypatch.setattr(H,'preview_kwargs',forbidden)
     inputs=I.preview(engine,state,body_source=owned)
-    assert set(inputs)=={'creative_source','creative_proxy','eye_light_assets'}
+    assert set(inputs)=={'creative_source','creative_proxy',*(name+'_assets' for name in ('eye_light','lipstick','blush_makeup','eyeliner','eyelash','brow_makeup','iris_makeup'))}
     assert inputs['creative_source']==owned and inputs['creative_proxy'] is rgb
     with pytest.raises(ValueError,match='body'):
         I.preview(engine,state,body_bank={'bodies':{'unadapted':{}},'analysis_runs':{},'support_assets':{}})

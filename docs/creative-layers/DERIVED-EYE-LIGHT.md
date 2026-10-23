@@ -1,5 +1,8 @@
 # M14 returned-source eye-light port
 
+Later continuation: `DERIVED-MAKEUP.md` ports the remaining six reviewed makeup
+consumers. The residual list below records this earlier eye-light-only snapshot.
+
 Source-only continuation of `7087e87ebdfee8eb67cefa63e2cce7cef3385f85`.
 Runtime, native, numerical and visual acceptance: **UNRUN**.
 This narrows the residual for handbook `LNX-REF-WF-127932-a9c143a25d`

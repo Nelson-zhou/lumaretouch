@@ -14,22 +14,19 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None):
         from .creative_derived_effects import require_graph
         owned = binding(engine); require_graph(state,owned)
         verify_precompute(engine,engine._precompute)
-        from .eye_light_support import KIND, resolve
-        from .people_state import face_ref
-        for face in state['faces'].values():
-            if face['asset_sha256'] == owned['sha256'] and KIND in face['local_assets']:
-                resolve(state,engine._people_support,face_ref(face))
+        from .creative_derived_makeup import validate_supports, input_banks
+        validate_supports(state,engine._people_support,owned['sha256'])
         body = engine._body_bank() if body_bank is _MISSING else body_bank
         if body is not None and (body['bodies'] or body['analysis_runs'] or body['support_assets']):
             raise ValueError('Derived portrait preview cannot consume original-file body observations')
         if body_source is not None and body_source != owned:
             raise ValueError('Derived portrait preview source differs from its retained binding')
-        # No resolver receives the original path. Eye-light receives only the
+        # No resolver receives the original path. Reviewed makeup receives only the
         # canonical review bank; it verifies source, face and landmark ownership.
         # The runtime
         # checks the pipeline RGB against this owned inference/display proxy.
         return {'creative_source':owned,'creative_proxy':analysis_rgb(engine),
-                'eye_light_assets':engine._people_support}
+                **input_banks(engine._people_support)}
     from .hair_colour_project import preview_kwargs
     return {**preview_kwargs(engine, state),
             'eye_light_assets': engine._people_support,

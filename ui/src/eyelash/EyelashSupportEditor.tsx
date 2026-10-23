@@ -38,10 +38,10 @@ export function EyelashSupportEditor({faceKey,source,image,disabled,onReview}:{f
   if(!Object.keys(eyes).length)return;setSaving(true);try{await onReview(eyes);setError('');}catch(e){setError(String(e));}finally{setSaving(false);}
  }
  return <fieldset disabled={disabled||saving}><legend>逐部位审核睫毛根部与延伸范围</legend>
-  <p>在未变形原图上先点涂真实睫毛根部，再点涂允许睫毛延伸的可见区域（须包含根部）。上下、左右分别审核。延伸区不是狭窄眼线带；不要覆盖眼镜、头发、其他人物、遮挡物或不可见部位。点涂不会跨点连接；用擦除移除不允许的区域。</p>
-  {!available&&<p role="status">等待当前人物对应原图参考加载。</p>}
+  <p>在未应用当前修图的源图上先点涂真实睫毛根部，再点涂允许睫毛延伸的可见区域（须包含根部）。上下、左右分别审核。延伸区不是狭窄眼线带；不要覆盖眼镜、头发、其他人物、遮挡物或不可见部位。点涂不会跨点连接；用擦除移除不允许的区域。</p>
+  {!available&&<p role="status">等待当前人物对应当前源图参考加载。</p>}
   {image&&matchesSource(image,source)&&<div style={{position:'relative',width:'100%',aspectRatio:`${image.displayWidth}/${image.displayHeight}`}}>
-   <img key={imageKey} src={image.url} alt="睫毛逐部位审核原图" style={{width:'100%',height:'100%'}} onLoad={e=>{if(e.currentTarget.naturalWidth===image.displayWidth&&e.currentTarget.naturalHeight===image.displayHeight)setLoaded(imageKey);else setError('原图回执尺寸不匹配');}} onError={()=>setLoaded('')}/>
+   <img key={imageKey} src={image.url} alt="睫毛逐部位审核当前源图" style={{width:'100%',height:'100%'}} onLoad={e=>{if(e.currentTarget.naturalWidth===image.displayWidth&&e.currentTarget.naturalHeight===image.displayHeight)setLoaded(imageKey);else setError('当前源图回执尺寸不匹配');}} onError={()=>setLoaded('')}/>
    <svg style={{position:'absolute',inset:0,width:'100%',height:'100%'}} viewBox={sourceViewport(image)} preserveAspectRatio="none" onClick={pick} aria-label="点涂根部或睫毛延伸区">
     {draft[part][zone].map(s=>s.points.map((p,i)=><ellipse key={`${s.id}:${i}`} cx={p[0]*(source.width-1)} cy={p[1]*(source.height-1)} rx={s.axes[0][0]*(source.width-1)} ry={s.axes[1][1]*(source.height-1)} fill={s.operation==='subtract'?'#ff7b7b':zone==='root_recipe'?'#35dfd0':'#ffd16c'} opacity={.45}/>))}
    </svg>

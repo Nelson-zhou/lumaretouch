@@ -1,0 +1,131 @@
+{
+  "schema": 1,
+  "status": "source-integrated-frozen; runtime acceptance UNRUN",
+  "base_commit": "db90a3515327b23d19e1d7f7af36922c33e765b0",
+  "scope": [
+    "M14 six reviewed makeup consumer ports on actual immutable derived source",
+    "Exact family review/palette/leaf admission and owned support banks",
+    "Iris effective-source crop with actual analysis and minimum-detail fences"
+  ],
+  "operation_ids": [
+    "lnx.lipstick.v1",
+    "lnx.blush_makeup.v1",
+    "lnx.eyeliner.v1",
+    "lnx.eyelash.v1",
+    "lnx.brow_makeup.v1",
+    "lnx.iris_makeup.v1"
+  ],
+  "integration_map": "docs/creative-layers/DERIVED-MAKEUP.md",
+  "checks": {
+    "python_ast_files": 10,
+    "whitespace": "git diff --check clean",
+    "product_imports": false,
+    "execution": false,
+    "tests": "UNRUN",
+    "build": false,
+    "typecheck": false,
+    "inference": false,
+    "caps": {
+      "App.tsx": 2091,
+      "main.rs": 2015,
+      "server.py": 6939
+    }
+  },
+  "not_claimed": [
+    "M14 complete",
+    "32 AI tools complete",
+    "New generation or anatomy inference",
+    "Shared transfer enabled",
+    "Hair/body/local mask/repair/recovery consumers",
+    "Transparent or HDR photo return",
+    "Runtime native numerical visual or recovery acceptance",
+    "Unconditional 24 MP workflow"
+  ],
+  "files": [
+    {
+      "path": "docs/creative-layers/DERIVED-EYE-LIGHT.md",
+      "sha256": "171a0bd0f92280a1cda6ebe8cb65c137c59401cd8c4dcbe34074ed8f91f47a52",
+      "bytes": 5893
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-MAKEUP.md",
+      "sha256": "0d4fc717c6e9ce87b42f17eefb9d78be9f8fb4b74e90a9da171b0753f1fcde79",
+      "bytes": 7299
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "256ffbb85b3cfd41d182226d7f6308dff9e9a5eeac5bf0d6cd621e8b9e2f7be8",
+      "bytes": 12847
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_makeup.py",
+      "sha256": "aa004a042982cbb71a1ae4ae4718763f5aa313eea97fcc5abcc28bb0ddaaab3d",
+      "bytes": 4226
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/iris_makeup_reference.py",
+      "sha256": "2bf1ff8516abecb9769f0037ac64d4840f300e123a2317d73829adc0f0584497",
+      "bytes": 3470
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "sha256": "de1e182e85f820eac57ae152ee2bc1739e19f0c12ae7e35228eeff7adf5a887b",
+      "bytes": 7109
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "sha256": "a198da0dad73af2472d289a809d3a83130b0d137000dabfa900b14ed0b964e65",
+      "bytes": 2495
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "177a3a314a2e5c87ec79fdca9e8806999c0f9532f3a7e1365cea554dadbcdaab",
+      "bytes": 15514
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_effects_contract.py",
+      "sha256": "0d0029eca206d0eb68e5a684c5dafbce0d4e48d41cc375dd07b481a508b65258",
+      "bytes": 16248
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_eye_light_contract.py",
+      "sha256": "9a9a79c8cba2f8368f7581104fccad2b6625df464cb335e052b412b48b029cb6",
+      "bytes": 8114
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_iris_reference.py",
+      "sha256": "706b0784832c90fffd4d60deadf85ad27d2f8ba94e02bfec65e2e413a631a5b8",
+      "bytes": 5504
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_makeup_contract.py",
+      "sha256": "e679a20850e1186a1fe57e79b3c5091bab8ebcd4ae29aed6458108b6e8b82ee3",
+      "bytes": 12876
+    },
+    {
+      "path": "ui/src/blushMakeup/BlushMakeupSupportEditor.tsx",
+      "sha256": "910fc7864794a992ef7b7a837c7bf34adc5f46b04de10023803c463d2b0051f6",
+      "bytes": 5422
+    },
+    {
+      "path": "ui/src/browMakeup/BrowMakeupSupportEditor.tsx",
+      "sha256": "b4652c2da33fc34dd6187a86fbaca9d2e81b6a4bde84808f4aea3c69569f1be0",
+      "bytes": 6095
+    },
+    {
+      "path": "ui/src/eyelash/EyelashSupportEditor.tsx",
+      "sha256": "d1f0b38f85e4a36e6d937401597ecfaf68d2a9ce52985ae37851e1fc99f8dd0e",
+      "bytes": 6696
+    },
+    {
+      "path": "ui/src/eyeliner/EyelinerSupportEditor.tsx",
+      "sha256": "5e151808163e6270ea83b91456496d2a5ce3f64a4b51542c11dd29d70bd9b187",
+      "bytes": 5309
+    },
+    {
+      "path": "ui/src/lipstick/LipstickSupportEditor.tsx",
+      "sha256": "e5795ab3c33e6ca4ad61e950c2c5826337bae566c70921befac529ceab3bd70a",
+      "bytes": 5415
+    }
+  ]
+}
