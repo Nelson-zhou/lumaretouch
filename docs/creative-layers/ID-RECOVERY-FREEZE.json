@@ -1,0 +1,154 @@
+{
+  "baseline": "a0df3773a71be344efb2ef0da2982e9c1d8216cf",
+  "scope": "Dedicated ID-background recovery on original and immutable derived sources; actual operator-local blend, source/recipe/support/asset/field review proof, native target binding, full export, existing history/project routes",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "requirements": [
+    "LNX-REF-PC-32481-C-0f284fcda5"
+  ],
+  "files": [
+    {
+      "path": "docs/creative-layers/DERIVED-ID-BACKGROUND.md",
+      "sha256": "7f09a4d73c5829a66794f21907c15f5ea57fdbad379268752e541b7b7f92e4bf",
+      "bytes": 8900
+    },
+    {
+      "path": "docs/creative-layers/ID-BACKGROUND-RECOVERY.md",
+      "sha256": "083e5a7e1c274aeeacd1cba03a75e6e2261195996c0bd70f854d08b1455cf960",
+      "bytes": 6440
+    },
+    {
+      "path": "docs/creative-layers/REVIEWED-PERSISTENT-PEOPLE.md",
+      "sha256": "7f1110d53e83a2f7bf6617f38516d08befaceafcf9584a85701abfa2c8f6e5db",
+      "bytes": 8547
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_global_recovery.py",
+      "sha256": "74412c4409a4a9ac9cfcdc1233a29d4fbe6fc277bde233dfb5ba4c4b56e679eb",
+      "bytes": 5936
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_recovery.py",
+      "sha256": "3d51d7143567c1be5fba2b58025af8292a95fd114dca421ac2eefcbf331075fe",
+      "bytes": 11589
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_controller.py",
+      "sha256": "fe32f7a63b3b4c2ca7657083db77586e50a2c771e08d0db84b11b976ae572a9d",
+      "bytes": 6362
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_preview.py",
+      "sha256": "a51f0af8c222b0b5f2ddca446016b80dd4aacea450da6dee58e0275d25543ed8",
+      "bytes": 9629
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_runtime.py",
+      "sha256": "aa9089a916754dcd6890ab82fdaa013e18edf578db43bff1117f5c001f8360be",
+      "bytes": 14540
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_stage.py",
+      "sha256": "393f6f1ee87a5afb5b1d8d86a6cbe8ee052cd7d2a3d820805eb5de22e2d8138b",
+      "bytes": 4379
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_state.py",
+      "sha256": "466a509bccf4851a93e165554b0212cda7f4008536da88b9cc10fa9bb6f89d54",
+      "bytes": 9512
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_project.py",
+      "sha256": "26bf40967065d57c6fdcdf6b4cf2a73845b6ee14e375930b08876f20b45c457d",
+      "bytes": 2657
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_recovery.py",
+      "sha256": "d3e49a67c36f1f7c95e78c655674f30cf56a736ba9fa5d2149b0003873a8b7d5",
+      "bytes": 5185
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_runtime.py",
+      "sha256": "34374377f339fbf5a6ab0be1408cc35ee45f3a72a41e99c189044658706365fd",
+      "bytes": 14826
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_provenance.py",
+      "sha256": "90fdd7b9623a30cdebe37f17a2a21755a1a310cca13fa3cc5d1d946435848d1d",
+      "bytes": 5836
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "121cd9d4e55f9ee25bbc2a6f2bf6d90957ee169181121a7dc6ee8021609da532",
+      "bytes": 463344
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "8b40d35039e729ce972a83660b2f41e87aea891aec4b540ebf50b814f9042286",
+      "bytes": 134450
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_id_background_recovery_unrun.py",
+      "sha256": "ec1314118cbb45ad53cdb95a8656b26120d3d3a195ad0549479c8cf3a7e92d99",
+      "bytes": 4331
+    },
+    {
+      "path": "engine/tests/test_id_recovery_routes_unrun.py",
+      "sha256": "709667296cb9a45013ead76fa870fa8e3f56f02a018fe13380ec60bfc5dc92eb",
+      "bytes": 1329
+    },
+    {
+      "path": "engine/tests/test_id_recovery_stage_unrun.py",
+      "sha256": "2371a6169eebe37b078506ec2f06880c270d5e1c200b933f083de5a936096145",
+      "bytes": 2577
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_api.rs",
+      "sha256": "c7ac20ec1be79bee8548fb5329328b378ceec468440f3b09fcd23988eaa9499c",
+      "bytes": 8637
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_host.rs",
+      "sha256": "4183a772c50b07ca21a1673c991016f89a5a336ae9c42f10d6e0b66c179e4e00",
+      "bytes": 11246
+    },
+    {
+      "path": "ui/src/effectRecovery/idRecovery.test.ts",
+      "sha256": "c0759e0ae8a2b0871d75e15404d09e60830f31a70bc66ec76b54b451ac334380",
+      "bytes": 1011
+    },
+    {
+      "path": "ui/src/effectRecovery/model.ts",
+      "sha256": "e5fdb9f0cda2a885cb3a0ea748dd9d6b6ece0c1b544d80b214dae5ba58a3122b",
+      "bytes": 2180
+    },
+    {
+      "path": "ui/src/effectRecovery/workflow.ts",
+      "sha256": "f7ab47f9083598a955236740276f628f1f1180d7797b94dc2b8d199facda6c1f",
+      "bytes": 16823
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 16,
+    "python_fixture_functions_authored_unrun": 16,
+    "typescript_fixture_functions_authored_unrun": 2,
+    "new_rust_fixture_functions_authored_unrun": 1,
+    "whitespace": "clean",
+    "app_lines": 2096,
+    "main_lines": 2015,
+    "server_lines": 6969,
+    "product_execution": false,
+    "tests_build_typecheck_inference": false
+  },
+  "remaining": [
+    "Legacy common background still proxy-bound, no immutable full-resolution replay or reviewed native envelope; remains derived-guarded",
+    "Spill removal/manual spill brush and original-shadow extraction are separate unfinished requirements",
+    "Existing custom saliency network has no demonstrated official BiRefNet checkpoint compatibility",
+    "Broader alpha/HDR photo pipelines and unadapted shared planners remain unsupported",
+    "All functional visual numerical export history package and recovery acceptance remains UNRUN"
+  ],
+  "excluded_unrelated": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

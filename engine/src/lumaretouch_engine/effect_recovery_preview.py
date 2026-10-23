@@ -42,6 +42,10 @@ def render_review(engine, stage):
     fabric(engine)
     masks(engine, strict=True)
     grades(engine, strict=True)
+    from .id_background_runtime import sync as id_background
+    id_background(engine, strict=False)
+    if getattr(engine._vram.id_background,'suspended',None):
+        raise ValueError(engine._vram.id_background.suspended)
     R.sync(engine, strict=True)
     manual(engine, strict=True)
     from .studio_background_runtime import sync as studio
@@ -127,6 +131,9 @@ class RecoveryPreview:
                 else:
                     value = S.prepare_mutation(self.engine, capture, mutation)
                 from .creative_derived_recovery import GLOBAL_TARGETS, global_context, assert_review
+                if mutation['target'] == 'id_background':
+                    from .id_background_runtime import sync as sync_id
+                    sync_id(self.engine,strict=True)
                 global_proof = global_context(self.engine, mutation['target']) if mutation['target'] in GLOBAL_TARGETS else None
                 stage = R.prepare_stage(self.engine, value)
                 stage.people_recovery = PEOPLE.prepare(self.engine, value, mutation['target'])
@@ -168,6 +175,8 @@ class RecoveryPreview:
         assert_review(self.engine, record)
         value = S.check(record['value'])
         stage = R.prepare_stage(self.engine, value)
+        if record['target'] == 'id_background':
+            stage.id_recovery_context=deepcopy(record['global_context']['consumer'])
         if PEOPLE.handles(self.engine, record['target']):
             if record['people_context'] is None:
                 raise ValueError('人物恢复预览缺少确切人物归属，请重新查看本笔')

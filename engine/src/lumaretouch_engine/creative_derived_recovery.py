@@ -1,4 +1,4 @@
-"""Reviewed face, fabric and smoothing recovery for an immutable returned source.
+"""Reviewed face, fabric, smoothing and dedicated ID recovery for an immutable returned source.
 
 Face ownership stays separate from the reviewed global consumers. No other global
 operator or second history owner is admitted; recovery attenuates one delta.
@@ -7,7 +7,7 @@ import hashlib
 import json
 from .facial_wrinkle_recovery import FACE_TARGETS as TARGETS
 
-GLOBAL_TARGETS = frozenset(('fabric_fine', 'skin_smoothing'))
+GLOBAL_TARGETS = frozenset(('fabric_fine', 'skin_smoothing', 'id_background'))
 
 COMMANDS = frozenset(('source_patch_capture','effect_recovery_preview','effect_recovery'))
 
@@ -43,6 +43,10 @@ def _global_value(engine):
 def global_context(engine,target):
     """Read-only producer evidence, never a face cursor used as global identity."""
     from .creative_derived_source import record
+    if target == 'id_background':
+        from .id_background_recovery import context
+        from .effect_recovery_state import check
+        return {'target':target,'consumer':context(engine),'recovery':check(getattr(engine,'_effect_recovery',None))}
     if record(engine) is None:return None
     if target not in GLOBAL_TARGETS:
         raise ValueError('This global recovery consumer is not derived-source adapted')
@@ -56,6 +60,10 @@ def global_context(engine,target):
 def assert_review(engine,record):
     """Revalidate even when a caller reaches the review owner without dispatch."""
     from .creative_derived_source import record as source_record
+    if record['target'] == 'id_background':
+        if record.get('people_context') is not None or record.get('global_context') != global_context(engine,'id_background'):
+            raise ValueError('ID recovery compositor source, recipe, asset or fields changed')
+        return
     if source_record(engine) is None:
         if record.get('global_context') is not None:
             raise ValueError('Derived recovery review cannot become an original-file edit')
@@ -133,7 +141,11 @@ def require_command(engine,name,request):
                 matching={**request,'generation':retained['descriptor']['generation']}
             if not _uint(matching['generation']):raise ValueError('Invalid recovery capture generation')
             _capture(engine,matching)
-        source_binding(engine)
+        # Source-input coordinates do not require a detected face. Face
+        # mutation previews still validate their exact analysis in _context.
+        from .creative_derived_source import binding
+        from .creative_derived_repair_runtime import verify_pipeline
+        verify_pipeline(engine._vram,binding(engine))
         _pixels(engine)
         return
     fields={'cmd','action','preview_id',*PROOF_KEYS}
@@ -148,7 +160,7 @@ def require_command(engine,name,request):
     if name=='effect_recovery_preview' and action=='preview':
         mutation=request['mutation']
         if type(mutation) is not dict or mutation.get('target') not in TARGETS | GLOBAL_TARGETS:
-            raise ValueError('Only reviewed face, fabric and smoothing operators support derived recovery')
+            raise ValueError('Only reviewed face, fabric, smoothing and dedicated ID operators support derived recovery')
         allowed={'view':{'action','target'},'stroke':{'action','target','stroke'},
                  'clear':{'action','target'},'enable':{'action','target','enabled'},
                  'delete':{'action','target','id'}}

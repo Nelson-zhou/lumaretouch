@@ -25,6 +25,8 @@ interface Candidate {id:string;mutation:RecoveryMutation;final:boolean;serial:nu
 const initial=():RecoveryState=>({phase:'idle',target:'skin_smoothing',frame:null,image:null,previewId:null,
   request:null,message:'',strokeActive:false,ending:false,open:false});
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
+/** A valid legacy recovery preview is not consent for the separate ID stage. */
+export const recoveryTargetMatches=(value:unknown,target:RecoveryTarget):boolean=>object(value)&&value.target===target;
 const count=(v:unknown)=>Number.isSafeInteger(v)&&Number(v)>=0;
 function bounded<T>(promise:Promise<T>,ms:number):Promise<T>{
   let timer:ReturnType<typeof setTimeout>|undefined;
@@ -126,7 +128,7 @@ export function createRecoveryWorkflow(api:RecoveryTransport,options:{refresh:()
         const raw=await bounded(api.previewStatus(candidate.id),deadline-Date.now());if(!current(o)||token!==life)return;
         if(!object(raw)||raw.preview_id!==candidate.id||raw.document_id!==o.documentId||raw.capture_id!==o.id||raw.ticket!==o.ticket)throw Error('恢复效果预览身份变化');
         if(raw.state==='running'){await bounded(sleep(100),deadline-Date.now());continue;}
-        if(raw.state!=='ready'||raw.success!==true)throw Error(typeof raw.error==='string'?raw.error:'恢复预览没有完成');
+        if(raw.state!=='ready'||raw.success!==true||!recoveryTargetMatches(raw,candidate.mutation.target))throw Error(typeof raw.error==='string'?raw.error:'恢复预览没有完成或效果目标不匹配');
         const image=review(raw.result);
         shown=candidate;
         publish({image,previewId:candidate.id,phase:state.strokeActive?'drawing':'previewing',message:latest?'全效果预览更新中…':candidate.final?'正在显示本笔最终效果…':'左侧定位原图，右侧是真实全效果；可继续涂抹'});
@@ -148,7 +150,7 @@ export function createRecoveryWorkflow(api:RecoveryTransport,options:{refresh:()
       while(current(o)&&token===life&&shown===candidate&&!latest&&candidate.serial===serial){
         const raw=await bounded(api.previewStatus(candidate.id),deadline-Date.now());
         if(!current(o)||token!==life||shown!==candidate||latest||candidate.serial!==serial)return;
-        if(!object(raw)||raw.preview_id!==candidate.id)throw Error('恢复显示证明身份变化');
+        if(!object(raw)||raw.preview_id!==candidate.id||!recoveryTargetMatches(raw,candidate.mutation.target))throw Error('恢复显示证明身份或效果目标变化');
         if(raw.state==='presented'){
           if(candidate.final&&!state.strokeActive)await apply(candidate,o);
           else publish({phase:'drawing',message:'左侧原图定位，右侧全效果即时反馈；松手自动保存一笔，Esc 结束'});

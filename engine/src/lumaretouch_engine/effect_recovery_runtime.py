@@ -36,6 +36,12 @@ def availability(engine):
         'background_replace': {'active': bool(pipe and pipe.has_background()),
                                'reason': None if pipe and pipe.has_background() else '请先启用现有换底；不包含尚未实现的换天空或背景修复'},
     }
+    from .id_background_recovery import context as id_context
+    try:
+        id_context(engine,require_active=True)
+        result['id_background']={'active':True,'reason':None}
+    except Exception as error:
+        result['id_background']={'active':False,'reason':str(error)}
     from . import people_recovery as PEOPLE
     if PEOPLE.managed(engine):
         result.update(PEOPLE.availability(engine))
@@ -71,6 +77,8 @@ def prepare_stage(engine, value):
     if pipe is None:
         raise ValueError('没有可处理的照片')
     requested = S.check(value)
+    from .id_background_recovery import validate_state as validate_id
+    validate_id(engine,requested)
     from .people_recovery import global_value
     value = global_value(engine, requested)
     row = engine._docs[engine._doc_index]
@@ -104,6 +112,13 @@ def sync(engine, *, strict=False):
         return
     from .people_recovery import global_value
     value = global_value(engine)
+    from .id_background_recovery import enabled as id_enabled
+    if id_enabled(value):
+        # Other reviewed preview producers also call this owner directly. Bring
+        # its ID dependency current only when needed; do not force model replay
+        # on every status/proof read or reinstall unchanged checked fields.
+        from .id_background_runtime import sync as sync_id
+        sync_id(engine,strict=False)
     from .creative_derived_source import record, binding
     if record(engine) is not None:
         from .creative_derived_global_recovery import validate
@@ -135,7 +150,9 @@ def stage_key(engine, value, *, source_stamp=None):
     if effective is not None and value['targets']:
         from .creative_derived_repair_runtime import verify_pipeline
         verify_pipeline(engine._vram, effective)
-    return (json.dumps(value, sort_keys=True), M.file_stamp(row['path']) if source_stamp is None else source_stamp, id(engine._vram.src_f32), face_key,
+    from .id_background_recovery import enabled as id_enabled, context as id_context
+    id_proof=id_context(engine) if id_enabled(value) else None
+    return (json.dumps(id_proof,sort_keys=True),json.dumps(value, sort_keys=True), M.file_stamp(row['path']) if source_stamp is None else source_stamp, id(engine._vram.src_f32), face_key,
             json.dumps(effective,sort_keys=True))
 
 
@@ -171,6 +188,8 @@ def report(engine):
 
 
 def verify_snapshot(snap, path, shape=None):
+    from .id_background_recovery import validate_state as validate_id
+    validate_id(snap,snap.get('effect_recovery'))
     from .creative_derived_source import record
     if record(snap) is not None:
         from .creative_derived_global_recovery import verify_snapshot as verify_derived
@@ -240,11 +259,15 @@ def export_prepare(spec, shape, *, cancelled=lambda: False, source_pixels=None):
     else:
         M.verify_source(value, path, shape)
         spec.effect_recovery_fields = raster_fields(value, path, shape, cancelled=cancelled)
+    from .id_background_recovery import export_prepare as prepare_id
+    prepare_id(spec)
     if M.file_stamp(path) != before:
         raise ValueError('生成全尺寸恢复蒙版时源图变化，停止导出')
 
 
 def attach_tile(pipe, spec, window):
+    from .id_background_recovery import verify_export as verify_id
+    verify_id(spec)
     y0, x0, y1, x1 = window
     check_fields(spec.effect_recovery_fields, state=spec.effect_recovery)
     fields = [{'target': item['target'], 'weight': item['weight'][y0:y1, x0:x1]}

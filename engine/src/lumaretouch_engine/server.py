@@ -1526,7 +1526,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             emit({"event": "engine_warn", "warn": "蒙版尚未恢复：保留编辑参数，暂不应用该范围的磨皮，不回退为全图"})
         effective_strength, effective_channel = self._retouch_render_args()
         FABRIC.sync(self)
-        LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); IDR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
+        LM.sync(self); LGR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); IDR.sync(self); ERR.sync(self); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
         self._people_render_open(pipe,lambda:CER.render_preview(self) if CER.active(self) else PGR.render_preview(self) if PGR.active(self) else SKR.render_proxy(self,lambda:pipe.render(effective_strength, channel=effective_channel, **self._params)))
         with self._wlock:
             seq, t_emit, slot = shm.write_frame(pipe.read_back(), presentation=self._frame_presentation(str(t0), (d.src_w,d.src_h), "original" if self._people_open_flags() else "edited"))
@@ -3329,7 +3329,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             self._vram.grading_prefix_cache.invalidate()
         t0 = monotonic_ns()
         # Original viewing bypasses all layers, rather than merely setting skin strength0.
-        if not original: FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); IDR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
+        if not original: FABRIC.sync(self); LM.sync(self); LGR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); IDR.sync(self); ERR.sync(self); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
         st, channel = (0.0, None) if original else self._retouch_render_args()
         from .grading_prefix_cache import preview_context
         prefix_key = preview_context(self, mode, original)
@@ -5572,7 +5572,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 # 通道必须跟着会话一起迁移：不传 channel 的话，报表里 active_channel 还是 skin，
                 # 而给用户补发的是一帧全图渲染——字段与实际执行不一致正是本仓最贵那个坑的形状
                 strength, channel = self._retouch_render_args()
-                FABRIC.sync(self); LM.sync(self); LGR.sync(self); ERR.sync(self); MLR.sync(self); SBR.sync(self); IDR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
+                FABRIC.sync(self); LM.sync(self); LGR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); IDR.sync(self); ERR.sync(self); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
                 CER.render_preview(self) if CER.active(self) else PGR.render_preview(self) if PGR.active(self) else SKR.render_proxy(self,lambda:self._vram.render(strength, channel=channel, **self._params))
                 with self._wlock:
                     seq, t_emit, slot = self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation())
@@ -6466,7 +6466,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         self._attach_pipeline(self._src_rgb, adopt=True)
         if self._precompute is not None:
             self._rehang_precompute(replayed_for=replayed_for)
-        if strict_local: LM.sync(self, strict=True); LGR.sync(self, strict=True); ERR.sync(self, strict=True); MLR.sync(self, strict=True); SBR.sync(self, strict=True); IDR.sync(self, strict=True); OPR.sync(self, strict=True); SKR.sync(self, strict=True); LIPR.sync(self, strict=True); BROWR.sync(self, strict=True); NOSER.sync(self, strict=True); EYER.sync(self, strict=True); MOUTHR.sync(self, strict=True); self._people_sync(strict=True); RCR.sync(self, strict=True); SCR.sync(self, strict=True); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
+        if strict_local: LM.sync(self, strict=True); LGR.sync(self, strict=True); MLR.sync(self, strict=True); SBR.sync(self, strict=True); OPR.sync(self, strict=True); SKR.sync(self, strict=True); LIPR.sync(self, strict=True); BROWR.sync(self, strict=True); NOSER.sync(self, strict=True); EYER.sync(self, strict=True); MOUTHR.sync(self, strict=True); self._people_sync(strict=True); IDR.sync(self, strict=True); ERR.sync(self, strict=True); RCR.sync(self, strict=True); SCR.sync(self, strict=True); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
         return self._write_current_frame(mode)
 
     def _face_known_single(self, row: dict | None, *, live: bool) -> tuple[str, str]:

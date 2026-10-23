@@ -44,7 +44,10 @@ pub(crate) fn effect_recovery_preview(state: State<'_, Arc<AppState>>, action: S
     if proof.descriptor["domain"] != "source-input" { return Err("recovery drawing requires immutable source input".into()); }
     let document = proof.identity.document.to_string();
     let mut host = state.recovery_preview.lock().map_err(|_| "recovery preview lock poisoned")?;
-    if action == "preview" { host.begin(handle.epoch(), &preview_id, &capture_id, &ticket, &document)?; }
+    if action == "preview" {
+        let selected = mutation.as_ref().ok_or("missing recovery mutation")?;
+        host.begin(handle.epoch(), &preview_id, &capture_id, &ticket, &document, &selected["target"])?;
+    }
     else if !host.matches(handle.epoch(), &preview_id, &capture_id, &ticket, &document) {
         return Err("recovery preview expired".into());
     }
@@ -128,7 +131,7 @@ mod tests {
     fn reviewed_face_mutations_use_the_same_exact_target_contract() {
         for name in ["facial_wrinkles", "lip_makeup", "eye_light", "blush_makeup",
             "lipstick", "eyeliner", "eyelash", "brow_makeup", "iris_makeup",
-            "skin_smoothing", "fabric_fine", "background_replace"] {
+            "skin_smoothing", "fabric_fine", "background_replace", "id_background"] {
             assert!(mutation(&json!({"action":"view","target":name})).is_ok());
             assert!(mutation(&json!({"action":"clear","target":name})).is_ok());
             assert!(mutation(&json!({"action":"enable","target":name,"enabled":false})).is_ok());

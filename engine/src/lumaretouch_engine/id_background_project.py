@@ -27,6 +27,13 @@ def _bundle(raw, assets):
 
 def validate_records(value,assets=None):
     if isinstance(value,dict):
+        if '_effect_recovery' in value or 'effect_recovery' in value:
+            from .id_background_recovery import validate_state
+            from .effect_recovery_state import check
+            if ('_effect_recovery' in value and 'effect_recovery' in value
+                    and check(value['_effect_recovery']) != check(value['effect_recovery'])):
+                raise ValueError('Conflicting saved ID recovery state aliases')
+            validate_state(value,value.get('_effect_recovery',value.get('effect_recovery')))
         if '_id_background' in value:
             if value['_id_background'] is None:raise ValueError('已保存的证件照背景配方不能为 null')
             recipe=S.check(value['_id_background']);raw=value.get('_id_background_bundle')

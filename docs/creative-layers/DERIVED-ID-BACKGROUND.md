@@ -43,7 +43,7 @@ The existing asset decoder is preserved: real PNG16 via imagecodecs, supported R
 
 ## Remaining limitations and acceptance
 
-- Dedicated ID-background recovery is still missing. The common `background_replace` recovery brush belongs to the separate legacy stage; enabling it would not restore this compositor. It remains guarded. Implement a source-owned ID-stage recovery field, native review, history, full replay and stage blend together before claiming that requirement.
+- The subsequent [dedicated ID-recovery slice](ID-BACKGROUND-RECOVERY.md) connects a separate source-owned `id_background` target with reviewed stage-local recovery. The common `background_replace` brush still belongs to the legacy stage and remains derived-guarded. All new recovery fixtures remain UNRUN; this does not complete spill removal or original-shadow extraction.
 - Spill correction, original-shadow extraction/AI retention and its strength/blend/mask workflow remain unimplemented. Designed new shadows are not a substitute.
 - Reviewed global-only and explicit face-map transfer are continued in `DERIVED-CROSS-IMAGE-TRANSFER.md`. General background/support-bearing transfer, legacy background algorithms, unsupported local effects and transparent/signed/HDR returned sources remain fenced. No implicit flattening, clipping or guessed model compatibility.
 - Runtime/model/device behavior, private capture transport, undo/redo/package reopening, full-resolution quality, actual ICC/PNG16/TIFF decoding, native GUI reachability, memory/cancellation and visual parity are unverified here.

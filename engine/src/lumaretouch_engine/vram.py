@@ -637,7 +637,11 @@ class PreviewPipeline:
         out = self.local_grade_layers.apply(out, self.align_source_grade_mask)
         out = self.sky_replacement.apply(out,self.align_source_grade_mask)
         out = self.apply_background(out)
-        out = self.id_background.apply(out,self.align_source_grade_mask)
+        # Dedicated recovery attenuates only this ID compositor's contribution.
+        # The input already contains upstream edits; never blend source RGB here.
+        out = self.effect_recovery.apply('id_background', out,
+            self.id_background.apply(out,self.align_source_grade_mask),
+            align=self.align_source_grade_mask)
         out = self.manual_liquify.apply(out)
         if render_stage == 'optics-input': return out
         out = self.optics.apply(out)

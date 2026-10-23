@@ -60,6 +60,8 @@ class RecoveryController:
         result = pending['result']
         try:
             verified_key = pending['stage'].verified_source_key
+            from .id_background_recovery import assert_consumer
+            assert_consumer(e,pending['stage'])
             if R.stage_key(e, pending['value']) != verified_key:
                 raise ValueError('恢复准备后源图改变，未提交本笔')
             pending['started'] = True
@@ -72,6 +74,7 @@ class RecoveryController:
                 e._effect_recovery, pipe.effect_recovery = pending['value'], pending['stage']
                 pipe._effect_recovery_key = verified_key
                 frame = e._write_current_frame('effect_recovery')
+                assert_consumer(e,pending['stage'])
                 if R.stage_key(e, e._effect_recovery) != verified_key:
                     raise ValueError('恢复提交渲染期间源图改变，撤回本笔')
                 no_change = previous == e._effect_recovery

@@ -165,10 +165,13 @@ def report(engine):
                 '三种范围逐类手动审核；不自动判断接触关系，不提供自动发丝抠像',
                 '源图手工矢量按目标尺寸重放，使用现有 8 位覆盖度；提示模型使用其固有低分辨率候选，不宣称发丝或原生全尺寸 alpha',
                 '新阴影为线性 sRGB 二维设计投影，不是物理三维光照或原阴影提取',
-                '祛染色、原阴影提取与证件照独立恢复画笔尚未实现；当前源图、真实选定参考与审核主体关联三种吸管均读取经验证的代理浮点输入',
+                '证件照恢复使用独立目标，只减弱当前换背景贡献并保留上游编辑；祛染色、原阴影提取仍未实现',
+                '当前源图、真实选定参考与审核主体关联三种吸管均读取经验证的代理浮点输入',
                 '原尺寸检查与导出共用完整场；超过预算明确拒绝，不静默降质']}
 
 def export_prepare(spec,source,*,cancelled=lambda:False):
+    # A reused export specification cannot retain an earlier consumer stamp.
+    spec._id_recovery_consumer=None
     spec.id_background_prepared=None
     spec._id_background_prepared_proof=None
     if not S.active(spec.id_background):return
@@ -225,6 +228,11 @@ def finish_export(spec):
             'creative_id_background_context':spec.creative_id_background_context},spec.id_background_path)
         if _prepared_proof(spec,spec.id_background_prepared)!=getattr(spec,'_id_background_prepared_proof',None):
             raise ValueError('ID background source-bound fields changed during export')
+    # Initial ID preparation precedes recovery preparation. Once that consumer
+    # proof exists, every finalization also checks the actual full ID fields.
+    if getattr(spec,'_id_recovery_consumer',None) is not None:
+        from .id_background_recovery import verify_export
+        verify_export(spec)
 
 def resident_bytes(spec):
     return sum(v.nbytes for v in (spec.id_background_prepared or {}).values() if isinstance(v,np.ndarray))

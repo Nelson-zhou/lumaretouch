@@ -1,6 +1,6 @@
 """Derived global recovery vectors, not original-image pixels or face assets.
 
-Only adapted fabric and smoothing operators are admitted. Contexts are ephemeral export
+Only adapted fabric, smoothing and dedicated ID operators are admitted. Contexts are ephemeral export
 proofs; durable intent remains the existing source-bound normalized vectors.
 """
 from copy import deepcopy
@@ -9,7 +9,7 @@ import json
 from . import effect_recovery_state as S, local_mask_state as M
 from . import creative_derived_source as D
 
-TARGETS = frozenset(('fabric_fine', 'skin_smoothing'))
+TARGETS = frozenset(('fabric_fine', 'skin_smoothing', 'id_background'))
 
 
 def validate(value, source):
@@ -19,7 +19,7 @@ def validate(value, source):
         raise ValueError('Recovery vectors belong to another immutable source')
     from .facial_wrinkle_recovery import FACE_TARGETS
     if any(row['target'] not in TARGETS | set(FACE_TARGETS) for row in value['targets']):
-        raise ValueError('Derived global recovery supports fabric and smoothing only; background remains unadapted')
+        raise ValueError('Derived global recovery supports fabric, smoothing and dedicated ID only; legacy background remains unadapted')
     value['targets'] = [row for row in value['targets'] if row['target'] in TARGETS]
     if not value['targets']:value['source'] = None
     value = S.check(value)
@@ -104,7 +104,10 @@ def mutation_binding(engine, target):
     validate(getattr(engine, '_effect_recovery', None), source)
     from .creative_derived_repair_runtime import verify_pipeline
     verify_pipeline(engine._vram, source)
-    if target == 'skin_smoothing':
+    if target == 'id_background':
+        from .id_background_recovery import context
+        context(engine)
+    elif target == 'skin_smoothing':
         from .creative_derived_smoothing import recovery_context
         context = recovery_context(engine)
         if context['source'] != source:
@@ -126,3 +129,5 @@ def validate_state(state):
     else:
         raw = getattr(state, '_effect_recovery', None)
     validate(raw, source)
+    from .id_background_recovery import validate_state as validate_id
+    validate_id(state, raw)

@@ -70,7 +70,7 @@ class EffectRecoveryStage:
             raise ValueError('效果恢复输入与算子输出不在同一像素域')
         torch = optional_module('torch')
         weight = coverage.to(dtype=after.dtype).div(255.0)
-        if target == 'background_replace':
+        if target in ('background_replace', 'id_background'):
             if align is None:
                 raise ValueError('换底恢复需要真实形变场，不接受原图坐标直接贴到形变图')
             weight = align(weight)

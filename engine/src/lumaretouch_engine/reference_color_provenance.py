@@ -51,6 +51,22 @@ def source_support(pipe,window,full_shape,spec):
             if weight is None:raise ValueError('换背景恢复足迹缺失')
             removed=removed*(1-pipe.align_source_grade_mask(weight.to(torch.float32)/255).clamp(0,1))
         t=t*(removed<=0)
+    identity=pipe.id_background
+    if identity.required:
+        if identity.suspended or identity.fields is None:
+            raise ValueError('证件照换背景来源足迹缺失')
+        # The exact ID compositor alpha, transported through its actual geometry.
+        # Restoring ID contribution does not restore upstream replaced pixels:
+        # t still carries all previous exclusions.
+        removed=1-pipe.align_source_grade_mask(identity.fields[:,:1]).clamp(0,1)
+        recovery=pipe.effect_recovery
+        if 'id_background' in recovery.required:
+            if recovery.suspended or 'id_background' in recovery.suspended_targets:
+                raise ValueError('证件照恢复来源未知')
+            weight=recovery.fields.get('id_background')
+            if weight is None:raise ValueError('证件照恢复足迹缺失')
+            removed=removed*(1-pipe.align_source_grade_mask(weight.to(torch.float32)/255).clamp(0,1))
+        t=t*(removed<=0)
     t=pipe.manual_liquify.apply(t)
     return np.ascontiguousarray(t[0].permute(1,2,0).detach().cpu().numpy())
 

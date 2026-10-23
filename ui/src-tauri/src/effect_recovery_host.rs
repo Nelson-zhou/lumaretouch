@@ -10,7 +10,7 @@ pub(crate) type RecoveryHost = ReceiptHost<RecoveryKind>;
 /// Face ownership is still checked by the engine; this grants no source bypass.
 pub(crate) fn supported_target(value: &Value) -> bool {
     matches!(value.as_str(), Some(
-        "skin_smoothing" | "fabric_fine" | "background_replace"
+        "skin_smoothing" | "fabric_fine" | "background_replace" | "id_background"
         | "facial_wrinkles" | "lip_makeup" | "eye_light" | "blush_makeup"
         | "lipstick" | "eyeliner" | "eyelash" | "brow_makeup" | "iris_makeup"
     ))
@@ -56,6 +56,7 @@ pub(crate) struct RecoveryPreviewHost {
     epoch: [u8; 16],
     pub bound: Option<(String, String, String, String)>, // preview, capture, ticket, document
     value: Option<Value>,
+    target: Option<String>,
     delivered: bool,
     presentation_requested: bool,
     shown: bool,
@@ -63,17 +64,19 @@ pub(crate) struct RecoveryPreviewHost {
 }
 impl RecoveryPreviewHost {
     pub fn invalidate(&mut self) {
-        self.bound = None; self.value = None; self.delivered = false; self.presentation_requested = false;
+        self.bound = None; self.value = None; self.target = None; self.delivered = false; self.presentation_requested = false;
         self.shown = false; self.redeemed = false;
     }
     pub fn reset(&mut self, epoch: [u8; 16]) { self.invalidate(); self.epoch = epoch; }
     pub fn ended(&mut self, epoch: [u8; 16]) { if self.epoch == epoch { self.reset([0; 16]); } }
-    pub fn begin(&mut self, epoch: [u8; 16], preview: &str, capture: &str, ticket: &str, document: &str) -> Result<(), String> {
+    pub fn begin(&mut self, epoch: [u8; 16], preview: &str, capture: &str, ticket: &str, document: &str, target: &Value) -> Result<(), String> {
         binding(document, capture, ticket, preview)?;
+        if !supported_target(target) { return Err("unsupported recovery target".into()); }
         if self.epoch != epoch || epoch == [0; 16] { return Err("recovery preview engine changed".into()); }
         if self.bound.as_ref().is_some_and(|b| b.0 == preview) { return Err("use a fresh recovery preview ID".into()); }
         self.invalidate();
         self.bound = Some((preview.into(), capture.into(), ticket.into(), document.into()));
+        self.target = target.as_str().map(str::to_owned);
         self.value = Some(json!({"protocol":1,"state":"running","preview_id":preview,
             "capture_id":capture,"ticket":ticket,"document_id":document,"success":true}));
         Ok(())
@@ -92,7 +95,7 @@ impl RecoveryPreviewHost {
                 && ["width", "height"].iter().all(|k| r[*k].as_u64().is_some_and(|n| (1..=800).contains(&n)))
                 && ["before", "after"].iter().all(|k| r[*k].as_str().is_some_and(|s|
                     s.len() <= 4*1024*1024 && s.starts_with("data:image/png;base64,")))
-                && supported_target(&v["target"])
+                && supported_target(&v["target"]) && v["target"].as_str() == self.target.as_deref()
         };
         let valid = v["protocol"] == 1 && v["success"].is_boolean() && v.to_string().len() <= 6*1024*1024+16384
             && match v["state"].as_str() {
@@ -155,11 +158,11 @@ mod tests {
 
     #[test]
     fn exact_face_targets_keep_delivery_presentation_and_single_use_fences() {
-        for target in FACES {
+        for target in FACES.into_iter().chain(["id_background", "background_replace"]) {
             let epoch = [1; 16];
             let mut host = RecoveryPreviewHost::default();
             host.reset(epoch);
-            host.begin(epoch, PREVIEW, CAPTURE, "3", "4").unwrap();
+            host.begin(epoch, PREVIEW, CAPTURE, "3", "4", &json!(target)).unwrap();
             host.receive(epoch, &ready(target));
             assert!(host.redeem().is_err());
             assert!(host.allow_presented().is_err());
@@ -181,7 +184,7 @@ mod tests {
             assert!(!supported_target(&json!(target)));
             let mut host = RecoveryPreviewHost::default();
             host.reset(epoch);
-            host.begin(epoch, PREVIEW, CAPTURE, "3", "4").unwrap();
+            host.begin(epoch, PREVIEW, CAPTURE, "3", "4", &json!("eye_light")).unwrap();
             host.receive(epoch, &ready(target));
             assert_eq!(host.status(epoch, PREVIEW)["state"], "failed");
             assert!(host.allow_presented().is_err());
@@ -189,7 +192,7 @@ mod tests {
         }
         let mut host = RecoveryPreviewHost::default();
         host.reset(epoch);
-        host.begin(epoch, PREVIEW, CAPTURE, "3", "4").unwrap();
+        host.begin(epoch, PREVIEW, CAPTURE, "3", "4", &json!("eye_light")).unwrap();
         let mut wrong = ready("eye_light");
         wrong["document_id"] = json!("5");
         host.receive(epoch, &wrong);
@@ -197,5 +200,19 @@ mod tests {
         assert!(host.allow_presented().is_err());
         host.receive([2; 16], &ready("eye_light"));
         assert!(host.redeem().is_err());
+    }
+
+    #[test]
+    fn legacy_preview_cannot_authorize_dedicated_id_recovery() {
+        let epoch = [1; 16];
+        let mut host = RecoveryPreviewHost::default();
+        host.reset(epoch);
+        host.begin(epoch, PREVIEW, CAPTURE, "3", "4", &json!("id_background")).unwrap();
+        host.receive(epoch, &ready("background_replace"));
+        assert_eq!(host.status(epoch, PREVIEW)["state"], "failed");
+        assert!(host.allow_presented().is_err());
+        assert!(host.redeem().is_err());
+        host.reset(epoch);
+        assert!(host.begin(epoch, PREVIEW, CAPTURE, "3", "4", &json!("id_background_other")).is_err());
     }
 }
