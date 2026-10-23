@@ -12,6 +12,9 @@ class Controller:
         from .spill_removal_controller import ACTIONS, controller as spill_controller
         if p.get('action') in ACTIONS:
             return spill_controller(self.engine,self.emit).handle(p)
+        from .original_shadow_controller import ACTIONS as SHADOW_ACTIONS, controller as shadow_controller
+        if p.get('action') in SHADOW_ACTIONS:
+            return shadow_controller(self.engine,self.emit).handle(p)
         e=self.engine;rid=p.get('request_id');action=p.get('action')
         result={'event':'id_background_result','protocol':1,'request_id':rid,'document_id':p.get('document_id'),'action':action,'success':False,'outcome_unknown':False,'requires_reload':False}
         before=None;digest=None
@@ -37,6 +40,9 @@ class Controller:
             reason=e._guard_editable('ID background')
             if reason:raise ValueError(reason)
             value=S.check(getattr(e,'_id_background',None));bundle=getattr(e,'_id_background_bundle',None)
+            from .original_shadow_state import active as shadow_active
+            if action in ('id_set','id_import','id_review') and shadow_active(S.original_shadow_of(value)):
+                raise ValueError('原图阴影启用时不能未经前后审核更换背景或主体范围；请先通过原图阴影审核关闭，再调整并重新审核。清除背景仍可用')
             derived=D.record(e) is not None
             source=D.binding(e) if derived else None
             if derived:

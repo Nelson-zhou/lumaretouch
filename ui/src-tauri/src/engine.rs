@@ -191,7 +191,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             while let Ok(line) = rx.recv() {
                 if let Ok(v)=serde_json::from_str::<Value>(&line) {
                     // Reviewed outcomes settle only after exact original validation.
-                    if v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" {
+                    if v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" {
                         crate::project_recovery_fence::observed(inspection_epoch, &v);
                     }
                     if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {

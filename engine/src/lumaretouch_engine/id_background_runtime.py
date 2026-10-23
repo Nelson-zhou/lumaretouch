@@ -70,16 +70,16 @@ def background(value,bundle,shape,cancelled):
     return out
 
 def prepare(value,bundle,path,source,*,full_source=False,effective_source=None,source_input=None,
-            source_pixels=None,force_prompted=False,cancelled=lambda:False):
+            source_pixels=None,force_prompted=False,original_shadow_pixels=None,cancelled=lambda:False):
     from . import id_background_support as U,id_background_native as N
-    from . import spill_removal_render as SP
+    from . import spill_removal_render as SP,original_shadow_render as OS
     value=S.check(value);h,w=source.shape[:2]
     if cancelled():raise InterruptedError('证件照完整场准备已取消')
     if h*w>MAX_PIXELS:raise ValueError('证件照完整场超过 3200 万像素预算；不会降级为放大代理蒙版')
     from .cpu_memory_budget import available_estimate
     asset=value['background'].get('asset');asset_pixels=asset['width']*asset['height'] if asset and value['background']['kind']=='asset' else 0
     scale=min(w/value['source']['width'],h/value['source']['height'])
-    if N.memory_estimate((h,w),value,render_scale=scale)+SP.memory_estimate((h,w),value)+asset_pixels*48+64*1024**2>available_estimate():raise MemoryError('背景、祛染色完整场与素材超过可用内存，不会降低源图质量')
+    if N.memory_estimate((h,w),value,render_scale=scale)+SP.memory_estimate((h,w),value)+OS.memory_estimate((h,w),value)+asset_pixels*48+64*1024**2>available_estimate():raise MemoryError('背景、祛染色、原阴影完整场与素材超过可用内存，不会降低源图质量')
     binding=value['support'][value['selected_support']]
     if binding is None:raise ValueError('请先独立确认此保留范围')
     spill_input=SP.source_identity(source,value['source'],full_source=full_source,cancelled=cancelled) if SP.active(value) else None
@@ -92,8 +92,35 @@ def prepare(value,bundle,path,source,*,full_source=False,effective_source=None,s
     if spill_input is not None and spill_input!={key:spill['spill_source'][key] for key in spill_input}:
         raise ValueError('Spill source changed while resolving reviewed foreground support')
     bg=background(value,bundle,(h,w),cancelled)
+    original_shadow_proof=None
+    if OS.active(value):
+        display_background=bg
+        if full_source:
+            if original_shadow_pixels is not None:
+                raise ValueError('原阴影完整导出不能混用第二份源图输入')
+            original_pixels,original_alpha=source,alpha
+        else:
+            # The locator above may be RGB8-derived. It never supplies original
+            # shadow evidence: replay the reviewed matte on actual full pixels.
+            original_pixels=original_shadow_pixels
+            OS.source_identity(original_pixels,value['source'],cancelled=cancelled)
+            original_alpha=U.raster(binding,path,original_pixels,full_source=True,cancelled=cancelled,
+                effective_source=effective_source,source_input=None,
+                source_pixels=original_pixels if effective_source is not None else None)
+        if not full_source:
+            # Shade the actual full background before reducing completed RGB.
+            # Opacity multiplication / Soft Light do not commute with resizing.
+            bg=background(value,bundle,original_pixels.shape[:2],cancelled)
+        bg,original_shadow_proof=OS.prepare(value,original_pixels,original_alpha,bg,
+            render_shape=(h,w),display_background=display_background,cancelled=cancelled)
     scale=min(w/value['source']['width'],h/value['source']['height'])
     prepared=N.prepare(alpha,bg,value,render_scale=scale,cancelled=cancelled)
+    if original_shadow_proof is not None:
+        if OS._hash(prepared['background'],cancelled)!=original_shadow_proof['background_sha256']:
+            raise ValueError('原阴影背景场被另一投影改变；不能叠加重复阴影')
+        prepared['original_shadow_source']=original_shadow_proof
+        for field in prepared.values():
+            if isinstance(field,np.ndarray):field.setflags(write=False)
     if cancelled():raise InterruptedError('证件照完整场准备已取消')
     return {**prepared,**spill} if spill else prepared
 
@@ -105,12 +132,17 @@ def _stage_proof(stage):
     # actual packed coverage/background content as well as allocation identity.
     digest=sha256()
     spill=getattr(stage,'spill_source',None)
+    original_shadow=getattr(stage,'original_shadow_source',None)
     if tuple(field.shape)!=(1,8 if spill is not None else 4,*stage.shape):
         raise ValueError('ID background installed field extent changed')
     if spill is not None:
         from .spill_removal_render import check_source_proof
         digest.update(check_source_proof(spill,tuple(spill.get('shape',[])[:2])).encode('utf-8'))
         digest.update(json.dumps(getattr(stage,'spill_window',None),allow_nan=False).encode('utf-8'))
+    if original_shadow is not None:
+        from .original_shadow_render import check_source_proof
+        digest.update(check_source_proof(original_shadow,tuple(original_shadow.get('render_shape',[])[:2])).encode('utf-8'))
+        digest.update(json.dumps(getattr(stage,'original_shadow_window',None),allow_nan=False).encode('utf-8'))
     for y in range(0,stage.shape[0],64):
         block=field[:,:,y:y+64].detach().cpu().numpy()
         if block.dtype!=np.float32 or not np.isfinite(block).all():
@@ -118,6 +150,22 @@ def _stage_proof(stage):
         digest.update(memoryview(np.ascontiguousarray(block)).cast('B'))
     return (stage.required,stage.suspended,
         (id(field),field.data_ptr(),int(field._version),tuple(field.shape),str(field.dtype),str(field.device),digest.hexdigest()))
+
+
+def _install(stage,prepared,window=None):
+    """Carry compact full-source proof, not extra compositor tensor channels."""
+    from copy import deepcopy
+    from . import original_shadow_render as OS
+    proof=prepared.get('original_shadow_source')
+    if proof is not None:
+        OS.check_source_proof(proof,prepared['alpha'].shape)
+        # Export owns one frozen full-field proof at preparation and rechecks
+        # before publication. Do not rehash a whole image for every small tile.
+        if window is None and OS._hash(prepared['background'])!=proof['background_sha256']:
+            raise ValueError('原阴影背景场与审核源图证明不匹配')
+    stage.install(prepared,window)
+    stage.original_shadow_source=deepcopy(proof)
+    stage.original_shadow_window=None if proof is None or window is None else tuple(window)
 
 
 def _live_input(engine,value):
@@ -135,6 +183,8 @@ def _live_input(engine,value):
             from .creative_derived_prompted import capture,cache_identity
             packet=capture(engine)
             key=(key,cache_identity(packet,source),P.dependency_stamp())
+        from . import original_shadow_render as OS
+        if OS.active(value):key=(key,OS.live_source_key(engine,value))
         return key,None,pixels,source,packet
     dependency=P.dependency_stamp() if prompted else None
     key=(json.dumps(value,sort_keys=True),M.file_stamp(row['path']),id(pipe.src_f32),dependency)
@@ -144,6 +194,8 @@ def _live_input(engine,value):
         # A writable alias of src_f32 does not change object identity. Spill
         # estimation must bind actual bytes before accepting a cached field.
         key=(*key,json.dumps(SP.source_identity(pixels,value['source']),sort_keys=True))
+    from . import original_shadow_render as OS
+    if OS.active(value):key=(*key,OS.live_source_key(engine,value),OS._hash(pixels))
     return key,row['path'],pixels,None,None
 
 
@@ -169,10 +221,11 @@ def sync(engine,*,strict=False):
                 if row.get('_local_source_stamp')!=M.file_stamp(row['path']):raise ValueError('原图已改变，请重新打开')
                 M.verify_source(value,row['path'],(row['src_h'],row['src_w']))
             prepared=prepare(value,getattr(engine,'_id_background_bundle',None),path,src,
-                effective_source=effective,source_input=packet,force_prompted=strict)
+                effective_source=effective,source_input=packet,force_prompted=strict,
+                original_shadow_pixels=_original_shadow_live_pixels(engine,value))
             if _live_input(engine,value)[0]!=stamp:
                 raise ValueError('ID background source, support, asset or model changed during preparation')
-            stage.install(prepared)
+            _install(stage,prepared)
         pipe.id_background=stage;pipe._id_background_key=stamp
         pipe._id_background_field_proof=_stage_proof(stage)
     except Exception as error:
@@ -182,18 +235,31 @@ def sync(engine,*,strict=False):
         if strict:raise
 
 
+def _original_shadow_live_pixels(engine,value):
+    from . import original_shadow_render as OS
+    return OS.full_source(engine,value) if OS.active(value) else None
+
+
 def report(engine):
-    from . import spill_removal_native as SP
+    from . import spill_removal_native as SP,original_shadow_native as OS
     stage=getattr(engine._vram,'id_background',None)
     version=engine._document_versions().version(engine._docs[engine._doc_index]) if 0<=engine._doc_index<len(engine._docs) else None
     return {'recipe':S.check(getattr(engine,'_id_background',None)), 'available':available(),
             'spill_protocol':1,'spill_available':SP.available(),
+            'original_shadow_protocol':1,'original_shadow_available':OS.available(),
             'recipe_document_id':version.document_id if version else '', 'recipe_revision':str(version.revision) if version else '',
             'suspended':getattr(stage,'suspended',None),'boundaries':[
                 '三种范围逐类手动审核；不自动判断接触关系，不提供自动发丝抠像',
                 '源图手工矢量按目标尺寸重放，使用现有 8 位覆盖度；提示模型使用其固有低分辨率候选，不宣称发丝或原生全尺寸 alpha',
                 '新阴影为线性 sRGB 二维设计投影，不是物理三维光照或原阴影提取',
-                '证件照恢复使用独立目标，只减弱当前换背景及祛染色贡献并保留上游编辑；原阴影提取仍未实现',
+                '证件照恢复使用独立目标，只减弱当前换背景、原阴影及祛染色贡献并保留上游编辑',
+                '原阴影为源数据估计的黑色标量图层，不是 AI、三维光照恢复或原地面像素粘贴；需要分别审核同材质明亮地面与阴影范围',
+                '原阴影主体范围只接受完整源图手工矢量重放；提示模型代理 alpha 不作为原阴影提取证据',
+                '原阴影只适用于已确认的均匀漫反射地面；深色、纹理、反射、彩色照明与主体本色可能无法区分，不能保证提取',
+                '不一致、过暗、过亮或接近噪声的选中像素保持零阴影；主体边缘和接触阴影可能被保守排除，不保证完整保留',
+                '原阴影普通与正片叠底对黑色图层数学等价；柔光是不同的艺术性调暗，不能同时开启新投影阴影',
+                '原阴影始终从实际完整原图或派生浮点源提取；预览只缩小完成阴影混合的背景，不使用 RGB8 代理作为证据',
+                '实时素材背景预览用完整阴影/背景的缩小透射比维持零强度中性；与最终全尺寸采样可有差异，以完整前后审核与导出为准',
                 '祛染色从审核源图估计有证据的颜色方向，只作用于当前 SDR 像素；HDR 编辑像素原样旁路，不裁切或压平',
                 '祛染色前后景联合颜色估计使用最长 1024 像素引导层，并在完整源图逐像素细化；不是原尺寸联合 F/B 求解或自动发丝蒙版',
                 '接近不透明边缘的反射染色使用独立门控启发式；深层不透明染色与主体本色可能无法区分',
@@ -207,6 +273,7 @@ def export_prepare(spec,source,*,cancelled=lambda:False):
     spec.id_background_prepared=None
     spec._id_background_prepared_proof=None
     spec._spill_source_input=None
+    spec._original_shadow_source_input=None
     spec._id_background_cancelled=cancelled
     if not S.active(spec.id_background):return
     path=spec.id_background_path
@@ -216,15 +283,23 @@ def export_prepare(spec,source,*,cancelled=lambda:False):
     if derived:
         from .creative_derived_id_background import verify_export
         effective=verify_export(spec,source)['source']
-    else:M.verify_source(spec.id_background,path,source.shape[:2])
+    else:
+        M.verify_source(spec.id_background,path,source.shape[:2])
+        from . import original_shadow_render as OS
+        if OS.active(spec.id_background):
+            bits=OS.verify_original_format(path)
+            if bits==16 and source.dtype!=np.uint16:
+                raise ValueError('Original-shadow export requires genuine full-precision RGB16, not an RGB8 surrogate')
     prepared=prepare(spec.id_background,spec.id_background_bundle,None if derived else path,source,
         full_source=True,effective_source=effective,source_pixels=source if derived else None,cancelled=cancelled)
-    from . import spill_removal_render as SP
+    from . import spill_removal_render as SP,original_shadow_render as OS
     spill_active=SP.active(spec.id_background)
+    original_shadow_active=OS.active(spec.id_background)
     if spill_active:spec._spill_source_input=source
+    if original_shadow_active:spec._original_shadow_source_input=source
     if derived:
         verify_export(spec,source)
-    if derived or spill_active:
+    if derived or spill_active or original_shadow_active:
         spec._id_background_prepared_proof=_prepared_proof(spec,prepared)
         for field in prepared.values():
             if isinstance(field,np.ndarray):field.setflags(write=False)
@@ -234,10 +309,11 @@ def export_prepare(spec,source,*,cancelled=lambda:False):
 
 def _prepared_proof(spec,prepared):
     from hashlib import sha256
-    from . import spill_removal_render as SP
+    from . import spill_removal_render as SP,original_shadow_render as OS
     value=S.check(spec.id_background);source=value['source']
     spill_active=SP.active(value)
-    expected={'alpha','background','encoding','render_scale'} | (set(SP.FIELD_KEYS) if spill_active else set())
+    original_shadow_active=OS.active(value)
+    expected={'alpha','background','encoding','render_scale'} | (set(SP.FIELD_KEYS) if spill_active else set()) | (set(OS.FIELD_KEYS) if original_shadow_active else set())
     if type(prepared) is not dict or set(prepared)!=expected:
         raise ValueError('ID background full fields lack their exact preparation contract')
     if prepared['encoding']!='linear-srgb-d65' or prepared['render_scale']!=1.:
@@ -267,24 +343,32 @@ def _prepared_proof(spec,prepared):
         if actual!={key:proof[key] for key in actual}:
             raise ValueError('Spill estimator source pixels changed during export')
         hashes.append(sha256(checked.encode('utf-8')).hexdigest())
+    if original_shadow_active:
+        proof=prepared['original_shadow_source']
+        checked=OS.check_source_proof(proof,(source['height'],source['width']),source,value)
+        actual=OS.source_identity(getattr(spec,'_original_shadow_source_input',None),source,
+                                  cancelled=cancelled)
+        if actual!={key:proof[key] for key in actual} or hashes[1]!=proof['background_sha256']:
+            raise ValueError('Original-shadow actual source pixels or prepared background changed during export')
+        hashes.append(sha256(checked.encode('utf-8')).hexdigest())
     return json.dumps(value,sort_keys=True),tuple(hashes)
 
 def attach_tile(pipe,spec,window):
     stage=IDBackgroundStage(pipe.device,(pipe.h,pipe.w))
     if S.active(spec.id_background):
         if spec.id_background_prepared is None:raise ValueError('缺少证件照完整背景场')
-        stage.install(spec.id_background_prepared,window)
+        _install(stage,spec.id_background_prepared,window)
     pipe.id_background=stage
 
 def finish_export(spec):
-    from . import spill_removal_render as SP
+    from . import spill_removal_render as SP,original_shadow_render as OS
     if S.active(spec.id_background) and list(M.file_stamp(spec.id_background_path))!=spec.id_background_stamp:raise ValueError('证件照换背景导出期间源图变化')
     if S.active(spec.id_background) and getattr(spec,'creative_base',None) is not None:
         from .creative_derived_id_background import verify_snapshot
         verify_snapshot({'creative_base':spec.creative_base,'id_background':spec.id_background,
             'id_background_bundle':spec.id_background_bundle,
             'creative_id_background_context':spec.creative_id_background_context},spec.id_background_path)
-    if S.active(spec.id_background) and (getattr(spec,'creative_base',None) is not None or SP.active(spec.id_background)):
+    if S.active(spec.id_background) and (getattr(spec,'creative_base',None) is not None or SP.active(spec.id_background) or OS.active(spec.id_background)):
         if _prepared_proof(spec,spec.id_background_prepared)!=getattr(spec,'_id_background_prepared_proof',None):
             raise ValueError('ID background source-bound fields changed during export')
     # Initial ID preparation precedes recovery preparation. Once that consumer

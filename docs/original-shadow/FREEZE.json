@@ -1,0 +1,247 @@
+{
+  "baseline": "c05471a43230321484ab746b238d185f085ca673",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Original Rust manual-assisted uniform diffuse-floor photographed-shadow estimation with target-owned lit/retention geometry, exact full source, reviewed UI/native apply, v3 state/history/export and recovery ownership. Not AI shadow retention.",
+  "files": [
+    {
+      "path": "core/original_shadow/Cargo.toml",
+      "sha256": "cf77e0c77abd835c061874aa982fe43a811f9caa863024623520ffcf7e712935",
+      "bytes": 174
+    },
+    {
+      "path": "core/original_shadow/README.md",
+      "sha256": "cb891f4485303099360a750755b64fda3ffde9e9c0b8a11fb3069a33034a59cd",
+      "bytes": 13451
+    },
+    {
+      "path": "core/original_shadow/lib.rs",
+      "sha256": "54b83d1a6d94fa58aa51e89880383129e8e4ba39137494d006bc2b3ee2cd59f6",
+      "bytes": 30003
+    },
+    {
+      "path": "docs/creative-layers/NEXT-MATERIAL-FEATURES.md",
+      "sha256": "7a03f02e46d75fbc688ae0e9baeb9b694b9e89f95448daccdfbe9330753d3651",
+      "bytes": 6872
+    },
+    {
+      "path": "docs/original-shadow/IMPLEMENTATION.md",
+      "sha256": "e47081db415920155f79f8b969b9201d7878fae0a04ed2d75cd5d2fc51c27d27",
+      "bytes": 8882
+    },
+    {
+      "path": "docs/original-shadow/REQUIREMENT-AND-RESEARCH.md",
+      "sha256": "7921e853a0353831801e925b82d65171c6f6e616cf10809eaa5a6548bd8940e8",
+      "bytes": 4963
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_id_background.py",
+      "sha256": "4f6c6efd1736dc57a7380b40ac5f4c1dd6d6b8c11168abdaec42e73c06f22bf7",
+      "bytes": 15813
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_id_background_host.py",
+      "sha256": "564cb1103a4d34f0a1d45b16e2888b5a7ad6d5325261bc2e709d4910420cc1b5",
+      "bytes": 4252
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_controller.py",
+      "sha256": "e4f00423ea1f378118a1ea11225b670091bc65f5e6b940d71955210ce3f0f239",
+      "bytes": 7043
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_export.py",
+      "sha256": "6e40f4c0a6cd9b375841db34c1d5a5c094c630f7f9dcf6d4835695474cff34c0",
+      "bytes": 3332
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_runtime.py",
+      "sha256": "df47c8227094e793c76ef53916c2bccb73bba559e2e160efa5928a4f10e0fdc4",
+      "bytes": 25103
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_state.py",
+      "sha256": "a1e6283f7c69df44973d294f9377375dbbd6481a3e5b5b3db390f061da958ebe",
+      "bytes": 14241
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/original_shadow_controller.py",
+      "sha256": "c9cd271f3033c99d9953f4f3131046df3ad12eb9a24ec074f5f3091b73825981",
+      "bytes": 10015
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/original_shadow_native.py",
+      "sha256": "0c376af716cd7b2cb9d2ef0dbc9b2a766f34755ae052951883254f378a97cbaa",
+      "bytes": 6170
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/original_shadow_render.py",
+      "sha256": "ad4ccf54286013cf1ef684b081e1189c4104bddf20cadd0526ed59997ceac613",
+      "bytes": 16640
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/original_shadow_review.py",
+      "sha256": "855fc4d5a60ec556c78b62eaa2bd606712d06edf14963f28ae7ab03caed30686",
+      "bytes": 8460
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/original_shadow_state.py",
+      "sha256": "48d5c9896a9256cb21d28bf255f2ce0819249eed964878bbec8eeb35eaa00d73",
+      "bytes": 6388
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "56b63870bd07ae3799b84297d881c266f740d7952a3ec17f686d01695ab8ab19",
+      "bytes": 7018
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "a77c9d34e83aabda02217c740485a7e15cf8233f343df9d456abf5a9dc3e669e",
+      "bytes": 463864
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_scope.py",
+      "sha256": "cc7c9d18eb0e6ab69b7b8092cc6ff7c54dc659ad8e6d1eaa7ea74e09e5001866",
+      "bytes": 3162
+    },
+    {
+      "path": "engine/tests/test_original_shadow_integration_unrun.py",
+      "sha256": "3376cd2a92bc44f0d762b2f806cb2064d5ba3099cace3b5ea530c0d06d5103cd",
+      "bytes": 4226
+    },
+    {
+      "path": "engine/tests/test_original_shadow_review_unrun.py",
+      "sha256": "0544058368044bc60ec637039ea9bb55cf8011ebd8de69d84ae961b77d92fd52",
+      "bytes": 9981
+    },
+    {
+      "path": "engine/tests/test_original_shadow_source_unrun.py",
+      "sha256": "57fe616a6b59629ad318bcbcadc2f8769b591a1b35de9276bb9ef622c9d17d5d",
+      "bytes": 10547
+    },
+    {
+      "path": "engine/tests/test_original_shadow_transactions_unrun.py",
+      "sha256": "fc7a7581d2258ed91432ac65c382d3094b887c34edb3f012e7cf3c16a638b48a",
+      "bytes": 9081
+    },
+    {
+      "path": "packaging/build-original-shadow.sh",
+      "sha256": "61d6f1d1a1bbecc809470c0646da210b990b0140e614a4a74210efbfbed378ce",
+      "bytes": 368
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "16ece24da757349f96d5dd5cefe3a48623a70f31f0990f36d2b84f6b8893d3ca",
+      "bytes": 20223
+    },
+    {
+      "path": "ui/package.json",
+      "sha256": "523d2c9c1b2354e3fdc09f27de70185c18ad2b01dcf443583b10975818acc966",
+      "bytes": 1911
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "c9de9af7bb0182755bf228aa8de790256f00f9f09736fd79e2db08e7a5d82c73",
+      "bytes": 37637
+    },
+    {
+      "path": "ui/src-tauri/src/id_background_api.rs",
+      "sha256": "6bd86701c04f355895ed969d3c5071e75627e0cde1641bcd8cbcddcaf1ce5e15",
+      "bytes": 24754
+    },
+    {
+      "path": "ui/src-tauri/src/original_shadow_protocol.rs",
+      "sha256": "9fa4fe25fde95fcf2952b20ec116320ae066d0932f3faf043d92a8ffe0550d4f",
+      "bytes": 11160
+    },
+    {
+      "path": "ui/src-tauri/src/original_shadow_protocol_tests.rs",
+      "sha256": "b69d9fe5064c4e99916cea91bb7153c7e8aae33d17a0c743d57cdc79d46cbcd6",
+      "bytes": 12314
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "sha256": "d08b9c99dc2f5bafccbd2626a554bb55da88f4cfa0fe975dd716b5ae69d43823",
+      "bytes": 4795
+    },
+    {
+      "path": "ui/src/idBackground/IdBackgroundPanel.tsx",
+      "sha256": "2521bf0419f8ef9a17ff03db8aa81813e26f42ba08169d712a0f34cc0e3ee4e9",
+      "bytes": 14395
+    },
+    {
+      "path": "ui/src/idBackground/model.ts",
+      "sha256": "a7f3e9575a6e6493a55fa4bf956bbc17d1b6e3a10db6ea7f54e45fc53462defd",
+      "bytes": 3415
+    },
+    {
+      "path": "ui/src/idBackground/useIdBackground.ts",
+      "sha256": "13c9f826b32aa94dbb7ef391ebb88283dca045de4a677bd8945dcccacb5f00cb",
+      "bytes": 14732
+    },
+    {
+      "path": "ui/src/originalShadow/OriginalShadowPanel.tsx",
+      "sha256": "4583b4378f58ae5d3e590b3e3793bfeb01572f54c766b681ec88c28079dcc17e",
+      "bytes": 12557
+    },
+    {
+      "path": "ui/src/originalShadow/OriginalShadowPixelReview.tsx",
+      "sha256": "7e1096b0ed2c058c09cc5b5177703114d465d88e37726bfced412f6ab442a2c3",
+      "bytes": 4741
+    },
+    {
+      "path": "ui/src/originalShadow/UNRUN-acceptance.md",
+      "sha256": "ebe66081d0cf7e421f9136cfeccbb8393eb11548438248b88d7ece3f7698c58f",
+      "bytes": 9307
+    },
+    {
+      "path": "ui/src/originalShadow/model.ts",
+      "sha256": "276a1835da8052bd0eb621f8b05dfc21505481fd7459f5008e0112e53ae0d642",
+      "bytes": 8893
+    },
+    {
+      "path": "ui/src/originalShadow/model.unrun.test.ts",
+      "sha256": "16524cf0cf78ad0abbea5e71f1360d6e120ab305955ecfd49f3b5f121ee68b4c",
+      "bytes": 10069
+    },
+    {
+      "path": "ui/src/originalShadow/originalShadow.css",
+      "sha256": "526e4e8fa026fca2b34622e5f2ee28024c646b1199b3656c14fe80cd79f953da",
+      "bytes": 659
+    },
+    {
+      "path": "ui/src/spillRemoval/SpillRemovalPanel.tsx",
+      "sha256": "fb0e827adc6e73c54d59ff5725d5fbca9e5e9288b9bfc97b13c77fc2b30b3245",
+      "bytes": 8817
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 997,
+    "package_json": "parsed",
+    "toml_files": 3,
+    "git_diff_check": "clean",
+    "line_counts": {
+      "ui/src/App.tsx": 2122,
+      "ui/src-tauri/src/main.rs": 2041,
+      "engine/src/lumaretouch_engine/server.py": 6971
+    }
+  },
+  "requirements": {
+    "LNX-REF-PC-32475-C-442ced0175": "partial: narrow manual-assisted entry, not general extraction",
+    "LNX-REF-PC-32475-C-ab010073e3": "unimplemented: no verified deployed AI detector/decomposition weights",
+    "LNX-REF-PC-32475-C-48553e2d03": "source-connected local strength; numerical/photo acceptance UNRUN",
+    "LNX-REF-PC-32475-C-c959928d7a": "source-connected standard black-layer Normal; UNRUN",
+    "LNX-REF-PC-32475-C-b1b766d4ce": "source-connected standard Multiply, identical to Normal for black layer; UNRUN",
+    "LNX-REF-PC-32475-C-9e1c732ff8": "source-connected linear-space artistic Soft Light; UNRUN",
+    "LNX-REF-PC-32475-C-0513155f3d": "partial: reviewed existing source-local geometric brush objects, no new in-panel direct paint canvas"
+  },
+  "remaining": [
+    "Uniform diffuse same-material floor only; same-colour dark albedo, stains and neutral texture remain ambiguous. Deep/dark contact shadows and mixed foreground edges may be omitted.",
+    "Requires manual geometric subject support; prompted low-resolution model alpha not admitted as native-full extraction evidence.",
+    "Live asset background uses bounded display transmission approximation; full-source review/inspection/export authoritative, no pixel-exact low-resolution parity claim.",
+    "RAW/TIFF16 ordinary RGB8 delivery with early downconversion explicitly refused; PNG16 late-quantized RGB8 and genuine high-bit routes supported in source only.",
+    "No dedicated target-reviewed original-shadow preset/batch transfer. Whole-ID transfer also refuses disabled nonneutral retained intent; no separate clear-samples action.",
+    "Direct retention paint canvas, general textured-floor extraction and AI retention remain unfinished.",
+    "Alpha/HDR not extended or clipped. All runtime, numerical, native, UI, photographic, packaging and performance acceptance UNRUN."
+  ],
+  "verification": "No product imports/execution, tests, build, compiler, typecheck, inference, downloads or Git writes. Primary sources and licences documented; no external code/weights copied."
+}

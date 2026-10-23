@@ -1,7 +1,10 @@
-# Original photographed-shadow retention: unimplemented research boundary
+# Original photographed-shadow retention: research boundary
 
 Reconciled 2026-10-23. This document is not an implementation, model installation,
 licence clearance for checkpoint redistribution, or numerical/photo acceptance.
+The later [manual-assisted implementation scope](IMPLEMENTATION.md) uses reviewed
+uniform-floor measurements, not these neural models. The AI retention requirement
+and general photographic extraction remain unimplemented; the family stays partial.
 
 ## Exact official requirements
 

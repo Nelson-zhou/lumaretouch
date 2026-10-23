@@ -2,7 +2,7 @@
 from hashlib import sha256
 import json
 
-ACTIONS=frozenset(('id_state','id_sample','id_clear','id_import','id_set','id_review','id_spill_preview','id_spill_apply','id_spill_paint_source'))
+ACTIONS=frozenset(('id_state','id_sample','id_clear','id_import','id_set','id_review','id_spill_preview','id_spill_apply','id_spill_paint_source','id_original_shadow_preview','id_original_shadow_apply'))
 MODES=frozenset(('id_background','id_background_subject','id_background_reference'))
 
 
@@ -23,7 +23,9 @@ def require_command(engine,name,request):
     if name=='background':
         rid=request.get('request_id')
         if type(rid) is not str or not 1<=len(rid)<=128:raise ValueError('Invalid ID request identity')
-        owner=engine.__dict__.get('_spill_removal_owner' if action in ('id_spill_preview','id_spill_apply','id_spill_paint_source') else '_id_background_owner')
+        owner_key=('_original_shadow_owner' if action in ('id_original_shadow_preview','id_original_shadow_apply') else
+                   '_spill_removal_owner' if action in ('id_spill_preview','id_spill_apply','id_spill_paint_source') else '_id_background_owner')
+        owner=engine.__dict__.get(owner_key)
         cached=getattr(owner,'cache',{}).get(rid)
         if cached is not None:
             digest=sha256(json.dumps(request,sort_keys=True,allow_nan=False).encode()).hexdigest()
@@ -40,8 +42,11 @@ def require_command(engine,name,request):
         from .spill_removal_controller import EXTRA, ACTIONS as SPILL_ACTIONS, envelope
         if action in SPILL_ACTIONS:
             envelope(request)
+        from .original_shadow_controller import ACTIONS as SHADOW_ACTIONS, envelope as shadow_envelope
+        if action in SHADOW_ACTIONS:
+            shadow_envelope(request)
         extra={'id_clear':set(),'id_import':{'path'},'id_set':{'recipe'},'id_review':{'category','object_ids','reviewed'},**EXTRA}
-        if action not in SPILL_ACTIONS and set(request)!={'cmd','action','request_id','document_id','recipe_document_id','recipe_revision'}|extra[action]:
+        if action not in SPILL_ACTIONS|SHADOW_ACTIONS and set(request)!={'cmd','action','request_id','document_id','recipe_document_id','recipe_revision'}|extra[action]:
             raise ValueError('Invalid ID mutation envelope')
     else:
         allowed={'cmd','action','capture_id','ticket','document_id'}

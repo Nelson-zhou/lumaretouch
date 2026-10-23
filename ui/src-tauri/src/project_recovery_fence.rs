@@ -8,6 +8,10 @@ fn pending()->&'static Mutex<HashMap<([u8;16],String),Value>> {
 }
 pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     if command["cmd"]=="project_recovery" || crate::batch_api::read_only(command) {return Ok(());}
+    // These exact background actions read isolated/source snapshots. A lost
+    // display receipt must not create a fictitious uncertain-edit save fence.
+    if command["cmd"]=="background" && matches!(command["action"].as_str(),
+        Some("id_state"|"id_sample"|"id_spill_preview"|"id_spill_paint_source"|"id_original_shadow_preview")) {return Ok(());}
     let name=command["cmd"].as_str().unwrap_or("");
     if name.ends_with("_state")||name.ends_with("_receipt")||name.ends_with("_capture")||name.ends_with("_preview")||name.ends_with("_sample")
         || matches!(command["action"].as_str(),Some("state"|"status"|"query"|"receipt"|"list"|"context"|"preview"|"preview_support"|"preview_recovery")) {return Ok(());}
@@ -42,6 +46,16 @@ pub(crate) fn proof(epoch:[u8;16])->Result<Value,String>{
 #[cfg(test)]
 mod tests {
     use super::*;
+    // AUTHORED / UNRUN. Read-only exception must never admit shadow apply.
+    #[test] fn isolated_shadow_preview_does_not_fence_recovery_but_apply_does() {
+        let epoch=[219;16];
+        issued(epoch,&json!({"cmd":"background","action":"id_original_shadow_preview","request_id":"shadow-read"})).unwrap();
+        assert!(proof(epoch).is_ok());
+        issued(epoch,&json!({"cmd":"background","action":"id_original_shadow_apply","request_id":"shadow-write"})).unwrap();
+        assert!(proof(epoch).is_err());
+        observed(epoch,&json!({"event":"id_background_result","request_id":"shadow-write","success":true,"outcome_unknown":false}));
+        assert!(proof(epoch).is_ok());
+    }
     #[test] fn unknown_result_keeps_fence_until_explicit_new_workspace() {
         let epoch=[201;16];
         issued(epoch,&json!({"cmd":"people","action":"commit","request_id":"recovery-fixture"})).unwrap();

@@ -57,7 +57,11 @@ Numerical and photographic quality acceptance remains separate from source work.
 - Original shadow: PC-32475 suffixes `442ced0175`, `ab010073e3`, `48553e2d03`,
   `c959928d7a`, `b1b766d4ce`, `9e1c732ff8`, `0513155f3d`. Existing designed
   projected shadows do not extract original shadows from floor/background/contact
-  texture. Adding blend controls alone would not close this gap.
+  texture. A separate [manual-assisted uniform-floor estimate](../original-shadow/IMPLEMENTATION.md)
+  is now source-connected with actual source measurements and review, not
+  relabelled synthetic projection. AI extraction, general textured floors and
+  direct in-panel retention painting remain unfinished. Adding blend controls
+  alone does not close this gap; all seven IDs remain separately mapped.
 
 ## Avoid double counting
 

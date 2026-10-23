@@ -86,6 +86,13 @@ def validate(value,source):
         # Validate all categories, not only the selected or currently visible one.
         # Existing support validation forbids generic semantic/full-image masks.
         R.validate_budget(mask['recipe'],(source['height'],source['width']))
+    original_shadow=S.original_shadow_of(value)
+    for role in ('lit_floor','retention'):
+        binding=original_shadow[role]
+        if binding is not None:
+            if binding['mask']['source']!=source:
+                raise ValueError('Original shadow samples belong to another effective source')
+            R.validate_budget(binding['mask']['recipe'],(source['height'],source['width']))
     return value
 
 

@@ -58,14 +58,14 @@ def restore(state, previous):
     """Restore only prior target-owned spill, never the parent's other edits.
 
     The caller must first match undo_key against its frozen expected target.
-    Current v2 adds only spill, so restoring a v1 predecessor can remove spill
-    and recover the exact v1 shape without changing any non-spill ID field.
+    A v3 original-shadow sibling must survive restoring legacy neutral spill.
+    Only an otherwise v2 container can return to the exact v1 shape.
     """
     current = I.check(state.get('_id_background'))
     prior = I.check(previous.get('_id_background'))
     if current['source'] != prior['source']:
         raise ValueError('祛染色历史只能恢复同一目标来源；不能复制另一来源的覆盖范围')
-    if prior['version'] == I.VERSION:
+    if prior['version'] == I.VERSION and current['version'] != I.ORIGINAL_SHADOW_VERSION:
         current.pop('spill', None)
         current['version'] = I.VERSION
         restored = I.check(current)

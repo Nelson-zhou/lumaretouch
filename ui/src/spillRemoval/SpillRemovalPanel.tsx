@@ -10,7 +10,7 @@ import './spillRemoval.css';
 
 type Props={documentId:string;report:Report|null;review:SpillReview|null;masks?:LocalMaskReport;disabled:boolean;request:(action:string,fields?:Record<string,unknown>)=>Promise<void>;invalidate:()=>void};
 export function SpillRemovalPanel({documentId,report,review,masks,disabled,request,invalidate}:Props){
- const stored=report?.recipe.version===2?report.recipe.spill:null;
+ const stored=report?.recipe.version===2||report?.recipe.version===3?report.recipe.spill:null;
  const [parameters,setParameters]=useState<SpillParameters>({enabled:stored?.enabled??false,strength:stored?.strength??50});
  const [coverage,setCoverage]=useState<'retain'|'automatic'|'manual'|'paint'>('retain'),[ids,setIds]=useState<string[]>([]),[coverageReviewed,setCoverageReviewed]=useState(false),[readyKey,setReadyKey]=useState<string|null>(null);
  const [strokes,setStrokes]=useState<SpillStroke[]>([]),[paintReady,setPaintReady]=useState(false),[sourceInvalid,setSourceInvalid]=useState(false);

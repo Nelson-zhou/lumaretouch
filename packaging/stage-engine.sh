@@ -215,6 +215,11 @@ mkdir -p "$stage/lumaretouch_engine/third_party/spill_removal"
 cp "$here/../core/spill_removal/lib.rs" "$here/../core/spill_removal/spill_removal.h" "$here/../core/spill_removal/README.md" "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/spill_removal/"
 cp "$here/../docs/spill-removal/README.md" "$stage/lumaretouch_engine/third_party/spill_removal/INTEGRATION.md"
 
+# Original reviewed uniform-floor shadow extraction, no AI model or weights.
+bash "$here/build-original-shadow.sh" "$stage/lumaretouch_engine/bin/liblrt_original_shadow.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/original_shadow"
+cp "$here/../core/original_shadow/lib.rs" "$here/../core/original_shadow/README.md" "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/original_shadow/"
+
 # Original deterministic source-coordinate photo grain, build-time only.
 bash "$here/build-photo-grain.sh" "$stage/lumaretouch_engine/bin/liblrt_photo_grain.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/photo_grain"
