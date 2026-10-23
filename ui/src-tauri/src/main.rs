@@ -59,6 +59,7 @@ mod preset_host;
 mod preset_api;
 mod preset_organisation_api;
 mod source_relocation_api;
+mod virtual_copy_api;
 mod white_balance_api;
 mod white_balance_host;
 mod white_balance_capture_host;
@@ -595,6 +596,11 @@ impl AppState {
     }
 
     pub fn on_session_state(&self, v: &Value) {
+        if v["index"].as_i64() == Some(-1) && v["doc_state"].is_null() {
+            *self.image.lock().unwrap() = None;
+            *self.doc_report.lock().unwrap() = None;
+            *self.doc_rev.lock().unwrap() += 1;
+        }
         *self.session.lock().unwrap() = Some(v.clone());
         // 同上：切文档那一条的 doc_state 就是新那一张的历史账
         if v.get("view_only").and_then(Value::as_bool) != Some(true) { self.note_doc(v, "session_state"); }
@@ -1279,6 +1285,7 @@ fn export(
     quality: Option<i64>,
     tile: Option<i64>,
     images: Option<Vec<String>>,
+    document_ids: Option<Vec<String>>,
     // 放大（M7）：倍率与出片锐量。宿主不填默认值——那两个数的出处是引擎的
     // ready（upscale_scales），宿主抄一份就会在引擎改口径时静默漂开。
     scale: Option<i64>,
@@ -1310,6 +1317,7 @@ fn export(
     if let Some(v) = images {
         cmd["images"] = json!(v);
     }
+    if let Some(v) = document_ids { cmd["document_ids"] = json!(v); }
     if let Some(v) = scale {
         cmd["scale"] = json!(v);
     }
@@ -1727,6 +1735,7 @@ fn session(
     request_id: Option<String>,
     session_id: Option<String>,
     selected_path: Option<String>,
+    document_id: Option<String>,
 ) -> Result<Value, String> {
     const ACTIONS: [&str; 7] = ["scan", "add", "select", "state", "thumbs", "stop_thumbs", "query"];
     if !ACTIONS.contains(&action.as_str()) {
@@ -1737,6 +1746,7 @@ fn session(
     if let Some(v)=request_id { cmd["request_id"]=json!(v); }
     if let Some(v)=session_id { cmd["session_id"]=json!(v); }
     if let Some(v)=selected_path { cmd["selected_path"]=json!(v); }
+    if let Some(v)=document_id { cmd["document_id"]=json!(v); }
     if let Some(v) = dir {
         cmd["dir"] = json!(v);
     }
@@ -1837,6 +1847,7 @@ fn project(
     directory: Option<String>,
     path: Option<String>,
     doc: Option<String>,
+    document_id: Option<String>,
     index: Option<i64>,
     tags: Option<Vec<String>>,
     label: Option<String>,
@@ -1853,6 +1864,7 @@ fn project(
         ("directory", directory.map(Value::from)),
         ("path", path.map(Value::from)),
         ("doc", doc.map(Value::from)),
+        ("document_id", document_id.map(Value::from)),
         ("index", index.map(Value::from)),
         ("trashed", trashed.map(Value::from)),
         ("force", force.map(Value::from)),
@@ -1955,6 +1967,7 @@ fn main() {
             color_picker_capture_api::color_picker_capture, color_picker_capture_api::color_picker_capture_status, color_picker_capture_api::color_picker_capture_frame,
             color_picker_api::color_picker, color_picker_api::color_picker_result,
             white_balance_capture_api::white_balance_capture, white_balance_capture_api::white_balance_capture_status, white_balance_capture_api::white_balance_capture_frame, white_balance_capture_api::white_balance_pick,
+            virtual_copy_api::virtual_copy_request, virtual_copy_api::virtual_copy_status,
             source_relocation_api::source_relocation_request, source_relocation_api::source_relocation_status,
             project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, lip_makeup_api::lip_makeup, brow_shape_api::brow_shape, nose_shape_api::nose_shape, eye_shape_api::eye_shape, mouth_shape_api::mouth_shape, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, preset_organisation_api::preset_organisation, preset_organisation_api::preset_organisation_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
             prompted_mask_api::prompted_masks, prompted_mask_api::prompted_masks_status,

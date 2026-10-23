@@ -1,0 +1,27 @@
+.virtual-copies {
+  color: var(--fg, #e6e8ee); background: #12141a;
+  border: 1px solid var(--line, #2a2e37); border-radius: 8px;
+  padding: 10px; min-width: 0; font-size: 12px; line-height: 1.5;
+}
+.virtual-copies__header, .virtual-copies__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.virtual-copies__header > span, .virtual-copies__hint { color: #a7aebb; }
+.virtual-copies button, .virtual-copies select {
+  font: inherit; color: inherit; min-height: 30px; padding: 4px 8px;
+  background: #20232b; border: 1px solid var(--line, #2a2e37); border-radius: 5px;
+}
+.virtual-copies button { cursor: pointer; }
+.virtual-copies button:disabled { opacity: .5; cursor: not-allowed; }
+.virtual-copies button:focus-visible, .virtual-copies input:focus-visible, .virtual-copies select:focus-visible {
+  outline: 2px solid var(--acc, #e0a86a); outline-offset: 2px;
+}
+.virtual-copies__list { margin: 9px 0; max-height: 220px; overflow: auto; border-block: 1px solid var(--line, #2a2e37); }
+.virtual-copies__row { display: flex; gap: 7px; align-items: center; padding: 6px 2px; }
+.virtual-copies__row[data-trashed="true"] { color: #a7aebb; }
+.virtual-copies__name { min-width: 0; overflow-wrap: anywhere; }
+.virtual-copies__name em { margin-left: 8px; color: #dcb17d; font-size: 11px; font-style: normal; }
+.virtual-copies__semantics { color: #c1c6d0; }
+.virtual-copies__review, .virtual-copies__uncertain { border: 1px solid #8c7048; border-radius: 5px; margin: 8px 0; padding: 9px; background: #272219; }
+.virtual-copies__review ul { max-height: 160px; overflow: auto; padding-left: 20px; }
+.virtual-copies__review button, .virtual-copies__uncertain button { margin: 3px 6px 3px 0; }
+.virtual-copies__uncertain small { display: block; margin-top: 6px; }
+.virtual-copies__error { color: #ffada3; overflow-wrap: anywhere; }

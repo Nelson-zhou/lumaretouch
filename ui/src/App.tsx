@@ -1,3 +1,4 @@
+import {VirtualCopyControls} from './virtualCopies/VirtualCopyControls';
 import {FilmstripGallery,LibraryGallery} from './libraryQuery/Gallery';
 import {LibraryQueryControls} from './libraryQuery/Controls';
 import {useLibraryQuery} from './libraryQuery/useLibraryQuery';
@@ -933,22 +934,22 @@ export default function App() {
   useEffect(()=>{
     const result=strip?.library_query;if(!result)return;
     const previous=selectionSnapshot.current;
-    const trash=Object.fromEntries(strip.docs.map(d=>[d.path,d.trashed]));
+    const trash=Object.fromEntries(strip.docs.map(d=>[d.document_id,d.trashed]));
     setSel(old=>{const next=new Set([...old].filter(path=>previous?.session===result.session_id
       &&previous.ids[path]===result.source_ids[path]&&!!result.source_ids[path]&&previous.trash[path]===trash[path]));
       return next.size===old.size?old:next;});
-    if(previous?.session!==result.session_id||!result.paths.includes(selAnchor.current??''))selAnchor.current=null;
+    if(previous?.session!==result.session_id||!result.document_ids.includes(selAnchor.current??''))selAnchor.current=null;
     selectionSnapshot.current={session:result.session_id,ids:result.source_ids,trash};
   },[strip]);
   const libraryControls=<LibraryQueryControls query={library.query} onChange={library.change}
     pending={library.pending||!library.supported} error={library.error} total={strip?.count??0}
     visible={library.docs.length} selected={sel.size}
-    onSelectVisible={()=>setSel(prev=>new Set([...prev,...library.docs.map(d=>d.path)]))}
+    onSelectVisible={()=>setSel(prev=>new Set([...prev,...library.docs.map(d=>d.document_id)]))}
     onClearSelection={()=>{setSel(new Set());selAnchor.current=null;}}/>;
   async function cyclePick(d:SessionDoc){
     const next=flagOf(d)==='unflagged'?'accepted':flagOf(d)==='accepted'?'rejected':'unflagged';
     const tags=d.tags.filter(t=>!t.startsWith('flag:'));if(next!=='unflagged')tags.push(`flag:${next}`);
-    try{await runProject('tag',{doc:d.path,tags,label:d.label??''});await refreshStatus();}catch(e){setDragNote(String(e));}
+    try{await runProject('tag',{documentId:d.document_id,tags,label:d.label??''});await refreshStatus();}catch(e){setDragNote(String(e));}
   }
   /** 底片条的评分/色标：落在工程记录的 tags/label 上（不碰原图）。
    *  评分用保留标签 `rating:N`；色标用 label（红/黄/绿/蓝/紫）。 */
@@ -957,7 +958,7 @@ export default function App() {
     const tags = (d.tags ?? []).filter((x) => !x.startsWith("rating:"));
     if (next > 0) tags.push(`rating:${next}`);
     try {
-      await runProject("tag", { doc: d.path, tags, label: d.label ?? "" });
+      await runProject("tag", { documentId: d.document_id, tags, label: d.label ?? "" });
       await refreshStatus();
     } catch (e) { setDragNote(String(e)); }
   }
@@ -966,7 +967,7 @@ export default function App() {
     const cur = order.indexOf(d.label ?? "");
     const next = order[(cur + 1) % order.length];
     try {
-      await runProject("tag", { doc: d.path, tags: d.tags ?? [], label: next });
+      await runProject("tag", { documentId: d.document_id, tags: d.tags ?? [], label: next });
       await refreshStatus();
     } catch (e) { setDragNote(String(e)); }
   }
@@ -1260,7 +1261,7 @@ export default function App() {
           sharpen: exportSharpen > 0 ? exportSharpen : undefined,
           bitDepth: exportBits16 ? 16 : undefined,
           // 底片条多选集就是本批的清单；没选就只导当前这一张（引擎按 images 逐条记账）
-          images: exportTargets.length ? exportTargets : undefined,
+          documentIds: exportTargets.length ? exportTargets : undefined,
           // 导出侧 P0 的四格：中性位由引擎定，这里传用户显式选过的值
           outputProfile: exportProfile,
           tiffCompression: combo.tiffCompression,
@@ -1301,7 +1302,7 @@ export default function App() {
   function onPickDoc(index: number) {
     if(library.pending||library.error)return;
     const target=library.docs.find(d=>d.index===index);if(!target)return;
-    runSession("select", { index,selectedPath:target.path,sessionId:library.result?.session_id })
+    runSession("select", { index,selectedPath:target.path,documentId:target.document_id,sessionId:library.result?.session_id })
       .then(() => refreshStatus())
       .catch((e) => setDragNote(String(e)));
   }
@@ -1318,11 +1319,11 @@ export default function App() {
     }
     if (e.shiftKey && selAnchor.current !== null) {
       const docs = library.docs;
-      const anchor=docs.findIndex(d=>d.path===selAnchor.current), target=docs.findIndex(d=>d.path===path);
+      const anchor=docs.findIndex(d=>d.document_id===selAnchor.current), target=docs.findIndex(d=>d.document_id===path);
       if(anchor<0||target<0){selAnchor.current=path;return;}
       const a = Math.min(anchor,target), b = Math.max(anchor,target);
       setSel((prev) => { const n = new Set(prev);
-        docs.slice(a,b+1).forEach((d) => n.add(d.path)); return n; });
+        docs.slice(a,b+1).forEach((d) => n.add(d.document_id)); return n; });
       return;
     }
     selAnchor.current = path;
@@ -1334,19 +1335,16 @@ export default function App() {
     const tag = batchTag.trim();
     if (!tag || !selPaths.length) return;
     for (const path of selPaths) {
-      const row = strip?.docs.find((d) => d.path === path);
+      const row = strip?.docs.find((d) => d.document_id === path);
       const tags = Array.from(new Set([...(row?.tags ?? []), tag]));
-      await runProject("tag", { path, tags }).catch((e) => setDragNote(String(e)));
+      await runProject("tag", { documentId:path, tags }).catch((e) => setDragNote(String(e)));
     }
     await refreshStatus();
   }
 
   /** 批量进/出回收站：置的是工程记录里的标志位，源文件一个字节也不动（CORE-007）。 */
   async function onBatchTrash(toTrash: boolean) {
-    for (const path of selPaths) {
-      await runProject("trash", { path, trashed: toTrash }).catch((e) => setDragNote(String(e)));
-    }
-    await refreshStatus();
+    window.dispatchEvent(new CustomEvent('lrt-virtual-copy-context',{detail:{documentIds:selPaths,action:toTrash?'trash':'restore'}}));
   }
 
   /** 挑图的四组敏感度：用户没挑的就留空，让引擎的默认档（standard）由引擎说。 */
@@ -1411,7 +1409,7 @@ export default function App() {
     if (!strip?.count) { setPickNote(t("strip.needDir")); return; }
     const targets = selPaths.length ? selPaths : undefined;
     try {
-      await runPick("analyze", { ...(targets ? { paths: targets } : {}), force, ...pickArms });
+      await runPick("analyze", { ...(targets ? { indices: (strip?.docs??[]).filter(d=>targets.includes(d.document_id)).map(d=>d.index) } : {}), force, ...pickArms });
       await refreshStatus();
     } catch (e) { setPickNote(String(e)); }
   }
@@ -1442,8 +1440,8 @@ export default function App() {
   const exporting = !!status?.export_progress;
   const projSuffix = caps?.project_suffix ?? ".lrproject.json";
   /** 底片条上被选中的那几张（没选就只导当前这张） */
-  const selPaths = (library.pending||library.error?[]:library.docs).filter(d=>sel.has(d.path)).map(d=>d.path);
-  const exportTargets = sel.size ? selPaths : (hasImage && status?.image?.doc ? [status.image.doc] : []);
+  const selPaths = (library.pending||library.error?[]:library.docs).filter(d=>sel.has(d.document_id)).map(d=>d.document_id);
+  const exportTargets = sel.size ? selPaths : (hasImage ? (strip?.docs.filter(d=>d.loaded).map(d=>d.document_id)??[]) : []);
   const {ok: faceOk, why: faceWhy} = portraitAccess(status, doc, deformGeomWarn);
   const liveTask = tasks.length ? tasks[tasks.length - 1] : null;
   // 注册表上的格式名（jpeg/tiff）与引擎落盘用的后缀名（jpg/tif）不是一回事：
@@ -1788,6 +1786,10 @@ export default function App() {
                         faceAdding={pickFace} />
         </aside>
 
+      {(workspace==='library'||workspace==='retouch')&&<VirtualCopyControls
+        projectKey={`${pid}:${library.result?.session_id??''}`} refreshKey={`${status?.doc_rev}:${status?.session_rev}`} activeDocumentId={strip?.docs.find(d=>d.loaded)?.document_id}
+        selectedDocumentIds={selPaths} disabled={busy||exporting||!status?.engine_alive}
+        onChanged={()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));}}/>}
       <main className="stage">
         <RetouchToolActivity onLocate={locateTool} items={[
           {name:"AI瘦手臂与瘦手臂",featureId:"PC-32473",path:"AI瘦手臂&瘦手臂",active:false,pending:arms.busy,phase:arms.uncertain||arms.state.phase==='uncertain'?'uncertain':arms.state.phase,message:arms.message||arms.state.message,check:arms.check},
@@ -1904,7 +1906,7 @@ export default function App() {
             <ConfirmedPeopleTransfer owner={peopleWorkflow} targets={selPaths} currentPath={strip?.current??''} enabled={hasImage&&!exporting&&status?.ready_caps?.people_protocol===1&&status?.ready_caps?.batch_preflight_protocol===1} onComplete={()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));}}/>
             {strip && strip.count > 0 && (
               <>
-                <ColourTransferTools workflowEnabled={status?.ready_caps?.semantic_colour_workflow_protocol===1} selectedSample={sampleLibrary.selectedReference} semanticEnabled={hasImage&&status?.ready_caps?.semantic_colour_protocol===1} refreshKey={String(status?.doc_rev??0)} sourceDocumentId={doc?.document_id??''} currentPath={strip.current??''} targets={selPaths} enabled={hasImage&&status?.ready_caps?.reference_color_protocol===1} onComplete={()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));}}/>
+                <ColourTransferTools workflowEnabled={status?.ready_caps?.semantic_colour_workflow_protocol===1} selectedSample={sampleLibrary.selectedReference} semanticEnabled={hasImage&&status?.ready_caps?.semantic_colour_protocol===1} refreshKey={String(status?.doc_rev??0)} sourceDocumentId={doc?.document_id??''} currentPath={strip.current??''} targets={selPaths.filter(id=>id!==strip.docs.find(d=>d.loaded)?.document_id)} enabled={hasImage&&status?.ready_caps?.reference_color_protocol===1} onComplete={()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));}}/>
                 <BatchActions count={selPaths.length} scopes={syncScopes} scope={effectiveScope.label}
                   groups={doc?.local_masks?.transfer_groups} localMaskTransfer={syncScopeOps.includes(LOCAL_GRADE_OP)?localMaskTransfer:undefined} onLocalMaskTransfer={setLocalMaskTransfer} policy={batchPolicy} onScope={setSyncScopeLabel} onPolicy={setBatchPolicy} note={syncNote}
                   ready={hasImage&&status?.ready_caps?.batch_preflight_protocol===1} busy={['committing','preflighting'].includes(batchWorkflow.ui.phase)}

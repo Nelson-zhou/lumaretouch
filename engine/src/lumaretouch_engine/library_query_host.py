@@ -71,15 +71,15 @@ def query_state(engine, event_rows):
     exported = successful_exports(getattr(engine, '_tasks', {}))
     # These are response copies, not source rows. Keep every outgoing fact in
     # one result consistent with the same observed export-ledger snapshot.
-    rows = [{**row, 'library': {**row['library'], 'exported': row['path'] in exported}}
+    rows = [{**row, 'library': {**row['library'], 'exported': (row.get('document_id',row['path']) in exported or (not row.get('copy_number',0) and row['path'] in exported))}}
             for row in event_rows]
     visible = evaluate(rows, owner['query'])
     return {'version': 1, 'session_id': owner['session_id'],
             'request_id': owner['request_id'], 'success': owner['success'], 'error': owner['error'],
-            'query': deepcopy(owner['query']), 'paths': [row['path'] for row in visible],
+            'query': deepcopy(owner['query']), 'paths': [row['path'] for row in visible], 'document_ids':[row['document_id'] for row in visible],
             'indices': [row['index'] for row in visible], 'count': len(visible), 'total': len(rows),
-            'source_ids': {row['path']: row['library']['source_id'] for row in rows},
-            'facts': {row['path']: row['library'] for row in rows},
+            'source_ids': {row['document_id']: row['source_asset_id'] for row in rows},
+            'facts': {row['document_id']: row['library'] for row in rows},
             'unknown': {key: sum(row['library'].get(key) is None for row in rows)
                         for key in ('rating', 'flag', 'edited', 'capture_time', 'edit_time', 'size', 'format')},
             'policies': {'combination': 'and_axes_or_choices', 'unknown_sort': 'last_in_both_directions',

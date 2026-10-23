@@ -1874,7 +1874,7 @@ def export_master_16bit(path: str, out_path: str, *, device: str | None = None,
                         output_profile: str = "srgb",
                         conflict_policy: str = "skip_and_report",
                         metadata_include_gps: bool = False,
-                        tiff_compression: str = "none") -> dict:
+                        tiff_compression: str = "none", verify_source=None) -> dict:
     """16-bit 母档直通导出：满幅解一次 → 写 16-bit TIFF → 读回逐字节自证。
 
     三个自证读数缺一个都不算“保真”：
@@ -1887,6 +1887,7 @@ def export_master_16bit(path: str, out_path: str, *, device: str | None = None,
     from . import decode as D
     t0 = time.perf_counter()
     d = D.load_full(path, device=device, want_bits=16)
+    if verify_source is not None: verify_source()  # Fence before any output publication.
     t_dec = time.perf_counter()
     arr = d.rgb
     src = (d.raw or {}).get("source")

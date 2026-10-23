@@ -17,15 +17,15 @@ export function ExportQueuePanel({exportTargets,exporting,status,strip,exportBit
               )}
               <div className="qList">
                 {exportTargets.length ? exportTargets.map((p) => {
-                  const d = strip?.docs.find((x) => x.path === p);
-                  const done = status?.export?.images?.find((i) => i.path === p);
-                  const now = status?.export_progress?.path === p;
+                  const d = strip?.docs.find((x) => x.document_id === p);
+                  const done = status?.export?.images?.find((i) => i.document_id === p);
+                  const now = status?.export_progress?.document_id === p;
                   const state = done ? (done.error ? "失败" : "已完成")
                     : now ? "导出中" : "待导出";
                   return (
                     <div className={"qRow" + (done ? (done.error ? " bad" : " ok") : "")}
                          key={p} title={done?.error}>
-                      <span className="qName">{d?.name ?? p.split("/").pop() ?? p}</span>
+                      <span className="qName">{d ? `${d.name}${d.copy_number ? ` · 副本 ${d.copy_number}` : ""}` : p}</span>
                       <span className="qFmt">{exportBits16 ? "16-bit TIFF"
                         : exportFormat.toUpperCase()}</span>
                       <em>{state}</em>

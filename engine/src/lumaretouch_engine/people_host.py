@@ -26,11 +26,8 @@ class PeopleHostMixin:
         return flags(self)
 
     def _people_owner(self):
-        if '_people_graph_owner' not in self.__dict__:
-            self._people_graph_owner=PeopleGraphOwner()
-            self._people_support={};self._people_landmarks={};self._people_analyses={}
-            self._people_cursors={};self._people_targets={};self._people_analysis_key=None
-        return self._people_graph_owner
+        from .virtual_copy_people import owner
+        return owner(self)
 
     def _people_source(self):
         return SOURCE.bind_source(self)
@@ -173,13 +170,10 @@ class PeopleHostMixin:
         owner.commit(candidate,expected_fence=owner.fence);self._people_analysis_key=None
 
     def _people_save(self,project):
-        owner=self._people_owner()
-        project['people_graph']=owner.snapshot();project['people_support_assets']=deepcopy(self._people_support)
-        project['people_landmarks']=deepcopy(self._people_landmarks)
-        project['people_cursors']=deepcopy(self._people_cursors)
+        from .virtual_copy_people import save_project
+        self._people_owner();save_project(self,project)
         from .people_history_persistence import save
         save(self,project)
-        HAIR.save(self,project)
 
     def _people_stage_project(self,project,rows):
         from .people_project import validate_records
@@ -196,31 +190,36 @@ class PeopleHostMixin:
         self._people_landmarks=RA.check_store(project.get('people_landmarks',{}))
         self._people_cursors=deepcopy(project.get('people_cursors',{}));self._people_targets={}
         self._people_analyses={};self._people_analysis_key=None;self._people_render_enabled=False
+        from .virtual_copy_people import loaded
+        loaded(self)
         from .people_history_persistence import restore
         restore(self,project,prepared_history)
 
-    def _people_export_snapshot(self,state,source_path=None,graph=None):
+    def _people_export_snapshot(self,state,source_path=None,graph=None,*,context=None):
         from .people_snapshot import capture
+        from .virtual_copy_people import export_context,view
         if source_path is None:source_path=self._doc_path
         if not source_path:return None
-        asset=SOURCE.source_digest(source_path);graph=self._people_owner().snapshot() if graph is None else S.check(graph)
+        context=export_context(self,state,source_path,context)
+        retained_host=view(self,context)
+        asset=SOURCE.source_digest(source_path);graph=context['people_graph'] if graph is None else S.check(graph)
         retained=any(f['asset_sha256']==asset for f in graph['faces'].values()) or any(r['asset_sha256']==asset and r['status']=='unresolved' for r in graph['unresolved_legacy']) or any(r['scope']=='all_people' and r['target_id']==asset for r in graph['overrides'])
         if not retained:return None
-        analyses=self._people_analyses.get(asset,{})
+        analyses={}
         pc=state.get('_precompute')
         if pc is not None and any(f['asset_sha256']==asset for f in graph['faces'].values()):
             face=next(f for f in graph['faces'].values() if f['asset_sha256']==asset)
             ev=face['evidence']
             _,analyses,_=B.bind(graph,asset,pc,source_dimensions=(ev['source_width'],ev['source_height']))
-            analyses=RA.restore_missing(graph,self._people_landmarks,asset,pc,analyses)
+            analyses=RA.restore_missing(graph,context['people_landmarks'],asset,pc,analyses)
         face=next((f for f in graph['faces'].values() if f['asset_sha256']==asset),None)
         binding=None if face is None else {'sha256':asset,'width':face['evidence']['source_width'],'height':face['evidence']['source_height']}
         if pc is None and binding is not None:
             from .hair_colour_replay import analyses as retained_hair_analyses
-            restored=retained_hair_analyses(self,graph,binding)
+            restored=retained_hair_analyses(retained_host,graph,binding)
             if restored is not None:analyses=restored
-        result=capture(graph,asset,analyses);result['support_assets']=deepcopy(self._people_support)
-        return result if binding is None else HAIR.capture(self,result,pc,binding,source_path=source_path)
+        result=capture(graph,asset,analyses);result['support_assets']=deepcopy(context['people_support_assets'])
+        return result if binding is None else HAIR.capture(retained_host,result,pc,binding,source_path=source_path)
 
     def cmd_people(self,p):
         from .people_host_commands import apply
@@ -242,6 +241,9 @@ class PeopleHostMixin:
         def signature(state,asset):
             return [(k,f['enabled'],f['local_assets'],resolve(state,k,A.defaults())['operations'],resolve(state,k,A.defaults())['conflicts'])
                     for k,f in sorted(state['faces'].items()) if f['asset_sha256']==asset]
+        from .virtual_copy_people import scope_rows,is_private,current_row
+        scoped_rows=scope_rows(self)
+        if is_private(current_row(self)):assets=set(assets)&{current}
         staged=None
         for asset in sorted(assets):
             if asset!=current and signature(before,asset)==signature(candidate,asset) and before['association_revision']==candidate['association_revision']:continue
@@ -249,7 +251,7 @@ class PeopleHostMixin:
                 recovery=SUPPORT.raster(candidate,self._people_support,asset,(self._vram.h,self._vram.w))
                 staged=prepare_preview(self._vram,candidate,asset,self._people_analyses.get(asset,{}),byte_budget=available_estimate(),recovery_assets=recovery,**OWNED.preview(self,candidate,body_source=source))
             else:
-                row=next((row for row in self._docs if SOURCE.source_digest(row['path'])==asset),None)
+                row=next((row for row in scoped_rows if SOURCE.source_digest(row['path'])==asset),None)
                 if row is None:raise ValueError('A linked photo is unavailable; shared edits were not partially applied')
                 validate(self,row,candidate)
         self._people_staged=staged
@@ -268,7 +270,8 @@ class PeopleHostMixin:
         owner=self._people_owner();before=owner.snapshot();fence=owner.fence
         try:
             owner.commit(candidate,expected_fence=fence);self._people_analysis_key=None
-            for row in self._docs:
+            from .virtual_copy_people import scope_rows
+            for row in scope_rows(self):
                 if SOURCE.source_digest(row['path']) in assets:self._document_versions().advance(row)
             self._people_sync(strict=True)
             frame=self._write_current_frame('people');frame['doc_state']=self.doc_state()
@@ -283,18 +286,18 @@ class PeopleHostMixin:
         finally:self._people_staged=None
 
     def _people_restore_batch(self,batch,redo):
-        from .people_graph_patch import apply
-        from .people_graph_owner import affected_assets
-        owner=self._people_owner();before=owner.snapshot()
-        for rec in batch['targets'].values():
-            found=self._document_versions().find(self._docs,rec['document_id'])
-            from .source_relocation_history import matches as source_path_matches
-            if found is None or not source_path_matches(found[1], rec['path']) or SOURCE.source_digest(found[1]['path'])!=rec['asset_sha256']:
-                raise ValueError('A people batch target changed or was removed; protected group restore refused')
-        candidate=apply(before,batch['people_changes'],redo=redo)
-        assets=affected_assets(before,candidate);assets.add(self._people_source()['sha256'])
-        self._people_prepare_graph(candidate,assets)
-        return self._people_publish_graph(candidate,assets)
+        from .people_batch_ledger import restore_scoped
+        if 'people_scoped_changes' in batch:return restore_scoped(self,batch,redo)
+        # Old project-wide receipts remain attached to the original shared
+        # owner even when the user is currently viewing a private copy.
+        from .virtual_copy_people import is_private,PROJECT
+        rows=[row for row in self._docs if not is_private(row) and not row.get('_people_new_import')]
+        if not rows:raise ValueError('Legacy portrait history has no original project graph')
+        converted=deepcopy(batch)
+        converted['people_scoped_changes']=[{'scope':PROJECT,'document_id':rows[0]['document_id'],
+                                              'changes':batch['people_changes']}]
+        for record in converted['targets'].values():record['people_scope']=PROJECT
+        return restore_scoped(self,converted,redo)
 
     def _people_selected_field(self,kind):
         from types import SimpleNamespace

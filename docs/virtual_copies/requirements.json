@@ -1,0 +1,12 @@
+{
+  "schema": "lrt.virtual-copies.acceptance.v1",
+  "runtime_status": "UNRUN",
+  "requirements": [
+    {"id":"LNX-REF-WF-3YX3UbkTVp-89e052113b","name":"虚拟副本","priority":"P1","source":"https://www.pixcakeai.com/guide/3YX3UbkTVp","implementation":"native controls, project v23, canonical source/document/recipe identity","acceptance":"UNRUN"},
+    {"id":"LNX-REF-WF-3YX3UbkTVp-10e78f2d5f","name":"虚拟副本创建","priority":"P1","source":"https://www.pixcakeai.com/guide/3YX3UbkTVp","implementation":"gallery/retouch context menu, Ctrl/Cmd+apostrophe, independent single/batch copies","acceptance":"UNRUN"},
+    {"id":"LNX-REF-WF-3YX3UbkTVp-acad6e50de","name":"副本删除恢复","priority":"P1","source":"https://www.pixcakeai.com/guide/3YX3UbkTVp","implementation":"root trash cascade, copy-only trash, copy+root restore, affected-revision review and original-operation readback","acceptance":"UNRUN"}
+  ],
+  "verification_performed": ["static Python AST parsing", "static source inspection", "JSON parsing and file hashing"],
+  "verification_not_performed": ["product imports", "tests", "native builds", "typecheck", "compiler", "inference", "application launch", "pixel or screenshot acceptance"],
+  "source_bytes_policy": "No source raster copy, overwrite, move or deletion; source identity uses full SHA evidence, path relocation is source-family metadata only."
+}

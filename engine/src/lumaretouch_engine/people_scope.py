@@ -12,7 +12,9 @@ def describe():
 
 def legacy_batch_face_check(engine,row,*,live=False):
     path=engine._doc_path if live or row is None else row['path']
-    state=engine._people_owner().snapshot();asset=SOURCE.source_digest(path)
+    from .virtual_copy_people import row_snapshot
+    state=row_snapshot(engine,row) if row is not None and not live else engine._people_owner().snapshot()
+    asset=SOURCE.source_digest(path)
     if any(face['asset_sha256']==asset for face in state['faces'].values()):
         return 'unresolved','Retained people edits require the explicit confirmed-face parameter review; a whole legacy recipe has no target map'
     return engine._face_known_single(row,live=live)

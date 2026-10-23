@@ -14,12 +14,13 @@ export function FilmstripGallery({docs,total,sel,thumbs,controls,facts,onPickDoc
                     const rate = ratingOf(d);
                     const flag = d.label ?? "";
                     return (
-                      <div key={d.path}
+                      <div key={d.document_id}
                            className={"cell" + (d.loaded ? " on" : "")
-                             + (sel.has(d.path) ? " sel" : "") + (d.trashed ? " trashed" : "")}
+                             + (sel.has(d.document_id) ? " sel" : "") + (d.trashed ? " trashed" : "")}
                            role="button" tabIndex={0}
-                           title={d.name}
-                           onClick={(e) => onCellClick(e, d.index, d.path)}
+                           title={`${d.name}${d.copy_number ? ` · 副本 ${d.copy_number}` : " · 原图"}`}
+                           onContextMenu={e=>{e.preventDefault();window.dispatchEvent(new CustomEvent("lrt-virtual-copy-context",{detail:{documentId:d.document_id}}));}}
+                           onClick={(e) => onCellClick(e, d.index, d.document_id)}
                            onKeyDown={(e) => {
                              if (e.key === "Enter") onPickDoc(d.index);
                            }}>
@@ -62,20 +63,21 @@ export function LibraryGallery({docs,total,sel,thumbs,controls,facts,onPickDoc,o
             {docs.length > 0 ? (
               <div className="libGrid">
                 {docs.map((d) => (
-                  <button key={d.path}
-                          className={"libCard" + (d.loaded ? " cur" : "") + (sel.has(d.path) ? " sel" : "")} aria-pressed={sel.has(d.path)}
-                          onClick={(e) => { onCellClick(e, d.index, d.path); if (!e.shiftKey && !e.metaKey && !e.ctrlKey) onRetouch(); }}>
+                  <button key={d.document_id}
+                          onContextMenu={e=>{e.preventDefault();window.dispatchEvent(new CustomEvent("lrt-virtual-copy-context",{detail:{documentId:d.document_id}}));}}
+                          className={"libCard" + (d.loaded ? " cur" : "") + (sel.has(d.document_id) ? " sel" : "")} aria-pressed={sel.has(d.document_id)}
+                          onClick={(e) => { onCellClick(e, d.index, d.document_id); if (!e.shiftKey && !e.metaKey && !e.ctrlKey) onRetouch(); }}>
                     <span className="libThumb">
                       {d.thumb && thumbs[d.path]
                         ? <img alt={d.name} src={`data:image/jpeg;base64,${thumbs[d.path]}`} />
                         : <span className="ph">…</span>}
                     </span>
                     <span className="libMeta">
-                      <span className="libName">{d.name}</span>
+                      <span className="libName">{d.name}{d.copy_number ? ` · 副本 ${d.copy_number}` : " · 原图"}</span>
                       <span className="libTags">
                         {isRawDoc(d) && <em className="tag raw">RAW</em>}
-                        {!!facts?.[d.path]?.edited && <em className="tag edited">已编辑</em>}
-                        {!!facts?.[d.path]?.exported && <em className="tag done">已导出</em>}
+                        {!!facts?.[d.document_id]?.edited && <em className="tag edited">已编辑</em>}
+                        {!!facts?.[d.document_id]?.exported && <em className="tag done">已导出</em>}
                       </span>
                       <span className="libStars">
                         {"★".repeat(ratingOf(d))}{"☆".repeat(5 - ratingOf(d))}

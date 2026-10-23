@@ -82,9 +82,9 @@ def test_source_hash_is_unchanged_by_the_project(tmp_path, src):
     after = (open(src, "rb").read(), os.stat(src).st_mtime_ns)
     assert before[0] == after[0] and before[1] == after[1], "打指纹这一步碰了源文件"
     import hashlib
-    # 默认那一等是 head（扫描 512 张时逐张全文件哈希会把导入拖成几十秒），
-    # 而 head 不能冒充 full：报出去就得说清手里的是哪个
-    assert fp["hash_level"] == "head" and fp["sha256"] is None, fp
+    # v23 source identities require complete byte evidence when adding a document.
+    # UNRUN: virtual-copy migration changes the previous head-only default.
+    assert fp["hash_level"] == "full" and fp["sha256"] == hashlib.sha256(after[0]).hexdigest(), fp
     full = P.fingerprint(src, full=True)
     assert full["hash_level"] == "full"
     assert full["sha256"] == hashlib.sha256(after[0]).hexdigest()

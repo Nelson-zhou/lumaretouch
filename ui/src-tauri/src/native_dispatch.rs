@@ -32,7 +32,8 @@ impl AppState {
         // Arm selection and owned proposal queries/cancellation do not alter
         // image pixels or revoke unrelated capture lifetimes.
         // A library view changes neither image history nor any capture lease.
-        if name == "session" && cmd.get("action").and_then(Value::as_str) == Some("query") {
+        if (name == "session" && cmd.get("action").and_then(Value::as_str) == Some("query"))
+            || (name == "virtual_copy" && matches!(cmd.get("action").and_then(Value::as_str), Some("state") | Some("query"))) {
             let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
             return guard.as_ref().ok_or("引擎未启动")?.send(cmd);
         }

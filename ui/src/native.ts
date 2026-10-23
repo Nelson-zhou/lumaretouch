@@ -259,6 +259,7 @@ export interface HistoryState extends HistoryReport {
 
 /** session_state.docs 的一项。缩略图不在这里：像素由 filmstrip 单独取。 */
 export interface SessionDoc {
+  document_id: string; source_asset_id: string; root_document_id: string; copy_number: number; recipe_version_id: string;
   index: number;
   path: string;
   name: string;
@@ -1106,6 +1107,7 @@ export interface TaskState {
  * 必须逐张说清，不能默默少几层。
  */
 export interface ExportedImage {
+  document_id?:string; source_asset_id?:string; recipe_version_id?:string; copy_number?:number;
   path: string;
   outputs?: {path: string | null; variant: string; skipped?: boolean}[];
   watermark?: {enabled: boolean; orientation?: string; asset_sha256?: string};
@@ -1176,6 +1178,7 @@ export interface ExportDone {
 
 /** 逐图进度（引擎侧 export_progress，M4）。index 从 0 起。 */
 export interface ExportProgress {
+  document_id?:string;
   index: number;
   total: number;
   path: string;
@@ -1498,7 +1501,7 @@ export const runBackground = (
  */
 export const runExport = (
   outDir: string,
-  opts?: { format?: string; quality?: number; tile?: number; images?: string[];
+  opts?: { format?: string; quality?: number; tile?: number; images?: string[]; documentIds?:string[];
            scale?: number; sharpen?: number; upscaleBackend?: string;
            bitDepth?: number; outputProfile?: string; tiffCompression?: string;
            metadataIncludeGps?: boolean; conflictPolicy?: string; watermark?: WatermarkSettings; layout?: import("./layout/model").LayoutSpec },
@@ -1509,6 +1512,7 @@ export const runExport = (
     quality: opts?.quality,
     tile: opts?.tile,
     images: opts?.images,
+    documentIds: opts?.documentIds,
     scale: opts?.scale,
     sharpen: opts?.sharpen,
     upscaleBackend: opts?.upscaleBackend,
@@ -1629,7 +1633,7 @@ export const m0Env = () => invoke<M0Env>("m0_env");
 export const runSession = (
   action: "scan" | "add" | "select" | "state" | "thumbs" | "stop_thumbs" | "query",
   opts: { dir?: string; paths?: string[]; index?: number; edge?: number;
-          quality?: number; limit?: number; thumbs?: boolean; query?: import("./libraryQuery/model").LibraryQuery; requestId?:string;sessionId?:string;selectedPath?:string } = {},
+          quality?: number; limit?: number; thumbs?: boolean; query?: import("./libraryQuery/model").LibraryQuery; requestId?:string;sessionId?:string;selectedPath?:string; documentId?:string } = {},
 ) => invoke<{ requested: boolean }>("session", { action, ...opts });
 
 /** 挑图建议（LNX-PICK-001）：一条命令转发 analyze/stop/state。
@@ -1655,7 +1659,7 @@ export const fetchFilmstrip = () => invoke<Filmstrip>("filmstrip");
 export const runProject = (
   action: "create" | "open" | "save" | "state" | "tag" | "trash",
   opts: { name?: string; directory?: string; path?: string; doc?: string; index?: number;
-          tags?: string[]; label?: string; trashed?: boolean; force?: boolean } = {},
+          tags?: string[]; label?: string; trashed?: boolean; force?: boolean; documentId?:string } = {},
 ) => invoke<{ requested: boolean }>("project", { action, ...opts });
 
 /** 批量任务队列（LNX-P0-TASK）：转移表在引擎里，这里只把 id 递过去。 */

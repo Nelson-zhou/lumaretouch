@@ -1,0 +1,295 @@
+{
+  "status": "AUTHORED_UNRUN",
+  "baseline_commit": "a3741ad6",
+  "files": [
+    {
+      "path": "docs/virtual_copies/README.md",
+      "bytes": 7170,
+      "sha256": "1d9c1ac986e289b3a7d66c375fc84238c5a96e19f1b74be20363b0508b8eafe6"
+    },
+    {
+      "path": "docs/virtual_copies/requirements.json",
+      "bytes": 1382,
+      "sha256": "7b80bb727bb87853ca5607ef5c96056a02cc218d3f6e41617e67686bd14a5a78"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "bytes": 23186,
+      "sha256": "016b25cb506cb3cba8434501e032e211e7c386daa41a5880b7e043ae7dbd0875"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/document_versions.py",
+      "bytes": 2740,
+      "sha256": "2f669357047fd65ba73004b50cc8f8811659b4ddd31f3b84d15a0d2380a85693"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "bytes": 121319,
+      "sha256": "cb62efbfa2766097eab0c19b8f0585dfd0c9a85dcc99e3d29803808476ef178e"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "bytes": 4534,
+      "sha256": "7d244d80b3da2c8a8be4f4fd8f9ea784754ddef0bc188d539232c50f9e716962"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/library_query_facts.py",
+      "bytes": 8856,
+      "sha256": "27e3bf0c6968aaa83288b0e8ece8036b93ba9f60162b5b5d1cca6fd85b3d15a9"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/library_query_host.py",
+      "bytes": 5314,
+      "sha256": "9495824478c435ac2dd82854e2c295425eb6150e941d429a1a2500d4ffc73dac"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/optics_transfer_engine.py",
+      "bytes": 3928,
+      "sha256": "65cc0afa252b0832a3f4a3683b7f1d4348b031570c2a321ee8778e502ec9520e"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_batch_ledger.py",
+      "bytes": 7753,
+      "sha256": "0211e87e48513d7a76c5460eb966052842e1b43fe12b872397a3868d727e53f9"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_batch_transfer.py",
+      "bytes": 11695,
+      "sha256": "19f2a68d249fe5cd775f04ce7b3e3aff94ee5d23202b276193c420708d967124"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_history_persistence.py",
+      "bytes": 9720,
+      "sha256": "1593b19aecd9f270662d09567bd0441e97112998d97acc5abe9bdaa70dce6f59"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "bytes": 19076,
+      "sha256": "8d91de1574e2d9da8dc3318bdbc1328bb5930d745e6ae8b950bdd66825c36a0e"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "bytes": 4557,
+      "sha256": "7e71bd4b905e78ad868216b1c7230fd4dc45250359cca5fb0f5881c1c77e4297"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "bytes": 70582,
+      "sha256": "1fd4f980e480887fadb6d56eb8aa0614de7381317763f86ee359a60b682023ec"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_engine.py",
+      "bytes": 6027,
+      "sha256": "4a6c3e6536bd1dc1e11dad012544b8bf219e382c9a77a3aff68c3d3766abfc03"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/semantic_colour_batch_target.py",
+      "bytes": 5348,
+      "sha256": "f064ca5f7b7fea446bf6724c7e4c95ead93c8a090ba6ceb888b7d6f3b6765311"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/semantic_colour_capture.py",
+      "bytes": 7543,
+      "sha256": "de57375267c47162aaf5794d16e88a6d9e34e5a3c47e7f82f89bf5d4c74856db"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "bytes": 466505,
+      "sha256": "5de849f9bebd615548374465b55445d1a0b882504cfc35a7f60d55edf894c35c"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/source_relocation_host.py",
+      "bytes": 19203,
+      "sha256": "656d2911de7d825d698e322d4fff2eee4fd867d2489e8471744003d23cbe16dc"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/source_relocation_transaction.py",
+      "bytes": 10197,
+      "sha256": "030ea7bfe9acc298e19dcf51458f3b6c7936bfc4169bcd96bb632284ecfbb278"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_export.py",
+      "bytes": 4454,
+      "sha256": "b64da7649500f199d8c152a59e48f1a1c8032841d522d4893b571dd6e90ea745"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_host.py",
+      "bytes": 10568,
+      "sha256": "9a05fdf1726866cbdf47d7b71d182abf6b0885c035f399b396dae7a8827266f9"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_people.py",
+      "bytes": 12971,
+      "sha256": "71f076b401a45ed524d0af0cf799325f5ba94d5fb2db900eba40d13439564ad8"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_project.py",
+      "bytes": 3210,
+      "sha256": "f389b4f673540ab4971dcf597d5f991f4b14038083de22e21ea7aea9f6ff821e"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_session.py",
+      "bytes": 1850,
+      "sha256": "ed3134a97a160acaf03c1d0d74d454bc6281d9df10006dcee04a18c69e3d5d43"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_source.py",
+      "bytes": 1835,
+      "sha256": "1aaee69a11335cc62d060172bc5319a25f60031a13673c2b71f93d52d35055eb"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_storage.py",
+      "bytes": 14650,
+      "sha256": "5911d97d49ed2459f3e72323e58bb6cf201eba2bca899a1d9e58e77be98229dc"
+    },
+    {
+      "path": "engine/tests/test_document_versions.py",
+      "bytes": 2133,
+      "sha256": "faad20ef49e1a192b34a10e59841bb81667d8afd505017e8cd85f3cb9fcb28c2"
+    },
+    {
+      "path": "engine/tests/test_project.py",
+      "bytes": 18579,
+      "sha256": "29d1a9161c62133104f54bd55780f9011b410fac310a3dc0421173f4b5cd8c67"
+    },
+    {
+      "path": "engine/tests/test_virtual_copy_export.py",
+      "bytes": 2240,
+      "sha256": "47655aa839975c66c1f28a690a8f750a6b81c9fa74dd058e2500ae612169152a"
+    },
+    {
+      "path": "engine/tests/test_virtual_copy_people.py",
+      "bytes": 16577,
+      "sha256": "fa2c9444b6e2ee872cfdf74493bd8f4f129b8222a7a6b23e75dbecb1bf16e193"
+    },
+    {
+      "path": "engine/tests/test_virtual_copy_session.py",
+      "bytes": 2006,
+      "sha256": "11b79040d42a102d162b531197d13831d222a47c2e859a509c9a74e37f10c97d"
+    },
+    {
+      "path": "engine/tests/test_virtual_copy_storage.py",
+      "bytes": 12023,
+      "sha256": "90cd396e24b9f4e8a39296da069a4097daa62de3cb8f10f5cf06f907c39b14c5"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "bytes": 34360,
+      "sha256": "0a6e53647f9576cf9b9c5541a182e68dd829537cb1b28c4362f0825164adb935"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "bytes": 97600,
+      "sha256": "8845268a8bc881d9d176770525796b6e60a24b0a3923fd3134d9d6f22a0feaba"
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "bytes": 7565,
+      "sha256": "2e64f3c94b9ab07f34b8f546c427f01148134ad9091d14c633713f54643f404d"
+    },
+    {
+      "path": "ui/src-tauri/src/virtual_copy_api.rs",
+      "bytes": 6279,
+      "sha256": "17a20028ae77a37b12d813409373c36a82861d88acf7bc6f23b987a1bf89576d"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "bytes": 134535,
+      "sha256": "63d3a6e95d6ff013c90e4a9ecdf6e12a4794b50c7ccd9b80b0f8d99b023b77b8"
+    },
+    {
+      "path": "ui/src/components/ExportQueuePanel.tsx",
+      "bytes": 2319,
+      "sha256": "22f36e893a76f97447de75432bc16cda33f8c405852bc1cda34d49a751ce1108"
+    },
+    {
+      "path": "ui/src/libraryQuery/Gallery.tsx",
+      "bytes": 6427,
+      "sha256": "6a3a45fa3829e8304baccb54cb6651042554b7a35ff41911b21410283b5153c2"
+    },
+    {
+      "path": "ui/src/libraryQuery/model.ts",
+      "bytes": 1250,
+      "sha256": "4d1f1730d8a37b80d5aa8411ff82d0a42475951ca6c9f88098b349e8899da0a9"
+    },
+    {
+      "path": "ui/src/libraryQuery/useLibraryQuery.ts",
+      "bytes": 2386,
+      "sha256": "2f6232684d9c4060776fe23d81874185af8f19965470d939c7d3c38aeca28127"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "bytes": 95075,
+      "sha256": "8516ca4fd7dd066ce593d196fb56aa4e6a31c2b5dd7a86cb873232b4804e3a6d"
+    },
+    {
+      "path": "ui/src/people/ConfirmedPeopleTransfer.tsx",
+      "bytes": 6810,
+      "sha256": "7a78f15049b82719adde6e4073b0b693ded8471972ec7d5ae2d41969593e5938"
+    },
+    {
+      "path": "ui/src/sourceRelocation/SourceRelocationPanel.tsx",
+      "bytes": 10103,
+      "sha256": "e1f8fd55d3b7ec8b34bb5dd261b734d85a50cfc24221c31119613d9fabaafa6a"
+    },
+    {
+      "path": "ui/src/sourceRelocation/nativePort.ts",
+      "bytes": 1630,
+      "sha256": "22f27f56a5a343d4a162401972c2156e2355213b76c4a3312095861bfd52d9be"
+    },
+    {
+      "path": "ui/src/virtualCopies/ACCEPTANCE.md",
+      "bytes": 6324,
+      "sha256": "c80fbc2b92c701044db43dc254810f70b4f4b8f391dd699a44d7c2cdb9b1d209"
+    },
+    {
+      "path": "ui/src/virtualCopies/VirtualCopyControls.tsx",
+      "bytes": 18984,
+      "sha256": "121f10c3513a30466bd24db52ca10fb97849eb0f9cb9edaf07314b37c066eba9"
+    },
+    {
+      "path": "ui/src/virtualCopies/model.test.ts",
+      "bytes": 4808,
+      "sha256": "a34b0480074b2bb23f1f2e0e381984c5b662685ce62a7b38464f04e43873c0be"
+    },
+    {
+      "path": "ui/src/virtualCopies/model.ts",
+      "bytes": 4120,
+      "sha256": "2067e0c525a08b69f7e26725056b87a1c0b356521ba585106f5e0cc86807d818"
+    },
+    {
+      "path": "ui/src/virtualCopies/nativePort.ts",
+      "bytes": 4973,
+      "sha256": "0c4fa4d9ac388ea54920195cca9a18aa002734875b00202f5e8114da99a0428a"
+    },
+    {
+      "path": "ui/src/virtualCopies/virtualCopies.css",
+      "bytes": 1840,
+      "sha256": "6d53345f24a38148df3431414be5961f376b5e391308ca1654031cb367374f97"
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 770,
+    "json_parse": "docs/virtual_copies/requirements.json",
+    "git_diff_check": "clean",
+    "line_counts": {
+      "App.tsx": 2073,
+      "main.rs": 1980,
+      "server.py": 7025
+    }
+  },
+  "not_run": [
+    "product imports",
+    "tests",
+    "build",
+    "compiler",
+    "typecheck",
+    "inference",
+    "application UI"
+  ],
+  "limitations": [
+    "Legacy preexisting same-byte original documents retain historical shared people associations; newly imported independent roots and virtual copies are isolated.",
+    "Conflicting retained hair evidence refuses save instead of replacing evidence.",
+    "Runtime, IPC, visual, pixel-output and performance acceptance remain UNRUN."
+  ]
+}

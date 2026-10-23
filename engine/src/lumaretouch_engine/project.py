@@ -41,6 +41,7 @@ from .reference_color_project import validate_records as validate_reference
 from .semantic_colour_project import validate_records as validate_semantic_colour
 from .body_pose_project import validate_records as validate_body_pose
 from .repair_record import RepairOp, check_repair_fields, validate_repair_ops
+from . import virtual_copy_storage as VC
 
 LEGACY_SCHEMA = "lrt.project.v1"
 WB_SCHEMA = "lrt.project.v2"
@@ -63,7 +64,8 @@ SELECTIVE_SCHEMA = "lrt.project.v18"
 PRIMARY_SCHEMA = "lrt.project.v19"
 DETAIL_SCHEMA = "lrt.project.v20"
 GRAIN_SCHEMA = "lrt.project.v21"
-SCHEMA = "lrt.project.v22"
+COLOUR_EDITOR_SCHEMA = "lrt.project.v22"
+SCHEMA = "lrt.project.v23"
 SUFFIX = ".lrproject.json"
 
 # 上限：宁可显式丢弃，也不要"保存成功但下次打开少了一半配方"这种事
@@ -174,44 +176,49 @@ def validate(p: object) -> None:
     except (ValueError,TypeError,KeyError) as error: raise ProjectError(str(error)) from error
     sv = p.get("schema_version")
     from .primary_calibration_adapters import validate_records as validate_primary
-    try:validate_primary(p,allowed=sv in (PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA))
+    try:validate_primary(p,allowed=sv in (PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
     except (ValueError,TypeError,KeyError,RuntimeError,OSError) as error:raise ProjectError(str(error)) from error
     from .selective_colour_adapters import validate_records as validate_selective
-    try:validate_selective(p,allowed=sv in (SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA))
+    try:validate_selective(p,allowed=sv in (SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     from .colour_grading_adapters import validate_records as validate_grading
-    try:validate_grading(p,allowed=sv in (GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA))
+    try:validate_grading(p,allowed=sv in (GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     from .colour_editor_adapters import validate_records as validate_editor
-    try:validate_editor(p,allowed=sv==SCHEMA)
+    try:validate_editor(p,allowed=sv in (COLOUR_EDITOR_SCHEMA, SCHEMA))
     except ValueError as error:raise ProjectError(str(error)) from error
     from .photo_grain_adapters import validate_records as validate_grain
-    try:validate_grain(p,allowed=sv in (GRAIN_SCHEMA,SCHEMA))
+    try:validate_grain(p,allowed=sv in (GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
     except ValueError as error:raise ProjectError(str(error)) from error
     from .photo_detail_project import validate_records as validate_photo_detail
-    try:validate_photo_detail(p,allowed=sv in (DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA))
+    try:validate_photo_detail(p,allowed=sv in (DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
     except ValueError as error:raise ProjectError(str(error)) from error
     from .extended_tone_project import validate_records as validate_extended_tone
-    try:validate_extended_tone(p,allowed=sv in (TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA))
+    try:validate_extended_tone(p,allowed=sv in (TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     from .hair_colour_project import validate as validate_hair
-    try:validate_hair(p,allowed=(sv in (HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)))
+    try:validate_hair(p,allowed=(sv in (HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
-    try:validate_body_pose(p,allowed=(sv in (BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)))
+    try:validate_body_pose(p,allowed=(sv in (BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
-    if sv not in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, MASK_SCHEMA, GRADE_SCHEMA, RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, SCHEMA):
+    if sv not in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, MASK_SCHEMA, GRADE_SCHEMA, RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA):
         raise ProjectError(f"项目 schema_version={sv!r}，本版本认 {SCHEMA!r}")
     for k in ("project_id", "name", "docs", "assets"):
         if k not in p:
             raise ProjectError(f"项目缺顶层键 {k!r}")
     if not isinstance(p["docs"], list) or not isinstance(p["assets"], dict):
         raise ProjectError("项目的 docs/assets 形状不对（应为 list / dict）")
+    if sv == SCHEMA:
+        try:
+            VC.validate_identity(p)
+        except (ValueError, TypeError, KeyError) as error:
+            raise ProjectError(f"Invalid virtual-copy identity: {error}") from error
     seen = set()
     for i, row in enumerate(p["docs"]):
         if not isinstance(row, dict) or not isinstance(row.get("path"), str):
             raise ProjectError(f"docs[{i}] 缺 path 或形状不对")
         rp = row["path"]
-        if rp in seen:
+        if rp in seen and sv != SCHEMA:
             raise ProjectError(f"docs[{i}] 的 path 与前面重复：{rp}")
         seen.add(rp)
         if not isinstance(row.get("versions"), list):
@@ -232,41 +239,41 @@ def validate(p: object) -> None:
                     WB.normalize_state(recipe, required=(sv != LEGACY_SCHEMA))
                 except ValueError as error:
                     raise ProjectError(f"Invalid white-balance recipe: {error}") from error
-                if sv in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, SCHEMA):
+                if sv in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA):
                     _check_manual_liquify_record(recipe.get("_manual_liquify"))
         from .sky_replacement_project import validate_records as validate_sky
-        try: validate_sky(row,required=(sv in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, SCHEMA)),allowed=(sv in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, SCHEMA)),semantic=(sv in (SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)))
+        try: validate_sky(row,required=(sv in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),allowed=(sv in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),semantic=(sv in (SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
         except ValueError as error: raise ProjectError(str(error)) from error
         from .brow_shape_project import validate_records as validate_brows
         from .nose_shape_project import validate_records as validate_noses
         from .eye_shape_project import validate_records as validate_eyes
         from .mouth_shape_project import validate_records as validate_mouth
         from .lip_makeup_project import validate_records as validate_lips
-        try: validate_lips(row); validate_brows(row); validate_noses(row); validate_eyes(row); validate_mouth(row); validate_reference(row); validate_semantic_colour(row,allowed=(sv in (SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)),assets=p["assets"]); validate_body_pose(row,allowed=(sv in (BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)))
+        try: validate_lips(row); validate_brows(row); validate_noses(row); validate_eyes(row); validate_mouth(row); validate_reference(row); validate_semantic_colour(row,allowed=(sv in (SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)),assets=p["assets"]); validate_body_pose(row,allowed=(sv in (BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
         except ValueError as error: raise ProjectError(str(error)) from error
         from .optics_project import validate_records as validate_optics
-        try: validate_optics(row,required=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)),allowed=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)))
+        try: validate_optics(row,required=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)),allowed=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
         except ValueError as error: raise ProjectError(str(error)) from error
         from .id_background_project import validate_records as validate_id_background
         try: validate_id_background(row, assets=p['assets'])
         except ValueError as error: raise ProjectError(str(error)) from error
         from .studio_background_project import validate_records as validate_studio
-        try: validate_studio(row, required=(sv in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)), allowed=(sv in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)))
+        try: validate_studio(row, required=(sv in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)), allowed=(sv in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
         except ValueError as error: raise ProjectError(str(error)) from error
         # Check the complete owned row, not only its active recipe: inactive
         # versions, document snapshots and nested history must fail together.
         _validate_encoded_repairs(row, p["assets"],
             allow_legacy=(sv in (LEGACY_SCHEMA, WB_SCHEMA)),
-            allow_local_grades=(sv in (GRADE_SCHEMA, RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, SCHEMA)),
-            allow_effect_recovery=(sv in (RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, SCHEMA)),
-            require_manual_liquify=(sv in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, SCHEMA)))
+            allow_local_grades=(sv in (GRADE_SCHEMA, RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),
+            allow_effect_recovery=(sv in (RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),
+            require_manual_liquify=(sv in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)))
 
 
 def _migrate(project):
     """Own nested versions; preserve legacy pixels and record explicit heal kinds."""
     result = copy.deepcopy(project)
     previous = result["schema_version"]
-    if previous != SCHEMA:
+    if previous not in (COLOUR_EDITOR_SCHEMA, SCHEMA):
         from .manual_liquify_state import migrate_legacy_states as migrate_manual
         from .studio_background_state import migrate_legacy_states as migrate_studio
         from .optics_state import migrate_legacy_states as migrate_optics
@@ -306,6 +313,15 @@ def _migrate(project):
             "v16 adds independent extended tone and original monochrome output mode where explicitly saved; absent recipes stay neutral. v15 adds lossless custom CUBE assets; v14 retains source-owned hair support and lossless semantic evidence; absent hair intent remains neutral. v13 body bank ownership is preserved. "
             "v11 sky semantics are preserved. v12 adds a separate neutral semantic-colour group only where absent; retained masks use their own rendered-canvas domain. "
             "v13 adds source-owned body operation banks without widening shoulder reviews to other anatomy. Readers older than v13 must reject rather than silently drop body edits; v12 semantic colour and v11 sky ownership remain unchanged.")
+    if previous != SCHEMA:
+        try:
+            VC.ensure_identity(result)
+        except (ValueError, TypeError, KeyError) as error:
+            raise ProjectError(f"Cannot migrate document identity: {error}") from error
+        result["schema_version"] = SCHEMA
+        result.setdefault("migration_notes", []).append(
+            f"Migrated {previous} to v23: stable logical document/source/recipe identities; "
+            "legacy recipes and provenance are unchanged. Independent sources are not deduplicated.")
         validate(result)
     return result
 
@@ -870,11 +886,12 @@ def writer_stamp() -> dict:
 def new_project(name: str, root: str = "") -> dict:
     if not str(name).strip():
         raise ProjectError("项目名不能是空的：底片条与工程列表里它得有个能指认的名字")
-    return {"schema_version": SCHEMA, "project_id": str(uuid.uuid4()),
+    project = {"schema_version": SCHEMA, "project_id": str(uuid.uuid4()),
             "name": str(name).strip(), "root": os.path.abspath(root or os.getcwd()),
             "created_ns": int(time.time_ns()), "updated_ns": int(time.time_ns()),
             "engine": "LumaRetouch", "writer": writer_stamp(),
-            "assets": {}, "docs": [], "dropped": []}
+            "assets": {}, "source_assets": {}, "docs": [], "dropped": []}
+    return VC.ensure_identity(project)
 
 
 def project_path_for(directory: str, name: str, occupied=os.path.exists) -> str:
@@ -900,33 +917,46 @@ def project_path_for(directory: str, name: str, occupied=os.path.exists) -> str:
     raise ProjectError(f"同名项目文件太多（{safe} 一直排到 999）：换个项目名")
 
 
-def find_doc(project: dict, path: str) -> dict | None:
+def find_doc(project: dict, path: str | None = None, *,
+             document_id: str | None = None) -> dict | None:
+    """Resolve explicit document identity, never silently choose a same-path row."""
+    if document_id is not None:
+        matches = [row for row in project["docs"] if row.get("document_id") == document_id]
+        if len(matches) > 1:
+            raise ProjectError(f"Duplicate document identity: {document_id}")
+        row = matches[0] if matches else None
+        if row is not None and path is not None and row["path"] != os.path.abspath(str(path)):
+            raise ProjectError("document_id and path identify different source bindings")
+        return row
+    if path is None:
+        raise ProjectError("A document_id or unambiguous path is required")
     want = os.path.abspath(str(path))
-    for row in project["docs"]:
-        if row["path"] == want:
-            return row
-    return None
+    matches = [row for row in project["docs"] if row["path"] == want]
+    if len(matches) > 1:
+        raise ProjectError(f"Ambiguous source path; select a document_id: {want}")
+    return matches[0] if matches else None
 
 
 def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
             tags=None, dc_types: dict | None = None, budget: int | None = None,
-            version_id: str | None = None, version_name: str = "live") -> dict:
-    """把一张照片连同它的配方放进项目。已存在就**就地换版本**，不追加第二行。
+            version_id: str | None = None, version_name: str = "live",
+            document_id: str | None = None, source_asset_id: str | None = None,
+            root_document_id: str | None = None, copy_number: int | None = None,
+            recipe_version_id: str | None = None, trashed: bool | None = None) -> dict:
+    """Save an explicitly owned document, retaining legacy unambiguous path calls.
 
-    底片条靠路径认一行；同一路径出现两行会让"切回这张图"有歧义，
-    而 `validate()` 会直接拒掉重复 path——所以现在这条是换而不是加。
-
-    `version_id` 给定时按 id **覆盖**而不是追加："当前配方"在工程文件里只能有一格，
-    而它的身份得在多次保存之间稳定（否则“活动版本”每次保存都换一个名字，
-    重开后宿主拿到的 id 与上次看到的不是同一个）。不传就是新建一个命名版本。
+    New linked rows need document_id/source_asset_id/root_document_id/copy_number.
+    Merely supplying the same path never creates a copy or merges independent
+    sources. Version IDs keep their existing named-version semantics; the row's
+    separate recipe_version_id remains stable across edits and saves.
     """
     if recipe is not None:
         try:
             recipe = WB.normalize_state(recipe)
-            if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, SCHEMA):
+            if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA):
                 _check_manual_liquify_record(recipe.get("_manual_liquify"))
             from .sky_replacement_project import validate_records as validate_sky
-            validate_sky(recipe,required=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, SCHEMA)),allowed=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, SCHEMA)),semantic=(project.get("schema_version") in (SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)))
+            validate_sky(recipe,required=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),allowed=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),semantic=(project.get("schema_version") in (SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
             from .brow_shape_project import validate_records as validate_brows
             from .nose_shape_project import validate_records as validate_noses
             from .eye_shape_project import validate_records as validate_eyes
@@ -934,26 +964,59 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
             from .lip_makeup_project import validate_records as validate_lips
             validate_lips(recipe); validate_brows(recipe); validate_noses(recipe); validate_eyes(recipe); validate_mouth(recipe); validate_reference(recipe); validate_semantic_colour(recipe); validate_body_pose(recipe)
             from .optics_project import validate_records as validate_optics
-            validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)))
+            validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
             from .studio_background_project import validate_records as validate_studio
-            validate_studio(recipe, required=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)), allowed=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)))
+            validate_studio(recipe, required=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)), allowed=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
             for key in _REPAIR_STACKS.intersection(recipe):
                 validate_repair_ops(recipe[key], shape=recipe.get("_proxy"))
         except ValueError as error:
             raise ProjectError(f"Invalid project recipe: {error}") from error
-    fp = fp or fingerprint(path)
+    fp = copy.deepcopy(fp) if fp is not None else fingerprint(path, full=True)
+    want = os.path.abspath(str(path))
+    if fp.get("path", want) != want:
+        raise ProjectError("Source fingerprint path does not match the requested document")
+    fp["path"] = want
     dropped: list = []
     assets = dict(project.get("assets", {}))
     enc = encode(recipe, assets, dropped, "recipe") if recipe is not None else None
     _validate_encoded_repairs(enc, assets, allow_legacy=False,
-                              require_manual_liquify=(project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, SCHEMA)))
-    project["assets"] = assets
-    row = find_doc(project, fp["path"])
+                              require_manual_liquify=(project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)))
+    original = find_doc(project, want, document_id=document_id)
+    row = copy.deepcopy(original) if original is not None else None
     if row is None:
-        row = {"path": fp["path"], "fingerprint": fp, "tags": list(tags or []),
-               "label": None, "trashed": False, "added_ns": int(time.time_ns()),
-               "versions": [], "active_version": None, "budget": budget}
-        project["docs"].append(row)
+        did = document_id or str(uuid.uuid4())
+        row = {"path": want, "fingerprint": fp, "tags": list(tags or []),
+               "label": None, "trashed": bool(trashed), "added_ns": int(time.time_ns()),
+               "versions": [], "active_version": None, "budget": budget,
+               "document_id": did, "source_asset_id": source_asset_id or str(uuid.uuid4()),
+               "root_document_id": root_document_id or did,
+               "copy_number": 0 if copy_number is None else copy_number,
+               "recipe_version_id": recipe_version_id or str(uuid.uuid4())}
+        if trashed is None and row["root_document_id"] != did:
+            root = find_doc(project, document_id=row["root_document_id"])
+            row["trashed"] = bool(root and root.get("trashed", False))
+    else:
+        if row.get("document_id") is None:
+            VC.ensure_identity({"project_id": project["project_id"], "docs": [row]})
+        for key, requested in (("document_id", document_id), ("source_asset_id", source_asset_id),
+                               ("root_document_id", root_document_id), ("copy_number", copy_number),
+                               ("recipe_version_id", recipe_version_id)):
+            if requested is not None and row.get(key) != requested:
+                raise ProjectError(f"Immutable document identity cannot change: {key}")
+    # Stage identity changes before touching the live project, including sibling
+    # fingerprint updates. A failed binding must not leave a half-added copy.
+    if trashed is not None:
+        row["trashed"] = bool(trashed)
+    staged_rows = [(current, row if current is original else copy.copy(current))
+                   for current in project["docs"]]
+    candidate = {**project, "source_assets": copy.deepcopy(project.get("source_assets", {})),
+                 "docs": [staged for _, staged in staged_rows] + ([] if original is not None else [row])}
+    try:
+        VC.ensure_identity(candidate)
+        source = VC.register_source(candidate, row["source_asset_id"], want, fp)
+        VC.validate_identity(candidate)
+    except (ValueError, TypeError, KeyError) as error:
+        raise ProjectError(f"Invalid document/source identity: {error}") from error
     if tags is not None:
         row["tags"] = list(tags)
     vid = version_id or str(uuid.uuid4())
@@ -966,27 +1029,37 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
                 # 无效配方。不记这一笔，重开时只能拿“图在不在”猜，而猜错的表现是渲染半截画面
                 "proxy": (recipe.get("_proxy") if isinstance(recipe, dict) else None)})
     row["active_version"] = vid
-    row["fingerprint"] = fp
+    row["fingerprint"] = copy.deepcopy(source["fingerprint"])
+    project["assets"] = assets
+    project["source_assets"] = candidate["source_assets"]
+    for current, staged in staged_rows:
+        current.update(staged)
+    if original is None:
+        project["docs"].append(row)
+    else:
+        original.update(row)
+        row = original
     if dropped:
         project.setdefault("dropped", []).extend(
             [{"path": fp["path"], **d} for d in dropped])
     return row
 
 
-def active_recipe(project: dict, path: str, dc_types: dict | None = None) -> object:
-    row = find_doc(project, path)
+def active_recipe(project: dict, path: str | None = None, dc_types: dict | None = None, *,
+                  document_id: str | None = None) -> object:
+    row = find_doc(project, path, document_id=document_id)
     if row is None:
         raise ProjectError(f"项目里没有这一张：{path}")
     vid = row.get("active_version")
     for v in row.get("versions", []):
         if v["id"] == vid:
             recipe = v.get("recipe")
-            if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, SCHEMA) and recipe is not None:
+            if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA) and recipe is not None:
                 if type(recipe) is not dict:
                     raise ProjectError("Project v7 recipe must be an object")
                 _check_manual_liquify_record(recipe.get("_manual_liquify"))
                 from .sky_replacement_project import validate_records as validate_sky
-                validate_sky(recipe,required=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, SCHEMA)),allowed=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, SCHEMA)),semantic=(project.get("schema_version") in (SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)))
+                validate_sky(recipe,required=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),allowed=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),semantic=(project.get("schema_version") in (SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
                 from .brow_shape_project import validate_records as validate_brows
                 from .nose_shape_project import validate_records as validate_noses
                 from .eye_shape_project import validate_records as validate_eyes
@@ -994,9 +1067,9 @@ def active_recipe(project: dict, path: str, dc_types: dict | None = None) -> obj
                 from .lip_makeup_project import validate_records as validate_lips
                 validate_lips(recipe); validate_brows(recipe); validate_noses(recipe); validate_eyes(recipe); validate_mouth(recipe); validate_reference(recipe); validate_semantic_colour(recipe); validate_body_pose(recipe)
                 from .optics_project import validate_records as validate_optics
-                validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)))
+                validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
                 from .studio_background_project import validate_records as validate_studio
-                validate_studio(recipe, required=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)), allowed=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,SCHEMA)))
+                validate_studio(recipe, required=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)), allowed=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
                 _validate_encoded_repairs(recipe, project.get("assets") or {}, allow_legacy=False,
                                           require_manual_liquify=True)
             dropped: list = []
@@ -1005,9 +1078,10 @@ def active_recipe(project: dict, path: str, dc_types: dict | None = None) -> obj
     raise ProjectError(f"{path} 的活动版本 {vid!r} 在 versions 里找不到（半个配方）")
 
 
-def put_active_version(project: dict, path: str, version_id: str) -> dict:
+def put_active_version(project: dict, path: str | None, version_id: str, *,
+                       document_id: str | None = None) -> dict:
     """切"活动版本"。找不到就拒——静默切到不存在的版本，下次打开显示的就是别人的配方。"""
-    row = find_doc(project, path)
+    row = find_doc(project, path, document_id=document_id)
     if row is None:
         raise ProjectError(f"项目里没有这一张：{path}")
     if not any(v["id"] == version_id for v in row.get("versions", [])):
@@ -1017,21 +1091,25 @@ def put_active_version(project: dict, path: str, version_id: str) -> dict:
     return row
 
 
-def set_trashed(project: dict, path: str, on: bool) -> dict:
-    """回收站是**项目记录**，不是对原图动手。
-
-    CORE-007 的 then 写着"原图不删除；配方仍在"：所以这里只置一个标志位，
-    既不 unlink 也不改 mtime，配方那一行也原样留着。恢复就是把标志翻回来。
-    """
-    row = find_doc(project, path)
+def set_trashed(project: dict, path: str | None, on: bool, *,
+                document_id: str | None = None) -> dict:
+    """Soft-delete/restore project records only; original source bytes are untouched."""
+    row = find_doc(project, path, document_id=document_id)
     if row is None:
-        raise ProjectError(f"项目里没有这一张：{path}")
-    row["trashed"] = bool(on)
+        raise ProjectError(f"项目里没有这一张：{document_id or path}")
+    if row.get("document_id") is None:
+        row["trashed"] = bool(on)
+    else:
+        try:
+            VC.set_trashed(project, row["document_id"], on)
+        except (ValueError, TypeError, KeyError) as error:
+            raise ProjectError(str(error)) from error
     return row
 
 
-def set_tags(project: dict, path: str, tags) -> dict:
-    row = find_doc(project, path)
+def set_tags(project: dict, path: str | None, tags, *,
+             document_id: str | None = None) -> dict:
+    row = find_doc(project, path, document_id=document_id)
     if row is None:
         raise ProjectError(f"项目里没有这一张：{path}")
     out, bad = [], []
@@ -1052,9 +1130,13 @@ def set_tags(project: dict, path: str, tags) -> dict:
 
 
 def missing_sources(project: dict) -> list:
-    """打开项目时对一遍在不在。缺失的逐条报，不静默少几张（与 session.scan 同一条理由）。"""
-    return [{"path": row["path"],
-             "exists": os.path.isfile(row["path"]),
-             "bytes_match": (os.path.isfile(row["path"])
-                             and os.path.getsize(row["path"]) == row["fingerprint"]["bytes"])}
-            for row in project["docs"]]
+    """Report every document against its authoritative source, without path collapse."""
+    out = []
+    for row in project["docs"]:
+        source = project.get("source_assets", {}).get(row.get("source_asset_id"), row)
+        path, fp = source["path"], source.get("fingerprint") or {}
+        exists = os.path.isfile(path)
+        out.append({"path": path, "document_id": row.get("document_id"),
+                    "source_asset_id": row.get("source_asset_id"), "exists": exists,
+                    "bytes_match": bool(exists and os.path.getsize(path) == fp.get("bytes"))})
+    return out

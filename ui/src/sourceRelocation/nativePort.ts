@@ -2,7 +2,7 @@ import {invoke} from '@tauri-apps/api/core';
 import {open} from '@tauri-apps/plugin-dialog';
 export type Missing = {document_id:string;revision:number;old_path:string;eligible:boolean;reason?:string};
 export type Candidate = {path:string;sha256:string;bytes:number};
-export type PreviewRow = Missing & {sha256:string;bytes:number;candidates:Candidate[];format?:string; width?:number;height?:number;orientation?:number};
+export type PreviewRow = Missing & {sha256:string;bytes:number;candidates:Candidate[]; affected_documents?:{document_id:string;copy_number:number;trashed:boolean}[];format?:string; width?:number;height?:number;orientation?:number};
 export type Preview = {preview_id:string;rows:PreviewRow[];errors:{path:string;reason:string}[];files_hashed:number;bytes_hashed:number};
 export type State = {available:boolean;rows:Missing[];reason?:string;busy?:boolean;requires_readback?:boolean;workspace?:string;project_path?:string;recovery_operation_id?:string};
 export type Result = {event?:string;request_id:string;status:string;error?:string;preview?:Preview;state?:State;operation?:Result;relocated?:number;requires_readback?:boolean};

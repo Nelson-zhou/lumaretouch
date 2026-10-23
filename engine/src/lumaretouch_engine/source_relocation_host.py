@@ -73,11 +73,11 @@ class SourceRelocation:
             if ids is not None and version.document_id not in ids: continue
             if ids is None and os.path.lexists(row['path']): continue
             identity = {'document_id': version.document_id, 'revision': version.revision,
-                        'old_path': row['path'], 'width': row.get('src_w'), 'height': row.get('src_h'),
+                        'source_asset_id':row['source_asset_id'], 'old_path': row['path'], 'width': row.get('src_w'), 'height': row.get('src_h'),
                         'format': (row.get('_library_metadata') or {}).get('format') or row.get('source_format'), 'orientation': row.get('source_orientation')}
             if ids is None:
-                stored = next((r for r in e._project['docs'] if r['path'] == row['path']), {})
-                try: T.expected(stored); identity['eligible'] = True
+                stored = next((r for r in e._project['docs'] if r.get('document_id') == row['document_id']), {})
+                try: T.expected(stored,e._project); identity['eligible'] = True
                 except ValueError as error: identity.update(eligible=False, reason=str(error))
             identities.append(identity)
         if ids is not None and {r['document_id'] for r in identities} != set(ids):

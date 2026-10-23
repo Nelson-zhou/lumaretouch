@@ -6,7 +6,7 @@ export interface LibraryQuery {
   sort:'capture_time'|'edit_time'|'rating'|'type'|'size'|'name'|'import'; direction:'asc'|'desc';
 }
 export interface LibraryResult {
-  query:LibraryQuery; paths:string[]; session_id:string; source_ids:Record<string,string>;
+  query:LibraryQuery; paths:string[]; document_ids:string[]; session_id:string; source_ids:Record<string,string>;
   facts:Record<string,{edited:boolean|null;exported:boolean;[key:string]:unknown}>;
   request_id:string|null; error?:string|null;
 }

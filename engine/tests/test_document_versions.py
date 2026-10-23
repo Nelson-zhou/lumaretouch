@@ -2,11 +2,11 @@ from copy import deepcopy
 from lumaretouch_engine.document_versions import DocumentVersions,KEY,fences_current_document
 
 
-def test_reorder_retains_identity_but_copied_or_readded_rows_do_not():
+def test_reorder_and_reconstructed_records_retain_identity_but_new_imports_do_not():
     versions=DocumentVersions();a={'path':'same'};b={'path':'other'}
     original=versions.version(a);versions.version(b)
     assert versions.find([b,a],original.document_id)==(1,a)
-    assert versions.version(deepcopy(a)).document_id!=original.document_id
+    assert versions.version(deepcopy(a)).document_id==original.document_id  # persisted record, not a create-copy action
     assert versions.version({'path':'same'}).document_id!=original.document_id
 
 
@@ -23,7 +23,8 @@ def test_new_workspace_invalidates_context_without_rewriting_retained_row_identi
     versions=DocumentVersions();row={};before=versions.version(row);workspace=versions.workspace
     versions.new_workspace()
     assert versions.workspace!=workspace and versions.version(row)==before
-    other=DocumentVersions();assert other.version(row).document_id!=before.document_id
+    other=DocumentVersions();assert other.version(row).document_id==before.document_id
+    assert other.workspace != versions.workspace  # persistent identity, fresh admission epoch
 
 
 def test_command_fence_excludes_pure_reads_selection_and_batch_owned_writes():

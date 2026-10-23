@@ -34,7 +34,7 @@ export function useLibraryQuery(strip:SessionState|null,refresh:()=>Promise<unkn
   },[pending,query]);
   // Old engines are visibly unsupported, never silently simulate a successful query.
   const supported=!!result;
-  const byPath=new Map((strip?.docs??[]).map(d=>[d.path,d]));
-  const docs=supported?result.paths.flatMap(path=>{const d=byPath.get(path);return d?[d]:[];}):(strip?.docs??[]);
+  const byId=new Map((strip?.docs??[]).map(d=>[d.document_id,d]));
+  const docs=supported?(result.document_ids??[]).flatMap(id=>{const d=byId.get(id);return d?[d]:[];}):(strip?.docs??[]);
   return {query,change,docs,result,pending,error:supported?error:'当前引擎未提供组合筛选协议，请重启更新后的引擎。',supported};
 }

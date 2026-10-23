@@ -8,7 +8,7 @@ import json
 from . import people_state as S, people_algorithms as A, people_transfer_adapter as T
 from .people_confirmed_transfer import prepare_confirmed
 from .batch_preflight import FrozenTarget,canonical
-from . import local_mask_state as SOURCE
+from . import local_mask_state as SOURCE, virtual_copy_people as V
 
 MARKER='_people_transfer'
 
@@ -45,20 +45,22 @@ def preflight(engine,controller,p):
     rows=batch.documents.rows();source_row=rows[batch.documents.current_index()]
     source_asset=SOURCE.source_digest(source_row['path']);source_document=document(engine,source_row)
     selected=options(p.get('people_transfer'),p.get('module_scope'),source_asset)
-    indices,rejected=batch.target_indices(p.get('docs'));targets=[];public=[];seen_assets=set()
+    indices,rejected=batch.target_indices(p.get('docs'));targets=[];public=[];seen_documents=set()
     for index in indices:
         row=rows[index];target_document=document(engine,row);asset=SOURCE.source_digest(row['path'])
         blocked=None;payload=None
         try:
             if row.get('trashed'):raise ValueError('Target photo is in the project trash')
-            if asset==source_asset:raise ValueError('The source photo is not a transfer target')
-            if asset in seen_assets:raise ValueError('The same source asset was already selected as a target')
-            seen_assets.add(asset)
-            payload=prepare_confirmed(before,before,selected['source_ref'],asset,selected['selection'],A.defaults(),
+            if target_document['document_id']==source_document['document_id']:raise ValueError('The source document is not a transfer target')
+            if target_document['document_id'] in seen_documents:raise ValueError('The same document was already selected as a target')
+            seen_documents.add(target_document['document_id'])
+            target_graph=V.row_snapshot(engine,row)
+            payload=prepare_confirmed(before,target_graph,selected['source_ref'],asset,selected['selection'],A.defaults(),
                 source_document=source_document,target_document=target_document)
-            staged=T.candidate(payload,before,before,source_document=source_document,target_document=target_document)
-            engine._people_prepare_graph(staged,{asset})
-            if owner.fence!=fence or document(engine,row)!=target_document or SOURCE.source_digest(row['path'])!=asset:
+            staged=T.candidate(payload,before,target_graph,source_document=source_document,target_document=target_document)
+            from .people_candidate_render import validate
+            validate(engine,row,staged)
+            if owner.fence!=fence or V.row_snapshot(engine,row)!=target_graph or document(engine,row)!=target_document or SOURCE.source_digest(row['path'])!=asset:
                 raise ValueError('Target or graph changed during preparation')
         except Exception as error:blocked=str(error)[:2000];payload=None
         public.append({'index':index,'path':row['path'],'live':False,'document_id':target_document['document_id'],
@@ -81,13 +83,14 @@ def preflight(engine,controller,p):
 
 def commit(engine,controller,p,plan):
     if set(p)-{'cmd','action','request_id','preflight_token'}:raise ValueError('Commit accepts only the frozen token')
-    batch=engine._batch_controller();batch.documents.remember_current();graph=engine._people_owner().snapshot()
+    batch=engine._batch_controller();batch.documents.remember_current()
     params=plan.params()[MARKER];source=batch.versions.find(batch.documents.rows(),plan.source_id)
     if source is None or source[1]['path']!=plan.source_path or batch.versions.version(source[1]).revision!=plan.source_revision:
         raise ValueError('People source changed after review')
+    graph=V.row_snapshot(engine,source[1])
     if SOURCE.source_digest(source[1]['path'])!=params['source_asset'] or graph['revision']!=params['state_revision'] or graph['association_revision']!=params['association_revision']:
         raise ValueError('Source bytes or people associations changed after review')
-    source_document=document(engine,source[1]);resolved=[];candidate=S.check(graph);assets=set()
+    source_document=document(engine,source[1]);resolved=[];plans={};eligible=0
     for target in plan.targets:
         found=batch.versions.find(batch.documents.rows(),target.document_id);blocked=target.blocked;payload=None
         try:
@@ -99,23 +102,31 @@ def commit(engine,controller,p,plan):
             asset=json.loads(target.before_json)['asset_sha256']
             if SOURCE.source_digest(row['path'])!=asset:raise ValueError('Target source bytes changed after review')
             payload=json.loads(target.people_json)
-            T.verify(payload,graph,graph,source_document=source_document,target_document=document(engine,row))
-            # All frozen payloads are verified against the same original graph;
-            # merge sparse leaves only, without replaying strength or masks.
+            target_graph=V.row_snapshot(engine,row)
+            T.verify(payload,graph,target_graph,source_document=source_document,target_document=document(engine,row))
+            identity=V.scope(row)
+            scoped=plans.setdefault(identity,{'row':row,'before':target_graph,'candidate':S.check(target_graph)})
+            if scoped['before']!=target_graph:raise ValueError('Target scope changed during preparation')
+            # Every payload verifies its own logical document and owner. Same
+            # source bytes are valid across independent copies, never merged
+            # just because the digest or inherited face reference matches.
             for ref in payload['target_refs']:
                 for leaf in payload['parameters']:
-                    candidate=S.set_override(candidate,'face',ref['face_instance_id'],leaf['operation_id'],leaf['parameter_path'],leaf['value'])
-            assets.add(asset)
+                    scoped['candidate']=S.set_override(scoped['candidate'],'face',ref['face_instance_id'],leaf['operation_id'],leaf['parameter_path'],leaf['value'])
+            eligible+=1
         except Exception as error:blocked=str(error)[:2000]
         resolved.append({'index':None if found is None else found[0],'path':target.path,'document_id':target.document_id,
             'blocked':blocked,'expected_revision':str(target.revision),
             'current_revision':None if found is None else str(batch.versions.version(found[1]).revision),
             'target_refs':[] if payload is None else payload['target_refs']})
     if plan.policy=='recheck' and any(x['blocked'] for x in resolved):raise ValueError('A target changed; no people parameters were applied')
-    if not assets:raise ValueError('No confirmed target remains eligible')
-    engine._people_prepare_graph(candidate,assets|{params['source_asset']})
+    if not eligible:raise ValueError('No confirmed target remains eligible')
+    from .people_batch_ledger import prepare_scoped,_targets,_verify
+    targets=_targets(batch,engine,plans)
+    prepare_scoped(engine,plans,targets)
+    _verify(batch,engine,plans,targets)
     # Expensive original-source preparation cannot authorize a newer graph.
-    if engine._people_owner().snapshot()!=graph:raise ValueError('People graph changed during final preparation')
+    if V.row_snapshot(engine,source[1])!=graph:raise ValueError('People graph changed during final preparation')
     if document(engine,source[1])!=source_document or SOURCE.source_digest(source[1]['path'])!=params['source_asset']:
         raise ValueError('People source changed during final preparation')
     for result in resolved:
@@ -125,8 +136,8 @@ def commit(engine,controller,p,plan):
             raise ValueError('People target changed during final preparation; no graph was published')
     controller.store.claim(plan)
     try:
-        from .people_batch_ledger import commit as publish
-        result=publish(batch,engine,graph,candidate,request_id=p.get('request_id'),prepare=False)
+        from .people_batch_ledger import commit_scoped as publish
+        result=publish(batch,engine,plans,request_id=p.get('request_id'),prepare=False)
         bid,frame=(None,None) if result is None else result
         body={'event':'batch_committed','success':True,'batch_id':bid,'module_scope':list(plan.modules),
             'applied':[x['index'] for x in resolved if not x['blocked']],

@@ -45,6 +45,9 @@ pub struct EngineHandle {
 impl EngineHandle {
     pub fn epoch(&self)->[u8;16]{self.epoch}
     pub fn send(&self, cmd: Value) -> Result<(), String> {
+        if cmd["cmd"] == "virtual_copy" && matches!(cmd["action"].as_str(), Some("state" | "query")) {
+            return self.dispatcher.enqueue(None, cmd);
+        }
         // Some reviewed native APIs send directly, outside AppState dispatch.
         // Fence them too, including shutdown; library reads are explicitly exempt.
         if cmd["cmd"] != "preset_organisation" && crate::sample_library_api::invalidates_capture(&cmd) && !crate::semantic_colour_api::read_only(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) && !crate::leg_shape_api::read_only(&cmd) && !crate::waist_shape_api::read_only(&cmd) && !crate::leg_length_api::read_only(&cmd) && !crate::neck_shape_api::read_only(&cmd) && !crate::arm_shape_api::read_only(&cmd) {
@@ -265,6 +268,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "photo_detail_result" | "photo_detail_readback" => { crate::photo_detail_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
         "extended_tone_result" | "extended_tone_readback" => { crate::extended_tone_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
         "custom_lut_result" => { crate::custom_lut_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
+        "virtual_copy_result" => crate::virtual_copy_api::receive(inspection_epoch, &v),
         "source_relocation_result" => crate::source_relocation_api::receive(inspection_epoch, &v),
         "preset_organisation_result" => crate::preset_organisation_api::receive(inspection_epoch, &v),
         "sample_library_result" => crate::sample_library_api::receive(inspection_epoch, &v),

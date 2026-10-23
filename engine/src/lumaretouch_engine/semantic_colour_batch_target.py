@@ -66,7 +66,8 @@ def verify(engine,row,state,document_id,revision,intent,record):
     if target['document_id']!=document_id or target['revision']!=str(revision):raise ValueError('追色审核属于其它目标版本')
     shape=(row.get('src_h'),row.get('src_w'))
     LM.verify_source({'source':target['source']},row['path'],shape if all(shape) else None)
-    snap=engine._state_to_export_snap(state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=row['path'])
+    from . import virtual_copy_people as VP
+    snap=engine._state_to_export_snap(state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=row['path'],people_context=VP.row_context(engine,row),people_graph=VP.row_snapshot(engine,row))
     if target['state_key']!=candidate_key(state,snap.get('people')) or target['geometry_sha256']!=geometry_key(state,snap.get('people')):
         raise ValueError('追色目标、素材或共用人物几何在审核后改变')
     path=A.cache_root()/(intent['reference']['asset_id']+'.npz')

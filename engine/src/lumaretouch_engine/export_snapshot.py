@@ -14,8 +14,8 @@ from . import reference_color_state as RCS, white_balance_recipe as WB, extended
 from .ops import curves as CURVES, levels as LEVELS
 
 
-def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_path=None,people_graph=None):
-    snap = dict(id_background=IDBS.check(st.get("_id_background")), id_background_bundle=deepcopy(st.get("_id_background_bundle")), people=self._people_export_snapshot(st,source_path,people_graph), strength=float(st.get("_strength", 0.0)),
+def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_path=None,people_graph=None,people_context=None):
+    snap = dict(id_background=IDBS.check(st.get("_id_background")), id_background_bundle=deepcopy(st.get("_id_background_bundle")), people=self._people_export_snapshot(st,source_path,people_graph,context=people_context), strength=float(st.get("_strength", 0.0)),
                     params=dict(st.get("_params") or self._params),
                     grade=tuple(st.get("_grade", (0.0, 0.0, 0.0, 1.0))),
                     grade_scope=str(st.get("_grade_scope") or "all"),
@@ -44,5 +44,6 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
                     device=device, scale=scale, upscale_backend=upscale_backend,
                     sharpen=sharpen)
     from .body_pose_render import capture as capture_body
-    snap=capture_body(self,snap,st,source_path or self._doc_path,people_graph)
+    from .virtual_copy_people import view
+    snap=capture_body(view(self,people_context) if people_context is not None else self,snap,st,source_path or self._doc_path,people_graph)
     return self._semantic_snapshot(snap,st,source_path)

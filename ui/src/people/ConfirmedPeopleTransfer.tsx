@@ -34,7 +34,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
   const proof: PeopleTransferProof | undefined = view && links.length === 1 ? {
     ...view.binding, state_revision: view.revision, association_revision: view.association_revision, person_id: links[0].person_id,
   } : undefined;
-  const selected = [...new Set(targets)].filter(path => path !== currentPath);
+  const selected = [...new Set(targets)].filter(identity => identity !== view?.binding.document_id);
   const ready = enabled && owner.enabled && !owner.state.pending && !owner.state.uncertain && !!source?.enabled
     && source.analysis_status === 'verified' && matches && !!proof && !!request;
   const flow = useBatchWorkflow({docs: selected, moduleScope: Object.keys(selection), conflictPolicy: policy,

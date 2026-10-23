@@ -134,7 +134,7 @@ def row_facts(row, event, state):
 
 def successful_exports(tasks):
     """Failed, queued, cancelled, and conflict-skipped items are never success."""
-    return {item['path'] for task in tuple(tasks.values()) if task.get('kind') == 'export'
+    return {item.get('document_id') or item['path'] for task in tuple(tasks.values()) if task.get('kind') == 'export'
             for item in tuple(task.get('items') or [])
             if item.get('state') == 'succeeded' and type(item.get('out')) is str
             and item['out'] and type(item.get('path')) is str}
@@ -146,12 +146,13 @@ def people_edits(engine, row, state):
     A graph may have edits for an unsaved source whose digest is not exposed on
     its row. Report unknown for that ambiguity instead of borrowing another face.
     """
-    owner = engine.__dict__.get('_people_graph_owner')
-    graph = getattr(owner, '_state', None)
+    from .virtual_copy_people import peek_graph
+    graph = peek_graph(engine,row)
+    if graph is None: return None
     if not isinstance(graph, dict) or not graph.get('overrides'):
         return False
     asset = (row.get('fingerprint') or {}).get('sha256')
-    if not asset and row.get('path') == getattr(engine, '_people_path', None):
+    if not asset and 0 <= engine._doc_index < len(engine._docs) and row is engine._docs[engine._doc_index]:
         prepared = getattr(getattr(engine, '_vram', None), 'people_prepared', None)
         plan = getattr(prepared, 'plan', {})
         asset = plan.get('asset_sha256') if isinstance(plan, dict) else None

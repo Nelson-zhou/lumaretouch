@@ -7,26 +7,41 @@ def asset_for(row):
     return (row.get('fingerprint') or {}).get('sha256') or SOURCE.source_digest(row['path'])
 
 
+def history_key(row):
+    identity=row.get('document_id')
+    if not identity:
+        from .virtual_copy_host import initialize
+        initialize(row);identity=row['document_id']
+    return 'document:'+identity
+
+
 def save(engine,project):
     # Keep unavailable-photo histories from the loaded project unchanged. A
     # missing original is not permission to discard its unresolved edit history.
     from .body_pose_document_history import assets as body_assets
     histories=deepcopy((engine._project or {}).get('people_document_history',{}));dropped=[]
     for row in engine._docs:
+        key=history_key(row)
         stacks={name:row.get(name,[]) for name in ('undo','redo')}
+        retained=any(snap.get('_people_history') is not None or body_assets(snap) for stack in stacks.values() for snap in stack)
+        cleared=row.get('_history_owned') and not any(stacks.values())
+        # Migrate only after this original has a replacement stack or an
+        # explicitly cleared history. Unavailable originals retain old data.
+        if retained or cleared:
+            for old_key,old in list(histories.items()):
+                if not row.get('copy_number',0) and 'document_id' not in old and old.get('path')==row['path']:
+                    histories.pop(old_key,None)
         if row.get('_history_owned') and not any(stacks.values()):
             # An explicitly cleared current document is not an unavailable-photo
             # history to resurrect from the last project save.
-            try:histories.pop(asset_for(row),None)
-            except OSError:
-                from .body_pose_project import bank as body_bank
-                for key in body_bank(row.get('state') or {})['analysis_runs']:histories.pop(key,None)
-        if not any(snap.get('_people_history') is not None or body_assets(snap) for stack in stacks.values() for snap in stack):continue
+            histories.pop(key,None)
+        if not retained:continue
         refs={snap['_people_history']['asset_sha256'] for stack in stacks.values() for snap in stack if snap.get('_people_history') is not None}
         refs.update(key for stack in stacks.values() for snap in stack for key in body_assets(snap))
         if len(refs)!=1:raise ValueError('Document stack mixes source assets')
         asset=next(iter(refs))
-        histories[asset]={'path':row['path'],'stacks':P.encode(stacks,project['assets'],dropped,'people_history.'+asset)}
+        histories[key]={'document_id':row['document_id'],'asset_sha256':asset,'path':row['path'],
+                        'stacks':P.encode(stacks,project['assets'],dropped,'people_history.'+key)}
     if dropped:raise ValueError('People history cannot be saved lossily: '+str(dropped))
     # The enclosing project rebuilds its asset table. Carry only assets still
     # referenced by preserved encoded histories, not an unbounded old table.
@@ -54,11 +69,17 @@ def prepare(project,rows,limit):
     if type(histories) is not dict or len(histories)>10000 or type(saved) is not dict or len(saved)>10000:
         raise ValueError('Invalid saved people history budget')
     staged={}
-    for asset,record in histories.items():
-        S.digest(asset)
-        if type(record) is not dict or set(record)!={'path','stacks'} or type(record['path']) is not str:
+    for key,record in histories.items():
+        if type(record) is not dict or type(record.get('path')) is not str:
             raise ValueError('Invalid saved people history record')
-        dropped=[];stacks=P.decode(record['stacks'],project['assets'],dropped,'people_history.'+asset,dc_types={'RepairOp':RepairOp,'LightOp':LightOp})
+        legacy=set(record)=={'path','stacks'}
+        if legacy:asset=S.digest(key)
+        else:
+            if set(record)!={'document_id','asset_sha256','path','stacks'}:
+                raise ValueError('Invalid document-scoped portrait history')
+            S.token(record['document_id']);asset=S.digest(record['asset_sha256'])
+            if key!='document:'+record['document_id']:raise ValueError('Portrait history document identity mismatch')
+        dropped=[];stacks=P.decode(record['stacks'],project['assets'],dropped,'people_history.'+key,dc_types={'RepairOp':RepairOp,'LightOp':LightOp})
         if dropped or type(stacks) is not dict or set(stacks)!={'undo','redo'}:raise ValueError('Saved people history cannot be restored lossily')
         for stack in stacks.values():
             if type(stack) is not list or len(stack)>limit:raise ValueError('Saved people history exceeds its retained budget')
@@ -74,7 +95,10 @@ def prepare(project,rows,limit):
                     if type(ref) is not dict or set(ref)!=required or ref['asset_sha256']!=asset:
                         raise ValueError('Saved document history names another source or incomplete scope')
                     for field in ('association_revision','association_fence','asset_fence'):S.revision(ref[field])
-        matches=[i for i,row in enumerate(rows) if row['path']==record['path']]
+        if legacy:
+            matches=[i for i,row in enumerate(rows) if not row.get('copy_number',0) and row['path']==record['path']]
+        else:
+            matches=[i for i,row in enumerate(rows) if row.get('document_id')==record['document_id']]
         if len(matches)>1:raise ValueError('Saved document history is ambiguous')
         if matches:
             row=rows[matches[0]]
@@ -88,9 +112,24 @@ def prepare(project,rows,limit):
         if value['ops']!=['lnx.people_graph.v1'] or type(value['targets']) is not dict or type(value['undone']) is not bool or type(value['people_changes']) is not list:
             raise ValueError('Invalid people batch history contract')
         entry=deepcopy(value)
+        scopes=entry.get('people_scoped_changes')
+        if scopes is not None:
+            if type(scopes) is not list or not scopes or len(scopes)>10000 or entry['people_changes']:
+                raise ValueError('Invalid scoped portrait batch history')
+            seen=set()
+            for scope in scopes:
+                if type(scope) is not dict or set(scope)!={'scope','document_id','changes'} or type(scope['changes']) is not list:
+                    raise ValueError('Invalid saved portrait graph scope')
+                S.token(scope['scope']);S.token(scope['document_id'])
+                if scope['scope'] in seen:raise ValueError('Duplicate saved portrait graph scope')
+                seen.add(scope['scope'])
+                if scope['scope']!='project' and scope['scope']!=scope['document_id']:
+                    raise ValueError('Copy history belongs to another document scope')
         for rec in entry['targets'].values():
             if type(rec) is not dict or not {'path','document_id','revision','asset_sha256'}<=set(rec):raise ValueError('Invalid saved batch target')
             S.digest(rec['asset_sha256']);S.revision(rec['revision'])
+            if scopes is not None and rec.get('people_scope') not in seen:
+                raise ValueError('Saved portrait target has no graph scope')
         entries[str(key)]=entry
     return staged,entries
 
@@ -104,7 +143,9 @@ def restore(engine,project,prepared=None):
         owner=engine._batch_controller()
         for key,entry in entries.items():
             for rec in entry['targets'].values():
-                matches=[row for row in engine._docs if row['path']==rec['path']]
+                matches=[row for row in engine._docs if row.get('document_id')==rec['document_id']]
+                if not matches and 'people_scoped_changes' not in entry:
+                    matches=[row for row in engine._docs if not row.get('copy_number',0) and row['path']==rec['path']]
                 # Keep missing/replaced source entries, but never give them a new
                 # runtime identity; protected restore will explicitly refuse.
                 if len(matches)==1:

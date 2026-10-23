@@ -23,7 +23,9 @@ class DocumentVersions:
         value=row.get(KEY)
         # A copied/reconstructed row is not the retained original document.
         if not isinstance(value,dict) or value.get('owner')!=self.owner or value.get('object')!=id(row):
-            value={'owner':self.owner,'object':id(row),'id':uuid.uuid4().hex,'revision':0}
+            from .virtual_copy_host import initialize
+            initialize(row)
+            value={'owner':self.owner,'object':id(row),'id':row['document_id'],'revision':row['document_revision']}
             row[KEY]=value
         revision=value.get('revision')
         if type(revision) is not int or not 0<=revision<=MAX_REVISION:raise ValueError('invalid document mutation fence')
@@ -37,6 +39,7 @@ class DocumentVersions:
     def advance(self,row):
         version=self.check_advance(row)
         row[KEY]['revision']=version.revision+1
+        row['document_revision']=version.revision+1
         return self.version(row)
 
     def new_workspace(self):

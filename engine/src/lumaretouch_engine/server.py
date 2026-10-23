@@ -15,6 +15,7 @@ from . import extended_tone_state as ETS, extended_tone_host as ETH
 from . import photo_detail_state as PDS, photo_detail_host as PDH
 
 import argparse
+import copy
 from pathlib import Path
 import json
 import math
@@ -1172,14 +1173,9 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                                               "逐点层（磨皮参数/调色表/肤色定向）原样保留"})
         return out
 
-    def _index_of(self, path) -> int:
-        if not path:
-            return -1
-        want = os.path.abspath(str(path))
-        for i, d in enumerate(self._docs):
-            if d["path"] == want:
-                return i
-        return -1
+    def _index_of(self, path, document_id=None) -> int:
+        from .virtual_copy_session import index_of
+        return index_of(self._docs, path, document_id)
 
     def _document_versions(self):
         from .document_versions import DocumentVersions
@@ -1194,7 +1190,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
     def _new_row(self, path: str, *, state: dict | None = None, budget: int | None = None) -> dict:
         m = S.doc_meta(path)
         row = {**m, "path": os.path.abspath(path), "state": state or self._fresh_doc_state(),
-                "budget": budget, "thumb": None, "thumb_error": None, "opened": False, "_optics_new_import": state is None,
+                "budget": budget, "thumb": None, "thumb_error": None, "opened": False, "_optics_new_import": state is None, "_people_new_import": state is None,
                 "undo": [], "redo": [],
                 # 项目层的三个字段（LNX-P0-PROJECT / CORE-001、CORE-007）：标签与回收站
                 # 是工程记录，不是对原图动手。`fingerprint` 只在项目保存或打开时才算
@@ -1212,6 +1208,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         """把 live 状态存回当前文档那一格。底片条的一切意思都在这一步：不存就是
         「切走再切回来，调的全没了」。"""
         if 0 <= self._doc_index < len(self._docs) and self._image_loaded:
+            from .virtual_copy_people import remember
+            remember(self)
             self._docs[self._doc_index]["state"] = self._capture_state()
             # 历史跟着状态走：只存状态不存栈，切回来会"画面带着一笔而撤销按钮是灰的"
             self._docs[self._doc_index]["undo"] = list(self._undo)
@@ -1348,6 +1346,12 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         if self._export is not None and self._export.is_alive():
             emit({"event": "error", "error": "导出进行中，拒绝换图：等 export_done"})
             return
+        try:
+            selected = self._index_of(p["path"], p.get("document_id"))
+            if selected >= 0 and self._docs[selected].get("trashed"):
+                raise ValueError("请先恢复回收站文档")
+        except ValueError as error:
+            emit({"event":"error","error":str(error)}); return
         # Validate before decoding, preview publication, or switching recipe/history.
         # A rejected import must leave the current document intact.
         strength = (_clamp_strength(p["strength"])
@@ -1388,7 +1392,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         self._proxy_budget = budget     # 下一次切文档默认沿同一档代理（会话级，见上面注释）
         self._preset_last = None        # 换文档了：“这张当前是哪个预设”不能跟着跳过去
         self._remember_current()
-        idx = self._index_of(p["path"])
+        idx = self._index_of(p["path"], p.get("document_id"))
         if idx < 0:
             self._docs.append(self._new_row(str(p["path"]), budget=budget))
             idx = len(self._docs) - 1
@@ -1415,6 +1419,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         row["_local_source_stamp"] = source_stamp
         row.update(src_w=d.src_w, src_h=d.src_h)
         self._doc_index = idx
+        from .virtual_copy_people import activate
+        activate(self, row)
         self._history_bind(row)         # 这一格自己的撤销/重做栈
         self._doc_path = os.path.abspath(str(p["path"]))   # 导出默认目标；只有导成功才记账
         return self._open_session(d, p, t0=t0, strength=strength, switched=existed,
@@ -1684,7 +1690,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
 
     # ------------------------------------------------------------ M5-a 底片条
     SESSION_KEYS = {"cmd", "action", "dir", "paths", "index", "limit", "edge",
-                    "quality", "thumbs", "query", "request_id", "session_id", "selected_path"}
+                    "quality", "thumbs", "query", "request_id", "session_id", "selected_path", "document_id"}
     # 每解这么多张让一次 GIL：缩略图解码是纯 CPU 活，而帧通路每秒要 60 次调度。
     # 该不该让、让多少不是拍出来的，是 m5-filmstrip-bench 那两臂量出来的。
     THUMB_BATCH = 4
@@ -1720,6 +1726,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 # 挑图那一格（PICK-001）。徽章只能读引擎这份：前端自己按缩略图亮度判断
                 # 「这张糊不糊」就是又造一个不可复算的出处
                 "pick": d.get("pick"), "pick_error": d.get("pick_error")}
+        from .virtual_copy_host import IDENTITY_KEYS
+        row.update({k:d[k] for k in IDENTITY_KEYS})
         return LQ.enrich_row(self, i, d, row, st)
 
 
@@ -1755,37 +1763,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
               "docs": rows, "library_query": LQ.query_state(self, rows), **extra})
 
     def _rows_from(self, paths: list) -> list:
-        """把一份路径列表合成新的底片条，**保留已有格子的状态与缩略图**。
-
-        不保留就是“重扫一次目录，刚才调的全没了”——那比不记忆更坑，因为它看起来
-        什么都没发生。旧目录里有、这次扫不到的格子会被放下来（当前那张除外，
-        不然正在编辑的图会从底片条上直接消失）。
-        """
-        with self._doclock:
-            old = {d["path"]: d for d in self._docs}
-            rows: list = []
-            seen: set = set()
-            for x in paths:
-                ap = os.path.abspath(str(x))
-                if ap in seen:                   # 同一批里重复的路径只留第一格
-                    # （不兼容也不另说：session_add 报 duplicated 的个数）
-                    continue
-                seen.add(ap)
-                row = old.pop(ap, None)
-                if row is None:
-                    row = self._new_row(ap)
-                rows.append(row)
-            kept = None
-            if self._doc_path:
-                want = os.path.abspath(self._doc_path)
-                if want in old:
-                    kept = old[want]
-            self._docs = rows
-            if kept is not None and not any(r["path"] == kept["path"] for r in rows):
-                rows.append(kept)
-                self._doc_path = kept["path"]
-            self._doc_index = self._index_of(self._doc_path)
-            return rows
+        from .virtual_copy_session import rows_from
+        return rows_from(self, paths)
 
     def _start_thumbs(self, indices: list, edge, quality) -> bool:
         try:
@@ -1929,7 +1908,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 emit({"event": "error", "error": f"index={idx} 不在底片条里（共 {len(self._docs)} 格）"})
                 return
             if ((p.get("session_id") is not None and p["session_id"] != LQ.session_id(self))
-                    or (p.get("selected_path") is not None and p["selected_path"] != self._docs[idx]["path"])):
+                    or (p.get("selected_path") is not None and p["selected_path"] != self._docs[idx]["path"])
+                    or (p.get("document_id") is not None and p["document_id"] != self._docs[idx]["document_id"])):
                 emit({"event": "error", "error": "图库身份已变化，请刷新后重试选择"})
                 return
             if idx == self._doc_index and self._image_loaded:
@@ -1938,7 +1918,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 self.emit_session_state(noop=True)
                 return
             row = self._docs[idx]
-            cmd = {"path": row["path"]}
+            cmd = {"path": row["path"], "document_id": row["document_id"]}
             if self._proxy_budget:
                 cmd["max_px"] = int(self._proxy_budget)
             # 切文档走的就是 load_image 那一条路，不写第二份：守卫（跑靶/导出互斥）、
@@ -2312,7 +2292,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
     # ------------------------------------------------------------ 项目（LNX-P0-PROJECT / CORE-001、007、008）
     PROJECT_ACTIONS = ("create", "open", "save", "state", "tag", "trash")
     PROJECT_KEYS = {"cmd", "action", "name", "directory", "path", "doc", "index",
-                    "tags", "label", "trashed", "force"}
+                    "tags", "label", "trashed", "force", "document_id"}
 
     def _project_state(self) -> dict:
         """项目段只有一个组装点：`session_state` 与四条 `project_*` 事件读到的必须同一份。
@@ -2327,7 +2307,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         p = self._project
         return {"open": p is not None, "path": self._project_path,
                 "name": (p or {}).get("name"), "project_id": (p or {}).get("project_id"),
-                "docs": len((p or {}).get("docs") or []),
+                "docs": len(self._docs) if p is not None else 0,
                 "dirty": bool(self._project_dirty),
                 "saved_ns": self._project_saved_ns,
                 # 台账格数（不是“已写进文件的那一份”）：下一次 save 写的就是它，
@@ -2364,11 +2344,13 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             # 身份不随重存/改名变：工程列表靠它认“这是同一个项目”
             prj["project_id"] = base["project_id"]
             prj["created_ns"] = base.get("created_ns", prj["created_ns"])
+            prj["source_assets"] = copy.deepcopy(base.get("source_assets",{}))
         dc = {"RepairOp": RepairOp, "LightOp": LightOp}
-        for row in self._docs:
+        for row in sorted(self._docs,key=lambda row:bool(row.get("copy_number",0))):
             if row.get("fingerprint") is None:
                 try:
-                    row["fingerprint"] = PJ.fingerprint(row["path"], full=True)
+                    from .virtual_copy_source import fingerprint_for
+                    row["fingerprint"] = fingerprint_for(row)[0]
                 except OSError as e:
                     # 源文件没了：不把“我读不到”说成“它没变”，也不因此不存这一格
                     row["fingerprint"] = {"path": row["path"], "bytes": -1, "sha256": None,
@@ -2391,17 +2373,25 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                                "重开后按 precompute_backend 重新推理"})
             prow = PJ.add_doc(prj, row["path"], recipe, fp=row["fingerprint"],
                               tags=row.get("tags"), dc_types=dc,
-                              budget=row.get("budget"), version_id="live")
+                              budget=row.get("budget"), version_id=row.get("_project_version_id", row["recipe_version_id"]), trashed=bool(row.get("trashed")),
+                              **{k:row[k] for k in ("document_id","source_asset_id","root_document_id","copy_number","recipe_version_id")})
+            from .virtual_copy_project import save_row
+            save_row(prj, row, prow, PJ)
             # 回收站与标签是**工程记录**：add_doc 新行时默认 False/None，这里把底片条
             # 那一格的实际值装回去（不装就是“存完重开，标都没了”）
             prow["trashed"] = bool(row.get("trashed"))
             prow["label"] = row.get("label")
+        order = {row["document_id"]:i for i,row in enumerate(self._docs)}
+        prj["docs"].sort(key=lambda row:order[row["document_id"]])
         # 任务台账跟着工程走（TASK-004/008）：persisted 那一份只存参数快照与结局，
         # 配方快照（带 numpy 图层）不存——所以重开后重试会被拒而不是偷换配方
         for t in self._tasks.values():
             t["persisted"] = True
         prj["tasks"] = [T.for_json(t) for t in self._tasks.values()]
         self._people_save(prj)
+        from .virtual_copy_project import save_receipts
+        save_receipts(self, prj)
+        prj["active_document_id"] = self._docs[self._doc_index]["document_id"] if 0 <= self._doc_index < len(self._docs) else None
         return prj, {"hash_ms": round((monotonic_ns() - t0) / 1e6, 2),
                      "fingerprinted": hashed}
 
@@ -2435,6 +2425,10 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
 
     def _row_target(self, p: dict) -> dict | None:
         """按 index 或 path 找底片条那一格；找不到就 emit error 并递 None。"""
+        if p.get("document_id") is not None:
+            found = self._document_versions().find(self._docs, p["document_id"])
+            if found is None: emit({"event":"error","error":"文档身份已变化，请刷新"}); return None
+            return found[1]
         if p.get("index") is not None:
             try:
                 idx = int(p["index"])
@@ -2447,8 +2441,10 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 return None
             return self._docs[idx]
         if p.get("path"):
-            row = next((d for d in self._docs
-                        if d["path"] == os.path.abspath(str(p["path"]))), None)
+            try: index = self._index_of(p["path"])
+            except ValueError as error:
+                emit({"event":"error","error":str(error)}); return None
+            row = self._docs[index] if index >= 0 else None
             if row is None:
                 emit({"event": "error", "error": f"底片条里没有这一张：{p['path']}"})
             return row
@@ -2501,7 +2497,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         """
         changed: list = []
         for prow in prj["docs"]:
-            fp = prow.get("fingerprint")
+            fp = (prj.get("source_assets",{}).get(prow.get("source_asset_id"),{}).get("fingerprint") or prow.get("fingerprint"))
             if not isinstance(fp, dict) or fp.get("hash_level") in (None, "none"):
                 continue                      # 这一格没指纹可核（旧版从没算过的降级行）
             v = PJ.verify_fingerprint(prow["path"], fp)
@@ -2626,7 +2622,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             rows, notes = [], []
             for prow in prj["docs"]:
                 try:
-                    recipe, dropped = PJ.active_recipe(prj, prow["path"], dc_types=dc)
+                    recipe, dropped = PJ.active_recipe(prj, prow["path"], dc_types=dc, document_id=prow["document_id"])
                 except ProjectError as e:
                     # 一张图坏了不把整个工程锁在外面：这一格降级成“没调过”，原因跟着走
                     recipe, dropped = None, [{"at": "recipe", "reason": str(e)}]
@@ -2646,6 +2642,10 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                             # 项目里的格子都是“被打开并调过”的（哪怕配方是空的）：不置这一位，
                             # load_image 会把它当刚扫出来的新图，把宿主要的那步 precompute 跳掉
                             "opened": True})
+                from .virtual_copy_project import restore_row
+                try: restore_row(prj, prow, row, PJ, dc)
+                except (ValueError,TypeError) as error:
+                    emit({"event":"error","error":str(error)}); return
                 rows.append(row)
             for candidate in rows:
                 WB.prepare_state(candidate["state"])
@@ -2698,7 +2698,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             # 隔了一拍就是这种形状：事件说“没开”，视口上却亮着一张）。
             # 回收站里的格子不当默认那张：一份全在回收站里的工程，重开就该是空视口。
             target = None
-            if p.get("index") is not None:
+            if p.get("document_id") is not None or p.get("index") is not None:
                 target = self._row_target(p)
                 if target is None:
                     return
@@ -2707,7 +2707,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 if target is None:
                     return
             elif rows and p.get("doc") != "none":
-                target = next((r for r in rows if not r["trashed"]), None)
+                target = next((r for r in rows if r["document_id"] == prj.get("active_document_id") and not r["trashed"]), None)
+                if target is None: target = next((r for r in rows if not r["trashed"]), None)
             emit({"event": "project_opened", "docs": len(rows),
                   "auto_opened": (target or {}).get("path"),
                   # 叫 task_restore 而不叫 tasks：下面那份 `**self._project_state()` 里有一个
@@ -2725,7 +2726,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                   **self._project_state()})
             self.emit_session_state()
             if target is not None:
-                cmd = {"path": target["path"]}
+                cmd = {"path": target["path"], "document_id": target["document_id"]}
                 if self._proxy_budget:
                     cmd["max_px"] = int(self._proxy_budget)
                 # 重开那一张走的就是 load_image 同一条路（守卫/尺寸比对/预计算重挂/事件形状
@@ -2770,14 +2771,25 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         shim = {"docs": self._docs}
         try:
             if action == "tag":
-                PJ.set_tags(shim, row["path"], p.get("tags"))
+                self._document_versions().check_advance(row)
+                PJ.set_tags({"docs":[row]}, row["path"], p.get("tags"))
                 if p.get("label") is not None:
                     row["label"] = str(p["label"])[:64]
+                self._document_versions().advance(row)
             else:
-                PJ.set_trashed(shim, row["path"], bool(p.get("trashed", True)))
+                from .virtual_copy_host import affected
+                linked = affected(self._docs, [row["document_id"]], "trash" if p.get("trashed",True) else "restore")
+                for target in linked: self._document_versions().check_advance(target)
+                for target in linked:
+                    target["trashed"] = bool(p.get("trashed",True))
+                    self._document_versions().advance(target)
         except ProjectError as e:
             emit({"event": "error", "error": f"{action} 被拒，工程记录原样未动：{e}"})
             return
+        if action == "trash" and 0 <= self._doc_index < len(self._docs) and self._docs[self._doc_index].get("trashed"):
+            self._remember_current(); self._cancel_snapshot("trash")
+            self._load_id = ""; self._image_loaded = False
+            self._doc_index, self._doc_path = -1, None; self._history_bind(None)
         # 工程记录也改了（与 EDIT_CMDS 那条“真改了文档状态”是两件事，这里必须自己上）
         self._project_dirty = True
         emit({"event": "project_edited", "action": action, "path": row["path"],
@@ -5789,7 +5801,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                    "scale", "sharpen", "upscale_backend", "bit_depth",
                    # d2c 那四格：名字进白名单不等于接通，下面逐条校验完才进 snap
                    "output_profile", "tiff_compression", "metadata_include_gps",
-                   "conflict_policy", "watermark", "layout"}
+                   "conflict_policy", "watermark", "layout", "document_ids"}
 
     def _state_to_export_snap(self,st,**options):
         from .export_snapshot import state_to_export_snap
@@ -5925,7 +5937,11 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                            "峰值账单就不是那个数了）"})
             return
         doc = self._doc_path
-        images = p.get("images") or ([doc] if doc else [])
+        from . import virtual_copy_export as VCX
+        try: selected_documents = VCX.select(self, p)
+        except ValueError as error:
+            emit({"event":"error","error":str(error)}); return
+        images = [row['path'] for row in selected_documents]
         if not isinstance(images, list) or not images:
             emit({"event": "error", "error": "export 需要 images（路径列表），且当前没有已加载的文档"})
             return
@@ -5956,14 +5972,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         # 默认策略下整批会“完成而一个文件也没新写”，而事件里写着跳过——用户看到的是
         # 导出跑了而目录里没有一样新东西。更重要的是：这条不变量不能依赖“今天没有
         # overwrite 策略”——那是一句会被后人改的话，而源文件不可变是一句必须一直真的话。
-        collide = []
-        for x in images:
-            src_real = os.path.realpath(x)
-            stem = os.path.splitext(os.path.basename(x))[0]
-            for ext in {fmt, "tif"}:
-                if os.path.realpath(os.path.join(out_dir_abs, f"{stem}.{ext}")) == src_real:
-                    collide.append(f"{x} → {stem}.{ext}")
-                    break
+        collide = VCX.source_collisions(self, selected_documents, out_dir_abs, fmt)
         if collide:
             emit({"event": "error",
                   "error": "导出目标就是输入文件本身，整批拒绝（原片只读）："
@@ -6068,7 +6077,9 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         # Validate every frozen per-image recipe, not the active image's live
         # fields. Otherwise a neutral active image silently bypasses edits on
         # another image in a 16-bit passthrough batch.
-        snap_by_path = self._export_snap_by_path(images, doc, snap)
+        try: entry_ids, snap_by_path, export_entries = VCX.freeze(self, selected_documents, snap)
+        except (ValueError,RuntimeError,OSError) as error:
+            emit({"event":"error","error":str(error)}); return
         from . import watermark as WM
         from .layout_spec import normalize as normalize_layout, LAYOUT_ITEM
         try:
@@ -6093,9 +6104,9 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         # 而开发 venv 里这批用例全部 skip（没 torch），只有运行时 venv 才响得出来）
         opts = {"output_profile": output_profile, "tiff_compression": tiff_comp,
                 "metadata_include_gps": bool(include_gps), "conflict_policy": conflict_policy,
-                "watermark": WM.public_settings(snap.get("export_watermark")), "layout": snap.get("export_layout")}
+                "watermark": WM.public_settings(snap.get("export_watermark")), "layout": snap.get("export_layout"), "document_entries": export_entries}
         # P1-1：为这批每一张预解析各自的配方（命令线程读 _docs，worker 不再读 live）。
-        self._export_args = (list(images), out_dir, fmt, quality, tile, doc, snap, bit_depth,
+        self._export_args = (entry_ids, out_dir, fmt, quality, tile, doc, snap, bit_depth,
                              opts, snap_by_path)
         # 台账先建再开工：TASK-001 要“状态转移可审计”，而从 queued 起才有第一步。
         # inputs 是**命令当时那一拍**的快照：TASK-002 的“重试固定输入”全靠它，
@@ -6106,12 +6117,15 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                           {"images": list(images), "out_dir": out_dir, "format": fmt,
                            "quality": quality, "tile": tile, "bit_depth": bit_depth,
                            "doc": doc, **opts},
-                          list(images) + ([LAYOUT_ITEM] if snap.get("export_layout") else []), task_id=f"exp{self._task_seq}-{os.getpid()}")
+                          entry_ids + ([LAYOUT_ITEM] if snap.get("export_layout") else []), task_id=f"exp{self._task_seq}-{os.getpid()}")
         # `recipe_persisted` 说的是“这份配方快照现在还在不在会话里”，不是“有没有写过
         # 工程文件”：当场建账的批次必然还在（_task_args 刚收过），只有从盘上读回来的
         # 那一份才 False。上一版在这里写死 False，于是重试的门在**本会话内**也是关着
         # 的——TASK-002 要的“失败重试固定输入”当场就实现不了，而单测层（tasks.py）
         # 看不见这道命令面守卫，只有起真进程的端到端用例才会响。
+        for item in task["items"]:
+            entry = export_entries.get(item["path"], {})
+            item.update({key:entry[key] for key in ("document_id","source_asset_id","recipe_version_id","copy_number") if key in entry})
         task["recipe_persisted"] = True
         self._tasks[task["task_id"]] = task
         # 参数快照按 task_id 收：只拿 `self._export_args` （会话里最后那一批）当快照，
@@ -6349,7 +6363,11 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         results: list = []
         failed = 0
         stopped = False
-        for idx, path in enumerate(images):
+        from .virtual_copy_source import verify_entry, verify_decode
+        verified_sources = set()
+        for idx, entry_id in enumerate(images):
+            entry = opts.get("document_entries", {}).get(entry_id, {"path":entry_id})
+            path = entry["path"]
             # 安全点只在条目之间：这一句返“停”时，上一张已经原子提交完了
             if task is not None and self._task_boundary(task) == "stop":
                 stopped = True
@@ -6357,7 +6375,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             stage = "decode"
             try:
                 image_started = monotonic_ns()
-                snap_i, for_doc_i = snap_by_path.get(path, (snap, path == doc))
+                immutable_stamp = verify_entry(entry, verified_sources)
+                snap_i, for_doc_i = snap_by_path.get(entry_id, (snap, path == doc))
                 from . import body_pose_render as body_render
                 mask_source_stamp = LM.file_stamp(path) if snap_i.get('body_pose') is not None or snap_i.get("grade_scope") == "objects" or LGS.has_groups(snap_i) or bool(ERS.check(snap_i.get("effect_recovery"))["targets"]) or bool(MLS.check(snap_i.get("manual_liquify"))["strokes"]) or SBS.check(snap_i.get("studio_background"))["source"] is not None or IDS.check(snap_i.get("id_background"))["source"] is not None or OPS.source_bound(OPS.check(snap_i.get("optics"))) or SKS.check(snap_i.get("sky_replacement"))["enabled"] else None
                 stage = "semantic_analysis"
@@ -6365,7 +6384,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 analysis_ms = round((monotonic_ns() - image_started) / 1e6, 2)
                 if bit_depth == 16:
                     from .export import export_master_16bit, export_edited_16bit
-                    out_path = os.path.join(out_dir, os.path.splitext(os.path.basename(path))[0] + ".tif")
+                    out_path = os.path.join(out_dir, entry.get("stem", os.path.splitext(os.path.basename(path))[0]) + ".tif")
                     skipped = []
                     common = dict(output_profile=opts["output_profile"],
                                   conflict_policy=opts["conflict_policy"],
@@ -6375,6 +6394,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                         stage = "decode16"
                         decode_started = monotonic_ns()
                         d = load_full(path, device=snap_i["device"], want_bits=16)
+                        verify_decode(path, immutable_stamp)
                         LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
                         decode_ms = (monotonic_ns() - decode_started) / 1e6
                         spec, skipped = self._export_snapshot(snap_i, d.h, d.w, for_document=for_doc_i)
@@ -6387,7 +6407,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                                                decode_ms=decode_ms, **wm_args, **common)
                     else:
                         stage = "master16"
-                        r = export_master_16bit(path, out_path, device=snap_i["device"], **common)
+                        r = export_master_16bit(path, out_path, device=snap_i["device"],
+                                               verify_source=lambda: verify_decode(path, immutable_stamp), **common)
                     results.append({"path": path, "out": r["path"], "format": "tif",
                                     "bits": 16, "source": r["source"],
                                     "w": r["w"], "h": r["h"], "bytes": r["bytes"],
@@ -6431,11 +6452,13 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                     # 16-bit 那一路也得有逐图进度与台账结局：以前它 continue 得过早，
                     # 既不发 export_progress 也不记条目——于是 RAW 批量导出在进度条上
                     # 是“动都不动”，在批次账上是“跑完了而没人知道跑了哪几张”。
-                    self._task_item(task, path, results[-1])
-                    emit({"event": "export_progress", "index": idx, "total": n, "path": path,
+                    results[-1].update({k:entry.get(k) for k in ("document_id","source_asset_id","recipe_version_id","copy_number")})
+                    self._task_item(task, entry_id, results[-1])
+                    emit({"event": "export_progress", "index": idx, "total": n, "path": path, "document_id":entry.get("document_id"),
                           "ok": True})
                     continue
                 d = load_full(path, device=self.device)
+                verify_decode(path, immutable_stamp)
                 LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
                 stage = "render"
                 # P1-1：这一张用它自己那份配方（当前档=现拍 snap；其它档=它存的 state；
@@ -6443,7 +6466,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 spec, skipped = self._export_snapshot(snap_i, d.h, d.w,
                                                       for_document=for_doc_i)
                 stage = "write"
-                out_path = os.path.join(out_dir, os.path.splitext(os.path.basename(path))[0] + "." + fmt)
+                out_path = os.path.join(out_dir, entry.get("stem", os.path.splitext(os.path.basename(path))[0]) + "." + fmt)
                 frame, st = export_image(d.rgb, spec, device=snap_i["device"], tile=tile, geometry=(tuple(snap_i.get("crop_rect") or (0.,0.,1.,1.)),float(snap_i.get("crop_rotation") or 0.)) if RCS.active(spec.reference_color) or SCS.active(spec.semantic_colour) or CGS.active(spec.colour_grading) or CES.active(spec.colour_editor) or SCSL.active(spec.selective_colour) or PDS.active(spec.photo_detail) or PGS.active(spec.photo_grain) else None)
                 # 与预览链同序：几何在所有像素层之后。反过来先剪再算，同一支消除笔
                 # 在剪后的图上会落在别处——那不是"批量应用设置"，那是另一张图。
@@ -6492,9 +6515,10 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 failed += 1
                 results.append({"path": path, "stage": stage, "error": f"{type(e).__name__}: {e}",
                                 "outputs": getattr(e, "outputs", [])})
-            emit({"event": "export_progress", "index": idx, "total": n, "path": path,
+            emit({"event": "export_progress", "index": idx, "total": n, "path": path, "document_id":entry.get("document_id"),
                   "ok": "error" not in results[-1]})
-            self._task_item(task, path, results[-1])
+            results[-1].update({k:entry.get(k) for k in ("document_id","source_asset_id","recipe_version_id","copy_number")})
+            self._task_item(task, entry_id, results[-1])
         layout_result = None
         if snap.get("export_layout"):
             from .layout_delivery import finish_layout
@@ -6697,7 +6721,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light",
                "deform", "lut", "custom_lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -6709,6 +6733,12 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                # 而 UI 一句也不说为什么"（CORE-006 为此专门加了一条用例）
                "enhance", "lip_makeup", "brow_shape", "nose_shape", "eye_shape", "mouth_shape", "people", "hair_colour", "fabric")
     _HANDLED_LAMBDA = ("bench_stop",)      # 唯一不开成 cmd_* 的那条：只是置停止位
+
+    def cmd_virtual_copy(self, p):
+        from .virtual_copy_host import VirtualCopies
+        if not hasattr(self, '_virtual_copy_controller'):
+            self._virtual_copy_controller = VirtualCopies(self, emit)
+        return self._virtual_copy_controller.handle(p)
 
     def cmd_source_relocation(self, p):
         SRH.handle(self, p, emit, PJ.validate)
@@ -6740,6 +6770,9 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 emit({"event": "error", "error": f"未知命令: {name}"})
                 return
             relocation = self.__dict__.get('_source_relocation_controller')
+            if name == 'virtual_copy' and relocation is not None:
+                with relocation.lock: fn(msg)
+                return
             if relocation is not None and relocation.blocks(name, msg):
                 reason = '原图重定位仍在进行或结果待确认；请查询原操作，暂不接受其他修改'
                 if name == 'preset_organisation':
@@ -6748,7 +6781,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                           'success': False, 'outcome_unknown': False, 'error': reason})
                     return
                 raise ValueError(reason)
-            if name == 'source_relocation':
+            if name in ('source_relocation', 'virtual_copy'):
                 fn(msg); return  # Path transactions never enter recipe history/capture invalidation.
             if relocation is not None and name == 'project' and msg.get('action') == 'state':
                 with relocation.lock: fn(msg)

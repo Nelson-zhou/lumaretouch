@@ -94,13 +94,14 @@ export function SourceRelocationPanel({projectKey,onChanged}:{projectKey:string;
       <p>已核验 {preview.files_hashed} 个文件。候选显示前已比较完整内容；提交前再次核验。</p>
       {preview.rows.map(row=><div key={row.document_id}>
         <p>{row.old_path}<br/>原图 SHA-256：{row.sha256}<br/>大小：{row.bytes} 字节；候选通过时以完整字节一致核验格式、尺寸、方向{row.width&&row.height?`（${row.width} × ${row.height}）`: '（旧项目未记录可展示的尺寸）'}</p>
+        <p>此映射将同时更新同源的 {(row.affected_documents??[]).length || 1} 个文档（含回收站）：{(row.affected_documents??[]).map(item=>`${item.copy_number ? `副本 ${item.copy_number}` : '原件'}${item.trashed?'（回收站）':''} · ${item.document_id}`).join('；')}。配方与历史保持独立。</p>
         <select aria-label={`为 ${row.old_path} 选择新路径`} disabled={busy||uncertain} value={choices[row.document_id]??''} onChange={e=>{const path=e.target.value;setChoices(old=>{const next={...old};if(path)next[row.document_id]=path;else delete next[row.document_id];return next;});setConfirmed(false);}}>
           <option value="">{row.candidates.length?'选择候选（可暂不处理）':'未找到完全匹配的原图'}</option>
           {row.candidates.map(candidate=><option key={candidate.path} value={candidate.path}>{candidate.path}</option>)}
         </select>
       </div>)}
       {preview.errors.length>0&&<details><summary>扫描提示（{preview.errors.length}）</summary><ul>{preview.errors.map((item,index)=><li key={index}>{item.path}：{item.reason}</li>)}</ul></details>}
-      <label><input type="checkbox" disabled={busy||uncertain} checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>我已审核 {Object.keys(choices).length} 个路径对应关系，只更新选定引用</label>
+      <label><input type="checkbox" disabled={busy||uncertain} checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>我已审核 {Object.keys(choices).length} 个路径对应关系，更新其列出的全部同源文档引用</label>
       <button disabled={busy||uncertain||!confirmed||Object.keys(choices).length===0} onClick={()=>void run('commit',{preview_id:preview.preview_id,choices,confirmed:true})}>确认重定位并保存工程</button>
     </div>}
     {(uncertain||recoveryId)&&<button disabled={busy||!recoveryId} onClick={()=>void run('query',{operation_id:recoveryId})}>查询原操作结果</button>}

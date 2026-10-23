@@ -40,8 +40,9 @@ def read_project(path):
         os.close(fd)
 
 
-def expected(row):
-    fp = row.get('fingerprint') or {}
+def expected(row, project=None):
+    source = (project or {}).get('source_assets',{}).get(row.get('source_asset_id'),{})
+    fp = source.get('fingerprint') or row.get('fingerprint') or {}
     if fp.get('hash_level') != 'full' or not isinstance(fp.get('sha256'), str) or not DIGEST.fullmatch(fp['sha256']):
         raise ValueError('旧项目没有完整 SHA-256，不能证明是原图；请从可信备份恢复原文件')
     if type(fp.get('bytes')) is not int or fp['bytes'] < 1:
@@ -56,13 +57,14 @@ def preview(project, identities, paths, directory, cancelled):
     rows, results, errors = {}, [], []
     for identity in identities:
         old = identity['old_path']
-        matches = [r for r in project['docs'] if r['path'] == old]
-        if len(matches) != 1 or old in rows: raise ValueError('项目来源身份不唯一')
+        matches = [r for r in project['docs'] if r['path'] == old and (r.get('document_id') == identity['document_id'] or not r.get('document_id'))]
+        if len(matches) != 1: raise ValueError('项目来源身份不唯一')
         # lexists rejects a replaced, unreadable or dangling-link original, not just readable files.
         if os.path.lexists(old): raise ValueError('原路径仍存在；这是源文件变化或权限问题，不是缺失重定位')
-        fp = expected(matches[0])
+        fp = expected(matches[0], project)
         rows[old] = (matches[0], fp)
-        results.append({**identity, 'sha256': fp['sha256'], 'bytes': fp['bytes'], 'candidates': [],
+        family = [r for r in project['docs'] if r.get('source_asset_id') == matches[0].get('source_asset_id')] if matches[0].get('source_asset_id') else matches
+        results.append({**identity, 'affected_documents':[{'document_id':r.get('document_id'), 'copy_number':r.get('copy_number',0), 'trashed':bool(r.get('trashed'))} for r in family], 'sha256': fp['sha256'], 'bytes': fp['bytes'], 'candidates': [],
                         'metadata_equivalence': 'full-byte-sha256',
                         'format': identity.get('format'), 'width': identity.get('width'),
                         'height': identity.get('height'), 'orientation': identity.get('orientation')})
@@ -100,6 +102,7 @@ def stage(project, plan, choices, cancelled):
         raise ValueError('选择不属于此预览')
     output = copy.deepcopy(project)
     updates, budget = [], Budget(cancelled)
+    sources = {}
     for item in plan['rows']:
         selected = choices.get(item['document_id'])
         if selected is None: continue
@@ -109,14 +112,28 @@ def stage(project, plan, choices, cancelled):
         current = hash_file(selected, budget, item['bytes'])
         if current['sha256'] != item['sha256'] or current['stat'] != found['stat']:
             raise ValueError('候选文件在预览后变化，请重新扫描')
-        row = next(r for r in output['docs'] if r['path'] == item['old_path'])
-        row['path'] = selected
-        row['fingerprint']['path'] = selected
-        # No traversal/rebinding of provenance: source identity, recipes, support,
-        # face/body identities, histories and accepted assets remain byte-identical.
-        updates.append({**item, 'new_path': selected})
-    if len({r['path'] for r in output['docs']}) != len(output['docs']):
-        raise ValueError('目标路径已属于另一文档；不能静默合并业务副本')
+        legacy = not any(r.get('document_id') for r in output['docs'])
+        if legacy:
+            row = next(r for r in output['docs'] if r['path'] == item['old_path'])
+            if any(r is not row and r['path']==selected for r in output['docs']):
+                raise ValueError('目标路径已属于另一文档；不能静默合并业务副本')
+            row['path'] = selected; row['fingerprint']['path'] = selected
+            updates.append({**item,'new_path':selected})
+            continue
+        row = next(r for r in output['docs'] if r.get('document_id') == item['document_id'])
+        source_id = row['source_asset_id']
+        if source_id in sources:
+            if sources[source_id] != selected: raise ValueError('同源副本必须重连到同一个已核验文件')
+            continue
+        if any(r['path']==selected and r['source_asset_id']!=source_id for r in output['docs']):
+            raise ValueError('目标属于另一独立来源；不能静默合并业务文档')
+        sources[source_id] = selected
+        from .virtual_copy_storage import relocate_source
+        relocate_source(output, source_id, selected, {**expected(row,output),'path':selected})
+        for sibling in output['docs']:
+            if sibling['source_asset_id'] != source_id: continue
+            sibling.setdefault('source_relocation_aliases',{})[item['old_path']] = item['sha256']
+            updates.append({**item, 'document_id':sibling['document_id'], 'source_asset_id':source_id, 'new_path':selected})
     return output, updates
 
 

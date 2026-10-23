@@ -77,7 +77,10 @@ class BatchSyncController:
                 else:
                     bad.append({"doc": d, "error": "格号超出底片条范围"})
                 continue
-            i = self.documents.index_of(d)
+            match = self.versions.find(self.documents.rows(),d)
+            try: i = match[0] if match else self.documents.index_of(d)
+            except ValueError as error:
+                bad.append({"doc":d,"error":str(error)}); continue
             if i < 0:
                 bad.append({"doc": d, "error": "这张图不在底片条里"})
             elif i not in out:
