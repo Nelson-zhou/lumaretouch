@@ -1,0 +1,126 @@
+{
+  "schema_version": "lrt.export-destination.acceptance.v1",
+  "status": "UNRUN",
+  "requirements": [
+    "LNX-REF-WF-32563-8139388436",
+    "LNX-REF-WF-32483-30b6eae726",
+    "LNX-P0-EXPORT"
+  ],
+  "cases": [
+    {
+      "id": "DEST-001",
+      "given": "/input/A/nested/photo.jpg imported at /input/A; chosen /deliver; retain hierarchy",
+      "expect": "/deliver/A/nested/photo.jpg"
+    },
+    {
+      "id": "DEST-002",
+      "given": "/input/A/nested/photo.jpg; source folder; project Exports",
+      "expect": "/input/A/nested/Exports/photo.jpg"
+    },
+    {
+      "id": "DEST-003",
+      "given": "/a/Session and /b/Session imported together",
+      "expect": "Separate Session-<stable-root-hash> trees; no merged outputs; selection order does not change names"
+    },
+    {
+      "id": "DEST-004",
+      "given": "original and two virtual copies sharing source path, distinct item IDs and frame receipts",
+      "expect": "Three distinct targets and preserved recipes; stable item ordering; no source-path keyed collapse"
+    },
+    {
+      "id": "DEST-005",
+      "given": "target exists and conflict ask",
+      "expect": "needs_confirmation; task attach refused until user chooses rename or skip inside existing export settings and previews again"
+    },
+    {
+      "id": "DEST-006",
+      "given": "source target alias or hardlink, rename policy",
+      "expect": "Original inode unchanged; new unique name; no overwrite even if file appears after preview"
+    },
+    {
+      "id": "DEST-007",
+      "given": "../ traversal, absolute target filename, NUL, backslash or >255-byte component",
+      "expect": "Rejected before directory creation or rendering"
+    },
+    {
+      "id": "DEST-008",
+      "given": "output ancestor symlink, dangling target symlink, source escaping import root",
+      "expect": "Ancestor/source escape rejected; existing target never overwritten"
+    },
+    {
+      "id": "DEST-009",
+      "given": "missing target parents, create_missing false; then true",
+      "expect": "First preview fails without mkdir; second lists missing parents and only commit creates them"
+    },
+    {
+      "id": "DEST-010",
+      "given": "read-only directory, inaccessible parent, missing source",
+      "expect": "Actionable failure, no export or fallback directory"
+    },
+    {
+      "id": "DEST-011",
+      "given": "intent or frame changes during preview, repeated submit, close/reopen",
+      "expect": "Stale preview discarded; no duplicate queue submission; re-preview required"
+    },
+    {
+      "id": "DEST-012",
+      "given": "queue JSON roundtrip and retry with existing target",
+      "expect": "Identical plan ID and target; fail review-required, never a new auto-numbered target"
+    },
+    {
+      "id": "DEST-013",
+      "given": "restart with destination plan but missing frozen recipes",
+      "expect": "Existing recipe_persisted guard blocks retry; plan alone cannot authorize rendering"
+    },
+    {
+      "id": "DEST-014",
+      "given": "RGB16 TIFF, ICC, GPS false, compression, watermark and layout options",
+      "expect": "Destination layer retains exact export settings and filename suffix; both writer branches use frozen target; no color/metadata change"
+    },
+    {
+      "id": "DEST-015",
+      "given": "target raced in after preview or symlink ancestor swapped",
+      "expect": "No-clobber commit refuses target; descriptor-relative nofollow traversal never follows symlink"
+    },
+    {
+      "id": "DEST-016",
+      "given": "disk full, fsync or unlink error after link commit",
+      "expect": "No original changed; queue reports uncertain/failed receipt, retry detects existing target and requires review"
+    },
+    {
+      "id": "DEST-017",
+      "given": "engine restarted or reply arrives after release",
+      "expect": "Mailbox cleared; late reply ignored; unsupported capability never falls back to flattening export"
+    },
+    {
+      "id": "DEST-018",
+      "given": "watermark dual output and layout aggregate filenames",
+      "expect": "Every derivative reserved in full plan; real RGB8/RGB16 clean outputs and layout pages/PDF/manifest use frozen paths; partial outputs remain in failed receipts"
+    },
+    {
+      "id": "DEST-019",
+      "given": "add folder A, add folder B, open a photo and rescan",
+      "expect": "Both explicit import roots remain in library; no flattening or dropped directory"
+    },
+    {
+      "id": "DEST-020",
+      "given": "v23 save/reopen, create virtual copy, relocate original",
+      "expect": "Original logical import root/relative path retained for all copies; physical source-folder output uses relocated source directory"
+    },
+    {
+      "id": "DEST-021",
+      "given": "legacy v23 project without import_origin",
+      "expect": "Preview visibly identifies legacy parent-directory fallback; no claim of known original hierarchy"
+    },
+    {
+      "id": "DEST-022",
+      "given": "cancel or navigate away during preview, then receive late result",
+      "expect": "Result discarded by generation/input fence; no export is submitted; native receipt released"
+    },
+    {
+      "id": "DEST-023",
+      "given": "cross-directory source-mode layout without layout_root",
+      "expect": "Preview requires explicit summary destination; never chooses the first image directory silently"
+    }
+  ]
+}

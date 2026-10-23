@@ -495,7 +495,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
               # 前端抄一份 action 名单，两边分叉时“不支持”与“拼错了”长得一模一样
               "project_actions": list(self.PROJECT_ACTIONS),
               "project_suffix": PJ.SUFFIX,
-              "task_actions": list(self.TASK_ACTIONS),
+              "export_destination_protocol": 1, "task_actions": list(self.TASK_ACTIONS),
               # 挑图（LNX-PICK-001）：action 名单、四组档位的可选值、阈值本体与判据指纹
               # 全部由引擎说。前端刻一份「weak/standard/strong」或抄一个阈值数字，就是
               # 下一轮改判据时漏改的那一处——而它的表现是徽章悄悄改了含义。
@@ -1200,6 +1200,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 # 挑图建议（派生旁注）：一次分析的完整读数与折出来的建议。它随会话活、
                 # 不随工程文件走（理由同 _precompute：是算出来的，不是用户画的）。
                 "pick": None, "pick_error": None}
+        from .export_destination_import import origin
+        row['import_origin'] = origin(row['path'])
         self._document_versions().version(row)
         library_file_identity(row)
         return row
@@ -1762,9 +1764,9 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
               "presets": self._preset_state(), "sync": self._sync_state(),
               "docs": rows, "library_query": LQ.query_state(self, rows), **extra})
 
-    def _rows_from(self, paths: list) -> list:
+    def _rows_from(self, paths: list, origins=None) -> list:
         from .virtual_copy_session import rows_from
-        return rows_from(self, paths)
+        return rows_from(self, paths, origins)
 
     def _start_thumbs(self, indices: list, edge, quality) -> bool:
         try:
@@ -1862,7 +1864,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             if self._thumbs is not None and self._thumbs.is_alive():
                 self._thumb_stop.set()      # 旧任务下一轮会自己按 path 对不上而退出
             self._remember_current()
-            rows = self._rows_from(got["files"])
+            from .export_destination_import import origin
+            rows = self._rows_from(got["files"], {path:origin(path, got["dir"], kind="directory") for path in got["files"]})
             emit({"event": "session_scan", "dir": got["dir"], "found": len(got["files"]),
                   "rows": len(rows), "truncated": got["truncated"], "skipped": got["skipped"],
                   "limit": limit, "scan_ms": got["scan_ms"],
@@ -1882,14 +1885,14 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 return
             # 先验存在再提交（与所有 cmd_* 同一条铁律）：收一条不存在的路径进底片条，
             # 代价要拖到缩略图线程或用户点上去那一刻才报，而那时已经看不出来是哪一步错了。
-            missing = [str(x) for x in paths if not os.path.isfile(os.path.abspath(str(x)))]
-            if missing:
-                emit({"event": "error", "error": f"session add 里有 {len(missing)} 个不是现有文件："
-                       f"{missing[:3]}{'…' if len(missing) > 3 else ''}"})
-                return
+            from .export_destination_import import expand
+            try:
+                paths, origins = expand(paths, S.IMAGE_EXTS, S.MAX_DOCS)
+            except (ValueError, OSError) as error:
+                emit({"event":"error", "error":str(error)}); return
             self._remember_current()
             before = {d["path"] for d in self._docs}
-            rows = self._rows_from(list(self._doc_paths()) + [str(x) for x in paths])
+            rows = self._rows_from(list(self._doc_paths()) + [str(x) for x in paths], origins)
             added = [d["path"] for d in rows if d["path"] not in before]
             emit({"event": "session_add", "requested": len(paths), "added": len(added),
                   "duplicated": len(paths) - len(added), "rows": len(rows)})
@@ -5801,7 +5804,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                    "scale", "sharpen", "upscale_backend", "bit_depth",
                    # d2c 那四格：名字进白名单不等于接通，下面逐条校验完才进 snap
                    "output_profile", "tiff_compression", "metadata_include_gps",
-                   "conflict_policy", "watermark", "layout", "document_ids"}
+                   "conflict_policy", "watermark", "layout", "document_ids",
+                   "destination_policy", "destination_plan_id", "intent_revision", "request_id"}
 
     def _state_to_export_snap(self,st,**options):
         from .export_snapshot import state_to_export_snap
@@ -5914,25 +5918,47 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         from .export_recipe import build_export_spec
         return build_export_spec(snap, eh, ew, for_document=for_document)
 
+    def cmd_export_destination(self, p):
+        rid = p.get("request_id")
+        if not isinstance(rid, str) or not rid or len(rid) > 128:
+            emit({"event":"error", "error":"无效目录预览请求身份"}); return
+        if p.get("action") == "cancel":
+            emit({"event":"export_destination_result", "request_id":rid, "status":"ready", "value":{"cancelled":True}}); return
+        try:
+            if p.get("action") != "preview" or not isinstance(p.get("export_options"), dict):
+                raise ValueError("无效目录预览动作")
+            command = {**p["export_options"], "cmd":"export", "action":"preview", "request_id":rid,
+                       "destination_policy":p["policy"], "document_ids":p["document_ids"],
+                       "intent_revision":p["intent_revision"]}
+            self.cmd_export(command)
+        except (ValueError,TypeError,KeyError,OSError,RuntimeError) as error:
+            emit({"event":"export_destination_result", "request_id":rid, "status":"failed", "error":str(error)})
+
     def cmd_export(self, p: dict):
         """全尺寸分块导出（批量）。在 worker 线程里跑：满幅一块图就能是几秒。"""
+        preview = p.get("action") == "preview"
+        def respond(payload):
+            if preview and payload.get("event") == "error":
+                emit({"event":"export_destination_result", "request_id":p.get("request_id"),
+                      "status":"failed", "error":payload.get("error")})
+            else: emit(payload)
         unknown = set(p) - self.EXPORT_KEYS
         if unknown:
-            emit({"event": "error", "error": f"export 收到不认识的参数：{sorted(unknown)}"})
+            respond({"event": "error", "error": f"export 收到不认识的参数：{sorted(unknown)}"})
             return
         # action 在白名单里就必须被校验：不校验的话 {"action":"status"} 会当成"开始导出"
         # 直接跑起来——前端想要的是状态，拿到的是一次满幅批量出片。
         action = p.get("action", "start")
-        if action != "start":
-            emit({"event": "error",
+        if action not in ("start", "preview"):
+            respond({"event": "error",
                   "error": f"export 只认识 action=start（收到 {action!r}）；" \
                            "进度看 export_progress / export_done 事件"})
             return
         if self.bench is not None and self.bench.is_alive():
-            emit({"event": "error", "error": "跑靶进行中，拒绝导出：先 bench_stop"})
+            respond({"event": "error", "error": "跑靶进行中，拒绝导出：先 bench_stop"})
             return
         if self._export is not None and self._export.is_alive():
-            emit({"event": "error",
+            respond({"event": "error",
                   "error": "导出已在进行中：一批只许一个（两个导出会同抢一块卡，"
                            "峰值账单就不是那个数了）"})
             return
@@ -5940,13 +5966,13 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         from . import virtual_copy_export as VCX
         try: selected_documents = VCX.select(self, p)
         except ValueError as error:
-            emit({"event":"error","error":str(error)}); return
+            respond({"event":"error","error":str(error)}); return
         images = [row['path'] for row in selected_documents]
         if not isinstance(images, list) or not images:
-            emit({"event": "error", "error": "export 需要 images（路径列表），且当前没有已加载的文档"})
+            respond({"event": "error", "error": "export 需要 images（路径列表），且当前没有已加载的文档"})
             return
         if any((not isinstance(x, str) or not x) for x in images):
-            emit({"event": "error", "error": "export 的 images 必须是非空字符串列表"})
+            respond({"event": "error", "error": "export 的 images 必须是非空字符串列表"})
             return
         # 路径一律按绝对路径比对，但**必须排在校验之后**：先归一会把空字符串变成一个
         # 真实目录、把 "not-a-list" 这个字符串拆成十个单字符路径，于是那两条拒绝双双
@@ -5955,16 +5981,18 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         # 相对/绝对两种写法；比不上的代价不是报错而是静默——for_document 判假，笔迹与
         # 形变全部不进满幅文件，而事件里写着“已导出”。
         images = [os.path.abspath(x) for x in images]
-        out_dir = p.get("out_dir")
+        out_dir = p.get("out_dir") or (p.get("destination_policy") or {}).get("chosen_root")
+        if (p.get("destination_policy") or {}).get("mode") == "source_folder":
+            out_dir = os.path.dirname(images[0])
         if not isinstance(out_dir, str) or not out_dir:
-            emit({"event": "error", "error": "export 需要 out_dir（导出目录）"})
+            respond({"event": "error", "error": "export 需要 out_dir（导出目录）"})
             return
         out_dir_abs = os.path.abspath(out_dir)
         # 目录创建挪到全部参数校验之后（见下方“建目录”那条）：校验没过就先把用户的
         # 目录建出来，失败的路径会在盘上留下一个空文件夹，而报错说的是“参数不合法”
         fmt = str(p.get("format", "jpg")).lower().lstrip(".")
         if fmt not in FORMATS:
-            emit({"event": "error", "error": f"不支持的导出格式：{fmt}（可用 {sorted(set(FORMATS))}）"})
+            respond({"event": "error", "error": f"不支持的导出格式：{fmt}（可用 {sorted(set(FORMATS))}）"})
             return
         # 原片只读（CORE-004）：落点不许指向**任何一张输入**。
         # 今天它并不会真的盖掉源文件（resolve_target 对已存在的目标只会 skip_and_report
@@ -5973,8 +6001,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         # 导出跑了而目录里没有一样新东西。更重要的是：这条不变量不能依赖“今天没有
         # overwrite 策略”——那是一句会被后人改的话，而源文件不可变是一句必须一直真的话。
         collide = VCX.source_collisions(self, selected_documents, out_dir_abs, fmt)
-        if collide:
-            emit({"event": "error",
+        if collide and p.get("destination_policy") is None:
+            respond({"event": "error",
                   "error": "导出目标就是输入文件本身，整批拒绝（原片只读）："
                            + "；".join(collide[:4]) + ("…" if len(collide) > 4 else "")
                            + "；换一个导出目录（同名同格式时 skip_and_report 会整批“跳过”，"
@@ -5984,13 +6012,13 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             quality = int(p.get("quality", 95))
             tile = int(p.get("tile", DEFAULT_TILE))
         except (TypeError, ValueError):
-            emit({"event": "error", "error": "quality/tile 必须是整数"})
+            respond({"event": "error", "error": "quality/tile 必须是整数"})
             return
         if not (MIN_TILE <= tile <= MAX_TILE):
-            emit({"event": "error", "error": f"tile={tile} 越界（允许 {MIN_TILE}~{MAX_TILE}）"})
+            respond({"event": "error", "error": f"tile={tile} 越界（允许 {MIN_TILE}~{MAX_TILE}）"})
             return
         if not (1 <= quality <= 100):
-            emit({"event": "error", "error": f"quality={quality} 越界（需要 1~100）"})
+            respond({"event": "error", "error": f"quality={quality} 越界（需要 1~100）"})
             return
         # 放大（M7）：这一层只做"能不能解析"的校，参数上下限的唯一口径在
         # ExportSpec.check（与各层 setter 同源），不在这里抄第二份数
@@ -5998,28 +6026,28 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         try:
             scale = check_scale(p.get("scale", 1))
         except (ValueError, TypeError) as e:
-            emit({"event": "error", "error": f"scale 非法：{e}"})
+            respond({"event": "error", "error": f"scale 非法：{e}"})
             return
         backend = str(p.get("upscale_backend", "lanczos3"))
         if backend not in ("lanczos3", "realesrgan"):
-            emit({"event": "error", "error": f"未知放大后端：{backend}（可用 lanczos3/realesrgan）"})
+            respond({"event": "error", "error": f"未知放大后端：{backend}（可用 lanczos3/realesrgan）"})
             return
         if backend == "realesrgan":
             # 无权重整条拒，不降级成 Lanczos 报"AI 超分"（与 lama/birefnet 同一条规矩）。
             # 理由只有一句出处（export.UPSCALE_NOT_WIRED）：命令层与 ExportSpec 各写一份
             # 就会漂，而“设好 sha256 后重试”那一版把未接入出片环路这一件事推给了权重。
-            emit({"event": "error", "error": UPSCALE_NOT_WIRED})
+            respond({"event": "error", "error": UPSCALE_NOT_WIRED})
             return
         try:
             sharpen = float(p.get("sharpen", 0.0))
         except (TypeError, ValueError):
-            emit({"event": "error", "error": "sharpen 必须是 0~2 的数"})
+            respond({"event": "error", "error": "sharpen 必须是 0~2 的数"})
             return
         # 越界值必须在开跑前就拒：ExportSpec.check 里那一条虽然也会拦，但它跑在
         # worker 里，拦下时 export_progress 已经发出去了——进度条走完后什么都没有，
         # 上一轮 M4 就是为这一件事付过费。界只有一处出处（export 模块常量）。
         if not (math.isfinite(sharpen) and 0.0 <= sharpen <= SHARPEN_AMOUNT_LIMIT):
-            emit({"event": "error",
+            respond({"event": "error",
                   "error": f"sharpen={sharpen} 越界（需要 [0,{SHARPEN_AMOUNT_LIMIT}]）"})
             return
         # 16-bit 母档直通（M9-e）：位深是“走哪条通路”而不是“一个参数”——它不进
@@ -6028,14 +6056,14 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         try:
             bit_depth = int(p.get("bit_depth", 8))
         except (TypeError, ValueError):
-            emit({"event": "error", "error": f"bit_depth={p.get('bit_depth')!r} 不是整数（只认 8 或 16）"})
+            respond({"event": "error", "error": f"bit_depth={p.get('bit_depth')!r} 不是整数（只认 8 或 16）"})
             return
         if bit_depth not in (8, 16):
-            emit({"event": "error", "error": f"bit_depth={bit_depth} 不支持（只认 8 或 16）"})
+            respond({"event": "error", "error": f"bit_depth={bit_depth} 不支持（只认 8 或 16）"})
             return
         if bit_depth == 16:
             if fmt not in ("tif", "tiff"):
-                emit({"event": "error",
+                respond({"event": "error",
                       "error": f"16-bit 输出当前只能写 TIFF（收到 format={fmt}）："
                                "JPEG/WebP 是有损的，PNG 编码器不吃三通道 16-bit"
                                "（实测 Pillow 拒 uint16 RGB）——不拿降到 8-bit 冒充 16-bit 出片"})
@@ -6047,7 +6075,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         output_profile = str(p.get("output_profile", "srgb"))
         include_gps = p.get("metadata_include_gps", False)
         if not isinstance(include_gps, bool):
-            emit({"event": "error",
+            respond({"event": "error",
                   "error": f"metadata_include_gps={include_gps!r} 必须是 true/false"
                            "（注册表里这一格是 boolean，中性 false=默认不外泄 GPS）"})
             return
@@ -6062,11 +6090,11 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 raise _ExportError(f"output_profile={output_profile!r} 本层不带该档"
                                    "（可用：srgb / source / none，或一个真实的 .icc 文件路径）")
         except _ExportError as e:
-            emit({"event": "error", "error": str(e)})
+            respond({"event": "error", "error": str(e)})
             return
         if fmt != "tif" and fmt != "tiff" and comp_key != "deflate":
             # 不夹也不忽略：只有 TIFF 读这个值，给 JPEG 设 deflate 是一次无效的输入
-            emit({"event": "error",
+            respond({"event": "error",
                   "error": f"tiff_compression={tiff_comp!r} 只对 TIFF 有意义（当前 format={fmt}）："
                            "JPEG/WebP 用 quality，PNG 用 quality 映射的 compress_level"})
             return
@@ -6079,24 +6107,18 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         # another image in a 16-bit passthrough batch.
         try: entry_ids, snap_by_path, export_entries = VCX.freeze(self, selected_documents, snap)
         except (ValueError,RuntimeError,OSError) as error:
-            emit({"event":"error","error":str(error)}); return
+            respond({"event":"error","error":str(error)}); return
         from . import watermark as WM
         from .layout_spec import normalize as normalize_layout, LAYOUT_ITEM
         try:
             snap["export_watermark"] = WM.freeze_settings(p.get("watermark"))
             snap["export_layout"] = normalize_layout(p.get("layout"))
         except (ValueError, TypeError, OSError) as error:
-            emit({"event": "error", "error": f"水印/排版设置无效：{error}"})
+            respond({"event": "error", "error": f"水印/排版设置无效：{error}"})
             return
         # Pixel edits are now routed to the float/RGB16 pipeline per image.
         # The neutral classifier remains below to select exact passthrough;
         # it must not be used to silently omit nonneutral frozen recipes.
-        # 建目录（挪下来了）：到这里每一个参数都已核验，失败的可能性只剩“这一路真不可写”
-        try:
-            os.makedirs(out_dir, exist_ok=True)
-        except OSError as e:
-            emit({"event": "error", "error": f"out_dir 不可用：{e}"})
-            return
         # 四格打包成一个 dict：_export_args 已经是第 9 元组，再往中间插
         # 会让“哪一位是什么”只有数位置的人看得懂；加一位 dict 反而把这一批的口径写清了
         # （opts 必须先有名字再进元组：上一版把字面量直接写在元组里，而下面建台账的
@@ -6105,6 +6127,32 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         opts = {"output_profile": output_profile, "tiff_compression": tiff_comp,
                 "metadata_include_gps": bool(include_gps), "conflict_policy": conflict_policy,
                 "watermark": WM.public_settings(snap.get("export_watermark")), "layout": snap.get("export_layout"), "document_entries": export_entries}
+        destination_plan = None
+        if p.get("destination_policy") is not None:
+            from . import export_destination_runtime as EDR
+            settings = {"format":fmt, "quality":quality, "tile":tile, "bit_depth":bit_depth,
+                        "scale":scale, "sharpen":sharpen, "upscale_backend":backend,
+                        **{k:v for k,v in opts.items() if k != "document_entries"}}
+            try:
+                destination_plan = EDR.build(self, selected_documents, entry_ids, export_entries,
+                    settings, p["destination_policy"], p.get("intent_revision", 0))
+                if preview:
+                    respond({"event":"export_destination_result", "request_id":p.get("request_id"),
+                             "status":"ready", "value":destination_plan.payload()})
+                    return
+                if destination_plan.plan_id != p.get("destination_plan_id"):
+                    raise ValueError("导出设置、文档或目标文件已变化，请重新预览导出位置")
+                if any(e.disposition == "needs_confirmation" for e in destination_plan.entries):
+                    raise ValueError("请在导出设置中选择改名或跳过冲突文件，再重新预览")
+                opts["destination_plan"] = destination_plan.payload()
+            except (ValueError,TypeError,OSError,KeyError,RuntimeError) as error:
+                respond({"event":"error", "error":str(error)}); return
+        elif preview:
+            respond({"event":"error", "error":"目录预览需要位置策略"}); return
+        else:
+            try: os.makedirs(out_dir, exist_ok=True)
+            except OSError as error:
+                respond({"event":"error", "error":f"out_dir 不可用：{error}"}); return
         # P1-1：为这批每一张预解析各自的配方（命令线程读 _docs，worker 不再读 live）。
         self._export_args = (entry_ids, out_dir, fmt, quality, tile, doc, snap, bit_depth,
                              opts, snap_by_path)
@@ -6148,7 +6196,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 "counts": T.counts(task), "batch": T.batch_state(list(self._tasks.values())),
                 "persisted": bool(task.get("persisted")),
                 "blocked_reason": task.get("blocked_reason"),
-                "out_dir": task["inputs"].get("out_dir"),
+                "out_dir": None if task["inputs"].get("destination_plan") else task["inputs"].get("out_dir"),
+                "destination_directories": sorted({os.path.dirname(e["target"]) for e in (task["inputs"].get("destination_plan") or {}).get("entries", [])}),
                 "updated_ns": task["updated_ns"], "note": note, **extra}
 
     def _emit_task(self, task: dict, note: str = "", **extra) -> None:
@@ -6188,13 +6237,13 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             return
         if "error" in rec:
             T.item_result(task, path, "failed", reason=rec["error"],
-                          detail={"stage": rec.get("stage")})
+                          detail={"stage": rec.get("stage"), "outputs":rec.get("outputs",[]), "destination_plan_id":rec.get("destination_plan_id"), "planned_target":rec.get("planned_target")})
         elif rec.get("out_skipped"):
             T.item_result(task, path, "skipped", reason=rec.get("skip_reason"),
-                          out=rec.get("out"))
+                          out=rec.get("out"), detail={"outputs":rec.get("outputs",[]),"destination_plan_id":rec.get("destination_plan_id")})
         else:
             T.item_result(task, path, "succeeded", out=rec.get("out"),
-                          detail={"bytes": rec.get("bytes"), "layout_usable": not any(o.get("skipped") for o in rec.get("outputs", []) or [] if o.get("path") == rec.get("out"))})
+                          detail={"bytes": rec.get("bytes"), "outputs":rec.get("outputs",[]), "renamed_from":rec.get("renamed_from"), "destination_plan_id":rec.get("destination_plan_id"), "layout_usable": not any(o.get("skipped") for o in rec.get("outputs", []) or [] if o.get("path") == rec.get("out"))})
         self._emit_task(task, f"第 {T.counts(task)['succeeded'] + T.counts(task)['failed']} "
                               f"条已定")
 
@@ -6327,8 +6376,16 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
             # 一批只许一个：两条 worker 会同抢一块卡，峰值账单就不是那个数了，
             # 而更坑的是它们会互相把对方的 `self._export_args` 抢掉
             raise T.TaskError("已经有一批在跑：先等 export_done 或取消它，再重试")
-        _task, pend = T.begin_retry(t)
         args = self._task_args.get(t["task_id"])
+        if args is not None and args[8].get("destination_plan"):
+            from .export_destination_policy import restore, DestinationError
+            try:
+                retained = restore(args[8]["destination_plan"])
+                persisted = restore(t["inputs"]["destination_plan"])
+                if retained.plan_id != persisted.plan_id: raise DestinationError("冻结导出目标不一致")
+            except (ValueError,KeyError,TypeError) as error:
+                raise T.TaskError(f"目录计划损坏，拒绝重试：{error}") from error
+        _task, pend = T.begin_retry(t)
         if args is None:
             t["recipe_persisted"] = False
             raise T.TaskError("这条批次没有配方快照（重启过的旧台账）：请打开那张图重新导出")
@@ -6364,6 +6421,8 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         failed = 0
         stopped = False
         from .virtual_copy_source import verify_entry, verify_decode
+        from . import export_destination_runtime as EDR
+        destination_plan = opts.get("destination_plan")
         verified_sources = set()
         for idx, entry_id in enumerate(images):
             entry = opts.get("document_entries", {}).get(entry_id, {"path":entry_id})
@@ -6384,7 +6443,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 analysis_ms = round((monotonic_ns() - image_started) / 1e6, 2)
                 if bit_depth == 16:
                     from .export import export_master_16bit, export_edited_16bit
-                    out_path = os.path.join(out_dir, entry.get("stem", os.path.splitext(os.path.basename(path))[0]) + ".tif")
+                    out_path = EDR.primary_target(destination_plan, entry_id) if destination_plan else os.path.join(out_dir, entry.get("stem", os.path.splitext(os.path.basename(path))[0]) + ".tif")
                     skipped = []
                     common = dict(output_profile=opts["output_profile"],
                                   conflict_policy=opts["conflict_policy"],
@@ -6401,13 +6460,13 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                         stage = "edit16"
                         render16 = export_delivery16 if watermark else export_edited_16bit
                         wm_args = {"watermark": watermark} if watermark else {}
-                        r = render16(d, spec, out_path, device=snap_i["device"], tile=tile,
+                        r = EDR.run(destination_plan, entry_id, render16, d, spec, out_path, device=snap_i["device"], tile=tile,
                                                crop_rect=tuple(snap_i.get("crop_rect") or (0, 0, 1, 1)),
                                                rotation_degrees=float(snap_i.get("crop_rotation") or 0),
                                                decode_ms=decode_ms, **wm_args, **common)
                     else:
                         stage = "master16"
-                        r = export_master_16bit(path, out_path, device=snap_i["device"],
+                        r = EDR.run(destination_plan, entry_id, export_master_16bit, path, out_path, device=snap_i["device"],
                                                verify_source=lambda: verify_decode(path, immutable_stamp), **common)
                     results.append({"path": path, "out": r["path"], "format": "tif",
                                     "bits": 16, "source": r["source"],
@@ -6452,6 +6511,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                     # 16-bit 那一路也得有逐图进度与台账结局：以前它 continue 得过早，
                     # 既不发 export_progress 也不记条目——于是 RAW 批量导出在进度条上
                     # 是“动都不动”，在批次账上是“跑完了而没人知道跑了哪几张”。
+                    EDR.decorate(results[-1], destination_plan, entry_id)
                     results[-1].update({k:entry.get(k) for k in ("document_id","source_asset_id","recipe_version_id","copy_number")})
                     self._task_item(task, entry_id, results[-1])
                     emit({"event": "export_progress", "index": idx, "total": n, "path": path, "document_id":entry.get("document_id"),
@@ -6466,7 +6526,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                 spec, skipped = self._export_snapshot(snap_i, d.h, d.w,
                                                       for_document=for_doc_i)
                 stage = "write"
-                out_path = os.path.join(out_dir, entry.get("stem", os.path.splitext(os.path.basename(path))[0]) + "." + fmt)
+                out_path = EDR.primary_target(destination_plan, entry_id) if destination_plan else os.path.join(out_dir, entry.get("stem", os.path.splitext(os.path.basename(path))[0]) + "." + fmt)
                 frame, st = export_image(d.rgb, spec, device=snap_i["device"], tile=tile, geometry=(tuple(snap_i.get("crop_rect") or (0.,0.,1.,1.)),float(snap_i.get("crop_rotation") or 0.)) if RCS.active(spec.reference_color) or SCS.active(spec.semantic_colour) or CGS.active(spec.colour_grading) or CES.active(spec.colour_editor) or SCSL.active(spec.selective_colour) or PDS.active(spec.photo_detail) or PGS.active(spec.photo_grain) else None)
                 # 与预览链同序：几何在所有像素层之后。反过来先剪再算，同一支消除笔
                 # 在剪后的图上会落在别处——那不是"批量应用设置"，那是另一张图。
@@ -6484,7 +6544,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                     raise _ExportError(
                         "RAW 源暂不携带源 ICC：这条通道没读元数据，不是文件里没有。"
                         "请改选 srgb，或把一个真实的 .icc 文件路径当 output_profile 递进来")
-                info = write_delivery8(frame, out_path, quality=quality, watermark=watermark,
+                info = EDR.run(destination_plan, entry_id, write_delivery8, frame, out_path, quality=quality, watermark=watermark,
                                   output_profile=opts["output_profile"],
                                   source_icc=d.source_icc, source_exif=d.source_exif,
                                   metadata_include_gps=opts["metadata_include_gps"],
@@ -6517,6 +6577,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                                 "outputs": getattr(e, "outputs", [])})
             emit({"event": "export_progress", "index": idx, "total": n, "path": path, "document_id":entry.get("document_id"),
                   "ok": "error" not in results[-1]})
+            EDR.decorate(results[-1], destination_plan, entry_id)
             results[-1].update({k:entry.get(k) for k in ("document_id","source_asset_id","recipe_version_id","copy_number")})
             self._task_item(task, entry_id, results[-1])
         layout_result = None
@@ -6721,7 +6782,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("export_destination", "virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light",
                "deform", "lut", "custom_lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",

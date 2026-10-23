@@ -64,6 +64,8 @@ def ensure_identity(project):
         raise ValueError("source_assets must be an object")
     for row in project["docs"]:
         path = row["path"]
+        from .export_destination_import import origin
+        row.setdefault('import_origin', origin(path, kind='legacy_parent'))
         row.setdefault("document_id", _legacy_id(project_id, path, "document"))
         row.setdefault("source_asset_id", _legacy_id(project_id, path, "source"))
         row.setdefault("root_document_id", row["document_id"])
@@ -86,6 +88,9 @@ def validate_identity(project):
     for index, row in enumerate(project["docs"]):
         if not isinstance(row, dict):
             raise ValueError(f"docs[{index}] must be an object")
+        if "import_origin" in row:
+            from .export_destination_import import validate
+            validate(row["import_origin"])
         document_id = _identifier(row.get("document_id"), "document_id")
         source_id = _identifier(row.get("source_asset_id"), "source_asset_id")
         root_id = _identifier(row.get("root_document_id"), "root_document_id")

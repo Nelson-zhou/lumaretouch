@@ -1,3 +1,7 @@
+import {ExportDestinationPanel} from './exportDestination/ExportDestinationPanel';
+import {initialDestination, type DestinationPreview} from './exportDestination/model';
+import {exportDestinationApi, INSPECTION_EDIT_INTENT, chooseImportFolder} from './native';
+import {settleCurveEdit} from './curveEditBarrier';
 import {VirtualCopyControls} from './virtualCopies/VirtualCopyControls';
 import {FilmstripGallery,LibraryGallery} from './libraryQuery/Gallery';
 import {LibraryQueryControls} from './libraryQuery/Controls';
@@ -262,6 +266,20 @@ export default function App() {
   const {watermark, setWatermark, storageError: watermarkStorageError} = useWatermarkSettings();
   const layoutModel = useLayoutSettings();
   const [exportDir, setExportDir] = useState("/tmp/luma-export");
+  const [destinationPolicy, setDestinationPolicy] = useState(initialDestination);
+  const [destinationPreview, setDestinationPreview] = useState<DestinationPreview|null>(null);
+  const [destinationBusy, setDestinationBusy] = useState(false);
+  const destinationGeneration = useRef(0);
+  const destinationSubmitting = useRef(false);
+  const destinationPreviewRunning = useRef(false);
+  const destinationInput = useRef('');
+  const invalidateDestination = useCallback(() => {
+    destinationGeneration.current++; setDestinationPreview(null);
+  }, []);
+  useEffect(() => {
+    window.addEventListener(INSPECTION_EDIT_INTENT, invalidateDestination);
+    return () => window.removeEventListener(INSPECTION_EDIT_INTENT, invalidateDestination);
+  }, [invalidateDestination]);
   const [exportFormat, setExportFormat] = useState("jpg");
   const [idBackgroundBusy,setIdBackgroundBusy]=useState(false);
   const [exportQuality, setExportQuality] = useState(95);
@@ -1241,38 +1259,56 @@ export default function App() {
 
   /** 导出一张：tile 空串就是“不给”（让引擎用自己的 DEFAULT_TILE），而不是前端猜一个。
    *  倍率/锐量为 1/0 时也不给：那两个值就是“这一层没开”，递上去与递默认值是两回事。 */
-  function onExport() {
-    const tile = exportTile.trim() === "" ? undefined : Number(exportTile);
-    setExportErr("");
-    // 直通的拒绝是引擎在开跑前发的一条 error：runExport 那条 promise 只到"发出去了"
-    // 为止（宿主回的是 requested:true），所以成败要看状态位，不能等 catch。
-    // 先拿一份 last_error 作基线：上一张图的错还挂在那儿的时候，不能把它读成"这次也失败了"。
-    engineStatus()
-      .then((st0) => {
-        const before = st0?.last_error ?? null;
-        // P2-2：勾了 16-bit 就按TIFF容器，保留用户的无损压缩选择发，
-        // 不把JPEG容器冒充16-bit，也不向非TIFF格式递交旧TIFF压缩参数。
-        const combo = reconcileExportCombo(exportBits16, exportFormat, exportTiffComp);
-        return runExport(exportDir, {
-          format: combo.format,
-          quality: exportQuality,
-          tile,
-          scale: exportScale !== 1 ? exportScale : undefined,
-          sharpen: exportSharpen > 0 ? exportSharpen : undefined,
-          bitDepth: exportBits16 ? 16 : undefined,
-          // 底片条多选集就是本批的清单；没选就只导当前这一张（引擎按 images 逐条记账）
-          documentIds: exportTargets.length ? exportTargets : undefined,
-          // 导出侧 P0 的四格：中性位由引擎定，这里传用户显式选过的值
-          outputProfile: exportProfile,
-          tiffCompression: combo.tiffCompression,
-          metadataIncludeGps: exportGps,
-          conflictPolicy: exportConflict,
-          watermark, layout: layoutModel.layout,
-        })
-          .then(() => refreshStatus())
-          .then(() => watchExportOutcome(before));
-      })
-      .catch((e) => setDragNote(String(e)));
+  function destinationOptions() {
+    const combo = reconcileExportCombo(exportBits16, exportFormat, exportTiffComp);
+    return {out_dir:exportDir, format:combo.format, quality:exportQuality,
+      ...(exportTile.trim() ? {tile:Number(exportTile)} : {}),
+      ...(exportScale !== 1 ? {scale:exportScale} : {}),
+      ...(exportSharpen > 0 ? {sharpen:exportSharpen} : {}),
+      ...(exportBits16 ? {bit_depth:16} : {}), output_profile:exportProfile,
+      ...(combo.tiffCompression ? {tiff_compression:combo.tiffCompression} : {}),
+      metadata_include_gps:exportGps, conflict_policy:exportConflict, watermark, layout:layoutModel.layout};
+  }
+  async function onPreviewDestination() {
+    if (destinationPreviewRunning.current || destinationSubmitting.current) return;
+    destinationPreviewRunning.current = true;
+    setExportErr(''); setDestinationBusy(true); setDestinationPreview(null);
+    try {
+      await settleCurveEdit();
+      const revision = ++destinationGeneration.current;
+      const input = destinationInput.current;
+      const result = await exportDestinationApi.preview({...destinationPolicy, chosen_root:exportDir},
+        [...exportTargets], revision, destinationOptions());
+      if (revision === destinationGeneration.current && input === destinationInput.current) setDestinationPreview(result);
+    } catch (error) { setExportErr(String(error)); }
+    finally { destinationPreviewRunning.current = false; setDestinationBusy(false); }
+  }
+  async function onExport() {
+    if (destinationSubmitting.current || destinationPreviewRunning.current) return;
+    const plan = destinationPreview;
+    if (!plan || plan.intent_revision !== destinationGeneration.current) { setExportErr('请先预览导出位置'); return; }
+    if (plan.entries.some(e=>e.disposition==='needs_confirmation')) { setExportErr('请选择改名或跳过冲突文件，然后重新预览'); return; }
+    destinationSubmitting.current = true; setDestinationBusy(true); setExportErr('');
+    try {
+      await settleCurveEdit();
+      if (plan.intent_revision !== destinationGeneration.current) throw new Error('编辑已变化，请重新预览导出位置');
+      const before = (await engineStatus())?.last_error ?? null;
+      const combo = reconcileExportCombo(exportBits16, exportFormat, exportTiffComp);
+      await runExport(exportDir, {
+        format:combo.format, quality:exportQuality,
+        tile:exportTile.trim() ? Number(exportTile) : undefined,
+        scale:exportScale !== 1 ? exportScale : undefined,
+        sharpen:exportSharpen > 0 ? exportSharpen : undefined,
+        bitDepth:exportBits16 ? 16 : undefined, documentIds:[...exportTargets],
+        outputProfile:exportProfile, tiffCompression:combo.tiffCompression,
+        metadataIncludeGps:exportGps, conflictPolicy:exportConflict,
+        watermark, layout:layoutModel.layout,
+        destinationPolicy:{...destinationPolicy, chosen_root:exportDir},
+        destinationPlanId:plan.plan_id, intentRevision:plan.intent_revision,
+      });
+      await refreshStatus(); await watchExportOutcome(before);
+    } catch (error) { setExportErr(String(error)); }
+    finally { destinationSubmitting.current=false; setDestinationBusy(false); invalidateDestination(); }
   }
 
   /** 拒绝是立刻到的（开跑前），成功是慢慢到的（一批图）：这里只等"引擎开口说错"，
@@ -1442,6 +1478,11 @@ export default function App() {
   /** 底片条上被选中的那几张（没选就只导当前这张） */
   const selPaths = (library.pending||library.error?[]:library.docs).filter(d=>sel.has(d.document_id)).map(d=>d.document_id);
   const exportTargets = sel.size ? selPaths : (hasImage ? (strip?.docs.filter(d=>d.loaded).map(d=>d.document_id)??[]) : []);
+  const destinationSignature = JSON.stringify([destinationPolicy, exportDir, exportFormat, exportQuality,
+    exportScale, exportSharpen, exportBits16, exportTiffComp, exportGps, exportConflict,
+    exportProfile, exportTile, watermark, layoutModel.layout, exportTargets, status?.doc_rev, status?.engine_alive, workspace]);
+  destinationInput.current = destinationSignature;
+  useEffect(() => { invalidateDestination(); }, [destinationSignature, invalidateDestination]);
   const {ok: faceOk, why: faceWhy} = portraitAccess(status, doc, deformGeomWarn);
   const liveTask = tasks.length ? tasks[tasks.length - 1] : null;
   // 注册表上的格式名（jpeg/tiff）与引擎落盘用的后缀名（jpg/tif）不是一回事：
@@ -1921,8 +1962,14 @@ export default function App() {
           project={project} projectSuffix={projSuffix} hasImage={hasImage}
           onEnterRetouch={() => setWorkspace("retouch")} />}
 
-        {workspace === "library" && (
+        {workspace === "library" && (<>
+          <button type="button" disabled={busy||exporting} onClick={async()=>{
+            setBusy(true);
+            try {const folder=await chooseImportFolder();if(folder){await runSession('add',{paths:[folder],thumbs:true});await refreshStatus();}}
+            catch(error){setDragNote(String(error));}finally{setBusy(false);}
+          }}>添加文件夹（保留导入层级，可继续添加多个目录）</button>
           <LibraryGallery docs={library.docs} total={strip?.count??0} sel={sel} thumbs={thumbs} controls={libraryControls} facts={library.result?.facts} onPickDoc={onPickDoc} onCellClick={onCellClick} openAndImport={openAndImport} onRetouch={()=>setWorkspace("retouch")} setRating={setRating} cycleFlag={cycleFlag} cyclePick={cyclePick}/>
+          </>
         )}
 
         {workspace === "creative" && (
@@ -2027,25 +2074,21 @@ export default function App() {
                   </select>
                 </label>
                 <ExportColorSpace value={exportProfile} onChange={setExportProfile}/>
-                <label>同名冲突
-                  <select value={exportConflict} onChange={(e) => setExportConflict(e.target.value)}>
-                    <option value="skip_and_report">跳过并报告</option>
-                    <option value="recheck">重新检查</option>
-                  </select>
-                </label>
                 <ExportMetadataOptions bits16={exportBits16} gps={exportGps} onBits16={setExportBits16} onGps={setExportGps} onFormat={setExportFormat}/>
               </div>
               <LayoutControls model={layoutModel} disabled={exporting} selected={exportTargets.length || (hasImage ? 1 : 0)} receipt={status?.export?.layout_result}/>
               <WatermarkControls value={watermark} onChange={setWatermark} disabled={exporting} storageError={watermarkStorageError}/>
-              <label className="exDir">输出目录
-                <input value={exportDir} onChange={(e) => setExportDir(e.target.value)} />
-              </label>
+              <ExportDestinationPanel policy={{...destinationPolicy, chosen_root:exportDir}}
+                preview={destinationPreview} busy={destinationBusy||exporting}
+                available={status?.ready_caps?.export_destination_protocol===1}
+                onChange={policy=>{invalidateDestination();setDestinationPolicy(policy);setExportDir(policy.chosen_root??'');setExportConflict(policy.conflict==='rename'?'recheck':'skip_and_report');}}
+                onPreview={()=>void onPreviewDestination()} error={exportErr}/>
               <div className="exFoot">
                 <span>{exportTargets.length > 1
                   ? `本批 ${exportTargets.length} 张 · 按底片条记账`
                   : "单张导出 · 原片只读"}</span>
                 <button className="tb primary" onClick={onExport}
-                        disabled={!hasImage || exporting}>
+                        disabled={!exportTargets.length || exporting || destinationBusy || !destinationPreview || destinationPreview.entries.some(e=>e.disposition==='needs_confirmation')}>
                   {exporting ? "导出中…" : "开始导出"}
                 </button>
               </div>

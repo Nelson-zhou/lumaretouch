@@ -1,0 +1,13 @@
+{
+  "status": "STATIC_ONLY",
+  "python_ast_files": 14,
+  "json_parsed_files": 2,
+  "tests": "UNRUN",
+  "build": "UNRUN",
+  "typecheck": "UNRUN",
+  "render": "UNRUN",
+  "exports": "UNRUN",
+  "git_mutations": "NONE",
+  "babel_syntax_ast_files": 7,
+  "rust_compilation": "UNRUN"
+}

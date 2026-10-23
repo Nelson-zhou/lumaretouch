@@ -21,12 +21,14 @@ def _deliver(frame, path, watermark, write):
     try:
         if watermark and watermark["alsoClean"]:
             clean_dir = os.path.join(os.path.dirname(path), "无水印")
-            os.makedirs(clean_dir, exist_ok=True)
-            clean = write(frame, os.path.join(clean_dir, os.path.basename(path)))
+            from .export_destination_runtime import active, variant_target
+            if not active(): os.makedirs(clean_dir, exist_ok=True)
+            clean = write(frame, variant_target(os.path.join(clean_dir, os.path.basename(path)), "clean"))
             outputs.append({**clean, "variant": "clean"})
         result = write(marked, path)
         outputs.append({**result, "variant": "watermarked" if watermark else "clean"})
     except Exception as error:
+        outputs.extend(getattr(error, "outputs", []))
         raise DeliveryError(f"导出失败；已处理的副本保留，见逐项记录：{error}", outputs) from error
     # One source-image task is skipped only if every requested variant skipped.
     result = {**result, "skipped": all(o.get("skipped", False) for o in outputs)}

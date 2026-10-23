@@ -5,6 +5,8 @@ from .virtual_copy_host import IDENTITY_KEYS
 
 def save_row(project, runtime, stored, codec):
     stored.update({k:runtime[k] for k in IDENTITY_KEYS})
+    from .export_destination_import import origin, validate
+    stored['import_origin'] = deepcopy(validate(runtime.get('import_origin') or origin(runtime['path'], kind='legacy_parent')))
     stored['document_revision'] = runtime.get('document_revision',0)
     stored['source_relocation_aliases'] = deepcopy(runtime.get('_source_relocation_aliases',{}))
     stored['library_metadata'] = deepcopy(runtime.get('_library_metadata',{}))
@@ -26,6 +28,8 @@ def restore_row(project, stored, runtime, codec, dc_types):
     from .virtual_copy_people import decode
     decode(runtime,stored)
     runtime['fingerprint'] = deepcopy(project['source_assets'][stored['source_asset_id']]['fingerprint'])
+    from .export_destination_import import origin, validate
+    runtime['import_origin'] = deepcopy(validate(stored.get('import_origin') or origin(stored['path'], kind='legacy_parent')))
     runtime['document_revision'] = stored.get('document_revision',0)
     runtime['_project_version_id'] = stored.get('active_version') or runtime['recipe_version_id']
     runtime.pop('_lrt_runtime_version',None)

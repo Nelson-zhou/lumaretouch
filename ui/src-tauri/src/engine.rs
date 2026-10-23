@@ -268,6 +268,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "photo_detail_result" | "photo_detail_readback" => { crate::photo_detail_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
         "extended_tone_result" | "extended_tone_readback" => { crate::extended_tone_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
         "custom_lut_result" => { crate::custom_lut_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
+        "export_destination_result" => crate::export_destination_port::receive(inspection_epoch, &v),
         "virtual_copy_result" => crate::virtual_copy_api::receive(inspection_epoch, &v),
         "source_relocation_result" => crate::source_relocation_api::receive(inspection_epoch, &v),
         "preset_organisation_result" => crate::preset_organisation_api::receive(inspection_epoch, &v),

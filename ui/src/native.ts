@@ -961,6 +961,7 @@ export interface EngineStatus {
    *  这些“引擎说什么能力”的清单都从这一份读。老宿主没报时为 undefined——那时那一排
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
+    export_destination_protocol?: number;
     colour_grading_protocol?: number;
     primary_calibration_protocol?: number;
     selective_colour_protocol?: number;
@@ -1107,6 +1108,7 @@ export interface TaskState {
  * 必须逐张说清，不能默默少几层。
  */
 export interface ExportedImage {
+  out_skipped?: boolean; skip_reason?: string | null; renamed_from?: string | null; destination_plan_id?: string;
   document_id?:string; source_asset_id?:string; recipe_version_id?:string; copy_number?:number;
   path: string;
   outputs?: {path: string | null; variant: string; skipped?: boolean}[];
@@ -1501,13 +1503,16 @@ export const runBackground = (
  */
 export const runExport = (
   outDir: string,
-  opts?: { format?: string; quality?: number; tile?: number; images?: string[]; documentIds?:string[];
+  opts?: { destinationPolicy?: import("./exportDestination/model").DestinationPolicy; destinationPlanId?: string; intentRevision?: number; format?: string; quality?: number; tile?: number; images?: string[]; documentIds?:string[];
            scale?: number; sharpen?: number; upscaleBackend?: string;
            bitDepth?: number; outputProfile?: string; tiffCompression?: string;
            metadataIncludeGps?: boolean; conflictPolicy?: string; watermark?: WatermarkSettings; layout?: import("./layout/model").LayoutSpec },
 ) =>
   invoke<{ requested: boolean }>("export", {
     outDir,
+    destinationPolicy: opts?.destinationPolicy,
+    destinationPlanId: opts?.destinationPlanId,
+    intentRevision: opts?.intentRevision,
     format: opts?.format,
     quality: opts?.quality,
     tile: opts?.tile,
@@ -1832,3 +1837,10 @@ export function runNeckShape(request:import('./neckShape/nativeTransport').Comma
   return ['view','status','mailbox_status','release'].includes(request.action)
     ? tauriInvoke<import('./neckShape/nativeTransport').Mailbox>('neck_shape',{request}) : invoke<import('./neckShape/nativeTransport').Mailbox>('neck_shape',{request});
 }
+
+// Destination preview shares the existing edit barrier and real native dispatcher.
+import {destinationPort} from "./exportDestination/nativePort";
+export const exportDestinationApi = destinationPort(<T>(command:string, payload:Record<string,unknown>) =>
+  settleCurveEdit().then(() => invoke<T>(command, payload)));
+
+export const chooseImportFolder = () => invoke<string|null>("choose_import_folder");

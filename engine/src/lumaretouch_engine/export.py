@@ -1473,7 +1473,10 @@ def resolve_target(path: str, conflict_policy: str = "skip_and_report") -> tuple
         也不动别人的成果），并在回报里记录改名前后的对应关系。
     """
     policy = _check_policy(conflict_policy)
-    if not os.path.exists(path):
+    from .export_destination_runtime import resolve
+    frozen = resolve(path)
+    if frozen is not None: return frozen
+    if not os.path.lexists(path):
         return path, None
     if policy == "skip_and_report":
         return None, f"目标已存在，按 skip_and_report 跳过：{path}"
@@ -1487,27 +1490,10 @@ def resolve_target(path: str, conflict_policy: str = "skip_and_report") -> tuple
 
 
 def _atomic_write(path: str, data: bytes) -> None:
-    """同目录临时文件 + fsync + os.replace。中断只会留下一个 .tmp，不会留下半个成品。
-
-    同目录不是细节：跨文件系统的 rename 不是原子的，而且 tmp 放外面会把
-    “失败后现场干净”这件事变成一个分区拓扑问题。用 os.replace 而不是 os.rename：
-    前者在 Windows 语义上也能顶替已存在目标（我们只在 Unix 跑，但口径要一致）。
-    """
-    d = os.path.dirname(os.path.abspath(path)) or "."
-    tmp = os.path.join(d, f".{os.path.basename(path)}.{os.getpid()}.tmp")
-    try:
-        with open(tmp, "wb") as f:
-            f.write(data)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    except BaseException:
-        # 失败不留现场：半个 tmp 对谁都没用，删了才能说“目录里只有完整文件”
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
+    """Canonical descriptor-relative no-clobber publication for all export codecs."""
+    from .export_destination_commit import commit_encoded_bytes
+    from .export_destination_runtime import create_missing
+    commit_encoded_bytes(os.path.abspath(path), data, create_missing=create_missing())
 
 
 def write_file(rgb: np.ndarray, path: str, *, quality: int = 95,

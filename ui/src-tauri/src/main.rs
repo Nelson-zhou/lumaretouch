@@ -60,6 +60,7 @@ mod preset_api;
 mod preset_organisation_api;
 mod source_relocation_api;
 mod virtual_copy_api;
+mod export_destination_port;
 mod white_balance_api;
 mod white_balance_host;
 mod white_balance_capture_host;
@@ -1303,6 +1304,9 @@ fn export(
     conflict_policy: Option<String>,
     watermark: Option<Value>,
     layout: Option<Value>,
+    destination_policy: Option<Value>,
+    destination_plan_id: Option<String>,
+    intent_revision: Option<u64>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "export", "action": "start", "out_dir": out_dir});
     if let Some(v) = format {
@@ -1337,6 +1341,9 @@ fn export(
         ("conflict_policy", conflict_policy.map(Value::from)),
         ("watermark", watermark),
         ("layout", layout),
+        ("destination_policy", destination_policy),
+        ("destination_plan_id", destination_plan_id.map(Value::from)),
+        ("intent_revision", intent_revision.map(Value::from)),
     ] {
         if let Some(v) = v {
             cmd[k] = v;
@@ -1967,6 +1974,7 @@ fn main() {
             color_picker_capture_api::color_picker_capture, color_picker_capture_api::color_picker_capture_status, color_picker_capture_api::color_picker_capture_frame,
             color_picker_api::color_picker, color_picker_api::color_picker_result,
             white_balance_capture_api::white_balance_capture, white_balance_capture_api::white_balance_capture_status, white_balance_capture_api::white_balance_capture_frame, white_balance_capture_api::white_balance_pick,
+            export_destination_port::choose_import_folder, export_destination_port::export_destination, export_destination_port::export_destination_result, export_destination_port::export_destination_release,
             virtual_copy_api::virtual_copy_request, virtual_copy_api::virtual_copy_status,
             source_relocation_api::source_relocation_request, source_relocation_api::source_relocation_status,
             project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, lip_makeup_api::lip_makeup, brow_shape_api::brow_shape, nose_shape_api::nose_shape, eye_shape_api::eye_shape, mouth_shape_api::mouth_shape, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, preset_organisation_api::preset_organisation, preset_organisation_api::preset_organisation_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,

@@ -1,0 +1,148 @@
+{
+  "schema_version": 2,
+  "status": "SOURCE_WIRED_ACCEPTANCE_UNRUN",
+  "base": "0cbffbabcbed16afa389ebf7382d5c249fb0f2f0",
+  "validation": "Python AST, JSON parsing, Babel TS/TSX syntax AST and SHA256 only; no imports of product modules, tests, compilation, typecheck, build or rendering",
+  "files": [
+    {
+      "path": "docs/export_destination/INTEGRATION.md",
+      "change": "owned",
+      "sha256": "c15ae05e995a645225a3bc4cc89eb25767e2cc44a98f910ac185c3777e39bbca"
+    },
+    {
+      "path": "docs/export_destination/shared-before.json",
+      "change": "owned",
+      "sha256": "c9a6ee3fbdd13f8fa07ee41c2c35b3476abe5320c47072b47687928a3092e2b1"
+    },
+    {
+      "path": "docs/export_destination/static-validation.json",
+      "change": "owned",
+      "sha256": "085bcf38b4cee1431170a749aedf4d55b8829c1d298b497ed45c4519aef45627"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "change": "modified",
+      "sha256": "268062846a0304bba307d6430c1780cf960a87d904d5e7d238b52143d9a7ffd0"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_destination_commit.py",
+      "change": "owned",
+      "sha256": "0395076e2b2b8c81cc66ef584d8be5a252955b609bf9b9f690b2b0d28c6fe47b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_destination_controller.py",
+      "change": "owned",
+      "sha256": "6930677c49bcd4d8d29982d71dec98fcc8961141f10c03764a0bdb3f08a3fd6f"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_destination_host.py",
+      "change": "owned",
+      "sha256": "48ff8ce19715fcebafb1de9f5761cf3ecdefdee8071ac58fd0003f4d0613b869"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_destination_import.py",
+      "change": "owned",
+      "sha256": "14a1e941a1cde35a6a129d7243058464536491589036e8d1536a6181806169c4"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_destination_policy.py",
+      "change": "owned",
+      "sha256": "9aee4efa6df6af56a174fb62a574b2ce5d3f84fdcec39405805f4d1fc620aca6"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_destination_runtime.py",
+      "change": "owned",
+      "sha256": "f18f31d8c9f0881b2b4be3a838e7c69bb25712c93d1af1ad4ade52121094f534"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/layout_delivery.py",
+      "change": "modified",
+      "sha256": "f4c2e8a5a2c2314c8d6a8595c16881d2bd5fa82064cad3861ac68de4643cd9b0"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "change": "modified",
+      "sha256": "f17a888da8244c1d76f190c3de73fd409b51abc3893b61e005acb11c37c43689"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_project.py",
+      "change": "modified",
+      "sha256": "16d78b41dee1efa50a1fdbc23dde87c04280dd4466829c1a6771f35d7f8b5a9a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_session.py",
+      "change": "modified",
+      "sha256": "3238b90758fde1007f78d3c209f060b4a7c429240e43c336720f70302047e17a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_storage.py",
+      "change": "modified",
+      "sha256": "4dd379eb5c656ea15474bc5b466feff9ab8d5e3e8b20955e368741c8050780be"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/watermark_delivery.py",
+      "change": "modified",
+      "sha256": "6ed8fef8a17761814d9bb178469db760fe3ab797586cb86a3169a18e73893b42"
+    },
+    {
+      "path": "engine/tests/fixtures/export_destination/acceptance.json",
+      "change": "owned",
+      "sha256": "a7805736f81de6111a355305791d7bb9a621750bdcf8f568634c85da63a08619"
+    },
+    {
+      "path": "engine/tests/test_export_destination_policy.py",
+      "change": "owned",
+      "sha256": "a19f2d05c844ee1ec2ed99a492af3eafefdf95dbcb7879c8d00d7ad223398074"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "change": "modified",
+      "sha256": "faf91353f8d62f42bfe16aff9cdc21810ed589d5cb7b0776901afc1ca8cce63d"
+    },
+    {
+      "path": "ui/src/components/ExportQueuePanel.tsx",
+      "change": "modified",
+      "sha256": "c78bc68397df145534c3e17e79eead42b11a655a6f64843d1e712b6814967320"
+    },
+    {
+      "path": "ui/src/exportDestination/ExportDestinationPanel.tsx",
+      "change": "owned",
+      "sha256": "c4605d80e888e3c3ea7c84040d598967312631ffd84295b44525727b09a2bbc9"
+    },
+    {
+      "path": "ui/src/exportDestination/controller.ts",
+      "change": "owned",
+      "sha256": "ea095d46178230709d5a172b859e0fec5cdc8bc477354535f1ef360b242f00bc"
+    },
+    {
+      "path": "ui/src/exportDestination/model.ts",
+      "change": "owned",
+      "sha256": "d2691dedeb2d7e3f76c067a48d74352409169b79b11bc167052f9bb8c9e5677f"
+    },
+    {
+      "path": "ui/src/exportDestination/nativePort.ts",
+      "change": "owned",
+      "sha256": "658b2446c15731e96e734a8445443ac6bf0c2c42790f6f747c862fa66b39eb06"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "change": "modified",
+      "sha256": "e68c10464acf623de3d8d2bdccca82e00a8f6dd30cf1a9417009b9338a8a94a1"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "change": "modified",
+      "sha256": "f4947d7d807cbe04df1f8e17b40bbf1c8d0f182cbe684751d87744f290189d0d"
+    },
+    {
+      "path": "ui/src-tauri/src/export_destination_port.rs",
+      "change": "owned",
+      "sha256": "5a3a093322c506e2d5518ea8d99ac6f6589c7274185617fa86f055a11dc73e6d"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "change": "modified",
+      "sha256": "2d556f82232a9a4ea9cdb6713d4867036510d6d83cec9cd811a7e790c41302ac"
+    }
+  ]
+}
