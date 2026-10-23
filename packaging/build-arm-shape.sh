@@ -3,7 +3,7 @@
 # Explicit packaging only. NOT run by Python import, UI start, preview or export.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEST="$ROOT/engine/src/lumaretouch_engine/bin"
-mkdir -p "$DEST"
+OUT="${1:-$ROOT/engine/src/lumaretouch_engine/bin/liblrt_arm_shape.so}"
+mkdir -p "$(dirname "$OUT")"
 rustc --edition=2021 --crate-type cdylib -C opt-level=3 -C panic=abort \
-  "$ROOT/core/arm_shape/lib.rs" -o "$DEST/liblrt_arm_shape.so"
+  "$ROOT/core/arm_shape/lib.rs" -o "$OUT"

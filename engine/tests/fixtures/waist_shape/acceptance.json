@@ -1,0 +1,653 @@
+{
+  "version": 1,
+  "feature_id": "PC-32473",
+  "control_id": "PC-32473-C-8268ea3e37",
+  "requirement_id": "LNX-REF-PC-32473-C-8268ea3e37",
+  "related_module_case_ids": [
+    "PORTRAIT-008"
+  ],
+  "status": "AUTHORED_UNRUN",
+  "quality_status": "NOT_ACCEPTED",
+  "cases": [
+    {
+      "case_id": "WAIST-001",
+      "title": "Exact mapping",
+      "procedure": "Verify the sole route uses PC-32473-C-8268ea3e37 and LNX-REF-PC-32473-C-8268ea3e37; PORTRAIT-008 is not acceptance evidence.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-002",
+      "title": "Honest control semantics",
+      "procedure": "Verify one inward 0..1 amount, zero neutral and explicit original-local-range labeling; no official range, bilateral unlock or AI claim.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-003",
+      "title": "Out-of-scope controls",
+      "procedure": "Verify waist length, torso length and whole-body AI shaping are not marked completed or implemented by this route.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-004",
+      "title": "Real body orientation",
+      "procedure": "Load actual admitted BodyRef v2; verify only observed shoulders11/12 and hips23/24 orient the waist field, not face-box or ratio-generated waist anatomy.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-005",
+      "title": "No invented bounds",
+      "procedure": "Open new body: upper/lower bounds and both contours require source review; no fabricated default bounds or valid prefilled widths.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-006",
+      "title": "Canonical source preview",
+      "procedure": "Verify editor displays bound unretouched source PNG with correct dimensions/orientation, not retouched frame or mismatched document.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-007",
+      "title": "Bounds review",
+      "procedure": "Select separate upper and lower bounds on source; reject coincident, reversed, nonfinite and out-of-policy values.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-008",
+      "title": "Independent bilateral measurements",
+      "procedure": "Measure visibly asymmetric sides; retain nine independent widths per side and never replace one side with the other.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-009",
+      "title": "Missing side refusal",
+      "procedure": "Omit each side or one station in turn; active adjustment must refuse, not mirror or partially apply.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-010",
+      "title": "Low-confidence anchors",
+      "procedure": "Reduce visibility/presence or move required actual anchor outside source; manual confirmation cannot authorize active geometry.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-011",
+      "title": "Severe perspective",
+      "procedure": "Use side-on or strongly foreshortened torso; require refusal rather than inferred unseen boundary.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-012",
+      "title": "Occluded side",
+      "procedure": "Use arm, bag or other occluder over one waist edge; reject unsupported contour even if other side is clear.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-013",
+      "title": "Loose clothing",
+      "procedure": "Use loose visible shirt; editor and receipt identify visible material only and do not represent internal body anatomy.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-014",
+      "title": "Unclear arm contact",
+      "procedure": "Use arm touching waist with ambiguous edge; refuse instead of moving arm as waist or inventing seam.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-015",
+      "title": "Known other person",
+      "procedure": "Place another detected body inside transition support; refuse all requested waist effect before publication.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-016",
+      "title": "Undetected person caution",
+      "procedure": "Verify review wording never claims detector census complete or no other person exists; user ownership review remains mandatory.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-017",
+      "title": "Face keep-out",
+      "procedure": "Place retained face near transition; ensure conservative guard refuses overlap.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-018",
+      "title": "Exclusion keep-out",
+      "procedure": "Add reviewed exclusion touching support; reject rather than shrink/crop the requested field silently.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-019",
+      "title": "Ownership window",
+      "procedure": "Move contour or its transition beyond reviewed ownership region; reject without silently clipping evidence.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-020",
+      "title": "Review isolation",
+      "procedure": "Attempt shoulder/leg/arm review as waist authorization; reject until waist-specific support and review exist.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-021",
+      "title": "Source SHA fence",
+      "procedure": "Change one source byte after review, including same filename/dimensions; active preview/export must reject stale source.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-022",
+      "title": "Orientation fence",
+      "procedure": "Change normalized orientation/source frame; reject retained support reuse.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-023",
+      "title": "Pose revision fence",
+      "procedure": "Reanalyze same photograph; old point digest/review/support cannot be rebound automatically.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-024",
+      "title": "Body ownership fence",
+      "procedure": "Reassign explicit anonymous person/body link; stale prepared field and receipt must not publish.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-025",
+      "title": "Support content fence",
+      "procedure": "Mutate a width, bound, confirmation or exclusion without new digest/review; reject.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-026",
+      "title": "Native neutral bypass",
+      "procedure": "Open, select and review with zero strength; no native deformation load, pixel change or geometry-identity churn.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-027",
+      "title": "Amount validation",
+      "procedure": "Reject negative, greater-than-one, NaN, infinity, boolean and unknown recipe keys; no silent clamp.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-028",
+      "title": "Inward direction",
+      "procedure": "On authorized bilateral portrait, compare source contour positions at interior stations; positive amount moves visible sides inward, not expands or changes axial length.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-029",
+      "title": "Off-grid geometry",
+      "procedure": "Evaluate fractional coordinates across bounds; verify continuous displacement and finite values, not rounded proxy lookups.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-030",
+      "title": "Support boundary identity",
+      "procedure": "Evaluate outside complete support and at upper/lower taper endpoints; verify exact identity and smooth transition without a seam.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-031",
+      "title": "Jacobian safety",
+      "procedure": "Use extreme valid support and amount; shared map must refuse unsafe foldovers before publication rather than return damaged candidate.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-032",
+      "title": "Budget refusal",
+      "procedure": "Exceed active-field/memory/displacement budget; refuse whole candidate without truncation or partial publication.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-033",
+      "title": "One sampling pass",
+      "procedure": "Instrument later local render with shoulder+leg+arm+waist+face active; require one common source RGB sample, no per-waist resample.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-034",
+      "title": "Authoritative order v4",
+      "procedure": "With waist active verify frozen operation order v4 is used consistently in preview, snapshot, project and export.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-035",
+      "title": "Neutral order compatibility",
+      "procedure": "For existing shoulder-only/leg/arm documents add neutral waist intent/review; preserve prior v1/v2/v3 geometry hash and pixels.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-036",
+      "title": "Existing families preservation",
+      "procedure": "Adjust waist with existing independent shoulders/legs/arms/hair; preserve their recipes, support, reviews and semantics.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-037",
+      "title": "UI route reachability",
+      "procedure": "Launch exact 瘦腰 requirement from body workspace; reach real controls/source review/native view/select/execute/status, not a placeholder.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-038",
+      "title": "Busy and duplicate click",
+      "procedure": "Rapid repeated Apply/slider releases use bounded immutable requests; no duplicate mutation or doubled amount.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-039",
+      "title": "Close popup in flight",
+      "procedure": "Close/reopen waist dialog while request is uncertain; app-lifetime owner retains original ID and reconciles without resending.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-040",
+      "title": "Stale reply after navigation",
+      "procedure": "Switch source/body/document before late reply; reject stale adoption and do not publish into new context.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-041",
+      "title": "Lost terminal response",
+      "procedure": "Drop response after actual publication; original request status recovers immutable receipt and never reapplies deformation.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-042",
+      "title": "Engine replacement",
+      "procedure": "Replace engine during pending request; native epoch fence blocks stale response and reports uncertainty rather than success.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-043",
+      "title": "Cross-family request collision",
+      "procedure": "Reuse inner or outer request ID with different family/action/payload, including after native receipt release or epoch change; reject collision without returning misleading earlier success. Identical retained requests may query the original outcome but never execute again.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-044",
+      "title": "Read-only capture stability",
+      "procedure": "View/select/status must not discard unrelated capture/export lifecycle or advance document content revision.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-045",
+      "title": "Undo redo ownership",
+      "procedure": "Waist gesture undo/redo restores only intended waist changes, preserving source observations, unrelated operations and append-only support assets.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-046",
+      "title": "Interrupted recovery",
+      "procedure": "Interrupt around journal/preview/history publication; recover explicit pending/applied/refused outcome, never fabricated publish success.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-047",
+      "title": "Project14 roundtrip",
+      "procedure": "Save/reopen project14 with active waist and other families; validate all nested records and restore exact source-bound intent/reviews.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-048",
+      "title": "Older project compatibility",
+      "procedure": "Open supported older project without waist; no forced stale identity or changed neutral render; preserve project compatibility behavior.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-049",
+      "title": "Generic preset exclusion",
+      "procedure": "Save/apply generic preset on another source; waist BodyRef, contours, reviews and analysis identities are not copied.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-050",
+      "title": "Batch source isolation",
+      "procedure": "Batch semantic workflow over distinct sources preserves existing scopes and cannot apply a source-owned waist support to another photo.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-051",
+      "title": "RGB8 original export",
+      "procedure": "Export original-resolution RGB8; verify exact source digest/dimensions, original field rebuild, immutable actual output receipt.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-052",
+      "title": "RGB16 original export",
+      "procedure": "Export original-resolution RGB16/high-bit source through supported path; no proxy geometry enlargement or silent source precision downgrade.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-053",
+      "title": "Source changed during decode",
+      "procedure": "Change source during export decode; reject via stamp/digest fences, without publishing stale/mixed pixels.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-054",
+      "title": "Preview export agreement",
+      "procedure": "Compare landmarks/contours after scaling independently rebuilt preview/export geometry; inspect final-resolution pixels and interpolation differences honestly.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-055",
+      "title": "Background limitation",
+      "procedure": "Use straight patterned background in transition; visibly disclose it may move, inspect output and do not claim background-perfect preservation.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-056",
+      "title": "Cloth texture limitation",
+      "procedure": "Use striped/checkered loose garment; inspect deformation, seams and details; record quality rejection when artifacts are unacceptable.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-057",
+      "title": "Rotated portrait",
+      "procedure": "Use safely oriented rotated torso with bilateral visibility; coordinate mapping and bounds must follow actual torso direction, not fixed screen vertical.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-058",
+      "title": "Package native failure",
+      "procedure": "Missing/wrong ABI library fails visibly on active request; no Python approximation, model download or hidden installer fallback.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-059",
+      "title": "Receipt integrity",
+      "procedure": "Verify actual published pixel hash, prepared identity, geometry hash, dimensions and common order; request acceptance alone is not a render receipt.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-060",
+      "title": "No unsupported acceptance",
+      "procedure": "Verify every authored case remains UNRUN with null evidence until local execution; documentation cannot promote source wiring to quality acceptance.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-061",
+      "title": "ALIGN8 source-coordinate conjugation",
+      "procedure": "Use a full-frame ALIGN8 proxy whose x/y scale ratios differ; verify source→render coordinate conjugation maps exact reviewed source contours and bounds correctly in both axes. Compare arbitrary off-grid samples with independently scaled source-space evaluation; reject width-only isotropic approximation.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-062",
+      "title": "Complete transition ownership",
+      "procedure": "Choose an ownership box containing all contour stations but excluding one complete transition corner; require rejection. Enlarge the box to cover complete transition support and review it explicitly before retry.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-063",
+      "title": "Packaged original Rust libraries",
+      "procedure": "Inspect built distributor during later authorized local acceptance: arm and waist ABI outputs must both be staged at their expected paths with source/notices. Missing output cannot be hidden by stale libraries.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    },
+    {
+      "case_id": "WAIST-064",
+      "title": "Extracted family dispatch",
+      "procedure": "Exercise waist, leg and arm view/execute/status through body_pose_families routing; verify family protocol and immutable payload ownership stay independent and existing registered routes remain reachable.",
+      "requirement_ids": [
+        "LNX-REF-PC-32473-C-8268ea3e37"
+      ],
+      "status": "UNRUN",
+      "evidence": null
+    }
+  ]
+}

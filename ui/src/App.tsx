@@ -2,6 +2,7 @@ import {useShoulderWorkflow} from './shoulderShape/useShoulderWorkflow';
 import {BodyShapeTools} from './legShape/BodyShapeTools';
 import {useLegWorkflow} from './legShape/useLegWorkflow';
 import {useArmWorkflow} from './armShape/useArmWorkflow';
+import {useWaistWorkflow} from './waistShape/useWaistWorkflow';
 import {useHairColourPort} from './hairColour/useHairColourPort';
 import {useOriginalCompareKeys} from './components/useOriginalCompareKeys';
 import {useSampleLibraryHost} from './sampleLibrary/useSampleLibraryHost';
@@ -703,7 +704,7 @@ export default function App() {
   }
 
   async function importPath(raw: string) {
-    if(armBusyRef.current){setDragNote('请先核对或等待原手臂请求完成，再切换照片。');return;}
+    if(armBusyRef.current){setDragNote('请先核对或等待原身体调整请求完成，再切换照片。');return;}
     const p = raw.trim();
     if (!p) {
       setPathErr(t("retouch.needPath"));
@@ -750,7 +751,7 @@ export default function App() {
    *  先 scan 再打开第一张，不同目录就明说只打开了第一张（不许静默丢文件）。 */
   async function onDropPaths(raw: string[]) {
     setDropHint(false);
-    if(armBusyRef.current){setDragNote('手臂请求仍待完成，未导入拖入的照片。');return;}
+    if(armBusyRef.current){setDragNote('身体调整请求仍待完成，未导入拖入的照片。');return;}
     if (!raw.length) return;
     const exts = (await engineStatus().catch(() => null))?.image_exts ?? null;
     const { ok, skipped } = splitDroppable(raw, exts);
@@ -1676,8 +1677,9 @@ export default function App() {
     ||!(batchWorkflow.ui.phase==='closed'||batchWorkflow.ui.hidden===true);
   const legs=useLegWorkflow(status,doc,refreshFromEngine,bodyToolsBlocked||shoulders.busy||shoulders.acquisition.busy);
   const arms=useArmWorkflow(status,doc,refreshFromEngine,bodyToolsBlocked||shoulders.busy||shoulders.acquisition.busy||legs.busy);
-  armBusyRef.current=arms.busy;
-  const hairBusy=busy||exporting||shoulders.busy||legs.busy||arms.busy||peopleWorkflow.state.pending||peopleWorkflow.state.uncertain
+  const waist=useWaistWorkflow(status,doc,refreshFromEngine,bodyToolsBlocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||arms.busy);
+  armBusyRef.current=arms.busy||waist.busy;
+  const hairBusy=busy||exporting||shoulders.busy||legs.busy||arms.busy||waist.busy||peopleWorkflow.state.pending||peopleWorkflow.state.uncertain
     ||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||brushOn||pickFace||whiteBalanceWorkflow.workflow.busy()
     ||sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||manual.active||manual.pending
     ||recovery.active||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||localMasks.active||localMasks.pending
@@ -1686,14 +1688,14 @@ export default function App() {
     ||!(batchWorkflow.ui.phase==='closed'||batchWorkflow.ui.hidden===true);
   const hair=useHairColourPort(peopleWorkflow.enabled&&status?.ready_caps?.hair_colour_protocol===1&&!hairBusy
     &&!!doc?.document_id&&status.image?.load_id===doc.document_id,refreshFromEngine);
-  // Keep uncertain arm mutations/proposal cancellation from racing other UI edits.
+  // Keep uncertain arm/waist mutations and proposal cancellation from racing other UI edits.
   // Original-receipt checks, popup Close and the activity locator remain accessible.
   const guardArmWork=(event:import('react').SyntheticEvent)=>{
-    if(arms.busy&&event.target instanceof Element&&!event.target.closest('[data-arm-workflow],.retouchToolActivity')){event.preventDefault();event.stopPropagation();}
+    if((arms.busy||waist.busy)&&event.target instanceof Element&&!event.target.closest('[data-arm-workflow],[data-waist-workflow],.retouchToolActivity')){event.preventDefault();event.stopPropagation();}
   };
   return (
     <div className={"app ws-" + workspace} onClickCapture={guardArmWork} onPointerDownCapture={guardArmWork} onKeyDownCapture={guardArmWork}>
-      <WorkspaceTopbar workspace={workspace} onWorkspace={setWorkspace} busy={busy||arms.busy} hasImage={hasImage}
+      <WorkspaceTopbar workspace={workspace} onWorkspace={setWorkspace} busy={busy||arms.busy||waist.busy} hasImage={hasImage}
         currentPath={strip?.current} onOpenPhoto={() => { setWorkspace("retouch"); void openAndImport(); }}
         libraryEnabled={sampleLibrary.enabled} onLibrary={() => sampleLibrary.show('manage')}/>
       <SampleLibraryHost owner={sampleLibrary}/>
@@ -1707,7 +1709,7 @@ export default function App() {
                 if(target instanceof HTMLSelectElement || (target instanceof HTMLInputElement
                   && ['range','number','color','checkbox'].includes(target.type)))notifyInspectionEditIntent();
               }}>
-          <RetouchPanel shoulderPanel={<BodyShapeTools shoulders={shoulders} legs={legs} arms={arms} blocked={bodyToolsBlocked}/>} sampleLibraryPanel={<SampleLibraryLaunch owner={sampleLibrary}/>} toolLocation={toolLocation} {...createRetouchToolSlots({sky,skyReport:doc?.sky_replacement,optics,opticsReport:doc?.optics,manual,recovery,studio,manualReport:doc?.manual_liquify,recoveryReport,studioReport:doc?.studio_background,busy:liveGrade.busy})} colorActions={{owner:colorPicker,blocked:sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||sourcePatch.pending||wbPicker.pending||cloneStamp.pending||localMasks.pending,onStart:(action,channel)=>{if(sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||sourcePatch.pending||wbPicker.pending||cloneStamp.pending||localMasks.pending)return;setBrushOn(false);setPickFace(false);colorSampler.cancel();sourcePatch.workflow.cancel();wbPicker.workflow.cancel();cloneStamp.workflow.cancel();localMasks.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();void colorPicker.workflow.start(action,channel);}}} whiteBalanceBusy={optics.active||optics.pending||studio.active||studio.pending||sourcePatch.active||sourcePatch.pending||cloneStamp.active||cloneStamp.pending||sky.active||sky.pending||manual.active||recovery.active||manual.pending||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||whiteBalanceWorkflow.workflow.busy()||wbPicker.active||wbPicker.pending||localMasks.active||localMasks.pending} whiteBalancePanel={<WhiteBalanceControls owner={whiteBalanceWorkflow} value={doc?.exposure} pickerBusy={sky.active||sky.pending||manual.active||recovery.active||manual.pending||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||localMasks.active||localMasks.pending||wbPicker.active||wbPicker.pending||sourcePatch.active||sourcePatch.pending||cloneStamp.active||cloneStamp.pending} picker={<WhiteBalancePickerControls owner={{...wbPicker,context:{...wbPicker.context,canStart:wbPicker.context.canStart!==false&&!manual.active&&!manual.pending&&!colorPicker.pending&&!recovery.pending&&!liveGrade.busy}}} onStart={()=>{if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();localMasks.workflow.cancel();cloneStamp.workflow.cancel();void wbPicker.workflow.start();}}/>}/>} presetPanel={<PresetPanel workflow={presetWorkflow}/>} status={status} doc={doc} hasImage={hasImage}
+          <RetouchPanel shoulderPanel={<BodyShapeTools shoulders={shoulders} legs={legs} arms={arms} waist={waist} blocked={bodyToolsBlocked}/>} sampleLibraryPanel={<SampleLibraryLaunch owner={sampleLibrary}/>} toolLocation={toolLocation} {...createRetouchToolSlots({sky,skyReport:doc?.sky_replacement,optics,opticsReport:doc?.optics,manual,recovery,studio,manualReport:doc?.manual_liquify,recoveryReport,studioReport:doc?.studio_background,busy:liveGrade.busy})} colorActions={{owner:colorPicker,blocked:sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||sourcePatch.pending||wbPicker.pending||cloneStamp.pending||localMasks.pending,onStart:(action,channel)=>{if(sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||sourcePatch.pending||wbPicker.pending||cloneStamp.pending||localMasks.pending)return;setBrushOn(false);setPickFace(false);colorSampler.cancel();sourcePatch.workflow.cancel();wbPicker.workflow.cancel();cloneStamp.workflow.cancel();localMasks.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();void colorPicker.workflow.start(action,channel);}}} whiteBalanceBusy={optics.active||optics.pending||studio.active||studio.pending||sourcePatch.active||sourcePatch.pending||cloneStamp.active||cloneStamp.pending||sky.active||sky.pending||manual.active||recovery.active||manual.pending||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||whiteBalanceWorkflow.workflow.busy()||wbPicker.active||wbPicker.pending||localMasks.active||localMasks.pending} whiteBalancePanel={<WhiteBalanceControls owner={whiteBalanceWorkflow} value={doc?.exposure} pickerBusy={sky.active||sky.pending||manual.active||recovery.active||manual.pending||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||localMasks.active||localMasks.pending||wbPicker.active||wbPicker.pending||sourcePatch.active||sourcePatch.pending||cloneStamp.active||cloneStamp.pending} picker={<WhiteBalancePickerControls owner={{...wbPicker,context:{...wbPicker.context,canStart:wbPicker.context.canStart!==false&&!manual.active&&!manual.pending&&!colorPicker.pending&&!recovery.pending&&!liveGrade.busy}}} onStart={()=>{if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();localMasks.workflow.cancel();cloneStamp.workflow.cancel();void wbPicker.workflow.start();}}/>}/>} presetPanel={<PresetPanel workflow={presetWorkflow}/>} status={status} doc={doc} hasImage={hasImage}
                         sourcePatchPanel={<SourcePatchPanel owner={sourcePatch} blocked={sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||colorPicker.pending||localMasks.pending||wbPicker.active||wbPicker.pending||cloneStamp.pending} onStart={()=>{if(sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||colorPicker.pending||localMasks.pending||wbPicker.active||wbPicker.pending||cloneStamp.pending)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();localMasks.workflow.cancel();cloneStamp.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();void sourcePatch.workflow.start();}}/>}
                         cloneStampPanel={<CloneStampPanel owner={cloneStamp} blocked={sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||colorPicker.pending||localMasks.pending||sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending} onStart={()=>{if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();localMasks.workflow.cancel();void cloneStamp.workflow.start();}}/>}
                         localMasksPanel={<LocalMaskPanel liveGrade={liveGrade} owner={localMasks} report={doc?.local_masks} blocked={sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||manual.active||manual.pending||recovery.pending||colorPicker.pending||sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending||cloneStamp.active||cloneStamp.pending} onStart={(mutation,draw,groupId)=>{if(sky.active||sky.pending||optics.active||optics.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();cloneStamp.workflow.cancel();sourcePatch.workflow.cancel();wbPicker.workflow.cancel();void localMasks.workflow.start(mutation,draw,groupId);}}/>}
@@ -1737,6 +1739,7 @@ export default function App() {
       <main className="stage">
         <RetouchToolActivity onLocate={locateTool} items={[
           {name:"AI瘦手臂与瘦手臂",featureId:"PC-32473",path:"AI瘦手臂&瘦手臂",active:false,pending:arms.busy,phase:arms.uncertain||arms.state.phase==='uncertain'?'uncertain':arms.state.phase,message:arms.message||arms.state.message,check:arms.check},
+          {name:"瘦腰",featureId:"PC-32473",path:"瘦腰",active:false,pending:waist.busy,phase:waist.uncertain||waist.state.phase==='uncertain'?'uncertain':waist.state.phase,message:waist.message||waist.state.message,check:waist.check},
           {name:"发色与光泽",featureId:"PC-32472",path:"发色选择",active:false,pending:hair.state.pending,phase:hair.state.uncertain?'uncertain':'idle',message:hair.state.message,check:hair.check},
           {name:"效果恢复画笔",featureId:"PC-32481",active:recovery.active,pending:recovery.pending,phase:recovery.state.phase,message:recovery.state.message,check:recovery.workflow.check},
           {name:"手动液化",featureId:"PC-32479",active:manual.active,pending:manual.pending,phase:manual.state.phase,message:manual.state.message,check:manual.workflow.check},

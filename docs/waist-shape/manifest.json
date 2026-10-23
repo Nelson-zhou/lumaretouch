@@ -1,0 +1,363 @@
+{
+  "version": 1,
+  "frozen_date_utc": "2026-10-23",
+  "base_commit": "cca76d271e79b639e97748ef04cbeaf85990f85f",
+  "feature_id": "PC-32473",
+  "control_id": "PC-32473-C-8268ea3e37",
+  "requirement_id": "LNX-REF-PC-32473-C-8268ea3e37",
+  "original_path": "瘦腰",
+  "operation_id": "lnx.waist_shape.v1",
+  "source_status": "registered_source_integration_authored_runtime_unaccepted",
+  "runtime_quality_status": "NOT_ACCEPTED",
+  "manual_evidence_only": true,
+  "authored_acceptance_cases": 64,
+  "executed_cases": 0,
+  "excluded_features": [
+    "waist length",
+    "upper-body/torso length",
+    "whole-body slimming",
+    "AI shaping",
+    "automatic waist segmentation"
+  ],
+  "static_inspection": {
+    "python_ast_files": 17,
+    "typescript_babel_ast_files": 16,
+    "json_payload_files": 1,
+    "git_diff_whitespace": "clean",
+    "compiler_typecheck_tests_builds_product_execution_inference": "NOT_RUN"
+  },
+  "frozen_line_counts": {
+    "ui/src/App.tsx": 2119,
+    "ui/src-tauri/src/main.rs": 1935,
+    "engine/src/lumaretouch_engine/server.py": 6848
+  },
+  "line_caps": {
+    "ui/src/App.tsx": 2160,
+    "ui/src-tauri/src/main.rs": 2060,
+    "engine/src/lumaretouch_engine/server.py": 7065
+  },
+  "ordering": {
+    "active_waist": 4,
+    "neutral_waist": "preserves effective v1/v2/v3 identity"
+  },
+  "module_extraction": "body_pose_families.py centralizes actual host request family, presentation and report routing",
+  "adjacent_preservation_fix": "build-arm-shape.sh now honors explicit staged output path",
+  "hash_scope": "All changed files against base except this self-referential manifest; manifest hash reported separately. Hashes attest bytes only, not runtime correctness.",
+  "files": [
+    {
+      "path": "core/waist_shape/README.md",
+      "status": "added",
+      "bytes": 2155,
+      "sha256": "8f81e807706234a10a9bb900c6f111d002685439831371723da133d7a4bb4edf",
+      "base_sha256": null
+    },
+    {
+      "path": "core/waist_shape/lib.rs",
+      "status": "added",
+      "bytes": 5182,
+      "sha256": "b7209fb98db5e935ba9e9e26f64230571201f7e595c8b8d3e5520096556b52b5",
+      "base_sha256": null
+    },
+    {
+      "path": "docs/waist-shape/README.md",
+      "status": "added",
+      "bytes": 8536,
+      "sha256": "7381093563a3512d165450068fd154976ac0d005e0fd0288e6a5249378c78d61",
+      "base_sha256": null
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/arm_shape_registered_host.py",
+      "status": "modified",
+      "bytes": 3386,
+      "sha256": "d9819e5872241c9b717f6f19112434aec3e2b029ba48cdb9e47351fde2a84b5b",
+      "base_sha256": "ad3bbe17aec4fec29d9536e91a6d5f008519cebae15083ea82ddf270ff4275ef"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_commands.py",
+      "status": "modified",
+      "bytes": 10376,
+      "sha256": "0ae80f7cb13efd6c2174270799d1b6b46d34052766b572e898c8b892852f19cd",
+      "base_sha256": "beb264708aa8eb440de8d1e18a19f4d1fb3e48b92f38d87db9be86e0a2a1c004"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_families.py",
+      "status": "added",
+      "bytes": 1364,
+      "sha256": "3bb9f9c27f459ef1a7c1c61a6194ee66680d48cd6b45e337c1ec2caca7ceea88",
+      "base_sha256": null
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_geometry.py",
+      "status": "modified",
+      "bytes": 7877,
+      "sha256": "6b8079e9776bcf122d6896a6359ff830771a7876682de1a69589978efde8fe9e",
+      "base_sha256": "57b7486401820e27960cc06decb3b45f61b09c650a5a97ece5b4d9b688fac2d0"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_host.py",
+      "status": "modified",
+      "bytes": 12449,
+      "sha256": "95d72857f9a324510c1788d50de6419fb5bac4acc5e3ac3d3e0318d074bb8e54",
+      "base_sha256": "dc66a63fa8dd6521cb3d9a04ee447269356338e7876a9ce367dd03cd4c197fa6"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_operations.py",
+      "status": "modified",
+      "bytes": 9766,
+      "sha256": "8d4d3b1ef36c3f28bf42010257a02fab1443655e0b30b655c203de1a1446c6cb",
+      "base_sha256": "0598ef622c0faa3d0aec91d54ce44394724d2d1cb68b736ba6ff335ff3d77d43"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_render.py",
+      "status": "modified",
+      "bytes": 9354,
+      "sha256": "6cb790af7b1be2097c2b44f4e7aa170b3ff4147ca7e2a85955257b21eb3d8fc1",
+      "base_sha256": "5ce739bc2cb82ff26d85687a6242d98ec2ad50fbc215840674d99c87a73b901d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_controller.py",
+      "status": "modified",
+      "bytes": 8557,
+      "sha256": "fcf76e9a062e3936e04e1d0081d239687898f54435869e4236c31f7661462cbd",
+      "base_sha256": "e97a55e85d7dd3350a2cf11845d041b504c4f9a0a7eb145576cf65a16dbfc78e"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "status": "modified",
+      "bytes": 6201,
+      "sha256": "cf857413849f8433b72335648dc90ff76f375968594abb23811dca1439702890",
+      "base_sha256": "3956955c2b83d20bb4e1d53cdb2483547b6510d4d1005149a9a360fa3d85229d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "status": "modified",
+      "bytes": 444646,
+      "sha256": "6582b2631fd2d63fd327c5457193195a60f57354408523f2eefe5cd3c1f7defb",
+      "base_sha256": "f2c9c131cc7747644f40837907170ad88da16d941e3600cf2020ae07a4027f8a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/waist_shape_field.py",
+      "status": "added",
+      "bytes": 5320,
+      "sha256": "601df802b1f3f90c3f10aae767fc9d59623d4f7805d9f541347acd5c3dd2835c",
+      "base_sha256": null
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/waist_shape_host.py",
+      "status": "added",
+      "bytes": 13063,
+      "sha256": "b118d3d06eb23199656983def79110698a90abb3418d961e3925433ddcf3acd3",
+      "base_sha256": null
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/waist_shape_native.py",
+      "status": "added",
+      "bytes": 1584,
+      "sha256": "c7d9f2867e222b649a4c32485f5d171c96eee9a38698267c0ba32a96db769bb3",
+      "base_sha256": null
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/waist_shape_project.py",
+      "status": "added",
+      "bytes": 7842,
+      "sha256": "b9f6f401fa3a6ef1cb254d39206f9d6b9924d7450a792eff64c34d9f2002a2a1",
+      "base_sha256": null
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/waist_shape_runtime.py",
+      "status": "added",
+      "bytes": 5214,
+      "sha256": "20d93560af7bec7023ad4ad56f2a233c22cf810d59ba94ff2e5c0c4046b2e397",
+      "base_sha256": null
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/waist_shape_state.py",
+      "status": "added",
+      "bytes": 5756,
+      "sha256": "4f5f2a21730c7764d425583fa0e5d4824949ecbc8b2291765b5440ee888d7d1c",
+      "base_sha256": null
+    },
+    {
+      "path": "engine/tests/fixtures/waist_shape/acceptance.json",
+      "status": "added",
+      "bytes": 23376,
+      "sha256": "ad263392896208f088cc8c88557ed3b897bc2f2c2021b816593e06dd07701e94",
+      "base_sha256": null
+    },
+    {
+      "path": "engine/tests/test_waist_shape_contract.py",
+      "status": "added",
+      "bytes": 5411,
+      "sha256": "f18fd5741d30652dcaf80c81a6770210fa3251bfb903565dc950ab6ca205c928",
+      "base_sha256": null
+    },
+    {
+      "path": "packaging/build-arm-shape.sh",
+      "status": "modified",
+      "bytes": 436,
+      "sha256": "d1944f95cf6a18773071b084bbe4f8e999e4e774c9e4f85b12f556166b93dbe8",
+      "base_sha256": "0370612e785f4ebe039c3fe12fef4601201e2f9f2e28a668b7330f513f4e97a8"
+    },
+    {
+      "path": "packaging/build-waist-shape.sh",
+      "status": "added",
+      "bytes": 440,
+      "sha256": "a3606a277b616f4e09b39c3b9d2007f2f7a6c00f1e799f8d779a00733246b202",
+      "base_sha256": null
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "status": "modified",
+      "bytes": 11672,
+      "sha256": "cf24a819b449bff0fe6ebc22199afb66a69685c82a48449e512181277def9f32",
+      "base_sha256": "76d5632e0f8b0a0e3c63abcefde336f49c38e4084887e8949ef5fc46ba6cc9b3"
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "status": "modified",
+      "bytes": 2981,
+      "sha256": "cc590ffbbb03e494311cb82b67c996d4b4f693dd91638a78522b7aa4e78a446d",
+      "base_sha256": "a21a8aaf1190d3ce1d0f9598ec85196aa8e629f5abbdbd18d059fdf6c8569097"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "status": "modified",
+      "bytes": 30263,
+      "sha256": "bac89cd344e5d29e2e115fa82b36cd187348a561e31f76a63510340fa56c0c67",
+      "base_sha256": "e1bd47dad5a314cbfd37a6a126f65347e2a765b3958de8118582f3a21d653fa4"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "status": "modified",
+      "bytes": 94375,
+      "sha256": "f6dddb156a2e39a72a202e0c24cc025283f543c25255d42d8d48f71556b778a3",
+      "base_sha256": "9439b1a8556c7d49f9c4194a3c15f4c53ee92831ec70ac1b3a8347081b6c1330"
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "status": "modified",
+      "bytes": 6948,
+      "sha256": "bae4fcc25f68da8d7d659cd6769f5f0c8f9116673a6fd9559caca8b463df38b5",
+      "base_sha256": "480816cc074f36f2a7894ddc7a6837c975ef6ae2e1d58868155eefb15f09812c"
+    },
+    {
+      "path": "ui/src-tauri/src/waist_shape_api.rs",
+      "status": "added",
+      "bytes": 18924,
+      "sha256": "2e5d284d39666e992b52a339cf0fda21c796a4e18ce9126f8d1734085f4a1071",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "status": "modified",
+      "bytes": 127845,
+      "sha256": "636887563afc78a768a94f6a1259ccadebc1321cac6097cccb3e12aaba3b5a08",
+      "base_sha256": "a36958fdcfaad87725a39828984c06bb31f7f70d7d24fb40762ed17cfe109d8c"
+    },
+    {
+      "path": "ui/src/legShape/BodyShapeTools.tsx",
+      "status": "modified",
+      "bytes": 7551,
+      "sha256": "2a9fd3103d544200018e029760baf79f31aedc7b08e7d6e4f9b100ac89a25df9",
+      "base_sha256": "392492cb0018de48a74129d28f182335cce01f7ccdecc9c8786ad880af320675"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "status": "modified",
+      "bytes": 91666,
+      "sha256": "7b0939fd85ce1a5f34e6ca7d6e4a48bb83bdf75dc0e8ba82a4fd8eec87ac0e63",
+      "base_sha256": "3efcaa8b2454721f765fc216f7bdce91535132466c6f9a8d76c2763b6f0b085e"
+    },
+    {
+      "path": "ui/src/toolRouting/coverage.ts",
+      "status": "modified",
+      "bytes": 3678,
+      "sha256": "9ce3acf47fe66683aceea58b630175949ac915c13afeaeaea55712444e792386",
+      "base_sha256": "b3338554f2d2d3669c28bbbf3b422210c1abe8d0601ad0e0adb4a071719d0772"
+    },
+    {
+      "path": "ui/src/waistShape/WaistShapePanel.tsx",
+      "status": "added",
+      "bytes": 4924,
+      "sha256": "61fe0d1a346133daae31545876bfce47e795ca63b8c3758bca37e0588e0b9b25",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/waistShape/WaistSupportEditor.tsx",
+      "status": "added",
+      "bytes": 10854,
+      "sha256": "2c63d2800e15cc271c429c0528ab39936682821a8439a697cace54226e76ad00",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/waistShape/WaistWorkspace.tsx",
+      "status": "added",
+      "bytes": 1743,
+      "sha256": "520f959d77fa75b5a8acf586b2a94422131e3a8dcdb115d1f45f9ee7be6d37b7",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/waistShape/context.ts",
+      "status": "added",
+      "bytes": 646,
+      "sha256": "ee5513bd95b50abefe00cb79afd11121e565f3d4298aab158f0c71209d009b16",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/waistShape/controller.ts",
+      "status": "added",
+      "bytes": 5879,
+      "sha256": "b6d7169f2de8cc79c13ca45e239af7a100f87a20ff3e32628143013e65bc89f1",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/waistShape/model.test.ts",
+      "status": "added",
+      "bytes": 1704,
+      "sha256": "0304508bd78927bc4c1bdafcd4691ea3c8a82b974a017c3a928ae718cac6f292",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/waistShape/model.ts",
+      "status": "added",
+      "bytes": 6105,
+      "sha256": "dc701d208f23c1f2868c64fb2b4df10ced9cc754ab8b57142f6dcf2b31803327",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/waistShape/nativeTransport.ts",
+      "status": "added",
+      "bytes": 3393,
+      "sha256": "8d1ff4cb782437589958feb22b1c188689fadc3bdd72cfc88a40114d70857685",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/waistShape/receipts.ts",
+      "status": "added",
+      "bytes": 1045,
+      "sha256": "dde50bf16ceeb00b054a9fd73e951da7d90bb5d3b6444e0187142028981f985e",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/waistShape/sourcePreview.test.ts",
+      "status": "added",
+      "bytes": 1779,
+      "sha256": "6ca7e97fa8b871948fa47c14a5221c9b3060ba9c5044f95deba32f366cb1f1f8",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/waistShape/sourcePreview.ts",
+      "status": "added",
+      "bytes": 2507,
+      "sha256": "3e1882d756d6269615fb6f67e83a829b0534995764597b95308e03c1c7880fca",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/waistShape/useWaistWorkflow.ts",
+      "status": "added",
+      "bytes": 6596,
+      "sha256": "ae7d45cad3da1e9584aafd7149ee838b642e12f6a083df68556cebb0470dcc1a",
+      "base_sha256": null
+    }
+  ]
+}

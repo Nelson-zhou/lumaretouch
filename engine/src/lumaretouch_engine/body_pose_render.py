@@ -38,7 +38,7 @@ def wrap_prepared(prepared,bank,people,frame):
 
 def prepare(prepared,bank,people,frame,*,byte_budget,source_pixels=None,source_path=None):
     from .people_geometry_identity import digest
-    from . import leg_shape_runtime as legs
+    from . import leg_shape_runtime as legs, waist_shape_runtime as waist
     frame=check_source(bank,source(frame));bank=P.check(bank)
     replay=None;budget=byte_budget
     if needs_arm_replay(bank):
@@ -53,6 +53,7 @@ def prepare(prepared,bank,people,frame,*,byte_budget,source_pixels=None,source_p
             replay=decode_source(source_path,{k:frame[k] for k in ('sha256','width','height')},device='cpu')
         else:replay=source_pixels
     fields=legs.prepare_fields(bank,frame['sha256'],tuple(prepared.geometry.delta.shape[1:3]),people_state=people,byte_budget=budget)
+    fields=tuple(fields)+waist.prepare_fields(bank,frame['sha256'],tuple(prepared.geometry.delta.shape[1:3]),people_state=people,byte_budget=budget,source_frame=frame)
     wrapper=A.prepare_common(prepared,prepared.face_fields,bank,people,frame,
         people_geometry_identity=digest({'state':people,'asset_sha256':frame['sha256']}),byte_budget=budget,
         source_pixels=replay,extra_body_fields=fields,body_operation_order=P.effective_order(bank))

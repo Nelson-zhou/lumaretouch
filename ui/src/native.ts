@@ -18,7 +18,7 @@ export function notifyInspectionEditIntent(){
 }
 const inspectionMutations=new Set(['start_engine','shutdown_engine','load_image','set_strength','precompute',
   'inpaint','light','deform','lut','grade','enhance','lip_makeup','brow_shape','nose_shape','eye_shape','mouth_shape','background','exposure','hsl','curves','levels','fabric','crop','compare',
-  'shoulder_shape','leg_shape','arm_shape','people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
+  'shoulder_shape','leg_shape','waist_shape','arm_shape','people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
   const send=()=>{if(inspectionMutations.has(command))notifyInspectionEditIntent();return tauriInvoke<T>(command,args,options);};
   if(isCurveEditBusy()&&curveBarrierRequired(command,(args as Record<string,unknown>|undefined)?.action,inspectionMutations.has(command))){
@@ -148,6 +148,7 @@ export interface DocState {
   people?: PeopleView;
   shoulder_shape?: import('./shoulderShape/model').ShoulderView;
   leg_shape?: import('./legShape/model').LegView;
+  waist_shape?: import('./waistShape/model').WaistView;
   arm_shape?: import('./armShape/model').ArmView;
   brow_shape?: {version:1;revision:number;selected_face_id:string;recipe:import("./browShape/model").BrowShape;sides:Partial<Record<import("./browShape/model").BrowSide,import("./browShape/model").BrowFact>>;suspended:string|null;bytes_fields:number};
   nose_shape?: {version:1;revision:number;selected_face_id:string;recipe:import("./noseShape/model").NoseShape;controls:Partial<Record<import("./noseShape/model").NoseKey,import("./noseShape/model").NoseFact>>;suspended:string|null;bytes_fields:number};
@@ -950,6 +951,7 @@ export interface EngineStatus {
     reference_color_protocol?: number;
     shoulder_shape_protocol?: number;
     leg_shape_protocol?: number;
+    waist_shape_protocol?: number;
     arm_shape_protocol?: number;
     semantic_colour_protocol?: number;
     semantic_colour_workflow_protocol?: number;
@@ -1769,6 +1771,11 @@ export const bodyPoseModelStatus=()=>tauriInvoke<import('./shoulderShape/useShou
 export function runLegShape(request:import('./legShape/nativeTransport').Command|{action:'mailbox_status'|'release';request_id:string}):Promise<import('./legShape/nativeTransport').Mailbox>{
   return ['view','status','mailbox_status','release'].includes(request.action)
     ? tauriInvoke<import('./legShape/nativeTransport').Mailbox>('leg_shape',{request}) : invoke<import('./legShape/nativeTransport').Mailbox>('leg_shape',{request});
+}
+
+export function runWaistShape(request:import('./waistShape/nativeTransport').Command|{action:'mailbox_status'|'release';request_id:string}):Promise<import('./waistShape/nativeTransport').Mailbox>{
+  return ['view','status','mailbox_status','release'].includes(request.action)
+    ? tauriInvoke<import('./waistShape/nativeTransport').Mailbox>('waist_shape',{request}) : invoke<import('./waistShape/nativeTransport').Mailbox>('waist_shape',{request});
 }
 
 /** One arm mailbox; reads and proposal receipts never invalidate editing captures. */
