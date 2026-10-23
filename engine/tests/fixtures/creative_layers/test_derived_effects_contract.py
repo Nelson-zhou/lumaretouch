@@ -30,7 +30,7 @@ def fixture(monkeypatch):
     rgb=np.full((4,4,3),128,np.uint8);rgb.setflags(write=False)
     pc=SimpleNamespace(backend='mediapipe',landmarks=points,masks={'skin':np.ones((4,4),np.float32)})
     engine=SimpleNamespace(_creative_base=base,_docs=[{'state':{'_creative_base':base}}],
-        _precompute=pc,_load_id='load',_people_targets={owned['sha256']:target},
+        _people_support={},_precompute=pc,_load_id='load',_people_targets={owned['sha256']:target},
         _people_owner=lambda:SimpleNamespace(snapshot=lambda:deepcopy(state)),
         _people_binding=lambda:{'document_id':'doc','document_epoch':'epoch','document_revision':0,'asset_sha256':owned['sha256']},
         _people_managed=lambda:True,_people_source=lambda:owned,
@@ -163,7 +163,7 @@ def test_preview_forwarding_never_resolves_original_hair_or_body(monkeypatch):
     def forbidden(*args,**kwargs):raise AssertionError('Original hair resolver called')
     monkeypatch.setattr(H,'preview_kwargs',forbidden)
     inputs=I.preview(engine,state,body_source=owned)
-    assert set(inputs)=={'creative_source','creative_proxy'}
+    assert set(inputs)=={'creative_source','creative_proxy','eye_light_assets'}
     assert inputs['creative_source']==owned and inputs['creative_proxy'] is rgb
     with pytest.raises(ValueError,match='body'):
         I.preview(engine,state,body_bank={'bodies':{'unadapted':{}},'analysis_runs':{},'support_assets':{}})

@@ -75,6 +75,10 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
             raise ValueError('Derived portrait graph source mismatch')
         if repaired is not None or recovery_assets or hair_evidence is not None or hair_source_path is not None:
             raise ValueError('Derived portrait runtime cannot acquire original-file inputs')
+        from .eye_light_support import KIND, resolve as resolve_review
+        for face in state['faces'].values():
+            if face['asset_sha256'] == asset_sha256 and KIND in face['local_assets']:
+                resolve_review(state,eye_light_assets or {},S.face_ref(face))
     if type(source) is not np.ndarray or source.dtype != np.float32 or source.ndim != 3 or source.shape[2] != 3 or not np.isfinite(source).all() or np.any((source < 0) | (source > 1)):
         raise ValueError('People preparation needs frozen working-sRGB float32 RGB')
     effect_source = source if repaired is None else repaired
@@ -150,10 +154,10 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
                 blush_review=blush_raster(state,blush_makeup_assets or {},entry['face_ref'],(h,w)) if A.BLUSH.active(values[A.BLUSH.OP]) else None
             local = E.prepare(entry['face_ref'], lm, values, effect_source, excluded=analysis['excluded'], skin=analysis['skin'],
                               backend=face['evidence']['backend'], semantic_sha=face['evidence']['semantic_model_sha256'],blush_review=blush_review,lipstick_review=lipstick_review,source_only=source_only)
+            from .eye_light_people import prepare as prepare_eye_light
+            from .eye_light_state import OPERATION as EYE_LIGHT
+            local.extend(prepare_eye_light(state,eye_light_assets or {},entry['face_ref'],analysis,effect_source,values[EYE_LIGHT],source_revision=state['revision']))
             if not source_only:
-                from .eye_light_people import prepare as prepare_eye_light
-                from .eye_light_state import OPERATION as EYE_LIGHT
-                local.extend(prepare_eye_light(state,eye_light_assets or {},entry['face_ref'],analysis,effect_source,values[EYE_LIGHT],source_revision=state['revision']))
                 from .eyeliner_people import prepare as prepare_eyeliner
                 local.extend(prepare_eyeliner(state,eyeliner_assets or {},entry['face_ref'],analysis,effect_source,values[A.EYELINER.OP],source_revision=state['revision']))
                 from .eyelash_people import prepare as prepare_eyelash

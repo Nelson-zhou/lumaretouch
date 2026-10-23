@@ -1,5 +1,9 @@
 # M14 derived effects and explicit fresh-current document
 
+Continuation: `DERIVED-EYE-LIGHT.md` adds the exact reviewed eye-light consumer
+and effective-source reference pixels. The eight-operation list below describes
+this earlier frozen slice, not the later cumulative admission set.
+
 Status: source-only continuation of local
 `b5d288a9ec0d80810236621f5f573b96a4f4856e`; runtime acceptance UNRUN.
 This continues `LNX-REF-WF-127932-a9c143a25d` return and

@@ -3,14 +3,15 @@
 This is an operation/parameter contract, not a blanket tool-name exemption.
 The existing people owner still validates revisions, stages every requested
 face and publishes through the existing history/receipt transaction. Path-based
-hair/body/selection/recovery/reference consumers are intentionally not admitted.
+hair/body/selection/recovery consumers remain fenced. Eye-light alone admits
+its exact target-owned visibility review and effective-source reference.
 """
 import math
 
 OPERATIONS = frozenset((
     'lnx.deform.v1', 'lnx.enhance.v1', 'lnx.facial_wrinkles.v1',
     'lnx.brow_shape.v1', 'lnx.nose_shape.v1', 'lnx.eye_shape.v1',
-    'lnx.mouth_shape.v1', 'lnx.lip_makeup.v1',
+    'lnx.mouth_shape.v1', 'lnx.lip_makeup.v1', 'lnx.eye_light.v1',
 ))
 LEGACY = {name: 'lnx.' + name + '.v1' for name in (
     'deform', 'enhance', 'brow_shape', 'nose_shape', 'eye_shape', 'mouth_shape', 'lip_makeup')}
@@ -61,6 +62,17 @@ def _leaf(operation, path, value):
     neutral, validator = A.specifications()[operation]
     known = A.leaves(neutral)
     if path not in known: raise ValueError('Unknown derived portrait parameter')
+    if operation == 'lnx.eye_light.v1':
+        # Validate leaves without applying them to a linked neutral pair: the
+        # existing graph owner validates the complete atomic two-eye recipe.
+        from .eye_light_state import check_eye, neutral_eye
+        if path == '/linked':
+            if type(value) is not bool: raise ValueError('Eye-light link flag must be boolean')
+        else:
+            _,side,key = path.split('/')
+            if side not in ('left','right'): raise ValueError('Invalid eye-light side')
+            check_eye({**neutral_eye(),key:value})
+        return
     if type(known[path]) is bool:
         if type(value) is not bool: raise ValueError('Portrait link flag must be boolean')
     elif type(value) not in (int,float) or not math.isfinite(value):
@@ -97,6 +109,13 @@ def _request(name, request):
         S.token(request['request_id'])
         action,payload,target = request['action'],request['payload'],context['target']
         if action == 'patch': _patches(payload)
+        elif action in ('eye_light_reference','eye_light_review'):
+            if target['scope'] != 'face' or type(payload) is not dict:
+                raise ValueError('Eye-light review requires an exact local face')
+            if action == 'eye_light_reference':
+                if payload != {}: raise ValueError('Eye-light reference accepts no source override')
+            elif set(payload) != {'eyes'} or type(payload['eyes']) is not dict or not payload['eyes'] or set(payload['eyes'])-{'left','right'}:
+                raise ValueError('Eye-light review requires explicit eye sides')
         elif action in ('select','target','analyse_face'):
             if payload != {} or type(payload) is not dict or (action != 'target' and target['scope'] != 'face'):
                 raise ValueError('Invalid local portrait cursor/analysis request')
@@ -192,7 +211,9 @@ def require_graph(state, binding):
     if any(link['face_instance_id'] in faces for link in state['links']) or any(set(group['face_ids']) & set(faces) for group in state['groups'].values()):
         raise ValueError('Derived portrait graph cannot inherit shared person/group inputs')
     for key,face in faces.items():
-        if face['local_assets']: raise ValueError('Derived portrait graph cannot replay source-file support/recovery assets')
+        for kind,descriptor in face['local_assets'].items():
+            if kind != 'eye_light_visibility' or descriptor['kind'] != kind or descriptor['owner'] != S.face_ref(face):
+                raise ValueError('Derived portrait graph cannot replay unadapted support/recovery assets')
         evidence = face['evidence']
         if (evidence['source_width'],evidence['source_height']) != (owned['width'],owned['height']):
             raise ValueError('Derived portrait evidence has another source extent')

@@ -21,7 +21,8 @@ def checked_binding(engine,value):
 def source_preview(engine):
     import numpy as np
     from PIL import Image
-    source=R.source(engine._people_source());rgb=np.asarray(engine._src_rgb)
+    from .creative_derived_source import analysis_rgb
+    source=R.source(engine._people_source());rgb=np.asarray(analysis_rgb(engine))
     if rgb.dtype!=np.uint8 or rgb.ndim!=3 or rgb.shape[2]!=3:raise ValueError('Canonical unretouched body preview RGB8 is unavailable')
     h,w=rgb.shape[:2]
     E.whole_source_shape(source,(h,w))

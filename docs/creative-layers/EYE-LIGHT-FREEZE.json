@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "status": "source-integrated-frozen; runtime acceptance UNRUN",
+  "base_commit": "7087e87ebdfee8eb67cefa63e2cce7cef3385f85",
+  "scope": [
+    "M14 effective derived-source review reference pixels",
+    "Exact reviewed eye-light consumer with existing Rust solver"
+  ],
+  "integration_map": "docs/creative-layers/DERIVED-EYE-LIGHT.md",
+  "checks": {
+    "python_ast_files": 6,
+    "product_imports": false,
+    "execution": false,
+    "tests": "UNRUN",
+    "build": false,
+    "typecheck": false,
+    "inference": false
+  },
+  "not_claimed": [
+    "M14 complete",
+    "Shared transfer enabled",
+    "Other advanced makeup/hair/body/repair consumers",
+    "Transparent or HDR photo return",
+    "Runtime numerical visual acceptance"
+  ],
+  "files": [
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_commands.py",
+      "sha256": "5caa98161fe9a73efe1702e2f3345a063fb27013017d017535df17dfb20cfeed",
+      "bytes": 10487
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "70595c7d0cf5564e066e1a24af817ffa5c76dd8120a3efa38218c737f0edf462",
+      "bytes": 13742
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "sha256": "24281cd13a9ed78b93405f8593334f0854c5f6992ad23001bbc2b9641b2885d2",
+      "bytes": 2644
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "ccc20557e411f74d20dc326cec2e40ec7759d8e3878b9a85533b1e87e36a9c6b",
+      "bytes": 14968
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_effects_contract.py",
+      "sha256": "dc318d78e04f816a05472aa2f34d936943011250943b94cfbbd6f179f7e80709",
+      "bytes": 16148
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_eye_light_contract.py",
+      "sha256": "72a0f56eeb702be60daf31d0ddcf4aa03caf7954bbc1d2e8960f3ee1c0c41d2e",
+      "bytes": 8145
+    },
+    {
+      "path": "ui/src/eyeLight/EyeLightSupportEditor.tsx",
+      "sha256": "0ed3c77b82d0c035074916f72116140644da5fc21e70b5359cdbdf4d04cae3b4",
+      "bytes": 5222
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-EFFECTS.md",
+      "sha256": "548539ddc486b8ce5830f335b39ecc2fb4617e045d87229e5f6338c926de6cb4",
+      "bytes": 7494
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-EYE-LIGHT.md",
+      "sha256": "712582a7d251e4cfb9782f81e1e3c0261d6507803f8c06d28a94b775153b8362",
+      "bytes": 5731
+    }
+  ]
+}
