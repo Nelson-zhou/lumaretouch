@@ -57,7 +57,7 @@ def validate(engine,row,candidate):
     from . import body_pose_render as body_render, id_background_runtime as id_background
     for owner in (groups,recovery,manual,studio,sky,body_render,id_background):owner.check_export_decode(snap,path,stamp,(h,w))
     if snap.get('grade_scope')=='objects':
-        M.verify_source(M.check(snap.get('local_masks')),path,(h,w));snap['local_mask_source_path']=path
+        M.verify_snapshot(snap,path,(h,w));snap['local_mask_source_path']=path
     spec,skipped=build_export_spec(snap,h,w,for_document=True)
     if skipped:raise ValueError('People target preparation cannot omit existing edits: '+str(skipped))
     export_float(pixels,spec,geometry=(snap['crop_rect'],snap['crop_rotation']))

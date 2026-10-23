@@ -16,6 +16,7 @@ from .preset_transaction import apply_with_rollback, PresetApplyError
 from .preset_organisation_store import OrganisationError
 from . import local_grade_layers as LG
 from . import sky_replacement_scope as SKY, optics_auto_scope as OA, id_background_scope as ID_BACKGROUND
+from . import creative_derived_transfer as DERIVED, creative_derived_source as SOURCE
 
 ACTIONS = ("list", "preflight", "apply", "save", "import", "delete")
 LEGACY_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note", "local_mask_transfer", "preflight_token"}
@@ -132,11 +133,15 @@ class PresetController:
                 evidence = {"catalog": catalog}
             elif action == "preflight":
                 doc = PS.find(p['id'])
+                state = self.ports.capture()
+                # The stored preset, never a caller's claimed module_scope,
+                # decides whether this source can use the general route.
+                DERIVED.require_modules(state, doc['modules'])
                 for op in doc['modules']:
                     if SC.MODULES[op]['single_face']:
                         verdict, reason = self.ports.face_check()
                         if verdict != 'ok': raise SC.ScopeError(f'{op}：{reason}')
-                evidence = self.reviews.prepare(doc, self.ports.capture(), self.ports.target_row(),
+                evidence = self.reviews.prepare(doc, state, self.ports.target_row(),
                     self.ports.document_id(), self.ports.revision(), p.get('local_mask_transfer'), self.ports.prepare_optics, self.ports.prepare_reference)
             elif action == "apply": evidence = self.apply(p)
             elif action == "save": evidence = self.save(p)
@@ -214,13 +219,19 @@ class PresetController:
         pid = str(p.get("id") or "")
         if not pid: raise SC.ScopeError("preset apply 需要 id")
         previous = self.ports.capture()
+        source_proof = None
         if p.get('preflight_token') is not None:
             record = self.reviews.claim(p['preflight_token'], pid, previous, self.ports.target_row(),
                                        self.ports.document_id(), self.ports.revision())
             doc, mods = record['preset'], record['modules']
+            source_proof = record.get('source_proof')
         else:
             doc = PS.find(pid); mods = doc['modules']
+            mods = DERIVED.require_modules(previous, mods)
             if LG.OP in mods or OA.OP in mods or RC.OP in mods: raise SC.ScopeError('含局部组或自动镜头/透视的预设必须先查看本目标预检，再确认应用')
+            if SOURCE.record(previous) is not None:
+                source_proof = SOURCE.row_proof({**self.ports.target_row(), 'state':previous})
+        DERIVED.require_modules(previous, mods, source_proof)
         ops = list(mods)
         for op in ops:
             if SC.MODULES[op]["single_face"]:
@@ -243,10 +254,13 @@ class PresetController:
         if NOSE.OP in ops and OA.OP not in ops: NOSE.validate_target(state,self.ports.target_row())
         if EYE.OP in ops and OA.OP not in ops: EYE.validate_target(state,self.ports.target_row())
         if MOUTH.OP in ops and OA.OP not in ops: MOUTH.validate_target(state,self.ports.target_row())
+        DERIVED.require_candidate(previous, state, mods, source_proof)
+        if source_proof is not None:
+            SOURCE.verify_row({**self.ports.target_row(), 'state':self.ports.capture()}, source_proof)
         if p.get('preflight_token') is not None:self.ports.advance()
         self._effect_started = True
         frame = apply_with_rollback(self.ports.replay, previous, state, preset_id=pid,
-                                    emit=self.emit, invalidate=self.ports.invalidate, strict_local=ID_BACKGROUND.OP in ops or LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
+                                    emit=self.emit, invalidate=self.ports.invalidate, strict_local=SOURCE.record(state) is not None or ID_BACKGROUND.OP in ops or LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
         after = OA.before_params(state, ops)
         self.last = {"id": pid, "name": doc["name"], "ops": ops, "params": after}
         render_ms = frame.pop("render_ms")
@@ -254,12 +268,16 @@ class PresetController:
                    "modules": ops, "before": before, "after": after, "render_ms": render_ms, "doc_state": self.ports.status()})
         self.emit(frame)
         return {"id": pid, "name": doc["name"], "module_scope": ops, "before": before, "after": after,
-                "document_id": self.ports.document_id(), "preflight_token":p.get('preflight_token')}
+                "document_id": self.ports.document_id(), "preflight_token":p.get('preflight_token'),
+                "source_proof":source_proof}
 
     def save(self, p):
         requested = p.get("module_scope")
         ops = SC.check_scope([op for op in SC.transferable_ops() if op not in (OA.OP,RC.OP)] if requested is None else requested)
-        mods = SC.params_of(self.ports.capture(), ops)
+        state = self.ports.capture()
+        if SOURCE.record(state) is not None and set(ops) - SC.DERIVED_PARAMETER_OPS:
+            raise SC.ScopeError('合成来源只能通过通用预设保存明确选择的全局参数模块')
+        mods = DERIVED.require_modules(state, SC.params_of(state, ops))
         if SC.CUSTOM_LUT.OP in mods:
             mods[SC.CUSTOM_LUT.OP] = SC.CUSTOM_LUT.portable(mods[SC.CUSTOM_LUT.OP])
         if SKY.OP in mods and mods[SKY.OP]["recipe"]["enabled"]:

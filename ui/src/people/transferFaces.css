@@ -1,0 +1,16 @@
+.transferFaceGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px;margin:12px 0}
+.transferFacePreview{min-width:0;border:1px solid var(--border,#555);border-radius:8px;padding:10px}
+.transferFaceTitle{font-weight:600;margin:0 0 8px}
+.transferSourceImage{position:relative;line-height:0;margin:auto;background:#222}
+.transferSourceImage>img{display:block;width:100%;height:auto}
+.transferFaceBox{position:absolute;box-sizing:border-box;border:2px solid #ffe28a!important;border-radius:3px!important;background:transparent!important;min-width:0!important;min-height:0!important;padding:0!important;cursor:pointer}
+.transferFaceBox.chosen{border:3px solid #67f5bc!important;box-shadow:0 0 0 1px #112d25}
+.transferFaceBox:focus-visible{outline:3px solid white;outline-offset:2px}
+.transferFaceBox:disabled{border-style:dashed!important;opacity:.6;cursor:not-allowed}
+.transferFaceBox>b{position:absolute;left:0;top:0;font:600 12px/1.4 sans-serif;background:#14251f;color:#fff;padding:0 4px}
+.transferFaceIdentity{font-size:11px;overflow-wrap:anywhere;opacity:.8}
+.transferFaceOption{display:block;padding:4px 0}
+.transferFaceOption small{opacity:.75}
+.transferFacePreview fieldset{margin:8px 0 0;padding:8px}
+.transferFaceBlocked{padding:10px;border:1px solid #c18a50;border-radius:6px;overflow-wrap:anywhere}
+.peopleTransfer>details>fieldset{margin:10px 0}

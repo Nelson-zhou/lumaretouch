@@ -146,6 +146,8 @@ def prepare(project,rows,limit):
                     raise ValueError('Saved portrait target has conflicting source evidence')
             if scopes is not None and rec.get('people_scope') not in seen:
                 raise ValueError('Saved portrait target has no graph scope')
+            from .people_batch_ledger import reviewed_refs
+            reviewed_refs(rec)
         entries[str(key)]=entry
     return staged,entries
 

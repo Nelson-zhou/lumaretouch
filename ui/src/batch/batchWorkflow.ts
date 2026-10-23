@@ -1,4 +1,4 @@
-import {samePeopleRequest,validPeopleReview,type PeopleTransferRequest,type PeopleTransferProof,type PeopleTransferReview} from '../people/transferReview';
+import {samePeopleRequest,validPeopleReview,peopleProofDocument,type PeopleTransferRequest,type PeopleTransferProof,type PeopleTransferReview} from '../people/transferProof.ts';
 import {validReferenceReview,type ReferenceReview} from '../referenceColor/ReferenceColorReview';
 import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../optics/transferReviewModel';
 import {LOCAL_GRADE_OP,validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence} from '../localMasks/transferModel.ts';
@@ -25,7 +25,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   const now=options.now??(()=>performance.now());
   let context:BatchContext={docs:[],moduleScope:[],conflictPolicy:'skip_and_report',sourceDocumentId:'',enabled:false,label:''};
   let key='',generation=0,disposed=false;
-  let pending:{id:string;action:BatchAction;generation:number;token?:string;scope?:string[];policy?:string;transfer?:MaskTransferOptions;reference?:{strength:number};people?:PeopleTransferRequest;peopleProof?:PeopleTransferProof;referencePath?:string}|null=null;
+  let pending:{id:string;action:BatchAction;generation:number;contextKey:string;token?:string;scope?:string[];policy?:string;transfer?:MaskTransferOptions;reference?:{strength:number};people?:PeopleTransferRequest;peopleProof?:PeopleTransferProof;referencePath?:string;docs?:string[]}|null=null;
   let state:BatchUi={phase:'closed',operation:'preflight',plan:null,result:null,message:'',scopeLabel:''};
   const set=(patch:Partial<BatchUi>)=>{state={...state,...patch};if(!disposed)publish(state);};
   const active=(g:number)=>!disposed&&g===generation;
@@ -41,7 +41,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   }
   const identity=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{32}$/.test(v);
   const revision=(v:unknown)=>typeof v==='string'&&v.length<=20&&/^\d+$/.test(v)&&BigInt(v)<=18446744073709551615n;
-  function planFrom(result:BatchReply,scope:string[],policy:string,transfer?:MaskTransferOptions,reference?:{strength:number},people?:PeopleTransferRequest,peopleProof?:PeopleTransferProof,referencePath?:string):BatchPlan{
+  function planFrom(result:BatchReply,scope:string[],policy:string,transfer?:MaskTransferOptions,reference?:{strength:number},people?:PeopleTransferRequest,peopleProof?:PeopleTransferProof,referencePath?:string,docs?:string[]):BatchPlan{
     if(scope.includes(LOCAL_GRADE_OP)&&!sameTransferOptions(result.local_mask_transfer,transfer))throw Error('局部迁移策略与请求不一致');
     if(!identity(result.preflight_token)||!result.source_snapshot||!identity(result.source_snapshot.document_id)
       ||!revision(result.source_snapshot.revision)||typeof result.source_snapshot.path!=='string'
@@ -51,19 +51,31 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       ||(result.ok??-1)<0||(result.blocked??-1)<0||(result.ok??0)+(result.blocked??0)!==result.targets.length
       ||(!people&&Object.keys(result.applies).sort().join('|')!==[...scope].sort().join('|')))throw Error('预检回执不完整，未允许提交');
     if(people&&(!peopleProof||result.people_transfer!==true||!samePeopleRequest(result.applies,people)
-      ||result.source_snapshot.document_id!==peopleProof.document_id||result.source_snapshot.revision!==String(peopleProof.document_revision)))throw Error('人物迁移源图、关联或参数选择与请求不符');
+      ||result.source_snapshot.document_id!==peopleProofDocument(peopleProof).document_id
+      ||result.source_snapshot.revision!==String(peopleProofDocument(peopleProof).revision)))throw Error('人物迁移源图、关联或参数选择与请求不符');
     if(!people&&result.people_transfer)throw Error('未请求的人物迁移回执');
     if(reference&&(result.applies?.['lnx.reference_color.v1'] as {strength?:number})?.strength!==reference.strength)throw Error('参考统一程度与请求不同');
     if(referencePath&&result.source_snapshot.path!==referencePath)throw Error('源图与冻结请求不同');
+    const exactPeopleTargets=people?.target_policy==='explicit_face_map'?new Set(people.targets.map(row=>row.target.document.document_id)):null;
+    if(exactPeopleTargets&&(!docs||docs.length!==exactPeopleTargets.size||new Set(docs).size!==docs.length
+      ||docs.some(id=>!exactPeopleTargets.has(id))))throw Error('本次配对没有覆盖准确的目标照片名单');
     const ids=new Set<string>();let blocked=0;
     for(const item of result.targets){const t=item as BatchTarget;
       if(!t||typeof t.path!=='string'||!identity(t.document_id)||!revision(t.revision)
         ||!Number.isInteger(t.index)||(t.index??-1)<0||ids.has(t.document_id))throw Error('预检目标身份不完整');
+      if(exactPeopleTargets&&!exactPeopleTargets.delete(t.document_id))throw Error('预检加入了未指定的人物目标');
       if(scope.includes(LOCAL_GRADE_OP)&&!t.blocked&&(!validTransferEvidence(t.local_mask_transfer)||!sameTransferOptions(t.local_mask_transfer.policy,transfer)))throw Error('缺少匹配的目标局部组预检证据');
       if(scope.includes(OPTICS_AUTO_OP)&&!t.blocked&&!validOpticalReview(t.optical_transfer,t.document_id,t.revision,result.applies[OPTICS_AUTO_OP]))throw Error('缺少匹配的自动镜头/透视目标预检证据');
       if(scope.includes('lnx.reference_color.v1')&&!t.blocked&&(result.applies['lnx.reference_color.v1'] as {strength?:number})?.strength!==0&&!validReferenceReview(t.reference_color,t.document_id,t.revision??''))throw Error('缺少匹配的参考统一目标预检证据');
       if(people&&!t.blocked&&(!peopleProof||!validPeopleReview(t.people_transfer,people,peopleProof,t)))throw Error('缺少已确认人物及逐项参数的目标预检证据');
       ids.add(t.document_id);if(t.blocked)blocked++;
+    }
+    if(exactPeopleTargets){
+      for(const rejected of result.rejected_docs??[]){
+        if(!rejected||typeof rejected.doc!=='string'||!exactPeopleTargets.delete(rejected.doc)
+          ||typeof rejected.error!=='string'||!rejected.error)throw Error('无效目标回执与本次配对不符');
+      }
+      if(exactPeopleTargets.size)throw Error('预检遗漏了本次明确指定的目标照片');
     }
     if(blocked!==result.blocked)throw Error('预检受阻数量不一致');
     return result as BatchPlan;
@@ -98,7 +110,8 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
           if(!result||result.request_id!==request.id||result.action!==request.action||typeof result.success!=='boolean')throw Error('批量结果身份不匹配');
           if(result.success&&request.action==='commit'&&result.preflight_token!==request.token)throw Error('批量结果不属于本次预检');
           if(result.success&&request.action==='preflight'){
-            const plan=planFrom(result,request.scope??[],request.policy??'',request.transfer,request.reference,request.people,request.peopleProof,request.referencePath);pending=null;set({phase:'review',plan,result:null,message:''});return;
+            if(request.contextKey!==key){pending=null;set({phase:'error',plan:null,result:null,message:'源图、目标或参数选择已经变化，旧预检不会用于提交；请重新预检。'});return;}
+            const plan=planFrom(result,request.scope??[],request.policy??'',request.transfer,request.reference,request.people,request.peopleProof,request.referencePath,request.docs);pending=null;set({phase:'review',plan,result:null,message:''});return;
           }
           if(result.outcome_unknown&&request.action!=='preflight'){set({phase:'uncertain',result,message:result.error??'执行结果未确认'});return;}
           if(result.success&&request.action==='commit')checkCommitted(result);
@@ -115,7 +128,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   }
   async function submit(action:BatchAction,opts:BatchOptions){
     const g=++generation,id=uuid(),deadline=now()+(options.timeoutMs??120000);
-    const request={id,action,generation:g,token:opts.preflightToken,scope:opts.moduleScope,policy:opts.conflictPolicy,transfer:opts.localMaskTransfer,reference:opts.referenceColor,people:opts.peopleTransfer,peopleProof:context.peopleProof,referencePath:context.referencePath};pending=request;
+    const request={id,action,generation:g,contextKey:key,token:opts.preflightToken,scope:opts.moduleScope,policy:opts.conflictPolicy,transfer:opts.localMaskTransfer,reference:opts.referenceColor,people:opts.peopleTransfer,peopleProof:context.peopleProof,referencePath:context.referencePath,docs:opts.docs};pending=request;
     set({phase:action==='preflight'?'preflighting':'committing',hidden:false,operation:action,result:null,message:''});
     try{
       const accepted=await bounded(api.request(action,{...opts,requestId:id}),deadline);

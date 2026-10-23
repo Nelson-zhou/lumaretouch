@@ -47,7 +47,7 @@ impl EngineHandle {
     pub fn send(&self, cmd: Value) -> Result<(), String> {
         crate::project_recovery_fence::issued(self.epoch, &cmd)?;
         if cmd["cmd"]=="project_recovery" || cmd["cmd"]=="canvas_guides" {return self.dispatcher.enqueue(None,cmd);}
-        if crate::managed_import_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
+        if crate::managed_import_api::read_only(&cmd) || crate::batch_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if cmd["cmd"] == "virtual_copy" && matches!(cmd["action"].as_str(), Some("state" | "query")) {
             return self.dispatcher.enqueue(None, cmd);
         }

@@ -174,20 +174,65 @@ def test_multi_copy_batch_and_protected_undo_never_edit_original(monkeypatch):
     assert V.row_snapshot(engine,original)==before
 
 
-def test_confirmed_transfer_accepts_identical_source_sha_in_distinct_documents():
+def test_copied_person_ids_do_not_authorize_cross_owner_confirmed_transfer():
     from lumaretouch_engine.people_confirmed_transfer import prepare_confirmed
-    from lumaretouch_engine.people_transfer_adapter import candidate
+    from lumaretouch_engine.people_transfer_inventory import graph_digest
     engine,original,(first,second),face=fixture()
     source=edit(engine,original,face,.65)
     document=lambda row:{'document_id':row['document_id'],'epoch':'fixture','revision':0}
+    def proof(state,row):
+        return {'document':document(row),'people_scope':V.scope(row),'state_revision':state['revision'],
+                'association_revision':state['association_revision'],'graph_sha256':graph_digest(state),
+                'source_proof':{'asset_sha256':ASSET,'creative_source':None,'original_sha256':ASSET}}
     for row in (first,second):
         target=V.row_snapshot(engine,row)
-        payload=prepare_confirmed(source,target,S.face_ref(source['faces'][face]),ASSET,{OP:['/strength']},
-                                  {OP:{'/strength':0.}},source_document=document(original),target_document=document(row))
-        result=candidate(payload,source,target,source_document=document(original),target_document=document(row))
-        assert result['overrides'][0]['value']==.65
-        assert result['faces']==target['faces']
-        assert result['links']==target['links']
+        with pytest.raises(ValueError,match='Independent portrait owners'):
+            prepare_confirmed(source,target,S.face_ref(source['faces'][face]),ASSET,{OP:['/strength']},
+                {OP:{'/strength':0.}},source_document=document(original),target_document=document(row),
+                source_owner=proof(source,original),target_owner=proof(target,row))
+        assert V.row_snapshot(engine,row)==target
+
+
+def test_reviewed_face_history_roundtrip_and_reanalysis_refusal(monkeypatch):
+    from lumaretouch_engine import people_history_persistence as H
+    engine,original,(first,_),face,batch,L=batch_fixture(monkeypatch)
+    before=V.row_snapshot(engine,first);ref=S.face_ref(before['faces'][face])
+    plans={V.scope(first):{'row':first,'before':before,
+        'candidate':S.set_override(before,'face',face,OP,'/strength',.6),'reviewed_face_refs':[ref]}}
+    bid,_=L.commit_scoped(batch,engine,plans,request_id='reviewed',prepare=False)
+    receipt=batch.ledger[bid]
+    assert all(record['reviewed_face_refs']==[ref] for record in receipt['targets'].values())
+    L.restore_scoped(engine,receipt,False)
+    L.restore_scoped(engine,receipt,True)
+    project={'assets':{},'people_batch_history':{'reviewed':deepcopy(receipt)}}
+    _,entries=H.prepare(project,engine._docs,64)
+    assert entries['reviewed']['targets']==receipt['targets']
+    graph_owner=V.row_owner(engine,first);changed=graph_owner.snapshot()
+    changed['faces'][face]['analysis_revision']+=1
+    graph_owner.commit(changed,expected_fence=graph_owner.fence)
+    retained=V.row_snapshot(engine,first)
+    with pytest.raises(ValueError,match='face analysis changed'):
+        L.restore_scoped(engine,receipt,False)
+    assert V.row_snapshot(engine,first)==retained
+    assert V.row_snapshot(engine,original)['overrides']==[]
+
+
+def test_history_rejects_ref_tamper_and_derived_legacy_without_faces(monkeypatch):
+    from lumaretouch_engine import people_history_persistence as H
+    engine,_,(first,_),face,batch,L=batch_fixture(monkeypatch)
+    before=V.row_snapshot(engine,first);ref=S.face_ref(before['faces'][face])
+    plans={V.scope(first):{'row':first,'before':before,
+        'candidate':S.set_override(before,'face',face,OP,'/strength',.6),'reviewed_face_refs':[ref]}}
+    bid,_=L.commit_scoped(batch,engine,plans,request_id='reviewed',prepare=False)
+    receipt=deepcopy(batch.ledger[bid]);record=next(iter(receipt['targets'].values()))
+    record['reviewed_face_refs'][0]['asset_sha256']='f'*64
+    with pytest.raises(ValueError,match='another source'):
+        H.prepare({'assets':{},'people_batch_history':{'tampered':receipt}},engine._docs,64)
+    record=deepcopy(next(iter(batch.ledger[bid]['targets'].values())))
+    record.pop('reviewed_face_refs')
+    record['source_proof']['creative_source']={'sha256':ASSET,'width':640,'height':480}
+    with pytest.raises(ValueError,match='missing reviewed face'):
+        L.reviewed_refs(record)
 
 
 def test_reviewed_support_records_keep_hashes_and_split_without_rebinding():

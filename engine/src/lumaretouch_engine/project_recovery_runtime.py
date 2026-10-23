@@ -36,6 +36,8 @@ def finish(engine, boundary, error=None):
     if boundary is None:
         return
     message = boundary['message']
+    from .creative_transfer_host import inventory_read_only
+    if inventory_read_only(message):return
     if not boundary['started'] or message.get('cmd') in ('project_recovery', 'canvas_guides'):
         return
     runtime = engine.__dict__.get('_project_recovery_runtime')

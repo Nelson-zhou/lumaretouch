@@ -9,6 +9,7 @@ from . import people_state as S, people_algorithms as A, people_transfer_adapter
 from .people_confirmed_transfer import prepare_confirmed
 from .batch_preflight import FrozenTarget,canonical
 from . import creative_derived_source as SOURCE, virtual_copy_people as V
+from . import people_transfer_inventory as I
 
 MARKER='_people_transfer'
 
@@ -19,9 +20,14 @@ def document(engine,row):
 
 
 def options(value,modules,source_asset):
-    if type(value) is not dict or set(value)!={'source_ref','selection','target_policy'}:
+    if type(value) is not dict:
+        raise ValueError('People transfer requires an explicit request object')
+    policy=value.get('target_policy')
+    fields={'source_ref','selection','target_policy'}|({'source','targets'} if policy=='explicit_face_map' else set())
+    if set(value)!=fields:
         raise ValueError('People transfer requires an explicit source, parameter selection and target policy')
-    if value['target_policy']!='confirmed_person_only':raise ValueError('Only explicitly confirmed anonymous associations may select people targets')
+    if policy not in ('confirmed_person_only','explicit_face_map'):
+        raise ValueError('Only confirmed same-owner people or an explicit reviewed face map may select targets')
     ref=S.check_ref(value['source_ref'])
     if ref['asset_sha256']!=source_asset:raise ValueError('The source face belongs to another photo')
     selection=value['selection'];defaults=A.defaults()
@@ -32,6 +38,31 @@ def options(value,modules,source_asset):
         if op not in defaults or type(paths) is not list or not paths or len(paths)!=len(set(paths)):
             raise ValueError('Invalid people module or leaf selection')
         if any(path not in defaults[op] for path in paths):raise ValueError('Only supported scalar parameter leaves are transferable')
+    if policy=='explicit_face_map':
+        source=I.check_proof(value['source'])
+        if source['source_proof']['asset_sha256']!=source_asset:
+            raise ValueError('Explicit source proof belongs to another effective image')
+        targets=value['targets']
+        if type(targets) is not list or not 1<=len(targets)<=I.MAX_TARGETS:
+            raise ValueError('Explicit face map needs one to sixteen reviewed target documents')
+        seen=set()
+        for item in targets:
+            if type(item) is not dict or set(item)!={'target','target_refs'}:
+                raise ValueError('Each explicit target needs its exact owner proof and selected FaceRefs')
+            target=I.check_proof(item['target']);identity=target['document']['document_id']
+            if identity in seen or identity==source['document']['document_id']:
+                raise ValueError('Explicit transfer target is duplicated or is its source document')
+            if target['document']['epoch']!=source['document']['epoch']:
+                raise ValueError('Explicit transfer endpoints belong to different workspaces')
+            seen.add(identity);refs=item['target_refs']
+            if type(refs) is not list or not 1<=len(refs)<=I.MAX_FACES:
+                raise ValueError('Select at least one exact face on each reviewed target')
+            ids=set()
+            for ref in refs:
+                ref=S.check_ref(ref)
+                if ref['asset_sha256']!=target['source_proof']['asset_sha256'] or ref['face_instance_id'] in ids:
+                    raise ValueError('Explicit target face is duplicated or belongs to another effective source')
+                ids.add(ref['face_instance_id'])
     return deepcopy(value)
 
 
@@ -45,7 +76,17 @@ def preflight(engine,controller,p):
     rows=batch.documents.rows();source_row=rows[batch.documents.current_index()]
     source_proof=SOURCE.row_proof(source_row);source_asset=source_proof['asset_sha256'];source_document=document(engine,source_row)
     selected=options(p.get('people_transfer'),p.get('module_scope'),source_asset)
+    source_owner=I.proof(engine,source_row,before)
+    explicit=selected['target_policy']=='explicit_face_map'
+    if explicit:
+        I.verify(engine,source_row,before,selected['source'])
+        requested=p.get('docs')
+        if (type(requested) is not list or len(requested)!=len(set(requested))
+                or set(requested)!={item['target']['document']['document_id'] for item in selected['targets']}):
+            raise ValueError('Selected target documents must exactly match the reviewed explicit face map')
     indices,rejected=batch.target_indices(p.get('docs'));targets=[];public=[];seen_documents=set()
+    if explicit and policy=='recheck' and rejected:
+        raise ValueError('An explicit target document is no longer available; review the complete face map again')
     for index in indices:
         row=rows[index];target_document=document(engine,row)
         blocked=None;payload=None;target_proof=None
@@ -56,9 +97,18 @@ def preflight(engine,controller,p):
             seen_documents.add(target_document['document_id'])
             target_proof=SOURCE.row_proof(row);asset=target_proof['asset_sha256']
             target_graph=V.row_snapshot(engine,row)
-            payload=prepare_confirmed(before,target_graph,selected['source_ref'],asset,selected['selection'],A.defaults(),
-                source_document=source_document,target_document=target_document)
-            staged=T.candidate(payload,before,target_graph,source_document=source_document,target_document=target_document)
+            target_owner=I.proof(engine,row,target_graph)
+            if explicit:
+                mapping=next(item for item in selected['targets'] if item['target']['document']['document_id']==target_document['document_id'])
+                I.verify(engine,row,target_graph,mapping['target'])
+                payload=T.prepare(before,target_graph,selected['source_ref'],mapping['target_refs'],selected['selection'],A.defaults(),
+                    source_document=source_document,target_document=target_document,source_owner=source_owner,target_owner=target_owner)
+                payload['target_policy']='explicit_face_map'
+            else:
+                payload=prepare_confirmed(before,target_graph,selected['source_ref'],asset,selected['selection'],A.defaults(),
+                    source_document=source_document,target_document=target_document,source_owner=source_owner,target_owner=target_owner)
+            staged=T.candidate(payload,before,target_graph,source_document=source_document,target_document=target_document,
+                               source_owner=source_owner,target_owner=target_owner)
             from .people_candidate_render import validate
             validate(engine,row,staged)
             SOURCE.verify_row(row,target_proof)
@@ -72,8 +122,9 @@ def preflight(engine,controller,p):
     SOURCE.verify_row(source_row,source_proof)
     if owner.fence!=fence or document(engine,source_row)!=source_document:
         raise ValueError('Source or associations changed during preparation; review again')
+    I.verify(engine,source_row,before,source_owner)
     frozen={MARKER:{'options':selected,'source_asset':source_asset,'source_proof':source_proof,'state_revision':before['revision'],
-                    'association_revision':before['association_revision']}}
+                    'association_revision':before['association_revision'],'source_owner':source_owner}}
     plan=controller.store.create(batch.versions.workspace,source_document['document_id'],source_document['revision'],
         source_row['path'],p['module_scope'],frozen,policy,targets,rejected)
     body={'event':'batch_preflight','success':True,'module_scope':list(plan.modules),'source':'current',
@@ -95,6 +146,7 @@ def commit(engine,controller,p,plan):
     if source_proof['asset_sha256']!=params['source_asset'] or graph['revision']!=params['state_revision'] or graph['association_revision']!=params['association_revision']:
         raise ValueError('Source bytes or people associations changed after review')
     source_document=document(engine,source[1]);resolved=[];plans={};eligible=0
+    source_owner=I.verify(engine,source[1],graph,params['source_owner'])
     for target in plan.targets:
         found=batch.versions.find(batch.documents.rows(),target.document_id);blocked=target.blocked;payload=None
         try:
@@ -106,18 +158,29 @@ def commit(engine,controller,p,plan):
             target_proof=SOURCE.verify_row(row,json.loads(target.before_json)['source_proof'])
             payload=json.loads(target.people_json)
             target_graph=V.row_snapshot(engine,row)
-            T.verify(payload,graph,target_graph,source_document=source_document,target_document=document(engine,row))
+            target_owner=I.proof(engine,row,target_graph)
+            T.verify(payload,graph,target_graph,source_document=source_document,target_document=document(engine,row),
+                     source_owner=source_owner,target_owner=target_owner)
+            if payload['target_policy']=='confirmed_person_only' and source_owner['people_scope']!=target_owner['people_scope']:
+                raise ValueError('Confirmed person IDs do not authorize transfer between independent owners')
             if any(ref['asset_sha256']!=target_proof['asset_sha256'] for ref in payload['target_refs']):
                 raise ValueError('Reviewed target faces belong to another effective source')
             identity=V.scope(row)
-            scoped=plans.setdefault(identity,{'row':row,'before':target_graph,'candidate':S.check(target_graph)})
-            if scoped['before']!=target_graph:raise ValueError('Target scope changed during preparation')
+            scoped=plans.get(identity)
+            if scoped is not None and scoped['before']!=target_graph:raise ValueError('Target scope changed during preparation')
+            candidate=S.check(target_graph if scoped is None else scoped['candidate'])
             # Every payload verifies its own logical document and owner. Same
             # source bytes are valid across independent copies, never merged
             # just because the digest or inherited face reference matches.
             for ref in payload['target_refs']:
                 for leaf in payload['parameters']:
-                    scoped['candidate']=S.set_override(scoped['candidate'],'face',ref['face_instance_id'],leaf['operation_id'],leaf['parameter_path'],leaf['value'])
+                    candidate=S.set_override(candidate,'face',ref['face_instance_id'],leaf['operation_id'],leaf['parameter_path'],leaf['value'])
+            # A per-target validation/budget failure must not leave a partial
+            # candidate that skip_and_report could accidentally publish.
+            plans[identity]={'row':row if scoped is None else scoped['row'],
+                             'before':target_graph,'candidate':candidate,
+                             'reviewed_face_refs':list({(ref['asset_sha256'],ref['face_instance_id'],ref['analysis_revision']):ref
+                                 for ref in (([] if scoped is None else scoped.get('reviewed_face_refs',[]))+payload['target_refs'])}.values())}
             eligible+=1
         except Exception as error:blocked=str(error)[:2000]
         resolved.append({'index':None if found is None else found[0],'path':target.path,'document_id':target.document_id,
@@ -133,6 +196,7 @@ def commit(engine,controller,p,plan):
     # Expensive effective-source preparation cannot authorize a newer graph.
     if V.row_snapshot(engine,source[1])!=graph:raise ValueError('People graph changed during final preparation')
     SOURCE.verify_row(source[1],source_proof)
+    I.verify(engine,source[1],graph,source_owner)
     if document(engine,source[1])!=source_document:
         raise ValueError('People source changed during final preparation')
     for result in resolved:
@@ -165,4 +229,5 @@ def commit(engine,controller,p,plan):
 
 
 def handle(engine,controller,p,plan):
+    if plan is None and p.get('action')=='people_targets':return I.inventory(engine,controller,p)
     return preflight(engine,controller,p) if plan is None else commit(engine,controller,p,plan)

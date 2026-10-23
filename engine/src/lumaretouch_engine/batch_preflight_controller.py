@@ -9,6 +9,7 @@ from . import optics_transfer_review as OR
 from . import local_grade_layers as LG
 from . import local_grade_runtime as LR
 from .batch_preflight import PreflightStore,FrozenTarget,canonical
+from . import creative_derived_source as SOURCE, creative_derived_transfer as TRANSFER
 
 @dataclass(frozen=True)
 class PlanPorts:
@@ -76,6 +77,9 @@ class FrozenBatchController:
                 if not 0<=index<len(rows):raise SC.ScopeError('no active source document')
                 source=self.ports.capture();source_row=rows[index];version=self.versions.version(source_row)
                 mods=SC.params_of(source,ops)
+                source_owned=SOURCE.record(source) is not None or any(SOURCE.record(rows[i].get('state') or {}) is not None for i in indices)
+                source_proof=SOURCE.row_proof({**source_row,'state':source}) if source_owned else None
+                TRANSFER.require_modules(source,mods,source_proof)
                 reference_options=p.get('reference_color')
                 if reference_options is not None:
                     if ops!=[RC.OP] or type(reference_options) is not dict or set(reference_options)!={'strength'}:
@@ -93,6 +97,11 @@ class FrozenBatchController:
                 for i in indices:
                     row=rows[i];v=self.versions.version(row);live=i==index
                     before=OA.before_params(source if live else row['state'],ops);blocked=self._blocked(row,ops,live)
+                    target_state=source if live else row['state'];target_proof=None
+                    try:
+                        if source_owned:target_proof=SOURCE.row_proof({**row,'state':target_state})
+                        TRANSFER.require_modules(target_state,mods,source_proof)
+                    except Exception as error:blocked=str(error)[:2000]
                     prepared=None;transfer=None;optics_record=None;optical_transfer=None;reference_record=None
                     if RC.OP in ops and live:blocked="参考图保持不变，不作为统一目标"
                     if not blocked and LG.OP in ops:
@@ -131,14 +140,26 @@ class FrozenBatchController:
                             if optics_record is not None:candidate['_optics']=optics_record['recipe']
                             reference_record=self.ports.prepare_reference(row,candidate,v.document_id,str(v.revision),mods[RC.OP])
                         except Exception as error:blocked=str(error)[:2000]
+                    if not blocked and source_owned:
+                        try:
+                            candidate=OA.candidate(target_state,prepared or mods,local_replace_legacy=bool(transfer and transfer['legacy_removed']))
+                            TRANSFER.require_candidate(target_state,candidate,prepared or mods,source_proof)
+                            if target_proof is not None:SOURCE.verify_row({**row,'state':self.ports.capture() if live else row['state']},target_proof)
+                            if self.versions.version(row)!=v:raise ValueError('Target changed during parameter review')
+                        except Exception as error:blocked=str(error)[:2000]
                     private_transfer=None if transfer is None else {k:v for k,v in transfer.items() if k!='preview_jpeg'}
                     targets.append(FrozenTarget(v.document_id,v.revision,i,row['path'],blocked,canonical(before),
                         None if prepared is None else canonical(prepared),None if private_transfer is None else canonical(private_transfer),
-                        None if optics_record is None else canonical(optics_record),None if reference_record is None else canonical(reference_record)))
+                        None if optics_record is None else canonical(optics_record),None if reference_record is None else canonical(reference_record),
+                        source_proof_json=None if target_proof is None else canonical(target_proof)))
                     public.append({'index':i,'path':row['path'],'live':live,'blocked':blocked,'before':before,
-                                   'document_id':v.document_id,'revision':str(v.revision),'local_mask_transfer':transfer,'optical_transfer':optical_transfer,'reference_color':reference_record})
+                                   'document_id':v.document_id,'revision':str(v.revision),'local_mask_transfer':transfer,'optical_transfer':optical_transfer,'reference_color':reference_record,
+                                   **({'source_proof':target_proof} if source_owned else {})})
+                if source_proof is not None:
+                    SOURCE.verify_row({**source_row,'state':self.ports.capture()},source_proof)
+                    if self.versions.version(source_row)!=version:raise ValueError('Source changed during parameter review')
                 plan=self.store.create(self.versions.workspace,version.document_id,version.revision,source_row['path'],
-                    ops,mods,policy,targets,rejected)
+                    ops,mods,policy,targets,rejected,source_proof=source_proof)
                 body={'event':'batch_preflight','success':True,'module_scope':ops,'source':'current',
                     'source_snapshot':self._source(plan),'applies':plan.params(),'policy':policy,'targets':public,
                     'rejected_docs':rejected,'ok':sum(not r['blocked'] for r in public),'blocked':sum(bool(r['blocked']) for r in public),
@@ -150,6 +171,7 @@ class FrozenBatchController:
             token=p.get('preflight_token')
             if self.replay_completed(p):return
             plan=self.store.get(token,self.versions.workspace);self.ports.remember()
+            source_proof=None if plan.source_proof_json is None else SOURCE.check_row_proof(json.loads(plan.source_proof_json))
             all_rows=self.ports.rows();current=self.ports.current();live_state=self.ports.capture()
             by_id={self.versions.version(row).document_id:(i,row) for i,row in enumerate(all_rows)}
             resolved=[]
@@ -160,9 +182,25 @@ class FrozenBatchController:
                 else:
                     index,row=found;actual=self.versions.version(row).revision
                     if actual!=target.revision:blocked='target was edited after preflight; preflight again'
+                    elif row['path']!=target.path:blocked='target source path changed after preflight; preflight again'
                     elif canonical(OA.before_params(live_state if index==current else row['state'],plan.modules))!=target.before_json:
                         blocked='target parameters changed outside the reviewed snapshot'
                     elif not blocked:blocked=self._blocked(row,plan.modules,index==current)
+                    if not blocked:
+                        try:
+                            state=live_state if index==current else row['state']
+                            if source_proof is not None and target.source_proof_json is None:
+                                raise ValueError('Reviewed target lacks its effective-source proof')
+                            if target.source_proof_json is not None:
+                                SOURCE.verify_row({**row,'state':state},json.loads(target.source_proof_json))
+                            elif SOURCE.record(state) is not None:
+                                raise ValueError('Legacy parameter review cannot authorize a derived target')
+                            if source_proof is not None or target.source_proof_json is not None:
+                                prepared=json.loads(target.prepared_json) if target.prepared_json is not None else plan.params()
+                                TRANSFER.require_modules(state,prepared,source_proof)
+                                candidate=OA.candidate(state,prepared,local_replace_legacy=bool(target.transfer_json and json.loads(target.transfer_json)['legacy_removed']))
+                                TRANSFER.require_candidate(state,candidate,prepared,source_proof)
+                        except Exception as error:blocked=str(error)[:2000]
                     if not blocked and LG.OP in plan.modules:
                         try:LR.verify_modules(json.loads(target.prepared_json),row,json.loads(target.transfer_json))
                         except Exception as error:blocked=str(error)[:2000]
@@ -184,6 +222,7 @@ class FrozenBatchController:
                             OA.verify_target(json.loads(target.optics_json),original,candidate,row,target.document_id,target.revision,prepared[OA.OP])
                         except Exception as error:blocked=str(error)[:2000]
                 resolved.append({'index':index,'path':target.path,'blocked':blocked,'document_id':target.document_id,
+                    '_source_proof':None if target.source_proof_json is None else json.loads(target.source_proof_json),
                     '_reference_prepared':None if target.reference_json is None else json.loads(target.reference_json),
                     '_optics_prepared':None if target.optics_json is None else json.loads(target.optics_json),
                     '_prepared_modules':None if target.prepared_json is None else json.loads(target.prepared_json),
@@ -191,6 +230,9 @@ class FrozenBatchController:
                     'reviewed_index':target.index,'expected_revision':str(target.revision),'current_revision':None if actual is None else str(actual)})
             source=by_id.get(plan.source_id)
             source_changed=source is None or self.versions.version(source[1]).revision!=plan.source_revision
+            if not source_changed and source_proof is not None:
+                try:SOURCE.verify_row({**source[1],'state':live_state if source[0]==current else source[1]['state']},source_proof)
+                except Exception:source_changed=True
             if RC.OP in plan.modules:
                 if source_changed:raise SC.ScopeError('参考源图在预检后变化，请重新审核')
                 # A newly captured current reference is source-file bound as well
@@ -223,4 +265,5 @@ class FrozenBatchController:
 
     @staticmethod
     def _source(plan):
-        return {'document_id':plan.source_id,'revision':str(plan.source_revision),'path':plan.source_path}
+        return {'document_id':plan.source_id,'revision':str(plan.source_revision),'path':plan.source_path,
+                **({'source_proof':json.loads(plan.source_proof_json)} if plan.source_proof_json is not None else {})}

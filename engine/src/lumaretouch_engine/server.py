@@ -6706,6 +6706,9 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
                     with relocation.lock: fn(msg)
                 else: fn(msg)
                 return  # View-only: do not fence or revoke any edit/capture owner.
+            from .creative_transfer_host import inventory_read_only
+            if inventory_read_only(msg):
+                fn(msg); return  # No edit fence, history or capture invalidation.
             if name == "background" and msg.get("action") in ("id_state","id_sample"):
                 from .id_background_controller import controller
                 recovery_boundary['started'] = True

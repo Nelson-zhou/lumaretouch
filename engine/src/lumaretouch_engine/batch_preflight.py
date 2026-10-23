@@ -31,6 +31,7 @@ class FrozenTarget:
     optics_json:str|None=None
     reference_json:str|None=None
     people_json:str|None=None
+    source_proof_json:str|None=None
 
 @dataclass(frozen=True)
 class FrozenPlan:
@@ -46,6 +47,7 @@ class FrozenPlan:
     rejected_json:str
     created_ns:int
     expires_ns:int
+    source_proof_json:str|None=None
 
     def params(self):return json.loads(self.params_json)
     def rejected(self):return json.loads(self.rejected_json)
@@ -54,14 +56,23 @@ class PreflightStore:
     def __init__(self,clock):
         self.clock=clock;self.pending=OrderedDict();self.terminal=OrderedDict()
 
-    def create(self,workspace,source_id,source_revision,source_path,modules,params,policy,targets,rejected):
+    def create(self,workspace,source_id,source_revision,source_path,modules,params,policy,targets,rejected,*,source_proof=None):
         if not targets or len(targets)>MAX_TARGETS:raise ValueError('invalid batch preflight target count')
+        from .creative_derived_source import check_row_proof
+        if source_proof is not None:
+            source_proof=check_row_proof(source_proof)
+        for target in targets:
+            if target.source_proof_json is not None:
+                if type(target.source_proof_json) is not str or len(target.source_proof_json)>4096:
+                    raise ValueError('Invalid bounded batch target source proof')
+                check_row_proof(json.loads(target.source_proof_json))
         now=self.clock();self._prune(now)
         # Validate the total metadata budget, not only each target independently.
         canonical({'source':[source_id,source_revision,source_path],'modules':modules,'params':params,
-            'targets':[[t.document_id,t.revision,t.index,t.path,t.blocked,t.before_json,t.prepared_json,t.transfer_json,t.optics_json,t.reference_json,t.people_json] for t in targets],'rejected':rejected})
+            'source_proof':source_proof,
+            'targets':[[t.document_id,t.revision,t.index,t.path,t.blocked,t.before_json,t.prepared_json,t.transfer_json,t.optics_json,t.reference_json,t.people_json,t.source_proof_json] for t in targets],'rejected':rejected})
         plan=FrozenPlan(uuid.uuid4().hex,workspace,source_id,source_revision,source_path,tuple(modules),canonical(params),policy,
-            tuple(targets),canonical(rejected),now,now+TTL_NS)
+            tuple(targets),canonical(rejected),now,now+TTL_NS,None if source_proof is None else canonical(source_proof))
         self.pending[plan.token]=plan
         while len(self.pending)>MAX_PENDING:self.pending.popitem(last=False)
         return plan

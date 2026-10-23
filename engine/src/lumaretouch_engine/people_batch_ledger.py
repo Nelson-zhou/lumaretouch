@@ -7,9 +7,37 @@ without changing source identity, support evidence, or accepted associations.
 from copy import deepcopy
 from .people_graph_patch import between
 from .people_graph_owner import affected_assets
-from . import virtual_copy_people as V, creative_derived_source as SOURCE
+from . import virtual_copy_people as V, creative_derived_source as SOURCE, people_state as S
 
 OP='lnx.people_graph.v1'
+
+
+def reviewed_refs(record):
+    """New transfer history pins exact analysis; legacy originals stay explicit."""
+    if 'reviewed_face_refs' not in record:
+        if (record.get('source_proof') or {}).get('creative_source') is not None:
+            raise ValueError('Derived portrait history is missing reviewed face analysis references')
+        return None
+    refs=record['reviewed_face_refs']
+    if type(refs) is not list or not 1<=len(refs)<=128:
+        raise ValueError('Reviewed portrait history requires bounded exact face references')
+    checked=[];seen=set()
+    for ref in refs:
+        ref=S.check_ref(ref)
+        if ref['asset_sha256']!=record['asset_sha256'] or ref['face_instance_id'] in seen:
+            raise ValueError('Reviewed portrait history face is duplicated or belongs to another source')
+        seen.add(ref['face_instance_id']);checked.append(ref)
+    return checked
+
+
+def verify_reviewed_refs(engine,row,record):
+    refs=reviewed_refs(record)
+    if refs is None:return
+    state=V.row_snapshot(engine,row)
+    for ref in refs:
+        face=state['faces'].get(ref['face_instance_id'])
+        if face is None or S.face_ref(face)!=ref:
+            raise ValueError('Reviewed portrait face analysis changed; protected batch history refused')
 
 
 def _targets(owner,engine,plans):
@@ -24,6 +52,9 @@ def _targets(owner,engine,plans):
             version=owner.versions.check_advance(row)
             targets[str(index)]={'path':row['path'],'document_id':version.document_id,
                 'revision':version.revision,'asset_sha256':asset,'people_scope':identity,'source_proof':proof}
+            if 'reviewed_face_refs' in plan:
+                targets[str(index)]['reviewed_face_refs']=[deepcopy(ref) for ref in plan['reviewed_face_refs'] if ref['asset_sha256']==asset]
+            reviewed_refs(targets[str(index)])
     return targets
 
 
@@ -38,6 +69,7 @@ def _verify(owner,engine,plans,targets):
                 or V.scope(found[1])!=target['people_scope']):
             raise ValueError('People batch target changed during preparation')
         SOURCE.verify_row_target(found[1],target)
+        verify_reviewed_refs(engine,found[1],target)
 
 
 def prepare_scoped(engine,plans,targets):
@@ -70,6 +102,15 @@ def _publish(owner,engine,plans,targets):
         if current is not None and V.scope(current) in plans:
             engine._people_sync(strict=True)
             frame=engine._write_current_frame('people');frame['doc_state']=engine.doc_state()
+        # Rendering the active owner may be expensive. Recheck every parked
+        # target's actual effective bytes/provenance before returning success;
+        # failure stays inside the existing all-owner graph rollback boundary.
+        for target in targets.values():
+            found=owner.versions.find(owner.documents.rows(),target['document_id'])
+            if found is None or V.scope(found[1])!=target['people_scope']:
+                raise ValueError('Portrait target owner changed during publication')
+            SOURCE.verify_row_target(found[1],target)
+            verify_reviewed_refs(engine,found[1],target)
         V.remember(engine)
         engine._project_dirty=True
         return frame
@@ -117,13 +158,16 @@ def commit(owner,engine,before,candidate,*,request_id,prepare=True):
 def restore_scoped(engine,batch,redo):
     from .people_graph_patch import apply
     from .source_relocation_history import matches as source_path_matches
-    owner=engine._batch_controller();plans={}
+    owner=engine._batch_controller();plans={};reviewed={}
     for record in batch['targets'].values():
         found=owner.versions.find(engine._docs,record['document_id'])
         if (found is None or not source_path_matches(found[1],record['path'])
                 or V.scope(found[1])!=record.get('people_scope')):
             raise ValueError('A scoped portrait batch target changed or was removed')
         SOURCE.verify_row_target(found[1],record)
+        verify_reviewed_refs(engine,found[1],record)
+        refs=reviewed_refs(record)
+        if refs is not None:reviewed.setdefault(record['people_scope'],[]).extend(refs)
     for record in batch['people_scoped_changes']:
         found=owner.versions.find(engine._docs,record['document_id'])
         if found is None or V.scope(found[1])!=record['scope']:
@@ -131,6 +175,9 @@ def restore_scoped(engine,batch,redo):
         row=found[1];before=V.row_snapshot(engine,row)
         plans[record['scope']]={'row':row,'before':before,
                                'candidate':apply(before,record['changes'],redo=redo)}
+        if record['scope'] in reviewed:
+            plans[record['scope']]['reviewed_face_refs']=list({(ref['asset_sha256'],ref['face_instance_id'],ref['analysis_revision']):ref
+                for ref in reviewed[record['scope']]}.values())
     targets=_targets(owner,engine,plans)
     # Recompute runtime paths/fences only after exact historical document/source
     # verification; a duplicate path never grants a replacement identity.

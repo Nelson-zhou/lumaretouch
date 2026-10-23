@@ -80,13 +80,20 @@ def test_scoped_targets_use_effective_assets_not_shared_physical_path(tmp_path,m
     plans={}
     for item in (first,second):
         before=S.empty()
-        candidate=S.set_override(before,'all_people',D.row_asset(item),'fixture.portrait','/strength',.5)
-        plans[item['document_id']]={'row':item,'before':before,'candidate':candidate}
+        evidence={'backend':'authored_fixture','detector_model_sha256':None,'semantic_model_sha256':None,
+            'landmark_digest':None,'status':'synthetic','source_width':2,'source_height':1,
+            'orientation':'exif_normalized_once'}
+        face=S.new_face(D.row_asset(item),(.1,.1,.8,.8),evidence)
+        before['faces'][face['face_instance_id']]=face
+        candidate=S.set_override(before,'face',face['face_instance_id'],'fixture.portrait','/strength',.5)
+        plans[item['document_id']]={'row':item,'before':before,'candidate':candidate,
+                                   'reviewed_face_refs':[S.face_ref(face)]}
     targets=L._targets(owner,SimpleNamespace(),plans)
     assert {target['document_id'] for target in targets.values()}=={'first','second'}
     assert len({target['asset_sha256'] for target in targets.values()})==2
     for target in targets.values():
         assert target['source_proof']['creative_source']['width']==2
+        assert target['reviewed_face_refs'][0]['asset_sha256']==target['asset_sha256']
 
 
 def test_scoped_undo_rejects_old_receipt_before_preparing_or_publishing(tmp_path,monkeypatch):
@@ -103,22 +110,20 @@ def test_scoped_undo_rejects_old_receipt_before_preparing_or_publishing(tmp_path
 
 def test_transfer_freezes_effective_sources_and_rejects_changed_canvas(tmp_path,monkeypatch):
     from lumaretouch_engine import people_batch_transfer as T, people_candidate_render as C
-    from lumaretouch_engine import virtual_copy_people as V, people_algorithms as A
+    from lumaretouch_engine import virtual_copy_people as V, people_algorithms as A, people_transfer_inventory as I
     from lumaretouch_engine.batch_preflight import PreflightStore
     from lumaretouch_engine.document_versions import DocumentVersions
     source=row(tmp_path,.5,'source');target=row(tmp_path,.6,'target');rows=[source,target]
+    source['copy_number']=1;target['copy_number']=1
     def graph(item):
         state=S.empty()
-        evidence={'backend':'authored_fixture','detector_model_sha256':None,'semantic_model_sha256':None,
-            'landmark_digest':None,'status':'synthetic','source_width':2,'source_height':1,
+        evidence={'backend':'authored_fixture','detector_model_sha256':'b'*64,'semantic_model_sha256':None,
+            'landmark_digest':'c'*64,'status':'verified','source_width':2,'source_height':1,
             'orientation':'exif_normalized_once'}
         face=S.new_face(D.row_asset(item),(.1,.1,.8,.8),evidence)
         state['faces'][face['face_instance_id']]=face
-        state['persons']['fixture-person']={'anonymous':True}
-        state['links']=[{'face_instance_id':face['face_instance_id'],'person_id':'fixture-person',
-                        'state':'confirmed','confirmation_revision':0}]
         return S.check(state),S.face_ref(face)
-    source_graph,source_ref=graph(source);target_graph,_=graph(target)
+    source_graph,source_ref=graph(source);target_graph,target_ref=graph(target)
     source_graph=S.set_override(source_graph,'face',source_ref['face_instance_id'],'fixture.portrait','/strength',.5)
     graphs={'source':source_graph,'target':target_graph};owner=SimpleNamespace(snapshot=lambda:source_graph,fence=0)
     versions=DocumentVersions()
@@ -129,14 +134,15 @@ def test_transfer_freezes_effective_sources_and_rejects_changed_canvas(tmp_path,
                            _document_versions=lambda:versions,_batch_controller=lambda:batch)
     monkeypatch.setattr(V,'row_snapshot',lambda _engine,item:deepcopy(graphs[item['document_id']]))
     monkeypatch.setattr(A,'defaults',lambda:{'fixture.portrait':{'/strength':0.}})
-    # Planner contract only: synthetic evidence cannot pass real portrait render.
+    # Planner contract only: fabricated schema evidence is not actual inference.
     prepared=[]
     monkeypatch.setattr(C,'validate',lambda _engine,item,_candidate:prepared.append(D.row_asset(item)))
     events=[];store=PreflightStore(lambda:1)
     controller=SimpleNamespace(store=store,_source=lambda _plan:{},emit=events.append,emit_result=lambda *_args:None)
-    request={'cmd':'batch','action':'preflight','request_id':'fixture','docs':[1],'module_scope':['fixture.portrait'],
+    request={'cmd':'batch','action':'preflight','request_id':'fixture','docs':['target'],'module_scope':['fixture.portrait'],
         'people_transfer':{'source_ref':source_ref,'selection':{'fixture.portrait':['/strength']},
-                           'target_policy':'confirmed_person_only'}}
+            'target_policy':'explicit_face_map','source':I.proof(engine,source,source_graph),
+            'targets':[{'target':I.proof(engine,target,target_graph),'target_refs':[target_ref]}]}}
     T.preflight(engine,controller,request)
     plan=store.get(events[-1]['preflight_token'],versions.workspace)
     assert events[-1]['ok']==1 and prepared==[D.row_asset(target)]

@@ -515,6 +515,31 @@ def _check_shared_strength(ops: list[str], mods: dict[str, dict]) -> None:
                          "（冻结件：两个「强度」必须同一个含义）")
 
 
+# This is a deliberately separate, closed admission set, not the much broader
+# transferable registry. Source/semantic/support consumers need their own ports.
+# Crop remains per-image: cross-image normalized crop still needs target visual
+# review, not just a list of normalized rectangle numbers.
+DERIVED_PARAMETER_OPS = frozenset((
+    OP_EXPOSURE, OP_WHITE_BALANCE, OP_LEVELS, OP_CURVES, OP_HSL,
+    EXTENDED_TONE.OP, PHOTO_DETAIL.OP, PHOTO_GRAIN.OP, COLOUR_GRADING.OP,
+    PRIMARY_CALIBRATION.OP, SELECTIVE_COLOUR.OP, COLOUR_EDITOR.OP,
+))
+
+
+def check_derived_modules(mods):
+    """Admit actual parameters only; neutral unsupported modules still reject."""
+    if type(mods) is not dict or not mods or any(type(op) is not str for op in mods):
+        raise ScopeError('合成来源的参数迁移需要明确的非空模块对象')
+    denied = set(mods) - DERIVED_PARAMETER_OPS
+    if denied:
+        raise ScopeError('合成来源的通用预设/批量仅支持全局参数；这些模块须使用独立来源审核通路：' + ', '.join(sorted(denied)))
+    check_scope(list(mods))
+    clean = {op: check_params(op, params) for op, params in mods.items()}
+    if COLOUR_EDITOR.OP in clean and clean[COLOUR_EDITOR.OP]['recipe']['scope'] != 'all':
+        raise ScopeError('合成来源的色彩编辑器参数迁移仅支持完整 scope=all 配方，不能复制局部蒙版作用域')
+    return clean
+
+
 def apply_modules(state: dict, mods: dict[str, dict], *, local_replace_legacy=False) -> dict:
     """把 {operation_id: 参数} 盖到一份文档状态上，返回**新的一份**。
 
@@ -522,6 +547,8 @@ def apply_modules(state: dict, mods: dict[str, dict], *, local_replace_legacy=Fa
     没写的键回到冻结中性值；旧 WB options 缺省保留目标参考白。其它键不保留目标原值。这正是"先套人像预设再套色彩
     预设"能预期重放的原因：两次套完的结果与目标图原来有什么无关（作用域内）。
     """
+    from .creative_derived_transfer import require_modules
+    mods = require_modules(state, mods)
     ops = list(mods)
     check_scope(ops)
     _check_shared_strength(ops, mods)
@@ -539,6 +566,13 @@ def apply_modules(state: dict, mods: dict[str, dict], *, local_replace_legacy=Fa
 
 def restore_modules(current, previous, ops):
     """Restore only reviewed modules; retain exact legacy local-grade fields."""
+    from .creative_derived_transfer import involved, require_modules
+    if involved(current, related_states=(previous,)):
+        # Check the scope before reading unsupported snapshot consumers. Both
+        # snapshots participate even when the live row is currently original.
+        if set(ops) - DERIVED_PARAMETER_OPS:
+            raise ScopeError('合成来源的通用历史不能恢复未经支持的模块')
+        require_modules(current, params_of(previous, ops), related_states=(previous,))
     ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP,REFERENCE.OP,SEMANTIC.OP,ID_BACKGROUND.OP)]
     result = apply_modules(current, params_of(previous, ordinary)) if ordinary else dict(current)
     if OP_LOCAL_GRADE in ops: LOCAL_GRADE.restore(result, previous)

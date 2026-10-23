@@ -330,6 +330,11 @@ def guard_command(engine, name, request):
     """
     # These planners can mutate parked targets, not just the active row. Until
     # their target validators own derived content, fail closed for this session.
+    if name in ('batch','preset') and (getattr(engine,'_creative_base',None) is not None or any(
+            (row.get('state') or {}).get('_creative_base') is not None for row in getattr(engine,'_docs',[]))):
+        from .creative_transfer_host import require_route
+        require_route(name,request)
+        return  # Controllers verify actual modules, target sources and protected history.
     from .creative_derived_effects import is_local_command, require_command
     local_portrait = is_local_command(name,request)
     if name in ('people','batch','semantic_colour') and not local_portrait and any(

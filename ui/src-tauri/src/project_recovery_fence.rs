@@ -7,7 +7,7 @@ fn pending()->&'static Mutex<HashMap<([u8;16],String),Value>> {
     STORE.get_or_init(||Mutex::new(HashMap::new()))
 }
 pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
-    if command["cmd"]=="project_recovery" {return Ok(());}
+    if command["cmd"]=="project_recovery" || crate::batch_api::read_only(command) {return Ok(());}
     let name=command["cmd"].as_str().unwrap_or("");
     if name.ends_with("_state")||name.ends_with("_receipt")||name.ends_with("_capture")||name.ends_with("_preview")||name.ends_with("_sample")
         || matches!(command["action"].as_str(),Some("state"|"status"|"query"|"receipt"|"list"|"context"|"preview"|"preview_support"|"preview_recovery")) {return Ok(());}

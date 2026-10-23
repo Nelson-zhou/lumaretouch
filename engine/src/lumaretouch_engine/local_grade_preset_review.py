@@ -1,4 +1,4 @@
-"""Bounded frozen local-mask/automatic-optics preset reviews; no editor writes."""
+"""Bounded target-owned preset reviews; no editor writes or source rebinding."""
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from collections import OrderedDict
 from copy import deepcopy
@@ -8,14 +8,19 @@ from . import reference_color_scope as RC
 from . import scope as SC, local_grade_layers as LG, local_grade_runtime as LR
 from . import sky_replacement_scope as SKY, optics_auto_scope as OA, optics_transfer_review as OR
 from .batch_preflight import canonical
+from . import creative_derived_transfer as DERIVED, creative_derived_source as SOURCE
 
 
 class PresetReviews:
     def __init__(self):self.pending=OrderedDict()
 
     def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None):
-        modules=preset['modules'];SC.check_scope(list(modules))
-        if LG.OP not in modules and OA.OP not in modules and RC.OP not in modules:raise ValueError('此预设不含需要冻结目标预检的模块')
+        modules=DERIVED.require_modules(state,preset['modules']);SC.check_scope(list(modules))
+        derived=SOURCE.record(state) is not None
+        if not derived and LG.OP not in modules and OA.OP not in modules and RC.OP not in modules:raise ValueError('此预设不含需要冻结目标预检的模块')
+        # Current captured state owns the effective source, not a stale parked
+        # row state. Originals retain their existing review contract.
+        proof=SOURCE.row_proof({**row,'state':state}) if derived else None
         if LG.OP in modules:prepared,transfer=LR.prepare_modules(state,modules,row,options,preview=True)
         else:
             if options is not None:raise ValueError('未选择局部组，不能附带蒙版选项')
@@ -36,16 +41,19 @@ class PresetReviews:
             if prepare_reference is None:raise ValueError('参考统一目标预检端口不可用')
             if optical_record is not None:candidate['_optics']=optical_record['recipe']
             reference_record=prepare_reference(row,candidate,document_id,str(revision),prepared[RC.OP])
+        DERIVED.require_candidate(state,candidate,prepared,proof)
+        if proof is not None:SOURCE.verify_row({**row,'state':state},proof)
         token=uuid.uuid4().hex
         record={'preset':deepcopy(preset),'modules':prepared,'transfer':transfer,'optics':optical_record,'reference':reference_record,
                 'document_id':document_id,'revision':str(revision),'path':row['path'],
+                'row_document_id':row.get('document_id'),'source_proof':proof,
                 'before':canonical(OA.before_params(state,list(modules))),'local_key':LG.undo_key(state) if LG.OP in modules else None,
                 'expires':time.monotonic()+30*60}
         canonical(record);self.pending[token]=record
         while len(self.pending)>8:self.pending.popitem(last=False)
         return {'id':preset['id'],'name':preset['name'],'module_scope':list(modules),
                 'preflight_token':token,'applies':deepcopy(prepared),'local_mask_transfer':transfer,'optical_transfer':optical_transfer,'reference_color':reference_record,
-                'document_id':document_id,'revision':str(revision)}
+                'document_id':document_id,'revision':str(revision),'source_proof':deepcopy(proof)}
 
     def claim(self,token,preset_id,state,row,document_id,revision):
         if type(token) is not str or token not in self.pending:raise ValueError('目标预设预检已失效或使用，请重新预检')
@@ -53,6 +61,18 @@ class PresetReviews:
         if time.monotonic()>=record['expires']:raise ValueError('目标预设预检已过期，请重新预检')
         if (record['preset']['id']!=preset_id or record['document_id']!=document_id or record['path']!=row['path'] or record['revision']!=str(revision)):
             raise ValueError('照片、版本或预设与预检不同，请重新预检')
+        if record.get('row_document_id') != row.get('document_id'):
+            raise ValueError('目标文档身份在预检后改变，请重新预检')
+        proof=record.get('source_proof')
+        # A proof-less original/legacy review must not wake up against a new
+        # derived baseline even when path, revision and scoped values match.
+        if proof is None:
+            if SOURCE.record(state) is not None:raise ValueError('旧预设预检缺少合成来源证明，请重新预检')
+        else:SOURCE.verify_row({**row,'state':state},proof)
+        stored_modules=DERIVED.require_modules(state,record['preset']['modules'],proof)
+        prepared_modules=DERIVED.require_modules(state,record['modules'],proof)
+        if DERIVED.involved(state,proof) and canonical(stored_modules)!=canonical(prepared_modules):
+            raise ValueError('全局参数预检不能替换或扩展已存储的预设模块')
         if canonical(OA.before_params(state,list(record['modules'])))!=record['before'] or (record['local_key'] is not None and LG.undo_key(state)!=record['local_key']):
             raise ValueError('照片在预检后发生修改，请重新预检')
         if LG.OP in record['modules']:LR.verify_modules(record['modules'],{**row,'state':state},record['transfer'])
@@ -66,5 +86,7 @@ class PresetReviews:
         if RC.OP in record['modules']:
             if OA.OP in record['modules']:candidate['_optics']=record['optics']['recipe']
             RC.verify_target(record['reference'],state,candidate,row,document_id,revision,record['modules'][RC.OP])
+        DERIVED.require_candidate(state,candidate,record['modules'],proof)
+        if proof is not None:SOURCE.verify_row({**row,'state':state},proof)
         del self.pending[token]
         return record

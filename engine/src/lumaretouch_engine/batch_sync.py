@@ -11,10 +11,29 @@ from . import scope as SC, reference_color_scope as RC
 from . import sky_replacement_scope as SKY, optics_auto_scope as OA, id_background_scope as ID_BACKGROUND
 from .document_versions import DocumentVersions
 from .batch_preflight_controller import FrozenBatchController,PlanPorts
+from . import creative_derived_source as SOURCE, creative_derived_transfer as TRANSFER
 
-ACTIONS = ("preflight", "commit", "undo", "redo", "state")
+ACTIONS = ("preflight", "commit", "undo", "redo", "state", "people_targets")
 KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color", "people_transfer"}
 POLICIES = ("skip_and_report", "recheck")
+
+
+def verify_history_source(row, record, ops, previous):
+    """Bind scoped history to its target, including dormant derived frames.
+
+    A legacy original-only receipt stays usable for originals. It can never
+    authorize a newly derived current row or hide a derived before/after frame.
+    """
+    states=(row['state'],record['before'],record['after'])
+    proof=record.get('source_proof')
+    if proof is None:
+        if any(SOURCE.record(state) is not None for state in states):
+            raise ValueError('Legacy batch history lacks an effective-source proof')
+        return
+    proof=SOURCE.verify_row(row,proof)
+    for state in states[1:]:
+        SOURCE.verify_row({**row,'state':state},proof)
+    TRANSFER.require_modules(row['state'],SC.params_of(previous,ops),proof,related_states=states[1:])
 
 @dataclass(frozen=True)
 class BatchDocuments:
@@ -121,6 +140,12 @@ class BatchSyncController:
                  "undone": v["undone"], "at_ns": v["at_ns"]} for k, v in self.ledger.items()],
                  "modules": SC.describe()})
             return
+        if action == "people_targets":
+            try:
+                if self.preflight.ports.people_transfer is None:raise ValueError('People transfer adapter unavailable')
+                self.preflight.ports.people_transfer(self.preflight,p,None)
+            except Exception as error:self._reject(p,str(error))
+            return
         if action=="commit" and p.get("preflight_token") is not None:
             try:
                 if self.preflight.replay_completed(p):return
@@ -170,11 +195,21 @@ class BatchSyncController:
             self.documents.remember_current()
             src = self.editor.capture()
             mods = SC.params_of(src, ops)
+            source_row=self.documents.rows()[self.documents.current_index()]
+            source_owned=SOURCE.record(src) is not None or any(SOURCE.record(self.documents.rows()[i].get('state') or {}) is not None for i in idxs)
+            source_proof=SOURCE.row_proof({**source_row,'state':src}) if source_owned else None
+            TRANSFER.require_modules(src,mods,source_proof)
             rows = []
             for i in idxs:
                 row = self.documents.rows()[i]
                 live = (i == self.documents.current_index())
                 blocked = None
+                target_proof=None
+                try:
+                    target_state=src if live else row['state']
+                    if source_owned:target_proof=SOURCE.row_proof({**row,'state':target_state})
+                    TRANSFER.require_modules(target_state,mods,source_proof)
+                except Exception as error:blocked=str(error)[:2000]
                 for op in ops:
                     if SC.MODULES[op]["single_face"]:
                         verdict, reason = self.editor.face_known_single(row, live=live)
@@ -183,11 +218,18 @@ class BatchSyncController:
                             break
                 rows.append({"index": i, "path": row["path"], "live": live,
                              "blocked": blocked,
+                             "_source_proof":target_proof,
                              "before": SC.params_of(row["state"] if not live else src, ops)})
             if policy == "recheck" and any(r["blocked"] for r in rows):
                 raise SC.ScopeError(f"recheck 策略下有目标不合格，整条不提交："
                                     f"{[r['path'] for r in rows if r['blocked']]}")
-            body=self.commit(ops, mods, rows, policy, bad)
+            source_snapshot=None
+            if source_proof is not None:
+                SOURCE.verify_row({**source_row,'state':self.editor.capture()},source_proof)
+                version=self.versions.version(source_row)
+                source_snapshot={'document_id':version.document_id,'revision':str(version.revision),
+                                 'path':source_row['path'],'source_proof':source_proof}
+            body=self.commit(ops, mods, rows, policy, bad,source_snapshot=source_snapshot)
             self.preflight.emit_result(p,{**body,"success":True,"mode":"direct_unreviewed"})
         except Exception as e:
             self._reject(p,f"batch {action} 被拒：{e}")
@@ -202,6 +244,22 @@ class BatchSyncController:
         live_idx = self.documents.current_index()
         planned: list[tuple[int, dict, dict]] = []
         applied_rows = []
+        proofs={}
+        source_proof=(source_snapshot or {}).get('source_proof')
+        if source_proof is not None:source_proof=SOURCE.check_row_proof(source_proof)
+        source_state=self.editor.capture()
+        source_owned=SOURCE.record(source_state) is not None or any(
+            SOURCE.record(self.documents.rows()[item['index']].get('state') or {}) is not None
+            for item in rows if not item['blocked'])
+        if source_snapshot is None and source_owned:
+            source_row=self.documents.rows()[live_idx]
+            source_proof=SOURCE.row_proof({**source_row,'state':source_state})
+            version=self.versions.version(source_row)
+            source_snapshot={'document_id':version.document_id,'revision':str(version.revision),
+                             'path':source_row['path'],'source_proof':source_proof}
+        # A frozen source may have changed or disappeared. Its reviewed scalar
+        # recipe remains authoritative; only exact target proofs are rechecked.
+        TRANSFER.require_modules({} if source_snapshot is not None else source_state,mods,source_proof)
         for r in rows:
             if r["blocked"]:
                 continue
@@ -211,7 +269,14 @@ class BatchSyncController:
             self.versions.check_advance(row)
             before = dict(row["state"]) if r["index"] != live_idx else dict(self.editor.capture())
             prepared=r.get('_prepared_modules') or mods
+            proof=r.get('_source_proof')
+            if proof is not None:proof=SOURCE.verify_row({**row,'state':before},proof)
+            elif source_proof is not None or SOURCE.record(before) is not None:
+                if source_snapshot is not None:raise SC.ScopeError('Target lacks its reviewed effective-source proof')
+                proof=SOURCE.row_proof({**row,'state':before})
+            TRANSFER.require_modules(before,prepared,source_proof)
             new = OA.candidate(before,prepared,local_replace_legacy=r.get('_local_replace_legacy', False))
+            TRANSFER.require_candidate(before,new,prepared,source_proof)
             if OA.OP in ops:
                 if r.get('_optics_prepared') is None:raise SC.ScopeError('缺少冻结目标镜头/透视预检')
                 version=self.versions.version(row)
@@ -228,10 +293,16 @@ class BatchSyncController:
             if EYE.OP in ops and OA.OP not in ops: EYE.validate_target(new,row)
             if MOUTH.OP in ops and OA.OP not in ops: MOUTH.validate_target(new,row)
             WB.prepare_state(new)
+            if proof is not None:SOURCE.verify_row({**row,'state':new},proof)
+            proofs[r['index']]=proof
             planned.append((r["index"], before, new))
             applied_rows.append(r)
         if not planned:
             raise SC.ScopeError("所有目标都不合格，这一批一个也没写（见 preflight 里的 blocked）")
+        for idx,before,new in planned:
+            if proofs[idx] is not None:
+                row=self.documents.rows()[idx]
+                SOURCE.verify_row({**row,'state':self.editor.capture() if idx==live_idx else row['state']},proofs[idx])
         self.sequence += 1
         batch_id = f"batch-{self.sequence:03d}-{int(self.clock() * 1000)}"
         targets: dict[str, dict] = {}
@@ -240,8 +311,15 @@ class BatchSyncController:
         live_plan=next((item for item in planned if item[0]==live_idx),None)
         if live_plan is not None:
             idx,before,new=live_plan;self.versions.advance(self.documents.rows()[idx])
-            try:fr=self.editor.replay(new,mode="batch",replayed_for=f"batch:{batch_id}",
-                                      **({'strict_local':True} if ID_BACKGROUND.OP in ops or SC.OP_LOCAL_GRADE in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops else {}))
+            try:
+                fr=self.editor.replay(new,mode="batch",replayed_for=f"batch:{batch_id}",
+                                      **({'strict_local':True} if SOURCE.record(new) is not None or ID_BACKGROUND.OP in ops or SC.OP_LOCAL_GRADE in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops else {}))
+                # A render may be expensive. Do not publish parked candidates
+                # whose provenance changed while the active target rendered.
+                for target_index,_,_ in planned:
+                    if proofs[target_index] is not None:
+                        target=self.documents.rows()[target_index]
+                        SOURCE.verify_row({**target,'state':self.editor.capture() if target_index==live_idx else target['state']},proofs[target_index])
             except Exception as error:
                 try:
                     rollback=self.editor.replay(before,mode="batch",replayed_for=f"batch_rollback:{batch_id}")
@@ -261,6 +339,7 @@ class BatchSyncController:
                 row["redo"].clear()
             targets[str(idx)] = {"path": row["path"], "before": before, "after": new,
                 "applied":OA.before_params(new, ops),"live":idx==live_idx,"document_id":self.versions.version(row).document_id,
+                **({'source_proof':proofs[idx]} if proofs[idx] is not None else {}),
                 "local_key":SC.LOCAL_GRADE.undo_key(new) if SC.OP_LOCAL_GRADE in ops else None}
         self.ledger[batch_id] = {"ops": ops, "targets": targets, "at_ns": self.monotonic(),
                                    "undone": False, "policy": policy,"source_snapshot":source_snapshot}
@@ -303,6 +382,7 @@ class BatchSyncController:
         # 一比就“没冲突”——本轮实测就是这个 bug：被编辑过的那一格也被还原了。
         self.documents.remember_current()
         restored, conflicts, planned = [], [], []
+        history_proofs={}
         for key, rec in b["targets"].items():
             idx = int(key)
             if rec.get("document_id"):
@@ -326,7 +406,11 @@ class BatchSyncController:
             # Conflict checks are scoped; restoration must use the same scope.
             # Restoring the whole old snapshot would erase later unrelated edits.
             try:
+                verify_history_source(row,rec,ops,rec['before'])
                 restored_state = SC.restore_modules(cur, rec["before"], ops)
+                if rec.get('source_proof') is not None:
+                    TRANSFER.require_candidate(cur,restored_state,SC.params_of(rec['before'],ops),rec['source_proof'])
+                    SOURCE.verify_row({**row,'state':restored_state},rec['source_proof'])
                 if ID_BACKGROUND.OP in ops:ID_BACKGROUND.validate_target(restored_state,row["path"],(row["src_h"],row["src_w"]))
                 if SKY.OP in ops:
                     SKY.validate_target(restored_state["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
@@ -338,15 +422,22 @@ class BatchSyncController:
                                   "reason": f"还原配方与后续修改不兼容：{str(error)[:500]}"})
                 continue
             planned.append((idx, row, cur, restored_state))
+            history_proofs[idx]=rec.get('source_proof')
         # Validate every candidate first, then render the active target before any
         # parked writes. An invalid cross-module combination is an explicit conflict.
         live_idx = self.documents.current_index()
+        for idx,row,previous,restored_state in planned:
+            if history_proofs[idx] is not None:SOURCE.verify_row(row,history_proofs[idx])
         live = next((item for item in planned if item[0] == live_idx), None)
         if live is not None:
             _, row, previous, restored_state = live
             self.versions.advance(row)
             try:
-                frame = self.editor.replay(restored_state, mode="batch", replayed_for=f"batch_undo:{bid}")
+                frame = self.editor.replay(restored_state, mode="batch", replayed_for=f"batch_undo:{bid}",
+                                          **({'strict_local':True} if SOURCE.record(restored_state) is not None else {}))
+                for target_index,target,_,_ in planned:
+                    if history_proofs[target_index] is not None:
+                        SOURCE.verify_row({**target,'state':self.editor.capture() if target_index==live_idx else target['state']},history_proofs[target_index])
                 if frame is not None:
                     self.emit(frame)
             except Exception as error:
