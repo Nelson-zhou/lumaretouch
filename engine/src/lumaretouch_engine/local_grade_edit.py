@@ -29,7 +29,8 @@ def prepare(engine, capture, mutation):
         view = SimpleNamespace(**vars(engine))
         view._local_masks, view._grade_scope = layers[index]['mask'], 'objects'
         owner = layers[index]['mask']['semantic_owner']
-        if owner is not None:
+        from .creative_derived_source import record
+        if owner is not None and record(engine) is None:
             from .local_grade_semantics import model_bytes
             model_bytes(owner)  # Existing group owns the exact model, not the selected face.
         layers[index]['mask'], _ = prepare_mutation(view, capture, inner, semantic_owner=owner)

@@ -11,18 +11,26 @@ import time
 
 
 class PromptedJob:
-    def __init__(self, path, source, prompts, device):
+    def __init__(self, path, source, prompts, device, *, source_input=None):
         from .cpu_memory_budget import available_estimate
         pixels = source['width']*source['height']
         if pixels > 64_000_000 or available_estimate() < pixels*32 + 2*1024**3:
             raise ValueError('Insufficient admitted RAM for full-source prompted selection (source buffers + 2 GiB reserve)')
+        if source_input is not None:
+            from .creative_derived_prompted import validate
+            if path is not None:raise ValueError('Derived prompted worker cannot decode an original pathname')
+            validate(source_input,source)
         self.directory = tempfile.TemporaryDirectory(prefix='lumaretouch-prompted-')
         self.root = Path(self.directory.name)
         self.process = None
         self.state, self.result, self.error = 'running', None, None
         self.started = time.monotonic()
         try:
-            request = json.dumps({'path': path, 'source': source, 'prompts': prompts, 'device': device}, allow_nan=False)
+            request_value={'path':path,'source':source,'prompts':prompts,'device':device}
+            if source_input is not None:
+                request_value['source_input']=source_input['descriptor']
+                with (self.root/'source.rgb8').open('xb') as stream:stream.write(source_input['pixels'])
+            request = json.dumps(request_value, allow_nan=False)
             if len(request.encode()) > 65536: raise ValueError('Prompt request is too large')
             (self.root/'request.json').write_text(request)
             self.process = subprocess.Popen([sys.executable, '-m', 'lumaretouch_engine.prompted_mask_worker',

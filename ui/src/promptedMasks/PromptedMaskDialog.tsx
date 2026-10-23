@@ -43,8 +43,8 @@ export function PromptedMaskDialog({owner,onClose}:{owner:LocalMaskOwner;onClose
       const value=packet?.result;
       if(value&&(packet.preview_id!==id||packet.document_id!==context.documentId||packet.state!=='ready'))throw Error('AI 结果与当前照片或预览不匹配');
       if(value?.candidates?.length&&(!Array.isArray(value.candidates)||value.candidates.length!==3||!value.candidates.every(v=>typeof v==='string'&&v.startsWith('data:image/png;base64,'))||!Array.isArray(value.scores)||value.scores.length!==3))throw Error('AI 候选结果不完整');
-      if(value?.source_image){setSource(value.source_image);if(Array.isArray(value.candidates)&&value.candidates.length){setResult(value);setCandidate(0);setPresented(false);setBusy(false);setMessage(`已生成 ${value.candidates.length} 个候选，执行设备 ${value.device}。请选择并检查实际覆盖范围。`);return;}if((packet.state??packet.phase)==='ready'){setBusy(false);setMessage('请在原图添加提示，再点击预测。');return;}}
-      if(packet?.source_image){setSource(packet.source_image);setBusy(false);setMessage('请在原图添加提示，再点击预测。');return;}
+      if(value?.source_image){setSource(value.source_image);if(Array.isArray(value.candidates)&&value.candidates.length){setResult(value);setCandidate(0);setPresented(false);setBusy(false);setMessage(`已生成 ${value.candidates.length} 个候选，执行设备 ${value.device}。请选择并检查实际覆盖范围。`);return;}if((packet.state??packet.phase)==='ready'){setBusy(false);setMessage('请在当前来源图添加提示，再点击预测。');return;}}
+      if(packet?.source_image){setSource(packet.source_image);setBusy(false);setMessage('请在当前来源图添加提示，再点击预测。');return;}
       await new Promise(resolve=>setTimeout(resolve,250));if(!current())return;
       await invoke('prompted_masks',{action:'poll',previewId:id,...identity()});if(!current())return;
       packet=await invoke<Packet>('prompted_masks_status',{previewId:id});

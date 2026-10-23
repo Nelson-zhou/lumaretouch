@@ -5610,7 +5610,7 @@ class Engine(PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMix
         require_rebound_snapshot(snap)
         if snap.get("grade_scope") == "objects":
             if not for_document: raise ExportError("Source-bound mask objects cannot transfer to another photo")
-            LM.verify_source(LM.check(snap.get("local_masks")), path)
+            LM.verify_snapshot(snap, path)
         if LGS.has_groups(snap):
             if not for_document: raise ExportError("独立局部调色不能借用其他照片，请先通过目标预检同步")
             LGS.verify_snapshot(snap, path)

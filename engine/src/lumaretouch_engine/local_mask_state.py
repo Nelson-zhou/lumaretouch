@@ -103,6 +103,10 @@ def state(engine):
 def sync(engine, *, strict=False):
     pipe = engine._vram
     if pipe is None or engine._grade_scope != 'objects': return
+    from .creative_derived_source import record
+    if record(engine) is not None:
+        from .creative_derived_masks import sync_legacy
+        return sync_legacy(engine,strict=strict)
     value = check(engine._local_masks)
     row = engine._docs[engine._doc_index] if 0 <= engine._doc_index < len(engine._docs) else {}
     pc = engine._precompute
@@ -140,6 +144,14 @@ def export_prepare(spec, source, *, cancelled=lambda: False):
     if spec.local_masks is None: raise ValueError('Composed grade mask recipe is missing')
     value = check(spec.local_masks)
     h, w = source.shape[:2]
+    if getattr(spec,'creative_base',None) is not None:
+        from . import creative_derived_masks as D
+        D.verify_pixels(spec,source);context=spec.creative_mask_context
+        D.validate(value,context['source'])
+        semantics=D.semantic_fields(value,context,(h,w))
+        semantics.update(D.prompted(value,context,(h,w),pixels=source,force=True,cancelled=cancelled))
+        spec.grade_mask=R.raster(value['recipe'],(h,w),rgb=source,semantic=semantics)
+        return
     if value['source'] and (h, w) != (value['source']['height'], value['source']['width']):
         raise ValueError('Export source dimensions differ from retained mask source')
     # RGB stays in this process; the raster bridge sends bounded tiles only.
@@ -156,6 +168,10 @@ def export_prepare(spec, source, *, cancelled=lambda: False):
 def diagnostic(engine):
     """Read-only persisted composition on the original source grid, not a draft."""
     pipe = engine._vram
+    from .creative_derived_source import record
+    if record(engine) is not None:
+        from .creative_derived_masks import diagnostic_legacy
+        return diagnostic_legacy(engine)
     try:
         value = check(engine._local_masks)
         row = engine._docs[engine._doc_index]
@@ -179,6 +195,10 @@ def check_export_decode(snap, path, before, shape):
     if file_stamp(path) != before:
         raise ValueError('Source changed during full-resolution decoding; export suspended')
     value = check(snap.get('local_masks'))
+    from .creative_derived_source import record
+    if record(snap) is not None:
+        from .creative_derived_masks import verify_snapshot
+        verify_snapshot(snap,path)
     source = value['source']
     if source is not None and tuple(shape) != (source['height'], source['width']):
         raise ValueError('Full-resolution source dimensions changed; export suspended')
@@ -199,3 +219,15 @@ def sample_valid_rows(valid):
         last = int(gaps[0]) if len(gaps) else len(indices)-1
         rows.append([int(indices[0]), int(indices[last])+1])
     return rows
+
+
+def verify_snapshot(snap,path,shape=None):
+    """Snapshot source guard separates derived content from original provenance."""
+    from .creative_derived_source import record
+    if record(snap) is not None:
+        from .creative_derived_masks import verify_snapshot as verify_derived
+        context=verify_derived(snap,path)
+        if context is not None and shape is not None and tuple(shape)!=(context['source']['height'],context['source']['width']):
+            raise ValueError('Derived local mask export dimensions changed')
+        return context
+    return verify_source(check(snap.get('local_masks')),path,shape)

@@ -52,4 +52,8 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
     from .body_pose_render import capture as capture_body
     from .virtual_copy_people import view
     snap=capture_body(view(self,people_context) if people_context is not None else self,snap,st,source_path or self._doc_path,people_graph)
+    if creative_base is not None:
+        from .creative_derived_masks import masks, capture
+        values=masks(snap)
+        if values:snap['creative_mask_context']=capture(st,values,source_path or self._doc_path,active_values=masks(snap,active_only=True))
     return self._semantic_snapshot(snap,st,source_path)

@@ -65,18 +65,25 @@ def verify_legacy(state, path, shape):
         P.fields(mask['recipe'], mask['source'], path, (min(shape[0],256),min(shape[1],256)), force=True)
 
 
-def rasters(groups, path, shape, *, rgb=None, force=False, cancelled=lambda: False):
+def rasters(groups, path, shape, *, rgb=None, force=False, cancelled=lambda: False, creative_context=None, engine=None):
     value = L.check(groups)
     L.validate_budget(value, shape)
     result = []
+    if creative_context is not None:
+        from . import creative_derived_masks as D
+        D.verify_context(creative_context,creative_context['source'],[row['mask'] for row in value['layers']],active_values=[row['mask'] for row in value['layers'] if row['enabled']])
     for layer in value['layers']:
         if not layer['enabled']: continue
         if cancelled(): raise InterruptedError('局部调色组计算已取消')
         mask = layer['mask']
-        M.verify_source(mask, path)
-        semantic = S.fields(mask, path, shape, force=force, cancelled=cancelled)
-        from .prompted_mask_resolver import fields
-        semantic.update(fields(mask['recipe'], mask['source'], path, shape, force=force, cancelled=cancelled))
+        if creative_context is not None:
+            semantic=D.semantic_fields(mask,creative_context,shape)
+            semantic.update(D.prompted(mask,creative_context,shape,engine=engine,pixels=None if engine is not None else rgb,force=force,cancelled=cancelled))
+        else:
+            M.verify_source(mask, path)
+            semantic = S.fields(mask, path, shape, force=force, cancelled=cancelled)
+            from .prompted_mask_resolver import fields
+            semantic.update(fields(mask['recipe'], mask['source'], path, shape, force=force, cancelled=cancelled))
         weight = M.R.raster(mask['recipe'], shape, rgb=rgb, semantic=semantic)
         result.append({'id': layer['id'], 'grade': layer['grade'], 'weight': weight})
     return result
@@ -94,6 +101,11 @@ def diagnostic(engine, group_id):
     pipe = engine._vram
     groups = {'version':L.VERSION, 'layers':[{**layer, 'enabled':True}]}
     try:
+        from .creative_derived_source import record
+        if record(engine) is not None:
+            from .creative_derived_masks import preview
+            context,rgb=preview(engine,[row['mask'] for row in L.check(engine._local_grade_layers)['layers']],active_values=[layer['mask']])
+            return rasters(groups,None,(pipe.h,pipe.w),rgb=rgb,creative_context=context,engine=engine)[0]['weight'],None
         row = engine._docs[engine._doc_index]
         if row.get('_local_source_stamp') != M.file_stamp(row['path']):
             raise ValueError('源文件在解码后变化，请重新打开照片')
@@ -172,6 +184,20 @@ def sync(engine, *, strict=False):
         live = engine.__dict__.get('_local_grade_live_owner')
         if live is not None and live.cached_sync(groups):
             return  # Full SHA verification at admission/commit, guarded lease only.
+        from .creative_derived_source import record
+        if record(engine) is not None:
+            from .creative_derived_masks import preview,cache_key
+            values=[row['mask'] for row in groups['layers']]
+            active=[row['mask'] for row in groups['layers'] if row['enabled']]
+            key=cache_key(engine,values,groups,active_values=active)
+            if getattr(pipe,'_local_grade_layers_key',None)==key:
+                if strict and pipe.local_grade_layers.suspended:raise ValueError(pipe.local_grade_layers.suspended)
+                return
+            context,rgb=preview(engine,values,active_values=active)
+            fields=rasters(groups,None,(pipe.h,pipe.w),rgb=rgb,creative_context=context,engine=engine)
+            pipe.local_grade_layers.set(fields)
+            pipe._local_grade_layers_key=key;pipe._local_grade_masks_key=None
+            return
         stamp = M.file_stamp(row['path'])
         if row.get('_local_source_stamp') != stamp: raise ValueError('源文件在解码后变化，请重新打开照片')
         # Model bytes are checked even on a cache hit. Replacing a model cannot
@@ -208,6 +234,11 @@ def export_prepare(spec, source, *, cancelled=lambda: False):
     groups = L.check(spec.local_grade_groups)
     if not groups['layers']:
         spec.local_grade_fields = []
+        return
+    if getattr(spec,'creative_base',None) is not None:
+        from . import creative_derived_masks as D
+        D.verify_pixels(spec,source)
+        spec.local_grade_fields=rasters(groups,None,source.shape[:2],rgb=source,creative_context=spec.creative_mask_context,force=True,cancelled=cancelled)
         return
     if not spec.local_mask_source_path: raise ValueError('独立局部调色组缺少原图路径，导出已阻止')
     for layer in groups['layers']:

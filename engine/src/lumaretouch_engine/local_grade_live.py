@@ -42,8 +42,10 @@ class LiveLocalGrade:
         stamp = M.file_stamp(row['path'])
         if row.get('_local_source_stamp') != stamp:
             raise ValueError('源文件已变化，请重新打开照片')
+        from .creative_derived_source import record,binding
+        effective=None if record(e) is None else tuple(sorted(binding(e).items()))
         return (str(e._load_id), version.document_id, version.revision,
-                id(e._vram), id(row), stamp)
+                id(e._vram), id(row), stamp,effective)
 
     def retire(self):
         old, self.session = self.session, None

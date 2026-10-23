@@ -1,0 +1,180 @@
+{
+  "baseline": "6280028cc371fa7b6d45710e4260a1a5f8da266b",
+  "scope": "M14 effective-source general/composed/local-grade/prompted masks with reviewed immutable input and canonical float export",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "files": [
+    {
+      "path": "docs/creative-layers/DERIVED-BODY.md",
+      "sha256": "1836fbbd9ee28eaf8408d61e69cdaecd54293a67f0238312814e8e0e2052c807",
+      "bytes": 8562
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-MASKS.md",
+      "sha256": "35561bc1ad666ec4b7f6c7aacf2e5c4e4f139743e9a9f6ab55c0f809a6412847",
+      "bytes": 7598
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_mask_commands.py",
+      "sha256": "a642e4d59d740d0bc6d5f71a1548dc989aac0ac8198402bb10a9660f506c8f9d",
+      "bytes": 8951
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_masks.py",
+      "sha256": "65d5236bd05a4447e3c8cb4764dd8a77950168e579b019e59bdeeb656328fec5",
+      "bytes": 13440
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_prompted.py",
+      "sha256": "285b5abc18d258d8344f28461ed89fdce5d6a8551da4394c20c1f4848e26dd3a",
+      "bytes": 2085
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "sha256": "f1b5faa1d1e77cba0a726c15d6f0b1610e5359b9d2998d126437a9c78be4e157",
+      "bytes": 19158
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "be465aa39b3e102d6c6d2b9f6c40ae1cf6c3ee1e2e3fa967838d31c57693ee15",
+      "bytes": 23328
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "1715ab6c7db213a42a65c737169400ead778446fba80f7b8b48e02508c5ec6a2",
+      "bytes": 125096
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "764610d9892b7291430198bde10b1dde0aae42706d059a83657532a47e6c359c",
+      "bytes": 19807
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "sha256": "1cd6097b4f2b0ce0e4306593ed90f7af27fdb55d57fd9500b36b49ef4bf396a9",
+      "bytes": 5224
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_edit.py",
+      "sha256": "ad935536cd168871a1e4ac0eea0175750cf296f23d2c114ac7b5acdaf39c5df5",
+      "bytes": 2297
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_live.py",
+      "sha256": "aab367404b5a999b78597d3d2ff6e8a31338de47659ae9b15868ad13242c1747",
+      "bytes": 12225
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_live_dependencies.py",
+      "sha256": "b6b7387bed0709d2bb7a996c13157c001b9b1e8415ebd5bc5eb7808144906e70",
+      "bytes": 2362
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_runtime.py",
+      "sha256": "758723fe1615c697e2a7e7cf2ad87fdbf9c25f48581b338adc023bee6c91cbb2",
+      "bytes": 13857
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_source.py",
+      "sha256": "b825a5eab8e425d8c1504eae23d433263c157003de5468d02f4f92fa666f58a6",
+      "bytes": 1873
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_mask_controller.py",
+      "sha256": "cd8cc425a1e8efad41e616678153279825875ba4494a6d601ce72390ea1fbb8b",
+      "bytes": 11208
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_mask_state.py",
+      "sha256": "b3ba75676ec58170827248013b6d94ca8f709a71d496f8a3bb5d051abd7321a1",
+      "bytes": 11420
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/prompted_mask_controller.py",
+      "sha256": "27ec52b9b9dd2d39bce0e0c92f1ee0627761b5c0a95150793751b9db56c29ded",
+      "bytes": 8330
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/prompted_mask_job.py",
+      "sha256": "a582cc2505ef433a4ea4531af3b6b5f1e560127c5120ccd907da73264ef3d759",
+      "bytes": 3563
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/prompted_mask_resolver.py",
+      "sha256": "1012c1e7b701457ec849561a8b60deaabf73155417ca90f22197a1ab8d2ec4f7",
+      "bytes": 7088
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/prompted_mask_worker.py",
+      "sha256": "cee0f66053d4f983366dd609754aa24d1180ba3a511783a2c84c32487ca69f32",
+      "bytes": 4240
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "44d76e0ead33a6594645b48639c7381bfa45b7e889684def31f876a5b30f85cb",
+      "bytes": 461473
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/source_patch_capture.py",
+      "sha256": "cc9608ca30582502a25f09fe040298767339aac5d86b7724bf77c21e6b954e4e",
+      "bytes": 12894
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_local_masks.py",
+      "sha256": "95c31909e09ac642320eb529cf49b9052691f13e2656baab08b15dbbcb3c05be",
+      "bytes": 8751
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_mask_commands.py",
+      "sha256": "1566bb119509701e569000002fd53a662ccbee46a1fe57f0caec66d755ef5c56",
+      "bytes": 7407
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_mask_integration.py",
+      "sha256": "f0a8d4f976ff82357139b0c4ff890b751782521d71737aba74860137e14d4318",
+      "bytes": 1887
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_derived_prompted_contract.py",
+      "sha256": "6eeae0d189f10ec38fd7287c9e3dd85438336c59e9dea04314d115b63e34931e",
+      "bytes": 6386
+    },
+    {
+      "path": "ui/src/localMasks/LocalMaskOverlay.tsx",
+      "sha256": "b325166f80b91237664209c7f3e0c6c01f1309c598410f95eeba2aa907263ef2",
+      "bytes": 11302
+    },
+    {
+      "path": "ui/src/localMasks/LocalMaskPanel.tsx",
+      "sha256": "b5268b8c97033fee10ace9211ab884aad8be729b13d53ed95c1119ad7552ad76",
+      "bytes": 14096
+    },
+    {
+      "path": "ui/src/localMasks/model.ts",
+      "sha256": "8d10df9ba90647bcc0dc72acb94c25b16568a4d1f5b608238b5c5e2068ebab8d",
+      "bytes": 5648
+    },
+    {
+      "path": "ui/src/promptedMasks/PromptedMaskDialog.tsx",
+      "sha256": "499cd0c90f3b78510eb29acca17dbc214bbe66bcf4c27c632aeaa5e6dcf685ce",
+      "bytes": 15713
+    }
+  ],
+  "verification": {
+    "static_python_ast_files": 25,
+    "tests": "AUTHORED_UNRUN",
+    "product_imports_execution": "NOT_RUN",
+    "build_typecheck_inference": "NOT_RUN",
+    "line_counts": {
+      "ui/src/App.tsx": 2091,
+      "ui/src-tauri/src/main.rs": 2015,
+      "engine/src/lumaretouch_engine/server.py": 6939
+    }
+  },
+  "residuals": [
+    "Shared target transfer and planners remain fenced",
+    "Source-patch/clone/inpaint require durable source-bound repair stacks",
+    "Global recovery and unadapted consumers remain fenced",
+    "Photo return alpha/HDR remains explicitly unsupported",
+    "No functional or visual acceptance claimed"
+  ]
+}

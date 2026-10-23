@@ -115,7 +115,7 @@ export function LocalMaskOverlay({owner,clip,box,view}:{owner:LocalMaskOwner;cli
         {sampling&&hover&&<circle cx={hover[0]*d.width} cy={hover[1]*d.height} r="4" fill="none" stroke="#fff" vectorEffect="non-scaling-stroke"/>}
         {editable&&object?.kind==='brush'&&hover&&<circle cx={hover[0]*d.width} cy={hover[1]*d.height} r={diameter.current*Math.min(d.width,d.height)/2} fill="none" stroke="#ffb35c" vectorEffect="non-scaling-stroke"/>}
       </svg>
-      <div className="sourcePatchViewLabel">{state.showLuminanceMap?'源图亮度诊断：8 位代理 RGB → 线性 Y → 显示灰度，不是最终效果或原图精度验证':MASK_SOURCE_LABEL}{d.mask_group_id?'；范围：当前独立局部调色组':'；范围：旧编辑器蒙版'}{d.mask_suspended?`；已保存蒙版暂停：${d.mask_suspended}`:showCoverage?'；青色：已保存组合范围（不是本次草稿）':''}</div>
+      <div className="sourcePatchViewLabel">{state.showLuminanceMap?'源图亮度诊断：8 位代理 RGB → 线性 Y → 显示灰度，不是最终效果或当前来源图精度验证':MASK_SOURCE_LABEL}{d.mask_group_id?'；范围：当前独立局部调色组':'；范围：旧编辑器蒙版'}{d.mask_suspended?`；已保存蒙版暂停：${d.mask_suspended}`:showCoverage?'；青色：已保存组合范围（不是本次草稿）':''}</div>
       <div className="sourcePatchViewHint">{state.showLuminanceMap?'灰色棋盘表示构图填充，不参与亮度；吸管仍读原始 RGB，不读灰度或青色。':''}{state.draw?'橙色仅表示本次几何草稿，不代表合成蒙版；拖动可重画，面板点击应用。':sampling?'点击源图取样：8 位代理近似值；参数或反相修改需应用后重新查看已保存范围。':rangeMode?'此画面未提供采样有效域，吸管不可用；可在面板手动设定范围。':'原始源图已冻结；请在蒙版面板确认或关闭。'}</div>
     </div>,clip)}
   </>;

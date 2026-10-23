@@ -112,6 +112,7 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     spec.check_effect_recovery()
     from . import local_grade_layers as LG
     spec.local_grade_groups = LG.check(snap.get("local_grade_groups"))
+    spec.creative_mask_context = snap.get('creative_mask_context')
     LG.validate_budget(spec.local_grade_groups, (eh, ew))
     spec.local_mask_source_path = snap.get("local_mask_source_path")
     spec.local_grade_source_stamp = snap.get("local_grade_source_stamp")
@@ -222,10 +223,15 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
         _, required = LM.R.dependencies(spec.local_masks["recipe"])
         if required and (spec.local_masks["semantic_owner"] is None or spec.local_masks["semantic_owner"] != snap.get("local_mask_owner")):
             raise ValueError("Semantic mask source/backend/contract changed; export suspended")
-        for name in required:
-            if pc is None or name not in (pc.masks or {}):
-                raise ValueError("Required semantic mask is unavailable: " + name)
-            spec.local_mask_semantics[name] = resample_field(np.asarray(pc.masks[name], dtype=np.float32), (eh, ew))
+        if spec.creative_base is not None:
+            from .creative_derived_masks import verify_snapshot, semantic_fields
+            context=verify_snapshot(snap)
+            spec.local_mask_semantics=semantic_fields(spec.local_masks,context,(eh,ew))
+        else:
+            for name in required:
+                if pc is None or name not in (pc.masks or {}):
+                    raise ValueError("Required semantic mask is unavailable: " + name)
+                spec.local_mask_semantics[name] = resample_field(np.asarray(pc.masks[name], dtype=np.float32), (eh, ew))
     if spec.grade_scope in ("skin", "brush") and (tuple(spec.grade) != (0.0, 0.0, 0.0, 1.0) or (spec.colour_editor or {}).get("scope")=="local"):
         cov = None
         if spec.grade_scope == "brush":

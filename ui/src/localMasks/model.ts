@@ -36,7 +36,7 @@ export function withObjectMutation(mutation:MaskMutation,inner:Extract<BaseMaskM
 }
 export const MASK_LABELS:Record<MaskKind,string>={brush:'画笔',linear:'线性渐变',radial:'径向渐变',color_range:'颜色范围',luminance_range:'亮度范围',semantic:'语义区域',full:'全图',prompted:'AI提示选区'};
 export const OPERATION_LABELS:Record<MaskOperation,string>={add:'添加（最大值）',subtract:'减去',intersect:'交集（最小值）'};
-export const MASK_SOURCE_LABEL='蒙版编辑视图：原始源图，保留构图，不含修补、磨皮、形变或调色；不是最终效果图';
+export const MASK_SOURCE_LABEL='蒙版编辑视图：当前不可变来源底图，保留构图，不含其上的修补、磨皮、形变或调色；不是最终效果图';
 export function newMask(kind:MaskKind,channel=''):MaskObject {
   const common:Common={id:crypto.randomUUID().replaceAll('-',''),name:MASK_LABELS[kind],enabled:true,operation:'add',opacity:1,feather:0};
   switch(kind){

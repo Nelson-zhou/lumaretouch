@@ -111,6 +111,10 @@ class CaptureController:
         context,spec=self._context()
         if spec!=c['spec'] or any(c['descriptor'][k]!=v for k,v in context.items()):
             raise ValueError('Repair document changed; capture again')
+        from .creative_derived_source import record
+        if record(self.engine) is not None or c.get('effective_source') is not None:
+            from .creative_derived_mask_commands import capture_binding, require_pixels
+            capture_binding(self.engine,c);require_pixels(self.engine)
         return c
 
     def handle(self,p):
@@ -141,6 +145,14 @@ class CaptureController:
                             or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}',group_id)))):
                     raise ValueError('Invalid local-mask capture group')
                 context,spec=self._context()
+                from .creative_derived_source import record, binding, verify
+                effective_source=binding(self.engine) if record(self.engine) is not None else None
+                if effective_source is not None:
+                    if purpose!='local-masks':raise ValueError('Derived repair capture has not been adapted')
+                    if context['full_source']!=[effective_source['width'],effective_source['height']]:
+                        raise ValueError('Derived capture canvas differs from immutable source')
+                    from .creative_derived_mask_commands import require_pixels
+                    require_pixels(self.engine)
                 if context['document_id']!=p['document_id']:raise ValueError('Repair document changed')
                 if self.generation==MAX_U64:raise ValueError('Repair generation exhausted; restart engine')
                 self.generation+=1
@@ -179,10 +191,12 @@ class CaptureController:
                     mask_suspended=mask_reason, sample_valid_rows=sample_valid_rows(valid))
                 current,current_spec=self._context()
                 if current!=context or current_spec!=spec:raise ValueError('Repair input changed while capturing')
+                if effective_source is not None:
+                    verify(effective_source,self.engine);require_pixels(self.engine)
                 root=os.environ.get('LRT_INSPECTION_ROOT')
                 if not root:raise ValueError('Private repair capture root unavailable')
                 self.path=write_capture(root,d,rgba)
-                self.capture={'descriptor':d,'spec':spec,'eligible':False,'valid':valid}
+                self.capture={'descriptor':d,'spec':spec,'eligible':False,'valid':valid,'effective_source':effective_source}
                 event['descriptor']=d
             event['success']=True
         except Exception as error:

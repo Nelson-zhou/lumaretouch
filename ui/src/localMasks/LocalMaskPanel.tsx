@@ -77,7 +77,7 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false,liveGrade}:{o
       <label>组合方式<select value={draft.operation} disabled={full} onChange={e=>patch({operation:e.target.value as MaskOperation})}>{(Object.keys(OPERATION_LABELS) as MaskOperation[]).map(op=><option key={op} value={op}>{OPERATION_LABELS[op]}</option>)}</select></label>
       <label>不透明度<input type="range" min="0" max="100" value={Math.round(draft.opacity*100)} disabled={full} onChange={e=>patch({opacity:Number(e.target.value)/100})}/>{Math.round(draft.opacity*100)}%</label>
       <label>羽化<input type="range" min="0" max="100" value={draft.feather} disabled={full} onChange={e=>patch({feather:Number(e.target.value)})}/>{draft.feather}</label>
-      <small>羽化 0–100 映射为原图短边的 0–5%，不随屏幕缩放改变。</small>
+      <small>羽化 0–100 映射为当前来源图短边的 0–5%，不随屏幕缩放改变。</small>
       {draft.kind==='brush'&&<label>重绘笔刷直径（取样图短边）<input type="range" min="0.1" max="40" step="0.1" value={diameter*100} onChange={e=>setDiameter(Number(e.target.value)/100)}/>{(diameter*100).toFixed(1)}%</label>}
       <RangeControls object={draft} onChange={patch}/>
       {draft.kind==='semantic'&&<label>已分析的整图语义类别<select value={draft.channel} onChange={e=>patch({channel:e.target.value})}>

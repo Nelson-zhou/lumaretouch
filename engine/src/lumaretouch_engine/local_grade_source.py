@@ -15,6 +15,14 @@ def verify_snapshot(snap, path, shape=None):
     groups = L.check(snap.get('local_grade_groups'))
     if not groups['layers']:
         return
+    from .creative_derived_source import record
+    if record(snap) is not None:
+        from .creative_derived_masks import verify_snapshot as verify_derived
+        context=verify_derived(snap,path)
+        if shape is not None and tuple(shape)!=(context['source']['height'],context['source']['width']):
+            raise ValueError('Derived grade export extent differs from canonical source')
+        L.validate_budget(groups,(context['source']['height'],context['source']['width']))
+        return
     before = M.file_stamp(path)
     if shape is not None:
         L.validate_budget(groups, shape)

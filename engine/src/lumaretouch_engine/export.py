@@ -144,6 +144,7 @@ class ExportSpec:
     local_masks: dict | None = None
     local_mask_semantics: dict = field(default_factory=dict)
     local_mask_source_path: str | None = None  # ephemeral verified source, never a persisted raster
+    creative_mask_context: dict | None = None  # ephemeral effective-source/category proof
     local_grade_groups: dict | None = None    # retained ordered groups, not merged masks
     local_grade_fields: list | None = None    # disposable full-source uint8 rasters
     local_grade_source_stamp: list | None = None  # decode-to-render source race guard
@@ -732,6 +733,9 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry):
     from .cpu_memory_budget import available_estimate
     work_bytes = min(4_000_000_000, max(1, int(available_estimate()) // 2))
     source = export_source(spec.creative_base, cancelled=cancelled, max_bytes=work_bytes)
+    if resolved.creative_mask_context is not None:
+        from .creative_derived_masks import stamp_pixels
+        stamp_pixels(resolved,source)
     if resolved.body_pose is not None:
         from .creative_derived_body_export import stamp_pixels
         stamp_pixels(resolved,source)

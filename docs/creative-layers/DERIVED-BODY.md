@@ -132,3 +132,8 @@ upstream full-float guarantee. Existing pinned model/config and archived notices
 in `docs/arm-shape/README.md` and `docs/model-licenses/` remain unchanged.
 No new upstream code/model was copied or downloaded. Existing original Rust
 consumers are reused; no new third-party licence surface was introduced.
+
+## Subsequent source adaptation
+
+[Derived local masks](DERIVED-MASKS.md) records the next source-only slice and
+remaining repair/shared-transfer boundaries. This body slice remains historical.

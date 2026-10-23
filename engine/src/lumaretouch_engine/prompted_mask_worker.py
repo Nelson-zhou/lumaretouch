@@ -26,16 +26,29 @@ def run(directory):
     raw = (root/'request.json').read_bytes()
     if len(raw) > 65536: raise ValueError('Prompted worker request exceeds budget')
     request = json.loads(raw)
-    if set(request) != {'path', 'source', 'device', 'prompts'}:
+    if set(request) not in ({'path','source','device','prompts'}, {'path','source','device','prompts','source_input'}):
         raise ValueError('Invalid prompted worker request')
-    source = decode_source(request['path'], request['source'], device='cpu')
+    if 'source_input' in request:
+        import stat
+        from .creative_derived_arm_input import MAX_BYTES
+        from .creative_derived_prompted import validate
+        if request['path'] is not None:raise ValueError('Derived worker cannot read original-file pixels')
+        path=root/'source.rgb8';info=path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_size>MAX_BYTES:raise ValueError('Invalid immutable prompted input file')
+        with path.open('rb') as stream:data=stream.read(MAX_BYTES+1)
+        source=validate({'descriptor':request['source_input'],'pixels':data},request['source'])
+    else:
+        source = decode_source(request['path'], request['source'], device='cpu')
     image, digest = inference_image(source)
     result = {'source_image': image_url(Image.fromarray(image), rgb=True),
               'source': request['source'], 'input_sha256': digest,
               'inference_size': [image.shape[1], image.shape[0]]}
     if request['prompts'] is not None:
+        from .prompted_model_install import installed_runtime_identity
+        runtime=installed_runtime_identity()
         prompts = check_prompts(request['prompts'])
         prediction = Predictor(request['device']).predict(source, prompts)
+        if installed_runtime_identity()!=runtime:raise ValueError('Prompted runtime changed during actual inference')
         masks = prediction.pop('masks')
         result.update(prediction)
         result['prompts'] = prompts

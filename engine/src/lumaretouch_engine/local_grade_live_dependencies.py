@@ -13,6 +13,11 @@ def snapshot(engine, groups):
     source = (row['path'], M.file_stamp(row['path']))
     semantic = any(layer['enabled'] and M.R.dependencies(layer['mask']['recipe'])[1]
                    for layer in groups['layers'])
+    from .creative_derived_source import record
+    if record(engine) is not None:
+        from .creative_derived_masks import live_dependencies
+        source=(*source,live_dependencies(engine,groups))
+        semantic=False # Exact measured category bank, never original-file model inference.
     models = []
     if semantic:
         from .face import model_search_dirs, SELFIE_MULTICLASS_MODEL

@@ -40,7 +40,8 @@ def prepare_mutation(engine, capture, mutation, *, accepted_prompted=False, sema
             if any(normalized[k] != objects[index][k] for k in GEOMETRY.get(normalized['kind'], ())):
                 raise ValueError('Redraw geometry on a newly reviewed source capture')
         else: raise ValueError('Unknown mask coordinate domain')
-        source = S.bind_source(engine)
+        from .creative_derived_source import binding
+        source = binding(engine)
         if objects and old['source'] != source: raise ValueError('Source changed; retained masks cannot be rebound silently')
         new['source'] = source
         if normalized['kind'] == 'semantic':
