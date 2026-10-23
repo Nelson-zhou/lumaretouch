@@ -30,6 +30,7 @@ export function batchScopeOptions(modules: readonly {operation_id: string; trans
   if(supported.has('lnx.nose_shape.v1'))out.push({label:'鼻形六项（二维几何，目标逐图重算）',ops:['lnx.nose_shape.v1']});
   if(supported.has('lnx.mouth_shape.v1'))out.push({label:'嘴形九项（目标逐图重算，不复制源图嘴部）',ops:['lnx.mouth_shape.v1']});
   if(supported.has('lnx.eye_shape.v1'))out.push({label:'眼形十项双侧（二维几何，目标逐图重算）',ops:['lnx.eye_shape.v1']});
+  if(supported.has('lnx.blush_makeup.v1'))out.push({label:'腮红（仅参数；目标须独立人物审核）',ops:['lnx.blush_makeup.v1']});
   if(supported.has('lnx.lip_makeup.v1'))out.push({label:'唇妆增强（三控件，逐张须单脸）',ops:['lnx.lip_makeup.v1']});
   if(supported.has('lnx.facial_wrinkles.v1'))out.push({label:'面部祛纹八部位（逐张须单脸，仅参数）',ops:['lnx.facial_wrinkles.v1']});
   return out;

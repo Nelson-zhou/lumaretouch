@@ -81,7 +81,15 @@ def apply(engine,raw,emit):
     records[request]={'success':False,'digest':digest};state,binding,target=checked(engine,p);asset=binding['asset_sha256']
     records[request]['before_fence']=engine._people_owner().fence
     action=p.get('action');payload=p.get('payload');created=None;batch_id=None
-    if action=='eye_light_reference':
+    if action=='blush_palette':
+        from .blush_makeup_host import palette_action
+        palette_action(engine,p)
+        frame=None
+    elif action=='blush_reference':
+        from .blush_makeup_host import reference
+        reference(engine,state,target,payload)
+        frame=None
+    elif action=='eye_light_reference':
         from .eye_light_host import reference
         reference(engine,state,target,payload)
         frame=None
@@ -105,6 +113,9 @@ def apply(engine,raw,emit):
             records[request]['side_effects_started']=True
             candidate,ref=analyse(engine,state,target['face_ref'])
             target={'scope':'face','target_id':ref['face_instance_id'],'face_ref':ref}
+        elif action=='blush_review':
+            from .blush_makeup_host import stage_review
+            candidate=stage_review(engine,state,target,payload)
         elif action=='eye_light_review':
             from .eye_light_host import stage_review
             candidate=stage_review(engine,state,target,payload)

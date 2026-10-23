@@ -9,7 +9,8 @@ def emit(event):
 class WorkflowPortsMixin:
     def _people_preset_capture(self):
         from .eye_light_scope import capture
-        return capture(self)
+        from .blush_makeup_scope import capture as capture_blush
+        return capture_blush(self,capture(self))
 
     def _people_preset_replay(self,state,**kwargs):
         from .people_scope import replay_preset

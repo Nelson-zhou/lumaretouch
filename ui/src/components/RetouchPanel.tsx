@@ -67,6 +67,7 @@ export interface RetouchProps {
   whiteBalancePanel?: React.ReactNode;
   whiteBalanceBusy?: boolean;
   colorSamplePanel?: React.ReactNode;
+  blushMakeupPanel?: React.ReactNode;
   colorActions?: ColorActionControlsProps;
   sourcePatchPanel?: React.ReactNode;cloneStampPanel?: React.ReactNode;localMasksPanel?: React.ReactNode;
   status: EngineStatus | null;
@@ -255,6 +256,12 @@ const WIRED: Record<string, string> = {
   "PC-32466|眉毛/眉头长短": "brow.inner_length",
   "PC-32466|眉毛/眉尾长短": "brow.outer_length",
 
+  "PC-32471|局部妆容/腮红": "blush.family",
+  "PC-32471|局部妆容/腮红/推荐颜色": "blush.recommended",
+  "PC-32471|局部妆容/腮红/吸管": "blush.eyedropper",
+  "PC-32471|局部妆容/腮红/RGB": "blush.rgb",
+  "PC-32471|局部妆容/腮红/HEX": "blush.hex",
+  "PC-32471|局部妆容/腮红/收藏颜色": "blush.saved",
   "PC-32471|唇妆增强": "lip.family",
   "PC-32471|唇妆增强/饱和度": "lip.saturation",
   "PC-32471|唇妆增强/明度": "lip.brightness",
@@ -574,6 +581,8 @@ export default function RetouchPanel(props: RetouchProps) {
       why={props.faceOk?(doc?.brow_shape?.suspended??undefined):props.faceWhy}
       documentId={doc?.document_id??""} faceId={doc?.brow_shape?.selected_face_id??""} revision={doc?.brow_shape?.revision??0} peopleContext={capturedPeople}/>;
     if (kind.startsWith("brow.")) return null;
+    if (kind === "blush.family") return <div key={leaf.path}>{props.blushMakeupPanel}</div>;
+    if (kind.startsWith("blush.")) return null;
     if (kind === "lip.family") return <LipMakeupControls key={leaf.path} value={doc?.lip_makeup?.recipe??neutralLips()}
       fact={doc?.lip_makeup?.facts} disabled={dim||!props.faceOk||!!props.whiteBalanceBusy||status?.ready_caps?.lip_makeup_protocol!==1}
       reason={props.faceOk?(doc?.lip_makeup?.suspended??undefined):props.faceWhy}

@@ -24,6 +24,6 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
       state_revision: value.revision, association_revision: value.association_revision,
       request_id: crypto.randomUUID(), target, action, payload});
   }
-  return {value, state, supported, enabled, submit, patch: workflow.patch, check: workflow.check};
+  return {value, state, supported, enabled, submit, submitCaptured: workflow.submit, patch: workflow.patch, check: workflow.check};
 }
 export type PeopleOwner = ReturnType<typeof usePeopleWorkflow>;

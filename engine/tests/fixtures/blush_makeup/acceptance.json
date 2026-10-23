@@ -1,0 +1,90 @@
+{
+  "status": "UNRUN",
+  "scope": "blush only; not whole makeup completion",
+  "requirements": [
+    "LNX-REF-PC-32471-C-e7ccb5a9e2",
+    "LNX-REF-PC-32471-C-6be18714f8",
+    "LNX-REF-PC-32471-C-53df3c11b3",
+    "LNX-REF-PC-32471-C-3f0064d896",
+    "LNX-REF-PC-32471-C-8059d0cdd0",
+    "LNX-REF-PC-32471-C-6f5d708f87"
+  ],
+  "cases": [
+    {
+      "id": "BLUSH-001",
+      "status": "UNRUN",
+      "expected": "Twelve original patterns at identical colour and strength differ spatially; measured frontal face, both cheeks, no eye/lip pixels altered."
+    },
+    {
+      "id": "BLUSH-002",
+      "status": "UNRUN",
+      "expected": "Strength 0 produces byte-identical float input, no native load; monotonic contribution 0.25/0.5/1 with no compositing twice."
+    },
+    {
+      "id": "BLUSH-003",
+      "status": "UNRUN",
+      "expected": "Each pattern exposes its own recommended colours; selecting pattern does not overwrite custom colour."
+    },
+    {
+      "id": "BLUSH-004",
+      "status": "UNRUN",
+      "expected": "Eyedropper capture requires actual painted producer frame; reject switched photo, changed epoch/revision, changed target/analysis, stale click and cancelled frame; only matching working-sRGB float sample applies one colour patch."
+    },
+    {
+      "id": "BLUSH-005",
+      "status": "UNRUN",
+      "expected": "RGB and HEX agree; malformed, partial, negative, noninteger, >255 and nonfinite values reject atomically; drafts do not mutate image."
+    },
+    {
+      "id": "BLUSH-006",
+      "status": "UNRUN",
+      "expected": "Six unique favourites persist save/reopen and history; seventh refuses without eviction; remove then add works; duplicate is idempotent."
+    },
+    {
+      "id": "BLUSH-007",
+      "status": "UNRUN",
+      "expected": "Known hair/clothes/background, eyes, lips and outside-face support are exactly zero. Real hand/glasses overlap reviewed and corrected with blush-only recovery; do not claim full occlusion detection."
+    },
+    {
+      "id": "BLUSH-008",
+      "status": "UNRUN",
+      "expected": "Two real people have independent pattern, amount and colour. Source/landmark evidence mismatch and synthetic/manual points reject. One refused requested face refuses full publication."
+    },
+    {
+      "id": "BLUSH-009",
+      "status": "UNRUN",
+      "expected": "Original RGB16 fine ramps survive unquantized; neutral HDR contract unaffected; active out-of-working-range input refuses, never silently clamps input. GPU/CPU parity and tile seams require measurement."
+    },
+    {
+      "id": "BLUSH-010",
+      "status": "UNRUN",
+      "expected": "Recovery on blush removes only blush before/after contribution; old immutable vectors survive undo/redo/reopen; face or source mismatch refuses."
+    },
+    {
+      "id": "BLUSH-011",
+      "status": "UNRUN",
+      "expected": "Batch/preset transfers scalar intent only through reviewed canonical mappings and frozen receipts; destination recomputes support; no copied face IDs/masks/recovery or palette; stale preflight refuses."
+    },
+    {
+      "id": "BLUSH-012",
+      "status": "UNRUN",
+      "expected": "Full-source export solves each face once and crops all tile edges; original-source and repaired float anchors frozen; low-memory refuses rather than proxy/downsample/skip."
+    },
+    {
+      "id": "BLUSH-013",
+      "status": "UNRUN",
+      "expected": "Project/history deeply reject corrupt colours, catalogues, unknown pattern, dormant overrides or missing native artifact; old files without blush remain neutral."
+    },
+    {
+      "id": "BLUSH-014",
+      "status": "UNRUN",
+      "expected": "UI keyboard/tab order, partial HEX/RGB drafts, Enter, double-click, collapse/reopen, pending edits, uncertain receipts, Escape and tool switch remain safe; no success inferred from control motion."
+    },
+    {
+      "id": "BLUSH-015",
+      "status": "UNRUN",
+      "expected": "Load matched undeformed source preview, paint and confirm both cheeks; immutable review assets enter canonical support bank and survive undo/redo/reopen. Missing, single-cheek, stale source/analysis or tampered review refuses active blush. Review never overrides actual skin, eyes/lips or known-occluder exclusions."
+    }
+  ],
+  "fixture_policy": "Native numeric cases use synthetic float arrays only. Visual acceptance requires independently licensed real portraits with recorded consent/source and model hashes; none fabricated or downloaded during this task."
+}

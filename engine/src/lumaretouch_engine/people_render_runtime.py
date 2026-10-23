@@ -65,7 +65,7 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32, recovery_assets=None, repaired=None,
-            hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None):
+            hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None):
     state = S.check(state)
     if type(source) is not np.ndarray or source.dtype != np.float32 or source.ndim != 3 or source.shape[2] != 3 or not np.isfinite(source).all() or np.any((source < 0) | (source > 1)):
         raise ValueError('People preparation needs frozen working-sRGB float32 RGB')
@@ -95,6 +95,10 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
                 stage = asset['kind']
+                if stage=='blush_makeup_visibility':
+                    from .blush_makeup_support import resolve as resolve_blush_support
+                    resolve_blush_support(state,blush_makeup_assets or {},entry['face_ref'])
+                    continue
                 if stage=='eye_light_visibility':
                     from .eye_light_support import resolve as resolve_eye_support
                     resolve_eye_support(state,eye_light_assets or {},entry['face_ref'])
@@ -110,8 +114,10 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, max_faces=32,
                 owned['weight'].setflags(write=False); owned_recovery[(key,stage)] = owned
             lm = verify_analysis(face, analysis, (h,w))
             field = A.build_geometry(key, lm, values, source, analysis['excluded'], backend=face['evidence']['backend'])
+            from .blush_makeup_support import raster as blush_raster
+            blush_review=blush_raster(state,blush_makeup_assets or {},entry['face_ref'],(h,w)) if A.BLUSH.active(values[A.BLUSH.OP]) else None
             local = E.prepare(entry['face_ref'], lm, values, effect_source, excluded=analysis['excluded'], skin=analysis['skin'],
-                              backend=face['evidence']['backend'], semantic_sha=face['evidence']['semantic_model_sha256'])
+                              backend=face['evidence']['backend'], semantic_sha=face['evidence']['semantic_model_sha256'],blush_review=blush_review)
             from .eye_light_people import prepare as prepare_eye_light
             from .eye_light_state import OPERATION as EYE_LIGHT
             local.extend(prepare_eye_light(state,eye_light_assets or {},entry['face_ref'],analysis,effect_source,values[EYE_LIGHT],source_revision=state['revision']))

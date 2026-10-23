@@ -142,6 +142,8 @@ class PeopleHostMixin:
             result['parameter_catalog']=describe()
             from .eye_light_host import report as eye_light_report
             result['eye_light']=eye_light_report(self,state,source,self._people_cursors.get(asset))
+            from .blush_makeup_host import report as blush_report
+            result['blush_makeup']=blush_report(self,state,source,self._people_cursors.get(asset))
             result.update(binding=self._people_binding(),editing_target=deepcopy(target),editing_overrides=overrides,legacy_unresolved=legacy_report(state,asset))
             return result
         except (ValueError,OSError):return None
