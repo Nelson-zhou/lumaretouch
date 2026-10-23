@@ -26,6 +26,7 @@ def restore_group(owner,request):
             if rec.get('source_proof') is not None:
                 TRANSFER.require_restoration(current,previous,restored,ops,rec['source_proof'])
                 SOURCE.verify_row({**row,'state':restored},rec['source_proof'])
+            if SC.SPILL_REMOVAL.OP in ops:SC.SPILL_REMOVAL.validate_target(restored,row['path'],(row['src_h'],row['src_w']))
             if SC.FRINGE_REPAIR.OP in ops:SC.FRINGE_REPAIR.validate_target(restored,row['path'],(row['src_h'],row['src_w']))
             if RC.OP in ops:
                 value=RS.check(restored.get(RS.KEY));RR.verify_export({'reference_color':value},row['path'],(row['src_h'],row['src_w']))
@@ -46,6 +47,8 @@ def restore_group(owner,request):
         owner.versions.advance(row)
         try:
             frame=owner.editor.replay(after,mode='batch',replayed_for=f'batch_group:{bid}',strict_local=True)
+            if SC.SPILL_REMOVAL.OP in ops and SC.SPILL_REMOVAL.undo_key(owner.editor.capture()) != SC.SPILL_REMOVAL.undo_key(after):
+                raise ValueError('祛反光目标依赖在组历史重放期间变化')
             for index,target,_,_ in planned:
                 if proofs[index] is not None:
                     SOURCE.verify_row({**target,'state':owner.editor.capture() if index==live else target['state']},proofs[index])

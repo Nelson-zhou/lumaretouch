@@ -32,9 +32,13 @@ Numerical and photographic quality acceptance remains separate from source work.
 ## Other genuine gaps
 
 - PC-32475 spill removal: `LNX-REF-PC-32475-C-e999ab085a` and manual coverage
-  `LNX-REF-PC-32475-C-4bc238dfa1`. No canonical spill-correction state exists.
-  Foreground/background colour estimation is a real dependency; global desaturation,
-  matte erosion and an ID recovery brush are not substitutes.
+  `LNX-REF-PC-32475-C-4bc238dfa1`. A bounded colour-estimation and selective
+  correction source slice is now authored; see [scope](../spill-removal/README.md).
+  Fixed-alpha boundary decontamination is not enough to identify reflected light
+  on opaque foreground: the separate near-edge heuristic, manual exclusions and
+  actual target review do not resolve deep spill or genuine matching-colour
+  objects. Full official behavior and photographic acceptance remain incomplete.
+  Global desaturation, matte erosion and an ID recovery brush are not substitutes.
 - Local XMP import: `LNX-REF-WF-158978-398fbf9da9`. A bounded native parameter
   adaptation slice is now authored with immutable XML, explicit compatibility
   consent and current-target before/after review; see [scope](../xmp-import/README.md).

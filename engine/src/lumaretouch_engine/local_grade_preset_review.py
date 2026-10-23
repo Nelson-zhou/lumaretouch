@@ -18,15 +18,16 @@ class PresetReviews:
         modules=DERIVED.require_modules(state,preset['modules']);SC.check_scope(list(modules))
         xmp=preset.get("xmp_import")
         derived=SOURCE.record(state) is not None
-        if xmp is None and not derived and LG.OP not in modules and OA.OP not in modules and RC.OP not in modules and SC.OP_CROP not in modules:raise ValueError('此预设不含需要冻结目标预检的模块')
+        if xmp is None and not derived and LG.OP not in modules and OA.OP not in modules and RC.OP not in modules and SC.OP_CROP not in modules and SC.SPILL_REMOVAL.OP not in modules:raise ValueError('此预设不含需要冻结目标预检的模块')
         # Current captured state owns the effective source, not a stale parked
         # row state. Originals retain their existing review contract.
-        proof=SOURCE.row_proof({**row,'state':state}) if xmp is not None or derived or SC.OP_CROP in modules else None
+        proof=SOURCE.row_proof({**row,'state':state}) if xmp is not None or derived or SC.OP_CROP in modules or SC.SPILL_REMOVAL.OP in modules else None
         if LG.OP in modules:prepared,transfer=LR.prepare_modules(state,modules,row,options,preview=True)
         else:
             if options is not None:raise ValueError('未选择局部组，不能附带蒙版选项')
             prepared,transfer=deepcopy(modules),None
         candidate=OA.candidate(state,prepared,local_replace_legacy=bool(transfer and transfer['legacy_removed']))
+        if SC.SPILL_REMOVAL.OP in prepared:SC.SPILL_REMOVAL.validate_target(candidate,row["path"],(row["src_h"],row["src_w"]))
         if SKY.OP in prepared:SKY.validate_target(candidate['_sky_replacement'],row['path'],(row['src_h'],row['src_w']))
         if BROW.OP in prepared and OA.OP not in prepared:BROW.validate_target(candidate,row)
         if NOSE.OP in prepared and OA.OP not in prepared:NOSE.validate_target(candidate,row)
@@ -90,6 +91,7 @@ class PresetReviews:
             raise ValueError('照片在预检后发生修改，请重新预检')
         if LG.OP in record['modules']:LR.verify_modules(record['modules'],{**row,'state':state},record['transfer'])
         candidate=OA.candidate(state,record['modules'],local_replace_legacy=bool(record['transfer'] and record['transfer']['legacy_removed']))
+        if SC.SPILL_REMOVAL.OP in record['modules']:SC.SPILL_REMOVAL.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
         if SKY.OP in record['modules']:SKY.validate_target(candidate['_sky_replacement'],row['path'],(row['src_h'],row['src_w']))
         if BROW.OP in record['modules'] and OA.OP not in record['modules']:BROW.validate_target(candidate,row)
         if NOSE.OP in record['modules'] and OA.OP not in record['modules']:NOSE.validate_target(candidate,row)

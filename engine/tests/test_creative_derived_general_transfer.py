@@ -44,6 +44,7 @@ def test_allowlist_is_closed_and_global_colour_editor_uses_actual_schema():
         'lnx.hsl.v1', 'lnx.extended_tone.v1', 'lnx.photo_detail.v1',
         'lnx.photo_grain.v1', 'lnx.colour_grading.v1', 'lnx.primary_calibration.v1',
         'lnx.selective_colour.v1', 'lnx.colour_editor.v1', 'lnx.crop.v1',
+        'lnx.fringe_repair.v1', 'lnx.spill_removal.v1',
     }
     modules = {SC.OP_EXPOSURE:{'ev':1.25}, SC.COLOUR_EDITOR.OP:{'recipe':CE.neutral()}}
     assert T.require_modules(state(), modules)[SC.COLOUR_EDITOR.OP]['recipe']['scope'] == 'all'

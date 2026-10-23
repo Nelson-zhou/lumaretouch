@@ -1,0 +1,366 @@
+{
+  "baseline": "c72de4fbb2a5cadb5bd41c936b596d37555c76a8",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "PC-32475 spill removal e999ab085a and manual coverage 4bc238dfa1: original Rust fixed-alpha foreground/background colour estimation plus guarded reflected-edge correction, effective-source fields and reviewed ID consumer, target-owned coverage, scalar preset/batch transfer. Both official requirements remain partial, not photographic acceptance.",
+  "files": [
+    {
+      "path": "core/spill_removal/Cargo.toml",
+      "sha256": "3c82e9c1eadb43b18c6316e24e024173a5bed04e7e1c44ccf926728b13b0923a",
+      "bytes": 164
+    },
+    {
+      "path": "core/spill_removal/README.md",
+      "sha256": "ddc8d1bdfba6b07f9b216f69f2f08659dbe5697a72a13cb076d0df485e1b2b75",
+      "bytes": 9044
+    },
+    {
+      "path": "core/spill_removal/lib.rs",
+      "sha256": "2db785cc1e125c70e8c6192687ef3324483b4a74cb0df42c887b66e044fbcb7d",
+      "bytes": 22731
+    },
+    {
+      "path": "core/spill_removal/spill_removal.h",
+      "sha256": "551b2364e1ba569309d1b4b253fb1ce4e52f4d9b517a94cd87f7194fb5bb34ce",
+      "bytes": 853
+    },
+    {
+      "path": "core/spill_removal/test_native_contract_unrun.py",
+      "sha256": "64a264f13ff77b5ba3814b0174575257b05e0e03812888c0c5e4380ca53dbda6",
+      "bytes": 5407
+    },
+    {
+      "path": "docs/creative-layers/NEXT-MATERIAL-FEATURES.md",
+      "sha256": "fec216a834d22c50b23607c0a695d3fd12109acec89808d1613b2d879d623a84",
+      "bytes": 6371
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "d8e173f8abfd103390082cbac5d1e1d2d6c2a0c5ad692e242293611f7c0d58d3",
+      "bytes": 19653
+    },
+    {
+      "path": "docs/spill-removal/README.md",
+      "sha256": "38149cd359223756a301b424c22aa9a273715e1ee96c2aff5c79f12dd4104065",
+      "bytes": 11015
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_group_history.py",
+      "sha256": "b7d78b7237764bef9af19cfb2688ab5ace55a2c5b9d1945d97c983a9d03f7786",
+      "bytes": 4748
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight_controller.py",
+      "sha256": "d918cf7fa6fd82e50be67a36fe7a6feec3aee9b5d6c914fe543a9a5cc5c2551a",
+      "bytes": 25790
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "f3253abee369322dfba84eca67c747d73442802ebbda0685c94674b3e50639ce",
+      "bytes": 32980
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_id_background_host.py",
+      "sha256": "f8d7a7bcee340f5527ab71a589705f27450a062dab14ed6628163b6b5aa3f2d7",
+      "bytes": 3672
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_controller.py",
+      "sha256": "09403880750d7a172a53b1688be106ef9cbe0d90f3b5461a991f5f7f17216edc",
+      "bytes": 6442
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_export.py",
+      "sha256": "94e9490a800db2d978d4ac35588ec9a3f75044a09e83c8ef08cbc7bcc6964c97",
+      "bytes": 3201
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_runtime.py",
+      "sha256": "3763bd5f302e50f1bde6cabe3a740640aee81855ee65da29556baff8c7ae0d3f",
+      "bytes": 18927
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_scope.py",
+      "sha256": "b10d69e6994f62f11c36f82c4a85df94fa6f57e4ce82695c49ba0ccdfeefde93",
+      "bytes": 3519
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_stage.py",
+      "sha256": "b6628ba09af4409eb84c7c58c929c8ae2cbc1209ce813bf0ec83876c922b2365",
+      "bytes": 3467
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_state.py",
+      "sha256": "de4215997ca21aafb5001c72fa0889f84326358b11caf3688489d1986e111ec8",
+      "bytes": 11095
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_preset_review.py",
+      "sha256": "a1c18797f7760566a375243035f2dfa19b2933ba274eeb21debfb689b653ce37",
+      "bytes": 9930
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/optics_auto_scope.py",
+      "sha256": "c4ff8510ba266b11a086084602b676f464f47af40f4fdbc8ddc2742e81158aed",
+      "bytes": 4122
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "sha256": "1971a411c3a030ee4361780c858da5402e31b23375480c6c9cce06ad3d0dff85",
+      "bytes": 22768
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "964fa1b2b6166efe21ea96e090ae943be5e64f6b8f32a423c33a7d34453b722d",
+      "bytes": 6961
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_provenance.py",
+      "sha256": "69188bb753f7f1e88d624d765ae91cbc2a67b524ba8db2b95119b4975020ee55",
+      "bytes": 6518
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "a6f072b070426e751aeb2a1ddc4120d433e3b5fe07fa6bcf73afbf0055440aa5",
+      "bytes": 44190
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "d744785fc2bc683df2ebdca3d5eab7d902c6d25582232af41de1b8a98bb77763",
+      "bytes": 465497
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_controller.py",
+      "sha256": "1c19ac5fa7a522b8610cabf9bf0ae69e3fc7896430d126bda32e6653fc235e70",
+      "bytes": 8729
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_coverage.py",
+      "sha256": "47756aa9469db97e0bfb917597b2805d431f2a53f9863c13c9707745b897e7f3",
+      "bytes": 4947
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_native.py",
+      "sha256": "45743b19514026e9aa11158bf839f739a4b04dcf4e760ae633ef25df807eb3dd",
+      "bytes": 10088
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_render.py",
+      "sha256": "ac2f15b38b384c9c969b8559a1befcd01cdf51f5cc22c13c8dbc7b566ad76cd1",
+      "bytes": 10796
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_review.py",
+      "sha256": "633219ada071cc4aaef853960f72a679e733cdc4f7adefd5ce9f969cdf5007f5",
+      "bytes": 8167
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_scope.py",
+      "sha256": "e305bd748febba28d1b4d7fc9feac43a5116584e03fcc3156bd7c4ec949b4172",
+      "bytes": 3118
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_state.py",
+      "sha256": "1a5175435c621066b2189ce0ba4a934f1d9542ecfa6eb0b1c2e4ac9f672f5adf",
+      "bytes": 1939
+    },
+    {
+      "path": "engine/tests/id_background_fixtures/test_spill_scope_unrun.py",
+      "sha256": "a3d8e11f02ebcc43e24c0ccd1a34d96cf9677830fa7cb204669c2362e873119d",
+      "bytes": 10618
+    },
+    {
+      "path": "engine/tests/id_background_fixtures/test_spill_state_unrun.py",
+      "sha256": "4d9ab91070e0dc48ac5faed772de8a7e636039d1e194ba973cbf24d174784a26",
+      "bytes": 9750
+    },
+    {
+      "path": "engine/tests/test_creative_derived_general_transfer.py",
+      "sha256": "d7d2bbd0b9dd7cafe9d9bf749e31c12c010ac2111bb8204a0a31b7d31814539f",
+      "bytes": 11859
+    },
+    {
+      "path": "engine/tests/test_spill_review_unrun.py",
+      "sha256": "db8adb63448b40db369344d14560826c0bf0dbc94e7ceccad2d453138617b361",
+      "bytes": 14850
+    },
+    {
+      "path": "engine/tests/test_spill_source_render_unrun.py",
+      "sha256": "8182c9be441e82d27a5b902d1cb2d8c2a08cedb9e194e185aa15650b95ffa2bd",
+      "bytes": 12901
+    },
+    {
+      "path": "engine/tests/test_spill_transfer_wiring_unrun.py",
+      "sha256": "c65ce8c29e232d81e2a2a73fdf80f7bd0fd8b30d328b71d191c2d11a43011a76",
+      "bytes": 11789
+    },
+    {
+      "path": "packaging/build-spill-removal.sh",
+      "sha256": "7f9e0644dc19d62ea2207f1ce278213b5d7104fd1d7e1587a594d995a1b07ea0",
+      "bytes": 364
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "326f6e23993935760dceb9dee09e73f9961e5cba626f73688ea2ac76e3b1f32d",
+      "bytes": 19824
+    },
+    {
+      "path": "ui/package.json",
+      "sha256": "d402ccc228a68ef7eacb58b7e2377303963a80f5a15aeeebb4ac9b6f42be1f1f",
+      "bytes": 1827
+    },
+    {
+      "path": "ui/src-tauri/src/batch_host.rs",
+      "sha256": "370649e6c7e7976fbf90dd4fd4d7de0df6722f3bc1a5cd64fd956f5f263abf71",
+      "bytes": 10369
+    },
+    {
+      "path": "ui/src-tauri/src/id_background_api.rs",
+      "sha256": "a46a5299d9fc0e4a1d057adb985cc174699b7f41415c4c580de94c1c996b2ac7",
+      "bytes": 11671
+    },
+    {
+      "path": "ui/src-tauri/src/preset_host.rs",
+      "sha256": "638045e4d23ea61c78f0b50fac35d76f73cae19d0086e730b221c2d88a3f8a4f",
+      "bytes": 15304
+    },
+    {
+      "path": "ui/src-tauri/src/spill_removal_protocol.rs",
+      "sha256": "1eb955069bb216ca4f871f4f8712e0cfad62464287681c429ffe15c25b0bc1b1",
+      "bytes": 10172
+    },
+    {
+      "path": "ui/src-tauri/src/spill_removal_protocol_tests.rs",
+      "sha256": "b2bd29ada62d2e1ef43f874f347993ca5ff35197fa685b20cbb59790f3c54021",
+      "bytes": 5120
+    },
+    {
+      "path": "ui/src/batch/batchWorkflow.ts",
+      "sha256": "8896fec08836db245b057c3d8d5aaad08ec0cff68923f2394cef601bc5fee22a",
+      "bytes": 20031
+    },
+    {
+      "path": "ui/src/batch/spillBatchWorkflow.unrun.test.ts",
+      "sha256": "c0bf7c36d1e369261bb9fe2a8d639465d50696be7cfd76fe6d20d2d83f3bf861",
+      "bytes": 4591
+    },
+    {
+      "path": "ui/src/cropTransfer/model.ts",
+      "sha256": "719053dafe65ba6a4c9d484818f8f4be4f6dd92d6c78afafffe1e444cd18e696",
+      "bytes": 4343
+    },
+    {
+      "path": "ui/src/idBackground/IdBackgroundPanel.tsx",
+      "sha256": "608a622c086c18fc1ca4057a2d3f7041ccdb648ee646ddeae2c59a0ada17e7fd",
+      "bytes": 13241
+    },
+    {
+      "path": "ui/src/idBackground/UNRUN-acceptance.md",
+      "sha256": "b413f3f2cdcce59e3c03d2857f8be65e5d66ba6835783e7e57bc0bc720eeed54",
+      "bytes": 4677
+    },
+    {
+      "path": "ui/src/idBackground/model.test.ts",
+      "sha256": "466a8a33d6d5a6aacae15b466dab590b79ef71b74db89e12589a03cae2e7d8fb",
+      "bytes": 1000
+    },
+    {
+      "path": "ui/src/idBackground/model.ts",
+      "sha256": "bce8636525aa4f0c3a71bab6a017be9cd81346b1dfac0f89bec87ef3780f6ae2",
+      "bytes": 2884
+    },
+    {
+      "path": "ui/src/idBackground/useIdBackground.ts",
+      "sha256": "470af60ad9c6a4fd229f568c31a1243aa2eb6c8e4f06b3e6b6132de78c26d221",
+      "bytes": 8243
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "fcdc1938f978ec20db58240f4c799acc49ed82939e6b8b349924abd029bbcba6",
+      "bytes": 4124
+    },
+    {
+      "path": "ui/src/presets/presetWorkflow.test.ts",
+      "sha256": "7df042757162838cb9f1f8bb844c2e4608067e530d96ee903943d56d6f71b4b6",
+      "bytes": 14921
+    },
+    {
+      "path": "ui/src/presets/presetWorkflow.ts",
+      "sha256": "6ce22fd3732f99c59e5d4a6cbf76a06ac66a7f26ed24b33e9eaa6f6852940e73",
+      "bytes": 14534
+    },
+    {
+      "path": "ui/src/presets/usePresetWorkflow.ts",
+      "sha256": "cb1ed4f939cc6b85fb03231004469d9688d787cb47e99018168c4d8768515cde",
+      "bytes": 11494
+    },
+    {
+      "path": "ui/src/spillRemoval/SpillPixelReview.tsx",
+      "sha256": "20dde3ada7b34c04048e890233c32cf2c86b451a7d95dc2c22a90fa2e4906969",
+      "bytes": 2916
+    },
+    {
+      "path": "ui/src/spillRemoval/SpillRemovalPanel.tsx",
+      "sha256": "e1e0084137e1c9a11c843bb50dc02a62e0dbc632b048edd46393b546c572adc6",
+      "bytes": 6621
+    },
+    {
+      "path": "ui/src/spillRemoval/UNRUN-acceptance.md",
+      "sha256": "922f790f2db27cc8c3f2de0ae6109f94c616377b738d6e870378995247fbe3b4",
+      "bytes": 5036
+    },
+    {
+      "path": "ui/src/spillRemoval/model.test.ts",
+      "sha256": "ce1f5ac70fab908c90657aa2b3a554549409aa61c8940c4cce596367ff7f37cf",
+      "bytes": 4449
+    },
+    {
+      "path": "ui/src/spillRemoval/model.ts",
+      "sha256": "02e0df1acacce3140eef294f7cdc9424363f520cc1c07de91f0acf99887c932a",
+      "bytes": 5646
+    },
+    {
+      "path": "ui/src/spillRemoval/spillRemoval.css",
+      "sha256": "9e53fe3c13ba79bc62c335b88e68690df874692a9fe66796fa06ab1ffa637704",
+      "bytes": 499
+    }
+  ],
+  "verification": {
+    "performed": [
+      "Python stdlib AST parse of 967 source/fixture files without product imports",
+      "JSON parsing of UI package and registry extension",
+      "Git read-only diff whitespace check",
+      "Per-file SHA-256 and byte counts",
+      "Source-level independent numerical, transaction and transfer reviews"
+    ],
+    "not_performed": [
+      "product imports or execution",
+      "tests",
+      "build/compiler/typecheck",
+      "inference",
+      "downloads",
+      "browser/native runtime acceptance",
+      "numerical or photographic evaluation",
+      "performance or memory measurement"
+    ],
+    "ceilings": {
+      "App.tsx": 2121,
+      "main.rs": 2040,
+      "server.py": 6984
+    }
+  },
+  "residuals": [
+    "Deep opaque reflected illumination and same-colour subject/background remain ambiguous; no universal photographic correction claim.",
+    "Finite coarse-guided F/B relaxation can stall at a box boundary and is not proven converged; native-full-resolution spatial F/B recovery is not implemented.",
+    "Dedicated in-panel erase/restore painting is unfinished; existing source-mask brush/linear/radial snapshots provide independently owned manual coverage.",
+    "Manual coverage uses the existing 8-bit raster and only attenuates supported automatic correction.",
+    "Preset/batch transfer freezes scalar/source/dependency ownership, not actual rendered review for every parked target; fields are recomputed on activation/export.",
+    "New spill core must be built and packaged; runtime availability and 24MP memory/performance remain unmeasured.",
+    "Whole-ID derived transfer and wider alpha/HDR source pipeline remain guarded; edited HDR pixels receive no spill correction, not clipping.",
+    "Colour accuracy, edge/hair preservation, neutral/tile parity, native review, history/reopen and all authored fixtures remain UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

@@ -194,6 +194,7 @@ class BatchSyncController:
             ops = SC.check_scope(p.get("module_scope"))
             if SC.SEMANTIC.OP in ops:raise SC.ScopeError(SC.SEMANTIC.REASON)
             if SC.OP_CROP in ops:raise SC.ScopeError('Crop requires a frozen per-target visual preflight before commit')
+            if SC.SPILL_REMOVAL.OP in ops:raise SC.ScopeError("祛反光参数必须先逐目标冻结预检，不复制其他照片范围")
             if ID_BACKGROUND.OP in ops:raise SC.ScopeError("证件照背景必须先逐目标预检，不会复制其他照片的审核范围")
             if SKY.OP in ops:
                 raise SC.ScopeError("换天空批量必须逐目标预检，再用冻结 token 提交；不会猜测天空或复制源图区域")
@@ -305,6 +306,7 @@ class BatchSyncController:
                 version=self.versions.version(row)
                 self.editor.verify_crop(row,new,version.document_id,str(version.revision),r['_crop_prepared'])
                 crop_proofs[r['index']]=r['_crop_prepared']
+            if SC.SPILL_REMOVAL.OP in ops:SC.SPILL_REMOVAL.validate_target(new,row["path"],(row["src_h"],row["src_w"]))
             if ID_BACKGROUND.OP in ops:ID_BACKGROUND.validate_target(new,row["path"],(row["src_h"],row["src_w"]))
             if SKY.OP in ops:
                 SKY.validate_target(new["_sky_replacement"],row["path"],(row["src_h"],row["src_w"]))
@@ -337,7 +339,9 @@ class BatchSyncController:
             published_version=self.versions.version(self.documents.rows()[idx])
             try:
                 fr=self.editor.replay(new,mode="batch",replayed_for=f"batch:{batch_id}",
-                                      **({'strict_local':True} if SC.OP_CROP in ops or SOURCE.record(new) is not None or ID_BACKGROUND.OP in ops or SC.OP_LOCAL_GRADE in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops else {}))
+                                      **({'strict_local':True} if SC.SPILL_REMOVAL.OP in ops or SC.OP_CROP in ops or SOURCE.record(new) is not None or ID_BACKGROUND.OP in ops or SC.OP_LOCAL_GRADE in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops else {}))
+                if SC.SPILL_REMOVAL.OP in ops and SC.SPILL_REMOVAL.undo_key(self.editor.capture()) != SC.SPILL_REMOVAL.undo_key(new):
+                    raise SC.ScopeError('祛反光目标依赖在批量重放期间变化')
                 # A render may be expensive. Do not publish parked candidates
                 # whose provenance changed while the active target rendered.
                 for target_index,_,target_candidate in planned:
@@ -446,6 +450,7 @@ class BatchSyncController:
                 if rec.get('source_proof') is not None:
                     TRANSFER.require_restoration(cur,rec['before'],restored_state,ops,rec['source_proof'])
                     SOURCE.verify_row({**row,'state':restored_state},rec['source_proof'])
+                if SC.SPILL_REMOVAL.OP in ops:SC.SPILL_REMOVAL.validate_target(restored_state,row['path'],(row['src_h'],row['src_w']))
                 if SC.FRINGE_REPAIR.OP in ops:SC.FRINGE_REPAIR.validate_target(restored_state,row['path'],(row['src_h'],row['src_w']))
                 if ID_BACKGROUND.OP in ops:ID_BACKGROUND.validate_target(restored_state,row["path"],(row["src_h"],row["src_w"]))
                 if SKY.OP in ops:
@@ -470,7 +475,9 @@ class BatchSyncController:
             self.versions.advance(row)
             try:
                 frame = self.editor.replay(restored_state, mode="batch", replayed_for=f"batch_undo:{bid}",
-                                          **({'strict_local':True} if SOURCE.record(restored_state) is not None else {}))
+                                          **({'strict_local':True} if SC.SPILL_REMOVAL.OP in ops or SOURCE.record(restored_state) is not None else {}))
+                if SC.SPILL_REMOVAL.OP in ops and SC.SPILL_REMOVAL.undo_key(self.editor.capture()) != SC.SPILL_REMOVAL.undo_key(restored_state):
+                    raise SC.ScopeError('祛反光目标依赖在批量撤销期间变化')
                 for target_index,target,_,_ in planned:
                     if history_proofs[target_index] is not None:
                         SOURCE.verify_row({**target,'state':self.editor.capture() if target_index==live_idx else target['state']},history_proofs[target_index])

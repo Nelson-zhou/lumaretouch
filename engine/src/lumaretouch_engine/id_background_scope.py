@@ -1,4 +1,9 @@
-"""One portable scope: source review and user image bytes belong to each target."""
+"""One portable scope: source reviews, spill vectors and assets stay target-owned.
+
+The operation ID remains stable. Its versioned portable recipe admits v1 and
+v2, but only spill enabled/strength travel; the target's independent manual
+coverage survives preset/batch application and is restored exactly by undo.
+"""
 from . import id_background_state as S, id_background_assets as A
 from . import local_mask_state as M
 OP='lnx.id_background.v1'

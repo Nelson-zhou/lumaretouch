@@ -14,7 +14,7 @@ const keys = (v: Record<string, unknown>, expected: string[]) => Object.keys(v).
 const hash = (v: unknown): v is string => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v);
 const positive = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
 const size = (v: unknown): v is [number, number] => Array.isArray(v) && v.length === 2 && v.every(positive);
-function sourceProof(v: unknown): v is EffectiveSourceProof {
+export function sourceProof(v: unknown): v is EffectiveSourceProof {
   if (!object(v) || !keys(v, ['asset_sha256', 'original_sha256', 'creative_source']) || !hash(v.asset_sha256) || !hash(v.original_sha256)) return false;
   const c = v.creative_source;
   return c === null ? v.asset_sha256 === v.original_sha256 : object(c) && keys(c, ['sha256', 'width', 'height'])

@@ -58,7 +58,17 @@ def source_support(pipe,window,full_shape,spec):
         # The exact ID compositor alpha, transported through its actual geometry.
         # Restoring ID contribution does not restore upstream replaced pixels:
         # t still carries all previous exclusions.
-        removed=1-pipe.align_source_grade_mask(identity.fields[:,:1]).clamp(0,1)
+        if getattr(identity,'spill_source',None) is not None:
+            if identity.fields.shape[1]!=8:raise ValueError('祛染色来源足迹缺失')
+            # Use one transport of the exact packed consumer fields. A manually
+            # permitted, evidence-backed foreground correction is not original
+            # scene colour, even where the replacement alpha is fully opaque.
+            packed=pipe.align_source_grade_mask(identity.fields)
+            alpha=packed[:,:1].clamp(0,1)
+            spill_changed=(packed[:,4:7].abs().amax(dim=1,keepdim=True)>0) & (packed[:,7:8]>0) & (alpha>0)
+            removed=(1-alpha)+spill_changed.to(alpha.dtype)
+        else:
+            removed=1-pipe.align_source_grade_mask(identity.fields[:,:1]).clamp(0,1)
         recovery=pipe.effect_recovery
         if 'id_background' in recovery.required:
             if recovery.suspended or 'id_background' in recovery.suspended_targets:

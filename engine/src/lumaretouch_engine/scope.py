@@ -49,6 +49,7 @@ from . import extended_tone_scope as EXTENDED_TONE
 from . import photo_grain_scope as PHOTO_GRAIN
 from . import photo_detail_scope as PHOTO_DETAIL
 from . import fringe_repair_scope as FRINGE_REPAIR
+from . import spill_removal_scope as SPILL_REMOVAL
 from . import colour_grading_scope as COLOUR_GRADING
 from . import primary_calibration_scope as PRIMARY_CALIBRATION
 from . import selective_colour_scope as SELECTIVE_COLOUR
@@ -95,6 +96,10 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: operation_id → 契约。`single_face` 的模块只能作用在"已知只有一张脸"的文档上；
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
+    SPILL_REMOVAL.OP: {"params": ("enabled", "strength"), "state_fields": SPILL_REMOVAL.FIELDS,
+        "single_face": False, "transferable": True, "cmd": "background", "label": "祛背景色反光（参数）",
+        "read": SPILL_REMOVAL.params_of, "write": SPILL_REMOVAL.install,
+        "why_not": "仅同步启用与强度；目标须已有自己的已启用证件照背景及审核主体，保留目标手工覆盖，逐图重算颜色"},
     FRINGE_REPAIR.OP: {"params": ("enabled", "strength"), "state_fields": FRINGE_REPAIR.FIELDS,
         "single_face": False, "transferable": True, "cmd": "fringe_repair", "label": "黑白边缘修复",
         "read": FRINGE_REPAIR.params_of, "write": FRINGE_REPAIR.install,
@@ -166,7 +171,7 @@ MODULES: dict[str, dict] = {
                 "why_not": "仅手动数值；目标保留自己的镜头配置、自动结果与引导线，改变畸变前须重新分析"},
     ID_BACKGROUND.OP: {"params": ("recipe",), "state_fields": ID_BACKGROUND.FIELDS, "single_face": False,
                 "transferable": True, "cmd": "background", "read": ID_BACKGROUND.params_of, "write": ID_BACKGROUND.install,
-                "why_not": "仅复制颜色及设计参数；各目标保留独立审核范围，素材模式使用各目标自己的已绑定素材"},
+                "why_not": "仅复制颜色、设计与祛反光参数；各目标保留独立审核范围和手工祛反光覆盖，素材使用目标自己的绑定"},
     STUDIO.OP: {"params": ("recipe",), "state_fields": STUDIO.FIELDS, "single_face": False,
                 "transferable": True, "cmd": "studio_background", "read": STUDIO.params_of, "write": STUDIO.install,
                 "why_not": "只同步强度；目标必须已有自己的背景/地面范围，保护和恢复笔迹不复制"},
@@ -367,6 +372,9 @@ def check_params(op: str, params: dict) -> dict:
     if op == LIPSTICK.OP:
         try: return LIPSTICK.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
+    if op == SPILL_REMOVAL.OP:
+        try: return SPILL_REMOVAL.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
     if op == FRINGE_REPAIR.OP:
         try: return FRINGE_REPAIR.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
@@ -459,6 +467,7 @@ def check_params(op: str, params: dict) -> dict:
 
 
 def _neutral_of(op: str, key: str):
+    if op == SPILL_REMOVAL.OP: return SPILL_REMOVAL.S.neutral()[key]
     if op == FRINGE_REPAIR.OP: return FRINGE_REPAIR.S.neutral()[key]
     if op == PHOTO_GRAIN.OP and key == "recipe": return PHOTO_GRAIN.S.neutral()
     if op == COLOUR_GRADING.OP and key == "recipe": return COLOUR_GRADING.S.neutral()
@@ -503,6 +512,8 @@ def check_scope(ops) -> list[str]:
         if op not in out:
             out.append(op)
     if OPTICS.OP in out and OPTICS_AUTO.OP in out: raise ScopeError("镜头/透视手动保留模式与自动重算模式不能同时选择")
+    if ID_BACKGROUND.OP in out and SPILL_REMOVAL.OP in out:
+        raise ScopeError("完整证件照背景与独立祛反光参数不能同时选择；请选择一种作用域")
     _check_shared_strength(out, {})
     return out
 
@@ -530,7 +541,7 @@ def _check_shared_strength(ops: list[str], mods: dict[str, dict]) -> None:
 # review. This parameter validator alone never authorizes a transfer commit.
 DERIVED_PARAMETER_OPS = frozenset((
     OP_EXPOSURE, OP_WHITE_BALANCE, OP_LEVELS, OP_CURVES, OP_HSL,
-    EXTENDED_TONE.OP, PHOTO_DETAIL.OP, PHOTO_GRAIN.OP, COLOUR_GRADING.OP, FRINGE_REPAIR.OP,
+    EXTENDED_TONE.OP, PHOTO_DETAIL.OP, PHOTO_GRAIN.OP, COLOUR_GRADING.OP, FRINGE_REPAIR.OP, SPILL_REMOVAL.OP,
     PRIMARY_CALIBRATION.OP, SELECTIVE_COLOUR.OP, COLOUR_EDITOR.OP, OP_CROP,
 ))
 
@@ -582,7 +593,7 @@ def restore_modules(current, previous, ops):
         if set(ops) - DERIVED_PARAMETER_OPS:
             raise ScopeError('合成来源的通用历史不能恢复未经支持的模块')
         require_modules(current, params_of(previous, ops), related_states=(previous,))
-    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP,REFERENCE.OP,SEMANTIC.OP,ID_BACKGROUND.OP,FRINGE_REPAIR.OP)]
+    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP,REFERENCE.OP,SEMANTIC.OP,ID_BACKGROUND.OP,FRINGE_REPAIR.OP,SPILL_REMOVAL.OP)]
     result = apply_modules(current, params_of(previous, ordinary)) if ordinary else dict(current)
     if OP_LOCAL_GRADE in ops: LOCAL_GRADE.restore(result, previous)
     if OPTICS_AUTO.OP in ops: OPTICS_AUTO.restore(result, previous)
@@ -590,6 +601,7 @@ def restore_modules(current, previous, ops):
     if SEMANTIC.OP in ops: SEMANTIC.restore(result, previous)
     if ID_BACKGROUND.OP in ops: ID_BACKGROUND.restore(result, previous)
     if FRINGE_REPAIR.OP in ops: FRINGE_REPAIR.restore(result, previous)
+    if SPILL_REMOVAL.OP in ops: SPILL_REMOVAL.restore(result, previous)
     return result
 
 

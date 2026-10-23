@@ -7,14 +7,15 @@ import './idBackground.css';
 import {VerifiedPicker} from './VerifiedPicker';
 import {pickerLabels,type PickerMode} from './model';
 import type {SelectedSampleReference} from '../sampleLibrary/model';
+import {SpillRemovalPanel} from '../spillRemoval/SpillRemovalPanel';
 export function IdBackgroundPanel({documentId,hostRevision,disabled,available,masks,onChanged,onBusy,selectedReference,onSelectReference,pickerDisabled}:{documentId:string;hostRevision:number;disabled:boolean;available:boolean;masks?:LocalMaskReport;onChanged?:()=>void;onBusy?:(busy:boolean)=>void;selectedReference?:SelectedSampleReference|null;onSelectReference?:()=>void;pickerDisabled?:boolean}){
  const owner=useIdBackground(documentId,hostRevision,available,onChanged),[draft,setDraft]=useState<Recipe|null>(null),[hexText,setHexText]=useState(''),[ids,setIds]=useState<string[]>([]),[reviewed,setReviewed]=useState(false),[dialogError,setDialogError]=useState(''),[picking,setPicking]=useState(false),[pickerMode,setPickerMode]=useState<PickerMode>('original');
  const current=useRef(documentId);current.current=documentId;
- useEffect(()=>{setDraft(owner.report?structuredClone(owner.report.recipe):null);setReviewed(false);setIds([]);setHexText(owner.report?hex(owner.report.recipe.background.color??[255,255,255]):'');},[owner.report,documentId]);
+ useEffect(()=>{setDraft(owner.report?structuredClone(owner.report.recipe):null);setReviewed(false);setIds([]);setHexText(owner.report?hex(owner.report.recipe.background.color??[255,255,255]):'');},[owner.report?.recipe_document_id,owner.report?.recipe_revision,documentId]);
  useEffect(()=>{onBusy?.(owner.busy||owner.uncertain||picking);return()=>onBusy?.(false);},[owner.busy,owner.uncertain,picking,onBusy]);
  useEffect(()=>{setPicking(false);},[documentId,hostRevision,selectedReference]);
  const selectedColor:RGB=draft?.background.color??[255,255,255];
- const locked=disabled||owner.busy||owner.uncertain||!available||picking,edit=(patch:Partial<Recipe>)=>draft&&setDraft({...draft,...patch});
+ const locked=disabled||owner.busy||owner.uncertain||!available||picking,edit=(patch:Partial<ReturnType<typeof editable>>)=>draft&&setDraft({...draft,...patch});
  const bg=(patch:Partial<Background>)=>draft&&edit({background:{...draft.background,...patch}}),shadow=(patch:Partial<Shadow>)=>draft&&edit({shadow:{...draft.shadow,...patch}});
  const color=(value:RGB)=>{bg({kind:draft?.background.kind==='asset'?'asset':'solid',color:value});setHexText(hex(value));};
  const choices=masks?.recipe.objects.filter(m=>m.enabled&&m.kind!=='semantic'&&m.kind!=='full')??[];
@@ -45,6 +46,7 @@ export function IdBackgroundPanel({documentId,hostRevision,disabled,available,ma
  <div data-control-id={control('2dbfc5c48d')}>{(['normal','multiply','softlight'] as const).map((blend,i)=><label key={blend} data-control-id={control(['f7a0f5d983','6778b740a1','a50052e23b'][i])}><input type="radio" name={`id-blend-${documentId}`} checked={draft.shadow.blend===blend} onChange={()=>shadow({blend})}/>{['正常','正片叠底','柔光'][i]}</label>)}</div>
  {numeric('阴影不透明度',draft.shadow.opacity,0,1,.01,'427037b85c',opacity=>shadow({opacity}))}{numeric('阴影虚化（源图像素）',draft.shadow.blur,0,256,1,'63d8aedbf9',blur=>shadow({blur}))}{numeric('渐变',draft.shadow.gradient,0,1,.01,'02c0300cd7',gradient=>shadow({gradient}))}{numeric('水平（源图像素）',draft.shadow.x,-8192,8192,1,'99bc6203fa',x=>shadow({x}))}{numeric('垂直（源图像素）',draft.shadow.y,-8192,8192,1,'56e54c5094',y=>shadow({y}))}{numeric('阴影距离（源图像素）',draft.shadow.distance,0,8192,1,'c549f5beef',distance=>shadow({distance}))}{numeric('阴影角度',draft.shadow.angle,-180,180,1,'a8447804ff',angle=>shadow({angle}))}<p>由审核后的 alpha 生成二维投影，使用固定线性 RGB 混合空间，不模拟物理三维光照。</p></fieldset>
  <button type="button" disabled={draft.enabled&&(!draft.support[draft.selected_support]||!owner.report?.available)} onClick={()=>void owner.request('id_set',{recipe:editable(draft)})}>应用背景配方</button><button type="button" onClick={()=>owner.report&&setDraft(structuredClone(owner.report.recipe))}>放弃尚未应用的修改</button></fieldset>}
+ <SpillRemovalPanel documentId={documentId} report={owner.report} review={owner.spillReview} masks={masks} disabled={locked} request={owner.request} invalidate={owner.clearSpillReview}/>
  <p role="status">{owner.message}</p>{picking&&<VerifiedPicker documentId={documentId} mode={pickerMode} reference={selectedReference} onSample={rgb=>{color(rgb);setPicking(false);}} onClose={()=>setPicking(false)}/>}{dialogError&&<p role="alert">{dialogError}</p>}<button type="button" disabled={owner.busy} onClick={()=>void owner.query()}>查询原操作</button><button type="button" disabled={owner.busy} onClick={()=>void owner.read()}>重新读取并核对状态</button>
- <details><summary>处理边界与待验收项</summary><p>原图阴影提取、背景反光祛染和证件照独立恢复画笔尚未实现。参考图取色需先选择真实样片；主体取色需先审核关联物品范围。创意回流图读取自己的当前源图与审核范围，不借用原照片蒙版；透明/HDR 源图仍明确拒绝。源代码接入不代表画质、性能或 UI 验收通过。</p>{owner.report?.boundaries?.map(v=><p key={v}>{v}</p>)}</details></section>;
+ <details><summary>处理边界与待验收项</summary><p>原图阴影提取和证件照独立恢复画笔尚未实现。背景反光祛染单独生成真实前后审核后才可应用，手工覆盖复用当前源图中已绘制并审核的对象。参考图取色需先选择真实样片；主体取色需先审核关联物品范围。创意回流图读取自己的当前源图与审核范围，不借用原照片蒙版；透明/HDR 源图仍明确拒绝。源代码接入不代表画质、性能或 UI 验收通过。</p>{owner.report?.boundaries?.map(v=><p key={v}>{v}</p>)}</details></section>;
 }

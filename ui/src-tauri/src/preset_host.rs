@@ -66,13 +66,22 @@ fn crop_review(value:&Value,document:&Value,revision:&Value,params:&Value)->bool
         &&bytes.len()<=400000&&bytes.len()%4==0&&bytes.starts_with("iVBOR")
         &&bytes.bytes().all(|b|b.is_ascii_alphanumeric()||b"+/=".contains(&b))
 }
+fn spill_source(value:&Value)->bool {
+    let hash=|v:&Value|v.as_str().is_some_and(|s|s.len()==64&&s.bytes().all(|b|b.is_ascii_digit()||(b'a'..=b'f').contains(&b)));
+    if value.as_object().map_or(true,|m|m.len()!=3||!m.contains_key("creative_source"))||!hash(&value["asset_sha256"])||!hash(&value["original_sha256"]){return false;}
+    let c=&value["creative_source"];
+    if c.is_null(){return value["asset_sha256"]==value["original_sha256"];}
+    c.as_object().is_some_and(|m|m.len()==3)&&c["sha256"]==value["asset_sha256"]
+        &&["width","height"].iter().all(|k|c[*k].as_u64().is_some_and(|n|n>0&&n<=1_000_000))
+}
 fn reviewed_types(value: &Value) -> bool {
     let Some(ops)=value["module_scope"].as_array() else{return false;};
     let local=ops.iter().any(|op|op=="lnx.local_grade.v1");
     let optics=ops.iter().any(|op|op=="lnx.optics_auto.v1");
     let crop=ops.iter().any(|op|op=="lnx.crop.v1");
+    let spill=ops.iter().any(|op|op=="lnx.spill_removal.v1");
     let xmp=!value["xmp_report"].is_null()||!value["xmp_transfer"].is_null();
-    (local||optics||crop||xmp) && (!local||value["local_mask_transfer"].is_object())
+    (local||optics||crop||xmp||spill) && (!spill||spill_source(&value["source_proof"])) && (!local||value["local_mask_transfer"].is_object())
         && (!optics||optical_review(&value["optical_transfer"],&value["document_id"],&value["revision"],&value["applies"]["lnx.optics_auto.v1"]))
         && (!crop||crop_review(&value["crop_transfer"],&value["document_id"],&value["revision"],&value["applies"]["lnx.crop.v1"]))
         && (!xmp||(xmp_protocol::transfer(&value["xmp_transfer"],&value["document_id"],&value["revision"],&value["xmp_report"])

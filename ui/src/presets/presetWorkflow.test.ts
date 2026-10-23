@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createPresetWorkflow,type PresetTransport,type PresetOptions,type PresetReply} from './presetWorkflow.ts';
+import {createPresetWorkflow,validatePresetReply,type PresetTransport,type PresetOptions,type PresetReply} from './presetWorkflow.ts';
 import {XMP_MODE,type XmpReport,type XmpSummary,type XmpTransfer} from '../xmpImport/model.ts';
 const op='lnx.hsl.v1',modules={[op]:{recipe:{version:1}}};
 const context={enabled:true,editable:true,documentId:'doc-1'};
@@ -146,4 +146,20 @@ test('XMP import receipts must preserve the explicit selection and omit original
       preset:{schema:'lrt.preset.v1',id:'xmp-p',name:'XMP',kind:'color',builtin:false,modules:xmpModules,xmp_import:source}}};};
     await flow.submit('import',{path:'/sample.xmp',xmpAck:{mode:XMP_MODE,source_sha256:'a'.repeat(64),report_sha256:'b'.repeat(64),selected:['exposure']}});
     assert.equal(flow.snapshot().phase,mismatch?'uncertain':'done');}
+});
+
+// AUTHORED / UNRUN: scalar spill transfer must retain actual target ownership.
+test('spill preflight rejects missing or inconsistent effective source proof',()=>{
+  const op='lnx.spill_removal.v1',opts={id:'spill',documentId:'doc-1'};
+  const reply:PresetReply={protocol:1,request_id:'spill-review',action:'preflight',success:true,
+    outcome_unknown:false,document_id:'doc-1',id:'spill',module_scope:[op],revision:'4',
+    preflight_token:'1'.repeat(32),applies:{[op]:{enabled:true,strength:40}},
+    source_proof:{asset_sha256:'a'.repeat(64),original_sha256:'a'.repeat(64),creative_source:null}};
+  assert.doesNotThrow(()=>validatePresetReply(reply,'preflight',opts,'spill-review',[op]));
+  assert.throws(()=>validatePresetReply({...reply,source_proof:undefined},'preflight',opts,'spill-review',[op]));
+  assert.throws(()=>validatePresetReply({...reply,source_proof:{asset_sha256:'b'.repeat(64),
+    original_sha256:'a'.repeat(64),creative_source:null}},'preflight',opts,'spill-review',[op]));
+  assert.doesNotThrow(()=>validatePresetReply({...reply,source_proof:{asset_sha256:'b'.repeat(64),
+    original_sha256:'a'.repeat(64),creative_source:{sha256:'b'.repeat(64),width:12,height:8}}},
+    'preflight',opts,'spill-review',[op]));
 });

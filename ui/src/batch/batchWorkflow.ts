@@ -1,5 +1,5 @@
 import {sameAssociationReview,validAssociationReview,type AssociationReview,type AssociationTarget} from '../people/associationProof';
-import {CROP_OP,CROP_LIMITS,validCropReview,type CropReview} from '../cropTransfer/model.ts';
+import {CROP_OP,CROP_LIMITS,sourceProof,validCropReview,type CropReview} from '../cropTransfer/model.ts';
 import {samePeopleRequest,validPeopleReview,peopleProofDocument,type PeopleTransferRequest,type PeopleTransferProof,type PeopleTransferReview} from '../people/transferProof.ts';
 import {validReferenceReview,type ReferenceReview} from '../referenceColor/ReferenceColorReview';
 import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../optics/transferReviewModel';
@@ -8,18 +8,32 @@ import {LOCAL_GRADE_OP,validTransferEvidence,sameTransferOptions,type MaskTransf
 export type BatchAction='preflight'|'commit'|'undo'|'redo';
 export type BatchOptions={docs?:string[];moduleScope?:string[];conflictPolicy?:string;batchId?:string;preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest};
 export type BatchTarget={index:number|null;path:string;document_id:string;revision?:string;blocked?:string|null;
-  expected_revision?:string;current_revision?:string|null;result_revision?:string|null;outcome?:string;before?:unknown;crop_transfer?:CropReview;local_mask_transfer?:MaskTransferEvidence;optical_transfer?:OpticalTargetReview;reference_color?:ReferenceReview;people_transfer?:PeopleTransferReview|null;association?:AssociationTarget['association']};
+  source_proof?:unknown;expected_revision?:string;current_revision?:string|null;result_revision?:string|null;outcome?:string;before?:unknown;crop_transfer?:CropReview;local_mask_transfer?:MaskTransferEvidence;optical_transfer?:OpticalTargetReview;reference_color?:ReferenceReview;people_transfer?:PeopleTransferReview|null;association?:AssociationTarget['association']};
+type BatchSource={document_id:string;revision:string;path:string;source_proof?:unknown};
 export type BatchReply={batch_id?:string;request_id:string;action:BatchAction;success:boolean;error?:string;outcome_unknown?:boolean;
-  persistent_association?:AssociationReview;association_source?:BatchTarget;source_outcome?:BatchTarget;people_transfer?:boolean;local_mask_transfer?:MaskTransferOptions;preflight_token?:string;source_snapshot?:{document_id:string;revision:string;path:string};source_changed_since_preflight?:boolean;
+  persistent_association?:AssociationReview;association_source?:BatchTarget;source_outcome?:BatchTarget;people_transfer?:boolean;local_mask_transfer?:MaskTransferOptions;preflight_token?:string;source_snapshot?:BatchSource;source_changed_since_preflight?:boolean;
   module_scope?:string[];applies?:Record<string,unknown>;policy?:string;targets?:unknown[];target_outcomes?:BatchTarget[];
   rejected_docs?:Array<{doc:unknown;error:string}>;ok?:number;blocked?:number;restored?:number[];conflicts?:Array<{path:string;reason:string}>};
-export type BatchPlan=Omit<BatchReply,'targets'|'success'|'preflight_token'|'source_snapshot'|'module_scope'|'applies'|'ok'|'blocked'>&{success:true;preflight_token:string;source_snapshot:{document_id:string;revision:string;path:string};
+export type BatchPlan=Omit<BatchReply,'targets'|'success'|'preflight_token'|'source_snapshot'|'module_scope'|'applies'|'ok'|'blocked'>&{success:true;preflight_token:string;source_snapshot:BatchSource;
   module_scope:string[];targets:BatchTarget[];applies:Record<string,unknown>;ok:number;blocked:number};
 export type BatchContext={docs:string[];moduleScope:string[];conflictPolicy:string;sourceDocumentId:string;enabled:boolean;label:string;referencePath?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest;peopleProof?:PeopleTransferProof};
 export type BatchUi={phase:'closed'|'preflighting'|'review'|'committing'|'uncertain'|'done'|'error';
   hidden?:boolean;operation:BatchAction;plan:BatchPlan|null;result:BatchReply|null;message:string;scopeLabel:string};
 export type BatchTransport={request:(action:BatchAction,options:BatchOptions)=>Promise<{requested:boolean}>;
   read:(id:string)=>Promise<{phase:string;request_id:string;result?:BatchReply;error?:string}>};
+const SPILL_OP='lnx.spill_removal.v1';
+const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
+const hash=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
+function spillParameters(v:unknown){
+  return object(v)&&Object.keys(v).sort().join('|')==='enabled|strength'&&typeof v.enabled==='boolean'
+    &&typeof v.strength==='number'&&Number.isFinite(v.strength)&&v.strength>=0&&v.strength<=100;
+}
+function sameSourceProof(a:unknown,b:unknown){
+  return sourceProof(a)&&sourceProof(b)&&a.asset_sha256===b.asset_sha256&&a.original_sha256===b.original_sha256
+    &&(a.creative_source===null?b.creative_source===null:b.creative_source!==null
+      &&a.creative_source.sha256===b.creative_source.sha256&&a.creative_source.width===b.creative_source.width
+      &&a.creative_source.height===b.creative_source.height);
+}
 export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>void,
   options:{uuid?:()=>string;pause?:(ms:number)=>Promise<void>;now?:()=>number;timeoutMs?:number}={}){
   const uuid=options.uuid??(()=>crypto.randomUUID());
@@ -52,6 +66,9 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       ||!Array.isArray(result.rejected_docs)||!Number.isInteger(result.ok)||!Number.isInteger(result.blocked)
       ||(result.ok??-1)<0||(result.blocked??-1)<0||(result.ok??0)+(result.blocked??0)!==result.targets.length
       ||(!people&&Object.keys(result.applies).sort().join('|')!==[...scope].sort().join('|')))throw Error('预检回执不完整，未允许提交');
+    const spill=scope.includes(SPILL_OP);
+    if(spill&&(scope.includes('lnx.id_background.v1')||result.source_snapshot.document_id!==context.sourceDocumentId||!sourceProof(result.source_snapshot.source_proof)
+      ||!spillParameters(result.applies[SPILL_OP])))throw Error('祛反光预检缺少真实源图证明或包含非标量参数');
     if(people&&(!peopleProof||result.people_transfer!==true||!samePeopleRequest(result.applies,people)
       ||result.source_snapshot.document_id!==peopleProofDocument(peopleProof).document_id
       ||result.source_snapshot.revision!==String(peopleProofDocument(peopleProof).revision)))throw Error('人物迁移源图、关联或参数选择与请求不符');
@@ -68,6 +85,13 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       if(!t||typeof t.path!=='string'||!identity(t.document_id)||!revision(t.revision)
         ||!Number.isInteger(t.index)||(t.index??-1)<0||ids.has(t.document_id))throw Error('预检目标身份不完整');
       if(exactPeopleTargets&&!exactPeopleTargets.delete(t.document_id))throw Error('预检加入了未指定的人物目标');
+      if(spill&&t.blocked!=null&&(typeof t.blocked!=='string'||!t.blocked))throw Error('祛反光目标受阻状态无效');
+      if(spill&&!t.blocked){
+        const before=object(t.before)?t.before[SPILL_OP]:null;
+        if(!sourceProof(t.source_proof)||!object(before)||Object.keys(before).length!==1||!hash(before.target_recipe_key)
+          ||t.document_id===result.source_snapshot.document_id&&!sameSourceProof(t.source_proof,result.source_snapshot.source_proof))
+          throw Error('祛反光目标缺少自己的来源证明或冻结背景依赖');
+      }
       if(scope.includes(LOCAL_GRADE_OP)&&!t.blocked&&(!validTransferEvidence(t.local_mask_transfer)||!sameTransferOptions(t.local_mask_transfer.policy,transfer)))throw Error('缺少匹配的目标局部组预检证据');
       if(scope.includes(OPTICS_AUTO_OP)&&!t.blocked&&!validOpticalReview(t.optical_transfer,t.document_id,t.revision,result.applies[OPTICS_AUTO_OP]))throw Error('缺少匹配的自动镜头/透视目标预检证据');
       if(scope.includes('lnx.reference_color.v1')&&!t.blocked&&(result.applies['lnx.reference_color.v1'] as {strength?:number})?.strength!==0&&!validReferenceReview(t.reference_color,t.document_id,t.revision??''))throw Error('缺少匹配的参考统一目标预检证据');
@@ -92,6 +116,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     if(!plan||!Array.isArray(result.target_outcomes)||result.target_outcomes.length!==plan.targets.length
       ||result.source_snapshot?.document_id!==plan.source_snapshot.document_id
       ||result.source_snapshot?.revision!==plan.source_snapshot.revision||result.source_snapshot?.path!==plan.source_snapshot.path)throw Error('提交结果缺少冻结源图或目标明细');
+    if(plan.module_scope.includes(SPILL_OP)&&!sameSourceProof(result.source_snapshot?.source_proof,plan.source_snapshot.source_proof))throw Error('祛反光提交来源证明与冻结预检不同');
     if(plan.persistent_association){const source=result.source_outcome,before=plan.association_source;
       if(!sameAssociationReview(result.persistent_association,plan.persistent_association))throw Error('持久关联提交内容或版本与冻结审核不同');
       if(!source||!before||source.document_id!==before.document_id||source.path!==before.path||source.expected_revision!==before.revision||source.outcome!=='applied'||!revision(source.result_revision)||BigInt(source.result_revision)<=BigInt(before.revision??'0'))throw Error('持久关联缺少源成员的实际提交结果');}

@@ -4,6 +4,29 @@
   "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
+      "operation_id": "lnx.spill_removal.v1",
+      "parameter_key": "enabled",
+      "type": "boolean",
+      "neutral": false,
+      "transferable": true,
+      "source_requirement": "LNX-REF-PC-32475-C-e999ab085a",
+      "reason": "Original bounded fixed-alpha colour estimation and conservative reflected-colour heuristic; scalar-only transfer into targets with their own active reviewed ID background. Manual coverage, source/support/assets remain target-owned. Deep opaque spill and matching foreground colours unresolved; runtime/photo acceptance UNRUN."
+    },
+    {
+      "operation_id": "lnx.spill_removal.v1",
+      "parameter_key": "strength",
+      "type": "number",
+      "neutral": 50,
+      "transferable": true,
+      "source_requirement": "LNX-REF-PC-32475-C-e999ab085a",
+      "reason": "Original bounded fixed-alpha colour estimation and conservative reflected-colour heuristic; scalar-only transfer into targets with their own active reviewed ID background. Manual coverage, source/support/assets remain target-owned. Deep opaque spill and matching foreground colours unresolved; runtime/photo acceptance UNRUN.",
+      "range": {
+        "min": 0,
+        "max": 100,
+        "step": 1
+      }
+    },
+    {
       "operation_id": "lnx.fringe_repair.v1",
       "parameter_key": "enabled",
       "type": "boolean",

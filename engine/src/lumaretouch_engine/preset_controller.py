@@ -243,7 +243,7 @@ class PresetController:
             mods = DERIVED.require_modules(previous, mods)
             if doc.get("xmp_import") is not None: raise SC.ScopeError("XMP adaptation requires current target-image review before apply")
             if p.get("xmp_review_ack") is not None: raise SC.ScopeError("Unexpected XMP review acknowledgment")
-            if LG.OP in mods or OA.OP in mods or RC.OP in mods or SC.OP_CROP in mods: raise SC.ScopeError('含裁剪、局部组或自动镜头/透视的预设必须先查看本目标预检，再确认应用')
+            if SC.SPILL_REMOVAL.OP in mods or LG.OP in mods or OA.OP in mods or RC.OP in mods or SC.OP_CROP in mods: raise SC.ScopeError('含裁剪、局部组或自动镜头/透视的预设必须先查看本目标预检，再确认应用')
             if SOURCE.record(previous) is not None:
                 source_proof = SOURCE.row_proof({**self.ports.target_row(), 'state':previous})
         DERIVED.require_modules(previous, mods, source_proof)
@@ -259,6 +259,9 @@ class PresetController:
         if RC.OP in ops:
             recipe=RC.verify_target(record['reference'],previous,state,self.ports.target_row(),self.ports.document_id(),self.ports.revision(),mods[RC.OP])
             RC.apply_verified(state,recipe)
+        if SC.SPILL_REMOVAL.OP in ops:
+            row=self.ports.target_row()
+            SC.SPILL_REMOVAL.validate_target(state,row["path"],(row["src_h"],row["src_w"]))
         if ID_BACKGROUND.OP in ops:
             row=self.ports.target_row()
             ID_BACKGROUND.validate_target(state,row["path"],(row["src_h"],row["src_w"]))
@@ -283,6 +286,9 @@ class PresetController:
                 raise SC.ScopeError('预设渲染期间目标文档发生变化')
             if self.ports.revision()!=published_revision:raise SC.ScopeError('预设渲染期间目标版本发生变化')
             if source_proof is not None:SOURCE.verify_row({**current,'state':self.ports.capture()},source_proof)
+            if SC.SPILL_REMOVAL.OP in ops:
+                if SC.SPILL_REMOVAL.undo_key(self.ports.capture()) != SC.SPILL_REMOVAL.undo_key(state):
+                    raise SC.ScopeError('祛反光目标依赖在重放期间变化')
             if SC.OP_CROP in ops:
                 proof=deepcopy(record['crop']);proof['revision']=str(published_revision)
                 self.ports.verify_crop(current,state,self.ports.document_id(),str(published_revision),proof)
@@ -293,8 +299,8 @@ class PresetController:
         published_revision=self.ports.revision()
         self._effect_started = True
         frame = apply_with_rollback(self.ports.replay, previous, state, preset_id=pid,
-                                    emit=self.emit, invalidate=self.ports.invalidate, verify_after=verify_after if SC.OP_CROP in ops or doc.get("xmp_import") is not None else None,
-                                    strict_local=doc.get("xmp_import") is not None or SC.OP_CROP in ops or SOURCE.record(state) is not None or ID_BACKGROUND.OP in ops or LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
+                                    emit=self.emit, invalidate=self.ports.invalidate, verify_after=verify_after if source_proof is not None or SC.OP_CROP in ops or doc.get("xmp_import") is not None else None,
+                                    strict_local=SC.SPILL_REMOVAL.OP in ops or doc.get("xmp_import") is not None or SC.OP_CROP in ops or SOURCE.record(state) is not None or ID_BACKGROUND.OP in ops or LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
         after = OA.before_params(state, ops)
         self.last = {"id": pid, "name": doc["name"], "ops": ops, "params": after}
         render_ms = frame.pop("render_ms")
@@ -307,7 +313,7 @@ class PresetController:
 
     def save(self, p):
         requested = p.get("module_scope")
-        ops = SC.check_scope([op for op in SC.transferable_ops() if op not in (OA.OP,RC.OP)] if requested is None else requested)
+        ops = SC.check_scope([op for op in SC.transferable_ops() if op not in (OA.OP,RC.OP,SC.SPILL_REMOVAL.OP)] if requested is None else requested)
         state = self.ports.capture()
         if SOURCE.record(state) is not None and set(ops) - SC.DERIVED_PARAMETER_OPS:
             raise SC.ScopeError('合成来源只能通过通用预设保存明确选择的全局参数模块')

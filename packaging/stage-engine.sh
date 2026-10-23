@@ -209,6 +209,12 @@ rustc --edition=2021 --crate-type cdylib -C opt-level=3 "$here/../core/fringe_re
 mkdir -p "$stage/lumaretouch_engine/third_party/fringe_repair"
 cp "$here/../core/fringe_repair/lib.rs" "$here/../core/fringe_repair/fringe_repair.h" "$here/../LICENSE" "$here/../docs/fringe-repair/KERNEL.md" "$stage/lumaretouch_engine/third_party/fringe_repair/"
 
+# Original fixed-alpha colour estimation / selective spill; offline build only.
+rustc --edition=2021 --crate-type cdylib -C opt-level=3 "$here/../core/spill_removal/lib.rs" -o "$stage/lumaretouch_engine/bin/liblrt_spill_removal.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/spill_removal"
+cp "$here/../core/spill_removal/lib.rs" "$here/../core/spill_removal/spill_removal.h" "$here/../core/spill_removal/README.md" "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/spill_removal/"
+cp "$here/../docs/spill-removal/README.md" "$stage/lumaretouch_engine/third_party/spill_removal/INTEGRATION.md"
+
 # Original deterministic source-coordinate photo grain, build-time only.
 bash "$here/build-photo-grain.sh" "$stage/lumaretouch_engine/bin/liblrt_photo_grain.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/photo_grain"

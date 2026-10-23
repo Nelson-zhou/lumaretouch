@@ -81,7 +81,7 @@ class FrozenBatchController:
                 if not 0<=index<len(rows):raise SC.ScopeError('no active source document')
                 source=self.ports.capture();source_row=rows[index];version=self.versions.version(source_row)
                 mods=SC.params_of(source,ops)
-                source_owned=SC.OP_CROP in ops or SOURCE.record(source) is not None or any(SOURCE.record(rows[i].get('state') or {}) is not None for i in indices)
+                source_owned=SC.SPILL_REMOVAL.OP in ops or SC.OP_CROP in ops or SOURCE.record(source) is not None or any(SOURCE.record(rows[i].get('state') or {}) is not None for i in indices)
                 source_proof=SOURCE.row_proof({**source_row,'state':source}) if source_owned else None
                 TRANSFER.require_modules(source,mods,source_proof)
                 reference_options=p.get('reference_color')
@@ -111,10 +111,11 @@ class FrozenBatchController:
                     if not blocked and LG.OP in ops:
                         try:prepared,transfer=LR.prepare_modules(source if live else row['state'],mods,row,local_options,preview=len(public)<12)
                         except Exception as error:blocked=str(error)[:2000]
-                    if not blocked and ID_BACKGROUND.OP in ops:
+                    if not blocked and (ID_BACKGROUND.OP in ops or SC.SPILL_REMOVAL.OP in ops):
                         try:
                             candidate=OA.candidate(source if live else row['state'],prepared or mods,local_replace_legacy=bool(transfer and transfer['legacy_removed']))
-                            ID_BACKGROUND.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
+                            validator=SC.SPILL_REMOVAL if SC.SPILL_REMOVAL.OP in ops else ID_BACKGROUND
+                            validator.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
                         except Exception as error:blocked=str(error)[:2000]
                     if not blocked and SKY.OP in ops:
                         try:
@@ -228,10 +229,11 @@ class FrozenBatchController:
                     if not blocked and LG.OP in plan.modules:
                         try:LR.verify_modules(json.loads(target.prepared_json),row,json.loads(target.transfer_json))
                         except Exception as error:blocked=str(error)[:2000]
-                    if not blocked and ID_BACKGROUND.OP in plan.modules:
+                    if not blocked and (ID_BACKGROUND.OP in plan.modules or SC.SPILL_REMOVAL.OP in plan.modules):
                         try:
                             candidate=OA.candidate(live_state if index==current else row['state'],json.loads(target.prepared_json) if target.prepared_json is not None else plan.params(),local_replace_legacy=bool(target.transfer_json and json.loads(target.transfer_json)['legacy_removed']))
-                            ID_BACKGROUND.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
+                            validator=SC.SPILL_REMOVAL if SC.SPILL_REMOVAL.OP in plan.modules else ID_BACKGROUND
+                            validator.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
                         except Exception as error:blocked=str(error)[:2000]
                     if not blocked and SKY.OP in plan.modules:
                         try:

@@ -36,6 +36,10 @@ def finish(engine, boundary, error=None):
     if boundary is None:
         return
     message = boundary['message']
+    # Spill preview renders isolated candidates only. Even a rejected or failed
+    # preview cannot dirty/taint committed project state or advance autosave.
+    if message.get('cmd') == 'background' and message.get('action') == 'id_spill_preview':
+        return
     from .creative_transfer_host import inventory_read_only
     if inventory_read_only(message):return
     if not boundary['started'] or message.get('cmd') in ('project_recovery', 'canvas_guides'):

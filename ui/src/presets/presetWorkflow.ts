@@ -1,4 +1,4 @@
-import {CROP_OP,validCropReview,type CropReview} from '../cropTransfer/model.ts';
+import {CROP_OP,validCropReview,sourceProof,type CropReview} from '../cropTransfer/model.ts';
 import {validReferenceReview,type ReferenceReview} from '../referenceColor/ReferenceColorReview';
 import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../optics/transferReviewModel';
 import {validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence,type TransferGroupChoice} from '../localMasks/transferModel.ts';
@@ -10,7 +10,7 @@ export type PresetOptions = {id?:string;name?:string;path?:string;kind?:string;n
   moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;
   xmpAck?:XmpAck;xmpReviewAck?:XmpReviewAck;/** UI-only captured expected source, never sent as authority. */xmpExpected?:XmpSummary};
 export type PresetReply = {protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
-  xmp_report?:XmpReport;xmp_transfer?:XmpTransfer;
+  xmp_report?:XmpReport;xmp_transfer?:XmpTransfer;source_proof?:unknown;
   crop_transfer?:CropReview;reference_color?:ReferenceReview;revision?:string;optical_transfer?:OpticalTargetReview;preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
   before?:Record<string,unknown>;after?:Record<string,unknown>;doc_state?:Record<string,unknown>;
   error?:string;requires_reload?:boolean;rolled_back?:boolean;operation_committed?:boolean|null};
@@ -47,6 +47,7 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
   if(wanted&&!sameScope(result.module_scope,wanted))throw Error('实际作用模块与选择不一致');
   if(action==='preflight'){
     if(!text(result.revision)||!text(result.preflight_token)||!/^[a-f0-9]{32}$/.test(result.preflight_token)||!moduleKeys(result.applies,result.module_scope))throw Error('冻结预设预检结果不完整');
+    if(result.module_scope.includes('lnx.spill_removal.v1')&&!sourceProof(result.source_proof))throw Error('祛反光预设缺少真实目标来源证明');
     if(result.module_scope.includes('lnx.local_grade.v1')){
       if(!validTransferEvidence(result.local_mask_transfer)||!sameTransferOptions(result.local_mask_transfer.policy,opts.localMaskTransfer))throw Error('局部预设预检证据或策略不匹配');
     }
@@ -58,7 +59,7 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
         ||result.xmp_report.source_sha256!==opts.xmpExpected.source_sha256||result.xmp_report.report_sha256!==opts.xmpExpected.report.report_sha256
         ||!validXmpTransfer(result.xmp_transfer,opts.documentId??'',result.revision,opts.xmpExpected.source_sha256))throw Error('缺少匹配本预设、当前照片和冻结版本的 XMP 前后像素证据');
     }
-    if(!opts.xmpExpected&&!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1',CROP_OP].includes(op)))throw Error('预设不含需要冻结预检的模块');
+    if(!opts.xmpExpected&&!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1',CROP_OP,'lnx.spill_removal.v1'].includes(op)))throw Error('预设不含需要冻结预检的模块');
     return;
   }
   if(action==='apply'){

@@ -41,7 +41,8 @@ def admit_prepare(spec,shape,*,tile,bits):
     # already resident; reserve output and one conservative full-halo tile too.
     tile_pixels=min(h,int(tile)+512)*min(w,int(tile)+512)
     from .id_background_native import memory_estimate
-    reserve=memory_estimate((h,w),spec.id_background)+asset_pixels*48+pixels*12*int(spec.scale)**2+tile_pixels*768+128*1024**2
+    from .spill_removal_render import memory_estimate as spill_memory_estimate
+    reserve=memory_estimate((h,w),spec.id_background)+spill_memory_estimate((h,w),spec.id_background)+asset_pixels*48+pixels*12*int(spec.scale)**2+tile_pixels*768+128*1024**2
     if reserve>available_estimate():
-        raise ValueError('证件照背景完整原尺寸场、素材及输出超过可用内存；请减小瓦片或释放内存，不会放大代理蒙版')
+        raise ValueError('证件照背景、祛染色完整原尺寸场、素材及输出超过可用内存；请减小瓦片或释放内存，不会放大代理蒙版')
     return reserve

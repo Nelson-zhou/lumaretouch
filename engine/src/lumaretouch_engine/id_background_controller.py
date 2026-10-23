@@ -9,6 +9,9 @@ from . import creative_derived_source as D
 class Controller:
     def __init__(self,engine,emit):self.engine,self.emit=engine,emit;self.cache=OrderedDict()
     def handle(self,p):
+        from .spill_removal_controller import ACTIONS, controller as spill_controller
+        if p.get('action') in ACTIONS:
+            return spill_controller(self.engine,self.emit).handle(p)
         e=self.engine;rid=p.get('request_id');action=p.get('action')
         result={'event':'id_background_result','protocol':1,'request_id':rid,'document_id':p.get('document_id'),'action':action,'success':False,'outcome_unknown':False,'requires_reload':False}
         before=None;digest=None

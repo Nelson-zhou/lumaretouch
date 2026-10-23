@@ -2,6 +2,8 @@
 
 Source-reviewed masks never transfer to another photograph. File locators are
 not asset identities; immutable content belongs in the sibling project bundle.
+Legacy v1 records are preserved exactly by validation. Spill edits explicitly
+upgrade to v2, so old derived-source recipe hashes are not silently rewritten.
 """
 from copy import deepcopy
 import os
@@ -10,6 +12,7 @@ from .local_mask_recipe import number
 from . import local_mask_state as M
 
 VERSION = 1
+SPILL_VERSION = 2
 MAX_ASSET_BYTES = 10_000_000
 MAX_ASSET_PIXELS = 32_000_000
 CATEGORIES = ('subject', 'contact', 'all')
@@ -99,8 +102,11 @@ def empty():
 
 def check(raw):
     if raw is None: return empty()
-    if (type(raw) is not dict or set(raw) != set(empty()) or type(raw['version']) is not int
-            or raw['version'] != VERSION or type(raw['enabled']) is not bool
+    if type(raw) is not dict: raise ValueError('证件照背景配方必须是对象')
+    version = raw.get('version')
+    fields = set(empty()) | ({'spill'} if version == SPILL_VERSION else set())
+    if (set(raw) != fields or type(version) is not int
+            or version not in (VERSION, SPILL_VERSION) or type(raw['enabled']) is not bool
             or type(raw['support']) is not dict or set(raw['support']) != set(CATEGORIES)
             or raw['selected_support'] not in CATEGORIES):
         raise ValueError('证件照背景配方版本、保留范围或字段无效')
@@ -109,12 +115,33 @@ def check(raw):
     support = {k:check_binding(raw['support'][k],k) if raw['support'][k] is not None else None for k in CATEGORIES}
     if any(v is not None and v['mask']['source'] != source for v in support.values()):
         raise ValueError('独立审核的背景保留范围必须绑定同一原照片')
-    out = {'version':VERSION,'enabled':raw['enabled'],'source':source,'background':background(raw['background']),
+    out = {'version':version,'enabled':raw['enabled'],'source':source,'background':background(raw['background']),
            'support':support,'selected_support':raw['selected_support'],'edge':number(raw['edge'],-20,20),
            'opacity':number(raw['opacity'],0,1),'shadow':shadow(raw['shadow']),'favourites':favourites(raw['favourites'])}
+    if version == SPILL_VERSION:
+        from . import spill_removal_state as SP
+        out['spill'] = SP.check(raw['spill'])
+        coverage = out['spill']['coverage']
+        if coverage is not None and coverage['mask']['source'] != source:
+            raise ValueError('祛染色手工覆盖度与证件照背景必须属于同一有效源图')
     if out['enabled'] and (source is None or support[out['selected_support']] is None or out['background']['kind'] == 'none'):
         raise ValueError('请先选择背景，并审核绑定原照片的保留范围')
     return deepcopy(out)
+
+
+def spill_of(raw):
+    """Read old recipes as neutral without rewriting old saved hash content."""
+    from . import spill_removal_state as SP
+    value = check(raw)
+    return deepcopy(value['spill']) if value['version'] == SPILL_VERSION else SP.neutral()
+
+
+def with_spill(raw, spill):
+    """Only an explicit spill edit upgrades the containing ID recipe to v2."""
+    from . import spill_removal_state as SP
+    value = check(raw)
+    value.update(version=SPILL_VERSION, spill=SP.check(spill))
+    return check(value)
 
 
 def active(raw):
@@ -132,12 +159,18 @@ def portable(raw):
     out = {k:deepcopy(value[k]) for k in ('version','enabled','background','selected_support','edge','opacity','shadow','favourites')}
     out['requires_target_asset'] = out['background']['kind'] == 'asset'
     out['background']['asset'] = None
+    if value['version'] == SPILL_VERSION:
+        from . import spill_removal_state as SP
+        out['spill'] = SP.portable(value['spill'])
     return check_portable(out)
 
 
 def check_portable(raw):
     fields = {'version','enabled','background','selected_support','edge','opacity','shadow','favourites','requires_target_asset'}
-    if (type(raw) is not dict or set(raw) != fields or type(raw['version']) is not int or raw['version'] != VERSION
+    if type(raw) is not dict: raise ValueError('证件照背景预设必须是对象')
+    version = raw.get('version')
+    if version == SPILL_VERSION: fields.add('spill')
+    if (set(raw) != fields or type(version) is not int or version not in (VERSION, SPILL_VERSION)
             or type(raw['enabled']) is not bool or type(raw['requires_target_asset']) is not bool
             or raw['selected_support'] not in CATEGORIES):
         raise ValueError('证件照背景预设字段不兼容')
@@ -146,20 +179,34 @@ def check_portable(raw):
         raise ValueError('背景预设只使用目标照片自己的素材，不携带其他照片素材身份')
     if raw['enabled'] and bg['kind'] == 'none':
         raise ValueError('未选择背景的预设不能启用')
-    return {'version':VERSION,'enabled':raw['enabled'],'background':bg,'selected_support':raw['selected_support'],
+    out = {'version':version,'enabled':raw['enabled'],'background':bg,'selected_support':raw['selected_support'],
             'edge':number(raw['edge'],-20,20),'opacity':number(raw['opacity'],0,1),'shadow':shadow(raw['shadow']),
             'favourites':favourites(raw['favourites']),'requires_target_asset':raw['requires_target_asset']}
+    if version == SPILL_VERSION:
+        from . import spill_removal_state as SP
+        out['spill'] = SP.check_portable(raw['spill'])
+    return out
 
 
 def apply_portable(target,raw):
     proposal = check_portable(raw); out = check(target)
     retained_asset = out['background']['asset']
-    out.update({k:deepcopy(v) for k,v in proposal.items() if k != 'requires_target_asset'})
+    # A legacy preset disables spill, but never destroys target-owned vectors.
+    # Once v2 intent exists, keep it versioned even when the new source preset
+    # was v1. A v1 target remains v1 when both sides lack spill intent.
+    target_version = out['version']
+    retained_spill = spill_of(out)
+    out.update({k:deepcopy(v) for k,v in proposal.items() if k not in ('requires_target_asset', 'spill')})
+    if proposal['version'] == SPILL_VERSION or target_version == SPILL_VERSION:
+        from . import spill_removal_state as SP
+        params = proposal.get('spill', SP.portable(SP.neutral()))
+        out['version'] = SPILL_VERSION
+        out['spill'] = SP.apply_portable(retained_spill, params)
     if proposal['requires_target_asset']:
         if retained_asset is None:
             raise ValueError('素材背景预设要求目标照片先选择自己的素材；不会复制另一照片素材')
         out['background']['asset'] = retained_asset
-    # Source and all three independent reviews remain target-specific.
+    # Source, independent reviews and manual spill coverage remain target-owned.
     return check(out)
 
 
