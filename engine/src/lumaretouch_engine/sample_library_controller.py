@@ -150,8 +150,11 @@ class SampleLibrary:
                 staged, digest, length = I.copy_original(self.store, path, check_cancel)
                 if digest in known:
                     existing = known[digest]
-                    outcome.update(status='duplicate', sample_id=existing['id'],
-                                   message='相同原片已在回收站，请恢复' if existing['deleted_at'] is not None else '相同原片已在样片库中，未重复保存')
+                    refreshed = I.reinspect_import(self.store, existing, check_cancel)
+                    message = ('相同原片已在回收站，请恢复' if existing['deleted_at'] is not None
+                               else '相同原片已在样片库中，未重复保存')
+                    if refreshed: message += '；已按原片摘要重新验证完整精度参考并更新浏览图'
+                    outcome.update(status='duplicate', sample_id=existing['id'], message=message)
                 else:
                     S.room(catalog)
                     metadata, thumbnail = I.inspect_and_thumbnail(staged)

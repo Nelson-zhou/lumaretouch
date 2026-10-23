@@ -1,7 +1,9 @@
 import {TargetSizeResult} from '../exportTargetSize/TargetSizeControls';
 import type {EngineStatus,SessionState} from '../native';
 import {WatermarkReceipt} from '../watermark/WatermarkControls';
+import {reconcileExportFormat} from '../exportModel';
 export function ExportQueuePanel({exportTargets,exporting,status,strip,exportBits16,exportFormat}:{exportTargets:string[];exporting:boolean;status:EngineStatus|null;strip:SessionState|null;exportBits16:boolean;exportFormat:string}){
+ const pendingFormat = reconcileExportFormat(exportBits16, exportFormat);
  return (<div className="exportQueue">
               <div className="qHead">
                 <h2>批量导出</h2>
@@ -28,8 +30,8 @@ export function ExportQueuePanel({exportTargets,exporting,status,strip,exportBit
                     <div className={"qRow" + (done ? (done.error || targetWarning ? " bad" : " ok") : "")}
                          key={p} title={done?.error ?? done?.skip_reason ?? done?.out}>
                       <span className="qName">{d ? `${d.name}${d.copy_number ? ` · 副本 ${d.copy_number}` : ""}` : p}</span>
-                      <span className="qFmt">{done?.format ? done.format.toUpperCase() : exportBits16 ? "16-bit TIFF"
-                        : exportFormat.toUpperCase()}</span>
+                      <span className="qFmt">{done?.format ? `${(done.bits ?? status?.export?.bit_depth) === 16 ? '16-bit ' : ''}${done.format.toUpperCase()}`
+                        : `${exportBits16 ? '16-bit ' : ''}${pendingFormat === 'tif' ? 'TIFF' : pendingFormat.toUpperCase()}`}</span>
                       <em>{state}</em>
                       {done?.out && <small title={done.renamed_from ? `原目标：${done.renamed_from}` : undefined}>{done.out}</small>}
                       <WatermarkReceipt outputs={done?.outputs}/>

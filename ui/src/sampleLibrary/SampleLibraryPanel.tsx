@@ -301,7 +301,7 @@ export function SampleLibraryPanel({ port, open = true, mode = 'manage', capture
               <span>{sample.width} × {sample.height} · {sample.format.toUpperCase()} · {sample.precision}</span>
               <span>{formatBytes(sample.bytes)} · {sample.kind === 'render' ? '当前成片' : '导入图片'}</span>
               <span>分组：{groupNames.get(sample.group_id ?? UNGROUPED_ID) || '未分组'}</span>
-              {sample.reference_supported === false && <span className="sampleLibraryPrecisionWarning">仅管理，暂不能作为完整精度参考</span>}
+              {sample.reference_supported === false && <span className="sampleLibraryPrecisionWarning">仅管理，暂不能作为完整精度参考。若为旧版本限制，可重新导入同一原片复核；不会重复保存原片或改写已有参考资源。</span>}
             </div>
             <details className="sampleLibraryDetails"><summary>样片详情</summary>
               <dl><dt>创建时间</dt><dd>{readableTime(sample.created_at)}</dd>

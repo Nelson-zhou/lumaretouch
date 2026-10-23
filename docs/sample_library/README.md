@@ -45,7 +45,9 @@ photo licence. No AI追色 or PC-32452-family completion claim is justified by t
 - `sample_library_store.py`: cross-process flock, optimistic revision, atomic JSON/fsync,
   previous-catalogue recovery copy, immutable object checks and local byte accounting.
 - `sample_library_images.py`: bounded folder walk, descriptor-checked original copy,
-  metadata and display thumbnails, deferred original-resolution full decode.
+  immutable reference materialization and explicitly requested legacy reinspection.
+- `sample_library_source.py`: source metadata, genuine full decode, native opacity,
+  shared ICC16 working-sRGB input and display-only thumbnail quantization.
 - `sample_library_controller.py`: operations, per-file results, manual select, trash/restore.
 - `sample_library_query.py`: bounded metadata pages, revision/query-pinned cursors, full counts and small mutation receipts.
 - `sample_library_capture.py`: original-resolution render through existing full export
@@ -59,7 +61,7 @@ photo licence. No AI追色 or PC-32452-family completion claim is justified by t
   control lane, without bypassing the serialized edit queue for any actual operation.
 - `ui/src/sampleLibrary/`: accessible manager, native adapter, App owner and reachable launcher.
   Existing App navigation is genuinely extracted to `WorkspaceTopbar.tsx` to respect the file cap.
-- `engine/tests/test_sample_library.py`: authored fixtures, not executed.
+- `engine/tests/test_sample_library.py` and `test_sample_library_png16_unrun.py`: authored fixtures, not executed.
 
 Catalogue/storage orchestration stays with existing Python filesystem/codec owners.
 It does not introduce a second colour implementation. Existing reference math/render
@@ -80,14 +82,41 @@ No decorative Rust shim, extra colour operator or new native build dependency wa
   original bytes; duplicates in trash point to the recoverable row instead of duplication.
 - 384-pixel JPEG thumbnails are explicitly 8-bit display-only, never calculation input.
   Source bit depth is recorded; PNG IHDR is checked because Pillow's RGB mode alone
-  does not prove 8-bit input. Full selection refuses unsupported PNG16/transparency/
-  unconverted ICC-bearing RGB16 rather than silently discarding precision or alpha.
+  does not prove 8-bit input. Native PNG16 metadata does not depend on Pillow:
+  genuine decode owns eXIf before or after IDAT and applies orientation exactly once.
+  PNG16 uses genuine `load_full(want_bits=16)`; header-verified RGB16 TIFF uses
+  that decoder's existing genuine TIFF owner directly, including a renamed staging
+  suffix. Both use the shared `full_source_working.working_rgb` boundary. Embedded RGB ICC is
+  converted on uint16 samples before thumbnail resampling/quantization and before
+  full reference normalization. Full precision never comes from a thumbnail.
+  Native PNG16 alpha/tRNS is checked on original samples: fully opaque alpha and
+  unused tRNS keys are allowed, while even alpha 65534 or an exact tRNS hit is refused.
+  RGB8 opacity is likewise tested from actual coverage, not just channel presence.
+  Unsupported high-bit colour, real transparency, invalid ICC or unavailable native
+  conversion can retain the exact original as a management-only row with an explicit
+  reason and labelled placeholder. This is not a photo preview or a usable reference;
+  preview support for these rejected variants remains unavailable. No Pillow RGB8
+  fallback is used for its picture.
+  APNG/multipage, HDR/non-sRGB metadata, grayscale ICC and unsupported TIFF channel
+  layouts remain subject to the shared decoder's explicit refusal; this does not
+  add support beyond that decoder. Library ICC admission remains bounded at 4 MiB.
 - Selection expands one admitted full reference through the existing decoder and
   `reference_color_assets.save/load`, preserving stable source/render/asset identities.
   Imported-source support matches an unedited document's interior pixels (two-pixel
   boundary excluded). It is pipeline support, NOT proof of an untouched camera scene.
   External-import provenance remains explicit. Same-scene matcher admission still
   requires its geometric/photometric evidence; selecting a photo applies no effect.
+- Legacy rows are not silently migrated by browsing or selecting. To recheck an old
+  PNG16/ICC16/alpha limitation, use Import and choose the same original bytes again.
+  Duplicate import may upgrade only an unmaterialized imported row with a recognized
+  old limitation (or a new explicit native-validation failure), after retained-object
+  SHA verification, real decode/opacity/ICC validation and matching format, dimensions
+  and recorded precision. Under the existing catalogue CAS, only reviewed support,
+  notes and thumbnail metadata change; the result states that revalidation occurred.
+  Sample identity, original object/hash, group, dates and trash status remain unchanged.
+  Unsupported reinspection leaves catalogue bytes unchanged. Existing immutable
+  reference bundles, project/preset pointers and replay history are never rewritten
+  or retroactively labelled corrected. An unreimported old row remains management-only.
 - Full current-result capture uses `reference_color_engine.render(reference=True)`:
   original decode, current effects, actual geometry/crop and known source-support
   exclusions, without export-only upscaling/sharpening. It refuses unsupported render
@@ -205,8 +234,12 @@ operator must have its own verified semantics, masks, review and undo integratio
 2. One and multiple JPEG/PNG/TIFF/WebP, duplicate bytes/names, source replaced during
    read, unreadable/symlink/special file, corrupt/animated/huge image, deep directories,
    1000 versus 1001 entries and exactly 2000 active rows; per-file errors preserve successes.
-3. RGB16 near-level precision and source hash retention; PNG16/alpha/ICC refusal on
-   selection is explicit. Inspect memory/disk growth across 2000 compressed originals.
+3. PNG16/RGB16 TIFF near-level precision, original byte/hash retention, ICC16-before-
+   thumbnail and ICC16-before-reference normalization; grayscale/RGB/opaque-alpha,
+   alpha 65534, exact versus unused tRNS, orientation, invalid ICC and HDR refusal.
+   Verify user-triggered duplicate reinspection, hash mismatch/cancellation/CAS failure,
+   unsupported rows remaining unchanged and existing reference/preset replay unchanged.
+   Inspect memory/disk growth across 2000 compressed originals.
 4. Group rename/delete, cross-group and cross-page multiselect move, drag order and keyboard/button
    equivalents, 2000-active/large-trash pagination, stale cursor/query rejection, full-order
    reordering, truthful counts, repeated clicks and loading errors.
@@ -223,3 +256,17 @@ operator must have its own verified semantics, masks, review and undo integratio
 
 The manifest records only authored source bytes. Neither its hashes nor AST parsing
 constitutes compile, integration, image-quality or end-user acceptance.
+
+## PNG16 / ICC16 continuation (source only, 2026-10-23)
+
+This continuation uses the existing pinned PNG/TIFF codec and LittleCMS16 input
+owner; it introduces no codec, colour-transform kernel, dependency or Rust shim.
+High-bit thumbnails transiently decode genuine full samples, but imports still do
+not persist float references. Reference bundles remain lazily created on selection.
+The existing v1 sample/reference identities and byte-addressed cache contract are
+unchanged. Ordinary RGB8 references are not converted twice. The new authored
+fixtures are `engine/tests/test_sample_library_png16_unrun.py`; all runtime,
+packaging, photographic and application acceptance remains **UNRUN** with Qoder.
+
+The earlier `manifest.json` is a historical freeze, not a claim that its listed
+hashes cover this continuation. The parent continuation freeze owns current hashes.

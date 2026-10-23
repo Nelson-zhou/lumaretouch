@@ -15,7 +15,7 @@ def build(engine, rows, entry_ids, entries, settings, policy_value, revision):
     policy = Policy(**policy_value)
     records = []
     receipts = {}
-    ext = 'tif' if settings['bit_depth'] == 16 else settings['format']
+    ext = 'png' if settings['bit_depth'] == 16 and settings['format'] == 'png' else 'tif' if settings['bit_depth'] == 16 else settings['format']
     for row, key in zip(rows, entry_ids):
         provenance = validate(row.get('import_origin') or origin(row['path'], kind='legacy_parent'))
         version = engine._document_versions().version(row) if row.get('document_id') else None

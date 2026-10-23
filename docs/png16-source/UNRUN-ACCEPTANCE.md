@@ -22,9 +22,10 @@ compiler, build, typecheck or product execution were performed in this slice.
 6. Edit exposure, curves, crop/rotation and representative source-bound effects.
    Verify preview, full inspection and export share source dimensions/ICC and
    preserve independent masks/analysis. Inspect boundaries at full resolution.
-7. Neutral master16, edited16 and watermarked16 TIFF output: verify native
+7. Neutral master16, edited16 and watermarked16 TIFF/PNG output: verify native
    readback samples, ICC and source identity. Output source profile is distinct
-   from working sRGB. PNG output is still RGB8, not a claimed RGB16 encoder.
+   from working sRGB. Verify the selected PNG16 container actually retains
+   uint16 samples and that RGB8 PNG remains a separate delivery choice.
 8. Ordinary RGB8 delivery: verify native16 decode, float editing/geometry before
    final quantization, output ICC/source profile, watermark/layout, target-size
    search and final dimensions. Regression-check other formats and derived-base
@@ -36,6 +37,8 @@ compiler, build, typecheck or product execution were performed in this slice.
     cancellation boundaries and invalid oversized/complex PNGs. Conservative
     byte estimates are not measured performance or OOM guarantees.
 
-The sample/reference library's independent PNG16/ICC16 guards remain visible.
+Re-import eligible old unsupported sample rows and verify native PNG16/ICC16
+selection, unchanged originals/identities and immutable preset references.
+Unsupported transparency, colour signalling and stale/corrupt ownership stay guarded.
 Per-target visual spill batch review, wider alpha/HDR, model/photo quality and
 other handbook gaps are not acceptance targets declared complete here.

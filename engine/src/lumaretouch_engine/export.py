@@ -1999,6 +1999,10 @@ def _rgb16_readback_facts(reference: np.ndarray, actual: np.ndarray, *,
 
 def _write_verified_rgb16(arr, out_path, *, target_icc, conflict_policy,
                           metadata_include_gps, tiff_compression):
+    if os.path.splitext(out_path)[1].lower() == '.png':
+        from .png16_export import write_verified_png16
+        return write_verified_png16(arr, out_path, target_icc=target_icc,
+            conflict_policy=conflict_policy, metadata_include_gps=metadata_include_gps)
     info = write_tiff16(arr, out_path, output_profile="source" if target_icc else "none",
                         source_icc=target_icc, conflict_policy=conflict_policy,
                         metadata_include_gps=metadata_include_gps,
@@ -2029,7 +2033,7 @@ def export_master_16bit(path: str, out_path: str, *, device: str | None = None,
                         conflict_policy: str = "skip_and_report",
                         metadata_include_gps: bool = False,
                         tiff_compression: str = "none", verify_source=None) -> dict:
-    """16-bit 母档直通导出：满幅解一次 → 写 16-bit TIFF → 读回逐字节自证。
+    """16-bit 母档直通：满幅真解码 → RGB16 TIFF/PNG → 真实样本与 ICC 读回核验。
 
     三个自证读数缺一个都不算“保真”：
     * readback_max_diff 必须 0（无损这一句得有人核对，不能只写在注释里）；
@@ -2122,7 +2126,7 @@ def export_edited_16bit(decoded, spec: ExportSpec, out_path: str, *,
                          output_profile: str = "srgb", conflict_policy: str = "skip_and_report",
                          metadata_include_gps: bool = False, tiff_compression: str = "none",
                          decode_ms: float = 0.0) -> dict:
-    """Decoded true RGB16 -> working sRGB -> float edits/geometry -> RGB16 TIFF.
+    """Decoded true RGB16 -> working sRGB -> float edits -> RGB16 TIFF/PNG.
 
     Source and destination ICC conversion use RGB16 LittleCMS, never Pillow RGB8.
     Display proxy bytes are not accepted as source data. This does not establish

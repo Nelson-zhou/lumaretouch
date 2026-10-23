@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Private byte-for-byte imports and display-only thumbnails; full decode is lazy.
+"""Private byte-for-byte imports and display-only thumbnails; reference bundles are lazy.
 
 No commercial photos, cloud fetch, embedded camera preview, permanent float copy
 per imported item, or lower-precision fallback. Unsupported full-reference formats
@@ -98,60 +98,8 @@ def copy_original(store, source, check_cancel):
 
 
 def inspect_and_thumbnail(path):
-    from PIL import Image, ImageOps
-    from .decode import _source_bits, _to_working_srgb
-    from .cpu_memory_budget import available_estimate
-    with Image.open(path) as image:
-        fmt = image.format
-        if fmt not in S.FORMATS: S.fail('仅支持 JPEG、PNG、TIFF、WebP 单帧样片')
-        if int(getattr(image, 'n_frames', 1)) != 1:
-            S.fail('不导入多页或动画为单张样片，请先拆分')
-        width, height = image.size
-        if width * height > S.MAX_PIXELS: S.fail('样片超过 3200 万像素预算；不会静默缩小原片')
-        orientation = int(image.getexif().get(274, 1))
-        if orientation not in range(1, 9): S.fail('样片方向元数据无效')
-        bits = _source_bits(image)
-        if fmt == 'PNG':
-            # Pillow may expose RGB16 PNG as mode RGB without info['bits'].
-            with open(path, 'rb') as stream: header = stream.read(29)
-            if len(header) < 29 or header[:8] != b'\x89PNG\r\n\x1a\n' or header[12:16] != b'IHDR':
-                S.fail('PNG 图像头无效')
-            bits = int(header[24])
-        icc = image.info.get('icc_profile')
-        if icc and len(icc) > 4 * 1024 * 1024: S.fail('样片颜色配置文件过大')
-        transparent = 'A' in image.getbands() or 'transparency' in image.info
-        supported = True; reason = ''
-        if min(width, height) < 64:
-            supported = False; reason = '原片已保留；现有完整参考资源要求宽高至少 64 像素'
-        elif transparent:
-            supported = False; reason = '原片已保留；透明样片尚无受支持的参考合成语义，不会丢弃透明度'
-        elif bits > 8 and (fmt != 'TIFF' or bits != 16 or image.mode != 'RGB'):
-            supported = False; reason = '原片已保留；现有完整参考解码仅支持 RGB8 或 RGB16 TIFF，不会降位'
-        elif bits == 16 and icc:
-            supported = False; reason = '原片已保留；RGB16 ICC 到工作色域转换尚未接入，不会当成 sRGB'
-        # JPEG draft reduces only the display thumbnail, never the retained file.
-        if fmt == 'JPEG': image.draft('RGB', (384, 384))
-        required = image.width * image.height * 12 + 64 * 1024 * 1024
-        if available_estimate() < required:
-            S.fail('当前可验证内存不足以生成样片缩略图，原片未改动', 'memory_budget')
-        image.load()
-        display = ImageOps.exif_transpose(image)
-        display.thumbnail((384, 384), Image.Resampling.LANCZOS)
-        if transparent:
-            rgba = display.convert('RGBA')
-            backdrop = Image.new('RGBA', rgba.size, (96, 96, 96, 255)); backdrop.alpha_composite(rgba)
-            display = backdrop.convert('RGB')
-        display = _to_working_srgb(display, bytes(icc) if icc else None)
-        output = io.BytesIO(); display.save(output, format='JPEG', quality=86)
-        thumb = output.getvalue()
-        if len(thumb) > 1024 * 1024: S.fail('缩略图超过预算')
-    if orientation in (5, 6, 7, 8): width, height = height, width
-    return {'width': width, 'height': height, 'format': fmt,
-            'precision': f'{bits}-bit source; 8-bit display thumbnail',
-            'reference_supported': supported, 'reference_reason': reason,
-            'notes': ['原文件逐字节保存；缩略图仅用于浏览，不参与参考计算',
-                      '外部导入来源：保留源文件像素支持，不证明相机原始真实性，也不代表 AI 追色已执行',
-                      '原片未嵌 ICC：按 sRGB 输入假设处理' if not icc else '原片 ICC 已保留；浏览图为 8 位颜色管理显示']}, thumb
+    from .sample_library_source import inspect_and_thumbnail as inspect
+    return inspect(path)
 
 
 def save_thumbnail(store, raw):
@@ -167,6 +115,39 @@ def save_thumbnail(store, raw):
     return digest
 
 
+_LEGACY_REFERENCE_REASONS = {
+    '原片已保留；透明样片尚无受支持的参考合成语义，不会丢弃透明度',
+    '原片已保留；现有完整参考解码仅支持 RGB8 或 RGB16 TIFF，不会降位',
+    '原片已保留；RGB16 ICC 到工作色域转换尚未接入，不会当成 sRGB',
+}
+
+
+def reinspect_import(store, item, check_cancel):
+    """Explicit duplicate import may upgrade only a verified, unmaterialized row.
+
+    Never reinterpret a prior immutable reference or silently update read pages.
+    An unsupported reinspection leaves all catalogue metadata unchanged.
+    """
+    from .sample_library_source import UNAVAILABLE
+    if (item['kind'] != 'import' or item['reference'] is not None or item['reference_supported']
+            or (item['reference_reason'] not in _LEGACY_REFERENCE_REASONS
+                and not item['reference_reason'].startswith(UNAVAILABLE))):
+        return False
+    path = store.verify_object(item['object_name'], item['original_sha256'])
+    cancelled(check_cancel)
+    metadata, thumbnail = inspect_and_thumbnail(path)
+    if any(metadata[key] != item[key] for key in ('width', 'height', 'format', 'precision')):
+        S.fail('旧样片与重新验证的原片元数据不一致；未迁移目录', 'asset_corrupt')
+    if not metadata['reference_supported']:
+        return False
+    cancelled(check_cancel)
+    thumb_id = save_thumbnail(store, thumbnail)
+    store.verify_object(item['object_name'], item['original_sha256'])
+    cancelled(check_cancel)
+    item.update(metadata, thumbnail_sha256=thumb_id)
+    return True
+
+
 def reference_reservation(width, height):
     # float32 RGB + boolean support, NPY/ZIP metadata and conservative deflate
     # expansion. Reserve the actual canvas, not 397 MiB for every small image.
@@ -178,29 +159,36 @@ def materialize(store, item, check_cancel, *, admit_reference):
     """Use existing working-sRGB full decoder and immutable reference asset semantics."""
     from . import reference_color_assets as assets
     from .reference_color_review import ColorInput
-    from .decode import load_full
-    from .cpu_memory_budget import available_estimate
+    from .sample_library_source import admit_memory, header, load_working
+    from PIL import Image
+    from .png16_source import source_header
     import numpy as np
     if not item['reference_supported']: S.fail(item['reference_reason'], 'reference_unsupported')
     path = store.verify_object(item['object_name'], item['original_sha256'])
-    required = item['width'] * item['height'] * 64 + 256 * 1024 * 1024
-    if available_estimate() < required: S.fail('当前可验证内存不足以完整展开样片，未降低精度', 'memory_budget')
+    admit_memory(item['width'], item['height'], native=True)
     cancelled(check_cancel)
-    bits = 16 if item['precision'].startswith('16-') else 8
-    decoded = load_full(str(path), max_px=S.MAX_PIXELS, device='cpu', want_bits=bits)
-    if ((decoded.w, decoded.h) != (item['width'], item['height']) or decoded.draft_used
-            or (decoded.raw or {}).get('used_preview') or (decoded.raw or {}).get('half_size')
-            or decoded.rgb.dtype != (np.dtype('uint16') if bits == 16 else np.dtype('uint8'))):
-        S.fail('完整样片解码精度或尺寸不符；未使用代理替代')
+    png = source_header(path)
+    if png is not None and png.bits == 16:
+        width, height, fmt, bits = item['width'], item['height'], 'PNG', 16
+    else:
+        with Image.open(path) as image:
+            width, height, fmt, bits, _ = header(image, path)
+    if ((width, height, fmt) != (item['width'], item['height'], item['format'])
+            or item['precision'].split('-', 1)[0] != str(bits)):
+        S.fail('样片目录与完整原片元数据不同', 'asset_corrupt')
+    pixels = load_working(path, width, height, fmt, bits)
     cancelled(check_cancel)
-    source = {'sha256': item['original_sha256'], 'width': decoded.w, 'height': decoded.h}
+    source = {'sha256': item['original_sha256'], 'width': width, 'height': height}
     # Match an unedited document's imported-source support, not forensic camera
     # authenticity. External edits are unknown; no claim of untouched capture.
-    support = np.ones((decoded.h, decoded.w), dtype=np.bool_)
+    support = np.ones((height, width), dtype=np.bool_)
     support[:2] = False; support[-2:] = False
     support[:, :2] = False; support[:, -2:] = False
+    # Keep the established key for its previously supported RGB8/unprofiled
+    # TIFF16 inputs. Newly supported source profiles are identified by source
+    # SHA plus the actual working pixel digest; existing bundles never change.
     key = sha256(b'local-sample-import-full-working-srgb-v1').hexdigest()
-    frame = ColorInput('sample-' + item['id'], '0', source, key, decoded.rgb, support)
+    frame = ColorInput('sample-' + item['id'], '0', source, key, pixels, support)
     store.verify_object(item['object_name'], item['original_sha256'])
     admit_reference()
     reference = assets.save(assets.cache_root(), frame)

@@ -96,7 +96,7 @@ import RetouchPanel from "./components/RetouchPanel";
 import CropModal from "./components/CropModal";
 import { REGISTRY, keyOf, sectionTitleOf, type SectionId } from "./p0";
 import { clickRle } from "./brush";
-import { reconcileExportCombo } from "./exportModel";
+import { exportGpsForDepth, is16BitExportFormat, reconcileExportCombo, reconcileExportFormat } from "./exportModel";
 import { notifyInspectionEditIntent } from "./native";
 import type { InspectionUiState } from "./inspectionController";
 import { t, type MsgKey } from "./i18n";
@@ -302,7 +302,7 @@ export default function App() {
   // 而不是一个没人同意的默认美化。
   const [exportScale, setExportScale] = useState(1);
   const [exportSharpen, setExportSharpen] = useState(0);
-  // 16-bit TIFF：保留原生高位深源，并按逐图配方进入浮点编辑；显示代理不作出片源。
+  // 16-bit PNG/TIFF：保留原生高位深源，并按逐图配方进入浮点编辑；显示代理不作出片源。
   const [exportBits16, setExportBits16] = useState(false);
   // 形变作用层（LNX-PORTRAIT-004）：这一格选的是"正在改哪一层"，值本身不进口径——
   // 每一层的数值与"这张被覆盖了哪几格"都由引擎随 doc_state 报（面板读它，不读这里）
@@ -1281,7 +1281,7 @@ export default function App() {
       ...(exportSharpen > 0 ? {sharpen:exportSharpen} : {}),
       ...(exportBits16 ? {bit_depth:16} : {}), output_profile:exportProfile,
       ...(combo.tiffCompression ? {tiff_compression:combo.tiffCompression} : {}),
-      metadata_include_gps:exportGps, conflict_policy:exportConflict, watermark, layout:layoutModel.layout};
+      metadata_include_gps:exportGpsForDepth(exportBits16, exportGps), conflict_policy:exportConflict, watermark, layout:layoutModel.layout};
   }
   async function onPreviewDestination() {
     if (destinationPreviewRunning.current || destinationSubmitting.current) return;
@@ -1315,7 +1315,7 @@ export default function App() {
         sharpen:exportSharpen > 0 ? exportSharpen : undefined,
         bitDepth:exportBits16 ? 16 : undefined, documentIds:[...exportTargets],
         outputProfile:exportProfile, tiffCompression:combo.tiffCompression,
-        metadataIncludeGps:exportGps, conflictPolicy:exportConflict,
+        metadataIncludeGps:exportGpsForDepth(exportBits16, exportGps), conflictPolicy:exportConflict,
         watermark, layout:layoutModel.layout,
         destinationPolicy:{...destinationPolicy, chosen_root:exportDir},
         destinationPlanId:plan.plan_id, intentRevision:plan.intent_revision,
@@ -1520,7 +1520,7 @@ export default function App() {
       case "lnx.export.v1.jpeg_quality": return exportQuality;
       case "lnx.export.v1.tiff_compression": return exportTiffComp;
       case "lnx.export.v1.output_profile": return exportProfile;
-      case "lnx.export.v1.metadata_include_gps": return exportGps;
+      case "lnx.export.v1.metadata_include_gps": return exportGpsForDepth(exportBits16, exportGps);
       case "lnx.batch.v1.conflict_policy": return batchPolicy;
       // 预设下拉读的两个都来自引擎：`last_applied` 是“套完而没被手改”那一个（参数比过
       // 才算），而不是前端记的“上次点了哪个按钮”。
@@ -1547,7 +1547,7 @@ export default function App() {
         return syncScopes.map((s) => s.label);
       case "lnx.export.v1.format":
         // 引擎报的落盘后缀翻回注册表的格式名：名单出处仍是 ready.export_formats
-        return (caps?.export_formats ?? ["jpg", "tif", "png"]).map((x) => fmtIn[x] ?? x);
+        return (caps?.export_formats ?? ["jpg", "tif", "png"]).filter(x=>!exportBits16||is16BitExportFormat(x)).map((x) => fmtIn[x] ?? x);
       case "lnx.export.v1.output_profile":
         // 内置只有两条真能落的：其它两个枚举值需要用户递一个真实 .icc（面板上说明了原因）
         return ["srgb", "source"];
@@ -1559,6 +1559,9 @@ export default function App() {
 
   /** 这一刻为什么不能点。理由必须可复查（说的是引擎报出来的事实），不许写“暂不可用”。 */
   function p0enabled(key: string): string | null {
+    if (key === "lnx.export.v1.jpeg_quality" && exportBits16) return "16-bit PNG / TIFF 使用无损编码，不使用品质值。";
+    if (key === "lnx.export.v1.metadata_include_gps" && exportBits16) return "16-bit PNG / TIFF 暂不支持 GPS；保留 8-bit 时的选择。";
+    if (key === "lnx.export.v1.tiff_compression" && !["tif", "tiff"].includes(exportFormat)) return "TIFF 压缩只用于 TIFF；PNG 使用独立的无损编码。";
     if (key.startsWith("lnx.task.v1.")) {
       if (!tasks.length) return "队列里还没有批次：先点「开始批量导出」。";
       const st = liveTask?.state ?? "?";
@@ -1609,7 +1612,7 @@ export default function App() {
 
   function p0toggle(key: string, v: boolean) {
     if (key === "lnx.blemish.v1.enabled") {if(v)startReviewedHeal();else healBrush.workflow.cancel();return;}
-    if (key === "lnx.export.v1.metadata_include_gps") { setExportGps(v); return; }
+    if (key === "lnx.export.v1.metadata_include_gps") { if (!exportBits16) setExportGps(v); return; }
     if (key === "lnx.skin.v1.enabled") { onStrength(v ? (strength <= 0 ? 0.5 : strength) : 0); return; }
     if (key === "lnx.mask.v1.analysis_enabled") {
       // 分析只能跑，不能“关”：掩膜是会话级常驻，关掉就是让面部微调当场失效。
@@ -1620,7 +1623,7 @@ export default function App() {
   }
 
   function p0enum(key: string, v: string) {
-    if (key === "lnx.export.v1.format") { setExportFormat(fmtOut[v] ?? v); return; }
+    if (key === "lnx.export.v1.format") { setExportFormat(reconcileExportFormat(exportBits16, fmtOut[v] ?? v)); return; }
     if (key === "lnx.export.v1.tiff_compression") { setExportTiffComp(v); return; }
     if (key === "lnx.export.v1.output_profile") { setExportProfile(v); return; }
     if (key === "lnx.batch.v1.conflict_policy") { setBatchPolicy(v); return; }
@@ -2044,30 +2047,28 @@ export default function App() {
               <h2>导出设置</h2>
               <div className="exGrid">
                 <label>格式
-                  <select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)}
-                          disabled={exportBits16}
-                          title={exportBits16 ? "16-bit 输出使用 TIFF，支持无损压缩，格式已锁定" : undefined}>
-                    <option value="jpg">JPEG</option>
+                  <select value={exportFormat} onChange={(e) => setExportFormat(reconcileExportFormat(exportBits16, e.target.value))}
+                          title={exportBits16 ? "16-bit 可选 PNG 或 TIFF；JPEG / WebP 需要先关闭 16-bit" : undefined}>
+                    <option value="jpg" disabled={exportBits16}>JPEG</option>
                     <option value="png">PNG</option>
                     <option value="tif">TIFF</option>
-                    <option value="webp">WebP</option>
+                    <option value="webp" disabled={exportBits16}>WebP</option>
                   </select>
                 </label>
-                <label>TIFF 无损压缩
+                {["tif", "tiff"].includes(exportFormat) && <label>TIFF 无损压缩
                   <select value={exportTiffComp}
-                          disabled={!exportBits16 && !["tif", "tiff"].includes(exportFormat)}
                           onChange={(e) => setExportTiffComp(e.target.value)}>
                     <option value="none">无压缩</option>
                     <option value="deflate">Deflate（无损）</option>
                     <option value="lzw">LZW（无损）</option>
                   </select>
-                </label>
-                <label>质量
-                  <input type="range" min={60} max={100} value={exportQuality} disabled={exportTargetSize.enabled || exporting || destinationBusy}
+                </label>}
+                <label>{exportFormat === "png" ? "PNG 压缩力度（无损）" : "质量"}
+                  <input type="range" min={60} max={100} value={exportQuality} disabled={exportBits16 || exportTargetSize.enabled || exporting || destinationBusy}
                          onChange={(e) => setExportQuality(+e.target.value)} />
-                  <em>{exportQuality}</em>
+                  <em>{exportBits16 ? "16-bit 无损编码，不使用品质值" : exportQuality}</em>
                 </label>
-                <TargetSizeControls value={exportTargetSize} onChange={setExportTargetSize} format={exportBits16 ? "tif" : exportFormat} bitDepth={exportBits16 ? 16 : 8} busy={exporting || destinationBusy}/>
+                <TargetSizeControls value={exportTargetSize} onChange={setExportTargetSize} format={exportFormat} bitDepth={exportBits16 ? 16 : 8} busy={exporting || destinationBusy}/>
                 <label>尺寸
                   <select value={exportScale} onChange={(e) => setExportScale(+e.target.value)}>
                     <option value={1}>1× 原尺寸</option>
@@ -2077,7 +2078,7 @@ export default function App() {
                   </select>
                 </label>
                 <ExportColorSpace value={exportProfile} onChange={setExportProfile}/>
-                <ExportMetadataOptions bits16={exportBits16} gps={exportGps} onBits16={setExportBits16} onGps={setExportGps} onFormat={setExportFormat}/>
+                <ExportMetadataOptions bits16={exportBits16} format={exportFormat} gps={exportGps} onBits16={setExportBits16} onGps={setExportGps} onFormat={setExportFormat}/>
               </div>
               <LayoutControls model={layoutModel} disabled={exporting} selected={exportTargets.length || (hasImage ? 1 : 0)} receipt={status?.export?.layout_result}/>
               <WatermarkControls value={watermark} onChange={setWatermark} disabled={exporting} storageError={watermarkStorageError}/>

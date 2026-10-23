@@ -460,11 +460,8 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
               # 线性数据，厂商专有容器与 lossless JPEG 要 libraw 可选插件。前端拿这一
               # 份说话，而不是自己刻一个“支持 RAW”——那会把“解不开 CR2”写成已通过。
               "raw_backends": R.raw_backends(),
-              # 导出位深（M9-e）：16-bit 只有 TIFF 这一种落盘形状，且只有相机 RAW 有
-              # 母档可直通。把这件事写清楚而不是只报“支持 8/16-bit”：前端刻一份
-              # “PNG 也能 16-bit”就是让用户收一张实际只有 8-bit 内容的件。唯一出处在
-              # 这里，不在 UI 里另写一份判定。
-              "export_bits": {"8": list(FORMATS), "16": ["tif", "tiff"]},
+              # Native RGB16 writers, not Pillow RGB8 with a renamed bit-depth label.
+              "export_bits": {"8": list(FORMATS), "16": ["tif", "tiff", "png"]},
               # M5-a 底片条：行程与上限同样由引擎说。前端自己刻一份“长边 160”或
               # “最多 512 张”，下一轮改上限时就是漏改的那一处（它会静默把图截小）。
               "session_actions": ["scan", "add", "select", "state", "thumbs", "stop_thumbs", "query"],
@@ -5841,9 +5838,8 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
             respond({"event": "error",
                   "error": f"sharpen={sharpen} 越界（需要 [0,{SHARPEN_AMOUNT_LIMIT}]）"})
             return
-        # 16-bit 母档直通（M9-e）：位深是“走哪条通路”而不是“一个参数”——它不进
-        # export_image 那整条 uint8 链，所以这里先把话说清：图层上有东西时直拒，
-        # 不默默降到 8-bit 交一张看起来同名的件。
+        # Native16 source enters neutral passthrough or genuine floating edits;
+        # output containers must retain RGB16, never silently become RGB8.
         try:
             bit_depth = int(p.get("bit_depth", 8))
         except (TypeError, ValueError):
@@ -5853,11 +5849,10 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
             respond({"event": "error", "error": f"bit_depth={bit_depth} 不支持（只认 8 或 16）"})
             return
         if bit_depth == 16:
-            if fmt not in ("tif", "tiff"):
+            if fmt not in ("tif", "tiff", "png"):
                 respond({"event": "error",
-                      "error": f"16-bit 输出当前只能写 TIFF（收到 format={fmt}）："
-                               "JPEG/WebP 是有损的，PNG 编码器不吃三通道 16-bit"
-                               "（实测 Pillow 拒 uint16 RGB）——不拿降到 8-bit 冒充 16-bit 出片"})
+                      "error": f"16-bit 输出支持真实 RGB16 TIFF/PNG（收到 format={fmt}）；"
+                               "JPEG/WebP 不支持本路径，不拿降到 8-bit 冒充 16-bit 出片"})
                 return
         from .export_target_size_adapter import request_policy
         try:
@@ -5876,10 +5871,13 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                   "error": f"metadata_include_gps={include_gps!r} 必须是 true/false"
                            "（注册表里这一格是 boolean，中性 false=默认不外泄 GPS）"})
             return
+        if bit_depth == 16 and include_gps:
+            respond({"event": "error", "error": "RGB16 TIFF/PNG 暂不透传 EXIF/GPS；请关闭写入 GPS，或选择常规 RGB8 导出"})
+            return
         conflict_policy = str(p.get("conflict_policy", "skip_and_report"))
         # Preserve the previous protocol default while accepting explicit lossless
         # compression in both bit depths. Predictor 2 preserves decoded samples.
-        tiff_comp = str(p.get("tiff_compression", "none" if bit_depth == 16 else "deflate"))
+        tiff_comp = str(p.get("tiff_compression", "none" if bit_depth == 16 and fmt in ("tif", "tiff") else "deflate"))
         try:
             _check_policy(conflict_policy)
             comp_key, _ = _tiff_compression(tiff_comp)
@@ -5889,11 +5887,11 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
         except _ExportError as e:
             respond({"event": "error", "error": str(e)})
             return
-        if fmt != "tif" and fmt != "tiff" and comp_key != "deflate":
+        if fmt not in ("tif", "tiff") and (comp_key != "deflate" or (bit_depth == 16 and "tiff_compression" in p)):
             # 不夹也不忽略：只有 TIFF 读这个值，给 JPEG 设 deflate 是一次无效的输入
             respond({"event": "error",
                   "error": f"tiff_compression={tiff_comp!r} 只对 TIFF 有意义（当前 format={fmt}）："
-                           "JPEG/WebP 用 quality，PNG 用 quality 映射的 compress_level"})
+                           "JPEG/WebP 用 quality；PNG16 固定无损编码，不使用 TIFF 压缩参数"})
             return
         # 参数在命令线程里全部拍定：worker 里不再读 self._*，否则中途改一下滑块，
         # 这一批里前几张与后几张用的就不是同一套设置（而事件里只写了一份）
@@ -6243,7 +6241,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                 analysis_ms = round((monotonic_ns() - image_started) / 1e6, 2)
                 if bit_depth == 16:
                     from .export import export_master_16bit, export_edited_16bit
-                    out_path = EDR.primary_target(destination_plan, entry_id) if destination_plan else os.path.join(out_dir, entry.get("stem", os.path.splitext(os.path.basename(path))[0]) + ".tif")
+                    out_path = EDR.primary_target(destination_plan, entry_id) if destination_plan else os.path.join(out_dir, entry.get("stem", os.path.splitext(os.path.basename(path))[0]) + (".png" if fmt == "png" else ".tif"))
                     skipped = []
                     common = dict(output_profile=opts["output_profile"],
                                   conflict_policy=opts["conflict_policy"],
@@ -6268,7 +6266,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                         stage = "master16"
                         r = EDR.run(destination_plan, entry_id, export_master_16bit, path, out_path, device=snap_i["device"],
                                                verify_source=lambda: verify_decode(path, immutable_stamp), **common)
-                    results.append({"path": path, "out": r["path"], "format": "tif",
+                    results.append({"path": path, "out": r["path"], "format": r["format"],
                                     "bits": 16, "source": r["source"],
                                     "w": r["w"], "h": r["h"], "bytes": r["bytes"],
                                     "write_ms": r["write_ms"], "decode_ms": r["decode_ms"],
@@ -6300,6 +6298,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                                     "color_conversion_ms": r.get("color_conversion_ms"),
                                     "tiff_compression": r.get("tiff_compression"),
                                     "tiff_compression_tag": r.get("tiff_compression_tag"),
+                                    "png_compress_level": r.get("png_compress_level"),
                                     "notes": list(r.get("notes", [])),
                                     "gps_written": r.get("gps_written"),
                                     # 仍叫 skipped：UI 那侧按同一个键读两条通路（16-bit 恒空），

@@ -24,8 +24,9 @@ separate alpha-capable creative-layer and background-asset import contracts.
 - Source-owned candidate, spill locator, 100% inspection and current-edit creative
   capture use the same genuine source and working-sRGB boundary. No preview PNG,
   camera thumbnail or reduced-resolution proxy becomes an export source.
-- Neutral master16 and edited16 use existing verified TIFF16 output. PNG16 input
-  does not claim that the existing PNG output encoder can write RGB16.
+- Neutral master16 and edited16 originally used verified TIFF16 output. The
+  subsequent [sample/output slice](DELIVERY-README.md) adds a real RGB16 PNG
+  encoder and actual container choice, not Pillow RGB8 with a changed label.
 - Ordinary RGB8 delivery from PNG16 keeps true16 samples through working-space
   floating-point editing and geometry, then quantizes once for delivery. Existing
   output ICC, watermark, size-target and delivery ownership remain downstream.
@@ -56,8 +57,9 @@ missing colour metadata. RGB16 ICC conversion and SDR output are not lossless
 wide-gamut or scene-linear HDR editing. Neutral unconverted uint16 preservation
 and transformed output colour are separate contracts.
 
-The sample/reference library retains its explicit PNG16 and RGB16-ICC selection
-guards; this slice does not silently broaden that separate resource workflow.
+The subsequent [sample/output slice](DELIVERY-README.md) connects PNG16 and
+RGB16-ICC sample references through genuine decoding and reviewed reinspection,
+without silently changing old immutable references.
 Existing asset-import support is not removed. Source paint's 512-pixel locator
 remains a locator, not 100% inspection. Per-target visual spill batch review and
 photographic spill quality remain unfinished.

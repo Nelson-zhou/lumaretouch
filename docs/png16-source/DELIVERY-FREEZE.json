@@ -1,0 +1,135 @@
+{
+  "baseline": "4f8207ec2ce109f524fa1249f54b8d2a0915a593",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Native PNG16/ICC16 sample-library reference selection, explicit legacy reinspection, verified opaque RGB16 PNG output and matching destination/UI routes. Precision integration, not new handbook feature acceptance.",
+  "files": [
+    {
+      "path": "docs/png16-source/DELIVERY-README.md",
+      "sha256": "ed96c8cbf211aa6d921096fa51c62fc97aff90fb2223c8c212ae4a42dabc07d8",
+      "bytes": 5374
+    },
+    {
+      "path": "docs/png16-source/README.md",
+      "sha256": "3c26b73464faec8edb1184e880fa5f3cee1707617c6eb9bc650f56dbbe407c1b",
+      "bytes": 5761
+    },
+    {
+      "path": "docs/png16-source/UNRUN-ACCEPTANCE.md",
+      "sha256": "ae4175beb74c8aa8f9f2ec5e529f9226a89a99be4ac557bdf08a56fa76b186e4",
+      "bytes": 3155
+    },
+    {
+      "path": "docs/sample_library/README.md",
+      "sha256": "22950121bf064ab58764b3e1c8c3cac8b45411201af71071edfb6ff2ee478737",
+      "bytes": 20735
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "32524e44e3dfcc08ba9d10a63bd52744d42d6811fb576f6318b733e1efae32c0",
+      "bytes": 132117
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_destination_runtime.py",
+      "sha256": "cca3ac2d937666cbb88110be4a3eb4e361e07c179c5be3ae2c10fc6bceedbe85",
+      "bytes": 5329
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/png16_export.py",
+      "sha256": "35c3520610fa237cac36c409e4c6ae62238a6882e8726d2ab6b871a636609fa7",
+      "bytes": 10402
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sample_library_controller.py",
+      "sha256": "f01e283fde3b05355d72018461788206e129103f113a36f758b8bf391a564b29",
+      "bytes": 18877
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sample_library_images.py",
+      "sha256": "7b21e597600494892cbd471ab50421ce5de78e994aec23c7971a59514f24a49f",
+      "bytes": 9997
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/sample_library_source.py",
+      "sha256": "0bb3d7b7773cad7bc1ee4f92871ca19ed466d326412334ad3d68cd956755da21",
+      "bytes": 10018
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "ef89b18e8f1618feb28cd0336763f49c821012752ef0bf8e9ee088044a9e9a93",
+      "bytes": 463835
+    },
+    {
+      "path": "engine/tests/test_png16_export_unrun.py",
+      "sha256": "b7ba893690dd2e5ba1d427ac991039759fe41e3415e9f441e7a0c08c5ddb3e0a",
+      "bytes": 16262
+    },
+    {
+      "path": "engine/tests/test_png16_output_routes_unrun.py",
+      "sha256": "92a498bc52b80d079676869433ddbdd557bf0464762c1e2b394536be32833bf3",
+      "bytes": 5195
+    },
+    {
+      "path": "engine/tests/test_sample_library_png16_unrun.py",
+      "sha256": "516cdbac20663703bc36718648fef6756ddb891c80ae883abe4fec67fc476055",
+      "bytes": 14797
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "341a2be28d0700d706f8b1fc6c88494e9d9dc6863911dce7705c07976e8028a5",
+      "bytes": 149857
+    },
+    {
+      "path": "ui/src/components/ExportMetadataOptions.tsx",
+      "sha256": "db1d34dee2a97f099273b6371f3bf81d479f3823b98d45c3e8f86d9ed43db7bf",
+      "bytes": 1052
+    },
+    {
+      "path": "ui/src/components/ExportQueuePanel.tsx",
+      "sha256": "c070dd2eeec35642598b4098240adb4a370437c09aa32a72a04442cb9c596ed0",
+      "bytes": 3861
+    },
+    {
+      "path": "ui/src/exportModel.test.ts",
+      "sha256": "0cec4d85ebcc69bf65f9fdcb6b9e3fce1654927b819ac555e8d00986fafe2fb8",
+      "bytes": 8949
+    },
+    {
+      "path": "ui/src/exportModel.ts",
+      "sha256": "7b5d9795de5fbdef718d50ebd42c385874e4581d0d99aa25c32fcc8392347eb8",
+      "bytes": 1147
+    },
+    {
+      "path": "ui/src/sampleLibrary/SampleLibraryPanel.tsx",
+      "sha256": "e24fba25f84a5669182cc24b0f61aa240e6680df4dac6602bd7cf13d2ed17a3f",
+      "bytes": 29111
+    }
+  ],
+  "payload_files": 20,
+  "payload_bytes": 915831,
+  "static_verification": {
+    "python_ast_files": 984,
+    "json_files": [
+      "ui/package.json"
+    ],
+    "git_diff_check": "clean",
+    "line_counts": {
+      "ui/src/App.tsx": 2122,
+      "ui/src-tauri/src/main.rs": 2040,
+      "engine/src/lumaretouch_engine/server.py": 6971
+    },
+    "runtime": "UNRUN: no product imports, codecs, tests, build, compiler, typecheck or inference executed"
+  },
+  "integration_map": {
+    "sample": "sample_library_source -> genuine PNG16/TIFF16 decode -> working_rgb -> native_thumbnail or immutable reference ColorInput; duplicate controller reinspection requires retained hash and catalogue CAS",
+    "export": "export._write_verified_rgb16 -> png16_export -> pinned imagecodecs native RGB16 -> frozen resolve_target / atomic commit -> native pixel/ICC readback",
+    "ui": "exportModel reconciliation -> App and metadata controls -> existing native transport -> server and export_destination_runtime actual container -> queue receipts"
+  },
+  "remaining_limitations": [
+    "Nonopaque source alpha, HDR/APNG/unsupported PNG colour signals and gray ICC remain explicit refusals; no clipping or flattening.",
+    "RGB16 delivery retains ICC-only metadata policy; source EXIF/GPS passthrough is not implemented.",
+    "Failed postcommit readback retains and names the file, but structured unverified committed-output receipts are not yet implemented; frozen retry refuses overwrite.",
+    "Unsupported high-bit library items display a labelled placeholder. Eligible legacy rows require explicit same-original reimport; existing references are never rewritten.",
+    "Ordinary RGB8 originals are not promoted as genuine 16-bit masters. Wide-gamut conversion is not lossless gamut mapping.",
+    "All codec, numerical, performance, UI, preset/project replay, photographic and application acceptance remains UNRUN. Per-target visual spill batch review and broader handbook gaps remain unfinished."
+  ]
+}
