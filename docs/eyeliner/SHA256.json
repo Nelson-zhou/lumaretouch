@@ -1,0 +1,273 @@
+{
+  "status": "SOURCE_WIRED_UNRUN",
+  "shared_base": "local03a0b4e968afe4222caf8d1ebb0daad6abc5c8ee",
+  "isolated_base": "f68a5d7d",
+  "verification": "Static Python AST, JSON and SHA256 only. No product import/test/build/compiler/typecheck/inference/download/install/Git writes.",
+  "files": [
+    {
+      "path": "core/eyeliner/build_eyeliner.sh",
+      "sha256": "1e4a8a069e8b95330284de4e4f9efea00b04fe9721c5c69509cec75052be954b",
+      "bytes": 353
+    },
+    {
+      "path": "core/eyeliner/eyeliner.rs",
+      "sha256": "d53badb3f463aeb7d5ddd9ae2c4d0cd1214f9314a83aa0fca8ffdadea8242808",
+      "bytes": 2873
+    },
+    {
+      "path": "docs/eyeliner/INTEGRATION.md",
+      "sha256": "b304ab2fa0e746074c20141efe007ff3a9f69c60839a27ab0b5e377455d4f852",
+      "bytes": 6843
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_runtime.py",
+      "sha256": "42d72d12598bf6350375009a4189e3588f982c4000c9908ed357b792f0707d32",
+      "bytes": 9935
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_state.py",
+      "sha256": "9240f216e84d88729637c93c7d8355886a9a92417c2725114293cfac9ef46c06",
+      "bytes": 8796
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eyeliner_adapters.py",
+      "sha256": "8e42ed1d6786d9aad75518e3ac4696eb4610e18da2a6ce168c6eaf55d77a9aff",
+      "bytes": 3293
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eyeliner_catalogue.py",
+      "sha256": "2db61e2c16b2518f2094f06ebbe2e276f3de568e93062c3874381d4cbab93a34",
+      "bytes": 573
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eyeliner_geometry.py",
+      "sha256": "41225dd9fb1da5f872f5487d52427308e0efe80cd74b8ad9da15d69be928af4a",
+      "bytes": 3262
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eyeliner_host.py",
+      "sha256": "ee5ac00dc32014799f6de940c7aa91bf36d04e7e82d8168712848e33e02e6fd0",
+      "bytes": 3622
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eyeliner_native.py",
+      "sha256": "012254c734201617aad3e05a4fad67a34923aef7bd4ddb1362453640618b242f",
+      "bytes": 1480
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eyeliner_patterns.json",
+      "sha256": "7e92c1c83d664ea1120cb94a62cd5ef2aa952d9df6bbc034f7dafa935309d21f",
+      "bytes": 1835
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eyeliner_people.py",
+      "sha256": "a0d373171db0ba859fd24ef5cbfc770e0ca715ae04789635d5b3466530b6bdfd",
+      "bytes": 2176
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eyeliner_project.py",
+      "sha256": "9ae7242747ff9d546b069340f1d163b775a02bc3e2e2290e2a8dbf7943ec13d0",
+      "bytes": 1701
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eyeliner_scope.py",
+      "sha256": "aaad406e1d6a3aa60ae33ba7efafc86f1ab0410de1934e13d0d8a1eb4e038169",
+      "bytes": 1784
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eyeliner_state.py",
+      "sha256": "d0a3bca86915626603dd3b1f379d2b132db69c17db194df124abd443e98ec177",
+      "bytes": 2717
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eyeliner_support.py",
+      "sha256": "bc122c90d9e914381d980c895501239cfb8ca2e2ea56859f2e0e804561b23f7f",
+      "bytes": 5221
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_wrinkle_recovery.py",
+      "sha256": "ce560bd6a4bc5d4b0513b1d973298f2431bed0fc247aa9e10e60b96eed1302fa",
+      "bytes": 3767
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "60372a805422c88bdd4f35e4142011d18e6eac365bc8a094f2ed55ad5caaf255",
+      "bytes": 6713
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "05300eec7c36f09feb1facdc1a0776e73fb247f52eec9f080efa79634c88d4cf",
+      "bytes": 3414
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_edit.py",
+      "sha256": "f9c2b68f6d4e926dfa148afb57d13ea86b8aeea78590396bbf98d625e401117b",
+      "bytes": 5572
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "sha256": "4992ff5ce921af44461f9edf82ac9d8da06ef949808fe04d472a04d843bd0c42",
+      "bytes": 6773
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "0a4c5ae305a752950cb8bff0d11b02a2fa7a4bda1e2dd90e38cf3bc5c4b77c79",
+      "bytes": 5452
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "5b2a74249248a1024d570c28866b4bc35122a447c6779c7af863f97a0f20221a",
+      "bytes": 3701
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "9f681c8c015ce154a41bba622e895aac4255340f4b1aa0697e2f90644f40ea59",
+      "bytes": 18455
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "22ecb3fcab1b5a8027ddf81948c53992c92d7d78804ad8e2ec1a55457c1e8c59",
+      "bytes": 15427
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "sha256": "e5632e44fc81de243971deaef5700a8c49a7f43d72af3a68701fe9addce35f4a",
+      "bytes": 1040
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "sha256": "9a907da68975661e3e9c44f43b45e3c42e5bb46abe42aecf996b0aaf4702ad1f",
+      "bytes": 4938
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_project.py",
+      "sha256": "028de61fa4816c7e8000a84bc8afaa2c9daf01bff944f2df7b512b8ebdcf09db",
+      "bytes": 2728
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "f30d2852332e69a732aad4aaa173035bde71fd39943f37a12290b531aec97a2d",
+      "bytes": 12039
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "e0442f7eb788056340cba6e11d56a83e9e1255f5e28a919688e937f4e4108828",
+      "bytes": 3873
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_support_assets.py",
+      "sha256": "525da27008d6402aa0a82b619e42677651f319edaff8fe8fe025786467981b50",
+      "bytes": 9612
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "4ee5302584a0447656299796a690d848dfc0e2346968a56bee6b52c2cde33d38",
+      "bytes": 33153
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "f0cbc3612d06f0c10475b4871b655a502f14bb086fac43531a9ac446893db741",
+      "bytes": 446136
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "c6b800a212d80681799357258bf29c5811cda7e82740419a23d9a116d43ff731",
+      "bytes": 127520
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "ced9851e8da696548221fed6042010ce4d245067706fbf40a38e8e1a95e6151c",
+      "bytes": 4581
+    },
+    {
+      "path": "engine/tests/fixtures/eyeliner/acceptance.json",
+      "sha256": "dd98025b4d64dc7ce1ae635732b36a85333b6680741b05e9698333f26de59aa8",
+      "bytes": 5106
+    },
+    {
+      "path": "packaging/build-eyeliner.sh",
+      "sha256": "42d0f05030703ebcc70a5adadb8523e36833a8e6d5ff670d31ba73b8b586dc27",
+      "bytes": 419
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "0de10a6dc05938c5d0c20bb0848d6250c1576fa6b0804b551121cbd0d4643829",
+      "bytes": 13520
+    },
+    {
+      "path": "ui/src-tauri/src/people_api.rs",
+      "sha256": "1720ec8d425a0384473cd81bc35943e794f029eadbe55c5e8f46b4b34ce14449",
+      "bytes": 6723
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "89c8c1dee839ef703acada8c8c005b740b2de32c206c79ddd7cd0674ef3c07f4",
+      "bytes": 132168
+    },
+    {
+      "path": "ui/src/batch/batchScopeOptions.ts",
+      "sha256": "ac8650731a6a4693bd2c7458183fcf100ead9febb68aaa9b9bf6ce1cd0277bd7",
+      "bytes": 3621
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "1b7a75667e4c99dc6d6da513382cd80a6665477c17cc1a821bef6cdabac76764",
+      "bytes": 56335
+    },
+    {
+      "path": "ui/src/effectRecovery/model.ts",
+      "sha256": "d9d1c3ac69bfd57743f5cd5a4db7e163993a53e65cb2933004918cbdc237b3cb",
+      "bytes": 2032
+    },
+    {
+      "path": "ui/src/eyeliner/EyelinerEyeControls.tsx",
+      "sha256": "d3d403e7a490d41639be96a1967dd89049381d4360014fa4accbffa2caddc6dc",
+      "bytes": 5342
+    },
+    {
+      "path": "ui/src/eyeliner/EyelinerPanel.tsx",
+      "sha256": "52d1598b80ac79d397ab283b1f231fd0f93d3b77e935313d41b0fee2f62bec89",
+      "bytes": 4762
+    },
+    {
+      "path": "ui/src/eyeliner/EyelinerSupportEditor.tsx",
+      "sha256": "f9428f4381307e28f16a3ae82f765ac668a6ba0095a50486a69ce4cf0bfaaeeb",
+      "bytes": 5261
+    },
+    {
+      "path": "ui/src/eyeliner/catalogue.ts",
+      "sha256": "654bc2cb817dc84b19db468d10b472d68717e9ab20165f0d0f2f40dc2e835dc7",
+      "bytes": 1033
+    },
+    {
+      "path": "ui/src/eyeliner/model.ts",
+      "sha256": "6be283f7e90c231a77d9858cb29c3a1064e0fdca1559140c9d672744e88d9bdb",
+      "bytes": 4271
+    },
+    {
+      "path": "ui/src/eyeliner/picker.ts",
+      "sha256": "2ca906c2ac7cf9c7a656c409d5e30e8965f9fe97e6acc7eebf000adb3904cc27",
+      "bytes": 3160
+    },
+    {
+      "path": "ui/src/eyeliner/useEyelinerPicker.ts",
+      "sha256": "ddf8a6e747c92da5198c496cb23e969befc803e1639b3d3d0958c1de5f8e58c0",
+      "bytes": 2856
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "993c192013d8ebbbaf68cea10e5b08c59d78d49c24caef4632926be5ada9972e",
+      "bytes": 92350
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "8aec40f40de72b0bbf2b882a3fd68c42c8946ced331fdb311fe72f3ebe1705df",
+      "bytes": 6658
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "e29df9968cb24798f50d918e87e159f1824651c59db6ad0effd922505d8816d9",
+      "bytes": 3197
+    }
+  ]
+}

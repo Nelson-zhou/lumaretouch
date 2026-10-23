@@ -10,7 +10,7 @@ from . import people_pipeline as PIPE
 
 
 def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_assets=None,body_bank=None,body_source=None,body_source_path=None,
-                    hair_assets=None,hair_evidence=None,hair_source_path=None,eye_light_assets=None,blush_makeup_assets=None,lipstick_assets=None):
+                    hair_assets=None,hair_evidence=None,hair_source_path=None,eye_light_assets=None,blush_makeup_assets=None,lipstick_assets=None,eyeliner_assets=None):
     import torch
     if body_bank is None and getattr(getattr(pipe,'people_prepared',None),'body_fields',()):
         raise ValueError('Preview omitted independently retained body inputs')
@@ -23,7 +23,7 @@ def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_asse
         repaired=np.array(pipe.repair_base[0].permute(1,2,0).to('cpu',torch.float32).numpy(),dtype=np.float32,copy=True)
         repaired.setflags(write=False)
     prepared=prepare(state,asset_sha256,rgb,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,repaired=repaired,
-        hair_assets=hair_assets,hair_evidence=hair_evidence,hair_source_path=hair_source_path,eye_light_assets=eye_light_assets,blush_makeup_assets=blush_makeup_assets,lipstick_assets=lipstick_assets)
+        hair_assets=hair_assets,hair_evidence=hair_evidence,hair_source_path=hair_source_path,eye_light_assets=eye_light_assets,blush_makeup_assets=blush_makeup_assets,lipstick_assets=lipstick_assets,eyeliner_assets=eyeliner_assets)
     if body_bank is not None:
         from .body_pose_render import prepare as prepare_body
         prepared=prepare_body(prepared,body_bank,state,body_source,byte_budget=body_budget(prepared,byte_budget),source_path=body_source_path)
@@ -31,9 +31,9 @@ def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_asse
 
 
 def synchronize(pipe,state,asset_sha256,analyses,*,byte_budget,recovery_assets=None,body_bank=None,body_source=None,body_source_path=None,
-                    hair_assets=None,hair_evidence=None,hair_source_path=None,eye_light_assets=None,blush_makeup_assets=None,lipstick_assets=None):
+                    hair_assets=None,hair_evidence=None,hair_source_path=None,eye_light_assets=None,blush_makeup_assets=None,lipstick_assets=None,eyeliner_assets=None):
     prepared=prepare_preview(pipe,state,asset_sha256,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,body_bank=body_bank,body_source=body_source,body_source_path=body_source_path,
-        hair_assets=hair_assets,hair_evidence=hair_evidence,hair_source_path=hair_source_path,eye_light_assets=eye_light_assets,blush_makeup_assets=blush_makeup_assets,lipstick_assets=lipstick_assets)
+        hair_assets=hair_assets,hair_evidence=hair_evidence,hair_source_path=hair_source_path,eye_light_assets=eye_light_assets,blush_makeup_assets=blush_makeup_assets,lipstick_assets=lipstick_assets,eyeliner_assets=eyeliner_assets)
     PIPE.install(pipe,prepared);pipe.people_suspended=None
     return prepared
 
@@ -58,7 +58,7 @@ def prepare_export(snapshot,source,repaired,*,byte_budget,recovery_assets=None,b
     rgb.setflags(write=False)
     from .hair_colour_project import kwargs as hair_inputs
     prepared=prepare(state,asset,rgb,analyses,byte_budget=byte_budget,recovery_assets=recovery_assets,repaired=repaired,
-        **hair_inputs(snapshot),force_hair_prompted=True,eye_light_assets=snapshot.get('support_assets',{}),blush_makeup_assets=snapshot.get('support_assets',{}),lipstick_assets=snapshot.get('support_assets',{}))
+        **hair_inputs(snapshot),force_hair_prompted=True,eye_light_assets=snapshot.get('support_assets',{}),blush_makeup_assets=snapshot.get('support_assets',{}),lipstick_assets=snapshot.get('support_assets',{}),eyeliner_assets=snapshot.get('support_assets',{}))
     if body_pose is not None:
         from .arm_shape_project import check_snapshot
         from .body_pose_render import prepare as prepare_body

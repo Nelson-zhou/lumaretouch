@@ -68,6 +68,7 @@ export interface RetouchProps {
   whiteBalanceBusy?: boolean;
   colorSamplePanel?: React.ReactNode;
   blushMakeupPanel?: React.ReactNode;
+  eyelinerPanel?: React.ReactNode;
   lipstickPanel?: React.ReactNode;
   colorActions?: ColorActionControlsProps;
   sourcePatchPanel?: React.ReactNode;cloneStampPanel?: React.ReactNode;localMasksPanel?: React.ReactNode;
@@ -257,6 +258,12 @@ const WIRED: Record<string, string> = {
   "PC-32466|眉毛/眉头长短": "brow.inner_length",
   "PC-32466|眉毛/眉尾长短": "brow.outer_length",
 
+  "PC-32471|局部妆容/眼线": "eyeliner.family",
+  "PC-32471|局部妆容/眼线/推荐颜色": "eyeliner.recommended",
+  "PC-32471|局部妆容/眼线/吸管": "eyeliner.eyedropper",
+  "PC-32471|局部妆容/眼线/RGB": "eyeliner.rgb",
+  "PC-32471|局部妆容/眼线/HEX": "eyeliner.hex",
+  "PC-32471|局部妆容/眼线/收藏颜色": "eyeliner.saved",
   "PC-32471|局部妆容/口红": "lipstick.family",
   "PC-32471|局部妆容/口红/推荐颜色": "lipstick.recommended",
   "PC-32471|局部妆容/口红/吸管": "lipstick.eyedropper",
@@ -593,6 +600,8 @@ export default function RetouchPanel(props: RetouchProps) {
       why={props.faceOk?(doc?.brow_shape?.suspended??undefined):props.faceWhy}
       documentId={doc?.document_id??""} faceId={doc?.brow_shape?.selected_face_id??""} revision={doc?.brow_shape?.revision??0} peopleContext={capturedPeople}/>;
     if (kind.startsWith("brow.")) return null;
+    if (kind === "eyeliner.family") return <div key={leaf.path}>{props.eyelinerPanel}</div>;
+    if (kind.startsWith("eyeliner.")) return null;
     if (kind === "lipstick.family") return <div key={leaf.path}>{props.lipstickPanel}</div>;
     if (kind.startsWith("lipstick.")) return null;
     if (kind === "blush.family") return <div key={leaf.path}>{props.blushMakeupPanel}</div>;

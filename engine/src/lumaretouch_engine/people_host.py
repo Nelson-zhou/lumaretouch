@@ -142,6 +142,8 @@ class PeopleHostMixin:
             result['parameter_catalog']=describe()
             from .eye_light_host import report as eye_light_report
             result['eye_light']=eye_light_report(self,state,source,self._people_cursors.get(asset))
+            from .eyeliner_host import report as eyeliner_report
+            result['eyeliner']=eyeliner_report(self,state,source,self._people_cursors.get(asset))
             from .lipstick_host import report as lipstick_report
             result['lipstick']=lipstick_report(self,state,source,self._people_cursors.get(asset))
             from .blush_makeup_host import report as blush_report

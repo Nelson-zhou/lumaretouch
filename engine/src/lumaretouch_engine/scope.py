@@ -39,7 +39,7 @@ from . import studio_background_scope as STUDIO
 from . import optics_scope as OPTICS, optics_auto_scope as OPTICS_AUTO
 from . import reference_color_scope as REFERENCE
 from . import facial_wrinkle_scope as WRINKLES
-from . import lip_makeup_scope as LIP, eye_light_scope as EYE_LIGHT, blush_makeup_scope as BLUSH, lipstick_scope as LIPSTICK
+from . import lip_makeup_scope as LIP, eye_light_scope as EYE_LIGHT, blush_makeup_scope as BLUSH, lipstick_scope as LIPSTICK, eyeliner_scope as EYELINER
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
@@ -109,6 +109,9 @@ MODULES: dict[str, dict] = {
     BLUSH.OP: {"params": ("recipe",), "state_fields": BLUSH.FIELDS, "single_face": True,
                "transferable": True, "cmd": "people", "read": BLUSH.params_of, "write": BLUSH.install,
                "why_not": "仅腮红图案、程度和颜色；目标重算真实皮肤支持，不复制人物、蒙版、收藏或恢复笔迹"},
+    EYELINER.OP: {"params": ("recipe",), "state_fields": EYELINER.FIELDS, "single_face": True,
+               "transferable": True, "cmd": "people", "read": EYELINER.params_of, "write": EYELINER.install,
+               "why_not": "仅逐眼眼线素材、程度、颜色与联动；目标需要独立眼睑审核，不复制眼球/眼睑蒙版或恢复笔迹"},
     LIPSTICK.OP: {"params": ("recipe",), "state_fields": LIPSTICK.FIELDS, "single_face": True,
                "transferable": True, "cmd": "people", "read": LIPSTICK.params_of, "write": LIPSTICK.install,
                "why_not": "仅口红图案、程度、颜色和质地；目标须审核真实可见唇部，不复制人物、蒙版、收藏或恢复笔迹"},
@@ -311,6 +314,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == BLUSH.OP:
         try: return BLUSH.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == EYELINER.OP:
+        try: return EYELINER.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == LIPSTICK.OP:
         try: return LIPSTICK.check_params(params)

@@ -1,0 +1,132 @@
+{
+  "status": "UNRUN",
+  "warning": "Authored cases, not runtime evidence. Requires real source photos and authorized local execution.",
+  "cases": [
+    {
+      "id": "EL-001",
+      "requirement": "LNX-REF-PC-32471-C-fa257bcc51",
+      "action": "Render each six original curves on reviewed open eye",
+      "expected": "Six visibly distinct curves; no outside-review pixels; no hidden anatomy",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-002",
+      "requirement": "LNX-REF-PC-32471-C-fa257bcc51",
+      "action": "Set strength 0 with native absent",
+      "expected": "Exact unchanged source; no native load",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-003",
+      "requirement": "LNX-REF-PC-32471-C-fa257bcc51",
+      "action": "Linked change with only one eye reviewed",
+      "expected": "Atomic refusal; neither eye/recipe/history partially published",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-004",
+      "requirement": "LNX-REF-PC-32471-C-fa257bcc51",
+      "action": "Unlock; zero closed side; change visible side",
+      "expected": "Independent side changes, linked=false persists through save/history/preset",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-005",
+      "requirement": "LNX-REF-PC-32471-C-97481ec9e4",
+      "action": "Select each material recommendation",
+      "expected": "Valid exact hex colour committed through canonical patch",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-006",
+      "requirement": "LNX-REF-PC-32471-C-e42b06d0e5",
+      "action": "RGB -1/256/NaN/fraction/booleans and valid 0/255",
+      "expected": "Reject invalid; exact valid RGB to HEX roundtrip",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-007",
+      "requirement": "LNX-REF-PC-32471-C-0677331ed6",
+      "action": "HEX short/malformed and lowercase #a0b1c2",
+      "expected": "Reject malformed; normalize valid uppercase",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-008",
+      "requirement": "LNX-REF-PC-32471-C-2590457a9a",
+      "action": "Save six distinct; seventh; duplicate; remove; reopen and undo",
+      "expected": "Seventh refused, duplicate no-op, no replacement; exact persisted palette",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-009",
+      "requirement": "LNX-REF-PC-32471-C-d1f91e8f4d",
+      "action": "Sample unpresented frame, stale ticket, earlier click, changed person/revision",
+      "expected": "Reject all; valid presented working-sRGB proxy applies one atomic chosen-side/linked patch",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-010",
+      "requirement": "LNX-REF-PC-32471-C-fa257bcc51",
+      "action": "Give eye_light_visibility asset instead of eyeliner review",
+      "expected": "Reject; eye review cannot authorize eyelid",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-011",
+      "requirement": "LNX-REF-PC-32471-C-fa257bcc51",
+      "action": "Close eye, occlude eyelid, truncate corner, degenerate rim or insufficient support",
+      "expected": "Refuse requested eye, do not invent eyelid or silently skip side",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-012",
+      "requirement": "LNX-REF-PC-32471-C-fa257bcc51",
+      "action": "Same recipe preview and full-resolution export",
+      "expected": "Reraster original vectors at each resolution, not resized proxy masks; visual/pixel comparison recorded",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-013",
+      "requirement": "LNX-REF-PC-32471-C-fa257bcc51",
+      "action": "Recover liner at brush area, then undo/redo",
+      "expected": "Only eyeliner contribution removed; other effects and source unchanged",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-014",
+      "requirement": "LNX-REF-PC-32471-C-fa257bcc51",
+      "action": "Save/reopen project and historical graph/support/palette; corrupt digest",
+      "expected": "Exact roundtrip; corrupt source/landmark/material rejected before restore",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-015",
+      "requirement": "LNX-REF-PC-32471-C-fa257bcc51",
+      "action": "Preset/batch to distinct target with and without own eyelid review",
+      "expected": "Only seven intent leaves transfer; target own evidence required; no source mask or palette travel",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-016",
+      "requirement": "LNX-REF-PC-32471-C-fa257bcc51",
+      "action": "Two people overlap and two eyes overlap ROI boxes",
+      "expected": "Canonical deterministic ownership; no doubled contribution or selected-face leak",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-017",
+      "requirement": "LNX-REF-PC-32471-C-fa257bcc51",
+      "action": "Invalid Rust ABI inputs, nonfinite fields, oversize ROI",
+      "expected": "Refusal without output modification or automatic build/fallback",
+      "status": "UNRUN"
+    },
+    {
+      "id": "EL-018",
+      "requirement": "LNX-REF-PC-32471-C-fa257bcc51",
+      "action": "Equal colour/source yields no changed pixels",
+      "expected": "Report no measurable change, not successful visible application",
+      "status": "UNRUN"
+    }
+  ]
+}

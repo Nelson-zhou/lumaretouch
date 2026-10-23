@@ -39,7 +39,7 @@ def isolated_snapshot(snapshot,*,for_document):
                 enhance={'amounts':{},'built':False},enhance_defer=False)
     from . import effect_recovery_state as R
     recovery=R.check(snap.get('effect_recovery'))
-    recovery['targets']=[row for row in recovery['targets'] if row['target'] not in ('lip_makeup','facial_wrinkles','eye_light','blush_makeup','lipstick')]
+    recovery['targets']=[row for row in recovery['targets'] if row['target'] not in ('lip_makeup','facial_wrinkles','eye_light','blush_makeup','lipstick','eyeliner')]
     if not recovery['targets']:recovery=R.empty()
     snap['effect_recovery']=recovery
     return snap
