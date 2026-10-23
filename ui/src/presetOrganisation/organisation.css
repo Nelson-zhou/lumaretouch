@@ -1,0 +1,11 @@
+.presetOrganisation { margin-top:1rem; padding:.6rem; border:1px solid var(--border,#666); border-radius:.4rem; }
+.presetOrganisation p,.presetOrganisation small { overflow-wrap:anywhere; }
+.organisationActions,.organisationCategoryHeading,.presetOrganisation li { display:flex; gap:.4rem; align-items:center; flex-wrap:wrap; }
+.organisationCategory { margin:.6rem 0; padding:.4rem; border:1px solid var(--border,#666); }
+.organisationCategoryHeading { padding:.3rem; background:var(--panel-bg,transparent); }
+.presetOrganisation ul { list-style:none; margin:0; padding:0; }
+.presetOrganisation li { padding:.45rem 0; border-bottom:1px solid var(--border,#666); }
+.presetOrganisation small { font-size:.8em; opacity:.85; }
+.presetOrganisation :focus-visible { outline:2px solid var(--accent,#61afff); outline-offset:2px; }
+.presetOrganisation [draggable=true] { cursor:grab; }
+.presetOrganisation input,.presetOrganisation select { max-width:100%; }

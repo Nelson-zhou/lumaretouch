@@ -18,6 +18,15 @@ import re
 import tempfile
 import stat
 import errno
+from functools import wraps
+from . import preset_organisation_store as PO
+
+def _catalogue_locked(fn):
+    @wraps(fn)
+    def locked(*args, **kwargs):
+        with PO.catalogue_lock(kwargs.get("directory") or preset_dir()):
+            return fn(*args, **kwargs)
+    return locked
 
 from .scope import (PRESET_MAX_BYTES, PRESET_SCHEMA, ScopeError, dump_preset, safe_slug,
                     validate_preset)
@@ -141,7 +150,8 @@ def load_file(path: str, *, max_bytes: int = PRESET_MAX_BYTES) -> dict:
     return validate_preset(doc)
 
 
-def list_all() -> tuple[list[dict], list[dict]]:
+@_catalogue_locked
+def raw_list_all() -> tuple[list[dict], list[dict]]:
     """(内置 + 用户预设, 读不了的那一些及原因)。坏掉的预设**不会被静默跳过**：
     它带着原因进 `errors`（调用方在列表事件里上报），因为“我导入的预设怎么不见了”
     必须有答案。"""
@@ -165,11 +175,17 @@ def list_all() -> tuple[list[dict], list[dict]]:
     return out, errors
 
 
+@_catalogue_locked
+def list_all() -> tuple[list[dict], list[dict]]:
+    raw, errors = raw_list_all()
+    return PO.overlay(raw, preset_dir()), errors
+
 def docs() -> list[dict]:
     """只要列表、不要错误（给枚举、报表用）。"""
     return list_all()[0]
 
 
+@_catalogue_locked
 def save(doc: dict, *, force: bool = False, directory: str | None = None) -> str:
     # `builtin` 是派生字段（上面的 validate 不允文件里带它），而落盘层的这一写永远进
     # 用户目录——用户目录里不存在“内置”这回事。剔掉后再校一次，这样“已校验副本回炉”
@@ -178,6 +194,12 @@ def save(doc: dict, *, force: bool = False, directory: str | None = None) -> str
     if clean["id"] in builtin_ids():
         raise ScopeError(f"预设 id 与内置预设 {clean['id']} 相撞：用户文件不能顶掉随包分发的那一个"
                          "（列表里同 id 会被报成错误，而不是静默二选一）")
+    root = directory or preset_dir()
+    metadata = PO.load(root)['items'].get(clean['id'])
+    if metadata and metadata['deleted']:
+        raise ScopeError('同 ID 预设仍在回收站；请先恢复，或导入为新副本')
+    if metadata and metadata['name'] is not None and metadata['name'] != clean['name']:
+        raise ScopeError('已有分类名称覆盖；请使用重命名或导入为新副本，未改写预设')
     path = _path_for(clean["id"], directory)
     if os.path.exists(path) and not force:
         raise ScopeError(f"预设 {clean['id']} 已存在（{path}）：要覆盖请显式给 force")
@@ -215,17 +237,17 @@ def save(doc: dict, *, force: bool = False, directory: str | None = None) -> str
     return path
 
 
+@_catalogue_locked
 def delete(preset_id: str, *, directory: str | None = None) -> str:
-    if preset_id in builtin_ids():
-        raise ScopeError(f"内置预设 {preset_id} 不删除（它随包分发，删了装机就没有预设）")
-    path = _path_for(preset_id, directory)
-    if not os.path.isfile(path):
-        raise ScopeError(f"没有这个预设文件：{path}")
-    try: os.remove(path)
-    except OSError as error: raise _storage_error(error, committing=True) from error
-    try: _sync_parent(path)
-    except OSError as error: raise _storage_error(error, committed=True) from error
-    return path
+    """Compatibility entrypoint: recoverable catalogue trash, never unlink a recipe."""
+    if directory is not None and os.path.abspath(directory) != os.path.abspath(preset_dir()):
+        raise ScopeError('回收站只支持当前预设目录')
+    if preset_id in builtin_ids(): raise ScopeError('内置预设不能删除')
+    store = PO.OrganisationStore(preset_dir(), raw_list_all)
+    current = store.snapshot()
+    store.transact({'action':'preset_trash','id':preset_id,'request_id':str(__import__('uuid').uuid4()),
+                    'expected_revision':current['revision']})
+    return _path_for(preset_id, directory)
 
 
 def find(preset_id: str) -> dict:

@@ -13,6 +13,7 @@ import json
 from typing import Callable
 from . import scope as SC, preset_store as PS, reference_color_scope as RC
 from .preset_transaction import apply_with_rollback, PresetApplyError
+from .preset_organisation_store import OrganisationError
 from . import local_grade_layers as LG
 from . import sky_replacement_scope as SKY, optics_auto_scope as OA, id_background_scope as ID_BACKGROUND
 
@@ -63,7 +64,7 @@ class PresetController:
             available = False; docs = []
             errors = [{"file": PS.preset_dir(), "error": f"读预设目录失败：{error}"}]
         return {"list": docs, "errors": errors, "modules": SC.describe(), "dir": PS.preset_dir(),
-                "schema": SC.PRESET_SCHEMA, "last_applied": self.last_applied(), "available": available}
+                "schema": SC.PRESET_SCHEMA, "last_applied": self.last_applied(), "available": available, "organisation_protocol": 1}
 
     @staticmethod
     def request_id(p):
@@ -158,6 +159,8 @@ class PresetController:
             if isinstance(error, PresetApplyError):
                 unknown = not error.rolled_back
                 result.update(rolled_back=error.rolled_back, requires_reload=error.requires_reload)
+            if isinstance(error, OrganisationError):
+                unknown = error.outcome_unknown
             if isinstance(error, PS.PresetStorageError):
                 unknown = error.outcome_unknown
                 result["operation_committed"] = error.committed

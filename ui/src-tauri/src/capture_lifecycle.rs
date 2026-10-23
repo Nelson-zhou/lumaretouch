@@ -29,6 +29,7 @@ impl AppState {
         crate::neck_shape_api::reset(epoch);
         crate::arm_shape_api::reset(epoch);
         crate::sample_library_api::reset(epoch);
+        crate::preset_organisation_api::reset(epoch);
         crate::semantic_colour_api::reset(epoch);
         self.color_capture.lock().unwrap().reset(epoch);
         self.source_patch.lock().unwrap().reset(epoch);

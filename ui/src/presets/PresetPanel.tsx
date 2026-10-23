@@ -1,3 +1,4 @@
+import {PresetOrganisationPanel} from '../presetOrganisation/PresetOrganisationPanel';
 import {ReferenceColorReview} from '../referenceColor/ReferenceColorReview';
 import {AutomaticTransferReview} from '../optics/AutomaticTransferReview';
 import {OPTICS_AUTO_OP} from '../optics/transferReviewModel';
@@ -11,11 +12,13 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
   const faceBlocked=!w.face.ok&&modules.some(m=>selectedOps.includes(m.operation_id)&&m.single_face);
   const rows=[...modules,...chosen.filter(op=>!modules.some(m=>m.operation_id===op))
     .map(operation_id=>({operation_id,params:[],transferable:false,single_face:false,dedicated_transport:undefined,reason:'当前引擎不再提供这个模块'}))];
-  const verbs={list:'刷新列表',preflight:'预检目标预设',apply:'应用预设',save:'保存预设',import:'导入预设',delete:'删除预设'};
+  const verbs={list:'刷新列表',preflight:'预检目标预设',apply:'应用预设',save:'保存预设',import:'导入预设',delete:'移入预设回收站'};
   const oldDocument=!!w.ui.submitted?.options.documentId&&w.ui.submitted.options.documentId!==w.context.documentId;
   const nameLength=Array.from(w.form.name.trim()).length;
   return <section className="modulePresets" aria-label="模块预设">
     <h4>模块预设</h4>
+    <PresetOrganisationPanel enabled={w.context.enabled&&(w.catalog as {organisation_protocol?:number}|null)?.organisation_protocol===1}
+      externalBusy={w.busy} sourceVersion={w.catalog} onChanged={w.refresh} onSelect={w.select}/>
     <p>保存曝光、曲线、HSL 等模块的参数组合。下方的 LUT 风格单独保留，不会被混为一类。</p>
     {!w.context.enabled&&<p role="status">需要支持预设回执的配套引擎，当前操作不可用。</p>}
     <label>选择预设<select aria-label="选择模块预设" value={w.form.selectedId} disabled={w.busy} onChange={e=>w.select(e.target.value)}>
@@ -33,7 +36,7 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
     <div className="presetButtons">
       <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{selectedOps.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1"].includes(op))?'预检所选预设':'应用所选'}</button>
       <button disabled={!w.context.enabled||w.busy} onClick={()=>void w.refresh()}>刷新列表</button>
-      <button disabled={!w.context.enabled||w.busy||!w.selected||w.selected.builtin} onClick={()=>void w.remove()}>删除所选</button>
+      <button disabled={!w.context.enabled||w.busy||!w.selected||w.selected.builtin} onClick={()=>void w.remove()}>移入回收站</button>
     </div>
     {selectedOps.includes(LOCAL_GRADE_OP)&&<MaskTransferControls groups={transferGroupsFromParams(w.selected?.modules[LOCAL_GRADE_OP])} value={w.localMaskTransfer} onChange={w.setLocalMaskTransfer} disabled={w.busy}/>}
     {w.review&&<div className="presetDetail"><strong>冻结的目标预检，尚未应用</strong>{w.review.local_mask_transfer&&<MaskTransferEvidenceView value={w.review.local_mask_transfer}/>} {w.review.reference_color&&<ReferenceColorReview value={w.review.reference_color}/>} {w.review.optical_transfer&&<AutomaticTransferReview report={w.review.optical_transfer}/>}<button disabled={w.busy||!w.context.editable} onClick={()=>void w.confirmLocal()}>确认本次目标预设并应用</button></div>}

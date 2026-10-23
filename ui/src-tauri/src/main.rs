@@ -57,6 +57,7 @@ mod hair_colour_api;
 mod portrait_api;
 mod preset_host;
 mod preset_api;
+mod preset_organisation_api;
 mod white_balance_api;
 mod white_balance_host;
 mod white_balance_capture_host;
@@ -1953,7 +1954,7 @@ fn main() {
             color_picker_capture_api::color_picker_capture, color_picker_capture_api::color_picker_capture_status, color_picker_capture_api::color_picker_capture_frame,
             color_picker_api::color_picker, color_picker_api::color_picker_result,
             white_balance_capture_api::white_balance_capture, white_balance_capture_api::white_balance_capture_status, white_balance_capture_api::white_balance_capture_frame, white_balance_capture_api::white_balance_pick,
-            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, lip_makeup_api::lip_makeup, brow_shape_api::brow_shape, nose_shape_api::nose_shape, eye_shape_api::eye_shape, mouth_shape_api::mouth_shape, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
+            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, lip_makeup_api::lip_makeup, brow_shape_api::brow_shape, nose_shape_api::nose_shape, eye_shape_api::eye_shape, mouth_shape_api::mouth_shape, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, preset_organisation_api::preset_organisation, preset_organisation_api::preset_organisation_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
             prompted_mask_api::prompted_masks, prompted_mask_api::prompted_masks_status,
             prompted_model_api::prompted_model, prompted_model_api::prompted_model_status,
             native_dispatch::report, app_shutdown::quit

@@ -1,0 +1,26 @@
+{
+  "requirement": "LNX-REF-WF-32459-bf14f4d6c1",
+  "status": "UNRUN",
+  "execution_owner": "Qoder local testing",
+  "rules": {"name_normalization":"NFC after trim", "name_limit":"20 Unicode code points", "collision":"Unicode casefold within active category; active category names globally unique", "ordering":"manual persisted order, type filter never rewrites hidden rows", "trash":"metadata only; never erase recipe, LUT or reference assets"},
+  "cases": [
+    {"id":"ORG-001","source":"official","scenario":"Drag categories and presets; restart; exact order persists","status":"UNRUN"},
+    {"id":"ORG-002","source":"official","scenario":"Cross-category drag places before target preset or at category end; stable ID and module payload hashes unchanged","status":"UNRUN"},
+    {"id":"ORG-003","source":"official","scenario":"Right-click preset rename/delete; keyboard More controls provide same actions; Escape closes action group","status":"UNRUN"},
+    {"id":"ORG-004","source":"official","scenario":"Filter portrait/color/custom kinds; move visible items without dropping or renumbering hidden siblings","status":"UNRUN"},
+    {"id":"ORG-005","source":"linux-original","scenario":"Create/rename/reorder/delete empty category and restore it; reject deleting populated or offline-referenced category","status":"UNRUN"},
+    {"id":"ORG-006","source":"linux-original","scenario":"Trash then restart then restore preset; recipe/custom-LUT/reference file hashes and ID all unchanged","status":"UNRUN"},
+    {"id":"ORG-007","source":"linux-original","scenario":"Reject built-in rename/trash/cross-category move; allow within-built-in ordering; system categories cannot be renamed or deleted","status":"UNRUN"},
+    {"id":"ORG-008","source":"manual-save-name-limit-plus-linux-policy","scenario":"Whitespace, NFC composed/decomposed names, emoji, 20/21 code points, controls, casefold collisions, duplicate rename/move/restore; legacy names remain readable","status":"UNRUN"},
+    {"id":"ORG-009","source":"linux-original","scenario":"Two processes edit same revision; one succeeds and one rejects; failed/stale operation never overwrites metadata","status":"UNRUN"},
+    {"id":"ORG-010","source":"linux-original","scenario":"Save/import versus organisation transaction serialize under same catalogue lock; forced overwrite of trashed/aliased record rejected, no recipe lost","status":"UNRUN"},
+    {"id":"ORG-011","source":"linux-original","scenario":"Disk-full/temp-write/fsync/replace/parent-fsync failures; uncertain commit only queried, not retried; persisted receipt shares metadata transaction","status":"UNRUN"},
+    {"id":"ORG-012","source":"linux-original","scenario":"Receipt replay same ID+payload does not mutate; ID+different payload rejected; lost/evicted/restarted mailbox reports uncertainty; durable receipt query resolves committed operation","status":"UNRUN"},
+    {"id":"ORG-013","source":"linux-original","scenario":"Corrupt/duplicate-field/oversized/symlink sidecar, malformed category refs, duplicate source IDs: reject without overwriting original","status":"UNRUN"},
+    {"id":"ORG-014","source":"linux-original","scenario":"Missing recipe remains offline metadata reference; replacing same ID reconnects original category/order; duplicate active names require explicit resolution","status":"UNRUN"},
+    {"id":"ORG-015","source":"linux-original","scenario":"Export/import/apply/batch keep IDs, recipes, custom LUT and reference asset IDs; trashed presets absent from effective catalogue; restore reconnects","status":"UNRUN"},
+    {"id":"ORG-016","source":"linux-original","scenario":"Repeated click, uncertain status, newer engine epoch, dialog Cancel/Escape, close/reopen panel: no duplicate edits or stale photograph history writes","status":"UNRUN"},
+    {"id":"ORG-017","source":"linux-original","scenario":"Snapshot/category edits do not revoke live image captures, previews or add photo undo entries; revision records remain catalogue-only","status":"UNRUN"},
+    {"id":"ORG-018","source":"linux-original","scenario":"Installed Linux native command registration and UI entrypoint work with real user catalogue, restart and keyboard-only operation; no console mocks","status":"UNRUN"}
+  ]
+}

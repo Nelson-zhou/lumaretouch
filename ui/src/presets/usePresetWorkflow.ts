@@ -74,7 +74,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
     if(!preset||preset.builtin)return;
     dialogLock.current=true;setDialogBusy(true);setNote('');
     try{
-      const approved=await confirm(`删除预设“${preset.name}”？\nID：${preset.id}\n仅删除预设文件，不撤销照片上的调整。此删除无法通过照片历史恢复。`,{title:'删除自定义预设',kind:'warning'});
+      const approved=await confirm(`将预设“${preset.name}”移入回收站？\nID：${preset.id}\n配方和素材保留；可在分类管理的回收站恢复，不撤销照片上的调整。`,{title:'移入预设回收站',kind:'warning'});
       if(approved)await current()?.submit('delete',{id:preset.id});
     }catch(error){setNote(`打开删除确认失败：${String(error)}`);}
     finally{dialogLock.current=false;setDialogBusy(false);}
