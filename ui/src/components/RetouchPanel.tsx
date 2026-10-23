@@ -34,6 +34,7 @@ import { FacialWrinkleControl } from "../facialWrinkles/FacialWrinkleControl";
 import type { Region as WrinkleRegion } from "../facialWrinkles/model";
 import { EyeHighlightsControl } from "./EyeHighlightsControl";
 import {teethColourReadiness, TEETH_CONTROL_IDS} from '../teethColour/model';
+import {redEyeReadiness, RED_EYE_CONTROL_ID} from '../redEye/model';
 import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {FabricPanel} from "../fabric/FabricPanel";
 import {HistogramPanel} from "./HistogramPanel";
@@ -373,6 +374,7 @@ const WIRED: Record<string, string> = {
   "PC-32470|亮眼/眼白": "enh.sclera",
   "PC-32470|亮眼/眼瞳": "enh.iris",
   "PC-32470|祛红血丝": "enh.veins",
+  "PC-32470|祛红眼": "enh.red_eye",
   "PC-32470|亮眼/眼睛高光": "enh.catchlight",
   "PC-32469|牙齿美白": "enh.teeth",
   // The source specifies two independent child controls, not another alias of
@@ -431,6 +433,7 @@ const WIRE_LABEL: Record<string, string> = {
   "enh.sclera": "眼白提亮",
   "enh.iris": "眼瞳提亮",
   "enh.veins": "祛红血丝",
+  "enh.red_eye": "祛红眼",
   "enh.catchlight": "眼睛高光",
   "enh.teeth": "牙齿美白",
   "enh.teeth_brightness": "牙齿明度",
@@ -516,6 +519,8 @@ export default function RetouchPanel(props: RetouchProps) {
   const enhAmounts = doc?.enhance?.amounts ?? {};
   const teethCapability = doc?.enhance?.teeth_colour_available === undefined ? status?.enhance : doc?.enhance;
   const teethReady = teethColourReadiness(teethCapability);
+  const redEyeCapability = doc?.enhance?.red_eye_available === undefined ? status?.enhance : doc?.enhance;
+  const redEyeReady = redEyeReadiness(redEyeCapability);
   const ex = doc?.exposure;
   const grade = doc?.grade;
   // P2-3：肤色定向三条滑杆的量程来自引擎报的 grade_limits（不是前端写死 ±100）。
@@ -736,6 +741,23 @@ export default function RetouchPanel(props: RetouchProps) {
               disabled={dim || props.people.state.pending || (doc?.people ? !capturedPeople : !doc)}
               title="只归零当前编辑范围的明度与祛黄；保留旧版美白及其他参数，无需缺失的调整核心"
               onClick={() => commitEnhance({teeth_brightness: 0, teeth_yellow_removal: 0})}>重置独立牙齿调整</button>}
+        </div>;
+      }
+      case "enh.red_eye": {
+        const reason = !props.faceOk ? props.faceWhy : redEyeReady.reason
+          ?? doc?.enhance?.reason?.red_eye ?? status?.enhance?.enhance_reason?.red_eye ?? undefined;
+        return <div key={leaf.path} data-control-id={RED_EYE_CONTROL_ID}>
+          <p className="muted">仅校正中央虹膜内明显偏红像素，不是瞳孔分割。红棕虹膜、美瞳或彩色反光可能误判，请对比原图；不会重建眼睛。</p>
+          <Slider label={label} value={Math.round((enhAmounts.red_eye ?? 0) * 100)} min={0} max={100}
+            disabled={dim || !props.faceOk || !redEyeReady.available}
+            title={reason ?? '减轻闪光造成的瞳孔红色偏光；与眼白红血丝和眼瞳提亮独立'}
+            onChange={(v) => commitEnhance({red_eye: v / 100})}
+            onReset={() => commitEnhance({red_eye: 0})} />
+          {reason && <p className="muted" role="status">{reason}</p>}
+          {(enhAmounts.red_eye ?? 0) > 0 && <button type="button" className="specBtn"
+            disabled={dim || props.people.state.pending || (doc?.people ? !capturedPeople : !doc)}
+            title="只归零当前编辑范围的祛红眼参数；保留眼白红血丝、眼瞳提亮及其他参数，无需缺失的调整核心"
+            onClick={() => commitEnhance({red_eye: 0})}>重置祛红眼</button>}
         </div>;
       }
       case "enh.veins":

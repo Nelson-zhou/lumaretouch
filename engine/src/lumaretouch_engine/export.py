@@ -1035,7 +1035,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             upixels = (base_f[uy:uy+uh, ux:ux+uw] if base_f is not None else
                        src_u8[uy:uy+uh, ux:ux+uw].astype(np.float32) / divisor)
             under_layer = UNDER.UnderEyeLayer(uwindow, upixels, ulm)
-            under_layer.solve(spec.enhance)
+            under_layer.solve(spec.enhance, cancelled=tone_cancelled)
         enhance_ms = (time.perf_counter() - t_e) * 1000.0
     scale = int(spec.scale)
     plan = UpscalePlan(h, w, scale)          # 表只算一次，每块取自己那一段

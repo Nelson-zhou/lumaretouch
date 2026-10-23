@@ -1836,7 +1836,7 @@ class PreviewPipeline:
 
     # ---- PORTRAIT-009：眼牙局部增强 ---------------------------------------
     def has_enhance(self) -> bool:
-        if PEOPLE_PIPE.active(self):return any(r.stage in ("enhance","eye_detail","facial_wrinkles") for r in self.people_prepared.effects)
+        if PEOPLE_PIPE.active(self):return any(r.stage in ("enhance","facial_wrinkles") or (r.stage=="eye_detail" and r.delta is not None and np.any(r.delta != 0)) for r in self.people_prepared.effects)
         """这一层到底有没有活：三个数至少一个非零，而权重场里确实有额度。
 
         只看参数不够：“三个数都是 0.4 而掩膜是空的”（闭嘴样本的牙齿那一格、两只眼都被
@@ -1961,7 +1961,7 @@ class PreviewPipeline:
         WRUNTIME.solve_preview(self, checked)
         UNDER.refresh_source(self)
         if self.under_eye_layer is not None:
-            delta = self.under_eye_layer.solve(checked)
+            delta = self.under_eye_layer.solve(checked, cancelled=getattr(self,"teeth_colour_cancelled",lambda:False))
             UNDER.attach_delta(self, self.under_eye_layer.window, delta)
             self.enhance_facts.update(self.under_eye_layer.facts)
         self.enhance_amounts = checked
@@ -2052,7 +2052,7 @@ class PreviewPipeline:
         subs = list(ENH.EFFECT_KEYS)
         facts = self.enhance_facts or {}
         return {
-            **ENH.TEETH.capability(),
+            **ENH.TEETH.capability(), **ENH.RED_EYE.capability(),
             "enhance_amounts": {k: float(a[k]) for k in ENH.AMOUNT_KEYS},
             "enhance_subs": subs,
             "enhance_limit": float(ENH.AMOUNT_LIMIT),

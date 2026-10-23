@@ -1,8 +1,9 @@
 """Portable enhancement scalars, never source masks, FaceRefs or render caches.
 
 This is a view of the existing lnx.enhance.v1 amounts, not a second owner.
-The independent tooth controls use a local [0,1] scale and neutral zero; the
-source handbook publishes neither a numerical range nor a numerical default.
+The independent tooth and flash red-eye controls use a local [0,1] scale and
+neutral zero; the source handbook publishes neither a numerical range nor a
+numerical default. Red-eye is a scalar, not a source-derived pupil mask.
 """
 from copy import deepcopy
 import math
@@ -72,6 +73,7 @@ def install(state, params):
         box = tuple(round(float(value), 5) for value in target)
     # The destination's other enhancement owner (wrinkles) remains intact.
     # Always rebuild active support from this target, including transitions from
-    # combined legacy whitening to either independent tooth colour control.
+    # combined legacy whitening to either independent tooth colour control, and
+    # flash red-eye edits. No source eye support is transferred with the scalar.
     current['built'], current['box'] = False, box
     state['_enhance'], state['_enhance_defer'] = current, active

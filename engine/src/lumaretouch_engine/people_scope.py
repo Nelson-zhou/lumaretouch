@@ -26,10 +26,11 @@ def replay_preset(engine,state,**kwargs):
     The existing preset owner owns receipts, rollback, document fences/history.
     Only changed scalar leaves enter its uniquely evidenced target face.
     """
-    from . import enhance_scope as ENHANCE, teeth_colour_apply as TEETH
+    from . import enhance_scope as ENHANCE, teeth_colour_apply as TEETH, red_eye_apply as RED_EYE
     # Even an otherwise unchanged or legacy preset must not publish success
-    # after an active independent tooth layer failed to rebuild on its target.
-    if TEETH.active(ENHANCE.amounts_of(state)):kwargs['strict_local']=True
+    # after an active independent tooth/red-eye layer failed on its own target.
+    amounts=ENHANCE.amounts_of(state)
+    if TEETH.active(amounts) or RED_EYE.active(amounts):kwargs['strict_local']=True
     if not engine._people_managed():return engine._replay_state(state,**kwargs)
     before=engine._people_owner().snapshot();asset=engine._people_source()['sha256']
     faces=[face for face in before['faces'].values() if face['asset_sha256']==asset and face['enabled']]

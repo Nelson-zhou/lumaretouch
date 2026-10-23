@@ -37,10 +37,17 @@ pub fn enhance_command(action: &str, legacy: [Option<f64>; 8], wrinkles: Option<
 /// stay missing: the old combined `teeth` amount is never copied or reset here.
 /// The finite [0,1] range is a Linux implementation choice, not a source default.
 pub fn enhance_command_with_teeth(action: &str, legacy: [Option<f64>; 8], teeth_colour: [Option<f64>; 2], wrinkles: Option<Value>) -> Result<Value, String> {
+    enhance_command_with_red_eye(action, legacy, None, teeth_colour, wrinkles)
+}
+
+/// Flash red-eye is independent from sclera veins and iris brightness. Optional
+/// omission is not a reset; only an explicit finite zero clears this scalar.
+pub fn enhance_command_with_red_eye(action: &str, legacy: [Option<f64>; 8], red_eye: Option<f64>, teeth_colour: [Option<f64>; 2], wrinkles: Option<Value>) -> Result<Value, String> {
     let mut command = serde_json::json!({"cmd":"enhance","action":action});
     let legacy_keys = ["sclera", "iris", "teeth", "dark_circles", "eye_bags", "veins", "catchlight_left", "catchlight_right"];
     let teeth_keys = ["teeth_brightness", "teeth_yellow_removal"];
-    for (key, value) in legacy_keys.into_iter().zip(legacy).chain(teeth_keys.into_iter().zip(teeth_colour)) {
+    for (key, value) in legacy_keys.into_iter().zip(legacy)
+        .chain(teeth_keys.into_iter().zip(teeth_colour)).chain([("red_eye", red_eye)]) {
         if let Some(amount) = value {
             if !amount.is_finite() || !(0.0..=1.0).contains(&amount) {
                 return Err(format!("人物增强参数超出范围：{key}"));
@@ -55,3 +62,7 @@ pub fn enhance_command_with_teeth(action: &str, legacy: [Option<f64>; 8], teeth_
 #[cfg(test)]
 #[path = "teeth_colour_api_unrun.rs"]
 mod teeth_colour_tests;
+
+#[cfg(test)]
+#[path = "red_eye_api_unrun.rs"]
+mod red_eye_tests;

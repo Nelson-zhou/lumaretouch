@@ -8,13 +8,20 @@ import numpy as np
 from .ops import enhance as ENH
 from .third_party.rapidretouch import under_eye as EYES
 from .third_party.rapidretouch import eye_detail as DETAIL
+from . import red_eye_apply as RED_EYE
 
-KEYS = ("dark_circles", "eye_bags", "veins", "catchlight_left", "catchlight_right")
+KEYS = ("dark_circles", "eye_bags", "veins", "catchlight_left", "catchlight_right", "red_eye")
 
-def correct(source, landmarks, key):
+def correct(source, landmarks, key, *, cancelled=lambda: False, red_eye_result=None):
     faces = [landmarks.astype(np.float32)]
-    out = EYES.apply(source, faces, EYES.Params(*key[:2]))
-    return DETAIL.apply(out, faces, dict(zip(KEYS, key)))
+    # Red-eye is a separate original Rust consumer, not the old sclera filter.
+    out = (red_eye_result[0] if red_eye_result is not None else
+           RED_EYE.correct(source, landmarks, key[-1], cancelled=cancelled)[0]) if key[-1] else source
+    if any(key[:2]):
+        out = EYES.apply(out, faces, EYES.Params(*key[:2]))
+    if any(key[2:5]):
+        out = DETAIL.apply(out, faces, dict(zip(KEYS, key)))
+    return out
 
 
 def bounds(landmarks, h, w):
@@ -35,7 +42,7 @@ class UnderEyeLayer:
         self.delta = None
         self.facts = {}
 
-    def solve(self, amounts):
+    def solve(self, amounts, *, cancelled=lambda: False):
         key = tuple(float(amounts.get(k, 0)) for k in KEYS)
         if key == self.key:
             return self.delta
@@ -44,9 +51,10 @@ class UnderEyeLayer:
             self.key = key
             self.facts = {k: {"gated_px": 0, "geom_px": 0, "reason": "disabled"} for k in KEYS}
             return None
-        if EYES.cv2 is None:
+        if any(key[:5]) and EYES.cv2 is None:
             raise ENH.EnhanceError("眼部局部修正需要 OpenCV；未生成替代效果")
-        corrected = correct(self.source, self.landmarks, key)
+        red_result = RED_EYE.correct(self.source, self.landmarks, key[-1], cancelled=cancelled) if key[-1] else None
+        corrected = correct(self.source, self.landmarks, key, cancelled=cancelled, red_eye_result=red_result)
         delta = np.ascontiguousarray(corrected - self.source)
         if not np.isfinite(delta).all():
             raise ENH.EnhanceError("眼部局部修正产生非有限值，整层拒绝")
@@ -56,9 +64,12 @@ class UnderEyeLayer:
             if not key[i]:
                 facts[k] = {"gated_px": 0, "geom_px": 0, "reason": "disabled"}
                 continue
+            if k == "red_eye":
+                facts[k] = red_result[1]
+                continue
             single = [0.0] * len(KEYS)
             single[i] = key[i]
-            one = corrected if sum(v != 0 for v in key) == 1 and key[i] else correct(self.source, self.landmarks, single)
+            one = corrected if sum(v != 0 for v in key) == 1 and key[i] else correct(self.source, self.landmarks, single, cancelled=cancelled)
             count = int(np.count_nonzero(np.max(np.abs(one - self.source), axis=2) > 1e-7))
             facts[k] = {"gated_px": count, "geom_px": count,
                              "reason": None if count else ("disabled" if not key[i] else "no_eligible_eye_pixels")}
@@ -105,7 +116,7 @@ def refresh_source(pipe):
     source = pipe.repair_base if pipe.repair_base is not None else pipe.src_f32
     pixels = source[0, :, y:y+h, x:x+w].permute(1, 2, 0).to("cpu", torch.float32).numpy()
     replacement = UnderEyeLayer(layer.window, pixels, layer.landmarks * [w, h] + [x, y])
-    delta = replacement.solve(pipe.enhance_amounts)
+    delta = replacement.solve(pipe.enhance_amounts, cancelled=getattr(pipe,"teeth_colour_cancelled",lambda:False))
     replacement.source_version = pipe.repair_version
     attach_delta(pipe, replacement.window, delta)
     pipe.under_eye_layer = replacement

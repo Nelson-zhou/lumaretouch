@@ -12,14 +12,14 @@
         "amounts": {
           "sclera": 0, "iris": 0, "teeth": 0, "dark_circles": 0,
           "eye_bags": 0, "veins": 0, "catchlight_left": 0, "catchlight_right": 0,
-          "teeth_brightness": 0, "teeth_yellow_removal": 0
+          "teeth_brightness": 0, "teeth_yellow_removal": 0, "red_eye": 0
         }
       },
       "range": {"version": [1, 1], "amounts": {"min": 0, "max": 1, "step": 0.01}},
       "transferable": true,
       "source_requirement": "LNX-REF-PC-32469-C-6eb0bef21b",
-      "source_requirements": ["LNX-REF-PC-32469-C-6eb0bef21b", "LNX-REF-PC-32469-C-5462a41c9a"],
-      "reason": "Existing canonical eye/teeth enhancement scalar owner, with independent tooth brightness and yellow removal. Legacy combined teeth semantics unchanged; wrinkle intent remains a separate operation. Finite 0..1 scale and neutral zero are local implementation choices, not published handbook ranges/defaults. Presets contain only versioned scalars; each target recomputes its own support and confirmed-face batch preserves target-owned masks/history. Runtime, numerical and photographic acceptance UNRUN."
+      "source_requirements": ["LNX-REF-PC-32469-C-6eb0bef21b", "LNX-REF-PC-32469-C-5462a41c9a", "LNX-REF-PC-32470-C-ee00f0a195"],
+      "reason": "Existing canonical eye/teeth enhancement scalar owner, with independent tooth brightness, yellow removal and flash red-eye. Red-eye is not an alias of sclera veins or iris brightness. Legacy combined teeth and omitted optional scalar semantics stay unchanged; wrinkle intent remains a separate operation. Finite 0..1 scale and neutral zero are local implementation choices, not published handbook ranges/defaults. Presets contain only versioned scalars; each target recomputes its own support and confirmed-face batch preserves target-owned masks/history. Generic derived-source legacy presets remain refused. Runtime, numerical and photographic acceptance UNRUN."
     },
     {
       "operation_id": "lnx.spill_removal.v1",

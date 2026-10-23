@@ -612,6 +612,8 @@ export interface EnhanceDoc {
   /** Actual Rust library/ABI capability, independent from face availability. */
   teeth_colour_available?: boolean;
   teeth_colour_reason?: string | null;
+  red_eye_available?: boolean;
+  red_eye_reason?: string | null;
   facial_wrinkles?: Record<string, RegionFact>;
   /** 三个子功能当前的滑块值，[0,1]；0 就是这一格没开 */
   amounts: Record<string, number>;
@@ -1437,7 +1439,7 @@ export const runLut = (
  */
 export const runEnhance = (
   action: EnhanceInfo["action"],
-  opts?: { sclera?: number; iris?: number; teeth?: number; teeth_brightness?: number; teeth_yellow_removal?: number; dark_circles?: number; eye_bags?: number; veins?: number; catchlight_left?: number; catchlight_right?: number } & Partial<Record<WrinkleKey, number>>,
+  opts?: { sclera?: number; iris?: number; teeth?: number; teeth_brightness?: number; teeth_yellow_removal?: number; dark_circles?: number; eye_bags?: number; veins?: number; red_eye?: number; catchlight_left?: number; catchlight_right?: number } & Partial<Record<WrinkleKey, number>>,
   peopleContext?: PeopleContext,
 ) =>
   invoke<{ requested: boolean }>("enhance", {
@@ -1445,6 +1447,7 @@ export const runEnhance = (
     darkCircles: opts?.dark_circles,
     eyeBags: opts?.eye_bags,
     veins: opts?.veins,
+    redEye: opts?.red_eye,
     catchlightLeft: opts?.catchlight_left,
     catchlightRight: opts?.catchlight_right,
     wrinkles: wrinkleTransport(opts),

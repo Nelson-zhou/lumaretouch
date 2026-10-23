@@ -202,7 +202,7 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
         missing = ("人物增强参数非零但未构建且不可重建" if not (en.get("built") or snap.get("enhance_defer"))
                    else "人物增强缺少当前选中人物的关键点" if pc is None else None)
         if missing:
-            if WSTATE.active(enh_amounts) or ENH.TEETH.active(enh_amounts): raise ValueError(missing + "；不能静默省略面部祛纹或独立牙齿调整导出")
+            if WSTATE.active(enh_amounts) or ENH.TEETH.active(enh_amounts) or ENH.RED_EYE.active(enh_amounts): raise ValueError(missing + "；不能静默省略面部祛纹、独立牙齿或祛红眼调整导出")
             skipped.append("enhance（" + missing + "）")
         else:
             spec.enhance = enh_amounts

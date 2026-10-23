@@ -1,0 +1,156 @@
+{
+  "baseline": "6e5d18af5a0f3cff53794752da4f0cc87b2d76aa",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Dedicated flash red-eye scalar with original Rust red-channel correction, source-owned inward central-iris geometric candidates, canonical people/legacy/native UI/full-source export/preset and reviewed person-parameter batch. No pupil segmentation or reconstruction claim.",
+  "requirement_ids": [
+    "LNX-REF-PC-32470-C-ee00f0a195"
+  ],
+  "files": [
+    {
+      "path": "core/red_eye/Cargo.toml",
+      "sha256": "2e8eb724be5055d0558ffbfc8030c37848582df68d6a4d82cd9aea00ce3d246f",
+      "bytes": 216
+    },
+    {
+      "path": "core/red_eye/README.md",
+      "sha256": "a1509eb28ee6c632ea2be061c878a9e937ec68bae1cc879e120b78b6d6b93b2f",
+      "bytes": 11391
+    },
+    {
+      "path": "core/red_eye/lib.rs",
+      "sha256": "1b1ceec15d6991652bd8fee0d3234266805b20ac203964b33395dedd4a83a84e",
+      "bytes": 14469
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "5453588a3832c64123040ccbd2746e5824d74e616a4246c78bc7dab00af6691c",
+      "bytes": 21048
+    },
+    {
+      "path": "docs/red-eye/IMPLEMENTATION.md",
+      "sha256": "7cc7172ee27c138f908570ffdfc75415702f52fd8878215608429c8bb4a7b085",
+      "bytes": 6860
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/enhance_scope.py",
+      "sha256": "bf2605bcef172deed2ab01b38afc0454f0825725032d2fb3b16f85d7b21d5562",
+      "bytes": 4283
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "2d0f06f6e0ab5850d0768d50e969cadb5c4aae8f6a39ba2f53542e4211ea1198",
+      "bytes": 132397
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "8df43aaa65cffffa069ac661adc739f2a38bf6a135bffe1e20f2e2304db20bed",
+      "bytes": 20924
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/ops/enhance.py",
+      "sha256": "19e4308ff5fe309d937599dd7af7f3bb06d1bb4aa7114029a406d3c00e844880",
+      "bytes": 38486
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "33c112e3e2dcddc9809f0f95ec1f60883b02a617b128ca5e0698bf6a84919e10",
+      "bytes": 5128
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/red_eye_apply.py",
+      "sha256": "6375e15ff2bd676f84c2a93c4710114ad8579a12be4f1cef5e7bac6c86b7a102",
+      "bytes": 4742
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/red_eye_native.py",
+      "sha256": "eb58b781dee8ae867f19bce41d15237a1b4929481bd5ca2ed55881c37301b71a",
+      "bytes": 8393
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "8fa6742e6419de3868ab3317b142301ca01fb6da167e8434b3ce7568a8887387",
+      "bytes": 464345
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/under_eye_layer.py",
+      "sha256": "9f767ef2fc12645746d39191d5ed2ad2711c6139d3b1af82862f148083f5df16",
+      "bytes": 5519
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "3d2c7434d39a2712bfaf633814318f3aec1594a17e3276a2551ed80adf4e9f27",
+      "bytes": 135636
+    },
+    {
+      "path": "engine/tests/test_red_eye_integration_unrun.py",
+      "sha256": "ec1f1ffad401750339d463ef5c01bb7e7c248f932a64bd869a71b89ac5700525",
+      "bytes": 3728
+    },
+    {
+      "path": "engine/tests/test_red_eye_native_unrun.py",
+      "sha256": "cf88393549d99632b2da80f092d2fc246c00d1a6e4629d89c4563fa1a67acdcb",
+      "bytes": 14362
+    },
+    {
+      "path": "packaging/build-red-eye.sh",
+      "sha256": "e051a9629a1d480240fab8bf51fd3e19cc7d0268a63b24ebc2633c0df7008c22",
+      "bytes": 623
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "746d16b73f44157efec82eaa1bac03e73906540bbf19e5f364eee9f94fda41da",
+      "bytes": 20799
+    },
+    {
+      "path": "ui/src-tauri/src/facial_wrinkle_api.rs",
+      "sha256": "0c8df7a41857de93071bbe683f9652b6296a065f72cc95d8fec6c6e595b2170f",
+      "bytes": 3469
+    },
+    {
+      "path": "ui/src-tauri/src/portrait_api.rs",
+      "sha256": "dcdfda9d50e065a66f1b2fad45648f4d5a0d45ba4475bdad88d2a63e3b86212c",
+      "bytes": 2043
+    },
+    {
+      "path": "ui/src-tauri/src/red_eye_api_unrun.rs",
+      "sha256": "8ef897b080276a389962380d8eb1a98f9e6b4f2ee4f9344c8452392f31e22743",
+      "bytes": 2069
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "dfe8bcae677f2e30d898389eb02cbecf5da518107e540e5766a5f4bc694b825a",
+      "bytes": 63310
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "66aa4d046d5faaab1216d4ddd486d8341893c213314b2c240faf84ed11e72fb1",
+      "bytes": 100291
+    },
+    {
+      "path": "ui/src/redEye/model.ts",
+      "sha256": "5d4b7cbcaeb637b98327953b7e8e59f52cd7bff7eb6212038b44912bd8ae04db",
+      "bytes": 506
+    },
+    {
+      "path": "ui/src/redEye/wiring.unrun.test.ts",
+      "sha256": "9ac577326720757acce80aed30fa9c45059dd104703c5b3bdedfc6352c43e02d",
+      "bytes": 4534
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1024,
+    "json_files": 1,
+    "toml_files": 1,
+    "git_diff_check": "clean",
+    "App_lines": 2122,
+    "main_lines": 2042,
+    "server_lines": 6974
+  },
+  "acceptance": "All product imports, tests, builds, typechecks, numerical, memory, latency, natural-photo and package execution UNRUN",
+  "remaining": [
+    "Geometry and red dominance do not establish flash causation; red/brown iris or coloured-contact false positives and large/off-axis pupil incompleteness remain",
+    "No dedicated pupil review, manual red-eye mask or recovery brush; original/current comparison and explicit UI warning only",
+    "Generic legacy preset onto derived source refused; direct canonical controls and reviewed face-parameter transfer use actual effective-source evidence",
+    "No alpha/HDR support, eye-white purification, eye replacement or runtime/photo acceptance"
+  ]
+}
