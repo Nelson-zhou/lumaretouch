@@ -66,6 +66,9 @@ pub(crate) fn enqueue(state: &AppState, handle: &EngineHandle, mut command: Valu
     if epoch.as_str() != Some(hex(handle.epoch()).as_str()) {
         return Err("common background engine changed before dispatch".into());
     }
+    let generation = command.as_object_mut().ok_or("invalid common background command")?
+        .remove("host_client_generation").ok_or("common background client generation missing")?;
+    let generation = token(generation.as_str().ok_or("invalid common background client generation")?)?;
     if command["action"] != "apply" { return Err("invalid common background apply action".into()); }
     let request = command["request_id"].as_str().ok_or("common background request missing")?.to_owned();
     let document = command["document_id"].as_str().ok_or("document missing")?;
@@ -81,30 +84,49 @@ pub(crate) fn enqueue(state: &AppState, handle: &EngineHandle, mut command: Valu
     }
     preview.can_redeem()?;
     let mut receipts = state.common_background.lock().map_err(|_| "common background receipt lock poisoned")?;
-    receipts.begin_bound(handle.epoch(), &request, "apply", Some(&bound))?;
+    crate::common_background_readback::admit_apply(handle.epoch(), &command, generation, ||
+        receipts.begin_bound(handle.epoch(), &request, "apply", Some(&bound)))?;
     preview.redeem()?;
     let sent = handle.send(command);
-    if let Err(error) = &sent { receipts.failed(&request, error); }
+    if let Err(error) = &sent {
+        receipts.failed(&request, error);
+        crate::common_background_readback::retain_native_unknown(handle.epoch(), &receipts.status(&request)["result"]);
+    }
     sent
 }
 
 #[tauri::command]
 pub(crate) fn common_background(state: State<'_, Arc<AppState>>, request_id: String,
-    preview_id: String, session_id: String, document_id: String) -> Result<Value, String> {
-    supported(&state)?;
+    preview_id: String, session_id: String, document_id: String, client_generation: Option<String>) -> Result<Value, String> {
     if request_id.is_empty() || request_id.len() > 128 { return Err("invalid common background request ID".into()); }
     id16(&preview_id)?; id16(&session_id)?; token(&document_id)?;
-    let handle = state.engine.lock().map_err(|_| "engine lock poisoned")?.clone().ok_or("engine is not running")?;
-    state.send_to_engine(json!({"cmd": "common_background", "action": "apply", "request_id": request_id,
-        "preview_id": preview_id, "session_id": session_id, "document_id": document_id, "host_epoch": hex(handle.epoch())}))?;
-    Ok(json!({"requested": true}))
+    let mut epoch = [0; 16];
+    let sent = (|| -> Result<Value, String> {
+        let handle = state.engine.lock().map_err(|_| "engine lock poisoned")?.clone().ok_or("engine is not running")?;
+        epoch = handle.epoch();
+        supported(&state)?;
+        let generation = client_generation.as_deref().ok_or("common background client bootstrap missing")?;
+        token(generation)?;
+        state.send_to_engine(json!({"cmd": "common_background", "action": "apply", "request_id": request_id,
+            "preview_id": preview_id, "session_id": session_id, "document_id": document_id,
+            "host_epoch": hex(epoch), "host_client_generation": generation}))?;
+        Ok(json!({"requested": true}))
+    })();
+    if let Err(error) = &sent {
+        // A ledger row is inserted before a send can occur. Only its verified
+        // absence on this synchronous error path permits a not-sent receipt.
+        crate::common_background_readback::record_not_sent(epoch, &request_id, &document_id, &session_id, &preview_id, error)?;
+    }
+    sent
 }
 
 #[tauri::command]
 pub(crate) fn common_background_result(state: State<'_, Arc<AppState>>, request_id: String) -> Result<Value, String> {
     if request_id.is_empty() || request_id.len() > 128 { return Err("invalid common background request ID".into()); }
-    let value = state.common_background.lock().map_err(|_| "common background receipt lock poisoned")?.status(&request_id);
-    Ok(value)
+    // The audit validates both arrival orders against authoritative readback.
+    // Its first original, including native unknown, must win over generic state.
+    if let Some(retained) = crate::common_background_readback::original_status(&request_id)? { return Ok(retained); }
+    Ok(state.common_background.lock().map_err(|_| "common background receipt lock poisoned")?.status(&request_id))
 }
 
 // Source-authored validation fixtures, intentionally UNRUN.

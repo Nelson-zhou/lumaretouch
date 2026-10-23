@@ -65,3 +65,7 @@ class StudioToolsMixin:
     def cmd_common_background_preview(self,p):
         from .common_background_review import controller
         controller(self,_emit).handle(p)
+
+    def cmd_common_background_readback(self,p):
+        from .common_background_readback import handle
+        handle(self,p,_emit)

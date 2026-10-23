@@ -43,6 +43,7 @@ import {defaultMaskTransfer,LOCAL_GRADE_OP} from './localMasks/transfer';
 import {ColorActionStatus} from './colorActions/ColorActionControls';
 import {useRetouchCaptureWorkflows} from './localMasks/useRetouchCaptureWorkflows';
 import {useCommonBackgroundWorkflow} from './commonBackground/useCommonBackgroundWorkflow';
+import {CommonBackgroundPanel} from './commonBackground/CommonBackgroundPanel';
 import {createRetouchToolSlots} from './studioBackground/RetouchToolsPanels';
 import {LocalMaskPanel,LocalMaskStatus} from './localMasks/LocalMaskPanel';
 import {EffectRecoveryWorkspace} from './effectRecovery/EffectRecoveryPanel';
@@ -1714,7 +1715,7 @@ export default function App() {
   // 而不是当成"没在跑"——那会把刚起好的引擎显示成已死。
   const engineAlive = status?.engine_alive ?? !!pid;
 
-  const commonBackground=useCommonBackgroundWorkflow({enabled:!!status?.engine_alive&&caps?.common_background_protocol===1&&hasImage&&!busy&&!exporting&&!idBackgroundBusy
+  const commonBackground=useCommonBackgroundWorkflow({readbackEnabled:!!status?.engine_alive&&caps?.common_background_readback_protocol===1,engineKey:String(pid??''),enabled:!!status?.engine_alive&&caps?.common_background_protocol===1&&hasImage&&!busy&&!exporting&&!idBackgroundBusy
     &&!!doc?.document_id&&status.image?.load_id===doc.document_id&&workspace==='retouch'&&compareMode==='single'&&!comparing&&!inspectionEnabled&&!cropOpen&&!whiteBalanceWorkflow.workflow.busy()
     &&(batchWorkflow.ui.phase==='closed'||batchWorkflow.ui.hidden===true),canStart:!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending&&!peopleWorkflow.state.pending&&!peopleWorkflow.state.uncertain,
     documentId:doc?.document_id??'',contextKey:JSON.stringify([pid,status?.doc_rev,status?.image?.load_id,workspace,compareMode,comparing,inspectionEnabled,cropOpen]),reason:'请等待编辑完成，并返回单视图代理预览'},refreshFromEngine,async()=>{
@@ -2086,6 +2087,7 @@ export default function App() {
           </section>
         )}
       </main>
+      <CommonBackgroundPanel mode="workspace" owner={commonBackground}/>
       <BatchReview state={batchWorkflow.ui} onCommit={batchWorkflow.commit} onReview={batchWorkflow.start} onQuery={batchWorkflow.query} onAcknowledge={batchWorkflow.acknowledgeInspection} onClose={batchWorkflow.close}/>
       <CropModal open={cropOpen}
         imgW={status?.image?.w ?? 0} imgH={status?.image?.h ?? 0}

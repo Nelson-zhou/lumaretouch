@@ -1,0 +1,82 @@
+# Material handbook gaps after derived common transport
+
+Static reconciliation at ff0984c556f7dc2f366cd85e68448105b904175f. Historical core.md
+is not a current missing-feature count. Source-connected does not mean tested or
+accepted. Returned-source adapters are not additional handbook features.
+
+## Next selected feature: black/white-edge repair
+
+Exact prefix `LNX-REF-PC-AlCcjw85ql-C-`:
+`6d78bc490e` entry, `f4f0ead111` enabled state, `2173a021fd` strength,
+`8dbd34ce2a` add brush, `c205301c9f` erase, `eb7a67cd87` update.
+
+Supplied handbook lines 705–710 and ui/src/spec/refine.json describe edges of
+people, hair, clothing and accessories; enabled on entry; editable correction
+coverage followed by explicit update; preset and batch support. Undisclosed numeric
+ranges/defaults must not be represented as official facts. Current source has
+catalogue/title/spec entries but no implemented operator/live feature.
+
+A coherent Rust-first implementation must correct actual bright/dark halos while
+preserving legitimate rim light, white clothing, fine hair, jewellery and texture.
+Morphology, erosion, blur or a renamed lens chromatic-aberration slider is not an
+implementation of this requirement. Include neutral behavior, source-owned coverage,
+one edit/history owner, original-size RGB8/RGB16 inspection/export, project reopen,
+and per-target batch recalculation rather than copying another image's mask.
+Numerical and photographic quality acceptance remains separate from source work.
+
+## Other genuine gaps
+
+- PC-32475 spill removal: `LNX-REF-PC-32475-C-e999ab085a` and manual coverage
+  `LNX-REF-PC-32475-C-4bc238dfa1`. No canonical spill-correction state exists.
+  Foreground/background colour estimation is a real dependency; global desaturation,
+  matte erosion and an ID recovery brush are not substitutes.
+- Local XMP import: `LNX-REF-WF-158978-398fbf9da9`. Existing preset import is JSON.
+  Safe XML is only the first step: disclose unsupported or non-equivalent process
+  versions, curves, WB and profiles. Do not promise Adobe-identical rendering or
+  proprietary sharing-password compatibility.
+- AI passerby removal: `LNX-REF-WF-158249-a8278ceb16`, and generated removal-layer
+  lifecycle `LNX-REF-WF-127932-22318776c0`. Automatic proposals, protected subjects,
+  brush/lasso feathering, two candidates, regeneration and editable fusion masks
+  need a real licensed model and original-resolution strategy. Imported source
+  layers or generic heal do not establish M13 candidate generation.
+- Original shadow: PC-32475 suffixes `442ced0175`, `ab010073e3`, `48553e2d03`,
+  `c959928d7a`, `b1b766d4ce`, `9e1c732ff8`, `0513155f3d`. Existing designed
+  projected shadows do not extract original shadows from floor/background/contact
+  texture. Adding blend controls alone would not close this gap.
+
+## Avoid double counting
+
+Dedicated ID background already owns the mapped image assets and pickers for
+original and returned sources. Duplicating those controls into legacy common
+color-key would chiefly extend an adapter, not complete a new PC-32475 family.
+Export destinations, target-size, virtual copies, managed imports, project packages,
+source relocation, library query, guides and preset organisation now have source
+packages; do not simply repeat the old audit's missing list. Their UNRUN validation
+and documented residuals still matter. No whole-product completion claim follows.
+
+## Primary-source check for the selected feature
+
+Live read on 2026-10-23: https://www.pixcakeai.com/guide/AlCcjw85ql confirms the
+supplied behavior and identifies artifacts after skin-tone, background, sky,
+local-colour and AI colour-matching changes. This is not merely sharpening-ring
+removal. The official page does not disclose its proprietary algorithm or numeric
+default strength. Shortcut entry and default initial repair also belong in the
+implementation plan, without claiming Linux behavior from a macOS/Windows shortcut.
+
+Technique reading started at the authors' guided-filter project:
+https://people.csail.mit.edu/kaiming/eccv10/index.html . Its edge-aware local-linear
+filter is a possible primitive, not proof of a complete fringe-repair solution or
+photographic quality. No referenced code was downloaded, copied or executed. A
+final algorithm choice requires further primary-source review and explicit failure
+cases for real rim light, fine hair and contaminated boundary colour.
+
+Further primary reading: Farbman et al., *Edge-Preserving Decompositions for
+Multi-Scale Tone and Detail Manipulation* (SIGGRAPH 2008), author-hosted publication
+at https://www.microsoft.com/en-us/research/wp-content/uploads/2008/08/Farbman-EPD-small-SG08.pdf .
+Its discussion of edge blurring/sharpening, ringing and gradient reversals warns
+against treating any generic edge-preserving smoother as a guaranteed correction.
+WLS decomposition is a candidate technique to evaluate, not an implemented or
+validated operator here. A source/current composite comparison can supply useful
+edit-induced evidence, but pre-existing image halos require an honest separate
+confidence path. Existing fine structures must not be erased merely because they
+look like local extrema.

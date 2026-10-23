@@ -1004,6 +1004,7 @@ export interface EngineStatus {
     manual_liquify_preview_protocol?: number;
     studio_background_protocol?: number;
     common_background_protocol?: number;
+    common_background_readback_protocol?: number;
     id_background_protocol?: number;
     manual_liquify_protocol?: number;
     local_grade_live_protocol?: number;
@@ -1509,11 +1510,22 @@ export const commonBackgroundPreview = (args: {
 }) => tauriInvoke<unknown>('common_background_preview', {...args, mutation: args.mutation ?? null});
 export const commonBackgroundPreviewStatus = (previewId: string) =>
   tauriInvoke<unknown>('common_background_preview_status', {previewId});
-export const commonBackgroundApply = (request: import('./commonBackground/model').Request) =>
-  invoke<unknown>('common_background', {requestId: request.request_id, previewId: request.preview_id,
-    sessionId: request.session_id, documentId: request.document_id});
+export const commonBackgroundApply = (request: import('./commonBackground/model').Request, clientGeneration: string) => {
+  // The workflow has already settled edits under its lifetime guard. Do not defer
+  // admission through generic invoke(), whose barrier can outlive an App remount.
+  notifyInspectionEditIntent();
+  return tauriInvoke<unknown>('common_background', {requestId: request.request_id, previewId: request.preview_id,
+    sessionId: request.session_id, documentId: request.document_id, clientGeneration});
+};
 export const commonBackgroundResult = (requestId: string) =>
   tauriInvoke<unknown>('common_background_result', {requestId});
+/** Read-only reconciliation never enters mutation fences or resends the original apply. */
+export const commonBackgroundReadback = (request: import('./commonBackground/readback').ReadbackRequest) =>
+  tauriInvoke<unknown>('common_background_readback', {requestId: request.request_id, previewId: request.preview_id,
+    sessionId: request.session_id, documentId: request.document_id, readbackId: request.readback_id});
+export const commonBackgroundReadbackStatus = (readbackId: string) =>
+  tauriInvoke<unknown>('common_background_readback_status', {readbackId});
+export const commonBackgroundAudit = () => tauriInvoke<unknown>('common_background_audit');
 
 /** 全尺寸分块导出（M4）。不传 images 就是导当前这张。
  *

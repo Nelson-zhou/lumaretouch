@@ -94,6 +94,10 @@ boundaries. No unrelated recovery target is used as a bypass.
 
 ## Explicit remaining limitations and next validation
 
+Subsequent bounded transport recovery is documented in COMMON-BACKGROUND-READBACK.md.
+Same-engine verified terminal readback addresses lost acknowledgments, not the
+genuine failed-rollback/checkpoint-reload limitation below.
+
 1. Unknown/requires_reload retains its receipt and locks edits; a dedicated verified
    host reload/reconciliation escape is not implemented. Restarting cannot turn an
    unknown outcome into success. This is a real recovery UX limitation.

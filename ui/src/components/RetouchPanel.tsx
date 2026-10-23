@@ -1029,7 +1029,6 @@ export default function RetouchPanel(props: RetouchProps) {
 
   return (
     <PortraitRevision.Provider value={doc?.people ? `${doc.people.binding.document_id}:${doc.people.revision}:${JSON.stringify(doc.people.editing_target)}` : ''}>
-      <CommonBackgroundPanel mode="workspace" owner={props.commonBackgroundOwner}/>
     <div className="retouch" data-spec-total={SPEC_COUNTS.features}
          data-spec-controls={SPEC_COUNTS.subcontrols}>
       <div className="rtContent" ref={contentRef} onScroll={(e) => {

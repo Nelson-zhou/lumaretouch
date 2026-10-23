@@ -2,6 +2,7 @@ import {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {defaultDraft, hex, parseHex, type Mutation} from './model';
 import type {CommonBackgroundOwner} from './useCommonBackgroundWorkflow';
+import {CommonBackgroundReceiptPanel} from './CommonBackgroundReceiptPanel';
 import './commonBackground.css';
 
 export function CommonBackgroundPanel({owner, disabled = false, mode = 'all'}: {
@@ -27,7 +28,7 @@ export function CommonBackgroundPanel({owner, disabled = false, mode = 'all'}: {
     const first = requestAnimationFrame(() => {second = requestAnimationFrame(() => {if (live) void workflow.presented(preview);});});
     return () => {live = false; cancelAnimationFrame(first); cancelAnimationFrame(second);};
   }, [opened, workflow, state?.open, state?.phase, state?.previewId, state?.image, loaded]);
-  const locked = owner?.pending || state?.phase === 'preparing' || state?.phase === 'loading';
+  const locked = owner?.pending || state?.phase === 'preparing' || state?.phase === 'loading' || state?.phase === 'confirming';
   const startDisabled = disabled || !!locked || !owner || !owner.context.enabled || owner.context.canStart === false || owner.pending || owner.active;
   function edit(next: Extract<Mutation, {action: 'set'}>) {owner?.setDraft(next); workflow?.dirty();}
   function preview(mutation: Mutation) {
@@ -47,15 +48,16 @@ export function CommonBackgroundPanel({owner, disabled = false, mode = 'all'}: {
     {owner && !owner.context.enabled && <p role="status">{owner.context.reason || '请在可编辑的单张照片中打开纯色换底审核。'}</p>}
     {!state?.open && state?.message && <p role="status">{state.message}</p>}
     {state?.phase === 'preparing' && <button type="button" onClick={() => workflow?.cancel()}>取消等待</button>}
-    {!state?.open && owner?.pending && <button type="button" onClick={() => void workflow?.check()}>查询原操作结果，不重复提交</button>}
+    {!state?.open && owner && <CommonBackgroundReceiptPanel owner={owner}/>}
     <details><summary>算法与旧路径说明</summary>
       <p>当前审核只使用确定性色键。复杂背景、与底色相近的衣物、半透明发丝仍可能误选，请检查前后对照，不满意就取消。</p>
       <p>旧神经抠图与历史代理蒙版路径仍保留在诊断工具中，权重缺失不会自动回退；代理蒙版不等于原尺寸精修，不能据此宣称神经抠图、透明图或 HDR 已完成验收。</p>
       <p>此处展示实际成片管线的 sRGB 8 位代理图，不是最终导出文件，也不是原尺寸边缘或色彩精度验收结果。</p>
     </details>
     </section>}
-    {mode === 'workspace' && !opened && owner?.pending && <aside className="commonBackgroundPanel commonBackgroundReceipt" aria-label="待确认的换底操作">
-      <p role="status">{state?.message}</p><button type="button" onClick={() => void workflow?.check()}>查询原操作结果，不重复提交</button>
+    {mode === 'workspace' && !opened && owner && (owner.pending || owner.state.audit.length > 0) && <aside className="commonBackgroundPanel commonBackgroundReceipt" aria-label="换底原操作与核对记录">
+      <details open={owner.pending || undefined}><summary>{owner.pending ? '换底原操作待确认' : '换底原操作记录'}</summary>
+        <p role="status">{state?.message}</p><CommonBackgroundReceiptPanel owner={owner}/></details>
     </aside>}
     {opened && state && workflow && createPortal(<div className="commonBackgroundBackdrop">
       <div className="commonBackgroundWorkspace" ref={dialog} role="dialog" aria-modal="true" aria-label="纯色换底前后审核"
@@ -94,8 +96,8 @@ export function CommonBackgroundPanel({owner, disabled = false, mode = 'all'}: {
           <p><small>请重点检查发丝、衣物和边缘。不透明 SDR 回流图按自身源图处理，不借用原照片的蒙版；透明/HDR 不在此审核路径的支持范围内。</small></p>
           <div className="specSeg"><button type="button" className="on" disabled={!!locked || state.phase !== 'ready' || !state.presented || !state.committable || owner?.context.canStart === false}
             onClick={() => void workflow.confirm()}>{state.mutation?.action === 'clear' ? '确定还原换底' : '确定应用换底'}</button>
-            {owner?.pending && <button type="button" onClick={() => void workflow.check()}>查询原操作，不重复提交</button>}
             {state.phase === 'failure' && <button type="button" onClick={() => preview(state.mutation ?? draft)}>重新生成对照</button>}</div>
+          {owner && <CommonBackgroundReceiptPanel owner={owner}/>}
         </footer>
       </div>
     </div>, document.body)}

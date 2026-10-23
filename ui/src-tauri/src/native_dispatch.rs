@@ -30,6 +30,7 @@ impl AppState {
         // M5-b：命令名先取出来（cmd 下面会被 send 吃掉）。它只用来标"可能有新的一步"，
         // 宿主不数步数、不自己判哪条命令算编辑——名单由引擎的 ready 报
         let name = cmd.get("cmd").and_then(|c| c.as_str()).unwrap_or("").to_string();
+        if name == "common_background" { crate::common_background_readback::precheck_client(&cmd)?; }
         // Arm selection and owned proposal queries/cancellation do not alter
         // image pixels or revoke unrelated capture lifetimes.
         // A library view changes neither image history nor any capture lease.

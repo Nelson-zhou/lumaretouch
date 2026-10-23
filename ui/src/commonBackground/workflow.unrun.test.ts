@@ -17,6 +17,7 @@ function fixture(timeoutMs = 1000) {
   const sent: Request[] = [], queried: string[] = [], canceled: string[] = [];
   let serial = 0, refreshes = 0, preview: Record<string, unknown> = {};
   const api: Transport = {
+    audit: async () => ({protocol: 1, audit_scope: 'application-process', client_generation: '1', count: 0, items: []}),
     preview: async (action, preview_id, session_id, document_id) => {
       if (action === 'preview') preview = {protocol: 1, preview_id, session_id, document_id, state: 'ready', success: true, ...recipe, image};
       if (action === 'presented') preview = {...preview, state: 'presented'};
@@ -29,7 +30,7 @@ function fixture(timeoutMs = 1000) {
   };
   const flow = createWorkflow(api, async () => {refreshes++;}, {id: () => (++serial).toString(16).padStart(32, '0'), timeoutMs, sleep: async () => {await tick();}});
   flow.context({enabled: true, documentId: 'photo-original', contextKey: 'epoch-1:revision-4'});
-  async function ready() {await flow.start(defaultDraft()); assert.equal(flow.snapshot().phase, 'ready');}
+  async function ready() {await flow.initialize(); await flow.start(defaultDraft()); assert.equal(flow.snapshot().phase, 'ready');}
   async function presented() {await ready(); await flow.presented(flow.snapshot().previewId!); assert.equal(flow.snapshot().presented, true);}
   return {flow, api, sent, queried, canceled, ready, presented, preview: () => preview,
     replacePreview: (next: Record<string, unknown>) => {preview = next;}, refreshes: () => refreshes};
@@ -48,7 +49,7 @@ test('UNRUN: rejected peer preparation never acquires ownership or previews', as
   const flow = createWorkflow(api, async () => {}, {prepare: async () => {throw Error('another editor owns the document');}});
   flow.context({enabled: true, documentId: 'photo-original', contextKey: 'revision-1'});
   const open: boolean[] = []; flow.subscribe(state => open.push(state.open));
-  await flow.start(defaultDraft()); assert.equal(flow.snapshot().phase, 'failure'); assert.equal(previews, 0);
+  await flow.initialize(); await flow.start(defaultDraft()); assert.equal(flow.snapshot().phase, 'failure'); assert.equal(previews, 0);
   assert.ok(open.every(value => value === false));
 });
 test('UNRUN: cancellation while settling edits prevents a late preparation from creating a preview', async () => {
@@ -56,7 +57,7 @@ test('UNRUN: cancellation while settling edits prevents a late preparation from 
   const api = {...f.api, preview: async (...args: Parameters<Transport['preview']>) => {previews++; return f.api.preview(...args);}};
   const flow = createWorkflow(api, async () => {}, {prepare: () => new Promise<void>(resolve => {resume = resolve;})});
   flow.context({enabled: true, documentId: 'photo-original', contextKey: 'revision-1'});
-  const preparing = flow.start(defaultDraft()); assert.equal(flow.snapshot().phase, 'preparing');
+  await flow.initialize(); const preparing = flow.start(defaultDraft()); assert.equal(flow.snapshot().phase, 'preparing');
   flow.cancel(); resume(); await preparing; assert.equal(flow.snapshot().phase, 'idle'); assert.equal(previews, 0);
 });
 test('UNRUN: generating a preview is not apply; image-presentation acknowledgment is mandatory', async () => {
@@ -84,7 +85,7 @@ test('UNRUN: editing parameters invalidates commit eligibility until a new previ
   await f.flow.presented(f.flow.snapshot().previewId!); await f.flow.confirm(); assert.equal(f.sent.length, 1);
 });
 test('UNRUN: clear follows the same review barrier and a no-change receipt creates no claimed history', async () => {
-  const f = fixture(); await f.flow.start({action: 'clear'}); await f.flow.confirm(); assert.equal(f.sent.length, 0);
+  const f = fixture(); await f.flow.initialize(); await f.flow.start({action: 'clear'}); await f.flow.confirm(); assert.equal(f.sent.length, 0);
   await f.flow.presented(f.flow.snapshot().previewId!);
   f.api.result = async () => completed(f.sent[0], {no_change: true, history: {undo_steps: 0, redo_steps: 0}});
   await f.flow.confirm(); assert.equal(f.sent.length, 1); assert.match(f.flow.snapshot().message, /未新增历史/);

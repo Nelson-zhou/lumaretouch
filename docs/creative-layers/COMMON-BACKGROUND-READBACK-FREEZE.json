@@ -1,0 +1,144 @@
+{
+  "baseline": "ff0984c556f7dc2f366cd85e68448105b904175f",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Exact same-engine common apply receipt readback; process-lifetime audit inventory; generation-fenced remount admission; immutable authoritative outcome checks; no apply retry or checkpoint unlock.",
+  "files": [
+    {
+      "path": "docs/creative-layers/COMMON-BACKGROUND-READBACK.md",
+      "sha256": "ed8d3fbf3feb1ec5d78d92e984dcf100bb90d8069ce0af948900c2eb9a2da064",
+      "bytes": 6898
+    },
+    {
+      "path": "docs/creative-layers/DERIVED-COMMON-BACKGROUND.md",
+      "sha256": "a29ae1e6041a1dd3a4b6aa6460599309e5c327c7118a5f62a52fec1806eb3ec6",
+      "bytes": 7505
+    },
+    {
+      "path": "docs/creative-layers/NEXT-MATERIAL-FEATURES.md",
+      "sha256": "1a22814d07b122dfab725c2a699b75c281f78360dcab662ca7fe299fa0a64edc",
+      "bytes": 5172
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/common_background_readback.py",
+      "sha256": "6ded6ce694a41ed4f4ce7e0c52de2a37fe1741fdce38c5d3717ea5ab0225f63b",
+      "bytes": 2225
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "1ed2b7d9e25f172bc20fb0456f0a3fcdcc7e59e3d87768b679fb159001d08c07",
+      "bytes": 464117
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/studio_tools_dispatch.py",
+      "sha256": "eb12b6e6034fa7eebfe723d688be031d2b9f1eaac64a5d218182c1ced1332aef",
+      "bytes": 2521
+    },
+    {
+      "path": "engine/tests/fixtures/creative_layers/test_common_background_readback_unrun.py",
+      "sha256": "2efb722a09975215d8bbb2cc7eb395f4b1186cb5abcca94ddface6c979816662",
+      "bytes": 3567
+    },
+    {
+      "path": "ui/src-tauri/src/common_background_api.rs",
+      "sha256": "f5cf1fadfc0063ce5d2aa967aa1220f9b77d047e8c19d0987abe64018af5fcc1",
+      "bytes": 9393
+    },
+    {
+      "path": "ui/src-tauri/src/common_background_readback.rs",
+      "sha256": "c464fc1d57f5beae5144245677d3eca9a818df3410d000be4031bd1514311003",
+      "bytes": 34335
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "c9069ed052a776e931f99ab6a5dc3dc28ff4a476becd432912aeb03d316bf77a",
+      "bytes": 36662
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "e7845e012010d2e4f8cf99ff4ee06fe7f8d9f5f8b23775b7bbed4168b8108ef8",
+      "bytes": 100523
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "abca52a1895267a6ef13f5a76d6d37e5bec715cbb41babf4d4dd21b4fe40c291",
+      "bytes": 8595
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "a3084688be23d2fb13a58bddd58f756bb03aec6be37e23b5f2e27a50e3a55b1a",
+      "bytes": 145801
+    },
+    {
+      "path": "ui/src/commonBackground/ACCEPTANCE_UNRUN.md",
+      "sha256": "4e6b18236497fbe6cfa1893c0cc38d19671a21666bc33546ebc8cf90555de7b3",
+      "bytes": 8043
+    },
+    {
+      "path": "ui/src/commonBackground/CommonBackgroundPanel.tsx",
+      "sha256": "a563486f5b6070be416476c2a0229cce56cb8f3f57b04078dbe1ac7d199606cc",
+      "bytes": 9301
+    },
+    {
+      "path": "ui/src/commonBackground/CommonBackgroundReceiptPanel.tsx",
+      "sha256": "25abb12027620a7424178ab61f94a0b6b52c9cf7db39075b3c24ed10b3f36673",
+      "bytes": 3279
+    },
+    {
+      "path": "ui/src/commonBackground/commonBackground.css",
+      "sha256": "f1812b8f139dce36e58057375776e889b3fa4f13872faf945bd1a303880a3877",
+      "bytes": 2363
+    },
+    {
+      "path": "ui/src/commonBackground/readback.ts",
+      "sha256": "30041248b8a93361aa4ae8a80edd13e0d767f486b3c80a36dc5d58d44f76e855",
+      "bytes": 7315
+    },
+    {
+      "path": "ui/src/commonBackground/readback.unrun.test.ts",
+      "sha256": "2bddae34d77944a7bd447562623feee3693a3d2c37e84ad974b55595b73d737e",
+      "bytes": 18318
+    },
+    {
+      "path": "ui/src/commonBackground/useCommonBackgroundWorkflow.ts",
+      "sha256": "787d824a75eb7941a87c07bb427957d5f23af59591c1a2d431390f870a564190",
+      "bytes": 2986
+    },
+    {
+      "path": "ui/src/commonBackground/workflow.ts",
+      "sha256": "ddb4ee67ac589fa6e88ee7ae7c3df23e918b3980736e1525bb6937ea6f7df973",
+      "bytes": 23091
+    },
+    {
+      "path": "ui/src/commonBackground/workflow.unrun.test.ts",
+      "sha256": "909eb66e926f3d025b531e206fb2eafb3e2aff8f2d75a91f8d4bdc14469f0467",
+      "bytes": 13066
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "e08a73844c4db52a50435e8ff156e50948bb38cafd1e296be8f8091f005302f2",
+      "bytes": 59070
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "d0bc9051640b88a1c25529664f799c4bab3b60867df33a7f4defb4e9759a2d42",
+      "bytes": 99012
+    }
+  ],
+  "validation": {
+    "python_ast": "4 changed/new Python sources parsed without imports",
+    "whitespace": "git diff --check clean",
+    "line_counts": {
+      "App.tsx": 2108,
+      "main.rs": 2028,
+      "server.py": 6976
+    },
+    "fixtures": "8 Python test functions (parameterized cases), 14 Rust readback fixtures, 23 new UI and 18 retained UI workflow fixtures; all UNRUN",
+    "runtime": "No imports, tests, compiler, typecheck, build, inference or product execution"
+  },
+  "remaining": [
+    "Actual failed rollback and engine-loss/cache-eviction verified checkpoint recovery remain blocked.",
+    "Audit is application-process lifetime only; no persistent transaction evidence across full application restart.",
+    "Broader alpha/HDR retouch support and M13 generation remain unfinished.",
+    "Black/white fringe repair is next material feature; requirement/primary-technique audit only in this slice."
+  ]
+}

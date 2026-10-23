@@ -96,6 +96,7 @@ mod studio_background_host;
 mod studio_background_api;
 mod common_background_host;
 mod common_background_api;
+mod common_background_readback;
 mod id_background_api;
 mod sky_replacement_host;
 mod sky_replacement_api;
@@ -1998,6 +1999,8 @@ fn main() {
             studio_background_api::studio_background_preview, studio_background_api::studio_background_preview_status,
             common_background_api::common_background, common_background_api::common_background_result,
             common_background_api::common_background_preview, common_background_api::common_background_preview_status,
+            common_background_readback::common_background_readback, common_background_readback::common_background_readback_status,
+            common_background_readback::common_background_audit,
             manual_liquify_api::manual_liquify, manual_liquify_api::manual_liquify_result,
             manual_liquify_api::manual_liquify_preview, manual_liquify_api::manual_liquify_preview_status,
             effect_recovery_api::effect_recovery, effect_recovery_api::effect_recovery_result,

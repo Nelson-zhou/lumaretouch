@@ -46,6 +46,7 @@ impl EngineHandle {
     pub fn epoch(&self)->[u8;16]{self.epoch}
     pub fn send(&self, cmd: Value) -> Result<(), String> {
         crate::project_recovery_fence::issued(self.epoch, &cmd)?;
+        if crate::common_background_readback::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if cmd["cmd"]=="project_recovery" || cmd["cmd"]=="canvas_guides" {return self.dispatcher.enqueue(None,cmd);}
         if crate::managed_import_api::read_only(&cmd) || crate::batch_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if cmd["cmd"] == "virtual_copy" && matches!(cmd["action"].as_str(), Some("state" | "query")) {
@@ -186,7 +187,10 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
         thread::spawn(move || {
             while let Ok(line) = rx.recv() {
                 if let Ok(v)=serde_json::from_str::<Value>(&line) {
-                    crate::project_recovery_fence::observed(inspection_epoch, &v);
+                    // Common outcomes settle only after exact binding validation.
+                    if v["event"] != "common_background_result" {
+                        crate::project_recovery_fence::observed(inspection_epoch, &v);
+                    }
                     if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {
                         let why="宿主与引擎不匹配：引擎缺少命令完成回执，请使用同一版本的配套引擎";
                         *st.last_error.lock().unwrap()=Some(why.into());
@@ -227,6 +231,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             st.studio_background.lock().unwrap().ended(inspection_epoch);
             st.studio_background_preview.lock().unwrap().ended(inspection_epoch);
             st.common_background.lock().unwrap().ended(inspection_epoch);
+            crate::common_background_readback::ended(inspection_epoch);
             st.common_background_preview.lock().unwrap().ended(inspection_epoch);
             st.manual_liquify.lock().unwrap().ended(inspection_epoch);
             st.liquify_preview.lock().unwrap().ended(inspection_epoch);
@@ -310,7 +315,11 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "id_background_result"=>crate::id_background_api::receive(inspection_epoch,&v),
         "studio_background_result"=>state.studio_background.lock().unwrap().receive(inspection_epoch,&v),
         "studio_background_preview"=>state.studio_background_preview.lock().unwrap().receive(inspection_epoch,&v),
-        "common_background_result"=>state.common_background.lock().unwrap().receive(inspection_epoch,&v),
+        "common_background_result"=>{
+            state.common_background.lock().unwrap().receive(inspection_epoch,&v);
+            crate::common_background_readback::receive_apply(inspection_epoch,&v);
+        },
+        "common_background_readback"=>crate::common_background_readback::receive(inspection_epoch,&v),
         "common_background_preview"=>state.common_background_preview.lock().unwrap().receive(inspection_epoch,&v),
         "manual_liquify_result"=>state.manual_liquify.lock().unwrap().receive(inspection_epoch,&v),
         "manual_liquify_preview"=>state.liquify_preview.lock().unwrap().receive(inspection_epoch,&v),
