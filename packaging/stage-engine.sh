@@ -184,3 +184,8 @@ cp "$here/../core/extended_tone/extended_tone.rs" "$here/../LICENSE" "$here/../d
 bash "$here/build-colour-grading.sh" "$stage/lumaretouch_engine/bin/liblrt_colour_grading.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/colour_grading"
 cp "$here/../core/colour_grading/lib.rs" "$here/../LICENSE" "$here/../docs/colour-grading/CONTRACT.md" "$stage/lumaretouch_engine/third_party/colour_grading/"
+
+# Original selective colour ABI1, offline build at packaging only.
+bash "$here/build-selective-colour.sh" "$stage/lumaretouch_engine/bin/liblrt_selective_colour.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/selective_colour"
+cp "$here/../core/selective_colour/lib.rs" "$here/../LICENSE" "$here/../docs/selective-colour/CONTRACT.md" "$stage/lumaretouch_engine/third_party/selective_colour/"

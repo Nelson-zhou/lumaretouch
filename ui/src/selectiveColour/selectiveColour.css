@@ -1,0 +1,8 @@
+.selectiveColour { display:grid; gap:8px; }
+.selectiveColour fieldset { min-width:0; border:1px solid var(--border,#555); border-radius:8px; }
+.selectiveColourRanges { display:flex; flex-wrap:wrap; gap:4px; }
+.selectiveColourRanges button[aria-pressed="true"] { outline:2px solid var(--accent,#8badff); }
+.selectiveColour label { display:flex; align-items:center; gap:6px; margin:6px 0; }
+.selectiveColour input[type="range"] { flex:1; min-width:40px; }
+.selectiveColour input[type="number"] { width:65px; }
+.selectiveColour small { opacity:.8; }

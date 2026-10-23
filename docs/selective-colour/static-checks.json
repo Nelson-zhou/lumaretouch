@@ -1,0 +1,43 @@
+{
+  "status": "STATIC_ONLY",
+  "python_ast_parsed": [
+    "engine/src/lumaretouch_engine/colour_grading_service.py",
+    "engine/src/lumaretouch_engine/custom_lut_service.py",
+    "engine/src/lumaretouch_engine/export.py",
+    "engine/src/lumaretouch_engine/export_recipe.py",
+    "engine/src/lumaretouch_engine/export_snapshot.py",
+    "engine/src/lumaretouch_engine/extended_tone_service.py",
+    "engine/src/lumaretouch_engine/project.py",
+    "engine/src/lumaretouch_engine/scope.py",
+    "engine/src/lumaretouch_engine/selective_colour_adapters.py",
+    "engine/src/lumaretouch_engine/selective_colour_controller.py",
+    "engine/src/lumaretouch_engine/selective_colour_host.py",
+    "engine/src/lumaretouch_engine/selective_colour_native.py",
+    "engine/src/lumaretouch_engine/selective_colour_scope.py",
+    "engine/src/lumaretouch_engine/selective_colour_service.py",
+    "engine/src/lumaretouch_engine/selective_colour_stage.py",
+    "engine/src/lumaretouch_engine/selective_colour_state.py",
+    "engine/src/lumaretouch_engine/server.py",
+    "engine/src/lumaretouch_engine/vram.py",
+    "engine/tests/selective_colour_fixtures/test_contract.py"
+  ],
+  "json_parsed": [
+    "docs/selective-colour/requirement-map.json",
+    "docs/selective-colour/shared-before-sha256.json",
+    "docs/selective-colour/static-checks.json",
+    "engine/tests/selective_colour_fixtures/vectors.json"
+  ],
+  "source_assertions": [
+    "preview grading -> selective -> monochrome",
+    "export prepass before grading -> selective -> monochrome",
+    "project v18 with v17 named compatibility",
+    "all 16 exact control paths registered",
+    "all ingress owners evaluated"
+  ],
+  "requirement_count": 16,
+  "runtime_tests": "UNRUN",
+  "build": "UNRUN",
+  "compiler": "UNRUN",
+  "typecheck": "UNRUN",
+  "product_imports": "NOT_PERFORMED"
+}

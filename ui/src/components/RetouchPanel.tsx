@@ -1,3 +1,4 @@
+import {ConnectedSelectiveColourPanel} from "../selectiveColour/ConnectedSelectiveColourPanel";
 import {ConnectedColourGradingPanel} from "../colourGrading/ConnectedColourGradingPanel";
 import {ConnectedExtendedTonePanel} from "../extendedTone/ConnectedExtendedTonePanel";
 import {ConnectedCustomLutPanel} from "../customLut/ConnectedCustomLutPanel";
@@ -1030,7 +1031,7 @@ export default function RetouchPanel(props: RetouchProps) {
         patch={async patches=>{props.people.patch(patches);}} refresh={props.refreshHair}/>
       {props.people.state.message&&<p role="status">{props.people.state.message}</p>}
     </>;
-    if (fid === "PC-32455") return <>{doc?.document_id && <ConnectedColourGradingPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.colour_grading_protocol===1}/>}{doc?.document_id && <ConnectedExtendedTonePanel documentId={doc.document_id} revision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.extended_tone_protocol===1}/>}{lutBlock}{doc?.document_id && <ConnectedCustomLutPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} assetId={doc.lut.asset_id ?? null} amount={doc.lut.amount} />}</>;
+    if (fid === "PC-32455") return <>{doc?.document_id && <ConnectedColourGradingPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.colour_grading_protocol===1}/>}{doc?.document_id && <ConnectedSelectiveColourPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.selective_colour_protocol===1}/>}{doc?.document_id && <ConnectedExtendedTonePanel documentId={doc.document_id} revision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.extended_tone_protocol===1}/>}{lutBlock}{doc?.document_id && <ConnectedCustomLutPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} assetId={doc.lut.asset_id ?? null} amount={doc.lut.amount} />}</>;
     if (fid === "PC-32452") return <>{props.sampleLibraryPanel}{props.presetPanel}{lutBlock}</>;
     if (fid === "PC-32454") return gradeBlock;
     if (fid === "PC-32481") return props.effectRecoveryPanel;

@@ -164,3 +164,8 @@ Colour grading (core/colour_grading): original Lumaretouch GPL-3.0-or-later
 float32 tonal-mask grading. Vendor documentation informed control semantics;
 no vendor code, LUTs, imagery or model weights are included. See
  docs/colour-grading/CONTRACT.md for domain and provenance limitations.
+
+Selective colour (core/selective_colour): original Lumaretouch GPL-3.0-or-later
+float32 RGB-family CMYK adjustments. Adobe/FFmpeg documentation informed control
+semantics; no vendor code or assets are included. The nine-way partition and
+additive black rule are original. See docs/selective-colour/CONTRACT.md.

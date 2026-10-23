@@ -1,0 +1,310 @@
+{
+  "status": "SOURCE_CONNECTED_UNRUN",
+  "source_sha256": "b3d5fbe7a75ce3d7cde7a39193b1f86b5ec634399eac36d667ed8ebbabeca748",
+  "requirements": [
+    {
+      "id": "LNX-REF-PC-32455-C-63924bf039",
+      "path": "可选颜色",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-ad5041d8a3",
+      "path": "可选颜色/红",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-b2931a80c2",
+      "path": "可选颜色/黄",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-c762b47e72",
+      "path": "可选颜色/绿",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-f7a02ddd85",
+      "path": "可选颜色/青",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-5a61ebc24d",
+      "path": "可选颜色/蓝",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-961b8a72e5",
+      "path": "可选颜色/洋红",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-baf4810187",
+      "path": "可选颜色/白",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-322f0a8b89",
+      "path": "可选颜色/中间色",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-1b6b0ac442",
+      "path": "可选颜色/黑",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-1162cf5707",
+      "path": "可选颜色/青色量",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-aef234aebb",
+      "path": "可选颜色/洋红量",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-d25cf174ad",
+      "path": "可选颜色/黄色量",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-0e8f77b2e7",
+      "path": "可选颜色/黑色量",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-94a9cc59c6",
+      "path": "可选颜色/相对",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    },
+    {
+      "id": "LNX-REF-PC-32455-C-e7ab820b5d",
+      "path": "可选颜色/绝对",
+      "source_url": "https://www.pixcakeai.com/guide/32455",
+      "implementation": [
+        "core/selective_colour/lib.rs",
+        "engine/src/lumaretouch_engine/selective_colour_state.py",
+        "ui/src/selectiveColour/SelectiveColourPanel.tsx"
+      ],
+      "acceptance": "ACCEPTANCE-UNRUN.md #3",
+      "status": "SOURCE_CONNECTED_UNRUN",
+      "integration": [
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/vram.py",
+        "engine/src/lumaretouch_engine/export.py",
+        "ui/src/components/RetouchPanel.tsx",
+        "ui/src/toolRouting/coverage.ts"
+      ]
+    }
+  ]
+}

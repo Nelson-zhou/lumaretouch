@@ -1,0 +1,231 @@
+{
+  "status": "SOURCE_CONNECTED_UNRUN",
+  "base": "328cde0fdef0a21951b8203775bec66449586b5b",
+  "files": [
+    {
+      "path": "NOTICE",
+      "sha256": "170534e8f2e08b14500a6c9b1750c48a52a7593e570e43d8ce141d5e06bb9f2a",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "core/selective_colour/lib.rs",
+      "sha256": "d1296ebf83902bdc6cfcf01d7a347680cbfa69a12f23cf91fc5f73bfed63abd3",
+      "kind": "new_owned"
+    },
+    {
+      "path": "docs/selective-colour/ACCEPTANCE-UNRUN.md",
+      "sha256": "4ffe50ad50a4267c2cc4386426a542d21435f9b0fdd9faaa7cabb2f16f4e4945",
+      "kind": "new_owned"
+    },
+    {
+      "path": "docs/selective-colour/CONTRACT.md",
+      "sha256": "01f8c44e268e20845ee160388e4f2b3a746117b294b80a4a5eccc9f250259698",
+      "kind": "new_owned"
+    },
+    {
+      "path": "docs/selective-colour/INTEGRATION.md",
+      "sha256": "96e643e4b2b55ba58154bf50e8eac79c3c8b66fe7d850d9e2df592764d3dc2b8",
+      "kind": "new_owned"
+    },
+    {
+      "path": "docs/selective-colour/requirement-map.json",
+      "sha256": "9a06e6b242529996b2f210795ec13807dc49f95391d360ea4b122e09590b6a87",
+      "kind": "new_owned"
+    },
+    {
+      "path": "docs/selective-colour/shared-before-sha256.json",
+      "sha256": "85fa65b74d28ca45b27f9eacced927e71ba6ff50c5d223e4d5c276ebd2086da9",
+      "kind": "new_owned"
+    },
+    {
+      "path": "docs/selective-colour/static-checks.json",
+      "sha256": "20f06d0c16bf643c8cadd16d8e0c3d20a6073999a506a264ee4fb5f4701a7503",
+      "kind": "new_owned"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/colour_grading_service.py",
+      "sha256": "e500ab463d3e8a928638e4f299e251656605e3be4e8b97c0a9f063919c75f274",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/custom_lut_service.py",
+      "sha256": "8799561959ee6197f356011f730192933e31cb54a53e36cdb675f68bededbc8e",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "ee794a52933ffb9853e4bfb1cc47213215d57b672c1b029e6560975aad4c9123",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "5b3f245102224ee6ed2ec867b95b20a0f72ff023d7c468e3d2f1110d9f8b1906",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "sha256": "7299b815da65845e487205bbcd3c761a87b42710285d0f9641096118f2b92e5e",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/extended_tone_service.py",
+      "sha256": "5c171528cc1d36609803c7cb846edca9e9dd9ff42c704d68d2509e31cc15fb84",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "45f14ea4a4528d3782a1b158c24448c7e3d874e9a8500fb1ce216702e377dcbb",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "bddb226f27a86b5505063f2ab10962544db8f30106dc50f839ac83d4a73deddb",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/selective_colour_adapters.py",
+      "sha256": "0a0b0e00a1b744fbe2a38ee7962858f9ce7988eebbb41ed1ec9d1097daa64271",
+      "kind": "new_owned"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/selective_colour_controller.py",
+      "sha256": "26661ab68331667724039395b0e4b8ecbe9e1af6c24c451a0ed49d03ebd9254f",
+      "kind": "new_owned"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/selective_colour_host.py",
+      "sha256": "a612dfe8366e624cfe6c4b68584a97d74d0217c864a4ced69b4f568be686ee6d",
+      "kind": "new_owned"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/selective_colour_native.py",
+      "sha256": "3a6ca50ae1575bfbfd02fb8f98542f0c8a742652122518755c40bd099ccfa577",
+      "kind": "new_owned"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/selective_colour_scope.py",
+      "sha256": "de3b017c651adf1a23c11950433688688b0385154728bc373ae18562ae25dbec",
+      "kind": "new_owned"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/selective_colour_service.py",
+      "sha256": "292ec58e3578441485e206c4ef235177ce9c9f4fd6688ae983aafb777955a215",
+      "kind": "new_owned"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/selective_colour_stage.py",
+      "sha256": "7b429f18484ec4d411b9cfd51cb25d4e05a345adaed0f49658f86c7c671f177c",
+      "kind": "new_owned"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/selective_colour_state.py",
+      "sha256": "99f742da864090e6ee1b7b0b0b593ae6ef1a0a3b7716dc925894f55954b3cedc",
+      "kind": "new_owned"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "adb69fb80e8c09edbab628e3b1e7013012dfac22af2adb3bc2928c38462d1b39",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "69c0b5b56ac4179a274050e6c96373da157974b944b776e977beb4027c5d174e",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "engine/tests/selective_colour_fixtures/test_contract.py",
+      "sha256": "8f5317767ff93e81241cd34af5976d0006f6396357e421b1dec9b17326156a49",
+      "kind": "new_owned"
+    },
+    {
+      "path": "engine/tests/selective_colour_fixtures/vectors.json",
+      "sha256": "2ea21177fb96c9fca701f1ef3dfb5f55bb6620ecd5341abce9340f52f37c2a6b",
+      "kind": "new_owned"
+    },
+    {
+      "path": "packaging/build-selective-colour.sh",
+      "sha256": "f3d448104253710e7c3dee96a687510b9db0198d4d992275567dbcb4fe62dbde",
+      "kind": "new_owned"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "095eebce24dbb424fd29b9a5016396fbb7b2fb2397764df300ee51787ee65cf9",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "b07461e18deb80fc91d2bc421bb691509e9d085cd48d76dde50bc51842556c47",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "9a4bbafbfc262b3737385be0fa764381c697ec6187b26dff93a1be81ad6ed131",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "ui/src-tauri/src/selective_colour_api.rs",
+      "sha256": "8323f912f9a7644d9785fff858c5e30732a57fba2f3e1fee701ca9d93f81e19e",
+      "kind": "new_owned"
+    },
+    {
+      "path": "ui/src/batch/batchScopeOptions.ts",
+      "sha256": "0c5f59b7bf7e5a6f92ba0baa75ad1876228d7543a2239d359f5f361db6a98e47",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "ff001a3594480863fd55fe44d1d4941c42531975daee8af126ac441f6f37ec63",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "a1af0547100f15194d5e72560a4f7533d6b2155ac3c134088717904afef9ae2e",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "769c10dd3c4a2438892cf7d855a89b0c3dc4b457e52154edc72def61d1651732",
+      "kind": "changed_shared"
+    },
+    {
+      "path": "ui/src/selectiveColour/ConnectedSelectiveColourPanel.tsx",
+      "sha256": "910e9668122914240de6511a6df8a7384e2277556fdd56b90ad5a1a78942160d",
+      "kind": "new_owned"
+    },
+    {
+      "path": "ui/src/selectiveColour/SelectiveColourPanel.tsx",
+      "sha256": "8b54d252ccfb8845fa5eca8a05e81cb0021d5e45288e5b0973fd3c7b93bdc943",
+      "kind": "new_owned"
+    },
+    {
+      "path": "ui/src/selectiveColour/model.test.ts",
+      "sha256": "8d9ce1594da8478e35a7e769064ee7b83380e98430ec3f18e8aafaf940dd2ed1",
+      "kind": "new_owned"
+    },
+    {
+      "path": "ui/src/selectiveColour/model.ts",
+      "sha256": "187bc7945f20d1d18e73696811cd69a3cbb189eb93e5818c2362b71bf223feb6",
+      "kind": "new_owned"
+    },
+    {
+      "path": "ui/src/selectiveColour/nativePort.ts",
+      "sha256": "eb525a395303b47b2393ee4b50b79a948318a85df54220ff2923eba9f84df521",
+      "kind": "new_owned"
+    },
+    {
+      "path": "ui/src/selectiveColour/selectiveColour.css",
+      "sha256": "ea79324543dedb6b00e9bc59baacbc2b139a09bdb544121f43ef52812165313f",
+      "kind": "new_owned"
+    },
+    {
+      "path": "ui/src/selectiveColour/workflow.ts",
+      "sha256": "ad54e1ca92224f0128bc8b20d1921c4a9bc0e445f75c627a1f126ea98f20ab32",
+      "kind": "new_owned"
+    },
+    {
+      "path": "ui/src/toolRouting/coverage.ts",
+      "sha256": "5b19acd8ccdbbc66853c55e732a1f27bc5a776dd4a7672252930f3d0c5d37822",
+      "kind": "changed_shared"
+    }
+  ]
+}

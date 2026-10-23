@@ -66,6 +66,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     configure_extended_tone(spec,snap)
     from .colour_grading_adapters import configure_export as configure_grading
     configure_grading(spec,snap)
+    from .selective_colour_adapters import configure_export as configure_selective
+    configure_selective(spec,snap)
     spec.people=snap.get("people")
     from .body_pose_render import configure_export as configure_body
     configure_body(spec,snap,(eh,ew),for_document=for_document)

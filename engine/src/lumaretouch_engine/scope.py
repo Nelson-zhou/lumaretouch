@@ -46,6 +46,7 @@ from . import semantic_colour_scope as SEMANTIC
 from . import custom_lut_scope as CUSTOM_LUT
 from . import extended_tone_scope as EXTENDED_TONE
 from . import colour_grading_scope as COLOUR_GRADING
+from . import selective_colour_scope as SELECTIVE_COLOUR
 
 SCHEMA = "lrt.scope.v1"
 PRESET_SCHEMA = "lrt.preset.v1"
@@ -89,6 +90,7 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
     COLOUR_GRADING.OP: {"params": ("recipe",), "state_fields": COLOUR_GRADING.FIELDS, "single_face": False, "transferable": True, "cmd": "colour_grading", "label": "颜色分级", "read": COLOUR_GRADING.params_of, "write": COLOUR_GRADING.install},
+    SELECTIVE_COLOUR.OP: {"params": ("recipe",), "state_fields": SELECTIVE_COLOUR.FIELDS, "single_face": False, "transferable": True, "cmd": "selective_colour", "label": "可选颜色", "read": SELECTIVE_COLOUR.params_of, "write": SELECTIVE_COLOUR.install},
     EXTENDED_TONE.OP: {"params": ("recipe",), "state_fields": EXTENDED_TONE.FIELDS, "single_face": False,
         "transferable": True, "cmd": "extended_tone", "label": "扩展影调", "read": EXTENDED_TONE.params_of, "write": EXTENDED_TONE.install},
     SEMANTIC.OP: {"params": ("intent",), "state_fields": SEMANTIC.FIELDS, "single_face": False,
@@ -351,6 +353,9 @@ def check_params(op: str, params: dict) -> dict:
     if op == COLOUR_GRADING.OP:
         try: return COLOUR_GRADING.check_params(params)
         except ValueError as exc: raise ScopeError(str(exc)) from exc
+    if op == SELECTIVE_COLOUR.OP:
+        try: return SELECTIVE_COLOUR.check_params(params)
+        except ValueError as exc: raise ScopeError(str(exc)) from exc
     if op == EXTENDED_TONE.OP:
         try: return EXTENDED_TONE.check_params(params)
         except ValueError as exc: raise ScopeError(str(exc)) from exc
@@ -420,6 +425,7 @@ def check_params(op: str, params: dict) -> dict:
 
 def _neutral_of(op: str, key: str):
     if op == COLOUR_GRADING.OP and key == "recipe": return COLOUR_GRADING.S.neutral()
+    if op == SELECTIVE_COLOUR.OP and key == "recipe": return SELECTIVE_COLOUR.S.neutral()
     if op == EXTENDED_TONE.OP and key == "recipe": return EXTENDED_TONE.S.default()
     if op == OP_WHITE_BALANCE and key == "options": return WB.neutral_transfer_options()
     if op == OP_HSL and key == "recipe": return HSL_RECIPE.default_recipe()

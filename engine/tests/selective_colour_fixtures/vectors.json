@@ -1,0 +1,54 @@
+{
+  "status": "AUTHORED_UNRUN",
+  "encoding": "extended-srgb-d65",
+  "vectors": [
+    {
+      "input": [
+        0.8,
+        0.2,
+        0.2
+      ],
+      "range": "reds",
+      "cyan": 20,
+      "method": "relative",
+      "expected": [
+        0.776,
+        0.2,
+        0.2
+      ],
+      "tolerance": 2e-06
+    },
+    {
+      "input": [
+        0.8,
+        0.2,
+        0.2
+      ],
+      "range": "reds",
+      "cyan": 20,
+      "method": "absolute",
+      "expected": [
+        0.68,
+        0.2,
+        0.2
+      ],
+      "tolerance": 2e-06
+    },
+    {
+      "input": [
+        4,
+        4,
+        4
+      ],
+      "range": "whites",
+      "cyan": 20,
+      "method": "absolute",
+      "expected": [
+        3.8,
+        4,
+        4
+      ],
+      "tolerance": 2e-06
+    }
+  ]
+}

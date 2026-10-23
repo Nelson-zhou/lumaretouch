@@ -1,0 +1,21 @@
+{
+  "engine/src/lumaretouch_engine/server.py": "a6a0ec6d7a222fd9f94697fb0510c3d673900da57ae7771528f354b26f7d22f5",
+  "engine/src/lumaretouch_engine/vram.py": "e55d04e7fa4b98b422814fa141b657a2027e1f2a8a82e631eedab8b807036168",
+  "engine/src/lumaretouch_engine/export.py": "324418ef993350c67a366f62c8d0791b080284c5ab2eb813ebb2c6767ee36ea3",
+  "engine/src/lumaretouch_engine/export_recipe.py": "a83eafb88fd68277cf26bf815488dba9e40bfbed07d4867ae77ccd8164dda4ed",
+  "engine/src/lumaretouch_engine/export_snapshot.py": "b28909f1e5ca106a02f45eaf55495ef7645eba118773da81de437a93cc0ed0fb",
+  "engine/src/lumaretouch_engine/project.py": "eb41811f2a1e1eae5c0885eb84ab37539a1f997f030e3b33bbd028d97ed309a5",
+  "engine/src/lumaretouch_engine/scope.py": "6fe16bd2dc8e4cf7b0a3a61f5a8138cf868ab2e929949e31122c3502c3d13d2f",
+  "engine/src/lumaretouch_engine/colour_grading_service.py": "9d5e20e5ae9655bd0499c69a682b8344e2376d3e3e4f57b2273d6c66d9524e45",
+  "engine/src/lumaretouch_engine/extended_tone_service.py": "d25aa76a16d5fc8b646f021bfca466dbe7cd6fbeef42ffea5e1cab83476d367f",
+  "engine/src/lumaretouch_engine/custom_lut_service.py": "0d5e508cefb55c2b4da4ead21e38f12be1b16925728c79076b1cdf937a1cf45d",
+  "ui/src-tauri/src/main.rs": "b838eeb86179b70e15c17bcd19c951045ab0d9cfad6db09ca7e12f4adaad4ce0",
+  "ui/src-tauri/src/engine.rs": "95194d41eebeef0509a2c593e5d3d9de256838e981027e41f906dfa200938674",
+  "ui/src/native.ts": "e4d6813f1969c44429d6e25dca4d9787c9ea38b2f159a0dff1b4c7705edb5874",
+  "ui/src/components/RetouchPanel.tsx": "60802a38ee26ac3a19eb22353641b9c20b3bc6bb2262199b9c1f1c9b6531abdd",
+  "ui/src/toolRouting/coverage.ts": "10568a1caf174ac311e60b1ec6cb99636cfa844047c3ea8a1d09ca69075a9200",
+  "ui/src/presets/presetModel.ts": "8ea5ad10e027613f6791514199d1a8922e3ddaeca61b84196259a527ede31d06",
+  "ui/src/batch/batchScopeOptions.ts": "669f349471f81c394fbc522be9338e173574ffa1e6d37b2fc1afc3342178a79e",
+  "packaging/stage-engine.sh": "3e8713091bffc8c10926110135abcee33067b6dddeebe2ba8509985d654f03a7",
+  "NOTICE": "ac8dbaf88871e22ac061925da9ac6827442e0143b7cf41a38dbca353a304469e"
+}
