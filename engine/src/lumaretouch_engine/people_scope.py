@@ -26,6 +26,10 @@ def replay_preset(engine,state,**kwargs):
     The existing preset owner owns receipts, rollback, document fences/history.
     Only changed scalar leaves enter its uniquely evidenced target face.
     """
+    from . import enhance_scope as ENHANCE, teeth_colour_apply as TEETH
+    # Even an otherwise unchanged or legacy preset must not publish success
+    # after an active independent tooth layer failed to rebuild on its target.
+    if TEETH.active(ENHANCE.amounts_of(state)):kwargs['strict_local']=True
     if not engine._people_managed():return engine._replay_state(state,**kwargs)
     before=engine._people_owner().snapshot();asset=engine._people_source()['sha256']
     faces=[face for face in before['faces'].values() if face['asset_sha256']==asset and face['enabled']]
@@ -52,6 +56,8 @@ def replay_preset(engine,state,**kwargs):
         validator=A.specifications()[op][1];left=A.leaves(validator(current.get(field)));right=A.leaves(validator(state.get(field)))
         patches.extend((op,path,value) for path,value in right.items() if left[path]!=value)
     from . import facial_wrinkle_state as W
+    left=A.leaves(ENHANCE.amounts_of(current));right=A.leaves(ENHANCE.amounts_of(state))
+    patches.extend((A.ENHANCE,path,value) for path,value in right.items() if left[path]!=value)
     left=W.check((current.get('_enhance') or {}).get('amounts',{}));right=W.check((state.get('_enhance') or {}).get('amounts',{}))
     patches.extend((A.WRINKLES,path,value) for path,value in A.leaves(right).items() if A.leaves(left)[path]!=value)
     if not patches:return engine._replay_state(state,**kwargs)
@@ -61,7 +67,7 @@ def replay_preset(engine,state,**kwargs):
     owner=engine._people_owner()
     try:
         owner.commit(candidate,expected_fence=owner.fence);engine._people_analysis_key=None
-        if any(op in (EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS) for op,_,_ in patches):kwargs['strict_local']=True
+        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS) for op,_,_ in patches):kwargs['strict_local']=True
         return engine._replay_state(state,**kwargs)
     except Exception:
         before['association_revision']=owner.association_fence

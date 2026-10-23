@@ -36,6 +36,8 @@ pub(crate) fn enhance(
     sclera: Option<f64>,
     iris: Option<f64>,
     teeth: Option<f64>,
+    teeth_brightness: Option<f64>,
+    teeth_yellow_removal: Option<f64>,
     dark_circles: Option<f64>,
     eye_bags: Option<f64>,
     veins: Option<f64>,
@@ -44,8 +46,9 @@ pub(crate) fn enhance(
     wrinkles: Option<Value>,
     people_context: Option<Value>,
 ) -> Result<Value, String> {
-    let mut cmd = crate::facial_wrinkle_api::enhance_command(&action,
-        [sclera, iris, teeth, dark_circles, eye_bags, veins, catchlight_left, catchlight_right], wrinkles)?;
+    let mut cmd = crate::facial_wrinkle_api::enhance_command_with_teeth(&action,
+        [sclera, iris, teeth, dark_circles, eye_bags, veins, catchlight_left, catchlight_right],
+        [teeth_brightness, teeth_yellow_removal], wrinkles)?;
     crate::people_api::add_context(&mut cmd, people_context)?;
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))

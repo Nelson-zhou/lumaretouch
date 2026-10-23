@@ -1021,12 +1021,14 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     enhance_ms = 0.0
     if any(float(vv) != 0.0 for key, vv in (spec.enhance or {}).items() if key not in WSTATE.INTENT_KEYS):
         t_e = time.perf_counter()
-        enh_reg = ENH.geometry(spec.landmarks, h, w)
+        enh_reg = ENH.geometry(spec.landmarks, h, w, strict_teeth=ENH.TEETH.active(spec.enhance))
         ey0, ex0, eeh, eew = enh_reg.window
         # 只把窗口那一片换成 float：整幅 astype 会在 24 MP 上多占 72 MB，而这一层用不着
         e_win = (base_f[ey0:ey0 + eeh, ex0:ex0 + eew] if base_f is not None
                  else src_u8[ey0:ey0 + eeh, ex0:ex0 + eew].astype(np.float32) / divisor)
         enh_weight, _enh_facts = ENH.refine(enh_reg, np.ascontiguousarray(e_win))
+        if ENH.TEETH.active(spec.enhance) and not np.any(enh_weight[2] > 0):
+            raise ValueError("独立牙齿调整导出没有可信内唇支持")
         if any(spec.enhance.get(k, 0) for k in UNDER.KEYS):
             uwindow, ulm = UNDER.bounds(spec.landmarks, h, w)
             uy, ux, uh, uw = uwindow
@@ -1068,6 +1070,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             pipe.load_rgb_u8(src_u8[cy0:cy1, cx0:cx1])
         pipe.primary_calibration=primary_stage(spec)
         pipe.primary_calibration.cancelled=tone_cancelled
+        pipe.teeth_colour_cancelled=tone_cancelled
         # Rasterize once at source dimensions, then take the identical tile halo
         # used by all operators. RGB8/RGB16 share this float recovery stage.
         if people_prepared is not None:

@@ -93,10 +93,10 @@ def post_effects(pipe,pixels):
         weights=_local(pipe,record,record.weights.transpose(1,2,0),3)
         weights=warp(pipe,weights)
         support=torch.zeros_like(occupied)
-        for i,key in enumerate(H.SUBS):
-            if record.amounts[key]>0:support|=weights[:,i:i+1]>0
+        for i,amount in enumerate(H.support_amounts(record.amounts)):
+            if amount>0:support|=weights[:,i:i+1]>0
         take=support&~occupied
-        corrected=H.enhance_t(pixels,weights[0],record.amounts)
+        corrected=H.enhance_t(pixels,weights[0],record.amounts,cancelled=getattr(pipe,"teeth_colour_cancelled",lambda:False))
         out=torch.where(take,corrected,out);occupied|=take
     delta=_merge_delta(pipe,'eye_detail',align=True)
     return torch.where(delta!=0,(out+delta).clamp(0,1),out)

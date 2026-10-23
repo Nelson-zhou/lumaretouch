@@ -609,6 +609,9 @@ export interface FaceState {
 
 /** 眼牙局部增强在引擎里的那一格账（doc_state.enhance 与 enhance_done 同一个组装点）。 */
 export interface EnhanceDoc {
+  /** Actual Rust library/ABI capability, independent from face availability. */
+  teeth_colour_available?: boolean;
+  teeth_colour_reason?: string | null;
   facial_wrinkles?: Record<string, RegionFact>;
   /** 三个子功能当前的滑块值，[0,1]；0 就是这一格没开 */
   amounts: Record<string, number>;
@@ -1434,7 +1437,7 @@ export const runLut = (
  */
 export const runEnhance = (
   action: EnhanceInfo["action"],
-  opts?: { sclera?: number; iris?: number; teeth?: number; dark_circles?: number; eye_bags?: number; veins?: number; catchlight_left?: number; catchlight_right?: number } & Partial<Record<WrinkleKey, number>>,
+  opts?: { sclera?: number; iris?: number; teeth?: number; teeth_brightness?: number; teeth_yellow_removal?: number; dark_circles?: number; eye_bags?: number; veins?: number; catchlight_left?: number; catchlight_right?: number } & Partial<Record<WrinkleKey, number>>,
   peopleContext?: PeopleContext,
 ) =>
   invoke<{ requested: boolean }>("enhance", {
@@ -1449,6 +1452,8 @@ export const runEnhance = (
     sclera: opts?.sclera,
     iris: opts?.iris,
     teeth: opts?.teeth,
+    teethBrightness: opts?.teeth_brightness,
+    teethYellowRemoval: opts?.teeth_yellow_removal,
   });
 
 /** 眼牙层现状：与 faceStateOf 同一类"两个来源汇成一份"（重开工程那一刻 image_ready

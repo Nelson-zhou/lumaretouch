@@ -1847,8 +1847,8 @@ class PreviewPipeline:
             return False
         return bool((self.facial_wrinkle_delta is not None and bool(self.facial_wrinkle_delta.any())) or
                     (self.under_eye_delta is not None and bool(self.under_eye_delta.any())) or
-                    (self.enhance_gpu is not None and any(self.enhance_amounts.get(k, 0) > 0 and
-                     float(self.enhance_gpu[i].max()) > 0 for i, k in enumerate(ENH.SUBS))))
+                    (self.enhance_gpu is not None and any(amount > 0 and
+                     float(self.enhance_gpu[i].max()) > 0 for i, amount in enumerate(ENH.support_amounts(self.enhance_amounts)))))
 
     def build_enhance(self, landmarks, *, amounts=None) -> dict:
         """从 478 点重画这一层：几何栅格 + 内容门，然后上一次卡。
@@ -1870,13 +1870,15 @@ class PreviewPipeline:
             WRUNTIME.build_preview(self, landmarks)
             self.enhance_build_ms = round((time.perf_counter() - t0) * 1000, 2)
             return self._enhance_payload(layer_recomputed=True)
-        reg = ENH.geometry(landmarks, self.h, self.w)
+        reg = ENH.geometry(landmarks, self.h, self.w, strict_teeth=ENH.TEETH.active(requested))
         y0, x0, fh, fw = reg.window
         # 只把窗口那一片搬下来（不是整幅）：内容门要的只是这一块，而整幅 D2H 在
         # 产品档上是 12 MB——那笔钱没有理由付。
         win = (self.src_f32[:, :, y0:y0 + fh, x0:x0 + fw]
                .permute(0, 2, 3, 1).to("cpu", torch.float32).numpy()[0])
         weight, facts = ENH.refine(reg, win)
+        if ENH.TEETH.active(requested) and not np.any(weight[2] > 0):
+            raise ValueError("独立牙齿调整没有可信的内唇可见支持，未发布修改")
         self.enhance_field = weight
         self.enhance_gpu = torch.as_tensor(weight, device=self.device)
         self.enhance_lm_sig = self._lm_fingerprint(landmarks)
@@ -1933,6 +1935,8 @@ class PreviewPipeline:
 
     def enhance_needs_rebuild(self, landmarks, *, amounts=None) -> bool:
         """这张场还能不能复用：没挂过、或关键点变了，就得重画。"""
+        if amounts is not None and ENH.TEETH.active(amounts) != bool((self.enhance_info or {}).get("strict_teeth")):
+            return True
         if amounts is not None and self.enhance_gpu is None and any(amounts.get(k, 0) for k in ENH.AMOUNT_KEYS if k not in WSTATE.INTENT_KEYS):
             return True
         return self.enhance_lm_sig != self._lm_fingerprint(landmarks)
@@ -1998,7 +2002,7 @@ class PreviewPipeline:
             return out
         ly0, lx0, lh, lw = self.enhance_local
         sub = t[:, :, ly0:ly0 + lh, lx0:lx0 + lw]
-        eff = ENH.enhance_t(sub, self.enhance_gpu, self.enhance_amounts)
+        eff = ENH.enhance_t(sub, self.enhance_gpu, self.enhance_amounts, cancelled=getattr(self,"teeth_colour_cancelled",lambda:False))
         # 写回走 clone + 切片赋值：掩膜外的像素因此是**复制**过去的而不是混合出来的，
         # “掩膜外逐字节不变”这条承诺不依赖浮点巧合（与 apply_grade 用 mix_masked 等价，
         # 但这里窗口外那些像素连混合式都不该进——它们离掩膜有几百像素远）
@@ -2048,6 +2052,7 @@ class PreviewPipeline:
         subs = list(ENH.EFFECT_KEYS)
         facts = self.enhance_facts or {}
         return {
+            **ENH.TEETH.capability(),
             "enhance_amounts": {k: float(a[k]) for k in ENH.AMOUNT_KEYS},
             "enhance_subs": subs,
             "enhance_limit": float(ENH.AMOUNT_LIMIT),

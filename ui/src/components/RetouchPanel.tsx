@@ -33,6 +33,7 @@ import {neutral as neutralLips} from "../lipMakeup/model";
 import { FacialWrinkleControl } from "../facialWrinkles/FacialWrinkleControl";
 import type { Region as WrinkleRegion } from "../facialWrinkles/model";
 import { EyeHighlightsControl } from "./EyeHighlightsControl";
+import {teethColourReadiness, TEETH_CONTROL_IDS} from '../teethColour/model';
 import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {FabricPanel} from "../fabric/FabricPanel";
 import {HistogramPanel} from "./HistogramPanel";
@@ -374,6 +375,10 @@ const WIRED: Record<string, string> = {
   "PC-32470|祛红血丝": "enh.veins",
   "PC-32470|亮眼/眼睛高光": "enh.catchlight",
   "PC-32469|牙齿美白": "enh.teeth",
+  // The source specifies two independent child controls, not another alias of
+  // the existing combined whitening amount. [0,1] is our local scalar range.
+  "PC-32469|牙齿美白/明度": "enh.teeth_brightness",
+  "PC-32469|牙齿美白/祛黄": "enh.teeth_yellow_removal",
   // 色彩与光影
   "PC-32455|影调/曝光": "exp.ev",
   "PC-32455|白平衡/色温": "exp.temp",
@@ -428,6 +433,8 @@ const WIRE_LABEL: Record<string, string> = {
   "enh.veins": "祛红血丝",
   "enh.catchlight": "眼睛高光",
   "enh.teeth": "牙齿美白",
+  "enh.teeth_brightness": "牙齿明度",
+  "enh.teeth_yellow_removal": "牙齿祛黄",
   "exp.ev": "曝光",
   "exp.temp": "色温",
   "exp.tint": "色调",
@@ -507,6 +514,8 @@ export default function RetouchPanel(props: RetouchProps) {
   const params = doc?.params ?? {};
   const amounts = doc?.deform.amounts ?? {};
   const enhAmounts = doc?.enhance?.amounts ?? {};
+  const teethCapability = doc?.enhance?.teeth_colour_available === undefined ? status?.enhance : doc?.enhance;
+  const teethReady = teethColourReadiness(teethCapability);
   const ex = doc?.exposure;
   const grade = doc?.grade;
   // P2-3：肤色定向三条滑杆的量程来自引擎报的 grade_limits（不是前端写死 ±100）。
@@ -709,6 +718,26 @@ export default function RetouchPanel(props: RetouchProps) {
         return <EyeHighlightsControl key={leaf.path} amounts={enhAmounts}
           disabled={dim || !props.faceOk} reason={props.faceOk ? undefined : props.faceWhy}
           commit={commitEnhance} Slider={Slider} />;
+      case "enh.teeth_brightness":
+      case "enh.teeth_yellow_removal": {
+        const key = kind === 'enh.teeth_brightness' ? 'teeth_brightness' : 'teeth_yellow_removal';
+        const reason = !props.faceOk ? props.faceWhy : teethReady.reason
+          ?? doc?.enhance?.reason?.[key] ?? status?.enhance?.enhance_reason?.[key] ?? undefined;
+        return <div key={leaf.path} data-control-id={TEETH_CONTROL_IDS[key]}>
+          <Slider label={label} value={Math.round((enhAmounts[key] ?? 0) * 100)} min={0} max={100}
+            disabled={dim || !props.faceOk || !teethReady.available}
+            title={reason ?? (key === 'teeth_brightness' ? '调整已有牙齿的明度，保留纹理与高光' : '只降低已有牙齿的黄色偏色，不漂白其它颜色')}
+            onChange={(v) => commitEnhance({ [key]: v / 100 })}
+            onReset={() => commitEnhance({ [key]: 0 })} />
+          {reason && <p className="muted" role="status">{reason}</p>}
+          {key === 'teeth_brightness' && !teethReady.available
+            && ((enhAmounts.teeth_brightness ?? 0) > 0 || (enhAmounts.teeth_yellow_removal ?? 0) > 0)
+            && <button type="button" className="specBtn"
+              disabled={dim || props.people.state.pending || (doc?.people ? !capturedPeople : !doc)}
+              title="只归零当前编辑范围的明度与祛黄；保留旧版美白及其他参数，无需缺失的调整核心"
+              onClick={() => commitEnhance({teeth_brightness: 0, teeth_yellow_removal: 0})}>重置独立牙齿调整</button>}
+        </div>;
+      }
       case "enh.veins":
       case "enh.dark_circles":
       case "enh.eye_bags":

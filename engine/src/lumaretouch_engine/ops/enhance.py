@@ -55,6 +55,7 @@ import numpy as np
 
 from ..optional_dependencies import optional_module
 from .. import facial_wrinkle_state as WRINKLES
+from .. import teeth_colour_apply as TEETH
 
 torch = optional_module("torch")
 
@@ -62,9 +63,10 @@ from .deform import (IRIS_LEFT, IRIS_RIM_LEFT, IRIS_RIM_RIGHT, IRIS_RIGHT, LIP_I
                      LIP_INNER_TOP, MOUTH_CORNER_LEFT, MOUTH_CORNER_RIGHT)
 from .grade import hsv_to_rgb_np, rgb_to_hsv_np, smoothstep
 
-AMOUNT_KEYS = ("sclera", "iris", "teeth", "dark_circles", "eye_bags", "veins", "catchlight_left", "catchlight_right") + WRINKLES.INTENT_KEYS
+AMOUNT_KEYS = ("sclera", "iris", "teeth", "dark_circles", "eye_bags", "veins", "catchlight_left", "catchlight_right") + TEETH.KEYS + WRINKLES.INTENT_KEYS
 EFFECT_KEYS = tuple(key for key in AMOUNT_KEYS if key != WRINKLES.LINK_KEY)
 SUBS = ("sclera", "iris", "teeth")      # 三个子功能，顺序即权重场第 0 轴的顺序
+PIXEL_KEYS = SUBS + TEETH.KEYS
 AMOUNT_LIMIT = 1.0                      # 滑块值域 [0,1]；这一层没有负档（"反向"无安全含义）
 NUM_LANDMARKS = 478
 
@@ -152,6 +154,8 @@ def check_amounts(amounts) -> dict:
             out[k] = wrinkle_values[k]
             continue
         v = given.get(k, 0.0)
+        if k in TEETH.KEYS and type(v) not in (int, float):
+            raise EnhanceError("独立牙齿调整需要有限数值，不接受布尔或字符串")
         try:
             f = float(v)
         except (TypeError, ValueError):
@@ -165,7 +169,13 @@ def check_amounts(amounts) -> dict:
 def is_identity(amounts) -> bool:
     """校验过才算数：非法值不是"没活"，是"要拒"。"""
     a = check_amounts(amounts)
-    return all(a[k] == 0.0 for k in SUBS)
+    return all(a[k] == 0.0 for k in PIXEL_KEYS)
+
+
+def support_amounts(amounts):
+    """Three support planes, including both independent teeth colour controls."""
+    return (amounts.get('sclera',0), amounts.get('iris',0),
+            max(amounts.get(key,0) for key in ('teeth', *TEETH.KEYS)))
 
 
 def _landmark_pixels(landmarks, h: int, w: int) -> np.ndarray:
@@ -310,9 +320,10 @@ class Regions:
     window: tuple                   # (y0, x0, fh, fw)
     canvas: tuple                   # (h, w)
     info: dict = field(default_factory=dict)
+    teeth_cavity: np.ndarray | None = None
 
 
-def geometry(landmarks, h: int, w: int) -> Regions:
+def geometry(landmarks, h: int, w: int, *, strict_teeth=False) -> Regions:
     """从 478 点画三张几何掩膜（眼白 / 虹膜 / 牙齿）。只碰几何，不碰像素。
 
     不支持的情形（侧脸到唇环不再星形、虹膜小过一档、嘴闭上）在这里就**显式**留下
@@ -413,7 +424,15 @@ def geometry(landmarks, h: int, w: int) -> Regions:
                 minfo["reject"] = (f"开口度 {open_:.3f} < {MOUTH_OPEN_MIN}（13/14 只差 "
                                    f"{gap:.1f} px）：这是闭嘴样本，牙齿那一格不会点火")
 
-    return Regions(weight=weight, window=(iy0, ix0, fh, fw), canvas=(h, w), info=info)
+    cavity = None
+    if strict_teeth:
+        from ..mouth_shape_consumers import cavity_support
+        # Actual inner-lip contour with an inward sampling-footprint margin.
+        # Applied only for the new controls; old project recipes remain unchanged.
+        cavity = cavity_support(lm - [ix0, iy0], (fh, fw))
+        minfo['strict_teeth_geom_px'] = int((weight[2] * cavity > .5).sum())
+    info['strict_teeth'] = bool(strict_teeth)
+    return Regions(weight=weight, window=(iy0, ix0, fh, fw), canvas=(h, w), info=info, teeth_cavity=cavity)
 
 
 # ------------------------------------------------------------------- 内容门与统计
@@ -485,6 +504,11 @@ def refine(reg: Regions, src: np.ndarray) -> tuple[np.ndarray, dict]:
         gated = teeth_geom * gate
     else:
         gated = np.zeros_like(teeth_geom)
+    if reg.teeth_cavity is not None:
+        # Keep the original wider mouth pool for relative photometric statistics,
+        # then intersect the result. Recalibrating the pool to teeth alone would
+        # reject uniformly visible teeth by requiring them brighter than themselves.
+        gated *= reg.teeth_cavity
     kept = int((gated > 0.5).sum())
     why = None
     if kept < TEETH_MIN_PX:
@@ -502,16 +526,18 @@ def refine(reg: Regions, src: np.ndarray) -> tuple[np.ndarray, dict]:
         facts[k]["field_max"] = round(float(out[i].max()), 4)
     if not np.isfinite(out).all():
         raise EnhanceError("内容门产出非有限值，整层拒绝")
+    for key in TEETH.KEYS:
+        facts[key] = {**facts['teeth'], 'support': 'inner-cavity-geometric-photometric' if reg.info.get('strict_teeth') else 'inactive-legacy-support'}
     return out, facts
 
 
-def build_field(landmarks, h: int, w: int, src_nhwc: np.ndarray) -> tuple:
+def build_field(landmarks, h: int, w: int, src_nhwc: np.ndarray, *, strict_teeth=False) -> tuple:
     """一步到位：几何 + 内容门。返回 (window, weight, info, facts)。
 
     src_nhwc 是**整幅画布**的 (H,W,3) float [0,1]（导出通路上已经解码好的那一份）。
     会话侧不用这个入口：它从显存里只切窗口（见 vram.set_enhance），不搬整幅。
     """
-    reg = geometry(landmarks, h, w)
+    reg = geometry(landmarks, h, w, strict_teeth=strict_teeth)
     y0, x0, fh, fw = reg.window
     win = np.asarray(src_nhwc, dtype=np.float64)[y0:y0 + fh, x0:x0 + fw]
     weight, facts = refine(reg, win)
@@ -557,7 +583,7 @@ def _cap_up(y, x, ceil: float):
     return np.minimum(y, np.maximum(x, ceil))
 
 
-def enhance_np(x: np.ndarray, weight: np.ndarray, amounts) -> np.ndarray:
+def enhance_np(x: np.ndarray, weight: np.ndarray, amounts, *, cancelled=lambda: False) -> np.ndarray:
     """解析真值臂：x 是 (fh,fw,3) 或 (…,fh,fw,3)，weight 是 (3,fh,fw)。
 
     混合写成 `x + (out − x)·wc`：wc=0 处它在 IEEE 下精确回到 x（`0·有限=0`），
@@ -570,6 +596,8 @@ def enhance_np(x: np.ndarray, weight: np.ndarray, amounts) -> np.ndarray:
         raise EnhanceError(f"权重形状 {w.shape} 与窗口 {x.shape} 不合（要 (3,fh,fw)）")
     if is_identity(a):
         return x.copy()
+    if not any(a[k] > 0 for k in SUBS):
+        return TEETH.numpy_apply(x, w[2], a, cancelled=cancelled)
     hsv = rgb_to_hsv_np(np.clip(x, 0.0, 1.0))
     s_new, v_new = _sub_effects(None, hsv[..., 1], hsv[..., 2],
                                 np.clip(w[0], 0.0, 1.0), np.clip(w[1], 0.0, 1.0),
@@ -584,10 +612,10 @@ def enhance_np(x: np.ndarray, weight: np.ndarray, amounts) -> np.ndarray:
     out = x + (eff - x) * wc
     if not np.isfinite(out).all():
         raise EnhanceError("眼牙增强产出非有限值，整层拒绝")
-    return out
+    return TEETH.numpy_apply(out, w[2], a, cancelled=cancelled)
 
 
-def enhance_t(t, weight_t, amounts):
+def enhance_t(t, weight_t, amounts, *, cancelled=lambda: False):
     """生产内核：t 是窗口切片 (1,3,fh,fw)，weight_t 是 (3,fh,fw) 同设备 float。
 
     与 enhance_np 同一条算式（`_sub_effects` 的 torch 版在下面），两臂逐点一致由
@@ -602,6 +630,8 @@ def enhance_t(t, weight_t, amounts):
         raise EnhanceError(f"权重 {tuple(weight_t.shape)} 与窗口 {tuple(t.shape)} 不合")
     if is_identity(a):
         return t                        # 结构短路：一个算子也不跑
+    if not any(a[k] > 0 for k in SUBS):
+        return TEETH.tensor_apply(t, weight_t[2], a, cancelled=cancelled)
     from .grade import hsv_to_rgb_t, rgb_to_hsv_t
 
     w0 = weight_t[0].unsqueeze(0).unsqueeze(0).clamp(0.0, 1.0)
@@ -616,7 +646,7 @@ def enhance_t(t, weight_t, amounts):
     out = t + (eff - t) * wc
     if not torch.isfinite(out).all():
         raise EnhanceError("眼牙增强产出非有限值，整层拒绝（拦在写回之前）")
-    return out
+    return TEETH.tensor_apply(out, weight_t[2], a, cancelled=cancelled)
 
 
 def _sub_effects_t(h_, s, v, w0, w1, w2, amounts):
@@ -643,4 +673,4 @@ def report_guard(amounts_np_before, amounts_np_after):
     """
     b = check_amounts(amounts_np_before)
     a = check_amounts(amounts_np_after)
-    return {k: {"before": b[k], "after": a[k], "changed": b[k] != a[k]} for k in SUBS}
+    return {k: {"before": b[k], "after": a[k], "changed": b[k] != a[k]} for k in PIXEL_KEYS}

@@ -69,8 +69,14 @@ def prepare(face_ref, landmarks, recipes, source, *, excluded, skin, backend, se
         layer = UnderEyeLayer(window, source[y:y+rh,x:x+rw], lm)
         delta = layer.solve(amounts)
         records.append(LocalEffect(ref, 'eye_detail', window, delta=delta, facts=layer.facts))
-    if any(amounts[k] for k in H.SUBS):
-        window, weights, _, facts = H.build_field(landmarks, h, w, source)
+    if any(amounts[k] for k in H.PIXEL_KEYS):
+        window, weights, _, facts = H.build_field(landmarks, h, w, source, strict_teeth=H.TEETH.active(amounts))
+        if H.TEETH.active(amounts) and not np.any(weights[2] > 0):
+            raise ValueError('Independent teeth colour refused: no measured visible teeth support')
+        facts = dict(facts)
+        for key in H.TEETH.KEYS:
+            facts[key] = {**facts.get('teeth',{}), 'support': 'inner-cavity-geometric-photometric-not-segmentation',
+                          'requested': amounts[key], 'native_solver': 'rust-teeth-colour-v1'}
         records.append(LocalEffect(ref, 'enhance', window, weights=weights, amounts=amounts, facts=facts))
     for record in records:
         for array in (record.delta, record.weights):

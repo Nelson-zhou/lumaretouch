@@ -40,6 +40,7 @@ from . import id_background_scope as ID_BACKGROUND
 from . import optics_scope as OPTICS, optics_auto_scope as OPTICS_AUTO
 from . import reference_color_scope as REFERENCE
 from . import facial_wrinkle_scope as WRINKLES
+from . import enhance_scope as ENHANCE
 from . import lip_makeup_scope as LIP, eye_light_scope as EYE_LIGHT, blush_makeup_scope as BLUSH, lipstick_scope as LIPSTICK, eyeliner_scope as EYELINER, eyelash_scope as EYELASH, brow_makeup_scope as BROW_MAKEUP, iris_makeup_scope as IRIS
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
@@ -165,6 +166,10 @@ MODULES: dict[str, dict] = {
     LIP.OP: {"params": ("recipe",), "state_fields": LIP.FIELDS, "single_face": True,
              "transferable": True, "cmd": "lip_makeup", "read": LIP.params_of, "write": LIP.install,
              "why_not": "仅三项唇妆参数；目标须有自己的真实人脸与嘴唇可见性，恢复笔迹不复制"},
+    ENHANCE.OP: {"params": ("recipe",), "state_fields": ENHANCE.FIELDS, "single_face": True,
+               "transferable": True, "cmd": "enhance", "label": "眼牙增强（仅参数）",
+               "read": ENHANCE.params_of, "write": ENHANCE.install,
+               "why_not": "只同步独立强度；目标重新建立自己的眼牙支持，人物、蒙版、缓存及恢复笔迹不复制"},
     WRINKLES.OP: {"params": ("recipe",), "state_fields": WRINKLES.FIELDS, "single_face": True,
                 "transferable": True, "cmd": "enhance", "read": WRINKLES.params_of, "write": WRINKLES.install,
                 "why_not": "仅区域强度与左右联动状态；目标须有自己的真实单脸与皮肤分析，恢复笔迹不复制"},
@@ -418,6 +423,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == WRINKLES.OP:
         try: return WRINKLES.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == ENHANCE.OP:
+        try: return ENHANCE.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == OPTICS.OP:
         try: return OPTICS.check_params(params)

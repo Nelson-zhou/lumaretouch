@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Strict sparse transport for the eight-region family. This is not a renderer.
+//! Strict sparse enhancement transport. This is not a renderer.
 use serde_json::Value;
 
 pub const KEYS: [&str; 10] = [
@@ -30,9 +30,17 @@ pub fn append(command: &mut Value, patch: Option<Value>) -> Result<(), String> {
 /// Build the complete enhance protocol envelope. Existing eye/teeth options
 /// remain sparse and independent from the wrinkle-family metadata envelope.
 pub fn enhance_command(action: &str, legacy: [Option<f64>; 8], wrinkles: Option<Value>) -> Result<Value, String> {
+    enhance_command_with_teeth(action, legacy, [None, None], wrinkles)
+}
+
+/// Independent PC-32469 brightness/yellow-removal leaves. Missing values must
+/// stay missing: the old combined `teeth` amount is never copied or reset here.
+/// The finite [0,1] range is a Linux implementation choice, not a source default.
+pub fn enhance_command_with_teeth(action: &str, legacy: [Option<f64>; 8], teeth_colour: [Option<f64>; 2], wrinkles: Option<Value>) -> Result<Value, String> {
     let mut command = serde_json::json!({"cmd":"enhance","action":action});
-    let keys = ["sclera", "iris", "teeth", "dark_circles", "eye_bags", "veins", "catchlight_left", "catchlight_right"];
-    for (key, value) in keys.into_iter().zip(legacy) {
+    let legacy_keys = ["sclera", "iris", "teeth", "dark_circles", "eye_bags", "veins", "catchlight_left", "catchlight_right"];
+    let teeth_keys = ["teeth_brightness", "teeth_yellow_removal"];
+    for (key, value) in legacy_keys.into_iter().zip(legacy).chain(teeth_keys.into_iter().zip(teeth_colour)) {
         if let Some(amount) = value {
             if !amount.is_finite() || !(0.0..=1.0).contains(&amount) {
                 return Err(format!("人物增强参数超出范围：{key}"));
@@ -43,3 +51,7 @@ pub fn enhance_command(action: &str, legacy: [Option<f64>; 8], wrinkles: Option<
     append(&mut command, wrinkles)?;
     Ok(command)
 }
+
+#[cfg(test)]
+#[path = "teeth_colour_api_unrun.rs"]
+mod teeth_colour_tests;

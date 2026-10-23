@@ -1,0 +1,177 @@
+{
+  "baseline": "febb5dee058fb98dae8ae42556ab0db3656fe06d",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Independent teeth brightness and selective yellow reduction with original Rust solver, strict inner-cavity source support, canonical people/legacy/native UI/full-source export/preset and reviewed parameter batch paths. Legacy whitening preserved.",
+  "requirement_ids": [
+    "LNX-REF-PC-32469-C-6eb0bef21b",
+    "LNX-REF-PC-32469-C-5462a41c9a"
+  ],
+  "files": [
+    {
+      "path": "core/teeth_colour/Cargo.toml",
+      "sha256": "677ae9c29e4f789ae0ca6c2c1ac062dc05185c51cde39c777dd3a23420fb5737",
+      "bytes": 221
+    },
+    {
+      "path": "core/teeth_colour/README.md",
+      "sha256": "c114f3309fc6e8165b26e6015b0bc44a149d688f76b1122e5a5d90cdb3c54f85",
+      "bytes": 8965
+    },
+    {
+      "path": "core/teeth_colour/lib.rs",
+      "sha256": "8d9fc6161fca04277b89545e13afc8983848a87e02200a50ec7b633b06111dab",
+      "bytes": 15812
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "bd3befb747b3c1b26fa21880a38e66eeab0136b9ec2e671f72633c9b0606853b",
+      "bytes": 20839
+    },
+    {
+      "path": "docs/teeth-colour/IMPLEMENTATION.md",
+      "sha256": "b25612c8c986b026fac969e5be4e8ba20325ca16604fbb1ca4baa561d569b6a7",
+      "bytes": 7045
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_shape_consumers.py",
+      "sha256": "c947fbc72d279441c2a107cc968d805c93064eb5abf3fa5cac80db80864e2ce8",
+      "bytes": 1056
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/enhance_scope.py",
+      "sha256": "528a9fe6887866847a05068166a99044fc056d71a44dec412f133a89006c8400",
+      "bytes": 4126
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "71438de1d32d6601b588edf615d55f13d2b3fe1ebad500aa1c741aeada875bff",
+      "bytes": 132371
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "dc26b458e717d61dc5cf41cffb96e59b7ce67620f3fdaa1bf4f9b82b87bb435f",
+      "bytes": 20877
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/ops/enhance.py",
+      "sha256": "916236f32682f9e892d0ace3de6e799264fe0a12f23ef5bec788f251dffe24ef",
+      "bytes": 38406
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "sha256": "a18520d384cdbd6e6ca54193c4a6767ed4971d93570dba6c5b40d8eb34305ddc",
+      "bytes": 7592
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "sha256": "b11c415d6ce30daebdca79bd22663769e9d18f55a47e3971e9680d8ae8a05e24",
+      "bytes": 5055
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "314c5ee5d0dccf3dd195b0ff360d255a166719b037d61c62180a5a631c314037",
+      "bytes": 5054
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "3ce097b36dbbae9522ee171b4300bbc0e07b047b0ace072c210110def50afa3a",
+      "bytes": 45896
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "a9265faeba74c5e3c05899ebc8e82737030491135ac165578553bef6f6c86c1d",
+      "bytes": 464250
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/teeth_colour_apply.py",
+      "sha256": "10440f4e8e8ec1a5dc24f2566ad2f5bf2d7aae612345c366a61a10c2bbc029f4",
+      "bytes": 4099
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/teeth_colour_native.py",
+      "sha256": "e8e0103a79e7be24646463c5f50d8581c0b7831f29374e78657ce3e8c3ff9a67",
+      "bytes": 7569
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "3fe95d03375ed971b90c7d620c14d24bf84bd25e74d2ed20a992751fa5c277ba",
+      "bytes": 135482
+    },
+    {
+      "path": "engine/tests/test_teeth_colour_integration_unrun.py",
+      "sha256": "f09e42c1203830be74d868b556e4498ae13050da84e3b20ede92ad2a5399688f",
+      "bytes": 4040
+    },
+    {
+      "path": "engine/tests/test_teeth_colour_native_unrun.py",
+      "sha256": "4e8ed2d7ed61e340ed9f073a711b932d2ad20d816717f95015db481bd47ca444",
+      "bytes": 12139
+    },
+    {
+      "path": "engine/tests/test_teeth_colour_scope_unrun.py",
+      "sha256": "de8e6078b5773db053a922b9813916df48008f5055b5e05bbd60d016e8efe76c",
+      "bytes": 10656
+    },
+    {
+      "path": "packaging/build-teeth-colour.sh",
+      "sha256": "b861cdf402325eb64b740b211544dd1431b9e0d3afa8b1ca2e0c7f197ce0ed4c",
+      "bytes": 638
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "77068e838d52d1bed35324e6d87c6a8673dfb7708f88bb7e64649ddf389d3c3a",
+      "bytes": 20526
+    },
+    {
+      "path": "ui/src-tauri/src/facial_wrinkle_api.rs",
+      "sha256": "7718acdcc9c2fb4739f829d70d8ad94a559e46dc8590ab3383977656a6e312bc",
+      "bytes": 2941
+    },
+    {
+      "path": "ui/src-tauri/src/portrait_api.rs",
+      "sha256": "41ad1790e5111b88f29f19111976cad1cf51875fdddcaf70a5ce7e5e757fba81",
+      "bytes": 1998
+    },
+    {
+      "path": "ui/src-tauri/src/teeth_colour_api_unrun.rs",
+      "sha256": "292e363fb04abfe78eaa83f90dc83081eab8a5d3558812c77da632995afc068c",
+      "bytes": 1956
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "0dc6abb77e273ad24dc66305b8ee99083c96819c1d33905304438e6cd593aa63",
+      "bytes": 61619
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "4e559aa9892929bf210ce935762def87a7dea4d7e0ba721090ac576a4125b1d6",
+      "bytes": 100181
+    },
+    {
+      "path": "ui/src/teethColour/model.ts",
+      "sha256": "50922f82392e22fd1ddf15e7aa8ccb5df40db5161f82542eab1ece07307c8e0e",
+      "bytes": 631
+    },
+    {
+      "path": "ui/src/teethColour/transport.unrun.test.ts",
+      "sha256": "2d3663ab61da232e853b878c4dd7d621eaeeb30298dff1c3365269360d474fa8",
+      "bytes": 3108
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1020,
+    "json_files": 1,
+    "toml_files": 1,
+    "git_diff_check": "clean",
+    "App_lines": 2122,
+    "main_lines": 2042,
+    "server_lines": 6974
+  },
+  "acceptance": "All imports, tests, builds, typechecks, numerical, memory, latency, natural-photo and package execution UNRUN",
+  "remaining": [
+    "Heuristic geometric/photometric support, not dental segmentation or explicit support review",
+    "Generic legacy preset onto derived source refused; direct canonical controls and reviewed face-parameter batch use effective analysis",
+    "No tooth reconstruction, braces removal, alignment, edge completion or dedicated recovery",
+    "No transparent/HDR tooth-colour support or runtime/photo acceptance"
+  ]
+}
