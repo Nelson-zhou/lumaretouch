@@ -5,13 +5,13 @@ adapters remain the sole mutation, review, publication and receipt owners.
 """
 from . import body_pose_evidence as E
 
-COMMANDS=frozenset(('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape'))
-_TRANSPORTS=dict(zip(('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape'),
-                    ('_body_transport','_leg_transport','_arm_transport','_waist_transport','_leg_length_transport','_neck_transport')))
-_OWNERS=dict(zip(('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape'),
-                ('_body_edit_owner','_leg_edit_owner','_arm_edit_owner','_waist_edit_owner','_leg_length_edit_owner','_neck_edit_owner')))
+COMMANDS=frozenset(('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape','torso_length'))
+_TRANSPORTS=dict(zip(('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape','torso_length'),
+                    ('_body_transport','_leg_transport','_arm_transport','_waist_transport','_leg_length_transport','_neck_transport','_torso_length_transport')))
+_OWNERS=dict(zip(('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape','torso_length'),
+                ('_body_edit_owner','_leg_edit_owner','_arm_edit_owner','_waist_edit_owner','_leg_length_edit_owner','_neck_edit_owner','_torso_length_edit_owner')))
 _LEDGERS={'leg_shape':'_leg_receipts','waist_shape':'_waist_receipts',
-          'leg_length':'_leg_length_receipts','neck_shape':'_neck_receipts'}
+          'leg_length':'_leg_length_receipts','neck_shape':'_neck_receipts','torso_length':'_torso_length_receipts'}
 
 
 def validate(bank, source):

@@ -47,6 +47,7 @@ mod shoulder_shape_api;
 mod leg_shape_api;
 mod waist_shape_api;
 mod leg_length_api;
+mod torso_length_api;
 mod neck_shape_api;
 mod arm_shape_api;
 mod body_pose_model_api;
@@ -1993,7 +1994,7 @@ fn main() {
             extended_tone_api::extended_tone_request, extended_tone_api::extended_tone_status, extended_tone_api::extended_tone_cancel,
             custom_lut_api::custom_lut_choose, custom_lut_api::custom_lut_request, custom_lut_api::custom_lut_status, custom_lut_api::custom_lut_cancel,
             inpaint, light, portrait_api::deform, lut, grade, portrait_api::enhance, background, export, session, filmstrip, history,
-            people_api::people, shoulder_shape_api::shoulder_shape, leg_shape_api::leg_shape, waist_shape_api::waist_shape, leg_length_api::leg_length, neck_shape_api::neck_shape, arm_shape_api::arm_shape, body_pose_model_api::body_pose_model, body_pose_model_api::body_pose_model_status, semantic_colour_api::semantic_colour, hair_colour_api::hair_colour,
+            people_api::people, shoulder_shape_api::shoulder_shape, leg_shape_api::leg_shape, waist_shape_api::waist_shape, leg_length_api::leg_length, torso_length_api::torso_length, neck_shape_api::neck_shape, arm_shape_api::arm_shape, body_pose_model_api::body_pose_model, body_pose_model_api::body_pose_model_status, semantic_colour_api::semantic_colour, hair_colour_api::hair_colour,
             sample_library_api::sample_library, sample_library_api::sample_library_choose,
             color_capture_api::capture_arm, color_capture_api::capture_status, color_capture_api::capture_frame,
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,

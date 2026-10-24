@@ -4,7 +4,7 @@
 Keep presentation/publication and replay identity in one place. Unknown request
 operations are never reinterpreted as shoulder edits.
 """
-FAMILIES=('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape')
+FAMILIES=('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape','torso_length')
 
 
 def request_family(request):
@@ -14,14 +14,14 @@ def request_family(request):
         return 'arm_shape'
     operation=request.get('operation_id')
     if operation is None:return 'shoulder_shape'  # observation/association owner
-    for name in ('shoulder_shape','leg_shape','waist_shape','leg_length','neck_shape'):
+    for name in ('shoulder_shape','leg_shape','waist_shape','leg_length','neck_shape','torso_length'):
         if operation=='lnx.'+name+'.v1':return name
     raise ValueError('Unknown body request operation')
 
 
 def presenter(name):
-    from . import shoulder_shape_host,leg_shape_host,arm_shape_host,waist_shape_host,leg_length_host,neck_shape_host
-    return dict(zip(FAMILIES,(shoulder_shape_host,leg_shape_host,arm_shape_host,waist_shape_host,leg_length_host,neck_shape_host)))[name]
+    from . import shoulder_shape_host,leg_shape_host,arm_shape_host,waist_shape_host,leg_length_host,neck_shape_host,torso_length_host
+    return dict(zip(FAMILIES,(shoulder_shape_host,leg_shape_host,arm_shape_host,waist_shape_host,leg_length_host,neck_shape_host,torso_length_host)))[name]
 
 
 def report(engine):

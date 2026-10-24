@@ -49,6 +49,10 @@ impl AppState {
             let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
             return crate::arm_shape_api::enqueue(guard.as_ref().ok_or("引擎未启动")?, cmd);
         }
+        if crate::torso_length_api::read_only(&cmd) {
+            let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
+            return crate::torso_length_api::enqueue(guard.as_ref().ok_or("引擎未启动")?, cmd);
+        }
         if name!="hello" && name!="inspection_snapshot" {self.source_patch_capture.lock().map_err(|_|"source patch capture lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {self.recovery_preview.lock().map_err(|_|"recovery preview lock poisoned")?.invalidate();}
         if name!="hello" && name!="inspection_snapshot" {self.white_balance_capture.lock().map_err(|_|"WB capture lock poisoned")?.invalidate();}
@@ -71,6 +75,7 @@ impl AppState {
             self.sky_semantic.lock().map_err(|_|"semantic lock poisoned")?.invalidate();
         }
         let edited = self.history_edit_cmds.lock().unwrap().iter().any(|c| c == &name)
+            && (name != "torso_length" || cmd["action"] == "edit")
             && (name != "arm_shape" || cmd["action"] == "execute")
             && (name != "hair_colour" || matches!(cmd["action"].as_str(), Some("commit_support" | "commit_recovery" | "clear_recovery" | "clear_support")));
         let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
@@ -85,6 +90,7 @@ impl AppState {
             "leg_shape" => crate::leg_shape_api::enqueue(handle, cmd)?,
             "waist_shape" => crate::waist_shape_api::enqueue(handle, cmd)?,
             "leg_length" => crate::leg_length_api::enqueue(handle, cmd)?,
+            "torso_length" => crate::torso_length_api::enqueue(handle, cmd)?,
             "neck_shape" => crate::neck_shape_api::enqueue(handle, cmd)?,
             "arm_shape" => crate::arm_shape_api::enqueue(handle, cmd)?,
             "people" => crate::people_api::enqueue(handle, cmd)?,

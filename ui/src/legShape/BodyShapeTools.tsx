@@ -4,6 +4,8 @@ import type {NeckOwner} from '../neckShape/useNeckWorkflow';
 import {useState} from 'react';
 import {LegLengthWorkspace} from '../legLength/LegLengthWorkspace';
 import type {LegLengthOwner} from '../legLength/useLegLengthWorkflow';
+import {TorsoLengthWorkspace} from '../torsoLength/TorsoLengthWorkspace';
+import type {TorsoLengthOwner} from '../torsoLength/useTorsoLengthWorkflow';
 import {WaistWorkspace} from '../waistShape/WaistWorkspace';
 import type {WaistOwner} from '../waistShape/useWaistWorkflow';
 import {ShoulderShapeTools} from '../shoulderShape/ShoulderShapeTools';
@@ -13,8 +15,8 @@ import type {LegOwner} from './useLegWorkflow';
 import {ArmShapePanel} from '../armShape/ArmShapePanel';
 import type {ArmOwner} from '../armShape/useArmWorkflow';
 /** Independent operation receipts and reviews share only the real body bank. */
-export function BodyShapeTools({shoulders,legs,arms,waist,length,neck,blocked}:{shoulders:ShoulderOwner;legs:LegOwner;arms:ArmOwner;waist:WaistOwner;length:LegLengthOwner;neck:NeckOwner;blocked:boolean}){
- const [workspace,setWorkspace]=useState<'shoulder'|'leg'|'arm'|'waist'|'length'|'neck'|null>(null),[error,setError]=useState('');
+export function BodyShapeTools({shoulders,legs,arms,waist,length,neck,torso,blocked}:{shoulders:ShoulderOwner;legs:LegOwner;arms:ArmOwner;waist:WaistOwner;length:LegLengthOwner;neck:NeckOwner;torso:TorsoLengthOwner;blocked:boolean}){
+ const [workspace,setWorkspace]=useState<'shoulder'|'leg'|'arm'|'waist'|'length'|'neck'|'torso'|null>(null),[error,setError]=useState('');
  const act=async(work:()=>Promise<unknown>)=>{setError('');try{await work();}catch(e){setError(e instanceof Error?e.message:'操作未完成');}};
  const openShoulders=()=>{setWorkspace('shoulder');void act(()=>shoulders.run('view'));};
  const openLegs=()=>{setWorkspace('leg');void act(()=>legs.run('view'));};
@@ -22,13 +24,15 @@ export function BodyShapeTools({shoulders,legs,arms,waist,length,neck,blocked}:{
  const openWaist=()=>{setWorkspace('waist');void act(()=>waist.run('view'));};
  const openLength=()=>{setWorkspace('length');void act(()=>length.run('view'));};
  const openNeck=()=>{setWorkspace('neck');void act(()=>neck.run('view'));};
- const neckBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||arms.busy||waist.busy||length.busy||!neck.enabled;
- const lengthBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||arms.busy||waist.busy||neck.busy||!length.enabled;
- const waistBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||arms.busy||length.busy||neck.busy||!waist.enabled;
- const legBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||arms.busy||waist.busy||length.busy||neck.busy||!legs.enabled;
- const armBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||waist.busy||length.busy||neck.busy||!arms.enabled;
+ const openTorso=()=>{setWorkspace('torso');if(!torso.busy)void act(()=>torso.run('view'));};
+ const torsoBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||arms.busy||waist.busy||length.busy||neck.busy||!torso.enabled;
+ const neckBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||arms.busy||waist.busy||length.busy||torso.busy||!neck.enabled;
+ const lengthBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||arms.busy||waist.busy||neck.busy||torso.busy||!length.enabled;
+ const waistBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||arms.busy||length.busy||neck.busy||torso.busy||!waist.enabled;
+ const legBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||arms.busy||waist.busy||length.busy||neck.busy||torso.busy||!legs.enabled;
+ const armBlocked=blocked||shoulders.busy||shoulders.acquisition.busy||legs.busy||waist.busy||length.busy||neck.busy||torso.busy||!arms.enabled;
  return <>
-  <ShoulderShapeTools owner={shoulders} blocked={blocked||legs.busy||arms.busy||waist.busy||length.busy||neck.busy} workspaceOpen={workspace==='shoulder'} onWorkspaceOpen={open=>setWorkspace(open?'shoulder':null)}/>
+  <ShoulderShapeTools owner={shoulders} blocked={blocked||legs.busy||arms.busy||waist.busy||length.busy||neck.busy||torso.busy} workspaceOpen={workspace==='shoulder'} onWorkspaceOpen={open=>setWorkspace(open?'shoulder':null)}/>
   <section aria-label="AI瘦手臂与瘦手臂" data-feature-id="PC-32473" data-control-id="PC-32473-C-5d25f1744f" data-requirement-id="LNX-REF-PC-32473-C-5d25f1744f" data-tool-anchor="AI瘦手臂&瘦手臂" data-arm-workflow>
    <p>AI瘦手臂 / 瘦手臂：上臂、前臂与左右独立选择。AI 只提供待复核分割候选，不借用肩部或腿部复核权限。</p>
    <button type="button" disabled={armBlocked} onClick={openArms}>打开手臂调整与源图复核</button>
@@ -62,6 +66,15 @@ export function BodyShapeTools({shoulders,legs,arms,waist,length,neck,blocked}:{
    {(length.uncertain||length.state.phase==='uncertain')&&<button type="button" onClick={()=>void act(length.check)}>查询原腿长请求</button>}
    {length.message&&<p role="status">{length.message}</p>}
   </section>
+  <section data-torso-length-workflow aria-label="上身长度" data-feature-id="PC-32473" data-control-id="PC-32473-C-f1662d2dec" data-requirement-id="LNX-REF-PC-32473-C-f1662d2dec" data-tool-anchor="上身长度">
+   <p>上身长度：手动辅助 2D 局部实现。髋固定，上身沿肩髋方向缩短或拉长；完整头部与手臂需独立复核。不是腰部长度、3D 或全身 AI 塑形。</p>
+   <button type="button" disabled={torsoBlocked||torso.busy} onClick={openTorso}>打开上身长度与当前来源图复核</button>
+   {!torso.supported&&<p role="status">当前引擎未提供上身长度通信协议，请使用配套版本。</p>}
+   {torso.supported&&!torso.coreAvailable&&<p role="status">{torso.unavailableReason}</p>}
+   {torso.busy&&<p role="status">{torso.uncertain||torso.state.phase==='uncertain'?'上身长度结果待核对，不会重发。':'正在处理上身长度请求。'}</p>}
+   {(torso.uncertain||torso.state.phase==='uncertain')&&<button type="button" onClick={()=>void act(torso.check)}>查询原上身长度请求</button>}
+   {torso.message&&<p role="status">{torso.message}</p>}
+  </section>
   <section data-neck-workflow aria-label="脖子长度与宽度" data-feature-id="PC-32473" data-tool-anchor="脖子长度">
    <span data-tool-anchor="瘦脖子"/><p>脖子长度与宽度：完整头部头发连贯移动，左右宽度可独立解锁。不是天鹅颈。</p>
    <button type="button" disabled={neckBlocked||neck.busy} onClick={openNeck}>打开颈部长宽与当前来源图复核</button>
@@ -69,6 +82,7 @@ export function BodyShapeTools({shoulders,legs,arms,waist,length,neck,blocked}:{
    {neck.busy&&<p role="status">颈部请求处理中或待核对，不会重发。</p>}
    {(neck.uncertain||neck.state.phase==='uncertain')&&<button type="button" onClick={()=>void act(neck.check)}>查询原颈部请求</button>}{neck.message&&<p role="status">{neck.message}</p>}
   </section>
+  {workspace==='torso'&&<TorsoLengthWorkspace owner={torso} blocked={torsoBlocked} onClose={()=>setWorkspace(null)} onOpenBodyAnalysis={openShoulders}/>}
   {workspace==='neck'&&<NeckWorkspace owner={neck} blocked={neckBlocked} onClose={()=>setWorkspace(null)} onOpenBodyAnalysis={openShoulders}/>}
   {workspace==='length' &&<LegLengthWorkspace owner={length} blocked={lengthBlocked} onClose={()=>setWorkspace(null)} onOpenBodyAnalysis={openShoulders}/>}
   {workspace==='waist'&&<WaistWorkspace owner={waist} blocked={waistBlocked} onClose={()=>setWorkspace(null)} onOpenBodyAnalysis={openShoulders}/>}

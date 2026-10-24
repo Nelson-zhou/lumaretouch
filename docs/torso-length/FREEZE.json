@@ -1,0 +1,386 @@
+{
+  "baseline": "ad5fae4b5f67fd9ea0abb4690e7125b8b7558049",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN_PARTIAL_REQUIREMENT",
+  "scope": "Distinct reviewed upper-body length with original Rust compact-support invertible longitudinal field, actual source-owned shoulders/hips, complete head/arms/background review, current associated-face evidence, canonical body history/one common sampler/original-derived full-source export. Not a width/neck/waist/leg alias.",
+  "requirement_ids": [
+    "LNX-REF-PC-32473-C-f1662d2dec"
+  ],
+  "requirement_status": "partial; end-user preset/batch transfer and photographic/numerical/runtime acceptance remain unfinished",
+  "files": [
+    {
+      "path": "core/torso_length/ABI.md",
+      "sha256": "b6bec7d6711c582c0409f8b5b0f7f9f03bfdc0789f04c303781064a08d644de1",
+      "bytes": 3997
+    },
+    {
+      "path": "core/torso_length/Cargo.toml",
+      "sha256": "0182d9385c330653549ebfe4062298c4ca20d1346928711a7909cf42181caf45",
+      "bytes": 171
+    },
+    {
+      "path": "core/torso_length/build.sh",
+      "sha256": "e6f1db76ba9fb7126238cbbede4115144a63db00a6c09043e1233f1a35505a46",
+      "bytes": 457
+    },
+    {
+      "path": "core/torso_length/lib.rs",
+      "sha256": "00faec8fd534c43fc0c874fb662a8366beda8793c76eed3a58da0b94582b32bb",
+      "bytes": 14036
+    },
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "f752a26c4045950aac3aae94211530de8ce4d17d8081ab61be0f52976466c226",
+      "bytes": 15460
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "a281a7ccc15cdd382d8e2b2ddeebd80f3b600be885dc482a9ae954ae07369d67",
+      "bytes": 44663
+    },
+    {
+      "path": "docs/torso-length/IMPLEMENTATION.md",
+      "sha256": "d2d845d20195d8e81620e02646e4c77e4d27a578fdc7d0f8b8dc0ded622596f5",
+      "bytes": 6517
+    },
+    {
+      "path": "docs/torso-length/INTEGRATION-UNRUN.md",
+      "sha256": "0c742a3cb6ffb953097053b1a08d1eac4af60120309633d43b3583c51acf25d8",
+      "bytes": 10954
+    },
+    {
+      "path": "docs/torso-length/NUMERICAL-CONTRACT.md",
+      "sha256": "de8fc26ced834bf16d5f323a72991994a5146de8394f04afad3ae904744a532a",
+      "bytes": 9272
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/arm_shape_registered_host.py",
+      "sha256": "06f5dba68a58c5b7a1f7fa90e251171fb4f717e4aa9193d4073a57988506dc8b",
+      "bytes": 3508
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_commands.py",
+      "sha256": "4d9706aec077e1c0f58d8bf35ad163b46b323768540038201f129876745bfa57",
+      "bytes": 11858
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_families.py",
+      "sha256": "f4f7435acdc313303bbcf802e5f6940801bb653928bd263d7d4864fe42b3b22f",
+      "bytes": 1546
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_geometry.py",
+      "sha256": "27f74b081fc287b22c2a01d4e9d7e84c571665c94dfffd34662957a0892e978a",
+      "bytes": 8363
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_host.py",
+      "sha256": "b0063339a7d29a75542b74474fb9c8f204d41dc9461bc819be026652b0c5e7fe",
+      "bytes": 17287
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_operations.py",
+      "sha256": "20fa89fb311dd64300d1da240fa3d769af674b130efe6979fc3ff4053a778311",
+      "bytes": 9918
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_render.py",
+      "sha256": "cd0878e40be7cd2556bc90e7368edc1b8aa6aef7dad514a3a7a847f30c51564b",
+      "bytes": 11432
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_body.py",
+      "sha256": "4a67963d5fdcf371a17679e2cae6f0fd6625be6229c25f28e03a3dfa5a758492",
+      "bytes": 8421
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "6556b8fcbb79deb268ef3d7f18bcd3b0ff915662b914cdf0ea47fc475a5ab2a5",
+      "bytes": 25458
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_controller.py",
+      "sha256": "64fe4c6de524b7489a71bb63d23ae4b65eea7131a86e9a7cf918409114a808af",
+      "bytes": 10669
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "6a881b60a0e6384912df0e3c6dfdab7aa22e2141af9a9ef7126a57e0ef5de02c",
+      "bytes": 7684
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "cca583b89514a1bf8420c03cb90b4f0418fb3ff4ea9c9669fe039eb123e6179f",
+      "bytes": 7067
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "8e9036462136f50d2e365d30c362db3b77c2f472ef316249978805031cb0d648",
+      "bytes": 466657
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/torso_length_adapter.py",
+      "sha256": "2a136cd80cd044037afaf65406206e0e9a174aa121bc64e37eadfca0e37331d0",
+      "bytes": 2808
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/torso_length_field.py",
+      "sha256": "82da78e48b654bbbc087271b1a6897471264496bee1ba9907735f2658be39cae",
+      "bytes": 8263
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/torso_length_host.py",
+      "sha256": "6ac9daf36d56db843fa636902fddff08659a7b25ab46483803d53a700bb5516e",
+      "bytes": 13739
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/torso_length_native.py",
+      "sha256": "a3cc904ef07dca3016f36925dc3c33d1ad172fd05ad29ff627dff477b6f14364",
+      "bytes": 7013
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/torso_length_project.py",
+      "sha256": "f0b7d7ab79a164190d8f7f451e729feb0f4a0f0e8372ee757ea6bcbeb8a88c7c",
+      "bytes": 8225
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/torso_length_runtime.py",
+      "sha256": "1e724bbd22eb935834356c3ab114c33de8860bd9223128765a0f21e126e8a2e7",
+      "bytes": 9360
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/torso_length_state.py",
+      "sha256": "c55bc5d5329403f749de34f01ba7bb6c919cdf95573abf5259a0905560c6afba",
+      "bytes": 7773
+    },
+    {
+      "path": "engine/tests/test_torso_length_integration_unrun.py",
+      "sha256": "d7e1a9df4982e6ec0e9119a18337194cb0bf0e45d6e93b349b60692673804405",
+      "bytes": 32454
+    },
+    {
+      "path": "engine/tests/test_torso_length_native_unrun.py",
+      "sha256": "2edab79022e50304df927004d41d72e8ee6f842573328c9a708da42a71e51915",
+      "bytes": 12048
+    },
+    {
+      "path": "engine/tests/test_torso_length_support_unrun.py",
+      "sha256": "496cad30483319e2e917bc2f0d5f04c68ec2168e46b17682569b3de98ac4e30a",
+      "bytes": 27275
+    },
+    {
+      "path": "packaging/build-torso-length.sh",
+      "sha256": "9ac60bb08ce7bb48ae91cb4acf909268c01810550f069c3546aded1a4b14030f",
+      "bytes": 427
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "sha256": "6761a71d1fc829e680526c703b68c4cf2f24f0c8886b80f9a5cdf631b665af3c",
+      "bytes": 3558
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "145aaffbba8e50d05976c473050eff046cf07704cfd7a778d68b8886d0a955d3",
+      "bytes": 38309
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "6c8d9fd08eddeed9cb9aa4dd9eaed2638b6dce6921876ab91858db1959bc9bee",
+      "bytes": 101422
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "c1221523704fa11e959113c81350d87b6f4c68f43dd2630bd015b44cc618769e",
+      "bytes": 9480
+    },
+    {
+      "path": "ui/src-tauri/src/torso_length_api.rs",
+      "sha256": "0e8efa07694d933336286b34a020595ca91b0f2d8c2583766c4403a04b1c0148",
+      "bytes": 29744
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "aeb5576fe70692e2e4dcb9273b59ea73acfdf0662042f63c1885aa2d97f43b50",
+      "bytes": 150524
+    },
+    {
+      "path": "ui/src/legShape/BodyShapeTools.tsx",
+      "sha256": "b4778026725d5350ad2295efbd9a274cff3de56122e76d3d467c8547f66ce8de",
+      "bytes": 12416
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "ad31fd10b3a2f5a64fd6aaada5583f6acee10ed1c50f027fee9627a2c866dce2",
+      "bytes": 102786
+    },
+    {
+      "path": "ui/src/toolRouting/coverage.ts",
+      "sha256": "541015b6210a3f213073b971477a8ff342064a5c5b979e605e614a3bbaee0b3b",
+      "bytes": 4833
+    },
+    {
+      "path": "ui/src/torsoLength/TorsoLengthPanel.tsx",
+      "sha256": "3db82e295b3c8ff40b90edd6ed21665064484e9e1ad589ba653ba2e5f8c80e79",
+      "bytes": 5643
+    },
+    {
+      "path": "ui/src/torsoLength/TorsoLengthSupportEditor.tsx",
+      "sha256": "5dbcefbfa9e3b3a8185519aecc81266ce2c2abb245d7ff266e5a602084bda9ba",
+      "bytes": 7915
+    },
+    {
+      "path": "ui/src/torsoLength/TorsoLengthWorkspace.tsx",
+      "sha256": "aff31f45bdd98904fc411b5b3e2f20545e19f1ecef6b344d0d833e99991ae39f",
+      "bytes": 2167
+    },
+    {
+      "path": "ui/src/torsoLength/availability.ts",
+      "sha256": "f533c216916d49a08d59d23c4b396d5e9fb3888f93d7975b536ce58495a0a6fe",
+      "bytes": 998
+    },
+    {
+      "path": "ui/src/torsoLength/availability.unrun.test.ts",
+      "sha256": "a7d9553792ad1e21d313ec870b32d740bb9f2d53b5066c8a015c0ed77a49c4cc",
+      "bytes": 2034
+    },
+    {
+      "path": "ui/src/torsoLength/context.ts",
+      "sha256": "d18c5ae84eb7174455b95303e86c898689a703be79e7fd916cbc6f01a6fcc727",
+      "bytes": 642
+    },
+    {
+      "path": "ui/src/torsoLength/controller.ts",
+      "sha256": "4e43e1723a1d36f0af2ac31ff184d137b7f078f3e88d25e55f98beebbdc14308",
+      "bytes": 6571
+    },
+    {
+      "path": "ui/src/torsoLength/controller.unrun.test.ts",
+      "sha256": "3992524a26b8ea321723ea9a25da43b5fbdce6a332decba61f6faba177b998e4",
+      "bytes": 4201
+    },
+    {
+      "path": "ui/src/torsoLength/model.ts",
+      "sha256": "779d9295c707d1ad27026abcfadabaca9ba4267964ca131ff3273c8bcda7025a",
+      "bytes": 7124
+    },
+    {
+      "path": "ui/src/torsoLength/model.unrun.test.ts",
+      "sha256": "93ff73a3103ad544d3302764c4a8d787ef6b5e83457b1d9160177bbed8460145",
+      "bytes": 4516
+    },
+    {
+      "path": "ui/src/torsoLength/nativeTransport.ts",
+      "sha256": "5721168f368f31f60d70857a441c74f4b714f9185fd4d80ef5a6ceb5847efd7b",
+      "bytes": 3342
+    },
+    {
+      "path": "ui/src/torsoLength/receipts.ts",
+      "sha256": "123ef7c27ffbc63bf6af186c33360dba7840cc8ee7813a4808c563c01bd86a20",
+      "bytes": 1051
+    },
+    {
+      "path": "ui/src/torsoLength/receipts.unrun.test.ts",
+      "sha256": "e5f27e3f60c9c08197b95484946a4cc73878718e393ea8ab975e2f8e6e9429b4",
+      "bytes": 1595
+    },
+    {
+      "path": "ui/src/torsoLength/sourcePreview.ts",
+      "sha256": "3e1882d756d6269615fb6f67e83a829b0534995764597b95308e03c1c7880fca",
+      "bytes": 2507
+    },
+    {
+      "path": "ui/src/torsoLength/torsoLength.css",
+      "sha256": "b2a9bcdadab03fc4c09f942abdc1e34ee940bed7a7aaf5d16f7137402b3c5dcf",
+      "bytes": 2146
+    },
+    {
+      "path": "ui/src/torsoLength/useTorsoLengthWorkflow.ts",
+      "sha256": "35f7bf46bccf9c0acf53639c0b5536b2861ac3fd064aa383996ede69e8ec6dbc",
+      "bytes": 7217
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1214,
+    "changed_json_toml": "parsed with standard library only",
+    "git_diff_check": "clean",
+    "old_core_ops_common_geometry_unchanged": 207,
+    "old_body_geometry_class_and_require_prepared_identical_sha256": "d233cd7637c2f480d4f46e0c10f06b7035f909bd252acd9719d3352b905a014c",
+    "line_caps": {
+      "ui/src/App.tsx": 2125,
+      "ui/src-tauri/src/main.rs": 2043,
+      "engine/src/lumaretouch_engine/server.py": 6993
+    },
+    "authored_fixture_declarations_unrun": {
+      "python_test_declarations": 59,
+      "rust_test_attributes": 21,
+      "ui_test_declarations": 12
+    }
+  },
+  "integration_map": {
+    "kernel": [
+      "core/torso_length",
+      "torso_length_native",
+      "packaging/build-torso-length.sh"
+    ],
+    "source_ownership": [
+      "torso_length_state",
+      "torso_length_field",
+      "torso_length_runtime",
+      "torso_length_project",
+      "torso_length_adapter"
+    ],
+    "canonical_host": [
+      "torso_length_host",
+      "body_pose_host",
+      "body_pose_commands",
+      "body_pose_families"
+    ],
+    "common_render": [
+      "body_pose_operations",
+      "body_pose_geometry active-only order7",
+      "body_pose_render",
+      "unchanged shoulder_shape_runtime common body-to-face map and sampler"
+    ],
+    "history_and_effective_sources": [
+      "history_policy",
+      "history_controller",
+      "creative_derived_body",
+      "creative_document_host",
+      "project_recovery_runtime",
+      "arm_shape_registered_host read-only admission"
+    ],
+    "native_transport": [
+      "ui/src-tauri/src/torso_length_api.rs",
+      "engine.rs",
+      "capture_lifecycle.rs",
+      "native_dispatch.rs",
+      "main.rs"
+    ],
+    "ui": [
+      "ui/src/torsoLength",
+      "ui/src/legShape/BodyShapeTools.tsx",
+      "ui/src/toolRouting/coverage.ts",
+      "ui/src/native.ts",
+      "ui/src/App.tsx mutually exclusive owner/activity"
+    ],
+    "capability": [
+      "server.py transport protocol1 remains available independently of actual native ABI gate; neutral reset/disable/status remain reachable"
+    ]
+  },
+  "limitations": [
+    "Partial upright, visible, manually reviewed 2D operation, not automatic 3D body shaping or learned AI.",
+    "Waist-length LNX-REF-PC-32473-C-5d33f285bb remains separate and unimplemented here.",
+    "Requires actual head/shoulders/arms/hands/hips and explicit same-person current face evidence; hidden, cropped, foreshortened, contacted or ambiguous ownership refuses.",
+    "Background and clothing inside reviewed transitions can move; lower arms follow torso deformation, not rigid whole-arm translation.",
+    "Original numerical constants are product policy, not official calibration. Strict source displacement/headroom/gradient gates refuse instead of silently attenuating or clipping.",
+    "Private operation-local scalar transfer helper is not reachable end-user preset/batch support. No review, source masks, body/face identity or manual boundary transfers.",
+    "Native library must be installed with matching ABI for active deformation; no runtime build, model download, fake fallback or new model-readiness claim.",
+    "Existing broad alpha/HDR pipeline limitations remain; no clipping or invented support.",
+    "All imports/runtime/tests/build/compiler/typecheck/inference/UI/photographic/export-parity/performance acceptance is UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}
