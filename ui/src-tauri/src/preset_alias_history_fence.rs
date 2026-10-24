@@ -5,11 +5,13 @@ use std::{collections::{BTreeSet, HashMap, VecDeque}, sync::{Mutex, OnceLock}};
 use serde_json::{json, Value};
 use crate::preset_api::visual::{fields, text};
 const MARKER: &str = "eye_bag_preset_alias_review";
+const DECORATION: &str = "face_decoration_alias_review";
 const RECOVERY: &str = "eye_bag_recovery_alias_review";
 fn valid_marker(key: &str, value: &Value) -> bool {
     match key {
         MARKER => crate::batch_api::history::preset_alias_summary(value),
         RECOVERY => crate::effect_recovery_host::alias::summary(value),
+        DECORATION => crate::people_api::decoration_alias::summary(value),
         _ => false,
     }
 }
@@ -57,7 +59,7 @@ pub(super) fn observe_session(epoch: [u8;16], event: &Value) {
     for row in rows {
         if !text(&row["batch_id"]) || !seen.insert(row["batch_id"].as_str().unwrap()) { snapshot.invalid = true; break; }
         snapshot.ids.insert(row["batch_id"].as_str().unwrap().to_owned());
-        let keys: Vec<_> = [MARKER, RECOVERY].into_iter().filter(|key| row.get(*key).is_some()).collect();
+        let keys: Vec<_> = [MARKER, RECOVERY, DECORATION].into_iter().filter(|key| row.get(*key).is_some()).collect();
         if keys.is_empty() { continue; }
         if keys.len() != 1 { snapshot.blocked.insert(row["batch_id"].as_str().unwrap().to_owned()); continue; }
         let key = keys[0]; let marker = &row[key];
@@ -77,7 +79,7 @@ pub(super) fn observe_session(epoch: [u8;16], event: &Value) {
 
 /// Called only with a validated original preset/recovery receipt and matching ACK.
 pub(super) fn observe_publication(epoch: [u8;16], value: &Value) {
-    let keys: Vec<_> = [MARKER, RECOVERY].into_iter().filter(|key| value.get(*key).is_some()).collect();
+    let keys: Vec<_> = [MARKER, RECOVERY, DECORATION].into_iter().filter(|key| value.get(*key).is_some()).collect();
     if !text(&value["batch_id"]) || keys.len() != 1 || !valid_marker(keys[0], &value[keys[0]]) { return; }
     let marker = json!({(keys[0]):value[keys[0]]});
     let Ok(mut registry) = registry().lock() else { return; };

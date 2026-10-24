@@ -183,8 +183,9 @@ fn head_commit(value: &Value) -> bool {
 }
 impl ReceiptKind for BatchKind {
     const NAME: &'static str = "batch";
-    const ACTIONS: &'static [&'static str] = &["preflight", "commit", "undo", "redo", "people_targets", "collarbone_visual", "face_style_visual", "portrait_cohort_visual", "eye_bag_visual", "eye_bag_cohort_visual", "face_decoration_visual"];
+    const ACTIONS: &'static [&'static str] = &["preflight", "commit", "undo", "redo", "people_targets", "collarbone_visual", "face_style_visual", "portrait_cohort_visual", "eye_bag_visual", "eye_bag_cohort_visual", "face_decoration_visual", "face_decoration_cohort_visual"];
     fn valid(value: &Value, _: Option<&str>) -> bool {
+        if crate::batch_api::decoration_cohort::evidence(value) {return crate::batch_api::decoration_cohort::receipt(value);}
         if !crate::batch_api::face_decoration::receipt(value) {return false;}
         if !crate::batch_api::history::receipt(value) { return false; }
         if !crate::batch_api::eye_cohort::receipt(value) { return false; }

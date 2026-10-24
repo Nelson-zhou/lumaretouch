@@ -150,8 +150,10 @@ fn facts(v: &Value, report: &Value) -> bool {
         && (if v["changed_pixels"].as_u64() == Some(0) { v["reason"] == "no_measurable_change" } else { v["reason"].is_null() })
 }
 fn report(v: &Value, payload: &Value, changed: bool) -> bool {
+    if !super::decoration_alias::report_metadata(v){return false;}
+    let mut normalized=v.clone(); if let Some(map)=normalized.as_object_mut(){for key in ["alias_required","alias_member_count","alias_reason","alias_review"]{map.remove(key);}}
     let proof = &payload["reference_proof"];
-    if !fields(v, &["recipe", "facts", "source", "face_ref", "landmark_digest", "reviewed", "source_preview", "reference_proof",
+    if !fields(&normalized, &["recipe", "facts", "source", "face_ref", "landmark_digest", "reviewed", "source_preview", "reference_proof",
         "support_sha256", "native_available", "support_available", "support_reason", "suspended"])
         || !recipe(&v["recipe"]) || !facts(&v["facts"], v) || v["source"] != proof["source"] || v["face_ref"] != proof["face_ref"]
         || v["landmark_digest"] != proof["landmark_digest"] || !v["reviewed"].is_boolean()

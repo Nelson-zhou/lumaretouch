@@ -70,12 +70,14 @@ def save(engine,project):
     from .face_style_alias_history import check as check_alias_history
     from .eye_bag_batch_history import check as check_eye_history
     from .face_decoration_batch_history import check as check_decoration_history
+    from .face_decoration_alias_history import check as check_da
+    from .face_decoration_cohort_history import check as check_dc
     from .eye_bag_cohort_history import check as check_cohort_history
     from .eye_bag_alias_history import check as check_eye_alias_history
     from .eye_bag_recovery_alias_history import validate_project_assets as validate_recovery_history
     for entry in batches.values():
         validate_recovery_history(entry,project)
-        check_decoration_history(entry);check_alias_history(entry);check_eye_history(entry);check_cohort_history(entry);check_eye_alias_history(entry)
+        check_da(entry);check_dc(entry);check_decoration_history(entry);check_alias_history(entry);check_eye_history(entry);check_cohort_history(entry);check_eye_alias_history(entry)
     from .eye_bag_preset_alias_history import encode_states
     project['people_batch_history']={key:encode_states(entry,project['assets']) for key,entry in batches.items()}
 
@@ -166,6 +168,9 @@ def prepare(project,rows,limit):
         check_eye_history(entry)
         from .face_decoration_batch_history import check as check_decoration_history
         check_decoration_history(entry)
+        from .face_decoration_alias_history import check as check_da
+        from .face_decoration_cohort_history import check as check_dc
+        check_da(entry);check_dc(entry)
         from .eye_bag_cohort_history import check as check_cohort_history
         check_cohort_history(entry)
         from .eye_bag_alias_history import check as check_eye_alias_history

@@ -314,13 +314,13 @@ class PeopleHostMixin:
         from .people_host_commands import legacy
         return legacy(self,operation,p,emit)
 
-    def _people_prepare_graph(self,candidate,assets):
+    def _people_prepare_graph(self,candidate,assets,*,decoration_authority=None):
         from .people_engine_runtime import prepare_preview
         from .cpu_memory_budget import available_estimate
         from .people_candidate_render import validate
         before=self._people_owner().snapshot();source=self._people_source();current=source['sha256']
         from .face_decoration_project import require_transition as require_decoration_transition
-        require_decoration_transition(self,before,candidate)
+        require_decoration_transition(self,before,candidate,authority=decoration_authority)
         def signature(state,asset):
             return [(k,f['enabled'],f['local_assets'],resolve(state,k,A.defaults())['operations'],resolve(state,k,A.defaults())['conflicts'])
                     for k,f in sorted(state['faces'].items()) if f['asset_sha256']==asset]
@@ -338,7 +338,7 @@ class PeopleHostMixin:
                 from .creative_derived_source import row_asset
                 row=next((row for row in scoped_rows if row_asset(row)==asset),None)
                 if row is None:raise ValueError('A linked photo is unavailable; shared edits were not partially applied')
-                validate(self,row,candidate)
+                validate(self,row,candidate,decoration_authority=decoration_authority)
         self._people_staged=staged
 
     def _people_publish_pending_review(self,candidate):

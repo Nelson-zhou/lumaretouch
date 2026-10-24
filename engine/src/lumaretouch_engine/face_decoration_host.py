@@ -23,6 +23,9 @@ def check_proof(proof):
 
 
 def check_action(action, payload, target):
+    if action.startswith('face_decoration_alias_'):
+        from .face_decoration_alias_review import check_action as aliases
+        return aliases(action,payload,target)
     if (action not in ACTIONS or type(target) is not dict or set(target) != {'scope','target_id','face_ref'}
             or target['scope'] != 'face' or type(payload) is not dict):
         raise ValueError('面部装饰审核需要当前明确的单个人物')
@@ -92,7 +95,9 @@ def report(engine, state, source, selected_id):
     shown = getattr(engine,'_face_decoration_reference',None); target = engine._people_targets.get(source['sha256'])
     current = bool(shown and ref is not None and shown['proof']['source'] == source and shown['proof']['face_ref'] == ref
                    and shown['proof']['landmark_digest'] == landmark and shown['binding'] == binding(engine,state,target))
-    return {'recipe':recipe,'facts':facts,'source':source,'face_ref':ref,'landmark_digest':landmark,
+    from .face_decoration_alias_review import status as alias_status
+    aliases=alias_status(engine,state,source,ref)
+    return {**aliases,'recipe':recipe,'facts':facts,'source':source,'face_ref':ref,'landmark_digest':landmark,
             'reviewed':digest is not None,'support_sha256':digest,
             'source_preview':deepcopy(shown['preview']) if current else None,
             'reference_proof':deepcopy(shown['proof']) if current else None,

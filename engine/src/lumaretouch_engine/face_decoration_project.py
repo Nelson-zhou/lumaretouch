@@ -58,9 +58,15 @@ def require_unaliased(engine, row, assets):
         raise ValueError('面部装饰会影响多个共用源图的文档；此通路没有完整逐文档审核，请使用独立虚拟副本，不会静默修改其他副本')
 
 
-def require_transition(engine, before, candidate, *, row=None):
+def require_transition(engine, before, candidate, *, row=None, authority=None):
     from .virtual_copy_people import current_row
-    require_unaliased(engine,current_row(engine) if row is None else row,changed_assets(before,candidate))
+    actual=current_row(engine) if row is None else row
+    if authority is not None:
+        from .face_decoration_alias_authority import AliasAuthority
+        if type(authority) is not AliasAuthority:raise ValueError("Private exact decoration alias authority required")
+        authority.verify(engine,actual,before,candidate)
+        return
+    require_unaliased(engine,actual,changed_assets(before,candidate))
 
 
 def photograph_dormant(state, asset):

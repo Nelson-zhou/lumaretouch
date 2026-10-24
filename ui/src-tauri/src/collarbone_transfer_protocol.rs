@@ -46,6 +46,7 @@ pub(crate) fn acknowledgments(value: &Value) -> bool {
         && hex(&item["coverage_sha256"], 64) && seen.insert(item["document_id"].as_str().unwrap()))
 }
 pub(crate) fn command(value: &Value) -> Result<(), String> {
+    if value["action"]==crate::batch_api::decoration_cohort::IMAGE||value.get(crate::batch_api::decoration_cohort::ACK).is_some() {return crate::batch_api::decoration_cohort::command(value);}
     if value["cmd"]=="batch" && (value["action"]=="face_decoration_visual"||value.get(crate::batch_api::face_decoration::ACK).is_some()) {return crate::batch_api::face_decoration::command(value);}
     if crate::batch_api::eye_cohort::routed(value) { return crate::batch_api::eye_cohort::command(value); }
     if value["cmd"] == "batch" && (value["action"] == "eye_bag_visual"

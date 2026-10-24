@@ -13,6 +13,7 @@ from .people_resolver import resolve
 from . import collarbone_cohort_review as CLAVICLE
 from . import portrait_cohort_review as PORTRAIT
 from . import eye_bag_cohort_review as EYE
+from . import face_decoration_cohort_review as DECORATION
 
 MARKER = '_people_transfer'
 POLICY = 'persistent_association'
@@ -49,8 +50,6 @@ def options(value, modules):
             raise ValueError('Association documents must be distinct in one workspace')
         seen.add(document['document_id'])
     selection = value['selection']; defaults = A.defaults()
-    if type(selection) is dict and 'lnx.face_decoration.v1' in selection:
-        raise ValueError('Decoration persistent cohorts require a dedicated complete-member image review, not generic scalar metadata')
     if type(selection) is not dict or type(modules) is not list or len(modules) != len(set(modules)) or set(modules) != set(selection):
         raise ValueError('Association modules must exactly name selected scalar leaves')
     if value['operation'] == 'unlink':
@@ -82,9 +81,6 @@ def _endpoint(engine, rows, proof, ref, *, reviewed_only=False):
     if reviewed_only and (row.get('_people_new_import') or V.peek_graph(engine,row) is None):
         raise ValueError('Named cohort requires an already reviewed member owner; open and inspect each member first')
     graph = V.row_snapshot(engine, row)
-    from .face_decoration_batch_plan import active as decoration_active
-    if decoration_active(graph,proof['source_proof']['asset_sha256']):
-        raise ValueError('Retained active decorations require dedicated complete-cohort visual review; no association was changed')
     I.verify(engine, row, graph, proof); SOURCE.verify_row(row, proof['source_proof'])
     scope = V.scope(row)
     if sum(V.scope(other) == scope for other in rows) != 1:
@@ -119,7 +115,7 @@ def prepare(engine, selected, *, validate=True):
     """Rebuild the entire atomic cohort from exact current reviewed endpoints."""
     rows = engine._batch_controller().documents.rows()
     named='face_style' in selected
-    reviewed=named or 'eye_bag_cohort' in selected
+    reviewed=named or 'eye_bag_cohort' in selected or DECORATION.D.OP in selected['selection']
     endpoints = [_endpoint(engine, rows, selected['source'], selected['source_ref'],reviewed_only=reviewed)]
     endpoints.extend(_endpoint(engine, rows, item['target'], item['target_refs'][0],reviewed_only=reviewed) for item in selected['targets'])
     members = sorted((item['member'] for item in endpoints), key=lambda item: item['document_id'])
@@ -173,12 +169,14 @@ def prepare(engine, selected, *, validate=True):
         item['candidate'] = candidate
         item['candidate_sha256'] = I.graph_digest(candidate)
         item['eye_bag_cohort_state'] = EYE.state(item)
+        item['face_decoration_cohort_state'] = DECORATION.state(item)
     review = {'version': 1, 'operation': operation, 'association_id': association_id,
               'generation': capsule['generation'], 'members': members, 'intent': intent}
     if EYE.required(endpoints,selected,review):
         if 'eye_bag_cohort' not in selected:
             raise ValueError('Retained or resolved eye-bag cohort content requires explicit complete before/after review and member replacement choices')
         EYE.closure(engine,endpoints)
+    if DECORATION.required(endpoints,selected,review):DECORATION.closure(engine,endpoints)
     if validate:
         from .people_candidate_render import validate as render
         for item in endpoints:render(engine,item['row'],item['candidate'])
@@ -194,7 +192,7 @@ def _public(item, *, live=False):
     return {'index': item['index'], 'path': item['row']['path'], 'live': live,
             'document_id': document['document_id'], 'revision': str(document['revision']),
             'blocked': None, 'before': {}, 'association': {'owner': item['proof'], 'ref': item['ref'],
-            'candidate_sha256': item['candidate_sha256'], 'person_id': item['person_id'], **CLAVICLE.evidence(item), **PORTRAIT.evidence(item), **EYE.evidence(item)}}
+            'candidate_sha256': item['candidate_sha256'], 'person_id': item['person_id'], **CLAVICLE.evidence(item), **PORTRAIT.evidence(item), **EYE.evidence(item), **DECORATION.evidence(item)}}
 
 
 def preflight(engine, controller, p):
@@ -206,7 +204,7 @@ def preflight(engine, controller, p):
     docs = p.get('docs')
     if type(docs) is not list or len(docs) != len(set(docs)) or set(docs) != {item['target']['document']['document_id'] for item in selected['targets']}:
         raise ValueError('Requested documents must exactly match reviewed association targets')
-    if 'face_style' in selected or 'eye_bag_cohort' in selected:
+    if 'face_style' in selected or 'eye_bag_cohort' in selected or DECORATION.D.OP in selected['selection']:
         from .people_preset_plan import require_active_owner
         require_active_owner(engine)
         if V.current_row(engine).get('_people_new_import'):raise ValueError('Open and review the named cohort source owner first')
@@ -222,6 +220,8 @@ def preflight(engine, controller, p):
     portrait_displays=PORTRAIT.prepare(engine,endpoints,selected,review,existing_displays=displays) if portrait_required else None
     eye_required=EYE.required(endpoints,selected,review)
     eye_displays=EYE.prepare(engine,endpoints,selected,existing_displays=displays or portrait_displays) if eye_required else None
+    decoration_required=DECORATION.required(endpoints,selected,review)
+    decoration_displays=DECORATION.prepare(engine,endpoints,selected,existing_displays=displays or portrait_displays or eye_displays) if decoration_required else None
     for item in endpoints:
         I.verify(engine, item['row'], V.row_snapshot(engine, item['row']), item['proof'])
         SOURCE.verify_row(item['row'], item['proof']['source_proof'])
@@ -229,9 +229,9 @@ def preflight(engine, controller, p):
     frozen = [FrozenTarget(item['proof']['document']['document_id'], item['proof']['document']['revision'],
               item['index'], item['row']['path'], None, canonical(item['proof']),
               people_json=canonical({'ref': item['ref'], 'person_id': item['person_id'],
-                                     'candidate_sha256': item['candidate_sha256'], **CLAVICLE.evidence(item), **PORTRAIT.evidence(item,private=True), **EYE.evidence(item,private=True)})) for item in endpoints]
+                                     'candidate_sha256': item['candidate_sha256'], **CLAVICLE.evidence(item), **PORTRAIT.evidence(item,private=True), **EYE.evidence(item,private=True), **DECORATION.evidence(item,private=True)})) for item in endpoints]
     params = {MARKER: {'mode': POLICY, 'options': selected, 'review': review,
-                       'collarbone_visual_required': visual_required,'portrait_cohort_required':portrait_required,'eye_bag_cohort_required':eye_required}}
+                       'collarbone_visual_required': visual_required,'portrait_cohort_required':portrait_required,'eye_bag_cohort_required':eye_required,'face_decoration_cohort_required':decoration_required}}
     plan = controller.store.create(batch.versions.workspace, document['document_id'], document['revision'],
         source['row']['path'], p['module_scope'], params, 'recheck', frozen, [])
     body = {'event': 'batch_preflight', 'success': True, 'module_scope': list(plan.modules), 'source': 'current',
@@ -243,7 +243,8 @@ def preflight(engine, controller, p):
     if visual_required:body['collarbone_cohort']=True
     if portrait_required:body['portrait_cohort']=True
     if eye_required:body['eye_bag_cohort']=True
-    if visual_required or portrait_required or eye_required:
+    if decoration_required:body['face_decoration_cohort']=True
+    if visual_required or portrait_required or eye_required or decoration_required:
         try:
             canonical(body,7*1024*1024)
             if visual_required:
@@ -255,6 +256,9 @@ def preflight(engine, controller, p):
             if eye_required:
                 from .eye_bag_cohort_store import attach
                 attach(controller.store,plan,eye_displays)
+            if decoration_required:
+                from .face_decoration_cohort_store import attach
+                attach(controller.store,plan,decoration_displays)
         except Exception:
             controller.store.pending.pop(plan.token,None)
             from .collarbone_visual_store import prune
@@ -263,18 +267,25 @@ def preflight(engine, controller, p):
             prune(controller.store)
             from .eye_bag_cohort_store import prune
             prune(controller.store)
+            from .face_decoration_cohort_store import prune
+            prune(controller.store)
             raise
     controller.emit(body); controller.emit_result(p, body)
 
 
 def commit(engine, controller, p, plan):
-    if set(p) - {'cmd','action','request_id','preflight_token','collarbone_review_ack','portrait_cohort_ack','eye_bag_cohort_ack','module_scope'}:
+    if set(p) - {'cmd','action','request_id','preflight_token','collarbone_review_ack','portrait_cohort_ack','eye_bag_cohort_ack','face_decoration_cohort_ack','module_scope'}:
         raise ValueError('Association commit accepts only its immutable reviewed token')
     import json
     params = plan.params()[MARKER]; selected = options(params['options'], list(plan.modules))
     visual_required = params.get('collarbone_visual_required') is True
     portrait_required=params.get('portrait_cohort_required') is True
     eye_records=EYE.records(plan);eye_required=eye_records is not None;eye_ack=None
+    decoration_records=DECORATION.records(plan);decoration_required=decoration_records is not None;decoration_ack=None
+    if decoration_required:
+        if p.get('module_scope')!=list(plan.modules):raise ValueError('Decoration cohort requires exact frozen module scope')
+        decoration_ack=DECORATION.acknowledgments(p.get('face_decoration_cohort_ack'),decoration_records)
+    elif 'face_decoration_cohort_ack' in p:raise ValueError('Decoration cohort ACK cannot authorize another plan')
     if eye_required:
         if p.get('module_scope')!=list(plan.modules):raise ValueError('Eye-bag cohort confirmation must retain its exact frozen operation scope')
         eye_ack=EYE.acknowledgments(p.get('eye_bag_cohort_ack'),eye_records)
@@ -283,7 +294,7 @@ def commit(engine, controller, p, plan):
     if portrait_required:
         if p.get('module_scope')!=list(plan.modules):raise ValueError('Cohort confirmation must retain exact frozen operation scope')
         portrait_ack=PORTRAIT.acknowledgments(p.get('portrait_cohort_ack'),[json.loads(t.people_json)['portrait_visual'] for t in plan.targets])
-    elif 'portrait_cohort_ack' in p or ('module_scope' in p and not eye_required):raise ValueError('Portrait-cohort confirmation cannot authorize another operation')
+    elif 'portrait_cohort_ack' in p or ('module_scope' in p and not eye_required and not decoration_required):raise ValueError('Portrait-cohort confirmation cannot authorize another operation')
     visual_ack = None
     if visual_required:
         visual_ack = CLAVICLE.R.acknowledgments(p.get('collarbone_review_ack'),
@@ -295,13 +306,14 @@ def commit(engine, controller, p, plan):
     if (review != params['review'] or len(endpoints) != len(plan.targets)
             or CLAVICLE.required(endpoints, selected, review) != visual_required
             or PORTRAIT.required(endpoints,selected,review)!=portrait_required
-            or EYE.required(endpoints,selected,review)!=eye_required):
+            or EYE.required(endpoints,selected,review)!=eye_required
+            or DECORATION.required(endpoints,selected,review)!=decoration_required):
         raise ValueError('Reviewed association content changed')
     plans = {}
     for item, frozen in zip(endpoints, plan.targets):
         frozen_payload = json.loads(frozen.people_json)
         expected_payload = {'ref': item['ref'], 'person_id': item['person_id'], 'candidate_sha256': item['candidate_sha256'],
-                            'eye_bag_cohort_state':item['eye_bag_cohort_state']}
+                            'eye_bag_cohort_state':item['eye_bag_cohort_state'],'face_decoration_cohort_state':item['face_decoration_cohort_state']}
         if visual_required:
             expected_payload.update(CLAVICLE.evidence(frozen_payload))
             CLAVICLE.verify(engine, item, frozen_payload)
@@ -311,6 +323,9 @@ def commit(engine, controller, p, plan):
         if eye_required:
             expected_payload.update(EYE.evidence(frozen_payload,private=True))
             EYE.verify(engine,item,frozen_payload,selected)
+        if decoration_required:
+            expected_payload.update(DECORATION.evidence(frozen_payload,private=True))
+            DECORATION.verify(engine,item,frozen_payload)
         if (item['proof'] != json.loads(frozen.before_json) or item['row']['path'] != frozen.path
                 or item['proof']['document']['document_id'] != frozen.document_id
                 or expected_payload != frozen_payload):
@@ -351,10 +366,18 @@ def commit(engine, controller, p, plan):
         verify_available(controller.store,plan)
         from .eye_bag_cohort_history import prepare as prepare_eye_history
         eye_history=prepare_eye_history(engine,plans,targets,review,eye_ack)
-    controller.store.claim(plan,collarbone_review_ack=visual_ack,portrait_cohort_ack=portrait_ack,eye_bag_cohort_ack=eye_ack,request_id=p.get('request_id'))
+    decoration_history=None
+    if decoration_required:
+        DECORATION.closure(engine,endpoints)
+        for item,frozen in zip(endpoints,plan.targets):DECORATION.verify(engine,item,json.loads(frozen.people_json))
+        from .face_decoration_cohort_store import verify_available
+        verify_available(controller.store,plan)
+        from .face_decoration_cohort_history import prepare as prepare_decoration_history
+        decoration_history=prepare_decoration_history(engine,plans,targets,review,decoration_ack)
+    controller.store.claim(plan,face_decoration_cohort_ack=decoration_ack,collarbone_review_ack=visual_ack,portrait_cohort_ack=portrait_ack,eye_bag_cohort_ack=eye_ack,request_id=p.get('request_id'))
     try:
-        result = commit_scoped(batch, engine, plans, request_id=p.get('request_id'), prepare=False, prepared_targets=targets,eye_bag_cohort_history=eye_history)
-        if eye_required and result is None:raise ValueError('Reviewed eye-bag cohort unexpectedly produced no atomic ledger transaction')
+        result = commit_scoped(batch, engine, plans, request_id=p.get('request_id'), prepare=False, prepared_targets=targets,eye_bag_cohort_history=eye_history,face_decoration_cohort_history=decoration_history)
+        if (eye_required or decoration_required) and result is None:raise ValueError('Reviewed eye-bag cohort unexpectedly produced no atomic ledger transaction')
         bid, frame = (None, None) if result is None else result
         outcomes = [{'index': item['index'], 'path': item['row']['path'], 'document_id': item['member']['document_id'],
                      'expected_revision': str(item['proof']['document']['revision']),
@@ -369,6 +392,9 @@ def commit(engine, controller, p, plan):
             body.update(collarbone_cohort=True, collarbone_review_ack=deepcopy(visual_ack))
         if portrait_required:body.update(portrait_cohort=True,portrait_cohort_ack=deepcopy(portrait_ack),outcome_unknown=False)
         if eye_required:body.update(eye_bag_cohort=True,eye_bag_cohort_ack=deepcopy(eye_ack),outcome_unknown=False)
+        if decoration_required:
+            from .face_decoration_cohort_history import status_summary
+            body.update(face_decoration_cohort=True,face_decoration_cohort_ack=deepcopy(decoration_ack),face_decoration_cohort_review=status_summary(batch.ledger[bid]),outcome_unknown=False)
         controller.emit(body)
         if frame is not None: controller.emit(frame)
     except Exception as error:
@@ -378,4 +404,5 @@ def commit(engine, controller, p, plan):
         body.update(collarbone_cohort=True, collarbone_review_ack=deepcopy(visual_ack), module_scope=list(plan.modules))
     if portrait_required:body.update(portrait_cohort=True,portrait_cohort_ack=deepcopy(portrait_ack),module_scope=list(plan.modules))
     if eye_required:body.update(eye_bag_cohort=True,eye_bag_cohort_ack=deepcopy(eye_ack),module_scope=list(plan.modules))
+    if decoration_required:body.update(face_decoration_cohort=True,face_decoration_cohort_ack=deepcopy(decoration_ack),module_scope=list(plan.modules))
     controller.emit_result(p, controller.store.finish(plan, body))

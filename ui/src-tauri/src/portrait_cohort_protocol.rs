@@ -105,6 +105,7 @@ fn image_request(v: &Value) -> bool {
         && matches!(v["side"].as_str(), Some("before" | "after")) && hex(&v["sha256"], 64)
 }
 pub(crate) fn command(v: &Value) -> Result<(), String> {
+    if v["action"]==crate::batch_api::decoration_cohort::IMAGE||v.get(crate::batch_api::decoration_cohort::ACK).is_some() {return crate::batch_api::decoration_cohort::command(v);}
     if crate::batch_api::eye_cohort::routed(v) { return crate::batch_api::eye_cohort::command(v); }
     if v["action"] == "portrait_cohort_visual" {
         return if image_request(v) { Ok(()) } else { Err("Portrait cohort image read needs exact frozen coordinates".into()) };

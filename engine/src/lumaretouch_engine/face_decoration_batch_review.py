@@ -36,6 +36,10 @@ def required(plan):
 
 
 def records(plan):
+    params=plan.params().get('_people_transfer')
+    if type(params) is dict and params.get('mode')=='persistent_association':
+        if params.get('face_decoration_visual_required') is True:raise ValueError('Ordinary decoration proof cannot authorize a cohort')
+        return None
     if not required(plan):
         if OP in plan.modules: raise ValueError('Decoration batch requires actual image review')
         return None

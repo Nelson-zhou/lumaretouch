@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import {echoMatches as decorationEchoMatches, referenceReceiptValid as decorationReferenceReceiptValid, reviewReceiptValid as decorationReviewReceiptValid, releasedReferenceReceiptValid as decorationReleasedReferenceValid} from '../faceDecoration/model';
+import {isDecorationAliasAction,validAliasReview,validAliasConfirmation,aliasAck,aliasEchoMatches,aliasReceiptCurrent,verifyDecorationAliasReview,aliasHistoryDigest,type DecorationAliasReview,type DecorationAliasReceipt} from '../faceDecoration/aliasModel';
+import {canonical as decorationCanonical} from '../faceDecoration/model';
+import {registerDecorationMultiHistory} from '../faceDecoration/multiHistory';
 import {bindingKey, type ParameterPatch, type PeopleAction, type PeopleMailbox, type PeopleView} from './model';
 import {faceStyleAck, faceStyleEchoMatches, faceStyleReceiptCurrent, object, sameFaceStyleAck,
   validFaceStyleConfirmation, validFaceStyleRecipe, validFaceStyleReview,
@@ -11,7 +14,8 @@ import {validDraft, type EyeBagDraft} from '../eyeBagPreserve/draft';
 import {eyeBagBinding} from '../eyeBagPreserve/model';
 import {canonical as eyeBagCanonical} from '../eyeBagPreserve/support';
 
-type View = {faceDecorationReleasedRequestId: string | null; eyeBagCancel: 'none' | 'requested' | 'stopped' | 'completed' | 'released'; pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string;
+type DecorationAliasCommit = {batchId:string;documentEpoch:string;review:DecorationAliasReview;reviewSha256:string};
+type View = {lastDecorationAliasResult:DecorationAliasReceipt|null;lastDecorationAliasCommit:DecorationAliasCommit|null;faceDecorationReleasedRequestId: string | null; eyeBagCancel: 'none' | 'requested' | 'stopped' | 'completed' | 'released'; pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string;
   lastEyeBagResult: EyeBagReceipt | null; lastEyeBagAliasCommit: EyeBagAliasCommit | null; lastBodyResult: SkinBodyResult | null; lastFaceStyleResult: FaceStyleReceipt | null; lastAliasCommit: FaceStyleAliasCommit | null};
 type Ports = {
   send: (command: PeopleAction) => Promise<unknown>;
@@ -29,13 +33,14 @@ export function createPeopleWorkflow(ports: Ports) {
   let checkingCommand: PeopleAction | null = null;
   let aliasReview: FaceStyleReviewV2 | null = null, pendingAliasReview: FaceStyleReviewV2 | null = null;
   let eyeBagReview: EyeBagReview | null = null, pendingEyeBagReview: EyeBagReview | null = null;
+  let decorationAliasReview:DecorationAliasReview|null=null,pendingDecorationAliasReview:DecorationAliasReview|null=null;
   let pendingPreviewView: PeopleView | null = null;
   let eyeDraft: {binding: string; value: EyeBagDraft} | null = null;
   let cancelIntent: PeopleAction | null = null;
   const eyeRead = (command: PeopleAction) => isEyeBagAction(command.action) && command.action !== 'eye_bag_confirm';
   let queued: {key: string; patches: Map<string, ParameterPatch>} | null = null;
   let waitFor: {key: string; revision: number; documentRevision: number} | null = null;
-  let view: View = {faceDecorationReleasedRequestId: null, eyeBagCancel: 'none', pending: false, pendingAction: null, uncertain: false, message: '', lastEyeBagResult: null, lastEyeBagAliasCommit: null, lastBodyResult: null, lastFaceStyleResult: null, lastAliasCommit: null};
+  let view: View = {lastDecorationAliasResult:null,lastDecorationAliasCommit:null,faceDecorationReleasedRequestId: null, eyeBagCancel: 'none', pending: false, pendingAction: null, uncertain: false, message: '', lastEyeBagResult: null, lastEyeBagAliasCommit: null, lastBodyResult: null, lastFaceStyleResult: null, lastAliasCommit: null};
   const listeners = new Set<() => void>();
   const publish = (patch: Partial<View>) => {view = {...view, ...patch}; listeners.forEach(listener => listener());};
   const targetKey = (value: PeopleView) => `${bindingKey(value.binding)}:${value.association_revision}:${JSON.stringify(value.editing_target)}`;
@@ -66,6 +71,39 @@ export function createPeopleWorkflow(ports: Ports) {
           if (!result || result.request_id !== command.request_id || result.action !== command.action
             || result.document_id !== command.document_id || result.outcome_unknown) {
             throw Error(result?.error ?? '人物修改结果未确认；未自动重发。');
+          }
+          const decorationAlias=isDecorationAliasAction(command.action);
+          if(decorationAlias&&(!aliasEchoMatches(command,result)||result.protocol!==1||typeof result.success!=='boolean'
+            ||typeof result.outcome_unknown!=='boolean'||!result.success&&result.batch_id!=null))
+            throw Error('共享来源装饰回执缺少原请求的精确身份，请查询原请求，未重发。');
+          if(decorationAlias&&command.action!=='face_decoration_alias_confirm'&&(result.batch_id!=null||command.action==='face_decoration_alias_image'&&result.doc_state!==undefined))
+            throw Error('共享来源装饰只读审核不能发布文档或批次。');
+          if(result.success&&command.action==='face_decoration_alias_preview'){
+            decorationAliasReview=null;
+            if(!object(result.payload)||result.payload.kind!=='face_decoration_alias_preview'
+              ||!validAliasReview(result.payload.review,pendingPreviewView,command.payload.recipe)
+              ||!result.doc_state?.people||decorationCanonical(result.doc_state.people.face_decoration?.alias_review)!==decorationCanonical(result.payload.review)
+              ||decorationCanonical(result.doc_state.people.binding)!==decorationCanonical(pendingPreviewView?.binding)
+              ||decorationCanonical(result.doc_state.people.editing_target)!==decorationCanonical(pendingPreviewView?.editing_target)
+              ||result.doc_state.people.binding.document_revision!==command.document_revision
+              ||result.doc_state.people.revision!==pendingPreviewView?.revision
+              ||result.doc_state.people.association_revision!==pendingPreviewView?.association_revision
+              ||!await verifyDecorationAliasReview(result.payload.review))
+              throw Error('共享来源装饰完整审核与实际来源、配方或可见范围不符，请查询原请求。');
+            if(aliasReceiptCurrent(command,result,current)&&validAliasReview(result.payload.review,current,command.payload.recipe))
+              decorationAliasReview=structuredClone(result.payload.review);
+          }
+          let decorationAliasCommit:DecorationAliasCommit|null=null;
+          if(result.success&&command.action==='face_decoration_alias_confirm'){
+            if(!pendingDecorationAliasReview||!validAliasConfirmation(pendingDecorationAliasReview,result))
+              throw Error('共享来源装饰确认缺少完整成员、候选图和批次证明，请查询原请求。');
+            const historyDigest=await aliasHistoryDigest(pendingDecorationAliasReview);
+            if(!object(result.payload)||result.payload.history_review_sha256!==historyDigest
+              ||!registerDecorationMultiHistory(command.document_epoch,result.batch_id!,'face_decoration_alias_review',
+                {version:1,review_sha256:historyDigest,member_count:pendingDecorationAliasReview.members.length}))
+              throw Error('共享来源装饰历史身份不匹配，请查询原请求，不要重复应用。');
+            decorationAliasCommit={batchId:result.batch_id!,documentEpoch:command.document_epoch,
+              review:structuredClone(pendingDecorationAliasReview),reviewSha256:historyDigest};
           }
           const decoration = command.action === 'face_decoration_reference' || command.action === 'face_decoration_review';
           if (decoration && (!decorationEchoMatches(command, result) || result.batch_id != null))
@@ -131,7 +169,7 @@ export function createPeopleWorkflow(ports: Ports) {
             } else if (object(result.payload) && Object.hasOwn(result.payload, 'alias_members'))
               throw Error('未请求的共享来源确认回执，只能查询原请求。');
           }
-          const faceStyleRead = faceStyle && command.action !== 'face_style_confirm' || eyeBag && command.action !== 'eye_bag_confirm';
+          const faceStyleRead = decorationAlias && command.action !== 'face_decoration_alias_confirm' || faceStyle && command.action !== 'face_style_confirm' || eyeBag && command.action !== 'eye_bag_confirm';
           if (result.success && (faceStyleRead || decorationReleased)) {
             // Read-only face-style receipts must not manufacture or publish a document mutation.
             // A stale response is harmless and discarded below, never applied to the current face.
@@ -158,13 +196,16 @@ export function createPeopleWorkflow(ports: Ports) {
           pending = null;
           pendingAliasReview = null;
           pendingEyeBagReview = null;
+          pendingDecorationAliasReview=null;
+          if(decorationAliasCommit)decorationAliasReview=null;
           if (command.action === 'eye_bag_confirm') eyeBagReview = null;
           pendingPreviewView = null;
           cancelIntent = null;
           if (aliasCommit) aliasReview = null;
           const bodyFamily = skinBodyActionFamily(command.action);
           const bodyPayloadInvalid = !!bodyFamily && !result.payload_released && !skinBodyFamilyMatches(result.payload, bodyFamily);
-          publish({faceDecorationReleasedRequestId: decorationReleased ? command.request_id : null, eyeBagCancel: discardedRead ? (cancelled ? 'stopped' : 'completed') : 'none', pending: !!queued, pendingAction: queued ? 'patch' : null, uncertain: false,
+          publish({lastDecorationAliasResult:aliasReceiptCurrent(command,result,current)?{command,result}:null,
+            ...(decorationAliasCommit?{lastDecorationAliasCommit:decorationAliasCommit}:{}),faceDecorationReleasedRequestId: decorationReleased ? command.request_id : null, eyeBagCancel: discardedRead ? (cancelled ? 'stopped' : 'completed') : 'none', pending: !!queued, pendingAction: queued ? 'patch' : null, uncertain: false,
             lastEyeBagResult: !discardedRead && eyeBagReceiptCurrent(command, result, current) ? {command, result} : null,
             lastFaceStyleResult: faceStyleReceiptCurrent(command, result, current) ? {command, result} : null,
             ...(aliasCommit ? {lastAliasCommit: aliasCommit} : {}),
@@ -200,6 +241,14 @@ export function createPeopleWorkflow(ports: Ports) {
   async function submit(command: PeopleAction): Promise<void> {
     if (pending || queued) throw Error('上一项人物修改尚未确认，请先查询结果。');
     if (!enabled || !matches(command)) throw Error('照片或人物状态已变化，请等待刷新后再修改。');
+    pendingDecorationAliasReview=null;
+    if(command.action==='face_decoration_alias_confirm'){
+      if(!decorationAliasReview||!validAliasReview(decorationAliasReview,current,decorationAliasReview.recipe)
+        ||command.payload.token!==decorationAliasReview.token||decorationCanonical(command.payload.ack)!==decorationCanonical(aliasAck(decorationAliasReview)))
+        throw Error('共享来源装饰审核已失效，请重新查看每张照片，未提交修改。');
+      pendingDecorationAliasReview=structuredClone(decorationAliasReview);
+    }
+    if(command.action==='face_decoration_alias_preview')decorationAliasReview=null;
     let captured: FaceStyleReviewV2 | null = null;
     if (command.action === 'face_style_confirm' && object(command.payload.ack) && Object.hasOwn(command.payload.ack, 'members')) {
       if (!aliasReview || !validFaceStyleReview(aliasReview, current, aliasReview.recipe)
@@ -219,11 +268,11 @@ export function createPeopleWorkflow(ports: Ports) {
     }
     if (command.action === 'eye_bag_preview') eyeBagReview = null;
     pendingAliasReview = captured;
-    pendingPreviewView = (command.action === 'face_style_preview' || command.action === 'eye_bag_preview') ? structuredClone(current) : null;
+    pendingPreviewView = (command.action === 'face_decoration_alias_preview' || command.action === 'face_style_preview' || command.action === 'eye_bag_preview') ? structuredClone(current) : null;
     if (command.action === 'face_style_preview') aliasReview = null;
     pending = command;
     cancelIntent = null;
-    publish({faceDecorationReleasedRequestId: null, eyeBagCancel: 'none', pending: true, pendingAction: command.action, uncertain: false, lastEyeBagResult: null, lastBodyResult: null, lastFaceStyleResult: null, message: '正在提交人物修改，等待引擎确认。'});
+    publish({lastDecorationAliasResult:null,faceDecorationReleasedRequestId: null, eyeBagCancel: 'none', pending: true, pendingAction: command.action, uncertain: false, lastEyeBagResult: null, lastBodyResult: null, lastFaceStyleResult: null, message: '正在提交人物修改，等待引擎确认。'});
     try {await bounded(ports.send(command), 10000);}
     catch (error) {if (pending === command) publish({uncertain: true, message: `${String(error)}。正在查询原请求，不重发修改。`});}
     if (pending === command) await check();
@@ -292,8 +341,11 @@ export function createPeopleWorkflow(ports: Ports) {
       if (eyeDraft && eyeDraft.binding !== eyeBagBinding(value)) eyeDraft = null;
       if (view.lastEyeBagResult && !eyeBagReceiptCurrent(view.lastEyeBagResult.command, view.lastEyeBagResult.result, value)) publish({lastEyeBagResult: null});
       if (view.lastFaceStyleResult && !faceStyleReceiptCurrent(view.lastFaceStyleResult.command, view.lastFaceStyleResult.result, value)) publish({lastFaceStyleResult: null});
+      if(view.lastDecorationAliasResult&&!aliasReceiptCurrent(view.lastDecorationAliasResult.command,view.lastDecorationAliasResult.result,value))publish({lastDecorationAliasResult:null});
       if (view.lastBodyResult && !skinBodyReceiptCurrent(view.lastBodyResult.command, view.lastBodyResult.result, value)) publish({lastBodyResult: null});
       if (changed) {
+        decorationAliasReview=null;
+        if(view.lastDecorationAliasResult)publish({lastDecorationAliasResult:null});
         eyeBagReview = null;
         if (view.lastEyeBagResult) publish({lastEyeBagResult: null});
         queued = null; waitFor = null;

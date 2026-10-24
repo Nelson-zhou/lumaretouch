@@ -290,7 +290,7 @@ class PreflightStore:
         if generation!=workspace:raise ValueError('batch result belongs to another workspace')
         return json.loads(payload)
 
-    def claim(self,plan,*,spill_review_ack=None,shadow_review_ack=None,torso_review_ack=None,waist_review_ack=None,head_review_ack=None,collarbone_review_ack=None,face_style_review_ack=None,portrait_cohort_ack=None,eye_bag_review_ack=None,eye_bag_cohort_ack=None,face_decoration_review_ack=None,request_id=None):
+    def claim(self,plan,*,spill_review_ack=None,shadow_review_ack=None,torso_review_ack=None,waist_review_ack=None,head_review_ack=None,collarbone_review_ack=None,face_style_review_ack=None,portrait_cohort_ack=None,eye_bag_review_ack=None,eye_bag_cohort_ack=None,face_decoration_review_ack=None,face_decoration_cohort_ack=None,request_id=None):
         # Consume before the first write: even failure to encode the final receipt
         # must never leave a successfully applied token available for reexecution.
         if request_id is not None and (type(request_id) is not str or not 1<=len(request_id)<=128):
@@ -340,12 +340,17 @@ class PreflightStore:
             cohort_acknowledgments(eye_bag_cohort_ack,cohort_records)
         elif eye_bag_cohort_ack is not None:
             raise ValueError('Eye-bag cohort claim requires actual frozen complete association review')
+        from .face_decoration_cohort_review import records as decoration_cohort_records,acknowledgments as decoration_cohort_acks
+        decoration_members=decoration_cohort_records(plan)
+        if decoration_members is not None:decoration_cohort_acks(face_decoration_cohort_ack,decoration_members)
+        elif face_decoration_cohort_ack is not None:raise ValueError('Decoration cohort claim requires actual complete review')
         from .face_decoration_batch_review import records as decoration_records,acknowledgments as decoration_acknowledgments
         decorations=decoration_records(plan)
         if decorations is not None:decoration_acknowledgments(face_decoration_review_ack,decorations)
         elif face_decoration_review_ack is not None:raise ValueError('Decoration claim requires actual image evidence')
         self.finish(plan,{'success':False,'outcome_unknown':True,'preflight_token':plan.token,'request_id':request_id,
-            **({'module_scope':list(plan.modules)} if face_decoration_review_ack is not None or eye_bag_cohort_ack is not None or eye_bag_review_ack is not None or face_style_review_ack is not None or portrait_cohort_ack is not None or collarbone_review_ack is not None or any(value is not None for value in scalar_acks.values()) else {}),
+            **({'module_scope':list(plan.modules)} if face_decoration_cohort_ack is not None or face_decoration_review_ack is not None or eye_bag_cohort_ack is not None or eye_bag_review_ack is not None or face_style_review_ack is not None or portrait_cohort_ack is not None or collarbone_review_ack is not None or any(value is not None for value in scalar_acks.values()) else {}),
+            **({'face_decoration_cohort_ack':face_decoration_cohort_ack,'face_decoration_cohort':True} if face_decoration_cohort_ack is not None else {}),
             **({'eye_bag_cohort_ack':eye_bag_cohort_ack,'eye_bag_cohort':True} if eye_bag_cohort_ack is not None else {}),
             **({'portrait_cohort_ack':portrait_cohort_ack,'portrait_cohort':True} if portrait_cohort_ack is not None else {}),
             **({'face_decoration_review_ack':face_decoration_review_ack} if face_decoration_review_ack is not None else {}),
@@ -456,6 +461,8 @@ class PreflightStore:
                 raise ValueError('Eye-bag cohort result cannot invent collarbone review')
         elif 'eye_bag_cohort_ack' in result or 'eye_bag_cohort' in result:
             raise ValueError('Eye-bag cohort receipt cannot accompany another frozen scope')
+        from .face_decoration_cohort_review import reconcile as reconcile_decoration_cohort
+        decoration_cohort_ack=reconcile_decoration_cohort(plan,result,retained)
         from .face_decoration_batch_review import reconcile as decoration_reconcile
         decoration_ack=decoration_reconcile(plan,result,retained)
         try:payload=canonical(result,MAX_RESULT_BYTES)
@@ -487,6 +494,7 @@ class PreflightStore:
                     'coverage_sha256':r['coverage_sha256']} for r in records]
                 ack['module_scope']=list(plan.modules)
                 if collarbone_cohort(plan):ack['collarbone_cohort']=True
+            if decoration_cohort_ack is not None:ack.update(face_decoration_cohort_ack=decoration_cohort_ack,face_decoration_cohort=True,module_scope=list(plan.modules))
             if decoration_ack is not None:ack.update(face_decoration_review_ack=decoration_ack,module_scope=list(plan.modules),face_decoration_visual_required=True)
             if eye_ack is not None:
                 ack.update(eye_bag_review_ack=eye_ack,module_scope=list(plan.modules))
@@ -513,6 +521,8 @@ class PreflightStore:
         prune_portrait_cohort(self)
         from .eye_bag_cohort_store import prune as prune_eye_cohort
         prune_eye_cohort(self)
+        from .face_decoration_cohort_store import prune as prune_decoration_cohort
+        prune_decoration_cohort(self)
         while (len(self.terminal)>MAX_TERMINAL or
                sum(len(value[1].encode('utf-8')) for value in self.terminal.values())>MAX_TERMINAL_BYTES):
             self.terminal.popitem(last=False)

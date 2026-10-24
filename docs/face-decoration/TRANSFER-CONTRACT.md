@@ -81,3 +81,9 @@ invent hidden anatomy, remove original freckles/moles or claim vendor parity.
 Existing opaque-SDR, memory/work-budget and synchronous native-solve limits
 remain. RGB8 reduced comparison is not native-resolution photographic approval.
 See `TRANSFER-ACCEPTANCE-UNRUN.md` for required unexecuted validation cases.
+
+## Subsequent multiowner routes
+
+[MULTIOWNER-CONTRACT.md](MULTIOWNER-CONTRACT.md) adds dedicated persistent-cohort
+and direct scalar-alias image review. It does not relax the mixed-preset alias,
+whole-state batch or support-paint alias boundaries above. No algorithm count changes.

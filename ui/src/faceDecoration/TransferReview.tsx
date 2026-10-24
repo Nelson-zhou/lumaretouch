@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {SpillImage} from '../spillRemoval/model';
-import {requestDecorationBatchImage,requestDecorationPresetImage,readDecorationBatchImage,readDecorationPresetImage} from '../native';
+import {requestDecorationBatchImage,requestDecorationPresetImage,readDecorationBatchImage,readDecorationPresetImage,requestDecorationCohortImage} from '../native';
 import {fetchDecorationImage} from './visualTransport';
 import {verifyDecorationCoverage,type DecorationCoverage,type DecorationVisual} from './transferModel';
-type Props={value:DecorationVisual;coverage:DecorationCoverage;token:string;reviewKey:string;onReady:(key:string,ready:boolean)=>void;disabled?:boolean;preset?:{id:string;loadId:string}};
+type Props={value:DecorationVisual;coverage:DecorationCoverage;token:string;reviewKey:string;onReady:(key:string,ready:boolean)=>void;disabled?:boolean;cohort?:boolean;readImage?:(side:'before'|'after',live:()=>boolean)=>Promise<SpillImage>;preset?:{id:string;loadId:string}};
 export function DecorationTransferReview(props:Props){return <Review key={props.reviewKey} {...props}/>;}
-function Review({value,coverage,token,reviewKey,onReady,disabled=false,preset}:Props){
+function Review({value,coverage,token,reviewKey,onReady,disabled=false,preset,cohort=false,readImage}:Props){
  const [pair,setPair]=useState<{before:SpillImage;after:SpillImage}|null>(null),[error,setError]=useState(''),[attempt,setAttempt]=useState(0),[zoom,setZoom]=useState(false);
  const [loaded,setLoaded]=useState({before:false,after:false}),[ack,setAck]=useState(false);
  const activeAttempt=useRef(attempt);activeAttempt.current=attempt;
@@ -15,20 +15,20 @@ function Review({value,coverage,token,reviewKey,onReady,disabled=false,preset}:P
  useEffect(()=>{
   setPair(null);setLoaded({before:false,after:false});setAck(false);setError('');notify.current(reviewKey,false);
   if(!attempt)return;let live=true;
-  const api=preset?{request:requestDecorationPresetImage,read:readDecorationPresetImage}:{request:requestDecorationBatchImage,read:readDecorationBatchImage};
+  const api=preset?{request:requestDecorationPresetImage,read:readDecorationPresetImage}:{request:cohort?requestDecorationCohortImage:requestDecorationBatchImage,read:readDecorationBatchImage};
   void(async()=>{try{
-   const read=(side:'before'|'after')=>fetchDecorationImage(api,{...(preset?{id:preset.id}:{}),documentId:preset?.loadId??value.document_id,preflightToken:token,revision:value.revision,side,sha256:value[side].sha256,requestId:crypto.randomUUID()},value[side],()=>live);
+   const read=(side:'before'|'after')=>readImage?readImage(side,()=>live):fetchDecorationImage(api,{...(preset?{id:preset.id}:{}),documentId:preset?.loadId??value.document_id,preflightToken:token,revision:value.revision,side,sha256:value[side].sha256,requestId:crypto.randomUUID()},value[side],()=>live,cohort?'face_decoration_cohort_visual':'face_decoration_visual');
    const before=await read('before'),after=await read('after');
    if(!await verifyDecorationCoverage(value,coverage))throw Error('目标可见范围与冻结摘要不一致');
    if(live)setPair({before,after});
   }catch(e){if(live)setError(String(e));}})();
   return()=>{live=false;};
- },[reviewKey,coverageKey,token,attempt]);
+ },[reviewKey,coverageKey,token,attempt,cohort]);
  const ready=!!pair&&loaded.before&&loaded.after&&!error,confirmed=ready&&ack;
  useEffect(()=>notify.current(reviewKey,confirmed),[reviewKey,confirmed]);
  function displayed(side:'before'|'after',generation:number,image?:HTMLImageElement){if(activeAttempt.current!==generation)return;const ok=!!image&&image.naturalWidth===value[side].width&&image.naturalHeight===value[side].height;setLoaded(old=>({...old,[side]:ok}));if(!ok){setAck(false);notify.current(reviewKey,false);setError('审核图像解码尺寸不匹配，请重新读取。');}}
  return <section aria-label="脸部装饰完整目标前后审核" style={{flexBasis:'100%'}}>
-  <strong>本照片完整编辑链的真实前后效果，尚未应用</strong>
+  <strong>本照片完整编辑链的真实前后效果，尚未应用</strong>{cohort&&<p>持久关联包括源成员及每一目标。更新或解除关联仍检查每张照片保留的装饰；共同参数不复制人物分析、皮肤笔画或恢复向量。</p>}
   <p>包含本次全部所选参数和目标已有装饰，不是单独叠加图案的示意图。仅传递图案与程度；每张照片使用自己审核的可见皮肤范围，不复制源图笔刷、坐标或恢复蒙版。</p>
   <ul>{coverage.targets.map(row=><li key={row.face_ref.face_instance_id}>人脸 {row.face_ref.face_instance_id}：{row.scope==='neutral-no-effect'?'候选装饰程度为零；已有装饰的移除仍须查看前后图。':'使用该人物自己审核的可见皮肤范围。'}</li>)}</ul>
   <button type="button" disabled={disabled||attempt>0&&!pair&&!error} onClick={()=>setAttempt(n=>n+1)}>{pair?'重新读取前后图':'读取本照片完整前后图'}</button>

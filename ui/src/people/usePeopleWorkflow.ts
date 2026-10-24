@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import {decorationMultiHistory} from '../faceDecoration/multiHistory';
 import {eyeBagPresetAliasHistoryClass,eyeBagPresetAliasWritePending,subscribeEyeBagPresetAliasWrites,sameEyeBagPresetAliasMarker} from '../eyeBagPreserve/presetAliasHistoryRegistry';
 import {recoveryAliasHistoryClass,recoveryAliasWritePending,subscribeRecoveryAliasWrites,sameRecoveryAliasMarker,setRecoveryAliasWritePending,subscribeRecoveryAliasWorkspace,recoveryAliasWorkspace,type RecoveryAliasMarker} from '../effectRecovery/aliasHistoryRegistry';
 import {useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
@@ -22,7 +23,7 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
   const recoveryReadback=useRef<{id:string;epoch:string;batchId:string;action:'undo'|'redo';marker:RecoveryAliasMarker;terminalKnown:boolean}|null>(null);
   const [recoveryNeedsRefresh,setRecoveryNeedsRefresh]=useState(false);
   useLayoutEffect(()=>subscribeRecoveryAliasWorkspace(replacement=>{if(recoveryReadback.current?.epoch===replacement.previous){recoveryReadback.current=null;setRecoveryNeedsRefresh(false);}}),[]);
-  const [historyKind, setHistoryKind] = useState<'face_style' | 'eye_bag' | 'eye_bag_preset' | 'eye_bag_recovery' | null>(null);
+  const [historyKind, setHistoryKind] = useState<'face_style' | 'eye_bag' | 'eye_bag_preset' | 'eye_bag_recovery' | 'face_decoration_alias' | null>(null);
   async function refreshHistory() {
     const recoveryAtStart=recoveryReadback.current,terminalAtStart=recoveryAtStart?.terminalKnown===true;
     setHistoryRefreshing(true);
@@ -117,6 +118,24 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
       recoveryReadback.current={id,epoch,batchId,action,marker:structuredClone(recoveryAliasHistoryClass(batchId)!.marker!),terminalKnown:false};setRecoveryNeedsRefresh(true);setRecoveryAliasWritePending(id,true,epoch);}
     return work;
   }
+  const decorationAliasBatches=(status?.session?.sync?.batches??[]).filter(batch=>Object.hasOwn(batch,'face_decoration_alias_review'));
+  const canDecorationAliasHistory=(batchId:string,action:'undo'|'redo')=>{
+    const batch=decorationAliasBatches.find(row=>row.batch_id===batchId),classification=decorationMultiHistory(batchId);
+    return enabled&&status?.ready_caps?.batch_preflight_protocol===1&&!!batch
+      &&classification?.field==='face_decoration_alias_review'&&!!classification.marker
+      &&status.session?.sync?.workspace_generation===value?.binding.document_epoch
+      &&batch.face_decoration_alias_review?.version===classification.marker.version
+      &&batch.face_decoration_alias_review?.review_sha256===classification.marker.review_sha256
+      &&batch.face_decoration_alias_review?.member_count===classification.marker.member_count
+      &&batch.targets===classification.memberCount&&JSON.stringify(batch.module_scope)===JSON.stringify(['lnx.people_graph.v1'])
+      &&!state.pending&&!state.uncertain&&!historyBusy&&!historyRefreshError&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending
+      &&(action==='undo'?!batch.undone&&!!status.session?.sync?.undoable.includes(batchId):batch.undone);
+  };
+  function restoreDecorationAlias(batchId:string,action:'undo'|'redo'){
+    if(!canDecorationAliasHistory(batchId,action))return;
+    setHistoryKind('face_decoration_alias');setHistoryRefreshError('');workflow.update(value,false);
+    return action==='undo'?history.undo(batchId):history.redo(batchId);
+  }
   const guard = () => {
     if (historyBusy) throw Error('共享来源批次历史仍在处理或查询中，不能重发修改。');
   };
@@ -141,6 +160,11 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
       canRedo: canHistory && !!ledger!.undone,
       undo: () => restoreAlias('undo'), redo: () => restoreAlias('redo'), query: history.query,
       refreshing: historyRefreshing, refresh: refreshHistory},
+    decorationAliasHistory:{batches:decorationAliasBatches,
+      state:historyKind==='face_decoration_alias'?history.ui:{...history.ui,phase:'closed' as const,result:null},
+      canUndo:(id:string)=>canDecorationAliasHistory(id,'undo'),canRedo:(id:string)=>canDecorationAliasHistory(id,'redo'),
+      undo:(id:string)=>restoreDecorationAlias(id,'undo'),redo:(id:string)=>restoreDecorationAlias(id,'redo'),query:history.query,
+      refreshError:historyRefreshError,refreshing:historyRefreshing,refresh:refreshHistory},
     presetEyeBagAliasHistory:{batches:presetAliasBatches,
       state:historyKind==='eye_bag_preset'?history.ui:{...history.ui,phase:'closed' as const,result:null},
       writePending:presetAliasPending,canUndo:(id:string)=>canPresetAliasHistory(id,'undo'),canRedo:(id:string)=>canPresetAliasHistory(id,'redo'),

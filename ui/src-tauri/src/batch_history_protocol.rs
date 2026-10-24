@@ -43,12 +43,15 @@ pub(crate) fn preset_alias_summary(v: &Value) -> bool {
 }
 pub(crate) fn receipt(v: &Value) -> bool {
     if !action(v) { return true; }
-    if let Some(marker)=v.get("face_decoration_batch_review") {
-        if !summary(marker) {return false;}
+    for key in ["face_decoration_batch_review","face_decoration_cohort_review","face_decoration_alias_review"] {
+        if let Some(marker)=v.get(key) {
+        if !summary(marker)||(key!="face_decoration_batch_review"&&marker["member_count"].as_u64().unwrap()<2) {return false;}
         if v["success"]==true && (v["module_scope"]!=json!(["lnx.people_graph.v1"])
             ||v["restored"].as_array().map(|rows|rows.len() as u64)!=marker["member_count"].as_u64()
             ||v["conflicts"].as_array().map_or(true,|rows|!rows.is_empty())){return false;}
     }
+    }
+    if ["face_decoration_batch_review","face_decoration_cohort_review","face_decoration_alias_review"].iter().filter(|k|v.get(**k).is_some()).count()>1{return false;}
     if !text(&v["batch_id"]) || !v["success"].is_boolean() || !v["outcome_unknown"].is_boolean() { return false; }
     for key in EYE_MARKERS {
         if let Some(marker) = v.get(*key) {

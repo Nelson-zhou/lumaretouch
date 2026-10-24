@@ -1,3 +1,4 @@
+import {observeDecorationMultiHistory} from './faceDecoration/multiHistory';
 import {observeDecorationBatchHistory} from './faceDecoration/batchHistoryRegistry';
 import {observeEyeBagPresetAliasHistory} from './eyeBagPreserve/presetAliasHistoryRegistry';
 import {observeRecoveryAliasHistory} from './effectRecovery/aliasHistoryRegistry';
@@ -32,7 +33,7 @@ const inspectionMutations=new Set(['photo_grain_request','photo_detail_request',
   'shoulder_shape','leg_shape','waist_shape','leg_length','neck_shape','arm_shape','torso_length','waist_length','head_size','people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
   const mutation=inspectionMutations.has(command)&&!(command==='session'&&(args as Record<string,unknown>|undefined)?.action==='query')
-    &&!(['batch','preset'].includes(command)&&['collarbone_visual','face_decoration_visual'].includes(String((args as Record<string,unknown>|undefined)?.action)))
+    &&!(['batch','preset'].includes(command)&&['collarbone_visual','face_decoration_visual','face_decoration_cohort_visual'].includes(String((args as Record<string,unknown>|undefined)?.action)))
     &&!(['batch','preset'].includes(command)&&(args as Record<string,unknown>|undefined)?.action==='eye_bag_visual')
     &&!(command==='batch'&&['face_style_visual','portrait_cohort_visual','eye_bag_cohort_visual'].includes(String((args as Record<string,unknown>|undefined)?.action)));
   const send=()=>{if(mutation)notifyInspectionEditIntent();return tauriInvoke<T>(command,args,options);};
@@ -355,6 +356,8 @@ export interface SyncState {
   batches: { batch_id: string; module_scope: string[]; targets: number; undone: boolean;
     face_style_alias_review?: {version: 1; review_sha256: string; member_count: number};
     face_decoration_batch_review?: {version: 1; review_sha256: string; member_count: number};
+    face_decoration_cohort_review?: {version:1;review_sha256:string;member_count:number};
+    face_decoration_alias_review?: {version:1;review_sha256:string;member_count:number};
     eye_bag_batch_review?: {version: 1; review_sha256: string; member_count: number};
     eye_bag_preset_alias_review?: import('./eyeBagPreserve/presetAliasHistoryRegistry').EyeBagPresetAliasMarker;
     eye_bag_recovery_alias_review?: import('./effectRecovery/aliasHistoryRegistry').RecoveryAliasMarker }[];
@@ -1368,7 +1371,7 @@ export const engineStatus = async () => {
   const status = await invoke<EngineStatus>("engine_status");
   observeFaceStyleAliasHistory(status.session?.sync, observation);
   observeEyeBagAliasHistory(status.session?.sync, observation);
-  observeDecorationBatchHistory(status.session?.sync, observation);
+  observeDecorationBatchHistory(status.session?.sync, observation);observeDecorationMultiHistory(status.session?.sync, observation);
   observeEyeBagBatchHistory(status.session?.sync, observation);
   observeEyeBagCohortHistory(status.session?.sync, observation);
   observeEyeBagPresetAliasHistory(status.session?.sync, observation);
@@ -1832,10 +1835,10 @@ export const readPresetResult=(requestId:string)=>invoke<{phase:string;request_i
 export const runBatch = (
   action: "preflight" | "commit" | "undo" | "redo" | "state",
   opts: { docs?: string[]; moduleScope?: string[]; conflictPolicy?: string;
-          batchId?: string; preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest;spillReviewAck?:import('./spillRemoval/transferModel').SpillTransferAck[];shadowReviewAck?:import('./originalShadow/transferModel').ShadowTransferAck[];torsoReviewAck?:import('./torsoLength/transferModel').TorsoTransferAck[];waistReviewAck?:import('./waistLength/transferModel').WaistTransferAck[];headReviewAck?:import('./headSize/transferModel').HeadTransferAck[];faceDecorationReviewAck?:import('./faceDecoration/transferModel').DecorationAck[];collarboneReviewAck?:import('./collarbone/transferModel').CollarboneAck[];faceStyleReviewAck?:import('./faceStyle/batchModel').FaceStyleBatchAck[];portraitCohortAck?:import('./portraitCohort/model').PortraitCohortAck[];eyeBagReviewAck?:import('./eyeBagPreserve/batchModel').EyeBagBatchAck[];eyeBagCohortAck?:import('./eyeBagPreserve/cohortModel').EyeBagCohortAck[] } = {},
+          batchId?: string; preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest;spillReviewAck?:import('./spillRemoval/transferModel').SpillTransferAck[];shadowReviewAck?:import('./originalShadow/transferModel').ShadowTransferAck[];torsoReviewAck?:import('./torsoLength/transferModel').TorsoTransferAck[];waistReviewAck?:import('./waistLength/transferModel').WaistTransferAck[];headReviewAck?:import('./headSize/transferModel').HeadTransferAck[];faceDecorationCohortAck?:import('./faceDecoration/transferModel').DecorationAck[];faceDecorationReviewAck?:import('./faceDecoration/transferModel').DecorationAck[];collarboneReviewAck?:import('./collarbone/transferModel').CollarboneAck[];faceStyleReviewAck?:import('./faceStyle/batchModel').FaceStyleBatchAck[];portraitCohortAck?:import('./portraitCohort/model').PortraitCohortAck[];eyeBagReviewAck?:import('./eyeBagPreserve/batchModel').EyeBagBatchAck[];eyeBagCohortAck?:import('./eyeBagPreserve/cohortModel').EyeBagCohortAck[] } = {},
 ) => invoke<{ requested: boolean }>("batch", {
   action, docs: opts.docs, moduleScope: opts.moduleScope,
-  conflictPolicy: opts.conflictPolicy, batchId: opts.batchId,preflightToken:opts.preflightToken,requestId:opts.requestId,localMaskTransfer:opts.localMaskTransfer,referenceColor:opts.referenceColor,peopleTransfer:opts.peopleTransfer,spillReviewAck:opts.spillReviewAck,shadowReviewAck:opts.shadowReviewAck,torsoReviewAck:opts.torsoReviewAck,waistReviewAck:opts.waistReviewAck,headReviewAck:opts.headReviewAck,faceDecorationReviewAck:opts.faceDecorationReviewAck,collarboneReviewAck:opts.collarboneReviewAck,faceStyleReviewAck:opts.faceStyleReviewAck,portraitCohortAck:opts.portraitCohortAck,eyeBagReviewAck:opts.eyeBagReviewAck,eyeBagCohortAck:opts.eyeBagCohortAck,
+  conflictPolicy: opts.conflictPolicy, batchId: opts.batchId,preflightToken:opts.preflightToken,requestId:opts.requestId,localMaskTransfer:opts.localMaskTransfer,referenceColor:opts.referenceColor,peopleTransfer:opts.peopleTransfer,spillReviewAck:opts.spillReviewAck,shadowReviewAck:opts.shadowReviewAck,torsoReviewAck:opts.torsoReviewAck,waistReviewAck:opts.waistReviewAck,headReviewAck:opts.headReviewAck,faceDecorationReviewAck:opts.faceDecorationReviewAck,faceDecorationCohortAck:opts.faceDecorationCohortAck,collarboneReviewAck:opts.collarboneReviewAck,faceStyleReviewAck:opts.faceStyleReviewAck,portraitCohortAck:opts.portraitCohortAck,eyeBagReviewAck:opts.eyeBagReviewAck,eyeBagCohortAck:opts.eyeBagCohortAck,
 });
 // Read-only paged full-chain eye-bag batch review; never starts a mutation.
 export const requestEyeBagCohortImage=(value:import('./eyeBagPreserve/cohortTransport').EyeBagCohortImageRequest)=>invoke<{requested:boolean}>('batch',{...value,action:'eye_bag_cohort_visual'});
@@ -2029,3 +2032,5 @@ export const requestDecorationPresetImage=(value:import('./faceDecoration/visual
 export const readDecorationPresetImage=(requestId:string)=>invoke<{phase:string;request_id:string;result?:import('./faceDecoration/visualTransport').DecorationImageReply;error?:string}>('preset_result',{requestId});
 export const requestDecorationBatchImage=(value:import('./faceDecoration/visualTransport').DecorationImageRequest)=>invoke<{requested:boolean}>('batch',{action:'face_decoration_visual',...value});
 export const readDecorationBatchImage=(requestId:string)=>invoke<{phase:string;request_id:string;result?:import('./faceDecoration/visualTransport').DecorationImageReply;error?:string}>('batch_result',{requestId});
+
+export const requestDecorationCohortImage=(value:import('./faceDecoration/visualTransport').DecorationImageRequest)=>invoke<{requested:boolean}>('batch',{action:'face_decoration_cohort_visual',...value});

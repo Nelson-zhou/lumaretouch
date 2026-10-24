@@ -40,11 +40,16 @@ def rejected(request, error, boundary, emit):
     decoration_read=decoration_read_only(request)
     decoration_commit=(action=='commit' and 'face_decoration_review_ack' in request
         and not set(request)-{'cmd','action','request_id','preflight_token','face_decoration_review_ack','eye_bag_review_ack','collarbone_review_ack'})
+    from .face_decoration_cohort_store import read_only as decoration_cohort_read_only,failure_context as decoration_cohort_failure
+    decoration_cohort_read=decoration_cohort_read_only(request)
+    decoration_cohort_commit=(action=='commit' and 'face_decoration_cohort_ack' in request
+        and not set(request)-{'cmd','action','request_id','preflight_token','module_scope','face_decoration_cohort_ack','eye_bag_cohort_ack','portrait_cohort_ack','collarbone_review_ack'})
     cohort_read = cohort_read_only(request)
-    if not (history or eye_commit or read_only(request) or cohort_commit or cohort_read or decoration_read or decoration_commit):
+    if not (history or eye_commit or read_only(request) or cohort_commit or cohort_read or decoration_read or decoration_commit or decoration_cohort_read or decoration_cohort_commit):
         return
     context = cohort_failure_context(request) if cohort_commit or cohort_read else failure_context(request)
     if decoration_read or decoration_commit:context.update(decoration_failure_context(request))
+    if decoration_cohort_read or decoration_cohort_commit:context.update(decoration_cohort_failure(request))
     if not context:
         return
     emit({'event': 'batch_result', 'action': action, 'request_id': identity,

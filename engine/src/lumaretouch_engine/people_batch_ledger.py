@@ -78,11 +78,13 @@ def prepare_scoped(engine,plans,targets):
     for identity,plan in plans.items():
         rows=[row for row in engine._docs if any(target['document_id']==row['document_id']
               and target['people_scope']==identity for target in targets.values())]
+        authority=plan.get('decoration_alias_authority')
+        extra={'decoration_authority':authority} if authority is not None else {}
         if identity==current_scope and current is not None:
             assets=affected_assets(plan['before'],plan['candidate'])
-            engine._people_prepare_graph(plan['candidate'],assets)
+            engine._people_prepare_graph(plan['candidate'],assets,**extra)
         else:
-            for row in rows:validate(engine,row,plan['candidate'])
+            for row in rows:validate(engine,row,plan['candidate'],**extra)
 
 
 def _publish(owner,engine,plans,targets):
@@ -127,7 +129,7 @@ def _publish(owner,engine,plans,targets):
     finally:engine._people_staged=None
 
 
-def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None,eye_bag_history=None,face_decoration_history=None,eye_bag_cohort_history=None,eye_bag_alias_history=None,eye_bag_preset_alias_history=None,preset_alias_verify=None,eye_bag_recovery_alias_history=None,recovery_alias_assets=None,recovery_alias_verify=None):
+def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None,eye_bag_history=None,face_decoration_history=None,face_decoration_alias_history=None,face_decoration_cohort_history=None,eye_bag_cohort_history=None,eye_bag_alias_history=None,eye_bag_preset_alias_history=None,preset_alias_verify=None,eye_bag_recovery_alias_history=None,recovery_alias_assets=None,recovery_alias_verify=None):
     composite=eye_bag_preset_alias_history is not None
     recovery=eye_bag_recovery_alias_history is not None
     if composite and recovery:raise ValueError('Mixed preset and recovery alias authority cannot be combined')
@@ -155,6 +157,12 @@ def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=
     if face_decoration_history is not None:
         from .face_decoration_batch_history import KEY as DECORATION_KEY,check as check_decoration_history
         entry[DECORATION_KEY]=deepcopy(face_decoration_history);check_decoration_history(entry)
+    if face_decoration_alias_history is not None:
+        from .face_decoration_alias_history import KEY as DA_KEY,check as check_da
+        entry[DA_KEY]=deepcopy(face_decoration_alias_history);check_da(entry)
+    if face_decoration_cohort_history is not None:
+        from .face_decoration_cohort_history import KEY as DC_KEY,check as check_dc
+        entry[DC_KEY]=deepcopy(face_decoration_cohort_history);check_dc(entry)
     if eye_bag_history is not None:
         from .eye_bag_batch_history import KEY as EYE_KEY, check as check_eye_history
         entry[EYE_KEY]=deepcopy(eye_bag_history)
@@ -205,6 +213,10 @@ def restore_scoped(engine,batch,redo):
     eye_history=check_eye_history(batch)
     from .face_decoration_batch_history import check as check_decoration_history,verify_restore as verify_decoration_restore
     decoration_history=check_decoration_history(batch)
+    from .face_decoration_alias_history import check as check_da,verify_restore as verify_da
+    decoration_alias=check_da(batch)
+    from .face_decoration_cohort_history import check as check_dc,verify_restore as verify_dc
+    decoration_cohort=check_dc(batch)
     from .eye_bag_cohort_history import check as check_cohort_history, verify_restore as verify_cohort_restore
     cohort_history=check_cohort_history(batch)
     from .eye_bag_alias_history import check as check_eye_alias_history, verify_restore as verify_eye_alias_restore
@@ -214,7 +226,7 @@ def restore_scoped(engine,batch,redo):
     from . import eye_bag_recovery_alias_history as RECOVERY, eye_bag_recovery_alias_transaction as RECOVERY_TRANSACTION
     recovery_history=RECOVERY.check(batch)
     owner=engine._batch_controller();plans={};reviewed={}
-    if decoration_history is not None or eye_history is not None or cohort_history is not None or eye_alias_history is not None or mixed_history is not None or recovery_history is not None:
+    if decoration_alias is not None or decoration_cohort is not None or decoration_history is not None or eye_history is not None or cohort_history is not None or eye_alias_history is not None or mixed_history is not None or recovery_history is not None:
         # The scoped restore route bypasses the legacy undo() wrapper. Capture
         # the current document so unsaved repair/crop edits cannot hide behind
         # a parked row's older dependency digest.
@@ -249,6 +261,8 @@ def restore_scoped(engine,batch,redo):
         return TRANSACTION.publish(owner,engine,plans,targets,batch,redo=redo)
     if alias_history is not None:verify_alias_restore(engine,batch,plans,targets)
     if decoration_history is not None:verify_decoration_restore(engine,batch,plans,targets)
+    if decoration_alias is not None:verify_da(engine,batch,plans,targets)
+    if decoration_cohort is not None:verify_dc(engine,batch,plans,targets,redo=redo)
     if eye_history is not None:verify_eye_restore(engine,batch,plans,targets)
     if cohort_history is not None:verify_cohort_restore(engine,batch,plans,targets,redo=redo)
     if eye_alias_history is not None:verify_eye_alias_restore(engine,batch,plans,targets,redo=redo)
@@ -260,6 +274,8 @@ def restore_scoped(engine,batch,redo):
         # Legacy scoped batches retain their established restoration behavior.
         verify_alias_restore(engine,batch,plans,_targets(owner,engine,plans))
     if decoration_history is not None:verify_decoration_restore(engine,batch,plans,_targets(owner,engine,plans))
+    if decoration_alias is not None:verify_da(engine,batch,plans,_targets(owner,engine,plans))
+    if decoration_cohort is not None:verify_dc(engine,batch,plans,_targets(owner,engine,plans),redo=redo)
     if eye_history is not None:verify_eye_restore(engine,batch,plans,_targets(owner,engine,plans))
     if cohort_history is not None:verify_cohort_restore(engine,batch,plans,_targets(owner,engine,plans),redo=redo)
     if eye_alias_history is not None:verify_eye_alias_restore(engine,batch,plans,_targets(owner,engine,plans),redo=redo)
@@ -274,6 +290,9 @@ def restore(owner,request):
     recovery_marker=recovery_summary(batch)
     from .face_decoration_batch_history import KEY as DECORATION_KEY,status_summary as decoration_summary
     decoration_marker=decoration_summary(batch)
+    from .face_decoration_alias_history import KEY as DA_KEY,status_summary as da_summary
+    from .face_decoration_cohort_history import KEY as DC_KEY,status_summary as dc_summary
+    da_marker=da_summary(batch);dc_marker=dc_summary(batch)
     try:
         if marker is not None:
             from .eye_bag_preset_alias_transaction import require_history_request
@@ -289,6 +308,8 @@ def restore(owner,request):
               'module_scope':batch['ops'],'restored':[int(k) for k in batch['targets']], 'conflicts':[], 'doc_state':owner.editor.status()}
         owner.last_result={'kind':'redo' if redo else 'undo','batch_id':request['batch_id'],'restored':body['restored'],'conflicts':[]}
         if decoration_marker is not None:body[DECORATION_KEY]=decoration_marker
+        if da_marker is not None:body[DA_KEY]=da_marker
+        if dc_marker is not None:body[DC_KEY]=dc_marker
         if marker is not None:body[MIXED_KEY]=marker
         if recovery_marker is not None:body[RECOVERY_KEY]=recovery_marker
         owner.emit(body)

@@ -15,6 +15,7 @@ export type DecorationPreview = SourcePreview & {sha256: string};
 export type FaceDecorationView = {recipe: Recipe; facts: {changed_pixels?: number; reason?: string; limitation?: string};
   source: Source; face_ref: FaceRef | null; reviewed: boolean; source_preview: DecorationPreview | null;
   reference_proof: ReferenceProof | null; landmark_digest: string | null; support_sha256: string | null;
+  alias_required?: boolean; alias_member_count?: number; alias_reason?: string | null; alias_review?: import('./aliasModel').DecorationAliasReview | null;
   native_available: boolean; support_available: boolean; support_reason: string | null; suspended: string | null};
 export type Capability = {face_decoration_protocol?: number; face_decoration_available?: boolean; face_decoration_reason?: string | null};
 export const neutral = (): Recipe => ({version: 1, pattern: 'freckle_dust', strength: 0});
@@ -109,7 +110,7 @@ export function access(view: PeopleView | null | undefined, capability: Capabili
     : report?.support_reason || (report?.reviewed !== true ? '请先独立审核此人物的可见皮肤范围。' : report?.suspended || undefined));
   return {...state, core, resetDisabled, patternDisabled, changeDisabled, reviewDisabled, reason};
 }
-export function command(view: PeopleView, action: 'face_decoration_reference' | 'face_decoration_review', requestId: string, payload: Record<string, unknown>): PeopleAction {
+export function command(view: PeopleView, action: 'face_decoration_reference' | 'face_decoration_review' | import('./aliasModel').DecorationAliasAction, requestId: string, payload: Record<string, unknown>): PeopleAction {
   if (!targetReady(view) || view.editing_target?.scope !== 'face' || view.editing_target.target_id !== view.selected_face_id)
     throw Error('脸部装饰审核需要当前人物独立编辑范围。');
   return {document_id: view.binding.document_id, document_epoch: view.binding.document_epoch,

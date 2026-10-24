@@ -96,7 +96,7 @@ The subsequent [complete preset and ordinary batch review](TRANSFER-CONTRACT.md)
 adds exact full mixed-image acknowledgment to the bounded routes below. It adds
 no new renderer/material or automatic visibility claim. The foundation-only
 generic preflight limitation is superseded for one-photo exact presets and
-ordinary explicit face-map batches, not for aliases or persistent cohorts.
+ordinary explicit face-map batches. The later [multiowner slice](MULTIOWNER-CONTRACT.md) adds persistent cohorts and direct scalar aliases with complete affected-image review.
 
 Ordinary original-photo preset capture/save/replay is registered with the
 existing preset library and scope installer. Active replay requires the current
@@ -111,12 +111,9 @@ now available on derived sources.
 Ordinary explicit face-map batches now use paged photographic before/after
 acknowledgment and the existing frozen scalar ledger. Only pattern/strength
 travel, with each target's own evidence. Generic whole-state batches and
-persistent associations with active decoration remain refused pending their
-own complete-image review; metadata preflight is not photographic review.
+unreviewed persistent associations with active decoration remain refused; the dedicated complete-image cohort route is documented separately. Metadata preflight is not photographic review.
 
-New same-owner source-identical alias mutations, including review/recovery
-pointers and dormant override changes, are refused until their complete
-affected-document review is implemented. Independent virtual-copy owners remain
+Direct scalar aliases now have complete affected-document review. Alias support/recovery pointer changes, mixed presets and dormant override changes remain refused pending their own exact support/state transactions. Independent virtual-copy owners remain
 independent. Existing eye-bag or face-style alias review cannot authorize new
 decoration state. Unsupported aliases must remain visible refusals rather than
 silently changing hidden siblings.

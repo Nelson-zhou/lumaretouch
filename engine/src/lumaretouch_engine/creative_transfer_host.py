@@ -152,6 +152,10 @@ def require_route(name,request):
         raise ValueError('Invalid reviewed transfer request')
     action=request.get('action')
     if name=='batch':
+        if action=='face_decoration_cohort_visual':
+            from .face_decoration_cohort_store import image_read_only
+            if not image_read_only(request):raise ValueError('Decoration cohort image requires exact frozen member identity')
+            return  # Only display retrieval, not mutation or a substitute source proof.
         if action=='eye_bag_cohort_visual':
             from .eye_bag_cohort_store import image_read_only
             if not image_read_only(request):raise ValueError('Eye-bag cohort image requires its exact frozen member identity')
@@ -186,7 +190,10 @@ def require_route(name,request):
             decoration=required|{'face_decoration_review_ack'}
             portrait=required|{'module_scope','portrait_cohort_ack'}
             eye_cohort=required|{'module_scope','eye_bag_cohort_ack'}
-            if set(request) not in (decoration,decoration|{'eye_bag_review_ack'},decoration|{'collarbone_review_ack'},
+            decoration_cohort=required|{'module_scope','face_decoration_cohort_ack'}
+            decoration_cohort_shape=(decoration_cohort<=set(request)
+                and not set(request)-(decoration_cohort|{'portrait_cohort_ack','eye_bag_cohort_ack','collarbone_review_ack'}))
+            if not decoration_cohort_shape and set(request) not in (decoration,decoration|{'eye_bag_review_ack'},decoration|{'collarbone_review_ack'},
                                     decoration|{'eye_bag_review_ack','collarbone_review_ack'},
                                     required,required|{'head_review_ack'},required|{'face_style_review_ack'},
                                     required|{'eye_bag_review_ack'},required|{'eye_bag_review_ack','collarbone_review_ack'},

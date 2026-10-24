@@ -188,6 +188,10 @@ impl ReviewBinding {
             if bytes > 192 * 1024 { return Err("eye bag source review identity exceeds receipt budget".into()); }
             return Ok(Some(Self { fields, bytes, read_only: crate::people_api::eye_bag::read_only(value), strict_failure_identity: true }));
         }
+        if let Some(fields)=crate::people_api::decoration_alias::binding(value)? {
+            let bytes=fields.to_string().len(); if bytes>16*1024{return Err("Decoration alias identity exceeds receipt budget".into());}
+            return Ok(Some(Self{fields,bytes,read_only:crate::people_api::decoration_alias::read_only(value),strict_failure_identity:true}));
+        }
         if let Some(fields) = crate::people_api::face_decoration::binding(value)? {
             let bytes = fields.to_string().len();
             if bytes > 256 * 1024 { return Err("face decoration source review identity exceeds receipt budget".into()); }
@@ -197,6 +201,10 @@ impl ReviewBinding {
             let bytes = fields.to_string().len();
             if bytes > 16 * 1024 { return Err("face style review identity exceeds receipt budget".into()); }
             return Ok(Some(Self { fields, bytes, read_only: crate::people_api::face_style::read_only(value), strict_failure_identity: false }));
+        }
+        if let Some(fields)=crate::batch_api::decoration_cohort::binding(value)? {
+            let bytes=fields.to_string().len(); if bytes>32*1024{return Err("Decoration cohort identity exceeds receipt budget".into());}
+            return Ok(Some(Self{fields,bytes,read_only:crate::batch_api::decoration_cohort::read_only(value),strict_failure_identity:value["action"]!="preflight"}));
         }
         if let Some(fields) = crate::batch_api::eye_cohort::binding(value)? {
             let bytes = fields.to_string().len();
@@ -290,7 +298,7 @@ impl ReviewBinding {
         // reports no write and has not echoed any accepted review identity.
         let no_write = value["success"] == false && value["outcome_unknown"] == false
             && value["error"].as_str().is_some_and(|error| !error.trim().is_empty())
-            && ["module_scope", "face_decoration_review_ack", "face_decoration_preset_ack", "face_decoration_preset", "face_decoration_visual_required", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack", "collarbone_preset_ack", "collarbone_preset", "face_style_review_ack", "face_style", "face_style_visual",
+            && ["face_decoration_cohort", "face_decoration_cohort_ack", "face_decoration_cohort_visual", "module_scope", "face_decoration_review_ack", "face_decoration_preset_ack", "face_decoration_preset", "face_decoration_visual_required", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack", "collarbone_preset_ack", "collarbone_preset", "face_style_review_ack", "face_style", "face_style_visual",
                 "eye_bag_cohort", "eye_bag_cohort_ack", "eye_bag_cohort_visual", "eye_bag_preset", "eye_bag_preset_ack", "eye_bag_review_ack", "eye_bag", "eye_bag_coverage", "eye_bag_visual", "portrait_cohort_ack", "portrait_cohort", "portrait_visual", "persistent_association", "association_source", "source_outcome", "collarbone_cohort",
                 "torso_transfer", "waist_transfer", "head_transfer",
                 "member_document_id", "member_revision", "before", "after", "doc_state", "batch_id", "applied", "committed", "operation_committed"]
@@ -302,7 +310,7 @@ impl ReviewBinding {
             && value["requires_reload"] != true;
         // A second family cannot be added to a portrait acknowledgment after
         // dispatch. Both presence and the exact ordered arrays were authorized.
-        let same_families = (self.fields.get("face_decoration_review_ack").is_none()
+        let same_families = (self.fields.get("face_decoration_cohort_ack").is_none() || ["eye_bag_cohort_ack","eye_bag_cohort","portrait_cohort_ack","portrait_cohort","collarbone_review_ack","collarbone_cohort"].iter().all(|key|value.get(*key)==self.fields.get(*key))) && (self.fields.get("face_decoration_review_ack").is_none()
             || ["eye_bag_review_ack","collarbone_review_ack"].iter().all(|k|value.get(*k)==self.fields.get(*k))) && (!(self.fields.get("side").is_some() && self.fields.get("sha256").is_some()
             && self.fields.get("preflight_token").is_some())
             || ["member_document_id", "member_revision"].iter().all(|key| value.get(*key) == self.fields.get(*key)))
@@ -316,7 +324,7 @@ impl ReviewBinding {
             || (value.get("collarbone_review_ack") == self.fields.get("collarbone_review_ack")
                 && value.get("collarbone_cohort") == self.fields.get("collarbone_cohort")));
         (no_write && !self.strict_failure_identity && self.fields.get("face_style_request").is_none()) || (same_families && self.fields.as_object().unwrap().iter().all(|(key, expected)| {
-            if key=="face_decoration_applies_sha256" || key=="eye_bag_cohort_applies_sha256" || key=="eye_bag_applies_sha256" {
+            if key=="face_decoration_cohort_applies_sha256" || key=="face_decoration_applies_sha256" || key=="eye_bag_cohort_applies_sha256" || key=="eye_bag_applies_sha256" {
                 value["applies"].is_object() && expected.as_str()==Some(crate::batch_api::collarbone::request_digest(&value["applies"]).as_str())
             } else if key=="collarbone_applies_sha256" {
                 value["applies"].is_object() && expected.as_str()==Some(crate::batch_api::collarbone::request_digest(&value["applies"]).as_str())
@@ -331,7 +339,7 @@ impl ReviewBinding {
         if (self.fields["protocol"] == 2 && self.fields.get("ack").is_some())
             || self.fields.get("eye_bag_recovery_alias_review").is_some() { value["no_write"] = json!(false); }
         for (key, expected) in self.fields.as_object().unwrap() {
-            if !["face_decoration_applies_sha256", "eye_bag_cohort_applies_sha256", "eye_bag_applies_sha256", "collarbone_applies_sha256", "face_style_applies_sha256", "portrait_applies_sha256"].contains(&key.as_str()) {value[key] = expected.clone();}
+            if !["face_decoration_cohort_applies_sha256", "face_decoration_applies_sha256", "eye_bag_cohort_applies_sha256", "eye_bag_applies_sha256", "collarbone_applies_sha256", "face_style_applies_sha256", "portrait_applies_sha256"].contains(&key.as_str()) {value[key] = expected.clone();}
         }
     }
 }
@@ -341,7 +349,7 @@ impl Receipt {
         self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true
             // Only explicitly classified head/collarbone preflight or paged
             // image reads may expire; an unknown commit remains guarded.
-            || (matches!(self.action.as_str(), "preflight" | "face_decoration_visual" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "face_decoration_reference") && self.review.as_ref().is_some_and(|review| review.read_only)))
+            || (matches!(self.action.as_str(), "face_decoration_alias_preview" | "face_decoration_alias_image" | "face_decoration_cohort_visual" | "preflight" | "face_decoration_visual" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "face_decoration_reference") && self.review.as_ref().is_some_and(|review| review.read_only)))
     }
 }
 pub(crate) struct ReceiptHost<K: ReceiptKind> {
