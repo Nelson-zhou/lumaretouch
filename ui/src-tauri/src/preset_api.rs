@@ -3,6 +3,9 @@ use std::sync::Arc;
 use serde_json::{json, Value};
 use tauri::State;
 use crate::{AppState, engine::EngineHandle};
+#[path="collarbone_preset_protocol.rs"]
+pub(crate) mod collarbone;
+pub(crate) fn read_only(value:&Value)->bool {collarbone::read_only(value)}
 fn require_xmp_support(state: &AppState, command: &Value) -> Result<(), String> {
     if (command["action"] == "xmp_inspect" || command.get("xmp_ack").is_some() || command.get("xmp_review_ack").is_some())
         && state.ready_caps.lock().map_err(|_| "capability lock poisoned")?["xmp_import_protocol"] != 1 {
@@ -11,6 +14,7 @@ fn require_xmp_support(state: &AppState, command: &Value) -> Result<(), String> 
     Ok(())
 }
 pub(crate) fn enqueue(state: &AppState, handle: &EngineHandle, command: Value) -> Result<(), String> {
+    collarbone::command(&command)?;
     crate::spill_transfer_protocol::command(&command)?;
     crate::original_shadow_transfer_protocol::command(&command)?;
     crate::torso_transfer_protocol::command(&command)?;
@@ -51,8 +55,12 @@ pub(crate) fn preset(
     torso_review_ack: Option<Value>,
     waist_review_ack: Option<Value>,
     head_review_ack: Option<Value>,
+    collarbone_preset_ack: Option<Value>,
+    revision: Option<String>,
+    side: Option<String>,
+    sha256: Option<String>,
 ) -> Result<Value, String> {
-    const ACTIONS: [&str; 7] = ["list", "preflight", "apply", "save", "import", "delete", "xmp_inspect"];
+    const ACTIONS: [&str; 8] = ["list", "preflight", "apply", "save", "import", "delete", "xmp_inspect", "collarbone_visual"];
     if !ACTIONS.contains(&action.as_str()) {
         return Err(format!("preset 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
     }
@@ -78,6 +86,10 @@ pub(crate) fn preset(
         ("torso_review_ack", torso_review_ack),
         ("waist_review_ack", waist_review_ack),
         ("head_review_ack", head_review_ack),
+        ("collarbone_preset_ack", collarbone_preset_ack),
+        ("revision", revision.map(Value::from)),
+        ("side", side.map(Value::from)),
+        ("sha256", sha256.map(Value::from)),
     ] {
         if let Some(v) = v {
             cmd[k] = v;
@@ -86,6 +98,7 @@ pub(crate) fn preset(
     if let Some(v) = module_scope {
         cmd["module_scope"] = json!(v);
     }
+    collarbone::command(&cmd)?;
     crate::spill_transfer_protocol::command(&cmd)?;
     crate::original_shadow_transfer_protocol::command(&cmd)?;
     crate::torso_transfer_protocol::command(&cmd)?;

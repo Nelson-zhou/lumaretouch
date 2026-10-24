@@ -1,6 +1,7 @@
-# Remaining current-photo preset visual review
+# Current-photo preset visual review: design record
 
-Source inspection only, 2026-10-24. This is an implementation plan, not completed
+Source inspection only, 2026-10-24. The plan below is now source-authored in
+[PRESET-VISUAL-CONTRACT.md](PRESET-VISUAL-CONTRACT.md), not runtime-accepted
 functionality. The collarbone batch and persistent-cohort visual proofs do not
 authorize current-photo preset application through another controller.
 

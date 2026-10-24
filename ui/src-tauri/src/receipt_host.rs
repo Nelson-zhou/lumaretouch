@@ -178,6 +178,11 @@ mod scalar_binding_tests {
 struct ReviewBinding { fields: Value, bytes: usize, read_only: bool }
 impl ReviewBinding {
     fn from_command(value: &Value) -> Result<Option<Self>, String> {
+        if let Some(fields) = crate::preset_api::collarbone::binding(value)? {
+            let bytes=fields.to_string().len();
+            if bytes>16*1024{return Err("preset collarbone review identity exceeds receipt budget".into());}
+            return Ok(Some(Self{fields,bytes,read_only:crate::preset_api::collarbone::read_only(value)}));
+        }
         if let Some(fields) = crate::batch_api::collarbone::binding(value)? {
             let bytes = fields.to_string().len();
             if bytes > 16 * 1024 { return Err("collarbone review identity exceeds receipt budget".into()); }
@@ -217,7 +222,7 @@ impl ReviewBinding {
         // reports no write and has not echoed any accepted review identity.
         let no_write = value["success"] == false && value["outcome_unknown"] == false
             && value["error"].as_str().is_some_and(|error| !error.trim().is_empty())
-            && ["module_scope", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack",
+            && ["module_scope", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack", "collarbone_preset_ack", "collarbone_preset",
                 "torso_transfer", "waist_transfer", "head_transfer",
                 "before", "after", "doc_state", "batch_id", "applied", "committed", "operation_committed"]
                 .iter().all(|key| value.get(*key).is_none())

@@ -18,6 +18,7 @@ _NO_SHADOW_ACK = object()
 _NO_TORSO_ACK = object()
 _NO_WAIST_ACK = object()
 _NO_HEAD_ACK = object()
+_NO_COLLARBONE_ACK = object()
 
 
 class PresetReviews:
@@ -25,17 +26,18 @@ class PresetReviews:
         self.pending=OrderedDict()
         self.targets={}
 
-    def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None,prepare_crop=None,verify_crop=None,prepare_xmp=None,verify_xmp=None,prepare_spill=None,verify_spill=None,prepare_shadow=None,verify_shadow=None,prepare_torso=None,verify_torso=None,prepare_waist=None,verify_waist=None,prepare_head=None,verify_head=None):
+    def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None,prepare_crop=None,verify_crop=None,prepare_xmp=None,verify_xmp=None,prepare_spill=None,verify_spill=None,prepare_shadow=None,verify_shadow=None,prepare_torso=None,verify_torso=None,prepare_waist=None,verify_waist=None,prepare_head=None,verify_head=None,prepare_collarbone=None,verify_collarbone=None):
         modules=DERIVED.require_modules(state,preset['modules']);SC.check_scope(list(modules))
         family=BODY_REVIEW.select(modules)
+        collarbone=SC.COLLARBONE.OP in modules
         row_identity=(row.get('document_id'),row.get('path'))
         xmp=preset.get("xmp_import")
         if family is not None and xmp is not None:raise ValueError('身体长度参数须独立审核，不能附带 XMP 兼容性迁移')
         derived=SOURCE.record(state) is not None
-        if xmp is None and not derived and LG.OP not in modules and OA.OP not in modules and RC.OP not in modules and SC.OP_CROP not in modules and SC.SPILL_REMOVAL.OP not in modules and SC.ORIGINAL_SHADOW.OP not in modules and family is None:raise ValueError('此预设不含需要冻结目标预检的模块')
+        if xmp is None and not derived and LG.OP not in modules and OA.OP not in modules and RC.OP not in modules and SC.OP_CROP not in modules and SC.SPILL_REMOVAL.OP not in modules and SC.ORIGINAL_SHADOW.OP not in modules and family is None and not collarbone:raise ValueError('此预设不含需要冻结目标预检的模块')
         # Current captured state owns the effective source, not a stale parked
         # row state. Originals retain their existing review contract.
-        proof=SOURCE.row_proof({**row,'state':state}) if xmp is not None or derived or SC.OP_CROP in modules or SC.SPILL_REMOVAL.OP in modules or SC.ORIGINAL_SHADOW.OP in modules or family is not None else None
+        proof=SOURCE.row_proof({**row,'state':state}) if xmp is not None or derived or SC.OP_CROP in modules or SC.SPILL_REMOVAL.OP in modules or SC.ORIGINAL_SHADOW.OP in modules or family is not None or collarbone else None
         if LG.OP in modules:prepared,transfer=LR.prepare_modules(state,modules,row,options,preview=True)
         else:
             if options is not None:raise ValueError('未选择局部组，不能附带蒙版选项')
@@ -94,36 +96,56 @@ class PresetReviews:
             if prepare_xmp is None or verify_xmp is None:raise ValueError('XMP requires actual full-target image review ports')
             xmp_record,xmp_transfer=prepare_xmp(row,state,candidate,document_id,str(revision),xmp['source_sha256'])
             verify_xmp(row,state,candidate,document_id,str(revision),xmp['source_sha256'],xmp_record)
+        collarbone_record=None;collarbone_public=None
+        if collarbone:
+            if prepare_collarbone is None or verify_collarbone is None:
+                raise ValueError('Collarbone preset requires the exact mixed-portrait target image planner')
+            collarbone_record,collarbone_public=prepare_collarbone(row,state,candidate,document_id,str(revision),preset,prepared)
+            verify_collarbone(row,state,candidate,document_id,str(revision),collarbone_record)
         if proof is not None:SOURCE.verify_row({**row,'state':state},proof)
-        if family is not None and (row.get('document_id'),row.get('path'))!=row_identity:
+        if (family is not None or collarbone) and (row.get('document_id'),row.get('path'))!=row_identity:
             raise ValueError('身体长度预检期间目标文档身份发生变化')
         token=uuid.uuid4().hex
         record={'preset':deepcopy(preset),'modules':prepared,'transfer':transfer,'optics':optical_record,'reference':reference_record,'crop':crop_record,'xmp':xmp_record,'spill':spill_record,'shadow':shadow_record,'torso':None,
                 **({family.preset_key:scalar_record} if family is not None else {}),
+                **({'collarbone':collarbone_record} if collarbone else {}),
                 'document_id':document_id,'revision':str(revision),'path':row['path'],
                 'row_document_id':row.get('document_id'),'source_proof':proof,
                 'before':canonical(OA.before_params(state,list(modules))),'local_key':LG.undo_key(state) if LG.OP in modules else None,
                 'expires':time.monotonic()+30*60}
         canonical(record);self.pending[token]=record
-        if family is not None:self.targets[token]=row
+        if family is not None or collarbone:self.targets[token]=row
+        if collarbone:
+            from .collarbone_preset_store import attach,prune
+            try:attach(self,token,collarbone_record)
+            except Exception:
+                self.pending.pop(token,None);self.targets.pop(token,None);prune(self);raise
         while len(self.pending)>8:
             expired,_=self.pending.popitem(last=False)
             self.targets.pop(expired,None)
+        from .collarbone_preset_store import prune
+        prune(self)
         return {'id':preset['id'],'name':preset['name'],'module_scope':list(modules),
                 'preflight_token':token,'applies':deepcopy(prepared),'local_mask_transfer':transfer,'optical_transfer':optical_transfer,'reference_color':reference_record,
                 'document_id':document_id,'revision':str(revision),'source_proof':deepcopy(proof),'crop_transfer':crop_transfer,
                 **({'spill_transfer':spill_transfer} if SC.SPILL_REMOVAL.OP in prepared else {}),
                 **({'shadow_transfer':shadow_transfer} if SC.ORIGINAL_SHADOW.OP in prepared else {}),
                 **({family.wire_key:scalar_transfer} if family is not None else {}),
+                **({'collarbone_preset':collarbone_public} if collarbone else {}),
                 **({'xmp_transfer':xmp_transfer,'xmp_report':deepcopy(xmp['report'])} if xmp is not None else {})}
 
-    def claim(self,token,preset_id,state,row,document_id,revision,verify_crop=None,verify_xmp=None,xmp_review_ack=None,verify_spill=None,spill_review_ack=_NO_SPILL_ACK,verify_shadow=None,shadow_review_ack=_NO_SHADOW_ACK,verify_torso=None,torso_review_ack=_NO_TORSO_ACK,verify_waist=None,waist_review_ack=_NO_WAIST_ACK,verify_head=None,head_review_ack=_NO_HEAD_ACK):
+    def claim(self,token,preset_id,state,row,document_id,revision,verify_crop=None,verify_xmp=None,xmp_review_ack=None,verify_spill=None,spill_review_ack=_NO_SPILL_ACK,verify_shadow=None,shadow_review_ack=_NO_SHADOW_ACK,verify_torso=None,torso_review_ack=_NO_TORSO_ACK,verify_waist=None,waist_review_ack=_NO_WAIST_ACK,verify_head=None,head_review_ack=_NO_HEAD_ACK,verify_collarbone=None,collarbone_preset_ack=_NO_COLLARBONE_ACK):
         if type(token) is not str or token not in self.pending:raise ValueError('目标预设预检已失效或使用，请重新预检')
         record=self.pending[token]
         family=BODY_REVIEW.select(record['modules'])
-        if family is not None and self.targets.get(token) is not row:
+        collarbone=SC.COLLARBONE.OP in record['modules']
+        if (family is not None or collarbone) and self.targets.get(token) is not row:
             raise ValueError('身体长度预设的目标行已替换，请重新预检')
-        if time.monotonic()>=record['expires']:raise ValueError('目标预设预检已过期，请重新预检')
+        if time.monotonic()>=record['expires']:
+            self.pending.pop(token,None);self.targets.pop(token,None)
+            from .collarbone_preset_store import prune
+            prune(self)
+            raise ValueError('目标预设预检已过期，请重新预检')
         if (record['preset']['id']!=preset_id or record['document_id']!=document_id or record['path']!=row['path'] or record['revision']!=str(revision)):
             raise ValueError('照片、版本或预设与预检不同，请重新预检')
         if record.get('row_document_id') != row.get('document_id'):
@@ -190,7 +212,18 @@ class PresetReviews:
             acknowledgment(xmp_review_ack,record)
             verify_xmp(row,state,candidate,document_id,str(revision),xmp['source_sha256'],record.get('xmp'))
         elif xmp_review_ack is not None:raise ValueError('Unexpected XMP review acknowledgment')
+        if collarbone:
+            from .collarbone_preset_review import acknowledgment
+            from .collarbone_preset_store import verify_available
+            if verify_collarbone is None:raise ValueError('Collarbone preset verifier is unavailable')
+            acknowledgment(collarbone_preset_ack,record['collarbone'])
+            verify_collarbone(row,state,candidate,document_id,str(revision),record['collarbone'])
+            verify_available(self,token)
+        elif collarbone_preset_ack is not _NO_COLLARBONE_ACK:
+            raise ValueError('A collarbone preset acknowledgment cannot authorize another preset scope')
         if proof is not None:SOURCE.verify_row({**row,'state':state},proof)
         del self.pending[token]
         self.targets.pop(token,None)
+        from .collarbone_preset_store import prune
+        prune(self)
         return record

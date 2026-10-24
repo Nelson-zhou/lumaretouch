@@ -139,10 +139,28 @@ class WorkflowPortsMixin:
         from .waist_length_transfer_review import history_identity
         return history_identity(self,row,state,document_id,str(revision))
 
+    def _prepare_collarbone_preset(self,row,before,candidate,document_id,revision,preset,modules):
+        from .collarbone_preset_review import prepare
+        return prepare(self,row,before,candidate,document_id,str(revision),preset,modules)
+
+    def _verify_collarbone_preset(self,row,before,candidate,document_id,revision,record):
+        from .collarbone_preset_review import verify
+        return verify(self,row,before,candidate,document_id,str(revision),record)
+
+    def _replay_collarbone_preset(self,row,state,document_id,revision,record,**kwargs):
+        from .collarbone_preset_review import replay
+        return replay(self,row,state,document_id,str(revision),record,**kwargs)
+
+    def _verify_collarbone_preset_applied(self,row,state,document_id,revision,record,**kwargs):
+        from .collarbone_preset_review import verify_applied
+        return verify_applied(self,row,state,document_id,str(revision),record,**kwargs)
+
     def _preset_controller(self):
         controller = self.__dict__.get("_live_presets")
         if controller is None:
             controller = PRS.PresetController(PRS.PresetPorts(
+                prepare_collarbone=self._prepare_collarbone_preset,verify_collarbone=self._verify_collarbone_preset,
+                collarbone_replay=self._replay_collarbone_preset,verify_collarbone_applied=self._verify_collarbone_preset_applied,
                 prepare_optics=self._prepare_optics_target, prepare_reference=self._prepare_reference_target,
                 prepare_crop=self._prepare_crop_target, verify_crop=self._verify_crop_target,
                 prepare_spill=self._prepare_spill_target, verify_spill=self._verify_spill_target,

@@ -5,9 +5,10 @@ import {fetchCollarboneImage} from './visualTransport';
 import type {SpillImage} from '../spillRemoval/model';
 import type {CollarboneCoverage} from '../people/transferProof';
 type ImageStatus='loading'|'ready'|'error';
-type ReviewProps={value:CollarboneVisual;coverage:CollarboneCoverage;preflightToken:string;reviewKey:string;onReady:(key:string,ready:boolean)=>void;disabled?:boolean};
+export type CollarboneImageLoader=(side:'before'|'after',live:()=>boolean)=>Promise<SpillImage>;
+type ReviewProps={value:CollarboneVisual;coverage:CollarboneCoverage;preflightToken:string;reviewKey:string;onReady:(key:string,ready:boolean)=>void;disabled?:boolean;imageLoader?:CollarboneImageLoader;preset?:boolean};
 export function CollarboneTransferReview(props:ReviewProps){return <TargetReview key={props.reviewKey} {...props}/>;}
-function TargetReview({value,coverage,preflightToken,reviewKey,onReady,disabled=false}:ReviewProps){
+function TargetReview({value,coverage,preflightToken,reviewKey,onReady,disabled=false,imageLoader,preset=false}:ReviewProps){
   const [pair,setPair]=useState<{before:SpillImage;after:SpillImage}|null>(null),[requestError,setRequestError]=useState('');
   const [loadAttempt,setLoadAttempt]=useState(0);
   const [zoom,setZoom]=useState(false);
@@ -25,7 +26,7 @@ function TargetReview({value,coverage,preflightToken,reviewKey,onReady,disabled=
     if(!loadAttempt)return;
     let live=true;setPair(null);setRequestError('');notify.current(reviewKey,false);
     const api={request:requestCollarboneImage,read:readCollarboneImage};
-    const fetchSide=(side:'before'|'after')=>fetchCollarboneImage(api,{preflightToken,documentId:value.document_id,revision:value.revision,side,sha256:value[side].sha256,requestId:crypto.randomUUID()},value[side],()=>live);
+    const fetchSide=(side:'before'|'after')=>imageLoader?imageLoader(side,()=>live):fetchCollarboneImage(api,{preflightToken,documentId:value.document_id,revision:value.revision,side,sha256:value[side].sha256,requestId:crypto.randomUUID()},value[side],()=>live);
     void (async()=>{try{
       const before=await fetchSide('before'),after=await fetchSide('after');
       if(!await verifyCollarboneCoverage(value,coverage))throw Error('目标覆盖范围与冻结摘要不一致');
@@ -47,7 +48,7 @@ function TargetReview({value,coverage,preflightToken,reviewKey,onReady,disabled=
   }
   return <section aria-label="本目标锁骨增强前后审核" style={{flexBasis:'100%'}}>
     <strong>本次冻结目标的真实前后预览，尚未应用</strong>
-    <p>这里显示预检时冻结目标完整编辑链的实际应用前后效果，包含本次同时选择的其他人物参数。只传递数值，不复制源图锁骨曲线、身体蒙版、类别确认或人物关联。零强度也必须审核，因其可能移除目标已有增强。</p>
+    <p>这里显示预检时冻结目标完整编辑链的实际应用前后效果，{preset?'包含预设所选的人像与非人像模块，不是仅叠加锁骨的示意图。':'包含本次同时选择的其他人物参数。'}只传递数值，不复制源图锁骨曲线、身体蒙版、类别确认或人物关联。零强度也必须审核，因其可能移除目标已有增强。</p>
     <p>每张目标的可见锁骨范围与类别来自其独立审核。下方可切换原尺寸显示并滚动检查细节；图像最长边最多 1024 像素，不替代全分辨率照片验收。预检后若照片或支持证据改变，提交会拒绝，不能用旧图授权新状态。</p>
     <ul>{coverage.targets.map(row=><li key={row.face_ref.face_instance_id}>本人脸 {row.face_ref.face_instance_id}：{row.scope==='neutral-no-effect'
       ?'候选强度为零，不据此声明存在类别或身体审核；应用前的已有作用仍显示在真实前图。'
@@ -63,7 +64,7 @@ function TargetReview({value,coverage,preflightToken,reviewKey,onReady,disabled=
     </figure>)}</div>}
     {!ready&&<p role="status">{failed?'前后预览未通过 PNG 内容、尺寸或显示校验，不能确认；请重新预检。':!loadAttempt?'请先读取并检查本目标的两张真实预览。':'正在校验并显示本目标的两张真实预览…'}</p>}
     <label><input type="checkbox" checked={confirmed} disabled={disabled||!ready}
-      onChange={event=>setViewed({key:reviewKey,checked:ready&&event.target.checked})}/>我已查看本目标锁骨、身体及同时选择参数的真实前后效果，确认本次同步</label>
+      onChange={event=>setViewed({key:reviewKey,checked:ready&&event.target.checked})}/>我已查看本目标锁骨、身体及同时选择参数的真实前后效果，确认{preset?'本次完整预设应用':'本次同步'}</label>
     <p><small>先用目标完整源像素与目标独立审核执行完整编辑链，再生成审核缩略图。缩略图不参与最终出片；这不是源图效果示意，也不替代全分辨率验收。</small></p>
   </section>;
 }

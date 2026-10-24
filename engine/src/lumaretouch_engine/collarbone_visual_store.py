@@ -43,7 +43,8 @@ def _records(plan):
 
 
 class _Images:
-    def __init__(self):
+    def __init__(self, records=None):
+        self.records = _records if records is None else records
         self.directory = tempfile.TemporaryDirectory(prefix='lumaretouch-collarbone-review-')
         self.plans = {}
         self.bytes = 0
@@ -66,7 +67,7 @@ class _Images:
 
     def attach(self, plan, display_map):
         from .collarbone_transfer_review import MAX_PNG_BYTES
-        records = _records(plan)
+        records = self.records(plan)
         if type(display_map) is not dict or set(display_map) != set(records):
             raise ValueError('Every eligible collarbone target requires both immutable review images')
         if plan.token in self.plans:
@@ -108,7 +109,7 @@ class _Images:
             raise
 
     def read(self, plan, document, revision, side, digest):
-        record = _records(plan).get(document)
+        record = self.records(plan).get(document)
         row = self.plans.get(plan.token, {}).get(document)
         if (record is None or row is None or side not in ('before', 'after')
                 or revision != record['revision'] or digest != record[side]['sha256']):

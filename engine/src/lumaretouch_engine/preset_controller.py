@@ -19,9 +19,9 @@ from . import sky_replacement_scope as SKY, optics_auto_scope as OA, id_backgrou
 from . import creative_derived_transfer as DERIVED, creative_derived_source as SOURCE
 from . import body_scalar_transfer_review as BODY_REVIEW
 
-ACTIONS = ("list", "preflight", "apply", "save", "import", "delete", "xmp_inspect")
+ACTIONS = ("list", "preflight", "apply", "save", "import", "delete", "xmp_inspect", "collarbone_visual")
 LEGACY_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note", "local_mask_transfer", "preflight_token"}
-FIELDS = {"list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack"},
+FIELDS = {"collarbone_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token"}, "list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_preset_ack"},
           "preflight": {"id", "document_id", "local_mask_transfer", "module_scope"},
           "save": {"id", "name", "kind", "force", "note", "module_scope", "document_id", "local_mask_transfer"},
           "import": {"path", "id", "force", "xmp_ack"}, "xmp_inspect": {"path"}, "delete": {"id"}}
@@ -61,6 +61,10 @@ class PresetPorts:
     prepare_head: Callable | None = None
     verify_head: Callable | None = None
     head_history_identity: Callable | None = None
+    prepare_collarbone: Callable | None = None
+    verify_collarbone: Callable | None = None
+    collarbone_replay: Callable | None = None
+    verify_collarbone_applied: Callable | None = None
 
 
 class PresetController:
@@ -103,6 +107,7 @@ class PresetController:
         if action not in ACTIONS: raise SC.ScopeError(f"未知 preset action: {action}")
         allowed = (FIELDS[action] | {"cmd", "action", "request_id"}) if correlated else LEGACY_KEYS
         if set(p) - allowed: raise SC.ScopeError(f"preset 收到不认识的参数：{sorted(set(p)-allowed)}")
+        if action == 'collarbone_visual' and not correlated:raise SC.ScopeError('Preset image reads require a correlated frozen request')
         if correlated:
             if p.get("cmd", "preset") != "preset": raise SC.ScopeError("preset command mismatch")
             if "force" in p and type(p["force"]) is not bool: raise SC.ScopeError("force 必须是布尔值")
@@ -150,6 +155,9 @@ class PresetController:
                 catalog = self.state(); event = {"event": "preset_list", **catalog}; self.emit(event)
                 if not catalog["available"]: raise SC.ScopeError("无法读取预设目录，详见目录错误")
                 evidence = {"catalog": catalog}
+            elif action == "collarbone_visual":
+                from .collarbone_preset_store import retrieve
+                evidence = retrieve(self,p)
             elif action == "preflight":
                 doc = PS.find(p['id'])
                 if 'module_scope' in p and (type(p['module_scope']) is not list
@@ -164,6 +172,8 @@ class PresetController:
                 # decides whether this source can use the general route.
                 DERIVED.require_modules(state, doc['modules'])
                 family=BODY_REVIEW.select(doc['modules'])
+                if SC.COLLARBONE.OP in doc['modules'] and (self.ports.collarbone_replay is None or self.ports.verify_collarbone_applied is None):
+                    raise SC.ScopeError('Exact collarbone preset graph replay and post-render verification are unavailable')
                 if family is not None and family.port_name in ('waist','head') and getattr(self.ports,family.port_name+'_history_identity') is None:
                     raise SC.ScopeError('身体参数预设缺少当前完整人物身份审核端口')
                 for op in doc['modules']:
@@ -176,8 +186,9 @@ class PresetController:
                     self.ports.prepare_spill, self.ports.verify_spill, self.ports.prepare_shadow, self.ports.verify_shadow,
                     self.ports.prepare_torso, self.ports.verify_torso,
                     self.ports.prepare_waist, self.ports.verify_waist,
-                    self.ports.prepare_head, self.ports.verify_head)
-                if family is not None:
+                    self.ports.prepare_head, self.ports.verify_head,
+                    self.ports.prepare_collarbone,self.ports.verify_collarbone)
+                if family is not None or SC.COLLARBONE.OP in doc['modules']:
                     current=self.ports.target_row()
                     from .optics_candidate_identity import fingerprint
                     if (current is not reviewed_row
@@ -185,6 +196,8 @@ class PresetController:
                             or fingerprint(self.ports.capture())!=fingerprint(state)):
                         token=evidence['preflight_token']
                         self.reviews.pending.pop(token,None);self.reviews.targets.pop(token,None)
+                        from .collarbone_preset_store import prune
+                        prune(self.reviews)
                         raise SC.ScopeError('身体长度预检期间目标发生变化，请重新审核')
             elif action == "xmp_inspect":
                 from .preset_xmp_import import inspect
@@ -247,10 +260,13 @@ class PresetController:
         result = public_view(result)
         # Compact acknowledgment identities survive failures and bounded receipt
         # fallbacks. A replay never gains a new token or fresh image approval.
-        scalar_keys=('torso_review_ack','waist_review_ack','head_review_ack')
-        scalar_scope=any(op in result.get('module_scope',[]) for op in (SC.TORSO_LENGTH.OP,SC.WAIST_LENGTH.OP,SC.HEAD_SIZE.OP))
+        scalar_keys=('torso_review_ack','waist_review_ack','head_review_ack','collarbone_preset_ack')
+        scalar_scope=any(op in result.get('module_scope',[]) for op in (SC.TORSO_LENGTH.OP,SC.WAIST_LENGTH.OP,SC.HEAD_SIZE.OP,SC.COLLARBONE.OP))
         review_fields = {key: deepcopy(result[key]) for key in ('module_scope', 'preflight_token', *scalar_keys)
                          if key in result} if any(key in result for key in scalar_keys) or scalar_scope else {}
+        if 'collarbone_preset_ack' in result:
+            review_fields.update({key:deepcopy(result[key]) for key in
+                ('id','document_id','xmp_review_ack','spill_review_ack','shadow_review_ack') if key in result})
         try:
             json.dumps(result, allow_nan=False, ensure_ascii=False).encode("utf-8")
             raw = json.dumps(result, allow_nan=False, ensure_ascii=True)
@@ -288,18 +304,27 @@ class PresetController:
         if p.get('preflight_token') is not None:
             pending=self.reviews.pending.get(p['preflight_token']) if type(p['preflight_token']) is str else None
             selected=BODY_REVIEW.select(pending['modules']) if pending is not None else None
+            if pending is not None and SC.COLLARBONE.OP in pending['modules'] and (self.ports.collarbone_replay is None or self.ports.verify_collarbone_applied is None):
+                raise SC.ScopeError('Exact collarbone preset graph replay and post-render verification are unavailable')
             if selected is not None and selected.port_name in ('waist','head') and getattr(self.ports,selected.port_name+'_history_identity') is None:
                 raise SC.ScopeError('身体参数预设缺少当前完整人物身份审核端口')
             spill_ack={'spill_review_ack':p['spill_review_ack']} if 'spill_review_ack' in p else {}
             shadow_ack={'shadow_review_ack':p['shadow_review_ack']} if 'shadow_review_ack' in p else {}
+            collarbone_ack={'collarbone_preset_ack':p['collarbone_preset_ack']} if 'collarbone_preset_ack' in p else {}
             record = self.reviews.claim(p['preflight_token'], pid, previous, reviewed_row,
                                        reviewed_identity[2], reviewed_revision, self.ports.verify_crop, self.ports.verify_xmp, p.get("xmp_review_ack"),
                                        self.ports.verify_spill, verify_shadow=self.ports.verify_shadow,
                                        verify_torso=self.ports.verify_torso, verify_waist=self.ports.verify_waist, verify_head=self.ports.verify_head,
+                                       verify_collarbone=self.ports.verify_collarbone, **collarbone_ack,
                                        **spill_ack, **shadow_ack, **scalar_acks)
             doc, mods = record['preset'], record['modules']
             source_proof = record.get('source_proof')
             family=BODY_REVIEW.select(mods)
+            if SC.COLLARBONE.OP in mods:
+                self._scalar_receipt = {'id':pid,'document_id':reviewed_identity[2],
+                    'module_scope':list(mods),'preflight_token':p['preflight_token'],
+                    'collarbone_preset_ack':deepcopy(p['collarbone_preset_ack']),
+                    **{key:deepcopy(p[key]) for key in ('xmp_review_ack','spill_review_ack','shadow_review_ack') if key in p}}
             if family is not None:
                 # Echo only an acknowledgment accepted by the frozen review.
                 # Invalid/missing acks remain correctable pre-mutation rejections.
@@ -314,11 +339,15 @@ class PresetController:
             if "spill_review_ack" in p: raise SC.ScopeError('祛染色目标图审核确认必须属于当前冻结预检')
             if "shadow_review_ack" in p: raise SC.ScopeError('原图阴影目标图审核确认必须属于当前冻结预检')
             if scalar_acks: raise SC.ScopeError('身体长度目标图审核确认必须属于当前冻结预检')
-            if family is not None or SC.ORIGINAL_SHADOW.OP in mods or SC.SPILL_REMOVAL.OP in mods or LG.OP in mods or OA.OP in mods or RC.OP in mods or SC.OP_CROP in mods: raise SC.ScopeError('含目标审核模块的预设必须先查看本目标预检，再确认应用')
+            if 'collarbone_preset_ack' in p:raise SC.ScopeError('Collarbone preset acknowledgment requires its exact frozen review')
+            if SC.COLLARBONE.OP in mods or family is not None or SC.ORIGINAL_SHADOW.OP in mods or SC.SPILL_REMOVAL.OP in mods or LG.OP in mods or OA.OP in mods or RC.OP in mods or SC.OP_CROP in mods: raise SC.ScopeError('含目标审核模块的预设必须先查看本目标预检，再确认应用')
             if SOURCE.record(previous) is not None:
                 source_proof = SOURCE.row_proof({**self.ports.target_row(), 'state':previous})
         DERIVED.require_modules(previous, mods, source_proof)
         ops = list(mods)
+        collarbone = SC.COLLARBONE.OP in ops
+        if not collarbone and 'collarbone_preset_ack' in p:
+            raise SC.ScopeError('Collarbone preset acknowledgment cannot authorize another scope')
         if SC.SPILL_REMOVAL.OP not in ops and "spill_review_ack" in p:
             raise SC.ScopeError('未选择祛染色模块，不能附带目标图审核确认')
         if SC.ORIGINAL_SHADOW.OP not in ops and "shadow_review_ack" in p:
@@ -372,17 +401,21 @@ class PresetController:
             history_scalar=getattr(self.ports,family.port_name+'_history_identity')
             if family.port_name in ('waist','head') and history_scalar is None:
                 raise SC.ScopeError('身体参数预设缺少当前完整人物身份审核端口')
+        if collarbone:
+            if self.ports.verify_collarbone is None:raise SC.ScopeError('Exact collarbone preset verifier is unavailable')
+            self.ports.verify_collarbone(self.ports.target_row(),previous,state,self.ports.document_id(),str(self.ports.revision()),record['collarbone'])
         if source_proof is not None:
             SOURCE.verify_row({**self.ports.target_row(), 'state':self.ports.capture()}, source_proof)
-        if family is not None:
+        if family is not None or collarbone:
             current=self.ports.target_row()
             if (current is not reviewed_row
                     or (current.get('document_id'),current.get('path'),self.ports.document_id())!=reviewed_identity
                     or self.ports.revision()!=reviewed_revision):
                 raise SC.ScopeError('身体长度目标在冻结审核期间发生变化，未写入照片')
         def verify_after():
+            if collarbone:collarbone_transaction.verify()
             current=self.ports.target_row()
-            if ((family is not None and current is not reviewed_row)
+            if (((family is not None or collarbone) and current is not reviewed_row)
                     or (current.get('document_id'),current.get('path'),self.ports.document_id())!=reviewed_identity):
                 raise SC.ScopeError('预设渲染期间目标文档发生变化')
             if self.ports.revision()!=published_revision:raise SC.ScopeError('预设渲染期间目标版本发生变化')
@@ -413,8 +446,9 @@ class PresetController:
                 self.ports.verify_xmp(current,previous,self.ports.capture(),self.ports.document_id(),str(published_revision),doc['xmp_import']['source_sha256'],proof)
         if p.get('preflight_token') is not None:self.ports.advance()
         def verify_rollback():
+            if collarbone:collarbone_transaction.verify(rollback=True)
             current=self.ports.target_row()
-            if ((family is not None and current is not reviewed_row)
+            if (((family is not None or collarbone) and current is not reviewed_row)
                     or (current.get('document_id'),current.get('path'),self.ports.document_id())!=reviewed_identity):
                 raise SC.ScopeError('预设失败后目标已切换，无法确认回滚')
             rollback_revision=str(self.ports.revision())
@@ -430,6 +464,10 @@ class PresetController:
                 prior=family.review.rollback_record(record[family.preset_key],previous,rollback_revision)
                 verify_scalar(current,previous,self.ports.capture(),self.ports.document_id(),rollback_revision,prior)
         published_revision=self.ports.revision()
+        collarbone_transaction=None
+        if collarbone:
+            from .preset_collarbone_lifecycle import CollarbonePresetReplay
+            collarbone_transaction=CollarbonePresetReplay(self.ports,reviewed_row,reviewed_identity,published_revision,record['collarbone'])
         self._effect_started = True
         scalar_write_started=False
         def replay_scalar(value, **kwargs):
@@ -501,10 +539,10 @@ class PresetController:
                 raise SC.ScopeError('身体长度最终审核回调改变了当前配方')
             if kwargs.get('mode')=='preset':scalar_write_started=True
             return self.ports.replay(value, **{**kwargs, 'strict_local':True})
-        frame = apply_with_rollback(replay_scalar if family is not None else self.ports.replay, previous, state, preset_id=pid,
-                                    emit=self.emit, invalidate=self.ports.invalidate, verify_after=verify_after if source_proof is not None or family is not None or SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops or SC.OP_CROP in ops or doc.get("xmp_import") is not None else None,
-                                    verify_rollback=verify_rollback if family is not None or SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops else None,
-                                    strict_local=family is not None or SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops or doc.get("xmp_import") is not None or SC.OP_CROP in ops or SOURCE.record(state) is not None or ID_BACKGROUND.OP in ops or LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
+        frame = apply_with_rollback(collarbone_transaction.replay if collarbone else replay_scalar if family is not None else self.ports.replay, previous, state, preset_id=pid,
+                                    emit=self.emit, invalidate=self.ports.invalidate, verify_after=verify_after if collarbone or source_proof is not None or family is not None or SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops or SC.OP_CROP in ops or doc.get("xmp_import") is not None else None,
+                                    verify_rollback=verify_rollback if collarbone or family is not None or SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops else None,
+                                    strict_local=collarbone or family is not None or SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops or doc.get("xmp_import") is not None or SC.OP_CROP in ops or SOURCE.record(state) is not None or ID_BACKGROUND.OP in ops or LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
         after = OA.before_params(state, ops)
         self.last = {"id": pid, "name": doc["name"], "ops": ops, "params": after}
         render_ms = frame.pop("render_ms")
@@ -514,6 +552,7 @@ class PresetController:
         return {"id": pid, "name": doc["name"], "module_scope": ops, "before": before, "after": after,
                 "document_id": self.ports.document_id(), "preflight_token":p.get('preflight_token'),
                 "source_proof":source_proof,
+                **({'collarbone_preset_ack':deepcopy(p['collarbone_preset_ack'])} if collarbone else {}),
                 **({family.ack_key:deepcopy(p[family.ack_key])} if family is not None else {})}
 
     def save(self, p):

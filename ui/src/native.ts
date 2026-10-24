@@ -25,7 +25,7 @@ const inspectionMutations=new Set(['photo_grain_request','photo_detail_request',
   'shoulder_shape','leg_shape','waist_shape','leg_length','neck_shape','arm_shape','torso_length','waist_length','head_size','people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
   const mutation=inspectionMutations.has(command)&&!(command==='session'&&(args as Record<string,unknown>|undefined)?.action==='query')
-    &&!(command==='batch'&&(args as Record<string,unknown>|undefined)?.action==='collarbone_visual');
+    &&!(['batch','preset'].includes(command)&&(args as Record<string,unknown>|undefined)?.action==='collarbone_visual');
   const send=()=>{if(mutation)notifyInspectionEditIntent();return tauriInvoke<T>(command,args,options);};
   if(isCurveEditBusy()&&curveBarrierRequired(command,(args as Record<string,unknown>|undefined)?.action,mutation)){
     return settleCurveEdit().then(send);
@@ -1784,12 +1784,14 @@ export const runPreset = (
   action: "list" | "preflight" | "apply" | "save" | "import" | "delete" | "xmp_inspect",
   opts: { id?: string; name?: string; path?: string; kind?: string; note?: string;
           force?: boolean; moduleScope?: string[]; requestId?: string; documentId?: string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};preflightToken?:string;
-          xmpAck?:import('./xmpImport/model').XmpAck;xmpReviewAck?:import('./xmpImport/model').XmpReviewAck;spillReviewAck?:import('./spillRemoval/transferModel').SpillTransferAck[];shadowReviewAck?:import('./originalShadow/transferModel').ShadowTransferAck[];torsoReviewAck?:import('./torsoLength/transferModel').TorsoTransferAck[];waistReviewAck?:import('./waistLength/transferModel').WaistTransferAck[];headReviewAck?:import('./headSize/transferModel').HeadTransferAck[] } = {},
+          xmpAck?:import('./xmpImport/model').XmpAck;xmpReviewAck?:import('./xmpImport/model').XmpReviewAck;spillReviewAck?:import('./spillRemoval/transferModel').SpillTransferAck[];shadowReviewAck?:import('./originalShadow/transferModel').ShadowTransferAck[];torsoReviewAck?:import('./torsoLength/transferModel').TorsoTransferAck[];waistReviewAck?:import('./waistLength/transferModel').WaistTransferAck[];headReviewAck?:import('./headSize/transferModel').HeadTransferAck[];collarbonePresetAck?:import('./collarbone/presetModel').CollarbonePresetAck } = {},
 ) => invoke<{ requested: boolean }>("preset", {
   action, id: opts.id, name: opts.name, path: opts.path, kind: opts.kind, note: opts.note,
   force: opts.force, moduleScope: opts.moduleScope, requestId: opts.requestId, documentId: opts.documentId,localMaskTransfer:opts.localMaskTransfer,referenceColor:opts.referenceColor,preflightToken:opts.preflightToken,
-  xmpAck:opts.xmpAck,xmpReviewAck:opts.xmpReviewAck,spillReviewAck:opts.spillReviewAck,shadowReviewAck:opts.shadowReviewAck,torsoReviewAck:opts.torsoReviewAck,waistReviewAck:opts.waistReviewAck,headReviewAck:opts.headReviewAck,
+  xmpAck:opts.xmpAck,xmpReviewAck:opts.xmpReviewAck,spillReviewAck:opts.spillReviewAck,shadowReviewAck:opts.shadowReviewAck,torsoReviewAck:opts.torsoReviewAck,waistReviewAck:opts.waistReviewAck,headReviewAck:opts.headReviewAck,collarbonePresetAck:opts.collarbonePresetAck,
 });
+export const requestCollarbonePresetImage=(value:import('./collarbone/presetTransport').CollarbonePresetImageRequest)=>invoke<{requested:boolean}>('preset',{action:'collarbone_visual',...value});
+export const readCollarbonePresetImage=(requestId:string)=>invoke<{phase:string;request_id:string;result?:import('./collarbone/presetTransport').CollarbonePresetImageReply;error?:string}>('preset_result',{requestId});
 export const readPresetResult=(requestId:string)=>invoke<{phase:string;request_id:string;result?:PresetReply;error?:string}>("preset_result",{requestId});
 
 /** 批量同步（LNX-P0-BATCH / BATCH-004）：目标按 path 递（多选集就是按 path 记的），

@@ -1,3 +1,4 @@
+import {COLLARBONE_PRESET_OP,collarbonePresetKey,collarbonePresetAck} from '../collarbone/presetModel';
 import {CROP_OP,cropReviewKey} from '../cropTransfer/model';
 import {SPILL_TRANSFER_OP,spillTransferReviewKey,spillTransferAck} from '../spillRemoval/transferModel';
 import {SHADOW_TRANSFER_OP,shadowTransferReviewKey,shadowTransferAck} from '../originalShadow/transferModel';
@@ -20,6 +21,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   const [shadowImage,setShadowImage]=useState<{key:string;ready:boolean}>({key:'',ready:false});
   const [torsoImage,setTorsoImage]=useState<{key:string;ready:boolean}>({key:'',ready:false});
   const [waistImage,setWaistImage]=useState<{key:string;ready:boolean}>({key:'',ready:false});
+  const [collarboneImage,setCollarboneImage]=useState<{key:string;ready:boolean}>({key:'',ready:false});
   const [headImage,setHeadImage]=useState<{key:string;ready:boolean}>({key:'',ready:false});
   const [xmpImport,setXmpImport]=useState<XmpImportDraft|null>(null);
   const xmpDraft=useRef<XmpImportDraft|null>(null),xmpImportTarget=useRef<{path:string;id?:string}|null>(null);
@@ -86,8 +88,8 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
       setNote(value.face.why||'这个预设的部分模块需要可用的单脸');return;
     }
     dispatch({type:'select',id});setNote('');
-    await current()?.submit(preset.xmp_import||ops.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP,"lnx.spill_removal.v1",SHADOW_TRANSFER_OP,TORSO_TRANSFER_OP,WAIST_TRANSFER_OP,HEAD_TRANSFER_OP].includes(op))?'preflight':'apply',
-      {id,...(ops.includes(HEAD_TRANSFER_OP)?{moduleScope:[HEAD_TRANSFER_OP]}:{}),...(preset.xmp_import?{xmpExpected:preset.xmp_import}:{}),...(ops.includes(LOCAL_GRADE_OP)?{localMaskTransfer:value.localMaskTransfer}:{})},ops);
+    await current()?.submit(preset.xmp_import||ops.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP,"lnx.spill_removal.v1",SHADOW_TRANSFER_OP,TORSO_TRANSFER_OP,WAIST_TRANSFER_OP,HEAD_TRANSFER_OP,COLLARBONE_PRESET_OP].includes(op))?'preflight':'apply',
+      {id,...(ops.includes(HEAD_TRANSFER_OP)?{moduleScope:[HEAD_TRANSFER_OP]}:ops.includes(COLLARBONE_PRESET_OP)?{moduleScope:[...ops]}:{}),...(preset.xmp_import?{xmpExpected:preset.xmp_import}:{}),...(ops.includes(LOCAL_GRADE_OP)?{localMaskTransfer:value.localMaskTransfer}:{})},ops);
   }
   const review=ui.action==='preflight'&&ui.submitted?.reviewContextKey===context.reviewContextKey&&ui.result?.success&&ui.result.id===form.selectedId&&ui.result.document_id===context.documentId
     &&(!ui.result.module_scope?.includes(LOCAL_GRADE_OP)||JSON.stringify(ui.submitted?.options.localMaskTransfer)===JSON.stringify(localMaskTransfer))?ui.result:null;
@@ -110,8 +112,11 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   const headKey=review?.head_transfer&&review.preflight_token?headTransferReviewKey(`${review.preflight_token}:${review.request_id}`,review.head_transfer):'';
   const headReady=!review?.module_scope?.includes(HEAD_TRANSFER_OP)||!!headKey&&headImage.key===headKey&&headImage.ready;
   useEffect(()=>setHeadImage({key:'',ready:false}),[headKey]);
+  const collarboneKey=review?.collarbone_preset&&review.preflight_token&&review.id?collarbonePresetKey(review.preflight_token,review.request_id,review.id,review.collarbone_preset):'';
+  const collarboneReady=!review?.module_scope?.includes(COLLARBONE_PRESET_OP)||!!collarboneKey&&collarboneImage.key===collarboneKey&&collarboneImage.ready;
+  useEffect(()=>setCollarboneImage({key:'',ready:false}),[collarboneKey]);
   async function confirmLocal(){
-    if(locked()||!cropReady||!xmpReady||!spillReady||!shadowReady||!torsoReady||!waistReady||!headReady||!review?.preflight_token||!review.module_scope)return;
+    if(locked()||!cropReady||!xmpReady||!spillReady||!shadowReady||!torsoReady||!waistReady||!headReady||!collarboneReady||!review?.preflight_token||!review.module_scope)return;
     const controller=current();
     if(controller?.snapshot().result?.preflight_token!==review.preflight_token)return;
     const expected=ui.submitted?.options.xmpExpected;
@@ -123,6 +128,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
       ...(review.module_scope.includes(TORSO_TRANSFER_OP)&&review.torso_transfer?{torsoReviewAck:torsoTransferAck([review.torso_transfer])}:{}),
       ...(review.module_scope.includes(WAIST_TRANSFER_OP)&&review.waist_transfer?{waistReviewAck:waistTransferAck([review.waist_transfer])}:{}),
       ...(review.module_scope.includes(HEAD_TRANSFER_OP)&&review.head_transfer?{headReviewAck:headTransferAck([review.head_transfer])}:{}),
+      ...(review.module_scope.includes(COLLARBONE_PRESET_OP)&&review.collarbone_preset?{collarbonePresetAck:collarbonePresetAck(review.collarbone_preset)}:{}),
       ...(expected&&review.xmp_transfer&&review.xmp_report?{xmpExpected:expected,xmpReviewAck:xmpReviewAck(review.xmp_transfer,review.xmp_report)}:{})},review.module_scope);
   }
   async function importFile(asCopy=false,xmp=false){
@@ -159,7 +165,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   async function refresh(){if(locked())return;setNote('');await current()?.submit('list');}
   async function inspect(){try{await latest.current.onRefresh();setNote('已请求当前状态，请核对照片与预设列表；不会重复提交操作。');}catch(error){setNote(String(error));}}
   return {ui,form,note,selected,catalog,context,dialogBusy,face,localMaskTransfer,setLocalMaskTransfer,saveMaskTransfer,setSaveMaskTransfer,review,confirmLocal,cropKey,cropReady,setCropImage,
-    headKey,headReady,setHeadImage,waistKey,waistReady,setWaistImage,torsoKey,torsoReady,setTorsoImage,shadowKey,shadowReady,setShadowImage,spillKey,spillReady,setSpillImage,dismissReview:()=>{setSpillImage({key:'',ready:false});setShadowImage({key:'',ready:false});setTorsoImage({key:'',ready:false});setWaistImage({key:'',ready:false});setHeadImage({key:'',ready:false});current()?.dismissReview();},
+    collarboneKey,collarboneReady,setCollarboneImage,headKey,headReady,setHeadImage,waistKey,waistReady,setWaistImage,torsoKey,torsoReady,setTorsoImage,shadowKey,shadowReady,setShadowImage,spillKey,spillReady,setSpillImage,dismissReview:()=>{setCollarboneImage({key:'',ready:false});setSpillImage({key:'',ready:false});setShadowImage({key:'',ready:false});setTorsoImage({key:'',ready:false});setWaistImage({key:'',ready:false});setHeadImage({key:'',ready:false});current()?.dismissReview();},
     xmpKey,xmpReady,setXmpImage,xmpImport,cancelXmpImport,confirmXmpImport,
     busy:dialogBusy||!!xmpImport||ui.phase==='working'||ui.phase==='uncertain',
     setName:(value:string)=>dispatch({type:'name',value}),select:(id:string)=>dispatch({type:'select',id}),

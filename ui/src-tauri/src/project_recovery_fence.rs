@@ -22,7 +22,7 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     // Do not turn an unavailable head preview into an uncertain photo edit.
     // Check a pending ID collision first: read-only status cannot release or
     // replace an already-issued mutation belonging to another receipt host.
-    if crate::torso_transfer_protocol::read_only_head_preflight(command) {return Ok(());}
+    if crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command) {return Ok(());}
     if store.len()>=4096{return Err("未确认请求超过恢复屏障容量，请查询原请求或重新打开工程".into());}
     store.insert(key,command.clone()); Ok(())
 }

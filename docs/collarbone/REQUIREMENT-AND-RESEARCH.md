@@ -96,8 +96,9 @@ for source/owner fences, shared-graph handling, bounds and remaining paths.
 This is source-connected only, not runtime or photographic acceptance.
 Persistent source-and-target collarbone cohort review is subsequently authored
 in [COHORT-VISUAL-CONTRACT.md](COHORT-VISUAL-CONTRACT.md), including inherited
-intent and unlink. A new current-photo visual preset-application route remains
-separate and unfinished; see [PRESET-VISUAL-NEXT.md](PRESET-VISUAL-NEXT.md).
+intent and unlink. Current-photo complete mixed-preset visual review is now
+source-authored in [PRESET-VISUAL-CONTRACT.md](PRESET-VISUAL-CONTRACT.md), with
+unchanged generic derived-preset refusal and explicit source/support limits.
 
 All tests, builds, native execution, numerical precision, RGB16 preservation,
 preview/export equivalence, history/project round trips, photographic quality,

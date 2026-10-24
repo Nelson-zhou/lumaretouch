@@ -20,12 +20,16 @@ def legacy_batch_face_check(engine,row,*,live=False):
     return engine._face_known_single(row,live=live)
 
 
-def replay_preset(engine,state,**kwargs):
+def plan_preset(engine,state,*,require_active=True,**kwargs):
     """Preserve existing single-face presets; never infer a multi-face target.
 
     The existing preset owner owns receipts, rollback, document fences/history.
-    Only changed scalar leaves enter its uniquely evidenced target face.
+    Only changed scalar leaves enter its uniquely evidenced target face. This
+    preparation does not commit a graph or invoke live replay/rendering.
     """
+    from .people_preset_plan import snapshot, require_active_owner
+    managed=engine._people_managed()
+    if managed and require_active:require_active_owner(engine)
     from . import enhance_scope as ENHANCE, teeth_colour_apply as TEETH, red_eye_apply as RED_EYE
     from . import sclera_purify_apply as SCLERA_PURIFY
     from . import skin_colour_scope as SKIN_COLOUR
@@ -109,7 +113,7 @@ def replay_preset(engine,state,**kwargs):
     lip_texture_recipe=LIP_TEXTURE.S.check(state.get(LIP_TEXTURE.FIELD))
     lip_texture_requested=state.get(LIP_TEXTURE.REQUESTED) is True
     if LIP_TEXTURE.S.active(lip_texture_recipe):kwargs['strict_local']=True
-    if not engine._people_managed():
+    if not managed:
         if skin_requested or SKIN_COLOUR.S.active(skin_recipe):
             raise ValueError('面部肤色预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
         if finish_requested or SKIN_FINISH.S.active(finish_recipe):
@@ -152,8 +156,9 @@ def replay_preset(engine,state,**kwargs):
             raise ValueError('眉毛增强预设需要当前明确的规范人物，不能静默丢弃或转换为眉妆配方')
         if lip_texture_requested or LIP_TEXTURE.S.active(lip_texture_recipe):
             raise ValueError('唇部暗细纹预设需要当前明确的规范人物，不能静默丢弃或转换为口红或 AI 祛瑕配方')
-        return engine._replay_state(state,**kwargs)
-    before=engine._people_owner().snapshot();asset=engine._people_source()['sha256']
+        return snapshot(state,kwargs)
+    owner=engine._people_owner();owner_fence=owner.fence
+    before=owner.snapshot();asset=engine._people_source()['sha256']
     faces=[face for face in before['faces'].values() if face['asset_sha256']==asset and face['enabled']]
     from .eye_light_scope import capture as preset_capture, OP as EYE_LIGHT
     from .blush_makeup_scope import capture as blush_capture, OP as BLUSH
@@ -407,7 +412,8 @@ def replay_preset(engine,state,**kwargs):
             from .people_resolver import resolve
             values=A.recipes(resolve(candidate,current[CHIN_LENGTH.TARGET]['face_instance_id'],A.defaults()))
             CHIN_LENGTH.S.check_coexistence(values[CHIN_LENGTH.OP],values[A.DEFORM]['small_chin'])
-        return engine._replay_state(state,**kwargs)
+        return snapshot(state,kwargs,owner=owner,owner_fence=owner_fence,before=before,candidate=candidate,
+                        target_ref=S.face_ref(faces[0]) if len(faces)==1 else None)
     if len(faces)!=1:raise ValueError('A legacy portrait preset requires one explicit unambiguous enabled face; use people parameter review for multiple faces')
     key=faces[0]['face_instance_id']
     if skin_involved and current[SKIN_COLOUR.TARGET]!=S.face_ref(faces[0]):
@@ -473,15 +479,66 @@ def replay_preset(engine,state,**kwargs):
         from .people_resolver import resolve
         values=A.recipes(resolve(candidate,key,A.defaults()))
         SLIM_FACE.S.check_coexistence(values[SLIM_FACE.OP],values[A.DEFORM]['slim_face'],values[FACE_CONTOUR.OP])
+    # Shared by preview and application: strict rendering requirements cannot
+    # depend on whether graph publication has already happened.
+    if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,SKIN_EVENNESS.OP,BODY_SKIN_EVENNESS.OP,COLLARBONE.OP,BODY_FACE_MATCH.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP,MID_FACE.OP,CHIN_SHAPE.OP,CHIN_LENGTH.OP,PHILTRUM.OP,EYE_SYMMETRY.OP,BROW_ENHANCE.OP,LIP_TEXTURE.OP) for op,_,_ in patches):kwargs['strict_local']=True
+    return snapshot(state,kwargs,owner=owner,owner_fence=owner_fence,before=before,candidate=candidate,
+                    patches=patches,target_ref=S.face_ref(faces[0]))
+
+
+def execute_plan(engine,plan,**kwargs):
+    """Publish the exact prepared candidate under the existing transaction.
+
+    This is not another transaction/history owner. The visual preset adapter
+    additionally fences document, source, full state and support before entry.
+    """
+    from .people_preset_plan import PresetReplayPlan, clone_state
+    if not isinstance(plan,PresetReplayPlan):raise ValueError('Exact portrait preset plan required')
+    options={**plan.kwargs,**kwargs}
+    if plan.kwargs.get('strict_local') is True:options['strict_local']=True
+    if not plan.managed:
+        return engine._replay_state(clone_state(plan.state),**options)
     owner=engine._people_owner()
+    if owner is not plan.owner or owner.fence!=plan.owner_fence or owner.snapshot()!=plan.before:
+        raise ValueError('Portrait owner changed after preset preparation; no graph was published')
+    if not plan.patches:
+        return engine._replay_state(clone_state(plan.state),**options)
+    committed=False
     try:
-        owner.commit(candidate,expected_fence=owner.fence);engine._people_analysis_key=None
-        # All selected portrait layers, including source-measured lip furrows
-        # and separately added lip/brow makeup, compose in the complete renderer.
-        # Never clear/convert other intent for local success.
-        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,SKIN_EVENNESS.OP,BODY_SKIN_EVENNESS.OP,COLLARBONE.OP,BODY_FACE_MATCH.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP,MID_FACE.OP,CHIN_SHAPE.OP,CHIN_LENGTH.OP,PHILTRUM.OP,EYE_SYMMETRY.OP,BROW_ENHANCE.OP,LIP_TEXTURE.OP) for op,_,_ in patches):kwargs['strict_local']=True
-        return engine._replay_state(state,**kwargs)
+        owner.commit(plan.candidate,expected_fence=plan.owner_fence);engine._people_analysis_key=None
+        committed=True;published_fence=owner.fence
+        return engine._replay_state(clone_state(plan.state),**options)
     except Exception:
-        before['association_revision']=owner.association_fence
-        owner.commit(before,expected_fence=owner.fence);engine._people_analysis_key=None
+        if committed:
+            # Never overwrite a later owner's mutation during rollback.
+            before=S.check(plan.before);before['association_revision']=owner.association_fence
+            owner.commit(before,expected_fence=published_fence);engine._people_analysis_key=None
         raise
+
+
+def restore_plan(engine,plan,previous_state,*,expected_owner_fence=None,**kwargs):
+    """Restore exact prior intent, not a reverse diff against transported leaves.
+
+    Accept only this plan's before/candidate content. Outer preset transaction
+    remains responsible for source/document/non-people state and history fences.
+    """
+    from .people_preset_plan import PresetReplayPlan, clone_state, graph_content
+    if not isinstance(plan,PresetReplayPlan):raise ValueError('Exact portrait preset rollback plan required')
+    options={**kwargs,'strict_local':True}
+    if not plan.managed:return engine._replay_state(clone_state(previous_state),**options)
+    owner=engine._people_owner()
+    if owner is not plan.owner or (expected_owner_fence is not None and owner.fence!=expected_owner_fence):
+        raise ValueError('Portrait owner changed before exact preset rollback')
+    current=owner.snapshot();content=graph_content(current)
+    before_content=graph_content(plan.before)
+    if content not in (before_content,graph_content(plan.candidate)):
+        raise ValueError('Preset rollback cannot overwrite unrelated portrait changes')
+    if content!=before_content:
+        before=S.check(plan.before);before['association_revision']=owner.association_fence
+        owner.commit(before,expected_fence=owner.fence);engine._people_analysis_key=None
+    return engine._replay_state(clone_state(previous_state),**options)
+
+
+def replay_preset(engine,state,**kwargs):
+    """Legacy and visual preset application share the complete planner."""
+    return execute_plan(engine,plan_preset(engine,state,require_active=False,**kwargs))
