@@ -34,7 +34,7 @@ test('actual display gates checkbox on hashes, load dimensions and coverage',()=
 });
 test('people wrapper forwards ack and persistent mode cannot silently drop selection',()=>{
  const s=readFileSync(new URL('../people/ConfirmedPeopleTransfer.tsx',import.meta.url),'utf8');
- assert.ok(s.includes('flow.commit(spill,shadow,torso,waist,head,collarbone)'));assert.ok(!s.includes('collarbonePersistentBlocked'));assert.ok(s.includes('确认源成员与所有目标的真实前后图像'));
+ assert.ok(s.includes('flow.commit(spill,shadow,torso,waist,head,collarbone,faceStyle)'));assert.ok(!s.includes('collarbonePersistentBlocked'));assert.ok(s.includes('确认源成员与所有目标的真实前后图像'));
 });
 test('workflow keeps unknown mutations pending and rejects absent visual review',()=>{
  const s=readFileSync(new URL('../batch/batchWorkflow.ts',import.meta.url),'utf8');

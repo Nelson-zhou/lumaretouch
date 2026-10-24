@@ -1,0 +1,313 @@
+{
+  "baseline": "f8f8e462813612d107db8b0a61dad7a98b8d601f",
+  "status": "FROZEN_SOURCE_ONLY_NAMED_FACE_STYLE_BATCH_REVIEW_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32466-C-3b31aac970",
+    "LNX-REF-PC-32466-C-6c86bf2c55",
+    "LNX-REF-PC-32466-C-7ce4146bc1",
+    "LNX-REF-PC-32466-C-e4a7970fd2",
+    "LNX-REF-PC-32466-C-7e035684d8",
+    "LNX-REF-PC-32466-C-0e3343d22a",
+    "LNX-REF-PC-32466-C-7b800a0655",
+    "LNX-REF-PC-32466-C-ae54a179f8",
+    "LNX-REF-PC-32466-C-9fc7c5a61e"
+  ],
+  "scope": "Same seven original-local versioned face compositions and shared amount as existing single-face recipe, target-local explicit face-map batch, complete aggregate target render with immutable paged images and exact ACK; existing scoped batch ledger remains sole commit/history owner. Workflow completion, not new algorithms.",
+  "files": [
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "ca944d458e5367b0a5075b3904e382c7c37d7c34d31389f5400d34a0b442840a",
+      "bytes": 465717
+    },
+    {
+      "path": "docs/face-style/BATCH-REVIEW-CONTRACT.md",
+      "sha256": "f2ae3f94d6ce8570154c248dfb8b8ef4e50eaa416e9ba39039f654a1b908c631",
+      "bytes": 5994
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight.py",
+      "sha256": "39e970fbe929059582636d609105a74fa2e217d960f937794e34f14e29fecba1",
+      "bytes": 19853
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight_controller.py",
+      "sha256": "80fc605c5c5f6ba98bd945261d1bbc17e3bc0e2064c906d12ae596c99ef330f3",
+      "bytes": 48519
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "db6168123e9c241c1ee775e5482b3524fb239a8f8386cdfc5a8c299b743457bc",
+      "bytes": 59779
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_transfer_host.py",
+      "sha256": "0adcd99d9667d1f224f8ed61ea258db4a13c377c4088ae498ea6ada6a7d75523",
+      "bytes": 8368
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_style_batch_plan.py",
+      "sha256": "09745afae36e082836eb82563b2c61728d21acc2fe73345e7b8301089fdb5f01",
+      "bytes": 4042
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_style_batch_review.py",
+      "sha256": "039a90d69d4e2b250dbb1805e51abc99b9c627a734a34d0e1e71cc800c0bf21a",
+      "bytes": 7034
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_style_batch_store.py",
+      "sha256": "c8101582c6044ae9aa8aa2519f00524fc55782d4ec572acf0367cddcfe80996c",
+      "bytes": 3128
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "180b06e04592bc1fae2228a8386680e0e87b47eca3b9959380d79c75a30996df",
+      "bytes": 8011
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_batch_transfer.py",
+      "sha256": "70118db73d68b1da185a7c82cb6f86c1c83bf2682d1ab2c046ec8e1a2417befb",
+      "bytes": 31869
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_transfer_adapter.py",
+      "sha256": "b446eb75fae65bdb7ea8c75cd930d8858e93f5170768aa69fab3b7865dcb2d05",
+      "bytes": 8586
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "eb150e439162434e078fda8eaedd79e88d4f943ed2b6471cbf95684169531040",
+      "bytes": 7616
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "c61a3a47d670d94ecb95bf0678ea091f182739dac1cb5cc9c2f15563fc07b97d",
+      "bytes": 468161
+    },
+    {
+      "path": "engine/tests/test_face_style_batch_host_contract_unrun.py",
+      "sha256": "d14c981dc8f3b1fba9d9a4b2cf5c59756bf43b30414300d89b4577cd19809229",
+      "bytes": 20474
+    },
+    {
+      "path": "engine/tests/test_face_style_batch_unrun.py",
+      "sha256": "57b15c77466499870478fa29416bdb9e95cfff044814e370b48422b7032263fe",
+      "bytes": 19678
+    },
+    {
+      "path": "ui/src-tauri/src/batch_api.rs",
+      "sha256": "6c63dd20c39871345a52f9f3207296c8fc42d77cbb3f938eba6da49efe4ea034",
+      "bytes": 6013
+    },
+    {
+      "path": "ui/src-tauri/src/batch_host.rs",
+      "sha256": "73bbc6455c32a04f276c35a7e0ca367f4f47e683761c4bc92d86fd5fcbd66116",
+      "bytes": 39503
+    },
+    {
+      "path": "ui/src-tauri/src/collarbone_transfer_protocol.rs",
+      "sha256": "1137eb7c73f37617f5b8930c377747bacb40cb89ab57118e3abafc91f2116e90",
+      "bytes": 15784
+    },
+    {
+      "path": "ui/src-tauri/src/face_style_batch_protocol.rs",
+      "sha256": "2e6f314b1e043d87d0e1d47683aa18fe1fd6b04ce439dbb119701fdad60ad076",
+      "bytes": 22090
+    },
+    {
+      "path": "ui/src-tauri/src/face_style_batch_protocol_tests.rs",
+      "sha256": "4d4dcf733e7d2ae66c35a89e863fcfd5d8bc4a03328a16ad5519c8150b142801",
+      "bytes": 22477
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "sha256": "7bd6521e00687c7d3ce259a34488990fbd9a5581829ba0544d0d79bfc9c99745",
+      "bytes": 6251
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "7a7666d3a1ffce2f7a974784111be0f0cd347d1d4f5a545e93923bb4f3dd1cfd",
+      "bytes": 25965
+    },
+    {
+      "path": "ui/src/batch/BatchReview.tsx",
+      "sha256": "d4565cf82152276acbe37c8eb52227143cbd9302564c3fd3a3b009f8a7c29c98",
+      "bytes": 21067
+    },
+    {
+      "path": "ui/src/batch/README.md",
+      "sha256": "020e69ed8d8a50447aa91f11527581c5922b739bdc21ad96eab1770ddbb35e1d",
+      "bytes": 2281
+    },
+    {
+      "path": "ui/src/batch/batchWorkflow.ts",
+      "sha256": "cdc8b3abf3f3cbd2f4a7a0d19b567c37521e9bef47eaee99c89b4836806ecd72",
+      "bytes": 49853
+    },
+    {
+      "path": "ui/src/batch/useBatchWorkflow.ts",
+      "sha256": "ec665de3627d3088463ab0c241afd96bc094de91b0749aa32f0a83249d1b1974",
+      "bytes": 2231
+    },
+    {
+      "path": "ui/src/collarbone/transferModel.unrun.test.ts",
+      "sha256": "96b32ea75263f55f668e3ec3e01359405bed2e673bb2a410e3b6b1e0407393da",
+      "bytes": 4412
+    },
+    {
+      "path": "ui/src/faceStyle/FaceStyleBatchReview.tsx",
+      "sha256": "73c8f01ca836cb7a568297ed850bd88640ebe24bf410a9302bfa2916f8306851",
+      "bytes": 6637
+    },
+    {
+      "path": "ui/src/faceStyle/batchModel.ts",
+      "sha256": "9a0694f886031766a2c5597434c993929069db86ae2bd9d174c84a5c583eac7e",
+      "bytes": 6305
+    },
+    {
+      "path": "ui/src/faceStyle/batchModel.unrun.test.ts",
+      "sha256": "6c293902e1b7653f887b93695e90cfc75c585d222bd74ffb0e4c8b4b80f3511a",
+      "bytes": 7356
+    },
+    {
+      "path": "ui/src/faceStyle/batchTransport.ts",
+      "sha256": "8bb095584d6e345fc105cea83e29802a2ba120f098bcbbdec362546faefeae81",
+      "bytes": 3624
+    },
+    {
+      "path": "ui/src/faceStyle/batchTransport.unrun.test.ts",
+      "sha256": "5a224596dfed24717c1ee87b7d8d33c6bcc0ac2a8d82e766c050f9a2a4af0c43",
+      "bytes": 2698
+    },
+    {
+      "path": "ui/src/faceStyle/batchWorkflow.unrun.test.ts",
+      "sha256": "a2eebcbe3955cb27d1edd28f6aed96fd1344ea90d7c89e81c1cdcea553c14f98",
+      "bytes": 9610
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "2d764d043f4cc1b1b81ad2e45cb2a2839fb2aeb844a611c80bc1675a2b5e6394",
+      "bytes": 106821
+    },
+    {
+      "path": "ui/src/people/ConfirmedPeopleTransfer.tsx",
+      "sha256": "d5189aa060b07abfff90da7757dea422432890820b8554e324d2f69e81bb2aaf",
+      "bytes": 23328
+    },
+    {
+      "path": "ui/src/people/transferProof.ts",
+      "sha256": "acca15e9cafd76f9a7f7ee533624cd6087d3dd1af03675d2d844dd29788b6eab",
+      "bytes": 24602
+    },
+    {
+      "path": "ui/src/people/transferReview.tsx",
+      "sha256": "d559e9cfd5ca0fe824742602e3f89a0c9fef10498bb273d2bfd8d1820ff89347",
+      "bytes": 7569
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1301,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 114,
+    "git_diff_check": "clean",
+    "payload_whitespace": "clean",
+    "prior_numeric_geometry_render_single_face_and_frozen_sources_byte_identical": 255,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 7005
+    },
+    "fixture_declarations_in_payload_not_executed": {
+      "python": {
+        "engine/tests/test_face_style_batch_host_contract_unrun.py": 23,
+        "engine/tests/test_face_style_batch_unrun.py": 19
+      },
+      "rust": {
+        "ui/src-tauri/src/batch_api.rs": 1,
+        "ui/src-tauri/src/batch_host.rs": 18,
+        "ui/src-tauri/src/face_style_batch_protocol_tests.rs": 20,
+        "ui/src-tauri/src/project_recovery_fence.rs": 3,
+        "ui/src-tauri/src/receipt_host.rs": 9
+      },
+      "typescript": {
+        "ui/src/collarbone/transferModel.unrun.test.ts": 9,
+        "ui/src/faceStyle/batchModel.unrun.test.ts": 6,
+        "ui/src/faceStyle/batchTransport.unrun.test.ts": 3,
+        "ui/src/faceStyle/batchWorkflow.unrun.test.ts": 9
+      }
+    }
+  },
+  "integration_map": {
+    "named_recipe_intent": [
+      "face_style_batch_review.py",
+      "people_transfer_adapter.py",
+      "people_batch_transfer.py"
+    ],
+    "complete_target_aggregate_and_snapshots": [
+      "face_style_batch_plan.py",
+      "portrait_review_render.py (unchanged shared primitive)",
+      "full_candidate_render.py (unchanged actual source renderer)"
+    ],
+    "paged_images": [
+      "face_style_batch_store.py",
+      "collarbone_visual_store._Images (unchanged storage primitive only)"
+    ],
+    "frozen_ledger_and_receipts": [
+      "batch_preflight.py",
+      "batch_preflight_controller.py",
+      "batch_sync.py",
+      "people_batch_ledger.py (unchanged single history owner)"
+    ],
+    "source_and_recovery_guards": [
+      "creative_transfer_host.py",
+      "project_recovery_runtime.py",
+      "server.py",
+      "history_policy.py"
+    ],
+    "native": [
+      "face_style_batch_protocol.rs",
+      "batch_api.rs",
+      "batch_host.rs",
+      "collarbone_transfer_protocol.rs (narrow coordinate routing)",
+      "receipt_host.rs",
+      "project_recovery_fence.rs"
+    ],
+    "ui": [
+      "ConfirmedPeopleTransfer.tsx",
+      "transferProof.ts",
+      "ui/src/faceStyle/batchModel.ts",
+      "FaceStyleBatchReview.tsx",
+      "batchTransport.ts",
+      "ui/src/batch",
+      "ui/src/native.ts"
+    ],
+    "documentation": [
+      "docs/face-style/BATCH-REVIEW-CONTRACT.md",
+      "same nine handbook-traceability records; no added feature counts"
+    ]
+  },
+  "limits": {
+    "target_documents": 16,
+    "pending_plans": 8,
+    "plan_ttl_seconds": 1800,
+    "display_edge": 1024,
+    "individual_png_bytes": 4194304,
+    "session_raw_image_bytes": 134217728,
+    "session_image_entries": 256,
+    "existing_native_result_bytes": 8388608
+  },
+  "limitations": [
+    "Explicit target face mapping only. No named persistent cohort or automatic matching/classification. Source face is context anchor, not coefficient or geometry donor.",
+    "Same-source aliases only when the complete affected target set is reviewed; source/context document cannot be a target, so aliases affecting it refuse. Single-photo alias restriction remains unchanged.",
+    "Zero replaces thirty owned leaves with neutral values; prior manual values on those leaves are replaced, not inherited/restored. Other intent and old numerical versions remain unchanged.",
+    "Original local recipes do not establish vendor numeric parity, learned AI, anatomical reconstruction or photographic quality. Existing unsupported anatomy/solver/derived alpha-HDR capabilities remain fenced.",
+    "Whole target render uses actual full source; review pages are RGB8 reductions up to 1024 edge, not 100 percent precision inspection. Ordinary sixteen-target memory/performance and resource envelopes are unmeasured.",
+    "All product imports/execution, tests/build/typecheck, inference/download, native/history/export/numerical/photographic/performance acceptance UNRUN. Authored fixtures explicitly mock rendering/source boundaries."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

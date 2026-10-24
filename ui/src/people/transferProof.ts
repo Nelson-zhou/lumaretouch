@@ -2,6 +2,8 @@ import {validCollarboneVisual,type CollarboneVisual} from '../collarbone/transfe
 import {sameAssociationRequest, type AssociationRequest} from './associationProof';
 import type {FaceRef, ParameterValue} from './model';
 import {validOwnFaceReference, type OwnFaceReference} from '../bodyFaceMatch/reference';
+import {validFaceStyleRecipe, type FaceStyleRecipe} from '../faceStyle/model';
+import {sameFaceStyleRecipe, validFaceStyleSelection, validFaceStyleBatchVisual, type FaceStyleBatchVisual} from '../faceStyle/batchModel';
 
 export type DocumentFence = {document_id: string; epoch: string; revision: number};
 export type EffectiveSourceProof = {
@@ -22,6 +24,7 @@ type SelectedParameters = {source_ref: FaceRef; selection: Record<string, string
 export type ExplicitPeopleRequest = SelectedParameters & {
   target_policy: 'explicit_face_map'; source: PeopleEndpointProof;
   targets: {target: PeopleEndpointProof; target_refs: FaceRef[]}[];
+  face_style?: FaceStyleRecipe;
 };
 export type PeopleTransferRequest = SelectedParameters & {target_policy: 'confirmed_person_only'} | ExplicitPeopleRequest | AssociationRequest;
 export type SkinColourCoverage = {
@@ -60,6 +63,8 @@ type ReviewBase = {
   body_face_match_coverage?: BodyFaceMatchCoverage;
   collarbone_coverage?: CollarboneCoverage;
   collarbone_visual?: CollarboneVisual;
+  face_style?: FaceStyleRecipe;
+  face_style_visual?: FaceStyleBatchVisual;
 };
 export type PeopleTransferReview = ReviewBase & ({
   confirmed_person_id: string; target_policy: 'confirmed_person_only'; confirmation_revisions: [string, number][];
@@ -192,7 +197,10 @@ export function samePeopleRequest(value: unknown, expected: PeopleTransferReques
   if (JSON.stringify(Object.keys(selection).sort()) !== JSON.stringify(ops)
     || !ops.every(op => JSON.stringify([...selection[op]].sort()) === JSON.stringify([...expected.selection[op]].sort()))) return false;
   if (expected.target_policy === 'confirmed_person_only') return keys(value, ['source_ref', 'selection', 'target_policy']);
-  if (!keys(value, ['source_ref', 'selection', 'target_policy', 'source', 'targets'])
+  const recipe = expected.face_style, named = recipe !== undefined;
+  if (named ? !validFaceStyleRecipe(recipe) || !sameFaceStyleRecipe(value.face_style, recipe)
+    || !validFaceStyleSelection(expected.selection) || !validFaceStyleSelection(selection) : Object.hasOwn(value, 'face_style')) return false;
+  if (!keys(value, ['source_ref', 'selection', 'target_policy', 'source', 'targets', ...(named ? ['face_style'] : [])])
     || !validEndpoint(value.source) || !validEndpoint(expected.source) || !sameEndpoint(value.source, expected.source)
     || value.source.source_proof.asset_sha256 !== value.source_ref.asset_sha256
     || !Array.isArray(value.targets) || !value.targets.length || value.targets.length > 16 || value.targets.length !== expected.targets.length) return false;
@@ -251,9 +259,16 @@ export function validPeopleReview(value: unknown, request: PeopleTransferRequest
     if (confirmations.size !== refs.size) return false;
   }
   const wanted = new Set(Object.entries(request.selection).flatMap(([op, paths]) => paths.map(path => JSON.stringify([op, path]))));
+  const named = request.target_policy === 'explicit_face_map' ? request.face_style : undefined;
+  if (named ? !sameFaceStyleRecipe(v.face_style, named) || !validFaceStyleBatchVisual(v.face_style_visual, v)
+    : Object.hasOwn(value, 'face_style') || Object.hasOwn(value, 'face_style_visual')) return false;
   for (const leaf of v.parameters) {
     if (!leaf || !wanted.delete(JSON.stringify([leaf.operation_id, leaf.parameter_path]))
       || !(['string', 'boolean'].includes(typeof leaf.value) || (typeof leaf.value === 'number' && Number.isFinite(leaf.value)))) return false;
+    // Named recipes replace only their bounded authored leaves, not donor values. The
+    // backend composes the exact coefficients and the digest binds the named intent.
+    if (named && (leaf.parameter_path.endsWith('/linked') ? leaf.value !== true
+      : typeof leaf.value !== 'number' || Math.abs(leaf.value) > 0.30 * named.amount || named.amount === 0 && leaf.value !== 0)) return false;
   }
   const skinSelected = Object.prototype.hasOwnProperty.call(request.selection, 'lnx.skin_colour.v1');
   if (skinSelected ? !validSkinColourCoverage(v.skin_colour_coverage, v.target_refs) : v.skin_colour_coverage !== undefined) return false;

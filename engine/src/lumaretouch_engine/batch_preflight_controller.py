@@ -11,7 +11,7 @@ from . import original_shadow_transfer_review as SHR
 from .body_scalar_transfer_review import select as body_family
 from . import local_grade_layers as LG
 from . import local_grade_runtime as LR
-from .batch_preflight import PreflightStore,FrozenTarget,canonical,MAX_RESULT_BYTES,collarbone_required
+from .batch_preflight import PreflightStore,FrozenTarget,canonical,MAX_RESULT_BYTES,collarbone_required,face_style_records
 from . import creative_derived_source as SOURCE, creative_derived_transfer as TRANSFER
 
 @dataclass(frozen=True)
@@ -51,6 +51,8 @@ class FrozenBatchController:
         self.store._prune(self.store.clock())
         from .collarbone_visual_store import prune
         prune(self.store)
+        from .face_style_batch_store import prune as prune_face_style
+        prune_face_style(self.store)
         self._scalar_targets={token:rows for token,rows in self._scalar_targets.items()
                               if token in self.store.pending}
 
@@ -71,7 +73,7 @@ class FrozenBatchController:
 
     def replay_completed(self,p):
         self._prune_scalar_targets()
-        if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','collarbone_review_ack'}:
+        if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','collarbone_review_ack','face_style_review_ack'}:
             raise SC.ScopeError('token commit cannot change reviewed options')
         cached=self.store.completed(p.get('preflight_token'),self.versions.workspace)
         if cached is None:return False
@@ -96,6 +98,11 @@ class FrozenBatchController:
                 raise SC.ScopeError('Collarbone token replay requires its exact original visual acknowledgment')
         elif 'collarbone_review_ack' in p:
             raise SC.ScopeError('Collarbone acknowledgment cannot accompany another token')
+        if 'face_style_review_ack' in cached:
+            if type(p.get('face_style_review_ack')) is not list or canonical(p['face_style_review_ack'])!=canonical(cached['face_style_review_ack']):
+                raise SC.ScopeError('Face-style token replay requires its exact original visual acknowledgment')
+        elif 'face_style_review_ack' in p:
+            raise SC.ScopeError('Face-style acknowledgment cannot accompany another token')
         if p.get('request_id') is None:self.emit({**cached,'event':'batch_result','action':'commit','request_id':None,'replayed':True})
         else:self.emit_result(p,{**cached,'replayed':True})
         return True
@@ -112,6 +119,8 @@ class FrozenBatchController:
                 raise SC.ScopeError('Body-scalar visual acknowledgment is accepted only for a frozen commit')
             if p['action']!='commit' and 'collarbone_review_ack' in p:
                 raise SC.ScopeError('Collarbone visual acknowledgment is accepted only for a frozen commit')
+            if p['action']!='commit' and 'face_style_review_ack' in p:
+                raise SC.ScopeError('Face-style visual acknowledgment is accepted only for a frozen commit')
             if p['action']=='preflight' and p.get('people_transfer') is not None:
                 if self.ports.people_transfer is None:raise ValueError('People transfer adapter unavailable')
                 self.ports.people_transfer(self,p,None);return
@@ -120,6 +129,12 @@ class FrozenBatchController:
                 reviewed=self.store.get(p.get('preflight_token'),self.versions.workspace)
                 if 'collarbone_review_ack' in p and not collarbone_required(reviewed):
                     raise SC.ScopeError('Collarbone acknowledgment requires its frozen people-transfer scope')
+                face_records=face_style_records(reviewed)
+                if face_records is not None:
+                    from .face_style_batch_review import acknowledgments
+                    acknowledgments(p.get('face_style_review_ack'),face_records)
+                elif 'face_style_review_ack' in p:
+                    raise SC.ScopeError('Face-style acknowledgment requires its actual frozen named people-transfer scope')
                 if SC.SPILL_REMOVAL.OP in reviewed.modules:
                     if len(reviewed.targets)>SR.MAX_TARGETS:raise SC.ScopeError('Spill target count exceeds its reviewed display bound')
                     spill_records=[]
@@ -359,7 +374,7 @@ class FrozenBatchController:
                     self.store.pending.pop(plan.token,None)
                     raise
                 self.emit(body);self.emit_result(p,body);return
-            if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','collarbone_review_ack'}:
+            if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','collarbone_review_ack','face_style_review_ack'}:
                 raise SC.ScopeError('token commit cannot change source, targets, modules or policy; preflight again')
             token=p.get('preflight_token')
             if self.replay_completed(p):return

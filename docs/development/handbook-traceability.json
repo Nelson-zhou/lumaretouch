@@ -3754,13 +3754,16 @@
         "docs/face-style/REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_recipes.py",
         "engine/src/lumaretouch_engine/face_style_review.py",
-        "ui/src/faceStyle"
+        "ui/src/faceStyle",
+        "docs/face-style/BATCH-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_batch_plan.py",
+        "engine/src/lumaretouch_engine/face_style_batch_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
       ]
     },
     {
@@ -4425,13 +4428,16 @@
         "docs/face-style/REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_recipes.py",
         "engine/src/lumaretouch_engine/face_style_review.py",
-        "ui/src/faceStyle"
+        "ui/src/faceStyle",
+        "docs/face-style/BATCH-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_batch_plan.py",
+        "engine/src/lumaretouch_engine/face_style_batch_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
       ]
     },
     {
@@ -4447,13 +4453,16 @@
         "docs/face-style/REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_recipes.py",
         "engine/src/lumaretouch_engine/face_style_review.py",
-        "ui/src/faceStyle"
+        "ui/src/faceStyle",
+        "docs/face-style/BATCH-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_batch_plan.py",
+        "engine/src/lumaretouch_engine/face_style_batch_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
       ]
     },
     {
@@ -4469,13 +4478,16 @@
         "docs/face-style/REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_recipes.py",
         "engine/src/lumaretouch_engine/face_style_review.py",
-        "ui/src/faceStyle"
+        "ui/src/faceStyle",
+        "docs/face-style/BATCH-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_batch_plan.py",
+        "engine/src/lumaretouch_engine/face_style_batch_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
       ]
     },
     {
@@ -4491,13 +4503,16 @@
         "docs/face-style/REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_recipes.py",
         "engine/src/lumaretouch_engine/face_style_review.py",
-        "ui/src/faceStyle"
+        "ui/src/faceStyle",
+        "docs/face-style/BATCH-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_batch_plan.py",
+        "engine/src/lumaretouch_engine/face_style_batch_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
       ]
     },
     {
@@ -4513,13 +4528,16 @@
         "docs/face-style/REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_recipes.py",
         "engine/src/lumaretouch_engine/face_style_review.py",
-        "ui/src/faceStyle"
+        "ui/src/faceStyle",
+        "docs/face-style/BATCH-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_batch_plan.py",
+        "engine/src/lumaretouch_engine/face_style_batch_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
       ]
     },
     {
@@ -4535,13 +4553,16 @@
         "docs/face-style/REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_recipes.py",
         "engine/src/lumaretouch_engine/face_style_review.py",
-        "ui/src/faceStyle"
+        "ui/src/faceStyle",
+        "docs/face-style/BATCH-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_batch_plan.py",
+        "engine/src/lumaretouch_engine/face_style_batch_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
       ]
     },
     {
@@ -4557,13 +4578,16 @@
         "docs/face-style/REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_recipes.py",
         "engine/src/lumaretouch_engine/face_style_review.py",
-        "ui/src/faceStyle"
+        "ui/src/faceStyle",
+        "docs/face-style/BATCH-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_batch_plan.py",
+        "engine/src/lumaretouch_engine/face_style_batch_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
       ]
     },
     {
@@ -4579,13 +4603,16 @@
         "docs/face-style/REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_recipes.py",
         "engine/src/lumaretouch_engine/face_style_review.py",
-        "ui/src/faceStyle"
+        "ui/src/faceStyle",
+        "docs/face-style/BATCH-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_batch_plan.py",
+        "engine/src/lumaretouch_engine/face_style_batch_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
       ]
     },
     {

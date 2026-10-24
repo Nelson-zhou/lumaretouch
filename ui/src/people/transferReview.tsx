@@ -1,11 +1,15 @@
 import {operationLabel} from './model';
 import type {PeopleTransferReview} from './transferProof';
+import {FACE_STYLE_LABELS} from '../faceStyle/model';
 export * from './transferProof';
 
 export function PeopleTransferEvidence({value}: {value: PeopleTransferReview}) {
   const explicit = value.target_policy === 'explicit_face_map';
-  return <details open={explicit || !!value.skin_colour_coverage || !!value.skin_finish_coverage || !!value.body_skin_evenness_coverage || !!value.body_face_match_coverage || !!value.collarbone_coverage}><summary>{explicit ? '仅本次指定配对' : '已确认关联'}：{value.target_refs.length} 张人脸 · {value.parameters.length} 项参数</summary>
-    <p>只替换明确勾选的参数；不复制蒙版、关键点、局部素材或人物关联。</p>
+  return <details open={explicit || !!value.skin_colour_coverage || !!value.skin_finish_coverage || !!value.body_skin_evenness_coverage || !!value.body_face_match_coverage || !!value.collarbone_coverage}><summary>{value.face_style ? '本次明确指定的新版脸型' : explicit ? '仅本次指定配对' : '已确认关联'}：{value.target_refs.length} 张人脸 · {value.parameters.length} 项参数</summary>
+    {value.face_style ? <>
+      <p>{FACE_STYLE_LABELS[value.face_style.style]} · 配方 v{value.face_style.version} · 统一程度 {Number((value.face_style.amount * 100).toFixed(6))}。下面是引擎按该固定配方生成的实际参数，不是上下文人脸的参数或外貌比较。</p>
+      <p>每次替换配方管理的全部 30 项，不叠加。0 也是中性替换，不恢复以前的自定义值；未管理的参数与旧版效果保留。每个目标使用自身关键点，不复制几何、蒙版、局部素材或人物关联。</p>
+    </> : <p>只替换明确勾选的参数；不复制蒙版、关键点、局部素材或人物关联。</p>}
     {value.target_policy === 'explicit_face_map' ? <>
       <p>确认仅授权本次同步，不建立持久人物关联，也不代表系统识别为同一人。</p>
       <p>目标独立人物版本 {value.target_owner.state_revision} · 关联版本 {value.target_owner.association_revision}。</p>

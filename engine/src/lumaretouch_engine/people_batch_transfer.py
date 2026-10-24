@@ -25,6 +25,11 @@ def options(value,modules,source_asset):
         raise ValueError('People transfer requires an explicit request object')
     policy=value.get('target_policy')
     fields={'source_ref','selection','target_policy'}|({'source','targets'} if policy=='explicit_face_map' else set())
+    if 'face_style' in value:
+        from .face_style_batch_review import recipe,check_selection
+        if policy!='explicit_face_map':raise ValueError('Named face styles require an explicit target-owned face map')
+        recipe(value['face_style']);check_selection(value['face_style'],value.get('selection'))
+        fields.add('face_style')
     if set(value)!=fields:
         raise ValueError('People transfer requires an explicit source, parameter selection and target policy')
     if policy not in ('confirmed_person_only','explicit_face_map'):
@@ -132,7 +137,15 @@ def preflight(engine,controller,p):
         raise ValueError('People transfer cannot be mixed with other batch options')
     policy=p.get('conflict_policy','skip_and_report')
     if policy not in ('skip_and_report','recheck'):raise ValueError('Unknown conflict policy')
-    engine._people_bind();owner=engine._people_owner();before=owner.snapshot();fence=owner.fence
+    named=type(p.get('people_transfer')) is dict and 'face_style' in p['people_transfer']
+    if named:
+        from .people_preset_plan import require_active_owner
+        owner=require_active_owner(engine)
+        if V.current_row(engine).get('_people_new_import'):
+            raise ValueError('Open and review the context photograph before named-style batch preparation')
+    else:
+        engine._people_bind();owner=engine._people_owner()
+    before=owner.snapshot();fence=owner.fence
     batch=engine._batch_controller();batch.documents.remember_current()
     rows=batch.documents.rows();source_row=rows[batch.documents.current_index()]
     source_proof=SOURCE.row_proof(source_row);source_asset=source_proof['asset_sha256'];source_document=document(engine,source_row)
@@ -157,19 +170,25 @@ def preflight(engine,controller,p):
             if target_document['document_id'] in seen_documents:raise ValueError('The same document was already selected as a target')
             seen_documents.add(target_document['document_id'])
             target_proof=SOURCE.row_proof(row);asset=target_proof['asset_sha256']
+            if named and (row.get('_people_new_import') or V.peek_graph(engine,row) is None):
+                raise ValueError('Named style requires an already reviewed target portrait owner; open and inspect it first')
             target_graph=V.row_snapshot(engine,row)
             target_owner=I.proof(engine,row,target_graph)
             if explicit:
                 mapping=next(item for item in selected['targets'] if item['target']['document']['document_id']==target_document['document_id'])
                 I.verify(engine,row,target_graph,mapping['target'])
                 payload=T.prepare(before,target_graph,selected['source_ref'],mapping['target_refs'],selected['selection'],A.defaults(),
-                    source_document=source_document,target_document=target_document,source_owner=source_owner,target_owner=target_owner)
+                    source_document=source_document,target_document=target_document,source_owner=source_owner,target_owner=target_owner,
+                    face_style=selected.get('face_style'))
                 payload['target_policy']='explicit_face_map'
             else:
                 payload=prepare_confirmed(before,target_graph,selected['source_ref'],asset,selected['selection'],A.defaults(),
                     source_document=source_document,target_document=target_document,source_owner=source_owner,target_owner=target_owner)
             staged=T.candidate(payload,before,target_graph,source_document=source_document,target_document=target_document,
                                source_owner=source_owner,target_owner=target_owner)
+            if 'face_style' in payload:
+                from .face_style_batch_plan import validate as validate_style
+                validate_style(staged,payload['target_refs'])
             from .people_candidate_render import validate
             validate(engine,row,staged)
             from .skin_colour_transfer_review import for_target as skin_coverage
@@ -193,7 +212,10 @@ def preflight(engine,controller,p):
             canonical({'source_proof':target_proof}),people_json=None if payload is None else canonical(payload)))
     from .collarbone_state import OP as COLLARBONE
     displays = None
-    if COLLARBONE in selected['selection']:
+    if 'face_style' in selected:
+        from .face_style_batch_plan import visuals
+        targets,displays=visuals(engine,rows,targets,public)
+    elif COLLARBONE in selected['selection']:
         targets,displays=_collarbone_visuals(engine,rows,targets,public)
     SOURCE.verify_row(source_row,source_proof)
     if owner.fence!=fence or document(engine,source_row)!=source_document:
@@ -208,12 +230,15 @@ def preflight(engine,controller,p):
         # Conservative envelope placeholders checked BEFORE retaining a token.
         'preflight_token':'x'*256,'workspace_generation':batch.versions.workspace,'expires_ns':'9'*128,
         'people_transfer':True}
-    if COLLARBONE in selected['selection'] and len(json.dumps(body,ensure_ascii=True,allow_nan=False).encode('utf-8'))>7*1024*1024:
+    if ('face_style' in selected or COLLARBONE in selected['selection']) and len(json.dumps(body,ensure_ascii=True,allow_nan=False).encode('utf-8'))>7*1024*1024:
         raise ValueError('Collarbone visual response exceeds transport budget; select fewer targets and review again')
     plan=controller.store.create(batch.versions.workspace,source_document['document_id'],source_document['revision'],
         source_row['path'],p['module_scope'],frozen,policy,targets,rejected)
     if displays is not None:
-        from .collarbone_visual_store import attach,prune
+        if 'face_style' in selected:
+            from .face_style_batch_store import attach,prune
+        else:
+            from .collarbone_visual_store import attach,prune
         try:
             attach(controller.store,plan,displays)
         except Exception:
@@ -226,10 +251,16 @@ def preflight(engine,controller,p):
 
 
 def commit(engine,controller,p,plan):
-    if set(p)-{'cmd','action','request_id','preflight_token','collarbone_review_ack'}:raise ValueError('Commit accepts only the frozen token and its collarbone image acknowledgments')
+    if set(p)-{'cmd','action','request_id','preflight_token','collarbone_review_ack','face_style_review_ack'}:raise ValueError('Commit accepts only the frozen token and its collarbone image acknowledgments')
     from .collarbone_state import OP as COLLARBONE
     from . import collarbone_transfer_review as visual_review
     visual_selected=COLLARBONE in plan.modules
+    from . import face_style_batch_review as style_review
+    style_selected=style_review.required(plan);style_ack=None
+    if style_selected:
+        if 'collarbone_review_ack' in p:raise ValueError('Mixed acknowledgment families cannot authorize named styles')
+        style_ack=style_review.acknowledgments(p.get('face_style_review_ack'),[json.loads(t.people_json)['face_style_visual'] for t in plan.targets if not t.blocked])
+    elif 'face_style_review_ack' in p:raise ValueError('Face-style ACK cannot authorize another operation')
     visual_ack=None
     if visual_selected:
         records=[json.loads(target.people_json).get('collarbone_visual') for target in plan.targets if not target.blocked]
@@ -274,6 +305,9 @@ def commit(engine,controller,p,plan):
             for ref in payload['target_refs']:
                 for leaf in payload['parameters']:
                     candidate=S.set_override(candidate,'face',ref['face_instance_id'],leaf['operation_id'],leaf['parameter_path'],leaf['value'])
+            if style_selected:
+                from .face_style_batch_plan import validate as validate_style
+                validate_style(candidate,payload['target_refs'])
             from .collarbone_state import OP as COLLARBONE
             from .body_skin_evenness_state import OP as BODY_SKIN_EVENNESS
             from .body_face_match_state import OP as BODY_FACE_MATCH
@@ -306,7 +340,7 @@ def commit(engine,controller,p,plan):
     if not eligible:raise ValueError('No confirmed target remains eligible')
     from .people_batch_ledger import prepare_scoped,_targets,_verify
     targets=_targets(batch,engine,plans)
-    if visual_selected:
+    if visual_selected or style_selected:
         reviewed={item['document_id'] for item in resolved if not item['blocked']}
         if any(target['document_id'] not in reviewed for target in targets.values()):
             raise ValueError('Collarbone publication would modify an unreviewed shared-source document; review the complete affected set')
@@ -346,6 +380,14 @@ def commit(engine,controller,p,plan):
             coverage=skin_coverage(engine,row,scoped['candidate'],payload,family='collarbone')
             visual_review.verify(engine,row,scoped['before'],scoped['candidate'],result['document_id'],
                 result['expected_revision'],coverage,payload['collarbone_visual'])
+    if style_selected:
+        from .face_style_batch_plan import verify as verify_style
+        for result in resolved:
+            if result['blocked']:continue
+            found=batch.versions.find(batch.documents.rows(),result['document_id'])
+            if found is None:raise ValueError('Named-style target disappeared')
+            row=found[1];frozen=next(t for t in plan.targets if t.document_id==result['document_id'])
+            verify_style(engine,row,plans[V.scope(row)],frozen,json.loads(frozen.people_json))
     _verify(batch,engine,plans,targets)
     # Expensive effective-source preparation cannot authorize a newer graph.
     if V.row_snapshot(engine,source[1])!=graph:raise ValueError('People graph changed during final preparation')
@@ -365,7 +407,10 @@ def commit(engine,controller,p,plan):
     if visual_selected:
         from .collarbone_visual_store import verify_available
         verify_available(controller.store,plan)
-    controller.store.claim(plan,collarbone_review_ack=visual_ack,request_id=p.get('request_id'))
+    if style_selected:
+        from .face_style_batch_store import verify_available
+        verify_available(controller.store,plan)
+    controller.store.claim(plan,collarbone_review_ack=visual_ack,face_style_review_ack=style_ack,request_id=p.get('request_id'))
     try:
         from .people_batch_ledger import commit_scoped as publish
         result=publish(batch,engine,plans,request_id=p.get('request_id'),prepare=False,prepared_targets=targets)
@@ -378,6 +423,9 @@ def commit(engine,controller,p,plan):
             'preflight_token':plan.token,'workspace_generation':plan.workspace,'people_transfer':True,
             'source_changed_since_preflight':False,'source_missing':False}
         if visual_ack is not None:body['collarbone_review_ack']=deepcopy(visual_ack)
+        if style_ack is not None:
+            body['face_style_review_ack']=deepcopy(style_ack)
+            body['outcome_unknown']=False
         controller.emit(body)
         if frame is not None:controller.emit(frame)
     except Exception as error:
@@ -385,6 +433,9 @@ def commit(engine,controller,p,plan):
               'workspace_generation':plan.workspace,'requires_preflight':True}
     if visual_ack is not None:
         body['collarbone_review_ack']=deepcopy(visual_ack)
+        body['module_scope']=list(plan.modules)
+    if style_ack is not None:
+        body['face_style_review_ack']=deepcopy(style_ack)
         body['module_scope']=list(plan.modules)
     controller.emit_result(p,controller.store.finish(plan,body))
 

@@ -4,6 +4,63 @@ Actual stored/frozen module admission, source proofs, target preparation and
 receipt replay live in the batch/preset controllers. This is only a narrow
 transport gate and deliberately admits no legacy unreviewed batch commit.
 """
+import re
+
+
+def face_style_preflight_read_only(request):
+    """Exact target-owned named-style review, not arbitrary people preflight.
+
+    This checks only detached request metadata. Actual source/graph ownership
+    and existing mutation fences remain the controller's responsibility.
+    """
+    fields={'cmd','action','request_id','docs','module_scope','people_transfer'}
+    if (type(request) is not dict or not fields<=set(request)
+            or set(request)-(fields|{'conflict_policy'}) or request.get('cmd')!='batch'
+            or request.get('action')!='preflight'
+            or request.get('conflict_policy','skip_and_report') not in ('skip_and_report','recheck')):
+        return False
+    identity=request['request_id'];docs=request['docs'];value=request['people_transfer']
+    if (type(identity) is not str or not identity.strip() or len(identity)>128
+            or any(ord(char)<32 or 0x7f<=ord(char)<=0x9f for char in identity)
+            or type(docs) is not list or not 1<=len(docs)<=16
+            or any(type(doc) is not str or re.fullmatch('[0-9a-f]{32}',doc) is None for doc in docs)
+            or len(set(docs))!=len(docs) or type(value) is not dict
+            or value.get('target_policy')!='explicit_face_map' or 'face_style' not in value):
+        return False
+    try:
+        from .face_style_batch_review import selection
+        from .people_transfer_inventory import check_proof
+        from .people_batch_transfer import options
+        if request['module_scope']!=list(selection(value['face_style'])):return False
+        source=check_proof(value.get('source'))
+        checked=options(value,request['module_scope'],source['source_proof']['asset_sha256'])
+        targets=checked['targets']
+        if set(docs)!={item['target']['document']['document_id'] for item in targets}:return False
+        for endpoint in [source]+[item['target'] for item in targets]:
+            if (re.fullmatch('[0-9a-f]{32}',endpoint['document']['document_id']) is None
+                    or any(endpoint[key]>2**53-1 for key in ('state_revision','association_revision'))
+                    or endpoint['document']['revision']>2**53-1):return False
+        refs=[checked['source_ref']]+[ref for item in targets for ref in item['target_refs']]
+        return all(ref['analysis_revision']<=2**53-1 for ref in refs) and len(identity.encode('utf-8'))<=128
+    except (ValueError,TypeError,KeyError,UnicodeError):
+        return False
+
+
+def face_style_image_read_only(request):
+    """Only a cached image read, never a recipe, graph or apply exemption."""
+    fields={'cmd','action','request_id','preflight_token','document_id','revision','side','sha256'}
+    if (type(request) is not dict or set(request)!=fields or request.get('cmd')!='batch'
+            or request.get('action')!='face_style_visual' or request.get('side') not in ('before','after')):
+        return False
+    for key in ('request_id','document_id'):
+        value=request[key]
+        if type(value) is not str or not 1<=len(value)<=128:return False
+    token=request['preflight_token'];revision=request['revision'];digest=request['sha256']
+    return (type(token) is str and re.fullmatch('[a-f0-9]{32}',token) is not None
+            and type(revision) is str and re.fullmatch('(0|[1-9][0-9]{0,19})',revision) is not None
+            and int(revision)<=2**64-1 and type(digest) is str
+            and re.fullmatch('[a-f0-9]{64}',digest) is not None)
+
 
 def inventory_read_only(request):
     if (type(request) is not dict or set(request)!={'cmd','action','request_id','docs'}
@@ -50,6 +107,9 @@ def require_route(name,request):
         raise ValueError('Invalid reviewed transfer request')
     action=request.get('action')
     if name=='batch':
+        if action=='face_style_visual':
+            if not face_style_image_read_only(request):raise ValueError('Face-style image read requires its exact bounded identity')
+            return  # Frozen image owner verifies its token; no original graph is interpreted.
         if action=='people_targets':
             if not inventory_read_only(request):raise ValueError('Face inventory requires bounded exact document identities')
             return
@@ -63,7 +123,7 @@ def require_route(name,request):
             raise ValueError('Derived transfer requires its correlated receipt identity')
         if action=='commit':
             required={'cmd','action','request_id','preflight_token'}
-            if set(request) not in (required,required|{'head_review_ack'}):
+            if set(request) not in (required,required|{'head_review_ack'},required|{'face_style_review_ack'}):
                 raise ValueError('Derived transfer accepts only its frozen token; no unreviewed commit')
         elif action in ('undo','redo'):
             if set(request)!={'cmd','action','request_id','batch_id'}:

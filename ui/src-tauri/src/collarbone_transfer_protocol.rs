@@ -41,6 +41,11 @@ pub(crate) fn acknowledgments(value: &Value) -> bool {
         && hex(&item["coverage_sha256"], 64) && seen.insert(item["document_id"].as_str().unwrap()))
 }
 pub(crate) fn command(value: &Value) -> Result<(), String> {
+    // A separate exact validator owns this image family. Never exempt generic
+    // batch coordinates merely because the caller supplied an action label.
+    if value["action"] == "face_style_visual" {
+        return crate::batch_api::face_style::command(value);
+    }
     if value["action"] == "collarbone_visual" {
         return if image_request(value) {Ok(())} else {Err("Invalid bounded collarbone image retrieval".into())};
     }
@@ -89,20 +94,20 @@ pub(crate) fn receipt(value: &Value) -> bool {
     };
     value["action"] == "commit" && (selected(value) || cohort(value)) && acknowledgments(ack)
         && hex(&value["preflight_token"], 32)
-        && !["torso_review_ack", "waist_review_ack", "head_review_ack", "spill_review_ack", "shadow_review_ack"]
+        && !["torso_review_ack", "waist_review_ack", "head_review_ack", "spill_review_ack", "shadow_review_ack", "face_style_review_ack"]
             .iter().any(|key| value.get(*key).is_some())
 }
 #[cfg(test)]
 #[path="collarbone_transfer_protocol_tests.rs"]
 mod tests;
 
-fn size(value: &Value) -> Option<(u64,u64)> {
+pub(crate) fn size(value: &Value) -> Option<(u64,u64)> {
     let v=value.as_array()?;
     if v.len()!=2 { return None; }
     let (w,h)=(v[0].as_u64()?,v[1].as_u64()?);
     (w>0 && h>0 && w<=u32::MAX as u64 && h<=u32::MAX as u64).then_some((w,h))
 }
-fn image(value: &Value, output: (u64,u64)) -> bool {
+pub(crate) fn image(value: &Value, output: (u64,u64)) -> bool {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
     use sha2::{Digest,Sha256};
     if !fields(value,&["mime","width","height","sha256","base64"])
@@ -162,7 +167,7 @@ pub(crate) fn preflight(value: &Value) -> bool {
         && value["ok"].as_u64()==Some(targets.len() as u64-blocked)
 }
 
-fn compact_image(value:&Value,output:(u64,u64))->bool {
+pub(crate) fn compact_image(value:&Value,output:(u64,u64))->bool {
     if !fields(value,&["mime","width","height","sha256"]) || value["mime"]!="image/png"
         || !hex(&value["sha256"],64) {return false;}
     let edge=output.0.max(output.1);

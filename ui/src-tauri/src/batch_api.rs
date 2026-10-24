@@ -5,9 +5,11 @@ use tauri::State;
 use crate::{AppState,engine::EngineHandle};
 #[path="collarbone_transfer_protocol.rs"]
 pub(crate) mod collarbone;
+#[path="face_style_batch_protocol.rs"]
+pub(crate) mod face_style;
 
 pub(crate) fn read_only(command:&Value)->bool {
-    if collarbone::read_only(command) {return true;}
+    if face_style::read_only(command) || collarbone::read_only(command) {return true;}
     let Some(fields)=command.as_object() else{return false;};
     let Some(docs)=command["docs"].as_array() else{return false;};
     command["cmd"]=="batch" && command["action"]=="people_targets" && fields.len()==4
@@ -18,6 +20,7 @@ pub(crate) fn read_only(command:&Value)->bool {
 }
 
 pub(crate) fn enqueue(state:&AppState,handle:&EngineHandle,command:Value)->Result<(),String>{
+    face_style::command(&command)?;
     collarbone::command(&command)?;
     crate::spill_transfer_protocol::command(&command)?;
     crate::original_shadow_transfer_protocol::command(&command)?;
@@ -34,8 +37,8 @@ pub(crate) fn enqueue(state:&AppState,handle:&EngineHandle,command:Value)->Resul
 #[tauri::command]
 pub(crate) fn batch(state:State<'_,Arc<AppState>>,action:String,docs:Option<Vec<String>>,
     module_scope:Option<Vec<String>>,conflict_policy:Option<String>,batch_id:Option<String>,
-    preflight_token:Option<String>,request_id:Option<String>,local_mask_transfer:Option<Value>,reference_color:Option<Value>,people_transfer:Option<Value>,spill_review_ack:Option<Value>,shadow_review_ack:Option<Value>,torso_review_ack:Option<Value>,waist_review_ack:Option<Value>,head_review_ack:Option<Value>,collarbone_review_ack:Option<Value>,document_id:Option<String>,revision:Option<String>,side:Option<String>,sha256:Option<String>)->Result<Value,String>{
-    if !["preflight","commit","undo","redo","state","people_targets","collarbone_visual"].contains(&action.as_str()){return Err("unknown batch action".into());}
+    preflight_token:Option<String>,request_id:Option<String>,local_mask_transfer:Option<Value>,reference_color:Option<Value>,people_transfer:Option<Value>,spill_review_ack:Option<Value>,shadow_review_ack:Option<Value>,torso_review_ack:Option<Value>,waist_review_ack:Option<Value>,head_review_ack:Option<Value>,collarbone_review_ack:Option<Value>,face_style_review_ack:Option<Value>,document_id:Option<String>,revision:Option<String>,side:Option<String>,sha256:Option<String>)->Result<Value,String>{
+    if !["preflight","commit","undo","redo","state","people_targets","collarbone_visual","face_style_visual"].contains(&action.as_str()){return Err("unknown batch action".into());}
     if request_id.is_some() && state.ready_caps.lock().map_err(|_|"capability lock poisoned")?["batch_preflight_protocol"]!=1 {
         return Err("current engine does not support reviewed batch receipts".into());
     }
@@ -55,9 +58,11 @@ pub(crate) fn batch(state:State<'_,Arc<AppState>>,action:String,docs:Option<Vec<
     if let Some(v)=waist_review_ack{cmd["waist_review_ack"]=v;}
     if let Some(v)=head_review_ack{cmd["head_review_ack"]=v;}
     if let Some(v)=collarbone_review_ack{cmd["collarbone_review_ack"]=v;}
+    if let Some(v)=face_style_review_ack{cmd["face_style_review_ack"]=v;}
     for (key,value) in [("document_id",document_id),("revision",revision),("side",side),("sha256",sha256)] {
         if let Some(v)=value{cmd[key]=json!(v);}
     }
+    face_style::command(&cmd)?;
     collarbone::command(&cmd)?;
     crate::spill_transfer_protocol::command(&cmd)?;
     crate::original_shadow_transfer_protocol::command(&cmd)?;

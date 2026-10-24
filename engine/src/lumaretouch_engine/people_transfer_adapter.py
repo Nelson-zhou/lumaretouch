@@ -5,12 +5,13 @@ payload and document fences, recheck them, then use existing atomic receipts and
 protected batch undo. people_batch_transfer wires this payload into that same controller.
 """
 from copy import deepcopy
+import json
 from . import people_state as S
 from .people_resolver import resolve
 
 
 def prepare(source_state, target_state, source_ref, target_refs, selection, defaults,
-            *, source_document, target_document, source_owner=None, target_owner=None):
+            *, source_document, target_document, source_owner=None, target_owner=None, face_style=None):
     """selection maps operation IDs to explicit parameter pointers, never assets."""
     source = S.check(source_state); target = S.check(target_state)
     source_ref = S.check_ref(source_ref)
@@ -25,15 +26,20 @@ def prepare(source_state, target_state, source_ref, target_refs, selection, defa
     for document in (source_document, target_document):
         if type(document) is not dict or set(document) != {'document_id', 'epoch', 'revision'}: raise ValueError('Document mutation fence required')
         S.token(document['document_id']); S.token(document['epoch']); S.revision(document['revision'])
-    resolved = resolve(source, source_ref['face_instance_id'], defaults)
-    parameters = []
-    for operation, paths in sorted(selection.items()):
-        for path in sorted(paths):
-            if any(x['operation_id'] == operation and x['parameter_path'] == path for x in resolved['conflicts']):
-                raise ValueError('Source has ambiguous group precedence')
-            record = resolved['operations'].get(operation, {}).get(path)
-            if record is None: raise ValueError('Selected parameter is not available on source')
-            parameters.append({'operation_id': operation, 'parameter_path': path, 'value': deepcopy(record['value'])})
+    if face_style is not None:
+        from .face_style_batch_review import recipe, check_selection, parameters as recipe_parameters
+        face_style=recipe(face_style);check_selection(face_style,selection)
+        parameters=recipe_parameters(face_style)
+    else:
+        resolved = resolve(source, source_ref['face_instance_id'], defaults)
+        parameters = []
+        for operation, paths in sorted(selection.items()):
+            for path in sorted(paths):
+                if any(x['operation_id'] == operation and x['parameter_path'] == path for x in resolved['conflicts']):
+                    raise ValueError('Source has ambiguous group precedence')
+                record = resolved['operations'].get(operation, {}).get(path)
+                if record is None: raise ValueError('Selected parameter is not available on source')
+                parameters.append({'operation_id': operation, 'parameter_path': path, 'value': deepcopy(record['value'])})
     if type(target_refs) is not list or not target_refs: raise ValueError('An explicit target face map is required')
     exact = []; seen = set()
     for ref in target_refs:
@@ -47,6 +53,10 @@ def prepare(source_state, target_state, source_ref, target_refs, selection, defa
             'source_association_revision': source['association_revision'],
             'target_association_revision': target['association_revision'],
             'transfer_policy': 'selected_parameter_keys_replace', 'excluded': ['local_assets', 'landmarks', 'masks', 'identity_links']}
+    if face_style is not None:
+        if source_owner is None or target_owner is None:raise ValueError('Named styles require both reviewed owner proofs')
+        payload['face_style']=deepcopy(face_style)
+        payload['target_policy']='explicit_face_map'
     if source_owner is not None or target_owner is not None:
         from .people_transfer_inventory import check_proof
         payload['source_owner'] = check_proof(source_owner)
@@ -84,6 +94,12 @@ def verify(payload, source_state, target_state, *, source_document, target_docum
             raise ValueError('Transfer requires distinct documents in the same workspace')
     elif payload.get('target_policy') == 'explicit_face_map':
         raise ValueError('Explicit face transfer is missing owner-qualified review proof')
+    if 'face_style' in payload:
+        from .face_style_batch_review import parameters as recipe_parameters
+        if payload.get('target_policy')!='explicit_face_map' or source_owner is None or target_owner is None:
+            raise ValueError('Named styles require explicit target face mapping')
+        if json.dumps(payload['parameters'],sort_keys=True,allow_nan=False)!=json.dumps(recipe_parameters(payload['face_style']),sort_keys=True,allow_nan=False):
+            raise ValueError('Frozen named style differs from its versioned local parameters')
     refs = [(source, payload['source_ref'])] + [(target, x) for x in payload['target_refs']]
     for state, ref in refs:
         face = state['faces'].get(ref['face_instance_id'])

@@ -7,7 +7,7 @@ fn pending()->&'static Mutex<HashMap<([u8;16],String),Value>> {
     STORE.get_or_init(||Mutex::new(HashMap::new()))
 }
 pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
-    if command["cmd"]=="project_recovery" || crate::batch_api::read_only(command) {return Ok(());}
+    if command["cmd"]=="project_recovery" {return Ok(());}
     // These exact background actions read isolated/source snapshots. A lost
     // display receipt must not create a fictitious uncertain-edit save fence.
     if command["cmd"]=="background" && matches!(command["action"].as_str(),
@@ -22,7 +22,7 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     // Do not turn an unavailable head preview into an uncertain photo edit.
     // Check a pending ID collision first: read-only status cannot release or
     // replace an already-issued mutation belonging to another receipt host.
-    if crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command)
+    if crate::batch_api::read_only(command) || crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command)
         || crate::people_api::face_style::read_only(command) {return Ok(());}
     if store.len()>=4096{return Err("未确认请求超过恢复屏障容量，请查询原请求或重新打开工程".into());}
     store.insert(key,command.clone()); Ok(())
