@@ -133,7 +133,7 @@ fn crc32(bytes: &[u8]) -> u32 {
     for byte in bytes { value = table[((value ^ u32::from(*byte)) & 255) as usize] ^ (value >> 8); }
     !value
 }
-fn png(bytes: &[u8], width: u32, height: u32) -> bool {
+pub(crate) fn png(bytes: &[u8], width: u32, height: u32) -> bool {
     if bytes.get(..8) != Some(b"\x89PNG\r\n\x1a\n".as_slice()) { return false; }
     let mut offset = 8usize;
     let mut image_data = false;

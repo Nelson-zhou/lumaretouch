@@ -1,0 +1,302 @@
+{
+  "baseline": "ef20ce9394fa986c7379544cb88a12b6956bd2e3",
+  "status": "FROZEN_SOURCE_ONLY_TARGET_VISUAL_REVIEW_PARTIAL_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32465-C-abf0a5c8c9"
+  ],
+  "scope": "Confirmed/explicit collarbone people scalar batch target-by-target actual full-render before/after review, paged immutable display retrieval and exact target acknowledgments. Same existing manual numerical operation; no new algorithm count or official AI 3D detection.",
+  "files": [
+    {
+      "path": "docs/collarbone/REQUIREMENT-AND-RESEARCH.md",
+      "sha256": "ec1c99fafb999ee13d95312fcad38f2f3f5d86eeb0694c9141cf7b570a10a2c6",
+      "bytes": 6667
+    },
+    {
+      "path": "docs/collarbone/TRANSFER-VISUAL-CONTRACT.md",
+      "sha256": "1fa8fd9f636dde4c1d1944e222bfaa047024ceac469f97092cfd1eed2d6b95fe",
+      "bytes": 7235
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "9d35d077ce1c010b8eed62c105da7f805ad40ae061a7af573bbb4c739008e991",
+      "bytes": 456413
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "8074e6de7672bd8b7e3e1bd6b8b7e91db449766873feaefaba49500a35c63dec",
+      "bytes": 49903
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight.py",
+      "sha256": "6d56134c3df1de570622eab87e5f483baa1fba8c8aa56f8368b2fe873a8b64f6",
+      "bytes": 15088
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight_controller.py",
+      "sha256": "075f84c300f18a1978a56e335e0411f683d83187b5558067f1317367c5f0d705",
+      "bytes": 47328
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "b07b408b8515d820240cfd7eb47c57f44bd922598c5f1d829ea478efa90f039a",
+      "bytes": 59211
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/collarbone_transfer_review.py",
+      "sha256": "245015f7b1d19c4dd9d92355c2b90f44e642aade59acb254d9ca5b50388cc9d1",
+      "bytes": 9478
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/collarbone_visual_store.py",
+      "sha256": "fb1f96253f783936341b5103dae9a61245fe18b10422dac0091cb0aaa778bf11",
+      "bytes": 9079
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_batch_transfer.py",
+      "sha256": "debbce9f78587eab31572b45d8facd162020ec0b92e815b1a05ac212134bd92a",
+      "bytes": 28661
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_cross_owner_workflow.py",
+      "sha256": "f2b3e2ddc56af4e2cc7a6eb7907f5386846bb993e164111b44c880d8d895a0f6",
+      "bytes": 16805
+    },
+    {
+      "path": "engine/tests/test_collarbone_ack_transport_unrun.py",
+      "sha256": "641f42c117b3bd9749e582e0ed11bf4cb006cd144be91173359c887b979d6d20",
+      "bytes": 2587
+    },
+    {
+      "path": "engine/tests/test_collarbone_visual_review_unrun.py",
+      "sha256": "4d0d95594336668f6f7f3d890d4d9130d2e68f5ec5ce6c228af1ad1711737d03",
+      "bytes": 8158
+    },
+    {
+      "path": "engine/tests/test_collarbone_visual_store_unrun.py",
+      "sha256": "56eadc6820cb3b4c001a0ba2f55325a480bbd6424db5e42bd173782a60eb7975",
+      "bytes": 7942
+    },
+    {
+      "path": "engine/tests/test_people_cross_owner_workflow_unrun.py",
+      "sha256": "34a44b2f3ab8065074a46d379478359527bc39d58bb032b52fd0aac44b1ec438",
+      "bytes": 7817
+    },
+    {
+      "path": "ui/src-tauri/src/batch_api.rs",
+      "sha256": "5a6c81f88d589484de8e5289911f7f75d9feab1c5bbb9ad065e3dc5f2183c962",
+      "bytes": 5715
+    },
+    {
+      "path": "ui/src-tauri/src/batch_host.rs",
+      "sha256": "5bb7864ceb0d5a5a1e5506d3f412ab56c029ee29f2164adca77dc9ba229fc903",
+      "bytes": 39407
+    },
+    {
+      "path": "ui/src-tauri/src/collarbone_transfer_protocol.rs",
+      "sha256": "e8c56c7ba8909493c69cd9b3a4395b77676ca3e7169bac696c4524df74b556b1",
+      "bytes": 10228
+    },
+    {
+      "path": "ui/src-tauri/src/collarbone_transfer_protocol_tests.rs",
+      "sha256": "87520404398b365302acc78fff625e38fb2eb242fda0981e83996069eb55b750",
+      "bytes": 6443
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "e15a5dc58aca877ad6ce88729e543bbee2933d1ab148ec58a17d65fb4db323f6",
+      "bytes": 23828
+    },
+    {
+      "path": "ui/src-tauri/src/torso_transfer_protocol.rs",
+      "sha256": "7e89430ffe5842e8354baa6156400cd03b16116660f4502a213b762b363eec47",
+      "bytes": 13315
+    },
+    {
+      "path": "ui/src/batch/BatchReview.tsx",
+      "sha256": "875d5361e8ceb32e2e2a5f09220300933df2e88e4f2af62efc580a521b7cc6c5",
+      "bytes": 17883
+    },
+    {
+      "path": "ui/src/batch/batchWorkflow.ts",
+      "sha256": "d1b1dd3d4966c96665a53e7bde1756383edee7a49d3dc209bef9c08ee6672554",
+      "bytes": 42594
+    },
+    {
+      "path": "ui/src/batch/useBatchWorkflow.ts",
+      "sha256": "00e2486dd99c001f97ebb21624ebc6579ff87a1138147e337e4d46a65a078581",
+      "bytes": 2120
+    },
+    {
+      "path": "ui/src/bodyScalar/transferModel.ts",
+      "sha256": "be854b87efb467e3560b717591baa50e798ae14ea0bd788c395178c470c01025",
+      "bytes": 10400
+    },
+    {
+      "path": "ui/src/collarbone/ACCEPTANCE_UNRUN.md",
+      "sha256": "c924b88c8881c0e713e5ec276097695643d17d0570018f0a6fe484a180817df8",
+      "bytes": 6478
+    },
+    {
+      "path": "ui/src/collarbone/CollarboneTransferReview.tsx",
+      "sha256": "1e0f1ccb28790d17a08fa8e7f71607a0be2a99d2106de9860a5d240653eade22",
+      "bytes": 6485
+    },
+    {
+      "path": "ui/src/collarbone/transferFixture.ts",
+      "sha256": "14ae759783870ac1ca145042783cf69fa84bec6fdd776790428459b26db10f90",
+      "bytes": 829
+    },
+    {
+      "path": "ui/src/collarbone/transferModel.ts",
+      "sha256": "298eed55120d2b10590e2f4e688aa77884ef2d6af1c9ad3ebdfc77517ed17a17",
+      "bytes": 6264
+    },
+    {
+      "path": "ui/src/collarbone/transferModel.unrun.test.ts",
+      "sha256": "5d3f7c2bbaf7c1d5e1afd17bb73e32863c4445692ce73cd78c5dd36270b74dd7",
+      "bytes": 4396
+    },
+    {
+      "path": "ui/src/collarbone/transferWorkflow.unrun.test.ts",
+      "sha256": "83f3368be7a90b5b9c5c7a00ac127defb4d5131ce05de83729ef96f818c94136",
+      "bytes": 4556
+    },
+    {
+      "path": "ui/src/collarbone/visualTransport.ts",
+      "sha256": "f38c046e8598bf65af63064f0af501b01c7d29201ac08242da3ddb6af84e3b07",
+      "bytes": 2880
+    },
+    {
+      "path": "ui/src/collarbone/visualTransport.unrun.test.ts",
+      "sha256": "e418263c6a1bf837c8ea2aa6e8c2c2d950e127164c6efdd6cf81e585ab472232",
+      "bytes": 2480
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "607ae2bf48b54ddb9443eb973f10202ca635df162bc202f8cb27669d2c6ad4ea",
+      "bytes": 105559
+    },
+    {
+      "path": "ui/src/people/ConfirmedPeopleTransfer.tsx",
+      "sha256": "e009a3f316f0021be56527410cf1e84d42571e47124da66442a4a73ae3a333b1",
+      "bytes": 19505
+    },
+    {
+      "path": "ui/src/people/collarboneCoverage.unrun.test.ts",
+      "sha256": "3a84c205596e539617a106f85d489b9308d5a7e3ae3644abb4a4d44d4787002b",
+      "bytes": 6450
+    },
+    {
+      "path": "ui/src/people/transferProof.ts",
+      "sha256": "ddca35cf32d138b47ff1778589c8be9e2937537c4e8229aa2c87ed045dac4ef4",
+      "bytes": 23233
+    },
+    {
+      "path": "ui/src/people/transferReview.tsx",
+      "sha256": "5d932d9c7663fff954d247ea17ee727ea3e2c06d1f7b458a62558416b01d68f0",
+      "bytes": 6892
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1276,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 101,
+    "git_diff_check": "clean",
+    "payload_whitespace": "clean",
+    "prior_numeric_geometry_and_frozen_sources_byte_identical": 235,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 6998
+    },
+    "fixture_declarations_in_payload_all_unrun": {
+      "python": {
+        "engine/tests/test_collarbone_ack_transport_unrun.py": 7,
+        "engine/tests/test_collarbone_visual_review_unrun.py": 14,
+        "engine/tests/test_collarbone_visual_store_unrun.py": 12,
+        "engine/tests/test_people_cross_owner_workflow_unrun.py": 9
+      },
+      "rust": {
+        "ui/src-tauri/src/batch_api.rs": 1,
+        "ui/src-tauri/src/batch_host.rs": 18,
+        "ui/src-tauri/src/collarbone_transfer_protocol_tests.rs": 10,
+        "ui/src-tauri/src/receipt_host.rs": 9
+      },
+      "typescript": {
+        "ui/src/collarbone/transferModel.unrun.test.ts": 9,
+        "ui/src/collarbone/transferWorkflow.unrun.test.ts": 4,
+        "ui/src/collarbone/visualTransport.unrun.test.ts": 4,
+        "ui/src/people/collarboneCoverage.unrun.test.ts": 7
+      }
+    }
+  },
+  "integration_map": {
+    "actual_render_and_frozen_owner": [
+      "people_batch_transfer.py",
+      "collarbone_transfer_review.py",
+      "full_candidate_render existing unchanged",
+      "people_batch_ledger existing unchanged"
+    ],
+    "paged_image_ownership": [
+      "collarbone_visual_store.py",
+      "batch_sync.py",
+      "batch_preflight.py",
+      "batch_preflight_controller.py"
+    ],
+    "native_transport": [
+      "batch_api.rs",
+      "collarbone_transfer_protocol.rs",
+      "batch_host.rs",
+      "receipt_host.rs",
+      "torso_transfer_protocol existing PNG validator visibility only"
+    ],
+    "target_review_ui": [
+      "ui/src/collarbone/CollarboneTransferReview.tsx",
+      "transferModel.ts",
+      "visualTransport.ts",
+      "ui/src/batch/BatchReview.tsx",
+      "batchWorkflow.ts",
+      "useBatchWorkflow.ts",
+      "ui/src/people/ConfirmedPeopleTransfer.tsx",
+      "transferProof.ts",
+      "transferReview.tsx",
+      "ui/src/native.ts"
+    ],
+    "alternate_routes": [
+      "people_cross_owner_workflow.py explicit selection refusal",
+      "generic collarbone batch explicit refusal",
+      "single-photo preset unchanged separate route"
+    ],
+    "requirement": [
+      "docs/collarbone/TRANSFER-VISUAL-CONTRACT.md",
+      "REQUIREMENT-AND-RESEARCH.md",
+      "handbook-traceability exact partial entry",
+      "registry-extensions"
+    ]
+  },
+  "limits": {
+    "targets": 16,
+    "display_edge": 1024,
+    "individual_png_bytes": 4194304,
+    "session_raw_image_bytes": 134217728,
+    "session_image_entries": 256,
+    "transient_preparation_base64_bytes": 201326592,
+    "preflight_response_bytes": 7340032,
+    "existing_native_result_bytes": 8388608
+  },
+  "limitations": [
+    "Official AI 3D clavicle detection and automatic category/anatomy remain missing. Requirement remains partial, no new algorithm count or whole-feature acceptance.",
+    "Manual target-local visible anatomy/category/ownership remains required; no masks/traces/source fields copied. Source ambiguity and photographic quality limitations unchanged.",
+    "Persistent association collarbone create/patch selection explicitly refuses pending whole-cohort image review; saved projections and unlink remain. Single-photo preset remains separate existing review, not newly visually reviewed here.",
+    "Unselected shared-source alias documents are refused. Newly skipped shared-owner targets changing aggregate require fresh visual review rather than blindly continuing skip_and_report.",
+    "Paged display reduces full canonical render for review only.1024edge RGB8 display is not fullresolution inspection or RGB16 precision acceptance. No broader alpha/HDR support or silent clipping.",
+    "16target limit and128MiB session raw budget are source contracts, not tested usability/performance guarantees. Multiple pending plans may exhaust budget; no hidden truncation or lower-detail image fallback. Unclean process termination can leave temporary files without restored authority.",
+    "All product imports, tests, builds/compiler/typecheck, native/filesystem runtime, model inference/download, numerical/photo/quality/history/export/performance acceptance remain UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

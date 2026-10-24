@@ -49,6 +49,8 @@ class FrozenBatchController:
 
     def _prune_scalar_targets(self):
         self.store._prune(self.store.clock())
+        from .collarbone_visual_store import prune
+        prune(self.store)
         self._scalar_targets={token:rows for token,rows in self._scalar_targets.items()
                               if token in self.store.pending}
 
@@ -69,7 +71,7 @@ class FrozenBatchController:
 
     def replay_completed(self,p):
         self._prune_scalar_targets()
-        if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack'}:
+        if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','collarbone_review_ack'}:
             raise SC.ScopeError('token commit cannot change reviewed options')
         cached=self.store.completed(p.get('preflight_token'),self.versions.workspace)
         if cached is None:return False
@@ -89,6 +91,11 @@ class FrozenBatchController:
                     raise SC.ScopeError('Body-scalar token replay requires its exact original visual acknowledgment')
             elif key in p:
                 raise SC.ScopeError('Body-scalar acknowledgment cannot accompany a different-family token')
+        if 'collarbone_review_ack' in cached:
+            if type(p.get('collarbone_review_ack')) is not list or canonical(p['collarbone_review_ack'])!=canonical(cached['collarbone_review_ack']):
+                raise SC.ScopeError('Collarbone token replay requires its exact original visual acknowledgment')
+        elif 'collarbone_review_ack' in p:
+            raise SC.ScopeError('Collarbone acknowledgment cannot accompany another token')
         if p.get('request_id') is None:self.emit({**cached,'event':'batch_result','action':'commit','request_id':None,'replayed':True})
         else:self.emit_result(p,{**cached,'replayed':True})
         return True
@@ -103,12 +110,16 @@ class FrozenBatchController:
                 raise SC.ScopeError('Original-shadow visual acknowledgment is accepted only for a frozen commit')
             if p['action']!='commit' and any(key in p for key in ('torso_review_ack','waist_review_ack','head_review_ack')):
                 raise SC.ScopeError('Body-scalar visual acknowledgment is accepted only for a frozen commit')
+            if p['action']!='commit' and 'collarbone_review_ack' in p:
+                raise SC.ScopeError('Collarbone visual acknowledgment is accepted only for a frozen commit')
             if p['action']=='preflight' and p.get('people_transfer') is not None:
                 if self.ports.people_transfer is None:raise ValueError('People transfer adapter unavailable')
                 self.ports.people_transfer(self,p,None);return
             if p['action']=='commit':
                 if self.replay_completed(p):return
                 reviewed=self.store.get(p.get('preflight_token'),self.versions.workspace)
+                if 'collarbone_review_ack' in p and ('_people_transfer' not in reviewed.params() or 'lnx.collarbone.v1' not in reviewed.modules):
+                    raise SC.ScopeError('Collarbone acknowledgment requires its frozen people-transfer scope')
                 if SC.SPILL_REMOVAL.OP in reviewed.modules:
                     if len(reviewed.targets)>SR.MAX_TARGETS:raise SC.ScopeError('Spill target count exceeds its reviewed display bound')
                     spill_records=[]
@@ -156,6 +167,7 @@ class FrozenBatchController:
                 raise SC.ScopeError(SC.SEMANTIC.REASON)
             if p['action']=='preflight':
                 ops=SC.check_scope(p.get('module_scope'));family=body_family(ops);policy=p.get('conflict_policy','skip_and_report')
+                if 'lnx.collarbone.v1' in ops:raise SC.ScopeError('Collarbone batch requires confirmed or explicit target-owned people visual review')
                 if policy not in ('skip_and_report','recheck'):raise SC.ScopeError(f'conflict_policy 未知：{policy!r}（可用：skip_and_report/recheck；没有 overwrite）')
                 if p.get('preflight_token') is not None:raise SC.ScopeError('preflight does not accept an old token')
                 indices,rejected=self.ports.targets(p.get('docs'))
@@ -347,7 +359,7 @@ class FrozenBatchController:
                     self.store.pending.pop(plan.token,None)
                     raise
                 self.emit(body);self.emit_result(p,body);return
-            if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack'}:
+            if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','collarbone_review_ack'}:
                 raise SC.ScopeError('token commit cannot change source, targets, modules or policy; preflight again')
             token=p.get('preflight_token')
             if self.replay_completed(p):return

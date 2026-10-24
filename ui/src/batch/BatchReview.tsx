@@ -1,3 +1,5 @@
+import {COLLARBONE_TRANSFER_OP,collarboneReviewKey,collarboneImagesReady,collarboneAck,type CollarboneAck} from '../collarbone/transferModel';
+import {CollarboneTransferReview} from '../collarbone/CollarboneTransferReview';
 import {CROP_OP,cropReviewKey,cropImagesReady} from '../cropTransfer/model';
 import {CropTransferReview} from '../cropTransfer/CropTransferReview';
 import {SPILL_TRANSFER_OP,spillTransferReviewKey,spillTransferImagesReady,spillTransferAck,type SpillTransferAck} from '../spillRemoval/transferModel';
@@ -28,18 +30,19 @@ function reason(text:string|null|undefined){
     'target parameters changed outside the reviewed snapshot':'参数与预检快照不同，已保护',
   };return known[text]??text;
 }
-export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClose,peoplePreview,commitBlockedReason}:{state:BatchUi;onCommit:(spillReviewAck?:SpillTransferAck[],shadowReviewAck?:ShadowTransferAck[],torsoReviewAck?:TorsoTransferAck[],waistReviewAck?:WaistTransferAck[],headReviewAck?:HeadTransferAck[])=>unknown;
+export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClose,peoplePreview,commitBlockedReason}:{state:BatchUi;onCommit:(spillReviewAck?:SpillTransferAck[],shadowReviewAck?:ShadowTransferAck[],torsoReviewAck?:TorsoTransferAck[],waistReviewAck?:WaistTransferAck[],headReviewAck?:HeadTransferAck[],collarboneReviewAck?:CollarboneAck[])=>unknown;
   onReview:()=>unknown;onQuery:()=>unknown;onAcknowledge:()=>void;onClose:()=>void;peoplePreview?:ReactNode;commitBlockedReason?:string}){
   const [cropImages,setCropImages]=useState<Record<string,boolean>>({});
   const [spillImages,setSpillImages]=useState<Record<string,boolean>>({});
   const [shadowImages,setShadowImages]=useState<Record<string,boolean>>({});
   const [torsoImages,setTorsoImages]=useState<Record<string,boolean>>({});
   const [waistImages,setWaistImages]=useState<Record<string,boolean>>({});
+  const [collarboneImages,setCollarboneImages]=useState<Record<string,boolean>>({});
   const [headImages,setHeadImages]=useState<Record<string,boolean>>({});
   const dialog=useRef<HTMLElement>(null),close=useRef(onClose);close.current=onClose;
   useEffect(()=>setCropImages({}),[state.plan?.preflight_token]);
   const open=state.phase!=='closed'&&!state.hidden,busy=state.phase==='committing';
-  useEffect(()=>{setSpillImages({});setShadowImages({});setTorsoImages({});setWaistImages({});setHeadImages({});},[state.plan?.preflight_token,state.plan?.request_id,open]);
+  useEffect(()=>{setSpillImages({});setShadowImages({});setTorsoImages({});setWaistImages({});setHeadImages({});setCollarboneImages({});},[state.plan?.preflight_token,state.plan?.request_id,open]);
   useEffect(()=>{
     if(!open)return;
     const previous=document.activeElement as HTMLElement|null;dialog.current?.focus();
@@ -73,7 +76,10 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
   const headTargets=plan?.module_scope.includes(HEAD_TRANSFER_OP)?plan.targets.filter(t=>!t.blocked):[];
   const headToken=`${plan?.preflight_token??''}:${plan?.request_id??''}`;
   const headReady=headTransferImagesReady(headToken,headTargets.map(t=>t.head_transfer),headImages);
-  const blockedReason=commitBlockedReason||(!cropReady?'请等待每张目标的实际裁剪预览通过显示校验，再确认同步。':!spillReady?'请逐张查看并勾选所有可同步目标的祛反光前后效果。':!shadowReady?'请逐张查看并勾选所有可同步目标的原图阴影前后效果。':!torsoReady?'请逐张查看并勾选所有可同步目标身体及本人面部的上身长度前后效果。':!waistReady?'请逐张查看并勾选所有可同步目标身体及本人面部的腰长前后效果。':!headReady?'请逐张查看并勾选所有可同步目标完整头发、头部及本人面部的小头前后效果。':undefined);
+  const collarboneTargets=plan?.module_scope.includes(COLLARBONE_TRANSFER_OP)?plan.targets.filter(t=>!t.blocked):[];
+  const collarboneToken=`${plan?.preflight_token??''}:${plan?.request_id??''}`;
+  const collarboneReady=collarboneImagesReady(collarboneToken,collarboneTargets.map(t=>t.people_transfer?.collarbone_visual),collarboneImages);
+  const blockedReason=commitBlockedReason||(!cropReady?'请等待每张目标的实际裁剪预览通过显示校验，再确认同步。':!spillReady?'请逐张查看并勾选所有可同步目标的祛反光前后效果。':!shadowReady?'请逐张查看并勾选所有可同步目标的原图阴影前后效果。':!torsoReady?'请逐张查看并勾选所有可同步目标身体及本人面部的上身长度前后效果。':!waistReady?'请逐张查看并勾选所有可同步目标身体及本人面部的腰长前后效果。':!headReady?'请逐张查看并勾选所有可同步目标完整头发、头部及本人面部的小头前后效果。':!collarboneReady?'请逐张查看并勾选所有可同步目标的锁骨真实前后效果。':undefined);
   const title=state.operation==='redo'?'重做批量同步':state.operation==='undo'?'撤销批量同步':'批量同步预检';
   return <div className="batchReviewBackdrop">
     <section ref={dialog} tabIndex={-1} className="batchReview" role="dialog" aria-modal="true" aria-labelledby="batchReviewTitle">
@@ -108,6 +114,7 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
         {plan?.module_scope.includes(TORSO_TRANSFER_OP)&&!t.blocked&&t.torso_transfer&&<TorsoTransferReview key={`${plan.request_id}:${torsoTransferReviewKey(plan.preflight_token,t.torso_transfer)}`} value={t.torso_transfer} reviewKey={torsoTransferReviewKey(plan.preflight_token,t.torso_transfer)} disabled={busy||state.phase!=='review'} onReady={(key,ready)=>setTorsoImages(old=>old[key]===ready?old:{...old,[key]:ready})}/>}
         {plan?.module_scope.includes(WAIST_TRANSFER_OP)&&!t.blocked&&t.waist_transfer&&<WaistTransferReview value={t.waist_transfer} reviewKey={waistTransferReviewKey(waistToken,t.waist_transfer)} disabled={busy||state.phase!=='review'} onReady={(key,ready)=>setWaistImages(old=>old[key]===ready?old:{...old,[key]:ready})}/>}
         {plan?.module_scope.includes(HEAD_TRANSFER_OP)&&!t.blocked&&t.head_transfer&&<HeadTransferReview value={t.head_transfer} reviewKey={headTransferReviewKey(headToken,t.head_transfer)} disabled={busy||state.phase!=='review'} onReady={(key,ready)=>setHeadImages(old=>old[key]===ready?old:{...old,[key]:ready})}/>}
+        {plan?.module_scope.includes(COLLARBONE_TRANSFER_OP)&&!t.blocked&&t.people_transfer?.collarbone_visual&&t.people_transfer.collarbone_coverage&&<CollarboneTransferReview preflightToken={plan.preflight_token} value={t.people_transfer.collarbone_visual} coverage={t.people_transfer.collarbone_coverage} reviewKey={collarboneReviewKey(collarboneToken,t.people_transfer.collarbone_visual)} disabled={busy||state.phase!=='review'} onReady={(key,ready)=>setCollarboneImages(old=>old[key]===ready?old:{...old,[key]:ready})}/>}
         {t.people_transfer&&<PeopleTransferEvidence value={t.people_transfer}/>}
         {t.local_mask_transfer&&<MaskTransferEvidenceView value={t.local_mask_transfer}/>}
         {t.reference_color&&<ReferenceColorReview value={t.reference_color}/>}
@@ -117,7 +124,7 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
       {!!result?.conflicts?.length&&<ul>{result.conflicts.map((r,i)=><li key={i}>{file(r.path)}：{r.reason}</li>)}</ul>}
       <footer>
         {state.phase==='review'&&blockedReason&&<p role="status">{blockedReason}</p>}
-        {state.phase==='review'&&<button className="tb primary" disabled={!!blockedReason||!plan?.ok||(plan.policy==='recheck'&&plan.blocked>0)} onClick={()=>{if(!blockedReason)onCommit(plan?.module_scope.includes(SPILL_TRANSFER_OP)?spillTransferAck(spillTargets.map(t=>t.spill_transfer!)):undefined,plan?.module_scope.includes(SHADOW_TRANSFER_OP)?shadowTransferAck(shadowTargets.map(t=>t.shadow_transfer!)):undefined,plan?.module_scope.includes(TORSO_TRANSFER_OP)?torsoTransferAck(torsoTargets.map(t=>t.torso_transfer!)):undefined,plan?.module_scope.includes(WAIST_TRANSFER_OP)?waistTransferAck(waistTargets.map(t=>t.waist_transfer!)):undefined,plan?.module_scope.includes(HEAD_TRANSFER_OP)?headTransferAck(headTargets.map(t=>t.head_transfer!)):undefined);}}>{plan?.persistent_association?'确认全部成员与持久关联操作':plan?.applies.target_policy==='explicit_face_map'?'仅确认本次人脸配对与参数并同步':'确认本次配方并同步'}</button>}
+        {state.phase==='review'&&<button className="tb primary" disabled={!!blockedReason||!plan?.ok||(plan.policy==='recheck'&&plan.blocked>0)} onClick={()=>{if(!blockedReason)onCommit(plan?.module_scope.includes(SPILL_TRANSFER_OP)?spillTransferAck(spillTargets.map(t=>t.spill_transfer!)):undefined,plan?.module_scope.includes(SHADOW_TRANSFER_OP)?shadowTransferAck(shadowTargets.map(t=>t.shadow_transfer!)):undefined,plan?.module_scope.includes(TORSO_TRANSFER_OP)?torsoTransferAck(torsoTargets.map(t=>t.torso_transfer!)):undefined,plan?.module_scope.includes(WAIST_TRANSFER_OP)?waistTransferAck(waistTargets.map(t=>t.waist_transfer!)):undefined,plan?.module_scope.includes(HEAD_TRANSFER_OP)?headTransferAck(headTargets.map(t=>t.head_transfer!)):undefined,plan?.module_scope.includes(COLLARBONE_TRANSFER_OP)?collarboneAck(collarboneTargets.map(t=>t.people_transfer!.collarbone_visual!)):undefined);}}>{plan?.persistent_association?'确认全部成员与持久关联操作':plan?.applies.target_policy==='explicit_face_map'?'仅确认本次人脸配对与参数并同步':'确认本次配方并同步'}</button>}
         {['review','error','done'].includes(state.phase)&&!['undo','redo'].includes(state.operation)&&<button className="tb" onClick={onReview}>重新预检</button>}
         {state.phase==='uncertain'&&<>{!plan?.module_scope.includes(WAIST_TRANSFER_OP)&&!plan?.module_scope.includes(HEAD_TRANSFER_OP)&&<button className="tb" onClick={onAcknowledge}>我已检查照片，结束本次跟踪</button>}<button className="tb primary" onClick={onQuery}>再次查询这次任务</button></>}
       </footer>

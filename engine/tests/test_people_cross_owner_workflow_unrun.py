@@ -55,6 +55,22 @@ class PersistentWorkflow(TestCase):
         with self.assertRaises(ValueError): W.options(duplicate, ['lnx.deform.v1'])
         with self.assertRaises(ValueError): W.options(request, [])
 
+    def test_collarbone_requires_separate_target_visual_route(self):
+        # Authored only: cohort-wide source/member visuals are not implemented.
+        for operation in ('create', 'patch'):
+            _, request = fixture()
+            request['operation'] = operation
+            request['selection'] = {'lnx.collarbone.v1': ['/amount']}
+            before = deepcopy(request)
+            with self.assertRaisesRegex(ValueError, 'target image pair'):
+                W.options(request, ['lnx.collarbone.v1'])
+            self.assertEqual(request, before)
+
+    def test_collarbone_guard_does_not_disable_complete_unlink(self):
+        _, request = fixture()
+        request['operation'] = 'unlink'; request['selection'] = {}
+        self.assertEqual(W.options(request, []), request)
+
     def test_unlink_is_explicit_without_selected_values(self):
         _, request = fixture(); request['operation'] = 'unlink'; request['selection'] = {}
         self.assertEqual(W.options(request, [])['operation'], 'unlink')

@@ -105,7 +105,7 @@ export function bodyScalarNoWriteRejection(value:unknown,token:string|undefined)
   if(!object(value)||!validBodyScalarReceiptState(value)||value.success!==false||value.outcome_unknown!==false||typeof value.error!=='string'||!value.error.trim()
     ||value.preflight_token!=null&&value.preflight_token!==token||value.requires_reload===true
     ||['module_scope','torso_review_ack','waist_review_ack','head_review_ack','torso_transfer','waist_transfer','head_transfer',
-      'before','after','doc_state','batch_id','applied','committed','operation_committed'].some(key=>Object.hasOwn(value,key)))return false;
+      'collarbone_review_ack','collarbone_visual','before','after','doc_state','batch_id','applied','committed','operation_committed'].some(key=>Object.hasOwn(value,key)))return false;
   return value.target_outcomes===undefined||Array.isArray(value.target_outcomes)&&value.target_outcomes.every(target=>object(target)
     &&['conflict','not_applied'].includes(String(target.outcome))&&target.result_revision==null);
 }

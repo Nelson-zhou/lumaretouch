@@ -28,3 +28,29 @@ Official requirement `LNX-REF-PC-32465-C-abf0a5c8c9`, path `锁骨增强`, remai
 ## Still required before acceptance
 
 Typecheck and run all relevant suites once execution is authorized. Exercise actual mouse/touch and keyboard controls, late image/error callbacks, close/reopen, target/body/source changes, conflicting explicit labels, unknown receipts and duplicate confirmation. Verify true original-source coordinate mapping at edges and under thumbnail rounding/zoom. Validate real-photo native effect quality, faint/one-sided/occluded cases, chromatic/lighting confounders, boundary and unrelated-person protection, mixed shared targets, derived-source restrictions, undo/redo/project replay and preview/export parity. Do not mark the official item or skin family complete from source fixtures or static review.
+
+## Target image review extension (source-authored, UNRUN)
+
+The explicit/confirmed people-transfer route now requires compact frozen target
+image-pair metadata, lazy read-only retrieval of each real before/after PNG,
+byte SHA-256 and IHDR/display-size checks, a canonical target coverage digest,
+and a separate checkbox for every eligible target. This applies to zero strength
+as well as nonzero values. Mixed selected people parameters are visible in the
+same full-chain candidate, not an isolated collarbone simulation.
+
+Each display uses the full-render output reduced only to longest edge 1024,
+with an optional native-display-size scroll view. It is not a full-resolution
+quality check. Paged retrieval does not enlarge the existing native mailbox cap.
+Token, request, document revision, side, image digest and coverage identity must
+match; stale asynchronous responses cannot authorize a newer review. Unknown
+mutation outcomes remain tied to the original request and cannot be dismissed
+as if no write occurred.
+
+Persistent association create/patch does not yet have cohort-wide visual review
+and therefore refuses this selected operation explicitly. Unlink and existing
+saved recipes are not reinterpreted. Generic single-photo preset review is a
+separate existing route and is not claimed to have these batch guarantees.
+Official AI 3D detection and automatic category/anatomy inference remain absent.
+
+New model, workflow and paged-transport fixtures are declarations only. No test,
+build, typecheck, app interaction, numerical or photographic acceptance ran.

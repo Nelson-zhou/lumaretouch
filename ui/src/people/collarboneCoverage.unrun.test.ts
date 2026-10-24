@@ -1,3 +1,4 @@
+import {visualFixture} from '../collarbone/transferFixture';
 // AUTHORED / UNRUN. No imports, tests, UI, typecheck or build executed while authoring.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,6 +12,7 @@ function fixture(scope: CollarboneCoverage['targets'][number]['scope'] = 'review
   value.collarbone_coverage = {version: 1, support_transfer: 'none', targets: [{face_ref: {...value.target_refs[0]}, scope,
     body_review_sha256: scope === 'neutral-no-effect' ? null : 'f'.repeat(64),
     clavicle_category: scope === 'neutral-no-effect' ? null : 'female', clavicle_sides: scope === 'neutral-no-effect' ? [] : ['left']}]};
+  value.collarbone_visual=visualFixture(value);
   return {req, value, target: {document_id: targetId, revision: '20'}};
 }
 test('own target evidence is required for active and exact no-effect disclosed for neutral', () => {
@@ -67,8 +69,8 @@ test('each exact target requires a separate record and unrelated operations cann
   const req = request(), unrelated = review(); unrelated.collarbone_coverage = fixture().value.collarbone_coverage;
   assert.equal(validPeopleReview(unrelated, req, req.source, {document_id: targetId, revision: '20'}), false);
 });
-test('visible transfer disclosure states category, image sides, scalar-only and missing batch visual comparison', () => {
+test('visible transfer disclosure states category, image sides, scalar-only and separate mandatory real visual comparison', () => {
   const text = readFileSync(new URL('./transferReview.tsx', import.meta.url), 'utf8');
   for (const expected of ['!!value.collarbone_coverage', '目标锁骨现有明暗增强覆盖范围', 'row.clavicle_category', 'row.clavicle_sides',
-    '不复制身体蒙版、锁骨曲线、类别确认或人物关联', '不是新生成的批量逐图视觉前后对比', '不自动分类、检测锁骨、补全另一侧或进行 AI 3D 重建']) assert.ok(text.includes(expected));
+    '不复制身体蒙版、锁骨曲线、类别确认或人物关联', '上方真实前后对比须逐图查看并确认', '不自动分类、检测锁骨、补全另一侧或进行 AI 3D 重建']) assert.ok(text.includes(expected));
 });

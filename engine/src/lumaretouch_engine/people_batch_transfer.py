@@ -5,6 +5,7 @@ There is no independent transaction queue, token service or undo stack here.
 """
 from copy import deepcopy
 import json
+from dataclasses import replace
 from . import people_state as S, people_algorithms as A, people_transfer_adapter as T
 from .people_confirmed_transfer import prepare_confirmed
 from .batch_preflight import FrozenTarget,canonical
@@ -64,6 +65,66 @@ def options(value,modules,source_asset):
                     raise ValueError('Explicit target face is duplicated or belongs to another effective source')
                 ids.add(ref['face_instance_id'])
     return deepcopy(value)
+
+
+
+def _collarbone_visuals(engine, rows, targets, public):
+    """Render the final aggregate shared-owner graph, including all mixed leaves.
+
+    Original photos share one owner. Independent per-row previews would omit
+    other selected updates and could not authorize the actual committed graph.
+    """
+    from . import collarbone_transfer_review as review
+    from .skin_colour_transfer_review import for_target
+    if len(targets) > review.MAX_TARGETS:
+        raise ValueError('Collarbone visual review supports at most sixteen targets; no target was omitted')
+    plans = {}
+    for target in targets:
+        if target.blocked: continue
+        row = rows[target.index]; payload = json.loads(target.people_json)
+        identity = V.scope(row); graph = V.row_snapshot(engine, row)
+        staged = plans.get(identity)
+        if staged is not None and staged['before'] != graph:
+            raise ValueError('Collarbone target owner changed during aggregate preparation')
+        candidate = S.check(graph if staged is None else staged['candidate'])
+        for ref in payload['target_refs']:
+            for leaf in payload['parameters']:
+                candidate = S.set_override(candidate, 'face', ref['face_instance_id'], leaf['operation_id'], leaf['parameter_path'], leaf['value'])
+        plans[identity] = {'before': graph, 'candidate': candidate}
+    from .people_graph_owner import affected_assets
+    reviewed = {target.document_id for target in targets if not target.blocked}
+    for row in rows:
+        staged = plans.get(V.scope(row))
+        if staged is not None and SOURCE.row_proof(row)['asset_sha256'] in affected_assets(staged['before'], staged['candidate']):
+            if document(engine,row)['document_id'] not in reviewed:
+                raise ValueError('Collarbone changes also affect an unreviewed shared-source document; include that document or use an independent virtual copy')
+    total = 0; frozen = []; displays = {}
+    for target, visible in zip(targets, public):
+        if target.blocked:
+            frozen.append(target); continue
+        row = rows[target.index]; payload = json.loads(target.people_json); staged = plans[V.scope(row)]
+        coverage = for_target(engine, row, staged['candidate'], payload, family='collarbone')
+        if coverage != payload.get('collarbone_coverage'):
+            raise ValueError('Collarbone target coverage changed during aggregate review')
+        record, display = review.prepare(engine, row, staged['before'], staged['candidate'],
+            target.document_id, str(target.revision), coverage)
+        total += len(display['before']['base64']) + len(display['after']['base64'])
+        if total > review.MAX_TOTAL_BASE64:
+            raise ValueError('Collarbone review response exceeds its display budget; select fewer targets, no target was silently omitted')
+        payload['collarbone_visual'] = record
+        frozen.append(replace(target, people_json=canonical(payload)))
+        visible['people_transfer'] = deepcopy(payload)
+        displays[target.document_id] = {'revision': str(target.revision), 'before': display['before'], 'after': display['after']}
+    # No view may become obsolete while another target is being rendered.
+    for target in frozen:
+        if target.blocked: continue
+        row = rows[target.index]; payload = json.loads(target.people_json); staged = plans[V.scope(row)]
+        if V.row_snapshot(engine, row) != staged['before']:
+            raise ValueError('Collarbone target graph changed while reviewing other targets')
+        coverage = for_target(engine, row, staged['candidate'], payload, family='collarbone')
+        review.verify(engine, row, staged['before'], staged['candidate'], target.document_id,
+            str(target.revision), coverage, payload['collarbone_visual'])
+    return frozen, displays
 
 
 def preflight(engine,controller,p):
@@ -130,24 +191,51 @@ def preflight(engine,controller,p):
             'revision':str(target_document['revision']),'blocked':blocked,'before':{},'people_transfer':payload})
         targets.append(FrozenTarget(target_document['document_id'],target_document['revision'],index,row['path'],blocked,
             canonical({'source_proof':target_proof}),people_json=None if payload is None else canonical(payload)))
+    from .collarbone_state import OP as COLLARBONE
+    displays = None
+    if COLLARBONE in selected['selection']:
+        targets,displays=_collarbone_visuals(engine,rows,targets,public)
     SOURCE.verify_row(source_row,source_proof)
     if owner.fence!=fence or document(engine,source_row)!=source_document:
         raise ValueError('Source or associations changed during preparation; review again')
     I.verify(engine,source_row,before,source_owner)
     frozen={MARKER:{'options':selected,'source_asset':source_asset,'source_proof':source_proof,'state_revision':before['revision'],
                     'association_revision':before['association_revision'],'source_owner':source_owner}}
+    body={'event':'batch_preflight','success':True,'module_scope':list(p['module_scope']),'source':'current',
+        'source_snapshot':{'document_id':source_document['document_id'],'revision':str(source_document['revision']),'path':source_row['path']},
+        'applies':selected,'policy':policy,'targets':public,
+        'rejected_docs':rejected,'ok':sum(not x['blocked'] for x in public),'blocked':sum(bool(x['blocked']) for x in public),
+        # Conservative envelope placeholders checked BEFORE retaining a token.
+        'preflight_token':'x'*256,'workspace_generation':batch.versions.workspace,'expires_ns':'9'*128,
+        'people_transfer':True}
+    if COLLARBONE in selected['selection'] and len(json.dumps(body,ensure_ascii=True,allow_nan=False).encode('utf-8'))>7*1024*1024:
+        raise ValueError('Collarbone visual response exceeds transport budget; select fewer targets and review again')
     plan=controller.store.create(batch.versions.workspace,source_document['document_id'],source_document['revision'],
         source_row['path'],p['module_scope'],frozen,policy,targets,rejected)
-    body={'event':'batch_preflight','success':True,'module_scope':list(plan.modules),'source':'current',
-        'source_snapshot':controller._source(plan),'applies':selected,'policy':policy,'targets':public,
-        'rejected_docs':rejected,'ok':sum(not x['blocked'] for x in public),'blocked':sum(bool(x['blocked']) for x in public),
-        'preflight_token':plan.token,'workspace_generation':plan.workspace,'expires_ns':str(plan.expires_ns),
-        'people_transfer':True}
+    if displays is not None:
+        from .collarbone_visual_store import attach,prune
+        try:
+            attach(controller.store,plan,displays)
+        except Exception:
+            controller.store.pending.pop(plan.token,None)
+            prune(controller.store)
+            raise
+    body.update(module_scope=list(plan.modules),source_snapshot=controller._source(plan),
+                preflight_token=plan.token,workspace_generation=plan.workspace,expires_ns=str(plan.expires_ns))
     controller.emit(body);controller.emit_result(p,body)
 
 
 def commit(engine,controller,p,plan):
-    if set(p)-{'cmd','action','request_id','preflight_token'}:raise ValueError('Commit accepts only the frozen token')
+    if set(p)-{'cmd','action','request_id','preflight_token','collarbone_review_ack'}:raise ValueError('Commit accepts only the frozen token and its collarbone image acknowledgments')
+    from .collarbone_state import OP as COLLARBONE
+    from . import collarbone_transfer_review as visual_review
+    visual_selected=COLLARBONE in plan.modules
+    visual_ack=None
+    if visual_selected:
+        records=[json.loads(target.people_json).get('collarbone_visual') for target in plan.targets if not target.blocked]
+        visual_ack=visual_review.acknowledgments(p.get('collarbone_review_ack'),records)
+    elif 'collarbone_review_ack' in p:
+        raise ValueError('Collarbone acknowledgment cannot authorize another operation')
     batch=engine._batch_controller();batch.documents.remember_current()
     params=plan.params()[MARKER];source=batch.versions.find(batch.documents.rows(),plan.source_id)
     if source is None or source[1]['path']!=plan.source_path or batch.versions.version(source[1]).revision!=plan.source_revision:
@@ -218,6 +306,10 @@ def commit(engine,controller,p,plan):
     if not eligible:raise ValueError('No confirmed target remains eligible')
     from .people_batch_ledger import prepare_scoped,_targets,_verify
     targets=_targets(batch,engine,plans)
+    if visual_selected:
+        reviewed={item['document_id'] for item in resolved if not item['blocked']}
+        if any(target['document_id'] not in reviewed for target in targets.values()):
+            raise ValueError('Collarbone publication would modify an unreviewed shared-source document; review the complete affected set')
     prepare_scoped(engine,plans,targets)
     # Full aggregate preparation may acquire fresher target observations. Do
     # not publish a previously frozen face-reference receipt against those new
@@ -239,6 +331,21 @@ def commit(engine,controller,p,plan):
         for family in families:
             if skin_coverage(engine,row,scoped['candidate'],payload,family=family)!=payload.get(family+'_coverage'):
                 raise ValueError('Target-local body review changed during final preparation; no graph was published')
+    if visual_selected:
+        # Verify the actual aggregate about to publish, not each isolated face
+        # recipe. A newly skipped shared-owner target may change that aggregate;
+        # require fresh visual review rather than silently weaken the receipt.
+        for result in resolved:
+            if result['blocked']:continue
+            found=batch.versions.find(batch.documents.rows(),result['document_id'])
+            if found is None:raise ValueError('Collarbone visual target disappeared')
+            row=found[1];scoped=plans[V.scope(row)]
+            frozen=next(target for target in plan.targets if target.document_id==result['document_id'])
+            payload=json.loads(frozen.people_json)
+            from .skin_colour_transfer_review import for_target as skin_coverage
+            coverage=skin_coverage(engine,row,scoped['candidate'],payload,family='collarbone')
+            visual_review.verify(engine,row,scoped['before'],scoped['candidate'],result['document_id'],
+                result['expected_revision'],coverage,payload['collarbone_visual'])
     _verify(batch,engine,plans,targets)
     # Expensive effective-source preparation cannot authorize a newer graph.
     if V.row_snapshot(engine,source[1])!=graph:raise ValueError('People graph changed during final preparation')
@@ -255,7 +362,10 @@ def commit(engine,controller,p,plan):
         proof=SOURCE.verify_row(found[1],json.loads(target.before_json)['source_proof'])
         if any(ref['asset_sha256']!=proof['asset_sha256'] for ref in result['target_refs']):
             raise ValueError('People target source changed during final preparation; no graph was published')
-    controller.store.claim(plan)
+    if visual_selected:
+        from .collarbone_visual_store import verify_available
+        verify_available(controller.store,plan)
+    controller.store.claim(plan,collarbone_review_ack=visual_ack,request_id=p.get('request_id'))
     try:
         from .people_batch_ledger import commit_scoped as publish
         result=publish(batch,engine,plans,request_id=p.get('request_id'),prepare=False,prepared_targets=targets)
@@ -267,11 +377,15 @@ def commit(engine,controller,p,plan):
                 'outcome':'skipped' if x['blocked'] else 'applied'} for x in resolved],
             'preflight_token':plan.token,'workspace_generation':plan.workspace,'people_transfer':True,
             'source_changed_since_preflight':False,'source_missing':False}
+        if visual_ack is not None:body['collarbone_review_ack']=deepcopy(visual_ack)
         controller.emit(body)
         if frame is not None:controller.emit(frame)
     except Exception as error:
         body={'success':False,'outcome_unknown':True,'error':str(error)[:2000],'preflight_token':plan.token,
               'workspace_generation':plan.workspace,'requires_preflight':True}
+    if visual_ack is not None:
+        body['collarbone_review_ack']=deepcopy(visual_ack)
+        body['module_scope']=list(plan.modules)
     controller.emit_result(p,controller.store.finish(plan,body))
 
 

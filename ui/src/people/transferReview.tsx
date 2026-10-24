@@ -55,7 +55,7 @@ export function PeopleTransferEvidence({value}: {value: PeopleTransferReview}) {
           ? `仅此目标独立审核的可见锁骨；用户确认类别：${row.clavicle_category === 'female' ? '女' : '长辈女'}；手工图像侧：${row.clavicle_sides.map(side => side === 'left' ? '图像左侧' : '图像右侧').join('、')}`
           : '本项强度为零，不产生锁骨增强；不据此声明类别、身体范围或可见锁骨审核有效'}
       </li>)}</ul>
-      <p>这份披露是目标审核元数据，不是新生成的批量逐图视觉前后对比，也不代表照片质量验收。不能从一个目标的审核推及其他人物；不自动分类、检测锁骨、补全另一侧或进行 AI 3D 重建。</p>
+      <p>这份披露是目标审核元数据；上方真实前后对比须逐图查看并确认，不代表照片质量验收。不能从一个目标的审核推及其他人物；不自动分类、检测锁骨、补全另一侧或进行 AI 3D 重建。</p>
       <p>预检拒绝须逐目标处理，不能通过复制源图曲线或借用其他人物审核绕过。</p>
     </section>}
     <ul>{value.parameters.map(leaf => <li key={`${leaf.operation_id}:${leaf.parameter_path}`}>

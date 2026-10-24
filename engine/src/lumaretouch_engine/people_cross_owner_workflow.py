@@ -41,6 +41,12 @@ def options(value, modules):
     selection = value['selection']; defaults = A.defaults()
     if type(selection) is not dict or type(modules) is not list or len(modules) != len(set(modules)) or set(modules) != set(selection):
         raise ValueError('Association modules must exactly name selected scalar leaves')
+    # A persistent cohort includes the source member and can change inherited
+    # intent in every owner. Ordinary target-only visual acknowledgments cannot
+    # authorize that separate transaction. Keep saved projections and complete
+    # unlink available; do not reinterpret old collarbone recipes.
+    if 'lnx.collarbone.v1' in selection:
+        raise ValueError('Collarbone scalar changes require each target image pair: use confirmed-person or explicit one-time transfer; persistent cohort visual review is not available')
     if value['operation'] == 'unlink':
         if selection: raise ValueError('Complete unlink accepts no new parameter selection')
     elif not selection:

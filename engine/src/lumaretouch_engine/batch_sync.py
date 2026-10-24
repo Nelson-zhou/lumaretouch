@@ -16,8 +16,8 @@ from . import spill_transfer_review as SR
 from . import original_shadow_transfer_review as SHR
 from .body_scalar_transfer_review import select as body_family
 
-ACTIONS = ("preflight", "commit", "undo", "redo", "state", "people_targets")
-KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color", "people_transfer", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack"}
+ACTIONS = ("preflight", "commit", "undo", "redo", "state", "people_targets", "collarbone_visual")
+KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color", "people_transfer", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack", "document_id", "revision", "side", "sha256"}
 POLICIES = ("skip_and_report", "recheck")
 
 
@@ -217,6 +217,18 @@ class BatchSyncController:
         if any(key in p for key in ('torso_review_ack','waist_review_ack','head_review_ack')) and (action!='commit' or p.get('preflight_token') is None):
             self._reject(p,'Body-scalar visual acknowledgment is accepted only for a frozen commit',no_write=True)
             return
+        if 'collarbone_review_ack' in p and (action!='commit' or p.get('preflight_token') is None):
+            self._reject(p,'Collarbone visual acknowledgment is accepted only for a frozen commit',no_write=True)
+            return
+        if action == "collarbone_visual":
+            try:
+                from .collarbone_visual_store import retrieve
+                self.preflight.emit_result(p,retrieve(self.preflight,p))
+            except Exception as error:self._reject(p,str(error),no_write=True)
+            return
+        if any(key in p for key in ('document_id','revision','side','sha256')):
+            self._reject(p,'Collarbone image coordinates require its exact read-only retrieval action',no_write=True)
+            return
         if action == "state":
             self.emit({"event": "batch_state", "batches": [
                 {"batch_id": k, "ops": v["ops"], "targets": len(v["targets"]),
@@ -264,6 +276,7 @@ class BatchSyncController:
                 return
             if p.get("people_transfer") is not None:raise SC.ScopeError("People transfer requires a frozen preflight token")
             ops = SC.check_scope(p.get("module_scope"))
+            if "lnx.collarbone.v1" in ops:raise SC.ScopeError("Collarbone batch requires confirmed or explicit target-owned people visual review")
             if SC.SEMANTIC.OP in ops:raise SC.ScopeError(SC.SEMANTIC.REASON)
             if SC.OP_CROP in ops:raise SC.ScopeError('Crop requires a frozen per-target visual preflight before commit')
             if SC.SPILL_REMOVAL.OP in ops:raise SC.ScopeError("祛反光参数必须先逐目标冻结预检，不复制其他照片范围")

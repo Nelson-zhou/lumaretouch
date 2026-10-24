@@ -63,7 +63,8 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
   const proof: PeopleTransferProof | undefined = manual ? (persistent?association?.source:explicit?.source)
     : view && links.length === 1 ? {...view.binding, state_revision: view.revision,
       association_revision: view.association_revision, person_id: links[0].person_id} : undefined;
-  const ready = sourceReady && !!proof && !!request && (!manual || allImagesReady);
+  const collarbonePersistentBlocked = persistent && associationOperation !== 'unlink' && Object.hasOwn(selection,'lnx.collarbone.v1');
+  const ready = !collarbonePersistentBlocked && sourceReady && !!proof && !!request && (!manual || allImagesReady);
   const flow = useBatchWorkflow({docs: selected, moduleScope: persistent&&associationOperation==='unlink'?[]:Object.keys(selection), conflictPolicy: persistent?'recheck':policy,
     sourceDocumentId: view?.binding.document_id ?? '', referencePath: currentPath, enabled: ready,
     label: persistent?'持久人物关联：所有成员共同审核，逐人脸显式参数仍优先':targetPolicy === 'explicit_face_map' ? '仅本次手动指定的人脸配对，不建立持久人物关联' : '仅向用户已确认的同一人物同步明确勾选的参数',
@@ -152,14 +153,15 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
           <p role="status">已手动指定 {selected.filter(id => choices[id]?.length).length} / {selected.length} 张目标照片。{!(persistent?association:explicit) ? (persistent?'需要每张精确成员及其全部关联共同版本；新建或更新还需选择参数，不能跳过受阻成员。':'每张目标都需要有效选择，且至少勾选一项参数，才能预检。') : '下一步将冻结配对与所选参数，仍需在审核窗口最终确认。'}</p>
         </>}
       </>}
+      {persistent&&<p>锁骨增强尚不支持持久关联的全成员视觉审核。请取消该项，或选择仅本次配对 / 已确认人物同步，逐目标查看真实前后效果；不会静默删除已选参数。</p>}
       <fieldset disabled={disabled}><legend>逐模块选择参数</legend>
         {operations.map(([operation]) => {
           const leaves = available.filter(leaf => leaf.operation === operation);
           return <details key={operation}><summary>{operationLabel(operation)}</summary>
-            <button type="button" onClick={() => setLeaves([...chosen, ...leaves.filter(leaf => !leaf.conflict).map(leaf => leaf.key)])}>勾选本模块可迁移参数</button>
+            <button type="button" disabled={persistent && operation === 'lnx.collarbone.v1'} onClick={() => setLeaves([...chosen, ...leaves.filter(leaf => !leaf.conflict).map(leaf => leaf.key)])}>勾选本模块可迁移参数</button>
             <button type="button" onClick={() => setLeaves(chosen.filter(id => !leaves.some(leaf => leaf.key === id)))}>取消本模块</button>
             {leaves.map(leaf => <label key={leaf.key} style={{display: 'block'}}>
-              <input type="checkbox" checked={chosen.includes(leaf.key)} disabled={leaf.conflict}
+              <input type="checkbox" checked={chosen.includes(leaf.key)} disabled={leaf.conflict || persistent && operation === 'lnx.collarbone.v1' && !chosen.includes(leaf.key)}
                 onChange={event => setLeaves(event.currentTarget.checked ? [...chosen, leaf.key] : chosen.filter(id => id !== leaf.key))}/>
               {leaf.path}：{String(leaf.value)}{leaf.conflict ? '（来源有分组冲突）' : ''}
             </label>)}
@@ -174,7 +176,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
         onClick={() => last && (undone ? flow.redo(last.id) : flow.undo(last.id))}>{undone ? '重做本次人物同步' : '撤销本次人物同步'}</button>
       <p>源图、人脸分析、独立人物状态、目标或关联改变后必须重新预检。没有逐张明确指定或已有确认关联的目标不会被猜测补齐。</p>
     </details>
-    <BatchReview state={flow.ui} onClose={flow.close} onCommit={() => (!needsFrozen || frozenReady) && flow.commit()} onReview={start}
+    <BatchReview state={flow.ui} onClose={flow.close} onCommit={(spill,shadow,torso,waist,head,collarbone) => (!needsFrozen || frozenReady) && flow.commit(spill,shadow,torso,waist,head,collarbone)} onReview={start}
       onQuery={flow.query} onAcknowledge={flow.acknowledgeInspection}
       commitBlockedReason={needsFrozen && !frozenReady ? '冻结配对的实际源图尚未全部验证显示，不能提交；若预览失败，请关闭并重新读取。' : undefined}
       peoplePreview={visibleFrozen ? <div>

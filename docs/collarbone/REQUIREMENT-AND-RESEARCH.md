@@ -89,9 +89,13 @@ semantic masks are not guaranteed instance segmentation or occlusion truth.
 Actual private before/after review and canonical confirmation are required for
 new support. Any scalar preset/people transfer uses each target's existing own
 review, never source traces, masks, identity, category or measured source field.
-The generic people-batch review provides target-owned coverage metadata and
-full rendering validation, not a new per-target image-comparison interface.
-That richer batch visual review remains unfinished and must not be advertised.
+The confirmed/one-time people-batch route now has authored target-by-target
+actual before/after images, lazy frozen-image retrieval and exact per-target
+acknowledgments. See [TRANSFER-VISUAL-CONTRACT.md](TRANSFER-VISUAL-CONTRACT.md)
+for source/owner fences, shared-graph handling, bounds and remaining paths.
+This is source-connected only, not runtime or photographic acceptance.
+Persistent collarbone association updates and a new visual preset-application
+route remain outside that guarantee; the former explicitly refuses new selection.
 
 All tests, builds, native execution, numerical precision, RGB16 preservation,
 preview/export equivalence, history/project round trips, photographic quality,

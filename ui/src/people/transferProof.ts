@@ -1,3 +1,4 @@
+import {validCollarboneVisual,type CollarboneVisual} from '../collarbone/transferModel';
 import {sameAssociationRequest, type AssociationRequest} from './associationProof';
 import type {FaceRef, ParameterValue} from './model';
 import {validOwnFaceReference, type OwnFaceReference} from '../bodyFaceMatch/reference';
@@ -58,6 +59,7 @@ type ReviewBase = {
   body_skin_evenness_coverage?: BodySkinEvennessCoverage;
   body_face_match_coverage?: BodyFaceMatchCoverage;
   collarbone_coverage?: CollarboneCoverage;
+  collarbone_visual?: CollarboneVisual;
 };
 export type PeopleTransferReview = ReviewBase & ({
   confirmed_person_id: string; target_policy: 'confirmed_person_only'; confirmation_revisions: [string, number][];
@@ -293,6 +295,7 @@ export function validPeopleReview(value: unknown, request: PeopleTransferRequest
   }
   const collarboneSelected = Object.prototype.hasOwnProperty.call(request.selection, 'lnx.collarbone.v1');
   if (collarboneSelected ? !validCollarboneCoverage(v.collarbone_coverage, v.target_refs) : v.collarbone_coverage !== undefined) return false;
+  if (collarboneSelected ? !validCollarboneVisual(v.collarbone_visual,v) : v.collarbone_visual !== undefined) return false;
   if (collarboneSelected) {
     const scalars = v.parameters.filter(leaf => leaf.operation_id === 'lnx.collarbone.v1');
     if (scalars.length !== 1 || scalars[0].parameter_path !== '/amount' || typeof scalars[0].value !== 'number'

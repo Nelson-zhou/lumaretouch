@@ -23,7 +23,7 @@
       },
       "transferable": true,
       "source_requirement": "PC-32465-C-abf0a5c8c9",
-      "reason": "PARTIAL / UNRUN: manual visible-clavicle traces, independently confirmed eligible product category and own-body support; original Rust observed-source directional light/shadow enhancement. No AI 3D detector or automatic feature acceptance. Only scalar amount transfers; target owns traces, category, masks and source. Generic people batch review is metadata, not per-target image comparison."
+      "reason": "PARTIAL / UNRUN: manual visible-clavicle traces, independently confirmed eligible product category and own-body support; original Rust observed-source directional light/shadow enhancement. No AI 3D detector or automatic feature acceptance. Only scalar amount transfers; target owns traces, category, masks and source. Confirmed/one-time people batch has source-authored target image pairs and exact acknowledgments with paged immutable retrieval; runtime remains UNRUN. Persistent cohort selection is explicitly guarded pending its own visual review."
     },
     {
       "operation_id": "lnx.head_size.v1",

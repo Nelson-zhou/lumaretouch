@@ -178,6 +178,11 @@ mod scalar_binding_tests {
 struct ReviewBinding { fields: Value, bytes: usize, read_only: bool }
 impl ReviewBinding {
     fn from_command(value: &Value) -> Result<Option<Self>, String> {
+        if let Some(fields) = crate::batch_api::collarbone::binding(value)? {
+            let bytes = fields.to_string().len();
+            if bytes > 16 * 1024 { return Err("collarbone review identity exceeds receipt budget".into()); }
+            return Ok(Some(Self { fields, bytes, read_only: crate::batch_api::collarbone::read_only(value) }));
+        }
         for family in crate::preset_host::BODY_REVIEW_FAMILIES {
             let operation = family.op();
             let ack_key = family.ack_key();
@@ -212,7 +217,7 @@ impl ReviewBinding {
         // reports no write and has not echoed any accepted review identity.
         let no_write = value["success"] == false && value["outcome_unknown"] == false
             && value["error"].as_str().is_some_and(|error| !error.trim().is_empty())
-            && ["module_scope", "torso_review_ack", "waist_review_ack", "head_review_ack",
+            && ["module_scope", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack",
                 "torso_transfer", "waist_transfer", "head_transfer",
                 "before", "after", "doc_state", "batch_id", "applied", "committed", "operation_committed"]
                 .iter().all(|key| value.get(*key).is_none())
@@ -231,9 +236,9 @@ struct Receipt { id: String, action: String, document: Option<String>, review: O
 impl Receipt {
     fn evictable(&self) -> bool {
         self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true
-            // This immutable original action only reads a head review. An
-            // unknown display receipt is not an uncertain edit and may expire.
-            || (self.action == "preflight" && self.review.as_ref().is_some_and(|review| review.read_only)))
+            // Only explicitly classified head/collarbone preflight or paged
+            // image reads may expire; an unknown commit remains guarded.
+            || (matches!(self.action.as_str(), "preflight" | "collarbone_visual") && self.review.as_ref().is_some_and(|review| review.read_only)))
     }
 }
 pub(crate) struct ReceiptHost<K: ReceiptKind> {
