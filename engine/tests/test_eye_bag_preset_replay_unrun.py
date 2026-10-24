@@ -117,6 +117,8 @@ def test_prepare_images_use_complete_planned_graph_and_full_state(monkeypatch):
     engine, row, before, incoming, plan, owner, live, wrapper, entry, calls = setup(monkeypatch)
     from lumaretouch_engine import people_transfer_inventory as INVENTORY
     from lumaretouch_engine import eye_bag_preset_plan as EYE_PLAN
+    from lumaretouch_engine import eye_bag_preset_alias_review as ALIASES
+    monkeypatch.setattr(ALIASES, 'required', lambda *a: False)
     monkeypatch.setattr(EYE_PLAN, 'admit', lambda *a: row)
     monkeypatch.setattr(PLANNER, 'plan_preset', lambda *a, **k: plan)
     proof = {'source_proof': {'source': 'owned'}}

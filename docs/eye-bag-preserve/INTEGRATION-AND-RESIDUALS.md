@@ -71,8 +71,13 @@ to publish an unverified graph. No corrupt-project recovery acceptance is claime
   source-geometric ridge descriptor, exact membership and protected history.
   Current native painting crops inspect only the current document, not every
   alias's repaired pixels. See `ALIAS-EDIT.md`. Dormant/unavailable affected
-  members remain refused. Shared-source preset application and alias effect-
-  recovery painting remain separate gaps, not implicitly admitted here.
+  members remain refused. Shared-source preset application has a distinct
+  complete mixed-preset affected-set review: only the active document receives
+  the selected nonportrait recipe, while each sibling retains its own crop,
+  repair and colour state. One composite scoped history owns the shared graph
+  and active recipe, including canonical state/assets on save/reopen. See
+  `PRESET-ALIAS.md`; source wiring is not runtime acceptance. Alias effect-
+  recovery painting remains a separate gap, not implicitly admitted here.
 - Dedicated effect-recovery painting now attenuates only the independently
   staged v2 eye-bag contribution, with separate source-owned vectors, actual
   full-source mixed-graph review and explicit confirmation. The bounded recovery

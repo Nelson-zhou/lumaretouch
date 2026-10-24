@@ -177,7 +177,7 @@ mod scalar_binding_tests {
 /// This is not another plan, history, mutation owner, or replayable command.
 struct ReviewBinding { fields: Value, bytes: usize, read_only: bool, strict_failure_identity: bool }
 impl ReviewBinding {
-    fn from_command(value: &Value) -> Result<Option<Self>, String> {
+    fn from_command(epoch: [u8;16], value: &Value) -> Result<Option<Self>, String> {
         if let Some(fields) = crate::people_api::eye_bag::binding(value)? {
             let bytes = fields.to_string().len();
             if bytes > 192 * 1024 { return Err("eye bag source review identity exceeds receipt budget".into()); }
@@ -198,7 +198,10 @@ impl ReviewBinding {
             if bytes > 16 * 1024 { return Err("eye-bag batch review identity exceeds receipt budget".into()); }
             return Ok(Some(Self { fields, bytes, read_only: crate::batch_api::eye_bag::read_only(value), strict_failure_identity: true }));
         }
-        if let Some(fields) = crate::batch_api::history::binding(value)? {
+        if let Some(mut fields) = crate::batch_api::history::binding(value)? {
+            if let Some(marker) = crate::project_recovery_fence::composite_history_marker(epoch,value)? {
+                fields["eye_bag_preset_alias_review"]=marker;
+            }
             let bytes = fields.to_string().len();
             return Ok(Some(Self { fields, bytes, read_only: false, strict_failure_identity: true }));
         }
@@ -217,7 +220,8 @@ impl ReviewBinding {
         if let Some(fields) = crate::preset_api::eye_bag::binding(value)? {
             let bytes=fields.to_string().len();
             if bytes>16*1024{return Err("preset eye-bag review identity exceeds receipt budget".into());}
-            return Ok(Some(Self{fields,bytes,read_only:crate::preset_api::eye_bag::read_only(value),strict_failure_identity:false}));
+            return Ok(Some(Self{fields,bytes,read_only:crate::preset_api::eye_bag::read_only(value),
+                strict_failure_identity:crate::preset_api::eye_bag::strict_failure_identity(value)}));
         }
         if let Some(fields) = crate::preset_api::collarbone::binding(value)? {
             let bytes=fields.to_string().len();
@@ -266,7 +270,7 @@ impl ReviewBinding {
             && ["module_scope", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack", "collarbone_preset_ack", "collarbone_preset", "face_style_review_ack", "face_style", "face_style_visual",
                 "eye_bag_cohort", "eye_bag_cohort_ack", "eye_bag_cohort_visual", "eye_bag_preset", "eye_bag_preset_ack", "eye_bag_review_ack", "eye_bag", "eye_bag_coverage", "eye_bag_visual", "portrait_cohort_ack", "portrait_cohort", "portrait_visual", "persistent_association", "association_source", "source_outcome", "collarbone_cohort",
                 "torso_transfer", "waist_transfer", "head_transfer",
-                "before", "after", "doc_state", "batch_id", "applied", "committed", "operation_committed"]
+                "member_document_id", "member_revision", "before", "after", "doc_state", "batch_id", "applied", "committed", "operation_committed"]
                 .iter().all(|key| value.get(*key).is_none())
             && (value["preflight_token"].is_null() || value.get("preflight_token") == self.fields.get("preflight_token"))
             && value.get("target_outcomes").map_or(true, |outcomes| outcomes.as_array().is_some_and(|rows|
@@ -275,7 +279,10 @@ impl ReviewBinding {
             && value["requires_reload"] != true;
         // A second family cannot be added to a portrait acknowledgment after
         // dispatch. Both presence and the exact ordered arrays were authorized.
-        let same_families = (self.fields.get("eye_bag_cohort_ack").is_none()
+        let same_families = (!(self.fields.get("side").is_some() && self.fields.get("sha256").is_some()
+            && self.fields.get("preflight_token").is_some())
+            || ["member_document_id", "member_revision"].iter().all(|key| value.get(*key) == self.fields.get(*key)))
+            && (self.fields.get("eye_bag_cohort_ack").is_none()
             || ["portrait_cohort_ack", "portrait_cohort", "collarbone_review_ack", "collarbone_cohort"]
                 .iter().all(|key| value.get(*key) == self.fields.get(*key)))
             && (self.fields.get("eye_bag_review_ack").is_none()
@@ -333,7 +340,7 @@ impl<K: ReceiptKind> ReceiptHost<K> {
         if command["cmd"].as_str() != Some(K::NAME) { return Err("receipt command kind does not match its host".into()); }
         let id = command["request_id"].as_str().ok_or("missing receipt request ID")?;
         let action = command["action"].as_str().ok_or("missing receipt action")?;
-        let review = ReviewBinding::from_command(command)?;
+        let review = ReviewBinding::from_command(epoch, command)?;
         self.begin_bound(epoch, id, action, command["document_id"].as_str())?;
         // begin_bound just appended this unique request, within the same lock.
         let record = self.records.back_mut().unwrap();
@@ -395,6 +402,14 @@ impl<K: ReceiptKind> ReceiptHost<K> {
             let error: String = result["error"].as_str().unwrap_or("Scalar outcome is unknown; inspect actual state")
                 .chars().take(2000).collect();
             let mut compact = Self::unknown(record, &error);
+            // `result` is either fully validated and request-bound above, or a
+            // synthesized unknown with no engine publication claims. Preserve
+            // only the dedicated bounded composite diagnostics in that result.
+            if K::NAME == "preset" {
+                if let Some(publication) = crate::preset_api::eye_bag::retained_alias_publication(&result) {
+                    for (key, value) in publication.as_object().unwrap() { compact[key] = value.clone(); }
+                }
+            }
             for key in ["requires_reload", "requires_readback", "publication_invalid", "rolled_back"] {
                 if result[key].is_boolean() { compact[key] = result[key].clone(); }
             }

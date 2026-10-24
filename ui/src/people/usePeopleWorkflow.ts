@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import {eyeBagPresetAliasHistoryClass,eyeBagPresetAliasWritePending,subscribeEyeBagPresetAliasWrites,sameEyeBagPresetAliasMarker} from '../eyeBagPreserve/presetAliasHistoryRegistry';
 import {useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
 import {runPeopleRequest, type DocState, type EngineStatus} from '../native';
 import {createPeopleWorkflow} from './workflow';
@@ -17,7 +18,7 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
   }), []);
   const state = useSyncExternalStore(workflow.subscribe, workflow.snapshot, workflow.snapshot);
   const [historyRefreshError, setHistoryRefreshError] = useState(''), [historyRefreshing, setHistoryRefreshing] = useState(false);
-  const [historyKind, setHistoryKind] = useState<'face_style' | 'eye_bag' | null>(null);
+  const [historyKind, setHistoryKind] = useState<'face_style' | 'eye_bag' | 'eye_bag_preset' | null>(null);
   async function refreshHistory() {
     setHistoryRefreshing(true);
     try {await refreshRef.current(); setHistoryRefreshError('');}
@@ -31,7 +32,8 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
   // It lives with the people queue, so collapsing a review cannot abandon an uncertain undo.
   const history = useBatchWorkflow({docs: [], moduleScope: [], conflictPolicy: 'recheck',
     sourceDocumentId: value?.binding.document_id ?? '', enabled: false, label: '共享来源人物受保护批次历史'}, () => {void refreshHistory();});
-  const historyBusy = historyRefreshing || ['preflighting', 'committing', 'uncertain'].includes(history.ui.phase);
+  const presetAliasPending=useSyncExternalStore(subscribeEyeBagPresetAliasWrites,eyeBagPresetAliasWritePending,eyeBagPresetAliasWritePending);
+  const historyBusy = presetAliasPending || historyRefreshing || ['preflighting', 'committing', 'uncertain'].includes(history.ui.phase);
   useLayoutEffect(() => {workflow.update(value, enabled && !historyBusy);}, [workflow, value, enabled, historyBusy]);
   const receipt = state.lastAliasCommit;
   useLayoutEffect(() => {if (receipt) history.protectFaceStyleAlias(receipt);}, [receipt]);
@@ -63,6 +65,22 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
     workflow.update(value, false);
     return action === 'undo' ? history.undo(eyeReceipt.batchId) : history.redo(eyeReceipt.batchId);
   }
+  // Reopened composite entries come from the exact ledger marker, not a guessed preset name or an in-memory success receipt.
+  const presetAliasBatches=(status?.session?.sync?.batches??[]).filter(batch=>Object.hasOwn(batch,'eye_bag_preset_alias_review'));
+  const canPresetAliasHistory=(batchId:string,action:'undo'|'redo')=>{
+    const batch=presetAliasBatches.find(row=>row.batch_id===batchId),classification=eyeBagPresetAliasHistoryClass(batchId);
+    return enabled&&status?.ready_caps?.batch_preflight_protocol===1&&!!batch&&!!classification?.marker
+      &&status.session?.sync?.workspace_generation===value?.binding.document_epoch
+      &&sameEyeBagPresetAliasMarker(batch.eye_bag_preset_alias_review,classification.marker)
+      &&batch.targets===classification.memberCount&&JSON.stringify(batch.module_scope)===JSON.stringify(['lnx.people_graph.v1'])
+      &&!state.pending&&!state.uncertain&&!historyBusy&&!historyRefreshError&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending
+      &&(action==='undo'?!batch.undone&&!!status.session?.sync?.undoable.includes(batchId):batch.undone);
+  };
+  function restorePresetAlias(batchId:string,action:'undo'|'redo'){
+    if(!canPresetAliasHistory(batchId,action))return;
+    setHistoryKind('eye_bag_preset');setHistoryRefreshError('');workflow.update(value,false);
+    return action==='undo'?history.undo(batchId):history.redo(batchId);
+  }
   const guard = () => {
     if (historyBusy) throw Error('共享来源批次历史仍在处理或查询中，不能重发修改。');
   };
@@ -87,6 +105,11 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
       canRedo: canHistory && !!ledger!.undone,
       undo: () => restoreAlias('undo'), redo: () => restoreAlias('redo'), query: history.query,
       refreshing: historyRefreshing, refresh: refreshHistory},
+    presetEyeBagAliasHistory:{batches:presetAliasBatches,
+      state:historyKind==='eye_bag_preset'?history.ui:{...history.ui,phase:'closed' as const,result:null},
+      writePending:presetAliasPending,canUndo:(id:string)=>canPresetAliasHistory(id,'undo'),canRedo:(id:string)=>canPresetAliasHistory(id,'redo'),
+      undo:(id:string)=>restorePresetAlias(id,'undo'),redo:(id:string)=>restorePresetAlias(id,'redo'),query:history.query,
+      refreshError:historyRefreshError,refreshing:historyRefreshing,refresh:refreshHistory},
     eyeBagAliasHistory: {receipt: eyeSameEpoch ? eyeReceipt : null,
       state: historyKind === 'eye_bag' ? history.ui : {...history.ui, phase: 'closed' as const, result: null},
       ledger: eyeLedger, refreshError: historyRefreshError,

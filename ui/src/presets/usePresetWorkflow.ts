@@ -40,8 +40,9 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
     const controller=createPresetWorkflow({request:runPreset,read:readPresetResult},state=>{
       if(!live)return;setUi(state);
       const result=state.result;
-      if(result&&reported!==result.request_id){
-        reported=result.request_id;
+      const resultKey=result?JSON.stringify([result.request_id,result.success,result.outcome_unknown,result.operation_committed]):'';
+      if(result&&reported!==resultKey){
+        reported=resultKey;
         if(result.success&&result.id){
           if(result.action==='save')dispatch({type:'saved',id:result.id,nameRevision:savedRevision.current});
           if(result.action==='import')dispatch({type:'imported',id:result.id});

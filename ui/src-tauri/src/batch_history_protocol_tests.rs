@@ -91,3 +91,48 @@ fn host(epoch: [u8;16]) -> crate::batch_host::BatchHost {
     bad = v.clone(); bad["module_scope"] = json!(["lnx.eye_bags.v2"]); assert!(!receipt(&bad));
     bad = v; bad["eye_bag_alias_review"]["support"] = json!({}); assert!(!receipt(&bad));
 }
+
+fn preset_alias_result(c: &Value) -> Value {
+    let mut value = result(c);
+    value[PRESET_ALIAS_MARKER] = json!({"version":1,"review_sha256":"d".repeat(64),
+        "preset_sha256":"e".repeat(64),"applies_sha256":"f".repeat(64),"current_document_id":"logical-active",
+        "member_count":2,"selected_modules":["lnx.eye_bags.v2","lnx.exposure.v1"]}); value
+}
+#[test] fn reopened_composite_preset_history_keeps_its_distinct_bounded_marker() {
+    for action in ["undo", "redo"] {
+        let mut c = request(); c["action"] = json!(action); let value = preset_alias_result(&c);
+        assert!(receipt(&value)); let mut h = host([238;16]); h.begin_command([238;16], &c).unwrap(); h.receive([238;16], &value);
+        assert_eq!(h.status("history")["result"], value);
+        for key in [PRESET_ALIAS_MARKER, "eye_bag_preset_ack", "alias_members", "selected_modules"] {
+            let mut bad = c.clone(); bad[key] = json!({}); assert!(command(&bad).is_err());
+        }
+        for old in ["eye_bag_alias_review", "eye_bag_cohort_review", "eye_bag_batch_review"] {
+            let mut bad = value.clone(); bad[old] = json!({"version":1,"review_sha256":"a".repeat(64),"member_count":2});
+            assert!(!receipt(&bad));
+            let mut bad = value.clone(); let marker = bad.as_object_mut().unwrap().remove(PRESET_ALIAS_MARKER).unwrap();
+            bad[old] = marker; assert!(!receipt(&bad));
+        }
+    }
+}
+#[test] fn composite_history_refuses_partial_restore_or_recipe_scope_substitution() {
+    let value = preset_alias_result(&request());
+    for (path, changed) in [("/restored",json!([1])),("/module_scope",json!(["lnx.eye_bags.v2","lnx.exposure.v1"])),
+        ("/conflicts",json!([{"index":2,"path":"/same.raw","reason":"Sibling edited"}])),
+        ("/eye_bag_preset_alias_review/member_count",json!(17)),("/eye_bag_preset_alias_review/current_document_id",json!("")),
+        ("/eye_bag_preset_alias_review/applies_sha256",json!("bad")),
+        ("/eye_bag_preset_alias_review/selected_modules",json!(["lnx.exposure.v1"])),
+        ("/eye_bag_preset_alias_review/selected_modules",json!(["lnx.eye_bags.v2","lnx.eye_bags.v2"])),
+        ("/eye_bag_preset_alias_review/selected_modules",json!(["lnx.eye_bags.v2","lnx.people_graph.v1"]))] {
+        let mut bad = value.clone(); *bad.pointer_mut(path).unwrap() = changed; assert!(!receipt(&bad), "{path}");
+    }
+    let mut bad = value; bad[PRESET_ALIAS_MARKER]["active_state"] = json!({}); assert!(!receipt(&bad));
+}
+#[test] fn unknown_reopened_composite_receipt_never_releases_batch_identity() {
+    let c = request(); let epoch = [239;16]; let mut h = host(epoch); h.begin_command(epoch, &c).unwrap();
+    crate::project_recovery_fence::issued(epoch, &c).unwrap();
+    let mut bad = preset_alias_result(&c); bad["restored"] = json!([1]); h.receive(epoch, &bad);
+    let retained = h.status("history"); assert_eq!(retained["result"]["outcome_unknown"], true);
+    assert_eq!(retained["result"]["batch_id"], c["batch_id"]); assert!(crate::project_recovery_fence::proof(epoch).is_err());
+    h.receive(epoch, &preset_alias_result(&c)); assert_eq!(h.status("history"), retained);
+    crate::project_recovery_fence::observed(epoch, &json!({"event":"project_opened"}));
+}

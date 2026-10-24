@@ -3,12 +3,14 @@
 from . import eye_bag_preserve_scope as EYE
 
 
-def admit(engine, graph, ref, recipe):
+def admit(engine, graph, ref, recipe, *, reviewed_aliases=False):
     from .eye_bag_preserve_host import _live
     from . import people_state as P, eye_bag_preserve_support as SUPPORT
     ref = P.check_ref(ref)
     target = {'scope': 'face', 'target_id': ref['face_instance_id'], 'face_ref': ref}
-    _, row, _, _, _ = _live(engine, graph, target)
+    if type(reviewed_aliases) is not bool:
+        raise ValueError('Shared preset admission requires an explicit private planning choice')
+    _, row, _, _, _ = _live(engine, graph, target, strict=not reviewed_aliases)
     if EYE.S.active(recipe):
         SUPPORT.resolve(graph, engine._people_support, ref)
     return row

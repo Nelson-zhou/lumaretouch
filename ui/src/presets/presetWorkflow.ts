@@ -1,4 +1,6 @@
-import {EYE_BAG_PRESET_OP,validEyeBagPreset,eyeBagPresetAck,sameEyeBagPresetAck,neutralEyeBagPreset,type EyeBagPresetReview,type EyeBagPresetAck} from '../eyeBagPreserve/presetModel';
+import {canonical as canonicalEyeBagValue} from '../eyeBagPreserve/support';
+import {presetAliasMarker,sameEyeBagPresetAliasMarker,registerEyeBagPresetAliasReceipt,setEyeBagPresetAliasWritePending,subscribeEyeBagPresetAliasWorkspace,type EyeBagPresetAliasMarker} from '../eyeBagPreserve/presetAliasHistoryRegistry';
+import {EYE_BAG_PRESET_OP,validEyeBagPreset,eyeBagPresetAck,sameEyeBagPresetAck,neutralEyeBagPreset,verifyEyeBagCoverage,type EyeBagPresetReview,type EyeBagPresetAck} from '../eyeBagPreserve/presetModel';
 import {COLLARBONE_PRESET_OP,validCollarbonePreset,collarbonePresetAck,sameCollarbonePresetAck,type CollarbonePresetReview,type CollarbonePresetAck} from '../collarbone/presetModel';
 import {CROP_OP,validCropReview,type CropReview} from '../cropTransfer/model.ts';
 import {SPILL_TRANSFER_OP,validSpillTransfer,validSpillTransferAck,type SpillTransferEvidence,type SpillTransferAck} from '../spillRemoval/transferModel.ts';
@@ -17,7 +19,7 @@ export type PresetAction = 'list'|'preflight'|'apply'|'save'|'import'|'delete'|'
 export type PresetOptions = {id?:string;name?:string;path?:string;kind?:string;note?:string;force?:boolean;
   moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;spillReviewAck?:SpillTransferAck[];shadowReviewAck?:ShadowTransferAck[];torsoReviewAck?:TorsoTransferAck[];waistReviewAck?:WaistTransferAck[];headReviewAck?:HeadTransferAck[];collarbonePresetAck?:CollarbonePresetAck;eyeBagPresetAck?:EyeBagPresetAck;eyeBagReplaceLegacy?:boolean;eyeBagNeutral?:boolean;
   xmpAck?:XmpAck;xmpReviewAck?:XmpReviewAck;/** UI-only captured expected source, never sent as authority. */xmpExpected?:XmpSummary};
-export type PresetReply = {eye_bag_preset?:EyeBagPresetReview;eye_bag_preset_ack?:EyeBagPresetAck;eye_bag_replace_legacy?:boolean;collarbone_preset?:CollarbonePresetReview;collarbone_preset_ack?:CollarbonePresetAck;protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
+export type PresetReply = {batch_id?:string|null;eye_bag_preset_alias_review?:EyeBagPresetAliasMarker;alias_members?:{document_id:string;expected_revision:string;result_revision:string}[];eye_bag_preset?:EyeBagPresetReview;eye_bag_preset_ack?:EyeBagPresetAck;eye_bag_replace_legacy?:boolean;collarbone_preset?:CollarbonePresetReview;collarbone_preset_ack?:CollarbonePresetAck;protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
   xmp_report?:XmpReport;xmp_transfer?:XmpTransfer;source_proof?:unknown;spill_transfer?:SpillTransferEvidence;shadow_transfer?:ShadowTransferEvidence;torso_transfer?:TorsoTransferEvidence;torso_review_ack?:TorsoTransferAck[];waist_transfer?:WaistTransferEvidence;waist_review_ack?:WaistTransferAck[];head_transfer?:HeadTransferEvidence;head_review_ack?:HeadTransferAck[];
   crop_transfer?:CropReview;reference_color?:ReferenceReview;revision?:string;optical_transfer?:OpticalTargetReview;preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
   before?:Record<string,unknown>;after?:Record<string,unknown>;doc_state?:Record<string,unknown>;
@@ -30,6 +32,7 @@ export type PresetTransport = {request:(action:PresetAction,options:PresetOption
 export const initialPresetUi:PresetUi = {phase:'idle',action:null,result:null,message:'',submitted:null};
 const object = (value:unknown):value is Record<string,unknown> => !!value && typeof value==='object' && !Array.isArray(value);
 const text = (value:unknown):value is string => typeof value==='string' && value.trim().length>0;
+const batchToken=(value:unknown):value is string=>typeof value==='string'&&!!value.trim()&&!/[\u0000-\u001f\u007f]/.test(value)&&new TextEncoder().encode(value).length<=128;
 const scope = (value:unknown):value is string[] => Array.isArray(value) && value.length>0 && value.every(text) && new Set(value).size===value.length;
 const sameScope = (a:string[],b:string[]) => a.length===b.length && a.every(op=>b.includes(op));
 const moduleKeys = (value:unknown,ops:string[]) => object(value) && sameScope(Object.keys(value),ops) && Object.values(value).every(object);
@@ -63,8 +66,57 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
   if(result.eye_bag_replace_legacy!==undefined&&(action!=='preflight'||typeof opts.eyeBagReplaceLegacy!=='boolean'||result.eye_bag_replace_legacy!==opts.eyeBagReplaceLegacy))throw Error('未请求或不匹配的旧版去眼袋替换策略');
   if(result.eye_bag_preset!==undefined&&(action!=='preflight'||!result.success||!result.module_scope?.includes(EYE_BAG_PRESET_OP)))throw Error('未请求的去眼袋完整预设证据');
   if(result.eye_bag_preset_ack!==undefined&&(action!=='apply'||opts.eyeBagPresetAck===undefined))throw Error('未请求的去眼袋预设确认');
-  if(action==='apply'&&opts.eyeBagPresetAck!==undefined&&(!validBodyScalarReceiptState(result)||!(result.eye_bag_preset_ack===undefined&&result.eye_bag_preset===undefined&&bodyScalarNoWriteRejection(result,opts.preflightToken))
+  const aliasAck=opts.eyeBagPresetAck&&'members'in opts.eyeBagPresetAck?opts.eyeBagPresetAck:null;
+  const raw=result as unknown as Record<string,unknown>;
+  if(action==='apply'&&aliasAck&&result.eye_bag_preset_ack!==undefined
+    &&!([['xmp_review_ack',opts.xmpReviewAck],['spill_review_ack',opts.spillReviewAck],['shadow_review_ack',opts.shadowReviewAck]] as const)
+      .every(([field,expected])=>expected===undefined?!Object.hasOwn(raw,field):Object.hasOwn(raw,field)&&canonicalEyeBagValue(raw[field])===canonicalEyeBagValue(expected)))
+    throw Error('共享来源混合预设的其他逐图确认与原请求不一致，只能查询原请求');
+  // Expired/unclaimed tokens may echo the exact ACK without a stored module scope.
+  // This exception proves a bounded no-write rejection only; it never authorizes unknown or successful writes.
+  const aliasNoWrite=action==='apply'&&!!aliasAck&&validBodyScalarReceiptState(result)&&result.success===false&&result.outcome_unknown===false
+    &&typeof result.error==='string'&&!!result.error.trim()&&result.id===opts.id&&result.document_id===opts.documentId&&result.preflight_token===opts.preflightToken
+    &&sameEyeBagPresetAck(result.eye_bag_preset_ack,aliasAck)
+    &&(result.module_scope===undefined||expectedScope!==undefined&&JSON.stringify(result.module_scope)===JSON.stringify(expectedScope))
+    &&!['batch_id','eye_bag_preset_alias_review','alias_members','eye_bag_preset','before','after','doc_state'].some(field=>Object.hasOwn(result,field))
+    &&raw.operation_committed!==true&&raw.committed!==true
+    &&['applied','restored'].every(field=>!Object.hasOwn(raw,field)||Array.isArray(raw[field])&&raw[field].length===0);
+  // A native diagnostic-only unknown can echo the captured command and a known ledger ID without publication proof.
+  // Preserve that ID as a diagnostic only: never invent scope, marker, membership or permission to restore it.
+  const aliasIdentityUnknown=action==='apply'&&!!aliasAck&&validBodyScalarReceiptState(result)&&result.success===false&&result.outcome_unknown===true
+    &&typeof result.error==='string'&&!!result.error.trim()&&result.id===opts.id&&result.document_id===opts.documentId&&result.preflight_token===opts.preflightToken
+    &&sameEyeBagPresetAck(result.eye_bag_preset_ack,aliasAck)
+    &&(result.module_scope===undefined||expectedScope!==undefined&&JSON.stringify(result.module_scope)===JSON.stringify(expectedScope))
+    &&(!Object.hasOwn(result,'batch_id')||batchToken(result.batch_id))
+    &&!['eye_bag_preset_alias_review','alias_members','eye_bag_preset','before','after','doc_state'].some(field=>Object.hasOwn(result,field))
+    &&raw.operation_committed!==true&&raw.committed!==true
+    &&['applied','restored'].every(field=>!Object.hasOwn(raw,field)||Array.isArray(raw[field])&&raw[field].length===0);
+  if(action==='apply'&&opts.eyeBagPresetAck!==undefined&&(!validBodyScalarReceiptState(result)||!(aliasNoWrite||aliasIdentityUnknown||result.eye_bag_preset_ack===undefined&&result.eye_bag_preset===undefined&&bodyScalarNoWriteRejection(result,opts.preflightToken))
     &&(result.id!==opts.id||result.preflight_token!==opts.preflightToken||!result.module_scope?.includes(EYE_BAG_PRESET_OP)||expectedScope!==undefined&&!sameScope(result.module_scope,expectedScope)||!sameEyeBagPresetAck(result.eye_bag_preset_ack,opts.eyeBagPresetAck))))throw Error('去眼袋完整预设回执不匹配，只能查询原请求');
+  if(['batch_id','eye_bag_preset_alias_review','alias_members'].some(field=>Object.hasOwn(result,field))&&(action!=='apply'||!aliasAck))throw Error('未请求的混合预设共享来源批次回执');
+  if(action==='apply'&&aliasAck){
+    const noWrite=aliasNoWrite||bodyScalarNoWriteRejection(result,opts.preflightToken)&&result.eye_bag_preset_ack===undefined;
+    if(noWrite&&['batch_id','eye_bag_preset_alias_review','alias_members'].some(field=>Object.hasOwn(result,field)))throw Error('明确未写入回执不能同时宣称共享来源批次');
+    if(aliasIdentityUnknown)return;
+    if(!noWrite){
+      if(!result.module_scope||!aliasAck.members.length||expectedScope!==undefined&&JSON.stringify(result.module_scope)!==JSON.stringify(expectedScope))throw Error('共享来源预设缺少实际模块与全成员确认');
+      const marker:EyeBagPresetAliasMarker={version:1,review_sha256:aliasAck.review_sha256,preset_sha256:aliasAck.preset_sha256,applies_sha256:aliasAck.applies_sha256,
+        current_document_id:aliasAck.members[0].document_id,member_count:aliasAck.members.length,selected_modules:[...result.module_scope]};
+      if(result.batch_id!==undefined&&result.batch_id!==null&&(typeof result.batch_id!=='string'||!result.batch_id.trim()||/[\u0000-\u001f\u007f]/.test(result.batch_id)||new TextEncoder().encode(result.batch_id).length>128)
+        ||result.eye_bag_preset_alias_review!==undefined&&!sameEyeBagPresetAliasMarker(result.eye_bag_preset_alias_review,marker))throw Error('共享来源预设批次身份或混合作用域不匹配，只能查询原请求');
+      if((result.success||result.alias_members!==undefined)&&(!result.batch_id||!sameEyeBagPresetAliasMarker(result.eye_bag_preset_alias_review,marker)||!Array.isArray(result.alias_members)||result.alias_members.length!==aliasAck.members.length
+        ||!result.alias_members.every((row,index)=>{const expected=aliasAck.members[index];return object(row)&&Object.keys(row).sort().join('|')==='document_id|expected_revision|result_revision'
+          &&row.document_id===expected.document_id&&row.expected_revision===expected.revision&&typeof row.result_revision==='string'&&/^(0|[1-9]\d{0,15})$/.test(row.result_revision)
+          &&BigInt(row.result_revision)<=BigInt(Number.MAX_SAFE_INTEGER)&&BigInt(row.result_revision)===BigInt(expected.revision)+1n;})))throw Error('共享来源混合预设未证明全部原成员一次性提交，只能查询原请求');
+      if(!result.success&&(typeof result.error!=='string'||!result.error.trim()))throw Error('未确认成功的共享来源预设缺少明确失败原因');
+      if(!result.success&&!result.outcome_unknown&&(['batch_id','eye_bag_preset_alias_review','alias_members','before','after','doc_state'].some(field=>Object.hasOwn(result,field))||result.operation_committed===true))throw Error('共享来源预设拒绝回执同时含有写入证据，只能查询原请求');
+      if(result.success){
+        const people=result.doc_state?.people,binding=object(people)?people.binding:null;
+        if(!object(binding)||binding.document_id!==aliasAck.members[0].document_id||binding.document_revision!==Number(BigInt(aliasAck.members[0].revision)+1n)
+          ||result.operation_committed===false||result.rolled_back===true)throw Error('共享来源预设当前人物绑定与全成员终态不匹配，只能查询原请求');
+      }
+    }
+  }
   if(!result.success)return;
   if(action==='xmp_inspect'){
     if(!text(result.path)||result.path!==opts.path||!validXmpReport(result.xmp_report))throw Error('XMP 检查路径或有界兼容报告不匹配');
@@ -110,7 +162,7 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
         ||result.xmp_report.source_sha256!==opts.xmpExpected.source_sha256||result.xmp_report.report_sha256!==opts.xmpExpected.report.report_sha256
         ||!validXmpTransfer(result.xmp_transfer,opts.documentId??'',result.revision,opts.xmpExpected.source_sha256))throw Error('缺少匹配本预设、当前照片和冻结版本的 XMP 前后像素证据');
     }
-    if(!opts.xmpExpected&&!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1',CROP_OP,'lnx.spill_removal.v1',SHADOW_TRANSFER_OP,TORSO_TRANSFER_OP,WAIST_TRANSFER_OP,HEAD_TRANSFER_OP,COLLARBONE_PRESET_OP].includes(op)))throw Error('预设不含需要冻结预检的模块');
+    if(!opts.xmpExpected&&!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1',CROP_OP,'lnx.spill_removal.v1',SHADOW_TRANSFER_OP,TORSO_TRANSFER_OP,WAIST_TRANSFER_OP,HEAD_TRANSFER_OP,COLLARBONE_PRESET_OP,EYE_BAG_PRESET_OP].includes(op)))throw Error('预设不含需要冻结预检的模块');
     return;
   }
   if(action==='apply'){
@@ -135,10 +187,16 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
   const pause=config.pause??((ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms)));
   let context:PresetContext={enabled:false,editable:false,documentId:''},state={...initialPresetUi},disposed=false,generation=0;
   let contextGeneration=0,contextKey='';
-  type Pending={contextGeneration:number;id:string;action:PresetAction;options:PresetOptions;expectedScope?:string[];generation:number};
+  type Pending={contextGeneration:number;id:string;action:PresetAction;options:PresetOptions;expectedScope?:string[];generation:number;eyeBagReview?:EyeBagPresetReview};
   let pending:Pending|null=null;
   const active=(g:number)=>!disposed&&generation===g;
   const set=(patch:Partial<PresetUi>)=>{state={...state,...patch};if(!disposed)publish(state);};
+  const stopWorkspaceRecovery=subscribeEyeBagPresetAliasWorkspace(replacement=>{
+    if(disposed||pending?.eyeBagReview?.version!==2||!replacement.retiredWrites.some(row=>row.requestId===pending!.id&&row.epoch===pending!.eyeBagReview!.owner.document.epoch))return;
+    // Explicitly reopened workspace supersedes this request's editing authority, not its unknown outcome.
+    generation++;pending=null;
+    set({phase:'error',result:null,message:'已确认进入新的项目工作区。原混合预设请求的结果仍未知，不认定成功或未执行；请核对重新打开的全部成员后再开始新操作。旧回执不能覆盖新工作区。'});
+  });
   function bounded<T>(promise:Promise<T>,deadline:number):Promise<T>{
     return new Promise<T>((resolve,reject)=>{
       const timer=setTimeout(()=>reject(Error('等待超时，执行结果未确认')),Math.max(1,deadline-now()));
@@ -161,7 +219,13 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
           if(!result)throw Error('缺少预设完成结果');
           validatePresetReply(result,request.action,request.options,request.id,request.expectedScope);
           if(request.action==='preflight'&&request.contextGeneration!==contextGeneration){pending=null;set({phase:'error',result:null,message:'目标照片或编辑上下文已经变化，旧预检不用于应用；请重新预检。'});return;}
+          if(request.eyeBagReview?.version===2&&result.batch_id&&request.expectedScope&&result.eye_bag_preset_alias_review
+            &&sameEyeBagPresetAliasMarker(result.eye_bag_preset_alias_review,presetAliasMarker(request.eyeBagReview,request.expectedScope))){
+            // Classify only the actual validated ledger marker. A known ID alone is not publication or history authority.
+            registerEyeBagPresetAliasReceipt(request.eyeBagReview.owner.document.epoch,result.batch_id,result.eye_bag_preset_alias_review);
+          }
           if(result.outcome_unknown){if(request.action==='list')pending=null;set({phase:request.action==='list'?'error':'uncertain',result,message:result.error??'执行结果未确认，请先核对实际状态'});return;}
+          if(request.eyeBagReview?.version===2)setEyeBagPresetAliasWritePending(request.id,false);
           pending=null;set({phase:result.success?'done':'error',result,message:result.error??''});return;
         }
         if(response.phase!=='pending')throw Error(response.error??'结果不可查，不代表操作未执行');
@@ -198,6 +262,11 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
       ||state.submitted?.reviewContextKey!==context.reviewContextKey||!frozen.module_scope?.includes(EYE_BAG_PRESET_OP)||expectedScope!==undefined&&!sameScope(expectedScope,frozen.module_scope)
       ||!validEyeBagPreset(frozen.eye_bag_preset,context.documentId,frozen.revision,frozen.source_proof,state.submitted?.options.eyeBagReplaceLegacy)
       ||!sameEyeBagPresetAck(options.eyeBagPresetAck,eyeBagPresetAck(frozen.eye_bag_preset)))){set({message:'请先查看目标逐眼保护和完整预设前后效果，并确认冻结的替换策略。'});return;}
+    if(eyeBag&&frozen?.eye_bag_preset){
+      const capturedContext=contextGeneration,verified=await verifyEyeBagCoverage(frozen.eye_bag_preset);
+      if(disposed||pending||state.result!==frozen||contextGeneration!==capturedContext)return;
+      if(!verified){set({message:'去眼袋逐眼保护或完整共享来源成员摘要未通过校验，请重新预检。'});return;}
+    }
     if(options.eyeBagPresetAck!==undefined&&action!=='apply'){set({message:'去眼袋预设确认只能用于冻结应用。'});return;}
     const collarbone=action==='apply'&&(expectedScope?.includes(COLLARBONE_PRESET_OP)||frozen?.module_scope?.includes(COLLARBONE_PRESET_OP)||options.collarbonePresetAck!==undefined);
     if(collarbone&&(!frozen?.collarbone_preset||!frozen.preflight_token||options.preflightToken!==frozen.preflight_token
@@ -286,10 +355,11 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
       ...(options.waistReviewAck?{waistReviewAck:options.waistReviewAck.map(ack=>({...ack}))}:{}),
       ...(options.headReviewAck?{headReviewAck:options.headReviewAck.map(ack=>({...ack}))}:{}),
       ...(options.collarbonePresetAck?{collarbonePresetAck:{...options.collarbonePresetAck}}:{}),
-      ...(options.eyeBagPresetAck?{eyeBagPresetAck:{...options.eyeBagPresetAck}}:{}),
+      ...(options.eyeBagPresetAck?{eyeBagPresetAck:structuredClone(options.eyeBagPresetAck)}:{}),
       ...(options.xmpExpected?{xmpExpected:structuredClone(options.xmpExpected)}:{}),
       ...(editing?{documentId:context.documentId}:{}),requestId:id};
-    const request:Pending={contextGeneration,id,action,options:captured,expectedScope:expectedScope?[...expectedScope]:undefined,generation:g};pending=request;
+    const request:Pending={contextGeneration,id,action,options:captured,expectedScope:expectedScope?[...expectedScope]:undefined,generation:g,...(eyeBag&&frozen?.eye_bag_preset?{eyeBagReview:structuredClone(frozen.eye_bag_preset)}:{})};pending=request;
+    if(request.eyeBagReview?.version===2)setEyeBagPresetAliasWritePending(id,true,request.eyeBagReview.owner.document.epoch);
     set({phase:'working',action,result:null,message:'',submitted:{action,options:captured,requestId:id,reviewContextKey:context.reviewContextKey}});
     try{
       const accepted=await bounded(api.request(action,captured),deadline);
@@ -309,5 +379,5 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
   }
   function dismissReview(){if(pending||state.phase==='working'||state.phase==='uncertain')return;set({...initialPresetUi});}
   return {submit,query,acknowledgeInspection,dismissReview,updateContext:(next:PresetContext)=>{const key=JSON.stringify([next.documentId,next.reviewContextKey]);if(key!==contextKey){contextGeneration++;contextKey=key;if(state.action==='preflight'&&!pending)set({result:null});}context={...next};},snapshot:()=>state,
-    dispose:()=>{disposed=true;generation++;pending=null;}};
+    dispose:()=>{stopWorkspaceRecovery();disposed=true;generation++;pending=null;}};
 }

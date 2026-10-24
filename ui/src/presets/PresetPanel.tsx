@@ -74,14 +74,14 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {w.review.head_transfer&&<HeadTransferReview value={w.review.head_transfer} reviewKey={w.headKey} disabled={w.busy} onReady={(key,ready)=>w.setHeadImage({key,ready})}/>}
       {w.review.collarbone_preset&&w.review.id&&w.review.preflight_token&&<CollarbonePresetReview value={w.review.collarbone_preset} id={w.review.id} token={w.review.preflight_token} reviewKey={w.collarboneKey} disabled={w.busy} onReady={(key,ready)=>w.setCollarboneImage({key,ready})}/>}
       {w.review.eye_bag_preset&&w.review.id&&w.review.preflight_token&&<EyeBagPresetReview value={w.review.eye_bag_preset} id={w.review.id} token={w.review.preflight_token} reviewKey={w.eyeBagKey} disabled={w.busy} onReady={(key,ready)=>w.setEyeBagImage({key,ready})}/>}
-      {!w.eyeBagReady&&<p role="status">请读取并确认本人物逐眼保护、明确替换策略及完整预设前后效果。</p>}
+      {!w.eyeBagReady&&<p role="status">请逐张读取并确认全部受影响成员的逐眼保护、明确替换策略及完整混合前后效果。</p>}
       {!w.collarboneReady&&<p role="status">请读取并确认本照片完整混合预设的真实前后效果。</p>}
       {!w.spillReady&&<p role="status">请查看并勾选确认本目标的祛反光前后效果。</p>}
       {!w.shadowReady&&<p role="status">请查看并勾选确认本目标的原图阴影前后效果。</p>}
       {!w.torsoReady&&<p role="status">请查看并勾选确认本目标身体及本人面部的上身长度前后效果。</p>}
       {!w.waistReady&&<p role="status">请查看并勾选确认本目标身体及本人面部的腰长前后效果。</p>}
       {!w.headReady&&<p role="status">请查看并勾选确认本目标身体及本人面部的小头前后效果。</p>}
-      <button disabled={w.busy||!w.context.editable||!w.eyeBagReady||!w.cropReady||!w.xmpReady||!w.spillReady||!w.shadowReady||!w.torsoReady||!w.waistReady||!w.headReady||!w.collarboneReady} onClick={()=>void w.confirmLocal()}>确认本次目标预设并应用</button>
+      <button disabled={w.busy||!w.context.editable||!w.eyeBagReady||!w.cropReady||!w.xmpReady||!w.spillReady||!w.shadowReady||!w.torsoReady||!w.waistReady||!w.headReady||!w.collarboneReady} onClick={()=>void w.confirmLocal()}>{w.review.eye_bag_preset?.version===2?'确认全部成员并应用此混合预设':'确认本次目标预设并应用'}</button>
       <button disabled={w.busy} onClick={w.dismissReview}>关闭本次审核</button></div>}
     <fieldset><legend>保存当前照片的模块参数</legend>
       <label>预设名称<input aria-label="预设名称" value={w.form.name} maxLength={160} placeholder="例如：室外婚纱暖调" onChange={e=>w.setName(e.target.value)}/><small>{nameLength}/80 字符</small></label>
@@ -112,14 +112,17 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
     <div role="status" aria-live="polite">
       {w.ui.phase==='working'&&<p>正在{w.ui.action?verbs[w.ui.action]:'处理'}，尚未确认完成…</p>}
       {w.ui.phase==='done'&&<p>{w.ui.action?verbs[w.ui.action]:'操作'}已确认成功{w.ui.result?.id?`：${w.ui.result.name??w.ui.result.preset?.name??w.ui.result.id}`:''}。</p>}
+      {w.ui.result?.success&&w.ui.result.eye_bag_preset_alias_review&&<p>已确认全部 {w.ui.result.eye_bag_preset_alias_review.member_count} 张成员，批次 {w.ui.result.batch_id}。只有原当前照片接收所选色彩、裁剪等配方，其他成员保留自己的当前编辑。请在去眼袋 v2 面板的“混合预设共享来源全成员历史”统一撤销或重做；不使用当前照片本地撤销。</p>}
       {w.ui.message&&<p>{w.ui.message}</p>}{w.note&&<p>{w.note}</p>}
       {oldDocument&&<p>这笔操作属于之前的照片，不会用旧回执覆盖当前照片的控制项。</p>}
       {w.ui.result?.requires_reload&&<p>应用失败且未能恢复图像，请重新打开照片。</p>}
     </div>
     {w.ui.phase==='uncertain'&&<div className="presetUncertain"><p>{w.ui.action==='preflight'||w.ui.action==='xmp_inspect'?'只读检查仍未确认完成，尚未导入或应用；可以查询同一笔任务，不会重复提交。':'结果尚未确认。不会自动重试，也不能据此认定没有保存或应用。'}</p>
+      {w.ui.result?.batch_id&&<p>待核对批次 ID：{w.ui.result.batch_id}。此标识不是请求成功终态，也不会单独授权撤销或重做。</p>}
+      {w.ui.submitted?.options.eyeBagPresetAck!==undefined&&<p>本次去眼袋预设应用只可查询原请求，冻结令牌和逐成员图像确认不会释放后重发。原生已记录的未知回执可能保持不变，重复查询不保证解锁。若仍未知，请先核对已保存的项目，再手动重新打开项目并检查全部成员；不要重复应用。普通换照片、关面板或刷新状态不能解除旧工作区等待。</p>}
       {w.ui.submitted?.options.headReviewAck!==undefined&&<p>本次小头应用只可查询原请求，冻结令牌及逐图确认不会被释放后重新提交。原生回执读取的既有限制仍可能阻止结果确认；当前状态刷新不等于这笔操作的终态证明。</p>}
       <button onClick={()=>void w.query()}>查询同一笔结果</button><button onClick={()=>void w.inspect()}>请求当前状态供核对</button>
-      {w.ui.submitted?.options.waistReviewAck===undefined&&w.ui.submitted?.options.headReviewAck===undefined&&w.ui.submitted?.options.collarbonePresetAck===undefined&&<button onClick={w.acknowledgeInspection}>我已核对，结束本次等待</button>}
+      {w.ui.submitted?.options.waistReviewAck===undefined&&w.ui.submitted?.options.headReviewAck===undefined&&w.ui.submitted?.options.collarbonePresetAck===undefined&&w.ui.submitted?.options.eyeBagPresetAck===undefined&&<button onClick={w.acknowledgeInspection}>我已核对，结束本次等待</button>}
     </div>}
     {!!w.catalog?.errors.length&&<details><summary>预设目录问题（{w.catalog.errors.length}）</summary>
       {w.catalog.errors.map((e,i)=><p key={`${e.file}-${i}`}>{e.file}：{e.error}</p>)}</details>}

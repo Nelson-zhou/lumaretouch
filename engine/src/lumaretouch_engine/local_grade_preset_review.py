@@ -232,6 +232,9 @@ class PresetReviews:
             verify_portrait(row,state,candidate,document_id,str(revision),record[portrait.name])
             portrait.store.verify_available(self,token)
         if proof is not None:SOURCE.verify_row({**row,'state':state},proof)
+        if eye_bag and record['eye_bag']['version']==2:
+            from .eye_bag_preset_store import retain_claimed
+            retain_claimed(self,token,record)
         del self.pending[token]
         self.targets.pop(token,None)
         PORTRAIT.prune(self)

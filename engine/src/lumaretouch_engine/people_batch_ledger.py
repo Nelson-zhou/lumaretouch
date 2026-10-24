@@ -127,16 +127,17 @@ def _publish(owner,engine,plans,targets):
     finally:engine._people_staged=None
 
 
-def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None,eye_bag_history=None,eye_bag_cohort_history=None,eye_bag_alias_history=None):
-    plans={identity:plan for identity,plan in plans.items() if between(plan['before'],plan['candidate'])}
+def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None,eye_bag_history=None,eye_bag_cohort_history=None,eye_bag_alias_history=None,eye_bag_preset_alias_history=None,preset_alias_verify=None):
+    composite=eye_bag_preset_alias_history is not None
+    plans={identity:plan for identity,plan in plans.items() if composite or between(plan['before'],plan['candidate'])}
     if not plans:return None
-    owner.documents.remember_current()
+    if not composite:owner.documents.remember_current()
     # Transfer callers retain the proof actually rendered. Re-freezing here
     # could authorize changed source bytes after expensive target preparation.
     targets=_targets(owner,engine,plans) if prepared_targets is None else deepcopy(prepared_targets)
     if not targets:raise ValueError('No retained portrait document can receive this batch')
-    if prepare:prepare_scoped(engine,plans,targets)
-    _verify(owner,engine,plans,targets)
+    if prepare and not composite:prepare_scoped(engine,plans,targets)
+    if not composite:_verify(owner,engine,plans,targets)
     owner.sequence+=1;bid=f'batch-{owner.sequence:03d}-{int(owner.clock()*1000)}'
     scoped=[{'scope':identity,'document_id':plan['row']['document_id'],
              'changes':between(plan['before'],plan['candidate'])} for identity,plan in plans.items()]
@@ -161,10 +162,19 @@ def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=
         from .eye_bag_alias_history import KEY as EYE_ALIAS_KEY, check as check_eye_alias_history
         entry[EYE_ALIAS_KEY]=deepcopy(eye_bag_alias_history)
         check_eye_alias_history(entry)
+    if composite:
+        from . import eye_bag_preset_alias_history as MIXED, eye_bag_preset_alias_transaction as TRANSACTION
+        entry[MIXED.KEY]=deepcopy(eye_bag_preset_alias_history);MIXED.check(entry)
+        if prepare:TRANSACTION.prepare(engine,plans,targets,entry,redo=True)
     result={'kind':'commit','batch_id':bid,'applied':[int(k) for k in targets],'skipped':[]}
-    frame=_publish(owner,engine,plans,targets)
+    frame=(TRANSACTION.publish(owner,engine,plans,targets,entry,redo=True,verify_before=preset_alias_verify)
+           if composite else _publish(owner,engine,plans,targets))
     owner.ledger[bid]=entry;owner.last_result=result
-    engine._people_shared_mutation=True;owner.editor.mark_dirty()
+    engine._people_shared_mutation=True
+    try:owner.editor.mark_dirty()
+    except Exception as error:
+        if composite:error.side_effects_started=True;error.batch_id=bid
+        raise
     return bid,frame
 
 
@@ -186,8 +196,10 @@ def restore_scoped(engine,batch,redo):
     cohort_history=check_cohort_history(batch)
     from .eye_bag_alias_history import check as check_eye_alias_history, verify_restore as verify_eye_alias_restore
     eye_alias_history=check_eye_alias_history(batch)
+    from . import eye_bag_preset_alias_history as MIXED, eye_bag_preset_alias_transaction as TRANSACTION
+    mixed_history=MIXED.check(batch)
     owner=engine._batch_controller();plans={};reviewed={}
-    if eye_history is not None or cohort_history is not None or eye_alias_history is not None:
+    if eye_history is not None or cohort_history is not None or eye_alias_history is not None or mixed_history is not None:
         # The scoped restore route bypasses the legacy undo() wrapper. Capture
         # the current document so unsaved repair/crop edits cannot hide behind
         # a parked row's older dependency digest.
@@ -211,7 +223,10 @@ def restore_scoped(engine,batch,redo):
         if record['scope'] in reviewed:
             plans[record['scope']]['reviewed_face_refs']=list({(ref['asset_sha256'],ref['face_instance_id'],ref['analysis_revision']):ref
                 for ref in reviewed[record['scope']]}.values())
-    targets=_targets(owner,engine,plans)
+    targets=(MIXED.targets(engine,mixed_history,plans['project']['before']) if mixed_history is not None else _targets(owner,engine,plans))
+    if mixed_history is not None:
+        TRANSACTION.prepare(engine,plans,targets,batch,redo=redo)
+        return TRANSACTION.publish(owner,engine,plans,targets,batch,redo=redo)
     if alias_history is not None:verify_alias_restore(engine,batch,plans,targets)
     if eye_history is not None:verify_eye_restore(engine,batch,plans,targets)
     if cohort_history is not None:verify_cohort_restore(engine,batch,plans,targets,redo=redo)
@@ -231,13 +246,24 @@ def restore_scoped(engine,batch,redo):
 
 def restore(owner,request):
     batch=owner.ledger[str(request.get('batch_id') or '')];redo=request.get('action')=='redo'
-    if bool(batch['undone'])!=redo:raise ValueError('People group is not in the requested undo/redo state')
-    if owner.editor.people_restore is None:raise ValueError('People group restore adapter is unavailable')
-    frame=owner.editor.people_restore(batch,redo)
-    batch['undone']=not redo;owner.editor.mark_dirty()
-    body={'event':'batch_redone' if redo else 'batch_undone','batch_id':request['batch_id'],
-          'module_scope':batch['ops'],'restored':[int(k) for k in batch['targets']], 'conflicts':[], 'doc_state':owner.editor.status()}
-    owner.last_result={'kind':'redo' if redo else 'undo','batch_id':request['batch_id'],'restored':body['restored'],'conflicts':[]}
-    owner.emit(body)
-    if frame is not None:owner.emit(frame)
-    return body
+    from .eye_bag_preset_alias_history import KEY as MIXED_KEY, status_summary as mixed_summary
+    marker=mixed_summary(batch);published=False
+    try:
+        if marker is not None:
+            from .eye_bag_preset_alias_transaction import require_history_request
+            require_history_request(owner,request,batch)
+        if bool(batch['undone'])!=redo:raise ValueError('People group is not in the requested undo/redo state')
+        if owner.editor.people_restore is None:raise ValueError('People group restore adapter is unavailable')
+        frame=owner.editor.people_restore(batch,redo);published=True
+        batch['undone']=not redo;owner.editor.mark_dirty()
+        body={'event':'batch_redone' if redo else 'batch_undone','batch_id':request['batch_id'],
+              'module_scope':batch['ops'],'restored':[int(k) for k in batch['targets']], 'conflicts':[], 'doc_state':owner.editor.status()}
+        owner.last_result={'kind':'redo' if redo else 'undo','batch_id':request['batch_id'],'restored':body['restored'],'conflicts':[]}
+        if marker is not None:body[MIXED_KEY]=marker
+        owner.emit(body)
+        if frame is not None:owner.emit(frame)
+        return body
+    except Exception as error:
+        if marker is not None:
+            error.eye_bag_preset_alias_history_no_write=not getattr(error,'side_effects_started',published)
+        raise

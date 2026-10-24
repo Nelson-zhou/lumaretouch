@@ -22,7 +22,7 @@ from . import preset_portrait_review as PORTRAIT, eye_bag_preserve_scope as EYE_
 
 ACTIONS = ("list", "preflight", "apply", "save", "import", "delete", "xmp_inspect", "collarbone_visual", "eye_bag_visual")
 LEGACY_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note", "local_mask_transfer", "preflight_token"}
-FIELDS = {"eye_bag_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token"}, "collarbone_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token"}, "list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_preset_ack", "eye_bag_preset_ack"},
+FIELDS = {"eye_bag_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token", "member_document_id", "member_revision"}, "collarbone_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token"}, "list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_preset_ack", "eye_bag_preset_ack"},
           "preflight": {"id", "document_id", "local_mask_transfer", "module_scope", "eye_bag_replace_legacy"},
           "save": {"id", "name", "kind", "force", "note", "module_scope", "document_id", "local_mask_transfer"},
           "import": {"path", "id", "force", "xmp_ack"}, "xmp_inspect": {"path"}, "delete": {"id"}}
@@ -70,6 +70,8 @@ class PresetPorts:
     verify_eye_bag: Callable | None = None
     eye_bag_replay: Callable | None = None
     verify_eye_bag_applied: Callable | None = None
+    verify_eye_bag_alias: Callable | None = None
+    publish_eye_bag_alias: Callable | None = None
 
 
 class PresetController:
@@ -142,6 +144,9 @@ class PresetController:
         action = raw_action if type(raw_action) is str and raw_action in ACTIONS else "invalid"
         result = {"event": "preset_result", "protocol": 1, "request_id": request, "action": action,
                   "success": False, "outcome_unknown": False}
+        if action == 'eye_bag_visual':
+            # Bounded identity-only failure echo does not assert image ownership.
+            result.update({key:p[key] for key in FIELDS[action] if type(p.get(key)) is str and len(p[key]) <= 128})
         if action in ("apply", "preflight", "save"):
             result["document_id"] = self.document_identity(p)
         digest = None; self._effect_started = False; self._scalar_receipt = {}
@@ -150,6 +155,14 @@ class PresetController:
             raw = json.dumps(p, sort_keys=True, allow_nan=False, ensure_ascii=False)
             if len(raw.encode()) > 65536: raise SC.ScopeError("preset command exceeds 64 KiB")
             digest = sha256(raw.encode()).hexdigest()
+            if action == 'apply' and type(p.get('eye_bag_preset_ack')) is dict and 'members' in p['eye_bag_preset_ack']:
+                from .eye_bag_preset_alias_review import check_ack
+                ack=check_ack(p['eye_bag_preset_ack'])
+                if all(type(p.get(key)) is str and 1<=len(p[key])<=128 for key in ('id','document_id','preflight_token')):
+                    frozen=self.reviews.pending.get(p['preflight_token'])
+                    self._scalar_receipt={**{key:p[key] for key in ('id','document_id','preflight_token')},
+                        'eye_bag_preset_ack':ack,**({'module_scope':list(frozen['modules'])} if frozen is not None else {}),
+                        **{key:deepcopy(p[key]) for key in ('xmp_review_ack','spill_review_ack','shadow_review_ack') if key in p}}
             if request in self._receipts:
                 old_digest, old_result, _ = self._receipts[request]
                 if old_digest != digest: raise SC.ScopeError("preset request_id reused with different arguments")
@@ -232,10 +245,17 @@ class PresetController:
                 evidence = {"id": p.get("id"), "path": gone}
             result.update(success=True, **evidence)
         except Exception as error:
-            unknown = self._effect_started and not isinstance(error, SC.ScopeError)
+            unknown = self._effect_started and (not isinstance(error, SC.ScopeError)
+                or type(self._scalar_receipt.get('eye_bag_preset_ack')) is dict
+                and 'members' in self._scalar_receipt['eye_bag_preset_ack'])
             if isinstance(error, PresetApplyError):
                 unknown = not error.rolled_back
                 result.update(rolled_back=error.rolled_back, requires_reload=error.requires_reload)
+            elif type(self._scalar_receipt.get('eye_bag_preset_ack')) is dict and 'members' in self._scalar_receipt['eye_bag_preset_ack']:
+                # A compensated composite claim still advanced monotonic
+                # fences. Report the rollback fact without calling it no-write.
+                result.update({key:getattr(error,key) for key in ('rolled_back','requires_reload')
+                    if type(getattr(error,key,None)) is bool})
             if isinstance(error, OrganisationError):
                 unknown = error.outcome_unknown
             if isinstance(error, PS.PresetStorageError):
@@ -245,6 +265,9 @@ class PresetController:
             self.emit({"event": "error", "error": f"preset {action}：{error}"})
         finally:
             if action == 'apply':result.update(deepcopy(self._scalar_receipt))
+            if action == 'apply' and type(p.get('preflight_token')) is str:
+                from .eye_bag_preset_store import release_claimed
+                release_claimed(self.reviews,p['preflight_token'])
             if request is not None and request not in self._pending:
                 self._pending[request] = (digest, result)
 
@@ -274,7 +297,8 @@ class PresetController:
                          if key in result} if any(key in result for key in scalar_keys) or scalar_scope else {}
         if 'collarbone_preset_ack' in result or 'eye_bag_preset_ack' in result:
             review_fields.update({key:deepcopy(result[key]) for key in
-                ('id','document_id','xmp_review_ack','spill_review_ack','shadow_review_ack') if key in result})
+                ('id','document_id','xmp_review_ack','spill_review_ack','shadow_review_ack',
+                 'batch_id','alias_members','eye_bag_preset_alias_review','rolled_back','requires_reload') if key in result})
         try:
             json.dumps(result, allow_nan=False, ensure_ascii=False).encode("utf-8")
             raw = json.dumps(result, allow_nan=False, ensure_ascii=True)
@@ -311,6 +335,14 @@ class PresetController:
             raise SC.ScopeError('身体长度审核确认不能与其他目标图审核确认混用')
         if p.get('preflight_token') is not None:
             pending=self.reviews.pending.get(p['preflight_token']) if type(p['preflight_token']) is str else None
+            raw_alias_ack=p.get('eye_bag_preset_ack')
+            if type(raw_alias_ack) is dict and 'members' in raw_alias_ack:
+                from .eye_bag_preset_alias_review import check_ack
+                echoed=check_ack(raw_alias_ack)
+                self._scalar_receipt={'id':pid,'document_id':reviewed_identity[2],
+                    'preflight_token':p['preflight_token'],'eye_bag_preset_ack':echoed,
+                    **({'module_scope':list(pending['modules'])} if pending is not None else {}),
+                    **{key:deepcopy(p[key]) for key in ('xmp_review_ack','spill_review_ack','shadow_review_ack') if key in p}}
             selected=BODY_REVIEW.select(pending['modules']) if pending is not None else None
             portrait=PORTRAIT.select(pending['modules'],eye_review='eye_bag_replace_legacy' in pending) if pending is not None else None
             if portrait is not None:portrait.require_ports(self.ports)
@@ -424,6 +456,41 @@ class PresetController:
                     or (current.get('document_id'),current.get('path'),self.ports.document_id())!=reviewed_identity
                     or self.ports.revision()!=reviewed_revision):
                 raise SC.ScopeError('目标图在冻结审核期间发生变化，未写入照片')
+        if collarbone and portrait.name=='eye_bag' and record['eye_bag']['version']==2:
+            # This branch must precede current-only revision advancement and the
+            # legacy rollback owner. The composite ledger owns graph + recipe,
+            # every affected revision and the only undo/redo publication.
+            publish=self.ports.publish_eye_bag_alias
+            if publish is None or self.ports.verify_eye_bag_alias is None:
+                raise SC.ScopeError('Complete mixed preset alias publication is unavailable')
+            try:
+                from .eye_bag_preset_store import verify_claimed
+                bid,frame=publish(reviewed_row,previous,state,reviewed_identity[2],str(reviewed_revision),
+                    record['eye_bag'],mods,self.request_id(p),
+                    verify_images=lambda:verify_claimed(self.reviews,p['preflight_token'],record['eye_bag']))
+                self._effect_started=True
+                self._scalar_receipt['batch_id']=bid
+                aliases=[{'document_id':member['visual']['document_id'],
+                    'expected_revision':member['visual']['revision'],
+                    'result_revision':str(int(member['visual']['revision'])+1)} for member in record['eye_bag']['members']]
+                marker={'version':1, **{key:record['eye_bag'][key] for key in ('review_sha256','preset_sha256','applies_sha256')},
+                    'current_document_id':aliases[0]['document_id'],'member_count':len(aliases),'selected_modules':ops}
+                self._scalar_receipt.update(alias_members=aliases,eye_bag_preset_alias_review=marker)
+                after=OA.before_params(state,ops)
+                self.last={'id':pid,'name':doc['name'],'ops':ops,'params':after}
+                render_ms=frame.pop('render_ms',0)
+                self.emit({'event':'preset_applied','id':pid,'kind':doc['kind'],'name':doc['name'],
+                    'modules':ops,'before':before,'after':after,'render_ms':render_ms,'doc_state':self.ports.status()})
+                self.emit(frame)
+                return {'id':pid,'name':doc['name'],'module_scope':ops,'before':before,'after':after,
+                    'document_id':reviewed_identity[2],'preflight_token':p['preflight_token'],
+                    'source_proof':source_proof,**deepcopy(self._scalar_receipt)}
+            except Exception as error:
+                self._effect_started=self._effect_started or bool(getattr(error,'side_effects_started',False))
+                if getattr(error,'batch_id',None) is not None:self._scalar_receipt['batch_id']=error.batch_id
+                for key in ('alias_members','eye_bag_preset_alias_review'):
+                    if getattr(error,key,None) is not None:self._scalar_receipt[key]=deepcopy(getattr(error,key))
+                raise
         def verify_after():
             if collarbone:collarbone_transaction.verify()
             current=self.ports.target_row()

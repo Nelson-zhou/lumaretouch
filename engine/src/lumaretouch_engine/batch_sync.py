@@ -187,7 +187,8 @@ class BatchSyncController:
         if isinstance(p.get("request_id"),str) and 1<=len(p["request_id"])<=128:
             from .eye_bag_batch_store import failure_context
             from .eye_bag_cohort_store import failure_context as cohort_failure_context
-            self.preflight.emit_result(p,{"success":False,"outcome_unknown":not no_write,"error":message,"requires_preflight":True,**failure_context(p),**cohort_failure_context(p)})
+            from .eye_bag_preset_alias_transaction import failure_context as mixed_failure_context
+            self.preflight.emit_result(p,{"success":False,"outcome_unknown":not no_write,"error":message,"requires_preflight":True,**failure_context(p),**cohort_failure_context(p),**mixed_failure_context(self,p)})
 
     def handle_command(self, p: dict):
         """批量同步（LNX-P0-BATCH / BATCH-001…4）。
@@ -373,7 +374,7 @@ class BatchSyncController:
             body=self.commit(ops, mods, rows, policy, bad,source_snapshot=source_snapshot)
             self.preflight.emit_result(p,{**body,"success":True,"mode":"direct_unreviewed"})
         except Exception as e:
-            self._reject(p,f"batch {action} 被拒：{e}",no_write=not mutation_may_have_started)
+            self._reject(p,f"batch {action} 被拒：{e}",no_write=getattr(e,'eye_bag_preset_alias_history_no_write',not mutation_may_have_started))
 
     def commit(self, ops: list[str], mods: dict, rows: list[dict],
                       policy: str, bad: list[dict], source_snapshot=None) -> dict:
@@ -876,6 +877,7 @@ class BatchSyncController:
         from .eye_bag_batch_history import status_summary as eye_status_summary
         from .eye_bag_cohort_history import status_summary as cohort_status_summary
         from .eye_bag_alias_history import status_summary as eye_alias_status_summary
+        from .eye_bag_preset_alias_history import status_summary as mixed_preset_status_summary
         items = []
         for key, entry in self.ledger.items():
             item = {"batch_id": key, "module_scope": entry["ops"], "targets": len(entry["targets"]),
@@ -888,6 +890,8 @@ class BatchSyncController:
             if cohort_marker is not None: item["eye_bag_cohort_review"] = cohort_marker
             eye_alias_marker = eye_alias_status_summary(entry)
             if eye_alias_marker is not None: item["eye_bag_alias_review"] = eye_alias_marker
+            mixed_marker = mixed_preset_status_summary(entry)
+            if mixed_marker is not None: item["eye_bag_preset_alias_review"] = mixed_marker
             items.append(item)
         un = [i for i in items if not i["undone"]]
         return {"batches": items, "workspace_generation": self.versions.workspace,

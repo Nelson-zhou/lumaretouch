@@ -3,26 +3,44 @@
 use serde_json::{json, Value};
 use crate::original_shadow_transfer_protocol::{hex, revision};
 use super::visual::{fields,text,image,visual,face};
+#[path="eye_bag_preset_alias_protocol.rs"]
+mod alias;
 pub(crate) const OP: &str = "lnx.eye_bags.v2";
 pub(crate) const ACK: &str = "eye_bag_preset_ack";
 pub(crate) fn selected(value:&Value)->bool {
     value["module_scope"].as_array().is_some_and(|ops|ops.iter().any(|op|op==OP))
 }
 fn image_request(value:&Value)->bool {
-    fields(value,&["cmd","action","request_id","id","document_id","preflight_token","revision","side","sha256"])
+    let mut keys=vec!["cmd","action","request_id","id","document_id","preflight_token","revision","side","sha256"];
+    if value.get("member_document_id").is_some()||value.get("member_revision").is_some(){
+        keys.extend(["member_document_id","member_revision"]);
+        if !alias::image_identity(value){return false;}
+    }
+    fields(value,&keys)
         &&value["cmd"]=="preset"&&value["action"]=="eye_bag_visual"&&text(&value["request_id"])
         &&text(&value["id"])&&text(&value["document_id"])&&hex(&value["preflight_token"],32)
         &&revision(&value["revision"])&&matches!(value["side"].as_str(),Some("before"|"after"))&&hex(&value["sha256"],64)
 }
 pub(crate) fn acknowledgment(value:&Value)->bool {
+    if value.get("members").is_some(){return alias::acknowledgment(value);}
     fields(value,&["document_id","revision","before_sha256","after_sha256","coverage_sha256","preset_sha256","applies_sha256","replace_legacy"])
         &&value["replace_legacy"].is_boolean()&&text(&value["document_id"])&&revision(&value["revision"])
         &&["before_sha256","after_sha256","coverage_sha256","preset_sha256","applies_sha256"].iter().all(|key|hex(&value[*key],64))
 }
+/// Only the new alias form requires every failure to retain the exact request.
+/// A missing member or ACK must not be reclassified as an ordinary local edit.
+pub(crate) fn strict_failure_identity(value:&Value)->bool {
+    value["cmd"]=="preset"&&(value[ACK].get("members").is_some()
+        ||(value["action"]=="eye_bag_visual"&&value.get("member_document_id").is_some()))
+}
+pub(crate) fn retained_alias_publication(value:&Value)->Option<Value> {alias::retained_publication(value)}
 pub(crate) fn command(value:&Value)->Result<(),String> {
     if value["cmd"]!="preset" {return Ok(());}
     if value["action"]=="eye_bag_visual" {
         return if image_request(value){Ok(())}else{Err("Eye-bag preset image requires exact preset/load/token/side identity".into())};
+    }
+    if value.get("member_document_id").is_some()||value.get("member_revision").is_some(){
+        return Err("Preset member coordinates belong only to an immutable eye-bag image read".into());
     }
     if value.get("eye_bag_replace_legacy").is_some() && !(value["action"]=="preflight"&&selected(value)&&value["eye_bag_replace_legacy"].is_boolean()) {
         return Err("Eye-bag legacy replacement is an explicit preflight-only choice".into());
@@ -53,8 +71,15 @@ pub(crate) fn read_only(value:&Value)->bool {
 pub(crate) fn binding(value:&Value)->Result<Option<Value>,String> {
     command(value)?;
     if value["cmd"]!="preset"{return Ok(None);}
-    if image_request(value){return Ok(Some(json!({"id":value["id"],"document_id":value["document_id"],
-        "preflight_token":value["preflight_token"],"revision":value["revision"],"side":value["side"],"sha256":value["sha256"]})));}
+    if image_request(value){
+        let mut out=json!({"id":value["id"],"document_id":value["document_id"],
+            "preflight_token":value["preflight_token"],"revision":value["revision"],"side":value["side"],"sha256":value["sha256"]});
+        if value.get("member_document_id").is_some(){
+            out["member_document_id"]=value["member_document_id"].clone();
+            out["member_revision"]=value["member_revision"].clone();
+        }
+        return Ok(Some(out));
+    }
     if value.get(ACK).is_some(){
         let mut out=json!({"id":value["id"],"document_id":value["document_id"],"preflight_token":value["preflight_token"],(ACK):value[ACK]});
         for key in ["xmp_review_ack","spill_review_ack","shadow_review_ack","torso_review_ack","waist_review_ack","head_review_ack","collarbone_preset_ack"] {
@@ -80,9 +105,14 @@ fn coverage(value:&Value,reference:&Value)->bool {
     }
 }
 pub(crate) fn review(value:&Value)->bool {
+    let p=&value["eye_bag_preset"];
+    if p["version"].as_u64()==Some(2){return alias::review(value);}
+    fields(p,&["version","preset_sha256","applies_sha256","load_id","owner","face_ref","coverage","visual","replace_legacy"])
+        &&p["version"].as_u64()==Some(1)&&review_base(value)
+}
+fn review_base(value:&Value)->bool {
     let p=&value["eye_bag_preset"];let owner=&p["owner"];let doc=&owner["document"];
-    if !fields(p,&["version","preset_sha256","applies_sha256","load_id","owner","face_ref","coverage","visual","replace_legacy"])
-        ||p["version"].as_u64()!=Some(1)||!p["replace_legacy"].is_boolean()||p["replace_legacy"]!=value["eye_bag_replace_legacy"]||p["load_id"]!=value["document_id"]||!text(&p["load_id"])
+    if !p["replace_legacy"].is_boolean()||p["replace_legacy"]!=value["eye_bag_replace_legacy"]||p["load_id"]!=value["document_id"]||!text(&p["load_id"])
         ||!hex(&p["preset_sha256"],64)||!hex(&p["applies_sha256"],64)
         ||!fields(owner,&["document","people_scope","state_revision","association_revision","graph_sha256","source_proof"])
         ||!fields(doc,&["document_id","epoch","revision"])||!text(&doc["document_id"])||!text(&doc["epoch"])
@@ -101,10 +131,13 @@ fn parameters(value:&Value)->bool {
         &&["amount","preserve"].iter().all(|key|recipe[*key].as_f64().is_some_and(|v|v.is_finite()&&(0.0..=1.0).contains(&v)))
 }
 pub(crate) fn receipt(value:&Value)->bool {
+    if (value.get("eye_bag_preset_alias_review").is_some()||value.get("alias_members").is_some())
+        &&(value["action"]!="apply"||value[ACK].get("members").is_none()){return false;}
     if value["action"]=="eye_bag_visual" {
         if value["success"]!=true{return true;}
         return text(&value["id"])&&text(&value["document_id"])&&hex(&value["preflight_token"],32)&&revision(&value["revision"])
             &&matches!(value["side"].as_str(),Some("before"|"after"))&&hex(&value["sha256"],64)
+            &&((value.get("member_document_id").is_none()&&value.get("member_revision").is_none())||alias::image_identity(value))
             &&value["image"]["sha256"]==value["sha256"]&&image(&value["image"]);
     }
     if !value["eye_bag_preset"].is_null()&&(value["action"]!="preflight"||value["success"]!=true||!selected(value)){return false;}
@@ -113,7 +146,13 @@ pub(crate) fn receipt(value:&Value)->bool {
         return if value.get("eye_bag_replace_legacy").is_some(){hex(&value["preflight_token"],32)&&review(value)}
             else {value["applies"][OP]["recipe"]["amount"].as_f64()==Some(0.)};
     }
-    if let Some(ack)=value.get(ACK){return value["action"]=="apply"&&selected(value)&&acknowledgment(ack)&&hex(&value["preflight_token"],32);}
+    if let Some(ack)=value.get(ACK){
+        // Expiry can discard the plan's module names, but never the submitted
+        // v2 acknowledgment. Its exact bound no-write refusal is still usable.
+        let scope=selected(value)||(ack.get("members").is_some()&&value["success"]==false&&value.get("module_scope").is_none());
+        return value["action"]=="apply"&&scope&&acknowledgment(ack)&&hex(&value["preflight_token"],32)
+            &&(ack.get("members").is_none()||alias::receipt(value));
+    }
     if value["action"]=="apply"&&selected(value)&&value["success"]==true {
         return parameters(&value["after"][OP])&&value["after"][OP]["recipe"]["amount"].as_f64()==Some(0.);
     }

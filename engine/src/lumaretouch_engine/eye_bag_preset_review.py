@@ -2,7 +2,7 @@
 """Exact mixed-preset portrait planning and image evidence. AUTHORED / UNRUN.
 
 Runtime plans are bounded session data, not a second history or serialized asset.
-Only the existing preset transaction may execute/restore their reviewed graph.
+V1 uses its existing preset transaction; V2 uses only the composite alias ledger.
 """
 from collections import OrderedDict
 from copy import deepcopy
@@ -25,6 +25,9 @@ def digest(value):
 
 
 def checked(value):
+    if type(value) is dict and type(value.get('version')) is int and value['version'] == 2:
+        from .eye_bag_preset_alias_review import checked as aliases
+        return aliases(value)
     from .people_transfer_inventory import check_proof
     from .people_state import check_ref
     if type(value) is not dict or set(value) != FIELDS or type(value['version']) is not int or value['version'] != 1:
@@ -60,6 +63,9 @@ def checked(value):
 
 
 def acknowledgment(raw, wrapper):
+    if type(wrapper) is dict and wrapper.get('version') == 2:
+        from .eye_bag_preset_alias_review import acknowledgment as aliases
+        return aliases(raw, wrapper)
     wrapper = checked(wrapper); visual = wrapper['visual']
     expected = {'document_id': visual['document_id'], 'revision': visual['revision'],
                 'before_sha256': visual['before']['sha256'], 'after_sha256': visual['after']['sha256'],
@@ -87,7 +93,7 @@ def take_images(wrapper):
     return images
 
 
-def _target(engine, row, load_id, revision):
+def _target(engine, row, load_id, revision, *, reviewed_aliases=False):
     from .virtual_copy_people import current_row
     from .people_preset_plan import require_active_owner
     if current_row(engine) is not row or getattr(engine, '_load_id', None) != load_id:
@@ -98,7 +104,7 @@ def _target(engine, row, load_id, revision):
     from .eye_bag_preserve_host import _live
     from .people_recovery import selection
     _, graph, _, ref = selection(engine, editing=True)
-    _live(engine, graph, {'scope':'face','target_id':ref['face_instance_id'],'face_ref':ref})
+    _live(engine, graph, {'scope':'face','target_id':ref['face_instance_id'],'face_ref':ref}, strict=not reviewed_aliases)
     return owner, version.document_id
 
 
@@ -118,6 +124,9 @@ def _image(*args, **kwargs):
 
 
 def prepare(engine, row, before, candidate, load_id, revision, preset, modules, replace_legacy=False):
+    from .eye_bag_preset_alias_review import required, prepare as prepare_aliases
+    if required(engine, row, load_id, revision):
+        return prepare_aliases(engine, row, before, candidate, load_id, revision, preset, modules, replace_legacy)
     from .people_scope import plan_preset
     from .people_preset_plan import clone_state
     from .people_transfer_inventory import proof
@@ -171,6 +180,9 @@ def prepare(engine, row, before, candidate, load_id, revision, preset, modules, 
 
 
 def verify(engine, row, before, candidate, load_id, revision, wrapper):
+    if type(wrapper) is dict and wrapper.get('version') == 2:
+        from .eye_bag_preset_alias_review import verify as aliases
+        return aliases(engine, row, before, candidate, load_id, revision, wrapper)
     from .optics_candidate_identity import fingerprint
     from .creative_derived_source import verify_row
     entry = _entry(wrapper, engine); plan = entry['plan']; owner, document = _target(engine, row, load_id, revision)
@@ -186,6 +198,8 @@ def verify(engine, row, before, candidate, load_id, revision, wrapper):
 
 
 def replay(engine, row, value, load_id, revision, wrapper, rollback=False, **kwargs):
+    if type(wrapper) is dict and wrapper.get('version') == 2:
+        raise ValueError('Shared mixed preset publication belongs only to its composite batch ledger')
     from .people_scope import execute_plan, restore_plan
     from .optics_candidate_identity import fingerprint
     from .creative_derived_source import verify_row
@@ -215,6 +229,8 @@ def replay(engine, row, value, load_id, revision, wrapper, rollback=False, **kwa
 
 
 def verify_applied(engine, row, actual, load_id, revision, wrapper, rollback=False):
+    if type(wrapper) is dict and wrapper.get('version') == 2:
+        raise ValueError('Shared mixed preset verification belongs only to its composite batch ledger')
     from .creative_derived_source import verify_row
     entry = _entry(wrapper, engine); plan = entry['plan']; owner, document = _target(engine, row, load_id, revision)
     if (entry['row'] is not row or load_id != wrapper['load_id'] or document != wrapper['visual']['document_id']

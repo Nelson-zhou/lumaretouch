@@ -201,3 +201,34 @@ No case above has been executed. Automatic ridge detection remains incomplete.
   neutrality. Keep preset/batch/cohort/alias recovery gates independent.
 
 These are authored verification cases, not executed results or photo acceptance.
+
+## Mixed-preset alias verification (UNRUN)
+
+- Use original/derived opaque SDR aliases with different crops, repairs and
+  colour adjustments. The active after image must show the entire selected
+  preset; sibling after images must retain their own nonportrait recipes while
+  showing the shared graph candidate. Compare with full canonical export.
+- Verify target-local protection and explicit legacy replacement for active,
+  partially protected and neutral eye-bag recipes. No donor support/recovery
+  vectors may be present in saved preset data or the new graph transition.
+- Require every actual image to load and every ordered member ACK. Reject
+  stale revision, substituted member, altered crop/repair/support, expired page,
+  wrong preset hash, incomplete membership and current-only v1 acknowledgment.
+- Check a graph no-op with a real current-document colour/crop change, a graph
+  change with unchanged current nonportrait state, and a complete no-op. Never
+  lose the local edit because graph patches are empty or manufacture a changed
+  history entry merely to satisfy a group protocol.
+- Inject failure before claim, after graph publication, during active replay,
+  after revision advancement and after ledger insertion. Preserve exact known
+  group identity and query-only uncertain receipts; never report uncertain
+  mutation as canceled or silently install a second single-photo undo owner.
+- Verify current-only state and shared graph restoration under one protected
+  group, including undo from a sibling or unrelated active document. Sibling
+  crops/repairs/colour must remain unchanged through apply, undo and redo.
+- Save, reopen and package the group with repaired originals and derived
+  sources. Canonical encoded before/after state must retain all referenced
+  assets, reject dropped values and missing bytes, and exclude runtime caches
+  and pointers. Reopened history must not depend on a session-only review token.
+- Refuse changed/unavailable/dormant membership or modified source/context;
+  preserve old v1 preset and direct-alias behavior and the distinct history
+  marker boundaries. These cases are not runtime acceptance claims.

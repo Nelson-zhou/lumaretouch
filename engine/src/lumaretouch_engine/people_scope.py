@@ -21,7 +21,7 @@ def legacy_batch_face_check(engine,row,*,live=False):
     return engine._face_known_single(row,live=live)
 
 
-def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,reviewed_eye_bag=False,replace_legacy_eye_bag=False,**kwargs):
+def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,reviewed_eye_bag=False,reviewed_eye_bag_aliases=False,replace_legacy_eye_bag=False,**kwargs):
     """Preserve existing single-face presets; never infer a multi-face target.
 
     The existing preset owner owns receipts, rollback, document fences/history.
@@ -31,6 +31,8 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
     from .people_preset_plan import snapshot, require_active_owner
     if type(reviewed_eye_bag) is not bool or type(replace_legacy_eye_bag) is not bool or (replace_legacy_eye_bag and not reviewed_eye_bag):
         raise ValueError('Eye-bag preset review policy requires explicit private boolean choices')
+    if type(reviewed_eye_bag_aliases) is not bool or (reviewed_eye_bag_aliases and not reviewed_eye_bag):
+        raise ValueError('Shared eye-bag planning requires its exact dedicated review owner')
     managed=engine._people_managed()
     if managed and require_active:require_active_owner(engine)
     from . import enhance_scope as ENHANCE, teeth_colour_apply as TEETH, red_eye_apply as RED_EYE
@@ -390,7 +392,7 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
     if eye_bag_involved:
         if reviewed_eye_bag:
             from .eye_bag_preset_plan import admit
-            admit(engine, before, current[EYE_BAG_PRESERVE.TARGET], eye_bag_recipe)
+            admit(engine, before, current[EYE_BAG_PRESERVE.TARGET], eye_bag_recipe, reviewed_aliases=reviewed_eye_bag_aliases)
             EYE_BAG_PRESERVE.install_reviewed(dict(current),{'recipe':eye_bag_recipe},replace_legacy=replace_legacy_eye_bag)
         else:
             EYE_BAG_PRESERVE.install(dict(current),{'recipe':eye_bag_recipe})

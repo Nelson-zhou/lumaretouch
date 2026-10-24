@@ -64,6 +64,8 @@ pub(crate) fn preset(
     eye_bag_preset_ack: Option<Value>,
     eye_bag_replace_legacy: Option<bool>,
     revision: Option<String>,
+    member_document_id: Option<String>,
+    member_revision: Option<String>,
     side: Option<String>,
     sha256: Option<String>,
 ) -> Result<Value, String> {
@@ -97,6 +99,8 @@ pub(crate) fn preset(
         ("eye_bag_preset_ack", eye_bag_preset_ack),
         ("eye_bag_replace_legacy", eye_bag_replace_legacy.map(Value::from)),
         ("revision", revision.map(Value::from)),
+        ("member_document_id", member_document_id.map(Value::from)),
+        ("member_revision", member_revision.map(Value::from)),
         ("side", side.map(Value::from)),
         ("sha256", sha256.map(Value::from)),
     ] {
