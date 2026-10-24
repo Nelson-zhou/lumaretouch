@@ -1,0 +1,36 @@
+{
+  "baseline": "cce54da2",
+  "status": "FROZEN_SOURCE_ONLY_AUTHORED_UNRUN",
+  "scope": "New target-owned torso scalar scope, full before/after review adapter and unrun fixtures only. Requirement remains partial. No product execution or runtime acceptance.",
+  "static_checks": [
+    "Python AST parse only for four authored Python files",
+    "SHA-256 and byte-count of exact owned files"
+  ],
+  "files": [
+    {
+      "path": "engine/src/lumaretouch_engine/torso_length_scope.py",
+      "sha256": "8df827da8dbb69acac7e46d663f364eee87a39d5a49afcbd734b0390aac5cdc1",
+      "bytes": 6039
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/torso_length_transfer_review.py",
+      "sha256": "3cc60fc422d3e22297bff270eab4578186752de635d57b0edf99cc25c1f98227",
+      "bytes": 18072
+    },
+    {
+      "path": "engine/tests/test_torso_length_transfer_scope_unrun.py",
+      "sha256": "4f5c0c20cfd16d1e20db006d077cdf004f068302435b1c7870e869616ef5e2af",
+      "bytes": 6085
+    },
+    {
+      "path": "engine/tests/test_torso_length_transfer_review_unrun.py",
+      "sha256": "fabb732c995fa32e38ee98526891c5b239bf73d8239c345e5ea31cb0a791b6fc",
+      "bytes": 12326
+    },
+    {
+      "path": "docs/torso-length/TRANSFER-SCOPE-REVIEW-UNRUN.md",
+      "sha256": "679c0884b1520c035a388cb2c713aae7a95f25678c9c781761a0c5c2c3016f3c",
+      "bytes": 6764
+    }
+  ]
+}

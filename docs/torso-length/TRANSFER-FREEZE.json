@@ -1,0 +1,315 @@
+{
+  "baseline": "cce54da2ee00d04c692e98ec9e9b881d34c24ce7",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN_PARTIAL_REQUIREMENT",
+  "requirement_ids": [
+    "LNX-REF-PC-32473-C-f1662d2dec"
+  ],
+  "scope": "Existing frozen preset/batch route for versioned torso amount only, unique enabled target body with independently reviewed source support/current own-face association, real full-source before/after review and exact ordered image acknowledgment. No transferred bodies, source masks, support or identity links.",
+  "files": [
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "e939b789e89a2002192e1ace6f36754a128a7a197c9238e5838f3a72fe41e185",
+      "bytes": 15592
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "10042e092adfde81e4a55d6151116203208ecf4b7d142182f8a47ecbcb8b420c",
+      "bytes": 46235
+    },
+    {
+      "path": "docs/torso-length/IMPLEMENTATION.md",
+      "sha256": "b79fbd0e3788a920264b5173640c73f331792262936799e9301ff0b185f575e8",
+      "bytes": 6666
+    },
+    {
+      "path": "docs/torso-length/INTEGRATION-UNRUN.md",
+      "sha256": "7454b2a368a59d39be54355fe341a6078135af26e509e661d8089822987c7109",
+      "bytes": 10766
+    },
+    {
+      "path": "docs/torso-length/TRANSFER-CONTRACT.md",
+      "sha256": "5dd3c75a2a5908953406239c08c50d095e90085c2d8ffec8c9ce1e8c87f70cb5",
+      "bytes": 4492
+    },
+    {
+      "path": "docs/torso-length/TRANSFER-SCOPE-REVIEW-FREEZE.json",
+      "sha256": "5accc67261f2da80274077984b85865ae4adeb6770a49dee5416e1107bc67d1d",
+      "bytes": 1359
+    },
+    {
+      "path": "docs/torso-length/TRANSFER-SCOPE-REVIEW-UNRUN.md",
+      "sha256": "679c0884b1520c035a388cb2c713aae7a95f25678c9c781761a0c5c2c3016f3c",
+      "bytes": 6764
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_group_history.py",
+      "sha256": "04198bc86653ace95a237df2b21eb28581257a6b7207df8deae1579beae51463",
+      "bytes": 12186
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight.py",
+      "sha256": "38540762006602919c8d6dc03e95d7526474517ab39d30fd2357b6ff90ecf31a",
+      "bytes": 11726
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight_controller.py",
+      "sha256": "2aeb7841a941fc2fe6b191d2ae7fc94832e8646be7250f215fcaf4469307d8ae",
+      "bytes": 43341
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "a36395eb6bd394c60357357ced92fcf16021b25c148519bb4ed7c36db4f01cc4",
+      "bytes": 48097
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_preset_review.py",
+      "sha256": "9c2d80f16c03efe9f441c76c6076db046644b29b64aa9e44ab74e0dbcfee08b5",
+      "bytes": 14794
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/optics_auto_scope.py",
+      "sha256": "c8358ed683f7eca7a4a34134db9fd4ba3cc9f2e0e8de306b599feece5c151154",
+      "bytes": 4408
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "sha256": "2ddc21dde78c4bff3090024c859c3402b768a00359c9087ed74872efd505119f",
+      "bytes": 31222
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "9c859218d25aae8dff898ad18f9445a99f61f7359a2f6e327a3903116b2f6194",
+      "bytes": 62000
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/torso_length_scope.py",
+      "sha256": "8df827da8dbb69acac7e46d663f364eee87a39d5a49afcbd734b0390aac5cdc1",
+      "bytes": 6039
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/torso_length_transfer_review.py",
+      "sha256": "3cc60fc422d3e22297bff270eab4578186752de635d57b0edf99cc25c1f98227",
+      "bytes": 18072
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "e3c5280891b044a41508e08a478c9655bde3cc151e2ad0c295d0802d871d01d3",
+      "bytes": 10203
+    },
+    {
+      "path": "engine/tests/test_torso_length_batch_unrun.py",
+      "sha256": "4417bd1e9a60dc6dfb4fa7a65d571354a1ceb5d644473a4ed5324a0408414f4e",
+      "bytes": 25600
+    },
+    {
+      "path": "engine/tests/test_torso_length_integration_unrun.py",
+      "sha256": "092cc027b5b904097facaa47903911e61b8dac12865bf43f4ce09bbe137d3d2c",
+      "bytes": 34360
+    },
+    {
+      "path": "engine/tests/test_torso_length_preset_review_unrun.py",
+      "sha256": "4a5a501221dacf6fbfbba7f3d9d93a642872b8e526037fab0356821aab1dd153",
+      "bytes": 22166
+    },
+    {
+      "path": "engine/tests/test_torso_length_transfer_review_unrun.py",
+      "sha256": "fabb732c995fa32e38ee98526891c5b239bf73d8239c345e5ea31cb0a791b6fc",
+      "bytes": 12326
+    },
+    {
+      "path": "engine/tests/test_torso_length_transfer_scope_unrun.py",
+      "sha256": "4f5c0c20cfd16d1e20db006d077cdf004f068302435b1c7870e869616ef5e2af",
+      "bytes": 6085
+    },
+    {
+      "path": "ui/src-tauri/src/batch_api.rs",
+      "sha256": "0d04a2727af54503c27cb159c381520d3affefcc9b453e263a61b6c5bd66e244",
+      "bytes": 4805
+    },
+    {
+      "path": "ui/src-tauri/src/batch_host.rs",
+      "sha256": "49a3cb42aa98133c1c6e9e93659e9d65918eed54df6c129efde9babba5ae1d21",
+      "bytes": 26691
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "d76469e5eef2f58ac10e470acf400a044cca3ed4c211caf7f249cde98a2b82bb",
+      "bytes": 101451
+    },
+    {
+      "path": "ui/src-tauri/src/preset_api.rs",
+      "sha256": "a9cca7ddb5b45813f1f802554dda33eb3c42fb08b3ae6a92e2c119a00cdde3d0",
+      "bytes": 4653
+    },
+    {
+      "path": "ui/src-tauri/src/preset_host.rs",
+      "sha256": "8243d2306b383bab5d1a92a4d80a81cd32a88517e4b334adaaf71566643aa6eb",
+      "bytes": 25803
+    },
+    {
+      "path": "ui/src-tauri/src/torso_transfer_protocol.rs",
+      "sha256": "404899ec48779122b8cf35750ca2d915cf4805b1d6f45d5128a722a80c71b7dc",
+      "bytes": 9900
+    },
+    {
+      "path": "ui/src-tauri/src/torso_transfer_protocol_tests.rs",
+      "sha256": "a5a29fb15285561f7dd8808522d141e21ba3ef5c78adad39854169f09e2521e2",
+      "bytes": 6966
+    },
+    {
+      "path": "ui/src/batch/BatchReview.tsx",
+      "sha256": "2e2b0d6e4b7b4d157d59166a431716ffe1f1330f190c2cba5ea8dc4aaee51f5e",
+      "bytes": 13094
+    },
+    {
+      "path": "ui/src/batch/batchScopeOptions.ts",
+      "sha256": "b346db4c3bf42f12f1aec475bdcfe99b02a08c13901599dc5fe88fec8672facf",
+      "bytes": 5090
+    },
+    {
+      "path": "ui/src/batch/batchWorkflow.ts",
+      "sha256": "06aa4a3f6efccb0b71d065b3574b750225ab517001ac830c1e1eebd101269f80",
+      "bytes": 28324
+    },
+    {
+      "path": "ui/src/batch/useBatchWorkflow.ts",
+      "sha256": "98872ff2c9be3c6c2ae80a5b5754ef61f2ddd8b0a467daa50e63ac18a1c36109",
+      "bytes": 1806
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "5b15af8b01bcd8305daaa9f1af7c6bbef238ffb39bad98f2a47f6e792ddac76e",
+      "bytes": 103002
+    },
+    {
+      "path": "ui/src/presets/PresetPanel.tsx",
+      "sha256": "b81202e259c62659d65047019edaa240a08fbe65705f578059196f54c1581ee1",
+      "bytes": 11962
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "410017f95a52fd66cc795d5edf9c369d4a640ee93a982d5f2b25c6ca9972761f",
+      "bytes": 6758
+    },
+    {
+      "path": "ui/src/presets/presetWorkflow.ts",
+      "sha256": "09bd6d6b2e7894c0926ae1ee5a9cb74d703e2555eed4e055cfa8384a9c016d54",
+      "bytes": 21850
+    },
+    {
+      "path": "ui/src/presets/usePresetWorkflow.ts",
+      "sha256": "fa1b91586a738c77f329739f342172dacf92cb4d3114d4f153a813d7e6504782",
+      "bytes": 14754
+    },
+    {
+      "path": "ui/src/torsoLength/TRANSFER-UNRUN.md",
+      "sha256": "5d3e7998f25e7540dea3ba7910e3c181ea64e108663cce2784a80f1baa5204f3",
+      "bytes": 2494
+    },
+    {
+      "path": "ui/src/torsoLength/TorsoTransferReview.tsx",
+      "sha256": "4c33d9215091340df69c083da59224e39aa1f921396b9223e17f534b93865b20",
+      "bytes": 5037
+    },
+    {
+      "path": "ui/src/torsoLength/transferModel.ts",
+      "sha256": "e3c564df0c56d081d2b585604991855145d54bf40b109b6b1eb66d9a5f5d4469",
+      "bytes": 8364
+    },
+    {
+      "path": "ui/src/torsoLength/transferModel.unrun.test.ts",
+      "sha256": "51355972dc6af3e087363ad9e23e266e95d92d8159581a8562feda22a7346851",
+      "bytes": 6649
+    },
+    {
+      "path": "ui/src/torsoLength/transferWorkflow.unrun.test.ts",
+      "sha256": "6635e788c175c52be8dc2f482d6cde445bff5b086530856cc97cfb525990f046",
+      "bytes": 7460
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1220,
+    "changed_json_toml": "standard-library parse only",
+    "git_diff_check": "clean",
+    "prior_numeric_core_ops_common_geometry_and_torso_sources_byte_identical": 216,
+    "line_caps": {
+      "ui/src/App.tsx": 2125,
+      "ui/src-tauri/src/main.rs": 2044,
+      "engine/src/lumaretouch_engine/server.py": 6993
+    },
+    "fixture_declarations_in_payload_all_unrun_this_slice": {
+      "python": {
+        "engine/tests/test_torso_length_batch_unrun.py": 27,
+        "engine/tests/test_torso_length_integration_unrun.py": 19,
+        "engine/tests/test_torso_length_preset_review_unrun.py": 17,
+        "engine/tests/test_torso_length_transfer_review_unrun.py": 12,
+        "engine/tests/test_torso_length_transfer_scope_unrun.py": 10
+      },
+      "rust": {
+        "ui/src-tauri/src/batch_api.rs": 1,
+        "ui/src-tauri/src/batch_host.rs": 14,
+        "ui/src-tauri/src/preset_host.rs": 11,
+        "ui/src-tauri/src/torso_transfer_protocol_tests.rs": 6
+      },
+      "typescript": {
+        "ui/src/torsoLength/transferModel.unrun.test.ts": 5,
+        "ui/src/torsoLength/transferWorkflow.unrun.test.ts": 5
+      }
+    }
+  },
+  "integration_map": {
+    "portable_scope": [
+      "torso_length_scope.py",
+      "scope.py",
+      "optics_auto_scope.py",
+      "docs/p0/registry-extensions.json"
+    ],
+    "actual_target_review": [
+      "torso_length_transfer_review.py",
+      "existing full_candidate_render identity/render and original/derived exporter unchanged"
+    ],
+    "preset_owner": [
+      "local_grade_preset_review.py",
+      "preset_controller.py",
+      "workflow_ports.py"
+    ],
+    "batch_owner": [
+      "batch_preflight.py",
+      "batch_preflight_controller.py",
+      "batch_sync.py",
+      "batch_group_history.py",
+      "workflow_ports.py"
+    ],
+    "native": [
+      "torso_transfer_protocol.rs",
+      "preset_api.rs",
+      "preset_host.rs",
+      "batch_api.rs",
+      "batch_host.rs",
+      "main.rs"
+    ],
+    "ui": [
+      "torsoLength/transferModel.ts",
+      "torsoLength/TorsoTransferReview.tsx",
+      "presets workflow/panel/model",
+      "batch workflow/review/options",
+      "native.ts"
+    ]
+  },
+  "limitations": [
+    "Source-connected bounded route, not runtime/numerical/photographic acceptance. All tests/build/import/typecheck/inference UNRUN.",
+    "Exactly one enabled independently reviewed target body; ambiguous multi-body transfer refuses. No automatic per-person association or hidden-body reconstruction.",
+    "Same source-owned full-resolution geometry limits remain; no kernel changes or source strength attenuation.",
+    "Each target retains its own observations/support/current own-face consent; transferring amount does not assert the source and target are the same person.",
+    "Only torso scope is admitted, not mixed modules or other private-helper-only body families.",
+    "Batch group ledger remains session-only; no cross-restart group undo promise.",
+    "Existing derived ownership capsules, original provenance, opaque SDR return bounds and alpha/HDR refusals remain.",
+    "Waist length and broader automatic/3D body shaping remain separate unfinished requirements."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

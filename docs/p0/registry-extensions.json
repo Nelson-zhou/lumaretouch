@@ -5,25 +5,29 @@
   "entries": [
     {
       "operation_id": "lnx.torso_length.v1",
-      "parameter_key": "recipe",
-      "type": "object",
-      "neutral": {
-        "version": 1,
-        "amount": 0
-      },
-      "range": {
-        "version": [
-          1,
-          1
-        ],
-        "amount": [
-          -1,
-          1
-        ]
-      },
-      "transferable": false,
+      "parameter_key": "version",
+      "type": "integer",
+      "neutral": 1,
+      "range": [
+        1,
+        1
+      ],
+      "transferable": true,
       "source_requirement": "PC-32473-C-f1662d2dec",
-      "reason": "Partial manually reviewed upright upper-body length in canonical body bank, not people scalar scope. Actual shoulders/hips and independent head/arm/background support; original Rust inverse geometry. Private scalar transfer helper is not a reachable preset/batch workflow; that remains unfinished. No 3D/AI/waist-length equivalence. Runtime/photo acceptance UNRUN."
+      "reason": "Partial manually reviewed upright upper-body length. Canonical body-bank recipe remains versioned; portable scope contains only version and amount. Existing frozen preset/batch owner requires exactly one enabled target body, independently reviewed support/current own-face association and actual per-target before/after acknowledgment. No source support, masks, observations or identities transfer. Multi-body transfer, runtime/photo acceptance remain incomplete."
+    },
+    {
+      "operation_id": "lnx.torso_length.v1",
+      "parameter_key": "amount",
+      "type": "number",
+      "neutral": 0,
+      "range": [
+        -1,
+        1
+      ],
+      "transferable": true,
+      "source_requirement": "PC-32473-C-f1662d2dec",
+      "reason": "Partial manually reviewed upright upper-body length. Canonical body-bank recipe remains versioned; portable scope contains only version and amount. Existing frozen preset/batch owner requires exactly one enabled target body, independently reviewed support/current own-face association and actual per-target before/after acknowledgment. No source support, masks, observations or identities transfer. Multi-body transfer, runtime/photo acceptance remain incomplete."
     },
     {
       "operation_id": "lnx.body_face_match.v1",
@@ -187,9 +191,23 @@
       "operation_id": "lnx.philtrum.v1",
       "parameter_key": "recipe",
       "type": "object",
-      "neutral": {"version": 1, "amount": 0},
-      "range": {"version": [1, 1], "amount": [-1, 1]},
-      "requirement_ids": ["LNX-REF-PC-32466-C-2605502c27"],
+      "neutral": {
+        "version": 1,
+        "amount": 0
+      },
+      "range": {
+        "version": [
+          1,
+          1
+        ],
+        "amount": [
+          -1,
+          1
+        ]
+      },
+      "requirement_ids": [
+        "LNX-REF-PC-32466-C-2605502c27"
+      ],
       "scope": "Visual nose-safe-to-above-lips gap: negative shortens, positive lengthens. All measured nose-connection vertices stay above the fixed plane; lips and retained lower-face source points translate together. Not clinical philtrum measurement or isolated segmentation.",
       "implementation": "New actual 24-nose/40-lip measurements and independent central-gap skin/RGB support reuse the unchanged original Rust mid_face rise/plateau/fall inverse. No new solver, binary or sampler claimed.",
       "transfer": "Version and amount only. Explicit reviewed targets reconstruct their own source evidence, influence and guard bounds; generic derived presets remain refused.",
@@ -200,9 +218,23 @@
       "operation_id": "lnx.chin_length.v1",
       "parameter_key": "recipe",
       "type": "object",
-      "neutral": {"version": 1, "amount": 0},
-      "range": {"version": [1, 1], "amount": [-1, 1]},
-      "requirement_ids": ["LNX-REF-PC-32466-C-44a42baef4"],
+      "neutral": {
+        "version": 1,
+        "amount": 0
+      },
+      "range": {
+        "version": [
+          1,
+          1
+        ],
+        "amount": [
+          -1,
+          1
+        ]
+      },
+      "requirement_ids": [
+        "LNX-REF-PC-32466-C-44a42baef4"
+      ],
       "scope": "Distinct measured below-all-lips chin length. Negative shortens, positive lengthens; not the larger nose-to-chin lower-face interval or bilateral horizontal chin taper.",
       "implementation": "New source-owned anatomy/evidence and canonical pullback reuse the unchanged original Rust lower_face anatomy-agnostic inverse primitive. No new solver or sampler is claimed.",
       "transfer": "Version and chosen amount only; each explicit target rebuilds its own actual source support. Active new intent refuses effective nonzero legacy small_chin. Presets never silently clear or reinterpret it.",
@@ -213,9 +245,30 @@
       "operation_id": "lnx.chin_shape.v1",
       "parameter_key": "recipe",
       "type": "object",
-      "neutral": {"version": 1, "linked": true, "left": 0, "right": 0},
-      "range": {"version": [1, 1], "linked": "boolean; true requires equal sides", "left": [-1, 1], "right": [-1, 1]},
-      "requirement_ids": ["LNX-REF-PC-32466-C-ed7837df9a"],
+      "neutral": {
+        "version": 1,
+        "linked": true,
+        "left": 0,
+        "right": 0
+      },
+      "range": {
+        "version": [
+          1,
+          1
+        ],
+        "linked": "boolean; true requires equal sides",
+        "left": [
+          -1,
+          1
+        ],
+        "right": [
+          -1,
+          1
+        ]
+      },
+      "requirement_ids": [
+        "LNX-REF-PC-32466-C-ed7837df9a"
+      ],
       "scope": "Independent bilateral visual chin taper below the complete measured lip boundary. Negative expands toward rounder appearance; positive contracts toward sharper appearance. Tip and head-axis height are preserved within explicit numerical tolerance, not clinical chin anatomy or a curvature guarantee.",
       "implementation": "Original Rust monotone horizontal forward map and bounded checked inverse; actual source-owned lower oval, skin/RGB and exclusion evidence. Existing common sampler only.",
       "transfer": "Version, linked and two scalar amounts only. Each explicitly reviewed target reconstructs its own source support and foreign-face guards; generic derived preset path remains refused.",
@@ -465,11 +518,31 @@
       "operation_id": "lnx.skin_colour.v1",
       "parameter_key": "recipe",
       "type": "object",
-      "neutral": {"version": 1, "temperature": 0, "tint": 0},
-      "range": {"version": [1, 1], "temperature": [-1, 1], "tint": [-1, 1]},
+      "neutral": {
+        "version": 1,
+        "temperature": 0,
+        "tint": 0
+      },
+      "range": {
+        "version": [
+          1,
+          1
+        ],
+        "temperature": [
+          -1,
+          1
+        ],
+        "tint": [
+          -1,
+          1
+        ]
+      },
       "transferable": true,
       "source_requirement": "LNX-REF-PC-32465-C-f0ba809461",
-      "source_requirements": ["LNX-REF-PC-32465-C-f0ba809461", "LNX-REF-PC-32465-C-0146f740bd"],
+      "source_requirements": [
+        "LNX-REF-PC-32465-C-f0ba809461",
+        "LNX-REF-PC-32465-C-0146f740bd"
+      ],
       "reason": "Dedicated signed face-skin temperature/tint: negative cool/green, positive warm/magenta. Original D65-referenced Lab colour adjustment with source-owned face-skin confidence, measured anatomy and other-face exclusions. No whole-body coverage, AI whitening, skin unification, semantic instance identity or complete occlusion claim. Range and neutral are local choices, not published official values. Scalar-only presets and confirmed-face target review retain independent target evidence; generic unmanaged/derived legacy transfer remains refused. Full-source export rebuilds geometry and colour on source float pixels; semantic confidence may be resampled, never claimed fresh full-resolution segmentation. Runtime, numerical and photo quality UNRUN; requirement coverage remains partial."
     },
     {
@@ -479,15 +552,39 @@
       "neutral": {
         "version": 1,
         "amounts": {
-          "sclera": 0, "iris": 0, "teeth": 0, "dark_circles": 0,
-          "eye_bags": 0, "veins": 0, "catchlight_left": 0, "catchlight_right": 0,
-          "teeth_brightness": 0, "teeth_yellow_removal": 0, "red_eye": 0, "sclera_purify": 0
+          "sclera": 0,
+          "iris": 0,
+          "teeth": 0,
+          "dark_circles": 0,
+          "eye_bags": 0,
+          "veins": 0,
+          "catchlight_left": 0,
+          "catchlight_right": 0,
+          "teeth_brightness": 0,
+          "teeth_yellow_removal": 0,
+          "red_eye": 0,
+          "sclera_purify": 0
         }
       },
-      "range": {"version": [1, 1], "amounts": {"min": 0, "max": 1, "step": 0.01}},
+      "range": {
+        "version": [
+          1,
+          1
+        ],
+        "amounts": {
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        }
+      },
       "transferable": true,
       "source_requirement": "LNX-REF-PC-32469-C-6eb0bef21b",
-      "source_requirements": ["LNX-REF-PC-32469-C-6eb0bef21b", "LNX-REF-PC-32469-C-5462a41c9a", "LNX-REF-PC-32470-C-ee00f0a195", "LNX-REF-PC-32470-C-26ab900915"],
+      "source_requirements": [
+        "LNX-REF-PC-32469-C-6eb0bef21b",
+        "LNX-REF-PC-32469-C-5462a41c9a",
+        "LNX-REF-PC-32470-C-ee00f0a195",
+        "LNX-REF-PC-32470-C-26ab900915"
+      ],
       "reason": "Existing canonical eye/teeth enhancement scalar owner, with independent tooth brightness, yellow removal, flash red-eye and eye-white purification. Purification targets limited local dull blemishes and colour casts, not merely brightness; it is not an alias of sclera brightness, veins or red-eye. Geometry-derived support is not semantic segmentation; before/after review is required and complete blemish detection is not claimed. Legacy combined teeth and omitted optional scalar semantics stay unchanged; wrinkle intent remains a separate operation. Finite 0..1 scale and neutral zero are local implementation choices, not published handbook ranges/defaults. Presets contain only versioned scalars; each target recomputes its own support and confirmed-face batch preserves target-owned masks/history. Generic derived-source legacy presets remain refused. Runtime, numerical and photographic acceptance UNRUN; whole-feature official acceptance is not claimed."
     },
     {
@@ -526,7 +623,11 @@
       "parameter_key": "strength",
       "type": "number",
       "neutral": 50,
-      "range": {"min": 0, "max": 100, "step": 1},
+      "range": {
+        "min": 0,
+        "max": 100,
+        "step": 1
+      },
       "transferable": true,
       "reason": "Strength defaults to 50 while enabled defaults false. Zero strength is neutral. Retained manual coverage is post-optics/pre-crop normalized vector intent, never a raster cache; it cannot be copied to another original or immutable derived source. Runtime and photographic acceptance UNRUN."
     },

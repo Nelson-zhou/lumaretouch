@@ -1,6 +1,7 @@
 import {CROP_OP,validCropReview,type CropReview} from '../cropTransfer/model.ts';
 import {SPILL_TRANSFER_OP,validSpillTransfer,validSpillTransferAck,type SpillTransferEvidence,type SpillTransferAck} from '../spillRemoval/transferModel.ts';
 import {SHADOW_TRANSFER_OP,validShadowTransfer,validShadowTransferAck,type ShadowTransferEvidence,type ShadowTransferAck} from '../originalShadow/transferModel.ts';
+import {TORSO_TRANSFER_OP,validTorsoTransfer,validTorsoTransferAck,sameTorsoTransferAck,type TorsoTransferEvidence,type TorsoTransferAck} from '../torsoLength/transferModel.ts';
 import {validReferenceReview,type ReferenceReview} from '../referenceColor/ReferenceColorReview';
 import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../optics/transferReviewModel';
 import {validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence,type TransferGroupChoice} from '../localMasks/transferModel.ts';
@@ -9,10 +10,10 @@ import type {PresetInfo, PresetState} from '../native';
 import {validXmpAck, validXmpReport, validXmpSummary, validXmpTransfer, validXmpReviewAck, type XmpAck, type XmpReport, type XmpSummary, type XmpTransfer, type XmpReviewAck} from '../xmpImport/model.ts';
 export type PresetAction = 'list'|'preflight'|'apply'|'save'|'import'|'delete'|'xmp_inspect';
 export type PresetOptions = {id?:string;name?:string;path?:string;kind?:string;note?:string;force?:boolean;
-  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;spillReviewAck?:SpillTransferAck[];shadowReviewAck?:ShadowTransferAck[];
+  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;spillReviewAck?:SpillTransferAck[];shadowReviewAck?:ShadowTransferAck[];torsoReviewAck?:TorsoTransferAck[];
   xmpAck?:XmpAck;xmpReviewAck?:XmpReviewAck;/** UI-only captured expected source, never sent as authority. */xmpExpected?:XmpSummary};
 export type PresetReply = {protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
-  xmp_report?:XmpReport;xmp_transfer?:XmpTransfer;source_proof?:unknown;spill_transfer?:SpillTransferEvidence;shadow_transfer?:ShadowTransferEvidence;
+  xmp_report?:XmpReport;xmp_transfer?:XmpTransfer;source_proof?:unknown;spill_transfer?:SpillTransferEvidence;shadow_transfer?:ShadowTransferEvidence;torso_transfer?:TorsoTransferEvidence;torso_review_ack?:TorsoTransferAck[];
   crop_transfer?:CropReview;reference_color?:ReferenceReview;revision?:string;optical_transfer?:OpticalTargetReview;preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
   before?:Record<string,unknown>;after?:Record<string,unknown>;doc_state?:Record<string,unknown>;
   error?:string;requires_reload?:boolean;rolled_back?:boolean;operation_committed?:boolean|null};
@@ -31,6 +32,9 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
   if(!result || result.protocol!==1 || result.request_id!==requestId || result.action!==action
     || typeof result.success!=='boolean' || typeof result.outcome_unknown!=='boolean' || (result.success&&result.outcome_unknown))throw Error('预设回执身份或状态不完整');
   if(['apply','preflight','save'].includes(action)&&result.document_id!==opts.documentId)throw Error('预设结果不属于本次照片');
+  if(result.torso_review_ack!==undefined&&(action!=='apply'||result.module_scope?.length!==1||result.module_scope[0]!==TORSO_TRANSFER_OP||result.preflight_token!==opts.preflightToken||!sameTorsoTransferAck(result.torso_review_ack,opts.torsoReviewAck)))throw Error('上身长度应用回执与本次逐图确认不一致');
+  if(action==='apply'&&opts.torsoReviewAck!==undefined&&result.success&&!sameTorsoTransferAck(result.torso_review_ack,opts.torsoReviewAck))throw Error('缺少本次上身长度 PNG 对确认的终态回执');
+  if(result.torso_transfer!==undefined&&(action!=='preflight'||!result.success||result.module_scope?.length!==1||result.module_scope[0]!==TORSO_TRANSFER_OP))throw Error('未请求或非预检的上身长度像素证据');
   if(!result.success)return;
   if(action==='xmp_inspect'){
     if(!text(result.path)||result.path!==opts.path||!validXmpReport(result.xmp_report))throw Error('XMP 检查路径或有界兼容报告不匹配');
@@ -45,6 +49,7 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
   if(!text(result.id) || (opts.id!==undefined&&result.id!==opts.id))throw Error('预设结果与提交的预设不一致');
   if(action==='delete'){if(!text(result.path))throw Error('缺少实际删除路径');return;}
   if(!scope(result.module_scope))throw Error('缺少实际作用模块');
+  if(result.module_scope.includes(TORSO_TRANSFER_OP)&&result.module_scope.length!==1)throw Error('上身长度必须独立预检与应用，不能混合其他模块');
   const wanted=action==='save'?opts.moduleScope:expectedScope;
   if(wanted&&!sameScope(result.module_scope,wanted))throw Error('实际作用模块与选择不一致');
   if(action==='preflight'){
@@ -53,6 +58,7 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
       ||result.module_scope.includes('lnx.id_background.v1')))throw Error('祛反光预设缺少本目标、参数及来源匹配的真实前后预览，或混入未审核背景迁移');
     if(result.module_scope.includes(SHADOW_TRANSFER_OP)&&(!validShadowTransfer(result.shadow_transfer,opts.documentId??'',result.revision,result.applies?.[SHADOW_TRANSFER_OP],result.source_proof)
       ||(result.module_scope.includes('lnx.id_background.v1')||result.module_scope.includes(SPILL_TRANSFER_OP))))throw Error('原图阴影预设缺少本目标、参数及来源匹配的真实前后预览，或混入未审核背景迁移');
+    if(result.module_scope.includes(TORSO_TRANSFER_OP)&&!validTorsoTransfer(result.torso_transfer,opts.documentId??'',result.revision,result.applies?.[TORSO_TRANSFER_OP],result.source_proof))throw Error('上身长度预设缺少本目标实际身体、本人面部、独立支持审核和真实前后预览');
     if(result.module_scope.includes('lnx.local_grade.v1')){
       if(!validTransferEvidence(result.local_mask_transfer)||!sameTransferOptions(result.local_mask_transfer.policy,opts.localMaskTransfer))throw Error('局部预设预检证据或策略不匹配');
     }
@@ -64,7 +70,7 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
         ||result.xmp_report.source_sha256!==opts.xmpExpected.source_sha256||result.xmp_report.report_sha256!==opts.xmpExpected.report.report_sha256
         ||!validXmpTransfer(result.xmp_transfer,opts.documentId??'',result.revision,opts.xmpExpected.source_sha256))throw Error('缺少匹配本预设、当前照片和冻结版本的 XMP 前后像素证据');
     }
-    if(!opts.xmpExpected&&!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1',CROP_OP,'lnx.spill_removal.v1',SHADOW_TRANSFER_OP].includes(op)))throw Error('预设不含需要冻结预检的模块');
+    if(!opts.xmpExpected&&!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1',CROP_OP,'lnx.spill_removal.v1',SHADOW_TRANSFER_OP,TORSO_TRANSFER_OP].includes(op)))throw Error('预设不含需要冻结预检的模块');
     return;
   }
   if(action==='apply'){
@@ -165,6 +171,20 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
     if(options.shadowReviewAck!==undefined&&action!=='apply'){
       set({phase:'error',action,result:null,message:'原图阴影视觉确认只允许用于已冻结预设的应用。'});return;
     }
+    const torso=action==='apply'&&(expectedScope?.includes(TORSO_TRANSFER_OP)||frozen?.module_scope?.includes(TORSO_TRANSFER_OP)||options.torsoReviewAck!==undefined);
+    if(torso&&(!frozen?.torso_transfer||!frozen.preflight_token||options.preflightToken!==frozen.preflight_token
+      ||options.id!==frozen.id||frozen.document_id!==context.documentId||state.submitted?.reviewContextKey!==context.reviewContextKey
+      ||!frozen.module_scope||frozen.module_scope.length!==1||frozen.module_scope[0]!==TORSO_TRANSFER_OP||expectedScope!==undefined&&!sameScope(expectedScope,frozen.module_scope)
+      ||!validTorsoTransfer(frozen.torso_transfer,context.documentId,frozen.revision,frozen.applies?.[TORSO_TRANSFER_OP],frozen.source_proof)
+      ||!validTorsoTransferAck(options.torsoReviewAck,[frozen.torso_transfer])
+      ||options.spillReviewAck!==undefined||options.shadowReviewAck!==undefined||options.xmpReviewAck!==undefined||options.localMaskTransfer!==undefined)){
+      set({message:'请先查看并确认当前目标身体及本人面部的上身长度前后效果，再独立应用这次冻结预设。'});return;
+    }
+    if(options.torsoReviewAck!==undefined&&action!=='apply'){
+      set({phase:'error',action,result:null,message:'上身长度视觉确认只允许用于已冻结预设的应用。'});return;
+    }
+    const selectedScope=action==='save'?options.moduleScope:expectedScope;
+    if(selectedScope?.includes(TORSO_TRANSFER_OP)&&selectedScope.length!==1){set({message:'上身长度必须单独保存、预检与应用，不混合其他模块。'});return;}
     if((expectedScope?.includes(SHADOW_TRANSFER_OP)&&expectedScope.some(op=>[SPILL_TRANSFER_OP,'lnx.id_background.v1'].includes(op)))){set({message:'原图阴影标量同步不能与整套背景或祛染同步混用；请分开审核。'});return;}
     const id=uuid(),g=++generation,deadline=now()+(config.timeoutMs??120000);
     const captured={...options,moduleScope:options.moduleScope?[...options.moduleScope]:undefined,
@@ -172,6 +192,7 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
       ...(options.xmpReviewAck?{xmpReviewAck:{...options.xmpReviewAck}}:{}),
       ...(options.spillReviewAck?{spillReviewAck:options.spillReviewAck.map(ack=>({...ack}))}:{}),
       ...(options.shadowReviewAck?{shadowReviewAck:options.shadowReviewAck.map(ack=>({...ack}))}:{}),
+      ...(options.torsoReviewAck?{torsoReviewAck:options.torsoReviewAck.map(ack=>({...ack}))}:{}),
       ...(options.xmpExpected?{xmpExpected:structuredClone(options.xmpExpected)}:{}),
       ...(editing?{documentId:context.documentId}:{}),requestId:id};
     const request:Pending={contextGeneration,id,action,options:captured,expectedScope:expectedScope?[...expectedScope]:undefined,generation:g};pending=request;

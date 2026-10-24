@@ -3,6 +3,7 @@ use serde_json::{json, Value};
 use crate::receipt_host::{ReceiptHost, ReceiptKind};
 use crate::spill_transfer_protocol as spill;
 use crate::original_shadow_transfer_protocol as shadow;
+use crate::torso_transfer_protocol as torso;
 #[path = "xmp_preset_protocol.rs"]
 pub(crate) mod xmp_protocol;
 pub(crate) struct PresetKind;
@@ -18,6 +19,9 @@ fn modules(value: &Value, ops: &Value) -> bool {
 fn preset(value: &Value) -> bool {
     value["schema"] == "lrt.preset.v1" && text(&value["id"]) && text(&value["name"])
         && text(&value["kind"]) && value["builtin"].is_boolean() && value["modules"].as_object().is_some_and(|m| !m.is_empty() && m.values().all(Value::is_object))
+        && value["modules"].get(torso::TORSO_OP).map_or(true, |params| {
+            value["modules"].as_object().is_some_and(|modules| modules.len() == 1) && torso::parameters(params)
+        })
         && value.get("xmp_import").map_or(true, |xmp| xmp_protocol::summary(xmp, &value["modules"]))
 }
 fn optical_review(value: &Value, document: &Value, revision: &Value, params: &Value) -> bool {
@@ -75,8 +79,15 @@ fn reviewed_types(value: &Value) -> bool {
     let crop=ops.iter().any(|op|op=="lnx.crop.v1");
     let has_spill=ops.iter().any(|op|op==spill::SPILL_OP);
     let has_shadow=ops.iter().any(|op|op==shadow::SHADOW_OP);
+    let has_torso=ops.iter().any(|op|op==torso::TORSO_OP);
     let xmp=!value["xmp_report"].is_null()||!value["xmp_transfer"].is_null();
-    (local||optics||crop||xmp||has_spill||has_shadow)
+    (local||optics||crop||xmp||has_spill||has_shadow||has_torso)
+        && (has_torso || value["torso_transfer"].is_null())
+        && (!has_torso || (ops.len() == 1 && !xmp && value.get("torso_review_ack").is_none()
+            && ["spill_transfer", "shadow_transfer", "crop_transfer", "local_mask_transfer", "optical_transfer", "reference_color", "people_transfer", "persistent_association"]
+                .iter().all(|key| value[*key].is_null())
+            && torso::hex(&value["preflight_token"],32)
+            && torso::transfer(&value["torso_transfer"],&value["document_id"],&value["revision"],&value["applies"][torso::TORSO_OP],&value["source_proof"])))
         && (!has_shadow || (!has_spill && !ops.iter().any(|op|op=="lnx.id_background.v1")
             && shadow::hex(&value["preflight_token"],32)
             && shadow::transfer(&value["shadow_transfer"],&value["document_id"],&value["revision"],&value["applies"][shadow::SHADOW_OP],&value["source_proof"])))
@@ -102,6 +113,19 @@ impl ReceiptKind for PresetKind {
         let Some(unknown) = value["outcome_unknown"].as_bool() else { return false };
         if value["protocol"].as_u64() != Some(1) || (success && unknown) { return false; }
         if document.is_some() && value["document_id"].as_str() != document { return false; }
+        if !value["torso_transfer"].is_null() && (!success || value["action"] != "preflight") { return false; }
+        let has_torso = value["module_scope"].as_array().is_some_and(|ops| ops.iter().any(|op| op == torso::TORSO_OP));
+        if has_torso && value["module_scope"].as_array().map_or(true, |ops| ops.len() != 1) { return false; }
+        if has_torso && ["spill_review_ack", "shadow_review_ack", "xmp_review_ack", "xmp_ack"]
+            .iter().any(|key| value.get(*key).is_some()) { return false; }
+        if let Some(ack) = value.get("torso_review_ack") {
+            if !has_torso || value["action"] != "apply"
+                || ["spill_review_ack", "shadow_review_ack", "xmp_review_ack", "xmp_ack"]
+                    .iter().any(|key| value.get(*key).is_some()) { return false; }
+            let command = json!({"cmd":"preset", "action":"apply", "request_id":value["request_id"],
+                "document_id":value["document_id"], "preflight_token":value["preflight_token"], "torso_review_ack":ack});
+            if torso::command(&command).is_err() { return false; }
+        } else if has_torso && success && value["action"] == "apply" { return false; }
         if !success { return true; }
         match value["action"].as_str() {
             Some("xmp_inspect") => text(&value["path"]) && xmp_protocol::report(&value["xmp_report"]),
@@ -113,6 +137,11 @@ impl ReceiptKind for PresetKind {
                 && value["catalog"]["errors"].is_array() && value["catalog"]["modules"].is_array(),
             Some("apply") => text(&value["id"]) && scope(&value["module_scope"]) && modules(&value["before"], &value["module_scope"])
                 && modules(&value["after"], &value["module_scope"]) && value["doc_state"].is_object()
+                && (!has_torso || ["before", "after"].iter().all(|side| {
+                    let dependency = &value[*side][torso::TORSO_OP];
+                    dependency.as_object().is_some_and(|fields| fields.len() == 1)
+                        && torso::hex(&dependency["target_recipe_key"], 64)
+                }))
                 && value["doc_state"]["document_id"].as_str() == document,
             Some("save" | "import") => text(&value["id"]) && text(&value["path"]) && scope(&value["module_scope"])
                 && preset(&value["preset"]) && value["preset"]["id"] == value["id"] && modules(&value["preset"]["modules"], &value["module_scope"]),
@@ -247,6 +276,57 @@ mod tests {
             assert!(!PresetKind::valid(&bad,Some("loaded-photo")));
         }
         let mut bad=value;bad["shadow_transfer"]["parameters"]["retention"]=json!({});assert!(!PresetKind::valid(&bad,Some("loaded-photo")));
+    }
+
+    // AUTHORED / UNRUN. Complete transport fixtures, not actual target rendering.
+    fn torso_review() -> Value {
+        let mut value = spill_review(); let params = json!({"version":1,"amount":-0.4});
+        value["request_id"] = json!("torso"); value["id"] = json!("torso-preset");
+        value["module_scope"] = json!([torso::TORSO_OP]); value["applies"] = json!({(torso::TORSO_OP):params});
+        value.as_object_mut().unwrap().remove("spill_transfer");
+        value["torso_transfer"] = torso::tests::sample_transfer(&value["document_id"], &value["revision"], &params, &value["source_proof"]);
+        value
+    }
+    #[test] fn torso_preset_requires_owned_body_face_and_both_verified_images() {
+        let value = torso_review(); assert!(PresetKind::valid(&value, Some("loaded-photo")));
+        for path in ["/torso_transfer", "/source_proof", "/torso_transfer/body_ref", "/torso_transfer/associated_face",
+            "/torso_transfer/body_review_sha256", "/torso_transfer/before_bank_sha256", "/torso_transfer/candidate_bank_sha256"] {
+            let mut bad = value.clone(); *bad.pointer_mut(path).unwrap() = Value::Null;
+            assert!(!PresetKind::valid(&bad, Some("loaded-photo")), "{path}");
+        }
+        for op in [spill::SPILL_OP, shadow::SHADOW_OP, "lnx.crop.v1", "lnx.exposure.v1"] {
+            let mut bad = value.clone(); bad["module_scope"].as_array_mut().unwrap().push(json!(op));
+            bad["applies"][op] = json!({}); assert!(!PresetKind::valid(&bad, Some("loaded-photo")));
+        }
+        let mut bad = value.clone(); bad["torso_transfer"]["body_ref"]["asset_sha256"] = json!("e".repeat(64));
+        assert!(!PresetKind::valid(&bad, Some("loaded-photo")));
+        bad = value.clone(); bad["torso_transfer"]["parameters"]["amount"] = json!(0.0);
+        assert!(!PresetKind::valid(&bad, Some("loaded-photo")));
+        let mut h = host(); h.begin_bound([1;16],"torso","preflight",Some("loaded-photo")).unwrap();
+        bad = value; bad["torso_transfer"]["after"]["sha256"] = json!("e".repeat(64)); h.receive([1;16], &bad);
+        assert_eq!(h.status("torso")["result"]["outcome_unknown"],true);
+    }
+    #[test] fn torso_apply_retains_reviewed_ack_and_dependency_keys_not_display_pixels() {
+        let review = torso_review(); let pair = &review["torso_transfer"];
+        let ack = json!([{"document_id":review["document_id"],"revision":review["revision"],
+            "before_sha256":pair["before"]["sha256"],"after_sha256":pair["after"]["sha256"]}]);
+        let value = json!({"protocol":1,"action":"apply","request_id":"torso-apply","success":true,"outcome_unknown":false,
+            "id":"torso-preset","document_id":"loaded-photo","module_scope":[torso::TORSO_OP],
+            "preflight_token":review["preflight_token"],"torso_review_ack":ack,
+            "before":{(torso::TORSO_OP):{"target_recipe_key":"a".repeat(64)}},
+            "after":{(torso::TORSO_OP):{"target_recipe_key":"b".repeat(64)}},"doc_state":{"document_id":"loaded-photo"}});
+        assert!(PresetKind::valid(&value, Some("loaded-photo")));
+        for key in ["torso_review_ack", "preflight_token"] {
+            let mut bad = value.clone(); bad.as_object_mut().unwrap().remove(key);
+            assert!(!PresetKind::valid(&bad, Some("loaded-photo")), "{key}");
+        }
+        let mut bad = value.clone(); bad["torso_review_ack"][0]["document_id"] = json!("other-photo");
+        assert!(!PresetKind::valid(&bad, Some("loaded-photo")));
+        bad = value.clone(); bad["after"][torso::TORSO_OP] = json!({"version":1,"amount":-0.4});
+        assert!(!PresetKind::valid(&bad, Some("loaded-photo")));
+        bad = value.clone(); bad["torso_transfer"] = pair.clone(); assert!(!PresetKind::valid(&bad, Some("loaded-photo")));
+        let mut pending = value; pending["success"] = json!(false); pending["outcome_unknown"] = json!(true);
+        assert!(PresetKind::valid(&pending, Some("loaded-photo")));
     }
 
 }

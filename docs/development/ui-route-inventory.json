@@ -211,7 +211,7 @@
         {
           "path": "上身长度",
           "ui_route": "torso_length.amount via reviewed body workspace",
-          "status": "PARTIAL_UNRUN; upright manually reviewed 2D source geometry; preset_batch_not_connected"
+          "status": "PARTIAL_UNRUN; upright manually reviewed 2D source geometry; bounded unique-body scalar preset/batch with per-target full-source visual review authored; multi-body transfer and runtime/photo acceptance remain unfinished"
         }
       ],
       "status": "implementation_and_semantics_require_verification"

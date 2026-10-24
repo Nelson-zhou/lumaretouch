@@ -70,6 +70,7 @@ from . import photo_detail_scope as PHOTO_DETAIL
 from . import fringe_repair_scope as FRINGE_REPAIR
 from . import spill_removal_scope as SPILL_REMOVAL
 from . import original_shadow_scope as ORIGINAL_SHADOW
+from . import torso_length_scope as TORSO_LENGTH
 from . import colour_grading_scope as COLOUR_GRADING
 from . import primary_calibration_scope as PRIMARY_CALIBRATION
 from . import selective_colour_scope as SELECTIVE_COLOUR
@@ -116,6 +117,10 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: operation_id → 契约。`single_face` 的模块只能作用在"已知只有一张脸"的文档上；
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
+    TORSO_LENGTH.OP: {"params": ("version", "amount"), "state_fields": TORSO_LENGTH.FIELDS,
+        "single_face": False, "transferable": True, "cmd": "torso_length", "label": "上身长度（仅参数，逐图审核）",
+        "read": TORSO_LENGTH.params_of, "write": TORSO_LENGTH.install,
+        "why_not": "每张目标须恰有一个已启用身体及独立审核的上身范围和本人面部归属；逐图查看真实前后结果，不复制范围"},
     ORIGINAL_SHADOW.OP: {"params": ("enabled", "strength", "blend"), "state_fields": ORIGINAL_SHADOW.FIELDS,
         "single_face": False, "transferable": True, "cmd": "background", "label": "原图阴影（仅参数）",
         "read": ORIGINAL_SHADOW.params_of, "write": ORIGINAL_SHADOW.install,
@@ -472,6 +477,9 @@ def check_params(op: str, params: dict) -> dict:
     if op == LIPSTICK.OP:
         try: return LIPSTICK.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
+    if op == TORSO_LENGTH.OP:
+        try: return TORSO_LENGTH.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
     if op == ORIGINAL_SHADOW.OP:
         try: return ORIGINAL_SHADOW.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
@@ -627,6 +635,7 @@ def check_params(op: str, params: dict) -> dict:
 
 
 def _neutral_of(op: str, key: str):
+    if op == TORSO_LENGTH.OP: return TORSO_LENGTH.S.neutral()[key]
     if op == ORIGINAL_SHADOW.OP: return ORIGINAL_SHADOW.S.neutral()[key]
     if op == SPILL_REMOVAL.OP: return SPILL_REMOVAL.S.neutral()[key]
     if op == FRINGE_REPAIR.OP: return FRINGE_REPAIR.S.neutral()[key]
@@ -672,6 +681,8 @@ def check_scope(ops) -> list[str]:
             raise ScopeError(f"module_scope 里有不可作用的模块 {op!r}：{MODULES[op].get('why_not')}")
         if op not in out:
             out.append(op)
+    if TORSO_LENGTH.OP in out and len(out) != 1:
+        raise ScopeError("上身长度须单独逐图审核，不与其他模块混合迁移")
     if OPTICS.OP in out and OPTICS_AUTO.OP in out: raise ScopeError("镜头/透视手动保留模式与自动重算模式不能同时选择")
     if ORIGINAL_SHADOW.OP in out and (ID_BACKGROUND.OP in out or SPILL_REMOVAL.OP in out):
         raise ScopeError("原图阴影参数需独立逐图审核，不能与整套证件照背景或祛反光参数同时迁移")
@@ -701,10 +712,11 @@ def _check_shared_strength(ops: list[str], mods: dict[str, dict]) -> None:
 # This is a deliberately separate, closed admission set, not the much broader
 # transferable registry. Source/semantic/support consumers need their own ports.
 # Crop admission requires the batch/preset owner's frozen full-target visual
-# review. This parameter validator alone never authorizes a transfer commit.
+# review. Torso additionally requires its independently reviewed target body/face
+# and full before/after proof. This validator alone never authorizes a commit.
 DERIVED_PARAMETER_OPS = frozenset((
     OP_EXPOSURE, OP_WHITE_BALANCE, OP_LEVELS, OP_CURVES, OP_HSL,
-    EXTENDED_TONE.OP, PHOTO_DETAIL.OP, PHOTO_GRAIN.OP, COLOUR_GRADING.OP, FRINGE_REPAIR.OP, SPILL_REMOVAL.OP, ORIGINAL_SHADOW.OP,
+    EXTENDED_TONE.OP, PHOTO_DETAIL.OP, PHOTO_GRAIN.OP, COLOUR_GRADING.OP, FRINGE_REPAIR.OP, SPILL_REMOVAL.OP, ORIGINAL_SHADOW.OP, TORSO_LENGTH.OP,
     PRIMARY_CALIBRATION.OP, SELECTIVE_COLOUR.OP, COLOUR_EDITOR.OP, OP_CROP,
 ))
 
@@ -715,7 +727,7 @@ def check_derived_modules(mods):
         raise ScopeError('合成来源的参数迁移需要明确的非空模块对象')
     denied = set(mods) - DERIVED_PARAMETER_OPS
     if denied:
-        raise ScopeError('合成来源的通用预设/批量仅支持全局参数；这些模块须使用独立来源审核通路：' + ', '.join(sorted(denied)))
+        raise ScopeError('合成来源的预设/批量仅支持明确接通的参数与目标审核模块；这些模块须使用独立来源审核通路：' + ', '.join(sorted(denied)))
     check_scope(list(mods))
     clean = {op: check_params(op, params) for op, params in mods.items()}
     if COLOUR_EDITOR.OP in clean and clean[COLOUR_EDITOR.OP]['recipe']['scope'] != 'all':
@@ -756,7 +768,7 @@ def restore_modules(current, previous, ops):
         if set(ops) - DERIVED_PARAMETER_OPS:
             raise ScopeError('合成来源的通用历史不能恢复未经支持的模块')
         require_modules(current, params_of(previous, ops), related_states=(previous,))
-    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP,REFERENCE.OP,SEMANTIC.OP,ID_BACKGROUND.OP,FRINGE_REPAIR.OP,SPILL_REMOVAL.OP,ORIGINAL_SHADOW.OP)]
+    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP,REFERENCE.OP,SEMANTIC.OP,ID_BACKGROUND.OP,FRINGE_REPAIR.OP,SPILL_REMOVAL.OP,ORIGINAL_SHADOW.OP,TORSO_LENGTH.OP)]
     result = apply_modules(current, params_of(previous, ordinary)) if ordinary else dict(current)
     if OP_LOCAL_GRADE in ops: LOCAL_GRADE.restore(result, previous)
     if OPTICS_AUTO.OP in ops: OPTICS_AUTO.restore(result, previous)
@@ -766,6 +778,7 @@ def restore_modules(current, previous, ops):
     if FRINGE_REPAIR.OP in ops: FRINGE_REPAIR.restore(result, previous)
     if SPILL_REMOVAL.OP in ops: SPILL_REMOVAL.restore(result, previous)
     if ORIGINAL_SHADOW.OP in ops: ORIGINAL_SHADOW.restore(result, previous)
+    if TORSO_LENGTH.OP in ops: TORSO_LENGTH.restore(result, previous)
     return result
 
 

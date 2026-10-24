@@ -28,7 +28,7 @@ Original and derived sources use the existing verified source transport, source 
 
 ## Transfer and remaining limits
 
-Operation-local portable recipe validation/history helpers do not constitute an end-user preset/batch workflow. Target support, pose and association must be recalculated and independently reviewed; no source support, FaceRef, BodyRef, mask or background boundary may be transferred. Until a real reviewed target flow is connected, UI preset/batch support remains unfinished rather than silently routed to generic portrait parameters.
+The foundation-only private helper remains distinct from the subsequently authored end-user preset/batch route. The bounded continuation uses the existing frozen workflow owner and real per-target before/after review, admitting exactly one enabled independently reviewed body per target. Only version and amount travel; no source support, FaceRef, BodyRef, mask or background boundary is transferred. See [the transfer contract](TRANSFER-CONTRACT.md) for exact ownership, acknowledgment, history and remaining multi-body/runtime limitations. Source wiring is not runtime acceptance.
 
 This slice is deliberately limited to supported upright, visible, unambiguous 2D subjects with sufficient source clearance. Background lines, attached objects, crossed or occluded limbs, multiple people, perspective and inaccurate model observations may refuse or remain unsuitable. Manual review does not guarantee natural photographic output. Waist length, automatic body shaping, full AI equivalence and runtime/photo acceptance remain incomplete.
 

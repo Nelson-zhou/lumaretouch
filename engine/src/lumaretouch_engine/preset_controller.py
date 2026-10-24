@@ -20,7 +20,7 @@ from . import creative_derived_transfer as DERIVED, creative_derived_source as S
 
 ACTIONS = ("list", "preflight", "apply", "save", "import", "delete", "xmp_inspect")
 LEGACY_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note", "local_mask_transfer", "preflight_token"}
-FIELDS = {"list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack", "spill_review_ack", "shadow_review_ack"},
+FIELDS = {"list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack", "spill_review_ack", "shadow_review_ack", "torso_review_ack"},
           "preflight": {"id", "document_id", "local_mask_transfer"},
           "save": {"id", "name", "kind", "force", "note", "module_scope", "document_id", "local_mask_transfer"},
           "import": {"path", "id", "force", "xmp_ack"}, "xmp_inspect": {"path"}, "delete": {"id"}}
@@ -51,12 +51,15 @@ class PresetPorts:
     verify_spill: Callable | None = None
     prepare_shadow: Callable | None = None
     verify_shadow: Callable | None = None
+    prepare_torso: Callable | None = None
+    verify_torso: Callable | None = None
 
 
 class PresetController:
     def __init__(self, ports: PresetPorts, emit: Callable[[dict], None]):
         self.ports = ports; self.emit = emit; self.last = None
         self._receipts = OrderedDict(); self._pending = {}; self._effect_started = False
+        self._torso_receipt = {}
         from .local_grade_preset_review import PresetReviews
         self.reviews = PresetReviews()
 
@@ -123,7 +126,7 @@ class PresetController:
                   "success": False, "outcome_unknown": False}
         if action in ("apply", "preflight", "save"):
             result["document_id"] = self.document_identity(p)
-        digest = None; self._effect_started = False
+        digest = None; self._effect_started = False; self._torso_receipt = {}
         try:
             if "request_id" in p and request is None: raise SC.ScopeError("preset request_id invalid")
             raw = json.dumps(p, sort_keys=True, allow_nan=False, ensure_ascii=False)
@@ -152,7 +155,8 @@ class PresetController:
                 evidence = self.reviews.prepare(doc, state, self.ports.target_row(),
                     self.ports.document_id(), self.ports.revision(), p.get('local_mask_transfer'), self.ports.prepare_optics, self.ports.prepare_reference,
                     self.ports.prepare_crop, self.ports.verify_crop, self.ports.prepare_xmp, self.ports.verify_xmp,
-                    self.ports.prepare_spill, self.ports.verify_spill, self.ports.prepare_shadow, self.ports.verify_shadow)
+                    self.ports.prepare_spill, self.ports.verify_spill, self.ports.prepare_shadow, self.ports.verify_shadow,
+                    self.ports.prepare_torso, self.ports.verify_torso)
             elif action == "xmp_inspect":
                 from .preset_xmp_import import inspect
                 evidence = inspect(p["path"])
@@ -190,6 +194,7 @@ class PresetController:
             result.update(error=str(error)[:2000], error_code="outcome_unknown" if unknown else "rejected", outcome_unknown=unknown)
             self.emit({"event": "error", "error": f"preset {action}：{error}"})
         finally:
+            if action == 'apply':result.update(deepcopy(self._torso_receipt))
             if request is not None and request not in self._pending:
                 self._pending[request] = (digest, result)
 
@@ -211,6 +216,10 @@ class PresetController:
                 result.update(success=False, outcome_unknown=True, error_code="state_confirmation_failed", error=str(error)[:2000])
         from .custom_lut_scope import public_view
         result = public_view(result)
+        # Compact acknowledgment identities survive failures and bounded receipt
+        # fallbacks. A replay never gains a new token or fresh image approval.
+        review_fields = {key: deepcopy(result[key]) for key in ('module_scope', 'preflight_token', 'torso_review_ack')
+                         if key in result} if 'torso_review_ack' in result or SC.TORSO_LENGTH.OP in result.get('module_scope', []) else {}
         try:
             json.dumps(result, allow_nan=False, ensure_ascii=False).encode("utf-8")
             raw = json.dumps(result, allow_nan=False, ensure_ascii=True)
@@ -218,14 +227,14 @@ class PresetController:
             unknown = bool(result.get("success") or result.get("outcome_unknown"))
             result = {"event": "preset_result", "protocol": 1, "request_id": request, "action": safe_action,
                       "document_id": self.document_identity(p), "success": False, "outcome_unknown": unknown,
-                      "error_code": "invalid_receipt", "error": "无法序列化预设结果，请检查实际状态"}
+                      "error_code": "invalid_receipt", "error": "无法序列化预设结果，请检查实际状态", **review_fields}
             raw = json.dumps(result)
         size = len(raw.encode()) + 1  # server.emit uses ASCII escaping plus a newline.
         if size > MAX_RESULT_BYTES:
             unknown = bool(result.get("success") or result.get("outcome_unknown")) and result["action"] != "list"
             result = {"event": "preset_result", "protocol": 1, "request_id": request, "action": result["action"],
                       "document_id": self.document_identity(p), "success": False, "outcome_unknown": unknown, "error_code": "receipt_too_large",
-                      "error": "预设结果超过容量限制，请检查实际状态，不要重复提交"}
+                      "error": "预设结果超过容量限制，请检查实际状态，不要重复提交", **review_fields}
             size = len(json.dumps(result).encode()) + 1
         if digest is not None and request not in self._receipts:
             self._receipts[request] = (digest, deepcopy(result), size)
@@ -234,18 +243,28 @@ class PresetController:
         self.emit(result)
 
     def apply(self, p):
+        self._torso_receipt = {}
         pid = str(p.get("id") or "")
         if not pid: raise SC.ScopeError("preset apply 需要 id")
         previous = self.ports.capture()
         source_proof = None
+        if 'torso_review_ack' in p and any(key in p for key in ('xmp_review_ack','spill_review_ack','shadow_review_ack')):
+            raise SC.ScopeError('上半身长度审核确认不能与其他目标图审核确认混用')
         if p.get('preflight_token') is not None:
             spill_ack={'spill_review_ack':p['spill_review_ack']} if 'spill_review_ack' in p else {}
             shadow_ack={'shadow_review_ack':p['shadow_review_ack']} if 'shadow_review_ack' in p else {}
+            torso_ack={'torso_review_ack':p['torso_review_ack']} if 'torso_review_ack' in p else {}
             record = self.reviews.claim(p['preflight_token'], pid, previous, self.ports.target_row(),
                                        self.ports.document_id(), self.ports.revision(), self.ports.verify_crop, self.ports.verify_xmp, p.get("xmp_review_ack"),
-                                       self.ports.verify_spill, verify_shadow=self.ports.verify_shadow, **spill_ack, **shadow_ack)
+                                       self.ports.verify_spill, verify_shadow=self.ports.verify_shadow,
+                                       verify_torso=self.ports.verify_torso, **spill_ack, **shadow_ack, **torso_ack)
             doc, mods = record['preset'], record['modules']
             source_proof = record.get('source_proof')
+            if SC.TORSO_LENGTH.OP in mods:
+                # Echo only an acknowledgment accepted by the frozen review.
+                # Invalid/missing acks remain correctable pre-mutation rejections.
+                self._torso_receipt = {'module_scope':list(mods), 'preflight_token':p['preflight_token'],
+                                       'torso_review_ack':deepcopy(p['torso_review_ack'])}
         else:
             doc = PS.find(pid); mods = doc['modules']
             mods = DERIVED.require_modules(previous, mods)
@@ -253,7 +272,8 @@ class PresetController:
             if p.get("xmp_review_ack") is not None: raise SC.ScopeError("Unexpected XMP review acknowledgment")
             if "spill_review_ack" in p: raise SC.ScopeError('祛染色目标图审核确认必须属于当前冻结预检')
             if "shadow_review_ack" in p: raise SC.ScopeError('原图阴影目标图审核确认必须属于当前冻结预检')
-            if SC.ORIGINAL_SHADOW.OP in mods or SC.SPILL_REMOVAL.OP in mods or LG.OP in mods or OA.OP in mods or RC.OP in mods or SC.OP_CROP in mods: raise SC.ScopeError('含裁剪、局部组或自动镜头/透视的预设必须先查看本目标预检，再确认应用')
+            if "torso_review_ack" in p: raise SC.ScopeError('上半身长度目标图审核确认必须属于当前冻结预检')
+            if SC.TORSO_LENGTH.OP in mods or SC.ORIGINAL_SHADOW.OP in mods or SC.SPILL_REMOVAL.OP in mods or LG.OP in mods or OA.OP in mods or RC.OP in mods or SC.OP_CROP in mods: raise SC.ScopeError('含目标审核模块的预设必须先查看本目标预检，再确认应用')
             if SOURCE.record(previous) is not None:
                 source_proof = SOURCE.row_proof({**self.ports.target_row(), 'state':previous})
         DERIVED.require_modules(previous, mods, source_proof)
@@ -262,6 +282,8 @@ class PresetController:
             raise SC.ScopeError('未选择祛染色模块，不能附带目标图审核确认')
         if SC.ORIGINAL_SHADOW.OP not in ops and "shadow_review_ack" in p:
             raise SC.ScopeError('未选择原图阴影模块，不能附带目标图审核确认')
+        if SC.TORSO_LENGTH.OP not in ops and "torso_review_ack" in p:
+            raise SC.ScopeError('未选择上半身长度模块，不能附带目标图审核确认')
         for op in ops:
             if SC.MODULES[op]["single_face"]:
                 verdict, reason = self.ports.face_check()
@@ -279,6 +301,9 @@ class PresetController:
         if SC.ORIGINAL_SHADOW.OP in ops:
             row=self.ports.target_row()
             SC.ORIGINAL_SHADOW.validate_target(state,row["path"],(row["src_h"],row["src_w"]))
+        if SC.TORSO_LENGTH.OP in ops:
+            row=self.ports.target_row()
+            SC.TORSO_LENGTH.validate_target(state,row["path"],(row["src_h"],row["src_w"]))
         if ID_BACKGROUND.OP in ops:
             row=self.ports.target_row()
             ID_BACKGROUND.validate_target(state,row["path"],(row["src_h"],row["src_w"]))
@@ -299,13 +324,17 @@ class PresetController:
         if SC.ORIGINAL_SHADOW.OP in ops:
             if self.ports.verify_shadow is None:raise SC.ScopeError('原图阴影预设缺少完整目标前后图审核端口')
             self.ports.verify_shadow(self.ports.target_row(),previous,state,self.ports.document_id(),str(self.ports.revision()),record.get('shadow'))
+        if SC.TORSO_LENGTH.OP in ops:
+            if self.ports.verify_torso is None:raise SC.ScopeError('上半身长度预设缺少完整目标前后图审核端口')
+            self.ports.verify_torso(self.ports.target_row(),previous,state,self.ports.document_id(),str(self.ports.revision()),record.get('torso'))
         if source_proof is not None:
             SOURCE.verify_row({**self.ports.target_row(), 'state':self.ports.capture()}, source_proof)
         reviewed_row=self.ports.target_row()
         reviewed_identity=(reviewed_row.get('document_id'),reviewed_row.get('path'),self.ports.document_id())
         def verify_after():
             current=self.ports.target_row()
-            if (current.get('document_id'),current.get('path'),self.ports.document_id())!=reviewed_identity:
+            if ((SC.TORSO_LENGTH.OP in ops and current is not reviewed_row)
+                    or (current.get('document_id'),current.get('path'),self.ports.document_id())!=reviewed_identity):
                 raise SC.ScopeError('预设渲染期间目标文档发生变化')
             if self.ports.revision()!=published_revision:raise SC.ScopeError('预设渲染期间目标版本发生变化')
             if source_proof is not None:SOURCE.verify_row({**current,'state':self.ports.capture()},source_proof)
@@ -321,6 +350,12 @@ class PresetController:
                     raise SC.ScopeError('原图阴影目标依赖在重放期间变化')
                 proof=deepcopy(record['shadow']);proof['revision']=str(published_revision)
                 self.ports.verify_shadow(current,previous,actual,self.ports.document_id(),str(published_revision),proof)
+            if SC.TORSO_LENGTH.OP in ops:
+                actual=self.ports.capture()
+                if SC.TORSO_LENGTH.undo_key(actual) != SC.TORSO_LENGTH.undo_key(state):
+                    raise SC.ScopeError('上半身长度目标依赖在重放期间变化')
+                proof=deepcopy(record['torso']);proof['revision']=str(published_revision)
+                self.ports.verify_torso(current,previous,actual,self.ports.document_id(),str(published_revision),proof)
             if SC.OP_CROP in ops:
                 proof=deepcopy(record['crop']);proof['revision']=str(published_revision)
                 self.ports.verify_crop(current,state,self.ports.document_id(),str(published_revision),proof)
@@ -330,23 +365,38 @@ class PresetController:
         if p.get('preflight_token') is not None:self.ports.advance()
         def verify_rollback():
             current=self.ports.target_row()
-            if (current.get('document_id'),current.get('path'),self.ports.document_id())!=reviewed_identity:
-                raise SC.ScopeError('祛反光失败后目标已切换，无法确认回滚')
+            if ((SC.TORSO_LENGTH.OP in ops and current is not reviewed_row)
+                    or (current.get('document_id'),current.get('path'),self.ports.document_id())!=reviewed_identity):
+                raise SC.ScopeError('预设失败后目标已切换，无法确认回滚')
             rollback_revision=str(self.ports.revision())
             if SC.ORIGINAL_SHADOW.OP in ops:
                 from .original_shadow_transfer_review import rollback_record
                 prior=rollback_record(record['shadow'],previous,rollback_revision)
                 self.ports.verify_shadow(current,previous,self.ports.capture(),self.ports.document_id(),rollback_revision,prior)
-            else:
+            if SC.SPILL_REMOVAL.OP in ops:
                 from .spill_transfer_review import rollback_record
                 prior=rollback_record(record['spill'],previous,rollback_revision)
                 self.ports.verify_spill(current,previous,self.ports.capture(),self.ports.document_id(),rollback_revision,prior)
+            if SC.TORSO_LENGTH.OP in ops:
+                from .torso_length_transfer_review import rollback_record
+                prior=rollback_record(record['torso'],previous,rollback_revision)
+                self.ports.verify_torso(current,previous,self.ports.capture(),self.ports.document_id(),rollback_revision,prior)
         published_revision=self.ports.revision()
         self._effect_started = True
-        frame = apply_with_rollback(self.ports.replay, previous, state, preset_id=pid,
-                                    emit=self.emit, invalidate=self.ports.invalidate, verify_after=verify_after if source_proof is not None or SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops or SC.OP_CROP in ops or doc.get("xmp_import") is not None else None,
-                                    verify_rollback=verify_rollback if SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops else None,
-                                    strict_local=SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops or doc.get("xmp_import") is not None or SC.OP_CROP in ops or SOURCE.record(state) is not None or ID_BACKGROUND.OP in ops or LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
+        def replay_torso(value, **kwargs):
+            # The generic transaction predates torso admission and only marks
+            # its forward replay strict. Rollback must use the same full gate.
+            current=self.ports.target_row()
+            if (current is not reviewed_row
+                    or (current.get('document_id'),current.get('path'),self.ports.document_id()) != reviewed_identity
+                    or self.ports.revision() != published_revision):
+                raise SC.ScopeError('上半身长度重放目标或版本已变化，不能写入或回滚到另一目标')
+            SOURCE.verify_row({**current,'state':self.ports.capture()},source_proof)
+            return self.ports.replay(value, **{**kwargs, 'strict_local':True})
+        frame = apply_with_rollback(replay_torso if SC.TORSO_LENGTH.OP in ops else self.ports.replay, previous, state, preset_id=pid,
+                                    emit=self.emit, invalidate=self.ports.invalidate, verify_after=verify_after if source_proof is not None or SC.TORSO_LENGTH.OP in ops or SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops or SC.OP_CROP in ops or doc.get("xmp_import") is not None else None,
+                                    verify_rollback=verify_rollback if SC.TORSO_LENGTH.OP in ops or SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops else None,
+                                    strict_local=SC.TORSO_LENGTH.OP in ops or SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops or doc.get("xmp_import") is not None or SC.OP_CROP in ops or SOURCE.record(state) is not None or ID_BACKGROUND.OP in ops or LG.OP in ops or SKY.OP in ops or OA.OP in ops or BROW.OP in ops or NOSE.OP in ops or EYE.OP in ops or MOUTH.OP in ops or RC.OP in ops)
         after = OA.before_params(state, ops)
         self.last = {"id": pid, "name": doc["name"], "ops": ops, "params": after}
         render_ms = frame.pop("render_ms")
@@ -355,11 +405,12 @@ class PresetController:
         self.emit(frame)
         return {"id": pid, "name": doc["name"], "module_scope": ops, "before": before, "after": after,
                 "document_id": self.ports.document_id(), "preflight_token":p.get('preflight_token'),
-                "source_proof":source_proof}
+                "source_proof":source_proof,
+                **({'torso_review_ack':deepcopy(p['torso_review_ack'])} if SC.TORSO_LENGTH.OP in ops else {})}
 
     def save(self, p):
         requested = p.get("module_scope")
-        ops = SC.check_scope([op for op in SC.transferable_ops() if op not in (OA.OP,RC.OP,SC.SPILL_REMOVAL.OP)] if requested is None else requested)
+        ops = SC.check_scope([op for op in SC.transferable_ops() if op not in (OA.OP,RC.OP,SC.SPILL_REMOVAL.OP,SC.TORSO_LENGTH.OP)] if requested is None else requested)
         state = self.ports.capture()
         if SOURCE.record(state) is not None and set(ops) - SC.DERIVED_PARAMETER_OPS:
             raise SC.ScopeError('合成来源只能通过通用预设保存明确选择的全局参数模块')

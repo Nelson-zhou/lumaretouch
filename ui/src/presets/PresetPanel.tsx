@@ -1,4 +1,6 @@
 import {SHADOW_TRANSFER_OP} from '../originalShadow/transferModel';
+import {TORSO_TRANSFER_OP} from '../torsoLength/transferModel';
+import {TorsoTransferReview} from '../torsoLength/TorsoTransferReview';
 import {CROP_OP} from '../cropTransfer/model';
 import {CropTransferReview} from '../cropTransfer/CropTransferReview';
 import {SPILL_TRANSFER_OP} from '../spillRemoval/transferModel';
@@ -46,7 +48,7 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {unavailableScope(selectedOps,modules).length>0&&<p>包含当前不可用模块，不能应用。</p>}
     </div>}
     <div className="presetButtons">
-      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||xmpUnsupported||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{w.selected?.xmp_import||selectedOps.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP,SPILL_TRANSFER_OP,SHADOW_TRANSFER_OP].includes(op))?'预检所选预设':'应用所选'}</button>
+      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||xmpUnsupported||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{w.selected?.xmp_import||selectedOps.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP,SPILL_TRANSFER_OP,SHADOW_TRANSFER_OP,TORSO_TRANSFER_OP].includes(op))?'预检所选预设':'应用所选'}</button>
       <button disabled={!w.context.enabled||w.busy} onClick={()=>void w.refresh()}>刷新列表</button>
       <button disabled={!w.context.enabled||w.busy||!w.selected||w.selected.builtin} onClick={()=>void w.remove()}>移入回收站</button>
     </div>
@@ -55,14 +57,16 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {w.review.xmp_transfer&&<XmpPixelReview key={w.xmpKey} value={w.review.xmp_transfer} reviewKey={w.xmpKey} onReady={(key,ready)=>w.setXmpImage({key,ready})}/>}
       {w.review.spill_transfer&&<SpillTransferReview value={w.review.spill_transfer} reviewKey={w.spillKey} disabled={w.busy} onReady={(key,ready)=>w.setSpillImage({key,ready})}/>}
       {w.review.shadow_transfer&&<ShadowTransferReview value={w.review.shadow_transfer} reviewKey={w.shadowKey} disabled={w.busy} onReady={(key,ready)=>w.setShadowImage({key,ready})}/>}
+      {w.review.torso_transfer&&<TorsoTransferReview value={w.review.torso_transfer} reviewKey={w.torsoKey} disabled={w.busy} onReady={(key,ready)=>w.setTorsoImage({key,ready})}/>}
       {!w.spillReady&&<p role="status">请查看并勾选确认本目标的祛反光前后效果。</p>}
       {!w.shadowReady&&<p role="status">请查看并勾选确认本目标的原图阴影前后效果。</p>}
-      <button disabled={w.busy||!w.context.editable||!w.cropReady||!w.xmpReady||!w.spillReady||!w.shadowReady} onClick={()=>void w.confirmLocal()}>确认本次目标预设并应用</button>
+      {!w.torsoReady&&<p role="status">请查看并勾选确认本目标身体及本人面部的上身长度前后效果。</p>}
+      <button disabled={w.busy||!w.context.editable||!w.cropReady||!w.xmpReady||!w.spillReady||!w.shadowReady||!w.torsoReady} onClick={()=>void w.confirmLocal()}>确认本次目标预设并应用</button>
       <button disabled={w.busy} onClick={w.dismissReview}>关闭本次审核</button></div>}
     <fieldset><legend>保存当前照片的模块参数</legend>
       <label>预设名称<input aria-label="预设名称" value={w.form.name} maxLength={160} placeholder="例如：室外婚纱暖调" onChange={e=>w.setName(e.target.value)}/><small>{nameLength}/80 字符</small></label>
       {nameLength>80&&<p role="alert">名称过长，请缩短到 80 个字符以内。</p>}
-      <div className="presetButtons"><button disabled={w.busy} onClick={()=>w.setScope(modules.filter(m=>m.transferable&&!m.dedicated_transport).map(m=>m.operation_id))}>全选可用模块</button>
+      <div className="presetButtons"><button disabled={w.busy} onClick={()=>w.setScope(modules.filter(m=>m.transferable&&!m.dedicated_transport&&m.operation_id!==TORSO_TRANSFER_OP).map(m=>m.operation_id))}>全选可组合模块</button>
         <button disabled={w.busy} onClick={()=>w.setScope([])}>清空选择</button></div>
       <div className="presetScopes">{rows.map(m=><label key={m.operation_id} title={m.reason??''}>
         <input type="checkbox" checked={chosen.includes(m.operation_id)} disabled={w.busy||((!m.transferable||!!m.dedicated_transport)&&!chosen.includes(m.operation_id))}
@@ -71,9 +75,10 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       </label>)}</div>
       {chosen.includes(LOCAL_GRADE_OP)&&<MaskTransferControls saveOnly groups={w.context.sourceGroups} value={w.saveMaskTransfer} onChange={w.setSaveMaskTransfer} disabled={w.busy}/>}
       {unavailable.length>0&&<p role="alert">请取消已不可用模块：{unavailable.map(moduleLabel).join('、')}</p>}
+      {chosen.includes(TORSO_TRANSFER_OP)&&<p role={chosen.length===1?'status':'alert'}>上身长度须单独保存与审核。{chosen.length>1?'请取消其他模块。':'不保存身体归属、关键点、支持范围或审核。'}</p>}
       {!chosen.length&&<p>请明确选择要保存的模块，不会自动保存全部调整。</p>}
       {!w.context.editable&&<p>保存和应用需要可编辑照片；导入、删除和浏览不需要打开照片。</p>}
-      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.form.name.trim()||nameLength>80||!chosen.length||!!unavailable.length} onClick={()=>void w.save()}>保存为新预设</button>
+      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.form.name.trim()||nameLength>80||!chosen.length||!!unavailable.length||(chosen.includes(TORSO_TRANSFER_OP)&&chosen.length!==1)} onClick={()=>void w.save()}>保存为新预设</button>
     </fieldset>
     <div className="presetButtons"><button disabled={!w.context.enabled||w.busy} onClick={()=>void w.importFile()}>导入 JSON</button>
       <button disabled={!w.context.enabled||w.busy} onClick={()=>void w.importFile(true)}>导入 JSON 为新副本</button>

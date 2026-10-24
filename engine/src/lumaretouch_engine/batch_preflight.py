@@ -35,6 +35,7 @@ class FrozenTarget:
     crop_json:str|None=None
     spill_json:str|None=None
     shadow_json:str|None=None
+    torso_json:str|None=None
 
 @dataclass(frozen=True)
 class FrozenPlan:
@@ -72,6 +73,11 @@ class PreflightStore:
         if shadow:
             from .original_shadow_transfer_review import MAX_TARGETS as SHADOW_MAX_TARGETS
             if len(targets)>SHADOW_MAX_TARGETS:raise ValueError('Original-shadow visual review supports at most eight targets; no target was omitted')
+        from .torso_length_scope import OP as TORSO_OP
+        torso=TORSO_OP in modules
+        if torso:
+            from .torso_length_transfer_review import MAX_TARGETS as TORSO_MAX_TARGETS
+            if len(targets)>TORSO_MAX_TARGETS:raise ValueError('Torso-length visual review supports at most eight targets; no target was omitted')
         if source_proof is not None:
             source_proof=check_row_proof(source_proof)
         for target in targets:
@@ -108,11 +114,23 @@ class PreflightStore:
                     raise ValueError('Original-shadow review does not belong to its frozen target')
             elif shadow and not target.blocked:
                 raise ValueError('Every eligible shadow target requires full before/after review evidence')
+            if target.torso_json is not None:
+                from .torso_length_transfer_review import checked
+                if not torso or type(target.torso_json) is not str or len(target.torso_json)>16384:
+                    raise ValueError('Invalid compact torso-length review proof')
+                record=checked(json.loads(target.torso_json))
+                modules_for_target=params if target.prepared_json is None else json.loads(target.prepared_json)
+                if (record['document_id']!=target.document_id or record['revision']!=str(target.revision)
+                        or target.source_proof_json is None or record['source_proof']!=json.loads(target.source_proof_json)
+                        or record['parameters']!=modules_for_target.get(TORSO_OP)):
+                    raise ValueError('Torso-length review does not belong to its frozen target')
+            elif torso and not target.blocked:
+                raise ValueError('Every eligible torso-length target requires full before/after review evidence')
         now=self.clock();self._prune(now)
         # Validate the total metadata budget, not only each target independently.
         canonical({'source':[source_id,source_revision,source_path],'modules':modules,'params':params,
             'source_proof':source_proof,
-            'targets':[[t.document_id,t.revision,t.index,t.path,t.blocked,t.before_json,t.prepared_json,t.transfer_json,t.optics_json,t.reference_json,t.people_json,t.source_proof_json,t.crop_json,t.spill_json,t.shadow_json] for t in targets],'rejected':rejected})
+            'targets':[[t.document_id,t.revision,t.index,t.path,t.blocked,t.before_json,t.prepared_json,t.transfer_json,t.optics_json,t.reference_json,t.people_json,t.source_proof_json,t.crop_json,t.spill_json,t.shadow_json,t.torso_json] for t in targets],'rejected':rejected})
         plan=FrozenPlan(uuid.uuid4().hex,workspace,source_id,source_revision,source_path,tuple(modules),canonical(params),policy,
             tuple(targets),canonical(rejected),now,now+TTL_NS,None if source_proof is None else canonical(source_proof))
         self.pending[plan.token]=plan
@@ -139,13 +157,15 @@ class PreflightStore:
         if generation!=workspace:raise ValueError('batch result belongs to another workspace')
         return json.loads(payload)
 
-    def claim(self,plan,*,spill_review_ack=None,shadow_review_ack=None):
+    def claim(self,plan,*,spill_review_ack=None,shadow_review_ack=None,torso_review_ack=None):
         # Consume before the first write: even failure to encode the final receipt
         # must never leave a successfully applied token available for reexecution.
         self.finish(plan,{'success':False,'outcome_unknown':True,'preflight_token':plan.token,
+            **({'module_scope':list(plan.modules)} if torso_review_ack is not None else {}),
             'error':'batch started; terminal outcome has not been recorded',
             **({'spill_review_ack':spill_review_ack} if spill_review_ack is not None else {}),
-            **({'shadow_review_ack':shadow_review_ack} if shadow_review_ack is not None else {})})
+            **({'shadow_review_ack':shadow_review_ack} if shadow_review_ack is not None else {}),
+            **({'torso_review_ack':torso_review_ack} if torso_review_ack is not None else {})})
 
     def finish(self,plan,result):
         try:payload=canonical(result,MAX_RESULT_BYTES)
@@ -163,6 +183,12 @@ class PreflightStore:
                 records=[json.loads(t.shadow_json) for t in plan.targets if not t.blocked and t.shadow_json is not None]
                 ack={'shadow_review_ack':[{'document_id':r['document_id'],'revision':r['revision'],
                     'before_sha256':r['before']['sha256'],'after_sha256':r['after']['sha256']} for r in records]}
+            from .torso_length_scope import OP as TORSO_OP
+            if TORSO_OP in plan.modules:
+                records=[json.loads(t.torso_json) for t in plan.targets if not t.blocked and t.torso_json is not None]
+                ack.update(torso_review_ack=[{'document_id':r['document_id'],'revision':r['revision'],
+                    'before_sha256':r['before']['sha256'],'after_sha256':r['after']['sha256']} for r in records])
+                ack['module_scope']=list(plan.modules)
             payload=canonical({'success':False,'outcome_unknown':True,'preflight_token':plan.token,
                 'error':'batch result could not be retained; inspect document state before a new batch',**ack})
         self.terminal[plan.token]=(plan.workspace,payload)

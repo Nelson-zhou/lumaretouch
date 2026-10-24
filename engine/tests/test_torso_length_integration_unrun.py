@@ -13,7 +13,8 @@ are doubled. The double is explicitly a routing fixture, not native numerical
 acceptance. The final endpoint test deliberately uses the REAL native boundary
 and must be run in an authorized environment with the installed extension.
 No fake prepared object, synthetic host publication or receipt is counted as
-integration evidence. Preset/batch remains an explicitly asserted residual.
+integration evidence. The later reviewed preset/batch route has separate UNRUN
+fixtures; this file guards its distinction from the private transfer helper.
 """
 import ast
 from copy import deepcopy
@@ -532,10 +533,42 @@ def test_private_parameter_transfer_keeps_target_support_and_rebuilds_its_own_so
     assert target.bank['bodies'][target.ref['body_instance_id']]['record'] == target_before['bodies'][target.ref['body_instance_id']]['record']
 
 
-def test_real_preset_and_batch_scope_do_not_claim_private_transfer_is_a_user_route():
+@pytest.mark.parametrize('derived', [False, True])
+def test_public_scalar_scope_rebuilds_real_target_common_geometry_and_scoped_restore(native_boundary, derived):
+    """UNRUN: real ownership/common sampler; only native numerical boundary doubled."""
+    from lumaretouch_engine import torso_length_scope as T
+    source = fixture(amount=-.7)
+    target = fixture(amount=.1, asset='f'*64, derived=derived)
+    original_bank = deepcopy(target.bank)
+    before = {DOCUMENT_BODY.KEY: P.pack(target.bank)}
+    state = deepcopy(before)
+    portable = T.params_of({DOCUMENT_BODY.KEY: P.pack(source.bank)})
+    assert set(portable) == {'version', 'amount'}
+    T.install(state, portable)
+    target.bank = DOCUMENT_BODY.bank(state)
+    assert target.bank['support_assets'] == original_bank['support_assets']
+    assert B.support(target.bank, target.ref, S.OP) == B.support(original_bank, target.ref, S.OP)
+    field = assert_common(export(target), target)
+    assert field.record['source'] == target.frame
+    assert native_boundary.prepared[-1][1] == [-.7]
+    # Distinct private people owners are not merged or relinked by scalar transfer.
+    assert target.people != source.people
+    restored = deepcopy(state)
+    T.restore(restored, before)
+    target.bank = DOCUMENT_BODY.bank(restored)
+    assert B.operation(target.bank, target.ref, S.OP)['recipe'] == {'version': 1, 'amount': .1}
+    assert target.bank['revision'] > original_bank['revision']
+    assert_common(export(target), target)
+    assert native_boundary.prepared[-1][1] == [.1]
+
+
+def test_reviewed_torso_scope_is_distinct_from_private_same_graph_helper():
     from lumaretouch_engine import scope
-    assert S.OP not in scope.MODULES
-    with pytest.raises(scope.ScopeError): scope.check_scope([S.OP])
+    assert scope.MODULES[S.OP]["transferable"] is True
+    assert scope.check_scope([S.OP]) == [S.OP]
+    assert scope.check_params(S.OP, {"version": 1, "amount": .4}) == {"version": 1, "amount": .4}
+    with pytest.raises(scope.ScopeError): scope.check_scope([S.OP, scope.OP_EXPOSURE])
+    with pytest.raises(scope.ScopeError): scope.check_params(S.OP, {"version": 1, "amount": .4, "body_ref": {}})
     # Source audit: a helper definition is not a reachable reviewed UI flow.
     for path in ENGINE_ROOT.glob('*.py'):
         if path.name == 'torso_length_project.py': continue

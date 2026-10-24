@@ -48,15 +48,11 @@ The host's exact-zero recipe recovery may retain the reset with an explicitly or
 
 `ui/src-tauri/src/torso_length_api.rs` validates exact signed recipes, the draft/manual support schema versus fully bound persisted support, all 25 upper-body anchors, source correspondence, separate inner/outer request IDs, native/document epochs and bounded replay tombstones. Read-only authoritative status can settle only its matching original recovery fence; it never dispatches the edit again. `engine.rs` avoids generic acknowledgement of an unvalidated torso result. Source presence and Rust fixtures are not proof of compiler or runtime correctness.
 
-## Preset and batch residual: confirmed by actual route inspection
+## Preset and batch continuation
 
-Torso is not registered in `scope.MODULES`. `scope.check_scope(["lnx.torso_length.v1"])` is therefore expected to reject it as unknown. The actual preset controller calls `SC.check_scope`; both batch preflight and batch sync do too:
+The initial foundation intentionally left torso absent from `scope.MODULES`. The later continuation registers only a torso-exclusive scalar route with exact target-owned full before/after review. The private `torso_length_project.transfer_recipe` remains uncalled by that product route; it cannot represent different document-private people owners. The updated guard fixture checks explicit registration, torso-only scope and rejection of nonportable body identities instead of preserving the obsolete unknown-operation assertion.
 
-- `engine/src/lumaretouch_engine/preset_controller.py`
-- `engine/src/lumaretouch_engine/batch_preflight_controller.py`
-- `engine/src/lumaretouch_engine/batch_sync.py`
-
-The `torso_length_project.transfer_recipe` helper has no reachable product caller found in the source audit. It checks current source/target/people graph identities and copies scalar intent only. It does not create an end-user target-selection, target-review, preflight, result, rollback or publication workflow. No such route was added or represented as complete in this fixture/audit task. Do not enable generic preset or batch transfer by serializing `_body_pose_bank`; pose, reviews, support geometry, associated face evidence, BodyRefs and source ownership cannot cross images.
+See `TRANSFER-CONTRACT.md` and the new transfer fixtures for the bounded unique-enabled-body policy, mandatory per-target ownership/visual acknowledgment and existing ledger/history integration. No source bank, analysis or support is serialized as portable preset data. Every fixture remains UNRUN.
 
 ## Baseline non-regression inspection
 

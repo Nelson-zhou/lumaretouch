@@ -13,6 +13,7 @@ fn require_xmp_support(state: &AppState, command: &Value) -> Result<(), String> 
 pub(crate) fn enqueue(state: &AppState, handle: &EngineHandle, command: Value) -> Result<(), String> {
     crate::spill_transfer_protocol::command(&command)?;
     crate::original_shadow_transfer_protocol::command(&command)?;
+    crate::torso_transfer_protocol::command(&command)?;
     crate::preset_host::xmp_protocol::command(&command)?;
     require_xmp_support(state, &command)?;
     let Some(id) = command["request_id"].as_str().map(str::to_owned) else { return handle.send(command) };
@@ -46,6 +47,7 @@ pub(crate) fn preset(
     xmp_review_ack: Option<Value>,
     spill_review_ack: Option<Value>,
     shadow_review_ack: Option<Value>,
+    torso_review_ack: Option<Value>,
 ) -> Result<Value, String> {
     const ACTIONS: [&str; 7] = ["list", "preflight", "apply", "save", "import", "delete", "xmp_inspect"];
     if !ACTIONS.contains(&action.as_str()) {
@@ -70,6 +72,7 @@ pub(crate) fn preset(
         ("xmp_review_ack", xmp_review_ack),
         ("spill_review_ack", spill_review_ack),
         ("shadow_review_ack", shadow_review_ack),
+        ("torso_review_ack", torso_review_ack),
     ] {
         if let Some(v) = v {
             cmd[k] = v;
@@ -80,6 +83,7 @@ pub(crate) fn preset(
     }
     crate::spill_transfer_protocol::command(&cmd)?;
     crate::original_shadow_transfer_protocol::command(&cmd)?;
+    crate::torso_transfer_protocol::command(&cmd)?;
     crate::preset_host::xmp_protocol::command(&cmd)?;
     require_xmp_support(&state, &cmd)?;
     state.send_to_engine(cmd)?;
