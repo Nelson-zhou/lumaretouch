@@ -1055,6 +1055,9 @@ export interface EngineStatus {
     lip_makeup_protocol?: number;
     eye_light_protocol?: number;
     blush_makeup_protocol?: number;
+    eye_makeup_enhance_protocol?: number;
+    eye_makeup_enhance_available?: boolean;
+    eye_makeup_enhance_reason?: string | null;
     facial_sculpt_protocol?: number;
     facial_sculpt_available?: boolean;
     facial_sculpt_reason?: string | null;

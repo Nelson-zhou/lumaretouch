@@ -5430,9 +5430,21 @@
       "source_url": "https://www.pixcakeai.com/guide/32471",
       "source_child_index": 3,
       "title": "眼妆增强",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_connected_manual_review_acceptance_unrun",
+      "implementation": [
+        "core/eye_makeup_enhance/lib.rs",
+        "engine/src/lumaretouch_engine/eye_makeup_enhance_layer.py",
+        "engine/src/lumaretouch_engine/people_render_runtime.py",
+        "ui/src/eyeMakeupEnhance/EyeMakeupEnhanceControl.tsx"
+      ],
+      "verification": [
+        "docs/eye-makeup-enhance/INTEGRATION-CONTRACT.md",
+        "engine/tests/test_eye_makeup_integration_unrun.py",
+        "ui/src/eyeMakeupEnhance/reviewIntegration.unrun.test.ts",
+        "ui/src-tauri/src/eye_makeup_enhance_protocol_unrun.rs"
+      ],
+      "requirement_id": "LNX-REF-PC-32471-C-ee9394fa95",
+      "scope_note": "原始 Rust 四项独立双侧参数，仅增强/减淡当前实际可见眼妆；逐眼人工覆盖、排除与同眼裸肤参考，真实当前 FaceRef/来源。不是学习式 AI 分割、新妆容生成或官方效果等价。原始及不透明 SDR 派生来源接入规范预览、全源导出、历史/持久化；共享源、跨照片预设/批量/人物传播与专属恢复未接通。构建、数值和照片质量验收均 UNRUN。"
     },
     {
       "id": "control:PC-32471:5",
@@ -5441,9 +5453,21 @@
       "source_url": "https://www.pixcakeai.com/guide/32471",
       "source_child_index": 4,
       "title": "眼妆增强/饱和度",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_connected_manual_review_acceptance_unrun",
+      "implementation": [
+        "core/eye_makeup_enhance/lib.rs",
+        "engine/src/lumaretouch_engine/eye_makeup_enhance_layer.py",
+        "engine/src/lumaretouch_engine/people_render_runtime.py",
+        "ui/src/eyeMakeupEnhance/EyeMakeupEnhanceControl.tsx"
+      ],
+      "verification": [
+        "docs/eye-makeup-enhance/INTEGRATION-CONTRACT.md",
+        "engine/tests/test_eye_makeup_integration_unrun.py",
+        "ui/src/eyeMakeupEnhance/reviewIntegration.unrun.test.ts",
+        "ui/src-tauri/src/eye_makeup_enhance_protocol_unrun.rs"
+      ],
+      "requirement_id": "LNX-REF-PC-32471-C-707956d003",
+      "scope_note": "原始 Rust 四项独立双侧参数，仅增强/减淡当前实际可见眼妆；逐眼人工覆盖、排除与同眼裸肤参考，真实当前 FaceRef/来源。不是学习式 AI 分割、新妆容生成或官方效果等价。原始及不透明 SDR 派生来源接入规范预览、全源导出、历史/持久化；共享源、跨照片预设/批量/人物传播与专属恢复未接通。构建、数值和照片质量验收均 UNRUN。"
     },
     {
       "id": "control:PC-32471:6",
@@ -5452,9 +5476,21 @@
       "source_url": "https://www.pixcakeai.com/guide/32471",
       "source_child_index": 5,
       "title": "眼妆增强/明度",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_connected_manual_review_acceptance_unrun",
+      "implementation": [
+        "core/eye_makeup_enhance/lib.rs",
+        "engine/src/lumaretouch_engine/eye_makeup_enhance_layer.py",
+        "engine/src/lumaretouch_engine/people_render_runtime.py",
+        "ui/src/eyeMakeupEnhance/EyeMakeupEnhanceControl.tsx"
+      ],
+      "verification": [
+        "docs/eye-makeup-enhance/INTEGRATION-CONTRACT.md",
+        "engine/tests/test_eye_makeup_integration_unrun.py",
+        "ui/src/eyeMakeupEnhance/reviewIntegration.unrun.test.ts",
+        "ui/src-tauri/src/eye_makeup_enhance_protocol_unrun.rs"
+      ],
+      "requirement_id": "LNX-REF-PC-32471-C-0985fdcfb9",
+      "scope_note": "原始 Rust 四项独立双侧参数，仅增强/减淡当前实际可见眼妆；逐眼人工覆盖、排除与同眼裸肤参考，真实当前 FaceRef/来源。不是学习式 AI 分割、新妆容生成或官方效果等价。原始及不透明 SDR 派生来源接入规范预览、全源导出、历史/持久化；共享源、跨照片预设/批量/人物传播与专属恢复未接通。构建、数值和照片质量验收均 UNRUN。"
     },
     {
       "id": "control:PC-32471:7",
@@ -5463,9 +5499,21 @@
       "source_url": "https://www.pixcakeai.com/guide/32471",
       "source_child_index": 6,
       "title": "眼妆增强/立体度",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_connected_manual_review_acceptance_unrun",
+      "implementation": [
+        "core/eye_makeup_enhance/lib.rs",
+        "engine/src/lumaretouch_engine/eye_makeup_enhance_layer.py",
+        "engine/src/lumaretouch_engine/people_render_runtime.py",
+        "ui/src/eyeMakeupEnhance/EyeMakeupEnhanceControl.tsx"
+      ],
+      "verification": [
+        "docs/eye-makeup-enhance/INTEGRATION-CONTRACT.md",
+        "engine/tests/test_eye_makeup_integration_unrun.py",
+        "ui/src/eyeMakeupEnhance/reviewIntegration.unrun.test.ts",
+        "ui/src-tauri/src/eye_makeup_enhance_protocol_unrun.rs"
+      ],
+      "requirement_id": "LNX-REF-PC-32471-C-e3b5569011",
+      "scope_note": "原始 Rust 四项独立双侧参数，仅增强/减淡当前实际可见眼妆；逐眼人工覆盖、排除与同眼裸肤参考，真实当前 FaceRef/来源。不是学习式 AI 分割、新妆容生成或官方效果等价。原始及不透明 SDR 派生来源接入规范预览、全源导出、历史/持久化；共享源、跨照片预设/批量/人物传播与专属恢复未接通。构建、数值和照片质量验收均 UNRUN。"
     },
     {
       "id": "control:PC-32471:8",

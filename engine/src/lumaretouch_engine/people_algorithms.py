@@ -14,6 +14,7 @@ from . import philtrum_state as PHILTRUM
 from . import eye_symmetry_state as EYE_SYMMETRY
 from . import brow_enhance_state as BROW_ENHANCE
 from . import facial_sculpt_state as FACIAL_SCULPT
+from . import eye_makeup_enhance_state as EYE_MAKEUP_ENHANCE
 from . import body_face_match_state as BODY_FACE_MATCH
 from . import body_skin_evenness_state as BODY_SKIN_EVENNESS
 from . import collarbone_state as COLLARBONE
@@ -49,6 +50,7 @@ def specifications():
             LIP_TEXTURE.OP: (LIP_TEXTURE.neutral(), LIP_TEXTURE.check),
             BROW_ENHANCE.OP: (BROW_ENHANCE.neutral(), BROW_ENHANCE.check),
             FACIAL_SCULPT.OP: (FACIAL_SCULPT.neutral(), FACIAL_SCULPT.check),
+            EYE_MAKEUP_ENHANCE.OP: (EYE_MAKEUP_ENHANCE.neutral(), EYE_MAKEUP_ENHANCE.check),
             EYE_SYMMETRY.OP: (EYE_SYMMETRY.neutral(), EYE_SYMMETRY.check),
             PHILTRUM.OP: (PHILTRUM.neutral(), PHILTRUM.check),
             CHIN_LENGTH.OP: (CHIN_LENGTH.neutral(), CHIN_LENGTH.check),

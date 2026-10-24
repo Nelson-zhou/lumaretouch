@@ -43,7 +43,11 @@ def stage(command, state, *, document_id, document_epoch, document_revision,
                 # not a rejection of the first scalar in a two-eye transaction.
                 if op==A.EYELASH.OP:neutral={**neutral,'link_lr':False,'link_ud':False}
                 if op in (A.EYE_LIGHT.OPERATION,A.EYELINER.OP,A.BROW_MAKEUP.OP,A.CHIN_SHAPE.OP,A.BROW_ENHANCE.OP):neutral={**neutral,'linked':False}
-                materialize({'conflicts':[], 'operations':{op:{path:{'value':patch['value']}}}},op,neutral,validator)
+                if op == A.EYE_MAKEUP_ENHANCE.OP:
+                    from .eye_makeup_enhance_project import validate_leaf
+                    validate_leaf(path, patch['value'])
+                else:
+                    materialize({'conflicts':[], 'operations':{op:{path:{'value':patch['value']}}}},op,neutral,validator)
             out = S.set_override(out,target['scope'],target['target_id'],op,path,patch.get('value'),unset=patch['unset'])
     elif action == 'link':
         if set(payload) != {'face_instance_id','person_id','state','user_confirmed'}: raise ValueError('Invalid association edit')

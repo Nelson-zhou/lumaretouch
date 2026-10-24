@@ -1,3 +1,4 @@
+import {EyeMakeupEnhanceControl} from '../eyeMakeupEnhance/EyeMakeupEnhanceControl';
 import {FacialSculptPanel} from '../facialSculpt/FacialSculptPanel';
 import {FringeRepairPanel} from '../fringeRepair/FringeRepairPanel';
 import type {FringeRepairOwner} from '../fringeRepair/useFringeRepairWorkflow';
@@ -345,6 +346,10 @@ const WIRED: Record<string, string> = {
   "PC-32471|局部妆容/腮红/收藏颜色": "blush.saved",
   "PC-32471|唇妆增强": "lip.family",
   "PC-32471|眉毛增强": "brow_enhance.v1",
+  "PC-32471|眼妆增强": "eye_makeup_enhance.family",
+  "PC-32471|眼妆增强/饱和度": "eye_makeup_enhance.family",
+  "PC-32471|眼妆增强/明度": "eye_makeup_enhance.family",
+  "PC-32471|眼妆增强/立体度": "eye_makeup_enhance.family",
   "PC-32471|高光立体": "facial_sculpt.highlight",
   "PC-32471|阴影立体": "facial_sculpt.shadow",
   "PC-32471|唇妆增强/饱和度": "lip.saturation",
@@ -728,6 +733,10 @@ export default function RetouchPanel(props: RetouchProps) {
     if (kind.startsWith("browMakeup.")) return null;
     if (kind === "lipstick.family") return <div key={leaf.path}>{props.lipstickPanel}</div>;
     if (kind.startsWith("lipstick.")) return null;
+    if (kind === 'eye_makeup_enhance.family') return <EyeMakeupEnhanceControl key={leaf.path}
+      people={props.people} capability={status?.ready_caps} faceOk={props.faceOk} faceWhy={props.faceWhy}
+      note={props.note} Slider={Slider} blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+        || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}/>;
     if (kind === 'facial_sculpt.highlight' || kind === 'facial_sculpt.shadow') return <FacialSculptPanel key={leaf.path}
       people={props.people} capability={status?.ready_caps} faceOk={props.faceOk} faceWhy={props.faceWhy}
       control={kind==='facial_sculpt.highlight'?'highlight':'shadow'}

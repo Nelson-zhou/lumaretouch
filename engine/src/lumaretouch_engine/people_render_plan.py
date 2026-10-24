@@ -21,10 +21,10 @@ def _assets_require_analysis(face, resolved):
     assets = face['local_assets']
     if not assets: return False
     from . import body_skin_evenness_state as EVENNESS, body_face_match_state as MATCH, collarbone_state as COLLARBONE
-    from . import eye_bag_preserve_state as EYE_BAGS, face_decoration_state as DECORATION, facial_sculpt_state as SCULPT
+    from . import eye_bag_preserve_state as EYE_BAGS, face_decoration_state as DECORATION, facial_sculpt_state as SCULPT, eye_makeup_enhance_state as EYE_MAKEUP_ENHANCE
     families = {'body_skin_evenness_visibility': EVENNESS, 'body_face_match_visibility': MATCH,
                 'collarbone_visibility': COLLARBONE, 'eye_bag_ridge_visibility': EYE_BAGS,
-                'face_decoration_visibility': DECORATION, 'face_decoration': DECORATION, 'facial_sculpt_visibility': SCULPT}
+                'face_decoration_visibility': DECORATION, 'face_decoration': DECORATION, 'facial_sculpt_visibility': SCULPT, 'eye_makeup_enhance_visibility': EYE_MAKEUP_ENHANCE}
     if set(assets) - set(families): return True
     from .people_resolver import materialize
     for kind, asset in assets.items():
@@ -69,6 +69,9 @@ def build(state, asset_sha256, defaults, *, max_faces, per_face_cost, total_budg
             # their existing evidence requirements. Canonical recipe validation
             # still runs even for an otherwise neutral render entry.
             if not ((operation == 'lnx.face_decoration.v1' and _decoration_dormant(resolved))
+                    or (operation == 'lnx.eye_makeup_enhance.v1'
+                        and path in ('/amount/linked','/saturation/linked','/brightness/linked','/structure/linked')
+                        and type(record['value']) is bool)
                     or (operation in ('lnx.slim_face.v2', 'lnx.brow_enhance.v1') and path == '/linked'
                      and type(record['value']) is bool)
                     # A valid reference-side policy alone does not move pixels.

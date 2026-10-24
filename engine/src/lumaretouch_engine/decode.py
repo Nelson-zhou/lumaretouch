@@ -656,6 +656,12 @@ def _load_rgb_pillow(path: str, budget: int) -> Decoded:
         if orient != 1:
             im = ImageOps.exif_transpose(im)          # 无 EXIF 时是空操作
         t_s = time.perf_counter()
+        # These original-retouch decoders return RGB only. Do not discard actual
+        # coverage before any portrait consumer can inspect it. Native high-bit
+        # branches have already routed separately; creative RGBA asset import
+        # retains its own alpha and does not pass through these two decoders.
+        from .full_source_working import require_opaque_8bit
+        require_opaque_8bit(im)
         im = _to_working_srgb(im, icc)
         if im.size != (pw, ph):                       # draft 只能给到近似尺寸，补最后一步
             im = im.resize((pw, ph), Image.LANCZOS)
@@ -782,6 +788,12 @@ def _load_full_pillow(path: str, max_px: int = MAX_EXPORT_PIXELS) -> Decoded:
         if im.size != (src_w, src_h):          # 方向处理后的尺寸必须与报出去的一致
             raise ValueError(f"摆正后尺寸 {im.size} 与报出去的 {src_w}x{src_h} 不一致")
         t_s = time.perf_counter()
+        # These original-retouch decoders return RGB only. Do not discard actual
+        # coverage before any portrait consumer can inspect it. Native high-bit
+        # branches have already routed separately; creative RGBA asset import
+        # retains its own alpha and does not pass through these two decoders.
+        from .full_source_working import require_opaque_8bit
+        require_opaque_8bit(im)
         im = _to_working_srgb(im, icc)
         arr = np.ascontiguousarray(np.asarray(im, dtype=np.uint8))
     t1 = time.perf_counter()

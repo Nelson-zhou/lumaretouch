@@ -1,0 +1,23 @@
+{
+  "status": "STATIC_ONLY",
+  "product_imports": false,
+  "product_execution": false,
+  "tests_executed": false,
+  "rust_compilation": false,
+  "typescript_typecheck": false,
+  "photographic_acceptance": false,
+  "python_ast": [
+    "docs/eye-makeup-enhance/fixtures/eye_makeup_enhance_contract_unrun.py",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_composition.py",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_host.py",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_layer.py",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_native.py",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_project.py",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_reference.py",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_state.py",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_support.py"
+  ],
+  "json_parsed": [
+    "docs/eye-makeup-enhance/fixtures/acceptance-unrun.json"
+  ]
+}

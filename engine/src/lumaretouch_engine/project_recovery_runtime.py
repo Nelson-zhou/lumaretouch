@@ -58,8 +58,8 @@ def finish(engine, boundary, error=None):
     if eye_bag_preset_read_only(message):return  # Dedicated preset read cannot publish or taint committed state.
     from .face_decoration_support_alias_review import read_only as decoration_support_read_only
     if decoration_support_read_only(message):return  # Staged graph/bank reads never publish or taint committed state.
-    from .people_host_commands import face_style_read_only, eye_bag_read_only, facial_sculpt_read_only
-    if face_style_read_only(message) or eye_bag_read_only(message) or facial_sculpt_read_only(message):return  # Private read failures cannot taint committed project state.
+    from .people_host_commands import face_style_read_only, eye_bag_read_only, facial_sculpt_read_only, eye_makeup_enhance_read_only
+    if face_style_read_only(message) or eye_bag_read_only(message) or facial_sculpt_read_only(message) or eye_makeup_enhance_read_only(message):return  # Private read failures cannot taint committed project state.
     if not boundary['started'] or message.get('cmd') in ('project_recovery', 'canvas_guides'):
         return
     runtime = engine.__dict__.get('_project_recovery_runtime')

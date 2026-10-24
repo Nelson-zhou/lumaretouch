@@ -1,0 +1,20 @@
+{
+  "status": "AUTHORED_UNRUN",
+  "baseline": "b655c75a456e620b8ee937ed49756aeff7f9dd88",
+  "operation": "lnx.eye_makeup_enhance.v1",
+  "not_claimed": ["native compilation", "Python imports", "unit test execution", "TypeScript typecheck", "UI execution", "photo acceptance", "PNG16 render parity", "performance validation"],
+  "cases": [
+    {"id":"bilateral","fixture":"asymmetric existing makeup on a consenting adult portrait","expect":"person-relative left and right independent for all four controls; unlock preserves values; explicit relink never copies or averages"},
+    {"id":"source-proof","fixture":"same photo reopened, reanalysed, creative source changed, source-alias document","expect":"immutable support survives only exact owner; stale landmarks/source rejected; alias document mutation refused"},
+    {"id":"actual-makeup","fixture":"bare eye, vivid shadow, neutral shadow, iris or eyelashes alone","expect":"no semantic detection claim; user-reviewed bare skin is not ground truth; no automatic no-makeup identity claim; globe/lash/brow protected"},
+    {"id":"reference","fixture":"two matched bare-skin patches, one missing, contradictory patches, specular or deep shadow patches","expect":"overall positive/negative accepts only estimable agreeing patches; no fake makeup removal; subcontrols independent"},
+    {"id":"texture","fixture":"visible makeup with pores and fine granules plus broad shading","expect":"low/mid-scale correction preserves fine source residual rather than pixel blur; verify no halos or banding before accepting"},
+    {"id":"visibility","fixture":"glasses, bangs, long lashes, occluded eye, overlapping other face, severe profile, crop","expect":"explicit exclusion and measured safety guards; refuse insufficient support, never invent hidden skin"},
+    {"id":"alpha-hdr","fixture":"RGB16 PNG, opaque SDR JPEG, alpha PNG, HDR float input","expect":"RGB16 source low bits preserved through float32 solve and 16-bit export; alpha/HDR refused by owner without flattening or clipping"},
+    {"id":"source-grid","fixture":"preview and export of original/derived effective source, edge-crossing tiles","expect":"prepare source field once for each render grid; tile only crops frozen delta; no tiling seams, no proxy-mask enlargement"},
+    {"id":"gamut","fixture":"near-gamut existing coloured makeup and upstream colour edits","expect":"finite SDR output through common-direction feasibility, no per-channel clipping, zero/protected exact bits"},
+    {"id":"interaction","fixture":"rapid repeated buttons, pending and uncertain receipts, new source, owner revision, Close/Reopen, late PNG load","expect":"one canonical request; query original uncertain request, no replay; old draft cannot commit after binding changes; callback identity alone does not invalidate draft"},
+    {"id":"cancellation","fixture":"cancel during snapshot, integral preparation, solve, validation","expect":"no partial native output, no partial LocalEffect or history publication; old result preserved"},
+    {"id":"resource","fixture":"huge source, thin makeup region, tiny eye, oversized vector or neighbour budget","expect":"clear refusal before image-sized allocations where possible, no downsample/radius fallback"}
+  ]
+}

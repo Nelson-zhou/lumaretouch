@@ -1,0 +1,32 @@
+{
+  "status": "INTEGRATED_OWNED_SOURCE_STATIC_ONLY",
+  "baseline": "b655c75a456e620b8ee937ed49756aeff7f9dd88",
+  "files": {
+    "core/eye_makeup_enhance/Cargo.toml": "553e37b79909922c9d0413a161d32e4f729c763086b3cd1a1587f3137a6a39ec",
+    "core/eye_makeup_enhance/README.md": "fa3440713cfd5933c1036f7df780744dff648e5188db1dfef869f19500b4dfc4",
+    "core/eye_makeup_enhance/THIRD_PARTY.md": "851cb04f37a74ed1c1f419b1da5c86be35ff271401f3f71035d2974d098bec91",
+    "core/eye_makeup_enhance/build_eye_makeup_enhance.sh": "1b0841db9e1f13e14c217fef2aab4b233caa41d363f0b54c4535335269f46462",
+    "core/eye_makeup_enhance/eye_makeup_enhance.h": "8a585bc3fd87fd923c9704c2c3eb43d49f5db74c09e933ee4eeacbe1a0e44d6a",
+    "core/eye_makeup_enhance/lib.rs": "a77ca22833b456bfbaba2d58f5f5355f05a7684612c7339bd2946dac969b9fe8",
+    "core/eye_makeup_enhance/tests.rs": "5f8c68ffd95991d0ff58da475f8eab94fdaeedfee59c1856644bb3902d91b864",
+    "docs/eye-makeup-enhance/INTEGRATION.md": "b111c618c037d26b237159588c31c95c55801a7586f7d9dfdba32b087fc7f343",
+    "docs/eye-makeup-enhance/README.md": "16c4c1bf8512b817f85e32446ba4b179805c0137cbe361c2a4d9f2754f8c4497",
+    "docs/eye-makeup-enhance/STATIC_CHECKS.json": "cf3004d013f23f57586149c61a5713466ed50cfc5d996fdfaec32d4aadd1d140",
+    "docs/eye-makeup-enhance/fixtures/acceptance-unrun.json": "fd98ce0b7c7f1e63092a6b7efa34c9c8c5852d1867f19febabe28b670c7a971c",
+    "docs/eye-makeup-enhance/fixtures/eye_makeup_enhance_contract_unrun.py": "72bfa4aaec4bd15df59f6198d28f7afcfea09f4279cf1f5c6735a2dc42bcf70c",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_composition.py": "87c9acba8bebbfd185a7d8c7fac296233bf4873c352c61c1bd5608be4808b7bc",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_host.py": "889d0b40fe521717fb92788bd9fee786f9e1b7168a8a97451518096b06a2b721",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_layer.py": "29b423dd91541d3e723548aadf9e6107cc014b553af2378aa652c956db42195e",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_native.py": "751500f65535ab72e003a6b7b57346155219acac635194f3a1340016f26def48",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_project.py": "fe33e6eb01589ef602054d24aa14d6f559440a286b23a484ea091d3d754f7c86",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_reference.py": "1edb7edc93fe4f9a23338cb76e3ecf953f5ce52e1e1f6f0dfb26ec368d68b717",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_state.py": "4e8a388cdebf9d05cc487fe14255e12d1028eb87a1b1873dc3c97e398a40c0ed",
+    "engine/src/lumaretouch_engine/eye_makeup_enhance_support.py": "c7a82862773be79b315a31da870f898da67dd4f5eae4ff7a7b7be7ed766a8f9d",
+    "ui/src/eyeMakeupEnhance/EyeMakeupEnhanceControl.tsx": "de9c4f70ff962c9a50760e6bbe7ad8484e8625e76a57eb3c2e9b7f0fec82e032",
+    "ui/src/eyeMakeupEnhance/EyeMakeupEnhanceSupportEditor.tsx": "a1337d01b04381a7e6632327a36255667ff31117e843a84a876cfc21ecbf98dc",
+    "ui/src/eyeMakeupEnhance/model.ts": "6f396a66978559ac44f18beaddf3c7eedc3fca368cd38f4eb6a92f885b39ff82",
+    "ui/src/eyeMakeupEnhance/model.unrun.test.ts": "de9dbbf88493c83561bcd4180f898d7dda121dc8d79a710ce472a48baad43a7a"
+  },
+  "integration_baseline": "ec6178ce2be0ba1ff703736ed858af93bce1e809",
+  "integration_note": "Hashes refreshed after source pixel-centre, staged build, current-owner transition, protocol and UI receipt fixes; original lane baseline retained for provenance."
+}

@@ -59,6 +59,7 @@ class PeopleHostMixin:
         self._eye_bag_reference=None
         self._face_decoration_reference=None
         self._facial_sculpt_reference=None
+        self._eye_makeup_enhance_reference=None
         initialize=not any(f['asset_sha256']==asset for f in state['faces'].values()) and asset not in state['analysis_runs']
         candidate,analyses,refusals=B.bind(state,asset,pc,source_dimensions=(source['width'],source['height']),initialize=initialize)
         analyses=RA.restore_missing(candidate,self._people_landmarks,asset,pc,analyses)
@@ -187,6 +188,8 @@ class PeopleHostMixin:
             result['face_decoration']=decoration_report(self,state,source,self._people_cursors.get(asset))
             from .facial_sculpt_host import report as sculpt_report
             result['facial_sculpt']=sculpt_report(self,state,source,self._people_cursors.get(asset))
+            from .eye_makeup_enhance_host import report as eye_makeup_enhance_report
+            result['eye_makeup_enhance']=eye_makeup_enhance_report(self,state,source,self._people_cursors.get(asset))
             result.update(binding=self._people_binding(),editing_target=deepcopy(target),editing_overrides=overrides,legacy_unresolved=legacy_report(state,asset))
             return result
         except (ValueError,OSError):return None
@@ -326,6 +329,8 @@ class PeopleHostMixin:
         require_decoration_transition(self,before,candidate,authority=decoration_authority)
         from .facial_sculpt_project import require_transition as require_sculpt_transition
         require_sculpt_transition(self,before,candidate)
+        from .eye_makeup_enhance_project import require_transition as require_eye_makeup_enhance_transition
+        require_eye_makeup_enhance_transition(self,before,candidate)
         def signature(state,asset):
             return [(k,f['enabled'],f['local_assets'],resolve(state,k,A.defaults())['operations'],resolve(state,k,A.defaults())['conflicts'])
                     for k,f in sorted(state['faces'].items()) if f['asset_sha256']==asset]

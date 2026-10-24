@@ -25,6 +25,7 @@ def digest(state, asset):
     # source slice retains its immutable support pointers. No stored intent is
     # dropped or reinterpreted; only a newly invented default row is excluded.
     defaults.pop('lnx.facial_sculpt.v1',None)
+    defaults.pop('lnx.eye_makeup_enhance.v1',None)
     resolved={}
     for key in sorted(faces):
         value=resolve(state,key,defaults)

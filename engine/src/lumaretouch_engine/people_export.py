@@ -21,6 +21,11 @@ def fastpath_blocker(snapshot):
     from .brow_enhance_project import validate_leaf as validate_brow_leaf
     for row in state['overrides']:
         if (row['scope']=='all_people' and row['target_id']==asset
+                and row['operation_id']==A.EYE_MAKEUP_ENHANCE.OP):
+            from .eye_makeup_enhance_project import validate_leaf as validate_eye_makeup_leaf
+            try:validate_eye_makeup_leaf(row['parameter_path'],row['value'])
+            except ValueError:return True
+        if (row['scope']=='all_people' and row['target_id']==asset
                 and row['operation_id']==A.FACIAL_SCULPT.OP):
             from .facial_sculpt_project import validate_leaf as validate_sculpt_leaf
             try:validate_sculpt_leaf(row['parameter_path'],row['value'])

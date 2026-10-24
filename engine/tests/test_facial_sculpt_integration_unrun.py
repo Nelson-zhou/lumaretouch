@@ -49,7 +49,7 @@ def test_context_keeps_explicit_new_intent_even_neutral(scope, target):
 def test_source_route_uses_full_renderer_and_owned_bank():
     runtime = (ENGINE / 'people_render_runtime.py').read_text()
     assert 'A.FACIAL_SCULPT.validate_graph(state)' in runtime
-    assert 'sculpt_budget=byte_budget-owned' in runtime
+    assert 'sculpt_budget=remaining(byte_budget,analyses,fields,field,effects,local,recovery_assets,owned_recovery)' in runtime
     assert runtime.index('if sculpt_budget <') < runtime.index('sculpt_review = sculpt_raster')
     assert 'byte_budget=sculpt_budget' in runtime
     assert 'local.append(sculpt_record)' in runtime
@@ -70,7 +70,7 @@ def test_exact_reference_and_mutating_review_have_separate_routes():
 
 def test_released_reference_finishes_without_a_document_mutation():
     workflow = (ROOT / 'ui/src/people/workflow.ts').read_text()
-    assert '(faceStyleRead || decorationReleased || sculptReleased)' in workflow
+    assert '(faceStyleRead || decorationReleased || sculptReleased || eyeMakeupReleased)' in workflow
     assert 'facialSculptReleasedRequestId: sculptReleased ? command.request_id : null' in workflow
     panel = (ROOT / 'ui/src/facialSculpt/FacialSculptPanel.tsx').read_text()
     assert 'people.state.facialSculptReleasedRequestId === reference.request.request_id' in panel

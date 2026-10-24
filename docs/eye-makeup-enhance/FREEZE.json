@@ -1,0 +1,383 @@
+{
+  "version": 1,
+  "baseline_commit": "ec6178ce2be0ba1ff703736ed858af93bce1e809",
+  "scope": "Current-photo existing periocular makeup, independent signed bilateral amount/saturation/brightness/structure with source-owned manual review",
+  "requirements": [
+    "LNX-REF-PC-32471-C-ee9394fa95",
+    "LNX-REF-PC-32471-C-707956d003",
+    "LNX-REF-PC-32471-C-0985fdcfb9",
+    "LNX-REF-PC-32471-C-e3b5569011"
+  ],
+  "status": "SOURCE_CONNECTED_MANUAL_REVIEW_ACCEPTANCE_UNRUN",
+  "verification": {
+    "python_ast_parse_files": 1454,
+    "new_family_relative_import_source_checks": 30,
+    "previous_core_files_byte_identical": 212,
+    "git_diff_check": "clean",
+    "all_payload_trailing_whitespace_and_extra_eof": "clean including new files",
+    "line_counts": {
+      "App.tsx": 2133,
+      "main.rs": 2048,
+      "server.py": 7049
+    },
+    "independent_static_audit": "completed; no remaining blocker found in inspected paths after capability, atomic bilateral validation, neutral recovery and original alpha admission corrections",
+    "runtime": "UNRUN",
+    "tests": "UNRUN",
+    "build": "UNRUN",
+    "typecheck": "UNRUN",
+    "inference": "UNRUN",
+    "numerical_photographic_performance_acceptance": "UNRUN"
+  },
+  "excluded": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json",
+    "core/expression_blend/",
+    "docs/expression-replacement/",
+    "core/lens_aperture/",
+    "docs/lens-blur/",
+    "ui/src/expressionReplacement/",
+    "docs/expression-review-ui/",
+    "ui/src/lensBlur/",
+    "docs/lens-focus-ui/"
+  ],
+  "limitations": [
+    "Manual visible makeup and same-eye bare-skin reference, not AI segmentation or new cosmetic generation",
+    "Original and opaque SDR derived sources only; no transparent or HDR retouch support",
+    "Current photo only; cross-photo preset/batch/cohort/shared aliases and dedicated recovery not connected",
+    "Reference display is source-bound RGB8 crop, numerical render retains actual float source precision",
+    "Original RGB8 retouch decoding now explicitly refuses actual alpha rather than silently flattening; creative RGBA assets unchanged"
+  ],
+  "files": [
+    {
+      "path": "core/eye_makeup_enhance/Cargo.toml",
+      "sha256": "553e37b79909922c9d0413a161d32e4f729c763086b3cd1a1587f3137a6a39ec",
+      "bytes": 224
+    },
+    {
+      "path": "core/eye_makeup_enhance/README.md",
+      "sha256": "fa3440713cfd5933c1036f7df780744dff648e5188db1dfef869f19500b4dfc4",
+      "bytes": 4872
+    },
+    {
+      "path": "core/eye_makeup_enhance/THIRD_PARTY.md",
+      "sha256": "851cb04f37a74ed1c1f419b1da5c86be35ff271401f3f71035d2974d098bec91",
+      "bytes": 2269
+    },
+    {
+      "path": "core/eye_makeup_enhance/build_eye_makeup_enhance.sh",
+      "sha256": "1b0841db9e1f13e14c217fef2aab4b233caa41d363f0b54c4535335269f46462",
+      "bytes": 601
+    },
+    {
+      "path": "core/eye_makeup_enhance/eye_makeup_enhance.h",
+      "sha256": "8a585bc3fd87fd923c9704c2c3eb43d49f5db74c09e933ee4eeacbe1a0e44d6a",
+      "bytes": 669
+    },
+    {
+      "path": "core/eye_makeup_enhance/lib.rs",
+      "sha256": "a77ca22833b456bfbaba2d58f5f5355f05a7684612c7339bd2946dac969b9fe8",
+      "bytes": 12130
+    },
+    {
+      "path": "core/eye_makeup_enhance/tests.rs",
+      "sha256": "5f8c68ffd95991d0ff58da475f8eab94fdaeedfee59c1856644bb3902d91b864",
+      "bytes": 4157
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "78dacd0c814969fcf2c9590f4644d55b9d0c611b99879efd319b2b70d4450bd7",
+      "bytes": 483333
+    },
+    {
+      "path": "docs/eye-makeup-enhance/INTEGRATION-CONTRACT.md",
+      "sha256": "cc160d95077c6f270b982b61660808782f1041b82f760f047f574f48ef7bf70b",
+      "bytes": 3399
+    },
+    {
+      "path": "docs/eye-makeup-enhance/INTEGRATION.md",
+      "sha256": "b111c618c037d26b237159588c31c95c55801a7586f7d9dfdba32b087fc7f343",
+      "bytes": 7676
+    },
+    {
+      "path": "docs/eye-makeup-enhance/NATIVE-INTEGRATION.md",
+      "sha256": "4bf8352afc4debed9597ec91b8c7691fe549502c50ce7cb3e698efb0df7ae4af",
+      "bytes": 8370
+    },
+    {
+      "path": "docs/eye-makeup-enhance/OWNED_HASHES.json",
+      "sha256": "77556d45d92c0fa6ac879561e9593b8cd0bba23a83e218613ec65826e971ecd3",
+      "bytes": 3362
+    },
+    {
+      "path": "docs/eye-makeup-enhance/README.md",
+      "sha256": "16c4c1bf8512b817f85e32446ba4b179805c0137cbe361c2a4d9f2754f8c4497",
+      "bytes": 6315
+    },
+    {
+      "path": "docs/eye-makeup-enhance/STATIC_CHECKS.json",
+      "sha256": "cf3004d013f23f57586149c61a5713466ed50cfc5d996fdfaec32d4aadd1d140",
+      "bytes": 931
+    },
+    {
+      "path": "docs/eye-makeup-enhance/fixtures/acceptance-unrun.json",
+      "sha256": "fd98ce0b7c7f1e63092a6b7efa34c9c8c5852d1867f19febabe28b670c7a971c",
+      "bytes": 3247
+    },
+    {
+      "path": "docs/eye-makeup-enhance/fixtures/eye_makeup_enhance_contract_unrun.py",
+      "sha256": "72bfa4aaec4bd15df59f6198d28f7afcfea09f4279cf1f5c6735a2dc42bcf70c",
+      "bytes": 3338
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_makeup.py",
+      "sha256": "18ac7664e3b983af6328b0c3a703d4907dcda9605404d0862895bac1df83cb3f",
+      "bytes": 7431
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/decode.py",
+      "sha256": "4e3631b19a39e64edc34585def4605bb66b87347b4924f3a88c99816326af371",
+      "bytes": 46168
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_makeup_enhance_composition.py",
+      "sha256": "87c9acba8bebbfd185a7d8c7fac296233bf4873c352c61c1bd5608be4808b7bc",
+      "bytes": 356
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_makeup_enhance_host.py",
+      "sha256": "889d0b40fe521717fb92788bd9fee786f9e1b7168a8a97451518096b06a2b721",
+      "bytes": 9053
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_makeup_enhance_layer.py",
+      "sha256": "29b423dd91541d3e723548aadf9e6107cc014b553af2378aa652c956db42195e",
+      "bytes": 14664
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_makeup_enhance_native.py",
+      "sha256": "751500f65535ab72e003a6b7b57346155219acac635194f3a1340016f26def48",
+      "bytes": 6647
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_makeup_enhance_project.py",
+      "sha256": "fe33e6eb01589ef602054d24aa14d6f559440a286b23a484ea091d3d754f7c86",
+      "bytes": 4946
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_makeup_enhance_reference.py",
+      "sha256": "1edb7edc93fe4f9a23338cb76e3ecf953f5ce52e1e1f6f0dfb26ec368d68b717",
+      "bytes": 3521
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_makeup_enhance_state.py",
+      "sha256": "4e8a388cdebf9d05cc487fe14255e12d1028eb87a1b1873dc3c97e398a40c0ed",
+      "bytes": 2993
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_makeup_enhance_support.py",
+      "sha256": "c7a82862773be79b315a31da870f898da67dd4f5eae4ff7a7b7be7ed766a8f9d",
+      "bytes": 8001
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "e9104ef0d95e70536109e7e562c1d9d45d9821531d87965137a770d96e27cfab",
+      "bytes": 8397
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "6437da820374402c525fc1a97c8170b03a4628de9fe006ec6ded23f5e2651e61",
+      "bytes": 6947
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_candidate_render.py",
+      "sha256": "68b5f537a6376fca10692c6d71b8626963b41f3e86fa8555532eed37ed8ca372",
+      "bytes": 928
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_edit.py",
+      "sha256": "6be0174f84ae2223bcba5f4ba725b33f275709e3bf8b931a3ad7e68355900d02",
+      "bytes": 6375
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effect_budget.py",
+      "sha256": "dfb644471979fb6e97312473bd20b9a0b4a9dea5dd958f93df393c826fd2f168",
+      "bytes": 1118
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "sha256": "b6db2f425146aba17a6bf5b19a96c86eb2155ce9f0816aeb00bcf7f91175ad92",
+      "bytes": 10358
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "1c83a117822ebef1618e5272040cbccfb2db38a40f68e5d2d29c369ece66a246",
+      "bytes": 12788
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "13ad694eea1c2fc4737869cb1936c91719e57a0e4f157e03123f517b494d9f57",
+      "bytes": 9090
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "6f7410232042f01b883c5e4263660eb1b140bf56a56e1fd5f60376a7484273ff",
+      "bytes": 26152
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "c87eb154a7cb8237722aac90076cf03a5940221a3d23a78e440ab498231cb271",
+      "bytes": 38701
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "sha256": "2dba35bbb225fe5ca61fe001a128a2f4eda41a853f33323628a5f213a979a303",
+      "bytes": 4076
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "sha256": "8e056bc70848a4a4ef4b9c16cb5f4a7fe7cef1a8fa761cb99fc0a49487d4b1dd",
+      "bytes": 8471
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_project.py",
+      "sha256": "1502dbbaf5a2b092f61c44e64358a7a41928af8a2b81136f82991963a3e08019",
+      "bytes": 6617
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_plan.py",
+      "sha256": "1426894945c89aa936d21bead0bc604ce0ee797e487ae6164af712aa9f14e050",
+      "bytes": 7811
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "5fec9df1294d4f0bd33bee499a3b2ba07396051e0dba213a1655e8dfa5faa3d9",
+      "bytes": 38326
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_source_context.py",
+      "sha256": "aad8f7d24d821a3727807a96b298552e5f93fb7aa31b75ffa36fcea128ebd5c8",
+      "bytes": 1919
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_support_assets.py",
+      "sha256": "31d13a341b1740f5aa16c3fc1c834a85b2f68bd8ab3caee0e30405161428933a",
+      "bytes": 12715
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "90de3b9692af703bccee1ed3cd1fe4b8edf718b467bd68dd02d7fe431ec4d1e2",
+      "bytes": 9232
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "a52713700a1e536790d65270095ed5793b5ee979894f81376f1fb3fcf36b6a22",
+      "bytes": 472403
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "c4fd3a6befbaa8274fd5a0334fd600a60592c62d26bee8e0c74f27f4523f4114",
+      "bytes": 136519
+    },
+    {
+      "path": "engine/tests/test_eye_makeup_integration_unrun.py",
+      "sha256": "e6be5927a104e144d84d2d2f28a759ee56deb517d66c4f7feca3f9b578d73428",
+      "bytes": 4415
+    },
+    {
+      "path": "engine/tests/test_facial_sculpt_integration_unrun.py",
+      "sha256": "f7340db1bc6e810b980448e4c48d7195968e23a19134fbbc1ada2fb03d8ffe87",
+      "bytes": 4274
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "ee1d252afafcfc1fdef43fea1c959c14d2ff6ced95dbad7d77e6cee2da5792e9",
+      "bytes": 28811
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "56403fb6921be0b21b37a15798f94e879eb910f045c04a97c2794aa7002a6aa8",
+      "bytes": 41765
+    },
+    {
+      "path": "ui/src-tauri/src/eye_makeup_enhance_protocol.rs",
+      "sha256": "3d4fd1c4bb86014f948f41721b8cd669ab822f5b73fee638d4877afd1f3cbbdc",
+      "bytes": 22706
+    },
+    {
+      "path": "ui/src-tauri/src/eye_makeup_enhance_protocol_unrun.rs",
+      "sha256": "cfc016d8b02eedcdd1001f8c556cbcb425b4811b094e645a5f329460a7181dde",
+      "bytes": 23287
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "a7c502cf81a9dec78b6d4ab4df9d7a4dbbcbbc958c8fd5f9724539496cb68f36",
+      "bytes": 11467
+    },
+    {
+      "path": "ui/src-tauri/src/people_api.rs",
+      "sha256": "8f32e1dbfa6b62f0c5d7b5d00399e3990ccbf48dc5933cbc8ec2f7d09e9abcf9",
+      "bytes": 19837
+    },
+    {
+      "path": "ui/src-tauri/src/preset_alias_recovery_fence.rs",
+      "sha256": "721c1ad41d1c78c208d1383b8915a447a9ced98334df865542336298fbdb79c8",
+      "bytes": 7708
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "sha256": "0c95920bb3d23f98c39bbdd74710f16ee7cc8e7903898fab24983e179e251a8a",
+      "bytes": 10645
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "5e7303707bf0d7b4642a071fedc4f6a8142391cada00b556d1a1e49add21056a",
+      "bytes": 44226
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "1cdd3efe9e04eba8a633c8e6361d6af03f449cc1222717df8c9ec4110e58e1e1",
+      "bytes": 89719
+    },
+    {
+      "path": "ui/src/eyeMakeupEnhance/EyeMakeupEnhanceControl.tsx",
+      "sha256": "de9c4f70ff962c9a50760e6bbe7ad8484e8625e76a57eb3c2e9b7f0fec82e032",
+      "bytes": 10551
+    },
+    {
+      "path": "ui/src/eyeMakeupEnhance/EyeMakeupEnhanceSupportEditor.tsx",
+      "sha256": "a1337d01b04381a7e6632327a36255667ff31117e843a84a876cfc21ecbf98dc",
+      "bytes": 11263
+    },
+    {
+      "path": "ui/src/eyeMakeupEnhance/model.ts",
+      "sha256": "6f396a66978559ac44f18beaddf3c7eedc3fca368cd38f4eb6a92f885b39ff82",
+      "bytes": 24816
+    },
+    {
+      "path": "ui/src/eyeMakeupEnhance/model.unrun.test.ts",
+      "sha256": "de9dbbf88493c83561bcd4180f898d7dda121dc8d79a710ce472a48baad43a7a",
+      "bytes": 1848
+    },
+    {
+      "path": "ui/src/eyeMakeupEnhance/reviewIntegration.unrun.test.ts",
+      "sha256": "d33d86cf83a33cd3bcf9740fbfa243e48c7c8e776618b479321a2a6bda7f2a73",
+      "bytes": 19080
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "3fb2d482478fe2058390495d8e3f86f004dcacb14875e56f883fda6ae5ad48b5",
+      "bytes": 115592
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "2e1940be0deda595251638d5cd47c894f87344b7e29429f099cb40a55ec47083",
+      "bytes": 11703
+    },
+    {
+      "path": "ui/src/people/workflow.ts",
+      "sha256": "5eafc03bee896c2419cb0dbeb8d7c7be942e7873d6e544b115ce4e478a39e212",
+      "bytes": 37647
+    }
+  ]
+}
