@@ -1,0 +1,187 @@
+{
+  "baseline": "340abcaed0d893375ee7396cef308fa2d46e4946",
+  "status": "FROZEN_SOURCE_ONLY_DERIVED_PRESET_VISUAL_REVIEW_PARTIAL_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32465-C-abf0a5c8c9"
+  ],
+  "scope": "Narrow opaque-SDR derived-source collarbone preset scalar admission, exact mixed planner and target-owned source/repair review, explicit scalar save and independently scoped image read. Generic derived transfer/install gates unchanged; no new algorithm or AI3D claim.",
+  "files": [
+    {
+      "path": "docs/collarbone/DERIVED-PRESET-CONTRACT.md",
+      "sha256": "3cab2dc1c14dc765d532e890f79fe8aa50a6f059f2362ee3f7bd8e30637b4ac3",
+      "bytes": 3798
+    },
+    {
+      "path": "docs/collarbone/PRESET-VISUAL-CONTRACT.md",
+      "sha256": "fd473c5d6cb65ca977e5cc149690e47dcda63ec6b6ed89a59a3c85360180bb3e",
+      "bytes": 5275
+    },
+    {
+      "path": "docs/collarbone/REQUIREMENT-AND-RESEARCH.md",
+      "sha256": "d7425d411d176d426bcd149738b0d1bc95284b1d81214dc0a18c09a3194ce867",
+      "bytes": 6960
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "f6decbbad0141d39ace93b0606cd5057793ca103c4d1affa694b5cd3d77963e7",
+      "bytes": 457005
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/collarbone_derived_preset.py",
+      "sha256": "91c7559080ae31f2a9ad38c3742860d22f5647d4332ba2c92da7c829b28a68e4",
+      "bytes": 4174
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/collarbone_preset_review.py",
+      "sha256": "f81707958d3d86fa2fd504f645e1a94f991ced307c09f352e95c06d75b872164",
+      "bytes": 14941
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/collarbone_preset_store.py",
+      "sha256": "9f09e1248903a3b1d84995187a7dfc3ea9772d4bf76b9117f76b88d309b5b4f9",
+      "bytes": 4840
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_transfer_host.py",
+      "sha256": "450227d81044f8583f68a072668d88ccb651a2cf4bcb021f92fb7c7dd65b03da",
+      "bytes": 4627
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_preset_review.py",
+      "sha256": "26c58c91054f50a7260d506239da14bff9f7927cc3b99367094ece2ecf13c90a",
+      "bytes": 18421
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "6ff55a451fd79ea694b3e2a7060750759bad82c58989b2176be84e736d6e8026",
+      "bytes": 40823
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "sha256": "673f794584f5c2b77ed7c24884b2e61dfa518e25f13a647cef2d28d3abdf46be",
+      "bytes": 43242
+    },
+    {
+      "path": "engine/tests/test_collarbone_derived_preset_unrun.py",
+      "sha256": "b1ca4867b6e1e869a6f36725c6335f77a4ea083612728c39a4d98d4c0a18068c",
+      "bytes": 9540
+    },
+    {
+      "path": "ui/src-tauri/src/collarbone_preset_protocol_tests.rs",
+      "sha256": "0e7ccade39184543d52eda4c409403665b13df5d59f8a74817432e63576b4a73",
+      "bytes": 9462
+    },
+    {
+      "path": "ui/src/collarbone/presetModel.unrun.test.ts",
+      "sha256": "683952a106bc8a4f54da20a8e3d2109fd2788b2233ac7db67ab870a81b6384a6",
+      "bytes": 3194
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1290,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 2,
+    "git_diff_check": "clean",
+    "payload_whitespace": "clean",
+    "prior_numeric_geometry_render_and_frozen_sources_byte_identical": 247,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 6998
+    },
+    "fixture_declarations_in_payload_all_unrun": {
+      "python": {
+        "engine/tests/test_collarbone_derived_preset_unrun.py": 15
+      },
+      "rust": {
+        "ui/src-tauri/src/collarbone_preset_protocol_tests.rs": 13
+      },
+      "typescript": {
+        "ui/src/collarbone/presetModel.unrun.test.ts": 5
+      }
+    }
+  },
+  "integration_map": {
+    "preset_only_derived_admission": [
+      "collarbone_derived_preset.py",
+      "preset_controller.py",
+      "local_grade_preset_review.py"
+    ],
+    "derived_session_read_route": [
+      "creative_transfer_host.py",
+      "collarbone_preset_store.py"
+    ],
+    "exact_shared_planner": [
+      "people_scope.py",
+      "collarbone_preset_review.py"
+    ],
+    "complete_render_proof_and_exact_replay": [
+      "collarbone_preset_review.py",
+      "workflow_ports.py"
+    ],
+    "preset_owner": [
+      "preset_controller.py",
+      "local_grade_preset_review.py",
+      "preset_collarbone_lifecycle.py"
+    ],
+    "paged_images": [
+      "collarbone_preset_store.py",
+      "collarbone_visual_store.py reusable storage primitive only"
+    ],
+    "native": [
+      "collarbone_preset_protocol.rs",
+      "preset_api.rs",
+      "preset_host.rs",
+      "receipt_host.rs",
+      "native_dispatch.rs",
+      "engine.rs",
+      "project_recovery_fence.rs"
+    ],
+    "ui": [
+      "ui/src/presets",
+      "ui/src/collarbone/CollarbonePresetReview.tsx",
+      "presetModel.ts",
+      "presetTransport.ts",
+      "ui/src/native.ts"
+    ],
+    "preserved": [
+      "collarbone numerical core and support",
+      "full_candidate_render.py",
+      "people_batch_ledger.py",
+      "people_batch_transfer.py",
+      "preset_transaction.py",
+      "main.rs",
+      "App.tsx"
+    ],
+    "documentation": [
+      "docs/collarbone/DERIVED-PRESET-CONTRACT.md",
+      "docs/collarbone/PRESET-VISUAL-CONTRACT.md",
+      "PRESET-VISUAL-NEXT.md",
+      "REQUIREMENT-AND-RESEARCH.md",
+      "handbook-traceability exact partial entry"
+    ]
+  },
+  "limits": {
+    "pending_plans": 8,
+    "plan_ttl_seconds": 1800,
+    "display_edge": 1024,
+    "individual_png_bytes": 4194304,
+    "session_raw_image_bytes": 134217728,
+    "session_image_entries": 256,
+    "existing_native_result_bytes": 8388608
+  },
+  "limitations": [
+    "Official AI3D clavicle detection and automatic category/anatomy remain absent; requirement stays partial. No new algorithm/feature count or photoquality acceptance.",
+    "Only the exact reviewed current-photo opaque-SDR derived collarbone preset path is admitted. Generic derived installation/batch guards remain unchanged; unsupported mixtures and retained unported portrait install paths still refuse atomically.",
+    "Legacy support/ownership migrations cannot be normalized away. Fresh review required; unrecognized partial state or foreign edit refuses rollback and needs explicit recovery.",
+    "Existing stale-support cohort unlink limits remain. All target traces, masks, categories and measured fields stay target-owned.",
+    "1024edge RGB8 display reductions are not fullresolution precision inspection. No broader alpha/HDR support or silent clipping/flattening. Memory and usability not measured.",
+    "All product imports, execution, tests, builds/compiler/typecheck, inference/download, native/history/export/numerical/photographic/performance acceptance UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

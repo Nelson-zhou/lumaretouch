@@ -8,6 +8,16 @@ from .collarbone_visual_store import _Images
 FIELDS = {'cmd', 'action', 'request_id', 'id', 'document_id', 'revision', 'side', 'sha256', 'preflight_token'}
 
 
+def image_read_only(request):
+    """Exact read-only envelope; pending token/content ownership is checked later."""
+    if (type(request) is not dict or set(request) != FIELDS or request.get('cmd') != 'preset'
+            or request.get('action') != 'collarbone_visual'
+            or request.get('side') not in ('before', 'after')):
+        return False
+    return all(type(request[key]) is str and 1 <= len(request[key]) <= 128
+               for key in ('request_id', 'id', 'document_id', 'revision', 'sha256', 'preflight_token'))
+
+
 def _record(reviews, token):
     record = reviews.pending.get(token)
     if record is None or record.get('collarbone') is None:
@@ -55,11 +65,7 @@ def verify_available(reviews, token):
 
 
 def retrieve(controller, request):
-    if (type(request) is not dict or set(request) != FIELDS or request.get('cmd') != 'preset'
-            or request.get('action') != 'collarbone_visual'
-            or request.get('side') not in ('before', 'after')
-            or type(request.get('request_id')) is not str or not 1 <= len(request['request_id']) <= 128
-            or type(request.get('preflight_token')) is not str):
+    if not image_read_only(request):
         raise ValueError('Preset image read requires its exact scoped request')
     prune(controller.reviews)
     record = _record(controller.reviews, request['preflight_token'])

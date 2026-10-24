@@ -96,3 +96,17 @@ fn review_fixture()->Value {
     assert!(crate::project_recovery_fence::proof(epoch).is_err());
     crate::project_recovery_fence::observed(epoch,&json!({"event":"project_opened"}));
 }
+#[test] fn derived_review_binds_effective_asset_not_original_provenance(){
+    let mut value=review_fixture();let asset="9".repeat(64);
+    let source=json!({"asset_sha256":asset,"original_sha256":"a".repeat(64),
+        "creative_source":{"sha256":asset,"width":2048,"height":1024}});
+    value["source_proof"]=source.clone();
+    value["collarbone_preset"]["owner"]["source_proof"]=source.clone();
+    value["collarbone_preset"]["visual"]["source_proof"]=source;
+    value["collarbone_preset"]["face_ref"]["asset_sha256"]=json!(asset);
+    value["collarbone_preset"]["coverage"]["targets"][0]["face_ref"]["asset_sha256"]=json!(asset);
+    value["collarbone_preset"]["visual"]["coverage_sha256"]=json!(crate::batch_api::collarbone::request_digest(&value["collarbone_preset"]["coverage"]));
+    assert!(review(&value));
+    value["collarbone_preset"]["face_ref"]["asset_sha256"]=json!("a".repeat(64));
+    assert!(!review(&value));
+}

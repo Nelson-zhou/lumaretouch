@@ -16,7 +16,7 @@ from .preset_transaction import apply_with_rollback, PresetApplyError
 from .preset_organisation_store import OrganisationError
 from . import local_grade_layers as LG
 from . import sky_replacement_scope as SKY, optics_auto_scope as OA, id_background_scope as ID_BACKGROUND
-from . import creative_derived_transfer as DERIVED, creative_derived_source as SOURCE
+from . import collarbone_derived_preset as DERIVED, creative_derived_source as SOURCE
 from . import body_scalar_transfer_review as BODY_REVIEW
 
 ACTIONS = ("list", "preflight", "apply", "save", "import", "delete", "xmp_inspect", "collarbone_visual")
@@ -360,7 +360,7 @@ class PresetController:
                 verdict, reason = self.ports.face_check()
                 if verdict != "ok": raise SC.ScopeError(f"{op} 不能作用在这张图上：{reason}")
         before = OA.before_params(previous, ops)
-        state = OA.candidate(previous, mods, local_replace_legacy=bool(p.get('preflight_token') and record['transfer'] and record['transfer']['legacy_removed']))
+        state = DERIVED.candidate(previous, mods, local_replace_legacy=bool(p.get('preflight_token') and record['transfer'] and record['transfer']['legacy_removed']))
         if OA.OP in ops:
             state['_optics']=OA.verify_target(record['optics'],previous,state,self.ports.target_row(),self.ports.document_id(),self.ports.revision(),mods[OA.OP])
         if RC.OP in ops:
@@ -559,8 +559,8 @@ class PresetController:
         requested = p.get("module_scope")
         ops = SC.check_scope([op for op in SC.transferable_ops() if op not in (OA.OP,RC.OP,SC.SPILL_REMOVAL.OP,SC.TORSO_LENGTH.OP,SC.WAIST_LENGTH.OP,SC.HEAD_SIZE.OP,SC.COLLARBONE.OP)] if requested is None else requested)
         state = self.ports.capture()
-        if SOURCE.record(state) is not None and set(ops) - SC.DERIVED_PARAMETER_OPS:
-            raise SC.ScopeError('合成来源只能通过通用预设保存明确选择的全局参数模块')
+        if SOURCE.record(state) is not None and set(ops) - (SC.DERIVED_PARAMETER_OPS | ({SC.COLLARBONE.OP} if requested is not None else set())):
+            raise SC.ScopeError('合成来源预设仅保存已接通的参数；人工锁骨光影须明确选择并保留本目标归属审核')
         mods = DERIVED.require_modules(state, SC.params_of(state, ops))
         if SC.CUSTOM_LUT.OP in mods:
             mods[SC.CUSTOM_LUT.OP] = SC.CUSTOM_LUT.portable(mods[SC.CUSTOM_LUT.OP])

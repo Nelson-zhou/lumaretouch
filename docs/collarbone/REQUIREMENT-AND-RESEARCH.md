@@ -98,7 +98,8 @@ Persistent source-and-target collarbone cohort review is subsequently authored
 in [COHORT-VISUAL-CONTRACT.md](COHORT-VISUAL-CONTRACT.md), including inherited
 intent and unlink. Current-photo complete mixed-preset visual review is now
 source-authored in [PRESET-VISUAL-CONTRACT.md](PRESET-VISUAL-CONTRACT.md), with
-unchanged generic derived-preset refusal and explicit source/support limits.
+a subsequent narrow [derived preset route](DERIVED-PRESET-CONTRACT.md).
+Generic transfer guards and explicit source/support limits remain.
 
 All tests, builds, native execution, numerical precision, RGB16 preservation,
 preview/export equivalence, history/project round trips, photographic quality,

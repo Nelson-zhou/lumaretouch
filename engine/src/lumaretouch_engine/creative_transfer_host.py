@@ -72,6 +72,10 @@ def require_route(name,request):
                           'local_mask_transfer','reference_color','people_transfer'}:
             raise ValueError('Invalid reviewed transfer options')
         return
+    if name=='preset' and action=='collarbone_visual':
+        from .collarbone_preset_store import image_read_only
+        if not image_read_only(request):raise ValueError('Preset image read requires its exact bounded identity')
+        return  # Never an apply exemption; actual preset owner checks the token.
     if name=='preset' and action in ('preflight','apply','save','list','import','delete','xmp_inspect'):
         return  # Preset owner validates exact schema and actual stored modules.
     raise ValueError('Unsupported derived transfer route')

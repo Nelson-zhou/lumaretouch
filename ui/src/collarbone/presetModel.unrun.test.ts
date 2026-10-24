@@ -26,3 +26,14 @@ test('display confirmation changes for request, preset, token and any frozen pro
  assert.notEqual(key,collarbonePresetKey('other','request','preset',v));assert.notEqual(key,collarbonePresetKey('token','other','preset',v));
  assert.notEqual(key,collarbonePresetKey('token','request','other',v));assert.notEqual(key,collarbonePresetKey('token','request','preset',{...v,applies_sha256:'c'.repeat(64)}));
 });
+test('derived preset proof keeps original provenance separate from actual target pixels',()=>{
+ const v=structuredClone(presetFixture()),asset='e'.repeat(64),original=v.owner.source_proof.original_sha256;
+ const proof={asset_sha256:asset,original_sha256:original,creative_source:{sha256:asset,width:1,height:1}};
+ v.owner.source_proof=proof;v.visual.source_proof=structuredClone(proof);
+ v.face_ref.asset_sha256=asset;v.coverage.targets[0].face_ref.asset_sha256=asset;
+ assert.ok(validCollarbonePreset(v,v.load_id,v.visual.revision,proof));
+ const stale=structuredClone(v);stale.face_ref.asset_sha256=original;
+ assert.equal(validCollarbonePreset(stale,v.load_id,v.visual.revision,proof),false);
+ const wrong=structuredClone(v);wrong.visual.source_proof.creative_source!.sha256='f'.repeat(64);
+ assert.equal(validCollarbonePreset(wrong,v.load_id,v.visual.revision,proof),false);
+});

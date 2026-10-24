@@ -3268,13 +3268,15 @@
         "engine/src/lumaretouch_engine/collarbone_cohort_review.py",
         "docs/collarbone/PRESET-VISUAL-CONTRACT.md",
         "engine/src/lumaretouch_engine/collarbone_preset_review.py",
-        "engine/src/lumaretouch_engine/people_preset_plan.py"
+        "engine/src/lumaretouch_engine/people_preset_plan.py",
+        "docs/collarbone/DERIVED-PRESET-CONTRACT.md",
+        "engine/src/lumaretouch_engine/collarbone_derived_preset.py"
       ],
       "verification": [],
       "remaining": [
         "Official AI 3D clavicle detection and automatic anatomy remain missing.",
         "All runtime, numerical, photographic and release acceptance UNRUN.",
-        "Confirmed/one-time, persistent source+target cohort and exact mixed current-photo preset image review are source-authored UNRUN. Generic derived collarbone preset installation remains refused; stale support/ownership migrations require fresh review."
+        "Confirmed/one-time, persistent source+target cohort and exact mixed current-photo preset image review are source-authored UNRUN. A narrow opaque-SDR derived current-photo preset path is source-authored with exact mixed review; generic derived installation/batch guards remain. Unsupported mixtures and stale support/ownership migrations still refuse."
       ]
     },
     {

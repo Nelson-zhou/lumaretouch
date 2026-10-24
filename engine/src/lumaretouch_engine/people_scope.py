@@ -20,7 +20,7 @@ def legacy_batch_face_check(engine,row,*,live=False):
     return engine._face_known_single(row,live=live)
 
 
-def plan_preset(engine,state,*,require_active=True,**kwargs):
+def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,**kwargs):
     """Preserve existing single-face presets; never infer a multi-face target.
 
     The existing preset owner owns receipts, rollback, document fences/history.
@@ -237,7 +237,13 @@ def plan_preset(engine,state,*,require_active=True,**kwargs):
         # The selected target must independently retain clavicle consent.
         # Re-capture live body/person/source proof before staging amount only;
         # final strict rendering rebuilds manual/semantic coverage and reference.
-        COLLARBONE.install(dict(current),{'recipe':collarbone_recipe})
+        if reviewed_collarbone and current.get('_creative_base') is not None:
+            # Only the exact read-only preset reviewer enables this branch.
+            # Generic legacy replay/install remain fenced for derived sources.
+            from .collarbone_derived_preset import validate_target
+            validate_target(current,collarbone_recipe)
+        else:
+            COLLARBONE.install(dict(current),{'recipe':collarbone_recipe})
         if (state.get(COLLARBONE.TARGET)!=current[COLLARBONE.TARGET]
                 or COLLARBONE.owner_identity(state)!=COLLARBONE.owner_identity(current)):
             raise ValueError('人工锁骨光影预设的文档、人物归属、有效来源或当前人物已变化，请重新选择')

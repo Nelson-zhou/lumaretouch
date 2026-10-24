@@ -148,7 +148,7 @@ def prepare(engine, row, before, candidate, load_id, revision, preset, modules):
     from .creative_derived_source import verify_row
     owner, document = _target(engine, row, load_id, revision)
     if SCOPE.OP not in modules: raise ValueError('A collarbone review cannot bless another preset')
-    plan = plan_preset(engine, candidate, require_active=True, strict_local=True)
+    plan = plan_preset(engine, candidate, require_active=True, reviewed_collarbone=True, strict_local=True)
     if not plan.managed or plan.owner is not owner or plan.target_ref is None:
         raise ValueError('Exact mixed preset review requires one existing explicit portrait target')
     ref = plan.target_ref

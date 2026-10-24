@@ -8,7 +8,7 @@ from . import reference_color_scope as RC
 from . import scope as SC, local_grade_layers as LG, local_grade_runtime as LR
 from . import sky_replacement_scope as SKY, optics_auto_scope as OA, optics_transfer_review as OR
 from .batch_preflight import canonical
-from . import creative_derived_transfer as DERIVED, creative_derived_source as SOURCE
+from . import collarbone_derived_preset as DERIVED, creative_derived_source as SOURCE
 from . import spill_transfer_review as SPILL_REVIEW
 from . import original_shadow_transfer_review as SHADOW_REVIEW
 from . import body_scalar_transfer_review as BODY_REVIEW
@@ -42,7 +42,7 @@ class PresetReviews:
         else:
             if options is not None:raise ValueError('未选择局部组，不能附带蒙版选项')
             prepared,transfer=deepcopy(modules),None
-        candidate=OA.candidate(state,prepared,local_replace_legacy=bool(transfer and transfer['legacy_removed']))
+        candidate=DERIVED.candidate(state,prepared,local_replace_legacy=bool(transfer and transfer['legacy_removed']))
         if SC.SPILL_REMOVAL.OP in prepared:SC.SPILL_REMOVAL.validate_target(candidate,row["path"],(row["src_h"],row["src_w"]))
         if SC.ORIGINAL_SHADOW.OP in prepared:SC.ORIGINAL_SHADOW.validate_target(candidate,row["path"],(row["src_h"],row["src_w"]))
         if family is not None:family.scope.validate_target(candidate,row["path"],(row["src_h"],row["src_w"]))
@@ -163,7 +163,7 @@ class PresetReviews:
         if canonical(OA.before_params(state,list(record['modules'])))!=record['before'] or (record['local_key'] is not None and LG.undo_key(state)!=record['local_key']):
             raise ValueError('照片在预检后发生修改，请重新预检')
         if LG.OP in record['modules']:LR.verify_modules(record['modules'],{**row,'state':state},record['transfer'])
-        candidate=OA.candidate(state,record['modules'],local_replace_legacy=bool(record['transfer'] and record['transfer']['legacy_removed']))
+        candidate=DERIVED.candidate(state,record['modules'],local_replace_legacy=bool(record['transfer'] and record['transfer']['legacy_removed']))
         if SC.SPILL_REMOVAL.OP in record['modules']:SC.SPILL_REMOVAL.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
         if SC.ORIGINAL_SHADOW.OP in record['modules']:SC.ORIGINAL_SHADOW.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
         if family is not None:family.scope.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))

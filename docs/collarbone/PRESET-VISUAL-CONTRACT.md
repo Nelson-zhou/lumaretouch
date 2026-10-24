@@ -70,8 +70,9 @@ apply receipts are query-only; image requests do not bypass mutation fences.
 
 ## Remaining limits
 
-- Generic derived-source collarbone preset installation retains its existing
-  explicit refusal. This slice does not claim to enable every derived preset.
+- The subsequent [derived preset adapter](DERIVED-PRESET-CONTRACT.md) admits
+  a narrow explicitly reviewed opaque-SDR current-photo path. Generic derived
+  installation/batch guards remain intact; this is not every derived preset.
 - Legacy support or ownership needing migration must be reopened/reviewed; it
   cannot be silently rebased while committing this frozen preset.
 - AI 3D clavicle detection, automatic anatomical/category inference and fully
