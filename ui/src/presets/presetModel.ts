@@ -12,6 +12,7 @@ const labels:Record<string,string>={'lnx.original_shadow.v1':'原图阴影（开
   'lnx.chin_length.v1':'新版下巴长度（嘴唇平面至下巴；正值拉长、负值缩短，逐图重算，不自动清零旧版）',
   'lnx.philtrum.v1':'人中（鼻部安全界至唇上界；负值缩短、正值拉长，嘴唇与下脸共同平移，逐图重算）',
   'lnx.eye_symmetry.v1':'眼睛对称（水平/大小强度与自动或左右大小参考策略；目标独立测量双眼，不复制眼睛）',
+  'lnx.brow_enhance.v1':'眉毛增强（原有眉毛对比度；左右独立，负值减弱、正值增强，目标独立测量眉毛与邻接额头，不添加眉妆）',
   'lnx.skin_texture.v1':'皮肤质感（面部纹理与精细清晰，来源细节逐图重算）',
   'lnx.curves.v1':'曲线','lnx.hsl.v1':'HSL','lnx.crop.v1':'裁剪','lnx.skin.v1':'磨皮','lnx.blemish.v1':'瑕疵处理','lnx.skin_mask.v1':'皮肤蒙版'};
 export const moduleLabel=(op:string)=>labels[op]??op;

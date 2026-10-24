@@ -18,6 +18,12 @@ def fastpath_blocker(snapshot):
     from . import people_resolver as R
     state=S.check(snapshot['state']);asset=S.digest(snapshot['asset_sha256'])
     if any(row['asset_sha256']==asset and row['status']=='unresolved' for row in state['unresolved_legacy']):return True
+    from .brow_enhance_project import validate_leaf as validate_brow_leaf
+    for row in state['overrides']:
+        if (row['scope']=='all_people' and row['target_id']==asset
+                and row['operation_id']==A.BROW_ENHANCE.OP):
+            try:validate_brow_leaf(row['parameter_path'],row['value'])
+            except ValueError:return True  # Equality alone confuses bool and numeric leaves.
     defaults=A.defaults();specs=A.specifications()
     faces=[face for face in state['faces'].values() if face['asset_sha256']==asset and face['enabled']]
     if not faces and any(row['scope']=='all_people' and row['target_id']==asset and row['value']!=defaults.get(row['operation_id'],{}).get(row['parameter_path']) for row in state['overrides']):return True

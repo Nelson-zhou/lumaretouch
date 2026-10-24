@@ -1,7 +1,7 @@
 {
   "method": "历史静态路由清单，后续切片仅增补其明确改动的条目，不是当前 RetouchPanel WIRED 的完整重新提取。wired_routes 是本文件列出条目数。其它路由和特殊 UI 分支未完整计入，未列出不直接判缺失，已列出也不算已完成。",
   "families": 39,
-  "wired_routes": 49,
+  "wired_routes": 50,
   "items": [
     {
       "id": "PC-47211",
@@ -164,7 +164,9 @@
       "id": "PC-32471",
       "title": "妆容调整",
       "subcontrol_records": 74,
-      "wired_routes_in_retouch_panel": [],
+      "wired_routes_in_retouch_panel": [
+        "PC-32471|眉毛增强"
+      ],
       "status": "implementation_and_semantics_require_verification"
     },
     {

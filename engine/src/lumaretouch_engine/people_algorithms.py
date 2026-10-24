@@ -12,6 +12,7 @@ from . import chin_shape_state as CHIN_SHAPE
 from . import chin_length_state as CHIN_LENGTH
 from . import philtrum_state as PHILTRUM
 from . import eye_symmetry_state as EYE_SYMMETRY
+from . import brow_enhance_state as BROW_ENHANCE
 from . import brow_shape_state as B, nose_shape_state as N, eye_shape_state as E, mouth_shape_state as M
 from . import lip_makeup_state as L, facial_wrinkle_state as W, hair_colour_state as HAIR
 from .ops import deform as D, enhance as H
@@ -32,7 +33,8 @@ def check_enhance(value):
 
 
 def specifications():
-    return {EYE_SYMMETRY.OP: (EYE_SYMMETRY.neutral(), EYE_SYMMETRY.check),
+    return {BROW_ENHANCE.OP: (BROW_ENHANCE.neutral(), BROW_ENHANCE.check),
+            EYE_SYMMETRY.OP: (EYE_SYMMETRY.neutral(), EYE_SYMMETRY.check),
             PHILTRUM.OP: (PHILTRUM.neutral(), PHILTRUM.check),
             CHIN_LENGTH.OP: (CHIN_LENGTH.neutral(), CHIN_LENGTH.check),
             CHIN_SHAPE.OP: (CHIN_SHAPE.neutral(), CHIN_SHAPE.check),

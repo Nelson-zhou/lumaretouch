@@ -80,8 +80,13 @@ def _merge_delta(pipe,stage,*,align):
 
 def source_effect(pipe,stage,pixels):
     import torch
-    if stage not in ('skin_colour','facial_wrinkles','lip_makeup','hair_colour','eye_light','blush_makeup','lipstick','eyeliner','eyelash','brow_makeup','iris_makeup'):raise ValueError('This effect belongs after common geometry')
+    if stage not in ('skin_colour','facial_wrinkles','lip_makeup','hair_colour','eye_light','blush_makeup','lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup'):raise ValueError('This effect belongs after common geometry')
+    if stage == 'brow_enhance' and not any(r.stage == stage for r in pipe.people_prepared.effects):
+        return pixels  # Exact neutral: no new full-frame scratch or native work.
     delta=_merge_delta(pipe,stage,align=False)
+    if stage == 'brow_enhance':
+        from .brow_enhance_composition import apply_t
+        return apply_t(pixels, delta)
     if stage=='skin_colour':
         from .people_skin_composition import apply as compose_skin
         return compose_skin(pixels,delta)

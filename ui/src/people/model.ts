@@ -114,6 +114,7 @@ export function operationLabel(id: string): string {
     'lnx.philtrum.v1': '人中（鼻下至唇上局部间距）',
     'lnx.lower_face.v1': '下庭（局部纵向长度）',
     'lnx.chin_shape.v1': '尖下巴（局部横向收尖，左右独立）',
+    'lnx.brow_enhance.v1': '眉毛增强（已有眉毛对比，左右独立）',
     'lnx.chin_length.v1': '下巴长短（唇下局部纵向长度）',
     'lnx.facial_wrinkles.v1': '面部细纹', 'lnx.lip_makeup.v1': '唇妆',
     'lnx.brow_shape.v1': '眉形', 'lnx.nose_shape.v1': '鼻形',

@@ -49,6 +49,7 @@ import {PhiltrumControl} from '../philtrum/PhiltrumControl';
 import {LowerFaceControl} from '../lowerFace/LowerFaceControl';
 import {ChinLengthControl, LegacySmallChinControl} from '../chinLength/ChinLengthControl';
 import {ChinShapeControl} from '../chinShape/ChinShapeControl';
+import {BrowEnhanceControl} from '../browEnhance/BrowEnhanceControl';
 import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {FabricPanel} from "../fabric/FabricPanel";
 import {HistogramPanel} from "./HistogramPanel";
@@ -333,6 +334,7 @@ const WIRED: Record<string, string> = {
   "PC-32471|局部妆容/腮红/HEX": "blush.hex",
   "PC-32471|局部妆容/腮红/收藏颜色": "blush.saved",
   "PC-32471|唇妆增强": "lip.family",
+  "PC-32471|眉毛增强": "brow_enhance.v1",
   "PC-32471|唇妆增强/饱和度": "lip.saturation",
   "PC-32471|唇妆增强/明度": "lip.brightness",
   "PC-32471|唇妆增强/立体度": "lip.dimensionality",
@@ -467,6 +469,7 @@ const WIRE_LABEL: Record<string, string> = {
   "lower_face.amount": "下庭（局部纵向长度）",
   "chin_length.amount": "下巴长短（唇下局部纵向长度）",
   "chin_shape.v1": "尖下巴（局部横向收尖，左右独立）",
+  "brow_enhance.v1": "眉毛增强（已有眉毛对比，左右独立）",
   "deform.slim_face": "旧版瘦脸（历史错误拓扑）",
   "deform.big_eye": "大眼",
   "deform.small_chin": "小下巴",
@@ -825,6 +828,15 @@ export default function RetouchPanel(props: RetouchProps) {
           <p className="muted">此文档尚未提供规范人物状态，尖下巴暂不可用。不会改用旧版小下巴、收下巴、下巴长短、下庭、瘦脸或下颌替代。</p>
         </section>;
         return <ChinShapeControl key={leaf.path}
+          people={props.people} capability={status?.ready_caps}
+          blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+            || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+          faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
+      case "brow_enhance.v1":
+        if (!doc?.people) return <section key={leaf.path} data-control-id="LNX-REF-PC-32471-C-18765fa8ea" aria-label="眉毛增强暂不可用">
+          <p className="muted">此文档尚未提供规范人物状态，眉毛增强暂不可用。不会改用眉妆素材、眉形变形或通用曝光替代。</p>
+        </section>;
+        return <BrowEnhanceControl key={leaf.path}
           people={props.people} capability={status?.ready_caps}
           blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
             || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}

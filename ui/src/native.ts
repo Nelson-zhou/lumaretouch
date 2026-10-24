@@ -1000,6 +1000,8 @@ export interface EngineStatus {
     lower_face_reason?: string | null;
     chin_shape_available?: boolean;
     chin_shape_reason?: string | null;
+    brow_enhance_available?: boolean;
+    brow_enhance_reason?: string | null;
     chin_length_available?: boolean;
     chin_length_reason?: string | null;
     creative_document_protocol?: number;

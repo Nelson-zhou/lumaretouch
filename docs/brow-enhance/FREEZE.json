@@ -1,0 +1,311 @@
+{
+  "baseline": "33865db48831b8375c4fcb3b9921914f22ed78a7",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Original observed-brow bilateral signed contrast, independently measured current-source brow and adjacent forehead reference, original Rust gain and source-only guardrails, canonical original/derived UI/history/export and target-recomputed scalar presets. No hair synthesis/removal or proprietary equivalence.",
+  "requirement_ids": [
+    "LNX-REF-PC-32471-C-18765fa8ea"
+  ],
+  "files": [
+    {
+      "path": "core/brow_enhance/Cargo.toml",
+      "sha256": "c9e1ec0dda6bbf85f631be1fa5fc290cf9f40dac8d8dd21331ea7d4e0569ba51",
+      "bytes": 221
+    },
+    {
+      "path": "core/brow_enhance/README.md",
+      "sha256": "799c894f336d7385870cd2446ae08903b023e6b0dd9d3f65f1fd4feca4adf927",
+      "bytes": 1423
+    },
+    {
+      "path": "core/brow_enhance/brow_enhance.h",
+      "sha256": "fed85a70d3dba62118256da3cd63acd37d2b4883b84107200cff695f0f193f62",
+      "bytes": 1286
+    },
+    {
+      "path": "core/brow_enhance/lib.rs",
+      "sha256": "0741eeae127082d8759e31ff584bd24ae88f1c8bdf7fcb301c57bed9dad39dd5",
+      "bytes": 11881
+    },
+    {
+      "path": "core/brow_enhance/tests.rs",
+      "sha256": "26ac61777e61652092b45912c4a284a30bad632f7050a56f7e1ecebd8c2e1bee",
+      "bytes": 11965
+    },
+    {
+      "path": "docs/brow-enhance/IMPLEMENTATION.md",
+      "sha256": "68885ad7e944e029b7faea4c7f07f350d6b2d8bdf2f282cf20bcae61acbe2909",
+      "bytes": 6652
+    },
+    {
+      "path": "docs/brow-enhance/NUMERICAL-CONTRACT.md",
+      "sha256": "13ee9d28fee231cf521794a70ef275603b87eab9d9fcae73a64f404e4616f23b",
+      "bytes": 14602
+    },
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "e4401c430a36bcdd7714bb263798e368046ed092192cf187b75ab14a3687e19b",
+      "bytes": 14552
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "4c61a1632ae8c3a95056b3de83153fa25b11d8695d7a9157aec25a5b8f01181b",
+      "bytes": 41101
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_enhance_composition.py",
+      "sha256": "2f0f9ad9ab7143601065990cad57546b85f537dcb2e1c65872e333047113fe08",
+      "bytes": 3586
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_enhance_layer.py",
+      "sha256": "41dc7383b83d8edb2fd4c9970db720d5fe3ca4b1ee9dbca43228447a0cc1a89e",
+      "bytes": 22904
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_enhance_native.py",
+      "sha256": "cccc6c1b35d13e1e85bc23eb947df85f4da73b214c53ffee730c4f35e12b42a1",
+      "bytes": 10514
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_enhance_project.py",
+      "sha256": "9809e1b572e4e3c5ae8d4cb9ab1ca8abb340140bcbe304efb2b3f2fe7cc14eb9",
+      "bytes": 1386
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_enhance_scope.py",
+      "sha256": "c7aad1f3cb20f1325127a4f49e4a5e2c993e4f0fb1d82f272f01ea6f617a4ce9",
+      "bytes": 6824
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_enhance_state.py",
+      "sha256": "bf76dde064925a0304ad67c1b12e7e77f849ee502876cf4ca7fb9c8eab4d7492",
+      "bytes": 2475
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "aadfa180684a39182939c78163df31a3a8bfad833ef63c6655d3ae7e2e79e018",
+      "bytes": 15220
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "c7d2ed01e3740082fb68c714b57f04cf720407b7ca2a2b3aea3d1b369aeba47c",
+      "bytes": 5629
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_edit.py",
+      "sha256": "8b3b4ba6ba86c687019a7258140798b9c383121e0dcad7b761e9f63d62f38354",
+      "bytes": 6052
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "sha256": "c126656eaac845694002299d112c1cb0afa781083b417d4b25ce9928ab8054e6",
+      "bytes": 7903
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "b034940582829246135a2cb0934ac354b1aacb8dc8cb6a1b22e084c377889912",
+      "bytes": 6443
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "sha256": "538a0fe526f55a76a9c7ec9363f137f7e0b72c3d58c994341cc5c6d2a004685b",
+      "bytes": 5528
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_project.py",
+      "sha256": "eaf3c50e6c90c65e39fa0febc8e1a76cfecddd1a686c0851b610fcaacf749ef3",
+      "bytes": 4309
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_plan.py",
+      "sha256": "2a9fb9831047546b27d0992e1e05231b170605c30f2f00e54aefe596bc669b3e",
+      "bytes": 5343
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "947b7a77d8399043e246ac6b488ccdb3eb7ffa2f4949c210abb8991d33d6fc17",
+      "bytes": 23505
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "87d9519b360f33c5d95ece6bd7005eb224907deae3b4fcdacaa8214c51e3e8f3",
+      "bytes": 28114
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "0ee996831ecf7b9832b7e2c8a421c7c6850d4d05c91e9a54968f0b46b3d6a5e1",
+      "bytes": 57179
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "13df0d3086ee24194c7e35c75229d0d6306c38fc32e3f79e1e866f768407ec31",
+      "bytes": 465791
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "7f84dd5eefa4b2949e89a93daf45e052310f12cdc418ff23ea5ac71cd4c7e924",
+      "bytes": 135796
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "6a0ecb4233c24f89cc2c0e67a1ec64dc4a29b5159e7b814a7046d1e5fad268ad",
+      "bytes": 8830
+    },
+    {
+      "path": "engine/tests/test_brow_enhance_composition_unrun.py",
+      "sha256": "f590df706499c0d0dba224e73a9e4e9ef804eb065b8e7f3b78f056d4aeab68d2",
+      "bytes": 2365
+    },
+    {
+      "path": "engine/tests/test_brow_enhance_integration_unrun.py",
+      "sha256": "fb8d41bfe3d3c37b223755f4984fbe4b85feab7f8128f6ba8ad927c9f75a7573",
+      "bytes": 42720
+    },
+    {
+      "path": "engine/tests/test_brow_enhance_native_unrun.py",
+      "sha256": "2c95aac39f927138513653595a8ab92d4eaaf26ca0d1efb24ad6e1f2f38cdfd1",
+      "bytes": 10236
+    },
+    {
+      "path": "engine/tests/test_brow_enhance_scope_unrun.py",
+      "sha256": "f1de81a3da3aa163396a54b884c6556c36c2fc0f50e1f2f75774215f3b46935c",
+      "bytes": 41728
+    },
+    {
+      "path": "engine/tests/test_brow_enhance_support_unrun.py",
+      "sha256": "eacb53814a37f1a782e5ede22c04215967bcec8b3c90d8384cd41d84681da125",
+      "bytes": 16338
+    },
+    {
+      "path": "packaging/build-brow-enhance.sh",
+      "sha256": "f00802299e40c5bd1e8a62d9661862653c7a94c81ce7c1f66dc6e386aee1909d",
+      "bytes": 639
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "12b3eca9c7be42c581ed9581f61009c2435399e17949dd548d33ab1f33de180f",
+      "bytes": 25073
+    },
+    {
+      "path": "ui/src/browEnhance/ACCEPTANCE_UNRUN.md",
+      "sha256": "c4154ab64ce7ad79ade4dad04cb5ed41ea7307c3a3a7e31bdb55e236e8673171",
+      "bytes": 7382
+    },
+    {
+      "path": "ui/src/browEnhance/BrowEnhanceControl.tsx",
+      "sha256": "545a05cf6e9d33d3321f08131f14422e2a48cd949ba9f40e1d6cf000d72f0467",
+      "bytes": 13330
+    },
+    {
+      "path": "ui/src/browEnhance/model.ts",
+      "sha256": "f9b87b01a74f3c3bac71555159b01cc658b720bca1bb3c22d2ed0d34f0181088",
+      "bytes": 12456
+    },
+    {
+      "path": "ui/src/browEnhance/model.unrun.test.ts",
+      "sha256": "f53d12ddc54293ee359e5165660111180e93b5b6b41c2cfbcc1cdedaa48a155f",
+      "bytes": 20266
+    },
+    {
+      "path": "ui/src/browEnhance/wiring.unrun.test.ts",
+      "sha256": "d39b85500eed559149570cc041f8abda1cf83a5968795e25113b1a4179db9b8a",
+      "bytes": 10388
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "41480dfdf166cbe4912831ec18579f0788f357ecd1abf4540293f439ee6606e4",
+      "bytes": 80219
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "0be83874b46d6c43a81ec6f920f8bfae9dbfec86331664233b4a845f056fc95b",
+      "bytes": 101703
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "d569f7ce75b7b0ee19e698f68c96514116feefae95e94700aac643e65f89dd52",
+      "bytes": 8619
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "8d4a6cf42abda203bb82e84afdf91666745e122837f0b4b079a3d1d9c16791e7",
+      "bytes": 5813
+    }
+  ],
+  "payload_file_count": 45,
+  "static_checks": {
+    "python_ast_files": 1165,
+    "json_toml_parse": "passed without product imports",
+    "git_diff_check": "passed read-only",
+    "preexisting_core_ops_joint_paths_byte_identical": 190,
+    "line_counts": {
+      "ui/src/App.tsx": 2122,
+      "ui/src-tauri/src/main.rs": 2042,
+      "engine/src/lumaretouch_engine/server.py": 6987
+    },
+    "python_test_functions_authored_unrun": {
+      "engine/tests/test_brow_enhance_composition_unrun.py": 5,
+      "engine/tests/test_brow_enhance_integration_unrun.py": 27,
+      "engine/tests/test_brow_enhance_native_unrun.py": 13,
+      "engine/tests/test_brow_enhance_scope_unrun.py": 29,
+      "engine/tests/test_brow_enhance_support_unrun.py": 17
+    },
+    "rust_test_functions_authored_unrun": 15,
+    "ui_test_declarations_authored_unrun": {
+      "ui/src/browEnhance/model.unrun.test.ts": 13,
+      "ui/src/browEnhance/wiring.unrun.test.ts": 8
+    }
+  },
+  "integration_map": {
+    "state_and_restore": [
+      "brow_enhance_state",
+      "brow_enhance_project",
+      "people_algorithms",
+      "people_edit",
+      "people_project"
+    ],
+    "render": [
+      "brow_enhance_layer",
+      "brow_enhance_native",
+      "brow_enhance_composition",
+      "people_render_runtime",
+      "people_effects",
+      "people_pipeline",
+      "vram"
+    ],
+    "source_and_transport": [
+      "creative_derived_effects",
+      "people_export",
+      "brow_enhance_scope",
+      "people_scope",
+      "scope",
+      "workflow_ports"
+    ],
+    "ui": [
+      "ui/src/browEnhance",
+      "RetouchPanel",
+      "people/model",
+      "native ready_caps",
+      "presets/presetModel"
+    ],
+    "packaging": [
+      "core/brow_enhance",
+      "build-brow-enhance.sh",
+      "stage-engine.sh"
+    ]
+  },
+  "limitations": [
+    "All builds, native loading, numerical tests, UI tests, inference, photographic, performance and memory-peak acceptance UNRUN.",
+    "Conservative source observation is not semantic brow/hair segmentation or persistent manually painted review; pigment/tattoo/makeup/shadow ambiguity remains.",
+    "Pale/white/low-contrast, occluded, nonuniform-reference or extreme-size brows can refuse; no hair generation, gap filling, complete removal or hidden-skin reconstruction.",
+    "Native tonal-order and chromatic-ratio contracts apply to fixed reference/support, not binary support transitions or downstream makeup/colour/geometry.",
+    "Generic unsupported derived/shared transfer paths and broader alpha/HDR retouch remain fenced.",
+    "Official requirement is bounded source-connected, not whole photographic acceptance."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

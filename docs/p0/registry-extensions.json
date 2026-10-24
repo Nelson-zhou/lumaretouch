@@ -4,6 +4,35 @@
   "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
+      "operation_id": "lnx.brow_enhance.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "linked": true,
+        "left": 0,
+        "right": 0
+      },
+      "range": {
+        "version": [
+          1,
+          1
+        ],
+        "linked": "boolean; linked requires equal sides",
+        "left": [
+          -1,
+          1
+        ],
+        "right": [
+          -1,
+          1
+        ]
+      },
+      "transferable": true,
+      "source_requirement": "PC-32471-C-18765fa8ea",
+      "reason": "Original observed brow contrast, independent bilateral signed strengths. Target-owned measured brow and forehead support recalculated from actual source. Not added makeup, hair growth, complete removal, semantic segmentation or proprietary equivalence. Runtime/photo acceptance UNRUN."
+    },
+    {
       "operation_id": "lnx.eye_symmetry.v1",
       "parameter_key": "recipe",
       "type": "object",

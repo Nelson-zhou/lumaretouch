@@ -29,12 +29,12 @@ def build(state, asset_sha256, defaults, *, max_faces, per_face_cost, total_budg
         required = bool(face['local_assets']) or any(
             operation not in defaults or path not in defaults[operation] or record['value'] != defaults[operation][path]
             for operation,leaves in resolved['operations'].items() for path,record in leaves.items()
-            # New v2 link state is interaction intent, not a rendered effect.
+            # Exact supported link states are interaction intent, not rendered effects.
             # Ignore only this exact valid boolean leaf; nonzero side amounts,
             # unknown/malformed leaves, other operations and owned assets keep
             # their existing evidence requirements. Canonical recipe validation
             # still runs even for an otherwise neutral render entry.
-            if not ((operation == 'lnx.slim_face.v2' and path == '/linked'
+            if not ((operation in ('lnx.slim_face.v2', 'lnx.brow_enhance.v1') and path == '/linked'
                      and type(record['value']) is bool)
                     # A valid reference-side policy alone does not move pixels.
                     # Nonzero strengths and every malformed/unknown leaf still

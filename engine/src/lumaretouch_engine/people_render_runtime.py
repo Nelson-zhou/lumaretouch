@@ -104,11 +104,19 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
     pending = [x for x in state['unresolved_legacy'] if x['asset_sha256']==asset_sha256 and x['status']=='unresolved']
     if pending:
         raise PeoplePreparationRefused([{'face_instance_id':'legacy','reason':'Review retained ambiguous legacy intent: '+x['legacy_key']} for x in pending])
+    if not any(face['asset_sha256']==asset_sha256 for face in state['faces'].values()):
+        from .brow_enhance_project import validate_leaf as validate_brow_leaf
+        for row in state['overrides']:
+            if (row['scope']=='all_people' and row['target_id']==asset_sha256
+                    and row['operation_id']==A.BROW_ENHANCE.OP):
+                validate_brow_leaf(row['parameter_path'], row['value'])
     if not any(face['asset_sha256']==asset_sha256 for face in state['faces'].values()) and any(
             row['scope']=='all_people' and row['target_id']==asset_sha256
             and row['value']!=A.defaults().get(row['operation_id'],{}).get(row['parameter_path'])
             and not (row['operation_id']==A.EYE_SYMMETRY.OP and row['parameter_path']=='/reference'
                      and type(row['value']) is str and row['value'] in A.EYE_SYMMETRY.REFERENCES)
+            and not (row['operation_id']==A.BROW_ENHANCE.OP and row['parameter_path']=='/linked'
+                     and type(row['value']) is bool)
             for row in state['overrides']):
         raise ValueError('Requested photograph-wide portrait parameters have no retained face; add or analyse a face before rendering')
     h,w = source.shape[:2]
@@ -248,6 +256,13 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             if A.EYELASH.active(values[A.EYELASH.OP]):
                 from .eyelash_people import prepare as prepare_eyelash
                 local.extend(prepare_eyelash(state,eyelash_assets or {},entry['face_ref'],analysis,effect_source,values[A.EYELASH.OP],source_revision=state['revision']))
+            if A.BROW_ENHANCE.active(values[A.BROW_ENHANCE.OP]):
+                from .brow_enhance_layer import prepare as prepare_brow_enhance
+                brow_neighbors = tuple(tuple(other['box']) for other_key, other in state['faces'].items()
+                    if other_key != key and other['asset_sha256'] == asset_sha256)
+                local.extend(prepare_brow_enhance(entry['face_ref'], analysis, effect_source,
+                    values[A.BROW_ENHANCE.OP], byte_budget=byte_budget,
+                    protected_boxes=brow_neighbors))
             if A.BROW_MAKEUP.active(values[A.BROW_MAKEUP.OP]):
                 from .brow_makeup_people import prepare as prepare_brow_makeup
                 local.extend(prepare_brow_makeup(state,brow_makeup_assets or {},entry['face_ref'],analysis,effect_source,values[A.BROW_MAKEUP.OP],source_revision=state['revision']))
