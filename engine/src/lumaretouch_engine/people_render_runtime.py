@@ -104,7 +104,12 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
     pending = [x for x in state['unresolved_legacy'] if x['asset_sha256']==asset_sha256 and x['status']=='unresolved']
     if pending:
         raise PeoplePreparationRefused([{'face_instance_id':'legacy','reason':'Review retained ambiguous legacy intent: '+x['legacy_key']} for x in pending])
-    if not any(face['asset_sha256']==asset_sha256 for face in state['faces'].values()) and any(row['scope']=='all_people' and row['target_id']==asset_sha256 and row['value']!=A.defaults().get(row['operation_id'],{}).get(row['parameter_path']) for row in state['overrides']):
+    if not any(face['asset_sha256']==asset_sha256 for face in state['faces'].values()) and any(
+            row['scope']=='all_people' and row['target_id']==asset_sha256
+            and row['value']!=A.defaults().get(row['operation_id'],{}).get(row['parameter_path'])
+            and not (row['operation_id']==A.EYE_SYMMETRY.OP and row['parameter_path']=='/reference'
+                     and type(row['value']) is str and row['value'] in A.EYE_SYMMETRY.REFERENCES)
+            for row in state['overrides']):
         raise ValueError('Requested photograph-wide portrait parameters have no retained face; add or analyse a face before rendering')
     h,w = source.shape[:2]
     if source_only:
@@ -193,6 +198,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                 values[A.CHIN_LENGTH.OP], legacy_amount=values[A.DEFORM]['small_chin'])
             from .philtrum_people import append as append_philtrum
             field, philtrum_facts = append_philtrum(field, state, entry['face_ref'], analysis, source, values[A.PHILTRUM.OP])
+            from .eye_symmetry_people import append as append_eye_symmetry
+            field, eye_symmetry_facts = append_eye_symmetry(field, state, entry['face_ref'], analysis, source, values[A.EYE_SYMMETRY.OP])
             blush_review=lipstick_review=None
             from .lipstick_support import raster as lipstick_raster
             lipstick_review=lipstick_raster(state,lipstick_assets or {},entry['face_ref'],(h,w)) if A.LIPSTICK.active(values[A.LIPSTICK.OP]) else None
@@ -269,6 +276,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             if chin_facts is not None: facts[key]['chin_shape'] = chin_facts
             if chin_length_facts is not None: facts[key]['chin_length'] = chin_length_facts
             if philtrum_facts is not None: facts[key]['philtrum'] = philtrum_facts
+            if eye_symmetry_facts is not None: facts[key]['eye_symmetry'] = eye_symmetry_facts
             if contour_facts is not None: facts[key]['face_contour'] = contour_facts
             liner_facts=[record.facts for record in local if record.stage=='eyeliner']
             if liner_facts:facts[key]['eyeliner']={'eyes':liner_facts,'stage':'source-working-srgb'}

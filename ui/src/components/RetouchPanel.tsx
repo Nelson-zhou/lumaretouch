@@ -19,6 +19,7 @@ import type {HairPort} from '../hairColour/model';
 import {MouthShapeControls} from "../mouthShape/MouthShapeControls";
 import {neutral as neutralMouth} from "../mouthShape/model";
 import {EyeLightPanel} from '../eyeLight/EyeLightPanel';
+import {EyeSymmetryControl} from '../eyeSymmetry/EyeSymmetryControl';
 import {EyeShapeControls} from "../eyeShape/EyeShapeControls";
 import {neutral as neutralEyes} from "../eyeShape/model";
 import {withoutCoveredLeaves} from "../toolRouting/coverage";
@@ -247,6 +248,11 @@ const FACE_LABEL: Record<string, string> = {
  * 面板不提前放行。
  */
 const WIRED: Record<string, string> = {
+  // 眼睛对称：独立水平、大小及仅用于大小的参考眼。
+  "PC-32470|眼睛对称": "eye_symmetry.family",
+  "PC-32470|眼睛对称/水平对称": "eye_symmetry.horizontal",
+  "PC-32470|眼睛对称/大小对称": "eye_symmetry.size",
+  "PC-32470|眼睛对称/参考眼选择": "eye_symmetry.reference",
   "PC-32470|眼神光": "eye_light.family",
   "PC-32470|眼神光/程度": "eye_light.strength",
   "PC-32470|眼神光/垂直位置": "eye_light.vertical",
@@ -654,6 +660,17 @@ export default function RetouchPanel(props: RetouchProps) {
     if (kind.startsWith("mouth.")) return null;
     if (kind === "eye_light.family") return <EyeLightPanel key={leaf.path} people={props.people} blocked={dim||props.hairBusy||!!props.whiteBalanceBusy||status?.ready_caps?.eye_light_protocol!==1}/>;
     if (kind.startsWith("eye_light.")) return null;
+    if (kind === "eye_symmetry.family") {
+      if (!doc?.people) return <section key={leaf.path} data-control-id="LNX-REF-PC-32470-C-2745ac86f5" aria-label="眼睛对称暂不可用">
+        <p className="muted">此文档尚未提供规范人物状态，眼睛对称暂不可用。不会改用眼形大小、眼球调整、旧版大眼或像素镜像替代。</p>
+      </section>;
+      return <EyeSymmetryControl key={leaf.path}
+        people={props.people} capability={status?.ready_caps}
+        blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+          || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+        faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
+    }
+    if (kind.startsWith("eye_symmetry.")) return null;
     if (kind === "eye.family") return <EyeShapeControls key={leaf.path} value={doc?.eye_shape?.recipe??neutralEyes()}
       facts={doc?.eye_shape?.controls} disabled={dim||!props.faceOk||!!props.whiteBalanceBusy||status?.ready_caps?.eye_shape_protocol!==2}
       why={props.faceOk?(doc?.eye_shape?.native_available===false?"眼形 Rust 核心未安装；调整会明确拒绝，请使用完整打包版本。":doc?.eye_shape?.suspended??undefined):props.faceWhy}

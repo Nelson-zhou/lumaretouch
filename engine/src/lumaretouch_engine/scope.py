@@ -54,6 +54,7 @@ from . import mid_face_scope as MID_FACE
 from . import chin_shape_scope as CHIN_SHAPE
 from . import chin_length_scope as CHIN_LENGTH
 from . import philtrum_scope as PHILTRUM
+from . import eye_symmetry_scope as EYE_SYMMETRY
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
@@ -220,6 +221,10 @@ MODULES: dict[str, dict] = {
                  "transferable": True, "cmd": "people", "label": "人中（独立二维长度参数）",
                  "read": PHILTRUM.params_of, "write": PHILTRUM.install,
                  "why_not": "仅长度标量，负值缩短、正值拉长鼻部安全界至唇上界的实测二维间隙，嘴唇与下脸共同平移；目标以自己的有效来源、真实皮肤、478 点中的全部 24 鼻点和 40 唇点、独立间隙证据及实际可用的共用 Rust 中庭内核完整重算，不复制人物、分析、蒙版或控制点，不清零其他意图，非临床分割或三维重建"},
+    EYE_SYMMETRY.OP: {"params": ("recipe",), "state_fields": EYE_SYMMETRY.FIELDS, "single_face": True,
+                      "transferable": True, "cmd": "people", "label": "眼睛对称（水平、大小与大小参考策略）",
+                      "read": EYE_SYMMETRY.params_of, "write": EYE_SYMMETRY.install,
+                      "why_not": "仅水平/大小两项 0..1 强度与 auto/left/right 大小参考策略；auto 在各目标重新选较大眼，手动左右也指目标自己的眼，水平校正独立于大小参考；完整重算须验证目标双眼自己的 478 点、RGB 与遮挡证据和实际 Rust 能力，不复制眼部像素、实测大小/高低、实际参考眼或控制点，不清零其他意图"},
     EYE_LIGHT.OP: {"params": ("recipe",), "state_fields": EYE_LIGHT.FIELDS, "single_face": True,
                    "transferable": True, "cmd": "people", "read": EYE_LIGHT.params_of, "write": EYE_LIGHT.install,
                    "why_not": "仅眼神光素材参数；目标人物须自行审核可见眼球，绝不复制归属、蒙版或恢复笔迹"},
@@ -510,6 +515,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == PHILTRUM.OP:
         try: return PHILTRUM.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == EYE_SYMMETRY.OP:
+        try: return EYE_SYMMETRY.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == EYE_LIGHT.OP:
         try: return EYE_LIGHT.check_params(params)

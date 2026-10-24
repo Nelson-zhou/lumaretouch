@@ -118,6 +118,7 @@ export function operationLabel(id: string): string {
     'lnx.facial_wrinkles.v1': '面部细纹', 'lnx.lip_makeup.v1': '唇妆',
     'lnx.brow_shape.v1': '眉形', 'lnx.nose_shape.v1': '鼻形',
     'lnx.eye_shape.v1': '眼形', 'lnx.mouth_shape.v1': '嘴形',
+    'lnx.eye_symmetry.v1': '眼睛对称（独立水平与大小，参考眼仅用于大小）',
     'lnx.hair_colour.v1': '发色与已有高光光泽', 'lnx.eye_light.v1': '眼神光素材', 'lnx.blush_makeup.v1': '腮红', 'lnx.lipstick.v1': '口红', 'lnx.eyeliner.v1': '眼线', 'lnx.iris_makeup.v1': '美瞳', 'lnx.eyelash.v1': '睫毛（上下/左右独立）', 'lnx.brow_makeup.v1': '眉妆'} as Record<string, string>)[id] ?? id;
 }
 export function bindingKey(binding: PeopleBinding): string {

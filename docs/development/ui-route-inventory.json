@@ -1,7 +1,7 @@
 {
   "method": "历史静态路由清单，后续切片仅增补其明确改动的条目，不是当前 RetouchPanel WIRED 的完整重新提取。wired_routes 是本文件列出条目数。其它路由和特殊 UI 分支未完整计入，未列出不直接判缺失，已列出也不算已完成。",
   "families": 39,
-  "wired_routes": 45,
+  "wired_routes": 49,
   "items": [
     {
       "id": "PC-47211",
@@ -133,6 +133,22 @@
       "title": "眼睛增强",
       "subcontrol_records": 33,
       "wired_routes_in_retouch_panel": [
+        {
+          "path": "眼睛对称",
+          "ui_route": "eye_symmetry.family"
+        },
+        {
+          "path": "眼睛对称/水平对称",
+          "ui_route": "eye_symmetry.horizontal"
+        },
+        {
+          "path": "眼睛对称/大小对称",
+          "ui_route": "eye_symmetry.size"
+        },
+        {
+          "path": "眼睛对称/参考眼选择",
+          "ui_route": "eye_symmetry.reference"
+        },
         {
           "path": "亮眼/眼白",
           "ui_route": "enh.sclera"

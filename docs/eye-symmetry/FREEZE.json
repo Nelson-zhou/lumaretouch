@@ -1,0 +1,225 @@
+{
+  "baseline": "223cb3657395914ca8be622436cee6ee1835c41f",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Distinct measured eye-level and aperture-size symmetry with target-local auto/manual reference policy. Original bounded head-axis/midpoint/area interpretation, unchanged Rust eye control generator and guarded TPS; canonical original/derived preview/export/history, UI and target-recomputed presets. No numerical/photo acceptance.",
+  "requirement_ids": [
+    "LNX-REF-PC-32470-C-2745ac86f5",
+    "LNX-REF-PC-32470-C-a86e5c0175",
+    "LNX-REF-PC-32470-C-4601eb7797",
+    "LNX-REF-PC-32470-C-118aa67e04"
+  ],
+  "files": [
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "88ad415ec4385ca9e1d89c937b9ce9cee0eb51a6865641428d335a0eac492652",
+      "bytes": 14513
+    },
+    {
+      "path": "docs/eye-symmetry/IMPLEMENTATION.md",
+      "sha256": "6a392e7c5188e5046bae6dfd81a18e4ebddc80eeb6883d7fdf758326bfb2e3c3",
+      "bytes": 12280
+    },
+    {
+      "path": "docs/eye-symmetry/NUMERICAL-CONTRACT.md",
+      "sha256": "cc3e556c420c76be95ac74cf181b7add7174a231670b554ef84644b88c9c9b4e",
+      "bytes": 19150
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "9c6ad66f0951f8e4609da97f97d47bd652ddb94b57d52445f3e91ee55a9b6d55",
+      "bytes": 40239
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "3a7f3e713cba136fafc04b222703f8c205a4210f946c210bcb5f658cf25027cd",
+      "bytes": 15176
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_symmetry_native.py",
+      "sha256": "720e929d4cb883e2587843b965b1bd9e04746db66ee196d3c22f210e46fa45fe",
+      "bytes": 5537
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_symmetry_people.py",
+      "sha256": "305572308524a61f7562eaa6409955877523f3696d3cd2192fef388a407c4ba3",
+      "bytes": 5074
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_symmetry_runtime.py",
+      "sha256": "86c16251712404a75cf874f0faed1428f4b833713886eb5bf1d29610035aa49d",
+      "bytes": 22242
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_symmetry_scope.py",
+      "sha256": "4aa178cee94cb822cd0cf831a3b5a1de697cd82ae10fae9896351e92363f0ae5",
+      "bytes": 6488
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_symmetry_state.py",
+      "sha256": "38db98ee7c634c206d62ebbf1b7da93a4a0ff224dc092870a7d19ca84fcd3704",
+      "bytes": 2595
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "848ecccb415b5866a455dbfa3a73f5519ccedffd549a810ad8b263b9a39c3387",
+      "bytes": 5505
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_plan.py",
+      "sha256": "26c87e510197cb97114b028f89e43454498b4f0afd519357825abda422f0fd11",
+      "bytes": 5308
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "7ecc3585642c67f2ec4d3fccfc519cdc39ad29c09d07a1bdb2ff60e63baded3c",
+      "bytes": 22382
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "969407f46eb99c4e3e715d6758055e52c0693f976768f8eabb91771b893ab065",
+      "bytes": 25920
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "e2ed9f8447ff764a0f14f20debc7b7e10c0d255799fd11dfe157034d12c35093",
+      "bytes": 56232
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "4aa3c6c8add57b396f316e24e199e42117e6a5a38d612645eab45095620c137c",
+      "bytes": 465684
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "367b0dc013079bc591c80b5ba4d7143c293fed014c1f8d1fbe11dc50ddcd5c51",
+      "bytes": 8731
+    },
+    {
+      "path": "engine/tests/test_eye_symmetry_geometry_unrun.py",
+      "sha256": "87410c7b60dac504221992307671b4138e95a3dc55a2dde45b409a32801938eb",
+      "bytes": 22277
+    },
+    {
+      "path": "engine/tests/test_eye_symmetry_integration_unrun.py",
+      "sha256": "ba387fdafccda59a122a2877c96a1c49e8ae923d1517e7ad2fc0cf64b26f0ec8",
+      "bytes": 47464
+    },
+    {
+      "path": "engine/tests/test_eye_symmetry_native_unrun.py",
+      "sha256": "e3a999a2615bf820225968cd4fe3b8853ceec15d4db1eefa6e16fe278d4f39b0",
+      "bytes": 21749
+    },
+    {
+      "path": "engine/tests/test_eye_symmetry_scope_unrun.py",
+      "sha256": "9e3e95c096b96527227c3bfc1f9b6556f4868db83ebf8fd8a3f2a8a2656717b0",
+      "bytes": 35019
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "a2dad498a3b70cd911cc787ab902521bdce5c3d5e7edd19f20703b8850f95b78",
+      "bytes": 79248
+    },
+    {
+      "path": "ui/src/eyeSymmetry/ACCEPTANCE_UNRUN.md",
+      "sha256": "662437594c26e38f43c7b85c1962f51f124f3fcf95ba773c027cd170e0d271e1",
+      "bytes": 8540
+    },
+    {
+      "path": "ui/src/eyeSymmetry/EyeSymmetryControl.tsx",
+      "sha256": "0ab66138b6f3d36f1c9631b9d7709eeb30fcff1cdbc0edcf94856a201827d5c5",
+      "bytes": 13947
+    },
+    {
+      "path": "ui/src/eyeSymmetry/model.ts",
+      "sha256": "24a6b39aed03320830e45f10f4afe37fd9e1b7d74658f877ee287a171d1cf614",
+      "bytes": 11009
+    },
+    {
+      "path": "ui/src/eyeSymmetry/model.unrun.test.ts",
+      "sha256": "8edc3aab3cb254487962ffc84947b49a18b459eec852f74a76e374a0c5c39e69",
+      "bytes": 17126
+    },
+    {
+      "path": "ui/src/eyeSymmetry/wiring.unrun.test.ts",
+      "sha256": "00fa2266737b86d1b666b41e330d6a23f587670c5b3f3d0c737cce2aa4517780",
+      "bytes": 11712
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "63087950ba41896af3525d25fba39f68af268a22bf3a071c37d7a01cb03f8d3e",
+      "bytes": 101624
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "938dbf80a9fc02c2d70453265ed547f5cde61a9b59567484b7f200dfde7a0a37",
+      "bytes": 8537
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "6cc6629fb380793cad94b8a261cbe04e7d6e1f7e5cfd449a750f38b5bd6a2497",
+      "bytes": 5641
+    }
+  ],
+  "static_checks": {
+    "engine_python_ast_files": 1154,
+    "changed_json": "parsed only",
+    "diff_whitespace": "git diff --check clean",
+    "file_ceilings": {
+      "ui/src/App.tsx": 2122,
+      "ui/src-tauri/src/main.rs": 2042,
+      "engine/src/lumaretouch_engine/server.py": 6986
+    },
+    "unchanged_baseline_source_hashes": 119,
+    "authored_unrun_new_fixture_functions": {
+      "python": 94,
+      "ui": 20,
+      "rust": 0
+    },
+    "python_fixture_functions_by_file": {
+      "test_eye_symmetry_geometry_unrun.py": 23,
+      "test_eye_symmetry_integration_unrun.py": 27,
+      "test_eye_symmetry_native_unrun.py": 20,
+      "test_eye_symmetry_scope_unrun.py": 24
+    },
+    "rust_reuse": "Existing core/eye_shape, native bridge, guarded EyeField/TPS and packaging unchanged. No new native binary, solver or Rust test claimed.",
+    "independent_source_review": {
+      "conclusion": "Source-only review resolved incorrect durable-source/current-grid equality and precision-loss identity edge; no further concrete blocker found, not runtime/numerical/photo verification.",
+      "reviewed_runtime_sha256": "86c16251712404a75cf874f0faed1428f4b833713886eb5bf1d29610035aa49d",
+      "reviewed_people_sha256": "305572308524a61f7562eaa6409955877523f3696d3cd2192fef388a407c4ba3"
+    }
+  },
+  "integration_map": {
+    "state_shared_native": "eye_symmetry_state.py / eye_symmetry_native.py; exact strengths and reference enum, actual shared ABI readiness, private float64 controls snapshots",
+    "source_geometry": "eye_symmetry_runtime.py / eye_symmetry_people.py; independent forehead/chin/nose consistency, both measured 16-lid areas and all21 points, RGB/occluder admission, true measured identity, guarded TPS",
+    "canonical_owner": "people_algorithms.py / people_render_runtime.py / people_render_plan.py; wrapper after philtrum, original four slots and mouth slot3 retained; valid reference-only policy requires no new geometry",
+    "derived": "creative_derived_effects.py exact operation and /reference enum branch; genuine source/repair/owner proofs and generic derived-preset guard retained",
+    "ui": "ui/src/eyeSymmetry, exact four RetouchPanel routes, strict native DTO/capability and people label; actual provenance versus explicit shared choices, source/pending/uncertain fences, atomic reset",
+    "presets": "eye_symmetry_scope.py / people_scope.py / scope.py / workflow_ports.py / presetModel.ts; only strengths/reference policy travel, each target remeasures both eyes, strict render/rollback and dormant intent",
+    "requirements": "IMPLEMENTATION.md / NUMERICAL-CONTRACT.md / registry extension / historical partial route inventory; one workflow, not four algorithms or full acceptance"
+  },
+  "unrun": [
+    "product imports/execution",
+    "tests and test collection",
+    "Rust compilation/build",
+    "typecheck",
+    "inference",
+    "numerical/photographic/performance acceptance",
+    "real UI/history/preview/export/batch acceptance"
+  ],
+  "limitations": [
+    "Original bounded head-relative midpoint and aperture-area isotropic policy, not verified PixCake algorithm equivalence, clinical measurement, gaze correction or AI/3D reconstruction.",
+    "Both eyes need genuine source-owned evidence; closed/occluded/clipped/low-resolution/foreshortened/over-budget requests refuse. No donor pixels, masks, selected eye or measured geometry are copied.",
+    "Size-only reference may still move when horizontal correction is enabled. Equal aperture area does not force identical width/height/shape.",
+    "Compact field can move surrounding tissue; protected source controls are not complete anatomical segmentation or guarantees after overlapping earlier geometry.",
+    "Existing regularized TPS uses sampled fold admission and strict control residual tolerances, not global injectivity proof. Representability loss refuses instead of claiming identity; downstream float precision remains.",
+    "Durable source evidence dimensions differ from current render grid; normalized observations and source binding persist while geometry is rebuilt. Resampled semantic coverage is not newly measured full-resolution segmentation.",
+    "Generic derived presets stay guarded; explicit reviewed target-person mapping/association uses independent target analyses. Unsupported shared-derived construction is not admitted.",
+    "128 integration parameter cases cover synthetic contour-wrapper prefix topology, not every predecessor recipe family. All 114 new authored fixtures remain UNRUN.",
+    "Broader alpha/HDR and remaining handbook features stay unfinished; no clipping, invented pixels or whole portrait/32-tool acceptance claim."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

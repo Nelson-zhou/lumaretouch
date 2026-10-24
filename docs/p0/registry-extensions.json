@@ -4,6 +4,47 @@
   "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
+      "operation_id": "lnx.eye_symmetry.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "horizontal": 0,
+        "size": 0,
+        "reference": "auto"
+      },
+      "range": {
+        "version": [
+          1,
+          1
+        ],
+        "horizontal": [
+          0,
+          1
+        ],
+        "size": [
+          0,
+          1
+        ],
+        "reference": [
+          "auto",
+          "left",
+          "right"
+        ]
+      },
+      "requirement_ids": [
+        "LNX-REF-PC-32470-C-2745ac86f5",
+        "LNX-REF-PC-32470-C-a86e5c0175",
+        "LNX-REF-PC-32470-C-4601eb7797",
+        "LNX-REF-PC-32470-C-118aa67e04"
+      ],
+      "scope": "Independent measured eye-level and aperture-size symmetry. Size reference is automatically the larger source aperture or explicitly the subject left/right eye; no donor pixels or masks travel.",
+      "implementation": "Original forehead/chin head-relative midpoint leveling and polygon-area isotropic size policy, using unchanged original Rust eye control generator and guarded inverse TPS. Not a manual-eye-slider alias or verified proprietary algorithm equivalence.",
+      "transfer": "Only version, two strengths and reference policy travel. Each reviewed target reconstructs both eyes, source evidence, reference resolution and protected influence from its own retained analysis.",
+      "compatibility": "Separate neutral operation after philtrum. Existing manual eye, facial proportion, legacy, source identity, history and common sampler semantics retained; no silent reset or migration.",
+      "acceptance": "AUTHORED / UNRUN. Source-connected bounded interpretation, not numerical or photographic acceptance. Eye reconstruction, gaze correction, complete occlusion segmentation, exact final equality after overlapping prior geometry, and broad alpha/HDR remain unsupported."
+    },
+    {
       "operation_id": "lnx.philtrum.v1",
       "parameter_key": "recipe",
       "type": "object",

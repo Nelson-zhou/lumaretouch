@@ -34,8 +34,14 @@ def build(state, asset_sha256, defaults, *, max_faces, per_face_cost, total_budg
             # unknown/malformed leaves, other operations and owned assets keep
             # their existing evidence requirements. Canonical recipe validation
             # still runs even for an otherwise neutral render entry.
-            if not (operation == 'lnx.slim_face.v2' and path == '/linked'
-                    and type(record['value']) is bool))
+            if not ((operation == 'lnx.slim_face.v2' and path == '/linked'
+                     and type(record['value']) is bool)
+                    # A valid reference-side policy alone does not move pixels.
+                    # Nonzero strengths and every malformed/unknown leaf still
+                    # require evidence; full recipe validation remains upstream.
+                    or (operation == 'lnx.eye_symmetry.v1' and path == '/reference'
+                        and type(record['value']) is str
+                        and record['value'] in ('auto', 'left', 'right'))))
         actual = available_evidence.get(key)
         if required and face['evidence']['status'] != 'verified': reasons.append('face_analysis_unresolved_or_synthetic')
         if required and (actual is None or actual.get('face_ref') != S.face_ref(face) or actual.get('evidence') != face['evidence']):

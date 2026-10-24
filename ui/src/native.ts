@@ -12,6 +12,10 @@ import type {ScopeResult,ScopeStage} from "./colorScopesModel";
 import type {LevelsSpec} from "./levelsModel";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 
+/** Strict eye-symmetry DTO: reference is a closed string enum, never a numeric or arbitrary-string leaf. */
+export type EyeSymmetryReference = 'auto' | 'left' | 'right';
+export type EyeSymmetryRecipe = {version: 1; horizontal: number; size: number; reference: EyeSymmetryReference};
+
 export const INSPECTION_EDIT_INTENT='lumaretouch-inspection-edit-intent';
 export function notifyInspectionEditIntent(){
   if(typeof window!=='undefined')window.dispatchEvent(new Event(INSPECTION_EDIT_INTENT));
@@ -990,6 +994,8 @@ export interface EngineStatus {
     mid_face_reason?: string | null;
     philtrum_available?: boolean;
     philtrum_reason?: string | null;
+    eye_symmetry_available?: boolean;
+    eye_symmetry_reason?: string | null;
     lower_face_available?: boolean;
     lower_face_reason?: string | null;
     chin_shape_available?: boolean;
