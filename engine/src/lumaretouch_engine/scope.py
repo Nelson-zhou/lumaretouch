@@ -72,6 +72,7 @@ from . import spill_removal_scope as SPILL_REMOVAL
 from . import original_shadow_scope as ORIGINAL_SHADOW
 from . import torso_length_scope as TORSO_LENGTH
 from . import waist_length_scope as WAIST_LENGTH
+from . import head_size_scope as HEAD_SIZE
 from . import colour_grading_scope as COLOUR_GRADING
 from . import primary_calibration_scope as PRIMARY_CALIBRATION
 from . import selective_colour_scope as SELECTIVE_COLOUR
@@ -118,6 +119,10 @@ RANGE_RECT_COORD = (0.0, 1.0)             # per_coordinate_min/max
 #: operation_id → 契约。`single_face` 的模块只能作用在"已知只有一张脸"的文档上；
 #: `transferable` 决定它能否进 `lnx.batch.v1.module_scope` 与预设。
 MODULES: dict[str, dict] = {
+    HEAD_SIZE.OP: {"params": ("version", "amount"), "state_fields": HEAD_SIZE.FIELDS,
+        "single_face": False, "transferable": True, "cmd": "head_size", "label": "头部大小（仅参数，逐图审核）",
+        "read": HEAD_SIZE.params_of, "write": HEAD_SIZE.install,
+        "why_not": "每张目标须恰有一个已启用身体及独立完整头发范围、过渡、中心和当前本人面部审核；逐图查看真实前后结果，不复制范围或人物关联"},
     WAIST_LENGTH.OP: {"params": ("version", "amount"), "state_fields": WAIST_LENGTH.FIELDS,
         "single_face": False, "transferable": True, "cmd": "waist_length", "label": "腰部长度（仅参数，逐图审核）",
         "read": WAIST_LENGTH.params_of, "write": WAIST_LENGTH.install,
@@ -430,8 +435,6 @@ def check_params(op: str, params: dict) -> dict:
     未知键**整条拒**：预设文件里多出一个键，要么是别的版本写的（schema 该拦），要么是
     有人想把参数塞进它不属于的模块。静默忽略就是"导入后参数少了一半而没人知道"。
     """
-    if op == "lnx.head_size.v1":
-        raise ScopeError("头部大小暂不支持预设或批量参数迁移；每张图需独立标记完整头发范围、过渡和中心并审核真实结果")
     m = MODULES.get(op)
     if m is None:
         raise ScopeError(f"未知模块 {op!r}（可用：{', '.join(known_ops())}）")
@@ -484,8 +487,8 @@ def check_params(op: str, params: dict) -> dict:
     if op == LIPSTICK.OP:
         try: return LIPSTICK.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
-    if op in (TORSO_LENGTH.OP, WAIST_LENGTH.OP):
-        try: return (TORSO_LENGTH if op == TORSO_LENGTH.OP else WAIST_LENGTH).check_params(params)
+    if op in (TORSO_LENGTH.OP, WAIST_LENGTH.OP, HEAD_SIZE.OP):
+        try: return {TORSO_LENGTH.OP: TORSO_LENGTH, WAIST_LENGTH.OP: WAIST_LENGTH, HEAD_SIZE.OP: HEAD_SIZE}[op].check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == ORIGINAL_SHADOW.OP:
         try: return ORIGINAL_SHADOW.check_params(params)
@@ -642,7 +645,8 @@ def check_params(op: str, params: dict) -> dict:
 
 
 def _neutral_of(op: str, key: str):
-    if op in (TORSO_LENGTH.OP, WAIST_LENGTH.OP): return (TORSO_LENGTH if op == TORSO_LENGTH.OP else WAIST_LENGTH).S.neutral()[key]
+    if op in (TORSO_LENGTH.OP, WAIST_LENGTH.OP, HEAD_SIZE.OP):
+        return {TORSO_LENGTH.OP: TORSO_LENGTH, WAIST_LENGTH.OP: WAIST_LENGTH, HEAD_SIZE.OP: HEAD_SIZE}[op].S.neutral()[key]
     if op == ORIGINAL_SHADOW.OP: return ORIGINAL_SHADOW.S.neutral()[key]
     if op == SPILL_REMOVAL.OP: return SPILL_REMOVAL.S.neutral()[key]
     if op == FRINGE_REPAIR.OP: return FRINGE_REPAIR.S.neutral()[key]
@@ -682,16 +686,14 @@ def check_scope(ops) -> list[str]:
         raise ScopeError("module_scope 不能为空：空集不等于全部模块（冻结件 lnx.batch.v1 的原文）")
     out: list[str] = []
     for op in ops:
-        if op == "lnx.head_size.v1":
-            raise ScopeError("头部大小暂不支持预设或批量参数迁移；每张图需独立标记完整头发范围、过渡和中心并审核真实结果")
         if op not in MODULES:
             raise ScopeError(f"module_scope 里有未知模块 {op!r}（可用：{', '.join(known_ops())}）")
         if not MODULES[op]["transferable"]:
             raise ScopeError(f"module_scope 里有不可作用的模块 {op!r}：{MODULES[op].get('why_not')}")
         if op not in out:
             out.append(op)
-    if any(op in out for op in (TORSO_LENGTH.OP, WAIST_LENGTH.OP)) and len(out) != 1:
-        raise ScopeError("上身长度或腰部长度须各自单独逐图审核，不与其他模块混合迁移")
+    if any(op in out for op in (TORSO_LENGTH.OP, WAIST_LENGTH.OP, HEAD_SIZE.OP)) and len(out) != 1:
+        raise ScopeError("上身长度、腰部长度或头部大小须各自单独逐图审核，不与其他模块混合迁移")
     if OPTICS.OP in out and OPTICS_AUTO.OP in out: raise ScopeError("镜头/透视手动保留模式与自动重算模式不能同时选择")
     if ORIGINAL_SHADOW.OP in out and (ID_BACKGROUND.OP in out or SPILL_REMOVAL.OP in out):
         raise ScopeError("原图阴影参数需独立逐图审核，不能与整套证件照背景或祛反光参数同时迁移")
@@ -725,7 +727,7 @@ def _check_shared_strength(ops: list[str], mods: dict[str, dict]) -> None:
 # and full before/after proof. This validator alone never authorizes a commit.
 DERIVED_PARAMETER_OPS = frozenset((
     OP_EXPOSURE, OP_WHITE_BALANCE, OP_LEVELS, OP_CURVES, OP_HSL,
-    EXTENDED_TONE.OP, PHOTO_DETAIL.OP, PHOTO_GRAIN.OP, COLOUR_GRADING.OP, FRINGE_REPAIR.OP, SPILL_REMOVAL.OP, ORIGINAL_SHADOW.OP, TORSO_LENGTH.OP, WAIST_LENGTH.OP,
+    EXTENDED_TONE.OP, PHOTO_DETAIL.OP, PHOTO_GRAIN.OP, COLOUR_GRADING.OP, FRINGE_REPAIR.OP, SPILL_REMOVAL.OP, ORIGINAL_SHADOW.OP, TORSO_LENGTH.OP, WAIST_LENGTH.OP, HEAD_SIZE.OP,
     PRIMARY_CALIBRATION.OP, SELECTIVE_COLOUR.OP, COLOUR_EDITOR.OP, OP_CROP,
 ))
 
@@ -777,7 +779,7 @@ def restore_modules(current, previous, ops):
         if set(ops) - DERIVED_PARAMETER_OPS:
             raise ScopeError('合成来源的通用历史不能恢复未经支持的模块')
         require_modules(current, params_of(previous, ops), related_states=(previous,))
-    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP,REFERENCE.OP,SEMANTIC.OP,ID_BACKGROUND.OP,FRINGE_REPAIR.OP,SPILL_REMOVAL.OP,ORIGINAL_SHADOW.OP,TORSO_LENGTH.OP,WAIST_LENGTH.OP)]
+    ordinary = [op for op in ops if op not in (OP_LOCAL_GRADE,OPTICS_AUTO.OP,REFERENCE.OP,SEMANTIC.OP,ID_BACKGROUND.OP,FRINGE_REPAIR.OP,SPILL_REMOVAL.OP,ORIGINAL_SHADOW.OP,TORSO_LENGTH.OP,WAIST_LENGTH.OP,HEAD_SIZE.OP)]
     result = apply_modules(current, params_of(previous, ordinary)) if ordinary else dict(current)
     if OP_LOCAL_GRADE in ops: LOCAL_GRADE.restore(result, previous)
     if OPTICS_AUTO.OP in ops: OPTICS_AUTO.restore(result, previous)
@@ -789,6 +791,7 @@ def restore_modules(current, previous, ops):
     if ORIGINAL_SHADOW.OP in ops: ORIGINAL_SHADOW.restore(result, previous)
     if TORSO_LENGTH.OP in ops: TORSO_LENGTH.restore(result, previous)
     if WAIST_LENGTH.OP in ops: WAIST_LENGTH.restore(result, previous)
+    if HEAD_SIZE.OP in ops: HEAD_SIZE.restore(result, previous)
     return result
 
 

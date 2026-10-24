@@ -91,11 +91,21 @@ export function validBodyScalarTransferAck(value:unknown,reviews:BodyScalarTrans
   }
   return expected.size===0;
 }
+/** Keep contradictory transport flags from releasing a frozen mutation request. */
+export function validBodyScalarReceiptState(value:unknown):boolean{
+  if(!object(value)||typeof value.success!=='boolean'||typeof value.outcome_unknown!=='boolean'||value.success&&value.outcome_unknown
+    ||['requires_reload','requires_readback'].some(key=>value[key]!=null&&typeof value[key]!=='boolean')
+    ||['phase','status'].some(key=>value[key]!=null&&typeof value[key]!=='string'))return false;
+  const unsettled=['requires_reload','requires_readback'].some(key=>value[key]===true)
+    ||['phase','status'].some(key=>['pending','running','unknown','queued','writing','accepted'].includes(String(value[key])));
+  return !unsettled||value.outcome_unknown===true;
+}
 /** Only an explicit, unclaimed no-write rejection may omit accepted review identity. */
 export function bodyScalarNoWriteRejection(value:unknown,token:string|undefined):boolean{
-  if(!object(value)||value.success!==false||value.outcome_unknown!==false||typeof value.error!=='string'||!value.error.trim()
+  if(!object(value)||!validBodyScalarReceiptState(value)||value.success!==false||value.outcome_unknown!==false||typeof value.error!=='string'||!value.error.trim()
     ||value.preflight_token!=null&&value.preflight_token!==token||value.requires_reload===true
-    ||['module_scope','torso_review_ack','waist_review_ack','before','after','doc_state','batch_id','applied','committed','operation_committed'].some(key=>Object.hasOwn(value,key)))return false;
+    ||['module_scope','torso_review_ack','waist_review_ack','head_review_ack','torso_transfer','waist_transfer','head_transfer',
+      'before','after','doc_state','batch_id','applied','committed','operation_committed'].some(key=>Object.hasOwn(value,key)))return false;
   return value.target_outcomes===undefined||Array.isArray(value.target_outcomes)&&value.target_outcomes.every(target=>object(target)
     &&['conflict','not_applied'].includes(String(target.outcome))&&target.result_revision==null);
 }

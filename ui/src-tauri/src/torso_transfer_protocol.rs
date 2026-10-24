@@ -1,4 +1,5 @@
-//! Torso scalar transfer is a separate, target-owned, frozen review family.
+//! Body scalar transfers retain separate, target-owned, frozen review families.
+//! Head uses an explicit contraction policy, never signed torso/waist amounts.
 //! PNG framing and digest validation are not a renderer or browser acceptance test.
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::Value;
@@ -6,6 +7,7 @@ use sha2::{Digest, Sha256};
 pub(crate) use crate::original_shadow_transfer_protocol::{hex, revision, source_proof};
 
 pub(crate) const TORSO_OP: &str = "lnx.torso_length.v1";
+pub(crate) const HEAD_OP: &str = "lnx.head_size.v1";
 pub(crate) const MAX_TARGETS: usize = 8;
 const MAX_BASE64: usize = 200_000;
 const MAX_PNG_BYTES: usize = 150_000;
@@ -20,10 +22,19 @@ fn ref_id(value: &Value) -> bool {
     value.as_str().is_some_and(|s| !s.is_empty() && s.len() <= 128 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b"_.:-".contains(&b)))
 }
 fn safe_revision(value: &Value) -> bool { value.as_u64().is_some_and(|n| n <= 9_007_199_254_740_991) }
-pub(crate) fn parameters(value: &Value) -> bool {
-    fields(value, &["version", "amount"]) && value["version"].as_u64() == Some(1)
-        && value["amount"].as_f64().is_some_and(|n| n.is_finite() && (-1.0..=1.0).contains(&n))
+#[derive(Clone, Copy)]
+enum ScalarPolicy { SignedLength, HeadContraction }
+impl ScalarPolicy {
+    fn parameters(self, value: &Value) -> bool {
+        fields(value, &["version", "amount"]) && value["version"].as_u64() == Some(1)
+            && value["amount"].as_f64().is_some_and(|n| n.is_finite() && match self {
+                Self::SignedLength => (-1.0..=1.0).contains(&n),
+                Self::HeadContraction => (0.0..=1.0).contains(&n),
+            })
+    }
 }
+pub(crate) fn parameters(value: &Value) -> bool { ScalarPolicy::SignedLength.parameters(value) }
+pub(crate) fn head_parameters(value: &Value) -> bool { ScalarPolicy::HeadContraction.parameters(value) }
 fn size(value: &Value) -> Option<(u64, u64)> {
     let dimensions = value.as_array()?;
     if dimensions.len() != 2 { return None; }
@@ -59,10 +70,38 @@ pub(crate) fn acknowledgments(value: &Value) -> bool {
 pub(crate) fn command(value: &Value) -> Result<(), String> {
     scalar_command(value, TORSO_OP, "torso_review_ack")
 }
+pub(crate) fn head_command(value: &Value) -> Result<(), String> {
+    scalar_command(value, HEAD_OP, "head_review_ack")
+}
+/// A bounded head review reads only. Its original command, not a later reply,
+/// determines whether an unavailable review can be abandoned without an edit fence.
+pub(crate) fn read_only_head_preflight(value: &Value) -> bool {
+    let identifier = |v: &Value| text(v) && v.as_str().is_some_and(|s| !s.trim().is_empty());
+    if value["action"] != "preflight" || !identifier(&value["request_id"])
+        || !value["module_scope"].as_array().is_some_and(|ops| ops.len() == 1 && ops[0] == HEAD_OP)
+        || value.get("head_review_ack").is_some() || head_command(value).is_err() { return false; }
+    match value["cmd"].as_str() {
+        Some("preset") => fields(value, &["cmd", "action", "request_id", "id", "document_id", "module_scope"])
+            && identifier(&value["id"]) && identifier(&value["document_id"]),
+        Some("batch") => {
+            let Some(map) = value.as_object() else { return false; };
+            let Some(docs) = value["docs"].as_array() else { return false; };
+            let names = ["cmd", "action", "request_id", "docs", "module_scope"];
+            names.iter().all(|key| map.contains_key(*key))
+                && map.keys().all(|key| names.contains(&key.as_str()) || key == "conflict_policy")
+                && value.get("conflict_policy").map_or(true, |policy| matches!(policy.as_str(), Some("skip_and_report" | "recheck")))
+                && !docs.is_empty() && docs.len() <= MAX_TARGETS
+                && docs.iter().all(|doc| identifier(doc) || doc.as_u64().is_some_and(|n| n <= 9_007_199_254_740_991))
+                && docs.iter().enumerate().all(|(index, doc)| !docs[..index].contains(doc))
+        }
+        _ => false,
+    }
+}
 /// Shared validation is not a shared receipt family: scope and acknowledgment keys stay exact.
 pub(crate) fn scalar_command(value: &Value, operation: &str, ack_key: &str) -> Result<(), String> {
     let selected = value["module_scope"].as_array().is_some_and(|ops| ops.iter().any(|op| op == operation));
-    let conflicting = ["people_transfer", "local_mask_transfer", "reference_color", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "xmp_ack", "xmp_review_ack"]
+    let conflicting = ["people_transfer", "local_mask_transfer", "reference_color", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack",
+        "torso_transfer", "waist_transfer", "head_transfer", "xmp_ack", "xmp_review_ack"]
         .iter().any(|key| *key != ack_key && value.get(*key).is_some());
     if selected && (value["module_scope"].as_array().map_or(true, |ops| ops.len() != 1) || conflicting) {
         return Err(format!("{operation} scalar transfer requires its own scope and never creates body ownership"));
@@ -131,10 +170,18 @@ fn preview(value: &Value, output: (u64, u64)) -> bool {
     format!("{:x}", Sha256::digest(&bytes)) == value["sha256"].as_str().unwrap()
 }
 pub(crate) fn transfer(value: &Value, document: &Value, rev: &Value, params: &Value, source: &Value) -> bool {
+    scalar_transfer(value, document, rev, params, source, ScalarPolicy::SignedLength)
+}
+/// Only bounded proof/image shape and digests are admitted here. The engine owns
+/// current complete-head/hair support, own-face metadata and displacement safety.
+pub(crate) fn head_transfer(value: &Value, document: &Value, rev: &Value, params: &Value, source: &Value) -> bool {
+    scalar_transfer(value, document, rev, params, source, ScalarPolicy::HeadContraction)
+}
+fn scalar_transfer(value: &Value, document: &Value, rev: &Value, params: &Value, source: &Value, policy: ScalarPolicy) -> bool {
     if !fields(value, &["version", "document_id", "revision", "source_proof", "before_sha256", "candidate_sha256", "before_people_sha256", "candidate_people_sha256",
         "source_size", "before_output_size", "after_output_size", "parameters", "body_ref", "associated_face", "body_support_sha256", "body_review_sha256", "before_bank_sha256", "candidate_bank_sha256", "before", "after"])
         || value["version"].as_u64() != Some(1) || !text(document) || &value["document_id"] != document
-        || !revision(rev) || &value["revision"] != rev || !parameters(params) || &value["parameters"] != params
+        || !revision(rev) || &value["revision"] != rev || !policy.parameters(params) || &value["parameters"] != params
         || !source_proof(source) || &value["source_proof"] != source
         || !body_ref(&value["body_ref"], &source["asset_sha256"]) || !face_binding(&value["associated_face"], &source["asset_sha256"])
         || !["before_sha256", "candidate_sha256", "before_people_sha256", "candidate_people_sha256", "body_support_sha256", "body_review_sha256", "before_bank_sha256", "candidate_bank_sha256"].iter().all(|key| hex(&value[*key], 64)) { return false; }
@@ -147,3 +194,8 @@ pub(crate) fn transfer(value: &Value, document: &Value, rev: &Value, params: &Va
 #[cfg(test)]
 #[path = "torso_transfer_protocol_tests.rs"]
 pub(crate) mod tests;
+
+// AUTHORED / UNRUN: head policy fixtures, not photographic acceptance.
+#[cfg(test)]
+#[path = "head_transfer_protocol_tests.rs"]
+mod head_tests;

@@ -11,20 +11,23 @@ pub(crate) struct PresetKind;
 /// The transport envelope is shared; each operation still selects its own proof
 /// validator and cannot borrow another family's transfer or acknowledgment.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum BodyReviewFamily { Torso, Waist }
-pub(crate) const BODY_REVIEW_FAMILIES: [BodyReviewFamily; 2] = [BodyReviewFamily::Torso, BodyReviewFamily::Waist];
+pub(crate) enum BodyReviewFamily { Torso, Waist, Head }
+pub(crate) const BODY_REVIEW_FAMILIES: [BodyReviewFamily; 3] = [BodyReviewFamily::Torso, BodyReviewFamily::Waist, BodyReviewFamily::Head];
 impl BodyReviewFamily {
-    pub(crate) fn op(self) -> &'static str { match self { Self::Torso => torso::TORSO_OP, Self::Waist => waist::WAIST_OP } }
-    pub(crate) fn transfer_key(self) -> &'static str { match self { Self::Torso => "torso_transfer", Self::Waist => "waist_transfer" } }
-    pub(crate) fn ack_key(self) -> &'static str { match self { Self::Torso => "torso_review_ack", Self::Waist => "waist_review_ack" } }
+    pub(crate) fn op(self) -> &'static str { match self { Self::Torso => torso::TORSO_OP, Self::Waist => waist::WAIST_OP, Self::Head => torso::HEAD_OP } }
+    pub(crate) fn transfer_key(self) -> &'static str { match self { Self::Torso => "torso_transfer", Self::Waist => "waist_transfer", Self::Head => "head_transfer" } }
+    pub(crate) fn ack_key(self) -> &'static str { match self { Self::Torso => "torso_review_ack", Self::Waist => "waist_review_ack", Self::Head => "head_review_ack" } }
     pub(crate) fn selected(self, value: &Value) -> bool {
         value["module_scope"].as_array().is_some_and(|ops| ops.iter().any(|op| op == self.op()))
     }
-    pub(crate) fn parameters(self, value: &Value) -> bool { match self { Self::Torso => torso::parameters(value), Self::Waist => waist::parameters(value) } }
+    pub(crate) fn parameters(self, value: &Value) -> bool { match self { Self::Torso => torso::parameters(value), Self::Waist => waist::parameters(value), Self::Head => torso::head_parameters(value) } }
     pub(crate) fn transfer(self, value: &Value, document: &Value, revision: &Value, params: &Value, source: &Value) -> bool {
-        match self { Self::Torso => torso::transfer(value, document, revision, params, source), Self::Waist => waist::transfer(value, document, revision, params, source) }
+        match self { Self::Torso => torso::transfer(value, document, revision, params, source), Self::Waist => waist::transfer(value, document, revision, params, source), Self::Head => torso::head_transfer(value, document, revision, params, source) }
     }
-    pub(crate) fn max_targets(self) -> usize { match self { Self::Torso => torso::MAX_TARGETS, Self::Waist => waist::MAX_TARGETS } }
+    pub(crate) fn max_targets(self) -> usize { match self { Self::Torso => torso::MAX_TARGETS, Self::Waist => waist::MAX_TARGETS, Self::Head => torso::MAX_TARGETS } }
+    pub(crate) fn command(self, value: &Value) -> Result<(), String> {
+        match self { Self::Torso => torso::command(value), Self::Waist => waist::command(value), Self::Head => torso::head_command(value) }
+    }
     pub(crate) fn no_foreign_evidence(self, value: &Value) -> bool {
         ["spill_transfer", "shadow_transfer", "crop_transfer", "local_mask_transfer", "optical_transfer", "reference_color",
             "people_transfer", "persistent_association", "xmp_report", "xmp_transfer"]
@@ -41,6 +44,7 @@ impl BodyReviewFamily {
         if selected && (value["module_scope"].as_array().map_or(true, |ops| ops.len() != 1)
             || !self.no_foreign_evidence(value)
             || (value["success"] == true && value["outcome_unknown"] == true)
+            || ((self == Self::Head || (self == Self::Waist && value["action"] == terminal)) && !value["outcome_unknown"].is_boolean())
             || value.get("outcome_unknown").is_some_and(|unknown| !unknown.is_boolean())) { return false; }
         if let Some(ack) = value.get(self.ack_key()) {
             if !selected || value["action"] != terminal || !self.no_foreign_evidence(value) { return false; }
@@ -48,9 +52,9 @@ impl BodyReviewFamily {
                 "module_scope":value["module_scope"], "preflight_token":value["preflight_token"]});
             command[self.ack_key()] = ack.clone();
             if command_kind == "preset" { command["document_id"] = value["document_id"].clone(); }
-            let valid = match self { Self::Torso => torso::command(&command), Self::Waist => waist::command(&command) };
+            let valid = self.command(&command);
             if valid.is_err() { return false; }
-        } else if selected && value["action"] == terminal && (self == Self::Waist || value["success"] == true) { return false; }
+        } else if selected && value["action"] == terminal && (self != Self::Torso || value["success"] == true) { return false; }
         true
     }
 }
@@ -469,3 +473,8 @@ mod tests {
     }
 
 }
+
+// AUTHORED / UNRUN: independent head-family protocol specifications.
+#[cfg(test)]
+#[path = "head_preset_host_tests.rs"]
+mod head_tests;

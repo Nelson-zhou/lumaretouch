@@ -1,11 +1,11 @@
-# Remaining head-size transfer workflow
+# Head-size transfer implementation checklist
 
-The initial complete-head operation does not expose end-user preset/batch
-transfer. `scope.check_scope` explicitly refuses `lnx.head_size.v1`; the private
-recipe helper is not a substitute. Requirement dc1b0ba40a remains partial.
+The initial complete-head foundation did not expose end-user preset/batch
+transfer. The subsequent slice against d365f6bd authors the bounded route below.
+This checklist is not runtime acceptance; requirement dc1b0ba40a remains partial.
 
-A future bounded route may reuse the frozen body-scalar review machinery, but
-must add an explicit head policy rather than guessing from the operation name:
+The source route reuses frozen body-scalar review machinery with an explicit
+head policy, never a policy guessed from the operation name:
 
 1. Transfer only `{version:1, amount}`. A target must already have its own current
    independent complete-head/hair box, pivot, transition, exact BodyRef, measured
@@ -21,5 +21,5 @@ must add an explicit head policy rather than guessing from the operation name:
    review and scoped history before advertising transfer. Preserve the existing
    unresolved-outcome safeguards and disclose mailbox/readback limitations.
 
-All future test and photographic acceptance remains pending. This plan does not
-register capability or change any support/receipt authorization.
+All test and photographic acceptance remains pending. See TRANSFER-CONTRACT.md
+for actual source integration and remaining ambiguous-target/readback limits.

@@ -21,8 +21,8 @@ from . import body_scalar_transfer_review as BODY_REVIEW
 
 ACTIONS = ("list", "preflight", "apply", "save", "import", "delete", "xmp_inspect")
 LEGACY_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note", "local_mask_transfer", "preflight_token"}
-FIELDS = {"list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack"},
-          "preflight": {"id", "document_id", "local_mask_transfer"},
+FIELDS = {"list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack"},
+          "preflight": {"id", "document_id", "local_mask_transfer", "module_scope"},
           "save": {"id", "name", "kind", "force", "note", "module_scope", "document_id", "local_mask_transfer"},
           "import": {"path", "id", "force", "xmp_ack"}, "xmp_inspect": {"path"}, "delete": {"id"}}
 MAX_RECEIPTS = 64
@@ -58,6 +58,9 @@ class PresetPorts:
     verify_waist: Callable | None = None
     torso_history_identity: Callable | None = None
     waist_history_identity: Callable | None = None
+    prepare_head: Callable | None = None
+    verify_head: Callable | None = None
+    head_history_identity: Callable | None = None
 
 
 class PresetController:
@@ -149,6 +152,11 @@ class PresetController:
                 evidence = {"catalog": catalog}
             elif action == "preflight":
                 doc = PS.find(p['id'])
+                if 'module_scope' in p and (type(p['module_scope']) is not list
+                        or p['module_scope']!=list(doc['modules'])):
+                    raise SC.ScopeError('预设预检的预期模块与已存储配方不同；请刷新后重新选择')
+                # Optional request scope binds the transport expectation only.
+                # The actual stored preset remains the sole admission authority.
                 reviewed_row=self.ports.target_row()
                 reviewed_identity=(reviewed_row.get('document_id'),reviewed_row.get('path'),self.ports.document_id(),self.ports.revision())
                 state = self.ports.capture()
@@ -156,8 +164,8 @@ class PresetController:
                 # decides whether this source can use the general route.
                 DERIVED.require_modules(state, doc['modules'])
                 family=BODY_REVIEW.select(doc['modules'])
-                if family is not None and family.port_name=='waist' and self.ports.waist_history_identity is None:
-                    raise SC.ScopeError('腰部长短预设缺少当前完整人物身份审核端口')
+                if family is not None and family.port_name in ('waist','head') and getattr(self.ports,family.port_name+'_history_identity') is None:
+                    raise SC.ScopeError('身体参数预设缺少当前完整人物身份审核端口')
                 for op in doc['modules']:
                     if SC.MODULES[op]['single_face']:
                         verdict, reason = self.ports.face_check()
@@ -167,7 +175,8 @@ class PresetController:
                     self.ports.prepare_crop, self.ports.verify_crop, self.ports.prepare_xmp, self.ports.verify_xmp,
                     self.ports.prepare_spill, self.ports.verify_spill, self.ports.prepare_shadow, self.ports.verify_shadow,
                     self.ports.prepare_torso, self.ports.verify_torso,
-                    self.ports.prepare_waist, self.ports.verify_waist)
+                    self.ports.prepare_waist, self.ports.verify_waist,
+                    self.ports.prepare_head, self.ports.verify_head)
                 if family is not None:
                     current=self.ports.target_row()
                     from .optics_candidate_identity import fingerprint
@@ -238,8 +247,8 @@ class PresetController:
         result = public_view(result)
         # Compact acknowledgment identities survive failures and bounded receipt
         # fallbacks. A replay never gains a new token or fresh image approval.
-        scalar_keys=('torso_review_ack','waist_review_ack')
-        scalar_scope=any(op in result.get('module_scope',[]) for op in (SC.TORSO_LENGTH.OP,SC.WAIST_LENGTH.OP))
+        scalar_keys=('torso_review_ack','waist_review_ack','head_review_ack')
+        scalar_scope=any(op in result.get('module_scope',[]) for op in (SC.TORSO_LENGTH.OP,SC.WAIST_LENGTH.OP,SC.HEAD_SIZE.OP))
         review_fields = {key: deepcopy(result[key]) for key in ('module_scope', 'preflight_token', *scalar_keys)
                          if key in result} if any(key in result for key in scalar_keys) or scalar_scope else {}
         try:
@@ -273,20 +282,20 @@ class PresetController:
         reviewed_revision=self.ports.revision()
         previous = self.ports.capture()
         source_proof = None
-        scalar_acks={key:p[key] for key in ('torso_review_ack','waist_review_ack') if key in p}
+        scalar_acks={key:p[key] for key in ('torso_review_ack','waist_review_ack','head_review_ack') if key in p}
         if scalar_acks and (len(scalar_acks)!=1 or any(key in p for key in ('xmp_review_ack','spill_review_ack','shadow_review_ack'))):
             raise SC.ScopeError('身体长度审核确认不能与其他目标图审核确认混用')
         if p.get('preflight_token') is not None:
             pending=self.reviews.pending.get(p['preflight_token']) if type(p['preflight_token']) is str else None
             selected=BODY_REVIEW.select(pending['modules']) if pending is not None else None
-            if selected is not None and selected.port_name=='waist' and self.ports.waist_history_identity is None:
-                raise SC.ScopeError('腰部长短预设缺少当前完整人物身份审核端口')
+            if selected is not None and selected.port_name in ('waist','head') and getattr(self.ports,selected.port_name+'_history_identity') is None:
+                raise SC.ScopeError('身体参数预设缺少当前完整人物身份审核端口')
             spill_ack={'spill_review_ack':p['spill_review_ack']} if 'spill_review_ack' in p else {}
             shadow_ack={'shadow_review_ack':p['shadow_review_ack']} if 'shadow_review_ack' in p else {}
             record = self.reviews.claim(p['preflight_token'], pid, previous, reviewed_row,
                                        reviewed_identity[2], reviewed_revision, self.ports.verify_crop, self.ports.verify_xmp, p.get("xmp_review_ack"),
                                        self.ports.verify_spill, verify_shadow=self.ports.verify_shadow,
-                                       verify_torso=self.ports.verify_torso, verify_waist=self.ports.verify_waist,
+                                       verify_torso=self.ports.verify_torso, verify_waist=self.ports.verify_waist, verify_head=self.ports.verify_head,
                                        **spill_ack, **shadow_ack, **scalar_acks)
             doc, mods = record['preset'], record['modules']
             source_proof = record.get('source_proof')
@@ -361,8 +370,8 @@ class PresetController:
             if verify_scalar is None:raise SC.ScopeError('身体长度预设缺少完整目标前后图审核端口')
             verify_scalar(self.ports.target_row(),previous,state,self.ports.document_id(),str(self.ports.revision()),record.get(family.preset_key))
             history_scalar=getattr(self.ports,family.port_name+'_history_identity')
-            if family.port_name=='waist' and history_scalar is None:
-                raise SC.ScopeError('腰部长短预设缺少当前完整人物身份审核端口')
+            if family.port_name in ('waist','head') and history_scalar is None:
+                raise SC.ScopeError('身体参数预设缺少当前完整人物身份审核端口')
         if source_proof is not None:
             SOURCE.verify_row({**self.ports.target_row(), 'state':self.ports.capture()}, source_proof)
         if family is not None:
@@ -452,7 +461,7 @@ class PresetController:
             else:
                 # Legacy torso hosts still have the full verifier. Recheck its
                 # frozen people proof before a write, not after stale state has
-                # already been installed. Waist admission requires its explicit
+                # already been installed. Waist/head admission requires its explicit
                 # current-state identity port above and cannot use this fallback.
                 proof=deepcopy(record[family.preset_key]);proof['revision']=str(published_revision)
                 if kwargs.get('mode')=='preset_rollback':
@@ -509,7 +518,7 @@ class PresetController:
 
     def save(self, p):
         requested = p.get("module_scope")
-        ops = SC.check_scope([op for op in SC.transferable_ops() if op not in (OA.OP,RC.OP,SC.SPILL_REMOVAL.OP,SC.TORSO_LENGTH.OP,SC.WAIST_LENGTH.OP)] if requested is None else requested)
+        ops = SC.check_scope([op for op in SC.transferable_ops() if op not in (OA.OP,RC.OP,SC.SPILL_REMOVAL.OP,SC.TORSO_LENGTH.OP,SC.WAIST_LENGTH.OP,SC.HEAD_SIZE.OP)] if requested is None else requested)
         state = self.ports.capture()
         if SOURCE.record(state) is not None and set(ops) - SC.DERIVED_PARAMETER_OPS:
             raise SC.ScopeError('合成来源只能通过通用预设保存明确选择的全局参数模块')

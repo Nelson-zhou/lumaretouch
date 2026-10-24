@@ -3,6 +3,7 @@ const labels:Record<string,string>={'lnx.original_shadow.v1':'原图阴影（开
   'lnx.skin_colour.v1':'面部肤色色温/色调',
   'lnx.torso_length.v1':'上身长度（独立标量；目标唯一身体、本人面部归属及支持须独立审核）',
   'lnx.waist_length.v1':'腰长（独立标量；目标唯一身体、四个腰部标记、本人面部及支持须独立审核）',
+  'lnx.head_size.v1':'小头（独立标量；目标唯一身体、完整头发/头部框、缩小中心、外围过渡框、本人面部及支持须独立审核）',
   'lnx.skin_finish.v1':'美白红润（独立参数，目标单独审核身体范围）',
   'lnx.skin_gloss.v1':'皮肤光泽（面部已有高光，正负强度逐图重算）',
   'lnx.face_contour.v1':'面部轮廓（太阳穴、颧骨、下颌；左右独立二维参数）',

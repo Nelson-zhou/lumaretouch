@@ -112,17 +112,21 @@ def installed_native():
         pytest.skip('UNRUN head size integration: installed Rust ABI unavailable; no numerical substitute')
 
 
-def test_registered_family_protocol_and_explicit_nontransferable_scope():
+def test_registered_family_protocol_and_exclusive_target_reviewed_scalar_scope():
     from lumaretouch_engine import scope
     assert S.OP == 'lnx.head_size.v1' and S.CONTROL_ID == REQUIREMENT
     assert S.OP in O.policies() and F.FAMILIES[-1] == 'head_size'
     assert F.request_family({'operation_id': S.OP}) == 'head_size'
     assert F.presenter('head_size').S.OP == S.OP
     assert 'head_size' in DERIVED.COMMANDS
-    assert S.OP not in scope.MODULES and S.OP not in scope.transferable_ops()
-    for command in (lambda: scope.check_scope([S.OP]), lambda: scope.check_params(S.OP, S.neutral())):
-        with pytest.raises(scope.ScopeError, match='暂不支持预设或批量'):
-            command()
+    assert S.OP in scope.MODULES and S.OP in scope.transferable_ops()
+    assert scope.MODULES[S.OP]['params'] == ('version', 'amount')
+    assert scope.check_scope([S.OP]) == [S.OP]
+    assert scope.check_params(S.OP, S.neutral()) == S.neutral()
+    for other in ('lnx.torso_length.v1', 'lnx.waist_length.v1', scope.OP_CROP):
+        with pytest.raises(scope.ScopeError): scope.check_scope([S.OP, other])
+    with pytest.raises(ValueError):
+        scope.apply_modules({}, {S.OP: S.neutral()})  # Zero never fabricates target support.
 
 
 @pytest.mark.parametrize('operation,version', [

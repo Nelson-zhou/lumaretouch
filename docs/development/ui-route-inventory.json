@@ -221,7 +221,7 @@
         {
           "path": "小头",
           "ui_route": "head_size.amount via independent complete-head/hair source workspace",
-          "status": "PARTIAL_UNRUN; manually reviewed complete head/hair box, pivot and clear transition, actual own BodyRef/FaceRef; no automatic hair segmentation, scalar preset/batch and photo acceptance unfinished"
+          "status": "PARTIAL_UNRUN; target-owned complete head/hair, pivot, transition and current own BodyRef/FaceRef; bounded exclusive scalar preset/batch with actual per-target full renders and acknowledgment authored. No automatic hair segmentation; ambiguous targets and runtime/photo acceptance unfinished."
         }
       ],
       "status": "implementation_and_semantics_require_verification"

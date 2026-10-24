@@ -17,6 +17,7 @@ _NO_SPILL_ACK = object()
 _NO_SHADOW_ACK = object()
 _NO_TORSO_ACK = object()
 _NO_WAIST_ACK = object()
+_NO_HEAD_ACK = object()
 
 
 class PresetReviews:
@@ -24,7 +25,7 @@ class PresetReviews:
         self.pending=OrderedDict()
         self.targets={}
 
-    def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None,prepare_crop=None,verify_crop=None,prepare_xmp=None,verify_xmp=None,prepare_spill=None,verify_spill=None,prepare_shadow=None,verify_shadow=None,prepare_torso=None,verify_torso=None,prepare_waist=None,verify_waist=None):
+    def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None,prepare_crop=None,verify_crop=None,prepare_xmp=None,verify_xmp=None,prepare_spill=None,verify_spill=None,prepare_shadow=None,verify_shadow=None,prepare_torso=None,verify_torso=None,prepare_waist=None,verify_waist=None,prepare_head=None,verify_head=None):
         modules=DERIVED.require_modules(state,preset['modules']);SC.check_scope(list(modules))
         family=BODY_REVIEW.select(modules)
         row_identity=(row.get('document_id'),row.get('path'))
@@ -82,7 +83,8 @@ class PresetReviews:
             verify_shadow(row,state,candidate,document_id,str(revision),shadow_record)
         scalar_record=None;scalar_transfer=None
         if family is not None:
-            prepare_scalar,verify_scalar=(prepare_torso,verify_torso) if family.name=='torso_length' else (prepare_waist,verify_waist)
+            prepare_scalar,verify_scalar={'torso':(prepare_torso,verify_torso),
+                'waist':(prepare_waist,verify_waist),'head':(prepare_head,verify_head)}[family.port_name]
             if prepare_scalar is None or verify_scalar is None:raise ValueError('身体长度预设需要完整目标前后图预览和审核端口')
             scalar_record,scalar_transfer=prepare_scalar(row,state,candidate,document_id,str(revision))
             scalar_record=family.review.checked(scalar_record)
@@ -115,7 +117,7 @@ class PresetReviews:
                 **({family.wire_key:scalar_transfer} if family is not None else {}),
                 **({'xmp_transfer':xmp_transfer,'xmp_report':deepcopy(xmp['report'])} if xmp is not None else {})}
 
-    def claim(self,token,preset_id,state,row,document_id,revision,verify_crop=None,verify_xmp=None,xmp_review_ack=None,verify_spill=None,spill_review_ack=_NO_SPILL_ACK,verify_shadow=None,shadow_review_ack=_NO_SHADOW_ACK,verify_torso=None,torso_review_ack=_NO_TORSO_ACK,verify_waist=None,waist_review_ack=_NO_WAIST_ACK):
+    def claim(self,token,preset_id,state,row,document_id,revision,verify_crop=None,verify_xmp=None,xmp_review_ack=None,verify_spill=None,spill_review_ack=_NO_SPILL_ACK,verify_shadow=None,shadow_review_ack=_NO_SHADOW_ACK,verify_torso=None,torso_review_ack=_NO_TORSO_ACK,verify_waist=None,waist_review_ack=_NO_WAIST_ACK,verify_head=None,head_review_ack=_NO_HEAD_ACK):
         if type(token) is not str or token not in self.pending:raise ValueError('目标预设预检已失效或使用，请重新预检')
         record=self.pending[token]
         family=BODY_REVIEW.select(record['modules'])
@@ -170,12 +172,13 @@ class PresetReviews:
             SHADOW_REVIEW.acknowledgments(shadow_review_ack,[shadow])
             verify_shadow(row,state,candidate,document_id,str(revision),shadow)
         elif shadow_review_ack is not _NO_SHADOW_ACK:raise ValueError('未选择原图阴影模块，不能附带目标图审核确认')
-        scalar_acks={'torso':(torso_review_ack,_NO_TORSO_ACK),'waist':(waist_review_ack,_NO_WAIST_ACK)}
+        scalar_acks={'torso':(torso_review_ack,_NO_TORSO_ACK),'waist':(waist_review_ack,_NO_WAIST_ACK),
+                     'head':(head_review_ack,_NO_HEAD_ACK)}
         for name,(value,missing) in scalar_acks.items():
             if value is not missing and (family is None or family.port_name!=name):
                 raise ValueError('未选择对应身体长度模块，不能附带目标图审核确认')
         if family is not None:
-            verify_scalar=verify_torso if family.name=='torso_length' else verify_waist
+            verify_scalar={'torso':verify_torso,'waist':verify_waist,'head':verify_head}[family.port_name]
             if verify_scalar is None:raise ValueError('身体长度预设缺少冻结目标前后图审核端口')
             scalar=family.review.checked(record.get(family.preset_key))
             family.review.acknowledgments(scalar_acks[family.port_name][0],[scalar])

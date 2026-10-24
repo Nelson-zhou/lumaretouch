@@ -50,10 +50,11 @@ def before_params(state,ops):
     from . import fringe_repair_scope as FRINGE
     from . import spill_removal_scope as SPILL
     from . import original_shadow_scope as SHADOW
-    from . import torso_length_scope as TORSO, waist_length_scope as WAIST_LENGTH
-    result=SC.params_of(state,[op for op in ops if op not in (OP,RC.OP,ID_BACKGROUND.OP,FRINGE.OP,SPILL.OP,SHADOW.OP,TORSO.OP,WAIST_LENGTH.OP)])
+    from . import torso_length_scope as TORSO, waist_length_scope as WAIST_LENGTH, head_size_scope as HEAD_SIZE
+    result=SC.params_of(state,[op for op in ops if op not in (OP,RC.OP,ID_BACKGROUND.OP,FRINGE.OP,SPILL.OP,SHADOW.OP,TORSO.OP,WAIST_LENGTH.OP,HEAD_SIZE.OP)])
     if TORSO.OP in ops:result[TORSO.OP]={"target_recipe_key":TORSO.undo_key(state)}
     if WAIST_LENGTH.OP in ops:result[WAIST_LENGTH.OP]={"target_recipe_key":WAIST_LENGTH.undo_key(state)}
+    if HEAD_SIZE.OP in ops:result[HEAD_SIZE.OP]={"target_recipe_key":HEAD_SIZE.undo_key(state)}
     if SHADOW.OP in ops:result[SHADOW.OP]={"target_recipe_key":SHADOW.undo_key(state)}
     if SPILL.OP in ops:result[SPILL.OP]={"target_recipe_key":SPILL.undo_key(state)}
     if FRINGE.OP in ops:result[FRINGE.OP]={"target_recipe_key":FRINGE.undo_key(state)}

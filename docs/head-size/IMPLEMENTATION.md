@@ -45,8 +45,10 @@ mutations are queried by their original identity rather than blindly resent.
   overlap may refuse rather than exclude hair from a supposed complete-head edit.
 - Background/neck transition may deform; a manually reviewed rectangle is not a
   semantic matte or proof that all hair was actually marked correctly.
-- Scalar preset/batch target-local review is not wired in this initial slice;
-  private recipe copying is not an end-user transfer implementation.
+- A subsequent bounded scalar preset/batch route is source-authored with actual
+  per-target full-render review. It admits only a unique enabled, independently
+  reviewed target body; ambiguous multi-body routing remains unfinished. See
+  [transfer contract](TRANSFER-CONTRACT.md).
 - Existing derived opacity/SDR and broader alpha/HDR restrictions remain.
 - All fixtures, builds, numerical behavior, native/UI interactions, performance,
   exports and photographic acceptance are UNRUN here.

@@ -17,7 +17,7 @@ from . import original_shadow_transfer_review as SHR
 from .body_scalar_transfer_review import select as body_family
 
 ACTIONS = ("preflight", "commit", "undo", "redo", "state", "people_targets")
-KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color", "people_transfer", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack"}
+KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color", "people_transfer", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack"}
 POLICIES = ("skip_and_report", "recheck")
 
 
@@ -127,6 +127,9 @@ class BatchEditor:
     prepare_waist: Callable | None = None
     verify_waist: Callable | None = None
     waist_history_identity: Callable | None = None
+    prepare_head: Callable | None = None
+    verify_head: Callable | None = None
+    head_history_identity: Callable | None = None
 
 class BatchSyncController:
     def __init__(self, documents: BatchDocuments, editor: BatchEditor,
@@ -144,7 +147,7 @@ class BatchSyncController:
         self.versions=versions if versions is not None else DocumentVersions()
         self.preflight=FrozenBatchController(PlanPorts(lambda:self.documents.rows(),lambda:self.documents.current_index(),
             lambda:self.documents.remember_current(),lambda:self.editor.capture(),lambda docs:self.target_indices(docs),
-            lambda row,**kw:self.editor.face_known_single(row,**kw),lambda *a,**kw:self.commit(*a,**kw),self.editor.prepare_optics,self.editor.prepare_reference,self.editor.capture_reference,self.editor.people_transfer,self.editor.prepare_crop,self.editor.verify_crop,self.editor.prepare_spill,self.editor.verify_spill,self.editor.prepare_shadow,self.editor.verify_shadow,self.editor.prepare_torso,self.editor.verify_torso,self.editor.prepare_waist,self.editor.verify_waist),
+            lambda row,**kw:self.editor.face_known_single(row,**kw),lambda *a,**kw:self.commit(*a,**kw),self.editor.prepare_optics,self.editor.prepare_reference,self.editor.capture_reference,self.editor.people_transfer,self.editor.prepare_crop,self.editor.verify_crop,self.editor.prepare_spill,self.editor.verify_spill,self.editor.prepare_shadow,self.editor.verify_shadow,self.editor.prepare_torso,self.editor.verify_torso,self.editor.prepare_waist,self.editor.verify_waist,self.editor.prepare_head,self.editor.verify_head),
             self.versions,lambda event:self.emit(event),monotonic)
 
     def target_indices(self, docs) -> tuple[list[int], list[dict]]:
@@ -179,10 +182,10 @@ class BatchSyncController:
             raise SC.ScopeError(f"batch 没有可用目标（全部被拒）：{bad}")
         return out, bad
 
-    def _reject(self,p,message):
+    def _reject(self,p,message,*,no_write=False):
         self.emit({"event":"error","error":message})
         if isinstance(p.get("request_id"),str) and 1<=len(p["request_id"])<=128:
-            self.preflight.emit_result(p,{"success":False,"error":message,"requires_preflight":True})
+            self.preflight.emit_result(p,{"success":False,"outcome_unknown":not no_write,"error":message,"requires_preflight":True})
 
     def handle_command(self, p: dict):
         """批量同步（LNX-P0-BATCH / BATCH-001…4）。
@@ -199,20 +202,20 @@ class BatchSyncController:
             self.emit({"event":"error","error":"invalid batch request identity"});return
         unknown = set(p) - KEYS
         if unknown:
-            self._reject(p,f"batch 收到不认识的参数：{sorted(unknown)}")
+            self._reject(p,f"batch 收到不认识的参数：{sorted(unknown)}",no_write=True)
             return
         action = p.get("action", "state")
         if action not in ACTIONS:
-            self._reject(p,f"未知 batch action: {action}（可用：{'/'.join(ACTIONS)}）")
+            self._reject(p,f"未知 batch action: {action}（可用：{'/'.join(ACTIONS)}）",no_write=True)
             return
         if 'spill_review_ack' in p and (action!='commit' or p.get('preflight_token') is None):
-            self._reject(p,'Spill visual acknowledgment is accepted only for a frozen commit')
+            self._reject(p,'Spill visual acknowledgment is accepted only for a frozen commit',no_write=True)
             return
         if 'shadow_review_ack' in p and (action!='commit' or p.get('preflight_token') is None):
-            self._reject(p,'Original-shadow visual acknowledgment is accepted only for a frozen commit')
+            self._reject(p,'Original-shadow visual acknowledgment is accepted only for a frozen commit',no_write=True)
             return
-        if any(key in p for key in ('torso_review_ack','waist_review_ack')) and (action!='commit' or p.get('preflight_token') is None):
-            self._reject(p,'Body-scalar visual acknowledgment is accepted only for a frozen commit')
+        if any(key in p for key in ('torso_review_ack','waist_review_ack','head_review_ack')) and (action!='commit' or p.get('preflight_token') is None):
+            self._reject(p,'Body-scalar visual acknowledgment is accepted only for a frozen commit',no_write=True)
             return
         if action == "state":
             self.emit({"event": "batch_state", "batches": [
@@ -229,15 +232,17 @@ class BatchSyncController:
         if action=="commit" and p.get("preflight_token") is not None:
             try:
                 if self.preflight.replay_completed(p):return
-            except Exception as error:self._reject(p,str(error));return
+            except Exception as error:self._reject(p,str(error),no_write=True);return
         why = self.editor.guard(f"batch {action}")
         if why:
-            self._reject(p,why)
+            self._reject(p,why,no_write=True)
             return
         if action=="preflight" or (action=="commit" and p.get("preflight_token") is not None):
             self.preflight.handle(p);return
+        mutation_may_have_started=False
         try:
             if action in ("undo","redo"):
+                mutation_may_have_started=True
                 from .batch_group_history import restore_group
                 from .people_batch_ledger import restore as restore_people
                 if self.ledger.get(str(p.get("batch_id")),{}).get("semantic_colour_owned"):
@@ -255,7 +260,7 @@ class BatchSyncController:
                 elif "people_changes" in self.ledger.get(str(p.get("batch_id")),{}):
                     body=restore_people(self,p)
                 else:body=restore_group(self,p) if action=="redo" or SC.ORIGINAL_SHADOW.OP in self.ledger.get(str(p.get("batch_id")),{}).get("ops",[]) or body_family(self.ledger.get(str(p.get("batch_id")),{}).get("ops",[])) is not None or RC.OP in self.ledger.get(str(p.get("batch_id")),{}).get("ops",[]) else self.undo(p)
-                self.preflight.emit_result(p,{**body,"success":True})
+                self.preflight.emit_result(p,{**body,"success":True,"outcome_unknown":False})
                 return
             if p.get("people_transfer") is not None:raise SC.ScopeError("People transfer requires a frozen preflight token")
             ops = SC.check_scope(p.get("module_scope"))
@@ -313,10 +318,11 @@ class BatchSyncController:
                 version=self.versions.version(source_row)
                 source_snapshot={'document_id':version.document_id,'revision':str(version.revision),
                                  'path':source_row['path'],'source_proof':source_proof}
+            mutation_may_have_started=True
             body=self.commit(ops, mods, rows, policy, bad,source_snapshot=source_snapshot)
             self.preflight.emit_result(p,{**body,"success":True,"mode":"direct_unreviewed"})
         except Exception as e:
-            self._reject(p,f"batch {action} 被拒：{e}")
+            self._reject(p,f"batch {action} 被拒：{e}",no_write=not mutation_may_have_started)
 
     def commit(self, ops: list[str], mods: dict, rows: list[dict],
                       policy: str, bad: list[dict], source_snapshot=None) -> dict:
@@ -353,7 +359,8 @@ class BatchSyncController:
             row = self.documents.rows()[r["index"]]
             if family is not None:
                 version=self.versions.version(row)
-                if (r.get('document_id')!=version.document_id or r.get('expected_revision')!=str(version.revision)
+                if (('_reviewed_row' in r and r['_reviewed_row'] is not row)
+                        or r.get('document_id')!=version.document_id or r.get('expected_revision')!=str(version.revision)
                         or r.get('path')!=row['path']):
                     raise SC.ScopeError('Body-scalar target changed before transaction planning')
                 scalar_rows[r['index']]=(row,row['path'],version)
@@ -404,7 +411,7 @@ class BatchSyncController:
             if SC.ORIGINAL_SHADOW.OP in ops:SC.ORIGINAL_SHADOW.validate_target(new,row["path"],(row["src_h"],row["src_w"]))
             if family is not None:
                 if (r.get(family.prepared_key) is None or verify_scalar is None
-                        or (family.port_name=='waist' and scalar_identity is None)):
+                        or (family.port_name in ('waist','head') and scalar_identity is None)):
                     raise SC.ScopeError('Body-scalar requires its frozen full before/after target review; direct commit refused')
                 version=self.versions.version(row)
                 scalar_record=family.review.checked(r[family.prepared_key])
@@ -427,7 +434,7 @@ class BatchSyncController:
             applied_rows.append(r)
         if not planned:
             raise SC.ScopeError("所有目标都不合格，这一批一个也没写（见 preflight 里的 blocked）")
-        def require_scalar_row(index,revision=None):
+        def require_scalar_row(index,revision=None,*,live_state=None):
             if family is None:return
             frozen,path,version=scalar_rows[index];current_rows=self.documents.rows()
             wanted=version.revision if revision is None else revision
@@ -436,7 +443,7 @@ class BatchSyncController:
                     or self.versions.version(frozen).revision!=wanted):
                 raise SC.ScopeError('Body-scalar exact target row or revision changed before write')
             if proofs[index] is None:raise SC.ScopeError('Body-scalar target lacks its frozen source proof')
-            SOURCE.verify_row({**frozen,'state':self.editor.capture() if index==live_idx else frozen['state']},proofs[index])
+            SOURCE.verify_row({**frozen,'state':(self.editor.capture() if live_state is None else live_state) if index==live_idx else frozen['state']},proofs[index])
         for idx,before,new in planned:
             require_scalar_row(idx)
             if proofs[idx] is not None:
@@ -500,7 +507,7 @@ class BatchSyncController:
                     else:
                         # Preserve the older torso host port: its full verifier
                         # still checks frozen body, face and complete people proof.
-                        # Waist is admitted only with its current-state identity port.
+                        # Waist and head require their explicit current-state identity port.
                         expected={**frozen,'revision':str(published_version.revision)}
                         candidate=state
                         if rollback:
@@ -600,9 +607,67 @@ class BatchSyncController:
                     self.editor.invalidate()
                     self.emit({"event":"engine_warn","warn":f"batch rollback failed: {rollback_error}; reload the active document"})
                 raise SC.ScopeError(f"live target failed before parked writes: {error}") from error
-        self.editor.mark_dirty()
+        def verify_parked_scalar(index,before):
+            if family is None or index==live_idx:return
+            from .optics_candidate_identity import fingerprint
+            require_scalar_row(index)
+            row,_,version=scalar_rows[index];frozen=scalar_proofs[index]
+            expected={'document_id':version.document_id,'revision':str(version.revision),
+                      'source_proof':proofs[index],'candidate_sha256':frozen['before_sha256'],
+                      'people_sha256':frozen['before_people_sha256']}
+            actual=row['state'];actual_hash=fingerprint(actual)
+            if actual_hash!=frozen['before_sha256'] or fingerprint(before)!=actual_hash:
+                raise SC.ScopeError('Body-scalar parked full state changed before publication')
+            if scalar_identity is not None:
+                if scalar_identity(row,actual,version.document_id,str(version.revision))!=expected:
+                    raise SC.ScopeError('Body-scalar parked people or full state changed before publication')
+                require_scalar_row(index)
+                if (fingerprint(row['state'])!=actual_hash
+                        or scalar_identity(row,row['state'],version.document_id,str(version.revision))!=expected):
+                    raise SC.ScopeError('Body-scalar parked context changed during final identity callback')
+            else:
+                # Preserve the older torso verifier port without granting head or
+                # waist a fallback that omits their current people identity.
+                verify_scalar(row,actual,next(new for idx,_,new in planned if idx==index),
+                              version.document_id,str(version.revision),frozen)
+            require_scalar_row(index)
+            if fingerprint(row['state'])!=actual_hash:
+                raise SC.ScopeError('Body-scalar parked final callback changed the current state')
+        final_live_state=None
+        try:
+            self.editor.mark_dirty()
+            for target_index,target_before,target_new in planned:
+                verify_parked_scalar(target_index,target_before)
+            # Capture the live owner before the final callback-free barrier so
+            # capture itself cannot invalidate a previously checked parked row.
+            if family is not None:
+                from .optics_candidate_identity import fingerprint
+                final_live_state=self.editor.capture() if live_plan is not None else None
+                for target_index,target_before,target_new in planned:
+                    require_scalar_row(target_index,published_version.revision if target_index==live_idx else None,
+                                       live_state=final_live_state)
+                    actual=final_live_state if target_index==live_idx else self.documents.rows()[target_index]['state']
+                    if fingerprint(actual)!=fingerprint(target_new if target_index==live_idx else target_before):
+                        raise SC.ScopeError('Body-scalar target changed at the final publication barrier')
+        except Exception as error:
+            if family is not None and live_plan is not None:
+                # No parked state has been installed. Restore the active target
+                # only through the same frozen owner/people/dependency guard.
+                idx,before,new=live_plan
+                try:
+                    rollback=replay_target(before,rollback=True,mode='batch',
+                        replayed_for=f'batch_rollback:{batch_id}',strict_local=True)
+                    expected=family.review.rollback_record(scalar_proofs[idx],before,str(published_version.revision))
+                    verify_scalar(live_row,before,self.editor.capture(),published_version.document_id,
+                                  str(published_version.revision),expected)
+                    if rollback is not None:self.emit(rollback)
+                except Exception as rollback_error:
+                    self.editor.invalidate()
+                    self.emit({'event':'engine_warn','warn':f'Final batch fence failed and active rollback is unresolved: {rollback_error}'})
+            raise SC.ScopeError(f'Final batch publication refused before parked writes: {error}') from error
+        # No editor callbacks remain between the barrier and the parked writes.
         for idx, before, new in planned:
-            require_scalar_row(idx,published_version.revision if idx==live_idx else None)
+            require_scalar_row(idx,published_version.revision if idx==live_idx else None,live_state=final_live_state)
             row = self.documents.rows()[idx]
             if idx != live_idx:
                 self.versions.advance(row)

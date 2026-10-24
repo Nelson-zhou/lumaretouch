@@ -5,15 +5,29 @@
   "entries": [
     {
       "operation_id": "lnx.head_size.v1",
-      "parameter_key": "recipe",
-      "type": "object",
-      "neutral": {
-        "version": 1,
-        "amount": 0
-      },
-      "transferable": false,
+      "parameter_key": "version",
+      "type": "integer",
+      "neutral": 1,
+      "range": [
+        1,
+        1
+      ],
+      "transferable": true,
       "source_requirement": "PC-32473-C-dc1b0ba40a",
-      "reason": "PARTIAL / UNRUN: independently marked complete head/hair and clear transition with current own BodyRef/FaceRef. Original local 2D shrink, not face-size or learned segmentation. Scalar preset/batch per-target review remains unwired."
+      "reason": "PARTIAL / UNRUN: exclusive version/amount head-size scalar route with actual per-target before/after review. Target must already have a unique enabled body, independent complete-head/hair box, pivot, clear transition, current source and own-face evidence. No copied geometry/support/analysis or silent attenuation. Multi-body routing and runtime/photo acceptance remain unfinished."
+    },
+    {
+      "operation_id": "lnx.head_size.v1",
+      "parameter_key": "amount",
+      "type": "number",
+      "neutral": 0,
+      "range": [
+        0,
+        1
+      ],
+      "transferable": true,
+      "source_requirement": "PC-32473-C-dc1b0ba40a",
+      "reason": "PARTIAL / UNRUN: exclusive version/amount head-size scalar route with actual per-target before/after review. Target must already have a unique enabled body, independent complete-head/hair box, pivot, clear transition, current source and own-face evidence. No copied geometry/support/analysis or silent attenuation. Multi-body routing and runtime/photo acceptance remain unfinished."
     },
     {
       "operation_id": "lnx.waist_length.v1",

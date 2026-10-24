@@ -105,7 +105,7 @@ fn body_preflight(value: &Value, family: BodyReviewFamily) -> bool {
         if !hex(&target["document_id"], 32) || !revision(&target["revision"])
             || !target["path"].is_string() || target["index"].as_u64().is_none()
             || !ids.insert(target["document_id"].as_str().unwrap())
-            || (family == BodyReviewFamily::Waist && !indices.insert(target["index"].as_u64().unwrap())) { return false; }
+            || (family != BodyReviewFamily::Torso && !indices.insert(target["index"].as_u64().unwrap())) { return false; }
         if !target["blocked"].is_null() {
             if !target["blocked"].as_str().is_some_and(|s| !s.is_empty())
                 || !target[family.transfer_key()].is_null() { return false; }
@@ -119,10 +119,67 @@ fn body_preflight(value: &Value, family: BodyReviewFamily) -> bool {
             || !hex(&before["target_recipe_key"], 64)
             || !family.transfer(&target[family.transfer_key()], &target["document_id"], &target["revision"], params, &target["source_proof"])
             || (target["document_id"] == source["document_id"] && (target["source_proof"] != source["source_proof"]
-                || (family == BodyReviewFamily::Waist && target["revision"] != source["revision"]))) { return false; }
+                || (family != BodyReviewFamily::Torso && target["revision"] != source["revision"]))) { return false; }
     }
     value["blocked"].as_u64() == Some(blocked)
         && value["ok"].as_u64() == Some(targets.len() as u64 - blocked)
+}
+/// The native mailbox cannot reconstruct the frozen target plan or geometry.
+/// It can reject incomplete head-success envelopes before they settle recovery.
+/// The engine and UI still compare source/path/reviewed-row identity to the plan.
+fn head_commit(value: &Value) -> bool {
+    let family = BodyReviewFamily::Head;
+    let (Some(outcomes), Some(acks), Some(applied)) = (value["target_outcomes"].as_array(),
+        value[family.ack_key()].as_array(), value["targets"].as_array()) else { return false; };
+    let bounded_text = |v: &Value, limit: usize| v.as_str().is_some_and(|s|
+        !s.trim().is_empty() && s.len() <= limit && !s.chars().any(|c| c.is_control()));
+    let index = |v: &Value| v.as_u64().filter(|n| *n <= 9_007_199_254_740_991);
+    let source = &value["source_snapshot"];
+    if outcomes.is_empty() || outcomes.len() > family.max_targets() || acks.is_empty()
+        || !bounded_text(&value["batch_id"], 128) || !hex(&source["document_id"], 32)
+        || !revision(&source["revision"]) || !bounded_text(&source["path"], 4096)
+        || !torso::source_proof(&source["source_proof"]) { return false; }
+    let mut acknowledged = std::collections::BTreeMap::new();
+    for ack in acks {
+        let Some(id) = ack["document_id"].as_str() else { return false; };
+        if acknowledged.insert(id, &ack["revision"]).is_some() { return false; }
+    }
+    let mut documents = std::collections::BTreeSet::new();
+    let mut reviewed_indices = std::collections::BTreeSet::new();
+    let mut applied_indices = std::collections::BTreeSet::new();
+    let mut actual_applied = Vec::new();
+    for outcome in outcomes {
+        if !hex(&outcome["document_id"], 32) || !revision(&outcome["expected_revision"])
+            || !bounded_text(&outcome["path"], 4096) || !family.no_foreign_evidence(outcome)
+            || !outcome[family.transfer_key()].is_null() || outcome.get(family.ack_key()).is_some() { return false; }
+        let id = outcome["document_id"].as_str().unwrap();
+        let Some(reviewed_index) = index(&outcome["reviewed_index"]) else { return false; };
+        if !documents.insert(id) || !reviewed_indices.insert(reviewed_index) { return false; }
+        let ack_revision = acknowledged.remove(id);
+        if ack_revision.is_some_and(|expected| expected != &outcome["expected_revision"]) { return false; }
+        match outcome["outcome"].as_str() {
+            Some("applied") => {
+                let Some(current_index) = index(&outcome["index"]) else { return false; };
+                if ack_revision.is_none() || !applied_indices.insert(current_index) || !outcome["blocked"].is_null()
+                    || outcome["current_revision"] != outcome["expected_revision"] || !revision(&outcome["result_revision"])
+                    || outcome["result_revision"].as_str().unwrap().parse::<u64>().unwrap()
+                        <= outcome["expected_revision"].as_str().unwrap().parse::<u64>().unwrap() { return false; }
+                // The row may move without changing document identity. Do not
+                // require this current index to equal the frozen reviewed index.
+                actual_applied.push(outcome["index"].clone());
+            }
+            Some("skipped") => {
+                // Engine diagnostics are capped at 2000 Unicode characters,
+                // not UTF-8 bytes; non-Latin skip reasons must remain valid.
+                if !outcome["blocked"].as_str().is_some_and(|reason| !reason.trim().is_empty() && reason.chars().count() <= 2000)
+                    || (!outcome["index"].is_null() && index(&outcome["index"]).is_none())
+                    || (!outcome["current_revision"].is_null() && !revision(&outcome["current_revision"]))
+                    || (!outcome["result_revision"].is_null() && !revision(&outcome["result_revision"])) { return false; }
+            }
+            _ => return false,
+        }
+    }
+    acknowledged.is_empty() && !actual_applied.is_empty() && &actual_applied == applied
 }
 impl ReceiptKind for BatchKind {
     const NAME: &'static str = "batch";
@@ -136,6 +193,8 @@ impl ReceiptKind for BatchKind {
             if evidence && (value["success"] != true || value["action"] != "preflight" || !family.selected(value)) { return false; }
             if value["success"] == true && value["action"] == "preflight" && family.selected(value)
                 && !body_preflight(value, family) { return false; }
+            if family == BodyReviewFamily::Head && family.selected(value)
+                && value["success"] == true && value["action"] == "commit" && !head_commit(value) { return false; }
         }
         value["success"].as_bool().is_some()
             && (value["success"] != true || value["action"] != "preflight"
@@ -494,3 +553,8 @@ mod tests {
     }
 
 }
+
+// AUTHORED / UNRUN: independent head-family protocol specifications.
+#[cfg(test)]
+#[path = "head_batch_host_tests.rs"]
+mod head_tests;

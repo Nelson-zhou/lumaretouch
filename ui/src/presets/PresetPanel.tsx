@@ -2,7 +2,9 @@ import {SHADOW_TRANSFER_OP} from '../originalShadow/transferModel';
 import {TORSO_TRANSFER_OP} from '../torsoLength/transferModel';
 import {TorsoTransferReview} from '../torsoLength/TorsoTransferReview';
 import {WAIST_TRANSFER_OP} from '../waistLength/transferModel';
+import {HEAD_TRANSFER_OP} from '../headSize/transferModel';
 import {WaistTransferReview} from '../waistLength/WaistTransferReview';
+import {HeadTransferReview} from '../headSize/HeadTransferReview';
 import {CROP_OP} from '../cropTransfer/model';
 import {CropTransferReview} from '../cropTransfer/CropTransferReview';
 import {SPILL_TRANSFER_OP} from '../spillRemoval/transferModel';
@@ -50,7 +52,7 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {unavailableScope(selectedOps,modules).length>0&&<p>包含当前不可用模块，不能应用。</p>}
     </div>}
     <div className="presetButtons">
-      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||xmpUnsupported||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{w.selected?.xmp_import||selectedOps.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP,SPILL_TRANSFER_OP,SHADOW_TRANSFER_OP,TORSO_TRANSFER_OP,WAIST_TRANSFER_OP].includes(op))?'预检所选预设':'应用所选'}</button>
+      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||xmpUnsupported||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{w.selected?.xmp_import||selectedOps.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP,SPILL_TRANSFER_OP,SHADOW_TRANSFER_OP,TORSO_TRANSFER_OP,WAIST_TRANSFER_OP,HEAD_TRANSFER_OP].includes(op))?'预检所选预设':'应用所选'}</button>
       <button disabled={!w.context.enabled||w.busy} onClick={()=>void w.refresh()}>刷新列表</button>
       <button disabled={!w.context.enabled||w.busy||!w.selected||w.selected.builtin} onClick={()=>void w.remove()}>移入回收站</button>
     </div>
@@ -61,16 +63,18 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {w.review.shadow_transfer&&<ShadowTransferReview value={w.review.shadow_transfer} reviewKey={w.shadowKey} disabled={w.busy} onReady={(key,ready)=>w.setShadowImage({key,ready})}/>}
       {w.review.torso_transfer&&<TorsoTransferReview value={w.review.torso_transfer} reviewKey={w.torsoKey} disabled={w.busy} onReady={(key,ready)=>w.setTorsoImage({key,ready})}/>}
       {w.review.waist_transfer&&<WaistTransferReview value={w.review.waist_transfer} reviewKey={w.waistKey} disabled={w.busy} onReady={(key,ready)=>w.setWaistImage({key,ready})}/>}
+      {w.review.head_transfer&&<HeadTransferReview value={w.review.head_transfer} reviewKey={w.headKey} disabled={w.busy} onReady={(key,ready)=>w.setHeadImage({key,ready})}/>}
       {!w.spillReady&&<p role="status">请查看并勾选确认本目标的祛反光前后效果。</p>}
       {!w.shadowReady&&<p role="status">请查看并勾选确认本目标的原图阴影前后效果。</p>}
       {!w.torsoReady&&<p role="status">请查看并勾选确认本目标身体及本人面部的上身长度前后效果。</p>}
       {!w.waistReady&&<p role="status">请查看并勾选确认本目标身体及本人面部的腰长前后效果。</p>}
-      <button disabled={w.busy||!w.context.editable||!w.cropReady||!w.xmpReady||!w.spillReady||!w.shadowReady||!w.torsoReady||!w.waistReady} onClick={()=>void w.confirmLocal()}>确认本次目标预设并应用</button>
+      {!w.headReady&&<p role="status">请查看并勾选确认本目标身体及本人面部的小头前后效果。</p>}
+      <button disabled={w.busy||!w.context.editable||!w.cropReady||!w.xmpReady||!w.spillReady||!w.shadowReady||!w.torsoReady||!w.waistReady||!w.headReady} onClick={()=>void w.confirmLocal()}>确认本次目标预设并应用</button>
       <button disabled={w.busy} onClick={w.dismissReview}>关闭本次审核</button></div>}
     <fieldset><legend>保存当前照片的模块参数</legend>
       <label>预设名称<input aria-label="预设名称" value={w.form.name} maxLength={160} placeholder="例如：室外婚纱暖调" onChange={e=>w.setName(e.target.value)}/><small>{nameLength}/80 字符</small></label>
       {nameLength>80&&<p role="alert">名称过长，请缩短到 80 个字符以内。</p>}
-      <div className="presetButtons"><button disabled={w.busy} onClick={()=>w.setScope(modules.filter(m=>m.transferable&&!m.dedicated_transport&&![TORSO_TRANSFER_OP,WAIST_TRANSFER_OP].includes(m.operation_id)).map(m=>m.operation_id))}>全选可组合模块</button>
+      <div className="presetButtons"><button disabled={w.busy} onClick={()=>w.setScope(modules.filter(m=>m.transferable&&!m.dedicated_transport&&![TORSO_TRANSFER_OP,WAIST_TRANSFER_OP,HEAD_TRANSFER_OP].includes(m.operation_id)).map(m=>m.operation_id))}>全选可组合模块</button>
         <button disabled={w.busy} onClick={()=>w.setScope([])}>清空选择</button></div>
       <div className="presetScopes">{rows.map(m=><label key={m.operation_id} title={m.reason??''}>
         <input type="checkbox" checked={chosen.includes(m.operation_id)} disabled={w.busy||((!m.transferable||!!m.dedicated_transport)&&!chosen.includes(m.operation_id))}
@@ -81,9 +85,10 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {unavailable.length>0&&<p role="alert">请取消已不可用模块：{unavailable.map(moduleLabel).join('、')}</p>}
       {chosen.includes(TORSO_TRANSFER_OP)&&<p role={chosen.length===1?'status':'alert'}>上身长度须单独保存与审核。{chosen.length>1?'请取消其他模块。':'不保存身体归属、关键点、支持范围或审核。'}</p>}
       {chosen.includes(WAIST_TRANSFER_OP)&&<p role={chosen.length===1?'status':'alert'}>腰长须单独保存与审核。{chosen.length>1?'请取消其他模块。':'仅保存版本与长度标量，不保存身体、腰部标记、本人面部归属、支持或审核。'}</p>}
+      {chosen.includes(HEAD_TRANSFER_OP)&&<p role={chosen.length===1?'status':'alert'}>小头须单独保存与审核。{chosen.length>1?'请取消其他模块。':'仅保存版本与缩小标量，不保存身体、头部几何、本人面部归属、支持或审核。'}</p>}
       {!chosen.length&&<p>请明确选择要保存的模块，不会自动保存全部调整。</p>}
       {!w.context.editable&&<p>保存和应用需要可编辑照片；导入、删除和浏览不需要打开照片。</p>}
-      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.form.name.trim()||nameLength>80||!chosen.length||!!unavailable.length||(chosen.some(op=>[TORSO_TRANSFER_OP,WAIST_TRANSFER_OP].includes(op))&&chosen.length!==1)} onClick={()=>void w.save()}>保存为新预设</button>
+      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.form.name.trim()||nameLength>80||!chosen.length||!!unavailable.length||(chosen.some(op=>[TORSO_TRANSFER_OP,WAIST_TRANSFER_OP,HEAD_TRANSFER_OP].includes(op))&&chosen.length!==1)} onClick={()=>void w.save()}>保存为新预设</button>
     </fieldset>
     <div className="presetButtons"><button disabled={!w.context.enabled||w.busy} onClick={()=>void w.importFile()}>导入 JSON</button>
       <button disabled={!w.context.enabled||w.busy} onClick={()=>void w.importFile(true)}>导入 JSON 为新副本</button>
@@ -100,8 +105,9 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {w.ui.result?.requires_reload&&<p>应用失败且未能恢复图像，请重新打开照片。</p>}
     </div>
     {w.ui.phase==='uncertain'&&<div className="presetUncertain"><p>{w.ui.action==='preflight'||w.ui.action==='xmp_inspect'?'只读检查仍未确认完成，尚未导入或应用；可以查询同一笔任务，不会重复提交。':'结果尚未确认。不会自动重试，也不能据此认定没有保存或应用。'}</p>
+      {w.ui.submitted?.options.headReviewAck!==undefined&&<p>本次小头应用只可查询原请求，冻结令牌及逐图确认不会被释放后重新提交。原生回执读取的既有限制仍可能阻止结果确认；当前状态刷新不等于这笔操作的终态证明。</p>}
       <button onClick={()=>void w.query()}>查询同一笔结果</button><button onClick={()=>void w.inspect()}>请求当前状态供核对</button>
-      {w.ui.submitted?.options.waistReviewAck===undefined&&<button onClick={w.acknowledgeInspection}>我已核对，结束本次等待</button>}
+      {w.ui.submitted?.options.waistReviewAck===undefined&&w.ui.submitted?.options.headReviewAck===undefined&&<button onClick={w.acknowledgeInspection}>我已核对，结束本次等待</button>}
     </div>}
     {!!w.catalog?.errors.length&&<details><summary>预设目录问题（{w.catalog.errors.length}）</summary>
       {w.catalog.errors.map((e,i)=><p key={`${e.file}-${i}`}>{e.file}：{e.error}</p>)}</details>}

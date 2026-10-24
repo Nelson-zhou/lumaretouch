@@ -3,7 +3,8 @@ import {SPILL_TRANSFER_OP,validSpillTransfer,validSpillTransferAck,type SpillTra
 import {SHADOW_TRANSFER_OP,validShadowTransfer,validShadowTransferAck,type ShadowTransferEvidence,type ShadowTransferAck} from '../originalShadow/transferModel.ts';
 import {TORSO_TRANSFER_OP,validTorsoTransfer,validTorsoTransferAck,sameTorsoTransferAck,type TorsoTransferEvidence,type TorsoTransferAck} from '../torsoLength/transferModel.ts';
 import {WAIST_TRANSFER_OP,waistTransferParameters,validWaistTransfer,validWaistTransferAck,sameWaistTransferAck,type WaistTransferEvidence,type WaistTransferAck} from '../waistLength/transferModel.ts';
-import {bodyScalarNoWriteRejection} from '../bodyScalar/transferModel.ts';
+import {HEAD_TRANSFER_OP,headTransferParameters,validHeadTransfer,validHeadTransferAck,sameHeadTransferAck,type HeadTransferEvidence,type HeadTransferAck} from '../headSize/transferModel.ts';
+import {bodyScalarNoWriteRejection,validBodyScalarReceiptState} from '../bodyScalar/transferModel.ts';
 import {validReferenceReview,type ReferenceReview} from '../referenceColor/ReferenceColorReview';
 import {OPTICS_AUTO_OP,validOpticalReview,type OpticalTargetReview} from '../optics/transferReviewModel';
 import {validTransferEvidence,sameTransferOptions,type MaskTransferOptions,type MaskTransferEvidence,type TransferGroupChoice} from '../localMasks/transferModel.ts';
@@ -12,10 +13,10 @@ import type {PresetInfo, PresetState} from '../native';
 import {validXmpAck, validXmpReport, validXmpSummary, validXmpTransfer, validXmpReviewAck, type XmpAck, type XmpReport, type XmpSummary, type XmpTransfer, type XmpReviewAck} from '../xmpImport/model.ts';
 export type PresetAction = 'list'|'preflight'|'apply'|'save'|'import'|'delete'|'xmp_inspect';
 export type PresetOptions = {id?:string;name?:string;path?:string;kind?:string;note?:string;force?:boolean;
-  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;spillReviewAck?:SpillTransferAck[];shadowReviewAck?:ShadowTransferAck[];torsoReviewAck?:TorsoTransferAck[];waistReviewAck?:WaistTransferAck[];
+  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;spillReviewAck?:SpillTransferAck[];shadowReviewAck?:ShadowTransferAck[];torsoReviewAck?:TorsoTransferAck[];waistReviewAck?:WaistTransferAck[];headReviewAck?:HeadTransferAck[];
   xmpAck?:XmpAck;xmpReviewAck?:XmpReviewAck;/** UI-only captured expected source, never sent as authority. */xmpExpected?:XmpSummary};
 export type PresetReply = {protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
-  xmp_report?:XmpReport;xmp_transfer?:XmpTransfer;source_proof?:unknown;spill_transfer?:SpillTransferEvidence;shadow_transfer?:ShadowTransferEvidence;torso_transfer?:TorsoTransferEvidence;torso_review_ack?:TorsoTransferAck[];waist_transfer?:WaistTransferEvidence;waist_review_ack?:WaistTransferAck[];
+  xmp_report?:XmpReport;xmp_transfer?:XmpTransfer;source_proof?:unknown;spill_transfer?:SpillTransferEvidence;shadow_transfer?:ShadowTransferEvidence;torso_transfer?:TorsoTransferEvidence;torso_review_ack?:TorsoTransferAck[];waist_transfer?:WaistTransferEvidence;waist_review_ack?:WaistTransferAck[];head_transfer?:HeadTransferEvidence;head_review_ack?:HeadTransferAck[];
   crop_transfer?:CropReview;reference_color?:ReferenceReview;revision?:string;optical_transfer?:OpticalTargetReview;preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
   before?:Record<string,unknown>;after?:Record<string,unknown>;doc_state?:Record<string,unknown>;
   error?:string;requires_reload?:boolean;rolled_back?:boolean;operation_committed?:boolean|null};
@@ -34,6 +35,8 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
   if(!result || result.protocol!==1 || result.request_id!==requestId || result.action!==action
     || typeof result.success!=='boolean' || typeof result.outcome_unknown!=='boolean' || (result.success&&result.outcome_unknown))throw Error('预设回执身份或状态不完整');
   if(['apply','preflight','save'].includes(action)&&result.document_id!==opts.documentId)throw Error('预设结果不属于本次照片');
+  if((opts.headReviewAck!==undefined||expectedScope?.includes(HEAD_TRANSFER_OP)||result.module_scope?.includes(HEAD_TRANSFER_OP))
+    &&!validBodyScalarReceiptState(result))throw Error('小头回执含有未决或矛盾状态，只能查询原请求');
   // An explicit, pre-claim no-write rejection may omit acceptance fields. Unknown
   // and claimed receipts must retain the original token and ordered acknowledgment.
   if(result.waist_review_ack!==undefined&&(action!=='apply'||opts.waistReviewAck===undefined))throw Error('未请求的腰长逐图确认回执');
@@ -41,7 +44,13 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
     &&(result.module_scope?.length!==1||result.module_scope[0]!==WAIST_TRANSFER_OP||result.preflight_token!==opts.preflightToken
       ||!sameWaistTransferAck(result.waist_review_ack,opts.waistReviewAck)))throw Error('腰长应用回执与原请求、冻结令牌或有序 PNG 对确认不一致');
   if(result.waist_transfer!=null&&(action!=='preflight'||!result.success||result.module_scope?.length!==1||result.module_scope[0]!==WAIST_TRANSFER_OP))throw Error('未请求或非预检的腰长像素证据');
-  if(result.module_scope?.includes(WAIST_TRANSFER_OP)&&[result.torso_transfer,result.spill_transfer,result.shadow_transfer,result.crop_transfer,result.local_mask_transfer,result.reference_color,result.optical_transfer,result.xmp_transfer,result.xmp_report].some(value=>value!=null))throw Error('腰长回执不能混入其他作用域的证据');
+  if(result.module_scope?.includes(WAIST_TRANSFER_OP)&&[result.head_transfer,result.torso_transfer,result.spill_transfer,result.shadow_transfer,result.crop_transfer,result.local_mask_transfer,result.reference_color,result.optical_transfer,result.xmp_transfer,result.xmp_report].some(value=>value!=null))throw Error('腰长回执不能混入其他作用域的证据');
+  if(result.head_review_ack!==undefined&&(action!=='apply'||opts.headReviewAck===undefined))throw Error('未请求的小头逐图确认回执');
+  if(action==='apply'&&opts.headReviewAck!==undefined&&!bodyScalarNoWriteRejection(result,opts.preflightToken)
+    &&(result.module_scope?.length!==1||result.module_scope[0]!==HEAD_TRANSFER_OP||result.preflight_token!==opts.preflightToken
+      ||!sameHeadTransferAck(result.head_review_ack,opts.headReviewAck)))throw Error('小头应用回执与原请求、冻结令牌或有序 PNG 对确认不一致');
+  if(result.head_transfer!=null&&(action!=='preflight'||!result.success||result.module_scope?.length!==1||result.module_scope[0]!==HEAD_TRANSFER_OP))throw Error('未请求或非预检的小头像素证据');
+  if(result.module_scope?.includes(HEAD_TRANSFER_OP)&&[result.waist_transfer,result.torso_transfer,result.spill_transfer,result.shadow_transfer,result.crop_transfer,result.local_mask_transfer,result.reference_color,result.optical_transfer,result.xmp_transfer,result.xmp_report].some(value=>value!=null))throw Error('小头回执不能混入其他作用域的证据');
   if(result.torso_review_ack!==undefined&&(action!=='apply'||result.module_scope?.length!==1||result.module_scope[0]!==TORSO_TRANSFER_OP||result.preflight_token!==opts.preflightToken||!sameTorsoTransferAck(result.torso_review_ack,opts.torsoReviewAck)))throw Error('上身长度应用回执与本次逐图确认不一致');
   if(action==='apply'&&opts.torsoReviewAck!==undefined&&result.success&&!sameTorsoTransferAck(result.torso_review_ack,opts.torsoReviewAck))throw Error('缺少本次上身长度 PNG 对确认的终态回执');
   if(result.torso_transfer!=null&&(action!=='preflight'||!result.success||result.module_scope?.length!==1||result.module_scope[0]!==TORSO_TRANSFER_OP))throw Error('未请求或非预检的上身长度像素证据');
@@ -54,6 +63,7 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
     if(!result.catalog || result.catalog.available!==true || !Array.isArray(result.catalog.list)
       || !Array.isArray(result.catalog.errors) || !Array.isArray(result.catalog.modules)
       || result.catalog.list.some(p=>p.xmp_import!==undefined&&!validXmpSummary(p.xmp_import,Object.keys(p.modules)))
+      || result.catalog.list.some(p=>Object.hasOwn(p.modules,HEAD_TRANSFER_OP)&&(Object.keys(p.modules).length!==1||!headTransferParameters(p.modules[HEAD_TRANSFER_OP])||p.xmp_import!==undefined))
       || result.catalog.list.some(p=>Object.hasOwn(p.modules,WAIST_TRANSFER_OP)&&(Object.keys(p.modules).length!==1||!waistTransferParameters(p.modules[WAIST_TRANSFER_OP])||p.xmp_import!==undefined)))throw Error('预设目录结果不完整');
     return;
   }
@@ -62,6 +72,7 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
   if(!scope(result.module_scope))throw Error('缺少实际作用模块');
   if(result.module_scope.includes(TORSO_TRANSFER_OP)&&result.module_scope.length!==1)throw Error('上身长度必须独立预检与应用，不能混合其他模块');
   if(result.module_scope.includes(WAIST_TRANSFER_OP)&&result.module_scope.length!==1)throw Error('腰长必须独立预检与应用，不能混合其他模块');
+  if(result.module_scope.includes(HEAD_TRANSFER_OP)&&result.module_scope.length!==1)throw Error('小头必须独立预检与应用，不能混合其他模块');
   const wanted=action==='save'?opts.moduleScope:expectedScope;
   if(wanted&&!sameScope(result.module_scope,wanted))throw Error('实际作用模块与选择不一致');
   if(action==='preflight'){
@@ -73,6 +84,8 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
     if(result.module_scope.includes(TORSO_TRANSFER_OP)&&!validTorsoTransfer(result.torso_transfer,opts.documentId??'',result.revision,result.applies?.[TORSO_TRANSFER_OP],result.source_proof))throw Error('上身长度预设缺少本目标实际身体、本人面部、独立支持审核和真实前后预览');
     if(result.module_scope.includes(WAIST_TRANSFER_OP)&&(!validWaistTransfer(result.waist_transfer,opts.documentId??'',result.revision,result.applies?.[WAIST_TRANSFER_OP],result.source_proof)
       ||result.torso_transfer!=null||result.spill_transfer!=null||result.shadow_transfer!=null||result.xmp_transfer!=null||result.local_mask_transfer!=null))throw Error('腰长预设缺少本目标实际身体、本人面部、腰部独立支持审核或真实前后预览，或混入其他审核');
+    if(result.module_scope.includes(HEAD_TRANSFER_OP)&&(!validHeadTransfer(result.head_transfer,opts.documentId??'',result.revision,result.applies?.[HEAD_TRANSFER_OP],result.source_proof)
+      ||result.waist_transfer!=null||result.torso_transfer!=null||result.spill_transfer!=null||result.shadow_transfer!=null||result.xmp_transfer!=null||result.local_mask_transfer!=null))throw Error('小头预设缺少本目标实际身体、本人面部、完整头部独立支持审核或真实前后预览，或混入其他审核');
     if(result.module_scope.includes('lnx.local_grade.v1')){
       if(!validTransferEvidence(result.local_mask_transfer)||!sameTransferOptions(result.local_mask_transfer.policy,opts.localMaskTransfer))throw Error('局部预设预检证据或策略不匹配');
     }
@@ -84,7 +97,7 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
         ||result.xmp_report.source_sha256!==opts.xmpExpected.source_sha256||result.xmp_report.report_sha256!==opts.xmpExpected.report.report_sha256
         ||!validXmpTransfer(result.xmp_transfer,opts.documentId??'',result.revision,opts.xmpExpected.source_sha256))throw Error('缺少匹配本预设、当前照片和冻结版本的 XMP 前后像素证据');
     }
-    if(!opts.xmpExpected&&!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1',CROP_OP,'lnx.spill_removal.v1',SHADOW_TRANSFER_OP,TORSO_TRANSFER_OP,WAIST_TRANSFER_OP].includes(op)))throw Error('预设不含需要冻结预检的模块');
+    if(!opts.xmpExpected&&!result.module_scope.some(op=>['lnx.local_grade.v1',OPTICS_AUTO_OP,'lnx.reference_color.v1',CROP_OP,'lnx.spill_removal.v1',SHADOW_TRANSFER_OP,TORSO_TRANSFER_OP,WAIST_TRANSFER_OP,HEAD_TRANSFER_OP].includes(op)))throw Error('预设不含需要冻结预检的模块');
     return;
   }
   if(action==='apply'){
@@ -97,6 +110,7 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
       ||!text(preset.kind)||!moduleKeys(preset.modules,result.module_scope))throw Error('缺少实际保存的预设内容');
     if(action==='save'&&preset.name!==opts.name)throw Error('保存名称与提交不一致');
     if(result.module_scope.includes(WAIST_TRANSFER_OP)&&(!waistTransferParameters(preset.modules[WAIST_TRANSFER_OP])||preset.xmp_import!==undefined))throw Error('腰长便携预设只能包含版本与长度标量，不能包含源图支持或其他审核');
+    if(result.module_scope.includes(HEAD_TRANSFER_OP)&&(!headTransferParameters(preset.modules[HEAD_TRANSFER_OP])||preset.xmp_import!==undefined))throw Error('小头便携预设只能包含版本与缩小标量，不能包含源图支持或其他审核');
     if(preset.xmp_import!==undefined&&!validXmpSummary(preset.xmp_import,result.module_scope))throw Error('XMP 预设来源摘要不完整');
     if(opts.xmpAck&&(!validXmpSummary(preset.xmp_import,result.module_scope)||!validXmpAck(opts.xmpAck,preset.xmp_import.report)
       ||!sameScope(preset.xmp_import.selected,opts.xmpAck.selected)))throw Error('导入结果与确认的 XMP 来源或参数选择不一致');
@@ -192,7 +206,7 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
       ||!frozen.module_scope||frozen.module_scope.length!==1||frozen.module_scope[0]!==TORSO_TRANSFER_OP||expectedScope!==undefined&&!sameScope(expectedScope,frozen.module_scope)
       ||!validTorsoTransfer(frozen.torso_transfer,context.documentId,frozen.revision,frozen.applies?.[TORSO_TRANSFER_OP],frozen.source_proof)
       ||!validTorsoTransferAck(options.torsoReviewAck,[frozen.torso_transfer])
-      ||options.spillReviewAck!==undefined||options.shadowReviewAck!==undefined||options.waistReviewAck!==undefined||options.xmpReviewAck!==undefined||options.localMaskTransfer!==undefined)){
+      ||options.spillReviewAck!==undefined||options.shadowReviewAck!==undefined||options.waistReviewAck!==undefined||options.headReviewAck!==undefined||options.xmpReviewAck!==undefined||options.localMaskTransfer!==undefined)){
       set({message:'请先查看并确认当前目标身体及本人面部的上身长度前后效果，再独立应用这次冻结预设。'});return;
     }
     if(options.torsoReviewAck!==undefined&&action!=='apply'){
@@ -204,24 +218,43 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
       ||!frozen.module_scope||frozen.module_scope.length!==1||frozen.module_scope[0]!==WAIST_TRANSFER_OP||expectedScope!==undefined&&!sameScope(expectedScope,frozen.module_scope)
       ||!validWaistTransfer(frozen.waist_transfer,context.documentId,frozen.revision,frozen.applies?.[WAIST_TRANSFER_OP],frozen.source_proof)
       ||!validWaistTransferAck(options.waistReviewAck,[frozen.waist_transfer])
-      ||options.spillReviewAck!==undefined||options.shadowReviewAck!==undefined||options.torsoReviewAck!==undefined||options.xmpAck!==undefined||options.xmpReviewAck!==undefined||options.localMaskTransfer!==undefined)){
+      ||options.spillReviewAck!==undefined||options.shadowReviewAck!==undefined||options.torsoReviewAck!==undefined||options.xmpAck!==undefined||options.headReviewAck!==undefined||options.xmpReviewAck!==undefined||options.localMaskTransfer!==undefined)){
       set({message:'请先查看并确认本目标身体及本人面部的腰长前后效果，再独立应用这次冻结预设。'});return;
     }
     if(options.waistReviewAck!==undefined&&action!=='apply'){
       set({phase:'error',action,result:null,message:'腰长视觉确认只允许用于已冻结预设的应用。'});return;
     }
+    const head=action==='apply'&&(expectedScope?.includes(HEAD_TRANSFER_OP)||frozen?.module_scope?.includes(HEAD_TRANSFER_OP)||options.headReviewAck!==undefined);
+    if(head&&(!frozen?.head_transfer||!frozen.preflight_token||options.preflightToken!==frozen.preflight_token
+      ||options.id!==frozen.id||frozen.document_id!==context.documentId||state.submitted?.reviewContextKey!==context.reviewContextKey
+      ||!frozen.module_scope||frozen.module_scope.length!==1||frozen.module_scope[0]!==HEAD_TRANSFER_OP||expectedScope!==undefined&&!sameScope(expectedScope,frozen.module_scope)
+      ||!validHeadTransfer(frozen.head_transfer,context.documentId,frozen.revision,frozen.applies?.[HEAD_TRANSFER_OP],frozen.source_proof)
+      ||!validHeadTransferAck(options.headReviewAck,[frozen.head_transfer])
+      ||options.spillReviewAck!==undefined||options.shadowReviewAck!==undefined||options.waistReviewAck!==undefined||options.torsoReviewAck!==undefined||options.xmpAck!==undefined||options.xmpReviewAck!==undefined||options.localMaskTransfer!==undefined)){
+      set({message:'请先查看并确认本目标身体及本人面部的小头前后效果，再独立应用这次冻结预设。'});return;
+    }
+    if(options.headReviewAck!==undefined&&action!=='apply'){
+      set({phase:'error',action,result:null,message:'小头视觉确认只允许用于已冻结预设的应用。'});return;
+    }
     const selectedScope=action==='save'?options.moduleScope:expectedScope;
     if(selectedScope?.includes(TORSO_TRANSFER_OP)&&selectedScope.length!==1){set({message:'上身长度必须单独保存、预检与应用，不混合其他模块。'});return;}
     if(selectedScope?.includes(WAIST_TRANSFER_OP)&&(selectedScope.length!==1||options.localMaskTransfer!==undefined||options.xmpExpected!==undefined)){set({message:'腰长必须单独保存、预检与应用，不混合其他模块或审核。'});return;}
+    if(selectedScope?.includes(HEAD_TRANSFER_OP)&&(selectedScope.length!==1||options.localMaskTransfer!==undefined||options.xmpExpected!==undefined)){set({message:'小头必须单独保存、预检与应用，不混合其他模块或审核。'});return;}
+    if(action==='preflight'&&selectedScope?.includes(HEAD_TRANSFER_OP)&&options.moduleScope!==undefined&&!sameScope(options.moduleScope,selectedScope)){
+      set({message:'小头预检的预期作用域与所选预设不一致。'});return;
+    }
     if((expectedScope?.includes(SHADOW_TRANSFER_OP)&&expectedScope.some(op=>[SPILL_TRANSFER_OP,'lnx.id_background.v1'].includes(op)))){set({message:'原图阴影标量同步不能与整套背景或祛染同步混用；请分开审核。'});return;}
     const id=uuid(),g=++generation,deadline=now()+(config.timeoutMs??120000);
-    const captured={...options,moduleScope:options.moduleScope?[...options.moduleScope]:undefined,
+    // Expected-scope equality only. The engine still loads and validates the
+    // stored preset; this field cannot choose or broaden its actual modules.
+    const captured={...options,moduleScope:action==='preflight'&&selectedScope?.includes(HEAD_TRANSFER_OP)?[HEAD_TRANSFER_OP]:options.moduleScope?[...options.moduleScope]:undefined,
       ...(options.xmpAck?{xmpAck:{...options.xmpAck,selected:[...options.xmpAck.selected]}}:{}),
       ...(options.xmpReviewAck?{xmpReviewAck:{...options.xmpReviewAck}}:{}),
       ...(options.spillReviewAck?{spillReviewAck:options.spillReviewAck.map(ack=>({...ack}))}:{}),
       ...(options.shadowReviewAck?{shadowReviewAck:options.shadowReviewAck.map(ack=>({...ack}))}:{}),
       ...(options.torsoReviewAck?{torsoReviewAck:options.torsoReviewAck.map(ack=>({...ack}))}:{}),
       ...(options.waistReviewAck?{waistReviewAck:options.waistReviewAck.map(ack=>({...ack}))}:{}),
+      ...(options.headReviewAck?{headReviewAck:options.headReviewAck.map(ack=>({...ack}))}:{}),
       ...(options.xmpExpected?{xmpExpected:structuredClone(options.xmpExpected)}:{}),
       ...(editing?{documentId:context.documentId}:{}),requestId:id};
     const request:Pending={contextGeneration,id,action,options:captured,expectedScope:expectedScope?[...expectedScope]:undefined,generation:g};pending=request;
@@ -237,6 +270,7 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
   function acknowledgeInspection(){
     if(state.phase!=='uncertain')return;
     if(pending?.options.waistReviewAck!==undefined){set({message:'腰长应用结果尚未确定，只能查询原请求；不会释放后重复提交。'});return;}
+    if(pending?.options.headReviewAck!==undefined){set({message:'小头应用结果尚未确定，只能查询原请求；不会释放后重复提交。'});return;}
     generation++;pending=null;set({...initialPresetUi});
   }
   function dismissReview(){if(pending||state.phase==='working'||state.phase==='uncertain')return;set({...initialPresetUi});}

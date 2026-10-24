@@ -174,20 +174,67 @@ def restore_group(owner,request):
                     verify_scalar_replay(live,owner.editor.capture(),'before',frozen_revision)
             except Exception:owner.editor.invalidate()
             raise
+    try:
+        if family is not None:owner.editor.mark_dirty()
+        for index,row,before,after in planned:
+            if index in scalar_identities:
+                if index==live:
+                    require_scalar_target()
+                    verify_scalar_replay(index,owner.editor.capture(),'after',frozen_revision)
+                else:
+                    from .optics_candidate_identity import fingerprint
+                    frozen=scalar_identities[index];actual_hash=fingerprint(row['state'])
+                    if actual_hash!=frozen['before']['candidate_sha256']:
+                        raise ValueError('Body-scalar parked history state changed before write')
+                    verify_scalar_replay(index,row['state'],'before',frozen['revision'])
+                    verify_scalar_replay(index,after,'after',frozen['revision'])
+                    # Candidate verification may call back into a host. It must not
+                    # replace the actual row or drift its source, state or people.
+                    verify_scalar_replay(index,row['state'],'before',frozen['revision'])
+                    if (index>=len(owner.documents.rows()) or owner.documents.rows()[index] is not row
+                            or row['path']!=frozen['path']
+                            or owner.versions.version(row).document_id!=frozen['document_id']
+                            or owner.versions.version(row).revision!=frozen['revision']
+                            or fingerprint(row['state'])!=actual_hash):
+                        raise ValueError('Body-scalar parked history callback changed the write target')
+                    SOURCE.verify_row(row,proofs[index])
+        if family is not None:
+            from .optics_candidate_identity import fingerprint
+            final_live=owner.editor.capture() if active else None
+            # Callback-free barrier over every target, including rows that a later
+            # target verifier could have edited after an earlier row was checked.
+            for index,row,before,after in planned:
+                frozen=scalar_identities[index]
+                expected_revision=frozen_revision if index==live else frozen['revision']
+                actual=final_live if index==live else row['state']
+                expected=after if index==live else before
+                if (owner.documents.current_index()!=live
+                        or index>=len(owner.documents.rows()) or owner.documents.rows()[index] is not row
+                        or row is not frozen['row'] or row['path']!=frozen['path']
+                        or owner.versions.version(row).document_id!=frozen['document_id']
+                        or owner.versions.version(row).revision!=expected_revision
+                        or fingerprint(actual)!=fingerprint(expected)):
+                    raise ValueError('Body-scalar history target changed at the final publication barrier')
+                SOURCE.verify_row({**row,'state':actual},proofs[index])
+    except Exception:
+        if family is not None and active:
+            # Late parked validation has not published any parked rows. Reuse
+            # the guarded active rollback rather than rebasing onto fresh state.
+            _,row,before,after=active
+            try:
+                replay_target(before,rollback=True,mode='batch',
+                              replayed_for=f'batch_group_rollback:{bid}',strict_local=True)
+                verify_scalar_replay(live,owner.editor.capture(),'before',frozen_revision)
+            except Exception:owner.editor.invalidate()
+        raise
     for index,row,before,after in planned:
-        if index in scalar_identities:
-            if index==live:
-                require_scalar_target()
-                verify_scalar_replay(index,owner.editor.capture(),'after',frozen_revision)
-            else:
-                verify_scalar_replay(index,row['state'],'before',scalar_identities[index]['revision'])
-                verify_scalar_replay(index,after,'after',scalar_identities[index]['revision'])
         if index!=live:
             owner.versions.advance(row);row['undo'].append(before)
             if len(row['undo'])>owner.history_limit:del row['undo'][0]
             row['redo'].clear()
         row['state']=after
-    owner.editor.mark_dirty();batch['undone']=not redo
+    if family is None:owner.editor.mark_dirty()
+    batch['undone']=not redo
     body={'event':'batch_redone' if redo else 'batch_undone','batch_id':bid,'module_scope':ops,
           'restored':[r[0] for r in planned],'conflicts':[],'doc_state':owner.editor.status()}
     owner.last_result={'kind':'redo' if redo else 'undo','batch_id':bid,'restored':body['restored'],'conflicts':[]}

@@ -15,6 +15,36 @@ def inventory_read_only(request):
         and len(set(docs))==len(docs))
 
 
+def head_preflight_read_only(request):
+    """Photo-read-only head review, never an apply/commit or arbitrary scope.
+
+    A preset's request scope is only an expectation: its owner separately
+    compares it with the actual stored modules before producing any proof.
+    This predicate never clears a pre-existing recovery/receipt mutation fence.
+    """
+    if (type(request) is not dict or request.get('action')!='preflight'
+            or request.get('module_scope')!=['lnx.head_size.v1']):
+        return False
+    def bounded_text(value):
+        if type(value) is not str or not value.strip():return False
+        try: bounded=len(value.encode('utf-8'))<=128
+        except UnicodeError:return False
+        return bounded and not any(ord(char)<32 or 0x7f<=ord(char)<=0x9f for char in value)
+    if not bounded_text(request.get('request_id')):return False
+    required={'cmd','action','request_id','module_scope'}
+    if request.get('cmd')=='preset':
+        if set(request)!=required|{'id','document_id'}:return False
+        return all(bounded_text(request[key]) for key in ('id','document_id'))
+    if request.get('cmd')!='batch' or not (required|{'docs'})<=set(request):return False
+    if set(request)-(required|{'docs','conflict_policy'}):return False
+    if request.get('conflict_policy','skip_and_report') not in ('skip_and_report','recheck'):return False
+    docs=request['docs']
+    return (type(docs) is list and 1<=len(docs)<=8
+            and all((type(value) is int and 0<=value<=2**53-1)
+                    or bounded_text(value) for value in docs)
+            and len(set(docs))==len(docs))
+
+
 def require_route(name,request):
     if type(request) is not dict or request.get('cmd')!=name:
         raise ValueError('Invalid reviewed transfer request')
@@ -32,7 +62,8 @@ def require_route(name,request):
         if type(rid) is not str or not 1<=len(rid)<=128:
             raise ValueError('Derived transfer requires its correlated receipt identity')
         if action=='commit':
-            if set(request)!={'cmd','action','request_id','preflight_token'}:
+            required={'cmd','action','request_id','preflight_token'}
+            if set(request) not in (required,required|{'head_review_ack'}):
                 raise ValueError('Derived transfer accepts only its frozen token; no unreviewed commit')
         elif action in ('undo','redo'):
             if set(request)!={'cmd','action','request_id','batch_id'}:

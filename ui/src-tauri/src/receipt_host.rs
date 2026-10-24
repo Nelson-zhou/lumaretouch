@@ -175,15 +175,15 @@ mod scalar_binding_tests {
 }
 /// Only immutable scalar review identities live beside the existing receipt.
 /// This is not another plan, history, mutation owner, or replayable command.
-struct ReviewBinding { fields: Value, bytes: usize }
+struct ReviewBinding { fields: Value, bytes: usize, read_only: bool }
 impl ReviewBinding {
     fn from_command(value: &Value) -> Result<Option<Self>, String> {
-        for (operation, ack_key) in [(crate::torso_transfer_protocol::TORSO_OP, "torso_review_ack"),
-            (crate::waist_transfer_protocol::WAIST_OP, "waist_review_ack")] {
-            let selected = value["module_scope"].as_array().is_some_and(|ops| ops.iter().any(|op| op == operation));
+        for family in crate::preset_host::BODY_REVIEW_FAMILIES {
+            let operation = family.op();
+            let ack_key = family.ack_key();
+            let selected = family.selected(value);
             if !selected && value.get(ack_key).is_none() { continue; }
-            crate::torso_transfer_protocol::command(value)?;
-            crate::waist_transfer_protocol::command(value)?;
+            for policy in crate::preset_host::BODY_REVIEW_FAMILIES { policy.command(value)?; }
             let terminal = (value["cmd"] == "preset" && value["action"] == "apply")
                 || (value["cmd"] == "batch" && value["action"] == "commit");
             if !terminal && value["action"] != "preflight" { continue; }
@@ -197,7 +197,7 @@ impl ReviewBinding {
             // Keep a second cap so this optional binding cannot expand the ledger.
             let bytes = fields.to_string().len();
             if bytes > 16 * 1024 { return Err("scalar review identity exceeds receipt budget".into()); }
-            return Ok(Some(Self { fields, bytes }));
+            return Ok(Some(Self { fields, bytes, read_only: crate::torso_transfer_protocol::read_only_head_preflight(value) }));
         }
         Ok(None)
     }
@@ -212,7 +212,8 @@ impl ReviewBinding {
         // reports no write and has not echoed any accepted review identity.
         let no_write = value["success"] == false && value["outcome_unknown"] == false
             && value["error"].as_str().is_some_and(|error| !error.trim().is_empty())
-            && ["module_scope", "torso_review_ack", "waist_review_ack",
+            && ["module_scope", "torso_review_ack", "waist_review_ack", "head_review_ack",
+                "torso_transfer", "waist_transfer", "head_transfer",
                 "before", "after", "doc_state", "batch_id", "applied", "committed", "operation_committed"]
                 .iter().all(|key| value.get(*key).is_none())
             && (value["preflight_token"].is_null() || value.get("preflight_token") == self.fields.get("preflight_token"))
@@ -229,7 +230,10 @@ impl ReviewBinding {
 struct Receipt { id: String, action: String, document: Option<String>, review: Option<ReviewBinding>, result: Option<Value>, bytes: usize }
 impl Receipt {
     fn evictable(&self) -> bool {
-        self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true)
+        self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true
+            // This immutable original action only reads a head review. An
+            // unknown display receipt is not an uncertain edit and may expire.
+            || (self.action == "preflight" && self.review.as_ref().is_some_and(|review| review.read_only)))
     }
 }
 pub(crate) struct ReceiptHost<K: ReceiptKind> {
@@ -300,8 +304,8 @@ impl<K: ReceiptKind> ReceiptHost<K> {
             Self::unknown(record, &format!("invalid or oversized {} receipt; inspect actual state", K::NAME))
         } else { value.clone() };
         if record.review.is_some() && result["outcome_unknown"] == true {
-            // Unknown scalar identities cannot be evicted: retain a compact
-            // diagnostic rather than pinning arbitrary multi-megabyte payloads.
+            // Unknown scalar mutation identities cannot be evicted. Keep read
+            // diagnostics compact too, without pinning arbitrary large payloads.
             let error: String = result["error"].as_str().unwrap_or("Scalar outcome is unknown; inspect actual state")
                 .chars().take(2000).collect();
             let mut compact = Self::unknown(record, &error);
@@ -343,3 +347,8 @@ impl<K: ReceiptKind> ReceiptHost<K> {
         }
     }
 }
+
+// AUTHORED / UNRUN: head inherits the bounded immutable receipt ledger.
+#[cfg(test)]
+#[path = "head_receipt_host_tests.rs"]
+mod head_tests;

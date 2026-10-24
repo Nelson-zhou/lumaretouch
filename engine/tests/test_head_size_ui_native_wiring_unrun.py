@@ -47,6 +47,6 @@ def test_native_query_lifecycle_and_validated_publication_are_wired():
     assert '"head_size" => crate::head_size_api::enqueue' in dispatch
 
 
-def test_no_unreviewed_head_scalar_batch_or_preset_option():
-    assert 'lnx.head_size.v1' not in source('ui/src/batch/batchScopeOptions.ts')
-    assert 'lnx.head_size.v1' not in source('ui/src/presets/presetModel.ts')
+def test_head_scalar_batch_and_preset_use_dedicated_reviewed_options():
+    assert 'lnx.head_size.v1' in source('ui/src/batch/batchScopeOptions.ts')
+    assert 'lnx.head_size.v1' in source('ui/src/presets/presetModel.ts')

@@ -38,6 +38,7 @@ class FrozenTarget:
     shadow_json:str|None=None
     torso_json:str|None=None
     waist_json:str|None=None
+    head_json:str|None=None
 
 @dataclass(frozen=True)
 class FrozenPlan:
@@ -116,7 +117,7 @@ class PreflightStore:
                     raise ValueError('Original-shadow review does not belong to its frozen target')
             elif shadow and not target.blocked:
                 raise ValueError('Every eligible shadow target requires full before/after review evidence')
-            for frozen_key in ('torso_json','waist_json'):
+            for frozen_key in ('torso_json','waist_json','head_json'):
                 value=getattr(target,frozen_key)
                 if value is None:continue
                 if family is None or frozen_key!=family.frozen_key or type(value) is not str or len(value)>16384:
@@ -133,7 +134,7 @@ class PreflightStore:
         # Validate the total metadata budget, not only each target independently.
         canonical({'source':[source_id,source_revision,source_path],'modules':modules,'params':params,
             'source_proof':source_proof,
-            'targets':[[t.document_id,t.revision,t.index,t.path,t.blocked,t.before_json,t.prepared_json,t.transfer_json,t.optics_json,t.reference_json,t.people_json,t.source_proof_json,t.crop_json,t.spill_json,t.shadow_json,t.torso_json,t.waist_json] for t in targets],'rejected':rejected})
+            'targets':[[t.document_id,t.revision,t.index,t.path,t.blocked,t.before_json,t.prepared_json,t.transfer_json,t.optics_json,t.reference_json,t.people_json,t.source_proof_json,t.crop_json,t.spill_json,t.shadow_json,t.torso_json,t.waist_json,t.head_json] for t in targets],'rejected':rejected})
         plan=FrozenPlan(uuid.uuid4().hex,workspace,source_id,source_revision,source_path,tuple(modules),canonical(params),policy,
             tuple(targets),canonical(rejected),now,now+TTL_NS,None if source_proof is None else canonical(source_proof))
         self.pending[plan.token]=plan
@@ -160,25 +161,26 @@ class PreflightStore:
         if generation!=workspace:raise ValueError('batch result belongs to another workspace')
         return json.loads(payload)
 
-    def claim(self,plan,*,spill_review_ack=None,shadow_review_ack=None,torso_review_ack=None,waist_review_ack=None,request_id=None):
+    def claim(self,plan,*,spill_review_ack=None,shadow_review_ack=None,torso_review_ack=None,waist_review_ack=None,head_review_ack=None,request_id=None):
         # Consume before the first write: even failure to encode the final receipt
         # must never leave a successfully applied token available for reexecution.
         if request_id is not None and (type(request_id) is not str or not 1<=len(request_id)<=128):
             raise ValueError('Invalid batch claim request identity')
         family=body_family(plan.modules)
-        scalar_acks={'torso_review_ack':torso_review_ack,'waist_review_ack':waist_review_ack}
+        scalar_acks={'torso_review_ack':torso_review_ack,'waist_review_ack':waist_review_ack,'head_review_ack':head_review_ack}
         if any(value is not None and (family is None or key!=family.ack_key) for key,value in scalar_acks.items()):
             raise ValueError('Body-scalar claim cannot retain another family acknowledgment')
         if family is not None:
             records=[json.loads(getattr(target,family.frozen_key)) for target in plan.targets if not target.blocked]
             family.review.acknowledgments(scalar_acks[family.ack_key],records)
         self.finish(plan,{'success':False,'outcome_unknown':True,'preflight_token':plan.token,'request_id':request_id,
-            **({'module_scope':list(plan.modules)} if torso_review_ack is not None or waist_review_ack is not None else {}),
+            **({'module_scope':list(plan.modules)} if any(value is not None for value in scalar_acks.values()) else {}),
             'error':'batch started; terminal outcome has not been recorded',
             **({'spill_review_ack':spill_review_ack} if spill_review_ack is not None else {}),
             **({'shadow_review_ack':shadow_review_ack} if shadow_review_ack is not None else {}),
             **({'torso_review_ack':torso_review_ack} if torso_review_ack is not None else {}),
-            **({'waist_review_ack':waist_review_ack} if waist_review_ack is not None else {})})
+            **({'waist_review_ack':waist_review_ack} if waist_review_ack is not None else {}),
+            **({'head_review_ack':head_review_ack} if head_review_ack is not None else {})})
 
     def finish(self,plan,result):
         # Keep the original bounded commit identity in the private terminal

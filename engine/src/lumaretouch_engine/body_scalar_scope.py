@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Source-owned scalar scope primitives shared by torso and waist. AUTHORED / UNRUN.
+"""Source-owned scalar scope primitives shared by torso, waist and head. AUTHORED / UNRUN.
 
 Portable data never contains body/support/face identity. Each explicitly selected
 family validates its own immutable support policy before any scalar can change.

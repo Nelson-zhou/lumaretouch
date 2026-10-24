@@ -23,6 +23,7 @@ export function batchScopeOptions(modules: readonly {operation_id: string; trans
   if(supported.has('lnx.original_shadow.v1')) out.push({label:'原图阴影（仅参数；目标须独立地面样本与逐图审核）',ops:['lnx.original_shadow.v1']});
   if(supported.has('lnx.torso_length.v1')) out.push({label:'上身长度（仅标量；唯一身体、本人面部归属及支持须逐图独立审核）',ops:['lnx.torso_length.v1']});
   if(supported.has('lnx.waist_length.v1')) out.push({label:'腰长（仅标量；唯一身体、四个腰部标记、本人面部及支持须逐图独立审核）',ops:['lnx.waist_length.v1']});
+  if(supported.has('lnx.head_size.v1')) out.push({label:'小头（仅标量；唯一身体、完整头发/头部框、缩小中心、外围过渡框、本人面部及支持须逐图独立审核）',ops:['lnx.head_size.v1']});
   if(supported.has('lnx.spill_removal.v1')) out.push({label:'祛背景色反光（仅参数；目标逐图审核）',ops:['lnx.spill_removal.v1']});
   if(supported.has('lnx.studio_background.v1')) out.push({label:'影棚背景强度（目标须已有范围）',ops:['lnx.studio_background.v1']});
   if(supported.has('lnx.optics_manual.v1')) out.push({label:'镜头/透视手动参数（不复制自动结果）',ops:['lnx.optics_manual.v1']});

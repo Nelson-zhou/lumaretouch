@@ -37,10 +37,20 @@ class PlanPorts:
     verify_torso:Callable|None=None
     prepare_waist:Callable|None=None
     verify_waist:Callable|None=None
+    prepare_head:Callable|None=None
+    verify_head:Callable|None=None
 
 class FrozenBatchController:
     def __init__(self,ports,versions,emit,clock):
         self.ports=ports;self.versions=versions;self.emit=emit;self.store=PreflightStore(clock)
+        # Session-only strong references, never serialized into a plan or receipt.
+        # Copied public IDs are not authority to replace a reviewed document row.
+        self._scalar_targets={}
+
+    def _prune_scalar_targets(self):
+        self.store._prune(self.store.clock())
+        self._scalar_targets={token:rows for token,rows in self._scalar_targets.items()
+                              if token in self.store.pending}
 
     def _blocked(self,row,ops,live):
         if row.get('trashed'):return 'target is in the project trash'
@@ -58,7 +68,8 @@ class FrozenBatchController:
         return result
 
     def replay_completed(self,p):
-        if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack'}:
+        self._prune_scalar_targets()
+        if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack'}:
             raise SC.ScopeError('token commit cannot change reviewed options')
         cached=self.store.completed(p.get('preflight_token'),self.versions.workspace)
         if cached is None:return False
@@ -72,7 +83,7 @@ class FrozenBatchController:
                 raise SC.ScopeError('Original-shadow token replay requires its exact original visual acknowledgment')
         elif 'shadow_review_ack' in p:
             raise SC.ScopeError('Original-shadow acknowledgment cannot accompany a non-shadow token')
-        for key in ('torso_review_ack','waist_review_ack'):
+        for key in ('torso_review_ack','waist_review_ack','head_review_ack'):
             if key in cached:
                 if type(p.get(key)) is not list or canonical(p[key])!=canonical(cached[key]):
                     raise SC.ScopeError('Body-scalar token replay requires its exact original visual acknowledgment')
@@ -85,11 +96,12 @@ class FrozenBatchController:
     def handle(self,p):
         plan=None;resolved=[];commit_started=False;spill_ack=None;shadow_ack=None;scalar_ack=None;family=None
         try:
+            self._prune_scalar_targets()
             if p['action']!='commit' and 'spill_review_ack' in p:
                 raise SC.ScopeError('Spill visual acknowledgment is accepted only for a frozen commit')
             if p['action']!='commit' and 'shadow_review_ack' in p:
                 raise SC.ScopeError('Original-shadow visual acknowledgment is accepted only for a frozen commit')
-            if p['action']!='commit' and any(key in p for key in ('torso_review_ack','waist_review_ack')):
+            if p['action']!='commit' and any(key in p for key in ('torso_review_ack','waist_review_ack','head_review_ack')):
                 raise SC.ScopeError('Body-scalar visual acknowledgment is accepted only for a frozen commit')
             if p['action']=='preflight' and p.get('people_transfer') is not None:
                 if self.ports.people_transfer is None:raise ValueError('People transfer adapter unavailable')
@@ -122,7 +134,7 @@ class FrozenBatchController:
                 elif 'shadow_review_ack' in p:
                     raise SC.ScopeError('Original-shadow acknowledgment requires an explicitly selected shadow module')
                 family=body_family(reviewed.modules)
-                for key in ('torso_review_ack','waist_review_ack'):
+                for key in ('torso_review_ack','waist_review_ack','head_review_ack'):
                     if key in p and (family is None or key!=family.ack_key):
                         raise SC.ScopeError('Body-scalar acknowledgment requires its explicitly selected family')
                 if family is not None:
@@ -175,9 +187,10 @@ class FrozenBatchController:
                     LG.portable({'version':1,'layers':selected})
                     LR.verify_original({'version':1,'layers':selected},source_row)
                 elif local_options is not None:raise SC.ScopeError('局部蒙版选项需要明确选择独立局部调色模块')
-                targets=[];public=[]
+                targets=[];public=[];scalar_targets={}
                 for i in indices:
                     row=rows[i];v=self.versions.version(row);live=i==index
+                    if family is not None:scalar_targets[v.document_id]=row
                     if family is not None:
                         blocked=self._blocked(row,ops,live)
                         try:before=OA.before_params(source if live else row['state'],ops)
@@ -309,9 +322,20 @@ class FrozenBatchController:
                 if source_proof is not None:
                     SOURCE.verify_row({**source_row,'state':self.ports.capture()},source_proof)
                     if self.versions.version(source_row)!=version:raise ValueError('Source changed during parameter review')
+                if family is not None:
+                    current_rows=self.ports.rows()
+                    for target in targets:
+                        retained=scalar_targets[target.document_id]
+                        found=self.versions.find(current_rows,target.document_id)
+                        if (found is None or found[1] is not retained
+                                or retained['path']!=target.path
+                                or self.versions.version(retained).revision!=target.revision):
+                            raise ValueError('Body-scalar target row was replaced or edited during preflight')
                 plan=self.store.create(self.versions.workspace,version.document_id,version.revision,source_row['path'],
                     ops,mods,policy,targets,rejected,source_proof=source_proof)
-                body={'event':'batch_preflight','success':True,'module_scope':ops,'source':'current',
+                if family is not None:self._scalar_targets[plan.token]=scalar_targets
+                self._prune_scalar_targets()
+                body={'event':'batch_preflight','success':True,'outcome_unknown':False,'module_scope':ops,'source':'current',
                     'source_snapshot':self._source(plan),'applies':plan.params(),'policy':policy,'targets':public,
                     'rejected_docs':rejected,'ok':sum(not r['blocked'] for r in public),'blocked':sum(bool(r['blocked']) for r in public),
                     'preflight_token':plan.token,'workspace_generation':plan.workspace,'expires_ns':str(plan.expires_ns)}
@@ -323,7 +347,7 @@ class FrozenBatchController:
                     self.store.pending.pop(plan.token,None)
                     raise
                 self.emit(body);self.emit_result(p,body);return
-            if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack'}:
+            if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack'}:
                 raise SC.ScopeError('token commit cannot change source, targets, modules or policy; preflight again')
             token=p.get('preflight_token')
             if self.replay_completed(p):return
@@ -338,7 +362,9 @@ class FrozenBatchController:
                 if found is None:blocked='target was removed or replaced'
                 else:
                     index,row=found;actual=self.versions.version(row).revision
-                    if actual!=target.revision:blocked='target was edited after preflight; preflight again'
+                    if family is not None and self._scalar_targets.get(plan.token,{}).get(target.document_id) is not row:
+                        blocked='exact reviewed target row was removed or replaced; preflight again'
+                    elif actual!=target.revision:blocked='target was edited after preflight; preflight again'
                     elif row['path']!=target.path:blocked='target source path changed after preflight; preflight again'
                     elif family is not None:
                         # Retain already blocked targets without trying to read
@@ -440,6 +466,7 @@ class FrozenBatchController:
                             verify_scalar(row,original,candidate,target.document_id,str(target.revision),json.loads(value))
                         except Exception as error:blocked=str(error)[:2000]
                 resolved.append({'index':index,'path':target.path,'blocked':blocked,'document_id':target.document_id,
+                    **({'_reviewed_row':self._scalar_targets.get(plan.token,{}).get(target.document_id)} if family is not None else {}),
                     '_source_proof':None if target.source_proof_json is None else json.loads(target.source_proof_json),
                     '_crop_prepared':None if target.crop_json is None else json.loads(target.crop_json),
                     '_spill_prepared':None if target.spill_json is None else json.loads(target.spill_json),
@@ -473,7 +500,7 @@ class FrozenBatchController:
                 found=by_id.get(row['document_id'])
                 after=None if found is None else str(self.versions.version(found[1]).revision)
                 outcomes.append({**{k:v for k,v in row.items() if not k.startswith('_')},'result_revision':after,'outcome':'skipped' if row['blocked'] else 'applied'})
-            result.update(success=True,target_outcomes=outcomes,preflight_token=plan.token,workspace_generation=plan.workspace,request_id=p.get('request_id'),
+            result.update(success=True,outcome_unknown=False,target_outcomes=outcomes,preflight_token=plan.token,workspace_generation=plan.workspace,request_id=p.get('request_id'),
                 source_snapshot=self._source(plan),source_changed_since_preflight=source_changed,source_missing=source is None)
             if spill_ack is not None:result['spill_review_ack']=spill_ack
             if shadow_ack is not None:result['shadow_review_ack']=shadow_ack
@@ -492,6 +519,8 @@ class FrozenBatchController:
             if plan is not None and p.get('action')=='commit':result=self.store.finish(plan,result)
             self.emit({'event':'error','error':'batch '+str(p.get('action'))+' rejected: '+result['error']})
             self.emit_result(p,result)
+        finally:
+            self._prune_scalar_targets()
 
     @staticmethod
     def _source(plan):

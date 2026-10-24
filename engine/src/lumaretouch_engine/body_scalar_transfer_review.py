@@ -345,7 +345,7 @@ def select(modules):
     """Select one exclusive scalar route from a checked operation collection.
 
     Accept mapping keys and existing sequence/set callers, never a bare string.
-    Ordinary scopes return None. Neither body family may compose with another
+    Ordinary scopes return None. No body scalar family may compose with another
     operation until a real combined target review protocol exists.
     """
     if type(modules) not in (dict, list, tuple, set, frozenset):
@@ -355,7 +355,7 @@ def select(modules):
         raise ValueError('Body scalar review operation IDs must be unique strings')
     # Fixed identities are deliberately visible here; no external data controls
     # an import, attribute lookup, family fallback or state-policy replacement.
-    selected = set(ops).intersection(('lnx.torso_length.v1', 'lnx.waist_length.v1'))
+    selected = set(ops).intersection(('lnx.torso_length.v1', 'lnx.waist_length.v1', 'lnx.head_size.v1'))
     if not selected:
         return None
     if len(ops) != 1:
@@ -365,7 +365,12 @@ def select(modules):
         return Family('torso_length', scope.OP, scope, review, 'torso_transfer',
                       'torso_review_ack', 'torso_review', 'torso_json',
                       '_torso_prepared', 'torso', 'torso')
-    from . import waist_length_scope as scope, waist_length_transfer_review as review
-    return Family('waist_length', scope.OP, scope, review, 'waist_transfer',
-                  'waist_review_ack', 'waist_review', 'waist_json',
-                  '_waist_prepared', 'waist', 'waist_review')
+    if ops[0] == 'lnx.waist_length.v1':
+        from . import waist_length_scope as scope, waist_length_transfer_review as review
+        return Family('waist_length', scope.OP, scope, review, 'waist_transfer',
+                      'waist_review_ack', 'waist_review', 'waist_json',
+                      '_waist_prepared', 'waist', 'waist_review')
+    from . import head_size_scope as scope, head_size_transfer_review as review
+    return Family('head_size', scope.OP, scope, review, 'head_transfer',
+                  'head_review_ack', 'head_review', 'head_json',
+                  '_head_prepared', 'head', 'head_review')

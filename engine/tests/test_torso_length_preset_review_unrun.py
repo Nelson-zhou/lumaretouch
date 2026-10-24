@@ -40,8 +40,13 @@ def fixture(tmp_path, *, derived=False, reviewed=True, family='torso', size=None
         from lumaretouch_engine import waist_length_scope as scope
         from lumaretouch_engine import waist_length_project as project
         from lumaretouch_engine import waist_length_transfer_review as review_api
+    elif family == 'head':
+        from test_head_size_support_unrun import fixture as make_body
+        from lumaretouch_engine import head_size_scope as scope
+        from lumaretouch_engine import head_size_project as project
+        from lumaretouch_engine import head_size_transfer_review as review_api
     else:
-        raise ValueError('Synthetic preset fixture needs a fixed torso/waist family')
+        raise ValueError('Synthetic preset fixture needs a fixed torso/waist/head family')
     if size is None: size = (512, 512) if family == 'torso' else (1024, 1024)
     width, height = size
     path = tmp_path / f'synthetic-{family}-original.bin'
@@ -52,14 +57,14 @@ def fixture(tmp_path, *, derived=False, reviewed=True, family='torso', size=None
         state['_creative_base'] = make_asset('rgba', width, height,
             struct.pack('<4f', .2, .3, .4, 1.) * (width * height))
     source = E.source({**SOURCE.binding(state, str(path), size), 'orientation': E.ORIENTATION})
-    bank, people, ref, _, _ = make_body(amount=-.25, review=reviewed, source=source)
+    bank, people, ref, _, _ = make_body(amount=.25 if family == 'head' else -.25, review=reviewed, source=source)
     state[BODY.KEY] = project.pack(bank)
     row = {'document_id': 'row-target', 'path': str(path), 'src_w': width, 'src_h': height,
            'state': state, 'people': people, 'undo': [], 'redo': []}
     context = SimpleNamespace(row=row, revision='7', document='loaded', events=[],
         calls=[], identity_calls=[], replays=[], invalid=[], preset=stored(), ref=ref)
-    if family == 'waist':
-        context.preset.update(id='waist', name='Waist scalar review',
+    if family in ('waist', 'head'):
+        context.preset.update(id=family, name=family.capitalize()+' scalar review',
             modules={scope.OP: {'version': 1, 'amount': .75}})
 
     def proof(current, before, candidate, document_id, revision):

@@ -113,6 +113,18 @@ class WorkflowPortsMixin:
         from .waist_length_transfer_review import verify
         return verify(self,row,before,candidate,document_id,revision,record)
 
+    def _prepare_head_target(self,row,before,candidate,document_id,revision):
+        from .head_size_transfer_review import prepare
+        return prepare(self,row,before,candidate,document_id,revision)
+
+    def _verify_head_target(self,row,before,candidate,document_id,revision,record):
+        from .head_size_transfer_review import verify
+        return verify(self,row,before,candidate,document_id,revision,record)
+
+    def _head_history_identity(self,row,state,document_id,revision):
+        from .head_size_transfer_review import history_identity
+        return history_identity(self,row,state,document_id,str(revision))
+
     def _batch_history_identity(self,row,state,document_id,revision):
         from .full_candidate_render import identity
         proof,_,_=identity(self,row,state,document_id,str(revision))
@@ -136,6 +148,8 @@ class WorkflowPortsMixin:
                 prepare_shadow=self._prepare_shadow_target, verify_shadow=self._verify_shadow_target,
                 prepare_torso=self._prepare_torso_target, verify_torso=self._verify_torso_target,
                 prepare_waist=self._prepare_waist_target, verify_waist=self._verify_waist_target,
+                prepare_head=self._prepare_head_target, verify_head=self._verify_head_target,
+                head_history_identity=self._head_history_identity,
                 torso_history_identity=self._torso_history_identity, waist_history_identity=self._waist_history_identity,
                 prepare_xmp=self._prepare_xmp_target, verify_xmp=self._verify_xmp_target,
                 guard=lambda label: self._guard_editable(label), document_id=lambda: self._load_id,
@@ -170,6 +184,8 @@ class WorkflowPortsMixin:
                 prepare_shadow=self._prepare_shadow_target, verify_shadow=self._verify_shadow_target,
                 prepare_torso=self._prepare_torso_target, verify_torso=self._verify_torso_target,
                 prepare_waist=self._prepare_waist_target, verify_waist=self._verify_waist_target,
+                prepare_head=self._prepare_head_target, verify_head=self._verify_head_target,
+                head_history_identity=self._head_history_identity,
                 waist_history_identity=self._waist_history_identity,
                 torso_history_identity=self._torso_history_identity, history_identity=self._batch_history_identity, people_transfer=self._people_transfer_batch, people_restore=self._people_restore_batch, capture_reference=self._capture_reference, prepare_optics=self._prepare_optics_target, prepare_reference=self._prepare_reference_target, guard=lambda label: self._guard_editable(label),
                     capture=lambda: self._capture_state(),
