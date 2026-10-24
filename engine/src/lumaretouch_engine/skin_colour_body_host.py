@@ -15,10 +15,11 @@ from .skin_colour_body_actions import check_action, action_name
 def _family(family,operation_id):
     kind,operation=SUPPORT.family_spec(family,operation_id)
     # Preserve old colour call signatures/private state for existing callers.
-    # The finish family has its own source reference and pending comparison;
-    # it never borrows a colour review, receipt, or attached support descriptor.
+    # Every added family has its own source reference and pending comparison;
+    # none borrows another family's review, receipt or support descriptor.
     options={} if family=='skin_colour' else {'family':family,'operation_id':operation}
-    prefix='_skin_body' if family=='skin_colour' else '_skin_finish_body'
+    prefix={'skin_colour':'_skin_body','skin_finish':'_skin_finish_body',
+            'body_skin_evenness':'_body_skin_evenness'}[family]
     return kind,operation,options,prefix+'_reference',prefix+'_preview'
 
 
@@ -27,9 +28,9 @@ def _tags(family,operation):
 
 
 def _matches_family(value,family,operation):
-    # Old colour-only private records had no tags. Explicit finish tags are
-    # mandatory and cannot become colour authorization even if copied by a bug.
-    defaults={} if family=='skin_finish' else {'family':family,'operation_id':operation}
+    # Old colour-only private records had no tags. Explicit non-colour tags are
+    # mandatory and cannot authorize another family even if copied by a bug.
+    defaults={'family':family,'operation_id':operation} if family=='skin_colour' else {}
     return all(value.get(key,defaults.get(key))==expected
                for key,expected in (('family',family),('operation_id',operation)))
 
@@ -108,17 +109,26 @@ def preview(engine,state,target,payload,*,family='skin_colour',operation_id=None
         raise ValueError('Read the current body skin source reference again')
     setattr(engine,preview_key,None)
     candidate,assets=SUPPORT.retain(state,engine._people_support,ref,bank,analysis,payload['review'],**options)
+    if family=='body_skin_evenness':
+        # First use must not persist an unsupported active body-only amount.
+        # The explicit local amount and support are one private comparison;
+        # confirmation publishes their exact face-scoped candidate together.
+        candidate=P.set_override(candidate,'face',ref['face_instance_id'],operation,'/amount',payload['amount'])
     from .people_support_assets import check_store
     check_store(assets)
     if family=='skin_colour':
         from .skin_colour_state import OP, active
-    else:
+    elif family=='skin_finish':
         from .skin_finish_state import OP, active
+    else:
+        from .body_skin_evenness_state import OP, active
     from .people_resolver import resolve
     from .people_algorithms import defaults,recipes
     if not active(recipes(resolve(candidate,ref['face_instance_id'],defaults()))[OP]):
-        label='skin-colour' if family=='skin_colour' else 'skin-finish'
-        raise ValueError('Set a nonzero '+label+' amount before reviewing its visible body extension')
+        label={'skin_colour':'skin-colour','skin_finish':'skin-finish',
+               'body_skin_evenness':'body-skin-evenness'}[family]
+        suffix=' region' if family=='body_skin_evenness' else ' extension'
+        raise ValueError('Set a nonzero '+label+' amount before reviewing its visible body'+suffix)
     staged=deepcopy(context);staged['people_graph']=candidate;staged['people_support_assets']=assets
     from .full_candidate_render import render
     rgb,before_proof=render(engine,row,snapshot,version.document_id,str(version.revision),people_graph=state)
@@ -139,11 +149,12 @@ def preview(engine,state,target,payload,*,family='skin_colour',operation_id=None
     if _capture(engine,state,target,**options)[0]!=fence:raise ValueError('Body skin review changed during full rendering')
     preview_id=uuid.uuid4().hex
     from .optics_candidate_identity import fingerprint
+    candidate_amount={'amount':float(payload['amount'])} if family=='body_skin_evenness' else {}
     result={'kind':'preview','preview_id':preview_id,'source':source,'face_ref':ref,'before':before,'after':after,
-            'overlay':overlay,'review':deepcopy(payload['review']),'runtime_quality_accepted':False,**tags}
+            'overlay':overlay,'review':deepcopy(payload['review']),'runtime_quality_accepted':False,**tags,**candidate_amount}
     setattr(engine,preview_key,{'id':preview_id,'fence':fence,'candidate':candidate,'assets':assets,
         'review':deepcopy(payload['review']),'candidate_sha256':fingerprint({'state':candidate,'assets':assets}),
-        'before_proof':before_proof,'after_proof':after_proof,**tags})
+        'before_proof':before_proof,'after_proof':after_proof,**tags,**candidate_amount})
     return result
 
 
@@ -156,6 +167,8 @@ def confirm(engine,state,target,payload,*,mark_started=lambda:None,family='skin_
             or not _matches_family(pending,family,operation)):
         raise ValueError('Body skin candidate is missing or changed; render a new comparison')
     candidate,assets=SUPPORT.retain(state,engine._people_support,ref,bank,analysis,pending['review'],**options)
+    if family=='body_skin_evenness':
+        candidate=P.set_override(candidate,'face',ref['face_instance_id'],operation,'/amount',pending['amount'])
     from .people_support_assets import check_store
     check_store(assets)
     from .optics_candidate_identity import fingerprint
@@ -171,6 +184,12 @@ def confirm(engine,state,target,payload,*,mark_started=lambda:None,family='skin_
 def detach(engine,state,target,payload,*,family='skin_colour',operation_id=None):
     _,operation,options,reference_key,preview_key=_family(family,operation_id)
     check_action(action_name('detach',family=family),payload,target,**options);_,ref=selected(engine,state,target)
+    if family=='body_skin_evenness':
+        from .body_skin_evenness_state import active
+        from .people_resolver import resolve
+        from .people_algorithms import defaults,recipes
+        if active(recipes(resolve(state,ref['face_instance_id'],defaults()))[operation]):
+            raise ValueError('Reset the body-skin-evenness amount to zero before detaching its support')
     candidate=SUPPORT.detach(state,ref,**options)
     setattr(engine,preview_key,None);setattr(engine,reference_key,None)
     return candidate,{'kind':'detached','attached':False,**_tags(family,operation)}

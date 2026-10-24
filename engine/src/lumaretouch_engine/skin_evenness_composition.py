@@ -7,12 +7,14 @@ older stage is added here. Unsupported HDR/alpha inputs are refused, not clipped
 import numpy as np
 
 
-def apply_records_np(current, records, recovery=None):
+def apply_records_np(current, records, recovery=None, *, stage='skin_evenness'):
+    if stage not in ('skin_evenness', 'body_skin_evenness'):
+        raise ValueError('Unknown chromatic evenness stage')
     from . import skin_evenness_native as native
-    selected = sorted((r for r in records if r.stage == 'skin_evenness'),
+    selected = sorted((r for r in records if r.stage == stage),
                       key=lambda r: r.face_ref['face_instance_id'])
     if not selected:
-        return current, {'stage': 'skin_evenness', 'overlap_pixels': 0, 'changed_pixels': 0}
+        return current, {'stage': stage, 'overlap_pixels': 0, 'changed_pixels': 0}
     if type(current) is not np.ndarray or current.dtype != np.float32 or current.ndim != 3 or current.shape[2] != 3:
         raise ValueError('Skin evenness needs actual current float32 RGB')
     if not np.isfinite(current).all() or np.any((current < 0) | (current > 1)):
@@ -20,7 +22,7 @@ def apply_records_np(current, records, recovery=None):
     h, w = current.shape[:2]
     occupied = np.zeros((h, w), bool); output = current; overlap = 0
     for record in selected:
-        if (recovery or {}).get((record.face_ref['face_instance_id'], 'skin_evenness')) is not None:
+        if (recovery or {}).get((record.face_ref['face_instance_id'], stage)) is not None:
             raise ValueError('Skin evenness has no reviewed dedicated recovery consumer')
         y, x, rh, rw = record.window; shift = record.chroma_shift
         if min(y, x) < 0 or min(rh, rw) <= 0 or y+rh > h or x+rw > w:
@@ -35,7 +37,7 @@ def apply_records_np(current, records, recovery=None):
         corrected = native.apply(current[y:y+rh, x:x+rw], shift)
         if output is current: output = current.copy()
         output[y:y+rh, x:x+rw][take] = corrected[take]; used[take] = True
-    return output, {'stage': 'skin_evenness', 'overlap_pixels': overlap,
+    return output, {'stage': stage, 'overlap_pixels': overlap,
                     'changed_pixels': int(np.count_nonzero(np.any(output != current, axis=2)))}
 
 

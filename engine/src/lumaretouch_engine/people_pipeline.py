@@ -78,11 +78,11 @@ def _merge_delta(pipe,stage,*,align):
     return result
 
 
-def _merge_chroma(pipe):
+def _merge_chroma(pipe, stage):
     import torch
     result=torch.zeros((1,2,pipe.h,pipe.w),device=pipe.device,dtype=torch.float32)
     occupied=torch.zeros((1,1,pipe.h,pipe.w),device=pipe.device,dtype=torch.bool)
-    records=sorted((r for r in pipe.people_prepared.effects if r.stage=='skin_evenness'),
+    records=sorted((r for r in pipe.people_prepared.effects if r.stage==stage),
                    key=lambda r:r.face_ref['face_instance_id'])
     for record in records:
         if pipe.people_prepared.recovery.get((record.face_ref['face_instance_id'],record.stage)) is not None:
@@ -96,12 +96,12 @@ def _merge_chroma(pipe):
 
 def source_effect(pipe,stage,pixels):
     import torch
-    if stage not in ('skin_evenness','skin_colour','facial_wrinkles','lip_texture','lip_makeup','hair_colour','eye_light','blush_makeup','lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup'):raise ValueError('This effect belongs after common geometry')
-    if stage in ('skin_evenness', 'brow_enhance', 'lip_texture') and not any(r.stage == stage for r in pipe.people_prepared.effects):
+    if stage not in ('body_skin_evenness','skin_evenness','skin_colour','facial_wrinkles','lip_texture','lip_makeup','hair_colour','eye_light','blush_makeup','lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup'):raise ValueError('This effect belongs after common geometry')
+    if stage in ('body_skin_evenness', 'skin_evenness', 'brow_enhance', 'lip_texture') and not any(r.stage == stage for r in pipe.people_prepared.effects):
         return pixels  # Exact neutral: no new full-frame scratch or native work.
-    if stage == 'skin_evenness':
+    if stage in ('skin_evenness', 'body_skin_evenness'):
         from .skin_evenness_composition import apply_t
-        return apply_t(pixels, _merge_chroma(pipe))
+        return apply_t(pixels, _merge_chroma(pipe, stage))
     delta=_merge_delta(pipe,stage,align=False)
     if stage == 'lip_texture':
         from .lip_texture_composition import apply_t

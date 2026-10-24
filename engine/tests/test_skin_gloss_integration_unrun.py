@@ -1,5 +1,6 @@
 """AUTHORED / UNRUN. Registry/source routes are not photographic acceptance."""
 from pathlib import Path
+import ast
 
 from lumaretouch_engine import people_algorithms as A
 from lumaretouch_engine import skin_gloss_state as G
@@ -27,7 +28,12 @@ def test_gloss_does_not_add_body_authority_or_a_second_history_owner():
     root = Path(__file__).resolve().parents[2] / 'engine/src/lumaretouch_engine'
     support = (root / 'skin_colour_body_support.py').read_text()
     assert 'skin_gloss_body_visibility' not in support
-    assert "FAMILIES = ('skin_colour', 'skin_finish')" in support
+    families = next(ast.literal_eval(node.value) for node in ast.parse(support).body
+                    if isinstance(node, ast.Assign)
+                    and any(isinstance(target, ast.Name) and target.id == 'FAMILIES'
+                            for target in node.targets))
+    assert families == ('skin_colour', 'skin_finish', 'body_skin_evenness')
+    assert 'skin_gloss' not in families
     assert "LocalEffect(ref, 'skin_gloss'" not in (root / 'skin_colour_people.py').read_text()
 
 

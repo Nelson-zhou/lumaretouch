@@ -1,5 +1,6 @@
 """AUTHORED / UNRUN. Source wiring is not numerical or photographic acceptance."""
 from pathlib import Path
+import ast
 import json
 
 from lumaretouch_engine import people_algorithms as A
@@ -33,7 +34,13 @@ def test_native_build_header_license_and_ready_connection():
 
 
 def test_no_body_authority_or_parallel_skin_effect_owner():
-    assert "FAMILIES = ('skin_colour', 'skin_finish')" in (SOURCE / 'skin_colour_body_support.py').read_text()
+    support = (SOURCE / 'skin_colour_body_support.py').read_text()
+    families = next(ast.literal_eval(node.value) for node in ast.parse(support).body
+                    if isinstance(node, ast.Assign)
+                    and any(isinstance(target, ast.Name) and target.id == 'FAMILIES'
+                            for target in node.targets))
+    assert families == ('skin_colour', 'skin_finish', 'body_skin_evenness')
+    assert 'skin_texture' not in families and 'skin_texture_body_visibility' not in support
     renderer = (SOURCE / 'skin_colour_people.py').read_text()
     assert "LocalEffect(ref, 'skin_texture'" not in renderer
     assert 'reference_rgb=reference, radius=texture_radius' in renderer

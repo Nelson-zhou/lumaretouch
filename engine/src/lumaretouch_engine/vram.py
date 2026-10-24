@@ -596,7 +596,7 @@ class PreviewPipeline:
             # Recover only smoothing's contribution, preserving repair and light.
             out = self.effect_recovery.apply('skin_smoothing', base, out)
         # Actual order: repair/light + smoothing/recovery -> fabric/recovery ->
-        # studio -> face chroma evenness -> skin colour -> facial wrinkles/recovery ->
+        # studio -> reviewed body chroma -> face chroma -> skin colour -> facial wrinkles/recovery ->
         # auto+brow+nose ONE warp -> enhance -> exposure -> levels -> curves -> HSL ->
         # LUT -> legacy grade -> independent local grades -> background/recovery
         # -> manual liquify -> geometry. Source masks stay at their own consumers;
@@ -606,6 +606,7 @@ class PreviewPipeline:
         out = self.effect_recovery.apply('fabric_fine', out, self.fabric.apply(out))
         out = self.studio_background.apply(out)
         if PEOPLE_PIPE.active(self):
+            out=PEOPLE_PIPE.source_effect(self,'body_skin_evenness',out)
             out=PEOPLE_PIPE.source_effect(self,'skin_evenness',out)
             out=PEOPLE_PIPE.source_effect(self,'skin_colour',out)
             out=PEOPLE_PIPE.source_effect(self,'facial_wrinkles',out)

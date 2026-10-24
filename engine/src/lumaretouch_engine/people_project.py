@@ -39,6 +39,8 @@ def validate_records(value):
                 validate_lip_texture_graph(value[key])
                 from .skin_evenness_project import validate_graph as validate_skin_evenness_graph
                 validate_skin_evenness_graph(value[key])
+                from .body_skin_evenness_project import validate_graph as validate_body_evenness_graph
+                validate_body_evenness_graph(value[key])
                 from .iris_makeup_state import validate_graph as validate_iris_graph
                 validate_iris_graph(value[key])
         if 'people_support_assets' in value:
@@ -61,6 +63,7 @@ def validate_records(value):
             from .skin_colour_body_support import validate_project as validate_body_skin_support
             validate_body_skin_support(value)
             validate_body_skin_support(value,family='skin_finish')
+            validate_body_skin_support(value,family='body_skin_evenness',operation_id='lnx.body_skin_evenness.v1')
         if 'people_landmarks' in value:
             from .people_retained_analysis import check_store
             check_store(value['people_landmarks'])

@@ -11,6 +11,26 @@ FIELD_ORDER = ('deform', 'brow_shape', 'nose_shape', 'eye_shape', 'mouth_shape')
 OVERLAP_POLICY = 'stable_instance_priority_partition'
 
 
+def _assets_require_analysis(face, resolved):
+    """Only exact dormant body-evenness consent may await fresh analysis.
+
+    Do not strand neutral recovery on stale body evidence. Every other asset,
+    malformed leaf or ambiguous recipe retains the prior checked requirement.
+    Project/descriptor ownership and normal recipe validation still apply.
+    """
+    assets = face['local_assets']
+    if not assets: return False
+    kind = 'body_skin_evenness_visibility'
+    if set(assets) != {kind} or assets[kind]['kind'] != kind: return True
+    from . import body_skin_evenness_state as BODY
+    from .people_resolver import materialize
+    try:
+        recipe = materialize(resolved, BODY.OP, BODY.neutral(), BODY.check)
+    except (ValueError, TypeError, KeyError):
+        return True
+    return BODY.active(recipe)
+
+
 def build(state, asset_sha256, defaults, *, max_faces, per_face_cost, total_budget,
           available_evidence, operation_check):
     """operation_check(face, resolved) returns explicit consumer refusal strings.
@@ -26,7 +46,7 @@ def build(state, asset_sha256, defaults, *, max_faces, per_face_cost, total_budg
     for key, face in sorted(state['faces'].items()):
         if face['asset_sha256'] != asset_sha256 or not face['enabled']: continue
         resolved = resolve(state, key, defaults); reasons = []
-        required = bool(face['local_assets']) or any(
+        required = _assets_require_analysis(face, resolved) or any(
             operation not in defaults or path not in defaults[operation] or record['value'] != defaults[operation][path]
             for operation,leaves in resolved['operations'].items() for path,record in leaves.items()
             # Exact supported link states are interaction intent, not rendered effects.

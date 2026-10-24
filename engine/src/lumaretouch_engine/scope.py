@@ -47,6 +47,7 @@ from . import skin_finish_scope as SKIN_FINISH
 from . import skin_gloss_scope as SKIN_GLOSS
 from . import skin_texture_scope as SKIN_TEXTURE
 from . import skin_evenness_scope as SKIN_EVENNESS
+from . import body_skin_evenness_scope as BODY_SKIN_EVENNESS
 from . import face_contour_scope as FACE_CONTOUR
 from . import slim_face_scope as SLIM_FACE
 from . import face_size_scope as FACE_SIZE
@@ -196,6 +197,10 @@ MODULES: dict[str, dict] = {
                      "transferable": True, "cmd": "people", "label": "面部肤色均匀（独立强度，部分非 AI 调整）",
                      "read": SKIN_EVENNESS.params_of, "write": SKIN_EVENNESS.install,
                      "why_not": "仅 0..1 强度；目标以自己的有效来源、真实面部皮肤观察、遮挡与 478 点独立重算参考肤色和色度位移，保留当前亮度；不复制样本、蒙版、像素或色度位移，不转换或清零旧版 skin.broad，不承诺全身或多人肤色匹配、瑕疵识别、模糊或全图色调替代"},
+    BODY_SKIN_EVENNESS.OP: {"params": ("recipe",), "state_fields": BODY_SKIN_EVENNESS.FIELDS, "single_face": True,
+                     "transferable": True, "cmd": "people", "label": "身体肤色均匀（独立审核范围，部分非 AI 调整）",
+                     "read": BODY_SKIN_EVENNESS.params_of, "write": BODY_SKIN_EVENNESS.install,
+                     "why_not": "仅 0..1 强度；目标须独立审核身体肤色均匀范围及 BodyRef/人物归属，以自己的真实身体皮肤观察和有效来源重算身体区域参考肤色，不复制手绘配方、审核、蒙版、参考样本或色度位移；不是身体与面部肤色匹配，不转换面部肤色均匀或旧版 skin.broad"},
     FACE_CONTOUR.OP: {"params": ("recipe",), "state_fields": FACE_CONTOUR.FIELDS, "single_face": True,
                       "transferable": True, "cmd": "people", "label": "面部轮廓（独立左右二维参数）",
                       "read": FACE_CONTOUR.params_of, "write": FACE_CONTOUR.install,
@@ -509,6 +514,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == SKIN_EVENNESS.OP:
         try: return SKIN_EVENNESS.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == BODY_SKIN_EVENNESS.OP:
+        try: return BODY_SKIN_EVENNESS.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == FACE_CONTOUR.OP:
         try: return FACE_CONTOUR.check_params(params)

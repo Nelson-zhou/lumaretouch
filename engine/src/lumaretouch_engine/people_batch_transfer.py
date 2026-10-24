@@ -116,6 +116,8 @@ def preflight(engine,controller,p):
             if coverage is not None:payload['skin_colour_coverage']=coverage
             finish_coverage=skin_coverage(engine,row,staged,payload,family='skin_finish')
             if finish_coverage is not None:payload['skin_finish_coverage']=finish_coverage
+            body_evenness_coverage=skin_coverage(engine,row,staged,payload,family='body_skin_evenness')
+            if body_evenness_coverage is not None:payload['body_skin_evenness_coverage']=body_evenness_coverage
             SOURCE.verify_row(row,target_proof)
             if owner.fence!=fence or V.row_snapshot(engine,row)!=target_graph or document(engine,row)!=target_document:
                 raise ValueError('Target or graph changed during preparation')
@@ -180,6 +182,17 @@ def commit(engine,controller,p,plan):
             for ref in payload['target_refs']:
                 for leaf in payload['parameters']:
                     candidate=S.set_override(candidate,'face',ref['face_instance_id'],leaf['operation_id'],leaf['parameter_path'],leaf['value'])
+            from .body_skin_evenness_state import OP as BODY_SKIN_EVENNESS
+            if any(leaf['operation_id']==BODY_SKIN_EVENNESS for leaf in payload['parameters']):
+                # Frozen scalar leaves do not authorize another body review.
+                # Validate the actual target again, then compare its exact local
+                # review receipt before this candidate enters a publishable plan.
+                from .people_candidate_render import validate
+                from .skin_colour_transfer_review import for_target as skin_coverage
+                validate(engine,row,candidate)
+                coverage=skin_coverage(engine,row,candidate,payload,family='body_skin_evenness')
+                if coverage!=payload.get('body_skin_evenness_coverage'):
+                    raise ValueError('Body-skin-evenness target coverage changed after review')
             # A per-target validation/budget failure must not leave a partial
             # candidate that skip_and_report could accidentally publish.
             plans[identity]={'row':row if scoped is None else scoped['row'],

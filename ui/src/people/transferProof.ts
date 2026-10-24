@@ -28,6 +28,11 @@ export type SkinColourCoverage = {
 };
 /** Structurally identical disclosure, independently keyed to finish intent. */
 export type SkinFinishCoverage = SkinColourCoverage;
+/** Body-evenness never has a face-only fallback or a transferable source support. */
+export type BodySkinEvennessCoverage = {
+  version: 1; support_transfer: 'none';
+  targets: {face_ref: FaceRef; scope: 'reviewed-body-only' | 'neutral-no-effect'; body_review_sha256: string | null}[];
+};
 type ReviewBase = {
   version: 1; source_document: DocumentFence; target_document: DocumentFence;
   source_ref: FaceRef; target_refs: FaceRef[];
@@ -37,6 +42,7 @@ type ReviewBase = {
   transfer_policy: 'selected_parameter_keys_replace'; excluded: string[];
   skin_colour_coverage?: SkinColourCoverage;
   skin_finish_coverage?: SkinFinishCoverage;
+  body_skin_evenness_coverage?: BodySkinEvennessCoverage;
 };
 export type PeopleTransferReview = ReviewBase & ({
   confirmed_person_id: string; target_policy: 'confirmed_person_only'; confirmation_revisions: [string, number][];
@@ -110,6 +116,19 @@ export function validSkinColourCoverage(value: unknown, refs: FaceRef[]): value 
 }
 export function validSkinFinishCoverage(value: unknown, refs: FaceRef[]): value is SkinFinishCoverage {
   return validSkinColourCoverage(value, refs);
+}
+export function validBodySkinEvennessCoverage(value: unknown, refs: FaceRef[]): value is BodySkinEvennessCoverage {
+  if (!object(value) || !keys(value, ['version', 'support_transfer', 'targets']) || value.version !== 1
+    || value.support_transfer !== 'none' || !Array.isArray(value.targets) || value.targets.length !== refs.length) return false;
+  const seen = new Set<string>();
+  for (const row of value.targets) {
+    if (!object(row) || !keys(row, ['face_ref', 'scope', 'body_review_sha256']) || !validFaceRef(row.face_ref)
+      || seen.has(row.face_ref.face_instance_id) || !refs.some(ref => sameFace(ref, row.face_ref as FaceRef))) return false;
+    if (row.scope === 'reviewed-body-only' ? !digest(row.body_review_sha256)
+      : row.scope !== 'neutral-no-effect' || row.body_review_sha256 !== null) return false;
+    seen.add(row.face_ref.face_instance_id);
+  }
+  return seen.size === refs.length;
 }
 function validSelection(v: unknown): v is Record<string, string[]> {
   return object(v) && Object.keys(v).length > 0 && Object.entries(v).every(([op, paths]) => token(op)
@@ -204,6 +223,16 @@ export function validPeopleReview(value: unknown, request: PeopleTransferRequest
       || typeof leaf.value !== 'number' || leaf.value < 0 || leaf.value > 1)) return false;
     if (scalars.some(leaf => leaf.value !== 0)
       && v.skin_finish_coverage!.targets.some(row => row.scope === 'neutral-no-effect')) return false;
+  }
+  const bodyEvennessSelected = Object.prototype.hasOwnProperty.call(request.selection, 'lnx.body_skin_evenness.v1');
+  if (bodyEvennessSelected ? !validBodySkinEvennessCoverage(v.body_skin_evenness_coverage, v.target_refs)
+    : v.body_skin_evenness_coverage !== undefined) return false;
+  if (bodyEvennessSelected) {
+    const scalars = v.parameters.filter(leaf => leaf.operation_id === 'lnx.body_skin_evenness.v1');
+    if (scalars.length !== 1 || scalars[0].parameter_path !== '/amount'
+      || typeof scalars[0].value !== 'number' || scalars[0].value < 0 || scalars[0].value > 1) return false;
+    const neutral = scalars[0].value === 0;
+    if (v.body_skin_evenness_coverage!.targets.some(row => (row.scope === 'neutral-no-effect') !== neutral)) return false;
   }
   return wanted.size === 0 && JSON.stringify([...v.excluded].sort()) === JSON.stringify(['identity_links', 'landmarks', 'local_assets', 'masks']);
 }

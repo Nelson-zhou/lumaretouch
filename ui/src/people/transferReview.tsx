@@ -4,7 +4,7 @@ export * from './transferProof';
 
 export function PeopleTransferEvidence({value}: {value: PeopleTransferReview}) {
   const explicit = value.target_policy === 'explicit_face_map';
-  return <details open={explicit || !!value.skin_colour_coverage || !!value.skin_finish_coverage}><summary>{explicit ? '仅本次指定配对' : '已确认关联'}：{value.target_refs.length} 张人脸 · {value.parameters.length} 项参数</summary>
+  return <details open={explicit || !!value.skin_colour_coverage || !!value.skin_finish_coverage || !!value.body_skin_evenness_coverage}><summary>{explicit ? '仅本次指定配对' : '已确认关联'}：{value.target_refs.length} 张人脸 · {value.parameters.length} 项参数</summary>
     <p>只替换明确勾选的参数；不复制蒙版、关键点、局部素材或人物关联。</p>
     {value.target_policy === 'explicit_face_map' ? <>
       <p>确认仅授权本次同步，不建立持久人物关联，也不代表系统识别为同一人。</p>
@@ -28,6 +28,15 @@ export function PeopleTransferEvidence({value}: {value: PeopleTransferReview}) {
           : row.scope === 'face-only' ? '仅面部；该目标没有美白红润身体审核，不会继承源图或色温/色调的身体范围'
           : '美白与红润均为零，不产生美白红润效果；不据此声明身体审核有效'}
       </li>)}</ul>
+    </section>}
+    {value.body_skin_evenness_coverage && <section aria-label="目标身体色度均匀覆盖范围">
+      <p>身体色度均匀只同步强度，不复制源图身体蒙版、参考色或人物关联。非零目标必须各自拥有本功能独立有效审核；色温、美白红润或脸部审核不能代替，也不能回退为仅面部效果。</p>
+      <ul>{value.body_skin_evenness_coverage.targets.map(row => <li key={row.face_ref.face_instance_id}>
+        人物 {row.face_ref.face_instance_id}：{row.scope === 'reviewed-body-only'
+          ? '仅此目标为身体色度均匀独立审核的身体皮肤，使用其自身来源参考；不调整脸部，不是脸身匹配'
+          : '身体强度为零，不产生本项效果；不据此声明已有有效身体审核'}
+      </li>)}</ul>
+      <p>预检中被拒绝的目标不会因其他人物已有审核而变为可用；请保留并处理原始拒绝原因。</p>
     </section>}
     <ul>{value.parameters.map(leaf => <li key={`${leaf.operation_id}:${leaf.parameter_path}`}>
       {operationLabel(leaf.operation_id)} · {leaf.parameter_path}：{String(leaf.value)}</li>)}</ul>

@@ -8,7 +8,9 @@ COLOUR_ACTIONS = frozenset(('skin_body_reference', 'skin_body_preview',
                             'skin_body_confirm', 'skin_body_detach'))
 FINISH_ACTIONS = frozenset(('skin_finish_body_reference', 'skin_finish_body_preview',
                            'skin_finish_body_confirm', 'skin_finish_body_detach'))
-ACTIONS = COLOUR_ACTIONS | FINISH_ACTIONS
+EVENNESS_ACTIONS = frozenset(('body_skin_evenness_reference', 'body_skin_evenness_preview',
+                             'body_skin_evenness_confirm', 'body_skin_evenness_detach'))
+ACTIONS = COLOUR_ACTIONS | FINISH_ACTIONS | EVENNESS_ACTIONS
 MAX_REVIEW_BYTES = 192 * 1024  # Preserve the native people-envelope 256 KiB cap.
 
 
@@ -16,13 +18,15 @@ def action_name(verb, *, family='skin_colour', operation_id=None):
     family_spec(family, operation_id)
     if verb not in ('reference', 'preview', 'confirm', 'detach'):
         raise ValueError('Unknown body-skin review action')
-    prefix = 'skin_body_' if family == 'skin_colour' else 'skin_finish_body_'
+    prefix = {'skin_colour': 'skin_body_', 'skin_finish': 'skin_finish_body_',
+              'body_skin_evenness': 'body_skin_evenness_'}[family]
     return prefix + verb
 
 
 def check_action(action, payload, target, *, family='skin_colour', operation_id=None):
     family_spec(family, operation_id)
-    allowed = COLOUR_ACTIONS if family == 'skin_colour' else FINISH_ACTIONS
+    allowed = {'skin_colour': COLOUR_ACTIONS, 'skin_finish': FINISH_ACTIONS,
+               'body_skin_evenness': EVENNESS_ACTIONS}[family]
     if (type(action) is not str or action not in allowed or type(target) is not dict
             or target.get('scope') != 'face' or type(payload) is not dict):
         raise ValueError('Body-skin review needs an exact local FaceRef and known action')
@@ -35,8 +39,14 @@ def check_action(action, payload, target, *, family='skin_colour', operation_id=
             raise ValueError('Confirm the exact displayed body-skin candidate')
         P.token(payload['preview_id'])
     else:
-        if set(payload) != {'review'} or type(payload['review']) is not dict:
+        fields = {'review', 'amount'} if family == 'body_skin_evenness' else {'review'}
+        if set(payload) != fields or type(payload['review']) is not dict:
             raise ValueError('Body-skin candidate needs an explicit reviewed source region')
+        if family == 'body_skin_evenness':
+            from .body_skin_evenness_state import check
+            candidate = check({'version': 1, 'amount': payload['amount']})
+            if candidate['amount'] == 0:
+                raise ValueError('Choose a positive body-skin-evenness amount for the private comparison')
         review = payload['review']
         if set(review) != {'body_ref', 'points_sha256', 'recipe', 'visible',
                            'unoccluded', 'ownership_confirmed'}:

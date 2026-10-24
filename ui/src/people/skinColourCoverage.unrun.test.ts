@@ -71,7 +71,7 @@ test('unrelated transfers retain compatibility but reject unexplained coverage c
 });
 test('coverage disclosure is open for both transfer policies and denies automatic whole-body claims', () => {
   const source = readFileSync(new URL('./transferReview.tsx', import.meta.url), 'utf8');
-  assert.ok(source.includes('open={explicit || !!value.skin_colour_coverage || !!value.skin_finish_coverage}'));
+  assert.ok(source.includes('open={explicit || !!value.skin_colour_coverage || !!value.skin_finish_coverage || !!value.body_skin_evenness_coverage}'));
   assert.ok(source.includes('身体审核不随源图或预设复制'));
   assert.ok(source.includes('不会继承源图的身体范围'));
   assert.ok(source.includes('不是自动全身分割'));

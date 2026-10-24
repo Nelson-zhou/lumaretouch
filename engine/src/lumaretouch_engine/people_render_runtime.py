@@ -70,7 +70,7 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=None, max_faces=32, recovery_assets=None, repaired=None,
-            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_bank=None):
+            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_bank=None):
     state = S.check(state)
     from .people_cross_owner import validate_owner
     validate_owner(state,asset_sha256,document_id)
@@ -118,6 +118,10 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                     and row['operation_id']==A.SKIN_EVENNESS.OP):
                 from .skin_evenness_project import validate_leaf as validate_evenness_leaf
                 validate_evenness_leaf(row['parameter_path'], row['value'])
+            if (row['scope']=='all_people' and row['target_id']==asset_sha256
+                    and row['operation_id']==A.BODY_SKIN_EVENNESS.OP):
+                from .body_skin_evenness_project import validate_leaf as validate_body_evenness_leaf
+                validate_body_evenness_leaf(row['parameter_path'], row['value'])
     if not any(face['asset_sha256']==asset_sha256 for face in state['faces'].values()) and any(
             row['scope']=='all_people' and row['target_id']==asset_sha256
             and row['value']!=A.defaults().get(row['operation_id'],{}).get(row['parameter_path'])
@@ -149,7 +153,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
                 stage = asset['kind']
-                if stage in ('skin_colour_body_visibility','skin_finish_body_visibility'):
+                if stage in ('skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility'):
                     # Separate operation-owned support, never generic recovery.
                     # Resolve each only when its own recipe is active below;
                     # dormant review cannot prevent disabling either recipe.
@@ -279,6 +283,20 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                 local.extend(prepare_skin_evenness(entry['face_ref'], analysis, effect_source,
                     values[A.SKIN_EVENNESS.OP], byte_budget=byte_budget-owned,
                     protected_boxes=evenness_neighbors))
+            if A.BODY_SKIN_EVENNESS.active(values[A.BODY_SKIN_EVENNESS.OP]):
+                from .body_skin_evenness_layer import prepare as prepare_body_evenness
+                seen = set(); owned = 0
+                for row in analyses.values():
+                    for array in row.values():
+                        if isinstance(array, np.ndarray) and id(array) not in seen:
+                            seen.add(id(array)); owned += array.nbytes
+                owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
+                owned += sum(a.nbytes for r in (*effects, *local)
+                             for a in (r.delta, r.weights, r.chroma_shift) if a is not None)
+                local.extend(prepare_body_evenness(entry['face_ref'], analysis, effect_source,
+                    values[A.BODY_SKIN_EVENNESS.OP], people_state=state,
+                    body_assets=body_skin_evenness_assets or {}, body_bank=body_bank,
+                    byte_budget=byte_budget-owned))
             if A.LIP_TEXTURE.active(values[A.LIP_TEXTURE.OP]):
                 from .lip_texture_layer import prepare as prepare_lip_texture
                 lip_neighbors = tuple(tuple(other['box']) for other_key, other in state['faces'].items()

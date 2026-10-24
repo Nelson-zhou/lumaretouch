@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Reviewed body-skin coverage in the ONE canonical people support bank.
 
-Each descriptor is an explicit, nonportable extension of exactly one allowlisted
-scalar family. Skin-colour reviews never authorize skin-finish. This is not a
-second recipe owner, pose operation or instance segmenter.
+Each descriptor is explicit, nonportable support for exactly one allowlisted
+scalar family. Skin-colour, skin-finish and body-skin-evenness reviews never
+authorize one another. This is not a second recipe owner, pose operation or
+instance segmenter. Body evenness is body-region colour unevenness only, not
+body-to-face colour matching or a learned correction model.
 The host stages ``retain`` privately, previews real coverage/pixels, and attaches
 the candidate only after its independently fenced confirmation transaction.
 
@@ -26,7 +28,9 @@ KIND = 'skin_colour_body_visibility'
 OPERATION = 'lnx.skin_colour.v1'
 FINISH_KIND = 'skin_finish_body_visibility'
 FINISH_OPERATION = 'lnx.skin_finish.v1'
-FAMILIES = ('skin_colour', 'skin_finish')
+EVENNESS_KIND = 'body_skin_evenness_visibility'
+EVENNESS_OPERATION = 'lnx.body_skin_evenness.v1'
+FAMILIES = ('skin_colour', 'skin_finish', 'body_skin_evenness')
 FLAGS = ('visible', 'unoccluded', 'ownership_confirmed')
 MAX_RECORD_BYTES = 4 * 1024 * 1024
 
@@ -35,8 +39,9 @@ def family_spec(family='skin_colour', operation_id=None):
     """Exact family/operation allowlist; no descriptor or authorization aliases."""
     if type(family) is not str or family not in FAMILIES:
         raise ValueError('Unknown body-skin scalar family')
-    kind, operation = ((KIND, OPERATION) if family == 'skin_colour'
-                       else (FINISH_KIND, FINISH_OPERATION))
+    kind, operation = {'skin_colour': (KIND, OPERATION),
+                       'skin_finish': (FINISH_KIND, FINISH_OPERATION),
+                       'body_skin_evenness': (EVENNESS_KIND, EVENNESS_OPERATION)}[family]
     if operation_id is not None and (type(operation_id) is not str or operation_id != operation):
         raise ValueError('Body-skin family cannot authorize another operation')
     return kind, operation
@@ -279,9 +284,10 @@ def raster(state, assets, face_ref, body_bank, analysis, shape, *, byte_budget=N
 
     Call only for nonneutral intent in the explicitly named family. Neutral reset
     must not require live support resolution. All attached same-source regions
-    across both families reserve ownership for OTHER faces, even disabled ones;
-    sorted-effect precedence never decides it. The same face's two deliberately
-    authorized families may compose on their separately reviewed coverages.
+    across all allowlisted families reserve ownership for OTHER faces, even
+    disabled ones; sorted-effect precedence never decides it. The same face's
+    deliberately authorized families may compose on separately reviewed
+    coverages. None can borrow a different family's support or consent.
     """
     _, operation = family_spec(family, operation_id)
     resolved = resolve(state, assets, face_ref, body_bank, analysis,
@@ -294,6 +300,15 @@ def raster(state, assets, face_ref, body_bank, analysis, shape, *, byte_budget=N
     shape = tuple(shape)
     E.whole_source_shape({**record['source'], 'orientation': E.ORIENTATION}, shape)
     SEM.check_analysis_fields(analysis, shape)
+    excluded = None
+    if family == 'body_skin_evenness':
+        # One admission field for both the real solver and the review overlay.
+        # This is known-occluder protection, not complete instance segmentation.
+        excluded = analysis.get('excluded')
+        if (type(excluded) is not np.ndarray or excluded.dtype != np.float32
+                or excluded.shape != shape or not np.isfinite(excluded).all()
+                or np.any(excluded < 0) or np.any(excluded > 1)):
+            raise ValueError('Body-skin-evenness needs actual finite float32 known-occluder support')
     others = []
     for face in state['faces'].values():
         ref = S.face_ref(face)
@@ -320,6 +335,8 @@ def raster(state, assets, face_ref, body_bank, analysis, shape, *, byte_budget=N
         raise ValueError('Body-skin coverage exceeds memory budget before raster allocation')
     coverage = _manual(recipes[0], shape)
     coverage *= analysis['body_skin']
+    if excluded is not None:
+        coverage[excluded > .1] = 0
     protected = _protect_faces(coverage, state, record['source']['sha256'])
     for other in others:
         competing = _manual(other['row']['review']['recipe'], shape)

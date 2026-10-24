@@ -34,6 +34,11 @@ def fastpath_blocker(snapshot):
             from .skin_evenness_project import validate_leaf as validate_evenness_leaf
             try:validate_evenness_leaf(row['parameter_path'],row['value'])
             except ValueError:return True
+        if (row['scope']=='all_people' and row['target_id']==asset
+                and row['operation_id']==A.BODY_SKIN_EVENNESS.OP):
+            from .body_skin_evenness_project import validate_leaf as validate_body_evenness_leaf
+            try:validate_body_evenness_leaf(row['parameter_path'],row['value'])
+            except ValueError:return True
     defaults=A.defaults();specs=A.specifications()
     faces=[face for face in state['faces'].values() if face['asset_sha256']==asset and face['enabled']]
     if not faces and any(row['scope']=='all_people' and row['target_id']==asset and row['value']!=defaults.get(row['operation_id'],{}).get(row['parameter_path']) for row in state['overrides']):return True

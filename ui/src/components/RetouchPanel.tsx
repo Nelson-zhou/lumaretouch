@@ -43,6 +43,7 @@ import {SkinGlossControl} from '../skinGloss/SkinGlossControl';
 import {SkinTextureControl} from '../skinTexture/SkinTextureControl';
 import {LipTextureControl} from '../lipTexture/LipTextureControl';
 import {SkinEvennessControl} from '../skinEvenness/SkinEvennessControl';
+import {BodySkinEvennessControl} from '../bodySkinEvenness/BodySkinEvennessControl';
 import {FaceContourControl} from '../faceContour/FaceContourControl';
 import {SlimFaceControl} from '../slimFace/SlimFaceControl';
 import {FaceSizeControl} from '../faceSize/FaceSizeControl';
@@ -383,6 +384,7 @@ const WIRED: Record<string, string> = {
   "PC-32465|高低频磨皮-脸部/身体": "skin.strength",
   "PC-32465|质感磨皮": "skin.detail",
   "PC-32465|AI肤色统一（脸部）": "skin_evenness.amount",
+  "PC-32465|AI肤色统一（身体）": "body_skin_evenness.amount",
   "PC-32465|水润磨皮-脸部/身体": "skin.radius",
   "PC-32465|肤色色温": "skin_colour.temperature",
   "PC-32465|肤色色调": "skin_colour.tint",
@@ -808,6 +810,12 @@ export default function RetouchPanel(props: RetouchProps) {
           </details>
         </div>;
       }
+      case "body_skin_evenness.amount":
+        return <BodySkinEvennessControl key={leaf.path}
+          people={props.people} capability={status?.ready_caps}
+          blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+            || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+          faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
       case "skin_colour.temperature":
       case "skin_colour.tint":
         return <SkinColourControl key={leaf.path}

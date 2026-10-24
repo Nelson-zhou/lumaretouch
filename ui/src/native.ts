@@ -990,6 +990,8 @@ export interface EngineStatus {
     lip_texture_reason?: string | null;
     skin_evenness_available?: boolean;
     skin_evenness_reason?: string | null;
+    body_skin_evenness_available?: boolean;
+    body_skin_evenness_reason?: string | null;
     face_contour_available?: boolean;
     face_contour_reason?: string | null;
     face_size_available?: boolean;

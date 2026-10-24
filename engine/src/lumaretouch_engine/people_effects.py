@@ -10,7 +10,7 @@ from .facial_wrinkle_layer import FacialWrinkleLayer, bounds as wrinkle_bounds
 from .under_eye_layer import UnderEyeLayer, bounds as eye_bounds, KEYS as EYE_KEYS
 from .ops import enhance as H
 
-STAGES = ('skin_evenness', 'skin_colour', 'facial_wrinkles', 'eye_detail', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'eye_light', 'blush_makeup', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
+STAGES = ('body_skin_evenness', 'skin_evenness', 'skin_colour', 'facial_wrinkles', 'eye_detail', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'eye_light', 'blush_makeup', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
 
 
 @dataclass(frozen=True)
@@ -105,9 +105,9 @@ def verify_recovery(face_ref, stage, recovery, shape):
 def apply(stage, current, records, *, recovery=None):
     """One operator's before/after pair; no repeated application on overlap."""
     if stage not in STAGES: raise ValueError('Unknown portrait stage')
-    if stage == 'skin_evenness':
+    if stage in ('skin_evenness', 'body_skin_evenness'):
         from .skin_evenness_composition import apply_records_np
-        return apply_records_np(current, records, recovery)
+        return apply_records_np(current, records, recovery, stage=stage)
     if current.ndim != 3 or current.shape[2] != 3 or not np.isfinite(current).all(): raise ValueError('Invalid portrait stage input')
     h, w = current.shape[:2]; total = np.zeros_like(current, dtype=np.float32)
     occupied = np.zeros((h, w), bool); overlap = 0

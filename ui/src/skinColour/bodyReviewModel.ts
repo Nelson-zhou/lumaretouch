@@ -4,7 +4,7 @@ import type {BodyRef} from '../legShape/model';
 import type {SourcePreview} from '../legShape/sourcePreview';
 import type {MaskObject} from '../localMasks/model';
 
-export type SkinBodyFamily = 'skin_colour' | 'skin_finish';
+export type SkinBodyFamily = 'skin_colour' | 'skin_finish' | 'body_skin_evenness';
 export const SKIN_BODY_FAMILIES = {
   skin_colour: {operation: 'lnx.skin_colour.v1', report: 'skin_body', actions: {
     reference: 'skin_body_reference', preview: 'skin_body_preview', confirm: 'skin_body_confirm', detach: 'skin_body_detach',
@@ -12,20 +12,23 @@ export const SKIN_BODY_FAMILIES = {
   skin_finish: {operation: 'lnx.skin_finish.v1', report: 'skin_finish_body', actions: {
     reference: 'skin_finish_body_reference', preview: 'skin_finish_body_preview', confirm: 'skin_finish_body_confirm', detach: 'skin_finish_body_detach',
   }},
+  body_skin_evenness: {operation: 'lnx.body_skin_evenness.v1', report: 'body_skin_evenness', actions: {
+    reference: 'body_skin_evenness_reference', preview: 'body_skin_evenness_preview', confirm: 'body_skin_evenness_confirm', detach: 'body_skin_evenness_detach',
+  }},
 } as const;
 export type SkinBodyAction = typeof SKIN_BODY_FAMILIES[SkinBodyFamily]['actions'][keyof typeof SKIN_BODY_FAMILIES.skin_colour.actions];
-type SkinBodyIdentity = {family?: SkinBodyFamily; operation_id?: 'lnx.skin_colour.v1' | 'lnx.skin_finish.v1'};
+type SkinBodyIdentity = {family?: SkinBodyFamily; operation_id?: 'lnx.skin_colour.v1' | 'lnx.skin_finish.v1' | 'lnx.body_skin_evenness.v1'};
 export function skinBodyActionFamily(action: PeopleAction['action']): SkinBodyFamily | null {
-  for (const family of ['skin_colour', 'skin_finish'] as const) {
+  for (const family of ['skin_colour', 'skin_finish', 'body_skin_evenness'] as const) {
     if ((Object.values(SKIN_BODY_FAMILIES[family].actions) as string[]).includes(action)) return family;
   }
   return null;
 }
-/** Legacy colour DTOs remain untagged; finish must carry both exact identities. */
+/** Legacy colour DTOs remain untagged; independent families carry both exact identities. */
 export function skinBodyFamilyMatches(value: unknown, family: SkinBodyFamily = 'skin_colour'): boolean {
   if (!value || typeof value !== 'object') return false;
   const identity = value as SkinBodyIdentity;
-  return family === 'skin_finish'
+  return family !== 'skin_colour'
     ? identity.family === family && identity.operation_id === SKIN_BODY_FAMILIES[family].operation
     : identity.family === undefined && identity.operation_id === undefined;
 }
@@ -40,6 +43,8 @@ export type SkinBodyPreview = SkinBodyIdentity & {
   kind: 'preview'; preview_id: string; source: SkinBodySource; face_ref: FaceRef;
   before: SkinBodyRendered; after: SkinBodyRendered; overlay: SourcePreview;
   review: SkinBodyReview; runtime_quality_accepted: false;
+  /** Body-evenness only: explicit preview candidate, atomically accepted with its own support. */
+  amount?: number;
 };
 export type SkinBodyPayload = SkinBodyReference | SkinBodyPreview | (SkinBodyIdentity & {kind: 'confirmed' | 'detached'; attached: boolean});
 export type SkinBodyResult = {command: PeopleAction; result: PeopleResult};
@@ -63,6 +68,13 @@ export function skinBodyReceiptCurrent(command: PeopleAction, result: PeopleResu
 }
 export const emptyBodyMask = (): SkinBodyMask => ({version: 1, domain: 'source-normalized', objects: []});
 export const skinBodyRequestFits = (command: PeopleAction): boolean => new TextEncoder().encode(JSON.stringify(command)).byteLength <= 192 * 1024;
+/** Explicit positive display amount for a private body-evenness candidate; blank never stages a default. */
+export function parseBodyReviewAmount(text: string): number | null {
+  const trimmed = text.trim();
+  if (!/^[+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(trimmed)) return null;
+  const amount = Number(trimmed) / 100;
+  return Number.isFinite(amount) && amount > 0 && amount <= 1 ? amount : null;
+}
 export const bodyRefKey = (ref: BodyRef): string => JSON.stringify([ref.asset_sha256, ref.body_instance_id, ref.analysis_revision]);
 /** Stable comparison of a returned canonical recipe, not a trust-bearing server digest. */
 export function bodyReviewKey(value: unknown): string {
@@ -96,7 +108,7 @@ export function skinBodyReport(view: PeopleView | null | undefined, family: Skin
 export function skinBodyAttached(view: PeopleView | null | undefined, family: SkinBodyFamily = 'skin_colour'): boolean | null {
   const report = skinBodyReport(view, family), selected = view?.faces.find(face => face.face_ref.face_instance_id === view.selected_face_id);
   if (!view || !report || !selected || typeof report.attached !== 'boolean' || !sameSkinFace(report.face_ref, selected.face_ref)
-    || report.source.sha256 !== view.binding.asset_sha256) return null;
+    || report.source?.sha256 !== view.binding.asset_sha256) return null;
   return report.attached;
 }
 export function referenceMatches(reference: SkinBodyReference, view: PeopleView, family: SkinBodyFamily = 'skin_colour'): boolean {
@@ -130,8 +142,9 @@ export function renderedSkinImage(value: SkinBodyRendered | null | undefined): s
     || !/^[A-Za-z0-9+/]+={0,2}$/.test(value.base64)) return null;
   return `data:image/png;base64,${value.base64}`;
 }
-export function previewMatches(preview: SkinBodyPreview, reference: SkinBodyReference, review: SkinBodyReview, family: SkinBodyFamily = 'skin_colour'): boolean {
+export function previewMatches(preview: SkinBodyPreview, reference: SkinBodyReference, review: SkinBodyReview, family: SkinBodyFamily = 'skin_colour', amount?: number): boolean {
   return preview.kind === 'preview' && skinBodyFamilyMatches(preview, family) && skinBodyFamilyMatches(reference, family)
+    && (family !== 'body_skin_evenness' || (typeof amount === 'number' && Number.isFinite(amount) && amount > 0 && amount <= 1 && preview.amount === amount))
     && token(preview.preview_id) && sameSkinFace(preview.face_ref, reference.face_ref)
     && sameSkinSource(preview.source, reference.source) && preview.runtime_quality_accepted === false
     && bodyReviewKey(preview.review) === bodyReviewKey(review)
