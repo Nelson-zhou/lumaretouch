@@ -15,9 +15,12 @@ test('only the exact gloss leaf connects, leaving distinct colour and finish lea
   assert.ok(control.includes('data-control-id={SKIN_GLOSS_CONTROL_ID}'));
   for (const existing of ['"PC-32465|肤色色温": "skin_colour.temperature"', '"PC-32465|肤色色调": "skin_colour.tint"',
     '"PC-32465|肤色美白": "skin_finish.whitening"', '"PC-32465|皮肤红润": "skin_finish.rosiness"',
-    '"PC-32465|AI肤色统一（脸部）": "skin.broad"', '"PC-32465|高低频磨皮-脸部/身体": "skin.strength"']) {
+    '"PC-32465|AI肤色统一（脸部）": "skin_evenness.amount"', '"PC-32465|高低频磨皮-脸部/身体": "skin.strength"']) {
     assert.ok(panel.includes(existing));
   }
+  for (const compatibility of ['data-legacy-skin-compat="true"', 'value={params.broad_gain ?? 0} min={0} max={2}',
+    'onChange={value => commitSkin({ broad: value })}', 'onReset={() => commitSkin({ broad: 0 })}',
+    '大尺度增益 0 只是旧默认值，不代表中性或关闭']) assert.ok(panel.includes(compatibility));
 });
 
 test('the existing people owner is the only mutation and uncertain-receipt route', () => {

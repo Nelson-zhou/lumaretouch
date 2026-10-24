@@ -4,6 +4,28 @@
   "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
+      "operation_id": "lnx.skin_evenness.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "amount": 0
+      },
+      "range": {
+        "version": [
+          1,
+          1
+        ],
+        "amount": [
+          0,
+          1
+        ]
+      },
+      "transferable": true,
+      "source_requirement": "PC-32465-C-60b7c0e3d1",
+      "reason": "Partial facial colour-unification requirement: original own-face masked luminance-guided log-chroma correction, not learned AI or body/multi-person colour matching. Actual current-stage linear luminance retained, target source support/reference rebuilt. Runtime/photo acceptance UNRUN."
+    },
+    {
       "operation_id": "lnx.lip_texture.v1",
       "parameter_key": "recipe",
       "type": "object",

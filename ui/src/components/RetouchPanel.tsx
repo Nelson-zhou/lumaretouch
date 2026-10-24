@@ -42,6 +42,7 @@ import {SkinFinishControl} from '../skinFinish/SkinFinishControl';
 import {SkinGlossControl} from '../skinGloss/SkinGlossControl';
 import {SkinTextureControl} from '../skinTexture/SkinTextureControl';
 import {LipTextureControl} from '../lipTexture/LipTextureControl';
+import {SkinEvennessControl} from '../skinEvenness/SkinEvennessControl';
 import {FaceContourControl} from '../faceContour/FaceContourControl';
 import {SlimFaceControl} from '../slimFace/SlimFaceControl';
 import {FaceSizeControl} from '../faceSize/FaceSizeControl';
@@ -381,7 +382,7 @@ const WIRED: Record<string, string> = {
   // 皮肤调整
   "PC-32465|高低频磨皮-脸部/身体": "skin.strength",
   "PC-32465|质感磨皮": "skin.detail",
-  "PC-32465|AI肤色统一（脸部）": "skin.broad",
+  "PC-32465|AI肤色统一（脸部）": "skin_evenness.amount",
   "PC-32465|水润磨皮-脸部/身体": "skin.radius",
   "PC-32465|肤色色温": "skin_colour.temperature",
   "PC-32465|肤色色调": "skin_colour.tint",
@@ -462,7 +463,7 @@ const LEAF_NOTE: Record<string, string> = {
 const WIRE_LABEL: Record<string, string> = {
   "skin.strength": "磨皮强度",
   "skin.detail": "质感保留",
-  "skin.broad": "肤色匀净",
+  "skin.broad": "旧版大尺度频率增益（非肤色统一）",
   "skin.radius": "磨皮半径",
   "slim_face.v2": "瘦脸（新版左右独立）",
   "face_size.amount": "小脸（局部整脸大小）",
@@ -611,7 +612,7 @@ export default function RetouchPanel(props: RetouchProps) {
   );
 
   const commitSkin = (patch: SkinEdit) => {
-    if (!doc || dim) return;
+    if (!doc || dim || props.people.state.pending || props.people.state.uncertain) return;
     if (skinWhy) { props.note(skinWhy); return; }
     ok(setStrength(patch.strength, skinEditOptions(patch)), props);
   };
@@ -774,6 +775,39 @@ export default function RetouchPanel(props: RetouchProps) {
             disabled={dim || !!skinWhy} title={skinWhy || undefined} onChange={(v) => commitSkin({ radius: v })}
             onReset={() => commitSkin({ radius: 12 })} />
         );
+      case "skin_evenness.amount": {
+        // The former alias had the only broad-gain route. Keep an explicit legacy route,
+        // with its original parameters and command, rather than migrating or hiding saved values.
+        const legacyDisabled = !doc || dim || !!skinWhy || props.people.state.pending || props.people.state.uncertain;
+        return <div key={leaf.path}>
+          <SkinEvennessControl
+            people={props.people} capability={status?.ready_caps}
+            blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+              || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+            faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>
+          <details data-legacy-skin-compat="true">
+            <summary>旧版磨皮兼容控制（照片级参数，非脸部色度均匀）</summary>
+            <p className="muted">以下保留当前照片的旧版磨皮强度与大尺度频率增益，不随人物编辑范围切换；旧流程使用整张照片的皮肤掩膜。它们不是新的脸部色度均匀，也不进行参数迁移、换算或自动清除。</p>
+            <Slider label="旧版照片级磨皮强度（皮肤掩膜）"
+              value={Math.round((doc?.strength ?? 0) * 100)} min={0} max={100}
+              disabled={legacyDisabled} title={skinWhy || '旧版磨皮强度；0 关闭旧磨皮。双击恢复旧版默认值 0。'}
+              onChange={value => commitSkin({ strength: value / 100 })}
+              onReset={() => commitSkin({ strength: 0 })}/>
+            <Slider label="旧版大尺度频率增益（0 至 2，非肤色统一）"
+              value={params.broad_gain ?? 0} min={0} max={2} step={0.01} digits={2}
+              disabled={legacyDisabled} title={skinWhy || '旧版频率增益；0 是旧默认值，不是中性。双击恢复旧版默认值 0。'}
+              onChange={value => commitSkin({ broad: value })}
+              onReset={() => commitSkin({ broad: 0 })}/>
+            <p className="muted">旧版强度 0 关闭旧磨皮；大尺度增益 0 只是旧默认值，不代表中性或关闭。两项均沿用旧版渲染与保存含义，不受上方新功能归零按钮影响。</p>
+            <button type="button" className="specBtn" disabled={legacyDisabled}
+              onClick={() => commitSkin({ strength: 0 })}>恢复旧版强度默认值（0，关闭旧磨皮）</button>
+            <button type="button" className="specBtn" disabled={legacyDisabled}
+              onClick={() => commitSkin({ broad: 0 })}>恢复旧版大尺度增益默认值（0，非中性）</button>
+            {skinWhy && <p className="muted" role="status">{skinWhy}</p>}
+            <p className="muted">人物修改正在处理或结果尚未确认时，旧版控制也会暂停。旧版命令仍保留自身限制；不支持的衍生来源路径仍会拒绝，不通过新功能绕过。</p>
+          </details>
+        </div>;
+      }
       case "skin_colour.temperature":
       case "skin_colour.tint":
         return <SkinColourControl key={leaf.path}

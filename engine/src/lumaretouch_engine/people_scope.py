@@ -32,6 +32,7 @@ def replay_preset(engine,state,**kwargs):
     from . import skin_finish_scope as SKIN_FINISH
     from . import skin_gloss_scope as SKIN_GLOSS
     from . import skin_texture_scope as SKIN_TEXTURE
+    from . import skin_evenness_scope as SKIN_EVENNESS
     from . import face_contour_scope as FACE_CONTOUR
     from . import slim_face_scope as SLIM_FACE
     from . import face_size_scope as FACE_SIZE
@@ -60,6 +61,9 @@ def replay_preset(engine,state,**kwargs):
     texture_recipe=SKIN_TEXTURE.S.check(state.get(SKIN_TEXTURE.FIELD))
     texture_requested=state.get(SKIN_TEXTURE.REQUESTED) is True
     if SKIN_TEXTURE.S.active(texture_recipe):kwargs['strict_local']=True
+    evenness_recipe=SKIN_EVENNESS.S.check(state.get(SKIN_EVENNESS.FIELD))
+    evenness_requested=state.get(SKIN_EVENNESS.REQUESTED) is True
+    if SKIN_EVENNESS.S.active(evenness_recipe):kwargs['strict_local']=True
     contour_recipe=FACE_CONTOUR.S.check(state.get(FACE_CONTOUR.FIELD))
     contour_requested=state.get(FACE_CONTOUR.REQUESTED) is True
     if FACE_CONTOUR.S.active(contour_recipe):kwargs['strict_local']=True
@@ -102,6 +106,8 @@ def replay_preset(engine,state,**kwargs):
             raise ValueError('皮肤光泽预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
         if texture_requested or SKIN_TEXTURE.S.active(texture_recipe):
             raise ValueError('皮肤质感预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
+        if evenness_requested or SKIN_EVENNESS.S.active(evenness_recipe):
+            raise ValueError('面部肤色均匀预设需要当前明确的规范人物，不能静默丢弃或转换为旧版磨皮或全图色调配方')
         if contour_requested or FACE_CONTOUR.S.active(contour_recipe):
             raise ValueError('面部轮廓预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
         if slim_requested or SLIM_FACE.S.active(slim_recipe):
@@ -144,6 +150,7 @@ def replay_preset(engine,state,**kwargs):
     current=SKIN_FINISH.capture(engine,current)
     current=SKIN_GLOSS.capture(engine,current)
     current=SKIN_TEXTURE.capture(engine,current)
+    current=SKIN_EVENNESS.capture(engine,current)
     current=FACE_CONTOUR.capture(engine,current)
     current=SLIM_FACE.capture(engine,current)
     current=FACE_SIZE.capture(engine,current)
@@ -185,6 +192,18 @@ def replay_preset(engine,state,**kwargs):
         SKIN_TEXTURE.install(dict(current),{'recipe':texture_recipe})
         if state.get(SKIN_TEXTURE.TARGET)!=current[SKIN_TEXTURE.TARGET]:
             raise ValueError('皮肤质感预设目标已变化，请重新选择当前人物')
+    evenness_involved=(SKIN_EVENNESS.FIELD in state and
+                      (evenness_requested or SKIN_EVENNESS.S.active(evenness_recipe)
+                       or evenness_recipe!=current[SKIN_EVENNESS.FIELD]))
+    if evenness_involved:
+        # Only amount travels. Refresh exact live owner/source/FaceRef and
+        # actual face-skin/478 observation before staging; the complete target
+        # renderer independently measures reference chroma and composes its
+        # typed shift without clearing or copying the legacy skin.broad amount.
+        SKIN_EVENNESS.install(dict(current),{'recipe':evenness_recipe})
+        if (state.get(SKIN_EVENNESS.TARGET)!=current[SKIN_EVENNESS.TARGET]
+                or SKIN_EVENNESS.owner_identity(state)!=SKIN_EVENNESS.owner_identity(current)):
+            raise ValueError('面部肤色均匀预设的文档、人物归属、有效来源或当前人物已变化，请重新选择')
     contour_involved=(FACE_CONTOUR.FIELD in state and
                       (contour_requested or FACE_CONTOUR.S.active(contour_recipe) or contour_recipe!=current[FACE_CONTOUR.FIELD]))
     if contour_involved:
@@ -305,6 +324,7 @@ def replay_preset(engine,state,**kwargs):
     if SKIN_FINISH.FIELD in state:fields[SKIN_FINISH.OP]=SKIN_FINISH.FIELD
     if SKIN_GLOSS.FIELD in state:fields[SKIN_GLOSS.OP]=SKIN_GLOSS.FIELD
     if SKIN_TEXTURE.FIELD in state:fields[SKIN_TEXTURE.OP]=SKIN_TEXTURE.FIELD
+    if SKIN_EVENNESS.FIELD in state:fields[SKIN_EVENNESS.OP]=SKIN_EVENNESS.FIELD
     if FACE_CONTOUR.FIELD in state:fields[FACE_CONTOUR.OP]=FACE_CONTOUR.FIELD
     if SLIM_FACE.FIELD in state:fields[SLIM_FACE.OP]=SLIM_FACE.FIELD
     if FACE_SIZE.FIELD in state:fields[FACE_SIZE.OP]=FACE_SIZE.FIELD
@@ -341,6 +361,8 @@ def replay_preset(engine,state,**kwargs):
         raise ValueError('皮肤光泽预设的当前人物与唯一可应用目标不一致')
     if texture_involved and current[SKIN_TEXTURE.TARGET]!=S.face_ref(faces[0]):
         raise ValueError('皮肤质感预设的当前人物与唯一可应用目标不一致')
+    if evenness_involved and current[SKIN_EVENNESS.TARGET]!=S.face_ref(faces[0]):
+        raise ValueError('面部肤色均匀预设的当前人物与唯一可应用目标不一致')
     if contour_involved and current[FACE_CONTOUR.TARGET]!=S.face_ref(faces[0]):
         raise ValueError('面部轮廓预设的当前人物与唯一可应用目标不一致')
     if slim_involved and current[SLIM_FACE.TARGET]!=S.face_ref(faces[0]):
@@ -394,7 +416,7 @@ def replay_preset(engine,state,**kwargs):
         # All selected portrait layers, including source-measured lip furrows
         # and separately added lip/brow makeup, compose in the complete renderer.
         # Never clear/convert other intent for local success.
-        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP,MID_FACE.OP,CHIN_SHAPE.OP,CHIN_LENGTH.OP,PHILTRUM.OP,EYE_SYMMETRY.OP,BROW_ENHANCE.OP,LIP_TEXTURE.OP) for op,_,_ in patches):kwargs['strict_local']=True
+        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,SKIN_EVENNESS.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP,MID_FACE.OP,CHIN_SHAPE.OP,CHIN_LENGTH.OP,PHILTRUM.OP,EYE_SYMMETRY.OP,BROW_ENHANCE.OP,LIP_TEXTURE.OP) for op,_,_ in patches):kwargs['strict_local']=True
         return engine._replay_state(state,**kwargs)
     except Exception:
         before['association_revision']=owner.association_fence

@@ -114,6 +114,10 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                     and row['operation_id']==A.LIP_TEXTURE.OP):
                 from .lip_texture_project import validate_leaf as validate_lip_leaf
                 validate_lip_leaf(row['parameter_path'], row['value'])
+            if (row['scope']=='all_people' and row['target_id']==asset_sha256
+                    and row['operation_id']==A.SKIN_EVENNESS.OP):
+                from .skin_evenness_project import validate_leaf as validate_evenness_leaf
+                validate_evenness_leaf(row['parameter_path'], row['value'])
     if not any(face['asset_sha256']==asset_sha256 for face in state['faces'].values()) and any(
             row['scope']=='all_people' and row['target_id']==asset_sha256
             and row['value']!=A.defaults().get(row['operation_id'],{}).get(row['parameter_path'])
@@ -244,7 +248,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                             seen_arrays.add(id(array)); analysis_bytes += array.nbytes
                 prior_bytes = sum(f.resident_bytes() for f in fields) + field.resident_bytes()
                 prior_bytes += sum(a.nbytes for record in (*effects,*local)
-                                   for a in (record.delta,record.weights) if a is not None)
+                                   for a in (record.delta,record.weights,record.chroma_shift) if a is not None)
                 local.extend(prepare_skin_colour(entry['face_ref'], analysis, others, effect_source,
                     values[A.SKIN_COLOUR.OP], byte_budget=byte_budget-analysis_bytes-prior_bytes,
                     protected_boxes=protected_boxes,people_state=state,
@@ -260,6 +264,21 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             if A.EYELASH.active(values[A.EYELASH.OP]):
                 from .eyelash_people import prepare as prepare_eyelash
                 local.extend(prepare_eyelash(state,eyelash_assets or {},entry['face_ref'],analysis,effect_source,values[A.EYELASH.OP],source_revision=state['revision']))
+            if A.SKIN_EVENNESS.active(values[A.SKIN_EVENNESS.OP]):
+                from .skin_evenness_layer import prepare as prepare_skin_evenness
+                evenness_neighbors = tuple(tuple(other['box']) for other_key, other in state['faces'].items()
+                    if other_key != key and other['asset_sha256'] == asset_sha256)
+                seen = set(); owned = 0
+                for row in analyses.values():
+                    for array in row.values():
+                        if isinstance(array, np.ndarray) and id(array) not in seen:
+                            seen.add(id(array)); owned += array.nbytes
+                owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
+                owned += sum(a.nbytes for r in (*effects, *local)
+                             for a in (r.delta, r.weights, r.chroma_shift) if a is not None)
+                local.extend(prepare_skin_evenness(entry['face_ref'], analysis, effect_source,
+                    values[A.SKIN_EVENNESS.OP], byte_budget=byte_budget-owned,
+                    protected_boxes=evenness_neighbors))
             if A.LIP_TEXTURE.active(values[A.LIP_TEXTURE.OP]):
                 from .lip_texture_layer import prepare as prepare_lip_texture
                 lip_neighbors = tuple(tuple(other['box']) for other_key, other in state['faces'].items()
@@ -291,7 +310,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                         record.weights[2] *= mouth.teeth_support[y:y+rh,x:x+rw]
                         record.weights.setflags(write=False)
             resident = sum(f.resident_bytes() for f in fields)+field.resident_bytes()
-            resident += sum(a.nbytes for record in (*effects,*local) for a in (record.delta,record.weights) if a is not None)
+            resident += sum(a.nbytes for record in (*effects,*local) for a in (record.delta,record.weights,record.chroma_shift) if a is not None)
             if resident+h*w*256+128*1024*1024 > byte_budget: raise ValueError('Accumulated portrait fields exceed memory budget')
             fields.append(field); effects.extend(local)
             facts[key] = {record.stage:record.facts for record in local}
@@ -331,7 +350,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
 
 def retained_bytes(prepared,*,include_geometry=True):
     total=sum(field.resident_bytes() for field in (*prepared.face_fields,*prepared.body_fields))
-    total+=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights) if array is not None)
+    total+=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights,record.chroma_shift) if array is not None)
     total+=sum(record['weight'].nbytes for record in prepared.recovery.values())
     if include_geometry:total+=prepared.geometry.delta.nbytes+prepared.geometry.owner.nbytes
     return total

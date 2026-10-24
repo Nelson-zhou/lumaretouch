@@ -15,6 +15,7 @@ const labels:Record<string,string>={'lnx.original_shadow.v1':'原图阴影（开
   'lnx.brow_enhance.v1':'眉毛增强（原有眉毛对比度；左右独立，负值减弱、正值增强，目标独立测量眉毛与邻接额头，不添加眉妆）',
   'lnx.lip_texture.v1':'唇部暗细纹减淡（独立强度，目标重算原有窄暗细纹；部分唇纹修整，非口红、模糊、AI 祛瑕或干皮裂口重建）',
   'lnx.skin_texture.v1':'皮肤质感（面部纹理与精细清晰，来源细节逐图重算）',
+  'lnx.skin_evenness.v1':'面部肤色均匀（独立强度，目标自有参考肤色逐图重算；部分非 AI 调整，不转换旧版 skin.broad）',
   'lnx.curves.v1':'曲线','lnx.hsl.v1':'HSL','lnx.crop.v1':'裁剪','lnx.skin.v1':'磨皮','lnx.blemish.v1':'瑕疵处理','lnx.skin_mask.v1':'皮肤蒙版'};
 export const moduleLabel=(op:string)=>labels[op]??op;
 export function presetLabel(preset:PresetInfo,list:PresetInfo[]){

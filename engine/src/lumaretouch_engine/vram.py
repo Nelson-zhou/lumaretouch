@@ -596,7 +596,8 @@ class PreviewPipeline:
             # Recover only smoothing's contribution, preserving repair and light.
             out = self.effect_recovery.apply('skin_smoothing', base, out)
         # Actual order: repair/light + smoothing/recovery -> fabric/recovery ->
-        # studio -> facial wrinkles/recovery -> auto+brow+nose ONE warp -> enhance -> exposure -> levels -> curves -> HSL ->
+        # studio -> face chroma evenness -> skin colour -> facial wrinkles/recovery ->
+        # auto+brow+nose ONE warp -> enhance -> exposure -> levels -> curves -> HSL ->
         # LUT -> legacy grade -> independent local grades -> background/recovery
         # -> manual liquify -> geometry. Source masks stay at their own consumers;
         # the final manual stage moves the complete processed RGB only.
@@ -605,6 +606,7 @@ class PreviewPipeline:
         out = self.effect_recovery.apply('fabric_fine', out, self.fabric.apply(out))
         out = self.studio_background.apply(out)
         if PEOPLE_PIPE.active(self):
+            out=PEOPLE_PIPE.source_effect(self,'skin_evenness',out)
             out=PEOPLE_PIPE.source_effect(self,'skin_colour',out)
             out=PEOPLE_PIPE.source_effect(self,'facial_wrinkles',out)
             out=PEOPLE_PIPE.source_effect(self,'lip_texture',out)
@@ -2021,7 +2023,7 @@ class PreviewPipeline:
         """本层账单：窗口那一片 float32 权重场。没挂就是 0（不是“查过没有”的 0）。"""
         n = WRUNTIME.resident_bytes(self) + LIPR.resident_bytes(self)
         if PEOPLE_PIPE.active(self):
-            n += sum(a.nbytes for record in self.people_prepared.effects for a in (record.delta,record.weights) if a is not None)
+            n += sum(a.nbytes for record in self.people_prepared.effects for a in (record.delta,record.weights,record.chroma_shift) if a is not None)
             n += sum(record["weight"].nbytes for record in self.people_prepared.recovery.values())
             n += sum(field.resident_bytes() for field in (*self.people_prepared.face_fields,*self.people_prepared.body_fields))
         brow = getattr(self,"brow_shape_field",None)

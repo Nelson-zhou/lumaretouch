@@ -138,7 +138,7 @@ def prepare_export(snapshot,source,repaired,*,byte_budget,document_id=None,recov
 def body_budget(prepared,budget):
     # Body composition already counts retained face evaluators and both maps.
     # Reserve independent colour/recovery arrays and source buffers as well.
-    colour=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights) if array is not None)
+    colour=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights,record.chroma_shift) if array is not None)
     recovery=sum(record['weight'].nbytes for record in prepared.recovery.values())
     h,w=prepared.geometry.delta.shape[1:3]
     return budget-colour-recovery-h*w*24

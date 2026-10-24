@@ -16,10 +16,13 @@ test('only the exact two skin-texture handbook leaves are connected', () => {
   assert.ok(panel.includes('<SkinTextureControl key={leaf.path}'));
   assert.ok(control.includes('data-control-id={SKIN_TEXTURE_CONTROL_IDS[control]}'));
   for (const existing of ['"PC-32465|高低频磨皮-脸部/身体": "skin.strength"', '"PC-32465|质感磨皮": "skin.detail"',
-    '"PC-32465|AI肤色统一（脸部）": "skin.broad"', '"PC-32465|水润磨皮-脸部/身体": "skin.radius"',
+    '"PC-32465|AI肤色统一（脸部）": "skin_evenness.amount"', '"PC-32465|水润磨皮-脸部/身体": "skin.radius"',
     '"PC-32465|肤色色温": "skin_colour.temperature"', '"PC-32465|肤色色调": "skin_colour.tint"',
     '"PC-32465|肤色美白": "skin_finish.whitening"', '"PC-32465|皮肤红润": "skin_finish.rosiness"',
     '"PC-32465|皮肤质感/光泽度": "skin_gloss.amount"']) assert.ok(panel.includes(existing));
+  for (const compatibility of ['data-legacy-skin-compat="true"', 'value={params.broad_gain ?? 0} min={0} max={2}',
+    'onChange={value => commitSkin({ broad: value })}', 'onReset={() => commitSkin({ broad: 0 })}',
+    '大尺度增益 0 只是旧默认值，不代表中性或关闭']) assert.ok(panel.includes(compatibility));
 });
 
 test('existing people owner handles scalar updates and one-request atomic neutral recovery', () => {

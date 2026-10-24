@@ -46,6 +46,7 @@ from . import skin_colour_scope as SKIN_COLOUR
 from . import skin_finish_scope as SKIN_FINISH
 from . import skin_gloss_scope as SKIN_GLOSS
 from . import skin_texture_scope as SKIN_TEXTURE
+from . import skin_evenness_scope as SKIN_EVENNESS
 from . import face_contour_scope as FACE_CONTOUR
 from . import slim_face_scope as SLIM_FACE
 from . import face_size_scope as FACE_SIZE
@@ -191,6 +192,10 @@ MODULES: dict[str, dict] = {
                      "transferable": True, "cmd": "people", "label": "皮肤质感（面部纹理与精细清晰）",
                      "read": SKIN_TEXTURE.params_of, "write": SKIN_TEXTURE.install,
                      "why_not": "仅纹理与清晰标量；目标用自己的真实面部皮肤、遮挡、关键点与原始有效来源重算双尺度细节，不复制人物、身体范围、蒙版或来源细节"},
+    SKIN_EVENNESS.OP: {"params": ("recipe",), "state_fields": SKIN_EVENNESS.FIELDS, "single_face": True,
+                     "transferable": True, "cmd": "people", "label": "面部肤色均匀（独立强度，部分非 AI 调整）",
+                     "read": SKIN_EVENNESS.params_of, "write": SKIN_EVENNESS.install,
+                     "why_not": "仅 0..1 强度；目标以自己的有效来源、真实面部皮肤观察、遮挡与 478 点独立重算参考肤色和色度位移，保留当前亮度；不复制样本、蒙版、像素或色度位移，不转换或清零旧版 skin.broad，不承诺全身或多人肤色匹配、瑕疵识别、模糊或全图色调替代"},
     FACE_CONTOUR.OP: {"params": ("recipe",), "state_fields": FACE_CONTOUR.FIELDS, "single_face": True,
                       "transferable": True, "cmd": "people", "label": "面部轮廓（独立左右二维参数）",
                       "read": FACE_CONTOUR.params_of, "write": FACE_CONTOUR.install,
@@ -501,6 +506,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == SKIN_TEXTURE.OP:
         try: return SKIN_TEXTURE.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == SKIN_EVENNESS.OP:
+        try: return SKIN_EVENNESS.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == FACE_CONTOUR.OP:
         try: return FACE_CONTOUR.check_params(params)

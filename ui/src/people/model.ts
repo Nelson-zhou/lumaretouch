@@ -108,6 +108,7 @@ export function operationLabel(id: string): string {
     'lnx.skin_gloss.v1': '面部已有高光光泽度（抑制与增强）',
     'lnx.skin_texture.v1': '面部纹理度与皮肤清晰度（已有细节）',
     'lnx.lip_texture.v1': '唇纹修整（仅淡化已测得的窄暗纹）',
+    'lnx.skin_evenness.v1': '脸部色度均匀（原片自参考）',
     'lnx.face_contour.v1': '太阳穴、颧骨与下颌（可见二维轮廓）',
     'lnx.slim_face.v2': '新版瘦脸（真实可见轮廓，左右独立）',
     'lnx.face_size.v1': '小脸（局部整脸整体大小）',

@@ -1,0 +1,319 @@
+{
+  "baseline": "377e601de8941d55047843c421b8c93b903def54",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN_PARTIAL_REQUIREMENT",
+  "scope": "Original deterministic own-face chromatic evenness with measured source support and two-channel frozen log-chroma field, applied to actual current-stage linear luminance. No learned AI, source RGB delta alias, body or multi-person matching. Legacy broad smoothing preserved independently.",
+  "requirement_ids": [
+    "LNX-REF-PC-32465-C-60b7c0e3d1"
+  ],
+  "requirement_status": "partial; not full official AI or photographic acceptance",
+  "files": [
+    {
+      "path": "core/skin_evenness/Cargo.toml",
+      "sha256": "be932ac9e701650a8667cae22937e4b91442f4eb15830ca0b0578b00c415470c",
+      "bytes": 222
+    },
+    {
+      "path": "core/skin_evenness/README.md",
+      "sha256": "d6ee7fc6bc67e73c6be9d12c8fff2d00c53f47b4615fa0a2b7d842af636080c3",
+      "bytes": 3643
+    },
+    {
+      "path": "core/skin_evenness/lib.rs",
+      "sha256": "97c5a8545acf15254b90cfe004833014ce4aa70f92f6b1fd01558e3e1562b2f4",
+      "bytes": 19215
+    },
+    {
+      "path": "core/skin_evenness/skin_evenness.h",
+      "sha256": "9603fe13ca1461dfed8243530210f2fedd639db75ce3dede031603d370283cf0",
+      "bytes": 1718
+    },
+    {
+      "path": "core/skin_evenness/tests.rs",
+      "sha256": "74dba4b5170224e64a85edd2d4c1eb497e37c4807e6846c06bd248584ca6cfc7",
+      "bytes": 13188
+    },
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "bfaaf27b77db9e1915169fe072e9145c63dd893b2502e5cce557b5df69ee673c",
+      "bytes": 14759
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "e545320f135051e94b072137b1b4243a968974e4ee9c74b625dea41684cd230a",
+      "bytes": 42496
+    },
+    {
+      "path": "docs/skin-evenness/IMPLEMENTATION.md",
+      "sha256": "b13f32bee09a69d89f5e73c942bf86d728cd6836811894139e346e31eae936be",
+      "bytes": 7759
+    },
+    {
+      "path": "docs/skin-evenness/NUMERICAL-CONTRACT.md",
+      "sha256": "5e42bd0e81bdc180d30614756e427161be4d52f303a55de97b2e6840bc0e6efe",
+      "bytes": 17687
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "2abc9ef1e2aa2393aff2e9c9eb65290ea02b09239605e3180d6b23436d4a0604",
+      "bytes": 15266
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "f92de4dcb77dd9f3ef8de2696aeeead2e0f1bccb3c893b741d25f4cfb812ceb9",
+      "bytes": 5877
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "sha256": "56f125498e39f55b512d39fb99074263c0e9ddebba48010d15d09a18a43c8d16",
+      "bytes": 8424
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "4866286f163de40b830ed4f5a820a3c8b79177756bc93d158fa40d16f0c5d478",
+      "bytes": 11125
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "ba18226996b8b4295c6af9e18eb6f700e7818650ff990e376e9a116993e82620",
+      "bytes": 7095
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "sha256": "4e2f0481f77768938621d42607e3ee2fa7f6d7ede3700609b65277b7843da0af",
+      "bytes": 6743
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_project.py",
+      "sha256": "93b136f48ba3fdb8bf614b05f595b3110a16c7d6b366dfcb4144d3a895f5ba17",
+      "bytes": 4613
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "9a3923f86b8d5e53097f529e4a756152bd002beec4fb7d549aff210f2dd39a91",
+      "bytes": 25828
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "60cee85b12f798c4112211f742786715afdff149f0e125cb5b6521776bcebcdc",
+      "bytes": 31637
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "21eaf15b56628165fde6d7a1840f72ca1d6f201f8c851bcc699091768d2ee1c3",
+      "bytes": 58970
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "8e352978ca8afc4f8e4e47ebf2f16f7e9815995c20ea288ba02dccde52d318f0",
+      "bytes": 466005
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_evenness_composition.py",
+      "sha256": "54abe89f97b457e0ac2aa37fa5af7d6319df0297848d7b5cf353318fdbdf8c43",
+      "bytes": 6116
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_evenness_layer.py",
+      "sha256": "4f8e7bfe1f53216620174ed91dccc7e492047f63537676dac38dd2f8f1bdec8c",
+      "bytes": 14825
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_evenness_native.py",
+      "sha256": "14c910977c587c879dc0747682d8a70e7582a83b16a82cf845f2446a5a1af794",
+      "bytes": 13388
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_evenness_project.py",
+      "sha256": "706832aee6366e00feed421037c4454e9af08b79cdc77eddc92fdfe61e53fe24",
+      "bytes": 948
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_evenness_scope.py",
+      "sha256": "3819f1b83279b3944a11e6ef756185d148869cd32c8b746644c424672369e24a",
+      "bytes": 6691
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_evenness_state.py",
+      "sha256": "3275cd4dbada7c0c462dbf5cb31c2496f0db73dd66de4d04377c61181215edac",
+      "bytes": 1416
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "d947d80c9e47c9ab8b409011f21d3cffea36d3249126ecdd52a07c12e615746e",
+      "bytes": 135999
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "bb5f6cc3887a27fa177f6b4469cab15d6f6cd4fea8d0cbabab8d09581302ec01",
+      "bytes": 9050
+    },
+    {
+      "path": "engine/tests/test_skin_evenness_integration_unrun.py",
+      "sha256": "298b53f4f509115e0058d5899aae3e6a4eeb3360581acb988925b9eeea5a7850",
+      "bytes": 48914
+    },
+    {
+      "path": "engine/tests/test_skin_evenness_native_unrun.py",
+      "sha256": "5122952da39500a34d9d904d4a019e07a337cb402575c1411858622d520775ca",
+      "bytes": 12121
+    },
+    {
+      "path": "engine/tests/test_skin_evenness_scope_unrun.py",
+      "sha256": "7327a5fdc664c948fdb162c42d609d2aed68c69c6d6b58b83184236e46615efc",
+      "bytes": 44070
+    },
+    {
+      "path": "engine/tests/test_skin_evenness_support_unrun.py",
+      "sha256": "9ecac4e5a04b6535e1b8220c743effc8a0bd22b3825911677005dae4487d7b9b",
+      "bytes": 25891
+    },
+    {
+      "path": "packaging/build-skin-evenness.sh",
+      "sha256": "a66749777899213c425f15be190cc118bcc5fafe6e0f8b279b80a766ca58594f",
+      "bytes": 676
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "3508da2fd963321ba0ef86f157f96365b496902079c46422fd194c086333617f",
+      "bytes": 25821
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "174cbe5182e5dc0cccfffd74e4f930b50c15b9871abf288d0519f583f89689a9",
+      "bytes": 84023
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "125213089b8bb9933293ef617a9aae81131dbfb708aeedc0116d3dad354d979f",
+      "bytes": 101861
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "6e333848be003fefacbf846ea06166cbb3e053625e87b171e08eebb1f4e6bf9d",
+      "bytes": 8768
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "7eb3e493ab3a214efa7f211944652911c958bc4b917ccf078dbf95de030c840f",
+      "bytes": 6142
+    },
+    {
+      "path": "ui/src/skinColour/wiring.unrun.test.ts",
+      "sha256": "7bf647673c887fe89a2561d3bd698cb36a388aa255d0e5ff8ed8413f50163685",
+      "bytes": 4829
+    },
+    {
+      "path": "ui/src/skinEvenness/ACCEPTANCE_UNRUN.md",
+      "sha256": "670e5431f4ea9271891121fab8ea528a5bde2285467c6e18c728224e855c9eaf",
+      "bytes": 9937
+    },
+    {
+      "path": "ui/src/skinEvenness/SkinEvennessControl.tsx",
+      "sha256": "8eb56c36fa1e977760873c3ea18e6ef49c53aa6352526933a52bb5a7ba791620",
+      "bytes": 9256
+    },
+    {
+      "path": "ui/src/skinEvenness/model.ts",
+      "sha256": "6fd93c68fb0b452a3db0b80111e9f717d1078c9ec9300f848d066f4ed0a9c99e",
+      "bytes": 11110
+    },
+    {
+      "path": "ui/src/skinEvenness/model.unrun.test.ts",
+      "sha256": "0834a67134b53f17d9b0069a083e4a3921af7ae82b6120b012a2a1a2a5b4fddc",
+      "bytes": 18275
+    },
+    {
+      "path": "ui/src/skinEvenness/wiring.unrun.test.ts",
+      "sha256": "2388145b42872b1cfb025df3ded89bfb2ce874be81bb389ee5c377bc9aae7a4c",
+      "bytes": 11099
+    },
+    {
+      "path": "ui/src/skinFinish/wiring.unrun.test.ts",
+      "sha256": "537a729510328f1894ae1eb370578beb50ceb71d7487283a9f0e63a3aefb156d",
+      "bytes": 6213
+    },
+    {
+      "path": "ui/src/skinGloss/wiring.unrun.test.ts",
+      "sha256": "ca7a31e76d150522ebf952e073c041c36925b332d81c0922fac635eaf89bffe8",
+      "bytes": 5665
+    },
+    {
+      "path": "ui/src/skinTexture/wiring.unrun.test.ts",
+      "sha256": "71ddfbe19f040bb2d93a41f81131c84490be6e96b755f5256b0b7d819d7c974b",
+      "bytes": 7722
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1186,
+    "json_and_toml": "parsed changed files using standard library only",
+    "git_diff_check": "no whitespace errors",
+    "old_core_ops_common_geometry_unchanged": 201,
+    "line_caps": {
+      "ui/src/App.tsx": 2122,
+      "ui/src-tauri/src/main.rs": 2042,
+      "engine/src/lumaretouch_engine/server.py": 6989
+    },
+    "fixture_declarations_unrun": {
+      "python_test_function_declarations": 87,
+      "rust_test_attributes": 12,
+      "ui_test_declarations": 21
+    }
+  },
+  "integration_map": {
+    "kernel": [
+      "core/skin_evenness",
+      "skin_evenness_native",
+      "skin_evenness_state"
+    ],
+    "source_and_current_stage": [
+      "skin_evenness_layer",
+      "LocalEffect.chroma_shift",
+      "skin_evenness_composition",
+      "people_render_runtime",
+      "people_effects",
+      "people_pipeline",
+      "vram",
+      "people_engine_runtime.body_budget"
+    ],
+    "history_and_export": [
+      "skin_evenness_project",
+      "people_project",
+      "people_export",
+      "existing canonical frozen snapshot and receipt owner"
+    ],
+    "transport": [
+      "creative_derived_effects",
+      "skin_evenness_scope",
+      "people_scope",
+      "scope",
+      "workflow_ports"
+    ],
+    "ui": [
+      "ui/src/skinEvenness",
+      "RetouchPanel dedicated route and separate legacy compatibility controls",
+      "native ready_caps",
+      "people/model",
+      "presets/presetModel"
+    ],
+    "packaging": [
+      "build-skin-evenness.sh",
+      "stage-engine.sh"
+    ]
+  },
+  "limitations": [
+    "Deterministic same-face statistical target is not learned blemish classification, recovered healthy skin or physical material/lighting separation.",
+    "Makeup, coloured light and natural pigmentation remain ambiguous; no automatic makeup protection or unknown-occluder recognition.",
+    "Body unification, multi-person brightest-reference matching, eyedropper target and neutral-grey lighting reconstruction remain separate unfinished requirements.",
+    "Requires actual skin observation, verified own anatomy, reliable source samples and guided context; missing or unsupported evidence refuses without proxy fallback.",
+    "No new dedicated recovery brush or mask inheritance; generic derived preset installation remains guarded.",
+    "Opaque SDR only; broader alpha/HDR support remains unfinished and is not obtained by clipping.",
+    "Source current-stage luminance preservation is not a claim about final image after subsequent colour/geometry stages.",
+    "All numerical/native loading/build/test/typecheck/inference/UI/photo/performance/memory-peak acceptance remains AUTHORED / UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

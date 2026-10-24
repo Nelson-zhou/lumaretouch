@@ -41,7 +41,8 @@
         },
         {
           "path": "AI肤色统一（脸部）",
-          "ui_route": "skin.broad"
+          "ui_route": "skin_evenness.amount",
+          "status": "partial_original_chromatic_method_not_learned_AI; AUTHORED_UNRUN"
         },
         {
           "path": "水润磨皮-脸部/身体",
@@ -487,7 +488,7 @@
     }
   ],
   "semantic_risks": [
-    "AI肤色统一映射到skin.broad频带参数不证明实现语义等价，须对照肤色目标和实图验收。",
+    "脸部肤色统一新增独立原片自参考色度方法；不是学习式AI，仍为部分覆盖。旧skin.broad保留为兼容磨皮控制，不再冒充该功能。",
     "水润磨皮映射到skin.radius不证明完整对应原手册体验。",
     "仿制图章与修补工具目前仍无独立采样实现，需求保留，不可用heal冒充。"
   ],

@@ -15,9 +15,12 @@ test('only the two independent skin-colour handbook paths are newly wired', () =
     assert.ok(panel.includes(`case "skin_colour.${key}":`));
   }
   assert.equal((panel.match(/"PC-32465\|[^"\n]+": "skin_colour\./g) ?? []).length, 2);
-  for (const existing of ['"PC-32465|AI肤色统一（脸部）": "skin.broad"',
-    '"PC-32465|高低频磨皮-脸部/身体": "skin.strength"', '"skin.broad": "肤色匀净"',
+  for (const existing of ['"PC-32465|AI肤色统一（脸部）": "skin_evenness.amount"',
+    '"PC-32465|高低频磨皮-脸部/身体": "skin.strength"', '"skin.broad": "旧版大尺度频率增益（非肤色统一）"',
     '"PC-32455|白平衡/色温": "exp.temp"', '"PC-32455|白平衡/色调": "exp.tint"']) assert.ok(panel.includes(existing));
+  for (const compatibility of ['data-legacy-skin-compat="true"', 'value={params.broad_gain ?? 0} min={0} max={2}',
+    'onChange={value => commitSkin({ broad: value })}', 'onReset={() => commitSkin({ broad: 0 })}',
+    '大尺度增益 0 只是旧默认值，不代表中性或关闭']) assert.ok(panel.includes(compatibility));
   assert.ok(control.includes('data-control-id={SKIN_COLOUR_CONTROL_IDS[control]}'));
 });
 

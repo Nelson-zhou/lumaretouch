@@ -19,6 +19,7 @@ class WorkflowPortsMixin:
         from .skin_finish_scope import capture as capture_skin_finish
         from .skin_gloss_scope import capture as capture_skin_gloss
         from .skin_texture_scope import capture as capture_skin_texture
+        from .skin_evenness_scope import capture as capture_skin_evenness
         from .face_contour_scope import capture as capture_face_contour
         from .slim_face_scope import capture as capture_slim_face
         from .face_size_scope import capture as capture_face_size
@@ -32,6 +33,7 @@ class WorkflowPortsMixin:
         from .lip_texture_scope import capture as capture_lip_texture
         state = capture_skin_finish(self,capture_skin_colour(self,capture_iris(self,capture_eyelash(self,capture_brow_makeup(self,capture_eyeliner(self,capture_lipstick(self,capture_blush(self,capture(self)))))))))
         state = capture_face_size(self,capture_slim_face(self,capture_face_contour(self,capture_skin_texture(self,capture_skin_gloss(self,state)))))
+        state = capture_skin_evenness(self,state)
         state = capture_philtrum(self,capture_chin_length(self,capture_chin_shape(self,capture_mid_face(self,capture_lower_face(self,state)))))
         return capture_lip_texture(self,capture_brow_enhance(self,capture_eye_symmetry(self,state)))
 
