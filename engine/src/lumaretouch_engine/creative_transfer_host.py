@@ -182,6 +182,10 @@ def require_route(name,request):
                           'local_mask_transfer','reference_color','people_transfer'}:
             raise ValueError('Invalid reviewed transfer options')
         return
+    if name=='preset' and action=='eye_bag_visual':
+        from .eye_bag_preset_store import image_read_only
+        if not image_read_only(request):raise ValueError('Eye-bag preset image requires its exact bounded identity')
+        return  # Frozen image retrieval cannot authorize an active recipe write.
     if name=='preset' and action=='collarbone_visual':
         from .collarbone_preset_store import image_read_only
         if not image_read_only(request):raise ValueError('Preset image read requires its exact bounded identity')

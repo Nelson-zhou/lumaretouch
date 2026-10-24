@@ -2804,12 +2804,13 @@
         "docs/eye-bag-preserve/SOURCE-CROP-CONTRACT.md",
         "docs/eye-bag-preserve/CANCELLATION-AND-RECOVERY.md",
         "docs/eye-bag-preserve/EFFECT-RECOVERY.md",
+        "docs/eye-bag-preserve/PRESET-TRANSFER.md",
         "ui/src/eyeBagPreserve/"
       ],
       "verification": [
         "AUTHORED / UNRUN: docs/eye-bag-preserve/ACCEPTANCE-UNRUN.md; no tests, build, inference, native, photo or export acceptance executed"
       ],
-      "scope_note": "LNX-REF-PC-32464-C-e5fac5fdcf remains PARTIAL: independently painted visible lower-lid support, preserved by default only at full coverage in the new operation. Not automatic ridge segmentation, complete ridge removal or vendor parity. New versioned recipe does not silently alter legacy eye-bag appearance. Active preset/batch and unreviewed shared-alias application remain fenced; no new algorithm/work-package count."
+      "scope_note": "LNX-REF-PC-32464-C-e5fac5fdcf remains PARTIAL: independently painted visible lower-lid support, preserved by default only at full coverage in the new operation. Not automatic ridge segmentation, complete ridge removal or vendor parity. New versioned recipe does not silently alter legacy eye-bag appearance. Current-photo active presets use exact mixed-render review and target-owned support; generic batch/cohort and unreviewed shared-alias application remain fenced. No new algorithm/work-package count."
     },
     {
       "id": "control:PC-32464:12",

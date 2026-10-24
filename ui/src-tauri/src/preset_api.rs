@@ -3,9 +3,13 @@ use std::sync::Arc;
 use serde_json::{json, Value};
 use tauri::State;
 use crate::{AppState, engine::EngineHandle};
+#[path="preset_visual_protocol.rs"]
+pub(crate) mod visual;
+#[path="eye_bag_preset_protocol.rs"]
+pub(crate) mod eye_bag;
 #[path="collarbone_preset_protocol.rs"]
 pub(crate) mod collarbone;
-pub(crate) fn read_only(value:&Value)->bool {collarbone::read_only(value)}
+pub(crate) fn read_only(value:&Value)->bool {eye_bag::read_only(value)||collarbone::read_only(value)}
 fn require_xmp_support(state: &AppState, command: &Value) -> Result<(), String> {
     if (command["action"] == "xmp_inspect" || command.get("xmp_ack").is_some() || command.get("xmp_review_ack").is_some())
         && state.ready_caps.lock().map_err(|_| "capability lock poisoned")?["xmp_import_protocol"] != 1 {
@@ -14,6 +18,7 @@ fn require_xmp_support(state: &AppState, command: &Value) -> Result<(), String> 
     Ok(())
 }
 pub(crate) fn enqueue(state: &AppState, handle: &EngineHandle, command: Value) -> Result<(), String> {
+    eye_bag::command(&command)?;
     collarbone::command(&command)?;
     crate::spill_transfer_protocol::command(&command)?;
     crate::original_shadow_transfer_protocol::command(&command)?;
@@ -56,11 +61,13 @@ pub(crate) fn preset(
     waist_review_ack: Option<Value>,
     head_review_ack: Option<Value>,
     collarbone_preset_ack: Option<Value>,
+    eye_bag_preset_ack: Option<Value>,
+    eye_bag_replace_legacy: Option<bool>,
     revision: Option<String>,
     side: Option<String>,
     sha256: Option<String>,
 ) -> Result<Value, String> {
-    const ACTIONS: [&str; 8] = ["list", "preflight", "apply", "save", "import", "delete", "xmp_inspect", "collarbone_visual"];
+    const ACTIONS: [&str; 9] = ["list", "preflight", "apply", "save", "import", "delete", "xmp_inspect", "collarbone_visual", "eye_bag_visual"];
     if !ACTIONS.contains(&action.as_str()) {
         return Err(format!("preset 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
     }
@@ -87,6 +94,8 @@ pub(crate) fn preset(
         ("waist_review_ack", waist_review_ack),
         ("head_review_ack", head_review_ack),
         ("collarbone_preset_ack", collarbone_preset_ack),
+        ("eye_bag_preset_ack", eye_bag_preset_ack),
+        ("eye_bag_replace_legacy", eye_bag_replace_legacy.map(Value::from)),
         ("revision", revision.map(Value::from)),
         ("side", side.map(Value::from)),
         ("sha256", sha256.map(Value::from)),
@@ -98,6 +107,7 @@ pub(crate) fn preset(
     if let Some(v) = module_scope {
         cmd["module_scope"] = json!(v);
     }
+    eye_bag::command(&cmd)?;
     collarbone::command(&cmd)?;
     crate::spill_transfer_protocol::command(&cmd)?;
     crate::original_shadow_transfer_protocol::command(&cmd)?;

@@ -59,6 +59,23 @@ def install(state, params):
     state[REQUESTED] = True
 
 
+def install_reviewed(state, params, *, replace_legacy=False):
+    """Stage scalars for the dedicated full-image preset planner only.
+
+    This is not publication authority. Generic install remains active-refusing;
+    the preset transaction must retain and verify the exact reviewed plan.
+    """
+    if type(replace_legacy) is not bool:
+        raise ValueError('Eye-bag legacy replacement must be explicitly chosen')
+    recipe = check_params(params)['recipe']; require_target(state)
+    state[FIELD] = recipe; state[REQUESTED] = True
+    if S.active(recipe) and replace_legacy:
+        from .people_preset_plan import clone_state
+        state['_enhance'] = clone_state(state.get('_enhance') or {})
+        state['_enhance']['amounts'] = dict(state['_enhance'].get('amounts') or {})
+        state['_enhance']['amounts']['eye_bags'] = 0.0
+
+
 def capture(engine, base=None):
     from . import people_state as P, people_algorithms as A, people_resolver as R
     out = engine._capture_state() if base is None else base

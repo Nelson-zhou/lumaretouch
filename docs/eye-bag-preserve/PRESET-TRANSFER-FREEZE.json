@@ -1,0 +1,256 @@
+{
+  "baseline": "e256d3b7ddfb8dde8e6240d61f6d2a341a94eda3",
+  "status": "FROZEN_SOURCE_ONLY_EYE_BAG_CURRENT_PHOTO_PRESET_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32464-C-e5fac5fdcf"
+  ],
+  "scope": "Dedicated current-photo scalar eye-bag v2 preset transfer using target-owned per-eye support and complete mixed-preset full-source images, explicit legacy choice, exact ACK/replay/rollback/history. No donor vectors, automatic anatomy or new algorithm count.",
+  "files": [
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "bc084f74a8061860033034df5a06640a77feac204b7033b3703d52af9edd236d",
+      "bytes": 472178
+    },
+    {
+      "path": "docs/eye-bag-preserve/ACCEPTANCE-UNRUN.md",
+      "sha256": "545d7a9c7f9e707ddac62277d05ddd2fa723eb5964eef9754356d55003a02e79",
+      "bytes": 6416
+    },
+    {
+      "path": "docs/eye-bag-preserve/INTEGRATION-AND-RESIDUALS.md",
+      "sha256": "bf3e73d3ec2bf22e4f2d55c571f0ae1415154621707703ba99da083c3f4702a0",
+      "bytes": 5288
+    },
+    {
+      "path": "docs/eye-bag-preserve/PRESET-TRANSFER.md",
+      "sha256": "7dd44e464fc53b1a6acd6f3043105d12ab289ef558a7bdf36912898dff0abb6d",
+      "bytes": 3414
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_transfer_host.py",
+      "sha256": "c1535cd74dfa4dc630f11ed99dad22f7b0cdc8a48a6f8df0150f6cde2f940403",
+      "bytes": 11895
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preserve_scope.py",
+      "sha256": "3bbe285700988ff00ab21ea0fb0c854d143a2f72636a98ba4f84bef8249a8c21",
+      "bytes": 4534
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preset_admission.py",
+      "sha256": "400314f1801ee8c594fe719c2a2d3dec1cfd55eb2fdba7fe983f0de53eebb8f4",
+      "bytes": 6405
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preset_plan.py",
+      "sha256": "222ae1589ea73a8a2a12599828b1300d409c6183846cfe4cea5b9fabf587deb4",
+      "bytes": 1671
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preset_review.py",
+      "sha256": "bee9a98d134c0de72e4755226aa14df22cdc9bb206f7a77b5c9e9e08bc435d95",
+      "bytes": 13987
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preset_store.py",
+      "sha256": "1282b48695564858ffed3b3d825458bf40a0dc4812484edbee830a1114b6712c",
+      "bytes": 5750
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_preset_review.py",
+      "sha256": "33d3624135f91abcfb1246077defc81708639723d63c782fad0a8acdff152b5a",
+      "bytes": 20291
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "8c455c2e4ea87a24fb4e74340f4f87832b786691ee57b27f9c788a8705040ab2",
+      "bytes": 43261
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_collarbone_lifecycle.py",
+      "sha256": "fc597d4080216a26ec451dc17797656a532387a7857b81859516cb60f44e3003",
+      "bytes": 2092
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "sha256": "86e7dce011a188289ca41798d496632a21865d3176815904775ffb42ea7fd55f",
+      "bytes": 44604
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_portrait_review.py",
+      "sha256": "69d98894f0761de3d54a893ac036eb9ab454e1e3e907e1140c0890b67dc9abdd",
+      "bytes": 1860
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "c792bec6bd861488b73a5a5822b23a39e0e578f132139e83712c52b35c2f5ac7",
+      "bytes": 8028
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "4da8a0314bda100b6e9129c1ed6bfad619b72ee127b03124bbf629a6220bf908",
+      "bytes": 65216
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "06a0777a4de84de307f29dd262e0365ff27028e3c0952114dd956f44d33994b1",
+      "bytes": 469552
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "327205af27762a047231ac0a93a8479eccf3c21bff27c6a7bf82855dc27027d6",
+      "bytes": 14763
+    },
+    {
+      "path": "engine/tests/test_collarbone_preset_owner_unrun.py",
+      "sha256": "c3e60fd8f647181843e01351091d193f40b5ded3e1b758eed8c6e4e395af866d",
+      "bytes": 6838
+    },
+    {
+      "path": "engine/tests/test_eye_bag_preset_admission_unrun.py",
+      "sha256": "bef8382603b90279e4bb252e43579cc2055ce36757e82362004ca2bdf2a890b9",
+      "bytes": 6498
+    },
+    {
+      "path": "engine/tests/test_eye_bag_preset_host_unrun.py",
+      "sha256": "976c4e1a893e787fed3b7d9f908d18d7196a4a2ff84b2881bd884921a31d4166",
+      "bytes": 3882
+    },
+    {
+      "path": "engine/tests/test_eye_bag_preset_protocol_unrun.py",
+      "sha256": "fc43deda3d71ead3d9d3640db8f7475a24d6c9420f0bf60c4777239db942b5a7",
+      "bytes": 3273
+    },
+    {
+      "path": "engine/tests/test_eye_bag_preset_replay_unrun.py",
+      "sha256": "b8ecff508bc2e43a5f1724ef79718c68a017dd42ee4d00704c937db456aec588",
+      "bytes": 8519
+    },
+    {
+      "path": "engine/tests/test_eye_bag_preset_routes_unrun.py",
+      "sha256": "329237a888a9a46924d763cff4eec7bd046f4542c87fe549af517a6f72a56c3b",
+      "bytes": 1755
+    },
+    {
+      "path": "ui/src-tauri/src/collarbone_preset_protocol.rs",
+      "sha256": "a091acdb9854052056eb5cad62ab62be67adbc062b1b85cdfec52700cc79c045",
+      "bytes": 7963
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_preset_protocol.rs",
+      "sha256": "5b0f7bc013d3dd75e938736ae0dc49bbea49d18b3787be942d71fa459fb54716",
+      "bytes": 8740
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_preset_protocol_tests.rs",
+      "sha256": "e6e69ba18cad28e828043f0a8370041b0d41ddca5f7e8d5c79cc4228f1721d08",
+      "bytes": 9254
+    },
+    {
+      "path": "ui/src-tauri/src/preset_api.rs",
+      "sha256": "209c61792319b47f96143c63b180de985fe22ef4e2ed5d112c94b7514a5fb3cd",
+      "bytes": 5910
+    },
+    {
+      "path": "ui/src-tauri/src/preset_host.rs",
+      "sha256": "a098f77798deafd794405e9f0782600d128466ef74baecc01af28b2d7c536bbe",
+      "bytes": 37298
+    },
+    {
+      "path": "ui/src-tauri/src/preset_visual_protocol.rs",
+      "sha256": "d477db06137ce174c22a99f9d9ec5c6bac3d96b1c28f4d7d63456ec3f1c2f429",
+      "bytes": 3478
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "31e0d939e6ec12182064b6bd474252655ae999940cfd3fe3970c091028f4d7af",
+      "bytes": 29481
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/EyeBagPresetReview.tsx",
+      "sha256": "c78bb0165423fc176b1e23ce492fbc42b8cdb3f7e1ab6022d3450cec9d02d28b",
+      "bytes": 5091
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/presetFixture.ts",
+      "sha256": "abaaba8b4fc05441402eebfe707d23653725426694e8b85ce7197887f72bd7a1",
+      "bytes": 452
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/presetModel.ts",
+      "sha256": "836a814e604ea14b19656da347bffaef2b2b7fb9e37bfb53523f668da905b690",
+      "bytes": 4813
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/presetTransport.ts",
+      "sha256": "e3eb89dd26077e238a1a54f8fab40eb6970847133e21906927a7cde6e5740fc5",
+      "bytes": 2940
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/presetWorkflow.unrun.test.ts",
+      "sha256": "4d3248916ac17ec9c62cd3f39f3dcea8e9f45235946fcaa5cff70a467b72697f",
+      "bytes": 6662
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "07908e89c717df89b1306055492c97bc75f57f594c478e8dc0eb8c830efe0143",
+      "bytes": 108852
+    },
+    {
+      "path": "ui/src/presets/PresetPanel.tsx",
+      "sha256": "70431dc4ec87efc99fcbaafd65ec601569da4e0c69a79d0910119fc37cf6e66e",
+      "bytes": 15936
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "ec50e7876d26c62b2547f0ec4cf88934ff73722028d5c5b5e18b046cc8b7d76d",
+      "bytes": 7421
+    },
+    {
+      "path": "ui/src/presets/presetWorkflow.ts",
+      "sha256": "8549f4fce3b725cffebfc016f68c69dcf0310c26d7d76f51d14c5a8bd34966dc",
+      "bytes": 38608
+    },
+    {
+      "path": "ui/src/presets/usePresetWorkflow.ts",
+      "sha256": "d84ee1fd901b4da5d27eb1984c3dec62aa94358241d4d675b44feecafd8563e5",
+      "bytes": 20504
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1341,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 85,
+    "git_diff_check": "clean",
+    "prior_numeric_solver_core_decoder_and_frozen_sources_byte_identical": 328,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 7022
+    }
+  },
+  "integration_map": {
+    "planner": "eye_bag_preset_admission/plan/review; private reviewed flags in shared people_scope; complete frozen original/derived plan with target-local ridge digest/sides and unchanged recovery assets",
+    "producers": "Typed private ProducerContext re-verifies existing auto-optics/reference target records before replacing only selected producer recipe fields",
+    "host": "shared preset_portrait_review selector and replay lifecycle; separate eye image store; workflow ports and existing preset transaction/history/unknown receipts",
+    "native": "independent eye_bag_preset_protocol; extracted unchanged generic image proof primitives; exact preset mailbox request/token/replacement/ACK and narrow read admission",
+    "ui": "explicit legacy policy for active eye presets, exact paged PNG and coverage verification, complete-preset comparison/ACK, invalidation on policy changes, query-only uncertain writes",
+    "reads": "server and project recovery exact eye preset read exemption after existing guards; derived transport image gate never authorizes an apply",
+    "neutral": "Original no-choice neutral route preserved; derived neutral scalar admission requires actual source/target identity but no active ridge/native/precompute prerequisite"
+  },
+  "limitations": [
+    "Manual target support is not automatic anatomical detection; requirement remains partial.",
+    "Active transfer requires one explicit unambiguous target face with its own previously reviewed per-eye support; unreviewed eyes remain unchanged.",
+    "No donor preservation masks, recovery vectors, source pixels or analysis transfer; target assets remain unchanged.",
+    "Generic batch/cohort and unreviewed shared aliases/dormant affected documents remain guarded.",
+    "Simultaneous active eye-bag and collarbone/body-scalar special review families require separate transactions; selected effects are not silently omitted.",
+    "Full source is rendered before <=1024-edge RGB8 display reduction; existing memory/opaque SDR/codec limits remain, no HDR/alpha or native-pixel quality claim.",
+    "All tests/build/typecheck/product execution/imports/inference/downloads and runtime/native/UI/history/numerical/photo acceptance UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

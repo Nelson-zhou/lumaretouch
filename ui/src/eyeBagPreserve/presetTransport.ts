@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+import type {SpillImage} from '../spillRemoval/model';
+import {verifyCollarboneImage,validCollarboneImageMetadata,type CollarboneImage} from '../collarbone/transferModel';
+export type EyeBagPresetImageRequest={id:string;documentId:string;preflightToken:string;revision:string;side:'before'|'after';sha256:string;requestId:string};
+export type EyeBagPresetImageReply={protocol:number;request_id:string;action:'eye_bag_visual';success:boolean;outcome_unknown:boolean;error?:string;id:string;document_id:string;preflight_token:string;revision:string;side:'before'|'after';sha256:string;image:SpillImage};
+export type EyeBagPresetImageTransport={request:(value:EyeBagPresetImageRequest)=>Promise<{requested:boolean}>;read:(id:string)=>Promise<{phase:string;request_id:string;result?:EyeBagPresetImageReply;error?:string}>};
+/** Preset mailbox only. A batch token or load-session substitution never authorizes pixels. */
+export async function fetchEyeBagPresetImage(api:EyeBagPresetImageTransport,request:EyeBagPresetImageRequest,expected:CollarboneImage,live:()=>boolean=()=>true):Promise<SpillImage>{
+ if(!validCollarboneImageMetadata(expected)||request.sha256!==expected.sha256||!['before','after'].includes(request.side))throw Error('预设图像读取与冻结元数据不一致');
+ const deadline=Date.now()+30000;
+ function bounded<T>(promise:Promise<T>):Promise<T>{return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('读取预设审核图像超时，可重试只读获取。')),Math.max(1,deadline-Date.now()));promise.then(v=>{clearTimeout(timer);resolve(v);},e=>{clearTimeout(timer);reject(e);});});}
+ const accepted=await bounded(api.request(request));if(!accepted.requested)throw Error('预设图像读取未确认入队');
+ while(live()){
+  const response=await bounded(api.read(request.requestId));if(!live())throw Error('预设审核图像请求已失效');
+  if(response.request_id!==request.requestId)throw Error('预设图像请求身份不一致');
+  if(response.phase==='done'){
+   const r=response.result;
+   if(!r||r.protocol!==1||r.request_id!==request.requestId||r.action!=='eye_bag_visual'||r.success!==true||r.outcome_unknown!==false
+    ||r.id!==request.id||r.document_id!==request.documentId||r.preflight_token!==request.preflightToken||r.revision!==request.revision||r.side!==request.side||r.sha256!==request.sha256
+    ||!r.image||r.image.mime!==expected.mime||r.image.width!==expected.width||r.image.height!==expected.height||r.image.sha256!==expected.sha256||!await verifyCollarboneImage(r.image))throw Error(r?.error||'预设图像身份或内容校验失败');
+   return r.image;
+  }
+  if(response.phase!=='pending'||Date.now()>=deadline)throw Error(response.error||'预设审核图像暂不可读，请重试只读获取。');
+  await new Promise(resolve=>setTimeout(resolve,100));
+ }
+ throw Error('预设审核图像请求已失效');
+}

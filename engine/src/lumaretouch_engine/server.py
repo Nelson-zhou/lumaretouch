@@ -6742,6 +6742,9 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
             from .people_host_commands import face_style_read_only
             if face_style_read_only(msg):
                 fn(msg); return  # Exact private face-style reads retain all earlier pending/recovery guards.
+            from .eye_bag_preset_store import read_only as eye_bag_preset_read_only
+            if eye_bag_preset_read_only(msg):
+                fn(msg); return  # Exact preset reads retain capture/receipt fences; controller verifies source and plan.
             from .people_host_commands import eye_bag_read_only
             if eye_bag_read_only(msg):
                 fn(msg); return  # Exact private ridge-review reads never publish graph or document edits.

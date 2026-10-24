@@ -156,10 +156,28 @@ class WorkflowPortsMixin:
         from .collarbone_preset_review import verify_applied
         return verify_applied(self,row,state,document_id,str(revision),record,**kwargs)
 
+    def _prepare_eye_bag_preset(self,row,before,candidate,document_id,revision,preset,modules,*,replace_legacy=False):
+        from .eye_bag_preset_review import prepare
+        return prepare(self,row,before,candidate,document_id,str(revision),preset,modules,replace_legacy=replace_legacy)
+
+    def _verify_eye_bag_preset(self,row,before,candidate,document_id,revision,record):
+        from .eye_bag_preset_review import verify
+        return verify(self,row,before,candidate,document_id,str(revision),record)
+
+    def _replay_eye_bag_preset(self,row,state,document_id,revision,record,**kwargs):
+        from .eye_bag_preset_review import replay
+        return replay(self,row,state,document_id,str(revision),record,**kwargs)
+
+    def _verify_eye_bag_preset_applied(self,row,state,document_id,revision,record,**kwargs):
+        from .eye_bag_preset_review import verify_applied
+        return verify_applied(self,row,state,document_id,str(revision),record,**kwargs)
+
     def _preset_controller(self):
         controller = self.__dict__.get("_live_presets")
         if controller is None:
             controller = PRS.PresetController(PRS.PresetPorts(
+                prepare_eye_bag=self._prepare_eye_bag_preset,verify_eye_bag=self._verify_eye_bag_preset,
+                eye_bag_replay=self._replay_eye_bag_preset,verify_eye_bag_applied=self._verify_eye_bag_preset_applied,
                 prepare_collarbone=self._prepare_collarbone_preset,verify_collarbone=self._verify_collarbone_preset,
                 collarbone_replay=self._replay_collarbone_preset,verify_collarbone_applied=self._verify_collarbone_preset_applied,
                 prepare_optics=self._prepare_optics_target, prepare_reference=self._prepare_reference_target,

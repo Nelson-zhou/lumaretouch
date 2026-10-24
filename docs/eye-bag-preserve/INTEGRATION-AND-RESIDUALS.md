@@ -55,10 +55,11 @@ to publish an unverified graph. No corrupt-project recovery acceptance is claime
   full-frame thumbnail is only a locator. Display remains RGB8, and oversized
   crops/source decodes refuse rather than reduce detail. See
   `SOURCE-CROP-CONTRACT.md`; actual decode/UI acceptance is still UNRUN.
-- Active generic preset/batch and persistent-cohort application remain refused.
-  Scalar capture/archive and neutral reset do not constitute active transfer.
-  A future transfer path must stage the target's own reviewed side masks and
-  actual full before/after/support images, never transfer donor masks or geometry.
+- Active current-photo preset application now has a dedicated exact mixed-preset
+  image review using the target's own previously reviewed per-eye support. No
+  donor support or recovery vectors transfer; legacy replacement is explicit.
+  Generic batch and persistent-cohort application remain refused. See
+  `PRESET-TRANSFER.md`; missing local support still requires target painting.
 - Current single-photo positive review refuses shared-source aliases and dormant
   affected siblings. Complete affected-set review is not implemented for v2.
 - Dedicated effect-recovery painting now attenuates only the independently

@@ -45,6 +45,8 @@ def finish(engine, boundary, error=None):
     if face_style_image_read_only(message):return  # Cached display failure is not a failed graph mutation.
     if face_style_preflight_read_only(message):return  # Named review may sync committed row snapshots, never publish edits.
     if portrait_cohort_image_read_only(message) or portrait_cohort_preflight_read_only(message):return
+    from .eye_bag_preset_store import read_only as eye_bag_preset_read_only
+    if eye_bag_preset_read_only(message):return  # Dedicated preset read cannot publish or taint committed state.
     from .people_host_commands import face_style_read_only, eye_bag_read_only
     if face_style_read_only(message) or eye_bag_read_only(message):return  # Private read failures cannot taint committed project state.
     if not boundary['started'] or message.get('cmd') in ('project_recovery', 'canvas_guides'):

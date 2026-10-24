@@ -1,3 +1,5 @@
+import {EYE_BAG_PRESET_OP,neutralEyeBagPreset} from '../eyeBagPreserve/presetModel';
+import {EyeBagPresetReview} from '../eyeBagPreserve/EyeBagPresetReview';
 import {COLLARBONE_PRESET_OP} from '../collarbone/presetModel';
 import {CollarbonePresetReview} from '../collarbone/CollarbonePresetReview';
 import {SHADOW_TRANSFER_OP} from '../originalShadow/transferModel';
@@ -26,6 +28,7 @@ import {validXmpSummary} from '../xmpImport/model';
 export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
   const list=w.catalog?.list??[],modules=w.catalog?.modules??[],chosen=w.form.scope;
   const unavailable=unavailableScope(chosen,modules),selectedOps=Object.keys(w.selected?.modules??{});
+  const eyeBagActive=selectedOps.includes(EYE_BAG_PRESET_OP)&&!neutralEyeBagPreset(w.selected?.modules[EYE_BAG_PRESET_OP]);
   const xmpUnsupported=w.selected?.xmp_import!==undefined&&w.catalog?.xmp_import_protocol!==1;
   const faceBlocked=!w.face.ok&&modules.some(m=>selectedOps.includes(m.operation_id)&&m.single_face);
   const rows=[...modules,...chosen.filter(op=>!modules.some(m=>m.operation_id===op))
@@ -53,8 +56,11 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {faceBlocked&&<p>{w.face.why||'部分模块应用时需要可用单脸'}</p>}
       {unavailableScope(selectedOps,modules).length>0&&<p>包含当前不可用模块，不能应用。</p>}
     </div>}
+    {eyeBagActive&&<label>目标旧版去眼袋策略<select value={w.eyeBagReplaceLegacy===null?'':String(w.eyeBagReplaceLegacy)} disabled={w.busy} onChange={e=>w.setEyeBagReplaceLegacy(e.target.value===''?null:e.target.value==='true')}>
+      <option value="">请明确选择</option><option value="false">不替换旧版，冲突时拒绝</option><option value="true">明确替换旧版去眼袋，其他眼部效果保留</option></select>
+      <small>目标须先在去眼袋 v2 面板独立绘制并审核可见逐眼保护。供图的保护、恢复笔迹或分析不复制；未审核眼保持不处理。</small></label>}
     <div className="presetButtons">
-      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||xmpUnsupported||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{w.selected?.xmp_import||selectedOps.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP,SPILL_TRANSFER_OP,SHADOW_TRANSFER_OP,TORSO_TRANSFER_OP,WAIST_TRANSFER_OP,HEAD_TRANSFER_OP,COLLARBONE_PRESET_OP].includes(op))?'预检所选预设':'应用所选'}</button>
+      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||xmpUnsupported||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{eyeBagActive||w.selected?.xmp_import||selectedOps.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP,SPILL_TRANSFER_OP,SHADOW_TRANSFER_OP,TORSO_TRANSFER_OP,WAIST_TRANSFER_OP,HEAD_TRANSFER_OP,COLLARBONE_PRESET_OP].includes(op))?'预检所选预设':'应用所选'}</button>
       <button disabled={!w.context.enabled||w.busy} onClick={()=>void w.refresh()}>刷新列表</button>
       <button disabled={!w.context.enabled||w.busy||!w.selected||w.selected.builtin} onClick={()=>void w.remove()}>移入回收站</button>
     </div>
@@ -67,13 +73,15 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {w.review.waist_transfer&&<WaistTransferReview value={w.review.waist_transfer} reviewKey={w.waistKey} disabled={w.busy} onReady={(key,ready)=>w.setWaistImage({key,ready})}/>}
       {w.review.head_transfer&&<HeadTransferReview value={w.review.head_transfer} reviewKey={w.headKey} disabled={w.busy} onReady={(key,ready)=>w.setHeadImage({key,ready})}/>}
       {w.review.collarbone_preset&&w.review.id&&w.review.preflight_token&&<CollarbonePresetReview value={w.review.collarbone_preset} id={w.review.id} token={w.review.preflight_token} reviewKey={w.collarboneKey} disabled={w.busy} onReady={(key,ready)=>w.setCollarboneImage({key,ready})}/>}
+      {w.review.eye_bag_preset&&w.review.id&&w.review.preflight_token&&<EyeBagPresetReview value={w.review.eye_bag_preset} id={w.review.id} token={w.review.preflight_token} reviewKey={w.eyeBagKey} disabled={w.busy} onReady={(key,ready)=>w.setEyeBagImage({key,ready})}/>}
+      {!w.eyeBagReady&&<p role="status">请读取并确认本人物逐眼保护、明确替换策略及完整预设前后效果。</p>}
       {!w.collarboneReady&&<p role="status">请读取并确认本照片完整混合预设的真实前后效果。</p>}
       {!w.spillReady&&<p role="status">请查看并勾选确认本目标的祛反光前后效果。</p>}
       {!w.shadowReady&&<p role="status">请查看并勾选确认本目标的原图阴影前后效果。</p>}
       {!w.torsoReady&&<p role="status">请查看并勾选确认本目标身体及本人面部的上身长度前后效果。</p>}
       {!w.waistReady&&<p role="status">请查看并勾选确认本目标身体及本人面部的腰长前后效果。</p>}
       {!w.headReady&&<p role="status">请查看并勾选确认本目标身体及本人面部的小头前后效果。</p>}
-      <button disabled={w.busy||!w.context.editable||!w.cropReady||!w.xmpReady||!w.spillReady||!w.shadowReady||!w.torsoReady||!w.waistReady||!w.headReady||!w.collarboneReady} onClick={()=>void w.confirmLocal()}>确认本次目标预设并应用</button>
+      <button disabled={w.busy||!w.context.editable||!w.eyeBagReady||!w.cropReady||!w.xmpReady||!w.spillReady||!w.shadowReady||!w.torsoReady||!w.waistReady||!w.headReady||!w.collarboneReady} onClick={()=>void w.confirmLocal()}>确认本次目标预设并应用</button>
       <button disabled={w.busy} onClick={w.dismissReview}>关闭本次审核</button></div>}
     <fieldset><legend>保存当前照片的模块参数</legend>
       <label>预设名称<input aria-label="预设名称" value={w.form.name} maxLength={160} placeholder="例如：室外婚纱暖调" onChange={e=>w.setName(e.target.value)}/><small>{nameLength}/80 字符</small></label>

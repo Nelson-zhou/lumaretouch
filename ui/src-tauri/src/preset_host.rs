@@ -131,9 +131,10 @@ fn reviewed_types(value: &Value) -> bool {
     let has_spill=ops.iter().any(|op|op==spill::SPILL_OP);
     let has_shadow=ops.iter().any(|op|op==shadow::SHADOW_OP);
     let collarbone=crate::preset_api::collarbone::selected(value);
+    let eye_bag=crate::preset_api::eye_bag::selected(value);
     let has_body=BODY_REVIEW_FAMILIES.iter().any(|family| family.selected(value));
     let xmp=!value["xmp_report"].is_null()||!value["xmp_transfer"].is_null();
-    (local||optics||crop||xmp||has_spill||has_shadow||has_body||collarbone)
+    (local||optics||crop||xmp||has_spill||has_shadow||has_body||collarbone||eye_bag)
         && BODY_REVIEW_FAMILIES.iter().all(|family| {
             if !family.selected(value) { return value[family.transfer_key()].is_null(); }
             ops.len() == 1 && !xmp && value.get(family.ack_key()).is_none() && family.no_foreign_evidence(value)
@@ -154,9 +155,9 @@ fn reviewed_types(value: &Value) -> bool {
 }
 impl ReceiptKind for PresetKind {
     const NAME: &'static str = "preset";
-    const ACTIONS: &'static [&'static str] = &["list", "preflight", "apply", "save", "import", "delete", "xmp_inspect", "collarbone_visual"];
+    const ACTIONS: &'static [&'static str] = &["list", "preflight", "apply", "save", "import", "delete", "xmp_inspect", "collarbone_visual", "eye_bag_visual"];
     fn valid_request(action: &str, document: Option<&str>) -> bool {
-        if ["apply", "preflight", "save", "collarbone_visual"].contains(&action) {
+        if ["apply", "preflight", "save", "collarbone_visual", "eye_bag_visual"].contains(&action) {
             document.is_some_and(|d| !d.is_empty() && d.len() <= 128 && d.chars().count() <= 64)
         } else { document.is_none() }
     }
@@ -165,10 +166,11 @@ impl ReceiptKind for PresetKind {
         let Some(unknown) = value["outcome_unknown"].as_bool() else { return false };
         if value["protocol"].as_u64() != Some(1) || (success && unknown) { return false; }
         if document.is_some() && value["document_id"].as_str() != document { return false; }
-        if !crate::preset_api::collarbone::receipt(value) {return false;}
+        if !crate::preset_api::collarbone::receipt(value)||!crate::preset_api::eye_bag::receipt(value) {return false;}
         if !BODY_REVIEW_FAMILIES.iter().all(|family| family.receipt(value, "preset", "apply")) { return false; }
         if !success { return true; }
         match value["action"].as_str() {
+            Some("eye_bag_visual") => crate::preset_api::eye_bag::receipt(value),
             Some("collarbone_visual") => crate::preset_api::collarbone::receipt(value),
             Some("xmp_inspect") => text(&value["path"]) && xmp_protocol::report(&value["xmp_report"]),
             Some("preflight") => text(&value["id"]) && scope(&value["module_scope"])

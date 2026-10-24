@@ -78,3 +78,22 @@ broader automatic AI blemish correction remain outside this bounded path.
 - Keep unknown commits query-only; never retry a potentially applied stroke.
 - Shared-source aliases and dormant affected history remain guarded until their
   complete affected-set review is implemented. Automatic anatomy stays partial.
+
+## Current-photo preset transfer, still UNRUN
+
+- Save and select version/amount/preserve only. Verify donor ridge and recovery
+  vectors never appear in the serialized preset or target asset bank.
+- Prepare distinct original and opaque derived targets with their own per-eye
+  support. Missing, changed, foreign and newly re-detected support must refuse.
+- Compare complete mixed portrait/color/crop preset renders, not an eye-only
+  overlay. All selected supported changes must appear in the candidate graph.
+- Require exact loaded image hashes, source/owner/preset binding and explicit
+  replacement choice. Changed choice, support, repair, source or graph invalidates
+  the previous acknowledgment rather than silently recomputing and applying.
+- Legacy eye-bag coexistence refuses without explicit replacement; dark circles
+  and other enhancement leaves survive. A contradictory selected legacy amount
+  cannot be silently dropped. Neutral reset does not migrate legacy behavior.
+- Unknown writes remain query-only; verify rollback, one-step undo/redo,
+  save/reopen/package and exact unchanged target recovery assets.
+- Generic batch/cohort/shared-alias guards remain; no one-photo token or donor
+  image acknowledgment can authorize another target.

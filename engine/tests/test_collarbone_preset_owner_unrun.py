@@ -75,25 +75,25 @@ def test_missing_exact_graph_ports_refuse_before_transaction():
 def test_final_mixed_candidate_is_prepared_before_collarbone_images():
     source = (SOURCE / 'local_grade_preset_review.py').read_text()
     prepare = source[source.index('    def prepare('):source.index('    def claim(')]
-    assert prepare.index("if reference_record is not None:RC.apply_verified") < prepare.index('prepare_collarbone(row,state,candidate')
-    assert prepare.index('prepare_xmp(row,state,candidate') < prepare.index('prepare_collarbone(row,state,candidate')
-    assert "preset,prepared)" in prepare
-    assert "**({'collarbone_preset':collarbone_public} if collarbone else {})" in prepare
+    assert prepare.index("if reference_record is not None:RC.apply_verified") < prepare.index('prepare_portrait(row,state,candidate')
+    assert prepare.index('prepare_xmp(row,state,candidate') < prepare.index('prepare_portrait(row,state,candidate')
+    assert "preset,prepared,**extra)" in prepare
+    assert "**({portrait.wire:collarbone_public} if collarbone else {})" in prepare
 
 
 def test_ack_and_real_images_are_verified_before_token_consumption():
     source = (SOURCE / 'local_grade_preset_review.py').read_text()
     claim = source[source.index('    def claim('):]
-    assert claim.index("acknowledgment(collarbone_preset_ack,record['collarbone'])") < claim.index('del self.pending[token]')
+    assert claim.index("portrait.review.acknowledgment(") < claim.index('del self.pending[token]')
     assert claim.index('verify_available(self,token)') < claim.index('del self.pending[token]')
-    assert claim.index('verify_collarbone(row,state,candidate') < claim.index('del self.pending[token]')
+    assert claim.index('verify_portrait(row,state,candidate') < claim.index('del self.pending[token]')
     assert "self.targets.get(token) is not row" in claim
 
 
 def test_apply_cannot_bypass_stored_collarbone_with_legacy_direct_route():
     source = (SOURCE / 'preset_controller.py').read_text()
-    assert "if SC.COLLARBONE.OP in mods or family is not None" in source
-    assert "'collarbone_preset_ack':deepcopy(p['collarbone_preset_ack'])" in source
+    assert "if PORTRAIT.select(mods) is not None or family is not None" in source
+    assert "portrait.ack:deepcopy(p[portrait.ack])" in source
     assert "collarbone_transaction.replay if collarbone" in source
     assert "if collarbone:collarbone_transaction.verify()" in source
     assert "if collarbone:collarbone_transaction.verify(rollback=True)" in source
@@ -102,7 +102,7 @@ def test_apply_cannot_bypass_stored_collarbone_with_legacy_direct_route():
 def test_failed_and_oversized_receipts_keep_exact_preset_ack_identity():
     source = (SOURCE / 'preset_controller.py').read_text()
     assert "finally:\n            if action == 'apply':result.update(deepcopy(self._scalar_receipt))" in source
-    assert "scalar_keys=('torso_review_ack','waist_review_ack','head_review_ack','collarbone_preset_ack')" in source
+    assert "scalar_keys=('torso_review_ack','waist_review_ack','head_review_ack','collarbone_preset_ack','eye_bag_preset_ack')" in source
     assert '**review_fields' in source
     assert "'preflight_token':p['preflight_token']" in source
 
@@ -110,7 +110,7 @@ def test_failed_and_oversized_receipts_keep_exact_preset_ack_identity():
 def test_image_reads_are_distinct_from_mutating_preset_actions():
     source = (SOURCE / 'preset_controller.py').read_text()
     assert '"collarbone_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token"}' in source
-    assert "if action == 'collarbone_visual' and not correlated" in source
+    assert "if action in ('collarbone_visual','eye_bag_visual') and not correlated" in source
     assert 'evidence = retrieve(self,p)' in source
     assert 'collarbone_review_ack' not in source  # Batch approval is not preset approval.
 
@@ -125,6 +125,6 @@ def test_workflow_ports_use_exact_adapter_not_generic_partial_overlay():
 def test_missing_graph_ports_are_rejected_before_claim_or_revision_advance():
     source = (SOURCE / 'preset_controller.py').read_text()
     apply = source[source.index('    def apply(self, p):'):]
-    assert apply.index('self.ports.collarbone_replay is None') < apply.index('self.reviews.claim(')
-    assert apply.index('self.ports.verify_collarbone_applied is None') < apply.index('self.ports.advance()')
+    assert apply.index('portrait.require_ports(self.ports)') < apply.index('self.reviews.claim(')
+    assert apply.index('portrait.require_ports(self.ports)') < apply.index('self.ports.advance()')
     assert 'verify_after=verify_after if collarbone or source_proof is not None' in apply

@@ -21,7 +21,7 @@ def legacy_batch_face_check(engine,row,*,live=False):
     return engine._face_known_single(row,live=live)
 
 
-def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,**kwargs):
+def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,reviewed_eye_bag=False,replace_legacy_eye_bag=False,**kwargs):
     """Preserve existing single-face presets; never infer a multi-face target.
 
     The existing preset owner owns receipts, rollback, document fences/history.
@@ -29,6 +29,8 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,**k
     preparation does not commit a graph or invoke live replay/rendering.
     """
     from .people_preset_plan import snapshot, require_active_owner
+    if type(reviewed_eye_bag) is not bool or type(replace_legacy_eye_bag) is not bool or (replace_legacy_eye_bag and not reviewed_eye_bag):
+        raise ValueError('Eye-bag preset review policy requires explicit private boolean choices')
     managed=engine._people_managed()
     if managed and require_active:require_active_owner(engine)
     from . import enhance_scope as ENHANCE, teeth_colour_apply as TEETH, red_eye_apply as RED_EYE
@@ -386,7 +388,12 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,**k
     eye_bag_involved=(EYE_BAG_PRESERVE.FIELD in state and
                       (eye_bag_requested or eye_bag_recipe!=current[EYE_BAG_PRESERVE.FIELD]))
     if eye_bag_involved:
-        EYE_BAG_PRESERVE.install(dict(current),{'recipe':eye_bag_recipe})
+        if reviewed_eye_bag:
+            from .eye_bag_preset_plan import admit
+            admit(engine, before, current[EYE_BAG_PRESERVE.TARGET], eye_bag_recipe)
+            EYE_BAG_PRESERVE.install_reviewed(dict(current),{'recipe':eye_bag_recipe},replace_legacy=replace_legacy_eye_bag)
+        else:
+            EYE_BAG_PRESERVE.install(dict(current),{'recipe':eye_bag_recipe})
         if (state.get(EYE_BAG_PRESERVE.TARGET)!=current[EYE_BAG_PRESERVE.TARGET]
                 or EYE_BAG_PRESERVE.owner_identity(state)!=EYE_BAG_PRESERVE.owner_identity(current)):
             raise ValueError('眼袋保留预设的文档、人物归属或有效来源已变化，请重新选择')
@@ -429,6 +436,9 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,**k
     left=W.check((current.get('_enhance') or {}).get('amounts',{}));right=W.check((state.get('_enhance') or {}).get('amounts',{}))
     patches.extend((A.WRINKLES,path,value) for path,value in A.leaves(right).items() if A.leaves(left)[path]!=value)
     if not patches:
+        if eye_bag_involved:
+            from .eye_bag_preset_plan import check_graph
+            check_graph(candidate, current[EYE_BAG_PRESERVE.TARGET], eye_bag_recipe)
         if chin_length_involved:
             # Unchanged active intent still cannot bypass the legacy conflict.
             from .people_resolver import resolve
@@ -479,6 +489,9 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,**k
     if eye_bag_involved and current[EYE_BAG_PRESERVE.TARGET]!=S.face_ref(faces[0]):
         raise ValueError('眼袋保留预设的当前人物与唯一可应用目标不一致')
     for op,path,value in patches:candidate=S.set_override(candidate,'face',key,op,path,value)
+    if eye_bag_involved:
+        from .eye_bag_preset_plan import check_graph
+        check_graph(candidate, current[EYE_BAG_PRESERVE.TARGET], eye_bag_recipe)
     if chin_length_involved:
         # Resolve inheritance only after all selected modules have been staged.
         # Scalar preset install never inserts an old-small_chin reset or converts

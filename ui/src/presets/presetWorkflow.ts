@@ -1,3 +1,4 @@
+import {EYE_BAG_PRESET_OP,validEyeBagPreset,eyeBagPresetAck,sameEyeBagPresetAck,neutralEyeBagPreset,type EyeBagPresetReview,type EyeBagPresetAck} from '../eyeBagPreserve/presetModel';
 import {COLLARBONE_PRESET_OP,validCollarbonePreset,collarbonePresetAck,sameCollarbonePresetAck,type CollarbonePresetReview,type CollarbonePresetAck} from '../collarbone/presetModel';
 import {CROP_OP,validCropReview,type CropReview} from '../cropTransfer/model.ts';
 import {SPILL_TRANSFER_OP,validSpillTransfer,validSpillTransferAck,type SpillTransferEvidence,type SpillTransferAck} from '../spillRemoval/transferModel.ts';
@@ -14,9 +15,9 @@ import type {PresetInfo, PresetState} from '../native';
 import {validXmpAck, validXmpReport, validXmpSummary, validXmpTransfer, validXmpReviewAck, type XmpAck, type XmpReport, type XmpSummary, type XmpTransfer, type XmpReviewAck} from '../xmpImport/model.ts';
 export type PresetAction = 'list'|'preflight'|'apply'|'save'|'import'|'delete'|'xmp_inspect';
 export type PresetOptions = {id?:string;name?:string;path?:string;kind?:string;note?:string;force?:boolean;
-  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;spillReviewAck?:SpillTransferAck[];shadowReviewAck?:ShadowTransferAck[];torsoReviewAck?:TorsoTransferAck[];waistReviewAck?:WaistTransferAck[];headReviewAck?:HeadTransferAck[];collarbonePresetAck?:CollarbonePresetAck;
+  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;spillReviewAck?:SpillTransferAck[];shadowReviewAck?:ShadowTransferAck[];torsoReviewAck?:TorsoTransferAck[];waistReviewAck?:WaistTransferAck[];headReviewAck?:HeadTransferAck[];collarbonePresetAck?:CollarbonePresetAck;eyeBagPresetAck?:EyeBagPresetAck;eyeBagReplaceLegacy?:boolean;eyeBagNeutral?:boolean;
   xmpAck?:XmpAck;xmpReviewAck?:XmpReviewAck;/** UI-only captured expected source, never sent as authority. */xmpExpected?:XmpSummary};
-export type PresetReply = {collarbone_preset?:CollarbonePresetReview;collarbone_preset_ack?:CollarbonePresetAck;protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
+export type PresetReply = {eye_bag_preset?:EyeBagPresetReview;eye_bag_preset_ack?:EyeBagPresetAck;eye_bag_replace_legacy?:boolean;collarbone_preset?:CollarbonePresetReview;collarbone_preset_ack?:CollarbonePresetAck;protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
   xmp_report?:XmpReport;xmp_transfer?:XmpTransfer;source_proof?:unknown;spill_transfer?:SpillTransferEvidence;shadow_transfer?:ShadowTransferEvidence;torso_transfer?:TorsoTransferEvidence;torso_review_ack?:TorsoTransferAck[];waist_transfer?:WaistTransferEvidence;waist_review_ack?:WaistTransferAck[];head_transfer?:HeadTransferEvidence;head_review_ack?:HeadTransferAck[];
   crop_transfer?:CropReview;reference_color?:ReferenceReview;revision?:string;optical_transfer?:OpticalTargetReview;preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
   before?:Record<string,unknown>;after?:Record<string,unknown>;doc_state?:Record<string,unknown>;
@@ -59,6 +60,11 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
   if(result.collarbone_preset_ack!==undefined&&(action!=='apply'||opts.collarbonePresetAck===undefined))throw Error('未请求的锁骨预设确认回执');
   if(action==='apply'&&opts.collarbonePresetAck!==undefined&&(!validBodyScalarReceiptState(result)||!(result.collarbone_preset_ack===undefined&&result.collarbone_preset===undefined&&bodyScalarNoWriteRejection(result,opts.preflightToken))
     &&(result.id!==opts.id||result.preflight_token!==opts.preflightToken||!result.module_scope?.includes(COLLARBONE_PRESET_OP)||expectedScope!==undefined&&!sameScope(result.module_scope,expectedScope)||!sameCollarbonePresetAck(result.collarbone_preset_ack,opts.collarbonePresetAck))))throw Error('完整预设回执与冻结令牌、目标或确认不符，只能查询原请求');
+  if(result.eye_bag_replace_legacy!==undefined&&(action!=='preflight'||typeof opts.eyeBagReplaceLegacy!=='boolean'||result.eye_bag_replace_legacy!==opts.eyeBagReplaceLegacy))throw Error('未请求或不匹配的旧版去眼袋替换策略');
+  if(result.eye_bag_preset!==undefined&&(action!=='preflight'||!result.success||!result.module_scope?.includes(EYE_BAG_PRESET_OP)))throw Error('未请求的去眼袋完整预设证据');
+  if(result.eye_bag_preset_ack!==undefined&&(action!=='apply'||opts.eyeBagPresetAck===undefined))throw Error('未请求的去眼袋预设确认');
+  if(action==='apply'&&opts.eyeBagPresetAck!==undefined&&(!validBodyScalarReceiptState(result)||!(result.eye_bag_preset_ack===undefined&&result.eye_bag_preset===undefined&&bodyScalarNoWriteRejection(result,opts.preflightToken))
+    &&(result.id!==opts.id||result.preflight_token!==opts.preflightToken||!result.module_scope?.includes(EYE_BAG_PRESET_OP)||expectedScope!==undefined&&!sameScope(result.module_scope,expectedScope)||!sameEyeBagPresetAck(result.eye_bag_preset_ack,opts.eyeBagPresetAck))))throw Error('去眼袋完整预设回执不匹配，只能查询原请求');
   if(!result.success)return;
   if(action==='xmp_inspect'){
     if(!text(result.path)||result.path!==opts.path||!validXmpReport(result.xmp_report))throw Error('XMP 检查路径或有界兼容报告不匹配');
@@ -81,6 +87,7 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
   const wanted=action==='save'?opts.moduleScope:expectedScope;
   if(wanted&&!sameScope(result.module_scope,wanted))throw Error('实际作用模块与选择不一致');
   if(action==='preflight'){
+    if(result.module_scope.includes(EYE_BAG_PRESET_OP)&&(opts.eyeBagReplaceLegacy!==undefined||!neutralEyeBagPreset(result.applies?.[EYE_BAG_PRESET_OP]))&&(result.eye_bag_replace_legacy!==opts.eyeBagReplaceLegacy||!validEyeBagPreset(result.eye_bag_preset,opts.documentId??'',result.revision,result.source_proof,opts.eyeBagReplaceLegacy)))throw Error('去眼袋预设缺少目标逐眼支持、完整前后图或明确旧版替换策略');
     if(result.module_scope.includes(COLLARBONE_PRESET_OP)&&!validCollarbonePreset(result.collarbone_preset,opts.documentId??'',result.revision,result.source_proof))throw Error('锁骨预设缺少当前实际来源、人物覆盖和完整混合效果的前后审核');
     if(!text(result.revision)||!text(result.preflight_token)||!/^[a-f0-9]{32}$/.test(result.preflight_token)||!moduleKeys(result.applies,result.module_scope))throw Error('冻结预设预检结果不完整');
     if(result.module_scope.includes(SPILL_TRANSFER_OP)&&(!validSpillTransfer(result.spill_transfer,opts.documentId??'',result.revision,result.applies?.[SPILL_TRANSFER_OP],result.source_proof)
@@ -184,6 +191,14 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
       set({phase:'error',action,result:null,message:'XMP 预设必须先检查当前照片的完整前后像素并确认'});return;
     }
     const frozen=state.action==='preflight'&&state.phase==='done'&&state.result?.success?state.result:null;
+    if(options.eyeBagReplaceLegacy!==undefined&&action!=='preflight'){set({message:'旧版替换选择只能随预检冻结；应用必须使用原确认。'});return;}
+    if(action==='preflight'&&expectedScope?.includes(EYE_BAG_PRESET_OP)&&!options.eyeBagNeutral&&typeof options.eyeBagReplaceLegacy!=='boolean'){set({message:'请明确选择是否替换目标旧版去眼袋。'});return;}
+    const eyeBag=action==='apply'&&(!options.eyeBagNeutral&&expectedScope?.includes(EYE_BAG_PRESET_OP)||frozen?.eye_bag_preset!==undefined||options.eyeBagPresetAck!==undefined);
+    if(eyeBag&&(!frozen?.eye_bag_preset||!frozen.preflight_token||options.preflightToken!==frozen.preflight_token||options.id!==frozen.id||frozen.document_id!==context.documentId
+      ||state.submitted?.reviewContextKey!==context.reviewContextKey||!frozen.module_scope?.includes(EYE_BAG_PRESET_OP)||expectedScope!==undefined&&!sameScope(expectedScope,frozen.module_scope)
+      ||!validEyeBagPreset(frozen.eye_bag_preset,context.documentId,frozen.revision,frozen.source_proof,state.submitted?.options.eyeBagReplaceLegacy)
+      ||!sameEyeBagPresetAck(options.eyeBagPresetAck,eyeBagPresetAck(frozen.eye_bag_preset)))){set({message:'请先查看目标逐眼保护和完整预设前后效果，并确认冻结的替换策略。'});return;}
+    if(options.eyeBagPresetAck!==undefined&&action!=='apply'){set({message:'去眼袋预设确认只能用于冻结应用。'});return;}
     const collarbone=action==='apply'&&(expectedScope?.includes(COLLARBONE_PRESET_OP)||frozen?.module_scope?.includes(COLLARBONE_PRESET_OP)||options.collarbonePresetAck!==undefined);
     if(collarbone&&(!frozen?.collarbone_preset||!frozen.preflight_token||options.preflightToken!==frozen.preflight_token
       ||options.id!==frozen.id||frozen.document_id!==context.documentId||state.submitted?.reviewContextKey!==context.reviewContextKey
@@ -271,6 +286,7 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
       ...(options.waistReviewAck?{waistReviewAck:options.waistReviewAck.map(ack=>({...ack}))}:{}),
       ...(options.headReviewAck?{headReviewAck:options.headReviewAck.map(ack=>({...ack}))}:{}),
       ...(options.collarbonePresetAck?{collarbonePresetAck:{...options.collarbonePresetAck}}:{}),
+      ...(options.eyeBagPresetAck?{eyeBagPresetAck:{...options.eyeBagPresetAck}}:{}),
       ...(options.xmpExpected?{xmpExpected:structuredClone(options.xmpExpected)}:{}),
       ...(editing?{documentId:context.documentId}:{}),requestId:id};
     const request:Pending={contextGeneration,id,action,options:captured,expectedScope:expectedScope?[...expectedScope]:undefined,generation:g};pending=request;
@@ -286,6 +302,7 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
   function acknowledgeInspection(){
     if(state.phase!=='uncertain')return;
     if(pending?.options.waistReviewAck!==undefined){set({message:'腰长应用结果尚未确定，只能查询原请求；不会释放后重复提交。'});return;}
+    if(pending?.options.eyeBagPresetAck!==undefined){set({message:'去眼袋完整预设结果尚未确定，只能查询原请求，不会释放后重复提交。'});return;}
     if(pending?.options.collarbonePresetAck!==undefined){set({message:'完整预设应用结果尚未确定，只能查询原请求，不会释放后重复提交。'});return;}
     if(pending?.options.headReviewAck!==undefined){set({message:'小头应用结果尚未确定，只能查询原请求；不会释放后重复提交。'});return;}
     generation++;pending=null;set({...initialPresetUi});
