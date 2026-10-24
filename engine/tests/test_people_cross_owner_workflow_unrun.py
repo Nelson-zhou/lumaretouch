@@ -55,18 +55,17 @@ class PersistentWorkflow(TestCase):
         with self.assertRaises(ValueError): W.options(duplicate, ['lnx.deform.v1'])
         with self.assertRaises(ValueError): W.options(request, [])
 
-    def test_collarbone_requires_separate_target_visual_route(self):
-        # Authored only: cohort-wide source/member visuals are not implemented.
+    def test_collarbone_selection_enters_whole_cohort_visual_route(self):
+        # Authoring only: accepting options is not authority to skip full cohort review.
         for operation in ('create', 'patch'):
             _, request = fixture()
             request['operation'] = operation
             request['selection'] = {'lnx.collarbone.v1': ['/amount']}
             before = deepcopy(request)
-            with self.assertRaisesRegex(ValueError, 'target image pair'):
-                W.options(request, ['lnx.collarbone.v1'])
+            self.assertEqual(W.options(request, ['lnx.collarbone.v1']), request)
             self.assertEqual(request, before)
 
-    def test_collarbone_guard_does_not_disable_complete_unlink(self):
+    def test_collarbone_review_does_not_disable_complete_unlink(self):
         _, request = fixture()
         request['operation'] = 'unlink'; request['selection'] = {}
         self.assertEqual(W.options(request, []), request)

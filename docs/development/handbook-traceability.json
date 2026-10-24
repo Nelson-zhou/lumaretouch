@@ -3263,13 +3263,15 @@
         "ui/src/collarbone",
         "docs/collarbone/TRANSFER-VISUAL-CONTRACT.md",
         "engine/src/lumaretouch_engine/collarbone_transfer_review.py",
-        "engine/src/lumaretouch_engine/collarbone_visual_store.py"
+        "engine/src/lumaretouch_engine/collarbone_visual_store.py",
+        "docs/collarbone/COHORT-VISUAL-CONTRACT.md",
+        "engine/src/lumaretouch_engine/collarbone_cohort_review.py"
       ],
       "verification": [],
       "remaining": [
         "Official AI 3D clavicle detection and automatic anatomy remain missing.",
         "All runtime, numerical, photographic and release acceptance UNRUN.",
-        "Target-by-target confirmed/one-time batch visuals and acknowledgments are source-authored UNRUN; persistent-cohort visual transfer and dedicated visual preset application remain incomplete."
+        "Confirmed/one-time and persistent source+target cohort image review and acknowledgments are source-authored UNRUN; dedicated current-photo visual preset application remains incomplete."
       ]
     },
     {

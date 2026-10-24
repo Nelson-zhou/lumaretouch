@@ -1,3 +1,4 @@
+import {validCollarboneCohort,collarbonePlanTargets} from '../collarbone/cohortModel';
 import {COLLARBONE_TRANSFER_OP as COLLARBONE_OP,COLLARBONE_VISUAL_LIMITS,validCollarboneVisual,validCollarboneAck,sameCollarboneAck,type CollarboneAck} from '../collarbone/transferModel';
 import {sameAssociationReview,validAssociationReview,type AssociationReview,type AssociationTarget} from '../people/associationProof';
 import {CROP_OP,CROP_LIMITS,sourceProof,validCropReview,type CropReview} from '../cropTransfer/model.ts';
@@ -21,7 +22,7 @@ type BatchSource={document_id:string;revision:string;path:string;source_proof?:u
 export type BatchReply={batch_id?:string;request_id:string;action:BatchAction;success:boolean;error?:string;outcome_unknown?:boolean;
   torso_review_ack?:TorsoTransferAck[];
   waist_review_ack?:WaistTransferAck[];
-  head_review_ack?:HeadTransferAck[];collarbone_review_ack?:CollarboneAck[];
+  head_review_ack?:HeadTransferAck[];collarbone_review_ack?:CollarboneAck[];collarbone_cohort?:boolean;
   persistent_association?:AssociationReview;association_source?:BatchTarget;source_outcome?:BatchTarget;people_transfer?:boolean;local_mask_transfer?:MaskTransferOptions;preflight_token?:string;source_snapshot?:BatchSource;source_changed_since_preflight?:boolean;
   module_scope?:string[];applies?:Record<string,unknown>;policy?:string;targets?:unknown[];target_outcomes?:BatchTarget[];
   rejected_docs?:Array<{doc:unknown;error:string}>;ok?:number;blocked?:number;restored?:number[];conflicts?:Array<{path:string;reason:string}>};
@@ -47,7 +48,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   const now=options.now??(()=>performance.now());
   let context:BatchContext={docs:[],moduleScope:[],conflictPolicy:'skip_and_report',sourceDocumentId:'',enabled:false,label:''};
   let key='',generation=0,disposed=false;
-  let pending:{id:string;action:BatchAction;generation:number;contextKey:string;token?:string;scope?:string[];policy?:string;transfer?:MaskTransferOptions;reference?:{strength:number};people?:PeopleTransferRequest;peopleProof?:PeopleTransferProof;referencePath?:string;docs?:string[];torsoAck?:TorsoTransferAck[];waistAck?:WaistTransferAck[];headAck?:HeadTransferAck[];collarboneAck?:CollarboneAck[]}|null=null;
+  let pending:{id:string;action:BatchAction;generation:number;contextKey:string;token?:string;scope?:string[];policy?:string;transfer?:MaskTransferOptions;reference?:{strength:number};people?:PeopleTransferRequest;peopleProof?:PeopleTransferProof;referencePath?:string;docs?:string[];torsoAck?:TorsoTransferAck[];waistAck?:WaistTransferAck[];headAck?:HeadTransferAck[];collarboneAck?:CollarboneAck[];collarboneCohort?:boolean}|null=null;
   let state:BatchUi={phase:'closed',operation:'preflight',plan:null,result:null,message:'',scopeLabel:''};
   const set=(patch:Partial<BatchUi>)=>{state={...state,...patch};if(!disposed)publish(state);};
   const active=(g:number)=>!disposed&&g===generation;
@@ -73,7 +74,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       ||(result.ok??-1)<0||(result.blocked??-1)<0||(result.ok??0)+(result.blocked??0)!==result.targets.length
       ||(!people&&Object.keys(result.applies).sort().join('|')!==[...scope].sort().join('|')))throw Error('预检回执不完整，未允许提交');
     const collarbone=scope.includes(COLLARBONE_OP);
-    if(collarbone&&(!people||people.target_policy==='persistent_association'||result.targets.length>COLLARBONE_VISUAL_LIMITS.targets))throw Error('锁骨逐图审核仅支持当前明确人物目标迁移，每批最多 16 张。');
+    if(collarbone&&(!people||result.targets.length+(people.target_policy==='persistent_association'?1:0)>COLLARBONE_VISUAL_LIMITS.targets))throw Error('锁骨逐图审核仅支持当前明确人物目标迁移，每批最多 16 张。');
     const spill=scope.includes(SPILL_OP);
     if(spill&&(scope.includes('lnx.id_background.v1')||result.source_snapshot.document_id!==context.sourceDocumentId||!sourceProof(result.source_snapshot.source_proof)
       ||!spillTransferParameters(result.applies[SPILL_OP])))throw Error('祛反光预检缺少真实源图证明或包含非标量参数');
@@ -100,7 +101,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     if(people&&(!peopleProof||result.people_transfer!==true||!samePeopleRequest(result.applies,people)
       ||result.source_snapshot.document_id!==peopleProofDocument(peopleProof).document_id
       ||result.source_snapshot.revision!==String(peopleProofDocument(peopleProof).revision)))throw Error('人物迁移源图、关联或参数选择与请求不符');
-    if(people?.target_policy!=='persistent_association'&&(result.persistent_association||result.association_source))throw Error('未请求的持久关联回执');
+    if(people?.target_policy!=='persistent_association'&&(result.persistent_association||result.association_source||result.collarbone_cohort!==undefined))throw Error('未请求的持久关联回执');
     if(!people&&result.people_transfer)throw Error('未请求的人物迁移回执');
     if(reference&&(result.applies?.['lnx.reference_color.v1'] as {strength?:number})?.strength!==reference.strength)throw Error('参考统一程度与请求不同');
     if(referencePath&&result.source_snapshot.path!==referencePath)throw Error('源图与冻结请求不同');
@@ -175,6 +176,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     }
     if(people?.target_policy==='persistent_association'&&(policy!=='recheck'||blocked||result.rejected_docs?.length||!result.association_source
       ||!validAssociationReview(result.persistent_association,people,result.association_source,result.targets as BatchTarget[])))throw Error('持久人物关联缺少完整的源图、成员及共享参数审核');
+    if(people?.target_policy==='persistent_association'&&!validCollarboneCohort(result as BatchPlan,people))throw Error('持久关联锁骨审核必须包含源成员与全部目标的真实图像及独立范围；不能用继承元数据代替。');
     if(blocked!==result.blocked)throw Error('预检受阻数量不一致');
     return result as BatchPlan;
   }
@@ -241,8 +243,9 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
           if(request.action==='commit'&&request.headAck!==undefined&&!bodyScalarNoWriteRejection(result,request.token)
             &&(result.module_scope?.length!==1||result.module_scope[0]!==HEAD_OP||result.preflight_token!==request.token
               ||!sameHeadTransferAck(result.head_review_ack,request.headAck)))throw Error('小头提交回执与原请求、冻结令牌或有序 PNG 对确认不一致');
+          if(result.collarbone_cohort!==undefined&&request.action!=='preflight'&&request.collarboneCohort!==true)throw Error('未请求的锁骨全成员审核回执');
           if(result.collarbone_review_ack!==undefined&&(request.action!=='commit'||request.collarboneAck===undefined))throw Error('未请求的锁骨逐图确认回执');
-          if(request.collarboneAck!==undefined&&(!validBodyScalarReceiptState(result)||!bodyScalarNoWriteRejection(result,request.token)&&(result.preflight_token!==request.token||!result.module_scope?.includes(COLLARBONE_OP)||!sameCollarboneAck(result.collarbone_review_ack,request.collarboneAck))))throw Error('锁骨终态或逐图确认回执不匹配，只能查询原请求');
+          if(request.collarboneAck!==undefined&&(!validBodyScalarReceiptState(result)||!bodyScalarNoWriteRejection(result,request.token)&&(result.preflight_token!==request.token||(request.collarboneCohort?result.collarbone_cohort!==true:result.collarbone_cohort!==undefined||!result.module_scope?.includes(COLLARBONE_OP))||!sameCollarboneAck(result.collarbone_review_ack,request.collarboneAck))))throw Error('锁骨终态或逐图确认回执不匹配，只能查询原请求');
           if(result.torso_review_ack!==undefined&&(request.action!=='commit'||result.module_scope?.length!==1||result.module_scope[0]!==TORSO_OP||result.preflight_token!==request.token||!sameTorsoTransferAck(result.torso_review_ack,request.torsoAck)))throw Error('上身长度提交回执与本次逐图确认不一致');
           if(request.action==='commit'&&request.torsoAck!==undefined&&result.success&&!sameTorsoTransferAck(result.torso_review_ack,request.torsoAck))throw Error('缺少上身长度 PNG 对确认的终态回执');
           if(result.success&&request.action==='commit'&&result.preflight_token!==request.token)throw Error('批量结果不属于本次预检');
@@ -269,7 +272,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   }
   async function submit(action:BatchAction,opts:BatchOptions){
     const g=++generation,id=uuid(),deadline=now()+(options.timeoutMs??120000);
-    const request={id,action,generation:g,contextKey:key,token:opts.preflightToken,scope:opts.moduleScope,policy:opts.conflictPolicy,transfer:opts.localMaskTransfer,reference:opts.referenceColor,people:opts.peopleTransfer,peopleProof:context.peopleProof,referencePath:context.referencePath,docs:opts.docs,torsoAck:opts.torsoReviewAck?.map(ack=>({...ack})),waistAck:opts.waistReviewAck?.map(ack=>({...ack})),headAck:opts.headReviewAck?.map(ack=>({...ack})),collarboneAck:opts.collarboneReviewAck?.map(ack=>({...ack}))};pending=request;
+    const request={id,action,generation:g,contextKey:key,token:opts.preflightToken,scope:opts.moduleScope,policy:opts.conflictPolicy,transfer:opts.localMaskTransfer,reference:opts.referenceColor,people:opts.peopleTransfer,peopleProof:context.peopleProof,referencePath:context.referencePath,docs:opts.docs,torsoAck:opts.torsoReviewAck?.map(ack=>({...ack})),waistAck:opts.waistReviewAck?.map(ack=>({...ack})),headAck:opts.headReviewAck?.map(ack=>({...ack})),collarboneAck:opts.collarboneReviewAck?.map(ack=>({...ack})),collarboneCohort:action==='commit'&&state.plan?.collarbone_cohort===true};pending=request;
     set({phase:action==='preflight'?'preflighting':'committing',hidden:false,operation:action,result:null,message:''});
     try{
       const accepted=await bounded(api.request(action,{...opts,requestId:id}),deadline);
@@ -299,9 +302,10 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   async function commit(spillReviewAck?:SpillTransferAck[],shadowReviewAck?:ShadowTransferAck[],torsoReviewAck?:TorsoTransferAck[],waistReviewAck?:WaistTransferAck[],headReviewAck?:HeadTransferAck[],collarboneReviewAck?:CollarboneAck[]){
     if(state.phase!=='review'||!state.plan||state.plan.ok<1)return;
     if(state.plan.policy==='recheck'&&state.plan.blocked>0){set({message:'有受阻目标，请重新预检或修改选择'});return;}
-    const collarbone=state.plan.module_scope.includes(COLLARBONE_OP);
+    const collarbone=state.plan.collarbone_cohort===true||state.plan.module_scope.includes(COLLARBONE_OP);
+    const collarboneTargets=collarbonePlanTargets(state.plan);
     const spill=state.plan.module_scope.includes(SPILL_OP),targets=state.plan.targets.filter(target=>!target.blocked);
-    if(collarbone&&(targets.some(t=>!t.people_transfer||!validCollarboneVisual(t.people_transfer.collarbone_visual,t.people_transfer))||!validCollarboneAck(collarboneReviewAck,targets.map(t=>t.people_transfer!.collarbone_visual!)))){set({message:'请逐图查看并确认所有目标的真实锁骨前后效果，包括归零。'});return;}
+    if(collarbone&&(collarboneTargets.length!==targets.length+(state.plan.collarbone_cohort?1:0)||(state.plan.collarbone_cohort===true?state.plan.applies.target_policy!=='persistent_association'||!validCollarboneCohort(state.plan,state.plan.applies as unknown as import('../people/associationProof').AssociationRequest):targets.some(t=>!t.people_transfer||!validCollarboneVisual(t.people_transfer.collarbone_visual,t.people_transfer)))||!validCollarboneAck(collarboneReviewAck,collarboneTargets.map(t=>t.visual)))){set({message:'请逐图查看并确认所有目标的真实锁骨前后效果，包括归零。'});return;}
     if(!collarbone&&collarboneReviewAck!==undefined){set({message:'锁骨确认不属于当前冻结范围。'});return;}
     if(spill&&(targets.some(target=>!validSpillTransfer(target.spill_transfer,target.document_id,target.revision,state.plan!.applies[SPILL_OP],target.source_proof))
       ||!validSpillTransferAck(spillReviewAck,targets.map(target=>target.spill_transfer!)))){

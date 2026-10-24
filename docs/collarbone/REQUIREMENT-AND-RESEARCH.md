@@ -94,8 +94,10 @@ actual before/after images, lazy frozen-image retrieval and exact per-target
 acknowledgments. See [TRANSFER-VISUAL-CONTRACT.md](TRANSFER-VISUAL-CONTRACT.md)
 for source/owner fences, shared-graph handling, bounds and remaining paths.
 This is source-connected only, not runtime or photographic acceptance.
-Persistent collarbone association updates and a new visual preset-application
-route remain outside that guarantee; the former explicitly refuses new selection.
+Persistent source-and-target collarbone cohort review is subsequently authored
+in [COHORT-VISUAL-CONTRACT.md](COHORT-VISUAL-CONTRACT.md), including inherited
+intent and unlink. A new current-photo visual preset-application route remains
+separate and unfinished; see [PRESET-VISUAL-NEXT.md](PRESET-VISUAL-NEXT.md).
 
 All tests, builds, native execution, numerical precision, RGB16 preservation,
 preview/export equivalence, history/project round trips, photographic quality,

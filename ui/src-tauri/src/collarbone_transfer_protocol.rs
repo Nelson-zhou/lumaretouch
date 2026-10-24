@@ -13,6 +13,24 @@ fn text(value: &Value) -> bool {
 pub(crate) fn selected(value: &Value) -> bool {
     value["module_scope"].as_array().is_some_and(|ops| ops.iter().any(|op| op == OP))
 }
+fn cohort(value: &Value) -> bool { value["collarbone_cohort"] == true }
+fn persistent_request(value: &Value) -> bool {
+    let request=&value["people_transfer"];
+    if !fields(request,&["target_policy","operation","association_id","source_ref","selection","source","targets"])
+        || request["target_policy"]!="persistent_association"
+        || !matches!(request["operation"].as_str(),Some("create"|"patch"|"unlink"))
+        || !text(&request["association_id"]) || !request["source_ref"].is_object()
+        || !request["source"].is_object() || !request["selection"].is_object() {return false;}
+    let (Some(targets),Some(docs),Some(ops))=(request["targets"].as_array(),value["docs"].as_array(),value["module_scope"].as_array()) else{return false;};
+    let selection=request["selection"].as_object().unwrap();
+    if targets.is_empty() || targets.len()>15 || docs.len()!=targets.len() || ops.len()!=selection.len()
+        || ops.iter().any(|op|op.as_str().map_or(true,|name|!selection.contains_key(name)))
+        || ops.iter().enumerate().any(|(i,op)|ops[..i].contains(op))
+        || (request["operation"]=="unlink" && !selection.is_empty()) {return false;}
+    targets.iter().all(|target|fields(target,&["target","target_refs"])
+        && target["target"].is_object() && target["target_refs"].as_array().is_some_and(|refs|refs.len()==1 && refs[0].is_object())
+        && docs.iter().any(|id|id==&target["target"]["document"]["document_id"]))
+}
 pub(crate) fn acknowledgments(value: &Value) -> bool {
     let Some(items) = value.as_array() else { return false; };
     let mut seen = std::collections::BTreeSet::new();
@@ -31,8 +49,9 @@ pub(crate) fn command(value: &Value) -> Result<(), String> {
     }
     if value["cmd"] == "batch" && selected(value)
         && (value["action"] != "preflight" || !value["people_transfer"].is_object()
-            || !matches!(value["people_transfer"]["target_policy"].as_str(), Some("confirmed_person_only" | "explicit_face_map"))) {
-        return Err("Collarbone batch requires confirmed or explicit target-owned people visual review".into());
+            || !matches!(value["people_transfer"]["target_policy"].as_str(), Some("confirmed_person_only" | "explicit_face_map" | "persistent_association"))
+            || (value["people_transfer"]["target_policy"]=="persistent_association" && !persistent_request(value))) {
+        return Err("Collarbone batch requires exact confirmed, explicit or persistent-cohort people visual review".into());
     }
     let Some(ack) = value.get(ACK) else { return Ok(()); };
     if value["cmd"] != "batch" || value["action"] != "commit"
@@ -53,6 +72,9 @@ pub(crate) fn binding(value: &Value) -> Result<Option<Value>, String> {
     if let Some(ack) = value.get(ACK) {
         return Ok(Some(json!({"preflight_token": value["preflight_token"], (ACK): ack})));
     }
+    if value["cmd"] == "batch" && value["action"] == "preflight" && persistent_request(value) {
+        return Ok(Some(json!({"module_scope":value["module_scope"],"collarbone_applies_sha256":request_digest(&value["people_transfer"])})));
+    }
     if value["cmd"] == "batch" && value["action"] == "preflight" && selected(value)
         && value["people_transfer"].is_object() {
         return Ok(Some(json!({"module_scope": value["module_scope"]})));
@@ -60,11 +82,12 @@ pub(crate) fn binding(value: &Value) -> Result<Option<Value>, String> {
     Ok(None)
 }
 pub(crate) fn receipt(value: &Value) -> bool {
+    if value.get("collarbone_cohort").is_some() && !cohort(value) {return false;}
     let Some(ack) = value.get(ACK) else {
-        return !(value["action"] == "commit" && selected(value)
+        return !(value["action"] == "commit" && (selected(value) || cohort(value))
             && (value["success"] == true || value["outcome_unknown"] == true));
     };
-    value["action"] == "commit" && selected(value) && acknowledgments(ack)
+    value["action"] == "commit" && (selected(value) || cohort(value)) && acknowledgments(ack)
         && hex(&value["preflight_token"], 32)
         && !["torso_review_ack", "waist_review_ack", "head_review_ack", "spill_review_ack", "shadow_review_ack"]
             .iter().any(|key| value.get(*key).is_some())
@@ -108,7 +131,14 @@ fn visual(value: &Value, target: &Value) -> bool {
     compact_image(&value["before"],before) && compact_image(&value["after"],after)
 }
 pub(crate) fn preflight(value: &Value) -> bool {
-    if value["success"]!=true || value["action"]!="preflight" || !selected(value) { return true; }
+    if value["success"]!=true || value["action"]!="preflight" {return true;}
+    if value["applies"]["target_policy"]=="persistent_association" {
+        let inherited=value["persistent_association"]["intent"].as_array().is_some_and(|leaves|leaves.iter().any(|leaf|leaf["op"]==OP));
+        if cohort(value) {return cohort_preflight(value);}
+        return !selected(value) && !inherited;
+    }
+    if cohort(value) {return false;}
+    if !selected(value) {return true;}
     if value["people_transfer"]!=true || !value["persistent_association"].is_null()
         || !matches!(value["applies"]["target_policy"].as_str(),Some("confirmed_person_only"|"explicit_face_map")) { return false; }
     let Some(targets)=value["targets"].as_array() else{return false;};
@@ -154,12 +184,12 @@ pub(crate) fn read_only(value:&Value)->bool {
     let Some(map)=value.as_object() else{return false;};
     let names=["cmd","action","request_id","docs","module_scope","people_transfer"];
     let Some(docs)=value["docs"].as_array() else{return false;};
-    value["cmd"]=="batch" && value["action"]=="preflight" && selected(value)
+    value["cmd"]=="batch" && value["action"]=="preflight" && (selected(value) || persistent_request(value))
         && command(value).is_ok() && text(&value["request_id"])
         && names.iter().all(|key|map.contains_key(*key))
         && map.keys().all(|key|names.contains(&key.as_str()) || key=="conflict_policy")
-        && value.get("conflict_policy").map_or(true,|p|matches!(p.as_str(),Some("skip_and_report"|"recheck")))
-        && !docs.is_empty() && docs.len()<=MAX_TARGETS && docs.iter().all(text)
+        && value.get("conflict_policy").map_or(true,|p|if persistent_request(value){p=="recheck"}else{matches!(p.as_str(),Some("skip_and_report"|"recheck"))})
+        && !docs.is_empty() && docs.len()<=(if persistent_request(value){15}else{MAX_TARGETS}) && docs.iter().all(text)
         && docs.iter().enumerate().all(|(i,v)|!docs[..i].contains(v))
 }
 pub(crate) fn image_receipt(value:&Value)->bool {
@@ -169,4 +199,49 @@ pub(crate) fn image_receipt(value:&Value)->bool {
     hex(&value["preflight_token"],32) && text(&value["document_id"]) && revision(&value["revision"])
         && matches!(value["side"].as_str(),Some("before"|"after")) && hex(&value["sha256"],64)
         && image_value["sha256"]==value["sha256"] && image(image_value,(w,h))
+}
+
+
+fn cohort_preflight(value:&Value)->bool {
+    if value["people_transfer"]!=true || !value["persistent_association"].is_object()
+        || value["policy"]!="recheck" || value["blocked"].as_u64()!=Some(0)
+        || value["rejected_docs"].as_array().map_or(true,|rows|!rows.is_empty()) {return false;}
+    let (Some(targets),Some(members))=(value["targets"].as_array(),value["persistent_association"]["members"].as_array()) else{return false;};
+    if targets.is_empty() || targets.len()>15 || members.len()!=targets.len()+1
+        || value["ok"].as_u64()!=Some(targets.len() as u64) || value.to_string().len()>7*1024*1024 {return false;}
+    let source=&value["association_source"];
+    if source["document_id"]!=value["source_snapshot"]["document_id"] {return false;}
+    let mut seen=std::collections::BTreeSet::new();
+    for target in std::iter::once(source).chain(targets.iter()) {
+        let association=&target["association"];let owner=&association["owner"];
+        if !text(&target["document_id"]) || !revision(&target["revision"]) || !target["blocked"].is_null()
+            || !seen.insert(target["document_id"].as_str().unwrap())
+            || owner["document"]["document_id"]!=target["document_id"]
+            || owner["document"]["revision"].as_u64().map(|n|n.to_string())!=target["revision"].as_str().map(str::to_owned)
+            || !members.iter().any(|m|m["document_id"]==target["document_id"] && m["ref"]==association["ref"])
+            || !visual(&association["collarbone_visual"],target)
+            || association["collarbone_visual"]["source_proof"]!=owner["source_proof"] {return false;}
+        let coverage=&association["collarbone_coverage"];
+        if !fields(coverage,&["version","support_transfer","targets"]) || coverage["version"].as_u64()!=Some(1)
+            || coverage["support_transfer"]!="none"
+            || !coverage["targets"].as_array().is_some_and(|rows|rows.len()==1 && rows[0]["face_ref"]==association["ref"]) {return false;}
+    }
+    seen.len()==members.len()
+}
+
+/// Internal receipt binding: retain exact arbitrary-order JSON intent by digest,
+/// not the complete sixteen-member request in the compact receipt budget.
+pub(crate) fn request_digest(value:&Value)->String {
+    use sha2::{Digest,Sha256};
+    fn sorted(value:&Value)->Value {
+        match value {
+            Value::Object(map)=>{
+                let ordered:std::collections::BTreeMap<_,_>=map.iter().map(|(key,item)|(key.clone(),sorted(item))).collect();
+                Value::Object(ordered.into_iter().collect())
+            },
+            Value::Array(items)=>Value::Array(items.iter().map(sorted).collect()),
+            _=>value.clone(),
+        }
+    }
+    format!("{:x}",Sha256::digest(sorted(value).to_string().as_bytes()))
 }

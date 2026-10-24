@@ -21,9 +21,16 @@ REQUEST_FIELDS = {'cmd', 'action', 'request_id', 'preflight_token', 'document_id
 def _records(plan):
     from .collarbone_transfer_review import checked
     params = plan.params().get('_people_transfer')
-    if ('lnx.collarbone.v1' not in plan.modules or type(params) is not dict
-            or params.get('mode') == 'persistent_association'):
-        raise ValueError('Collarbone images belong only to a frozen confirmed or one-time people transfer')
+    cohort = type(params) is dict and params.get('mode') == 'persistent_association'
+    required = (params.get('collarbone_visual_required') is True if cohort
+                else 'lnx.collarbone.v1' in plan.modules)
+    if type(params) is not dict or not required:
+        raise ValueError('Collarbone images require their actual frozen people or complete-cohort review')
+    if cohort and (not plan.targets or plan.targets[0].document_id != plan.source_id
+                   or any(target.blocked for target in plan.targets)):
+        raise ValueError('Collarbone cohort images require the source first and every atomic member')
+    if len(plan.targets) > 16:
+        raise ValueError('Collarbone image set exceeds its complete reviewed target bound')
     out = {}
     for target in plan.targets:
         if target.blocked: continue

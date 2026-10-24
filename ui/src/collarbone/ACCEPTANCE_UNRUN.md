@@ -46,11 +46,29 @@ match; stale asynchronous responses cannot authorize a newer review. Unknown
 mutation outcomes remain tied to the original request and cannot be dismissed
 as if no write occurred.
 
-Persistent association create/patch does not yet have cohort-wide visual review
-and therefore refuses this selected operation explicitly. Unlink and existing
-saved recipes are not reinterpreted. Generic single-photo preset review is a
-separate existing route and is not claimed to have these batch guarantees.
-Official AI 3D detection and automatic category/anatomy inference remain absent.
+Persistent association now has a source-authored whole-cohort visual route:
+the source member appears first, followed by every target, each with actual
+frozen before/after image retrieval, its own coverage and an independent
+checkbox. A collarbone selection, retained intent (including zero/unlink) or
+active member before/candidate state requires this cohort review even when the
+new module selection does not include collarbone. Complete ordered image and
+coverage acknowledgment remains bound to the single atomic transaction; a
+target-only acknowledgment cannot authorize the source member. Higher-priority
+explicit face parameters can keep a member unchanged without bypassing review.
+Saved recipes are not reinterpreted. If stale active prior support prevents the
+actual before-render, the cohort cannot claim successful visual review or use
+an invented neutral before-image; explicit recovery/refusal remains necessary.
+Generic single-photo preset review remains a separate existing route and is not
+claimed to have these batch guarantees. Official AI 3D detection and automatic
+category/anatomy inference remain absent.
 
 New model, workflow and paged-transport fixtures are declarations only. No test,
 build, typecheck, app interaction, numerical or photographic acceptance ran.
+
+## Cohort fixtures (authored, UNRUN)
+
+`cohortModel.unrun.test.ts` and `cohortWorkflow.unrun.test.ts` declare source-first
+ordering, missing-source rejection, empty-scope unlink, inherited/active-only
+trigger, proof/coverage substitution, per-member acknowledgment, terminal marker
+and uncertainty/query fences. They have not been imported, executed, built or
+typechecked. No photographic or performance acceptance is inferred.

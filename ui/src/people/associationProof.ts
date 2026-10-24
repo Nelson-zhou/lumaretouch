@@ -1,3 +1,5 @@
+import type {CollarboneVisual} from '../collarbone/transferModel';
+import type {CollarboneCoverage} from './transferProof';
 import type {FaceRef, ParameterValue} from './model';
 import {digest, validEndpoint, validFaceRef, sameFace, sameEndpoint, type PeopleEndpointProof} from './transferProof';
 export type AssociationMember={document_id:string;scope_id:string;original_sha256:string;ref:FaceRef};
@@ -7,7 +9,7 @@ export type AssociationRequest={target_policy:'persistent_association';operation
   selection:Record<string,string[]>;source:PeopleEndpointProof;targets:{target:PeopleEndpointProof;target_refs:FaceRef[]}[]};
 export type AssociationReview={version:1;operation:AssociationRequest['operation'];association_id:string;generation:string;members:AssociationMember[];intent:AssociationIntent[]};
 export type AssociationTarget={index:number|null;path:string;document_id:string;revision?:string;blocked?:string|null;
-  association?:{owner:PeopleEndpointProof;ref:FaceRef;candidate_sha256:string;person_id:string}};
+  association?:{owner:PeopleEndpointProof;ref:FaceRef;candidate_sha256:string;person_id:string;collarbone_coverage?:CollarboneCoverage;collarbone_visual?:CollarboneVisual}};
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const token=(v:unknown):v is string=>typeof v==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(v);
 const keys=(v:Record<string,unknown>, names:string[])=>Object.keys(v).sort().join('|')===[...names].sort().join('|');
@@ -53,7 +55,7 @@ export function validAssociationReview(v:unknown,request:AssociationRequest,sour
     const target=reviews.find(t=>t.document_id===proof.document.document_id),a=target?.association;
     if(!m||m.scope_id!==proof.people_scope||m.original_sha256!==proof.source_proof.original_sha256||!sameFace(m.ref,ref)||!target||target.blocked
       ||typeof target.path!=='string'||!Number.isInteger(target.index)||(target.index??-1)<0
-      ||target.revision!==String(proof.document.revision)||!a||!object(a)||!keys(a,['owner','ref','candidate_sha256','person_id'])||!validEndpoint(a.owner)||!sameEndpoint(a.owner,proof)||!validFaceRef(a.ref)||!sameFace(a.ref,ref)
+      ||target.revision!==String(proof.document.revision)||!a||!object(a)||!keys(a,['owner','ref','candidate_sha256','person_id',...((a.collarbone_coverage!==undefined||a.collarbone_visual!==undefined)?['collarbone_coverage','collarbone_visual']:[])])||!validEndpoint(a.owner)||!sameEndpoint(a.owner,proof)||!validFaceRef(a.ref)||!sameFace(a.ref,ref)
       ||!digest(a.candidate_sha256)||!token(a.person_id))return false;}
   if(request.operation==='create'&&v.intent.length!==Object.values(request.selection).reduce((n,paths)=>n+paths.length,0))return false;
   if(request.operation!=='unlink')for(const [op,paths] of Object.entries(request.selection))for(const path of paths)if(!v.intent.some(leaf=>leaf.op===op&&leaf.path===path))return false;

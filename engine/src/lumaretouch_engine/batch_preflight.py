@@ -14,6 +14,19 @@ MAX_TARGETS=10000
 TTL_NS=30*60*1_000_000_000
 
 
+def collarbone_required(plan):
+    """Frozen owner intent, never a caller-supplied review flag."""
+    people = plan.params().get('_people_transfer')
+    if type(people) is not dict: return False
+    if people.get('mode') == 'persistent_association':
+        return people.get('collarbone_visual_required') is True
+    return 'lnx.collarbone.v1' in plan.modules
+
+
+def collarbone_cohort(plan):
+    return collarbone_required(plan) and plan.params()['_people_transfer'].get('mode') == 'persistent_association'
+
+
 def canonical(value,limit=MAX_BYTES):
     text=json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False)
     if len(text.encode('utf-8'))>limit:raise ValueError('batch preflight exceeds metadata budget')
@@ -173,7 +186,7 @@ class PreflightStore:
         if family is not None:
             records=[json.loads(getattr(target,family.frozen_key)) for target in plan.targets if not target.blocked]
             family.review.acknowledgments(scalar_acks[family.ack_key],records)
-        if 'lnx.collarbone.v1' in plan.modules and '_people_transfer' in plan.params():
+        if collarbone_required(plan):
             from .collarbone_transfer_review import acknowledgments
             records=[json.loads(target.people_json)['collarbone_visual'] for target in plan.targets if not target.blocked]
             acknowledgments(collarbone_review_ack,records)
@@ -182,6 +195,7 @@ class PreflightStore:
         self.finish(plan,{'success':False,'outcome_unknown':True,'preflight_token':plan.token,'request_id':request_id,
             **({'module_scope':list(plan.modules)} if collarbone_review_ack is not None or any(value is not None for value in scalar_acks.values()) else {}),
             **({'collarbone_review_ack':collarbone_review_ack} if collarbone_review_ack is not None else {}),
+            **({'collarbone_cohort':True} if collarbone_cohort(plan) else {}),
             'error':'batch started; terminal outcome has not been recorded',
             **({'spill_review_ack':spill_review_ack} if spill_review_ack is not None else {}),
             **({'shadow_review_ack':shadow_review_ack} if shadow_review_ack is not None else {}),
@@ -222,12 +236,13 @@ class PreflightStore:
                 ack[family.ack_key]=[{'document_id':r['document_id'],'revision':r['revision'],
                     'before_sha256':r['before']['sha256'],'after_sha256':r['after']['sha256']} for r in records]
                 ack['module_scope']=list(plan.modules)
-            if 'lnx.collarbone.v1' in plan.modules and '_people_transfer' in plan.params():
+            if collarbone_required(plan):
                 records=[json.loads(t.people_json)['collarbone_visual'] for t in plan.targets if not t.blocked and t.people_json is not None]
                 ack['collarbone_review_ack']=[{'document_id':r['document_id'],'revision':r['revision'],
                     'before_sha256':r['before']['sha256'],'after_sha256':r['after']['sha256'],
                     'coverage_sha256':r['coverage_sha256']} for r in records]
                 ack['module_scope']=list(plan.modules)
+                if collarbone_cohort(plan):ack['collarbone_cohort']=True
             payload=canonical({'success':False,'outcome_unknown':True,'preflight_token':plan.token,'request_id':request_id,
                 'error':'batch result could not be retained; inspect document state before a new batch',**ack})
         self.terminal[plan.token]=(plan.workspace,payload)

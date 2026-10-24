@@ -63,8 +63,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
   const proof: PeopleTransferProof | undefined = manual ? (persistent?association?.source:explicit?.source)
     : view && links.length === 1 ? {...view.binding, state_revision: view.revision,
       association_revision: view.association_revision, person_id: links[0].person_id} : undefined;
-  const collarbonePersistentBlocked = persistent && associationOperation !== 'unlink' && Object.hasOwn(selection,'lnx.collarbone.v1');
-  const ready = !collarbonePersistentBlocked && sourceReady && !!proof && !!request && (!manual || allImagesReady);
+  const ready = sourceReady && !!proof && !!request && (!manual || allImagesReady);
   const flow = useBatchWorkflow({docs: selected, moduleScope: persistent&&associationOperation==='unlink'?[]:Object.keys(selection), conflictPolicy: persistent?'recheck':policy,
     sourceDocumentId: view?.binding.document_id ?? '', referencePath: currentPath, enabled: ready,
     label: persistent?'持久人物关联：所有成员共同审核，逐人脸显式参数仍优先':targetPolicy === 'explicit_face_map' ? '仅本次手动指定的人脸配对，不建立持久人物关联' : '仅向用户已确认的同一人物同步明确勾选的参数',
@@ -121,6 +120,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
         <select value={associationOperation} onChange={event=>setAssociationOperation(event.currentTarget.value as AssociationRequest['operation'])}>
           <option value="create">新建已审核的匿名人物关联</option><option value="patch">更新共同继承的所选参数</option><option value="unlink">解除整个关联，保留每张显式编辑与历史</option>
         </select>
+        <p>关联涉及锁骨增强（包括已有继承、启用效果或解除关联）时，必须另行逐张读取并确认源成员与所有目标的真实前后图像；不复制任何锁骨曲线、类别确认或支持范围。</p>
         <p>每张照片只选择一张人脸，最多 16 个独立文档成员（含源图）。所有成员同时提交；人脸显式参数优先于共享人物参数。不会自动识别或扩充成员。</p>
         <p>成员源图或可用状态改变后暂停共享编辑；保留上次已接受的本地投影。关联期间不允许直接重新分析成员，需先完整解除关联。当前仅支持成员齐全时更新或整体解除。</p>
         {existingAssociation&&<p>已存关联 {existingAssociation.association_id} · 内容版本 {existingAssociation.generation}。请在胶片栏选择其余全部成员，并重新逐张确认。</p>}
@@ -153,15 +153,14 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
           <p role="status">已手动指定 {selected.filter(id => choices[id]?.length).length} / {selected.length} 张目标照片。{!(persistent?association:explicit) ? (persistent?'需要每张精确成员及其全部关联共同版本；新建或更新还需选择参数，不能跳过受阻成员。':'每张目标都需要有效选择，且至少勾选一项参数，才能预检。') : '下一步将冻结配对与所选参数，仍需在审核窗口最终确认。'}</p>
         </>}
       </>}
-      {persistent&&<p>锁骨增强尚不支持持久关联的全成员视觉审核。请取消该项，或选择仅本次配对 / 已确认人物同步，逐目标查看真实前后效果；不会静默删除已选参数。</p>}
       <fieldset disabled={disabled}><legend>逐模块选择参数</legend>
         {operations.map(([operation]) => {
           const leaves = available.filter(leaf => leaf.operation === operation);
           return <details key={operation}><summary>{operationLabel(operation)}</summary>
-            <button type="button" disabled={persistent && operation === 'lnx.collarbone.v1'} onClick={() => setLeaves([...chosen, ...leaves.filter(leaf => !leaf.conflict).map(leaf => leaf.key)])}>勾选本模块可迁移参数</button>
+            <button type="button" onClick={() => setLeaves([...chosen, ...leaves.filter(leaf => !leaf.conflict).map(leaf => leaf.key)])}>勾选本模块可迁移参数</button>
             <button type="button" onClick={() => setLeaves(chosen.filter(id => !leaves.some(leaf => leaf.key === id)))}>取消本模块</button>
             {leaves.map(leaf => <label key={leaf.key} style={{display: 'block'}}>
-              <input type="checkbox" checked={chosen.includes(leaf.key)} disabled={leaf.conflict || persistent && operation === 'lnx.collarbone.v1' && !chosen.includes(leaf.key)}
+              <input type="checkbox" checked={chosen.includes(leaf.key)} disabled={leaf.conflict}
                 onChange={event => setLeaves(event.currentTarget.checked ? [...chosen, leaf.key] : chosen.filter(id => id !== leaf.key))}/>
               {leaf.path}：{String(leaf.value)}{leaf.conflict ? '（来源有分组冲突）' : ''}
             </label>)}

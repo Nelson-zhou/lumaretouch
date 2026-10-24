@@ -49,6 +49,9 @@ function TargetReview({value,coverage,preflightToken,reviewKey,onReady,disabled=
     <strong>本次冻结目标的真实前后预览，尚未应用</strong>
     <p>这里显示预检时冻结目标完整编辑链的实际应用前后效果，包含本次同时选择的其他人物参数。只传递数值，不复制源图锁骨曲线、身体蒙版、类别确认或人物关联。零强度也必须审核，因其可能移除目标已有增强。</p>
     <p>每张目标的可见锁骨范围与类别来自其独立审核。下方可切换原尺寸显示并滚动检查细节；图像最长边最多 1024 像素，不替代全分辨率照片验收。预检后若照片或支持证据改变，提交会拒绝，不能用旧图授权新状态。</p>
+    <ul>{coverage.targets.map(row=><li key={row.face_ref.face_instance_id}>本人脸 {row.face_ref.face_instance_id}：{row.scope==='neutral-no-effect'
+      ?'候选强度为零，不据此声明存在类别或身体审核；应用前的已有作用仍显示在真实前图。'
+      :`候选使用本成员独立审核的可见锁骨，用户确认类别 ${row.clavicle_category==='female'?'女':'长辈女'}，图像侧 ${row.clavicle_sides.map(side=>side==='left'?'左':'右').join('、')}。`}</li>)}</ul>
     <button type="button" disabled={disabled||!!loadAttempt&&!pair&&!requestError} onClick={()=>setLoadAttempt(n=>n+1)}>{pair?'重新读取本目标图像':'读取本目标真实前后图像'}</button>
     {!!requestError&&<p role="alert">{requestError}</p>}
     <label><input type="checkbox" checked={zoom} onChange={e=>setZoom(e.target.checked)}/>按审核图原尺寸显示，滚动检查锁骨细节</label>

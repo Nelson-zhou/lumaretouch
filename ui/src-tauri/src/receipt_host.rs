@@ -226,10 +226,16 @@ impl ReviewBinding {
                 rows.iter().all(|row| row.is_object() && row["result_revision"].is_null()
                     && matches!(row["outcome"].as_str(), Some("conflict" | "not_applied")))))
             && value["requires_reload"] != true;
-        no_write || self.fields.as_object().unwrap().iter().all(|(key, expected)| value.get(key) == Some(expected))
+        no_write || self.fields.as_object().unwrap().iter().all(|(key, expected)| {
+            if key=="collarbone_applies_sha256" {
+                value["applies"].is_object() && expected.as_str()==Some(crate::batch_api::collarbone::request_digest(&value["applies"]).as_str())
+            } else {value.get(key)==Some(expected)}
+        })
     }
     fn decorate(&self, value: &mut Value) {
-        for (key, expected) in self.fields.as_object().unwrap() { value[key] = expected.clone(); }
+        for (key, expected) in self.fields.as_object().unwrap() {
+            if key!="collarbone_applies_sha256" {value[key] = expected.clone();}
+        }
     }
 }
 struct Receipt { id: String, action: String, document: Option<String>, review: Option<ReviewBinding>, result: Option<Value>, bytes: usize }

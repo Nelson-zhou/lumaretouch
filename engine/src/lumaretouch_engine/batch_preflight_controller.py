@@ -11,7 +11,7 @@ from . import original_shadow_transfer_review as SHR
 from .body_scalar_transfer_review import select as body_family
 from . import local_grade_layers as LG
 from . import local_grade_runtime as LR
-from .batch_preflight import PreflightStore,FrozenTarget,canonical,MAX_RESULT_BYTES
+from .batch_preflight import PreflightStore,FrozenTarget,canonical,MAX_RESULT_BYTES,collarbone_required
 from . import creative_derived_source as SOURCE, creative_derived_transfer as TRANSFER
 
 @dataclass(frozen=True)
@@ -118,7 +118,7 @@ class FrozenBatchController:
             if p['action']=='commit':
                 if self.replay_completed(p):return
                 reviewed=self.store.get(p.get('preflight_token'),self.versions.workspace)
-                if 'collarbone_review_ack' in p and ('_people_transfer' not in reviewed.params() or 'lnx.collarbone.v1' not in reviewed.modules):
+                if 'collarbone_review_ack' in p and not collarbone_required(reviewed):
                     raise SC.ScopeError('Collarbone acknowledgment requires its frozen people-transfer scope')
                 if SC.SPILL_REMOVAL.OP in reviewed.modules:
                     if len(reviewed.targets)>SR.MAX_TARGETS:raise SC.ScopeError('Spill target count exceeds its reviewed display bound')

@@ -87,10 +87,10 @@ query-only, not a reason to blindly retry or discard recovery ownership.
 
 ## Explicit remaining paths and limitations
 
-- Persistent association create/patch cannot newly select collarbone until all
-  source and target cohort members have a corresponding actual-image review.
-  This is an explicit UI/backend refusal. Saved projections and complete unlink
-  remain available; old recipes are not reinterpreted.
+- Persistent source-and-target cohort image review is now source-authored in
+  the subsequent [COHORT-VISUAL-CONTRACT.md](COHORT-VISUAL-CONTRACT.md), including
+  retained intent and unlink. It remains UNRUN; old recipe semantics are not
+  reinterpreted and actual cohort-wide approval is mandatory when required.
 - Generic legacy batch cannot bypass the confirmed/explicit people image route.
   The separately existing current-photo preset path retains its own review;
   this change does not claim a new visual preset-application workflow. Generic

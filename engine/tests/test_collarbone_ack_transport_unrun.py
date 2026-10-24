@@ -11,13 +11,13 @@ def test_claim_checks_ack_before_consuming_frozen_plan():
     claim=source.split('    def claim(',1)[1].split('    def finish(',1)[0]
     assert claim.index('acknowledgments(collarbone_review_ack,records)') < claim.index('self.finish(plan')
     assert "json.loads(target.people_json)['collarbone_visual']" in claim
-    assert "'_people_transfer' in plan.params()" in claim
+    assert "if collarbone_required(plan):" in claim
 
 
 def test_replay_requires_exact_original_coverage_ack():
     source=(ENGINE/'batch_preflight_controller.py').read_text()
     assert "canonical(p['collarbone_review_ack'])!=canonical(cached['collarbone_review_ack'])" in source
-    assert "'_people_transfer' not in reviewed.params()" in source
+    assert "not collarbone_required(reviewed)" in source
 
 
 def test_overflow_fallback_retains_coverage_and_png_hashes():

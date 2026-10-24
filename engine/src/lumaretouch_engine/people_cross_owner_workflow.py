@@ -10,6 +10,7 @@ from . import people_cross_owner as C, people_transfer_inventory as I
 from . import virtual_copy_people as V, creative_derived_source as SOURCE
 from .batch_preflight import FrozenTarget, canonical
 from .people_resolver import resolve
+from . import collarbone_cohort_review as CLAVICLE
 
 MARKER = '_people_transfer'
 POLICY = 'persistent_association'
@@ -41,12 +42,6 @@ def options(value, modules):
     selection = value['selection']; defaults = A.defaults()
     if type(selection) is not dict or type(modules) is not list or len(modules) != len(set(modules)) or set(modules) != set(selection):
         raise ValueError('Association modules must exactly name selected scalar leaves')
-    # A persistent cohort includes the source member and can change inherited
-    # intent in every owner. Ordinary target-only visual acknowledgments cannot
-    # authorize that separate transaction. Keep saved projections and complete
-    # unlink available; do not reinterpret old collarbone recipes.
-    if 'lnx.collarbone.v1' in selection:
-        raise ValueError('Collarbone scalar changes require each target image pair: use confirmed-person or explicit one-time transfer; persistent cohort visual review is not available')
     if value['operation'] == 'unlink':
         if selection: raise ValueError('Complete unlink accepts no new parameter selection')
     elif not selection:
@@ -162,7 +157,7 @@ def _public(item, *, live=False):
     return {'index': item['index'], 'path': item['row']['path'], 'live': live,
             'document_id': document['document_id'], 'revision': str(document['revision']),
             'blocked': None, 'before': {}, 'association': {'owner': item['proof'], 'ref': item['ref'],
-            'candidate_sha256': item['candidate_sha256'], 'person_id': item['person_id']}}
+            'candidate_sha256': item['candidate_sha256'], 'person_id': item['person_id'], **CLAVICLE.evidence(item)}}
 
 
 def preflight(engine, controller, p):
@@ -179,12 +174,18 @@ def preflight(engine, controller, p):
     if current is None or batch.versions.version(current).document_id != selected['source']['document']['document_id']:
         raise ValueError('Association source must be the current reviewed document')
     endpoints, review = prepare(engine, selected)
+    visual_required = CLAVICLE.required(endpoints, selected, review)
+    displays = CLAVICLE.prepare(engine, endpoints) if visual_required else None
+    for item in endpoints:
+        I.verify(engine, item['row'], V.row_snapshot(engine, item['row']), item['proof'])
+        SOURCE.verify_row(item['row'], item['proof']['source_proof'])
     source = endpoints[0]; document = source['proof']['document']
     frozen = [FrozenTarget(item['proof']['document']['document_id'], item['proof']['document']['revision'],
               item['index'], item['row']['path'], None, canonical(item['proof']),
               people_json=canonical({'ref': item['ref'], 'person_id': item['person_id'],
-                                     'candidate_sha256': item['candidate_sha256']})) for item in endpoints]
-    params = {MARKER: {'mode': POLICY, 'options': selected, 'review': review}}
+                                     'candidate_sha256': item['candidate_sha256'], **CLAVICLE.evidence(item)})) for item in endpoints]
+    params = {MARKER: {'mode': POLICY, 'options': selected, 'review': review,
+                       'collarbone_visual_required': visual_required}}
     plan = controller.store.create(batch.versions.workspace, document['document_id'], document['revision'],
         source['row']['path'], p['module_scope'], params, 'recheck', frozen, [])
     body = {'event': 'batch_preflight', 'success': True, 'module_scope': list(plan.modules), 'source': 'current',
@@ -193,29 +194,54 @@ def preflight(engine, controller, p):
             'persistent_association': review, 'people_transfer': True, 'rejected_docs': [],
             'ok': len(endpoints) - 1, 'blocked': 0, 'preflight_token': plan.token,
             'workspace_generation': plan.workspace, 'expires_ns': str(plan.expires_ns)}
+    if visual_required:
+        body['collarbone_cohort'] = True
+        from .collarbone_visual_store import attach, prune
+        try:
+            canonical(body, 7 * 1024 * 1024)
+            attach(controller.store, plan, displays)
+        except Exception:
+            controller.store.pending.pop(plan.token, None)
+            prune(controller.store)
+            raise
     controller.emit(body); controller.emit_result(p, body)
 
 
 def commit(engine, controller, p, plan):
-    if set(p) - {'cmd', 'action', 'request_id', 'preflight_token'}:
+    if set(p) - {'cmd', 'action', 'request_id', 'preflight_token', 'collarbone_review_ack'}:
         raise ValueError('Association commit accepts only its immutable reviewed token')
     import json
     params = plan.params()[MARKER]; selected = options(params['options'], list(plan.modules))
+    visual_required = params.get('collarbone_visual_required') is True
+    visual_ack = None
+    if visual_required:
+        visual_ack = CLAVICLE.R.acknowledgments(p.get('collarbone_review_ack'),
+            [json.loads(target.people_json).get('collarbone_visual') for target in plan.targets])
+    elif 'collarbone_review_ack' in p:
+        raise ValueError('Collarbone acknowledgment cannot authorize a cohort without its own frozen image review')
     batch = engine._batch_controller(); batch.documents.remember_current()
     endpoints, review = prepare(engine, selected, validate=False)
-    if review != params['review'] or len(endpoints) != len(plan.targets):
+    if (review != params['review'] or len(endpoints) != len(plan.targets)
+            or CLAVICLE.required(endpoints, selected, review) != visual_required):
         raise ValueError('Reviewed association content changed')
     plans = {}
     for item, frozen in zip(endpoints, plan.targets):
+        frozen_payload = json.loads(frozen.people_json)
+        expected_payload = {'ref': item['ref'], 'person_id': item['person_id'], 'candidate_sha256': item['candidate_sha256']}
+        if visual_required:
+            expected_payload.update(CLAVICLE.evidence(frozen_payload))
+            CLAVICLE.verify(engine, item, frozen_payload)
         if (item['proof'] != json.loads(frozen.before_json) or item['row']['path'] != frozen.path
                 or item['proof']['document']['document_id'] != frozen.document_id
-                or {'ref': item['ref'], 'person_id': item['person_id'], 'candidate_sha256': item['candidate_sha256']} != json.loads(frozen.people_json)):
+                or expected_payload != frozen_payload):
             raise ValueError('Association endpoint or selected intent changed after review')
         plans[item['member']['scope_id']] = {'row': item['row'], 'before': item['before'],
             'candidate': item['candidate'], 'reviewed_face_refs': [item['ref']]}
     from .people_batch_ledger import _targets, prepare_scoped, _verify, commit_scoped
     targets = _targets(batch, engine, plans)
-    if len(targets) != len(endpoints): raise ValueError('Association affected document set differs from its reviewed cohort')
+    if ({target['document_id'] for target in targets.values()}
+            != {item['member']['document_id'] for item in endpoints}):
+        raise ValueError('Association affected document set differs from its reviewed cohort')
     # The ordinary scoped preparer stages the live preview rather than a full
     # export for the active owner. Persistent consent includes that source
     # member too, so verify its full-resolution candidate at commit as well.
@@ -228,7 +254,12 @@ def commit(engine, controller, p, plan):
     for item in endpoints:
         I.verify(engine, item['row'], V.row_snapshot(engine, item['row']), item['proof'])
         SOURCE.verify_row(item['row'], item['proof']['source_proof'])
-    controller.store.claim(plan)
+    if visual_required:
+        for item, frozen in zip(endpoints, plan.targets):
+            CLAVICLE.verify(engine, item, json.loads(frozen.people_json))
+        from .collarbone_visual_store import verify_available
+        verify_available(controller.store, plan)
+    controller.store.claim(plan, collarbone_review_ack=visual_ack, request_id=p.get('request_id'))
     try:
         result = commit_scoped(batch, engine, plans, request_id=p.get('request_id'), prepare=False, prepared_targets=targets)
         bid, frame = (None, None) if result is None else result
@@ -241,9 +272,13 @@ def commit(engine, controller, p, plan):
                 'source_outcome': outcomes[0], 'source_snapshot': controller._source(plan),
                 'persistent_association': review, 'people_transfer': True, 'source_changed_since_preflight': False,
                 'source_missing': False, 'preflight_token': plan.token, 'workspace_generation': plan.workspace}
+        if visual_required:
+            body.update(collarbone_cohort=True, collarbone_review_ack=deepcopy(visual_ack))
         controller.emit(body)
         if frame is not None: controller.emit(frame)
     except Exception as error:
         body = {'success': False, 'outcome_unknown': True, 'error': str(error)[:2000],
                 'preflight_token': plan.token, 'workspace_generation': plan.workspace, 'requires_preflight': True}
+    if visual_required:
+        body.update(collarbone_cohort=True, collarbone_review_ack=deepcopy(visual_ack), module_scope=list(plan.modules))
     controller.emit_result(p, controller.store.finish(plan, body))
