@@ -179,6 +179,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                                           values[A.FACE_CONTOUR.OP])
             from .face_contour_people import append as append_contour
             field, contour_facts = append_contour(field, state, entry['face_ref'], analysis, source, values[A.FACE_CONTOUR.OP])
+            from .face_size_people import append as append_size
+            field, size_facts = append_size(field, state, entry['face_ref'], analysis, source, values[A.FACE_SIZE.OP])
             blush_review=lipstick_review=None
             from .lipstick_support import raster as lipstick_raster
             lipstick_review=lipstick_raster(state,lipstick_assets or {},entry['face_ref'],(h,w)) if A.LIPSTICK.active(values[A.LIPSTICK.OP]) else None
@@ -249,6 +251,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             fields.append(field); effects.extend(local)
             facts[key] = {record.stage:record.facts for record in local}
             if slim_facts is not None: facts[key]['slim_face_v2'] = slim_facts
+            if size_facts is not None: facts[key]['face_size'] = size_facts
             if contour_facts is not None: facts[key]['face_contour'] = contour_facts
             liner_facts=[record.facts for record in local if record.stage=='eyeliner']
             if liner_facts:facts[key]['eyeliner']={'eyes':liner_facts,'stage':'source-working-srgb'}

@@ -984,6 +984,8 @@ export interface EngineStatus {
     skin_texture_reason?: string | null;
     face_contour_available?: boolean;
     face_contour_reason?: string | null;
+    face_size_available?: boolean;
+    face_size_reason?: string | null;
     creative_document_protocol?: number;
     canvas_guides_protocol?: number;
     export_destination_protocol?: number;

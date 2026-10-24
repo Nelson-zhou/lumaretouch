@@ -1,7 +1,7 @@
 {
   "method": "静态提取RetouchPanel WIRED，仅证明该表列出路由。其它特殊UI分支未计入，未列出不直接判缺失，已列出也不算已完成。",
   "families": 39,
-  "wired_routes": 39,
+  "wired_routes": 40,
   "items": [
     {
       "id": "PC-47211",
@@ -56,6 +56,10 @@
         {
           "path": "脸型/瘦脸",
           "ui_route": "slim_face.v2"
+        },
+        {
+          "path": "脸型/小脸",
+          "ui_route": "face_size.amount"
         },
         {
           "path": "眼睛/整体大小",

@@ -13,7 +13,7 @@ from . import creative_derived_hair as HAIR
 OPERATIONS = frozenset((
     'lnx.deform.v1', 'lnx.enhance.v1', 'lnx.facial_wrinkles.v1', 'lnx.skin_colour.v1', 'lnx.skin_finish.v1',
     'lnx.skin_gloss.v1',
-    'lnx.skin_texture.v1', 'lnx.face_contour.v1', 'lnx.slim_face.v2',
+    'lnx.skin_texture.v1', 'lnx.face_contour.v1', 'lnx.slim_face.v2', 'lnx.face_size.v1',
     'lnx.brow_shape.v1', 'lnx.nose_shape.v1', 'lnx.eye_shape.v1',
     'lnx.mouth_shape.v1', 'lnx.lip_makeup.v1', 'lnx.eye_light.v1',
 )) | MAKEUP.OPERATIONS | {HAIR.OPERATION}

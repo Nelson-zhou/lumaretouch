@@ -1,0 +1,225 @@
+{
+  "baseline": "e1ad97812a59e69f805af11ab21305420d8fe4f4",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Distinct measured whole-face size: original Rust inverse uniform core, original/derived canonical render/export/history, source-owned anatomy admission, native UI and scalar-only per-target transfer. No numerical or photographic acceptance.",
+  "requirement_ids": [
+    "LNX-REF-PC-32466-C-728fc62cdd"
+  ],
+  "files": [
+    {
+      "path": "core/face_size/Cargo.toml",
+      "sha256": "40b0ff7d04faeb8729fc4f2cfaae4069b553ae9b66ec3c14c076002a01a809ad",
+      "bytes": 168
+    },
+    {
+      "path": "core/face_size/README.md",
+      "sha256": "92d66fb098d9eebfae55661e98e715ff70be59ebd4e25a1c3eddd8d765ff0dcc",
+      "bytes": 7821
+    },
+    {
+      "path": "core/face_size/face_size.h",
+      "sha256": "517bdee57b5615760367f45e985c276b90e2e5c13004cb1dcc7594a88e15cde3",
+      "bytes": 1619
+    },
+    {
+      "path": "core/face_size/lib.rs",
+      "sha256": "f53ff8f9ac88b07d7e35f49ebf48e8dd297862f4d138a10b5c140107611f7e30",
+      "bytes": 7346
+    },
+    {
+      "path": "core/face_size/tests.rs",
+      "sha256": "e7520cd24acd1923832a2532297c3399d57f15ab5bd8369dfbbc742f862fc52f",
+      "bytes": 10364
+    },
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "61ce5a426a5e7fe079778e5d3fc1138dcaa3d6bc867e6e6ec5fa9bcebded9b51",
+      "bytes": 13318
+    },
+    {
+      "path": "docs/face-size/IMPLEMENTATION.md",
+      "sha256": "6ba35c41aca7c58ffc795230b9c34f4a6c657885413ec749e7abeccf0e28daf8",
+      "bytes": 9545
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "03f28032544bd51f46d686119bda88321eba035cd0d2530a5e43053d41ca79d9",
+      "bytes": 30668
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "0f1ad2c789c13b9c323326d47cd962e621a53ff9fa3745e619716acd1b5f4191",
+      "bytes": 14383
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_size_native.py",
+      "sha256": "f7d1cb3b77ab508055ec5f28913f550a56de221e6819276a54e8b19d382793d0",
+      "bytes": 6637
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_size_people.py",
+      "sha256": "edb795d76637955f9e41fccd455c4e72e57004472ee5c1cf869b2af6a5c248be",
+      "bytes": 5470
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_size_runtime.py",
+      "sha256": "18566c11211f5ae902d0c79fd7d33c4b026efaa801a7ba2a2e1b4582f5fa108b",
+      "bytes": 15746
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_size_scope.py",
+      "sha256": "1422cdc651d82fa4888ceb03b237abdc7f8efc77d1fb8187467599269fca40d9",
+      "bytes": 6534
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_size_state.py",
+      "sha256": "ac589cde812c2b146c11b78d0dd5b4087f983bf52383a439f29e509468b42ce8",
+      "bytes": 1990
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "70ad6d918e22e49d88adff36e507eb470acf446f94f8b934bc0a8959fab205e9",
+      "bytes": 4461
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "ac73bdf73332b5c61a34848409a7efd24728e17af7c030a5db8122fccc36efd6",
+      "bytes": 20376
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "60faff645232f4d9ba7992248aa5e333907da6ce00933695c8f9cc062ecfc1c9",
+      "bytes": 15478
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "e8ca2903500ec74b0fc02f0e11c6c4eabe4b4ba0c0134c253e31e349bca5b833",
+      "bytes": 50896
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "192f4c57fffed20000b5cce83418f78b9e306eac2060ccb901c61ebfa5e4db0f",
+      "bytes": 465081
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "4330af9c7b9c2a0737e06f56ee0519dd64dc5f7fb1177e90d06fe5e5127778db",
+      "bytes": 8132
+    },
+    {
+      "path": "engine/tests/test_face_size_geometry_unrun.py",
+      "sha256": "94ca33cbfbd41044832f40df89f5e044906b52d4736493510233e184b7732c5d",
+      "bytes": 12889
+    },
+    {
+      "path": "engine/tests/test_face_size_integration_unrun.py",
+      "sha256": "a1564cc50db361393b1a317d7606e99da389f0300cd659a7ad6eabf2010d3ba3",
+      "bytes": 32861
+    },
+    {
+      "path": "engine/tests/test_face_size_native_unrun.py",
+      "sha256": "7a6fcef1e88063512018b72936bfb73f0862f75defcd0e47bb2232d36c7d103c",
+      "bytes": 13987
+    },
+    {
+      "path": "engine/tests/test_face_size_scope_unrun.py",
+      "sha256": "af42f74aaf677cd08342d870f9356a0b873b3a6d473c8067884e011ba504bb94",
+      "bytes": 32777
+    },
+    {
+      "path": "packaging/build-face-size.sh",
+      "sha256": "828a9aae420be3b6244769219e953b132ad850b36fed36356b919744c4ed9a49",
+      "bytes": 656
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "994e31117a6d8ff5551ff30c14e6152e9d03cb2c258636d95e5f80a51b81259e",
+      "bytes": 23504
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "33b52387849effb0141810c466e7f5f47d9b5ac02d5863a4ccd7aca042330800",
+      "bytes": 70851
+    },
+    {
+      "path": "ui/src/faceSize/ACCEPTANCE_UNRUN.md",
+      "sha256": "412814e66a0aa6bb275126ed3d6641ecae06ff77e880bb3682a379fcba4bb09f",
+      "bytes": 4476
+    },
+    {
+      "path": "ui/src/faceSize/FaceSizeControl.tsx",
+      "sha256": "fca3c70063af6b7f3d9561c0671829b024fefe67f43e5c06629803baa9d46410",
+      "bytes": 8379
+    },
+    {
+      "path": "ui/src/faceSize/model.ts",
+      "sha256": "522dbdc85e70ba33d27c5314ca752af21921e1afbca9aec211c10ab5b3a1e660",
+      "bytes": 9164
+    },
+    {
+      "path": "ui/src/faceSize/model.unrun.test.ts",
+      "sha256": "bfdc2ad15bf3b80604364e76841b113c0fcc825946bba96a63177fcb513c4063",
+      "bytes": 14043
+    },
+    {
+      "path": "ui/src/faceSize/wiring.unrun.test.ts",
+      "sha256": "5cba82b2200357cd0731d388e8ce043da63ebd0c6cfeecef1571d8171b89a720",
+      "bytes": 8408
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "d75b98b8ac181f1a6b6a78d2cca73bcf8a024d4e3632dea4783661ff6da0e348",
+      "bytes": 100891
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "d8ecb0aa85a1c965d6d4b957e63742c3ef1cfe047f02e3cd5dcc269411ef072b",
+      "bytes": 8109
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "30508ccfa7bdac0e3afb56de445153a191b37aefe626d31b71f7d22ef4f9ee6e",
+      "bytes": 4852
+    }
+  ],
+  "static_validation": {
+    "python_ast_files": 1100,
+    "changed_json_and_toml": "parsed",
+    "payload_trailing_whitespace": 0,
+    "app_main_server_lines": [
+      2122,
+      2042,
+      6980
+    ],
+    "unchanged_baseline_geometry_hashes": 9,
+    "legacy_archive_migration_export_recipe_and_contour_slim_adapters": "byte-identical",
+    "authored_unrun_new_fixture_functions": {
+      "python": 84,
+      "ui": 18,
+      "rust": 13
+    }
+  },
+  "unrun": [
+    "product imports/execution",
+    "tests and test collection",
+    "Rust compilation/build",
+    "typecheck",
+    "inference",
+    "numerical/photographic/performance acceptance",
+    "real UI/history/preview/export/batch acceptance"
+  ],
+  "limitations": [
+    "Frontal/mild-yaw measured support; not person-instance segmentation, occlusion proof, AI reconstruction or 3D shape.",
+    "Uniform core encloses retained source and target landmarks, not arbitrarily relocated prior-edit points.",
+    "Transition moves adjacent hair, neck and background; source-window and foreign-face checks may refuse.",
+    "Scale 0.94..1.06 and 25% elliptical feather are unvalidated local policy.",
+    "Existing bilinear sampler and sampled-fold admission unchanged; no validated new antialias/detail guarantee.",
+    "Generic derived preset routing remains refused; explicit people transfer rebuilds target-owned evidence.",
+    "Broader alpha/HDR and whole facial-feature-family acceptance remain unfinished."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

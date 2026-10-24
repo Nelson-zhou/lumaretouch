@@ -48,6 +48,7 @@ from . import skin_gloss_scope as SKIN_GLOSS
 from . import skin_texture_scope as SKIN_TEXTURE
 from . import face_contour_scope as FACE_CONTOUR
 from . import slim_face_scope as SLIM_FACE
+from . import face_size_scope as FACE_SIZE
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
@@ -190,6 +191,10 @@ MODULES: dict[str, dict] = {
                   "transferable": True, "cmd": "people", "label": "新版瘦脸（左右独立二维参数）",
                   "read": SLIM_FACE.params_of, "write": SLIM_FACE.install,
                   "why_not": "仅左右联动与两项正负强度；目标以自己的真实皮肤与 478 点重算，不复制人物、蒙版或控制点，不转换或清零旧版瘦脸，仅支持正面与轻侧脸二维调整"},
+    FACE_SIZE.OP: {"params": ("recipe",), "state_fields": FACE_SIZE.FIELDS, "single_face": True,
+                  "transferable": True, "cmd": "people", "label": "脸部大小（整体等比缩放，独立参数）",
+                  "read": FACE_SIZE.params_of, "write": FACE_SIZE.install,
+                  "why_not": "仅整体等比大小标量，正值缩小、负值放大；目标以自己的有效来源、真实面部皮肤与 478 点重算，须有专用 Rust 内核，不复制人物、分析或控制点，不转换或清零瘦脸意图"},
     EYE_LIGHT.OP: {"params": ("recipe",), "state_fields": EYE_LIGHT.FIELDS, "single_face": True,
                    "transferable": True, "cmd": "people", "read": EYE_LIGHT.params_of, "write": EYE_LIGHT.install,
                    "why_not": "仅眼神光素材参数；目标人物须自行审核可见眼球，绝不复制归属、蒙版或恢复笔迹"},
@@ -462,6 +467,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == SLIM_FACE.OP:
         try: return SLIM_FACE.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == FACE_SIZE.OP:
+        try: return FACE_SIZE.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == EYE_LIGHT.OP:
         try: return EYE_LIGHT.check_params(params)

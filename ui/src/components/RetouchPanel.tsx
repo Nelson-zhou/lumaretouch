@@ -42,6 +42,7 @@ import {SkinGlossControl} from '../skinGloss/SkinGlossControl';
 import {SkinTextureControl} from '../skinTexture/SkinTextureControl';
 import {FaceContourControl} from '../faceContour/FaceContourControl';
 import {SlimFaceControl} from '../slimFace/SlimFaceControl';
+import {FaceSizeControl} from '../faceSize/FaceSizeControl';
 import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {FabricPanel} from "../fabric/FabricPanel";
 import {HistogramPanel} from "./HistogramPanel";
@@ -376,6 +377,7 @@ const WIRED: Record<string, string> = {
   "PC-32465|皮肤质感/清晰度": "skin_texture.clarity",
   // 面部重塑 / 表情
   "PC-32466|脸型/瘦脸": "slim_face.v2",
+  "PC-32466|脸型/小脸": "face_size.amount",
   "PC-32466|脸型/太阳穴": "face_contour.temple",
   "PC-32466|脸型/颧骨": "face_contour.cheekbone",
   "PC-32466|脸型/下颌": "face_contour.jaw",
@@ -443,6 +445,7 @@ const WIRE_LABEL: Record<string, string> = {
   "skin.broad": "肤色匀净",
   "skin.radius": "磨皮半径",
   "slim_face.v2": "瘦脸（新版左右独立）",
+  "face_size.amount": "小脸（局部整脸大小）",
   "deform.slim_face": "旧版瘦脸（历史错误拓扑）",
   "deform.big_eye": "大眼",
   "deform.small_chin": "小下巴",
@@ -754,6 +757,15 @@ export default function RetouchPanel(props: RetouchProps) {
       case "skin_texture.clarity":
         return <SkinTextureControl key={leaf.path}
           control={kind === 'skin_texture.texture' ? 'texture' : 'clarity'}
+          people={props.people} capability={status?.ready_caps}
+          blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+            || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+          faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
+      case "face_size.amount":
+        if (!doc?.people) return <section key={leaf.path} data-control-id="LNX-REF-PC-32466-C-728fc62cdd" aria-label="小脸暂不可用">
+          <p className="muted">此文档尚未提供规范人物状态，小脸暂不可用。不会改用整张图像缩放、旧版瘦脸或五官大小替代。</p>
+        </section>;
+        return <FaceSizeControl key={leaf.path}
           people={props.people} capability={status?.ready_caps}
           blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
             || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}

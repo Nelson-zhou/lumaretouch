@@ -4,6 +4,33 @@
   "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
+      "operation_id": "lnx.face_size.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "amount": 0
+      },
+      "range": {
+        "version": [
+          1,
+          1
+        ],
+        "amount": [
+          -1,
+          1
+        ]
+      },
+      "requirement_ids": [
+        "LNX-REF-PC-32466-C-728fc62cdd"
+      ],
+      "scope": "Whole visible face size: positive shrinks, negative enlarges. Exact uniform local similarity in a measured enclosing core, including interior features; compact transition also moves adjacent hair/background/neck. Not contour narrowing, global image resize, AI reconstruction or 3D.",
+      "implementation": "Original bounded Rust analytic inverse scale field with quintic transition and conservative derivative admission, authenticated actual source face evidence and one existing canonical sampler. Local scale 1-0.06*amount is not an official numeric range or validated quality setting.",
+      "transfer": "Scalar intent only; exact target source/FaceRef ownership and actual per-target field reconstruction. No masks, landmarks or field transfer; generic derived preset route remains refused.",
+      "compatibility": "Separate neutral-by-default operation; no change to saved legacy/slim/contour maps. Outermost pullback composes before the prior image field; canonical final combined map remains checked.",
+      "acceptance": "Source-only, all runtime/numerical/photo/UI/performance acceptance UNRUN; no complete visibility/occlusion or background invariance claim."
+    },
+    {
       "operation_id": "lnx.slim_face.v2",
       "parameter_key": "recipe",
       "type": "object",
