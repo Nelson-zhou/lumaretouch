@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import {supportAliasHistoryClass,sameSupportAliasMarker,supportAliasWritePending,subscribeSupportAliasWrites,subscribeSupportAliasWorkspace} from '../faceDecoration/supportAliasHistoryRegistry';
 import {decorationMultiHistory} from '../faceDecoration/multiHistory';
 import {eyeBagPresetAliasHistoryClass,eyeBagPresetAliasWritePending,subscribeEyeBagPresetAliasWrites,sameEyeBagPresetAliasMarker} from '../eyeBagPreserve/presetAliasHistoryRegistry';
 import {recoveryAliasHistoryClass,recoveryAliasWritePending,subscribeRecoveryAliasWrites,sameRecoveryAliasMarker,setRecoveryAliasWritePending,subscribeRecoveryAliasWorkspace,recoveryAliasWorkspace,type RecoveryAliasMarker} from '../effectRecovery/aliasHistoryRegistry';
@@ -19,11 +20,12 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
     refresh: () => refreshRef.current(),
   }), []);
   const state = useSyncExternalStore(workflow.subscribe, workflow.snapshot, workflow.snapshot);
+  useLayoutEffect(()=>subscribeSupportAliasWorkspace(value=>workflow.retireDecorationSupportWorkspace(value)),[workflow]);
   const [historyRefreshError, setHistoryRefreshError] = useState(''), [historyRefreshing, setHistoryRefreshing] = useState(false);
   const recoveryReadback=useRef<{id:string;epoch:string;batchId:string;action:'undo'|'redo';marker:RecoveryAliasMarker;terminalKnown:boolean}|null>(null);
   const [recoveryNeedsRefresh,setRecoveryNeedsRefresh]=useState(false);
   useLayoutEffect(()=>subscribeRecoveryAliasWorkspace(replacement=>{if(recoveryReadback.current?.epoch===replacement.previous){recoveryReadback.current=null;setRecoveryNeedsRefresh(false);}}),[]);
-  const [historyKind, setHistoryKind] = useState<'face_style' | 'eye_bag' | 'eye_bag_preset' | 'eye_bag_recovery' | 'face_decoration_alias' | null>(null);
+  const [historyKind, setHistoryKind] = useState<'face_style' | 'eye_bag' | 'eye_bag_preset' | 'eye_bag_recovery' | 'face_decoration_alias' | 'face_decoration_support_alias' | null>(null);
   async function refreshHistory() {
     const recoveryAtStart=recoveryReadback.current,terminalAtStart=recoveryAtStart?.terminalKnown===true;
     setHistoryRefreshing(true);
@@ -49,7 +51,8 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
     });
   const presetAliasPending=useSyncExternalStore(subscribeEyeBagPresetAliasWrites,eyeBagPresetAliasWritePending,eyeBagPresetAliasWritePending);
   const recoveryAliasPending=useSyncExternalStore(subscribeRecoveryAliasWrites,recoveryAliasWritePending,recoveryAliasWritePending);
-  const historyBusy = recoveryAliasPending || presetAliasPending || historyRefreshing || ['preflighting', 'committing', 'uncertain'].includes(history.ui.phase);
+  const decorationSupportPending=useSyncExternalStore(subscribeSupportAliasWrites,supportAliasWritePending,supportAliasWritePending);
+  const historyBusy = decorationSupportPending || recoveryAliasPending || presetAliasPending || historyRefreshing || ['preflighting', 'committing', 'uncertain'].includes(history.ui.phase);
   useLayoutEffect(() => {workflow.update(value, enabled && !historyBusy);}, [workflow, value, enabled, historyBusy]);
   const receipt = state.lastAliasCommit;
   useLayoutEffect(() => {if (receipt) history.protectFaceStyleAlias(receipt);}, [receipt]);
@@ -136,6 +139,21 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
     setHistoryKind('face_decoration_alias');setHistoryRefreshError('');workflow.update(value,false);
     return action==='undo'?history.undo(batchId):history.redo(batchId);
   }
+  const decorationSupportAliasBatches=(status?.session?.sync?.batches??[]).filter(batch=>Object.hasOwn(batch,'face_decoration_support_alias_review'));
+  const canDecorationSupportAliasHistory=(batchId:string,action:'undo'|'redo')=>{
+    const batch=decorationSupportAliasBatches.find(row=>row.batch_id===batchId),classification=supportAliasHistoryClass(batchId);
+    return enabled&&status?.ready_caps?.batch_preflight_protocol===1&&!!batch&&!!classification?.marker
+      &&status.session?.sync?.workspace_generation===value?.binding.document_epoch
+      &&sameSupportAliasMarker(batch.face_decoration_support_alias_review,classification.marker)
+      &&batch.targets===classification.memberCount&&JSON.stringify(batch.module_scope)===JSON.stringify(['lnx.people_graph.v1'])
+      &&!state.pending&&!state.uncertain&&!historyBusy&&!historyRefreshError&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending
+      &&(action==='undo'?!batch.undone&&!!status.session?.sync?.undoable.includes(batchId):batch.undone);
+  };
+  function restoreDecorationSupportAlias(batchId:string,action:'undo'|'redo'){
+    if(!canDecorationSupportAliasHistory(batchId,action))return;
+    setHistoryKind('face_decoration_support_alias');setHistoryRefreshError('');workflow.update(value,false);
+    return action==='undo'?history.undo(batchId):history.redo(batchId);
+  }
   const guard = () => {
     if (historyBusy) throw Error('共享来源批次历史仍在处理或查询中，不能重发修改。');
   };
@@ -160,6 +178,12 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
       canRedo: canHistory && !!ledger!.undone,
       undo: () => restoreAlias('undo'), redo: () => restoreAlias('redo'), query: history.query,
       refreshing: historyRefreshing, refresh: refreshHistory},
+    decorationSupportAliasHistory:{batches:decorationSupportAliasBatches,
+      state:historyKind==='face_decoration_support_alias'?history.ui:{...history.ui,phase:'closed' as const,result:null},
+      writePending:decorationSupportPending,
+      canUndo:(id:string)=>canDecorationSupportAliasHistory(id,'undo'),canRedo:(id:string)=>canDecorationSupportAliasHistory(id,'redo'),
+      undo:(id:string)=>restoreDecorationSupportAlias(id,'undo'),redo:(id:string)=>restoreDecorationSupportAlias(id,'redo'),query:history.query,
+      refreshError:historyRefreshError,refreshing:historyRefreshing,refresh:refreshHistory},
     decorationAliasHistory:{batches:decorationAliasBatches,
       state:historyKind==='face_decoration_alias'?history.ui:{...history.ui,phase:'closed' as const,result:null},
       canUndo:(id:string)=>canDecorationAliasHistory(id,'undo'),canRedo:(id:string)=>canDecorationAliasHistory(id,'redo'),

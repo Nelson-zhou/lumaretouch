@@ -4,6 +4,8 @@ import type {PeopleOwner} from '../people/usePeopleWorkflow';
 import {sourceLabel, targetLabel, type PeopleAction} from '../people/model';
 import {FaceDecorationAliasHistory} from './FaceDecorationAliasHistory';
 import {FaceDecorationAliasEditor} from './FaceDecorationAliasEditor';
+import {FaceDecorationSupportAliasEditor} from './FaceDecorationSupportAliasEditor';
+import {FaceDecorationSupportAliasHistory} from './FaceDecorationSupportAliasHistory';
 import {FaceDecorationSupportEditor} from './FaceDecorationSupportEditor';
 import {OP, CONTROL_ID, PATTERNS, access, bindingKey, canonical, command, patches, referenceCurrent,
   type Capability, type Recipe} from './model';
@@ -68,14 +70,15 @@ export function FaceDecorationPanel({people, capability, blocked, faceOk, faceWh
     <small>0 不添加装饰。归零只写入当前范围的程度，不改图案、不删除审核、不恢复继承，也不清除其他范围。0–100 对应内部 0–1，是本产品量程，不是手册公布的数值范围。</small>
     </>}
     {aliasRequired && recipe && <FaceDecorationAliasEditor people={people} recipe={recipe} disabled={blocked || !people.enabled || capability?.face_decoration_protocol !== 1 || capability?.face_decoration_available !== true || report?.native_available !== true || !faceOk}/> }
+    {aliasRequired && <FaceDecorationSupportAliasEditor people={people} disabled={blocked || !people.enabled || capability?.face_decoration_support_alias_protocol !== 1 || capability?.face_decoration_available !== true || report?.native_available !== true || !faceOk || selected?.enabled !== true || selected?.analysis_status !== 'verified'}/>}
+    {aliasRequired && capability?.face_decoration_support_alias_protocol !== 1 && <p role="status">当前引擎未提供独立的共享来源范围协议，不能借用图案和程度通道保存笔迹。</p>}
     {view && <details><summary>当前范围与有效参数来源</summary>
       {(['pattern', 'strength'] as const).map(key => {
         const own = view.editing_overrides[OP]?.[`/${key}`], from = view.resolved?.operations[OP]?.[`/${key}`];
         return <p key={key}>{key === 'pattern' ? '图案' : '程度'}：当前范围{own === undefined ? '未设置覆盖，保留继承' : `显式值 ${String(own)}`}；有效值来源：{from ? sourceLabel(from) : '尚未获得匹配读数'}。</p>;
       })}
     </details>}
-    <button type="button" disabled={aliasRequired || state.reviewDisabled || opening.current} onClick={() => void openReference()}>{report?.reviewed ? '重新审核此人物装饰范围' : '读取原图并审核装饰范围'}</button>
-    {aliasRequired && <p>共享来源支持笔迹重绘仍未开放；本通道仅对已有独立审核范围进行图案、程度与归零的完整图像审核。</p>}
+    {!aliasRequired && <button type="button" disabled={state.reviewDisabled || opening.current} onClick={() => void openReference()}>{report?.reviewed ? '重新审核此人物装饰范围' : '读取原图并审核装饰范围'}</button>}
     {view?.editing_target?.scope !== 'face' && <p>皮肤范围审核需要在人物栏切换为当前人物独立编辑；参数仍按你明确选择的范围保存，每个受影响人物都必须有自己的审核。</p>}
     {reference && !actualReference && <p role="status">等待与本次请求、当前来源和人物完全匹配的原图参考；未提供可审核图像。</p>}
     {actualReference && reference && report && selected && <FaceDecorationSupportEditor key={`${reference.request.request_id}:${binding}`} report={report} faceBox={selected.box}
@@ -99,6 +102,7 @@ export function FaceDecorationPanel({people, capability, blocked, faceOk, faceWh
     {people.state.message && <p role="status">{people.state.message}</p>}
     {people.state.uncertain && <button type="button" onClick={() => void people.check().catch(cause => setError(String(cause)))}>查询原请求结果（不重发）</button>}
     <FaceDecorationAliasHistory people={people}/>
+    <FaceDecorationSupportAliasHistory people={people}/>
     {error && error !== people.state.message && <p role="alert">{error}</p>}
     <small>手绘审核不等于自动分割或效果验收；核心就绪也不代表此脸可用。当前实现面向 RGB SDR，不宣称 HDR 支持。严重侧脸、遮挡或分辨率不足时拒绝；不补绘不可见皮肤。预设和批量仅携带图案与程度，目标逐图、逐人物独立审核，不复制源图像素或笔迹。真实照片与安装版效果验收尚未运行。</small>
   </section>;

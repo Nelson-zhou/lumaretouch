@@ -50,6 +50,15 @@ def rejected(request, error, boundary, emit):
     context = cohort_failure_context(request) if cohort_commit or cohort_read else failure_context(request)
     if decoration_read or decoration_commit:context.update(decoration_failure_context(request))
     if decoration_cohort_read or decoration_cohort_commit:context.update(decoration_cohort_failure(request))
+    if history:
+        # The serialized boundary retains its real engine, never a user-supplied
+        # owner. Read an existing ledger only; this cannot create a controller.
+        engine = boundary.get('engine')
+        owner = None if engine is None else engine.__dict__.get('_batch_sync')
+        if owner is not None:
+            from .face_decoration_support_alias_transaction import failure_context as support_failure_context
+            support = support_failure_context(owner, request)
+            if support: context.update(support, no_write=True, restored=[])
     if not context:
         return
     emit({'event': 'batch_result', 'action': action, 'request_id': identity,

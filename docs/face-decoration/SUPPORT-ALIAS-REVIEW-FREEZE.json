@@ -1,0 +1,54 @@
+{
+  "baseline": "45eba231affdb5248c5a396ad8854da6935172ec",
+  "status": "FROZEN_SOURCE_ONLY_FACE_DECORATION_SUPPORT_ALIAS_REVIEW_UNRUN",
+  "scope": "Owned engine review/host subset: staged immutable support bank, complete member full renders, exact paged image ACK and distinct transaction routing. No product execution or imports.",
+  "validation": {
+    "static_ast_parse": "7 Python source/fixture files parsed without importing or executing product code",
+    "runtime": "UNRUN",
+    "native": "UNRUN",
+    "image_acceptance": "UNRUN",
+    "tests": "AUTHORED_UNRUN"
+  },
+  "files": [
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_support_alias_review.py",
+      "sha256": "1d6a6c933d8fc4f7e524c2dbf861f5a4b756823279b3ee9c61733fb865af2c87",
+      "bytes": 18903
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_support_alias_plan.py",
+      "sha256": "fa81415d89690b6d676cb852dd0a2e9abf096d2bb640e3016449238dd1b25a3f",
+      "bytes": 4694
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_host.py",
+      "sha256": "e7766d563b72d9ef1aa29113e8ceef1f7a2f1d25d92915c12d3ea083fef5f5e9",
+      "bytes": 11006
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_project.py",
+      "sha256": "55e9ead71ae1f896d212a88976da8f14b2ced00bc513f23d682917b4f2eaf93a",
+      "bytes": 4641
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "2a749e7c11859ac10329c2d0b4065c610110c6acb9158acda40ab3fd52806861",
+      "bytes": 36074
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_review_render.py",
+      "sha256": "90b07f3ef4b3fb251f0bb85b33650e2125c34bdeba17b2743a645be449aa3323",
+      "bytes": 4144
+    },
+    {
+      "path": "engine/tests/test_face_decoration_support_alias_review_unrun.py",
+      "sha256": "024bdec49c7e13a16e3a376b667419afdd9bc8697ec577102a70da8a14deccbe",
+      "bytes": 10857
+    },
+    {
+      "path": "docs/face-decoration/SUPPORT-ALIAS-REVIEW-CONTRACT.md",
+      "sha256": "59e9b4c0a2eb4a1059fcbbba3a1f452a869e5f4226326efec7ebdebe97ac15eb",
+      "bytes": 5132
+    }
+  ]
+}

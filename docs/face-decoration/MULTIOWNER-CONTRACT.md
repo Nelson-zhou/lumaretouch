@@ -48,9 +48,9 @@ identity is assumed. Native and UI correlate the original request separately.
 
 ## Boundaries
 
-- Alias initial/revised visibility painting and effect-recovery painting are
-  still refused. They need an exact support-bank transaction, not scalar-ledger
-  authority. Mixed-preset aliases also remain guarded.
+- Scalar alias authority still refuses support painting. Initial/revised visibility
+  now has a separate [exact support-bank transaction](SUPPORT-ALIAS-CONTRACT.md).
+  Alias effect-recovery painting and mixed-preset aliases remain guarded.
 - Dormant, unavailable or hidden source-bearing members without complete proof
   remain refusals. Independent virtual-copy owners are not silently joined.
 - Existing 16-member cap, bounded paged image cache and full-source work budgets

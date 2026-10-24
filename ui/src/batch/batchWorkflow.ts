@@ -1,4 +1,6 @@
 import {decorationMultiHistory,registerDecorationMultiHistory,type DecorationHistoryField} from '../faceDecoration/multiHistory';
+import {supportAliasHistoryClass,supportAliasWritePending,supportAliasWorkspace,subscribeSupportAliasWorkspace,setSupportAliasWritePending,type SupportAliasMarker} from '../faceDecoration/supportAliasHistoryRegistry';
+import {checkSupportAliasHistoryReceipt,type SupportAliasHistoryRequest} from '../faceDecoration/supportAliasBatchReceipt';
 import {validDecorationCohort,decorationCohortAckDigest,decorationCohortTargets,decorationCohortAck,sameDecorationCohortAck} from '../faceDecoration/cohortModel';
 import {decorationBatchHistoryClass,registerDecorationBatchReceipt,validDecorationBatchMarker,type DecorationBatchMarker} from '../faceDecoration/batchHistoryRegistry';
 import {OP as DECORATION_OP,validDecorationEvidence,sameDecorationRender,decorationAck,sameDecorationAck,verifyDecorationCoverage,type DecorationAck} from '../faceDecoration/transferModel';
@@ -37,7 +39,7 @@ export type BatchOptions={docs?:string[];moduleScope?:string[];conflictPolicy?:s
 export type BatchTarget={index:number|null;reviewed_index?:number;path:string;document_id:string;revision?:string;blocked?:string|null;
   source_proof?:unknown;expected_revision?:string;current_revision?:string|null;result_revision?:string|null;outcome?:string;before?:unknown;spill_transfer?:SpillTransferEvidence;shadow_transfer?:ShadowTransferEvidence;torso_transfer?:TorsoTransferEvidence;waist_transfer?:WaistTransferEvidence;head_transfer?:HeadTransferEvidence;crop_transfer?:CropReview;local_mask_transfer?:MaskTransferEvidence;optical_transfer?:OpticalTargetReview;reference_color?:ReferenceReview;people_transfer?:PeopleTransferReview|null;association?:AssociationTarget['association']};
 type BatchSource={document_id:string;revision:string;path:string;source_proof?:unknown};
-export type BatchReply={face_decoration_cohort?:boolean;face_decoration_cohort_ack?:DecorationAck[];face_decoration_cohort_review?:DecorationBatchMarker;face_decoration_alias_review?:DecorationBatchMarker;face_decoration_batch_review?:DecorationBatchMarker;face_decoration_visual_required?:boolean;face_decoration_review_ack?:DecorationAck[];eye_bag_recovery_alias_review?:RecoveryAliasMarker;eye_bag_preset_alias_review?:EyeBagPresetAliasMarker;batch_id?:string|null;request_id:string;action:BatchAction;success:boolean;error?:string;outcome_unknown?:boolean;no_write?:boolean;rolled_back?:boolean;
+export type BatchReply={face_decoration_support_alias_review?:SupportAliasMarker;face_decoration_cohort?:boolean;face_decoration_cohort_ack?:DecorationAck[];face_decoration_cohort_review?:DecorationBatchMarker;face_decoration_alias_review?:DecorationBatchMarker;face_decoration_batch_review?:DecorationBatchMarker;face_decoration_visual_required?:boolean;face_decoration_review_ack?:DecorationAck[];eye_bag_recovery_alias_review?:RecoveryAliasMarker;eye_bag_preset_alias_review?:EyeBagPresetAliasMarker;batch_id?:string|null;request_id:string;action:BatchAction;success:boolean;error?:string;outcome_unknown?:boolean;no_write?:boolean;rolled_back?:boolean;
   eye_bag_review_ack?:EyeBagBatchAck[];eye_bag_cohort?:boolean;eye_bag_cohort_ack?:EyeBagCohortAck[];
   torso_review_ack?:TorsoTransferAck[];
   waist_review_ack?:WaistTransferAck[];
@@ -69,7 +71,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   let context:BatchContext={docs:[],moduleScope:[],conflictPolicy:'skip_and_report',sourceDocumentId:'',enabled:false,label:''};
   let key='',generation=0,contextRevision=0,disposed=false;
   const faceStyleBatchIds=new Set<string>(),portraitCohortBatchIds=new Set<string>(),eyeBagBatchIds=new Map<string,number>();
-  let pending:{id:string;action:BatchAction;generation:number;contextKey:string;contextRevision:number;batchId?:string;aliasMemberCount?:number|null;token?:string;scope?:string[];policy?:string;transfer?:MaskTransferOptions;reference?:{strength:number};people?:PeopleTransferRequest;peopleProof?:PeopleTransferProof;referencePath?:string;docs?:string[];torsoAck?:TorsoTransferAck[];waistAck?:WaistTransferAck[];headAck?:HeadTransferAck[];decorationCohortAck?:DecorationAck[];decorationHistoryField?:DecorationHistoryField;decorationWrite?:boolean;decorationReviewSha?:string|null;decorationMemberCount?:number|null;decorationAck?:DecorationAck[];collarboneAck?:CollarboneAck[];collarboneCohort?:boolean;faceStyleAck?:FaceStyleBatchAck[];faceStyleWrite?:boolean;portraitAck?:PortraitCohortAck[];portraitWrite?:boolean;eyeBagAck?:EyeBagBatchAck[];eyeBagCohortAck?:EyeBagCohortAck[];eyeBagWrite?:boolean;eyeBagMemberCount?:number|null;presetAliasWrite?:boolean;presetAliasEpoch?:string|null;presetAliasMarker?:EyeBagPresetAliasMarker|null;presetAliasMemberCount?:number|null;recoveryAliasWrite?:boolean;recoveryAliasEpoch?:string|null;recoveryAliasMarker?:RecoveryAliasMarker|null;recoveryAliasMemberCount?:number|null}|null=null;
+  let pending:(SupportAliasHistoryRequest & {id:string;action:BatchAction;generation:number;contextKey:string;contextRevision:number;batchId?:string;aliasMemberCount?:number|null;token?:string;scope?:string[];policy?:string;transfer?:MaskTransferOptions;reference?:{strength:number};people?:PeopleTransferRequest;peopleProof?:PeopleTransferProof;referencePath?:string;docs?:string[];torsoAck?:TorsoTransferAck[];waistAck?:WaistTransferAck[];headAck?:HeadTransferAck[];decorationCohortAck?:DecorationAck[];decorationHistoryField?:DecorationHistoryField;decorationWrite?:boolean;decorationReviewSha?:string|null;decorationMemberCount?:number|null;decorationAck?:DecorationAck[];collarboneAck?:CollarboneAck[];collarboneCohort?:boolean;faceStyleAck?:FaceStyleBatchAck[];faceStyleWrite?:boolean;portraitAck?:PortraitCohortAck[];portraitWrite?:boolean;eyeBagAck?:EyeBagBatchAck[];eyeBagCohortAck?:EyeBagCohortAck[];eyeBagWrite?:boolean;eyeBagMemberCount?:number|null;presetAliasWrite?:boolean;presetAliasEpoch?:string|null;presetAliasMarker?:EyeBagPresetAliasMarker|null;presetAliasMemberCount?:number|null;recoveryAliasWrite?:boolean;recoveryAliasEpoch?:string|null;recoveryAliasMarker?:RecoveryAliasMarker|null;recoveryAliasMemberCount?:number|null})|null=null;
   let state:BatchUi={phase:'closed',operation:'preflight',plan:null,result:null,message:'',scopeLabel:''};
   const set=(patch:Partial<BatchUi>)=>{state={...state,...patch};if(!disposed)publish(state);};
   const stopWorkspaceRecovery=subscribeEyeBagPresetAliasWorkspace(replacement=>{
@@ -81,6 +83,11 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     if(disposed||!pending?.recoveryAliasWrite||pending.recoveryAliasEpoch!==replacement.previous)return;
     generation++;pending=null;
     set({phase:'error',hidden:false,queryOnly:false,plan:null,result:null,message:'已确认进入新的项目工作区。原共享来源恢复历史请求结果仍未知，不认定成功；请核对全部成员后使用新工作区的准确批次台账。'});
+  });
+  const stopSupportWorkspace=subscribeSupportAliasWorkspace(replacement=>{
+    if(disposed||!pending?.supportAliasWrite||pending.supportAliasEpoch!==replacement.previous)return;
+    generation++;pending=null;
+    set({phase:'error',hidden:false,queryOnly:false,plan:null,result:null,message:'已确认进入新的项目工作区。原装饰范围历史请求结果仍未知，不认定成功；请核对全部成员和支持状态后使用新工作区的准确台账。'});
   });
   const active=(g:number)=>!disposed&&g===generation;
   function close(){
@@ -340,6 +347,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
             &&(result.module_scope?.length!==1||result.module_scope[0]!==HEAD_OP||result.preflight_token!==request.token
               ||!sameHeadTransferAck(result.head_review_ack,request.headAck)))throw Error('小头提交回执与原请求、冻结令牌或有序 PNG 对确认不一致');
           checkEyeBagCohortReceipt(result,request);
+          checkSupportAliasHistoryReceipt(result,request);
           if(result.eye_bag_recovery_alias_review!==undefined&&(!request.recoveryAliasWrite||!request.recoveryAliasMarker||!sameRecoveryAliasMarker(result.eye_bag_recovery_alias_review,request.recoveryAliasMarker)))throw Error('未请求或不匹配的共享来源效果恢复历史标记，只能查询原请求。');
           if(request.recoveryAliasWrite&&(!validBodyScalarReceiptState(result)||!['undo','redo'].includes(request.action)
             ||(result.success||result.batch_id!=null)&&result.batch_id!==request.batchId))throw Error('共享来源恢复历史回执不属于原批次或终态不明确，只能查询原请求。');
@@ -425,6 +433,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
             &&(JSON.stringify(result.module_scope)!==JSON.stringify(['lnx.people_graph.v1'])
               ||result.restored!.length!==request.aliasMemberCount||result.conflicts!.length!==0))
             throw Error('共享来源批次历史未证明完整原成员原子恢复，只能查询原请求');
+          if(request.supportAliasWrite)setSupportAliasWritePending(request.id,false);
           pending=null;set({phase:result.success?'done':'error',result,message:result.error??''});return;
         }
         if(response.phase!=='pending')throw Error(response.error??'批量结果暂不可查，不能据此判定未执行');
@@ -436,6 +445,9 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     }}
   }
   async function submit(action:BatchAction,opts:BatchOptions){
+    if(supportAliasWritePending()){set({message:'共享来源装饰范围仍未获得明确终态；请先查询原请求，不启动新的批次或历史修改。'});return;}
+    const supportHistory=supportAliasHistoryClass(opts.batchId);
+    if(supportHistory&&(!supportHistory.marker||supportHistory.memberCount===null)){set({phase:'error',message:'共享来源装饰范围批次标记不完整，禁止降级为普通历史。请重新读取准确台账。'});return;}
     if(recoveryAliasWritePending()){set({message:'共享来源效果恢复仍未获得明确终态；请先查询原恢复请求，不启动新的批次或历史修改。'});return;}
     if(eyeBagPresetAliasWritePending()){set({message:'共享来源混合预设应用仍未获得明确终态；请先查询原预设请求，不启动新的批次或历史修改。'});return;}
     const recoveryHistory=recoveryAliasHistoryClass(opts.batchId);
@@ -444,13 +456,13 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     const decorationMulti=decorationMultiHistory(opts.batchId);
     const decorationHistory=decorationMulti?{memberCount:decorationMulti.memberCount,reviewSha256:decorationMulti.marker?.review_sha256??null}:decorationBatchHistoryClass(opts.batchId);
     const presetAliasHistory=eyeBagPresetAliasHistoryClass(opts.batchId),aliasHistory=faceStyleAliasHistoryClass(opts.batchId),eyeHistory=eyeBagAliasHistoryClass(opts.batchId)??eyeBagCohortHistoryClass(opts.batchId)??eyeBagBatchHistoryClass(opts.batchId);
-    const request={id,action,generation:g,contextKey:key,contextRevision,batchId:opts.batchId,presetAliasWrite:!!presetAliasHistory,presetAliasEpoch:presetAliasHistory?eyeBagPresetAliasWorkspace():undefined,presetAliasMarker:presetAliasHistory?.marker?structuredClone(presetAliasHistory.marker):presetAliasHistory?.marker,presetAliasMemberCount:presetAliasHistory?.memberCount,aliasMemberCount:aliasHistory?.memberCount,token:opts.preflightToken,scope:opts.moduleScope?[...opts.moduleScope]:action==='commit'&&(opts.faceDecorationCohortAck!==undefined||opts.faceDecorationReviewAck!==undefined||opts.eyeBagReviewAck!==undefined||opts.eyeBagCohortAck!==undefined)?[...state.plan!.module_scope]:undefined,policy:opts.conflictPolicy,transfer:opts.localMaskTransfer,reference:opts.referenceColor,people:opts.peopleTransfer?structuredClone(opts.peopleTransfer):undefined,peopleProof:context.peopleProof?structuredClone(context.peopleProof):undefined,referencePath:context.referencePath,docs:opts.docs?[...opts.docs]:undefined,torsoAck:opts.torsoReviewAck?.map(ack=>({...ack})),waistAck:opts.waistReviewAck?.map(ack=>({...ack})),headAck:opts.headReviewAck?.map(ack=>({...ack})),decorationCohortAck:opts.faceDecorationCohortAck?.map(a=>({...a})),decorationHistoryField:decorationMulti?.field,decorationWrite:opts.faceDecorationCohortAck!==undefined||opts.faceDecorationReviewAck!==undefined||!!decorationHistory,decorationReviewSha:decorationHistory?.reviewSha256,decorationMemberCount:decorationHistory?.memberCount,decorationAck:opts.faceDecorationReviewAck?.map(ack=>({...ack})),collarboneAck:opts.collarboneReviewAck?.map(ack=>({...ack})),collarboneCohort:action==='commit'&&state.plan?.collarbone_cohort===true,
+    const request={id,action,generation:g,supportAliasWrite:!!supportHistory,supportAliasEpoch:supportHistory?supportAliasWorkspace():undefined,supportAliasMarker:supportHistory?.marker?structuredClone(supportHistory.marker):supportHistory?.marker,supportAliasMemberCount:supportHistory?.memberCount,contextKey:key,contextRevision,batchId:opts.batchId,presetAliasWrite:!!presetAliasHistory,presetAliasEpoch:presetAliasHistory?eyeBagPresetAliasWorkspace():undefined,presetAliasMarker:presetAliasHistory?.marker?structuredClone(presetAliasHistory.marker):presetAliasHistory?.marker,presetAliasMemberCount:presetAliasHistory?.memberCount,aliasMemberCount:aliasHistory?.memberCount,token:opts.preflightToken,scope:opts.moduleScope?[...opts.moduleScope]:action==='commit'&&(opts.faceDecorationCohortAck!==undefined||opts.faceDecorationReviewAck!==undefined||opts.eyeBagReviewAck!==undefined||opts.eyeBagCohortAck!==undefined)?[...state.plan!.module_scope]:undefined,policy:opts.conflictPolicy,transfer:opts.localMaskTransfer,reference:opts.referenceColor,people:opts.peopleTransfer?structuredClone(opts.peopleTransfer):undefined,peopleProof:context.peopleProof?structuredClone(context.peopleProof):undefined,referencePath:context.referencePath,docs:opts.docs?[...opts.docs]:undefined,torsoAck:opts.torsoReviewAck?.map(ack=>({...ack})),waistAck:opts.waistReviewAck?.map(ack=>({...ack})),headAck:opts.headReviewAck?.map(ack=>({...ack})),decorationCohortAck:opts.faceDecorationCohortAck?.map(a=>({...a})),decorationHistoryField:decorationMulti?.field,decorationWrite:opts.faceDecorationCohortAck!==undefined||opts.faceDecorationReviewAck!==undefined||!!decorationHistory,decorationReviewSha:decorationHistory?.reviewSha256,decorationMemberCount:decorationHistory?.memberCount,decorationAck:opts.faceDecorationReviewAck?.map(ack=>({...ack})),collarboneAck:opts.collarboneReviewAck?.map(ack=>({...ack})),collarboneCohort:action==='commit'&&state.plan?.collarbone_cohort===true,
       faceStyleAck:opts.faceStyleReviewAck?.map(ack=>({...ack})),faceStyleWrite:opts.faceStyleReviewAck!==undefined||!!aliasHistory||!!opts.batchId&&faceStyleBatchIds.has(opts.batchId),
       portraitAck:opts.portraitCohortAck?.map(ack=>({...ack})),portraitWrite:opts.portraitCohortAck!==undefined||!!opts.batchId&&portraitCohortBatchIds.has(opts.batchId),
       eyeBagAck:opts.eyeBagReviewAck?.map(ack=>({...ack})),eyeBagCohortAck:opts.eyeBagCohortAck?.map(ack=>({...ack})),eyeBagWrite:opts.eyeBagReviewAck!==undefined||opts.eyeBagCohortAck!==undefined||!!eyeHistory||!!opts.batchId&&eyeBagBatchIds.has(opts.batchId),
       eyeBagMemberCount:eyeHistory?eyeHistory.memberCount:opts.batchId?eyeBagBatchIds.get(opts.batchId):undefined,
-      recoveryAliasWrite:!!recoveryHistory,recoveryAliasEpoch:recoveryHistory?recoveryAliasWorkspace():undefined,recoveryAliasMarker:recoveryHistory?.marker?structuredClone(recoveryHistory.marker):recoveryHistory?.marker,recoveryAliasMemberCount:recoveryHistory?.memberCount};pending=request;
-    set({phase:action==='preflight'?'preflighting':'committing',hidden:false,queryOnly:request.decorationWrite||request.faceStyleWrite||request.portraitWrite||request.eyeBagWrite||request.presetAliasWrite||request.recoveryAliasWrite,operation:action,result:null,message:''});
+      recoveryAliasWrite:!!recoveryHistory,recoveryAliasEpoch:recoveryHistory?recoveryAliasWorkspace():undefined,recoveryAliasMarker:recoveryHistory?.marker?structuredClone(recoveryHistory.marker):recoveryHistory?.marker,recoveryAliasMemberCount:recoveryHistory?.memberCount};pending=request;if(request.supportAliasWrite)setSupportAliasWritePending(id,true,request.supportAliasEpoch??undefined);
+    set({phase:action==='preflight'?'preflighting':'committing',hidden:false,queryOnly:request.supportAliasWrite||request.decorationWrite||request.faceStyleWrite||request.portraitWrite||request.eyeBagWrite||request.presetAliasWrite||request.recoveryAliasWrite,operation:action,result:null,message:''});
     try{
       const accepted=await bounded(api.request(action,{...opts,requestId:id}),deadline);
       if(!active(g))return;
@@ -608,6 +620,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   }
   function acknowledgeInspection(){
     if(state.phase!=='uncertain')return;
+    if(pending?.supportAliasWrite){set({message:'共享来源装饰范围历史结果尚未确定，只能查询原请求，不能结束跟踪后重复撤销或重做。'});return;}
     if(pending?.recoveryAliasWrite){set({message:'共享来源效果恢复历史结果尚未确定，只能查询原请求，不能结束跟踪后重复撤销或重做。'});return;}
     if(pending?.presetAliasWrite){set({message:'共享来源混合预设历史结果尚未确定，只能查询原请求，不能结束跟踪后重复撤销或重做。'});return;}
     if(pending?.eyeBagWrite){set({message:'祛眼袋写入结果尚未确定，只能查询原请求，不能结束跟踪后重复提交。'});return;}
@@ -625,5 +638,5 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   function protectEyeBagAlias(commit:EyeBagAliasCommit){
     return !disposed&&registerEyeBagAliasReceipt(commit);
   }
-  return {updateContext,start,commit,undo,redo,query,close,acknowledgeInspection,protectFaceStyleAlias,protectEyeBagAlias,snapshot:()=>state,dispose:()=>{stopWorkspaceRecovery();stopRecoveryWorkspace();disposed=true;generation++;pending=null;}};
+  return {updateContext,start,commit,undo,redo,query,close,acknowledgeInspection,protectFaceStyleAlias,protectEyeBagAlias,snapshot:()=>state,dispose:()=>{stopWorkspaceRecovery();stopRecoveryWorkspace();stopSupportWorkspace();disposed=true;generation++;pending=null;}};
 }

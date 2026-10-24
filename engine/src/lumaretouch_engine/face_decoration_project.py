@@ -63,7 +63,8 @@ def require_transition(engine, before, candidate, *, row=None, authority=None):
     actual=current_row(engine) if row is None else row
     if authority is not None:
         from .face_decoration_alias_authority import AliasAuthority
-        if type(authority) is not AliasAuthority:raise ValueError("Private exact decoration alias authority required")
+        from .face_decoration_support_alias_authority import SupportAliasAuthority
+        if type(authority) not in (AliasAuthority,SupportAliasAuthority):raise ValueError("Private exact decoration alias authority required")
         authority.verify(engine,actual,before,candidate)
         return
     require_unaliased(engine,actual,changed_assets(before,candidate))

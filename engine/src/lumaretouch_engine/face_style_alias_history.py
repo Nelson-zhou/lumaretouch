@@ -41,6 +41,8 @@ def check(entry):
     """Validate only explicitly marked entries; an absent marker means legacy."""
     if KEY not in entry:
         return None
+    if 'face_decoration_support_alias_review' in entry:
+        raise ValueError('Visible-support alias history cannot reuse another history authority')
     marker = entry[KEY]
     if (type(marker) is not dict or set(marker) != FIELDS
             or type(marker['version']) is not int or marker['version'] != 1):

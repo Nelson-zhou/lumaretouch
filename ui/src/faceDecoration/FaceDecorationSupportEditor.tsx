@@ -5,8 +5,8 @@ import {verifiedImage, type FaceDecorationView} from './model';
 import {LIMITS, region, stroke, totalPoints, type Point, type Region, type Stroke} from './review';
 const emptyFlags = () => ({visible: false, unoccluded: false, owner: false});
 /** Mounted only for one exact reference request. No source support or consent is borrowed from another tool/person. */
-export function FaceDecorationSupportEditor({report, faceBox, disabled, onReview}: {
-  report: FaceDecorationView; faceBox: [number, number, number, number]; disabled: boolean; onReview: (region: Region) => Promise<void>;
+export function FaceDecorationSupportEditor({report, faceBox, disabled, onReview, staged = false}: {
+  report: FaceDecorationView; faceBox: [number, number, number, number]; disabled: boolean; onReview: (region: Region) => Promise<void>; staged?: boolean;
 }) {
   const id = useId(), [image, setImage] = useState<SourceImage | null>(null), [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(''), [strokes, setStrokes] = useState<Stroke[]>([]), [draft, setDraft] = useState<Stroke | null>(null);
@@ -76,7 +76,8 @@ export function FaceDecorationSupportEditor({report, faceBox, disabled, onReview
     </g>;
   }
   return <fieldset className="decorationReview" disabled={disabled || saving}>
-    <legend>仅此人物的脸部装饰范围审核</legend>
+    <legend>{staged ? '起草当前人物的共享来源装饰范围' : '仅此人物的脸部装饰范围审核'}</legend>
+    {staged && <p>这里的笔迹只是候选，不保存或改变任何照片。下一步必须读取全部共享来源照片的完整前后图并逐张确认，才能一起发布人物指针和支持状态。</p>}
     <p>这是真实来源的全图参考缩图，不是效果图或全分辨率验收图。请涂选可见面部皮肤，并擦除眼、眉、唇、发丝、饰物和其他人物；不会自动识别所有遮挡。</p>
     <p id={`${id}-instructions`}>黄色框标记当前人物检测位置，不是皮肤或遮挡证明。青色为添加笔迹，红色为排除笔迹，不代表最终精确蒙版。拖动画笔；也可聚焦图像，用方向键移动 5 个源像素（Shift 为 25），Enter 或空格点涂。新一笔不会跨越上一笔的间隙。</p>
     {!loaded && <p role="status">正在校验并加载本次来源图像，确认项尚不可用。</p>}
@@ -105,7 +106,7 @@ export function FaceDecorationSupportEditor({report, faceBox, disabled, onReview
     <label><input type="checkbox" disabled={!available || !strokes.length || !!draft} checked={flags.visible} onChange={e => setFlags(f => ({...f, visible: e.target.checked}))}/>我已查看本次来源图：脸部装饰只添加在所画的清晰可见皮肤上。</label>
     <label><input type="checkbox" disabled={!available || !strokes.length || !!draft} checked={flags.unoccluded} onChange={e => setFlags(f => ({...f, unoccluded: e.target.checked}))}/>我已从本次脸部装饰范围排除遮挡物、眼眉唇和头发。</label>
     <label><input type="checkbox" disabled={!available || !strokes.length || !!draft} checked={flags.owner} onChange={e => setFlags(f => ({...f, owner: e.target.checked}))}/>我确认本次脸部装饰范围仅属于当前选中人物，不是其他人物，也不沿用腮红或其他工具的审核。</label>
-    <button type="button" disabled={!available || !!draft || !strokes.some(s => s.operation === 'add') || !flags.visible || !flags.unoccluded || !flags.owner} onClick={() => void save()}>保存此人物的装饰范围审核</button>
+    <button type="button" disabled={!available || !!draft || !strokes.some(s => s.operation === 'add') || !flags.visible || !flags.unoccluded || !flags.owner} onClick={() => void save()}>{staged ? '生成全部共享来源照片的范围候选（不应用）' : '保存此人物的装饰范围审核'}</button>
     {error && <p role="alert">{error}</p>}
     <small>笔迹、原图及审核不会随预设或批量参数复制。关键点、皮肤支持、侧脸或分辨率不可靠时，引擎仍会拒绝，手动确认不能解除限制。</small>
   </fieldset>;

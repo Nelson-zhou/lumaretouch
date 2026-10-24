@@ -23,6 +23,9 @@ def check_proof(proof):
 
 
 def check_action(action, payload, target):
+    if action.startswith('face_decoration_support_alias_'):
+        from .face_decoration_support_alias_review import check_action as support_aliases
+        return support_aliases(action,payload,target)
     if action.startswith('face_decoration_alias_'):
         from .face_decoration_alias_review import check_action as aliases
         return aliases(action,payload,target)
@@ -97,7 +100,9 @@ def report(engine, state, source, selected_id):
                    and shown['proof']['landmark_digest'] == landmark and shown['binding'] == binding(engine,state,target))
     from .face_decoration_alias_review import status as alias_status
     aliases=alias_status(engine,state,source,ref)
-    return {**aliases,'recipe':recipe,'facts':facts,'source':source,'face_ref':ref,'landmark_digest':landmark,
+    from .face_decoration_support_alias_review import status as support_alias_status
+    support_aliases=support_alias_status(engine,state,source,ref)
+    return {**aliases,**support_aliases,'recipe':recipe,'facts':facts,'source':source,'face_ref':ref,'landmark_digest':landmark,
             'reviewed':digest is not None,'support_sha256':digest,
             'source_preview':deepcopy(shown['preview']) if current else None,
             'reference_proof':deepcopy(shown['proof']) if current else None,
@@ -123,7 +128,8 @@ def reference(engine, state, target, payload, *, request_id):
     return {'kind':'face_decoration_reference','reference_proof':deepcopy(proof)}
 
 
-def stage_review(engine, state, target, payload):
+def review_reference(engine, state, target, payload):
+    """Validate the source page and paint without installing any support bank."""
     check_action('face_decoration_review',payload,target)
     source, ref = selected(engine,state,target); shown = getattr(engine,'_face_decoration_reference',None)
     proof = check_proof(payload['reference_proof'])
@@ -131,6 +137,11 @@ def stage_review(engine, state, target, payload):
             or proof['landmark_digest'] != state['faces'][ref['face_instance_id']]['evidence']['landmark_digest']
             or shown['binding'] != binding(engine,state,target)):
         raise ValueError('面部装饰原图显示、人物或文档已改变，请重新读取并审核')
+    return source, ref, proof
+
+
+def stage_review(engine, state, target, payload):
+    source, ref, proof = review_reference(engine,state,target,payload)
     from .face_decoration_project import require_unaliased
     from .virtual_copy_people import current_row
     require_unaliased(engine,current_row(engine),{source['sha256']})

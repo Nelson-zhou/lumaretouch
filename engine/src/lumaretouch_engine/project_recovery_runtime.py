@@ -21,7 +21,7 @@ def observe(event):
 
 
 def begin(engine, message, handler):
-    boundary = {'failed': False, 'returned': False, 'started': False, 'message': message}
+    boundary = {'failed': False, 'returned': False, 'started': False, 'message': message, 'engine': engine}
     _local.boundary = boundary
     def wrapped(payload):
         boundary['started'] = True
@@ -56,6 +56,8 @@ def finish(engine, boundary, error=None):
     if eye_bag_batch_read_only(message):return  # Exact target review cannot publish or taint committed state.
     from .eye_bag_preset_store import read_only as eye_bag_preset_read_only
     if eye_bag_preset_read_only(message):return  # Dedicated preset read cannot publish or taint committed state.
+    from .face_decoration_support_alias_review import read_only as decoration_support_read_only
+    if decoration_support_read_only(message):return  # Staged graph/bank reads never publish or taint committed state.
     from .people_host_commands import face_style_read_only, eye_bag_read_only
     if face_style_read_only(message) or eye_bag_read_only(message):return  # Private read failures cannot taint committed project state.
     if not boundary['started'] or message.get('cmd') in ('project_recovery', 'canvas_guides'):

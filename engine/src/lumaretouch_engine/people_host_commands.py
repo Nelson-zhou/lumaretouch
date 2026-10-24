@@ -15,8 +15,10 @@ EYE_BAG_READS = frozenset(('eye_bag_source_image','eye_bag_reference','eye_bag_p
 EYE_BAG_ACTIONS = EYE_BAG_READS | {'eye_bag_confirm'}
 DECORATION_ALIAS_READS = frozenset(('face_decoration_alias_preview','face_decoration_alias_image'))
 DECORATION_ALIAS_ACTIONS = DECORATION_ALIAS_READS | {'face_decoration_alias_confirm'}
-DECORATION_READS = frozenset(('face_decoration_reference',)) | DECORATION_ALIAS_READS
-DECORATION_ACTIONS = DECORATION_READS | {'face_decoration_review','face_decoration_alias_confirm'}
+DECORATION_SUPPORT_ALIAS_READS = frozenset(('face_decoration_support_alias_preview','face_decoration_support_alias_image'))
+DECORATION_SUPPORT_ALIAS_ACTIONS = DECORATION_SUPPORT_ALIAS_READS | {'face_decoration_support_alias_confirm'}
+DECORATION_READS = frozenset(('face_decoration_reference',)) | DECORATION_ALIAS_READS | DECORATION_SUPPORT_ALIAS_READS
+DECORATION_ACTIONS = DECORATION_READS | {'face_decoration_review','face_decoration_alias_confirm','face_decoration_support_alias_confirm'}
 
 
 def face_style_read_only(raw):
@@ -160,7 +162,12 @@ def apply(engine,raw,emit):
     records[request]={'success':False,'digest':digest};state,binding,target=checked(engine,p);asset=binding['asset_sha256']
     records[request]['before_fence']=engine._people_owner().fence
     action=p.get('action');payload=p.get('payload');created=None;batch_id=None
-    if action in DECORATION_ALIAS_READS:
+    if action in DECORATION_SUPPORT_ALIAS_READS:
+        from . import face_decoration_support_alias_review as support_aliases
+        method=support_aliases.preview if action=='face_decoration_support_alias_preview' else support_aliases.image
+        records[request]['payload']=method(engine,state,target,payload)
+        frame=None
+    elif action in DECORATION_ALIAS_READS:
         from . import face_decoration_alias_review as aliases
         method=aliases.preview if action=='face_decoration_alias_preview' else aliases.image
         records[request]['payload']=method(engine,state,target,payload)
@@ -258,7 +265,10 @@ def apply(engine,raw,emit):
         engine._people_sync();frame=None
     else:
         before_publish=None
-        if action=='face_decoration_alias_confirm':
+        if action=='face_decoration_support_alias_confirm':
+            from . import face_decoration_support_alias_review as decoration_support_alias
+            candidate,records[request]['payload']=decoration_support_alias.confirm(engine,state,target,payload)
+        elif action=='face_decoration_alias_confirm':
             from . import face_decoration_alias_review as decoration_alias
             candidate,records[request]['payload']=decoration_alias.confirm(engine,state,target,payload)
         elif action=='face_style_confirm':
@@ -322,7 +332,12 @@ def apply(engine,raw,emit):
             frame=engine._people_publish_pending_review(candidate)
         else:
             try:
-                if action=='face_decoration_alias_confirm':
+                if action=='face_decoration_support_alias_confirm':
+                    batch_id,frame=decoration_support_alias.publish(engine,state,target,payload,candidate,records[request]['payload'],request_id=request,mark_started=lambda:records[request].update(side_effects_started=True))
+                    # Retain the known ledger identity before status/readback or
+                    # frame emission can fail. Identity is not success proof.
+                    records[request]['batch_id']=batch_id
+                elif action=='face_decoration_alias_confirm':
                     batch_id,frame=decoration_alias.publish(engine,state,target,payload,candidate,records[request]['payload'],request_id=request,mark_started=lambda:records[request].update(side_effects_started=True))
                 elif action=='face_style_confirm' and records[request]['payload'].get('alias_members') is not None:
                     # The frozen complete alias set belongs to the existing
@@ -331,13 +346,23 @@ def apply(engine,raw,emit):
                 elif action=='eye_bag_confirm' and records[request]['payload'].get('alias_members') is not None:
                     batch_id,frame=eye_bag_review.publish_alias(engine,state,target,payload,candidate,records[request]['payload'],request_id=request)
                 else:batch_id,frame=publish(engine,state,candidate,request,shared=shared,before_publish=before_publish)
-            except Exception:
+            except Exception as publish_error:
+                if action=='face_decoration_support_alias_confirm':
+                    for key in ('side_effects_started','rolled_back','requires_reload'):
+                        if hasattr(publish_error,key):records[request][key]=bool(getattr(publish_error,key))
+                    for key in ('batch_id','face_decoration_support_alias_review','alias_members'):
+                        if hasattr(publish_error,key):records[request][key]=deepcopy(getattr(publish_error,key))
                 # A rejected preparation may leave only append-only unused
                 # support bytes. With an unchanged graph fence no pixels/recipe
                 # were published; do not manufacture an uncertain edit lock.
                 if action in ('skin_body_confirm','skin_finish_body_confirm','body_skin_evenness_confirm','collarbone_confirm','body_face_match_confirm') and engine._people_owner().fence==records[request]['before_fence']:
                     records[request]['side_effects_started']=False
                 raise
+        if action=='face_decoration_support_alias_confirm':
+            decoration_support_alias.verify_after_publish(engine,candidate,records[request]['payload'])
+            from .face_decoration_support_alias_history import status_summary
+            records[request]['face_decoration_support_alias_review']=status_summary(engine._batch_controller().ledger[batch_id])
+            records[request]['alias_members']=deepcopy(records[request]['payload']['alias_members'])
         if action=='face_decoration_alias_confirm':decoration_alias.verify_after_publish(engine,candidate,records[request]['payload'])
         if action=='face_style_confirm':style_review.verify_after_publish(engine,candidate,records[request]['payload'])
         if action=='eye_bag_confirm':eye_bag_review.verify_after_publish(engine,candidate,records[request]['payload'])
@@ -354,19 +379,22 @@ def finish(engine,p,error,emit):
     style_action=p.get('action') in FACE_STYLE_ACTIONS
     style_read=p.get('action') in FACE_STYLE_READS
     eye_bag_action=p.get('action') in EYE_BAG_ACTIONS
-    review_read=style_read or p.get('action') in EYE_BAG_READS or p.get('action')=='face_decoration_alias_image'
+    review_read=style_read or p.get('action') in EYE_BAG_READS or p.get('action') in ('face_decoration_alias_image','face_decoration_support_alias_image')
     echo={'face_style_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})} if style_action else {}
     if p.get('action') in ('face_decoration_reference','face_decoration_review'):
         echo={'face_decoration_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     if p.get('action') in DECORATION_ALIAS_ACTIONS:
         echo={'face_decoration_alias_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
+    if p.get('action') in DECORATION_SUPPORT_ALIAS_ACTIONS:
+        echo={'face_decoration_support_alias_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     if eye_bag_action:
         echo={'eye_bag_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     digest=hashlib.sha256(json.dumps({k:v for k,v in p.items() if k!='cmd'},sort_keys=True,allow_nan=False).encode()).hexdigest()
     if old.get('digest') not in (None,digest):
         emit({'event':'people_result','protocol':1,'action':p.get('action'),'request_id':p['request_id'],'document_id':p.get('document_id'),
               'success':False,'error':'People request identity was reused with different content','outcome_unknown':False,
-              **echo,**({} if review_read else {'doc_state':engine.doc_state()})});return
+              **({'outcome_unknown':True,'no_write':False,'rolled_back':False,'requires_reload':False} if p.get('action') in DECORATION_SUPPORT_ALIAS_ACTIONS else {}),
+              **echo,**({} if review_read or p.get('action') in DECORATION_SUPPORT_ALIAS_ACTIONS else {'doc_state':engine.doc_state()})});return
     if 'result' in old:emit(old['result']);return
     if p.get('action') in EYE_BAG_READS:
         from .eye_bag_review_jobs import controller
@@ -384,20 +412,34 @@ def finish(engine,p,error,emit):
     # since disappeared. Never apply this proof to writes or a changed fence.
     unknown=False if proven_cancel else (engine._vram is None or bool(error and
         (old.get('success') or old.get('side_effects_started') or fence_changed)))
+    support_action=p.get('action') in DECORATION_SUPPORT_ALIAS_ACTIONS
+    support_rollback=bool(support_action and error and old.get('rolled_back') and not old.get('requires_reload'))
+    if support_rollback:unknown=False
     result={'event':'people_result','protocol':1,'action':p.get('action'),'request_id':p['request_id'],'document_id':p.get('document_id'),
         'success':bool(old.get('success')) and not error,'error':error,'outcome_unknown':unknown,
         'created_id':old.get('created_id'),'batch_id':old.get('batch_id'),'frame_emitted':old.get('frame_emitted',False),**echo}
+    if support_action:
+        result.update(no_write=not unknown and not old.get('side_effects_started') and not fence_changed,
+            rolled_back=support_rollback,requires_reload=bool(old.get('requires_reload')))
+        marker=old.get('face_decoration_support_alias_review');members=old.get('alias_members')
+        if marker is not None and members is not None and old.get('batch_id') is not None:
+            result.update(face_decoration_support_alias_review=deepcopy(marker),alias_members=deepcopy(members),module_scope=['lnx.people_graph.v1'])
     if proven_cancel:
         result.update(success=False,eye_bag_cancelled=True,error=error or 'Eye-bag read stopped after cancellation')
         old.pop('payload',None)
         result.pop('batch_id',None);result.pop('created_id',None)
     if 'payload' in old:result['payload']=old['payload']
     if old.get('payload_released'):result['payload_released']=True
-    if engine._vram is not None and not review_read:
+    if engine._vram is not None and not review_read and not (support_action and not result['success']):
         try:result['doc_state']=engine.doc_state()
         except Exception as state_error:
             result.update(success=False,outcome_unknown=True,
                 error=f"{error or 'People result state unavailable'}; {type(state_error).__name__}: {state_error}")
+            if support_action:result.update(no_write=False,rolled_back=False)
+    if support_action and not result['success']:
+        # Failed previews and attempted confirmations are never publication
+        # evidence. Preserve only verified terminal/uncertain ledger diagnostics.
+        result.pop('payload',None);result.pop('doc_state',None);result.pop('payload_released',None)
     records[p['request_id']]={'result':result,'digest':digest}
     from .face_decoration_host import bound_receipt_images
     bound_receipt_images(records)
@@ -405,11 +447,14 @@ def finish(engine,p,error,emit):
     bound_receipt_payloads(records)
     # Readback PNGs are session display pages, not durable outcome records.
     # Retain at most two; old request identities remain replayable without pixels.
-    remaining=2;decoration_alias_remaining=2
+    remaining=2;decoration_alias_remaining=2;decoration_support_alias_remaining=2
     eye_bag_remaining=3;eye_bag_reference_remaining=1;eye_bag_crop_remaining=2
     for row in reversed(records.values()):
         saved=row.get('result',row);body=saved.get('payload')
-        if type(body) is dict and body.get('kind')=='face_decoration_alias_image':
+        if type(body) is dict and body.get('kind')=='face_decoration_support_alias_image':
+            if decoration_support_alias_remaining:decoration_support_alias_remaining-=1
+            else:saved.pop('payload',None);saved['payload_released']=True
+        elif type(body) is dict and body.get('kind')=='face_decoration_alias_image':
             if decoration_alias_remaining:decoration_alias_remaining-=1
             else:saved.pop('payload',None);saved['payload_released']=True
         elif type(body) is dict and body.get('kind')=='face_style_image':

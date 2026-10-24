@@ -7,7 +7,7 @@ mod preset_alias;
 #[path = "preset_alias_history_fence.rs"]
 mod preset_alias_history;
 struct Pending { command: Value, composite_history: Option<Value> }
-impl Pending { fn composite(&self)->bool {preset_alias::applies(&self.command)||crate::people_api::decoration_alias::applies(&self.command)||crate::effect_recovery_host::alias::applies(&self.command)||self.composite_history.is_some()} }
+impl Pending { fn composite(&self)->bool {preset_alias::applies(&self.command)||crate::people_api::decoration_alias::applies(&self.command)||crate::people_api::decoration_support_alias::applies(&self.command)||crate::effect_recovery_host::alias::applies(&self.command)||self.composite_history.is_some()} }
 fn pending()->&'static Mutex<HashMap<([u8;16],String),Pending>> {
     static STORE:OnceLock<Mutex<HashMap<([u8;16],String),Pending>>=OnceLock::new();
     STORE.get_or_init(||Mutex::new(HashMap::new()))
@@ -43,12 +43,15 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     // replace an already-issued mutation belonging to another receipt host.
     if crate::batch_api::read_only(command) || crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command)
         || crate::people_api::face_style::read_only(command) || crate::people_api::eye_bag::read_only(command)
-        || crate::people_api::face_decoration::read_only(command) || crate::people_api::decoration_alias::read_only(command) {return Ok(());}
+        || crate::people_api::face_decoration::read_only(command) || crate::people_api::decoration_alias::read_only(command) || crate::people_api::decoration_support_alias::read_only(command) {return Ok(());}
     if store.len()>=4096{return Err("未确认请求超过恢复屏障容量，请查询原请求或重新打开工程".into());}
     store.insert(key,Pending{command:command.clone(),composite_history}); Ok(())
 }
 pub(crate) fn composite_history_marker(epoch:[u8;16],command:&Value)->Result<Option<Value>,String>{preset_alias_history::marker(epoch,command)}
 pub(crate) fn shared_history_markers(epoch:[u8;16],command:&Value)->Result<Option<Value>,String>{preset_alias_history::markers(epoch,command)}
+pub(crate) fn support_history_workspace(epoch: [u8;16], binding: &Value) -> Option<String> {
+    preset_alias_history::support_workspace(epoch, binding)
+}
 pub(crate) fn observed(epoch:[u8;16], value:&Value){
     let Ok(mut store)=pending().lock() else{return;};
     preset_alias_history::observe_session(epoch,value);
@@ -84,6 +87,13 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
             preset_alias_history::observe_publication(epoch,&publication);
         }
         if value["outcome_unknown"]!=false {return;}
+    }
+    if crate::people_api::decoration_support_alias::applies(command) {
+        if !crate::people_api::decoration_support_alias::matches_request(command, value) { return; }
+        if value["success"] == true || crate::people_api::decoration_support_alias::retained_publication(value).is_some() {
+            preset_alias_history::observe_publication(epoch, value);
+        }
+        if value["outcome_unknown"] != false { return; }
     }
     if crate::effect_recovery_host::alias::applies(command) {
         if !crate::effect_recovery_host::alias::matches_request(command, value) { return; }

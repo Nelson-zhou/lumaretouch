@@ -123,3 +123,13 @@ capture, recovery vector and render path. It reduces only this added decoration
 contribution, before common geometry, leaving other effects intact. It does not
 remove a person's original freckles/moles. Existing recovery uncertainty and
 shared-owner guards apply; there is no second recovery/history store.
+
+## Shared visibility support transaction
+
+The [separate support-alias route](SUPPORT-ALIAS-CONTRACT.md) stages the real
+source-canvas visibility record and requires complete affected-document image
+review before atomic graph/bank publication. It preserves scalar protocol and
+old recipes. Append-only retained assets plus exact pointer history are explicit,
+not a promise of whole-bank snapshot rollback. Alias effect recovery and mixed
+presets remain guarded. This is source-connected workflow work, not new algorithm
+or photographic acceptance; every runtime check remains UNRUN.

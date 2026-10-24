@@ -6,11 +6,13 @@ use serde_json::{json, Value};
 use crate::preset_api::visual::{fields, text};
 const MARKER: &str = "eye_bag_preset_alias_review";
 const DECORATION: &str = "face_decoration_alias_review";
+const DECORATION_SUPPORT: &str = "face_decoration_support_alias_review";
 const RECOVERY: &str = "eye_bag_recovery_alias_review";
 fn valid_marker(key: &str, value: &Value) -> bool {
     match key {
         MARKER => crate::batch_api::history::preset_alias_summary(value),
         RECOVERY => crate::effect_recovery_host::alias::summary(value),
+        DECORATION_SUPPORT => crate::people_api::decoration_support_alias::summary(value),
         DECORATION => crate::people_api::decoration_alias::summary(value),
         _ => false,
     }
@@ -59,7 +61,7 @@ pub(super) fn observe_session(epoch: [u8;16], event: &Value) {
     for row in rows {
         if !text(&row["batch_id"]) || !seen.insert(row["batch_id"].as_str().unwrap()) { snapshot.invalid = true; break; }
         snapshot.ids.insert(row["batch_id"].as_str().unwrap().to_owned());
-        let keys: Vec<_> = [MARKER, RECOVERY, DECORATION].into_iter().filter(|key| row.get(*key).is_some()).collect();
+        let keys: Vec<_> = [MARKER, RECOVERY, DECORATION, DECORATION_SUPPORT].into_iter().filter(|key| row.get(*key).is_some()).collect();
         if keys.is_empty() { continue; }
         if keys.len() != 1 { snapshot.blocked.insert(row["batch_id"].as_str().unwrap().to_owned()); continue; }
         let key = keys[0]; let marker = &row[key];
@@ -79,7 +81,7 @@ pub(super) fn observe_session(epoch: [u8;16], event: &Value) {
 
 /// Called only with a validated original preset/recovery receipt and matching ACK.
 pub(super) fn observe_publication(epoch: [u8;16], value: &Value) {
-    let keys: Vec<_> = [MARKER, RECOVERY, DECORATION].into_iter().filter(|key| value.get(*key).is_some()).collect();
+    let keys: Vec<_> = [MARKER, RECOVERY, DECORATION, DECORATION_SUPPORT].into_iter().filter(|key| value.get(*key).is_some()).collect();
     if !text(&value["batch_id"]) || keys.len() != 1 || !valid_marker(keys[0], &value[keys[0]]) { return; }
     let marker = json!({(keys[0]):value[keys[0]]});
     let Ok(mut registry) = registry().lock() else { return; };
@@ -110,6 +112,22 @@ pub(super) fn markers(epoch: [u8;16], command: &Value) -> Result<Option<Value>, 
         return Err("此多照片效果批次标记缺失、冲突或超过身份缓存容量，未提交历史操作".into());
     }
     Ok(command["batch_id"].as_str().and_then(|id| snapshot.markers.get(id)).cloned())
+}
+
+/// Internal late-receipt owner only. No client field or copied marker can
+/// manufacture the currently observed workspace or unblock a rejected batch.
+pub(super) fn support_workspace(epoch: [u8;16], binding: &Value) -> Option<String> {
+    let registry = registry().lock().ok()?;
+    let snapshot = &registry.iter().find(|(key, _)| *key == epoch)?.1;
+    let id = binding["batch_id"].as_str()?;
+    if snapshot.invalid || snapshot.blocked.contains(id) || !summary_support_binding(binding) { return None; }
+    let expected = json!({(DECORATION_SUPPORT):binding[DECORATION_SUPPORT]});
+    if snapshot.markers.get(id) != Some(&expected) { return None; }
+    snapshot.workspace.clone()
+}
+fn summary_support_binding(binding: &Value) -> bool {
+    crate::people_api::decoration_support_alias::summary(&binding[DECORATION_SUPPORT])
+        && binding["module_scope"] == json!(["lnx.people_graph.v1"])
 }
 
 pub(super) fn settled_markers(command: &Value, markers: &Value, receipt: &Value) -> bool {

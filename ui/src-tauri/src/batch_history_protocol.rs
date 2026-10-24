@@ -6,6 +6,8 @@ use crate::preset_api::visual::{fields, text};
 use crate::original_shadow_transfer_protocol::hex;
 const MAX_ROWS: usize = 10_000;
 const PRESET_ALIAS_MARKER: &str = "eye_bag_preset_alias_review";
+const DECORATION_SUPPORT: &str = "face_decoration_support_alias_review";
+const DECORATION_MARKERS: &[&str] = &["face_decoration_batch_review", "face_decoration_cohort_review", "face_decoration_alias_review", DECORATION_SUPPORT];
 const EYE_MARKERS: &[&str] = &["eye_bag_batch_review", "eye_bag_cohort_review", "eye_bag_alias_review", "eye_bag_recovery_alias_review", PRESET_ALIAS_MARKER];
 fn action(v: &Value) -> bool { matches!(v["action"].as_str(), Some("undo" | "redo")) }
 fn index(v: &Value) -> bool { v.as_u64().is_some_and(|n| n <= 9_007_199_254_740_991) }
@@ -43,7 +45,7 @@ pub(crate) fn preset_alias_summary(v: &Value) -> bool {
 }
 pub(crate) fn receipt(v: &Value) -> bool {
     if !action(v) { return true; }
-    for key in ["face_decoration_batch_review","face_decoration_cohort_review","face_decoration_alias_review"] {
+    for &key in DECORATION_MARKERS {
         if let Some(marker)=v.get(key) {
         if !summary(marker)||(key!="face_decoration_batch_review"&&marker["member_count"].as_u64().unwrap()<2) {return false;}
         if v["success"]==true && (v["module_scope"]!=json!(["lnx.people_graph.v1"])
@@ -51,8 +53,13 @@ pub(crate) fn receipt(v: &Value) -> bool {
             ||v["conflicts"].as_array().map_or(true,|rows|!rows.is_empty())){return false;}
     }
     }
-    if ["face_decoration_batch_review","face_decoration_cohort_review","face_decoration_alias_review"].iter().filter(|k|v.get(**k).is_some()).count()>1{return false;}
+    if DECORATION_MARKERS.iter().filter(|key| v.get(**key).is_some()).count() > 1 { return false; }
+    if v.get(DECORATION_SUPPORT).is_some() && EYE_MARKERS.iter().any(|key| v.get(*key).is_some()) { return false; }
     if !text(&v["batch_id"]) || !v["success"].is_boolean() || !v["outcome_unknown"].is_boolean() { return false; }
+    if v.get(DECORATION_SUPPORT).is_some()
+        && ((v["success"] == true && (v["no_write"] == true || v["rolled_back"] == true))
+            || (v["outcome_unknown"] == true && v["rolled_back"] == true)
+            || (v["outcome_unknown"] == false && (v["requires_reload"] == true || v["requires_readback"] == true))) { return false; }
     for key in EYE_MARKERS {
         if let Some(marker) = v.get(*key) {
             if *key == PRESET_ALIAS_MARKER {
@@ -62,7 +69,7 @@ pub(crate) fn receipt(v: &Value) -> bool {
     }
     if EYE_MARKERS.iter().filter(|key| v.get(**key).is_some()).count() > 1 { return false; }
     if v["success"] != true {
-        if v.get("eye_bag_recovery_alias_review").is_some()
+        if (v.get("eye_bag_recovery_alias_review").is_some() || v.get(DECORATION_SUPPORT).is_some())
             && (v["module_scope"] != json!(["lnx.people_graph.v1"]) || !v["no_write"].is_boolean()
                 || (v["outcome_unknown"] == true && (v["no_write"] == true || v.get("restored").is_some()))
                 || (v["outcome_unknown"] == false && (!v["restored"].as_array().is_some_and(|rows| rows.is_empty())

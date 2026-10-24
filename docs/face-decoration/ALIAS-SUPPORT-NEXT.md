@@ -1,4 +1,9 @@
-# Remaining alias support transaction
+# Alias support transaction plan (subsequently source-connected)
+
+The initial/revised visible-support route is now described in
+[SUPPORT-ALIAS-CONTRACT.md](SUPPORT-ALIAS-CONTRACT.md), source-only and UNRUN.
+This original plan remains design rationale; effect-recovery and mixed-preset
+alias routes are still separate gaps.
 
 The scalar-alias slice deliberately cannot authorize initial or revised visible
 skin painting, effect-recovery painting or mixed-preset local-state changes.

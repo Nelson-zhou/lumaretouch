@@ -51,7 +51,7 @@ impl EngineHandle {
         // revoke unrelated sample-library/semantic-colour capture ownership.
         if cmd["cmd"] == "fringe_repair_preview" { return self.dispatcher.enqueue(None, cmd); }
         if cmd["cmd"]=="project_recovery" || cmd["cmd"]=="canvas_guides" {return self.dispatcher.enqueue(None,cmd);}
-        if crate::people_api::face_style::read_only(&cmd) || crate::people_api::eye_bag::read_only(&cmd) || crate::people_api::face_decoration::read_only(&cmd) || crate::people_api::decoration_alias::read_only(&cmd) || crate::managed_import_api::read_only(&cmd) || crate::batch_api::read_only(&cmd) || crate::preset_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
+        if crate::people_api::face_style::read_only(&cmd) || crate::people_api::eye_bag::read_only(&cmd) || crate::people_api::face_decoration::read_only(&cmd) || crate::people_api::decoration_alias::read_only(&cmd) || crate::people_api::decoration_support_alias::read_only(&cmd) || crate::managed_import_api::read_only(&cmd) || crate::batch_api::read_only(&cmd) || crate::preset_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if cmd["cmd"] == "virtual_copy" && matches!(cmd["action"].as_str(), Some("state" | "query")) {
             return self.dispatcher.enqueue(None, cmd);
         }

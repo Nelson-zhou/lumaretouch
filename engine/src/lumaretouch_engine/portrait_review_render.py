@@ -32,12 +32,17 @@ def _graph_content(graph):
     return value
 
 
-def snapshot_key(engine, row, state, graph):
+def snapshot_key(engine, row, state, graph, *, staged_people_context=None):
     from .full_candidate_render import people_context
     from .people_export import isolated_snapshot
     from .optics_candidate_identity import fingerprint
     context = people_context(engine, row)
     document = engine._document_versions().version(row).document_id
+    if staged_people_context is not None:
+        from .full_candidate_render import identity
+        version = engine._document_versions().version(row)
+        _, _, context = identity(engine, row, state, document, str(version.revision),
+            people_graph=graph, staged_people_context=staged_people_context)
     snap = engine._state_to_export_snap(state, device='cpu', scale=1, upscale_backend='lanczos3', sharpen=0.,
         source_path=row['path'], people_graph=graph, people_context=context, people_document_id=document)
     snap = isolated_snapshot(snap, for_document=True)
@@ -49,11 +54,12 @@ def snapshot_key(engine, row, state, graph):
             'graph_sha256': fingerprint(_graph_content(graph))}
 
 
-def image(engine, row, state, graph, document, revision, *, cancelled=lambda: False):
+def image(engine, row, state, graph, document, revision, *, cancelled=lambda: False, staged_people_context=None):
     from .full_candidate_render import render
     from PIL import Image
     import numpy as np
-    rgb, proof = render(engine, row, state, document, str(revision), people_graph=graph, cancelled=cancelled)
+    options = {} if staged_people_context is None else {'staged_people_context': staged_people_context}
+    rgb, proof = render(engine, row, state, document, str(revision), people_graph=graph, cancelled=cancelled, **options)
     if cancelled(): raise InterruptedError('Portrait image review cancelled')
     size = preview_size(proof['output_size']); channels = []
     for channel in range(3):

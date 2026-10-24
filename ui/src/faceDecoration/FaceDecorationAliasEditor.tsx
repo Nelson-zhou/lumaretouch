@@ -53,7 +53,7 @@ export function FaceDecorationAliasEditor({people,recipe,disabled}:{people:Peopl
  }
  return <section aria-label="共享来源脸部装饰逐照片审核">
   <h4>共享来源：必须审核全部受影响照片后一起应用</h4>
-  <p>这里只起草当前人物的图案和程度，不立即改变任何照片。每个成员保留自己的裁切、色彩、修复和其他效果；不复制可见皮肤笔迹。需要重新绘制支持时，本通道仍不可用。</p>
+  <p>这里只起草当前人物的图案和程度，不立即改变任何照片。每个成员保留自己的裁切、色彩、修复和其他效果；不复制可见皮肤笔迹。初次或重新绘制范围请使用下方独立的范围事务，不能借用本通道提交。</p>
   <label>候选图案 <select disabled={!canEdit} value={draft.pattern} onChange={e=>change({...draft,pattern:e.target.value as Recipe['pattern']})}>{PATTERNS.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
   <label>候选程度 {Math.round(draft.strength*100)} / 100 <input type="range" min={0} max={100} step={1} disabled={!canEdit} value={Math.round(draft.strength*100)} onChange={e=>change({...draft,strength:Number(e.target.value)/100})}/></label>
   <button type="button" disabled={!canEdit} onClick={()=>change({...draft,strength:0})}>起草归零（仍须审核全部照片）</button>

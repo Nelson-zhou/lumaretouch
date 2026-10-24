@@ -188,6 +188,11 @@ impl ReviewBinding {
             if bytes > 192 * 1024 { return Err("eye bag source review identity exceeds receipt budget".into()); }
             return Ok(Some(Self { fields, bytes, read_only: crate::people_api::eye_bag::read_only(value), strict_failure_identity: true }));
         }
+        if let Some(fields) = crate::people_api::decoration_support_alias::binding(value)? {
+            let bytes = fields.to_string().len();
+            if bytes > 256 * 1024 { return Err("Decoration support identity exceeds receipt budget".into()); }
+            return Ok(Some(Self { fields, bytes, read_only: crate::people_api::decoration_support_alias::read_only(value), strict_failure_identity: true }));
+        }
         if let Some(fields)=crate::people_api::decoration_alias::binding(value)? {
             let bytes=fields.to_string().len(); if bytes>16*1024{return Err("Decoration alias identity exceeds receipt budget".into());}
             return Ok(Some(Self{fields,bytes,read_only:crate::people_api::decoration_alias::read_only(value),strict_failure_identity:true}));
@@ -219,7 +224,7 @@ impl ReviewBinding {
         if let Some(mut fields) = crate::batch_api::history::binding(value)? {
             if let Some(markers) = crate::project_recovery_fence::shared_history_markers(epoch, value)? {
                 for (key, marker) in markers.as_object().unwrap() { fields[key] = marker.clone(); }
-                if markers.get("eye_bag_recovery_alias_review").is_some() { fields["module_scope"] = json!(["lnx.people_graph.v1"]); }
+                if markers.get("eye_bag_recovery_alias_review").is_some() || markers.get(crate::people_api::decoration_support_alias::MARKER).is_some() { fields["module_scope"] = json!(["lnx.people_graph.v1"]); }
             }
             let bytes = fields.to_string().len();
             return Ok(Some(Self { fields, bytes, read_only: false, strict_failure_identity: true }));
@@ -337,19 +342,21 @@ impl ReviewBinding {
     }
     fn decorate(&self, value: &mut Value) {
         if (self.fields["protocol"] == 2 && self.fields.get("ack").is_some())
-            || self.fields.get("eye_bag_recovery_alias_review").is_some() { value["no_write"] = json!(false); }
+            || self.fields.get("eye_bag_recovery_alias_review").is_some()
+            || self.fields.get(crate::people_api::decoration_support_alias::MARKER).is_some()
+            || self.fields["face_decoration_support_alias_request"]["action"] == "face_decoration_support_alias_confirm" { value["no_write"] = json!(false); }
         for (key, expected) in self.fields.as_object().unwrap() {
             if !["face_decoration_cohort_applies_sha256", "face_decoration_applies_sha256", "eye_bag_cohort_applies_sha256", "eye_bag_applies_sha256", "collarbone_applies_sha256", "face_style_applies_sha256", "portrait_applies_sha256"].contains(&key.as_str()) {value[key] = expected.clone();}
         }
     }
 }
-struct Receipt { id: String, action: String, document: Option<String>, review: Option<ReviewBinding>, result: Option<Value>, bytes: usize }
+struct Receipt { id: String, action: String, document: Option<String>, review: Option<ReviewBinding>, result: Option<Value>, bytes: usize, native_unknown: bool, support_history_workspace: Option<String> }
 impl Receipt {
     fn evictable(&self) -> bool {
         self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true
             // Only explicitly classified head/collarbone preflight or paged
             // image reads may expire; an unknown commit remains guarded.
-            || (matches!(self.action.as_str(), "face_decoration_alias_preview" | "face_decoration_alias_image" | "face_decoration_cohort_visual" | "preflight" | "face_decoration_visual" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "face_decoration_reference") && self.review.as_ref().is_some_and(|review| review.read_only)))
+            || (matches!(self.action.as_str(), "face_decoration_support_alias_preview" | "face_decoration_support_alias_image" | "face_decoration_alias_preview" | "face_decoration_alias_image" | "face_decoration_cohort_visual" | "preflight" | "face_decoration_visual" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "face_decoration_reference") && self.review.as_ref().is_some_and(|review| review.read_only)))
     }
 }
 pub(crate) struct ReceiptHost<K: ReceiptKind> {
@@ -381,11 +388,14 @@ impl<K: ReceiptKind> ReceiptHost<K> {
         let id = command["request_id"].as_str().ok_or("missing receipt request ID")?;
         let action = command["action"].as_str().ok_or("missing receipt action")?;
         let review = ReviewBinding::from_command(epoch, command)?;
+        let support_history_workspace = review.as_ref().and_then(|review|
+            crate::project_recovery_fence::support_history_workspace(epoch, &review.fields));
         self.begin_bound(epoch, id, action, bound)?;
         // begin_bound just appended this unique request, within the same lock.
         let record = self.records.back_mut().unwrap();
-        record.bytes = review.as_ref().map_or(0, |binding| binding.bytes);
+        record.bytes = review.as_ref().map_or(0, |binding| binding.bytes) + support_history_workspace.as_ref().map_or(0, |workspace| workspace.len());
         record.review = review;
+        record.support_history_workspace = support_history_workspace;
         self.trim_bytes();
         Ok(())
     }
@@ -405,7 +415,7 @@ impl<K: ReceiptKind> ReceiptHost<K> {
             let index = self.records.iter().position(Receipt::evictable).ok_or_else(|| format!("too many pending or uncertain {} requests", K::NAME))?;
             self.records.remove(index);
         }
-        self.records.push_back(Receipt { id: id.into(), action: action.into(), document: document.map(str::to_owned), review: None, result: None, bytes: 0 });
+        self.records.push_back(Receipt { id: id.into(), action: action.into(), document: document.map(str::to_owned), review: None, result: None, bytes: 0, native_unknown: false, support_history_workspace: None });
         Ok(())
     }
     fn unknown(record: &Receipt, error: &str) -> Value {
@@ -429,11 +439,36 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                     && review.fields.get("eye_bag_request").is_some() && review.matches(value))
                 && value["outcome_unknown"] == false && K::valid(value, record.document.as_deref())
                 && value.to_string().len() <= MAX_RESULT_BYTES;
-            if !read_reconciliation { return; }
+            // Only the new support protocol may reconcile a locally synthesized
+            // transport unknown with the original exact engine terminal.
+            // An engine-issued unknown or any known terminal stays immutable.
+            let bound_support_event = K::NAME == "people" && record.native_unknown && previous["outcome_unknown"] == true
+                && value["event"] == "people_result"
+                && matches!(record.action.as_str(), "face_decoration_support_alias_preview" | "face_decoration_support_alias_image" | "face_decoration_support_alias_confirm")
+                && record.review.as_ref().is_some_and(|review| review.fields.get("face_decoration_support_alias_request").is_some() && review.matches(value))
+                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
+            // The support-bank history route uses its existing batch protocol,
+            // but only a native-observed exact workspace + marker may reconcile.
+            // Generic/scalar history, changed workspaces and rejected summaries
+            // retain their existing immutable-unknown/reopen behavior.
+            let bound_support_history_event = K::NAME == "batch" && record.native_unknown && previous["outcome_unknown"] == true
+                && value["event"] == "batch_result" && matches!(record.action.as_str(), "undo" | "redo")
+                && record.review.as_ref().is_some_and(|review|
+                    review.fields.get(crate::people_api::decoration_support_alias::MARKER).is_some() && review.matches(value)
+                    && record.support_history_workspace.as_ref().is_some_and(|workspace|
+                        crate::project_recovery_fence::support_history_workspace(epoch, &review.fields).as_ref() == Some(workspace)))
+                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
+            let support_reconciliation = (bound_support_event || bound_support_history_event) && value["outcome_unknown"] == false;
+            let support_engine_unknown = (bound_support_event || bound_support_history_event) && value["outcome_unknown"] == true;
+            if !read_reconciliation && !support_reconciliation && !support_engine_unknown { return; }
+            // An exact engine unknown replaces the transport diagnostic, not
+            // its authority: it closes late-terminal reconciliation and stays fenced.
+            if support_engine_unknown { record.native_unknown = false; }
         }
-        let mut result = if !K::valid(value, record.document.as_deref())
+        let invalid = !K::valid(value, record.document.as_deref())
             || record.review.as_ref().is_some_and(|review| !review.matches(value))
-            || value.to_string().len() > MAX_RESULT_BYTES {
+            || value.to_string().len() > MAX_RESULT_BYTES;
+        let mut result = if invalid {
             Self::unknown(record, &format!("invalid or oversized {} receipt; inspect actual state", K::NAME))
         } else { value.clone() };
         if record.review.is_some() && result["outcome_unknown"] == true {
@@ -450,6 +485,11 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                     for (key, value) in publication.as_object().unwrap() { compact[key] = value.clone(); }
                 }
             }
+            if K::NAME == "people" {
+                if let Some(publication) = crate::people_api::decoration_support_alias::retained_publication(&result) {
+                    for (key, value) in publication.as_object().unwrap() { compact[key] = value.clone(); }
+                }
+            }
             if K::NAME == "effect_recovery" {
                 if let Some(publication) = crate::effect_recovery_host::alias::retained_publication(&result) {
                     for (key, value) in publication.as_object().unwrap() { compact[key] = value.clone(); }
@@ -461,7 +501,9 @@ impl<K: ReceiptKind> ReceiptHost<K> {
             if let Some(code) = result["error_code"].as_str() { compact["error_code"] = json!(code.chars().take(128).collect::<String>()); }
             result = compact;
         }
-        record.bytes = result.to_string().len() + record.review.as_ref().map_or(0, |binding| binding.bytes);
+        record.native_unknown = result["outcome_unknown"] == true && record.native_unknown;
+        record.bytes = result.to_string().len() + record.review.as_ref().map_or(0, |binding| binding.bytes)
+            + record.support_history_workspace.as_ref().map_or(0, |workspace| workspace.len());
         record.result = Some(result);
         if record.review.is_some() {
             // Use the retained, validated result, never the raw engine event.
@@ -474,7 +516,11 @@ impl<K: ReceiptKind> ReceiptHost<K> {
         self.trim_bytes();
     }
     pub fn failed(&mut self, id: &str, error: &str) {
-        let value = self.records.iter().find(|r| r.id == id).map(|r| Self::unknown(r, error));
+        let value = self.records.iter_mut().find(|r| r.id == id).and_then(|record| {
+            if record.result.is_some() { return None; }
+            record.native_unknown = true;
+            Some(Self::unknown(record, error))
+        });
         if let Some(value) = value { self.receive(self.epoch, &value); }
     }
     pub fn ended(&mut self, epoch: [u8; 16]) {

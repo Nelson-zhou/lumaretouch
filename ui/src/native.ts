@@ -1,4 +1,5 @@
 import {observeDecorationMultiHistory} from './faceDecoration/multiHistory';
+import {observeSupportAliasHistory} from './faceDecoration/supportAliasHistoryRegistry';
 import {observeDecorationBatchHistory} from './faceDecoration/batchHistoryRegistry';
 import {observeEyeBagPresetAliasHistory} from './eyeBagPreserve/presetAliasHistoryRegistry';
 import {observeRecoveryAliasHistory} from './effectRecovery/aliasHistoryRegistry';
@@ -358,6 +359,7 @@ export interface SyncState {
     face_decoration_batch_review?: {version: 1; review_sha256: string; member_count: number};
     face_decoration_cohort_review?: {version:1;review_sha256:string;member_count:number};
     face_decoration_alias_review?: {version:1;review_sha256:string;member_count:number};
+    face_decoration_support_alias_review?: import('./faceDecoration/supportAliasHistoryRegistry').SupportAliasMarker;
     eye_bag_batch_review?: {version: 1; review_sha256: string; member_count: number};
     eye_bag_preset_alias_review?: import('./eyeBagPreserve/presetAliasHistoryRegistry').EyeBagPresetAliasMarker;
     eye_bag_recovery_alias_review?: import('./effectRecovery/aliasHistoryRegistry').RecoveryAliasMarker }[];
@@ -1051,6 +1053,7 @@ export interface EngineStatus {
     eye_light_protocol?: number;
     blush_makeup_protocol?: number;
     face_decoration_protocol?: number;
+    face_decoration_support_alias_protocol?: number;
     face_decoration_available?: boolean;
     face_decoration_reason?: string | null;
     lipstick_protocol?: number;
@@ -1371,7 +1374,7 @@ export const engineStatus = async () => {
   const status = await invoke<EngineStatus>("engine_status");
   observeFaceStyleAliasHistory(status.session?.sync, observation);
   observeEyeBagAliasHistory(status.session?.sync, observation);
-  observeDecorationBatchHistory(status.session?.sync, observation);observeDecorationMultiHistory(status.session?.sync, observation);
+  observeDecorationBatchHistory(status.session?.sync, observation);observeDecorationMultiHistory(status.session?.sync, observation);observeSupportAliasHistory(status.session?.sync, observation);
   observeEyeBagBatchHistory(status.session?.sync, observation);
   observeEyeBagCohortHistory(status.session?.sync, observation);
   observeEyeBagPresetAliasHistory(status.session?.sync, observation);

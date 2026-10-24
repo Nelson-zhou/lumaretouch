@@ -29,6 +29,8 @@ def _person(capsule):
 
 def check(entry):
     if KEY not in entry: return None
+    if 'face_decoration_support_alias_review' in entry:
+        raise ValueError('Visible-support alias history cannot reuse another history authority')
     marker = entry[KEY]
     if (type(marker) is not dict or set(marker) != {'version', 'review_sha256', 'association_id', 'members', 'targets'}
             or type(marker['version']) is not int or marker['version'] != 1

@@ -18,10 +18,14 @@ REVIEWS = {
     'iris':('eyes',frozenset(('left','right')),True),
 }
 PALETTES = frozenset(('lipstick','blush','eyeliner','eyelash','brow_makeup'))
-ACTIONS = frozenset(('face_decoration_reference','face_decoration_review','face_decoration_alias_preview','face_decoration_alias_image','face_decoration_alias_confirm')) | frozenset(prefix + suffix for prefix in REVIEWS for suffix in ('_reference','_review')) | frozenset(prefix+'_palette' for prefix in PALETTES)
+ACTIONS = frozenset(('face_decoration_reference','face_decoration_review','face_decoration_alias_preview','face_decoration_alias_image','face_decoration_alias_confirm','face_decoration_support_alias_preview','face_decoration_support_alias_image','face_decoration_support_alias_confirm')) | frozenset(prefix + suffix for prefix in REVIEWS for suffix in ('_reference','_review')) | frozenset(prefix+'_palette' for prefix in PALETTES)
 
 
 def check_action(action,payload,target):
+    if action.startswith('face_decoration_support_alias_'):
+        from .face_decoration_support_alias_review import check_action as support_action
+        support_action(action,payload,target)
+        return
     if action.startswith('face_decoration_alias_'):
         from .face_decoration_alias_review import check_action as alias_action
         alias_action(action,payload,target)

@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import {supportAliasWorkspace,type SupportAliasWorkspaceReplacement} from '../faceDecoration/supportAliasHistoryRegistry';
+import {createDecorationSupportQueue} from './decorationSupportQueue';
+import {isSupportAliasAction,supportAliasReceiptCurrent,type SupportAliasReceipt} from '../faceDecoration/supportAliasModel';
 import {echoMatches as decorationEchoMatches, referenceReceiptValid as decorationReferenceReceiptValid, reviewReceiptValid as decorationReviewReceiptValid, releasedReferenceReceiptValid as decorationReleasedReferenceValid} from '../faceDecoration/model';
 import {isDecorationAliasAction,validAliasReview,validAliasConfirmation,aliasAck,aliasEchoMatches,aliasReceiptCurrent,verifyDecorationAliasReview,aliasHistoryDigest,type DecorationAliasReview,type DecorationAliasReceipt} from '../faceDecoration/aliasModel';
 import {canonical as decorationCanonical} from '../faceDecoration/model';
@@ -15,7 +18,7 @@ import {eyeBagBinding} from '../eyeBagPreserve/model';
 import {canonical as eyeBagCanonical} from '../eyeBagPreserve/support';
 
 type DecorationAliasCommit = {batchId:string;documentEpoch:string;review:DecorationAliasReview;reviewSha256:string};
-type View = {lastDecorationAliasResult:DecorationAliasReceipt|null;lastDecorationAliasCommit:DecorationAliasCommit|null;faceDecorationReleasedRequestId: string | null; eyeBagCancel: 'none' | 'requested' | 'stopped' | 'completed' | 'released'; pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string;
+type View = {lastDecorationSupportAliasResult:SupportAliasReceipt|null;lastDecorationAliasResult:DecorationAliasReceipt|null;lastDecorationAliasCommit:DecorationAliasCommit|null;faceDecorationReleasedRequestId: string | null; eyeBagCancel: 'none' | 'requested' | 'stopped' | 'completed' | 'released'; pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string;
   lastEyeBagResult: EyeBagReceipt | null; lastEyeBagAliasCommit: EyeBagAliasCommit | null; lastBodyResult: SkinBodyResult | null; lastFaceStyleResult: FaceStyleReceipt | null; lastAliasCommit: FaceStyleAliasCommit | null};
 type Ports = {
   send: (command: PeopleAction) => Promise<unknown>;
@@ -28,6 +31,7 @@ type Ports = {
  * Body results retain their exact action and family-tagged payload; sharing this
  * mailbox never promotes colour review authority into skin-finish authority. */
 export function createPeopleWorkflow(ports: Ports) {
+  const decorationSupport=createDecorationSupportQueue();
   let current: PeopleView | null = null, enabled = false;
   let pending: PeopleAction | null = null, checking: Promise<void> | null = null;
   let checkingCommand: PeopleAction | null = null;
@@ -40,7 +44,7 @@ export function createPeopleWorkflow(ports: Ports) {
   const eyeRead = (command: PeopleAction) => isEyeBagAction(command.action) && command.action !== 'eye_bag_confirm';
   let queued: {key: string; patches: Map<string, ParameterPatch>} | null = null;
   let waitFor: {key: string; revision: number; documentRevision: number} | null = null;
-  let view: View = {lastDecorationAliasResult:null,lastDecorationAliasCommit:null,faceDecorationReleasedRequestId: null, eyeBagCancel: 'none', pending: false, pendingAction: null, uncertain: false, message: '', lastEyeBagResult: null, lastEyeBagAliasCommit: null, lastBodyResult: null, lastFaceStyleResult: null, lastAliasCommit: null};
+  let view: View = {lastDecorationSupportAliasResult:null,lastDecorationAliasResult:null,lastDecorationAliasCommit:null,faceDecorationReleasedRequestId: null, eyeBagCancel: 'none', pending: false, pendingAction: null, uncertain: false, message: '', lastEyeBagResult: null, lastEyeBagAliasCommit: null, lastBodyResult: null, lastFaceStyleResult: null, lastAliasCommit: null};
   const listeners = new Set<() => void>();
   const publish = (patch: Partial<View>) => {view = {...view, ...patch}; listeners.forEach(listener => listener());};
   const targetKey = (value: PeopleView) => `${bindingKey(value.binding)}:${value.association_revision}:${JSON.stringify(value.editing_target)}`;
@@ -72,6 +76,7 @@ export function createPeopleWorkflow(ports: Ports) {
             || result.document_id !== command.document_id || result.outcome_unknown) {
             throw Error(result?.error ?? '人物修改结果未确认；未自动重发。');
           }
+          await decorationSupport.validate(command,result,()=>current);
           const decorationAlias=isDecorationAliasAction(command.action);
           if(decorationAlias&&(!aliasEchoMatches(command,result)||result.protocol!==1||typeof result.success!=='boolean'
             ||typeof result.outcome_unknown!=='boolean'||!result.success&&result.batch_id!=null))
@@ -169,7 +174,7 @@ export function createPeopleWorkflow(ports: Ports) {
             } else if (object(result.payload) && Object.hasOwn(result.payload, 'alias_members'))
               throw Error('未请求的共享来源确认回执，只能查询原请求。');
           }
-          const faceStyleRead = decorationAlias && command.action !== 'face_decoration_alias_confirm' || faceStyle && command.action !== 'face_style_confirm' || eyeBag && command.action !== 'eye_bag_confirm';
+          const faceStyleRead = isSupportAliasAction(command.action)&&command.action!=='face_decoration_support_alias_confirm' || decorationAlias && command.action !== 'face_decoration_alias_confirm' || faceStyle && command.action !== 'face_style_confirm' || eyeBag && command.action !== 'eye_bag_confirm';
           if (result.success && (faceStyleRead || decorationReleased)) {
             // Read-only face-style receipts must not manufacture or publish a document mutation.
             // A stale response is harmless and discarded below, never applied to the current face.
@@ -193,6 +198,7 @@ export function createPeopleWorkflow(ports: Ports) {
           if (pending !== command) return;
           discardedRead = discardedRead || eyeRead(command) && cancelIntent === command;
           if (discardedRead) eyeBagReview = null;
+          decorationSupport.complete(command);
           pending = null;
           pendingAliasReview = null;
           pendingEyeBagReview = null;
@@ -204,7 +210,8 @@ export function createPeopleWorkflow(ports: Ports) {
           if (aliasCommit) aliasReview = null;
           const bodyFamily = skinBodyActionFamily(command.action);
           const bodyPayloadInvalid = !!bodyFamily && !result.payload_released && !skinBodyFamilyMatches(result.payload, bodyFamily);
-          publish({lastDecorationAliasResult:aliasReceiptCurrent(command,result,current)?{command,result}:null,
+          publish({lastDecorationSupportAliasResult:supportAliasReceiptCurrent(command,result,current)?{command,result}:null,
+            lastDecorationAliasResult:aliasReceiptCurrent(command,result,current)?{command,result}:null,
             ...(decorationAliasCommit?{lastDecorationAliasCommit:decorationAliasCommit}:{}),faceDecorationReleasedRequestId: decorationReleased ? command.request_id : null, eyeBagCancel: discardedRead ? (cancelled ? 'stopped' : 'completed') : 'none', pending: !!queued, pendingAction: queued ? 'patch' : null, uncertain: false,
             lastEyeBagResult: !discardedRead && eyeBagReceiptCurrent(command, result, current) ? {command, result} : null,
             lastFaceStyleResult: faceStyleReceiptCurrent(command, result, current) ? {command, result} : null,
@@ -241,6 +248,7 @@ export function createPeopleWorkflow(ports: Ports) {
   async function submit(command: PeopleAction): Promise<void> {
     if (pending || queued) throw Error('上一项人物修改尚未确认，请先查询结果。');
     if (!enabled || !matches(command)) throw Error('照片或人物状态已变化，请等待刷新后再修改。');
+    decorationSupport.prepare(command,current);
     pendingDecorationAliasReview=null;
     if(command.action==='face_decoration_alias_confirm'){
       if(!decorationAliasReview||!validAliasReview(decorationAliasReview,current,decorationAliasReview.recipe)
@@ -271,8 +279,9 @@ export function createPeopleWorkflow(ports: Ports) {
     pendingPreviewView = (command.action === 'face_decoration_alias_preview' || command.action === 'face_style_preview' || command.action === 'eye_bag_preview') ? structuredClone(current) : null;
     if (command.action === 'face_style_preview') aliasReview = null;
     pending = command;
+    decorationSupport.sent(command);
     cancelIntent = null;
-    publish({lastDecorationAliasResult:null,faceDecorationReleasedRequestId: null, eyeBagCancel: 'none', pending: true, pendingAction: command.action, uncertain: false, lastEyeBagResult: null, lastBodyResult: null, lastFaceStyleResult: null, message: '正在提交人物修改，等待引擎确认。'});
+    publish({lastDecorationSupportAliasResult:null,lastDecorationAliasResult:null,faceDecorationReleasedRequestId: null, eyeBagCancel: 'none', pending: true, pendingAction: command.action, uncertain: false, lastEyeBagResult: null, lastBodyResult: null, lastFaceStyleResult: null, message: '正在提交人物修改，等待引擎确认。'});
     try {await bounded(ports.send(command), 10000);}
     catch (error) {if (pending === command) publish({uncertain: true, message: `${String(error)}。正在查询原请求，不重发修改。`});}
     if (pending === command) await check();
@@ -338,6 +347,8 @@ export function createPeopleWorkflow(ports: Ports) {
     update(value: PeopleView | null, canEdit: boolean) {
       const changed = !!current && (!value || targetKey(current) !== targetKey(value));
       current = value; enabled = canEdit;
+      decorationSupport.update(value);
+      if(view.lastDecorationSupportAliasResult&&!supportAliasReceiptCurrent(view.lastDecorationSupportAliasResult.command,view.lastDecorationSupportAliasResult.result,value))publish({lastDecorationSupportAliasResult:null});
       if (eyeDraft && eyeDraft.binding !== eyeBagBinding(value)) eyeDraft = null;
       if (view.lastEyeBagResult && !eyeBagReceiptCurrent(view.lastEyeBagResult.command, view.lastEyeBagResult.result, value)) publish({lastEyeBagResult: null});
       if (view.lastFaceStyleResult && !faceStyleReceiptCurrent(view.lastFaceStyleResult.command, view.lastFaceStyleResult.result, value)) publish({lastFaceStyleResult: null});
@@ -354,6 +365,15 @@ export function createPeopleWorkflow(ports: Ports) {
         if (!pending) publish({pending: false, pendingAction: null, message: '', uncertain: false});
       }
       flush();
+    },
+    retireDecorationSupportWorkspace(replacement:SupportAliasWorkspaceReplacement){
+      const request=pending;
+      if(!request||!isSupportAliasAction(request.action)||request.document_epoch!==replacement.previous
+        ||replacement.previous===replacement.current||supportAliasWorkspace()!==replacement.current
+        ||request.action==='face_decoration_support_alias_confirm'&&!replacement.retiredWrites.some(row=>row.requestId===request.request_id&&row.epoch===request.document_epoch))return;
+      pending=null;queued=null;waitFor=null;decorationSupport.retire();
+      publish({lastDecorationSupportAliasResult:null,pending:false,pendingAction:null,uncertain:false,
+        message:'已核实重新打开后的工作区，旧共享可见范围请求已隔离；这不表示旧请求未写入，请以重新打开的来源和受保护历史为准。'});
     },
     subscribe(listener: () => void) {listeners.add(listener); return () => {listeners.delete(listener);};},
     snapshot: () => view,

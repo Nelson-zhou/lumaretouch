@@ -461,7 +461,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
               # 协议号不动（加键属兼容扩展，宿主只读不判）。
               "version": __version__, **skin_colour_capability(), **skin_finish_capability(), **skin_gloss_capability(), **skin_texture_capability(), **face_contour_capability(),**face_size_capability(), **lower_face_capability(), **mid_face_capability(), **chin_shape_capability(), **chin_length_capability(), **philtrum_capability(), **eye_symmetry_capability(), **brow_enhance_capability(), **lip_texture_capability(), **skin_evenness_capability(), **body_skin_evenness_capability(), **collarbone_capability(), **body_face_match_capability(),
-              "eye_bags_protocol": 2, **eye_bag_preserve_capability(), **face_decoration_capability(), "face_decoration_alias_protocol": 1,
+              "eye_bags_protocol": 2, **eye_bag_preserve_capability(), **face_decoration_capability(), "face_decoration_alias_protocol": 1, "face_decoration_support_alias_protocol": 1,
               "runtime": runtime_report(),
               "privacy": policy_status(),
               # 内置预设清单（M3-b）：按钮上写什么字、按哪个名提交，全部由引擎说。

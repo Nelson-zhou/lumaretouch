@@ -75,6 +75,8 @@ def _asset(face, ref, record):
 
 def check(entry):
     if KEY not in entry: return None
+    if 'face_decoration_support_alias_review' in entry:
+        raise ValueError('Visible-support alias history cannot reuse another history authority')
     marker = entry[KEY]
     fields = {'version', 'review_sha256', 'people_scope', 'document_ids', 'asset_sha256', 'face_ref', 'target',
         'before_face', 'after_face', 'before_graph_sha256', 'after_graph_sha256', 'recovery_assets', 'state_fields', 'dependencies'}

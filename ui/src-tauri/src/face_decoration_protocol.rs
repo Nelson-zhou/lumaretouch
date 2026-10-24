@@ -22,14 +22,14 @@ fn source(v: &Value) -> bool {
     fields(v, &["sha256", "width", "height"]) && hex(&v["sha256"], 64)
         && ["width", "height"].iter().all(|key| v[*key].as_u64().is_some_and(|n| (2..=1_000_000).contains(&n)))
 }
-fn recipe(v: &Value) -> bool {
+pub(super) fn recipe(v: &Value) -> bool {
     fields(v, &["version", "pattern", "strength"]) && v["version"].as_u64() == Some(1)
         && v["pattern"].as_str().is_some_and(|name| PATTERNS.contains(&name)) && number(&v["strength"], 0.0, 1.0)
 }
 fn pair(v: &Value, low: f64, high: f64) -> bool {
     v.as_array().is_some_and(|p| p.len() == 2 && p.iter().all(|n| number(n, low, high)))
 }
-fn region(v: &Value) -> bool {
+pub(super) fn region(v: &Value) -> bool {
     if !fields(v, &["recipe", "visible", "unoccluded", "ownership_confirmed"])
         || ["visible", "unoccluded", "ownership_confirmed"].iter().any(|key| v[*key] != true) { return false; }
     let mask = &v["recipe"];
@@ -57,7 +57,7 @@ fn region(v: &Value) -> bool {
                 - axes[0][1].as_f64().unwrap() * axes[1][0].as_f64().unwrap()).abs() >= 1e-12
     })
 }
-fn reference(v: &Value, target: &Value) -> bool {
+pub(super) fn reference(v: &Value, target: &Value) -> bool {
     fields(v, &["source", "face_ref", "landmark_digest", "preview_sha256", "reference_request_id"])
         && source(&v["source"]) && v["face_ref"] == target["face_ref"]
         && v["source"]["sha256"] == target["face_ref"]["asset_sha256"]
@@ -150,8 +150,8 @@ fn facts(v: &Value, report: &Value) -> bool {
         && (if v["changed_pixels"].as_u64() == Some(0) { v["reason"] == "no_measurable_change" } else { v["reason"].is_null() })
 }
 fn report(v: &Value, payload: &Value, changed: bool) -> bool {
-    if !super::decoration_alias::report_metadata(v){return false;}
-    let mut normalized=v.clone(); if let Some(map)=normalized.as_object_mut(){for key in ["alias_required","alias_member_count","alias_reason","alias_review"]{map.remove(key);}}
+    if !super::decoration_alias::report_metadata(v) || !super::decoration_support_alias::report_metadata(v){return false;}
+    let mut normalized=v.clone(); if let Some(map)=normalized.as_object_mut(){for key in ["alias_required","alias_member_count","alias_reason","alias_review","support_alias_review","support_alias_reason"]{map.remove(key);}}
     let proof = &payload["reference_proof"];
     if !fields(&normalized, &["recipe", "facts", "source", "face_ref", "landmark_digest", "reviewed", "source_preview", "reference_proof",
         "support_sha256", "native_available", "support_available", "support_reason", "suspended"])

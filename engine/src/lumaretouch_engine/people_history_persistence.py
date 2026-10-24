@@ -75,7 +75,9 @@ def save(engine,project):
     from .eye_bag_cohort_history import check as check_cohort_history
     from .eye_bag_alias_history import check as check_eye_alias_history
     from .eye_bag_recovery_alias_history import validate_project_assets as validate_recovery_history
+    from .face_decoration_support_alias_history import validate_project_assets as validate_support_history
     for entry in batches.values():
+        validate_support_history(entry,project)
         validate_recovery_history(entry,project)
         check_da(entry);check_dc(entry);check_decoration_history(entry);check_alias_history(entry);check_eye_history(entry);check_cohort_history(entry);check_eye_alias_history(entry)
     from .eye_bag_preset_alias_history import encode_states
@@ -177,6 +179,8 @@ def prepare(project,rows,limit):
         check_eye_alias_history(entry)
         from .eye_bag_recovery_alias_history import validate_project_assets as validate_recovery_history
         validate_recovery_history(entry,project)
+        from .face_decoration_support_alias_history import validate_project_assets as validate_support_history
+        validate_support_history(entry,project)
         entries[str(key)]=entry
     return staged,entries
 

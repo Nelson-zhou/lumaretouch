@@ -28,7 +28,7 @@ export function observeDecorationBatchHistory(sync: unknown, observation?: numbe
     if (object(marker) && Object.keys(marker).sort().join('|') === 'member_count|review_sha256|version'
       && marker.version === 1 && hash(marker.review_sha256) && count(marker.member_count)
       && (!Object.hasOwn(entry,'eye_bag_batch_review')||validDecorationBatchMarker(entry.eye_bag_batch_review)&&entry.eye_bag_batch_review.member_count===marker.member_count)
-      && !['eye_bag_cohort_review','eye_bag_alias_review','eye_bag_preset_alias_review','eye_bag_recovery_alias_review','face_style_alias_review'].some(field=>Object.hasOwn(entry,field))
+      && !['face_decoration_support_alias_review','eye_bag_cohort_review','eye_bag_alias_review','eye_bag_preset_alias_review','eye_bag_recovery_alias_review','face_style_alias_review'].some(field=>Object.hasOwn(entry,field))
       && entry.targets === marker.member_count && JSON.stringify(entry.module_scope) === JSON.stringify(['lnx.people_graph.v1']))
       next = {memberCount: marker.member_count, reviewSha256: marker.review_sha256};
     const id = key(workspace!, entry.batch_id), previous = marked.get(id);
