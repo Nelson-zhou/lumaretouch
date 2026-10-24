@@ -55,7 +55,7 @@
       "wired_routes_in_retouch_panel": [
         {
           "path": "脸型/瘦脸",
-          "ui_route": "deform.slim_face"
+          "ui_route": "slim_face.v2"
         },
         {
           "path": "眼睛/整体大小",

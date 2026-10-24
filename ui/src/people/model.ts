@@ -102,12 +102,13 @@ export function targetLabel(view: PeopleView): string {
   return index >= 0 ? `人物 ${index + 1} 独立覆盖` : '所选人脸已不在当前照片';
 }
 export function operationLabel(id: string): string {
-  return ({'lnx.deform.v1': '基础脸型', 'lnx.enhance.v1': '眼牙与面部增强',
+  return ({'lnx.deform.v1': '历史基础脸型（旧版瘦脸保留错误拓扑）', 'lnx.enhance.v1': '眼牙与面部增强',
     'lnx.skin_colour.v1': '面部肤色色温与色调',
     'lnx.skin_finish.v1': '肤色美白与皮肤红润（手动强度）',
     'lnx.skin_gloss.v1': '面部已有高光光泽度（抑制与增强）',
     'lnx.skin_texture.v1': '面部纹理度与皮肤清晰度（已有细节）',
     'lnx.face_contour.v1': '太阳穴、颧骨与下颌（可见二维轮廓）',
+    'lnx.slim_face.v2': '新版瘦脸（真实可见轮廓，左右独立）',
     'lnx.facial_wrinkles.v1': '面部细纹', 'lnx.lip_makeup.v1': '唇妆',
     'lnx.brow_shape.v1': '眉形', 'lnx.nose_shape.v1': '鼻形',
     'lnx.eye_shape.v1': '眼形', 'lnx.mouth_shape.v1': '嘴形',

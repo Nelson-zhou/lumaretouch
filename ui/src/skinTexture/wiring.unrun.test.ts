@@ -43,7 +43,7 @@ test('existing people owner handles scalar updates and one-request atomic neutra
 test('the exact two leaves use dedicated readiness and every existing competing-owner fence', () => {
   assert.ok(source('../native.ts').includes('skin_texture_available?: boolean'));
   assert.ok(source('../native.ts').includes('skin_texture_reason?: string | null'));
-  const textureCase = panel.slice(panel.indexOf('case "skin_texture.texture":'), panel.indexOf('case "deform.slim_face":'));
+  const textureCase = panel.slice(panel.indexOf('case "skin_texture.texture":'), panel.indexOf('case "slim_face.v2":'));
   for (const text of ['people={props.people}', 'capability={status?.ready_caps}', 'blocked={dim', 'props.hairBusy',
     'props.whiteBalanceBusy', 'portraitRequestsBusy()', 'status?.edit_queue?.in_flight', 'status?.edit_queue?.pending',
     'status?.edit_queue?.closed', 'faceOk={props.faceOk}', 'faceWhy={props.faceWhy}']) assert.ok(textureCase.includes(text));

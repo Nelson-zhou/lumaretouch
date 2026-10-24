@@ -41,6 +41,37 @@ fn positive_expands_temple_and_jaw_but_narrows_cheekbone() {
 }
 
 #[test]
+fn corrected_slim_profile_contracts_all_regions_with_independent_subject_sides() {
+    // New lnx.slim_face.v2 policy, NOT migration of old 0.11-width strengths.
+    // Subject-left +0.8 narrows; subject-right -0.4 expands.
+    let output = run(&[-0.8, 0.4, 0.8, -0.4, -0.8, 0.4], &FRAME);
+    for (i, expected) in [-2.8, -1.4, -2.8, -1.4, -2.8, -1.4].iter().enumerate() {
+        assert!((output[2 * i] - expected).abs() < 1.0e-12);
+        assert_eq!(output[2 * i + 1], 0.0);
+    }
+}
+
+#[test]
+fn corrected_slim_overlap_taper_is_bounded_and_zero_side_stays_exact() {
+    let mut roles = ROLES;
+    // Verified-oval transition profile: .65 temple plus .15 cheekbone.
+    roles[0] = 0.65; roles[1] = 0.15;
+    let mut output = [77.0; 12];
+    let values = [-1.0, 0.0, 1.0, 0.0, -1.0, 0.0];
+    let code = unsafe {
+        lrt_face_contour_controls_v1(
+            POINTS.as_ptr(), 12, roles.as_ptr(), 18, SIDES.as_ptr(), 6,
+            FRAME.as_ptr(), 7, values.as_ptr(), 6, 6, output.as_mut_ptr(), 12)
+    };
+    assert_eq!(code, 0);
+    assert!((output[0] + 2.8).abs() < 1.0e-12);
+    for i in [1, 3, 5] {
+        assert_eq!(output[2 * i].to_bits(), 0);
+        assert_eq!(output[2 * i + 1].to_bits(), 0);
+    }
+}
+
+#[test]
 fn each_subject_side_uses_its_own_control_without_hidden_linking() {
     let output = run(&[0.8, 0.0, 0.0, -0.6, 0.0, 0.4], &FRAME);
     for (i, expected) in [2.8, 0.0, 0.0, -2.1, 0.0, -1.4].iter().enumerate() {

@@ -170,7 +170,13 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                 owned = {**recovery, 'weight':recovery['weight'].copy()}
                 owned['weight'].setflags(write=False); owned_recovery[(key,stage)] = owned
             lm = verify_analysis(face, analysis, (h,w))
+            A.SLIM_FACE.check_coexistence(values[A.SLIM_FACE.OP], values[A.DEFORM]['slim_face'],
+                                        values[A.FACE_CONTOUR.OP])
             field = A.build_geometry(key, lm, values, source, analysis['excluded'], backend=face['evidence']['backend'])
+            from .slim_face_people import append as append_slim
+            field, slim_facts = append_slim(field, state, entry['face_ref'], analysis, source,
+                                          values[A.SLIM_FACE.OP], values[A.DEFORM]['slim_face'],
+                                          values[A.FACE_CONTOUR.OP])
             from .face_contour_people import append as append_contour
             field, contour_facts = append_contour(field, state, entry['face_ref'], analysis, source, values[A.FACE_CONTOUR.OP])
             blush_review=lipstick_review=None
@@ -242,6 +248,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             if resident+h*w*256+128*1024*1024 > byte_budget: raise ValueError('Accumulated portrait fields exceed memory budget')
             fields.append(field); effects.extend(local)
             facts[key] = {record.stage:record.facts for record in local}
+            if slim_facts is not None: facts[key]['slim_face_v2'] = slim_facts
             if contour_facts is not None: facts[key]['face_contour'] = contour_facts
             liner_facts=[record.facts for record in local if record.stage=='eyeliner']
             if liner_facts:facts[key]['eyeliner']={'eyes':liner_facts,'stage':'source-working-srgb'}

@@ -4,6 +4,7 @@ from . import skin_colour_state as SKIN_COLOUR, skin_finish_state as SKIN_FINISH
 from . import skin_gloss_state as SKIN_GLOSS
 from . import skin_texture_state as SKIN_TEXTURE
 from . import face_contour_state as FACE_CONTOUR
+from . import slim_face_state as SLIM_FACE
 from . import brow_shape_state as B, nose_shape_state as N, eye_shape_state as E, mouth_shape_state as M
 from . import lip_makeup_state as L, facial_wrinkle_state as W, hair_colour_state as HAIR
 from .ops import deform as D, enhance as H
@@ -24,7 +25,8 @@ def check_enhance(value):
 
 
 def specifications():
-    return {FACE_CONTOUR.OP: (FACE_CONTOUR.neutral(), FACE_CONTOUR.check),
+    return {SLIM_FACE.OP: (SLIM_FACE.neutral(), SLIM_FACE.check),
+            FACE_CONTOUR.OP: (FACE_CONTOUR.neutral(), FACE_CONTOUR.check),
             SKIN_TEXTURE.OP: (SKIN_TEXTURE.neutral(), SKIN_TEXTURE.check),
             SKIN_GLOSS.OP: (SKIN_GLOSS.neutral(), SKIN_GLOSS.check),
             SKIN_FINISH.OP: (SKIN_FINISH.neutral(), SKIN_FINISH.check),

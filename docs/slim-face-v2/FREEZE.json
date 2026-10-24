@@ -1,0 +1,191 @@
+{
+  "baseline": "4610bfd1bae25f7b665f2c19c01c4875cd263f4b",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Explicit versioned bilateral corrected slim-face profile and opt-in legacy replacement. Old deform/archives/migration/sampler source remains unchanged; source-owned verified-oval Rust contour map, canonical original/derived render/export/history, target-recomputed presets and guarded coexistence. No runtime or photographic acceptance.",
+  "requirement_ids": [
+    "LNX-REF-PC-32466-C-da1d54e292"
+  ],
+  "files": [
+    {
+      "path": "core/face_contour/tests.rs",
+      "sha256": "6e75533a318d86ce912ec20447a3956dd71dff10cd0ba4f4cdb76883638c4622",
+      "bytes": 10594
+    },
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "b72c2d916138af8beebc3350d77556be339db64b81a6e03815cd946fcfca51f2",
+      "bytes": 13221
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "c66e710dc1c139eeeeac3a51490601722873ec5b2e1c930f5ff6cb4c9d3a71f0",
+      "bytes": 29080
+    },
+    {
+      "path": "docs/slim-face-v2/IMPLEMENTATION.md",
+      "sha256": "d2218738e611a09a9e49a4d1f9473e5c9ba229268aa1eaa70369c0ff2cc87d50",
+      "bytes": 9669
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "cefaa3a4dbff2fbbff2642387e60bc9584f0f49a0ac159ec6976daf406a34592",
+      "bytes": 14363
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "4333d9b3f46aca4e06d8743c4cee4983f984f83cf77bd2019e9848284739f899",
+      "bytes": 4352
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_plan.py",
+      "sha256": "bb016ac316c2c653d96ff995a5f6dc3cdb677c9622c42b0891a238c64c92b06f",
+      "bytes": 4850
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "f36a7de0de2de6fd4864627c8eb7ce01da0973c773b6341fe93a5fed9c11a5be",
+      "bytes": 20117
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "b960ea7763aca598b2d198ca7b89b000cf1514b21a08fc432e3088a40c5e176b",
+      "bytes": 13903
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "dc567d32487895eb267d5705b074c075109b276c35218739da1c327cd63a9687",
+      "bytes": 50145
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/slim_face_people.py",
+      "sha256": "6b4b8f4823bb5896a811d42d80288f87ec7c461d68982447b821e43c4815037d",
+      "bytes": 1707
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/slim_face_scope.py",
+      "sha256": "2030210fca69fbe1b555a66d182226425e09dc696fa95c760cfd39e47389da29",
+      "bytes": 6721
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/slim_face_state.py",
+      "sha256": "af2425651ac89560b5f35632f850764e338812d2e16790eae53a7df61226ff57",
+      "bytes": 4244
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "ce9791d1412c19aa17e1655a2d02d37715ce8574a4d47e59276da7716ba7b0e6",
+      "bytes": 8042
+    },
+    {
+      "path": "engine/tests/test_slim_face_integration_unrun.py",
+      "sha256": "4bc26c0eb7d38fea07262e7256725d01e2367a043515d1a18ceb6bd353686a1e",
+      "bytes": 21091
+    },
+    {
+      "path": "engine/tests/test_slim_face_scope_unrun.py",
+      "sha256": "d8c9546dbf84ad397965cc84eee0d1cc1701fc71414e5809e4dfd0b1f32580a1",
+      "bytes": 37501
+    },
+    {
+      "path": "engine/tests/test_slim_face_version_unrun.py",
+      "sha256": "d5d9244234a793889d0c8eadc8a2ccfdaaf31a3fc35131ee47515afe689ae6ee",
+      "bytes": 17356
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "5e39adb70f96edf3c7fc4a69f0adf1b11a00a7d25b6dc5871a19fcbd8753c2bf",
+      "bytes": 69915
+    },
+    {
+      "path": "ui/src/faceContour/wiring.unrun.test.ts",
+      "sha256": "d43088aa4bdbe396e910f56d7e718f412c9e7221c92eeabd6279644435887e26",
+      "bytes": 7440
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "c26f04f7ca2c6ef1204a8fe4b8dc3991c18ffae6b46baaee4cc56d8b859b0933",
+      "bytes": 8045
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "7a133435f04787ecb9402b8507ffc2fd3233e4dcad0b325fd52f3f40fd604bec",
+      "bytes": 4746
+    },
+    {
+      "path": "ui/src/skinGloss/wiring.unrun.test.ts",
+      "sha256": "8ecb471c795effa9af76dc07be2d47e03c00659da78bb1af154a85fb728da010",
+      "bytes": 5326
+    },
+    {
+      "path": "ui/src/skinTexture/wiring.unrun.test.ts",
+      "sha256": "ebeabc0d503d7aba9e35ecab6b537afcae1c6e98154b3f63835d28b8fc4e8915",
+      "bytes": 7383
+    },
+    {
+      "path": "ui/src/slimFace/SlimFaceControl.tsx",
+      "sha256": "211ea2a365d5e35be053cc9d74aed828dc76d2079ac2bf92b45e75807ddbd194",
+      "bytes": 13821
+    },
+    {
+      "path": "ui/src/slimFace/model.ts",
+      "sha256": "f004ace7398d73dbe189e4a3a3a4b76c6ab1315f1508bcfc35b7ba22b023f8f9",
+      "bytes": 12201
+    },
+    {
+      "path": "ui/src/slimFace/model.unrun.test.ts",
+      "sha256": "d7e4cd0966586b02e1a8be1d6053a4a137dc61499d9d1f1c8da5d372624c1b4d",
+      "bytes": 20855
+    },
+    {
+      "path": "ui/src/slimFace/wiring.unrun.test.ts",
+      "sha256": "0dce40c6e07c49cf9f0d166b1628704e6c89b87cb99ca405d6c40da90514b1f8",
+      "bytes": 11305
+    }
+  ],
+  "static_validation": {
+    "python_ast_files": 1091,
+    "registry_and_route_json": "parsed",
+    "payload_trailing_whitespace": 0,
+    "app_main_server_lines": [
+      2122,
+      2042,
+      6979
+    ],
+    "legacy_deform_sha256": "5e0800bffa8f87f9f8e4f6cf8caa1ea782bee20d099a2232c869e0e9d53247fd",
+    "unchanged_from_baseline": [
+      "ops/deform.py",
+      "people_geometry.py",
+      "people_migration.py",
+      "people_legacy.py",
+      "export_recipe.py",
+      "core/face_contour/lib.rs"
+    ],
+    "authored_unrun_new_fixture_functions": {
+      "python": 63,
+      "ui": 23,
+      "rust_added": 2
+    }
+  },
+  "unrun": [
+    "product imports/execution",
+    "tests and test collection",
+    "native compilation/build",
+    "typecheck",
+    "inference",
+    "photographic/numerical/performance acceptance",
+    "real UI/history/preview/export/batch acceptance"
+  ],
+  "limitations": [
+    "Old saved topology intentionally preserved, not numerically converted.",
+    "New scale is a compound verified-oval profile, not old-strength or commercial appearance equivalence.",
+    "Active v2 cannot coexist with nonzero legacy slim or standalone contour.",
+    "Frontal/mild-yaw and source evidence only; no complete occlusion or silhouette segmentation, hidden-pixel invention or 3D/AI claim.",
+    "Adjacent-background halo and sampled-fold-check limits remain.",
+    "Generic derived preset guard, broader alpha/HDR and complete official preset/face family remain unfinished."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

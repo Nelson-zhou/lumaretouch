@@ -41,6 +41,7 @@ import {SkinFinishControl} from '../skinFinish/SkinFinishControl';
 import {SkinGlossControl} from '../skinGloss/SkinGlossControl';
 import {SkinTextureControl} from '../skinTexture/SkinTextureControl';
 import {FaceContourControl} from '../faceContour/FaceContourControl';
+import {SlimFaceControl} from '../slimFace/SlimFaceControl';
 import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {FabricPanel} from "../fabric/FabricPanel";
 import {HistogramPanel} from "./HistogramPanel";
@@ -227,7 +228,7 @@ function Slider(props: {
 }
 
 const FACE_LABEL: Record<string, string> = {
-  slim_face: "瘦脸",
+  slim_face: "旧版瘦脸（历史错误拓扑）",
   big_eye: "大眼",
   small_chin: "小下巴",
   smile: "微笑",
@@ -374,7 +375,7 @@ const WIRED: Record<string, string> = {
   "PC-32465|皮肤质感/纹理度": "skin_texture.texture",
   "PC-32465|皮肤质感/清晰度": "skin_texture.clarity",
   // 面部重塑 / 表情
-  "PC-32466|脸型/瘦脸": "deform.slim_face",
+  "PC-32466|脸型/瘦脸": "slim_face.v2",
   "PC-32466|脸型/太阳穴": "face_contour.temple",
   "PC-32466|脸型/颧骨": "face_contour.cheekbone",
   "PC-32466|脸型/下颌": "face_contour.jaw",
@@ -441,7 +442,8 @@ const WIRE_LABEL: Record<string, string> = {
   "skin.detail": "质感保留",
   "skin.broad": "肤色匀净",
   "skin.radius": "磨皮半径",
-  "deform.slim_face": "瘦脸",
+  "slim_face.v2": "瘦脸（新版左右独立）",
+  "deform.slim_face": "旧版瘦脸（历史错误拓扑）",
   "deform.big_eye": "大眼",
   "deform.small_chin": "小下巴",
   "deform.smile": "微笑",
@@ -481,6 +483,8 @@ const HSL_BANDS = ["红", "橙", "黄", "绿", "青", "蓝", "紫", "洋红"];
 const HSL_CHIP_COLORS = ["#e2534b", "#ef8b3a", "#e3c443", "#5fae57",
                          "#49b3b0", "#4b7bd0", "#8a63c9", "#cf5fa8"];
 
+/** Historical lnx.deform.v1 recipes, including its known wrong slim-face topology.
+ * Never reinterpret these strengths as lnx.slim_face.v2 or silently clear v2. */
 const SHAPE_PRESETS: Record<string, Record<string, number>> = {
   经典: { slim_face: 0.22, big_eye: 0.04, small_chin: 0.14, smile: 0 },
   幼态: { slim_face: 0.12, big_eye: 0.10, small_chin: 0.10, smile: 0.05 },
@@ -680,13 +684,14 @@ export default function RetouchPanel(props: RetouchProps) {
     if (kind.startsWith("deform.preset:")) {
       const preset = kind.split(":")[1];
       return (
-        <button key={leaf.path} className="specBtn" title={`脸型预设：${name}`}
+        <button key={leaf.path} type="button" className="specBtn"
+          title={`历史脸型预设：${name}。保留旧版数值及错误拓扑，不是新版瘦脸；与新版非零效果冲突时引擎会拒绝，不会自动替换。`}
           disabled={dim || !props.faceOk}
           onClick={() => {
             setOpenSeen((s) => ({ ...s, [preset]: true }));
             commitDeform(SHAPE_PRESETS[preset] ?? {});
           }}>
-          <b>{name}</b><em>预设</em>
+          <b>{name}</b><em>历史预设 · 旧版瘦脸</em>
         </button>
       );
     }
@@ -762,7 +767,24 @@ export default function RetouchPanel(props: RetouchProps) {
           blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
             || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
           faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
-      case "deform.slim_face":
+      case "slim_face.v2":
+        if (!doc?.people) return <section key={leaf.path} aria-label="旧版瘦脸兼容编辑">
+          <p className="muted">此文档尚未提供规范人物状态，新版左右独立瘦脸暂不可用。以下仅编辑保存的旧版配方，不会自动升级或换算。</p>
+          <p className="muted">旧版右侧控制点列表含非面部椭圆点和嘴唇点，属于历史错误拓扑；这里只为旧作品的外观兼容保留，不代表与新版同等正确。</p>
+          {Number.isFinite(amounts.slim_face) && Math.abs(amounts.slim_face) <= 1
+            ? <Slider label="旧版瘦脸（历史错误拓扑）" value={amounts.slim_face * 100} min={-100} max={100}
+                disabled={dim || !props.faceOk || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+                  || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+                title={props.faceOk ? '保留旧版数值含义，不转换为新版瘦脸。' : props.faceWhy}
+                onChange={value => commitDeform({slim_face: value / 100})}
+                onReset={() => commitDeform({slim_face: 0})}/>
+            : <p className="muted">引擎尚未提供有效的旧版瘦脸读数，不以 0 代替。</p>}
+        </section>;
+        return <SlimFaceControl key={leaf.path}
+          people={props.people} capability={status?.ready_caps}
+          blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+            || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+          faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
       case "deform.big_eye":
       case "deform.small_chin":
       case "deform.smile": {

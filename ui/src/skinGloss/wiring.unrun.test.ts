@@ -38,7 +38,7 @@ test('the existing people owner is the only mutation and uncertain-receipt route
 test('gloss readiness and every existing competing-owner fence gate the actual gloss leaf', () => {
   assert.ok(source('../native.ts').includes('skin_gloss_available?: boolean'));
   assert.ok(source('../native.ts').includes('skin_gloss_reason?: string | null'));
-  const glossCase = panel.slice(panel.indexOf('case "skin_gloss.amount":'), panel.indexOf('case "deform.slim_face":'));
+  const glossCase = panel.slice(panel.indexOf('case "skin_gloss.amount":'), panel.indexOf('case "slim_face.v2":'));
   for (const text of ['people={props.people}', 'capability={status?.ready_caps}', 'blocked={dim', 'props.hairBusy',
     'props.whiteBalanceBusy', 'portraitRequestsBusy()', 'status?.edit_queue?.in_flight', 'status?.edit_queue?.pending',
     'status?.edit_queue?.closed', 'faceOk={props.faceOk}', 'faceWhy={props.faceWhy}']) assert.ok(glossCase.includes(text));

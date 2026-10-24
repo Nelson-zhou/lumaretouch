@@ -15,7 +15,7 @@ test('only exact temple, cheekbone and jaw leaves are routed without aliasing ol
   assert.equal((panel.match(/"PC-32466\|[^"\n]+": "face_contour\./g) ?? []).length, 3);
   assert.ok(panel.includes('<FaceContourControl key={leaf.path}'));
   assert.ok(control.includes('data-control-id={FACE_CONTOUR_CONTROL_IDS[control]}'));
-  for (const existing of ['"PC-32466|脸型/瘦脸": "deform.slim_face"', '"PC-32466|脸型/收下巴": "deform.small_chin"',
+  for (const existing of ['"PC-32466|脸型/瘦脸": "slim_face.v2"', '"PC-32466|脸型/收下巴": "deform.small_chin"',
     '"PC-32466|眉毛": "brow.family"', '"PC-32466|鼻子": "nose.family"',
     '"PC-32466|眼睛": "eye.family"', '"PC-32466|嘴巴": "mouth.family"']) assert.ok(panel.includes(existing));
 });
@@ -38,7 +38,7 @@ test('generic owner submits one numeric group, a flag-only toggle and atomic pai
 test('dedicated readiness and all existing competing-owner fences apply to all three leaves', () => {
   assert.ok(source('../native.ts').includes('face_contour_available?: boolean'));
   assert.ok(source('../native.ts').includes('face_contour_reason?: string | null'));
-  const branch = panel.slice(panel.indexOf('case "face_contour.temple":'), panel.indexOf('case "deform.slim_face":'));
+  const branch = panel.slice(panel.indexOf('case "face_contour.temple":'), panel.indexOf('case "slim_face.v2":'));
   for (const text of ['people={props.people}', 'capability={status?.ready_caps}', 'blocked={dim', 'props.hairBusy',
     'props.whiteBalanceBusy', 'portraitRequestsBusy()', 'status?.edit_queue?.in_flight', 'status?.edit_queue?.pending',
     'status?.edit_queue?.closed', 'faceOk={props.faceOk}', 'faceWhy={props.faceWhy}']) assert.ok(branch.includes(text));
