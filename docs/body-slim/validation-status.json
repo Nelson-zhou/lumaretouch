@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "requirement_id": "LNX-REF-PC-32473-C-bc54b9eb3c",
+  "operation_id": "lnx.body_slim.v1",
+  "baseline_revision_supplied_by_parent": "b655c75a456e620b8ee937ed49756aeff7f9dd88",
+  "implementation_status": "AUTHORED_UNRUN_ISOLATED_FAMILY_INTERFACES",
+  "static_checks": {
+    "python_stdlib_ast_parse": "PASSED_SOURCE_SYNTAX_ONLY",
+    "python_source_files_parsed": 10,
+    "json_parse": "PASSED_DATA_SYNTAX_ONLY",
+    "native_symbol_and_layout_source_review": "REVIEWED_NOT_COMPILED",
+    "shared_registration": "PARENT_OWNED_NOT_ASSERTED"
+  },
+  "runtime_quality_accepted": false,
+  "performance_accepted": false,
+  "test_execution": "NOT_RUN",
+  "compiler_or_typecheck": "NOT_RUN",
+  "product_import_or_execution": "NOT_RUN",
+  "model_inference_download_install": "NOT_RUN",
+  "git_or_github": "NOT_USED_BY_WORKER",
+  "authored_fixture_sources": [
+    "core/body_slim/lib.rs:cfg(test)",
+    "engine/tests/test_body_slim_unrun.py",
+    "ui/src/bodySlim/body_slim.unrun.test.ts"
+  ],
+  "required_future_acceptance": [
+    "Native compilation, ABI symbol/layout check and original-source off-grid numerical fixtures",
+    "Signed measured full-person width, height identity, compact collar exterior and inverse residual/Jacobian",
+    "Malformed/self-crossing/concave face-boundary contact and missing actual33 support rejection",
+    "Disabled/unresolved foreign person, truncated census, stale BodyRef/FaceRef/source/review rejection",
+    "Canonical source/derived source, preview/export, RGB8/RGB16/float32 SDR precision and unsupported alpha/HDR refusal",
+    "One-pass common sampler with mixed active body/face operations and exact body operation order",
+    "Save/reopen, per-document undo/redo, stale graph, unknown outcome, repeated gesture and navigation reconciliation",
+    "Missing native artifact recovery: view/status, disable and zero reset remain available",
+    "Manual silhouette editor on real photos, polygon mistakes, source change, interrupted/repeated click flows",
+    "Actual licensed real-photo visual quality, facial aspect and background collar/gap distortion review",
+    "Actual latency and retained/transient memory measurements at supported resolutions"
+  ]
+}

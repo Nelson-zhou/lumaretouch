@@ -50,7 +50,7 @@ def commit_observations(engine,candidate,request_id,operation='shoulder_shape'):
     # now unsupported. It must then display the explicitly unapplied original.
     from .shoulder_shape_project import history_patch
     request={'request_id':request_id,'gesture_id':request_id}
-    if operation in ('leg_shape','waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size'):request['operation_id']='lnx.'+operation+'.v1'
+    if operation in ('leg_shape','waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size','body_slim'):request['operation_id']='lnx.'+operation+'.v1'
     engine._body_publish(before,candidate,prepared,history_patch(before,candidate),request)
 
 
@@ -138,7 +138,7 @@ def apply(engine,message):
 
 class BodyTransport:
     def __init__(self,operation='shoulder_shape'):
-        if operation not in ('shoulder_shape','leg_shape','waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size'):raise ValueError('Unregistered body operation transport')
+        if operation not in ('shoulder_shape','leg_shape','waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size','body_slim'):raise ValueError('Unregistered body operation transport')
         self.operation=operation;self.seen={};self.results=OrderedDict();self.bytes=0
 
     def handle(self,engine,message,emit):

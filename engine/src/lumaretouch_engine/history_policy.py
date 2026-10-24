@@ -95,7 +95,7 @@ def command_group(name: str, msg: dict) -> str:
         return 'batch:portrait_cohort:'+str(msg.get('preflight_token'))+':'+str(msg.get('request_id'))
     if name=='batch' and msg.get('action')=='commit' and 'face_style_review_ack' in msg:
         return 'batch:face_style:'+str(msg.get('preflight_token'))+':'+str(msg.get('request_id'))
-    if name in ("shoulder_shape","leg_shape","arm_shape","waist_shape","leg_length","neck_shape","torso_length","waist_length","head_size"):return name+":gesture:"+str((msg.get("request") or {}).get("gesture_id",msg.get("request_id","missing")))[:128]
+    if name in ("shoulder_shape","leg_shape","arm_shape","waist_shape","leg_length","neck_shape","torso_length","waist_length","head_size","body_slim"):return name+":gesture:"+str((msg.get("request") or {}).get("gesture_id",msg.get("request_id","missing")))[:128]
     if name=='hair_colour':return 'hair_colour:'+str((msg.get('people_context') or {}).get('target'))+':'+str(msg.get('request_id','missing'))
     if name=="people":
         if msg.get("action")=="face_style_confirm":return "people:face_style_confirm:"+str(msg.get("request_id"))

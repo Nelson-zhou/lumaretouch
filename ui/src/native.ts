@@ -32,7 +32,7 @@ export function notifyInspectionEditIntent(){
 }
 const inspectionMutations=new Set(['photo_grain_request','photo_detail_request','primary_calibration_request','selective_colour_request','colour_grading_request','extended_tone_request','start_engine','shutdown_engine','load_image','set_strength','precompute',
   'inpaint','light','deform','lut','grade','enhance','lip_makeup','brow_shape','nose_shape','eye_shape','mouth_shape','background','common_background','fringe_repair','exposure','hsl','curves','levels','fabric','crop','compare',
-  'shoulder_shape','leg_shape','waist_shape','leg_length','neck_shape','arm_shape','torso_length','waist_length','head_size','people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
+  'shoulder_shape','leg_shape','waist_shape','leg_length','neck_shape','arm_shape','torso_length','waist_length','head_size','body_slim','people','session','history','project','preset','batch','face','pick','export','task','bench_start','bench_stop']);
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
   const mutation=inspectionMutations.has(command)&&!(command==='session'&&(args as Record<string,unknown>|undefined)?.action==='query')
     &&!(['batch','preset'].includes(command)&&['collarbone_visual','face_decoration_visual','face_decoration_cohort_visual'].includes(String((args as Record<string,unknown>|undefined)?.action)))
@@ -186,6 +186,7 @@ export interface DocState {
   torso_length?: import('./torsoLength/model').TorsoLengthView;
   waist_length?: import('./waistLength/model').WaistLengthView;
   head_size?: import('./headSize/model').HeadSizeView;
+  body_slim?: import('./bodySlim/model').BodySlimView;
   arm_shape?: import('./armShape/model').ArmView;
   brow_shape?: {version:1;revision:number;selected_face_id:string;recipe:import("./browShape/model").BrowShape;sides:Partial<Record<import("./browShape/model").BrowSide,import("./browShape/model").BrowFact>>;suspended:string|null;bytes_fields:number};
   nose_shape?: {version:1;revision:number;selected_face_id:string;recipe:import("./noseShape/model").NoseShape;controls:Partial<Record<import("./noseShape/model").NoseKey,import("./noseShape/model").NoseFact>>;suspended:string|null;bytes_fields:number};
@@ -1080,6 +1081,9 @@ export interface EngineStatus {
     torso_length_protocol?: number;
     torso_length_available?: boolean;
     torso_length_unavailable_reason?: string|null;
+    body_slim_protocol?: number;
+    body_slim_available?: boolean;
+    body_slim_unavailable_reason?: string|null;
     head_size_protocol?: number;
     head_size_available?: boolean;
     head_size_unavailable_reason?: string|null;
@@ -2039,6 +2043,11 @@ export const projectPackageReceipt=<T,>(requestId:string)=>invoke<{phase:string;
 export function runHeadSize(request:import('./headSize/nativeTransport').Command|{action:'mailbox_status'|'release';request_id:string}):Promise<import('./headSize/nativeTransport').Mailbox>{
   return ['view','status','mailbox_status','release'].includes(request.action)
     ? tauriInvoke<import('./headSize/nativeTransport').Mailbox>('head_size',{request}) : invoke<import('./headSize/nativeTransport').Mailbox>('head_size',{request});
+}
+
+export function runBodySlim(request:import('./bodySlim/nativeTransport').Command|{action:'mailbox_status'|'release';request_id:string}):Promise<import('./bodySlim/nativeTransport').Mailbox>{
+  return ['view','status','mailbox_status','release'].includes(request.action)
+    ? tauriInvoke<import('./bodySlim/nativeTransport').Mailbox>('body_slim',{request}) : invoke<import('./bodySlim/nativeTransport').Mailbox>('body_slim',{request});
 }
 
 /** Immutable full mixed decoration review images; read-only mailbox only. */

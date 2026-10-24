@@ -51,7 +51,7 @@ pub(super) fn safe_during_pending(command: &Value) -> bool {
         || crate::people_api::face_decoration::read_only(command) || crate::people_api::facial_sculpt::read_only(command) || crate::people_api::decoration_alias::read_only(command) || crate::people_api::decoration_support_alias::read_only(command)
         || crate::common_background_readback::read_only(command)
         || crate::torso_length_api::read_only(command) || crate::waist_length_api::read_only(command)
-        || crate::head_size_api::read_only(command) || crate::shoulder_shape_api::read_only(command)
+        || crate::head_size_api::read_only(command) || crate::body_slim_api::read_only(command) || crate::shoulder_shape_api::read_only(command)
         || crate::leg_shape_api::read_only(command) || crate::waist_shape_api::read_only(command)
         || crate::leg_length_api::read_only(command) || crate::neck_shape_api::read_only(command)
         || crate::arm_shape_api::read_only(command) { return true; }

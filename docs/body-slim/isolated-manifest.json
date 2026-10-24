@@ -1,0 +1,191 @@
+{
+  "version": 1,
+  "operation_id": "lnx.body_slim.v1",
+  "requirement_id": "LNX-REF-PC-32473-C-bc54b9eb3c",
+  "baseline_revision_supplied_by_parent": "b655c75a456e620b8ee937ed49756aeff7f9dd88",
+  "frozen_at_utc": "2026-10-24T16:46:41.079148+00:00",
+  "status": "ISOLATED_NOT_YET_INTEGRATED_AUTHORED_UNRUN",
+  "ownership_released_to_parent": true,
+  "shared_files_modified_by_worker": false,
+  "runtime_quality_accepted": false,
+  "performance_accepted": false,
+  "verification": "Stdlib AST/JSON/hash and source review only; no product imports, execution, tests, builds, compiler, typecheck, inference, downloads, installs, Git or GitHub",
+  "parent_required_followup": "Integrate documented shared routes; replace local body_slim_project version-10 definition with sole body_pose_geometry order import; no current integration/quality claim",
+  "files": [
+    {
+      "path": "core/body_slim/ABI.md",
+      "sha256": "7b76ab525a45b7869440a1779aff10220fdfb1020dc98d65e9292f54a2ce7ffb",
+      "bytes": 3813
+    },
+    {
+      "path": "core/body_slim/Cargo.toml",
+      "sha256": "bf2b559654ebee8dcc17e24413b61310ec934a8dba3850fef0d7ccf8190be363",
+      "bytes": 168
+    },
+    {
+      "path": "core/body_slim/body_slim.h",
+      "sha256": "6d9f51402b5feb3b0a35e1d197122659177f6e63e9dbadf6be610bfee7356c78",
+      "bytes": 1008
+    },
+    {
+      "path": "core/body_slim/build.sh",
+      "sha256": "602d1335ab09ab408baa98bb1407a5172530abb525ac6d22cc30e5d94f631860",
+      "bytes": 548
+    },
+    {
+      "path": "core/body_slim/lib.rs",
+      "sha256": "59f0bbe685c93ce9b63a6471a9d5c6748c295c51e51f0c06f7a2be697b41cba2",
+      "bytes": 11416
+    },
+    {
+      "path": "docs/body-slim/INTEGRATION.md",
+      "sha256": "ff4b92081c0511aefc9638b3f0f198245a6c989b99384d69731a9d49dc818b29",
+      "bytes": 7465
+    },
+    {
+      "path": "docs/body-slim/RESEARCH.md",
+      "sha256": "fa100a578b4f5ffa877f708336cccaf3cf28ca7f1735d61290abca89b8ffecc3",
+      "bytes": 6196
+    },
+    {
+      "path": "docs/body-slim/validation-status.json",
+      "sha256": "0775b24508638ef5512cfccb233946a3d6873e57ada0d0a69caa7e15bb0a481f",
+      "bytes": 2210
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_adapter.py",
+      "sha256": "4476644791a36c2ec455ad8f138f3f8d0da8086284f6037a8c48e9892ba4363c",
+      "bytes": 2917
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_field.py",
+      "sha256": "62de6e75eed860b7a2badf2c59b814a6107be31048adb0b4c45be62b74834a93",
+      "bytes": 8418
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_host.py",
+      "sha256": "8015136ef2ef301dfdf7144e1555b3f04c301fd5287af31f5eb3c3f02e31f067",
+      "bytes": 14614
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_native.py",
+      "sha256": "13eb0bfce58bb527bed27a3d2042e76c8415119d65ded6b50a936dedb380ad7c",
+      "bytes": 7316
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_project.py",
+      "sha256": "befa1480946367a4bb8899a5dea2db967ac3eb914d58fae7db808dc66b99b185",
+      "bytes": 8294
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_runtime.py",
+      "sha256": "ba79105c6c8d92779e399a665858b6e323481214f614ae7e97a3389ad5f44ead",
+      "bytes": 8091
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_scope.py",
+      "sha256": "98dd5342ed0e8a9fac035df9fc994a52631f07472949174737ca6fc160967df4",
+      "bytes": 1006
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_state.py",
+      "sha256": "48231c136311c4c8195fdbaea8909b7d9d8f70a8376a09f8ea9026f28ce364ee",
+      "bytes": 8975
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_transfer_review.py",
+      "sha256": "027b155f066d20886da84b292ec297f9d8a41f5ce0fbada5f8c8e3096fb92058",
+      "bytes": 1325
+    },
+    {
+      "path": "engine/tests/test_body_slim_unrun.py",
+      "sha256": "5e02bdc54090c925ea556a29b14c1fde82e2bbca63624c4ba77ccc9a20698688",
+      "bytes": 9312
+    },
+    {
+      "path": "ui/src/bodySlim/BodySlimPanel.tsx",
+      "sha256": "f291a8eca5644d43f8751b3bae0f5dbe9b87d612364a15a094c8bc56ea37a4f7",
+      "bytes": 5633
+    },
+    {
+      "path": "ui/src/bodySlim/BodySlimSupportEditor.tsx",
+      "sha256": "20bdc5edc822591fbc6f68d8ce7bcddcdf938f3a0f54664eb0ee6e354f3f24eb",
+      "bytes": 6552
+    },
+    {
+      "path": "ui/src/bodySlim/BodySlimTransferReview.tsx",
+      "sha256": "dc1ce24f38d061c3fbef45ef984eb7afee990f1c892f54b9191e5ffaafb494cd",
+      "bytes": 352
+    },
+    {
+      "path": "ui/src/bodySlim/BodySlimWorkspace.tsx",
+      "sha256": "b0dceda3edbc884e83bba5d38acb58cfa5c8a7142a53f10e317d400648c6e4b0",
+      "bytes": 2149
+    },
+    {
+      "path": "ui/src/bodySlim/availability.ts",
+      "sha256": "4f2df71dd4adaa68e5f3c9400b8c6601cbcfc6b200471e9ccb2ee85787ee3985",
+      "bytes": 986
+    },
+    {
+      "path": "ui/src/bodySlim/bodySlim.css",
+      "sha256": "a7d39fb2d65c89552b833c1bdd121a6ad917975b000ed9f11caec297e18a7a6f",
+      "bytes": 2053
+    },
+    {
+      "path": "ui/src/bodySlim/body_slim.unrun.test.ts",
+      "sha256": "d1d2dfd23a3b794b5830141d383a1ba71f74d66cf359f13cb7319de42f9f4ce7",
+      "bytes": 1871
+    },
+    {
+      "path": "ui/src/bodySlim/context.ts",
+      "sha256": "96103454c7ffcfecb103338d9417d725acfc808abd141bdb15d6e2a1e9513779",
+      "bytes": 654
+    },
+    {
+      "path": "ui/src/bodySlim/controller.ts",
+      "sha256": "d7c6056ce0a7db6757119bb521b17bec73c6d03588d904a40c2f42007a4ca4e2",
+      "bytes": 6544
+    },
+    {
+      "path": "ui/src/bodySlim/model.ts",
+      "sha256": "7ab9d7b6eff7b186284b4601a9b02cc881305ed86625af7d3dfe019ce04d5c4d",
+      "bytes": 6898
+    },
+    {
+      "path": "ui/src/bodySlim/nativeTransport.ts",
+      "sha256": "7dc2618e976a98743f498f6a004b582c2bb9e7e665da51db2d52121b7ce7cce5",
+      "bytes": 3312
+    },
+    {
+      "path": "ui/src/bodySlim/receipts.ts",
+      "sha256": "533b06cf11096c1cce84d184d0d424e50e5ad8b12c816d6b540265405de4f3d4",
+      "bytes": 1051
+    },
+    {
+      "path": "ui/src/bodySlim/sourcePreview.ts",
+      "sha256": "3e1882d756d6269615fb6f67e83a829b0534995764597b95308e03c1c7880fca",
+      "bytes": 2507
+    },
+    {
+      "path": "ui/src/bodySlim/transferModel.ts",
+      "sha256": "7de986662140ff204fae683d014012807adfe8172e74921e9f08d959bfaa8b7a",
+      "bytes": 1105
+    },
+    {
+      "path": "ui/src/bodySlim/useBodySlimWorkflow.ts",
+      "sha256": "e73061acc6018bfac33be8015c81a6d17dbac287f275111a8e34d27541060500",
+      "bytes": 7172
+    }
+  ],
+  "parent_integration_adjustments": {
+    "authoritative_manifest": "docs/body-slim/FREEZE.json",
+    "changed_owned_paths": [
+      "core/body_slim/build.sh",
+      "engine/src/lumaretouch_engine/body_slim_host.py",
+      "engine/src/lumaretouch_engine/body_slim_project.py",
+      "engine/src/lumaretouch_engine/body_slim_runtime.py"
+    ],
+    "notes": "Canonical ordering import, absent-family neutral fast path, missing-core/dormant enable and publication-reason gates, atomic caller-selected packaging output. Isolated historical status is not final shared integration acceptance."
+  }
+}

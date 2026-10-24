@@ -5,13 +5,13 @@ adapters remain the sole mutation, review, publication and receipt owners.
 """
 from . import body_pose_evidence as E
 
-COMMANDS=frozenset(('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size'))
-_TRANSPORTS=dict(zip(('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size'),
-                    ('_body_transport','_leg_transport','_arm_transport','_waist_transport','_leg_length_transport','_neck_transport','_torso_length_transport','_waist_length_transport','_head_size_transport')))
-_OWNERS=dict(zip(('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size'),
-                ('_body_edit_owner','_leg_edit_owner','_arm_edit_owner','_waist_edit_owner','_leg_length_edit_owner','_neck_edit_owner','_torso_length_edit_owner','_waist_length_edit_owner','_head_size_edit_owner')))
+COMMANDS=frozenset(('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size','body_slim'))
+_TRANSPORTS=dict(zip(('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size','body_slim'),
+                    ('_body_transport','_leg_transport','_arm_transport','_waist_transport','_leg_length_transport','_neck_transport','_torso_length_transport','_waist_length_transport','_head_size_transport','_body_slim_transport')))
+_OWNERS=dict(zip(('shoulder_shape','leg_shape','arm_shape','waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size','body_slim'),
+                ('_body_edit_owner','_leg_edit_owner','_arm_edit_owner','_waist_edit_owner','_leg_length_edit_owner','_neck_edit_owner','_torso_length_edit_owner','_waist_length_edit_owner','_head_size_edit_owner','_body_slim_edit_owner')))
 _LEDGERS={'leg_shape':'_leg_receipts','waist_shape':'_waist_receipts',
-          'leg_length':'_leg_length_receipts','neck_shape':'_neck_receipts','torso_length':'_torso_length_receipts','waist_length':'_waist_length_receipts','head_size':'_head_size_receipts'}
+          'leg_length':'_leg_length_receipts','neck_shape':'_neck_receipts','torso_length':'_torso_length_receipts','waist_length':'_waist_length_receipts','head_size':'_head_size_receipts','body_slim':'_body_slim_receipts'}
 
 
 def validate(bank, source):

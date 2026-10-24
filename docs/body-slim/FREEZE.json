@@ -1,0 +1,358 @@
+{
+  "version": 1,
+  "baseline_commit": "2a781dd0eac7ea3341022ed4b35e328a7b497ad0",
+  "scope": "Integrated current-photo whole-body width with explicit complete-person manual ownership",
+  "requirements": [
+    "LNX-REF-PC-32473-C-bc54b9eb3c"
+  ],
+  "status": "SOURCE_CONNECTED_MANUAL_REVIEW_ACCEPTANCE_UNRUN",
+  "verification": {
+    "python_ast_parse_files": 1452,
+    "relative_import_source_checks": 487,
+    "git_diff_check": "clean",
+    "all_payload_trailing_whitespace_and_extra_eof": "clean including new files",
+    "previous_core_files_byte_identical": 207,
+    "line_counts": {
+      "App.tsx": 2133,
+      "main.rs": 2048,
+      "server.py": 7048
+    },
+    "independent_static_family_and_shared_audit": "completed; concrete source findings fixed",
+    "runtime": "UNRUN",
+    "build": "UNRUN",
+    "typecheck": "UNRUN",
+    "tests": "UNRUN",
+    "inference": "UNRUN",
+    "numerical_photographic_performance_acceptance": "UNRUN"
+  },
+  "excluded": [
+    "all eye_makeup_enhance/eyeMakeupEnhance/eye-makeup-enhance isolated lane files including native protocol",
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "limitations": [
+    "Manual complete silhouette/collar, full measured body and explicit own FaceRef, not automatic AI segmentation or 3D",
+    "Single-person complete near-upright source; no hidden anatomy reconstruction",
+    "Background gaps and admitted collar deform, exterior identity is not a promise of fixed background everywhere",
+    "Current-photo path; dedicated scalar preset/batch/cohort image review not registered",
+    "Original/opaque SDR derived source and existing precision limits; no HDR clipping or alpha flattening"
+  ],
+  "files": [
+    {
+      "path": "core/body_slim/ABI.md",
+      "sha256": "7b76ab525a45b7869440a1779aff10220fdfb1020dc98d65e9292f54a2ce7ffb",
+      "bytes": 3813
+    },
+    {
+      "path": "core/body_slim/Cargo.toml",
+      "sha256": "bf2b559654ebee8dcc17e24413b61310ec934a8dba3850fef0d7ccf8190be363",
+      "bytes": 168
+    },
+    {
+      "path": "core/body_slim/body_slim.h",
+      "sha256": "6d9f51402b5feb3b0a35e1d197122659177f6e63e9dbadf6be610bfee7356c78",
+      "bytes": 1008
+    },
+    {
+      "path": "core/body_slim/build.sh",
+      "sha256": "602d1335ab09ab408baa98bb1407a5172530abb525ac6d22cc30e5d94f631860",
+      "bytes": 548
+    },
+    {
+      "path": "core/body_slim/lib.rs",
+      "sha256": "59f0bbe685c93ce9b63a6471a9d5c6748c295c51e51f0c06f7a2be697b41cba2",
+      "bytes": 11416
+    },
+    {
+      "path": "docs/body-slim/INTEGRATION-CONTRACT.md",
+      "sha256": "bd70c0bbf9b3e1f8bbce582a3864ade534c5d3bd5a7856e902f557e9b0caa917",
+      "bytes": 4894
+    },
+    {
+      "path": "docs/body-slim/INTEGRATION.md",
+      "sha256": "ff4b92081c0511aefc9638b3f0f198245a6c989b99384d69731a9d49dc818b29",
+      "bytes": 7465
+    },
+    {
+      "path": "docs/body-slim/NATIVE-INTEGRATION.md",
+      "sha256": "19ee5a05efc875a84182de5e43a230b2211dad501a50e080fce01f2835c53970",
+      "bytes": 8004
+    },
+    {
+      "path": "docs/body-slim/RESEARCH.md",
+      "sha256": "fa100a578b4f5ffa877f708336cccaf3cf28ca7f1735d61290abca89b8ffecc3",
+      "bytes": 6196
+    },
+    {
+      "path": "docs/body-slim/isolated-manifest.json",
+      "sha256": "92ad6388f63602fed3e19ad722a3083f325df878352080aca5efc96d8f837390",
+      "bytes": 7092
+    },
+    {
+      "path": "docs/body-slim/validation-status.json",
+      "sha256": "0775b24508638ef5512cfccb233946a3d6873e57ada0d0a69caa7e15bb0a481f",
+      "bytes": 2210
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "c53605179df04c1041e889eb2213d051381174cc34533c0565f12e4a025898fe",
+      "bytes": 479165
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/arm_shape_registered_host.py",
+      "sha256": "d044fdf3ab188b81b3665ab310f0692d6d777243e4a408ac806ff79cdf7aaedc",
+      "bytes": 3547
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_commands.py",
+      "sha256": "f25cb99a75a5db58f7f0d534c9b57f69b796658eae81e2f2d5f9a8e40285ee87",
+      "bytes": 11936
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_families.py",
+      "sha256": "738383bb197fda5bded8db8d73150498b46663a40acc23d2faacdb6933938b07",
+      "bytes": 1720
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_geometry.py",
+      "sha256": "cd05227853dffa8590c7cd48c6f83f685d0156e4e2234c559102b7808860b791",
+      "bytes": 8867
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_host.py",
+      "sha256": "97de802f06a20ebf8bf5a7ddb64f37e710a1e16695dd55bc79f2c5c5213caa41",
+      "bytes": 22147
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_operations.py",
+      "sha256": "418672bdf812a284772539433373ec029324037e6d3a4840a870cbbaff4ef23d",
+      "bytes": 10074
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_render.py",
+      "sha256": "50859a92430ad3a13fbf46854cabb09908588c8038683e4d99824f70877a4a78",
+      "bytes": 12125
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_adapter.py",
+      "sha256": "4476644791a36c2ec455ad8f138f3f8d0da8086284f6037a8c48e9892ba4363c",
+      "bytes": 2917
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_field.py",
+      "sha256": "62de6e75eed860b7a2badf2c59b814a6107be31048adb0b4c45be62b74834a93",
+      "bytes": 8418
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_host.py",
+      "sha256": "8015136ef2ef301dfdf7144e1555b3f04c301fd5287af31f5eb3c3f02e31f067",
+      "bytes": 14614
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_native.py",
+      "sha256": "13eb0bfce58bb527bed27a3d2042e76c8415119d65ded6b50a936dedb380ad7c",
+      "bytes": 7316
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_project.py",
+      "sha256": "befa1480946367a4bb8899a5dea2db967ac3eb914d58fae7db808dc66b99b185",
+      "bytes": 8294
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_runtime.py",
+      "sha256": "ba79105c6c8d92779e399a665858b6e323481214f614ae7e97a3389ad5f44ead",
+      "bytes": 8091
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_scope.py",
+      "sha256": "98dd5342ed0e8a9fac035df9fc994a52631f07472949174737ca6fc160967df4",
+      "bytes": 1006
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_state.py",
+      "sha256": "48231c136311c4c8195fdbaea8909b7d9d8f70a8376a09f8ea9026f28ce364ee",
+      "bytes": 8975
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_slim_transfer_review.py",
+      "sha256": "027b155f066d20886da84b292ec297f9d8a41f5ce0fbada5f8c8e3096fb92058",
+      "bytes": 1325
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_body.py",
+      "sha256": "dfbc73c442f6136296cfda9b3db1c306eb4cebc35a278104144409d47b80ed5a",
+      "bytes": 8793
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "91fbf7a63cb27b8fb2987049be5af39b00f17fbadfa6366f5da8d97ccb9f04a9",
+      "bytes": 25497
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_controller.py",
+      "sha256": "a98850c825f343540058e5bc697b7de8045c1757f5719cf34a13a806c5e1cc80",
+      "bytes": 10806
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "51efa80cfbad464b1aa56cbd1f1fc1d25fe5dd37845d7853b0dba4e72b679cc3",
+      "bytes": 8369
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "408b9e91a55a53794cf0546fdc8a26ca6b19157646c8ea529574dac1709e16db",
+      "bytes": 9161
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "969f13344580d31c031bd289d5c2eab20e3da13f95fe81cd8eda85488d0d7ba2",
+      "bytes": 472211
+    },
+    {
+      "path": "engine/tests/test_body_slim_integration_unrun.py",
+      "sha256": "cd2aa46911dcc685611bc91ff00c35332769b5f544e20309b6eae8ddee66e8ac",
+      "bytes": 2362
+    },
+    {
+      "path": "engine/tests/test_body_slim_unrun.py",
+      "sha256": "5e02bdc54090c925ea556a29b14c1fde82e2bbca63624c4ba77ccc9a20698688",
+      "bytes": 9312
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "6d18d198e4345de84bcae511de8fd89623525206b0b121e2449d7f141568337a",
+      "bytes": 28312
+    },
+    {
+      "path": "ui/src-tauri/src/body_slim_api.rs",
+      "sha256": "9aa2aaf3b8bd045e2b70ca7e857e036495293445e2426735fb95c7a5aef2e730",
+      "bytes": 29248
+    },
+    {
+      "path": "ui/src-tauri/src/body_slim_api_unrun.rs",
+      "sha256": "2eb4967aae2db3aeb29ed698cacc99ebe12de6aff320bfe7cb35f7a24d08a363",
+      "bytes": 22529
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "sha256": "45a1735e66c5d416766fd221865f35e4808ee8a9685bf6d228d71c52c5af2eb6",
+      "bytes": 3693
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "9dd6385fec86db1049afec9c79bef0c1ef6384b4e89d0afb4dd720a538f4eeb1",
+      "bytes": 41707
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "c269cf6cc26a92196a115ca946c8b3533c5ddecc79259dd64119e4bc18070a7c",
+      "bytes": 101624
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "e1709dcc57d0abb67c78221c7d82a8a11f1096ad5ab8b3a1e797d2a384b3e9b5",
+      "bytes": 11409
+    },
+    {
+      "path": "ui/src-tauri/src/preset_alias_recovery_fence.rs",
+      "sha256": "b32df3af22adf6949e509202f7390fec19678f42bb101f461b664bf825202201",
+      "bytes": 7647
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "9340219aade01afcb656ed45c9f45757e7f8652849be696319b641fd427a3a32",
+      "bytes": 152525
+    },
+    {
+      "path": "ui/src/bodySlim/BodySlimLaunch.tsx",
+      "sha256": "62d626e40b416a7d0c2408c3dc87d11a49036fead06b231fb7a963ab5de3434e",
+      "bytes": 1571
+    },
+    {
+      "path": "ui/src/bodySlim/BodySlimPanel.tsx",
+      "sha256": "f291a8eca5644d43f8751b3bae0f5dbe9b87d612364a15a094c8bc56ea37a4f7",
+      "bytes": 5633
+    },
+    {
+      "path": "ui/src/bodySlim/BodySlimSupportEditor.tsx",
+      "sha256": "20bdc5edc822591fbc6f68d8ce7bcddcdf938f3a0f54664eb0ee6e354f3f24eb",
+      "bytes": 6552
+    },
+    {
+      "path": "ui/src/bodySlim/BodySlimTransferReview.tsx",
+      "sha256": "dc1ce24f38d061c3fbef45ef984eb7afee990f1c892f54b9191e5ffaafb494cd",
+      "bytes": 352
+    },
+    {
+      "path": "ui/src/bodySlim/BodySlimWorkspace.tsx",
+      "sha256": "b0dceda3edbc884e83bba5d38acb58cfa5c8a7142a53f10e317d400648c6e4b0",
+      "bytes": 2149
+    },
+    {
+      "path": "ui/src/bodySlim/availability.ts",
+      "sha256": "4f2df71dd4adaa68e5f3c9400b8c6601cbcfc6b200471e9ccb2ee85787ee3985",
+      "bytes": 986
+    },
+    {
+      "path": "ui/src/bodySlim/bodySlim.css",
+      "sha256": "a7d39fb2d65c89552b833c1bdd121a6ad917975b000ed9f11caec297e18a7a6f",
+      "bytes": 2053
+    },
+    {
+      "path": "ui/src/bodySlim/body_slim.unrun.test.ts",
+      "sha256": "d1d2dfd23a3b794b5830141d383a1ba71f74d66cf359f13cb7319de42f9f4ce7",
+      "bytes": 1871
+    },
+    {
+      "path": "ui/src/bodySlim/context.ts",
+      "sha256": "96103454c7ffcfecb103338d9417d725acfc808abd141bdb15d6e2a1e9513779",
+      "bytes": 654
+    },
+    {
+      "path": "ui/src/bodySlim/controller.ts",
+      "sha256": "d7c6056ce0a7db6757119bb521b17bec73c6d03588d904a40c2f42007a4ca4e2",
+      "bytes": 6544
+    },
+    {
+      "path": "ui/src/bodySlim/model.ts",
+      "sha256": "7ab9d7b6eff7b186284b4601a9b02cc881305ed86625af7d3dfe019ce04d5c4d",
+      "bytes": 6898
+    },
+    {
+      "path": "ui/src/bodySlim/nativeTransport.ts",
+      "sha256": "7dc2618e976a98743f498f6a004b582c2bb9e7e665da51db2d52121b7ce7cce5",
+      "bytes": 3312
+    },
+    {
+      "path": "ui/src/bodySlim/receipts.ts",
+      "sha256": "533b06cf11096c1cce84d184d0d424e50e5ad8b12c816d6b540265405de4f3d4",
+      "bytes": 1051
+    },
+    {
+      "path": "ui/src/bodySlim/sourcePreview.ts",
+      "sha256": "3e1882d756d6269615fb6f67e83a829b0534995764597b95308e03c1c7880fca",
+      "bytes": 2507
+    },
+    {
+      "path": "ui/src/bodySlim/transferModel.ts",
+      "sha256": "7de986662140ff204fae683d014012807adfe8172e74921e9f08d959bfaa8b7a",
+      "bytes": 1105
+    },
+    {
+      "path": "ui/src/bodySlim/useBodySlimWorkflow.ts",
+      "sha256": "e73061acc6018bfac33be8015c81a6d17dbac287f275111a8e34d27541060500",
+      "bytes": 7172
+    },
+    {
+      "path": "ui/src/legShape/BodyShapeTools.tsx",
+      "sha256": "0739875da281ccba53dfce43c85ea77d6b531f214112665565bcb814decaecc0",
+      "bytes": 17417
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "5dfd5cf7ee610677407b9f6f2a18d0b47cbece8206b713d6fc47f0ca86ec2f51",
+      "bytes": 115459
+    }
+  ]
+}

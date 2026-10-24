@@ -6457,9 +6457,21 @@
       "source_url": "https://www.pixcakeai.com/guide/32473",
       "source_child_index": 2,
       "title": "瘦身",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_connected_manual_review_acceptance_unrun",
+      "implementation": [
+        "core/body_slim/lib.rs",
+        "engine/src/lumaretouch_engine/body_slim_runtime.py",
+        "engine/src/lumaretouch_engine/body_pose_render.py",
+        "ui/src/bodySlim/BodySlimWorkspace.tsx",
+        "ui/src/legShape/BodyShapeTools.tsx"
+      ],
+      "verification": [
+        "docs/body-slim/INTEGRATION-CONTRACT.md",
+        "engine/tests/test_body_slim_integration_unrun.py",
+        "engine/tests/test_body_slim_unrun.py"
+      ],
+      "requirement_id": "LNX-REF-PC-32473-C-bc54b9eb3c",
+      "scope_note": "独立完整人物横向变形，不是局部瘦腰/腿组合。真实 33 点身体观察、显式同人 FaceRef 关联、手动完整人物轮廓及背景过渡复核；单人完整近直立适用，肢体间背景空隙及过渡区可移动。规范原始/不透明 SDR 派生源、共同一次采样几何、当前照片界面、历史和完整源导出接入；不声称自动 AI 分割/三维、官方效果等价或全场景支持。批量/预设专用逐图审核未接入。全部数值、构建、执行、真实照片和交互验收 UNRUN。"
     },
     {
       "id": "control:PC-32473:4",
