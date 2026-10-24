@@ -1,0 +1,261 @@
+{
+  "baseline": "30deb4e98c70a78e24b1f830beb253c84c3165df",
+  "status": "FROZEN_SOURCE_ONLY_VERSIONED_FACE_STYLE_REVIEW_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32466-C-3b31aac970",
+    "LNX-REF-PC-32466-C-6c86bf2c55",
+    "LNX-REF-PC-32466-C-7ce4146bc1",
+    "LNX-REF-PC-32466-C-e4a7970fd2",
+    "LNX-REF-PC-32466-C-7e035684d8",
+    "LNX-REF-PC-32466-C-0e3343d22a",
+    "LNX-REF-PC-32466-C-7b800a0655",
+    "LNX-REF-PC-32466-C-ae54a179f8",
+    "LNX-REF-PC-32466-C-9fc7c5a61e"
+  ],
+  "scope": "Seven original-local versioned compositions over ten existing measured geometry operations, thirty explicit owned leaves, current-face full-source before/after with immutable image pages and exact atomic confirmation. One recipe workflow, not seven new algorithms. Historic three presets remain explicit unchanged legacy entry.",
+  "files": [
+    {
+      "path": "docs/development/face-style-recipes.md",
+      "sha256": "c56204cc8d03a14d109307b7587d515df04a1144725ec3b2a233aabe393a48b3",
+      "bytes": 6821
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "df843dab8ed5390005d1a60c6ddc3e215bdc13bb56c0fba0c75b5173918273a1",
+      "bytes": 463485
+    },
+    {
+      "path": "docs/face-style/REVIEW-CONTRACT.md",
+      "sha256": "2c3e1bce820b2eb3dc59e432bda3afeb37e6b6e2d4697373d0bc413b72a83f2c",
+      "bytes": 5982
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/collarbone_preset_review.py",
+      "sha256": "c6f7218cb804c9bef44bab5d50fa56cf20178909830bc1b80177556440db8296",
+      "bytes": 12647
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "373c5dc0c59652c351c8b3f9991167ddfad3072a8d97d2ad3bb5453e342ef96a",
+      "bytes": 16807
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_style_recipes.py",
+      "sha256": "b70b58798026ccf6a4a88d888f89b654ddb6b715c329fae5bb0a725a7b569211",
+      "bytes": 7629
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_style_review.py",
+      "sha256": "d2f5d8471a7fb8df7100c65aaebc376b1149623a2aee7384d253828633527734",
+      "bytes": 13083
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "afd50f0409e581b6e47cd125ce2a6c47f8527a1d53755621da111e72bda4542f",
+      "bytes": 7824
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "a771475803b7b5a7a5a836ef68cc49788ddaa70cac707711e4a9f2f56c673f3a",
+      "bytes": 24064
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_review_render.py",
+      "sha256": "2b1b9192084e8b01707a875cc7afc2179746c145a00d53d4e19ac005a8af5cc8",
+      "bytes": 3367
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "fa7efc3ab5a235f39e0f56b0106cdaf7cb801e87caca615f86a92bcb827384cd",
+      "bytes": 7323
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "f11fcfa824fcbbd257187aeb0e44be7d7569c2e8658aff7f3e0700ef58b1bc38",
+      "bytes": 467787
+    },
+    {
+      "path": "engine/tests/test_face_style_host_unrun.py",
+      "sha256": "b199b211c1e50e71cc0d5e8d03990d863f58cce69ee1eaaaac937629f1a07807",
+      "bytes": 7882
+    },
+    {
+      "path": "engine/tests/test_face_style_recipes_unrun.py",
+      "sha256": "067184043ccf915ca3ea824b13bfbb8f375eec0c8df431600af31bd907bcc78b",
+      "bytes": 7794
+    },
+    {
+      "path": "engine/tests/test_face_style_review_unrun.py",
+      "sha256": "72a764ba31593056c6d5d3bcf0be5b54be3a8fc01055b3637f9bf2b4c7dc1675",
+      "bytes": 15974
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "2cb52132c90d56dfd29e56a7666705f4558575802a486a5aab225e4041d0120a",
+      "bytes": 40462
+    },
+    {
+      "path": "ui/src-tauri/src/face_style_protocol.rs",
+      "sha256": "d5636ac79177f77ab82f318180cfc9da3b87e3bc3f2e64848419a6855da4af9e",
+      "bytes": 10376
+    },
+    {
+      "path": "ui/src-tauri/src/face_style_protocol_tests.rs",
+      "sha256": "b50c5b5077b83d4afe72dc2ed2353a064719c9e5a8c509f511e13e84a5dfcffb",
+      "bytes": 6687
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "277f40fd4232d7f49ba56fa76617830b836e88bcd994ee417b9470e1590a9fd6",
+      "bytes": 10752
+    },
+    {
+      "path": "ui/src-tauri/src/people_api.rs",
+      "sha256": "18e35e1389cf4bfad2f525a80dffae2dbf358c7a09779caecb2cc51547faff32",
+      "bytes": 9131
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "sha256": "57b179d507d1742b8359cbec48f98499120dd72ffa09e597c755f77e4f6872c4",
+      "bytes": 6251
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "26fc9320721a3cd2bd50cde5d79cdf3b47ab21dbfa8a9336cfff85b42f4eae16",
+      "bytes": 24993
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "67e076f012c7fcb1460d8f3a2645f19a2b52e19f638fd93aa79f5dd54e86c1b3",
+      "bytes": 86552
+    },
+    {
+      "path": "ui/src/faceStyle/ACCEPTANCE_UNRUN.md",
+      "sha256": "f5323dca2bc3327313ecc7890ec65204d83f909c49c40eb8becc01f73edb07dd",
+      "bytes": 1626
+    },
+    {
+      "path": "ui/src/faceStyle/FaceStylePanel.tsx",
+      "sha256": "dee224fb6316ad8857177fbd4575de32b21f223de6111f07047198050b659fdf",
+      "bytes": 12846
+    },
+    {
+      "path": "ui/src/faceStyle/model.ts",
+      "sha256": "64f556d2006da8f22b542cbd2c3015ab27788f2984b86fac521b1fb9fad23396",
+      "bytes": 11015
+    },
+    {
+      "path": "ui/src/faceStyle/model.unrun.test.ts",
+      "sha256": "09e05abdac8c6718f86217255ed4fe63ec5e750badbb3446914dbce8c4155ca3",
+      "bytes": 6392
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "6d54448a83f7882348cbe2ad9c625ed9ff8a79f147b9a5e28487e07c273cac00",
+      "bytes": 9737
+    },
+    {
+      "path": "ui/src/people/workflow.ts",
+      "sha256": "fd79e43c916eb3ac13ed8dda029168876c03ef5507b0cb8ff5b90131290ae49f",
+      "bytes": 10526
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1296,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 83,
+    "git_diff_check": "clean",
+    "payload_whitespace": "clean",
+    "prior_numeric_geometry_render_and_frozen_sources_byte_identical": 252,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 7001
+    },
+    "fixture_declarations_in_payload_all_unrun": {
+      "python": {
+        "engine/tests/test_face_style_host_unrun.py": 9,
+        "engine/tests/test_face_style_recipes_unrun.py": 12,
+        "engine/tests/test_face_style_review_unrun.py": 16
+      },
+      "rust": {
+        "ui/src-tauri/src/face_style_protocol_tests.rs": 6,
+        "ui/src-tauri/src/project_recovery_fence.rs": 3,
+        "ui/src-tauri/src/receipt_host.rs": 9
+      },
+      "typescript": {
+        "ui/src/faceStyle/model.unrun.test.ts": 4
+      }
+    }
+  },
+  "integration_map": {
+    "versioned_scalar_compositions": [
+      "face_style_recipes.py",
+      "docs/development/face-style-recipes.md"
+    ],
+    "full_source_review": [
+      "face_style_review.py",
+      "portrait_review_render.py (shared primitive extraction)",
+      "collarbone_preset_review.py (delegates same primitives)"
+    ],
+    "actual_canonical_publication": [
+      "people_host_commands.py",
+      "creative_derived_effects.py",
+      "server.py",
+      "history_policy.py",
+      "project_recovery_runtime.py"
+    ],
+    "native_receipt_and_uncertainty": [
+      "face_style_protocol.rs",
+      "people_api.rs",
+      "receipt_host.rs",
+      "native_dispatch.rs",
+      "project_recovery_fence.rs",
+      "engine.rs"
+    ],
+    "current_face_ui": [
+      "ui/src/faceStyle",
+      "ui/src/people/model.ts",
+      "ui/src/people/workflow.ts",
+      "ui/src/components/RetouchPanel.tsx"
+    ],
+    "preserved": [
+      "existing core and ops numerical consumers",
+      "people_edit/people_state/people_resolver/people_algorithms",
+      "full_candidate_render.py",
+      "people_batch_ledger.py",
+      "people_batch_transfer.py",
+      "preset_transaction.py",
+      "main.rs",
+      "App.tsx",
+      "all prior collarbone frozen manifests"
+    ],
+    "documentation": [
+      "docs/face-style/REVIEW-CONTRACT.md",
+      "docs/development/face-style-recipes.md",
+      "handbook-traceability exact family/style/degree entries"
+    ]
+  },
+  "limits": {
+    "pending_reviews": 8,
+    "review_ttl_seconds": 1800,
+    "display_edge": 1024,
+    "individual_png_bytes": 4194304,
+    "session_raw_image_bytes": 134217728,
+    "session_image_entries": 256,
+    "existing_native_result_bytes": 8388608
+  },
+  "limitations": [
+    "Original local coefficients do not establish proprietary vendor parity, automatic shape classification, demographic inference, reconstruction or photo quality. Official desktop guide retrieval unavailable; supplied desktop baseline and retrieved Android qualitative corroboration are distinguished.",
+    "Degree replaces the same thirty managed leaves including prior manual values; zero neutralizes those leaves, not restore/inherit. Unmanaged and legacy values remain, actual incompatible merged recipes refuse.",
+    "Only explicitly selected verified current-face original or supported opaque-SDR derived source. Same-source logical aliases refuse single-photo review. Named-style batch catalogue is not implemented; existing actual-leaf transfer retains its own capability gates and target recalculation.",
+    "Paged RGB8 1024-edge review is not full-resolution inspection or broader alpha/HDR support. No clipping/flattening is used to claim unsupported pipeline capability.",
+    "All product imports, execution, tests, builds/compiler/typecheck, inference/download, native/history/export/numerical/photographic/performance acceptance UNRUN. Fixtures include explicit mocked renderer/source boundaries and do not prove photographic output."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

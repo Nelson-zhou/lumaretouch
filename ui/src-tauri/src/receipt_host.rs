@@ -178,6 +178,11 @@ mod scalar_binding_tests {
 struct ReviewBinding { fields: Value, bytes: usize, read_only: bool }
 impl ReviewBinding {
     fn from_command(value: &Value) -> Result<Option<Self>, String> {
+        if let Some(fields) = crate::people_api::face_style::binding(value)? {
+            let bytes = fields.to_string().len();
+            if bytes > 16 * 1024 { return Err("face style review identity exceeds receipt budget".into()); }
+            return Ok(Some(Self { fields, bytes, read_only: crate::people_api::face_style::read_only(value) }));
+        }
         if let Some(fields) = crate::preset_api::collarbone::binding(value)? {
             let bytes=fields.to_string().len();
             if bytes>16*1024{return Err("preset collarbone review identity exceeds receipt budget".into());}
@@ -231,7 +236,7 @@ impl ReviewBinding {
                 rows.iter().all(|row| row.is_object() && row["result_revision"].is_null()
                     && matches!(row["outcome"].as_str(), Some("conflict" | "not_applied")))))
             && value["requires_reload"] != true;
-        no_write || self.fields.as_object().unwrap().iter().all(|(key, expected)| {
+        (no_write && self.fields.get("face_style_request").is_none()) || self.fields.as_object().unwrap().iter().all(|(key, expected)| {
             if key=="collarbone_applies_sha256" {
                 value["applies"].is_object() && expected.as_str()==Some(crate::batch_api::collarbone::request_digest(&value["applies"]).as_str())
             } else {value.get(key)==Some(expected)}
@@ -249,7 +254,7 @@ impl Receipt {
         self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true
             // Only explicitly classified head/collarbone preflight or paged
             // image reads may expire; an unknown commit remains guarded.
-            || (matches!(self.action.as_str(), "preflight" | "collarbone_visual") && self.review.as_ref().is_some_and(|review| review.read_only)))
+            || (matches!(self.action.as_str(), "preflight" | "collarbone_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image") && self.review.as_ref().is_some_and(|review| review.read_only)))
     }
 }
 pub(crate) struct ReceiptHost<K: ReceiptKind> {

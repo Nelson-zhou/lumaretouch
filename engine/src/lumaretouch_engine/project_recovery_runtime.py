@@ -42,6 +42,8 @@ def finish(engine, boundary, error=None):
         return
     from .creative_transfer_host import inventory_read_only, head_preflight_read_only
     if inventory_read_only(message) or head_preflight_read_only(message):return
+    from .people_host_commands import face_style_read_only
+    if face_style_read_only(message):return  # Private read failures cannot taint committed project state.
     if not boundary['started'] or message.get('cmd') in ('project_recovery', 'canvas_guides'):
         return
     runtime = engine.__dict__.get('_project_recovery_runtime')

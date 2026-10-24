@@ -41,6 +41,10 @@ impl AppState {
             let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
             return guard.as_ref().ok_or("引擎未启动")?.send(cmd);
         }
+        if crate::people_api::face_style::read_only(&cmd) {
+            let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
+            return crate::people_api::enqueue(guard.as_ref().ok_or("引擎未启动")?, cmd);
+        }
         if crate::preset_api::read_only(&cmd) {
             let guard=self.engine.lock().map_err(|_|"引擎锁中毒".to_string())?;
             return crate::preset_api::enqueue(self,guard.as_ref().ok_or("引擎未启动")?,cmd);

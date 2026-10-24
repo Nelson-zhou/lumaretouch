@@ -51,7 +51,7 @@ impl EngineHandle {
         // revoke unrelated sample-library/semantic-colour capture ownership.
         if cmd["cmd"] == "fringe_repair_preview" { return self.dispatcher.enqueue(None, cmd); }
         if cmd["cmd"]=="project_recovery" || cmd["cmd"]=="canvas_guides" {return self.dispatcher.enqueue(None,cmd);}
-        if crate::managed_import_api::read_only(&cmd) || crate::batch_api::read_only(&cmd) || crate::preset_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
+        if crate::people_api::face_style::read_only(&cmd) || crate::managed_import_api::read_only(&cmd) || crate::batch_api::read_only(&cmd) || crate::preset_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if cmd["cmd"] == "virtual_copy" && matches!(cmd["action"].as_str(), Some("state" | "query")) {
             return self.dispatcher.enqueue(None, cmd);
         }
@@ -198,6 +198,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                         // request's exact scalar receipt validation.
                         st.batch_results.lock().map(|h|h.guards_review(inspection_epoch,id)).unwrap_or(true)
                             || st.preset_results.lock().map(|h|h.guards_review(inspection_epoch,id)).unwrap_or(true)
+                            || crate::people_api::guards_review(inspection_epoch,id)
                     });
                     if !scalar_review && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" {
                         crate::project_recovery_fence::observed(inspection_epoch, &v);
@@ -314,8 +315,8 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "sample_library_cancel_ack" => (),
         "batch_result"=>state.batch_results.lock().unwrap().receive(inspection_epoch,&v),
         "people_result" => {
-            crate::people_api::receive(inspection_epoch, &v);
-            if v.get("doc_state").is_some() { state.on_layer_frame(&v); }
+            let accepted = crate::people_api::receive(inspection_epoch, &v);
+            if accepted && v.get("doc_state").is_some() { state.on_layer_frame(&v); }
         },
         "brow_shape_result"=>{crate::brow_shape_api::receive(inspection_epoch,&v);if v.get("doc_state").is_some(){state.on_layer_frame(&v);}},
         "nose_shape_result"=>{crate::nose_shape_api::receive(inspection_epoch,&v);if v.get("doc_state").is_some(){state.on_layer_frame(&v);}},

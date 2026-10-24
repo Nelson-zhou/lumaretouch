@@ -122,7 +122,10 @@ def _request(name, request):
         context = _context({key:request[key] for key in _CONTEXT})
         S.token(request['request_id'])
         action,payload,target = request['action'],request['payload'],context['target']
-        if action == 'patch': _patches(payload)
+        if action in ('face_style_catalog','face_style_preview','face_style_image','face_style_confirm'):
+            from .face_style_review import check_action
+            check_action(action,payload,target)
+        elif action == 'patch': _patches(payload)
         elif action in ('body_face_match_reference','body_face_match_preview','body_face_match_confirm','body_face_match_detach'):
             from .skin_colour_body_actions import check_action
             check_action(action,payload,target,family='body_face_match',operation_id='lnx.body_face_match.v1')
@@ -208,7 +211,11 @@ def require_command(engine, name, request):
     context = _request(name,request)
     if record(engine) is None: return
     owned = binding(engine)
-    state = engine._people_owner().snapshot()
+    if name == 'people' and request['action'] in ('face_style_catalog','face_style_preview','face_style_image','face_style_confirm'):
+        from .people_preset_plan import require_active_owner
+        state = require_active_owner(engine).snapshot()
+    else:
+        state = engine._people_owner().snapshot()
     current = engine._people_binding()
     target = validate_envelope({**context,'request_id':request.get('request_id','derived-legacy')},state,
         **{key:current[key] for key in ('document_id','document_epoch','document_revision')})

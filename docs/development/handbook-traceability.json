@@ -3748,9 +3748,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32466",
       "source_child_index": 0,
       "title": "脸型预设",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_authored_versioned_recipe_workflow_unrun_no_vendor_numeric_parity",
+      "implementation": [
+        "docs/development/face-style-recipes.md",
+        "docs/face-style/REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_recipes.py",
+        "engine/src/lumaretouch_engine/face_style_review.py",
+        "ui/src/faceStyle"
+      ],
+      "verification": [],
+      "remaining": [
+        "All runtime, numerical, photographic and release acceptance UNRUN.",
+        "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
+        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+      ]
     },
     {
       "id": "control:PC-32466:2",
@@ -4408,9 +4419,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32466",
       "source_child_index": 60,
       "title": "脸型预设/经典",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_authored_versioned_recipe_workflow_unrun_no_vendor_numeric_parity",
+      "implementation": [
+        "docs/development/face-style-recipes.md",
+        "docs/face-style/REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_recipes.py",
+        "engine/src/lumaretouch_engine/face_style_review.py",
+        "ui/src/faceStyle"
+      ],
+      "verification": [],
+      "remaining": [
+        "All runtime, numerical, photographic and release acceptance UNRUN.",
+        "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
+        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+      ]
     },
     {
       "id": "control:PC-32466:62",
@@ -4419,9 +4441,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32466",
       "source_child_index": 61,
       "title": "脸型预设/幼态",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_authored_versioned_recipe_workflow_unrun_no_vendor_numeric_parity",
+      "implementation": [
+        "docs/development/face-style-recipes.md",
+        "docs/face-style/REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_recipes.py",
+        "engine/src/lumaretouch_engine/face_style_review.py",
+        "ui/src/faceStyle"
+      ],
+      "verification": [],
+      "remaining": [
+        "All runtime, numerical, photographic and release acceptance UNRUN.",
+        "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
+        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+      ]
     },
     {
       "id": "control:PC-32466:63",
@@ -4430,9 +4463,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32466",
       "source_child_index": 62,
       "title": "脸型预设/英气",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_authored_versioned_recipe_workflow_unrun_no_vendor_numeric_parity",
+      "implementation": [
+        "docs/development/face-style-recipes.md",
+        "docs/face-style/REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_recipes.py",
+        "engine/src/lumaretouch_engine/face_style_review.py",
+        "ui/src/faceStyle"
+      ],
+      "verification": [],
+      "remaining": [
+        "All runtime, numerical, photographic and release acceptance UNRUN.",
+        "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
+        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+      ]
     },
     {
       "id": "control:PC-32466:64",
@@ -4441,9 +4485,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32466",
       "source_child_index": 63,
       "title": "脸型预设/少年",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_authored_versioned_recipe_workflow_unrun_no_vendor_numeric_parity",
+      "implementation": [
+        "docs/development/face-style-recipes.md",
+        "docs/face-style/REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_recipes.py",
+        "engine/src/lumaretouch_engine/face_style_review.py",
+        "ui/src/faceStyle"
+      ],
+      "verification": [],
+      "remaining": [
+        "All runtime, numerical, photographic and release acceptance UNRUN.",
+        "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
+        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+      ]
     },
     {
       "id": "control:PC-32466:65",
@@ -4452,9 +4507,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32466",
       "source_child_index": 64,
       "title": "脸型预设/圆脸适用",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_authored_versioned_recipe_workflow_unrun_no_vendor_numeric_parity",
+      "implementation": [
+        "docs/development/face-style-recipes.md",
+        "docs/face-style/REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_recipes.py",
+        "engine/src/lumaretouch_engine/face_style_review.py",
+        "ui/src/faceStyle"
+      ],
+      "verification": [],
+      "remaining": [
+        "All runtime, numerical, photographic and release acceptance UNRUN.",
+        "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
+        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+      ]
     },
     {
       "id": "control:PC-32466:66",
@@ -4463,9 +4529,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32466",
       "source_child_index": 65,
       "title": "脸型预设/长脸适用",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_authored_versioned_recipe_workflow_unrun_no_vendor_numeric_parity",
+      "implementation": [
+        "docs/development/face-style-recipes.md",
+        "docs/face-style/REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_recipes.py",
+        "engine/src/lumaretouch_engine/face_style_review.py",
+        "ui/src/faceStyle"
+      ],
+      "verification": [],
+      "remaining": [
+        "All runtime, numerical, photographic and release acceptance UNRUN.",
+        "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
+        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+      ]
     },
     {
       "id": "control:PC-32466:67",
@@ -4474,9 +4551,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32466",
       "source_child_index": 66,
       "title": "脸型预设/方脸适用",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_authored_versioned_recipe_workflow_unrun_no_vendor_numeric_parity",
+      "implementation": [
+        "docs/development/face-style-recipes.md",
+        "docs/face-style/REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_recipes.py",
+        "engine/src/lumaretouch_engine/face_style_review.py",
+        "ui/src/faceStyle"
+      ],
+      "verification": [],
+      "remaining": [
+        "All runtime, numerical, photographic and release acceptance UNRUN.",
+        "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
+        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+      ]
     },
     {
       "id": "control:PC-32466:68",
@@ -4485,9 +4573,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32466",
       "source_child_index": 67,
       "title": "脸型预设/程度",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_authored_versioned_recipe_workflow_unrun_no_vendor_numeric_parity",
+      "implementation": [
+        "docs/development/face-style-recipes.md",
+        "docs/face-style/REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_recipes.py",
+        "engine/src/lumaretouch_engine/face_style_review.py",
+        "ui/src/faceStyle"
+      ],
+      "verification": [],
+      "remaining": [
+        "All runtime, numerical, photographic and release acceptance UNRUN.",
+        "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
+        "No automatic style/person classification or dedicated named-style batch workflow. Same-source shared-owner aliases require independent virtual copy or existing reviewed transfer."
+      ]
     },
     {
       "id": "control:PC-32466:69",

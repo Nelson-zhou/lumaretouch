@@ -94,6 +94,7 @@ def command_group(name: str, msg: dict) -> str:
     if name in ("shoulder_shape","leg_shape","arm_shape","waist_shape","leg_length","neck_shape","torso_length","waist_length","head_size"):return name+":gesture:"+str((msg.get("request") or {}).get("gesture_id",msg.get("request_id","missing")))[:128]
     if name=='hair_colour':return 'hair_colour:'+str((msg.get('people_context') or {}).get('target'))+':'+str(msg.get('request_id','missing'))
     if name=="people":
+        if msg.get("action")=="face_style_confirm":return "people:face_style_confirm:"+str(msg.get("request_id"))
         if msg.get('action')=='eyeliner_palette':return 'people:eyeliner_palette:'+str(msg.get('request_id'))
         if msg.get('action')=='eyelash_palette':return 'people:eyelash_palette:'+str(msg.get('request_id'))
         if msg.get('action')=='brow_makeup_palette':return 'people:brow_makeup_palette:'+str(msg.get('request_id'))

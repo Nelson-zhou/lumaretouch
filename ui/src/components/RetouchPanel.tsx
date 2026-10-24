@@ -47,6 +47,7 @@ import {BodySkinEvennessControl} from '../bodySkinEvenness/BodySkinEvennessContr
 import {CollarboneControl} from '../collarbone/CollarboneControl';
 import {BodyFaceMatchControl} from '../bodyFaceMatch/BodyFaceMatchControl';
 import {FaceContourControl} from '../faceContour/FaceContourControl';
+import {FaceStylePanel} from '../faceStyle/FaceStylePanel';
 import {SlimFaceControl} from '../slimFace/SlimFaceControl';
 import {FaceSizeControl} from '../faceSize/FaceSizeControl';
 import {MidFaceControl} from '../midFace/MidFaceControl';
@@ -731,7 +732,8 @@ export default function RetouchPanel(props: RetouchProps) {
     if (kind.startsWith("deform.preset:")) {
       const preset = kind.split(":")[1];
       return (
-        <button key={leaf.path} type="button" className="specBtn"
+        <details key={leaf.path}><summary>明确打开旧版{name}预设（历史兼容）</summary>
+        <button type="button" className="specBtn"
           title={`历史脸型预设：${name}。保留旧版瘦脸、小下巴数值及错误拓扑；与新版瘦脸或新版下巴长短的非零效果冲突时引擎会拒绝整个请求，不会自动替换。`}
           disabled={dim || !props.faceOk}
           onClick={() => {
@@ -739,7 +741,7 @@ export default function RetouchPanel(props: RetouchProps) {
             commitDeform(SHAPE_PRESETS[preset] ?? {});
           }}>
           <b>{name}</b><em>历史预设 · 旧版瘦脸</em>
-        </button>
+        </button></details>
       );
     }
     switch (kind) {
@@ -1406,10 +1408,14 @@ export default function RetouchPanel(props: RetouchProps) {
               {f.id === "PC-32465" && skinWhy && <div className="specEmpty" role="status">{skinWhy}</div>}
               {f.id === "PC-32455" && props.colorSamplePanel}
               {custom}
+              {f.id === "PC-32466" && <FaceStylePanel people={props.people} faceOk={props.faceOk}
+                blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+                  || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}/>}
               {tree.length > 0 && (
                 <SpecNodes nodes={withoutCoveredLeaves(tree, f.id, f.id === "PC-32455" ? !!props.opticsPanel : !!custom)}
                   openPaths={openPathsFor(f)} renderExtra={node=>renderExtra(node,f.id)}
                   renderLeaf={(leaf, name) => {
+                    if (f.id === 'PC-32466' && ['脸型预设/少年', '脸型预设/圆脸适用', '脸型预设/长脸适用', '脸型预设/方脸适用', '脸型预设/程度'].includes(leaf.path)) return null; // New versioned chooser above; legacy routes remain untouched.
                     if(f.id==='PC-32455'&&['滤镜/我的/CUBE导入','滤镜/我的','滤镜/推荐'].includes(leaf.path))return null;
                     if(f.id==='PC-32452'&&leaf.path==='AI追色/批量同步&保存预设')return <SemanticColourWorkflowLaunch enabled={props.hasImage&&props.status?.ready_caps?.semantic_colour_workflow_protocol===1}/>;
                     if(f.id==='PC-32472'&&['发色选择','头发光泽'].includes(leaf.path))return null;

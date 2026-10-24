@@ -22,7 +22,8 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     // Do not turn an unavailable head preview into an uncertain photo edit.
     // Check a pending ID collision first: read-only status cannot release or
     // replace an already-issued mutation belonging to another receipt host.
-    if crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command) {return Ok(());}
+    if crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command)
+        || crate::people_api::face_style::read_only(command) {return Ok(());}
     if store.len()>=4096{return Err("未确认请求超过恢复屏障容量，请查询原请求或重新打开工程".into());}
     store.insert(key,command.clone()); Ok(())
 }
@@ -39,8 +40,8 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
     // Receipt hosts can share an epoch but not command/action identity. A late
     // read-only preflight (including one whose result omits scope on rejection)
     // must never settle another host's later mutation with a reused request ID.
-    let preset_or_batch=matches!(command["cmd"].as_str(),Some("preset"|"batch"));
-    let preset_or_batch_receipt=matches!(event,"preset_result"|"batch_result");
+    let preset_or_batch=matches!(command["cmd"].as_str(),Some("preset"|"batch"|"people"));
+    let preset_or_batch_receipt=matches!(event,"preset_result"|"batch_result"|"people_result");
     if preset_or_batch||preset_or_batch_receipt {
         let expected=format!("{}_result",command["cmd"].as_str().unwrap_or(""));
         if event!=expected||value["action"]!=command["action"] {return;}
