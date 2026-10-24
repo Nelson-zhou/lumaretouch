@@ -90,10 +90,11 @@ def apply(engine,raw,emit):
     records[request]={'success':False,'digest':digest};state,binding,target=checked(engine,p);asset=binding['asset_sha256']
     records[request]['before_fence']=engine._people_owner().fence
     action=p.get('action');payload=p.get('payload');created=None;batch_id=None
-    if action in ('skin_body_reference','skin_body_preview'):
+    if action in ('skin_body_reference','skin_body_preview','skin_finish_body_reference','skin_finish_body_preview'):
         from . import skin_colour_body_host as skin_body
-        method=skin_body.reference if action=='skin_body_reference' else skin_body.preview
-        records[request]['payload']=method(engine,state,target,payload)
+        method=skin_body.reference if action.endswith('_reference') else skin_body.preview
+        options={'family':'skin_finish'} if action.startswith('skin_finish_body_') else {}
+        records[request]['payload']=method(engine,state,target,payload,**options)
         skin_body.bound_receipt_payloads(records)
         frame=None
     elif action=='iris_reference':
@@ -159,10 +160,11 @@ def apply(engine,raw,emit):
         # reachable while a requested face is suspended for correction.
         engine._people_sync();frame=None
     else:
-        if action in ('skin_body_confirm','skin_body_detach'):
+        if action in ('skin_body_confirm','skin_body_detach','skin_finish_body_confirm','skin_finish_body_detach'):
             from . import skin_colour_body_host as skin_body
-            method=skin_body.confirm if action=='skin_body_confirm' else skin_body.detach
-            options={'mark_started':lambda:records[request].update(side_effects_started=True)} if action=='skin_body_confirm' else {}
+            method=skin_body.confirm if action.endswith('_confirm') else skin_body.detach
+            options={'mark_started':lambda:records[request].update(side_effects_started=True)} if action.endswith('_confirm') else {}
+            if action.startswith('skin_finish_body_'):options['family']='skin_finish'
             candidate,records[request]['payload']=method(engine,state,target,payload,**options)
         elif action=='analyse_face':
             if payload!={} or target['scope']!='face':raise ValueError('Region analysis needs an explicit face')
@@ -207,7 +209,7 @@ def apply(engine,raw,emit):
                 # A rejected preparation may leave only append-only unused
                 # support bytes. With an unchanged graph fence no pixels/recipe
                 # were published; do not manufacture an uncertain edit lock.
-                if action=='skin_body_confirm' and engine._people_owner().fence==records[request]['before_fence']:
+                if action in ('skin_body_confirm','skin_finish_body_confirm') and engine._people_owner().fence==records[request]['before_fence']:
                     records[request]['side_effects_started']=False
                 raise
         if action=='analyse_face':select(engine,engine._people_owner().snapshot(),asset,target)

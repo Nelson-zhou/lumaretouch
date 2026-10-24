@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import {bindingKey, type ParameterPatch, type PeopleAction, type PeopleMailbox, type PeopleView} from './model';
-import {skinBodyReceiptCurrent, type SkinBodyResult} from '../skinColour/bodyReviewModel';
+import {skinBodyActionFamily, skinBodyFamilyMatches, skinBodyReceiptCurrent, type SkinBodyResult} from '../skinColour/bodyReviewModel';
 
 type View = {pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string; lastBodyResult: SkinBodyResult | null};
 type Ports = {
@@ -8,7 +8,9 @@ type Ports = {
   read: (requestId: string) => Promise<PeopleMailbox>;
   refresh: () => Promise<void>;
 };
-/** One in-flight receipt and latest scalar intentions, never a second people graph. */
+/** One in-flight receipt and latest scalar intentions, never a second people graph.
+ * Body results retain their exact action and family-tagged payload; sharing this
+ * mailbox never promotes colour review authority into skin-finish authority. */
 export function createPeopleWorkflow(ports: Ports) {
   let current: PeopleView | null = null, enabled = false;
   let pending: PeopleAction | null = null, checking: Promise<void> | null = null;
@@ -61,10 +63,13 @@ export function createPeopleWorkflow(ports: Ports) {
           let refreshError = '';
           try {await bounded(ports.refresh(), 10000);} catch {refreshError = '修改结果已确认，但照片状态刷新失败。请刷新查看，勿重复提交。';}
           pending = null;
+          const bodyFamily = skinBodyActionFamily(command.action);
+          const bodyPayloadInvalid = !!bodyFamily && !result.payload_released && !skinBodyFamilyMatches(result.payload, bodyFamily);
           publish({pending: !!queued, pendingAction: queued ? 'patch' : null, uncertain: false,
             lastBodyResult: skinBodyReceiptCurrent(command, result, current)
               ? {command, result} : null,
             message: !result.success ? (result.error ?? '人物修改被拒绝，未重试。')
+              : bodyPayloadInvalid ? '请求结果已收到，但身体皮肤审核回执的功能身份不匹配。请重新读取来源参考；已发送的修改不会重发。'
               : refreshError || (owns(command) ? '' : '原照片请求已确认，未将编辑范围或参数套用到当前照片。')});
           if (!result.success) throw new ConfirmedFailure(result.error ?? '人物修改被拒绝。');
           return;

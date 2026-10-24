@@ -157,6 +157,7 @@ class PeopleHostMixin:
             result['parameter_catalog']=describe()
             from .skin_colour_body_host import report as skin_body_report
             result['skin_body']=skin_body_report(self,state,source,self._people_cursors.get(asset))
+            result['skin_finish_body']=skin_body_report(self,state,source,self._people_cursors.get(asset),family='skin_finish')
             from .eye_light_host import report as eye_light_report
             result['eye_light']=eye_light_report(self,state,source,self._people_cursors.get(asset))
             from .iris_makeup_host import report as iris_report

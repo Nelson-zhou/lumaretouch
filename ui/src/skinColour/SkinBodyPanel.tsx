@@ -6,14 +6,19 @@ import {matchesSource, previewImage} from '../legShape/sourcePreview';
 import {skinColourBindingKey, skinColourTargetReady} from './model';
 import {SkinBodySourceEditor} from './SkinBodySourceEditor';
 import {bodyRefKey, bodyReview, bodyReviewKey, emptyBodyMask, previewMatches, referenceMatches, renderedSkinImage,
-  skinBodyAttached, skinBodyTarget, skinBodyRequestFits, type SkinBodyAction, type SkinBodyMask, type SkinBodyPayload,
+  SKIN_BODY_FAMILIES, skinBodyAttached, skinBodyFamilyMatches, skinBodyReport, skinBodyTarget, skinBodyRequestFits,
+  type SkinBodyFamily, type SkinBodyAction, type SkinBodyMask, type SkinBodyPayload,
   type SkinBodyPreview, type SkinBodyReference, type SkinBodyReview} from './bodyReviewModel';
 const emptyFlags = () => ({visible: false, unoccluded: false, ownership_confirmed: false});
 type Expected = {id: string; context: string; action: SkinBodyAction; review?: SkinBodyReview};
 
 /** Local review drafts only; submission, uncertainty and publication stay with people. */
-export function SkinBodyPanel({people, blocked, coreAvailable}: {people: PeopleOwner; blocked: boolean; coreAvailable: boolean}) {
-  const view = people.value, context = skinColourBindingKey(view);
+export function SkinBodyPanel({people, blocked, coreAvailable, family = 'skin_colour'}: {
+  people: PeopleOwner; blocked: boolean; coreAvailable: boolean; family?: SkinBodyFamily;
+}) {
+  const actions = SKIN_BODY_FAMILIES[family].actions, finish = family === 'skin_finish';
+  const operationLabel = finish ? '美白与红润' : '色温与色调';
+  const view = people.value, context = `${family}:${skinColourBindingKey(view)}`;
   const latest = useRef(context); latest.current = context;
   const expected = useRef<Expected | null>(null);
   const [open, setOpen] = useState(false), [reference, setReference] = useState<SkinBodyReference | null>(null);
@@ -22,7 +27,7 @@ export function SkinBodyPanel({people, blocked, coreAvailable}: {people: PeopleO
   const [sourceLoaded, setSourceLoaded] = useState(false), [loaded, setLoaded] = useState<Record<string, boolean>>({});
   const [reviewed, setReviewed] = useState(false), [error, setError] = useState('');
   const busy = blocked || !people.enabled || people.state.pending || people.state.uncertain;
-  const allowed = skinBodyTarget(view), attached = skinBodyAttached(view);
+  const allowed = skinBodyTarget(view), attached = skinBodyAttached(view, family), report = skinBodyReport(view, family);
   const canDetach = !!view && skinColourTargetReady(view) && view.editing_target?.scope === 'face'
     && view.editing_target.target_id === view.selected_face_id;
   const live = useRef({context, busy, allowed, canDetach, coreAvailable}); live.current = {context, busy, allowed, canDetach, coreAvailable};
@@ -41,24 +46,25 @@ export function SkinBodyPanel({people, blocked, coreAvailable}: {people: PeopleO
       if (receipt.result.payload_released) throw Error('这次审核图已释放；请重新打开来源参考并生成新的审核图，原请求不会重发。');
       const payload = receipt.result.payload as SkinBodyPayload | undefined;
       if (!payload) throw Error('审核回执缺少图像数据，请重新读取来源参考。');
-      if (request.action === 'skin_body_reference' && payload.kind === 'reference') {
+      if (!skinBodyFamilyMatches(payload, family)) throw Error('审核回执不属于当前调整功能；色温色调与美白红润的审核不能互相授权。');
+      if (request.action === actions.reference && payload.kind === 'reference') {
         const image = previewImage(payload.source_preview);
-        if (!referenceMatches(payload, view) || !matchesSource(image, {...payload.source, orientation: 'exif_normalized_once'})) throw Error('参考图与当前人物、实际来源或身体观察不匹配。');
+        if (!referenceMatches(payload, view, family) || !matchesSource(image, {...payload.source, orientation: 'exif_normalized_once'})) throw Error('参考图与当前人物、实际来源或身体观察不匹配。');
         setReference(payload); setOpen(true); setChoice(''); setMask(emptyBodyMask()); setFlags(emptyFlags()); setPreview(null); setReviewed(false); setLoaded({}); setSourceLoaded(false);
-      } else if (request.action === 'skin_body_preview' && payload.kind === 'preview' && reference && request.review) {
+      } else if (request.action === actions.preview && payload.kind === 'preview' && reference && request.review) {
         const overlay = previewImage(payload.overlay);
-        if (!previewMatches(payload, reference, request.review) || !matchesSource(overlay, {...reference.source, orientation: 'exif_normalized_once'})) throw Error('候选回执与提交的笔迹、人物或来源不匹配，请重新审核。');
+        if (!previewMatches(payload, reference, request.review, family) || !matchesSource(overlay, {...reference.source, orientation: 'exif_normalized_once'})) throw Error('候选回执与提交的笔迹、人物或来源不匹配，请重新审核。');
         setPreview(payload); setReviewed(false); setLoaded({});
-      } else if ((request.action === 'skin_body_confirm' && payload.kind === 'confirmed')
-        || (request.action === 'skin_body_detach' && payload.kind === 'detached')) close();
+      } else if ((request.action === actions.confirm && payload.kind === 'confirmed' && payload.attached === true)
+        || (request.action === actions.detach && payload.kind === 'detached' && payload.attached === false)) close();
       else throw Error('审核回执类型与当前请求不匹配。');
       setError('');
     } catch (reason) {setPreview(null); setReviewed(false); setError(String(reason));}
-  }, [people.state.lastBodyResult, view, reference]);
+  }, [people.state.lastBodyResult, view, reference, family, actions]);
 
   function send(action: SkinBodyAction, payload: Record<string, unknown>, review?: SkinBodyReview) {
-    if (expected.current || live.current.context !== context || live.current.busy || (action === 'skin_body_detach' ? !live.current.canDetach : !live.current.allowed)) return;
-    if ((action === 'skin_body_preview' || action === 'skin_body_confirm') && !live.current.coreAvailable) return;
+    if (expected.current || live.current.context !== context || live.current.busy || (action === actions.detach ? !live.current.canDetach : !live.current.allowed)) return;
+    if ((action === actions.preview || action === actions.confirm) && !live.current.coreAvailable) return;
     const captured = peopleContext(view); if (!captured) return;
     const command: PeopleAction = {...structuredClone(captured), request_id: crypto.randomUUID(), action, payload: structuredClone(payload)};
     if (!skinBodyRequestFits(command)) {
@@ -83,13 +89,14 @@ export function SkinBodyPanel({people, blocked, coreAvailable}: {people: PeopleO
   const comparisonLoaded = images.length === 3 && images.every(image => !!image.url && loaded[`${preview!.preview_id}:${image.key}`]);
   const draftMatches = !!preview && !!selected && bodyReviewKey(preview.review) === bodyReviewKey({body_ref: selected.body_ref,
     points_sha256: selected.points_sha256, recipe: mask, visible: true, unoccluded: true, ownership_confirmed: true});
-  return <section aria-label="可见身体皮肤范围审核">
+  return <section aria-label={`${operationLabel}的可见身体皮肤范围审核`} data-body-family={family}>
     <p>身体扩展只使用当前人物已确认关联的真实身体观察，并经手绘复核。不会复制其他人物的范围，也不会推测衣物下或被遮挡的皮肤。</p>
-    <p role="status">{attached === true ? view?.skin_body?.needs_review === false ? '当前人物已附加有效身体皮肤范围；色温与色调同时作用于其脸部及审核范围。' : '当前人物保留了身体范围，但有效性尚未确认或需要重新审核，不能视为可用。' : attached === false ? '当前人物尚未附加身体范围，仍仅调整面部皮肤。' : '尚未取得当前人物的身体范围状态。'}</p>
-    {attached !== null && view?.skin_body?.reason && <p role="status">{view.skin_body.reason}</p>}
+    {finish && <p>此处仅授权美白与红润。已有色温色调的身体范围不会复制、扩大或自动授权本功能，请重新画出并独立确认。</p>}
+    <p role="status">{attached === true ? report?.needs_review === false ? `当前人物已附加本功能的有效身体皮肤范围；${operationLabel}同时作用于其脸部及审核范围。` : '当前人物保留了本功能的身体范围，但有效性尚未确认或需要重新审核，不能视为可用。' : attached === false ? '当前人物尚未为本功能附加身体范围，仍仅调整面部皮肤。' : '尚未取得当前人物在本功能中的身体范围状态。'}</p>
+    {attached !== null && report?.reason && <p role="status">{report.reason}</p>}
     {!allowed && <p className="muted">请在人物栏选择当前已分析人物的独立编辑范围；人物、分组或全部默认不能直接拥有此来源选区。</p>}
-    <button type="button" className="specBtn" disabled={busy || !allowed} onClick={() => {if (expected.current) return; close(); send('skin_body_reference', {});}}>打开当前来源图审核身体皮肤</button>
-    <button type="button" className="specBtn" disabled={busy || !canDetach || attached !== true} onClick={() => send('skin_body_detach', {})}>移除此人物身体范围，保留面部调色</button>
+    <button type="button" className="specBtn" disabled={busy || !allowed} onClick={() => {if (expected.current) return; close(); send(actions.reference, {});}}>打开当前来源图审核{operationLabel}的身体皮肤</button>
+    <button type="button" className="specBtn" disabled={busy || !canDetach || attached !== true} onClick={() => send(actions.detach, {})}>移除此人物的{operationLabel}身体范围，保留面部调整</button>
     {open && reference && <div>
       <button type="button" onClick={close}>{people.state.pending ? '关闭审核，已发请求仍待确认' : '关闭审核，不提交草稿'}</button>
       <label>已确认关联的身体<select value={choice} disabled={busy} onChange={event => {setChoice(event.target.value); edit(emptyBodyMask()); setSourceLoaded(false);}}>
@@ -101,13 +108,13 @@ export function SkinBodyPanel({people, blocked, coreAvailable}: {people: PeopleO
       {(['visible', 'unoccluded', 'ownership_confirmed'] as const).map(flag => <label key={flag} style={{display: 'block'}}>
         <input type="checkbox" disabled={busy || !selected || !sourceLoaded || !mask.objects.length} checked={flags[flag]}
           onChange={event => {setFlags(old => ({...old, [flag]: event.target.checked})); setPreview(null); setReviewed(false); setLoaded({});}}/>
-        {flag === 'visible' ? '我确认笔迹所选均为来源图中真实可见的身体皮肤' : flag === 'unoccluded' ? '我确认已排除衣物、头发、物体及遮挡区域' : '我确认所选范围只属于当前脸与已关联身体，没有其他人物'}
+        {operationLabel}：{flag === 'visible' ? '我确认笔迹所选均为来源图中真实可见的身体皮肤' : flag === 'unoccluded' ? '我确认已排除衣物、头发、物体及遮挡区域' : '我确认所选范围只属于当前脸与已关联身体，没有其他人物'}
       </label>)}
       <button type="button" className="specBtn" disabled={busy || !coreAvailable || !selected || !sourceLoaded || !Object.values(flags).every(Boolean)} onClick={() => {
-        if (!selected) return; try {const review = bodyReview(selected, mask, flags); setPreview(null); setReviewed(false); setLoaded({}); send('skin_body_preview', {review}, review);} catch (reason) {setError(String(reason));}
+        if (!selected) return; try {const review = bodyReview(selected, mask, flags); setPreview(null); setReviewed(false); setLoaded({}); send(actions.preview, {review}, review);} catch (reason) {setError(String(reason));}
       }}>生成真实前后对比与范围审核图</button>
-      {!coreAvailable && <p role="status">肤色调整核心不可用，不能生成或确认真实候选；仍可移除当前人物已附加的身体范围。</p>}
-      <p className="muted">请先在色温或色调设置非零值，再打开审核；两项均为零时不会制造虚假的变化。更改调色、照片、人物或分析会使本次审核失效。</p>
+      {!coreAvailable && <p role="status">{operationLabel}核心不可用，不能生成或确认真实候选；仍可移除当前人物已附加的本功能身体范围。</p>}
+      <p className="muted">请先在{finish ? '美白或红润' : '色温或色调'}设置非零值，再打开审核；两项均为零时不会制造虚假的变化。更改调整参数、照片、人物或分析会使本次审核失效。</p>
       {preview && <div>
         {images.map(image => <figure key={`${preview.preview_id}:${image.key}`} style={{margin: '8px 0'}}>
           {image.url && <img src={image.url} alt={image.caption} style={{width: '100%', height: 'auto'}} onLoad={event => {
@@ -117,12 +124,12 @@ export function SkinBodyPanel({people, blocked, coreAvailable}: {people: PeopleO
           <figcaption>{image.caption}</figcaption>
         </figure>)}
         <p>请对比肤色、皮肤边缘与邻近人物；手工确认不等于分割或照片质量验收。图像为缩略对比，不能证明所有细节正确。</p>
-        <label><input type="checkbox" checked={reviewed} disabled={busy || !comparisonLoaded || !draftMatches} onChange={event => setReviewed(event.target.checked)}/>我已看过这组三张审核图，确认可见皮肤范围与当前人物一致，并接受此候选效果</label>
+        <label><input type="checkbox" checked={reviewed} disabled={busy || !comparisonLoaded || !draftMatches} onChange={event => setReviewed(event.target.checked)}/>我已看过这组三张审核图，确认可见皮肤范围与当前人物一致，并独立接受{operationLabel}的此候选效果</label>
         <button type="button" className="specBtn" disabled={busy || !coreAvailable || !allowed || !reviewed || !comparisonLoaded || !draftMatches}
-          onClick={() => {if (preview && comparisonLoaded && draftMatches && reviewed) send('skin_body_confirm', {preview_id: preview.preview_id, reviewed: true});}}>确认附加此身体皮肤范围</button>
+          onClick={() => {if (preview && comparisonLoaded && draftMatches && reviewed) send(actions.confirm, {preview_id: preview.preview_id, reviewed: true});}}>确认附加{operationLabel}的此身体皮肤范围</button>
       </div>}
     </div>}
     {error && <p role="alert">{error}</p>}
-    <p className="muted">这是手动审核的身体皮肤扩展，不是自动全身肤色识别、AI 美白或肤色统一；皮肤功能族仍未完整验收。</p>
+    <p className="muted">{finish ? '这是美白与红润的手动审核身体扩展，不是自动全身皮肤识别、肤色统一、腮红绘制或健康评估。' : '这是手动审核的身体皮肤扩展，不是自动全身肤色识别、AI 美白或肤色统一；'}皮肤功能族仍未完整验收。</p>
   </section>;
 }

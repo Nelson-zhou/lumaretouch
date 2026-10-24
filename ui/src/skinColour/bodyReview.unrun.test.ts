@@ -130,7 +130,7 @@ test('confirmation needs real loaded images, unchanged review, explicit consent 
   const panel = source('./SkinBodyPanel.tsx'), control = source('./SkinColourControl.tsx');
   for (const text of ['people.submitCaptured(command)', 'skinBodyRequestFits(command)', '192 KiB', 'comparisonLoaded', 'draftMatches',
     'naturalWidth === image.width', 'naturalHeight === image.height', 'preview_id: preview.preview_id, reviewed: true',
-    'request.context !== latest.current', 'receipt.result.payload_released', "send('skin_body_detach', {})",
+    'request.context !== latest.current', 'receipt.result.payload_released', 'send(actions.detach, {})',
     '先在全身塑形中完成身体分析与人物关联', 'coreAvailable', '已发请求仍待确认']) assert.ok(panel.includes(text));
   assert.ok(control.includes("control === 'temperature' && <SkinBodyPanel"));
   assert.ok(panel.includes('busy || !canDetach || attached !== true')); // No core/body validity gate on detach.

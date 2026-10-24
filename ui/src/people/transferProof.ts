@@ -26,6 +26,8 @@ export type SkinColourCoverage = {
   version: 1; support_transfer: 'none';
   targets: {face_ref: FaceRef; scope: 'face-only' | 'face-and-reviewed-body' | 'neutral-no-effect'; body_review_sha256: string | null}[];
 };
+/** Structurally identical disclosure, independently keyed to finish intent. */
+export type SkinFinishCoverage = SkinColourCoverage;
 type ReviewBase = {
   version: 1; source_document: DocumentFence; target_document: DocumentFence;
   source_ref: FaceRef; target_refs: FaceRef[];
@@ -34,6 +36,7 @@ type ReviewBase = {
   source_association_revision: number; target_association_revision: number;
   transfer_policy: 'selected_parameter_keys_replace'; excluded: string[];
   skin_colour_coverage?: SkinColourCoverage;
+  skin_finish_coverage?: SkinFinishCoverage;
 };
 export type PeopleTransferReview = ReviewBase & ({
   confirmed_person_id: string; target_policy: 'confirmed_person_only'; confirmation_revisions: [string, number][];
@@ -104,6 +107,9 @@ export function validSkinColourCoverage(value: unknown, refs: FaceRef[]): value 
     seen.add(row.face_ref.face_instance_id);
   }
   return seen.size === refs.length;
+}
+export function validSkinFinishCoverage(value: unknown, refs: FaceRef[]): value is SkinFinishCoverage {
+  return validSkinColourCoverage(value, refs);
 }
 function validSelection(v: unknown): v is Record<string, string[]> {
   return object(v) && Object.keys(v).length > 0 && Object.entries(v).every(([op, paths]) => token(op)
@@ -189,6 +195,15 @@ export function validPeopleReview(value: unknown, request: PeopleTransferRequest
       || typeof leaf.value !== 'number' || leaf.value < -1 || leaf.value > 1)) return false;
     if (scalars.some(leaf => leaf.value !== 0)
       && v.skin_colour_coverage!.targets.some(row => row.scope === 'neutral-no-effect')) return false;
+  }
+  const finishSelected = Object.prototype.hasOwnProperty.call(request.selection, 'lnx.skin_finish.v1');
+  if (finishSelected ? !validSkinFinishCoverage(v.skin_finish_coverage, v.target_refs) : v.skin_finish_coverage !== undefined) return false;
+  if (finishSelected) {
+    const scalars = v.parameters.filter(leaf => leaf.operation_id === 'lnx.skin_finish.v1');
+    if (scalars.some(leaf => !['/whitening', '/rosiness'].includes(leaf.parameter_path)
+      || typeof leaf.value !== 'number' || leaf.value < 0 || leaf.value > 1)) return false;
+    if (scalars.some(leaf => leaf.value !== 0)
+      && v.skin_finish_coverage!.targets.some(row => row.scope === 'neutral-no-effect')) return false;
   }
   return wanted.size === 0 && JSON.stringify([...v.excluded].sort()) === JSON.stringify(['identity_links', 'landmarks', 'local_assets', 'masks']);
 }

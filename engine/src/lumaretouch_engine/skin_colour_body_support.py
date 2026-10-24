@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Reviewed body-skin coverage in the ONE canonical people support bank.
 
-The descriptor is an explicit, nonportable extension of the existing skin-colour
-scalars. It is not a second recipe owner, pose operation or instance segmenter.
+Each descriptor is an explicit, nonportable extension of exactly one allowlisted
+scalar family. Skin-colour reviews never authorize skin-finish. This is not a
+second recipe owner, pose operation or instance segmenter.
 The host stages ``retain`` privately, previews real coverage/pixels, and attaches
 the candidate only after its independently fenced confirmation transaction.
 
@@ -23,8 +24,22 @@ from .people_support_assets import content_digest
 
 KIND = 'skin_colour_body_visibility'
 OPERATION = 'lnx.skin_colour.v1'
+FINISH_KIND = 'skin_finish_body_visibility'
+FINISH_OPERATION = 'lnx.skin_finish.v1'
+FAMILIES = ('skin_colour', 'skin_finish')
 FLAGS = ('visible', 'unoccluded', 'ownership_confirmed')
 MAX_RECORD_BYTES = 4 * 1024 * 1024
+
+
+def family_spec(family='skin_colour', operation_id=None):
+    """Exact family/operation allowlist; no descriptor or authorization aliases."""
+    if type(family) is not str or family not in FAMILIES:
+        raise ValueError('Unknown body-skin scalar family')
+    kind, operation = ((KIND, OPERATION) if family == 'skin_colour'
+                       else (FINISH_KIND, FINISH_OPERATION))
+    if operation_id is not None and (type(operation_id) is not str or operation_id != operation):
+        raise ValueError('Body-skin family cannot authorize another operation')
+    return kind, operation
 
 
 def _review(value):
@@ -44,8 +59,9 @@ def _review(value):
     return {**deepcopy(value), 'recipe': recipe}
 
 
-def check_record(record):
+def check_record(record, *, family='skin_colour', operation_id=None):
     """Validate immutable JSON only; never resolve history against a live bank."""
+    kind, operation = family_spec(family, operation_id)
     if (type(record) is not dict or set(record) != {'version', 'face_ref', 'source', 'row'}
             or type(record['version']) is not int or record['version'] != 1):
         raise ValueError('Invalid body-skin review asset')
@@ -59,8 +75,8 @@ def check_record(record):
     keys = {'target', 'operation_id', 'face_evidence', 'body_record_sha256',
             'body_association_revision', 'people_association_revision',
             'body_link', 'face_link', 'observation', 'review'}
-    if (type(row) is not dict or set(row) != keys or row['target'] != KIND
-            or row['operation_id'] != OPERATION):
+    if (type(row) is not dict or set(row) != keys or row['target'] != kind
+            or row['operation_id'] != operation):
         raise ValueError('Body-skin support cannot authorize another operation')
     review = _review(row['review']); body_ref = review['body_ref']
     if body_ref['asset_sha256'] != source['sha256']:
@@ -137,8 +153,9 @@ def _ownership(state, body_bank, ref, body_ref):
     return row, matches[0]
 
 
-def choices(state, body_bank, face_ref, analysis):
+def choices(state, body_bank, face_ref, analysis, *, family='skin_colour', operation_id=None):
     """Only explicitly associated bodies; never infer from boxes or pose proximity."""
+    family_spec(family, operation_id)
     state = S.check(state); body_bank = B.check(body_bank); ref, face = _face(state, face_ref)
     _analysis(face, analysis)
     result = []
@@ -153,8 +170,9 @@ def choices(state, body_bank, face_ref, analysis):
     return result
 
 
-def retain(state, assets, face_ref, body_bank, analysis, review):
+def retain(state, assets, face_ref, body_bank, analysis, review, *, family='skin_colour', operation_id=None):
     """Stage immutable support and its pointer only; host owns preview/confirmation."""
+    kind, operation = family_spec(family, operation_id)
     out = S.check(state); body_bank = B.check(body_bank); ref, face = _face(out, face_ref)
     review = _review(review); observation = _analysis(face, analysis)
     body, face_link = _ownership(out, body_bank, ref, review['body_ref'])
@@ -163,12 +181,12 @@ def retain(state, assets, face_ref, body_bank, analysis, review):
         raise ValueError('Body-skin review names stale measured pose points')
     record = check_record({'version': 1, 'face_ref': ref,
         'source': {key: measured['source'][key] for key in ('sha256', 'width', 'height')},
-        'row': {'target': KIND, 'operation_id': OPERATION, 'face_evidence': deepcopy(face['evidence']),
+        'row': {'target': kind, 'operation_id': operation, 'face_evidence': deepcopy(face['evidence']),
             'body_record_sha256': E.content_digest(measured),
             'body_association_revision': body_bank['association_revision'],
             'people_association_revision': out['association_revision'],
             'body_link': deepcopy(body['association']), 'face_link': deepcopy(face_link),
-            'observation': observation, 'review': review}})
+            'observation': observation, 'review': review}}, family=family, operation_id=operation)
     if type(assets) is not dict or len(assets) > 4096:
         raise ValueError('Invalid body-skin project support bank')
     key = content_digest(record); bank = deepcopy(assets)
@@ -179,29 +197,32 @@ def retain(state, assets, face_ref, body_bank, analysis, review):
     bank[key] = record
     if len(json.dumps(bank, allow_nan=False).encode()) > 16*1024*1024:
         raise ValueError('Body-skin project support assets exceed the canonical byte budget')
-    descriptor = {'owner': ref, 'content_sha256': key, 'kind': KIND}
-    if face['local_assets'].get(KIND) != descriptor:
-        face['local_assets'][KIND] = descriptor; out['revision'] += 1
+    descriptor = {'owner': ref, 'content_sha256': key, 'kind': kind}
+    if face['local_assets'].get(kind) != descriptor:
+        face['local_assets'][kind] = descriptor; out['revision'] += 1
     return S.check(out), bank
 
 
-def _attached(state, assets, ref):
-    _, face = _face(state, ref, enabled=False); descriptor = face['local_assets'].get(KIND)
+def _attached(state, assets, ref, *, family='skin_colour', operation_id=None):
+    kind, operation = family_spec(family, operation_id)
+    _, face = _face(state, ref, enabled=False); descriptor = face['local_assets'].get(kind)
     if descriptor is None:
         return None
     if type(assets) is not dict:
         raise ValueError('Body-skin support bank is missing')
-    key = descriptor['content_sha256']; record = check_record(assets.get(key))
+    key = descriptor['content_sha256']
+    record = check_record(assets.get(key), family=family, operation_id=operation)
     if (content_digest(record) != key or record['face_ref'] != ref
-            or descriptor != {'owner': ref, 'content_sha256': key, 'kind': KIND}):
+            or descriptor != {'owner': ref, 'content_sha256': key, 'kind': kind}):
         raise ValueError('Body-skin descriptor is missing, changed or owned by another face')
     return record, key
 
 
-def resolve(state, assets, face_ref, body_bank, analysis):
+def resolve(state, assets, face_ref, body_bank, analysis, *, family='skin_colour', operation_id=None):
     """Absent means old face-only behavior; stale attached support is an error."""
+    _, operation = family_spec(family, operation_id)
     state = S.check(state); ref, _ = _face(state, face_ref, enabled=False)
-    attached = _attached(state, assets, ref)
+    attached = _attached(state, assets, ref, family=family, operation_id=operation)
     if attached is None:
         return None
     ref, face = _face(state, ref); body_bank = B.check(body_bank)
@@ -218,11 +239,12 @@ def resolve(state, assets, face_ref, body_bank, analysis):
     return record, key
 
 
-def detach(state, face_ref):
+def detach(state, face_ref, *, family='skin_colour', operation_id=None):
     """Remove the active pointer even when evidence is stale; preserve history bytes."""
+    kind, _ = family_spec(family, operation_id)
     out = S.check(state); _, face = _face(out, face_ref, enabled=False)
-    if KIND in face['local_assets']:
-        del face['local_assets'][KIND]; out['revision'] += 1
+    if kind in face['local_assets']:
+        del face['local_assets'][kind]; out['revision'] += 1
     return S.check(out)
 
 
@@ -251,14 +273,19 @@ def _protect_faces(coverage, state, source):
     return count
 
 
-def raster(state, assets, face_ref, body_bank, analysis, shape, *, byte_budget=None):
+def raster(state, assets, face_ref, body_bank, analysis, shape, *, byte_budget=None,
+           family='skin_colour', operation_id=None):
     """Return readonly target coverage and facts, never corrected pixels.
 
-    Call only for nonneutral colour intent. Neutral reset must not require live
-    support resolution. All attached same-source regions reserve ownership even
-    if another face is disabled; sorted-effect precedence never decides it.
+    Call only for nonneutral intent in the explicitly named family. Neutral reset
+    must not require live support resolution. All attached same-source regions
+    across both families reserve ownership for OTHER faces, even disabled ones;
+    sorted-effect precedence never decides it. The same face's two deliberately
+    authorized families may compose on their separately reviewed coverages.
     """
-    resolved = resolve(state, assets, face_ref, body_bank, analysis)
+    _, operation = family_spec(family, operation_id)
+    resolved = resolve(state, assets, face_ref, body_bank, analysis,
+                       family=family, operation_id=operation)
     if resolved is None:
         return None, {'enabled': False}
     state = S.check(state); record, key = resolved
@@ -272,12 +299,13 @@ def raster(state, assets, face_ref, body_bank, analysis, shape, *, byte_budget=N
         ref = S.face_ref(face)
         if ref == record['face_ref'] or ref['asset_sha256'] != record['source']['sha256']:
             continue
-        attached = _attached(state, assets, ref)
-        if attached is not None:
-            other, _ = attached
-            if other['source'] != record['source']:
-                raise ValueError('Competing body-skin review has different source dimensions')
-            others.append(other)
+        for other_family in FAMILIES:
+            attached = _attached(state, assets, ref, family=other_family)
+            if attached is not None:
+                other, _ = attached
+                if other['source'] != record['source']:
+                    raise ValueError('Competing body-skin review has different source dimensions')
+                others.append(other)
     recipes = [record['row']['review']['recipe']] + [r['row']['review']['recipe'] for r in others]
     work = sum(M.validate_budget(recipe, shape)['work'] for recipe in recipes)
     if work > M.MAX_WORK:
@@ -322,8 +350,9 @@ def raster(state, assets, face_ref, body_bank, analysis, shape, *, byte_budget=N
         'manual_rasterizer': 'existing-rust-local-mask', 'runtime_quality_accepted': False}
 
 
-def validate_project(project):
+def validate_project(project, *, family='skin_colour', operation_id=None):
     """Resolve historical descriptor bytes, not historical links against live state."""
+    kind, operation = family_spec(family, operation_id)
     def visit(value, assets):
         if isinstance(value, dict):
             # Private documents/virtual copies own independent support stores.
@@ -332,13 +361,14 @@ def validate_project(project):
                 assets = value['people_support_assets']
                 if type(assets) is not dict:
                     raise ValueError('Historical body-skin support bank is invalid')
-            if 'face_instance_id' in value and KIND in value.get('local_assets', {}):
+            if 'face_instance_id' in value and kind in value.get('local_assets', {}):
                 ref = S.check_ref({k: value[k] for k in ('asset_sha256', 'face_instance_id', 'analysis_revision')})
-                descriptor = value['local_assets'][KIND]
+                descriptor = value['local_assets'][kind]
                 if (type(descriptor) is not dict or set(descriptor) != {'owner', 'content_sha256', 'kind'}
-                        or descriptor['owner'] != ref or descriptor['kind'] != KIND):
+                        or descriptor['owner'] != ref or descriptor['kind'] != kind):
                     raise ValueError('Historical body-skin descriptor ownership changed')
-                key = S.digest(descriptor['content_sha256']); record = check_record(assets.get(key))
+                key = S.digest(descriptor['content_sha256'])
+                record = check_record(assets.get(key), family=family, operation_id=operation)
                 if (record['face_ref'] != ref or content_digest(record) != key
                         or record['row']['face_evidence'] != value.get('evidence')):
                     raise ValueError('Historical body-skin support is missing or changed')

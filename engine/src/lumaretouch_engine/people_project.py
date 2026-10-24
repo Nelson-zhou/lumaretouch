@@ -54,6 +54,7 @@ def validate_records(value):
             validate_iris_support(value)
             from .skin_colour_body_support import validate_project as validate_body_skin_support
             validate_body_skin_support(value)
+            validate_body_skin_support(value,family='skin_finish')
         if 'people_landmarks' in value:
             from .people_retained_analysis import check_store
             check_store(value['people_landmarks'])

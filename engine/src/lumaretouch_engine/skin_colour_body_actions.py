@@ -1,21 +1,36 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Exact derived-source action admission; host owns all review/publication fences."""
 from . import people_state as P, body_pose_evidence as B, local_mask_recipe as M
+from .skin_colour_body_support import family_spec
 import json
 
-ACTIONS = frozenset(('skin_body_reference', 'skin_body_preview',
-                     'skin_body_confirm', 'skin_body_detach'))
+COLOUR_ACTIONS = frozenset(('skin_body_reference', 'skin_body_preview',
+                            'skin_body_confirm', 'skin_body_detach'))
+FINISH_ACTIONS = frozenset(('skin_finish_body_reference', 'skin_finish_body_preview',
+                           'skin_finish_body_confirm', 'skin_finish_body_detach'))
+ACTIONS = COLOUR_ACTIONS | FINISH_ACTIONS
 MAX_REVIEW_BYTES = 192 * 1024  # Preserve the native people-envelope 256 KiB cap.
 
 
-def check_action(action, payload, target):
-    if action not in ACTIONS or target['scope'] != 'face' or type(payload) is not dict:
+def action_name(verb, *, family='skin_colour', operation_id=None):
+    family_spec(family, operation_id)
+    if verb not in ('reference', 'preview', 'confirm', 'detach'):
+        raise ValueError('Unknown body-skin review action')
+    prefix = 'skin_body_' if family == 'skin_colour' else 'skin_finish_body_'
+    return prefix + verb
+
+
+def check_action(action, payload, target, *, family='skin_colour', operation_id=None):
+    family_spec(family, operation_id)
+    allowed = COLOUR_ACTIONS if family == 'skin_colour' else FINISH_ACTIONS
+    if (type(action) is not str or action not in allowed or type(target) is not dict
+            or target.get('scope') != 'face' or type(payload) is not dict):
         raise ValueError('Body-skin review needs an exact local FaceRef and known action')
     P.check_ref(target['face_ref'])
-    if action in ('skin_body_reference', 'skin_body_detach'):
+    if action in (action_name('reference', family=family), action_name('detach', family=family)):
         if payload != {}:
             raise ValueError('Body-skin reference/detach accepts no source override')
-    elif action == 'skin_body_confirm':
+    elif action == action_name('confirm', family=family):
         if set(payload) != {'preview_id', 'reviewed'} or payload['reviewed'] is not True:
             raise ValueError('Confirm the exact displayed body-skin candidate')
         P.token(payload['preview_id'])

@@ -70,7 +70,7 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=None, max_faces=32, recovery_assets=None, repaired=None,
-            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,body_bank=None):
+            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_bank=None):
     state = S.check(state)
     from .people_cross_owner import validate_owner
     validate_owner(state,asset_sha256,document_id)
@@ -127,10 +127,10 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
                 stage = asset['kind']
-                if stage=='skin_colour_body_visibility':
-                    # Dedicated colour support, never generic recovery. Resolve
-                    # it only when this recipe is active, in the consumer below;
-                    # a stale dormant review cannot block disabling the colour.
+                if stage in ('skin_colour_body_visibility','skin_finish_body_visibility'):
+                    # Separate operation-owned support, never generic recovery.
+                    # Resolve each only when its own recipe is active below;
+                    # dormant review cannot prevent disabling either recipe.
                     continue
                 if stage=='iris_makeup_visibility':
                     from .iris_makeup_support import resolve as resolve_iris_support
@@ -178,7 +178,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             blush_review=blush_raster(state,blush_makeup_assets or {},entry['face_ref'],(h,w)) if A.BLUSH.active(values[A.BLUSH.OP]) else None
             local = E.prepare(entry['face_ref'], lm, values, effect_source, excluded=analysis['excluded'], skin=analysis['skin'],
                               backend=face['evidence']['backend'], semantic_sha=face['evidence']['semantic_model_sha256'],blush_review=blush_review,lipstick_review=lipstick_review,source_only=source_only)
-            if A.SKIN_COLOUR.active(values[A.SKIN_COLOUR.OP]):
+            if (A.SKIN_COLOUR.active(values[A.SKIN_COLOUR.OP])
+                    or A.SKIN_FINISH.active(values[A.SKIN_FINISH.OP])):
                 from .skin_colour_people import prepare as prepare_skin_colour
                 others = []; protected_boxes = []
                 for other_key, other_face in state['faces'].items():
@@ -204,7 +205,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                 local.extend(prepare_skin_colour(entry['face_ref'], analysis, others, effect_source,
                     values[A.SKIN_COLOUR.OP], byte_budget=byte_budget-analysis_bytes-prior_bytes,
                     protected_boxes=protected_boxes,people_state=state,
-                    body_assets=skin_colour_body_assets,body_bank=body_bank))
+                    body_assets=skin_colour_body_assets,body_bank=body_bank,
+                    finish_recipe=values[A.SKIN_FINISH.OP],finish_body_assets=skin_finish_body_assets))
             from .eye_light_people import prepare as prepare_eye_light
             from .eye_light_state import OPERATION as EYE_LIGHT
             local.extend(prepare_eye_light(state,eye_light_assets or {},entry['face_ref'],analysis,effect_source,values[EYE_LIGHT],source_revision=state['revision']))

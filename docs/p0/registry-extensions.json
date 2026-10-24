@@ -4,6 +4,37 @@
   "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
+      "operation_id": "lnx.skin_finish.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "whitening": 0,
+        "rosiness": 0
+      },
+      "range": {
+        "version": [
+          1,
+          1
+        ],
+        "whitening": [
+          0,
+          1
+        ],
+        "rosiness": [
+          0,
+          1
+        ]
+      },
+      "transferable": true,
+      "source_requirement": "LNX-REF-PC-32465-C-d82f09f52f",
+      "source_requirements": [
+        "LNX-REF-PC-32465-C-d82f09f52f",
+        "LNX-REF-PC-32465-C-60936d5259"
+      ],
+      "reason": "Separate conservative skin whitening and rosiness, not global exposure or signed temperature/tint aliases. Original Rust monotone lightness lift with restrained cool-white chroma adjustment, and luminance-gated red-direction chroma at fixed resulting lightness. No blur, texture synthesis, medical assessment or proprietary equivalence. Target-owned measured face support plus separately consented manual-assisted body coverage; old skin-colour body reviews do not authorize this operation. Scalars only transfer, each target retains independent source/model/BodyRef/person/support review. Full-source original/derived/export/history integration, native/quality acceptance UNRUN; both whole-body requirements remain partial without automatic instance segmentation."
+    },
+    {
       "operation_id": "lnx.skin_colour.v1",
       "parameter_key": "recipe",
       "type": "object",

@@ -4,31 +4,58 @@ import type {BodyRef} from '../legShape/model';
 import type {SourcePreview} from '../legShape/sourcePreview';
 import type {MaskObject} from '../localMasks/model';
 
-export type SkinBodyAction = 'skin_body_reference' | 'skin_body_preview' | 'skin_body_confirm' | 'skin_body_detach';
+export type SkinBodyFamily = 'skin_colour' | 'skin_finish';
+export const SKIN_BODY_FAMILIES = {
+  skin_colour: {operation: 'lnx.skin_colour.v1', report: 'skin_body', actions: {
+    reference: 'skin_body_reference', preview: 'skin_body_preview', confirm: 'skin_body_confirm', detach: 'skin_body_detach',
+  }},
+  skin_finish: {operation: 'lnx.skin_finish.v1', report: 'skin_finish_body', actions: {
+    reference: 'skin_finish_body_reference', preview: 'skin_finish_body_preview', confirm: 'skin_finish_body_confirm', detach: 'skin_finish_body_detach',
+  }},
+} as const;
+export type SkinBodyAction = typeof SKIN_BODY_FAMILIES[SkinBodyFamily]['actions'][keyof typeof SKIN_BODY_FAMILIES.skin_colour.actions];
+type SkinBodyIdentity = {family?: SkinBodyFamily; operation_id?: 'lnx.skin_colour.v1' | 'lnx.skin_finish.v1'};
+export function skinBodyActionFamily(action: PeopleAction['action']): SkinBodyFamily | null {
+  for (const family of ['skin_colour', 'skin_finish'] as const) {
+    if ((Object.values(SKIN_BODY_FAMILIES[family].actions) as string[]).includes(action)) return family;
+  }
+  return null;
+}
+/** Legacy colour DTOs remain untagged; finish must carry both exact identities. */
+export function skinBodyFamilyMatches(value: unknown, family: SkinBodyFamily = 'skin_colour'): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const identity = value as SkinBodyIdentity;
+  return family === 'skin_finish'
+    ? identity.family === family && identity.operation_id === SKIN_BODY_FAMILIES[family].operation
+    : identity.family === undefined && identity.operation_id === undefined;
+}
 export type SkinBodySource = {sha256: string; width: number; height: number};
 export type SkinBodyMask = {version: 1; domain: 'source-normalized'; objects: Extract<MaskObject, {kind: 'brush'}>[]};
 export type SkinBodyChoice = {body_ref: BodyRef; points_sha256: string};
 export type SkinBodyReview = SkinBodyChoice & {recipe: SkinBodyMask; visible: true; unoccluded: true; ownership_confirmed: true};
-export type SkinBodyReport = {attached: boolean; face_ref: FaceRef; source: SkinBodySource; needs_review?: boolean; reason?: string | null};
+export type SkinBodyReport = SkinBodyIdentity & {attached: boolean; face_ref: FaceRef; source: SkinBodySource; needs_review?: boolean; reason?: string | null};
 export type SkinBodyReference = SkinBodyReport & {kind: 'reference'; source_preview: SourcePreview; bodies: SkinBodyChoice[]};
 export type SkinBodyRendered = {mime: 'image/png'; base64: string; width: number; height: number; mapping: 'rendered_result'};
-export type SkinBodyPreview = {
+export type SkinBodyPreview = SkinBodyIdentity & {
   kind: 'preview'; preview_id: string; source: SkinBodySource; face_ref: FaceRef;
   before: SkinBodyRendered; after: SkinBodyRendered; overlay: SourcePreview;
   review: SkinBodyReview; runtime_quality_accepted: false;
 };
-export type SkinBodyPayload = SkinBodyReference | SkinBodyPreview | {kind: 'confirmed' | 'detached'; attached: boolean};
+export type SkinBodyPayload = SkinBodyReference | SkinBodyPreview | (SkinBodyIdentity & {kind: 'confirmed' | 'detached'; attached: boolean});
 export type SkinBodyResult = {command: PeopleAction; result: PeopleResult};
 export function skinBodyReceiptCurrent(command: PeopleAction, result: PeopleResult, view: PeopleView | null): boolean {
-  if (!view || !['skin_body_reference', 'skin_body_preview', 'skin_body_confirm', 'skin_body_detach'].includes(command.action)
+  const family = skinBodyActionFamily(command.action);
+  if (!view || !family
     || result.protocol !== 1 || !result.success || result.outcome_unknown || result.request_id !== command.request_id
     || result.action !== command.action || result.document_id !== command.document_id
     || command.document_id !== view.binding.document_id || command.document_epoch !== view.binding.document_epoch
     || command.target.scope !== 'face' || view.editing_target?.scope !== 'face'
     || command.target.target_id !== view.selected_face_id || command.target.target_id !== view.editing_target.target_id
     || command.target.face_ref?.asset_sha256 !== view.binding.asset_sha256
-    || !sameSkinFace(command.target.face_ref, view.editing_target.face_ref)) return false;
-  return command.action === 'skin_body_confirm' || command.action === 'skin_body_detach'
+    || !sameSkinFace(command.target.face_ref, view.editing_target.face_ref)
+    || (!result.payload_released && !skinBodyFamilyMatches(result.payload, family))) return false;
+  const actions = SKIN_BODY_FAMILIES[family].actions;
+  return command.action === actions.confirm || command.action === actions.detach
     ? view.binding.document_revision >= command.document_revision && view.revision >= command.state_revision
       && view.association_revision >= command.association_revision
     : view.binding.document_revision === command.document_revision && view.revision === command.state_revision
@@ -62,15 +89,19 @@ export function skinBodyTarget(view: PeopleView | null | undefined): boolean {
     && face.face_ref.asset_sha256 === view.binding.asset_sha256 && sameSkinFace(face.face_ref, view.editing_target.face_ref);
 }
 /** Attachment is a refreshed engine fact, never inferred from a local painted draft. */
-export function skinBodyAttached(view: PeopleView | null | undefined): boolean | null {
-  const report = view?.skin_body, selected = view?.faces.find(face => face.face_ref.face_instance_id === view.selected_face_id);
-  if (!view || !report || !selected || !sameSkinFace(report.face_ref, selected.face_ref)
+export function skinBodyReport(view: PeopleView | null | undefined, family: SkinBodyFamily = 'skin_colour'): SkinBodyReport | null {
+  const report = view?.[SKIN_BODY_FAMILIES[family].report];
+  return report && skinBodyFamilyMatches(report, family) ? report : null;
+}
+export function skinBodyAttached(view: PeopleView | null | undefined, family: SkinBodyFamily = 'skin_colour'): boolean | null {
+  const report = skinBodyReport(view, family), selected = view?.faces.find(face => face.face_ref.face_instance_id === view.selected_face_id);
+  if (!view || !report || !selected || typeof report.attached !== 'boolean' || !sameSkinFace(report.face_ref, selected.face_ref)
     || report.source.sha256 !== view.binding.asset_sha256) return null;
   return report.attached;
 }
-export function referenceMatches(reference: SkinBodyReference, view: PeopleView): boolean {
+export function referenceMatches(reference: SkinBodyReference, view: PeopleView, family: SkinBodyFamily = 'skin_colour'): boolean {
   const source = reference.source;
-  return reference.kind === 'reference' && skinBodyTarget(view) && sameSkinFace(reference.face_ref, view.editing_target?.face_ref)
+  return reference.kind === 'reference' && skinBodyFamilyMatches(reference, family) && skinBodyTarget(view) && sameSkinFace(reference.face_ref, view.editing_target?.face_ref)
     && digest(source?.sha256) && source.sha256 === view.binding.asset_sha256 && extent(source.width) && extent(source.height)
     && Array.isArray(reference.bodies) && reference.bodies.every(body => digest(body.points_sha256)
       && body.body_ref.asset_sha256 === source.sha256 && token(body.body_ref.body_instance_id) && revision(body.body_ref.analysis_revision))
@@ -99,8 +130,9 @@ export function renderedSkinImage(value: SkinBodyRendered | null | undefined): s
     || !/^[A-Za-z0-9+/]+={0,2}$/.test(value.base64)) return null;
   return `data:image/png;base64,${value.base64}`;
 }
-export function previewMatches(preview: SkinBodyPreview, reference: SkinBodyReference, review: SkinBodyReview): boolean {
-  return preview.kind === 'preview' && token(preview.preview_id) && sameSkinFace(preview.face_ref, reference.face_ref)
+export function previewMatches(preview: SkinBodyPreview, reference: SkinBodyReference, review: SkinBodyReview, family: SkinBodyFamily = 'skin_colour'): boolean {
+  return preview.kind === 'preview' && skinBodyFamilyMatches(preview, family) && skinBodyFamilyMatches(reference, family)
+    && token(preview.preview_id) && sameSkinFace(preview.face_ref, reference.face_ref)
     && sameSkinSource(preview.source, reference.source) && preview.runtime_quality_accepted === false
     && bodyReviewKey(preview.review) === bodyReviewKey(review)
     && !!renderedSkinImage(preview.before) && !!renderedSkinImage(preview.after)
