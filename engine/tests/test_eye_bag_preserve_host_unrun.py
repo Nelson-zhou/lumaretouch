@@ -95,6 +95,14 @@ def host(monkeypatch):
         'width': 64, 'height': 96, 'source_sha256': ASSET, 'source_width': 128, 'source_height': 192,
         'decoded_width': 64, 'decoded_height': 96, 'mapping': 'normalized_full_frame',
         'orientation': 'exif_normalized_once'})
+    from lumaretouch_engine import eye_bag_preserve_crop as CROP
+    def crops(actual, graph, selected, current, source, snapshot_sha256, **kwargs):
+        return {'version': 1, 'mapping': 'source_pixel_edges', 'orientation': 'exif_normalized_once',
+            'display_encoding': 'srgb_rgb8', 'sampling': 'one_source_pixel_per_image_pixel',
+            'source_sha256': source['sha256'], 'source_width': 128, 'source_height': 192,
+            'snapshot_sha256': snapshot_sha256, 'input_stage': 'committed_repair',
+            'eyes': {side: {'rect': [0, 0, 64, 96], 'image': display(side)[1]} for side in ('left', 'right')}}
+    monkeypatch.setattr(CROP, 'prepare', crops)
     monkeypatch.setattr(BANK, 'check_store', lambda bank: deepcopy(bank))
     def retain(before, bank, ref, eyes, **kwargs):
         candidate = P.check(before); bank = deepcopy(bank)
@@ -126,9 +134,18 @@ def payload(amount=.4, *, replace=False, eyes=None):
         'eyes': {'left': eye()} if eyes is None else eyes, 'replace_legacy': replace}
 
 
+def served_reference(engine, state, target):
+    reference = R.reference(engine, state, target, {})
+    crops = reference['source_crops']
+    for side in ('left', 'right'):
+        R.source_image(engine, state, target, {'token': crops['token'], 'side': side,
+            'sha256': crops['eyes'][side]['image']['sha256']})
+    return reference
+
+
 def reviewed(host):
     engine, _, _, state, target = host
-    R.reference(engine, state, target, {})
+    served_reference(engine, state, target)
     return R.preview(engine, state, target, payload())['review']
 
 
@@ -196,7 +213,7 @@ def test_wrong_hash_ack_missing_image_and_single_use_claim(host):
 def test_legacy_replacement_is_explicit_atomic_and_preserves_old_graph(host):
     engine, owner, _, _, target = host
     owner.state = P.set_override(owner.state, 'face', target['target_id'], A.ENHANCE, '/eye_bags', .5)
-    state = owner.snapshot(); R.reference(engine, state, target, {})
+    state = owner.snapshot(); served_reference(engine, state, target)
     with pytest.raises(ValueError): R.preview(engine, state, target, payload())
     review = R.preview(engine, state, target, payload(replace=True))['review']
     candidate, proof = R.confirm(engine, state, target, {'token': review['token'], 'ack': R._ack(review)})
@@ -380,3 +397,35 @@ def test_cross_owner_source_guard_is_after_every_candidate_and_before_render():
     for operation in ('C.create(', 'C.update(', 'C.unlink('):
         assert prepare.index(operation) < guard
     assert guard < prepare.index("render(engine, item['row'], candidate)")
+
+
+def test_native_crop_pages_are_hash_bound_and_required_before_painted_review(host):
+    engine, _, _, state, target = host
+    reference = R.reference(engine, state, target, {})
+    crops = reference['source_crops']
+    assert all('base64' not in record['image'] for record in crops['eyes'].values())
+    assert all(type(raw) is bytes for raw in engine._eye_bag_reference['crop_images'].values())
+    with pytest.raises(ValueError, match='Load each painted eye'):
+        R.preview(engine, state, target, payload())
+    request = {'token': crops['token'], 'side': 'left', 'sha256': crops['eyes']['left']['image']['sha256']}
+    with pytest.raises(ValueError):
+        R.source_image(engine, state, target, {**request, 'sha256': '0' * 64})
+    page = R.source_image(engine, state, target, request)
+    assert page['snapshot_sha256'] == crops['snapshot_sha256']
+    assert R.preview(engine, state, target, payload())['review']
+    with pytest.raises(ValueError, match='Load each painted eye'):
+        R.preview(engine, state, target, payload(eyes={'right': eye()}))
+
+
+def test_native_crop_expiry_and_repair_change_release_cached_bytes(host, monkeypatch):
+    engine, _, _, state, target = host
+    reference = served_reference(engine, state, target)
+    crops = reference['source_crops']
+    request = {'token': crops['token'], 'side': 'left', 'sha256': crops['eyes']['left']['image']['sha256']}
+    engine.current['repair'] = 'different'
+    with pytest.raises(ValueError): R.source_image(engine, state, target, request)
+    assert engine._eye_bag_reference is None
+    reference = served_reference(engine, state, target)
+    engine._eye_bag_reference['expires'] = 0
+    with pytest.raises(ValueError): R.source_image(engine, state, target, request)
+    assert engine._eye_bag_reference is None

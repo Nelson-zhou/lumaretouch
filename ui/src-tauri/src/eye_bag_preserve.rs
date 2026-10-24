@@ -38,7 +38,7 @@ fn eyes(v: &Value, allow_empty: bool) -> bool {
             })
     })
 }
-pub(crate) fn action(v: &Value) -> bool {matches!(v["action"].as_str(), Some("eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "eye_bag_confirm"))}
+pub(crate) fn action(v: &Value) -> bool {matches!(v["action"].as_str(), Some("eye_bag_reference" | "eye_bag_source_image" | "eye_bag_preview" | "eye_bag_image" | "eye_bag_confirm"))}
 fn ack(v: &Value) -> bool {fields(v, &["review_sha256", "before_sha256", "after_sha256", "support_overlay_sha256"])
     && ["review_sha256", "before_sha256", "after_sha256", "support_overlay_sha256"].iter().all(|k| hex(&v[*k], 64))}
 pub(crate) fn command(v: &Value) -> Result<(), String> {
@@ -47,6 +47,8 @@ pub(crate) fn command(v: &Value) -> Result<(), String> {
     let p = &v["payload"];
     let valid = super::valid_context(&context) && v["target"]["scope"] == "face" && match v["action"].as_str() {
         Some("eye_bag_reference") => fields(p, &[]),
+        Some("eye_bag_source_image") => fields(p, &["token", "side", "sha256"]) && hex(&p["token"], 32) && hex(&p["sha256"], 64)
+            && matches!(p["side"].as_str(), Some("left" | "right")),
         Some("eye_bag_preview") => fields(p, &["recipe", "eyes", "replace_legacy"]) && recipe(&p["recipe"])
             && p["recipe"]["amount"].as_f64().is_some_and(|n| n > 0.0) && eyes(&p["eyes"], false) && p["replace_legacy"].is_boolean(),
         Some("eye_bag_image") => fields(p, &["token", "side", "sha256"]) && hex(&p["token"], 32) && hex(&p["sha256"], 64)
@@ -62,7 +64,7 @@ pub(crate) fn binding(v: &Value) -> Result<Option<Value>, String> {
     Ok(Some(json!({"eye_bag_request":r})))
 }
 pub(crate) fn read_only(v: &Value) -> bool {
-    v["cmd"] == "people" && matches!(v["action"].as_str(), Some("eye_bag_reference" | "eye_bag_preview" | "eye_bag_image"))
+    v["cmd"] == "people" && matches!(v["action"].as_str(), Some("eye_bag_reference" | "eye_bag_source_image" | "eye_bag_preview" | "eye_bag_image"))
         && command(v).is_ok() && v.as_object().is_some_and(|m| m.len() == 10 || (m.len() == 11 && hex(&v["host_epoch"], 32)))
         && text(&v["request_id"])
 }
@@ -94,6 +96,52 @@ fn support_mapping(source: &Value, image: &Value, size: (u64, u64)) -> bool {
         && ((dw == sw && dh == sh) || (dw % 8 == 0 && dh % 8 == 0 && dw * sh < (dh + 8) * sw && dh * sw < (dw + 8) * sh))
         && (if dw.max(dh) <= 1024 {w == dw && h == dh} else {w.max(h) == 1024 && (w * dh).abs_diff(h * dw) <= dw.max(dh)})
 }
+/// Native spatial sampling, not native sample precision: display PNGs are RGB8.
+/// The host owns the full source/repair snapshot and never authorizes geometry
+/// from these transport checks alone. Browser decode is separately required.
+fn crop_image(v: &Value, width: u64, height: u64) -> Option<usize> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use sha2::{Digest, Sha256};
+    if !(1..=2048).contains(&width) || !(1..=2048).contains(&height)
+        || width * height > 4_000_000 || !fields(v, &["mime", "width", "height", "sha256", "base64"])
+        || v["mime"] != "image/png" || v["width"].as_u64() != Some(width)
+        || v["height"].as_u64() != Some(height) || !hex(&v["sha256"], 64) {return None;}
+    let encoded = v["base64"].as_str()?;
+    if encoded.is_empty() || encoded.len() > 5_592_408 {return None;}
+    let bytes = STANDARD.decode(encoded).ok()?;
+    (bytes.len() <= 4 * 1024 * 1024 && STANDARD.encode(&bytes) == encoded
+        && crate::torso_transfer_protocol::png(&bytes, width as u32, height as u32)
+        // RGB only: the common PNG framing checker also permits RGBA.
+        && bytes.get(25) == Some(&2)
+        && format!("{:x}", Sha256::digest(&bytes)) == v["sha256"].as_str().unwrap()).then_some(bytes.len())
+}
+fn source_crops(v: &Value, source: &Value) -> bool {
+    if !fields(v, &["version", "token", "mapping", "orientation", "source_sha256", "source_width", "source_height",
+        "input_stage", "snapshot_sha256", "display_encoding", "sampling", "eyes"])
+        || !fields(source, &["sha256", "width", "height"]) || !hex(&source["sha256"], 64)
+        || v["version"].as_u64() != Some(1) || !hex(&v["token"], 32) || v["mapping"] != "source_pixel_edges"
+        || v["orientation"] != "exif_normalized_once" || v["source_sha256"] != source["sha256"]
+        || v["source_width"] != source["width"] || v["source_height"] != source["height"]
+        || !matches!(v["input_stage"].as_str(), Some("source" | "committed_repair"))
+        || !hex(&v["snapshot_sha256"], 64) || v["display_encoding"] != "srgb_rgb8"
+        || v["sampling"] != "one_source_pixel_per_image_pixel" || !fields(&v["eyes"], &["left", "right"]) {return false;}
+    let (Some(sw), Some(sh)) = (source["width"].as_u64(), source["height"].as_u64()) else {return false;};
+    if !(1..=1_000_000).contains(&sw) || !(1..=1_000_000).contains(&sh) {return false;}
+    let mut pixels = 0u64;
+    ["left", "right"].iter().all(|side| {
+        let eye = &v["eyes"][*side];
+        if !fields(eye, &["rect", "image"]) {return false;}
+        let Some(rect) = eye["rect"].as_array() else {return false;};
+        if rect.len() != 4 {return false;}
+        let (Some(x), Some(y), Some(w), Some(h)) = (rect[0].as_u64(), rect[1].as_u64(), rect[2].as_u64(), rect[3].as_u64()) else {return false;};
+        if !(1..=2048).contains(&w) || !(1..=2048).contains(&h) || x > sw || y > sh || w > sw - x || h > sh - y {return false;}
+        pixels += w * h;
+        if pixels > 4_000_000 {return false;}
+        let image = &eye["image"];
+        fields(image, &["mime", "width", "height", "sha256"]) && image["mime"] == "image/png"
+            && image["width"].as_u64() == Some(w) && image["height"].as_u64() == Some(h) && hex(&image["sha256"], 64)
+    })
+}
 fn review(v: &Value, r: &Value) -> bool {
     let o = &v["owner"]; let visual = &v["visual"];
     let source_size = &visual["source_size"];
@@ -121,10 +169,16 @@ pub(crate) fn receipt(v: &Value) -> bool {
     if v["success"] != true {return true;}
     let p = &v["payload"];
     match v["action"].as_str() {
-        Some("eye_bag_reference") => fields(p, &["kind", "source", "face_ref", "source_preview", "legacy_amount", "recipe", "eyes"])
+        Some("eye_bag_reference") => fields(p, &["kind", "source", "face_ref", "source_preview", "source_crops", "legacy_amount", "recipe", "eyes"])
             && p["kind"] == "eye_bag_reference" && p["face_ref"] == r["target"]["face_ref"] && p["source"]["sha256"] == p["face_ref"]["asset_sha256"]
-            && recipe(&p["recipe"]) && unit(&p["legacy_amount"]) && eyes(&p["eyes"], true) && source_preview(&p["source_preview"], &p["source"]),
+            && recipe(&p["recipe"]) && unit(&p["legacy_amount"]) && eyes(&p["eyes"], true) && source_preview(&p["source_preview"], &p["source"])
+            && source_crops(&p["source_crops"], &p["source"]),
         Some("eye_bag_preview") => fields(p, &["kind", "review"]) && p["kind"] == "eye_bag_preview" && review(&p["review"], r),
+        Some("eye_bag_source_image") => fields(p, &["kind", "token", "side", "snapshot_sha256", "image"])
+            && p["kind"] == "eye_bag_source_image" && p["token"] == r["payload"]["token"] && p["side"] == r["payload"]["side"]
+            && hex(&p["snapshot_sha256"], 64) && p["image"]["sha256"] == r["payload"]["sha256"]
+            && p["image"]["width"].as_u64().zip(p["image"]["height"].as_u64())
+                .is_some_and(|(w,h)| crop_image(&p["image"], w, h).is_some()),
         Some("eye_bag_image") => fields(p, &["kind", "token", "side", "sha256", "review_sha256", "image"])
             && p["kind"] == "eye_bag_image" && p["token"] == r["payload"]["token"] && p["side"] == r["payload"]["side"]
             && p["sha256"] == r["payload"]["sha256"] && p["sha256"] == p["image"]["sha256"] && hex(&p["review_sha256"], 64) && super::face_style::image(&p["image"]),

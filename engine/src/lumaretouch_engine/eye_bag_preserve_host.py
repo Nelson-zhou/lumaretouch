@@ -21,7 +21,7 @@ from . import people_state as P, people_algorithms as A
 from . import creative_derived_source as SOURCE, eye_bag_preserve_state as S
 from .portrait_review_render import image as render_image, snapshot_key
 
-READS = frozenset(('eye_bag_reference', 'eye_bag_preview', 'eye_bag_image'))
+READS = frozenset(('eye_bag_reference', 'eye_bag_preview', 'eye_bag_image', 'eye_bag_source_image'))
 ACTIONS = READS | {'eye_bag_confirm'}
 MAX_REVIEWS = 8
 TTL = 1800
@@ -68,12 +68,13 @@ def check_action(action, payload, target):
                                for obj in stack['objects'])):
                 raise ValueError('Eye-bag support needs independently painted add/subtract brush coverage')
     else:
-        fields = {'token', 'side', 'sha256'} if action == 'eye_bag_image' else {'token', 'ack'}
+        fields = {'token', 'side', 'sha256'} if action in ('eye_bag_image', 'eye_bag_source_image') else {'token', 'ack'}
         if (set(payload) != fields or type(payload['token']) is not str
                 or re.fullmatch('[0-9a-f]{32}', payload['token']) is None):
             raise ValueError('Eye-bag review requires its exact session token')
-        if action == 'eye_bag_image':
-            if payload['side'] not in ('before', 'after', 'support') or not _hash(payload['sha256']):
+        if action in ('eye_bag_image', 'eye_bag_source_image'):
+            sides = ('left', 'right') if action == 'eye_bag_source_image' else ('before', 'after', 'support')
+            if payload['side'] not in sides or not _hash(payload['sha256']):
                 raise ValueError('Invalid eye-bag image identity')
         else:
             ack = payload['ack']
@@ -124,7 +125,17 @@ def reference(engine, state, target, payload):
     before = snapshot_key(engine, row, current, state); fence = owner.fence
     from .body_pose_commands import source_preview
     from . import eye_bag_preserve_support as SUPPORT
+    # Discard superseded source crops before allocating the next full decode.
+    engine._eye_bag_reference = None
     shown = source_preview(engine); recipe, legacy = _values(state, target)
+    from .eye_bag_preserve_crop import prepare as prepare_crops
+    crops = prepare_crops(engine, state, target, current, engine._people_source(), digest(before))
+    token = uuid.uuid4().hex
+    crop_images = {side: base64.b64decode(record['image']['base64'], validate=True)
+        for side, record in crops['eyes'].items()}
+    crops = {**crops, 'token': token, 'eyes': {side: {'rect': record['rect'],
+        'image': {k: v for k, v in record['image'].items() if k != 'base64'}}
+        for side, record in crops['eyes'].items()}}
     eyes = {}
     if S.KIND in state['faces'][target['target_id']]['local_assets']:
         try:
@@ -144,23 +155,49 @@ def reference(engine, state, target, payload):
     engine._eye_bag_reference = {'owner': owner, 'row': row, 'path': row['path'],
         'load_id': engine._load_id, 'fence': fence, 'target': deepcopy(target),
         'source': deepcopy(source), 'before_key': before, 'document_id': version.document_id,
-        'revision': version.revision, 'epoch': engine._document_versions().workspace, 'source_preview': shown}
-    return {'kind': 'eye_bag_reference', 'source': deepcopy(engine._people_source()),
+        'revision': version.revision, 'epoch': engine._document_versions().workspace, 'source_preview': shown,
+        'source_crops': crops, 'crop_images': crop_images, 'crop_served': set(), 'expires': time.monotonic() + TTL}
+    response = {'kind': 'eye_bag_reference', 'source': deepcopy(engine._people_source()),
         'face_ref': deepcopy(target['face_ref']), 'source_preview': shown,
-        'legacy_amount': legacy, 'recipe': recipe, 'eyes': eyes}
+        'legacy_amount': legacy, 'recipe': recipe, 'eyes': eyes, 'source_crops': crops}
+    # The legacy locator is nonauthoritative; refuse oversize transport rather
+    # than silently downsampling the native crop pages. Leave receipt headroom.
+    if len(json.dumps(response, ensure_ascii=False).encode()) > 6 * 1024**2:
+        engine._eye_bag_reference = None
+        raise ValueError('Source locator exceeds bounded reference transport; native crops were not reduced')
+    return response
 
 
 def _reference(engine, state, target, live):
     owner, row, current, source, version = live
     shown = getattr(engine, '_eye_bag_reference', None)
-    if (not shown or shown['owner'] is not owner or shown['row'] is not row
+    if (not shown or time.monotonic() >= shown['expires'] or shown['owner'] is not owner or shown['row'] is not row
             or shown['path'] != row['path'] or shown['load_id'] != engine._load_id
             or shown['fence'] != owner.fence or shown['target'] != target or shown['source'] != source
             or shown['document_id'] != version.document_id or shown['revision'] != version.revision
             or shown['epoch'] != engine._document_versions().workspace
             or shown['before_key'] != snapshot_key(engine, row, current, state)):
+        engine._eye_bag_reference = None  # Release stale native image bytes.
         raise ValueError('Read a fresh source reference after any source, repair, recipe, analysis or support change')
     return shown
+
+
+def source_image(engine, state, target, payload):
+    """Fetch one immutable native crop, never a new decode or mutable proxy."""
+    check_action('eye_bag_source_image', payload, target)
+    shown = _reference(engine, state, target, _live(engine, state, target))
+    crops = shown['source_crops']
+    side = payload['side']
+    if payload['token'] != crops['token'] or payload['sha256'] != crops['eyes'][side]['image']['sha256']:
+        raise ValueError('Native eye image request does not match the current frozen source crop')
+    raw = shown['crop_images'][side]
+    if sha256(raw).hexdigest() != payload['sha256']:
+        engine._eye_bag_reference = None
+        raise ValueError('Native eye cached bytes changed')
+    shown['crop_served'].add(side)  # Read delivery, not a claim of human inspection.
+    return {'kind': 'eye_bag_source_image', 'token': crops['token'], 'side': side,
+        'snapshot_sha256': crops['snapshot_sha256'],
+        'image': {**crops['eyes'][side]['image'], 'base64': base64.b64encode(raw).decode('ascii')}}
 
 
 def _store(engine):
@@ -277,6 +314,8 @@ def preview(engine, state, target, payload):
     if (version.revision >= MAX_SAFE_REVISION or state['revision'] > MAX_SAFE_REVISION
             or state['association_revision'] > MAX_SAFE_REVISION):
         raise ValueError('Eye-bag review counters exceed exact client receipt range; no publication attempted')
+    if set(payload['eyes']) - shown['crop_served']:
+        raise ValueError('Load each painted eye native source crop under the current reference before review')
     recipe = S.check(payload['recipe']); _, legacy = _values(state, target)
     if legacy > 0 and not payload['replace_legacy']:
         raise ValueError('Legacy eye-bag correction is active; explicitly choose replacement or disable it first')

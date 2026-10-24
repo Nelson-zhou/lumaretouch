@@ -2800,6 +2800,8 @@
         "engine/src/lumaretouch_engine/eye_bag_preserve_layer.py",
         "engine/src/lumaretouch_engine/eye_bag_preserve_support.py",
         "engine/src/lumaretouch_engine/eye_bag_preserve_host.py",
+        "engine/src/lumaretouch_engine/eye_bag_preserve_crop.py",
+        "docs/eye-bag-preserve/SOURCE-CROP-CONTRACT.md",
         "ui/src/eyeBagPreserve/"
       ],
       "verification": [

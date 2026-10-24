@@ -30,3 +30,13 @@ test('native reads bypass capture invalidation and recovery mutation fences', ()
   const host = source('../../src-tauri/src/receipt_host.rs');
   assert.match(host, /people_api::eye_bag::binding/); assert.match(host, /strict_failure_identity: true/);
 });
+test('native source crop paging and per-eye decoded evidence replace thumbnail painting', () => {
+  const panel = source('./EyeBagPreservePanel.tsx'), editor = source('./RidgeSourceEditor.tsx');
+  assert.match(panel, /eye_bag_source_image/); assert.match(panel, /await sourceCropImage/);
+  assert.match(panel, /paintedCropsReady/); assert.match(panel, /sourceLoaded\[side\]/);
+  assert.match(editor, /cropSourcePoint/); assert.match(editor, /pen.translate\(-crop.rect\[0\], -crop.rect\[1\]\)/);
+  assert.match(editor, /width: image!.width \* zoom/); assert.match(editor, /height: image!.height \* zoom/);
+  assert.doesNotMatch(editor, /matchesSource|SourceImage|image.url/);
+  assert.match(editor, /live.current.side !== side/); assert.match(editor, /onPointerCancel=\{e => end\(e, true\)\}/);
+  assert.match(editor, /\[context, side, disabled\]/);
+});

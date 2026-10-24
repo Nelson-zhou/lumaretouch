@@ -281,7 +281,7 @@ impl Receipt {
         self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true
             // Only explicitly classified head/collarbone preflight or paged
             // image reads may expire; an unknown commit remains guarded.
-            || (matches!(self.action.as_str(), "preflight" | "collarbone_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image") && self.review.as_ref().is_some_and(|review| review.read_only)))
+            || (matches!(self.action.as_str(), "preflight" | "collarbone_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image") && self.review.as_ref().is_some_and(|review| review.read_only)))
     }
 }
 pub(crate) struct ReceiptHost<K: ReceiptKind> {

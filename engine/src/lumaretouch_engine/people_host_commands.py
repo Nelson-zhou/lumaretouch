@@ -11,7 +11,7 @@ from .people_graph_owner import affected_assets
 
 FACE_STYLE_READS = frozenset(('face_style_catalog','face_style_preview','face_style_image'))
 FACE_STYLE_ACTIONS = FACE_STYLE_READS | {'face_style_confirm'}
-EYE_BAG_READS = frozenset(('eye_bag_reference','eye_bag_preview','eye_bag_image'))
+EYE_BAG_READS = frozenset(('eye_bag_source_image','eye_bag_reference','eye_bag_preview','eye_bag_image'))
 EYE_BAG_ACTIONS = EYE_BAG_READS | {'eye_bag_confirm'}
 
 
@@ -154,7 +154,7 @@ def apply(engine,raw,emit):
         frame=None
     elif action in EYE_BAG_READS:
         from . import eye_bag_preserve_host as eye_bag_review
-        method={'eye_bag_reference':eye_bag_review.reference,'eye_bag_preview':eye_bag_review.preview,
+        method={'eye_bag_source_image':eye_bag_review.source_image,'eye_bag_reference':eye_bag_review.reference,'eye_bag_preview':eye_bag_review.preview,
                 'eye_bag_image':eye_bag_review.image}[action]
         records[request]['payload']=method(engine,state,target,payload)
         frame=None
@@ -351,7 +351,7 @@ def finish(engine,p,error,emit):
     # Readback PNGs are session display pages, not durable outcome records.
     # Retain at most two; old request identities remain replayable without pixels.
     remaining=2
-    eye_bag_remaining=3;eye_bag_reference_remaining=1
+    eye_bag_remaining=3;eye_bag_reference_remaining=1;eye_bag_crop_remaining=2
     for row in reversed(records.values()):
         saved=row.get('result',row);body=saved.get('payload')
         if type(body) is dict and body.get('kind')=='face_style_image':
@@ -359,6 +359,9 @@ def finish(engine,p,error,emit):
             else:saved.pop('payload',None);saved['payload_released']=True
         elif type(body) is dict and body.get('kind')=='eye_bag_image':
             if eye_bag_remaining:eye_bag_remaining-=1
+            else:saved.pop('payload',None);saved['payload_released']=True
+        elif type(body) is dict and body.get('kind')=='eye_bag_source_image':
+            if eye_bag_crop_remaining:eye_bag_crop_remaining-=1
             else:saved.pop('payload',None);saved['payload_released']=True
         elif type(body) is dict and body.get('kind')=='eye_bag_reference':
             if eye_bag_reference_remaining:eye_bag_reference_remaining-=1

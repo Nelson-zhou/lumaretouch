@@ -50,10 +50,11 @@ to publish an unverified graph. No corrupt-project recovery acceptance is claime
 
 - Automatic anatomical ridge detection remains absent. Manual reviewed support
   does not close the full official preservation requirement.
-- The source editor currently uses the established bounded full-frame source
-  reference. Zoom enlarges that reference but does not add native-pixel detail.
-  A source-bound full-resolution eye-crop inspection/editor is the next concrete
-  usability completion; ambiguous small details must not be guessed.
+- Native-spatial source eye crops now provide the painting view, with exact
+  whole-source edge coordinates and separately hash-bound image pages. The
+  full-frame thumbnail is only a locator. Display remains RGB8, and oversized
+  crops/source decodes refuse rather than reduce detail. See
+  `SOURCE-CROP-CONTRACT.md`; actual decode/UI acceptance is still UNRUN.
 - Active generic preset/batch and persistent-cohort application remain refused.
   Scalar capture/archive and neutral reset do not constitute active transfer.
   A future transfer path must stage the target's own reviewed side masks and

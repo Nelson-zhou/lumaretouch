@@ -1,0 +1,159 @@
+{
+  "baseline": "8462c150e95401ad0c89138daf9be33d265b5953",
+  "status": "FROZEN_SOURCE_ONLY_NATIVE_SPATIAL_EYE_CROP_PARTIAL_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32464-C-e5fac5fdcf"
+  ],
+  "scope": "Native-spatial source-owned per-eye painting crops, genuine original/derived source and committed repair replay, immutable paged images, full-source coordinate preservation. Existing solver/core and confirmation/history unchanged. Manual anatomical requirement remains partial; no new algorithm count.",
+  "files": [
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "800f203c84260a2470f055f70380d8fd77ce4bbe71e1322c953bdd45f904c055",
+      "bytes": 471926
+    },
+    {
+      "path": "docs/eye-bag-preserve/INTEGRATION-AND-RESIDUALS.md",
+      "sha256": "da1c7a67d5e9d827f90cc9b710f577fd38b84558c4aa6ae50b867233c6dffb21",
+      "bytes": 4808
+    },
+    {
+      "path": "docs/eye-bag-preserve/SOURCE-CROP-CONTRACT.md",
+      "sha256": "475d2876963fa79bbe99c9e46c1c22a4840e3ef4d24e042f5a9d8d0a7a1c16cc",
+      "bytes": 4623
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "b4e36a051d3651685a9f9b7cdbb87210c433b382d41bfb329298287bad6f6350",
+      "bytes": 17083
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_crop_memory.py",
+      "sha256": "e7ed482ac7e3d4bb7b2daa0c1623eeb14e958695eb5e5f01432275e8c5e633dd",
+      "bytes": 3000
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preserve_crop.py",
+      "sha256": "ca67006255d02e634e800cbd3364d5d03a5dc9afc2f9ace561645624f26850e8",
+      "bytes": 7902
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preserve_host.py",
+      "sha256": "2023bd668e01a96e065f0a90d73653b7b442dd750e7f677c59e16b525e15273d",
+      "bytes": 29532
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "f7db23081d77256b13897c9e08bfc9035e372be298805e03971b603a24793b0b",
+      "bytes": 27271
+    },
+    {
+      "path": "engine/tests/test_eye_bag_crop_routes_unrun.py",
+      "sha256": "4edc9e6e95604daeb40d82716622cee04f2a36587d910135d6c222b7436c66d3",
+      "bytes": 2230
+    },
+    {
+      "path": "engine/tests/test_eye_bag_preserve_crop_unrun.py",
+      "sha256": "db348e873e4da5e6e879acfcf4638cf9cd4fbd6194810eb54738580275368920",
+      "bytes": 4345
+    },
+    {
+      "path": "engine/tests/test_eye_bag_preserve_host_unrun.py",
+      "sha256": "76a78d985706ea9a2b8f763d373641c6823316978b4baaabe8ec5fc4dada45a2",
+      "bytes": 26149
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_preserve.rs",
+      "sha256": "15a7ec30fea9e4fd87d624a8a03fb4e4ebf41babfa8d320255038cb536d40e8e",
+      "bytes": 16710
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_preserve_unrun.rs",
+      "sha256": "83f22cdace494f0c2eefffcc26cc005ac29d8a05b7a652fb2ab5cb5147997151",
+      "bytes": 9197
+    },
+    {
+      "path": "ui/src-tauri/src/people_api.rs",
+      "sha256": "1295e73555edd71fcc578c0685ac0894d48e80ac741b6a48452528214ef2ad6d",
+      "bytes": 12183
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "5da736426c7c62fffde8db45db08cc6778e85572d5c826734c4935e1760b575d",
+      "bytes": 27762
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/ACCEPTANCE_UNRUN.md",
+      "sha256": "6841432e9df42d4cc246a1767ea4c7cbe1a9f74c0477564d45ff25a46edffdd8",
+      "bytes": 3437
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/EyeBagPreservePanel.tsx",
+      "sha256": "7e68d820ec9e642b500fb02ddc35132dbb95ddb78a8e6b53897f7ecd9c37e3f2",
+      "bytes": 19082
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/RidgeSourceEditor.tsx",
+      "sha256": "86f3916127b93858a124c8ac412ecd67ee07ac4fe32ed24038c3a86c3ca70100",
+      "bytes": 10356
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/model.ts",
+      "sha256": "4ce36ac0b312f1407cf52ef3007421b37356ba62f1eb36cf3f2fc0cf6bc76c20",
+      "bytes": 13988
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/sourceCrops.ts",
+      "sha256": "ac6597214ce08e3a855d0d8c10cfe90b52714eef98bfb15ba431c36433e5a013",
+      "bytes": 4816
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/sourceCrops.unrun.test.ts",
+      "sha256": "35026323c60e72d29102e18b438b96bf4fd9fbbb6df42e82af34d90f5944addc",
+      "bytes": 3404
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/wiring.unrun.test.ts",
+      "sha256": "d3a9344b7d520167d94af40961c7343b8c5a8236da5cc1697e8439e2b95aafc4",
+      "bytes": 3022
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "4bbed11aacd61fda1eb48c8eb6996287b8e372688c3c769119ea45eef364fb4d",
+      "bytes": 10389
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1326,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 22,
+    "git_diff_check": "clean",
+    "prior_numeric_solver_core_decoder_and_frozen_sources_byte_identical": 322,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 7012
+    }
+  },
+  "integration_map": {
+    "source": "eye_bag_preserve_crop.py and bounded memory helper; existing full decoder/ICC and immutable derived source; existing sequential repair replay",
+    "host": "eye_bag_preserve_host.reference/source_image and exact snapshot page gate before preview; people_host_commands read classification and bounded receipt retention",
+    "ui": "eyeBagPreserve sourceCrops/RidgeSourceEditor/Panel; token/hash/native dimensions and per-eye source-edge painting",
+    "native": "eye_bag_preserve.rs exact metadata/page validator; people_api and receipt_host read classification",
+    "derived": "creative_derived_effects exact dedicated action admission, no original analysis reuse"
+  },
+  "limitations": [
+    "Official automatic anatomical ridge detection remains absent; manual support requirement stays partial.",
+    "Native spatial crops are display-only sRGB RGB8, not lossless RGB16/HDR/alpha inspection or export acceptance.",
+    "32M source,2048 crop edge,4M combined crop pixels,4MiB per PNG; actual decode and repair phase memory admission can refuse. No proxy fallback.",
+    "Whole-frame locator and support overlay remain bounded unrepaired analysis references, not repaired native crops; full before/after mixed review remains reduced display.",
+    "User cancellation is not connected to helper callbacks; codecs and individual existing repair kernels retain interruption limits.",
+    "Active preset/batch/cohort, shared-source affected-set and dedicated arbitrary recovery remain unwired and guarded.",
+    "All tests/build/typecheck/product execution/imports/inference/downloads and numerical/photo/UI/export/history/performance acceptance UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

@@ -9,14 +9,16 @@ import type {FaceStyleVisual} from '../faceStyle/model';
 import type {SpillImage} from '../spillRemoval/model';
 import {canonical, validEyes, type RidgeEyes, type RidgeSource} from './support';
 
+import {validSourceCrops, type SourceCrops} from './sourceCrops';
+
 export const OPERATION_ID = 'lnx.eye_bags.v2' as const;
 export type EyeBagRecipe = {version: 2; amount: number; preserve: number};
 export const neutral = (): EyeBagRecipe => ({version: 2, amount: 0, preserve: 1});
-export type EyeBagAction = 'eye_bag_reference' | 'eye_bag_preview' | 'eye_bag_image' | 'eye_bag_confirm';
+export type EyeBagAction = 'eye_bag_reference' | 'eye_bag_source_image' | 'eye_bag_preview' | 'eye_bag_image' | 'eye_bag_confirm';
 export type EyeBagSide = 'before' | 'after' | 'support';
 export type EyeBagReceipt = {command: PeopleAction; result: PeopleResult};
 export type EyeBagReference = {kind: 'eye_bag_reference'; source: RidgeSource; face_ref: FaceRef; source_preview: SourcePreview;
-  legacy_amount: number; recipe: EyeBagRecipe; eyes: RidgeEyes};
+  legacy_amount: number; recipe: EyeBagRecipe; eyes: RidgeEyes; source_crops: SourceCrops};
 export type EyeBagCandidate = {recipe: EyeBagRecipe; eyes: RidgeEyes; replace_legacy: boolean};
 export type EyeBagReview = {version: 1; token: string; recipe: EyeBagRecipe; owner: PeopleEndpointProof; face_ref: FaceRef;
   support_sha256: string; candidate_state_revision: number; replace_legacy: boolean; visual: FaceStyleVisual; support_overlay: CollarboneImage; support_source: {source_width: number; source_height: number; decoded_width: number; decoded_height: number}; review_sha256: string};
@@ -38,12 +40,12 @@ export const validRecipe = (v: unknown): v is EyeBagRecipe => object(v) && keys(
 export const validCandidate = (v: unknown): v is EyeBagCandidate => object(v) && keys(v, ['recipe', 'eyes', 'replace_legacy'])
   && validRecipe(v.recipe) && v.recipe.amount > 0 && validEyes(v.eyes, false) && typeof v.replace_legacy === 'boolean';
 export function validReference(v: unknown, view: PeopleView | null): v is EyeBagReference {
-  if (!view || !targetReady(view) || !object(v) || !keys(v, ['kind', 'source', 'face_ref', 'source_preview', 'legacy_amount', 'recipe', 'eyes'])
+  if (!view || !targetReady(view) || !object(v) || !keys(v, ['kind', 'source', 'face_ref', 'source_preview', 'legacy_amount', 'recipe', 'eyes', 'source_crops'])
     || v.kind !== 'eye_bag_reference' || !validFaceRef(v.face_ref) || !sameFace(v.face_ref, view.editing_target?.face_ref)
     || !object(v.source) || !keys(v.source, ['sha256', 'width', 'height']) || v.source.sha256 !== view.binding.asset_sha256
     || !validRecipe(v.recipe) || !validEyes(v.eyes) || !unit(v.legacy_amount)) return false;
   const image = previewImage(v.source_preview as SourcePreview);
-  return matchesSource(image, {...v.source as RidgeSource, orientation: 'exif_normalized_once'});
+  return matchesSource(image, {...v.source as RidgeSource, orientation: 'exif_normalized_once'}) && validSourceCrops(v.source_crops, v.source as RidgeSource);
 }
 function validVisual(v: unknown): v is FaceStyleVisual {
   const size = (s: unknown): s is [number, number] => Array.isArray(s) && s.length === 2 && s.every(n => Number.isSafeInteger(n) && n > 0 && n <= 4294967295);
@@ -106,7 +108,7 @@ export function echoMatches(command: PeopleAction, result: PeopleResult): boolea
   const {request_id: _id, ...captured} = command;
   return object(result.eye_bag_request) && canonical(result.eye_bag_request) === canonical(captured);
 }
-export const isEyeBagAction = (action: string): action is EyeBagAction => ['eye_bag_reference', 'eye_bag_preview', 'eye_bag_image', 'eye_bag_confirm'].includes(action);
+export const isEyeBagAction = (action: string): action is EyeBagAction => ['eye_bag_reference', 'eye_bag_source_image', 'eye_bag_preview', 'eye_bag_image', 'eye_bag_confirm'].includes(action);
 export function receiptCurrent(command: PeopleAction, result: PeopleResult, view: PeopleView | null): boolean {
   if (!view || !isEyeBagAction(command.action) || !echoMatches(command, result) || result.protocol !== 1 || !result.success || result.outcome_unknown
     || result.request_id !== command.request_id || result.action !== command.action || result.document_id !== command.document_id

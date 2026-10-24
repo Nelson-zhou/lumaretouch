@@ -125,7 +125,7 @@ def _request(name, request):
         if action in ('face_style_catalog','face_style_preview','face_style_image','face_style_confirm'):
             from .face_style_review import check_action
             check_action(action,payload,target)
-        elif action in ('eye_bag_reference','eye_bag_preview','eye_bag_image','eye_bag_confirm'):
+        elif action in ('eye_bag_source_image', 'eye_bag_reference','eye_bag_preview','eye_bag_image','eye_bag_confirm'):
             from .eye_bag_preserve_host import check_action
             check_action(action,payload,target)
         elif action == 'patch': _patches(payload)

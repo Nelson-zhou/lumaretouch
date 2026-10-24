@@ -8,9 +8,12 @@ download or Git write was performed for this slice. Static reading is not a pass
   checks replacement and confirms the frozen candidate. No automatic ridge
   segmentation is claimed. Source-bound support is never copied across sources.
 - Per-eye pointer strokes use source pixel-edge coordinates and source-pixel
-  radius. Erase, undo-one-stroke, clear-eye, 1–32x zoom and actual drag-pan are
-  present. A thumbnail zoom cannot restore absent image detail, so the user is
-  told to stop when the ridge is not discernible. Canceled capture drops its
+  radius. Erase, undo-one-stroke, clear-eye, 0.25–32x zoom and actual drag-pan are
+  present. Painting uses lazily fetched native-spatial eye crops, not the retained
+  full-frame locator thumbnail. Each crop is SHA-256 checked, PNG-header checked
+  and naturally decoded before its eye can be marked reviewed. 100% means one
+  source pixel per CSS pixel, not physical device pixel; RGB8 is display-only,
+  not a claim of 16-bit photometric inspection. Zoom never invents detail. Canceled capture drops its
   partial stroke; each pointer gesture remains independent.
 - Default feather is 0, opacity is 1. Common canonical box feather semantics
   remain unchanged, with explicit disclosure that full-protection pixels can
@@ -35,3 +38,11 @@ real mixed-portrait source painting and source-switch/repair staleness;
 full/partial-core exactness at real decode and export resolutions; image decode
 failure, duplicate actions, slow/unknown receipts; undo/redo and project reopen;
 alias/dormant sibling refusal; legacy replacement and preserve0/1 quality review.
+
+Native-crop acceptance still UNRUN: original PNG16/ICC and derived float inputs,
+committed-repair changes, crop-edge corner/center mapping, per-eye lazy paging,
+slow/stale reference replies, both-eye visited gating, natural PNG mismatch,
+image/hash corruption, zoom/pan and pointer cancellation. Crops use integer
+source edges, max 2048 per side and 4,000,000 combined pixels; no resize fallback.
+Each paged PNG is at most 4 MiB. Full-source decode and host cache bounds remain
+explicit and are not a measured all-resolution/performance guarantee.

@@ -4,13 +4,14 @@ import {peopleContext, type PeopleAction} from '../people/model';
 import type {PeopleOwner} from '../people/usePeopleWorkflow';
 import type {SpillImage} from '../spillRemoval/model';
 import {previewImage} from '../legShape/sourcePreview';
+import {sourceCropImage, type SourceCrop} from './sourceCrops';
 import {RidgeSourceEditor} from './RidgeSourceEditor';
 import {canonical, emptyMask, reviewEyes, type EyeSide, type RidgeMask} from './support';
 import {OPERATION_ID, ack, eyeBagBinding, imageMetadata, neutral, object, reviewImage, targetReady,
   validCandidate, validConfirmation, validReference, validReview, type EyeBagAction, type EyeBagCandidate,
   type EyeBagRecipe, type EyeBagReference, type EyeBagReview, type EyeBagSide} from './model';
 
-type Expected = {id: string; binding: string; draft: string; action: EyeBagAction; candidate?: EyeBagCandidate; review?: EyeBagReview; side?: EyeBagSide};
+type Expected = {id: string; binding: string; draft: string; action: EyeBagAction; candidate?: EyeBagCandidate; review?: EyeBagReview; side?: EyeBagSide; cropSide?: EyeSide; reference?: EyeBagReference};
 const noMasks = (): Record<EyeSide, RidgeMask> => ({left: emptyMask(), right: emptyMask()});
 const noFlags = (): Record<EyeSide, boolean> => ({left: false, right: false});
 /** Drafts and image load state only; original people queue owns requests/history/uncertainty. */
@@ -20,9 +21,10 @@ export function EyeBagPreservePanel({people, blocked, faceOk, coreAvailable}: {
   const view = people.value, binding = eyeBagBinding(view), report = view?.eye_bag_preserve;
   const [reference, setReference] = useState<EyeBagReference | null>(null), [recipe, setRecipe] = useState<EyeBagRecipe>(neutral);
   const [masks, setMasks] = useState(noMasks), [flags, setFlags] = useState(noFlags), [side, setSide] = useState<EyeSide>('left');
-  const [replaceLegacy, setReplaceLegacy] = useState(false), [sourceLoaded, setSourceLoaded] = useState(false);
+  const [replaceLegacy, setReplaceLegacy] = useState(false), [sourceLoaded, setSourceLoaded] = useState(noFlags);
   const [review, setReview] = useState<EyeBagReview | null>(null), [images, setImages] = useState<Partial<Record<EyeBagSide, SpillImage>>>({});
   const [loaded, setLoaded] = useState<Partial<Record<EyeBagSide, boolean>>>({}), [accepted, setAccepted] = useState(false), [error, setError] = useState('');
+  const [sourceCrops, setSourceCrops] = useState<Partial<Record<EyeSide, SourceCrop>>>({});
   const [confirmed, setConfirmed] = useState(''), [referenceSession, setReferenceSession] = useState(0);
   const expected = useRef<Expected | null>(null), mounted = useRef(false);
   const draft = canonical([recipe, masks, flags, replaceLegacy]);
@@ -43,9 +45,9 @@ export function EyeBagPreservePanel({people, blocked, faceOk, coreAvailable}: {
   useLayoutEffect(() => {
     if (!expected.current || !confirmationOwner(expected.current)) expected.current = null;
     setReference(null); setMasks(noMasks()); setFlags(noFlags()); setRecipe(report?.recipe ?? neutral());
-    setReplaceLegacy(false); setSourceLoaded(false); invalidate();
+    setReplaceLegacy(false); setSourceLoaded(noFlags()); setSourceCrops({}); invalidate();
   }, [binding]);
-  function close() {expected.current = null; setReference(null); setSourceLoaded(false); setMasks(noMasks()); setFlags(noFlags()); invalidate();}
+  function close() {expected.current = null; setReference(null); setSourceLoaded(noFlags()); setSourceCrops({}); setMasks(noMasks()); setFlags(noFlags()); invalidate();}
   function send(action: EyeBagAction, payload: Record<string, unknown>, details: Partial<Expected> = {}) {
     if (!mounted.current || live.current.binding !== binding || live.current.draft !== draft || live.current.busy || !live.current.allowed || expected.current) return;
     const context = peopleContext(view); if (!context) return;
@@ -73,8 +75,13 @@ export function EyeBagPreservePanel({people, blocked, faceOk, coreAvailable}: {
           if (current()) {
             setReferenceSession(n => n + 1); setReference(payload); setRecipe(payload.recipe); setReplaceLegacy(false);
             setMasks({left: payload.eyes.left?.recipe ?? emptyMask(), right: payload.eyes.right?.recipe ?? emptyMask()});
-            setFlags(noFlags()); setSourceLoaded(false); invalidate();
+            setFlags(noFlags()); setSourceLoaded(noFlags()); setSourceCrops({}); invalidate();
           }
+        } else if (request.action === 'eye_bag_source_image') {
+          if (!request.reference || !request.cropSide) throw Error('原生裁片缺少来源绑定。');
+          const crop = await sourceCropImage(payload, request.reference.source_crops, request.cropSide);
+          if (!crop) throw Error('原生裁片摘要、尺寸或冻结来源不匹配。');
+          if (current()) setSourceCrops(old => ({...old, [request.cropSide!]: crop}));
         } else if (request.action === 'eye_bag_preview') {
           if (payload.kind !== 'eye_bag_preview' || !request.candidate || !validReview(payload.review, view, request.candidate))
             throw Error('候选不属于当前来源、人物或草稿，请重新生成。');
@@ -102,6 +109,11 @@ export function EyeBagPreservePanel({people, blocked, faceOk, coreAvailable}: {
     const side = (['support', 'before', 'after'] as const).find(k => !images[k]);
     if (side) send('eye_bag_image', {token: review.token, side, sha256: imageMetadata(review, side).sha256}, {review, side});
   }, [review, images, busy, error, binding, draft]);
+  useEffect(() => {
+    if (!reference || busy || expected.current || error || !allowed || sourceCrops[side]) return;
+    send('eye_bag_source_image', {token: reference.source_crops.token, side, sha256: reference.source_crops.eyes[side].image.sha256}, {cropSide: side, reference});
+  }, [reference, side, sourceCrops, busy, error, binding, draft]);
+  const paintedCropsReady = (['left', 'right'] as const).every(eye => !masks[eye].objects.length || sourceLoaded[eye]);
   let candidate: EyeBagCandidate | null = null;
   try {const value = {recipe, eyes: reviewEyes(masks, flags), replace_legacy: replaceLegacy}; if (validCandidate(value)) candidate = value;} catch { /* no submitted review yet */ }
   const matches = !!review && !!candidate && validReview(review, view, candidate);
@@ -115,7 +127,7 @@ export function EyeBagPreservePanel({people, blocked, faceOk, coreAvailable}: {
     setLoaded(old => ({...old, [side]: good})); if (!good) {setAccepted(false); setError('图片实际解码尺寸与凭据不符。');}
   }
   function stage() {
-    if (!candidate || !reference || !sourceLoaded || !legacyReady || !coreAvailable) return;
+    if (!candidate || !reference || !paintedCropsReady || !legacyReady || !coreAvailable) return;
     invalidate(); send('eye_bag_preview', candidate, {candidate});
   }
   const reset = async () => {
@@ -142,23 +154,30 @@ export function EyeBagPreservePanel({people, blocked, faceOk, coreAvailable}: {
       {typeof legacy === 'number' && legacy > 0 && <label><input type="checkbox" checked={replaceLegacy} onChange={e => {setReplaceLegacy(e.target.checked); invalidate();}}/>
         此脸旧版祛眼袋为 {Math.round(legacy * 100)}%。我明确同意确认候选时把旧版眼袋程度置 0，再使用新版；不清除其他旧版增强参数。</label>}
       <label>审核人物眼侧<select value={side} onChange={e => setSide(e.target.value as EyeSide)}><option value="left">人物左眼</option><option value="right">人物右眼</option></select></label>
-      <RidgeSourceEditor context={`${binding}:${referenceSession}`} image={sourceImage} source={reference.source} side={side} masks={masks} disabled={busy}
-        onLoaded={ready => {setSourceLoaded(ready); if (!ready) {setAccepted(false);}}} onDraftStart={invalidate}
+      {sourceImage && <details><summary>完整来源定位图（仅定位，不在缩略图绘制）</summary><img src={sourceImage.url} alt="完整来源定位缩略图" style={{maxWidth: '100%'}}/></details>}
+      <p>眼部裁片使用{reference.source_crops.input_stage === 'committed_repair' ? '已提交修补后的来源' : '当前不可变来源'}像素，位于人物形变与调色之前；每个眼侧分别加载、校验并审核。</p>
+      <button type="button" disabled={busy} onClick={() => {
+        if (expected.current) return;
+        setSourceCrops(old => {const next = {...old}; delete next[side]; return next;});
+        setSourceLoaded(old => ({...old, [side]: false})); setFlags(old => ({...old, [side]: false})); invalidate();
+      }}>重新读取当前眼原生裁片（保留草稿，重新确认）</button>
+      <RidgeSourceEditor key={`${binding}:${referenceSession}:${side}:${sourceCrops[side]?.image.sha256 ?? 'pending'}`} context={`${binding}:${referenceSession}`} crop={sourceCrops[side] ?? null} source={reference.source} side={side} masks={masks} disabled={busy}
+        onLoaded={ready => {if (!mounted.current || live.current.binding !== binding) return; setSourceLoaded(old => ({...old, [side]: ready})); if (!ready) {setAccepted(false);}}} onDraftStart={invalidate}
         onChange={(eye, mask) => {setMasks(old => ({...old, [eye]: mask})); setFlags(old => ({...old, [eye]: false})); invalidate();}}/>
-      <label><input type="checkbox" checked={flags[side]} disabled={!sourceLoaded || !masks[side].objects.length}
+      <label><input type="checkbox" checked={flags[side]} disabled={!sourceLoaded[side] || !masks[side].objects.length}
         onChange={e => {setFlags(old => ({...old, [side]: e.target.checked})); invalidate();}}/>
         我确认当前眼的标注是清晰可见、无遮挡且属于选中人物的卧蚕，不是邻人、眼袋、眼球或无法判断的区域</label>
       <p>当前草稿：左眼 {masks.left.objects.length} 笔{flags.left ? '，已确认' : '，未确认'}；右眼 {masks.right.objects.length} 笔{flags.right ? '，已确认' : '，未确认'}。空白眼侧不处理，不自动套用另一眼。</p>
       {recipe.amount === 0 && <p>0 程度不生成效果预览；使用上方「归零新版祛眼袋」安全重置。</p>}
-      <button type="button" disabled={!allowed || !coreAvailable || !sourceLoaded || !candidate || !legacyReady} onClick={stage}>生成实际保护范围与整张前后图</button>
+      <button type="button" disabled={!allowed || !coreAvailable || !paintedCropsReady || !candidate || !legacyReady} onClick={stage}>生成实际保护范围与整张前后图</button>
       <button type="button" onClick={close}>关闭审核，放弃未应用草稿</button>
     </fieldset>}
     {review && matches && <section aria-label="真实保护与完整照片前后审核">
       <p>来源 {review.support_source.source_width} × {review.support_source.source_height}；本次实际解码保护网格 {review.support_source.decoded_width} × {review.support_source.decoded_height}，下方仅显示缩略图。</p>
       <p>候选尚未应用。请检查保护范围、此脸、邻近人物和背景；所有图片是当前冻结来源的真实渲染缩略图，不是原尺寸质量验收。</p>
       {(['support', 'before', 'after'] as const).map(side => <figure key={`${review.token}:${side}`}>
-        <figcaption>{side === 'support' ? '引擎实际覆盖：青色满覆盖 1，琥珀色部分覆盖，无色 0；这是效果前的当前来源图' : side === 'before' ? '修改前：当前完整混合人像实际渲染' : '修改后：本次候选完整混合人像实际渲染（未应用）'}</figcaption>
-        {images[side] ? <img src={`data:image/png;base64,${images[side]!.base64}`} alt={side === 'support' ? '当前来源图上的真实卧蚕保护范围与羽化边缘' : side === 'before' ? '完整照片修改前' : '完整照片候选修改后'} style={{maxWidth: '100%', height: 'auto'}}
+        <figcaption>{side === 'support' ? '引擎实际覆盖：青色满覆盖 1，琥珀色部分覆盖，无色 0；底图是未修补的来源分析参考，不是上方已修补眼部裁片' : side === 'before' ? '修改前：当前完整混合人像实际渲染' : '修改后：本次候选完整混合人像实际渲染（未应用）'}</figcaption>
+        {images[side] ? <img src={`data:image/png;base64,${images[side]!.base64}`} alt={side === 'support' ? '未修补来源参考上的真实保护几何与羽化边缘' : side === 'before' ? '完整照片修改前' : '完整照片候选修改后'} style={{maxWidth: '100%', height: 'auto'}}
           onLoad={e => imageLoaded(side, e.currentTarget)} onError={() => {if (live.current.review !== review) return; setLoaded(old => ({...old, [side]: false})); setAccepted(false); setError('审核图片未完整显示，请重新生成预览。');}}/>
           : <p role="status">正在读取审核图…</p>}
       </figure>)}
