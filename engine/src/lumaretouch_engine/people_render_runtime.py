@@ -191,6 +191,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             from .chin_length_people import append as append_chin_length
             field, chin_length_facts = append_chin_length(field, state, entry['face_ref'], analysis, source,
                 values[A.CHIN_LENGTH.OP], legacy_amount=values[A.DEFORM]['small_chin'])
+            from .philtrum_people import append as append_philtrum
+            field, philtrum_facts = append_philtrum(field, state, entry['face_ref'], analysis, source, values[A.PHILTRUM.OP])
             blush_review=lipstick_review=None
             from .lipstick_support import raster as lipstick_raster
             lipstick_review=lipstick_raster(state,lipstick_assets or {},entry['face_ref'],(h,w)) if A.LIPSTICK.active(values[A.LIPSTICK.OP]) else None
@@ -266,6 +268,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             if mid_facts is not None: facts[key]['mid_face'] = mid_facts
             if chin_facts is not None: facts[key]['chin_shape'] = chin_facts
             if chin_length_facts is not None: facts[key]['chin_length'] = chin_length_facts
+            if philtrum_facts is not None: facts[key]['philtrum'] = philtrum_facts
             if contour_facts is not None: facts[key]['face_contour'] = contour_facts
             liner_facts=[record.facts for record in local if record.stage=='eyeliner']
             if liner_facts:facts[key]['eyeliner']={'eyes':liner_facts,'stage':'source-working-srgb'}

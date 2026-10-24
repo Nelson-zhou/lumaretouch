@@ -44,6 +44,7 @@ import {FaceContourControl} from '../faceContour/FaceContourControl';
 import {SlimFaceControl} from '../slimFace/SlimFaceControl';
 import {FaceSizeControl} from '../faceSize/FaceSizeControl';
 import {MidFaceControl} from '../midFace/MidFaceControl';
+import {PhiltrumControl} from '../philtrum/PhiltrumControl';
 import {LowerFaceControl} from '../lowerFace/LowerFaceControl';
 import {ChinLengthControl, LegacySmallChinControl} from '../chinLength/ChinLengthControl';
 import {ChinShapeControl} from '../chinShape/ChinShapeControl';
@@ -383,6 +384,7 @@ const WIRED: Record<string, string> = {
   "PC-32466|脸型/瘦脸": "slim_face.v2",
   "PC-32466|脸型/小脸": "face_size.amount",
   "PC-32466|脸型/中庭": "mid_face.amount",
+  "PC-32466|脸型/人中": "philtrum.amount",
   "PC-32466|脸型/下庭": "lower_face.amount",
   "PC-32466|脸型/下巴长短": "chin_length.amount",
   "PC-32466|脸型/尖下巴": "chin_shape.v1",
@@ -455,6 +457,7 @@ const WIRE_LABEL: Record<string, string> = {
   "slim_face.v2": "瘦脸（新版左右独立）",
   "face_size.amount": "小脸（局部整脸大小）",
   "mid_face.amount": "中庭（局部纵向长度）",
+  "philtrum.amount": "人中（鼻下至唇上局部间距）",
   "lower_face.amount": "下庭（局部纵向长度）",
   "chin_length.amount": "下巴长短（唇下局部纵向长度）",
   "chin_shape.v1": "尖下巴（局部横向收尖，左右独立）",
@@ -814,6 +817,15 @@ export default function RetouchPanel(props: RetouchProps) {
           <p className="muted">此文档尚未提供规范人物状态，下巴长短暂不可用。不会改用旧版小下巴、收下巴、下庭、中庭或尖下巴替代；旧效果保留不变。</p>
         </section>;
         return <ChinLengthControl key={leaf.path}
+          people={props.people} capability={status?.ready_caps}
+          blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+            || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+          faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
+      case "philtrum.amount":
+        if (!doc?.people) return <section key={leaf.path} data-control-id="LNX-REF-PC-32466-C-2605502c27" aria-label="人中暂不可用">
+          <p className="muted">此文档尚未提供规范人物状态，人中暂不可用。不会改用嘴巴上下位置、中庭、下庭、下巴长短或尖下巴替代；其他效果保留不变。</p>
+        </section>;
+        return <PhiltrumControl key={leaf.path}
           people={props.people} capability={status?.ready_caps}
           blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
             || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}

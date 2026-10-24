@@ -4,6 +4,19 @@
   "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
+      "operation_id": "lnx.philtrum.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {"version": 1, "amount": 0},
+      "range": {"version": [1, 1], "amount": [-1, 1]},
+      "requirement_ids": ["LNX-REF-PC-32466-C-2605502c27"],
+      "scope": "Visual nose-safe-to-above-lips gap: negative shortens, positive lengthens. All measured nose-connection vertices stay above the fixed plane; lips and retained lower-face source points translate together. Not clinical philtrum measurement or isolated segmentation.",
+      "implementation": "New actual 24-nose/40-lip measurements and independent central-gap skin/RGB support reuse the unchanged original Rust mid_face rise/plateau/fall inverse. No new solver, binary or sampler claimed.",
+      "transfer": "Version and amount only. Explicit reviewed targets reconstruct their own source evidence, influence and guard bounds; generic derived presets remain refused.",
+      "compatibility": "Separate neutral operation after chin length. Existing mouth-position, mid/lower-face, chin, slim and contour semantics/history stay unchanged; no old value reset or conversion.",
+      "acceptance": "AUTHORED / UNRUN. Shared plateau P<=8 may refuse short measured gaps; no measurement inflation or silent support cut. Same-height cheek tissue and adjacent neck/background can move. No clinical, AI/3D, proprietary-equivalence or photographic acceptance claim."
+    },
+    {
       "operation_id": "lnx.chin_length.v1",
       "parameter_key": "recipe",
       "type": "object",

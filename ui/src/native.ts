@@ -988,6 +988,8 @@ export interface EngineStatus {
     face_size_reason?: string | null;
     mid_face_available?: boolean;
     mid_face_reason?: string | null;
+    philtrum_available?: boolean;
+    philtrum_reason?: string | null;
     lower_face_available?: boolean;
     lower_face_reason?: string | null;
     chin_shape_available?: boolean;

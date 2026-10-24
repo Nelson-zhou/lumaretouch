@@ -10,6 +10,7 @@ from . import lower_face_state as LOWER_FACE
 from . import mid_face_state as MID_FACE
 from . import chin_shape_state as CHIN_SHAPE
 from . import chin_length_state as CHIN_LENGTH
+from . import philtrum_state as PHILTRUM
 from . import brow_shape_state as B, nose_shape_state as N, eye_shape_state as E, mouth_shape_state as M
 from . import lip_makeup_state as L, facial_wrinkle_state as W, hair_colour_state as HAIR
 from .ops import deform as D, enhance as H
@@ -30,7 +31,8 @@ def check_enhance(value):
 
 
 def specifications():
-    return {CHIN_LENGTH.OP: (CHIN_LENGTH.neutral(), CHIN_LENGTH.check),
+    return {PHILTRUM.OP: (PHILTRUM.neutral(), PHILTRUM.check),
+            CHIN_LENGTH.OP: (CHIN_LENGTH.neutral(), CHIN_LENGTH.check),
             CHIN_SHAPE.OP: (CHIN_SHAPE.neutral(), CHIN_SHAPE.check),
             MID_FACE.OP: (MID_FACE.neutral(), MID_FACE.check),
             LOWER_FACE.OP: (LOWER_FACE.neutral(), LOWER_FACE.check),

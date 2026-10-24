@@ -53,6 +53,7 @@ from . import lower_face_scope as LOWER_FACE
 from . import mid_face_scope as MID_FACE
 from . import chin_shape_scope as CHIN_SHAPE
 from . import chin_length_scope as CHIN_LENGTH
+from . import philtrum_scope as PHILTRUM
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
@@ -215,6 +216,10 @@ MODULES: dict[str, dict] = {
                     "transferable": True, "cmd": "people", "label": "新版下巴长度（独立二维长度参数）",
                     "read": CHIN_LENGTH.params_of, "write": CHIN_LENGTH.install,
                     "why_not": "仅长度标量，正值拉长、负值缩短实测嘴唇平面至下巴的二维区间；目标以自己的有效来源、真实皮肤、478 点与实际可用的共用 Rust 几何内核完整重算，不复制人物、分析、蒙版或控制点；新版非零与旧版小下巴非零冲突，不转换或自动清零旧版意图"},
+    PHILTRUM.OP: {"params": ("recipe",), "state_fields": PHILTRUM.FIELDS, "single_face": True,
+                 "transferable": True, "cmd": "people", "label": "人中（独立二维长度参数）",
+                 "read": PHILTRUM.params_of, "write": PHILTRUM.install,
+                 "why_not": "仅长度标量，负值缩短、正值拉长鼻部安全界至唇上界的实测二维间隙，嘴唇与下脸共同平移；目标以自己的有效来源、真实皮肤、478 点中的全部 24 鼻点和 40 唇点、独立间隙证据及实际可用的共用 Rust 中庭内核完整重算，不复制人物、分析、蒙版或控制点，不清零其他意图，非临床分割或三维重建"},
     EYE_LIGHT.OP: {"params": ("recipe",), "state_fields": EYE_LIGHT.FIELDS, "single_face": True,
                    "transferable": True, "cmd": "people", "read": EYE_LIGHT.params_of, "write": EYE_LIGHT.install,
                    "why_not": "仅眼神光素材参数；目标人物须自行审核可见眼球，绝不复制归属、蒙版或恢复笔迹"},
@@ -502,6 +507,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == CHIN_LENGTH.OP:
         try: return CHIN_LENGTH.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == PHILTRUM.OP:
+        try: return PHILTRUM.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == EYE_LIGHT.OP:
         try: return EYE_LIGHT.check_params(params)

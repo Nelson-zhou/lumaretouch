@@ -1,0 +1,219 @@
+{
+  "baseline": "abcc23b076fd3673603da468fca0fc74f55e8a44",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Distinct visual nose-to-mouth gap using complete measured nose/lip sets, independent central-gap source evidence and lower-face translation. Reuses unchanged original Rust mid_face inverse, canonical original/derived preview/export/history, UI and explicit target-recomputed scalar presets. No clinical/numerical/photographic acceptance.",
+  "requirement_ids": [
+    "LNX-REF-PC-32466-C-2605502c27"
+  ],
+  "files": [
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "2be6e58b90360cf3c7a0e1354b458dc6f3dab98226aa038381ab4f24675deda9",
+      "bytes": 14070
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "019304ebb3c9beb1a1c5fb17e2d25c88fdef263a5f7e434fe90c9fd9d4a6a228",
+      "bytes": 38316
+    },
+    {
+      "path": "docs/philtrum/IMPLEMENTATION.md",
+      "sha256": "cdb9e8d48d7052255a653bcfac6b6052a762f07ffcc222511b74b66d5c862d4c",
+      "bytes": 9949
+    },
+    {
+      "path": "docs/philtrum/NUMERICAL-CONTRACT.md",
+      "sha256": "7fe2ec7cc6502eaca6c1dbe029ba24481997a06b53b36717e1491583c593e262",
+      "bytes": 15357
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "d5812f4668f5dfea148d3d983173ed981d015023f3bacec7d0183d2c14b55c0a",
+      "bytes": 14804
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "1119a7cfd164ceb5f024396707302ae4e8286efa6654fdd3793e94757c817fb8",
+      "bytes": 5381
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "82074f9cd01e487eeab6573e8494b805b9be1d86e1723b42d81ad5c1fdc8f9a2",
+      "bytes": 21839
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "133f8ca4ddd38472612319fe0898e8587112a02e256259493ad26bcab9a18d87",
+      "bytes": 24123
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/philtrum_native.py",
+      "sha256": "c7dfcc4b7deef3427583a626edfdcb1da73636085682abb0c3ac5afa20cea0ee",
+      "bytes": 4151
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/philtrum_people.py",
+      "sha256": "e0e68f5cff199866fd64a9b5966c74a79563e9e31e181e1ca13be300f9ce8b77",
+      "bytes": 5344
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/philtrum_runtime.py",
+      "sha256": "057f08210f3282797b05cec805f6670a9c9dba599dca1a406bb8ff737b82b50e",
+      "bytes": 25773
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/philtrum_scope.py",
+      "sha256": "17417d156eaf14b1cb78d48779df98b860a5fd667aa454e86c511d3627109ec6",
+      "bytes": 6574
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/philtrum_state.py",
+      "sha256": "eb4d68ca92d46ca2950de058e7884dbecc1f513aac6b9b66d4ced9e38e28fe5b",
+      "bytes": 1932
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "e7eb4079015e6d2d170ff51a52faaac3c2345092e9d8c324867c0ba7186a831a",
+      "bytes": 55288
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "ff44897a6f62062e9d95b3e443963560294f85204dda4170a76b075357f0205c",
+      "bytes": 465577
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "2577826081c705237a8b474b6747b59d6e08ecd01742069957f0bcaa2280c2b8",
+      "bytes": 8610
+    },
+    {
+      "path": "engine/tests/test_philtrum_geometry_unrun.py",
+      "sha256": "4580b84911c1f9e71335c59549a07545c42635067686c7b346fd0e0806c1a1d9",
+      "bytes": 31301
+    },
+    {
+      "path": "engine/tests/test_philtrum_integration_unrun.py",
+      "sha256": "852a35e7bddc4e39dee6dcd8bcccc4ed65da834aef1cbece0f9b9241a17e7fbf",
+      "bytes": 78327
+    },
+    {
+      "path": "engine/tests/test_philtrum_native_unrun.py",
+      "sha256": "235f4d7d485f8c26980fd8e9665199e44aceba5107f1d68c553da6b370810942",
+      "bytes": 23932
+    },
+    {
+      "path": "engine/tests/test_philtrum_scope_unrun.py",
+      "sha256": "858a546fe46a229d853d1dba882ab85eeab3ac88d9c2d31778b44b53c8078071",
+      "bytes": 37235
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "2f49c2bc93a88adce9c2b52a1f048f63cbc668659d87264474db6028c60c5a3a",
+      "bytes": 78005
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "10bb8a4aa2a7aa84b6b0079c2624c4eadd241db343cc60c27df43013ad133629",
+      "bytes": 101260
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "a284310c27a2c5035f5f995e10d2f07e9798d821b0c3bfd4eebc201b76eb253f",
+      "bytes": 8440
+    },
+    {
+      "path": "ui/src/philtrum/ACCEPTANCE_UNRUN.md",
+      "sha256": "4735d97bfa816b3858014bab2a62eb086d47fe59662a906c28fa1c78c9ad71de",
+      "bytes": 7483
+    },
+    {
+      "path": "ui/src/philtrum/PhiltrumControl.tsx",
+      "sha256": "9ba6e4519908929106184ea0abb61dbad484517fce780e896ed0de7dd354be37",
+      "bytes": 9938
+    },
+    {
+      "path": "ui/src/philtrum/model.ts",
+      "sha256": "adb84024dcffa8b4adba062f943db6fa90ad1d028511ab7f8765d71085da157f",
+      "bytes": 8990
+    },
+    {
+      "path": "ui/src/philtrum/model.unrun.test.ts",
+      "sha256": "efab654a81b2de02c57138c110c184f50b32ea688cad57564e87473f41d1acde",
+      "bytes": 15077
+    },
+    {
+      "path": "ui/src/philtrum/wiring.unrun.test.ts",
+      "sha256": "ff977094dbdb7a31f3e63cdec9c36bf4b661289ba31820ba6c091ef652f19721",
+      "bytes": 10810
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "b58d416e1ddf9710710667134039a54de863aa46bbe2f40964a414b1f61ace8b",
+      "bytes": 5495
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1145,
+    "changed_json": "parsed",
+    "git_diff_check": "clean",
+    "payload_trailing_whitespace": "none; pre-existing workflow_ports.py blank EOF unchanged",
+    "line_caps": {
+      "ui/src/App.tsx": 2122,
+      "ui/src-tauri/src/main.rs": 2042,
+      "engine/src/lumaretouch_engine/server.py": 6985
+    },
+    "unchanged_baseline_source_hashes": 119,
+    "authored_unrun_new_fixture_functions": {
+      "python": 124,
+      "ui": 20,
+      "rust": 0
+    },
+    "python_fixture_functions_by_file": {
+      "test_philtrum_scope_unrun.py": 27,
+      "test_philtrum_native_unrun.py": 24,
+      "test_philtrum_integration_unrun.py": 39,
+      "test_philtrum_geometry_unrun.py": 34
+    },
+    "rust_reuse": "Existing core/mid_face, native boundary and explicit packaging unchanged; no new binary/solver or Rust tests claimed, existing Rust tests not rerun.",
+    "independent_source_review": {
+      "conclusion": "No concrete math/composition/ABI blocker found by read-only review. Moving strips now select actual supported portion. No numerical or photo validation.",
+      "reviewed_runtime_sha256": "057f08210f3282797b05cec805f6670a9c9dba599dca1a406bb8ff737b82b50e",
+      "reviewed_people_sha256": "e0e68f5cff199866fd64a9b5966c74a79563e9e31e181e1ca13be300f9ce8b77"
+    }
+  },
+  "integration_map": {
+    "state_shared_native": "philtrum_state.py / philtrum_native.py; version1 signed scalar, actual shared ABI readiness, exact private-snapshot measured P and derived tail",
+    "source_geometry": "philtrum_runtime.py / philtrum_people.py; all24nose/all40lip planes, central gap + surrounding band + lowerface independent evidence, actual source plateau and 478-target audits",
+    "canonical_owner": "people_algorithms.py / people_render_runtime.py; after chin length with first four slots, mouth slot3 and common sampler retained",
+    "derived": "creative_derived_effects.py exact operation admission only; genuine immutable source and repaired preview/export proof retained",
+    "ui": "ui/src/philtrum / exact RetouchPanel leaf / native capability / people label; provenance, explicit shared choices, ownership and uncertain-request fences",
+    "presets": "philtrum_scope.py / people_scope.py / scope.py / workflow_ports.py / presetModel.ts; scalar-only target recalculation, no new exclusions or legacy reset",
+    "requirements": "IMPLEMENTATION.md / NUMERICAL-CONTRACT.md / registry extension / historical partial route inventory"
+  },
+  "unrun": [
+    "product imports/execution",
+    "tests and test collection",
+    "Rust compilation/build",
+    "typecheck",
+    "inference",
+    "numerical/photographic/performance acceptance",
+    "real UI/history/preview/export/batch acceptance"
+  ],
+  "limitations": [
+    "Original visual plane-gap interpretation, not clinical philtrum anatomy, isolated segmentation, AI/3D or proprietary equivalence.",
+    "Full24 measured nose connection geometry and all40 lip/lower source targets are audited; no complete anatomical nose pixel visibility claim.",
+    "Actual nose2-to-lip0 change is additive .08*amount*H, where H is margin-trimmed plane gap; not generally8percent of actual anatomical interval.",
+    "Shared P=D/H<=8 may refuse short real gaps. Refusal prevalence is unmeasured; no inflated H, dropped vertices, moved lip plane, shortened plateau or silently reduced strength.",
+    "Full-width band moves cheek tissue; lower plateau and feather move lowerface/neck/background. Source invariants do not hold for arbitrary points relocated by prior operations.",
+    "Complete influence rectangle and small moving-strip sample gates remain conservative; difficult, occluded or neighboring faces can refuse.",
+    "Inherited bounded f64 inverse can refuse underflow/stagnation; tiny accepted shifts can vanish in subtraction or downstream float32 coordinates.",
+    "Existing chin-length/legacy compatibility and malformed multi-enabled-conflict graph recovery limit remain unchanged. No prior effect is silently reset or migrated.",
+    "Generic derived presets remain guarded; explicitly reviewed target-person transfer rebuilds each target actual source/support.",
+    "Broader alpha/HDR, remaining handbook features and real photographic/workflow acceptance remain unfinished."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}
