@@ -32,6 +32,7 @@ def replay_preset(engine,state,**kwargs):
     from . import skin_finish_scope as SKIN_FINISH
     from . import skin_gloss_scope as SKIN_GLOSS
     from . import skin_texture_scope as SKIN_TEXTURE
+    from . import face_contour_scope as FACE_CONTOUR
     # Even an otherwise unchanged or legacy preset must not publish success
     # after an active independent eye/tooth layer failed on its own target.
     amounts=ENHANCE.amounts_of(state)
@@ -49,6 +50,9 @@ def replay_preset(engine,state,**kwargs):
     texture_recipe=SKIN_TEXTURE.S.check(state.get(SKIN_TEXTURE.FIELD))
     texture_requested=state.get(SKIN_TEXTURE.REQUESTED) is True
     if SKIN_TEXTURE.S.active(texture_recipe):kwargs['strict_local']=True
+    contour_recipe=FACE_CONTOUR.S.check(state.get(FACE_CONTOUR.FIELD))
+    contour_requested=state.get(FACE_CONTOUR.REQUESTED) is True
+    if FACE_CONTOUR.S.active(contour_recipe):kwargs['strict_local']=True
     if not engine._people_managed():
         if skin_requested or SKIN_COLOUR.S.active(skin_recipe):
             raise ValueError('面部肤色预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
@@ -58,6 +62,8 @@ def replay_preset(engine,state,**kwargs):
             raise ValueError('皮肤光泽预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
         if texture_requested or SKIN_TEXTURE.S.active(texture_recipe):
             raise ValueError('皮肤质感预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
+        if contour_requested or FACE_CONTOUR.S.active(contour_recipe):
+            raise ValueError('面部轮廓预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
         return engine._replay_state(state,**kwargs)
     before=engine._people_owner().snapshot();asset=engine._people_source()['sha256']
     faces=[face for face in before['faces'].values() if face['asset_sha256']==asset and face['enabled']]
@@ -74,6 +80,7 @@ def replay_preset(engine,state,**kwargs):
     current=SKIN_FINISH.capture(engine,current)
     current=SKIN_GLOSS.capture(engine,current)
     current=SKIN_TEXTURE.capture(engine,current)
+    current=FACE_CONTOUR.capture(engine,current)
     skin_involved=(SKIN_COLOUR.FIELD in state and
                    (skin_requested or SKIN_COLOUR.S.active(skin_recipe) or skin_recipe!=current[SKIN_COLOUR.FIELD]))
     if skin_involved:
@@ -104,6 +111,15 @@ def replay_preset(engine,state,**kwargs):
         SKIN_TEXTURE.install(dict(current),{'recipe':texture_recipe})
         if state.get(SKIN_TEXTURE.TARGET)!=current[SKIN_TEXTURE.TARGET]:
             raise ValueError('皮肤质感预设目标已变化，请重新选择当前人物')
+    contour_involved=(FACE_CONTOUR.FIELD in state and
+                      (contour_requested or FACE_CONTOUR.S.active(contour_recipe) or contour_recipe!=current[FACE_CONTOUR.FIELD]))
+    if contour_involved:
+        # The exact owner and FaceRef fence intent only; target-local source
+        # geometry, photometry and neighbour safety are recomputed by rendering.
+        FACE_CONTOUR.install(dict(current),{'recipe':contour_recipe})
+        if (state.get(FACE_CONTOUR.TARGET)!=current[FACE_CONTOUR.TARGET]
+                or FACE_CONTOUR.owner_identity(state)!=FACE_CONTOUR.owner_identity(current)):
+            raise ValueError('面部轮廓预设的文档、人物归属、有效来源或当前人物已变化，请重新选择')
     fields=dict(zip(A.GEOMETRY,('_brow_shape','_nose_shape','_eye_shape','_mouth_shape')))
     fields[A.LIP]='_lip_makeup'
     # Ephemeral preset transport is consumed here; never a parallel render owner.
@@ -118,6 +134,7 @@ def replay_preset(engine,state,**kwargs):
     if SKIN_FINISH.FIELD in state:fields[SKIN_FINISH.OP]=SKIN_FINISH.FIELD
     if SKIN_GLOSS.FIELD in state:fields[SKIN_GLOSS.OP]=SKIN_GLOSS.FIELD
     if SKIN_TEXTURE.FIELD in state:fields[SKIN_TEXTURE.OP]=SKIN_TEXTURE.FIELD
+    if FACE_CONTOUR.FIELD in state:fields[FACE_CONTOUR.OP]=FACE_CONTOUR.FIELD
     for op,field in fields.items():
         validator=A.specifications()[op][1];left=A.leaves(validator(current.get(field)));right=A.leaves(validator(state.get(field)))
         patches.extend((op,path,value) for path,value in right.items() if left[path]!=value)
@@ -137,11 +154,13 @@ def replay_preset(engine,state,**kwargs):
         raise ValueError('皮肤光泽预设的当前人物与唯一可应用目标不一致')
     if texture_involved and current[SKIN_TEXTURE.TARGET]!=S.face_ref(faces[0]):
         raise ValueError('皮肤质感预设的当前人物与唯一可应用目标不一致')
+    if contour_involved and current[FACE_CONTOUR.TARGET]!=S.face_ref(faces[0]):
+        raise ValueError('面部轮廓预设的当前人物与唯一可应用目标不一致')
     for op,path,value in patches:candidate=S.set_override(candidate,'face',key,op,path,value)
     owner=engine._people_owner()
     try:
         owner.commit(candidate,expected_fence=owner.fence);engine._people_analysis_key=None
-        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP) for op,_,_ in patches):kwargs['strict_local']=True
+        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,FACE_CONTOUR.OP) for op,_,_ in patches):kwargs['strict_local']=True
         return engine._replay_state(state,**kwargs)
     except Exception:
         before['association_revision']=owner.association_fence

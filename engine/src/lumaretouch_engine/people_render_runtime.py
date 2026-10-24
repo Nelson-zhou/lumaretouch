@@ -171,6 +171,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                 owned['weight'].setflags(write=False); owned_recovery[(key,stage)] = owned
             lm = verify_analysis(face, analysis, (h,w))
             field = A.build_geometry(key, lm, values, source, analysis['excluded'], backend=face['evidence']['backend'])
+            from .face_contour_people import append as append_contour
+            field, contour_facts = append_contour(field, state, entry['face_ref'], analysis, source, values[A.FACE_CONTOUR.OP])
             blush_review=lipstick_review=None
             from .lipstick_support import raster as lipstick_raster
             lipstick_review=lipstick_raster(state,lipstick_assets or {},entry['face_ref'],(h,w)) if A.LIPSTICK.active(values[A.LIPSTICK.OP]) else None
@@ -226,7 +228,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                 from .iris_makeup_people import prepare as prepare_iris
                 local.extend(prepare_iris(state,iris_makeup_assets or {},entry['face_ref'],analysis,effect_source,values[A.IRIS.OP]))
             # Preserve mouth's source-cavity teeth veto independently per face.
-            mouth = field.fields[-1]
+            # Contour appends a fifth field; the legacy mouth slot remains 3.
+            mouth = field.fields[3]
             if mouth is not None and mouth.state is not None:
                 for record in local:
                     if record.stage == 'enhance':
@@ -239,6 +242,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             if resident+h*w*256+128*1024*1024 > byte_budget: raise ValueError('Accumulated portrait fields exceed memory budget')
             fields.append(field); effects.extend(local)
             facts[key] = {record.stage:record.facts for record in local}
+            if contour_facts is not None: facts[key]['face_contour'] = contour_facts
             liner_facts=[record.facts for record in local if record.stage=='eyeliner']
             if liner_facts:facts[key]['eyeliner']={'eyes':liner_facts,'stage':'source-working-srgb'}
             lash_facts=[record.facts for record in local if record.stage=='eyelash']

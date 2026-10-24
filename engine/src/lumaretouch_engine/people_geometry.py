@@ -45,7 +45,8 @@ class FaceGeometry:
 
     def evaluate(self, points):
         total = self.automatic.evaluate(points)
-        # Exact off-grid M(E(N(B(A(x))))), not a sum of independently sampled grids.
+        # Exact off-grid legacy M(E(N(B(A(x))))) then optional contour C.
+        # Not a sum of independently sampled grids; one final image sampler.
         for field in self.fields:
             if field is not None and field.state is not None: total += field.evaluate(points-total)
         return total

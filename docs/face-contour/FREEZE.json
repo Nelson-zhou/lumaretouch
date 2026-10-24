@@ -1,0 +1,223 @@
+{
+  "baseline": "ad1fc32c86a56700fe0ae7b7c011062059dbb84d",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Dedicated bilateral temple/cheekbone/jaw measured 2D contour intent, checked original Rust displacements, authenticated source support and existing normalized TPS/common sampler; canonical original/derived preview/export/history, explicit linked controls and target-recomputed scalar transfer. Not AI/3D reconstruction or whole facial-reshaping acceptance.",
+  "requirement_ids": [
+    "LNX-REF-PC-32466-C-94bf91612d",
+    "LNX-REF-PC-32466-C-d24d97d234",
+    "LNX-REF-PC-32466-C-3bc7e245b7"
+  ],
+  "files": [
+    {
+      "path": "core/face_contour/Cargo.toml",
+      "sha256": "51846d9352c23254d649f7074a4f1883dbae075b988f0057048fc4b1bfa20c84",
+      "bytes": 171
+    },
+    {
+      "path": "core/face_contour/README.md",
+      "sha256": "a593d5e46e9fd5418f73c61745d5a118b98329234c4033b76d928f5ed94e2a77",
+      "bytes": 7171
+    },
+    {
+      "path": "core/face_contour/face_contour.h",
+      "sha256": "5b0a09073c55e0eee96c67dd379b7a4ab15544272b19c98bfb015df84482517a",
+      "bytes": 1342
+    },
+    {
+      "path": "core/face_contour/lib.rs",
+      "sha256": "517e6a791f65918f586194fc6d1090c35b8b32b22bfc2ff0089d432f68f19210",
+      "bytes": 6548
+    },
+    {
+      "path": "core/face_contour/tests.rs",
+      "sha256": "825c9ed8545daa132cfba12437a236180dd6a0af0fb9c44973fb848862841017",
+      "bytes": 9370
+    },
+    {
+      "path": "docs/face-contour/IMPLEMENTATION.md",
+      "sha256": "34834638180bbe665b9ee88a7872830f3102f1f34a265d2963f053f306e5a10d",
+      "bytes": 9950
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "9ca8251295fc71dfa5d5683a28bd78e1eb0d577f3b57b7e3dec05b3379ca4aaf",
+      "bytes": 27533
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "a669e3a691f0f1b250991d17a938b1e51e58e4212b5fc04171593414855a0b30",
+      "bytes": 14343
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_contour_field.py",
+      "sha256": "e735091f5c4a07a93143fbfe066d917fbe2fa7f8d474accdd053db6ed378ded1",
+      "bytes": 7456
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_contour_geometry.py",
+      "sha256": "f40ce390d517dc8159ba3e74b4b949555d2b79e40daa0848ab1f36170be65f2d",
+      "bytes": 16814
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_contour_native.py",
+      "sha256": "e1fb0afbed2b969eb5d5121d15992831ff94547528a7740f24da297ebccaf85a",
+      "bytes": 5964
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_contour_people.py",
+      "sha256": "207e6ed0687da56ba22fc75c9eddf8780c3afb65df7ce54cdbd17aa3334fc78b",
+      "bytes": 5081
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_contour_runtime.py",
+      "sha256": "438edbf955b70bbd104798ddbbe0833ce53fc94e0e23f19d870a8fdfbd101e1c",
+      "bytes": 3829
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_contour_scope.py",
+      "sha256": "f37bb7f7d0b54ad797ad32dcaae06dc7e47688560c8af3710c2c2c6d82f2dbc4",
+      "bytes": 6762
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_contour_state.py",
+      "sha256": "82b3e96a443ab1f79caba3d73d652ce6126a4fb0030a84775f8f14024f651e91",
+      "bytes": 3305
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "c3d78be8972d0b72ea2576a394feb782ec67a76507cabf60623dca581ee5e50e",
+      "bytes": 4243
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_geometry.py",
+      "sha256": "554e4ea056f8c675be3b1fb859a2ca3101ca437dc1db52967e4151524955580b",
+      "bytes": 6293
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "d44a7761bdbb7091d936278b918dbd031a721948e07f84732958a0ee6c8f71be",
+      "bytes": 19549
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "ac4eaa2a03666978db30732cef872e9da4827c6b3523438b57999b85f9567596",
+      "bytes": 11984
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "d635f06786f5f502ec67eb6a6c0a2ae66e2e5e9dab7d5ffec4e38055ef55fce4",
+      "bytes": 49430
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "35ea56c978d4bf01d2484fc6cc2cc6b75064a89c17877a349bbe09dd0c200b48",
+      "bytes": 464984
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "edf618dfdc798fceab50fec584493d05d6f825405cd1f18ae8470024a737feb1",
+      "bytes": 7952
+    },
+    {
+      "path": "engine/tests/test_face_contour_geometry_unrun.py",
+      "sha256": "d3b0076635dcac31c39cdbd1a62361ebbd78165e21169d2c278d38a903d6c0f0",
+      "bytes": 14377
+    },
+    {
+      "path": "engine/tests/test_face_contour_integration_unrun.py",
+      "sha256": "edd0286df4a394bc75c82fd68785ede5d5419463de47522508e4be15341f7195",
+      "bytes": 13933
+    },
+    {
+      "path": "engine/tests/test_face_contour_native_unrun.py",
+      "sha256": "b649f6eebc4ebbe54520c722b3cc6da80097f6fcec7ed2948aa079b5bac7cf5d",
+      "bytes": 15503
+    },
+    {
+      "path": "engine/tests/test_face_contour_scope_unrun.py",
+      "sha256": "0a0a3f5bed3e4b0329621078dbc4402c2a0940fde4032b7638b6aaae9189db6e",
+      "bytes": 29747
+    },
+    {
+      "path": "packaging/build-face-contour.sh",
+      "sha256": "6118ccdce7a2c740563619a68db95161dff609f54a84e83ed0308ac1fd1e90aa",
+      "bytes": 585
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "9d6d6b786a7470df60111131e118b47de49125e4e85ae8fedacbf2a90795a431",
+      "bytes": 23109
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "98540421d35f286d77613d5670ae277a0d16c195d100867fae37a75ba362dc3c",
+      "bytes": 67686
+    },
+    {
+      "path": "ui/src/faceContour/ACCEPTANCE_UNRUN.md",
+      "sha256": "787ec67a8611f7718eb9bfd2bddb80c409563c1189e06a38a46d19795aed10cd",
+      "bytes": 8026
+    },
+    {
+      "path": "ui/src/faceContour/FaceContourControl.tsx",
+      "sha256": "48eca608279dcd882a2a9d6a31a03f61347cae171c4af0d342ba04d5618502e0",
+      "bytes": 8945
+    },
+    {
+      "path": "ui/src/faceContour/model.ts",
+      "sha256": "2d7ffca729b7c3152419718ec29e092ab15086188e57cfe13e9025c74cdff07b",
+      "bytes": 12244
+    },
+    {
+      "path": "ui/src/faceContour/model.unrun.test.ts",
+      "sha256": "7805d94298cb1998228562c0bf66893216cf3435cf9c0db44b11f8ad4fc73038",
+      "bytes": 18970
+    },
+    {
+      "path": "ui/src/faceContour/wiring.unrun.test.ts",
+      "sha256": "372f5591ce67beeca581a35f19fe7098d4d206190e9713a4afe24f2c5584a7e8",
+      "bytes": 7448
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "9f7c6cdce1ea631590aae26ec565e46af905cf5f792459245923d96aa7df7fd0",
+      "bytes": 100818
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "a8b47fb54616d0019ca8a08fa6c77bf027b26c24304544ac93fbfad322ad9c29",
+      "bytes": 7924
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "013f7b3bfe85a1bb84bdfc7ebdb5d232b32b5d3f71577652ab42e9c2689ea417",
+      "bytes": 4655
+    }
+  ],
+  "static_validation": {
+    "python_ast_files": 1085,
+    "registry_json": "parsed",
+    "core_cargo_toml": "parsed",
+    "payload_trailing_whitespace": 0,
+    "legacy_geometry_tuple": "unchanged",
+    "generic_derived_preset_guard": "unchanged",
+    "App_lines": 2122,
+    "main_lines": 2042,
+    "server_lines": 6979
+  },
+  "authored_unrun_fixtures": {
+    "python_named_fixture_functions": 71,
+    "ui_named_fixture_calls": 20,
+    "rust_test_attributes": 12
+  },
+  "acceptance": "All product imports/execution, compiler/build/typecheck/tests, native/numerical/photo/memory/performance/inference acceptance remain UNRUN. No downloads, installs or Git writes.",
+  "remaining": [
+    "Only visible measured frontal/mild-yaw contours. Inset semantic skin/RGB checks are not full silhouette or occlusion segmentation; smooth/low-contrast skin may refuse and undetected occluders remain possible.",
+    "Adjacent background halo necessarily moves. Complete source-window and actually composed foreign-face/source-boundary checks refuse unsafe work, but do not certify unchanged legacy prefix deformation.",
+    "Original product gains, thresholds and sampled TPS/Jacobian checks need independent numerical and representative-photo validation; no continuous injectivity, proprietary equivalence or 3D anatomy claim.",
+    "Opaque SDR canonical input only; no HDR clipping or alpha flattening. Original PNG16 and derived-float routes share actual-source rendering but runtime/low-bit image acceptance remains UNRUN.",
+    "Generic derived preset guard stays intact; supported explicit/confirmed people mappings carry only bilateral scalars/link flags and recompute each target.",
+    "Separate pre-existing legacy slim-face topology/comment discrepancy is documented, not silently corrected or newly accepted in this slice.",
+    "Broader AI face smoothing, jaw lighting correction, facial presets/3D/body and remaining handbook requirements are not covered by these three controls."
+  ]
+}

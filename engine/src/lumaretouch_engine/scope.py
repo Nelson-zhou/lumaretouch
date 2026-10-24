@@ -46,6 +46,7 @@ from . import skin_colour_scope as SKIN_COLOUR
 from . import skin_finish_scope as SKIN_FINISH
 from . import skin_gloss_scope as SKIN_GLOSS
 from . import skin_texture_scope as SKIN_TEXTURE
+from . import face_contour_scope as FACE_CONTOUR
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
@@ -180,6 +181,10 @@ MODULES: dict[str, dict] = {
                      "transferable": True, "cmd": "people", "label": "皮肤质感（面部纹理与精细清晰）",
                      "read": SKIN_TEXTURE.params_of, "write": SKIN_TEXTURE.install,
                      "why_not": "仅纹理与清晰标量；目标用自己的真实面部皮肤、遮挡、关键点与原始有效来源重算双尺度细节，不复制人物、身体范围、蒙版或来源细节"},
+    FACE_CONTOUR.OP: {"params": ("recipe",), "state_fields": FACE_CONTOUR.FIELDS, "single_face": True,
+                      "transferable": True, "cmd": "people", "label": "面部轮廓（独立左右二维参数）",
+                      "read": FACE_CONTOUR.params_of, "write": FACE_CONTOUR.install,
+                      "why_not": "仅太阳穴、颧骨、下颌的左右联动与六项标量；目标按自己的真实皮肤与 478 点重算，不复制分析、蒙版或控制点，仅支持正面与轻侧脸二维调整"},
     EYE_LIGHT.OP: {"params": ("recipe",), "state_fields": EYE_LIGHT.FIELDS, "single_face": True,
                    "transferable": True, "cmd": "people", "read": EYE_LIGHT.params_of, "write": EYE_LIGHT.install,
                    "why_not": "仅眼神光素材参数；目标人物须自行审核可见眼球，绝不复制归属、蒙版或恢复笔迹"},
@@ -446,6 +451,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == SKIN_TEXTURE.OP:
         try: return SKIN_TEXTURE.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == FACE_CONTOUR.OP:
+        try: return FACE_CONTOUR.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == EYE_LIGHT.OP:
         try: return EYE_LIGHT.check_params(params)

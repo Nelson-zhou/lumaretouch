@@ -40,6 +40,7 @@ import {SkinColourControl} from '../skinColour/SkinColourControl';
 import {SkinFinishControl} from '../skinFinish/SkinFinishControl';
 import {SkinGlossControl} from '../skinGloss/SkinGlossControl';
 import {SkinTextureControl} from '../skinTexture/SkinTextureControl';
+import {FaceContourControl} from '../faceContour/FaceContourControl';
 import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {FabricPanel} from "../fabric/FabricPanel";
 import {HistogramPanel} from "./HistogramPanel";
@@ -374,6 +375,9 @@ const WIRED: Record<string, string> = {
   "PC-32465|皮肤质感/清晰度": "skin_texture.clarity",
   // 面部重塑 / 表情
   "PC-32466|脸型/瘦脸": "deform.slim_face",
+  "PC-32466|脸型/太阳穴": "face_contour.temple",
+  "PC-32466|脸型/颧骨": "face_contour.cheekbone",
+  "PC-32466|脸型/下颌": "face_contour.jaw",
 
   "PC-32466|脸型/收下巴": "deform.small_chin",
   "PC-32466|脸型预设/经典": "deform.preset:经典",
@@ -745,6 +749,15 @@ export default function RetouchPanel(props: RetouchProps) {
       case "skin_texture.clarity":
         return <SkinTextureControl key={leaf.path}
           control={kind === 'skin_texture.texture' ? 'texture' : 'clarity'}
+          people={props.people} capability={status?.ready_caps}
+          blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+            || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+          faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
+      case "face_contour.temple":
+      case "face_contour.cheekbone":
+      case "face_contour.jaw":
+        return <FaceContourControl key={leaf.path}
+          control={kind === 'face_contour.temple' ? 'temple' : kind === 'face_contour.cheekbone' ? 'cheekbone' : 'jaw'}
           people={props.people} capability={status?.ready_caps}
           blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
             || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
