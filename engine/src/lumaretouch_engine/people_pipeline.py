@@ -82,6 +82,9 @@ def source_effect(pipe,stage,pixels):
     import torch
     if stage not in ('skin_colour','facial_wrinkles','lip_makeup','hair_colour','eye_light','blush_makeup','lipstick','eyeliner','eyelash','brow_makeup','iris_makeup'):raise ValueError('This effect belongs after common geometry')
     delta=_merge_delta(pipe,stage,align=False)
+    if stage=='skin_colour':
+        from .people_skin_composition import apply as compose_skin
+        return compose_skin(pixels,delta)
     return torch.where(delta!=0,pixels+delta if stage=='eye_light' else (pixels+delta).clamp(0,1),pixels)
 
 

@@ -1,0 +1,214 @@
+{
+  "baseline": "55e0b2540d2975e95322336a8165719352d53939",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Independent measured-face medium texture and fine sharpening with original source-guided Rust bands, canonical original/derived rendering/history/export and scalar-only target recalculation; bounded actual-upstream skin-vector headroom fix. Both handbook IDs remain face-only partial, not whole skin-family acceptance.",
+  "requirement_ids": [
+    "LNX-REF-PC-32465-C-1c80d411ce",
+    "LNX-REF-PC-32465-C-46e0c819b6"
+  ],
+  "files": [
+    {
+      "path": "core/skin_texture/Cargo.toml",
+      "sha256": "224d9779b36661457963f9e753f81772f0b877e652e5132c8be0391c1f6e7324",
+      "bytes": 221
+    },
+    {
+      "path": "core/skin_texture/README.md",
+      "sha256": "929f30d508fd455ff9ec25c70ab92862bf142099378f0f4c1f23c26af4bd3dd5",
+      "bytes": 16253
+    },
+    {
+      "path": "core/skin_texture/lib.rs",
+      "sha256": "8c46d3aafbd2f42af30342d49c11072f6893086663d738b01b107c54311d627a",
+      "bytes": 16562
+    },
+    {
+      "path": "core/skin_texture/skin_texture.h",
+      "sha256": "1b8e935648f7d99b43eb19f837fb68f77e825b231405114cc5000c934fb79ae2",
+      "bytes": 1155
+    },
+    {
+      "path": "core/skin_texture/tests.rs",
+      "sha256": "d11c85a72221d0b0bb3ce48b248aab0dbe71e1a68c8da7ed0c2794fb10e66f42",
+      "bytes": 11335
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "3d55e732a2827958a26f9cb26cc5776cf9e4cd3807eb4acae01264801c7ed6d0",
+      "bytes": 26016
+    },
+    {
+      "path": "docs/skin-texture/IMPLEMENTATION.md",
+      "sha256": "b8319b6dc3f09177b4a13b6cdec2393b8d44fca32578636d894ebef811c89905",
+      "bytes": 8719
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "0cdd2efe86ff2537ec108808408faa2e978cd5c7d04d6ea0d3d9c46a8ae0a6f2",
+      "bytes": 14320
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "8f048984681936c5abe34ef8f97528da0f64f8e80075523a44e7bb503e542000",
+      "bytes": 4119
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "sha256": "ebefbd90bd147550c93d23ea5bf3609bce5f9ef1e299fbdeaf30f46fed9a6514",
+      "bytes": 5207
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "f358e60d37dded306e23d375b232c854cc981edb5d29d4a3b5885532aa47264c",
+      "bytes": 19189
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "b9a40bba49dc54dd7b5860662e5e4e82c5cb0b6f784b533e05d9056267f1ef85",
+      "bytes": 10471
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_skin_composition.py",
+      "sha256": "b4c68708c57514ccfd6655d188d2ed07a5c86ae61e66bdd9dcec842cd86779bb",
+      "bytes": 2642
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "95a95420b818ec4b450eeadc0e04e3e9a32276fddc6fe85926be44c4217fb7e3",
+      "bytes": 48688
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "105c19d1fa13967b23a54a281d36a1ea5525c30c4338828a798f641ad95be8c9",
+      "bytes": 464877
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_colour_people.py",
+      "sha256": "d78e175fdc4e079705ca9b92311cfd017204e2939f797a8c6cf79decea9500b7",
+      "bytes": 23541
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_texture_native.py",
+      "sha256": "612d199e7375ee03d3ccc5e3f7e1e0f26ee90e1939ffd20783d4393681a68a59",
+      "bytes": 10303
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_texture_scope.py",
+      "sha256": "9adb737874d65a5882f62a3a1abea6c8e562c742be9d973d554dd8f9885b73e5",
+      "bytes": 5044
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_texture_state.py",
+      "sha256": "b6ba627aa019d6673b73d7b88300913a37a2a693e015854f0a20c67e519acf40",
+      "bytes": 1689
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "e74ad753e2f13c2992bfca432fac74a3f78ff7aa61cd81306cd527d6ce22447a",
+      "bytes": 7853
+    },
+    {
+      "path": "engine/tests/test_people_skin_composition_unrun.py",
+      "sha256": "d6ef9192ab5daba18c447def51d3c0b16a8fe75cb84eea4f9890980f49321b3a",
+      "bytes": 3307
+    },
+    {
+      "path": "engine/tests/test_skin_texture_integration_unrun.py",
+      "sha256": "32efbeaf540555e9d96bc2efcf8ebade7a3b5d610faefef7c3cf62c558e69fbe",
+      "bytes": 1846
+    },
+    {
+      "path": "engine/tests/test_skin_texture_native_unrun.py",
+      "sha256": "53187c0adaadd1e3b811097211e0c9e7685ee9dce1ff5548607ba8dbf90b1de2",
+      "bytes": 8436
+    },
+    {
+      "path": "engine/tests/test_skin_texture_render_unrun.py",
+      "sha256": "d6bf5cd63eb681894ac7d0568713e5927bbf48ca8c9986b6a61b843a4fb051b5",
+      "bytes": 32139
+    },
+    {
+      "path": "engine/tests/test_skin_texture_scope_unrun.py",
+      "sha256": "89fe839c008e62db33432358aad55f77896cd83be2859ae570386683ab86eab7",
+      "bytes": 24895
+    },
+    {
+      "path": "packaging/build-skin-texture.sh",
+      "sha256": "dd3ed73f4ccbe0ced384f2cc98bcf376d83a74b42010419403d3a79b6a5042fc",
+      "bytes": 629
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "15d041b229a86730aba85c7e4399f6ca5d2ec287150bdcb331cee862214abf37",
+      "bytes": 22684
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "dd9bc7755f44442788769719dd1f003b4701a3fa1a125d36582beed308cacf38",
+      "bytes": 66822
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "afb52d0a6eb5aef986cdb93f671eebfc82d8e09ad490f3a29e77a363685cfd75",
+      "bytes": 100739
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "bd21801c14b1a1c975f3f0ecf2cf8f38f611eccc3014ca4436b85decd4241824",
+      "bytes": 7842
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "9816cd4aca22f16fedc270e082c7227409b9f394f8e4410dc778e617248dd8ba",
+      "bytes": 4555
+    },
+    {
+      "path": "ui/src/skinTexture/ACCEPTANCE_UNRUN.md",
+      "sha256": "30aa7beba5a4ffbdacd675cc8469541eca665db563b3a8849342ff371ddf7d01",
+      "bytes": 6436
+    },
+    {
+      "path": "ui/src/skinTexture/SkinTextureControl.tsx",
+      "sha256": "329e83366162698e84a372ee3d7d440edf2481e5d54ad59fa870d70ed17e6a74",
+      "bytes": 6595
+    },
+    {
+      "path": "ui/src/skinTexture/model.ts",
+      "sha256": "6e05cbea39b103e0fb37bf06fd784647ff90808cba09379583c70637e46a060a",
+      "bytes": 8233
+    },
+    {
+      "path": "ui/src/skinTexture/model.unrun.test.ts",
+      "sha256": "8cc84df50a8fe4a49c310725a01ccb759ea4c37587383f1cb5bd6344e8d9f337",
+      "bytes": 15943
+    },
+    {
+      "path": "ui/src/skinTexture/wiring.unrun.test.ts",
+      "sha256": "801c15a66aa611f17d8f7c328211c61bd5f7090c535eeb3859dab1fd8f3fabfa",
+      "bytes": 7387
+    }
+  ],
+  "static_validation": {
+    "python_ast_files": 1074,
+    "registry_json": "parsed",
+    "core_cargo_toml": "parsed",
+    "payload_trailing_whitespace": 0,
+    "App_lines": 2122,
+    "main_lines": 2042,
+    "server_lines": 6978
+  },
+  "authored_unrun_fixtures": {
+    "python_named_fixture_functions": 65,
+    "ui_named_fixture_calls": 19,
+    "rust_test_attributes": 12
+  },
+  "acceptance": "All product imports/execution, compiler/build/typecheck/tests, numerical/photo/memory/performance/inference acceptance remain UNRUN. No downloads, installs or Git writes.",
+  "remaining": [
+    "Face-only measured support. Broader body texture/clarity and whole skin family remain incomplete; no automatic perfect occlusion/person segmentation.",
+    "Noise, pores, compression, fine signal rejection, halos and gradient reversal need real-image review. No AI, recovered detail, blemish removal or proprietary equivalence.",
+    "Native dimensions/radius/pixel/memory limits are explicit refusals, not latency or ordinary-hardware acceptance. Source and current full-frame contexts remain required.",
+    "Opaque SDR only; no HDR clipping or alpha flattening. Genuine original PNG16 path is reused, not proof of low-bit numerical/visual acceptance.",
+    "Generic derived preset guard stays unchanged; supported confirmed/explicit people mappings recalculate target-owned source evidence.",
+    "Skin headroom limiter preserves an encoded-RGB displacement direction, not perceptual hue or native contrast ratios after other edits; other portrait-stage clamps are unchanged."
+  ]
+}

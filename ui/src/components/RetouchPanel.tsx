@@ -39,6 +39,7 @@ import {ScleraPurifyControl} from '../scleraPurify/ScleraPurifyControl';
 import {SkinColourControl} from '../skinColour/SkinColourControl';
 import {SkinFinishControl} from '../skinFinish/SkinFinishControl';
 import {SkinGlossControl} from '../skinGloss/SkinGlossControl';
+import {SkinTextureControl} from '../skinTexture/SkinTextureControl';
 import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {FabricPanel} from "../fabric/FabricPanel";
 import {HistogramPanel} from "./HistogramPanel";
@@ -369,6 +370,8 @@ const WIRED: Record<string, string> = {
   "PC-32465|肤色美白": "skin_finish.whitening",
   "PC-32465|皮肤红润": "skin_finish.rosiness",
   "PC-32465|皮肤质感/光泽度": "skin_gloss.amount",
+  "PC-32465|皮肤质感/纹理度": "skin_texture.texture",
+  "PC-32465|皮肤质感/清晰度": "skin_texture.clarity",
   // 面部重塑 / 表情
   "PC-32466|脸型/瘦脸": "deform.slim_face",
 
@@ -734,6 +737,14 @@ export default function RetouchPanel(props: RetouchProps) {
           faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
       case "skin_gloss.amount":
         return <SkinGlossControl key={leaf.path}
+          people={props.people} capability={status?.ready_caps}
+          blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+            || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+          faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
+      case "skin_texture.texture":
+      case "skin_texture.clarity":
+        return <SkinTextureControl key={leaf.path}
+          control={kind === 'skin_texture.texture' ? 'texture' : 'clarity'}
           people={props.people} capability={status?.ready_caps}
           blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
             || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}

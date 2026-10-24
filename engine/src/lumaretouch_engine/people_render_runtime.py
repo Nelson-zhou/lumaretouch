@@ -180,7 +180,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                               backend=face['evidence']['backend'], semantic_sha=face['evidence']['semantic_model_sha256'],blush_review=blush_review,lipstick_review=lipstick_review,source_only=source_only)
             if (A.SKIN_COLOUR.active(values[A.SKIN_COLOUR.OP])
                     or A.SKIN_FINISH.active(values[A.SKIN_FINISH.OP])
-                    or A.SKIN_GLOSS.active(values[A.SKIN_GLOSS.OP])):
+                    or A.SKIN_GLOSS.active(values[A.SKIN_GLOSS.OP])
+                    or A.SKIN_TEXTURE.active(values[A.SKIN_TEXTURE.OP])):
                 from .skin_colour_people import prepare as prepare_skin_colour
                 others = []; protected_boxes = []
                 for other_key, other_face in state['faces'].items():
@@ -208,7 +209,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                     protected_boxes=protected_boxes,people_state=state,
                     body_assets=skin_colour_body_assets,body_bank=body_bank,
                     finish_recipe=values[A.SKIN_FINISH.OP],finish_body_assets=skin_finish_body_assets,
-                    gloss_recipe=values[A.SKIN_GLOSS.OP]))
+                    gloss_recipe=values[A.SKIN_GLOSS.OP],texture_recipe=values[A.SKIN_TEXTURE.OP]))
             from .eye_light_people import prepare as prepare_eye_light
             from .eye_light_state import OPERATION as EYE_LIGHT
             local.extend(prepare_eye_light(state,eye_light_assets or {},entry['face_ref'],analysis,effect_source,values[EYE_LIGHT],source_revision=state['revision']))
