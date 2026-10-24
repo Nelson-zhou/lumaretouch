@@ -63,6 +63,8 @@ type ReviewBase = {
   skin_finish_coverage?: SkinFinishCoverage;
   body_skin_evenness_coverage?: BodySkinEvennessCoverage;
   body_face_match_coverage?: BodyFaceMatchCoverage;
+  face_decoration_coverage?: import('../faceDecoration/transferModel').DecorationCoverage;
+  face_decoration_visual?: import('../faceDecoration/transferModel').DecorationVisual;
   collarbone_coverage?: CollarboneCoverage;
   collarbone_visual?: CollarboneVisual;
   face_style?: FaceStyleRecipe;

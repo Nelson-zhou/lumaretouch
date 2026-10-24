@@ -16,8 +16,8 @@ from . import spill_transfer_review as SR
 from . import original_shadow_transfer_review as SHR
 from .body_scalar_transfer_review import select as body_family
 
-ACTIONS = ("preflight", "commit", "undo", "redo", "state", "people_targets", "collarbone_visual", "face_style_visual", "eye_bag_visual", "eye_bag_cohort_visual", "portrait_cohort_visual")
-KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color", "people_transfer", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack", "face_style_review_ack", "eye_bag_review_ack", "eye_bag_cohort_ack", "portrait_cohort_ack", "document_id", "revision", "side", "sha256"}
+ACTIONS = ("preflight", "commit", "undo", "redo", "state", "people_targets", "collarbone_visual", "face_style_visual", "eye_bag_visual", "eye_bag_cohort_visual", "portrait_cohort_visual", "face_decoration_visual")
+KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color", "people_transfer", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack", "face_style_review_ack", "eye_bag_review_ack", "face_decoration_review_ack", "eye_bag_cohort_ack", "portrait_cohort_ack", "document_id", "revision", "side", "sha256"}
 POLICIES = ("skip_and_report", "recheck")
 
 
@@ -130,6 +130,7 @@ class BatchEditor:
     prepare_head: Callable | None = None
     verify_head: Callable | None = None
     head_history_identity: Callable | None = None
+    decoration_guard: Callable | None = None
 
 class BatchSyncController:
     def __init__(self, documents: BatchDocuments, editor: BatchEditor,
@@ -147,7 +148,7 @@ class BatchSyncController:
         self.versions=versions if versions is not None else DocumentVersions()
         self.preflight=FrozenBatchController(PlanPorts(lambda:self.documents.rows(),lambda:self.documents.current_index(),
             lambda:self.documents.remember_current(),lambda:self.editor.capture(),lambda docs:self.target_indices(docs),
-            lambda row,**kw:self.editor.face_known_single(row,**kw),lambda *a,**kw:self.commit(*a,**kw),self.editor.prepare_optics,self.editor.prepare_reference,self.editor.capture_reference,self.editor.people_transfer,self.editor.prepare_crop,self.editor.verify_crop,self.editor.prepare_spill,self.editor.verify_spill,self.editor.prepare_shadow,self.editor.verify_shadow,self.editor.prepare_torso,self.editor.verify_torso,self.editor.prepare_waist,self.editor.verify_waist,self.editor.prepare_head,self.editor.verify_head),
+            lambda row,**kw:self.editor.face_known_single(row,**kw),lambda *a,**kw:self.commit(*a,**kw),self.editor.prepare_optics,self.editor.prepare_reference,self.editor.capture_reference,self.editor.people_transfer,self.editor.prepare_crop,self.editor.verify_crop,self.editor.prepare_spill,self.editor.verify_spill,self.editor.prepare_shadow,self.editor.verify_shadow,self.editor.prepare_torso,self.editor.verify_torso,self.editor.prepare_waist,self.editor.verify_waist,self.editor.prepare_head,self.editor.verify_head,self.editor.decoration_guard),
             self.versions,lambda event:self.emit(event),monotonic)
 
     def target_indices(self, docs) -> tuple[list[int], list[dict]]:
@@ -186,6 +187,7 @@ class BatchSyncController:
         self.emit({"event":"error","error":message})
         if isinstance(p.get("request_id"),str) and 1<=len(p["request_id"])<=128:
             from .eye_bag_batch_store import failure_context
+            from .face_decoration_batch_store import failure_context as decoration_failure_context
             from .eye_bag_cohort_store import failure_context as cohort_failure_context
             from .eye_bag_preset_alias_transaction import failure_context as mixed_failure_context
             from .eye_bag_recovery_alias_transaction import failure_context as recovery_failure_context
@@ -195,7 +197,7 @@ class BatchSyncController:
                 recovery_context["no_write"]=bool(no_write)
                 if recovery_rollback:recovery_context["rolled_back"]=True
                 if no_write or recovery_rollback:recovery_context["restored"]=[]
-            self.preflight.emit_result(p,{"success":False,"outcome_unknown":not no_write and not recovery_rollback,"error":message,"requires_preflight":True,**failure_context(p),**cohort_failure_context(p),**mixed_failure_context(self,p),**recovery_context})
+            self.preflight.emit_result(p,{"success":False,"outcome_unknown":not no_write and not recovery_rollback,"error":message,"requires_preflight":True,**failure_context(p),**decoration_failure_context(p),**cohort_failure_context(p),**mixed_failure_context(self,p),**recovery_context})
 
     def handle_command(self, p: dict):
         """批量同步（LNX-P0-BATCH / BATCH-001…4）。
@@ -230,6 +232,8 @@ class BatchSyncController:
         if 'collarbone_review_ack' in p and (action!='commit' or p.get('preflight_token') is None):
             self._reject(p,'Collarbone visual acknowledgment is accepted only for a frozen commit',no_write=True)
             return
+        if 'face_decoration_review_ack' in p and (action!='commit' or p.get('preflight_token') is None):
+            self._reject(p,'Decoration acknowledgment requires its frozen commit',no_write=True);return
         if 'eye_bag_review_ack' in p and (action!='commit' or p.get('preflight_token') is None):
             self._reject(p,'Eye-bag visual acknowledgment is accepted only for a frozen commit',no_write=True)
             return
@@ -251,6 +255,12 @@ class BatchSyncController:
         if action == "portrait_cohort_visual":
             try:
                 from .portrait_cohort_store import retrieve
+                self.preflight.emit_result(p,retrieve(self.preflight,p))
+            except Exception as error:self._reject(p,str(error),no_write=True)
+            return
+        if action == "face_decoration_visual":
+            try:
+                from .face_decoration_batch_store import retrieve
                 self.preflight.emit_result(p,retrieve(self.preflight,p))
             except Exception as error:self._reject(p,str(error),no_write=True)
             return
@@ -322,6 +332,7 @@ class BatchSyncController:
                 return
             if p.get("people_transfer") is not None:raise SC.ScopeError("People transfer requires a frozen preflight token")
             ops = SC.check_scope(p.get("module_scope"))
+            if "lnx.face_decoration.v1" in ops:raise SC.ScopeError('Decoration requires explicit target face mapping and image review')
             if "lnx.collarbone.v1" in ops:raise SC.ScopeError("Collarbone batch requires confirmed or explicit target-owned people visual review")
             if SC.SEMANTIC.OP in ops:raise SC.ScopeError(SC.SEMANTIC.REASON)
             if SC.OP_CROP in ops:raise SC.ScopeError('Crop requires a frozen per-target visual preflight before commit')
@@ -418,6 +429,7 @@ class BatchSyncController:
             if r["blocked"]:
                 continue
             row = self.documents.rows()[r["index"]]
+            if self.editor.decoration_guard is not None:self.editor.decoration_guard(row)
             if family is not None:
                 version=self.versions.version(row)
                 if (('_reviewed_row' in r and r['_reviewed_row'] is not row)
@@ -884,6 +896,7 @@ class BatchSyncController:
         """
         from .face_style_alias_history import status_summary
         from .eye_bag_batch_history import status_summary as eye_status_summary
+        from .face_decoration_batch_history import status_summary as decoration_status_summary
         from .eye_bag_cohort_history import status_summary as cohort_status_summary
         from .eye_bag_alias_history import status_summary as eye_alias_status_summary
         from .eye_bag_preset_alias_history import status_summary as mixed_preset_status_summary
@@ -896,6 +909,8 @@ class BatchSyncController:
             if marker is not None: item["face_style_alias_review"] = marker
             eye_marker = eye_status_summary(entry)
             if eye_marker is not None: item["eye_bag_batch_review"] = eye_marker
+            decoration_marker=decoration_status_summary(entry)
+            if decoration_marker is not None:item["face_decoration_batch_review"]=decoration_marker
             cohort_marker = cohort_status_summary(entry)
             if cohort_marker is not None: item["eye_bag_cohort_review"] = cohort_marker
             eye_alias_marker = eye_alias_status_summary(entry)

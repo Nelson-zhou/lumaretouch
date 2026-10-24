@@ -156,6 +156,10 @@ def require_route(name,request):
             from .eye_bag_cohort_store import image_read_only
             if not image_read_only(request):raise ValueError('Eye-bag cohort image requires its exact frozen member identity')
             return  # Display reads cannot authorize a partial cohort or substitute source identity.
+        if action=='face_decoration_visual':
+            from .face_decoration_batch_store import image_read_only
+            if not image_read_only(request):raise ValueError('Decoration batch image requires exact frozen target identity')
+            return
         if action=='eye_bag_visual':
             from .eye_bag_batch_store import image_read_only
             if not image_read_only(request):raise ValueError('Eye-bag batch image requires its exact bounded identity')
@@ -179,9 +183,12 @@ def require_route(name,request):
             raise ValueError('Derived transfer requires its correlated receipt identity')
         if action=='commit':
             required={'cmd','action','request_id','preflight_token'}
+            decoration=required|{'face_decoration_review_ack'}
             portrait=required|{'module_scope','portrait_cohort_ack'}
             eye_cohort=required|{'module_scope','eye_bag_cohort_ack'}
-            if set(request) not in (required,required|{'head_review_ack'},required|{'face_style_review_ack'},
+            if set(request) not in (decoration,decoration|{'eye_bag_review_ack'},decoration|{'collarbone_review_ack'},
+                                    decoration|{'eye_bag_review_ack','collarbone_review_ack'},
+                                    required,required|{'head_review_ack'},required|{'face_style_review_ack'},
                                     required|{'eye_bag_review_ack'},required|{'eye_bag_review_ack','collarbone_review_ack'},
                                     eye_cohort,eye_cohort|{'portrait_cohort_ack'},eye_cohort|{'collarbone_review_ack'},
                                     eye_cohort|{'portrait_cohort_ack','collarbone_review_ack'},
@@ -193,6 +200,10 @@ def require_route(name,request):
         elif set(request)-{'cmd','action','request_id','docs','module_scope','conflict_policy',
                           'local_mask_transfer','reference_color','people_transfer'}:
             raise ValueError('Invalid reviewed transfer options')
+        return
+    if name=='preset' and action=='face_decoration_visual':
+        from .face_decoration_preset_store import image_read_only
+        if not image_read_only(request):raise ValueError('Decoration preset image requires exact frozen identity')
         return
     if name=='preset' and action=='eye_bag_visual':
         from .eye_bag_preset_store import image_read_only

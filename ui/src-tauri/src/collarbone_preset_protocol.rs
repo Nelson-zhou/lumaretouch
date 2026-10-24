@@ -20,6 +20,7 @@ pub(crate) fn acknowledgment(value:&Value)->bool {
 }
 pub(crate) fn command(value:&Value)->Result<(),String> {
     if value["cmd"]!="preset" {return Ok(());}
+    if value["action"]=="face_decoration_visual" {return super::face_decoration::command(value);}
     if value["action"]=="eye_bag_visual" {return super::eye_bag::command(value);}
     if value["action"]=="collarbone_visual" {
         return if image_request(value){Ok(())}else{Err("Preset image retrieval requires its exact preset/load/token/side identity".into())};

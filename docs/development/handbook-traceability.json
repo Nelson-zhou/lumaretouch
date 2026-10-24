@@ -5640,13 +5640,17 @@
         "engine/src/lumaretouch_engine/face_decoration_layer.py",
         "engine/src/lumaretouch_engine/face_decoration_support.py",
         "engine/src/lumaretouch_engine/face_decoration_host.py",
+        "engine/src/lumaretouch_engine/face_decoration_preset_review.py",
+        "engine/src/lumaretouch_engine/face_decoration_batch_plan.py",
         "ui/src/faceDecoration/FaceDecorationPanel.tsx",
+        "ui/src/faceDecoration/TransferReview.tsx",
         "ui/src-tauri/src/face_decoration_protocol.rs"
       ],
       "verification": [
-        "docs/face-decoration/ACCEPTANCE-UNRUN.md"
+        "docs/face-decoration/ACCEPTANCE-UNRUN.md",
+        "docs/face-decoration/TRANSFER-ACCEPTANCE-UNRUN.md"
       ],
-      "scope_note": "LNX-REF-PC-32471-C-dd14134407: original versioned 5 freckle + 3 mole-style analytic materials and strength, one operation, not eight algorithms. Decoration-specific current-person visible-skin paint and genuine measured source evidence; no proprietary artwork copied, automatic instance/occlusion segmentation or original-mark removal claim. Original/derived canonical integration and target-local scalar transfer are source contracts only; real UI, numerical, packaging and photographic acceptance remain UNRUN. See docs/face-decoration/IMPLEMENTATION.md for actual route limits."
+      "scope_note": "LNX-REF-PC-32471-C-dd14134407: original versioned 5 freckle + 3 mole-style analytic materials and strength, one operation, not eight algorithms. Decoration-specific current-person visible-skin paint and genuine measured source evidence; no proprietary artwork copied, automatic instance/occlusion segmentation or original-mark removal claim. Exact full mixed one-photo preset and ordinary explicit face-map batch image review/ACK now source-connected, including retained-active decoration and target-owned support. Whole-state batch, persistent cohort and shared-source alias limits remain explicit. Real UI, numerical, packaging, history and photographic acceptance remain UNRUN; no new feature count. See docs/face-decoration/TRANSFER-CONTRACT.md."
     },
     {
       "id": "control:PC-32471:26",

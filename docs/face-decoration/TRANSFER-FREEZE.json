@@ -1,0 +1,362 @@
+{
+  "baseline": "9d2d97fbbe5ef879a43e9bb29be5a9c5d3e56038",
+  "status": "FROZEN_SOURCE_ONLY_FACE_DECORATION_TRANSFER_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32471-C-dd14134407"
+  ],
+  "scope": "Complete single-photo mixed-preset and ordinary explicit-face-map batch visual review for existing original face decorations; scalar-only target-local support, exact full-source candidate rendering, paged evidence and image ACK. No new algorithm, material or automatic visibility claim.",
+  "files": [
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "a539308fd64e34e5e72e9584d5681268560702d43b6114ad4c818304aede9387",
+      "bytes": 475163
+    },
+    {
+      "path": "docs/face-decoration/IMPLEMENTATION.md",
+      "sha256": "de4125c06c7e3ca426b72110c12e6d648c7d4bb4bf1cfe2f792970d6bd00288f",
+      "bytes": 8424
+    },
+    {
+      "path": "docs/face-decoration/TRANSFER-ACCEPTANCE-UNRUN.md",
+      "sha256": "9e29dbe30f531dec13dae92826e520163e76671d39e9a6d69d8699c7ab74788b",
+      "bytes": 4866
+    },
+    {
+      "path": "docs/face-decoration/TRANSFER-CONTRACT.md",
+      "sha256": "e81dec3cf38358b2423cf057cc0b845885f7a823c210fa2489b46d810ab89aa2",
+      "bytes": 4961
+    },
+    {
+      "path": "docs/face-decoration/TRANSFER-RESEARCH.md",
+      "sha256": "d1e884629ca5448b3448d6be6b1cbe5d03361baf3d884a34fc9a9166642ef308",
+      "bytes": 3416
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_dispatch_receipt.py",
+      "sha256": "32daf5bd3bd811f159243e4ba887edabb26b8d09559603d12ec3e1b0ab03cec5",
+      "bytes": 2935
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight.py",
+      "sha256": "619880d6e60578b9aa716bda439a2f8f32ab56ec94adedd559b7734927b272d8",
+      "bytes": 37254
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight_controller.py",
+      "sha256": "cbeb1e7653aba30f751d9c80e4de6519f88ee7669415ba48e7387eb8069a869a",
+      "bytes": 56303
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "d630b8d89c7a9292d5a47d0a5c81b3cffc7338ea3ef008ac8d29a625ee312047",
+      "bytes": 65345
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_transfer_host.py",
+      "sha256": "ee6f409f06a530148e2fec9cd068043c1affa5572d8f4c84da400af2014e1106",
+      "bytes": 13753
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_batch_history.py",
+      "sha256": "07261aaaf740c5e7ad163a9ee89d35266bf42860938c57ce1a40888ec4298fb5",
+      "bytes": 1118
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_batch_plan.py",
+      "sha256": "6b10715af33f907884d082881553f324c688721f7d0a771cb2cf0d568fd81e06",
+      "bytes": 6509
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_batch_review.py",
+      "sha256": "0accca376026a5a0983af3a66af4ebecbe7bd77eb945bb61f6fe1676157a1ca0",
+      "bytes": 5389
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_batch_store.py",
+      "sha256": "0b9e1d36496b9e9faa23a949d945c231d7a67538b904709d08f86a88b0825840",
+      "bytes": 5467
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_admission.py",
+      "sha256": "a9bc7d59b8d404523288e3628a4dd6ffd44808a17aa374ade48c4dc4675cc592",
+      "bytes": 3576
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_coverage.py",
+      "sha256": "32b76d3247e8581bc3b784f6a62571c8ef74551f0343f546955a75d0347cb00d",
+      "bytes": 3668
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_review.py",
+      "sha256": "395467afaee315b00644000d35954486d2f1c3937514bb1d24f4c00637b71d00",
+      "bytes": 15230
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_store.py",
+      "sha256": "3c4a07075812b3f12129834f3b750dbd65e9d8db8d57817d5b573e3e02c11659",
+      "bytes": 5757
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_scope.py",
+      "sha256": "3190ce6edc23a84de030ac69d411ee0ca5e4cfdf6c5683972c17bb313c84a098",
+      "bytes": 4687
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_preset_review.py",
+      "sha256": "b92e575f02ea47e79862fcc37328092e3b89c4f54811795e90897fa87e181dea",
+      "bytes": 21148
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_batch_ledger.py",
+      "sha256": "a9023da3b9f1faf4a7b2e0dfde5c61f26886e48e8302022a23f08d67f3f5a396",
+      "bytes": 18627
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_batch_transfer.py",
+      "sha256": "1e7531b9a1b22df9d1889d0a83beda751612ea18e0359abd9f4f07b0cda38d5c",
+      "bytes": 39327
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_cross_owner_workflow.py",
+      "sha256": "00a85ef56f62316e1a69c476f155a89a8fbcdd65f396ce5bc9d404fc065eac30",
+      "bytes": 26349
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_history_persistence.py",
+      "sha256": "7d5b46ffdbe9286b85f157163967ab41ea9df3c5a10a90f8a9bb2a2d59627f33",
+      "bytes": 12925
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "c3132751a3c8ca77adb0a95d61a75272b1cbe5996d44d36f9fc584d845df1f11",
+      "bytes": 45415
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "sha256": "886943d988be93e213f77f52b210e39fdfe5fdf86012685fc2c9fd0aa74dd08b",
+      "bytes": 52016
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_portrait_review.py",
+      "sha256": "d9662ebb70953c843e6f1f07f409711a4c157666d3b0b8330600efeb7d3a8225",
+      "bytes": 2380
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "97c6b52d04d41cd481b187791dc7938dc867629390c767e9e8dcec44bd77a2cd",
+      "bytes": 8658
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "97a8592cfc41011c316ecbccccf70c76c6a46525252f05a7977178ef6c1fcb7d",
+      "bytes": 471298
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "42cd7e37f0d43e8d96210b5edcdd4720da410fac6994af88694a626ecce7e7fe",
+      "bytes": 16885
+    },
+    {
+      "path": "engine/tests/test_face_decoration_batch_unrun.py",
+      "sha256": "b528cc7680dec11a554f8e8699b855a553d1a1ba7a09366df9e56fa27a92a466",
+      "bytes": 4429
+    },
+    {
+      "path": "engine/tests/test_face_decoration_preset_contract_unrun.py",
+      "sha256": "695152a4524908d62aa73f8b927b751e23146b38557160c440f08a72bd96c0c8",
+      "bytes": 4317
+    },
+    {
+      "path": "engine/tests/test_face_decoration_preset_replay_unrun.py",
+      "sha256": "99a36d403620cfe507fb7c29f12e211b2bb8d7781bb52d47fc8bce012f2fec4f",
+      "bytes": 8401
+    },
+    {
+      "path": "engine/tests/test_face_decoration_preset_source_unrun.py",
+      "sha256": "c8b1b9ad7e2f12c53aff5a853b6a666df88e16c8e22343105217297c62972cd1",
+      "bytes": 2665
+    },
+    {
+      "path": "ui/src-tauri/src/batch_api.rs",
+      "sha256": "1b12dbebc824a5111f681f2a9e12d790d4a3a22cdb59cfa10377e287c5dc91e3",
+      "bytes": 7614
+    },
+    {
+      "path": "ui/src-tauri/src/batch_history_protocol.rs",
+      "sha256": "179bdc9645f0f40ee7d092a89375fc46ffc01624bf8f2dd17690861ba0b5018d",
+      "bytes": 5963
+    },
+    {
+      "path": "ui/src-tauri/src/batch_host.rs",
+      "sha256": "ea9a13e9c418ad6aea83bea4054e2b7a439b0746c04ff852569fd89676f157d5",
+      "bytes": 39975
+    },
+    {
+      "path": "ui/src-tauri/src/collarbone_preset_protocol.rs",
+      "sha256": "94683b8337fc84fb99a45f64512841c58a8f12ee79135bb89171aa18c76b8564",
+      "bytes": 8061
+    },
+    {
+      "path": "ui/src-tauri/src/collarbone_transfer_protocol.rs",
+      "sha256": "9aeaf2590d076a452914e259fb7dc295214ef8add1305505e1ad4f66555d7e96",
+      "bytes": 17904
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_batch_protocol.rs",
+      "sha256": "432ea68df208d721981de0d00a36fd741d0a47180ada95b023f8055de31795e9",
+      "bytes": 26114
+    },
+    {
+      "path": "ui/src-tauri/src/face_decoration_batch_protocol.rs",
+      "sha256": "a0ab92389630811b21e644146740c739f7bf0c235025bdfd8b867b065fc48669",
+      "bytes": 18553
+    },
+    {
+      "path": "ui/src-tauri/src/face_decoration_batch_protocol_unrun.rs",
+      "sha256": "9ea36d034430ddef083ee93d955ec96cbb5a75a41f5214f73d36c47876f5aa05",
+      "bytes": 10256
+    },
+    {
+      "path": "ui/src-tauri/src/face_decoration_preset_protocol.rs",
+      "sha256": "2d0ed7d47872dc07b440c6b4b1fd561fec2c855572872e0fe3c0ce1a4b20ca80",
+      "bytes": 9016
+    },
+    {
+      "path": "ui/src-tauri/src/face_decoration_preset_protocol_tests.rs",
+      "sha256": "6d210dc6caffeb1eaf8bdaff70d202623acd045c0598e4ee59ad7487bd615fb9",
+      "bytes": 5369
+    },
+    {
+      "path": "ui/src-tauri/src/preset_api.rs",
+      "sha256": "e023b57a0ff3955f7b36057cd80f6cad043cfba5ff9ba5e2036de542479bfb23",
+      "bytes": 6451
+    },
+    {
+      "path": "ui/src-tauri/src/preset_host.rs",
+      "sha256": "6d7f7b6d0718c9573fa873ce75ef9cccc5e813dc93f08a1df82d21a073ea70f8",
+      "bytes": 37658
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "9b40f4b391ea1f354129bbfc45ae4987360dd29e2dfb7c4b9084fb50abf27b63",
+      "bytes": 35630
+    },
+    {
+      "path": "ui/src/batch/BatchReview.tsx",
+      "sha256": "c08d1d109ce5544309231030343505172ca0d4068826e5adbdd370a4f0fd72ec",
+      "bytes": 29219
+    },
+    {
+      "path": "ui/src/batch/batchWorkflow.ts",
+      "sha256": "e5c67de4ff74775437d39aa74cf3b111097dde53531201ef8ff38d3ed7c4b435",
+      "bytes": 81318
+    },
+    {
+      "path": "ui/src/batch/useBatchWorkflow.ts",
+      "sha256": "cea1106dfa637b96a5de685be84e655e2b5dde67aa70bc5f324d1d88d96c8bcd",
+      "bytes": 3046
+    },
+    {
+      "path": "ui/src/faceDecoration/TRANSFER-ACCEPTANCE-UNRUN.md",
+      "sha256": "c846a8d8ad5ced3926106e3c95db28b050ccde27d2385cf86065f04c9b7c794e",
+      "bytes": 2594
+    },
+    {
+      "path": "ui/src/faceDecoration/TransferReview.tsx",
+      "sha256": "a4d7a4e0954dfe624cba293bc0b787624bd61654f43b6c2041f3971c6d745f7d",
+      "bytes": 5186
+    },
+    {
+      "path": "ui/src/faceDecoration/batchHistory.unrun.test.ts",
+      "sha256": "f0eaaef163b450ca67121330d0974ac344f0ab1a126002812c1bb5efeaceb797",
+      "bytes": 4868
+    },
+    {
+      "path": "ui/src/faceDecoration/batchHistoryRegistry.ts",
+      "sha256": "a6d0c04cfa3f2ae394df8446ddfe26460b5ec9a3f5618e89fc66c6137e2a0313",
+      "bytes": 4442
+    },
+    {
+      "path": "ui/src/faceDecoration/transfer.unrun.test.ts",
+      "sha256": "7c2df230e31a674e5245f9da28ce2b041e534135cd24d84ae251f689f6c61bdb",
+      "bytes": 3632
+    },
+    {
+      "path": "ui/src/faceDecoration/transferModel.ts",
+      "sha256": "a4c45fc9d51b24055be2b7c6015233e7aa6c668d3daaa23f2cea2f2ba39c29d8",
+      "bytes": 5223
+    },
+    {
+      "path": "ui/src/faceDecoration/transferWiring.unrun.test.ts",
+      "sha256": "ddce7ba1467d7a9c026e576d113bd73bece585ce260e2fe88c12b5ee1eefcb3d",
+      "bytes": 2260
+    },
+    {
+      "path": "ui/src/faceDecoration/visualTransport.ts",
+      "sha256": "dfe7875c69dc00bba02a95fd7c92a31208302976c5b1c169ccd1e2e52e961876",
+      "bytes": 2764
+    },
+    {
+      "path": "ui/src/faceDecoration/visualTransport.unrun.test.ts",
+      "sha256": "664d25de3b81c30138dc9bbab9bb88548eb6664ed3bc8648713d8e8c9062eddb",
+      "bytes": 2514
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "f824788f17026cd7a77eabd0d9a89b7dbae8bd5e4ab5f370f9a3d6fbb547cb26",
+      "bytes": 112686
+    },
+    {
+      "path": "ui/src/people/transferProof.ts",
+      "sha256": "f64fe0b71f011a4e8c2cf93fc43e8d56f26459009e9258153ffbeae158498f62",
+      "bytes": 26442
+    },
+    {
+      "path": "ui/src/presets/PresetPanel.tsx",
+      "sha256": "807a817f3561ba3d769dc28bce39c51bf37560ed19932a358ccb168a4e25636b",
+      "bytes": 18288
+    },
+    {
+      "path": "ui/src/presets/presetWorkflow.ts",
+      "sha256": "c786630c394e933766514ca819b53f4eb86837f47c5f1c627448258f608047ad",
+      "bytes": 51247
+    },
+    {
+      "path": "ui/src/presets/usePresetWorkflow.ts",
+      "sha256": "0bf8016e69cc4f0a5a37aa9712a183ffd75c9763c08bc7fe14ac43c824a6cc91",
+      "bytes": 21716
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1397,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 183,
+    "git_diff_check": "clean",
+    "prior_numeric_source_and_frozen_sources_byte_identical": 339,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 7042
+    }
+  },
+  "integration_map": {
+    "preset": "Exact detached complete mixed-portrait plan, original/supported derived proof, target-owned coverage and canonical source/repair snapshot; existing preset transaction only.",
+    "batch": "Ordinary explicit face maps, complete owner aggregate and all active retained face coverage, immutable paged images and exact per-target ACK; no source masks or recovery copied.",
+    "native_ui": "Exact correlated image read, PNG/hash/dimension/decode gates and explicit image ACK. Stale and unknown outcomes remain fenced.",
+    "history": "Existing canonical scoped ledger and source-owned graph/support persistence; no second history owner or persisted display PNGs."
+  },
+  "limitations": [
+    "Manual visible-skin support, moderately frontal geometry, opaque SDR and existing synchronous Rust/memory/work budgets unchanged.",
+    "Full-source canonical image pairs are reduced RGB8 display evidence, not native-resolution or photographic acceptance.",
+    "Ordinary batch is explicit confirmed face-map scalar transfer, retaining target-local non-portrait state; arbitrary whole-state transfer with active decoration remains refused.",
+    "Shared-source alias and persistent-cohort decoration workflows remain guarded; single-photo planner retains explicit unambiguous face admission.",
+    "Incompatible dedicated preset review owners refuse as a whole, never silently discard selected effects.",
+    "All builds/tests/typecheck/product imports/execution/inference/downloads and runtime/native/UI/history/quality/performance acceptance UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

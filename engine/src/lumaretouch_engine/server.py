@@ -6748,9 +6748,15 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
             from .eye_bag_cohort_store import read_only as eye_bag_cohort_read_only
             if eye_bag_cohort_read_only(msg):
                 fn(msg); return  # Exact all-member review retains prior guards and cannot publish association edits.
+            from .face_decoration_batch_store import read_only as decoration_batch_read_only
+            if decoration_batch_read_only(msg):
+                fn(msg); return  # Target-owned immutable decoration comparison reads, never commits.
             from .eye_bag_batch_store import read_only as eye_bag_batch_read_only
             if eye_bag_batch_read_only(msg):
                 fn(msg); return  # Frozen target review is read-only; retain earlier ownership and receipt guards.
+            from .face_decoration_preset_store import read_only as decoration_preset_read_only
+            if decoration_preset_read_only(msg):
+                fn(msg); return  # Read-only exact mixed preset evidence; stored modules still verified.
             from .eye_bag_preset_store import read_only as eye_bag_preset_read_only
             if eye_bag_preset_read_only(msg):
                 fn(msg); return  # Exact preset reads retain capture/receipt fences; controller verifies source and plan.

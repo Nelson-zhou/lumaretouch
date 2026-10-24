@@ -39,7 +39,7 @@ fn selection(v: &Value) -> bool {
     })
 }
 /// This envelope never accepts portable support, a named style or a cohort.
-fn request(v: &Value) -> bool {
+pub(crate) fn request(v: &Value) -> bool {
     if !fields(v, &["target_policy", "source_ref", "selection", "source", "targets", "eye_bag"])
         || v["target_policy"] != "explicit_face_map" || !selection(&v["selection"])
         || !face_style::endpoint(&v["source"])
@@ -126,8 +126,10 @@ pub(crate) fn command(v: &Value) -> Result<(), String> {
     if let Some(ack) = v.get(ACK) {
         let mut names = vec!["cmd", "action", "request_id", "preflight_token", ACK];
         if v.get(collarbone::ACK).is_some() { names.push(collarbone::ACK); }
+        if v.get(crate::batch_api::face_decoration::ACK).is_some(){names.push(crate::batch_api::face_decoration::ACK);}
         if !fields(v, &names) || v["action"] != "commit" || !text(&v["request_id"])
-            || !hex(&v["preflight_token"], 32) || !acknowledgments(ack) || !paired_acknowledgments(v) {
+            || !hex(&v["preflight_token"], 32) || !acknowledgments(ack) || !paired_acknowledgments(v)
+            || (v.get(crate::batch_api::face_decoration::ACK).is_some()&&!crate::batch_api::face_decoration::paired(v)) {
             return Err("Eye-bag batch commit needs exact ordered PNG/coverage acknowledgments and per-target legacy choices".into());
         }
     }
@@ -144,6 +146,7 @@ pub(crate) fn binding(v: &Value) -> Result<Option<Value>, String> {
     if let Some(ack) = v.get(ACK) {
         let mut result = json!({"preflight_token":v["preflight_token"], (ACK):ack});
         if let Some(other) = v.get(collarbone::ACK) { result[collarbone::ACK] = other.clone(); }
+        if let Some(other)=v.get(crate::batch_api::face_decoration::ACK){result[crate::batch_api::face_decoration::ACK]=other.clone();}
         return Ok(Some(result));
     }
     if preflight_request(v) {
@@ -224,7 +227,7 @@ fn target_review(v: &Value, row: &Value, wanted: &Value, applies: &Value) -> boo
     let choice = applies["eye_bag"]["targets"].as_array().unwrap().iter()
         .find(|choice| choice["document_id"] == row["document_id"]).unwrap();
     if !names.iter().all(|k| map.contains_key(*k)) || map.keys().any(|k|
-        !names.contains(&k.as_str()) && !optional.iter().any(|(op, key)| k.as_str() == *key && applies["selection"].get(*op).is_some()))
+        !names.contains(&k.as_str()) && !["face_decoration_coverage","face_decoration_visual"].contains(&k.as_str()) && !optional.iter().any(|(op, key)| k.as_str() == *key && applies["selection"].get(*op).is_some()))
         || v["version"].as_u64() != Some(1) || v["target_policy"] != "explicit_face_map"
         || v["transfer_policy"] != "selected_parameter_keys_replace"
         || v["excluded"] != json!(["local_assets", "landmarks", "masks", "identity_links"])

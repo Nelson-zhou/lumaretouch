@@ -92,20 +92,27 @@ limit. No 3D wrap, automatic visibility or hidden-surface reconstruction is clai
 
 ## Actual transfer and recovery routes
 
+The subsequent [complete preset and ordinary batch review](TRANSFER-CONTRACT.md)
+adds exact full mixed-image acknowledgment to the bounded routes below. It adds
+no new renderer/material or automatic visibility claim. The foundation-only
+generic preflight limitation is superseded for one-photo exact presets and
+ordinary explicit face-map batches, not for aliases or persistent cohorts.
+
 Ordinary original-photo preset capture/save/replay is registered with the
 existing preset library and scope installer. Active replay requires the current
 exact enabled FaceRef/owner and that target's own authentic face-skin analysis,
 decoration support and native core. The ordinary whole-image derived preset
-route remains refused by its existing operation allowlist. Derived direct
+route remains refused by its existing operation allowlist; the dedicated
+reviewed one-photo adapter is now a separate narrow admission. Derived direct
 people edits and explicit confirmed face-map transfers use the actual supported
 derived-source renderer instead; this is not a claim that every preset path is
 now available on derived sources.
 
-Generic ordinary batch, confirmed-person mapping and persistent associations
-use existing frozen scalar APIs and target rendering. Only pattern/strength
-travel, with each target's own evidence. This slice adds no dedicated paged
-photographic before/after acknowledgment UI for decoration batch/cohort results;
-existing generic preflight is not relabelled as that photographic review.
+Ordinary explicit face-map batches now use paged photographic before/after
+acknowledgment and the existing frozen scalar ledger. Only pattern/strength
+travel, with each target's own evidence. Generic whole-state batches and
+persistent associations with active decoration remain refused pending their
+own complete-image review; metadata preflight is not photographic review.
 
 New same-owner source-identical alias mutations, including review/recovery
 pointers and dormant override changes, are refused until their complete

@@ -21,7 +21,7 @@ def legacy_batch_face_check(engine,row,*,live=False):
     return engine._face_known_single(row,live=live)
 
 
-def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,reviewed_eye_bag=False,reviewed_eye_bag_aliases=False,replace_legacy_eye_bag=False,**kwargs):
+def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,reviewed_face_decoration=False,reviewed_eye_bag=False,reviewed_eye_bag_aliases=False,replace_legacy_eye_bag=False,**kwargs):
     """Preserve existing single-face presets; never infer a multi-face target.
 
     The existing preset owner owns receipts, rollback, document fences/history.
@@ -33,6 +33,8 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
         raise ValueError('Eye-bag preset review policy requires explicit private boolean choices')
     if type(reviewed_eye_bag_aliases) is not bool or (reviewed_eye_bag_aliases and not reviewed_eye_bag):
         raise ValueError('Shared eye-bag planning requires its exact dedicated review owner')
+    if type(reviewed_face_decoration) is not bool:
+        raise ValueError('Decoration planner review admission is a private boolean, not imported recipe authority')
     managed=engine._people_managed()
     if managed and require_active:require_active_owner(engine)
     from . import enhance_scope as ENHANCE, teeth_colour_apply as TEETH, red_eye_apply as RED_EYE
@@ -409,7 +411,11 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
     decoration_involved=(FACE_DECORATION.FIELD in state and
         (decoration_requested or decoration_recipe!=current[FACE_DECORATION.FIELD]))
     if decoration_involved:
-        FACE_DECORATION.install(dict(current),{'recipe':decoration_recipe})
+        if reviewed_face_decoration:
+            from .face_decoration_preset_admission import validate_target
+            validate_target(current,decoration_recipe)
+        else:
+            FACE_DECORATION.install(dict(current),{'recipe':decoration_recipe})
         if (state.get(FACE_DECORATION.TARGET)!=current[FACE_DECORATION.TARGET]
                 or FACE_DECORATION.owner_identity(state)!=FACE_DECORATION.owner_identity(current)):
             raise ValueError('面部装饰预设的文档、有效来源或人物归属已改变')

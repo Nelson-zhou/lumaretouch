@@ -16,13 +16,13 @@ from .preset_transaction import apply_with_rollback, PresetApplyError
 from .preset_organisation_store import OrganisationError
 from . import local_grade_layers as LG
 from . import sky_replacement_scope as SKY, optics_auto_scope as OA, id_background_scope as ID_BACKGROUND
-from . import eye_bag_preset_admission as DERIVED, creative_derived_source as SOURCE
+from . import face_decoration_preset_admission as DERIVED, creative_derived_source as SOURCE
 from . import body_scalar_transfer_review as BODY_REVIEW
 from . import preset_portrait_review as PORTRAIT, eye_bag_preserve_scope as EYE_BAG
 
-ACTIONS = ("list", "preflight", "apply", "save", "import", "delete", "xmp_inspect", "collarbone_visual", "eye_bag_visual")
+ACTIONS = ("list", "preflight", "apply", "save", "import", "delete", "xmp_inspect", "collarbone_visual", "eye_bag_visual", "face_decoration_visual")
 LEGACY_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note", "local_mask_transfer", "preflight_token"}
-FIELDS = {"eye_bag_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token", "member_document_id", "member_revision"}, "collarbone_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token"}, "list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_preset_ack", "eye_bag_preset_ack"},
+FIELDS = {"face_decoration_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token"}, "eye_bag_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token", "member_document_id", "member_revision"}, "collarbone_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token"}, "list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_preset_ack", "eye_bag_preset_ack", "face_decoration_preset_ack"},
           "preflight": {"id", "document_id", "local_mask_transfer", "module_scope", "eye_bag_replace_legacy"},
           "save": {"id", "name", "kind", "force", "note", "module_scope", "document_id", "local_mask_transfer"},
           "import": {"path", "id", "force", "xmp_ack"}, "xmp_inspect": {"path"}, "delete": {"id"}}
@@ -62,6 +62,10 @@ class PresetPorts:
     prepare_head: Callable | None = None
     verify_head: Callable | None = None
     head_history_identity: Callable | None = None
+    prepare_face_decoration: Callable | None = None
+    verify_face_decoration: Callable | None = None
+    face_decoration_replay: Callable | None = None
+    verify_face_decoration_applied: Callable | None = None
     prepare_collarbone: Callable | None = None
     verify_collarbone: Callable | None = None
     collarbone_replay: Callable | None = None
@@ -94,7 +98,9 @@ class PresetController:
         except Exception as error:
             available = False; docs = []
             errors = [{"file": PS.preset_dir(), "error": f"读预设目录失败：{error}"}]
-        return {"list": docs, "errors": errors, "modules": SC.describe(), "dir": PS.preset_dir(),
+        try: decoration_review=PORTRAIT.decoration_required({},self.ports.capture())
+        except Exception: decoration_review=True  # Fail closed; a stale catalogue is not edit authority.
+        return {"face_decoration_review_required":decoration_review, "list": docs, "errors": errors, "modules": SC.describe(), "dir": PS.preset_dir(),
                 "schema": SC.PRESET_SCHEMA, "last_applied": self.last_applied(), "available": available, "organisation_protocol": 1, "xmp_import_protocol": 1}
 
     @staticmethod
@@ -114,7 +120,7 @@ class PresetController:
         if action not in ACTIONS: raise SC.ScopeError(f"未知 preset action: {action}")
         allowed = (FIELDS[action] | {"cmd", "action", "request_id"}) if correlated else LEGACY_KEYS
         if set(p) - allowed: raise SC.ScopeError(f"preset 收到不认识的参数：{sorted(set(p)-allowed)}")
-        if action in ('collarbone_visual','eye_bag_visual') and not correlated:raise SC.ScopeError('Preset image reads require a correlated frozen request')
+        if action in ('collarbone_visual','eye_bag_visual','face_decoration_visual') and not correlated:raise SC.ScopeError('Preset image reads require a correlated frozen request')
         if correlated:
             if p.get("cmd", "preset") != "preset": raise SC.ScopeError("preset command mismatch")
             if "force" in p and type(p["force"]) is not bool: raise SC.ScopeError("force 必须是布尔值")
@@ -144,7 +150,7 @@ class PresetController:
         action = raw_action if type(raw_action) is str and raw_action in ACTIONS else "invalid"
         result = {"event": "preset_result", "protocol": 1, "request_id": request, "action": action,
                   "success": False, "outcome_unknown": False}
-        if action == 'eye_bag_visual':
+        if action in ('eye_bag_visual','face_decoration_visual'):
             # Bounded identity-only failure echo does not assert image ownership.
             result.update({key:p[key] for key in FIELDS[action] if type(p.get(key)) is str and len(p[key]) <= 128})
         if action in ("apply", "preflight", "save"):
@@ -155,6 +161,10 @@ class PresetController:
             raw = json.dumps(p, sort_keys=True, allow_nan=False, ensure_ascii=False)
             if len(raw.encode()) > 65536: raise SC.ScopeError("preset command exceeds 64 KiB")
             digest = sha256(raw.encode()).hexdigest()
+            if action == 'apply' and 'face_decoration_preset_ack' in p:
+                from .face_decoration_preset_review import failure_echo
+                frozen=self.reviews.pending.get(p.get('preflight_token')) if type(p.get('preflight_token')) is str else None
+                self._scalar_receipt=failure_echo(p,frozen)
             if action == 'apply' and type(p.get('eye_bag_preset_ack')) is dict and 'members' in p['eye_bag_preset_ack']:
                 from .eye_bag_preset_alias_review import check_ack
                 ack=check_ack(p['eye_bag_preset_ack'])
@@ -173,8 +183,10 @@ class PresetController:
                 catalog = self.state(); event = {"event": "preset_list", **catalog}; self.emit(event)
                 if not catalog["available"]: raise SC.ScopeError("无法读取预设目录，详见目录错误")
                 evidence = {"catalog": catalog}
-            elif action in ("collarbone_visual","eye_bag_visual"):
-                if action=="eye_bag_visual":
+            elif action in ("collarbone_visual","eye_bag_visual","face_decoration_visual"):
+                if action=="face_decoration_visual":
+                    from .face_decoration_preset_store import retrieve
+                elif action=="eye_bag_visual":
                     from .eye_bag_preset_store import retrieve
                 else:
                     from .collarbone_preset_store import retrieve
@@ -193,7 +205,7 @@ class PresetController:
                 # decides whether this source can use the general route.
                 DERIVED.require_modules(state, doc['modules'])
                 family=BODY_REVIEW.select(doc['modules'])
-                portrait=PORTRAIT.select(doc['modules'],eye_review='eye_bag_replace_legacy' in p)
+                portrait=PORTRAIT.select(doc['modules'],eye_review='eye_bag_replace_legacy' in p,state=state)
                 if portrait is not None:portrait.require_ports(self.ports)
                 if family is not None and family.port_name in ('waist','head') and getattr(self.ports,family.port_name+'_history_identity') is None:
                     raise SC.ScopeError('身体参数预设缺少当前完整人物身份审核端口')
@@ -209,7 +221,7 @@ class PresetController:
                     self.ports.prepare_waist, self.ports.verify_waist,
                     self.ports.prepare_head, self.ports.verify_head,
                     self.ports.prepare_collarbone,self.ports.verify_collarbone,
-                    self.ports.prepare_eye_bag,self.ports.verify_eye_bag,p.get("eye_bag_replace_legacy"))
+                    self.ports.prepare_eye_bag,self.ports.verify_eye_bag,p.get("eye_bag_replace_legacy"),self.ports.prepare_face_decoration,self.ports.verify_face_decoration)
                 if family is not None or portrait is not None:
                     current=self.ports.target_row()
                     from .optics_candidate_identity import fingerprint
@@ -291,13 +303,13 @@ class PresetController:
         result = public_view(result)
         # Compact acknowledgment identities survive failures and bounded receipt
         # fallbacks. A replay never gains a new token or fresh image approval.
-        scalar_keys=('torso_review_ack','waist_review_ack','head_review_ack','collarbone_preset_ack','eye_bag_preset_ack')
-        scalar_scope=any(op in result.get('module_scope',[]) for op in (SC.TORSO_LENGTH.OP,SC.WAIST_LENGTH.OP,SC.HEAD_SIZE.OP,SC.COLLARBONE.OP,EYE_BAG.OP))
+        scalar_keys=('torso_review_ack','waist_review_ack','head_review_ack','collarbone_preset_ack','eye_bag_preset_ack','face_decoration_preset_ack')
+        scalar_scope=any(op in result.get('module_scope',[]) for op in (SC.TORSO_LENGTH.OP,SC.WAIST_LENGTH.OP,SC.HEAD_SIZE.OP,SC.COLLARBONE.OP,EYE_BAG.OP,SC.FACE_DECORATION.OP))
         review_fields = {key: deepcopy(result[key]) for key in ('module_scope', 'preflight_token', *scalar_keys)
                          if key in result} if any(key in result for key in scalar_keys) or scalar_scope else {}
-        if 'collarbone_preset_ack' in result or 'eye_bag_preset_ack' in result:
+        if any(key in result for key in ('collarbone_preset_ack','eye_bag_preset_ack','face_decoration_preset_ack')):
             review_fields.update({key:deepcopy(result[key]) for key in
-                ('id','document_id','xmp_review_ack','spill_review_ack','shadow_review_ack',
+                ('id','document_id','xmp_review_ack','spill_review_ack','shadow_review_ack','face_decoration_visual_required',
                  'batch_id','alias_members','eye_bag_preset_alias_review','rolled_back','requires_reload') if key in result})
         try:
             json.dumps(result, allow_nan=False, ensure_ascii=False).encode("utf-8")
@@ -335,6 +347,9 @@ class PresetController:
             raise SC.ScopeError('身体长度审核确认不能与其他目标图审核确认混用')
         if p.get('preflight_token') is not None:
             pending=self.reviews.pending.get(p['preflight_token']) if type(p['preflight_token']) is str else None
+            if 'face_decoration_preset_ack' in p:
+                from .face_decoration_preset_review import failure_echo
+                self._scalar_receipt=failure_echo(p,pending)
             raw_alias_ack=p.get('eye_bag_preset_ack')
             if type(raw_alias_ack) is dict and 'members' in raw_alias_ack:
                 from .eye_bag_preset_alias_review import check_ack
@@ -344,27 +359,28 @@ class PresetController:
                     **({'module_scope':list(pending['modules'])} if pending is not None else {}),
                     **{key:deepcopy(p[key]) for key in ('xmp_review_ack','spill_review_ack','shadow_review_ack') if key in p}}
             selected=BODY_REVIEW.select(pending['modules']) if pending is not None else None
-            portrait=PORTRAIT.select(pending['modules'],eye_review='eye_bag_replace_legacy' in pending) if pending is not None else None
+            portrait=PORTRAIT.select(pending['modules'],eye_review='eye_bag_replace_legacy' in pending,state=previous) if pending is not None else None
             if portrait is not None:portrait.require_ports(self.ports)
             if selected is not None and selected.port_name in ('waist','head') and getattr(self.ports,selected.port_name+'_history_identity') is None:
                 raise SC.ScopeError('身体参数预设缺少当前完整人物身份审核端口')
             spill_ack={'spill_review_ack':p['spill_review_ack']} if 'spill_review_ack' in p else {}
             shadow_ack={'shadow_review_ack':p['shadow_review_ack']} if 'shadow_review_ack' in p else {}
-            collarbone_ack={key:p[key] for key in ('collarbone_preset_ack','eye_bag_preset_ack') if key in p}
+            collarbone_ack={key:p[key] for key in ('collarbone_preset_ack','eye_bag_preset_ack','face_decoration_preset_ack') if key in p}
             record = self.reviews.claim(p['preflight_token'], pid, previous, reviewed_row,
                                        reviewed_identity[2], reviewed_revision, self.ports.verify_crop, self.ports.verify_xmp, p.get("xmp_review_ack"),
                                        self.ports.verify_spill, verify_shadow=self.ports.verify_shadow,
                                        verify_torso=self.ports.verify_torso, verify_waist=self.ports.verify_waist, verify_head=self.ports.verify_head,
-                                       verify_collarbone=self.ports.verify_collarbone, verify_eye_bag=self.ports.verify_eye_bag, **collarbone_ack,
+                                       verify_collarbone=self.ports.verify_collarbone, verify_eye_bag=self.ports.verify_eye_bag, verify_face_decoration=self.ports.verify_face_decoration, **collarbone_ack,
                                        **spill_ack, **shadow_ack, **scalar_acks)
             doc, mods = record['preset'], record['modules']
             source_proof = record.get('source_proof')
             family=BODY_REVIEW.select(mods)
-            portrait=PORTRAIT.select(mods,eye_review="eye_bag_replace_legacy" in record)
+            portrait=PORTRAIT.select(mods,eye_review="eye_bag_replace_legacy" in record,state=previous)
             if portrait is not None:
                 self._scalar_receipt = {'id':pid,'document_id':reviewed_identity[2],
                     'module_scope':list(mods),'preflight_token':p['preflight_token'],
                     portrait.ack:deepcopy(p[portrait.ack]),
+                    **({'face_decoration_visual_required':True} if portrait.name=='face_decoration' else {}),
                     **{key:deepcopy(p[key]) for key in ('xmp_review_ack','spill_review_ack','shadow_review_ack') if key in p}}
             if family is not None:
                 # Echo only an acknowledgment accepted by the frozen review.
@@ -380,15 +396,15 @@ class PresetController:
             if "spill_review_ack" in p: raise SC.ScopeError('祛染色目标图审核确认必须属于当前冻结预检')
             if "shadow_review_ack" in p: raise SC.ScopeError('原图阴影目标图审核确认必须属于当前冻结预检')
             if scalar_acks: raise SC.ScopeError('身体长度目标图审核确认必须属于当前冻结预检')
-            if 'collarbone_preset_ack' in p or 'eye_bag_preset_ack' in p:raise SC.ScopeError('Portrait preset acknowledgment requires its exact frozen review')
-            if PORTRAIT.select(mods) is not None or family is not None or SC.ORIGINAL_SHADOW.OP in mods or SC.SPILL_REMOVAL.OP in mods or LG.OP in mods or OA.OP in mods or RC.OP in mods or SC.OP_CROP in mods: raise SC.ScopeError('含目标审核模块的预设必须先查看本目标预检，再确认应用')
+            if any(key in p for key in ('collarbone_preset_ack','eye_bag_preset_ack','face_decoration_preset_ack')):raise SC.ScopeError('Portrait preset acknowledgment requires its exact frozen review')
+            if PORTRAIT.select(mods,state=previous) is not None or family is not None or SC.ORIGINAL_SHADOW.OP in mods or SC.SPILL_REMOVAL.OP in mods or LG.OP in mods or OA.OP in mods or RC.OP in mods or SC.OP_CROP in mods: raise SC.ScopeError('含目标审核模块的预设必须先查看本目标预检，再确认应用')
             if SOURCE.record(previous) is not None:
                 source_proof = SOURCE.row_proof({**self.ports.target_row(), 'state':previous})
         DERIVED.require_modules(previous, mods, source_proof)
         ops = list(mods)
-        portrait=PORTRAIT.select(mods,eye_review=bool(p.get("preflight_token") and "eye_bag_replace_legacy" in record))
+        portrait=PORTRAIT.select(mods,eye_review=bool(p.get("preflight_token") and "eye_bag_replace_legacy" in record),state=previous)
         collarbone=portrait is not None
-        for name in ('collarbone','eye_bag'):
+        for name in ('collarbone','eye_bag','face_decoration'):
             if name+'_preset_ack' in p and (portrait is None or portrait.name!=name):
                 raise SC.ScopeError('Portrait preset acknowledgment cannot authorize another scope')
         if SC.SPILL_REMOVAL.OP not in ops and "spill_review_ack" in p:

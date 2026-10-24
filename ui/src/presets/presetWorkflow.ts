@@ -1,3 +1,4 @@
+import {OP as DECORATION_OP,validDecorationPreset,decorationPresetAck,sameDecorationPresetAck,verifyDecorationCoverage,type DecorationPreset,type DecorationPresetAck} from '../faceDecoration/transferModel';
 import {canonical as canonicalEyeBagValue} from '../eyeBagPreserve/support';
 import {presetAliasMarker,sameEyeBagPresetAliasMarker,registerEyeBagPresetAliasReceipt,setEyeBagPresetAliasWritePending,subscribeEyeBagPresetAliasWorkspace,type EyeBagPresetAliasMarker} from '../eyeBagPreserve/presetAliasHistoryRegistry';
 import {EYE_BAG_PRESET_OP,validEyeBagPreset,eyeBagPresetAck,sameEyeBagPresetAck,neutralEyeBagPreset,verifyEyeBagCoverage,type EyeBagPresetReview,type EyeBagPresetAck} from '../eyeBagPreserve/presetModel';
@@ -17,9 +18,9 @@ import type {PresetInfo, PresetState} from '../native';
 import {validXmpAck, validXmpReport, validXmpSummary, validXmpTransfer, validXmpReviewAck, type XmpAck, type XmpReport, type XmpSummary, type XmpTransfer, type XmpReviewAck} from '../xmpImport/model.ts';
 export type PresetAction = 'list'|'preflight'|'apply'|'save'|'import'|'delete'|'xmp_inspect';
 export type PresetOptions = {id?:string;name?:string;path?:string;kind?:string;note?:string;force?:boolean;
-  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;spillReviewAck?:SpillTransferAck[];shadowReviewAck?:ShadowTransferAck[];torsoReviewAck?:TorsoTransferAck[];waistReviewAck?:WaistTransferAck[];headReviewAck?:HeadTransferAck[];collarbonePresetAck?:CollarbonePresetAck;eyeBagPresetAck?:EyeBagPresetAck;eyeBagReplaceLegacy?:boolean;eyeBagNeutral?:boolean;
+  moduleScope?:string[];requestId?:string;documentId?:string;localMaskTransfer?:MaskTransferOptions;preflightToken?:string;spillReviewAck?:SpillTransferAck[];shadowReviewAck?:ShadowTransferAck[];torsoReviewAck?:TorsoTransferAck[];waistReviewAck?:WaistTransferAck[];headReviewAck?:HeadTransferAck[];faceDecorationPresetAck?:DecorationPresetAck;collarbonePresetAck?:CollarbonePresetAck;eyeBagPresetAck?:EyeBagPresetAck;eyeBagReplaceLegacy?:boolean;eyeBagNeutral?:boolean;
   xmpAck?:XmpAck;xmpReviewAck?:XmpReviewAck;/** UI-only captured expected source, never sent as authority. */xmpExpected?:XmpSummary};
-export type PresetReply = {batch_id?:string|null;eye_bag_preset_alias_review?:EyeBagPresetAliasMarker;alias_members?:{document_id:string;expected_revision:string;result_revision:string}[];eye_bag_preset?:EyeBagPresetReview;eye_bag_preset_ack?:EyeBagPresetAck;eye_bag_replace_legacy?:boolean;collarbone_preset?:CollarbonePresetReview;collarbone_preset_ack?:CollarbonePresetAck;protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
+export type PresetReply = {face_decoration_visual_required?:boolean;face_decoration_preset?:DecorationPreset;face_decoration_preset_ack?:DecorationPresetAck;batch_id?:string|null;eye_bag_preset_alias_review?:EyeBagPresetAliasMarker;alias_members?:{document_id:string;expected_revision:string;result_revision:string}[];eye_bag_preset?:EyeBagPresetReview;eye_bag_preset_ack?:EyeBagPresetAck;eye_bag_replace_legacy?:boolean;collarbone_preset?:CollarbonePresetReview;collarbone_preset_ack?:CollarbonePresetAck;protocol:number;request_id:string;action:PresetAction;success:boolean;outcome_unknown:boolean;
   xmp_report?:XmpReport;xmp_transfer?:XmpTransfer;source_proof?:unknown;spill_transfer?:SpillTransferEvidence;shadow_transfer?:ShadowTransferEvidence;torso_transfer?:TorsoTransferEvidence;torso_review_ack?:TorsoTransferAck[];waist_transfer?:WaistTransferEvidence;waist_review_ack?:WaistTransferAck[];head_transfer?:HeadTransferEvidence;head_review_ack?:HeadTransferAck[];
   crop_transfer?:CropReview;reference_color?:ReferenceReview;revision?:string;optical_transfer?:OpticalTargetReview;preflight_token?:string;applies?:Record<string,unknown>;local_mask_transfer?:MaskTransferEvidence;document_id?:string|null;name?:string;id?:string;path?:string;module_scope?:string[];preset?:PresetInfo;catalog?:PresetState;
   before?:Record<string,unknown>;after?:Record<string,unknown>;doc_state?:Record<string,unknown>;
@@ -59,6 +60,11 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
   if(result.torso_review_ack!==undefined&&(action!=='apply'||result.module_scope?.length!==1||result.module_scope[0]!==TORSO_TRANSFER_OP||result.preflight_token!==opts.preflightToken||!sameTorsoTransferAck(result.torso_review_ack,opts.torsoReviewAck)))throw Error('上身长度应用回执与本次逐图确认不一致');
   if(action==='apply'&&opts.torsoReviewAck!==undefined&&result.success&&!sameTorsoTransferAck(result.torso_review_ack,opts.torsoReviewAck))throw Error('缺少本次上身长度 PNG 对确认的终态回执');
   if(result.torso_transfer!=null&&(action!=='preflight'||!result.success||result.module_scope?.length!==1||result.module_scope[0]!==TORSO_TRANSFER_OP))throw Error('未请求或非预检的上身长度像素证据');
+  if(result.face_decoration_visual_required!==undefined&&result.face_decoration_visual_required!==true)throw Error('装饰视觉审核标记无效');
+  if(result.face_decoration_preset!==undefined&&(action!=='preflight'||!result.success||result.face_decoration_visual_required!==true))throw Error('未请求的装饰完整预设证据');
+  if(result.face_decoration_preset_ack!==undefined&&(action!=='apply'||opts.faceDecorationPresetAck===undefined))throw Error('未请求的装饰预设确认回执');
+  if(action==='apply'&&opts.faceDecorationPresetAck!==undefined&&(!validBodyScalarReceiptState(result)||!(result.face_decoration_preset_ack===undefined&&result.face_decoration_preset===undefined&&bodyScalarNoWriteRejection(result,opts.preflightToken))
+    &&(result.id!==opts.id||result.preflight_token!==opts.preflightToken||expectedScope!==undefined&&!sameScope(result.module_scope??[],expectedScope)||!sameDecorationPresetAck(result.face_decoration_preset_ack,opts.faceDecorationPresetAck))))throw Error('装饰预设终态、冻结范围或确认不匹配，只能查询原请求');
   if(result.collarbone_preset!==undefined&&(action!=='preflight'||!result.success||!result.module_scope?.includes(COLLARBONE_PRESET_OP)))throw Error('未请求的锁骨完整预设像素证据');
   if(result.collarbone_preset_ack!==undefined&&(action!=='apply'||opts.collarbonePresetAck===undefined))throw Error('未请求的锁骨预设确认回执');
   if(action==='apply'&&opts.collarbonePresetAck!==undefined&&(!validBodyScalarReceiptState(result)||!(result.collarbone_preset_ack===undefined&&result.collarbone_preset===undefined&&bodyScalarNoWriteRejection(result,opts.preflightToken))
@@ -123,7 +129,7 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
     return;
   }
   if(action==='list'){
-    if(!result.catalog || result.catalog.available!==true || !Array.isArray(result.catalog.list)
+    if(!result.catalog || result.catalog.face_decoration_review_required!==undefined&&typeof result.catalog.face_decoration_review_required!=='boolean' || result.catalog.available!==true || !Array.isArray(result.catalog.list)
       || !Array.isArray(result.catalog.errors) || !Array.isArray(result.catalog.modules)
       || result.catalog.list.some(p=>p.xmp_import!==undefined&&!validXmpSummary(p.xmp_import,Object.keys(p.modules)))
       || result.catalog.list.some(p=>Object.hasOwn(p.modules,HEAD_TRANSFER_OP)&&(Object.keys(p.modules).length!==1||!headTransferParameters(p.modules[HEAD_TRANSFER_OP])||p.xmp_import!==undefined))
@@ -139,6 +145,7 @@ export function validatePresetReply(result:PresetReply,action:PresetAction,opts:
   const wanted=action==='save'?opts.moduleScope:expectedScope;
   if(wanted&&!sameScope(result.module_scope,wanted))throw Error('实际作用模块与选择不一致');
   if(action==='preflight'){
+    if((result.module_scope.includes(DECORATION_OP)||result.face_decoration_visual_required===true)&&(!result.face_decoration_visual_required||!validDecorationPreset(result.face_decoration_preset,opts.documentId??'',result.revision,result.source_proof)))throw Error('装饰预设缺少本目标完整混合前后图与可见皮肤证明');
     if(result.module_scope.includes(EYE_BAG_PRESET_OP)&&(opts.eyeBagReplaceLegacy!==undefined||!neutralEyeBagPreset(result.applies?.[EYE_BAG_PRESET_OP]))&&(result.eye_bag_replace_legacy!==opts.eyeBagReplaceLegacy||!validEyeBagPreset(result.eye_bag_preset,opts.documentId??'',result.revision,result.source_proof,opts.eyeBagReplaceLegacy)))throw Error('去眼袋预设缺少目标逐眼支持、完整前后图或明确旧版替换策略');
     if(result.module_scope.includes(COLLARBONE_PRESET_OP)&&!validCollarbonePreset(result.collarbone_preset,opts.documentId??'',result.revision,result.source_proof))throw Error('锁骨预设缺少当前实际来源、人物覆盖和完整混合效果的前后审核');
     if(!text(result.revision)||!text(result.preflight_token)||!/^[a-f0-9]{32}$/.test(result.preflight_token)||!moduleKeys(result.applies,result.module_scope))throw Error('冻结预设预检结果不完整');
@@ -268,6 +275,14 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
       if(!verified){set({message:'去眼袋逐眼保护或完整共享来源成员摘要未通过校验，请重新预检。'});return;}
     }
     if(options.eyeBagPresetAck!==undefined&&action!=='apply'){set({message:'去眼袋预设确认只能用于冻结应用。'});return;}
+    const decoration=action==='apply'&&(expectedScope?.includes(DECORATION_OP)||frozen?.face_decoration_visual_required===true||options.faceDecorationPresetAck!==undefined);
+    if(decoration){
+      const snapshot=state,reviewContext=context.reviewContextKey,capturedGeneration=contextGeneration;
+      if(!frozen?.face_decoration_preset||frozen.face_decoration_visual_required!==true||!frozen.preflight_token||options.preflightToken!==frozen.preflight_token||options.id!==frozen.id||frozen.document_id!==context.documentId||state.submitted?.reviewContextKey!==reviewContext||expectedScope!==undefined&&!sameScope(expectedScope,frozen.module_scope??[])||!validDecorationPreset(frozen.face_decoration_preset,context.documentId,frozen.revision,frozen.source_proof)||!sameDecorationPresetAck(options.faceDecorationPresetAck,decorationPresetAck(frozen.face_decoration_preset))){set({message:'请先读取并确认本照片全部所选效果及已有装饰的真实前后图。'});return;}
+      const checked=await verifyDecorationCoverage(frozen.face_decoration_preset.visual,frozen.face_decoration_preset.coverage);
+      if(!checked||pending||state!==snapshot||contextGeneration!==capturedGeneration||context.reviewContextKey!==reviewContext||disposed){set({message:'装饰审核证据或目标已改变，请重新预检。'});return;}
+    }
+    if(options.faceDecorationPresetAck!==undefined&&action!=='apply'){set({message:'装饰图像确认只能用于原冻结应用。'});return;}
     const collarbone=action==='apply'&&(expectedScope?.includes(COLLARBONE_PRESET_OP)||frozen?.module_scope?.includes(COLLARBONE_PRESET_OP)||options.collarbonePresetAck!==undefined);
     if(collarbone&&(!frozen?.collarbone_preset||!frozen.preflight_token||options.preflightToken!==frozen.preflight_token
       ||options.id!==frozen.id||frozen.document_id!==context.documentId||state.submitted?.reviewContextKey!==context.reviewContextKey
@@ -354,6 +369,7 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
       ...(options.torsoReviewAck?{torsoReviewAck:options.torsoReviewAck.map(ack=>({...ack}))}:{}),
       ...(options.waistReviewAck?{waistReviewAck:options.waistReviewAck.map(ack=>({...ack}))}:{}),
       ...(options.headReviewAck?{headReviewAck:options.headReviewAck.map(ack=>({...ack}))}:{}),
+      ...(options.faceDecorationPresetAck?{faceDecorationPresetAck:{...options.faceDecorationPresetAck}}:{}),
       ...(options.collarbonePresetAck?{collarbonePresetAck:{...options.collarbonePresetAck}}:{}),
       ...(options.eyeBagPresetAck?{eyeBagPresetAck:structuredClone(options.eyeBagPresetAck)}:{}),
       ...(options.xmpExpected?{xmpExpected:structuredClone(options.xmpExpected)}:{}),
@@ -373,6 +389,7 @@ export function createPresetWorkflow(api:PresetTransport,publish:(state:PresetUi
     if(state.phase!=='uncertain')return;
     if(pending?.options.waistReviewAck!==undefined){set({message:'腰长应用结果尚未确定，只能查询原请求；不会释放后重复提交。'});return;}
     if(pending?.options.eyeBagPresetAck!==undefined){set({message:'去眼袋完整预设结果尚未确定，只能查询原请求，不会释放后重复提交。'});return;}
+    if(pending?.options.faceDecorationPresetAck!==undefined){set({message:'装饰完整预设写入尚未确定，只能查询原请求，不会释放后重复提交。'});return;}
     if(pending?.options.collarbonePresetAck!==undefined){set({message:'完整预设应用结果尚未确定，只能查询原请求，不会释放后重复提交。'});return;}
     if(pending?.options.headReviewAck!==undefined){set({message:'小头应用结果尚未确定，只能查询原请求；不会释放后重复提交。'});return;}
     generation++;pending=null;set({...initialPresetUi});

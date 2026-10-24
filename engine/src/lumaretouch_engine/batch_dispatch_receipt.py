@@ -36,10 +36,15 @@ def rejected(request, error, boundary, emit):
     cohort_commit = (action == 'commit' and set(request) in (cohort_fields,
         cohort_fields | {'portrait_cohort_ack'}, cohort_fields | {'collarbone_review_ack'},
         cohort_fields | {'portrait_cohort_ack', 'collarbone_review_ack'}))
+    from .face_decoration_batch_store import read_only as decoration_read_only,failure_context as decoration_failure_context
+    decoration_read=decoration_read_only(request)
+    decoration_commit=(action=='commit' and 'face_decoration_review_ack' in request
+        and not set(request)-{'cmd','action','request_id','preflight_token','face_decoration_review_ack','eye_bag_review_ack','collarbone_review_ack'})
     cohort_read = cohort_read_only(request)
-    if not (history or eye_commit or read_only(request) or cohort_commit or cohort_read):
+    if not (history or eye_commit or read_only(request) or cohort_commit or cohort_read or decoration_read or decoration_commit):
         return
     context = cohort_failure_context(request) if cohort_commit or cohort_read else failure_context(request)
+    if decoration_read or decoration_commit:context.update(decoration_failure_context(request))
     if not context:
         return
     emit({'event': 'batch_result', 'action': action, 'request_id': identity,

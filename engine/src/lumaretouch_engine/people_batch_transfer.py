@@ -141,7 +141,8 @@ def preflight(engine,controller,p):
     if policy not in ('skip_and_report','recheck'):raise ValueError('Unknown conflict policy')
     named=type(p.get('people_transfer')) is dict and 'face_style' in p['people_transfer']
     eye=type(p.get('people_transfer')) is dict and 'eye_bag' in p['people_transfer']
-    if named or eye:
+    explicit_request=type(p.get('people_transfer')) is dict and p['people_transfer'].get('target_policy')=='explicit_face_map'
+    if named or eye or explicit_request:
         from .people_preset_plan import require_active_owner
         owner=require_active_owner(engine)
         if V.current_row(engine).get('_people_new_import'):
@@ -162,6 +163,7 @@ def preflight(engine,controller,p):
                 or set(requested)!={item['target']['document']['document_id'] for item in selected['targets']}):
             raise ValueError('Selected target documents must exactly match the reviewed explicit face map')
     indices,rejected=batch.target_indices(p.get('docs'));targets=[];public=[];seen_documents=set()
+    decoration='lnx.face_decoration.v1' in selected['selection']
     if explicit and (policy=='recheck' or eye) and rejected:
         raise ValueError('An explicit target document is no longer available; review the complete face map again')
     for index in indices:
@@ -173,9 +175,11 @@ def preflight(engine,controller,p):
             if target_document['document_id'] in seen_documents:raise ValueError('The same document was already selected as a target')
             seen_documents.add(target_document['document_id'])
             target_proof=SOURCE.row_proof(row);asset=target_proof['asset_sha256']
-            if (named or eye) and (row.get('_people_new_import') or V.peek_graph(engine,row) is None):
+            if (named or eye or explicit_request) and (row.get('_people_new_import') or V.peek_graph(engine,row) is None):
                 raise ValueError('Named style requires an already reviewed target portrait owner; open and inspect it first')
             target_graph=V.row_snapshot(engine,row)
+            from .face_decoration_batch_plan import active as decoration_active
+            decoration=decoration or decoration_active(target_graph,asset)
             target_owner=I.proof(engine,row,target_graph)
             if explicit:
                 mapping=next(item for item in selected['targets'] if item['target']['document']['document_id']==target_document['document_id'])
@@ -194,6 +198,8 @@ def preflight(engine,controller,p):
             staged=T.candidate(payload,before,target_graph,source_document=source_document,target_document=target_document,
                                source_owner=source_owner,target_owner=target_owner,
                                eye_bag_review=ADMISSION if eye else None)
+            from .face_decoration_batch_plan import needed as decoration_needed
+            decoration=decoration or decoration_needed(target_graph,staged,payload)
             if 'face_style' in payload:
                 from .face_style_batch_plan import validate as validate_style
                 validate_style(staged,payload['target_refs'])
@@ -232,19 +238,24 @@ def preflight(engine,controller,p):
     if eye:
         from .eye_bag_batch_plan import visuals
         targets,eye_displays=visuals(engine,rows,targets,public)
+    decoration_displays=None
+    if decoration:
+        from .face_decoration_batch_plan import visuals as decoration_visuals
+        targets,decoration_displays=decoration_visuals(engine,rows,targets,public,selected,rejected)
     SOURCE.verify_row(source_row,source_proof)
     if owner.fence!=fence or document(engine,source_row)!=source_document:
         raise ValueError('Source or associations changed during preparation; review again')
     I.verify(engine,source_row,before,source_owner)
     frozen={MARKER:{'options':selected,'source_asset':source_asset,'source_proof':source_proof,'state_revision':before['revision'],
-                    'association_revision':before['association_revision'],'source_owner':source_owner}}
+                    'association_revision':before['association_revision'],'source_owner':source_owner,
+                    'face_decoration_visual_required':decoration}}
     body={'event':'batch_preflight','success':True,'module_scope':list(p['module_scope']),'source':'current',
         'source_snapshot':{'document_id':source_document['document_id'],'revision':str(source_document['revision']),'path':source_row['path']},
         'applies':selected,'policy':policy,'targets':public,
         'rejected_docs':rejected,'ok':sum(not x['blocked'] for x in public),'blocked':sum(bool(x['blocked']) for x in public),
         # Conservative envelope placeholders checked BEFORE retaining a token.
         'preflight_token':'x'*256,'workspace_generation':batch.versions.workspace,'expires_ns':'9'*128,
-        'people_transfer':True}
+        'people_transfer':True,**({'face_decoration_visual_required':True} if decoration else {})}
     if (eye or 'face_style' in selected or COLLARBONE in selected['selection']) and len(json.dumps(body,ensure_ascii=True,allow_nan=False).encode('utf-8'))>7*1024*1024:
         raise ValueError('Collarbone visual response exceeds transport budget; select fewer targets and review again')
     plan=controller.store.create(batch.versions.workspace,source_document['document_id'],source_document['revision'],
@@ -269,13 +280,19 @@ def preflight(engine,controller,p):
             from .collarbone_visual_store import prune as prune_collarbone
             prune_collarbone(controller.store)
             raise
+    if decoration_displays is not None:
+        from .face_decoration_batch_store import attach,prune
+        try:attach(controller.store,plan,decoration_displays)
+        except Exception:
+            controller.store.pending.pop(plan.token,None);prune(controller.store)
+            raise
     body.update(module_scope=list(plan.modules),source_snapshot=controller._source(plan),
                 preflight_token=plan.token,workspace_generation=plan.workspace,expires_ns=str(plan.expires_ns))
     controller.emit(body);controller.emit_result(p,body)
 
 
 def commit(engine,controller,p,plan):
-    if set(p)-{'cmd','action','request_id','preflight_token','collarbone_review_ack','face_style_review_ack','eye_bag_review_ack'}:raise ValueError('Commit accepts only the frozen token and its collarbone image acknowledgments')
+    if set(p)-{'cmd','action','request_id','preflight_token','collarbone_review_ack','face_style_review_ack','eye_bag_review_ack','face_decoration_review_ack'}:raise ValueError('Commit accepts only the frozen token and its collarbone image acknowledgments')
     from .collarbone_state import OP as COLLARBONE
     from . import collarbone_transfer_review as visual_review
     visual_selected=COLLARBONE in plan.modules
@@ -296,6 +313,10 @@ def commit(engine,controller,p,plan):
         visual_ack=visual_review.acknowledgments(p.get('collarbone_review_ack'),records)
     elif 'collarbone_review_ack' in p:
         raise ValueError('Collarbone acknowledgment cannot authorize another operation')
+    from . import face_decoration_batch_review as decoration_review
+    decoration_records=decoration_review.records(plan);decoration=decoration_records is not None;decoration_ack=None
+    if decoration:decoration_ack=decoration_review.acknowledgments(p.get('face_decoration_review_ack'),decoration_records)
+    elif 'face_decoration_review_ack' in p:raise ValueError('Decoration ACK cannot authorize another plan')
     batch=engine._batch_controller();batch.documents.remember_current()
     params=plan.params()[MARKER];source=batch.versions.find(batch.documents.rows(),plan.source_id)
     if source is None or source[1]['path']!=plan.source_path or batch.versions.version(source[1]).revision!=plan.source_revision:
@@ -367,11 +388,11 @@ def commit(engine,controller,p,plan):
             'blocked':blocked,'expected_revision':str(target.revision),
             'current_revision':None if found is None else str(batch.versions.version(found[1]).revision),
             'target_refs':[] if payload is None else payload['target_refs']})
-    if plan.policy=='recheck' and any(x['blocked'] for x in resolved):raise ValueError('A target changed; no people parameters were applied')
+    if (plan.policy=='recheck' or decoration) and any(x['blocked'] for x in resolved):raise ValueError('A target changed; no people parameters were applied')
     if not eligible:raise ValueError('No confirmed target remains eligible')
     from .people_batch_ledger import prepare_scoped,_targets,_verify
     targets=_targets(batch,engine,plans)
-    if eye_selected:
+    if eye_selected or decoration:
         # A no-op first row cannot represent the changed scope in protected
         # history. Select a retained actually affected document before claim.
         for identity,scoped in plans.items():
@@ -380,7 +401,7 @@ def commit(engine,controller,p,plan):
                 found=batch.versions.find(batch.documents.rows(),member['document_id'])
                 if found is None:raise ValueError('Eye-bag history representative disappeared')
                 scoped['row']=found[1]
-    if visual_selected or style_selected or eye_selected:
+    if visual_selected or style_selected or eye_selected or decoration:
         reviewed={item['document_id'] for item in resolved if not item['blocked']}
         if any(target['document_id'] not in reviewed for target in targets.values()):
             raise ValueError('Collarbone publication would modify an unreviewed shared-source document; review the complete affected set')
@@ -440,6 +461,19 @@ def commit(engine,controller,p,plan):
             verify_eye(engine,row,plans[V.scope(row)],frozen,json.loads(frozen.people_json))
         from .eye_bag_batch_history import prepare as prepare_history
         eye_history=prepare_history(engine,plans,targets,eye_ack) if targets else None
+    if decoration:
+        from .face_decoration_batch_plan import verify as verify_decoration,closure as decoration_closure
+        decoration_closure(engine,batch.documents.rows(),plans)
+        for result in resolved:
+            if result['blocked']:continue
+            found=batch.versions.find(batch.documents.rows(),result['document_id'])
+            if found is None:raise ValueError('Decoration target disappeared during full preparation')
+            row=found[1];frozen=next(t for t in plan.targets if t.document_id==result['document_id'])
+            verify_decoration(engine,row,plans[V.scope(row)],frozen,json.loads(frozen.people_json))
+    decoration_history=None
+    if decoration and targets:
+        from .face_decoration_batch_history import prepare as prepare_decoration_history
+        decoration_history=prepare_decoration_history(engine,plans,targets,decoration_ack)
     _verify(batch,engine,plans,targets)
     # Expensive effective-source preparation cannot authorize a newer graph.
     if V.row_snapshot(engine,source[1])!=graph:raise ValueError('People graph changed during final preparation')
@@ -465,10 +499,13 @@ def commit(engine,controller,p,plan):
     if eye_selected:
         from .eye_bag_batch_store import verify_available
         verify_available(controller.store,plan)
-    controller.store.claim(plan,collarbone_review_ack=visual_ack,face_style_review_ack=style_ack,eye_bag_review_ack=eye_ack,request_id=p.get('request_id'))
+    if decoration:
+        from .face_decoration_batch_store import verify_available
+        verify_available(controller.store,plan)
+    controller.store.claim(plan,face_decoration_review_ack=decoration_ack,collarbone_review_ack=visual_ack,face_style_review_ack=style_ack,eye_bag_review_ack=eye_ack,request_id=p.get('request_id'))
     try:
         from .people_batch_ledger import commit_scoped as publish
-        result=publish(batch,engine,plans,request_id=p.get('request_id'),prepare=False,prepared_targets=targets,eye_bag_history=eye_history)
+        result=publish(batch,engine,plans,request_id=p.get('request_id'),prepare=False,prepared_targets=targets,eye_bag_history=eye_history,face_decoration_history=decoration_history)
         bid,frame=(None,None) if result is None else result
         body={'event':'batch_committed','success':True,'batch_id':bid,'module_scope':list(plan.modules),
             'applied':[x['index'] for x in resolved if not x['blocked']],
@@ -477,12 +514,18 @@ def commit(engine,controller,p,plan):
                 'outcome':'skipped' if x['blocked'] else 'applied'} for x in resolved],
             'preflight_token':plan.token,'workspace_generation':plan.workspace,'people_transfer':True,
             'source_changed_since_preflight':False,'source_missing':False}
-        if eye_selected:
+        if eye_selected or decoration:
             changed={target['document_id'] for target in targets.values()}
             body['applied']=[x['index'] for x in resolved if not x['blocked'] and x['document_id'] in changed]
             for item in body['target_outcomes']:
                 if not item['blocked'] and item['document_id'] not in changed:item['outcome']='noop'
-            body.update(eye_bag_review_ack=deepcopy(eye_ack),outcome_unknown=False)
+            body.update(outcome_unknown=False)
+            if eye_selected:body['eye_bag_review_ack']=deepcopy(eye_ack)
+        if decoration_ack is not None:
+            body.update(face_decoration_review_ack=deepcopy(decoration_ack),face_decoration_visual_required=True)
+            if bid is not None:
+                from .face_decoration_batch_history import status_summary
+                body['face_decoration_batch_review']=status_summary(batch.ledger[bid])
         if visual_ack is not None:body['collarbone_review_ack']=deepcopy(visual_ack)
         if style_ack is not None:
             body['face_style_review_ack']=deepcopy(style_ack)
@@ -501,6 +544,8 @@ def commit(engine,controller,p,plan):
     if eye_ack is not None:
         body['eye_bag_review_ack']=deepcopy(eye_ack)
         body['module_scope']=list(plan.modules)
+    if decoration_ack is not None:
+        body['face_decoration_review_ack']=deepcopy(decoration_ack);body['module_scope']=list(plan.modules);body['face_decoration_visual_required']=True
     controller.emit_result(p,controller.store.finish(plan,body))
 
 

@@ -47,6 +47,9 @@ def finish(engine, boundary, error=None):
     if portrait_cohort_image_read_only(message) or portrait_cohort_preflight_read_only(message):return
     from .eye_bag_cohort_store import read_only as eye_bag_cohort_read_only
     if eye_bag_cohort_read_only(message):return  # Source-plus-members review is not an association write.
+    from .face_decoration_batch_store import read_only as decoration_batch_read_only
+    from .face_decoration_preset_store import read_only as decoration_preset_read_only
+    if decoration_batch_read_only(message) or decoration_preset_read_only(message):return
     from .eye_bag_batch_store import read_only as eye_bag_batch_read_only
     if eye_bag_batch_read_only(message):return  # Exact target review cannot publish or taint committed state.
     from .eye_bag_preset_store import read_only as eye_bag_preset_read_only

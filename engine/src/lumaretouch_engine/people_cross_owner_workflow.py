@@ -49,6 +49,8 @@ def options(value, modules):
             raise ValueError('Association documents must be distinct in one workspace')
         seen.add(document['document_id'])
     selection = value['selection']; defaults = A.defaults()
+    if type(selection) is dict and 'lnx.face_decoration.v1' in selection:
+        raise ValueError('Decoration persistent cohorts require a dedicated complete-member image review, not generic scalar metadata')
     if type(selection) is not dict or type(modules) is not list or len(modules) != len(set(modules)) or set(modules) != set(selection):
         raise ValueError('Association modules must exactly name selected scalar leaves')
     if value['operation'] == 'unlink':
@@ -80,6 +82,9 @@ def _endpoint(engine, rows, proof, ref, *, reviewed_only=False):
     if reviewed_only and (row.get('_people_new_import') or V.peek_graph(engine,row) is None):
         raise ValueError('Named cohort requires an already reviewed member owner; open and inspect each member first')
     graph = V.row_snapshot(engine, row)
+    from .face_decoration_batch_plan import active as decoration_active
+    if decoration_active(graph,proof['source_proof']['asset_sha256']):
+        raise ValueError('Retained active decorations require dedicated complete-cohort visual review; no association was changed')
     I.verify(engine, row, graph, proof); SOURCE.verify_row(row, proof['source_proof'])
     scope = V.scope(row)
     if sum(V.scope(other) == scope for other in rows) != 1:

@@ -47,12 +47,20 @@ def install(state, params):
     state[FIELD] = recipe; state[REQUESTED] = True
 
 
+def resolved_recipe(graph, face_id):
+    """Resolve only this operation; unrelated dormant conflicts are not relabelled."""
+    from . import people_algorithms as A, people_resolver as R
+    return R.materialize(R.resolve(graph,face_id,{OP:A.leaves(S.neutral())}),OP,S.neutral(),S.check)
+
+
 def capture(engine, base=None):
     from . import people_state as P, people_algorithms as A, people_resolver as R
     out = engine._capture_state() if base is None else base
-    recipe = S.neutral(); ref = None; proof = None; supported = False; native = False; refusal = None
+    recipe = S.neutral(); ref = None; proof = None; supported = False; native = False; refusal = None; retained_active = False
     if engine._people_managed():
         graph = engine._people_owner().snapshot(); source = engine._people_source(); asset = source['sha256']
+        retained_active = any(face['enabled'] and face['asset_sha256']==asset and
+            S.active(resolved_recipe(graph,key)) for key,face in graph['faces'].items())
         selected = engine._people_cursors.get(asset); face = graph['faces'].get(selected)
         target = engine._people_targets.get(asset)
         if face and face['enabled'] and face['asset_sha256'] == asset:
@@ -74,4 +82,4 @@ def capture(engine, base=None):
                     refusal = str(error)
     return {**out,FIELD:recipe,TARGET:ref,OWNER:proof,REQUESTED:False,
             '_face_decoration_supported':supported,'_face_decoration_native_available':native,
-            '_face_decoration_refusal':refusal}
+            '_face_decoration_refusal':refusal,'_face_decoration_preset_retained_active':retained_active}

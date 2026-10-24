@@ -142,6 +142,22 @@ class WorkflowPortsMixin:
         from .waist_length_transfer_review import history_identity
         return history_identity(self,row,state,document_id,str(revision))
 
+    def _prepare_face_decoration_preset(self,row,before,candidate,document_id,revision,preset,modules):
+        from .face_decoration_preset_review import prepare
+        return prepare(self,row,before,candidate,document_id,str(revision),preset,modules)
+
+    def _verify_face_decoration_preset(self,row,before,candidate,document_id,revision,record):
+        from .face_decoration_preset_review import verify
+        return verify(self,row,before,candidate,document_id,str(revision),record)
+
+    def _replay_face_decoration_preset(self,row,state,document_id,revision,record,**kwargs):
+        from .face_decoration_preset_review import replay
+        return replay(self,row,state,document_id,str(revision),record,**kwargs)
+
+    def _verify_face_decoration_preset_applied(self,row,state,document_id,revision,record,**kwargs):
+        from .face_decoration_preset_review import verify_applied
+        return verify_applied(self,row,state,document_id,str(revision),record,**kwargs)
+
     def _prepare_collarbone_preset(self,row,before,candidate,document_id,revision,preset,modules):
         from .collarbone_preset_review import prepare
         return prepare(self,row,before,candidate,document_id,str(revision),preset,modules)
@@ -189,6 +205,8 @@ class WorkflowPortsMixin:
                 prepare_eye_bag=self._prepare_eye_bag_preset,verify_eye_bag=self._verify_eye_bag_preset,
                 eye_bag_replay=self._replay_eye_bag_preset,verify_eye_bag_applied=self._verify_eye_bag_preset_applied,
                 verify_eye_bag_alias=self._verify_eye_bag_preset_alias,publish_eye_bag_alias=self._publish_eye_bag_preset_alias,
+                prepare_face_decoration=self._prepare_face_decoration_preset,verify_face_decoration=self._verify_face_decoration_preset,
+                face_decoration_replay=self._replay_face_decoration_preset,verify_face_decoration_applied=self._verify_face_decoration_preset_applied,
                 prepare_collarbone=self._prepare_collarbone_preset,verify_collarbone=self._verify_collarbone_preset,
                 collarbone_replay=self._replay_collarbone_preset,verify_collarbone_applied=self._verify_collarbone_preset_applied,
                 prepare_optics=self._prepare_optics_target, prepare_reference=self._prepare_reference_target,
@@ -221,6 +239,7 @@ class WorkflowPortsMixin:
 
 
     def _batch_controller(self):
+        from .face_decoration_batch_plan import require_generic_safe as decoration_guard
         controller = self.__dict__.get("_batch_sync")
         if controller is None:
             controller = BS.BatchSyncController(
@@ -228,7 +247,8 @@ class WorkflowPortsMixin:
                     current_index=lambda: self._doc_index,
                     remember_current=lambda: self._remember_current(),
                     index_of=lambda path: self._index_of(path)),
-                BS.BatchEditor(prepare_crop=self._prepare_crop_target, verify_crop=self._verify_crop_target,
+                BS.BatchEditor(decoration_guard=lambda row: decoration_guard(self,row),
+                prepare_crop=self._prepare_crop_target, verify_crop=self._verify_crop_target,
                 prepare_spill=self._prepare_spill_target, verify_spill=self._verify_spill_target,
                 prepare_shadow=self._prepare_shadow_target, verify_shadow=self._verify_shadow_target,
                 prepare_torso=self._prepare_torso_target, verify_torso=self._verify_torso_target,

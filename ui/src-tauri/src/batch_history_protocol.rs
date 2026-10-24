@@ -43,6 +43,12 @@ pub(crate) fn preset_alias_summary(v: &Value) -> bool {
 }
 pub(crate) fn receipt(v: &Value) -> bool {
     if !action(v) { return true; }
+    if let Some(marker)=v.get("face_decoration_batch_review") {
+        if !summary(marker) {return false;}
+        if v["success"]==true && (v["module_scope"]!=json!(["lnx.people_graph.v1"])
+            ||v["restored"].as_array().map(|rows|rows.len() as u64)!=marker["member_count"].as_u64()
+            ||v["conflicts"].as_array().map_or(true,|rows|!rows.is_empty())){return false;}
+    }
     if !text(&v["batch_id"]) || !v["success"].is_boolean() || !v["outcome_unknown"].is_boolean() { return false; }
     for key in EYE_MARKERS {
         if let Some(marker) = v.get(*key) {

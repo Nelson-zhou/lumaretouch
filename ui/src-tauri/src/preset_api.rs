@@ -9,7 +9,9 @@ pub(crate) mod visual;
 pub(crate) mod eye_bag;
 #[path="collarbone_preset_protocol.rs"]
 pub(crate) mod collarbone;
-pub(crate) fn read_only(value:&Value)->bool {eye_bag::read_only(value)||collarbone::read_only(value)}
+#[path="face_decoration_preset_protocol.rs"]
+pub(crate) mod face_decoration;
+pub(crate) fn read_only(value:&Value)->bool {eye_bag::read_only(value)||collarbone::read_only(value)||face_decoration::read_only(value)}
 fn require_xmp_support(state: &AppState, command: &Value) -> Result<(), String> {
     if (command["action"] == "xmp_inspect" || command.get("xmp_ack").is_some() || command.get("xmp_review_ack").is_some())
         && state.ready_caps.lock().map_err(|_| "capability lock poisoned")?["xmp_import_protocol"] != 1 {
@@ -18,6 +20,7 @@ fn require_xmp_support(state: &AppState, command: &Value) -> Result<(), String> 
     Ok(())
 }
 pub(crate) fn enqueue(state: &AppState, handle: &EngineHandle, command: Value) -> Result<(), String> {
+    face_decoration::command(&command)?;
     eye_bag::command(&command)?;
     collarbone::command(&command)?;
     crate::spill_transfer_protocol::command(&command)?;
@@ -62,6 +65,7 @@ pub(crate) fn preset(
     head_review_ack: Option<Value>,
     collarbone_preset_ack: Option<Value>,
     eye_bag_preset_ack: Option<Value>,
+    face_decoration_preset_ack: Option<Value>,
     eye_bag_replace_legacy: Option<bool>,
     revision: Option<String>,
     member_document_id: Option<String>,
@@ -69,7 +73,7 @@ pub(crate) fn preset(
     side: Option<String>,
     sha256: Option<String>,
 ) -> Result<Value, String> {
-    const ACTIONS: [&str; 9] = ["list", "preflight", "apply", "save", "import", "delete", "xmp_inspect", "collarbone_visual", "eye_bag_visual"];
+    const ACTIONS: [&str; 10] = ["list", "preflight", "apply", "save", "import", "delete", "xmp_inspect", "collarbone_visual", "eye_bag_visual", "face_decoration_visual"];
     if !ACTIONS.contains(&action.as_str()) {
         return Err(format!("preset 不认识动作 {action}（可用：{}）", ACTIONS.join("/")));
     }
@@ -97,6 +101,7 @@ pub(crate) fn preset(
         ("head_review_ack", head_review_ack),
         ("collarbone_preset_ack", collarbone_preset_ack),
         ("eye_bag_preset_ack", eye_bag_preset_ack),
+        ("face_decoration_preset_ack", face_decoration_preset_ack),
         ("eye_bag_replace_legacy", eye_bag_replace_legacy.map(Value::from)),
         ("revision", revision.map(Value::from)),
         ("member_document_id", member_document_id.map(Value::from)),
@@ -111,6 +116,7 @@ pub(crate) fn preset(
     if let Some(v) = module_scope {
         cmd["module_scope"] = json!(v);
     }
+    face_decoration::command(&cmd)?;
     eye_bag::command(&cmd)?;
     collarbone::command(&cmd)?;
     crate::spill_transfer_protocol::command(&cmd)?;

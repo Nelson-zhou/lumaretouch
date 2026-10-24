@@ -8,7 +8,7 @@ from . import reference_color_scope as RC
 from . import scope as SC, local_grade_layers as LG, local_grade_runtime as LR
 from . import sky_replacement_scope as SKY, optics_auto_scope as OA, optics_transfer_review as OR
 from .batch_preflight import canonical
-from . import eye_bag_preset_admission as DERIVED, creative_derived_source as SOURCE
+from . import face_decoration_preset_admission as DERIVED, creative_derived_source as SOURCE
 from . import spill_transfer_review as SPILL_REVIEW
 from . import original_shadow_transfer_review as SHADOW_REVIEW
 from . import body_scalar_transfer_review as BODY_REVIEW
@@ -21,6 +21,7 @@ _NO_WAIST_ACK = object()
 _NO_HEAD_ACK = object()
 _NO_COLLARBONE_ACK = object()
 _NO_EYE_BAG_ACK = object()
+_NO_FACE_DECORATION_ACK = object()
 
 
 class PresetReviews:
@@ -28,15 +29,15 @@ class PresetReviews:
         self.pending=OrderedDict()
         self.targets={}
 
-    def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None,prepare_crop=None,verify_crop=None,prepare_xmp=None,verify_xmp=None,prepare_spill=None,verify_spill=None,prepare_shadow=None,verify_shadow=None,prepare_torso=None,verify_torso=None,prepare_waist=None,verify_waist=None,prepare_head=None,verify_head=None,prepare_collarbone=None,verify_collarbone=None,prepare_eye_bag=None,verify_eye_bag=None,eye_bag_replace_legacy=None):
+    def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None,prepare_crop=None,verify_crop=None,prepare_xmp=None,verify_xmp=None,prepare_spill=None,verify_spill=None,prepare_shadow=None,verify_shadow=None,prepare_torso=None,verify_torso=None,prepare_waist=None,verify_waist=None,prepare_head=None,verify_head=None,prepare_collarbone=None,verify_collarbone=None,prepare_eye_bag=None,verify_eye_bag=None,eye_bag_replace_legacy=None,prepare_face_decoration=None,verify_face_decoration=None):
         modules=DERIVED.require_modules(state,preset['modules']);SC.check_scope(list(modules))
         family=BODY_REVIEW.select(modules)
-        portrait=PORTRAIT.select(modules,eye_review=eye_bag_replace_legacy is not None)
+        portrait=PORTRAIT.select(modules,eye_review=eye_bag_replace_legacy is not None,state=state)
         collarbone=portrait is not None
         eye_bag=portrait is not None and portrait.name=="eye_bag"
         if eye_bag and type(eye_bag_replace_legacy) is not bool:raise ValueError("Choose the explicit eye-bag legacy replacement policy")
         if not eye_bag and eye_bag_replace_legacy is not None:raise ValueError("Unexpected eye-bag replacement policy")
-        if eye_bag and family is not None:raise ValueError("Body scalar and eye-bag preset reviews require separate replay owners")
+        if portrait is not None and portrait.name in ('eye_bag','face_decoration') and family is not None:raise ValueError("Body scalar and eye-bag preset reviews require separate replay owners")
         row_identity=(row.get('document_id'),row.get('path'))
         xmp=preset.get("xmp_import")
         if family is not None and xmp is not None:raise ValueError('身体长度参数须独立审核，不能附带 XMP 兼容性迁移')
@@ -105,7 +106,7 @@ class PresetReviews:
             verify_xmp(row,state,candidate,document_id,str(revision),xmp['source_sha256'],xmp_record)
         collarbone_record=None;collarbone_public=None
         if collarbone:
-            prepare_portrait,verify_portrait=(prepare_eye_bag,verify_eye_bag) if eye_bag else (prepare_collarbone,verify_collarbone)
+            prepare_portrait,verify_portrait={'eye_bag':(prepare_eye_bag,verify_eye_bag),'collarbone':(prepare_collarbone,verify_collarbone),'face_decoration':(prepare_face_decoration,verify_face_decoration)}[portrait.name]
             if prepare_portrait is None or verify_portrait is None:
                 raise ValueError('Portrait preset requires the exact mixed-portrait target image planner')
             extra={'replace_legacy':eye_bag_replace_legacy} if eye_bag else {}
@@ -140,14 +141,15 @@ class PresetReviews:
                 **({'shadow_transfer':shadow_transfer} if SC.ORIGINAL_SHADOW.OP in prepared else {}),
                 **({family.wire_key:scalar_transfer} if family is not None else {}),
                 **({portrait.wire:collarbone_public} if collarbone else {}),
+                **({'face_decoration_visual_required':True} if portrait is not None and portrait.name=='face_decoration' else {}),
                 **({'eye_bag_replace_legacy':eye_bag_replace_legacy} if eye_bag else {}),
                 **({'xmp_transfer':xmp_transfer,'xmp_report':deepcopy(xmp['report'])} if xmp is not None else {})}
 
-    def claim(self,token,preset_id,state,row,document_id,revision,verify_crop=None,verify_xmp=None,xmp_review_ack=None,verify_spill=None,spill_review_ack=_NO_SPILL_ACK,verify_shadow=None,shadow_review_ack=_NO_SHADOW_ACK,verify_torso=None,torso_review_ack=_NO_TORSO_ACK,verify_waist=None,waist_review_ack=_NO_WAIST_ACK,verify_head=None,head_review_ack=_NO_HEAD_ACK,verify_collarbone=None,collarbone_preset_ack=_NO_COLLARBONE_ACK,verify_eye_bag=None,eye_bag_preset_ack=_NO_EYE_BAG_ACK):
+    def claim(self,token,preset_id,state,row,document_id,revision,verify_crop=None,verify_xmp=None,xmp_review_ack=None,verify_spill=None,spill_review_ack=_NO_SPILL_ACK,verify_shadow=None,shadow_review_ack=_NO_SHADOW_ACK,verify_torso=None,torso_review_ack=_NO_TORSO_ACK,verify_waist=None,waist_review_ack=_NO_WAIST_ACK,verify_head=None,head_review_ack=_NO_HEAD_ACK,verify_collarbone=None,collarbone_preset_ack=_NO_COLLARBONE_ACK,verify_eye_bag=None,eye_bag_preset_ack=_NO_EYE_BAG_ACK,verify_face_decoration=None,face_decoration_preset_ack=_NO_FACE_DECORATION_ACK):
         if type(token) is not str or token not in self.pending:raise ValueError('目标预设预检已失效或使用，请重新预检')
         record=self.pending[token]
         family=BODY_REVIEW.select(record['modules'])
-        portrait=PORTRAIT.select(record['modules'],eye_review='eye_bag_replace_legacy' in record)
+        portrait=PORTRAIT.select(record['modules'],eye_review='eye_bag_replace_legacy' in record,state=state)
         collarbone=portrait is not None
         eye_bag=portrait is not None and portrait.name=='eye_bag'
         if (family is not None or collarbone) and self.targets.get(token) is not row:
@@ -222,13 +224,13 @@ class PresetReviews:
             acknowledgment(xmp_review_ack,record)
             verify_xmp(row,state,candidate,document_id,str(revision),xmp['source_sha256'],record.get('xmp'))
         elif xmp_review_ack is not None:raise ValueError('Unexpected XMP review acknowledgment')
-        for name,ack,missing in (('collarbone',collarbone_preset_ack,_NO_COLLARBONE_ACK),('eye_bag',eye_bag_preset_ack,_NO_EYE_BAG_ACK)):
+        for name,ack,missing in (('collarbone',collarbone_preset_ack,_NO_COLLARBONE_ACK),('eye_bag',eye_bag_preset_ack,_NO_EYE_BAG_ACK),('face_decoration',face_decoration_preset_ack,_NO_FACE_DECORATION_ACK)):
             if ack is not missing and (portrait is None or portrait.name!=name):
                 raise ValueError('A portrait preset acknowledgment cannot authorize another preset scope')
         if collarbone:
-            verify_portrait=verify_eye_bag if eye_bag else verify_collarbone
+            verify_portrait={'eye_bag':verify_eye_bag,'collarbone':verify_collarbone,'face_decoration':verify_face_decoration}[portrait.name]
             if verify_portrait is None:raise ValueError('Exact portrait preset verifier is unavailable')
-            portrait.review.acknowledgment(eye_bag_preset_ack if eye_bag else collarbone_preset_ack,record[portrait.name])
+            portrait.review.acknowledgment({'eye_bag':eye_bag_preset_ack,'collarbone':collarbone_preset_ack,'face_decoration':face_decoration_preset_ack}[portrait.name],record[portrait.name])
             verify_portrait(row,state,candidate,document_id,str(revision),record[portrait.name])
             portrait.store.verify_available(self,token)
         if proof is not None:SOURCE.verify_row({**row,'state':state},proof)
