@@ -30,6 +30,7 @@ impl AppState {
         crate::leg_length_api::reset(epoch);
         crate::torso_length_api::reset(epoch);
         crate::waist_length_api::reset(epoch);
+        crate::head_size_api::reset(epoch);
         crate::neck_shape_api::reset(epoch);
         crate::arm_shape_api::reset(epoch);
         crate::sample_library_api::reset(epoch);

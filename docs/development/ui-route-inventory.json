@@ -217,6 +217,11 @@
           "path": "腰部长度",
           "ui_route": "waist_length.amount via independently marked waist source workspace",
           "status": "PARTIAL_UNRUN; explicit visible waist endpoints and current source/body/own-face ownership; direct canonical rendering plus bounded unique-body scalar preset/batch with actual per-target before/after authored; multi-body routing and numerical/photo acceptance remain unfinished"
+        },
+        {
+          "path": "小头",
+          "ui_route": "head_size.amount via independent complete-head/hair source workspace",
+          "status": "PARTIAL_UNRUN; manually reviewed complete head/hair box, pivot and clear transition, actual own BodyRef/FaceRef; no automatic hair segmentation, scalar preset/batch and photo acceptance unfinished"
         }
       ],
       "status": "implementation_and_semantics_require_verification"

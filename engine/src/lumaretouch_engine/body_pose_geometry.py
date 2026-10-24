@@ -31,9 +31,12 @@ TORSO_LENGTH_BODY_ORDER=FrozenBodyOrder(7,(*NECK_BODY_ORDER.operation_ids,'lnx.t
 
 WAIST_LENGTH_BODY_ORDER=FrozenBodyOrder(8,(*TORSO_LENGTH_BODY_ORDER.operation_ids,'lnx.waist_length.v1'))
 
+HEAD_SIZE_BODY_ORDER=FrozenBodyOrder(9,(*WAIST_LENGTH_BODY_ORDER.operation_ids,'lnx.head_size.v1'))
+
 def effective_order(state):
     """One authoritative chain. Neutral new families preserve older map identity."""
     active={op for row in state['bodies'].values() for op in O.active_operations(row)}
+    if 'lnx.head_size.v1' in active:return HEAD_SIZE_BODY_ORDER
     if 'lnx.waist_length.v1' in active:return WAIST_LENGTH_BODY_ORDER
     if 'lnx.torso_length.v1' in active:return TORSO_LENGTH_BODY_ORDER
     if 'lnx.neck_shape.v1' in active:return NECK_BODY_ORDER

@@ -32,8 +32,8 @@ class OperationPolicy:
 def policies(extra=None):
     from . import shoulder_shape_state as S
     shoulder=OperationPolicy(S.OPERATION_ID,S.neutral,S.check,S.active,tuple(E.ANCHORS))
-    from . import leg_shape_state as L, arm_shape_state as A, waist_shape_state as W, leg_length_state as LL, neck_shape_state as N, torso_length_state as T, waist_length_state as WL
-    result={SHOULDER_OPERATION:shoulder,L.OPERATION_ID:L.policy(),**A.policies(),W.OPERATION_ID:W.policy(),LL.OPERATION_ID:LL.policy(),N.OPERATION_ID:N.policy(),T.OPERATION_ID:T.policy(),WL.OPERATION_ID:WL.policy()}
+    from . import leg_shape_state as L, arm_shape_state as A, waist_shape_state as W, leg_length_state as LL, neck_shape_state as N, torso_length_state as T, waist_length_state as WL, head_size_state as HS
+    result={SHOULDER_OPERATION:shoulder,L.OPERATION_ID:L.policy(),**A.policies(),W.OPERATION_ID:W.policy(),LL.OPERATION_ID:LL.policy(),N.OPERATION_ID:N.policy(),T.OPERATION_ID:T.policy(),WL.OPERATION_ID:WL.policy(),HS.OPERATION_ID:HS.policy()}
     for key,policy in (extra or {}).items():
         E.token(key)
         if not isinstance(policy,OperationPolicy) or policy.operation_id!=key:raise ValueError('Body operation policy identity mismatch')

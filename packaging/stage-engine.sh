@@ -43,6 +43,11 @@ cp "$here/../core/arm_shape/lib.rs" "$here/../LICENSE" "$stage/lumaretouch_engin
 cp "$here/../docs/arm-shape/README.md" "$stage/lumaretouch_engine/third_party/arm_shape/README.md"
 cp "$here/../engine/src/lumaretouch_engine/body_pose_licenses/"*.txt "$stage/lumaretouch_engine/third_party/arm_shape/"
 cp "$here/../docs/model-licenses/archive/sam2-LICENSE.txt" "$here/../docs/model-licenses/archive/sam2-README.md" "$stage/lumaretouch_engine/third_party/arm_shape/"
+# Complete-head manual support with original Rust off-grid geometry. Build UNRUN.
+bash "$here/build-head-size.sh" "$stage/lumaretouch_engine/bin/liblrt_head_size.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/head_size"
+cp "$here/../core/head_size/lib.rs" "$here/../core/head_size/tests.rs" "$here/../core/head_size/head_size.h" "$here/../core/head_size/Cargo.toml" "$here/../LICENSE" "$here/../docs/head-size/"*.md "$stage/lumaretouch_engine/third_party/head_size/"
+cp "$here/../engine/src/lumaretouch_engine/body_pose_licenses/"*.txt "$stage/lumaretouch_engine/third_party/head_size/"
 bash "$here/build-waist-shape.sh" "$stage/lumaretouch_engine/bin/liblrt_waist_shape.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/waist_shape"
 cp "$here/../core/waist_shape/lib.rs" "$here/../LICENSE" "$here/../docs/waist-shape/README.md" "$stage/lumaretouch_engine/third_party/waist_shape/"

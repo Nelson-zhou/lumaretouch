@@ -430,6 +430,8 @@ def check_params(op: str, params: dict) -> dict:
     未知键**整条拒**：预设文件里多出一个键，要么是别的版本写的（schema 该拦），要么是
     有人想把参数塞进它不属于的模块。静默忽略就是"导入后参数少了一半而没人知道"。
     """
+    if op == "lnx.head_size.v1":
+        raise ScopeError("头部大小暂不支持预设或批量参数迁移；每张图需独立标记完整头发范围、过渡和中心并审核真实结果")
     m = MODULES.get(op)
     if m is None:
         raise ScopeError(f"未知模块 {op!r}（可用：{', '.join(known_ops())}）")
@@ -680,6 +682,8 @@ def check_scope(ops) -> list[str]:
         raise ScopeError("module_scope 不能为空：空集不等于全部模块（冻结件 lnx.batch.v1 的原文）")
     out: list[str] = []
     for op in ops:
+        if op == "lnx.head_size.v1":
+            raise ScopeError("头部大小暂不支持预设或批量参数迁移；每张图需独立标记完整头发范围、过渡和中心并审核真实结果")
         if op not in MODULES:
             raise ScopeError(f"module_scope 里有未知模块 {op!r}（可用：{', '.join(known_ops())}）")
         if not MODULES[op]["transferable"]:

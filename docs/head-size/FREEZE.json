@@ -1,0 +1,439 @@
+{
+  "baseline": "b62028f82ea969b06aa5015a1583c4a7e383b6b1",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN_PARTIAL_REQUIREMENT",
+  "requirement_ids": [
+    "LNX-REF-PC-32473-C-dc1b0ba40a"
+  ],
+  "scope": "Independent complete-head/hair shrink with manually marked plateau, pivot and clear transition, current measured own BodyRef/FaceRef. Original Rust continuous inverse field into existing one-pass body/face sampler. No inferred hairline, copied face pixels or duplicate face-size alias.",
+  "files": [
+    {
+      "path": "core/head_size/Cargo.toml",
+      "sha256": "2a700849b1b2eb9a82a81a906187ab96e15140f3ec7f8375e5a4eef15cbc8e86",
+      "bytes": 168
+    },
+    {
+      "path": "core/head_size/IMPLEMENTATION.md",
+      "sha256": "2435db17aef0ee1f74e6929847164becfb74df78506ebb616acc1f5f88448937",
+      "bytes": 1365
+    },
+    {
+      "path": "core/head_size/head_size.h",
+      "sha256": "cef98b2c091aa796176f908bf20dae8b5d98666e1b8311e0e4835c1eeb3a120b",
+      "bytes": 1059
+    },
+    {
+      "path": "core/head_size/lib.rs",
+      "sha256": "281d8c31cf0d911d47210df45e16252e76a3b9382f44601d8fc80cd87a287de2",
+      "bytes": 13342
+    },
+    {
+      "path": "core/head_size/test_native_contract_unrun.py",
+      "sha256": "a77e4e4525ed02286229e869e6e4914f1a22a26aece0e9260734bd0bedd67153",
+      "bytes": 9826
+    },
+    {
+      "path": "core/head_size/tests.rs",
+      "sha256": "9bdc988f0542edb10b3d94cb6fa9f36140fe0150267cfa8d9e1d0690a725e9e4",
+      "bytes": 13282
+    },
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "e4553a1ce7717abb3f7c5c73b0d918f5506803a55bf5c99f99731fdf56248f48",
+      "bytes": 16402
+    },
+    {
+      "path": "docs/head-size/IMPLEMENTATION.md",
+      "sha256": "f8992e94e9a3963d6b81ca347c7fb5604e1ac722471c62774f8db35500d134ea",
+      "bytes": 3213
+    },
+    {
+      "path": "docs/head-size/NUMERICAL-CONTRACT.md",
+      "sha256": "a502f718ae0ea4b079710442053565e4fed7ac6424005f324943ecc72b33a921",
+      "bytes": 10619
+    },
+    {
+      "path": "docs/head-size/REQUIREMENT-AND-RESEARCH.md",
+      "sha256": "a26b689106fe6dce0ce01735a4b3c44c3160ab2ca21806cf2dfc4dd9cc20cb12",
+      "bytes": 3073
+    },
+    {
+      "path": "docs/head-size/SCALAR-TRANSFER-NEXT.md",
+      "sha256": "3006cc8aae73989a39f28833eb0b5984f7662235622173609693c9f064ea32a1",
+      "bytes": 1575
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "f77415ca7cd0abffb332aad3b3be2b614f5121155f71e51c15d0166862f82d6a",
+      "bytes": 48124
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/arm_shape_registered_host.py",
+      "sha256": "b49ba63b89595a2677b2a161a933e66f4b888033459d1b81a763f3f75a73b2e4",
+      "bytes": 3535
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_commands.py",
+      "sha256": "156364a654ab341bb2d79acb1c911fadc0f473d3c52d393da6abe7e04e4a2066",
+      "bytes": 11912
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_families.py",
+      "sha256": "f5639295661985e525e147e1770b3bcd88efbda1aca89593c241549eb90b0921",
+      "bytes": 1666
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_geometry.py",
+      "sha256": "b9b88e2934cca9ac30b489283181442a82003a67c6359586b5688c29a3e1970f",
+      "bytes": 8705
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_host.py",
+      "sha256": "776d8d09ba6a4eabbc6fddc65bfc1abf7b3b034198dd02df423e076a33b66be4",
+      "bytes": 20535
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_operations.py",
+      "sha256": "e09593754affe311fa2eddd0249969d4c847cf012ebe1f095be399a483ae4d5b",
+      "bytes": 10023
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_render.py",
+      "sha256": "9fe28f223fb5be704082e7774f3bcb856ff9905f88a7bc181b45c127c22ebed8",
+      "bytes": 11849
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_body.py",
+      "sha256": "ea8c96abb1725a1971c603ae41933f5b616291a92f47385a86f6061755669a0e",
+      "bytes": 8676
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "80122561b05a8eba2158f2a48dfb55b72e209cc82a3b6e328dd8344253191c0b",
+      "bytes": 25485
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/head_size_adapter.py",
+      "sha256": "450bde6578dd7714c5c57daded0575ab78412247e409dec7450d7077207a4499",
+      "bytes": 2801
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/head_size_field.py",
+      "sha256": "e498852d9726f6aa3bd00bdbe0986a1d5b63a3ff18b0cede72959fe4f3cee5a9",
+      "bytes": 9003
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/head_size_host.py",
+      "sha256": "8840e8ee54ff5dd54addfa6975f81f61f332aeed9823dfa93d94d2d3116b03bb",
+      "bytes": 15986
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/head_size_native.py",
+      "sha256": "060160b1563caacbffdcb436a13630ef82c733a0788f91c2dc2f19ec922cdb5d",
+      "bytes": 8131
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/head_size_project.py",
+      "sha256": "b19b34e6f7d12a5d7af8c6c3b4f201a4078f7fd0d6e414d3956231f35c14fdc4",
+      "bytes": 8182
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/head_size_runtime.py",
+      "sha256": "c85e722e1cea6f883a2349e663bfa8ca3b309b77d0b9e41cd10ef15e1dc351ee",
+      "bytes": 9474
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/head_size_state.py",
+      "sha256": "084874e00634c05f7bf0473b83340e8e31c2d9f5b49e1d8b435cc0f6a09e92b1",
+      "bytes": 7673
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_controller.py",
+      "sha256": "258fde919eb32996e9a870bbc0885c64b0dcf55548fff35d3c149c07763bf8d4",
+      "bytes": 10762
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "b872d303f6f86b78e56586a7aad3f158de0be1257ef294cefac1d39fed6920ad",
+      "bytes": 7710
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "cdcf4fc8535a9725b557f2d03e465bf255da4766ebeb8d65108c4fd90e2f0527",
+      "bytes": 7094
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "f88308f175b15666642279024dc4c209ef9c5e2e0f13f5e846dc16def5e08013",
+      "bytes": 63217
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "0d8ec326c036e668e4dc0902acabe26eaf6bcd30657d933339b36235fe76c653",
+      "bytes": 467467
+    },
+    {
+      "path": "engine/tests/test_head_size_host_unrun.py",
+      "sha256": "4d0076867c61df9450ed01f6626da9c6734728c8a6e754442283c452cb897465",
+      "bytes": 20362
+    },
+    {
+      "path": "engine/tests/test_head_size_integration_unrun.py",
+      "sha256": "8c1368a58d0e98a169fddfc8853ff052a9655fd16ba26b65fbc71ca6b39ff41e",
+      "bytes": 21626
+    },
+    {
+      "path": "engine/tests/test_head_size_support_unrun.py",
+      "sha256": "6bad3fbb9307f36f75c2b0bd6427a0c48df2ec627cccebdebcc37f8f631ebf9e",
+      "bytes": 23382
+    },
+    {
+      "path": "engine/tests/test_head_size_ui_native_wiring_unrun.py",
+      "sha256": "682c0454e121cbc62b284a44d7266cc7cac096780005ac9eed0da7d5a9b4b315",
+      "bytes": 2430
+    },
+    {
+      "path": "packaging/build-head-size.sh",
+      "sha256": "68602cf84ac87d197c6db543bfbc72a7d2427e1e2849a566343b41a321978f61",
+      "bytes": 421
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "1b835a743552ff44b2f6380380478c6562a5fdbd5b5e63f79f4cfa9bf2fc9133",
+      "bytes": 26413
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "sha256": "3c1ae4ec8627990523303d45f7cb2dfe161bfd02c6a7fcd6f5849d476f7c67cc",
+      "bytes": 3649
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "1a1557ecb4494d67b94c2a230adffd6de2a1d0beef5c64ee41ff029087f9def1",
+      "bytes": 40262
+    },
+    {
+      "path": "ui/src-tauri/src/head_size_api.rs",
+      "sha256": "4ffb3847c4ac0516cb600b846d07ab9e6742bca3fdc435089524a389cc51b240",
+      "bytes": 36118
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "71fcb86da0df781d89ac46f183bde6658cd404f91147c3461f85e23f9002d137",
+      "bytes": 101579
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "cc45d66565bbb841e4c744507c5608fa0310c98a384a7c2c2315599b705b84ae",
+      "bytes": 10259
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "1f1eb8c83ec20623a59b0ae0fd8fcede87987a180809c502dcd9ccbd02078c1e",
+      "bytes": 152044
+    },
+    {
+      "path": "ui/src/headSize/HeadSizePanel.tsx",
+      "sha256": "43f6e6b0b3be8625c881b644c31e4e62b9afd5878936813a4457c4ff620be208",
+      "bytes": 6269
+    },
+    {
+      "path": "ui/src/headSize/HeadSizeSupportEditor.tsx",
+      "sha256": "dd34660ccdf45d5e2dd81a7fd8c4ee13561e403d74855b0ca28744eabff03502",
+      "bytes": 10622
+    },
+    {
+      "path": "ui/src/headSize/HeadSizeWorkspace.tsx",
+      "sha256": "ca5bbc99552a6009894ad022f1d0554e7f2828698e086525fbdda8d6f87435ac",
+      "bytes": 2204
+    },
+    {
+      "path": "ui/src/headSize/SOURCE-UNRUN.md",
+      "sha256": "64960129e3837abf9e5ad5fe24638c31e3bab207c3471fdd32a1e06f31a853c0",
+      "bytes": 3318
+    },
+    {
+      "path": "ui/src/headSize/availability.ts",
+      "sha256": "6662008554b88b0ba5a09d1ef31e27c4f510042342fce5fcb6be0bb99e692672",
+      "bytes": 1523
+    },
+    {
+      "path": "ui/src/headSize/availability.unrun.test.ts",
+      "sha256": "baf3711aa7d8b360fb207bd537f7777fdbebfae75299b81ce7bd639659e308ca",
+      "bytes": 2724
+    },
+    {
+      "path": "ui/src/headSize/context.ts",
+      "sha256": "20a31ed02458db3f612aaac9fa13021ecb55ed8b05e302abe4a945ea32d6ca0f",
+      "bytes": 638
+    },
+    {
+      "path": "ui/src/headSize/controller.ts",
+      "sha256": "27264dfc237ced0708111502755a8c33aa881c91b7a7a2b9c1e0335ff6982104",
+      "bytes": 6736
+    },
+    {
+      "path": "ui/src/headSize/controller.unrun.test.ts",
+      "sha256": "2dc2f392358916acb8eaf34d23c2a9f74efb15e94aaca390c699eff0317dab7d",
+      "bytes": 6087
+    },
+    {
+      "path": "ui/src/headSize/headSize.css",
+      "sha256": "85200b66245856e7a998093c57ea53774ddd1780837685c12760595d781ee975",
+      "bytes": 2417
+    },
+    {
+      "path": "ui/src/headSize/model.ts",
+      "sha256": "f3c6df15a63a9035164823377a6830adda8db1d660ccd47fd1725712f6c87f50",
+      "bytes": 10452
+    },
+    {
+      "path": "ui/src/headSize/model.unrun.test.ts",
+      "sha256": "ddfce18233581c85e45285be1f5ca393243fe320d1c1745eed326bab3c9ae863",
+      "bytes": 7198
+    },
+    {
+      "path": "ui/src/headSize/nativeTransport.ts",
+      "sha256": "fab8b032a7fa4ff1c0fd71e2ff4e5acb8429c773182dbdec2811e929afa0f411",
+      "bytes": 3279
+    },
+    {
+      "path": "ui/src/headSize/receipts.ts",
+      "sha256": "d979668f994e24f94323df6c50aa920cc4c8d70855f7c8319cd628929a6022a7",
+      "bytes": 1877
+    },
+    {
+      "path": "ui/src/headSize/receipts.unrun.test.ts",
+      "sha256": "9b358c90272bdde9082366fce4c38e1ffddf6981d71d47189bd5390a3c1f75e1",
+      "bytes": 2652
+    },
+    {
+      "path": "ui/src/headSize/reviewUi.unrun.test.ts",
+      "sha256": "9a1c561753503f5893cc7e95f32f0cc5ab4bdab73dc7fc2f4aefa97bfe1a61e8",
+      "bytes": 2391
+    },
+    {
+      "path": "ui/src/headSize/sourcePreview.ts",
+      "sha256": "28be1847435f25596f3cef4ebf07500628880375cda7ae2bbecab90cd641a6ae",
+      "bytes": 351
+    },
+    {
+      "path": "ui/src/headSize/sourcePreview.unrun.test.ts",
+      "sha256": "011b8e4e5b6ad693d65129fc57cb72303d96c714d5544903b3b04afd489206cd",
+      "bytes": 1599
+    },
+    {
+      "path": "ui/src/headSize/useHeadSizeWorkflow.ts",
+      "sha256": "19852deed228c667f286c515a9a9a5fc02134508633e548b839c58fce34ae69f",
+      "bytes": 7051
+    },
+    {
+      "path": "ui/src/legShape/BodyShapeTools.tsx",
+      "sha256": "7105d2b3ef90042ce37b9ca864bb2b430e28710633d488a405f1183575e3c475",
+      "bytes": 16429
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "2a392aa6f0533e6629803e8bde5555bd92e0b0a5e78a4fc420622a10f79e3fb1",
+      "bytes": 104590
+    },
+    {
+      "path": "ui/src/toolRouting/coverage.ts",
+      "sha256": "6586ede79bf8f5449dcf04a63dfee6e0da8a1e7bb8067c0b89e03481a83cf106",
+      "bytes": 4859
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1252,
+    "changed_json_toml": "standard-library parse only",
+    "git_diff_check": "clean",
+    "payload_whitespace": "clean",
+    "prior_numeric_core_ops_common_sampler_torso_waist_sources_byte_identical": 223,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 6997
+    },
+    "fixture_declarations_in_payload_all_unrun_this_slice": {
+      "python": {
+        "core/head_size/test_native_contract_unrun.py": 10,
+        "engine/tests/test_head_size_host_unrun.py": 21,
+        "engine/tests/test_head_size_integration_unrun.py": 11,
+        "engine/tests/test_head_size_support_unrun.py": 30,
+        "engine/tests/test_head_size_ui_native_wiring_unrun.py": 4
+      },
+      "rust": {
+        "core/head_size/tests.rs": 14,
+        "ui/src-tauri/src/head_size_api.rs": 19
+      },
+      "typescript": {
+        "ui/src/headSize/availability.unrun.test.ts": 3,
+        "ui/src/headSize/controller.unrun.test.ts": 6,
+        "ui/src/headSize/model.unrun.test.ts": 6,
+        "ui/src/headSize/receipts.unrun.test.ts": 3,
+        "ui/src/headSize/reviewUi.unrun.test.ts": 3,
+        "ui/src/headSize/sourcePreview.unrun.test.ts": 2
+      }
+    }
+  },
+  "integration_map": {
+    "numeric_core": [
+      "core/head_size",
+      "head_size_native.py",
+      "packaging/build-head-size.sh",
+      "packaging/stage-engine.sh"
+    ],
+    "source_ownership": [
+      "head_size_state.py",
+      "head_size_field.py",
+      "head_size_runtime.py",
+      "head_size_adapter.py"
+    ],
+    "canonical_geometry": [
+      "body_pose_operations.py",
+      "body_pose_geometry.py",
+      "body_pose_render.py",
+      "body_pose_families.py",
+      "existing body-then-face common sampler unchanged"
+    ],
+    "history_project_source": [
+      "head_size_project.py",
+      "head_size_host.py",
+      "body_pose_host.py",
+      "body_pose_commands.py",
+      "creative_derived_body.py",
+      "creative_document_host.py",
+      "history_policy.py",
+      "history_controller.py",
+      "project_recovery_runtime.py"
+    ],
+    "native": [
+      "head_size_api.rs",
+      "engine.rs",
+      "native_dispatch.rs",
+      "capture_lifecycle.rs",
+      "main.rs"
+    ],
+    "ui": [
+      "headSize source canvas/model/controller/receipt/workspace",
+      "legShape/BodyShapeTools.tsx",
+      "App.tsx",
+      "native.ts",
+      "toolRouting/coverage.ts"
+    ]
+  },
+  "limitations": [
+    "All numerical/compiler/runtime/photographic/performance acceptance UNRUN; requirement remains partial.",
+    "Manual complete visible head/hair and sufficient isolated transition above both shoulders required. Long hair crossing shoulders, crop, contact, occlusion and ambiguous ownership refuse, with no face-only fallback.",
+    "No automatic hair segmentation, hairline/ear reconstruction, learned AI or physical 3D measurement. Background/neck transition can move.",
+    "Local amount0..1 and maximum8percent plateau shrink are original product policy, not vendor calibration. Unsafe requested strength refuses rather than attenuates.",
+    "End-user scalar preset/batch per-target review remains unwired; portable private recipe helper is not that workflow.",
+    "Existing derived opaque SDR and broader alpha/HDR pipeline limitations remain. Original source untouched.",
+    "All older numeric cores and common sampling algorithms remain unchanged; active order9 does not change neutral older order identities."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}
