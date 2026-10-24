@@ -30,6 +30,7 @@ def replay_preset(engine,state,**kwargs):
     from . import sclera_purify_apply as SCLERA_PURIFY
     from . import skin_colour_scope as SKIN_COLOUR
     from . import skin_finish_scope as SKIN_FINISH
+    from . import skin_gloss_scope as SKIN_GLOSS
     # Even an otherwise unchanged or legacy preset must not publish success
     # after an active independent eye/tooth layer failed on its own target.
     amounts=ENHANCE.amounts_of(state)
@@ -41,11 +42,16 @@ def replay_preset(engine,state,**kwargs):
     finish_recipe=SKIN_FINISH.S.check(state.get(SKIN_FINISH.FIELD))
     finish_requested=state.get(SKIN_FINISH.REQUESTED) is True
     if SKIN_FINISH.S.active(finish_recipe):kwargs['strict_local']=True
+    gloss_recipe=SKIN_GLOSS.S.check(state.get(SKIN_GLOSS.FIELD))
+    gloss_requested=state.get(SKIN_GLOSS.REQUESTED) is True
+    if SKIN_GLOSS.S.active(gloss_recipe):kwargs['strict_local']=True
     if not engine._people_managed():
         if skin_requested or SKIN_COLOUR.S.active(skin_recipe):
             raise ValueError('面部肤色预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
         if finish_requested or SKIN_FINISH.S.active(finish_recipe):
             raise ValueError('美白红润预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
+        if gloss_requested or SKIN_GLOSS.S.active(gloss_recipe):
+            raise ValueError('皮肤光泽预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
         return engine._replay_state(state,**kwargs)
     before=engine._people_owner().snapshot();asset=engine._people_source()['sha256']
     faces=[face for face in before['faces'].values() if face['asset_sha256']==asset and face['enabled']]
@@ -60,6 +66,7 @@ def replay_preset(engine,state,**kwargs):
     current=iris_capture(engine,current)
     current=SKIN_COLOUR.capture(engine,current)
     current=SKIN_FINISH.capture(engine,current)
+    current=SKIN_GLOSS.capture(engine,current)
     skin_involved=(SKIN_COLOUR.FIELD in state and
                    (skin_requested or SKIN_COLOUR.S.active(skin_recipe) or skin_recipe!=current[SKIN_COLOUR.FIELD]))
     if skin_involved:
@@ -74,6 +81,14 @@ def replay_preset(engine,state,**kwargs):
         SKIN_FINISH.install(dict(current),{'recipe':finish_recipe})
         if state.get(SKIN_FINISH.TARGET)!=current[SKIN_FINISH.TARGET]:
             raise ValueError('美白红润预设目标已变化，请重新选择当前人物')
+    gloss_involved=(SKIN_GLOSS.FIELD in state and
+                    (gloss_requested or SKIN_GLOSS.S.active(gloss_recipe) or gloss_recipe!=current[SKIN_GLOSS.FIELD]))
+    if gloss_involved:
+        # The captured FaceRef is an admission fence, never reusable highlight
+        # evidence. The strict canonical replay recomputes target source facts.
+        SKIN_GLOSS.install(dict(current),{'recipe':gloss_recipe})
+        if state.get(SKIN_GLOSS.TARGET)!=current[SKIN_GLOSS.TARGET]:
+            raise ValueError('皮肤光泽预设目标已变化，请重新选择当前人物')
     fields=dict(zip(A.GEOMETRY,('_brow_shape','_nose_shape','_eye_shape','_mouth_shape')))
     fields[A.LIP]='_lip_makeup'
     # Ephemeral preset transport is consumed here; never a parallel render owner.
@@ -86,6 +101,7 @@ def replay_preset(engine,state,**kwargs):
     if '_brow_makeup_preset' in state:fields[BROW_MAKEUP]='_brow_makeup_preset'
     if SKIN_COLOUR.FIELD in state:fields[SKIN_COLOUR.OP]=SKIN_COLOUR.FIELD
     if SKIN_FINISH.FIELD in state:fields[SKIN_FINISH.OP]=SKIN_FINISH.FIELD
+    if SKIN_GLOSS.FIELD in state:fields[SKIN_GLOSS.OP]=SKIN_GLOSS.FIELD
     for op,field in fields.items():
         validator=A.specifications()[op][1];left=A.leaves(validator(current.get(field)));right=A.leaves(validator(state.get(field)))
         patches.extend((op,path,value) for path,value in right.items() if left[path]!=value)
@@ -101,11 +117,13 @@ def replay_preset(engine,state,**kwargs):
         raise ValueError('面部肤色预设的当前人物与唯一可应用目标不一致')
     if finish_involved and current[SKIN_FINISH.TARGET]!=S.face_ref(faces[0]):
         raise ValueError('美白红润预设的当前人物与唯一可应用目标不一致')
+    if gloss_involved and current[SKIN_GLOSS.TARGET]!=S.face_ref(faces[0]):
+        raise ValueError('皮肤光泽预设的当前人物与唯一可应用目标不一致')
     for op,path,value in patches:candidate=S.set_override(candidate,'face',key,op,path,value)
     owner=engine._people_owner()
     try:
         owner.commit(candidate,expected_fence=owner.fence);engine._people_analysis_key=None
-        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP) for op,_,_ in patches):kwargs['strict_local']=True
+        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP) for op,_,_ in patches):kwargs['strict_local']=True
         return engine._replay_state(state,**kwargs)
     except Exception:
         before['association_revision']=owner.association_fence

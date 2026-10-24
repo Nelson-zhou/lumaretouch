@@ -1,0 +1,193 @@
+{
+  "baseline": "ef886aab12b99c58a7a1b3e05dbc23323e7ca4a4",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Dedicated signed face-skin existing-highlight appearance adjustment, original Rust source-only local evidence, face-owned support, ordered canonical original/derived rendering/history/export and scalar-only target recalculation. Not physical separation, oil removal or whole skin-texture acceptance.",
+  "requirement_ids": [
+    "LNX-REF-PC-32465-C-1eed7cf9a9"
+  ],
+  "files": [
+    {
+      "path": "core/skin_gloss/Cargo.toml",
+      "sha256": "75b64af6d3afabce6a7223b8ecb5a012b3f62e310d1ef5fd06568904ff015686",
+      "bytes": 219
+    },
+    {
+      "path": "core/skin_gloss/README.md",
+      "sha256": "f9d0870b34b9f5876305440e2926b3350b34af6b3d2f9fca8afbc1cffe787ebc",
+      "bytes": 16176
+    },
+    {
+      "path": "core/skin_gloss/lib.rs",
+      "sha256": "9d4cfc00ed5d6032905c835df7d194296d41bf68511b65a874282c4c4d751865",
+      "bytes": 16587
+    },
+    {
+      "path": "core/skin_gloss/skin_gloss.h",
+      "sha256": "be0b003909cde2b273aeb23cb2110d9ee817208e27f81b166b3d969ed3c08e0f",
+      "bytes": 1133
+    },
+    {
+      "path": "core/skin_gloss/tests.rs",
+      "sha256": "97a8d64bebb6983d0c9ceaab5669b9c0eabd66daa45a397933a88b9706f90eb3",
+      "bytes": 9846
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "0b9bdbf5ac469b70915949fd17e40ce73bbbd55d2a480191f17f6999f5f9c084",
+      "bytes": 24978
+    },
+    {
+      "path": "docs/skin-gloss/IMPLEMENTATION.md",
+      "sha256": "e95a6e42a54f07900b340d23d2b59762e45e73d3d718112495ec187137c7a17c",
+      "bytes": 7016
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "e9d75c88c6ba01681e93e9d8b226b373ddf4afcd8b5f7b722b66d68473eb89ff",
+      "bytes": 14293
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "84c173829d5fd9b1c4eaba1e52e99035d8ce59920d765a029fb39020c8c09a23",
+      "bytes": 3995
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "7d4ca60fe6ea1038389cd7c9953b4a5449d54c296462ae2a97d01748b95c55c5",
+      "bytes": 19076
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "fc8e038ded82aadced01407fa4a62c50d41a964852d28cb83ae0e27b84e85efb",
+      "bytes": 9092
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "48af549baf8fbe942ca05421852f86c6f988d1a78a02490f1a80908eb53b95d8",
+      "bytes": 47954
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "b91aedcb15cd9654fd095db741d5e9c532716f90f7d180d62cde7f4ca197613c",
+      "bytes": 464770
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_colour_people.py",
+      "sha256": "121c989fb5074dbf710964ad3ee5e26f4b6049f71a4611e034c707fcdcacd3c0",
+      "bytes": 17651
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_gloss_native.py",
+      "sha256": "7eec0e2235bedcaaab048443457d1b0b6b87fa232d8dfe1245cbe2e1a7de6a67",
+      "bytes": 10262
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_gloss_scope.py",
+      "sha256": "c9688397141c174a07d7f33e4ecfdc65c60584ada31cb9da18d7aaca8a5fbcd9",
+      "bytes": 4937
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_gloss_state.py",
+      "sha256": "56694682be90310da37070df82b1366158f3eb9ffa47837141cf1db7fd389ff8",
+      "bytes": 1322
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "8113d090fca9d58e38abb2eb1971fff876fac8b36f081452f9aa729a3049fda9",
+      "bytes": 7754
+    },
+    {
+      "path": "engine/tests/test_skin_gloss_integration_unrun.py",
+      "sha256": "b95f33dcbd19a080269f087083cdb2032d7226c0b8373e1f585d95d3e8145984",
+      "bytes": 1929
+    },
+    {
+      "path": "engine/tests/test_skin_gloss_native_unrun.py",
+      "sha256": "7746740c7b5363fd485afc855ddee8961347664c0730a4bdb37c51b809e93c93",
+      "bytes": 5498
+    },
+    {
+      "path": "engine/tests/test_skin_gloss_render_unrun.py",
+      "sha256": "57db0ce10c6c91a478693518afe348458e53d62f593dc139167e789a60d1d269",
+      "bytes": 25843
+    },
+    {
+      "path": "engine/tests/test_skin_gloss_scope_unrun.py",
+      "sha256": "09833153f8509be0c6d286070abc3e7953b33a7319192889717a352e403758f5",
+      "bytes": 19812
+    },
+    {
+      "path": "packaging/build-skin-gloss.sh",
+      "sha256": "b27ad378207780109c0acf25d875d7a28813205f23cd551ea994e15d85807786",
+      "bytes": 624
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "b1fb7eb5754945abb47950851a4a2111776ec7d618bb52eddbf78b050633654f",
+      "bytes": 22259
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "adc34dd4d8b63f42ebbfe531362460eb3313c6727e372b5a8da3122e2394f014",
+      "bytes": 66068
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "794b379c3408dcca5fef67d903e9f52a517f8d5ace0deacd46f8ccb75a505fed",
+      "bytes": 100660
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "6ce746870b1c73b57d5c06261fea1fcbc30faf65f80df341b86f64fd90ce2f9f",
+      "bytes": 7760
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "343e5d7660cbdfc6f9265ee8e482cbcb241cec7b8a0bd57bffd9e35eabb0d55c",
+      "bytes": 4455
+    },
+    {
+      "path": "ui/src/skinGloss/ACCEPTANCE_UNRUN.md",
+      "sha256": "42ee1c7e38f1c64121600b0c6cab0fabadfd2deb93c2ffaa799dd6d722c96e14",
+      "bytes": 5331
+    },
+    {
+      "path": "ui/src/skinGloss/SkinGlossControl.tsx",
+      "sha256": "0a73f1ddf82cf94e6ff4bfe3c1da7b539a677dce288540ec92068d8594de0afc",
+      "bytes": 4970
+    },
+    {
+      "path": "ui/src/skinGloss/model.ts",
+      "sha256": "43dec073aa40d5fe0c8993041fdc5bb1cdb98f6fcc061d89b3774d6be2e1872e",
+      "bytes": 6866
+    },
+    {
+      "path": "ui/src/skinGloss/model.unrun.test.ts",
+      "sha256": "8118465bc9478840b391508ac3e5f98f254e1f624ba2ced59d3e47749e0b7df6",
+      "bytes": 11501
+    },
+    {
+      "path": "ui/src/skinGloss/wiring.unrun.test.ts",
+      "sha256": "c5bfa71b163aa4e12f9de5bd884720bcef7c8a58b3e1612fb77f49ea650b90c6",
+      "bytes": 5330
+    }
+  ],
+  "static_validation": {
+    "python_ast_files": 1065,
+    "registry_json": "parsed",
+    "core_cargo_toml": "parsed",
+    "payload_trailing_whitespace": 0,
+    "App_lines": 2122,
+    "main_lines": 2042,
+    "server_lines": 6977
+  },
+  "acceptance": "All product imports/execution, compiler/build/typecheck/tests, numerical/photo/memory/performance/inference acceptance remain UNRUN. No downloads, installs or Git writes.",
+  "remaining": [
+    "Single-image highlight evidence is ambiguous under makeup, colored/mixed illumination, achromatic surfaces and diffuse bright patches; no physical albedo/specular separation claim.",
+    "Clipped detail, broad uniform highlights beyond neighborhood scale, low-confidence/dark/insufficient support may remain unchanged; no exposure fallback.",
+    "Existing six-class face skin plus anatomy is not complete occlusion segmentation; no body support or automatic whole-body treatment.",
+    "Native full-frame cap32MP and radius2..256 are explicit refusal bounds, not performance or ordinary-hardware acceptance; full-source memory/latency remains UNRUN.",
+    "Opaque SDR only; no silent HDR clipping or alpha flattening. Generic derived presets retain existing refusal, explicit/confirmed target paths recalculate source evidence.",
+    "Skin texture/clarity/presets, oil/sweat removal and broader handbook gaps remain separate unfinished requirements."
+  ]
+}

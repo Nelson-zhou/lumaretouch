@@ -105,6 +105,7 @@ export function operationLabel(id: string): string {
   return ({'lnx.deform.v1': '基础脸型', 'lnx.enhance.v1': '眼牙与面部增强',
     'lnx.skin_colour.v1': '面部肤色色温与色调',
     'lnx.skin_finish.v1': '肤色美白与皮肤红润（手动强度）',
+    'lnx.skin_gloss.v1': '面部已有高光光泽度（抑制与增强）',
     'lnx.facial_wrinkles.v1': '面部细纹', 'lnx.lip_makeup.v1': '唇妆',
     'lnx.brow_shape.v1': '眉形', 'lnx.nose_shape.v1': '鼻形',
     'lnx.eye_shape.v1': '眼形', 'lnx.mouth_shape.v1': '嘴形',

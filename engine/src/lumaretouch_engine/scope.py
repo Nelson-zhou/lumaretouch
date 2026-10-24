@@ -44,6 +44,7 @@ from . import enhance_scope as ENHANCE
 from . import lip_makeup_scope as LIP, eye_light_scope as EYE_LIGHT, blush_makeup_scope as BLUSH, lipstick_scope as LIPSTICK, eyeliner_scope as EYELINER, eyelash_scope as EYELASH, brow_makeup_scope as BROW_MAKEUP, iris_makeup_scope as IRIS
 from . import skin_colour_scope as SKIN_COLOUR
 from . import skin_finish_scope as SKIN_FINISH
+from . import skin_gloss_scope as SKIN_GLOSS
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
@@ -170,6 +171,10 @@ MODULES: dict[str, dict] = {
                      "transferable": True, "cmd": "people", "label": "美白红润（仅独立参数）",
                      "read": SKIN_FINISH.params_of, "write": SKIN_FINISH.install,
                      "why_not": "仅美白与红润标量；目标独立面部分析及美白红润身体审核，不复制色温/色调审核、人物或蒙版，不承诺自动全身分割"},
+    SKIN_GLOSS.OP: {"params": ("recipe",), "state_fields": SKIN_GLOSS.FIELDS, "single_face": True,
+                     "transferable": True, "cmd": "people", "label": "皮肤光泽（仅面部正负强度）",
+                     "read": SKIN_GLOSS.params_of, "write": SKIN_GLOSS.install,
+                     "why_not": "仅正负强度；目标用自己的真实面部皮肤、遮挡、关键点与有效来源重算已有高光，不复制人物、身体范围、蒙版或高光支持"},
     EYE_LIGHT.OP: {"params": ("recipe",), "state_fields": EYE_LIGHT.FIELDS, "single_face": True,
                    "transferable": True, "cmd": "people", "read": EYE_LIGHT.params_of, "write": EYE_LIGHT.install,
                    "why_not": "仅眼神光素材参数；目标人物须自行审核可见眼球，绝不复制归属、蒙版或恢复笔迹"},
@@ -430,6 +435,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == SKIN_FINISH.OP:
         try: return SKIN_FINISH.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == SKIN_GLOSS.OP:
+        try: return SKIN_GLOSS.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == EYE_LIGHT.OP:
         try: return EYE_LIGHT.check_params(params)

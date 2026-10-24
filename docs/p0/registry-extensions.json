@@ -4,6 +4,31 @@
   "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
+      "operation_id": "lnx.skin_gloss.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "amount": 0
+      },
+      "range": {
+        "version": [
+          1,
+          1
+        ],
+        "amount": [
+          -1,
+          1
+        ]
+      },
+      "requirement_ids": [
+        "LNX-REF-PC-32465-C-1eed7cf9a9"
+      ],
+      "scope": "Measured source-owned face skin only; signed existing-highlight suppression/enhancement. No body coverage, new highlights, oil/sweat removal, or complete skin-texture family.",
+      "transfer": "Scalar amount only; each target recomputes source highlight evidence from its own immutable effective source and measured face support.",
+      "implementation": "Original Rust bounded local dichromatic appearance estimate, not physical specular recovery or a generic exposure alias. All runtime/photo acceptance UNRUN."
+    },
+    {
       "operation_id": "lnx.skin_finish.v1",
       "parameter_key": "recipe",
       "type": "object",
