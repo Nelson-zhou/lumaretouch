@@ -11,6 +11,10 @@ request identity. Context changes invalidate an unsubmitted review. Queue accept
 is not success. Unknown outcomes retain ownership across hiding and can be queried;
 a new mutation requires resolution or explicit inspect-and-end-tracking acknowledgment.
 That acknowledgment neither cancels nor rolls back an already-submitted operation.
+The authored waist scalar route is stricter: an uncertain waist commit cannot
+use inspect-and-end to release its original identity. It is query-only; queries
+read the retained native mailbox and do not guarantee reconciliation of a lost
+terminal result. See `../waistLength/TRANSFER-UNRUN.md` for source-only limits.
 
 Tests are listed in `ui/package.json`. Native receipt contracts live in
 `ui/src-tauri/src/batch_host.rs`; engine snapshot/conflict tests are separate. The

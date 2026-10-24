@@ -70,10 +70,11 @@ introduced to claim support. The original encoded source remains untouched.
 
 - Direct source marking, recipe edits, review, history and canonical rendering are
   authored, not runtime-tested or photographically accepted.
-- End-user waist scalar preset/batch transfer is not registered in this slice.
-  It requires its own target-local marked waist evidence and actual per-target
-  before/after review; a private helper is not that user workflow. The existing
-  torso transfer scope is not reused under a waist label.
+- The subsequent bounded scalar preset/batch route is source-authored, not accepted.
+  It requires exactly one enabled target body, its own four-marker support/current
+  face ownership, real full-source before/after and an explicit target acknowledgment.
+  Multi-body targeting and runtime/quality acceptance remain unfinished. See
+  [the transfer contract](TRANSFER-CONTRACT.md); a private helper alone is not that route.
 - Strong perspective, bent/cropped/occluded or uncertain waist anatomy, body
   contacts, inadequate source clearance and ambiguous people remain unsupported.
 - Automatic vendor AI equivalence, general body reconstruction, broader HDR/alpha

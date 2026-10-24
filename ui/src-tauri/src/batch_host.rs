@@ -3,7 +3,10 @@ use serde_json::Value;
 use crate::receipt_host::{ReceiptHost, ReceiptKind};
 use crate::spill_transfer_protocol::{self as spill, hex, revision, source_proof as spill_source, SPILL_OP};
 use crate::original_shadow_transfer_protocol::{self as shadow, SHADOW_OP};
-use crate::torso_transfer_protocol::{self as torso, TORSO_OP};
+use crate::torso_transfer_protocol as torso;
+#[cfg(test)] use crate::torso_transfer_protocol::TORSO_OP;
+#[cfg(test)] use crate::waist_transfer_protocol::WAIST_OP;
+use crate::preset_host::{BodyReviewFamily, BODY_REVIEW_FAMILIES};
 pub(crate) struct BatchKind;
 fn spill_preflight(value: &Value) -> bool {
     let (Some(ops), Some(applies), Some(targets)) = (value["module_scope"].as_array(),
@@ -77,47 +80,46 @@ fn shadow_preflight(value: &Value) -> bool {
     value["blocked"].as_u64() == Some(blocked)
         && value["ok"].as_u64() == Some(targets.len() as u64 - blocked)
 }
-fn torso_preflight(value: &Value) -> bool {
+fn body_preflight(value: &Value, family: BodyReviewFamily) -> bool {
     let (Some(ops), Some(applies), Some(targets)) = (value["module_scope"].as_array(),
         value["applies"].as_object(), value["targets"].as_array()) else { return false; };
-    if targets.is_empty() || targets.len() > torso::MAX_TARGETS { return false; }
+    if targets.is_empty() || targets.len() > family.max_targets() { return false; }
     let mut selected = std::collections::BTreeSet::new();
-    if ops.len() != 1 || ops[0] != TORSO_OP
+    if ops.len() != 1 || ops[0] != family.op()
         || ops.iter().any(|op| op.as_str().map_or(true, |op| !selected.insert(op)))
         || applies.len() != ops.len()
         || !selected.iter().all(|op| applies.get(*op).is_some_and(Value::is_object)) { return false; }
-    if !value["people_transfer"].is_null() || !value["persistent_association"].is_null()
-        || value.get("torso_review_ack").is_some()
-        || ["local_mask_transfer", "reference_color", "spill_transfer", "shadow_transfer", "crop_transfer"]
-            .iter().any(|key| !value[*key].is_null()) { return false; }
-    let params = &value["applies"][TORSO_OP];
-    if !torso::parameters(params) { return false; }
+    if !family.no_foreign_evidence(value) || value.get(family.ack_key()).is_some() { return false; }
+    let params = &value["applies"][family.op()];
+    if !family.parameters(params) { return false; }
     let source = &value["source_snapshot"];
     if !hex(&value["preflight_token"], 32) || !hex(&source["document_id"], 32)
         || !revision(&source["revision"]) || !source["path"].is_string()
         || !torso::source_proof(&source["source_proof"]) || !value["rejected_docs"].is_array()
         || !matches!(value["policy"].as_str(), Some("skip_and_report" | "recheck")) { return false; }
     let mut ids = std::collections::BTreeSet::new();
+    let mut indices = std::collections::BTreeSet::new();
     let mut blocked = 0_u64;
     for target in targets {
-        if ["spill_transfer", "shadow_transfer", "crop_transfer", "people_transfer", "local_mask_transfer", "optical_transfer", "reference_color"]
-            .iter().any(|key| !target[*key].is_null()) { return false; }
+        if !family.no_foreign_evidence(target) || target.get(family.ack_key()).is_some() { return false; }
         if !hex(&target["document_id"], 32) || !revision(&target["revision"])
             || !target["path"].is_string() || target["index"].as_u64().is_none()
-            || !ids.insert(target["document_id"].as_str().unwrap()) { return false; }
+            || !ids.insert(target["document_id"].as_str().unwrap())
+            || (family == BodyReviewFamily::Waist && !indices.insert(target["index"].as_u64().unwrap())) { return false; }
         if !target["blocked"].is_null() {
             if !target["blocked"].as_str().is_some_and(|s| !s.is_empty())
-                || !target["torso_transfer"].is_null() { return false; }
+                || !target[family.transfer_key()].is_null() { return false; }
             blocked += 1;
             continue;
         }
-        let before = &target["before"][TORSO_OP];
+        let before = &target["before"][family.op()];
         if !torso::source_proof(&target["source_proof"])
             || target["before"].as_object().map_or(true, |m| m.len() != 1)
             || before.as_object().map_or(true, |m| m.len() != 1)
             || !hex(&before["target_recipe_key"], 64)
-            || !torso::transfer(&target["torso_transfer"], &target["document_id"], &target["revision"], params, &target["source_proof"])
-            || (target["document_id"] == source["document_id"] && target["source_proof"] != source["source_proof"]) { return false; }
+            || !family.transfer(&target[family.transfer_key()], &target["document_id"], &target["revision"], params, &target["source_proof"])
+            || (target["document_id"] == source["document_id"] && (target["source_proof"] != source["source_proof"]
+                || (family == BodyReviewFamily::Waist && target["revision"] != source["revision"]))) { return false; }
     }
     value["blocked"].as_u64() == Some(blocked)
         && value["ok"].as_u64() == Some(targets.len() as u64 - blocked)
@@ -126,24 +128,15 @@ impl ReceiptKind for BatchKind {
     const NAME: &'static str = "batch";
     const ACTIONS: &'static [&'static str] = &["preflight", "commit", "undo", "redo", "people_targets"];
     fn valid(value: &Value, _: Option<&str>) -> bool {
-        let has_torso = value["module_scope"].as_array().is_some_and(|ops| ops.iter().any(|op| op == TORSO_OP));
-        let torso_evidence = value["targets"].as_array().is_some_and(|targets| targets.iter().any(|target| !target["torso_transfer"].is_null()));
-        // The batch proof is per target, never a source-level stand-in.
-        if !value["torso_transfer"].is_null() { return false; }
-        if torso_evidence && (value["success"] != true || value["action"] != "preflight" || !has_torso) { return false; }
-        if has_torso && value["module_scope"].as_array().map_or(true, |ops| ops.len() != 1) { return false; }
-        if has_torso && ["spill_review_ack", "shadow_review_ack", "xmp_review_ack", "xmp_ack"]
-            .iter().any(|key| value.get(*key).is_some()) { return false; }
-        if has_torso && (value["outcome_unknown"] == true && value["success"] == true
-            || value.get("outcome_unknown").is_some_and(|unknown| !unknown.is_boolean())) { return false; }
-        if let Some(ack) = value.get("torso_review_ack") {
-            if !has_torso || value["action"] != "commit"
-                || ["spill_review_ack", "shadow_review_ack", "xmp_review_ack", "xmp_ack"]
-                    .iter().any(|key| value.get(*key).is_some()) { return false; }
-            let command = serde_json::json!({"cmd":"batch", "action":"commit", "request_id":value["request_id"],
-                "preflight_token":value["preflight_token"], "torso_review_ack":ack});
-            if torso::command(&command).is_err() { return false; }
-        } else if has_torso && value["success"] == true && value["action"] == "commit" { return false; }
+        for family in BODY_REVIEW_FAMILIES {
+            // The batch proof is per target, never a source-level stand-in.
+            if !family.receipt(value, "batch", "commit") { return false; }
+            let evidence = value["targets"].as_array().is_some_and(|targets| targets.iter().any(|target|
+                !target[family.transfer_key()].is_null() || target.get(family.ack_key()).is_some()));
+            if evidence && (value["success"] != true || value["action"] != "preflight" || !family.selected(value)) { return false; }
+            if value["success"] == true && value["action"] == "preflight" && family.selected(value)
+                && !body_preflight(value, family) { return false; }
+        }
         value["success"].as_bool().is_some()
             && (value["success"] != true || value["action"] != "preflight"
                 || !value["module_scope"].as_array().is_some_and(|ops| ops.iter().any(|op| op == SPILL_OP))
@@ -151,8 +144,6 @@ impl ReceiptKind for BatchKind {
             && (value["success"] != true || value["action"] != "preflight"
                 || !value["module_scope"].as_array().is_some_and(|ops| ops.iter().any(|op| op == SHADOW_OP))
                 || shadow_preflight(value))
-            && (value["success"] != true || value["action"] != "preflight" || !has_torso
-                || torso_preflight(value))
     }
 }
 pub(crate) type BatchHost = ReceiptHost<BatchKind>;
@@ -386,6 +377,120 @@ mod tests {
         many["targets"].as_array_mut().unwrap().pop(); many["blocked"] = json!(0);
         assert!(BatchKind::valid(&many, None));
         many["targets"][1] = many["targets"][0].clone(); assert!(!BatchKind::valid(&many, None));
+    }
+
+    // AUTHORED / UNRUN. Common synthetic transport shape, not real waist/body
+    // geometry or current-face acceptance evidence from an actual photograph.
+    fn waist_review() -> Value {
+        let mut value = torso_review(); value["request_id"] = json!("waist");
+        value["module_scope"] = json!([WAIST_OP]); value["applies"] = json!({(WAIST_OP):{"version":1,"amount":0.0}});
+        value["targets"][0]["before"] = json!({(WAIST_OP):{"target_recipe_key":"d".repeat(64)}});
+        let proof = value["targets"][0].as_object_mut().unwrap().remove("torso_transfer").unwrap();
+        value["targets"][0]["waist_transfer"] = proof;
+        value
+    }
+    fn waist_commit() -> Value {
+        let review = waist_review(); let target = &review["targets"][0]; let pair = &target["waist_transfer"];
+        json!({"action":"commit","request_id":"waist-commit","success":true,"outcome_unknown":false,
+            "module_scope":[WAIST_OP],"preflight_token":review["preflight_token"],
+            "waist_review_ack":[{"document_id":target["document_id"],"revision":target["revision"],
+                "before_sha256":pair["before"]["sha256"],"after_sha256":pair["after"]["sha256"]}]})
+    }
+    #[test] fn waist_each_target_owns_every_proof_and_zero_amount_still_needs_pixels() {
+        let value = waist_review(); assert!(BatchKind::valid(&value, None));
+        for key in value["targets"][0]["waist_transfer"].as_object().unwrap().keys() {
+            let mut bad = value.clone(); bad["targets"][0]["waist_transfer"].as_object_mut().unwrap().remove(key);
+            assert!(!BatchKind::valid(&bad, None), "{key}");
+        }
+        for path in ["/source_snapshot/source_proof", "/targets/0/source_proof", "/targets/0/before",
+            "/targets/0/waist_transfer/body_ref", "/targets/0/waist_transfer/associated_face",
+            "/targets/0/waist_transfer/before/base64", "/targets/0/waist_transfer/after/base64"] {
+            let mut bad = value.clone(); *bad.pointer_mut(path).unwrap() = Value::Null;
+            assert!(!BatchKind::valid(&bad, None), "{path}");
+        }
+        for (key, replacement) in [("document_id", json!("e".repeat(32))), ("revision", json!("3")),
+            ("source_proof", value["source_snapshot"]["source_proof"].clone()), ("parameters", json!({"version":1,"amount":0.2})),
+            ("body_ref", json!([value["targets"][0]["waist_transfer"]["body_ref"].clone()])), ("body_refs", json!([]))] {
+            let mut bad = value.clone(); bad["targets"][0]["waist_transfer"][key] = replacement;
+            assert!(!BatchKind::valid(&bad, None), "{key}");
+        }
+        let mut bad = value.clone(); bad["targets"][0]["before"][TORSO_OP] = json!({"target_recipe_key":"e".repeat(64)});
+        assert!(!BatchKind::valid(&bad, None));
+        bad = value.clone(); bad["source_snapshot"]["document_id"] = value["targets"][0]["document_id"].clone();
+        bad["source_snapshot"]["source_proof"] = value["targets"][0]["source_proof"].clone();
+        assert!(!BatchKind::valid(&bad, None)); // The same document cannot have two current revisions.
+        bad["source_snapshot"]["revision"] = value["targets"][0]["revision"].clone(); assert!(BatchKind::valid(&bad, None));
+        bad = value.clone(); bad["targets"][0]["waist_transfer"]["associated_face"]["associated_face_ref"]["asset_sha256"] = json!("e".repeat(64));
+        assert!(!BatchKind::valid(&bad, None));
+        bad = value; bad["targets"][0]["waist_transfer"]["after"]["sha256"] = json!("e".repeat(64));
+        let mut host = BatchHost::default(); host.reset([1;16]); host.ready([1;16], true);
+        host.begin_command([1;16], &json!({"cmd":"batch","action":"preflight","request_id":"waist","module_scope":[WAIST_OP]})).unwrap();
+        host.receive([1;16], &bad); assert_eq!(host.status("waist")["result"]["outcome_unknown"], true);
+    }
+    #[test] fn waist_batch_rejects_mixed_source_level_or_wrong_family_evidence() {
+        let value = waist_review();
+        for op in [TORSO_OP, WAIST_OP, SPILL_OP, SHADOW_OP, "lnx.exposure.v1"] {
+            let mut bad = value.clone(); bad["module_scope"].as_array_mut().unwrap().push(json!(op));
+            bad["applies"][op] = json!({}); assert!(!BatchKind::valid(&bad, None), "{op}");
+        }
+        let mut legacy = value.clone(); legacy["targets"][0]["torso_transfer"] = Value::Null;
+        assert!(BatchKind::valid(&legacy, None));
+        for key in ["torso_transfer", "spill_transfer", "shadow_transfer", "people_transfer", "persistent_association", "xmp_transfer"] {
+            let mut bad = value.clone(); bad[key] = json!({}); assert!(!BatchKind::valid(&bad, None), "top {key}");
+            bad = value.clone(); bad["targets"][0][key] = json!({}); assert!(!BatchKind::valid(&bad, None), "target {key}");
+        }
+        for key in ["torso_review_ack", "waist_review_ack", "spill_review_ack", "shadow_review_ack"] {
+            let mut bad = value.clone(); bad[key] = Value::Null; assert!(!BatchKind::valid(&bad, None), "top {key}");
+            bad = value.clone(); bad["targets"][0][key] = Value::Null; assert!(!BatchKind::valid(&bad, None), "target {key}");
+        }
+        let mut bad = value.clone(); bad["waist_transfer"] = value["targets"][0]["waist_transfer"].clone();
+        assert!(!BatchKind::valid(&bad, None));
+        bad = value; bad["module_scope"] = json!([TORSO_OP]); assert!(!BatchKind::valid(&bad, None));
+    }
+    #[test] fn waist_target_count_identity_and_index_include_blocked_rows() {
+        let value = waist_review();
+        let mut two = value.clone(); let mut other = value["targets"][0].clone();
+        other["document_id"] = json!("e".repeat(32)); other["index"] = json!(2);
+        other["waist_transfer"]["document_id"] = other["document_id"].clone();
+        two["targets"].as_array_mut().unwrap().push(other); two["ok"] = json!(2);
+        assert!(BatchKind::valid(&two, None));
+        let mut bad = two.clone(); bad["targets"][1] = bad["targets"][0].clone(); assert!(!BatchKind::valid(&bad, None));
+        bad = two.clone(); bad["targets"][1]["index"] = json!(1); assert!(!BatchKind::valid(&bad, None));
+        two["targets"][1]["blocked"] = json!("Actual waist body/face review is unavailable");
+        two["ok"] = json!(1); two["blocked"] = json!(1); assert!(!BatchKind::valid(&two, None));
+        two["targets"][1]["waist_transfer"] = Value::Null; assert!(BatchKind::valid(&two, None));
+        bad = two.clone(); bad["targets"][1]["index"] = json!(1); assert!(!BatchKind::valid(&bad, None));
+        bad = value.clone(); bad["targets"] = json!([]); bad["ok"] = json!(0); assert!(!BatchKind::valid(&bad, None));
+        let mut many = value.clone();
+        many["targets"] = json!((0..9).map(|index| {
+            let mut target = value["targets"][0].clone(); target["document_id"] = json!(format!("{index:032x}"));
+            target["index"] = json!(index); target["waist_transfer"]["document_id"] = target["document_id"].clone(); target
+        }).collect::<Vec<_>>());
+        many["ok"] = json!(9); assert!(!BatchKind::valid(&many, None));
+        many["targets"][8]["blocked"] = json!("Target review unavailable"); many["targets"][8]["waist_transfer"] = Value::Null;
+        many["ok"] = json!(8); many["blocked"] = json!(1); assert!(!BatchKind::valid(&many, None));
+        many["targets"].as_array_mut().unwrap().pop(); many["blocked"] = json!(0); assert!(BatchKind::valid(&many, None));
+    }
+    #[test] fn waist_terminal_claim_and_unknown_need_the_original_family_ack_shape() {
+        let original = waist_commit();
+        for (success, unknown) in [(true,false), (false,true), (false,false)] {
+            let mut value = original.clone(); value["success"] = json!(success); value["outcome_unknown"] = json!(unknown);
+            assert!(BatchKind::valid(&value, None));
+            for key in ["waist_review_ack", "module_scope", "preflight_token"] {
+                let mut bad = value.clone(); bad.as_object_mut().unwrap().remove(key); assert!(!BatchKind::valid(&bad, None), "{key}");
+            }
+            let mut bad = value.clone(); bad["torso_review_ack"] = value["waist_review_ack"].clone(); assert!(!BatchKind::valid(&bad, None));
+            bad = value; bad["waist_review_ack"][0]["revision"] = json!("02"); assert!(!BatchKind::valid(&bad, None));
+        }
+        let mut host = BatchHost::default(); host.reset([1;16]); host.ready([1;16], true);
+        let command = json!({"cmd":"batch","action":"commit","request_id":original["request_id"],
+            "preflight_token":original["preflight_token"],"waist_review_ack":original["waist_review_ack"]});
+        host.begin_command([1;16], &command).unwrap();
+        let mut substituted = original.clone(); substituted["waist_review_ack"][0]["after_sha256"] = json!("e".repeat(64));
+        assert!(BatchKind::valid(&substituted, None)); // Shape alone is insufficient.
+        host.receive([1;16], &substituted);
+        let result = host.status("waist-commit")["result"].clone();
+        assert_eq!(result["outcome_unknown"], true); assert_eq!(result["waist_review_ack"], original["waist_review_ack"]);
     }
 
 }

@@ -191,7 +191,15 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             while let Ok(line) = rx.recv() {
                 if let Ok(v)=serde_json::from_str::<Value>(&line) {
                     // Reviewed outcomes settle only after exact original validation.
-                    if v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" {
+                    // Scalar preset/batch identities are retained by the existing
+                    // receipt host. Raw success cannot settle recovery first.
+                    let scalar_review=v["request_id"].as_str().is_some_and(|id| {
+                        // Even a wrong event name must not bypass an existing
+                        // request's exact scalar receipt validation.
+                        st.batch_results.lock().map(|h|h.guards_review(inspection_epoch,id)).unwrap_or(true)
+                            || st.preset_results.lock().map(|h|h.guards_review(inspection_epoch,id)).unwrap_or(true)
+                    });
+                    if !scalar_review && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" {
                         crate::project_recovery_fence::observed(inspection_epoch, &v);
                     }
                     if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {

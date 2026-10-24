@@ -18,10 +18,10 @@ pub(crate) fn enqueue(state:&AppState,handle:&EngineHandle,command:Value)->Resul
     crate::spill_transfer_protocol::command(&command)?;
     crate::original_shadow_transfer_protocol::command(&command)?;
     crate::torso_transfer_protocol::command(&command)?;
+    crate::waist_transfer_protocol::command(&command)?;
     let Some(id)=command["request_id"].as_str().map(str::to_owned) else{return handle.send(command)};
-    let action=command["action"].as_str().ok_or("missing batch action")?.to_owned();
     let mut host=state.batch_results.lock().map_err(|_|"batch receipt lock poisoned")?;
-    host.begin(handle.epoch(),&id,&action)?;
+    host.begin_command(handle.epoch(),&command)?;
     let result=handle.send(command);
     if let Err(error)=&result{host.failed(&id,error);}
     result
@@ -29,7 +29,7 @@ pub(crate) fn enqueue(state:&AppState,handle:&EngineHandle,command:Value)->Resul
 #[tauri::command]
 pub(crate) fn batch(state:State<'_,Arc<AppState>>,action:String,docs:Option<Vec<String>>,
     module_scope:Option<Vec<String>>,conflict_policy:Option<String>,batch_id:Option<String>,
-    preflight_token:Option<String>,request_id:Option<String>,local_mask_transfer:Option<Value>,reference_color:Option<Value>,people_transfer:Option<Value>,spill_review_ack:Option<Value>,shadow_review_ack:Option<Value>,torso_review_ack:Option<Value>)->Result<Value,String>{
+    preflight_token:Option<String>,request_id:Option<String>,local_mask_transfer:Option<Value>,reference_color:Option<Value>,people_transfer:Option<Value>,spill_review_ack:Option<Value>,shadow_review_ack:Option<Value>,torso_review_ack:Option<Value>,waist_review_ack:Option<Value>)->Result<Value,String>{
     if !["preflight","commit","undo","redo","state","people_targets"].contains(&action.as_str()){return Err("unknown batch action".into());}
     if request_id.is_some() && state.ready_caps.lock().map_err(|_|"capability lock poisoned")?["batch_preflight_protocol"]!=1 {
         return Err("current engine does not support reviewed batch receipts".into());
@@ -47,9 +47,11 @@ pub(crate) fn batch(state:State<'_,Arc<AppState>>,action:String,docs:Option<Vec<
     if let Some(v)=spill_review_ack{cmd["spill_review_ack"]=v;}
     if let Some(v)=shadow_review_ack{cmd["shadow_review_ack"]=v;}
     if let Some(v)=torso_review_ack{cmd["torso_review_ack"]=v;}
+    if let Some(v)=waist_review_ack{cmd["waist_review_ack"]=v;}
     crate::spill_transfer_protocol::command(&cmd)?;
     crate::original_shadow_transfer_protocol::command(&cmd)?;
     crate::torso_transfer_protocol::command(&cmd)?;
+    crate::waist_transfer_protocol::command(&cmd)?;
     if cmd["action"]=="people_targets" && !read_only(&cmd){return Err("invalid bounded face inventory request".into());}
     state.send_to_engine(cmd)?;Ok(json!({"requested":true}))
 }

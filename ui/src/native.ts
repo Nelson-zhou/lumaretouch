@@ -1777,11 +1777,11 @@ export const runPreset = (
   action: "list" | "preflight" | "apply" | "save" | "import" | "delete" | "xmp_inspect",
   opts: { id?: string; name?: string; path?: string; kind?: string; note?: string;
           force?: boolean; moduleScope?: string[]; requestId?: string; documentId?: string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};preflightToken?:string;
-          xmpAck?:import('./xmpImport/model').XmpAck;xmpReviewAck?:import('./xmpImport/model').XmpReviewAck;spillReviewAck?:import('./spillRemoval/transferModel').SpillTransferAck[];shadowReviewAck?:import('./originalShadow/transferModel').ShadowTransferAck[];torsoReviewAck?:import('./torsoLength/transferModel').TorsoTransferAck[] } = {},
+          xmpAck?:import('./xmpImport/model').XmpAck;xmpReviewAck?:import('./xmpImport/model').XmpReviewAck;spillReviewAck?:import('./spillRemoval/transferModel').SpillTransferAck[];shadowReviewAck?:import('./originalShadow/transferModel').ShadowTransferAck[];torsoReviewAck?:import('./torsoLength/transferModel').TorsoTransferAck[];waistReviewAck?:import('./waistLength/transferModel').WaistTransferAck[] } = {},
 ) => invoke<{ requested: boolean }>("preset", {
   action, id: opts.id, name: opts.name, path: opts.path, kind: opts.kind, note: opts.note,
   force: opts.force, moduleScope: opts.moduleScope, requestId: opts.requestId, documentId: opts.documentId,localMaskTransfer:opts.localMaskTransfer,referenceColor:opts.referenceColor,preflightToken:opts.preflightToken,
-  xmpAck:opts.xmpAck,xmpReviewAck:opts.xmpReviewAck,spillReviewAck:opts.spillReviewAck,shadowReviewAck:opts.shadowReviewAck,torsoReviewAck:opts.torsoReviewAck,
+  xmpAck:opts.xmpAck,xmpReviewAck:opts.xmpReviewAck,spillReviewAck:opts.spillReviewAck,shadowReviewAck:opts.shadowReviewAck,torsoReviewAck:opts.torsoReviewAck,waistReviewAck:opts.waistReviewAck,
 });
 export const readPresetResult=(requestId:string)=>invoke<{phase:string;request_id:string;result?:PresetReply;error?:string}>("preset_result",{requestId});
 
@@ -1790,10 +1790,10 @@ export const readPresetResult=(requestId:string)=>invoke<{phase:string;request_i
 export const runBatch = (
   action: "preflight" | "commit" | "undo" | "redo" | "state",
   opts: { docs?: string[]; moduleScope?: string[]; conflictPolicy?: string;
-          batchId?: string; preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest;spillReviewAck?:import('./spillRemoval/transferModel').SpillTransferAck[];shadowReviewAck?:import('./originalShadow/transferModel').ShadowTransferAck[];torsoReviewAck?:import('./torsoLength/transferModel').TorsoTransferAck[] } = {},
+          batchId?: string; preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest;spillReviewAck?:import('./spillRemoval/transferModel').SpillTransferAck[];shadowReviewAck?:import('./originalShadow/transferModel').ShadowTransferAck[];torsoReviewAck?:import('./torsoLength/transferModel').TorsoTransferAck[];waistReviewAck?:import('./waistLength/transferModel').WaistTransferAck[] } = {},
 ) => invoke<{ requested: boolean }>("batch", {
   action, docs: opts.docs, moduleScope: opts.moduleScope,
-  conflictPolicy: opts.conflictPolicy, batchId: opts.batchId,preflightToken:opts.preflightToken,requestId:opts.requestId,localMaskTransfer:opts.localMaskTransfer,referenceColor:opts.referenceColor,peopleTransfer:opts.peopleTransfer,spillReviewAck:opts.spillReviewAck,shadowReviewAck:opts.shadowReviewAck,torsoReviewAck:opts.torsoReviewAck,
+  conflictPolicy: opts.conflictPolicy, batchId: opts.batchId,preflightToken:opts.preflightToken,requestId:opts.requestId,localMaskTransfer:opts.localMaskTransfer,referenceColor:opts.referenceColor,peopleTransfer:opts.peopleTransfer,spillReviewAck:opts.spillReviewAck,shadowReviewAck:opts.shadowReviewAck,torsoReviewAck:opts.torsoReviewAck,waistReviewAck:opts.waistReviewAck,
 });
 export const readBatchResult=(requestId:string)=>invoke<{phase:string;request_id:string;result?:BatchReply;error?:string}>("batch_result",{requestId});
 

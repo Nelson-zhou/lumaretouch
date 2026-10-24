@@ -5,25 +5,29 @@
   "entries": [
     {
       "operation_id": "lnx.waist_length.v1",
-      "parameter_key": "recipe",
-      "type": "object",
-      "neutral": {
-        "version": 1,
-        "amount": 0
-      },
-      "range": {
-        "version": [
-          1,
-          1
-        ],
-        "amount": [
-          -1,
-          1
-        ]
-      },
-      "transferable": false,
+      "parameter_key": "version",
+      "type": "integer",
+      "neutral": 1,
+      "range": [
+        1,
+        1
+      ],
+      "transferable": true,
       "source_requirement": "PC-32473-C-5d33f285bb",
-      "reason": "PARTIAL / UNRUN: independent explicitly source-marked waist endpoints and own-face/body review. Direct canonical body intent only; no inferred waist from pose hips, no learned AI claim. End-user per-target visual preset/batch transfer is not registered; never copy source markers/support."
+      "reason": "PARTIAL / UNRUN: version and amount only, exclusive frozen waist scope. Each target must have exactly one enabled body with independently marked waist endpoints, support review and current own-face relation. Actual full-source before/after and exact target acknowledgment required. No source points, masks, supports or identity transfer. Multi-body routing and runtime/photo acceptance remain unfinished."
+    },
+    {
+      "operation_id": "lnx.waist_length.v1",
+      "parameter_key": "amount",
+      "type": "number",
+      "neutral": 0,
+      "range": [
+        -1,
+        1
+      ],
+      "transferable": true,
+      "source_requirement": "PC-32473-C-5d33f285bb",
+      "reason": "PARTIAL / UNRUN: version and amount only, exclusive frozen waist scope. Each target must have exactly one enabled body with independently marked waist endpoints, support review and current own-face relation. Actual full-source before/after and exact target acknowledgment required. No source points, masks, supports or identity transfer. Multi-body routing and runtime/photo acceptance remain unfinished."
     },
     {
       "operation_id": "lnx.torso_length.v1",

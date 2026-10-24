@@ -1,7 +1,8 @@
-# Remaining bounded waist transfer route
+# Waist scalar transfer implementation checklist
 
 Requirement remains LNX-REF-PC-32473-C-5d33f285bb, PARTIAL / UNRUN. This is a
-remaining implementation map, not a declaration that preset/batch is connected.
+original implementation checklist. The subsequent source slice is described in
+TRANSFER-CONTRACT.md; no item here is a runtime acceptance declaration.
 
 ## Allowed transferable data
 
@@ -42,8 +43,8 @@ Use the existing torso frozen-ledger pattern, not a second batch history owner:
 `batch_preflight` and `batch_sync`, `batch_group_history`, dedicated candidate
 review, `local_grade_preset_review` / `preset_controller` / `workflow_ports`, native
 preset/batch protocol and receipt validation, UI scope selection and explicit
-visual acknowledgment. The new source operation remains absent from these
-portable scope registrations until all these paths are coherent.
+visual acknowledgment. The source continuation connects these ports through a shared fixed family
+selector; runtime acceptance still requires executing the corresponding fixtures.
 
 Source-only fixtures should cover original and derived targets, different source
 sizes, absent/stale markers, unrelated body edits, missing current own-face

@@ -105,6 +105,14 @@ class WorkflowPortsMixin:
         from .torso_length_transfer_review import verify
         return verify(self,row,before,candidate,document_id,revision,record)
 
+    def _prepare_waist_target(self,row,before,candidate,document_id,revision):
+        from .waist_length_transfer_review import prepare
+        return prepare(self,row,before,candidate,document_id,revision)
+
+    def _verify_waist_target(self,row,before,candidate,document_id,revision,record):
+        from .waist_length_transfer_review import verify
+        return verify(self,row,before,candidate,document_id,revision,record)
+
     def _batch_history_identity(self,row,state,document_id,revision):
         from .full_candidate_render import identity
         proof,_,_=identity(self,row,state,document_id,str(revision))
@@ -112,6 +120,10 @@ class WorkflowPortsMixin:
 
     def _torso_history_identity(self,row,state,document_id,revision):
         from .torso_length_transfer_review import history_identity
+        return history_identity(self,row,state,document_id,str(revision))
+
+    def _waist_history_identity(self,row,state,document_id,revision):
+        from .waist_length_transfer_review import history_identity
         return history_identity(self,row,state,document_id,str(revision))
 
     def _preset_controller(self):
@@ -123,6 +135,8 @@ class WorkflowPortsMixin:
                 prepare_spill=self._prepare_spill_target, verify_spill=self._verify_spill_target,
                 prepare_shadow=self._prepare_shadow_target, verify_shadow=self._verify_shadow_target,
                 prepare_torso=self._prepare_torso_target, verify_torso=self._verify_torso_target,
+                prepare_waist=self._prepare_waist_target, verify_waist=self._verify_waist_target,
+                torso_history_identity=self._torso_history_identity, waist_history_identity=self._waist_history_identity,
                 prepare_xmp=self._prepare_xmp_target, verify_xmp=self._verify_xmp_target,
                 guard=lambda label: self._guard_editable(label), document_id=lambda: self._load_id,
                 capture=lambda: self._people_preset_capture(), replay=lambda state, **kw: self._people_preset_replay(state, **kw),
@@ -155,6 +169,8 @@ class WorkflowPortsMixin:
                 prepare_spill=self._prepare_spill_target, verify_spill=self._verify_spill_target,
                 prepare_shadow=self._prepare_shadow_target, verify_shadow=self._verify_shadow_target,
                 prepare_torso=self._prepare_torso_target, verify_torso=self._verify_torso_target,
+                prepare_waist=self._prepare_waist_target, verify_waist=self._verify_waist_target,
+                waist_history_identity=self._waist_history_identity,
                 torso_history_identity=self._torso_history_identity, history_identity=self._batch_history_identity, people_transfer=self._people_transfer_batch, people_restore=self._people_restore_batch, capture_reference=self._capture_reference, prepare_optics=self._prepare_optics_target, prepare_reference=self._prepare_reference_target, guard=lambda label: self._guard_editable(label),
                     capture=lambda: self._capture_state(),
                     replay=lambda state, **kw: self._replay_state(state, **kw),
@@ -170,5 +186,3 @@ class WorkflowPortsMixin:
 
     def cmd_batch(self, p: dict):
         return self._batch_controller().handle_command(p)
-
-

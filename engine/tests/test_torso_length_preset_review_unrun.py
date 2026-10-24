@@ -30,27 +30,43 @@ def stored():
             'kind': 'custom', 'note': '', 'modules': {TORSO.OP: {'version': 1, 'amount': .75}}}
 
 
-def fixture(tmp_path, *, derived=False, reviewed=True):
-    path = tmp_path / 'synthetic-torso-original.bin'
+def fixture(tmp_path, *, derived=False, reviewed=True, family='torso', size=None):
+    # Fixed synthetic families share only the controller-port harness. These
+    # non-PNG proofs are not substitutes for the separate complete-render tests.
+    if family == 'torso':
+        scope, project, review_api, make_body = TORSO, PROJECT, REVIEW, body_fixture
+    elif family == 'waist':
+        from test_waist_length_support_unrun import fixture as make_body
+        from lumaretouch_engine import waist_length_scope as scope
+        from lumaretouch_engine import waist_length_project as project
+        from lumaretouch_engine import waist_length_transfer_review as review_api
+    else:
+        raise ValueError('Synthetic preset fixture needs a fixed torso/waist family')
+    if size is None: size = (512, 512) if family == 'torso' else (1024, 1024)
+    width, height = size
+    path = tmp_path / f'synthetic-{family}-original.bin'
     path.write_bytes(b'not-a-decoded-photo-or-observed-body')
     state = {'_crop_rect': (0., 0., 1., 1.), '_crop_rotation': 0.,
              '_exposure': (0.,) * 7, '_unselected': 'target-owned'}
     if derived:
-        state['_creative_base'] = make_asset('rgba', 512, 512,
-            struct.pack('<4f', .2, .3, .4, 1.) * (512 * 512))
-    source = E.source({**SOURCE.binding(state, str(path), (512, 512)), 'orientation': E.ORIENTATION})
-    bank, people, ref, _, _ = body_fixture(amount=-.25, review=reviewed, source=source)
-    state[BODY.KEY] = PROJECT.pack(bank)
-    row = {'document_id': 'row-target', 'path': str(path), 'src_w': 512, 'src_h': 512,
+        state['_creative_base'] = make_asset('rgba', width, height,
+            struct.pack('<4f', .2, .3, .4, 1.) * (width * height))
+    source = E.source({**SOURCE.binding(state, str(path), size), 'orientation': E.ORIENTATION})
+    bank, people, ref, _, _ = make_body(amount=-.25, review=reviewed, source=source)
+    state[BODY.KEY] = project.pack(bank)
+    row = {'document_id': 'row-target', 'path': str(path), 'src_w': width, 'src_h': height,
            'state': state, 'people': people, 'undo': [], 'redo': []}
     context = SimpleNamespace(row=row, revision='7', document='loaded', events=[],
-        calls=[], replays=[], invalid=[], preset=stored(), ref=ref)
+        calls=[], identity_calls=[], replays=[], invalid=[], preset=stored(), ref=ref)
+    if family == 'waist':
+        context.preset.update(id='waist', name='Waist scalar review',
+            modules={scope.OP: {'version': 1, 'amount': .75}})
 
     def proof(current, before, candidate, document_id, revision):
         source_proof = SOURCE.row_proof({**current, 'state': before})
         size = [current['src_w'], current['src_h']]
-        left = REVIEW._target_identity(before, current['people'], source_proof, size)
-        right = REVIEW._target_identity(candidate, current['people'], source_proof, size)
+        left = review_api._target_identity(before, current['people'], source_proof, size)
+        right = review_api._target_identity(candidate, current['people'], source_proof, size)
         if any(left[key] != right[key] for key in left if key != 'bank_sha256'):
             raise ValueError('Synthetic transfer attempted to replace owned body support')
         binding = {key: value for key, value in right.items() if key != 'bank_sha256'}
@@ -60,15 +76,17 @@ def fixture(tmp_path, *, derived=False, reviewed=True):
             'before_people_sha256': fingerprint(current['people']),
             'candidate_people_sha256': fingerprint(current['people']),
             'source_size': size, 'before_output_size': size, 'after_output_size': size,
-            'parameters': TORSO.params_of(candidate), **binding,
+            'parameters': scope.params_of(candidate), **binding,
             'before_bank_sha256': left['bank_sha256'], 'candidate_bank_sha256': right['bank_sha256']}
         public_images = {}
         for side, value in (('before', before), ('after', candidate)):
             raw = ('SYNTHETIC NON-PNG PORT: ' + document_id + ':' + fingerprint(value)).encode()
-            private[side] = {'mime': 'image/png', 'width': 256, 'height': 256,
+            scale = min(1., 256 / max(size))
+            private[side] = {'mime': 'image/png', 'width': max(1, round(size[0] * scale)),
+                             'height': max(1, round(size[1] * scale)),
                              'sha256': sha256(raw).hexdigest()}
             public_images[side] = {**private[side], 'base64': base64.b64encode(raw).decode('ascii')}
-        private = REVIEW.checked(private)
+        private = review_api.checked(private)
         return private, {**deepcopy(private), **public_images}
 
     def prepare(current, before, candidate, document_id, revision):
@@ -80,9 +98,22 @@ def fixture(tmp_path, *, derived=False, reviewed=True):
         if context.document != document_id or context.revision != revision:
             raise ValueError('Synthetic target document or revision changed')
         expected, _ = proof(current, before, candidate, document_id, revision)
-        if REVIEW.checked(record) != expected:
+        if review_api.checked(record) != expected:
             raise ValueError('Synthetic complete target, body, face or source changed')
         return expected
+
+    def history_identity(current, actual, document_id, revision):
+        """Synthetic current-state/people fence, never a render or real image."""
+        review_api._context(document_id, revision)
+        context.identity_calls.append((document_id, revision, fingerprint(actual)))
+        if context.document != document_id or context.revision != revision:
+            raise ValueError('Synthetic current-state identity changed')
+        source_proof = SOURCE.row_proof({**current, 'state': actual})
+        review_api._target_identity(actual, current['people'], source_proof,
+                                   [current['src_w'], current['src_h']])
+        return {'document_id': document_id, 'revision': revision,
+                'source_proof': source_proof, 'candidate_sha256': fingerprint(actual),
+                'people_sha256': fingerprint(current['people'])}
 
     def replay(value, **kwargs):
         context.replays.append((deepcopy(value), kwargs))
@@ -92,13 +123,14 @@ def fixture(tmp_path, *, derived=False, reviewed=True):
     def advance():
         context.revision = str(int(context.revision) + 1)
 
-    context.prepare = prepare; context.verify = verify
+    context.prepare = prepare; context.verify = verify; context.history_identity = history_identity
     context.owner = PC.PresetController(PC.PresetPorts(lambda _: None,
         lambda: context.document, lambda: deepcopy(row['state']), replay,
         lambda: ('ok', ''), lambda: {'document_id': context.document},
         lambda: context.invalid.append(True), target_row=lambda: row,
         revision=lambda: context.revision, advance=advance,
-        prepare_torso=prepare, verify_torso=verify), context.events.append)
+        **{f'prepare_{family}': prepare, f'verify_{family}': verify,
+           f'{family}_history_identity': history_identity}), context.events.append)
     context.reviews = context.owner.reviews
     return context
 
@@ -241,8 +273,9 @@ def test_replay_drift_requires_strict_verified_rollback_and_preserves_ack_receip
     assert result['requires_reload'] is (changed == 'people') and bool(context.invalid) is (changed == 'people')
     assert result['torso_review_ack'] == ack(plan) and result['preflight_token'] == plan['preflight_token']
     assert result['module_scope'] == [TORSO.OP] and 'torso_transfer' not in result
-    assert context.row['state'] == before and not context.row['undo'] and not context.row['redo']
-    assert [entry[1]['mode'] for entry in context.replays] == ['preset', 'preset_rollback']
+    assert (context.row['state'] == before) is (changed == 'state')
+    assert not context.row['undo'] and not context.row['redo']
+    assert [entry[1]['mode'] for entry in context.replays] == (['preset', 'preset_rollback'] if changed == 'state' else ['preset'])
     assert all(entry[1]['strict_local'] is True for entry in context.replays)
     assert not any(event.get('event') == 'preset_applied' for event in context.events)
 

@@ -17,7 +17,11 @@ accepted mutation. This implementation still requires execution/physical checks.
   default-no-overwrite import and explicit copy, builtin protection, precise
   delete confirmation, uncertain-outcome recovery. Name edits during saving survive.
 - Native receipt_host.rs shares only mailbox mechanics with batch; preset_host.rs
-  validates preset evidence. Neither query endpoint executes another mutation.
+  validates preset evidence. Its opt-in body-scalar binding retains only the
+  original scope/token/ordered acknowledgment, not a second history or command.
+  Neither query endpoint executes another mutation. Waist uncertainty remains
+  query-only and cannot use inspect-and-end; current mailbox queries do not
+  guarantee authoritative recovery. See `../waistLength/TRANSFER-UNRUN.md`.
 
 npm test includes workflow/model regressions and the global statusFence tests.
 CI also executes preset_host::tests and existing batch_host::tests. The real

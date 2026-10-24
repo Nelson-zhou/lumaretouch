@@ -11,25 +11,30 @@ from .batch_preflight import canonical
 from . import creative_derived_transfer as DERIVED, creative_derived_source as SOURCE
 from . import spill_transfer_review as SPILL_REVIEW
 from . import original_shadow_transfer_review as SHADOW_REVIEW
-from . import torso_length_transfer_review as TORSO_REVIEW
+from . import body_scalar_transfer_review as BODY_REVIEW
 
 _NO_SPILL_ACK = object()
 _NO_SHADOW_ACK = object()
 _NO_TORSO_ACK = object()
+_NO_WAIST_ACK = object()
 
 
 class PresetReviews:
-    def __init__(self):self.pending=OrderedDict()
+    def __init__(self):
+        self.pending=OrderedDict()
+        self.targets={}
 
-    def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None,prepare_crop=None,verify_crop=None,prepare_xmp=None,verify_xmp=None,prepare_spill=None,verify_spill=None,prepare_shadow=None,verify_shadow=None,prepare_torso=None,verify_torso=None):
+    def prepare(self,preset,state,row,document_id,revision,options,prepare_optics=None,prepare_reference=None,prepare_crop=None,verify_crop=None,prepare_xmp=None,verify_xmp=None,prepare_spill=None,verify_spill=None,prepare_shadow=None,verify_shadow=None,prepare_torso=None,verify_torso=None,prepare_waist=None,verify_waist=None):
         modules=DERIVED.require_modules(state,preset['modules']);SC.check_scope(list(modules))
+        family=BODY_REVIEW.select(modules)
+        row_identity=(row.get('document_id'),row.get('path'))
         xmp=preset.get("xmp_import")
-        if SC.TORSO_LENGTH.OP in modules and xmp is not None:raise ValueError('上半身长度参数须独立审核，不能附带 XMP 兼容性迁移')
+        if family is not None and xmp is not None:raise ValueError('身体长度参数须独立审核，不能附带 XMP 兼容性迁移')
         derived=SOURCE.record(state) is not None
-        if xmp is None and not derived and LG.OP not in modules and OA.OP not in modules and RC.OP not in modules and SC.OP_CROP not in modules and SC.SPILL_REMOVAL.OP not in modules and SC.ORIGINAL_SHADOW.OP not in modules and SC.TORSO_LENGTH.OP not in modules:raise ValueError('此预设不含需要冻结目标预检的模块')
+        if xmp is None and not derived and LG.OP not in modules and OA.OP not in modules and RC.OP not in modules and SC.OP_CROP not in modules and SC.SPILL_REMOVAL.OP not in modules and SC.ORIGINAL_SHADOW.OP not in modules and family is None:raise ValueError('此预设不含需要冻结目标预检的模块')
         # Current captured state owns the effective source, not a stale parked
         # row state. Originals retain their existing review contract.
-        proof=SOURCE.row_proof({**row,'state':state}) if xmp is not None or derived or SC.OP_CROP in modules or SC.SPILL_REMOVAL.OP in modules or SC.ORIGINAL_SHADOW.OP in modules or SC.TORSO_LENGTH.OP in modules else None
+        proof=SOURCE.row_proof({**row,'state':state}) if xmp is not None or derived or SC.OP_CROP in modules or SC.SPILL_REMOVAL.OP in modules or SC.ORIGINAL_SHADOW.OP in modules or family is not None else None
         if LG.OP in modules:prepared,transfer=LR.prepare_modules(state,modules,row,options,preview=True)
         else:
             if options is not None:raise ValueError('未选择局部组，不能附带蒙版选项')
@@ -37,7 +42,7 @@ class PresetReviews:
         candidate=OA.candidate(state,prepared,local_replace_legacy=bool(transfer and transfer['legacy_removed']))
         if SC.SPILL_REMOVAL.OP in prepared:SC.SPILL_REMOVAL.validate_target(candidate,row["path"],(row["src_h"],row["src_w"]))
         if SC.ORIGINAL_SHADOW.OP in prepared:SC.ORIGINAL_SHADOW.validate_target(candidate,row["path"],(row["src_h"],row["src_w"]))
-        if SC.TORSO_LENGTH.OP in prepared:SC.TORSO_LENGTH.validate_target(candidate,row["path"],(row["src_h"],row["src_w"]))
+        if family is not None:family.scope.validate_target(candidate,row["path"],(row["src_h"],row["src_w"]))
         if SKY.OP in prepared:SKY.validate_target(candidate['_sky_replacement'],row['path'],(row['src_h'],row['src_w']))
         if BROW.OP in prepared and OA.OP not in prepared:BROW.validate_target(candidate,row)
         if NOSE.OP in prepared and OA.OP not in prepared:NOSE.validate_target(candidate,row)
@@ -75,37 +80,47 @@ class PresetReviews:
             shadow_record,shadow_transfer=prepare_shadow(row,state,candidate,document_id,str(revision))
             shadow_record=SHADOW_REVIEW.checked(shadow_record)
             verify_shadow(row,state,candidate,document_id,str(revision),shadow_record)
-        torso_record=None;torso_transfer=None
-        if SC.TORSO_LENGTH.OP in prepared:
-            if prepare_torso is None or verify_torso is None:raise ValueError('上半身长度预设需要完整目标前后图预览和审核端口')
-            torso_record,torso_transfer=prepare_torso(row,state,candidate,document_id,str(revision))
-            torso_record=TORSO_REVIEW.checked(torso_record)
-            verify_torso(row,state,candidate,document_id,str(revision),torso_record)
+        scalar_record=None;scalar_transfer=None
+        if family is not None:
+            prepare_scalar,verify_scalar=(prepare_torso,verify_torso) if family.name=='torso_length' else (prepare_waist,verify_waist)
+            if prepare_scalar is None or verify_scalar is None:raise ValueError('身体长度预设需要完整目标前后图预览和审核端口')
+            scalar_record,scalar_transfer=prepare_scalar(row,state,candidate,document_id,str(revision))
+            scalar_record=family.review.checked(scalar_record)
+            verify_scalar(row,state,candidate,document_id,str(revision),scalar_record)
         xmp_record=None;xmp_transfer=None
         if xmp is not None:
             if prepare_xmp is None or verify_xmp is None:raise ValueError('XMP requires actual full-target image review ports')
             xmp_record,xmp_transfer=prepare_xmp(row,state,candidate,document_id,str(revision),xmp['source_sha256'])
             verify_xmp(row,state,candidate,document_id,str(revision),xmp['source_sha256'],xmp_record)
         if proof is not None:SOURCE.verify_row({**row,'state':state},proof)
+        if family is not None and (row.get('document_id'),row.get('path'))!=row_identity:
+            raise ValueError('身体长度预检期间目标文档身份发生变化')
         token=uuid.uuid4().hex
-        record={'preset':deepcopy(preset),'modules':prepared,'transfer':transfer,'optics':optical_record,'reference':reference_record,'crop':crop_record,'xmp':xmp_record,'spill':spill_record,'shadow':shadow_record,'torso':torso_record,
+        record={'preset':deepcopy(preset),'modules':prepared,'transfer':transfer,'optics':optical_record,'reference':reference_record,'crop':crop_record,'xmp':xmp_record,'spill':spill_record,'shadow':shadow_record,'torso':None,
+                **({family.preset_key:scalar_record} if family is not None else {}),
                 'document_id':document_id,'revision':str(revision),'path':row['path'],
                 'row_document_id':row.get('document_id'),'source_proof':proof,
                 'before':canonical(OA.before_params(state,list(modules))),'local_key':LG.undo_key(state) if LG.OP in modules else None,
                 'expires':time.monotonic()+30*60}
         canonical(record);self.pending[token]=record
-        while len(self.pending)>8:self.pending.popitem(last=False)
+        if family is not None:self.targets[token]=row
+        while len(self.pending)>8:
+            expired,_=self.pending.popitem(last=False)
+            self.targets.pop(expired,None)
         return {'id':preset['id'],'name':preset['name'],'module_scope':list(modules),
                 'preflight_token':token,'applies':deepcopy(prepared),'local_mask_transfer':transfer,'optical_transfer':optical_transfer,'reference_color':reference_record,
                 'document_id':document_id,'revision':str(revision),'source_proof':deepcopy(proof),'crop_transfer':crop_transfer,
                 **({'spill_transfer':spill_transfer} if SC.SPILL_REMOVAL.OP in prepared else {}),
                 **({'shadow_transfer':shadow_transfer} if SC.ORIGINAL_SHADOW.OP in prepared else {}),
-                **({'torso_transfer':torso_transfer} if SC.TORSO_LENGTH.OP in prepared else {}),
+                **({family.wire_key:scalar_transfer} if family is not None else {}),
                 **({'xmp_transfer':xmp_transfer,'xmp_report':deepcopy(xmp['report'])} if xmp is not None else {})}
 
-    def claim(self,token,preset_id,state,row,document_id,revision,verify_crop=None,verify_xmp=None,xmp_review_ack=None,verify_spill=None,spill_review_ack=_NO_SPILL_ACK,verify_shadow=None,shadow_review_ack=_NO_SHADOW_ACK,verify_torso=None,torso_review_ack=_NO_TORSO_ACK):
+    def claim(self,token,preset_id,state,row,document_id,revision,verify_crop=None,verify_xmp=None,xmp_review_ack=None,verify_spill=None,spill_review_ack=_NO_SPILL_ACK,verify_shadow=None,shadow_review_ack=_NO_SHADOW_ACK,verify_torso=None,torso_review_ack=_NO_TORSO_ACK,verify_waist=None,waist_review_ack=_NO_WAIST_ACK):
         if type(token) is not str or token not in self.pending:raise ValueError('目标预设预检已失效或使用，请重新预检')
         record=self.pending[token]
+        family=BODY_REVIEW.select(record['modules'])
+        if family is not None and self.targets.get(token) is not row:
+            raise ValueError('身体长度预设的目标行已替换，请重新预检')
         if time.monotonic()>=record['expires']:raise ValueError('目标预设预检已过期，请重新预检')
         if (record['preset']['id']!=preset_id or record['document_id']!=document_id or record['path']!=row['path'] or record['revision']!=str(revision)):
             raise ValueError('照片、版本或预设与预检不同，请重新预检')
@@ -127,7 +142,7 @@ class PresetReviews:
         candidate=OA.candidate(state,record['modules'],local_replace_legacy=bool(record['transfer'] and record['transfer']['legacy_removed']))
         if SC.SPILL_REMOVAL.OP in record['modules']:SC.SPILL_REMOVAL.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
         if SC.ORIGINAL_SHADOW.OP in record['modules']:SC.ORIGINAL_SHADOW.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
-        if SC.TORSO_LENGTH.OP in record['modules']:SC.TORSO_LENGTH.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
+        if family is not None:family.scope.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
         if SKY.OP in record['modules']:SKY.validate_target(candidate['_sky_replacement'],row['path'],(row['src_h'],row['src_w']))
         if BROW.OP in record['modules'] and OA.OP not in record['modules']:BROW.validate_target(candidate,row)
         if NOSE.OP in record['modules'] and OA.OP not in record['modules']:NOSE.validate_target(candidate,row)
@@ -155,12 +170,16 @@ class PresetReviews:
             SHADOW_REVIEW.acknowledgments(shadow_review_ack,[shadow])
             verify_shadow(row,state,candidate,document_id,str(revision),shadow)
         elif shadow_review_ack is not _NO_SHADOW_ACK:raise ValueError('未选择原图阴影模块，不能附带目标图审核确认')
-        if SC.TORSO_LENGTH.OP in record['modules']:
-            if verify_torso is None:raise ValueError('上半身长度预设缺少冻结目标前后图审核端口')
-            torso=TORSO_REVIEW.checked(record.get('torso'))
-            TORSO_REVIEW.acknowledgments(torso_review_ack,[torso])
-            verify_torso(row,state,candidate,document_id,str(revision),torso)
-        elif torso_review_ack is not _NO_TORSO_ACK:raise ValueError('未选择上半身长度模块，不能附带目标图审核确认')
+        scalar_acks={'torso':(torso_review_ack,_NO_TORSO_ACK),'waist':(waist_review_ack,_NO_WAIST_ACK)}
+        for name,(value,missing) in scalar_acks.items():
+            if value is not missing and (family is None or family.port_name!=name):
+                raise ValueError('未选择对应身体长度模块，不能附带目标图审核确认')
+        if family is not None:
+            verify_scalar=verify_torso if family.name=='torso_length' else verify_waist
+            if verify_scalar is None:raise ValueError('身体长度预设缺少冻结目标前后图审核端口')
+            scalar=family.review.checked(record.get(family.preset_key))
+            family.review.acknowledgments(scalar_acks[family.port_name][0],[scalar])
+            verify_scalar(row,state,candidate,document_id,str(revision),scalar)
         xmp=record['preset'].get('xmp_import')
         if xmp is not None:
             if verify_xmp is None:raise ValueError('XMP review verifier unavailable')
@@ -170,4 +189,5 @@ class PresetReviews:
         elif xmp_review_ack is not None:raise ValueError('Unexpected XMP review acknowledgment')
         if proof is not None:SOURCE.verify_row({**row,'state':state},proof)
         del self.pending[token]
+        self.targets.pop(token,None)
         return record

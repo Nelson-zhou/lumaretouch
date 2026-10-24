@@ -16,7 +16,7 @@ The final installed-native acceptance tests deliberately have NO such double.
 Four manual source-normalized waist endpoint pairs are required independently
 of the Pose33 shoulder/hip observations. No pose waist guess, imported support,
 synthetic host receipt or mocked prepared object counts as evidence. A private
-same-person parameter helper is NOT an end-user preset/batch registration.
+same-person parameter helper remains distinct from the later frozen visual preset/batch route.
 """
 from copy import deepcopy
 from types import SimpleNamespace
@@ -651,12 +651,45 @@ def test_recipe_scoped_persistence_and_history_preserve_adjacent_torso_intent():
                        expected_bank_sha256=P.graph_digest(unrelated))
 
 
-def test_private_recipe_helper_is_not_an_end_user_preset_or_batch_registration():
+@pytest.mark.parametrize('derived', [False, True])
+def test_public_scalar_scope_rebuilds_real_target_common_geometry_and_scoped_restore(native_boundary, derived):
+    """UNRUN: real ownership/common sampler; only native numerical boundary doubled."""
+    from lumaretouch_engine import waist_length_scope as T
+    source = fixture(amount=-.7)
+    target = fixture(amount=.1, asset='f'*64, derived=derived)
+    original_bank = deepcopy(target.bank)
+    before = {DOCUMENT_BODY.KEY: P.pack(target.bank)}
+    state = deepcopy(before)
+    portable = T.params_of({DOCUMENT_BODY.KEY: P.pack(source.bank)})
+    assert set(portable) == {'version', 'amount'}
+    T.install(state, portable)
+    target.bank = DOCUMENT_BODY.bank(state)
+    assert target.bank['support_assets'] == original_bank['support_assets']
+    assert B.support(target.bank, target.ref, S.OP) == B.support(original_bank, target.ref, S.OP)
+    field = assert_common(export(target), target)
+    assert field.record['source'] == target.frame
+    assert native_boundary.prepared[-1][1] == [-.7]
+    # Distinct private people owners are not merged or relinked by scalar transfer.
+    assert target.people != source.people
+    restored = deepcopy(state)
+    T.restore(restored, before)
+    target.bank = DOCUMENT_BODY.bank(restored)
+    assert B.operation(target.bank, target.ref, S.OP)['recipe'] == {'version': 1, 'amount': .1}
+    assert target.bank['revision'] > original_bank['revision']
+    assert_common(export(target), target)
+    assert native_boundary.prepared[-1][1] == [.1]
+
+
+
+def test_frozen_scalar_scope_is_separate_from_private_recipe_helper():
     from lumaretouch_engine import scope
-    assert S.OP not in scope.MODULES
-    assert S.OP not in scope.transferable_ops()
-    with pytest.raises(scope.ScopeError): scope.check_scope([S.OP])
-    # Private same-person helper remains deliberate and separately guarded.
+    assert S.OP in scope.MODULES and S.OP in scope.transferable_ops()
+    assert scope.check_scope([S.OP]) == [S.OP]
+    for other in ('lnx.torso_length.v1', scope.OP_EXPOSURE):
+        with pytest.raises(scope.ScopeError): scope.check_scope([S.OP, other])
+    assert scope.MODULES[S.OP]['params'] == ('version', 'amount')
+    # Registration alone is not review or commit authorization.
+    with pytest.raises(ValueError): scope.WAIST_LENGTH.params_of({})
     assert callable(P.transfer_recipe)
 
 
@@ -713,3 +746,18 @@ def test_installed_native_uses_common_max_upper_min_lower_for_tilted_manual_pair
     np.testing.assert_allclose(recovered[:, 1], [upper, lower], rtol=0, atol=1e-7)
     assert field.facts['native_source_facts']['upper_waist_level'] == upper
     assert field.facts['native_source_facts']['lower_waist_level'] == lower
+
+
+def test_scalar_native_recovery_settlement_is_after_bound_receipt_validation_source_contract():
+    """UNRUN static wiring assertion, not native execution or recovery acceptance."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    engine = (root/'ui/src-tauri/src/engine.rs').read_text()
+    host = (root/'ui/src-tauri/src/receipt_host.rs').read_text()
+    start = engine.index('let scalar_review=match')
+    observed = engine.index('crate::project_recovery_fence::observed', start)
+    assert 'if !scalar_review' in engine[start:observed]
+    assert 'batch_results.lock().map(|h|h.guards_review' in engine[start:observed]
+    assert 'preset_results.lock().map(|h|h.guards_review' in engine[start:observed]
+    assert 'guards_review' in host and 'review.matches(value)' in host
+    assert 'project_recovery_fence::observed' in host

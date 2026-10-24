@@ -45,13 +45,11 @@ recorded separately in `FREEZE.json` once all owners stop editing.
   naturalness, speed or memory-peak claim follows from a formula or fixture.
 - Preserve alpha/HDR refusals until the whole pipeline genuinely supports them.
 
-## Next bounded user workflow
+## Subsequent bounded user workflow
 
-Dedicated waist scalar preset/batch transfer remains **not registered**. A future
-route must transfer only version and amount, resolve each target's own explicit
-four-marker support, BodyRef, current face association and immutable source,
-render real before/after, and collect a target-bound acknowledgment through the
-existing frozen ledger. It must not copy donor markers, pose, masks, identity or
-support assets. Mixed scopes and whole-bank copies must not bypass this review.
-Existing torso review infrastructure may inform this implementation, but cannot
-be treated as having already connected waist controls.
+The subsequent scalar transfer slice authors the existing frozen preset/batch
+route with independent waist policy, not a second controller. See
+[TRANSFER-CONTRACT.md](TRANSFER-CONTRACT.md) and its separately frozen manifest.
+Only version and amount travel; target markers, source, support and face ownership
+are independently retained and checked. Multi-body routing and actual numerical,
+UI, photo, persistence and publication acceptance remain UNRUN.

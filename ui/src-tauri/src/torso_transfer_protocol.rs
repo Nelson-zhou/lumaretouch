@@ -57,22 +57,26 @@ pub(crate) fn acknowledgments(value: &Value) -> bool {
         && seen.insert(item["document_id"].as_str().unwrap()))
 }
 pub(crate) fn command(value: &Value) -> Result<(), String> {
-    let torso = value["module_scope"].as_array().is_some_and(|ops| ops.iter().any(|op| op == TORSO_OP));
-    if torso && (value["module_scope"].as_array().map_or(true, |ops| ops.len() != 1)
-        || ["people_transfer", "local_mask_transfer", "reference_color", "spill_review_ack", "shadow_review_ack", "xmp_ack", "xmp_review_ack"].iter().any(|key| value.get(*key).is_some())) {
-        return Err("torso scalar transfer requires its own scope and never creates body ownership".into());
+    scalar_command(value, TORSO_OP, "torso_review_ack")
+}
+/// Shared validation is not a shared receipt family: scope and acknowledgment keys stay exact.
+pub(crate) fn scalar_command(value: &Value, operation: &str, ack_key: &str) -> Result<(), String> {
+    let selected = value["module_scope"].as_array().is_some_and(|ops| ops.iter().any(|op| op == operation));
+    let conflicting = ["people_transfer", "local_mask_transfer", "reference_color", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "xmp_ack", "xmp_review_ack"]
+        .iter().any(|key| *key != ack_key && value.get(*key).is_some());
+    if selected && (value["module_scope"].as_array().map_or(true, |ops| ops.len() != 1) || conflicting) {
+        return Err(format!("{operation} scalar transfer requires its own scope and never creates body ownership"));
     }
-    let Some(ack) = value.get("torso_review_ack") else { return Ok(()); };
-    if (value.get("module_scope").is_some() && !torso) || ["spill_review_ack", "shadow_review_ack", "people_transfer", "local_mask_transfer", "reference_color", "xmp_ack", "xmp_review_ack"]
-        .iter().any(|key| value.get(*key).is_some()) {
-        return Err("torso review cannot be combined with another transfer or acknowledgment family".into());
+    let Some(ack) = value.get(ack_key) else { return Ok(()); };
+    if (value.get("module_scope").is_some() && !selected) || conflicting {
+        return Err(format!("{operation} review cannot be combined with another transfer or acknowledgment family"));
     }
     let preset = value["cmd"] == "preset" && value["action"] == "apply";
     let batch = value["cmd"] == "batch" && value["action"] == "commit";
     if (!preset && !batch) || !acknowledgments(ack) || !text(&value["request_id"])
         || !hex(&value["preflight_token"], 32)
         || (preset && (!text(&value["document_id"]) || ack.as_array().map_or(true, |items| items.len() != 1 || items[0]["document_id"] != value["document_id"]))) {
-        return Err("torso application needs one exact frozen PNG-pair acknowledgment per eligible target".into());
+        return Err(format!("{operation} application needs one exact frozen PNG-pair acknowledgment per eligible target"));
     }
     Ok(())
 }

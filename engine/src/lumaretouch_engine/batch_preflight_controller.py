@@ -8,7 +8,7 @@ from . import sky_replacement_scope as SKY, optics_auto_scope as OA, id_backgrou
 from . import optics_transfer_review as OR
 from . import spill_transfer_review as SR
 from . import original_shadow_transfer_review as SHR
-from . import torso_length_transfer_review as TR
+from .body_scalar_transfer_review import select as body_family
 from . import local_grade_layers as LG
 from . import local_grade_runtime as LR
 from .batch_preflight import PreflightStore,FrozenTarget,canonical,MAX_RESULT_BYTES
@@ -35,6 +35,8 @@ class PlanPorts:
     verify_shadow:Callable|None=None
     prepare_torso:Callable|None=None
     verify_torso:Callable|None=None
+    prepare_waist:Callable|None=None
+    verify_waist:Callable|None=None
 
 class FrozenBatchController:
     def __init__(self,ports,versions,emit,clock):
@@ -56,7 +58,7 @@ class FrozenBatchController:
         return result
 
     def replay_completed(self,p):
-        if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack'}:
+        if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack'}:
             raise SC.ScopeError('token commit cannot change reviewed options')
         cached=self.store.completed(p.get('preflight_token'),self.versions.workspace)
         if cached is None:return False
@@ -70,24 +72,25 @@ class FrozenBatchController:
                 raise SC.ScopeError('Original-shadow token replay requires its exact original visual acknowledgment')
         elif 'shadow_review_ack' in p:
             raise SC.ScopeError('Original-shadow acknowledgment cannot accompany a non-shadow token')
-        if 'torso_review_ack' in cached:
-            if type(p.get('torso_review_ack')) is not list or canonical(p['torso_review_ack'])!=canonical(cached['torso_review_ack']):
-                raise SC.ScopeError('Torso-length token replay requires its exact original visual acknowledgment')
-        elif 'torso_review_ack' in p:
-            raise SC.ScopeError('Torso-length acknowledgment cannot accompany a non-torso token')
+        for key in ('torso_review_ack','waist_review_ack'):
+            if key in cached:
+                if type(p.get(key)) is not list or canonical(p[key])!=canonical(cached[key]):
+                    raise SC.ScopeError('Body-scalar token replay requires its exact original visual acknowledgment')
+            elif key in p:
+                raise SC.ScopeError('Body-scalar acknowledgment cannot accompany a different-family token')
         if p.get('request_id') is None:self.emit({**cached,'event':'batch_result','action':'commit','request_id':None,'replayed':True})
         else:self.emit_result(p,{**cached,'replayed':True})
         return True
 
     def handle(self,p):
-        plan=None;resolved=[];commit_started=False;spill_ack=None;shadow_ack=None;torso_ack=None
+        plan=None;resolved=[];commit_started=False;spill_ack=None;shadow_ack=None;scalar_ack=None;family=None
         try:
             if p['action']!='commit' and 'spill_review_ack' in p:
                 raise SC.ScopeError('Spill visual acknowledgment is accepted only for a frozen commit')
             if p['action']!='commit' and 'shadow_review_ack' in p:
                 raise SC.ScopeError('Original-shadow visual acknowledgment is accepted only for a frozen commit')
-            if p['action']!='commit' and 'torso_review_ack' in p:
-                raise SC.ScopeError('Torso-length visual acknowledgment is accepted only for a frozen commit')
+            if p['action']!='commit' and any(key in p for key in ('torso_review_ack','waist_review_ack')):
+                raise SC.ScopeError('Body-scalar visual acknowledgment is accepted only for a frozen commit')
             if p['action']=='preflight' and p.get('people_transfer') is not None:
                 if self.ports.people_transfer is None:raise ValueError('People transfer adapter unavailable')
                 self.ports.people_transfer(self,p,None);return
@@ -118,18 +121,21 @@ class FrozenBatchController:
                     shadow_ack=SHR.acknowledgments(p.get('shadow_review_ack'),shadow_records)
                 elif 'shadow_review_ack' in p:
                     raise SC.ScopeError('Original-shadow acknowledgment requires an explicitly selected shadow module')
-                if SC.TORSO_LENGTH.OP in reviewed.modules:
-                    if len(reviewed.targets)>TR.MAX_TARGETS:raise SC.ScopeError('Torso-length target count exceeds its reviewed display bound')
-                    torso_records=[]
+                family=body_family(reviewed.modules)
+                for key in ('torso_review_ack','waist_review_ack'):
+                    if key in p and (family is None or key!=family.ack_key):
+                        raise SC.ScopeError('Body-scalar acknowledgment requires its explicitly selected family')
+                if family is not None:
+                    if len(reviewed.targets)>family.review.MAX_TARGETS:
+                        raise SC.ScopeError('Body-scalar target count exceeds its reviewed display bound')
+                    scalar_records=[]
                     for target in reviewed.targets:
                         if target.blocked:continue
-                        if target.torso_json is None:raise SC.ScopeError('Torso-length target lacks its frozen before/after review')
-                        torso_records.append(TR.checked(json.loads(target.torso_json)))
-                    # Bad/missing acknowledgment must fail before claim or a
-                    # terminal receipt, so the actual reviewed token stays usable.
-                    torso_ack=TR.acknowledgments(p.get('torso_review_ack'),torso_records)
-                elif 'torso_review_ack' in p:
-                    raise SC.ScopeError('Torso-length acknowledgment requires an explicitly selected torso module')
+                        value=getattr(target,family.frozen_key)
+                        if value is None:raise SC.ScopeError('Body-scalar target lacks its frozen before/after review')
+                        scalar_records.append(family.review.checked(json.loads(value)))
+                    # Invalid acknowledgment never consumes an otherwise usable token.
+                    scalar_ack=family.review.acknowledgments(p.get(family.ack_key),scalar_records)
                 if '_semantic_colour_transfer' in reviewed.params():raise SC.ScopeError(SC.SEMANTIC.REASON)
                 if '_people_transfer' in reviewed.params():
                     if self.ports.people_transfer is None:raise ValueError('People transfer adapter unavailable')
@@ -137,7 +143,7 @@ class FrozenBatchController:
             if p['action']=='preflight' and SC.SEMANTIC.OP in (p.get('module_scope') or []):
                 raise SC.ScopeError(SC.SEMANTIC.REASON)
             if p['action']=='preflight':
-                ops=SC.check_scope(p.get('module_scope'));policy=p.get('conflict_policy','skip_and_report')
+                ops=SC.check_scope(p.get('module_scope'));family=body_family(ops);policy=p.get('conflict_policy','skip_and_report')
                 if policy not in ('skip_and_report','recheck'):raise SC.ScopeError(f'conflict_policy 未知：{policy!r}（可用：skip_and_report/recheck；没有 overwrite）')
                 if p.get('preflight_token') is not None:raise SC.ScopeError('preflight does not accept an old token')
                 indices,rejected=self.ports.targets(p.get('docs'))
@@ -146,14 +152,14 @@ class FrozenBatchController:
                     raise SC.ScopeError('Spill visual review supports at most eight targets; no target was omitted')
                 if SC.ORIGINAL_SHADOW.OP in ops and len(indices)>SHR.MAX_TARGETS:
                     raise SC.ScopeError('Original-shadow visual review supports at most eight targets; no target was omitted')
-                if SC.TORSO_LENGTH.OP in ops and len(indices)>TR.MAX_TARGETS:
-                    raise SC.ScopeError('Torso-length visual review supports at most eight targets; no target was omitted')
+                if family is not None and len(indices)>family.review.MAX_TARGETS:
+                    raise SC.ScopeError('Body-scalar visual review supports at most eight targets; no target was omitted')
                 self.ports.remember()
                 rows=self.ports.rows();index=self.ports.current()
                 if not 0<=index<len(rows):raise SC.ScopeError('no active source document')
                 source=self.ports.capture();source_row=rows[index];version=self.versions.version(source_row)
                 mods=SC.params_of(source,ops)
-                source_owned=SC.TORSO_LENGTH.OP in ops or SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops or SC.OP_CROP in ops or SOURCE.record(source) is not None or any(SOURCE.record(rows[i].get('state') or {}) is not None for i in indices)
+                source_owned=family is not None or SC.ORIGINAL_SHADOW.OP in ops or SC.SPILL_REMOVAL.OP in ops or SC.OP_CROP in ops or SOURCE.record(source) is not None or any(SOURCE.record(rows[i].get('state') or {}) is not None for i in indices)
                 source_proof=SOURCE.row_proof({**source_row,'state':source}) if source_owned else None
                 TRANSFER.require_modules(source,mods,source_proof)
                 reference_options=p.get('reference_color')
@@ -172,7 +178,7 @@ class FrozenBatchController:
                 targets=[];public=[]
                 for i in indices:
                     row=rows[i];v=self.versions.version(row);live=i==index
-                    if SC.TORSO_LENGTH.OP in ops:
+                    if family is not None:
                         blocked=self._blocked(row,ops,live)
                         try:before=OA.before_params(source if live else row['state'],ops)
                         except Exception as error:
@@ -186,7 +192,7 @@ class FrozenBatchController:
                         if source_owned:target_proof=SOURCE.row_proof({**row,'state':target_state})
                         TRANSFER.require_modules(target_state,mods,source_proof)
                     except Exception as error:blocked=str(error)[:2000]
-                    prepared=None;transfer=None;optics_record=None;optical_transfer=None;reference_record=None;crop_record=None;crop_transfer=None;spill_record=None;spill_transfer=None;shadow_record=None;shadow_transfer=None;torso_record=None;torso_transfer=None
+                    prepared=None;transfer=None;optics_record=None;optical_transfer=None;reference_record=None;crop_record=None;crop_transfer=None;spill_record=None;spill_transfer=None;shadow_record=None;shadow_transfer=None;scalar_record=None;scalar_transfer=None
                     if RC.OP in ops and live:blocked="参考图保持不变，不作为统一目标"
                     if not blocked and LG.OP in ops:
                         try:prepared,transfer=LR.prepare_modules(source if live else row['state'],mods,row,local_options,preview=len(public)<12)
@@ -271,20 +277,22 @@ class FrozenBatchController:
                             SOURCE.verify_row({**row,'state':self.ports.capture() if live else row['state']},target_proof)
                             if self.versions.version(row)!=v:raise ValueError('Target changed during shadow visual review')
                         except Exception as error:blocked=str(error)[:2000];shadow_record=None;shadow_transfer=None
-                    if not blocked and SC.TORSO_LENGTH.OP in ops:
+                    if not blocked and family is not None:
                         try:
-                            if self.ports.prepare_torso is None or self.ports.verify_torso is None:
-                                raise ValueError('Torso-length requires actual full edited before/after target previews')
+                            prepare_scalar=getattr(self.ports,'prepare_'+family.port_name)
+                            verify_scalar=getattr(self.ports,'verify_'+family.port_name)
+                            if prepare_scalar is None or verify_scalar is None:
+                                raise ValueError('Body-scalar requires actual full edited before/after target previews')
                             candidate=OA.candidate(target_state,prepared or mods,local_replace_legacy=bool(transfer and transfer['legacy_removed']))
                             if optics_record is not None:candidate['_optics']=optics_record['recipe']
                             if reference_record is not None:
                                 RC.apply_verified(candidate,RC.verify_target(reference_record,target_state,candidate,row,v.document_id,v.revision,(prepared or mods)[RC.OP]))
-                            SC.TORSO_LENGTH.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
-                            torso_record,torso_transfer=self.ports.prepare_torso(row,target_state,candidate,v.document_id,str(v.revision))
-                            self.ports.verify_torso(row,target_state,candidate,v.document_id,str(v.revision),torso_record)
+                            family.scope.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
+                            scalar_record,scalar_transfer=prepare_scalar(row,target_state,candidate,v.document_id,str(v.revision))
+                            verify_scalar(row,target_state,candidate,v.document_id,str(v.revision),scalar_record)
                             SOURCE.verify_row({**row,'state':self.ports.capture() if live else row['state']},target_proof)
-                            if self.versions.version(row)!=v:raise ValueError('Target changed during torso visual review')
-                        except Exception as error:blocked=str(error)[:2000];torso_record=None;torso_transfer=None
+                            if self.versions.version(row)!=v:raise ValueError('Target changed during body-scalar visual review')
+                        except Exception as error:blocked=str(error)[:2000];scalar_record=None;scalar_transfer=None
                     private_transfer=None if transfer is None else {k:v for k,v in transfer.items() if k!='preview_jpeg'}
                     targets.append(FrozenTarget(v.document_id,v.revision,i,row['path'],blocked,canonical(before),
                         None if prepared is None else canonical(prepared),None if private_transfer is None else canonical(private_transfer),
@@ -293,9 +301,10 @@ class FrozenBatchController:
                         crop_json=None if crop_record is None else canonical(crop_record),
                         spill_json=None if spill_record is None else canonical(spill_record),
                         shadow_json=None if shadow_record is None else canonical(shadow_record),
-                        torso_json=None if torso_record is None else canonical(torso_record)))
+                        **({family.frozen_key:None if scalar_record is None else canonical(scalar_record)} if family is not None else {})))
                     public.append({'index':i,'path':row['path'],'live':live,'blocked':blocked,'before':before,
-                                   'document_id':v.document_id,'revision':str(v.revision),'local_mask_transfer':transfer,'optical_transfer':optical_transfer,'reference_color':reference_record,'crop_transfer':crop_transfer,'spill_transfer':spill_transfer,'shadow_transfer':shadow_transfer,'torso_transfer':torso_transfer,
+                                   'document_id':v.document_id,'revision':str(v.revision),'local_mask_transfer':transfer,'optical_transfer':optical_transfer,'reference_color':reference_record,'crop_transfer':crop_transfer,'spill_transfer':spill_transfer,'shadow_transfer':shadow_transfer,'torso_transfer':None,
+                                   **({family.wire_key:scalar_transfer} if family is not None else {}),
                                    **({'source_proof':target_proof} if source_owned else {})})
                 if source_proof is not None:
                     SOURCE.verify_row({**source_row,'state':self.ports.capture()},source_proof)
@@ -314,7 +323,7 @@ class FrozenBatchController:
                     self.store.pending.pop(plan.token,None)
                     raise
                 self.emit(body);self.emit_result(p,body);return
-            if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack'}:
+            if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack'}:
                 raise SC.ScopeError('token commit cannot change source, targets, modules or policy; preflight again')
             token=p.get('preflight_token')
             if self.replay_completed(p):return
@@ -331,7 +340,7 @@ class FrozenBatchController:
                     index,row=found;actual=self.versions.version(row).revision
                     if actual!=target.revision:blocked='target was edited after preflight; preflight again'
                     elif row['path']!=target.path:blocked='target source path changed after preflight; preflight again'
-                    elif SC.TORSO_LENGTH.OP in plan.modules:
+                    elif family is not None:
                         # Retain already blocked targets without trying to read
                         # nonexistent anatomy. Newly invalid body ownership is
                         # also a per-target conflict under skip-and-report.
@@ -416,25 +425,26 @@ class FrozenBatchController:
                                 RC.apply_verified(candidate,RC.verify_target(json.loads(target.reference_json),original,candidate,row,target.document_id,target.revision,prepared[RC.OP]))
                             self.ports.verify_shadow(row,original,candidate,target.document_id,str(target.revision),json.loads(target.shadow_json))
                         except Exception as error:blocked=str(error)[:2000]
-                    if not blocked and SC.TORSO_LENGTH.OP in plan.modules:
+                    if not blocked and family is not None:
                         try:
-                            if target.torso_json is None or self.ports.verify_torso is None:
-                                raise ValueError('Torso-length commit is missing its actual reviewed before/after target')
+                            value=getattr(target,family.frozen_key);verify_scalar=getattr(self.ports,'verify_'+family.port_name)
+                            if value is None or verify_scalar is None:
+                                raise ValueError('Body-scalar commit is missing its actual reviewed before/after target')
                             original=live_state if index==current else row['state']
                             prepared=json.loads(target.prepared_json) if target.prepared_json is not None else plan.params()
                             candidate=OA.candidate(original,prepared,local_replace_legacy=bool(target.transfer_json and json.loads(target.transfer_json)['legacy_removed']))
                             if target.optics_json is not None:candidate['_optics']=json.loads(target.optics_json)['recipe']
                             if target.reference_json is not None:
                                 RC.apply_verified(candidate,RC.verify_target(json.loads(target.reference_json),original,candidate,row,target.document_id,target.revision,prepared[RC.OP]))
-                            SC.TORSO_LENGTH.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
-                            self.ports.verify_torso(row,original,candidate,target.document_id,str(target.revision),json.loads(target.torso_json))
+                            family.scope.validate_target(candidate,row['path'],(row['src_h'],row['src_w']))
+                            verify_scalar(row,original,candidate,target.document_id,str(target.revision),json.loads(value))
                         except Exception as error:blocked=str(error)[:2000]
                 resolved.append({'index':index,'path':target.path,'blocked':blocked,'document_id':target.document_id,
                     '_source_proof':None if target.source_proof_json is None else json.loads(target.source_proof_json),
                     '_crop_prepared':None if target.crop_json is None else json.loads(target.crop_json),
                     '_spill_prepared':None if target.spill_json is None else json.loads(target.spill_json),
                     '_shadow_prepared':None if target.shadow_json is None else json.loads(target.shadow_json),
-                    '_torso_prepared':None if target.torso_json is None else json.loads(target.torso_json),
+                    **({family.prepared_key:None if getattr(target,family.frozen_key) is None else json.loads(getattr(target,family.frozen_key))} if family is not None else {}),
                     '_reference_prepared':None if target.reference_json is None else json.loads(target.reference_json),
                     '_optics_prepared':None if target.optics_json is None else json.loads(target.optics_json),
                     '_prepared_modules':None if target.prepared_json is None else json.loads(target.prepared_json),
@@ -455,7 +465,7 @@ class FrozenBatchController:
                     verify_source({'source':plan.params()[RC.OP]['reference']['source']},source[1]['path'])
             if plan.policy=='recheck' and any(r['blocked'] for r in resolved):
                 raise SC.ScopeError('preflight conflicts require a new review; no target was written')
-            self.store.claim(plan,**({'spill_review_ack':spill_ack} if spill_ack is not None else {}),**({'shadow_review_ack':shadow_ack} if shadow_ack is not None else {}),**({'torso_review_ack':torso_ack} if torso_ack is not None else {}));commit_started=True
+            self.store.claim(plan,request_id=p.get('request_id'),**({'spill_review_ack':spill_ack} if spill_ack is not None else {}),**({'shadow_review_ack':shadow_ack} if shadow_ack is not None else {}),**({family.ack_key:scalar_ack} if scalar_ack is not None else {}));commit_started=True
             body=self.ports.commit(list(plan.modules),plan.params(),resolved,plan.policy,plan.rejected(),source_snapshot=self._source(plan))
             result={k:v for k,v in body.items() if k not in ('event','doc_state','frame')}
             outcomes=[]
@@ -463,22 +473,22 @@ class FrozenBatchController:
                 found=by_id.get(row['document_id'])
                 after=None if found is None else str(self.versions.version(found[1]).revision)
                 outcomes.append({**{k:v for k,v in row.items() if not k.startswith('_')},'result_revision':after,'outcome':'skipped' if row['blocked'] else 'applied'})
-            result.update(success=True,target_outcomes=outcomes,preflight_token=plan.token,workspace_generation=plan.workspace,
+            result.update(success=True,target_outcomes=outcomes,preflight_token=plan.token,workspace_generation=plan.workspace,request_id=p.get('request_id'),
                 source_snapshot=self._source(plan),source_changed_since_preflight=source_changed,source_missing=source is None)
             if spill_ack is not None:result['spill_review_ack']=spill_ack
             if shadow_ack is not None:result['shadow_review_ack']=shadow_ack
-            if torso_ack is not None:result['torso_review_ack']=torso_ack
-            if torso_ack is not None:result['module_scope']=list(plan.modules)
+            if scalar_ack is not None:result[family.ack_key]=scalar_ack
+            if scalar_ack is not None:result['module_scope']=list(plan.modules)
             result=self.store.finish(plan,result);self.emit_result(p,result)
         except Exception as error:
-            result={'success':False,'error':str(error)[:2000],'requires_preflight':True,
+            result={'success':False,'error':str(error)[:2000],'requires_preflight':True,'request_id':p.get('request_id'),
                     'outcome_unknown':commit_started,
                     'target_outcomes':[{**{k:v for k,v in r.items() if not k.startswith('_')},'outcome':'conflict' if r['blocked'] else ('unknown' if commit_started else 'not_applied')} for r in resolved],
                     'preflight_token':p.get('preflight_token'),'workspace_generation':self.versions.workspace}
             if spill_ack is not None:result['spill_review_ack']=spill_ack
             if shadow_ack is not None:result['shadow_review_ack']=shadow_ack
-            if torso_ack is not None:result['torso_review_ack']=torso_ack
-            if torso_ack is not None:result['module_scope']=list((plan or reviewed).modules)
+            if scalar_ack is not None:result[family.ack_key]=scalar_ack
+            if scalar_ack is not None:result['module_scope']=list((plan or reviewed).modules)
             if plan is not None and p.get('action')=='commit':result=self.store.finish(plan,result)
             self.emit({'event':'error','error':'batch '+str(p.get('action'))+' rejected: '+result['error']})
             self.emit_result(p,result)

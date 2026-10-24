@@ -64,7 +64,8 @@ test('ack binds exact ordered PNG hashes and retains the reviewed revision',()=>
   }
 });
 test('source review gate requires PNG verification, decoded dimensions and explicit per-target checkbox',()=>{
-  const source=readFileSync(new URL('./TorsoTransferReview.tsx',import.meta.url),'utf8');
-  for(const text of ['useLayoutEffect','verifyTorsoTransferImage(value.before)','verifyTorsoTransferImage(value.after)','image.naturalWidth===expected.width','image.naturalHeight===expected.height','disabled={disabled||!ready}','viewed.checked','notify.current(reviewKey,false)'])assert.ok(source.includes(text),text);
-  const hook=readFileSync(new URL('../batch/useBatchWorkflow.ts',import.meta.url),'utf8');assert.ok(hook.includes('commit(ack,shadowAck,torsoAck)'));
+  const source=readFileSync(new URL('../bodyScalar/BodyScalarTransferReview.tsx',import.meta.url),'utf8');
+  for(const text of ['useLayoutEffect','verifyBodyScalarTransferImage(value.before)','verifyBodyScalarTransferImage(value.after)','image.naturalWidth===expected.width','image.naturalHeight===expected.height','disabled={disabled||!ready}','viewed.checked','notify.current(reviewKey,false)'])assert.ok(source.includes(text),text);
+  const wrapper=readFileSync(new URL('./TorsoTransferReview.tsx',import.meta.url),'utf8');assert.ok(wrapper.includes('BodyScalarTransferReview'));
+  const hook=readFileSync(new URL('../batch/useBatchWorkflow.ts',import.meta.url),'utf8');assert.ok(hook.includes('commit(ack,shadowAck,torsoAck,waistAck)'));
 });
