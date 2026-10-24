@@ -1,3 +1,4 @@
+import {OPERATION_ID as EYE_BAGS} from '../eyeBagPreserve/model';
 import {associationRequest,sourceAssociation} from './associationRequest';
 import type {AssociationRequest} from './associationProof';
 import {useEffect, useState} from 'react';
@@ -48,7 +49,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
     && resolved.state_revision === view?.revision && resolved.association_revision === view?.association_revision;
   const operations = matches && resolved ? Object.entries(resolved.operations) : [];
   const selection: Record<string, string[]> = named ? faceStyleSelection() : {};
-  const available = operations.flatMap(([operation, values]) => Object.entries(values).map(([path, record]) => ({
+  const available = operations.filter(([operation]) => operation !== EYE_BAGS).flatMap(([operation, values]) => Object.entries(values).map(([path, record]) => ({
     operation, path, value: record.value, key: JSON.stringify([operation, path]),
     conflict: resolved!.conflicts.some(item => item.operation_id === operation && item.parameter_path === path),
   })));
@@ -184,6 +185,9 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
       </>}
       <fieldset disabled={disabled}><legend>{named?'目标冲突处理（配方固定替换全部 30 项）':'逐模块选择参数'}</legend>
         {!named && operations.map(([operation]) => {
+          if (operation === EYE_BAGS) return <details key={operation}><summary>{operationLabel(operation)} · 不支持直接同步</summary>
+            <p>来源卧蚕范围不能复制到目标。当前未提供逐目标真实保护及整张前后图审核，因此本模块不加入参数同步、分组或持久关联。请分别在每张照片的「祛眼袋」专用面板重画审核；需要停用时在各自人物面板归零新版程度。</p>
+          </details>;
           const leaves = available.filter(leaf => leaf.operation === operation);
           return <details key={operation}><summary>{operationLabel(operation)}</summary>
             <button type="button" onClick={() => setLeaves([...chosen, ...leaves.filter(leaf => !leaf.conflict).map(leaf => leaf.key)])}>勾选本模块可迁移参数</button>

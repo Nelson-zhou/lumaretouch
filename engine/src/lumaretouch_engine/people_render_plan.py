@@ -12,7 +12,7 @@ OVERLAP_POLICY = 'stable_instance_priority_partition'
 
 
 def _assets_require_analysis(face, resolved):
-    """Only exact dormant reviewed body-only families may await fresh analysis.
+    """Only exact dormant reviewed families may await fresh analysis.
 
     Every other asset, malformed leaf or ambiguous recipe retains its checked
     requirement. Project/descriptor ownership and recipe validation still apply.
@@ -21,8 +21,9 @@ def _assets_require_analysis(face, resolved):
     assets = face['local_assets']
     if not assets: return False
     from . import body_skin_evenness_state as EVENNESS, body_face_match_state as MATCH, collarbone_state as COLLARBONE
+    from . import eye_bag_preserve_state as EYE_BAGS
     families = {'body_skin_evenness_visibility': EVENNESS, 'body_face_match_visibility': MATCH,
-                'collarbone_visibility': COLLARBONE}
+                'collarbone_visibility': COLLARBONE, 'eye_bag_ridge_visibility': EYE_BAGS}
     if set(assets) - set(families): return True
     from .people_resolver import materialize
     for kind, asset in assets.items():
@@ -64,6 +65,10 @@ def build(state, asset_sha256, defaults, *, max_faces, per_face_cost, total_budg
                     # A valid reference-side policy alone does not move pixels.
                     # Nonzero strengths and every malformed/unknown leaf still
                     # require evidence; full recipe validation remains upstream.
+                    # Preservation is dormant scalar intent until amount > 0.
+                    # The separate amount leaf still demands real analysis.
+                    or (operation == 'lnx.eye_bags.v2' and path == '/preserve'
+                        and type(record['value']) in (int, float) and 0 <= record['value'] <= 1)
                     or (operation == 'lnx.eye_symmetry.v1' and path == '/reference'
                         and type(record['value']) is str
                         and record['value'] in ('auto', 'left', 'right'))))

@@ -61,6 +61,7 @@ from . import philtrum_scope as PHILTRUM
 from . import eye_symmetry_scope as EYE_SYMMETRY
 from . import brow_enhance_scope as BROW_ENHANCE
 from . import lip_texture_scope as LIP_TEXTURE
+from . import eye_bag_preserve_scope as EYE_BAG_PRESERVE
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
@@ -266,6 +267,10 @@ MODULES: dict[str, dict] = {
                      "transferable": True, "cmd": "people", "label": "眉毛增强（原有眉毛对比度，左右独立正负强度）",
                      "read": BROW_ENHANCE.params_of, "write": BROW_ENHANCE.install,
                      "why_not": "仅左右联动与两项 -1..1 强度，联动时两侧须相等；负值减弱原有眉毛对比度、正值增强，不添加眉妆；目标以自己的有效来源、真实面部皮肤观察、遮挡和 478 点独立测量实际眉毛与邻接额头，完整重算须有专用 Rust 内核，不复制几何、蒙版、参考样本或实测对比度，不清零其他意图"},
+    EYE_BAG_PRESERVE.OP: {"params": ("recipe",), "state_fields": EYE_BAG_PRESERVE.FIELDS, "single_face": True,
+                         "transferable": True, "cmd": "people", "label": "眼袋减淡与手工卧蚕保留（仅标量归档）",
+                         "read": EYE_BAG_PRESERVE.params_of, "write": EYE_BAG_PRESERVE.install,
+                         "why_not": EYE_BAG_PRESERVE.REVIEW_REQUIRED + '；仅 amount=0 的停用/休眠保留参数可通用应用，不复制源身份、范围、蒙版或审核，不改写旧版眼袋配方'},
     LIP_TEXTURE.OP: {"params": ("recipe",), "state_fields": LIP_TEXTURE.FIELDS, "single_face": True,
                     "transferable": True, "cmd": "people", "label": "唇部暗细纹减淡（独立强度，部分唇纹修整）",
                     "read": LIP_TEXTURE.params_of, "write": LIP_TEXTURE.install,
@@ -581,6 +586,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == BROW_ENHANCE.OP:
         try: return BROW_ENHANCE.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == EYE_BAG_PRESERVE.OP:
+        try: return EYE_BAG_PRESERVE.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == LIP_TEXTURE.OP:
         try: return LIP_TEXTURE.check_params(params)

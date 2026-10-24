@@ -10,6 +10,29 @@ from . import people_state as S
 from .people_resolver import resolve
 
 
+
+def _require_reviewed_eye_bag_transfer(payload, target):
+    """Generic target maps carry no dedicated eye-bag visual-review proof.
+
+    Build the complete target recipe before checking so amount=0 resets and
+    dormant preserve-only leaves remain portable. No support/identity is copied.
+    This also runs on commit verification, not just disposable preflight.
+    """
+    from . import people_algorithms as A
+    operation = A.EYE_BAG_PRESERVE.OP
+    selected = [row for row in payload['parameters'] if row['operation_id'] == operation]
+    if not selected: return
+    from .eye_bag_preserve_scope import REVIEW_REQUIRED
+    for ref in payload['target_refs']:
+        staged = S.check(target)
+        for row in selected:
+            staged = S.set_override(staged, 'face', ref['face_instance_id'], operation,
+                                    row['parameter_path'], row['value'])
+        recipe = A.recipes(resolve(staged, ref['face_instance_id'], A.defaults()))[operation]
+        if A.EYE_BAG_PRESERVE.active(recipe):
+            raise ValueError(REVIEW_REQUIRED)
+
+
 def prepare(source_state, target_state, source_ref, target_refs, selection, defaults,
             *, source_document, target_document, source_owner=None, target_owner=None, face_style=None):
     """selection maps operation IDs to explicit parameter pointers, never assets."""
@@ -63,6 +86,7 @@ def prepare(source_state, target_state, source_ref, target_refs, selection, defa
         payload['target_owner'] = check_proof(target_owner)
         verify(payload, source, target, source_document=source_document, target_document=target_document,
                source_owner=source_owner, target_owner=target_owner)
+    _require_reviewed_eye_bag_transfer(payload, target)
     return payload
 
 
@@ -106,6 +130,7 @@ def verify(payload, source_state, target_state, *, source_document, target_docum
         if face is None or S.face_ref(face) != ref or not face['enabled']: raise ValueError('Reviewed face is no longer available')
         if payload.get('target_policy') == 'explicit_face_map' and face['evidence']['status'] != 'verified':
             raise ValueError('Explicit transfer requires each selected face to have verified source-owned analysis')
+    _require_reviewed_eye_bag_transfer(payload, target)
 
 
 def candidate(payload, source_state, target_state, *, source_document, target_document,

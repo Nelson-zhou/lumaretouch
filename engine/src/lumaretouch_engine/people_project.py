@@ -35,6 +35,8 @@ def validate_records(value):
                 validate_brow_makeup_graph(value[key])
                 from .brow_enhance_project import validate_graph as validate_brow_enhance_graph
                 validate_brow_enhance_graph(value[key])
+                from .eye_bag_preserve_project import validate_graph as validate_eye_bag_graph
+                validate_eye_bag_graph(value[key])
                 from .lip_texture_project import validate_graph as validate_lip_texture_graph
                 validate_lip_texture_graph(value[key])
                 from .skin_evenness_project import validate_graph as validate_skin_evenness_graph
@@ -50,6 +52,8 @@ def validate_records(value):
         if 'people_support_assets' in value:
             from .people_support_assets import check_store
             check_store(value['people_support_assets'])
+            from .eye_bag_preserve_support import validate_project as validate_eye_bag_support
+            validate_eye_bag_support(value)
             from .eye_light_support import validate_project
             validate_project(value)
             from .blush_makeup_support import validate_project as validate_blush_support

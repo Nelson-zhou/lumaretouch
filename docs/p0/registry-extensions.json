@@ -4,6 +4,16 @@
   "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
+      "operation_id": "lnx.eye_bags.v2",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {"version": 2, "amount": 0, "preserve": 1},
+      "range": {"version": [2, 2], "amount": [0, 1], "preserve": [0, 1]},
+      "transferable": false,
+      "source_requirement": "LNX-REF-PC-32464-C-e5fac5fdcf",
+      "reason": "PARTIAL / UNRUN: source-owned manually painted lower-lid preservation and unchanged pinned eye-bag solver, with separate original Rust protection composition. Preservation defaults to one only for reviewed full-coverage pixels of this operation; unreviewed eyes remain untouched. No automatic ridge segmentation or total-removal guarantee. Old enhance.v1 eye_bags remains unchanged unless explicitly replaced after review. Scalar archive/capture and neutral reset are supported source contracts; active generic preset/batch application remains refused until target-specific full-image visual review is implemented. No mask, geometry, FaceRef or source transfer."
+    },
+    {
       "operation_id": "lnx.collarbone.v1",
       "parameter_key": "recipe",
       "type": "object",

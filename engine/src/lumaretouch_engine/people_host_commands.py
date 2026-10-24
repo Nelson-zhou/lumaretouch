@@ -11,17 +11,31 @@ from .people_graph_owner import affected_assets
 
 FACE_STYLE_READS = frozenset(('face_style_catalog','face_style_preview','face_style_image'))
 FACE_STYLE_ACTIONS = FACE_STYLE_READS | {'face_style_confirm'}
+EYE_BAG_READS = frozenset(('eye_bag_reference','eye_bag_preview','eye_bag_image'))
+EYE_BAG_ACTIONS = EYE_BAG_READS | {'eye_bag_confirm'}
 
 
 def face_style_read_only(raw):
     """Exact read route only; existing recovery/import/source guards run first."""
+    return _review_read_only(raw,FACE_STYLE_READS)
+
+
+def eye_bag_read_only(raw):
+    """Independent eye-bag reference/review pages, never graph publication."""
+    return _review_read_only(raw,EYE_BAG_READS)
+
+
+def _review_read_only(raw,actions):
     if (type(raw) is not dict or raw.get('cmd') != 'people'
-            or type(raw.get('action')) is not str or raw['action'] not in FACE_STYLE_READS):
+            or type(raw.get('action')) is not str or raw['action'] not in actions):
         return False
     if set(raw) != {'cmd','document_id','document_epoch','document_revision','state_revision','association_revision','request_id','target','action','payload'}:
         return False
     try:
-        from .face_style_review import check_action
+        if raw['action'] in EYE_BAG_READS:
+            from .eye_bag_preserve_host import check_action
+        else:
+            from .face_style_review import check_action
         for key in ('document_id','document_epoch','request_id'): S.token(raw[key])
         for key in ('document_revision','state_revision','association_revision'): S.revision(raw[key])
         check_action(raw['action'],raw['payload'],raw['target'])
@@ -34,7 +48,8 @@ def checked(engine,p):
     why=engine._guard_editable('people')
     if why:raise ValueError(why)
     style_action=p.get('action') in FACE_STYLE_ACTIONS
-    if style_action:
+    eye_bag_action=p.get('action') in EYE_BAG_ACTIONS
+    if style_action or eye_bag_action:
         from .people_preset_plan import require_active_owner
         owner=require_active_owner(engine)
     else:
@@ -44,13 +59,16 @@ def checked(engine,p):
     asset=binding['asset_sha256']
     if (target['scope']=='face' and target['face_ref']['asset_sha256']!=asset) or (target['scope']=='all_people' and target['target_id']!=asset):
         raise ValueError('People command targets another source asset')
-    if style_action:
-        from .face_style_review import check_action
+    if style_action or eye_bag_action:
+        if eye_bag_action:
+            from .eye_bag_preserve_host import check_action
+        else:
+            from .face_style_review import check_action
         check_action(p['action'],p.get('payload'),target)
         if (target['scope']!='face' or not state['faces'][target['target_id']]['enabled']
                 or engine._people_targets.get(asset)!=target
                 or engine._people_cursors.get(asset)!=target['target_id']):
-            raise ValueError('Face-style review requires the currently selected enabled source face')
+            raise ValueError('Portrait image review requires the currently selected enabled source face')
     return state,binding,target
 
 
@@ -134,6 +152,12 @@ def apply(engine,raw,emit):
         method={'face_style_catalog':style_review.catalogue,'face_style_preview':style_review.preview,'face_style_image':style_review.image}[action]
         records[request]['payload']=method(engine,state,target,payload)
         frame=None
+    elif action in EYE_BAG_READS:
+        from . import eye_bag_preserve_host as eye_bag_review
+        method={'eye_bag_reference':eye_bag_review.reference,'eye_bag_preview':eye_bag_review.preview,
+                'eye_bag_image':eye_bag_review.image}[action]
+        records[request]['payload']=method(engine,state,target,payload)
+        frame=None
     elif action in ('skin_body_reference','skin_body_preview','skin_finish_body_reference','skin_finish_body_preview','body_skin_evenness_reference','body_skin_evenness_preview','collarbone_reference','collarbone_preview','body_face_match_reference','body_face_match_preview'):
         from . import skin_colour_body_host as skin_body
         method=skin_body.reference if action.endswith('_reference') else skin_body.preview
@@ -212,6 +236,12 @@ def apply(engine,raw,emit):
             from . import face_style_review as style_review
             candidate,records[request]['payload']=style_review.confirm(engine,state,target,payload)
             before_publish=lambda:style_review.verify_before_publish(engine,state,target,payload,candidate,records[request]['payload'])
+        elif action=='eye_bag_confirm':
+            from . import eye_bag_preserve_host as eye_bag_review
+            candidate,records[request]['payload']=eye_bag_review.confirm(engine,state,target,payload)
+            def before_publish():
+                eye_bag_review.verify_before_publish(engine,state,target,payload,candidate,records[request]['payload'])
+                records[request]['side_effects_started']=True
         elif action in ('skin_body_confirm','skin_body_detach','skin_finish_body_confirm','skin_finish_body_detach','body_skin_evenness_confirm','body_skin_evenness_detach','collarbone_confirm','collarbone_detach','body_face_match_confirm','body_face_match_detach'):
             from . import skin_colour_body_host as skin_body
             method=skin_body.confirm if action.endswith('_confirm') else skin_body.detach
@@ -273,6 +303,7 @@ def apply(engine,raw,emit):
                     records[request]['side_effects_started']=False
                 raise
         if action=='face_style_confirm':style_review.verify_after_publish(engine,candidate,records[request]['payload'])
+        if action=='eye_bag_confirm':eye_bag_review.verify_after_publish(engine,candidate,records[request]['payload'])
         if action=='analyse_face':select(engine,engine._people_owner().snapshot(),asset,target)
         if frame is not None:frame['doc_state']=engine.doc_state()
     if frame is not None:emit(frame)
@@ -285,18 +316,23 @@ def finish(engine,p,error,emit):
     records=engine.__dict__.setdefault('_people_receipts',OrderedDict());old=records.get(p['request_id'],{})
     style_action=p.get('action') in FACE_STYLE_ACTIONS
     style_read=p.get('action') in FACE_STYLE_READS
+    eye_bag_action=p.get('action') in EYE_BAG_ACTIONS
+    review_read=style_read or p.get('action') in EYE_BAG_READS
     echo={'face_style_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})} if style_action else {}
+    if eye_bag_action:
+        echo={'eye_bag_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     digest=hashlib.sha256(json.dumps({k:v for k,v in p.items() if k!='cmd'},sort_keys=True,allow_nan=False).encode()).hexdigest()
     if old.get('digest') not in (None,digest):
         emit({'event':'people_result','protocol':1,'action':p.get('action'),'request_id':p['request_id'],'document_id':p.get('document_id'),
               'success':False,'error':'People request identity was reused with different content','outcome_unknown':False,
-              **echo,**({} if style_read else {'doc_state':engine.doc_state()})});return
+              **echo,**({} if review_read else {'doc_state':engine.doc_state()})});return
     if 'result' in old:emit(old['result']);return
     # Publication can succeed before status emission or history recording fails.
     # Rollback also advances the graph fence; neither case is a proven refusal.
-    owner=engine.__dict__.get('_people_graph_owner') if style_action else None
+    guarded_review=style_action or eye_bag_action
+    owner=engine.__dict__.get('_people_graph_owner') if guarded_review else None
     fence_changed=(old.get('before_fence') is not None and
-                   ((owner is None or owner.fence!=old['before_fence']) if style_action else engine._people_owner().fence!=old['before_fence']))
+                   ((owner is None or owner.fence!=old['before_fence']) if guarded_review else engine._people_owner().fence!=old['before_fence']))
     unknown=engine._vram is None or bool(error and
         (old.get('success') or old.get('side_effects_started') or fence_changed))
     result={'event':'people_result','protocol':1,'action':p.get('action'),'request_id':p['request_id'],'document_id':p.get('document_id'),
@@ -304,7 +340,7 @@ def finish(engine,p,error,emit):
         'created_id':old.get('created_id'),'batch_id':old.get('batch_id'),'frame_emitted':old.get('frame_emitted',False),**echo}
     if 'payload' in old:result['payload']=old['payload']
     if old.get('payload_released'):result['payload_released']=True
-    if engine._vram is not None and not style_read:
+    if engine._vram is not None and not review_read:
         try:result['doc_state']=engine.doc_state()
         except Exception as state_error:
             result.update(success=False,outcome_unknown=True,
@@ -315,10 +351,17 @@ def finish(engine,p,error,emit):
     # Readback PNGs are session display pages, not durable outcome records.
     # Retain at most two; old request identities remain replayable without pixels.
     remaining=2
+    eye_bag_remaining=3;eye_bag_reference_remaining=1
     for row in reversed(records.values()):
         saved=row.get('result',row);body=saved.get('payload')
         if type(body) is dict and body.get('kind')=='face_style_image':
             if remaining:remaining-=1
+            else:saved.pop('payload',None);saved['payload_released']=True
+        elif type(body) is dict and body.get('kind')=='eye_bag_image':
+            if eye_bag_remaining:eye_bag_remaining-=1
+            else:saved.pop('payload',None);saved['payload_released']=True
+        elif type(body) is dict and body.get('kind')=='eye_bag_reference':
+            if eye_bag_reference_remaining:eye_bag_reference_remaining-=1
             else:saved.pop('payload',None);saved['payload_released']=True
     while len(records)>128:records.popitem(last=False)
     emit(result)

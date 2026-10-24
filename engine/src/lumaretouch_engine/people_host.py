@@ -56,6 +56,7 @@ class PeopleHostMixin:
         self._body_skin_evenness_reference=None;self._body_skin_evenness_preview=None
         self._collarbone_reference=None;self._collarbone_preview=None
         self._body_face_match_reference=None;self._body_face_match_preview=None
+        self._eye_bag_reference=None
         initialize=not any(f['asset_sha256']==asset for f in state['faces'].values()) and asset not in state['analysis_runs']
         candidate,analyses,refusals=B.bind(state,asset,pc,source_dimensions=(source['width'],source['height']),initialize=initialize)
         analyses=RA.restore_missing(candidate,self._people_landmarks,asset,pc,analyses)
@@ -166,6 +167,8 @@ class PeopleHostMixin:
             result['body_face_match']=skin_body_report(self,state,source,self._people_cursors.get(asset),family='body_face_match',operation_id='lnx.body_face_match.v1')
             from .eye_light_host import report as eye_light_report
             result['eye_light']=eye_light_report(self,state,source,self._people_cursors.get(asset))
+            from .eye_bag_preserve_host import report as eye_bag_report
+            result['eye_bag_preserve']=eye_bag_report(self,state,source,self._people_cursors.get(asset))
             from .iris_makeup_host import report as iris_report
             result['iris_makeup']=iris_report(self,state,source,self._people_cursors.get(asset))
             from .eyeliner_host import report as eyeliner_report

@@ -1845,7 +1845,7 @@ class PreviewPipeline:
 
     # ---- PORTRAIT-009：眼牙局部增强 ---------------------------------------
     def has_enhance(self) -> bool:
-        if PEOPLE_PIPE.active(self):return any(r.stage in ("enhance","facial_wrinkles") or (r.stage=="eye_detail" and r.delta is not None and np.any(r.delta != 0)) for r in self.people_prepared.effects)
+        if PEOPLE_PIPE.active(self):return any(r.stage in ("enhance","facial_wrinkles") or (r.stage in ("eye_detail","eye_bag_preserve") and r.delta is not None and np.any(r.delta != 0)) for r in self.people_prepared.effects)
         """这一层到底有没有活：三个数至少一个非零，而权重场里确实有额度。
 
         只看参数不够：“三个数都是 0.4 而掩膜是空的”（闭嘴样本的牙齿那一格、两只眼都被

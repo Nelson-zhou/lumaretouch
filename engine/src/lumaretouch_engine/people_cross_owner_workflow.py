@@ -152,6 +152,11 @@ def prepare(engine, selected, *, validate=True):
         if operation == 'create': candidate = C.create(item['before'], item['person_id'], capsule)
         elif operation == 'patch': candidate = C.update(item['before'], item['person_id'], capsule)
         else: candidate = C.unlink(item['before'], item['person_id'])
+        # Metadata/general cohort review is not the dedicated ridge-support
+        # image proof. Recheck every endpoint on both preflight and replay;
+        # unlink can reveal inherited active intent just as create/patch can.
+        from .eye_bag_preserve_project import require_unreviewed_transition
+        require_unreviewed_transition(item['before'], candidate)
         if named:
             from .face_style_recipes import validate_compatibility
             validate_compatibility(A.recipes(resolve(candidate,item['ref']['face_instance_id'],A.defaults())))

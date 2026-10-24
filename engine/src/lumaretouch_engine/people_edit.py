@@ -66,6 +66,8 @@ def stage(command, state, *, document_id, document_epoch, document_revision,
                     'orientation':'exif_normalized_once'}
         face = S.new_face(asset_sha256,payload['box'],evidence,manual=True)
         created = face['face_instance_id']; out['faces'][created] = face; out['revision'] += 1; out = S.check(out)
+    from .eye_bag_preserve_project import require_unreviewed_transition
+    require_unreviewed_transition(state,out)
     # Validate registry domains for EVERY affected face, not only selected face.
     # Conflicting group values remain reviewable, but patch cannot publish them
     # as a successful ready render because preparation must refuse the conflict.

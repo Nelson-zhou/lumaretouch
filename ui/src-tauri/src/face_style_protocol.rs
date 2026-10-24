@@ -87,7 +87,7 @@ fn compact(v: &Value, output: (u64, u64)) -> bool {
     fields(v, &["mime", "width", "height", "sha256"]) && v["mime"] == "image/png" && hex(&v["sha256"], 64)
         && v["width"].as_u64() == Some(scaled(output.0)) && v["height"].as_u64() == Some(scaled(output.1))
 }
-fn image(v: &Value) -> bool {
+pub(crate) fn image(v: &Value) -> bool {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
     use sha2::{Digest, Sha256};
     if !fields(v, &["mime", "width", "height", "sha256", "base64"]) || v["mime"] != "image/png" || !hex(&v["sha256"], 64) { return false; }
@@ -98,7 +98,7 @@ fn image(v: &Value) -> bool {
         && crate::torso_transfer_protocol::png(&bytes, w as u32, h as u32)
         && format!("{:x}", Sha256::digest(&bytes)) == v["sha256"].as_str().unwrap()
 }
-fn visual_shape(v: &Value) -> bool {
+pub(crate) fn visual_shape(v: &Value) -> bool {
     if !fields(v, &["version", "document_id", "revision", "source_proof", "before_state_sha256", "candidate_state_sha256",
         "before_people_sha256", "candidate_people_sha256", "source_size", "before_output_size", "after_output_size", "before", "after"])
         || v["version"].as_u64() != Some(1) || !source_proof(&v["source_proof"])

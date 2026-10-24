@@ -25,6 +25,11 @@ def fastpath_blocker(snapshot):
             try:validate_brow_leaf(row['parameter_path'],row['value'])
             except ValueError:return True  # Equality alone confuses bool and numeric leaves.
         if (row['scope']=='all_people' and row['target_id']==asset
+                and row['operation_id']==A.EYE_BAG_PRESERVE.OP):
+            from .eye_bag_preserve_project import validate_leaf as validate_eye_bag_leaf
+            try:validate_eye_bag_leaf(row['parameter_path'],row['value'])
+            except ValueError:return True
+        if (row['scope']=='all_people' and row['target_id']==asset
                 and row['operation_id']==A.LIP_TEXTURE.OP):
             from .lip_texture_project import validate_leaf as validate_lip_leaf
             try:validate_lip_leaf(row['parameter_path'],row['value'])

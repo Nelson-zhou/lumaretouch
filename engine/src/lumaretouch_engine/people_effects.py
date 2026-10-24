@@ -10,7 +10,7 @@ from .facial_wrinkle_layer import FacialWrinkleLayer, bounds as wrinkle_bounds
 from .under_eye_layer import UnderEyeLayer, bounds as eye_bounds, KEYS as EYE_KEYS
 from .ops import enhance as H
 
-STAGES = ('body_face_match', 'body_skin_evenness', 'collarbone', 'skin_evenness', 'skin_colour', 'facial_wrinkles', 'eye_detail', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'eye_light', 'blush_makeup', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
+STAGES = ('body_face_match', 'body_skin_evenness', 'collarbone', 'skin_evenness', 'skin_colour', 'facial_wrinkles', 'eye_detail', 'eye_bag_preserve', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'eye_light', 'blush_makeup', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
 
 
 @dataclass(frozen=True)
@@ -126,6 +126,12 @@ def apply(stage, current, records, *, recovery=None):
         active = np.any(delta != 0, axis=2); used = occupied[y:y+rh,x:x+rw]
         overlap += int(np.count_nonzero(active & used)); take = active & ~used
         total[y:y+rh,x:x+rw][take] = delta[take]; used[take] = True
+    if stage == 'eye_bag_preserve':
+        from .people_source_vector import apply_np
+        out = apply_np(current, total, label='Eye-bag preservation')
+        return out, {'stage':stage, 'overlap_pixels':overlap,
+                     'composition':'direction-preserving-per-pixel-SDR-headroom-gain-no-channel-clipping',
+                     'changed_pixels':int(np.count_nonzero(np.any(out != current, axis=2)))}
     if stage == 'lip_texture':
         from .lip_texture_composition import apply_np
         out = apply_np(current, total)

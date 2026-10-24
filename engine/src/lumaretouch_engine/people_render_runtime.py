@@ -70,7 +70,7 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=None, max_faces=32, recovery_assets=None, repaired=None,
-            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,body_bank=None):
+            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None,body_bank=None):
     state = S.check(state)
     from .people_cross_owner import validate_owner
     validate_owner(state,asset_sha256,document_id)
@@ -111,6 +111,10 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                     and row['operation_id']==A.BROW_ENHANCE.OP):
                 validate_brow_leaf(row['parameter_path'], row['value'])
             if (row['scope']=='all_people' and row['target_id']==asset_sha256
+                    and row['operation_id']==A.EYE_BAG_PRESERVE.OP):
+                from .eye_bag_preserve_project import validate_leaf as validate_eye_bag_leaf
+                validate_eye_bag_leaf(row['parameter_path'], row['value'])
+            if (row['scope']=='all_people' and row['target_id']==asset_sha256
                     and row['operation_id']==A.LIP_TEXTURE.OP):
                 from .lip_texture_project import validate_leaf as validate_lip_leaf
                 validate_lip_leaf(row['parameter_path'], row['value'])
@@ -133,6 +137,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
     if not any(face['asset_sha256']==asset_sha256 for face in state['faces'].values()) and any(
             row['scope']=='all_people' and row['target_id']==asset_sha256
             and row['value']!=A.defaults().get(row['operation_id'],{}).get(row['parameter_path'])
+            and not (row['operation_id']==A.EYE_BAG_PRESERVE.OP and row['parameter_path']=='/preserve'
+                     and type(row['value']) in (int,float) and 0 <= row['value'] <= 1)
             and not (row['operation_id']==A.EYE_SYMMETRY.OP and row['parameter_path']=='/reference'
                      and type(row['value']) is str and row['value'] in A.EYE_SYMMETRY.REFERENCES)
             and not (row['operation_id']==A.BROW_ENHANCE.OP and row['parameter_path']=='/linked'
@@ -161,7 +167,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
                 stage = asset['kind']
-                if stage in ('skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility'):
+                if stage in ('skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility'):
                     # Separate operation-owned support, never generic recovery.
                     # Resolve each only when its own recipe is active below;
                     # dormant review cannot prevent disabling its own recipe.
@@ -333,6 +339,38 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                     values[A.COLLARBONE.OP], people_state=state,
                     body_assets=collarbone_assets or {}, body_bank=body_bank,
                     byte_budget=byte_budget-owned))
+            if A.EYE_BAG_PRESERVE.active(values[A.EYE_BAG_PRESERVE.OP]):
+                from .eye_bag_preserve_layer import prepare as prepare_eye_bag_preserve
+                seen = set(); owned = source.nbytes + (0 if repaired is None else repaired.nbytes)
+                for row in analyses.values():
+                    for array in row.values():
+                        if isinstance(array, np.ndarray) and id(array) not in seen:
+                            seen.add(id(array)); owned += array.nbytes
+                owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
+                owned += sum(a.nbytes for r in (*effects, *local)
+                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain) if a is not None)
+                # Painted ridge geometry remains owned by the canonical source;
+                # the unchanged bag solver reads this exact frozen repair base.
+                # Review transactions fence the full repair stack, not a proxy
+                # pixel digest that would wrongly fail full-resolution export.
+                prepared_bags = prepare_eye_bag_preserve(entry['face_ref'], analysis, effect_source,
+                    values[A.EYE_BAG_PRESERVE.OP], people_state=state,
+                    support_assets=eye_bag_preserve_assets or {}, byte_budget=byte_budget-owned)
+                if type(prepared_bags) is not list or len(prepared_bags) != 1:
+                    raise ValueError('Requested eye-bag preservation needs exactly one dedicated face effect record')
+                record = prepared_bags[0]
+                if record.stage != 'eye_bag_preserve' or record.face_ref != entry['face_ref']:
+                    raise ValueError('Eye-bag preservation returned a foreign face or effect stage')
+                y, x, rh, rw = record.window
+                if (min(y, x) < 0 or min(rh, rw) < 1 or y+rh > h or x+rw > w
+                        or type(record.delta) is not np.ndarray or record.delta.dtype != np.float32
+                        or record.delta.shape != (rh, rw, 3) or record.delta.flags.writeable
+                        or not np.isfinite(record.delta).all() or type(record.facts) is not dict):
+                    raise ValueError('Requested eye-bag effect is not an immutable finite source-owned delta')
+                record.facts['input_source'] = 'committed-repaired-source' if repaired is not None else 'canonical-source'
+                record.facts['source_sha256'] = asset_sha256
+                record.facts['composition'] = 'direction-preserving-per-pixel-SDR-headroom-gain-no-channel-clipping'
+                local.extend(prepared_bags)
             if A.LIP_TEXTURE.active(values[A.LIP_TEXTURE.OP]):
                 from .lip_texture_layer import prepare as prepare_lip_texture
                 lip_neighbors = tuple(tuple(other['box']) for other_key, other in state['faces'].items()

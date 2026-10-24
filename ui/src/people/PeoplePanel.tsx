@@ -3,6 +3,7 @@ import {useEffect, useRef, useState} from 'react';
 import {PEOPLE_CONTROL_IDS as IDS, sourceLabel, restoreInheritance, canSelectFace, targetLabel, operationLabel,
   type FaceChoice, type FaceRef, type LinkState, type PeopleAction, type PeopleScope, type PeopleTarget} from './model';
 import type {PeopleOwner} from './usePeopleWorkflow';
+import {OPERATION_ID as EYE_BAGS} from '../eyeBagPreserve/model';
 import './people.css';
 
 type Props = {owner: PeopleOwner; busy: boolean; thumb?: string; onFaceAdd: () => void; faceAdding: boolean};
@@ -37,7 +38,7 @@ export function PeoplePanel({owner, busy, thumb, onFaceAdd, faceAdding}: Props) 
   const target = (scope: PeopleScope, id: string | null, ref: FaceRef | null = null): PeopleTarget => ({scope, target_id: id, face_ref: ref});
   const faceTarget = face ? target('face', face.face_ref.face_instance_id, face.face_ref) : null;
   const allTarget = target('all_people', value.binding.asset_sha256);
-  const disabled = busy || owner.state.pending || !owner.enabled;
+  const disabled = busy || owner.state.pending || owner.state.uncertain || !owner.enabled;
   const submit = async (action: PeopleAction['action'], payload: Record<string, unknown>, to: PeopleTarget | null = faceTarget) => {
     if (disabled || !to) return;
     const captured = current.current; setError('');
@@ -125,13 +126,18 @@ export function PeoplePanel({owner, busy, thumb, onFaceAdd, faceAdding}: Props) 
       <p>{targetLabel(value)}。未列出的参数保留继承；不同人脸的继承结果可以不同。</p>
       {Object.entries(value.editing_overrides ?? {}).flatMap(([operation, parameters]) => Object.entries(parameters).map(([path, number]) => <div className="peopleValue" key={`${operation}:${path}`}>
         <span>{operationLabel(operation)} {path}：{String(number)}</span>
-        <button type="button" disabled={disabled || !value.editing_target} onClick={() => void submit('patch', {patches: [restoreInheritance(operation, path)]}, value.editing_target)}>恢复此范围该项继承</button>
+        {operation === EYE_BAGS ? <span className="muted">新版卧蚕保护只能在专用逐眼审核中启用或改变，不能在此恢复可能激活的继承。</span>
+          : <button type="button" disabled={disabled || !value.editing_target} onClick={() => void submit('patch', {patches: [restoreInheritance(operation, path)]}, value.editing_target)}>恢复此范围该项继承</button>}
       </div>))}
     </details>
     {value.resolved && <details><summary>所选人脸有效参数与来源</summary>
+      {value.resolved.operations[EYE_BAGS] && <div>
+        <p>新版祛眼袋与保留卧蚕参数在这里仅供检查。正向调整、恢复继承、跨脸分组或同步都不能绕过逐眼源图与真实前后图审核；请前往「面部祛瑕疵 → 祛眼袋」。当前不支持活跃新版效果跨来源复制。</p>
+        <button type="button" disabled={disabled || !faceTarget} onClick={() => void submit('patch', {patches: [{operation_id: EYE_BAGS, parameter_path: '/amount', unset: false, value: 0}]}, faceTarget)}>仅归零当前脸新版祛眼袋，保留保护设置</button>
+      </div>}
       {Object.entries(value.resolved.operations).flatMap(([operation, parameters]) => Object.entries(parameters).map(([path, number]) => <div className="peopleValue" key={`${operation}:${path}`}>
         <span>{operationLabel(operation)} {path}：{String(number.value)} · {sourceLabel(number)}</span>
-        {number.overridden && <button type="button" disabled={disabled || !faceTarget}
+        {number.overridden && operation !== EYE_BAGS && <button type="button" disabled={disabled || !faceTarget}
           onClick={() => void submit('patch', {patches: [restoreInheritance(operation, path)]}, faceTarget)}>恢复此脸该项继承</button>}
       </div>))}
     </details>}

@@ -1,0 +1,419 @@
+{
+  "baseline": "976bf17b9816f160906bc4377b4fc1b0b7c214b7",
+  "status": "FROZEN_SOURCE_ONLY_MANUAL_REVIEWED_EYE_BAG_RIDGE_PRESERVATION_PARTIAL_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32464-C-e5fac5fdcf"
+  ],
+  "related_existing_parent_requirement": "LNX-REF-PC-32464-C-fafd366f9d",
+  "scope": "Separate lnx.eye_bags.v2 manual per-eye ridge protection, original Rust exact-coverage compositor over unchanged pinned legacy bag solver, original/derived canonical rendering and full-image reviewed single-document publication. No automatic ridge detection or complete official acceptance; no new count for adapters.",
+  "files": [
+    {
+      "path": "core/eye_bag_preserve/Cargo.toml",
+      "sha256": "d8b24726ff1ae481bf60e05b7c254d19354faa6114dd24807e47ba5e95be1e5d",
+      "bytes": 225
+    },
+    {
+      "path": "core/eye_bag_preserve/README.md",
+      "sha256": "a1e66f45e64880b0b49f7a01d5d7b30ab094c2125878f39e0802acb2e1aece13",
+      "bytes": 3996
+    },
+    {
+      "path": "core/eye_bag_preserve/eye_bag_preserve.h",
+      "sha256": "aad01bba11eff9f9e696dc2a724a2ba015ccee2023b55b544679e1a21e4b4010",
+      "bytes": 1536
+    },
+    {
+      "path": "core/eye_bag_preserve/lib.rs",
+      "sha256": "49d6cd51696b48d1d5495d08e1d26e2dec1cb866e618396fe9eb1bdb0550f577",
+      "bytes": 6779
+    },
+    {
+      "path": "core/eye_bag_preserve/tests.rs",
+      "sha256": "e4835f92d77e3f61fbc25c02b32129dd9c5b549875ab6a5c3d7555070a9cb178",
+      "bytes": 5308
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "84dbd7e848037497405dd64272e06e9b9d0b96e3e8b39483482d2f7cf176746f",
+      "bytes": 471803
+    },
+    {
+      "path": "docs/development/under-eye-tools.md",
+      "sha256": "174c166f03cfa34bd2809d190a42f1dce131546b6547255385c3dac7d5dd22fb",
+      "bytes": 2971
+    },
+    {
+      "path": "docs/eye-bag-preserve/ACCEPTANCE-UNRUN.md",
+      "sha256": "dc98552c941c50d2a02463a882cc5cfce5b4aaf137b4feb3d9d61cbac38c60e2",
+      "bytes": 4000
+    },
+    {
+      "path": "docs/eye-bag-preserve/INTEGRATION-AND-RESIDUALS.md",
+      "sha256": "2a114f3c558e39b312e66a1e52191668769ad4fef4ce4b7612af0348f98d846d",
+      "bytes": 4752
+    },
+    {
+      "path": "docs/eye-bag-preserve/NUMERICAL-CONTRACT.md",
+      "sha256": "50f08e6db418554e75d1874109a035b5a3a492dfe01f1a8815d0508d75871518",
+      "bytes": 3619
+    },
+    {
+      "path": "docs/eye-bag-preserve/REQUIREMENT-AND-RESEARCH.md",
+      "sha256": "410ca97eebe5baa029d03792fe34b6a02b9554f434a9a9b6d63e94a108ec6813",
+      "bytes": 4660
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "58d5ab4fcb5caa7e2d391332f0e82311a328006fee1cb29d11d4b615a2068afc",
+      "bytes": 51009
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "2abd770b658f84a753c0a3a5b136348364de9c90125e36583b4b577d3b8bcf9d",
+      "bytes": 17059
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_makeup.py",
+      "sha256": "b0f216351bcbd783dace44ead8472c50161b7fd638b928bfb308d6fdbe95bb30",
+      "bytes": 4546
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preserve_host.py",
+      "sha256": "9e58c46abff5b067b5ac288e155fcebc9f3b2de3c885bb5228fdfa5abee2c10e",
+      "bytes": 26845
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preserve_layer.py",
+      "sha256": "cda5ad46db4f4c26f93e644b4f4a5af9c5ae3c0048052884b93494f715f82d01",
+      "bytes": 10139
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preserve_native.py",
+      "sha256": "9c9bf32d6c8618268d29478bef6465b3a4c4f8667d5c8e729d403f2fd7a89800",
+      "bytes": 5898
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preserve_project.py",
+      "sha256": "b2a9f9f4abc5f323721ae75c1bf4ba7568254400bcbfccea06b131d00848d8a9",
+      "bytes": 3668
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preserve_scope.py",
+      "sha256": "d536440dbfab0d5a2057e1b8225c548b2bf7cc0a7c8208feb0cb2bd5e41aec0f",
+      "bytes": 3691
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preserve_state.py",
+      "sha256": "5a51430237a63f4f723a079081622eda1e82e3a8e444931b7c672bdee3376fbb",
+      "bytes": 2221
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preserve_support.py",
+      "sha256": "985e9906a36ff5b476a891f91f8bb4f89ead230a93c8fc3e789f9ec22724da67",
+      "bytes": 16329
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "7550f74f032ad7c5895caad594469f3e13067a06a3c27e783b87f48b09b768a6",
+      "bytes": 8309
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "71f6aa1de32c739c13d434e1f082887c41bded7ed59b71e502511c3504eb44f0",
+      "bytes": 6525
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_cross_owner_workflow.py",
+      "sha256": "246a4b432255f5d73dc2b5dc51bf0c0369bc000e54a412ccb7ebea0c287c8beb",
+      "bytes": 22896
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_edit.py",
+      "sha256": "9bbf6ed0353dd2242a99e0c5cb1ddf54b9f943a6c498ab10942d409c47b0ebc7",
+      "bytes": 6169
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "sha256": "bfae2f26728ecee01503738cbfd418c6e247bc95444203a6a5a3800c783a9a9c",
+      "bytes": 9169
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "10a6556f8c45caf01c09c26ea9c88845fef6f77ba59595e0d25510361124edfa",
+      "bytes": 12166
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "7a045fe41482907d0685055a24a67bb85487556b9f5dbac3aad2622b775c7ba6",
+      "bytes": 8467
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "8e6247e3cab4892c96771d8ba383663e9a0c4c1a460b37a68eb12452bc046392",
+      "bytes": 24879
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "cff7193b641c626d2e491fe6dea7f4e2297734a41f70698f29897a161fe0fc4c",
+      "bytes": 26956
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "sha256": "3a96f6ac6015733e7210ba349209117e0da07ae93a1da16366c61840e57b3dfb",
+      "bytes": 3919
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "sha256": "c5b3aa376565b43995489680310a4fe4c35182da163d067fd882aab1459e073a",
+      "bytes": 7768
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_project.py",
+      "sha256": "6c8ac71dfada7f3a8b01fa7c0de28270cd7f8559e25dc13c111776d555ccb0be",
+      "bytes": 5688
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_plan.py",
+      "sha256": "3c89908f16397306470ea359a1349edfce5dbf904ffb48be9a6260d296eb0821",
+      "bytes": 6918
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "8f058d32b0f00d7f89ff4225c9754fbf379fb6a1b87e266cf4f072eb6586cb36",
+      "bytes": 33247
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "c8b3957e63959c2de81eb9d4d323409de971b51291dbb8433cd164b2cfdc4c28",
+      "bytes": 42333
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_support_assets.py",
+      "sha256": "1daf3c0629ab92206783a06ad21ed2a5c04d81a5de998d4f7ca3e565756fdb5b",
+      "bytes": 11770
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_transfer_adapter.py",
+      "sha256": "f175a7adc7165ab51544c87971e718be3be5ce37c37cffe2c6f12d390cf89faf",
+      "bytes": 9774
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "6d2db207ee838c98ae77caab937daa321760da58ce18814432c452c18755ff64",
+      "bytes": 7838
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "14affbe74780c634cd673c8e2339b8f94db379b97b3cf8a9320aa96e69dfe2e1",
+      "bytes": 65100
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "7066ce77940ba65a321b74cd33b5da9c92af21c7d898263231a058a40a6c41c1",
+      "bytes": 468807
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "efbe95fa2f1f419fd7dc9e3fdf24e075ce44f0783a472f1b2ab2cc47e9bb2dd2",
+      "bytes": 136308
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "e8ccf8db23d8eca8af8246ab0448934c4b21ecc775ada6b16ee1d484b74e53e8",
+      "bytes": 13571
+    },
+    {
+      "path": "engine/tests/test_eye_bag_preserve_core_unrun.py",
+      "sha256": "58008ba2e2dbcb062e71c057b4dd81e89cb59e7832322d6804527be03fe5d141",
+      "bytes": 14178
+    },
+    {
+      "path": "engine/tests/test_eye_bag_preserve_host_unrun.py",
+      "sha256": "610169d2552097d2c7302e42e007d427b3ed5143fb8524a5c1348b59b08b497c",
+      "bytes": 23329
+    },
+    {
+      "path": "engine/tests/test_eye_bag_preserve_integration_unrun.py",
+      "sha256": "2a807ff25593cae57db67c58c502645694347c5f5c4e8fb371d10357603e2396",
+      "bytes": 6612
+    },
+    {
+      "path": "engine/tests/test_eye_bag_preserve_scope_unrun.py",
+      "sha256": "95b507f8b9f028372be5a71c011605a97a7ffef81c642d0dbf216693e50df4b6",
+      "bytes": 5927
+    },
+    {
+      "path": "packaging/build-eye-bag-preserve.sh",
+      "sha256": "97f8d2cec18703b1ed589372869094e2d367456253bec34bda5ef2582a93450d",
+      "bytes": 615
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "026670a84d84647241b4479855412b0ea9db0591c555e4146bf3595c27a59ae2",
+      "bytes": 27177
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "217e035437f5858484aa2b4b72cd70ac38dbaa73d42b7627cbeef81f78ab8fda",
+      "bytes": 40509
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_preserve.rs",
+      "sha256": "6583eb278b12d6ca4f17b5f7f860ab89843c8758c1f56a5d506f2edf941e9976",
+      "bytes": 12620
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_preserve_unrun.rs",
+      "sha256": "008b62c43368c9251ab934363d2f1a9967ba0ff279c2b599cdba3f9ab0f1c827",
+      "bytes": 3801
+    },
+    {
+      "path": "ui/src-tauri/src/face_style_protocol.rs",
+      "sha256": "1eee3fa472081e937960f4f4d8ab4a235b86e62b67d570d215368647b3a4c105",
+      "bytes": 14873
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "0ce8bd285f273a6e941885f082283c2066ed2ca94d65b01362f294bce53cadf6",
+      "bytes": 10799
+    },
+    {
+      "path": "ui/src-tauri/src/people_api.rs",
+      "sha256": "0b24c500fd3f20543333932ac0697cc06636d16130ec9a0aa3ed21a0b0250647",
+      "bytes": 12159
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "sha256": "77cf91ea040e51ba8e9ee7024ed4e804ab357740bb6b1081daba5f27d73b2757",
+      "bytes": 6310
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "c9ffeccce51815855e07f18e05496bb209a194ae08f57032eb337bdd70dd6a11",
+      "bytes": 27737
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "3ed89c9baa2ad291c8fbab28fd7343c0cdfdd91883094bc6ddffef1a91bd5612",
+      "bytes": 87735
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/ACCEPTANCE_UNRUN.md",
+      "sha256": "56dc2d40f29526b0718fd9e55397d0a1064e4258ac02e6a2d473c1c07878e735",
+      "bytes": 2618
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/EyeBagPreservePanel.tsx",
+      "sha256": "3bcf4735248205d58d93b96639b5b9b1dac4cd8aa2349d7fc507dda4186fa671",
+      "bytes": 16782
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/RidgeSourceEditor.tsx",
+      "sha256": "5e3de169f9e6fc54c55fcc6f2d2009d619f22a71d7a39394164596b3970aa784",
+      "bytes": 9569
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/model.ts",
+      "sha256": "468e08b2789210a569ec9cb1fc97e77d5bb0bdee39618b5566d4ab47a8fbb4e7",
+      "bytes": 13768
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/model.unrun.test.ts",
+      "sha256": "5e33a7850a60b66b8b2e2acc79e3971153cb7c0355913ed4cba452f7461248f1",
+      "bytes": 3239
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/receipts.unrun.test.ts",
+      "sha256": "ca783d0579569cdf904e5deb95aa685c74570395a111478d2afbcd2e40ce8054",
+      "bytes": 5604
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/support.ts",
+      "sha256": "bfb260e3e6a9c72bf0f5538a6ac20b6ce43018e2c80f4a3ef7a630d8bf827cca",
+      "bytes": 5296
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/wiring.unrun.test.ts",
+      "sha256": "dd069aa1eb33f7d037d7550b8820187736b1212480e539a998187401faadd8a0",
+      "bytes": 2169
+    },
+    {
+      "path": "ui/src/people/ConfirmedPeopleTransfer.tsx",
+      "sha256": "7df90799c1a2007b6407a74394e783417e4df81c0527de340a10b682be4e6d0f",
+      "bytes": 24886
+    },
+    {
+      "path": "ui/src/people/PeoplePanel.tsx",
+      "sha256": "6eba57df38462150bbb4d494c4c13f76995d44d56f13a65481736d27236dd0c3",
+      "bytes": 16579
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "5956de5339727d365b5a9fdd0ed74e968192d9bc3e4f374347e06c335436fbd7",
+      "bytes": 10364
+    },
+    {
+      "path": "ui/src/people/workflow.ts",
+      "sha256": "e5e02ede1aca5fcdbf6769e96b3791bea18ba59ffbb80f6db09ccd2c9d819053",
+      "bytes": 17546
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1322,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 116,
+    "git_diff_check": "clean",
+    "payload_whitespace": "clean",
+    "prior_numeric_core_solver_history_and_frozen_sources_byte_identical": 318,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 7012
+    },
+    "fixture_declarations_not_executed": {
+      "python": {
+        "engine/tests/test_eye_bag_preserve_core_unrun.py": 15,
+        "engine/tests/test_eye_bag_preserve_host_unrun.py": 18,
+        "engine/tests/test_eye_bag_preserve_integration_unrun.py": 10,
+        "engine/tests/test_eye_bag_preserve_scope_unrun.py": 8
+      },
+      "rust": {
+        "core/eye_bag_preserve/tests.rs": 11,
+        "ui/src-tauri/src/eye_bag_preserve_unrun.rs": 6,
+        "ui/src-tauri/src/project_recovery_fence.rs": 3,
+        "ui/src-tauri/src/receipt_host.rs": 9
+      },
+      "typescript": {
+        "ui/src/eyeBagPreserve/model.unrun.test.ts": 5,
+        "ui/src/eyeBagPreserve/receipts.unrun.test.ts": 3,
+        "ui/src/eyeBagPreserve/wiring.unrun.test.ts": 4
+      }
+    }
+  },
+  "integration_map": {
+    "numeric": "core/eye_bag_preserve + eye_bag_preserve_native.py; unchanged RapidRetouch under_eye solver pin",
+    "source_support": "eye_bag_preserve_support.py + existing people_support_assets bank; independently reviewed eyes, actual analysis, full source vectors",
+    "preview_export": "eye_bag_preserve_layer.py; distinct canonical stage, actual repaired effective source, full-resolution ROI before tile crop, existing no-clipping headroom composition",
+    "review_publication": "eye_bag_preserve_host.py + people_host_commands.py + existing graph/history/receipt owner; source/support/full before-after image ACK",
+    "generic_ingress_fences": "eye_bag_preserve_project transition guard; people_edit, people_cross_owner_workflow, people_transfer_adapter and dedicated scope",
+    "ui_native": "ui/src/eyeBagPreserve, RetouchPanel/PeoplePanel, independent native protocol and mailbox correlation",
+    "packaging": "packaging/build-eye-bag-preserve.sh and stage-engine.sh source-only build definitions"
+  },
+  "limitations": [
+    "Official automatic ridge detection remains absent; manual source path is partial, not vendor parity or complete removal.",
+    "Only independently reviewed eyes are treated. Full preservation applies to full-coverage pixels of this operation before geometry, not all downstream effects.",
+    "Bounded full-frame source reference remains a thumbnail; zoom adds no native detail. Native-resolution source eye-crop review remains a concrete next usability task.",
+    "Active generic preset/batch/persistent cohort changes remain refused; scalar archive and neutral reset are not active reviewed transfer.",
+    "Positive single-document review refuses shared-source aliases and dormant affected siblings until complete affected-set review exists.",
+    "Project immutable-asset integrity stays strict; corrupted/missing persisted support requires recovery, not a validator bypass.",
+    "End-to-end cancellation is not wired through canonical preparation; native cancellation is narrower, legacy OpenCV and mask worker retain their existing interruption limits.",
+    "Broader alpha/HDR, automatic person segmentation and dedicated arbitrary recovery painting remain unsupported.",
+    "All product imports/execution, tests/build/typecheck, inference/download and native/numerical/photo/history/export/reopen/performance acceptance UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

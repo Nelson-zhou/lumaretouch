@@ -58,6 +58,7 @@ export type PeopleView = {
   brow_makeup?: import('../browMakeup/model').BrowMakeupView | null;
   lipstick?: import('../lipstick/model').LipstickView | null;
   blush_makeup?: import('../blushMakeup/model').BlushView | null;
+  eye_bag_preserve?: {recipe: import('../eyeBagPreserve/model').EyeBagRecipe | null; support_sha256: string | null; support_error: string | null; conflicts: unknown[]; source: import('../eyeBagPreserve/support').RidgeSource; face_ref: FaceRef; legacy_amount: number | null; reviewed: boolean; reviewed_eyes: ('left' | 'right')[]; changed_pixels: number; suspended: string | null} | null;
   eye_light?: import('../eyeLight/model').EyeLightView | null;
   skin_body?: import('../skinColour/bodyReviewModel').SkinBodyReport | null;
   skin_finish_body?: import('../skinColour/bodyReviewModel').SkinBodyReport | null;
@@ -67,7 +68,7 @@ export type PeopleView = {
   analysis_notice?: string; refusals?: {face_instance_id: string; reason: string}[];
 }
 export type PeopleAction = PeopleEnvelope & {
-  action: 'face_style_catalog' | 'face_style_preview' | 'face_style_image' | 'face_style_confirm' | 'patch' | 'link' | 'group' | 'face_status' | 'manual_add' | 'create_person' | 'select' | 'target' | 'analyse_face' | 'resolve_legacy' | 'eye_light_reference' | 'eye_light_review' | 'blush_palette' | 'blush_reference' | 'blush_review' | 'lipstick_palette' | 'lipstick_reference' | 'lipstick_review' | 'eyeliner_palette' | 'eyeliner_reference' | 'eyeliner_review' | 'iris_reference' | 'iris_review' | 'eyelash_palette' | 'eyelash_reference' | 'eyelash_review' | 'brow_makeup_palette' | 'brow_makeup_reference' | 'brow_makeup_review' | 'skin_body_reference' | 'skin_body_preview' | 'skin_body_confirm' | 'skin_body_detach' | 'skin_finish_body_reference' | 'skin_finish_body_preview' | 'skin_finish_body_confirm' | 'skin_finish_body_detach' | 'body_skin_evenness_reference' | 'body_skin_evenness_preview' | 'body_skin_evenness_confirm' | 'body_skin_evenness_detach' | 'body_face_match_reference' | 'body_face_match_preview' | 'body_face_match_confirm' | 'body_face_match_detach' | 'collarbone_reference' | 'collarbone_preview' | 'collarbone_confirm' | 'collarbone_detach';
+  action: 'eye_bag_reference' | 'eye_bag_preview' | 'eye_bag_image' | 'eye_bag_confirm' | 'face_style_catalog' | 'face_style_preview' | 'face_style_image' | 'face_style_confirm' | 'patch' | 'link' | 'group' | 'face_status' | 'manual_add' | 'create_person' | 'select' | 'target' | 'analyse_face' | 'resolve_legacy' | 'eye_light_reference' | 'eye_light_review' | 'blush_palette' | 'blush_reference' | 'blush_review' | 'lipstick_palette' | 'lipstick_reference' | 'lipstick_review' | 'eyeliner_palette' | 'eyeliner_reference' | 'eyeliner_review' | 'iris_reference' | 'iris_review' | 'eyelash_palette' | 'eyelash_reference' | 'eyelash_review' | 'brow_makeup_palette' | 'brow_makeup_reference' | 'brow_makeup_review' | 'skin_body_reference' | 'skin_body_preview' | 'skin_body_confirm' | 'skin_body_detach' | 'skin_finish_body_reference' | 'skin_finish_body_preview' | 'skin_finish_body_confirm' | 'skin_finish_body_detach' | 'body_skin_evenness_reference' | 'body_skin_evenness_preview' | 'body_skin_evenness_confirm' | 'body_skin_evenness_detach' | 'body_face_match_reference' | 'body_face_match_preview' | 'body_face_match_confirm' | 'body_face_match_detach' | 'collarbone_reference' | 'collarbone_preview' | 'collarbone_confirm' | 'collarbone_detach';
   payload: Record<string, unknown>;
 }
 export type PeopleResult = {
@@ -76,6 +77,7 @@ export type PeopleResult = {
   doc_state?: {people?: PeopleView};
   payload?: unknown; payload_released?: boolean;
   batch_id?: string | null;
+  eye_bag_request?: Omit<PeopleAction, 'request_id'>;
   face_style_request?: Omit<PeopleAction, 'request_id'>;
 }
 export type PeopleMailbox = {phase: 'pending' | 'done' | 'unavailable'; request_id: string; result?: PeopleResult; error?: string}
@@ -107,7 +109,7 @@ export function targetLabel(view: PeopleView): string {
   return index >= 0 ? `人物 ${index + 1} 独立覆盖` : '所选人脸已不在当前照片';
 }
 export function operationLabel(id: string): string {
-  return ({'lnx.deform.v1': '历史基础脸型（旧版瘦脸保留错误拓扑）', 'lnx.enhance.v1': '眼牙与面部增强',
+  return ({'lnx.eye_bags.v2': '新版祛眼袋与保留卧蚕（逐眼手绘审核）', 'lnx.deform.v1': '历史基础脸型（旧版瘦脸保留错误拓扑）', 'lnx.enhance.v1': '眼牙与面部增强',
     'lnx.skin_colour.v1': '面部肤色色温与色调',
     'lnx.skin_finish.v1': '肤色美白与皮肤红润（手动强度）',
     'lnx.skin_gloss.v1': '面部已有高光光泽度（抑制与增强）',

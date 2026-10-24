@@ -134,7 +134,16 @@ def post_effects(pipe,pixels):
         corrected=H.enhance_t(pixels,weights[0],record.amounts,cancelled=getattr(pipe,"teeth_colour_cancelled",lambda:False))
         out=torch.where(take,corrected,out);occupied|=take
     delta=_merge_delta(pipe,'eye_detail',align=True)
-    return torch.where(delta!=0,(out+delta).clamp(0,1),out)
+    out=torch.where(delta!=0,(out+delta).clamp(0,1),out)
+    # A dedicated ordered delta cannot suppress dark-circle/vein/eye-detail
+    # pixels through the within-stage stable-face overlap partition.
+    if any(r.stage=='eye_bag_preserve' for r in pipe.people_prepared.effects):
+        delta=_merge_delta(pipe,'eye_bag_preserve',align=True)
+        from .people_source_vector import apply_t
+        # A single per-pixel gain respects upstream SDR headroom without
+        # channel clipping; active HDR/invalid pixels are explicitly refused.
+        out=apply_t(out,delta,label='Eye-bag preservation')
+    return out
 
 
 def resident_bytes(pipe):

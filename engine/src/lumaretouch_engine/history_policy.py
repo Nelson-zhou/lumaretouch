@@ -99,6 +99,7 @@ def command_group(name: str, msg: dict) -> str:
     if name=='hair_colour':return 'hair_colour:'+str((msg.get('people_context') or {}).get('target'))+':'+str(msg.get('request_id','missing'))
     if name=="people":
         if msg.get("action")=="face_style_confirm":return "people:face_style_confirm:"+str(msg.get("request_id"))
+        if msg.get("action")=="eye_bag_confirm":return "people:eye_bag_confirm:"+str(msg.get("request_id"))
         if msg.get('action')=='eyeliner_palette':return 'people:eyeliner_palette:'+str(msg.get('request_id'))
         if msg.get('action')=='eyelash_palette':return 'people:eyelash_palette:'+str(msg.get('request_id'))
         if msg.get('action')=='brow_makeup_palette':return 'people:brow_makeup_palette:'+str(msg.get('request_id'))

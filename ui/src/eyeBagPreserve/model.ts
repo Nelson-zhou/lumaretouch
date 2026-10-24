@@ -1,0 +1,138 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+import {peopleContext, type FaceRef, type PeopleAction, type PeopleResult, type PeopleView} from '../people/model';
+import {digest, validEndpoint, validFaceRef, type PeopleEndpointProof} from '../people/transferProof';
+import {sourceProof} from '../cropTransfer/model';
+import {sameSpillSourceProof} from '../spillRemoval/transferModel';
+import {validCollarboneImageMetadata, validCollarboneImage, verifyCollarboneImage, type CollarboneImage} from '../collarbone/transferModel';
+import {matchesSource, previewImage, type SourcePreview} from '../legShape/sourcePreview';
+import type {FaceStyleVisual} from '../faceStyle/model';
+import type {SpillImage} from '../spillRemoval/model';
+import {canonical, validEyes, type RidgeEyes, type RidgeSource} from './support';
+
+export const OPERATION_ID = 'lnx.eye_bags.v2' as const;
+export type EyeBagRecipe = {version: 2; amount: number; preserve: number};
+export const neutral = (): EyeBagRecipe => ({version: 2, amount: 0, preserve: 1});
+export type EyeBagAction = 'eye_bag_reference' | 'eye_bag_preview' | 'eye_bag_image' | 'eye_bag_confirm';
+export type EyeBagSide = 'before' | 'after' | 'support';
+export type EyeBagReceipt = {command: PeopleAction; result: PeopleResult};
+export type EyeBagReference = {kind: 'eye_bag_reference'; source: RidgeSource; face_ref: FaceRef; source_preview: SourcePreview;
+  legacy_amount: number; recipe: EyeBagRecipe; eyes: RidgeEyes};
+export type EyeBagCandidate = {recipe: EyeBagRecipe; eyes: RidgeEyes; replace_legacy: boolean};
+export type EyeBagReview = {version: 1; token: string; recipe: EyeBagRecipe; owner: PeopleEndpointProof; face_ref: FaceRef;
+  support_sha256: string; candidate_state_revision: number; replace_legacy: boolean; visual: FaceStyleVisual; support_overlay: CollarboneImage; support_source: {source_width: number; source_height: number; decoded_width: number; decoded_height: number}; review_sha256: string};
+export type EyeBagAck = {review_sha256: string; before_sha256: string; after_sha256: string; support_overlay_sha256: string};
+export const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const keys = (v: Record<string, unknown>, names: string[]) => Object.keys(v).sort().join('|') === [...names].sort().join('|');
+const unit = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1;
+const sameFace = (a: FaceRef | null | undefined, b: FaceRef | null | undefined) => !!a && !!b && canonical(a) === canonical(b);
+export const eyeBagBinding = (v: PeopleView | null) => canonical(v ? [v.binding, v.revision, v.association_revision, v.editing_target, v.selected_face_id] : null);
+export function targetReady(view: PeopleView | null): boolean {
+  const selected = view?.faces.find(f => f.face_ref.face_instance_id === view.selected_face_id);
+  return !!view && !!peopleContext(view) && !!selected && selected.enabled && selected.analysis_status === 'verified'
+    && view.editing_target?.scope === 'face' && view.editing_target.target_id === selected.face_ref.face_instance_id
+    && selected.face_ref.asset_sha256 === view.binding.asset_sha256 && sameFace(selected.face_ref, view.editing_target.face_ref)
+    && sameFace(view.resolved?.face_ref, selected.face_ref) && view.resolved?.state_revision === view.revision
+    && view.resolved?.association_revision === view.association_revision && view.resolved.conflicts.length === 0;
+}
+export const validRecipe = (v: unknown): v is EyeBagRecipe => object(v) && keys(v, ['version', 'amount', 'preserve']) && v.version === 2 && unit(v.amount) && unit(v.preserve);
+export const validCandidate = (v: unknown): v is EyeBagCandidate => object(v) && keys(v, ['recipe', 'eyes', 'replace_legacy'])
+  && validRecipe(v.recipe) && v.recipe.amount > 0 && validEyes(v.eyes, false) && typeof v.replace_legacy === 'boolean';
+export function validReference(v: unknown, view: PeopleView | null): v is EyeBagReference {
+  if (!view || !targetReady(view) || !object(v) || !keys(v, ['kind', 'source', 'face_ref', 'source_preview', 'legacy_amount', 'recipe', 'eyes'])
+    || v.kind !== 'eye_bag_reference' || !validFaceRef(v.face_ref) || !sameFace(v.face_ref, view.editing_target?.face_ref)
+    || !object(v.source) || !keys(v.source, ['sha256', 'width', 'height']) || v.source.sha256 !== view.binding.asset_sha256
+    || !validRecipe(v.recipe) || !validEyes(v.eyes) || !unit(v.legacy_amount)) return false;
+  const image = previewImage(v.source_preview as SourcePreview);
+  return matchesSource(image, {...v.source as RidgeSource, orientation: 'exif_normalized_once'});
+}
+function validVisual(v: unknown): v is FaceStyleVisual {
+  const size = (s: unknown): s is [number, number] => Array.isArray(s) && s.length === 2 && s.every(n => Number.isSafeInteger(n) && n > 0 && n <= 4294967295);
+  if (!object(v) || !keys(v, ['version', 'document_id', 'revision', 'source_proof', 'before_state_sha256', 'candidate_state_sha256',
+    'before_people_sha256', 'candidate_people_sha256', 'source_size', 'before_output_size', 'after_output_size', 'before', 'after'])
+    || v.version !== 1 || typeof v.document_id !== 'string' || typeof v.revision !== 'string' || !/^(0|[1-9]\d{0,15})$/.test(v.revision)
+    || BigInt(v.revision) > BigInt(Number.MAX_SAFE_INTEGER) || !sourceProof(v.source_proof)
+    || !['before_state_sha256', 'candidate_state_sha256', 'before_people_sha256', 'candidate_people_sha256'].every(k => digest(v[k]))
+    || !size(v.source_size) || !size(v.before_output_size) || !size(v.after_output_size)
+    || !validCollarboneImageMetadata(v.before) || !validCollarboneImageMetadata(v.after)) return false;
+  const derived = v.source_proof.creative_source;
+  return (!derived || derived.width === v.source_size[0] && derived.height === v.source_size[1])
+    && compactMatches(v.before, v.before_output_size) && compactMatches(v.after, v.after_output_size);
+}
+function compactMatches(image: CollarboneImage, size: [number, number]): boolean {
+  const edge = Math.max(...size), scaled = (n: number) => {
+    if (edge <= 1024) return n;
+    const q = Math.floor(n * 1024 / edge), r = n * 1024 % edge;
+    return Math.max(1, q + (r * 2 > edge || r * 2 === edge && q % 2 === 1 ? 1 : 0));
+  };
+  return image.width === scaled(size[0]) && image.height === scaled(size[1]);
+}
+/** The canonical source may use an admitted ALIGN8 decode. Never label its PNG as full resolution. */
+function supportMapping(value: unknown, image: CollarboneImage, sourceSize: [number, number]): boolean {
+  if (!object(value) || !keys(value, ['source_width', 'source_height', 'decoded_width', 'decoded_height'])
+    || !Object.values(value).every(n => typeof n === 'number' && Number.isSafeInteger(n) && n >= 2 && n <= 1_000_000)) return false;
+  const {source_width: sw, source_height: sh, decoded_width: dw, decoded_height: dh} = value as EyeBagReview['support_source'];
+  return sw === sourceSize[0] && sh === sourceSize[1] && dw <= sw && dh <= sh
+    && (dw === sw && dh === sh || dw % 8 === 0 && dh % 8 === 0 && dw * sh < (dh + 8) * sw && dh * sw < (dw + 8) * sh)
+    && (Math.max(dw, dh) <= 1024 ? image.width === dw && image.height === dh
+      : Math.max(image.width, image.height) === 1024 && Math.abs(image.width * dh - image.height * dw) <= Math.max(dw, dh));
+}
+export function validReview(v: unknown, view: PeopleView | null, candidate: EyeBagCandidate): v is EyeBagReview {
+  if (!view || !targetReady(view) || !validCandidate(candidate) || !object(v)
+    || !keys(v, ['version', 'token', 'recipe', 'owner', 'face_ref', 'support_sha256', 'candidate_state_revision', 'replace_legacy', 'visual', 'support_overlay', 'support_source', 'review_sha256'])
+    || v.version !== 1 || typeof v.token !== 'string' || !/^[a-f0-9]{32}$/.test(v.token)
+    || !validRecipe(v.recipe) || canonical(v.recipe) !== canonical(candidate.recipe) || v.replace_legacy !== candidate.replace_legacy
+    || !validEndpoint(v.owner) || !validFaceRef(v.face_ref) || !sameFace(v.face_ref, view.editing_target?.face_ref)
+    || !digest(v.support_sha256) || !Number.isSafeInteger(v.candidate_state_revision) || typeof v.candidate_state_revision !== 'number'
+    || v.candidate_state_revision <= v.owner.state_revision || v.candidate_state_revision > v.owner.state_revision + 4 || !digest(v.review_sha256) || !validVisual(v.visual)
+    || !validCollarboneImageMetadata(v.support_overlay) || !supportMapping(v.support_source, v.support_overlay, v.visual.source_size)) return false;
+  const owner = v.owner, visual = v.visual;
+  return owner.document.document_id === view.binding.document_id && owner.document.epoch === view.binding.document_epoch
+    && owner.document.revision === view.binding.document_revision && owner.state_revision === view.revision
+    && owner.association_revision === view.association_revision && owner.source_proof.asset_sha256 === view.binding.asset_sha256
+    && visual.document_id === owner.document.document_id && visual.revision === String(owner.document.revision)
+    && sameSpillSourceProof(visual.source_proof, owner.source_proof);
+}
+export const ack = (review: EyeBagReview): EyeBagAck => ({review_sha256: review.review_sha256,
+  before_sha256: review.visual.before.sha256, after_sha256: review.visual.after.sha256, support_overlay_sha256: review.support_overlay.sha256});
+export const imageMetadata = (review: EyeBagReview, side: EyeBagSide): CollarboneImage => side === 'support' ? review.support_overlay : review.visual[side];
+export async function reviewImage(v: unknown, review: EyeBagReview, side: EyeBagSide): Promise<SpillImage | null> {
+  if (!object(v) || !keys(v, ['kind', 'token', 'side', 'sha256', 'review_sha256', 'image']) || v.kind !== 'eye_bag_image'
+    || v.token !== review.token || v.side !== side || v.review_sha256 !== review.review_sha256 || !validCollarboneImage(v.image)) return null;
+  const expected = imageMetadata(review, side), image = v.image;
+  return v.sha256 === expected.sha256 && image.sha256 === expected.sha256 && image.width === expected.width && image.height === expected.height
+    && await verifyCollarboneImage(image) ? image : null;
+}
+export function echoMatches(command: PeopleAction, result: PeopleResult): boolean {
+  const {request_id: _id, ...captured} = command;
+  return object(result.eye_bag_request) && canonical(result.eye_bag_request) === canonical(captured);
+}
+export const isEyeBagAction = (action: string): action is EyeBagAction => ['eye_bag_reference', 'eye_bag_preview', 'eye_bag_image', 'eye_bag_confirm'].includes(action);
+export function receiptCurrent(command: PeopleAction, result: PeopleResult, view: PeopleView | null): boolean {
+  if (!view || !isEyeBagAction(command.action) || !echoMatches(command, result) || result.protocol !== 1 || !result.success || result.outcome_unknown
+    || result.request_id !== command.request_id || result.action !== command.action || result.document_id !== command.document_id
+    || command.document_id !== view.binding.document_id || command.document_epoch !== view.binding.document_epoch
+    || command.target.scope !== 'face' || view.editing_target?.scope !== 'face' || command.target.target_id !== view.selected_face_id
+    || command.target.target_id !== view.editing_target.target_id || command.target.face_ref?.asset_sha256 !== view.binding.asset_sha256
+    || !sameFace(command.target.face_ref, view.editing_target.face_ref) || view.association_revision !== command.association_revision) return false;
+  return command.action === 'eye_bag_confirm'
+    ? view.binding.document_revision >= command.document_revision && view.revision >= command.state_revision
+    : view.binding.document_revision === command.document_revision && view.revision === command.state_revision;
+}
+export function validConfirmation(review: EyeBagReview, result: PeopleResult): boolean {
+  const p = result.payload, next = result.doc_state?.people, resolved = next?.resolved;
+  return object(p) && keys(p, ['kind', 'token', 'review_sha256', 'ack', 'recipe', 'support_sha256', 'replace_legacy', 'candidate_state_revision'])
+    && p.kind === 'eye_bag_confirm' && p.token === review.token && p.review_sha256 === review.review_sha256
+    && canonical(p.ack) === canonical(ack(review)) && canonical(p.recipe) === canonical(review.recipe)
+    && p.support_sha256 === review.support_sha256 && p.replace_legacy === review.replace_legacy && p.candidate_state_revision === review.candidate_state_revision
+    && result.protocol === 1 && result.success && !result.outcome_unknown && result.action === 'eye_bag_confirm'
+    && !!next && next.binding.document_id === review.owner.document.document_id && next.binding.document_epoch === review.owner.document.epoch
+    && next.binding.asset_sha256 === review.owner.source_proof.asset_sha256 && next.binding.document_revision === review.owner.document.revision + 1
+    && Number.isSafeInteger(review.owner.document.revision + 1) && next.revision === review.candidate_state_revision
+    && canonical(next.eye_bag_preserve?.recipe) === canonical(review.recipe) && next.eye_bag_preserve?.support_sha256 === review.support_sha256
+    && sameFace(next.eye_bag_preserve?.face_ref, review.face_ref) && !!resolved && sameFace(resolved.face_ref, review.face_ref)
+    && resolved?.state_revision === next.revision && resolved?.association_revision === next.association_revision
+    && resolved.operations[OPERATION_ID]?.['/amount']?.value === review.recipe.amount
+    && resolved.operations[OPERATION_ID]?.['/preserve']?.value === review.recipe.preserve
+    && (!review.replace_legacy || resolved.operations['lnx.enhance.v1']?.['/eye_bags']?.value === 0)
+    && (!review.replace_legacy || next.eye_bag_preserve?.legacy_amount === 0) && next.association_revision === review.owner.association_revision;
+}

@@ -18,6 +18,7 @@ import {HairColourPanel} from '../hairColour/HairColourPanel';
 import type {HairPort} from '../hairColour/model';
 import {MouthShapeControls} from "../mouthShape/MouthShapeControls";
 import {neutral as neutralMouth} from "../mouthShape/model";
+import {EyeBagPreservePanel} from '../eyeBagPreserve/EyeBagPreservePanel';
 import {EyeLightPanel} from '../eyeLight/EyeLightPanel';
 import {EyeSymmetryControl} from '../eyeSymmetry/EyeSymmetryControl';
 import {EyeShapeControls} from "../eyeShape/EyeShapeControls";
@@ -416,7 +417,8 @@ const WIRED: Record<string, string> = {
   "PC-32466|脸型预设/英气": "deform.preset:英气",
   "PC-32468|微笑嘴角": "deform.smile",
   "PC-32464|面部祛瑕疵/祛黑眼圈": "enh.dark_circles",
-  "PC-32464|面部祛瑕疵/祛眼袋": "enh.eye_bags",
+  "PC-32464|面部祛瑕疵/祛眼袋": "eye_bag.family",
+  "PC-32464|面部祛瑕疵/祛眼袋/保留卧蚕": "eye_bag.preserve",
   // 五官细节
   "PC-32470|亮眼/眼白": "enh.sclera",
   "PC-32470|亮眼/眼瞳": "enh.iris",
@@ -671,6 +673,18 @@ export default function RetouchPanel(props: RetouchProps) {
       legacy={doc?.mouth_shape?.legacy_smile??amounts.smile??0}
       documentId={doc?.document_id??""} faceId={doc?.mouth_shape?.selected_face_id??""} revision={doc?.mouth_shape?.revision??0} peopleContext={capturedPeople}/>;
     if (kind.startsWith("mouth.")) return null;
+    if (kind === "eye_bag.family") return <div key={leaf.path}>
+      <EyeBagPreservePanel people={props.people} faceOk={props.faceOk}
+        coreAvailable={status?.ready_caps?.eye_bags_protocol===2}
+        blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy() || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}/>
+      <details><summary>旧版祛眼袋（保留原值与原行为，不含新版卧蚕保护）</summary>
+        <p>旧配方不会自动迁移。新版生效时不要叠加旧版眼袋处理；切换必须明确审核替换。</p>
+        <Slider label="旧版祛眼袋" value={Math.round((enhAmounts.eye_bags ?? 0) * 100)} min={0} max={100}
+          disabled={dim || !props.faceOk || props.people.state.pending || props.people.state.uncertain}
+          onChange={v => commitEnhance({eye_bags: v / 100})} onReset={() => commitEnhance({eye_bags: 0})}/>
+      </details>
+    </div>;
+    if (kind.startsWith("eye_bag.")) return null;
     if (kind === "eye_light.family") return <EyeLightPanel key={leaf.path} people={props.people} blocked={dim||props.hairBusy||!!props.whiteBalanceBusy||status?.ready_caps?.eye_light_protocol!==1}/>;
     if (kind.startsWith("eye_light.")) return null;
     if (kind === "eye_symmetry.family") {

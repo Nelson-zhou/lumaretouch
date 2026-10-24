@@ -18,6 +18,7 @@ from . import body_skin_evenness_state as BODY_SKIN_EVENNESS
 from . import collarbone_state as COLLARBONE
 from . import skin_evenness_state as SKIN_EVENNESS
 from . import lip_texture_state as LIP_TEXTURE
+from . import eye_bag_preserve_state as EYE_BAG_PRESERVE
 from . import brow_shape_state as B, nose_shape_state as N, eye_shape_state as E, mouth_shape_state as M
 from . import lip_makeup_state as L, facial_wrinkle_state as W, hair_colour_state as HAIR
 from .ops import deform as D, enhance as H
@@ -42,6 +43,7 @@ def specifications():
             BODY_SKIN_EVENNESS.OP: (BODY_SKIN_EVENNESS.neutral(), BODY_SKIN_EVENNESS.check),
             COLLARBONE.OP: (COLLARBONE.neutral(), COLLARBONE.check),
             SKIN_EVENNESS.OP: (SKIN_EVENNESS.neutral(), SKIN_EVENNESS.check),
+            EYE_BAG_PRESERVE.OP: (EYE_BAG_PRESERVE.neutral(), EYE_BAG_PRESERVE.check),
             LIP_TEXTURE.OP: (LIP_TEXTURE.neutral(), LIP_TEXTURE.check),
             BROW_ENHANCE.OP: (BROW_ENHANCE.neutral(), BROW_ENHANCE.check),
             EYE_SYMMETRY.OP: (EYE_SYMMETRY.neutral(), EYE_SYMMETRY.check),
@@ -93,6 +95,7 @@ def validate_compatibility(values):
     # compatibility on the complete staged candidate and before rendering, not
     # while capturing intent or after the first leaf of an atomic replacement.
     CHIN_LENGTH.check_coexistence(values[CHIN_LENGTH.OP], values[DEFORM]['small_chin'])
+    EYE_BAG_PRESERVE.check_coexistence(values[EYE_BAG_PRESERVE.OP], values[ENHANCE]['eye_bags'])
 
 
 def build_geometry(face_id, landmarks, values, source, excluded, *, backend):
