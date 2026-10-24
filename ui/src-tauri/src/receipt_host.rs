@@ -178,6 +178,11 @@ mod scalar_binding_tests {
 struct ReviewBinding { fields: Value, bytes: usize, read_only: bool, strict_failure_identity: bool }
 impl ReviewBinding {
     fn from_command(epoch: [u8;16], value: &Value) -> Result<Option<Self>, String> {
+        if let Some(fields) = crate::effect_recovery_host::alias::binding(value)? {
+            let bytes = fields.to_string().len();
+            if bytes > 16 * 1024 { return Err("shared recovery receipt identity exceeds budget".into()); }
+            return Ok(Some(Self { fields, bytes, read_only: false, strict_failure_identity: true }));
+        }
         if let Some(fields) = crate::people_api::eye_bag::binding(value)? {
             let bytes = fields.to_string().len();
             if bytes > 192 * 1024 { return Err("eye bag source review identity exceeds receipt budget".into()); }
@@ -199,8 +204,9 @@ impl ReviewBinding {
             return Ok(Some(Self { fields, bytes, read_only: crate::batch_api::eye_bag::read_only(value), strict_failure_identity: true }));
         }
         if let Some(mut fields) = crate::batch_api::history::binding(value)? {
-            if let Some(marker) = crate::project_recovery_fence::composite_history_marker(epoch,value)? {
-                fields["eye_bag_preset_alias_review"]=marker;
+            if let Some(markers) = crate::project_recovery_fence::shared_history_markers(epoch, value)? {
+                for (key, marker) in markers.as_object().unwrap() { fields[key] = marker.clone(); }
+                if markers.get("eye_bag_recovery_alias_review").is_some() { fields["module_scope"] = json!(["lnx.people_graph.v1"]); }
             }
             let bytes = fields.to_string().len();
             return Ok(Some(Self { fields, bytes, read_only: false, strict_failure_identity: true }));
@@ -303,6 +309,8 @@ impl ReviewBinding {
         }))
     }
     fn decorate(&self, value: &mut Value) {
+        if (self.fields["protocol"] == 2 && self.fields.get("ack").is_some())
+            || self.fields.get("eye_bag_recovery_alias_review").is_some() { value["no_write"] = json!(false); }
         for (key, expected) in self.fields.as_object().unwrap() {
             if !["eye_bag_cohort_applies_sha256", "eye_bag_applies_sha256", "collarbone_applies_sha256", "face_style_applies_sha256", "portrait_applies_sha256"].contains(&key.as_str()) {value[key] = expected.clone();}
         }
@@ -337,11 +345,16 @@ impl<K: ReceiptKind> ReceiptHost<K> {
     /// Opt-in command binding for the existing preset/batch scalar route. Legacy
     /// callers of begin/begin_bound retain their original receipt behavior.
     pub fn begin_command(&mut self, epoch: [u8; 16], command: &Value) -> Result<(), String> {
+        self.begin_bound_command(epoch, command, command["document_id"].as_str())
+    }
+    /// Preserve a family-specific compound owner while retaining immutable
+    /// command evidence through the same terminal ledger, not a second owner.
+    pub fn begin_bound_command(&mut self, epoch: [u8; 16], command: &Value, bound: Option<&str>) -> Result<(), String> {
         if command["cmd"].as_str() != Some(K::NAME) { return Err("receipt command kind does not match its host".into()); }
         let id = command["request_id"].as_str().ok_or("missing receipt request ID")?;
         let action = command["action"].as_str().ok_or("missing receipt action")?;
         let review = ReviewBinding::from_command(epoch, command)?;
-        self.begin_bound(epoch, id, action, command["document_id"].as_str())?;
+        self.begin_bound(epoch, id, action, bound)?;
         // begin_bound just appended this unique request, within the same lock.
         let record = self.records.back_mut().unwrap();
         record.bytes = review.as_ref().map_or(0, |binding| binding.bytes);
@@ -407,6 +420,11 @@ impl<K: ReceiptKind> ReceiptHost<K> {
             // only the dedicated bounded composite diagnostics in that result.
             if K::NAME == "preset" {
                 if let Some(publication) = crate::preset_api::eye_bag::retained_alias_publication(&result) {
+                    for (key, value) in publication.as_object().unwrap() { compact[key] = value.clone(); }
+                }
+            }
+            if K::NAME == "effect_recovery" {
+                if let Some(publication) = crate::effect_recovery_host::alias::retained_publication(&result) {
                     for (key, value) in publication.as_object().unwrap() { compact[key] = value.clone(); }
                 }
             }

@@ -136,3 +136,20 @@ fn preset_alias_result(c: &Value) -> Value {
     h.receive(epoch, &preset_alias_result(&c)); assert_eq!(h.status("history"), retained);
     crate::project_recovery_fence::observed(epoch, &json!({"event":"project_opened"}));
 }
+
+#[test] fn recovery_alias_marker_is_distinct_and_requires_complete_member_history() {
+    let c = request(); let mut value = result(&c);
+    value["eye_bag_recovery_alias_review"] = json!({"version":1,"review_sha256":"e".repeat(64),"member_count":2});
+    assert!(receipt(&value));
+    for (path, replacement) in [("/restored", json!([1])), ("/module_scope", json!(["lnx.eye_bags.v2"])),
+        ("/eye_bag_recovery_alias_review/member_count", json!(1)), ("/eye_bag_recovery_alias_review/member_count", json!(17)),
+        ("/conflicts", json!([{"index":2,"path":"/alias.raw","reason":"Later edit"}]))] {
+        let mut bad = value.clone(); *bad.pointer_mut(path).unwrap() = replacement; assert!(!receipt(&bad), "{path}");
+    }
+    for other in ["eye_bag_alias_review", "eye_bag_preset_alias_review", "eye_bag_cohort_review", "eye_bag_batch_review"] {
+        let mut bad = value.clone(); bad[other] = value["eye_bag_recovery_alias_review"].clone(); assert!(!receipt(&bad));
+    }
+    for key in ["eye_bag_recovery_alias_review", "ack", "alias_members"] {
+        let mut client = c.clone(); client[key] = json!({}); assert!(command(&client).is_err());
+    }
+}

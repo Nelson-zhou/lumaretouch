@@ -127,17 +127,19 @@ def _publish(owner,engine,plans,targets):
     finally:engine._people_staged=None
 
 
-def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None,eye_bag_history=None,eye_bag_cohort_history=None,eye_bag_alias_history=None,eye_bag_preset_alias_history=None,preset_alias_verify=None):
+def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None,eye_bag_history=None,eye_bag_cohort_history=None,eye_bag_alias_history=None,eye_bag_preset_alias_history=None,preset_alias_verify=None,eye_bag_recovery_alias_history=None,recovery_alias_assets=None,recovery_alias_verify=None):
     composite=eye_bag_preset_alias_history is not None
+    recovery=eye_bag_recovery_alias_history is not None
+    if composite and recovery:raise ValueError('Mixed preset and recovery alias authority cannot be combined')
     plans={identity:plan for identity,plan in plans.items() if composite or between(plan['before'],plan['candidate'])}
     if not plans:return None
-    if not composite:owner.documents.remember_current()
+    if not composite and not recovery:owner.documents.remember_current()
     # Transfer callers retain the proof actually rendered. Re-freezing here
     # could authorize changed source bytes after expensive target preparation.
     targets=_targets(owner,engine,plans) if prepared_targets is None else deepcopy(prepared_targets)
     if not targets:raise ValueError('No retained portrait document can receive this batch')
-    if prepare and not composite:prepare_scoped(engine,plans,targets)
-    if not composite:_verify(owner,engine,plans,targets)
+    if prepare and not composite and not recovery:prepare_scoped(engine,plans,targets)
+    if not composite and not recovery:_verify(owner,engine,plans,targets)
     owner.sequence+=1;bid=f'batch-{owner.sequence:03d}-{int(owner.clock()*1000)}'
     scoped=[{'scope':identity,'document_id':plan['row']['document_id'],
              'changes':between(plan['before'],plan['candidate'])} for identity,plan in plans.items()]
@@ -166,14 +168,20 @@ def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=
         from . import eye_bag_preset_alias_history as MIXED, eye_bag_preset_alias_transaction as TRANSACTION
         entry[MIXED.KEY]=deepcopy(eye_bag_preset_alias_history);MIXED.check(entry)
         if prepare:TRANSACTION.prepare(engine,plans,targets,entry,redo=True)
+    if recovery:
+        from . import eye_bag_recovery_alias_history as RECOVERY, eye_bag_recovery_alias_transaction as RECOVERY_TRANSACTION
+        entry[RECOVERY.KEY]=deepcopy(eye_bag_recovery_alias_history);RECOVERY.check(entry)
+        if prepare:RECOVERY_TRANSACTION.prepare(engine,plans,targets,entry,redo=True,assets=recovery_alias_assets)
     result={'kind':'commit','batch_id':bid,'applied':[int(k) for k in targets],'skipped':[]}
     frame=(TRANSACTION.publish(owner,engine,plans,targets,entry,redo=True,verify_before=preset_alias_verify)
-           if composite else _publish(owner,engine,plans,targets))
+           if composite else RECOVERY_TRANSACTION.publish(owner,engine,plans,targets,entry,redo=True,
+               assets=recovery_alias_assets,verify_before=recovery_alias_verify) if recovery else _publish(owner,engine,plans,targets))
     owner.ledger[bid]=entry;owner.last_result=result
     engine._people_shared_mutation=True
     try:owner.editor.mark_dirty()
     except Exception as error:
-        if composite:error.side_effects_started=True;error.batch_id=bid
+        if composite or recovery:error.side_effects_started=True;error.batch_id=bid
+        if recovery:error.rolled_back=False;error.requires_reload=True
         raise
     return bid,frame
 
@@ -198,8 +206,10 @@ def restore_scoped(engine,batch,redo):
     eye_alias_history=check_eye_alias_history(batch)
     from . import eye_bag_preset_alias_history as MIXED, eye_bag_preset_alias_transaction as TRANSACTION
     mixed_history=MIXED.check(batch)
+    from . import eye_bag_recovery_alias_history as RECOVERY, eye_bag_recovery_alias_transaction as RECOVERY_TRANSACTION
+    recovery_history=RECOVERY.check(batch)
     owner=engine._batch_controller();plans={};reviewed={}
-    if eye_history is not None or cohort_history is not None or eye_alias_history is not None or mixed_history is not None:
+    if eye_history is not None or cohort_history is not None or eye_alias_history is not None or mixed_history is not None or recovery_history is not None:
         # The scoped restore route bypasses the legacy undo() wrapper. Capture
         # the current document so unsaved repair/crop edits cannot hide behind
         # a parked row's older dependency digest.
@@ -223,7 +233,12 @@ def restore_scoped(engine,batch,redo):
         if record['scope'] in reviewed:
             plans[record['scope']]['reviewed_face_refs']=list({(ref['asset_sha256'],ref['face_instance_id'],ref['analysis_revision']):ref
                 for ref in reviewed[record['scope']]}.values())
-    targets=(MIXED.targets(engine,mixed_history,plans['project']['before']) if mixed_history is not None else _targets(owner,engine,plans))
+    targets=(MIXED.targets(engine,mixed_history,plans['project']['before']) if mixed_history is not None else
+             RECOVERY.targets(engine,recovery_history,plans['project']['before']) if recovery_history is not None else _targets(owner,engine,plans))
+    if recovery_history is not None:
+        assets=RECOVERY_TRANSACTION.bank(engine)
+        RECOVERY_TRANSACTION.prepare(engine,plans,targets,batch,redo=redo,assets=assets)
+        return RECOVERY_TRANSACTION.publish(owner,engine,plans,targets,batch,redo=redo,assets=assets)
     if mixed_history is not None:
         TRANSACTION.prepare(engine,plans,targets,batch,redo=redo)
         return TRANSACTION.publish(owner,engine,plans,targets,batch,redo=redo)
@@ -248,10 +263,15 @@ def restore(owner,request):
     batch=owner.ledger[str(request.get('batch_id') or '')];redo=request.get('action')=='redo'
     from .eye_bag_preset_alias_history import KEY as MIXED_KEY, status_summary as mixed_summary
     marker=mixed_summary(batch);published=False
+    from .eye_bag_recovery_alias_history import KEY as RECOVERY_KEY, status_summary as recovery_summary
+    recovery_marker=recovery_summary(batch)
     try:
         if marker is not None:
             from .eye_bag_preset_alias_transaction import require_history_request
             require_history_request(owner,request,batch)
+        if recovery_marker is not None:
+            from .eye_bag_recovery_alias_transaction import require_history_request as require_recovery_request
+            require_recovery_request(owner,request,batch)
         if bool(batch['undone'])!=redo:raise ValueError('People group is not in the requested undo/redo state')
         if owner.editor.people_restore is None:raise ValueError('People group restore adapter is unavailable')
         frame=owner.editor.people_restore(batch,redo);published=True
@@ -260,10 +280,15 @@ def restore(owner,request):
               'module_scope':batch['ops'],'restored':[int(k) for k in batch['targets']], 'conflicts':[], 'doc_state':owner.editor.status()}
         owner.last_result={'kind':'redo' if redo else 'undo','batch_id':request['batch_id'],'restored':body['restored'],'conflicts':[]}
         if marker is not None:body[MIXED_KEY]=marker
+        if recovery_marker is not None:body[RECOVERY_KEY]=recovery_marker
         owner.emit(body)
         if frame is not None:owner.emit(frame)
         return body
     except Exception as error:
         if marker is not None:
             error.eye_bag_preset_alias_history_no_write=not getattr(error,'side_effects_started',published)
+        if recovery_marker is not None:
+            started=bool(getattr(error,'side_effects_started',published))
+            error.eye_bag_recovery_alias_history_no_write=not started
+            error.eye_bag_recovery_alias_history_rolled_back=started and bool(getattr(error,'rolled_back',False))
         raise

@@ -44,7 +44,7 @@ export function observeEyeBagPresetAliasHistory(sync:unknown,observation?:number
   if(!object(row)||!token(row.batch_id)||!Object.hasOwn(row,'eye_bag_preset_alias_review'))continue;
   const marker=row.eye_bag_preset_alias_review;
   const valid=validEyeBagPresetAliasMarker(marker)&&row.targets===marker.member_count&&same(row.module_scope,['lnx.people_graph.v1'])
-   &&!['face_style_alias_review','eye_bag_alias_review','eye_bag_batch_review','eye_bag_cohort_review'].some(field=>Object.hasOwn(row,field));
+   &&!['face_style_alias_review','eye_bag_alias_review','eye_bag_batch_review','eye_bag_cohort_review','eye_bag_recovery_alias_review'].some(field=>Object.hasOwn(row,field));
   retain(workspace,row.batch_id,valid?{memberCount:marker.member_count,marker:structuredClone(marker)}:{memberCount:null,marker:null});
  }
 }

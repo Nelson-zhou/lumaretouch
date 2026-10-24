@@ -77,7 +77,9 @@ to publish an unverified graph. No corrupt-project recovery acceptance is claime
   repair and colour state. One composite scoped history owns the shared graph
   and active recipe, including canonical state/assets on save/reopen. See
   `PRESET-ALIAS.md`; source wiring is not runtime acceptance. Alias effect-
-  recovery painting remains a separate gap, not implicitly admitted here.
+  recovery has a distinct complete-member image review and recovery-only scoped
+  ledger in `RECOVERY-ALIAS.md`. No document recipe is rewritten by recovery;
+  all existing unavailable/dormant-member restrictions remain.
 - Dedicated effect-recovery painting now attenuates only the independently
   staged v2 eye-bag contribution, with separate source-owned vectors, actual
   full-source mixed-graph review and explicit confirmation. The bounded recovery

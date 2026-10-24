@@ -20,7 +20,9 @@ export function newStroke(point:Point,width:number,height:number,settings:BrushS
 export interface RecoveryImage {
   before:string;after:string;width:number;height:number;domain:'production-output';quality:'proxy-render-srgb8'|'full-source-render-srgb8';note:string;
 }
-export interface RecoveryRequest {request_id:string;preview_id:string;capture_id:string;ticket:string;document_id:string}
+export interface RecoveryRequest {request_id:string;preview_id:string;capture_id:string;ticket:string;document_id:string;
+  protocol?:2;ack?:import('./aliasModel').RecoveryAliasAck;workspace?:string;alias_review?:import('./aliasModel').RecoveryAliasReview;
+  generation?:string;recipe_document_id?:string;recipe_revision?:string}
 
 /** This dedicated reviewed operation does not inherit legacy automatic stroke commits. */
 export const requiresRecoveryConfirmation=(target:RecoveryTarget)=>target==='eye_bag_preserve';

@@ -199,6 +199,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                         // request's exact scalar receipt validation.
                         st.batch_results.lock().map(|h|h.guards_review(inspection_epoch,id)).unwrap_or(true)
                             || st.preset_results.lock().map(|h|h.guards_review(inspection_epoch,id)).unwrap_or(true)
+                            || st.effect_recovery.lock().map(|h|h.guards_review(inspection_epoch,id)).unwrap_or(true)
                             || crate::people_api::guards_review(inspection_epoch,id)
                     });
                     if !scalar_review && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" {

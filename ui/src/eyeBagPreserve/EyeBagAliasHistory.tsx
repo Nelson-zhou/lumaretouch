@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import {eyeBagPresetAliasHistoryClass} from './presetAliasHistoryRegistry';
+import {RecoveryAliasHistory} from '../effectRecovery/RecoveryAliasHistory';
 import type {PeopleOwner} from '../people/usePeopleWorkflow';
 /** Uses the people owner's one existing batch controller, not local document undo. */
 export function EyeBagAliasHistory({people, blocked}: {people: PeopleOwner; blocked: boolean}) {
   const history = people.eyeBagAliasHistory;
-  if (!history.receipt && history.state.phase === 'closed') return <PresetAliasHistory people={people} blocked={blocked}/>;
+  if (!history.receipt && history.state.phase === 'closed') return <><PresetAliasHistory people={people} blocked={blocked}/><RecoveryAliasHistory people={people} blocked={blocked}/></>;
   return <><section aria-label="共享来源祛眼袋受保护批次历史">
     <h5>共享来源祛眼袋修改记录</h5>
     {history.receipt && <p role="status">引擎已确认全部 {history.receipt.review.members.length} 张成员，批次 {history.receipt.batchId}。
@@ -20,7 +21,7 @@ export function EyeBagAliasHistory({people, blocked}: {people: PeopleOwner; bloc
     {history.state.message && <p role="alert">{history.state.message}</p>}
     {history.refreshError && <p role="alert">{history.refreshError}</p>}
     {history.refreshError && <button type="button" disabled={history.refreshing} onClick={() => void history.refresh()}>刷新批次状态，不重复提交</button>}
-  </section><PresetAliasHistory people={people} blocked={blocked}/></>;
+  </section><PresetAliasHistory people={people} blocked={blocked}/><RecoveryAliasHistory people={people} blocked={blocked}/></>;
 }
 
 /** Presentation only. All actions use the people owner's existing, single batch controller. */

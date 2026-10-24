@@ -3,12 +3,13 @@ import {createPortal} from 'react-dom';
 import {LABELS,requiresRecoveryConfirmation,type BrushSettings,type RecoveryReport} from './model';
 import type {EffectRecoveryOwner} from './useEffectRecoveryWorkflow';
 import {RecoverySource} from './RecoverySource';
+import {RecoveryAliasReview} from './RecoveryAliasReview';
 import './effectRecovery.css';
 
 function ResolveRecovery({owner}:{owner:EffectRecoveryOwner}){
-  return <><button onClick={()=>void owner.workflow.check()}>查询原笔迹结果，不重复提交</button>
-    <button disabled={!owner.context.enabled||owner.context.documentId===owner.state.request?.document_id}
-      onClick={()=>owner.workflow.acknowledgeAfterReload()}>已重新打开照片</button></>;
+  return <>{owner.state.receiptBatchId&&<p>原请求诊断批次 {owner.state.receiptBatchId}。此编号本身不证明成功，也不能授权撤销或重做。</p>}<button onClick={()=>void owner.workflow.check()}>查询原笔迹结果，不重复提交</button>
+    {owner.state.request?.protocol===2?<p>共享来源恢复结果仍未知，切换照片不能解除写入保护。请核对已保存项目后手动重新打开，并检查全部成员与准确批次台账；不会自动重发。</p>:<button disabled={!owner.context.enabled||owner.context.documentId===owner.state.request?.document_id}
+      onClick={()=>owner.workflow.acknowledgeAfterReload()}>已重新打开照片</button>}</>;
 }
 
 function RenderedReview({owner}:{owner:EffectRecoveryOwner}){
@@ -40,7 +41,7 @@ function RenderedReview({owner}:{owner:EffectRecoveryOwner}){
   </>;
 }
 
-/** A continuous tool workspace, not an apply-confirmation dialog per stroke. */
+/** Legacy targets retain continuous commits; eye-bag recovery has explicit review authority. */
 export function EffectRecoveryPanel({owner,report,disabled=false}:{owner:EffectRecoveryOwner;report?:RecoveryReport;disabled?:boolean}){
   const {state,workflow}=owner;
   return <section className="effectRecoveryPanel" aria-label="功能专属恢复画笔">
@@ -70,7 +71,7 @@ export function EffectRecoveryWorkspace({owner,report}:{owner:EffectRecoveryOwne
   return createPortal(<div className="recoveryWorkspace" data-readonly-scopes role="dialog" aria-modal="true" aria-label="连续效果恢复画笔">
       <header><strong>{LABELS[state.target]} · 专属恢复画笔</strong>
         <span>{requiresRecoveryConfirmation(state.target)?'松手预览，确认后保存 · Esc 丢弃未提交笔迹':'松手自动提交一笔 · Esc 结束'}</span><button ref={focus} onClick={()=>workflow.cancel()}>结束画笔</button></header>
-      {state.target==='eye_bag_preserve'&&<p>仅恢复当前选中人物的去眼袋 v2 贡献；不会擦掉卧蚕保护笔迹、旧版去眼袋、黑眼圈或其他效果。定位使用当前源图绑定的捕获画布，不是原生眼部裁剪。</p>}
+      {state.target==='eye_bag_preserve'&&<p>仅恢复当前选中人物的去眼袋 v2 贡献；不会擦掉卧蚕保护笔迹、旧版去眼袋、黑眼圈或其他效果。若共享人物图影响多个来源别名，必须逐张审核并作为完整成员批次发布。定位使用当前源图绑定的捕获画布，不是原生眼部裁剪。</p>}
       <div className="recoveryBrushControls">
         <label>画笔大小 <input type="range" min=".5" max="25" step=".5" value={settings.size} disabled={controlsDisabled}
           onChange={e=>number('size',Number(e.target.value))}/><output>{settings.size}% 画布短边</output></label>
@@ -84,9 +85,9 @@ export function EffectRecoveryWorkspace({owner,report}:{owner:EffectRecoveryOwne
       </div>
       <div className="recoveryPanes"><section><h3>源图定位</h3><RecoverySource owner={owner} settings={settings}/>
         <small>原始源图坐标，保留构图。此处线条仅表示笔迹位置，不是处理效果。形变后的实际效果见右侧。</small></section>
-        <section><h3>实际全效果</h3><RenderedReview owner={owner}/></section></div>
+        <section><h3>实际全效果</h3>{state.aliasReview&&state.previewId?<RecoveryAliasReview owner={owner} review={state.aliasReview} preview={state.previewId}/>:<RenderedReview owner={owner}/>}</section></div>
       <footer><p role="status">{state.message}</p>
-        {state.awaitingConfirmation&&<button disabled={owner.pending||state.strokeActive} onClick={()=>void workflow.confirmReviewed()}>已比较前后，保存这笔去眼袋恢复</button>}
+        {state.awaitingConfirmation&&<button disabled={owner.pending||state.strokeActive} onClick={()=>void workflow.confirmReviewed()}>{state.aliasReview?'已逐张比较全部成员，保存这一完整恢复批次':'已比较前后，保存这笔去眼袋恢复'}</button>}
         <small>羽化采用原图短边 0–5% 的空间过渡；添加笔迹取最大覆盖，不以重复描画叠加强度。</small>
         {target?.strokes.length? <div className="recoveryHistoryTools">
           <button disabled={controlsDisabled||state.phase!=='drawing'} onClick={()=>workflow.mutate({action:'enable',target:state.target,enabled:!target.enabled})}>{target.enabled?'暂时停用此目标恢复':'启用此目标恢复'}</button>

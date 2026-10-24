@@ -14,3 +14,6 @@
 .recoveryCompareActions .active{background:#34546b;color:#fff}.recoveryResultWaiting{padding:60px 20px;color:#aab8c8;background:#111;text-align:center}
 .recoveryWorkspace small{font-size:11px;line-height:1.5;color:#aab8c8}.recoveryWorkspace footer{border-top:1px solid #343e4b;padding-top:8px}.recoveryWorkspace footer p{margin:0 0 5px}.recoveryHistoryTools{margin-top:8px}
 @media(max-width:900px){.recoveryWorkspace{inset:10px}.recoveryPanes{gap:10px}.recoveryBrushControls{gap:8px}.recoveryBrushControls input{width:65px}}
+.recoveryAliasPair{display:flex;flex-wrap:wrap;gap:12px;max-height:65vh;overflow:auto}
+.recoveryAliasPair figure{margin:0;min-width:0;flex:1 1 240px}
+.recoveryAliasPair img{display:block}

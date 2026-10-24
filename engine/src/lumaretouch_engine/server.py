@@ -6787,6 +6787,8 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                 return
             if name == "effect_recovery" and not self._effect_recovery_controller().prepare(msg):
                 return
+            from .effect_recovery_dispatch import owns_fence as recovery_owns_fence
+            recovery_alias_fence = name == "effect_recovery" and recovery_owns_fence(self, msg)
             if name == "local_masks" and not self._local_mask_controller().prepare(msg):
                 return
             if name == "white_balance" and not self._white_balance_controller().prepare(msg):
@@ -6794,7 +6796,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
             if name == "color_picker" and not self._color_picker_controller().prepare(msg):
                 return  # The exact frozen stage proof and scalar plan precede mutation.
             from .document_versions import fences_current_document
-            if name not in ("common_background","fringe_repair") and fences_current_document(name,msg,self.EDIT_CMDS) and not (name=="background" and str(msg.get("action","")).startswith("id_")):
+            if not recovery_alias_fence and name not in ("common_background","fringe_repair") and fences_current_document(name,msg,self.EDIT_CMDS) and not (name=="background" and str(msg.get("action","")).startswith("id_")):
                 self._fence_current_document()
             if name not in ("hello", "color_scopes", "color_capture") and not (
                     name=="inspection_snapshot" and msg.get("action","status")=="status"):
@@ -6806,7 +6808,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                 prompted = self.__dict__.get('_prompted_mask_owner')
                 if prompted is not None: prompted.cancel()
                 recovery = self.__dict__.get('_effect_recovery_preview_owner')
-                if recovery is not None: recovery.cancel()
+                if recovery is not None and not recovery_alias_fence: recovery.cancel()
             if name not in ("hello", "sky_semantic", "sky_replacement_preview", "color_scopes") and not (
                     name == "inspection_snapshot" and msg.get("action", "status") == "status"):
                 sky = self.__dict__.get("_sky_replacement_preview_owner")

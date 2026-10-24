@@ -35,8 +35,10 @@ The new recovery target requires an explicit confirmation after the exact images
 have loaded and been acknowledged. A viewed-only comparison cannot commit.
 
 Source, repair stack, graph, immutable support and current document ownership
-must still match when acknowledging and preparing the transaction. Existing
-single-photo shared-alias/dormant-history restrictions remain. The canonical
+must still match when acknowledging and preparing the transaction. Shared-source
+aliases require the separate complete affected-set route in `RECOVERY-ALIAS.md`;
+the legacy single-photo route does not authorize them. Dormant/unavailable-input
+restrictions remain. The canonical
 people owner publishes the vector reference in the ordinary history; old asset
 bytes remain for undo/project replay. Existing original request receipts and
 unknown-write query/reload fences are unchanged; cancellation/reconciliation is
@@ -61,7 +63,8 @@ No new model, weights or third-party source was downloaded or installed.
 - Ending this recovery workspace discards its unpublished review authority; it
   does not claim to interrupt an in-flight full render. The separate read-job
   cancellation protocol does not cover generic recovery preview commands.
-- Active preset/batch/cohort recovery transfer and complete shared-alias review
-  are not enabled by this route.
+- Recovery-vector preset/batch/cohort transfer across independent sources is not
+  enabled. Shared-source aliases have a distinct complete-image review and scoped
+  history route, not donor-vector transfer or generic permission to edit siblings.
 - Numerical, photographic, UI, native, export, history and restart acceptance
   are all UNRUN. No tests, build, typecheck, product imports or inference ran.

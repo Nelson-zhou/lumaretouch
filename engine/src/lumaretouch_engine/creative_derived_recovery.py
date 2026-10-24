@@ -116,8 +116,10 @@ def require_command(engine,name,request):
     if name not in COMMANDS or type(request) is not dict or request.get('cmd')!=name:
         raise ValueError('Unknown derived recovery command')
     action=request.get('action')
+    from .eye_bag_recovery_alias_derived import check_request, require_record
+    alias_envelope=check_request(name,request)
     if name=='effect_recovery':
-        if set(request)!={'cmd','action','request_id','preview_id',*PROOF_KEYS} or action!='apply':
+        if not alias_envelope and (set(request)!={'cmd','action','request_id','preview_id',*PROOF_KEYS} or action!='apply'):
             raise ValueError('Derived recovery apply requires its exact review receipt')
         if type(request['request_id']) is not str or not 1<=len(request['request_id'])<=128:
             raise ValueError('Invalid recovery request identity')
@@ -157,7 +159,7 @@ def require_command(engine,name,request):
         _pixels(engine)
         return
     fields={'cmd','action','preview_id',*PROOF_KEYS}
-    if name=='effect_recovery_preview':
+    if name=='effect_recovery_preview' and not alias_envelope:
         if action=='preview':fields.add('mutation')
         if action not in ('preview','presented','cancel') or set(request)!=fields:
             raise ValueError('Invalid derived recovery preview envelope')
@@ -183,6 +185,7 @@ def require_command(engine,name,request):
             or record['proof']!={key:request[key] for key in PROOF_KEYS}):
         raise ValueError('Derived recovery review source, face or graph changed')
     assert_review(engine,record)
+    require_record(engine,record,request)
     if name=='effect_recovery' and (not record['presented'] or not record['committable']):
         raise ValueError('Derived recovery requires a presented committable review')
 

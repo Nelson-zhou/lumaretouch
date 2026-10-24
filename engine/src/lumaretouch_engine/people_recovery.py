@@ -93,15 +93,17 @@ def assert_context(engine, expected):
         raise ValueError('人物、源照片、分析或人物配方在恢复预览后改变，请重新查看本笔')
 
 
-def prepare(engine, recovery, target, *, expected=None):
+def prepare(engine, recovery, target, *, expected=None, _eye_bag_alias=None):
     """Prepare a real all-face candidate without publishing its state or bytes."""
     if not handles(engine, target):
         return None
     engine._people_sync(strict=True)
     captured = context(engine)
+    if _eye_bag_alias is not None and target != 'eye_bag_preserve':
+        raise ValueError('Shared recovery admission belongs only to eye-bag v2')
     if target == 'eye_bag_preserve':
         from .eye_bag_effect_recovery import live
-        live(engine)  # Same-document and dormant alias protection, not a bypass.
+        live(engine, _alias_admission=_eye_bag_alias)
     if expected is not None and captured != expected:
         raise ValueError('人物恢复预览的确切归属已过期')
     current = value(engine)
@@ -130,6 +132,9 @@ def prepare(engine, recovery, target, *, expected=None):
     prepared = prepare_preview(pipe, candidate, asset, engine._people_analyses.get(asset, {}),
                                byte_budget=available_estimate(), recovery_assets=fields,**owned_inputs(engine,candidate,support_bank=assets))
     assert_context(engine, captured)
+    if _eye_bag_alias is not None:
+        from .eye_bag_recovery_alias_review import validate_admission
+        validate_admission(engine, _eye_bag_alias, before, captured['face_ref'])
     return {'context': captured, 'before': before, 'candidate': candidate,
             'assets': assets, 'prepared': prepared, 'target': target,
             'no_change': candidate == before}
@@ -154,8 +159,8 @@ def availability(engine):
         target_reason = reason
         if target == 'eye_bag_preserve' and active:
             try:
-                from .eye_bag_effect_recovery import live
-                live(engine)
+                from .eye_bag_recovery_alias_review import availability
+                availability(engine)
             except ValueError as error:
                 active = False; target_reason = str(error)
         result[target] = {'active': active, 'reason': target_reason or (None if active else

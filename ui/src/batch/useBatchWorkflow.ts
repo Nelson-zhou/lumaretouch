@@ -14,7 +14,7 @@ import type {SpillTransferAck} from '../spillRemoval/transferModel';
 import {createBatchWorkflow,type BatchContext,type BatchUi} from './batchWorkflow';
 import {runBatch,readBatchResult} from '../native';
 import {batchCompletionRequest} from './completion';
-export function useBatchWorkflow(context:BatchContext,onComplete:()=>void){
+export function useBatchWorkflow(context:BatchContext,onComplete:(state:BatchUi)=>void){
   const [ui,setUi]=useState<BatchUi>({phase:'closed',operation:'preflight',plan:null,result:null,message:'',scopeLabel:''});
   const latest=useRef({context,onComplete});latest.current={context,onComplete};
   const ref=useRef<ReturnType<typeof createBatchWorkflow>|null>(null);
@@ -23,7 +23,7 @@ export function useBatchWorkflow(context:BatchContext,onComplete:()=>void){
     const flow=createBatchWorkflow({request:runBatch,read:readBatchResult},state=>{
       if(!live)return;setUi(state);
       const completion=batchCompletionRequest(state,reported);
-      if(completion){reported=completion;latest.current.onComplete();}
+      if(completion){reported=completion;latest.current.onComplete(state);}
     });
     ref.current=flow;flow.updateContext(latest.current.context);
     return()=>{live=false;ref.current=null;flow.dispose();};

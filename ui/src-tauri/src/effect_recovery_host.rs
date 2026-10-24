@@ -2,6 +2,10 @@
 use serde_json::{json, Value};
 use crate::receipt_host::{ReceiptHost, ReceiptKind};
 use crate::color_capture_host::{id16, token};
+#[path = "effect_recovery_alias_protocol.rs"]
+pub(crate) mod alias;
+#[path = "effect_recovery_alias_preview.rs"]
+mod alias_preview;
 
 pub(crate) struct RecoveryKind;
 pub(crate) type RecoveryHost = ReceiptHost<RecoveryKind>;
@@ -35,9 +39,10 @@ impl ReceiptKind for RecoveryKind {
         let Some([document, capture, ticket, preview]) = parts(bound) else { return false };
         let (Some(success), Some(unknown), Some(reload)) =
             (v["success"].as_bool(), v["outcome_unknown"].as_bool(), v["requires_reload"].as_bool()) else { return false };
-        if v["protocol"] != 1 || v["action"] != "apply" || (success && unknown)
+        if !matches!(v["protocol"].as_u64(), Some(1 | 2)) || v["action"] != "apply" || (success && unknown)
             || v["document_id"] != document || v["capture_id"] != capture
             || v["ticket"] != ticket || v["preview_id"] != preview { return false; }
+        if v["protocol"] == 2 { return alias::receipt(v); }
         !success || (!reload && v["no_change"].is_boolean()
             && ["undo_steps", "redo_steps"].iter().all(|k| v["history"][*k].as_u64().is_some()))
     }
@@ -61,11 +66,15 @@ pub(crate) struct RecoveryPreviewHost {
     presentation_requested: bool,
     shown: bool,
     redeemed: bool,
+    proof: Option<crate::source_patch_capture_host::Proof>,
+    aliases: Option<alias_preview::AliasPreview>,
+    viewing: bool,
+    alias_terminal: bool,
 }
 impl RecoveryPreviewHost {
     pub fn invalidate(&mut self) {
         self.bound = None; self.value = None; self.target = None; self.delivered = false; self.presentation_requested = false;
-        self.shown = false; self.redeemed = false;
+        self.shown = false; self.redeemed = false; self.proof = None; self.aliases = None; self.viewing = false; self.alias_terminal = false;
     }
     pub fn reset(&mut self, epoch: [u8; 16]) { self.invalidate(); self.epoch = epoch; }
     pub fn ended(&mut self, epoch: [u8; 16]) { if self.epoch == epoch { self.reset([0; 16]); } }
@@ -81,14 +90,95 @@ impl RecoveryPreviewHost {
             "capture_id":capture,"ticket":ticket,"document_id":document,"success":true}));
         Ok(())
     }
+    pub fn bind_capture(&mut self, proof: &crate::source_patch_capture_host::Proof, viewing: bool) {
+        self.proof = Some(proof.clone()); self.viewing = viewing;
+    }
+    pub fn matches_capture(&self, proof: &crate::source_patch_capture_host::Proof) -> bool {
+        self.proof.as_ref().is_some_and(|old| old.identity == proof.identity
+            && old.recipe_document_id == proof.recipe_document_id && old.recipe_revision == proof.recipe_revision
+            && old.descriptor == proof.descriptor)
+    }
+    fn exact_proof(&self, value: &Value) -> bool {
+        self.proof.as_ref().map_or(true, |proof| value["generation"] == proof.identity.generation.to_string()
+            && value["recipe_document_id"] == proof.recipe_document_id && value["recipe_revision"] == proof.recipe_revision)
+    }
+    pub fn begin_image(&mut self, command: &Value) -> Result<(), String> {
+        if self.redeemed || !self.delivered { return Err("Shared recovery review is not available".into()); }
+        self.aliases.as_mut().ok_or("This recovery preview has no shared alias image pages")?.begin_image(command)
+    }
+    pub fn image_status(&mut self, epoch: [u8;16], preview: &str, request_id: &str) -> Value {
+        if self.epoch != epoch || self.redeemed || !self.bound.as_ref().is_some_and(|bound| bound.0 == preview) {
+            return json!({"state":"stale", "request_id":request_id});
+        }
+        self.aliases.as_mut().map_or_else(|| json!({"state":"stale", "request_id":request_id}), |aliases| aliases.status(request_id))
+    }
+    pub fn allow_presented_aliases(&mut self, acknowledgment: &Value) -> Result<(), String> {
+        if !self.delivered || self.redeemed { return Err("Shared recovery review has not been delivered".into()); }
+        self.aliases.as_ref().ok_or("This recovery preview has no alias acknowledgment")?.allow_presented(acknowledgment)?;
+        self.presentation_requested = true; Ok(())
+    }
+    pub fn redeem_aliases(&mut self, acknowledgment: &Value) -> Result<(), String> {
+        let aliases = self.aliases.as_ref().ok_or("This recovery preview has no shared alias review")?;
+        if self.viewing || aliases.acknowledgment() != *acknowledgment {
+            return Err("A viewed-only or changed alias recovery cannot authorize a mutation".into());
+        }
+        aliases.allow_presented(acknowledgment)?; self.redeem_checked()
+    }
     pub fn matches(&self, epoch: [u8; 16], preview: &str, capture: &str, ticket: &str, document: &str) -> bool {
         epoch != [0;16] && epoch == self.epoch && self.bound.as_ref().is_some_and(|b|
             b.0 == preview && b.1 == capture && b.2 == ticket && b.3 == document)
     }
     pub fn receive(&mut self, epoch: [u8; 16], v: &Value) {
-        let Some((preview, capture, ticket, document)) = self.bound.as_ref() else { return };
+        let Some((preview, capture, ticket, document)) = self.bound.clone() else { return };
         if epoch != self.epoch || v["preview_id"] != preview.as_str() || v["document_id"] != document.as_str()
             || v["capture_id"] != capture.as_str() || v["ticket"] != ticket.as_str() || self.redeemed { return; }
+        if !self.exact_proof(v) { return; }
+        if v.get("request_id").is_some() && self.aliases.is_some() {
+            self.aliases.as_mut().unwrap().receive(v);
+            if self.aliases.as_ref().is_some_and(|aliases| aliases.has_failed()) {
+                self.alias_terminal = true;
+                self.delivered = false; self.shown = false; self.presentation_requested = false;
+                if let Some(value) = self.value.as_mut() {
+                    value["state"] = json!("failed"); value["success"] = json!(false);
+                    value["error"] = json!("Shared recovery image review failed; start a fresh review");
+                }
+            }
+            return;
+        }
+        if self.alias_terminal { return; }
+        if v["protocol"] == 2 {
+            if v.to_string().len() > 256 * 1024 { self.invalidate(); return; }
+            let accepted = match v["state"].as_str() {
+                Some("ready") if self.value.as_ref().is_some_and(|value| value["state"] == "running")
+                    && self.target.as_deref() == Some("eye_bag_preserve") && v["target"] == "eye_bag_preserve" && v["success"] == true
+                    && v["result"]["domain"] == "production-output" && v["result"]["quality"] == "full-source-render-srgb8" => {
+                    let aliases = self.proof.as_ref().and_then(|proof| alias_preview::AliasPreview::new(&v["result"]["review"], proof).ok());
+                    if let Some(aliases) = aliases { self.aliases = Some(aliases); self.value = Some(v.clone()); true } else { false }
+                },
+                Some("presented") if v["success"] == true && self.delivered && self.presentation_requested
+                    && self.aliases.as_ref().is_some_and(|aliases| aliases.presented(v)) => {
+                    self.shown = true;
+                    if let Some(value) = self.value.as_mut() { value["state"] = json!("presented"); value["review_sha256"] = v["review_sha256"].clone(); }
+                    true
+                },
+                Some("cancelled") if v["success"] == true && self.aliases.is_some() => {
+                    self.value = Some(v.clone()); self.aliases = None; self.alias_terminal = true; true
+                },
+                Some("failed") if v["success"] == false => { self.value = Some(v.clone()); self.aliases = None; self.alias_terminal = true; true },
+                _ => false,
+            };
+            if !accepted {
+                self.value = Some(json!({"protocol":2,"state":"failed","success":false,"preview_id":preview,
+                    "capture_id":capture,"ticket":ticket,"document_id":document,"error":"Invalid shared recovery review or presentation proof"}));
+                self.aliases = None; self.alias_terminal = true;
+            }
+            if !self.value.as_ref().is_some_and(|value| value["state"] == "presented") {
+                self.delivered = false; self.shown = false; self.presentation_requested = false;
+            }
+            return;
+        }
+        // A protocol downgrade cannot convert a shared review into a single-photo grant.
+        if self.aliases.is_some() && v["state"] != "cancelled" { return; }
         let valid_images = || {
             let r = &v["result"];
             // The dedicated v2 delta is reviewed after an actual full-source
@@ -131,14 +221,18 @@ impl RecoveryPreviewHost {
         self.value.clone().unwrap_or_else(|| json!({"state":"stale"}))
     }
     pub fn allow_presented(&mut self) -> Result<(), String> {
-        if !self.delivered || self.redeemed || !self.value.as_ref().is_some_and(|v| v["state"] == "ready" || v["state"] == "presented") {
+        if self.aliases.is_some() || !self.delivered || self.redeemed || !self.value.as_ref().is_some_and(|v| v["state"] == "ready" || v["state"] == "presented") {
             return Err("rendered recovery comparison has not been delivered".into());
         }
         self.presentation_requested = true;
         Ok(())
     }
     pub fn redeem(&mut self) -> Result<(), String> {
-        if !self.shown || self.redeemed { return Err("rendered recovery comparison was not acknowledged or was already consumed".into()); }
+        if self.aliases.is_some() { return Err("Shared recovery requires its exact all-member acknowledgment".into()); }
+        self.redeem_checked()
+    }
+    fn redeem_checked(&mut self) -> Result<(), String> {
+        if self.viewing || !self.shown || self.redeemed { return Err("rendered recovery comparison was not acknowledged or was already consumed".into()); }
         self.redeemed = true;
         Ok(())
     }
@@ -260,3 +354,7 @@ mod tests {
         assert_eq!(host.status(epoch, PREVIEW)["state"], "stale");
     }
 }
+
+#[cfg(test)]
+#[path = "effect_recovery_alias_unrun.rs"]
+mod alias_tests;

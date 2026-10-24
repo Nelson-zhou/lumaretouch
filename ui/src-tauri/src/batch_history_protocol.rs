@@ -6,7 +6,7 @@ use crate::preset_api::visual::{fields, text};
 use crate::original_shadow_transfer_protocol::hex;
 const MAX_ROWS: usize = 10_000;
 const PRESET_ALIAS_MARKER: &str = "eye_bag_preset_alias_review";
-const EYE_MARKERS: &[&str] = &["eye_bag_batch_review", "eye_bag_cohort_review", "eye_bag_alias_review", PRESET_ALIAS_MARKER];
+const EYE_MARKERS: &[&str] = &["eye_bag_batch_review", "eye_bag_cohort_review", "eye_bag_alias_review", "eye_bag_recovery_alias_review", PRESET_ALIAS_MARKER];
 fn action(v: &Value) -> bool { matches!(v["action"].as_str(), Some("undo" | "redo")) }
 fn index(v: &Value) -> bool { v.as_u64().is_some_and(|n| n <= 9_007_199_254_740_991) }
 pub(crate) fn command(v: &Value) -> Result<(), String> {
@@ -53,6 +53,13 @@ pub(crate) fn receipt(v: &Value) -> bool {
     }
     if EYE_MARKERS.iter().filter(|key| v.get(**key).is_some()).count() > 1 { return false; }
     if v["success"] != true {
+        if v.get("eye_bag_recovery_alias_review").is_some()
+            && (v["module_scope"] != json!(["lnx.people_graph.v1"]) || !v["no_write"].is_boolean()
+                || (v["outcome_unknown"] == true && (v["no_write"] == true || v.get("restored").is_some()))
+                || (v["outcome_unknown"] == false && (!v["restored"].as_array().is_some_and(|rows| rows.is_empty())
+                    || !((v["no_write"] == true && v["rolled_back"] != true) || (v["no_write"] == false && v["rolled_back"] == true))))) {
+            return false;
+        }
         return v["error"].as_str().is_some_and(|s| !s.trim().is_empty())
             && (v["outcome_unknown"] == true || (v.get("doc_state").is_none()
                 && v["operation_committed"] != true && v["committed"] != true

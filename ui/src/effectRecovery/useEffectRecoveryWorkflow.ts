@@ -12,10 +12,13 @@ const api:RecoveryTransport={
   frame:(captureId,ticket)=>invoke('source_patch_capture_frame',{captureId,ticket}),
   presented:(captureId,ticket,documentId)=>invoke('source_patch_capture',{action:'presented',captureId,ticket,documentId}),
   cancel:(captureId,ticket,documentId)=>invoke('source_patch_capture',{action:'cancel',captureId,ticket,documentId}),
-  preview:(action,previewId,captureId,ticket,mutation)=>invoke('effect_recovery_preview',{action,previewId,captureId,ticket,mutation:mutation??null}),
+  preview:(action,previewId,captureId,ticket,mutation,ack)=>invoke('effect_recovery_preview',{action,previewId,captureId,ticket,mutation:mutation??null,...(ack?{protocol:2,ack}:{})}),
   previewStatus:previewId=>invoke('effect_recovery_preview_status',{previewId}),
+  aliasImage:{image:request=>invoke('effect_recovery_preview',{action:'image',protocol:2,...request}),
+    imageStatus:(previewId,requestId)=>invoke('effect_recovery_preview_status',{previewId,requestId})},
   submit:async request=>{await settleCurveEdit();ownIntent=true;try{notifyInspectionEditIntent();}finally{ownIntent=false;}
-    return invoke('effect_recovery',{requestId:request.request_id,previewId:request.preview_id,captureId:request.capture_id,ticket:request.ticket});},
+    return invoke('effect_recovery',{requestId:request.request_id,previewId:request.preview_id,captureId:request.capture_id,ticket:request.ticket,
+      ...(request.protocol===2?{protocol:2,ack:request.ack}:{})});},
   result:requestId=>invoke('effect_recovery_result',{requestId}),
 };
 
@@ -38,8 +41,8 @@ export function useEffectRecoveryWorkflow(context:RecoveryContext,refresh:()=>Pr
       if(event.key==='Escape'&&opened){event.preventDefault();workflow.cancel();return;}
       if(opened&&(event.ctrlKey||event.metaKey)&&!event.altKey&&['z','y'].includes(key)){
         event.preventDefault();event.stopImmediatePropagation();
-        const discardOnly=workflow.busy()||workspace.strokeActive||workspace.ending;
-        workflow.cancel();
+        const aliasHistory=workflow.usesAliasHistory(),discardOnly=workflow.busy()||workspace.strokeActive||workspace.ending||aliasHistory;
+        workflow.cancel(aliasHistory?'已结束恢复画笔并丢弃未提交笔迹。共享来源恢复只能在人物面板的完整成员恢复批次历史中整体撤销或重做，不执行当前照片的局部撤销。':undefined);
         // Mid-stroke undo cancels that uncommitted gesture. Between strokes it
         // must really undo/redo the document, not silently just close the tool.
         if(!discardOnly&&!event.repeat)void runHistory(key==='y'||event.shiftKey?'redo':'undo')

@@ -1,4 +1,5 @@
 import {observeEyeBagPresetAliasHistory} from './eyeBagPreserve/presetAliasHistoryRegistry';
+import {observeRecoveryAliasHistory} from './effectRecovery/aliasHistoryRegistry';
 import {observeEyeBagCohortHistory} from './eyeBagPreserve/cohortHistoryRegistry';
 import {observeEyeBagBatchHistory} from './eyeBagPreserve/batchHistoryRegistry';
 import type {PeopleTransferRequest} from './people/transferReview';
@@ -352,7 +353,8 @@ export interface SyncState {
   batches: { batch_id: string; module_scope: string[]; targets: number; undone: boolean;
     face_style_alias_review?: {version: 1; review_sha256: string; member_count: number};
     eye_bag_batch_review?: {version: 1; review_sha256: string; member_count: number};
-    eye_bag_preset_alias_review?: import('./eyeBagPreserve/presetAliasHistoryRegistry').EyeBagPresetAliasMarker }[];
+    eye_bag_preset_alias_review?: import('./eyeBagPreserve/presetAliasHistoryRegistry').EyeBagPresetAliasMarker;
+    eye_bag_recovery_alias_review?: import('./effectRecovery/aliasHistoryRegistry').RecoveryAliasMarker }[];
   undoable: string[];
   last: string | null;
   /** 上一笔 commit/undo 的事实：UI 那句“同步了几张、跳过几张为什么”只能读这里。 */
@@ -1363,6 +1365,7 @@ export const engineStatus = async () => {
   observeEyeBagBatchHistory(status.session?.sync, observation);
   observeEyeBagCohortHistory(status.session?.sync, observation);
   observeEyeBagPresetAliasHistory(status.session?.sync, observation);
+  observeRecoveryAliasHistory(status.session?.sync, observation);
   return status;
 };
 export const shutdownEngine = () => invoke("shutdown_engine");

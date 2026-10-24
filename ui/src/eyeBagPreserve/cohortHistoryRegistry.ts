@@ -25,6 +25,7 @@ export function observeEyeBagCohortHistory(sync: unknown, observation?: number):
     let next: Classification = {memberCount: null, reviewSha256: null};
     if (object(marker) && Object.keys(marker).sort().join('|') === 'member_count|review_sha256|version'
       && marker.version === 1 && hash(marker.review_sha256) && count(marker.member_count)
+      && !Object.hasOwn(entry, 'eye_bag_recovery_alias_review')
       && entry.targets === marker.member_count && JSON.stringify(entry.module_scope) === JSON.stringify(['lnx.people_graph.v1']))
       next = {memberCount: marker.member_count, reviewSha256: marker.review_sha256};
     const id = key(workspace!, entry.batch_id), previous = marked.get(id);

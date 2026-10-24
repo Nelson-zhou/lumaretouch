@@ -7,7 +7,7 @@ mod preset_alias;
 #[path = "preset_alias_history_fence.rs"]
 mod preset_alias_history;
 struct Pending { command: Value, composite_history: Option<Value> }
-impl Pending { fn composite(&self)->bool {preset_alias::applies(&self.command)||self.composite_history.is_some()} }
+impl Pending { fn composite(&self)->bool {preset_alias::applies(&self.command)||crate::effect_recovery_host::alias::applies(&self.command)||self.composite_history.is_some()} }
 fn pending()->&'static Mutex<HashMap<([u8;16],String),Pending>> {
     static STORE:OnceLock<Mutex<HashMap<([u8;16],String),Pending>>=OnceLock::new();
     STORE.get_or_init(||Mutex::new(HashMap::new()))
@@ -17,7 +17,7 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     if store.iter().any(|((owner_epoch,_),request)|*owner_epoch==epoch&&request.composite()) {
         if command["request_id"].as_str().is_some_and(|id|store.contains_key(&(epoch,id.to_owned())))
             || !preset_alias::safe_during_pending(command) {
-            return Err("混合预设影响的全部照片尚未确认；请查询原请求或重新打开工程，不能继续编辑、撤销、保存、导出或重发".into());
+            return Err("共享图层影响的全部照片尚未确认；请查询原请求或重新打开工程，不能继续编辑、撤销、保存、导出或重发".into());
         }
         // These reads/recovery escapes cannot create a second uncertain-edit
         // fence or release the original composite request.
@@ -31,9 +31,9 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     let name=command["cmd"].as_str().unwrap_or("");
     if name.ends_with("_state")||name.ends_with("_receipt")||name.ends_with("_capture")||name.ends_with("_preview")||name.ends_with("_sample")
         || matches!(command["action"].as_str(),Some("state"|"status"|"query"|"receipt"|"list"|"context"|"preview"|"preview_support"|"preview_recovery")) {return Ok(());}
-    let composite_history=preset_alias_history::marker(epoch,command)?;
+    let composite_history=preset_alias_history::markers(epoch,command)?;
     if composite_history.is_some()&&(command.get("request_id").is_none()||crate::batch_api::history::command(command).is_err()) {
-        return Err("混合预设批次历史必须保留原批次与关联请求身份".into());
+        return Err("多照片效果批次历史必须保留原批次与关联请求身份".into());
     }
     let Some(id)=command["request_id"].as_str() else {return Ok(());};
     let key=(epoch,id.to_owned());
@@ -47,6 +47,7 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     store.insert(key,Pending{command:command.clone(),composite_history}); Ok(())
 }
 pub(crate) fn composite_history_marker(epoch:[u8;16],command:&Value)->Result<Option<Value>,String>{preset_alias_history::marker(epoch,command)}
+pub(crate) fn shared_history_markers(epoch:[u8;16],command:&Value)->Result<Option<Value>,String>{preset_alias_history::markers(epoch,command)}
 pub(crate) fn observed(epoch:[u8;16], value:&Value){
     let Ok(mut store)=pending().lock() else{return;};
     preset_alias_history::observe_session(epoch,value);
@@ -64,8 +65,8 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
     // Receipt hosts can share an epoch but not command/action identity. A late
     // read-only preflight (including one whose result omits scope on rejection)
     // must never settle another host's later mutation with a reused request ID.
-    let preset_or_batch=matches!(command["cmd"].as_str(),Some("preset"|"batch"|"people"));
-    let preset_or_batch_receipt=matches!(event,"preset_result"|"batch_result"|"people_result");
+    let preset_or_batch=matches!(command["cmd"].as_str(),Some("preset"|"batch"|"people"|"effect_recovery"));
+    let preset_or_batch_receipt=matches!(event,"preset_result"|"batch_result"|"people_result"|"effect_recovery_result");
     if preset_or_batch||preset_or_batch_receipt {
         let expected=format!("{}_result",command["cmd"].as_str().unwrap_or(""));
         if event!=expected||value["action"]!=command["action"] {return;}
@@ -74,7 +75,12 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
         if preset_alias::matches_request(command,value) {preset_alias_history::observe_publication(epoch,value);}
         if !preset_alias::settled(command,value) {return;}
     }
-    if request.composite_history.as_ref().is_some_and(|marker|!preset_alias_history::settled(command,marker,value)) {return;}
+    if crate::effect_recovery_host::alias::applies(command) {
+        if !crate::effect_recovery_host::alias::matches_request(command, value) { return; }
+        preset_alias_history::observe_publication(epoch, value);
+        if value["outcome_unknown"] != false { return; }
+    }
+    if request.composite_history.as_ref().is_some_and(|markers|!preset_alias_history::settled_markers(command,markers,value)) {return;}
     if value["outcome_unknown"]==true||value["requires_readback"]==true||value["requires_reload"]==true{return;}
     let status=value["status"].as_str().or(value["phase"].as_str());
     if matches!(status,Some("pending"|"running"|"unknown"|"queued"|"writing"|"accepted")){return;}

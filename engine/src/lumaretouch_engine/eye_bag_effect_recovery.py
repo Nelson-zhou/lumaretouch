@@ -20,12 +20,15 @@ def reject_global(value):
         raise ValueError('Eye-bag v2 recovery requires its canonical face-local immutable asset, not a global row')
 
 
-def live(engine):
+def live(engine, *, _alias_admission=None):
     from . import people_recovery as PEOPLE
     from .eye_bag_preserve_host import _live
     source, graph, face, ref = PEOPLE.selection(engine, editing=True)
     target = {'scope': 'face', 'target_id': ref['face_instance_id'], 'face_ref': ref}
-    owner, row, current, proof, version = _live(engine, graph, target)
+    if _alias_admission is not None:
+        from .eye_bag_recovery_alias_review import validate_admission
+        validate_admission(engine, _alias_admission, graph, ref)
+    owner, row, current, proof, version = _live(engine, graph, target, strict=_alias_admission is None)
     if source['sha256'] != proof['asset_sha256']:
         raise ValueError('Eye-bag recovery source identity changed')
     return row, current, version
@@ -54,12 +57,12 @@ def _identity(engine, transaction):
     return {'before': before, 'after': after, 'path_stamp': list(file_stamp(row['path']))}, (row, current, version, context)
 
 
-def _display(rgb, proof):
+def _display(rgb, proof, *, _size=None):
     from PIL import Image
     import numpy as np
     width, height = proof['output_size']
     factor = min(1., MAX_EDGE / max(width, height))
-    size = (max(1, round(width * factor)), max(1, round(height * factor)))
+    size = (max(1, round(width * factor)), max(1, round(height * factor))) if _size is None else _size
     channels = []
     for channel in range(3):
         with Image.fromarray(rgb[:, :, channel].astype(np.float32)) as plane:

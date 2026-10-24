@@ -232,3 +232,35 @@ These are authored verification cases, not executed results or photo acceptance.
 - Refuse changed/unavailable/dormant membership or modified source/context;
   preserve old v1 preset and direct-alias behavior and the distinct history
   marker boundaries. These cases are not runtime acceptance claims.
+
+## Effect-recovery shared-source aliases (AUTHORED / UNRUN)
+
+- Review two through sixteen genuine live shared-source aliases with different
+  crops, repairs and colour recipes. Confirm the candidate uses its staged
+  immutable recovery vector, while every sibling keeps its own document state.
+- Paint, erase, clear, enable and delete recovery strokes through the verified
+  source-coordinate capture. Confirm only the selected face's eye-bag v2
+  contribution changes; ridge support, scalars, associations, other face effects
+  and other recovery targets remain unchanged.
+- Load/hash/decode every member's immutable image pair and explicitly acknowledge
+  all members. Missing/reordered/expired/wrong-source images or acknowledgments
+  must not authorize publication. Metadata alone is not photographic review.
+- Verify the controller retains prepared authority through dispatcher housekeeping
+  but explicit cancellation destroys unpublished authority. A client protocol
+  flag or guessed alias marker cannot skip normal fencing.
+- Change membership, effective source, repair stack, document recipe, graph,
+  face evidence or support bytes during rendering and before publication. Refuse
+  stale evidence, including dormant and unavailable affected documents.
+- Inject failures before claim, during immutable-bank retention, member advance,
+  graph publication, frame emission and ledger persistence. Verify no duplicate
+  ordinary history entry; unknown writes remain unknown and mutation-fenced.
+- Undo/redo the complete group from a member or unrelated active document, then
+  save/reopen/package with original and derived sources. Exact member dependencies
+  and both old/new immutable vectors must survive; no single-member restore and
+  no mixed-preset document-state rewrite are allowed.
+- Preserve old single-photo recovery, direct ridge alias and mixed-preset alias
+  wire contracts. Repeated receipt queries cannot invent success or clear an
+  uncertain edit; only a definite result or verified reopening settles the fence.
+- Test all supported source bit depths through the canonical decoder/export path
+  without claiming RGB8 review images preserve export precision. Alpha/HDR and
+  automatic anatomical segmentation remain outside acceptance.

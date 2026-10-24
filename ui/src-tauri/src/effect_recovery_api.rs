@@ -29,10 +29,20 @@ fn mutation(value: &Value) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn effect_recovery_preview(state: State<'_, Arc<AppState>>, action: String, preview_id: String,
-    capture_id: String, ticket: String, mutation: Option<Value>) -> Result<Value, String> {
+    capture_id: String, ticket: String, mutation: Option<Value>, protocol: Option<u64>, ack: Option<Value>,
+    request_id: Option<String>, review_sha256: Option<String>, member_document_id: Option<String>,
+    member_revision: Option<String>, side: Option<String>, sha256: Option<String>) -> Result<Value, String> {
     id16(&preview_id)?; id16(&capture_id)?; token(&ticket)?;
-    if !matches!(action.as_str(), "preview"|"presented"|"cancel") || (action == "preview") != mutation.is_some() {
+    if !matches!(action.as_str(), "preview"|"presented"|"cancel"|"image") || (action == "preview") != mutation.is_some() {
         return Err("invalid recovery preview arguments".into());
+    }
+    let image_fields = [request_id.as_ref(), review_sha256.as_ref(), member_document_id.as_ref(), member_revision.as_ref(), side.as_ref(), sha256.as_ref()];
+    if (action == "image" && (protocol != Some(2) || ack.is_some() || image_fields.iter().any(|field| field.is_none())))
+        || (action != "image" && image_fields.iter().any(|field| field.is_some()))
+        || (action == "presented" && (protocol == Some(2)) != ack.is_some())
+        || (action != "presented" && ack.is_some())
+        || (protocol.is_some() && (protocol != Some(2) || !matches!(action.as_str(), "presented" | "image"))) {
+        return Err("Recovery alias image and presentation arguments must be exact".into());
     }
     if state.ready_caps.lock().map_err(|_| "capability lock poisoned")?["effect_recovery_protocol"] != 1 {
         return Err("current engine does not support reviewed effect recovery".into());
@@ -47,29 +57,40 @@ pub(crate) fn effect_recovery_preview(state: State<'_, Arc<AppState>>, action: S
     if action == "preview" {
         let selected = mutation.as_ref().ok_or("missing recovery mutation")?;
         host.begin(handle.epoch(), &preview_id, &capture_id, &ticket, &document, &selected["target"])?;
+        host.bind_capture(&proof, selected["action"] == "view");
     }
-    else if !host.matches(handle.epoch(), &preview_id, &capture_id, &ticket, &document) {
+    else if !host.matches(handle.epoch(), &preview_id, &capture_id, &ticket, &document) || !host.matches_capture(&proof) {
         return Err("recovery preview expired".into());
     }
-    if action == "presented" { host.allow_presented()?; }
+    if action == "presented" {
+        if let Some(ack) = ack.as_ref() { host.allow_presented_aliases(ack)?; } else { host.allow_presented()?; }
+    }
     let mut command = json!({"cmd":"effect_recovery_preview","action":action,"preview_id":preview_id,
         "document_id":document,"capture_id":capture_id,"ticket":ticket,
         "generation":proof.identity.generation.to_string(),"recipe_document_id":proof.recipe_document_id,
         "recipe_revision":proof.recipe_revision});
     if let Some(mutation) = mutation { command["mutation"] = mutation; }
+    if let Some(protocol) = protocol { command["protocol"] = json!(protocol); }
+    if let Some(ack) = ack { command["ack"] = ack; }
+    for (key, value) in [("request_id", request_id), ("review_sha256", review_sha256), ("member_document_id", member_document_id),
+        ("member_revision", member_revision), ("side", side), ("sha256", sha256)] {
+        if let Some(value) = value { command[key] = json!(value); }
+    }
+    if action == "image" { host.begin_image(&command)?; }
     if let Err(error) = handle.send(command) { host.invalidate(); return Err(error); }
     Ok(json!({"requested":true}))
 }
 
 #[tauri::command]
-pub(crate) fn effect_recovery_preview_status(state: State<'_, Arc<AppState>>, preview_id: String) -> Result<Value, String> {
+pub(crate) fn effect_recovery_preview_status(state: State<'_, Arc<AppState>>, preview_id: String, request_id: Option<String>) -> Result<Value, String> {
     id16(&preview_id)?;
     let handle = state.engine.lock().map_err(|_| "engine lock poisoned")?.clone().ok_or("engine is not running")?;
     let capture = state.source_patch_capture.lock().map_err(|_| "capture lock poisoned")?;
     let mut host = state.recovery_preview.lock().map_err(|_| "recovery preview lock poisoned")?;
-    if host.bound.as_ref().is_some_and(|b| capture.eligible_proof(handle.epoch(), &b.1, &b.2).is_err()) {
+    if host.bound.as_ref().is_some_and(|b| capture.eligible_proof(handle.epoch(), &b.1, &b.2).map_or(true, |proof| !host.matches_capture(&proof))) {
         host.invalidate();
     }
+    if let Some(request) = request_id { self::request_id(&request)?; return Ok(host.image_status(handle.epoch(), &preview_id, &request)); }
     Ok(host.status(handle.epoch(), &preview_id))
 }
 
@@ -84,7 +105,9 @@ pub(crate) fn enqueue(state: &AppState, handle: &EngineHandle, mut command: Valu
         command["ticket"].as_str().ok_or("recovery ticket missing")?,
         command["preview_id"].as_str().ok_or("recovery preview missing")?)?;
     let mut host = state.effect_recovery.lock().map_err(|_| "recovery receipt lock poisoned")?;
-    host.begin_bound(handle.epoch(), &request, "apply", Some(&bound))?;
+    if crate::effect_recovery_host::alias::binding(&command)?.is_some() {
+        host.begin_bound_command(handle.epoch(), &command, Some(&bound))?;
+    } else { host.begin_bound(handle.epoch(), &request, "apply", Some(&bound))?; }
     let sent = handle.send(command);
     if let Err(error) = &sent { host.failed(&request, error); }
     sent
@@ -92,8 +115,11 @@ pub(crate) fn enqueue(state: &AppState, handle: &EngineHandle, mut command: Valu
 
 #[tauri::command]
 pub(crate) fn effect_recovery(state: State<'_, Arc<AppState>>, request_id: String, preview_id: String,
-    capture_id: String, ticket: String) -> Result<Value, String> {
+    capture_id: String, ticket: String, protocol: Option<u64>, ack: Option<Value>) -> Result<Value, String> {
     self::request_id(&request_id)?; id16(&preview_id)?; id16(&capture_id)?; token(&ticket)?;
+    if (protocol == Some(2)) != ack.is_some() || protocol.is_some_and(|value| value != 2) {
+        return Err("Shared recovery application requires protocol 2 and its exact acknowledgment".into());
+    }
     if state.ready_caps.lock().map_err(|_| "capability lock poisoned")?["effect_recovery_protocol"] != 1 {
         return Err("current engine does not support reviewed effect recovery".into());
     }
@@ -103,16 +129,19 @@ pub(crate) fn effect_recovery(state: State<'_, Arc<AppState>>, request_id: Strin
         let proof = capture.eligible_proof(handle.epoch(), &capture_id, &ticket)?;
         if proof.descriptor["domain"] != "source-input" { return Err("recovery requires source input".into()); }
         let mut preview = state.recovery_preview.lock().map_err(|_| "recovery preview lock poisoned")?;
-        if !preview.matches(handle.epoch(), &preview_id, &capture_id, &ticket, &proof.identity.document.to_string()) {
+        if !preview.matches(handle.epoch(), &preview_id, &capture_id, &ticket, &proof.identity.document.to_string()) || !preview.matches_capture(&proof) {
             return Err("rendered recovery preview identity changed".into());
         }
-        preview.redeem()?;
+        if let Some(ack) = ack.as_ref() { preview.redeem_aliases(ack)?; } else { preview.redeem()?; }
         capture.redeem(handle.epoch(), &capture_id, &ticket)?
     };
-    state.send_to_engine(json!({"cmd":"effect_recovery","action":"apply","request_id":request_id,
+    let mut command = json!({"cmd":"effect_recovery","action":"apply","request_id":request_id,
         "preview_id":preview_id,"host_epoch":hex(proof.identity.epoch),"capture_id":capture_id,"ticket":ticket,
         "document_id":proof.identity.document.to_string(),"generation":proof.identity.generation.to_string(),
-        "recipe_document_id":proof.recipe_document_id,"recipe_revision":proof.recipe_revision}))?;
+        "recipe_document_id":proof.recipe_document_id,"recipe_revision":proof.recipe_revision});
+    if let Some(protocol) = protocol { command["protocol"] = json!(protocol); }
+    if let Some(ack) = ack { command["ack"] = ack; }
+    state.send_to_engine(command)?;
     Ok(json!({"requested":true}))
 }
 

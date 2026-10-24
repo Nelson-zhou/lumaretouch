@@ -26,6 +26,7 @@ export function observeFaceStyleAliasHistory(sync: unknown, observation?: number
     if (object(marker) && Object.keys(marker).sort().join('|') === 'member_count|review_sha256|version'
       && marker.version === 1 && hash(marker.review_sha256) && typeof marker.member_count === 'number'
       && Number.isSafeInteger(marker.member_count) && marker.member_count >= 2 && marker.member_count <= 16
+      && !Object.hasOwn(entry, 'eye_bag_recovery_alias_review')
       && entry.targets === marker.member_count && JSON.stringify(entry.module_scope) === JSON.stringify(['lnx.people_graph.v1']))
       classification = {memberCount: marker.member_count, reviewSha256: marker.review_sha256};
     // A malformed marker can only tighten recovery, never silently downgrade to generic history.

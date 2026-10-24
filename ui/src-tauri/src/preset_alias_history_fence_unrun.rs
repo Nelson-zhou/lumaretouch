@@ -103,3 +103,48 @@ fn host(epoch: [u8;16]) -> crate::batch_host::BatchHost {
     for _ in 0..3 { observed(epoch, &malformed); assert!(marker(epoch, &c).is_err()); }
     observed(epoch, &opened()); assert!(marker(epoch, &c).unwrap().is_none());
 }
+
+fn recovery_summary() -> Value {
+    let mut value = summary("recovery-workspace");
+    let row = &mut value["sync"]["batches"][0]; row.as_object_mut().unwrap().remove(MARKER);
+    row[RECOVERY] = json!({"version":1,"review_sha256":"f".repeat(64),"member_count":2}); value
+}
+#[test] fn recovered_alias_history_binds_its_own_marker_without_preset_authority() {
+    let epoch = epoch(20); let c = command(); let summary = recovery_summary(); observed(epoch, &summary);
+    assert_eq!(marker(epoch, &c).unwrap(), None);
+    assert_eq!(markers(epoch, &c).unwrap(), Some(json!({(RECOVERY):summary["sync"]["batches"][0][RECOVERY]})));
+    let mut h = host(epoch); h.begin_command(epoch, &c).unwrap(); issued(epoch, &c).unwrap();
+    let mut v = result(&c); v.as_object_mut().unwrap().remove(MARKER);
+    v[RECOVERY] = summary["sync"]["batches"][0][RECOVERY].clone();
+    let mut missing = v.clone(); missing.as_object_mut().unwrap().remove(RECOVERY); h.receive(epoch, &missing);
+    let frozen = h.status("history-original"); assert_eq!(frozen["result"]["outcome_unknown"], true);
+    assert_eq!(frozen["result"][RECOVERY], v[RECOVERY]);
+    h.receive(epoch, &v); assert_eq!(h.status("history-original"), frozen);
+    assert!(issued(epoch, &json!({"cmd":"exposure","action":"status","exposure":0.5})).is_err());
+    observed(epoch, &json!({"event":"project_opened"})); assert!(proof(epoch).is_err());
+    observed(epoch, &opened()); assert!(proof(epoch).is_ok());
+}
+#[test] fn recovery_marker_cannot_be_removed_or_relabelled_after_workspace_read() {
+    let epoch = epoch(21); let c = command(); let source = recovery_summary(); observed(epoch, &source);
+    let mut downgraded = source.clone(); downgraded["sync"]["batches"][0].as_object_mut().unwrap().remove(RECOVERY);
+    observed(epoch, &downgraded); assert!(markers(epoch, &c).is_err()); observed(epoch, &opened());
+    observed(epoch, &source); let mut mixed = source; mixed["sync"]["batches"][0][MARKER] = marked();
+    observed(epoch, &mixed); assert!(markers(epoch, &c).is_err()); observed(epoch, &opened());
+}
+
+#[test] fn recovery_history_compensation_settles_only_with_exact_empty_restore_proof() {
+    let epoch = epoch(22); let c = command(); let summary = recovery_summary(); observed(epoch, &summary);
+    let mut host = host(epoch); host.begin_command(epoch, &c).unwrap(); issued(epoch, &c).unwrap();
+    let mut compensated = result(&c); compensated.as_object_mut().unwrap().remove(MARKER);
+    compensated[RECOVERY] = summary["sync"]["batches"][0][RECOVERY].clone();
+    compensated["success"] = json!(false); compensated["no_write"] = json!(false); compensated["rolled_back"] = json!(true);
+    compensated["restored"] = json!([]); compensated["error"] = json!("Frame failed; graph and vector bank restored, revision fences advanced");
+    assert!(crate::batch_api::history::receipt(&compensated)); host.receive(epoch, &compensated);
+    assert_eq!(host.status("history-original")["result"], compensated); assert!(proof(epoch).is_ok());
+    for (key, bad) in [("restored",json!([0])),("module_scope",json!(["lnx.eye_bags.v2"])),("rolled_back",json!(false)),("no_write",json!(true))] {
+        let mut invalid = compensated.clone(); invalid[key] = bad; assert!(!crate::batch_api::history::receipt(&invalid), "{key}");
+    }
+    let mut unknown = compensated; unknown["outcome_unknown"] = json!(true); unknown["rolled_back"] = json!(false);
+    assert!(!crate::batch_api::history::receipt(&unknown)); unknown.as_object_mut().unwrap().remove("restored");
+    assert!(crate::batch_api::history::receipt(&unknown)); observed(epoch, &opened());
+}

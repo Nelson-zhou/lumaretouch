@@ -23,9 +23,14 @@ class RecoveryController:
                   'preview_id': identity(p.get('preview_id'), 32),
                   **{k: identity(p.get(k), 128) for k in PROOF_KEYS},
                   'success': False, 'outcome_unknown': False, 'requires_reload': False}
+        if p.get('protocol') == 2:
+            result.update(protocol=2, ack=deepcopy(p.get('ack')), no_write=True)
         self.pending = {'result': result, 'digest': None, 'started': False}
         try:
-            if set(p) != KEYS or p['cmd'] != 'effect_recovery' or p['action'] != 'apply':
+            if 'protocol' in p:
+                from .eye_bag_recovery_alias_controller import check_apply_request
+                check_apply_request(p)
+            elif set(p) != KEYS or p['cmd'] != 'effect_recovery' or p['action'] != 'apply':
                 raise ValueError('恢复提交命令字段无效')
             preview_id(p['preview_id'])
             if result['request_id'] is None or any(result[k] is None for k in PROOF_KEYS):
@@ -43,7 +48,13 @@ class RecoveryController:
             preview = preview_controller(self.engine, self.emit)
             value, stage = preview.prepare(p)
             self.pending.update(value=value, stage=stage)
-            preview.cancel()
+            alias_entry = (getattr(stage, 'people_recovery', None) or {}).get('alias_entry')
+            if alias_entry is not None:
+                self.pending.update(recovery_alias=alias_entry, request=deepcopy(p))
+                from .eye_bag_recovery_alias_controller import prepared
+                prepared(self.engine, self.pending)
+            else:
+                preview.cancel()
             self.engine._source_patch_controller().capture.invalidate()
             return True
         except Exception as error:
@@ -54,6 +65,10 @@ class RecoveryController:
         pending = self.pending
         if pending is None or 'value' not in pending:
             raise ValueError('恢复提交没有预先验证的效果预览')
+        if 'recovery_alias' in pending:
+            from .eye_bag_recovery_alias_controller import apply
+            apply(self.engine, pending)
+            return
         e, pipe = self.engine, self.engine._vram
         previous = S.check(getattr(e, '_effect_recovery', None))
         old_stage, old_key = pipe.effect_recovery, getattr(pipe, '_effect_recovery_key', None)
@@ -103,17 +118,33 @@ class RecoveryController:
         result = pending['result']
         if dispatch_error:
             result.update(success=False, error=error_text(dispatch_error), outcome_unknown=pending['started'])
+            if 'recovery_alias' in pending and pending['started']:
+                result['requires_reload'] = True
         if result['success'] and not result.get('replayed'):
             try:
                 state = self.engine.doc_state()
                 if state['document_id'] != result['document_id']:
                     raise ValueError('恢复提交后文档发生变化')
                 result['history'] = {k: state['history'][k] for k in ('undo_steps', 'redo_steps')}
-                if 'frame' in pending:
+                if 'recovery_alias' in pending:
+                    result['doc_state'] = deepcopy(state)
+                if pending.get('frame') is not None:
                     pending['frame']['doc_state'] = state
                     self.emit(pending['frame'])
             except Exception as error:
                 result.update(success=False, outcome_unknown=True, error=error_text(error))
+                if 'recovery_alias' in pending:
+                    result['requires_reload'] = True
+        if 'recovery_alias' in pending:
+            from .eye_bag_recovery_alias_controller import finish
+            # Expire read authority before best-effort file cleanup. A cache
+            # cleanup failure cannot erase or replace the original terminal
+            # publication receipt, nor leave an unclaimed review reusable.
+            pending['recovery_alias']['cancelled'] = True
+            try:
+                finish(self.engine, pending)
+            except Exception as error:
+                pending['cleanup_error'] = error_text(error)
         rid, digest = result.get('request_id'), pending['digest']
         if rid and digest and rid not in self.cache:
             self.cache[rid] = (digest, deepcopy(result))

@@ -115,6 +115,9 @@ class RecoveryPreview:
         self.record = None
 
     def cancel(self):
+        if self.record is not None and 'eye_bag_alias_entry' in self.record:
+            from .eye_bag_recovery_alias_review import discard
+            discard(self.engine, self.record['eye_bag_alias_entry'])
         self.record = None
 
     def _matching(self, p):
@@ -133,7 +136,15 @@ class RecoveryPreview:
             fields = {'cmd', 'action', 'preview_id', *PROOF_KEYS}
             if action == 'preview':
                 fields.add('mutation')
-            if p.get('cmd') != 'effect_recovery_preview' or action not in ('preview', 'presented', 'cancel') or set(p) != fields:
+            version_two = 'protocol' in p or action == 'image'
+            if version_two:
+                from .eye_bag_recovery_alias_controller import check_preview_request
+                check_preview_request(p)
+                event['protocol'] = 2
+                if action == 'image':
+                    event.update({key: p[key] for key in ('request_id', 'review_sha256',
+                        'member_document_id', 'member_revision', 'side', 'sha256')})
+            elif p.get('cmd') != 'effect_recovery_preview' or action not in ('preview', 'presented', 'cancel') or set(p) != fields:
                 raise ValueError('恢复预览命令字段无效')
             ident = preview_id(p['preview_id'])
             capture = self._matching(p)
@@ -160,9 +171,25 @@ class RecoveryPreview:
                     sync_id(self.engine,strict=True)
                 global_proof = global_context(self.engine, mutation['target']) if mutation['target'] in GLOBAL_TARGETS else None
                 stage = R.prepare_stage(self.engine, value)
-                stage.people_recovery = PEOPLE.prepare(self.engine, value, mutation['target'])
-                full_review = None
+                alias_admission = None
                 if mutation['target'] == 'eye_bag_preserve':
+                    from .eye_bag_recovery_alias_review import admission
+                    alias_admission = admission(self.engine)
+                stage.people_recovery = PEOPLE.prepare(self.engine, value, mutation['target'],
+                    _eye_bag_alias=alias_admission)
+                full_review = None
+                alias_entry = None
+                if alias_admission is not None:
+                    from .eye_bag_recovery_alias_review import preview as alias_preview
+                    result, alias_entry = alias_preview(self.engine, stage.people_recovery,
+                        alias_admission, viewing=viewing)
+                    visual = result['review']['visual']
+                    if visual['document_id'] != proof['recipe_document_id'] or visual['revision'] != proof['recipe_revision']:
+                        from .eye_bag_recovery_alias_review import discard
+                        discard(self.engine, alias_entry)
+                        raise ValueError('恢复共享预览与源图捕获的确切文档版本不一致')
+                    event['protocol'] = 2
+                elif mutation['target'] == 'eye_bag_preserve':
                     from .eye_bag_effect_recovery import render as render_full
                     result, full_review = render_full(self.engine, stage.people_recovery)
                 else:
@@ -175,6 +202,7 @@ class RecoveryPreview:
                                'global_context': deepcopy(global_proof),
                                'committable': not viewing}
                 if full_review is not None: candidate_record['eye_bag_full_review'] = full_review
+                if alias_entry is not None: candidate_record['eye_bag_alias_entry'] = alias_entry
                 assert_review(self.engine, candidate_record)
                 self.record = candidate_record
                 event.update(state='ready', success=True, result=result, target=p['mutation']['target'])
@@ -182,18 +210,37 @@ class RecoveryPreview:
                 record = self.record
                 if record is None or record['id'] != ident or record['proof'] != proof:
                     raise ValueError('恢复效果预览已失效')
+                alias_entry = record.get('eye_bag_alias_entry')
+                if alias_entry is not None:
+                    event['protocol'] = 2
+                elif version_two:
+                    raise ValueError('版本 2 恢复必须来自当前完整共享眼袋预览')
                 if action == 'cancel':
                     self.cancel()
                     event.update(state='cancelled', success=True)
+                elif action == 'image':
+                    from .eye_bag_recovery_alias_review import image as alias_image
+                    event.update(state='image', success=True, image=alias_image(self.engine, alias_entry, p))
                 else:
                     from .creative_derived_recovery import assert_review
                     assert_review(self.engine, record)
-                    if record['target'] == 'eye_bag_preserve':
+                    if alias_entry is not None:
+                        if not version_two:
+                            raise ValueError('共享眼袋恢复必须明确确认每张照片的精确图像')
+                        from .eye_bag_recovery_alias_review import confirm
+                        confirm(self.engine, alias_entry, p['ack'])
+                        event['review_sha256'] = alias_entry['review']['review_sha256']
+                    elif record['target'] == 'eye_bag_preserve':
                         from .eye_bag_effect_recovery import verify
                         verify(self.engine, record.get('eye_bag_full_review'))
                     record['presented'] = True
                     event.update(state='presented', success=True)
         except Exception as error:
+            # A render may finish before capture verification fails. Release
+            # those private pages even when no public record was installed.
+            if 'alias_entry' in locals() and alias_entry is not None and self.record is None:
+                from .eye_bag_recovery_alias_review import discard
+                discard(self.engine, alias_entry)
             self.cancel()
             event['error'] = str(error)[:2000]
         self.emit(event)
@@ -207,6 +254,14 @@ class RecoveryPreview:
         from .creative_derived_recovery import assert_review
         assert_review(self.engine, record)
         value = S.check(record['value'])
+        alias_entry = record.get('eye_bag_alias_entry')
+        if alias_entry is not None:
+            from .eye_bag_recovery_alias_controller import check_apply_request
+            from .eye_bag_recovery_alias_review import confirm
+            check_apply_request(p)
+            confirm(self.engine, alias_entry, p['ack'])
+        elif 'protocol' in p or 'ack' in p:
+            raise ValueError('共享恢复确认不能替代单张照片恢复协议')
         stage = R.prepare_stage(self.engine, value)
         if record['target'] == 'id_background':
             stage.id_recovery_context=deepcopy(record['global_context']['consumer'])
@@ -216,10 +271,14 @@ class RecoveryPreview:
             if record['people_context'] is None:
                 raise ValueError('人物恢复预览缺少确切人物归属，请重新查看本笔')
             stage.people_recovery = PEOPLE.prepare(self.engine, value, record['target'],
-                                                    expected=record['people_context'])
+                expected=record['people_context'],
+                _eye_bag_alias=None if alias_entry is None else alias_entry['admission'])
         elif record['people_context'] is not None:
             raise ValueError('人物恢复处理路径在预览后改变')
-        if record['target'] == 'eye_bag_preserve':
+        if alias_entry is not None:
+            confirm(self.engine, alias_entry, p['ack'], stage.people_recovery)
+            stage.people_recovery['alias_entry'] = alias_entry
+        elif record['target'] == 'eye_bag_preserve':
             from .eye_bag_effect_recovery import verify
             verify(self.engine, record.get('eye_bag_full_review'), stage.people_recovery)
             stage.people_recovery['full_review'] = deepcopy(record['eye_bag_full_review'])

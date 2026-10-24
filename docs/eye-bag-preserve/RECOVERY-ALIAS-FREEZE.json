@@ -1,0 +1,340 @@
+{
+  "baseline": "85812e088a22f96b90b012d0564ae8efa1f8bf83",
+  "status": "FROZEN_SOURCE_ONLY_EYE_BAG_EFFECT_RECOVERY_ALIAS_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32464-C-e5fac5fdcf",
+    "LNX-REF-PC-32558-C-d5122cf2f7"
+  ],
+  "scope": "Source-owned eye-bag effect-recovery aliases: selected face recovery vector only, every affected member own full recipe/crop/repair render and image acknowledgment, recovery-only scoped atomic ledger and canonical immutable-vector history. No document-recipe writes, donor vectors or new algorithm.",
+  "files": [
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "521524a62481ca9fc913b670207987e1cefc718a5362aaf3ee1df848bbbf83f1",
+      "bytes": 473631
+    },
+    {
+      "path": "docs/eye-bag-preserve/ACCEPTANCE-UNRUN.md",
+      "sha256": "d5e3e1da8ddcd72b815e89d84f0da33e44a7109bd3afcd4b4fdaad50dfbd9161",
+      "bytes": 18198
+    },
+    {
+      "path": "docs/eye-bag-preserve/EFFECT-RECOVERY.md",
+      "sha256": "ee7ce746a36e3ab41804e93aeacb4acba793a670578e5127ecf0079ce2f809fe",
+      "bytes": 4224
+    },
+    {
+      "path": "docs/eye-bag-preserve/INTEGRATION-AND-RESIDUALS.md",
+      "sha256": "1fa4b2763bb612be59d8df583a1d4d4b1307b2bc8d662929cb7a747bdb8cc946",
+      "bytes": 6671
+    },
+    {
+      "path": "docs/eye-bag-preserve/RECOVERY-ALIAS.md",
+      "sha256": "cb877f3cfe26a92327c6102b1988ad7bdbe8700ce8216dc51d990c483daa0aae",
+      "bytes": 6004
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "50e6f84734cf85cfa829b450eb9036fde40c1b08e159b7b06639ee557d6084ac",
+      "bytes": 64090
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_recovery.py",
+      "sha256": "2e37880bff17004aa6f7ea32741a10aab4a1a1d24aee13cbd69ce248ce10a738",
+      "bytes": 12381
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_controller.py",
+      "sha256": "a6c8a4edd974dd7b9a3c5a216904c14981f761c1383ee02876ada459ed36b752",
+      "bytes": 8236
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_dispatch.py",
+      "sha256": "d06bc56374615136f7a9a3657d69fdfce8d1c92f372ca79f290dafa841041faa",
+      "bytes": 1670
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_preview.py",
+      "sha256": "f071a3f319cfa8046db40720f13b17cc39e8cb31c6fd7f567ccac9cd88c31bc1",
+      "bytes": 15953
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_effect_recovery.py",
+      "sha256": "b571d067965edc40c4d47c26114c80a75ad3a40cbefd0022232604799591134f",
+      "bytes": 6026
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_recovery_alias_controller.py",
+      "sha256": "55496f1af613ea9c9a926de143c8199ba78544b5a708f318797b76cf97619664",
+      "bytes": 7937
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_recovery_alias_derived.py",
+      "sha256": "73535327af63b3e688b82082864144c00eaf3f0d37d995566a2b57c44cefe7c6",
+      "bytes": 1250
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_recovery_alias_history.py",
+      "sha256": "535030dbee3b97d1f25fe95805597498d33a67a4cbc99ceab644d9deb125db99",
+      "bytes": 18406
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_recovery_alias_review.py",
+      "sha256": "640e31e512040df56c29a8d68923bee677ee4a59aa1543b187a577371f640b71",
+      "bytes": 17491
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_recovery_alias_transaction.py",
+      "sha256": "5df91a2e37f5b9fa461f9f2d8e31e46e403ee11000a857ded9965b6e706d69b1",
+      "bytes": 13354
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_batch_ledger.py",
+      "sha256": "f18e5c836b746cf096569d97041052b658c338aab9fcefd541ad182da9591299",
+      "bytes": 17698
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_history_persistence.py",
+      "sha256": "6e7f6da3bcc81d420b28413ed73f74c8d08b3f0f9787b34435273166bd4035bf",
+      "bytes": 12687
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_recovery.py",
+      "sha256": "56c03d52550aa863f59347aee01a3a3c53004f5401b3846ab81bb35612b10b66",
+      "bytes": 10821
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "909bd0a0c8b2610faab86a0683949f97636ef9c5d0a35888718e58f44668fb0b",
+      "bytes": 470499
+    },
+    {
+      "path": "engine/tests/test_eye_bag_recovery_alias_derived_unrun.py",
+      "sha256": "d8bf0e546a996207869d27f31390b429ed20778289a871982015520bab28d267",
+      "bytes": 3237
+    },
+    {
+      "path": "engine/tests/test_eye_bag_recovery_alias_dispatch_unrun.py",
+      "sha256": "4d11122e7f600f724e10e81e7765d17e7a7124095cc2cb963e8fc6f892b54ccf",
+      "bytes": 3282
+    },
+    {
+      "path": "engine/tests/test_eye_bag_recovery_alias_engine_unrun.py",
+      "sha256": "0a868467e8ec95efb7b1a30bc5ca0116a928ea60cad8b69dfd74eb4445ee411e",
+      "bytes": 15107
+    },
+    {
+      "path": "engine/tests/test_eye_bag_recovery_alias_history_unrun.py",
+      "sha256": "bd86134ac7155b86479f36563a0275406c837e3fa2f1afa77ca092aec49320b1",
+      "bytes": 20016
+    },
+    {
+      "path": "ui/src-tauri/src/batch_history_protocol.rs",
+      "sha256": "bf804860332daec8d3f8e85527dafcf15385ee1e33c5bfd8bbacacf17efbe4a3",
+      "bytes": 5572
+    },
+    {
+      "path": "ui/src-tauri/src/batch_history_protocol_tests.rs",
+      "sha256": "efb50ccedaa9ae85a090182ee3fef50d80e2998d7c2a453908456490607bc3d9",
+      "bytes": 11519
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_alias_preview.rs",
+      "sha256": "94d0850feb0de986e8d5746ff4279e9598eeb8ed813cf8662e4d3866168fc6e9",
+      "bytes": 6750
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_alias_protocol.rs",
+      "sha256": "039729dd364f92e0b00454d0601cd010d39f162549366e867531943e5508a5f6",
+      "bytes": 10340
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_alias_unrun.rs",
+      "sha256": "0e28c5bff84a1caecfe31829e6c3b16738aa1e15ddb0c6ea9a35ed5e9bf41e8b",
+      "bytes": 18047
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_api.rs",
+      "sha256": "adf160cdb960d1170a4a8dbccc13c7c45064b7588735b62d40f1681816f8b570",
+      "bytes": 11155
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_host.rs",
+      "sha256": "336940db85336c6feeaaaa9ec356367964da139599a2cba546b4212006921342",
+      "bytes": 19805
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "dc236532b016b80a026c9715cd28d3a7b37356e3aba89d1e3f443f0ec36ce2bd",
+      "bytes": 40763
+    },
+    {
+      "path": "ui/src-tauri/src/preset_alias_history_fence.rs",
+      "sha256": "fc6ca93b700b2352a420e69a3aa07d9fdf3c4cc6817f1f1d5b18337142a43771",
+      "bytes": 7526
+    },
+    {
+      "path": "ui/src-tauri/src/preset_alias_history_fence_unrun.rs",
+      "sha256": "0dcbe46e8f9d5ed25df0b57966d2cc47a2ec817a856dd8a397d531490e2e74f4",
+      "bytes": 11269
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "sha256": "43dcb47d724f5d48ad162bfa1ab449429db63ebfe814da7749c9212e44d123fd",
+      "bytes": 8861
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "977b60bec7831e4038a6b1a056a35bf20ad753365bcd807883a29aceb14a6979",
+      "bytes": 33829
+    },
+    {
+      "path": "ui/src/batch/batchWorkflow.ts",
+      "sha256": "fdb265806c2de1d8e9ae488683cc37c813341d1ae53d880e66fb44b5b78637b4",
+      "bytes": 74613
+    },
+    {
+      "path": "ui/src/batch/useBatchWorkflow.ts",
+      "sha256": "b0427339ecc0f5694e6c461d4b41886830223eec4d4c64eeca7c2e3f4b6ec22e",
+      "bytes": 2933
+    },
+    {
+      "path": "ui/src/effectRecovery/ALIAS_ACCEPTANCE_UNRUN.md",
+      "sha256": "d8307c332614a396d199fe9d27755a3c690ffa043515d22cd8980e2e00d0edad",
+      "bytes": 3179
+    },
+    {
+      "path": "ui/src/effectRecovery/EffectRecoveryPanel.tsx",
+      "sha256": "1ee6e0017ecbfb075389f97c4e4c91cc96fac340aac6f43a14a2ddb76244f6bc",
+      "bytes": 9696
+    },
+    {
+      "path": "ui/src/effectRecovery/RecoveryAliasHistory.tsx",
+      "sha256": "3ff30aac5e694e30cf1e4bcac926837fc1832eb6b3e838180eba189a7ff88b71",
+      "bytes": 3314
+    },
+    {
+      "path": "ui/src/effectRecovery/RecoveryAliasReview.tsx",
+      "sha256": "2c8395667fb8bd8a359c1f348984cca87cab1967efae6f74fcb1f779e6dae987",
+      "bytes": 7354
+    },
+    {
+      "path": "ui/src/effectRecovery/aliasHistory.unrun.test.ts",
+      "sha256": "c54f43cd64170b185a375dc47e0eed4e6c4b3bd88bba5698a32e3ec0fe21719b",
+      "bytes": 3424
+    },
+    {
+      "path": "ui/src/effectRecovery/aliasHistoryRegistry.ts",
+      "sha256": "1825eb5123909b5fc6fa2b9748000e2bc6528207f5ae5687e72550bc8b5b11a4",
+      "bytes": 4739
+    },
+    {
+      "path": "ui/src/effectRecovery/aliasModel.ts",
+      "sha256": "2b847cd3fc01363c586a1d938e6ed26b8a1d93cbf5cd602a61f24867527732e9",
+      "bytes": 6138
+    },
+    {
+      "path": "ui/src/effectRecovery/aliasTransport.ts",
+      "sha256": "04dc79281c83acf49048154b11a4e4cb85050648336d4d2daae7f4f99c71adfd",
+      "bytes": 2959
+    },
+    {
+      "path": "ui/src/effectRecovery/aliasWorkflow.unrun.test.ts",
+      "sha256": "a287e3c5877c2bc4a3b4d2ce0a853c70217c2fbafa18534eb1b65f81d02631a6",
+      "bytes": 8250
+    },
+    {
+      "path": "ui/src/effectRecovery/effectRecovery.css",
+      "sha256": "1066def7f1caa9b2517a98b9dd851ed96fa89db1d6e4a8dc35c5f420299c7c33",
+      "bytes": 2680
+    },
+    {
+      "path": "ui/src/effectRecovery/model.ts",
+      "sha256": "10b1eb45a7f174697203d69b7a57069f45a8e7dae01a10b8495857121dee9616",
+      "bytes": 2672
+    },
+    {
+      "path": "ui/src/effectRecovery/useEffectRecoveryWorkflow.ts",
+      "sha256": "e323a8836d9b77dde3c72220082cf23fbc85fc252469de06b378727570cd89b6",
+      "bytes": 5753
+    },
+    {
+      "path": "ui/src/effectRecovery/workflow.ts",
+      "sha256": "6b95e649c1be3b73e07f7609f3ef80d1193e3ebd3261ae7db25a56a7054e6167",
+      "bytes": 30286
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/EyeBagAliasHistory.tsx",
+      "sha256": "1db440ed2a6b1abae01aaea7a85607d425d992dec049bfbf1b28d99a70c36cd7",
+      "bytes": 5624
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/aliasHistoryRegistry.ts",
+      "sha256": "09f0e149271a2652f7e23a73d4bc5edee3cde447d5f3a4c3290f73848f3555d4",
+      "bytes": 3732
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/batchHistoryRegistry.ts",
+      "sha256": "0108818ab6f0325bc77e3e6e8f586e576f46ac93dee7e15e62d1a2e4c370e3ca",
+      "bytes": 3608
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/cohortHistoryRegistry.ts",
+      "sha256": "468e13cb17718b2ed0cde9ff859cccd5397ca3e96f2333a5bf11508cddca345e",
+      "bytes": 3615
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/presetAliasHistoryRegistry.ts",
+      "sha256": "16929904c0bd6bdb9fa151c580b44f1bd948409460871ae43bbcd2c86261ef3b",
+      "bytes": 6464
+    },
+    {
+      "path": "ui/src/faceStyle/aliasHistoryRegistry.ts",
+      "sha256": "863bf05691f5e0a800659237ed2cffd25e7b259f01fcfe8069344844015c78eb",
+      "bytes": 3597
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "ef64437a56fbfb8427cd0e291a27c47005873f97d4a5cc0716f31ccaead952fd",
+      "bytes": 111048
+    },
+    {
+      "path": "ui/src/people/usePeopleWorkflow.ts",
+      "sha256": "73dbd6d48ac177726a2ded237bf09273a0d3b9b2b444571db58a8ebe20268312",
+      "bytes": 14541
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1373,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 115,
+    "git_diff_check": "clean",
+    "prior_numeric_solver_core_decoder_and_frozen_sources_byte_identical": 333,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 7033
+    }
+  },
+  "integration_map": {
+    "engine": "existing recovery painting/controller with sealed alias candidate admission, staged recovery assets and complete immutable paged full-render member review",
+    "dispatch": "prepared identity/digest plus exact retained image/support verification owns all-member fences; no wire flag bypass or duplicate ordinary photo history",
+    "derived": "existing actual source pixels/capture/face context guards plus exact versioned alias envelope and retained review verification",
+    "ledger": "distinct eye_bag_recovery_alias_review changes only selected recovery pointer; append-only support bank, fullset revision/closure/recipe proof, compensation and canonical project persistence",
+    "native": "strict v2 image/display/ACK/receipt binding, correlated fullset history and pending/unknown mutation fencing before raw receipt observation",
+    "ui": "paged per-member actual image decode/display and explicit confirmation; noncommittable baseline can unlock drawing, changed gestures require all-member ACK and final confirmation; people-owned group history"
+  },
+  "limitations": [
+    "Official preservation remains partial manual anatomy, and recovery matrix is not wholly implemented or accepted.",
+    "Two through sixteen complete live aliases only; dormant/unavailable affected inputs remain refused.",
+    "Supported opaque SDR decode/solver limits, existing uint8 recovery coverage; RGB8 reduced review is not HDR/alpha or native pixel acceptance.",
+    "First terminal unknown writes remain query-only and fenced until verified project reopening; proven compensation can advance monotonic member revisions and requires fresh review.",
+    "No recovery-vector transfer across independent sources; no new generic recovery-render cancellation or other-family alias admission.",
+    "All tests/build/typecheck/product execution/imports/inference/downloads and runtime/native/UI/history/numerical/photo acceptance UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}
