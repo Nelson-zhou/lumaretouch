@@ -45,6 +45,7 @@ import {SlimFaceControl} from '../slimFace/SlimFaceControl';
 import {FaceSizeControl} from '../faceSize/FaceSizeControl';
 import {MidFaceControl} from '../midFace/MidFaceControl';
 import {LowerFaceControl} from '../lowerFace/LowerFaceControl';
+import {ChinShapeControl} from '../chinShape/ChinShapeControl';
 import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {FabricPanel} from "../fabric/FabricPanel";
 import {HistogramPanel} from "./HistogramPanel";
@@ -382,6 +383,7 @@ const WIRED: Record<string, string> = {
   "PC-32466|脸型/小脸": "face_size.amount",
   "PC-32466|脸型/中庭": "mid_face.amount",
   "PC-32466|脸型/下庭": "lower_face.amount",
+  "PC-32466|脸型/尖下巴": "chin_shape.v1",
   "PC-32466|脸型/太阳穴": "face_contour.temple",
   "PC-32466|脸型/颧骨": "face_contour.cheekbone",
   "PC-32466|脸型/下颌": "face_contour.jaw",
@@ -452,6 +454,7 @@ const WIRE_LABEL: Record<string, string> = {
   "face_size.amount": "小脸（局部整脸大小）",
   "mid_face.amount": "中庭（局部纵向长度）",
   "lower_face.amount": "下庭（局部纵向长度）",
+  "chin_shape.v1": "尖下巴（局部横向收尖，左右独立）",
   "deform.slim_face": "旧版瘦脸（历史错误拓扑）",
   "deform.big_eye": "大眼",
   "deform.small_chin": "小下巴",
@@ -790,6 +793,15 @@ export default function RetouchPanel(props: RetouchProps) {
           <p className="muted">此文档尚未提供规范人物状态，下庭暂不可用。不会改用小脸、收下巴、下巴长短或短脸替代。</p>
         </section>;
         return <LowerFaceControl key={leaf.path}
+          people={props.people} capability={status?.ready_caps}
+          blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+            || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+          faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
+      case "chin_shape.v1":
+        if (!doc?.people) return <section key={leaf.path} data-control-id="LNX-REF-PC-32466-C-ed7837df9a" aria-label="尖下巴暂不可用">
+          <p className="muted">此文档尚未提供规范人物状态，尖下巴暂不可用。不会改用旧版小下巴、收下巴、下巴长短、下庭、瘦脸或下颌替代。</p>
+        </section>;
+        return <ChinShapeControl key={leaf.path}
           people={props.people} capability={status?.ready_caps}
           blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
             || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}

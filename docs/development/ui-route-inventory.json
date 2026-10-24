@@ -1,7 +1,7 @@
 {
-  "method": "静态提取RetouchPanel WIRED，仅证明该表列出路由。其它特殊UI分支未计入，未列出不直接判缺失，已列出也不算已完成。",
+  "method": "历史静态路由清单，后续切片仅增补其明确改动的条目，不是当前 RetouchPanel WIRED 的完整重新提取。wired_routes 是本文件列出条目数。其它路由和特殊 UI 分支未完整计入，未列出不直接判缺失，已列出也不算已完成。",
   "families": 39,
-  "wired_routes": 42,
+  "wired_routes": 43,
   "items": [
     {
       "id": "PC-47211",
@@ -68,6 +68,10 @@
         {
           "path": "脸型/中庭",
           "ui_route": "mid_face.amount"
+        },
+        {
+          "path": "脸型/尖下巴",
+          "ui_route": "chin_shape.v1"
         },
         {
           "path": "眼睛/整体大小",
@@ -461,5 +465,5 @@
   ],
   "unique_handler_names": 32,
   "verified_source_commit": "8a443fd6d3a3eaaecda04f9b869840520958f9c4",
-  "count_warning": "39条显式路由含同一曲线编辑器的多个入口；32种handler名称也不是32个独立完成功能。特殊renderExtra/独立工作流未完整计入，禁止除以805生成完成率。"
+  "count_warning": "当前文件列出 43 条路由，包含同一编辑器的多个入口；unique_handler_names 和 verified_source_commit 保留历史清单读数，不是当前完整 UI 统计。特殊 renderExtra、后续路由及独立工作流未完整计入，禁止将这些数值用作独立完成功能数或除以 805 生成完成率。"
 }

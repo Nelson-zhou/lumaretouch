@@ -1,0 +1,243 @@
+{
+  "baseline": "4c1bea881ecdc4b2c94b88b7e99d0c7fb202aedb",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Independent bilateral chin taper, original Rust monotone horizontal inverse and actual below-lip/lower-oval evidence. Canonical original/derived rendering, history/export, native UI and parameter-only target-recomputed presets. No numerical or photographic acceptance.",
+  "requirement_ids": [
+    "LNX-REF-PC-32466-C-ed7837df9a"
+  ],
+  "files": [
+    {
+      "path": "core/chin_shape/Cargo.toml",
+      "sha256": "4c1606efee4e718562665e5e154f5a072852afcb292dc44d950ec8ae3420d1e2",
+      "bytes": 169
+    },
+    {
+      "path": "core/chin_shape/README.md",
+      "sha256": "a9e9747a0d2820f25ed35452584a40c7dbd99c22fadb4707dce9a2942f1fa833",
+      "bytes": 11248
+    },
+    {
+      "path": "core/chin_shape/chin_shape.h",
+      "sha256": "96de3aa46b87482fccceeb3487278030506e33764b50641175839f3c19697dbd",
+      "bytes": 2574
+    },
+    {
+      "path": "core/chin_shape/lib.rs",
+      "sha256": "7803cf0021f8b07573d9d6989e2a69e7071323bd60aa8dbd6d59bccf5a769c54",
+      "bytes": 11274
+    },
+    {
+      "path": "core/chin_shape/tests.rs",
+      "sha256": "d18e5d0c7adb2a8b9ba1b82864c0d571bb2cf1ccff1f36d383777b4a67972a78",
+      "bytes": 13349
+    },
+    {
+      "path": "docs/chin-shape/IMPLEMENTATION.md",
+      "sha256": "974500f9a6d6952bd24bad1c8ce16e4fa4fda1541416a1b59c126fb93fe44f27",
+      "bytes": 10013
+    },
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "5593b53b902ddcb3655e29097f30f9d16e93af2ec7e6bbc02192c1950447779c",
+      "bytes": 13869
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "c23e75ecd86ee04c98e3f4b9242b45b223eddd1ca3bce95bf2f462afd59d65be",
+      "bytes": 35413
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/chin_shape_native.py",
+      "sha256": "c699eaa84906e8008398f2feff48aceeeafe01e598e4616b61898ec09ab73209",
+      "bytes": 9284
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/chin_shape_people.py",
+      "sha256": "032ab442fc9a295152d2f56ed5cb492b72a81df4f9b0be9120b3712cddbca327",
+      "bytes": 5174
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/chin_shape_runtime.py",
+      "sha256": "e1466d2c4dadbdc51178ca5bea1d531f5f8d5d92979ab9561118a8dc1aaca3ea",
+      "bytes": 25746
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/chin_shape_scope.py",
+      "sha256": "161901a99d482d99340f0d5f0c917d2300be30a89672d43d38a543dc151f61b1",
+      "bytes": 6768
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/chin_shape_state.py",
+      "sha256": "223c4646febdcbe534b8c7853d465629a68de7f1f37345e6800ed563d3d9c8f9",
+      "bytes": 2752
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "401c17b41be240767ee6e70fd0880f4ff62b1502ba2f5b2bc76d68c190a2759a",
+      "bytes": 14763
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "2408445d5f836454bf25a85ae202ae959d4a6e22ccf464b34ad48f5ceedb8f19",
+      "bytes": 4793
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_edit.py",
+      "sha256": "48fa150483c36ab035cf4063afb5c82c60bfe8b8301f009db7b1dd02288dd30e",
+      "bytes": 5693
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "e89b0645beace989999c5ab088a7da495ae50503610640cc3b46b8a8ba930fd8",
+      "bytes": 21156
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "ce951766b94be4a89f47a36141a5e97fbb6aff5e7a10b4195a61f109b90ebedc",
+      "bytes": 20130
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "c9503ce256298bf42e0bc09aa98a8e4c4ce45888177b1f5eaab46a38f563fce9",
+      "bytes": 53520
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "4a2a9ab978440c477ca7c4ae4473754a25a4e317bcc70fbc55a2d573bd6bc3b1",
+      "bytes": 465378
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "8adb439dca4bfd43bf3070981e6bd384fd77336281d3995d900ecff64b1661e8",
+      "bytes": 8427
+    },
+    {
+      "path": "engine/tests/test_chin_shape_geometry_unrun.py",
+      "sha256": "ca8ac8c3916e2a9c65c4998dd253fbc03f77710d3d9ce9f9d10e61a217404e55",
+      "bytes": 29885
+    },
+    {
+      "path": "engine/tests/test_chin_shape_integration_unrun.py",
+      "sha256": "d10913fed687874d73d4f1fc951704660a821f4ca5f5462046177f7822c748c8",
+      "bytes": 52825
+    },
+    {
+      "path": "engine/tests/test_chin_shape_native_unrun.py",
+      "sha256": "ad7fc92fb4a5cbb2c5c695b98eb788dc842f623db19b6ef0e059d2d2de6c89b8",
+      "bytes": 20061
+    },
+    {
+      "path": "engine/tests/test_chin_shape_scope_unrun.py",
+      "sha256": "3fb9b9ac3d65f615006708a29846df72b930878d7a8483d613c28866ade0872f",
+      "bytes": 42212
+    },
+    {
+      "path": "packaging/build-chin-shape.sh",
+      "sha256": "e47f795c700a4d5c1bf4236c1ac0bc40973622c24ab27cf0f2265f52dbdfc4d7",
+      "bytes": 657,
+      "mode": "100755"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "2727dfbfa2d0fcf997df1fa099f740fc9240f91696027d2eab7dd980e8629fe5",
+      "bytes": 24699
+    },
+    {
+      "path": "ui/src/chinShape/ACCEPTANCE_UNRUN.md",
+      "sha256": "fe92f6f3a6793c9770db88615b116079203dfcf48898af3e0f9cdd26cd1bd980",
+      "bytes": 7069
+    },
+    {
+      "path": "ui/src/chinShape/ChinShapeControl.tsx",
+      "sha256": "efe5cc2829f8a1a652d852626663045ace6d94aecc713ac1c4ebbc5fa346eddc",
+      "bytes": 12883
+    },
+    {
+      "path": "ui/src/chinShape/model.ts",
+      "sha256": "00f00bf42610dcd9686deb5ad3806662c8570bbd8352930ac8a4b036c7635189",
+      "bytes": 11392
+    },
+    {
+      "path": "ui/src/chinShape/model.unrun.test.ts",
+      "sha256": "2d878f338b43f1ed64d72bf24055e18301aec546579efef2990fa930ca5a738d",
+      "bytes": 18247
+    },
+    {
+      "path": "ui/src/chinShape/wiring.unrun.test.ts",
+      "sha256": "7ca94cf74b601bb44d20245e2575aae5764b55de7c305223b43214cba62b82ae",
+      "bytes": 10341
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "97d0b666c51303bf3502fc836bc37a6add0b5fc0861937776540a257b34e2bac",
+      "bytes": 73699
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "f0a934d03581b1bd670f2b439cce240dc5675871b089bb7b8196746af18c8da0",
+      "bytes": 101112
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "98c9231fab1278d38a8a1e68a73c3c71e786df004ae8ca9716434e2a1cc7ce37",
+      "bytes": 8302
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "985a1861537f96f811500c89332cc20a620b95b0acd3e1027ec9d1f4ba0241e2",
+      "bytes": 5216
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1127,
+    "changed_json_toml": "parsed",
+    "git_diff_check": "clean",
+    "payload_trailing_whitespace": "none; pre-existing workflow_ports.py blank EOF unchanged",
+    "line_caps": {
+      "ui/src/App.tsx": 2122,
+      "ui/src-tauri/src/main.rs": 2042,
+      "engine/src/lumaretouch_engine/server.py": 6983
+    },
+    "unchanged_baseline_source_hashes": 61,
+    "authored_unrun_new_fixture_functions": {
+      "python": 119,
+      "ui": 20,
+      "rust": 12
+    },
+    "inverse_source_review": "Independent read-only review found no concrete blocking sign, bound, side, atomicity or ABI defect. Tiny nonzero displacement lost in coordinate subtraction is explicitly accepted and documented, not a numerical validation."
+  },
+  "integration_map": {
+    "state_native": "chin_shape_state.py / chin_shape_native.py / core/chin_shape / explicit packaging build and source-license staging",
+    "source_geometry": "chin_shape_runtime.py / chin_shape_people.py; all 40 lip vertices and full contiguous lower arc, requested-side source evidence, protected prefix pullback",
+    "canonical_owner": "people_algorithms.py / people_render_runtime.py; after midface, unchanged first four slots and common sampler",
+    "atomic_edit": "people_edit.py / creative_derived_effects.py; scalar ranges checked separately from complete staged linked equality",
+    "ui": "ui/src/chinShape / exact RetouchPanel leaf / native capability / canonical people owner",
+    "presets": "chin_shape_scope.py / people_scope.py / scope.py / workflow_ports.py / presetModel.ts; target-local reconstruction, no mask or geometry transfer",
+    "requirements": "docs/chin-shape/IMPLEMENTATION.md / registry extensions / historical partial UI route inventory clarified"
+  },
+  "unrun": [
+    "product imports/execution",
+    "tests and test collection",
+    "Rust compilation/build",
+    "typecheck",
+    "inference",
+    "numerical/photographic/performance acceptance",
+    "real UI/history/preview/export/batch acceptance"
+  ],
+  "limitations": [
+    "Original signed horizontal taper interpretation, not proven curvature, clinical anatomy, semantic segmentation, 3-D or proprietary equivalence.",
+    "Independent sides are continuous but can have a centerline derivative cusp; not globally C1.",
+    "One-sided requests retain bilateral measured geometry and conservative full-rectangle guards, including the neutral side.",
+    "Adjacent neck/background can move; prior geometry may enter support; source landmark pinning is not global post-composition invariance.",
+    "Bounded f64 inverse can refuse underflow/stagnation; accepted tiny displacements can disappear during coordinate subtraction or downstream float32 mapping. Actual measured side movement is separately required.",
+    "Legacy small_chin topology defect is documented and preserved; no silent recipe migration. Existing geometry/archive/license/common-sampler source hashes remain unchanged.",
+    "Unlinked zero/zero is geometry-neutral but conservatively blocks unchanged export passthrough; exact canonical neutral remains eligible.",
+    "Generic derived presets remain guarded; explicit reviewed people mappings rebuild each target evidence.",
+    "Broader alpha/HDR and other facial-family requirements and photographic acceptance remain unfinished."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

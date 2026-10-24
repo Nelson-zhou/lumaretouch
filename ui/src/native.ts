@@ -990,6 +990,8 @@ export interface EngineStatus {
     mid_face_reason?: string | null;
     lower_face_available?: boolean;
     lower_face_reason?: string | null;
+    chin_shape_available?: boolean;
+    chin_shape_reason?: string | null;
     creative_document_protocol?: number;
     canvas_guides_protocol?: number;
     export_destination_protocol?: number;

@@ -13,7 +13,7 @@ from . import creative_derived_hair as HAIR
 OPERATIONS = frozenset((
     'lnx.deform.v1', 'lnx.enhance.v1', 'lnx.facial_wrinkles.v1', 'lnx.skin_colour.v1', 'lnx.skin_finish.v1',
     'lnx.skin_gloss.v1',
-    'lnx.skin_texture.v1', 'lnx.face_contour.v1', 'lnx.slim_face.v2', 'lnx.face_size.v1', 'lnx.lower_face.v1', 'lnx.mid_face.v1',
+    'lnx.skin_texture.v1', 'lnx.face_contour.v1', 'lnx.slim_face.v2', 'lnx.face_size.v1', 'lnx.lower_face.v1', 'lnx.mid_face.v1', 'lnx.chin_shape.v1',
     'lnx.brow_shape.v1', 'lnx.nose_shape.v1', 'lnx.eye_shape.v1',
     'lnx.mouth_shape.v1', 'lnx.lip_makeup.v1', 'lnx.eye_light.v1',
 )) | MAKEUP.OPERATIONS | {HAIR.OPERATION}
@@ -66,6 +66,11 @@ def _leaf(operation, path, value):
     neutral, validator = A.specifications()[operation]
     known = A.leaves(neutral)
     if path not in known: raise ValueError('Unknown derived portrait parameter')
+    # A scalar is range-checked independently; linked equality belongs to the
+    # complete staged recipe in people_edit, including inherited target intent.
+    # Do not reject the first half of an atomic equal-sided edit on neutral.
+    if operation == A.CHIN_SHAPE.OP:
+        neutral = {**neutral, 'linked': False}
     if operation in MAKEUP.OPERATIONS:
         MAKEUP.check_leaf(operation,path,value,neutral,validator)
         return

@@ -4,6 +4,19 @@
   "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
+      "operation_id": "lnx.chin_shape.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {"version": 1, "linked": true, "left": 0, "right": 0},
+      "range": {"version": [1, 1], "linked": "boolean; true requires equal sides", "left": [-1, 1], "right": [-1, 1]},
+      "requirement_ids": ["LNX-REF-PC-32466-C-ed7837df9a"],
+      "scope": "Independent bilateral visual chin taper below the complete measured lip boundary. Negative expands toward rounder appearance; positive contracts toward sharper appearance. Tip and head-axis height are preserved within explicit numerical tolerance, not clinical chin anatomy or a curvature guarantee.",
+      "implementation": "Original Rust monotone horizontal forward map and bounded checked inverse; actual source-owned lower oval, skin/RGB and exclusion evidence. Existing common sampler only.",
+      "transfer": "Version, linked and two scalar amounts only. Each explicitly reviewed target reconstructs its own source support and foreign-face guards; generic derived preset path remains refused.",
+      "compatibility": "Separate neutral operation after mid-face. Old small_chin, lower/mid-face, size, slim and contour code/appearance are not migrated or silently corrected. Original mouth slot and sampler preserved.",
+      "acceptance": "AUTHORED / UNRUN. Independent sides can introduce a centerline derivative cusp. Neck/background feather transports nearby texture; incomplete visibility evidence, floating inverse and prior-composition limits remain. No AI, 3D, semantic segmentation, proprietary equivalence or photographic acceptance."
+    },
+    {
       "operation_id": "lnx.mid_face.v1",
       "parameter_key": "recipe",
       "type": "object",
